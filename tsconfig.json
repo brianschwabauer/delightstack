@@ -1,0 +1,26 @@
+{
+	"compilerOptions": {
+		"moduleResolution": "bundler",
+		"module": "esnext",
+		"lib": ["esnext", "DOM"],
+		"target": "esnext",
+		"allowJs": true,
+		"checkJs": true,
+		"isolatedModules": true,
+		"resolveJsonModule": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"sourceMap": true,
+		"strict": true
+	},
+	"exclude": [
+		"node_modules",
+		"**/node_modules/*",
+		".git",
+		"**/.turbo/**",
+		"**/build/**",
+		"**/dist/**",
+		"**/.svelte-kit/**"
+	]
+}

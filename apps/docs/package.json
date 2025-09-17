@@ -1,0 +1,24 @@
+{
+	"name": "@delightstack/docs",
+	"private": true,
+	"type": "module",
+	"version": "0.0.1",
+	"scripts": {
+		"dev": "astro dev",
+		"start": "astro dev",
+		"build": "astro build",
+		"preview": "astro build && wrangler preview",
+		"deploy": "astro build && wrangler deploy",
+		"astro": "astro"
+	},
+	"dependencies": {
+		"@astrojs/cloudflare": "^12.6.0",
+		"@astrojs/starlight": "^0.35.1",
+		"@astrojs/svelte": "^7.1.0",
+		"@delightstack/components": "workspace:*",
+		"astro": "^5.6.1",
+		"sharp": "^0.34.2",
+		"svelte": "^5.36.16",
+		"typescript": "^5.8.3"
+	}
+}

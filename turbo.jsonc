@@ -1,0 +1,24 @@
+{
+	"$schema": "https://turborepo.com/schema.json",
+	"tasks": {
+		"build": {
+			"outputs": ["dist/**", ".build/**", ".svelte-kit/**", "build/**"],
+		},
+		"@delightstack/components#build": {
+			"outputs": ["dist/**"],
+		},
+		"lint": {
+			"outputs": [],
+		},
+		"test": {
+			"cache": false,
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true,
+		},
+		"package": {
+			"outputs": ["package"],
+		},
+	},
+}

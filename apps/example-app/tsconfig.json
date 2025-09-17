@@ -1,0 +1,32 @@
+{
+	"extends": "./.svelte-kit/tsconfig.json",
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"strict": true,
+		"typeRoots": ["node_modules/@types"],
+		"types": ["svelte", "@types/google.maps"]
+	},
+	"include": [
+		"./.svelte-kit/ambient.d.ts",
+		"vite.config.ts",
+		"**/*.js",
+		"**/*.ts",
+		"**/*.svelte",
+		"tests/**/*.js",
+		"tests/**/*.ts",
+		"tests/**/*.svelte"
+	],
+	"exclude": [
+		"node_modules/**",
+		"**/node_modules/*",
+		"./**/svelte.config.js",
+		"./adapter/**/*.*",
+		"./.svelte-kit/[!ambient.d.ts]**"
+	]
+}

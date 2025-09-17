@@ -1,0 +1,22 @@
+{
+	"name": "@delightstack/example-server",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev --env staging --persist-to ./../../.wrangler/state"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20250428.0",
+		"typescript": "^5.5.2",
+		"wrangler": "^4.14.0"
+	},
+	"dependencies": {
+		"@orama/orama": "^3.0.4",
+		"@delightstack/types": "workspace:*",
+		"argon2-wasm-edge": "^1.0.23",
+		"cookie": "^1.0.2",
+		"stripe": "17.4.0-beta.2",
+		"zod": "^3.25.7"
+	}
+}
