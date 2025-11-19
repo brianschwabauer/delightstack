@@ -24,6 +24,12 @@
 		/** Whether the 'arrow' pointing to the target element should be shown */
 		arrow = true,
 
+		/** The x position (in px) where the popover's refElement/target is. This is used for context menu (right click) */
+		x = undefined as number | undefined,
+
+		/** The y position (in px) where the popover's refElement/target is. This is used for context menu (right click) */
+		y = undefined as number | undefined,
+
 		/** Whether the popover should open when the ref element is hover overed */
 		openOnHover = false,
 
@@ -147,7 +153,7 @@
 
 	/** Determines the position of the popover panel so that it fits on screen */
 	async function initPopoverPosition() {
-		if (!browser || !refElement) return;
+		if (!browser) return;
 		let bounds: DOMRect;
 		let borderRadius: number;
 		const {
@@ -160,6 +166,62 @@
 			size,
 		} = await import('@floating-ui/dom');
 		popoverPositionDestroy();
+
+		if (!refElement) {
+			if (typeof x !== 'number' || typeof y !== 'number') return;
+			const {
+				placement: calculatedPlacement,
+				x: calculatedX,
+				y: calculatedY,
+				middlewareData,
+			} = await computePosition(
+				{
+					getBoundingClientRect: () => ({
+						x,
+						y,
+						width: 0,
+						height: 0,
+						top: y,
+						right: x,
+						bottom: y,
+						left: x,
+					}),
+				},
+				popoverElement!,
+				{
+					placement,
+					strategy,
+					middleware: [
+						offset({ mainAxis: arrow ? OFFSET_WITH_ARROW : OFFSET }),
+						flip({ crossAxis: false }),
+						shift(),
+						...(!arrow
+							? []
+							: [arrowMiddleware({ element: arrowElement!, padding: ARROW_PADDING })]),
+						size({
+							padding: 8,
+							apply({ availableHeight, availableWidth }) {
+								if (popoverElement) {
+									popoverElement.style.maxHeight = `${availableHeight}px`;
+									popoverElement.style.maxWidth = `${availableWidth}px`;
+								}
+							},
+						}),
+					],
+				},
+			);
+			realPlacement = calculatedPlacement;
+			left = `${calculatedX}px`;
+			top = `${calculatedY}px`;
+			positioned = true;
+			transformOrigin = `${calculatedPlacement === 'top' ? 'bottom' : 'top'} center`;
+			if (middlewareData.arrow) {
+				arrowX = middlewareData.arrow?.x ? `${middlewareData.arrow.x || 0}px` : '';
+				arrowY = middlewareData.arrow?.y ? `${middlewareData.arrow.y || 0}px` : '';
+			}
+			return;
+		}
+
 		popoverPositionDestroy = autoUpdate(refElement, popoverElement!, async () => {
 			if (!refElement || !popoverElement || !opened) return;
 			const {
@@ -231,7 +293,7 @@
 
 	$effect(() => {
 		if (shown) {
-			initPopoverPosition();
+			untrack(() => initPopoverPosition());
 		} else {
 			popoverPositionDestroy();
 		}
@@ -516,11 +578,12 @@
 				enabled: !openOnFocus,
 				initialFocus: disableInitialFocus ? false : undefined,
 				clickOutsideDeactivates: (e) => {
+					if ((e as any).button === 2) return false; // Ignore right clicks
 					if (!closeOnOutsideClick) return false;
 					if (openOnClick) return false;
 					let el = e.target as HTMLElement | null | undefined;
 					while (el) {
-						if (el === refElement || el === popoverElement) return false;
+						if ((refElement && el === refElement) || el === popoverElement) return false;
 						el = el.parentElement;
 					}
 					return true;
