@@ -2,8 +2,8 @@
 	import { tick, untrack, type Component, type Snippet } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import Popover from './Popover.svelte';
-	import List from '$lib/form/List.svelte';
-	import ListItem from '$lib/form/ListItem.svelte';
+	import List from './../display/List.svelte';
+	import ListItem from './../display/ListItem.svelte';
 
 	export interface ContextMenuOptions {
 		/** The list of action menu items to show in the context menu */
