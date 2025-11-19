@@ -6,6 +6,7 @@
 	import Popover from './Popover.svelte';
 	import ChevronDown from '~icons/mdi/chevron-down';
 	import type { Placement, Strategy } from '@floating-ui/dom';
+	import Loading from '../feedback/Loading.svelte';
 
 	const propId = $props.id();
 	let {
@@ -264,12 +265,7 @@
 					class="loading-icon"
 					in:loadingTransition={{ direction: 'in' }}
 					out:loadingTransition={{ direction: 'out' }}>
-					Loading...
-					<!-- <Logo
-						loading={isLoading}
-						success={isLoadingSuccess}
-						brandmark
-						color="currentColor" /> -->
+					<Loading />
 				</div>
 			{/if}
 		{/if}
