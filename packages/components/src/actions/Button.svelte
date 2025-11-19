@@ -221,7 +221,7 @@
 	class={['button', className].filter(Boolean).join(' ')}
 	class:has-dropdown-trigger={dropdown && !disableDropdown}
 	class:icon
-	class:round
+	class:pill
 	class:dense
 	class:full-width={fullWidth}
 	class:full-height={fullHeight}
@@ -335,7 +335,7 @@
 		width: fit-content;
 		border-radius: var(--radius);
 
-		&.round {
+		&.pill {
 			--radius: var(--radius-round);
 		}
 
