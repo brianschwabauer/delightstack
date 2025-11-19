@@ -1,28 +1,371 @@
-<script lang="ts">
-	import type { Snippet } from 'svelte';
-
-	/**
-	 * A modal dialog for displaying important information or getting user input.
-	 */
-	let {
-		/** Additional props to pass to the modal parent element */
-		...rest
-	} = $props();
+<script lang="ts" module>
+	let lastClickedElement = undefined as HTMLElement | undefined;
+	let lastClickedListening = false;
+	function onDocumentClick(event: MouseEvent) {
+		lastClickedElement = event.target as HTMLElement;
+	}
+	function listenForLastClickedElement() {
+		if (!document || lastClickedListening) return;
+		lastClickedListening = true;
+		document.removeEventListener('pointerdown', onDocumentClick);
+		document.addEventListener('pointerdown', onDocumentClick);
+	}
 </script>
 
-<pre>
-	Confirmation Modal: Asks user to confirm an action.
+<script lang="ts">
+	import { crossfade, fade, scale } from 'svelte/transition';
+	import { quartOut } from 'svelte/easing';
+	import { type Snippet } from 'svelte';
+	import { focusTrap, generateID, ripple } from '@delightstack/utilities';
+	import CloseIcon from '~icons/ion/md-close';
+	import Button from './Button.svelte';
 
-Information Modal: Displays important info.
+	let {
+		/** Title text displayed as the dialog header */
+		title = '',
 
-Form Modal: Contains a form for input.
+		/** Determines whether the dialog is open or not */
+		open = $bindable(false) as boolean,
 
-Image Viewer Modal: Displays an image larger.
+		/** Determines whether the dialog can be conventially closed using the escape key or backdrop click. */
+		closable = true,
 
-Video Player Modal: Embedded video.
+		/** Whether the close icon should be hidden or not */
+		disableCloseIcon = false,
 
-Full-screen Modal: Takes over the entire screen.
+		/** The ID of the modal - used to set/unset transition targets automatically */
+		modalID = '',
 
+		/** The CSS string width of the modal (when on desktop) */
+		width = '',
 
-https://www.shadcn-svelte.com/docs/components/alert-dialog
-</pre>
+		/** The CSS string height of the modal (when on desktop) */
+		height = '',
+
+		/** The CSS string maximum width of the modal */
+		maxWidth = 'calc(100vw - 2rem)',
+
+		/** The CSS string maximum height of the modal */
+		maxHeight = 'calc(100svh - 2rem)',
+
+		/** The element that the modal will be animated from  when opening */
+		transitionTarget = undefined as HTMLElement | Element | undefined,
+
+		/** The css style string added to the component from the parent */
+		style = '',
+
+		/** Specifies a custom class name for the dialog */
+		class: className = '',
+
+		/** The snippet used to render the modal body */
+		children = undefined as undefined | Snippet,
+
+		/** The snippet used to render the header bar */
+		header = undefined as undefined | Snippet,
+
+		/** The snippet used to render a child at the start of the header bar. Can't be used if 'header' is supplied */
+		headerStart = undefined as undefined | Snippet,
+
+		/** The snippet used to render a child at the end of the header bar. Can't be used if 'header' is supplied */
+		headerEnd = undefined as undefined | Snippet,
+
+		/** The snippet used to render the modal footer */
+		footer = undefined as undefined | Snippet,
+
+		/** The snippet used to render the modal footer at the start. Can't be used if 'footer' is supplied */
+		footerStart = undefined as undefined | Snippet,
+
+		/** The snippet used to render the modal footer at the end. Can't be used if 'footer' is supplied */
+		footerEnd = undefined as undefined | Snippet,
+
+		/** The function to call when the dialog is closed. If false is returned, the modal will not be closed */
+		onclose = undefined as undefined | (() => boolean | undefined | void),
+
+		/** The function to call when the dialog is opened */
+		onopen = undefined as undefined | (() => void),
+
+		/** The function to call when the backdrop is clicked */
+		onbackdropclick = undefined as undefined | (() => void),
+
+		...rest
+	} = $props();
+
+	const titleId = `modal-title-${generateID({ length: 6 })}`;
+	const bodyId = `modal-body-${generateID({ length: 6 })}`;
+	const easing = (t: number, factor = 0.5) => quartOut(t) * factor + (1 - factor);
+	let _open = $state(open);
+	$effect(() => listenForLastClickedElement());
+	$effect(() => {
+		if (open === _open) return;
+		const target = transitionTarget || lastClickedElement;
+		if (target && open) send(target, { key: 'modal' });
+		_open = open;
+	});
+
+	// Setup the send/receive animation so the modal body can be animated into existence
+	const [send, receive] = crossfade({
+		duration: 300,
+		easing,
+		fallback: (node) => {
+			const style = getComputedStyle(node);
+			const transform = style.transform === 'none' ? '' : style.transform;
+			return {
+				duration: 300,
+				easing,
+				css: (t) => `transform: ${transform} translateZ(0px) scale(${t}); opacity: ${t}`,
+			};
+		},
+	});
+
+	function close() {
+		if (closable && _open) {
+			const accepted = onclose?.() ?? true;
+			if (accepted) {
+				_open = false;
+				open = false;
+			}
+		}
+	}
+	function handleEscapeKey({ key }: KeyboardEvent) {
+		if (key === 'Escape') close();
+	}
+
+	function mountModal(node: HTMLElement) {
+		if (onopen) onopen();
+		if (transitionTarget) transitionTarget = undefined;
+		return {
+			destroy: () => {
+				if (_open) return;
+				if (onclose) onclose();
+			},
+		};
+	}
+</script>
+
+<svelte:window onkeyup={handleEscapeKey} />
+
+{#if _open}
+	<div
+		class={['modal', className].filter(Boolean).join(' ')}
+		{style}
+		in:receive={{ key: 'modal' }}
+		out:scale={{ duration: 100, start: 0.75 }}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby={titleId}
+		aria-describedby={bodyId}
+		{@attach focusTrap({
+			escapeDeactivates: false,
+			allowOutsideClick: true,
+			returnFocusOnDeactivate: true,
+			initialFocus: false,
+		})}
+		use:mountModal
+		{...rest}>
+		<div
+			class="modal-body"
+			id={bodyId}
+			style:width
+			style:height
+			style:max-width={maxWidth}
+			style:max-height={maxHeight}>
+			{#if (closable && !disableCloseIcon) || title || header || headerStart || headerEnd}
+				<header class:bar={title || header || headerStart || headerEnd}>
+					{#if closable && !disableCloseIcon}
+						<div class="close">
+							<Button transparent icon onclick={close} size="0"><CloseIcon /></Button>
+						</div>
+					{/if}
+					{#if title}<h2>{title}</h2>{/if}
+					{#if header}
+						{@render header()}
+					{:else}
+						{#if headerStart}{@render headerStart()}{/if}
+						<div class="spacer"></div>
+						{#if headerEnd}{@render headerEnd()}{/if}
+					{/if}
+				</header>
+			{/if}
+			{#if children}{@render children()}{/if}
+		</div>
+		<div class="modal-fg"></div>
+	</div>
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div
+		class="modal-bg"
+		style:cursor={closable ? 'pointer' : ''}
+		style:pointer-events={closable ? '' : 'none'}
+		role="button"
+		tabindex="-1"
+		{@attach ripple()}
+		onclick={() => {
+			if (onbackdropclick) onbackdropclick();
+			close();
+		}}
+		in:fade={{ duration: 250, delay: 50 }}
+		out:fade={{ duration: 120 }}>
+	</div>
+{/if}
+
+<style lang="scss">
+	:global(html:has(.modal)) {
+		overflow: hidden;
+	}
+	:global(::view-transition-old(modal-fg)),
+	:global(::view-transition-new(modal-fg)) {
+		/* Prevent the default animation,
+		so both views remain opacity:1 throughout the transition */
+		animation: none;
+		/* Use normal blending,
+		so the new view sits on top and obscures the old view */
+		mix-blend-mode: normal;
+		/* Make the height the same as the group,
+		meaning the view size might not match its aspect-ratio. */
+		height: 100%;
+		/* Clip any overflow of the view */
+		overflow: clip;
+	}
+	.modal {
+		--layer: var(--layer-5);
+		--radius: var(--radius-5);
+		--shadow: var(--shadow-3);
+		display: grid;
+		position: fixed;
+		z-index: var(--layer);
+		top: 0;
+		left: 0;
+		bottom: 0;
+		right: 0;
+		grid-template-columns: 100%;
+		grid-template-rows: 100%;
+		width: 100%;
+		height: 100%;
+		align-content: center;
+		justify-content: center;
+		pointer-events: none;
+
+		@media (min-width: 768px) {
+			overflow: hidden;
+			grid-template-rows: max-content;
+			grid-template-columns: max-content;
+			border-radius: var(--radius);
+		}
+
+		header {
+			display: flex;
+			align-items: center;
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			background-color: var(--c-bg);
+			z-index: 2;
+			gap: 0.5rem;
+			padding: 0.5rem 0.5rem 0.5rem 0;
+			overflow-x: auto;
+			@media (max-width: 767px) {
+				width: 100%;
+				:global(> *) {
+					flex-shrink: 0;
+				}
+				h2 {
+					font-size: 1.15rem;
+				}
+			}
+			@media (min-width: 768px) {
+				&.bar {
+					padding: 0;
+					position: sticky;
+					margin: -1.5rem -1rem 0.5rem -1.25rem;
+					height: 4rem;
+					top: calc(-2rem - 1px);
+					bottom: unset;
+					left: unset;
+					overflow-x: hidden;
+				}
+			}
+			&:not(.bar) {
+				background-color: transparent;
+				position: sticky;
+				left: 0;
+				top: -1rem;
+				bottom: unset;
+				height: 4rem;
+				width: 4rem;
+				margin: -3rem 0 0 -2rem;
+				overflow: hidden;
+				@media (min-width: 768px) {
+					left: -1rem;
+					top: -2rem;
+					margin: -2rem 0 0 -2rem;
+				}
+			}
+			.close {
+				position: sticky;
+				left: 0;
+				background-color: var(--c-bg);
+				border-radius: var(--radius);
+			}
+			.spacer {
+				flex: 1;
+			}
+		}
+	}
+	.modal-body {
+		grid-column: 1 / 1;
+		grid-row: 1 / 1;
+		height: 100%;
+		z-index: 1;
+		padding: 1rem 0.5rem;
+		view-transition-name: modal-body;
+		overflow-y: auto;
+		overflow-x: hidden;
+		pointer-events: auto;
+		scrollbar-gutter: stable both-edges;
+		@media (max-width: 767px) {
+			min-width: 100vw;
+			padding-bottom: 4rem;
+		}
+		@media (min-width: 768px) {
+			padding: 2rem 1.5rem;
+		}
+		&::-webkit-scrollbar-track-piece:start {
+			margin-top: var(--radius);
+		}
+		&::-webkit-scrollbar-track-piece:end {
+			margin-bottom: var(--radius);
+		}
+	}
+	.modal-fg {
+		view-transition-name: modal-fg;
+		z-index: -1;
+		grid-column: 1 / 1;
+		grid-row: 1 / 1;
+		height: 100%;
+		background-color: var(--c-bg);
+		z-index: -1;
+		box-shadow: var(--shadow);
+		@media (min-width: 768px) {
+			border-radius: var(--radius);
+		}
+	}
+	.modal-bg {
+		--layer: var(--layer-4);
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		right: 0;
+		left: 0;
+		backdrop-filter: blur(15px);
+		z-index: var(--layer);
+		&::after {
+			content: '';
+			background-color: var(--c-text);
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			opacity: 0.2;
+		}
+	}
+</style>
