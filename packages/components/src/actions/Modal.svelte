@@ -1,3 +1,15 @@
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+
+	/**
+	 * A modal dialog for displaying important information or getting user input.
+	 */
+	let {
+		/** Additional props to pass to the modal parent element */
+		...rest
+	} = $props();
+</script>
+
 <pre>
 	Confirmation Modal: Asks user to confirm an action.
 

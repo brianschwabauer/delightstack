@@ -1,30 +1,9 @@
-<!-- <pre>
-	Primary / Call to Action (CTA) Button: Most prominent action.
-
-Secondary Button: Less prominent actions.
-
-Tertiary / Outline / Ghost Button: Minimal styling.
-
-Link Button: Looks like a button but acts as a link.
-
-Icon Button: Button with only an icon.
-
-Button Group: Multiple buttons clustered together.
-
-Loading Button: Displays a spinner while an action is in progress.
-
-Disabled Button: Visually indicates it's not interactive.
-
-Fab (Floating Action Button): Prominent, often circular button, usually for a primary action on a screen.
-</pre> -->
-
 <script lang="ts">
 	import { ripple, tooltip } from '@delightstack/utilities';
 	import { type Snippet } from 'svelte';
 	import { type TransitionConfig } from 'svelte/transition';
-	import { Logo } from '../components';
 	import { backOut, quartOut } from 'svelte/easing';
-	import Popover from '../components/Popover.svelte';
+	import Popover from './Popover.svelte';
 	import ChevronDown from '~icons/mdi/chevron-down';
 	import type { Placement, Strategy } from '@floating-ui/dom';
 
@@ -47,14 +26,24 @@ Fab (Floating Action Button): Prominent, often circular button, usually for a pr
 		/** Whether the button is an icon button only */
 		icon = false,
 
-		/** Whether the button is round */
-		round = false,
+		/** Whether the button is a pill shape (rounded corners) */
+		pill = false,
 
 		/** Whether the button has a transparent background */
 		transparent = false,
 
 		/** Whether the button has a semi-transparent background (takes on some of the color of the text color) */
 		translucent = false,
+
+		/** Whether the button has an outline style (transparent background with border) */
+		outline = false,
+
+		/**
+		 * Whether the button is part of a group of buttons.
+		 * If so, the border radius will be removed on the sides that touch other buttons
+		 * and the borders/margins will be merged
+		 */
+		grouped = false,
 
 		/**
 		 * Whether the will be styled to indicator an error (or danger).
@@ -275,11 +264,12 @@ Fab (Floating Action Button): Prominent, often circular button, usually for a pr
 					class="loading-icon"
 					in:loadingTransition={{ direction: 'in' }}
 					out:loadingTransition={{ direction: 'out' }}>
-					<Logo
+					Loading...
+					<!-- <Logo
 						loading={isLoading}
 						success={isLoadingSuccess}
 						brandmark
-						color="currentColor" />
+						color="currentColor" /> -->
 				</div>
 			{/if}
 		{/if}
@@ -297,10 +287,10 @@ Fab (Floating Action Button): Prominent, often circular button, usually for a pr
 			aria-haspopup="true"
 			aria-expanded={dropdownActive}
 			title="Open for more actions"
-			use:rippleAction={{
+			{@attach ripple({
 				enabled: ripple && !disabled && !isLoading,
 				zIndex: 1,
-			}}
+			})}
 			bind:this={dropdownTrigger}>
 			<ChevronDown
 				style="pointer-events:none"
