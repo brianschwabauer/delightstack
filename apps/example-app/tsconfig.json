@@ -10,7 +10,7 @@
 		"sourceMap": true,
 		"strict": true,
 		"typeRoots": ["node_modules/@types"],
-		"types": ["svelte", "@types/google.maps"]
+		"types": ["svelte"]
 	},
 	"include": [
 		"./.svelte-kit/ambient.d.ts",

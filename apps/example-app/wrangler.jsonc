@@ -27,12 +27,12 @@
 			"routes": [
 				{
 					"custom_domain": true,
-					"pattern": "staging.show.tours",
-					"zone_id": "d85c0738d67381606bcb149a910731c8",
+					"pattern": "staging.example.com",
+					"zone_id": "ZONE_ID",
 				},
 				{
-					"pattern": "staging.show.tours/*",
-					"zone_id": "d85c0738d67381606bcb149a910731c8",
+					"pattern": "staging.example.com/*",
+					"zone_id": "ZONE_ID",
 				},
 			],
 			"ai": {
@@ -41,25 +41,8 @@
 			"browser": {
 				"binding": "BROWSER",
 			},
-			"kv_namespaces": [
-				{
-					"binding": "BASE64",
-					"id": "9b606a5704fa44cfb31d5d81233358dd",
-				},
-				{
-					"binding": "ENV",
-					"id": "af9fee32751a4a3ebecbef2ed705d6dc",
-				},
-				{
-					"binding": "KV",
-					"id": "86ebc1140b43484cb9c22a81ba6ced40",
-				},
-			],
+			"kv_namespaces": [],
 			"services": [
-				{
-					"binding": "IMAGE_PROCESSOR",
-					"service": "image-processor-staging",
-				},
 				{
 					"binding": "SELF",
 					"service": "app-staging",
@@ -67,19 +50,9 @@
 			],
 			"queues": {
 				"consumers": [],
-				"producers": [
-					{
-						"binding": "QUEUE",
-						"queue": "showandtour-staging",
-					},
-				],
+				"producers": [],
 			},
-			"r2_buckets": [
-				{
-					"binding": "R2",
-					"bucket_name": "showandtour-staging",
-				},
-			],
+			"r2_buckets": [],
 		},
 		"production": {
 			"name": "app",
@@ -90,21 +63,12 @@
 			"routes": [
 				{
 					"custom_domain": true,
-					"pattern": "next.show.tours",
-					"zone_id": "d85c0738d67381606bcb149a910731c8",
+					"pattern": "example.com",
+					"zone_id": "ZONE_ID",
 				},
 				{
-					"custom_domain": true,
-					"pattern": "host.show.tours",
-					"zone_id": "d85c0738d67381606bcb149a910731c8",
-				},
-				{
-					"pattern": "next.show.tours/*",
-					"zone_id": "d85c0738d67381606bcb149a910731c8",
-				},
-				{
-					"pattern": "show.tours/*",
-					"zone_id": "d85c0738d67381606bcb149a910731c8",
+					"pattern": "example.com/*",
+					"zone_id": "ZONE_ID",
 				},
 			],
 			"ai": {
@@ -113,25 +77,8 @@
 			"browser": {
 				"binding": "BROWSER",
 			},
-			"kv_namespaces": [
-				{
-					"binding": "BASE64",
-					"id": "cca5020095bf476fb966bd06f03dc5ac",
-				},
-				{
-					"binding": "ENV",
-					"id": "97f50395d4b24ce792edbe6a8c404525",
-				},
-				{
-					"binding": "KV",
-					"id": "30b41582bc6e4c2f8234a567fe5189fc",
-				},
-			],
+			"kv_namespaces": [],
 			"services": [
-				{
-					"binding": "IMAGE_PROCESSOR",
-					"service": "image-processor",
-				},
 				{
 					"binding": "SELF",
 					"service": "app",
@@ -139,19 +86,9 @@
 			],
 			"queues": {
 				"consumers": [],
-				"producers": [
-					{
-						"binding": "QUEUE",
-						"queue": "showandtour",
-					},
-				],
+				"producers": [],
 			},
-			"r2_buckets": [
-				{
-					"binding": "R2",
-					"bucket_name": "showandtour",
-				},
-			],
+			"r2_buckets": [],
 		},
 	},
 }

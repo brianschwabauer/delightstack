@@ -14,20 +14,12 @@ const config = {
 	kit: {
 		adapter: adapter({
 			platformProxy: {
-				configPath: './wrangler.toml',
+				configPath: './wrangler.jsonc',
 				environment: 'staging',
-				persist: {
-					path: './../../.wrangler/state/v3',
-				},
+				persist: true,
 			},
 		}),
 		version: { name: `v${packageJson.version}` },
-	},
-	vitePlugin: {
-		inspector: {
-			showToggleButton: 'active',
-			toggleButtonPos: 'top-right',
-		},
 	},
 };
 
