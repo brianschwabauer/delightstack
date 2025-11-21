@@ -32,6 +32,9 @@
 		"wrangler": "^4.49.1"
 	},
 	"dependencies": {
+		"@delightstack/auth": "workspace:*",
+		"@delightstack/components": "workspace:*",
+		"@delightstack/utilities": "workspace:*",
 		"@sentry/browser": "^10.26.0",
 		"comlink": "^4.4.2",
 		"cookie": "^0.4.2",

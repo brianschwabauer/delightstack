@@ -1,15 +1,17 @@
 import { DurableObject } from 'cloudflare:workers';
-import { SqlServer } from './sql.server';
+import { SqlServer, type SqlEntityQuery } from '@delightstack/database';
 import { AUTH_DATABASE_UPGRADES, AuthDatabaseSchema } from './auth.sql.schema';
-import { ApiError, decodeJwt, generateID, generateJwt, parseSchema } from '@packages/lib';
+import { ApiError, generateID, parseSchema, apiError } from '@delightstack/utilities';
+import { generateJwt, decodeJwt } from './jwt.server';
 import {
-	PERMISSIONS,
-	ROLES,
 	decodeOauthCapability,
 	decodePermissions,
 	encodePermissions,
+	OauthApplication,
+	OauthCapabilityMap,
 	OauthToken,
 	SessionToken,
+	UserPermissionMap,
 	UserSession,
 	UserSessionMeta,
 	encodeOauthCapability,
@@ -19,9 +21,8 @@ import {
 	EmailPasswordSignIn,
 	EmailSignUp,
 	EmailLinkSignIn,
-} from '@packages/types';
-import { apiError } from '@packages/lib';
-import { type SqlEntityQuery } from './sql.helper';
+} from './../types';
+
 import { argon2id, setWASMModules, argon2Verify } from 'argon2-wasm-edge';
 // @ts-expect-error
 import argon2WASM from 'argon2-wasm-edge/wasm/argon2.wasm'; // <-- imports of wasm modules works differently in CF
@@ -45,47 +46,64 @@ export interface AuthOperationResult<Type = SessionToken['typ']> {
 	org_id?: string;
 }
 
-export interface OauthApplication {
-	/** The ID of the application. Used as the "client_id" in oauth requests */
-	id: string;
-	/** The name of the application to display on the oauth consent page */
-	name: string;
-	/** The url to the logo to display on the oauth consent page */
-	logo?: string;
+interface Env {
+	DEV: boolean;
+}
+
+export interface AuthDatabaseServerOptions<
+	PermissionMap extends UserPermissionMap = UserPermissionMap,
+	CapabilityMap extends OauthCapabilityMap = OauthCapabilityMap,
+> {
 	/**
-	 * The list of client secrets to check against the "client_secret" field when an oauth application uses client_id and client_secret.
-	 * We allow multiple client secrets to be used for the same application, so that you can rotate them without breaking existing clients.
-	 * We store the hash of the client secret, so that we can verify it without storing the actual secret.
-	 * Only the first 10 characters of the hash are returned to the client to avoid leaking information about the secret.
+	 * The secret used to sign the jwt tokens.
+	 * To generate a new secret key, use the following code:
+	 * let key = await crypto.subtle.generateKey({name: 'HMAC', hash: {name: 'SHA-256'}}, true, ['sign', 'verify']);
+	 * let arrayBuffer = await crypto.subtle.exportKey('raw', key);
+	 * let uint8 = new Uint8Array(arrayBuffer);
+	 * let hex = Array.from(uint8)
+	 *		.map(byte => byte.toString(16).padStart(2, '0'))
+	 *		.join('')
+	 * Now save the jwk in the env variable
+	 * More information can be found here: https://github.com/diafygi/webcrypto-examples#hmac
 	 */
-	client_secrets: { hash?: string; id: string; created_at: number }[];
-	/** The list of urls that the application can be redirected to after oauth authorization */
-	redirect_urls: string[];
-	/** The default url that the user will be redirected to after authorization (used if not specified in query params) */
-	default_redirect_url?: string;
-	/** An optional url to the application's home page */
-	url?: string;
-	/** An optional description of the application. Shown on the oauth consent page */
-	description?: string;
-	/** The url to the application's privacy policy */
-	privacy_policy_url?: string;
-	/** The url to the application's terms of service */
-	terms_of_service_url?: string;
+	secret: string;
+
+	/** The id/name issuer of the JWT tokens. Can be any string - usually unique to an application */
+	issuer: string;
+
+	/** The map of user permissions used to encode/decode user permissions */
+	permissionMap: PermissionMap;
+
+	/** The map of oauth capabilities used to encode/decode oauth capabilities */
+	oauthCapabilityMap: CapabilityMap;
+
 	/**
-	 * The epoch timestamp in ms when the oauth application was verified (or undefined if it is not verified).
-	 * Unverified applications could show "This app is not verified yet" on the oauth consent page.
-	 * Verification is done by the server team and is required for applications that request sensitive scopes.
+	 * The permission required for a user to be an admin of an organization.
+	 * This is necessary because we will add this permission automatically to users that create new organizations.
+	 * This permission string must be a key in the `permissionMap`.
+	 * @default 'org:admin'
 	 */
-	verified_at?: number;
-	/** The epoch timestamp in ms when the oauth application was created */
-	created_at: number;
-	/** The epoch timestamp in ms when the oauth application was last updated */
-	updated_at: number;
+	orgAdminPermission?: keyof PermissionMap & string;
+
+	/**
+	 * The capability required for an oauth application to access the user's profile information.
+	 * We need this to know which capability to check when fetching the user's profile from the oauth provider.
+	 * This capability string must be a key in the `capabilityMap`.
+	 * @default 'profile'
+	 */
+	oauthProfileCapability?: keyof CapabilityMap & string;
 }
 
 /** A Durable Object for handling database requests */
-export class AuthDatabaseServer extends DurableObject {
+export class AuthDatabaseServer extends DurableObject<Env> {
 	private sql = new SqlServer<AuthDatabaseSchema>(this.ctx.storage);
+
+	private get orgAdminPermission() {
+		return this.options.orgAdminPermission || 'org:admin';
+	}
+	private get oauthProfileCapability() {
+		return this.options.oauthProfileCapability || 'profile';
+	}
 
 	/**
 	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
@@ -97,6 +115,7 @@ export class AuthDatabaseServer extends DurableObject {
 	constructor(
 		ctx: DurableObjectState,
 		protected env: Env,
+		private options: AuthDatabaseServerOptions,
 	) {
 		super(ctx, env);
 		this.initializeDB();
@@ -234,9 +253,13 @@ export class AuthDatabaseServer extends DurableObject {
 				},
 			});
 			if (existing_permission) {
-				const existing_permissions = decodePermissions(existing_permission.permission);
-				const new_permissions = decodePermissions(permission);
+				const existing_permissions = decodePermissions(
+					this.options.permissionMap,
+					existing_permission.permission,
+				);
+				const new_permissions = decodePermissions(this.options.permissionMap, permission);
 				const all_permissions = encodePermissions(
+					this.options.permissionMap,
 					Array.from(new Set([...existing_permissions, ...new_permissions])),
 				);
 				this.sql.update('org_user', existing_permission.id, {
@@ -290,7 +313,7 @@ export class AuthDatabaseServer extends DurableObject {
 		);
 		let token: Awaited<ReturnType<typeof decodeJwt>>;
 		try {
-			token = await decodeJwt(this.env.JWT_KEY_SECRET, email_signin_token);
+			token = await decodeJwt(this.options.secret, email_signin_token);
 		} catch (error) {
 			throw apiError({
 				status: 400,
@@ -345,9 +368,13 @@ export class AuthDatabaseServer extends DurableObject {
 				},
 			});
 			if (existing_permission) {
-				const existing_permissions = decodePermissions(existing_permission.permission);
-				const new_permissions = decodePermissions(permission);
+				const existing_permissions = decodePermissions(
+					this.options.permissionMap,
+					existing_permission.permission,
+				);
+				const new_permissions = decodePermissions(this.options.permissionMap, permission);
 				const all_permissions = encodePermissions(
+					this.options.permissionMap,
 					Array.from(new Set([...existing_permissions, ...new_permissions])),
 				);
 				this.sql.update('org_user', existing_permission.id, {
@@ -456,7 +483,8 @@ export class AuthDatabaseServer extends DurableObject {
 					? {
 							[org_id]: {
 								role: permission,
-								db: this.env.DB.idFromName(org_id).toString(),
+								db: org.db_id,
+								plan: org.plan,
 								name: org.name,
 							},
 						}
@@ -687,10 +715,14 @@ export class AuthDatabaseServer extends DurableObject {
 				type = 'signin';
 			}
 			if (!user_auth) {
-				if (!decodeOauthCapability(existing_token.capability).includes('profile')) {
+				const hasProfilePermision = decodeOauthCapability(
+					this.options.oauthCapabilityMap,
+					existing_token.capability,
+				).includes(this.oauthProfileCapability);
+				if (!hasProfilePermision) {
 					throw apiError({
 						status: 400,
-						message: `This oauth account is already connected to another user and doesn't profile permissions`,
+						message: `This oauth account is already connected to another user and doesn't have ${this.oauthProfileCapability} permissions`,
 					});
 				}
 				// The oauth token is not being used as a sign in method. It is being used for another vendor api (like Google Drive)
@@ -788,9 +820,16 @@ export class AuthDatabaseServer extends DurableObject {
 					},
 				});
 				if (existing_permission) {
-					const existing_permissions = decodePermissions(existing_permission.permission);
-					const new_permissions = decodePermissions(permission);
+					const existing_permissions = decodePermissions(
+						this.options.permissionMap,
+						existing_permission.permission,
+					);
+					const new_permissions = decodePermissions(
+						this.options.permissionMap,
+						permission,
+					);
 					const all_permissions = encodePermissions(
+						this.options.permissionMap,
 						Array.from(new Set([...existing_permissions, ...new_permissions])),
 					);
 					permission = all_permissions;
@@ -860,12 +899,17 @@ export class AuthDatabaseServer extends DurableObject {
 					account_email: email,
 					account_name: oauth_token.account_name,
 					account_image: oauth_token.account_image,
-					capability: encodeOauthCapability(oauth_token.capabilities),
+					capability: encodeOauthCapability(
+						this.options.oauthCapabilityMap,
+						oauth_token.capabilities,
+					),
 				});
 				this.sql.insert('oauth_token_permission', undefined, {
 					oauth_token_id,
 					user_id,
-					permission: encodePermissions(ROLES.admin),
+					permission: encodePermissions(this.options.permissionMap, [
+						this.orgAdminPermission,
+					]),
 				});
 			}
 			if (existing_token) {
@@ -1185,8 +1229,9 @@ export class AuthDatabaseServer extends DurableObject {
 		oauth_token: Omit<OauthToken, 'id' | 'created_at' | 'updated_at'>,
 		user_id: string,
 	) {
-		const update: AuthDatabaseSchema['oauth_token'] =
-			AuthDatabaseServer.to_db_oauth_token(oauth_token as any);
+		const update: AuthDatabaseSchema['oauth_token'] = this.convertOauthTokenToDB(
+			oauth_token as any,
+		);
 		delete (update as any)['id'];
 		delete (update as any)['created_at'];
 		delete (update as any)['updated_at'];
@@ -1224,11 +1269,13 @@ export class AuthDatabaseServer extends DurableObject {
 			this.sql.insert('oauth_token_permission', undefined, {
 				oauth_token_id: new_token.id,
 				user_id,
-				permission: encodePermissions(ROLES.admin),
+				permission: encodePermissions(this.options.permissionMap, [
+					this.orgAdminPermission,
+				]),
 			});
 		}
 
-		return AuthDatabaseServer.from_db_oauth_token(new_token);
+		return this.convertOauthTokenFromDB(new_token);
 	}
 
 	/** Removes an oauth account/token from all user's accounts */
@@ -1254,19 +1301,20 @@ export class AuthDatabaseServer extends DurableObject {
 		oauth_token_id: string,
 		oauth_token: Omit<OauthToken, 'id' | 'created_at' | 'updated_at'>,
 	) {
-		const update: Partial<AuthDatabaseSchema['oauth_token']> =
-			AuthDatabaseServer.to_db_oauth_token(oauth_token as any);
+		const update: Partial<AuthDatabaseSchema['oauth_token']> = this.convertOauthTokenToDB(
+			oauth_token as any,
+		);
 		delete update['id'];
 		delete update['created_at'];
 		delete update['updated_at'];
 		const updated = this.sql.update('oauth_token', oauth_token_id, update);
-		return AuthDatabaseServer.from_db_oauth_token(updated);
+		return this.convertOauthTokenFromDB(updated);
 	}
 
 	/** Returns the oauth token with the given id */
 	getOauthToken(oauth_token_id: string): OauthToken {
 		const token = this.sql.get('oauth_token', oauth_token_id);
-		return AuthDatabaseServer.from_db_oauth_token(token);
+		return this.convertOauthTokenFromDB(token);
 	}
 
 	/** Lists all the oauth accounts the user has permission to access */
@@ -1277,7 +1325,9 @@ export class AuthDatabaseServer extends DurableObject {
 				or: [
 					{ key: 'user_id', is: '=', value: user_id },
 					...org_permissions.map((permission) => {
-						const org_permission = encodePermissions([permission]);
+						const org_permission = encodePermissions(this.options.permissionMap, [
+							permission,
+						]);
 						return {
 							and: [
 								{ key: 'org_id', is: '=', value: org_id } as const,
@@ -1290,13 +1340,16 @@ export class AuthDatabaseServer extends DurableObject {
 		});
 		const oauth_token_permissions = token_permissions.reduce(
 			(acc, token_permission) => {
-				const new_permissions = decodePermissions(token_permission.permission);
+				const new_permissions = decodePermissions(
+					this.options.permissionMap,
+					token_permission.permission,
+				);
 				acc[token_permission.oauth_token_id] = Array.from(
 					new Set([...(acc[token_permission.oauth_token_id] || []), ...new_permissions]),
 				);
 				return acc;
 			},
-			{} as Record<string, (keyof typeof PERMISSIONS)[]>,
+			{} as Record<string, string[]>,
 		);
 		const list = Object.entries(oauth_token_permissions).map(
 			([token_id, permissions]) => {
@@ -1306,7 +1359,10 @@ export class AuthDatabaseServer extends DurableObject {
 					vendor: oauth_token.vendor,
 					vendor_id: oauth_token.vendor_id,
 					permissions: permissions,
-					capabilities: decodeOauthCapability(oauth_token.capability),
+					capabilities: decodeOauthCapability(
+						this.options.oauthCapabilityMap,
+						oauth_token.capability,
+					),
 					account_name: oauth_token.account_name,
 					account_email: oauth_token.account_email,
 					account_image: oauth_token.account_image,
@@ -1334,7 +1390,9 @@ export class AuthDatabaseServer extends DurableObject {
 						or: [
 							{ key: 'user_id', is: '=', value: user_id },
 							...org_permissions.map((permission) => {
-								const org_permission = encodePermissions([permission]);
+								const org_permission = encodePermissions(this.options.permissionMap, [
+									permission,
+								]);
 								return {
 									and: [
 										{ key: 'org_id', is: '=', value: org_id } as const,
@@ -1347,9 +1405,11 @@ export class AuthDatabaseServer extends DurableObject {
 				],
 			},
 		});
-		let permissions = [] as (keyof typeof PERMISSIONS)[];
+		let permissions = [] as (keyof typeof this.options.permissionMap & string)[];
 		token_permissions.forEach((token_permission) =>
-			permissions.push(...decodePermissions(token_permission.permission)),
+			permissions.push(
+				...decodePermissions(this.options.permissionMap, token_permission.permission),
+			),
 		);
 		permissions = Array.from(new Set(permissions));
 		return {
@@ -1390,7 +1450,7 @@ export class AuthDatabaseServer extends DurableObject {
 			},
 		});
 		if (!org_user) return { list: [], count: 0, hasMore: false };
-		const list = decodePermissions(org_user.permission);
+		const list = decodePermissions(this.options.permissionMap, org_user.permission);
 		return {
 			list,
 			count: list.length,
@@ -1399,16 +1459,23 @@ export class AuthDatabaseServer extends DurableObject {
 	}
 
 	/**
-	 * Updates the user's role in the given organization
+	 * Updates the user's permissions in the given organization
 	 * Use '0' or an empty array to remove the user from the organization
+	 * If a number is provided, it is treated as an encoded permission integer
+	 * If an array of permission strings is provided, it is encoded before being used
 	 */
-	updateUserRole(
+	updateUserPermission(
 		user_id: string,
 		org_id: string,
-		roles: number | (keyof typeof PERMISSIONS)[],
+		encodedOrDecodedPermission:
+			| number
+			| (keyof typeof this.options.permissionMap & string)[],
 	) {
-		const permission = typeof roles === 'number' ? roles : encodePermissions(roles);
-		const decoded = decodePermissions(permission);
+		const permission =
+			typeof encodedOrDecodedPermission === 'number'
+				? encodedOrDecodedPermission
+				: encodePermissions(this.options.permissionMap, encodedOrDecodedPermission);
+		const decoded = decodePermissions(this.options.permissionMap, permission);
 		if (decoded.includes('superadmin:read') || decoded.includes('superadmin:write')) {
 			throw apiError({
 				status: 400,
@@ -1424,7 +1491,10 @@ export class AuthDatabaseServer extends DurableObject {
 				],
 			},
 		});
-		const current_permissions = decodePermissions(current_org_user?.permission || 0);
+		const current_permissions = decodePermissions(
+			this.options.permissionMap,
+			current_org_user?.permission || 0,
+		);
 
 		// Check if the user doesn't belong to the org yet
 		if (!current_org_user) {
@@ -1459,7 +1529,11 @@ export class AuthDatabaseServer extends DurableObject {
 				and: [
 					{ key: 'user_id', is: '!=', value: user_id },
 					{ key: 'org_id', is: '=', value: org_id },
-					{ key: 'permission', is: '&=', value: encodePermissions(['org:write']) },
+					{
+						key: 'permission',
+						is: '&=',
+						value: encodePermissions(this.options.permissionMap, ['org:write']),
+					},
 				],
 			},
 		});
@@ -1570,12 +1644,13 @@ export class AuthDatabaseServer extends DurableObject {
 
 		let jwt: Awaited<ReturnType<typeof generateJwt<'email_verification'>>>;
 		try {
-			jwt = await generateJwt(this.env.JWT_KEY_SECRET, {
+			jwt = await generateJwt(this.options.secret, {
 				sub: user_auth_id, // The ID of the user's auth method used to sign in
 				uid: user_id, // The user's ID
 				iat: Math.floor(now / 1000),
 				exp: Math.floor(now / 1000) + 60 * 60,
 				typ: 'email_verification',
+				iss: this.options.issuer,
 			});
 		} catch (error) {
 			throw apiError({ status: 500, message: 'Failed to generate password reset token' });
@@ -1639,12 +1714,13 @@ export class AuthDatabaseServer extends DurableObject {
 		const now = Date.now();
 		let jwt: Awaited<ReturnType<typeof generateJwt<'email_signin'>>>;
 		try {
-			jwt = await generateJwt(this.env.JWT_KEY_SECRET, {
+			jwt = await generateJwt(this.options.secret, {
 				sub: user_auth.id, // The ID of the user's auth method used to sign in
 				iat: Math.floor(now / 1000),
 				exp: Math.floor(now / 1000) + 60 * 60,
 				typ: 'email_signin',
 				uid: user_auth.user_id, // The user's ID
+				iss: this.options.issuer,
 			});
 		} catch (error) {
 			throw apiError({ status: 500, message: 'Failed to generate email sign in token' });
@@ -1676,7 +1752,7 @@ export class AuthDatabaseServer extends DurableObject {
 	async verifyEmail(email_verification_token: string, meta: UserSessionMeta) {
 		let token: Awaited<ReturnType<typeof decodeJwt>>;
 		try {
-			token = await decodeJwt(this.env.JWT_KEY_SECRET, email_verification_token);
+			token = await decodeJwt(this.options.secret, email_verification_token);
 		} catch (error) {
 			throw apiError({
 				status: 400,
@@ -1868,12 +1944,13 @@ export class AuthDatabaseServer extends DurableObject {
 		const user_auth_id = user_auth.id;
 		let jwt: Awaited<ReturnType<typeof generateJwt>>;
 		try {
-			jwt = await generateJwt(this.env.JWT_KEY_SECRET, {
+			jwt = await generateJwt(this.options.secret, {
 				sub: user_auth_id, // The ID of the user's auth method used to sign in
 				uid: user_id, // The user's ID
 				iat: Math.floor(now / 1000),
 				exp: Math.floor(now / 1000) + 60 * 60,
 				typ: 'password_reset',
+				iss: this.options.issuer,
 			});
 		} catch (error) {
 			throw apiError({ status: 500, message: 'Failed to generate password reset token' });
@@ -1932,7 +2009,7 @@ export class AuthDatabaseServer extends DurableObject {
 	) {
 		let token: Awaited<ReturnType<typeof decodeJwt>>;
 		try {
-			token = await decodeJwt(this.env.JWT_KEY_SECRET, password_reset_token);
+			token = await decodeJwt(this.options.secret, password_reset_token);
 		} catch (error) {
 			throw apiError({ status: 400, message: 'Invalid or expired reset password link' });
 		}
@@ -2034,7 +2111,7 @@ export class AuthDatabaseServer extends DurableObject {
 		/** The ID of the user session record to encode in this token */
 		user_session_id?: string;
 		/** A record of organizations the user belongs to */
-		org?: Record<string, { role: number; db: string; name: string }>;
+		org?: Record<string, { role: number; db?: string; plan?: number; name: string }>;
 		/** The number of seconds the token will expire in. @default 3600 */
 		expires_in?: number;
 		/** The name of the user. If not provided, it will look it up in the database */
@@ -2053,10 +2130,10 @@ export class AuthDatabaseServer extends DurableObject {
 				(acc, org_user) => {
 					const org = this.sql.get('org', org_user.org_id);
 					if (org.deleted_at) return acc;
-					const db_id = this.env.DB.idFromName(org_user.org_id).toString();
 					acc[org_user.org_id] = {
 						role: org_user.permission,
-						db: db_id,
+						db: org.db_id,
+						plan: org.plan,
 						name: org.name,
 					};
 					return acc;
@@ -2083,7 +2160,7 @@ export class AuthDatabaseServer extends DurableObject {
 		}
 
 		const iat = Math.floor(new Date().getTime() / 1000);
-		return generateJwt<'auth'>(this.env.JWT_KEY_SECRET, {
+		return generateJwt<'auth'>(this.options.secret, {
 			typ: 'auth',
 			iss: this.ctx.id.toString(), // The 'issuer' of the token
 			sub: user_auth_id, // The ID of the user's auth method used to sign in
@@ -2126,7 +2203,7 @@ export class AuthDatabaseServer extends DurableObject {
 
 	/** Revokes the given session jwt */
 	async revokeSessionToken(jwt: string) {
-		const session = await decodeJwt(this.env.JWT_KEY_SECRET, jwt);
+		const session = await decodeJwt(this.options.secret, jwt);
 		this.revokeSession(session.jti);
 	}
 
@@ -2156,7 +2233,9 @@ export class AuthDatabaseServer extends DurableObject {
 			this.sql.insert('org_user', null, {
 				org_id: created_org.id,
 				user_id: org.owner_id,
-				permission: encodePermissions(ROLES.admin),
+				permission: encodePermissions(this.options.permissionMap, [
+					this.orgAdminPermission,
+				]),
 			});
 		});
 		return created_org;
@@ -2181,15 +2260,23 @@ export class AuthDatabaseServer extends DurableObject {
 				},
 			});
 			if (new_owners_permissions) {
-				const current_permissions = decodePermissions(new_owners_permissions.permission);
+				const current_permissions = decodePermissions(
+					this.options.permissionMap,
+					new_owners_permissions.permission,
+				);
 				this.sql.update('org_user', new_owners_permissions.id, {
-					permission: encodePermissions([...current_permissions, ...ROLES.admin]),
+					permission: encodePermissions(this.options.permissionMap, [
+						...current_permissions,
+						this.orgAdminPermission,
+					]),
 				});
 			} else {
 				this.sql.insert('org_user', null, {
 					org_id: id,
 					user_id: org.owner_id,
-					permission: encodePermissions(ROLES.admin),
+					permission: encodePermissions(this.options.permissionMap, [
+						this.orgAdminPermission,
+					]),
 				});
 			}
 		}
@@ -3000,7 +3087,7 @@ export class AuthDatabaseServer extends DurableObject {
 			}
 
 			const jti = generateID();
-			const new_access_token = await generateJwt(this.env.JWT_KEY_SECRET, {
+			const new_access_token = await generateJwt(this.options.secret, {
 				jti,
 				typ: 'oauth_application',
 				sub: oauth_application_auth_code.org_id, // The org ID the user is signing in to
@@ -3008,6 +3095,7 @@ export class AuthDatabaseServer extends DurableObject {
 				role: oauth_application_auth_code.permission,
 				iat: Math.floor(now / 1000),
 				exp: Math.floor(now / 1000) + 60 * 60,
+				iss: this.options.issuer,
 			});
 
 			let token: AuthDatabaseSchema['oauth_application_token'] | undefined;
@@ -3051,7 +3139,7 @@ export class AuthDatabaseServer extends DurableObject {
 		}
 
 		// Generate a new access token and update the database
-		const new_access_token = await generateJwt(this.env.JWT_KEY_SECRET, {
+		const new_access_token = await generateJwt(this.options.secret, {
 			typ: 'oauth_application',
 			jti: token.id,
 			sub: token.org_id, // The org ID the user is signing in to
@@ -3059,6 +3147,7 @@ export class AuthDatabaseServer extends DurableObject {
 			iat: Math.floor(now / 1000),
 			exp: Math.floor(now / 1000) + 60 * 60,
 			role: token.permission,
+			iss: this.options.issuer,
 		});
 		const updated_token = this.sql.update('oauth_application_token', token.id, {
 			access_token: new_access_token.jwt,
@@ -3282,7 +3371,7 @@ export class AuthDatabaseServer extends DurableObject {
 		return { results: result.toArray() };
 	}
 
-	private static from_db_oauth_token(token: AuthDatabaseSchema['oauth_token']) {
+	private convertOauthTokenFromDB(token: AuthDatabaseSchema['oauth_token']) {
 		const json = JSON.parse(token.json || '{}');
 		return {
 			id: token.id,
@@ -3292,7 +3381,10 @@ export class AuthDatabaseServer extends DurableObject {
 			access_token_expires_at: token.access_token_expires_at,
 			refresh_token: token.refresh_token,
 			refresh_token_expires_at: token.refresh_token_expires_at,
-			capabilities: decodeOauthCapability(token.capability),
+			capabilities: decodeOauthCapability(
+				this.options.oauthCapabilityMap,
+				token.capability,
+			),
 			vendor: token.vendor,
 			vendor_id: token.vendor_id,
 			account_email: token.account_email,
@@ -3302,7 +3394,7 @@ export class AuthDatabaseServer extends DurableObject {
 		} satisfies OauthToken;
 	}
 
-	private static to_db_oauth_token(token: OauthToken) {
+	private convertOauthTokenToDB(token: OauthToken) {
 		return {
 			id: token.id,
 			created_at: token.created_at,
@@ -3311,7 +3403,10 @@ export class AuthDatabaseServer extends DurableObject {
 			access_token_expires_at: token.access_token_expires_at,
 			refresh_token: token.refresh_token,
 			refresh_token_expires_at: token.refresh_token_expires_at,
-			capability: encodeOauthCapability(token.capabilities),
+			capability: encodeOauthCapability(
+				this.options.oauthCapabilityMap,
+				token.capabilities,
+			),
 			vendor: token.vendor,
 			vendor_id: token.vendor_id,
 			account_email: token.account_email,

@@ -1,184 +1,43 @@
-/** The configuration used to authorize an oauth2 connection to an API */
-export interface OauthConfig {
-	/** The environment this code is being run in. (useful for calling a vendor's staging endpoint) */
-	environment: 'staging' | 'production';
-
-	/** The URL to initialize the oauth connection */
-	authorizationURL: string;
-
-	/** The URL to fetch an access token from a refresh token or auth code */
-	accessTokenURL: string;
-
-	/** The URL that the user will be redirected to after setting up the oauth connection */
-	redirectURL: string;
-
-	/** The oauth2 ID used to authenticate our servers with the vendor */
-	clientID: string;
-
-	/** The oauth2 secret used to authenticate our servers with the vendor */
-	clientSecret: string;
-
-	/** The secret used to authenticate that a webhook is coming from the vendor */
-	webhookSecret?: string;
-
-	/** The base url (without '/' at the end) of the vendor's api */
-	apiURL?: string;
-
-	[other: string]: string | undefined;
-}
-
-/** A credential used to interact with a vendor's API */
-export interface OauthCredential extends Omit<OauthToken, 'authCode'> {
-	/** The list of oauth2 scopes this token has permission to use */
-	scopes: string[];
-
-	/** The list of orgIDs that have connected this vendor account and have permission to use it */
-	orgIDs?: string[];
-
-	/** The name of the user that owns the vendor account. This name comes directly from the vendor oauth API. */
-	name?: string;
-
-	/** The email address used for the vendor's account (not the email used for Show & Tour) */
-	email?: string;
-
-	/**
-	 * The list of IDs of connections to this credential.
-	 * Used to allow multiple users to connect to the same credential with different permissions
-	 */
-	connectedVendorIDs?: string[];
-
-	/** A record of vendor connections to this credential */
-	connectedVendor?: {
-		[vendorID: string]: {
-			/** The ID of the organization that connected this vendor */
-			orgID: string;
-
-			/** The ID of the user that controls the connection to the vendor */
-			owner: string;
-
-			/** The list of permissions that users (or user roles) have for each vendor entity */
-			permissions?: VendorPermission[];
-		};
-	};
-
-	/** The list of errors that happened when attempting to connect to the vendor. Becomes null on successful connections */
-	errors?: OauthCredentialError[] | null;
-
-	/** The tag used to ID which 3rd party service this credential connects to */
-	vendor?: string;
-
-	/** The Show & Tour ID of the vendor object used to connect */
-	vendorID?: string;
-
-	/** The vendor's ID of the connected account's organization/group/team. */
-	vendorOrgID?: string;
-
-	/** The vendor's ID of the connected user's account. */
-	vendorUserID?: string;
-
-	/** The global ID used to search for entities from a vendor. In the format - `{vendor}~{vendorOrgID}~{vendorUserID}` */
-	vendorUUID?: VendorUUID;
-}
-
-/** A pending credential used to interact with a vendor's API */
-export interface PendingOauthCredential {
-	/** The tag used to ID which 3rd party service this credential connects to */
-	vendor?: string;
-
-	/** The ID of the user that controls the connection to the vendor */
-	owner: string;
-
-	/** The ID of the organization making the connection to the vendor */
-	orgID: string;
-
-	/** The list of capabilities this vendor supports */
-	capabilities?: VendorCapability[];
-
-	/** The list of oauth2 scopes this token has permission to use */
-	scopes: string[];
-}
-
-/** A generated oauth token used to interact with a vendor API on behalf of a user */
-export interface OauthToken {
-	/** The code used to initially connect via oauth (when their isn't a refresh token yet) */
-	authCode?: string;
-
-	/** The token used to make vendor API calls on behalf of a user */
-	accessToken: string;
-
-	/** The token used to generate new access tokens */
-	refreshToken: string;
-
-	/** The epoch timestamp (in ms) when the access token will expire */
-	expires: number;
-
-	/** The epoch timestamp (in ms) when the refresh token will expire */
-	refreshExpires: number;
-}
-
-/** Info about an error that occurred when connecting to an OauthVendor */
-export interface OauthCredentialError {
-	/** The http status code the vendor returned */
-	status: number;
-
-	/** The error message the vendor returned */
-	message: string;
-
-	/** The error code the vendor returned */
-	code: string;
-
-	/** The epoch timestamp of the error */
-	time: number;
-
-	/** The URL that was being requested */
-	url: string;
-
-	/** The HTTP method that was being requested */
-	method: string;
-
-	/** The Show & Tour ApiEntity that was being interacted with */
-	entity: string;
-
-	/** The full body payload of the vendor */
-	payload?: any;
-}
+import { CreateOauthToken, OauthConfig, OauthToken } from '../types';
 
 /**
  * Returns an oauth token for the given oauth credential
- * If an authCode is provided, this means it's the initial setup (using the callback URL)
- * If no authCode is provided, this uses the refresh token in the credential to get the access code
+ * If an auth_code is provided, this means it's the initial setup (using the callback URL)
+ * If no auth_code is provided, this uses the refresh token in the credential to get the access code
  * If a valid access token is already provided, it will simply return that token
  * If an expired token is provided, it will refresh the token and return the new one
  */
 export const getOauthToken = async (
-	config: Partial<OauthConfig>,
-	token: Partial<OauthToken>,
-): Promise<OauthToken & { payload?: Record<string, any> }> => {
-	if (!config.accessTokenURL) {
+	config: OauthConfig,
+	token: OauthToken | CreateOauthToken,
+): Promise<Omit<OauthToken, 'id' | 'created_at' | 'updated_at'>> => {
+	if (!config.access_token_url) {
 		throw { status: 400, message: `Access token URL not provided` };
 	}
 
 	// Check if the provided token is not expired. If not expired, return it
-	if ((token?.expires || 0) - 5 * 60 * 1000 > Date.now()) {
-		if (token.accessToken && token.refreshToken) {
-			return token as OauthToken;
-		}
+	if (
+		!('auth_code' in token) &&
+		(token.access_token_expires_at || 0) - 5 * 60 * 1000 > Date.now()
+	) {
+		if (token.access_token) return token as OauthToken;
 	}
 
 	// Generate a new access token with the given config & refresh token
-	const response = await fetch(config.accessTokenURL, {
+	const response = await fetch(config.access_token_url, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json, application/x-www-form-urlencoded',
 			'Content-Type': 'application/x-www-form-urlencoded',
 		},
 		body: new URLSearchParams({
-			...(!token.authCode ? {} : { code: token.authCode }),
-			...(token.authCode ? {} : { refresh_token: token.refreshToken }),
-			client_id: config.clientID || '',
-			client_secret: config.clientSecret || '',
-			grant_type: token.authCode ? 'authorization_code' : 'refresh_token',
-			...(token.authCode ? { redirect_uri: config.redirectURL || '' } : {}),
+			...('auth_code' in token
+				? { code: token.auth_code, redirect_uri: token.redirect_url }
+				: {}),
+			...('auth_code' in token ? {} : { refresh_token: token.refresh_token }),
+			client_id: config.client_id,
+			client_secret: config.client_secret,
+			grant_type: 'auth_code' in token ? 'authorization_code' : 'refresh_token',
 		}).toString(),
 	});
 
@@ -223,10 +82,16 @@ export const getOauthToken = async (
 		: refreshExpiresAt;
 
 	return {
-		accessToken: body.access_token,
-		refreshToken: body.refresh_token,
-		expires,
-		refreshExpires,
+		access_token: body.access_token,
+		refresh_token: body.refresh_token,
+		access_token_expires_at: expires,
+		refresh_token_expires_at: refreshExpires,
+		capabilities: 'capabilities' in token ? token.capabilities : [],
+		vendor: token.vendor,
+		vendor_id: 'vendor_id' in token ? token.vendor_id : '',
 		payload: body,
+		account_email: 'account_email' in token ? token.account_email : undefined,
+		account_image: 'account_image' in token ? token.account_image : undefined,
+		account_name: 'account_name' in token ? token.account_name : undefined,
 	};
 };

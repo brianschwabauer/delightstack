@@ -1,4 +1,4 @@
-import { SqlTaggedTemplate } from './sql.helper';
+import { SqlTaggedTemplate } from '@delightstack/database';
 
 /** A database schema for the auth server (durable object sqlite) */
 export type AuthDatabaseSchema = {
@@ -236,11 +236,30 @@ export type AuthDatabaseSchema = {
 	};
 	org: {
 		id: string;
+		/** The name of the organization */
 		name: string;
-		owner_id: string; // user_id of the owner
+		/**
+		 * The ID of the user that owns the organization.
+		 * They can't be removed from the organization until they are no longer the owner.
+		 */
+		owner_id: string;
+		/**
+		 * The durable object ID for the database of this organization
+		 * This will be added to the auth JWT for faster durable object lookups
+		 */
+		db_id?: string;
+		/**
+		 * The integer representing the current subscription plan the organization is on.
+		 * We use an integer here to save space since this will be saved in the JWT token as well.
+		 */
+		plan?: number;
+		/** Additional json information about the organization */
 		json?: string;
+		/** The epoch timestamp in ms when the organization was created */
 		created_at: number;
+		/** The epoch timestamp in ms when the organization was last updated */
 		updated_at: number;
+		/** The epoch timestamp in ms when the organization was deleted */
 		deleted_at?: number;
 	};
 	org_user: {
@@ -390,6 +409,8 @@ export const AUTH_DATABASE_UPGRADES = [
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
 			owner_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE, -- user_id of the org's owner
+			db_id TEXT, -- The durable object ID for the database of this organization
+			plan INTEGER, -- The integer representing the current subscription plan the organization is on
 			json TEXT,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL,
