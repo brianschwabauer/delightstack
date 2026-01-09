@@ -1,4 +1,10 @@
-import { AnySchema, Orama, SorterConfig, search, TypedDocument } from '@orama/orama';
+import {
+	AnySchema,
+	Orama,
+	SearchableType,
+	SorterConfig,
+	TypedDocument,
+} from '@orama/orama';
 import { z } from 'zod';
 
 /**
@@ -34,7 +40,10 @@ interface DatabaseFieldBase {
 	/** Whether the field must be unique in the table. This is ignored if 'primary' is true */
 	unique?: boolean;
 
-	/** Whether the field can be used for sorting results. 'searchable' must be true for this to take effect */
+	/**
+	 * Whether the field can be used for sorting results.
+	 * If this is true, 'searchable' will also automatically be set to true so that sorting can be done via orama
+	 */
 	sortable?: boolean;
 
 	/** Whether the field is read-only - which shows the value but prevents updates */
@@ -118,6 +127,15 @@ interface StringField extends DatabaseFieldBase {
 	 */
 	format?: StringFieldFormat;
 
+	/** The minimum length of the string */
+	minlength?: number;
+
+	/** The maximum length of the string */
+	maxlength?: number;
+
+	/** The regular expression the string must match */
+	pattern?: string;
+
 	/** The zod schema used to validate/parse the string field */
 	schema: {
 		[Key in StringFieldFormat]: StringFieldFormatToZodSchema[Key];
@@ -152,6 +170,12 @@ interface NumberField extends DatabaseFieldBase {
 	integer?: boolean;
 	/** The zod schema used to validate/parse the number field */
 	schema: z.ZodNumber;
+	/** The maximum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
+	max?: number;
+	/** The minimum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
+	min?: number;
+	/** The amount the number should be increased/decreased with each 'step' */
+	step?: number;
 }
 
 /** The options for a boolean field */
@@ -188,6 +212,10 @@ interface ArrayField<Items extends FieldGenerator>
 	type: 'array';
 	/** The type of items in the array */
 	items: Items;
+	/** The minimum number of items in the array */
+	min?: number;
+	/** The maximum number of items in the array */
+	max?: number;
 }
 
 /** The options for an enum field */
@@ -451,14 +479,14 @@ type OramaType<T> = T extends {
 					: never
 	: never;
 
-interface GenericFormFieldProps<FieldName extends string = string> {
+interface BaseFormFieldProps<FieldName extends string = string> {
 	/** The name of the field (used when inside a <form> element) */
 	name: FieldName;
 	/**
 	 * A function that is called on every change
 	 * If it throws and error, the error can contain a "message" field that will be shown to the user
 	 */
-	validate: (value: any) => void;
+	parse: (value: any) => void;
 }
 
 type FormFieldPathValue<T, P extends string> = P extends `${infer Key}.${infer Rest}`
@@ -491,6 +519,51 @@ type FlattenFormFieldProps<T> = {
 
 type ExtractFormFieldProps<T> =
 	T extends Record<string, any> ? { [Key in keyof T]: T[Key]['_'] } : never;
+
+type GenericFormFieldProps = BaseFormFieldProps & {
+	/** The type of value that the input element accepts */
+	type:
+		| 'text'
+		| 'textarea'
+		| 'number'
+		| 'boolean'
+		| 'color'
+		| 'datetime-local'
+		| 'email'
+		| 'password'
+		| 'tel'
+		| 'url'
+		| 'date'
+		| 'time';
+
+	/**
+	 * Whether the field allows multiple values to be selected.
+	 * The field must be defined as an array() type to use this option.
+	 */
+	multiple?: boolean;
+	/** A human-readable label for the field (usually shown above an input) */
+	label?: string;
+	/** Whether the field is required */
+	required?: boolean;
+	/** Whether the field is read-only (shows the current value, but disables editing) */
+	readonly?: boolean;
+	/** A placeholder string for the field (usually a lighter color text in the Input box) */
+	placeholder?: string;
+	/** The maximum number of characters the input string can be. 'type' must be one of the string options */
+	maxlength?: number;
+	/** The minimum number of characters the input string can be. 'type' must be one of the string options */
+	minlength?: number;
+	/** The regular expression the input must match (handled by the native browser input). 'type' must be one of the string options */
+	pattern?: string;
+	/** The available options for the enum field */
+	options?: string[];
+	/** The maximum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
+	max?: number;
+	/** The minimum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
+	min?: number;
+	/** The amount the number should be increased/decreased with each 'step' */
+	step?: number;
+};
 
 /**
  * Defines the props that can be added to input components for a form field.
@@ -546,7 +619,7 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 					: /** The field is an enum type so add the necessary enum input props */
 						TypeString extends 'enum'
 						? Flatten<{
-								_: GenericFormFieldProps<FieldName> &
+								_: BaseFormFieldProps<FieldName> &
 									OmitNeverProperties<{
 										/** The type of value that the input element accepts */
 										type: 'text';
@@ -575,7 +648,7 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 						: /** The field is a number type so add the necessary number input props */
 							TypeString extends 'number'
 							? Flatten<{
-									_: GenericFormFieldProps<FieldName> &
+									_: BaseFormFieldProps<FieldName> &
 										OmitNeverProperties<{
 											/** The type of value that the input element accepts */
 											type: 'number';
@@ -585,8 +658,6 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 											min?: number;
 											/** The amount the number should be increased/decreased with each 'step' */
 											step?: number;
-											/** The maximum amount of digits allowed in a number input. 0 makes the number an integer */
-											maxdigits?: number;
 											/** Whether the field is required */
 											required: IsOptional<T> extends true ? never : true;
 											/** Whether the field is read-only (shows the current value, but disables editing) */
@@ -606,7 +677,7 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 							: /** The field is a boolean type so add the necessary boolean input props */
 								TypeString extends 'boolean'
 								? Flatten<{
-										_: GenericFormFieldProps<FieldName> &
+										_: BaseFormFieldProps<FieldName> &
 											OmitNeverProperties<{
 												/** The type of value that the input element accepts */
 												type: 'boolean';
@@ -629,7 +700,7 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 								: /** The field is a string type so add the necessary string input props */
 									TypeString extends 'string'
 									? Flatten<{
-											_: GenericFormFieldProps<FieldName> &
+											_: BaseFormFieldProps<FieldName> &
 												OmitNeverProperties<{
 													/** The type of value that the input element accepts */
 													type: StringFieldInputType<T['_']>;
@@ -772,9 +843,10 @@ class StringFieldGenerator {
 	}
 
 	/** Whether the field can be used for sorting results */
-	sortable(): Omit<Sortable<this>, 'sortable'> {
+	sortable(): Omit<Searchable<Sortable<this>>, 'sortable' | 'searchable'> {
 		this._.sortable = true;
-		return this as Omit<Sortable<this>, 'sortable'>;
+		this._.searchable = true;
+		return this as Omit<Searchable<Sortable<this>>, 'sortable' | 'searchable'>;
 	}
 
 	/** Validates that the string is a valid base64 encoded string */
@@ -883,13 +955,19 @@ class StringFieldGenerator {
 
 	/** Calls the zod.string().max() method which checks the maximum length of the string */
 	max(...options: Parameters<z.ZodString['max']>): Omit<this, 'max'> {
-		this._.schema = this._.schema.max(...options);
+		if (options[0] >= 0) {
+			this._.schema = this._.schema.max(...options);
+			this._.maxlength = options[0];
+		}
 		return this as Omit<this, 'max'>;
 	}
 
 	/** Calls the zod.string().min() method which checks the minimum length of the string */
 	min(...options: Parameters<z.ZodString['min']>): Omit<this, 'min'> {
-		this._.schema = this._.schema.min(...options);
+		if (options[0] >= 0) {
+			this._.schema = this._.schema.min(...options);
+			this._.minlength = options[0];
+		}
 		return this as Omit<this, 'min'>;
 	}
 
@@ -965,6 +1043,7 @@ class StringFieldGenerator {
 	/** Calls the zod.string().regex() method which will validate the string against the given regular expression */
 	regex(...options: Parameters<z.ZodString['regex']>): Omit<this, 'regex'> {
 		this._.schema = this._.schema.regex(...options);
+		this._.pattern = options[0].source;
 		return this as Omit<this, 'regex'>;
 	}
 
@@ -1091,9 +1170,10 @@ class NumberFieldGenerator {
 	}
 
 	/** Whether the field can be used for sorting results */
-	sortable(): Omit<Sortable<this>, 'sortable'> {
+	sortable(): Omit<Searchable<Sortable<this>>, 'sortable' | 'searchable'> {
 		this._.sortable = true;
-		return this as Omit<Sortable<this>, 'sortable'>;
+		this._.searchable = true;
+		return this as Omit<Searchable<Sortable<this>>, 'sortable' | 'searchable'>;
 	}
 
 	/** Calls the zod.number().default() method with the given options */
@@ -1107,30 +1187,35 @@ class NumberFieldGenerator {
 	/** Calls the zod.number().gt() method which ensures the number is greater than the given value */
 	gt(...options: Parameters<z.ZodNumber['gt']>): Omit<this, 'min' | 'gt' | 'gte'> {
 		this._.schema = this._.schema.gt(...options);
+		this._.min = Math.max(this._.min ?? -Infinity, options[0] + Number.EPSILON);
 		return this as Omit<this, 'min' | 'gt' | 'gte'>;
 	}
 
 	/** Calls the zod.number().gte() method which ensures the number is greater than or equal to the given value */
 	gte(...options: Parameters<z.ZodNumber['gte']>): Omit<this, 'min' | 'gt' | 'gte'> {
 		this._.schema = this._.schema.gte(...options);
+		this._.min = Math.max(this._.min ?? -Infinity, options[0]);
 		return this as Omit<this, 'min' | 'gt' | 'gte'>;
 	}
 
 	/** Calls the zod.number().int() method which ensures the number is an integer */
 	int(...options: Parameters<z.ZodNumber['int']>): Omit<IntegerValue<this>, 'int'> {
 		this._.schema = this._.schema.int(...options);
+		this._.integer = true;
 		return this as Omit<IntegerValue<this>, 'int'>;
 	}
 
 	/** Calls the zod.number().max() method which ensures the number is less than or equal to the given value */
 	max(...options: Parameters<z.ZodNumber['max']>): Omit<this, 'max' | 'lt' | 'lte'> {
 		this._.schema = this._.schema.max(...options);
+		this._.max = Math.min(this._.max ?? Infinity, options[0]);
 		return this as Omit<this, 'max' | 'lt' | 'lte'>;
 	}
 
 	/** Calls the zod.number().min() method which ensures the number is greater than or equal to the given value */
 	min(...options: Parameters<z.ZodNumber['min']>): Omit<this, 'min' | 'gt' | 'gte'> {
 		this._.schema = this._.schema.min(...options);
+		this._.min = Math.max(this._.min ?? -Infinity, options[0]);
 		return this as Omit<this, 'min' | 'gt' | 'gte'>;
 	}
 
@@ -1139,12 +1224,14 @@ class NumberFieldGenerator {
 		...options: Parameters<z.ZodNumber['multipleOf']>
 	): Omit<this, 'multipleOf'> {
 		this._.schema = this._.schema.multipleOf(...options);
+		this._.step = options[0];
 		return this as Omit<this, 'multipleOf'>;
 	}
 
 	/** Calls the zod.number().min() method which ensures the number is less than 0 */
 	negative(...options: Parameters<z.ZodNumber['negative']>): Omit<this, 'negative'> {
 		this._.schema = this._.schema.negative(...options);
+		this._.max = Math.min(this._.max ?? Infinity, 0 - Number.EPSILON);
 		return this as Omit<this, 'negative'>;
 	}
 
@@ -1161,12 +1248,14 @@ class NumberFieldGenerator {
 	/** Calls the zod.number().lt() method which ensures the number is less than the given value */
 	lt(...options: Parameters<z.ZodNumber['lt']>): Omit<this, 'max' | 'lt' | 'lte'> {
 		this._.schema = this._.schema.lt(...options);
+		this._.max = Math.min(this._.max ?? Infinity, options[0] - Number.EPSILON);
 		return this as Omit<this, 'max' | 'lt' | 'lte'>;
 	}
 
 	/** Calls the zod.number().lte() method which ensures the number is less than or equal to the given value */
 	lte(...options: Parameters<z.ZodNumber['lte']>): Omit<this, 'max' | 'lt' | 'lte'> {
 		this._.schema = this._.schema.lte(...options);
+		this._.max = Math.min(this._.max ?? Infinity, options[0]);
 		return this as Omit<this, 'max' | 'lt' | 'lte'>;
 	}
 
@@ -1194,6 +1283,7 @@ class NumberFieldGenerator {
 	/** Calls the zod.number().positive() method which ensures the number is positive */
 	positive(...options: Parameters<z.ZodNumber['positive']>): Omit<this, 'positive'> {
 		this._.schema = this._.schema.positive(...options);
+		this._.min = Math.max(this._.min ?? -Infinity, 0 + Number.EPSILON);
 		return this as Omit<this, 'positive'>;
 	}
 
@@ -1234,9 +1324,10 @@ class BooleanFieldGenerator {
 	}
 
 	/** Whether the field can be used for sorting results */
-	sortable(): Omit<Sortable<this>, 'sortable'> {
+	sortable(): Omit<Searchable<Sortable<this>>, 'sortable' | 'searchable'> {
 		this._.sortable = true;
-		return this as Omit<Sortable<this>, 'sortable'>;
+		this._.searchable = true;
+		return this as Omit<Searchable<Sortable<this>>, 'sortable' | 'searchable'>;
 	}
 
 	/** Calls the zod.boolean().default() method with the given options */
@@ -1484,9 +1575,10 @@ class ForeignKeyFieldGenerator {
 	}
 
 	/** Whether the field can be used for sorting results */
-	sortable(): Omit<Sortable<this>, 'sortable'> {
+	sortable(): Omit<Searchable<Sortable<this>>, 'sortable' | 'searchable'> {
 		this._.sortable = true;
-		return this as Omit<Sortable<this>, 'sortable'>;
+		this._.searchable = true;
+		return this as Omit<Searchable<Sortable<this>>, 'sortable' | 'searchable'>;
 	}
 
 	/**
@@ -1615,6 +1707,22 @@ class ArrayFieldGenerator<Items extends FieldGenerator> {
 			this._.searchable = true;
 		}
 		return this as Omit<Searchable<this>, 'searchable'>;
+	}
+
+	/** Sets the minimum length of the array */
+	min(length: number): Omit<this, 'min'> {
+		if (length >= 0) {
+			this._.min = length;
+		}
+		return this as Omit<this, 'min'>;
+	}
+
+	/** Sets the maximum length of the array */
+	max(length: number): Omit<this, 'max'> {
+		if (length >= 0) {
+			this._.max = length;
+		}
+		return this as Omit<this, 'max'>;
 	}
 
 	/** Adds a human-readable label for the field (usually shown above input elements) */
@@ -1906,9 +2014,6 @@ export namespace Database {
 			/** The name of the table. Can only contain alphanumeric characters and underscores. */
 			name: TableName;
 
-			/** The zod schema used to validate the table's shape */
-			schema: z.ZodObject;
-
 			/**
 			 * Parses & validates the given data against the table's shape
 			 * @throws an error if the data is invalid
@@ -2011,72 +2116,570 @@ export namespace Database {
 		let searchable_fields: SearchableColumn[] = [];
 		let sortable_fields: SortableColumn[] = [];
 		let foreign_keys: ForeignKeys = {} as ForeignKeys;
+		const indexes: Table['config']['indexes'] = [];
 		const form_field = {} as FormFieldProps<TableConfig>;
 		const table_definition = {} as SqliteTableDefinition<TableConfig>;
 		const orama_schema = {} as OramaSchemaConfig;
 		const orama_sort: SorterConfig = {
-			enabled: true,
+			enabled: false,
 			unsortableProperties: [],
 		};
 
 		const generator = new DatabaseGenerator();
-		const response = callback(generator);
+		const table_config = callback(generator);
 
 		if (
-			typeof response !== 'object' ||
-			!response ||
-			!Object.keys(response).length ||
-			Array.isArray(response)
+			typeof table_config !== 'object' ||
+			!table_config ||
+			!Object.keys(table_config).length ||
+			Array.isArray(table_config)
 		) {
 			throw { message: 'Table schema callback must return a non-empty object' };
 		}
 
 		// Collect primary key, indexable fields, etc.
-		for (const [fieldName, fieldDef] of Object.entries(response)) {
+		for (const [fieldName, fieldDef] of Object.entries(table_config)) {
 			if (!fieldDef['_']) {
 				throw {
 					message: `Field '${fieldName}' is not a valid field definition. Did you forget to call a field generator method?`,
 				};
 			}
 			const field = fieldDef['_'] as DatabaseField;
-
 			if (field.type === 'primary_key') {
 				if (primary_key) {
 					throw {
 						message: `Table can only have one primary key defined. Fields ${fieldName} and ${primary_key} are both defined as primary keys.`,
 					};
 				}
+			}
+
+			// Handle primary key field
+			if (field.type === 'primary_key') {
 				primary_key = fieldName as PrimaryKeyColumn;
 				(table_definition as any)[fieldName] =
 					field.primary_key.type === 'string'
 						? 'TEXT PRIMARY KEY'
 						: 'INTEGER PRIMARY KEY AUTOINCREMENT';
-				form_field[fieldName as keyof typeof form_field] = {
-					name: fieldName,
-					type: field.primary_key.type === 'string' ? 'text' : 'number',
-					readonly: true,
-					required: true,
-				} as any;
 				(orama_schema as any)[fieldName] =
 					field.primary_key.type === 'number' ? 'number' : 'string';
+				searchable_fields.push(fieldName as SearchableColumn);
+				if ('sortable' in field && field.sortable) {
+					sortable_fields.push(fieldName as SortableColumn);
+					orama_sort.enabled = true;
+				} else {
+					orama_sort.unsortableProperties!.push(fieldName);
+				}
 				continue;
 			}
 
+			// Build the sortable/searchable fields for orama
 			if ('sortable' in field && field.sortable) {
 				sortable_fields.push(fieldName as SortableColumn);
+				orama_sort.enabled = true;
 			} else {
-				orama_sort.unsortableProperties!.push(fieldName);
+				if ('searchable' in field && field.searchable) {
+					orama_sort.unsortableProperties!.push(fieldName);
+				}
 			}
+			if ('searchable' in field && field.searchable) {
+				searchable_fields.push(fieldName as SearchableColumn);
+			}
+
+			// Build the indexable fields for sqlite
+			if ('indexable' in field && field.indexable) {
+				indexable_fields.push(fieldName as IndexableColumn);
+				let unique = false;
+				let descending = false;
+				let name = `idx_${tableName}_${fieldName}`;
+				const columns = [fieldName];
+				if ('index' in field && field.index) {
+					unique = field.index.unique ?? false;
+					descending = field.index.descending ?? false;
+					name = field.index.name ?? name;
+					const additional_columns = (field.index.additional_columns || []).filter(
+						Boolean,
+					);
+					if (additional_columns.length) {
+						columns.push(...additional_columns);
+						if (!field.index.name) {
+							name = `idx_${tableName}_${[fieldName, ...additional_columns].join('_')}`;
+						}
+					}
+				}
+				indexes.push({
+					name,
+					table: tableName,
+					columns,
+					unique,
+					direction: descending ? 'DESC' : 'ASC',
+				});
+			}
+
+			// Build the sqlite table definition
+			let sqliteColumnDef: 'TEXT' | 'INTEGER' | 'NUMERIC' | 'BOOLEAN' = 'TEXT';
+			if (field.type === 'boolean') {
+				sqliteColumnDef = 'BOOLEAN';
+			} else if (field.type === 'number') {
+				if ('integer' in field && field.integer) {
+					sqliteColumnDef = 'INTEGER';
+				} else {
+					sqliteColumnDef = 'NUMERIC';
+				}
+			} else if (field.type === 'foreign_key') {
+				if (field.foreign_key.type === 'number') {
+					sqliteColumnDef = 'INTEGER';
+				} else {
+					sqliteColumnDef = 'TEXT';
+				}
+			}
+			if ('unique' in field && field.unique) {
+				unique_fields.push(fieldName as UniqueColumn);
+				sqliteColumnDef += ' UNIQUE';
+			} else if (!field.optional) {
+				sqliteColumnDef += ' NOT NULL';
+			}
+			if (field.type === 'foreign_key') {
+				// Do a sanity check for invalid table names (in the off chance someone puts a bad table name here)
+				if (field.foreign_key.table.match(/[^a-zA-Z0-9_]/)) {
+					throw {
+						message: `Foreign key field '${fieldName}' has an invalid table name '${field.foreign_key.table}'. Table names can only contain alphanumeric characters and underscores.`,
+					};
+				}
+				if (field.foreign_key.column.match(/[^a-zA-Z0-9_]/)) {
+					throw {
+						message: `Foreign key field '${fieldName}' has an invalid column name '${field.foreign_key.column}'. Column names can only contain alphanumeric characters and underscores.`,
+					};
+				}
+				sqliteColumnDef += ` REFERENCES ${field.foreign_key.table}(${field.foreign_key.column})`;
+				if (field.foreign_key.on_update) {
+					sqliteColumnDef += ` ON UPDATE ${field.foreign_key.on_update}`;
+				}
+				if (field.foreign_key.on_delete) {
+					sqliteColumnDef += ` ON DELETE ${field.foreign_key.on_delete}`;
+				}
+				(foreign_keys as any)[fieldName] = {
+					type: field.foreign_key.type,
+					table: field.foreign_key.table,
+					column: field.foreign_key.column,
+					on_update: field.foreign_key.on_update,
+					on_delete: field.foreign_key.on_delete,
+				};
+			}
+			(table_definition as any)[fieldName] = sqliteColumnDef;
+
+			// Build the orama schema
+			function recursivelyBuildOramaSchema(
+				subfield: DatabaseField,
+				force_searchable: boolean = false,
+			): AnySchema | SearchableType | undefined {
+				if (subfield.type === 'object') {
+					const child = Object.entries(subfield.properties).reduce(
+						(acc, [childFieldName, childFieldDef]) => {
+							const childField = (childFieldDef as any)?.['_'] as DatabaseField;
+							if (!childField) return acc;
+							const childSchema = recursivelyBuildOramaSchema(
+								childField,
+								force_searchable || ('searchable' in childField && childField.searchable),
+							);
+							if (!childSchema) return acc;
+							acc[childFieldName] = childSchema;
+							return acc;
+						},
+						{} as Record<string, AnySchema | SearchableType>,
+					);
+					if (Object.keys(child).length === 0) return undefined;
+					return child;
+				}
+
+				if (subfield.type === 'array') {
+					if (!subfield.searchable || !('items' in subfield)) return;
+					const itemType = subfield.items._;
+					if (itemType.type === 'string') {
+						return 'string[]';
+					} else if (itemType.type === 'number') {
+						return 'number[]';
+					} else if (itemType.type === 'boolean') {
+						return 'boolean[]';
+					} else if (itemType.type === 'enum') {
+						return 'enum[]';
+					}
+					return;
+				}
+
+				if (!subfield.searchable && !force_searchable) return;
+				if (subfield.type === 'boolean') return 'boolean';
+				if (subfield.type === 'number') return 'number';
+				if (subfield.type === 'geopoint') return 'geopoint';
+				if (subfield.type === 'vector') return `vector[${subfield.dimensions}]`;
+				if (subfield.type === 'enum') return 'enum';
+				if (subfield.type === 'string') return 'string';
+				if (subfield.type === 'foreign_key') {
+					return subfield.foreign_key.type === 'number' ? 'number' : 'string';
+				}
+				if (subfield.type === 'primary_key') {
+					return subfield.primary_key.type === 'number' ? 'number' : 'string';
+				}
+				return;
+			}
+			const built_schema = recursivelyBuildOramaSchema(field);
+			if (built_schema) {
+				(orama_schema as any)[fieldName] = built_schema;
+			}
+
+			// Build the form field properties
+			function recursivelyBuildFormFieldProps(subfield: DatabaseField, path: string) {
+				if (subfield.type === 'object') {
+					for (const [childFieldName, childFieldDef] of Object.entries(
+						subfield.properties,
+					)) {
+						const childField = (childFieldDef as any)?.['_'] as DatabaseField;
+						if (!childField) continue;
+						recursivelyBuildFormFieldProps(
+							childField,
+							[path, childFieldName].filter(Boolean).join('.'),
+						);
+					}
+					return;
+				}
+				if (subfield.type === 'array') {
+					if (subfield.items && subfield.items._) {
+						const itemField = subfield.items._ as DatabaseField;
+						recursivelyBuildFormFieldProps(itemField, `${path}[]`);
+					}
+					return;
+				}
+				if (
+					subfield.type !== 'string' &&
+					subfield.type !== 'number' &&
+					subfield.type !== 'boolean' &&
+					subfield.type !== 'enum'
+				) {
+					return;
+				}
+				const field_props: GenericFormFieldProps = {
+					name: path,
+					type: 'text',
+					readonly: subfield.readonly,
+					required: !subfield.optional,
+					label: 'label' in subfield ? (subfield as any).label : undefined,
+					placeholder:
+						'placeholder' in subfield ? (subfield as any).placeholder : undefined,
+					parse: (value) => {
+						if ('schema' in subfield && subfield.schema) {
+							return subfield.schema.parse(value);
+						}
+						return value;
+					},
+				};
+				if (subfield.type === 'string') {
+					if ('minlength' in subfield && typeof subfield.minlength === 'number') {
+						field_props.minlength = subfield.minlength;
+					}
+					if ('maxlength' in subfield && typeof subfield.maxlength === 'number') {
+						field_props.maxlength = subfield.maxlength;
+					}
+					if ('pattern' in subfield && typeof subfield.pattern === 'string') {
+						field_props.pattern = subfield.pattern;
+					}
+					if ('format' in subfield && typeof subfield.format === 'string') {
+						if (subfield.textarea) {
+							field_props.type = 'textarea';
+						} else if (subfield.format === 'email') {
+							field_props.type = 'email';
+						} else if (subfield.format === 'url') {
+							field_props.type = 'url';
+						} else if (subfield.format === 'date') {
+							field_props.type = 'date';
+						} else if (subfield.format === 'datetime') {
+							field_props.type = 'datetime-local';
+						} else if (subfield.format === 'color') {
+							field_props.type = 'color';
+						} else if (subfield.format === 'password') {
+							field_props.type = 'password';
+						} else if (subfield.format === 'phone') {
+							field_props.type = 'tel';
+						} else if (subfield.format === 'time') {
+							field_props.type = 'time';
+						}
+					}
+				}
+				if (subfield.type === 'number') {
+					field_props.type = 'number';
+					if ('min' in subfield && typeof subfield.min === 'number') {
+						field_props.min = subfield.min;
+					}
+					if ('max' in subfield && typeof subfield.max === 'number') {
+						field_props.max = subfield.max;
+					}
+					if ('step' in subfield && typeof subfield.step === 'number') {
+						field_props.step = subfield.step;
+					}
+				}
+				if (subfield.type === 'boolean') {
+					field_props.type = 'boolean';
+				}
+				if (subfield.type === 'enum') {
+					field_props.options = subfield.options;
+				}
+				(form_field as any)[path] = field_props;
+			}
+			recursivelyBuildFormFieldProps(field, fieldName);
 		}
 
 		// Ensure the table has a valid config
 		if (!primary_key) throw { message: 'Table must have a primary key defined' };
 
+		/**
+		 * The parse function to validate data against the table schema
+		 * @throws an error if the data is invalid (with details about the validation errors)
+		 */
+		function parse(data: any): Entity {
+			const parsedData = {} as any;
+			const issues: Array<{ path: string[]; message: string }> = [];
+			for (const [fieldName, fieldDef] of Object.entries(table_config)) {
+				function recursivelyParseField(
+					field: DatabaseField,
+					value: any,
+					path: string[],
+				): any {
+					let label = path.join('.');
+					if ('label' in field && (field as any).label) {
+						label = (field as any).label;
+					} else if ('placeholder' in field && (field as any).placeholder) {
+						label = (field as any).placeholder;
+					}
+					if (value === undefined || value === null) {
+						if (!('optional' in field && field.optional)) {
+							issues.push({
+								message: `Field '${label}' is required but was not provided.`,
+								path,
+							});
+						}
+						return;
+					}
+
+					// Recursively parse/validate object fields
+					if (field.type === 'object') {
+						if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+							issues.push({
+								message: `Field '${label}' must be an object.`,
+								path,
+							});
+							return;
+						}
+						const parsedObject: any = {};
+						for (const [childFieldName, childFieldDef] of Object.entries(
+							field.properties,
+						)) {
+							const childField = (childFieldDef as any)?.['_'] as DatabaseField;
+							if (!childField) continue;
+							const childValue = value[childFieldName];
+							parsedObject[childFieldName] = recursivelyParseField(
+								childField,
+								childValue,
+								[...path, childFieldName],
+							);
+						}
+						return parsedObject;
+					}
+
+					// Recursively parse/validate array fields
+					if (field.type === 'array') {
+						if (!Array.isArray(value)) {
+							issues.push({
+								message: `Field '${label}' must be an array.`,
+								path,
+							});
+							return;
+						}
+						if (!field.items || !field.items._) return value;
+						const itemField = field.items._ as DatabaseField;
+						let message = '';
+						if (
+							'min' in itemField &&
+							typeof itemField.min === 'number' &&
+							'max' in itemField &&
+							typeof itemField.max === 'number'
+						) {
+							message = `Field '${label}' must have between ${itemField.min} and ${itemField.max} items.`;
+						}
+						if ('min' in itemField && typeof itemField.min === 'number') {
+							if (value.length < itemField.min) {
+								issues.push({
+									message:
+										message ||
+										`Field '${label}' must have at least ${itemField.min} items.`,
+									path,
+								});
+							}
+						}
+						if ('max' in itemField && typeof itemField.max === 'number') {
+							if (value.length > itemField.max) {
+								issues.push({
+									message:
+										message ||
+										`Field '${label}' must have at most ${itemField.max} items.`,
+									path,
+								});
+							}
+						}
+						return value.map((itemValue, index) =>
+							recursivelyParseField(itemField, itemValue, [...path, `[${index}]`]),
+						);
+					}
+
+					// Parse/validate geopoint fields (used in orama for location based searching)
+					if (field.type === 'geopoint') {
+						const lat = Number(value?.lat);
+						const lon = Number(value?.lon);
+						if (isNaN(lat) || isNaN(lon)) {
+							issues.push({
+								message: `Field '${label}' must be a geopoint with valid 'lat' and 'lon' numbers.`,
+								path,
+							});
+							return;
+						}
+						return {
+							lat: Math.max(-90, Math.min(90, lat)),
+							lon: Math.max(-180, Math.min(180, lon)),
+						};
+					}
+
+					// Parse/validate boolean fields
+					if (field.type === 'boolean') {
+						if (value === 'true' || value === '1' || value === 1) return true;
+						if (value === 'false' || value === '0' || value === 0) return false;
+						if (typeof value !== 'boolean') {
+							issues.push({
+								message: `Field '${label}' must be a boolean.`,
+								path,
+							});
+						}
+						return value;
+					}
+
+					// Parse/validate enum fields
+					if (field.type === 'enum') {
+						if (typeof value !== 'string' || !field.options.includes(value)) {
+							issues.push({
+								message: `Field '${label}' must be one of the allowed options: ${field.options.join(
+									', ',
+								)}.`,
+								path,
+							});
+							return;
+						}
+						return value;
+					}
+
+					// Parse/validate vector fields (used for vector search in orama)
+					if (field.type === 'vector') {
+						if (!Array.isArray(value) || value.length !== field.dimensions) {
+							issues.push({
+								message: `Field '${label}' must be an array of numbers with length ${field.dimensions}.`,
+								path,
+							});
+							return;
+						}
+						const parsedVector = value.map((v, i) => {
+							const num = Number(v);
+							if (isNaN(num)) {
+								issues.push({
+									message: `Field '${label}' has an invalid number at index ${i}.`,
+									path,
+								});
+							}
+							return num;
+						});
+						return parsedVector;
+					}
+
+					// Foreign key fields are either strings or numbers and have no zod schema
+					if (field.type === 'foreign_key') {
+						if (field.foreign_key.type === 'number') {
+							const parsedNumber = Number(value);
+							if (isNaN(parsedNumber)) {
+								issues.push({
+									message: `Field '${label}' must be a number.`,
+									path,
+								});
+								return;
+							}
+							return parsedNumber;
+						} else {
+							return String(value);
+						}
+					}
+
+					// Primary fields are either strings or numbers and have no zod schema
+					if (field.type === 'primary_key') {
+						if (field.primary_key.type === 'number') {
+							const parsedNumber = Number(value);
+							if (isNaN(parsedNumber)) {
+								issues.push({
+									message: `Field '${label}' must be a number.`,
+									path,
+								});
+								return;
+							}
+							return parsedNumber;
+						} else {
+							return String(value);
+						}
+					}
+
+					// Use the zod schema if provided (this should be provided in most cases)
+					if ('schema' in field && field.schema) {
+						try {
+							return field.schema.parse(value);
+						} catch (err) {
+							issues.push({
+								message: `Field '${label}' is invalid: ${(err as any)?.message || 'Unknown error'}`,
+								path,
+							});
+							return;
+						}
+					}
+
+					// Handle numbers without a schema (this should never happen, but just in case)
+					if (field.type === 'number') {
+						const parsedNumber = Number(value);
+						if (isNaN(parsedNumber)) {
+							issues.push({
+								message: `Field '${label}' must be a number.`,
+								path,
+							});
+							return;
+						}
+						return parsedNumber;
+					}
+
+					// Handle strings without a schema (this should never happen, but just in case)
+					if (field.type === 'string') {
+						return String(value);
+					}
+
+					return value;
+				}
+				parsedData[fieldName] = recursivelyParseField(fieldDef['_'], data[fieldName], [
+					fieldName,
+				]);
+			}
+
+			// If there are any validation issues, throw an error with details
+			if (issues.length) {
+				throw {
+					message: issues[0].message,
+					issues,
+				};
+			}
+			return parsedData as Entity;
+		}
+
 		return {
-			_: {} as any,
+			_: table_config,
 			name: tableName,
-			schema: z.object({}) as z.ZodObject<any>,
-			parse: (data: any) => data as Entity,
+			parse,
 			config: {
 				primary_key,
 				indexable_fields,
@@ -2084,12 +2687,12 @@ export namespace Database {
 				sortable_fields,
 				unique_fields,
 				foreign_keys,
+				table_definition,
+				indexes,
 				orama: {
 					schema: orama_schema,
 					sort: orama_sort,
 				},
-				table_definition: table_definition,
-				indexes: [] as any[], // the sqlite indexes to create
 			},
 			form: {
 				field: form_field,
@@ -2097,143 +2700,3 @@ export namespace Database {
 		} as Table;
 	}
 }
-
-export const Person = Database.table('person', (db) => ({
-	id: db.primaryKey({ type: 'number' }),
-	/** The name of the person */
-	name: db
-		.string()
-		.indexable({ name: 'idx_person_name' })
-		.min(1)
-		.max(255)
-		.label('Full Name')
-		.placeholder('Enter full name here'),
-	// A number between 0 and 100
-	number: db.number().sortable().min(0).max(100).readonly(),
-	vectorField: db.vector(128),
-	number2: db
-		.number()
-		.indexable({
-			name: 'idx_person_number2',
-			unique: true,
-			descending: false,
-		})
-		.searchable(),
-	foreign_id: db
-		.foreignKey({
-			type: 'string',
-			table: 'other_table',
-			column: 'id',
-		})
-		.searchable(),
-	boolean2: db.boolean().searchable().sortable(),
-	child: db.object({
-		nestedName: db.string().min(3).max(100).searchable().sortable(),
-		optional: db.string().optional().readonly(),
-		deeplyNested: db.object({
-			deepName: db.string().min(1).max(50).optional(),
-		}),
-		nestedArray: db.array(db.string()).searchable(),
-		enumChild: db.enum(['childOption1', 'childOption2']).default('childOption1'),
-	}),
-	hello: db.string().optional(),
-	enumTest: db.enum(['option1', 'option2', 'option3']).default('option1').searchable(),
-	enumArray: db
-		.array(db.enum(['option1', 'option2', 'option3']).default('option1').searchable())
-		.optional(),
-	array2: db.array(db.string()).searchable(),
-	geopoint: db.geopoint(),
-	array: db.array(
-		db.object({
-			test: db.string().searchable().sortable().readonly(),
-			hello: db.boolean(),
-			item: db.number().min(0),
-			optional: db.string().optional(),
-			hi: db.object({
-				nested: db.string().min(1),
-			}),
-		}),
-	),
-}));
-
-Person.name;
-Person.parse;
-Person.config;
-Person.form.field['name'].label;
-Person.form.field['child.deeplyNested.deepName'].name;
-// Person.form.field.hello?.type;
-// Person._.array._.items._.type;
-type FieldTypeTest = FieldType<typeof Person._.array>;
-type FieldTypeTest2 = FieldType<typeof Person._.array._.items>;
-type FieldTypeTest3 = FieldType<typeof Person._.array._.items._.properties.test>;
-type FieldTypeTest4 = FieldType<
-	ObjectFieldGenerator<{
-		nestedName: StringFieldGenerator;
-	}>
->;
-
-Person.config.table_definition;
-Person.config.sortable_fields;
-Person.config.primary_key;
-let OramaTest = {} as Orama<typeof Person.config.orama.schema>;
-
-const result = search(OramaTest, {
-	term: 'hello',
-	properties: ['child.nestedName'],
-	sortBy: {
-		property: 'child.nestedName',
-		order: 'ASC',
-	},
-	where: {
-		boolean2: true,
-	},
-});
-async () => {
-	const awaited = result instanceof Promise ? await result : result;
-	// awaited.hits[0].document.child.deeplyNested.deepName;
-	awaited.hits[0].document.child.nestedName;
-	awaited.hits[0].document.id;
-	awaited.hits[0].document.array2;
-	awaited.hits[0].document.child.nestedArray;
-	// awaited.hits[0].document.vectorField;
-};
-// Person.config.foreignKeys.foreign_id.onDelete;
-
-type Person = Database.Entity<typeof Person>;
-type PersonTableSql = Database.SqlEntity<typeof Person>;
-type PersonOrama = Database.SearchConfig<typeof Person>;
-
-type TestField = Person['number'];
-
-let examplePerson = {
-	id: 123,
-	name: 'John Doe',
-	number: 42,
-	vectorField: [0.1, 0.2, 0.3, 0.4],
-	array: [],
-	array2: [],
-	boolean2: true,
-	enumTest: 'option3',
-	geopoint: { lat: 37.7749, lon: -122.4194 },
-	child: {
-		nestedName: 'Nested',
-		nestedArray: [],
-		optional: undefined,
-		deeplyNested: {
-			deepName: 'Deep',
-		},
-		enumChild: 'childOption1',
-	},
-	number2: 7,
-	foreign_id: '',
-} as Person;
-
-// examplePerson.boolean2 = false;
-// examplePerson.number = 20;
-// examplePerson.child.optional = 'asdf';
-
-// type Person = z.infer<typeof Person>;
-/**
- * Example usage for svelte component
- * <Input {...Person.meta().form} bind:value={value.name} />
- */
