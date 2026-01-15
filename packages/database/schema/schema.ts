@@ -1,9 +1,14 @@
 import {
+	AnyOrama,
 	AnySchema,
 	Orama,
+	Results,
 	SearchableType,
+	SearchParamsFullText,
+	SearchParamsVector,
 	SorterConfig,
 	TypedDocument,
+	SearchParams,
 } from '@orama/orama';
 import { z } from 'zod';
 
@@ -80,7 +85,7 @@ interface IndexableField extends DatabaseFieldBase {
 		/** Whether the index should be created in descending order */
 		descending?: boolean;
 		/** Additional columns to include in the index (for covering indexes) */
-		additional_columns?: string[];
+		additional_columns?: { column: string; descending?: boolean }[];
 	};
 }
 
@@ -829,7 +834,7 @@ class StringFieldGenerator {
 		/** Whether the index should be created in descending order */
 		descending?: boolean;
 		/** Additional columns to include in the index (for covering indexes) */
-		additional_columns?: string[];
+		additional_columns?: { column: string; descending?: boolean }[];
 	}): Omit<Indexable<this>, 'indexable'> {
 		this._.indexable = true;
 		(this._ as IndexableField).index = indexOptions;
@@ -1156,7 +1161,7 @@ class NumberFieldGenerator {
 		/** Whether the index should be created in descending order */
 		descending?: boolean;
 		/** Additional columns to include in the index (for covering indexes) */
-		additional_columns?: string[];
+		additional_columns?: { column: string; descending?: boolean }[];
 	}): Omit<Indexable<this>, 'indexable'> {
 		this._.indexable = true;
 		(this._ as IndexableField).index = indexOptions;
@@ -1931,8 +1936,8 @@ export namespace Database {
 		>
 	>;
 
-	/** Infers the type of the config used to initialize the search library Orama */
-	export type SearchConfig<
+	/** Infers the type of the schema used to initialize the search library Orama */
+	export type SearchSchema<
 		Table extends {
 			readonly _: Record<string, FieldGenerator>;
 		},
@@ -1942,17 +1947,149 @@ export namespace Database {
 		}>
 	>;
 
+	/** The type used to initialize the orama library using orama({...}) */
+	export type SearchConfig<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+	> = {
+		/** The schema used to initialize the orama library */
+		schema: SearchSchema<Table>;
+		/** The configuration for sorting search results */
+		sort: SorterConfig;
+	};
+
 	/** Infers the shape of the documents returned by the search library */
 	export type SearchEntity<
 		Table extends {
 			readonly _: Record<string, FieldGenerator>;
 		},
-		OramaSchemaConfig extends AnySchema = SearchConfig<Table>,
+		OramaSchemaConfig extends AnySchema = SearchSchema<Table>,
 		PrimaryKeyColumn extends keyof Table['_'] = {
 			[Key in keyof Table['_']]: IsPrimaryKey<Table['_'][Key]> extends true ? Key : never;
 		}[keyof Table['_']],
 	> = Partial<TypedDocument<Orama<OramaSchemaConfig>>> & {
 		[Key in PrimaryKeyColumn]: string;
+	};
+
+	/**
+	 * A name of a field that is searchable in the database table.
+	 * This includes all fields marked as 'searchable', as well as nested fields within objects.
+	 * For nested fields, the path is represented using dot notation (e.g., 'address.city').
+	 */
+	export type SearchableField<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+		ForceSearchable extends boolean = false,
+	> = Table extends object
+		? {
+				[Key in keyof Table['_'] & string]: Table['_'][Key] extends {
+					readonly _: {
+						type: 'object';
+						properties: infer Properties extends Record<string, FieldGenerator>;
+					};
+				}
+					? SearchableField<
+							{ readonly _: Properties },
+							IsSearchable<Table['_'][Key]> extends true ? true : ForceSearchable
+						> extends never
+						? never
+						: `${Key}.${SearchableField<{ readonly _: Properties }, IsSearchable<Table['_'][Key]> extends true ? true : ForceSearchable>}`
+					: ForceSearchable extends true
+						? Key
+						: IsSearchable<Table['_'][Key]> extends true
+							? Key
+							: never;
+			}[keyof Table['_'] & string]
+		: never;
+
+	/**
+	 * A name of a field that is sortable in the database table.
+	 * This includes all fields marked as 'sortable'
+	 * For nested fields, the path is represented using dot notation (e.g., 'address.city').
+	 */
+	export type SortableField<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+	> = Table extends object
+		? {
+				[Key in keyof Table['_'] & string]: Table['_'][Key] extends {
+					readonly _: {
+						type: 'object';
+						properties: infer Properties extends Record<string, FieldGenerator>;
+					};
+				}
+					? SortableField<{ readonly _: Properties }> extends never
+						? never
+						: `${Key}.${SortableField<{ readonly _: Properties }>}`
+					: IsSortable<Table['_'][Key]> extends true
+						? Key
+						: never;
+			}[keyof Table['_'] & string]
+		: never;
+
+	/**
+	 * The type used to define the search query parameters for a database table
+	 * This is the direct input of the `search` method in Orama.
+	 */
+	export type SearchQuery<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+		OramaSchemaConfig extends AnySchema = SearchSchema<Table>,
+		OramaSchema extends AnyOrama = Orama<OramaSchemaConfig>,
+	> = Pick<SearchParams<OramaSchema>, 'facets' | 'limit' | 'term' | 'where' | 'offset'> &
+		Pick<
+			SearchParamsFullText<OramaSchema>,
+			'boost' | 'distinctOn' | 'exact' | 'properties' | 'threshold' | 'tolerance'
+		> &
+		Pick<SearchParamsVector<OramaSchema>, 'vector'> & {
+			/**
+			 * Whether only the sparse 'searchable' fields should be returned.
+			 * If this is false, all fields from sqlite will be returned (including those stored in the 'json' column).
+			 * If this is true, only fields indexed by orama will be returned.
+			 * @default true
+			 */
+			sparse?: boolean;
+
+			/**
+			 * A cursor to continue fetching results from a previous query.
+			 * If this is provided, all other query parameters (term, where, limit, order, etc.) will be ignored.
+			 */
+			cursor?: string;
+
+			/** How the results should be ordered. Multiple orderings can be specified to determine the sorting precedence */
+			order?: {
+				/** The key (field) to sort by */
+				key: string;
+				/** The direction to sort by (ascending or descending) @default ASC */
+				direction?: 'ASC' | 'DESC';
+			}[];
+		};
+
+	/**
+	 * The type returned by the search query for a database table
+	 * If the 'sparse' option in the query is false, the full Entity type is returned.
+	 * If the 'sparse' option in the query is true, only the SearchEntity type is returned.
+	 */
+	export type SearchQueryResults<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+		Query extends SearchQuery<Table> = {},
+		Data extends Query['sparse'] extends false
+			? Entity<Table>
+			: SearchEntity<Table> = Query['sparse'] extends false
+			? Entity<Table>
+			: SearchEntity<Table>,
+	> = Pick<Results<Data>, 'count' | 'elapsed' | 'facets' | 'hits'> & {
+		/**
+		 * A cursor that can be used to fetch the next set of results.
+		 * If this is null/undefined, there are no more results to fetch.
+		 */
+		cursor: string | null;
 	};
 
 	/**
@@ -1979,11 +2116,32 @@ export namespace Database {
 	 * Infers the SQLite table definition for a database table (created via the `table` function)
 	 * This is used to create or update the actual table columns in SQLite.
 	 */
-	export type SqlTableDefinition<
+	export type SqlTableConfig<
 		Table extends {
 			readonly _: Record<string, FieldGenerator>;
 		},
 	> = SqliteTableDefinition<Table['_']>;
+
+	/** The type used to define the indexes for a database table (created via the `table` function) */
+	export type SqlIndexes = Array<{
+		/** The name of the index that will be created. @example 'idx_person_name' */
+		name: string;
+		/** The name of the table in sqlite that will be indexed */
+		table: string;
+		/**
+		 * The list of columns (ordered) that the rows should be indexed by.
+		 * This will always have at least one column (the main indexed column defined by .indexable()),
+		 * but may have additional columns for covering indexes (by adding additional_columns in the indexable() options).
+		 */
+		columns: {
+			/** The name of the column to be indexed */
+			column: string;
+			/** The direction of the items will be indexed. @default 'ASC' */
+			direction: 'ASC' | 'DESC';
+		}[];
+		/** Whether the index should be unique (no duplicates) */
+		unique: boolean;
+	}>;
 
 	/** The type returned by the `table` function */
 	export type Table = ReturnType<typeof table>;
@@ -1993,7 +2151,8 @@ export namespace Database {
 		TableName extends string,
 		TableConfig extends Record<string, FieldGenerator>,
 		Entity extends Database.Entity<{ readonly _: TableConfig }>,
-		OramaSchemaConfig extends Database.SearchConfig<{ readonly _: TableConfig }>,
+		SearchEntity extends Database.SearchEntity<{ readonly _: TableConfig }>,
+		OramaConfig extends Database.SearchConfig<{ readonly _: TableConfig }>,
 		ForeignKeys extends Flatten<
 			OmitNeverProperties<{
 				[Key in keyof TableConfig & string]: IsForeignKey<TableConfig[Key]> extends true
@@ -2020,6 +2179,9 @@ export namespace Database {
 			 */
 			parse(data: any): Entity;
 
+			/** Converts the given entity data to a sparse search entity used by the orama search index */
+			toSparse(data: Entity): SearchEntity;
+
 			/** The form properties for the table used when editing a table record in an html form */
 			form: {
 				/** The form properties for each field that can be spread onto an html element for that field */
@@ -2030,6 +2192,8 @@ export namespace Database {
 			config: {
 				/** The primary key for the table */
 				primary_key: PrimaryKeyColumn;
+				/** The type of the primary key ('string' for TEXT, 'number' for INTEGER) */
+				primary_key_type: 'string' | 'number';
 				/** The list of fields that will have indexes created in sqlite */
 				indexable_fields: IndexableColumn[];
 				/** The list of fields that must be unique */
@@ -2044,10 +2208,7 @@ export namespace Database {
 				 * The orama-specific configuration for the table. Sets up an index to fuzzy search the searchable fields.
 				 * If no searchable fields are defined, this will be an empty object.
 				 */
-				orama: {
-					schema: OramaSchemaConfig;
-					sort: SorterConfig;
-				};
+				orama: OramaConfig;
 				/**
 				 * The SQLite table schema definition for the generated table.
 				 * Fields of type 'object' or 'array' are omitted since they are stored in the 'json' column.
@@ -2055,22 +2216,7 @@ export namespace Database {
 				 */
 				table_definition: SqliteTableDefinition<TableConfig>;
 				/** The list of indexes to create for the table */
-				indexes: Array<{
-					/** The name of the index that will be created. @example 'idx_person_name' */
-					name: string;
-					/** The name of the table in sqlite that will be indexed */
-					table: string;
-					/**
-					 * The list of columns (ordered) that the rows should be indexed by.
-					 * This will always have at least one column (the main indexed column defined by .indexable()),
-					 * but may have additional columns for covering indexes (by adding additional_columns in the indexable() options).
-					 */
-					columns: string[];
-					/** Whether the index should be unique (no duplicates) */
-					unique: boolean;
-					/** The direction of the items will be indexed. @default 'ASC' */
-					direction: 'ASC' | 'DESC';
-				}>;
+				indexes: SqlIndexes;
 			};
 		},
 		PrimaryKeyColumn extends keyof TableConfig & string = {
@@ -2083,16 +2229,12 @@ export namespace Database {
 				? Key
 				: never;
 		}[keyof TableConfig & string],
-		SortableColumn extends keyof TableConfig & string = {
-			[Key in keyof TableConfig & string]: IsSortable<TableConfig[Key]> extends true
-				? Key
-				: never;
-		}[keyof TableConfig & string],
-		SearchableColumn extends keyof TableConfig & string = {
-			[Key in keyof TableConfig & string]: IsSearchable<TableConfig[Key]> extends true
-				? Key
-				: never;
-		}[keyof TableConfig & string],
+		SortableColumn extends keyof TableConfig & string = SortableField<{
+			readonly _: TableConfig;
+		}>,
+		SearchableColumn extends keyof TableConfig & string = SearchableField<{
+			readonly _: TableConfig;
+		}>,
 		UniqueColumn extends keyof TableConfig & string = {
 			[Key in keyof TableConfig & string]: IsUnique<TableConfig[Key]> extends true
 				? Key
@@ -2111,6 +2253,7 @@ export namespace Database {
 			.parse(rawTableName);
 
 		let primary_key: PrimaryKeyColumn | undefined;
+		let primary_key_type: 'string' | 'number' = 'string';
 		let indexable_fields: IndexableColumn[] = [];
 		let unique_fields: UniqueColumn[] = [];
 		let searchable_fields: SearchableColumn[] = [];
@@ -2119,8 +2262,8 @@ export namespace Database {
 		const indexes: Table['config']['indexes'] = [];
 		const form_field = {} as FormFieldProps<TableConfig>;
 		const table_definition = {} as SqliteTableDefinition<TableConfig>;
-		const orama_schema = {} as OramaSchemaConfig;
-		const orama_sort: SorterConfig = {
+		const orama_schema = {} as OramaConfig['schema'];
+		const orama_sort: OramaConfig['sort'] = {
 			enabled: false,
 			unsortableProperties: [],
 		};
@@ -2156,6 +2299,7 @@ export namespace Database {
 			// Handle primary key field
 			if (field.type === 'primary_key') {
 				primary_key = fieldName as PrimaryKeyColumn;
+				primary_key_type = field.primary_key.type;
 				(table_definition as any)[fieldName] =
 					field.primary_key.type === 'string'
 						? 'TEXT PRIMARY KEY'
@@ -2172,37 +2316,29 @@ export namespace Database {
 				continue;
 			}
 
-			// Build the sortable/searchable fields for orama
-			if ('sortable' in field && field.sortable) {
-				sortable_fields.push(fieldName as SortableColumn);
-				orama_sort.enabled = true;
-			} else {
-				if ('searchable' in field && field.searchable) {
-					orama_sort.unsortableProperties!.push(fieldName);
-				}
-			}
-			if ('searchable' in field && field.searchable) {
-				searchable_fields.push(fieldName as SearchableColumn);
-			}
-
 			// Build the indexable fields for sqlite
 			if ('indexable' in field && field.indexable) {
 				indexable_fields.push(fieldName as IndexableColumn);
 				let unique = false;
-				let descending = false;
+				const direction: 'ASC' | 'DESC' =
+					'index' in field && field.index?.descending ? 'DESC' : 'ASC';
 				let name = `idx_${tableName}_${fieldName}`;
-				const columns = [fieldName];
+				const columns = [{ column: fieldName, direction }];
 				if ('index' in field && field.index) {
 					unique = field.index.unique ?? false;
-					descending = field.index.descending ?? false;
 					name = field.index.name ?? name;
 					const additional_columns = (field.index.additional_columns || []).filter(
 						Boolean,
 					);
 					if (additional_columns.length) {
-						columns.push(...additional_columns);
+						columns.push(
+							...additional_columns.map((col) => ({
+								column: col.column,
+								direction: (col.descending ? 'DESC' : 'ASC') as 'ASC' | 'DESC',
+							})),
+						);
 						if (!field.index.name) {
-							name = `idx_${tableName}_${[fieldName, ...additional_columns].join('_')}`;
+							name = `idx_${tableName}_${[fieldName, ...additional_columns.map((col) => col.column)].join('_')}`;
 						}
 					}
 				}
@@ -2211,7 +2347,6 @@ export namespace Database {
 					table: tableName,
 					columns,
 					unique,
-					direction: descending ? 'DESC' : 'ASC',
 				});
 			}
 
@@ -2270,6 +2405,7 @@ export namespace Database {
 			// Build the orama schema
 			function recursivelyBuildOramaSchema(
 				subfield: DatabaseField,
+				path: string = '',
 				force_searchable: boolean = false,
 			): AnySchema | SearchableType | undefined {
 				if (subfield.type === 'object') {
@@ -2279,6 +2415,7 @@ export namespace Database {
 							if (!childField) return acc;
 							const childSchema = recursivelyBuildOramaSchema(
 								childField,
+								[path, childFieldName].filter(Boolean).join('.'),
 								force_searchable || ('searchable' in childField && childField.searchable),
 							);
 							if (!childSchema) return acc;
@@ -2307,6 +2444,13 @@ export namespace Database {
 				}
 
 				if (!subfield.searchable && !force_searchable) return;
+				if (path) searchable_fields.push(path as SearchableColumn);
+				if ('sortable' in subfield && subfield.sortable) {
+					sortable_fields.push(path as SortableColumn);
+					orama_sort.enabled = true;
+				} else {
+					orama_sort.unsortableProperties!.push(path);
+				}
 				if (subfield.type === 'boolean') return 'boolean';
 				if (subfield.type === 'number') return 'number';
 				if (subfield.type === 'geopoint') return 'geopoint';
@@ -2321,7 +2465,7 @@ export namespace Database {
 				}
 				return;
 			}
-			const built_schema = recursivelyBuildOramaSchema(field);
+			const built_schema = recursivelyBuildOramaSchema(field, fieldName);
 			if (built_schema) {
 				(orama_schema as any)[fieldName] = built_schema;
 			}
@@ -2676,12 +2820,40 @@ export namespace Database {
 			return parsedData as Entity;
 		}
 
+		/**
+		 * Converts the given entity data to a sparse search entity used by the orama search index.
+		 * This only includes the fields defined as 'searchable' in the table schema.
+		 */
+		function toSparse(data: Entity): SearchEntity {
+			let sparse_data = {} as any;
+			for (const field_dot_notation of searchable_fields) {
+				const field_path = field_dot_notation.split('.');
+				let current = data;
+				for (let i = 0; i < field_path.length; i++) {
+					if (current === undefined || current === null) break;
+					const field = field_path[i];
+					if (i === field_path.length - 1) {
+						sparse_data[field] = (current as any)[field] ?? undefined;
+					} else {
+						if (!(field in sparse_data)) {
+							sparse_data[field] = {};
+						}
+						sparse_data = sparse_data[field];
+						current = (current as any)[field];
+					}
+				}
+			}
+			return sparse_data as SearchEntity;
+		}
+
 		return {
 			_: table_config,
 			name: tableName,
 			parse,
+			toSparse,
 			config: {
 				primary_key,
+				primary_key_type,
 				indexable_fields,
 				searchable_fields,
 				sortable_fields,
