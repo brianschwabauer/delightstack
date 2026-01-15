@@ -445,7 +445,7 @@ export class DatabaseServer<
 	 * An array of expand fields can be provided to expand the entity with the given fields
 	 * @example expand: ['creator_id'] -> adds the full creator data to the entity in {expanded: {creator_id: {...}}}
 	 */
-	async get<
+	get<
 		Type extends keyof DatabaseConfig & string,
 		Table extends DatabaseConfig[Type],
 		Entity extends Database.Entity<DatabaseConfig[Type]>,
@@ -455,7 +455,7 @@ export class DatabaseServer<
 		Output extends ExpandedFields extends Array<any>
 			? Entity & { expanded: { [K in ExpandedFields[number]]: any } }
 			: Entity,
-	>(entity_type: Type, id: string | number, expand?: ExpandedFields): Promise<Output> {
+	>(entity_type: Type, id: string | number, expand?: ExpandedFields): Output {
 		const table = this.config[entity_type];
 		if (!table) {
 			throw {
@@ -522,55 +522,22 @@ export class DatabaseServer<
 	 * Creates the entity with the given type/table and data.
 	 * This will also parse the data to ensure it's valid (throws an error if not).
 	 */
-	async create<
+	create<
 		Type extends keyof DatabaseConfig & string,
 		Table extends DatabaseConfig[Type],
 		OutputData extends Database.Entity<Table>,
 		InputData extends Omit<OutputData, 'id' | 'created_at' | 'updated_at'>,
-	>(entity_type: Type, unsafe_data: InputData): Promise<OutputData> {
-		const table = this.config[entity_type];
-		const index = this.getIndex(entity_type);
-		if (!table || !index) {
+	>(entity_type: Type, unsafe_data: InputData): OutputData {
+		const [result] = this.transaction([
+			{ create: { type: entity_type, data: unsafe_data } },
+		]);
+		if (!result || !('entity' in result)) {
 			throw {
-				status: 400,
-				message: `Entity type ${entity_type} is not valid`,
+				status: 500,
+				message: 'Database transaction did not return created entity',
 			};
 		}
-		if (!unsafe_data) throw { status: 400, message: 'No data given' };
-		delete (unsafe_data as any).id;
-		delete (unsafe_data as any).created_at;
-		delete (unsafe_data as any).updated_at;
-		const sanitized_table = this.sanitize(entity_type);
-		const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-		const now = new Date().toISOString();
-
-		// Parse the data to ensure it's valid (throws an error if not)
-		const input_data = table.parse({
-			...unsafe_data,
-			[primary_key]: table.config.primary_key_type === 'string' ? generateID() : 0,
-			created_at: now,
-			updated_at: now,
-		}) as OutputData;
-
-		// For numeric primary keys, we let the database auto-increment the ID
-		if (table.config.primary_key_type === 'number') {
-			(input_data as any)[primary_key] = undefined;
-		}
-
-		let output_data: OutputData = input_data;
-		this.ctx.storage.transactionSync(() => {
-			const updates = Object.entries(this.toSqliteValue(entity_type, <any>input_data)!);
-			const bindings = updates.map(([_, value]) => value);
-			const columns = updates.map(([column]) => column).join(', ');
-			const values = updates.map(() => '?').join(', ');
-			const query = `INSERT INTO ${sanitized_table} (${columns}) VALUES (${values}) RETURNING *;`;
-			const result = this.ctx.storage.sql.exec(query, ...bindings);
-			output_data = this.toEntityValue(entity_type, result.one()) as OutputData;
-			const sparse_entity = table.toSparse(output_data as any);
-			insertIntoOrama(index.orama, sparse_entity);
-			this.saveIndex(entity_type);
-		});
-		return output_data;
+		return result.entity.data as OutputData;
 	}
 
 	/**
@@ -578,104 +545,30 @@ export class DatabaseServer<
 	 * This does a deep partial update, so only the fields provided in the data will be updated.
 	 * This will also parse the data to ensure it's valid (throws an error if not).
 	 */
-	async update<
+	update<
 		Type extends keyof DatabaseConfig & string,
 		Table extends DatabaseConfig[Type],
 		OutputData extends Database.Entity<Table>,
 		InputData extends DeepPartial<OutputData>,
-	>(entity_type: Type, id: string | number, unsafe_data: InputData): Promise<OutputData> {
-		const table = this.config[entity_type];
-		const index = this.getIndex(entity_type);
-		if (!table || !index) {
+	>(entity_type: Type, id: string | number, unsafe_data: InputData): OutputData {
+		const [result] = this.transaction([
+			{ update: { type: entity_type, id, data: unsafe_data } },
+		]);
+		if (!result || !('entity' in result)) {
 			throw {
-				status: 400,
-				message: `Entity type ${entity_type} is not valid`,
+				status: 500,
+				message: 'Database transaction did not return updated entity',
 			};
 		}
-		if (!unsafe_data) throw { status: 400, message: 'No updates given' };
-
-		delete (unsafe_data as any).id;
-		delete (unsafe_data as any).created_at;
-		delete (unsafe_data as any).updated_at;
-		const sanitized_table = this.sanitize(entity_type);
-		const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-
-		const current_data = (await this.get(entity_type, id)) as OutputData; // will throw a 404 if not found
-		let input_data = structuredClone(current_data);
-
-		function deepMerge(current: any, next: any) {
-			if (next === undefined) return current;
-			if (
-				typeof current !== 'object' ||
-				current === null ||
-				Array.isArray(current) ||
-				typeof next !== 'object' ||
-				Array.isArray(next) ||
-				next === null
-			) {
-				return next;
-			}
-			const keys = new Set([...Object.keys(current), ...Object.keys(next)]);
-			for (const key of keys) {
-				current[key] = deepMerge(current[key], next[key]);
-			}
-			return current;
-		}
-
-		const now = new Date().toISOString();
-		input_data = table.parse({
-			...deepMerge(input_data, unsafe_data),
-			[primary_key]: (current_data as any)[primary_key],
-			updated_at: now,
-			created_at: (current_data as any).created_at,
-		}) as OutputData;
-
-		let output_data: OutputData = input_data;
-		this.ctx.storage.transactionSync(() => {
-			const updates = Object.entries(this.toSqliteValue(entity_type, <any>input_data)!);
-			const bindings = [...updates.map(([_, value]) => value), id];
-			const updateFields = updates
-				.map(([column]) => `${this.sanitize(column)} = ?`)
-				.join(', ');
-			const query = `UPDATE ${sanitized_table} SET ${updateFields} WHERE ${primary_key} = ? RETURNING *;`;
-			const result = this.ctx.storage.sql.exec(query, ...bindings);
-			output_data = this.toEntityValue(entity_type, result.one()) as OutputData;
-			const sparse_entity = table.toSparse(output_data as any);
-			removeFromOrama(index.orama, id.toString());
-			insertIntoOrama(index.orama, sparse_entity);
-			this.saveIndex(entity_type);
-		});
-		return output_data as OutputData;
+		return result.entity.data as OutputData;
 	}
 
 	/** Deletes the entity with the given id */
-	async delete<
-		Type extends keyof DatabaseConfig & string,
-		Table extends DatabaseConfig[Type],
-		OutputData extends Database.Entity<Table>,
-	>(entity_type: Type, id: string | number) {
-		const table = this.config[entity_type];
-		const index = this.getIndex(entity_type);
-		if (!table || !index) {
-			throw {
-				status: 400,
-				message: `Entity type ${entity_type} is not valid`,
-			};
-		}
-		if (!id) throw { status: 400, message: 'No ID given' };
-		const sanitized_table = this.sanitize(entity_type);
-		let output_data: OutputData;
-		this.ctx.storage.transactionSync(() => {
-			const result = this.ctx.storage.sql.exec(
-				`DELETE FROM ${sanitized_table} WHERE id = ? RETURNING *`,
-				id,
-			);
-			output_data = this.toEntityValue(entity_type, result.one()) as OutputData;
-			removeFromOrama(index.orama, id.toString());
-			index.deleted[id.toString()] = Date.now();
-			this.saveIndex(entity_type);
-		});
-		return output_data!;
+	delete<Type extends keyof DatabaseConfig & string>(
+		entity_type: Type,
+		id: string | number,
+	): void {
+		this.transaction([{ delete: { type: entity_type, id } }]);
 	}
 
 	/**
@@ -1141,8 +1034,183 @@ export class DatabaseServer<
 	transaction(
 		operations: DatabaseServerTransaction<DatabaseConfig>[],
 	): DatabaseServerTransactionResult<DatabaseConfig>[] {
-		// TODO: implement transactions
-		return [];
+		if (!operations || !Array.isArray(operations) || operations.length === 0) return [];
+		if (operations.length > 5000) {
+			throw {
+				status: 400,
+				message: `Too many operations in a single transaction. Maximum is 5000.`,
+			};
+		}
+		const results: DatabaseServerTransactionResult<DatabaseConfig>[] = [];
+		const now = new Date();
+
+		const indexes_to_save: Set<string> = new Set();
+		this.ctx.storage.transactionSync(() => {
+			for (const op of operations) {
+				if ('exec' in op) {
+					const { statement, bindings } = op.exec;
+					const result = this.ctx.storage.sql
+						.exec(statement, ...(bindings || []))
+						.toArray();
+					results.push({ results: result });
+					continue;
+				}
+
+				if ('create' in op) {
+					const { type: entity_type, data: unsafe_data } = op.create;
+					const table = this.config[entity_type];
+					const index = this.getIndex(entity_type);
+					if (!table || !index) {
+						throw {
+							status: 400,
+							message: `Entity type ${entity_type} is not valid`,
+						};
+					}
+					const data_copy = { ...unsafe_data };
+					delete data_copy.id;
+					delete data_copy.created_at;
+					delete data_copy.updated_at;
+					const sanitized_table = this.sanitize(entity_type);
+					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+
+					// Parse the data to ensure it's valid (throws an error if not)
+					const input_data = table.parse({
+						...data_copy,
+						[primary_key]: table.config.primary_key_type === 'string' ? generateID() : 0,
+						created_at: now.toISOString(),
+						updated_at: now.toISOString(),
+					}) as any;
+
+					// For numeric primary keys, we let the database auto-increment the ID
+					if (table.config.primary_key_type === 'number') {
+						input_data[primary_key] = undefined;
+					}
+
+					const updates = Object.entries(this.toSqliteValue(entity_type, input_data)!);
+					const bindings = updates.map(([_, value]) => value);
+					const columns = updates.map(([column]) => column).join(', ');
+					const values = updates.map(() => '?').join(', ');
+					const query_sql = `INSERT INTO ${sanitized_table} (${columns}) VALUES (${values}) RETURNING *;`;
+					const result = this.ctx.storage.sql.exec(query_sql, ...bindings);
+					const output_data = this.toEntityValue(entity_type, result.one()) as any;
+					const sparse_entity = table.toSparse(output_data);
+					insertIntoOrama(index.orama, sparse_entity);
+					indexes_to_save.add(entity_type);
+					results.push({
+						entity: {
+							type: entity_type,
+							data: output_data,
+							id: output_data[primary_key] || output_data.id,
+						},
+					});
+					now.setMilliseconds(now.getMilliseconds() + 1); // Ensure unique timestamps
+					continue;
+				}
+
+				if ('update' in op) {
+					const { type: entity_type, id, data: unsafe_data } = op.update;
+					const table = this.config[entity_type];
+					const index = this.getIndex(entity_type);
+					if (!table || !index) {
+						throw {
+							status: 400,
+							message: `Entity type ${entity_type} is not valid`,
+						};
+					}
+					const data_copy = { ...unsafe_data };
+					delete data_copy.id;
+					delete data_copy.created_at;
+					delete data_copy.updated_at;
+					const sanitized_table = this.sanitize(entity_type);
+					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+					const current_data = this.get(entity_type, id); // will throw a 404 if not found
+					let input_data = structuredClone(current_data);
+					const deepMerge = (current: any, next: any) => {
+						if (next === undefined) return current;
+						if (
+							typeof current !== 'object' ||
+							current === null ||
+							Array.isArray(current) ||
+							typeof next !== 'object' ||
+							Array.isArray(next) ||
+							next === null
+						) {
+							return next;
+						}
+						const keys = new Set([...Object.keys(current), ...Object.keys(next)]);
+						for (const key of keys) {
+							current[key] = deepMerge(current[key], next[key]);
+						}
+						return current;
+					};
+
+					input_data = table.parse({
+						...deepMerge(input_data, data_copy),
+						[primary_key]: (current_data as any)[primary_key],
+						updated_at: now.toISOString(),
+						created_at: (current_data as any).created_at,
+					}) as any;
+
+					const updates = Object.entries(this.toSqliteValue(entity_type, input_data)!);
+					const bindings = [...updates.map(([_, value]) => value), id];
+					const updateFields = updates
+						.map(([column]) => `${this.sanitize(column)} = ?`)
+						.join(', ');
+					const query_sql = `UPDATE ${sanitized_table} SET ${updateFields} WHERE ${primary_key} = ? RETURNING *;`;
+					const result = this.ctx.storage.sql.exec(query_sql, ...bindings);
+					const output_data = this.toEntityValue(entity_type, result.one()) as any;
+					const sparse_entity = table.toSparse(output_data);
+					removeFromOrama(index.orama, id.toString());
+					insertIntoOrama(index.orama, sparse_entity);
+					indexes_to_save.add(entity_type);
+
+					results.push({
+						entity: {
+							type: entity_type,
+							data: output_data,
+							id: output_data[primary_key] || output_data.id || id,
+						},
+					});
+					now.setMilliseconds(now.getMilliseconds() + 1); // Ensure unique timestamps
+					continue;
+				}
+
+				if ('delete' in op) {
+					const { type: entity_type, id } = op.delete;
+					const table = this.config[entity_type];
+					const index = this.getIndex(entity_type);
+					if (!table || !index) {
+						throw {
+							status: 400,
+							message: `Entity type ${entity_type} is not valid`,
+						};
+					}
+					const sanitized_table = this.sanitize(entity_type);
+					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+					this.ctx.storage.sql.exec(
+						`DELETE FROM ${sanitized_table} WHERE ${primary_key} = ?`,
+						id,
+					);
+					removeFromOrama(index.orama, id.toString());
+					index.deleted[id.toString()] = now.getTime();
+					indexes_to_save.add(entity_type);
+					results.push({
+						entity: {
+							type: entity_type,
+							data: undefined,
+							id,
+						},
+					});
+					now.setMilliseconds(now.getMilliseconds() + 1); // Ensure unique timestamps
+					continue;
+				}
+			}
+
+			// Save all modified indexes
+			indexes_to_save.forEach((entity_type) => this.saveIndex(entity_type));
+		});
+
+		return results;
 	}
 
 	/** Loads & returns the orama search instance of the given entity type */
