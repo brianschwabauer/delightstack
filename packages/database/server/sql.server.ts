@@ -1,4 +1,3 @@
-import { generateID } from '@packages/lib/utility/id';
 import {
 	SqlDatabaseSchema,
 	SqlEntityQueryResultData,
@@ -6,7 +5,7 @@ import {
 	SqlTableRow,
 } from './sql.helper';
 import { prepareSql, SqlEntityQuery, SqlQueryFn } from './sql.helper';
-import { ApiError, apiError } from '@packages/lib';
+import { generateID } from '@delightstack/utilities';
 
 /** A helper class for writing/getting data to/from CloudFlare D1 using SQL commands */
 export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
@@ -40,7 +39,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		// We're doing this just to be safe and for peace of mind
 		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z_]/g, '');
 		if (!sanitizedTable) {
-			throw apiError({ status: 400, message: 'Missing database table name' });
+			throw { status: 400, message: 'Missing database table name' };
 		}
 		const updates = Object.entries({
 			...data,
@@ -57,7 +56,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			})
 			.filter((v) => !!v);
 		if (!updates.length) {
-			throw apiError({ status: 400, message: 'No data provided to insert' });
+			throw { status: 400, message: 'No data provided to insert' };
 		}
 		if (id !== null) updates.push(['id', id || generateID()]);
 		const bindings = updates.map(([_, value]) => value);
@@ -94,9 +93,9 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		// We're doing this just to be safe and for peace of mind
 		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z_]/g, '');
 		if (!sanitizedTable) {
-			throw apiError({ status: 400, message: 'Missing database table name' });
+			throw { status: 400, message: 'Missing database table name' };
 		}
-		if (!id) throw apiError({ status: 400, message: 'Item ID not provided' });
+		if (!id) throw { status: 400, message: 'Item ID not provided' };
 
 		const updates = Object.entries({
 			...data,
@@ -112,7 +111,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			})
 			.filter((v) => !!v);
 		if (!updates.length) {
-			throw apiError({ status: 400, message: 'No data provided to update' });
+			throw { status: 400, message: 'No data provided to update' };
 		}
 		const bindings = [...updates.map(([_, value]) => value), id];
 		const updateFields = updates.map(([column]) => `${column} = ?`).join(', ');
@@ -137,10 +136,10 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		// We're doing this just to be safe and for peace of mind
 		const sanitizedTable = table.toLowerCase().replace(/[^a-z_]/g, '');
 		if (!table) {
-			throw apiError({ status: 400, message: `Must provide a table to delete from` });
+			throw { status: 400, message: `Must provide a table to delete from` };
 		}
 		if (!id) {
-			throw apiError({ status: 400, message: `Must provide an ID to delete` });
+			throw { status: 400, message: `Must provide an ID to delete` };
 		}
 		const result = this.exec(
 			`DELETE FROM ${sanitizedTable} WHERE id = ? RETURNING *`,
@@ -247,10 +246,10 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 						isNaN(where.value) ||
 						!isFinite(where.value)
 					) {
-						throw apiError({
+						throw {
 							status: 400,
 							message: `Invalid value for bitwise AND operator`,
-						});
+						};
 					}
 					return {
 						clause: `(${sanitizedKey} & ${where.value}) == ${where.value}`,
@@ -330,7 +329,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		const data = result.next()?.value;
 		if (!data) {
 			const tableName = table.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-			throw apiError({ status: 404, message: `${tableName} not found` });
+			throw { status: 404, message: `${tableName} not found` };
 		}
 		return data;
 	}
@@ -352,16 +351,16 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	run<T extends Record<string, SqlStorageValue>>(queryFn: SqlQueryFn) {
 		const parsed = queryFn(prepareSql);
 		if (!parsed) {
-			throw apiError({
+			throw {
 				status: 400,
 				message: `Must return a tagged template literal to build SQL queries`,
-			});
+			};
 		}
 		if (!(parsed as any)?.__safelyInterpretedSql__) {
-			throw apiError({
+			throw {
 				status: 400,
 				message: `Must use the 'sql' tagged template literal to build SQL queries`,
-			});
+			};
 		}
 		const { query, values } = parsed;
 		const start = performance.now();
@@ -411,13 +410,12 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 					return (...args: any[]) => {
 						try {
 							return (target[prop] as any)(...args);
-						} catch (error) {
-							const sqlError = ApiError.from(error);
-							throw apiError({
-								status: status || sqlError.status,
+						} catch (error: any) {
+							throw {
+								status: status || error?.status || 500,
 								message,
-								detail: sqlError.toString(),
-							});
+								detail: error ? error.toString() : undefined,
+							};
 						}
 					};
 				}
@@ -448,7 +446,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		if (data instanceof ArrayBuffer || data instanceof Blob) return data as any;
 		if (data instanceof Date) return data.getTime();
 		if (typeof data === 'object') return JSON.stringify(data);
-		throw apiError({ status: 400, message: `Invalid data type: ${typeof data}` });
+		throw { status: 400, message: `Invalid data type: ${typeof data}` };
 	}
 
 	/** Executes the given query and writes better error messages than the default sqlite ones */
@@ -466,11 +464,11 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 				'\n',
 				query.replace(/\t+/g, ''),
 			);
-			throw apiError({
+			throw {
 				status: 500,
 				message: `Uh oh, a database error occurred. Please try again later.`,
 				detail: error?.message || `Unknown database error`,
-			});
+			};
 		}
 	}
 }
