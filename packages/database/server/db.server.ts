@@ -14,7 +14,7 @@ import {
 import { encode as encodeMsgPack, decode as decodeMsgPack } from '@msgpack/msgpack';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
-import { generateID } from '@delightstack/utilities';
+import { generateTimestampID } from '@delightstack/utilities';
 
 interface Env {
 	DEV: boolean;
@@ -1090,7 +1090,8 @@ export class DatabaseServer<
 					// Parse the data to ensure it's valid (throws an error if not)
 					const input_data = table.parse({
 						...data_copy,
-						[primary_key]: table.config.primary_key_type === 'string' ? generateID() : 0,
+						[primary_key]:
+							table.config.primary_key_type === 'string' ? generateTimestampID() : 0,
 						created_at: now.toISOString(),
 						updated_at: now.toISOString(),
 					}) as any;
