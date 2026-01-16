@@ -290,6 +290,15 @@ export class DatabaseServer<
 					created_at INTEGER NOT NULL,
 					updated_at INTEGER NOT NUll
 				);
+				CREATE TABLE IF NOT EXISTS orama (
+					id TEXT PRIMARY KEY, # ID of the orama index (typically the table name), with a numeric suffix if split across multiple rows
+					index_data BLOB NOT NULL, # BLOB data of the orama index (may be split across multiple rows if too large)
+					index_config TEXT NOT NULL, # JSON string of the orama config used to create the index
+					index_version INTEGER NOT NULL, # Version number of the index config/schema (incremented every time the config changes)
+					deleted TEXT NOT NULL, # JSON string of a record of deleted entity ids with their deletion epoch timestamps in ms
+					created_at INTEGER NOT NULL,
+					updated_at INTEGER NOT NUll
+				);
 			`,
 		);
 
@@ -1219,23 +1228,110 @@ export class DatabaseServer<
 	): SearchIndex | undefined {
 		if (this.#search_index[entity_type]) return this.#search_index[entity_type];
 		if (!this.config?.[entity_type]) return;
+
+		const orama_row = this.ctx.storage.sql
+			.exec(`SELECT * FROM orama WHERE id = ?`, entity_type)
+			.one();
+
+		// If no index found, or if we need to rebuild it
+		if (!orama_row) {
+			return this.rebuildIndex(entity_type);
+		}
+
+		let config;
+		try {
+			config = JSON.parse((orama_row.index_config as string) || '{}');
+		} catch (e) {
+			return this.rebuildIndex(entity_type);
+		}
+
+		// Check if the config has changed
+		const current_config = this.config[entity_type].config.orama;
+		const { _chunks, ...stored_config } = config;
+
+		// We simply compare the stringified configs to see if they match.
+		// This is not perfect, but it's good enough for our purposes.
+		if (JSON.stringify(stored_config) !== JSON.stringify(current_config)) {
+			// If the config has changed, we need to increment the version and rebuild the index
+			return this.rebuildIndex(entity_type, (orama_row?.index_version as number) + 1);
+		}
+
+		// Load the index data
+		let index_data_string = '';
+		const decoder = new TextDecoder();
+		try {
+			// Combine the chunks
+			const chunks_count = _chunks || 1;
+			const chunks: string[] = [];
+			chunks.push(decoder.decode(new Uint8Array(orama_row.index_data as ArrayBuffer))); // First chunk
+
+			for (let i = 1; i < chunks_count; i++) {
+				const chunk_row = this.ctx.storage.sql
+					.exec(`SELECT index_data FROM orama WHERE id = ?`, `${entity_type}_${i}`)
+					.one();
+				if (chunk_row && chunk_row.index_data) {
+					chunks.push(
+						decoder.decode(new Uint8Array(chunk_row.index_data as ArrayBuffer)),
+					);
+				}
+			}
+			index_data_string = chunks.join('');
+		} catch (e) {
+			console.error('Error loading index chunks:', e);
+			return this.rebuildIndex(entity_type);
+		}
+
+		const orama = createOrama(current_config);
+		try {
+			loadOrama(orama, JSON.parse(index_data_string));
+		} catch (error) {
+			console.error('Error loading orama index:', error);
+			return this.rebuildIndex(entity_type);
+		}
+
 		this.#search_index[entity_type] = {
-			deleted: {},
-			last_updated_at: 0,
-			config_version: 1,
-			orama: createOrama(this.config[entity_type].config.orama),
+			deleted: JSON.parse((orama_row.deleted as string) || '{}'),
+			last_updated_at: orama_row.updated_at as number,
+			config_version: orama_row.index_version as number,
+			orama,
 		};
 
-		// TODO: Load the index data from sqlite.
-		// Since the indexes can be larger than the max row size (2MB), we need to split the index data into multiple rows
-		// We also need to get the 'deleted' record from the database and the last_updated_at timestamp
-		// When the data is retrieved from sqlite, we can load it into the orama instance using 'loadOrama'
-		// This can all be done synchronously since sqlite is synchronous in Durable Objects
-		// We also need to compare the config saved in sqlite vs the current config to see if we need to recreate the index from scratch
-		// If the configs don't match, we need to recreate the index from scratch - by fetching all entities from the database and inserting them into the index
-		// And then saving the index data back to sqlite
-
 		return this.#search_index[entity_type];
+	}
+
+	/** Rebuilds the index from scratch for the given entity type */
+	private rebuildIndex<Type extends keyof DatabaseConfig & string>(
+		entity_type: Type,
+		version = 1,
+	): SearchIndex {
+		const orama = createOrama(this.config[entity_type].config.orama);
+		const index = {
+			deleted: {},
+			last_updated_at: 0,
+			config_version: version,
+			orama,
+		};
+		this.#search_index[entity_type] = index;
+
+		// Load all entities from the database
+		const sanitized_table = this.sanitize(entity_type);
+		const table = this.config[entity_type];
+		const rows = this.ctx.storage.sql.exec(`SELECT * FROM ${sanitized_table}`);
+
+		const entities: any[] = [];
+		for (const row of rows) {
+			const entity = this.toEntityValue(entity_type, row);
+			if (entity) {
+				entities.push(table.toSparse(entity as any));
+			}
+		}
+
+		if (entities.length > 0) {
+			insertMultipleIntoOrama(orama, entities);
+		}
+
+		this.saveIndex(entity_type);
+		return index;
 	}
 
 	/** Saves the current state of the index of the given entity type to the database */
@@ -1243,10 +1339,40 @@ export class DatabaseServer<
 		const index = this.#search_index[entity_type];
 		if (!index) return;
 		const raw_data = saveOrama(index.orama);
-		// TODO: Save the raw_data to sqlite.
-		// Since the index data can be larger than the max row size (2MB), we need to split the index data into multiple rows
-		// index.deleted also needs to be saved to the database
-		// The config data & config_version should also be saved to the database
+
+		const data_string = JSON.stringify(raw_data);
+		const chunk_size = 1500 * 1000; // 1.5MB safely under 2MB limit
+		const total_chunks = Math.ceil(data_string.length / chunk_size);
+		const config = this.config[entity_type].config.orama;
+		const index_config = JSON.stringify({ ...config, _chunks: total_chunks });
+		const deleted_json = JSON.stringify(index.deleted);
+		const now = Date.now();
+		const encoder = new TextEncoder();
+
+		// Cleanup old chunks
+		this.ctx.storage.sql.exec(
+			`DELETE FROM orama WHERE id = ? OR id LIKE ?`,
+			entity_type,
+			`${entity_type}_%`,
+		);
+
+		for (let i = 0; i < total_chunks; i++) {
+			const chunk = data_string.slice(i * chunk_size, (i + 1) * chunk_size);
+			const is_first = i === 0;
+			const row_id = is_first ? entity_type : `${entity_type}_${i}`;
+			const blob = encoder.encode(chunk);
+
+			this.ctx.storage.sql.exec(
+				`INSERT INTO orama (id, index_data, index_config, index_version, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				row_id,
+				blob,
+				is_first ? index_config : '',
+				index.config_version,
+				is_first ? deleted_json : '{}',
+				now,
+				now,
+			);
+		}
 	}
 
 	/**
