@@ -27,22 +27,33 @@ export function generateID(options?: GenerateIdOptions): string {
 }
 
 /**
- * The amount of IDs that have been created in this requested - used to increment the newly generated IDs.
+ * The amount of IDs that have been created in this request at this same timestamp.
  * This is needed because of how CloudFlare handles Date.now()
  * All Date.now() calls are exactly the same for the same request
+ * So if we create multiple IDs in the same request, the timestamp part would be the same (which would break sort order)
  */
 let idCounter = 0;
+let idTimestamp = 0;
 
-/** Generates a random ID for firebase RTDB based on the timestamp */
+/**
+ * Generates a random ID based on the current timestamp.
+ * It only uses alphanumeric characters and is 20 characters long.
+ * It provides roughly the same collision resistance as a UUID, but is
+ * lexicographically sortable, shorter, and more URL-safe.
+ * Modeled after Firebase push IDs.
+ */
 export function generateTimestampID(): string {
-	// The characters that the native RTDB uses for IDs
-	// Modeled after base64 web-safe chars, but ordered by ASCII.
-	// const PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
-
 	// The 62 bit characters to use so we don't have to use symbols
 	const PUSH_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
-	let now = Date.now() + idCounter;
+	let now = Date.now();
+	if (now === idTimestamp) {
+		idCounter++;
+		now += idCounter;
+	} else {
+		idCounter = 0;
+		idTimestamp = now;
+	}
 	const timeStampChars = new Array(8);
 	const numChars = PUSH_CHARS.length;
 	for (let i = 7; i >= 0; i--) {
@@ -54,6 +65,5 @@ export function generateTimestampID(): string {
 	for (let i = 0; i < 12; i++) {
 		id += PUSH_CHARS.charAt(Math.floor(Math.random() * numChars));
 	}
-	idCounter++;
 	return id;
 }
