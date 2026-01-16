@@ -5,7 +5,7 @@ import {
 	SqlTableRow,
 } from './sql.helper';
 import { prepareSql, SqlEntityQuery, SqlQueryFn } from './sql.helper';
-import { generateID } from '@delightstack/utilities';
+import { generateTimestampID } from '@delightstack/utilities';
 
 /** A helper class for writing/getting data to/from CloudFlare D1 using SQL commands */
 export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
@@ -58,7 +58,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		if (!updates.length) {
 			throw { status: 400, message: 'No data provided to insert' };
 		}
-		if (id !== null) updates.push(['id', id || generateID()]);
+		if (id !== null) updates.push(['id', id || generateTimestampID()]);
 		const bindings = updates.map(([_, value]) => value);
 		const columns = updates.map(([column]) => column).join(', ');
 		const values = updates.map(() => '?').join(', ');
