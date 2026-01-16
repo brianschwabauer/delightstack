@@ -13,6 +13,8 @@ import {
 	Results,
 	save as saveOrama,
 } from '@orama/orama';
+import { encode as encodeMsgPack, decode as decodeMsgPack } from '@msgpack/msgpack';
+import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
 import { generateID } from '@delightstack/utilities';
 
@@ -242,9 +244,17 @@ type DatabaseServerState<
 
 interface SearchIndex {
 	/** A record of deleted entity ids with their deletion epoch timestamps in ms */
-	deleted: Record<string, number>;
-	/** The last epoch timestamp in ms when the index was updated (and entity was created/updated/deleted) */
+	deleted_entity: Record<string, number>;
+	/**
+	 * The last epoch timestamp in ms when an event occurred to the index (an entity was created/updated/deleted).
+	 * This is useful to know so we don't have to check if anything has changed after this timestamp.
+	 */
 	last_updated_at: number;
+	/**
+	 * The first epoch timestamp in ms of the first change (an entity was created).
+	 * This is used to know when the first event occurred for sync purposes.
+	 */
+	first_updated_at: number;
 	/**
 	 * The version number of the search config/schema used to create the index.
 	 * This number automatically increments every time the config/schema changes.
@@ -252,6 +262,25 @@ interface SearchIndex {
 	config_version: number;
 	/** The orama search index for the table. This is preloaded with all documents */
 	orama: AnyOrama;
+}
+
+interface SearchIndexTableSchema {
+	/** The ID of the orama index (typically the table name), with a numeric suffix */
+	id: string;
+	/** The BLOB data of the orama index (may be split across multiple rows if too large) */
+	index_data?: ArrayBuffer;
+	/** The JSON string of the orama config used to create the index */
+	index_config: string;
+	/** The version number of the index config/schema (incremented every time the config changes) */
+	index_version: number;
+	/** The format of the stored index data (msgpack or json) */
+	index_format: 'msgpack' | 'json';
+	/** The JSON string of a record of deleted entity ids with their deletion epoch timestamps in ms */
+	deleted_entity: string;
+	/** The epoch timestamp in ms of the first change (an entity was created) */
+	first_updated_at: number;
+	/** The epoch timestamp in ms of the last change (an entity was created/updated/deleted) */
+	last_updated_at: number;
 }
 
 type DeepPartial<T> = {
@@ -283,21 +312,23 @@ export class DatabaseServer<
 	) {
 		super(ctx, env);
 
-		this.ctx.storage.sql.exec(
-			`CREATE TABLE IF NOT EXISTS state (
+		this.exec(
+			(sql) => sql`
+				CREATE TABLE IF NOT EXISTS state (
 					id TEXT PRIMARY KEY,
 					json TEXT NOT NULL,
 					created_at INTEGER NOT NULL,
 					updated_at INTEGER NOT NUll
 				);
-				CREATE TABLE IF NOT EXISTS orama (
-					id TEXT PRIMARY KEY, # ID of the orama index (typically the table name), with a numeric suffix if split across multiple rows
-					index_data BLOB NOT NULL, # BLOB data of the orama index (may be split across multiple rows if too large)
-					index_config TEXT NOT NULL, # JSON string of the orama config used to create the index
-					index_version INTEGER NOT NULL, # Version number of the index config/schema (incremented every time the config changes)
-					deleted TEXT NOT NULL, # JSON string of a record of deleted entity ids with their deletion epoch timestamps in ms
-					created_at INTEGER NOT NULL,
-					updated_at INTEGER NOT NUll
+				CREATE TABLE IF NOT EXISTS search_index (
+					id TEXT PRIMARY KEY,
+					index_data BLOB NOT NULL,
+					index_config TEXT NOT NULL,
+					index_version INTEGER NOT NULL,
+					index_format TEXT NOT NULL,
+					deleted_entity TEXT NOT NULL,
+					first_updated_at INTEGER NOT NULL,
+					last_updated_at INTEGER NOT NULL
 				);
 			`,
 		);
@@ -697,7 +728,7 @@ export class DatabaseServer<
 			}
 
 			// Add the deleted entities to the results
-			for (const [id, deleted_at] of Object.entries(index.deleted)) {
+			for (const [id, deleted_at] of Object.entries(index.deleted_entity)) {
 				if (deleted_at > from && deleted_at <= to) deleted.push(id);
 				if (deleted_at < start_updated_at) start_updated_at = deleted_at;
 				if (deleted_at > end_updated_at) end_updated_at = deleted_at;
@@ -1201,7 +1232,7 @@ export class DatabaseServer<
 						id,
 					);
 					removeFromOrama(index.orama, id.toString());
-					index.deleted[id.toString()] = now.getTime();
+					index.deleted_entity[id.toString()] = now.getTime();
 					indexes_to_save.add(entity_type);
 					results.push({
 						entity: {
@@ -1229,70 +1260,80 @@ export class DatabaseServer<
 		if (this.#search_index[entity_type]) return this.#search_index[entity_type];
 		if (!this.config?.[entity_type]) return;
 
-		const orama_row = this.ctx.storage.sql
-			.exec(`SELECT * FROM orama WHERE id = ?`, entity_type)
-			.one();
+		const search_index_rows = this.ctx.storage.sql
+			.exec(`SELECT * FROM search_index WHERE id LIKE ?`, `${entity_type}.%`)
+			.toArray() as unknown as SearchIndexTableSchema[];
 
 		// If no index found, or if we need to rebuild it
-		if (!orama_row) {
-			return this.rebuildIndex(entity_type);
-		}
+		if (!search_index_rows.length) return this.rebuildIndex(entity_type);
 
-		let config;
+		let stored_config;
+		const current_config = this.config[entity_type].config.orama;
+		const stored_index_version = search_index_rows[0].index_version || 1;
+		const stored_index_format = search_index_rows[0].index_format || 'json';
 		try {
-			config = JSON.parse((orama_row.index_config as string) || '{}');
+			stored_config = JSON.parse(search_index_rows[0].index_config || '{}');
 		} catch (e) {
 			return this.rebuildIndex(entity_type);
 		}
 
-		// Check if the config has changed
-		const current_config = this.config[entity_type].config.orama;
-		const { _chunks, ...stored_config } = config;
-
-		// We simply compare the stringified configs to see if they match.
-		// This is not perfect, but it's good enough for our purposes.
-		if (JSON.stringify(stored_config) !== JSON.stringify(current_config)) {
-			// If the config has changed, we need to increment the version and rebuild the index
-			return this.rebuildIndex(entity_type, (orama_row?.index_version as number) + 1);
+		// Check if the config has changed. If so, we need to increment the version and rebuild the index
+		if (!deepEqual(stored_config, current_config)) {
+			return this.rebuildIndex(entity_type, stored_index_version + 1);
 		}
 
 		// Load the index data
-		let index_data_string = '';
-		const decoder = new TextDecoder();
-		try {
-			// Combine the chunks
-			const chunks_count = _chunks || 1;
-			const chunks: string[] = [];
-			chunks.push(decoder.decode(new Uint8Array(orama_row.index_data as ArrayBuffer))); // First chunk
-
-			for (let i = 1; i < chunks_count; i++) {
-				const chunk_row = this.ctx.storage.sql
-					.exec(`SELECT index_data FROM orama WHERE id = ?`, `${entity_type}_${i}`)
-					.one();
-				if (chunk_row && chunk_row.index_data) {
-					chunks.push(
-						decoder.decode(new Uint8Array(chunk_row.index_data as ArrayBuffer)),
-					);
+		let search_index_config: any = undefined;
+		if (stored_index_format === 'json') {
+			const decoder = new TextDecoder();
+			try {
+				// Combine the chunks
+				const chunks: string[] = [];
+				for (const row of search_index_rows) {
+					if (!row?.index_data) continue;
+					chunks.push(decoder.decode(new Uint8Array(row.index_data)));
 				}
+				search_index_config = JSON.parse(chunks.join(''));
+			} catch (e) {
+				console.error('Error loading json index chunks:', e);
+				return this.rebuildIndex(entity_type);
 			}
-			index_data_string = chunks.join('');
-		} catch (e) {
-			console.error('Error loading index chunks:', e);
-			return this.rebuildIndex(entity_type);
+		}
+		if (stored_index_format === 'msgpack') {
+			try {
+				// Combine the chunks
+				const size = search_index_rows.reduce((acc, row) => {
+					if (!row?.index_data) return acc;
+					return acc + row.index_data.byteLength;
+				}, 0);
+				const combined = new Uint8Array(size);
+				let offset = 0;
+				for (const row of search_index_rows) {
+					if (!row?.index_data) continue;
+					combined.set(new Uint8Array(row.index_data), offset);
+					offset += row.index_data.byteLength;
+					delete row.index_data; // free up memory
+				}
+				search_index_config = decodeMsgPack(combined);
+			} catch (e) {
+				console.error('Error loading msgpack index chunks:', e);
+				return this.rebuildIndex(entity_type);
+			}
 		}
 
 		const orama = createOrama(current_config);
 		try {
-			loadOrama(orama, JSON.parse(index_data_string));
+			loadOrama(orama, search_index_config);
 		} catch (error) {
 			console.error('Error loading orama index:', error);
 			return this.rebuildIndex(entity_type);
 		}
 
 		this.#search_index[entity_type] = {
-			deleted: JSON.parse((orama_row.deleted as string) || '{}'),
-			last_updated_at: orama_row.updated_at as number,
-			config_version: orama_row.index_version as number,
+			deleted_entity: JSON.parse(search_index_rows[0].deleted_entity || '{}'),
+			last_updated_at: search_index_rows[0].last_updated_at || 0,
+			first_updated_at: search_index_rows[0].first_updated_at || 0,
+			config_version: search_index_rows[0].index_version || 1,
 			orama,
 		};
 
@@ -1306,11 +1347,12 @@ export class DatabaseServer<
 	): SearchIndex {
 		const orama = createOrama(this.config[entity_type].config.orama);
 		const index = {
-			deleted: {},
+			deleted_entity: {},
 			last_updated_at: 0,
+			first_updated_at: 0,
 			config_version: version,
 			orama,
-		};
+		} satisfies SearchIndex;
 		this.#search_index[entity_type] = index;
 
 		// Load all entities from the database
@@ -1320,9 +1362,18 @@ export class DatabaseServer<
 
 		const entities: any[] = [];
 		for (const row of rows) {
-			const entity = this.toEntityValue(entity_type, row);
+			const entity = this.toEntityValue(entity_type, row) as any;
 			if (entity) {
 				entities.push(table.toSparse(entity as any));
+				if (entity.updated_at && entity.updated_at > index.last_updated_at) {
+					index.last_updated_at = entity.updated_at;
+				}
+				if (
+					entity.updated_at &&
+					(!index.first_updated_at || entity.updated_at < index.first_updated_at)
+				) {
+					index.first_updated_at = entity.updated_at;
+				}
 			}
 		}
 
@@ -1339,39 +1390,39 @@ export class DatabaseServer<
 		const index = this.#search_index[entity_type];
 		if (!index) return;
 		const raw_data = saveOrama(index.orama);
-
-		const data_string = JSON.stringify(raw_data);
-		const chunk_size = 1500 * 1000; // 1.5MB safely under 2MB limit
-		const total_chunks = Math.ceil(data_string.length / chunk_size);
-		const config = this.config[entity_type].config.orama;
-		const index_config = JSON.stringify({ ...config, _chunks: total_chunks });
-		const deleted_json = JSON.stringify(index.deleted);
-		const now = Date.now();
-		const encoder = new TextEncoder();
+		const index_format: 'msgpack' | 'json' = 'msgpack';
+		const binary = encodeMsgPack(raw_data);
+		const chunk_size = 1900 * 1000; // 1.9MB safely under 2MB limit
+		const index_config = JSON.stringify(this.config[entity_type].config.orama);
+		const deleted_json = JSON.stringify(index.deleted_entity);
+		const first_chunk_size = chunk_size - (deleted_json.length + index_config.length);
 
 		// Cleanup old chunks
 		this.ctx.storage.sql.exec(
-			`DELETE FROM orama WHERE id = ? OR id LIKE ?`,
-			entity_type,
-			`${entity_type}_%`,
+			`DELETE FROM search_index WHERE id LIKE ?`,
+			`${entity_type}.%`,
 		);
 
-		for (let i = 0; i < total_chunks; i++) {
-			const chunk = data_string.slice(i * chunk_size, (i + 1) * chunk_size);
-			const is_first = i === 0;
-			const row_id = is_first ? entity_type : `${entity_type}_${i}`;
-			const blob = encoder.encode(chunk);
-
-			this.ctx.storage.sql.exec(
-				`INSERT INTO orama (id, index_data, index_config, index_version, deleted, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-				row_id,
-				blob,
-				is_first ? index_config : '',
-				index.config_version,
-				is_first ? deleted_json : '{}',
-				now,
-				now,
+		let i = 0;
+		let saved_bytes = 0;
+		while (saved_bytes < binary.length) {
+			const chunk = binary.slice(
+				saved_bytes,
+				saved_bytes + (i === 0 ? first_chunk_size : chunk_size),
 			);
+			this.ctx.storage.sql.exec(
+				`INSERT INTO search_index (id, index_data, index_config, index_version, index_format, deleted, first_updated_at, last_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				`${entity_type}.${i}`,
+				chunk,
+				i === 0 ? index_config : '{}',
+				index.config_version || 1,
+				index_format,
+				i === 0 ? deleted_json : '{}',
+				index.first_updated_at || 0,
+				index.last_updated_at || 0,
+			);
+			saved_bytes += chunk.length;
+			i++;
 		}
 	}
 
