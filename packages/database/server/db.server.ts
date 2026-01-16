@@ -674,29 +674,9 @@ export class DatabaseServer<
 			});
 			if (result instanceof Promise) continue; // orama search should always be sync here, this is for type safety
 
-			// Find the first and last updated_at timestamps from the index
-			const first_entity = searchOrama(orama, {
-				limit: 1,
-				sortBy: {
-					property: 'updated_at',
-					order: 'ASC',
-				},
-			});
-			if (first_entity instanceof Promise) continue; // orama search should always be sync here, this is for type safety
-			const last_entity = searchOrama(orama, {
-				limit: 1,
-				sortBy: {
-					property: 'updated_at',
-					order: 'DESC',
-				},
-			});
-			if (last_entity instanceof Promise) continue; // orama search should always be sync here, this is for type safety
-
 			const deleted = [] as (string | number)[];
 			const updated = [] as Database.SearchEntity<DatabaseConfig[typeof entity_type]>[];
 			const created = [] as Database.SearchEntity<DatabaseConfig[typeof entity_type]>[];
-			const first_updated_at = first_entity.hits[0]?.document?.updated_at || 0;
-			let last_updated_at = last_entity.hits[0]?.document?.updated_at || 0;
 			let start_updated_at = Infinity;
 			let end_updated_at = 0;
 
@@ -722,9 +702,6 @@ export class DatabaseServer<
 				if (item.document.updated_at > end_updated_at) {
 					end_updated_at = item.document.updated_at;
 				}
-				if (item.document.updated_at > last_updated_at) {
-					last_updated_at = item.document.updated_at;
-				}
 			}
 
 			// Add the deleted entities to the results
@@ -732,16 +709,15 @@ export class DatabaseServer<
 				if (deleted_at > from && deleted_at <= to) deleted.push(id);
 				if (deleted_at < start_updated_at) start_updated_at = deleted_at;
 				if (deleted_at > end_updated_at) end_updated_at = deleted_at;
-				if (deleted_at > last_updated_at) last_updated_at = deleted_at;
 			}
 
 			results.entity[entity_type] = {
 				deleted,
 				created,
 				updated,
-				config_version: index.config_version,
-				first_updated_at,
-				last_updated_at,
+				config_version: index.config_version || 1,
+				first_updated_at: index.first_updated_at || 0,
+				last_updated_at: index.last_updated_at || 0,
 				start_updated_at: start_updated_at === Infinity ? 0 : start_updated_at,
 				end_updated_at,
 				config: schema_changed ? this.config[entity_type].config.orama : undefined,
@@ -1135,6 +1111,8 @@ export class DatabaseServer<
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
 					const sparse_entity = table.toSparse(output_data);
 					insertIntoOrama(index.orama, sparse_entity);
+					index.last_updated_at = now.getTime();
+					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
 					results.push({
 						entity: {
@@ -1202,6 +1180,8 @@ export class DatabaseServer<
 					const sparse_entity = table.toSparse(output_data);
 					removeFromOrama(index.orama, id.toString());
 					insertIntoOrama(index.orama, sparse_entity);
+					index.last_updated_at = now.getTime();
+					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
 
 					results.push({
@@ -1233,6 +1213,8 @@ export class DatabaseServer<
 					);
 					removeFromOrama(index.orama, id.toString());
 					index.deleted_entity[id.toString()] = now.getTime();
+					index.last_updated_at = now.getTime();
+					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
 					results.push({
 						entity: {
