@@ -332,8 +332,7 @@ export class DatabaseServer<
 		);
 
 		const result = this.ctx.storage.sql.exec(
-			`SELECT * FROM state WHERE id = ? LIMIT 1;`,
-			'main',
+			`SELECT * FROM state WHERE id = main LIMIT 1;`,
 		);
 		const now = Date.now();
 		let state = result.next()?.value as
