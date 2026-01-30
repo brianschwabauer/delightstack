@@ -47,9 +47,13 @@ A versatile, polished button component that serves as the primary interactive el
 | `color` | `'action' \| 'accent' \| 'error' \| 'success'` | `'action'` | Color scheme |
 | `icon` | `Component` | - | Icon component to display |
 | `iconPosition` | `'start' \| 'end'` | `'start'` | Icon placement |
+| `iconOnly` | `boolean` | `false` | Icon-only button (circular, requires aria-label) |
 | `pill` | `boolean` | `false` | Fully rounded corners |
 | `fullWidth` | `boolean` | `false` | Stretch to container width |
 | `loading` | `boolean` | `false` | Show loading spinner |
+| `loadingText` | `string` | - | Text to show while loading (e.g., "Saving...") |
+| `confirmMode` | `boolean` | `false` | Require double-click to confirm |
+| `confirmText` | `string` | `'Click again to confirm'` | Text shown in confirm state |
 | `disabled` | `boolean` | `false` | Disable interaction |
 | `href` | `string` | - | Renders as anchor tag |
 | `target` | `string` | - | Link target attribute |
@@ -57,6 +61,9 @@ A versatile, polished button component that serves as the primary interactive el
 | `disableRipple` | `boolean` | `false` | Disable ripple effect |
 | `tooltip` | `string` | - | Hover tooltip text |
 | `badge` | `string \| number` | - | Badge indicator |
+| `id` | `string` | - | Element ID |
+| `name` | `string` | - | Form element name |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Variants
 
@@ -119,6 +126,33 @@ A versatile, polished button component that serves as the primary interactive el
   }}>
     Save
   </Button>
+  ```
+- Optional `loadingText` shows different text while loading:
+  ```svelte
+  <Button loadingText="Saving...">Save</Button>
+  ```
+
+### Confirm Mode
+- For destructive or important actions
+- First click "arms" the button, changes text to confirm message
+- Second click executes the action
+- Resets after timeout (3s) if not confirmed
+- Visual indication of armed state (pulsing border, different color)
+  ```svelte
+  <Button confirmMode color="error" onclick={deleteItem}>
+    Delete
+  </Button>
+  <!-- First click: "Click again to confirm" -->
+  <!-- Second click: executes deleteItem() -->
+  ```
+
+### Icon-Only Mode
+- Circular button shape
+- Requires `aria-label` or `tooltip` for accessibility
+- Auto-applies tooltip from aria-label if not set
+- Consistent sizing across icon sizes
+  ```svelte
+  <Button iconOnly icon={TrashIcon} aria-label="Delete item" />
   ```
 
 ### Success Feedback

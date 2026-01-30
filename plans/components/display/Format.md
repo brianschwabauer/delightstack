@@ -75,6 +75,8 @@ This is primarily a formatting utility - visual output depends on context. The c
 | `type` | `FormatType` | required | Format type |
 | `value` | `any` | required | Value to format |
 | `locale` | `string` | `'en-US'` | Locale for formatting |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Type-Specific Props
 

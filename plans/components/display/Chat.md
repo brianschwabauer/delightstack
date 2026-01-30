@@ -40,6 +40,10 @@ A conversation display component for showing message threads between users or wi
 | `groupMessages` | `boolean` | `true` | Group consecutive messages |
 | `dense` | `boolean` | `false` | Compact message spacing |
 | `comfortable` | `boolean` | `false` | Relaxed message spacing |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `5` | Number of skeleton messages |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Message Interface
 ```typescript

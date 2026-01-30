@@ -42,6 +42,8 @@ A dropdown menu component for navigation and actions. Appears on click or hover,
 | `closeOnSelect` | `boolean` | `true` | Close after selection |
 | `dense` | `boolean` | `false` | Compact item spacing |
 | `comfortable` | `boolean` | `false` | Relaxed item spacing |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### MenuItem
 | Prop | Type | Default | Description |

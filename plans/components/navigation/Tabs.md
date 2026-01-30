@@ -46,10 +46,17 @@ A tabbed navigation component for switching between different views or content s
 |------|------|---------|-------------|
 | `value` | `string` | - | Active tab value (bindable) |
 | `variant` | `Variant` | `'default'` | Visual style |
+| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Tab layout direction |
 | `fullWidth` | `boolean` | `false` | Stretch to container |
 | `disabled` | `boolean` | `false` | Disable all tabs |
+| `closable` | `boolean` | `false` | Show close button on tabs |
+| `addable` | `boolean` | `false` | Show "+" button to add new tabs |
+| `draggable` | `boolean` | `false` | Allow drag to reorder tabs |
+| `overflow` | `'scroll' \| 'dropdown'` | `'scroll'` | Handle overflow tabs |
 | `dense` | `boolean` | `false` | Compact tab padding |
 | `comfortable` | `boolean` | `false` | Relaxed tab padding |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Tab Item
 | Prop | Type | Default | Description |

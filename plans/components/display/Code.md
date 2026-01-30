@@ -47,6 +47,9 @@ Single cohesive theme that works in both light/dark modes:
 | `startLine` | `number` | `1` | Starting line number |
 | `highlightLines` | `number[]` | `[]` | Lines to highlight |
 | `wrap` | `boolean` | `false` | Wrap long lines |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Supported Languages
 

@@ -44,6 +44,10 @@ A vertical or horizontal timeline for displaying chronological events, activity 
 | `pending` | `boolean` | `false` | Show pending state at end |
 | `dense` | `boolean` | `false` | Compact event spacing |
 | `comfortable` | `boolean` | `false` | Relaxed event spacing |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `3` | Number of skeleton items |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Timeline Item
 

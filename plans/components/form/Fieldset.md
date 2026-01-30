@@ -37,6 +37,8 @@ A grouping component for related form fields. Provides visual structure, shared 
 | `required` | `boolean` | `false` | Mark section required |
 | `dense` | `boolean` | `false` | Compact field spacing |
 | `comfortable` | `boolean` | `false` | Relaxed field spacing |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Structure
 

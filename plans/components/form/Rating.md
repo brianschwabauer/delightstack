@@ -47,6 +47,9 @@ A star rating input for collecting user ratings or displaying scores. Supports h
 | `showValue` | `boolean` | `false` | Show numeric value |
 | `dense` | `boolean` | `false` | Tighter star spacing |
 | `comfortable` | `boolean` | `false` | More star spacing |
+| `id` | `string` | - | Element ID |
+| `name` | `string` | - | Form field name |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

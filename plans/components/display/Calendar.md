@@ -39,14 +39,34 @@ A date display and selection component showing a monthly view. Supports single d
 |------|------|---------|-------------|
 | `value` | `Date \| Date[]` | - | Selected date(s) (bindable) |
 | `mode` | `'single' \| 'range' \| 'multiple'` | `'single'` | Selection mode |
+| `view` | `'month' \| 'week' \| 'year'` | `'month'` | Calendar view |
 | `month` | `Date` | `new Date()` | Displayed month |
 | `min` | `Date` | - | Minimum selectable date |
 | `max` | `Date` | - | Maximum selectable date |
 | `disabled` | `Date[]` | `[]` | Disabled dates |
 | `marked` | `MarkedDate[]` | `[]` | Dates with markers |
+| `events` | `CalendarEvent[]` | `[]` | Events to display on dates |
 | `weekStartsOn` | `0-6` | `0` | First day of week |
+| `locale` | `string` | `'en-US'` | Locale for date formatting |
+| `showTimeSlots` | `boolean` | `false` | Show time slots (for scheduling) |
+| `timeSlotInterval` | `number` | `30` | Time slot interval in minutes |
 | `dense` | `boolean` | `false` | Compact cell spacing |
 | `comfortable` | `boolean` | `false` | Relaxed cell spacing |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
+
+### CalendarEvent Interface
+```typescript
+interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end?: Date;
+  color?: string;
+  allDay?: boolean;
+}
+```
 
 ### MarkedDate Interface
 ```typescript

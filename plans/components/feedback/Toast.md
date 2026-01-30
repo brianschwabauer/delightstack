@@ -80,8 +80,13 @@ toast.promise(saveData(), {
 | `dismissible` | `boolean` | `true` | Show close button |
 | `action` | `Action` | - | Action button |
 | `icon` | `Component` | - | Custom icon |
+| `persistent` | `boolean` | `false` | Don't auto-dismiss |
+| `sound` | `boolean \| string` | `false` | Play notification sound |
+| `richContent` | `boolean` | `false` | Enable rich HTML content |
 | `dense` | `boolean` | `false` | Compact padding |
 | `comfortable` | `boolean` | `false` | Relaxed padding |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Toaster Container
 
@@ -102,6 +107,9 @@ Place once in your app layout:
 | `position` | `Position` | `'bottom-right'` | Screen position |
 | `maxVisible` | `number` | `5` | Max visible toasts |
 | `gap` | `number` | `8` | Space between toasts |
+| `grouping` | `boolean` | `false` | Group duplicate toasts |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Delightful Details
 

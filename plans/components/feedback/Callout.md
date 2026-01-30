@@ -50,6 +50,8 @@ Each variant has a default icon:
 | `dismissible` | `boolean` | `false` | Show close button |
 | `dense` | `boolean` | `false` | Compact padding |
 | `comfortable` | `boolean` | `false` | Relaxed padding |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

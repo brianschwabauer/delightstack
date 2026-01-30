@@ -32,6 +32,8 @@ A smooth animated container that expands and collapses content. Uses CSS Grid fo
 | `show` | `boolean` | `false` | Controls expanded state (bindable) |
 | `duration` | `number` | `300` | Animation duration in ms |
 | `style` | `string` | - | Additional inline styles |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## How It Works
 

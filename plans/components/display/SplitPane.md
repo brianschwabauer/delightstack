@@ -37,6 +37,8 @@ A resizable split view container that divides space between two panes. Users can
 | `snap` | `number[]` | `[]` | Snap points (%) |
 | `collapsible` | `boolean` | `false` | Allow collapsing panes |
 | `collapsed` | `'first' \| 'second' \| null` | `null` | Collapsed state |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

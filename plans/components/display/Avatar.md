@@ -48,6 +48,12 @@ A profile image component that gracefully handles missing images with initials o
 | `shape` | `'circle' \| 'square'` | `'circle'` | Shape variant |
 | `status` | `'online' \| 'away' \| 'busy' \| 'offline'` | - | Status indicator |
 | `statusPosition` | `'top' \| 'bottom'` | `'bottom'` | Indicator position |
+| `badge` | `string \| number` | - | Number badge overlay |
+| `ring` | `boolean` | `false` | Show colored ring around avatar |
+| `ringColor` | `string` | `'var(--color-action)'` | Ring color |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Fallback Logic
 

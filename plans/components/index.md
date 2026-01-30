@@ -314,6 +314,7 @@ Interactive elements that trigger behaviors.
 | Component                                     | Status         | Description                                                        |
 | --------------------------------------------- | -------------- | ------------------------------------------------------------------ |
 | [Button](./actions/Button.md)                 | ✅ Complete    | Versatile button with ripple effects, loading states, and variants |
+| [ButtonGroup](./actions/ButtonGroup.md)       | 🔲 Placeholder | Connected button container with shared borders                     |
 | [Modal](./actions/Modal.md)                   | ✅ Complete    | Dialog overlay with transitions and focus management               |
 | [Alert](./actions/Alert.md)                   | ✅ Complete    | Confirmation dialog built on Modal                                 |
 | [Popover](./actions/Popover.md)               | ✅ Complete    | Floating content with smart positioning                            |
@@ -333,6 +334,7 @@ Components for presenting information.
 | [ListItem](./display/ListItem.md)     | ✅ Complete    | Rich list item with multiple interaction types |
 | [Accordion](./display/Accordion.md)   | 🔲 Placeholder | Collapsible content sections                   |
 | [Avatar](./display/Avatar.md)         | 🔲 Placeholder | User/entity profile image                      |
+| [AvatarGroup](./display/AvatarGroup.md) | 🔲 Placeholder | Stacked overlapping avatars                    |
 | [Badge](./display/Badge.md)           | 🔲 Placeholder | Small status indicator                         |
 | [Banner](./display/Banner.md)         | 🔲 Placeholder | Full-width announcement bar                    |
 | [Calendar](./display/Calendar.md)     | 🔲 Placeholder | Date display and selection                     |
@@ -358,6 +360,7 @@ Components that communicate state and progress.
 | Component                          | Status         | Description                     |
 | ---------------------------------- | -------------- | ------------------------------- |
 | [Callout](./feedback/Callout.md)   | 🔲 Placeholder | Highlighted information block   |
+| [Confetti](./feedback/Confetti.md) | 🔲 Placeholder | Celebration animation           |
 | [Loading](./feedback/Loading.md)   | 🔲 Placeholder | Animated loading indicator      |
 | [Progress](./feedback/Progress.md) | 🔲 Placeholder | Progress bar                    |
 | [Skeleton](./feedback/Skeleton.md) | 🔲 Placeholder | Content loading placeholder     |
@@ -429,14 +432,14 @@ Components for moving through the application.
 
 | Category   | Complete | Placeholder | Total  |
 | ---------- | -------- | ----------- | ------ |
-| Actions    | 6        | 2           | 8      |
-| Display    | 3        | 19          | 22     |
-| Feedback   | 0        | 7           | 7      |
+| Actions    | 6        | 3           | 9      |
+| Display    | 3        | 20          | 23     |
+| Feedback   | 0        | 8           | 8      |
 | Form       | 1        | 11          | 12     |
 | Layout     | 0        | 4           | 4      |
 | Media      | 0        | 7           | 7      |
 | Navigation | 0        | 7           | 7      |
-| **Total**  | **10**   | **57**      | **67** |
+| **Total**  | **10**   | **60**      | **70** |
 
 ---
 

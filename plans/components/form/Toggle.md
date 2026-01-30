@@ -43,6 +43,9 @@ An on/off switch component for binary choices. More visually prominent than a ch
 | `offLabel` | `string` | - | Label when off |
 | `dense` | `boolean` | `false` | Tighter label spacing |
 | `comfortable` | `boolean` | `false` | More label spacing |
+| `id` | `string` | - | Element ID |
+| `name` | `string` | - | Form field name |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

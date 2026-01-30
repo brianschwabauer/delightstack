@@ -55,6 +55,9 @@ A small status indicator component for highlighting counts, labels, or states. U
 | `dot` | `boolean` | `false` | Show as dot only (no content) |
 | `pulse` | `boolean` | `false` | Add pulse animation |
 | `max` | `number` | `99` | Max number before "+" |
+| `showZero` | `boolean` | `false` | Show badge when value is 0 |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Special Modes
 

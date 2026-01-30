@@ -46,6 +46,10 @@ A vertically stacked set of collapsible sections, allowing users to expand one o
 | `disabled` | `boolean` | `false` | Disable all items |
 | `dense` | `boolean` | `false` | Compact header/content padding |
 | `comfortable` | `boolean` | `false` | Relaxed header/content padding |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `3` | Number of skeleton items |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Accordion Item
 

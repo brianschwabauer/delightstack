@@ -37,12 +37,39 @@ A dropdown selection component for choosing from a list of options. Custom-style
 | `multiple` | `boolean` | `false` | Allow multi-select |
 | `searchable` | `boolean` | `false` | Enable search/filter |
 | `clearable` | `boolean` | `false` | Show clear button |
+| `creatable` | `boolean` | `false` | Allow creating new options by typing |
+| `loading` | `boolean` | `false` | Show loading state |
 | `disabled` | `boolean` | `false` | Disable select |
 | `placeholder` | `string` | `'Select...'` | Placeholder text |
 | `label` | `string` | - | Field label |
 | `error` | `string` | - | Error message |
 | `dense` | `boolean` | `false` | Compact option spacing |
 | `comfortable` | `boolean` | `false` | Relaxed option spacing |
+| `id` | `string` | - | Element ID |
+| `name` | `string` | - | Form element name |
+| `class` | `string` | - | Additional CSS classes |
+
+### Option Interface (Extended)
+```typescript
+interface Option {
+  value: any;
+  label: string;
+  disabled?: boolean;
+  icon?: Component;
+  description?: string;  // Secondary text below label
+  group?: string;
+}
+```
+
+### Custom Value Rendering
+```svelte
+<Select options={users} bind:value={selectedUser}>
+  {#snippet renderValue(selected)}
+    <Avatar src={selected.avatar} size="xs" />
+    <span>{selected.label}</span>
+  {/snippet}
+</Select>
+```
 
 ### Option Interface
 ```typescript

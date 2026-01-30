@@ -39,6 +39,9 @@ An interactive before/after image comparison slider. Users can drag a divider to
 | `showLabels` | `boolean` | `true` | Show before/after labels |
 | `labelBefore` | `string` | `'Before'` | Before label text |
 | `labelAfter` | `string` | `'After'` | After label text |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

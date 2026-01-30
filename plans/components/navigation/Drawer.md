@@ -37,6 +37,8 @@ A slide-out side panel for navigation menus, settings, or supplementary content.
 | `closeOnOutsideClick` | `boolean` | `true` | Close on overlay click |
 | `closeOnEscape` | `boolean` | `true` | Close on Escape key |
 | `persistent` | `boolean` | `false` | Keep open (desktop sidebar) |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

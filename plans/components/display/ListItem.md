@@ -38,6 +38,8 @@ A versatile list item component that adapts to its parent List context. Supports
 | `href` | `string` | - | Render as link |
 | `target` | `string` | - | Link target |
 | `menu` | `boolean` | `false` | Has submenu |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Popover Integration
 

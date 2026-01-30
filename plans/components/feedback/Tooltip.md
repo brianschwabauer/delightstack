@@ -76,10 +76,15 @@ interface TooltipOptions {
 |------|------|---------|-------------|
 | `content` | `string` | required | Tooltip text |
 | `placement` | `Placement` | `'top'` | Position |
-| `delay` | `number` | `200` | Show delay (ms) |
+| `openDelay` | `number` | `200` | Delay before showing (ms) |
+| `closeDelay` | `number` | `0` | Delay before hiding (ms) |
+| `interactive` | `boolean` | `false` | Keep open when hovering tooltip content |
+| `arrow` | `boolean` | `true` | Show arrow pointer |
 | `variant` | `Variant` | `'dark'` | Visual style |
 | `maxWidth` | `number` | `200` | Max width (px) |
 | `disabled` | `boolean` | `false` | Disable tooltip |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Placement Options
 

@@ -46,12 +46,18 @@ A polished dialog overlay for focused content and interactions. Features smooth 
 | `open` | `boolean` | `false` | Controls visibility (bindable) |
 | `title` | `string` | - | Modal title text |
 | `closable` | `boolean` | `true` | Allow closing via backdrop/escape |
+| `preventClose` | `boolean` | `false` | Prevent all close methods (for required flows) |
 | `disableCloseIcon` | `boolean` | `false` | Hide the X close button |
+| `fullscreen` | `boolean` | `false` | Full viewport modal |
+| `scrollBehavior` | `'inside' \| 'outside'` | `'inside'` | Where scrollbar appears |
+| `initialFocus` | `HTMLElement \| string` | - | Element or selector to focus on open |
 | `width` | `string` | `'auto'` | Modal width |
 | `maxWidth` | `string` | `'500px'` | Maximum width |
 | `height` | `string` | `'auto'` | Modal height |
 | `maxHeight` | `string` | `'85vh'` | Maximum height |
 | `transitionTarget` | `HTMLElement` | - | Element to morph from/to |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Slots/Children
 

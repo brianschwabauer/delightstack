@@ -24,6 +24,8 @@ This is a layout utility - no visual output, pure structure.
 | `reverse` | `boolean` | `false` | Reverse order |
 | `dense` | `boolean` | `false` | Tighter gap (`0.5rem`) |
 | `comfortable` | `boolean` | `false` | Larger gap (`1.5rem`) |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Common Patterns
 

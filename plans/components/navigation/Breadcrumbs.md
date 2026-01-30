@@ -38,6 +38,9 @@ A navigation trail showing the user's location within the application hierarchy.
 | `homeHref` | `string` | `'/'` | Home link destination |
 | `dense` | `boolean` | `false` | Compact item spacing |
 | `comfortable` | `boolean` | `false` | Relaxed item spacing |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### BreadcrumbItem Interface
 ```typescript

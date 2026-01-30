@@ -41,6 +41,12 @@ A swipeable content slider for images, cards, or any content. Features smooth an
 | `slidesPerView` | `number \| 'auto'` | `1` | Visible slides |
 | `gap` | `string \| number` | `0` | Gap between slides |
 | `peek` | `number` | `0` | Peek of adjacent slides |
+| `transition` | `'slide' \| 'fade' \| 'cards'` | `'slide'` | Transition effect |
+| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Slide direction |
+| `freeScroll` | `boolean` | `false` | Free scroll without snapping |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

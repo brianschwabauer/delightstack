@@ -37,6 +37,8 @@ A placeholder component that mimics content structure while loading. Creates a b
 | `lines` | `number` | `1` | Number of text lines |
 | `animation` | `'shimmer' \| 'pulse' \| 'none'` | `'shimmer'` | Animation type |
 | `rounded` | `boolean \| string` | `true` | Border radius |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Presets
 

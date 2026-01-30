@@ -43,6 +43,9 @@ A dedicated file upload component with drag-and-drop support, file previews, and
 | `upload` | `(file: File) => Promise` | - | Upload handler |
 | `dense` | `boolean` | `false` | Compact dropzone padding |
 | `comfortable` | `boolean` | `false` | Relaxed dropzone padding |
+| `id` | `string` | - | Element ID |
+| `name` | `string` | - | Form field name |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

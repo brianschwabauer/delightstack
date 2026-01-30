@@ -48,6 +48,16 @@ A data table component for displaying tabular information with sorting, filterin
 | `dense` | `boolean` | `false` | Compact cell padding |
 | `comfortable` | `boolean` | `false` | Relaxed cell padding |
 | `stickyHeader` | `boolean` | `true` | Sticky header on scroll |
+| `resizableColumns` | `boolean` | `false` | Allow column width resizing |
+| `reorderableColumns` | `boolean` | `false` | Allow column drag reordering |
+| `expandable` | `boolean` | `false` | Enable row expansion |
+| `virtualized` | `boolean` | `false` | Virtual scrolling for large datasets |
+| `columnVisibility` | `Record<string, boolean>` | - | Column visibility state (bindable) |
+| `groupBy` | `string` | - | Column key to group rows by |
+| `exportable` | `boolean` | `false` | Enable CSV/JSON export |
+| `skeleton` | `boolean` | `false` | Show loading skeleton rows |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Column Interface
 ```typescript

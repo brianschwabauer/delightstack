@@ -38,10 +38,16 @@ A hierarchical data display component for folder structures, category trees, or 
 | `expanded` | `string[]` | `[]` | Expanded node IDs (bindable) |
 | `selectable` | `boolean` | `false` | Enable selection |
 | `multiSelect` | `boolean` | `false` | Allow multiple selection |
+| `checkboxes` | `boolean` | `false` | Show checkboxes for selection |
 | `showLines` | `boolean` | `false` | Show connecting lines |
-| `draggable` | `boolean` | `false` | Enable drag-and-drop |
+| `draggable` | `boolean` | `false` | Enable drag-and-drop reordering |
+| `filter` | `string` | - | Filter/search term to highlight matches |
+| `virtualized` | `boolean` | `false` | Virtual scrolling for large trees |
 | `dense` | `boolean` | `false` | Compact node spacing |
 | `comfortable` | `boolean` | `false` | Relaxed node spacing |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### TreeNode Interface
 ```typescript

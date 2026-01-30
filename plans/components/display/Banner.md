@@ -45,6 +45,8 @@ A full-width announcement bar for important messages, promotions, or system noti
 | `dismissible` | `boolean` | `false` | Show close button |
 | `icon` | `Component` | - | Leading icon |
 | `sticky` | `boolean` | `false` | Stick to top on scroll |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

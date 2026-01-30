@@ -51,6 +51,8 @@ A keyboard-driven command interface inspired by VS Code, Raycast, and Linear. Al
 | `groupBy` | `'category' \| 'none'` | `'category'` | How to group results |
 | `dense` | `boolean` | `false` | Compact result item spacing |
 | `comfortable` | `boolean` | `false` | Relaxed result item spacing |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### CommandOption Interface
 

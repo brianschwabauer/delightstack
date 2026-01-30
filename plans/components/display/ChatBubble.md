@@ -41,6 +41,8 @@ An individual message bubble for use within the Chat component. Handles the visu
 | `showAvatar` | `boolean` | `true` | Show sender avatar |
 | `showTimestamp` | `boolean` | `true` | Show time |
 | `showStatus` | `boolean` | `true` | Show delivery status |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Content Types
 

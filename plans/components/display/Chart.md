@@ -46,6 +46,9 @@ Default accessible colors that work together:
 | `showLegend` | `boolean` | `true` | Show legend |
 | `showTooltip` | `boolean` | `true` | Enable tooltips |
 | `animate` | `boolean` | `true` | Animate on load/change |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### ChartData Interface
 ```typescript

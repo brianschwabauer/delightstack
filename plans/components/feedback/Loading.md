@@ -44,6 +44,8 @@ An animated loading indicator for showing progress or activity. A larger, more e
 | `label` | `string` | - | Loading text below |
 | `overlay` | `boolean` | `false` | Dim background |
 | `fullScreen` | `boolean` | `false` | Cover viewport |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Variants Detail
 

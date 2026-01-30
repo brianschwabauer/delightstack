@@ -40,8 +40,21 @@ A progress bar component for showing determinate progress through a task or proc
 | `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | Bar thickness/diameter |
 | `color` | `string` | - | Fill color |
 | `showLabel` | `boolean` | `false` | Show percentage |
+| `labelPosition` | `'inside' \| 'outside' \| 'center'` | `'outside'` | Label placement |
 | `indeterminate` | `boolean` | `false` | Unknown progress |
 | `striped` | `boolean` | `false` | Striped animation |
+| `segments` | `ProgressSegment[]` | - | Multi-segment progress |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
+
+### ProgressSegment Interface
+```typescript
+interface ProgressSegment {
+  value: number;
+  color?: string;
+  label?: string;
+}
+```
 
 ## Sizes
 

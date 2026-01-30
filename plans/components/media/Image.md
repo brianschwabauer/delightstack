@@ -39,6 +39,9 @@ An optimized image component with loading states, lazy loading, and fallback han
 | `lazy` | `boolean` | `true` | Lazy load |
 | `placeholder` | `string` | - | Placeholder image/color |
 | `fallback` | `string` | - | Error fallback image |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

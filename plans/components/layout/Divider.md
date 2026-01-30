@@ -37,6 +37,8 @@ Text centered with lines on both sides.
 | `color` | `string` | - | Custom line color |
 | `spacing` | `string` | - | Vertical margin |
 | `style` | `'solid' \| 'dashed' \| 'dotted'` | `'solid'` | Line style |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Variants
 

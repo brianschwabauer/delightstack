@@ -44,6 +44,8 @@ A max-width content wrapper that centers content and provides consistent horizon
 | `padding` | `boolean` | `true` | Apply horizontal padding |
 | `center` | `boolean` | `true` | Center the container |
 | `as` | `string` | `'div'` | HTML element to render |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Usage Patterns
 

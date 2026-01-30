@@ -40,6 +40,10 @@ An image grid display with lightbox functionality. Shows a collection of images 
 | `lightbox` | `boolean` | `true` | Enable lightbox |
 | `dense` | `boolean` | `false` | Compact grid gap (`0.25rem`) |
 | `comfortable` | `boolean` | `false` | Relaxed grid gap (`1rem`) |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `6` | Number of skeleton items |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Image Interface
 ```typescript

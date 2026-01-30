@@ -39,6 +39,8 @@ An animated text component that simulates typing, perfect for hero sections, cha
 | `cursor` | `'block' \| 'line' \| 'underscore' \| false` | `'line'` | Cursor style |
 | `cursorBlink` | `boolean` | `true` | Animate cursor blink |
 | `deleteSpeed` | `number` | `30` | Backspace speed (ms) |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

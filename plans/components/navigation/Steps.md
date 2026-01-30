@@ -37,6 +37,8 @@ A multi-step progress indicator for wizards, onboarding flows, and sequential pr
 | `linear` | `boolean` | `true` | Must complete in order |
 | `dense` | `boolean` | `false` | Compact step spacing |
 | `comfortable` | `boolean` | `false` | Relaxed step spacing |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Step Item
 | Prop | Type | Default | Description |

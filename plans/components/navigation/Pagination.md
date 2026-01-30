@@ -41,6 +41,8 @@ Page navigation controls for paginated content. Provides previous/next buttons, 
 | `boundaryCount` | `number` | `1` | Pages at start/end |
 | `dense` | `boolean` | `false` | Compact button/control spacing |
 | `comfortable` | `boolean` | `false` | Relaxed button/control spacing |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

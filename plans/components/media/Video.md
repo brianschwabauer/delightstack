@@ -41,6 +41,9 @@ A custom video player with styled controls and enhanced functionality. Provides 
 | `controls` | `boolean` | `true` | Show controls |
 | `aspectRatio` | `string` | `'16/9'` | Aspect ratio |
 | `preload` | `'auto' \| 'metadata' \| 'none'` | `'metadata'` | Preload behavior |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Source Interface
 ```typescript

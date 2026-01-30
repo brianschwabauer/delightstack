@@ -44,6 +44,9 @@ A slider input for selecting a value or range within a specified interval. Custo
 | `showValue` | `boolean` | `false` | Show value label |
 | `showTicks` | `boolean` | `false` | Show step markers |
 | `formatValue` | `(n: number) => string` | - | Value formatter |
+| `id` | `string` | - | Element ID |
+| `name` | `string` | - | Form field name |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

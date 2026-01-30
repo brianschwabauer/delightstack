@@ -41,6 +41,9 @@ A component for displaying key metrics or statistics with optional labels, icons
 | `trend` | `'up' \| 'down' \| 'neutral'` | - | Trend direction |
 | `size` | `Size` | `'md'` | Component size |
 | `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Change Indicator
 

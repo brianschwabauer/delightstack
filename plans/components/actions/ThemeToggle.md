@@ -37,6 +37,8 @@ A delightful theme switcher component that transitions between light, dark, and 
 | `disableAuto` | `boolean` | `false` | Hide auto/system option |
 | `variant` | `'icon' \| 'switch' \| 'segmented'` | `'icon'` | Visual style |
 | `size` | `'small' \| 'medium'` | `'medium'` | Component size |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

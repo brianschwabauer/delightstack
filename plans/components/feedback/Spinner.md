@@ -38,6 +38,8 @@ A compact spinning loading indicator for inline use. Smaller and simpler than th
 | `color` | `string` | `'currentColor'` | Spinner color |
 | `speed` | `'slow' \| 'normal' \| 'fast'` | `'normal'` | Rotation speed |
 | `label` | `string` | - | Accessible label |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Speed Values
 

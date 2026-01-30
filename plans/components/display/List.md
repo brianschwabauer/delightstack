@@ -33,6 +33,24 @@ A flexible container for list items that provides context-based state management
 | `touched` | `boolean` | `false` | Track if interacted (bindable) |
 | `paddingX` | `string` | - | Horizontal padding override |
 | `paddingY` | `string` | - | Vertical padding override |
+| `virtualized` | `boolean` | `false` | Virtual scrolling for large lists |
+| `itemHeight` | `number` | - | Fixed item height for virtualization |
+| `draggable` | `boolean` | `false` | Enable drag to reorder items |
+| `swipeActions` | `SwipeAction[]` | - | Mobile swipe-to-reveal actions |
+| `skeleton` | `boolean` | `false` | Show loading skeleton items |
+| `skeletonCount` | `number` | `5` | Number of skeleton items to show |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
+
+### SwipeAction Interface
+```typescript
+interface SwipeAction {
+  label: string;
+  icon?: Component;
+  color?: string;
+  onclick: () => void;
+}
+```
 
 ## Events
 

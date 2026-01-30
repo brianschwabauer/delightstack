@@ -27,6 +27,8 @@ This is primarily a functional wrapper. Visual output is minimal:
 | `resetOnSubmit` | `boolean` | `false` | Reset after success |
 | `dense` | `boolean` | `false` | Compact field spacing |
 | `comfortable` | `boolean` | `false` | Relaxed field spacing |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

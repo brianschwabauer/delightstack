@@ -35,6 +35,8 @@ A QR code generator component that creates scannable codes for URLs, text, or ot
 | `logo` | `string` | - | Center logo URL |
 | `logoSize` | `number` | `0.25` | Logo size (0-1 ratio) |
 | `rounded` | `boolean` | `false` | Round module corners |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Error Correction Levels
 

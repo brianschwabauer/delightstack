@@ -35,6 +35,8 @@ An animated number display that smoothly transitions between values. Perfect for
 | `animation` | `'count' \| 'flip' \| 'fade'` | `'count'` | Animation style |
 | `separator` | `boolean` | `true` | Use thousands separator |
 | `easing` | `string` | `'ease-out'` | Animation easing |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

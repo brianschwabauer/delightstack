@@ -43,6 +43,8 @@ A mobile-style slide-up panel for secondary content or actions. Emerges from the
 | `showHandle` | `boolean` | `true` | Show drag handle |
 | `showBackdrop` | `boolean` | `true` | Show backdrop |
 | `blocking` | `boolean` | `true` | Prevent body scroll |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

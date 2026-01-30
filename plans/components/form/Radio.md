@@ -52,6 +52,8 @@ A styled radio button for single-selection within a group. Features custom styli
 | `error` | `string` | - | Error message |
 | `dense` | `boolean` | `false` | Compact option spacing |
 | `comfortable` | `boolean` | `false` | Relaxed option spacing |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ## Events
 

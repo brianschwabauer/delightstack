@@ -37,6 +37,9 @@ A sophisticated floating content container that intelligently positions itself r
 | `strategy` | `'absolute' \| 'fixed'` | `'absolute'` | CSS positioning strategy |
 | `arrow` | `boolean` | `true` | Show arrow pointer |
 | `radius` | `string` | - | Border radius override |
+| `matchTriggerWidth` | `boolean` | `false` | Match width of trigger element |
+| `id` | `string` | - | Element ID |
+| `class` | `string` | - | Additional CSS classes |
 
 ### Trigger Modes
 
@@ -45,7 +48,8 @@ A sophisticated floating content container that intelligently positions itself r
 | `openOnHover` | `boolean` | `false` | Open on mouse hover |
 | `openOnClick` | `boolean` | `true` | Open on click |
 | `openOnFocus` | `boolean` | `false` | Open on focus |
-| `hoverDelay` | `number` | `200` | Delay before opening on hover (ms) |
+| `openDelay` | `number` | `200` | Delay before opening (ms) |
+| `closeDelay` | `number` | `0` | Delay before closing (ms) |
 
 ### Close Behavior
 
