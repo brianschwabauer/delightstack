@@ -31,7 +31,7 @@ Colors use semantic naming with the `--color-` prefix. Dark mode is handled via 
 
 	--color-text: light-dark(#171717, #fafafa);
 	--color-text-muted: light-dark(#525252, #a3a3a3);
-	--color-text-subtle: light-dark(#737373, #737373);
+	--color-text-disabled: light-dark(#a3a3a3, #525252);
 
 	/* Interactive colors */
 	--color-action: light-dark(#2563eb, #3b82f6);
