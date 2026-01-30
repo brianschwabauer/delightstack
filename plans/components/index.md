@@ -24,41 +24,23 @@ Colors use semantic naming with the `--color-` prefix. Dark mode is handled via 
 :root {
 	color-scheme: light dark;
 
-	/* Semantic colors using light-dark() */
+	/* Background colors */
 	--color-bg: light-dark(#ffffff, #0a0a0a);
 	--color-bg-subtle: light-dark(#f5f5f5, #141414);
 	--color-bg-muted: light-dark(#e5e5e5, #262626);
+	--color-bg-disabled: light-dark(#f5f5f5, #1a1a1a);
 
+	/* Text colors */
 	--color-text: light-dark(#171717, #fafafa);
 	--color-text-muted: light-dark(#525252, #a3a3a3);
 	--color-text-disabled: light-dark(#a3a3a3, #525252);
 
-	/* Interactive colors */
-	--color-action: light-dark(#2563eb, #3b82f6);
-	--color-action-hover: light-dark(#1d4ed8, #60a5fa);
-	--color-action-text: #ffffff;
+	/* Borders */
+	--color-border: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.1));
+	--color-border-strong: light-dark(rgb(0 0 0 / 0.2), rgb(255 255 255 / 0.2));
+	--color-border-disabled: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.05));
 
-	--color-accent: light-dark(#7c3aed, #a78bfa);
-	--color-accent-hover: light-dark(#6d28d9, #c4b5fd);
-
-	/* Semantic feedback */
-	--color-success: light-dark(#16a34a, #22c55e);
-	--color-warning: light-dark(#ca8a04, #facc15);
-	--color-error: light-dark(#dc2626, #ef4444);
-	--color-info: light-dark(#0891b2, #06b6d4);
-
-	/* Borders and outlines */
-	--color-border: light-dark(
-		color-mix(in oklch, transparent, #000 10%),
-		color-mix(in oklch, transparent, #fff 10%)
-	);
-	--color-border-strong: light-dark(
-		color-mix(in oklch, transparent, #000 20%),
-		color-mix(in oklch, transparent, #fff 20%)
-	);
-	--color-outline-focus: color-mix(in oklch, var(--color-action) 50%, transparent);
-
-	/* Surfaces (elevation layers) */
+	/* Surfaces - elevated layers get lighter in dark mode */
 	--color-surface-1: light-dark(#ffffff, #0a0a0a);
 	--color-surface-2: light-dark(#fafafa, #141414);
 	--color-surface-3: light-dark(#f5f5f5, #1f1f1f);
@@ -66,27 +48,81 @@ Colors use semantic naming with the `--color-` prefix. Dark mode is handled via 
 }
 ```
 
-#### Dynamic Color Manipulation
+#### Interactive Colors
 
-Use `color-mix()` and relative color syntax for dynamic variations:
+Define only the base color - all states derive automatically via relative color syntax:
 
 ```css
-/* Create hover states with color-mix */
-.button:hover {
-	background: color-mix(in oklch, var(--color-action), black 10%);
-}
+:root {
+	/* Action color - only define the base */
+	--color-action: light-dark(#2563eb, #3b82f6);
 
-/* Create alpha variations */
-.overlay {
-	background: color-mix(in oklch, var(--color-bg), transparent 20%);
-}
+	/* Auto-derived hover/active states (darker) */
+	--color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
+	--color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
 
-/* Relative color syntax for precise adjustments */
-.highlight {
-	/* Make 20% lighter in oklch lightness */
-	background: oklch(from var(--color-action) calc(l + 0.2) c h);
+	/* Auto-derived text: tinted off-white (same hue, low chroma, high lightness) */
+	--color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
+	--color-action-text-hover: white;
+
+	/* Accent color - same pattern */
+	--color-accent: light-dark(#7c3aed, #a78bfa);
+	--color-accent-hover: oklch(from var(--color-accent) calc(l - 0.05) c h);
+	--color-accent-active: oklch(from var(--color-accent) calc(l - 0.1) c h);
+	--color-accent-text: oklch(from var(--color-accent) 0.92 calc(c * 0.15) h);
+	--color-accent-text-hover: white;
 }
 ```
+
+The text color formula `oklch(from var(...) 0.92 calc(c * 0.15) h)` creates a barely-tinted off-white that subtly matches the button color. On hover, it becomes pure white - a "revelation" effect that makes the interaction feel intentional.
+
+#### Semantic Feedback Colors
+
+```css
+:root {
+	/* Base feedback colors */
+	--color-success: light-dark(#16a34a, #22c55e);
+	--color-warning: light-dark(#ca8a04, #facc15);
+	--color-error: light-dark(#dc2626, #ef4444);
+	--color-info: light-dark(#0891b2, #06b6d4);
+
+	/* Soft backgrounds for callouts/alerts */
+	--color-success-bg: light-dark(#f0fdf4, #052e16);
+	--color-warning-bg: light-dark(#fefce8, #422006);
+	--color-error-bg: light-dark(#fef2f2, #450a0a);
+	--color-info-bg: light-dark(#ecfeff, #083344);
+}
+```
+
+#### Selection & Focus
+
+```css
+:root {
+	/* Selection highlight (list items, text selection) */
+	--color-selection: color-mix(in oklch, var(--color-action) 15%, transparent);
+	--color-selection-strong: color-mix(in oklch, var(--color-action) 25%, transparent);
+
+	/* Focus ring */
+	--color-focus-ring: var(--color-action);
+	--focus-ring-width: 2px;
+	--focus-ring-offset: 2px;
+}
+```
+
+#### Backdrop & Overlay
+
+```css
+:root {
+	/* Modal backdrop - darker in dark mode for contrast */
+	--color-backdrop: light-dark(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.7));
+	--backdrop-blur: 8px;
+
+	/* Light overlay for hover states on cards, etc. */
+	--color-overlay-hover: light-dark(rgb(0 0 0 / 0.03), rgb(255 255 255 / 0.03));
+}
+```
+
+Use `backdrop-filter: blur(var(--backdrop-blur))` strategically for modals to focus user attention. Don't blur for small popovers or menus.
 
 ### Border Radius
 
@@ -102,17 +138,56 @@ Use `color-mix()` and relative color syntax for dynamic variations:
 }
 ```
 
-### Shadows
+### Elevation (Shadows & Borders)
+
+Shadows work well in light mode but look muddy in dark mode. Instead, dark mode uses stronger borders and subtle inset highlights to indicate elevation.
 
 ```css
 :root {
-	--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-	--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-	--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-	--shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+	/*
+	 * Light mode: traditional shadows
+	 * Dark mode: subtle inset top highlight (frosted glass edge effect)
+	 */
+	--shadow-sm: light-dark(
+		0 1px 2px 0 rgb(0 0 0 / 0.05),
+		inset 0 1px 0 0 rgb(255 255 255 / 0.04)
+	);
+	--shadow-md: light-dark(
+		0 4px 6px -1px rgb(0 0 0 / 0.1),
+		inset 0 1px 0 0 rgb(255 255 255 / 0.06)
+	);
+	--shadow-lg: light-dark(
+		0 10px 15px -3px rgb(0 0 0 / 0.1),
+		inset 0 1px 0 0 rgb(255 255 255 / 0.08)
+	);
+	--shadow-xl: light-dark(
+		0 20px 25px -5px rgb(0 0 0 / 0.1),
+		inset 0 1px 0 0 rgb(255 255 255 / 0.1)
+	);
 
-	/* Colored shadows for floating elements */
-	--shadow-action: 0 4px 14px color-mix(in oklch, var(--color-action), transparent 70%);
+	/*
+	 * Border strength increases with elevation in dark mode
+	 * Components should use: border: 1px solid var(--border-elevated-N)
+	 */
+	--border-elevated-1: light-dark(var(--color-border), var(--color-border));
+	--border-elevated-2: light-dark(var(--color-border), var(--color-border-strong));
+	--border-elevated-3: light-dark(var(--color-border), rgb(255 255 255 / 0.15));
+	--border-elevated-4: light-dark(var(--color-border), rgb(255 255 255 / 0.18));
+}
+```
+
+**Pattern for elevated components:**
+```css
+.card {
+	background: var(--color-surface-2);
+	border: 1px solid var(--border-elevated-2);
+	box-shadow: var(--shadow-md);
+}
+
+.modal {
+	background: var(--color-surface-3);
+	border: 1px solid var(--border-elevated-3);
+	box-shadow: var(--shadow-xl);
 }
 ```
 
@@ -383,6 +458,29 @@ Components for moving through the application.
 - Use `$bindable()` for two-way binding props
 - Provide sensible defaults for all optional props
 
+### Density Props
+
+Instead of a global spacing scale, components manage their own internal spacing. Where appropriate, components support `dense` and `comfortable` boolean props:
+
+```svelte
+<List dense>        <!-- Tighter spacing for data-heavy UIs -->
+<List>              <!-- Default balanced spacing -->
+<List comfortable>  <!-- More breathing room -->
+```
+
+Components define their own spacing internally:
+```css
+.list-item {
+	padding: 0.75rem 1rem;           /* default */
+}
+.list.dense .list-item {
+	padding: 0.5rem 0.75rem;         /* dense */
+}
+.list.comfortable .list-item {
+	padding: 1rem 1.25rem;           /* comfortable */
+}
+```
+
 ### Events
 
 - Use callback props (`onclick`, `onchange`) instead of dispatching events
@@ -393,31 +491,49 @@ Components for moving through the application.
 - Use CSS custom properties for theming
 - Keep styles scoped within the component
 - Use `light-dark()` for dark mode colors
-- Use `color-mix()` for dynamic color variations
+- Use relative color syntax (`oklch(from var(...))`) for derived colors
 - Use container queries for component-level responsiveness
 - Prefer `transform` and `opacity` for animations (GPU-accelerated)
 
 ### Dark Mode
 
-Components automatically support dark mode via the `light-dark()` function:
+Components automatically support dark mode via `light-dark()`. Key differences in dark mode:
 
+**Elevation**: Use borders + surface colors instead of shadows
 ```css
-.button {
-	background: var(--color-action);
-	color: var(--color-action-text);
-	/* These automatically switch in dark mode */
+.card {
+	background: var(--color-surface-2);
+	border: 1px solid var(--border-elevated-2);
+	box-shadow: var(--shadow-md);  /* shadow in light, inset highlight in dark */
 }
 ```
 
-For custom colors within a component:
+**Text on colored backgrounds**: Tinted off-white that becomes pure white on hover
+```css
+.button {
+	background: var(--color-action);
+	color: var(--color-action-text);        /* tinted off-white */
+}
+.button:hover {
+	background: var(--color-action-hover);
+	color: var(--color-action-text-hover);  /* pure white */
+}
+```
+
+### Backdrop Blur
+
+Use `backdrop-filter: blur()` strategically for focus:
 
 ```css
-.custom-element {
-	background: light-dark(#f0f0f0, #1a1a1a);
-	border-color: light-dark(
-		color-mix(in oklch, #000, transparent 90%),
-		color-mix(in oklch, #fff, transparent 90%)
-	);
+/* YES: Modal backdrops - blur focuses attention on the modal */
+.modal-backdrop {
+	background: var(--color-backdrop);
+	backdrop-filter: blur(var(--backdrop-blur));
+}
+
+/* NO: Small popovers/menus - blur would be distracting */
+.popover-backdrop {
+	/* No blur, just click-away detection */
 }
 ```
 
@@ -427,6 +543,7 @@ For custom colors within a component:
 - Support keyboard navigation
 - Maintain focus management
 - Use semantic HTML elements
+- Respect `prefers-reduced-motion` for animations
 
 ---
 
