@@ -80,6 +80,8 @@ toast.promise(saveData(), {
 | `dismissible` | `boolean` | `true` | Show close button |
 | `action` | `Action` | - | Action button |
 | `icon` | `Component` | - | Custom icon |
+| `dense` | `boolean` | `false` | Compact padding |
+| `comfortable` | `boolean` | `false` | Relaxed padding |
 
 ## Toaster Container
 

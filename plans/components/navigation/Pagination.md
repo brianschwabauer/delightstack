@@ -39,6 +39,8 @@ Page navigation controls for paginated content. Provides previous/next buttons, 
 | `showInfo` | `boolean` | `false` | Show item count info |
 | `siblingCount` | `number` | `1` | Pages shown around current |
 | `boundaryCount` | `number` | `1` | Pages at start/end |
+| `dense` | `boolean` | `false` | Compact button/control spacing |
+| `comfortable` | `boolean` | `false` | Relaxed button/control spacing |
 
 ## Events
 

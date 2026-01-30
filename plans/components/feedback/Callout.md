@@ -48,6 +48,8 @@ Each variant has a default icon:
 | `title` | `string` | - | Optional heading |
 | `icon` | `Component \| false` | - | Custom icon or hide |
 | `dismissible` | `boolean` | `false` | Show close button |
+| `dense` | `boolean` | `false` | Compact padding |
+| `comfortable` | `boolean` | `false` | Relaxed padding |
 
 ## Events
 

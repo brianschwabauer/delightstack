@@ -25,6 +25,8 @@ This is primarily a functional wrapper. Visual output is minimal:
 | `loading` | `boolean` | `false` | Loading state (bindable) |
 | `disabled` | `boolean` | `false` | Disable all fields |
 | `resetOnSubmit` | `boolean` | `false` | Reset after success |
+| `dense` | `boolean` | `false` | Compact field spacing |
+| `comfortable` | `boolean` | `false` | Relaxed field spacing |
 
 ## Events
 

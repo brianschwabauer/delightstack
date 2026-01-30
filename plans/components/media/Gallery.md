@@ -38,6 +38,8 @@ An image grid display with lightbox functionality. Shows a collection of images 
 | `layout` | `'grid' \| 'masonry'` | `'grid'` | Layout style |
 | `aspectRatio` | `string` | `'1'` | Thumbnail aspect ratio |
 | `lightbox` | `boolean` | `true` | Enable lightbox |
+| `dense` | `boolean` | `false` | Compact grid gap (`0.25rem`) |
+| `comfortable` | `boolean` | `false` | Relaxed grid gap (`1rem`) |
 
 ### Image Interface
 ```typescript

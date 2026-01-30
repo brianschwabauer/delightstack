@@ -36,6 +36,8 @@ A navigation trail showing the user's location within the application hierarchy.
 | `maxItems` | `number` | - | Max visible items |
 | `showHome` | `boolean` | `true` | Show home icon first |
 | `homeHref` | `string` | `'/'` | Home link destination |
+| `dense` | `boolean` | `false` | Compact item spacing |
+| `comfortable` | `boolean` | `false` | Relaxed item spacing |
 
 ### BreadcrumbItem Interface
 ```typescript

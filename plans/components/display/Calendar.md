@@ -45,6 +45,8 @@ A date display and selection component showing a monthly view. Supports single d
 | `disabled` | `Date[]` | `[]` | Disabled dates |
 | `marked` | `MarkedDate[]` | `[]` | Dates with markers |
 | `weekStartsOn` | `0-6` | `0` | First day of week |
+| `dense` | `boolean` | `false` | Compact cell spacing |
+| `comfortable` | `boolean` | `false` | Relaxed cell spacing |
 
 ### MarkedDate Interface
 ```typescript

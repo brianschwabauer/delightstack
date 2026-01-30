@@ -38,6 +38,8 @@ A conversation display component for showing message threads between users or wi
 | `showAvatars` | `boolean` | `true` | Show user avatars |
 | `showTimestamps` | `boolean` | `true` | Show message times |
 | `groupMessages` | `boolean` | `true` | Group consecutive messages |
+| `dense` | `boolean` | `false` | Compact message spacing |
+| `comfortable` | `boolean` | `false` | Relaxed message spacing |
 
 ### Message Interface
 ```typescript

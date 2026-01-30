@@ -45,6 +45,8 @@ A star rating input for collecting user ratings or displaying scores. Supports h
 | `emptyIcon` | `Component` | - | Icon for empty state |
 | `color` | `string` | - | Filled star color |
 | `showValue` | `boolean` | `false` | Show numeric value |
+| `dense` | `boolean` | `false` | Tighter star spacing |
+| `comfortable` | `boolean` | `false` | More star spacing |
 
 ## Events
 

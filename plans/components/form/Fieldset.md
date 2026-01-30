@@ -35,6 +35,8 @@ A grouping component for related form fields. Provides visual structure, shared 
 | `disabled` | `boolean` | `false` | Disable all fields |
 | `error` | `string` | - | Group-level error |
 | `required` | `boolean` | `false` | Mark section required |
+| `dense` | `boolean` | `false` | Compact field spacing |
+| `comfortable` | `boolean` | `false` | Relaxed field spacing |
 
 ## Structure
 

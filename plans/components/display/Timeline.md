@@ -42,6 +42,8 @@ A vertical or horizontal timeline for displaying chronological events, activity 
 | `direction` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction |
 | `alternate` | `boolean` | `false` | Alternate sides |
 | `pending` | `boolean` | `false` | Show pending state at end |
+| `dense` | `boolean` | `false` | Compact event spacing |
+| `comfortable` | `boolean` | `false` | Relaxed event spacing |
 
 ### Timeline Item
 

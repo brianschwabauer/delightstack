@@ -22,6 +22,8 @@ This is a layout utility - no visual output, pure structure.
 | `justify` | `'start' \| 'center' \| 'end' \| 'between' \| 'around'` | `'start'` | Main-axis alignment |
 | `wrap` | `boolean` | `false` | Allow wrapping |
 | `reverse` | `boolean` | `false` | Reverse order |
+| `dense` | `boolean` | `false` | Tighter gap (`0.5rem`) |
+| `comfortable` | `boolean` | `false` | Larger gap (`1.5rem`) |
 
 ## Common Patterns
 

@@ -38,6 +38,8 @@ A searchable icon picker component for selecting icons from a predefined set. Us
 | `placeholder` | `string` | `'Select icon'` | Placeholder text |
 | `clearable` | `boolean` | `true` | Allow clearing |
 | `disabled` | `boolean` | `false` | Disable selector |
+| `dense` | `boolean` | `false` | Compact icon grid spacing |
+| `comfortable` | `boolean` | `false` | Relaxed icon grid spacing |
 
 ### IconDefinition
 ```typescript

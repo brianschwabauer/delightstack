@@ -37,6 +37,8 @@ A component for selecting images or videos from a media library. Integrates with
 | `maxSelect` | `number` | - | Max selections |
 | `placeholder` | `string` | `'Select media'` | Placeholder text |
 | `uploadEnabled` | `boolean` | `true` | Allow uploading |
+| `dense` | `boolean` | `false` | Compact thumbnail grid spacing |
+| `comfortable` | `boolean` | `false` | Relaxed thumbnail grid spacing |
 
 ### Media Interface
 ```typescript

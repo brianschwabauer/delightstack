@@ -50,6 +50,8 @@ A styled radio button for single-selection within a group. Features custom styli
 | `disabled` | `boolean` | `false` | Disable all |
 | `direction` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout |
 | `error` | `string` | - | Error message |
+| `dense` | `boolean` | `false` | Compact option spacing |
+| `comfortable` | `boolean` | `false` | Relaxed option spacing |
 
 ## Events
 

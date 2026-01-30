@@ -40,6 +40,8 @@ A hierarchical data display component for folder structures, category trees, or 
 | `multiSelect` | `boolean` | `false` | Allow multiple selection |
 | `showLines` | `boolean` | `false` | Show connecting lines |
 | `draggable` | `boolean` | `false` | Enable drag-and-drop |
+| `dense` | `boolean` | `false` | Compact node spacing |
+| `comfortable` | `boolean` | `false` | Relaxed node spacing |
 
 ### TreeNode Interface
 ```typescript

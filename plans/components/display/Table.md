@@ -45,7 +45,8 @@ A data table component for displaying tabular information with sorting, filterin
 | `selectable` | `boolean` | `false` | Enable row selection |
 | `selected` | `T[]` | `[]` | Selected rows (bindable) |
 | `striped` | `boolean` | `false` | Alternating row colors |
-| `compact` | `boolean` | `false` | Dense row spacing |
+| `dense` | `boolean` | `false` | Compact cell padding |
+| `comfortable` | `boolean` | `false` | Relaxed cell padding |
 | `stickyHeader` | `boolean` | `true` | Sticky header on scroll |
 
 ### Column Interface

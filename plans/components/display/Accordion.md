@@ -44,6 +44,8 @@ A vertically stacked set of collapsible sections, allowing users to expand one o
 | `value` | `string \| string[]` | - | Open item(s) (bindable) |
 | `collapsible` | `boolean` | `true` | Allow closing all items |
 | `disabled` | `boolean` | `false` | Disable all items |
+| `dense` | `boolean` | `false` | Compact header/content padding |
+| `comfortable` | `boolean` | `false` | Relaxed header/content padding |
 
 ### Accordion Item
 

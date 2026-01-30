@@ -47,6 +47,8 @@ A right-click context menu system that provides contextual actions for any eleme
 ```typescript
 interface ContextMenuOptions {
   items: ContextMenuItem[];
+  dense?: boolean;       // Compact item spacing
+  comfortable?: boolean; // Relaxed item spacing
   onopen?: () => void;
   onclose?: () => void;
 }

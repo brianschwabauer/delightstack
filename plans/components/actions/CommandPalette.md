@@ -49,6 +49,8 @@ A keyboard-driven command interface inspired by VS Code, Raycast, and Linear. Al
 | `placeholder` | `string` | `'Type a command...'` | Input placeholder |
 | `recentLimit` | `number` | `5` | Number of recent items to show |
 | `groupBy` | `'category' \| 'none'` | `'category'` | How to group results |
+| `dense` | `boolean` | `false` | Compact result item spacing |
+| `comfortable` | `boolean` | `false` | Relaxed result item spacing |
 
 ### CommandOption Interface
 

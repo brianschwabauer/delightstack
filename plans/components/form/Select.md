@@ -41,6 +41,8 @@ A dropdown selection component for choosing from a list of options. Custom-style
 | `placeholder` | `string` | `'Select...'` | Placeholder text |
 | `label` | `string` | - | Field label |
 | `error` | `string` | - | Error message |
+| `dense` | `boolean` | `false` | Compact option spacing |
+| `comfortable` | `boolean` | `false` | Relaxed option spacing |
 
 ### Option Interface
 ```typescript

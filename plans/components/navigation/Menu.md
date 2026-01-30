@@ -40,6 +40,8 @@ A dropdown menu component for navigation and actions. Appears on click or hover,
 | `trigger` | `HTMLElement` | - | Trigger element |
 | `placement` | `Placement` | `'bottom-start'` | Menu position |
 | `closeOnSelect` | `boolean` | `true` | Close after selection |
+| `dense` | `boolean` | `false` | Compact item spacing |
+| `comfortable` | `boolean` | `false` | Relaxed item spacing |
 
 ### MenuItem
 | Prop | Type | Default | Description |

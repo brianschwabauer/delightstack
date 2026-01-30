@@ -35,6 +35,8 @@ A multi-step progress indicator for wizards, onboarding flows, and sequential pr
 | `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | Layout direction |
 | `clickable` | `boolean` | `false` | Allow clicking completed steps |
 | `linear` | `boolean` | `true` | Must complete in order |
+| `dense` | `boolean` | `false` | Compact step spacing |
+| `comfortable` | `boolean` | `false` | Relaxed step spacing |
 
 ### Step Item
 | Prop | Type | Default | Description |

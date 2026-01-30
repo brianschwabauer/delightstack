@@ -41,6 +41,8 @@ A dedicated file upload component with drag-and-drop support, file previews, and
 | `disabled` | `boolean` | `false` | Disable upload |
 | `preview` | `boolean` | `true` | Show file previews |
 | `upload` | `(file: File) => Promise` | - | Upload handler |
+| `dense` | `boolean` | `false` | Compact dropzone padding |
+| `comfortable` | `boolean` | `false` | Relaxed dropzone padding |
 
 ## Events
 

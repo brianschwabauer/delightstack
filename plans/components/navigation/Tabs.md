@@ -48,6 +48,8 @@ A tabbed navigation component for switching between different views or content s
 | `variant` | `Variant` | `'default'` | Visual style |
 | `fullWidth` | `boolean` | `false` | Stretch to container |
 | `disabled` | `boolean` | `false` | Disable all tabs |
+| `dense` | `boolean` | `false` | Compact tab padding |
+| `comfortable` | `boolean` | `false` | Relaxed tab padding |
 
 ### Tab Item
 | Prop | Type | Default | Description |

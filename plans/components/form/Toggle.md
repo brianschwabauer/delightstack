@@ -41,6 +41,8 @@ An on/off switch component for binary choices. More visually prominent than a ch
 | `labelPosition` | `'left' \| 'right'` | `'right'` | Label placement |
 | `onLabel` | `string` | - | Label when on |
 | `offLabel` | `string` | - | Label when off |
+| `dense` | `boolean` | `false` | Tighter label spacing |
+| `comfortable` | `boolean` | `false` | More label spacing |
 
 ## Events
 

@@ -42,6 +42,8 @@ A styled checkbox input for boolean selections. Features smooth animations, cust
 | `label` | `string` | - | Label text |
 | `description` | `string` | - | Helper text below label |
 | `error` | `string` | - | Error message |
+| `dense` | `boolean` | `false` | Tighter label/box spacing |
+| `comfortable` | `boolean` | `false` | More label/box spacing |
 
 ## Events
 
