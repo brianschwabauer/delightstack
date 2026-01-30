@@ -11,9 +11,9 @@ A syntax-highlighted code block component for displaying code snippets. Features
 ## Visual Design
 
 ### Container
-- Monospace font (system or custom)
-- Dark background (code blocks stand out)
-- Rounded corners (`--radius-2`)
+- Monospace font (`--font-mono`)
+- Background uses `light-dark()` to stand out in both themes
+- Rounded corners (`--radius-md`)
 - Horizontal scroll for long lines
 
 ### Header (Optional)

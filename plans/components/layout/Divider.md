@@ -63,7 +63,7 @@ Line with centered text.
 
 ### Styled
 ```svelte
-<Divider style="dashed" color="var(--c-action)" />
+<Divider style="dashed" color="var(--color-action)" />
 ```
 
 ## Delightful Details

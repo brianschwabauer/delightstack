@@ -180,6 +180,6 @@ The List component uses CSS custom properties that can be overridden:
   --list-padding-x: 16px;
   --list-padding-y: 12px;
   --list-item-radius: 8px;
-  --list-hover-bg: var(--layer-1);
+  --list-hover-bg: var(--color-surface-2);
 }
 ```

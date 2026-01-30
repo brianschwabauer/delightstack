@@ -8,32 +8,225 @@ A polished, opinionated Svelte 5 component library focused on **delightful user 
 - **Delight Users**: Subtle animations, smooth transitions, and unexpected moments of joy
 - **Opinionated by Default**: Components look great out of the box with sensible defaults
 - **Self-Contained**: Each component is readable and maintainable in a single file
-- **Modern CSS**: Plain CSS with CSS custom properties for theming
+- **Modern CSS**: Plain CSS with custom properties, `light-dark()`, `color-mix()`, and container queries
+
+---
 
 ## Design System
 
-### Colors
+### Color Tokens
 
-- `--c-bg` / `--c-text`: Base background and text colors
-- `--c-action`: Primary interactive color
-- `--c-accent`: Secondary highlight color
-- `--c-error` / `--c-success`: Semantic feedback colors
-- `--layer-1` through `--layer-5`: Elevation layers
+Colors use semantic naming with the `--color-` prefix. Dark mode is handled via the CSS `light-dark()` function, which automatically switches based on the `color-scheme` property.
 
-### Spacing & Radius
+#### Base Colors
 
-- `--radius-1` through `--radius-5`: Border radius scale
-- `--radius-round`: Fully rounded (pill shape)
-- Consistent 4px/8px spacing rhythm
+```css
+:root {
+	color-scheme: light dark;
 
-### Typography
+	/* Semantic colors using light-dark() */
+	--color-bg: light-dark(#ffffff, #0a0a0a);
+	--color-bg-subtle: light-dark(#f5f5f5, #141414);
+	--color-bg-muted: light-dark(#e5e5e5, #262626);
 
-- `--font-size-0000` through `--font-size-6`: Type scale
-- System font stack for performance
+	--color-text: light-dark(#171717, #fafafa);
+	--color-text-muted: light-dark(#525252, #a3a3a3);
+	--color-text-subtle: light-dark(#737373, #737373);
+
+	/* Interactive colors */
+	--color-action: light-dark(#2563eb, #3b82f6);
+	--color-action-hover: light-dark(#1d4ed8, #60a5fa);
+	--color-action-text: #ffffff;
+
+	--color-accent: light-dark(#7c3aed, #a78bfa);
+	--color-accent-hover: light-dark(#6d28d9, #c4b5fd);
+
+	/* Semantic feedback */
+	--color-success: light-dark(#16a34a, #22c55e);
+	--color-warning: light-dark(#ca8a04, #facc15);
+	--color-error: light-dark(#dc2626, #ef4444);
+	--color-info: light-dark(#0891b2, #06b6d4);
+
+	/* Borders and outlines */
+	--color-border: light-dark(
+		color-mix(in oklch, transparent, #000 10%),
+		color-mix(in oklch, transparent, #fff 10%)
+	);
+	--color-border-strong: light-dark(
+		color-mix(in oklch, transparent, #000 20%),
+		color-mix(in oklch, transparent, #fff 20%)
+	);
+	--color-outline-focus: color-mix(in oklch, var(--color-action) 50%, transparent);
+
+	/* Surfaces (elevation layers) */
+	--color-surface-1: light-dark(#ffffff, #0a0a0a);
+	--color-surface-2: light-dark(#fafafa, #141414);
+	--color-surface-3: light-dark(#f5f5f5, #1f1f1f);
+	--color-surface-4: light-dark(#e5e5e5, #292929);
+}
+```
+
+#### Dynamic Color Manipulation
+
+Use `color-mix()` and relative color syntax for dynamic variations:
+
+```css
+/* Create hover states with color-mix */
+.button:hover {
+	background: color-mix(in oklch, var(--color-action), black 10%);
+}
+
+/* Create alpha variations */
+.overlay {
+	background: color-mix(in oklch, var(--color-bg), transparent 20%);
+}
+
+/* Relative color syntax for precise adjustments */
+.highlight {
+	/* Make 20% lighter in oklch lightness */
+	background: oklch(from var(--color-action) calc(l + 0.2) c h);
+}
+```
+
+### Border Radius
+
+```css
+:root {
+	--radius-none: 0;
+	--radius-sm: 0.25rem; /* 4px - subtle rounding */
+	--radius-md: 0.5rem; /* 8px - default for most elements */
+	--radius-lg: 0.75rem; /* 12px - cards, modals */
+	--radius-xl: 1rem; /* 16px - large containers */
+	--radius-2xl: 1.5rem; /* 24px - prominent elements */
+	--radius-full: 9999px; /* pill shape */
+}
+```
 
 ### Shadows
 
-- `--shadow-1` through `--shadow-3`: Elevation shadows
+```css
+:root {
+	--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+	--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+	--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+	--shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+	/* Colored shadows for floating elements */
+	--shadow-action: 0 4px 14px color-mix(in oklch, var(--color-action), transparent 70%);
+}
+```
+
+### Z-Index Layers
+
+```css
+:root {
+	--layer-base: 0;
+	--layer-dropdown: 100;
+	--layer-sticky: 200;
+	--layer-drawer: 300;
+	--layer-modal: 400;
+	--layer-popover: 500;
+	--layer-toast: 600;
+	--layer-tooltip: 700;
+}
+```
+
+### Typography
+
+```css
+:root {
+	--font-sans:
+		ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+	/* Type scale (major second - 1.125) */
+	--text-xs: 0.75rem; /* 12px */
+	--text-sm: 0.875rem; /* 14px */
+	--text-base: 1rem; /* 16px */
+	--text-lg: 1.125rem; /* 18px */
+	--text-xl: 1.25rem; /* 20px */
+	--text-2xl: 1.5rem; /* 24px */
+	--text-3xl: 1.875rem; /* 30px */
+	--text-4xl: 2.25rem; /* 36px */
+
+	--font-weight-normal: 400;
+	--font-weight-medium: 500;
+	--font-weight-semibold: 600;
+	--font-weight-bold: 700;
+
+	--leading-tight: 1.25;
+	--leading-normal: 1.5;
+	--leading-relaxed: 1.75;
+}
+```
+
+### Transitions
+
+```css
+:root {
+	--duration-fast: 100ms;
+	--duration-normal: 200ms;
+	--duration-slow: 300ms;
+	--duration-slower: 500ms;
+
+	--ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+	--ease-in: cubic-bezier(0.4, 0, 1, 1);
+	--ease-out: cubic-bezier(0, 0, 0.2, 1);
+	--ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+	--ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+```
+
+---
+
+## Responsive Strategy
+
+### Container Queries for Components
+
+Components should use **container queries** for internal responsiveness rather than viewport media queries. This makes components truly portable—they adapt to their available space, not the screen size.
+
+```css
+/* Make a component a container */
+.card {
+	container-type: inline-size;
+	container-name: card;
+}
+
+/* Respond to container size */
+@container card (width < 300px) {
+	.card-content {
+		flex-direction: column;
+	}
+}
+
+/* Use container query units */
+.card-title {
+	font-size: clamp(1rem, 3cqi, 1.5rem);
+}
+```
+
+### When to Use Container Queries
+
+- **Internal layout changes** within a component (card layouts, list items)
+- **Font size adjustments** based on available space
+- **Showing/hiding elements** based on container width
+- **Grid column adjustments** within a component
+
+### When to Use Media Queries
+
+- **Page-level layout changes** (sidebar collapse, navigation mode)
+- **Global typography changes**
+- **Full-width components** that truly depend on viewport
+
+### Breakpoint Tokens (for media queries when needed)
+
+```css
+/* Use these sparingly - prefer container queries */
+--breakpoint-sm: 640px;
+--breakpoint-md: 768px;
+--breakpoint-lg: 1024px;
+--breakpoint-xl: 1280px;
+```
 
 ---
 
@@ -199,8 +392,34 @@ Components for moving through the application.
 
 - Use CSS custom properties for theming
 - Keep styles scoped within the component
-- Use CSS Grid and Flexbox for layout
+- Use `light-dark()` for dark mode colors
+- Use `color-mix()` for dynamic color variations
+- Use container queries for component-level responsiveness
 - Prefer `transform` and `opacity` for animations (GPU-accelerated)
+
+### Dark Mode
+
+Components automatically support dark mode via the `light-dark()` function:
+
+```css
+.button {
+	background: var(--color-action);
+	color: var(--color-action-text);
+	/* These automatically switch in dark mode */
+}
+```
+
+For custom colors within a component:
+
+```css
+.custom-element {
+	background: light-dark(#f0f0f0, #1a1a1a);
+	border-color: light-dark(
+		color-mix(in oklch, #000, transparent 90%),
+		color-mix(in oklch, #fff, transparent 90%)
+	);
+}
+```
 
 ### Accessibility
 
@@ -208,3 +427,13 @@ Components for moving through the application.
 - Support keyboard navigation
 - Maintain focus management
 - Use semantic HTML elements
+
+---
+
+## Sources & References
+
+- [CSS Custom Properties Naming Conventions](https://jwdallas.com/posts/namingcssvariables/)
+- [Nord Design System Naming](https://nordhealth.design/naming/)
+- [CSS light-dark() Function](https://css-tricks.com/almanac/functions/l/light-dark/)
+- [Container Queries Unleashed](https://www.joshwcomeau.com/css/container-queries-unleashed/)
+- [Modern Dark Mode Implementation](https://medium.com/design-bootcamp/the-ultimate-guide-to-implementing-dark-mode-in-2025-bbf2938d2526)

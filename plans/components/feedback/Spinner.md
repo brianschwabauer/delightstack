@@ -130,7 +130,7 @@ Works naturally in context:
 </button>
 
 <!-- Custom color -->
-<Spinner color="var(--c-success)" />
+<Spinner color="var(--color-success)" />
 
 <!-- Large standalone -->
 <div class="loading-container">

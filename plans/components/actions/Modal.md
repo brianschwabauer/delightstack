@@ -12,9 +12,9 @@ A polished dialog overlay for focused content and interactions. Features smooth 
 
 ### Container
 - Centered in viewport
-- White/dark background based on theme
-- Rounded corners (`--radius-3`)
-- Soft shadow for elevation (`--shadow-3`)
+- Background uses `light-dark()` for automatic theming
+- Rounded corners (`--radius-lg`)
+- Soft shadow for elevation (`--shadow-lg`)
 - Max-width with responsive padding
 
 ### Backdrop

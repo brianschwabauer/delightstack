@@ -201,8 +201,8 @@ Override with CSS custom properties:
 .my-list-item {
   --list-item-padding-x: 16px;
   --list-item-padding-y: 12px;
-  --list-item-hover-bg: rgba(0, 0, 0, 0.05);
-  --list-item-active-bg: var(--c-action-alpha);
+  --list-item-hover-bg: color-mix(in oklch, var(--color-text), transparent 95%);
+  --list-item-active-bg: color-mix(in oklch, var(--color-action), transparent 90%);
   --checkbox-size: 20px;
   --radio-size: 20px;
 }

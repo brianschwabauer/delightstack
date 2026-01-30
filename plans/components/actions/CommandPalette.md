@@ -12,9 +12,9 @@ A keyboard-driven command interface inspired by VS Code, Raycast, and Linear. Al
 
 ### Container
 - Centered modal overlay, positioned in upper third of screen
-- Clean white/dark background with subtle shadow
+- Background uses `light-dark()` for automatic theming
 - Generous width (600px max) for comfortable reading
-- Rounded corners (`--radius-3`)
+- Rounded corners (`--radius-lg`)
 
 ### Search Input
 - Large, prominent input at top

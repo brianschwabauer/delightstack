@@ -145,8 +145,8 @@ In range mode:
 <Calendar
   value={selectedDate}
   marked={[
-    { date: eventDate, color: 'var(--c-accent)', label: 'Meeting' },
-    { date: deadline, color: 'var(--c-error)', label: 'Deadline' }
+    { date: eventDate, color: 'var(--color-accent)', label: 'Meeting' },
+    { date: deadline, color: 'var(--color-error)', label: 'Deadline' }
   ]}
 />
 ```

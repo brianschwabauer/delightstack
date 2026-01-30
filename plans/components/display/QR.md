@@ -87,7 +87,7 @@ A QR code generator component that creates scannable codes for URLs, text, or ot
 <QR
   value={shareUrl}
   size={250}
-  foreground="var(--c-action)"
+  foreground="var(--color-action)"
   rounded
 />
 

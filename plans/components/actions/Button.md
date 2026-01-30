@@ -11,14 +11,14 @@ A versatile, polished button component that serves as the primary interactive el
 ## Visual Design
 
 ### Default Appearance
-- Solid background using `--c-action` color
+- Solid background using `--color-action`
 - White text with medium font weight
-- Subtle rounded corners (`--radius-2`)
+- Subtle rounded corners (`--radius-md`)
 - Soft shadow on hover for depth
 - Comfortable padding: `8px 16px` (default size)
 
 ### Hover State
-- Slight brightness increase
+- Slight brightness increase using `color-mix(in oklch, var(--color-action), black 10%)`
 - Gentle scale transform (1.01x)
 - Shadow elevation increase
 - Cursor pointer
@@ -29,7 +29,7 @@ A versatile, polished button component that serves as the primary interactive el
 - Shadow reduces
 
 ### Focus State
-- Visible focus ring using `--c-action` with alpha
+- Visible focus ring using `--color-outline-focus`
 - No outline (custom focus indicator)
 
 ### Disabled State
@@ -96,9 +96,9 @@ A versatile, polished button component that serves as the primary interactive el
 
 | Size | Padding | Font Size | Min Height |
 |------|---------|-----------|------------|
-| `small` | `4px 12px` | `--font-size-00` | `28px` |
-| `medium` | `8px 16px` | `--font-size-0` | `36px` |
-| `large` | `12px 24px` | `--font-size-1` | `44px` |
+| `small` | `4px 12px` | `--text-sm` | `28px` |
+| `medium` | `8px 16px` | `--text-base` | `36px` |
+| `large` | `12px 24px` | `--text-lg` | `44px` |
 
 ## Delightful Details
 

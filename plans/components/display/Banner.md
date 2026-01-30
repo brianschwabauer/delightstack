@@ -25,11 +25,11 @@ A full-width announcement bar for important messages, promotions, or system noti
 
 | Variant | Background | Use Case |
 |---------|------------|----------|
-| `info` | `--c-action` | General announcements |
-| `success` | `--c-success` | Positive news |
-| `warning` | `--c-warning` | Important notices |
-| `error` | `--c-error` | Critical alerts |
-| `neutral` | `--layer-1` | Subtle announcements |
+| `info` | `--color-info` | General announcements |
+| `success` | `--color-success` | Positive news |
+| `warning` | `--color-warning` | Important notices |
+| `error` | `--color-error` | Critical alerts |
+| `neutral` | `--color-surface-2` | Subtle announcements |
 
 ### Styles
 - **Solid**: Full background color

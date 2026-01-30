@@ -30,7 +30,7 @@ An animated loading indicator for showing progress or activity. A larger, more e
 | `xl` | 120px | Full-screen |
 
 ### Colors
-- Uses `--c-action` by default
+- Uses `--color-action` by default
 - Can be overridden with `color` prop
 - Adapts to dark/light mode
 

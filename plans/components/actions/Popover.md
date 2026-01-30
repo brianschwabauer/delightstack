@@ -11,9 +11,9 @@ A sophisticated floating content container that intelligently positions itself r
 ## Visual Design
 
 ### Container
-- White/dark background based on theme
-- Subtle rounded corners (`--radius-2`)
-- Soft shadow for elevation
+- Background uses `light-dark()` for automatic theming
+- Subtle rounded corners (`--radius-md`)
+- Soft shadow for elevation (`--shadow-md`)
 - Optional arrow pointing to trigger
 
 ### Arrow

@@ -21,12 +21,12 @@ A small status indicator component for highlighting counts, labels, or states. U
 
 | Variant | Background | Use Case |
 |---------|------------|----------|
-| `default` | `--c-action` | Primary badges |
-| `accent` | `--c-accent` | Secondary highlights |
-| `success` | `--c-success` | Positive status |
-| `warning` | `--c-warning` | Attention needed |
-| `error` | `--c-error` | Errors, alerts |
-| `neutral` | `--layer-2` | Subtle labels |
+| `default` | `--color-action` | Primary badges |
+| `accent` | `--color-accent` | Secondary highlights |
+| `success` | `--color-success` | Positive status |
+| `warning` | `--color-warning` | Attention needed |
+| `error` | `--color-error` | Errors, alerts |
+| `neutral` | `--color-surface-3` | Subtle labels |
 
 ### Styles
 

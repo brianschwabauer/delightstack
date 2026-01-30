@@ -153,7 +153,7 @@ A star rating input for collecting user ratings or displaying scores. Supports h
   max={3}
   icon={HeartIcon}
   emptyIcon={HeartOutlineIcon}
-  color="var(--c-error)"
+  color="var(--color-error)"
 />
 
 <!-- Large for feedback forms -->

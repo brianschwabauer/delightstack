@@ -16,8 +16,8 @@ An individual message bubble for use within the Chat component. Handles the visu
 - Background color differentiates sender
 
 ### Colors
-- **Own messages**: `--c-action` background, white text
-- **Other messages**: `--layer-1` background, default text
+- **Own messages**: `--color-action` background, white text
+- **Other messages**: `--color-surface-2` background, default text
 - Consistent with overall chat theme
 
 ### Content Layout
