@@ -29,7 +29,7 @@ A versatile, polished button component that serves as the primary interactive el
 - Shadow reduces
 
 ### Focus State
-- Visible focus ring using `--color-outline-focus`
+- Visible focus ring using `--color-focus-ring`
 - No outline (custom focus indicator)
 
 ### Disabled State
@@ -42,7 +42,7 @@ A versatile, polished button component that serves as the primary interactive el
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Button size variant |
+| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | Button size variant |
 | `variant` | `'solid' \| 'outline' \| 'ghost' \| 'link'` | `'solid'` | Visual style |
 | `color` | `'action' \| 'accent' \| 'error' \| 'success'` | `'action'` | Color scheme |
 | `icon` | `Component` | - | Icon component to display |
@@ -103,9 +103,9 @@ A versatile, polished button component that serves as the primary interactive el
 
 | Size | Padding | Font Size | Min Height |
 |------|---------|-----------|------------|
-| `small` | `4px 12px` | `--text-sm` | `28px` |
-| `medium` | `8px 16px` | `--text-base` | `36px` |
-| `large` | `12px 24px` | `--text-lg` | `44px` |
+| `sm` | `4px 12px` | `--text-sm` | `28px` |
+| `md` | `8px 16px` | `--text-base` | `36px` |
+| `lg` | `12px 24px` | `--text-lg` | `44px` |
 
 ## Delightful Details
 

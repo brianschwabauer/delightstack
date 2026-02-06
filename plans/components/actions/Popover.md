@@ -31,7 +31,7 @@ A sophisticated floating content container that intelligently positions itself r
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `opened` | `boolean` | `false` | Controls visibility (bindable) |
+| `open` | `boolean` | `false` | Controls visibility (bindable) |
 | `refElement` | `HTMLElement` | - | Element to position relative to |
 | `placement` | `Placement` | `'bottom'` | Preferred position |
 | `strategy` | `'absolute' \| 'fixed'` | `'absolute'` | CSS positioning strategy |
@@ -57,7 +57,7 @@ A sophisticated floating content container that intelligently positions itself r
 |------|------|---------|-------------|
 | `closeOnOutsideClick` | `boolean` | `true` | Close when clicking outside |
 | `closeOnInsideClick` | `boolean` | `false` | Close when clicking inside |
-| `closeOnEscapeKey` | `boolean` | `true` | Close on escape key |
+| `closeOnEscape` | `boolean` | `true` | Close on escape key |
 | `disableInitialFocus` | `boolean` | `false` | Don't auto-focus content |
 
 ## Placement Options
@@ -140,7 +140,7 @@ The current implementation is **complete** with:
 </Button>
 
 <Popover
-  bind:opened={isOpen}
+  bind:open={isOpen}
   refElement={buttonRef}
   placement="bottom-start"
 >

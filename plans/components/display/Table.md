@@ -178,7 +178,7 @@ interface Column<T> {
       label: '',
       width: '100px',
       render: (_, row) => (
-        <Button size="small" onclick={() => editUser(row)}>
+        <Button size="sm" onclick={() => editUser(row)}>
           Edit
         </Button>
       )

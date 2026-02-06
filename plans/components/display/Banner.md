@@ -65,7 +65,7 @@ A full-width announcement bar for important messages, promotions, or system noti
   New feature: Dark mode is now available!
 
   {#snippet action()}
-    <Button size="small" variant="ghost">Try it</Button>
+    <Button size="sm" variant="ghost">Try it</Button>
   {/snippet}
 </Banner>
 ```

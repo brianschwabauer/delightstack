@@ -2,7 +2,7 @@
 
 **Status**: 🔲 Placeholder
 **Category**: Display
-**File**: `packages/components/src/display/Accordian.svelte`
+**File**: `packages/components/src/display/Accordion.svelte`
 
 ## Description
 

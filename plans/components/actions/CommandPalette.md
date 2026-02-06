@@ -191,7 +191,7 @@ Currently a **placeholder** with only the TypeScript interface defined. Needs fu
   ];
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <CommandPalette
   bind:open={paletteOpen}

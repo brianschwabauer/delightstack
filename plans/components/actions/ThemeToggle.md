@@ -36,7 +36,7 @@ A delightful theme switcher component that transitions between light, dark, and 
 | `isDark` | `boolean` | - | Computed dark state (bindable, read-only) |
 | `disableAuto` | `boolean` | `false` | Hide auto/system option |
 | `variant` | `'icon' \| 'switch' \| 'segmented'` | `'icon'` | Visual style |
-| `size` | `'small' \| 'medium'` | `'medium'` | Component size |
+| `size` | `'sm' \| 'md'` | `'md'` | Component size |
 | `id` | `string` | - | Element ID |
 | `class` | `string` | - | Additional CSS classes |
 
@@ -163,7 +163,7 @@ Currently a **placeholder** with props defined but no markup. Needs full impleme
 <header>
   <Logo />
   <nav>...</nav>
-  <ThemeToggle size="small" />
+  <ThemeToggle size="sm" />
 </header>
 ```
 

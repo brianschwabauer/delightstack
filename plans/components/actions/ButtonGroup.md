@@ -32,7 +32,7 @@ Inherits button variants, but applied uniformly:
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Layout direction |
-| `size` | `Size` | `'medium'` | Size for all buttons |
+| `size` | `Size` | `'md'` | Size for all buttons |
 | `variant` | `Variant` | `'outline'` | Variant for all buttons |
 | `disabled` | `boolean` | `false` | Disable all buttons |
 | `attached` | `boolean` | `true` | Connect buttons visually |
@@ -122,7 +122,7 @@ Inherits button variants, but applied uniformly:
 </script>
 
 <!-- View toggle -->
-<ButtonGroup size="small">
+<ButtonGroup size="sm">
   <Button
     active={viewMode === 'grid'}
     onclick={() => viewMode = 'grid'}
