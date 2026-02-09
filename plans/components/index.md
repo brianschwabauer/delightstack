@@ -314,89 +314,67 @@ Interactive elements that trigger behaviors.
 | Component                                     | Status         | Description                                                        |
 | --------------------------------------------- | -------------- | ------------------------------------------------------------------ |
 | [Button](./actions/Button.md)                 | ✅ Complete    | Versatile button with ripple effects, loading states, and variants |
-| [ButtonGroup](./actions/ButtonGroup.md)       | 🔲 Placeholder | Connected button container with shared borders                     |
+| [ButtonGroup](./actions/ButtonGroup.md)       | 📋 Planned | Connected button container with shared borders                     |
 | [Modal](./actions/Modal.md)                   | ✅ Complete    | Dialog overlay with transitions and focus management               |
 | [Alert](./actions/Alert.md)                   | ✅ Complete    | Confirmation dialog built on Modal                                 |
 | [Popover](./actions/Popover.md)               | ✅ Complete    | Floating content with smart positioning                            |
 | [ContextMenu](./actions/ContextMenu.md)       | ✅ Complete    | Right-click menu system                                            |
 | [Portal](./actions/Portal.md)                 | ✅ Complete    | Render children in different DOM locations                         |
-| [CommandPalette](./actions/CommandPalette.md) | 🔲 Placeholder | Keyboard-driven command interface                                  |
-| [ThemeToggle](./actions/ThemeToggle.md)       | 🔲 Placeholder | Light/dark/auto theme switcher                                     |
+| [CommandPalette](./actions/CommandPalette.md) | 📋 Planned | Keyboard-driven command interface                                  |
+| [ThemeToggle](./actions/ThemeToggle.md)       | 📋 Planned | Light/dark/auto theme switcher                                     |
 
 ### Display
 
 Components for presenting information.
 
-| Component                             | Status         | Description                                    |
-| ------------------------------------- | -------------- | ---------------------------------------------- |
-| [Expand](./display/Expand.md)         | ✅ Complete    | Animated show/hide container                   |
-| [List](./display/List.md)             | ✅ Complete    | Flexible list container with selection modes   |
-| [ListItem](./display/ListItem.md)     | ✅ Complete    | Rich list item with multiple interaction types |
-| [Accordion](./display/Accordion.md)   | 🔲 Placeholder | Collapsible content sections                   |
-| [Avatar](./display/Avatar.md)         | 🔲 Placeholder | User/entity profile image                      |
-| [AvatarGroup](./display/AvatarGroup.md) | 🔲 Placeholder | Stacked overlapping avatars                    |
-| [Badge](./display/Badge.md)           | 🔲 Placeholder | Small status indicator                         |
-| [Banner](./display/Banner.md)         | 🔲 Placeholder | Full-width announcement bar                    |
-| [Calendar](./display/Calendar.md)     | 🔲 Placeholder | Date display and selection                     |
-| [Chart](./display/Chart.md)           | 🔲 Placeholder | Data visualization                             |
-| [Chat](./display/Chat.md)             | 🔲 Placeholder | Conversation display                           |
-| [ChatBubble](./display/ChatBubble.md) | 🔲 Placeholder | Individual message bubble                      |
-| [Code](./display/Code.md)             | 🔲 Placeholder | Syntax-highlighted code block                  |
-| [Comparison](./display/Comparison.md) | 🔲 Placeholder | Before/after image slider                      |
-| [Counter](./display/Counter.md)       | 🔲 Placeholder | Animated number display                        |
-| [Format](./display/Format.md)         | 🔲 Placeholder | Text formatting utilities                      |
-| [QR](./display/QR.md)                 | 🔲 Placeholder | QR code generator                              |
-| [SplitPane](./display/SplitPane.md)   | 🔲 Placeholder | Resizable split view                           |
-| [Stat](./display/Stat.md)             | 🔲 Placeholder | Key metric display                             |
-| [Table](./display/Table.md)           | 🔲 Placeholder | Data table with sorting/filtering              |
-| [Timeline](./display/Timeline.md)     | 🔲 Placeholder | Chronological event display                    |
-| [Tree](./display/Tree.md)             | 🔲 Placeholder | Hierarchical data display                      |
-| [Typewriter](./display/Typewriter.md) | 🔲 Placeholder | Animated text typing effect                    |
+| Component                                | Status         | Description                                    |
+| ---------------------------------------- | -------------- | ---------------------------------------------- |
+| [Expand](./display/Expand.md)            | ✅ Complete    | Animated show/hide container                   |
+| [List](./display/List.md)                | ✅ Complete    | Flexible list container with selection modes   |
+| [ListItem](./display/ListItem.md)        | ✅ Complete    | Rich list item with multiple interaction types |
+| [Accordion](./display/Accordion.md)      | 📋 Planned | Collapsible content sections                   |
+| [Avatar](./display/Avatar.md)            | 📋 Planned | User/entity profile image                      |
+| [AvatarGroup](./display/AvatarGroup.md)  | 📋 Planned | Stacked overlapping avatars                    |
+| [Calendar](./display/Calendar.md)        | 📋 Planned | Date display and selection                     |
+| [Chart](./display/Chart.md)              | 📋 Planned | Data visualization                             |
+| [Code](./display/Code.md)                | 📋 Planned | Syntax-highlighted code block                  |
+| [Comparison](./display/Comparison.md)    | 📋 Planned | Before/after image slider                      |
+| [Counter](./display/Counter.md)          | 📋 Planned | Animated number display                        |
+| [QR](./display/QR.md)                    | 📋 Planned | QR code generator                              |
+| [SplitPane](./display/SplitPane.md)      | 📋 Planned | Resizable split view                           |
+| [Stat](./display/Stat.md)                | 📋 Planned | Key metric display                             |
+| [Table](./display/Table.md)              | 📋 Planned | Data table with sorting/filtering              |
+| [Timeline](./display/Timeline.md)        | 📋 Planned | Chronological event display                    |
+| [Tree](./display/Tree.md)                | 📋 Planned | Hierarchical data display                      |
+| [Typewriter](./display/Typewriter.md)    | 📋 Planned | Animated text typing effect                    |
 
 ### Feedback
 
 Components that communicate state and progress.
 
-| Component                          | Status         | Description                     |
-| ---------------------------------- | -------------- | ------------------------------- |
-| [Callout](./feedback/Callout.md)   | 🔲 Placeholder | Highlighted information block   |
-| [Confetti](./feedback/Confetti.md) | 🔲 Placeholder | Celebration animation           |
-| [Loading](./feedback/Loading.md)   | 🔲 Placeholder | Animated loading indicator      |
-| [Progress](./feedback/Progress.md) | 🔲 Placeholder | Progress bar                    |
-| [Skeleton](./feedback/Skeleton.md) | 🔲 Placeholder | Content loading placeholder     |
-| [Spinner](./feedback/Spinner.md)   | 🔲 Placeholder | Spinning loading indicator      |
-| [Toast](./feedback/Toast.md)       | 🔲 Placeholder | Temporary notification messages |
-| [Tooltip](./feedback/Tooltip.md)   | 🔲 Placeholder | Hover information popup         |
+| Component                          | Status         | Description                                          |
+| ---------------------------------- | -------------- | ---------------------------------------------------- |
+| [Callout](./feedback/Callout.md)   | 📋 Planned | Highlighted information block (inline + banner mode) |
+| [Confetti](./feedback/Confetti.md) | 📋 Planned | Celebration animation                                |
+| [Progress](./feedback/Progress.md) | 📋 Planned | Progress bar, spinner, and loading indicator          |
+| [Toast](./feedback/Toast.md)       | 📋 Planned | Temporary notification messages                      |
 
 ### Form
 
 Input components for user data entry.
 
-| Component                                | Status         | Description                         |
-| ---------------------------------------- | -------------- | ----------------------------------- |
-| [Input](./form/Input.md)                 | ✅ Complete    | Comprehensive text/data input field |
-| [Checkbox](./form/Checkbox.md)           | 🔲 Placeholder | Boolean toggle with check mark      |
-| [Fieldset](./form/Fieldset.md)           | 🔲 Placeholder | Form section grouping               |
-| [FileUpload](./form/FileUpload.md)       | 🔲 Placeholder | Drag-and-drop file input            |
-| [Form](./form/Form.md)                   | 🔲 Placeholder | Form container with validation      |
-| [IconSelector](./form/IconSelector.md)   | 🔲 Placeholder | Icon picker interface               |
-| [MediaSelector](./form/MediaSelector.md) | 🔲 Placeholder | Image/video selection               |
-| [Radio](./form/Radio.md)                 | 🔲 Placeholder | Single-select option                |
-| [Range](./form/Range.md)                 | 🔲 Placeholder | Slider input                        |
-| [Rating](./form/Rating.md)               | 🔲 Placeholder | Star/score input                    |
-| [Select](./form/Select.md)               | 🔲 Placeholder | Dropdown selection                  |
-| [Toggle](./form/Toggle.md)               | 🔲 Placeholder | On/off switch                       |
-
-### Layout
-
-Structural components for page organization.
-
-| Component                          | Status         | Description                     |
-| ---------------------------------- | -------------- | ------------------------------- |
-| [Container](./layout/Container.md) | 🔲 Placeholder | Max-width content wrapper       |
-| [Grid](./layout/Grid.md)           | 🔲 Placeholder | CSS Grid layout helper          |
-| [Stack](./layout/Stack.md)         | 🔲 Placeholder | Vertical/horizontal flex layout |
-| [Divider](./layout/Divider.md)     | 🔲 Placeholder | Visual separator                |
+| Component                          | Status         | Description                         |
+| ---------------------------------- | -------------- | ----------------------------------- |
+| [Input](./form/Input.md)          | ✅ Complete    | Comprehensive text/data input field |
+| [Checkbox](./form/Checkbox.md)    | 📋 Planned | Boolean toggle with check mark      |
+| [Fieldset](./form/Fieldset.md)    | 📋 Planned | Form section grouping               |
+| [FileUpload](./form/FileUpload.md)| 📋 Planned | Drag-and-drop file input            |
+| [Form](./form/Form.md)            | 📋 Planned | Form container with validation      |
+| [Radio](./form/Radio.md)          | 📋 Planned | Single-select option                |
+| [Range](./form/Range.md)          | 📋 Planned | Slider input                        |
+| [Rating](./form/Rating.md)        | 📋 Planned | Star/score input                    |
+| [Select](./form/Select.md)        | 📋 Planned | Dropdown selection                  |
+| [Toggle](./form/Toggle.md)        | 📋 Planned | On/off switch                       |
 
 ### Media
 
@@ -404,13 +382,13 @@ Components for rich media content.
 
 | Component                       | Status         | Description                         |
 | ------------------------------- | -------------- | ----------------------------------- |
-| [Carousel](./media/Carousel.md) | 🔲 Placeholder | Swipeable image/content slider      |
-| [Gallery](./media/Gallery.md)   | 🔲 Placeholder | Image grid with lightbox            |
-| [Image](./media/Image.md)       | 🔲 Placeholder | Optimized image with loading states |
-| [Map](./media/Map.md)           | 🔲 Placeholder | Interactive map display             |
-| [Panorama](./media/Panorama.md) | 🔲 Placeholder | 360° image viewer                   |
-| [PDF](./media/PDF.md)           | 🔲 Placeholder | PDF document viewer                 |
-| [Video](./media/Video.md)       | 🔲 Placeholder | Video player with controls          |
+| [Carousel](./media/Carousel.md) | 📋 Planned | Swipeable image/content slider      |
+| [Gallery](./media/Gallery.md)   | 📋 Planned | Image grid with lightbox            |
+| [Image](./media/Image.md)       | 📋 Planned | Optimized image with loading states |
+| [Map](./media/Map.md)           | 📋 Planned | Interactive map display             |
+| [Panorama](./media/Panorama.md) | 📋 Planned | 360° image viewer                   |
+| [PDF](./media/PDF.md)           | 📋 Planned | PDF document viewer                 |
+| [Video](./media/Video.md)       | 📋 Planned | Video player with controls          |
 
 ### Navigation
 
@@ -418,28 +396,122 @@ Components for moving through the application.
 
 | Component                                  | Status         | Description                   |
 | ------------------------------------------ | -------------- | ----------------------------- |
-| [BottomSheet](./navigation/BottomSheet.md) | 🔲 Placeholder | Mobile-style slide-up panel   |
-| [Breadcrumbs](./navigation/Breadcrumbs.md) | 🔲 Placeholder | Hierarchical navigation trail |
-| [Drawer](./navigation/Drawer.md)           | 🔲 Placeholder | Slide-out side panel          |
-| [Menu](./navigation/Menu.md)               | 🔲 Placeholder | Dropdown menu                 |
-| [Pagination](./navigation/Pagination.md)   | 🔲 Placeholder | Page navigation controls      |
-| [Steps](./navigation/Steps.md)             | 🔲 Placeholder | Multi-step progress indicator |
-| [Tabs](./navigation/Tabs.md)               | 🔲 Placeholder | Tabbed content switcher       |
+| [BottomSheet](./navigation/BottomSheet.md) | 📋 Planned | Mobile-style slide-up panel   |
+| [Breadcrumbs](./navigation/Breadcrumbs.md) | 📋 Planned | Hierarchical navigation trail |
+| [Drawer](./navigation/Drawer.md)           | 📋 Planned | Slide-out side panel          |
+| [Menu](./navigation/Menu.md)               | 📋 Planned | Dropdown menu                 |
+| [Pagination](./navigation/Pagination.md)   | 📋 Planned | Page navigation controls      |
+| [Steps](./navigation/Steps.md)             | 📋 Planned | Multi-step progress indicator |
+| [Tabs](./navigation/Tabs.md)               | 📋 Planned | Tabbed content switcher       |
+
+---
+
+## Components in Other Packages
+
+Some components live outside the core `@delightstack/components` package:
+
+| Component | Package | Description |
+| --------- | ------- | ----------- |
+| Chat | `@delightstack/chat` | Conversation display with message grouping, typing indicators |
+| ChatBubble | `@delightstack/chat` | Individual message bubble with reactions, content types |
+| IconSelector | `@delightstack/recipes` | Searchable icon picker popover |
+| MediaSelector | `@delightstack/recipes` | Media library browser modal |
+
+Additionally, the **Format** utility (date, number, currency, relative time formatting) lives in `@delightstack/utilities` as the `formatToString()` function.
 
 ---
 
 ## Implementation Progress
 
-| Category   | Complete | Placeholder | Total  |
-| ---------- | -------- | ----------- | ------ |
-| Actions    | 6        | 3           | 9      |
-| Display    | 3        | 20          | 23     |
-| Feedback   | 0        | 8           | 8      |
-| Form       | 1        | 11          | 12     |
-| Layout     | 0        | 4           | 4      |
-| Media      | 0        | 7           | 7      |
-| Navigation | 0        | 7           | 7      |
-| **Total**  | **10**   | **60**      | **70** |
+| Category       | Complete | Placeholder | Total  |
+| -------------- | -------- | ----------- | ------ |
+| Actions        | 6        | 3           | 9      |
+| Display        | 3        | 15          | 18     |
+| Feedback       | 0        | 4           | 4      |
+| Form           | 1        | 9           | 10     |
+| Media          | 0        | 7           | 7      |
+| Navigation     | 0        | 7           | 7      |
+| **Total**      | **10**   | **45**      | **55** |
+
+---
+
+## Dependency Graph
+
+Components depend on each other. This graph shows internal dependencies (arrows point from dependency → dependent):
+
+```
+Portal ← Modal ← Alert
+                ← CommandPalette
+                ← Gallery (lightbox)
+
+Popover ← ContextMenu
+        ← Menu
+        ← Select (dropdown)
+        ← Input (autocomplete popover)
+        ← Breadcrumbs (overflow menu)
+
+Expand ← Accordion
+
+List + ListItem ← Menu (items)
+                ← Select (options)
+                ← CommandPalette (results)
+                ← Tree (nodes)
+
+Progress ← Button (loading state)
+         ← FileUpload (upload progress)
+
+Avatar ← AvatarGroup
+
+Counter ← Stat
+
+Pagination ← Table
+
+Button ← ButtonGroup
+       ← Alert (actions)
+       ← Modal (footer actions)
+```
+
+---
+
+## Implementation Order
+
+Build components in dependency order. Each phase depends on the previous.
+
+### Phase 1 — Foundations
+
+No component dependencies. Build these first.
+
+Portal, Expand, Progress, Avatar, Counter, QR, Typewriter, Confetti, Comparison, Image
+
+### Phase 2 — Core Interactive
+
+Minimal dependencies (mostly standalone).
+
+Button, ButtonGroup, Input, Checkbox, Radio, Toggle, Range, Rating, Fieldset, ThemeToggle
+
+### Phase 3 — Overlays & Lists
+
+Depend on Portal and/or Popover.
+
+Modal, Popover, Alert, List, ListItem, Callout, Toast
+
+### Phase 4 — Composed Components
+
+Depend on Phase 3 components.
+
+Menu, ContextMenu, Select, Accordion, Tabs, Breadcrumbs, Pagination, Steps, Drawer, BottomSheet, FileUpload, Form
+
+### Phase 5 — Data & Complex Display
+
+Depend on Phase 4 components.
+
+Table, Tree, Calendar, Code, Timeline, Stat, AvatarGroup, SplitPane, CommandPalette, Chart
+
+### Phase 6 — Media
+
+Mostly independent but lower priority.
+
+Video, Gallery, Carousel, Map, Panorama, PDF
 
 ---
 
@@ -460,10 +532,43 @@ Components for moving through the application.
 - Use `$props()` with TypeScript interfaces
 - Use `$bindable()` for two-way binding props
 - Provide sensible defaults for all optional props
+- Spread `...rest` for forwarding unknown attributes
+
+### Size System
+
+Components use a numeric size scale where `'1'` is the default/normal size:
+
+```typescript
+size?: '0000' | '000' | '00' | '0' | '1' | '2' | '3' | '4' | '5' | '6'
+```
+
+Not every component uses the full scale — each defines the relevant subset. The size maps to `font-size: var(--font-size-{size})` internally, which cascades to scale the entire component via `em` units.
+
+```svelte
+<Button size="0">Small</Button>
+<Button>Normal (size="1" default)</Button>
+<Button size="3">Large</Button>
+```
+
+### Variant Props
+
+Components use **boolean props** for visual variants rather than a single `variant` string. This allows combinations:
+
+```svelte
+<!-- Single variant -->
+<Button outline>Outlined</Button>
+<Button transparent>Ghost</Button>
+
+<!-- Combined variants -->
+<Button transparent success>Green text, no background</Button>
+<Button outline accent>Accent-colored border</Button>
+```
+
+Available variant booleans vary by component. Common ones: `outline`, `transparent`, `translucent`, `accent`, `error`, `success`.
 
 ### Density Props
 
-Instead of a global spacing scale, components manage their own internal spacing. Where appropriate, components support `dense` and `comfortable` boolean props:
+Components manage their own internal spacing. Where appropriate, components support `dense` and `comfortable` boolean props:
 
 ```svelte
 <List dense>        <!-- Tighter spacing for data-heavy UIs -->
@@ -471,23 +576,41 @@ Instead of a global spacing scale, components manage their own internal spacing.
 <List comfortable>  <!-- More breathing room -->
 ```
 
-Components define their own spacing internally:
-```css
-.list-item {
-	padding: 0.75rem 1rem;           /* default */
-}
-.list.dense .list-item {
-	padding: 0.5rem 0.75rem;         /* dense */
-}
-.list.comfortable .list-item {
-	padding: 1rem 1.25rem;           /* comfortable */
-}
-```
+### Cross-Cutting Props
+
+Several props appear across many components as a convention:
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `skeleton` | `boolean` | Shows a loading skeleton/shimmer in the component's shape. Added to components that display dynamically loaded content (tables, lists, avatars, etc.). |
+| `tooltip` | `string` | Hover tooltip text. Implemented via `{@attach tooltip()}` from `@delightstack/utilities`. Added to interactive components. |
+| `badge` | `number \| boolean` | Notification badge. `true` shows a dot, a number shows the count (truncated to 99+). Added to Button, Avatar, Tabs, ListItem, Menu items. |
 
 ### Events
 
 - Use callback props (`onclick`, `onchange`) instead of dispatching events
-- Support Promise returns for async operations with loading states
+- Support Promise returns for async operations — the component auto-manages loading state
+
+```svelte
+<!-- Button automatically shows spinner while the Promise resolves -->
+<Button onclick={async () => {
+	await saveData();
+}}>
+	Save
+</Button>
+```
+
+### Utilities Integration
+
+Components use actions from `@delightstack/utilities` via the `{@attach}` directive:
+
+```svelte
+<button {@attach ripple()} {@attach tooltip('Click me')}>
+	Action
+</button>
+```
+
+Available utilities: `ripple`, `tooltip`, `focusTrap`, `autoAnimate`, `intersectionObserver`, `resizeObserver`, `fitText`, `truncateText`, `onDragDropFile`, `selectable`, `sortable`, `onFocusWithin`.
 
 ### Styling
 
@@ -557,3 +680,4 @@ Use `backdrop-filter: blur()` strategically for focus:
 - [CSS light-dark() Function](https://css-tricks.com/almanac/functions/l/light-dark/)
 - [Container Queries Unleashed](https://www.joshwcomeau.com/css/container-queries-unleashed/)
 - [Modern Dark Mode Implementation](https://medium.com/design-bootcamp/the-ultimate-guide-to-implementing-dark-mode-in-2025-bbf2938d2526)
+- [Standard Schema](https://github.com/standard-schema/standard-schema) — for form validation
