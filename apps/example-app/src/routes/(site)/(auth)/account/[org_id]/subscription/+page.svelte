@@ -191,19 +191,19 @@
 		gap: 1rem;
 	}
 	.message {
-		background-color: var(--c-bg-active);
+		background-color: var(--color-bg-active);
 		border-radius: var(--radius-3);
 		padding: 1rem 1.5rem;
 		text-wrap: pretty;
 		&.error {
-			background-color: var(--c-error);
-			color: var(--c-error-text);
+			background-color: var(--color-error);
+			color: var(--color-error-text);
 		}
 	}
 	.plan {
 		border-radius: var(--radius);
 		padding: 1rem;
-		border: solid 1px var(--c-outline-disabled);
+		border: solid 1px var(--color-outline-disabled);
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;

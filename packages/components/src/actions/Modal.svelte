@@ -207,7 +207,7 @@
 	</div>
 {/if}
 
-<style lang="scss">
+<style>
 	:global(html:has(.modal)) {
 		overflow: hidden;
 	}
@@ -257,7 +257,7 @@
 			position: absolute;
 			bottom: 0;
 			left: 0;
-			background-color: var(--c-bg);
+			background-color: var(--color-bg);
 			z-index: 2;
 			gap: 0.5rem;
 			padding: 0.5rem 0.5rem 0.5rem 0;
@@ -302,7 +302,7 @@
 			.close {
 				position: sticky;
 				left: 0;
-				background-color: var(--c-bg);
+				background-color: var(--color-bg);
 				border-radius: var(--radius);
 			}
 			.spacer {
@@ -341,7 +341,7 @@
 		grid-column: 1 / 1;
 		grid-row: 1 / 1;
 		height: 100%;
-		background-color: var(--c-bg);
+		background-color: var(--color-bg);
 		z-index: -1;
 		box-shadow: var(--shadow);
 		@media (min-width: 768px) {
@@ -359,7 +359,7 @@
 		z-index: var(--layer);
 		&::after {
 			content: '';
-			background-color: var(--c-text);
+			background-color: var(--color-text);
 			position: absolute;
 			top: 0;
 			left: 0;

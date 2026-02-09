@@ -247,7 +247,7 @@
 		display: flex;
 		flex-direction: row;
 		padding: 0;
-		background-color: var(--c-bg-2);
+		background-color: var(--color-bg-2);
 		position: fixed;
 		bottom: 0;
 		left: 0;
@@ -290,7 +290,7 @@
 		gap: 0.5rem;
 		z-index: var(--layer-5);
 		backdrop-filter: blur(15px);
-		background-color: rgb(from var(--c-bg-2) r g b / 0.8);
+		background-color: rgb(from var(--color-bg-2) r g b / 0.8);
 		font-size: 0.9rem;
 		@media (min-width: 768px) {
 			display: none;
@@ -301,7 +301,7 @@
 		width: clamp(200px, 15vw, 250px);
 		flex-direction: column;
 		align-items: center;
-		background-color: var(--c-bg-2);
+		background-color: var(--color-bg-2);
 		height: 100vh;
 		padding: 1rem;
 		gap: 0.5rem;

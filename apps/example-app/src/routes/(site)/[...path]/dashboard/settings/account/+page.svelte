@@ -267,7 +267,7 @@
 							<p class="name">
 								{user.name}
 								{#if user.id === authState.id}
-									<span style="color: var(--c-text-active)">(Me)</span>
+									<span style="color: var(--color-text-active)">(Me)</span>
 								{/if}
 							</p>
 							{#if user.id !== authState.id}

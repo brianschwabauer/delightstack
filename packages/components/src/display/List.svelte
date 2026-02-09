@@ -142,17 +142,17 @@
 	</ul>
 {:else if children}{@render children()}{/if}
 
-<style lang="scss">
+<style>
 	ul {
 		--radius: var(--radius-5);
-		--c-bg: var(--c-bg-active);
+		--color-bg: var(--color-bg-active);
 		--border-inset: 6px;
 		border-radius: var(--radius);
 		padding: 0;
 		margin: 0;
-		background-color: var(--c-bg);
+		background-color: var(--color-bg);
 		&.disabled {
-			color: var(--c-text-disabled);
+			color: var(--color-text-disabled);
 			cursor: not-allowed;
 		}
 		&.dense {

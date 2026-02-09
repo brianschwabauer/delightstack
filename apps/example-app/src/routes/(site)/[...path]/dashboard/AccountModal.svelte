@@ -266,7 +266,7 @@
 	</div>
 </dialog>
 
-<style lang="scss">
+<style>
 	:global(html) {
 		&::view-transition-old(dark-mode-toggle),
 		&::view-transition-new(dark-mode-toggle) {
@@ -325,9 +325,9 @@
 	.profile-modal {
 		display: flex;
 		flex-direction: column;
-		color: var(--c-text);
+		color: var(--color-text);
 		gap: 1rem;
-		background-color: var(--c-bg-3);
+		background-color: var(--color-bg-3);
 		position: absolute;
 		bottom: 4rem;
 		left: 0px;

@@ -155,11 +155,11 @@
 		}
 		p {
 			padding: 1rem 1.5rem;
-			background-color: var(--c-bg-active);
+			background-color: var(--color-bg-active);
 			border-radius: var(--radius-3);
 			&.error {
-				background-color: var(--c-error);
-				color: var(--c-error-text);
+				background-color: var(--color-error);
+				color: var(--color-error-text);
 			}
 		}
 

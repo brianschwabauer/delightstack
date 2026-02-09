@@ -68,7 +68,7 @@
 		gap: 1rem;
 		p {
 			padding: 1rem 1.5rem;
-			background-color: var(--c-bg-active);
+			background-color: var(--color-bg-active);
 			border-radius: var(--radius-3);
 		}
 

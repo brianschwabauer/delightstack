@@ -675,7 +675,7 @@
 	{@render popover()}
 {/if}
 
-<style lang="scss">
+<style>
 	.popover-hit-box {
 		pointer-events: none;
 	}
@@ -684,11 +684,11 @@
 	}
 	.popover {
 		--shadow: var(--shadow-2);
-		--c-bg: var(--c-bg-0);
+		--color-bg: var(--color-bg-0);
 		--layer: var(--layer-5);
 		--easing: var(--ease-out-back);
 		z-index: var(--layer);
-		background-color: var(--c-bg);
+		background-color: var(--color-bg);
 		border-radius: var(--popover-radius, var(--radius-5));
 		box-shadow: var(--shadow);
 		max-width: calc(100vw - 1rem);
@@ -700,7 +700,7 @@
 		.arrow {
 			position: absolute;
 			pointer-events: none;
-			background-color: var(--c-bg);
+			background-color: var(--color-bg);
 			width: calc(var(--arrow-size) / 2);
 			height: calc(var(--arrow-size) / 2);
 			top: calc(var(--arrow-size) / -2);
@@ -728,13 +728,13 @@
 			&::after {
 				right: calc(var(--arrow-size) * -1 + 3px);
 				border-radius: 0 0 0 var(--arrow-size);
-				box-shadow: min(-2px, calc(var(--arrow-size) / -2 + 8px)) 8px 0 0 var(--c-bg);
+				box-shadow: min(-2px, calc(var(--arrow-size) / -2 + 8px)) 8px 0 0 var(--color-bg);
 			}
 
 			&::before {
 				left: calc(var(--arrow-size) * -1 + 3px);
 				border-radius: 0px 0px var(--arrow-size) 0;
-				box-shadow: max(2px, calc(var(--arrow-size) / 2 - 8px)) 8px 0 0 var(--c-bg);
+				box-shadow: max(2px, calc(var(--arrow-size) / 2 - 8px)) 8px 0 0 var(--color-bg);
 			}
 		}
 	}

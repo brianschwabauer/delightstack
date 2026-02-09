@@ -64,13 +64,13 @@
 		<div class="row" style="gap: 0;">
 			<div
 				class="color"
-				style="background-color: white; color:var(--c-text-dark); border:none; border-radius: 0; font-size: 1rem;">
+				style="background-color: white; color:var(--color-text-dark); border:none; border-radius: 0; font-size: 1rem;">
 				white
 			</div>
 			{#each [50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950] as i}
 				<div
 					class="color"
-					style="background-color:var(--c-{i}); color:var(--c-text-{i > 500
+					style="background-color:var(--color-{i}); color:var(--color-text-{i > 500
 						? 'light'
 						: 'dark'}); border:none; border-radius: 0; font-size: 1rem;">
 					{i}
@@ -78,143 +78,143 @@
 			{/each}
 			<div
 				class="color"
-				style="background-color: black; color:var(--c-text-light); border:none; border-radius: 0; font-size: 1rem;">
+				style="background-color: black; color:var(--color-text-light); border:none; border-radius: 0; font-size: 1rem;">
 				black
 			</div>
 		</div>
 		<div class="row">
 			<div
 				class="color"
-				style="color:var(--c-text-disabled);border-color:var(--c-outline-disabled);">
+				style="color:var(--color-text-disabled);border-color:var(--color-outline-disabled);">
 				Test
 			</div>
-			<div class="color" style="color:var(--c-text);">Test</div>
-			<div class="color" style="color:var(--c-text-hover);">Test</div>
+			<div class="color" style="color:var(--color-text);">Test</div>
+			<div class="color" style="color:var(--color-text-hover);">Test</div>
 			<div
 				class="color"
-				style="background-color:var(--c-bg-1); color:var(--c-text-active);">
+				style="background-color:var(--color-bg-1); color:var(--color-text-active);">
 				Test
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-bg-1); color:var(--c-text-active);">
+				style="background-color:var(--color-bg-1); color:var(--color-text-active);">
 				Test
 			</div>
-			<div class="color" style="background-color:var(--c-bg-1); color:var(--c-text-3);">
+			<div class="color" style="background-color:var(--color-bg-1); color:var(--color-text-3);">
 				Test
 			</div>
-			<div class="color" style="background-color:var(--c-bg-1); color:var(--c-text-4);">
+			<div class="color" style="background-color:var(--color-bg-1); color:var(--color-text-4);">
 				Test
 			</div>
-			<div class="color" style="background-color:var(--c-bg-1); color:var(--c-text-5);">
+			<div class="color" style="background-color:var(--color-bg-1); color:var(--color-text-5);">
 				Test
 			</div>
-			<div class="color" style="background-color:var(--c-bg-1); color:var(--c-text-6);">
+			<div class="color" style="background-color:var(--color-bg-1); color:var(--color-text-6);">
 				Test
 			</div>
 		</div>
-		<div class="row" style="color:var(--c-text);">
-			<div class="color" style="background-color:var(--c-bg-00);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-0);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-1);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-2);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-3);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-4);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-5);">Test</div>
+		<div class="row" style="color:var(--color-text);">
+			<div class="color" style="background-color:var(--color-bg-00);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-0);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-1);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-2);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-3);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-4);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-5);">Test</div>
 		</div>
 		<div class="row">
 			<div
 				class="color"
-				style="background-color:var(--c-bg-00); color:var(--c-text-disabled);">
+				style="background-color:var(--color-bg-00); color:var(--color-text-disabled);">
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-bg-1); color:var(--c-text-active);">
+				style="background-color:var(--color-bg-1); color:var(--color-text-active);">
 			</div>
-			<div class="color" style="background-color:var(--c-bg-0-2); color:var(--c-text-2);">
+			<div class="color" style="background-color:var(--color-bg-0-2); color:var(--color-text-2);">
 			</div>
 		</div>
 		<div class="row" style="color-scheme: light">
 			<div
 				class="color"
-				style="background-color:var(--c-bg-1); color:var(--c-text-disabled);">
+				style="background-color:var(--color-bg-1); color:var(--color-text-disabled);">
 				Test
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-bg-1); color:var(--c-text-active);">
+				style="background-color:var(--color-bg-1); color:var(--color-text-active);">
 				Test
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-bg-1); color:var(--c-text-active);">
+				style="background-color:var(--color-bg-1); color:var(--color-text-active);">
 				Test
 			</div>
-			<div class="color" style="background-color:var(--c-bg-1); color:var(--c-text-3);">
+			<div class="color" style="background-color:var(--color-bg-1); color:var(--color-text-3);">
 				Test
 			</div>
-			<div class="color" style="background-color:var(--c-bg-1); color:var(--c-text-4);">
+			<div class="color" style="background-color:var(--color-bg-1); color:var(--color-text-4);">
 				Test
 			</div>
-			<div class="color" style="background-color:var(--c-bg-1); color:var(--c-text-5);">
+			<div class="color" style="background-color:var(--color-bg-1); color:var(--color-text-5);">
 				Test
 			</div>
-			<div class="color" style="background-color:var(--c-bg-1); color:var(--c-text-6);">
+			<div class="color" style="background-color:var(--color-bg-1); color:var(--color-text-6);">
 				Test
 			</div>
 		</div>
-		<div class="row" style="color-scheme: light; color:var(--c-text-dark);">
-			<div class="color" style="background-color:var(--c-bg-00);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-0);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-1);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-2);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-3);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-4);">Test</div>
-			<div class="color" style="background-color:var(--c-bg-5);">Test</div>
+		<div class="row" style="color-scheme: light; color:var(--color-text-dark);">
+			<div class="color" style="background-color:var(--color-bg-00);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-0);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-1);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-2);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-3);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-4);">Test</div>
+			<div class="color" style="background-color:var(--color-bg-5);">Test</div>
 		</div>
 		<div class="row" style="color-scheme: light">
 			<div
 				class="color"
-				style="background-color:var(--c-bg-00); color:var(--c-text-disabled);">
+				style="background-color:var(--color-bg-00); color:var(--color-text-disabled);">
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-bg-1); color:var(--c-text-active);">
+				style="background-color:var(--color-bg-1); color:var(--color-text-active);">
 			</div>
-			<div class="color" style="background-color:var(--c-bg-0-2); color:var(--c-text-2);">
+			<div class="color" style="background-color:var(--color-bg-0-2); color:var(--color-text-2);">
 			</div>
 		</div>
 		<div class="row" style="color-scheme: dark">
 			<div
 				class="color"
-				style="background-color:var(--c-action-disabled); color:var(--c-action-text-disabled);">
+				style="background-color:var(--color-action-disabled); color:var(--color-action-text-disabled);">
 				text
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-action); color:var(--c-action-text);">
+				style="background-color:var(--color-action); color:var(--color-action-text);">
 				text
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-action-active); color:var(--c-action-text-active);">
+				style="background-color:var(--color-action-active); color:var(--color-action-text-active);">
 				text
 			</div>
 		</div>
 		<div class="row" style="color-scheme: light">
 			<div
 				class="color"
-				style="background-color:var(--c-action-disabled); color:var(--c-action-text-disabled);">
+				style="background-color:var(--color-action-disabled); color:var(--color-action-text-disabled);">
 				text
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-action); color:var(--c-action-text);">
+				style="background-color:var(--color-action); color:var(--color-action-text);">
 				text
 			</div>
 			<div
 				class="color"
-				style="background-color:var(--c-action-active); color:var(--c-action-text-active);">
+				style="background-color:var(--color-action-active); color:var(--color-action-text-active);">
 				text
 			</div>
 		</div>
@@ -237,14 +237,14 @@
 		width: 150px;
 		height: 250px;
 		border-radius: 1rem;
-		border: solid 1px var(--c-outline);
+		border: solid 1px var(--color-outline);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		font-size: 1.5rem;
 		&:hover {
-			color: var(--c-text-active) !important;
-			border-color: var(--c-outline-active);
+			color: var(--color-text-active) !important;
+			border-color: var(--color-outline-active);
 		}
 	}
 

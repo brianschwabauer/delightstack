@@ -223,7 +223,7 @@
 						style="display: flex; justify-content: space-between; align-items: center;">
 						{#if 'secret' in secret && secret.secret}
 							<div
-								style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem; background-color: var(--c-bg-active); border-radius: var(--radius-3); padding: 1.5rem;">
+								style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem; background-color: var(--color-bg-active); border-radius: var(--radius-3); padding: 1.5rem;">
 								<p>
 									Please copy the secret for your own safekeeping. Secrets will no longer
 									be available after this moment.
@@ -312,14 +312,14 @@
 		display: inline-block;
 		padding: 0.25rem 0.5rem;
 		border-radius: var(--radius-round);
-		background-color: var(--c-success);
-		color: var(--c-success-text);
+		background-color: var(--color-success);
+		color: var(--color-success-text);
 		font-size: 0.875rem;
 		font-weight: 500;
 		width: fit-content;
 		&.error {
-			background-color: var(--c-error);
-			color: var(--c-error-text);
+			background-color: var(--color-error);
+			color: var(--color-error-text);
 		}
 	}
 </style>

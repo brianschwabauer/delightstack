@@ -321,7 +321,7 @@
 	</Popover>
 {/if}
 
-<style lang="scss">
+<style>
 	.button {
 		--radius: var(--action-radius, var(--radius-3));
 		--easing: var(--ease-out-back);
@@ -336,71 +336,71 @@
 		}
 
 		&:not(.transparent):not(.translucent) {
-			--c-bg: var(--c-action);
-			--c-bg-disabled: var(--c-action-disabled);
-			--c-bg-active: var(--c-action-active);
-			--c-text: var(--c-action-text);
-			--c-text-disabled: var(--c-action-text-disabled);
-			--c-text-active: var(--c-action-text-active);
-			--c-outline: var(--c-action-outline);
-			--c-outline-disabled: var(--c-action-outline-disabled);
-			--c-outline-active: var(--c-action-outline-active);
+			--color-bg: var(--color-action);
+			--color-bg-disabled: var(--color-action-disabled);
+			--color-bg-active: var(--color-action-active);
+			--color-text: var(--color-action-text);
+			--color-text-disabled: var(--color-action-text-disabled);
+			--color-text-active: var(--color-action-text-active);
+			--color-outline: var(--color-action-outline);
+			--color-outline-disabled: var(--color-action-outline-disabled);
+			--color-outline-active: var(--color-action-outline-active);
 		}
 		&.accent:not(.transparent):not(.translucent) {
-			--c-bg: var(--c-accent);
-			--c-bg-disabled: var(--c-accent-disabled);
-			--c-bg-active: var(--c-accent-active);
-			--c-text: var(--c-accent-text);
-			--c-text-active: var(--c-accent-text-active);
-			--c-text-disabled: var(--c-accent-text-disabled);
+			--color-bg: var(--color-accent);
+			--color-bg-disabled: var(--color-accent-disabled);
+			--color-bg-active: var(--color-accent-active);
+			--color-text: var(--color-accent-text);
+			--color-text-active: var(--color-accent-text-active);
+			--color-text-disabled: var(--color-accent-text-disabled);
 		}
 		&.error:not(.transparent):not(.translucent) {
-			--c-bg: var(--c-error);
-			--c-bg-disabled: var(--c-error-disabled);
-			--c-bg-active: var(--c-error-active);
-			--c-text: var(--c-error-text);
-			--c-text-active: var(--c-error-text-active);
-			--c-text-disabled: var(--c-error-text-disabled);
+			--color-bg: var(--color-error);
+			--color-bg-disabled: var(--color-error-disabled);
+			--color-bg-active: var(--color-error-active);
+			--color-text: var(--color-error-text);
+			--color-text-active: var(--color-error-text-active);
+			--color-text-disabled: var(--color-error-text-disabled);
 		}
 		&.success:not(.transparent):not(.translucent) {
-			--c-bg: var(--c-success);
-			--c-bg-disabled: var(--c-success-disabled);
-			--c-bg-active: var(--c-success-active);
-			--c-text: var(--c-success-text);
-			--c-text-active: var(--c-success-text-active);
-			--c-text-disabled: var(--c-success-text-disabled);
+			--color-bg: var(--color-success);
+			--color-bg-disabled: var(--color-success-disabled);
+			--color-bg-active: var(--color-success-active);
+			--color-text: var(--color-success-text);
+			--color-text-active: var(--color-success-text-active);
+			--color-text-disabled: var(--color-success-text-disabled);
 		}
 
 		&.transparent {
-			--c-bg: transparent;
-			--c-bg-disabled: transparent;
-			--c-bg-active: rgb(from var(--c-text) r g b / 0.06);
+			--color-bg: transparent;
+			--color-bg-disabled: transparent;
+			--color-bg-active: rgb(from var(--color-text) r g b / 0.06);
 		}
 		&.translucent {
 			backdrop-filter: blur(10px);
-			--c-bg: rgb(from var(--c-text) r g b / 0.06);
-			--c-bg-disabled: transparent;
-			--c-bg-active: rgb(from var(--c-text) r g b / 0.12);
-			--c-action-outline: none;
-			--c-action-outline-disabled: none;
-			--c-action-outline-active: none;
+			--color-bg: rgb(from var(--color-text) r g b / 0.06);
+			--color-bg-disabled: transparent;
+			--color-bg-active: rgb(from var(--color-text) r g b / 0.12);
+			--color-action-outline: none;
+			--color-action-outline-disabled: none;
+			--color-action-outline-active: none;
 		}
 		&.transparent,
 		&.translucent {
 			&.accent {
-				--c-text: var(--c-accent);
-				--c-text-disabled: var(--c-accent-disabled);
-				--c-text-active: var(--c-accent-active);
+				--color-text: var(--color-accent);
+				--color-text-disabled: var(--color-accent-disabled);
+				--color-text-active: var(--color-accent-active);
 			}
 			&.error {
-				--c-text: var(--c-error);
-				--c-text-disabled: var(--c-error-disabled);
-				--c-text-active: var(--c-error-active);
+				--color-text: var(--color-error);
+				--color-text-disabled: var(--color-error-disabled);
+				--color-text-active: var(--color-error-active);
 			}
 			&.success {
-				--c-text: var(--c-success);
-				--c-text-disabled: var(--c-success-disabled);
-				--c-text-active: var(--c-success-active);
+				--color-text: var(--color-success);
+				--color-text-disabled: var(--color-success-disabled);
+				--color-text-active: var(--color-success-active);
 			}
 		}
 		&.is-loading {
@@ -417,8 +417,8 @@
 			}
 		}
 		&.active {
-			--c-bg: var(--c-bg-active) !important;
-			--c-text: var(--c-text-active) !important;
+			--color-bg: var(--color-bg-active) !important;
+			--color-text: var(--color-text-active) !important;
 		}
 		&.full-width {
 			width: 100%;
@@ -442,8 +442,8 @@
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			background-color: var(--c-accent, var(--c-text));
-			color: var(--c-accent-text, var(--c-bg));
+			background-color: var(--color-accent, var(--color-text));
+			color: var(--color-accent-text, var(--color-bg));
 			border-radius: var(--radius-round);
 			font-size: 0.85em;
 			line-height: 0.85em;
@@ -463,8 +463,8 @@
 		&.transparent,
 		&.translucent {
 			.badge {
-				background-color: var(--c-accent);
-				color: var(--c-accent-text);
+				background-color: var(--color-accent);
+				color: var(--color-accent-text);
 			}
 		}
 		&.icon {
@@ -499,36 +499,36 @@
 			position: relative;
 			overflow: hidden;
 			outline: none;
-			border: var(--c-action-outline);
+			border: var(--color-action-outline);
 			text-align: center;
 			width: fit-content;
 			border-radius: var(--radius);
-			background-color: var(--c-bg);
-			color: var(--c-text);
+			background-color: var(--color-bg);
+			color: var(--color-text);
 			cursor: pointer;
 			padding: 0.75em 1.5em;
 			transition:
 				background-color 100ms,
 				color 100ms,
 				box-shadow 200ms ease;
-			box-shadow: inset 0px 0px 0px 0px var(--c-text);
+			box-shadow: inset 0px 0px 0px 0px var(--color-text);
 			gap: 0.5em;
 
 			&:focus-visible:not(:disabled):not([aria-disabled='true']) {
-				box-shadow: inset 0px 0px 0px 2px var(--c-text);
-				outline: solid 2px var(--c-bg);
+				box-shadow: inset 0px 0px 0px 2px var(--color-text);
+				outline: solid 2px var(--color-bg);
 			}
 			&:disabled,
 			&[aria-disabled='true'] {
-				background-color: var(--c-bg-disabled);
-				color: var(--c-text-disabled);
+				background-color: var(--color-bg-disabled);
+				color: var(--color-text-disabled);
 				cursor: not-allowed;
-				border: var(--c-action-outline-disabled);
+				border: var(--color-action-outline-disabled);
 			}
 			&:hover:not(:disabled):not([aria-disabled='true']) {
-				background-color: var(--c-bg-active);
-				color: var(--c-text-active);
-				border: var(--c-action-outline-active);
+				background-color: var(--color-bg-active);
+				color: var(--color-text-active);
+				border: var(--color-action-outline-active);
 			}
 		}
 
@@ -594,7 +594,7 @@
 				height: 1em;
 				margin: 0 -0.25em 0 -0.5em;
 				padding: 0;
-				background-color: var(--c-text);
+				background-color: var(--color-text);
 				width: 1px;
 				opacity: 0.2;
 			}
@@ -656,9 +656,9 @@
 			}
 		}
 		&.overlay {
-			--c-action-outline: none;
-			--c-action-outline-disabled: none;
-			--c-action-outline-active: none;
+			--color-action-outline: none;
+			--color-action-outline-disabled: none;
+			--color-action-outline-active: none;
 			&.active {
 				button,
 				a {

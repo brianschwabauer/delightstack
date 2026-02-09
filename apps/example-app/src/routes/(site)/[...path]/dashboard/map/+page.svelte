@@ -17,7 +17,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-		background-color: var(--c-bg-0);
+		background-color: var(--color-bg-0);
 		max-width: 800px;
 		width: 100%;
 		padding: 0.5rem 1rem;
@@ -40,7 +40,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background-color: var(--c-bg-5);
+		background-color: var(--color-bg-5);
 		z-index: -1;
 	}
 </style>

@@ -117,8 +117,8 @@
 						theme: 'flat',
 						labels: 'floating',
 						variables: {
-							colorText: getHexColorFromDom(`var(--c-text)`, stripeEl),
-							colorBackground: getHexColorFromDom(`var(--c-bg)`, stripeEl),
+							colorText: getHexColorFromDom(`var(--color-text)`, stripeEl),
+							colorBackground: getHexColorFromDom(`var(--color-bg)`, stripeEl),
 						},
 					},
 				},
@@ -392,7 +392,7 @@
 		width: 100%;
 		.default {
 			border-radius: var(--radius-2);
-			border: solid 1px var(--c-outline);
+			border: solid 1px var(--color-outline);
 			padding: 0.25rem 0.5rem;
 			font-size: 0.8rem;
 		}
@@ -401,13 +401,13 @@
 		justify-content: end !important;
 	}
 	.coupon {
-		background-color: var(--c-bg-active);
+		background-color: var(--color-bg-active);
 		border-radius: var(--radius-3);
 		padding: 1rem 1.5rem;
 		text-wrap: pretty;
 		&.error {
-			background-color: var(--c-error);
-			color: var(--c-error-text);
+			background-color: var(--color-error);
+			color: var(--color-error-text);
 		}
 	}
 </style>

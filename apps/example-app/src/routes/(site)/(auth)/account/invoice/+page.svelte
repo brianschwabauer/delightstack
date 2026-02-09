@@ -87,7 +87,7 @@
 	.status {
 		text-transform: uppercase;
 		font-size: 0.8rem;
-		border: solid 1px var(--c-outline);
+		border: solid 1px var(--color-outline);
 		border-radius: 4px;
 		padding: 0.15rem 0.25rem;
 	}

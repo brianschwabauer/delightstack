@@ -40,7 +40,7 @@
 		gap: 1rem;
 	}
 	.message {
-		background-color: var(--c-bg-active);
+		background-color: var(--color-bg-active);
 		border-radius: var(--radius-3);
 		padding: 1rem 1.5rem;
 	}

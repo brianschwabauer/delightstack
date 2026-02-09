@@ -2,92 +2,92 @@
 html {
 	color-scheme: light dark;
 
-	--c-dashboard: #616969;
-	--c-primary: #005640;
-	--c-secondary: #005640;
-	--c-50: oklch(from var(--c-dashboard) 99% min(0.01, c) h);
-	--c-100: oklch(from var(--c-dashboard) 97% min(0.015, c) h);
-	--c-150: oklch(from var(--c-dashboard) 95% min(0.02, c) h);
-	--c-200: oklch(from var(--c-dashboard) 92% min(0.03, c) h);
-	--c-250: oklch(from var(--c-dashboard) 87% min(0.04, c) h);
-	--c-300: oklch(from var(--c-dashboard) 82% min(0.05, c) h);
-	--c-350: oklch(from var(--c-dashboard) 76% min(0.06, c) h);
-	--c-400: oklch(from var(--c-dashboard) 70% min(0.07, c) h);
-	--c-450: oklch(from var(--c-dashboard) 65% min(0.08, c) h);
-	--c-500: oklch(from var(--c-dashboard) 60% min(0.08, c) h);
-	--c-550: oklch(from var(--c-dashboard) 55% min(0.08, c) h);
-	--c-600: oklch(from var(--c-dashboard) 48% min(0.07, c) h);
-	--c-650: oklch(from var(--c-dashboard) 41% min(0.06, c) h);
-	--c-700: oklch(from var(--c-dashboard) 35% min(0.05, c) h);
-	--c-750: oklch(from var(--c-dashboard) 29% min(0.04, c) h);
-	--c-800: oklch(from var(--c-dashboard) 24% min(0.03, c) h);
-	--c-850: oklch(from var(--c-dashboard) 21% min(0.02, c) h);
-	--c-900: oklch(from var(--c-dashboard) 18% min(0.015, c) h);
-	--c-950: oklch(from var(--c-dashboard) 15% min(0.01, c) h);
+	--color-dashboard: #616969;
+	--color-primary: #005640;
+	--color-secondary: #005640;
+	--color-50: oklch(from var(--color-dashboard) 99% min(0.01, c) h);
+	--color-100: oklch(from var(--color-dashboard) 97% min(0.015, c) h);
+	--color-150: oklch(from var(--color-dashboard) 95% min(0.02, c) h);
+	--color-200: oklch(from var(--color-dashboard) 92% min(0.03, c) h);
+	--color-250: oklch(from var(--color-dashboard) 87% min(0.04, c) h);
+	--color-300: oklch(from var(--color-dashboard) 82% min(0.05, c) h);
+	--color-350: oklch(from var(--color-dashboard) 76% min(0.06, c) h);
+	--color-400: oklch(from var(--color-dashboard) 70% min(0.07, c) h);
+	--color-450: oklch(from var(--color-dashboard) 65% min(0.08, c) h);
+	--color-500: oklch(from var(--color-dashboard) 60% min(0.08, c) h);
+	--color-550: oklch(from var(--color-dashboard) 55% min(0.08, c) h);
+	--color-600: oklch(from var(--color-dashboard) 48% min(0.07, c) h);
+	--color-650: oklch(from var(--color-dashboard) 41% min(0.06, c) h);
+	--color-700: oklch(from var(--color-dashboard) 35% min(0.05, c) h);
+	--color-750: oklch(from var(--color-dashboard) 29% min(0.04, c) h);
+	--color-800: oklch(from var(--color-dashboard) 24% min(0.03, c) h);
+	--color-850: oklch(from var(--color-dashboard) 21% min(0.02, c) h);
+	--color-900: oklch(from var(--color-dashboard) 18% min(0.015, c) h);
+	--color-950: oklch(from var(--color-dashboard) 15% min(0.01, c) h);
 
-	--c-bg-max-contrast: light-dark(white, black);
-	--c-bg-00: light-dark(white, black);
-	--c-bg-0: light-dark(var(--c-50), var(--c-950));
-	--c-bg-1: light-dark(var(--c-100), var(--c-900));
-	--c-bg-2: light-dark(var(--c-150), var(--c-850));
-	--c-bg-3: light-dark(var(--c-200), var(--c-800));
-	--c-bg-4: light-dark(var(--c-250), var(--c-750));
-	--c-bg-5: light-dark(var(--c-300), var(--c-700));
-	--c-bg-6: light-dark(var(--c-350), var(--c-650));
-	--c-bg-7: light-dark(var(--c-400), var(--c-600));
-	--c-bg-8: light-dark(var(--c-450), var(--c-550));
-	--c-bg-9: light-dark(var(--c-500), var(--c-500));
-	--c-bg-10: light-dark(var(--c-550), var(--c-450));
-	--c-bg-11: light-dark(var(--c-600), var(--c-400));
-	--c-bg-12: light-dark(var(--c-650), var(--c-350));
-	--c-bg-13: light-dark(var(--c-700), var(--c-300));
-	--c-bg-14: light-dark(var(--c-750), var(--c-250));
-	--c-bg-15: light-dark(var(--c-800), var(--c-200));
-	--c-bg-16: light-dark(var(--c-850), var(--c-150));
-	--c-bg-17: light-dark(var(--c-900), var(--c-100));
-	--c-bg-18: light-dark(var(--c-950), var(--c-50));
-	--c-bg: var(--c-bg-1);
-	--c-bg-disabled: var(--c-bg-0);
-	--c-bg-active: var(--c-bg-2);
+	--color-bg-max-contrast: light-dark(white, black);
+	--color-bg-00: light-dark(white, black);
+	--color-bg-0: light-dark(var(--color-50), var(--color-950));
+	--color-bg-1: light-dark(var(--color-100), var(--color-900));
+	--color-bg-2: light-dark(var(--color-150), var(--color-850));
+	--color-bg-3: light-dark(var(--color-200), var(--color-800));
+	--color-bg-4: light-dark(var(--color-250), var(--color-750));
+	--color-bg-5: light-dark(var(--color-300), var(--color-700));
+	--color-bg-6: light-dark(var(--color-350), var(--color-650));
+	--color-bg-7: light-dark(var(--color-400), var(--color-600));
+	--color-bg-8: light-dark(var(--color-450), var(--color-550));
+	--color-bg-9: light-dark(var(--color-500), var(--color-500));
+	--color-bg-10: light-dark(var(--color-550), var(--color-450));
+	--color-bg-11: light-dark(var(--color-600), var(--color-400));
+	--color-bg-12: light-dark(var(--color-650), var(--color-350));
+	--color-bg-13: light-dark(var(--color-700), var(--color-300));
+	--color-bg-14: light-dark(var(--color-750), var(--color-250));
+	--color-bg-15: light-dark(var(--color-800), var(--color-200));
+	--color-bg-16: light-dark(var(--color-850), var(--color-150));
+	--color-bg-17: light-dark(var(--color-900), var(--color-100));
+	--color-bg-18: light-dark(var(--color-950), var(--color-50));
+	--color-bg: var(--color-bg-1);
+	--color-bg-disabled: var(--color-bg-0);
+	--color-bg-active: var(--color-bg-2);
 	
-	--c-text-max-contrast: light-dark(black, white);
-	--c-text-light: oklch(from var(--c-dashboard) 76% min(0.06, c) h);
-	--c-text-dark: oklch(from var(--c-dashboard) 46% min(0.06, c) h);
-	--c-text-disabled: light-dark(oklch(from currentColor calc(l + 0.2) c h), oklch(from currentColor calc(l - 0.2) c h));
-	--c-text-active: light-dark(oklch(from currentColor calc(l - 0.3) c h), oklch(from currentColor calc(l + 0.2) c h));
-	--c-text: light-dark(var(--c-text-dark), var(--c-text-light));
+	--color-text-max-contrast: light-dark(black, white);
+	--color-text-light: oklch(from var(--color-dashboard) 76% min(0.06, c) h);
+	--color-text-dark: oklch(from var(--color-dashboard) 46% min(0.06, c) h);
+	--color-text-disabled: light-dark(oklch(from currentColor calc(l + 0.2) c h), oklch(from currentColor calc(l - 0.2) c h));
+	--color-text-active: light-dark(oklch(from currentColor calc(l - 0.3) c h), oklch(from currentColor calc(l + 0.2) c h));
+	--color-text: light-dark(var(--color-text-dark), var(--color-text-light));
 
-	--c-outline: light-dark(oklch(from currentColor 85% min(c, .1) h), oklch(from currentColor 40% min(c, .09) h));
-	--c-outline-disabled: light-dark(oklch(from currentColor 90% min(c, .1) h), oklch(from currentColor 30% min(c, .09) h));
-	--c-outline-active: light-dark(oklch(from currentColor 75% min(c, .1) h), oklch(from currentColor 50% min(c, .09) h));
+	--color-outline: light-dark(oklch(from currentColor 85% min(c, .1) h), oklch(from currentColor 40% min(c, .09) h));
+	--color-outline-disabled: light-dark(oklch(from currentColor 90% min(c, .1) h), oklch(from currentColor 30% min(c, .09) h));
+	--color-outline-active: light-dark(oklch(from currentColor 75% min(c, .1) h), oklch(from currentColor 50% min(c, .09) h));
 	
-	--c-action: light-dark(oklch(from var(--c-primary) clamp(0.3, l, 0.5) min(.3, c) h), oklch(from var(--c-primary) clamp(0.4, l, 0.6) min(.3, c) h));
-	--c-action-disabled: light-dark(oklch(from var(--c-action) calc(l + .08) calc(c - .01) h), oklch(from var(--c-action) calc(l - .1) calc(c - .02) h));
-	--c-action-active: light-dark(oklch(from var(--c-action) calc(l - .06) calc(c + .02) h), oklch(from var(--c-action) calc(l + .07) calc(c + .02) h));
-	--c-action-text: light-dark(oklch(from var(--c-primary) 94% min(.05, c) h), oklch(from var(--c-primary) 94% min(.05, c) h));
-	--c-action-text-disabled: light-dark(oklch(from var(--c-primary) 82% min(.09, c) h), oklch(from var(--c-primary) 66% min(.09, c) h));
-	--c-action-text-active: light-dark(oklch(from var(--c-primary) 99% min(.03, c) h), oklch(from var(--c-primary) 99% min(.03, c) h));
+	--color-action: light-dark(oklch(from var(--color-primary) clamp(0.3, l, 0.5) min(.3, c) h), oklch(from var(--color-primary) clamp(0.4, l, 0.6) min(.3, c) h));
+	--color-action-disabled: light-dark(oklch(from var(--color-action) calc(l + .08) calc(c - .01) h), oklch(from var(--color-action) calc(l - .1) calc(c - .02) h));
+	--color-action-active: light-dark(oklch(from var(--color-action) calc(l - .06) calc(c + .02) h), oklch(from var(--color-action) calc(l + .07) calc(c + .02) h));
+	--color-action-text: light-dark(oklch(from var(--color-primary) 94% min(.05, c) h), oklch(from var(--color-primary) 94% min(.05, c) h));
+	--color-action-text-disabled: light-dark(oklch(from var(--color-primary) 82% min(.09, c) h), oklch(from var(--color-primary) 66% min(.09, c) h));
+	--color-action-text-active: light-dark(oklch(from var(--color-primary) 99% min(.03, c) h), oklch(from var(--color-primary) 99% min(.03, c) h));
 
-	--c-accent: light-dark(oklch(from var(--c-secondary) clamp(0.3, l, 0.5) min(.3, c) h), oklch(from var(--c-secondary) clamp(0.4, l, 0.6) min(.3, c) h));
-	--c-accent-disabled: light-dark(oklch(from var(--c-accent) calc(l + .08) calc(c - .01) h), oklch(from var(--c-accent) calc(l - .1) calc(c - .02) h));
-	--c-accent-active: light-dark(oklch(from var(--c-accent) calc(l - .06) calc(c + .02) h), oklch(from var(--c-accent) calc(l + .07) calc(c + .02) h));
-	--c-accent-text: light-dark(oklch(from var(--c-secondary) 94% min(.05, c) h), oklch(from var(--c-secondary) 94% min(.05, c) h));
-	--c-accent-text-disabled: light-dark(oklch(from var(--c-secondary) 82% min(.09, c) h), oklch(from var(--c-secondary) 66% min(.09, c) h));
-	--c-accent-text-active: light-dark(oklch(from var(--c-secondary) 99% min(.03, c) h), oklch(from var(--c-secondary) 99% min(.03, c) h));
+	--color-accent: light-dark(oklch(from var(--color-secondary) clamp(0.3, l, 0.5) min(.3, c) h), oklch(from var(--color-secondary) clamp(0.4, l, 0.6) min(.3, c) h));
+	--color-accent-disabled: light-dark(oklch(from var(--color-accent) calc(l + .08) calc(c - .01) h), oklch(from var(--color-accent) calc(l - .1) calc(c - .02) h));
+	--color-accent-active: light-dark(oklch(from var(--color-accent) calc(l - .06) calc(c + .02) h), oklch(from var(--color-accent) calc(l + .07) calc(c + .02) h));
+	--color-accent-text: light-dark(oklch(from var(--color-secondary) 94% min(.05, c) h), oklch(from var(--color-secondary) 94% min(.05, c) h));
+	--color-accent-text-disabled: light-dark(oklch(from var(--color-secondary) 82% min(.09, c) h), oklch(from var(--color-secondary) 66% min(.09, c) h));
+	--color-accent-text-active: light-dark(oklch(from var(--color-secondary) 99% min(.03, c) h), oklch(from var(--color-secondary) 99% min(.03, c) h));
 	
-	--c-error: light-dark(#ef6262, #b04343);
-	--c-error-disabled: light-dark(#b38383, #5e2a2a);
-	--c-error-active: light-dark(#ca3030, #f55d5d);
-	--c-error-text: light-dark(#ffe6e6, #fac0c0);
-	--c-error-text-disabled: light-dark(#ffadad, #d96868);
-	--c-error-text-active: light-dark(#ffffff, #ffffff);
+	--color-error: light-dark(#ef6262, #b04343);
+	--color-error-disabled: light-dark(#b38383, #5e2a2a);
+	--color-error-active: light-dark(#ca3030, #f55d5d);
+	--color-error-text: light-dark(#ffe6e6, #fac0c0);
+	--color-error-text-disabled: light-dark(#ffadad, #d96868);
+	--color-error-text-active: light-dark(#ffffff, #ffffff);
 
-	--c-success: light-dark(#00b7a1, #2c8f83);
-	--c-success-disabled: light-dark(#83b3ad, #2a5e58);
-	--c-success-active: light-dark(#289487, #00b7a1);
-	--c-success-text: light-dark(#f5fefd, #b7f1eb);
-	--c-success-text-disabled: light-dark(#58e0d0, #4ec2b3);
-	--c-success-text-active: light-dark(#ffffff, #ffffff);
+	--color-success: light-dark(#00b7a1, #2c8f83);
+	--color-success-disabled: light-dark(#83b3ad, #2a5e58);
+	--color-success-active: light-dark(#289487, #00b7a1);
+	--color-success-text: light-dark(#f5fefd, #b7f1eb);
+	--color-success-text-disabled: light-dark(#58e0d0, #4ec2b3);
+	--color-success-text-active: light-dark(#ffffff, #ffffff);
 	
 	--layer-1: 1;
 	--layer-2: 2;
@@ -276,9 +276,6 @@ html {
 			1
 		);
 	}
-	@include desktop {
-		scrollbar-gutter: stable;
-	}
 	@media (pointer: fine) {
 		scrollbar-gutter: stable;
 	}
@@ -289,10 +286,10 @@ html {
 }
 
 body {
-	background-color: var(--c-bg);
-	color: var(--c-text);
+	background-color: var(--color-bg);
+	color: var(--color-text);
 	scrollbar-color: var(--scrollthumb-color) transparent;
-	accent-color: var(--c-bg-2, var(--link));
+	accent-color: var(--color-bg-2, var(--link));
 	caret-color: currentColor;
 	font-family: var(--font-serif);
 	font-size: var(--font-size-1);
@@ -301,8 +298,8 @@ body {
 	font-style: normal;
 }
 ::selection {
-	background-color: var(--c-action);
-	color: var(--c-action-text);
+	background-color: var(--color-action);
+	color: var(--color-action-text);
 }
 
 h1,
@@ -331,16 +328,16 @@ h4 {
 }
 small {
 	font-size: 0.75em;
-	color: var(--c-text-disabled);
+	color: var(--color-text-disabled);
 }
 a {
 	text-decoration: none;
-	color: var(--c-text);
+	color: var(--color-text);
 }
 
 *:focus-visible {
 	outline: none;
-	box-shadow: 0 0 0 1px var(--c-outline);
+	box-shadow: 0 0 0 1px var(--color-outline);
 }
 
 /* Box sizing rules */
@@ -467,7 +464,7 @@ select {
 	}
 	&:after {
 		animation: spinAround 500ms infinite linear;
-		border: 2px solid var(--c-text);
+		border: 2px solid var(--color-text);
 		border-radius: var(--radius-round);
 		border-right-color: transparent;
 		border-top-color: transparent;
@@ -482,7 +479,7 @@ select {
 		width: var(--loading-size, 5rem);
 		height: var(--loading-size, 5rem);
 		border-width: 0.2rem;
-		border-color: var(--loading-bg, var(--c-text));
+		border-color: var(--loading-bg, var(--color-text));
 		border-right-color: transparent;
 		border-top-color: transparent;
 		z-index: 3;

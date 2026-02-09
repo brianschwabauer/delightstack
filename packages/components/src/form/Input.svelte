@@ -1365,7 +1365,7 @@
 							: convertFromValueToHtmlInputString(type, elValue)) || '#000000'}
 						onchange={onInputPickerChange}
 						oninput={onInputPickerInput} />
-					<label for={id + '-picker'} style:--color-input={elValue || 'black'}></label>
+					<label for={id + '-picker'} style:--picker-color={elValue || 'black'}></label>
 				</div>
 			{/if}
 		</div>
@@ -1431,12 +1431,11 @@
 	</Portal>
 {/if}
 
-<style lang="scss">
-	$label-font-size: 0.8em;
-	$label-margin: 0.4em;
-
+<style>
 	/** The outer most container */
 	.input {
+		--label-font-size: 0.8em;
+		--label-margin: 0.4em;
 		flex: 1 1 auto;
 		font-size: 1em;
 		letter-spacing: normal;
@@ -1461,7 +1460,7 @@
 
 		input,
 		textarea {
-			color: var(--c-text);
+			color: var(--color-text);
 
 			&:invalid {
 				box-shadow: none;
@@ -1478,17 +1477,17 @@
 
 		&.disabled {
 			cursor: not-allowed;
-			color: var(--c-text-disabled);
+			color: var(--color-text-disabled);
 
 			input,
 			textarea {
 				cursor: not-allowed;
-				color: var(--c-text-disabled);
+				color: var(--color-text-disabled);
 			}
 
 			label {
 				cursor: not-allowed;
-				color: var(--c-text-disabled);
+				color: var(--color-text-disabled);
 			}
 		}
 
@@ -1505,7 +1504,7 @@
 			input,
 			textarea {
 				&::placeholder {
-					color: var(--c-text-disabled);
+					color: var(--color-text-disabled);
 				}
 			}
 			.input-inner {
@@ -1533,21 +1532,21 @@
 		display: flex;
 		position: relative;
 		width: 100%;
-		margin-bottom: $label-margin;
+		margin-bottom: var(--label-margin);
 		z-index: 1;
 	}
 
 	/** Information below the main input field */
 	.input-details {
-		color: var(--c-text-disabled);
+		color: var(--color-text-disabled);
 		display: flex;
 		justify-content: space-between;
 		flex: 1 0 auto;
 		max-width: 100%;
 		font-size: 0.75em;
 		overflow: hidden;
-		margin-top: -$label-margin;
-		margin-bottom: $label-margin;
+		margin-top: calc(-1 * var(--label-margin));
+		margin-bottom: var(--label-margin);
 
 		span {
 			flex-grow: 1;
@@ -1569,11 +1568,11 @@
 		caret-color: currentColor;
 		display: flex;
 		align-items: center;
-		min-height: calc(var(--height) + $label-margin);
+		min-height: calc(var(--height) + var(--label-margin));
 		border-radius: var(--radius);
 
 		> :global(*) {
-			margin-top: $label-margin;
+			margin-top: var(--label-margin);
 		}
 
 		&.loading {
@@ -1586,7 +1585,7 @@
 		}
 
 		&.rounded {
-			--radius: calc((var(--height) / 2) + #{$label-margin});
+			--radius: calc((var(--height) / 2) + var(--label-margin));
 			.input-box > label {
 				&::before {
 					transition:
@@ -1622,36 +1621,34 @@
 			left: 0;
 			position: absolute;
 			pointer-events: none;
-			border-color: var(--c-outline);
+			border-color: var(--color-outline);
 			border-style: solid;
-			top: $label-margin;
+			top: var(--label-margin);
 			border-width: 1px;
 			box-sizing: border-box;
 			transition: border-color 0.1s;
 		}
 
-		& > {
-			.prepend {
-				min-width: 3em;
-				display: flex;
-				align-items: center;
-				justify-content: center;
+		& > .prepend {
+			min-width: 3em;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		& > .prepend ~ .input-box {
+			> input:not(:focus):placeholder-shown + label::before,
+			> textarea:not(:focus):placeholder-shown + label::before {
+				width: 3em;
+				transition:
+					margin-right 0.2s cubic-bezier(0, 0.54, 0.47, 1),
+					width 0.2s cubic-bezier(0, 0.54, 0.47, 1);
 			}
-			.prepend ~ .input-box {
-				> input:not(:focus):placeholder-shown + label::before,
-				> textarea:not(:focus):placeholder-shown + label::before {
-					width: 3em;
-					transition:
-						margin-right 0.2s cubic-bezier(0, 0.54, 0.47, 1),
-						width 0.2s cubic-bezier(0, 0.54, 0.47, 1);
-				}
-			}
-			:global([slot='append']) {
-				min-width: 3em;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-			}
+		}
+		& > :global([slot='append']) {
+			min-width: 3em;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 	}
 
@@ -1681,17 +1678,17 @@
 		}
 	}
 	.input.error {
-		color: var(--c-error);
-		--c-outline: var(--c-error);
-		--c-text-disabled: var(--c-error);
+		color: var(--color-error);
+		--color-outline: var(--color-error);
+		--color-text-disabled: var(--color-error);
 		.input-inner:hover,
 		&:focus-within {
-			color: var(--c-error-active);
+			color: var(--color-error-active);
 		}
 		.input-inner:hover,
 		&:focus-within .input-inner {
 			&::before {
-				border-color: var(--c-error-active);
+				border-color: var(--color-error-active);
 			}
 			&.has-label {
 				&::before {
@@ -1736,23 +1733,23 @@
 			position: absolute;
 			text-overflow: ellipsis;
 			transform-origin: top left;
-			top: $label-margin;
+			top: var(--label-margin);
 			left: 0;
 			display: flex;
 			width: 100%;
-			min-height: calc(100% - $label-margin);
+			min-height: calc(100% - var(--label-margin));
 			max-height: 100%;
 			max-width: 100%;
-			line-height: calc(var(--height) - ($label-margin / 2));
+			line-height: calc(var(--height) - (var(--label-margin) / 2));
 			height: auto;
 			padding: 0;
 			transform: none;
 			cursor: text;
 			overflow: visible;
 			font-size: 1em;
-			border-top: solid 1px var(--c-outline);
+			border-top: solid 1px var(--color-outline);
 			border-radius: var(--radius);
-			color: var(--c-text-disabled);
+			color: var(--color-text-disabled);
 			.tooltip-icon {
 				line-height: 0px;
 				margin: -0.5em 0 0 0.5em;
@@ -1841,7 +1838,7 @@
 			}
 			.input-box > label {
 				color: inherit;
-				// top: calc($label-margin + 2px);
+				// top: calc(var(--label-margin) + 2px);
 			}
 			.input-box {
 				&:not(.has-chips) > input:not(:focus):placeholder-shown,
@@ -1884,7 +1881,7 @@
 			&::after {
 				// The top border when there is a value in the input and the input is not focused
 				// The placeholder text shows up at the top
-				border-top: solid 1px var(--c-outline);
+				border-top: solid 1px var(--color-outline);
 			}
 		}
 		input:focus + label,
@@ -1893,7 +1890,7 @@
 		textarea:not(:placeholder-shown) + label,
 		&.has-chips > label {
 			line-height: 0px !important;
-			font-size: $label-font-size;
+			font-size: var(--label-font-size);
 			border-top: transparent;
 			.tooltip-icon {
 				@media (min-width: 768px) {
@@ -1945,7 +1942,7 @@
 				border-radius: var(--radius-round);
 				&::after {
 					content: '';
-					background-color: var(--color-input, 'black');
+					background-color: var(--picker-color, 'black');
 					border-radius: var(--radius-round);
 					display: block;
 					width: 100%;
@@ -1982,9 +1979,9 @@
 		box-shadow: none;
 		&::after {
 			content: '';
-			background-color: var(--c-bg);
-			width: calc(100% - #{$label-font-size});
-			height: calc(100% - #{$label-font-size});
+			background-color: var(--color-bg);
+			width: calc(100% - var(--label-font-size));
+			height: calc(100% - var(--label-font-size));
 			position: absolute;
 			top: 0.4em;
 			left: 0.4em;
@@ -2013,7 +2010,7 @@
 		&.chips {
 			gap: 0.5em;
 			padding: calc(1em + 1px);
-			padding-top: calc(1em + $label-margin + 1px);
+			padding-top: calc(1em + var(--label-margin) + 1px);
 			margin: 0;
 			&:focus,
 			&:focus-visible {
@@ -2023,8 +2020,8 @@
 			}
 			&:focus-visible {
 				.chip.active {
-					background-color: var(--c-bg-4);
-					color: var(--c-text-active);
+					background-color: var(--color-bg-4);
+					color: var(--color-text-active);
 				}
 			}
 			input,
@@ -2039,7 +2036,7 @@
 				input,
 				textarea {
 					&::placeholder {
-						color: var(--c-text-disabled);
+						color: var(--color-text-disabled);
 					}
 				}
 			}
@@ -2048,9 +2045,9 @@
 			position: relative;
 			display: flex;
 			align-items: center;
-			background-color: var(--c-bg-3);
+			background-color: var(--color-bg-3);
 			border-radius: var(--radius-round);
-			color: var(--c-text);
+			color: var(--color-text);
 			border: none;
 			outline: none;
 			padding: 0.25em 0.5em 0.25em 1em;
@@ -2068,7 +2065,7 @@
 				border-radius: 100%;
 				margin-left: -1em;
 				margin-right: 0.25em;
-				border: solid 1px var(--c-bg-2);
+				border: solid 1px var(--color-bg-2);
 			}
 
 			span {
@@ -2083,15 +2080,15 @@
 				cursor: not-allowed;
 			}
 			&:not(:disabled):hover {
-				background-color: var(--c-bg-4);
-				color: var(--c-text-active);
+				background-color: var(--color-bg-4);
+				color: var(--color-text-active);
 			}
 		}
 	}
 	.input.dense {
 		.input-box.chips {
 			padding: 0.5em 1em 0.5em;
-			padding-top: calc(0.75em + $label-margin);
+			padding-top: calc(0.75em + var(--label-margin));
 			gap: 0.5em;
 			input,
 			textarea {
@@ -2114,16 +2111,16 @@
 		.button {
 			display: block;
 			border-radius: var(--radius);
-			background-color: var(--c-action);
-			color: var(--c-action-text);
+			background-color: var(--color-action);
+			color: var(--color-action-text);
 			outline: none;
 			border: none;
 			margin: 0 1em;
 			padding: 0.25em 0.5em;
 			font-size: 0.9em;
 			&:hover {
-				background-color: var(--c-action);
-				color: var(--c-action-text-active);
+				background-color: var(--color-action);
+				color: var(--color-action-text-active);
 			}
 		}
 	}
@@ -2149,8 +2146,8 @@
 		&:focus {
 			~ .file-picker {
 				.button {
-					background-color: var(--c-action);
-					color: var(--c-action-text-active);
+					background-color: var(--color-action);
+					color: var(--color-action-text-active);
 				}
 			}
 		}
@@ -2161,14 +2158,14 @@
 		--border-inset: 6px;
 		position: fixed;
 		z-index: var(--layer-5);
-		background-color: var(--c-bg-0);
-		color: var(--c-text);
+		background-color: var(--color-bg-0);
+		color: var(--color-text);
 		border-radius: var(--radius);
 		overflow-x: hidden;
 		overflow-y: auto;
 		box-shadow: var(--shadow-2);
 		max-height: calc((3.5em * 5) + 16px);
-		scrollbar-color: var(--c-bg-1) transparent;
+		scrollbar-color: var(--color-bg-1) transparent;
 		scrollbar-width: thin;
 		margin: 2px 0;
 		&::-webkit-scrollbar {
@@ -2185,11 +2182,11 @@
 			margin-bottom: var(--radius);
 		}
 		&::-webkit-scrollbar-thumb {
-			background-color: var(--c-action);
+			background-color: var(--color-action);
 			border-radius: 9999px;
 			min-height: 2rem;
 			&:hover {
-				background-color: var(--c-action-active);
+				background-color: var(--color-action-active);
 				cursor: pointer;
 			}
 		}
@@ -2232,12 +2229,12 @@
 				left: var(--border-inset);
 				right: var(--border-inset);
 				border-radius: calc(var(--radius) - var(--border-inset));
-				background-color: var(--c-bg-1);
+				background-color: var(--color-bg-1);
 				z-index: -1;
 			}
 			&:hover,
 			&.active {
-				color: var(--c-text-active);
+				color: var(--color-text-active);
 				&::before {
 					content: '';
 				}
@@ -2248,7 +2245,7 @@
 					color 100ms;
 			}
 			:global(small) {
-				color: var(--c-text-disabled);
+				color: var(--color-text-disabled);
 				font-size: var(--font-size-0);
 				margin-left: 0.5em;
 				display: inline-block;
