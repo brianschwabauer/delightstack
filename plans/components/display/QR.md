@@ -1,40 +1,49 @@
 # QR
 
-**Status**: 🔲 Placeholder
+**Status**: Planned
 **Category**: Display
 **File**: `packages/components/src/display/QR.svelte`
 
 ## Description
 
-A QR code generator component that creates scannable codes for URLs, text, or other data. Renders as SVG for crisp display at any size with customizable styling options.
+A QR code generator component that creates scannable codes from URLs, text, or other data. Uses a QR encoding library for generation and renders as SVG for crisp display at any size. Supports customizable colors, error correction levels, logo overlay, rounded modules, and download functionality.
+
+## Dependencies
+
+- **Components**: none
+- **Utilities**: `@delightstack/utilities` -- none directly
+- **Libraries**: `qr-code-generator` (or similar lightweight QR encoding library)
 
 ## Visual Design
 
 ### Default Appearance
 - Black modules on white background
-- Comfortable quiet zone (padding)
-- Sharp, crisp edges
-- Scales perfectly (SVG)
+- Comfortable quiet zone (4 module padding)
+- Sharp, crisp edges via SVG rendering
+- Scales perfectly at any size
 
 ### Customization
 - Custom foreground/background colors
 - Optional logo/image in center
 - Rounded module corners
-- Gradient fills (advanced)
+- Theme-aware defaults using `--color-*` tokens
 
 ## Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `value` | `string` | required | Data to encode |
-| `size` | `number` | `200` | Size in pixels |
-| `level` | `'L' \| 'M' \| 'Q' \| 'H'` | `'M'` | Error correction |
-| `foreground` | `string` | `'#000'` | Module color |
-| `background` | `string` | `'#fff'` | Background color |
-| `margin` | `number` | `4` | Quiet zone (modules) |
-| `logo` | `string` | - | Center logo URL |
-| `logoSize` | `number` | `0.25` | Logo size (0-1 ratio) |
+| `size` | `number` | `200` | Size in pixels (width and height) |
+| `level` | `'L' \| 'M' \| 'Q' \| 'H'` | `'M'` | Error correction level |
+| `foreground` | `string` | `'#000000'` | Module (dark) color |
+| `background` | `string` | `'#ffffff'` | Background (light) color |
+| `margin` | `number` | `4` | Quiet zone in modules |
+| `logo` | `string` | - | Center logo image URL |
+| `logoSize` | `number` | `0.25` | Logo size as ratio of QR size (0-1) |
 | `rounded` | `boolean` | `false` | Round module corners |
+| `downloadable` | `boolean` | `false` | Show download button |
+| `downloadFilename` | `string` | `'qr-code'` | Filename for download |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | - | Element ID |
 | `class` | `string` | - | Additional CSS classes |
 
@@ -42,36 +51,65 @@ A QR code generator component that creates scannable codes for URLs, text, or ot
 
 | Level | Recovery | Use Case |
 |-------|----------|----------|
-| `L` | ~7% | Clean environments |
+| `L` | ~7% | Clean environments, maximum data capacity |
 | `M` | ~15% | General use (default) |
 | `Q` | ~25% | Moderate damage expected |
-| `H` | ~30% | Logos, harsh environments |
+| `H` | ~30% | Required when using logo overlay, harsh environments |
 
-## Delightful Details
+When `logo` is provided, the error correction level is automatically upgraded to `'H'` if a lower level was specified, since the logo covers part of the code.
 
-### Smooth Generation
-- No flicker on value change
-- Crossfade to new code
-- Instant generation
+## Logo Integration
 
-### Logo Integration
-- Centered over QR code
-- Uses higher error correction
-- Background behind logo
-- Maintains scannability
+- Logo is centered over the QR code
+- A white (or `background` color) rectangle is drawn behind the logo to clear modules
+- Higher error correction ensures scannability despite covered modules
+- `logoSize` controls the logo dimensions as a fraction of the total QR size
+- Logo image is loaded and rendered into the SVG
 
-### Download Option
+## Download
+
+When `downloadable` is true:
+- A small download button appears below or beside the QR code
+- Click downloads the QR as a PNG (rendered via canvas from SVG)
+- `downloadFilename` controls the file name
+
+Programmatic download:
 ```svelte
-<QR value={url} downloadable filename="my-qr" />
+<QR value={url} bind:this={qrRef} />
+<button onclick={() => qrRef.download('my-code')}>Download</button>
 ```
-- Download as PNG or SVG
-- Configurable filename
-- Optional download button
 
-### Responsive
-- Scales to container
-- Maintains square aspect
-- Crisp at any resolution
+## Skeleton State
+
+When `skeleton` is true, render a square shimmering placeholder matching the specified `size`. A subtle grid pattern hints at QR code structure.
+
+## Accessibility
+
+- `role="img"` on the SVG element
+- `aria-label` describing the encoded content (e.g., "QR code for https://example.com")
+- Always provide alternative access to the encoded URL/text nearby (QR codes are not accessible to screen readers)
+
+## CSS Approach
+
+```css
+.qr-container {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.qr-container svg {
+  display: block;
+}
+
+.qr-container .download-button {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+```
 
 ## Code Example
 
@@ -93,31 +131,37 @@ A QR code generator component that creates scannable codes for URLs, text, or ot
   rounded
 />
 
-<!-- With logo -->
+<!-- With logo (auto-upgrades to H error correction) -->
 <QR
   value={shareUrl}
   logo="/logo.png"
   level="H"
 />
 
+<!-- High error correction -->
+<QR value={shareUrl} level="H" />
+
 <!-- Downloadable -->
 <QR
   value={shareUrl}
   downloadable
-  filename="share-code"
+  downloadFilename="share-code"
+/>
+
+<!-- Custom colors -->
+<QR
+  value={shareUrl}
+  foreground="oklch(0.3 0.1 250)"
+  background="oklch(0.95 0.02 250)"
 />
 ```
 
-## Accessibility
-
-- Include descriptive text nearby
-- Don't rely solely on QR for content access
-- Provide alternative link
-
 ## Implementation Notes
 
-- Implement QR generation algorithm or use small library
-- Output as SVG for scalability
-- Calculate logo safe area for error correction
-- Handle very long data gracefully
-- Consider canvas fallback for PNG export
+- Use a lightweight QR encoding library (e.g., `qr-code-generator`) for the matrix generation
+- Output as SVG for scalability and crisp rendering
+- Each module is an SVG `<rect>` (or rounded `<rect>` with `rx`/`ry` when `rounded` is true)
+- Logo: render as an `<image>` element within the SVG, with a backing `<rect>` in the background color
+- Download: create an off-screen `<canvas>`, draw the SVG into it, then use `canvas.toBlob()` to generate a PNG
+- Handle very long data strings gracefully (show error if data exceeds QR capacity)
+- Crossfade animation when `value` changes

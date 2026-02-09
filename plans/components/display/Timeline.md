@@ -1,37 +1,46 @@
 # Timeline
 
-**Status**: 🔲 Placeholder
+**Status**: Planned
 **Category**: Display
 **File**: `packages/components/src/display/Timeline.svelte`
 
 ## Description
 
-A vertical or horizontal timeline for displaying chronological events, activity history, or step-by-step processes. Connects events with a visual line and markers.
+A chronological event display component for vertical or horizontal timelines. Connects events with a visual line and markers indicating status (complete, active, pending). Supports scroll-based entrance animations, horizontal mode with snap-point scrolling, virtual scrolling for long timelines, and on-demand loading.
+
+## Dependencies
+
+- **Components**: none
+- **Utilities**: `@delightstack/utilities` -- `intersectionObserver` (attachment, for scroll-reveal animations)
+- **Libraries**: none
 
 ## Visual Design
 
 ### Vertical Layout (Default)
-- Line runs down left side
+- Line runs down the left side
 - Events branch to the right
-- Markers on the line
-- Dates/times on left (optional)
+- Markers positioned on the line
+- Dates/times displayed to the left of markers (optional)
+- Optional alternating sides (`alternate` mode)
 
 ### Horizontal Layout
-- Line runs horizontally
-- Events above and below (alternating)
-- Good for process steps
+- Line runs horizontally with scrollable overflow
+- Events positioned above or below the line (alternating)
+- Scroll snapping at each event marker
+- Navigation arrows for scrolling
+- Touch-friendly swipe support
 
 ### Markers
 - Circular nodes on the line
-- Icons or numbers inside
-- Color indicates status
-- Size indicates importance
+- Icons or checkmarks inside
+- Color indicates status (complete=accent, active=pulse, pending=muted)
+- Size consistent across items
 
 ### Event Content
-- Title
-- Description
+- Title text
+- Description/body
 - Timestamp
-- Optional action buttons
+- Optional action buttons or custom content
 
 ## Props
 
@@ -39,111 +48,194 @@ A vertical or horizontal timeline for displaying chronological events, activity 
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `direction` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction |
-| `alternate` | `boolean` | `false` | Alternate sides |
-| `pending` | `boolean` | `false` | Show pending state at end |
+| `horizontal` | `boolean` | `false` | Horizontal layout instead of vertical |
+| `alternate` | `boolean` | `false` | Alternate events left/right (vertical) or top/bottom (horizontal) |
+| `pending` | `boolean` | `false` | Show a pending/loading indicator at the end |
 | `dense` | `boolean` | `false` | Compact event spacing |
 | `comfortable` | `boolean` | `false` | Relaxed event spacing |
+| `virtualized` | `boolean` | `false` | Virtual scrolling for long timelines |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `skeletonCount` | `number` | `3` | Number of skeleton items |
 | `id` | `string` | - | Element ID |
 | `class` | `string` | - | Additional CSS classes |
+| `children` | `Snippet` | - | TimelineItem children |
+| `onloadmore` | `() => void \| Promise<void>` | - | Called when scrolling near the end (for on-demand loading) |
 
-### Timeline Item
+### TimelineItem
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `date` | `Date \| string` | - | Event timestamp |
 | `title` | `string` | - | Event title |
 | `icon` | `Component` | - | Marker icon |
-| `color` | `string` | - | Marker color |
+| `color` | `string` | - | Marker color override |
 | `status` | `'complete' \| 'active' \| 'pending'` | - | Event status |
+| `children` | `Snippet` | - | Event body content |
 
 ## Event States
 
 ### Complete
-- Solid marker
-- Checkmark or custom icon
-- Full line connection
+- Solid filled marker with accent color
+- Checkmark icon (or custom icon)
+- Solid connecting line
+- Full opacity content
 
 ### Active
-- Highlighted marker
-- Pulse animation
-- Indicates current
+- Highlighted marker with pulse animation
+- Accent color ring
+- Indicates the current/in-progress event
+- Full opacity content
 
 ### Pending
-- Hollow/dashed marker
-- Dashed line connection
-- Muted styling
+- Hollow/outline marker
+- Dashed connecting line
+- Muted text color
+- Reduced opacity
 
-## Delightful Details
+## Horizontal Mode
 
-### Line Animation
-- Line "draws" on scroll into view
-- Progressive reveal
-- Smooth entrance
+The horizontal timeline is a scrollable container with snap behavior:
 
-### Marker Animation
-- Pop in as they appear
-- Staggered timing
-- Smooth scale
+```css
+.timeline.horizontal {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+}
 
-### Scroll Reveal
-- Events animate in on scroll
-- Staggered by position
-- Subtle fade + slide
-
-### Hover Effects
-- Marker scales slightly
-- Card elevates
-- More details revealed
-
-### Collapse/Expand
-- Long timelines can collapse middle items
-- "Show more" reveals hidden
-- Smooth height animation
-
-## Variants
-
-### Activity Feed
-```svelte
-<Timeline>
-  <TimelineItem date={now} icon={UserIcon}>
-    <strong>Alice</strong> created a new project
-  </TimelineItem>
-  <TimelineItem date={earlier} icon={EditIcon}>
-    <strong>Bob</strong> updated settings
-  </TimelineItem>
-</Timeline>
+.timeline.horizontal .timeline-item {
+  scroll-snap-align: center;
+  flex-shrink: 0;
+}
 ```
 
-### Process Steps
-```svelte
-<Timeline direction="horizontal">
-  <TimelineItem status="complete" title="Order Placed" />
-  <TimelineItem status="complete" title="Processing" />
-  <TimelineItem status="active" title="Shipping" />
-  <TimelineItem status="pending" title="Delivered" />
-</Timeline>
-```
+- Events are arranged along a horizontal line
+- The container scrolls horizontally with CSS snap points at each event
+- Optional navigation arrows (left/right) appear at the container edges
+- Touch/swipe scrolling supported natively
+- Keyboard: Left/Right arrows scroll between events when focused
 
-### Changelog
-```svelte
-<Timeline>
-  <TimelineItem date="2024-01-15" title="v2.0.0">
-    <Badge>Major</Badge>
-    <p>Complete redesign with new features...</p>
-  </TimelineItem>
-  <!-- ... -->
-</Timeline>
-```
+## Virtual Scrolling
+
+When `virtualized` is true:
+- Only visible timeline items are rendered in the DOM
+- Smooth scrolling with overscan
+- Handles timelines with thousands of events
+- Works in both vertical and horizontal modes
+
+## On-Demand Loading
+
+When `onloadmore` is provided:
+- The component detects when the user scrolls near the end of the timeline
+- Triggers `onloadmore` to fetch additional events
+- Shows a loading indicator during the fetch
+- New events are appended to the timeline
+
+## Scroll-Reveal Animation
+
+Each TimelineItem uses `intersectionObserver` from `@delightstack/utilities` to animate in when it scrolls into view:
+- Marker pops in with a scale animation
+- Content fades in with a slight slide
+- Line segment draws progressively
+- Staggered timing for smooth cascade effect
+- Respects `prefers-reduced-motion`
+
+## Skeleton State
+
+When `skeleton` is true, render `skeletonCount` placeholder timeline items with:
+- Circular shimmer markers on the line
+- Shimmering bars for title, date, and description
+- Faded line connecting the placeholders
 
 ## Accessibility
 
-- Ordered list semantics
-- Dates announced properly
-- Status communicated via text
-- Keyboard navigable
+- Rendered as an ordered list (`<ol>`) for semantic structure
+- Dates use `<time>` elements with `datetime` attributes
+- Status communicated via `aria-label` on markers (e.g., "Completed: Order Confirmed")
+- Keyboard navigable in horizontal mode (arrow keys)
+- Focus management for interactive timeline items
+
+## CSS Approach
+
+```css
+.timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.timeline-item {
+  position: relative;
+  padding-bottom: 2rem;
+  padding-left: 1.5rem;
+}
+
+.timeline-item .marker {
+  position: absolute;
+  left: -2rem;
+  top: 0.25rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.timeline-item .marker.complete {
+  background: var(--color-action);
+  color: var(--color-action-text);
+}
+
+.timeline-item .marker.active {
+  background: var(--color-bg);
+  border: 2px solid var(--color-action);
+  animation: pulse 2s infinite;
+}
+
+.timeline-item .marker.pending {
+  background: var(--color-bg);
+  border: 2px dashed var(--color-text-muted);
+}
+
+.timeline-item .date {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.timeline-item .title {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+/* Horizontal mode */
+.timeline.horizontal {
+  display: flex;
+  padding-left: 0;
+  padding-top: 3rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+.timeline.horizontal::before {
+  left: 0;
+  right: 0;
+  top: 2rem;
+  bottom: auto;
+  height: 2px;
+  width: auto;
+}
+```
 
 ## Code Example
 
@@ -155,7 +247,7 @@ A vertical or horizontal timeline for displaying chronological events, activity 
   import PackageIcon from '~icons/mdi/package';
 </script>
 
-<!-- Order tracking -->
+<!-- Order tracking (vertical) -->
 <Timeline>
   <TimelineItem
     status="complete"
@@ -190,12 +282,47 @@ A vertical or horizontal timeline for displaying chronological events, activity 
     icon={PackageIcon}
   />
 </Timeline>
+
+<!-- Horizontal process steps -->
+<Timeline horizontal>
+  <TimelineItem status="complete" title="Order Placed" />
+  <TimelineItem status="complete" title="Processing" />
+  <TimelineItem status="active" title="Shipping" />
+  <TimelineItem status="pending" title="Delivered" />
+</Timeline>
+
+<!-- With on-demand loading -->
+<Timeline onloadmore={loadMoreEvents} pending>
+  {#each events as event}
+    <TimelineItem
+      date={event.date}
+      title={event.title}
+      status={event.status}
+    >
+      {event.description}
+    </TimelineItem>
+  {/each}
+</Timeline>
+
+<!-- Skeleton loading -->
+<Timeline skeleton skeletonCount={4} />
+
+<!-- Alternating sides -->
+<Timeline alternate>
+  {#each events as event}
+    <TimelineItem date={event.date} title={event.title}>
+      {event.description}
+    </TimelineItem>
+  {/each}
+</Timeline>
 ```
 
 ## Implementation Notes
 
-- Use CSS for line and connectors
-- Flexbox for layout
-- IntersectionObserver for scroll animations
-- Support nested content
-- Handle very long timelines with virtualization
+- Use CSS `::before` pseudo-element for the connecting line
+- Flexbox for horizontal layout, standard flow for vertical
+- `IntersectionObserver` via the utility attachment for scroll-reveal animations
+- Horizontal scroll snapping via `scroll-snap-type` and `scroll-snap-align`
+- Virtual scrolling: calculate total timeline height/width, position visible items
+- On-demand loading: use `IntersectionObserver` on a sentinel element near the bottom
+- Alternating mode: use `:nth-child(odd/even)` to position items on alternating sides

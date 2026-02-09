@@ -1,147 +1,257 @@
 # Drawer
 
-**Status**: 🔲 Placeholder
 **Category**: Navigation
 **File**: `packages/components/src/navigation/Drawer.svelte`
 
 ## Description
 
-A slide-out side panel for navigation menus, settings, or supplementary content. Can emerge from either side of the screen with smooth animations and optional overlay.
+A slide-out side panel for navigation menus, settings, or supplementary content. Supports four edge positions via boolean props, three interaction modes (overlay, push, persistent), body scroll locking, swipe-to-close on touch devices, responsive behavior that auto-switches between persistent and overlay modes at breakpoints, and focus trapping for accessibility.
+
+## Dependencies
+
+- **Components**: `Portal` -- used for DOM placement to ensure proper stacking context
+- **Utilities**: `@delightstack/utilities` -- `focusTrap` for trapping keyboard focus within the drawer when in overlay mode
+- **Libraries**: none
 
 ## Visual Design
 
 ### Container
-- Slides in from left or right
-- Full height of viewport
-- Fixed width (configurable)
-- Shadow for depth
+- Slides in from the specified edge (left by default)
+- Full height for left/right, full width for top/bottom
+- Configurable width (left/right) or height (top/bottom)
+- Elevation shadow for depth separation
+- Background uses `light-dark()` for theming
 
-### Backdrop
-- Semi-transparent overlay
-- Covers main content
-- Click to close
+### Backdrop (Overlay Mode)
+- Semi-transparent dark overlay covering the main content
+- Click to close the drawer
+- Fades in/out with the drawer animation
+- Opacity correlates with drawer open progress
 
 ### Content Area
-- Scrollable if content exceeds height
-- Header section (optional)
-- Footer section (optional)
+- Scrollable when content exceeds the drawer dimensions
+- Supports `header`, `footer`, and default children snippets
+- Comfortable padding
+
+### Modes
+
+| Mode | Overlay | Content Shift | Always Visible |
+|------|---------|---------------|----------------|
+| **Overlay** (default) | Yes | No | No |
+| **Push** (`push`) | No | Yes, main content shifts | No |
+| **Persistent** (`persistent`) | No | Yes, is part of layout flow | Yes |
 
 ## Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `open` | `boolean` | `false` | Controls visibility (bindable) |
-| `side` | `'left' \| 'right'` | `'left'` | Slide-in direction |
-| `width` | `string` | `'280px'` | Drawer width |
-| `overlay` | `boolean` | `true` | Show backdrop overlay |
-| `closeOnOutsideClick` | `boolean` | `true` | Close on overlay click |
-| `closeOnEscape` | `boolean` | `true` | Close on Escape key |
-| `persistent` | `boolean` | `false` | Keep open (desktop sidebar) |
+| `open` | `boolean` | `false` | Controls visibility (`$bindable()`) |
+| `right` | `boolean` | `false` | Slide in from the right edge (default is left) |
+| `top` | `boolean` | `false` | Slide in from the top edge |
+| `bottom` | `boolean` | `false` | Slide in from the bottom edge |
+| `push` | `boolean` | `false` | Push mode: main content shifts to make room |
+| `persistent` | `boolean` | `false` | Persistent mode: always visible, no overlay, part of layout |
+| `width` | `string` | `'280px'` | Drawer width (for left/right positions) |
+| `height` | `string` | `'280px'` | Drawer height (for top/bottom positions) |
+| `closeOnOutsideClick` | `boolean` | `true` | Close when clicking outside/on backdrop (overlay mode) |
+| `closeOnEscape` | `boolean` | `true` | Close on Escape key press |
+| `breakpoint` | `string` | - | CSS media query breakpoint for responsive mode switching (e.g. `'768px'`) |
 | `id` | `string` | - | Element ID |
 | `class` | `string` | - | Additional CSS classes |
+| `children` | `Snippet` | - | Main drawer content |
+| `header` | `Snippet` | - | Header area content |
+| `footer` | `Snippet` | - | Footer area content |
+| `onopen` | `() => void` | - | Fires when the drawer opens |
+| `onclose` | `() => void` | - | Fires when the drawer closes |
 
-## Events
+## Position Props
 
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `onopen` | - | Drawer opened |
-| `onclose` | - | Drawer closed |
+Position is controlled via boolean props. Only one should be active at a time. The default (no boolean set) is left.
 
-## Content Slots
+| Configuration | Edge |
+|--------------|------|
+| _(none)_ | Left |
+| `right` | Right |
+| `top` | Top |
+| `bottom` | Bottom |
 
-```svelte
-<Drawer bind:open>
-  {#snippet header()}
-    <div class="drawer-header">
-      <Logo />
-      <Button icon onclick={() => open = false}>
-        <CloseIcon />
-      </Button>
-    </div>
-  {/snippet}
+## Mode Props
 
-  <nav>
-    <List>
-      <ListItem href="/">Home</ListItem>
-      <ListItem href="/about">About</ListItem>
-    </List>
-  </nav>
+Mode is controlled via boolean props. The default (no boolean set) is overlay mode.
 
-  {#snippet footer()}
-    <div class="drawer-footer">
-      <Button onclick={logout}>Logout</Button>
-    </div>
-  {/snippet}
-</Drawer>
-```
+| Configuration | Behavior |
+|--------------|----------|
+| _(none)_ | Overlay: backdrop, focus trap, body scroll lock |
+| `push` | Content shifts, no backdrop, content remains interactive |
+| `persistent` | Always visible, part of layout flow, no overlay |
 
-## Variants
+## Body Scroll Lock
 
-### Overlay Drawer (Default)
-- Covers content
-- Backdrop visible
-- Click outside closes
+In overlay mode, when the drawer is open:
+- `document.body` receives `overflow: hidden` to prevent background scrolling.
+- The scroll position is preserved and restored on close.
+- This prevents the common issue of background content scrolling behind the overlay on mobile.
+- Not applied in `push` or `persistent` modes since the main content remains interactive.
 
-### Push Drawer
-```svelte
-<Drawer variant="push">
-```
-- Pushes main content aside
-- No overlay
-- Content remains interactive
+## Swipe to Close
 
-### Persistent Drawer
-```svelte
-<Drawer persistent open>
-```
-- Always visible (desktop)
-- Part of layout
-- No overlay
+On touch devices, the drawer supports swipe gestures to dismiss:
+- Swipe toward the edge the drawer came from (e.g., swipe left for a left-positioned drawer).
+- The drawer follows the finger position during the swipe.
+- Release velocity and distance determine whether to close or snap back.
+- Threshold: 30% of drawer width/height or velocity > 0.5px/ms.
+- Rubber banding effect if swiped in the wrong direction.
 
 ## Responsive Behavior
 
+When `breakpoint` is set, the drawer auto-switches between persistent and overlay modes based on the viewport width:
+
 ```svelte
-<Drawer
-  persistent={isDesktop}
-  open={isDesktop || mobileMenuOpen}
->
+<Drawer persistent breakpoint="768px" bind:open={drawerOpen}>
+  <!-- persistent on desktop (>= 768px), overlay on mobile (< 768px) -->
+</Drawer>
 ```
-- Persistent on desktop
-- Overlay on mobile
-- Smooth transition between
+
+- Above the breakpoint: behaves as `persistent` (always visible, part of layout).
+- Below the breakpoint: behaves as overlay (backdrop, focus trap, can be toggled).
+- Transition between modes is seamless; the drawer does not close when crossing the breakpoint.
+- Uses `window.matchMedia` to observe breakpoint changes.
+
+## Focus Trap
+
+In overlay mode, focus is trapped within the drawer using `focusTrap` from `@delightstack/utilities`:
+- Focus moves to the first focusable element inside the drawer on open.
+- Tab cycles through drawer content only.
+- Focus returns to the trigger element on close.
+- Not applied in `push` or `persistent` modes (main content remains accessible).
+
+## Portal
+
+The drawer renders via Portal to `document.body` to ensure proper stacking context and avoid `overflow: hidden` or `z-index` issues from ancestor elements. In `persistent` mode, the drawer renders inline (no Portal) since it is part of the layout flow.
 
 ## Delightful Details
 
 ### Slide Animation
-- Smooth slide from edge
-- Content follows (push variant)
-- Spring easing
+- CSS `transform: translateX()` / `translateY()` for GPU-accelerated animation
+- Smooth ease-out on open, ease-in on close
+- Duration: 250ms
 
-### Swipe to Close
-- Swipe toward edge to dismiss
-- Velocity-based threshold
-- Natural gesture
+### Push Content Animation
+- Main content wrapper shifts via `margin-left`/`margin-right`/`margin-top`/`margin-bottom`
+- Animated in sync with the drawer slide
+- Content remains fully interactive during and after animation
 
-### Focus Trap
-- Focus contained in drawer
-- Returns on close
+### Backdrop Fade
+- Backdrop opacity is tied to the drawer's open progress
+- Fades in as the drawer slides open
+- Creates a smooth, correlated visual effect
 
-### Backdrop Animation
-- Fades in with drawer
-- Opacity tied to position
-- Smooth correlation
-
-### Transform Performance
-- Uses CSS transforms
-- GPU accelerated
-- Smooth on mobile
+### Swipe Tracking
+- During swipe, the drawer follows the finger exactly
+- Backdrop opacity updates in real-time based on drawer position
+- Smooth spring animation on release (snap open or closed)
 
 ## Accessibility
 
-- Focus trap when open
-- Escape to close
-- ARIA attributes
-- Screen reader announcements
+- `role="dialog"` with `aria-modal="true"` (overlay mode)
+- `role="complementary"` with `aria-label` (persistent mode)
+- Focus trap in overlay mode via `focusTrap`
+- Escape key closes the drawer (when `closeOnEscape` is true)
+- Focus returns to trigger element on close
+- Screen reader announcement on open/close
+
+## CSS Approach
+
+```css
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: light-dark(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.7));
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-default);
+  z-index: var(--z-overlay);
+}
+
+.drawer-backdrop.open {
+  opacity: 1;
+}
+
+.drawer {
+  position: fixed;
+  background: light-dark(var(--color-surface-0), var(--color-surface-0));
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-overlay);
+  transition: transform var(--duration-normal) var(--ease-default);
+}
+
+.drawer.left {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  transform: translateX(-100%);
+}
+
+.drawer.left.open {
+  transform: translateX(0);
+}
+
+.drawer.right {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateX(100%);
+}
+
+.drawer.right.open {
+  transform: translateX(0);
+}
+
+.drawer.top {
+  top: 0;
+  left: 0;
+  right: 0;
+  transform: translateY(-100%);
+}
+
+.drawer.top.open {
+  transform: translateY(0);
+}
+
+.drawer.bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transform: translateY(100%);
+}
+
+.drawer.bottom.open {
+  transform: translateY(0);
+}
+
+.drawer.persistent {
+  position: relative;
+  box-shadow: none;
+  transform: none;
+  border-right: 1px solid light-dark(var(--color-border), var(--color-border));
+}
+
+.drawer-header {
+  padding: 1rem;
+  border-bottom: 1px solid light-dark(var(--color-border), var(--color-border));
+}
+
+.drawer-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.drawer-footer {
+  padding: 1rem;
+  border-top: 1px solid light-dark(var(--color-border), var(--color-border));
+}
+```
 
 ## Code Example
 
@@ -150,17 +260,17 @@ A slide-out side panel for navigation menus, settings, or supplementary content.
   import { Drawer, List, ListItem, Button } from '@delightstack/components';
 
   let menuOpen = $state(false);
+  let settingsOpen = $state(false);
 </script>
 
-<!-- Mobile menu button -->
+<!-- Left navigation drawer (default overlay) -->
 <Button onclick={() => menuOpen = true}>
-  <MenuIcon />
+  Open Menu
 </Button>
 
-<!-- Navigation drawer -->
 <Drawer bind:open={menuOpen}>
   {#snippet header()}
-    <div class="drawer-header">
+    <div class="drawer-brand">
       <Logo />
     </div>
   {/snippet}
@@ -175,23 +285,33 @@ A slide-out side panel for navigation menus, settings, or supplementary content.
   </nav>
 
   {#snippet footer()}
-    <div class="drawer-footer">
-      <ThemeToggle />
-    </div>
+    <ThemeToggle />
   {/snippet}
 </Drawer>
 
 <!-- Right-side settings drawer -->
-<Drawer bind:open={settingsOpen} side="right" width="350px">
+<Drawer bind:open={settingsOpen} right width="350px">
   <h2>Settings</h2>
   <!-- settings content -->
 </Drawer>
+
+<!-- Top notification tray -->
+<Drawer bind:open={notificationsOpen} top height="200px">
+  <NotificationList />
+</Drawer>
+
+<!-- Push mode drawer -->
+<Drawer bind:open={sidebarOpen} push width="240px">
+  <SideNavigation />
+</Drawer>
+
+<!-- Persistent desktop sidebar with responsive fallback -->
+<Drawer persistent breakpoint="768px" bind:open={sidebarOpen} width="260px">
+  <SideNavigation />
+</Drawer>
+
+<!-- Bottom drawer -->
+<Drawer bind:open={bottomOpen} bottom height="300px">
+  <FilterPanel />
+</Drawer>
 ```
-
-## Implementation Notes
-
-- Portal to body for proper stacking
-- Handle touch/swipe gestures
-- CSS transforms for animation
-- Proper z-index management
-- Consider body scroll lock

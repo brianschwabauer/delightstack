@@ -1,30 +1,37 @@
 # AvatarGroup
 
-**Status**: 🔲 Placeholder
+**Status**: Planned
 **Category**: Display
 **File**: `packages/components/src/display/AvatarGroup.svelte`
 
 ## Description
 
-A component for displaying a stack of overlapping avatars, commonly used to show multiple users or participants. Includes an overflow indicator when there are more avatars than can be displayed.
+A component for displaying a stack of overlapping avatars, commonly used to show multiple users or participants. Renders Avatar components internally and includes a "+N" overflow indicator when there are more avatars than can be displayed.
+
+## Dependencies
+
+- **Components**: `Avatar`
+- **Utilities**: `@delightstack/utilities` -- `tooltip` (attachment, for individual avatar tooltips)
+- **Libraries**: none
 
 ## Visual Design
 
 ### Appearance
 - Avatars overlap horizontally
-- Later avatars stack on top (or underneath)
-- Consistent ring/border around each
-- "+N" overflow indicator
+- Later avatars stack on top (or underneath, depending on direction)
+- Consistent ring/border around each avatar to prevent visual blending
+- "+N" overflow indicator when exceeding `max`
 
 ### Overlap
-- Configurable overlap amount
-- Typically 25-50% overlap
-- Ring prevents visual blending
+- Configurable overlap amount (ratio of avatar size)
+- Default 25% overlap
+- Ring/border prevents visual merging
 
-### Overflow
-- Shows "+N" when exceeding max
-- Overflow indicator matches avatar styling
-- Click to expand (optional)
+### Overflow Indicator
+- Styled to match avatar shape and size
+- Shows "+N" where N is the number of hidden avatars
+- Matches avatar ring styling
+- Optionally clickable to expand
 
 ## Props
 
@@ -32,12 +39,13 @@ A component for displaying a stack of overlapping avatars, commonly used to show
 |------|------|---------|-------------|
 | `avatars` | `AvatarData[]` | `[]` | Array of avatar data |
 | `max` | `number` | `5` | Maximum visible avatars |
-| `size` | `Size` | `'md'` | Avatar size |
+| `size` | `'0' \| '1' \| '2' \| '3' \| '4' \| '5'` | `'1'` | Avatar size (passed to each Avatar) |
 | `overlap` | `number` | `0.25` | Overlap ratio (0-1) |
 | `direction` | `'left' \| 'right'` | `'right'` | Stack direction |
-| `ringColor` | `string` | `'var(--color-bg)'` | Ring/border color |
-| `expandable` | `boolean` | `false` | Click overflow to show all |
+| `ringColor` | `string` | `'var(--color-bg)'` | Ring/border color around each avatar |
+| `expandable` | `boolean` | `false` | Click overflow to reveal all |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `4` | Number of skeleton circles to show |
 | `id` | `string` | - | Element ID |
 | `class` | `string` | - | Additional CSS classes |
 
@@ -46,7 +54,6 @@ A component for displaying a stack of overlapping avatars, commonly used to show
 interface AvatarData {
   src?: string;
   name: string;
-  fallback?: string;
   href?: string;
 }
 ```
@@ -55,81 +62,75 @@ interface AvatarData {
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `onclick` | `{ avatar, index }` | Avatar clicked |
-| `onoverflowclick` | `{ remaining }` | Overflow indicator clicked |
+| `onclick` | `{ avatar: AvatarData, index: number }` | Individual avatar clicked |
+| `onoverflowclick` | `{ remaining: AvatarData[] }` | Overflow "+N" indicator clicked |
 
-## Delightful Details
+## Skeleton State
 
-### Hover Effects
-- Hovered avatar rises slightly
-- Shows tooltip with name
-- Others dim slightly (optional)
+When `skeleton` is true, render `skeletonCount` circular shimmer placeholders in the overlapping layout. Each placeholder matches the specified `size`. Maintains the same spacing and overlap as real avatars.
 
-### Stacking Animation
-- Avatars animate in when added
-- Smooth reflow when removed
-- Overflow count updates smoothly
+## Hover Effects
 
-### Skeleton State
-- Circular skeleton placeholders
-- Shimmer animation
-- Maintains layout
+- Hovered avatar rises slightly (translateY -2px)
+- Shows tooltip with the avatar's `name`
+- Other avatars dim slightly (optional, subtle)
 
-### Expand Animation
-- Click overflow to expand
-- Avatars fan out
-- Popover with full list
+## Expand Behavior
 
-### Ring/Border
-- Consistent ring around each
-- Prevents visual merging
-- Matches background color
-
-## Common Patterns
-
-### Team Members
-```svelte
-<AvatarGroup
-  avatars={teamMembers}
-  max={4}
-  size="sm"
-/>
-```
-
-### With Tooltip
-```svelte
-<AvatarGroup avatars={participants}>
-  {#snippet avatar(data, index)}
-    <Tooltip content={data.name}>
-      <Avatar src={data.src} name={data.name} />
-    </Tooltip>
-  {/snippet}
-</AvatarGroup>
-```
-
-### Clickable Avatars
-```svelte
-<AvatarGroup
-  avatars={users}
-  onclick={({ avatar }) => openProfile(avatar)}
-/>
-```
-
-### Expandable
-```svelte
-<AvatarGroup
-  avatars={allParticipants}
-  max={3}
-  expandable
-/>
-```
+When `expandable` is true and the overflow indicator is clicked:
+- All hidden avatars are revealed
+- Avatars fan out smoothly with animation
+- A popover or inline expansion shows the full list
 
 ## Accessibility
 
-- Each avatar has accessible name
-- Overflow indicator is focusable
-- Screen reader announces count
-- Keyboard navigable when expandable
+- Each avatar has an accessible name (from `name` in AvatarData)
+- Overflow indicator is focusable and has `aria-label` (e.g., "3 more participants")
+- Screen reader announces total count
+- Keyboard navigable when expandable (Enter/Space on overflow)
+
+## CSS Approach
+
+```css
+.avatar-group {
+  display: flex;
+  align-items: center;
+}
+
+.avatar-group .avatar-wrapper {
+  margin-left: calc(var(--avatar-size) * var(--overlap) * -1);
+  box-shadow: 0 0 0 2px var(--ring-color);
+  border-radius: 50%;
+  position: relative;
+}
+
+.avatar-group .avatar-wrapper:first-child {
+  margin-left: 0;
+}
+
+.avatar-group .overflow-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: light-dark(var(--color-surface-2), var(--color-surface-2));
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--ring-color);
+  cursor: default;
+}
+
+.avatar-group .overflow-indicator.expandable {
+  cursor: pointer;
+}
+
+.avatar-group .avatar-wrapper:hover {
+  z-index: 1;
+  transform: translateY(-2px);
+  transition: transform 150ms ease;
+}
+```
 
 ## Code Example
 
@@ -154,7 +155,7 @@ interface AvatarData {
 <AvatarGroup avatars={teamMembers} max={3} />
 
 <!-- Small size for compact UI -->
-<AvatarGroup avatars={teamMembers} size="sm" max={4} />
+<AvatarGroup avatars={teamMembers} size="0" max={4} />
 
 <!-- Expandable list -->
 <AvatarGroup
@@ -165,50 +166,20 @@ interface AvatarData {
 />
 
 <!-- Loading state -->
-<AvatarGroup skeleton avatars={[]} max={4} />
+<AvatarGroup skeleton skeletonCount={4} />
 
-<!-- In a card header -->
-<Card>
-  <Card.Header>
-    <span>Project Team</span>
-    <AvatarGroup avatars={teamMembers} size="xs" max={3} />
-  </Card.Header>
-</Card>
-```
-
-## CSS Approach
-
-```css
-.avatar-group {
-  display: flex;
-  flex-direction: row-reverse; /* For right stacking */
-}
-
-.avatar-group > :global(*) {
-  margin-left: calc(var(--size) * var(--overlap) * -1);
-  box-shadow: 0 0 0 2px var(--ring-color);
-  border-radius: 50%;
-}
-
-.avatar-group > :global(*:last-child) {
-  margin-left: 0;
-}
-
-.overflow-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-muted);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-medium);
-}
+<!-- Clickable avatars -->
+<AvatarGroup
+  avatars={teamMembers}
+  onclick={({ avatar }) => openProfile(avatar)}
+/>
 ```
 
 ## Implementation Notes
 
-- Use flexbox with negative margins for overlap
-- Z-index management for stacking order
-- Support both Avatar components and raw data
-- Handle dynamic avatar changes gracefully
-- Consider performance for large avatar lists
+- Uses Avatar component internally for each visible avatar
+- Flexbox with negative margins for overlap
+- Z-index management for stacking order (hover raises z-index)
+- Tooltips on each avatar showing the name
+- Dynamic re-render when `avatars` array changes
+- Overflow indicator count updates reactively

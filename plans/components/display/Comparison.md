@@ -1,30 +1,36 @@
 # Comparison
 
-**Status**: 🔲 Placeholder
+**Status**: Planned
 **Category**: Display
 **File**: `packages/components/src/display/Comparison.svelte`
 
 ## Description
 
-An interactive before/after image comparison slider. Users can drag a divider to reveal either side, perfect for showing transformations, edits, or A/B comparisons.
+An interactive before/after image comparison slider. Users drag a divider to reveal either side, using CSS `clip-path` for the image reveal. Supports horizontal and vertical orientations. Ideal for showing transformations, edits, or A/B comparisons.
+
+## Dependencies
+
+- **Components**: none
+- **Utilities**: `@delightstack/utilities` -- none directly
+- **Libraries**: none
 
 ## Visual Design
 
 ### Container
 - Fixed aspect ratio or explicit dimensions
-- Both images fully visible area
+- Both images visible in the same area, clipped by divider position
 - Clean edges with optional border
 
 ### Divider
-- Vertical line with handle
-- Centered handle element (circle or pill)
+- Vertical (or horizontal) line with a draggable handle
+- Centered handle element (circle with arrows)
 - Arrows indicating drag direction
-- Semi-transparent or white for visibility
+- Semi-transparent or white for visibility over any image
 
 ### Labels
 - Optional "Before" / "After" labels
-- Positioned in corners
-- Subtle background for readability
+- Positioned in corners of the respective sides
+- Subtle semi-transparent background for readability
 
 ## Props
 
@@ -32,10 +38,10 @@ An interactive before/after image comparison slider. Users can drag a divider to
 |------|------|---------|-------------|
 | `before` | `string` | required | Before image URL |
 | `after` | `string` | required | After image URL |
-| `beforeAlt` | `string` | `'Before'` | Before image alt |
-| `afterAlt` | `string` | `'After'` | After image alt |
-| `position` | `number` | `50` | Initial position (0-100, bindable) |
-| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Slider direction |
+| `beforeAlt` | `string` | `'Before'` | Before image alt text |
+| `afterAlt` | `string` | `'After'` | After image alt text |
+| `position` | `number` | `50` | Divider position (0-100), bindable |
+| `vertical` | `boolean` | `false` | Vertical orientation (divider moves up/down) |
 | `showLabels` | `boolean` | `true` | Show before/after labels |
 | `labelBefore` | `string` | `'Before'` | Before label text |
 | `labelAfter` | `string` | `'After'` | After label text |
@@ -47,77 +53,110 @@ An interactive before/after image comparison slider. Users can drag a divider to
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `onchange` | `{ position }` | Position changed |
+| `onchange` | `{ position: number }` | Divider position changed |
 
 ## Interaction
 
 ### Mouse/Touch Drag
-- Drag handle to move divider
-- Smooth, responsive tracking
-- Contained within bounds
+- Drag the handle to move the divider
+- Smooth, responsive tracking (pointer events, not just mouse)
+- Contained within the component bounds
 
 ### Click to Move
-- Click anywhere to jump divider to that position
-- Optional: can be disabled
+- Click anywhere in the component to jump the divider to that position
+- Smooth animated transition to clicked position
 
 ### Keyboard
-- Focus on handle
-- Arrow keys move incrementally
-- Home/End for extremes
+- Focus the handle via Tab
+- Arrow Left/Right (horizontal) or Arrow Up/Down (vertical) moves in 1% increments
+- Shift+Arrow moves in 10% increments
+- Home: move to 0%
+- End: move to 100%
 
-## Delightful Details
+## CSS Clip-Path Approach
 
-### Smooth Animations
-- Initial position animates in
-- Slight inertia on drag release
-- Smooth position changes
+The before image is displayed at full size. The after image overlays it with a `clip-path` that reveals only the portion to the right (or below) the divider:
 
-### Handle Design
-- Visible but not obtrusive
-- Hover: slight scale up
-- Active: pressed appearance
-- Clear affordance to drag
-
-### Loading States
-- Skeleton while images load
-- Progressive reveal when ready
-- Handle appears last
-
-### Hover Effects
-- Divider line thickens slightly on hover
-- Handle glows or elevates
-- Cursor changes to indicate drag
-
-### Edge Behavior
-- Small padding at edges (can't go fully to 0 or 100)
-- Or: snap back animation if dragged past
-
-## Variants
-
-### Horizontal (Default)
-```svelte
-<Comparison before={before} after={after} />
+```css
+.comparison-after {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 0 0 var(--position));
+}
 ```
-- Divider moves left/right
-- Most common usage
 
-### Vertical
-```svelte
-<Comparison
-  before={before}
-  after={after}
-  orientation="vertical"
-/>
+For vertical orientation:
+```css
+.comparison-after {
+  clip-path: inset(var(--position) 0 0 0);
+}
 ```
-- Divider moves up/down
-- Good for tall images
+
+## Skeleton State
+
+When `skeleton` is true, render two side-by-side shimmering rectangles with a centered divider line. Matches the component dimensions.
 
 ## Accessibility
 
-- Handle is focusable
-- Keyboard controls for movement
-- ARIA labels for images
-- Instructions available
+- Divider handle has `role="slider"` with `aria-valuenow`, `aria-valuemin="0"`, `aria-valuemax="100"`
+- `aria-label="Image comparison slider"`
+- Both images have descriptive alt text
+- Keyboard controls for full operation without a pointer
+
+## CSS Approach
+
+```css
+.comparison {
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+.comparison img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.comparison .divider {
+  position: absolute;
+  z-index: 2;
+  cursor: col-resize;
+}
+
+.comparison.vertical .divider {
+  cursor: row-resize;
+}
+
+.comparison .handle {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: var(--shadow-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+}
+
+.comparison .handle:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.comparison .label {
+  position: absolute;
+  padding: 0.25rem 0.5rem;
+  background: color-mix(in oklch, black, transparent 40%);
+  color: white;
+  font-size: var(--text-sm);
+  border-radius: var(--radius-2);
+}
+```
 
 ## Code Example
 
@@ -148,15 +187,15 @@ An interactive before/after image comparison slider. Users can drag a divider to
 <Comparison
   before="/images/before.jpg"
   after="/images/after.jpg"
-  orientation="vertical"
+  vertical
 />
 ```
 
 ## Implementation Notes
 
-- Use CSS clip-path for image reveal
-- Handle touch events properly
-- Prevent image dragging
-- Consider lazy loading images
-- Ensure images are same dimensions
-- Add resize observer for responsiveness
+- Use CSS `clip-path: inset()` for the image reveal (GPU-accelerated, no repaints)
+- Handle `pointermove` events on the container (not just the handle) for smooth dragging
+- Prevent native image dragging with `draggable="false"` on images
+- Both images must be the same dimensions for proper alignment
+- Add `ResizeObserver` for responsive behavior when the container resizes
+- `touch-action: none` on the container to prevent scroll interference on mobile

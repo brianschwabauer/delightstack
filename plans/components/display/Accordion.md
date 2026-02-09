@@ -1,12 +1,18 @@
 # Accordion
 
-**Status**: 🔲 Placeholder
+**Status**: Planned
 **Category**: Display
 **File**: `packages/components/src/display/Accordion.svelte`
 
 ## Description
 
-A vertically stacked set of collapsible sections, allowing users to expand one or multiple panels to reveal content. Perfect for FAQs, settings pages, and organizing large amounts of content into digestible sections.
+A vertically stacked set of collapsible sections, allowing users to expand one or multiple panels to reveal content. Built on semantic `<details>`/`<summary>` elements enhanced with smooth animations via the Expand component. Ideal for FAQs, settings pages, and organizing large amounts of content into digestible sections.
+
+## Dependencies
+
+- **Components**: `Expand`
+- **Utilities**: `@delightstack/utilities` -- none directly
+- **Libraries**: none
 
 ## Visual Design
 
@@ -17,21 +23,21 @@ A vertically stacked set of collapsible sections, allowing users to expand one o
 - Consistent spacing throughout
 
 ### Item Header
-- Full-width clickable area
+- Full-width clickable `<summary>` element
 - Clear title text
-- Chevron/plus icon indicating state
+- Chevron icon indicating state
 - Icon rotates on expand
 
 ### Item Content
-- Smooth expand animation
+- Smooth expand animation via the Expand component
 - Comfortable padding
 - No maximum height (content-driven)
 - Subtle background differentiation (optional)
 
 ### States
-- **Collapsed**: Chevron pointing right/down
-- **Expanded**: Chevron rotated, content visible
-- **Hover**: Subtle background highlight
+- **Collapsed**: Chevron pointing right
+- **Expanded**: Chevron rotated 90 degrees, content visible
+- **Hover**: Subtle background highlight on summary
 - **Disabled**: Reduced opacity, non-interactive
 
 ## Props
@@ -40,30 +46,33 @@ A vertically stacked set of collapsible sections, allowing users to expand one o
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `multiple` | `boolean` | `false` | Allow multiple open |
-| `value` | `string \| string[]` | - | Open item(s) (bindable) |
+| `multiple` | `boolean` | `false` | Allow multiple panels open simultaneously |
+| `value` | `string \| string[]` | - | Open item(s), bindable |
 | `collapsible` | `boolean` | `true` | Allow closing all items |
 | `disabled` | `boolean` | `false` | Disable all items |
 | `dense` | `boolean` | `false` | Compact header/content padding |
 | `comfortable` | `boolean` | `false` | Relaxed header/content padding |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
-| `skeletonCount` | `number` | `3` | Number of skeleton items |
+| `skeletonCount` | `number` | `3` | Number of skeleton items to render |
 | `id` | `string` | - | Element ID |
 | `class` | `string` | - | Additional CSS classes |
+| `children` | `Snippet` | - | AccordionItem children |
 
-### Accordion Item
+### AccordionItem
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `value` | `string` | required | Unique identifier |
-| `title` | `string` | - | Header text |
+| `value` | `string` | required | Unique identifier for this item |
+| `title` | `string` | - | Header text shown in the `<summary>` |
 | `disabled` | `boolean` | `false` | Disable this item |
+| `trigger` | `Snippet` | - | Custom header content replacing title text |
+| `children` | `Snippet` | - | Panel content |
 
 ## Behavior Modes
 
 ### Single Mode (Default)
 - One section open at a time
-- Opening new section closes current
+- Opening a new section closes the current one
 - Clean, focused navigation
 
 ### Multiple Mode
@@ -72,9 +81,9 @@ A vertically stacked set of collapsible sections, allowing users to expand one o
   ...
 </Accordion>
 ```
-- Multiple sections can be open
+- Multiple sections can be open simultaneously
 - Independent toggle behavior
-- `value` is an array
+- `value` is an array of strings
 
 ### Always One Open
 ```svelte
@@ -83,51 +92,79 @@ A vertically stacked set of collapsible sections, allowing users to expand one o
 </Accordion>
 ```
 - Cannot close all sections
-- At least one always visible
+- At least one section always visible
 
 ## Animation
 
+The Accordion uses the Expand component internally for all expand/collapse animation. Each AccordionItem wraps its content in `<Expand show={isOpen}>`.
+
 ### Expand
-1. Height animates from 0 to auto (using Expand component)
+1. Height animates from 0 to auto via Expand (CSS Grid `0fr` to `1fr`)
 2. Content fades in slightly
-3. Chevron rotates 90° or 180°
+3. Chevron rotates 90 degrees
 4. Duration: 250ms ease-out
 
 ### Collapse
 1. Content fades slightly
-2. Height animates to 0
+2. Height animates to 0 via Expand
 3. Chevron rotates back
 4. Duration: 200ms ease-in
 
-## Delightful Details
+## Semantic HTML
 
-### Smooth Transitions
-- Uses CSS Grid animation trick
-- No content measurement needed
-- Silky smooth expand/collapse
+Each AccordionItem renders as a `<details>` element with a `<summary>` for the trigger area. The native open/close behavior is intercepted and managed by the Accordion container via context so that `multiple` and `collapsible` constraints are enforced. The native `<details>` open attribute is synced with the component state for progressive enhancement.
 
-### Icon Animation
-- Chevron rotates with easing
-- Or: Plus morphs to minus
-- Subtle spring effect
+## Keyboard Navigation
 
-### Focus Flow
-- Tab moves between headers
-- Arrow keys navigate between items
-- Enter/Space toggles current
+- **Tab**: Moves focus between `<summary>` elements
+- **Arrow Down / Arrow Up**: Moves focus to next/previous `<summary>`
+- **Enter / Space**: Toggles the focused item
+- **Home**: Moves focus to the first `<summary>`
+- **End**: Moves focus to the last `<summary>`
 
-### Nested Accordions
-- Support for accordion within accordion
-- Proper indentation
-- Independent state management
+## Skeleton State
+
+When `skeleton` is true, render `skeletonCount` placeholder items. Each placeholder shows a shimmering bar for the header and no content area. Maintains the same layout dimensions as real items.
 
 ## Accessibility
 
-- `role="region"` for each panel
-- `aria-expanded` on triggers
-- `aria-controls` linking header to content
-- Keyboard navigation (arrows, home, end)
-- Focus management
+- Uses semantic `<details>`/`<summary>` elements for native accessibility
+- `aria-expanded` on `<summary>` elements reflects state
+- `aria-controls` links each `<summary>` to its content panel
+- `role="region"` on each content panel
+- Full keyboard navigation (arrows, Home, End, Enter, Space)
+- Focus management across items
+
+## CSS Approach
+
+```css
+.accordion-item {
+  border-bottom: 1px solid light-dark(
+    var(--color-border),
+    var(--color-border)
+  );
+}
+
+.accordion-item summary {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 1rem 1.25rem;
+  list-style: none;
+}
+
+.accordion-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.accordion-item .chevron {
+  transition: transform 250ms ease-out;
+}
+
+.accordion-item[open] .chevron {
+  transform: rotate(90deg);
+}
+```
 
 ## Code Example
 
@@ -170,8 +207,28 @@ A vertically stacked set of collapsible sections, allowing users to expand one o
 </AccordionItem>
 ```
 
+### Skeleton Loading
+```svelte
+<Accordion skeleton skeletonCount={4} />
+```
+
+### Nested Accordions
+```svelte
+<Accordion bind:value={outerSection}>
+  <AccordionItem value="section-1" title="Parent Section">
+    <Accordion bind:value={innerSection}>
+      <AccordionItem value="child-1" title="Child Section">
+        <p>Nested content</p>
+      </AccordionItem>
+    </Accordion>
+  </AccordionItem>
+</Accordion>
+```
+
 ## Implementation Notes
 
-- Uses Expand component internally for animation
-- Maintain state via context for nested items
-- Support both controlled and uncontrolled modes
+- Uses Expand component internally for smooth height animation
+- Renders `<details>`/`<summary>` for progressive enhancement and semantics
+- Intercepts native `<details>` toggle events to enforce `multiple`/`collapsible` rules
+- Maintains state via `setContext` for child AccordionItem communication
+- Supports both controlled (`value` prop) and uncontrolled modes

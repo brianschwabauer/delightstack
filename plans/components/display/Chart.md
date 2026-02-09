@@ -1,51 +1,60 @@
 # Chart
 
-**Status**: 🔲 Placeholder
+**Status**: Planned
 **Category**: Display
 **File**: `packages/components/src/display/Chart.svelte`
 
 ## Description
 
-A lightweight data visualization component for displaying common chart types. Built with SVG for crisp rendering at any size, with smooth animations and interactive tooltips.
+A data visualization wrapper component for displaying common chart types. Wraps a lightweight charting library (uPlot for time-series/line/bar charts, or Layercake for Svelte-native rendering) to provide a simple, consistent API. Charts are responsive and resize with their container.
+
+## Dependencies
+
+- **Components**: none
+- **Utilities**: `@delightstack/utilities` -- `resizeObserver` (attachment, for responsive resizing)
+- **Libraries**: `uplot` (lightweight, performant charting) or `layercake` (Svelte-native charting)
 
 ## Visual Design
 
 ### Common Elements
 - Clean axes with subtle grid lines
 - Readable labels at any size
-- Consistent color palette
+- Consistent color palette derived from `--color-*` tokens
 - Optional legend
 
 ### Chart Types
 
 | Type | Description |
 |------|-------------|
-| `line` | Connected data points over time |
-| `area` | Line chart with filled area below |
-| `bar` | Vertical bars for comparisons |
+| `line` | Connected data points, ideal for time series |
+| `area` | Line chart with filled area below the line |
+| `bar` | Vertical bars for categorical comparisons |
 | `horizontal-bar` | Horizontal bars |
-| `pie` | Circular proportional display |
+| `pie` | Circular proportional segments |
 | `donut` | Pie with center cutout |
 
 ### Color Palette
-Default accessible colors that work together:
-- 6-8 distinct, visually balanced colors
-- Work in both light and dark themes
-- Accessible contrast ratios
+Default accessible colors derived from design tokens:
+- 8 distinct, visually balanced colors
+- Adapt to light and dark themes via `light-dark()`
+- Accessible contrast ratios against both backgrounds
 
 ## Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `type` | `ChartType` | `'line'` | Chart type |
+| `type` | `'line' \| 'area' \| 'bar' \| 'horizontal-bar' \| 'pie' \| 'donut'` | `'line'` | Chart type |
 | `data` | `ChartData` | required | Data to display |
-| `width` | `number \| string` | `'100%'` | Chart width |
-| `height` | `number` | `300` | Chart height |
-| `colors` | `string[]` | - | Custom color palette |
+| `height` | `number` | `300` | Chart height in pixels |
+| `colors` | `string[]` | - | Custom color palette (overrides defaults) |
 | `showGrid` | `boolean` | `true` | Show grid lines |
 | `showLegend` | `boolean` | `true` | Show legend |
-| `showTooltip` | `boolean` | `true` | Enable tooltips |
-| `animate` | `boolean` | `true` | Animate on load/change |
+| `showTooltip` | `boolean` | `true` | Enable interactive tooltips |
+| `animate` | `boolean` | `true` | Animate on initial load and data changes |
+| `stacked` | `boolean` | `false` | Stack datasets (bar, area) |
+| `curved` | `boolean` | `true` | Smooth curves for line/area charts |
+| `showPoints` | `boolean` | `false` | Show data points on line/area charts |
+| `innerRadius` | `number` | `0` | Inner radius for pie/donut (0 = pie, >0 = donut) |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | - | Element ID |
 | `class` | `string` | - | Additional CSS classes |
@@ -64,82 +73,102 @@ interface Dataset {
 }
 ```
 
-## Chart-Specific Options
+## Responsive Behavior
 
-### Line/Area
-```typescript
-{
-  curved: boolean;      // Smooth curves vs straight lines
-  showPoints: boolean;  // Show data points
-  fill: boolean;        // Fill area under line
-}
-```
+Charts resize with their container using either a `ResizeObserver` (via the `resizeObserver` attachment from `@delightstack/utilities`) or CSS container queries. The chart re-renders at the new dimensions without jarring redraws.
 
-### Bar
-```typescript
-{
-  stacked: boolean;     // Stack bars
-  horizontal: boolean;  // Horizontal orientation
-  barRadius: number;    // Rounded corners
-}
-```
-
-### Pie/Donut
-```typescript
-{
-  innerRadius: number;  // 0 for pie, >0 for donut
-  showLabels: boolean;  // Labels on segments
-  startAngle: number;   // Starting angle
-}
-```
+- Width: always `100%` of the container
+- Height: fixed in pixels (via `height` prop) or responsive via CSS
+- Font sizes and label density adapt to available width
+- Legend repositions below the chart on narrow containers
 
 ## Interactivity
 
 ### Tooltips
-- Appear on hover
-- Show exact values
+- Appear on hover over data points or segments
+- Show exact values and dataset labels
 - Follow cursor smoothly
-- Multi-series support
+- Multi-series crosshair for line/area charts
 
 ### Hover Effects
-- Highlight hovered element
-- Dim non-hovered elements
-- Smooth transitions
+- Highlight hovered element (bar, line point, pie segment)
+- Dim non-hovered elements to 40% opacity
+- Smooth transitions between states
 
 ### Legend Interaction
-- Click to toggle series visibility
-- Hover to highlight series
-- Responsive layout
+- Click legend items to toggle dataset visibility
+- Hover legend items to highlight corresponding dataset
+- Responsive layout (wraps on small screens)
 
-## Delightful Details
+## Animations
 
 ### Load Animation
-- Lines draw from left to right
-- Bars grow from zero
+- Lines draw from left to right using stroke-dasharray
+- Bars grow upward from zero height
 - Pie segments expand from center
-- Staggered timing for multiple series
+- Staggered timing for multiple datasets
 
 ### Update Animation
-- Smooth transitions between values
-- Morphing shapes
+- Smooth transitions between old and new values
+- Morphing shapes on type change
 - No jarring redraws
 
-### Responsive Design
-- Adapts to container width
-- Font sizes scale appropriately
-- Legend repositions on small screens
+## Skeleton State
 
-### Empty State
-- Meaningful empty state message
-- Not just blank space
-- Guides user on what data to add
+When `skeleton` is true, render a placeholder matching the chart dimensions. Show subtle animated bars, a sine wave, or a circle depending on `type` to hint at the chart shape.
+
+## Empty State
+
+When `data.datasets` is empty or all values are zero:
+- Display a centered message ("No data available")
+- Subtle illustration or icon
+- Maintains chart dimensions
 
 ## Accessibility
 
-- Proper ARIA labels
-- Data table alternative available
-- Keyboard navigation for interactive elements
-- Colorblind-friendly palette option
+- `role="img"` on the chart container
+- `aria-label` describing the chart purpose
+- Hidden data table as an alternative representation (accessible to screen readers)
+- Keyboard navigation for interactive legend
+- Color palette is colorblind-friendly (distinct shapes/patterns option)
+
+## CSS Approach
+
+```css
+.chart-container {
+  width: 100%;
+  position: relative;
+  container-type: inline-size;
+}
+
+.chart-skeleton {
+  background: light-dark(var(--color-surface-1), var(--color-surface-1));
+  border-radius: var(--radius-3);
+  animation: shimmer 1.5s infinite;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  padding: 0.5rem 0;
+}
+
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.chart-legend-item.hidden {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+```
 
 ## Code Example
 
@@ -151,11 +180,11 @@ interface Dataset {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
     datasets: [
       {
-        label: '2024',
+        label: '2025',
         data: [12, 19, 3, 5, 2, 3]
       },
       {
-        label: '2023',
+        label: '2024',
         data: [8, 15, 7, 8, 4, 6]
       }
     ]
@@ -163,35 +192,33 @@ interface Dataset {
 </script>
 
 <!-- Line chart -->
-<Chart
-  type="line"
-  data={salesData}
-  height={250}
-/>
+<Chart type="line" data={salesData} height={250} />
 
-<!-- Bar chart -->
-<Chart
-  type="bar"
-  data={salesData}
-/>
+<!-- Stacked bar chart -->
+<Chart type="bar" data={salesData} stacked />
+
+<!-- Area chart with data points -->
+<Chart type="area" data={salesData} showPoints />
 
 <!-- Donut chart -->
 <Chart
   type="donut"
   data={{
     labels: ['Desktop', 'Mobile', 'Tablet'],
-    datasets: [{
-      data: [65, 30, 5]
-    }]
+    datasets: [{ label: 'Traffic', data: [65, 30, 5] }]
   }}
+  innerRadius={60}
 />
+
+<!-- Skeleton loading -->
+<Chart type="bar" skeleton height={300} />
 ```
 
 ## Implementation Notes
 
-- Use SVG for crisp rendering
-- Avoid heavy charting libraries
-- Calculate scales manually (simple math)
-- Use CSS transitions for animations
-- Consider canvas for large datasets
-- Keep bundle size minimal
+- Wrap uPlot (or Layercake) rather than building SVG rendering from scratch
+- Lazy-load the charting library to keep initial bundle size small
+- ResizeObserver for responsive re-rendering
+- Use CSS custom properties for theme integration
+- Canvas rendering (via uPlot) for large datasets; SVG (via Layercake) for smaller datasets with rich interactivity
+- Export the chart as a PNG or SVG via an optional method

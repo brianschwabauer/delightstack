@@ -1,63 +1,68 @@
 # List
 
-**Status**: ✅ Complete
+**Status**: Complete
 **Category**: Display
 **File**: `packages/components/src/display/List.svelte`
 
 ## Description
 
-A flexible container for list items that provides context-based state management, selection handling, and consistent styling. Supports multiple interaction modes including buttons, checkboxes, radios, and plain text.
+A flexible container for list items that provides context-based state management, selection handling, and consistent styling. Supports multiple interaction modes including buttons, checkboxes, radios, and plain text. Uses `setContext` to communicate shared state to child ListItem components.
+
+## Dependencies
+
+- **Components**: `ListItem` (child)
+- **Utilities**: `@delightstack/utilities` -- `onFocusWithin` (attachment, for touched state tracking)
+- **Libraries**: none
 
 ## Visual Design
 
 ### Container
-- Clean background (inherits or transparent)
-- Optional subtle border
+- Clean background (inherits or `--color-bg-active`)
 - Rounded corners on first/last items
 - Consistent vertical rhythm
+- Subtle dividers between items
 
-### Density Variants
-- **Default**: Comfortable spacing for touch
-- **Comfortable**: Slightly reduced padding
-- **Dense**: Compact for data-heavy UIs
+### Density
+- **Default**: Comfortable spacing for touch targets (3.5rem min-height)
+- **Dense** (`dense`): Compact spacing for data-heavy UIs (3rem min-height)
+- **Comfortable** (`comfortable`): Relaxed spacing (4rem min-height)
 
 ## Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `type` | `'button' \| 'text' \| 'radio' \| 'checkbox'` | `'button'` | Interaction mode |
-| `value` | `any` | - | Selected value(s) (bindable) |
+| `type` | `'button' \| 'text' \| 'radio' \| 'checkbox'` | `'button'` | Interaction mode for items |
+| `value` | `number[]` | `[]` | Selected item indices, bindable |
 | `dense` | `boolean` | `false` | Compact spacing |
-| `comfortable` | `boolean` | `false` | Medium spacing |
+| `comfortable` | `boolean` | `false` | Relaxed spacing |
 | `disabled` | `boolean` | `false` | Disable all items |
-| `touched` | `boolean` | `false` | Track if interacted (bindable) |
+| `touched` | `boolean` | `false` | Track if user has interacted, bindable |
 | `paddingX` | `string` | - | Horizontal padding override |
 | `paddingY` | `string` | - | Vertical padding override |
-| `virtualized` | `boolean` | `false` | Virtual scrolling for large lists |
-| `itemHeight` | `number` | - | Fixed item height for virtualization |
-| `draggable` | `boolean` | `false` | Enable drag to reorder items |
-| `swipeActions` | `SwipeAction[]` | - | Mobile swipe-to-reveal actions |
 | `skeleton` | `boolean` | `false` | Show loading skeleton items |
 | `skeletonCount` | `number` | `5` | Number of skeleton items to show |
 | `id` | `string` | - | Element ID |
 | `class` | `string` | - | Additional CSS classes |
+| `style` | `string` | - | Additional inline styles |
+| `children` | `Snippet` | - | ListItem children |
+| `ontouch` | `() => void` | - | Called when first interaction occurs |
+| `onchange` | `(value: number[]) => void` | - | Called when selection changes |
 
-### SwipeAction Interface
+## Context API
+
+List provides context to child ListItems via `setContext`:
+
 ```typescript
-interface SwipeAction {
-  label: string;
-  icon?: Component;
-  color?: string;
-  onclick: () => void;
+interface ListContext {
+  type: 'button' | 'text' | 'radio' | 'checkbox';
+  value: number[];
+  dense: boolean;
+  comfortable: boolean;
+  disabled: boolean;
+  level: number;
+  id: string;
 }
 ```
-
-## Events
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `onchange` | `value` | Selection changed |
-| `ontouch` | - | First interaction occurred |
 
 ## Selection Modes
 
@@ -70,31 +75,31 @@ interface SwipeAction {
 ```
 - Items are clickable buttons
 - No persistent selection state
-- Visual feedback on hover/click
+- Visual feedback on hover/click with ripple
 
 ### Radio Mode
 ```svelte
 <List type="radio" bind:value={selected}>
-  <ListItem value="option1">Option 1</ListItem>
-  <ListItem value="option2">Option 2</ListItem>
-  <ListItem value="option3">Option 3</ListItem>
+  <ListItem>Option 1</ListItem>
+  <ListItem>Option 2</ListItem>
+  <ListItem>Option 3</ListItem>
 </List>
 ```
 - Single selection
-- Radio indicator on left
-- Bound to single value
+- Radio indicator displayed
+- Value contains a single-element array with the selected index
 
 ### Checkbox Mode
 ```svelte
 <List type="checkbox" bind:value={selected}>
-  <ListItem value="a">Item A</ListItem>
-  <ListItem value="b">Item B</ListItem>
-  <ListItem value="c">Item C</ListItem>
+  <ListItem>Item A</ListItem>
+  <ListItem>Item B</ListItem>
+  <ListItem>Item C</ListItem>
 </List>
 ```
 - Multiple selection
-- Checkbox indicator on left
-- Bound to array of values
+- Checkbox indicator displayed
+- Value is an array of selected indices
 
 ### Text Mode
 ```svelte
@@ -107,55 +112,62 @@ interface SwipeAction {
 - No hover effects
 - For information display
 
-## Context API
+## Keyboard Navigation
 
-List provides context to child ListItems:
+- **Arrow Up/Down**: Move focus between items
+- **Home/End**: Jump to first/last item
+- **Space/Enter**: Activate current item (select or click)
+- **Type-ahead**: Focus item matching typed characters
 
-```typescript
-interface ListContext {
-  type: 'button' | 'text' | 'radio' | 'checkbox';
-  value: Writable<any>;
-  disabled: boolean;
-  dense: boolean;
-  comfortable: boolean;
-  // ... other shared state
-}
-```
+## Nested Lists
 
-## Delightful Details
+Lists can be nested. The parent context propagates to children with the `level` incremented, enabling indentation and inherited settings.
 
-### Smart Borders
-- First item: top corners rounded
-- Last item: bottom corners rounded
-- Middle items: no radius
-- Handles dynamic children
+## Skeleton State
 
-### Keyboard Navigation
-- Arrow keys move between items
-- Home/End jump to start/end
-- Space/Enter activates item
-- Type-ahead search
-
-### Nested Lists
-- Supports list within list
-- Proper indentation
-- Context inheritance with overrides
+When `skeleton` is true, render `skeletonCount` placeholder items with shimmering bars matching the list item layout. Each placeholder has the same height as real items.
 
 ## Accessibility
 
-- Proper `role="listbox"` or `role="menu"`
-- `aria-selected` for selections
-- Keyboard navigation
-- Focus management
+- Renders as `<ul>` with proper list semantics
+- `aria-selected` for selection modes
+- Keyboard navigation across items
+- Focus management with `onFocusWithin` attachment
+- Disabled state communicated to assistive technology
 
-## Current Implementation
+## CSS Approach
 
-The current implementation is **complete** with:
-- All selection modes
-- Context API for ListItem
-- Density variants
-- Nested list support
-- Full keyboard navigation
+```css
+ul.list {
+  --radius: var(--radius-5);
+  --color-bg: var(--color-bg-active);
+  --border-inset: 6px;
+  border-radius: var(--radius);
+  padding: 0;
+  margin: 0;
+  background-color: var(--color-bg);
+}
+
+ul.list.dense {
+  --radius: var(--radius-4);
+  --border-inset: 4px;
+}
+
+ul.list.disabled {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+ul.list > :global(li:first-child) {
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
+}
+
+ul.list > :global(li:last-child) {
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+```
 
 ## Code Example
 
@@ -163,22 +175,22 @@ The current implementation is **complete** with:
 <script>
   import { List, ListItem } from '@delightstack/components';
 
-  let selectedOption = $state('');
-  let selectedItems = $state<string[]>([]);
+  let selectedOption = $state<number[]>([]);
+  let selectedItems = $state<number[]>([]);
 </script>
 
 <!-- Radio selection -->
 <List type="radio" bind:value={selectedOption}>
-  <ListItem value="small">Small</ListItem>
-  <ListItem value="medium">Medium</ListItem>
-  <ListItem value="large">Large</ListItem>
+  <ListItem>Small</ListItem>
+  <ListItem>Medium</ListItem>
+  <ListItem>Large</ListItem>
 </List>
 
 <!-- Checkbox multi-select -->
 <List type="checkbox" bind:value={selectedItems}>
-  <ListItem value="notifications">Notifications</ListItem>
-  <ListItem value="emails">Email Updates</ListItem>
-  <ListItem value="sms">SMS Alerts</ListItem>
+  <ListItem>Notifications</ListItem>
+  <ListItem>Email Updates</ListItem>
+  <ListItem>SMS Alerts</ListItem>
 </List>
 
 <!-- Menu actions -->
@@ -187,17 +199,16 @@ The current implementation is **complete** with:
   <ListItem onclick={() => handleDuplicate()}>Duplicate</ListItem>
   <ListItem onclick={() => handleDelete()}>Delete</ListItem>
 </List>
+
+<!-- Skeleton -->
+<List skeleton skeletonCount={4} />
 ```
 
-## Styling
+## Implementation Notes
 
-The List component uses CSS custom properties that can be overridden:
-
-```css
-.my-list {
-  --list-padding-x: 16px;
-  --list-padding-y: 12px;
-  --list-item-radius: 8px;
-  --list-hover-bg: var(--color-surface-2);
-}
-```
+- The current implementation is complete
+- Uses `setContext`/`getContext` for parent-child communication
+- Selection state managed via change event delegation on the `<ul>` element
+- Nested lists inherit parent context with incremented `level`
+- `onFocusWithin` attachment tracks the `touched` state
+- Only renders the outer `<ul>` at the top level; nested children render directly
