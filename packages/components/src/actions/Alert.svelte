@@ -30,7 +30,7 @@
 			{message}
 		</div>
 	{/if}
-	{#snippet footerEnd}
+	{#snippet footerEnd()}
 		<div class="actions">
 			<Button transparent onclick={oncancel}>{cancelText}</Button>
 			<Button onclick={oncontinue}>{continueText}</Button>
