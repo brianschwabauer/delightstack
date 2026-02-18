@@ -593,6 +593,47 @@ interface VariantConfig {
 	 *   Default for variants with max_dimension <= 1024.
 	 */
 	fit?: 'inside' | 'cover';
+
+	/**
+	 * Watermark to composite on top of this variant.
+	 * Specify either `text` or `image`, not both. Default: no watermark.
+	 */
+	watermark?: {
+		/** Repeating text watermark (e.g. '© Acme Photos'). Mutually exclusive with `image`. */
+		text?: string;
+
+		/** URL or path to a watermark image (e.g. a transparent PNG logo). Mutually exclusive with `text`. */
+		image?: string;
+
+		/**
+		 * How the watermark is positioned.
+		 * - 'repeat': Tiled diagonally across the entire image (default)
+		 * - 'center': Single instance centered on the image
+		 * - 'corner': Single instance in one corner
+		 */
+		layout?: 'repeat' | 'center' | 'corner';
+
+		/** Opacity (0-1). Default: 0.3 */
+		opacity?: number;
+
+		/**
+		 * Rotation in degrees. Applied to each tile for 'repeat', to the watermark for 'center'/'corner'.
+		 * Default: -30 for 'repeat', 0 otherwise.
+		 */
+		rotation?: number;
+
+		/** Gap between repeated tiles in pixels. Only applies to layout: 'repeat'. Default: 64 */
+		gap?: number;
+
+		/** Corner position. Only applies to layout: 'corner'. Default: 'bottom-right' */
+		position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+		/**
+		 * Scale factor for the watermark image relative to the variant's short edge (0-1).
+		 * Only applies to `image` watermarks. Default: 0.25
+		 */
+		scale?: number;
+	};
 }
 
 /** Options for db.images.upload() (Mode 1: database integration) */
@@ -837,6 +878,8 @@ Input
   │   ├── "thumbnail" → fit cover 640px, AVIF q50 effort 4, strip metadata
   │   └── (any custom variants from config)
   │
+  ├── 6a. [if variant has watermark] Composite watermark onto resized image (see Watermarks section)
+  │
   ├── 7. Generate ThumbHash from resized preview
   │
   ├── 8. Original: compress (full-res AVIF, preserve EXIF/ICC), keep raw, or delete per config
@@ -855,6 +898,8 @@ Input
   │   ├── "default" → fit inside 2048px, animated WebP (AVIF doesn't support animation)
   │   ├── "thumbnail" → fit cover 640px, animated WebP
   │   └── (custom variants forced to WebP/GIF if animated)
+  │
+  ├── 6a. [if variant has watermark] Composite watermark onto first frame only (see Watermarks section)
   │
   ├── 7. ThumbHash from first frame
   │
@@ -1070,6 +1115,78 @@ Examples:
 - A 4000x3000 image (long edge: 4000px) → generates both `default` (2048px) and `thumbnail` (640px)
 
 The `original` variant is never skipped — it's always kept (compressed or raw) when `keep_original` is true.
+
+### Watermarks
+
+Variants can optionally have a watermark composited on top. Watermarks are applied **after resize but before encoding** — each variant is watermarked independently, so you can have a watermarked `preview` alongside a clean `thumbnail`.
+
+Specify either `text` or `image` in the variant's `watermark` field. By default, no variants have watermarks.
+
+**Text watermarks** are rendered as white text with a subtle black drop shadow (for visibility on any background). The container generates an SVG tile on the fly:
+
+```typescript
+variants: [
+	{
+		name: 'preview',
+		max_dimension: 2048,
+		format: 'avif',
+		watermark: { text: '© Acme Photos' },
+	},
+	{
+		name: 'thumbnail',
+		max_dimension: 640,
+		format: 'avif',
+		// No watermark on thumbnails
+	},
+]
+```
+
+**Image watermarks** use a transparent PNG/WebP (e.g. a logo). The image is fetched once per processing job and reused across variants. It's scaled relative to the variant's short edge so it stays proportional at different sizes:
+
+```typescript
+variants: [
+	{
+		name: 'branded',
+		max_dimension: 2048,
+		format: 'avif',
+		watermark: {
+			image: '/watermarks/logo.png',
+			layout: 'corner',
+			position: 'bottom-right',
+			opacity: 0.5,
+			scale: 0.15,
+		},
+	},
+]
+```
+
+**Layout options:**
+
+| Layout   | Behavior                                                                                                   | Default rotation |
+| -------- | ---------------------------------------------------------------------------------------------------------- | ---------------- |
+| `repeat` | Tiled diagonally across the entire image. Classic stock-photo look. Gap controls spacing between tiles.     | -30°             |
+| `center` | Single instance centered on the image.                                                                     | 0°               |
+| `corner` | Single instance in one corner (controlled by `position`).                                                  | 0°               |
+
+**Implementation:** Watermarking uses Sharp's `.composite()` method. For `repeat` layout, the container creates a full-size transparent overlay with the watermark tiled at the specified gap and rotation, then composites it in a single operation. For `center` and `corner`, a single watermark instance is composited at the appropriate gravity/offset.
+
+```
+Pipeline (per variant):
+  Resized image
+    │
+    ├── [no watermark] → encode directly
+    │
+    └── [has watermark]
+        ├── Generate/load watermark asset (SVG text tile or fetched image)
+        ├── Apply opacity, rotation, scaling
+        ├── Build overlay (tile for 'repeat', position for 'center'/'corner')
+        ├── sharp.composite([{ input: overlay, blend: 'over' }])
+        └── encode
+```
+
+**Animated images:** For animated inputs, the watermark is composited onto the first frame only. This is a limitation of Sharp's animation handling — compositing onto every frame would require decoding all frames individually, which is prohibitively expensive for large GIFs.
+
+**Watermarks are never applied to the `original` variant** (compressed or raw). The original is always stored clean.
 
 ### Avatar Profile
 
@@ -1425,6 +1542,14 @@ export default {
 					format: 'webp',
 					quality: 75,
 					fit: 'inside',
+				},
+				{
+					name: 'preview',
+					max_dimension: 2048,
+					format: 'avif',
+					quality: 50,
+					fit: 'inside',
+					watermark: { text: 'PREVIEW', opacity: 0.2, layout: 'repeat' },
 				},
 			],
 		});
@@ -2660,6 +2785,7 @@ packages/image-processor/
 │   ├── thumbhash.ts           # ThumbHash generation
 │   ├── colors.ts              # Background + accent color extraction + OKLCH conversion
 │   ├── face-crop.ts           # Face detection + square crop for avatar profile
+│   ├── watermark.ts           # Watermark generation and compositing (text SVG tiles, image overlays)
 │   ├── svg.ts                 # SVG-specific handling (sanitization, metadata)
 │   ├── pdf.ts                 # PDF-specific handling (first page rendering)
 │   ├── validation.ts          # Input validation (size, dimensions, format)
