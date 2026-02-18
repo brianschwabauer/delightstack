@@ -2284,13 +2284,13 @@ export function imageURL(
 </script>
 
 <div
-	class="ds-image {className}"
+	class="image {className}"
 	style:background-color={bg_color}
 	style:aspect-ratio={image.aspect_ratio ?? undefined}
 	{style}>
 	{#if placeholder && !loaded}
 		<img
-			class="ds-image-placeholder"
+			class="placeholder"
 			src={placeholder}
 			alt=""
 			aria-hidden="true"
@@ -2299,9 +2299,9 @@ export function imageURL(
 	{#if is_ready}
 		<img
 			bind:this={img_el}
-			class="ds-image-main"
-			class:ds-image-loaded={loaded}
-			class:ds-image-instant={instant}
+			class="main"
+			class:loaded
+			class:instant
 			{src}
 			srcset={srcset || undefined}
 			{sizes}
@@ -2316,12 +2316,12 @@ export function imageURL(
 </div>
 
 <style>
-	.ds-image {
+	.image {
 		position: relative;
 		overflow: hidden;
 	}
 
-	.ds-image-placeholder {
+	.placeholder {
 		position: absolute;
 		inset: 0;
 		width: 100%;
@@ -2332,7 +2332,7 @@ export function imageURL(
 		pointer-events: none;
 	}
 
-	.ds-image-main {
+	.main {
 		display: block;
 		width: 100%;
 		height: 100%;
@@ -2342,12 +2342,12 @@ export function imageURL(
 		transition: opacity 300ms ease;
 	}
 
-	.ds-image-loaded {
+	.loaded {
 		opacity: 1;
 	}
 
 	/* Skip transition for cached images */
-	.ds-image-instant {
+	.instant {
 		transition: none;
 	}
 </style>
