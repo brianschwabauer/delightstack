@@ -112,18 +112,18 @@ import { ImageProcessorContainer, processImage } from '@delightstack/image-proce
 export { ImageProcessorContainer };
 
 export default {
-  async fetch(request: Request, env: Env) {
-    // Process an image that was uploaded to R2
-    const result = await processImage(env.IMAGE_PROCESSOR, {
-      bucket: env.MEDIA_BUCKET,
-      key: 'uploads/user-123/photo.jpg',
-      keep_original: true,
-      output_prefix: 'processed/user-123/',
-    });
+	async fetch(request: Request, env: Env) {
+		// Process an image that was uploaded to R2
+		const result = await processImage(env.IMAGE_PROCESSOR, {
+			bucket: env.MEDIA_BUCKET,
+			key: 'uploads/user-123/photo.jpg',
+			keep_original: true,
+			output_prefix: 'processed/user-123/',
+		});
 
-    // result contains all metadata + variant URLs
-    return Response.json(result);
-  }
+		// result contains all metadata + variant URLs
+		return Response.json(result);
+	},
 };
 ```
 
@@ -135,33 +135,33 @@ The `processImage()` helper does this internally:
 
 ```typescript
 async function processImage(
-  binding: DurableObjectNamespace,
-  options: ProcessImageOptions,
+	binding: DurableObjectNamespace,
+	options: ProcessImageOptions,
 ): Promise<ProcessImageResult> {
-  // Get a container instance (reuses running containers)
-  const id = binding.idFromName('image-processor');
-  const stub = binding.get(id);
+	// Get a container instance (reuses running containers)
+	const id = binding.idFromName('image-processor');
+	const stub = binding.get(id);
 
-  // This single fetch call:
-  // 1. Wakes the container if sleeping (~2-3s cold start)
-  // 2. Sends the processing request
-  // 3. Waits for the container to finish (2-30s)
-  // 4. Returns the result
-  //
-  // Workers have NO wall-clock time limit on HTTP requests.
-  // The await is I/O wait, NOT CPU time. The CPU cost is negligible.
-  const response = await stub.fetch('https://image-processor/process', {
-    method: 'POST',
-    body: JSON.stringify(options),
-    headers: { 'Content-Type': 'application/json' },
-  });
+	// This single fetch call:
+	// 1. Wakes the container if sleeping (~2-3s cold start)
+	// 2. Sends the processing request
+	// 3. Waits for the container to finish (2-30s)
+	// 4. Returns the result
+	//
+	// Workers have NO wall-clock time limit on HTTP requests.
+	// The await is I/O wait, NOT CPU time. The CPU cost is negligible.
+	const response = await stub.fetch('https://image-processor/process', {
+		method: 'POST',
+		body: JSON.stringify(options),
+		headers: { 'Content-Type': 'application/json' },
+	});
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new ImageProcessorError(error);
-  }
+	if (!response.ok) {
+		const error = await response.json();
+		throw new ImageProcessorError(error);
+	}
 
-  return response.json();
+	return response.json();
 }
 ```
 
@@ -169,12 +169,12 @@ The Container class handles the lifecycle:
 
 ```typescript
 class ImageProcessorContainer extends Container {
-  defaultPort = 8080;
-  sleepAfter = '5m'; // Sleep after 5 minutes of idle
-  enableInternet = false; // No outbound internet needed
+	defaultPort = 8080;
+	sleepAfter = '5m'; // Sleep after 5 minutes of idle
+	enableInternet = false; // No outbound internet needed
 
-  // The container downloads from R2/S3 via a presigned URL
-  // or via the R2 binding passed through the DO
+	// The container downloads from R2/S3 via a presigned URL
+	// or via the R2 binding passed through the DO
 }
 ```
 
@@ -213,52 +213,52 @@ Worker                    DO                          Container
 
 ```typescript
 interface ProcessImageOptions {
-  /** The R2 bucket binding to use for input/output */
-  bucket: R2Bucket;
+	/** The R2 bucket binding to use for input/output */
+	bucket: R2Bucket;
 
-  /** The key/path of the input file in the bucket */
-  key: string;
+	/** The key/path of the input file in the bucket */
+	key: string;
 
-  /** Whether to keep the original file after processing. Default: true */
-  keep_original?: boolean;
+	/** Whether to keep the original file after processing. Default: true */
+	keep_original?: boolean;
 
-  /** Prefix for output files. Default: same directory as input */
-  output_prefix?: string;
+	/** Prefix for output files. Default: same directory as input */
+	output_prefix?: string;
 
-  /** Custom variant configuration. Uses sensible defaults if omitted */
-  variants?: VariantConfig[];
+	/** Custom variant configuration. Uses sensible defaults if omitted */
+	variants?: VariantConfig[];
 
-  /** Custom processing options */
-  processing?: {
-    /** AVIF quality for the standard variant (1-100). Default: 50 */
-    avif_quality?: number;
+	/** Custom processing options */
+	processing?: {
+		/** AVIF quality for the standard variant (1-100). Default: 50 */
+		avif_quality?: number;
 
-    /** AVIF encoding effort (0-9, higher = slower + smaller). Default: 4 */
-    avif_effort?: number;
+		/** AVIF encoding effort (0-9, higher = slower + smaller). Default: 4 */
+		avif_effort?: number;
 
-    /** Thumbnail long-edge size in pixels. Default: 640 */
-    thumbnail_size?: number;
+		/** Thumbnail long-edge size in pixels. Default: 640 */
+		thumbnail_size?: number;
 
-    /** Standard variant long-edge size in pixels. Default: 2048 */
-    standard_size?: number;
+		/** Standard variant long-edge size in pixels. Default: 2048 */
+		standard_size?: number;
 
-    /** Size of the tiny base64 preview. Default: 36 */
-    tiny_preview_size?: number;
-  };
+		/** Size of the tiny base64 preview. Default: 36 */
+		tiny_preview_size?: number;
+	};
 }
 
 interface VariantConfig {
-  /** Unique name for this variant (used in output key) */
-  name: string;
+	/** Unique name for this variant (used in output key) */
+	name: string;
 
-  /** Maximum long-edge dimension in pixels */
-  max_dimension: number;
+	/** Maximum long-edge dimension in pixels */
+	max_dimension: number;
 
-  /** Output format */
-  format: 'avif' | 'webp' | 'jpeg' | 'png';
+	/** Output format */
+	format: 'avif' | 'webp' | 'jpeg' | 'png';
 
-  /** Quality (1-100) */
-  quality?: number;
+	/** Quality (1-100) */
+	quality?: number;
 }
 ```
 
@@ -266,113 +266,113 @@ interface VariantConfig {
 
 ```typescript
 interface ProcessImageResult {
-  /** Whether processing succeeded */
-  ok: true;
+	/** Whether processing succeeded */
+	ok: true;
 
-  /** Unique processing job ID */
-  job_id: string;
+	/** Unique processing job ID */
+	job_id: string;
 
-  /** Metadata extracted from the original image */
-  metadata: ImageMetadata;
+	/** Metadata extracted from the original image */
+	metadata: ImageMetadata;
 
-  /** ThumbHash as a base64 string (~33 chars, encodes aspect ratio + transparency) */
-  thumbhash: string;
+	/** ThumbHash as a base64 string (~33 chars, encodes aspect ratio + transparency) */
+	thumbhash: string;
 
-  /** Tiny base64-encoded preview image as a data URI (e.g. "data:image/avif;base64,...") */
-  tiny_preview: string;
+	/** Tiny base64-encoded preview image as a data URI (e.g. "data:image/avif;base64,...") */
+	tiny_preview: string;
 
-  /** The generated output variants */
-  variants: OutputVariant[];
+	/** The generated output variants */
+	variants: OutputVariant[];
 
-  /** Info about the original file */
-  original: {
-    /** R2 key of the original file (undefined if deleted) */
-    key?: string;
-    /** Whether the original was kept */
-    kept: boolean;
-  };
+	/** Info about the original file */
+	original: {
+		/** R2 key of the original file (undefined if deleted) */
+		key?: string;
+		/** Whether the original was kept */
+		kept: boolean;
+	};
 }
 
 interface ImageMetadata {
-  /** Original filename with extension */
-  file_name: string;
+	/** Original filename with extension */
+	file_name: string;
 
-  /** File extension (lowercase, without dot) */
-  file_extension: string;
+	/** File extension (lowercase, without dot) */
+	file_extension: string;
 
-  /** Detected MIME type from file magic bytes (not from extension) */
-  mime_type: string;
+	/** Detected MIME type from file magic bytes (not from extension) */
+	mime_type: string;
 
-  /** File size in bytes */
-  file_size: number;
+	/** File size in bytes */
+	file_size: number;
 
-  /** Original width in pixels (after orientation correction) */
-  width: number;
+	/** Original width in pixels (after orientation correction) */
+	width: number;
 
-  /** Original height in pixels (after orientation correction) */
-  height: number;
+	/** Original height in pixels (after orientation correction) */
+	height: number;
 
-  /** Aspect ratio as width/height (e.g. 1.778 for 16:9) */
-  aspect_ratio: number;
+	/** Aspect ratio as width/height (e.g. 1.778 for 16:9) */
+	aspect_ratio: number;
 
-  /** Whether the image has an alpha channel */
-  has_transparency: boolean;
+	/** Whether the image has an alpha channel and that alpha channel has data (isn't just all fully opaque) */
+	has_transparency: boolean;
 
-  /** Whether the image is animated (GIF, APNG, animated WebP) */
-  is_animated: boolean;
+	/** Whether the image is animated (GIF, APNG, animated WebP) */
+	is_animated: boolean;
 
-  /** Number of animation frames (1 for static images) */
-  frame_count: number;
+	/** Number of animation frames (1 for static images) */
+	frame_count: number;
 
-  /** Color space (srgb, display-p3, adobe-rgb, cmyk, etc.) */
-  color_space: string;
+	/** Color space (srgb, display-p3, adobe-rgb, cmyk, etc.) */
+	color_space: string;
 
-  /** Bits per channel */
-  bit_depth: number;
+	/** Bits per channel */
+	bit_depth: number;
 
-  /** Number of channels (3 for RGB, 4 for RGBA, etc.) */
-  channels: number;
+	/** Number of channels (3 for RGB, 4 for RGBA, etc.) */
+	channels: number;
 
-  /** Dominant color in OKLCH format { l: 0-1, c: 0-0.4, h: 0-360 } */
-  dominant_color: { l: number; c: number; h: number };
+	/** Dominant color in OKLCH format { l: 0-1, c: 0-0.4, h: 0-360 } */
+	dominant_color: { l: number; c: number; h: number };
 
-  /** Dominant color as a CSS oklch() string */
-  dominant_color_css: string;
+	/** Dominant color as a CSS oklch() string */
+	dominant_color_css: string;
 
-  /** EXIF orientation value (1-8) before correction. 1 = no rotation needed */
-  exif_orientation: number;
+	/** EXIF orientation value (1-8) before correction. 1 = no rotation needed */
+	exif_orientation: number;
 
-  /** Whether the image has an embedded ICC profile */
-  has_icc_profile: boolean;
+	/** Whether the image has an embedded ICC profile */
+	has_icc_profile: boolean;
 
-  /** DPI/PPI if available */
-  density?: number;
+	/** DPI/PPI if available */
+	density?: number;
 
-  /** Format-specific info (e.g. GIF loop count, PNG interlace, JPEG progressive) */
-  format_info?: Record<string, unknown>;
+	/** Format-specific info (e.g. GIF loop count, PNG interlace, JPEG progressive) */
+	format_info?: Record<string, unknown>;
 }
 
 interface OutputVariant {
-  /** Variant name (e.g. 'standard', 'thumbnail') */
-  name: string;
+	/** Variant name (e.g. 'standard', 'thumbnail') */
+	name: string;
 
-  /** R2 key where the variant was saved */
-  key: string;
+	/** R2 key where the variant was saved */
+	key: string;
 
-  /** Output format */
-  format: 'avif' | 'webp' | 'jpeg' | 'png';
+	/** Output format */
+	format: 'avif' | 'webp' | 'jpeg' | 'png';
 
-  /** Width in pixels */
-  width: number;
+	/** Width in pixels */
+	width: number;
 
-  /** Height in pixels */
-  height: number;
+	/** Height in pixels */
+	height: number;
 
-  /** File size in bytes */
-  file_size: number;
+	/** File size in bytes */
+	file_size: number;
 
-  /** Whether this variant is animated */
-  is_animated: boolean;
+	/** Whether this variant is animated */
+	is_animated: boolean;
 }
 ```
 
@@ -478,16 +478,16 @@ For the 36x36 pixel preview, we want the absolute smallest base64 string that ca
 const tiny = sharp(input).resize(36, 36, { fit: 'inside' }).removeMetadata();
 
 const [avif, webp, jpeg] = await Promise.all([
-  tiny.clone().avif({ quality: 40, effort: 2 }).toBuffer(),
-  tiny.clone().webp({ quality: 40 }).toBuffer(),
-  tiny.clone().jpeg({ quality: 40 }).toBuffer(),
+	tiny.clone().avif({ quality: 40, effort: 2 }).toBuffer(),
+	tiny.clone().webp({ quality: 40 }).toBuffer(),
+	tiny.clone().jpeg({ quality: 40 }).toBuffer(),
 ]);
 
 // Pick smallest
 const candidates = [
-  { format: 'avif', mime: 'image/avif', buffer: avif },
-  { format: 'webp', mime: 'image/webp', buffer: webp },
-  { format: 'jpeg', mime: 'image/jpeg', buffer: jpeg },
+	{ format: 'avif', mime: 'image/avif', buffer: avif },
+	{ format: 'webp', mime: 'image/webp', buffer: webp },
+	{ format: 'jpeg', mime: 'image/jpeg', buffer: jpeg },
 ].sort((a, b) => a.buffer.length - b.buffer.length);
 
 const winner = candidates[0];
@@ -501,20 +501,21 @@ At 36x36 pixels, the differences are small (~200-600 bytes per format), but AVIF
 
 We use **ThumbHash** instead of BlurHash because:
 
-| Feature | BlurHash | ThumbHash |
-|---------|----------|-----------|
-| Size | 20-30 chars (Base83) | ~33 chars (Base64) |
-| Encodes aspect ratio | No (must store separately) | Yes |
-| Supports transparency | No | Yes |
-| Visual detail | Lower (smudgy) | Higher (recognizable shapes) |
-| Configuration needed | Yes (component count) | None (auto-determined) |
-| Average color extraction | No | Yes (from hash, no decode needed) |
+| Feature                  | BlurHash                   | ThumbHash                         |
+| ------------------------ | -------------------------- | --------------------------------- |
+| Size                     | 20-30 chars (Base83)       | ~33 chars (Base64)                |
+| Encodes aspect ratio     | No (must store separately) | Yes                               |
+| Supports transparency    | No                         | Yes                               |
+| Visual detail            | Lower (smudgy)             | Higher (recognizable shapes)      |
+| Configuration needed     | Yes (component count)      | None (auto-determined)            |
+| Average color extraction | No                         | Yes (from hash, no decode needed) |
 
 ThumbHash provides better previews with less configuration. It's 25 bytes binary (~33 chars base64), which is tiny enough to store alongside any image record.
 
 Both the thumbhash AND the tiny base64 preview are generated. They serve slightly different purposes:
+
 - **ThumbHash**: Absolute smallest (33 chars), good for list views with hundreds of items
-- **Tiny base64**: Slightly larger (300-800 chars) but pixel-accurate preview, good for hero images where you want the preview to look as close to the real image as possible
+- **Tiny base64**: Slightly larger (300-800 chars) but pixel-accurate preview, good for hero images where you want the preview to look as close to the real image as possible. This can also be server side rendered because it can be simply injected into an image src tag
 
 ---
 
@@ -522,11 +523,11 @@ Both the thumbhash AND the tiny base64 preview are generated. They serve slightl
 
 ### Default Variants
 
-| Variant | Max Dimension | Format | Quality | Notes |
-|---------|--------------|--------|---------|-------|
-| `standard` | 2048px | AVIF | 50 | Primary viewing size. WebP for animated. |
-| `thumbnail` | 640px | AVIF | 50 | List/grid views. WebP for animated. |
-| `tiny` | 36px | smallest of AVIF/WebP/JPEG | 40 | Base64-encoded data URI |
+| Variant     | Max Dimension | Format                     | Quality | Notes                                    |
+| ----------- | ------------- | -------------------------- | ------- | ---------------------------------------- |
+| `standard`  | 2048px        | AVIF                       | 50      | Primary viewing size. WebP for animated. |
+| `thumbnail` | 640px         | AVIF                       | 50      | List/grid views. WebP for animated.      |
+| `tiny`      | 36px          | smallest of AVIF/WebP/JPEG | 40      | Base64-encoded data URI                  |
 
 ### Output File Naming
 
@@ -542,6 +543,7 @@ Example:
 ### Animated Image Handling
 
 When the input is animated:
+
 - AVIF variants fall back to animated WebP (AVIF doesn't support animation in Sharp/libvips)
 - Frame count is capped at 500 frames to prevent abuse
 - The tiny preview and thumbhash use only the first frame
@@ -562,26 +564,26 @@ All extracted metadata is returned in the `metadata` field. Here's everything Sh
 
 ### Core Metadata (always available)
 
-| Field | Source | Description |
-|-------|--------|-------------|
-| `file_name` | Input key | Original filename with extension |
-| `file_extension` | Input key | Lowercase extension without dot |
-| `mime_type` | `file-type` (magic bytes) | True MIME type regardless of extension |
-| `file_size` | R2 object info | Size in bytes |
-| `width` | `sharp.metadata()` | Pixels (after orientation correction) |
-| `height` | `sharp.metadata()` | Pixels (after orientation correction) |
-| `aspect_ratio` | Computed | `width / height` as a float |
-| `has_transparency` | `sharp.metadata().hasAlpha` | Whether alpha channel exists |
-| `is_animated` | `sharp.metadata().pages > 1` | Whether image has multiple frames |
-| `frame_count` | `sharp.metadata().pages` | Number of frames |
-| `color_space` | `sharp.metadata().space` | sRGB, CMYK, etc. |
-| `bit_depth` | `sharp.metadata().depth` | Bits per channel |
-| `channels` | `sharp.metadata().channels` | Number of channels |
-| `dominant_color` | `sharp.stats()` + `culori` | OKLCH `{ l, c, h }` |
-| `dominant_color_css` | Computed | `oklch(0.65 0.15 250)` CSS string |
-| `exif_orientation` | `sharp.metadata().orientation` | EXIF orientation tag (1-8) |
-| `has_icc_profile` | `sharp.metadata().hasProfile` | ICC profile presence |
-| `density` | `sharp.metadata().density` | DPI/PPI if available |
+| Field                | Source                         | Description                            |
+| -------------------- | ------------------------------ | -------------------------------------- |
+| `file_name`          | Input key                      | Original filename with extension       |
+| `file_extension`     | Input key                      | Lowercase extension without dot        |
+| `mime_type`          | `file-type` (magic bytes)      | True MIME type regardless of extension |
+| `file_size`          | R2 object info                 | Size in bytes                          |
+| `width`              | `sharp.metadata()`             | Pixels (after orientation correction)  |
+| `height`             | `sharp.metadata()`             | Pixels (after orientation correction)  |
+| `aspect_ratio`       | Computed                       | `width / height` as a float            |
+| `has_transparency`   | `sharp.metadata().hasAlpha`    | Whether alpha channel exists           |
+| `is_animated`        | `sharp.metadata().pages > 1`   | Whether image has multiple frames      |
+| `frame_count`        | `sharp.metadata().pages`       | Number of frames                       |
+| `color_space`        | `sharp.metadata().space`       | sRGB, CMYK, etc.                       |
+| `bit_depth`          | `sharp.metadata().depth`       | Bits per channel                       |
+| `channels`           | `sharp.metadata().channels`    | Number of channels                     |
+| `dominant_color`     | `sharp.stats()` + `culori`     | OKLCH `{ l, c, h }`                    |
+| `dominant_color_css` | Computed                       | `oklch(0.65 0.15 250)` CSS string      |
+| `exif_orientation`   | `sharp.metadata().orientation` | EXIF orientation tag (1-8)             |
+| `has_icc_profile`    | `sharp.metadata().hasProfile`  | ICC profile presence                   |
+| `density`            | `sharp.metadata().density`     | DPI/PPI if available                   |
 
 ### Dominant Color in OKLCH
 
@@ -598,18 +600,24 @@ const oklch = toOklch({ mode: 'rgb', r: r / 255, g: g / 255, b: b / 255 });
 ```
 
 OKLCH is ideal because:
+
 - **Perceptually uniform**: Equal numeric changes = equal visual changes
 - **Adjustable lightness**: Change `l` to make the color lighter/darker for backgrounds vs accents
 - **CSS native**: `oklch()` is supported in all modern browsers
 - **Gamut mapping**: Works with wide-gamut displays (Display P3)
 
 Example usage in CSS:
+
 ```css
 /* Use dominant color as background (lightened) */
-.card { background: oklch(0.95 0.03 250); }
+.card {
+	background: oklch(0.95 0.03 250);
+}
 
 /* Use dominant color as accent (full saturation) */
-.badge { background: oklch(0.65 0.15 250); }
+.badge {
+	background: oklch(0.65 0.15 250);
+}
 ```
 
 ---
@@ -618,36 +626,36 @@ Example usage in CSS:
 
 ### File Size Limits
 
-| Input Type | Max Size | Rationale |
-|------------|----------|-----------|
-| Standard images (JPEG, PNG, WebP, AVIF) | 50 MB | Covers high-res photos |
-| RAW camera files (NEF, CR2, ARW, DNG) | 100 MB | RAW files are large (25-80 MB typical) |
-| Animated images (GIF, animated WebP) | 50 MB | Animated files can be large |
-| PDFs | 50 MB | Only first page is rendered |
-| SVGs | 5 MB | SVGs should be small; large ones are suspicious |
+| Input Type                              | Max Size | Rationale                                       |
+| --------------------------------------- | -------- | ----------------------------------------------- |
+| Standard images (JPEG, PNG, WebP, AVIF) | 50 MB    | Covers high-res photos                          |
+| RAW camera files (NEF, CR2, ARW, DNG)   | 100 MB   | RAW files are large (25-80 MB typical)          |
+| Animated images (GIF, animated WebP)    | 50 MB    | Animated files can be large                     |
+| PDFs                                    | 50 MB    | Only first page is rendered                     |
+| SVGs                                    | 5 MB     | SVGs should be small; large ones are suspicious |
 
 ### Dimension Limits
 
-| Limit | Value | Rationale |
-|-------|-------|-----------|
+| Limit                       | Value          | Rationale                                        |
+| --------------------------- | -------------- | ------------------------------------------------ |
 | Max pixels (width x height) | 256 megapixels | Prevents memory exhaustion. Covers 100MP cameras |
-| Max single dimension | 32,768 px | Beyond this is pathological |
-| Min dimension | 1 px | Must be at least 1x1 |
-| Max animated frames | 500 | Prevents abuse with very long GIFs |
+| Max single dimension        | 32,768 px      | Beyond this is pathological                      |
+| Min dimension               | 1 px           | Must be at least 1x1                             |
+| Max animated frames         | 500            | Prevents abuse with very long GIFs               |
 
 ### Validation Errors
 
 ```typescript
 type ImageProcessorError =
-  | { code: 'FILE_TOO_LARGE'; max_bytes: number; actual_bytes: number }
-  | { code: 'DIMENSIONS_TOO_LARGE'; max_megapixels: number; actual_megapixels: number }
-  | { code: 'UNSUPPORTED_FORMAT'; mime_type: string; file_extension: string }
-  | { code: 'TOO_MANY_FRAMES'; max_frames: number; actual_frames: number }
-  | { code: 'CORRUPTED_FILE'; details: string }
-  | { code: 'PROCESSING_TIMEOUT'; timeout_ms: number }
-  | { code: 'SVG_MALICIOUS'; details: string }
-  | { code: 'FILE_NOT_FOUND'; key: string }
-  | { code: 'INTERNAL_ERROR'; details: string };
+	| { code: 'FILE_TOO_LARGE'; max_bytes: number; actual_bytes: number }
+	| { code: 'DIMENSIONS_TOO_LARGE'; max_megapixels: number; actual_megapixels: number }
+	| { code: 'UNSUPPORTED_FORMAT'; mime_type: string; file_extension: string }
+	| { code: 'TOO_MANY_FRAMES'; max_frames: number; actual_frames: number }
+	| { code: 'CORRUPTED_FILE'; details: string }
+	| { code: 'PROCESSING_TIMEOUT'; timeout_ms: number }
+	| { code: 'SVG_MALICIOUS'; details: string }
+	| { code: 'FILE_NOT_FOUND'; key: string }
+	| { code: 'INTERNAL_ERROR'; details: string };
 ```
 
 All errors are typed and actionable. The consumer knows exactly what went wrong and can show appropriate user-facing messages.
@@ -658,51 +666,51 @@ All errors are typed and actionable. The consumer knows exactly what went wrong 
 
 ### Full Processing (resize + variants + metadata)
 
-| Format | Extensions | MIME Type | Notes |
-|--------|-----------|-----------|-------|
-| JPEG | .jpg, .jpeg | image/jpeg | Most common. Full support. |
-| PNG | .png | image/png | Transparency preserved. |
-| WebP | .webp | image/webp | Static and animated. |
-| AVIF | .avif | image/avif | Static only (animated read unsupported by libvips). |
-| GIF | .gif | image/gif | Static and animated. Frame limit enforced. |
-| HEIC/HEIF | .heic, .heif | image/heic, image/heif | iPhone photos. Requires libheif in Docker image. |
-| TIFF | .tiff, .tif | image/tiff | Common in print/scan workflows. |
-| BMP | .bmp | image/bmp | Legacy support. |
-| ICO | .ico | image/x-icon | Extracts largest embedded image. |
-| JPEG 2000 | .jp2, .j2k | image/jp2 | Medical/archival imaging. |
-| JPEG XL | .jxl | image/jxl | Next-gen format (if libvips built with libjxl). |
+| Format    | Extensions   | MIME Type              | Notes                                               |
+| --------- | ------------ | ---------------------- | --------------------------------------------------- |
+| JPEG      | .jpg, .jpeg  | image/jpeg             | Most common. Full support.                          |
+| PNG       | .png         | image/png              | Transparency preserved.                             |
+| WebP      | .webp        | image/webp             | Static and animated.                                |
+| AVIF      | .avif        | image/avif             | Static only (animated read unsupported by libvips). |
+| GIF       | .gif         | image/gif              | Static and animated. Frame limit enforced.          |
+| HEIC/HEIF | .heic, .heif | image/heic, image/heif | iPhone photos. Requires libheif in Docker image.    |
+| TIFF      | .tiff, .tif  | image/tiff             | Common in print/scan workflows.                     |
+| BMP       | .bmp         | image/bmp              | Legacy support.                                     |
+| ICO       | .ico         | image/x-icon           | Extracts largest embedded image.                    |
+| JPEG 2000 | .jp2, .j2k   | image/jp2              | Medical/archival imaging.                           |
+| JPEG XL   | .jxl         | image/jxl              | Next-gen format (if libvips built with libjxl).     |
 
 ### Camera RAW (resize + variants + metadata)
 
-| Format | Extensions | Camera |
-|--------|-----------|--------|
-| DNG | .dng | Adobe Digital Negative (universal) |
-| NEF | .nef | Nikon |
-| CR2/CR3 | .cr2, .cr3 | Canon |
-| ARW | .arw | Sony |
-| RAF | .raf | Fujifilm |
-| ORF | .orf | Olympus |
-| RW2 | .rw2 | Panasonic |
-| PEF | .pef | Pentax |
+| Format  | Extensions | Camera                             |
+| ------- | ---------- | ---------------------------------- |
+| DNG     | .dng       | Adobe Digital Negative (universal) |
+| NEF     | .nef       | Nikon                              |
+| CR2/CR3 | .cr2, .cr3 | Canon                              |
+| ARW     | .arw       | Sony                               |
+| RAF     | .raf       | Fujifilm                           |
+| ORF     | .orf       | Olympus                            |
+| RW2     | .rw2       | Panasonic                          |
+| PEF     | .pef       | Pentax                             |
 
 RAW support via libraw (native in libvips 8.18+). Covers 1000+ camera models.
 
 ### Special Handling
 
-| Format | Extensions | Processing |
-|--------|-----------|------------|
-| PDF | .pdf | First page rendered to raster. Metadata extracted. No resize of original. |
-| SVG | .svg, .svgz | Metadata extracted. Sanitized. No resize variants. Tiny preview from rasterization. |
+| Format | Extensions  | Processing                                                                          |
+| ------ | ----------- | ----------------------------------------------------------------------------------- |
+| PDF    | .pdf        | First page rendered to raster. Metadata extracted. No resize of original.           |
+| SVG    | .svg, .svgz | Metadata extracted. Sanitized. No resize variants. Tiny preview from rasterization. |
 
 ### Explicitly Unsupported
 
-| Type | Reason |
-|------|--------|
-| Video (.mp4, .mov, .avi, etc.) | Out of scope. Use a video processing service. |
-| Audio (.mp3, .wav, etc.) | Out of scope. |
-| 3D models (.obj, .gltf, etc.) | Out of scope. |
-| Photoshop (.psd) | Possible via ImageMagick but unreliable. May add later. |
-| AI/EPS | Vector formats better handled by dedicated tools. |
+| Type                           | Reason                                                  |
+| ------------------------------ | ------------------------------------------------------- |
+| Video (.mp4, .mov, .avi, etc.) | Out of scope. Use a video processing service.           |
+| Audio (.mp3, .wav, etc.)       | Out of scope.                                           |
+| 3D models (.obj, .gltf, etc.)  | Out of scope.                                           |
+| Photoshop (.psd)               | Possible via ImageMagick but unreliable. May add later. |
+| AI/EPS                         | Vector formats better handled by dedicated tools.       |
 
 ---
 
@@ -725,34 +733,37 @@ IMAGE_PROCESSOR_SLEEP_AFTER = "5m"              # Container idle timeout
 ### Programmatic Configuration
 
 ```typescript
-import { ImageProcessorContainer, createImageProcessor } from '@delightstack/image-processor';
+import {
+	ImageProcessorContainer,
+	createImageProcessor,
+} from '@delightstack/image-processor';
 
 // Re-export for Cloudflare to discover
 export { ImageProcessorContainer };
 
 // Create a configured processor
 const imageProcessor = createImageProcessor({
-  keep_original: true,
-  standard_size: 2048,
-  thumbnail_size: 640,
-  avif_quality: 50,
-  avif_effort: 4,
-  max_file_size: 50 * 1024 * 1024,
-  // Custom variants in addition to defaults
-  extra_variants: [
-    { name: 'social', max_dimension: 1200, format: 'jpeg', quality: 85 },
-    { name: 'banner', max_dimension: 1920, format: 'webp', quality: 75 },
-  ],
+	keep_original: true,
+	standard_size: 2048,
+	thumbnail_size: 640,
+	avif_quality: 50,
+	avif_effort: 4,
+	max_file_size: 50 * 1024 * 1024,
+	// Custom variants in addition to defaults
+	extra_variants: [
+		{ name: 'social', max_dimension: 1200, format: 'jpeg', quality: 85 },
+		{ name: 'banner', max_dimension: 1920, format: 'webp', quality: 75 },
+	],
 });
 
 export default {
-  async fetch(request: Request, env: Env) {
-    const result = await imageProcessor.process(env.IMAGE_PROCESSOR, {
-      bucket: env.MEDIA_BUCKET,
-      key: 'uploads/photo.jpg',
-    });
-    return Response.json(result);
-  }
+	async fetch(request: Request, env: Env) {
+		const result = await imageProcessor.process(env.IMAGE_PROCESSOR, {
+			bucket: env.MEDIA_BUCKET,
+			key: 'uploads/photo.jpg',
+		});
+		return Response.json(result);
+	},
 };
 ```
 
@@ -822,6 +833,7 @@ CMD ["node", "server.js"]
 **Expected image size:** ~250-350 MB (Node.js + libvips + all codec libraries). This fits comfortably within even the `lite` instance type's 2 GB disk.
 
 **Instance type recommendation:**
+
 - `standard-1` (0.5 vCPU, 4 GiB RAM) for most workloads
 - `standard-2` (1 vCPU, 6 GiB RAM) for processing very large RAW files or high-throughput scenarios
 
@@ -907,14 +919,14 @@ For S3-compatible buckets other than R2, pass credentials:
 
 ```typescript
 const result = await processImage(env.IMAGE_PROCESSOR, {
-  s3: {
-    endpoint: 'https://s3.us-east-1.amazonaws.com',
-    access_key_id: env.AWS_ACCESS_KEY_ID,
-    secret_access_key: env.AWS_SECRET_ACCESS_KEY,
-    bucket: 'my-bucket',
-    region: 'us-east-1',
-  },
-  key: 'uploads/photo.jpg',
+	s3: {
+		endpoint: 'https://s3.us-east-1.amazonaws.com',
+		access_key_id: env.AWS_ACCESS_KEY_ID,
+		secret_access_key: env.AWS_SECRET_ACCESS_KEY,
+		bucket: 'my-bucket',
+		region: 'us-east-1',
+	},
+	key: 'uploads/photo.jpg',
 });
 ```
 
@@ -923,11 +935,13 @@ When using R2 (the default), no credentials are needed -- the R2 bucket binding 
 ### Scaling Considerations
 
 **Single Container (default):**
+
 - One container instance handles all requests sequentially
 - Good for low-to-moderate traffic (up to ~100-200 images/hour depending on size)
 - Images queue up while the container is processing
 
 **Multiple Containers:**
+
 - Set `max_instances` higher in wrangler.toml
 - Use different DO IDs to route to different container instances
 - The helper function can auto-distribute using a round-robin or hash-based strategy
@@ -935,10 +949,10 @@ When using R2 (the default), no credentials are needed -- the R2 bucket binding 
 ```typescript
 // Simple round-robin across N containers
 const result = await processImage(env.IMAGE_PROCESSOR, {
-  // Automatically picks a container instance
-  container_strategy: 'round-robin',
-  max_containers: 5,
-  // ... other options
+	// Automatically picks a container instance
+	container_strategy: 'round-robin',
+	max_containers: 5,
+	// ... other options
 });
 ```
 
@@ -957,8 +971,8 @@ import { defineImageTable } from '@delightstack/image-processor/schema';
 
 // Use in your database config
 const database = {
-  image: defineImageTable(),
-  // ... your other tables
+	image: defineImageTable(),
+	// ... your other tables
 };
 ```
 
@@ -1001,50 +1015,50 @@ export { ImageProcessorContainer };
 
 // Your database config includes the image table
 const dbConfig = {
-  image: defineImageTable(),
-  user: defineUserTable(),
+	image: defineImageTable(),
+	user: defineUserTable(),
 };
 
 export class AppDatabase extends DatabaseServer<typeof dbConfig> {
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(dbConfig, () => null, ctx, env);
-  }
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(dbConfig, () => null, ctx, env);
+	}
 
-  /** Process an uploaded image and save the result to the database */
-  async processAndSaveImage(
-    imageProcessorBinding: DurableObjectNamespace,
-    bucket: R2Bucket,
-    key: string,
-  ) {
-    // Process the image
-    const result = await processImage(imageProcessorBinding, {
-      bucket,
-      key,
-      keep_original: true,
-      output_prefix: 'processed/',
-    });
+	/** Process an uploaded image and save the result to the database */
+	async processAndSaveImage(
+		imageProcessorBinding: DurableObjectNamespace,
+		bucket: R2Bucket,
+		key: string,
+	) {
+		// Process the image
+		const result = await processImage(imageProcessorBinding, {
+			bucket,
+			key,
+			keep_original: true,
+			output_prefix: 'processed/',
+		});
 
-    // Save to database (all metadata + variant info)
-    return this.create('image', {
-      key: result.original.key || key,
-      file_name: result.metadata.file_name,
-      mime_type: result.metadata.mime_type,
-      file_size: result.metadata.file_size,
-      width: result.metadata.width,
-      height: result.metadata.height,
-      aspect_ratio: result.metadata.aspect_ratio,
-      has_transparency: result.metadata.has_transparency,
-      is_animated: result.metadata.is_animated,
-      frame_count: result.metadata.frame_count,
-      dominant_color_l: result.metadata.dominant_color.l,
-      dominant_color_c: result.metadata.dominant_color.c,
-      dominant_color_h: result.metadata.dominant_color.h,
-      thumbhash: result.thumbhash,
-      tiny_preview: result.tiny_preview,
-      variants: result.variants,
-      processing_status: 'completed',
-    });
-  }
+		// Save to database (all metadata + variant info)
+		return this.create('image', {
+			key: result.original.key || key,
+			file_name: result.metadata.file_name,
+			mime_type: result.metadata.mime_type,
+			file_size: result.metadata.file_size,
+			width: result.metadata.width,
+			height: result.metadata.height,
+			aspect_ratio: result.metadata.aspect_ratio,
+			has_transparency: result.metadata.has_transparency,
+			is_animated: result.metadata.is_animated,
+			frame_count: result.metadata.frame_count,
+			dominant_color_l: result.metadata.dominant_color.l,
+			dominant_color_c: result.metadata.dominant_color.c,
+			dominant_color_h: result.metadata.dominant_color.h,
+			thumbhash: result.thumbhash,
+			tiny_preview: result.tiny_preview,
+			variants: result.variants,
+			processing_status: 'completed',
+		});
+	}
 }
 ```
 
@@ -1055,34 +1069,34 @@ The key insight for Delightstack integration: **you never need webhooks**. Becau
 ```typescript
 // In your Worker fetch handler
 async function handleUpload(request: Request, env: Env) {
-  const formData = await request.formData();
-  const file = formData.get('file') as File;
+	const formData = await request.formData();
+	const file = formData.get('file') as File;
 
-  // 1. Upload raw file to R2
-  const key = `uploads/${crypto.randomUUID()}/${file.name}`;
-  await env.MEDIA_BUCKET.put(key, file.stream());
+	// 1. Upload raw file to R2
+	const key = `uploads/${crypto.randomUUID()}/${file.name}`;
+	await env.MEDIA_BUCKET.put(key, file.stream());
 
-  // 2. Process it (synchronous -- waits for container to finish)
-  const result = await processImage(env.IMAGE_PROCESSOR, {
-    bucket: env.MEDIA_BUCKET,
-    key,
-  });
+	// 2. Process it (synchronous -- waits for container to finish)
+	const result = await processImage(env.IMAGE_PROCESSOR, {
+		bucket: env.MEDIA_BUCKET,
+		key,
+	});
 
-  // 3. Save metadata to database
-  const dbStub = env.APP_DATABASE.get(env.APP_DATABASE.idFromName('main'));
-  const response = await dbStub.fetch('https://db/image/create', {
-    method: 'POST',
-    body: JSON.stringify({
-      key,
-      ...result.metadata,
-      thumbhash: result.thumbhash,
-      tiny_preview: result.tiny_preview,
-      variants: result.variants,
-    }),
-  });
+	// 3. Save metadata to database
+	const dbStub = env.APP_DATABASE.get(env.APP_DATABASE.idFromName('main'));
+	const response = await dbStub.fetch('https://db/image/create', {
+		method: 'POST',
+		body: JSON.stringify({
+			key,
+			...result.metadata,
+			thumbhash: result.thumbhash,
+			tiny_preview: result.tiny_preview,
+			variants: result.variants,
+		}),
+	});
 
-  // 4. Return to client
-  return Response.json({ ok: true, image: await response.json() });
+	// 4. Return to client
+	return Response.json({ ok: true, image: await response.json() });
 }
 ```
 
@@ -1096,35 +1110,41 @@ The user uploads an image, and in a single HTTP request-response cycle: the file
 
 ```typescript
 class ImageProcessorError extends Error {
-  code: string;
-  status: number;
-  details?: Record<string, unknown>;
+	code: string;
+	status: number;
+	details?: Record<string, unknown>;
 }
 
 // Validation errors (4xx) -- the input is bad
-class ValidationError extends ImageProcessorError { status = 400; }
+class ValidationError extends ImageProcessorError {
+	status = 400;
+}
 
 // Processing errors (5xx) -- something went wrong during processing
-class ProcessingError extends ImageProcessorError { status = 500; }
+class ProcessingError extends ImageProcessorError {
+	status = 500;
+}
 
 // Timeout errors (504) -- processing took too long
-class TimeoutError extends ImageProcessorError { status = 504; }
+class TimeoutError extends ImageProcessorError {
+	status = 504;
+}
 ```
 
 ### Error Codes
 
-| Code | HTTP Status | When |
-|------|-------------|------|
-| `FILE_NOT_FOUND` | 404 | R2 key doesn't exist |
-| `FILE_TOO_LARGE` | 400 | Exceeds size limit |
-| `DIMENSIONS_TOO_LARGE` | 400 | Exceeds pixel limit |
-| `UNSUPPORTED_FORMAT` | 400 | Unrecognized or blocked format |
-| `TOO_MANY_FRAMES` | 400 | Animated image exceeds frame limit |
-| `CORRUPTED_FILE` | 400 | Can't decode the image |
-| `SVG_MALICIOUS` | 400 | SVG contains scripts or dangerous content |
-| `PROCESSING_TIMEOUT` | 504 | Took longer than 60 seconds |
-| `CONTAINER_UNAVAILABLE` | 503 | Container failed to start |
-| `INTERNAL_ERROR` | 500 | Unexpected error |
+| Code                    | HTTP Status | When                                      |
+| ----------------------- | ----------- | ----------------------------------------- |
+| `FILE_NOT_FOUND`        | 404         | R2 key doesn't exist                      |
+| `FILE_TOO_LARGE`        | 400         | Exceeds size limit                        |
+| `DIMENSIONS_TOO_LARGE`  | 400         | Exceeds pixel limit                       |
+| `UNSUPPORTED_FORMAT`    | 400         | Unrecognized or blocked format            |
+| `TOO_MANY_FRAMES`       | 400         | Animated image exceeds frame limit        |
+| `CORRUPTED_FILE`        | 400         | Can't decode the image                    |
+| `SVG_MALICIOUS`         | 400         | SVG contains scripts or dangerous content |
+| `PROCESSING_TIMEOUT`    | 504         | Took longer than 60 seconds               |
+| `CONTAINER_UNAVAILABLE` | 503         | Container failed to start                 |
+| `INTERNAL_ERROR`        | 500         | Unexpected error                          |
 
 ---
 
@@ -1132,15 +1152,15 @@ class TimeoutError extends ImageProcessorError { status = 504; }
 
 ### Processing Time Estimates
 
-| Input | Size | Estimated Time |
-|-------|------|---------------|
-| JPEG photo (12MP) | 5 MB | 1-3 seconds |
-| PNG with transparency | 10 MB | 2-4 seconds |
-| HEIC from iPhone (48MP) | 8 MB | 3-5 seconds |
-| Camera RAW (NEF, 45MP) | 50 MB | 5-10 seconds |
-| Animated GIF (100 frames) | 20 MB | 5-15 seconds |
-| PDF (first page) | 10 MB | 2-5 seconds |
-| SVG (metadata only) | 100 KB | <0.5 seconds |
+| Input                     | Size   | Estimated Time |
+| ------------------------- | ------ | -------------- |
+| JPEG photo (12MP)         | 5 MB   | 1-3 seconds    |
+| PNG with transparency     | 10 MB  | 2-4 seconds    |
+| HEIC from iPhone (48MP)   | 8 MB   | 3-5 seconds    |
+| Camera RAW (NEF, 45MP)    | 50 MB  | 5-10 seconds   |
+| Animated GIF (100 frames) | 20 MB  | 5-15 seconds   |
+| PDF (first page)          | 10 MB  | 2-5 seconds    |
+| SVG (metadata only)       | 100 KB | <0.5 seconds   |
 
 Add ~2-3 seconds for cold start if the container was sleeping.
 
@@ -1148,10 +1168,10 @@ Add ~2-3 seconds for cold start if the container was sleeping.
 
 Using `standard-1` instance (0.5 vCPU, 4 GiB RAM):
 
-| Scenario | Monthly Cost |
-|----------|-------------|
-| 100 images/day, container sleeps most of the time | ~$2-5/month |
-| 1,000 images/day, container active ~4 hours | ~$10-20/month |
+| Scenario                                             | Monthly Cost  |
+| ---------------------------------------------------- | ------------- |
+| 100 images/day, container sleeps most of the time    | ~$2-5/month   |
+| 1,000 images/day, container active ~4 hours          | ~$10-20/month |
 | 10,000 images/day, container active most of the time | ~$40-80/month |
 
 Plus: Workers requests ($0.30/million), R2 storage ($0.015/GB/month), R2 operations ($4.50/million Class A writes).
@@ -1164,16 +1184,16 @@ Costs are dominated by R2 storage and egress for most workloads, not the contain
 
 ### Why Node.js + Sharp (not Rust, Go, or Python)
 
-| Factor | Node.js + Sharp | Rust | Go | Python |
-|--------|----------------|------|-----|--------|
-| **Processing engine** | libvips (via Sharp) | image-rs or libvips FFI | bimg (libvips) | Pillow or pyvips |
-| **Format breadth** | Excellent (all via libvips) | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins) |
-| **Performance** | Excellent (C-level via libvips) | Excellent (native) | Excellent (C-level via libvips) | Slower (GIL + Python overhead) |
-| **Memory efficiency** | Excellent (libvips streaming) | Good | Excellent (libvips streaming) | Poor (Pillow loads full image) |
-| **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash all npm) | Fragmented | Decent | Rich but slow |
-| **Docker image size** | ~300 MB | ~200 MB | ~250 MB | ~400 MB |
-| **Developer familiarity** | Matches rest of Delightstack (TypeScript) | Different language | Different language | Different language |
-| **Community/maintenance** | Sharp: 29K stars, very active | image-rs: 5K stars | bimg: 4K stars | Pillow: 12K stars |
+| Factor                      | Node.js + Sharp                                    | Rust                                            | Go                               | Python                         |
+| --------------------------- | -------------------------------------------------- | ----------------------------------------------- | -------------------------------- | ------------------------------ |
+| **Processing engine**       | libvips (via Sharp)                                | image-rs or libvips FFI                         | bimg (libvips)                   | Pillow or pyvips               |
+| **Format breadth**          | Excellent (all via libvips)                        | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins)      |
+| **Performance**             | Excellent (C-level via libvips)                    | Excellent (native)                              | Excellent (C-level via libvips)  | Slower (GIL + Python overhead) |
+| **Memory efficiency**       | Excellent (libvips streaming)                      | Good                                            | Excellent (libvips streaming)    | Poor (Pillow loads full image) |
+| **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash all npm) | Fragmented                                      | Decent                           | Rich but slow                  |
+| **Docker image size**       | ~300 MB                                            | ~200 MB                                         | ~250 MB                          | ~400 MB                        |
+| **Developer familiarity**   | Matches rest of Delightstack (TypeScript)          | Different language                              | Different language               | Different language             |
+| **Community/maintenance**   | Sharp: 29K stars, very active                      | image-rs: 5K stars                              | bimg: 4K stars                   | Pillow: 12K stars              |
 
 **Decision: Node.js + Sharp.** Same language as the rest of Delightstack. Sharp has the best libvips binding, the largest community, and the richest ecosystem of complementary packages. The container runs in Docker so we have full access to native dependencies (no Cloudflare Workers restrictions).
 
@@ -1215,23 +1235,14 @@ Recommendation: Start with a single shared container. Add pooling later if throu
 Should we support a fire-and-forget mode for large batch uploads?
 
 The synchronous pattern works great for single image uploads. But for batch processing (e.g., uploading 50 images at once), you'd want to queue them and get results later. Options:
+
 - Use `Promise.all` with multiple `processImage` calls (container processes sequentially)
 - Use Cloudflare Queues for batching
 - Use Cloudflare Workflows for complex multi-step pipelines
 
 Recommendation: Start synchronous-only. Add queue-based batch processing as a later feature.
 
-### 3. WebP Fallback Variants
-
-Should we also generate WebP variants alongside AVIF for older browser support?
-
-- AVIF support is now universal in evergreen browsers
-- WebP would roughly double storage costs
-- Could be an opt-in config option
-
-Recommendation: AVIF only by default. Allow users to add WebP variants via the `extra_variants` config.
-
-### 4. Image Optimization Profiles
+### 3. Image Optimization Profiles
 
 Should we provide named profiles for common use cases?
 
@@ -1255,7 +1266,7 @@ processImage(env.IMAGE_PROCESSOR, {
 });
 ```
 
-### 5. Image Cropping
+### 4. Image Cropping
 
 Should the processor support cropping (e.g., square crop for avatars)?
 
@@ -1340,8 +1351,8 @@ This package aims to make image processing on Cloudflare as simple as:
 
 ```typescript
 const result = await processImage(env.IMAGE_PROCESSOR, {
-  bucket: env.MEDIA_BUCKET,
-  key: 'uploads/photo.jpg',
+	bucket: env.MEDIA_BUCKET,
+	key: 'uploads/photo.jpg',
 });
 
 // result.thumbhash → "3OcRJYB4d3h/iIeHeEh3eIhw+j2w"
