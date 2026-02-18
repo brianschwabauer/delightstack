@@ -253,7 +253,9 @@ The user's `alarm()` method delegates to `processAlarm()`:
 ```typescript
 // In the user's DatabaseServer subclass
 class AppDatabase extends DatabaseServer<typeof dbConfig> {
-	readonly images = imageProcessing(this, { /* ... */ });
+	readonly images = imageProcessing(this, {
+		/* ... */
+	});
 
 	async alarm() {
 		// Delegate image processing work to the helper.
@@ -297,7 +299,12 @@ async processAlarm(): Promise<void> {
 				continue;
 			}
 
-			const result = await containerStub.process(await input.arrayBuffer());
+			// The container handles variant skipping (based on original dimensions)
+			// and compress_original (full-res AVIF re-encode with metadata preserved).
+			const result = await containerStub.process(await input.arrayBuffer(), {
+				variants: this.options.variants, // VariantConfig[] with fit field
+				compress_original: this.options.compress_original ?? true,
+			});
 
 			// Check if image was deleted while processing
 			try {
@@ -323,6 +330,26 @@ async processAlarm(): Promise<void> {
 						customMetadata: {
 							width: String(variant.width),
 							height: String(variant.height),
+						},
+					},
+				);
+			}
+
+			// If compress_original is true (default), replace the raw upload
+			// with the compressed original returned by the container
+			if (result.compressed_original) {
+				await this.options.bucket().put(
+					`${image.base_path}/original`,
+					result.compressed_original.data,
+					{
+						httpMetadata: {
+							contentType: result.compressed_original.mime_type,
+							cacheControl: 'public, max-age=31536000, immutable',
+						},
+						customMetadata: {
+							width: String(result.compressed_original.width),
+							height: String(result.compressed_original.height),
+							...(image.file_name ? { 'original-filename': image.file_name } : {}),
 						},
 					},
 				);
@@ -358,6 +385,7 @@ async processAlarm(): Promise<void> {
 ```
 
 **Why alarms?** Alarms are the canonical way to do background work in Durable Objects. They're durable -- if the DO instance is evicted and re-created, the alarm still fires. This means:
+
 - If a deploy happens mid-processing, pending images will be retried
 - If the DO crashes, it recovers and picks up where it left off
 - No images are lost in the queue
@@ -397,7 +425,7 @@ class ImageProcessorContainer extends Container {
 	// Public method = automatically exposed as RPC endpoint
 	async process(
 		imageData: ArrayBuffer,
-		options?: VariantConfig[],
+		options?: { variants?: VariantConfig[]; compress_original?: boolean },
 	): Promise<ContainerProcessResult> {
 		// Stream input to the Docker container
 		const port = this.ctx.container.getTcpPort(8080);
@@ -415,6 +443,7 @@ class ImageProcessorContainer extends Container {
 ```
 
 Key RPC details:
+
 - **Structured Clone serialization**: RPC uses Structured Clone (not JSON), so `ArrayBuffer` works natively for passing image data. Max payload is 32 MiB; for larger files, `ReadableStream` is used.
 - **Type safety**: `DurableObjectNamespace<ImageProcessorContainer>` gives full TypeScript autocomplete on the stub.
 - **Container is stateless**: It processes bytes and returns bytes. All state management and R2 I/O lives in the caller.
@@ -479,11 +508,25 @@ interface ProcessImageOptions {
 	keep_original?: boolean;
 
 	/**
+	 * Whether to re-encode the original at full resolution as AVIF.
+	 * Default: true. Only applies when keep_original is true.
+	 *
+	 * When true, the "original" stored in R2 is a full-resolution AVIF
+	 * re-encode (preserving EXIF/ICC metadata) rather than the raw upload.
+	 * This significantly reduces storage for large camera uploads
+	 * (e.g. 8 MB JPEG → 3 MB AVIF at full resolution).
+	 *
+	 * When false, the raw uploaded file is kept as-is.
+	 */
+	compress_original?: boolean;
+
+	/**
 	 * Custom variant configuration. If omitted, uses these defaults:
-	 * - { name: 'default', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 }
-	 * - { name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4 }
+	 * - { name: 'default', max_dimension: 2048, format: 'avif', quality: 50, effort: 4, fit: 'inside' }
+	 * - { name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4, fit: 'cover' }
 	 *
 	 * The thumbhash is always generated regardless of variants.
+	 * Variants whose max_dimension exceeds the original's long edge are skipped.
 	 */
 	variants?: VariantConfig[];
 }
@@ -492,7 +535,7 @@ interface VariantConfig {
 	/** Unique name for this variant (used in output key and result lookup) */
 	name: string;
 
-	/** Maximum long-edge dimension in pixels. Image is fit inside this box. */
+	/** Maximum dimension in pixels. Behavior depends on `fit`. */
 	max_dimension: number;
 
 	/** Output format. For animated inputs, 'avif' automatically falls back to 'webp'. */
@@ -503,6 +546,20 @@ interface VariantConfig {
 
 	/** Encoding effort (0-9, higher = slower + better compression). Only applies to AVIF. Default: 4 */
 	effort?: number;
+
+	/**
+	 * Resize strategy.
+	 *
+	 * - 'inside': The long edge fits within max_dimension (image fits inside a square box).
+	 *   A 4000x3000 photo at max_dimension: 2048 → 2048x1536.
+	 *   Default for variants with max_dimension > 1024.
+	 *
+	 * - 'cover': The short edge fits within max_dimension (no cropping, just resize).
+	 *   A 4000x3000 photo at max_dimension: 640 → 854x640.
+	 *   Guarantees the image is always at least max_dimension pixels on its shortest side.
+	 *   Default for variants with max_dimension <= 1024.
+	 */
+	fit?: 'inside' | 'cover';
 }
 
 /** Options for db.images.upload() (Mode 1: database integration) */
@@ -524,6 +581,13 @@ interface UploadOptions {
 
 	/** Whether to keep the original file after processing. Default: true */
 	keep_original?: boolean;
+
+	/**
+	 * Whether to re-encode the original at full resolution as AVIF.
+	 * Default: true. Only applies when keep_original is true.
+	 * See ProcessImageOptions.compress_original for details.
+	 */
+	compress_original?: boolean;
 
 	/** Custom variant configuration. If omitted, uses the default variants. */
 	variants?: VariantConfig[];
@@ -552,8 +616,13 @@ interface ProcessImageResult {
 
 	/**
 	 * The generated output variants.
-	 * If keep_original is true (default), the original file is included as a variant
-	 * with name: 'original'. If keep_original is false, the original variant is absent.
+	 * If keep_original is true (default), the original is included as a variant
+	 * with name: 'original'. When compress_original is true (default), the
+	 * "original" is a full-resolution AVIF re-encode with EXIF/ICC metadata
+	 * preserved. When compress_original is false, it's the raw uploaded file.
+	 *
+	 * Variants whose max_dimension exceeds the original's long edge are skipped
+	 * (the image is already smaller than the variant would produce).
 	 */
 	variants: OutputVariant[];
 }
@@ -655,6 +724,9 @@ interface OutputVariant {
 
 	/** Whether this variant is animated */
 	is_animated: boolean;
+
+	/** Fit strategy used: 'inside' (long edge) or 'cover' (short edge). Absent for 'original'. */
+	fit?: 'inside' | 'cover';
 }
 ```
 
@@ -673,14 +745,14 @@ Input
   ├── 4. Extract metadata (dimensions, color, alpha, ICC, etc.)
   ├── 5. Extract colors → background (1x1 average) + accent (node-vibrant) → OKLCH
   │
-  ├── 6. Generate variants:
-  │   ├── "default" → 2048px long-edge, AVIF q50 effort 4, strip metadata
-  │   ├── "thumbnail" → 640px long-edge, AVIF q50 effort 4, strip metadata
+  ├── 6. Generate variants (skip any where original's long edge < max_dimension):
+  │   ├── "default" → fit inside 2048px, AVIF q50 effort 4, strip metadata
+  │   ├── "thumbnail" → fit cover 640px, AVIF q50 effort 4, strip metadata
   │   └── (any custom variants from config)
   │
   ├── 7. Generate ThumbHash from resized preview
   │
-  ├── 8. Original: keep or delete per config
+  ├── 8. Original: compress (full-res AVIF, preserve EXIF/ICC), keep raw, or delete per config
   │
   └── 9. Return result
 ```
@@ -692,9 +764,9 @@ Input
   │
   ├── 1-5. Same as static (metadata from first frame)
   │
-  ├── 6. Generate variants:
-  │   ├── "default" → 2048px, animated WebP (AVIF doesn't support animation)
-  │   ├── "thumbnail" → 640px, animated WebP
+  ├── 6. Generate variants (skip any where original's long edge < max_dimension):
+  │   ├── "default" → fit inside 2048px, animated WebP (AVIF doesn't support animation)
+  │   ├── "thumbnail" → fit cover 640px, animated WebP
   │   └── (custom variants forced to WebP/GIF if animated)
   │
   ├── 7. ThumbHash from first frame
@@ -777,8 +849,7 @@ The `thumbHashToDataURL()` function generates a PNG data URL from a thumbhash �
 	src={thumbHashToDataURL(image.thumbhash)}
 	width={image.width}
 	height={image.height}
-	alt=""
-/>
+	alt="" />
 ```
 
 The decoded image is ~32x32 pixels (dimensions are embedded in the hash, not related to the original image size). When scaled up by the browser, it looks like a smooth blurry preview — the right colors and shapes.
@@ -792,8 +863,7 @@ For fullscreen hero images, add a CSS blur to smooth any banding from the extrem
 	style="filter: blur(20px); transform: scale(1.1)"
 	width={image.width}
 	height={image.height}
-	alt=""
-/>
+	alt="" />
 ```
 
 The `scale(1.1)` prevents blurred edges from being visible. For cards, grids, and thumbnails, the raw thumbhash looks fine without blur.
@@ -804,10 +874,17 @@ The `scale(1.1)` prevents blurred edges from being visible. For cards, grids, an
 
 ### Default Variants
 
-| Variant     | Max Dimension | Format | Quality | Notes                                    |
-| ----------- | ------------- | ------ | ------- | ---------------------------------------- |
-| `default`   | 2048px        | AVIF   | 50      | Primary viewing size. WebP for animated. |
-| `thumbnail` | 640px         | AVIF   | 50      | List/grid views. WebP for animated.      |
+| Variant     | Max Dimension | Fit      | Format | Quality | Notes                                                                   |
+| ----------- | ------------- | -------- | ------ | ------- | ----------------------------------------------------------------------- |
+| `default`   | 2048px        | `inside` | AVIF   | 50      | Long edge fits. Primary viewing size. WebP for animated.                |
+| `thumbnail` | 640px         | `cover`  | AVIF   | 50      | Short edge fits. Guarantees minimum width for grids. WebP for animated. |
+
+**Fit strategies:**
+
+- `inside` (default for max_dimension > 1024): The **long edge** fits within max_dimension. A 4000x3000 image at 2048px → 2048x1536. The image fits inside a square box. Good for "full size" variants where you want to cap the maximum dimension.
+- `cover` (default for max_dimension ≤ 1024): The **short edge** fits within max_dimension, no cropping. A 4000x3000 image at 640px → 854x640. Guarantees the image is always at least `max_dimension` pixels wide (or tall for landscape), which is useful for grid layouts where cards have a fixed width.
+
+**Variant skipping:** If the original image's long edge is already smaller than a variant's `max_dimension`, that variant is skipped. For example, uploading a 500x400 image will skip the `default` (2048px) variant entirely — only `thumbnail` (640px) is generated if the short edge (400px) is smaller than 640px. The `original` variant (compressed or raw) is always kept if `keep_original` is true.
 
 ### Output File Naming
 
@@ -828,19 +905,29 @@ Each R2 object is stored with metadata that enables direct serving without a dat
 
 **Processed variants** (default, thumbnail, custom):
 
-| Metadata | Type | Value | Purpose |
-| --- | --- | --- | --- |
-| `httpMetadata.contentType` | HTTP | e.g. `image/avif` | Browser renders correctly |
-| `httpMetadata.cacheControl` | HTTP | `public, max-age=31536000, immutable` | Aggressive caching (variants are immutable, keyed by unique ID) |
-| `customMetadata.width` | Custom | e.g. `"2048"` | `<img width>` without DB lookup |
-| `customMetadata.height` | Custom | e.g. `"1365"` | `<img height>` without DB lookup |
+| Metadata                    | Type   | Value                                 | Purpose                                                         |
+| --------------------------- | ------ | ------------------------------------- | --------------------------------------------------------------- |
+| `httpMetadata.contentType`  | HTTP   | e.g. `image/avif`                     | Browser renders correctly                                       |
+| `httpMetadata.cacheControl` | HTTP   | `public, max-age=31536000, immutable` | Aggressive caching (variants are immutable, keyed by unique ID) |
+| `customMetadata.width`      | Custom | e.g. `"2048"`                         | `<img width>` without DB lookup                                 |
+| `customMetadata.height`     | Custom | e.g. `"1365"`                         | `<img height>` without DB lookup                                |
 
-**Original file:**
+**Original file** (when `compress_original: true`, the default):
 
-| Metadata | Type | Value | Purpose |
-| --- | --- | --- | --- |
-| `httpMetadata.contentType` | HTTP | From `File.type` at upload | Best-guess MIME until processing detects the real type |
-| `customMetadata.original-filename` | Custom | e.g. `"vacation-photo.jpg"` | Display name for downloads |
+| Metadata                           | Type   | Value                                 | Purpose                        |
+| ---------------------------------- | ------ | ------------------------------------- | ------------------------------ |
+| `httpMetadata.contentType`         | HTTP   | `image/avif`                          | Re-encoded format              |
+| `httpMetadata.cacheControl`        | HTTP   | `public, max-age=31536000, immutable` | Immutable (keyed by unique ID) |
+| `customMetadata.width`             | Custom | e.g. `"4000"`                         | Full original dimensions       |
+| `customMetadata.height`            | Custom | e.g. `"3000"`                         | Full original dimensions       |
+| `customMetadata.original-filename` | Custom | e.g. `"vacation-photo.jpg"`           | Display name for downloads     |
+
+**Original file** (when `compress_original: false`):
+
+| Metadata                           | Type   | Value                       | Purpose                                                |
+| ---------------------------------- | ------ | --------------------------- | ------------------------------------------------------ |
+| `httpMetadata.contentType`         | HTTP   | From `File.type` at upload  | Best-guess MIME until processing detects the real type |
+| `customMetadata.original-filename` | Custom | e.g. `"vacation-photo.jpg"` | Display name for downloads                             |
 
 Rich metadata (colors, thumbhash, aspect ratio, animation info) belongs in the database record, not on R2 objects — it's used for UI rendering, not file serving.
 
@@ -859,6 +946,44 @@ When the input is animated:
 - JPEG variants (if requested) get a white background composited
 - ThumbHash encodes the alpha channel
 
+### Compressed Original
+
+When `compress_original` is true (the default) and `keep_original` is true, the raw uploaded file at `{base_path}/original` is **replaced** after processing with a full-resolution AVIF re-encode. This preserves the original dimensions but significantly reduces file size:
+
+| Scenario              | Raw Upload | Compressed Original | Savings |
+| --------------------- | ---------- | ------------------- | ------- |
+| 12MP JPEG from camera | 8 MB       | ~3 MB (AVIF q50)    | ~60%    |
+| 48MP HEIC from iPhone | 12 MB      | ~5 MB (AVIF q50)    | ~58%    |
+| 45MP RAW (NEF)        | 50 MB      | ~8 MB (AVIF q50)    | ~84%    |
+| PNG screenshot        | 2 MB       | ~0.5 MB (AVIF q50)  | ~75%    |
+
+Key behaviors:
+
+- **EXIF and ICC metadata are preserved** in the compressed original (unlike resized variants which strip metadata). This is important for photographers who want to retain camera data, GPS coordinates, copyright info, etc.
+- The compressed original uses the same quality/effort settings as the `default` variant (q50, effort 4) by default.
+- When `compress_original` is false, the raw uploaded file is kept untouched. Useful when you need the exact original bytes (e.g. for print workflows or legal/archival purposes).
+- For animated inputs, the compressed original is animated WebP (AVIF doesn't support animation).
+
+### Variant Skipping
+
+Variants are skipped when the original image is already smaller than the variant would produce. The skip logic uses the **long edge** of the original:
+
+```
+original long edge = max(original.width, original.height)
+
+for each variant:
+  if original_long_edge < variant.max_dimension:
+    skip this variant
+```
+
+Examples:
+
+- A 500x400 image (long edge: 500px) → skips `default` (2048px), generates `thumbnail` (640px) only if the fit logic would actually reduce the image
+- A 1000x800 image (long edge: 1000px) → skips `default` (2048px), generates `thumbnail` (640px)
+- A 4000x3000 image (long edge: 4000px) → generates both `default` (2048px) and `thumbnail` (640px)
+
+The `original` variant is never skipped — it's always kept (compressed or raw) when `keep_original` is true.
+
 ---
 
 ## Metadata Extraction
@@ -867,28 +992,28 @@ All extracted metadata is returned in the `metadata` field. Here's everything Sh
 
 ### Core Metadata (always available)
 
-| Field                | Source                         | Description                            |
-| -------------------- | ------------------------------ | -------------------------------------- |
-| `file_name`          | Upload option                  | Original filename if provided, or null |
-| `file_extension`     | `file_name`                    | Lowercase extension without dot        |
-| `mime_type`          | `file-type` (magic bytes)      | True MIME type regardless of extension |
-| `file_size`          | R2 object info                 | Size in bytes                          |
-| `width`              | `sharp.metadata()`             | Pixels (after orientation correction)  |
-| `height`             | `sharp.metadata()`             | Pixels (after orientation correction)  |
-| `aspect_ratio`       | Computed                       | `width / height` as a float            |
-| `has_transparency`   | `sharp.metadata().hasAlpha`    | Whether alpha channel exists           |
-| `is_animated`        | `sharp.metadata().pages > 1`   | Whether image has multiple frames      |
-| `frame_count`        | `sharp.metadata().pages`       | Number of frames                       |
-| `color_space`        | `sharp.metadata().space`       | sRGB, CMYK, etc.                       |
-| `bit_depth`          | `sharp.metadata().depth`       | Bits per channel                       |
-| `channels`           | `sharp.metadata().channels`    | Number of channels                     |
+| Field                  | Source                         | Description                            |
+| ---------------------- | ------------------------------ | -------------------------------------- |
+| `file_name`            | Upload option                  | Original filename if provided, or null |
+| `file_extension`       | `file_name`                    | Lowercase extension without dot        |
+| `mime_type`            | `file-type` (magic bytes)      | True MIME type regardless of extension |
+| `file_size`            | R2 object info                 | Size in bytes                          |
+| `width`                | `sharp.metadata()`             | Pixels (after orientation correction)  |
+| `height`               | `sharp.metadata()`             | Pixels (after orientation correction)  |
+| `aspect_ratio`         | Computed                       | `width / height` as a float            |
+| `has_transparency`     | `sharp.metadata().hasAlpha`    | Whether alpha channel exists           |
+| `is_animated`          | `sharp.metadata().pages > 1`   | Whether image has multiple frames      |
+| `frame_count`          | `sharp.metadata().pages`       | Number of frames                       |
+| `color_space`          | `sharp.metadata().space`       | sRGB, CMYK, etc.                       |
+| `bit_depth`            | `sharp.metadata().depth`       | Bits per channel                       |
+| `channels`             | `sharp.metadata().channels`    | Number of channels                     |
 | `background_color`     | 1x1 resize + `culori`          | Average color as OKLCH `{ l, c, h }`   |
 | `background_color_css` | Computed                       | `oklch(0.65 0.04 210)` CSS string      |
 | `accent_color`         | `node-vibrant` + `culori`      | Vibrant color as OKLCH `{ l, c, h }`   |
 | `accent_color_css`     | Computed                       | `oklch(0.63 0.21 1)` CSS string        |
-| `exif_orientation`   | `sharp.metadata().orientation` | EXIF orientation tag (1-8)             |
-| `has_icc_profile`    | `sharp.metadata().hasProfile`  | ICC profile presence                   |
-| `density`            | `sharp.metadata().density`     | DPI/PPI if available                   |
+| `exif_orientation`     | `sharp.metadata().orientation` | EXIF orientation tag (1-8)             |
+| `has_icc_profile`      | `sharp.metadata().hasProfile`  | ICC profile presence                   |
+| `density`              | `sharp.metadata().density`     | DPI/PPI if available                   |
 
 ### Color Extraction: Background + Accent
 
@@ -900,7 +1025,10 @@ Two colors are extracted from each image, both in OKLCH:
 import { oklch, parse } from 'culori';
 
 // Resize to 1x1 = true average of all pixels
-const { data } = await sharp(input).resize(1, 1).raw().toBuffer({ resolveWithObject: true });
+const { data } = await sharp(input)
+	.resize(1, 1)
+	.raw()
+	.toBuffer({ resolveWithObject: true });
 const [r, g, b] = data;
 const hex = `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 const bg = oklch(parse(hex));
@@ -915,7 +1043,8 @@ import { Vibrant } from 'node-vibrant/node';
 
 const palette = await Vibrant.from(input).getPalette();
 // Fallback chain: Vibrant > DarkVibrant > LightVibrant > Muted > null
-const swatch = palette.Vibrant ?? palette.DarkVibrant ?? palette.LightVibrant ?? palette.Muted;
+const swatch =
+	palette.Vibrant ?? palette.DarkVibrant ?? palette.LightVibrant ?? palette.Muted;
 
 if (swatch) {
 	const accent = oklch(parse(swatch.hex));
@@ -1075,12 +1204,40 @@ export default {
 			bucket: env.MEDIA_BUCKET,
 			key: 'uploads/photo.jpg',
 			keep_original: true,
+			compress_original: true, // re-encode as full-res AVIF (default)
 			// Override default variants or add custom ones
+			// Variants larger than the source image are automatically skipped.
 			variants: [
-				{ name: 'default', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 },
-				{ name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4 },
-				{ name: 'social', max_dimension: 1200, format: 'jpeg', quality: 85 },
-				{ name: 'banner', max_dimension: 1920, format: 'webp', quality: 75 },
+				{
+					name: 'default',
+					max_dimension: 2048,
+					format: 'avif',
+					quality: 50,
+					effort: 4,
+					fit: 'inside',
+				},
+				{
+					name: 'thumbnail',
+					max_dimension: 640,
+					format: 'avif',
+					quality: 50,
+					effort: 4,
+					fit: 'cover',
+				},
+				{
+					name: 'social',
+					max_dimension: 1200,
+					format: 'jpeg',
+					quality: 85,
+					fit: 'inside',
+				},
+				{
+					name: 'banner',
+					max_dimension: 1920,
+					format: 'webp',
+					quality: 75,
+					fit: 'inside',
+				},
 			],
 		});
 		return Response.json(result);
@@ -1294,7 +1451,7 @@ class AppDatabase extends DatabaseServer<typeof dbConfig> {
 
 This creates a helper with these methods:
 
-```typescript
+````typescript
 interface ImageProcessingHelper {
 	/**
 	 * Save the original file to R2, create a pending image record,
@@ -1303,9 +1460,9 @@ interface ImageProcessingHelper {
 	 * Accepts a File (auto-extracts file_name), ReadableStream, or ArrayBuffer.
 	 *
 	 * Generates a unique ID used for both the record and R2 keys:
-	 *   {prefix}/{id}/original   ← raw upload
-	 *   {prefix}/{id}/default    ← processed variant (after alarm)
-	 *   {prefix}/{id}/thumbnail  ← processed variant (after alarm)
+	 *   {prefix}/{id}/original   ← compressed original (full-res AVIF) or raw upload
+	 *   {prefix}/{id}/default    ← processed variant (after alarm, skipped if too large)
+	 *   {prefix}/{id}/thumbnail  ← processed variant (after alarm, skipped if too large)
 	 */
 	upload(
 		data: File | ReadableStream | ArrayBuffer,
@@ -1344,9 +1501,10 @@ interface ImageProcessingHelper {
 	 */
 	processAlarm(): Promise<void>;
 }
-```
+````
 
 **How this works internally:**
+
 - `imageProcessing()` receives a reference to the `DatabaseServer` instance.
 - It uses `this.db.create()`, `this.db.update()`, `this.db.get()`, `this.db.delete()` for all database operations — it's just calling the existing database methods.
 - It accesses the Container DO binding and R2 bucket via the lazy getters `container()` and `bucket()`.
@@ -1362,7 +1520,9 @@ Because of this, the `imageProcessing()` helper does **not** override or monkey-
 
 ```typescript
 class AppDatabase extends DatabaseServer<typeof dbConfig> {
-	readonly images = imageProcessing(this, { /* ... */ });
+	readonly images = imageProcessing(this, {
+		/* ... */
+	});
 
 	async alarm() {
 		// Image processing: processes pending images, reschedules if more remain
@@ -1385,6 +1545,7 @@ if (existing === null || Date.now() < existing) {
 ```
 
 This means:
+
 - If no alarm is pending, one is set for immediate execution.
 - If an alarm is already pending for later, it's moved earlier (so images start processing sooner).
 - If an alarm is already pending for now or sooner, nothing changes.
@@ -1395,11 +1556,15 @@ This means:
 1. `upload()` creates a record with `processing_status = 'pending'` and ensures an alarm is scheduled
 2. When the alarm fires, the user's `alarm()` calls `this.images.processAlarm()`
 3. `processAlarm()` queries the `image` table for pending records (up to 10 per cycle)
-4. For each: marks it `'processing'`, calls the Container DO via RPC, writes variants to R2
-5. On success: updates the record to `'processed'` with all metadata
-6. On failure: updates the record to `'failed'` with an error code
-7. If the image record was deleted during processing: cleans up variant files from R2
-8. If more pending images remain, schedules another alarm (using "set only if earlier")
+4. For each: marks it `'processing'`, calls the Container DO via RPC (passing variant configs + `compress_original`)
+5. The container skips variants whose `max_dimension` exceeds the original's long edge
+6. The container applies the correct fit strategy (`inside` or `cover`) per variant
+7. If `compress_original` is true, the container produces a full-res AVIF re-encode with metadata preserved
+8. Back in the DO: writes variants to R2, replaces the raw original with the compressed version (if applicable)
+9. On success: updates the record to `'processed'` with all metadata
+10. On failure: updates the record to `'failed'` with an error code
+11. If the image record was deleted during processing: cleans up variant files from R2
+12. If more pending images remain, schedules another alarm (using "set only if earlier")
 
 This makes the system self-healing. If the DO restarts, the alarm fires again and retries any images stuck in `'pending'` or `'processing'` state.
 
@@ -1471,6 +1636,7 @@ export class AppDatabase extends DatabaseServer<typeof dbConfig> {
 		container: () => this.env.IMAGE_PROCESSOR,
 		bucket: () => this.env.MEDIA_BUCKET,
 		keep_original: true,
+		compress_original: true, // re-encode original as full-res AVIF (default)
 	});
 
 	constructor(ctx: DurableObjectState, env: Env) {
@@ -1596,8 +1762,8 @@ interface CreateImageHandleOptions {
 ```typescript
 const imageHandle = createImageHandle({
 	bucket: (event) => event.platform!.env.MEDIA_BUCKET,
-	prefix: 'images',           // default
-	cdn_prefix: '/cdn/image',   // default
+	prefix: 'images', // default
+	cdn_prefix: '/cdn/image', // default
 	default_variant: 'default', // default
 	placeholder: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
 		<rect width="400" height="300" fill="#f5f5f5"/>
@@ -1726,8 +1892,7 @@ export function createImageHandle(options: CreateImageHandleOptions): Handle {
 	src="/cdn/image/{image.id}/default"
 	width={image.width}
 	height={image.height}
-	alt=""
-/>
+	alt="" />
 ```
 
 ---
@@ -1812,16 +1977,16 @@ Costs are dominated by R2 storage and egress for most workloads, not the contain
 
 ### Why Bun + Sharp (not Node.js, Rust, Go, or Python)
 
-| Factor                      | Bun + Sharp                                            | Rust                                            | Go                               | Python                         |
-| --------------------------- | ------------------------------------------------------ | ----------------------------------------------- | -------------------------------- | ------------------------------ |
-| **Processing engine**       | libvips (via Sharp)                                    | image-rs or libvips FFI                         | bimg (libvips)                   | Pillow or pyvips               |
-| **Format breadth**          | Excellent (all via libvips)                            | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins)      |
-| **Performance**             | Excellent (C-level via libvips, fast startup via Bun)  | Excellent (native)                              | Excellent (C-level via libvips)  | Slower (GIL + Python overhead) |
-| **Memory efficiency**       | Excellent (libvips streaming)                          | Good                                            | Excellent (libvips streaming)    | Poor (Pillow loads full image) |
-| **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash, node-vibrant all npm) | Fragmented                          | Decent                           | Rich but slow                  |
-| **Docker image size**       | ~300 MB                                                | ~200 MB                                         | ~250 MB                          | ~400 MB                        |
-| **Developer familiarity**   | Matches rest of Delightstack (TypeScript)              | Different language                              | Different language               | Different language             |
-| **Community/maintenance**   | Sharp: 29K stars, very active                          | image-rs: 5K stars                              | bimg: 4K stars                   | Pillow: 12K stars              |
+| Factor                      | Bun + Sharp                                                      | Rust                                            | Go                               | Python                         |
+| --------------------------- | ---------------------------------------------------------------- | ----------------------------------------------- | -------------------------------- | ------------------------------ |
+| **Processing engine**       | libvips (via Sharp)                                              | image-rs or libvips FFI                         | bimg (libvips)                   | Pillow or pyvips               |
+| **Format breadth**          | Excellent (all via libvips)                                      | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins)      |
+| **Performance**             | Excellent (C-level via libvips, fast startup via Bun)            | Excellent (native)                              | Excellent (C-level via libvips)  | Slower (GIL + Python overhead) |
+| **Memory efficiency**       | Excellent (libvips streaming)                                    | Good                                            | Excellent (libvips streaming)    | Poor (Pillow loads full image) |
+| **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash, node-vibrant all npm) | Fragmented                                      | Decent                           | Rich but slow                  |
+| **Docker image size**       | ~300 MB                                                          | ~200 MB                                         | ~250 MB                          | ~400 MB                        |
+| **Developer familiarity**   | Matches rest of Delightstack (TypeScript)                        | Different language                              | Different language               | Different language             |
+| **Community/maintenance**   | Sharp: 29K stars, very active                                    | image-rs: 5K stars                              | bimg: 4K stars                   | Pillow: 12K stars              |
 
 **Decision: Bun + Sharp.** Same language as the rest of Delightstack (TypeScript). Bun provides faster startup times and native TypeScript execution (no build step in the container). Sharp has the best libvips binding, the largest community, and the richest ecosystem of complementary packages. The container runs in Docker so we have full access to native dependencies (no Cloudflare Workers restrictions).
 
@@ -1863,6 +2028,7 @@ Recommendation: Start with a single shared container. Add pooling later if throu
 The alarm handler processes pending images sequentially within a single DO instance. For batch uploads (e.g., 50 images at once), they'll be processed one-at-a-time per alarm invocation (with batching of ~10 per alarm cycle).
 
 Should we:
+
 - Process multiple images per alarm cycle in parallel? (risk: memory pressure)
 - Rate-limit how many images can be queued per DO? (prevent abuse)
 - Use multiple container instances for parallelism? (adds complexity)
@@ -1897,7 +2063,7 @@ processImage(env.IMAGE_PROCESSOR, {
 
 Should the processor support cropping (e.g., square crop for avatars)?
 
-Currently the design only "fits" images inside a max dimension (no cropping). Smart cropping (attention-based or face-detection) is more complex. Could be a future addition.
+Currently the design supports two fit modes (`inside` and `cover`) but neither crops — they only resize. Smart cropping (attention-based or face-detection) is more complex. Could be a future addition.
 
 ---
 
