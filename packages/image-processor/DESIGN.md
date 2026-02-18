@@ -76,6 +76,7 @@ Worker ── processImage(env.IMAGE_PROCESSOR, { bucket, key }) ── waits 2-
 2. **`processImage()`** -- Standalone helper for synchronous processing (Mode 2).
 3. **`imageProcessing()`** -- Factory that creates a helper object with `upload()`, `delete()`, etc. for use inside a DatabaseServer subclass (Mode 1).
 4. **`defineImageTable()`** -- Database schema helper for `@delightstack/database`.
+5. **`createImageHandle()`** -- SvelteKit server hook factory for serving images from R2 on your own domain.
 
 The container sleeps when idle (scale-to-zero). Cold starts take ~2-3 seconds. In Mode 2, the `processImage()` call awaits the result synchronously via RPC -- Workers have no wall-clock time limit, so waiting 2-30 seconds is fine. In Mode 1, the worker returns immediately and processing happens asynchronously inside the database DO.
 
@@ -1528,6 +1529,210 @@ You might wonder: why not have the database DO also be the Container? Two reason
 2. **Separation of concerns**: The database DO may have thousands of instances (one per user/org). The container is a heavy Docker VM that should have a small pool of instances. Coupling them would mean spinning up a Docker container for every database DO instance, which is wasteful and expensive.
 
 The `imageProcessing()` helper bridges this gap cleanly. From the user's perspective, `db.images.upload(file)` is a single call that handles ID generation, R2 storage, record creation, and alarm scheduling. The cross-DO communication is an implementation detail they never see.
+
+### SvelteKit CDN Hook
+
+The package exports `createImageHandle()`, a factory that returns a SvelteKit `Handle` for serving images from R2 on your own domain.
+
+**5. Add the CDN hook to your SvelteKit app:**
+
+```typescript
+// src/hooks.server.ts
+import { sequence } from '@sveltejs/kit/hooks';
+import { createImageHandle } from '@delightstack/image-processor';
+
+const imageHandle = createImageHandle({
+	bucket: (event) => event.platform!.env.MEDIA_BUCKET,
+});
+
+export const handle = sequence(imageHandle /* , authHandle, ... */);
+```
+
+That's it. Images are now served at `/cdn/image/{id}/{variant}`:
+
+- `/cdn/image/01JQ7X8K9M3N/default` — default variant
+- `/cdn/image/01JQ7X8K9M3N/thumbnail` — thumbnail variant
+- `/cdn/image/01JQ7X8K9M3N/original` — original file (with download filename)
+- `/cdn/image/01JQ7X8K9M3N` — omit variant to get the default
+
+**Options:**
+
+```typescript
+import type { RequestEvent } from '@sveltejs/kit';
+
+interface CreateImageHandleOptions {
+	/**
+	 * Function to get the R2 bucket binding from the request event.
+	 * Called on every image request.
+	 */
+	bucket: (event: RequestEvent) => R2Bucket;
+
+	/**
+	 * R2 key prefix. Must match the prefix used in imageProcessing() options.
+	 * Default: 'images'
+	 */
+	prefix?: string;
+
+	/**
+	 * URL path prefix for image routes.
+	 * Default: '/cdn/image'
+	 */
+	cdn_prefix?: string;
+
+	/**
+	 * Variant to serve when none is specified in the URL.
+	 * Default: 'default'
+	 */
+	default_variant?: string;
+
+	/**
+	 * SVG string to serve as a 404 placeholder when an image doesn't exist.
+	 * Served with Content-Type: image/svg+xml and Cache-Control: no-cache
+	 * (so the browser retries after the image is processed).
+	 * Default: built-in "Image not found" SVG
+	 */
+	placeholder?: string;
+}
+```
+
+**Full example with all options:**
+
+```typescript
+const imageHandle = createImageHandle({
+	bucket: (event) => event.platform!.env.MEDIA_BUCKET,
+	prefix: 'images',           // default
+	cdn_prefix: '/cdn/image',   // default
+	default_variant: 'default', // default
+	placeholder: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
+		<rect width="400" height="300" fill="#f5f5f5"/>
+		<text x="200" y="155" text-anchor="middle" fill="#aaa"
+			font-family="system-ui,sans-serif" font-size="14">Not found</text>
+	</svg>`,
+});
+```
+
+**Implementation (inside the package):**
+
+```typescript
+import type { Handle, RequestEvent } from '@sveltejs/kit';
+
+const DEFAULT_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+	<rect width="400" height="300" fill="#f0f0f0"/>
+	<text x="200" y="158" text-anchor="middle" fill="#999" font-family="system-ui,sans-serif" font-size="16">Image not found</text>
+</svg>`;
+
+export function createImageHandle(options: CreateImageHandleOptions): Handle {
+	const prefix = options.prefix ?? 'images';
+	const cdn_prefix = (options.cdn_prefix ?? '/cdn/image').replace(/\/$/, '') + '/';
+	const default_variant = options.default_variant ?? 'default';
+	const placeholder = options.placeholder ?? DEFAULT_PLACEHOLDER;
+
+	function notFound(): Response {
+		return new Response(placeholder, {
+			status: 404,
+			headers: {
+				'Content-Type': 'image/svg+xml',
+				'Cache-Control': 'no-cache',
+			},
+		});
+	}
+
+	return async ({ event, resolve }) => {
+		if (!event.url.pathname.startsWith(cdn_prefix)) {
+			return resolve(event);
+		}
+
+		const path = event.url.pathname.slice(cdn_prefix.length);
+		const segments = path.split('/').filter(Boolean);
+
+		if (segments.length === 0) {
+			return notFound();
+		}
+
+		const id = segments[0];
+		const variant = segments[1] || default_variant;
+		const key = `${prefix}/${id}/${variant}`;
+
+		const bucket = options.bucket(event);
+
+		// Conditional request: return 304 if the client already has this version
+		const ifNoneMatch = event.request.headers.get('If-None-Match');
+		if (ifNoneMatch) {
+			const head = await bucket.head(key);
+			if (head && ifNoneMatch === head.httpEtag) {
+				return new Response(null, { status: 304 });
+			}
+		}
+
+		const object = await bucket.get(key);
+
+		if (!object) {
+			return notFound();
+		}
+
+		const headers = new Headers();
+		headers.set(
+			'Content-Type',
+			object.httpMetadata?.contentType ?? 'application/octet-stream',
+		);
+		headers.set(
+			'Cache-Control',
+			object.httpMetadata?.cacheControl ?? 'public, max-age=31536000, immutable',
+		);
+		headers.set('ETag', object.httpEtag);
+		headers.set('X-Content-Type-Options', 'nosniff');
+
+		// Expose dimensions as response headers (from R2 custom metadata)
+		if (object.customMetadata?.width) {
+			headers.set('X-Image-Width', object.customMetadata.width);
+		}
+		if (object.customMetadata?.height) {
+			headers.set('X-Image-Height', object.customMetadata.height);
+		}
+
+		// For the original variant, set Content-Disposition so browsers
+		// use the original filename when downloading
+		if (variant === 'original' && object.customMetadata?.['original-filename']) {
+			headers.set(
+				'Content-Disposition',
+				`inline; filename="${object.customMetadata['original-filename']}"`,
+			);
+		}
+
+		return new Response(object.body, { headers });
+	};
+}
+```
+
+**Key behaviors:**
+
+- **No database lookup.** Everything needed to serve the file lives on the R2 object itself (Content-Type, Cache-Control, dimensions). The CDN path is fast and independent of the database DO.
+- **304 Not Modified.** Respects `If-None-Match` headers using the R2 object's ETag. After the first load, subsequent requests get a 304 with zero body transfer.
+- **Immutable caching.** Processed variants are keyed by unique ID, so they never change. `max-age=31536000, immutable` tells browsers and CDNs to cache forever.
+- **Placeholder 404.** Returns a customizable SVG placeholder instead of a broken image icon. Uses `Cache-Control: no-cache` so the browser retries once the image is processed.
+- **Content-Disposition for originals.** When serving the `original` variant, sets the original filename so "Save Image As" uses the right name.
+- **Composable.** Returns a standard SvelteKit `Handle` — use with `sequence()` alongside auth hooks, logging, etc.
+
+**Usage in Svelte templates:**
+
+```svelte
+<!-- Basic usage -->
+<img src="/cdn/image/{image.id}/default" alt="" />
+
+<!-- Thumbnail -->
+<img src="/cdn/image/{image.id}/thumbnail" alt="" />
+
+<!-- Omit variant for default -->
+<img src="/cdn/image/{image.id}" alt="" />
+
+<!-- With dimensions from the image record (avoids layout shift) -->
+<img
+	src="/cdn/image/{image.id}/default"
+	width={image.width}
+	height={image.height}
+	alt=""
+/>
+```
 
 ---
 
