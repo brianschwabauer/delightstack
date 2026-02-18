@@ -236,6 +236,7 @@ async upload(
 		base_path,
 		processing_status: 'pending',
 		file_name,
+		alt_text: options?.alt_text ?? null,
 		// ... minimal fields, rest filled in after processing
 	});
 
@@ -594,6 +595,14 @@ interface UploadOptions {
 	 * Provide explicitly to override.
 	 */
 	file_name?: string;
+
+	/**
+	 * Alt text for the image. Stored in the database record.
+	 * Can be set at upload time or updated later via a dashboard.
+	 * The <Image> component uses this as a fallback when no explicit alt prop is provided.
+	 * Default: null.
+	 */
+	alt_text?: string;
 
 	/** Whether to keep the original file after processing. Default: true */
 	keep_original?: boolean;
@@ -1739,6 +1748,7 @@ CREATE TABLE image (
   id TEXT PRIMARY KEY,                  -- Timestamp-based ID (also used in R2 keys)
   base_path TEXT NOT NULL,              -- R2 path prefix: {prefix}/{id}
   file_name TEXT,                       -- Original filename if provided (metadata only)
+  alt_text TEXT,                        -- Alt text for the image (nullable, updatable)
   processing_status TEXT NOT NULL,      -- 'pending' | 'processing' | 'processed' | 'failed'
   error_code TEXT,                      -- Error code if failed
 
@@ -1769,7 +1779,7 @@ CREATE TABLE image (
 );
 ```
 
-Note: Most metadata fields are nullable because they're populated asynchronously after processing completes. Only `id`, `base_path`, and `processing_status` are guaranteed at upload time. `file_name` is optional metadata provided by the caller.
+Note: Most metadata fields are nullable because they're populated asynchronously after processing completes. Only `id`, `base_path`, and `processing_status` are guaranteed at upload time. `file_name` and `alt_text` are optional metadata provided by the caller — `alt_text` can also be updated later (e.g. via a dashboard).
 
 ### Full End-to-End Example
 
@@ -2064,7 +2074,7 @@ A Svelte 5 component for displaying images from the image processor. Handles thu
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
 | `image` | `ImageRecord` | (required) | Image record from the database. |
-| `alt` | `string` | `undefined` | Alt text. Falls back to `image.file_name` without extension (e.g. `"vacation-photo"`). |
+| `alt` | `string` | `undefined` | Alt text. Falls back to `image.alt_text` (from DB) → `image.file_name` without extension → `""`. |
 | `fit` | `'cover' \| 'contain' \| 'fill' \| 'none' \| 'scale-down'` | `'cover'` | CSS `object-fit` value. |
 | `loading` | `'lazy' \| 'eager'` | `'lazy'` | Browser loading strategy. |
 | `ssr_placeholder` | `boolean` | `false` | Decode thumbhash on the server during SSR. Use for above-the-fold hero images. |
@@ -2164,6 +2174,7 @@ export function imageURL(
 			id: string;
 			processing_status: string;
 			file_name: string | null;
+			alt_text: string | null;
 			width: number | null;
 			height: number | null;
 			aspect_ratio: number | null;
@@ -2197,9 +2208,9 @@ export function imageURL(
 		style = '',
 	}: Props = $props();
 
-	// Alt text: explicit prop → file_name without extension → empty string
+	// Alt text: explicit prop → image.alt_text from DB → file_name without extension → empty string
 	const alt_text = $derived(
-		alt ?? image.file_name?.replace(/\.[^.]+$/, '') ?? '',
+		alt ?? image.alt_text ?? image.file_name?.replace(/\.[^.]+$/, '') ?? '',
 	);
 
 	// Parse variants from JSON string or use directly
@@ -2355,11 +2366,17 @@ export function imageURL(
 
 ### Usage Examples
 
-**Basic — alt text derived from file_name automatically:**
+**Basic — alt text derived automatically from the image record:**
 
 ```svelte
 <Image image={photo} />
-<!-- alt="vacation-photo" (from file_name "vacation-photo.jpg") -->
+<!-- Uses image.alt_text from DB, or file_name without extension, or "" -->
+```
+
+**With alt_text set at upload time:**
+
+```typescript
+const image = await db.images.upload(file, { alt_text: 'A sunset over the ocean' });
 ```
 
 **Explicit alt text:**
