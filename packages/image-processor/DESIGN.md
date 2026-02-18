@@ -36,7 +36,7 @@ The database DO orchestrates everything. Upload returns immediately; processing 
 User Upload
   │
   ▼
-Worker ── db.images.upload(key, stream) ── return 201
+Worker ── db.images.upload(file) ── return 201
                         │
                         ▼
                   Database DO
@@ -161,9 +161,9 @@ export default {
 
 		// upload() saves the original to R2 and creates a pending record.
 		// Processing happens asynchronously in the background via DO alarm.
-		const key = `uploads/${crypto.randomUUID()}/${file.name}`;
+		// File name is extracted automatically from the File object.
 		const db = env.APP_DATABASE.getByName('main');
-		const image = await db.images.upload(key, file.stream());
+		const image = await db.images.upload(file);
 
 		return new Response(null, {
 			status: 201,
@@ -173,7 +173,7 @@ export default {
 };
 ```
 
-That's it. One call. The user uploads a file and gets a 201 back. The `upload()` method saves the original to R2, creates the pending record, and schedules an alarm for processing. The image record transitions from `'pending'` → `'processing'` → `'processed'` (or `'failed'`). The frontend can show the thumbhash/tiny preview as soon as the record is marked `'processed'`.
+That's it. One call. The user uploads a file and gets a 201 back. The `upload()` method generates a unique ID, saves the original to R2 at `/{prefix}/{id}/original`, creates the pending record, and schedules an alarm for processing. The image record transitions from `'pending'` → `'processing'` → `'processed'` (or `'failed'`). The frontend can show the thumbhash/tiny preview as soon as the record is marked `'processed'`.
 
 ### Standalone Setup (without `@delightstack/database`)
 
@@ -199,23 +199,34 @@ export default {
 
 ### How Async Processing Works (Mode 1: Database Integration)
 
-When you call `db.images.upload(key, stream)`, here's what happens:
+When you call `db.images.upload(file)`, here's what happens:
 
 ```typescript
 // Inside the imageProcessing() helper
 async upload(
-	key: string,
-	data: ReadableStream | ArrayBuffer,
+	data: File | ReadableStream | ArrayBuffer,
 	options?: UploadOptions,
 ): Promise<ImageRecord> {
-	// 1. Save the original file to R2
-	await this.options.bucket().put(key, data);
+	// 1. Generate a unique ID for the image (used for record + R2 keys)
+	const id = generateTimestampID();
+	const prefix = options?.prefix ?? 'images';
+	const base_path = `${prefix}/${id}`;
 
-	// 2. Create the image record with status: 'pending'
+	// If data is a File, extract file_name automatically (options.file_name overrides)
+	const file_name = options?.file_name ?? (data instanceof File ? data.name : null);
+	const stream = data instanceof File ? data.stream() : data;
+
+	// 2. Save the original file to R2 (extensionless — MIME type set after processing)
+	await this.options.bucket().put(`${base_path}/original`, stream, {
+		customMetadata: file_name ? { 'original-filename': file_name } : undefined,
+	});
+
+	// 3. Create the image record with status: 'pending'
 	const record = this.db.create('image', {
-		key,
+		id,
+		base_path,
 		processing_status: 'pending',
-		file_name: key.split('/').pop() || key,
+		file_name,
 		// ... minimal fields, rest filled in after processing
 	});
 
@@ -272,7 +283,7 @@ async processAlarm(): Promise<void> {
 			const containerStub = this.options.container().getByName('processor');
 
 			// Read input from R2 and send to container
-			const input = await this.options.bucket().get(image.key);
+			const input = await this.options.bucket().get(`${image.base_path}/original`);
 			if (!input) {
 				this.db.update('image', image.id, {
 					processing_status: 'failed',
@@ -294,9 +305,12 @@ async processAlarm(): Promise<void> {
 				continue;
 			}
 
-			// Write variants to R2
+			// Write variants to R2 (extensionless keys: {base_path}/{variant_name})
 			for (const variant of result.variants) {
-				await this.options.bucket().put(variant.key, variant.data);
+				await this.options.bucket().put(
+					`${image.base_path}/${variant.name}`,
+					variant.data,
+				);
 			}
 
 			// Update the image record with all metadata
@@ -405,7 +419,7 @@ Mode 1 (async):
 
 Worker                 Database DO                 Container DO
   │                       │                              │
-  │── db.images.upload(key, stream)                      │
+  │── db.images.upload(file)                              │
   │                       │── write original to R2       │
   │                       │── create pending record      │
   │◄── 201 + image ID ──  │                              │
@@ -450,12 +464,9 @@ interface ProcessImageOptions {
 	/** Whether to keep the original file after processing. Default: true */
 	keep_original?: boolean;
 
-	/** Prefix for output files. Default: same directory as input */
-	output_prefix?: string;
-
 	/**
 	 * Custom variant configuration. If omitted, uses these defaults:
-	 * - { name: 'standard', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 }
+	 * - { name: 'default', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 }
 	 * - { name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4 }
 	 *
 	 * The tiny base64 preview and thumbhash are always generated regardless of variants.
@@ -478,6 +489,30 @@ interface VariantConfig {
 
 	/** Encoding effort (0-9, higher = slower + better compression). Only applies to AVIF. Default: 4 */
 	effort?: number;
+}
+
+/** Options for db.images.upload() (Mode 1: database integration) */
+interface UploadOptions {
+	/**
+	 * R2 path prefix for all files related to this image.
+	 * Default: 'images'. Files are stored at {prefix}/{id}/{variant_name}.
+	 */
+	prefix?: string;
+
+	/**
+	 * Original filename (e.g. "vacation-photo.jpg").
+	 * Stored as metadata in the image record and as R2 custom metadata
+	 * (x-amz-meta-original-filename). NOT used in R2 keys.
+	 * If data is a File, this is extracted automatically from file.name.
+	 * Provide explicitly to override.
+	 */
+	file_name?: string;
+
+	/** Whether to keep the original file after processing. Default: true */
+	keep_original?: boolean;
+
+	/** Custom variant configuration. If omitted, uses the default variants. */
+	variants?: VariantConfig[];
 }
 ```
 
@@ -509,11 +544,11 @@ interface ProcessImageResult {
 }
 
 interface ImageMetadata {
-	/** Original filename with extension */
-	file_name: string;
+	/** Original filename if provided at upload (e.g. "vacation-photo.jpg"), or null */
+	file_name: string | null;
 
-	/** File extension (lowercase, without dot) */
-	file_extension: string;
+	/** File extension from file_name (lowercase, without dot), or null */
+	file_extension: string | null;
 
 	/** Detected MIME type from file magic bytes (not from extension) */
 	mime_type: string;
@@ -585,10 +620,10 @@ interface ImageMetadata {
 }
 
 interface OutputVariant {
-	/** Variant name (e.g. 'standard', 'thumbnail', 'original') */
+	/** Variant name (e.g. 'default', 'thumbnail', 'original') */
 	name: string;
 
-	/** R2 key where the variant was saved */
+	/** R2 key where the variant was saved (extensionless, e.g. 'images/{id}/default') */
 	key: string;
 
 	/** MIME type of the variant (e.g. 'image/avif', 'image/jpeg') */
@@ -624,7 +659,7 @@ Input
   ├── 5. Extract colors → background (1x1 average) + accent (node-vibrant) → OKLCH
   │
   ├── 6. Generate variants:
-  │   ├── "standard" → 2048px long-edge, AVIF q50 effort 4, strip metadata
+  │   ├── "default" → 2048px long-edge, AVIF q50 effort 4, strip metadata
   │   ├── "thumbnail" → 640px long-edge, AVIF q50 effort 4, strip metadata
   │   ├── "tiny" → 36px long-edge, smallest of AVIF/WebP/JPEG, base64-encode
   │   └── (any custom variants from config)
@@ -644,7 +679,7 @@ Input
   ├── 1-5. Same as static (metadata from first frame)
   │
   ├── 6. Generate variants:
-  │   ├── "standard" → 2048px, animated WebP (AVIF doesn't support animation)
+  │   ├── "default" → 2048px, animated WebP (AVIF doesn't support animation)
   │   ├── "thumbnail" → 640px, animated WebP
   │   ├── "tiny" → 36px from FIRST FRAME only, base64-encode
   │   └── (custom variants forced to WebP/GIF if animated)
@@ -757,19 +792,21 @@ Both the thumbhash AND the tiny base64 preview are generated. They serve slightl
 
 | Variant     | Max Dimension | Format                     | Quality | Notes                                    |
 | ----------- | ------------- | -------------------------- | ------- | ---------------------------------------- |
-| `standard`  | 2048px        | AVIF                       | 50      | Primary viewing size. WebP for animated. |
+| `default`   | 2048px        | AVIF                       | 50      | Primary viewing size. WebP for animated. |
 | `thumbnail` | 640px         | AVIF                       | 50      | List/grid views. WebP for animated.      |
 | `tiny`      | 36px          | smallest of AVIF/WebP/JPEG | 40      | Base64-encoded data URI                  |
 
 ### Output File Naming
 
-```
-{output_prefix}{original_name_without_ext}/{variant_name}.{format}
+R2 keys are **extensionless**. The MIME type is stored in the image record and set via `Content-Type` when serving. This means the frontend can use a stable path like `/images/{id}/default` without knowing the format.
 
-Example:
-  Input:  uploads/user-123/photo.jpg
-  Output: processed/user-123/photo/standard.avif
-          processed/user-123/photo/thumbnail.avif
+```
+{prefix}/{id}/{variant_name}
+
+Example (with default prefix 'images'):
+  images/01JQ7X8K9M3N/original
+  images/01JQ7X8K9M3N/default
+  images/01JQ7X8K9M3N/thumbnail
 ```
 
 ### Animated Image Handling
@@ -798,8 +835,8 @@ All extracted metadata is returned in the `metadata` field. Here's everything Sh
 
 | Field                | Source                         | Description                            |
 | -------------------- | ------------------------------ | -------------------------------------- |
-| `file_name`          | Input key                      | Original filename with extension       |
-| `file_extension`     | Input key                      | Lowercase extension without dot        |
+| `file_name`          | Upload option                  | Original filename if provided, or null |
+| `file_extension`     | `file_name`                    | Lowercase extension without dot        |
 | `mime_type`          | `file-type` (magic bytes)      | True MIME type regardless of extension |
 | `file_size`          | R2 object info                 | Size in bytes                          |
 | `width`              | `sharp.metadata()`             | Pixels (after orientation correction)  |
@@ -1006,7 +1043,7 @@ export default {
 			keep_original: true,
 			// Override default variants or add custom ones
 			variants: [
-				{ name: 'standard', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 },
+				{ name: 'default', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 },
 				{ name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4 },
 				{ name: 'social', max_dimension: 1200, format: 'jpeg', quality: 85 },
 				{ name: 'banner', max_dimension: 1920, format: 'webp', quality: 75 },
@@ -1114,8 +1151,8 @@ Body: raw image bytes
 Response:
 Content-Type: multipart/mixed
 - Part 1: JSON metadata + variant info
-- Part 2: standard.avif binary
-- Part 3: thumbnail.avif binary
+- Part 2: default variant binary
+- Part 3: thumbnail variant binary
 - Part 4: (additional variant binaries)
 ```
 
@@ -1228,11 +1265,16 @@ interface ImageProcessingHelper {
 	/**
 	 * Save the original file to R2, create a pending image record,
 	 * and schedule an alarm for processing.
-	 * Accepts ReadableStream (from file.stream()) or ArrayBuffer.
+	 *
+	 * Accepts a File (auto-extracts file_name), ReadableStream, or ArrayBuffer.
+	 *
+	 * Generates a unique ID used for both the record and R2 keys:
+	 *   {prefix}/{id}/original   ← raw upload
+	 *   {prefix}/{id}/default    ← processed variant (after alarm)
+	 *   {prefix}/{id}/thumbnail  ← processed variant (after alarm)
 	 */
 	upload(
-		key: string,
-		data: ReadableStream | ArrayBuffer,
+		data: File | ReadableStream | ArrayBuffer,
 		options?: UploadOptions,
 	): Promise<ImageRecord>;
 
@@ -1341,9 +1383,9 @@ Creates this table:
 
 ```sql
 CREATE TABLE image (
-  id TEXT PRIMARY KEY,                  -- Timestamp-based ID
-  key TEXT NOT NULL,                    -- R2 key of the input file
-  file_name TEXT NOT NULL,              -- Original filename
+  id TEXT PRIMARY KEY,                  -- Timestamp-based ID (also used in R2 keys)
+  base_path TEXT NOT NULL,              -- R2 path prefix: {prefix}/{id}
+  file_name TEXT,                       -- Original filename if provided (metadata only)
   processing_status TEXT NOT NULL,      -- 'pending' | 'processing' | 'processed' | 'failed'
   error_code TEXT,                      -- Error code if failed
 
@@ -1371,7 +1413,7 @@ CREATE TABLE image (
 );
 ```
 
-Note: Most metadata fields are nullable because they're populated asynchronously after processing completes. Only `id`, `key`, `file_name`, and `processing_status` are set at upload time.
+Note: Most metadata fields are nullable because they're populated asynchronously after processing completes. Only `id`, `base_path`, and `processing_status` are guaranteed at upload time. `file_name` is optional metadata provided by the caller.
 
 ### Full End-to-End Example
 
@@ -1416,9 +1458,8 @@ export default {
 		if (request.method === 'POST' && url.pathname === '/images') {
 			const formData = await request.formData();
 			const file = formData.get('file') as File;
-			const key = `uploads/${crypto.randomUUID()}/${file.name}`;
 
-			const image = await db.images.upload(key, file.stream());
+			const image = await db.images.upload(file);
 			return new Response(null, {
 				status: 201,
 				headers: { Location: `/images/${image.id}` },
@@ -1450,7 +1491,7 @@ You might wonder: why not have the database DO also be the Container? Two reason
 
 2. **Separation of concerns**: The database DO may have thousands of instances (one per user/org). The container is a heavy Docker VM that should have a small pool of instances. Coupling them would mean spinning up a Docker container for every database DO instance, which is wasteful and expensive.
 
-The `imageProcessing()` helper bridges this gap cleanly. From the user's perspective, `db.images.upload(key, stream)` is a single call that handles R2 storage, record creation, and alarm scheduling. The cross-DO communication is an implementation detail they never see.
+The `imageProcessing()` helper bridges this gap cleanly. From the user's perspective, `db.images.upload(file)` is a single call that handles ID generation, R2 storage, record creation, and alarm scheduling. The cross-DO communication is an implementation detail they never see.
 
 ---
 
@@ -1598,19 +1639,19 @@ Should we provide named profiles for common use cases?
 ```typescript
 // E-commerce product images
 processImage(env.IMAGE_PROCESSOR, {
-  profile: 'ecommerce',  // 2048 standard + 640 thumb + 120 tiny + white bg
+  profile: 'ecommerce',  // 2048 default + 640 thumb + 120 tiny + white bg
   ...
 });
 
 // User avatars
 processImage(env.IMAGE_PROCESSOR, {
-  profile: 'avatar',  // 512 standard + 128 thumb + square crop
+  profile: 'avatar',  // 512 default + 128 thumb + square crop
   ...
 });
 
 // Blog/CMS content images
 processImage(env.IMAGE_PROCESSOR, {
-  profile: 'content',  // 1920 standard + 640 thumb + social share variant
+  profile: 'content',  // 1920 default + 640 thumb + social share variant
   ...
 });
 ```
@@ -1701,7 +1742,7 @@ This package aims to make image processing on Cloudflare as simple as:
 
 ```typescript
 // With @delightstack/database — async, non-blocking
-const image = await db.images.upload(key, file.stream());
+const image = await db.images.upload(file);
 // Saves original to R2, returns immediately. Processing happens in the background.
 // image.processing_status === 'pending'
 // Later: 'processed' with all metadata, variants, thumbhash, colors, etc.
@@ -1715,7 +1756,7 @@ const result = await processImage(env.IMAGE_PROCESSOR, {
 // result.tiny_preview → "data:image/avif;base64,AAAAIG..."
 // result.metadata.background_color_css → "oklch(0.65 0.04 210)"
 // result.metadata.accent_color_css → "oklch(0.63 0.21 1)"
-// result.variants[0].key → "processed/photo/standard.avif"
+// result.variants[0].key → "images/01JQ7X8K9M3N/default"
 ```
 
 You give it a bucket and a key. It gives you back everything you need to display that image beautifully on a website, including instant placeholder previews, optimized variants, and rich metadata. No webhooks. No polling. No configuration beyond the basics. With the database integration, the user doesn't even wait -- upload returns immediately and processing happens in the background.
