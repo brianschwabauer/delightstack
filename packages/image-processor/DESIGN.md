@@ -16,6 +16,7 @@ A reusable Cloudflare Container-based image processing package that handles resi
 - [Container Internals](#container-internals)
 - [Cloudflare Integration](#cloudflare-integration)
 - [Delightstack Integration](#delightstack-integration)
+- [Svelte Image Component](#svelte-image-component)
 - [Error Handling](#error-handling)
 - [Cost & Performance Characteristics](#cost--performance-characteristics)
 - [Technology Choices](#technology-choices)
@@ -77,6 +78,9 @@ Worker ── processImage(env.IMAGE_PROCESSOR, { bucket, key }) ── waits 2-
 3. **`imageProcessing()`** -- Factory that creates a helper object with `upload()`, `delete()`, etc. for use inside a DatabaseServer subclass (Mode 1).
 4. **`defineImageTable()`** -- Database schema helper for `@delightstack/database`.
 5. **`createImageHandle()`** -- SvelteKit server hook factory for serving images from R2 on your own domain.
+6. **`Image`** -- Svelte 5 component for displaying images with progressive thumbhash placeholders and responsive srcset.
+7. **`decodeThumbHash()`** -- Helper to decode a base64 thumbhash to a `data:image/png` URL. Works server-side.
+8. **`imageURL()`** -- Helper to build CDN URLs for image variants.
 
 The container sleeps when idle (scale-to-zero). Cold starts take ~2-3 seconds. In Mode 2, the `processImage()` call awaits the result synchronously via RPC -- Workers have no wall-clock time limit, so waiting 2-30 seconds is fine. In Mode 1, the worker returns immediately and processing happens asynchronously inside the database DO.
 
@@ -2051,6 +2055,376 @@ export function createImageHandle(options: CreateImageHandleOptions): Handle {
 
 ---
 
+## Svelte Image Component
+
+A Svelte 5 component for displaying images from the image processor. Handles thumbhash placeholders, responsive srcset, progressive loading, and error recovery.
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `image` | `ImageRecord` | (required) | Image record from the database. |
+| `alt` | `string` | `undefined` | Alt text. Falls back to `image.file_name` without extension (e.g. `"vacation-photo"`). |
+| `fit` | `'cover' \| 'contain' \| 'fill' \| 'none' \| 'scale-down'` | `'cover'` | CSS `object-fit` value. |
+| `loading` | `'lazy' \| 'eager'` | `'lazy'` | Browser loading strategy. |
+| `ssr_placeholder` | `boolean` | `false` | Decode thumbhash on the server during SSR. Use for above-the-fold hero images. |
+| `sizes` | `string` | `'100vw'` | Responsive `sizes` attribute for srcset. Tells the browser how wide the image slot is. |
+| `cdn_prefix` | `string` | `'/cdn/image'` | URL prefix for the CDN hook. |
+| `onload` | `() => void` | `undefined` | Called when the full image loads. |
+| `class` | `string` | `''` | CSS class for the container. |
+| `style` | `string` | `''` | Inline style for the container. |
+
+### Loading Behavior
+
+The component uses three-tier progressive loading:
+
+```
+1. Background color (immediate, from HTML — no JS needed)
+   └── image.background_color as oklch() CSS value
+   └── Prevents white flash, matches the image's average color
+
+2. ThumbHash placeholder (SSR or after JS loads)
+   └── ssr_placeholder: true → decoded on server, in initial HTML (no flash)
+   └── ssr_placeholder: false → decoded on client after JS loads (~32x32 blurred preview)
+
+3. Full image (after browser fetches the best srcset variant)
+   └── Smooth 300ms opacity fade from placeholder to loaded image
+   └── Cached images skip the fade (detected via img.complete)
+```
+
+For a **hero image** above the fold, use `ssr_placeholder` + `loading="eager"` to eliminate any flash:
+
+```svelte
+<Image image={hero} alt="Welcome" ssr_placeholder loading="eager" />
+```
+
+For an **image grid**, use the defaults — the background color shows instantly, the thumbhash appears after JS hydrates, and the full image lazy-loads on scroll:
+
+```svelte
+{#each photos as photo}
+	<Image image={photo} alt={photo.file_name ?? ''} sizes="(max-width: 768px) 50vw, 33vw" />
+{/each}
+```
+
+### Exported Helpers
+
+```typescript
+/**
+ * Decode a base64 thumbhash to a data:image/png URL.
+ * Works server-side (pure JS, no canvas).
+ * Use this outside the component — e.g. in a load function or API response.
+ */
+export function decodeThumbHash(base64: string): string;
+
+/**
+ * Build a CDN URL for an image variant.
+ * Useful for links, downloads, or Open Graph meta tags.
+ */
+export function imageURL(
+	image_id: string,
+	variant?: string,   // Default: 'default'
+	cdn_prefix?: string, // Default: '/cdn/image'
+): string;
+// imageURL('01JQ7X8K9M3N') → '/cdn/image/01JQ7X8K9M3N/default'
+// imageURL('01JQ7X8K9M3N', 'thumbnail') → '/cdn/image/01JQ7X8K9M3N/thumbnail'
+// imageURL('01JQ7X8K9M3N', 'original') → '/cdn/image/01JQ7X8K9M3N/original'
+```
+
+### Component Source
+
+```svelte
+<script lang="ts" module>
+	import { thumbHashToDataURL } from 'thumbhash';
+
+	/** Decode a base64 thumbhash to a data:image/png URL. Works server-side (pure JS). */
+	export function decodeThumbHash(base64: string): string {
+		const binary = atob(base64);
+		const hash = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) {
+			hash[i] = binary.charCodeAt(i);
+		}
+		return thumbHashToDataURL(hash);
+	}
+
+	/** Build a CDN URL for an image variant. */
+	export function imageURL(
+		image_id: string,
+		variant = 'default',
+		cdn_prefix = '/cdn/image',
+	): string {
+		return `${cdn_prefix}/${image_id}/${variant}`;
+	}
+</script>
+
+<script lang="ts">
+	const is_browser = typeof window !== 'undefined';
+
+	interface Props {
+		image: {
+			id: string;
+			processing_status: string;
+			file_name: string | null;
+			width: number | null;
+			height: number | null;
+			aspect_ratio: number | null;
+			thumbhash: string | null;
+			background_color_l: number | null;
+			background_color_c: number | null;
+			background_color_h: number | null;
+			variants: { name: string; width: number; height: number }[] | string | null;
+		};
+		alt?: string;
+		fit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down';
+		loading?: 'lazy' | 'eager';
+		ssr_placeholder?: boolean;
+		sizes?: string;
+		cdn_prefix?: string;
+		onload?: () => void;
+		class?: string;
+		style?: string;
+	}
+
+	let {
+		image,
+		alt,
+		fit = 'cover',
+		loading = 'lazy',
+		ssr_placeholder = false,
+		sizes = '100vw',
+		cdn_prefix = '/cdn/image',
+		onload,
+		class: className = '',
+		style = '',
+	}: Props = $props();
+
+	// Alt text: explicit prop → file_name without extension → empty string
+	const alt_text = $derived(
+		alt ?? image.file_name?.replace(/\.[^.]+$/, '') ?? '',
+	);
+
+	// Parse variants from JSON string or use directly
+	const variants = $derived(
+		!image.variants
+			? []
+			: typeof image.variants === 'string'
+				? JSON.parse(image.variants)
+				: image.variants,
+	);
+
+	// srcset: all non-original variants, ascending by width
+	const srcset = $derived(
+		variants
+			.filter((v: { name: string }) => v.name !== 'original')
+			.sort((a: { width: number }, b: { width: number }) => a.width - b.width)
+			.map(
+				(v: { name: string; width: number }) =>
+					`${cdn_prefix}/${image.id}/${v.name} ${v.width}w`,
+			)
+			.join(', '),
+	);
+
+	// Fallback src: largest non-original variant
+	const src = $derived.by(() => {
+		const best = variants
+			.filter((v: { name: string }) => v.name !== 'original')
+			.sort((a: { width: number }, b: { width: number }) => b.width - a.width)[0];
+		return `${cdn_prefix}/${image.id}/${best?.name ?? 'default'}`;
+	});
+
+	// Background color for immediate placeholder (CSS only, no JS needed)
+	const bg_color = $derived(
+		image.background_color_l != null
+			? `oklch(${image.background_color_l} ${image.background_color_c} ${image.background_color_h})`
+			: undefined,
+	);
+
+	// ThumbHash placeholder:
+	// ssr_placeholder=true  → decoded on server + client (in the initial HTML)
+	// ssr_placeholder=false → decoded on client only (after JS hydrates)
+	const placeholder = $derived.by(() => {
+		if (!image.thumbhash) return null;
+		if (!ssr_placeholder && !is_browser) return null;
+		return decodeThumbHash(image.thumbhash);
+	});
+
+	let img_el = $state<HTMLImageElement>();
+	let loaded = $state(false);
+	let instant = $state(false);
+	let error_count = $state(0);
+	let retry_timer: ReturnType<typeof setTimeout>;
+
+	// Detect cached images — skip the fade transition
+	$effect(() => {
+		if (img_el?.complete && img_el.naturalWidth > 0) {
+			loaded = true;
+			instant = true;
+		}
+	});
+
+	function handleLoad() {
+		loaded = true;
+		onload?.();
+	}
+
+	function handleError() {
+		if (error_count >= 3) return;
+		error_count++;
+		clearTimeout(retry_timer);
+		retry_timer = setTimeout(() => {
+			if (loaded || !img_el) return;
+			const current = img_el.src;
+			img_el.src = '';
+			img_el.src = current;
+		}, error_count ** 2 * 1000); // 1s, 4s, 9s
+	}
+
+	$effect(() => () => clearTimeout(retry_timer));
+
+	const is_ready = $derived(image.processing_status === 'processed');
+</script>
+
+<div
+	class="ds-image {className}"
+	style:background-color={bg_color}
+	style:aspect-ratio={image.aspect_ratio ?? undefined}
+	{style}>
+	{#if placeholder && !loaded}
+		<img
+			class="ds-image-placeholder"
+			src={placeholder}
+			alt=""
+			aria-hidden="true"
+			style:object-fit={fit} />
+	{/if}
+	{#if is_ready}
+		<img
+			bind:this={img_el}
+			class="ds-image-main"
+			class:ds-image-loaded={loaded}
+			class:ds-image-instant={instant}
+			{src}
+			srcset={srcset || undefined}
+			{sizes}
+			alt={alt_text}
+			width={image.width ?? undefined}
+			height={image.height ?? undefined}
+			{loading}
+			style:object-fit={fit}
+			onload={handleLoad}
+			onerror={handleError} />
+	{/if}
+</div>
+
+<style>
+	.ds-image {
+		position: relative;
+		overflow: hidden;
+	}
+
+	.ds-image-placeholder {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		filter: blur(20px);
+		transform: scale(1.1); /* hide blurred edges */
+		z-index: 1;
+		pointer-events: none;
+	}
+
+	.ds-image-main {
+		display: block;
+		width: 100%;
+		height: 100%;
+		position: relative;
+		z-index: 2;
+		opacity: 0;
+		transition: opacity 300ms ease;
+	}
+
+	.ds-image-loaded {
+		opacity: 1;
+	}
+
+	/* Skip transition for cached images */
+	.ds-image-instant {
+		transition: none;
+	}
+</style>
+```
+
+### Usage Examples
+
+**Basic — alt text derived from file_name automatically:**
+
+```svelte
+<Image image={photo} />
+<!-- alt="vacation-photo" (from file_name "vacation-photo.jpg") -->
+```
+
+**Explicit alt text:**
+
+```svelte
+<Image image={photo} alt="A sunset over the ocean" />
+```
+
+**Hero image — SSR placeholder, eager load, no flash:**
+
+```svelte
+<Image image={hero} alt="Welcome to our site" ssr_placeholder loading="eager" />
+```
+
+**Responsive grid — tell the browser each image is ~33% of viewport:**
+
+```svelte
+<div class="grid">
+	{#each photos as photo}
+		<Image image={photo} sizes="(max-width: 768px) 50vw, 33vw" />
+	{/each}
+</div>
+```
+
+**Avatar — square, cover fit:**
+
+```svelte
+<div class="avatar" style="width: 48px; height: 48px; border-radius: 50%; overflow: hidden;">
+	<Image image={user.avatar} alt={user.name} />
+</div>
+```
+
+**Contain fit — diagrams, screenshots:**
+
+```svelte
+<Image image={diagram} alt="Architecture diagram" fit="contain" />
+```
+
+**With onload callback:**
+
+```svelte
+<Image image={photo} onload={() => console.log('Image loaded!')} />
+```
+
+**Building URLs outside the component:**
+
+```svelte
+<script>
+	import { imageURL, decodeThumbHash } from '@delightstack/image-processor';
+</script>
+
+<!-- Open Graph meta tag -->
+<svelte:head>
+	<meta property="og:image" content={imageURL(image.id, 'default')} />
+</svelte:head>
+
+<!-- Download link -->
+<a href={imageURL(image.id, 'original')} download>Download original</a>
+
+<!-- Server-side placeholder in a +page.server.ts load function -->
+<!-- const placeholder_url = decodeThumbHash(image.thumbhash); -->
+```
+
+---
+
 ## Error Handling
 
 ### Error Hierarchy
@@ -2220,8 +2594,10 @@ packages/image-processor/
 │   ├── process.ts             # processImage() standalone helper (Mode 2)
 │   ├── integration.ts         # imageProcessing() factory for DatabaseServer (Mode 1)
 │   ├── schema.ts              # defineImageTable() for @delightstack/database
-│   ├── types.ts               # All TypeScript types
-│   └── errors.ts              # Error classes
+│   ├── Image.svelte            # Svelte 5 image component
+│   ├── image-helpers.ts        # decodeThumbHash(), imageURL()
+│   ├── types.ts                # All TypeScript types
+│   └── errors.ts               # Error classes
 │
 └── tests/
     ├── pipeline.test.ts       # Unit tests for processing pipeline
