@@ -21,7 +21,6 @@ A reusable Cloudflare Container-based image processing package that handles resi
 - [Cost & Performance Characteristics](#cost--performance-characteristics)
 - [Technology Choices](#technology-choices)
 - [Open Questions](#open-questions)
-- [Future Features](#future-features)
 
 ---
 
@@ -132,13 +131,13 @@ import {
 // Re-export for Cloudflare to discover
 export { ImageProcessorContainer };
 
+// Option A: No custom fields — just the built-in image columns
 const dbConfig = {
-	// No custom fields — just the built-in image columns
 	image: defineImageTable(),
 	// ... your other tables
 };
 
-// Or add custom fields via the callback (receives the same schema builder):
+// Option B: Add custom fields via the callback (receives the same schema builder as table())
 const dbConfig = {
 	image: defineImageTable((schema) => ({
 		user_id: schema.string(),
@@ -256,7 +255,7 @@ async upload(
 		...options?.data,
 	});
 
-	// 3. Ensure an alarm is scheduled so processAlarm() runs.
+	// 4. Ensure an alarm is scheduled so processAlarm() runs.
 	//    Uses "set only if earlier" to avoid overwriting a closer alarm
 	//    that may have been set by other code.
 	const existing = await this.db.ctx.storage.getAlarm();
@@ -264,7 +263,7 @@ async upload(
 		await this.db.ctx.storage.setAlarm(Date.now());
 	}
 
-	// 4. Return the record immediately — the caller doesn't wait for processing
+	// 5. Return the record immediately — the caller doesn't wait for processing
 	return record;
 }
 ```
@@ -415,19 +414,41 @@ async processAlarm(): Promise<void> {
 
 ### How Synchronous Processing Works (Mode 2: Standalone)
 
-The `processImage()` helper calls the Container DO via RPC and waits for the result:
+The `processImage()` helper reads from R2, sends the bytes to the Container DO via RPC, writes variants back to R2, and returns the result:
 
 ```typescript
 async function processImage(
 	binding: DurableObjectNamespace<ImageProcessorContainer>,
 	options: ProcessImageOptions,
 ): Promise<ProcessImageResult> {
-	const stub = binding.getByName('image-processor');
+	// 1. Read the input file from R2
+	const object = await options.bucket.get(options.key);
+	if (!object) throw new ImageProcessorError('FILE_NOT_FOUND');
 
-	// Direct RPC call — waits for container to finish (2-30s)
-	// Workers have NO wall-clock time limit.
-	// The await is I/O wait, NOT CPU time.
-	return await stub.process(options);
+	// 2. Call the Container DO via RPC with just the bytes + processing options
+	//    Workers have NO wall-clock time limit. The await is I/O wait, NOT CPU time.
+	const stub = binding.getByName('image-processor');
+	const result = await stub.process(await object.arrayBuffer(), {
+		variants: options.variants,
+		compress_original: options.compress_original,
+		avatar: options.avatar,
+	});
+
+	// 3. Write variants back to R2
+	for (const variant of result.variants) {
+		await options.bucket.put(
+			`${options.key.replace(/\/[^/]+$/, '')}/${variant.name}`,
+			variant.data,
+			{
+				httpMetadata: {
+					contentType: variant.mime_type,
+					cacheControl: 'public, max-age=31536000, immutable',
+				},
+			},
+		);
+	}
+
+	return result;
 }
 ```
 
@@ -602,7 +623,11 @@ interface VariantConfig {
 		/** Repeating text watermark (e.g. '© Acme Photos'). Mutually exclusive with `image`. */
 		text?: string;
 
-		/** URL or path to a watermark image (e.g. a transparent PNG logo). Mutually exclusive with `text`. */
+		/**
+		 * R2 key or URL of a watermark image (e.g. a transparent PNG logo).
+		 * Mutually exclusive with `text`. The caller fetches this before sending
+		 * to the container (which has no internet access).
+		 */
 		image?: string;
 
 		/**
@@ -853,6 +878,9 @@ interface OutputVariant {
 
 	/** Fit strategy used: 'inside' (long edge) or 'cover' (short edge). Absent for 'original'. */
 	fit?: 'inside' | 'cover';
+
+	/** Whether this variant has a watermark applied */
+	watermarked?: boolean;
 }
 ```
 
@@ -1141,7 +1169,7 @@ variants: [
 ]
 ```
 
-**Image watermarks** use a transparent PNG/WebP (e.g. a logo). The image is fetched once per processing job and reused across variants. It's scaled relative to the variant's short edge so it stays proportional at different sizes:
+**Image watermarks** use a transparent PNG/WebP (e.g. a logo). Since the container runs with `enableInternet = false`, the caller (database DO or standalone helper) fetches/reads the watermark image and passes its bytes to the container alongside the source image. The watermark is loaded once per processing job and reused across variants. It's scaled relative to the variant's short edge so it stays proportional at different sizes:
 
 ```typescript
 variants: [
@@ -1630,21 +1658,7 @@ CMD ["bun", "run", "server.ts"]
 
 ### Container HTTP Server
 
-The container runs a minimal HTTP server (Bun's built-in `Bun.serve()`) with a single endpoint:
-
-```
-POST /process
-Content-Type: multipart/form-data
-
-- Part 1: JSON options (processing config)
-- Part 2: Binary image data
-
-Response: multipart/form-data
-- Part 1: JSON result (metadata + variant info)
-- Part 2+: Binary variant data (one part per variant)
-```
-
-Since the DO handles all R2 I/O, the container only needs one endpoint:
+The container runs a minimal HTTP server (Bun's built-in `Bun.serve()`) with a single endpoint. Since the DO handles all R2 I/O, the container only receives bytes and returns bytes:
 
 ```
 POST /process
@@ -1703,25 +1717,6 @@ bucket_name = "my-media"
 [observability]
 enabled = true
 ```
-
-### S3-Compatible Storage (Non-R2)
-
-For S3-compatible buckets other than R2, the standalone `processImage()` accepts an S3 config:
-
-```typescript
-const result = await processImage(env.IMAGE_PROCESSOR, {
-	s3: {
-		endpoint: 'https://s3.us-east-1.amazonaws.com',
-		access_key_id: env.AWS_ACCESS_KEY_ID,
-		secret_access_key: env.AWS_SECRET_ACCESS_KEY,
-		bucket: 'my-bucket',
-		region: 'us-east-1',
-	},
-	key: 'uploads/photo.jpg',
-});
-```
-
-When using R2 (the default and recommended), no credentials are needed -- the R2 bucket binding handles auth natively. The database integration (`imageProcessing()`) uses R2 bindings exclusively.
 
 ### Scaling Considerations
 
@@ -1943,6 +1938,10 @@ CREATE TABLE image (
 ```
 
 Note: Most metadata fields are nullable because they're populated asynchronously after processing completes. Only `id`, `base_path`, and `processing_status` are guaranteed at upload time. `file_name` and `alt_text` are optional metadata provided by the caller — `alt_text` can also be updated later (e.g. via a dashboard).
+
+**Fields in `ImageMetadata` but not in the database schema:** `file_extension`, `color_space`, `bit_depth`, `channels`, `exif_orientation`, `has_icc_profile`, `density`, and `format_info` are returned by the container in `ProcessImageResult.metadata` but are not stored as columns. They're available during processing (e.g. for logging or custom logic) but aren't needed for typical frontend rendering. If you need any of these persisted, add them as custom fields via `defineImageTable()`.
+
+**Computed CSS strings (`background_color_css`, `accent_color_css`) are also not stored as columns.** The database stores the individual OKLCH components (`_l`, `_c`, `_h`) instead, which are more useful — they can be sorted, filtered, and recombined into any CSS format. The `<Image>` component reconstructs the `oklch()` string from the components directly.
 
 With the custom fields example above, the table would also include:
 
@@ -2407,10 +2406,10 @@ export function imageURL(
 				: image.variants,
 	);
 
-	// srcset: all non-original variants, ascending by width
+	// srcset: all non-original, non-watermarked variants, ascending by width
 	const srcset = $derived(
 		variants
-			.filter((v: { name: string }) => v.name !== 'original')
+			.filter((v: { name: string; watermarked?: boolean }) => v.name !== 'original' && !v.watermarked)
 			.sort((a: { width: number }, b: { width: number }) => a.width - b.width)
 			.map(
 				(v: { name: string; width: number }) =>
@@ -2419,10 +2418,10 @@ export function imageURL(
 			.join(', '),
 	);
 
-	// Fallback src: largest non-original variant
+	// Fallback src: largest non-original, non-watermarked variant
 	const src = $derived.by(() => {
 		const best = variants
-			.filter((v: { name: string }) => v.name !== 'original')
+			.filter((v: { name: string; watermarked?: boolean }) => v.name !== 'original' && !v.watermarked)
 			.sort((a: { width: number }, b: { width: number }) => b.width - a.width)[0];
 		return `${cdn_prefix}/${image.id}/${best?.name ?? 'default'}`;
 	});
