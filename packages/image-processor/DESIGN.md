@@ -690,6 +690,33 @@ interface ImageMetadata {
 	/** Accent color as a CSS oklch() string, or null for achromatic images */
 	accent_color_css: string | null;
 
+	/**
+	 * Average perceived brightness (0-1).
+	 * This is the `l` (lightness) component of the background_color OKLCH value.
+	 * Useful for deciding whether to overlay light or dark text on the image.
+	 * 0 = pure black, 1 = pure white. Values below ~0.5 suggest light text.
+	 */
+	luminance: number;
+
+	/**
+	 * Date/time the photo was taken, from EXIF DateTimeOriginal.
+	 * ISO 8601 string (e.g. "2024-08-15T14:30:00").
+	 * Null if no EXIF date is present (e.g. screenshots, generated images).
+	 */
+	date_taken: string | null;
+
+	/**
+	 * GPS latitude from EXIF, in decimal degrees (e.g. 48.8566 for Paris).
+	 * Positive = north, negative = south. Null if no GPS data.
+	 */
+	gps_latitude: number | null;
+
+	/**
+	 * GPS longitude from EXIF, in decimal degrees (e.g. 2.3522 for Paris).
+	 * Positive = east, negative = west. Null if no GPS data.
+	 */
+	gps_longitude: number | null;
+
 	/** EXIF orientation value (1-8) before correction. 1 = no rotation needed */
 	exif_orientation: number;
 
@@ -1011,6 +1038,10 @@ All extracted metadata is returned in the `metadata` field. Here's everything Sh
 | `background_color_css` | Computed                       | `oklch(0.65 0.04 210)` CSS string      |
 | `accent_color`         | `node-vibrant` + `culori`      | Vibrant color as OKLCH `{ l, c, h }`   |
 | `accent_color_css`     | Computed                       | `oklch(0.63 0.21 1)` CSS string        |
+| `luminance`            | `background_color.l`           | Average brightness (0-1), for text overlay decisions |
+| `date_taken`           | EXIF `DateTimeOriginal`        | When the photo was taken (ISO 8601), or null |
+| `gps_latitude`         | EXIF GPS                       | Decimal degrees (positive = north), or null |
+| `gps_longitude`        | EXIF GPS                       | Decimal degrees (positive = east), or null |
 | `exif_orientation`     | `sharp.metadata().orientation` | EXIF orientation tag (1-8)             |
 | `has_icc_profile`      | `sharp.metadata().hasProfile`  | ICC profile presence                   |
 | `density`              | `sharp.metadata().density`     | DPI/PPI if available                   |
@@ -1034,6 +1065,7 @@ const hex = `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
 const bg = oklch(parse(hex));
 // bg = { l: 0.65, c: 0.04, h: 210 }
 // CSS: oklch(0.65 0.04 210)
+// luminance = bg.l (0.65 — use light text if < ~0.5)
 ```
 
 **Accent color** -- the most visually prominent/saturated color that stands out. Computed via `node-vibrant`'s perceptual palette extraction, which uses Modified Median Cut Quantization to cluster colors and identify the "Vibrant" swatch:
@@ -1081,6 +1113,37 @@ Both extractions run in parallel for minimal overhead.
 - **CSS native**: `oklch()` is supported in all modern browsers
 - **Gamut mapping**: Works with wide-gamut displays (Display P3)
 - **Chroma sorting**: `c` directly measures saturation, making it easy to filter or rank colors
+
+### Luminance
+
+The `luminance` field is the `l` component of `background_color` — no extra computation needed. It represents the average perceived brightness of the entire image on a 0-1 scale. Primary use case: deciding text color for overlays.
+
+```typescript
+// Light text on dark images, dark text on light images
+const textColor = image.luminance < 0.5 ? 'white' : 'black';
+```
+
+### EXIF: Date Taken & GPS
+
+Date and GPS coordinates are extracted from EXIF metadata via `exif-reader` (which Sharp can invoke directly):
+
+```typescript
+import exifReader from 'exif-reader';
+
+const { exif } = sharp.metadata();
+const parsed = exif ? exifReader(exif) : null;
+
+const date_taken = parsed?.exif?.DateTimeOriginal?.toISOString() ?? null;
+
+const gps_latitude = parsed?.gps?.GPSLatitude
+	? toDecimalDegrees(parsed.gps.GPSLatitude, parsed.gps.GPSLatitudeRef)
+	: null;
+const gps_longitude = parsed?.gps?.GPSLongitude
+	? toDecimalDegrees(parsed.gps.GPSLongitude, parsed.gps.GPSLongitudeRef)
+	: null;
+```
+
+These fields are null for images without EXIF data (screenshots, programmatically generated images, PNGs, most SVGs). GPS coordinates in particular are only present when the camera/phone had location services enabled.
 
 ---
 
@@ -1603,6 +1666,10 @@ CREATE TABLE image (
   accent_color_l REAL,                 -- Accent OKLCH lightness (nullable for achromatic images)
   accent_color_c REAL,                 -- Accent OKLCH chroma
   accent_color_h REAL,                 -- Accent OKLCH hue
+  luminance REAL,                      -- Average brightness (0-1), same as background_color_l
+  date_taken TEXT,                     -- EXIF DateTimeOriginal as ISO 8601, or null
+  gps_latitude REAL,                   -- Decimal degrees (positive = north), or null
+  gps_longitude REAL,                  -- Decimal degrees (positive = east), or null
   thumbhash TEXT,                      -- ThumbHash base64 (~33 chars)
   variants TEXT,                       -- JSON array of variant info (includes 'original' if kept)
 
