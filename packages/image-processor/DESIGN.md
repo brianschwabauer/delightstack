@@ -40,14 +40,14 @@ A reusable Cloudflare Container-based image processing package that handles resi
 │   │    processImage(env, {        │                 │
 │   │      bucket: 'my-bucket',     │                 │
 │   │      key: 'uploads/photo.jpg' │                 │
-│   │    })                         │ ── fetch() ──►  │
+│   │    })                         │ ── RPC ──────►  │
 │   └───────────────────────────────┘                 │
 │                                                     │
 │   ImageProcessor (Durable Object + Container)       │
 │   ┌─────────────────────────────────────────────┐   │
 │   │  Container class (manages lifecycle)        │   │
 │   │  ┌───────────────────────────────────────┐  │   │
-│   │  │  Docker Container (Node.js + Sharp)   │  │   │
+│   │  │  Docker Container (Bun + Sharp)        │  │   │
 │   │  │                                       │  │   │
 │   │  │  1. Download from R2/S3               │  │   │
 │   │  │  2. Validate & extract metadata       │  │   │
@@ -64,9 +64,9 @@ A reusable Cloudflare Container-based image processing package that handles resi
 The package exports two things:
 
 1. **A Container/Durable Object class** (`ImageProcessorContainer`) that you add to your wrangler config and export from your worker entrypoint.
-2. **A helper function** (`processImage`) that your worker code calls. It handles the Durable Object binding, sends the request, and returns a typed result.
+2. **A helper function** (`processImage`) that your worker code calls. It uses Cloudflare Workers RPC to call a method directly on the Durable Object -- no HTTP request construction or response parsing needed.
 
-The container sleeps when idle (scale-to-zero). Cold starts take ~2-3 seconds. The `processImage()` call awaits the container's HTTP response synchronously -- Workers have no wall-clock time limit on HTTP-triggered requests, so waiting 2-30 seconds for processing is fine. No webhooks, no polling, no queues.
+The container sleeps when idle (scale-to-zero). Cold starts take ~2-3 seconds. The `processImage()` call awaits the result synchronously via RPC -- Workers have no wall-clock time limit, so waiting 2-30 seconds for processing is fine. No webhooks, no polling, no queues.
 
 ---
 
@@ -131,78 +131,95 @@ That's it. Three files touched. No webhook endpoints, no queue consumers, no pol
 
 ### How the Synchronous Call Works
 
-The `processImage()` helper does this internally:
+The `processImage()` helper uses Cloudflare Workers RPC to call a method directly on the Durable Object. Since the `Container` class extends `DurableObject`, any public method on it is automatically exposed as an RPC endpoint. No HTTP request construction, URL routing, or response parsing needed -- it's a direct async method call.
 
 ```typescript
 async function processImage(
-	binding: DurableObjectNamespace,
+	binding: DurableObjectNamespace<ImageProcessorContainer>,
 	options: ProcessImageOptions,
 ): Promise<ProcessImageResult> {
 	// Get a container instance (reuses running containers)
-	const id = binding.idFromName('image-processor');
-	const stub = binding.get(id);
+	const stub = binding.getByName('image-processor');
 
-	// This single fetch call:
+	// Direct RPC method call on the Durable Object:
 	// 1. Wakes the container if sleeping (~2-3s cold start)
-	// 2. Sends the processing request
+	// 2. Reads input from R2 and streams to container
 	// 3. Waits for the container to finish (2-30s)
-	// 4. Returns the result
+	// 4. Writes output variants to R2
+	// 5. Returns the typed result directly
 	//
-	// Workers have NO wall-clock time limit on HTTP requests.
+	// Workers have NO wall-clock time limit.
 	// The await is I/O wait, NOT CPU time. The CPU cost is negligible.
-	const response = await stub.fetch('https://image-processor/process', {
-		method: 'POST',
-		body: JSON.stringify(options),
-		headers: { 'Content-Type': 'application/json' },
-	});
-
-	if (!response.ok) {
-		const error = await response.json();
-		throw new ImageProcessorError(error);
-	}
-
-	return response.json();
+	return await stub.process(options);
 }
 ```
 
-The Container class handles the lifecycle:
+The Container class exposes the `process` RPC method and handles the full lifecycle:
 
 ```typescript
+import { Container } from '@cloudflare/containers';
+
 class ImageProcessorContainer extends Container {
 	defaultPort = 8080;
-	sleepAfter = '5m'; // Sleep after 5 minutes of idle
+	sleepAfter = '5m';
 	enableInternet = false; // No outbound internet needed
 
-	// The container downloads from R2/S3 via a presigned URL
-	// or via the R2 binding passed through the DO
+	// Public method = automatically exposed as RPC endpoint
+	async process(options: ProcessImageOptions): Promise<ProcessImageResult> {
+		// 1. Read input from R2 via this.env.MEDIA_BUCKET
+		const input = await this.env[options.bucket_binding].get(options.key);
+
+		// 2. Stream input to the container for processing
+		const port = this.ctx.container.getTcpPort(8080);
+		const response = await port.fetch('http://localhost/process', {
+			method: 'POST',
+			body: input.body,
+			headers: { 'X-Options': btoa(JSON.stringify(options)) },
+		});
+
+		// 3. Parse multipart response (metadata + variant binaries)
+		const { metadata, variants } = await parseMultipartResponse(response);
+
+		// 4. Write variants to R2
+		for (const variant of variants) {
+			await this.env[options.bucket_binding].put(variant.key, variant.data);
+		}
+
+		// 5. Return typed result (serialized via Structured Clone over RPC)
+		return { ok: true, job_id: crypto.randomUUID(), metadata, variants, ... };
+	}
 }
 ```
+
+Key RPC details:
+- **No URL routing**: Calling `stub.process(options)` invokes the method directly -- no `fetch()`, no URL construction, no JSON serialization/deserialization.
+- **Structured Clone serialization**: RPC uses Structured Clone (not JSON), so `Date`, `ArrayBuffer`, `Map`, `Set`, and typed arrays all work natively. Max payload is 32 MiB; use `ReadableStream` for larger data.
+- **Type safety**: The `DurableObjectNamespace<ImageProcessorContainer>` generic gives full TypeScript autocomplete on the stub.
+- **R2 bindings stay server-side**: R2 buckets can't be passed over RPC, so the DO accesses them via `this.env` -- which is why the DO handles all R2 I/O.
 
 ### R2 Access Pattern
 
-The container itself does not have direct access to R2 bindings (containers are Docker VMs, not Workers). Instead, the Durable Object acts as a proxy:
+The container itself does not have direct access to R2 bindings (containers are Docker VMs, not Workers). The Durable Object handles all storage I/O:
 
-**Option A: Presigned URLs (preferred for large files)**
-The DO generates presigned R2 URLs and passes them to the container. The container downloads/uploads using standard HTTP. Requires `enableInternet = true` for R2 presigned URLs, OR the DO can proxy the data.
+1. The DO reads the input file from R2 and streams it to the container via HTTP.
+2. The container processes the image and returns all outputs (variant binaries + metadata) in a multipart response.
+3. The DO writes each variant back to R2.
 
-**Option B: DO-proxied data**
-The DO reads the file from R2 and streams it to the container in the request body. The container processes it and returns the results in the response, which the DO writes back to R2. This avoids needing internet access but means the DO handles all data transfer.
-
-**Option C: Hybrid (recommended)**
-The DO reads the input from R2 and streams it to the container. The container processes it, and returns all outputs (variants + metadata) in a multipart response. The DO then writes the variants back to R2. This keeps `enableInternet = false` (more secure), keeps the container stateless, and lets the DO handle storage concerns.
+This keeps `enableInternet = false` on the container (more secure), keeps the container fully stateless, and centralizes all storage logic in the DO where it has access to the R2 binding via `this.env`.
 
 ```
 Worker                    DO                          Container
   │                       │                              │
-  │── processImage() ──►  │                              │
-  │                       │── read input from R2 ──►     │
+  │── stub.process() ──►  │                              │
+  │   (RPC call)          │── read input from R2         │
   │                       │── stream to container ──►    │
   │                       │                              │── process
   │                       │                              │── resize
   │                       │                              │── extract metadata
   │                       │  ◄── multipart response ──── │
-  │                       │── write variants to R2 ──►   │
-  │  ◄── result JSON ──── │                              │
+  │                       │── write variants to R2       │
+  │  ◄── result ────────  │                              │
+  │   (RPC return)        │                              │
 ```
 
 ---
@@ -225,40 +242,31 @@ interface ProcessImageOptions {
 	/** Prefix for output files. Default: same directory as input */
 	output_prefix?: string;
 
-	/** Custom variant configuration. Uses sensible defaults if omitted */
+	/**
+	 * Custom variant configuration. If omitted, uses these defaults:
+	 * - { name: 'standard', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 }
+	 * - { name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4 }
+	 *
+	 * The tiny base64 preview and thumbhash are always generated regardless of variants.
+	 */
 	variants?: VariantConfig[];
-
-	/** Custom processing options */
-	processing?: {
-		/** AVIF quality for the standard variant (1-100). Default: 50 */
-		avif_quality?: number;
-
-		/** AVIF encoding effort (0-9, higher = slower + smaller). Default: 4 */
-		avif_effort?: number;
-
-		/** Thumbnail long-edge size in pixels. Default: 640 */
-		thumbnail_size?: number;
-
-		/** Standard variant long-edge size in pixels. Default: 2048 */
-		standard_size?: number;
-
-		/** Size of the tiny base64 preview. Default: 36 */
-		tiny_preview_size?: number;
-	};
 }
 
 interface VariantConfig {
-	/** Unique name for this variant (used in output key) */
+	/** Unique name for this variant (used in output key and result lookup) */
 	name: string;
 
-	/** Maximum long-edge dimension in pixels */
+	/** Maximum long-edge dimension in pixels. Image is fit inside this box. */
 	max_dimension: number;
 
-	/** Output format */
+	/** Output format. For animated inputs, 'avif' automatically falls back to 'webp'. */
 	format: 'avif' | 'webp' | 'jpeg' | 'png';
 
-	/** Quality (1-100) */
+	/** Quality (1-100). Default: 50 for AVIF, 75 for WebP, 80 for JPEG, lossless for PNG */
 	quality?: number;
+
+	/** Encoding effort (0-9, higher = slower + better compression). Only applies to AVIF. Default: 4 */
+	effort?: number;
 }
 ```
 
@@ -281,16 +289,12 @@ interface ProcessImageResult {
 	/** Tiny base64-encoded preview image as a data URI (e.g. "data:image/avif;base64,...") */
 	tiny_preview: string;
 
-	/** The generated output variants */
+	/**
+	 * The generated output variants.
+	 * If keep_original is true (default), the original file is included as a variant
+	 * with name: 'original'. If keep_original is false, the original variant is absent.
+	 */
 	variants: OutputVariant[];
-
-	/** Info about the original file */
-	original: {
-		/** R2 key of the original file (undefined if deleted) */
-		key?: string;
-		/** Whether the original was kept */
-		kept: boolean;
-	};
 }
 
 interface ImageMetadata {
@@ -333,11 +337,28 @@ interface ImageMetadata {
 	/** Number of channels (3 for RGB, 4 for RGBA, etc.) */
 	channels: number;
 
-	/** Dominant color in OKLCH format { l: 0-1, c: 0-0.4, h: 0-360 } */
-	dominant_color: { l: number; c: number; h: number };
+	/**
+	 * Background color in OKLCH format { l: 0-1, c: 0-0.4, h: 0-360 }.
+	 * The average color of the image -- suitable as a background behind or replacing the image.
+	 * Computed by resizing to 1x1 pixel, giving the true perceptual average of all pixels.
+	 */
+	background_color: { l: number; c: number; h: number };
 
-	/** Dominant color as a CSS oklch() string */
-	dominant_color_css: string;
+	/** Background color as a CSS oklch() string (e.g. "oklch(0.65 0.04 210)") */
+	background_color_css: string;
+
+	/**
+	 * Accent color in OKLCH format { l: 0-1, c: 0-0.4, h: 0-360 }.
+	 * The most visually prominent/saturated color that stands out in the image.
+	 * For example, in a mostly gray photo of a person wearing a bright red hat,
+	 * this would be the red of the hat.
+	 * Computed via perceptual palette extraction (node-vibrant's Vibrant swatch).
+	 * May be null for achromatic images (black-and-white, grayscale).
+	 */
+	accent_color: { l: number; c: number; h: number } | null;
+
+	/** Accent color as a CSS oklch() string, or null for achromatic images */
+	accent_color_css: string | null;
 
 	/** EXIF orientation value (1-8) before correction. 1 = no rotation needed */
 	exif_orientation: number;
@@ -353,14 +374,14 @@ interface ImageMetadata {
 }
 
 interface OutputVariant {
-	/** Variant name (e.g. 'standard', 'thumbnail') */
+	/** Variant name (e.g. 'standard', 'thumbnail', 'original') */
 	name: string;
 
 	/** R2 key where the variant was saved */
 	key: string;
 
-	/** Output format */
-	format: 'avif' | 'webp' | 'jpeg' | 'png';
+	/** MIME type of the variant (e.g. 'image/avif', 'image/jpeg') */
+	mime_type: string;
 
 	/** Width in pixels */
 	width: number;
@@ -389,7 +410,7 @@ Input
   ├── 2. Input validation (size, dimensions, format)
   ├── 3. Load with Sharp (auto-rotate from EXIF)
   ├── 4. Extract metadata (dimensions, color, alpha, ICC, etc.)
-  ├── 5. Compute dominant color → OKLCH via culori
+  ├── 5. Extract colors → background (1x1 average) + accent (node-vibrant) → OKLCH
   │
   ├── 6. Generate variants:
   │   ├── "standard" → 2048px long-edge, AVIF q50 effort 4, strip metadata
@@ -579,46 +600,76 @@ All extracted metadata is returned in the `metadata` field. Here's everything Sh
 | `color_space`        | `sharp.metadata().space`       | sRGB, CMYK, etc.                       |
 | `bit_depth`          | `sharp.metadata().depth`       | Bits per channel                       |
 | `channels`           | `sharp.metadata().channels`    | Number of channels                     |
-| `dominant_color`     | `sharp.stats()` + `culori`     | OKLCH `{ l, c, h }`                    |
-| `dominant_color_css` | Computed                       | `oklch(0.65 0.15 250)` CSS string      |
+| `background_color`     | 1x1 resize + `culori`          | Average color as OKLCH `{ l, c, h }`   |
+| `background_color_css` | Computed                       | `oklch(0.65 0.04 210)` CSS string      |
+| `accent_color`         | `node-vibrant` + `culori`      | Vibrant color as OKLCH `{ l, c, h }`   |
+| `accent_color_css`     | Computed                       | `oklch(0.63 0.21 1)` CSS string        |
 | `exif_orientation`   | `sharp.metadata().orientation` | EXIF orientation tag (1-8)             |
 | `has_icc_profile`    | `sharp.metadata().hasProfile`  | ICC profile presence                   |
 | `density`            | `sharp.metadata().density`     | DPI/PPI if available                   |
 
-### Dominant Color in OKLCH
+### Color Extraction: Background + Accent
+
+Two colors are extracted from each image, both in OKLCH:
+
+**Background color** -- the average color of the image, suitable for use as a placeholder background or card color. Computed by resizing the image to 1x1 pixel (Sharp's lanczos3 kernel computes a weighted mean of all pixel colors):
 
 ```typescript
-import { converter } from 'culori';
+import { oklch, parse } from 'culori';
 
-const toOklch = converter('oklch');
-const stats = await sharp(input).stats();
-const { r, g, b } = stats.dominant;
-
-const oklch = toOklch({ mode: 'rgb', r: r / 255, g: g / 255, b: b / 255 });
-// oklch = { mode: 'oklch', l: 0.65, c: 0.15, h: 250 }
-// CSS: oklch(0.65 0.15 250)
+// Resize to 1x1 = true average of all pixels
+const { data } = await sharp(input).resize(1, 1).raw().toBuffer({ resolveWithObject: true });
+const [r, g, b] = data;
+const hex = `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+const bg = oklch(parse(hex));
+// bg = { l: 0.65, c: 0.04, h: 210 }
+// CSS: oklch(0.65 0.04 210)
 ```
 
-OKLCH is ideal because:
+**Accent color** -- the most visually prominent/saturated color that stands out. Computed via `node-vibrant`'s perceptual palette extraction, which uses Modified Median Cut Quantization to cluster colors and identify the "Vibrant" swatch:
 
-- **Perceptually uniform**: Equal numeric changes = equal visual changes
-- **Adjustable lightness**: Change `l` to make the color lighter/darker for backgrounds vs accents
-- **CSS native**: `oklch()` is supported in all modern browsers
-- **Gamut mapping**: Works with wide-gamut displays (Display P3)
+```typescript
+import { Vibrant } from 'node-vibrant/node';
 
-Example usage in CSS:
+const palette = await Vibrant.from(input).getPalette();
+// Fallback chain: Vibrant > DarkVibrant > LightVibrant > Muted > null
+const swatch = palette.Vibrant ?? palette.DarkVibrant ?? palette.LightVibrant ?? palette.Muted;
+
+if (swatch) {
+	const accent = oklch(parse(swatch.hex));
+	// accent = { l: 0.63, c: 0.21, h: 1 }
+	// CSS: oklch(0.63 0.21 1)
+}
+```
+
+Both extractions run in parallel for minimal overhead.
+
+**Why two colors?** A single "dominant" color is often a muddy average that's neither good as a background nor as an accent. Separating them gives the frontend developer exactly what they need:
 
 ```css
-/* Use dominant color as background (lightened) */
-.card {
-	background: oklch(0.95 0.03 250);
+/* Background color: the overall feel of the image */
+.image-card {
+	background: oklch(0.65 0.04 210);
 }
 
-/* Use dominant color as accent (full saturation) */
-.badge {
-	background: oklch(0.65 0.15 250);
+/* Accent color: the standout color for UI elements */
+.image-badge {
+	background: oklch(0.63 0.21 1);
+}
+
+/* Lighten the background color for a subtle card */
+.image-card--subtle {
+	background: oklch(0.95 0.02 210);
 }
 ```
+
+**Why OKLCH?**
+
+- **Perceptually uniform**: Equal numeric changes = equal visual changes
+- **Adjustable lightness**: Change `l` to make the color lighter/darker without shifting hue
+- **CSS native**: `oklch()` is supported in all modern browsers
+- **Gamut mapping**: Works with wide-gamut displays (Display P3)
+- **Chroma sorting**: `c` directly measures saturation, making it easy to filter or rank colors
 
 ---
 
@@ -723,44 +774,32 @@ RAW support via libraw (native in libvips 8.18+). Covers 1000+ camera models.
 [vars]
 IMAGE_PROCESSOR_MAX_FILE_SIZE = "52428800"     # 50MB default
 IMAGE_PROCESSOR_KEEP_ORIGINAL = "true"          # Keep originals by default
-IMAGE_PROCESSOR_STANDARD_SIZE = "2048"          # Standard variant max dimension
-IMAGE_PROCESSOR_THUMBNAIL_SIZE = "640"          # Thumbnail variant max dimension
-IMAGE_PROCESSOR_AVIF_QUALITY = "50"             # AVIF quality (1-100)
-IMAGE_PROCESSOR_AVIF_EFFORT = "4"               # AVIF effort (0-9)
 IMAGE_PROCESSOR_SLEEP_AFTER = "5m"              # Container idle timeout
 ```
+
+Variant-specific options (dimensions, quality, effort) are configured programmatically via the `variants` array in `ProcessImageOptions`, not via environment variables. This keeps the config type-safe and colocated with the code that uses it.
 
 ### Programmatic Configuration
 
 ```typescript
-import {
-	ImageProcessorContainer,
-	createImageProcessor,
-} from '@delightstack/image-processor';
+import { ImageProcessorContainer, processImage } from '@delightstack/image-processor';
 
 // Re-export for Cloudflare to discover
 export { ImageProcessorContainer };
 
-// Create a configured processor
-const imageProcessor = createImageProcessor({
-	keep_original: true,
-	standard_size: 2048,
-	thumbnail_size: 640,
-	avif_quality: 50,
-	avif_effort: 4,
-	max_file_size: 50 * 1024 * 1024,
-	// Custom variants in addition to defaults
-	extra_variants: [
-		{ name: 'social', max_dimension: 1200, format: 'jpeg', quality: 85 },
-		{ name: 'banner', max_dimension: 1920, format: 'webp', quality: 75 },
-	],
-});
-
 export default {
 	async fetch(request: Request, env: Env) {
-		const result = await imageProcessor.process(env.IMAGE_PROCESSOR, {
+		const result = await processImage(env.IMAGE_PROCESSOR, {
 			bucket: env.MEDIA_BUCKET,
 			key: 'uploads/photo.jpg',
+			keep_original: true,
+			// Override default variants or add custom ones
+			variants: [
+				{ name: 'standard', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 },
+				{ name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4 },
+				{ name: 'social', max_dimension: 1200, format: 'jpeg', quality: 85 },
+				{ name: 'banner', max_dimension: 1920, format: 'webp', quality: 75 },
+			],
 		});
 		return Response.json(result);
 	},
@@ -774,7 +813,7 @@ export default {
 ### Docker Image
 
 ```dockerfile
-FROM node:22-alpine AS builder
+FROM oven/bun:alpine AS builder
 
 # Install build dependencies for custom libvips with full format support
 RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
@@ -803,7 +842,7 @@ RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/c
 # Build libvips 8.18 from source (or use Alpine edge package if available)
 # ... (build steps)
 
-FROM node:22-alpine AS runtime
+FROM oven/bun:alpine AS runtime
 
 # Copy compiled libvips and runtime dependencies
 RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
@@ -820,17 +859,17 @@ RUN apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/c
     fftw-double-libs
 
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --production
+COPY package.json bun.lock ./
+RUN bun install --production
 COPY . .
 
 EXPOSE 8080
-CMD ["node", "server.js"]
+CMD ["bun", "run", "server.ts"]
 ```
 
 **Architecture:** `linux/amd64` (Cloudflare Containers requirement)
 
-**Expected image size:** ~250-350 MB (Node.js + libvips + all codec libraries). This fits comfortably within even the `lite` instance type's 2 GB disk.
+**Expected image size:** ~250-350 MB (Bun + libvips + all codec libraries). This fits comfortably within even the `lite` instance type's 2 GB disk.
 
 **Instance type recommendation:**
 
@@ -839,7 +878,7 @@ CMD ["node", "server.js"]
 
 ### Container HTTP Server
 
-The container runs a minimal HTTP server (e.g., Fastify or plain `http`) with a single endpoint:
+The container runs a minimal HTTP server (Bun's built-in `Bun.serve()`) with a single endpoint:
 
 ```
 POST /process
@@ -853,7 +892,7 @@ Response: multipart/form-data
 - Part 2+: Binary variant data (one part per variant)
 ```
 
-Or, more simply, if we let the DO handle R2 I/O:
+Since the DO handles all R2 I/O, the container only needs one endpoint:
 
 ```
 POST /process
@@ -869,7 +908,7 @@ Content-Type: multipart/mixed
 - Part 4: (additional variant binaries)
 ```
 
-The DO receives this multipart response, writes each variant to R2, and returns the final `ProcessImageResult` JSON to the worker.
+The DO receives this multipart response, writes each variant to R2, and returns the final `ProcessImageResult` to the worker via RPC.
 
 ### Processing Timeout
 
@@ -981,7 +1020,7 @@ This creates a table with columns matching the `ProcessImageResult` structure:
 ```sql
 CREATE TABLE image (
   id TEXT PRIMARY KEY,                  -- Timestamp-based ID
-  key TEXT NOT NULL,                    -- R2 key of original/primary file
+  key TEXT NOT NULL,                    -- R2 key of the input file
   file_name TEXT NOT NULL,              -- Original filename
   mime_type TEXT NOT NULL,              -- Detected MIME type
   file_size INTEGER NOT NULL,           -- Original file size in bytes
@@ -991,12 +1030,15 @@ CREATE TABLE image (
   has_transparency INTEGER NOT NULL,    -- 0 or 1
   is_animated INTEGER NOT NULL,         -- 0 or 1
   frame_count INTEGER NOT NULL,         -- Number of frames
-  dominant_color_l REAL,                -- OKLCH lightness
-  dominant_color_c REAL,                -- OKLCH chroma
-  dominant_color_h REAL,                -- OKLCH hue
+  background_color_l REAL,              -- Background OKLCH lightness
+  background_color_c REAL,              -- Background OKLCH chroma
+  background_color_h REAL,              -- Background OKLCH hue
+  accent_color_l REAL,                  -- Accent OKLCH lightness (nullable)
+  accent_color_c REAL,                  -- Accent OKLCH chroma (nullable)
+  accent_color_h REAL,                  -- Accent OKLCH hue (nullable)
   thumbhash TEXT NOT NULL,              -- ThumbHash base64
   tiny_preview TEXT NOT NULL,           -- Base64 data URI
-  variants TEXT NOT NULL,               -- JSON array of variant info
+  variants TEXT NOT NULL,               -- JSON array of variant info (includes 'original' if kept)
   processing_status TEXT NOT NULL,      -- 'pending' | 'processing' | 'completed' | 'failed'
   error_code TEXT,                      -- Error code if failed
   created_at TEXT NOT NULL,
@@ -1040,7 +1082,7 @@ export class AppDatabase extends DatabaseServer<typeof dbConfig> {
 
 		// Save to database (all metadata + variant info)
 		return this.create('image', {
-			key: result.original.key || key,
+			key,
 			file_name: result.metadata.file_name,
 			mime_type: result.metadata.mime_type,
 			file_size: result.metadata.file_size,
@@ -1050,9 +1092,12 @@ export class AppDatabase extends DatabaseServer<typeof dbConfig> {
 			has_transparency: result.metadata.has_transparency,
 			is_animated: result.metadata.is_animated,
 			frame_count: result.metadata.frame_count,
-			dominant_color_l: result.metadata.dominant_color.l,
-			dominant_color_c: result.metadata.dominant_color.c,
-			dominant_color_h: result.metadata.dominant_color.h,
+			background_color_l: result.metadata.background_color.l,
+			background_color_c: result.metadata.background_color.c,
+			background_color_h: result.metadata.background_color.h,
+			accent_color_l: result.metadata.accent_color?.l ?? null,
+			accent_color_c: result.metadata.accent_color?.c ?? null,
+			accent_color_h: result.metadata.accent_color?.h ?? null,
 			thumbhash: result.thumbhash,
 			tiny_preview: result.tiny_preview,
 			variants: result.variants,
@@ -1082,21 +1127,18 @@ async function handleUpload(request: Request, env: Env) {
 		key,
 	});
 
-	// 3. Save metadata to database
-	const dbStub = env.APP_DATABASE.get(env.APP_DATABASE.idFromName('main'));
-	const response = await dbStub.fetch('https://db/image/create', {
-		method: 'POST',
-		body: JSON.stringify({
-			key,
-			...result.metadata,
-			thumbhash: result.thumbhash,
-			tiny_preview: result.tiny_preview,
-			variants: result.variants,
-		}),
+	// 3. Save metadata to database (RPC call to your database DO)
+	const db = env.APP_DATABASE.getByName('main');
+	const image = await db.createImage({
+		key,
+		...result.metadata,
+		thumbhash: result.thumbhash,
+		tiny_preview: result.tiny_preview,
+		variants: result.variants,
 	});
 
 	// 4. Return to client
-	return Response.json({ ok: true, image: await response.json() });
+	return Response.json({ ok: true, image });
 }
 ```
 
@@ -1182,30 +1224,30 @@ Costs are dominated by R2 storage and egress for most workloads, not the contain
 
 ## Technology Choices
 
-### Why Node.js + Sharp (not Rust, Go, or Python)
+### Why Bun + Sharp (not Node.js, Rust, Go, or Python)
 
-| Factor                      | Node.js + Sharp                                    | Rust                                            | Go                               | Python                         |
-| --------------------------- | -------------------------------------------------- | ----------------------------------------------- | -------------------------------- | ------------------------------ |
-| **Processing engine**       | libvips (via Sharp)                                | image-rs or libvips FFI                         | bimg (libvips)                   | Pillow or pyvips               |
-| **Format breadth**          | Excellent (all via libvips)                        | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins)      |
-| **Performance**             | Excellent (C-level via libvips)                    | Excellent (native)                              | Excellent (C-level via libvips)  | Slower (GIL + Python overhead) |
-| **Memory efficiency**       | Excellent (libvips streaming)                      | Good                                            | Excellent (libvips streaming)    | Poor (Pillow loads full image) |
-| **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash all npm) | Fragmented                                      | Decent                           | Rich but slow                  |
-| **Docker image size**       | ~300 MB                                            | ~200 MB                                         | ~250 MB                          | ~400 MB                        |
-| **Developer familiarity**   | Matches rest of Delightstack (TypeScript)          | Different language                              | Different language               | Different language             |
-| **Community/maintenance**   | Sharp: 29K stars, very active                      | image-rs: 5K stars                              | bimg: 4K stars                   | Pillow: 12K stars              |
+| Factor                      | Bun + Sharp                                            | Rust                                            | Go                               | Python                         |
+| --------------------------- | ------------------------------------------------------ | ----------------------------------------------- | -------------------------------- | ------------------------------ |
+| **Processing engine**       | libvips (via Sharp)                                    | image-rs or libvips FFI                         | bimg (libvips)                   | Pillow or pyvips               |
+| **Format breadth**          | Excellent (all via libvips)                            | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins)      |
+| **Performance**             | Excellent (C-level via libvips, fast startup via Bun)  | Excellent (native)                              | Excellent (C-level via libvips)  | Slower (GIL + Python overhead) |
+| **Memory efficiency**       | Excellent (libvips streaming)                          | Good                                            | Excellent (libvips streaming)    | Poor (Pillow loads full image) |
+| **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash, node-vibrant all npm) | Fragmented                          | Decent                           | Rich but slow                  |
+| **Docker image size**       | ~300 MB                                                | ~200 MB                                         | ~250 MB                          | ~400 MB                        |
+| **Developer familiarity**   | Matches rest of Delightstack (TypeScript)              | Different language                              | Different language               | Different language             |
+| **Community/maintenance**   | Sharp: 29K stars, very active                          | image-rs: 5K stars                              | bimg: 4K stars                   | Pillow: 12K stars              |
 
-**Decision: Node.js + Sharp.** Same language as the rest of Delightstack. Sharp has the best libvips binding, the largest community, and the richest ecosystem of complementary packages. The container runs in Docker so we have full access to native dependencies (no Cloudflare Workers restrictions).
+**Decision: Bun + Sharp.** Same language as the rest of Delightstack (TypeScript). Bun provides faster startup times and native TypeScript execution (no build step in the container). Sharp has the best libvips binding, the largest community, and the richest ecosystem of complementary packages. The container runs in Docker so we have full access to native dependencies (no Cloudflare Workers restrictions).
 
 ### Why ThumbHash (not BlurHash)
 
 ThumbHash is strictly superior: encodes more detail, supports transparency, includes aspect ratio, requires no configuration, and is similarly tiny (~33 chars base64 vs ~25 chars for BlurHash).
 
-### Why OKLCH for Dominant Color (not hex/RGB/HSL)
+### Why OKLCH for Colors (not hex/RGB/HSL)
 
 - Perceptually uniform (adjusting lightness gives predictable visual results)
 - Native CSS support (`oklch()`)
-- Easy to derive backgrounds (increase `l`), accents (keep original), and text colors (check contrast)
+- `l` controls lightness, `c` controls saturation -- trivial to create light/dark/muted variations
 - Future-proof (part of CSS Colors Level 4)
 
 ### Why AVIF as Default Output (not WebP or JPEG)
@@ -1230,7 +1272,7 @@ Should we use a single shared container or per-user/per-request containers?
 
 Recommendation: Start with a single shared container. Add pooling later if throughput becomes a bottleneck.
 
-### 2. Async Processing Option
+### 2. Async/Batch Processing
 
 Should we support a fire-and-forget mode for large batch uploads?
 
@@ -1315,7 +1357,7 @@ packages/image-processor/
 │   ├── metadata.ts            # Metadata extraction
 │   ├── variants.ts            # Variant generation
 │   ├── thumbhash.ts           # ThumbHash generation
-│   ├── dominant-color.ts      # Dominant color extraction + OKLCH conversion
+│   ├── colors.ts              # Background + accent color extraction + OKLCH conversion
 │   ├── svg.ts                 # SVG-specific handling (sanitization, metadata)
 │   ├── pdf.ts                 # PDF-specific handling (first page rendering)
 │   ├── validation.ts          # Input validation (size, dimensions, format)
@@ -1357,9 +1399,11 @@ const result = await processImage(env.IMAGE_PROCESSOR, {
 
 // result.thumbhash → "3OcRJYB4d3h/iIeHeEh3eIhw+j2w"
 // result.tiny_preview → "data:image/avif;base64,AAAAIG..."
-// result.metadata.dominant_color_css → "oklch(0.65 0.12 245)"
+// result.metadata.background_color_css → "oklch(0.65 0.04 210)"
+// result.metadata.accent_color_css → "oklch(0.63 0.21 1)"
 // result.variants[0].key → "processed/photo/standard.avif"
 // result.variants[1].key → "processed/photo/thumbnail.avif"
+// result.variants[2].name → "original" (if keep_original is true)
 ```
 
 You give it a bucket and a key. It gives you back everything you need to display that image beautifully on a website, including instant placeholder previews, optimized variants, and rich metadata. No webhooks. No background jobs. No configuration beyond the basics.
