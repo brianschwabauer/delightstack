@@ -216,8 +216,12 @@ async upload(
 	const file_name = options?.file_name ?? (data instanceof File ? data.name : null);
 	const stream = data instanceof File ? data.stream() : data;
 
-	// 2. Save the original file to R2 (extensionless — MIME type set after processing)
+	// 2. Save the original file to R2
 	await this.options.bucket().put(`${base_path}/original`, stream, {
+		httpMetadata: {
+			// Use File.type if available (best guess until processing detects the real MIME type)
+			contentType: data instanceof File ? data.type : undefined,
+		},
 		customMetadata: file_name ? { 'original-filename': file_name } : undefined,
 	});
 
@@ -310,6 +314,16 @@ async processAlarm(): Promise<void> {
 				await this.options.bucket().put(
 					`${image.base_path}/${variant.name}`,
 					variant.data,
+					{
+						httpMetadata: {
+							contentType: variant.mime_type,
+							cacheControl: 'public, max-age=31536000, immutable',
+						},
+						customMetadata: {
+							width: String(variant.width),
+							height: String(variant.height),
+						},
+					},
 				);
 			}
 
@@ -798,7 +812,7 @@ Both the thumbhash AND the tiny base64 preview are generated. They serve slightl
 
 ### Output File Naming
 
-R2 keys are **extensionless**. The MIME type is stored in the image record and set via `Content-Type` when serving. This means the frontend can use a stable path like `/images/{id}/default` without knowing the format.
+R2 keys are **extensionless**. Each R2 object carries its own metadata so files can be served directly without a database lookup. The frontend can use a stable path like `/images/{id}/default` without knowing the format.
 
 ```
 {prefix}/{id}/{variant_name}
@@ -808,6 +822,28 @@ Example (with default prefix 'images'):
   images/01JQ7X8K9M3N/default
   images/01JQ7X8K9M3N/thumbnail
 ```
+
+### R2 Object Metadata
+
+Each R2 object is stored with metadata that enables direct serving without a database lookup:
+
+**Processed variants** (default, thumbnail, custom):
+
+| Metadata | Type | Value | Purpose |
+| --- | --- | --- | --- |
+| `httpMetadata.contentType` | HTTP | e.g. `image/avif` | Browser renders correctly |
+| `httpMetadata.cacheControl` | HTTP | `public, max-age=31536000, immutable` | Aggressive caching (variants are immutable, keyed by unique ID) |
+| `customMetadata.width` | Custom | e.g. `"2048"` | `<img width>` without DB lookup |
+| `customMetadata.height` | Custom | e.g. `"1365"` | `<img height>` without DB lookup |
+
+**Original file:**
+
+| Metadata | Type | Value | Purpose |
+| --- | --- | --- | --- |
+| `httpMetadata.contentType` | HTTP | From `File.type` at upload | Best-guess MIME until processing detects the real type |
+| `customMetadata.original-filename` | Custom | e.g. `"vacation-photo.jpg"` | Display name for downloads |
+
+Rich metadata (colors, thumbhash, aspect ratio, animation info) belongs in the database record, not on R2 objects — it's used for UI rendering, not file serving.
 
 ### Animated Image Handling
 
