@@ -26,55 +26,60 @@ A reusable Cloudflare Container-based image processing package that handles resi
 
 ## Architecture Overview
 
+The package supports two usage modes:
+
+### Mode 1: With `@delightstack/database` (recommended)
+
+The database DO orchestrates everything. Upload returns immediately; processing is async.
+
 ```
-                    Cloudflare Edge
-┌─────────────────────────────────────────────────────┐
-│                                                     │
-│   Your Worker                                       │
-│   ┌───────────────────────────────┐                 │
-│   │  import { processImage }      │                 │
-│   │  from '@delightstack/         │                 │
-│   │        image-processor'       │                 │
-│   │                               │                 │
-│   │  const result = await         │                 │
-│   │    processImage(env, {        │                 │
-│   │      bucket: 'my-bucket',     │                 │
-│   │      key: 'uploads/photo.jpg' │                 │
-│   │    })                         │ ── RPC ──────►  │
-│   └───────────────────────────────┘                 │
-│                                                     │
-│   ImageProcessor (Durable Object + Container)       │
-│   ┌─────────────────────────────────────────────┐   │
-│   │  Container class (manages lifecycle)        │   │
-│   │  ┌───────────────────────────────────────┐  │   │
-│   │  │  Docker Container (Bun + Sharp)        │  │   │
-│   │  │                                       │  │   │
-│   │  │  1. Download from R2/S3               │  │   │
-│   │  │  2. Validate & extract metadata       │  │   │
-│   │  │  3. Generate variants (avif, thumb)   │  │   │
-│   │  │  4. Generate thumbhash + base64 tiny  │  │   │
-│   │  │  5. Upload results back to R2/S3      │  │   │
-│   │  │  6. Return metadata + variant info    │  │   │
-│   │  └───────────────────────────────────────┘  │   │
-│   └─────────────────────────────────────────────┘   │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+User Upload
+  │
+  ▼
+Worker ── R2.put(raw file) ── db.images.upload(key) ── return 201
+                                    │
+                                    ▼ (async, via DO alarm)
+                              Database DO
+                                    │── read from R2
+                                    │── stream to Container DO
+                                    │          │
+                                    │          ▼
+                                    │   Docker Container (Bun + Sharp)
+                                    │     process / resize / extract
+                                    │          │
+                                    │   ◄── multipart response
+                                    │── write variants to R2
+                                    │── update image record (status: 'processed')
+                                    ▼
+                              Done. Image record has all metadata.
 ```
 
-The package exports two things:
+The database DO owns the image lifecycle: it creates the pending record, triggers processing via an alarm, writes results to R2, and updates the record. If the image record is deleted while processing is in flight, the DO cleans up any newly-created variant files.
 
-1. **A Container/Durable Object class** (`ImageProcessorContainer`) that you add to your wrangler config and export from your worker entrypoint.
-2. **A helper function** (`processImage`) that your worker code calls. It uses Cloudflare Workers RPC to call a method directly on the Durable Object -- no HTTP request construction or response parsing needed.
+### Mode 2: Standalone (without `@delightstack/database`)
 
-The container sleeps when idle (scale-to-zero). Cold starts take ~2-3 seconds. The `processImage()` call awaits the result synchronously via RPC -- Workers have no wall-clock time limit, so waiting 2-30 seconds for processing is fine. No webhooks, no polling, no queues.
+Direct synchronous call. You manage your own storage and state.
+
+```
+Worker ── processImage(env.IMAGE_PROCESSOR, { bucket, key }) ── waits 2-30s ── result
+```
+
+### What the package exports
+
+1. **`ImageProcessorContainer`** -- The Container/Durable Object class. Must be exported from your worker entrypoint for Cloudflare to discover it.
+2. **`processImage()`** -- Standalone helper for synchronous processing (Mode 2).
+3. **`imageProcessing()`** -- Factory that creates a helper object with `upload()`, `delete()`, etc. for use inside a DatabaseServer subclass (Mode 1).
+4. **`defineImageTable()`** -- Database schema helper for `@delightstack/database`.
+
+The container sleeps when idle (scale-to-zero). Cold starts take ~2-3 seconds. In Mode 2, the `processImage()` call awaits the result synchronously via RPC -- Workers have no wall-clock time limit, so waiting 2-30 seconds is fine. In Mode 1, the worker returns immediately and processing happens asynchronously inside the database DO.
 
 ---
 
 ## How It Works
 
-### The Simplest Possible Setup
+### Setup with `@delightstack/database` (recommended)
 
-**1. Install the package:**
+**1. Install:**
 
 ```bash
 pnpm add @delightstack/image-processor
@@ -102,59 +107,247 @@ binding = "MEDIA_BUCKET"
 bucket_name = "my-media"
 ```
 
-**3. Export the container class and use it:**
+**3. Add image processing to your database DO:**
+
+```typescript
+// src/database.ts
+import { DatabaseServer } from '@delightstack/database';
+import {
+	ImageProcessorContainer,
+	imageProcessing,
+	defineImageTable,
+} from '@delightstack/image-processor';
+
+// Re-export for Cloudflare to discover
+export { ImageProcessorContainer };
+
+const dbConfig = {
+	image: defineImageTable(),
+	// ... your other tables
+};
+
+export class AppDatabase extends DatabaseServer<typeof dbConfig> {
+	// Add image processing helper — wired to this DB, the container, and the bucket
+	readonly images = imageProcessing(this, {
+		container: () => this.env.IMAGE_PROCESSOR,
+		bucket: () => this.env.MEDIA_BUCKET,
+	});
+
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(dbConfig, () => null, ctx, env);
+	}
+
+	// Required: wire the alarm to the image processing helper
+	async alarm() {
+		await this.images.processAlarm();
+	}
+}
+```
+
+**4. Use it in your worker:**
 
 ```typescript
 // src/index.ts
+export default {
+	async fetch(request: Request, env: Env) {
+		const formData = await request.formData();
+		const file = formData.get('file') as File;
+
+		// 1. Upload raw file to R2
+		const key = `uploads/${crypto.randomUUID()}/${file.name}`;
+		await env.MEDIA_BUCKET.put(key, file.stream());
+
+		// 2. Create image record — returns IMMEDIATELY with status: 'pending'
+		//    Processing happens asynchronously in the background via DO alarm
+		const db = env.APP_DATABASE.getByName('main');
+		const image = await db.images.upload(key);
+
+		// 3. Return 201 — the user doesn't wait for processing
+		return new Response(null, {
+			status: 201,
+			headers: { Location: `/images/${image.id}` },
+		});
+	},
+};
+```
+
+That's it. The user uploads a file and gets a 201 back in milliseconds. Processing happens in the background. The image record transitions from `'pending'` → `'processing'` → `'processed'` (or `'failed'`). The frontend can show the thumbhash/tiny preview as soon as the record is marked `'processed'`.
+
+### Standalone Setup (without `@delightstack/database`)
+
+For users who manage their own state, the synchronous `processImage()` function is still available:
+
+```typescript
 import { ImageProcessorContainer, processImage } from '@delightstack/image-processor';
 
-// Re-export the container class so Cloudflare discovers it
 export { ImageProcessorContainer };
 
 export default {
 	async fetch(request: Request, env: Env) {
-		// Process an image that was uploaded to R2
+		// Synchronous — waits for container to finish (2-30s)
 		const result = await processImage(env.IMAGE_PROCESSOR, {
 			bucket: env.MEDIA_BUCKET,
-			key: 'uploads/user-123/photo.jpg',
-			keep_original: true,
-			output_prefix: 'processed/user-123/',
+			key: 'uploads/photo.jpg',
 		});
 
-		// result contains all metadata + variant URLs
 		return Response.json(result);
 	},
 };
 ```
 
-That's it. Three files touched. No webhook endpoints, no queue consumers, no polling.
+### How Async Processing Works (Mode 1: Database Integration)
 
-### How the Synchronous Call Works
+When you call `db.images.upload(key)`, here's what happens:
 
-The `processImage()` helper uses Cloudflare Workers RPC to call a method directly on the Durable Object. Since the `Container` class extends `DurableObject`, any public method on it is automatically exposed as an RPC endpoint. No HTTP request construction, URL routing, or response parsing needed -- it's a direct async method call.
+```typescript
+// Inside the imageProcessing() helper
+async upload(key: string, options?: UploadOptions): Promise<ImageRecord> {
+	// 1. Create the image record with status: 'pending'
+	const record = this.db.create('image', {
+		key,
+		processing_status: 'pending',
+		file_name: key.split('/').pop() || key,
+		// ... minimal fields, rest filled in after processing
+	});
+
+	// 2. Ensure an alarm is scheduled so processAlarm() runs.
+	//    Uses "set only if earlier" to avoid overwriting a closer alarm
+	//    that may have been set by other code.
+	const existing = await this.db.ctx.storage.getAlarm();
+	if (existing === null || Date.now() < existing) {
+		await this.db.ctx.storage.setAlarm(Date.now());
+	}
+
+	// 3. Return the record immediately — the caller doesn't wait
+	return record;
+}
+```
+
+The user's `alarm()` method delegates to `processAlarm()`:
+
+```typescript
+// In the user's DatabaseServer subclass
+class AppDatabase extends DatabaseServer<typeof dbConfig> {
+	readonly images = imageProcessing(this, { /* ... */ });
+
+	async alarm() {
+		// Delegate image processing work to the helper.
+		// This processes pending images and reschedules if more remain.
+		await this.images.processAlarm();
+
+		// You can add your own alarm-based work here too.
+		// For example: await this.cleanupExpiredSessions();
+	}
+}
+```
+
+Inside `processAlarm()`:
+
+```typescript
+// Inside the imageProcessing() helper
+async processAlarm(): Promise<void> {
+	// Find all pending images
+	const pending = this.db.exec(
+		`SELECT * FROM image WHERE processing_status = 'pending' LIMIT 10`
+	);
+
+	// Nothing to do — exit early, don't reschedule
+	if (pending.length === 0) return;
+
+	for (const image of pending) {
+		// Mark as processing
+		this.db.update('image', image.id, { processing_status: 'processing' });
+
+		try {
+			// Call the Container DO via RPC
+			const containerStub = this.options.container().getByName('processor');
+
+			// Read input from R2 and send to container
+			const input = await this.options.bucket().get(image.key);
+			if (!input) {
+				this.db.update('image', image.id, {
+					processing_status: 'failed',
+					error_code: 'FILE_NOT_FOUND',
+				});
+				continue;
+			}
+
+			const result = await containerStub.process(await input.arrayBuffer());
+
+			// Check if image was deleted while processing
+			try {
+				this.db.get('image', image.id);
+			} catch {
+				// Image was deleted — clean up the newly created variants
+				for (const variant of result.variants) {
+					await this.options.bucket().delete(variant.key);
+				}
+				continue;
+			}
+
+			// Write variants to R2
+			for (const variant of result.variants) {
+				await this.options.bucket().put(variant.key, variant.data);
+			}
+
+			// Update the image record with all metadata
+			this.db.update('image', image.id, {
+				processing_status: 'processed',
+				...result.metadata,
+				thumbhash: result.thumbhash,
+				tiny_preview: result.tiny_preview,
+				variants: result.variant_info, // without binary data
+			});
+		} catch (error) {
+			this.db.update('image', image.id, {
+				processing_status: 'failed',
+				error_code: error.code || 'INTERNAL_ERROR',
+			});
+		}
+	}
+
+	// If there are more pending images, schedule another alarm.
+	// Uses "set only if earlier" — won't push a closer alarm further out.
+	const remaining = this.db.exec(
+		`SELECT count(*) as count FROM image WHERE processing_status = 'pending'`
+	);
+	if (remaining[0]?.count > 0) {
+		const existing = await this.db.ctx.storage.getAlarm();
+		if (existing === null || Date.now() < existing) {
+			await this.db.ctx.storage.setAlarm(Date.now());
+		}
+	}
+}
+```
+
+**Why alarms?** Alarms are the canonical way to do background work in Durable Objects. They're durable -- if the DO instance is evicted and re-created, the alarm still fires. This means:
+- If a deploy happens mid-processing, pending images will be retried
+- If the DO crashes, it recovers and picks up where it left off
+- No images are lost in the queue
+
+**Deletion during processing:** When a user deletes an image, the record is removed from the database. When the container finishes processing, the alarm handler checks whether the record still exists. If it was deleted, it cleans up any variant files that were just created in R2. No orphaned files.
+
+### How Synchronous Processing Works (Mode 2: Standalone)
+
+The `processImage()` helper calls the Container DO via RPC and waits for the result:
 
 ```typescript
 async function processImage(
 	binding: DurableObjectNamespace<ImageProcessorContainer>,
 	options: ProcessImageOptions,
 ): Promise<ProcessImageResult> {
-	// Get a container instance (reuses running containers)
 	const stub = binding.getByName('image-processor');
 
-	// Direct RPC method call on the Durable Object:
-	// 1. Wakes the container if sleeping (~2-3s cold start)
-	// 2. Reads input from R2 and streams to container
-	// 3. Waits for the container to finish (2-30s)
-	// 4. Writes output variants to R2
-	// 5. Returns the typed result directly
-	//
+	// Direct RPC call — waits for container to finish (2-30s)
 	// Workers have NO wall-clock time limit.
-	// The await is I/O wait, NOT CPU time. The CPU cost is negligible.
+	// The await is I/O wait, NOT CPU time.
 	return await stub.process(options);
 }
 ```
 
-The Container class exposes the `process` RPC method and handles the full lifecycle:
+### The Container DO (Both Modes)
+
+The Container DO is a thin wrapper. It receives image bytes, delegates to the Docker container, and returns the results. It has no opinion about databases or state management.
 
 ```typescript
 import { Container } from '@cloudflare/containers';
@@ -162,64 +355,71 @@ import { Container } from '@cloudflare/containers';
 class ImageProcessorContainer extends Container {
 	defaultPort = 8080;
 	sleepAfter = '5m';
-	enableInternet = false; // No outbound internet needed
+	enableInternet = false;
 
 	// Public method = automatically exposed as RPC endpoint
-	async process(options: ProcessImageOptions): Promise<ProcessImageResult> {
-		// 1. Read input from R2 via this.env.MEDIA_BUCKET
-		const input = await this.env[options.bucket_binding].get(options.key);
-
-		// 2. Stream input to the container for processing
+	async process(
+		imageData: ArrayBuffer,
+		options?: VariantConfig[],
+	): Promise<ContainerProcessResult> {
+		// Stream input to the Docker container
 		const port = this.ctx.container.getTcpPort(8080);
 		const response = await port.fetch('http://localhost/process', {
 			method: 'POST',
-			body: input.body,
-			headers: { 'X-Options': btoa(JSON.stringify(options)) },
+			body: imageData,
+			headers: { 'X-Options': JSON.stringify(options || []) },
 		});
 
-		// 3. Parse multipart response (metadata + variant binaries)
-		const { metadata, variants } = await parseMultipartResponse(response);
-
-		// 4. Write variants to R2
-		for (const variant of variants) {
-			await this.env[options.bucket_binding].put(variant.key, variant.data);
-		}
-
-		// 5. Return typed result (serialized via Structured Clone over RPC)
-		return { ok: true, job_id: crypto.randomUUID(), metadata, variants, ... };
+		// Return metadata + variant binaries
+		// The CALLER (database DO or standalone helper) handles R2 writes
+		return parseMultipartResponse(response);
 	}
 }
 ```
 
 Key RPC details:
-- **No URL routing**: Calling `stub.process(options)` invokes the method directly -- no `fetch()`, no URL construction, no JSON serialization/deserialization.
-- **Structured Clone serialization**: RPC uses Structured Clone (not JSON), so `Date`, `ArrayBuffer`, `Map`, `Set`, and typed arrays all work natively. Max payload is 32 MiB; use `ReadableStream` for larger data.
-- **Type safety**: The `DurableObjectNamespace<ImageProcessorContainer>` generic gives full TypeScript autocomplete on the stub.
-- **R2 bindings stay server-side**: R2 buckets can't be passed over RPC, so the DO accesses them via `this.env` -- which is why the DO handles all R2 I/O.
+- **Structured Clone serialization**: RPC uses Structured Clone (not JSON), so `ArrayBuffer` works natively for passing image data. Max payload is 32 MiB; for larger files, `ReadableStream` is used.
+- **Type safety**: `DurableObjectNamespace<ImageProcessorContainer>` gives full TypeScript autocomplete on the stub.
+- **Container is stateless**: It processes bytes and returns bytes. All state management and R2 I/O lives in the caller.
 
 ### R2 Access Pattern
 
-The container itself does not have direct access to R2 bindings (containers are Docker VMs, not Workers). The Durable Object handles all storage I/O:
+The Docker container has no access to R2 bindings (containers are VMs, not Workers). The **caller** handles all R2 I/O:
 
-1. The DO reads the input file from R2 and streams it to the container via HTTP.
-2. The container processes the image and returns all outputs (variant binaries + metadata) in a multipart response.
-3. The DO writes each variant back to R2.
+- **Mode 1 (database integration):** The database DO reads from R2, sends bytes to the container DO via RPC, and writes variants back to R2.
+- **Mode 2 (standalone):** The `processImage()` helper reads from R2, sends bytes to the container DO via RPC, and writes variants back to R2.
 
-This keeps `enableInternet = false` on the container (more secure), keeps the container fully stateless, and centralizes all storage logic in the DO where it has access to the R2 binding via `this.env`.
+In both cases, `enableInternet = false` on the container (more secure), the container is fully stateless, and all storage logic lives where the R2 binding is accessible via `this.env`.
 
 ```
-Worker                    DO                          Container
+Mode 1 (async):
+
+Worker                 Database DO                 Container DO
   │                       │                              │
-  │── stub.process() ──►  │                              │
-  │   (RPC call)          │── read input from R2         │
-  │                       │── stream to container ──►    │
+  │── db.images.upload()  │                              │
+  │◄── 201 + image ID ──  │                              │
+  │                       │  (alarm fires)               │
+  │                       │── read from R2               │
+  │                       │── RPC: process(bytes) ──►    │
   │                       │                              │── process
   │                       │                              │── resize
   │                       │                              │── extract metadata
-  │                       │  ◄── multipart response ──── │
+  │                       │  ◄── variant bytes + meta ── │
   │                       │── write variants to R2       │
-  │  ◄── result ────────  │                              │
-  │   (RPC return)        │                              │
+  │                       │── update image record        │
+  │                       │                              │
+
+Mode 2 (sync):
+
+Worker                                              Container DO
+  │                                                      │
+  │── processImage(binding, { bucket, key })             │
+  │   (reads from R2, sends bytes via RPC)               │
+  │──────────── RPC: process(bytes) ──────────────►      │
+  │                                                      │── process
+  │  ◄───────── variant bytes + meta ──────────────      │
+  │   (writes variants to R2)                            │
+  │◄── result                                            │
 ```
 
 ---
@@ -954,7 +1154,7 @@ enabled = true
 
 ### S3-Compatible Storage (Non-R2)
 
-For S3-compatible buckets other than R2, pass credentials:
+For S3-compatible buckets other than R2, the standalone `processImage()` accepts an S3 config:
 
 ```typescript
 const result = await processImage(env.IMAGE_PROCESSOR, {
@@ -969,7 +1169,7 @@ const result = await processImage(env.IMAGE_PROCESSOR, {
 });
 ```
 
-When using R2 (the default), no credentials are needed -- the R2 bucket binding handles auth natively.
+When using R2 (the default and recommended), no credentials are needed -- the R2 bucket binding handles auth natively. The database integration (`imageProcessing()`) uses R2 bindings exclusively.
 
 ### Scaling Considerations
 
@@ -983,17 +1183,7 @@ When using R2 (the default), no credentials are needed -- the R2 bucket binding 
 
 - Set `max_instances` higher in wrangler.toml
 - Use different DO IDs to route to different container instances
-- The helper function can auto-distribute using a round-robin or hash-based strategy
-
-```typescript
-// Simple round-robin across N containers
-const result = await processImage(env.IMAGE_PROCESSOR, {
-	// Automatically picks a container instance
-	container_strategy: 'round-robin',
-	max_containers: 5,
-	// ... other options
-});
-```
+- The `imageProcessing()` helper can auto-distribute using a round-robin or hash-based strategy internally
 
 **Scale-to-zero:** Containers automatically sleep after the configured `sleepAfter` period (default 5 minutes). Billing stops during sleep. Cold start on next request is ~2-3 seconds.
 
@@ -1001,148 +1191,248 @@ const result = await processImage(env.IMAGE_PROCESSOR, {
 
 ## Delightstack Integration
 
-### Database Schema Helper
+### Design Philosophy
 
-The package provides a pre-built database schema for storing image metadata in a `@delightstack/database` table:
+The `@delightstack/image-processor` does NOT depend on `@delightstack/database`. It works standalone. But the large majority of users will use both packages together, so the integration is optimized for that case.
+
+The key problem: the database lives in one DO, and the container lives in another DO. Making them talk is inherently cross-DO communication. Rather than forcing the user to wire this up themselves, the `imageProcessing()` factory creates a helper object that encapsulates all the orchestration logic and runs inside the database DO.
+
+### The `imageProcessing()` Helper
 
 ```typescript
-import { defineImageTable } from '@delightstack/image-processor/schema';
+import { imageProcessing } from '@delightstack/image-processor';
 
-// Use in your database config
-const database = {
+class AppDatabase extends DatabaseServer<typeof dbConfig> {
+	readonly images = imageProcessing(this, {
+		container: () => this.env.IMAGE_PROCESSOR,
+		bucket: () => this.env.MEDIA_BUCKET,
+	});
+}
+```
+
+This creates a helper with these methods:
+
+```typescript
+interface ImageProcessingHelper {
+	/** Create a pending image record and schedule an alarm for processing */
+	upload(key: string, options?: UploadOptions): ImageRecord;
+
+	/**
+	 * Delete an image and all its variants from R2.
+	 * If the image is currently being processed, processAlarm()
+	 * will detect the deletion and clean up any newly created files.
+	 */
+	delete(image_id: string): void;
+
+	/** Re-process a failed image */
+	retry(image_id: string): void;
+
+	/** Check processing status */
+	getStatus(image_id: string): ImageRecord;
+
+	/**
+	 * Process pending images. Call this from your alarm() handler.
+	 *
+	 * Cloudflare Durable Objects have exactly ONE alarm handler and ONE
+	 * pending alarm at a time. The imageProcessing() helper does NOT
+	 * override or hijack alarm() — you must wire it up yourself:
+	 *
+	 * ```typescript
+	 * async alarm() {
+	 *   await this.images.processAlarm();
+	 * }
+	 * ```
+	 *
+	 * This processes up to 10 pending images per invocation. If more
+	 * remain, it schedules another alarm using a "set only if earlier"
+	 * strategy that won't overwrite a closer alarm set by other code.
+	 */
+	processAlarm(): Promise<void>;
+}
+```
+
+**How this works internally:**
+- `imageProcessing()` receives a reference to the `DatabaseServer` instance.
+- It uses `this.db.create()`, `this.db.update()`, `this.db.get()`, `this.db.delete()` for all database operations — it's just calling the existing database methods.
+- It accesses the Container DO binding and R2 bucket via the lazy getters `container()` and `bucket()`.
+- It exposes `processAlarm()` which the user calls from their DO's `alarm()` handler.
+
+The helper is not a mixin and does not modify the class hierarchy or the alarm handler. It's a plain object with methods that close over the `DatabaseServer` instance. The user wires it into their alarm handler explicitly.
+
+### Alarm-Based Processing
+
+**Constraint:** Cloudflare Durable Objects have exactly **one** `alarm()` handler and **one** pending alarm at a time. Calling `setAlarm()` overwrites any existing alarm. The `alarm()` method receives no context about what triggered it — just `retryCount` and `isRetry`.
+
+Because of this, the `imageProcessing()` helper does **not** override or monkey-patch `alarm()`. Instead, it provides a `processAlarm()` method that the user calls from their own `alarm()` handler. This gives the user full control over alarm composition:
+
+```typescript
+class AppDatabase extends DatabaseServer<typeof dbConfig> {
+	readonly images = imageProcessing(this, { /* ... */ });
+
+	async alarm() {
+		// Image processing: processes pending images, reschedules if more remain
+		await this.images.processAlarm();
+
+		// Your own alarm-based work (optional):
+		// await this.cleanupExpiredSessions();
+		// await this.sendScheduledNotifications();
+	}
+}
+```
+
+**Alarm scheduling uses a "set only if earlier" strategy.** Both `upload()` and `processAlarm()` check the existing alarm before calling `setAlarm()`:
+
+```typescript
+const existing = await this.db.ctx.storage.getAlarm();
+if (existing === null || Date.now() < existing) {
+	await this.db.ctx.storage.setAlarm(Date.now());
+}
+```
+
+This means:
+- If no alarm is pending, one is set for immediate execution.
+- If an alarm is already pending for later, it's moved earlier (so images start processing sooner).
+- If an alarm is already pending for now or sooner, nothing changes.
+- Your own code can also call `setAlarm()` safely — the alarm handler runs all concerns regardless of what triggered it.
+
+**Processing flow:**
+
+1. `upload()` creates a record with `processing_status = 'pending'` and ensures an alarm is scheduled
+2. When the alarm fires, the user's `alarm()` calls `this.images.processAlarm()`
+3. `processAlarm()` queries the `image` table for pending records (up to 10 per cycle)
+4. For each: marks it `'processing'`, calls the Container DO via RPC, writes variants to R2
+5. On success: updates the record to `'processed'` with all metadata
+6. On failure: updates the record to `'failed'` with an error code
+7. If the image record was deleted during processing: cleans up variant files from R2
+8. If more pending images remain, schedules another alarm (using "set only if earlier")
+
+This makes the system self-healing. If the DO restarts, the alarm fires again and retries any images stuck in `'pending'` or `'processing'` state.
+
+### Database Schema
+
+```typescript
+import { defineImageTable } from '@delightstack/image-processor';
+
+const dbConfig = {
 	image: defineImageTable(),
-	// ... your other tables
 };
 ```
 
-This creates a table with columns matching the `ProcessImageResult` structure:
+Creates this table:
 
 ```sql
 CREATE TABLE image (
   id TEXT PRIMARY KEY,                  -- Timestamp-based ID
   key TEXT NOT NULL,                    -- R2 key of the input file
   file_name TEXT NOT NULL,              -- Original filename
-  mime_type TEXT NOT NULL,              -- Detected MIME type
-  file_size INTEGER NOT NULL,           -- Original file size in bytes
-  width INTEGER NOT NULL,               -- Original width (orientation-corrected)
-  height INTEGER NOT NULL,              -- Original height (orientation-corrected)
-  aspect_ratio REAL NOT NULL,           -- width/height float
-  has_transparency INTEGER NOT NULL,    -- 0 or 1
-  is_animated INTEGER NOT NULL,         -- 0 or 1
-  frame_count INTEGER NOT NULL,         -- Number of frames
-  background_color_l REAL,              -- Background OKLCH lightness
-  background_color_c REAL,              -- Background OKLCH chroma
-  background_color_h REAL,              -- Background OKLCH hue
-  accent_color_l REAL,                  -- Accent OKLCH lightness (nullable)
-  accent_color_c REAL,                  -- Accent OKLCH chroma (nullable)
-  accent_color_h REAL,                  -- Accent OKLCH hue (nullable)
-  thumbhash TEXT NOT NULL,              -- ThumbHash base64
-  tiny_preview TEXT NOT NULL,           -- Base64 data URI
-  variants TEXT NOT NULL,               -- JSON array of variant info (includes 'original' if kept)
-  processing_status TEXT NOT NULL,      -- 'pending' | 'processing' | 'completed' | 'failed'
+  processing_status TEXT NOT NULL,      -- 'pending' | 'processing' | 'processed' | 'failed'
   error_code TEXT,                      -- Error code if failed
+
+  -- Populated after processing (nullable while pending)
+  mime_type TEXT,                       -- Detected MIME type
+  file_size INTEGER,                   -- Original file size in bytes
+  width INTEGER,                       -- Original width (orientation-corrected)
+  height INTEGER,                      -- Original height (orientation-corrected)
+  aspect_ratio REAL,                   -- width/height float
+  has_transparency INTEGER,            -- 0 or 1
+  is_animated INTEGER,                 -- 0 or 1
+  frame_count INTEGER,                 -- Number of frames
+  background_color_l REAL,             -- Background OKLCH lightness
+  background_color_c REAL,             -- Background OKLCH chroma
+  background_color_h REAL,             -- Background OKLCH hue
+  accent_color_l REAL,                 -- Accent OKLCH lightness (nullable for achromatic images)
+  accent_color_c REAL,                 -- Accent OKLCH chroma
+  accent_color_h REAL,                 -- Accent OKLCH hue
+  thumbhash TEXT,                      -- ThumbHash base64
+  tiny_preview TEXT,                   -- Base64 data URI
+  variants TEXT,                       -- JSON array of variant info (includes 'original' if kept)
+
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 ```
 
-### Full Integration Example
+Note: Most metadata fields are nullable because they're populated asynchronously after processing completes. Only `id`, `key`, `file_name`, and `processing_status` are set at upload time.
+
+### Full End-to-End Example
 
 ```typescript
-import { ImageProcessorContainer, processImage } from '@delightstack/image-processor';
+// === src/database.ts ===
 import { DatabaseServer } from '@delightstack/database';
-import { defineImageTable } from '@delightstack/image-processor/schema';
+import {
+	ImageProcessorContainer,
+	imageProcessing,
+	defineImageTable,
+} from '@delightstack/image-processor';
 
 export { ImageProcessorContainer };
 
-// Your database config includes the image table
 const dbConfig = {
 	image: defineImageTable(),
-	user: defineUserTable(),
+	post: definePostTable(), // your app's tables
 };
 
 export class AppDatabase extends DatabaseServer<typeof dbConfig> {
+	readonly images = imageProcessing(this, {
+		container: () => this.env.IMAGE_PROCESSOR,
+		bucket: () => this.env.MEDIA_BUCKET,
+		keep_original: true,
+	});
+
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(dbConfig, () => null, ctx, env);
 	}
 
-	/** Process an uploaded image and save the result to the database */
-	async processAndSaveImage(
-		imageProcessorBinding: DurableObjectNamespace,
-		bucket: R2Bucket,
-		key: string,
-	) {
-		// Process the image
-		const result = await processImage(imageProcessorBinding, {
-			bucket,
-			key,
-			keep_original: true,
-			output_prefix: 'processed/',
-		});
-
-		// Save to database (all metadata + variant info)
-		return this.create('image', {
-			key,
-			file_name: result.metadata.file_name,
-			mime_type: result.metadata.mime_type,
-			file_size: result.metadata.file_size,
-			width: result.metadata.width,
-			height: result.metadata.height,
-			aspect_ratio: result.metadata.aspect_ratio,
-			has_transparency: result.metadata.has_transparency,
-			is_animated: result.metadata.is_animated,
-			frame_count: result.metadata.frame_count,
-			background_color_l: result.metadata.background_color.l,
-			background_color_c: result.metadata.background_color.c,
-			background_color_h: result.metadata.background_color.h,
-			accent_color_l: result.metadata.accent_color?.l ?? null,
-			accent_color_c: result.metadata.accent_color?.c ?? null,
-			accent_color_h: result.metadata.accent_color?.h ?? null,
-			thumbhash: result.thumbhash,
-			tiny_preview: result.tiny_preview,
-			variants: result.variants,
-			processing_status: 'completed',
-		});
+	async alarm() {
+		await this.images.processAlarm();
 	}
 }
+
+// === src/index.ts ===
+export default {
+	async fetch(request: Request, env: Env) {
+		const db = env.APP_DATABASE.getByName('main');
+
+		// Upload
+		if (request.method === 'POST' && url.pathname === '/images') {
+			const formData = await request.formData();
+			const file = formData.get('file') as File;
+			const key = `uploads/${crypto.randomUUID()}/${file.name}`;
+			await env.MEDIA_BUCKET.put(key, file.stream());
+
+			const image = await db.images.upload(key);
+			return new Response(null, {
+				status: 201,
+				headers: { Location: `/images/${image.id}` },
+			});
+		}
+
+		// Get image (works immediately — shows pending status or full metadata)
+		if (request.method === 'GET' && url.pathname.startsWith('/images/')) {
+			const id = url.pathname.split('/').pop()!;
+			const image = await db.images.getStatus(id);
+			return Response.json(image);
+		}
+
+		// Delete image (cleans up variants from R2 too)
+		if (request.method === 'DELETE' && url.pathname.startsWith('/images/')) {
+			const id = url.pathname.split('/').pop()!;
+			await db.images.delete(id);
+			return new Response(null, { status: 204 });
+		}
+	},
+};
 ```
 
-### Avoiding Webhooks: The Direct-Call Pattern
+### Why Not Merge the Container into the Database DO?
 
-The key insight for Delightstack integration: **you never need webhooks**. Because the `processImage()` call is synchronous (from the Worker's perspective), you can process an image and save the result to the database in a single request handler:
+You might wonder: why not have the database DO also be the Container? Two reasons:
 
-```typescript
-// In your Worker fetch handler
-async function handleUpload(request: Request, env: Env) {
-	const formData = await request.formData();
-	const file = formData.get('file') as File;
+1. **Cloudflare architecture**: A Container class IS a Durable Object. You can't have a single class extend both `DatabaseServer` (which extends `DurableObject`) and `Container` (which also extends `DurableObject`). They're separate DOs by necessity.
 
-	// 1. Upload raw file to R2
-	const key = `uploads/${crypto.randomUUID()}/${file.name}`;
-	await env.MEDIA_BUCKET.put(key, file.stream());
+2. **Separation of concerns**: The database DO may have thousands of instances (one per user/org). The container is a heavy Docker VM that should have a small pool of instances. Coupling them would mean spinning up a Docker container for every database DO instance, which is wasteful and expensive.
 
-	// 2. Process it (synchronous -- waits for container to finish)
-	const result = await processImage(env.IMAGE_PROCESSOR, {
-		bucket: env.MEDIA_BUCKET,
-		key,
-	});
-
-	// 3. Save metadata to database (RPC call to your database DO)
-	const db = env.APP_DATABASE.getByName('main');
-	const image = await db.createImage({
-		key,
-		...result.metadata,
-		thumbhash: result.thumbhash,
-		tiny_preview: result.tiny_preview,
-		variants: result.variants,
-	});
-
-	// 4. Return to client
-	return Response.json({ ok: true, image });
-}
-```
-
-The user uploads an image, and in a single HTTP request-response cycle: the file goes to R2, gets processed by the container, metadata is saved to the database, and the client gets the full result back. No background jobs, no polling, no webhooks.
+The `imageProcessing()` helper bridges this gap cleanly. From the user's perspective, `db.images.upload(key)` is a single call. The cross-DO communication is an implementation detail they never see.
 
 ---
 
@@ -1272,17 +1562,16 @@ Should we use a single shared container or per-user/per-request containers?
 
 Recommendation: Start with a single shared container. Add pooling later if throughput becomes a bottleneck.
 
-### 2. Async/Batch Processing
+### 2. Alarm Concurrency and Rate Limiting
 
-Should we support a fire-and-forget mode for large batch uploads?
+The alarm handler processes pending images sequentially within a single DO instance. For batch uploads (e.g., 50 images at once), they'll be processed one-at-a-time per alarm invocation (with batching of ~10 per alarm cycle).
 
-The synchronous pattern works great for single image uploads. But for batch processing (e.g., uploading 50 images at once), you'd want to queue them and get results later. Options:
+Should we:
+- Process multiple images per alarm cycle in parallel? (risk: memory pressure)
+- Rate-limit how many images can be queued per DO? (prevent abuse)
+- Use multiple container instances for parallelism? (adds complexity)
 
-- Use `Promise.all` with multiple `processImage` calls (container processes sequentially)
-- Use Cloudflare Queues for batching
-- Use Cloudflare Workflows for complex multi-step pipelines
-
-Recommendation: Start synchronous-only. Add queue-based batch processing as a later feature.
+Recommendation: Start with sequential processing (simple, predictable). Add parallelism later if throughput becomes a bottleneck.
 
 ### 3. Image Optimization Profiles
 
@@ -1366,10 +1655,11 @@ packages/image-processor/
 ├── src/                       # Worker-side code (imported by consuming apps)
 │   ├── index.ts               # Main exports
 │   ├── container.ts           # ImageProcessorContainer class (DO + Container)
-│   ├── process.ts             # processImage() helper function
+│   ├── process.ts             # processImage() standalone helper (Mode 2)
+│   ├── integration.ts         # imageProcessing() factory for DatabaseServer (Mode 1)
+│   ├── schema.ts              # defineImageTable() for @delightstack/database
 │   ├── types.ts               # All TypeScript types
-│   ├── errors.ts              # Error classes
-│   └── schema.ts              # Database schema helper for @delightstack/database
+│   └── errors.ts              # Error classes
 │
 └── tests/
     ├── pipeline.test.ts       # Unit tests for processing pipeline
@@ -1392,18 +1682,22 @@ packages/image-processor/
 This package aims to make image processing on Cloudflare as simple as:
 
 ```typescript
+// With @delightstack/database — async, non-blocking
+const image = await db.images.upload(key);
+// Returns immediately. Processing happens in the background.
+// image.processing_status === 'pending'
+// Later: 'processed' with all metadata, variants, thumbhash, colors, etc.
+
+// Standalone — synchronous, blocking
 const result = await processImage(env.IMAGE_PROCESSOR, {
 	bucket: env.MEDIA_BUCKET,
 	key: 'uploads/photo.jpg',
 });
-
 // result.thumbhash → "3OcRJYB4d3h/iIeHeEh3eIhw+j2w"
 // result.tiny_preview → "data:image/avif;base64,AAAAIG..."
 // result.metadata.background_color_css → "oklch(0.65 0.04 210)"
 // result.metadata.accent_color_css → "oklch(0.63 0.21 1)"
 // result.variants[0].key → "processed/photo/standard.avif"
-// result.variants[1].key → "processed/photo/thumbnail.avif"
-// result.variants[2].name → "original" (if keep_original is true)
 ```
 
-You give it a bucket and a key. It gives you back everything you need to display that image beautifully on a website, including instant placeholder previews, optimized variants, and rich metadata. No webhooks. No background jobs. No configuration beyond the basics.
+You give it a bucket and a key. It gives you back everything you need to display that image beautifully on a website, including instant placeholder previews, optimized variants, and rich metadata. No webhooks. No polling. No configuration beyond the basics. With the database integration, the user doesn't even wait -- upload returns immediately and processing happens in the background.
