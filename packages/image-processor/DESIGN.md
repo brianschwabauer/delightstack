@@ -36,25 +36,31 @@ The database DO orchestrates everything. Upload returns immediately; processing 
 User Upload
   │
   ▼
-Worker ── R2.put(raw file) ── db.images.upload(key) ── return 201
-                                    │
-                                    ▼ (async, via DO alarm)
-                              Database DO
-                                    │── read from R2
-                                    │── stream to Container DO
-                                    │          │
-                                    │          ▼
-                                    │   Docker Container (Bun + Sharp)
-                                    │     process / resize / extract
-                                    │          │
-                                    │   ◄── multipart response
-                                    │── write variants to R2
-                                    │── update image record (status: 'processed')
-                                    ▼
-                              Done. Image record has all metadata.
+Worker ── db.images.upload(key, stream) ── return 201
+                        │
+                        ▼
+                  Database DO
+                        │── write original to R2
+                        │── create pending record
+                        │── schedule alarm
+                        │
+                        ▼ (async, via DO alarm)
+                  Database DO
+                        │── read from R2
+                        │── stream to Container DO
+                        │          │
+                        │          ▼
+                        │   Docker Container (Bun + Sharp)
+                        │     process / resize / extract
+                        │          │
+                        │   ◄── multipart response
+                        │── write variants to R2
+                        │── update image record (status: 'processed')
+                        ▼
+                  Done. Image record has all metadata.
 ```
 
-The database DO owns the image lifecycle: it creates the pending record, triggers processing via an alarm, writes results to R2, and updates the record. If the image record is deleted while processing is in flight, the DO cleans up any newly-created variant files.
+The database DO owns the entire image lifecycle: it saves the original file to R2, creates the pending record, triggers processing via an alarm, writes results to R2, and updates the record. If the image record is deleted while processing is in flight, the DO cleans up any newly-created variant files.
 
 ### Mode 2: Standalone (without `@delightstack/database`)
 
@@ -153,16 +159,12 @@ export default {
 		const formData = await request.formData();
 		const file = formData.get('file') as File;
 
-		// 1. Upload raw file to R2
+		// upload() saves the original to R2 and creates a pending record.
+		// Processing happens asynchronously in the background via DO alarm.
 		const key = `uploads/${crypto.randomUUID()}/${file.name}`;
-		await env.MEDIA_BUCKET.put(key, file.stream());
-
-		// 2. Create image record — returns IMMEDIATELY with status: 'pending'
-		//    Processing happens asynchronously in the background via DO alarm
 		const db = env.APP_DATABASE.getByName('main');
-		const image = await db.images.upload(key);
+		const image = await db.images.upload(key, file.stream());
 
-		// 3. Return 201 — the user doesn't wait for processing
 		return new Response(null, {
 			status: 201,
 			headers: { Location: `/images/${image.id}` },
@@ -171,7 +173,7 @@ export default {
 };
 ```
 
-That's it. The user uploads a file and gets a 201 back in milliseconds. Processing happens in the background. The image record transitions from `'pending'` → `'processing'` → `'processed'` (or `'failed'`). The frontend can show the thumbhash/tiny preview as soon as the record is marked `'processed'`.
+That's it. One call. The user uploads a file and gets a 201 back. The `upload()` method saves the original to R2, creates the pending record, and schedules an alarm for processing. The image record transitions from `'pending'` → `'processing'` → `'processed'` (or `'failed'`). The frontend can show the thumbhash/tiny preview as soon as the record is marked `'processed'`.
 
 ### Standalone Setup (without `@delightstack/database`)
 
@@ -197,12 +199,19 @@ export default {
 
 ### How Async Processing Works (Mode 1: Database Integration)
 
-When you call `db.images.upload(key)`, here's what happens:
+When you call `db.images.upload(key, stream)`, here's what happens:
 
 ```typescript
 // Inside the imageProcessing() helper
-async upload(key: string, options?: UploadOptions): Promise<ImageRecord> {
-	// 1. Create the image record with status: 'pending'
+async upload(
+	key: string,
+	data: ReadableStream | ArrayBuffer,
+	options?: UploadOptions,
+): Promise<ImageRecord> {
+	// 1. Save the original file to R2
+	await this.options.bucket().put(key, data);
+
+	// 2. Create the image record with status: 'pending'
 	const record = this.db.create('image', {
 		key,
 		processing_status: 'pending',
@@ -210,7 +219,7 @@ async upload(key: string, options?: UploadOptions): Promise<ImageRecord> {
 		// ... minimal fields, rest filled in after processing
 	});
 
-	// 2. Ensure an alarm is scheduled so processAlarm() runs.
+	// 3. Ensure an alarm is scheduled so processAlarm() runs.
 	//    Uses "set only if earlier" to avoid overwriting a closer alarm
 	//    that may have been set by other code.
 	const existing = await this.db.ctx.storage.getAlarm();
@@ -218,7 +227,7 @@ async upload(key: string, options?: UploadOptions): Promise<ImageRecord> {
 		await this.db.ctx.storage.setAlarm(Date.now());
 	}
 
-	// 3. Return the record immediately — the caller doesn't wait
+	// 4. Return the record immediately — the caller doesn't wait for processing
 	return record;
 }
 ```
@@ -396,7 +405,9 @@ Mode 1 (async):
 
 Worker                 Database DO                 Container DO
   │                       │                              │
-  │── db.images.upload()  │                              │
+  │── db.images.upload(key, stream)                      │
+  │                       │── write original to R2       │
+  │                       │── create pending record      │
   │◄── 201 + image ID ──  │                              │
   │                       │  (alarm fires)               │
   │                       │── read from R2               │
@@ -1214,8 +1225,16 @@ This creates a helper with these methods:
 
 ```typescript
 interface ImageProcessingHelper {
-	/** Create a pending image record and schedule an alarm for processing */
-	upload(key: string, options?: UploadOptions): ImageRecord;
+	/**
+	 * Save the original file to R2, create a pending image record,
+	 * and schedule an alarm for processing.
+	 * Accepts ReadableStream (from file.stream()) or ArrayBuffer.
+	 */
+	upload(
+		key: string,
+		data: ReadableStream | ArrayBuffer,
+		options?: UploadOptions,
+	): Promise<ImageRecord>;
 
 	/**
 	 * Delete an image and all its variants from R2.
@@ -1398,9 +1417,8 @@ export default {
 			const formData = await request.formData();
 			const file = formData.get('file') as File;
 			const key = `uploads/${crypto.randomUUID()}/${file.name}`;
-			await env.MEDIA_BUCKET.put(key, file.stream());
 
-			const image = await db.images.upload(key);
+			const image = await db.images.upload(key, file.stream());
 			return new Response(null, {
 				status: 201,
 				headers: { Location: `/images/${image.id}` },
@@ -1432,7 +1450,7 @@ You might wonder: why not have the database DO also be the Container? Two reason
 
 2. **Separation of concerns**: The database DO may have thousands of instances (one per user/org). The container is a heavy Docker VM that should have a small pool of instances. Coupling them would mean spinning up a Docker container for every database DO instance, which is wasteful and expensive.
 
-The `imageProcessing()` helper bridges this gap cleanly. From the user's perspective, `db.images.upload(key)` is a single call. The cross-DO communication is an implementation detail they never see.
+The `imageProcessing()` helper bridges this gap cleanly. From the user's perspective, `db.images.upload(key, stream)` is a single call that handles R2 storage, record creation, and alarm scheduling. The cross-DO communication is an implementation detail they never see.
 
 ---
 
@@ -1683,8 +1701,8 @@ This package aims to make image processing on Cloudflare as simple as:
 
 ```typescript
 // With @delightstack/database — async, non-blocking
-const image = await db.images.upload(key);
-// Returns immediately. Processing happens in the background.
+const image = await db.images.upload(key, file.stream());
+// Saves original to R2, returns immediately. Processing happens in the background.
 // image.processing_status === 'pending'
 // Later: 'processed' with all metadata, variants, thumbhash, colors, etc.
 
