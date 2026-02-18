@@ -425,7 +425,7 @@ class ImageProcessorContainer extends Container {
 	// Public method = automatically exposed as RPC endpoint
 	async process(
 		imageData: ArrayBuffer,
-		options?: { variants?: VariantConfig[]; compress_original?: boolean },
+		options?: { variants?: VariantConfig[]; compress_original?: boolean; avatar?: boolean },
 	): Promise<ContainerProcessResult> {
 		// Stream input to the Docker container
 		const port = this.ctx.container.getTcpPort(8080);
@@ -529,6 +529,14 @@ interface ProcessImageOptions {
 	 * Variants whose max_dimension exceeds the original's long edge are skipped.
 	 */
 	variants?: VariantConfig[];
+
+	/**
+	 * Enable avatar mode: face-aware square crop, keep_original defaults to false,
+	 * single thumbnail variant (640px). See "Avatar Profile" section.
+	 *
+	 * Explicit options (keep_original, variants, etc.) override avatar defaults.
+	 */
+	avatar?: boolean;
 }
 
 interface VariantConfig {
@@ -591,6 +599,14 @@ interface UploadOptions {
 
 	/** Custom variant configuration. If omitted, uses the default variants. */
 	variants?: VariantConfig[];
+
+	/**
+	 * Enable avatar mode: face-aware square crop, keep_original defaults to false,
+	 * single thumbnail variant (640px). See "Avatar Profile" section.
+	 *
+	 * Explicit options (keep_original, variants, etc.) override avatar defaults.
+	 */
+	avatar?: boolean;
 }
 ```
 
@@ -771,6 +787,8 @@ Input
   ├── 3. Load with Sharp (auto-rotate from EXIF)
   ├── 4. Extract metadata (dimensions, color, alpha, ICC, etc.)
   ├── 5. Extract colors → background (1x1 average) + accent (node-vibrant) → OKLCH
+  │
+  ├── 5a. [avatar: true only] Face-aware square crop (see Avatar Profile section)
   │
   ├── 6. Generate variants (skip any where original's long edge < max_dimension):
   │   ├── "default" → fit inside 2048px, AVIF q50 effort 4, strip metadata
@@ -1010,6 +1028,70 @@ Examples:
 - A 4000x3000 image (long edge: 4000px) → generates both `default` (2048px) and `thumbnail` (640px)
 
 The `original` variant is never skipped — it's always kept (compressed or raw) when `keep_original` is true.
+
+### Avatar Profile
+
+The `avatar: true` option enables face-aware square cropping, designed for user profile pictures. The crop happens **before** variant generation — all variants receive the already-cropped square image.
+
+**Defaults when `avatar: true`:**
+
+| Option             | Avatar Default | Normal Default |
+| ------------------ | -------------- | -------------- |
+| `keep_original`    | `false`        | `true`         |
+| `compress_original`| n/a            | `true`         |
+| `variants`         | `[{ name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4, fit: 'inside' }]` | default + thumbnail |
+
+All defaults can be overridden explicitly. For example, `{ avatar: true, keep_original: true }` will keep the original (pre-crop) file.
+
+**Cropping strategy:**
+
+```
+Input (any aspect ratio)
+  │
+  ├── 1. Run face detection (mediapipe-face-detection via @mediapipe/tasks-vision)
+  │
+  ├── 2a. Face detected:
+  │   ├── Compute bounding box center of the largest face
+  │   ├── Expand to a square crop region centered on the face
+  │   │   (square side = min(width, height), shifted to keep face centered)
+  │   ├── Clamp to image bounds
+  │   └── Extract square region with Sharp .extract()
+  │
+  ├── 2b. No face detected:
+  │   └── Fall back to Sharp's attention-based crop:
+  │       sharp(input).resize(size, size, { fit: 'cover', position: 'attention' })
+  │       (uses saliency/entropy to find the most interesting region)
+  │
+  ├── 3. Generate variant(s) from the cropped square
+  │
+  └── 4. Generate ThumbHash (from the cropped square — will encode 1:1 aspect ratio)
+```
+
+**Face detection details:**
+- Uses `@mediapipe/tasks-vision` with the BlazeFace short-range model (~200 KB, optimized for faces within 2 meters of the camera)
+- Runs on CPU in the Docker container — no GPU needed, ~50-100ms per image
+- If multiple faces are detected, uses the largest bounding box (closest face)
+- The model is loaded once at container startup and reused across requests
+
+**Usage:**
+
+```typescript
+// Database integration
+const avatar = await db.images.upload(file, { avatar: true });
+// → One R2 file: images/{id}/thumbnail (640x640 square AVIF)
+// → No original kept
+// → ThumbHash encodes a 1:1 square
+
+// Standalone
+const result = await processImage(env.IMAGE_PROCESSOR, {
+	bucket: env.MEDIA_BUCKET,
+	key: 'uploads/selfie.jpg',
+	avatar: true,
+});
+// → result.variants = [{ name: 'thumbnail', width: 640, height: 640, ... }]
+```
+
+The avatar variant uses `fit: 'inside'` (not `cover`) because the input is already square after cropping — both fit modes produce the same result on a square image.
 
 ---
 
@@ -2050,7 +2132,7 @@ Costs are dominated by R2 storage and egress for most workloads, not the contain
 | **Format breadth**          | Excellent (all via libvips)                                      | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins)      |
 | **Performance**             | Excellent (C-level via libvips, fast startup via Bun)            | Excellent (native)                              | Excellent (C-level via libvips)  | Slower (GIL + Python overhead) |
 | **Memory efficiency**       | Excellent (libvips streaming)                                    | Good                                            | Excellent (libvips streaming)    | Poor (Pillow loads full image) |
-| **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash, node-vibrant all npm) | Fragmented                                      | Decent                           | Rich but slow                  |
+| **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash, node-vibrant, @mediapipe/tasks-vision all npm) | Fragmented                                      | Decent                           | Rich but slow                  |
 | **Docker image size**       | ~300 MB                                                          | ~200 MB                                         | ~250 MB                          | ~400 MB                        |
 | **Developer familiarity**   | Matches rest of Delightstack (TypeScript)                        | Different language                              | Different language               | Different language             |
 | **Community/maintenance**   | Sharp: 29K stars, very active                                    | image-rs: 5K stars                              | bimg: 4K stars                   | Pillow: 12K stars              |
@@ -2102,36 +2184,6 @@ Should we:
 
 Recommendation: Start with sequential processing (simple, predictable). Add parallelism later if throughput becomes a bottleneck.
 
-### 3. Image Optimization Profiles
-
-Should we provide named profiles for common use cases?
-
-```typescript
-// E-commerce product images
-processImage(env.IMAGE_PROCESSOR, {
-  profile: 'ecommerce',  // 2048 default + 640 thumb + white bg
-  ...
-});
-
-// User avatars
-processImage(env.IMAGE_PROCESSOR, {
-  profile: 'avatar',  // 512 default + 128 thumb + square crop
-  ...
-});
-
-// Blog/CMS content images
-processImage(env.IMAGE_PROCESSOR, {
-  profile: 'content',  // 1920 default + 640 thumb + social share variant
-  ...
-});
-```
-
-### 4. Image Cropping
-
-Should the processor support cropping (e.g., square crop for avatars)?
-
-Currently the design supports two fit modes (`inside` and `cover`) but neither crops — they only resize. Smart cropping (attention-based or face-detection) is more complex. Could be a future addition.
-
 ---
 
 ## Future Features
@@ -2140,15 +2192,11 @@ Currently the design supports two fit modes (`inside` and `cover`) but neither c
 
 - **Batch processing** via Cloudflare Queues
 - **WebP fallback variants** (opt-in)
-- **Smart cropping** (attention-based crop for thumbnails)
-- **Image optimization profiles** (avatar, ecommerce, content, social)
 - **Progress reporting** via WebSocket for large files
 - **Watermarking** (text or image overlay)
-- **EXIF preservation option** (for photographers who want to keep camera data)
 
 ### Phase 3 (Later)
 
-- **Face detection** for smart avatar cropping
 - **NSFW detection** via a lightweight ML model
 - **Perceptual deduplication** (detect near-duplicate uploads)
 - **Image comparison** (diff two images for visual regression testing)
@@ -2176,6 +2224,7 @@ packages/image-processor/
 │   ├── variants.ts            # Variant generation
 │   ├── thumbhash.ts           # ThumbHash generation
 │   ├── colors.ts              # Background + accent color extraction + OKLCH conversion
+│   ├── face-crop.ts           # Face detection + square crop for avatar profile
 │   ├── svg.ts                 # SVG-specific handling (sanitization, metadata)
 │   ├── pdf.ts                 # PDF-specific handling (first page rendering)
 │   ├── validation.ts          # Input validation (size, dimensions, format)
