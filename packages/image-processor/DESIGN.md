@@ -174,7 +174,7 @@ export default {
 };
 ```
 
-That's it. One call. The user uploads a file and gets a 201 back. The `upload()` method generates a unique ID, saves the original to R2 at `/{prefix}/{id}/original`, creates the pending record, and schedules an alarm for processing. The image record transitions from `'pending'` → `'processing'` → `'processed'` (or `'failed'`). The frontend can show the thumbhash/tiny preview as soon as the record is marked `'processed'`.
+That's it. One call. The user uploads a file and gets a 201 back. The `upload()` method generates a unique ID, saves the original to R2 at `/{prefix}/{id}/original`, creates the pending record, and schedules an alarm for processing. The image record transitions from `'pending'` → `'processing'` → `'processed'` (or `'failed'`). The frontend can show the thumbhash placeholder as soon as the record is marked `'processed'`.
 
 ### Standalone Setup (without `@delightstack/database`)
 
@@ -333,7 +333,6 @@ async processAlarm(): Promise<void> {
 				processing_status: 'processed',
 				...result.metadata,
 				thumbhash: result.thumbhash,
-				tiny_preview: result.tiny_preview,
 				variants: result.variant_info, // without binary data
 			});
 		} catch (error) {
@@ -484,7 +483,7 @@ interface ProcessImageOptions {
 	 * - { name: 'default', max_dimension: 2048, format: 'avif', quality: 50, effort: 4 }
 	 * - { name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4 }
 	 *
-	 * The tiny base64 preview and thumbhash are always generated regardless of variants.
+	 * The thumbhash is always generated regardless of variants.
 	 */
 	variants?: VariantConfig[];
 }
@@ -544,11 +543,12 @@ interface ProcessImageResult {
 	/** Metadata extracted from the original image */
 	metadata: ImageMetadata;
 
-	/** ThumbHash as a base64 string (~33 chars, encodes aspect ratio + transparency) */
+	/**
+	 * ThumbHash as a base64 string (~33 chars, encodes aspect ratio + transparency).
+	 * Use thumbHashToDataURL(thumbhash) to generate a placeholder image —
+	 * works server-side (pure JS, no canvas) for SSR.
+	 */
 	thumbhash: string;
-
-	/** Tiny base64-encoded preview image as a data URI (e.g. "data:image/avif;base64,...") */
-	tiny_preview: string;
 
 	/**
 	 * The generated output variants.
@@ -676,7 +676,6 @@ Input
   ├── 6. Generate variants:
   │   ├── "default" → 2048px long-edge, AVIF q50 effort 4, strip metadata
   │   ├── "thumbnail" → 640px long-edge, AVIF q50 effort 4, strip metadata
-  │   ├── "tiny" → 36px long-edge, smallest of AVIF/WebP/JPEG, base64-encode
   │   └── (any custom variants from config)
   │
   ├── 7. Generate ThumbHash from resized preview
@@ -696,7 +695,6 @@ Input
   ├── 6. Generate variants:
   │   ├── "default" → 2048px, animated WebP (AVIF doesn't support animation)
   │   ├── "thumbnail" → 640px, animated WebP
-  │   ├── "tiny" → 36px from FIRST FRAME only, base64-encode
   │   └── (custom variants forced to WebP/GIF if animated)
   │
   ├── 7. ThumbHash from first frame
@@ -740,44 +738,15 @@ Input
   ├── 3. Sanitize: strip <script> tags, event handlers, external references
   │      Use DOMPurify or a whitelist-based sanitizer
   │
-  ├── 4. Rasterize at a sensible size for ThumbHash/tiny preview only
+  ├── 4. Rasterize at a sensible size for ThumbHash only
   │      (via librsvg through Sharp, or resvg)
   │
   ├── 5. Do NOT create resized variants (SVGs are resolution-independent)
   │
-  ├── 6. Return sanitized SVG + metadata + tiny preview
+  ├── 6. Return sanitized SVG + metadata + thumbhash
   │
   └── Note: Original SVG is always kept (sanitized version saved alongside)
 ```
-
-### Tiny Base64 Preview Strategy
-
-For the 36x36 pixel preview, we want the absolute smallest base64 string that can be used in an `<img src="data:...">` tag.
-
-**Approach:** Generate the 36x36 image in all three formats (AVIF, WebP, JPEG) and pick the smallest:
-
-```typescript
-const tiny = sharp(input).resize(36, 36, { fit: 'inside' }).removeMetadata();
-
-const [avif, webp, jpeg] = await Promise.all([
-	tiny.clone().avif({ quality: 40, effort: 2 }).toBuffer(),
-	tiny.clone().webp({ quality: 40 }).toBuffer(),
-	tiny.clone().jpeg({ quality: 40 }).toBuffer(),
-]);
-
-// Pick smallest
-const candidates = [
-	{ format: 'avif', mime: 'image/avif', buffer: avif },
-	{ format: 'webp', mime: 'image/webp', buffer: webp },
-	{ format: 'jpeg', mime: 'image/jpeg', buffer: jpeg },
-].sort((a, b) => a.buffer.length - b.buffer.length);
-
-const winner = candidates[0];
-const data_uri = `data:${winner.mime};base64,${winner.buffer.toString('base64')}`;
-// Typical size: 200-500 bytes as base64 string
-```
-
-At 36x36 pixels, the differences are small (~200-600 bytes per format), but AVIF or WebP usually win. The resulting base64 string is typically 300-800 characters -- small enough to inline in HTML or store in a database column.
 
 ### ThumbHash vs BlurHash
 
@@ -794,10 +763,40 @@ We use **ThumbHash** instead of BlurHash because:
 
 ThumbHash provides better previews with less configuration. It's 25 bytes binary (~33 chars base64), which is tiny enough to store alongside any image record.
 
-Both the thumbhash AND the tiny base64 preview are generated. They serve slightly different purposes:
+### ThumbHash as Placeholder Image
 
-- **ThumbHash**: Absolute smallest (33 chars), good for list views with hundreds of items
-- **Tiny base64**: Slightly larger (300-800 chars) but pixel-accurate preview, good for hero images where you want the preview to look as close to the real image as possible. This can also be server side rendered because it can be simply injected into an image src tag
+The `thumbHashToDataURL()` function generates a PNG data URL from a thumbhash — **pure JS, no canvas, no DOM.** This works on Cloudflare Workers and in SvelteKit server hooks, enabling server-side rendered placeholders with zero flash.
+
+```svelte
+<script>
+	import { thumbHashToDataURL } from 'thumbhash';
+</script>
+
+<!-- Server-rendered placeholder — no client JS needed, no layout shift -->
+<img
+	src={thumbHashToDataURL(image.thumbhash)}
+	width={image.width}
+	height={image.height}
+	alt=""
+/>
+```
+
+The decoded image is ~32x32 pixels (dimensions are embedded in the hash, not related to the original image size). When scaled up by the browser, it looks like a smooth blurry preview — the right colors and shapes.
+
+For fullscreen hero images, add a CSS blur to smooth any banding from the extreme upscale:
+
+```svelte
+<!-- Hero image with smooth placeholder -->
+<img
+	src={thumbHashToDataURL(image.thumbhash)}
+	style="filter: blur(20px); transform: scale(1.1)"
+	width={image.width}
+	height={image.height}
+	alt=""
+/>
+```
+
+The `scale(1.1)` prevents blurred edges from being visible. For cards, grids, and thumbnails, the raw thumbhash looks fine without blur.
 
 ---
 
@@ -805,11 +804,10 @@ Both the thumbhash AND the tiny base64 preview are generated. They serve slightl
 
 ### Default Variants
 
-| Variant     | Max Dimension | Format                     | Quality | Notes                                    |
-| ----------- | ------------- | -------------------------- | ------- | ---------------------------------------- |
-| `default`   | 2048px        | AVIF                       | 50      | Primary viewing size. WebP for animated. |
-| `thumbnail` | 640px         | AVIF                       | 50      | List/grid views. WebP for animated.      |
-| `tiny`      | 36px          | smallest of AVIF/WebP/JPEG | 40      | Base64-encoded data URI                  |
+| Variant     | Max Dimension | Format | Quality | Notes                                    |
+| ----------- | ------------- | ------ | ------- | ---------------------------------------- |
+| `default`   | 2048px        | AVIF   | 50      | Primary viewing size. WebP for animated. |
+| `thumbnail` | 640px         | AVIF   | 50      | List/grid views. WebP for animated.      |
 
 ### Output File Naming
 
@@ -852,14 +850,13 @@ When the input is animated:
 
 - AVIF variants fall back to animated WebP (AVIF doesn't support animation in Sharp/libvips)
 - Frame count is capped at 500 frames to prevent abuse
-- The tiny preview and thumbhash use only the first frame
+- The thumbhash uses only the first frame
 - All frames are resized together, preserving timing/delays
 
 ### Transparency Handling
 
 - If the input has transparency, AVIF and WebP variants preserve it
 - JPEG variants (if requested) get a white background composited
-- The tiny preview preserves transparency if the smallest format supports it
 - ThumbHash encodes the alpha channel
 
 ---
@@ -1441,8 +1438,7 @@ CREATE TABLE image (
   accent_color_l REAL,                 -- Accent OKLCH lightness (nullable for achromatic images)
   accent_color_c REAL,                 -- Accent OKLCH chroma
   accent_color_h REAL,                 -- Accent OKLCH hue
-  thumbhash TEXT,                      -- ThumbHash base64
-  tiny_preview TEXT,                   -- Base64 data URI
+  thumbhash TEXT,                      -- ThumbHash base64 (~33 chars)
   variants TEXT,                       -- JSON array of variant info (includes 'original' if kept)
 
   created_at TEXT NOT NULL,
@@ -1880,7 +1876,7 @@ Should we provide named profiles for common use cases?
 ```typescript
 // E-commerce product images
 processImage(env.IMAGE_PROCESSOR, {
-  profile: 'ecommerce',  // 2048 default + 640 thumb + 120 tiny + white bg
+  profile: 'ecommerce',  // 2048 default + 640 thumb + white bg
   ...
 });
 
@@ -1994,10 +1990,10 @@ const result = await processImage(env.IMAGE_PROCESSOR, {
 	key: 'uploads/photo.jpg',
 });
 // result.thumbhash → "3OcRJYB4d3h/iIeHeEh3eIhw+j2w"
-// result.tiny_preview → "data:image/avif;base64,AAAAIG..."
+// thumbHashToDataURL(result.thumbhash) → "data:image/png;base64,..." (works server-side)
 // result.metadata.background_color_css → "oklch(0.65 0.04 210)"
 // result.metadata.accent_color_css → "oklch(0.63 0.21 1)"
 // result.variants[0].key → "images/01JQ7X8K9M3N/default"
 ```
 
-You give it a bucket and a key. It gives you back everything you need to display that image beautifully on a website, including instant placeholder previews, optimized variants, and rich metadata. No webhooks. No polling. No configuration beyond the basics. With the database integration, the user doesn't even wait -- upload returns immediately and processing happens in the background.
+You give it a bucket and a key. It gives you back everything you need to display that image beautifully on a website, including a thumbhash placeholder (server-renderable via `thumbHashToDataURL()`), optimized variants, and rich metadata. No webhooks. No polling. No configuration beyond the basics. With the database integration, the user doesn't even wait -- upload returns immediately and processing happens in the background.
