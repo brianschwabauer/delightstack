@@ -76,7 +76,7 @@ Worker ── processImage(env.IMAGE_PROCESSOR, { bucket, key }) ── waits 2-
 1. **`ImageProcessorContainer`** -- The Container/Durable Object class. Must be exported from your worker entrypoint for Cloudflare to discover it.
 2. **`processImage()`** -- Standalone helper for synchronous processing (Mode 2).
 3. **`imageProcessing()`** -- Factory that creates a helper object with `upload()`, `delete()`, etc. for use inside a DatabaseServer subclass (Mode 1).
-4. **`defineImageTable()`** -- Database schema helper for `@delightstack/database`.
+4. **`defineImageTable()`** -- Database schema helper for `@delightstack/database`. Accepts an optional callback to add custom fields.
 5. **`createImageHandle()`** -- SvelteKit server hook factory for serving images from R2 on your own domain.
 6. **`Image`** -- Svelte 5 component for displaying images with progressive thumbhash placeholders and responsive srcset.
 7. **`decodeThumbHash()`** -- Helper to decode a base64 thumbhash to a `data:image/png` URL. Works server-side.
@@ -133,7 +133,19 @@ import {
 export { ImageProcessorContainer };
 
 const dbConfig = {
+	// No custom fields — just the built-in image columns
 	image: defineImageTable(),
+	// ... your other tables
+};
+
+// Or add custom fields via the callback (receives the same schema builder):
+const dbConfig = {
+	image: defineImageTable((schema) => ({
+		user_id: schema.string(),
+		album_id: schema.foreignKey({ table: 'album', column: 'id', on_delete: 'CASCADE' }),
+		caption: schema.string().optional(),
+		is_public: schema.boolean(),
+	})),
 	// ... your other tables
 };
 
@@ -167,8 +179,11 @@ export default {
 		// upload() saves the original to R2 and creates a pending record.
 		// Processing happens asynchronously in the background via DO alarm.
 		// File name is extracted automatically from the File object.
+		// Custom fields (from defineImageTable callback) go in the `data` option.
 		const db = env.APP_DATABASE.getByName('main');
-		const image = await db.images.upload(file);
+		const image = await db.images.upload(file, {
+			data: { user_id: currentUser.id, is_public: true },
+		});
 
 		return new Response(null, {
 			status: 201,
@@ -231,13 +246,14 @@ async upload(
 	});
 
 	// 3. Create the image record with status: 'pending'
+	//    Custom fields from options.data are spread in alongside built-in fields.
 	const record = this.db.create('image', {
 		id,
 		base_path,
 		processing_status: 'pending',
 		file_name,
 		alt_text: options?.alt_text ?? null,
-		// ... minimal fields, rest filled in after processing
+		...options?.data,
 	});
 
 	// 3. Ensure an alarm is scheduled so processAlarm() runs.
@@ -624,6 +640,15 @@ interface UploadOptions {
 	 * Explicit options (keep_original, variants, etc.) override avatar defaults.
 	 */
 	avatar?: boolean;
+
+	/**
+	 * Custom field values to store in the image record.
+	 * These correspond to the fields defined in the defineImageTable() callback.
+	 * Spread into the db.create() call alongside built-in fields.
+	 *
+	 * Example: { user_id: 'abc', album_id: '123', is_public: true }
+	 */
+	data?: Record<string, unknown>;
 }
 ```
 
@@ -1736,12 +1761,25 @@ This makes the system self-healing. If the DO restarts, the alarm fires again an
 ```typescript
 import { defineImageTable } from '@delightstack/image-processor';
 
+// Basic — built-in fields only
 const dbConfig = {
 	image: defineImageTable(),
 };
+
+// With custom fields — callback receives the same schema builder as table()
+const dbConfig = {
+	image: defineImageTable((schema) => ({
+		user_id: schema.string(),
+		album_id: schema.foreignKey({ table: 'album', column: 'id', on_delete: 'CASCADE' }),
+		caption: schema.string().optional(),
+		is_public: schema.boolean(),
+	})),
+};
 ```
 
-Creates this table:
+The callback fields are merged with the built-in fields. `defineImageTable()` internally calls `table('image', ...)` with the built-in columns plus any custom columns from the callback. Custom fields become regular SQLite columns with full type safety.
+
+The built-in table creates:
 
 ```sql
 CREATE TABLE image (
@@ -1781,6 +1819,24 @@ CREATE TABLE image (
 
 Note: Most metadata fields are nullable because they're populated asynchronously after processing completes. Only `id`, `base_path`, and `processing_status` are guaranteed at upload time. `file_name` and `alt_text` are optional metadata provided by the caller — `alt_text` can also be updated later (e.g. via a dashboard).
 
+With the custom fields example above, the table would also include:
+
+```sql
+  -- Custom fields (from defineImageTable callback)
+  user_id TEXT NOT NULL,
+  album_id TEXT REFERENCES album(id) ON DELETE CASCADE,
+  caption TEXT,
+  is_public INTEGER NOT NULL,               -- 0 or 1
+```
+
+Custom field values are passed via the `data` option when uploading:
+
+```typescript
+const image = await db.images.upload(file, {
+	data: { user_id: currentUser.id, album_id: 'abc', is_public: true },
+});
+```
+
 ### Full End-to-End Example
 
 ```typescript
@@ -1795,7 +1851,9 @@ import {
 export { ImageProcessorContainer };
 
 const dbConfig = {
-	image: defineImageTable(),
+	image: defineImageTable((schema) => ({
+		user_id: schema.string(),
+	})),
 	post: definePostTable(), // your app's tables
 };
 
@@ -1826,7 +1884,9 @@ export default {
 			const formData = await request.formData();
 			const file = formData.get('file') as File;
 
-			const image = await db.images.upload(file);
+			const image = await db.images.upload(file, {
+				data: { user_id: currentUser.id },
+			});
 			return new Response(null, {
 				status: 201,
 				headers: { Location: `/images/${image.id}` },
