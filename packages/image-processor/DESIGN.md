@@ -425,7 +425,11 @@ class ImageProcessorContainer extends Container {
 	// Public method = automatically exposed as RPC endpoint
 	async process(
 		imageData: ArrayBuffer,
-		options?: { variants?: VariantConfig[]; compress_original?: boolean; avatar?: boolean },
+		options?: {
+			variants?: VariantConfig[];
+			compress_original?: boolean;
+			avatar?: boolean;
+		},
 	): Promise<ContainerProcessResult> {
 		// Stream input to the Docker container
 		const port = this.ctx.container.getTcpPort(8080);
@@ -1035,11 +1039,11 @@ The `avatar: true` option enables face-aware square cropping, designed for user 
 
 **Defaults when `avatar: true`:**
 
-| Option             | Avatar Default | Normal Default |
-| ------------------ | -------------- | -------------- |
-| `keep_original`    | `false`        | `true`         |
-| `compress_original`| n/a            | `true`         |
-| `variants`         | `[{ name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4, fit: 'inside' }]` | default + thumbnail |
+| Option              | Avatar Default                                                                                       | Normal Default      |
+| ------------------- | ---------------------------------------------------------------------------------------------------- | ------------------- |
+| `keep_original`     | `false`                                                                                              | `true`              |
+| `compress_original` | n/a                                                                                                  | `true`              |
+| `variants`          | `[{ name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4, fit: 'inside' }]` | default + thumbnail |
 
 All defaults can be overridden explicitly. For example, `{ avatar: true, keep_original: true }` will keep the original (pre-crop) file.
 
@@ -1068,6 +1072,7 @@ Input (any aspect ratio)
 ```
 
 **Face detection details:**
+
 - Uses `@mediapipe/tasks-vision` with the BlazeFace short-range model (~200 KB, optimized for faces within 2 meters of the camera)
 - Runs on CPU in the Docker container — no GPU needed, ~50-100ms per image
 - If multiple faces are detected, uses the largest bounding box (closest face)
@@ -1101,32 +1106,32 @@ All extracted metadata is returned in the `metadata` field. Here's everything Sh
 
 ### Core Metadata (always available)
 
-| Field                  | Source                         | Description                            |
-| ---------------------- | ------------------------------ | -------------------------------------- |
-| `file_name`            | Upload option                  | Original filename if provided, or null |
-| `file_extension`       | `file_name`                    | Lowercase extension without dot        |
-| `mime_type`            | `file-type` (magic bytes)      | True MIME type regardless of extension |
-| `file_size`            | R2 object info                 | Size in bytes                          |
-| `width`                | `sharp.metadata()`             | Pixels (after orientation correction)  |
-| `height`               | `sharp.metadata()`             | Pixels (after orientation correction)  |
-| `aspect_ratio`         | Computed                       | `width / height` as a float            |
-| `has_transparency`     | `sharp.metadata().hasAlpha`    | Whether alpha channel exists           |
-| `is_animated`          | `sharp.metadata().pages > 1`   | Whether image has multiple frames      |
-| `frame_count`          | `sharp.metadata().pages`       | Number of frames                       |
-| `color_space`          | `sharp.metadata().space`       | sRGB, CMYK, etc.                       |
-| `bit_depth`            | `sharp.metadata().depth`       | Bits per channel                       |
-| `channels`             | `sharp.metadata().channels`    | Number of channels                     |
-| `background_color`     | 1x1 resize + `culori`          | Average color as OKLCH `{ l, c, h }`   |
-| `background_color_css` | Computed                       | `oklch(0.65 0.04 210)` CSS string      |
-| `accent_color`         | `node-vibrant` + `culori`      | Vibrant color as OKLCH `{ l, c, h }`   |
-| `accent_color_css`     | Computed                       | `oklch(0.63 0.21 1)` CSS string        |
+| Field                  | Source                         | Description                                          |
+| ---------------------- | ------------------------------ | ---------------------------------------------------- |
+| `file_name`            | Upload option                  | Original filename if provided, or null               |
+| `file_extension`       | `file_name`                    | Lowercase extension without dot                      |
+| `mime_type`            | `file-type` (magic bytes)      | True MIME type regardless of extension               |
+| `file_size`            | R2 object info                 | Size in bytes                                        |
+| `width`                | `sharp.metadata()`             | Pixels (after orientation correction)                |
+| `height`               | `sharp.metadata()`             | Pixels (after orientation correction)                |
+| `aspect_ratio`         | Computed                       | `width / height` as a float                          |
+| `has_transparency`     | `sharp.metadata().hasAlpha`    | Whether alpha channel exists                         |
+| `is_animated`          | `sharp.metadata().pages > 1`   | Whether image has multiple frames                    |
+| `frame_count`          | `sharp.metadata().pages`       | Number of frames                                     |
+| `color_space`          | `sharp.metadata().space`       | sRGB, CMYK, etc.                                     |
+| `bit_depth`            | `sharp.metadata().depth`       | Bits per channel                                     |
+| `channels`             | `sharp.metadata().channels`    | Number of channels                                   |
+| `background_color`     | 1x1 resize + `culori`          | Average color as OKLCH `{ l, c, h }`                 |
+| `background_color_css` | Computed                       | `oklch(0.65 0.04 210)` CSS string                    |
+| `accent_color`         | `node-vibrant` + `culori`      | Vibrant color as OKLCH `{ l, c, h }`                 |
+| `accent_color_css`     | Computed                       | `oklch(0.63 0.21 1)` CSS string                      |
 | `luminance`            | `background_color.l`           | Average brightness (0-1), for text overlay decisions |
-| `date_taken`           | EXIF `DateTimeOriginal`        | When the photo was taken (ISO 8601), or null |
-| `gps_latitude`         | EXIF GPS                       | Decimal degrees (positive = north), or null |
-| `gps_longitude`        | EXIF GPS                       | Decimal degrees (positive = east), or null |
-| `exif_orientation`     | `sharp.metadata().orientation` | EXIF orientation tag (1-8)             |
-| `has_icc_profile`      | `sharp.metadata().hasProfile`  | ICC profile presence                   |
-| `density`              | `sharp.metadata().density`     | DPI/PPI if available                   |
+| `date_taken`           | EXIF `DateTimeOriginal`        | When the photo was taken (ISO 8601), or null         |
+| `gps_latitude`         | EXIF GPS                       | Decimal degrees (positive = north), or null          |
+| `gps_longitude`        | EXIF GPS                       | Decimal degrees (positive = east), or null           |
+| `exif_orientation`     | `sharp.metadata().orientation` | EXIF orientation tag (1-8)                           |
+| `has_icc_profile`      | `sharp.metadata().hasProfile`  | ICC profile presence                                 |
+| `density`              | `sharp.metadata().density`     | DPI/PPI if available                                 |
 
 ### Color Extraction: Background + Accent
 
@@ -2126,16 +2131,16 @@ Costs are dominated by R2 storage and egress for most workloads, not the contain
 
 ### Why Bun + Sharp (not Node.js, Rust, Go, or Python)
 
-| Factor                      | Bun + Sharp                                                      | Rust                                            | Go                               | Python                         |
-| --------------------------- | ---------------------------------------------------------------- | ----------------------------------------------- | -------------------------------- | ------------------------------ |
-| **Processing engine**       | libvips (via Sharp)                                              | image-rs or libvips FFI                         | bimg (libvips)                   | Pillow or pyvips               |
-| **Format breadth**          | Excellent (all via libvips)                                      | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins)      |
-| **Performance**             | Excellent (C-level via libvips, fast startup via Bun)            | Excellent (native)                              | Excellent (C-level via libvips)  | Slower (GIL + Python overhead) |
-| **Memory efficiency**       | Excellent (libvips streaming)                                    | Good                                            | Excellent (libvips streaming)    | Poor (Pillow loads full image) |
+| Factor                      | Bun + Sharp                                                                               | Rust                                            | Go                               | Python                         |
+| --------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------- | ------------------------------ |
+| **Processing engine**       | libvips (via Sharp)                                                                       | image-rs or libvips FFI                         | bimg (libvips)                   | Pillow or pyvips               |
+| **Format breadth**          | Excellent (all via libvips)                                                               | Limited (no HEIC, no PDF, no RAW without C FFI) | Same as Sharp (both use libvips) | Good (via Pillow plugins)      |
+| **Performance**             | Excellent (C-level via libvips, fast startup via Bun)                                     | Excellent (native)                              | Excellent (C-level via libvips)  | Slower (GIL + Python overhead) |
+| **Memory efficiency**       | Excellent (libvips streaming)                                                             | Good                                            | Excellent (libvips streaming)    | Poor (Pillow loads full image) |
 | **Ecosystem for this task** | Best (sharp, file-type, culori, thumbhash, node-vibrant, @mediapipe/tasks-vision all npm) | Fragmented                                      | Decent                           | Rich but slow                  |
-| **Docker image size**       | ~300 MB                                                          | ~200 MB                                         | ~250 MB                          | ~400 MB                        |
-| **Developer familiarity**   | Matches rest of Delightstack (TypeScript)                        | Different language                              | Different language               | Different language             |
-| **Community/maintenance**   | Sharp: 29K stars, very active                                    | image-rs: 5K stars                              | bimg: 4K stars                   | Pillow: 12K stars              |
+| **Docker image size**       | ~300 MB                                                                                   | ~200 MB                                         | ~250 MB                          | ~400 MB                        |
+| **Developer familiarity**   | Matches rest of Delightstack (TypeScript)                                                 | Different language                              | Different language               | Different language             |
+| **Community/maintenance**   | Sharp: 29K stars, very active                                                             | image-rs: 5K stars                              | bimg: 4K stars                   | Pillow: 12K stars              |
 
 **Decision: Bun + Sharp.** Same language as the rest of Delightstack (TypeScript). Bun provides faster startup times and native TypeScript execution (no build step in the container). Sharp has the best libvips binding, the largest community, and the richest ecosystem of complementary packages. The container runs in Docker so we have full access to native dependencies (no Cloudflare Workers restrictions).
 
@@ -2183,27 +2188,6 @@ Should we:
 - Use multiple container instances for parallelism? (adds complexity)
 
 Recommendation: Start with sequential processing (simple, predictable). Add parallelism later if throughput becomes a bottleneck.
-
----
-
-## Future Features
-
-### Phase 2 (After Initial Release)
-
-- **Batch processing** via Cloudflare Queues
-- **WebP fallback variants** (opt-in)
-- **Progress reporting** via WebSocket for large files
-- **Watermarking** (text or image overlay)
-
-### Phase 3 (Later)
-
-- **NSFW detection** via a lightweight ML model
-- **Perceptual deduplication** (detect near-duplicate uploads)
-- **Image comparison** (diff two images for visual regression testing)
-- **Animated AVIF** output (when libvips adds support)
-- **PSD/AI support** via ImageMagick fallback
-- **JPEG XL** output (when browser support improves)
-- **On-the-fly resizing** (like Cloudflare Images) via a URL-based API
 
 ---
 
