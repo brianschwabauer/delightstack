@@ -9,18 +9,18 @@ Wire together validation, metadata extraction, color analysis, variant generatio
 
 ## Tasks
 
-- [ ] Create `docker/pipeline.ts`
-- [ ] Implement `process(data, options)` function — main entry point
-- [ ] Wire pipeline stages: detect → validate → load → metadata → colors → variants → thumbhash
-- [ ] Run independent stages in parallel where possible (colors + variants, etc.)
-- [ ] Assemble `ContainerProcessResult` from all stages
-- [ ] Handle compressed original (include in result if requested)
-- [ ] Route to special format handlers (SVG, PDF, animated) based on MIME type
-- [ ] Pass avatar flag through to face-crop (spec 12 — stub for now)
-- [ ] Pass watermark configs through to watermark step (spec 13 — stub for now)
-- [ ] Integration test: JPEG → full pipeline → result with metadata + variants + thumbhash
-- [ ] Integration test: PNG with transparency → correct alpha handling
-- [ ] Integration test: variant skipping with small image
+- [x] Create `docker/pipeline.ts`
+- [x] Implement `process(data, options)` function — main entry point
+- [x] Wire pipeline stages: detect → validate → load → metadata → colors → variants → thumbhash
+- [x] Run independent stages in parallel where possible (colors + variants, etc.)
+- [x] Assemble `ContainerProcessResult` from all stages
+- [x] Handle compressed original (include in result if requested)
+- [x] Route to special format handlers (SVG, PDF, animated) based on MIME type
+- [x] Pass avatar flag through to face-crop (spec 12 — stub for now)
+- [x] Pass watermark configs through to watermark step (spec 13 — stub for now)
+- [x] Integration test: JPEG → full pipeline → result with metadata + variants + thumbhash
+- [x] Integration test: PNG with transparency → correct alpha handling
+- [x] Integration test: variant skipping with small image
 
 ## Details
 

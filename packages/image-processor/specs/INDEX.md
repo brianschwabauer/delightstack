@@ -16,7 +16,7 @@ Read the specs in order. Each spec lists its dependencies — don't start a spec
 | 04 | [Metadata Extraction & Color Analysis](./04-metadata-extraction.md) | done | Sharp metadata, EXIF, background/accent colors, OKLCH |
 | 05 | [Variant Generation](./05-variant-generation.md) | done | Resize, format encoding, fit strategies, skipping, compressed original |
 | 06 | [ThumbHash Generation](./06-thumbhash.md) | done | ThumbHash from resized preview, base64 encoding |
-| 07 | [Processing Pipeline Orchestration](./07-pipeline-orchestration.md) | pending | Wire together 03–06 for static images, result assembly |
+| 07 | [Processing Pipeline Orchestration](./07-pipeline-orchestration.md) | done | Wire together 03–06 for static images, result assembly |
 | 08 | [Special Formats](./08-special-formats.md) | pending | Animated images, SVG sanitization, PDF rendering |
 | 09 | [Container DO](./09-container-do.md) | pending | ImageProcessorContainer class, RPC bridge |
 | 10 | [Standalone Mode](./10-standalone-mode.md) | pending | processImage() helper (Mode 2) |
@@ -54,7 +54,7 @@ Specs 10 and 11 can be done in parallel after 09.
 
 - [x] Complete spec 01 — Project Foundation
 - [x] Complete specs 02–06 — Container internals (parallelizable)
-- [ ] Complete spec 07 — Pipeline Orchestration (integrates 03–06)
+- [x] Complete spec 07 — Pipeline Orchestration (integrates 03–06)
 - [ ] Complete spec 08 — Special Formats
 - [ ] Complete spec 09 — Container DO
 - [ ] Complete specs 10–11 — Worker-side integration (parallelizable)
@@ -72,5 +72,6 @@ Specs 10 and 11 can be done in parallel after 09.
 
 | Date | Change |
 |------|--------|
+| 2026-02-18 | Spec 07 complete — Pipeline orchestration wiring all stages together |
 | 2026-02-18 | Specs 02–06 complete — Docker container, MIME detection, validation, metadata, colors, variants, thumbhash |
 | 2026-02-18 | Spec 01 complete — package.json, tsconfig.json, src/types.ts, src/errors.ts, src/index.ts |
