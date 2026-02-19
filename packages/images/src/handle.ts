@@ -38,8 +38,8 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 		const id = segments[0];
 		const variant = segments[1] || defaultVariant;
 
-		// Validate id — reject empty, slashes, or path traversal
-		if (!id || id.includes('..')) {
+		// Validate id and variant — reject empty, slashes, or path traversal
+		if (!id || id.includes('..') || variant.includes('..') || variant.includes('/')) {
 			return new Response(placeholder, {
 				status: 404,
 				headers: {
@@ -88,6 +88,9 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 		);
 		headers.set('ETag', object.httpEtag);
 		headers.set('X-Content-Type-Options', 'nosniff');
+		if (object.size !== undefined) {
+			headers.set('Content-Length', String(object.size));
+		}
 
 		// Expose image dimensions
 		if (object.customMetadata?.width) {

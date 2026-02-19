@@ -52,13 +52,15 @@
 	);
 
 	// Parse variants from JSON string or use directly
-	const variants = $derived(
-		!image.variants
-			? []
-			: typeof image.variants === 'string'
-				? JSON.parse(image.variants)
-				: image.variants,
-	);
+	const variants = $derived.by(() => {
+		if (!image.variants) return [];
+		if (typeof image.variants !== 'string') return image.variants;
+		try {
+			return JSON.parse(image.variants);
+		} catch {
+			return [];
+		}
+	});
 
 	// srcset: all non-original, non-watermarked variants, ascending by width
 	const srcset = $derived(
@@ -130,6 +132,7 @@
 	$effect(() => () => clearTimeout(retry_timer));
 
 	const is_ready = $derived(image.processing_status === 'processed');
+	const is_failed = $derived(image.processing_status === 'failed');
 </script>
 
 <div
@@ -145,7 +148,16 @@
 			aria-hidden="true"
 			style:object-fit={fit} />
 	{/if}
-	{#if is_ready}
+	{#if is_failed}
+		<div class="failed" role="img" aria-label="Image failed to process">
+			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
+				<rect x="3" y="3" width="18" height="18" rx="2" />
+				<circle cx="8.5" cy="8.5" r="1.5" />
+				<path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+				<line x1="4" y1="4" x2="20" y2="20" />
+			</svg>
+		</div>
+	{:else if is_ready}
 		<img
 			bind:this={img_el}
 			class="main"
@@ -198,5 +210,15 @@
 	/* Skip transition for cached images */
 	.instant {
 		transition: none;
+	}
+
+	.failed {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: oklch(0.55 0 0);
+		z-index: 2;
 	}
 </style>

@@ -5,6 +5,20 @@ import type { MimeResult } from './mime';
 /** EXIF orientation values that indicate width/height swap */
 const ROTATED_ORIENTATIONS = new Set([5, 6, 7, 8]);
 
+/** Map Sharp depth strings to actual bit depth values */
+const DEPTH_MAP: Record<string, number> = {
+	uchar: 8,
+	char: 8,
+	ushort: 16,
+	short: 16,
+	uint: 32,
+	int: 32,
+	float: 32,
+	complex: 64,
+	double: 64,
+	dpcomplex: 128,
+};
+
 /** Convert GPS DMS (degrees, minutes, seconds) array + ref to decimal degrees */
 function convertGps(
 	dms: number[] | undefined,
@@ -127,7 +141,7 @@ export async function extractMetadata(
 		is_animated,
 		frame_count: pages,
 		color_space: meta.space ?? 'srgb',
-		bit_depth: typeof meta.depth === 'string' ? parseInt(meta.depth) || 8 : (meta.depth ?? 8) as number,
+		bit_depth: typeof meta.depth === 'string' ? (DEPTH_MAP[meta.depth] ?? 8) : (meta.depth ?? 8) as number,
 		channels: meta.channels ?? 3,
 		exif_orientation: orientation,
 		has_icc_profile: meta.hasProfile ?? false,

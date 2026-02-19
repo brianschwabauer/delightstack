@@ -3,6 +3,7 @@ import type { VariantConfig, ContainerProcessResult, ContainerOutputVariant, Ima
 import { createError } from './errors';
 
 const BOUNDARY = '----imgproc';
+const RPC_TIMEOUT_MS = 120_000;
 
 interface ContainerProcessOptions {
 	variants?: VariantConfig[];
@@ -105,17 +106,25 @@ async function parseMultipartResponse(response: Response): Promise<ContainerProc
 	}
 
 	// Merge binary data with variant metadata
-	const variants: ContainerOutputVariant[] = (jsonData.variants ?? []).map((v: RawVariantJson) => ({
-		name: v.name,
-		mime_type: v.mime_type,
-		width: v.width,
-		height: v.height,
-		file_size: v.file_size,
-		is_animated: v.is_animated ?? false,
-		fit: v.fit,
-		watermarked: v.watermarked ?? false,
-		data: binaryParts.get(v.name) ?? new ArrayBuffer(0),
-	}));
+	const variants: ContainerOutputVariant[] = (jsonData.variants ?? []).map((v: RawVariantJson) => {
+		const data = binaryParts.get(v.name);
+		if (!data || data.byteLength === 0) {
+			throw createError('INTERNAL_ERROR', {
+				message: `Missing binary data for variant '${v.name}' in container response`,
+			});
+		}
+		return {
+			name: v.name,
+			mime_type: v.mime_type,
+			width: v.width,
+			height: v.height,
+			file_size: v.file_size,
+			is_animated: v.is_animated ?? false,
+			fit: v.fit,
+			watermarked: v.watermarked ?? false,
+			data,
+		};
+	});
 
 	return {
 		metadata: jsonData.metadata,
@@ -132,6 +141,17 @@ export class ImageProcessorContainer extends Container {
 	defaultPort = 8080;
 	sleepAfter = '5m';
 	enableInternet = false;
+
+	/** Encode an ArrayBuffer to base64 without exceeding max call stack size */
+	private arrayBufferToBase64(buffer: ArrayBuffer): string {
+		const bytes = new Uint8Array(buffer);
+		const chunks: string[] = [];
+		const chunkSize = 32768;
+		for (let i = 0; i < bytes.length; i += chunkSize) {
+			chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+		}
+		return btoa(chunks.join(''));
+	}
 
 	/**
 	 * Process an image via the Docker container.
@@ -156,20 +176,29 @@ export class ImageProcessorContainer extends Container {
 		if (watermarkImages && watermarkImages.size > 0) {
 			const encoded: Record<string, string> = {};
 			for (const [key, value] of watermarkImages) {
-				encoded[key] = btoa(String.fromCharCode(...new Uint8Array(value)));
+				encoded[key] = this.arrayBufferToBase64(value);
 			}
 			containerOptions.watermark_images = encoded;
 		}
 
 		try {
 			const port = this.ctx.container!.getTcpPort(8080);
-			const response = await port.fetch('http://localhost/process', {
-				method: 'POST',
-				body: imageData,
-				headers: {
-					'X-Options': btoa(JSON.stringify(containerOptions)),
-				},
-			});
+			const abortController = new AbortController();
+			const timeoutId = setTimeout(() => abortController.abort(), RPC_TIMEOUT_MS);
+
+			let response: Response;
+			try {
+				response = await port.fetch('http://localhost/process', {
+					method: 'POST',
+					body: imageData,
+					headers: {
+						'X-Options': btoa(JSON.stringify(containerOptions)),
+					},
+					signal: abortController.signal,
+				});
+			} finally {
+				clearTimeout(timeoutId);
+			}
 
 			if (!response.ok) {
 				let errorBody: { code?: string; details?: string | Record<string, unknown> };

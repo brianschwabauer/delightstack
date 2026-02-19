@@ -18,13 +18,25 @@ const EXTERNAL_HREFS = /\s+((?:xlink:)?href)\s*=\s*(?:"(https?:\/\/[^"]*)"|'(htt
 /** <use> elements with external href (can reference malicious SVGs) */
 const EXTERNAL_USE = /<use[\s][^>]*(?:xlink:)?href\s*=\s*(?:"(?!#)[^"]*"|'(?!#)[^']*')[^>]*\/?>/gi;
 
+/** Decode HTML/XML numeric and named entities to detect obfuscated URLs */
+function decodeEntities(str: string): string {
+	return str
+		.replace(/&#x([0-9a-fA-F]+);?/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+		.replace(/&#(\d+);?/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&amp;/g, '&')
+		.replace(/&quot;/g, '"')
+		.replace(/&apos;/g, "'");
+}
+
 /**
  * Sanitize SVG content by removing dangerous elements and attributes.
  * Throws SVG_MALICIOUS if javascript: or data:text/html content is found.
  */
 function sanitizeSvg(svgString: string): string {
-	// Check for explicitly malicious content (no `g` flag — safe to call repeatedly)
-	if (DANGEROUS_URLS.test(svgString)) {
+	// Check for dangerous URLs in both raw and entity-decoded forms
+	if (DANGEROUS_URLS.test(svgString) || DANGEROUS_URLS.test(decodeEntities(svgString))) {
 		throw Object.assign(new Error('SVG contains dangerous JavaScript or data URLs'), {
 			code: 'SVG_MALICIOUS',
 			details: 'Contains javascript: or data:text/html URLs',
@@ -50,20 +62,23 @@ function sanitizeSvg(svgString: string): string {
 
 /** Extract dimensions from SVG viewBox or width/height attributes */
 function extractSvgDimensions(svgString: string): { width: number; height: number } {
-	// Try viewBox first
-	const viewBoxMatch = svgString.match(/viewBox\s*=\s*"([^"]+)"/);
+	// Try viewBox first (supports both double and single quotes)
+	const viewBoxMatch = svgString.match(/viewBox\s*=\s*(?:"([^"]+)"|'([^']+)')/);
 	if (viewBoxMatch) {
-		const parts = viewBoxMatch[1].trim().split(/[\s,]+/).map(Number);
+		const value = viewBoxMatch[1] ?? viewBoxMatch[2];
+		const parts = value.trim().split(/[\s,]+/).map(Number);
 		if (parts.length >= 4 && parts[2] > 0 && parts[3] > 0) {
 			return { width: parts[2], height: parts[3] };
 		}
 	}
 
-	// Fallback: width/height attributes
-	const widthMatch = svgString.match(/\bwidth\s*=\s*"(\d+(?:\.\d+)?)(?:px)?"/);
-	const heightMatch = svgString.match(/\bheight\s*=\s*"(\d+(?:\.\d+)?)(?:px)?"/);
+	// Fallback: width/height attributes (supports both quote styles)
+	const widthMatch = svgString.match(/\bwidth\s*=\s*(?:"(\d+(?:\.\d+)?)(?:px)?"|'(\d+(?:\.\d+)?)(?:px)?')/);
+	const heightMatch = svgString.match(/\bheight\s*=\s*(?:"(\d+(?:\.\d+)?)(?:px)?"|'(\d+(?:\.\d+)?)(?:px)?')/);
 	if (widthMatch && heightMatch) {
-		return { width: parseFloat(widthMatch[1]), height: parseFloat(heightMatch[1]) };
+		const w = widthMatch[1] ?? widthMatch[2];
+		const h = heightMatch[1] ?? heightMatch[2];
+		return { width: parseFloat(w), height: parseFloat(h) };
 	}
 
 	// Default fallback

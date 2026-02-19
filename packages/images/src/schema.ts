@@ -46,7 +46,7 @@ export function defineImageTable(callback?: (schema: SchemaBuilder) => Record<st
 				gps_longitude: schema.number().optional(),
 				thumbhash: schema.string().optional(),
 				variants: schema.string().optional(), // JSON string of variant info
-				_processing_options: schema.string().optional(), // JSON string of processing config
+				_processing: schema.string().optional(), // JSON: processing options + retry state
 				created_at: schema.string(),
 				updated_at: schema.string(),
 			};

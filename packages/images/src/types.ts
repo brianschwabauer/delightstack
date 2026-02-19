@@ -123,9 +123,47 @@ export interface ProcessImageOptions {
 	avatar?: boolean;
 }
 
+// ── Reserved field names (used by the image table schema) ────────────────────
+
+/** Fields managed by the image processor — cannot be used in uploadOptions.data */
+export const RESERVED_IMAGE_FIELDS = new Set([
+	'id',
+	'base_path',
+	'file_name',
+	'alt_text',
+	'processing_status',
+	'error_code',
+	'mime_type',
+	'file_size',
+	'width',
+	'height',
+	'aspect_ratio',
+	'has_transparency',
+	'is_animated',
+	'frame_count',
+	'background_color_l',
+	'background_color_c',
+	'background_color_h',
+	'accent_color_l',
+	'accent_color_c',
+	'accent_color_h',
+	'luminance',
+	'date_taken',
+	'gps_latitude',
+	'gps_longitude',
+	'thumbhash',
+	'variants',
+	'_processing',
+	'created_at',
+	'updated_at',
+] as const);
+
+/** Union of all reserved field names */
+export type ReservedImageField = typeof RESERVED_IMAGE_FIELDS extends Set<infer T> ? T : never;
+
 // ── Upload options (Mode 1: database integration) ────────────────────────────
 
-export interface UploadOptions {
+export interface UploadOptions<TData extends Record<string, unknown> = Record<string, unknown>> {
 	/**
 	 * R2 path prefix for all files related to this image.
 	 * Default: 'images'. Files are stored at {prefix}/{id}/{variant_name}.
@@ -166,8 +204,9 @@ export interface UploadOptions {
 	/**
 	 * Custom field values to store in the image record.
 	 * These correspond to the fields defined in the defineImageTable() callback.
+	 * Cannot use reserved field names (id, processing_status, width, etc.).
 	 */
-	data?: Record<string, unknown>;
+	data?: TData & { [K in ReservedImageField]?: never };
 }
 
 // ── Image metadata ───────────────────────────────────────────────────────────

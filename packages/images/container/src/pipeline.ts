@@ -65,17 +65,18 @@ async function generateAnimatedVariants(
 	const results: GeneratedVariant[] = [];
 
 	for (const config of configs) {
-		if (longEdge < config.max_dimension) continue;
-
 		const fit = config.fit ?? (config.max_dimension > 1024 ? 'inside' : 'cover');
 		const sharpFit: 'inside' | 'outside' = fit === 'inside' ? 'inside' : 'outside';
 		const maxDim = config.max_dimension;
 		const quality = config.quality ?? 75; // WebP default for animated
+		const needsResize = longEdge >= maxDim;
 
-		// Resize animated (preserving all frames)
-		const resized = await sharp(input, { animated: true })
-			.resize(maxDim, maxDim, { fit: sharpFit, withoutEnlargement: true })
-			.toBuffer({ resolveWithObject: true });
+		// Resize animated (preserving all frames), or just re-encode at original size
+		const pipeline = sharp(input, { animated: true });
+		if (needsResize) {
+			pipeline.resize(maxDim, maxDim, { fit: sharpFit, withoutEnlargement: true });
+		}
+		const resized = await pipeline.toBuffer({ resolveWithObject: true });
 
 		const outMeta = await sharp(resized.data, { animated: true }).metadata();
 		const height = outMeta.pageHeight ?? resized.info.height;

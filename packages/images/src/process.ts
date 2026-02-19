@@ -28,48 +28,47 @@ export async function processImage(
 		bucket: options.bucket, // for watermark image fetching
 	});
 
-	// 3. Determine base path from key (strip the filename)
-	const basePath = options.key.replace(/\/[^/]+$/, '');
+	// 3. Determine base path from key (strip the filename portion)
+	const lastSlash = options.key.lastIndexOf('/');
+	const basePath = lastSlash >= 0 ? options.key.slice(0, lastSlash) : options.key.replace(/\.[^.]+$/, '');
 
-	// 4. Write variants to R2
-	const outputVariants: OutputVariant[] = [];
+	// 4. Write variants to R2 (parallel)
+	const outputVariants: OutputVariant[] = await Promise.all(
+		result.variants.map(async (variant) => {
+			const key = `${basePath}/${variant.name}`;
 
-	for (const variant of result.variants) {
-		const key = `${basePath}/${variant.name}`;
+			const customMetadata: Record<string, string> = {
+				width: String(variant.width),
+				height: String(variant.height),
+			};
 
-		const customMetadata: Record<string, string> = {
-			width: String(variant.width),
-			height: String(variant.height),
-		};
+			const httpMetadata: R2HTTPMetadata = {
+				contentType: variant.mime_type,
+				cacheControl: 'public, max-age=31536000, immutable',
+			};
 
-		// For original variant, include the original filename
-		const httpMetadata: R2HTTPMetadata = {
-			contentType: variant.mime_type,
-			cacheControl: 'public, max-age=31536000, immutable',
-		};
+			if (variant.name === 'original' && result.metadata.file_name) {
+				customMetadata['original-filename'] = result.metadata.file_name;
+			}
 
-		// Content-Disposition for original variant (use original filename)
-		if (variant.name === 'original' && result.metadata.file_name) {
-			customMetadata['original-filename'] = result.metadata.file_name;
-		}
+			await options.bucket.put(key, variant.data, {
+				httpMetadata,
+				customMetadata,
+			});
 
-		await options.bucket.put(key, variant.data, {
-			httpMetadata,
-			customMetadata,
-		});
-
-		outputVariants.push({
-			name: variant.name,
-			key,
-			mime_type: variant.mime_type,
-			width: variant.width,
-			height: variant.height,
-			file_size: variant.file_size,
-			is_animated: variant.is_animated,
-			fit: variant.fit,
-			watermarked: variant.watermarked || undefined,
-		});
-	}
+			return {
+				name: variant.name,
+				key,
+				mime_type: variant.mime_type,
+				width: variant.width,
+				height: variant.height,
+				file_size: variant.file_size,
+				is_animated: variant.is_animated,
+				fit: variant.fit,
+				watermarked: variant.watermarked || undefined,
+			};
+		}),
+	);
 
 	// 5. If keep_original is explicitly false and the original was uploaded,
 	//    delete the original upload (variants were written with clean keys)

@@ -7,6 +7,7 @@ import type {
 	ImageMetadata,
 	DatabaseLike,
 } from './types';
+import { RESERVED_IMAGE_FIELDS } from './types';
 import type { ImageProcessorContainer } from './container';
 import { createError } from './errors';
 import { generateTimestampID } from '@delightstack/utilities';
@@ -46,6 +47,24 @@ async function scheduleAlarm(storage: DurableObjectStorage): Promise<void> {
 	}
 }
 
+interface ProcessingData {
+	keep_original?: boolean;
+	compress_original?: boolean;
+	variants?: VariantConfig[];
+	avatar?: boolean;
+	retry_count?: number;
+}
+
+/** Parse the _processing JSON column, returning defaults on failure */
+function parseProcessing(raw: string | undefined | null): ProcessingData {
+	if (!raw) return {};
+	try {
+		return JSON.parse(raw);
+	} catch {
+		return {};
+	}
+}
+
 /**
  * Factory function that returns helper methods for image processing
  * integrated with @delightstack/database.
@@ -66,6 +85,7 @@ export function imageProcessing(
 	const defaultKeepOriginal = options.keep_original ?? true;
 	const defaultCompressOriginal = options.compress_original ?? true;
 	const defaultVariants = options.variants;
+	const MAX_RETRIES = 5;
 
 	return {
 		/**
@@ -77,6 +97,17 @@ export function imageProcessing(
 			data: File | Blob | ArrayBuffer | Uint8Array | ReadableStream,
 			uploadOptions?: UploadOptions,
 		): Promise<ImageRecord> {
+			if (uploadOptions?.data) {
+				for (const key of Object.keys(uploadOptions.data)) {
+					if (RESERVED_IMAGE_FIELDS.has(key as never)) {
+						throw new Error(
+							`Cannot use reserved field name '${key}' in uploadOptions.data. ` +
+							`Reserved fields are managed by the image processor.`,
+						);
+					}
+				}
+			}
+
 			const id = generateTimestampID();
 			const basePath = `${uploadOptions?.prefix ?? prefix}/${id}`;
 			const r2Key = `${basePath}/original`;
@@ -137,7 +168,7 @@ export function imageProcessing(
 			};
 
 			// Store processing options on the record for processAlarm to use
-			const processingOptions = {
+			const processing = {
 				keep_original: uploadOptions?.keep_original ?? defaultKeepOriginal,
 				compress_original: uploadOptions?.compress_original ?? defaultCompressOriginal,
 				variants: uploadOptions?.variants ?? defaultVariants,
@@ -147,7 +178,7 @@ export function imageProcessing(
 			await db.create('image', {
 				...record,
 				...(uploadOptions?.data ?? {}),
-				_processing_options: JSON.stringify(processingOptions),
+				_processing: JSON.stringify(processing),
 			});
 
 			// Schedule alarm
@@ -160,20 +191,50 @@ export function imageProcessing(
 		 * Process pending images. Called from the DO's alarm handler.
 		 */
 		async processAlarm(): Promise<void> {
-			// Query pending images (also retry stuck 'processing' records from crashed runs)
-			const pending = await db.query<ImageRecord & { _processing_options?: string }>(
+			// Only pick up 'pending' records to avoid racing with another alarm.
+			// Stuck 'processing' records are handled by the retry query below.
+			const pending = await db.query<ImageRecord & { _processing?: string }>(
 				'image',
-				`SELECT * FROM image WHERE processing_status IN ('pending', 'processing') LIMIT 10`,
+				`SELECT * FROM image WHERE processing_status = 'pending' LIMIT 10`,
 			);
 
-			if (!pending?.length) return;
+			if (!pending?.length) {
+				// Check for stuck 'processing' records and reset them to pending (with retry count)
+				const stuck = await db.query<ImageRecord & { _processing?: string }>(
+					'image',
+					`SELECT * FROM image WHERE processing_status = 'processing' LIMIT 5`,
+				);
+				if (stuck?.length) {
+					for (const image of stuck) {
+						const proc = parseProcessing(image._processing);
+						const retries = (proc.retry_count ?? 0) + 1;
+						if (retries > MAX_RETRIES) {
+							await db.update('image', image.id, {
+								processing_status: 'failed',
+								error_code: 'INTERNAL_ERROR',
+								updated_at: new Date().toISOString(),
+							});
+						} else {
+							await db.update('image', image.id, {
+								processing_status: 'pending',
+								_processing: JSON.stringify({ ...proc, retry_count: retries }),
+								updated_at: new Date().toISOString(),
+							});
+						}
+					}
+					await scheduleAlarm(db.ctx.storage);
+				}
+				return;
+			}
 
 			const bucket = options.bucket();
 			const container = options.container();
 
 			for (const image of pending) {
+				const proc = parseProcessing(image._processing);
+
 				try {
-					// Mark as processing
+					// Mark as processing atomically
 					await db.update('image', image.id, {
 						processing_status: 'processing',
 						updated_at: new Date().toISOString(),
@@ -188,61 +249,49 @@ export function imageProcessing(
 						continue;
 					}
 
-					// Parse processing options
-					let procOpts: {
-						keep_original?: boolean;
-						compress_original?: boolean;
-						variants?: VariantConfig[];
-						avatar?: boolean;
-					} = {};
-					try {
-						procOpts = JSON.parse((image._processing_options as string) ?? '{}');
-					} catch {
-						// Use defaults
-					}
-
 					// Call Container DO via RPC
 					const stub = container.getByName('image-processor') as unknown as ImageProcessorContainer;
 					const result = await stub.process(await object.arrayBuffer(), {
-						variants: procOpts.variants ?? defaultVariants,
-						compress_original: procOpts.compress_original ?? defaultCompressOriginal,
-						avatar: procOpts.avatar,
+						variants: proc.variants ?? defaultVariants,
+						compress_original: proc.compress_original ?? defaultCompressOriginal,
+						avatar: proc.avatar,
 						bucket,
 					});
 
-					// Write variants to R2
-					const outputVariants: OutputVariant[] = [];
-					for (const variant of result.variants) {
-						const key = `${image.base_path}/${variant.name}`;
-						const customMetadata: Record<string, string> = {
-							width: String(variant.width),
-							height: String(variant.height),
-						};
-						if (variant.name === 'original' && image.file_name) {
-							customMetadata['original-filename'] = image.file_name;
-						}
-						await bucket.put(key, variant.data, {
-							httpMetadata: {
-								contentType: variant.mime_type,
-								cacheControl: 'public, max-age=31536000, immutable',
-							},
-							customMetadata,
-						});
-						outputVariants.push({
-							name: variant.name,
-							key,
-							mime_type: variant.mime_type,
-							width: variant.width,
-							height: variant.height,
-							file_size: variant.file_size,
-							is_animated: variant.is_animated,
-							fit: variant.fit,
-							watermarked: variant.watermarked || undefined,
-						});
-					}
+					// Write variants to R2 (parallel)
+					const outputVariants: OutputVariant[] = await Promise.all(
+						result.variants.map(async (variant) => {
+							const key = `${image.base_path}/${variant.name}`;
+							const customMetadata: Record<string, string> = {
+								width: String(variant.width),
+								height: String(variant.height),
+							};
+							if (variant.name === 'original' && image.file_name) {
+								customMetadata['original-filename'] = image.file_name;
+							}
+							await bucket.put(key, variant.data, {
+								httpMetadata: {
+									contentType: variant.mime_type,
+									cacheControl: 'public, max-age=31536000, immutable',
+								},
+								customMetadata,
+							});
+							return {
+								name: variant.name,
+								key,
+								mime_type: variant.mime_type,
+								width: variant.width,
+								height: variant.height,
+								file_size: variant.file_size,
+								is_animated: variant.is_animated,
+								fit: variant.fit,
+								watermarked: variant.watermarked || undefined,
+							};
+						}),
+					);
 
 					// If keep_original is false, delete the raw upload
-					if (procOpts.keep_original === false) {
+					if (proc.keep_original === false) {
 						await bucket.delete(`${image.base_path}/original`);
 					}
 
@@ -263,23 +312,25 @@ export function imageProcessing(
 						...flat,
 						thumbhash: result.thumbhash,
 						variants: JSON.stringify(outputVariants),
+						_processing: null,
 						updated_at: new Date().toISOString(),
 					});
 				} catch (error: unknown) {
-					// Update record to 'failed'
 					const code = (error as { code?: string })?.code ?? 'INTERNAL_ERROR';
+					const retries = (proc.retry_count ?? 0) + 1;
 					await db.update('image', image.id, {
-						processing_status: 'failed',
+						processing_status: retries >= MAX_RETRIES ? 'failed' : 'pending',
 						error_code: code,
+						_processing: JSON.stringify({ ...proc, retry_count: retries }),
 						updated_at: new Date().toISOString(),
 					});
 				}
 			}
 
-			// Reschedule if more pending/stuck
+			// Reschedule if more pending
 			const remaining = await db.query<{ count: number }>(
 				'image',
-				`SELECT COUNT(*) as count FROM image WHERE processing_status IN ('pending', 'processing')`,
+				`SELECT COUNT(*) as count FROM image WHERE processing_status IN ('pending')`,
 			);
 			if (remaining?.[0]?.count && remaining[0].count > 0) {
 				await scheduleAlarm(db.ctx.storage);

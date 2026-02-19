@@ -33,13 +33,14 @@ let faceDetectionAvailable: boolean | null = null;
 export async function initFaceDetector(): Promise<void> {
 	try {
 		const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision');
-		const vision = await FilesetResolver.forVisionTasks(
-			'node_modules/@mediapipe/tasks-vision/wasm',
-		);
+		// Resolve WASM directory dynamically (works regardless of CWD)
+		const resolved = import.meta.resolve('@mediapipe/tasks-vision');
+		const wasmDir = new URL('./wasm', resolved).pathname;
+		const modelPath = new URL('./wasm/blaze_face_short_range.tflite', resolved).pathname;
+
+		const vision = await FilesetResolver.forVisionTasks(wasmDir);
 		faceDetector = await FaceDetector.createFromOptions(vision, {
-			baseOptions: {
-				modelAssetPath: 'node_modules/@mediapipe/tasks-vision/wasm/blaze_face_short_range.tflite',
-			},
+			baseOptions: { modelAssetPath: modelPath },
 			runningMode: 'IMAGE',
 		});
 		faceDetectionAvailable = true;
@@ -147,7 +148,7 @@ export const AVATAR_DEFAULTS = {
 			format: 'avif' as const,
 			quality: 50,
 			effort: 4,
-			fit: 'inside' as const,
+			fit: 'cover' as const,
 		},
 	],
 };

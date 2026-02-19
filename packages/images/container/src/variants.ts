@@ -95,15 +95,17 @@ export async function resizeVariants(
 	const results: ResizedVariant[] = [];
 
 	for (const config of configs) {
-		if (longEdge < config.max_dimension) continue;
-
 		const fit: 'inside' | 'cover' = config.fit ?? (config.max_dimension > 1024 ? 'inside' : 'cover');
 		const maxDim = config.max_dimension;
 		const sharpFit: 'inside' | 'outside' = fit === 'inside' ? 'inside' : 'outside';
+		const needsResize = longEdge >= maxDim;
 
-		const result = await sharp(input)
-			.rotate()
-			.resize(maxDim, maxDim, { fit: sharpFit, withoutEnlargement: true })
+		const pipeline = sharp(input).rotate();
+		if (needsResize) {
+			pipeline.resize(maxDim, maxDim, { fit: sharpFit, withoutEnlargement: true });
+		}
+
+		const result = await pipeline
 			.png() // lossless intermediate for watermarking
 			.toBuffer({ resolveWithObject: true });
 
