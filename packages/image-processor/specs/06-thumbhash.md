@@ -9,15 +9,15 @@ Generate a ThumbHash from the image — a ~25-byte binary hash (encoded as ~33-c
 
 ## Tasks
 
-- [ ] Create `docker/thumbhash.ts`
-- [ ] Implement `generateThumbHash(sharpInstance)` function
-- [ ] Resize image to appropriate preview size for hashing
-- [ ] Handle RGBA and RGB inputs correctly
-- [ ] Encode hash as base64 string
-- [ ] Handle animated images (use first frame only)
-- [ ] Handle images with transparency (alpha channel preserved in hash)
-- [ ] Unit tests with known images — verify hash is ~33 chars base64
-- [ ] Unit test: hash round-trips correctly (encode → decode → recognizable image)
+- [x] Create `docker/thumbhash.ts`
+- [x] Implement `generateThumbHash(sharpInstance)` function
+- [x] Resize image to appropriate preview size for hashing
+- [x] Handle RGBA and RGB inputs correctly
+- [x] Encode hash as base64 string
+- [x] Handle animated images (use first frame only)
+- [x] Handle images with transparency (alpha channel preserved in hash)
+- [x] Unit tests with known images — verify hash is ~33 chars base64
+- [x] Unit test: hash round-trips correctly (encode → decode → recognizable image)
 
 ## Details
 

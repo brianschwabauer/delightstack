@@ -1,0 +1,13 @@
+{
+	"name": "image-processor-container",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"sharp": "^0.33.5",
+		"file-type": "^19.6.0",
+		"culori": "^4.0.1",
+		"node-vibrant": "^4.0.3",
+		"thumbhash": "^0.1.1",
+		"exif-reader": "^2.0.1"
+	}
+}

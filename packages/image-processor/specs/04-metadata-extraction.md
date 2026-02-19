@@ -9,20 +9,20 @@ Extract all metadata from the original image: dimensions, color space, transpare
 
 ## Tasks
 
-- [ ] Create `docker/metadata.ts` — Sharp metadata + EXIF extraction
-- [ ] Create `docker/colors.ts` — background color, accent color, OKLCH conversion
-- [ ] Extract core Sharp metadata (width, height, channels, pages, etc.)
-- [ ] Apply EXIF orientation correction and report corrected dimensions
-- [ ] Extract EXIF date_taken via exif-reader
-- [ ] Extract EXIF GPS coordinates and convert DMS to decimal degrees
-- [ ] Extract background color via 1x1 resize
-- [ ] Extract accent color via node-vibrant
-- [ ] Convert both colors to OKLCH via culori
-- [ ] Derive luminance from background_color.l
-- [ ] Generate CSS strings for both colors
-- [ ] Handle edge cases: no EXIF, no GPS, achromatic images (null accent)
-- [ ] Unit tests for metadata extraction across formats
-- [ ] Unit tests for color extraction (known images with predictable colors)
+- [x] Create `docker/metadata.ts` — Sharp metadata + EXIF extraction
+- [x] Create `docker/colors.ts` — background color, accent color, OKLCH conversion
+- [x] Extract core Sharp metadata (width, height, channels, pages, etc.)
+- [x] Apply EXIF orientation correction and report corrected dimensions
+- [x] Extract EXIF date_taken via exif-reader
+- [x] Extract EXIF GPS coordinates and convert DMS to decimal degrees
+- [x] Extract background color via 1x1 resize
+- [x] Extract accent color via node-vibrant
+- [x] Convert both colors to OKLCH via culori
+- [x] Derive luminance from background_color.l
+- [x] Generate CSS strings for both colors
+- [x] Handle edge cases: no EXIF, no GPS, achromatic images (null accent)
+- [x] Unit tests for metadata extraction across formats
+- [x] Unit tests for color extraction (known images with predictable colors)
 
 ## Details
 

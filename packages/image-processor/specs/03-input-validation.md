@@ -9,12 +9,12 @@ Detect the true MIME type of uploaded files from magic bytes (not file extension
 
 ## Tasks
 
-- [ ] Create `docker/mime.ts` — MIME type detection via `file-type`
-- [ ] Create `docker/validation.ts` — size, dimension, format validation
-- [ ] Handle edge case: file-type returns undefined (unknown format)
-- [ ] Handle edge case: SVG detection (file-type may not detect SVGs since they're text)
-- [ ] Unit tests for each validation error scenario
-- [ ] Unit tests for MIME detection across all supported formats
+- [x] Create `docker/mime.ts` — MIME type detection via `file-type`
+- [x] Create `docker/validation.ts` — size, dimension, format validation
+- [x] Handle edge case: file-type returns undefined (unknown format)
+- [x] Handle edge case: SVG detection (file-type may not detect SVGs since they're text)
+- [x] Unit tests for each validation error scenario
+- [x] Unit tests for MIME detection across all supported formats
 
 ## Details
 

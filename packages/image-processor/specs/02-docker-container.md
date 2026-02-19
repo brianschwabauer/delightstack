@@ -9,15 +9,15 @@ Build the Docker image that runs inside Cloudflare Containers. It runs a Bun HTT
 
 ## Tasks
 
-- [ ] Create `docker/package.json` with container-only dependencies
-- [ ] Create `docker/Dockerfile` (multi-stage: build libvips, runtime)
-- [ ] Create `docker/server.ts` HTTP server with `POST /process` endpoint
-- [ ] Implement multipart response encoding (JSON metadata + binary variant parts)
-- [ ] Implement request parsing (raw body + X-Options header)
-- [ ] Add 60-second processing timeout wrapper
-- [ ] Add health check endpoint (`GET /health`)
-- [ ] Test: Docker image builds successfully
-- [ ] Test: Server starts and responds to health check
+- [x] Create `docker/package.json` with container-only dependencies
+- [x] Create `docker/Dockerfile` (multi-stage: build libvips, runtime)
+- [x] Create `docker/server.ts` HTTP server with `POST /process` endpoint
+- [x] Implement multipart response encoding (JSON metadata + binary variant parts)
+- [x] Implement request parsing (raw body + X-Options header)
+- [x] Add 60-second processing timeout wrapper
+- [x] Add health check endpoint (`GET /health`)
+- [x] Test: Docker image builds successfully
+- [x] Test: Server starts and responds to health check
 
 ## Details
 

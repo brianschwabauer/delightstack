@@ -9,20 +9,20 @@ Generate resized output variants from the processed image. Handles fit strategie
 
 ## Tasks
 
-- [ ] Create `docker/variants.ts`
-- [ ] Implement `generateVariants(sharpInstance, metadata, variantConfigs)` function
-- [ ] Implement `inside` fit strategy (long edge fits within max_dimension)
-- [ ] Implement `cover` fit strategy (short edge fits within max_dimension)
-- [ ] Implement default fit selection (inside for >1024, cover for ≤1024)
-- [ ] Implement variant skipping (skip if original long edge < max_dimension)
-- [ ] Implement format encoding (AVIF, WebP, JPEG, PNG) with per-format quality defaults
-- [ ] Implement compressed original (full-res AVIF re-encode preserving EXIF/ICC)
-- [ ] Strip metadata from resized variants (not from compressed original)
-- [ ] Return variant binary data + metadata (width, height, mime_type, file_size)
-- [ ] Handle JPEG transparency (composite white background)
-- [ ] Unit tests for fit strategies with known dimensions
-- [ ] Unit tests for variant skipping logic
-- [ ] Unit tests for compressed original with metadata preservation
+- [x] Create `docker/variants.ts`
+- [x] Implement `generateVariants(sharpInstance, metadata, variantConfigs)` function
+- [x] Implement `inside` fit strategy (long edge fits within max_dimension)
+- [x] Implement `cover` fit strategy (short edge fits within max_dimension)
+- [x] Implement default fit selection (inside for >1024, cover for ≤1024)
+- [x] Implement variant skipping (skip if original long edge < max_dimension)
+- [x] Implement format encoding (AVIF, WebP, JPEG, PNG) with per-format quality defaults
+- [x] Implement compressed original (full-res AVIF re-encode preserving EXIF/ICC)
+- [x] Strip metadata from resized variants (not from compressed original)
+- [x] Return variant binary data + metadata (width, height, mime_type, file_size)
+- [x] Handle JPEG transparency (composite white background)
+- [x] Unit tests for fit strategies with known dimensions
+- [x] Unit tests for variant skipping logic
+- [x] Unit tests for compressed original with metadata preservation
 
 ## Details
 
