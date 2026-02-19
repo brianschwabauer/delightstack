@@ -1,13 +1,7 @@
 import type { ProcessImageOptions, ProcessImageResult, OutputVariant } from './types';
 import type { ImageProcessorContainer } from './container';
 import { createError } from './errors';
-
-/** Generate a unique job ID (timestamp + random) */
-function generateJobId(): string {
-	const ts = Date.now().toString(36);
-	const rand = Math.random().toString(36).slice(2, 8);
-	return `${ts}-${rand}`;
-}
+import { generateTimestampID } from '@delightstack/utilities';
 
 /**
  * Process an image synchronously (Mode 2: standalone, without database integration).
@@ -86,7 +80,7 @@ export async function processImage(
 	// 6. Return result without binary data
 	return {
 		ok: true,
-		job_id: generateJobId(),
+		job_id: generateTimestampID(),
 		metadata: result.metadata,
 		thumbhash: result.thumbhash,
 		variants: outputVariants,

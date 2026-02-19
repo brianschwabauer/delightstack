@@ -9,13 +9,7 @@ import type {
 } from './types';
 import type { ImageProcessorContainer } from './container';
 import { createError } from './errors';
-
-/** Generate a timestamp-based unique ID */
-function generateId(): string {
-	const ts = Date.now().toString(36);
-	const rand = Math.random().toString(36).slice(2, 10);
-	return `${ts}${rand}`;
-}
+import { generateTimestampID } from '@delightstack/utilities';
 
 /** Flatten nested ImageMetadata into flat database columns */
 function flattenMetadata(metadata: ImageMetadata): Record<string, unknown> {
@@ -83,7 +77,7 @@ export function imageProcessing(
 			data: File | Blob | ArrayBuffer | Uint8Array | ReadableStream,
 			uploadOptions?: UploadOptions,
 		): Promise<ImageRecord> {
-			const id = generateId();
+			const id = generateTimestampID();
 			const basePath = `${uploadOptions?.prefix ?? prefix}/${id}`;
 			const r2Key = `${basePath}/original`;
 

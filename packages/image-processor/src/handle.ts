@@ -1,4 +1,5 @@
 import type { CreateImageHandleOptions, RequestEventLike } from './types';
+import { encodeContentDisposition } from '@delightstack/utilities';
 
 const DEFAULT_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
   <rect width="400" height="300" fill="#f0f0f0"/>
@@ -98,10 +99,8 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 
 		// Content-Disposition for original variant (download with original filename)
 		if (variant === 'original' && object.customMetadata?.['original-filename']) {
-			headers.set(
-				'Content-Disposition',
-				`inline; filename="${object.customMetadata['original-filename']}"`,
-			);
+			const encoded = encodeContentDisposition(object.customMetadata['original-filename']);
+			headers.set('Content-Disposition', `inline; filename="${encoded}"`);
 		}
 
 		return new Response(object.body, {
