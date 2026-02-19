@@ -454,40 +454,6 @@ export interface RequestEventLike {
 	[key: string]: unknown;
 }
 
-/**
- * Minimal database interface compatible with @delightstack/database's DatabaseServer.
- * Avoids tight coupling — the consumer must have @delightstack/database installed.
- */
-export interface DatabaseLike {
-	create(table: string, data: Record<string, unknown>): Promise<unknown>;
-	query<T = Record<string, unknown>>(table: string, sql: string): Promise<T[] | null>;
-	update(table: string, id: string, data: Record<string, unknown>): Promise<unknown>;
-	delete(table: string, id: string): Promise<unknown>;
-	get<T = Record<string, unknown>>(table: string, id: string): Promise<T | null>;
-	ctx: { storage: DurableObjectStorage };
-}
-
-// ── Schema builder types ─────────────────────────────────────────────────────
-
-/** A single field in the schema builder */
-export interface SchemaField {
-	primaryKey(): SchemaField;
-	optional(): SchemaField;
-}
-
-/** The schema builder passed to table definition callbacks */
-export interface SchemaBuilder {
-	string(): SchemaField;
-	number(): SchemaField;
-	boolean(): SchemaField;
-}
-
-/** Function that defines a table (from @delightstack/database) */
-export type TableDefiner = (
-	name: string,
-	callback: (schema: SchemaBuilder) => Record<string, SchemaField>,
-) => unknown;
-
 // ── CDN hook options ─────────────────────────────────────────────────────────
 
 /** Options for createImageHandle() */
@@ -517,6 +483,9 @@ export interface ImageProcessingOptions {
 
 	/** Function to get the R2 bucket binding */
 	bucket: () => R2Bucket;
+
+	/** The Durable Object storage for alarm scheduling */
+	storage: DurableObjectStorage;
 
 	/** Whether to keep the original file after processing. Default: true */
 	keep_original?: boolean;

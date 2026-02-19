@@ -5,6 +5,7 @@ export { ImageProcessorContainer } from './container';
 export { processImage } from './process';
 export { imageProcessing } from './integration';
 export { defineImageTable } from './schema';
+export type { ImageSchemaBuilder, ImageTable } from './schema';
 
 export { createImageHandle } from './handle';
 

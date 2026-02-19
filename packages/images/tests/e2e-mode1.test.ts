@@ -69,7 +69,9 @@ function createMockContainerNamespace(processResult: any) {
 	};
 }
 
-// ── Mock Database ───────────────────────────────────────────────────────────
+// ── Mock DatabaseServer ─────────────────────────────────────────────────────
+
+let mockIdCounter = 0;
 
 function createMockDb() {
 	const records = new Map<string, any>();
@@ -85,22 +87,29 @@ function createMockDb() {
 				}),
 			},
 		},
-		async create(table: string, record: any) {
-			records.set(record.id, { ...record });
+		create(table: string, data: any) {
+			const id = `mock_${++mockIdCounter}_${Date.now()}`;
+			const now = new Date().toISOString();
+			const record = { ...data, id, created_at: now, updated_at: now };
+			records.set(id, record);
+			return record;
 		},
-		async get(table: string, id: string) {
-			return records.get(id) ?? null;
+		get(table: string, id: string) {
+			const record = records.get(id);
+			if (!record) throw { status: 404, message: 'image not found' };
+			return record;
 		},
-		async update(table: string, id: string, updates: any) {
+		update(table: string, id: string, updates: any) {
 			const existing = records.get(id);
-			if (existing) {
-				records.set(id, { ...existing, ...updates });
-			}
+			if (!existing) throw { status: 404, message: 'image not found' };
+			const updated = { ...existing, ...updates, updated_at: new Date().toISOString() };
+			records.set(id, updated);
+			return updated;
 		},
-		async delete(table: string, id: string) {
+		delete(table: string, id: string) {
 			records.delete(id);
 		},
-		async query(table: string, sql: string) {
+		exec(sql: string, ...bindings: any[]) {
 			if (sql.includes('processing_status')) {
 				// Match quoted status values to avoid false matches (e.g. 'processing' in 'processing_status')
 				const matchStatuses: string[] = [];
@@ -186,6 +195,7 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 	let images: ReturnType<typeof imageProcessing>;
 
 	beforeEach(() => {
+		mockIdCounter = 0;
 		bucket = createMockBucket();
 		containerNs = createMockContainerNamespace(FAKE_PROCESS_RESULT);
 		db = createMockDb();
@@ -193,6 +203,7 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 		images = imageProcessing(db, {
 			container: () => containerNs,
 			bucket: () => bucket,
+			storage: db.ctx.storage,
 		});
 	});
 
@@ -320,6 +331,7 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 		images = imageProcessing(db, {
 			container: () => errorContainer,
 			bucket: () => bucket,
+			storage: db.ctx.storage,
 		});
 
 		const file = new File(['data'], 'bad.jpg', { type: 'image/jpeg' });
@@ -362,7 +374,7 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 		const id = 'del1';
 		db._records.set(id, {
 			id,
-			base_path: `images/${id}`,
+			base_path: '/images',
 			processing_status: 'processed',
 			variants: JSON.stringify([
 				{ name: 'default', width: 2048, height: 1365 },
@@ -383,21 +395,21 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 		expect(bucket._store.has(`images/${id}/thumbnail`)).toBe(false);
 	});
 
-	it('getStatus returns the current record', async () => {
+	it('getStatus returns the current record', () => {
 		db._records.set('status1', {
 			id: 'status1',
 			processing_status: 'processed',
 		});
 
-		const result = await images.getStatus('status1');
+		const result = images.getStatus('status1');
 		expect(result).toEqual({
 			id: 'status1',
 			processing_status: 'processed',
 		});
 	});
 
-	it('getStatus returns null for missing image', async () => {
-		const result = await images.getStatus('nonexistent');
+	it('getStatus returns null for missing image', () => {
+		const result = images.getStatus('nonexistent');
 		expect(result).toBeNull();
 	});
 
