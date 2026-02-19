@@ -1474,9 +1474,10 @@ class VectorFieldGenerator {
 			type: 'vector',
 			dimensions,
 			searchable: true,
-			schema: dimensions > 0
-				? z.array(z.number()).length(dimensions) as any
-				: z.array(z.number()) as any,
+			schema:
+				dimensions > 0
+					? (z.array(z.number()).length(dimensions) as any)
+					: (z.array(z.number()) as any),
 		};
 	}
 
