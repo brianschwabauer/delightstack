@@ -28,7 +28,7 @@ The package has two separate dependency contexts:
 Root `package.json`:
 
 ```
-name: @delightstack/image-processor
+name: @delightstack/images
 type: module
 dependencies:
   - @delightstack/database (workspace:*)   — for defineImageTable() types

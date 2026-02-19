@@ -1,4 +1,4 @@
-# @delightstack/image-processor
+# @delightstack/images
 
 A reusable Cloudflare Container-based image processing package that handles resizing, format conversion, metadata extraction, and thumbnail generation. Deploy with wrangler, use via a Workers binding.
 
@@ -92,7 +92,7 @@ The container sleeps when idle (scale-to-zero). Cold starts take ~2-3 seconds. I
 **1. Install:**
 
 ```bash
-pnpm add @delightstack/image-processor
+pnpm add @delightstack/images
 ```
 
 **2. Add to wrangler.toml:**
@@ -100,7 +100,7 @@ pnpm add @delightstack/image-processor
 ```toml
 [[containers]]
 class_name = "ImageProcessorContainer"
-image = "node_modules/@delightstack/image-processor/docker"
+image = "node_modules/@delightstack/images/docker"
 max_instances = 5
 instance_type = "standard-1"  # 0.5 vCPU, 4 GiB RAM, 8 GB disk
 
@@ -126,7 +126,7 @@ import {
 	ImageProcessorContainer,
 	imageProcessing,
 	defineImageTable,
-} from '@delightstack/image-processor';
+} from '@delightstack/images';
 
 // Re-export for Cloudflare to discover
 export { ImageProcessorContainer };
@@ -199,7 +199,7 @@ That's it. One call. The user uploads a file and gets a 201 back. The `upload()`
 For users who manage their own state, the synchronous `processImage()` function is still available:
 
 ```typescript
-import { ImageProcessorContainer, processImage } from '@delightstack/image-processor';
+import { ImageProcessorContainer, processImage } from '@delightstack/images';
 
 export { ImageProcessorContainer };
 
@@ -1529,7 +1529,7 @@ Variant-specific options (dimensions, quality, effort) are configured programmat
 ### Programmatic Configuration
 
 ```typescript
-import { ImageProcessorContainer, processImage } from '@delightstack/image-processor';
+import { ImageProcessorContainer, processImage } from '@delightstack/images';
 
 // Re-export for Cloudflare to discover
 export { ImageProcessorContainer };
@@ -1697,7 +1697,7 @@ compatibility_date = "2025-02-01"
 # Image processor container
 [[containers]]
 class_name = "ImageProcessorContainer"
-image = "node_modules/@delightstack/image-processor/docker"
+image = "node_modules/@delightstack/images/docker"
 max_instances = 5
 instance_type = "standard-1"
 
@@ -1743,14 +1743,14 @@ enabled = true
 
 ### Design Philosophy
 
-The `@delightstack/image-processor` does NOT depend on `@delightstack/database`. It works standalone. But the large majority of users will use both packages together, so the integration is optimized for that case.
+The `@delightstack/images` does NOT depend on `@delightstack/database`. It works standalone. But the large majority of users will use both packages together, so the integration is optimized for that case.
 
 The key problem: the database lives in one DO, and the container lives in another DO. Making them talk is inherently cross-DO communication. Rather than forcing the user to wire this up themselves, the `imageProcessing()` factory creates a helper object that encapsulates all the orchestration logic and runs inside the database DO.
 
 ### The `imageProcessing()` Helper
 
 ```typescript
-import { imageProcessing } from '@delightstack/image-processor';
+import { imageProcessing } from '@delightstack/images';
 
 class AppDatabase extends DatabaseServer<typeof dbConfig> {
 	readonly images = imageProcessing(this, {
@@ -1882,7 +1882,7 @@ This makes the system self-healing. If the DO restarts, the alarm fires again an
 ### Database Schema
 
 ```typescript
-import { defineImageTable } from '@delightstack/image-processor';
+import { defineImageTable } from '@delightstack/images';
 
 // Basic — built-in fields only
 const dbConfig = {
@@ -1973,7 +1973,7 @@ import {
 	ImageProcessorContainer,
 	imageProcessing,
 	defineImageTable,
-} from '@delightstack/image-processor';
+} from '@delightstack/images';
 
 export { ImageProcessorContainer };
 
@@ -2056,7 +2056,7 @@ The package exports `createImageHandle()`, a factory that returns a SvelteKit `H
 ```typescript
 // src/hooks.server.ts
 import { sequence } from '@sveltejs/kit/hooks';
-import { createImageHandle } from '@delightstack/image-processor';
+import { createImageHandle } from '@delightstack/images';
 
 const imageHandle = createImageHandle({
 	bucket: (event) => event.platform!.env.MEDIA_BUCKET,
@@ -2612,7 +2612,7 @@ const image = await db.images.upload(file, { alt_text: 'A sunset over the ocean'
 
 ```svelte
 <script>
-	import { imageURL, decodeThumbHash } from '@delightstack/image-processor';
+	import { imageURL, decodeThumbHash } from '@delightstack/images';
 </script>
 
 <!-- Open Graph meta tag -->
@@ -2772,7 +2772,7 @@ Recommendation: Start with sequential processing (simple, predictable). Add para
 ## Package Structure
 
 ```
-packages/image-processor/
+packages/images/
 ├── DESIGN.md                  # This document
 ├── package.json
 ├── tsconfig.json

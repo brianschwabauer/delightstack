@@ -113,7 +113,7 @@ declare namespace App {
 		D1: D1Database;
 		WS: DurableObjectNamespace<import('./../server/src').WebsocketServer>;
 		RATE_LIMITER: DurableObjectNamespace<import('./../server/src').RateLimiterServer>;
-		IMAGE_PROCESSOR: Service<import('./../image-processor/src').ImageProcessor>;
+		IMAGE_PROCESSOR: Service<import('./../images/src').ImageProcessor>;
 		SERVER: import('./../server/src/index').ForeverFamilyServer;
 	}
 }

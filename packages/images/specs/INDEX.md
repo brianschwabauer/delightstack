@@ -1,4 +1,4 @@
-# @delightstack/image-processor — Implementation Plan
+# @delightstack/images — Implementation Plan
 
 Reference: [DESIGN.md](../DESIGN.md) contains the full design specification.
 

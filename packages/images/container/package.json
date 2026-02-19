@@ -1,5 +1,5 @@
 {
-	"name": "image-processor-container",
+	"name": "images-container",
 	"private": true,
 	"type": "module",
 	"dependencies": {

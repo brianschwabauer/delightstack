@@ -299,7 +299,7 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  packages/image-processor:
+  packages/images:
     dependencies:
       '@cloudflare/containers':
         specifier: ^0.1.0

@@ -202,8 +202,8 @@ Usage:
 
 ```svelte
 <script>
-  import Image from '@delightstack/image-processor/component';
-  import { imageURL, decodeThumbHash } from '@delightstack/image-processor';
+  import Image from '@delightstack/images/component';
+  import { imageURL, decodeThumbHash } from '@delightstack/images';
 </script>
 
 <Image image={photo} />

@@ -140,5 +140,5 @@ RPC uses Structured Clone serialization, so `ArrayBuffer` works natively. The 32
 This class must be re-exported from the consumer's worker entrypoint for Cloudflare to discover it:
 
 ```ts
-export { ImageProcessorContainer } from '@delightstack/image-processor';
+export { ImageProcessorContainer } from '@delightstack/images';
 ```

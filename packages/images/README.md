@@ -1,4 +1,4 @@
-# @delightstack/image-processor
+# @delightstack/images
 
 Cloudflare Container-based image processing: resize, format conversion, metadata extraction, ThumbHash generation, face-aware avatar cropping, and watermarks. Deploy with wrangler, use via a Workers binding.
 
@@ -7,7 +7,7 @@ Cloudflare Container-based image processing: resize, format conversion, metadata
 **1. Install:**
 
 ```bash
-pnpm add @delightstack/image-processor
+pnpm add @delightstack/images
 ```
 
 **2. Add to `wrangler.toml`:**
@@ -15,7 +15,7 @@ pnpm add @delightstack/image-processor
 ```toml
 [[containers]]
 class_name = "ImageProcessorContainer"
-image = "node_modules/@delightstack/image-processor/container"
+image = "node_modules/@delightstack/images/container"
 max_instances = 5
 instance_type = "standard-1"
 
@@ -40,7 +40,7 @@ import {
   ImageProcessorContainer,
   imageProcessing,
   defineImageTable,
-} from '@delightstack/image-processor';
+} from '@delightstack/images';
 
 export { ImageProcessorContainer };
 
@@ -72,7 +72,7 @@ const image = await db.images.upload(file, {
 ```typescript
 // src/hooks.server.ts
 import { sequence } from '@sveltejs/kit/hooks';
-import { createImageHandle } from '@delightstack/image-processor';
+import { createImageHandle } from '@delightstack/images';
 
 const imageHandle = createImageHandle({
   bucket: (event) => event.platform!.env.MEDIA_BUCKET,
@@ -85,7 +85,7 @@ export const handle = sequence(imageHandle, ...otherHandles);
 
 ```svelte
 <script>
-  import Image from '@delightstack/image-processor/component';
+  import Image from '@delightstack/images/component';
 </script>
 
 <Image image={photo} />
@@ -96,7 +96,7 @@ export const handle = sequence(imageHandle, ...otherHandles);
 For direct synchronous processing without database integration:
 
 ```typescript
-import { ImageProcessorContainer, processImage } from '@delightstack/image-processor';
+import { ImageProcessorContainer, processImage } from '@delightstack/images';
 
 export { ImageProcessorContainer };
 
@@ -118,7 +118,7 @@ const result = await processImage(env.IMAGE_PROCESSOR, {
 | `createImageHandle()` | SvelteKit server hook for serving images from R2 with ETag/304 |
 | `decodeThumbHash()` | Decode base64 thumbhash to `data:image/png` URL (works server-side) |
 | `imageURL()` | Build CDN URLs: `imageURL(id, variant?, prefix?)` |
-| `Image` | Svelte 5 component (import from `@delightstack/image-processor/component`) |
+| `Image` | Svelte 5 component (import from `@delightstack/images/component`) |
 
 ## Image Component
 
