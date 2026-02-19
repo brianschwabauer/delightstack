@@ -58,7 +58,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		if (!updates.length) {
 			throw { status: 400, message: 'No data provided to insert' };
 		}
-		if (id !== null) updates.push(['id', id || generateTimestampID()]);
+		if (id !== null) updates.push(['id', id ?? generateTimestampID()]);
 		const bindings = updates.map(([_, value]) => value);
 		const columns = updates.map(([column]) => column).join(', ');
 		const values = updates.map(() => '?').join(', ');
@@ -135,7 +135,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
 		const sanitizedTable = table.toLowerCase().replace(/[^a-z_]/g, '');
-		if (!table) {
+		if (!sanitizedTable) {
 			throw { status: 400, message: `Must provide a table to delete from` };
 		}
 		if (!id) {

@@ -1,6 +1,7 @@
-// @ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 import { DatabaseServer } from './db.server';
+import type { Database } from '../schema/schema';
 
 // Mock cloudflare:workers
 vi.mock('cloudflare:workers', () => {
@@ -39,65 +40,100 @@ vi.mock('@msgpack/msgpack', () => ({
 	decode: (val: any) => ({}),
 }));
 
-describe('DatabaseServer', () => {
-	let dbServer: DatabaseServer<any>;
-	let mockStorage: any;
-	let mockSql: any;
-	let mockCtx: any;
-	let mockEnv: any;
-	let executedQueries: { sql: string; args: any[] }[] = [];
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-	const testConfig = {
-		users: {
-			name: 'users',
-			config: {
-				primary_key: 'id',
-				primary_key_type: 'string',
-				table_definition: {
-					id: 'TEXT PRIMARY KEY',
-					name: 'TEXT',
-					email: 'TEXT',
-				},
-				indexes: [],
-				foreign_keys: {},
-				sortable_fields: ['updated_at', 'name'],
-				orama: {
-					schema: {
-						id: 'string',
-						name: 'string',
-						email: 'string',
-						updated_at: 'number',
-					},
-				},
+type TestConfig = Record<string, Database.Table>;
+
+const testConfig: TestConfig = {
+	users: {
+		name: 'users',
+		_: {} as any,
+		config: {
+			primary_key: 'id',
+			primary_key_type: 'string',
+			table_definition: {
+				id: 'TEXT PRIMARY KEY',
+				name: 'TEXT',
+				email: 'TEXT',
 			},
-			parse: vi.fn((data) => data),
-			toSparse: vi.fn((data) => data),
+			indexes: [],
+			foreign_keys: {},
+			sortable_fields: ['updated_at', 'name'],
+			searchable_fields: ['id', 'name', 'email'],
+			unique_fields: [],
+			orama: {
+				schema: {
+					id: 'string',
+					name: 'string',
+					email: 'string',
+					updated_at: 'number',
+				},
+				sort: { enabled: false },
+			},
+		},
+		parse: vi.fn((data: any) => data),
+		toSparse: vi.fn((data: any) => data),
+	} as unknown as Database.Table,
+};
+
+/** Creates a mock SqlStorageCursor that mimics Cloudflare's cursor API */
+function mockCursor<T extends Record<string, any>>(rows: T[]) {
+	let index = 0;
+	return {
+		next: () => {
+			if (index < rows.length) {
+				return { done: false, value: rows[index++] };
+			}
+			return { done: true, value: undefined };
+		},
+		toArray: () => rows,
+		one: () => rows[0],
+		[Symbol.iterator]: function* () {
+			yield* rows;
 		},
 	};
+}
+
+function emptyCursor() {
+	return mockCursor([]);
+}
+
+// ── Test Suite ───────────────────────────────────────────────────────────────
+
+describe('DatabaseServer', () => {
+	let dbServer: DatabaseServer<TestConfig>;
+	let mockSql: { exec: Mock };
+	let executedQueries: { sql: string; args: any[] }[];
 
 	beforeEach(() => {
 		executedQueries = [];
 
-		// Create a basic mock for the SQL storage
 		mockSql = {
-			exec: vi.fn((sql, ...args) => {
-				executedQueries.push({ sql: sql.toString(), args });
+			exec: vi.fn((sql: string, ...args: any[]) => {
+				executedQueries.push({ sql, args });
 
-				// Return a fake iterator/cursor for results
-				return {
-					next: () => ({ done: true, value: undefined }),
-					toArray: () => [],
-					one: () => undefined,
-					[Symbol.iterator]: function* () {
-						yield* [];
-					},
-				};
+				if (sql.includes('SELECT * FROM state WHERE id = main')) {
+					return mockCursor([{
+						id: 'main',
+						json: '{}',
+						created_at: Date.now(),
+						updated_at: Date.now(),
+						table_config: {},
+						sql_indexes: [],
+					}]);
+				}
+
+				if (sql.includes('SELECT * FROM search_index')) {
+					return emptyCursor();
+				}
+
+				return emptyCursor();
 			}),
 		};
 
-		mockStorage = {
+		const mockStorage = {
 			sql: mockSql,
-			transactionSync: vi.fn((cb) => cb()),
+			transactionSync: vi.fn((cb: () => void) => cb()),
 			getAlarm: vi.fn(),
 			setAlarm: vi.fn(),
 			deleteAlarm: vi.fn(),
@@ -106,107 +142,44 @@ describe('DatabaseServer', () => {
 			onNextSessionRestoreBookmark: vi.fn(),
 		};
 
-		mockCtx = {
+		const mockCtx = {
 			id: { toString: () => 'mock-id' },
 			storage: mockStorage,
 			abort: vi.fn(),
 		};
 
-		mockEnv = {
-			DEV: true,
-		};
-
-		// We need to return an initial state when asked
-		mockSql.exec.mockImplementation((sql: string, ...args) => {
-			executedQueries.push({ sql, args });
-
-			if (sql.includes('SELECT * FROM state WHERE id = main')) {
-				return {
-					next: () => ({
-						done: false,
-						value: {
-							id: 'main',
-							json: '{}',
-							created_at: Date.now(),
-							updated_at: Date.now(),
-							table_config: {},
-							sql_indexes: [],
-						},
-					}),
-					toArray: () => [],
-					one: () => undefined,
-					[Symbol.iterator]: function* () {
-						yield* [];
-					},
-				};
-			}
-
-			if (sql.includes('SELECT * FROM search_index')) {
-				return {
-					toArray: () => [], // No existing index
-					next: () => ({ done: true }),
-					one: () => undefined,
-					[Symbol.iterator]: function* () {
-						yield* [];
-					},
-				};
-			}
-
-			// Default empty result
-			return {
-				next: () => ({ done: true, value: undefined }),
-				toArray: () => [],
-				one: () => undefined,
-				[Symbol.iterator]: function* () {
-					yield* [];
-				},
-			};
-		});
+		const mockEnv = { DEV: true };
 
 		dbServer = new DatabaseServer(
-			testConfig as any,
-			() => ({}) as any, // Mock ws
-			mockCtx,
+			testConfig,
+			() => ({}) as any,
+			mockCtx as any,
 			mockEnv,
 		);
 	});
 
+	// ── Initialization ──────────────────────────────────────────────────
+
 	it('should initialize and create tables', () => {
-		// Verify table creation logic in constructor
 		const createTableQuery = executedQueries.find((q) =>
 			q.sql.includes('CREATE TABLE IF NOT EXISTS users'),
 		);
 		expect(createTableQuery).toBeDefined();
-		expect(createTableQuery?.sql).toContain('id TEXT PRIMARY KEY');
-		expect(createTableQuery?.sql).toContain('name TEXT');
+		expect(createTableQuery!.sql).toContain('id TEXT PRIMARY KEY');
+		expect(createTableQuery!.sql).toContain('name TEXT');
 	});
+
+	// ── Single get ──────────────────────────────────────────────────────
 
 	it('should fetch an entity', () => {
 		const mockUser = { id: '123', name: 'Test User' };
 
-		mockSql.exec.mockImplementation((sql: string, ...args) => {
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
 			executedQueries.push({ sql, args });
 			if (sql.includes('SELECT * FROM users WHERE id = ?')) {
-				return {
-					next: () => ({
-						done: false,
-						value: { ...mockUser },
-					}),
-					toArray: () => [mockUser],
-					one: () => mockUser,
-					[Symbol.iterator]: function* () {
-						yield mockUser;
-					},
-				};
+				return mockCursor([{ ...mockUser }]);
 			}
-			return {
-				next: () => ({ done: true, value: undefined }),
-				toArray: () => [],
-				one: () => undefined,
-				[Symbol.iterator]: function* () {
-					yield* [];
-				},
-			};
+			return emptyCursor();
 		});
 
 		const result = dbServer.get('users', '123');
@@ -218,6 +191,106 @@ describe('DatabaseServer', () => {
 		).toBe(true);
 	});
 
+	it('should throw 404 for missing entity', () => {
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			return emptyCursor();
+		});
+
+		expect(() => dbServer.get('users', 'nonexistent')).toThrow();
+		try {
+			dbServer.get('users', 'nonexistent');
+		} catch (err: any) {
+			expect(err.status).toBe(404);
+		}
+	});
+
+	it('should throw 400 for invalid entity type', () => {
+		expect(() => (dbServer as any).get('nonexistent_type', '123')).toThrow();
+		try {
+			(dbServer as any).get('nonexistent_type', '123');
+		} catch (err: any) {
+			expect(err.status).toBe(400);
+		}
+	});
+
+	// ── Batch get ───────────────────────────────────────────────────────
+
+	it('should batch get multiple entities', () => {
+		const user1 = { id: '1', name: 'Alice' };
+		const user2 = { id: '2', name: 'Bob' };
+
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			if (sql.includes('WHERE id IN')) {
+				return mockCursor([user1, user2]);
+			}
+			return emptyCursor();
+		});
+
+		const results = dbServer.get([
+			{ entity_type: 'users', id: '1' },
+			{ entity_type: 'users', id: '2' },
+		]);
+
+		expect(results).toHaveLength(2);
+		expect(results[0]).toEqual(user1);
+		expect(results[1]).toEqual(user2);
+
+		// Should use a single IN query, not N individual queries
+		const inQuery = executedQueries.find((q) => q.sql.includes('WHERE id IN'));
+		expect(inQuery).toBeDefined();
+	});
+
+	it('should return empty array for empty batch', () => {
+		const results = dbServer.get([]);
+		expect(results).toEqual([]);
+	});
+
+	it('should preserve order in batch get results', () => {
+		const user1 = { id: '1', name: 'Alice' };
+		const user2 = { id: '2', name: 'Bob' };
+
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			if (sql.includes('WHERE id IN')) {
+				// Return in reverse order from DB
+				return mockCursor([user2, user1]);
+			}
+			return emptyCursor();
+		});
+
+		const results = dbServer.get([
+			{ entity_type: 'users', id: '1' },
+			{ entity_type: 'users', id: '2' },
+		]);
+
+		// Results should be in request order, not DB order
+		expect(results[0]).toEqual(user1);
+		expect(results[1]).toEqual(user2);
+	});
+
+	it('should throw 404 if any batch entity is missing', () => {
+		const user1 = { id: '1', name: 'Alice' };
+
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			if (sql.includes('WHERE id IN')) {
+				return mockCursor([user1]); // Only one of two requested
+			}
+			return emptyCursor();
+		});
+
+		expect(() =>
+			dbServer.get([
+				{ entity_type: 'users', id: '1' },
+				{ entity_type: 'users', id: 'missing' },
+			]),
+		).toThrow();
+	});
+
+	// ── Create ──────────────────────────────────────────────────────────
+
 	it('should create an entity', () => {
 		const newUser = { name: 'New User', email: 'test@example.com' };
 		const createdUser = {
@@ -227,38 +300,25 @@ describe('DatabaseServer', () => {
 			updated_at: 'now',
 		};
 
-		mockSql.exec.mockImplementation((sql: string, ...args) => {
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
 			executedQueries.push({ sql, args });
 			if (sql.startsWith('INSERT INTO users')) {
-				return {
-					next: () => ({ done: false, value: createdUser }),
-					toArray: () => [createdUser],
-					one: () => createdUser, // RETURNING * behavior mock
-					[Symbol.iterator]: function* () {
-						yield createdUser;
-					},
-				};
+				return mockCursor([createdUser]);
 			}
-			// Default for other queries (rebuildIndex)
-			return {
-				next: () => ({ done: true, value: undefined }),
-				toArray: () => [],
-				one: () => undefined,
-				[Symbol.iterator]: function* () {
-					yield* [];
-				},
-			};
+			return emptyCursor();
 		});
 
-		const result = dbServer.create('users', newUser);
+		const result = dbServer.create('users', newUser as any);
 
 		expect(result).toEqual(createdUser);
 		const insertQuery = executedQueries.find((q) =>
 			q.sql.startsWith('INSERT INTO users'),
 		);
 		expect(insertQuery).toBeDefined();
-		expect(insertQuery?.sql).toContain('name, email');
+		expect(insertQuery!.sql).toContain('name, email');
 	});
+
+	// ── Update ──────────────────────────────────────────────────────────
 
 	it('should update an entity', () => {
 		const existingUser = {
@@ -270,36 +330,15 @@ describe('DatabaseServer', () => {
 		const updateData = { name: 'New Name' };
 		const updatedUser = { ...existingUser, ...updateData, updated_at: 'now' };
 
-		mockSql.exec.mockImplementation((sql: string, ...args) => {
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
 			executedQueries.push({ sql, args });
 			if (sql.includes('SELECT * FROM users WHERE id = ?')) {
-				return {
-					next: () => ({ done: false, value: existingUser }),
-					toArray: () => [existingUser],
-					one: () => existingUser,
-					[Symbol.iterator]: function* () {
-						yield existingUser;
-					},
-				};
+				return mockCursor([existingUser]);
 			}
 			if (sql.startsWith('UPDATE users')) {
-				return {
-					next: () => ({ done: false, value: updatedUser }),
-					toArray: () => [updatedUser],
-					one: () => updatedUser,
-					[Symbol.iterator]: function* () {
-						yield updatedUser;
-					},
-				};
+				return mockCursor([updatedUser]);
 			}
-			return {
-				next: () => ({ done: true, value: undefined }),
-				toArray: () => [],
-				one: () => undefined,
-				[Symbol.iterator]: function* () {
-					yield* [];
-				},
-			};
+			return emptyCursor();
 		});
 
 		const result = dbServer.update('users', '123', updateData);
@@ -307,21 +346,16 @@ describe('DatabaseServer', () => {
 		expect(result).toEqual(updatedUser);
 		const updateQuery = executedQueries.find((q) => q.sql.startsWith('UPDATE users'));
 		expect(updateQuery).toBeDefined();
-		expect(updateQuery?.sql).toContain('name = ?');
-		expect(updateQuery?.args).toContain('New Name');
+		expect(updateQuery!.sql).toContain('name = ?');
+		expect(updateQuery!.args).toContain('New Name');
 	});
 
+	// ── Delete ──────────────────────────────────────────────────────────
+
 	it('should delete an entity', () => {
-		mockSql.exec.mockImplementation((sql: string, ...args) => {
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
 			executedQueries.push({ sql, args });
-			return {
-				next: () => ({ done: true, value: undefined }),
-				toArray: () => [],
-				one: () => undefined,
-				[Symbol.iterator]: function* () {
-					yield* [];
-				},
-			};
+			return emptyCursor();
 		});
 
 		dbServer.delete('users', '123');
@@ -330,43 +364,81 @@ describe('DatabaseServer', () => {
 			q.sql.startsWith('DELETE FROM users'),
 		);
 		expect(deleteQuery).toBeDefined();
-		expect(deleteQuery?.args).toContain('123');
+		expect(deleteQuery!.args).toContain('123');
 	});
 
+	// ── Transaction ─────────────────────────────────────────────────────
+
+	it('should execute a transaction with multiple operations', () => {
+		const user1 = { id: 'u1', name: 'Alice', created_at: 'now', updated_at: 'now' };
+		const user2 = { id: 'u2', name: 'Bob', created_at: 'now', updated_at: 'now' };
+
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			if (sql.startsWith('INSERT INTO users')) {
+				// Return different users for each insert
+				const name = args.find((a: any) => typeof a === 'string' && a !== 'u1' && a !== 'u2');
+				if (name === 'Alice') return mockCursor([user1]);
+				return mockCursor([user2]);
+			}
+			return emptyCursor();
+		});
+
+		const results = dbServer.transaction([
+			{ create: { type: 'users', data: { name: 'Alice' } } },
+			{ create: { type: 'users', data: { name: 'Bob' } } },
+		]);
+
+		expect(results).toHaveLength(2);
+		results.forEach((result) => {
+			expect('entity' in result).toBe(true);
+		});
+	});
+
+	it('should reject transactions over 5000 operations', () => {
+		const ops = Array.from({ length: 5001 }, () => ({
+			create: { type: 'users' as const, data: { name: 'x' } },
+		}));
+
+		expect(() => dbServer.transaction(ops)).toThrow();
+	});
+
+	it('should return empty array for empty transaction', () => {
+		const results = dbServer.transaction([]);
+		expect(results).toEqual([]);
+	});
+
+	// ── List ────────────────────────────────────────────────────────────
+
 	it('should list entities with default query', () => {
-		mockSql.exec.mockImplementation((sql, ...args) => {
-			// Mock loading of search_index chunks if requested
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
 			if (sql.startsWith('SELECT * FROM search_index')) {
-				return {
-					toArray: () => [],
-					next: () => ({ done: true }),
-					[Symbol.iterator]: function* () {
-						yield* [];
-					},
-				};
+				return emptyCursor();
 			}
 			if (sql.startsWith('SELECT * FROM users')) {
 				const item = { id: '1', name: 'User 1', updated_at: 100 };
-				return {
-					toArray: () => [item],
-					next: () => ({ done: true }),
-					[Symbol.iterator]: function* () {
-						yield item;
-					},
-				};
+				return mockCursor([item]);
 			}
-			return {
-				toArray: () => [],
-				next: () => ({ done: true }),
-				[Symbol.iterator]: function* () {
-					yield* [];
-				},
-			};
+			return emptyCursor();
 		});
 
-		const result = dbServer.list('users', {});
+		const result = dbServer.list('users', {} as any);
 		expect(result).toBeDefined();
-		// Since searchOrama mock returns empty hits, actual result logic might differ,
-		// but we verify the method runs without error.
+	});
+
+	// ── exec ────────────────────────────────────────────────────────────
+
+	it('should execute raw SQL with string overload', () => {
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			if (sql === 'SELECT COUNT(*) as count FROM users') {
+				return mockCursor([{ count: 42 }]);
+			}
+			return emptyCursor();
+		});
+
+		const results = dbServer.exec('SELECT COUNT(*) as count FROM users');
+		expect(results).toEqual([{ count: 42 }]);
 	});
 });

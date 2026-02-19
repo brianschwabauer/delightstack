@@ -1514,7 +1514,7 @@ export class DatabaseServer<
 				saved_bytes + (i === 0 ? first_chunk_size : chunk_size),
 			);
 			this.ctx.storage.sql.exec(
-				`INSERT INTO search_index (id, index_data, index_config, index_version, index_format, deleted, first_updated_at, last_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				`INSERT INTO search_index (id, index_data, index_config, index_version, index_format, deleted_entity, first_updated_at, last_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 				`${entity_type}.${i}`,
 				chunk,
 				i === 0 ? index_config : '{}',

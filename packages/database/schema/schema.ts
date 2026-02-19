@@ -1528,6 +1528,7 @@ class GeopointFieldGenerator {
 	 */
 	optional(): Omit<OptionalValue<this>, 'optional'> {
 		this._.optional = true;
+		this._.schema = this._.schema.optional().nullable() as any;
 		return this as Omit<OptionalValue<this>, 'optional'>;
 	}
 
@@ -1537,6 +1538,7 @@ class GeopointFieldGenerator {
 	 */
 	readonly(): Omit<ReadOnly<this>, 'readonly'> {
 		this._.readonly = true;
+		this._.schema = this._.schema.readonly() as any;
 		return this as Omit<ReadOnly<this>, 'readonly'>;
 	}
 }
@@ -2844,10 +2846,11 @@ export namespace Database {
 		 * This only includes the fields defined as 'searchable' in the table schema.
 		 */
 		function toSparse(data: Entity): SearchEntity {
-			let sparse_data = {} as any;
+			const root = {} as any;
 			for (const field_dot_notation of searchable_fields) {
 				const field_path = field_dot_notation.split('.');
 				let current = data;
+				let sparse_data = root;
 				for (let i = 0; i < field_path.length; i++) {
 					if (current === undefined || current === null) break;
 					const field = field_path[i];
@@ -2862,7 +2865,7 @@ export namespace Database {
 					}
 				}
 			}
-			return sparse_data as SearchEntity;
+			return root as SearchEntity;
 		}
 
 		return {
