@@ -10,27 +10,27 @@ Build a Svelte 5 component for displaying images from the image processor. Handl
 ## Tasks
 
 ### Helpers (src/image-helpers.ts)
-- [ ] Create `src/image-helpers.ts`
-- [ ] Implement `decodeThumbHash(base64)` — base64 → Uint8Array → `thumbHashToDataURL()` → data URL
-- [ ] Implement `imageURL(image_id, variant?, cdn_prefix?)` — build CDN URL string
+- [x] Create `src/image-helpers.ts`
+- [x] Implement `decodeThumbHash(base64)` — base64 → Uint8Array → `thumbHashToDataURL()` → data URL
+- [x] Implement `imageURL(image_id, variant?, cdn_prefix?)` — build CDN URL string
 - [ ] Test: decodeThumbHash round-trips correctly
 - [ ] Test: imageURL builds correct paths with defaults and custom prefix
 
 ### Component (src/Image.svelte)
-- [ ] Create `src/Image.svelte`
-- [ ] Define Props interface matching DESIGN.md (image, alt, fit, loading, ssr_placeholder, sizes, cdn_prefix, onload, class, style)
-- [ ] Implement alt text fallback chain: prop → image.alt_text → image.file_name without extension → ""
-- [ ] Implement background color placeholder (CSS oklch from image record)
-- [ ] Implement ThumbHash placeholder (SSR when ssr_placeholder=true, client otherwise)
-- [ ] Build srcset from non-original, non-watermarked variants, ascending by width
-- [ ] Build fallback src from largest non-original, non-watermarked variant
-- [ ] Detect cached images (img.complete) and skip fade transition
-- [ ] Implement 300ms opacity fade from placeholder to loaded image
-- [ ] Implement error retry with exponential backoff (1s, 4s, 9s — max 3 retries)
-- [ ] Only render `<img>` when processing_status is 'processed'
-- [ ] Clean up retry timer on component destroy
-- [ ] Handle missing variants gracefully (empty srcset)
-- [ ] Scoped CSS: .image, .placeholder, .main, .loaded, .instant
+- [x] Create `src/Image.svelte`
+- [x] Define Props interface matching DESIGN.md (image, alt, fit, loading, ssr_placeholder, sizes, cdn_prefix, onload, class, style)
+- [x] Implement alt text fallback chain: prop → image.alt_text → image.file_name without extension → ""
+- [x] Implement background color placeholder (CSS oklch from image record)
+- [x] Implement ThumbHash placeholder (SSR when ssr_placeholder=true, client otherwise)
+- [x] Build srcset from non-original, non-watermarked variants, ascending by width
+- [x] Build fallback src from largest non-original, non-watermarked variant
+- [x] Detect cached images (img.complete) and skip fade transition
+- [x] Implement 300ms opacity fade from placeholder to loaded image
+- [x] Implement error retry with exponential backoff (1s, 4s, 9s — max 3 retries)
+- [x] Only render `<img>` when processing_status is 'processed'
+- [x] Clean up retry timer on component destroy
+- [x] Handle missing variants gracefully (empty srcset)
+- [x] Scoped CSS: .image, .placeholder, .main, .loaded, .instant
 - [ ] Test: renders with background color when no thumbhash
 - [ ] Test: renders thumbhash placeholder on client
 - [ ] Test: SSR placeholder works server-side

@@ -24,7 +24,7 @@ Read the specs in order. Each spec lists its dependencies — don't start a spec
 | 12 | [Avatar Mode](./12-avatar-mode.md) | done | Face detection, square crop, avatar defaults |
 | 13 | [Watermarks](./13-watermarks.md) | done | Text/image watermarks, layouts, compositing |
 | 14 | [SvelteKit CDN Hook](./14-cdn-hook.md) | done | createImageHandle(), R2 serving, ETag/304 |
-| 15 | [Svelte Image Component](./15-image-component.md) | pending | Image.svelte, decodeThumbHash(), imageURL() |
+| 15 | [Svelte Image Component](./15-image-component.md) | done | Image.svelte, decodeThumbHash(), imageURL() |
 
 ## Dependency Graph
 
@@ -60,7 +60,7 @@ Specs 10 and 11 can be done in parallel after 09.
 - [x] Complete specs 10–11 — Worker-side integration (parallelizable)
 - [x] Complete specs 12–13 — Advanced features (parallelizable)
 - [x] Complete spec 14 — SvelteKit CDN Hook
-- [ ] Complete spec 15 — Svelte Image Component
+- [x] Complete spec 15 — Svelte Image Component
 - [ ] End-to-end integration test (Mode 1: upload → alarm → processed → CDN → component)
 - [ ] End-to-end integration test (Mode 2: standalone processImage → result)
 - [ ] Write package README with quickstart
@@ -72,6 +72,7 @@ Specs 10 and 11 can be done in parallel after 09.
 
 | Date | Change |
 |------|--------|
+| 2026-02-18 | Spec 15 complete — Image.svelte component, decodeThumbHash(), imageURL() helpers, barrel export |
 | 2026-02-18 | Spec 14 complete — createImageHandle() CDN hook with ETag/304 and SVG placeholder |
 | 2026-02-18 | Specs 12–13 complete — Face-crop avatar mode, watermark compositing (text/image, repeat/center/corner) |
 | 2026-02-18 | Specs 10–11 complete — processImage() standalone helper, defineImageTable(), imageProcessing() factory |

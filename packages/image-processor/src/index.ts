@@ -8,5 +8,4 @@ export { defineImageTable } from './schema';
 
 export { createImageHandle } from './handle';
 
-// Future exports (added as specs are implemented):
-// export { decodeThumbHash, imageURL } from './image-helpers';
+export { decodeThumbHash, imageURL } from './image-helpers';
