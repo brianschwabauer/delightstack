@@ -5,6 +5,8 @@ import { extractMetadata, type MetadataResult } from './metadata';
 import { extractColors, type ColorResult } from './colors';
 import { generateVariants, type VariantConfig, type GeneratedVariant } from './variants';
 import { generateThumbHash } from './thumbhash';
+import { svgPipeline } from './svg';
+import { pdfPipeline } from './pdf';
 
 // Stubs for features implemented in later specs
 async function faceCrop(input: Buffer, _metadata: MetadataResult): Promise<Buffer> {
@@ -16,20 +18,6 @@ async function applyWatermark(
 	_watermarkImages?: Map<string, ArrayBuffer>,
 ): Promise<GeneratedVariant> {
 	return variant; // spec 13
-}
-
-async function svgPipeline(_data: ArrayBuffer, _options: ProcessOptions): Promise<PipelineResult> {
-	throw Object.assign(new Error('SVG processing not yet implemented'), {
-		code: 'UNSUPPORTED_FORMAT',
-		details: { mime_type: 'image/svg+xml', file_extension: 'svg' },
-	});
-}
-
-async function pdfPipeline(_data: ArrayBuffer, _options: ProcessOptions): Promise<PipelineResult> {
-	throw Object.assign(new Error('PDF processing not yet implemented'), {
-		code: 'UNSUPPORTED_FORMAT',
-		details: { mime_type: 'application/pdf', file_extension: 'pdf' },
-	});
 }
 
 export interface ProcessOptions {
@@ -94,6 +82,71 @@ export async function process(data: ArrayBuffer, options: ProcessOptions): Promi
 	return imagePipeline(data, mimeResult, options);
 }
 
+/** Generate variants for animated images, preserving all frames */
+async function generateAnimatedVariants(
+	input: Buffer,
+	metadata: MetadataResult,
+	configs: VariantConfig[],
+	options: { compress_original: boolean; keep_original: boolean },
+): Promise<GeneratedVariant[]> {
+	const longEdge = Math.max(metadata.width, metadata.height);
+	const results: GeneratedVariant[] = [];
+
+	for (const config of configs) {
+		if (longEdge < config.max_dimension) continue;
+
+		const fit = config.fit ?? (config.max_dimension > 1024 ? 'inside' : 'cover');
+		const sharpFit = fit === 'inside' ? 'inside' : 'outside';
+		const maxDim = config.max_dimension;
+
+		const result = await sharp(input, { animated: true })
+			.resize(maxDim, maxDim, { fit: sharpFit as any, withoutEnlargement: true })
+			.webp({ quality: config.quality ?? 75 })
+			.toBuffer({ resolveWithObject: true });
+
+		// Get per-page height for animated output
+		const outMeta = await sharp(result.data).metadata();
+		const height = outMeta.pageHeight ?? result.info.height;
+
+		results.push({
+			name: config.name,
+			data: result.data,
+			width: result.info.width,
+			height,
+			mime_type: 'image/webp',
+			file_size: result.data.byteLength,
+			is_animated: true,
+			fit,
+			watermarked: false,
+		});
+	}
+
+	// Compressed original for animated: always WebP
+	if (options.compress_original && options.keep_original) {
+		const compressed = await sharp(input, { animated: true })
+			.keepMetadata()
+			.webp({ quality: 75 })
+			.toBuffer({ resolveWithObject: true });
+
+		const outMeta = await sharp(compressed.data).metadata();
+		const height = outMeta.pageHeight ?? compressed.info.height;
+
+		results.push({
+			name: 'original',
+			data: compressed.data,
+			width: compressed.info.width,
+			height,
+			mime_type: 'image/webp',
+			file_size: compressed.data.byteLength,
+			is_animated: true,
+			fit: 'inside',
+			watermarked: false,
+		});
+	}
+
+	return results;
+}
+
 async function imagePipeline(
 	data: ArrayBuffer,
 	mimeResult: { mime_type: string; extension: string },
@@ -109,7 +162,15 @@ async function imagePipeline(
 	const pages = sharpMeta.pages ?? 1;
 	const is_animated = pages > 1;
 
-	// For animated images, process first frame as static (full animated support in spec 08)
+	// Enforce frame limit for animated images
+	if (is_animated && pages > 500) {
+		throw Object.assign(new Error('Too many animation frames'), {
+			code: 'TOO_MANY_FRAMES',
+			details: { max_frames: 500, actual_frames: pages },
+		});
+	}
+
+	// For metadata/color extraction, use first frame
 	const processBuffer = is_animated
 		? await sharp(inputBuffer, { page: 0 }).toBuffer()
 		: inputBuffer;
@@ -147,12 +208,23 @@ async function imagePipeline(
 	const keep_original = options.keep_original ?? true;
 	const compress_original = options.compress_original ?? true;
 
+	// For animated images, override AVIF → WebP (AVIF animation unsupported in libvips)
+	if (is_animated) {
+		for (const config of resolvedConfigs) {
+			if (config.format === 'avif') {
+				(config as any).format = 'webp';
+			}
+		}
+	}
+
+	// For animated variants, use the full animated buffer; for static, use the working buffer
+	const variantBuffer = is_animated ? inputBuffer : workingBuffer;
+
 	// Generate variants and thumbhash in parallel
 	const [variants, thumbhash] = await Promise.all([
-		generateVariants(workingBuffer, coreMetadata, resolvedConfigs, {
-			compress_original,
-			keep_original,
-		}),
+		is_animated
+			? generateAnimatedVariants(variantBuffer, coreMetadata, resolvedConfigs, { compress_original, keep_original })
+			: generateVariants(workingBuffer, coreMetadata, resolvedConfigs, { compress_original, keep_original }),
 		generateThumbHash(workingBuffer, is_animated),
 	]);
 

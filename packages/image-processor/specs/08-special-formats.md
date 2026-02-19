@@ -10,35 +10,35 @@ Handle three categories of inputs that deviate from the standard static image pi
 ## Tasks
 
 ### Animated Images
-- [ ] Detect animated inputs in the pipeline (metadata.pages > 1)
-- [ ] Force AVIF variants to fall back to animated WebP
-- [ ] Enforce 500-frame limit (throw `TOO_MANY_FRAMES`)
-- [ ] Resize all frames together (preserve timing/delays)
-- [ ] Generate ThumbHash from first frame only
-- [ ] Watermark first frame only (note in variant metadata)
-- [ ] Compressed original: use animated WebP (not AVIF)
-- [ ] Test with animated GIF, animated WebP, APNG
+- [x] Detect animated inputs in the pipeline (metadata.pages > 1)
+- [x] Force AVIF variants to fall back to animated WebP
+- [x] Enforce 500-frame limit (throw `TOO_MANY_FRAMES`)
+- [x] Resize all frames together (preserve timing/delays)
+- [x] Generate ThumbHash from first frame only
+- [x] Watermark first frame only (note in variant metadata)
+- [x] Compressed original: use animated WebP (not AVIF)
+- [x] Test with animated GIF, animated WebP, APNG
 
 ### SVG Handling
-- [ ] Create `docker/svg.ts`
-- [ ] Detect SVG (text-based, check for `<svg` prefix)
-- [ ] Parse and extract metadata (viewBox dimensions, file size)
-- [ ] Sanitize: strip `<script>`, event handlers (`onload`, `onerror`, etc.), external references
-- [ ] Detect embedded fonts, external resources
-- [ ] Rasterize at a sensible size for ThumbHash only (via librsvg/Sharp)
-- [ ] Do NOT create resized variants (SVGs are resolution-independent)
-- [ ] Return sanitized SVG + metadata + ThumbHash
-- [ ] Throw `SVG_MALICIOUS` if dangerous content is found
-- [ ] Test with clean SVGs, SVGs with scripts, SVGs with external references
+- [x] Create `docker/svg.ts`
+- [x] Detect SVG (text-based, check for `<svg` prefix)
+- [x] Parse and extract metadata (viewBox dimensions, file size)
+- [x] Sanitize: strip `<script>`, event handlers (`onload`, `onerror`, etc.), external references
+- [x] Detect embedded fonts, external resources
+- [x] Rasterize at a sensible size for ThumbHash only (via librsvg/Sharp)
+- [x] Do NOT create resized variants (SVGs are resolution-independent)
+- [x] Return sanitized SVG + metadata + ThumbHash
+- [x] Throw `SVG_MALICIOUS` if dangerous content is found
+- [x] Test with clean SVGs, SVGs with scripts, SVGs with external references
 
 ### PDF Handling
-- [ ] Create `docker/pdf.ts`
-- [ ] Detect PDF via magic bytes (`%PDF-`)
-- [ ] Render first page to raster via Sharp's built-in poppler support
-- [ ] Use `density: 150` for quality/speed balance
-- [ ] Extract metadata (page count, rendered dimensions, file size)
-- [ ] Process rendered first page through the standard static image pipeline
-- [ ] Test with single-page PDF, multi-page PDF
+- [x] Create `docker/pdf.ts`
+- [x] Detect PDF via magic bytes (`%PDF-`)
+- [x] Render first page to raster via Sharp's built-in poppler support
+- [x] Use `density: 150` for quality/speed balance
+- [x] Extract metadata (page count, rendered dimensions, file size)
+- [x] Process rendered first page through the standard static image pipeline
+- [x] Test with single-page PDF, multi-page PDF
 
 ## Details
 
