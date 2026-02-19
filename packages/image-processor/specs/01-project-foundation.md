@@ -9,12 +9,12 @@ Set up the package scaffolding, define all shared TypeScript types, and implemen
 
 ## Tasks
 
-- [ ] Create `package.json` with dependencies and exports map
-- [ ] Create `tsconfig.json` for `src/` (worker-side code)
-- [ ] Create `src/types.ts` with all shared interfaces
-- [ ] Create `src/errors.ts` with error class hierarchy
-- [ ] Create `src/index.ts` barrel export
-- [ ] Verify the package builds cleanly with `tsc --noEmit`
+- [x] Create `package.json` with dependencies and exports map
+- [x] Create `tsconfig.json` for `src/` (worker-side code)
+- [x] Create `src/types.ts` with all shared interfaces
+- [x] Create `src/errors.ts` with error class hierarchy
+- [x] Create `src/index.ts` barrel export
+- [x] Verify the package builds cleanly with `tsc --noEmit`
 
 ## Details
 

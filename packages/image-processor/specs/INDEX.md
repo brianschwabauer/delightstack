@@ -10,7 +10,7 @@ Read the specs in order. Each spec lists its dependencies — don't start a spec
 
 | #  | Spec | Status | Description |
 |----|------|--------|-------------|
-| 01 | [Project Foundation](./01-project-foundation.md) | pending | Package scaffolding, types, error classes |
+| 01 | [Project Foundation](./01-project-foundation.md) | done | Package scaffolding, types, error classes |
 | 02 | [Docker Container Setup](./02-docker-container.md) | pending | Dockerfile, HTTP server, multipart protocol |
 | 03 | [Input Validation & MIME Detection](./03-input-validation.md) | pending | File type detection, size/dimension limits |
 | 04 | [Metadata Extraction & Color Analysis](./04-metadata-extraction.md) | pending | Sharp metadata, EXIF, background/accent colors, OKLCH |
@@ -52,7 +52,7 @@ Specs 10 and 11 can be done in parallel after 09.
 
 ## General TODO
 
-- [ ] Complete spec 01 — Project Foundation
+- [x] Complete spec 01 — Project Foundation
 - [ ] Complete specs 02–06 — Container internals (parallelizable)
 - [ ] Complete spec 07 — Pipeline Orchestration (integrates 03–06)
 - [ ] Complete spec 08 — Special Formats
@@ -72,4 +72,4 @@ Specs 10 and 11 can be done in parallel after 09.
 
 | Date | Change |
 |------|--------|
-| — | (no changes yet) |
+| 2026-02-18 | Spec 01 complete — package.json, tsconfig.json, src/types.ts, src/errors.ts, src/index.ts |

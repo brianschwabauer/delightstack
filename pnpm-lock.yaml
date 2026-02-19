@@ -299,6 +299,28 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  packages/image-processor:
+    dependencies:
+      '@delightstack/database':
+        specifier: workspace:*
+        version: link:../database
+      thumbhash:
+        specifier: ^0.1.1
+        version: 0.1.1
+      zod:
+        specifier: ^4.1.12
+        version: 4.1.12
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20251120.0
+        version: 4.20251120.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.1
+        version: 3.2.4(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.1.0)(sass@1.89.2)
+
   packages/utilities:
     dependencies:
       '@floating-ui/dom':
@@ -4321,6 +4343,9 @@ packages:
   term-size@2.2.1:
     resolution: {integrity: sha512-wK0Ri4fOGjv/XPy8SBHZChl8CM7uMc5VML7SqiQ0zG7+J5Vr+RMQDoHa2CNT6KHUnTGIXH34UDMkPzAUyapBZg==}
     engines: {node: '>=8'}
+
+  thumbhash@0.1.1:
+    resolution: {integrity: sha512-kH5pKeIIBPQXAOni2AiY/Cu/NKdkFREdpH+TLdM0g6WA7RriCv0kPLgP731ady67MhTAqrVG/4mnEeibVuCJcg==}
 
   tiny-inflate@1.0.3:
     resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
@@ -9767,6 +9792,8 @@ snapshots:
   tabbable@6.2.0: {}
 
   term-size@2.2.1: {}
+
+  thumbhash@0.1.1: {}
 
   tiny-inflate@1.0.3: {}
 
