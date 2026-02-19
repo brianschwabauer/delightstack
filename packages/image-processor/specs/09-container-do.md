@@ -9,17 +9,17 @@ Implement the `ImageProcessorContainer` class — a Cloudflare Container/Durable
 
 ## Tasks
 
-- [ ] Create `src/container.ts`
-- [ ] Extend `Container` from `@cloudflare/containers`
-- [ ] Set `defaultPort = 8080`, `sleepAfter = '5m'`, `enableInternet = false`
-- [ ] Implement `process(imageData, options)` RPC method
-- [ ] Forward image bytes + options to Docker container via `this.ctx.container.getTcpPort(8080).fetch()`
-- [ ] Parse multipart response from Docker container
-- [ ] Handle watermark image pre-fetching (resolve R2 keys/URLs to bytes before sending to container)
-- [ ] Handle container startup errors (CONTAINER_UNAVAILABLE)
-- [ ] Handle connection failures / retries
-- [ ] Test: RPC call with mock container
-- [ ] Test: Container unavailable error path
+- [x] Create `src/container.ts`
+- [x] Extend `Container` from `@cloudflare/containers`
+- [x] Set `defaultPort = 8080`, `sleepAfter = '5m'`, `enableInternet = false`
+- [x] Implement `process(imageData, options)` RPC method
+- [x] Forward image bytes + options to Docker container via `this.ctx.container.getTcpPort(8080).fetch()`
+- [x] Parse multipart response from Docker container
+- [x] Handle watermark image pre-fetching (resolve R2 keys/URLs to bytes before sending to container)
+- [x] Handle container startup errors (CONTAINER_UNAVAILABLE)
+- [x] Handle connection failures / retries
+- [x] Test: RPC call with mock container
+- [x] Test: Container unavailable error path
 
 ## Details
 

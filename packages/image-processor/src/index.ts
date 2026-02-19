@@ -1,8 +1,9 @@
 export * from './types';
 export * from './errors';
 
+export { ImageProcessorContainer } from './container';
+
 // Future exports (added as specs are implemented):
-// export { ImageProcessorContainer } from './container';
 // export { processImage } from './process';
 // export { imageProcessing } from './integration';
 // export { defineImageTable } from './schema';
