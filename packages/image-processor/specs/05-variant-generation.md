@@ -1,7 +1,7 @@
 # 05 — Variant Generation
 
 **Dependencies:** 01, 04
-**Files created:** `docker/variants.ts`
+**Files created:** `container/src/variants.ts`
 
 ## Overview
 
@@ -9,7 +9,7 @@ Generate resized output variants from the processed image. Handles fit strategie
 
 ## Tasks
 
-- [x] Create `docker/variants.ts`
+- [x] Create `container/src/variants.ts`
 - [x] Implement `generateVariants(sharpInstance, metadata, variantConfigs)` function
 - [x] Implement `inside` fit strategy (long edge fits within max_dimension)
 - [x] Implement `cover` fit strategy (short edge fits within max_dimension)

@@ -2777,21 +2777,22 @@ packages/image-processor/
 ├── package.json
 ├── tsconfig.json
 │
-├── docker/                    # Container image
+├── container/                 # Docker container (runs inside Cloudflare Containers)
 │   ├── Dockerfile
-│   ├── package.json           # Container's own dependencies (sharp, file-type, etc.)
-│   ├── server.ts              # HTTP server that processes images
-│   ├── pipeline.ts            # Core processing pipeline
-│   ├── metadata.ts            # Metadata extraction
-│   ├── variants.ts            # Variant generation
-│   ├── thumbhash.ts           # ThumbHash generation
-│   ├── colors.ts              # Background + accent color extraction + OKLCH conversion
-│   ├── face-crop.ts           # Face detection + square crop for avatar profile
-│   ├── watermark.ts           # Watermark generation and compositing (text SVG tiles, image overlays)
-│   ├── svg.ts                 # SVG-specific handling (sanitization, metadata)
-│   ├── pdf.ts                 # PDF-specific handling (first page rendering)
-│   ├── validation.ts          # Input validation (size, dimensions, format)
-│   └── mime.ts                # MIME type detection from magic bytes
+│   ├── package.json           # Container-only dependencies (sharp, file-type, etc.)
+│   └── src/                   # Processing code that runs inside the container
+│       ├── server.ts          # HTTP server entry point (Bun.serve on port 8080)
+│       ├── pipeline.ts        # Core processing pipeline orchestration
+│       ├── metadata.ts        # Metadata extraction (EXIF, GPS, dimensions)
+│       ├── variants.ts        # Variant generation (resize, encode, defaults)
+│       ├── thumbhash.ts       # ThumbHash generation
+│       ├── colors.ts          # Background + accent color extraction (OKLCH)
+│       ├── face-crop.ts       # Face detection + square crop for avatar mode
+│       ├── watermark.ts       # Watermark compositing (text/image, repeat/center/corner)
+│       ├── svg.ts             # SVG sanitization + processing
+│       ├── pdf.ts             # PDF first-page rendering
+│       ├── validation.ts      # Input validation (size, dimensions, format)
+│       └── mime.ts            # MIME type detection from magic bytes
 │
 ├── src/                       # Worker-side code (imported by consuming apps)
 │   ├── index.ts               # Main exports

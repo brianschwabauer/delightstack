@@ -1,7 +1,7 @@
 # 13 — Watermarks
 
 **Dependencies:** 05, 07
-**Files created:** `docker/watermark.ts`
+**Files created:** `container/src/watermark.ts`
 
 ## Overview
 
@@ -9,7 +9,7 @@ Apply watermarks to individual variants. Supports text watermarks (rendered as S
 
 ## Tasks
 
-- [x] Create `docker/watermark.ts`
+- [x] Create `container/src/watermark.ts`
 - [x] Implement `applyWatermark(resizedBuffer, variantDimensions, watermarkConfig, watermarkImages)` function
 - [x] Implement text watermark SVG generation (white text with black drop shadow)
 - [x] Implement `repeat` layout — tiled diagonal grid
@@ -30,7 +30,7 @@ Apply watermarks to individual variants. Supports text watermarks (rendered as S
 
 ## Details
 
-### docker/watermark.ts
+### container/src/watermark.ts
 
 ```
 applyWatermark(

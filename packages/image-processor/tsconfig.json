@@ -15,5 +15,5 @@
 		"skipLibCheck": true
 	},
 	"include": ["src/**/*"],
-	"exclude": ["docker", "tests", "specs"]
+	"exclude": ["container", "tests", "specs"]
 }

@@ -15,7 +15,7 @@ pnpm add @delightstack/image-processor
 ```toml
 [[containers]]
 class_name = "ImageProcessorContainer"
-image = "node_modules/@delightstack/image-processor/docker"
+image = "node_modules/@delightstack/image-processor/container"
 max_instances = 5
 instance_type = "standard-1"
 

@@ -1,7 +1,7 @@
 # 03 — Input Validation & MIME Detection
 
 **Dependencies:** 01
-**Files created:** `docker/validation.ts`, `docker/mime.ts`
+**Files created:** `container/src/validation.ts`, `container/src/mime.ts`
 
 ## Overview
 
@@ -9,8 +9,8 @@ Detect the true MIME type of uploaded files from magic bytes (not file extension
 
 ## Tasks
 
-- [x] Create `docker/mime.ts` — MIME type detection via `file-type`
-- [x] Create `docker/validation.ts` — size, dimension, format validation
+- [x] Create `container/src/mime.ts` — MIME type detection via `file-type`
+- [x] Create `container/src/validation.ts` — size, dimension, format validation
 - [x] Handle edge case: file-type returns undefined (unknown format)
 - [x] Handle edge case: SVG detection (file-type may not detect SVGs since they're text)
 - [x] Unit tests for each validation error scenario
@@ -18,7 +18,7 @@ Detect the true MIME type of uploaded files from magic bytes (not file extension
 
 ## Details
 
-### docker/mime.ts
+### container/src/mime.ts
 
 Use the `file-type` npm package which reads magic bytes from the start of the file:
 
@@ -30,7 +30,7 @@ detectMimeType(data: ArrayBuffer): { mime_type: string; extension: string } | nu
 - Return `{ mime_type, extension }` or `null` if unrecognized
 - Special case: SVGs are text-based and file-type won't detect them. Check for `<?xml` or `<svg` prefix after file-type returns null. If found, return `{ mime_type: 'image/svg+xml', extension: 'svg' }`
 
-### docker/validation.ts
+### container/src/validation.ts
 
 ```
 validateInput(data: ArrayBuffer, mimeResult): void  // throws on failure

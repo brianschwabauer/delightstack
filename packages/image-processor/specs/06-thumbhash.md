@@ -1,7 +1,7 @@
 # 06 — ThumbHash Generation
 
 **Dependencies:** 01
-**Files created:** `docker/thumbhash.ts`
+**Files created:** `container/src/thumbhash.ts`
 
 ## Overview
 
@@ -9,7 +9,7 @@ Generate a ThumbHash from the image — a ~25-byte binary hash (encoded as ~33-c
 
 ## Tasks
 
-- [x] Create `docker/thumbhash.ts`
+- [x] Create `container/src/thumbhash.ts`
 - [x] Implement `generateThumbHash(sharpInstance)` function
 - [x] Resize image to appropriate preview size for hashing
 - [x] Handle RGBA and RGB inputs correctly
@@ -21,7 +21,7 @@ Generate a ThumbHash from the image — a ~25-byte binary hash (encoded as ~33-c
 
 ## Details
 
-### docker/thumbhash.ts
+### container/src/thumbhash.ts
 
 ```
 generateThumbHash(sharpInstance): Promise<string>

@@ -1,7 +1,7 @@
 # 04 — Metadata Extraction & Color Analysis
 
 **Dependencies:** 01, 03
-**Files created:** `docker/metadata.ts`, `docker/colors.ts`
+**Files created:** `container/src/metadata.ts`, `container/src/colors.ts`
 
 ## Overview
 
@@ -9,8 +9,8 @@ Extract all metadata from the original image: dimensions, color space, transpare
 
 ## Tasks
 
-- [x] Create `docker/metadata.ts` — Sharp metadata + EXIF extraction
-- [x] Create `docker/colors.ts` — background color, accent color, OKLCH conversion
+- [x] Create `container/src/metadata.ts` — Sharp metadata + EXIF extraction
+- [x] Create `container/src/colors.ts` — background color, accent color, OKLCH conversion
 - [x] Extract core Sharp metadata (width, height, channels, pages, etc.)
 - [x] Apply EXIF orientation correction and report corrected dimensions
 - [x] Extract EXIF date_taken via exif-reader
@@ -26,7 +26,7 @@ Extract all metadata from the original image: dimensions, color space, transpare
 
 ## Details
 
-### docker/metadata.ts
+### container/src/metadata.ts
 
 ```
 extractMetadata(sharpInstance, mimeResult, fileSize): ImageMetadata
@@ -66,7 +66,7 @@ GPS conversion helper: `[degrees, minutes, seconds]` + ref ('N'/'S'/'E'/'W') →
 
 **Result assembly:** Return an `ImageMetadata` object. Fields that aren't applicable (no EXIF, no GPS, etc.) are `null`.
 
-### docker/colors.ts
+### container/src/colors.ts
 
 ```
 extractColors(sharpInstance): { background, accent, luminance, css strings }

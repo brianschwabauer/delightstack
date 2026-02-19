@@ -1,7 +1,7 @@
 # 08 — Special Formats
 
 **Dependencies:** 07
-**Files created:** `docker/svg.ts`, `docker/pdf.ts`, animated image handling in `docker/pipeline.ts`
+**Files created:** `container/src/svg.ts`, `container/src/pdf.ts`, animated image handling in `container/src/pipeline.ts`
 
 ## Overview
 
@@ -20,7 +20,7 @@ Handle three categories of inputs that deviate from the standard static image pi
 - [x] Test with animated GIF, animated WebP, APNG
 
 ### SVG Handling
-- [x] Create `docker/svg.ts`
+- [x] Create `container/src/svg.ts`
 - [x] Detect SVG (text-based, check for `<svg` prefix)
 - [x] Parse and extract metadata (viewBox dimensions, file size)
 - [x] Sanitize: strip `<script>`, event handlers (`onload`, `onerror`, etc.), external references
@@ -32,7 +32,7 @@ Handle three categories of inputs that deviate from the standard static image pi
 - [x] Test with clean SVGs, SVGs with scripts, SVGs with external references
 
 ### PDF Handling
-- [x] Create `docker/pdf.ts`
+- [x] Create `container/src/pdf.ts`
 - [x] Detect PDF via magic bytes (`%PDF-`)
 - [x] Render first page to raster via Sharp's built-in poppler support
 - [x] Use `density: 150` for quality/speed balance
@@ -76,7 +76,7 @@ const resized = await sharp(input, { animated: true })
 
 ### SVG Handling
 
-**docker/svg.ts:**
+**container/src/svg.ts:**
 
 ```
 svgPipeline(data: ArrayBuffer, options): ContainerProcessResult
@@ -118,7 +118,7 @@ const rasterized = await sharp(Buffer.from(sanitizedSvg))
 
 ### PDF Handling
 
-**docker/pdf.ts:**
+**container/src/pdf.ts:**
 
 ```
 pdfPipeline(data: ArrayBuffer, options): ContainerProcessResult

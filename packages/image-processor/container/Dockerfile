@@ -55,4 +55,4 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app .
 
 EXPOSE 8080
-CMD ["bun", "run", "server.ts"]
+CMD ["bun", "run", "src/server.ts"]

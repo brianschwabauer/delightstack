@@ -1,7 +1,7 @@
 # 07 — Processing Pipeline Orchestration
 
 **Dependencies:** 02, 03, 04, 05, 06
-**Files created:** `docker/pipeline.ts`
+**Files created:** `container/src/pipeline.ts`
 
 ## Overview
 
@@ -9,7 +9,7 @@ Wire together validation, metadata extraction, color analysis, variant generatio
 
 ## Tasks
 
-- [x] Create `docker/pipeline.ts`
+- [x] Create `container/src/pipeline.ts`
 - [x] Implement `process(data, options)` function — main entry point
 - [x] Wire pipeline stages: detect → validate → load → metadata → colors → variants → thumbhash
 - [x] Run independent stages in parallel where possible (colors + variants, etc.)
@@ -24,7 +24,7 @@ Wire together validation, metadata extraction, color analysis, variant generatio
 
 ## Details
 
-### docker/pipeline.ts
+### container/src/pipeline.ts
 
 ```
 process(

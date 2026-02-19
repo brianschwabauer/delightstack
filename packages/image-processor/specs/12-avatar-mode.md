@@ -1,7 +1,7 @@
 # 12 — Avatar Mode
 
 **Dependencies:** 07
-**Files created:** `docker/face-crop.ts`
+**Files created:** `container/src/face-crop.ts`
 
 ## Overview
 
@@ -9,7 +9,7 @@ Implement face-aware square cropping for avatar/profile pictures. When `avatar: 
 
 ## Tasks
 
-- [x] Create `docker/face-crop.ts`
+- [x] Create `container/src/face-crop.ts`
 - [x] Install and configure `@mediapipe/tasks-vision` with BlazeFace short-range model
 - [x] Load the face detection model once at container startup (reuse across requests)
 - [x] Implement face detection on input image
@@ -30,7 +30,7 @@ Implement face-aware square cropping for avatar/profile pictures. When `avatar: 
 
 ## Details
 
-### docker/face-crop.ts
+### container/src/face-crop.ts
 
 ```
 faceCrop(sharpInstance, metadata): Promise<Sharp>

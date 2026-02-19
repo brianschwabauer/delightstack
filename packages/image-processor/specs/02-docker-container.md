@@ -1,7 +1,7 @@
 # 02 — Docker Container Setup
 
 **Dependencies:** 01
-**Files created:** `docker/Dockerfile`, `docker/package.json`, `docker/server.ts`
+**Files created:** `container/Dockerfile`, `container/package.json`, `container/src/server.ts`
 
 ## Overview
 
@@ -9,9 +9,9 @@ Build the Docker image that runs inside Cloudflare Containers. It runs a Bun HTT
 
 ## Tasks
 
-- [x] Create `docker/package.json` with container-only dependencies
-- [x] Create `docker/Dockerfile` (multi-stage: build libvips, runtime)
-- [x] Create `docker/server.ts` HTTP server with `POST /process` endpoint
+- [x] Create `container/package.json` with container-only dependencies
+- [x] Create `container/Dockerfile` (multi-stage: build libvips, runtime)
+- [x] Create `container/src/server.ts` HTTP server with `POST /process` endpoint
 - [x] Implement multipart response encoding (JSON metadata + binary variant parts)
 - [x] Implement request parsing (raw body + X-Options header)
 - [x] Add 60-second processing timeout wrapper
@@ -21,7 +21,7 @@ Build the Docker image that runs inside Cloudflare Containers. It runs a Bun HTT
 
 ## Details
 
-### docker/package.json
+### container/package.json
 
 Container-specific dependencies (these run inside Docker, not in Workers):
 
@@ -57,7 +57,7 @@ Architecture: `linux/amd64` (Cloudflare Containers requirement).
 
 Target image size: 250–350 MB.
 
-### docker/server.ts
+### container/src/server.ts
 
 Minimal HTTP server using `Bun.serve()`:
 

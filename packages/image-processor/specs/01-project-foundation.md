@@ -23,7 +23,7 @@ Set up the package scaffolding, define all shared TypeScript types, and implemen
 The package has two separate dependency contexts:
 
 1. **Worker-side** (`package.json` at the root) — lightweight, no native deps. Used by consuming apps.
-2. **Container-side** (`docker/package.json`) — heavy, native deps (sharp, etc.). Only runs inside Docker.
+2. **Container-side** (`container/package.json`) — heavy, native deps (sharp, etc.). Only runs inside Docker.
 
 Root `package.json`:
 
@@ -56,7 +56,7 @@ The Svelte component is a separate export so non-Svelte consumers don't pull it 
 
 ### tsconfig.json
 
-Standard Delightstack config. Target `esnext`, module `esnext`, strict. Include `src/**/*`. Exclude `docker/`, `tests/`, `specs/`.
+Standard Delightstack config. Target `esnext`, module `esnext`, strict. Include `src/**/*`. Exclude `container/`, `tests/`, `specs/`.
 
 ### src/types.ts
 
