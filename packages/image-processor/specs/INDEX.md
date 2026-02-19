@@ -61,8 +61,8 @@ Specs 10 and 11 can be done in parallel after 09.
 - [x] Complete specs 12–13 — Advanced features (parallelizable)
 - [x] Complete spec 14 — SvelteKit CDN Hook
 - [x] Complete spec 15 — Svelte Image Component
-- [ ] End-to-end integration test (Mode 1: upload → alarm → processed → CDN → component)
-- [ ] End-to-end integration test (Mode 2: standalone processImage → result)
+- [x] End-to-end integration test (Mode 1: upload → alarm → processed → CDN → component)
+- [x] End-to-end integration test (Mode 2: standalone processImage → result)
 - [ ] Write package README with quickstart
 - [ ] Publish dry-run (`npm pack`) to verify exports and Docker image inclusion
 
@@ -72,6 +72,7 @@ Specs 10 and 11 can be done in parallel after 09.
 
 | Date | Change |
 |------|--------|
+| 2026-02-18 | Tests complete — 48 tests across helpers, CDN handle, e2e Mode 1, e2e Mode 2 |
 | 2026-02-18 | Spec 15 complete — Image.svelte component, decodeThumbHash(), imageURL() helpers, barrel export |
 | 2026-02-18 | Spec 14 complete — createImageHandle() CDN hook with ETag/304 and SVG placeholder |
 | 2026-02-18 | Specs 12–13 complete — Face-crop avatar mode, watermark compositing (text/image, repeat/center/corner) |
