@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * End-to-end integration test: Mode 2
  * standalone processImage() → result
@@ -221,7 +220,7 @@ describe('Mode 2: standalone processImage()', () => {
 				bucket,
 				key: 'nonexistent/image.jpg',
 			});
-		} catch (err) {
+		} catch (err: any) {
 			expect(err.code).toBe('FILE_NOT_FOUND');
 		}
 	});

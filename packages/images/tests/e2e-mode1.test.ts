@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * End-to-end integration test: Mode 1
  * upload → alarm → processed → CDN → component
@@ -103,17 +102,21 @@ function createMockDb() {
 		},
 		async query(table: string, sql: string) {
 			if (sql.includes('processing_status')) {
-				const matchStatuses = ['pending', 'processing'].filter(
-					(s) => sql.includes(s),
-				);
+				// Match quoted status values to avoid false matches (e.g. 'processing' in 'processing_status')
+				const matchStatuses: string[] = [];
+				if (sql.includes("'pending'")) matchStatuses.push('pending');
+				if (sql.includes("'processing'")) matchStatuses.push('processing');
+				if (sql.includes("'processed'")) matchStatuses.push('processed');
+				if (sql.includes("'failed'")) matchStatuses.push('failed');
+
 				if (sql.includes('COUNT(*)')) {
 					const count = Array.from(records.values()).filter(
-						(r) => matchStatuses.includes(r.processing_status),
+						(r: any) => matchStatuses.includes(r.processing_status),
 					).length;
 					return [{ count }];
 				}
 				return Array.from(records.values()).filter(
-					(r) => matchStatuses.includes(r.processing_status),
+					(r: any) => matchStatuses.includes(r.processing_status),
 				);
 			}
 			return [];
@@ -302,8 +305,8 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 		expect(db._records.has(record.id)).toBe(false);
 	});
 
-	it('processAlarm marks record as failed on container error', async () => {
-		// Use a container that throws
+	it('processAlarm retries on container error, then marks failed after max retries', async () => {
+		// Use a container that always throws
 		const errorContainer = {
 			getByName: vi.fn(() => ({
 				process: vi.fn(async () => {
@@ -322,9 +325,19 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 		const file = new File(['data'], 'bad.jpg', { type: 'image/jpeg' });
 		const record = await images.upload(file);
 
+		// First failure: should retry (status → pending with retry_count in _processing)
 		await images.processAlarm();
+		let updated = db._records.get(record.id);
+		expect(updated.processing_status).toBe('pending');
+		expect(updated.error_code).toBe('CORRUPTED_FILE');
+		expect(JSON.parse(updated._processing).retry_count).toBe(1);
 
-		const updated = db._records.get(record.id);
+		// Exhaust retries (MAX_RETRIES = 5)
+		for (let i = 1; i < 5; i++) {
+			await images.processAlarm();
+		}
+
+		updated = db._records.get(record.id);
 		expect(updated.processing_status).toBe('failed');
 		expect(updated.error_code).toBe('CORRUPTED_FILE');
 	});
