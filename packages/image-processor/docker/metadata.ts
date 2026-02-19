@@ -106,6 +106,15 @@ export async function extractMetadata(
 
 	const aspect_ratio = height > 0 ? Math.round((width / height) * 1000) / 1000 : 1;
 
+	// Build format-specific info
+	const format_info: Record<string, unknown> = {};
+	if (meta.format) format_info.type = meta.format;
+	if (meta.isProgressive !== undefined) format_info.progressive = meta.isProgressive;
+	if (meta.loop !== undefined) format_info.loop_count = meta.loop;
+	if (meta.delay?.length) format_info.frame_delays = meta.delay;
+	if (meta.chromaSubsampling) format_info.chroma_subsampling = meta.chromaSubsampling;
+	if (meta.compression) format_info.compression = meta.compression;
+
 	return {
 		file_name,
 		file_extension: getFileExtension(file_name),
@@ -126,6 +135,6 @@ export async function extractMetadata(
 		date_taken,
 		gps_latitude,
 		gps_longitude,
-		format_info: undefined,
+		format_info: Object.keys(format_info).length > 0 ? format_info : undefined,
 	};
 }

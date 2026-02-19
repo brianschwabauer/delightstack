@@ -3,7 +3,7 @@ import { detectMimeType } from './mime';
 import { validateInput } from './validation';
 import { extractMetadata, type MetadataResult } from './metadata';
 import { extractColors, type ColorResult } from './colors';
-import { generateVariants, type VariantConfig, type GeneratedVariant } from './variants';
+import { resizeVariants, encodeVariant, generateCompressedOriginal, resolveConfigs, type VariantConfig, type GeneratedVariant, type ResizedVariant } from './variants';
 import { generateThumbHash } from './thumbhash';
 import { svgPipeline } from './svg';
 import { pdfPipeline } from './pdf';
@@ -23,24 +23,6 @@ export interface PipelineResult {
 	metadata: MetadataResult & ColorResult;
 	thumbhash: string;
 	variants: GeneratedVariant[];
-}
-
-/** Resolve default fit per variant config if not explicitly set */
-function resolveConfigs(configs: VariantConfig[] | undefined): VariantConfig[] {
-	const resolved = configs?.length
-		? configs.map((c) => ({ ...c }))
-		: [
-				{ name: 'default', max_dimension: 2048, format: 'avif' as const, quality: 50, effort: 4 },
-				{ name: 'thumbnail', max_dimension: 640, format: 'avif' as const, quality: 50, effort: 4 },
-			];
-
-	for (const config of resolved) {
-		if (!config.fit) {
-			config.fit = config.max_dimension > 1024 ? 'inside' : 'cover';
-		}
-	}
-
-	return resolved;
 }
 
 /**
@@ -77,7 +59,7 @@ async function generateAnimatedVariants(
 	input: Buffer,
 	metadata: MetadataResult,
 	configs: VariantConfig[],
-	options: { compress_original: boolean; keep_original: boolean },
+	options: { compress_original: boolean; keep_original: boolean; watermark_images?: Map<string, ArrayBuffer> },
 ): Promise<GeneratedVariant[]> {
 	const longEdge = Math.max(metadata.width, metadata.height);
 	const results: GeneratedVariant[] = [];
@@ -88,26 +70,49 @@ async function generateAnimatedVariants(
 		const fit = config.fit ?? (config.max_dimension > 1024 ? 'inside' : 'cover');
 		const sharpFit = fit === 'inside' ? 'inside' : 'outside';
 		const maxDim = config.max_dimension;
+		const quality = config.quality ?? 75; // WebP default for animated
 
-		const result = await sharp(input, { animated: true })
+		// Resize animated (preserving all frames)
+		const resized = await sharp(input, { animated: true })
 			.resize(maxDim, maxDim, { fit: sharpFit as any, withoutEnlargement: true })
-			.webp({ quality: config.quality ?? 75 })
 			.toBuffer({ resolveWithObject: true });
 
-		// Get per-page height for animated output
-		const outMeta = await sharp(result.data).metadata();
-		const height = outMeta.pageHeight ?? result.info.height;
+		const outMeta = await sharp(resized.data, { animated: true }).metadata();
+		const height = outMeta.pageHeight ?? resized.info.height;
+		const hasWatermark = config.watermark && config.name !== 'original';
+
+		let finalData: Buffer;
+		if (hasWatermark) {
+			// For animated watermarks: extract first frame, watermark it,
+			// then composite the watermarked first frame back onto the animation
+			const firstFrame = await sharp(resized.data, { page: 0 }).png().toBuffer();
+			const watermarkedFrame = await applyWatermarkToVariant(
+				firstFrame,
+				{ width: resized.info.width, height },
+				config.watermark as any,
+				options.watermark_images,
+			);
+			// Re-encode with watermarked first frame composited
+			finalData = await sharp(resized.data, { animated: true })
+				.composite([{ input: watermarkedFrame, tile: false, blend: 'over', gravity: 'northwest' }])
+				.webp({ quality })
+				.toBuffer();
+		} else {
+			finalData = await sharp(resized.data, { animated: true })
+				.webp({ quality })
+				.toBuffer();
+		}
 
 		results.push({
 			name: config.name,
-			data: result.data,
-			width: result.info.width,
+			data: finalData,
+			width: resized.info.width,
 			height,
 			mime_type: 'image/webp',
-			file_size: result.data.byteLength,
+			file_size: finalData.byteLength,
 			is_animated: true,
 			fit,
-			watermarked: false,
+			watermarked: !!hasWatermark,
 		});
 	}
 
@@ -118,7 +123,7 @@ async function generateAnimatedVariants(
 			.webp({ quality: 75 })
 			.toBuffer({ resolveWithObject: true });
 
-		const outMeta = await sharp(compressed.data).metadata();
+		const outMeta = await sharp(compressed.data, { animated: true }).metadata();
 		const height = outMeta.pageHeight ?? compressed.info.height;
 
 		results.push({
@@ -129,7 +134,6 @@ async function generateAnimatedVariants(
 			mime_type: 'image/webp',
 			file_size: compressed.data.byteLength,
 			is_animated: true,
-			fit: 'inside',
 			watermarked: false,
 		});
 	}
@@ -144,11 +148,16 @@ async function imagePipeline(
 ): Promise<PipelineResult> {
 	const inputBuffer = Buffer.from(data);
 
-	// Load with Sharp, auto-rotate from EXIF
-	const instance = sharp(inputBuffer).rotate();
-
-	// Check for animation
-	const sharpMeta = await sharp(inputBuffer).metadata();
+	// Decode and check for animation (also detects corrupt files)
+	let sharpMeta;
+	try {
+		sharpMeta = await sharp(inputBuffer).metadata();
+	} catch (err: any) {
+		throw Object.assign(new Error('File appears to be corrupt or truncated'), {
+			code: 'CORRUPTED_FILE',
+			details: { message: err?.message ?? String(err) },
+		});
+	}
 	const pages = sharpMeta.pages ?? 1;
 	const is_animated = pages > 1;
 
@@ -206,53 +215,65 @@ async function imagePipeline(
 	if (is_animated) {
 		for (const config of resolvedConfigs) {
 			if (config.format === 'avif') {
-				(config as any).format = 'webp';
+				config.format = 'webp' as any;
+				// Adjust quality for WebP (AVIF 50 ≈ WebP 75)
+				if (!config.quality || config.quality <= 50) {
+					config.quality = 75;
+				}
 			}
 		}
 	}
 
-	// For animated variants, use the full animated buffer; for static, use the working buffer
+	// Generate variants and thumbhash
 	const variantBuffer = is_animated ? inputBuffer : workingBuffer;
 
-	// Generate variants and thumbhash in parallel
-	const [variants, thumbhash] = await Promise.all([
-		is_animated
-			? generateAnimatedVariants(variantBuffer, coreMetadata, resolvedConfigs, { compress_original, keep_original })
-			: generateVariants(workingBuffer, coreMetadata, resolvedConfigs, { compress_original, keep_original }),
-		generateThumbHash(workingBuffer, is_animated),
+	if (is_animated) {
+		const [variants, thumbhash] = await Promise.all([
+			generateAnimatedVariants(variantBuffer, coreMetadata, resolvedConfigs, {
+				compress_original, keep_original, watermark_images: options.watermark_images,
+			}),
+			generateThumbHash(workingBuffer, is_animated),
+		]);
+
+		return {
+			metadata: { ...coreMetadata, ...colors },
+			thumbhash,
+			variants,
+		};
+	}
+
+	// Static pipeline: resize → watermark → encode
+	const [resized, thumbhash] = await Promise.all([
+		resizeVariants(workingBuffer, coreMetadata, resolvedConfigs),
+		generateThumbHash(workingBuffer, false),
 	]);
 
-	// Apply watermarks to variants that have watermark config
-	const watermarkedVariants: GeneratedVariant[] = [];
-	for (const variant of variants) {
-		const config = resolvedConfigs.find((c) => c.name === variant.name);
-		if (config?.watermark && variant.name !== 'original') {
+	const variants: GeneratedVariant[] = [];
+	for (const r of resized) {
+		const config = resolvedConfigs.find((c) => c.name === r.name);
+		if (config?.watermark && r.name !== 'original') {
+			// Apply watermark to raw resized buffer, then encode
 			const watermarkedData = await applyWatermarkToVariant(
-				variant.data,
-				{ width: variant.width, height: variant.height },
+				r.raw_data,
+				{ width: r.width, height: r.height },
 				config.watermark as any,
 				options.watermark_images,
 			);
-			watermarkedVariants.push({
-				...variant,
-				data: watermarkedData,
-				file_size: watermarkedData.byteLength,
-				watermarked: true,
-			});
+			// Replace raw_data and encode
+			variants.push(await encodeVariant({ ...r, raw_data: watermarkedData }, true));
 		} else {
-			watermarkedVariants.push(variant);
+			variants.push(await encodeVariant(r, false));
 		}
 	}
 
-	// Assemble result
-	const metadata = {
-		...coreMetadata,
-		...colors,
-	};
+	// Compressed original
+	if (compress_original && keep_original) {
+		variants.push(await generateCompressedOriginal(workingBuffer, false));
+	}
 
 	return {
-		metadata,
+		metadata: { ...coreMetadata, ...colors },
 		thumbhash,
-		variants: watermarkedVariants,
+		variants,
 	};
 }

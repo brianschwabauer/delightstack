@@ -44,6 +44,7 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 				headers: {
 					'Content-Type': 'image/svg+xml',
 					'Cache-Control': 'no-cache',
+					'X-Content-Type-Options': 'nosniff',
 				},
 			});
 		}

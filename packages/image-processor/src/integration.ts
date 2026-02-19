@@ -79,7 +79,7 @@ export function imageProcessing(
 		 * Returns immediately — processing happens asynchronously.
 		 */
 		async upload(
-			data: File | Blob | ArrayBuffer | Uint8Array,
+			data: File | Blob | ArrayBuffer | Uint8Array | ReadableStream,
 			uploadOptions?: UploadOptions,
 		): Promise<ImageRecord> {
 			const id = generateId();
@@ -99,7 +99,7 @@ export function imageProcessing(
 						? data.type
 						: data instanceof Blob
 							? data.type
-							: 'application/octet-stream',
+							: 'application/octet-stream', // ArrayBuffer, Uint8Array, ReadableStream
 			};
 			const customMetadata: Record<string, string> = {};
 			if (file_name) {
@@ -165,10 +165,10 @@ export function imageProcessing(
 		 * Process pending images. Called from the DO's alarm handler.
 		 */
 		async processAlarm(): Promise<void> {
-			// Query pending images
+			// Query pending images (also retry stuck 'processing' records from crashed runs)
 			const pending = await db.query(
 				'image',
-				`SELECT * FROM image WHERE processing_status = 'pending' LIMIT 10`,
+				`SELECT * FROM image WHERE processing_status IN ('pending', 'processing') LIMIT 10`,
 			);
 
 			if (!pending?.length) return;
@@ -210,16 +210,6 @@ export function imageProcessing(
 						bucket,
 					});
 
-					// Check if image was deleted during processing
-					const stillExists = await db.get('image', image.id);
-					if (!stillExists) {
-						// Clean up R2 objects that were just written
-						for (const variant of result.variants) {
-							await bucket.delete(`${image.base_path}/${variant.name}`);
-						}
-						continue;
-					}
-
 					// Write variants to R2
 					const outputVariants: OutputVariant[] = [];
 					for (const variant of result.variants) {
@@ -255,6 +245,15 @@ export function imageProcessing(
 						await bucket.delete(`${image.base_path}/original`);
 					}
 
+					// Check if image was deleted during processing
+					const stillExists = await db.get('image', image.id);
+					if (!stillExists) {
+						// Clean up R2 objects that were just written
+						const keys = outputVariants.map((v) => v.key);
+						await Promise.all(keys.map((k) => bucket.delete(k)));
+						continue;
+					}
+
 					// Update record to 'processed' with metadata
 					const flat = flattenMetadata(result.metadata);
 					await db.update('image', image.id, {
@@ -262,14 +261,7 @@ export function imageProcessing(
 						error_code: null,
 						...flat,
 						thumbhash: result.thumbhash,
-						variants: JSON.stringify(
-							outputVariants.map((v) => ({
-								name: v.name,
-								width: v.width,
-								height: v.height,
-								watermarked: v.watermarked ?? false,
-							})),
-						),
+						variants: JSON.stringify(outputVariants),
 						updated_at: new Date().toISOString(),
 					});
 				} catch (error: any) {
@@ -283,10 +275,10 @@ export function imageProcessing(
 				}
 			}
 
-			// Reschedule if more pending
+			// Reschedule if more pending/stuck
 			const remaining = await db.query(
 				'image',
-				`SELECT COUNT(*) as count FROM image WHERE processing_status = 'pending'`,
+				`SELECT COUNT(*) as count FROM image WHERE processing_status IN ('pending', 'processing')`,
 			);
 			if (remaining?.[0]?.count > 0) {
 				await scheduleAlarm(db.ctx.storage);

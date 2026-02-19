@@ -122,6 +122,15 @@ export function validateInput(data: ArrayBuffer, mimeResult: MimeResult): void {
 	// Step 3: Quick dimension check (header-based, no decode)
 	const dims = quickDimensionCheck(data, mimeResult.mime_type);
 	if (dims) {
+		// Min dimension: must be at least 1x1
+		if (dims.width < 1 || dims.height < 1) {
+			throw createValidationError('DIMENSIONS_TOO_LARGE', {
+				min_dimension: 1,
+				width: dims.width,
+				height: dims.height,
+			});
+		}
+
 		const megapixels = (dims.width * dims.height) / 1_000_000;
 		if (megapixels > MAX_MEGAPIXELS || dims.width > MAX_SINGLE_SIDE || dims.height > MAX_SINGLE_SIDE) {
 			throw createValidationError('DIMENSIONS_TOO_LARGE', {

@@ -1,36 +1,43 @@
 import sharp from 'sharp';
 import { generateThumbHash } from './thumbhash';
+import { extractColors } from './colors';
 import type { ProcessOptions, PipelineResult } from './pipeline';
 
-/** Dangerous SVG elements to remove */
-const DANGEROUS_ELEMENTS = /(<script[\s>][\s\S]*?<\/script>|<foreignObject[\s>][\s\S]*?<\/foreignObject>|<iframe[\s>][\s\S]*?<\/iframe>|<embed[\s>][\s\S]*?<\/embed>|<object[\s>][\s\S]*?<\/object>)/gi;
+/** Dangerous SVG elements to remove (includes animation elements that can trigger JS) */
+const DANGEROUS_ELEMENTS = /(<script[\s>][\s\S]*?<\/script>|<foreignObject[\s>][\s\S]*?<\/foreignObject>|<iframe[\s>][\s\S]*?<\/iframe>|<embed[\s>][\s\S]*?<\/embed>|<object[\s>][\s\S]*?<\/object>|<set[\s>][\s\S]*?(?:<\/set>|\/>)|<animate[\s>][\s\S]*?(?:<\/animate>|\/>)|<animateTransform[\s>][\s\S]*?(?:<\/animateTransform>|\/>))/gi;
 
-/** Event handler attributes */
-const EVENT_HANDLERS = /\s+on\w+\s*=\s*"[^"]*"/gi;
+/** Event handler attributes (supports double-quoted, single-quoted, and unquoted values) */
+const EVENT_HANDLERS = /\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi;
 
-/** javascript: and data:text/html URLs */
-const DANGEROUS_URLS = /(?:javascript|data\s*:\s*text\/html)\s*:/gi;
+/** javascript: and data:text/html URLs — no `g` flag to avoid .test() statefulness */
+const DANGEROUS_URLS = /(?:javascript|data\s*:\s*text\/html)\s*:/i;
 
-/** External href/xlink:href (keep internal #id references) */
-const EXTERNAL_HREFS = /\s+((?:xlink:)?href)\s*=\s*"(https?:\/\/[^"]*)"/gi;
+/** External href/xlink:href (both quote styles; keep internal #id references) */
+const EXTERNAL_HREFS = /\s+((?:xlink:)?href)\s*=\s*(?:"(https?:\/\/[^"]*)"|'(https?:\/\/[^']*)')/gi;
+
+/** <use> elements with external href (can reference malicious SVGs) */
+const EXTERNAL_USE = /<use[\s][^>]*(?:xlink:)?href\s*=\s*(?:"(?!#)[^"]*"|'(?!#)[^']*')[^>]*\/?>/gi;
 
 /**
  * Sanitize SVG content by removing dangerous elements and attributes.
  * Throws SVG_MALICIOUS if javascript: or data:text/html content is found.
  */
 function sanitizeSvg(svgString: string): string {
-	// Check for explicitly malicious content
+	// Check for explicitly malicious content (no `g` flag — safe to call repeatedly)
 	if (DANGEROUS_URLS.test(svgString)) {
 		throw Object.assign(new Error('SVG contains dangerous JavaScript or data URLs'), {
 			code: 'SVG_MALICIOUS',
-			details: { reason: 'Contains javascript: or data:text/html URLs' },
+			details: 'Contains javascript: or data:text/html URLs',
 		});
 	}
 
 	let sanitized = svgString;
 
-	// Remove dangerous elements
+	// Remove dangerous elements (script, foreignObject, iframe, embed, object, animation)
 	sanitized = sanitized.replace(DANGEROUS_ELEMENTS, '');
+
+	// Remove <use> elements with external references
+	sanitized = sanitized.replace(EXTERNAL_USE, '');
 
 	// Remove event handler attributes
 	sanitized = sanitized.replace(EVENT_HANDLERS, '');
@@ -74,8 +81,12 @@ export async function svgPipeline(data: ArrayBuffer, options: ProcessOptions): P
 	const dimensions = extractSvgDimensions(sanitized);
 	const sanitizedBuffer = Buffer.from(sanitized);
 
-	// Rasterize for ThumbHash
-	const thumbhash = await generateThumbHash(sanitizedBuffer);
+	// Rasterize for ThumbHash and color extraction
+	const rasterized = await sharp(sanitizedBuffer).png().toBuffer();
+	const [thumbhash, colors] = await Promise.all([
+		generateThumbHash(rasterized),
+		extractColors(rasterized),
+	]);
 
 	// The sanitized SVG is the only "variant"
 	const svgVariant = {
@@ -112,12 +123,7 @@ export async function svgPipeline(data: ArrayBuffer, options: ProcessOptions): P
 			gps_latitude: null,
 			gps_longitude: null,
 			format_info: { type: 'svg' },
-			// Colors via rasterization
-			background_color: { l: 0.95, c: 0, h: 0 },
-			background_color_css: 'oklch(0.950 0.000 0.0)',
-			accent_color: null,
-			accent_color_css: null,
-			luminance: 0.95,
+			...colors,
 		},
 		thumbhash,
 		variants: [svgVariant],

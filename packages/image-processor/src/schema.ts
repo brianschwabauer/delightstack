@@ -44,6 +44,9 @@ export function defineImageTable(callback?: (schema: any) => Record<string, any>
 				gps_longitude: schema.number().optional(),
 				thumbhash: schema.string().optional(),
 				variants: schema.string().optional(), // JSON string of variant info
+				_processing_options: schema.string().optional(), // JSON string of processing config
+				created_at: schema.string(),
+				updated_at: schema.string(),
 			};
 
 			const custom = callback ? callback(schema) : {};

@@ -1,7 +1,7 @@
 import sharp from 'sharp';
 import { extractMetadata } from './metadata';
 import { extractColors } from './colors';
-import { generateVariants } from './variants';
+import { generateVariants, resolveConfigs } from './variants';
 import { generateThumbHash } from './thumbhash';
 import type { ProcessOptions, PipelineResult } from './pipeline';
 
@@ -47,16 +47,8 @@ export async function pdfPipeline(data: ArrayBuffer, options: ProcessOptions): P
 	// Extract colors from rasterized page
 	const colors = await extractColors(rasterBuffer);
 
-	// Resolve variant configs
-	const configs = options.variants?.length
-		? options.variants.map((c) => ({
-				...c,
-				fit: c.fit ?? (c.max_dimension > 1024 ? 'inside' : 'cover'),
-			}))
-		: [
-				{ name: 'default', max_dimension: 2048, format: 'avif' as const, quality: 50, effort: 4, fit: 'inside' as const },
-				{ name: 'thumbnail', max_dimension: 640, format: 'avif' as const, quality: 50, effort: 4, fit: 'cover' as const },
-			];
+	// Resolve variant configs (uses shared defaults from pipeline)
+	const configs = resolveConfigs(options.variants);
 
 	const keep_original = options.keep_original ?? true;
 	const compress_original = options.compress_original ?? true;

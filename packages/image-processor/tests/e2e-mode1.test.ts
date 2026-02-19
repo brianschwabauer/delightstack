@@ -102,16 +102,19 @@ function createMockDb() {
 			records.delete(id);
 		},
 		async query(table: string, sql: string) {
-			if (sql.includes("processing_status = 'pending'")) {
-				return Array.from(records.values()).filter(
-					(r) => r.processing_status === 'pending',
+			if (sql.includes('processing_status')) {
+				const matchStatuses = ['pending', 'processing'].filter(
+					(s) => sql.includes(s),
 				);
-			}
-			if (sql.includes('COUNT(*)')) {
-				const count = Array.from(records.values()).filter(
-					(r) => r.processing_status === 'pending',
-				).length;
-				return [{ count }];
+				if (sql.includes('COUNT(*)')) {
+					const count = Array.from(records.values()).filter(
+						(r) => matchStatuses.includes(r.processing_status),
+					).length;
+					return [{ count }];
+				}
+				return Array.from(records.values()).filter(
+					(r) => matchStatuses.includes(r.processing_status),
+				);
 			}
 			return [];
 		},

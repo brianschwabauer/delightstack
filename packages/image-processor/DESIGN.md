@@ -967,17 +967,18 @@ Input
   │   ├── Has scripts? (potential XSS)
   │   └── Uses external resources?
   │
-  ├── 3. Sanitize: strip <script> tags, event handlers, external references
-  │      Use DOMPurify or a whitelist-based sanitizer
+  ├── 3. Sanitize: strip <script> tags, event handlers, animation elements,
+  │      external references, <use> with external hrefs, javascript:/data: URLs
+  │      (regex-based sanitization in server-side Bun context)
   │
-  ├── 4. Rasterize at a sensible size for ThumbHash only
-  │      (via librsvg through Sharp, or resvg)
+  ├── 4. Rasterize for ThumbHash and color extraction
+  │      (via librsvg through Sharp)
   │
   ├── 5. Do NOT create resized variants (SVGs are resolution-independent)
   │
-  ├── 6. Return sanitized SVG + metadata + thumbhash
+  ├── 6. Return sanitized SVG + metadata + thumbhash + extracted colors
   │
-  └── Note: Original SVG is always kept (sanitized version saved alongside)
+  └── Note: Only the sanitized SVG is stored (unsanitized original is discarded for security)
 ```
 
 ### ThumbHash vs BlurHash
@@ -1257,9 +1258,11 @@ Input (any aspect ratio)
 **Face detection details:**
 
 - Uses `@mediapipe/tasks-vision` with the BlazeFace short-range model (~200 KB, optimized for faces within 2 meters of the camera)
+- `@mediapipe/tasks-vision` is an optional dependency — if unavailable, falls back to Sharp's attention-based crop
 - Runs on CPU in the Docker container — no GPU needed, ~50-100ms per image
 - If multiple faces are detected, uses the largest bounding box (closest face)
 - The model is loaded once at container startup and reused across requests
+- For animated images, avatar mode only affects the ThumbHash (using the first frame); animated variants are generated without face-crop
 
 **Usage:**
 

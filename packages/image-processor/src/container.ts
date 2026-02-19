@@ -161,7 +161,11 @@ export class ImageProcessorContainer extends Container {
 				} catch {
 					throw createError('INTERNAL_ERROR', { status: response.status });
 				}
-				throw createError(error.code ?? 'INTERNAL_ERROR', error.details);
+				// Normalize details to Record<string, unknown> (container may send a string)
+				const details = typeof error.details === 'string'
+					? { message: error.details }
+					: (error.details ?? {});
+				throw createError(error.code ?? 'INTERNAL_ERROR', details);
 			}
 
 			return parseMultipartResponse(response);

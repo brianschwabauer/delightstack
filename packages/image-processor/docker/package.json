@@ -9,5 +9,8 @@
 		"node-vibrant": "^4.0.3",
 		"thumbhash": "^0.1.1",
 		"exif-reader": "^2.0.1"
+	},
+	"optionalDependencies": {
+		"@mediapipe/tasks-vision": "^0.10.22"
 	}
 }

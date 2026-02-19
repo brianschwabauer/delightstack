@@ -49,9 +49,27 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	return Promise.race([
 		promise,
 		new Promise<never>((_, reject) =>
-			setTimeout(() => reject({ code: 'PROCESSING_TIMEOUT', timeout_ms: ms }), ms),
+			setTimeout(() => {
+				const err = Object.assign(new Error(`Processing timed out after ${ms}ms`), {
+					code: 'PROCESSING_TIMEOUT',
+					details: { timeout_ms: ms },
+				});
+				reject(err);
+			}, ms),
 		),
 	]);
+}
+
+/** Deserialize watermark_images from base64 strings to Map<string, ArrayBuffer> */
+function deserializeWatermarkImages(raw: Record<string, string>): Map<string, ArrayBuffer> {
+	const map = new Map<string, ArrayBuffer>();
+	for (const [key, base64] of Object.entries(raw)) {
+		const binary = atob(base64);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		map.set(key, bytes.buffer);
+	}
+	return map;
 }
 
 Bun.serve({
@@ -74,6 +92,13 @@ Bun.serve({
 				const optionsHeader = request.headers.get('X-Options');
 				if (optionsHeader) {
 					options = JSON.parse(atob(optionsHeader));
+				}
+
+				// Deserialize watermark_images from base64 strings to Map<string, ArrayBuffer>
+				if (options.watermark_images && typeof options.watermark_images === 'object') {
+					options.watermark_images = deserializeWatermarkImages(
+						options.watermark_images as Record<string, string>,
+					);
 				}
 
 				// Process with timeout
