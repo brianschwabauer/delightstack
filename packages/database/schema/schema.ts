@@ -1979,6 +1979,10 @@ export namespace Database {
 		schema: SearchSchema<Table>;
 		/** The configuration for sorting search results */
 		sort: SorterConfig;
+		/** Custom orama components (e.g., getDocumentIndexId for custom primary key fields) */
+		components: {
+			getDocumentIndexId: (doc: Record<string, any>) => string;
+		};
 	};
 
 	/** Infers the shape of the documents returned by the search library */
@@ -2887,6 +2891,11 @@ export namespace Database {
 				orama: {
 					schema: orama_schema,
 					sort: orama_sort,
+					components: {
+						getDocumentIndexId: (doc: Record<string, any>): string => {
+							return String(doc[primary_key]);
+						},
+					},
 				},
 			},
 			form: {

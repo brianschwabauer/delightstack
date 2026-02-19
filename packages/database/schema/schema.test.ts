@@ -59,6 +59,38 @@ describe('Schema: Database.table()', () => {
 		expect(table.config.searchable_fields).toContain('address.city');
 		expect(table.config.searchable_fields).not.toContain('address.zip');
 	});
+
+	it('should set getDocumentIndexId using the primary key field', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+		}));
+
+		const getId = table.config.orama.components.getDocumentIndexId;
+		expect(getId({ id: 'abc', name: 'test' })).toBe('abc');
+	});
+
+	it('should set getDocumentIndexId for a custom primary key name', () => {
+		const table = Database.table('items', (schema) => ({
+			slug: schema.primaryKey(),
+			name: schema.string(),
+		}));
+
+		expect(table.config.primary_key).toBe('slug');
+		const getId = table.config.orama.components.getDocumentIndexId;
+		expect(getId({ slug: 'my-item', name: 'test' })).toBe('my-item');
+	});
+
+	it('should convert numeric primary keys to string in getDocumentIndexId', () => {
+		const table = Database.table('items', (schema) => ({
+			item_id: schema.primaryKey('number'),
+			name: schema.string(),
+		}));
+
+		expect(table.config.primary_key).toBe('item_id');
+		const getId = table.config.orama.components.getDocumentIndexId;
+		expect(getId({ item_id: 42, name: 'test' })).toBe('42');
+	});
 });
 
 describe('Schema: toSparse()', () => {
