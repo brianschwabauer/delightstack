@@ -10,8 +10,8 @@ import { RESERVED_IMAGE_FIELDS } from './types';
 import type { ImageProcessorContainer } from './container';
 import type { DatabaseServer } from '@delightstack/database';
 
-/** Flatten nested ImageMetadata into flat database columns */
-function flattenMetadata(metadata: ImageMetadata): Record<string, unknown> {
+/** Map ImageMetadata to database record fields */
+function metadataToRecord(metadata: ImageMetadata): Record<string, unknown> {
 	return {
 		mime_type: metadata.mime_type ?? null,
 		file_size: metadata.file_size ?? null,
@@ -21,16 +21,13 @@ function flattenMetadata(metadata: ImageMetadata): Record<string, unknown> {
 		has_transparency: metadata.has_transparency ?? null,
 		is_animated: metadata.is_animated ?? null,
 		frame_count: metadata.frame_count ?? null,
-		background_color_l: metadata.background_color?.l ?? null,
-		background_color_c: metadata.background_color?.c ?? null,
-		background_color_h: metadata.background_color?.h ?? null,
-		accent_color_l: metadata.accent_color?.l ?? null,
-		accent_color_c: metadata.accent_color?.c ?? null,
-		accent_color_h: metadata.accent_color?.h ?? null,
+		background_color: metadata.background_color ?? null,
+		accent_color: metadata.accent_color ?? null,
 		luminance: metadata.luminance ?? null,
 		date_taken: metadata.date_taken ?? null,
-		gps_latitude: metadata.gps_latitude ?? null,
-		gps_longitude: metadata.gps_longitude ?? null,
+		gps: metadata.gps_latitude != null && metadata.gps_longitude != null
+			? { lat: metadata.gps_latitude, lon: metadata.gps_longitude }
+			: null,
 	};
 }
 
@@ -172,16 +169,11 @@ export function imageProcessing(
 				has_transparency: null,
 				is_animated: null,
 				frame_count: null,
-				background_color_l: null,
-				background_color_c: null,
-				background_color_h: null,
-				accent_color_l: null,
-				accent_color_c: null,
-				accent_color_h: null,
+				background_color: null,
+				accent_color: null,
 				luminance: null,
 				date_taken: null,
-				gps_latitude: null,
-				gps_longitude: null,
+				gps: null,
 				thumbhash: null,
 				variants: null,
 				_processing: JSON.stringify(processing),
@@ -327,13 +319,13 @@ export function imageProcessing(
 					}
 
 					// Update record to 'processed' with metadata
-					const flat = flattenMetadata(result.metadata);
+					const fields = metadataToRecord(result.metadata);
 					db.update('image', image.id, {
 						processing_status: 'processed',
 						error_code: null,
-						...flat,
+						...fields,
 						thumbhash: result.thumbhash,
-						variants: JSON.stringify(outputVariants),
+						variants: outputVariants,
 						_processing: null,
 					} as any);
 				} catch (error: unknown) {
@@ -366,7 +358,10 @@ export function imageProcessing(
 			const bucket = options.bucket();
 
 			// Delete all R2 objects under the image's path
-			const variants = JSON.parse(image.variants ?? '[]') as { name: string }[];
+			const rawVariants = image.variants;
+			const variants = (
+				typeof rawVariants === 'string' ? JSON.parse(rawVariants) : rawVariants ?? []
+			) as { name: string }[];
 			const keys = variants.map((v) => r2Key(image.base_path, image.id, v.name));
 			keys.push(r2Key(image.base_path, image.id, 'original'));
 

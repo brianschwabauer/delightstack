@@ -1511,6 +1511,15 @@ class GeopointFieldGenerator {
 	}
 
 	/**
+	 * Marks the field as optional (nullable).
+	 * Since we are using sqlite, optional geopoints will be stored as NULL in the database.
+	 */
+	optional(): Omit<OptionalValue<this>, 'optional'> {
+		this._.optional = true;
+		return this as Omit<OptionalValue<this>, 'optional'>;
+	}
+
+	/**
 	 * Marks the field as readonly.
 	 * If 'readonly' is called, the field cannot be updated after creation.
 	 */

@@ -141,16 +141,11 @@ export const RESERVED_IMAGE_FIELDS = new Set([
 	'has_transparency',
 	'is_animated',
 	'frame_count',
-	'background_color_l',
-	'background_color_c',
-	'background_color_h',
-	'accent_color_l',
-	'accent_color_c',
-	'accent_color_h',
+	'background_color',
+	'accent_color',
 	'luminance',
 	'date_taken',
-	'gps_latitude',
-	'gps_longitude',
+	'gps',
 	'thumbhash',
 	'variants',
 	'_processing',
@@ -411,14 +406,14 @@ export interface ContainerProcessResult {
 /** Processing status of an image */
 export type ProcessingStatus = 'pending' | 'processing' | 'processed' | 'failed';
 
-/** Shape of a database image record (flat columns, matches SQL schema) */
+/** Shape of a database image record (matches SQL schema) */
 export interface ImageRecord {
 	id: string;
 	base_path: string;
 	file_name: string | null;
 	alt_text: string | null;
 	processing_status: ProcessingStatus;
-	error_code: string | null;
+	error_code: ErrorCode | null;
 	mime_type: string | null;
 	file_size: number | null;
 	width: number | null;
@@ -427,19 +422,13 @@ export interface ImageRecord {
 	has_transparency: boolean | null;
 	is_animated: boolean | null;
 	frame_count: number | null;
-	background_color_l: number | null;
-	background_color_c: number | null;
-	background_color_h: number | null;
-	accent_color_l: number | null;
-	accent_color_c: number | null;
-	accent_color_h: number | null;
+	background_color: OklchColor | null;
+	accent_color: OklchColor | null;
 	luminance: number | null;
 	date_taken: string | null;
-	gps_latitude: number | null;
-	gps_longitude: number | null;
+	gps: { lat: number; lon: number } | null;
 	thumbhash: string | null;
-	/** JSON string of variant info */
-	variants: string | null;
+	variants: OutputVariant[] | null;
 	created_at: string;
 	updated_at: string;
 }

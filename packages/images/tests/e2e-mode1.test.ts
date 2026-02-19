@@ -243,19 +243,18 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 		expect(processed.thumbhash).toBe('YTkGJwaRhWUIt4lEBHhYSJdwcIA=');
 		expect(processed.width).toBe(3000);
 		expect(processed.height).toBe(2000);
-		expect(processed.background_color_l).toBe(0.65);
-		expect(processed.background_color_c).toBe(0.04);
-		expect(processed.background_color_h).toBe(210);
+		expect(processed.background_color).toEqual({ l: 0.65, c: 0.04, h: 210 });
+		expect(processed.accent_color).toEqual({ l: 0.55, c: 0.2, h: 30 });
 		expect(processed.luminance).toBe(0.65);
 		expect(processed.mime_type).toBe('image/jpeg');
+		expect(processed.gps).toBeNull();
 
-		// Verify variants JSON
-		const variants = JSON.parse(processed.variants);
-		expect(variants).toHaveLength(2);
-		expect(variants[0].name).toBe('default');
-		expect(variants[0].width).toBe(2048);
-		expect(variants[1].name).toBe('thumbnail');
-		expect(variants[1].width).toBe(640);
+		// Verify variants
+		expect(processed.variants).toHaveLength(2);
+		expect(processed.variants[0].name).toBe('default');
+		expect(processed.variants[0].width).toBe(2048);
+		expect(processed.variants[1].name).toBe('thumbnail');
+		expect(processed.variants[1].width).toBe(640);
 
 		// Verify variants were written to R2
 		expect(bucket._store.has(`images/${record.id}/default`)).toBe(true);
