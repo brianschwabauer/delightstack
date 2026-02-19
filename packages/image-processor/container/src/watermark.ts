@@ -1,16 +1,5 @@
 import sharp from 'sharp';
-import type { GeneratedVariant, VariantConfig } from './variants';
-
-interface WatermarkConfig {
-	text?: string;
-	image?: string;
-	layout?: 'repeat' | 'center' | 'corner';
-	opacity?: number;
-	rotation?: number;
-	gap?: number;
-	position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-	scale?: number;
-}
+import type { GeneratedVariant, VariantConfig, WatermarkConfig } from './variants';
 
 /** Escape XML special characters to prevent SVG injection */
 function escapeXml(text: string): string {
@@ -160,7 +149,8 @@ async function applyCornerLayout(
 	config: WatermarkConfig,
 	dimensions: { width: number; height: number },
 ): Promise<Buffer> {
-	const gravityMap: Record<string, string> = {
+	type SharpGravity = 'northwest' | 'northeast' | 'southwest' | 'southeast';
+	const gravityMap: Record<string, SharpGravity> = {
 		'top-left': 'northwest',
 		'top-right': 'northeast',
 		'bottom-left': 'southwest',
@@ -168,7 +158,7 @@ async function applyCornerLayout(
 	};
 
 	const position = config.position ?? 'bottom-right';
-	const gravity = gravityMap[position] ?? 'southeast';
+	const gravity: SharpGravity = gravityMap[position] ?? 'southeast';
 	const rotation = config.rotation ?? 0;
 	const margin = 16;
 
@@ -196,47 +186,8 @@ async function applyCornerLayout(
 		.toBuffer();
 
 	return sharp(imageBuffer)
-		.composite([{ input: paddedWm, gravity: gravity as any, blend: 'over' }])
+		.composite([{ input: paddedWm, gravity, blend: 'over' }])
 		.toBuffer();
-}
-
-/**
- * Apply a watermark to a generated variant.
- * Returns a new variant with the watermark composited.
- */
-export async function applyWatermark(
-	variant: GeneratedVariant,
-	watermarkImages?: Map<string, ArrayBuffer>,
-): Promise<GeneratedVariant> {
-	const config = (variant as any)._watermarkConfig as WatermarkConfig | undefined;
-	if (!config) return variant;
-
-	const dimensions = { width: variant.width, height: variant.height };
-	const watermarkBuffer = await prepareWatermark(config, dimensions, watermarkImages);
-
-	let resultBuffer: Buffer;
-	const layout = config.layout ?? 'repeat';
-
-	switch (layout) {
-		case 'repeat':
-			resultBuffer = await applyRepeatLayout(variant.data, watermarkBuffer, config, dimensions);
-			break;
-		case 'center':
-			resultBuffer = await applyCenterLayout(variant.data, watermarkBuffer, config);
-			break;
-		case 'corner':
-			resultBuffer = await applyCornerLayout(variant.data, watermarkBuffer, config, dimensions);
-			break;
-		default:
-			resultBuffer = await applyRepeatLayout(variant.data, watermarkBuffer, config, dimensions);
-	}
-
-	return {
-		...variant,
-		data: resultBuffer,
-		file_size: resultBuffer.byteLength,
-		watermarked: true,
-	};
 }
 
 /**

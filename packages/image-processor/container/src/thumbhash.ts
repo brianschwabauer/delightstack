@@ -9,7 +9,9 @@ export async function generateThumbHash(input: Buffer | ArrayBuffer, is_animated
 	// For animated images, use first frame only
 	const sharpOptions = is_animated ? { page: 0 } : {};
 
-	const preview = await sharp(Buffer.from(input), sharpOptions)
+	const inputBuffer = Buffer.isBuffer(input) ? input : Buffer.from(new Uint8Array(input));
+
+	const preview = await sharp(inputBuffer, sharpOptions)
 		.resize(100, 100, { fit: 'inside' })
 		.ensureAlpha()
 		.raw()

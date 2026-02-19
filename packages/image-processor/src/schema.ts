@@ -1,3 +1,5 @@
+import type { SchemaBuilder, SchemaField, TableDefiner } from './types';
+
 /**
  * Define the image table schema for use with @delightstack/database.
  *
@@ -9,14 +11,14 @@
  *     album_id: schema.string().optional(),
  *   }));
  */
-export function defineImageTable(callback?: (schema: any) => Record<string, any>) {
+export function defineImageTable(callback?: (schema: SchemaBuilder) => Record<string, SchemaField>) {
 	// This is a thin wrapper that returns a table definition compatible
 	// with @delightstack/database's table() function.
 	// The actual table() import and schema building happens at the call site
 	// to avoid tight coupling — the consumer must have @delightstack/database installed.
 
-	return (table: any) => {
-		return table('image', (schema: any) => {
+	return (table: TableDefiner) => {
+		return table('image', (schema: SchemaBuilder) => {
 			const builtIn = {
 				id: schema.string().primaryKey(),
 				base_path: schema.string(),

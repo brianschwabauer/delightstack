@@ -26,7 +26,7 @@ export async function processImage(
 	}
 
 	// 2. Call Container DO via RPC
-	const stub = binding.getByName('image-processor') as any as ImageProcessorContainer;
+	const stub = binding.getByName('image-processor') as unknown as ImageProcessorContainer;
 	const result = await stub.process(await object.arrayBuffer(), {
 		variants: options.variants,
 		compress_original: options.compress_original ?? true,
@@ -87,7 +87,7 @@ export async function processImage(
 	return {
 		ok: true,
 		job_id: generateJobId(),
-		metadata: result.metadata as any,
+		metadata: result.metadata,
 		thumbhash: result.thumbhash,
 		variants: outputVariants,
 	};

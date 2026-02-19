@@ -1,6 +1,18 @@
 import sharp from 'sharp';
 import type { MetadataResult } from './metadata';
 
+/** Watermark configuration for a variant */
+export interface WatermarkConfig {
+	text?: string;
+	image?: string;
+	layout?: 'repeat' | 'center' | 'corner';
+	opacity?: number;
+	rotation?: number;
+	gap?: number;
+	position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+	scale?: number;
+}
+
 export interface VariantConfig {
 	name: string;
 	max_dimension: number;
@@ -8,7 +20,7 @@ export interface VariantConfig {
 	quality?: number;
 	effort?: number;
 	fit?: 'inside' | 'cover';
-	watermark?: unknown;
+	watermark?: WatermarkConfig;
 }
 
 export interface GeneratedVariant {
@@ -87,11 +99,11 @@ export async function resizeVariants(
 
 		const fit: 'inside' | 'cover' = config.fit ?? (config.max_dimension > 1024 ? 'inside' : 'cover');
 		const maxDim = config.max_dimension;
-		const sharpFit = fit === 'inside' ? 'inside' : 'outside';
+		const sharpFit: 'inside' | 'outside' = fit === 'inside' ? 'inside' : 'outside';
 
 		const result = await sharp(input)
 			.rotate()
-			.resize(maxDim, maxDim, { fit: sharpFit as any, withoutEnlargement: true })
+			.resize(maxDim, maxDim, { fit: sharpFit, withoutEnlargement: true })
 			.png() // lossless intermediate for watermarking
 			.toBuffer({ resolveWithObject: true });
 

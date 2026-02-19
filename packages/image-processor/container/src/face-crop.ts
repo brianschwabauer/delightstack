@@ -12,7 +12,21 @@ import type { MetadataResult } from './metadata';
  * If unavailable, falls back directly to attention-based crop.
  */
 
-let faceDetector: any = null;
+interface FaceDetection {
+	boundingBox?: {
+		originX: number;
+		originY: number;
+		width: number;
+		height: number;
+	};
+}
+
+interface FaceDetectorLike {
+	// MediaPipe accepts TexImageSource | ImageData-like objects at runtime
+	detect(image: unknown): { detections: FaceDetection[] };
+}
+
+let faceDetector: FaceDetectorLike | null = null;
 let faceDetectionAvailable: boolean | null = null;
 
 /** Initialize face detection (called once at startup) */
@@ -82,7 +96,7 @@ export async function faceCrop(input: Buffer, metadata: MetadataResult): Promise
 		}
 
 		// Find the largest face by bounding box area
-		const largest = result.detections.reduce((a: any, b: any) => {
+		const largest = result.detections.reduce((a: FaceDetection, b: FaceDetection) => {
 			const areaA = (a.boundingBox?.width ?? 0) * (a.boundingBox?.height ?? 0);
 			const areaB = (b.boundingBox?.width ?? 0) * (b.boundingBox?.height ?? 0);
 			return areaA > areaB ? a : b;

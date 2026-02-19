@@ -5,6 +5,7 @@ import type {
 	OutputVariant,
 	ImageRecord,
 	ImageMetadata,
+	DatabaseLike,
 } from './types';
 import type { ImageProcessorContainer } from './container';
 import { createError } from './errors';
@@ -17,7 +18,7 @@ function generateId(): string {
 }
 
 /** Flatten nested ImageMetadata into flat database columns */
-function flattenMetadata(metadata: any): Record<string, unknown> {
+function flattenMetadata(metadata: ImageMetadata): Record<string, unknown> {
 	return {
 		mime_type: metadata.mime_type ?? null,
 		file_size: metadata.file_size ?? null,
@@ -64,7 +65,7 @@ async function scheduleAlarm(storage: DurableObjectStorage): Promise<void> {
  *   const record = await images.upload(file, { alt_text: 'Photo' });
  */
 export function imageProcessing(
-	db: any, // DatabaseServer from @delightstack/database
+	db: DatabaseLike,
 	options: ImageProcessingOptions,
 ) {
 	const prefix = options.prefix ?? 'images';
@@ -166,7 +167,7 @@ export function imageProcessing(
 		 */
 		async processAlarm(): Promise<void> {
 			// Query pending images (also retry stuck 'processing' records from crashed runs)
-			const pending = await db.query(
+			const pending = await db.query<ImageRecord & { _processing_options?: string }>(
 				'image',
 				`SELECT * FROM image WHERE processing_status IN ('pending', 'processing') LIMIT 10`,
 			);
@@ -194,15 +195,20 @@ export function imageProcessing(
 					}
 
 					// Parse processing options
-					let procOpts: any = {};
+					let procOpts: {
+						keep_original?: boolean;
+						compress_original?: boolean;
+						variants?: VariantConfig[];
+						avatar?: boolean;
+					} = {};
 					try {
-						procOpts = JSON.parse(image._processing_options ?? '{}');
+						procOpts = JSON.parse((image._processing_options as string) ?? '{}');
 					} catch {
 						// Use defaults
 					}
 
 					// Call Container DO via RPC
-					const stub = container.getByName('image-processor') as any;
+					const stub = container.getByName('image-processor') as unknown as ImageProcessorContainer;
 					const result = await stub.process(await object.arrayBuffer(), {
 						variants: procOpts.variants ?? defaultVariants,
 						compress_original: procOpts.compress_original ?? defaultCompressOriginal,
@@ -214,18 +220,19 @@ export function imageProcessing(
 					const outputVariants: OutputVariant[] = [];
 					for (const variant of result.variants) {
 						const key = `${image.base_path}/${variant.name}`;
+						const customMetadata: Record<string, string> = {
+							width: String(variant.width),
+							height: String(variant.height),
+						};
+						if (variant.name === 'original' && image.file_name) {
+							customMetadata['original-filename'] = image.file_name;
+						}
 						await bucket.put(key, variant.data, {
 							httpMetadata: {
 								contentType: variant.mime_type,
 								cacheControl: 'public, max-age=31536000, immutable',
 							},
-							customMetadata: {
-								width: String(variant.width),
-								height: String(variant.height),
-								...(variant.name === 'original' && image.file_name
-									? { 'original-filename': image.file_name }
-									: {}),
-							},
+							customMetadata,
 						});
 						outputVariants.push({
 							name: variant.name,
@@ -246,7 +253,7 @@ export function imageProcessing(
 					}
 
 					// Check if image was deleted during processing
-					const stillExists = await db.get('image', image.id);
+					const stillExists = await db.get<ImageRecord>('image', image.id);
 					if (!stillExists) {
 						// Clean up R2 objects that were just written
 						const keys = outputVariants.map((v) => v.key);
@@ -264,9 +271,9 @@ export function imageProcessing(
 						variants: JSON.stringify(outputVariants),
 						updated_at: new Date().toISOString(),
 					});
-				} catch (error: any) {
+				} catch (error: unknown) {
 					// Update record to 'failed'
-					const code = error?.code ?? 'INTERNAL_ERROR';
+					const code = (error as { code?: string })?.code ?? 'INTERNAL_ERROR';
 					await db.update('image', image.id, {
 						processing_status: 'failed',
 						error_code: code,
@@ -276,11 +283,11 @@ export function imageProcessing(
 			}
 
 			// Reschedule if more pending/stuck
-			const remaining = await db.query(
+			const remaining = await db.query<{ count: number }>(
 				'image',
 				`SELECT COUNT(*) as count FROM image WHERE processing_status IN ('pending', 'processing')`,
 			);
-			if (remaining?.[0]?.count > 0) {
+			if (remaining?.[0]?.count && remaining[0].count > 0) {
 				await scheduleAlarm(db.ctx.storage);
 			}
 		},
@@ -289,7 +296,7 @@ export function imageProcessing(
 		 * Delete an image and all its R2 objects.
 		 */
 		async delete(image_id: string): Promise<void> {
-			const image = await db.get('image', image_id);
+			const image = await db.get<ImageRecord>('image', image_id);
 			if (!image) return;
 
 			const bucket = options.bucket();
@@ -321,7 +328,7 @@ export function imageProcessing(
 		 * Get the current status of an image.
 		 */
 		async getStatus(image_id: string): Promise<ImageRecord | null> {
-			return db.get('image', image_id);
+			return db.get<ImageRecord>('image', image_id);
 		},
 	};
 }

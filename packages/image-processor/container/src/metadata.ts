@@ -85,18 +85,18 @@ export async function extractMetadata(
 	if (meta.exif) {
 		try {
 			const parsed = exifReader(meta.exif);
-			if (parsed?.exif?.DateTimeOriginal) {
-				const d = parsed.exif.DateTimeOriginal;
+			if (parsed.Photo?.DateTimeOriginal) {
+				const d = parsed.Photo.DateTimeOriginal;
 				date_taken = d instanceof Date ? d.toISOString() : String(d);
 			}
-			if (parsed?.gps) {
+			if (parsed.GPSInfo) {
 				gps_latitude = convertGps(
-					parsed.gps.GPSLatitude as number[] | undefined,
-					parsed.gps.GPSLatitudeRef as string | undefined,
+					parsed.GPSInfo.GPSLatitude as number[] | undefined,
+					parsed.GPSInfo.GPSLatitudeRef as string | undefined,
 				);
 				gps_longitude = convertGps(
-					parsed.gps.GPSLongitude as number[] | undefined,
-					parsed.gps.GPSLongitudeRef as string | undefined,
+					parsed.GPSInfo.GPSLongitude as number[] | undefined,
+					parsed.GPSInfo.GPSLongitudeRef as string | undefined,
 				);
 			}
 		} catch {
@@ -127,7 +127,7 @@ export async function extractMetadata(
 		is_animated,
 		frame_count: pages,
 		color_space: meta.space ?? 'srgb',
-		bit_depth: typeof meta.depth === 'string' ? parseInt(meta.depth) || 8 : (meta.depth as number) ?? 8,
+		bit_depth: typeof meta.depth === 'string' ? parseInt(meta.depth) || 8 : (meta.depth ?? 8) as number,
 		channels: meta.channels ?? 3,
 		exif_orientation: orientation,
 		has_icc_profile: meta.hasProfile ?? false,

@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { oklch, parse } from 'culori';
-import Vibrant from 'node-vibrant';
+import { Vibrant } from 'node-vibrant/node';
 
 export interface ColorResult {
 	background_color: { l: number; c: number; h: number };

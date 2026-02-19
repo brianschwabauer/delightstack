@@ -6,11 +6,8 @@ interface ErrorLike {
 	details: Record<string, unknown>;
 }
 
-function createValidationError(code: string, details: Record<string, unknown>): ErrorLike {
-	const err: any = new Error(`${code}: ${JSON.stringify(details)}`);
-	err.code = code;
-	err.details = details;
-	return err;
+function createValidationError(code: string, details: Record<string, unknown>): Error & ErrorLike {
+	return Object.assign(new Error(`${code}: ${JSON.stringify(details)}`), { code, details });
 }
 
 /** Maximum file sizes per format category (bytes) */

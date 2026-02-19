@@ -1,4 +1,4 @@
-import type { CreateImageHandleOptions } from './types';
+import type { CreateImageHandleOptions, RequestEventLike } from './types';
 
 const DEFAULT_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
   <rect width="400" height="300" fill="#f0f0f0"/>
@@ -26,7 +26,7 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 	const defaultVariant = options.default_variant ?? 'default';
 	const placeholder = options.placeholder ?? DEFAULT_PLACEHOLDER;
 
-	return async function handle({ event, resolve }: { event: any; resolve: (event: any) => Promise<Response> }): Promise<Response> {
+	return async function handle({ event, resolve }: { event: RequestEventLike; resolve: (event: RequestEventLike) => Promise<Response> }): Promise<Response> {
 		// Only intercept requests under the CDN prefix
 		if (!event.url.pathname.startsWith(cdnPrefix)) {
 			return resolve(event);

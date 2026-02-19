@@ -1,5 +1,5 @@
 import { Container } from '@cloudflare/containers';
-import type { VariantConfig, ContainerProcessResult, ContainerOutputVariant } from './types';
+import type { VariantConfig, ContainerProcessResult, ContainerOutputVariant, ImageMetadata, ErrorCode } from './types';
 import { createError } from './errors';
 
 const BOUNDARY = '----imgproc';
@@ -40,7 +40,24 @@ async function parseMultipartResponse(response: Response): Promise<ContainerProc
 		throw createError('INTERNAL_ERROR', { details: 'Invalid multipart response from container' });
 	}
 
-	let jsonData: any = null;
+	interface RawVariantJson {
+		name: string;
+		mime_type: string;
+		width: number;
+		height: number;
+		file_size: number;
+		is_animated?: boolean;
+		fit?: 'inside' | 'cover';
+		watermarked?: boolean;
+	}
+
+	interface ContainerJsonData {
+		metadata: ImageMetadata;
+		thumbhash: string;
+		variants: RawVariantJson[];
+	}
+
+	let jsonData: ContainerJsonData | null = null;
 	const binaryParts: Map<string, ArrayBuffer> = new Map();
 
 	// Parse each part
@@ -88,7 +105,7 @@ async function parseMultipartResponse(response: Response): Promise<ContainerProc
 	}
 
 	// Merge binary data with variant metadata
-	const variants: ContainerOutputVariant[] = (jsonData.variants ?? []).map((v: any) => ({
+	const variants: ContainerOutputVariant[] = (jsonData.variants ?? []).map((v: RawVariantJson) => ({
 		name: v.name,
 		mime_type: v.mime_type,
 		width: v.width,
@@ -155,28 +172,28 @@ export class ImageProcessorContainer extends Container {
 			});
 
 			if (!response.ok) {
-				let error: any;
+				let errorBody: { code?: string; details?: string | Record<string, unknown> };
 				try {
-					error = await response.json();
+					errorBody = await response.json() as { code?: string; details?: string | Record<string, unknown> };
 				} catch {
 					throw createError('INTERNAL_ERROR', { status: response.status });
 				}
 				// Normalize details to Record<string, unknown> (container may send a string)
-				const details = typeof error.details === 'string'
-					? { message: error.details }
-					: (error.details ?? {});
-				throw createError(error.code ?? 'INTERNAL_ERROR', details);
+				const details = typeof errorBody.details === 'string'
+					? { message: errorBody.details }
+					: (errorBody.details ?? {});
+				throw createError((errorBody.code ?? 'INTERNAL_ERROR') as ErrorCode, details);
 			}
 
 			return parseMultipartResponse(response);
-		} catch (err: any) {
+		} catch (err: unknown) {
 			// If it's already one of our errors, re-throw
-			if (err?.name === 'ImageProcessorError' || err?.name === 'ValidationError' || err?.name === 'ProcessingError' || err?.name === 'TimeoutError') {
+			if (err instanceof Error && ['ImageProcessorError', 'ValidationError', 'ProcessingError', 'TimeoutError'].includes(err.name)) {
 				throw err;
 			}
 			// Connection or startup failure
 			throw createError('CONTAINER_UNAVAILABLE', {
-				message: err?.message ?? String(err),
+				message: err instanceof Error ? err.message : String(err),
 			});
 		}
 	}

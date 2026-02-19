@@ -3,7 +3,7 @@ import { detectMimeType } from './mime';
 import { validateInput } from './validation';
 import { extractMetadata, type MetadataResult } from './metadata';
 import { extractColors, type ColorResult } from './colors';
-import { resizeVariants, encodeVariant, generateCompressedOriginal, resolveConfigs, type VariantConfig, type GeneratedVariant, type ResizedVariant } from './variants';
+import { resizeVariants, encodeVariant, generateCompressedOriginal, resolveConfigs, type VariantConfig, type WatermarkConfig, type GeneratedVariant, type ResizedVariant } from './variants';
 import { generateThumbHash } from './thumbhash';
 import { svgPipeline } from './svg';
 import { pdfPipeline } from './pdf';
@@ -68,13 +68,13 @@ async function generateAnimatedVariants(
 		if (longEdge < config.max_dimension) continue;
 
 		const fit = config.fit ?? (config.max_dimension > 1024 ? 'inside' : 'cover');
-		const sharpFit = fit === 'inside' ? 'inside' : 'outside';
+		const sharpFit: 'inside' | 'outside' = fit === 'inside' ? 'inside' : 'outside';
 		const maxDim = config.max_dimension;
 		const quality = config.quality ?? 75; // WebP default for animated
 
 		// Resize animated (preserving all frames)
 		const resized = await sharp(input, { animated: true })
-			.resize(maxDim, maxDim, { fit: sharpFit as any, withoutEnlargement: true })
+			.resize(maxDim, maxDim, { fit: sharpFit, withoutEnlargement: true })
 			.toBuffer({ resolveWithObject: true });
 
 		const outMeta = await sharp(resized.data, { animated: true }).metadata();
@@ -89,7 +89,7 @@ async function generateAnimatedVariants(
 			const watermarkedFrame = await applyWatermarkToVariant(
 				firstFrame,
 				{ width: resized.info.width, height },
-				config.watermark as any,
+				config.watermark!,
 				options.watermark_images,
 			);
 			// Re-encode with watermarked first frame composited
@@ -152,10 +152,11 @@ async function imagePipeline(
 	let sharpMeta;
 	try {
 		sharpMeta = await sharp(inputBuffer).metadata();
-	} catch (err: any) {
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : String(err);
 		throw Object.assign(new Error('File appears to be corrupt or truncated'), {
 			code: 'CORRUPTED_FILE',
-			details: { message: err?.message ?? String(err) },
+			details: { message },
 		});
 	}
 	const pages = sharpMeta.pages ?? 1;
@@ -215,7 +216,7 @@ async function imagePipeline(
 	if (is_animated) {
 		for (const config of resolvedConfigs) {
 			if (config.format === 'avif') {
-				config.format = 'webp' as any;
+				config.format = 'webp';
 				// Adjust quality for WebP (AVIF 50 ≈ WebP 75)
 				if (!config.quality || config.quality <= 50) {
 					config.quality = 75;
@@ -256,7 +257,7 @@ async function imagePipeline(
 			const watermarkedData = await applyWatermarkToVariant(
 				r.raw_data,
 				{ width: r.width, height: r.height },
-				config.watermark as any,
+				config.watermark!,
 				options.watermark_images,
 			);
 			// Replace raw_data and encode

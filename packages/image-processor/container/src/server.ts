@@ -1,4 +1,5 @@
 import { process } from './pipeline';
+import type { GeneratedVariant } from './variants';
 
 const BOUNDARY = '----imgproc';
 const TIMEOUT_MS = 60_000;
@@ -6,7 +7,7 @@ const TIMEOUT_MS = 60_000;
 /** Encode a multipart/mixed response from JSON metadata + binary variant parts */
 function encodeMultipart(
 	json: Record<string, unknown>,
-	binaryParts: { name: string; mime_type: string; data: ArrayBuffer }[],
+	binaryParts: { name: string; mime_type: string; data: Buffer }[],
 ): { body: Uint8Array; content_type: string } {
 	const encoder = new TextEncoder();
 	const parts: Uint8Array[] = [];
@@ -72,6 +73,11 @@ function deserializeWatermarkImages(raw: Record<string, string>): Map<string, Ar
 	return map;
 }
 
+interface CodedError extends Error {
+	code?: string;
+	details?: Record<string, unknown> | string;
+}
+
 Bun.serve({
 	port: 8080,
 	async fetch(request) {
@@ -108,7 +114,7 @@ Bun.serve({
 				const jsonPart = {
 					metadata: result.metadata,
 					thumbhash: result.thumbhash,
-					variants: result.variants.map((v: any) => ({
+					variants: result.variants.map((v: GeneratedVariant) => ({
 						name: v.name,
 						mime_type: v.mime_type,
 						width: v.width,
@@ -120,7 +126,7 @@ Bun.serve({
 					})),
 				};
 
-				const binaryParts = result.variants.map((v: any) => ({
+				const binaryParts = result.variants.map((v: GeneratedVariant) => ({
 					name: v.name,
 					mime_type: v.mime_type,
 					data: v.data,
@@ -128,19 +134,20 @@ Bun.serve({
 
 				const { body, content_type } = encodeMultipart(jsonPart, binaryParts);
 
-				return new Response(body, {
+				return new Response(body.buffer as ArrayBuffer, {
 					status: 200,
 					headers: { 'Content-Type': content_type },
 				});
-			} catch (error: any) {
-				const code = error?.code ?? 'INTERNAL_ERROR';
+			} catch (error: unknown) {
+				const err = error as CodedError;
+				const code = err?.code ?? 'INTERNAL_ERROR';
 				const status =
 					code === 'PROCESSING_TIMEOUT' ? 504
 					: code === 'INTERNAL_ERROR' ? 500
 					: 400;
 
 				return Response.json(
-					{ code, details: error?.details ?? error?.message ?? String(error) },
+					{ code, details: err?.details ?? err?.message ?? String(error) },
 					{ status },
 				);
 			}
