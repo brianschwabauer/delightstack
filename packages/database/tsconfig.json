@@ -1,6 +1,8 @@
 {
 	"compilerOptions": {
 		"target": "esnext",
+		"module": "esnext",
+		"moduleResolution": "bundler",
 		/* Specify type package names to be included without being referenced in a source file. */
 		"types": ["@cloudflare/workers-types"],
 		/* Enable importing .json files */
