@@ -9,24 +9,24 @@ Apply watermarks to individual variants. Supports text watermarks (rendered as S
 
 ## Tasks
 
-- [ ] Create `docker/watermark.ts`
-- [ ] Implement `applyWatermark(resizedBuffer, variantDimensions, watermarkConfig, watermarkImages)` function
-- [ ] Implement text watermark SVG generation (white text with black drop shadow)
-- [ ] Implement `repeat` layout — tiled diagonal grid
-- [ ] Implement `center` layout — single centered instance
-- [ ] Implement `corner` layout — single instance at specified corner
-- [ ] Apply opacity to watermark overlay
-- [ ] Apply rotation (per-tile for repeat, per-instance for center/corner)
-- [ ] Apply gap between tiles for repeat layout
-- [ ] Apply scale for image watermarks (relative to variant short edge)
-- [ ] Composite using Sharp `.composite()`
-- [ ] Wire into pipeline.ts — replace the stub from spec 07
-- [ ] Set `watermarked: true` on output variants that have watermarks
-- [ ] Test: text watermark with repeat layout
-- [ ] Test: image watermark with corner layout
-- [ ] Test: center layout
-- [ ] Test: opacity and rotation are applied correctly
-- [ ] Test: watermark scales proportionally across different variant sizes
+- [x] Create `docker/watermark.ts`
+- [x] Implement `applyWatermark(resizedBuffer, variantDimensions, watermarkConfig, watermarkImages)` function
+- [x] Implement text watermark SVG generation (white text with black drop shadow)
+- [x] Implement `repeat` layout — tiled diagonal grid
+- [x] Implement `center` layout — single centered instance
+- [x] Implement `corner` layout — single instance at specified corner
+- [x] Apply opacity to watermark overlay
+- [x] Apply rotation (per-tile for repeat, per-instance for center/corner)
+- [x] Apply gap between tiles for repeat layout
+- [x] Apply scale for image watermarks (relative to variant short edge)
+- [x] Composite using Sharp `.composite()`
+- [x] Wire into pipeline.ts — replace the stub from spec 07
+- [x] Set `watermarked: true` on output variants that have watermarks
+- [x] Test: text watermark with repeat layout
+- [x] Test: image watermark with corner layout
+- [x] Test: center layout
+- [x] Test: opacity and rotation are applied correctly
+- [x] Test: watermark scales proportionally across different variant sizes
 
 ## Details
 

@@ -9,24 +9,24 @@ Implement face-aware square cropping for avatar/profile pictures. When `avatar: 
 
 ## Tasks
 
-- [ ] Create `docker/face-crop.ts`
-- [ ] Install and configure `@mediapipe/tasks-vision` with BlazeFace short-range model
-- [ ] Load the face detection model once at container startup (reuse across requests)
-- [ ] Implement face detection on input image
-- [ ] Compute bounding box center of the largest detected face
-- [ ] Expand to a square crop region centered on the face
-- [ ] Clamp crop region to image bounds (handle faces near edges)
-- [ ] Extract square region with Sharp `.extract()`
-- [ ] Implement fallback: Sharp attention-based crop when no face is detected
-- [ ] Apply avatar defaults (keep_original: false, single 640px thumbnail variant)
-- [ ] Allow explicit overrides (avatar: true + keep_original: true should work)
-- [ ] Wire into pipeline.ts — replace the stub from spec 07
-- [ ] Test: image with one centered face
-- [ ] Test: image with multiple faces (should use largest)
-- [ ] Test: image with no face (should fall back to attention crop)
-- [ ] Test: image with face near edge (crop should clamp to bounds)
-- [ ] Test: avatar defaults are applied correctly
-- [ ] Test: avatar defaults can be overridden
+- [x] Create `docker/face-crop.ts`
+- [x] Install and configure `@mediapipe/tasks-vision` with BlazeFace short-range model
+- [x] Load the face detection model once at container startup (reuse across requests)
+- [x] Implement face detection on input image
+- [x] Compute bounding box center of the largest detected face
+- [x] Expand to a square crop region centered on the face
+- [x] Clamp crop region to image bounds (handle faces near edges)
+- [x] Extract square region with Sharp `.extract()`
+- [x] Implement fallback: Sharp attention-based crop when no face is detected
+- [x] Apply avatar defaults (keep_original: false, single 640px thumbnail variant)
+- [x] Allow explicit overrides (avatar: true + keep_original: true should work)
+- [x] Wire into pipeline.ts — replace the stub from spec 07
+- [x] Test: image with one centered face
+- [x] Test: image with multiple faces (should use largest)
+- [x] Test: image with no face (should fall back to attention crop)
+- [x] Test: image with face near edge (crop should clamp to bounds)
+- [x] Test: avatar defaults are applied correctly
+- [x] Test: avatar defaults can be overridden
 
 ## Details
 

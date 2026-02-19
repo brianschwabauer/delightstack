@@ -7,18 +7,8 @@ import { generateVariants, type VariantConfig, type GeneratedVariant } from './v
 import { generateThumbHash } from './thumbhash';
 import { svgPipeline } from './svg';
 import { pdfPipeline } from './pdf';
-
-// Stubs for features implemented in later specs
-async function faceCrop(input: Buffer, _metadata: MetadataResult): Promise<Buffer> {
-	return input; // spec 12
-}
-
-async function applyWatermark(
-	variant: GeneratedVariant,
-	_watermarkImages?: Map<string, ArrayBuffer>,
-): Promise<GeneratedVariant> {
-	return variant; // spec 13
-}
+import { faceCrop, AVATAR_DEFAULTS } from './face-crop';
+import { applyWatermarkToVariant } from './watermark';
 
 export interface ProcessOptions {
 	variants?: VariantConfig[];
@@ -203,10 +193,14 @@ async function imagePipeline(
 		})(),
 	]);
 
+	// Apply avatar defaults if avatar mode is active
+	const avatarActive = options.avatar === true;
+	const effectiveVariants = options.variants ?? (avatarActive ? AVATAR_DEFAULTS.variants : undefined);
+	const keep_original = options.keep_original ?? (avatarActive ? AVATAR_DEFAULTS.keep_original : true);
+	const compress_original = options.compress_original ?? (avatarActive ? AVATAR_DEFAULTS.compress_original : true);
+
 	// Resolve variant configs
-	const resolvedConfigs = resolveConfigs(options.variants);
-	const keep_original = options.keep_original ?? true;
-	const compress_original = options.compress_original ?? true;
+	const resolvedConfigs = resolveConfigs(effectiveVariants);
 
 	// For animated images, override AVIF → WebP (AVIF animation unsupported in libvips)
 	if (is_animated) {
@@ -233,9 +227,18 @@ async function imagePipeline(
 	for (const variant of variants) {
 		const config = resolvedConfigs.find((c) => c.name === variant.name);
 		if (config?.watermark && variant.name !== 'original') {
-			const watermarked = await applyWatermark(variant, options.watermark_images);
-			watermarked.watermarked = true;
-			watermarkedVariants.push(watermarked);
+			const watermarkedData = await applyWatermarkToVariant(
+				variant.data,
+				{ width: variant.width, height: variant.height },
+				config.watermark as any,
+				options.watermark_images,
+			);
+			watermarkedVariants.push({
+				...variant,
+				data: watermarkedData,
+				file_size: watermarkedData.byteLength,
+				watermarked: true,
+			});
 		} else {
 			watermarkedVariants.push(variant);
 		}

@@ -21,8 +21,8 @@ Read the specs in order. Each spec lists its dependencies — don't start a spec
 | 09 | [Container DO](./09-container-do.md) | done | ImageProcessorContainer class, RPC bridge |
 | 10 | [Standalone Mode](./10-standalone-mode.md) | done | processImage() helper (Mode 2) |
 | 11 | [Database Integration](./11-database-integration.md) | done | defineImageTable(), imageProcessing() factory, upload, processAlarm |
-| 12 | [Avatar Mode](./12-avatar-mode.md) | pending | Face detection, square crop, avatar defaults |
-| 13 | [Watermarks](./13-watermarks.md) | pending | Text/image watermarks, layouts, compositing |
+| 12 | [Avatar Mode](./12-avatar-mode.md) | done | Face detection, square crop, avatar defaults |
+| 13 | [Watermarks](./13-watermarks.md) | done | Text/image watermarks, layouts, compositing |
 | 14 | [SvelteKit CDN Hook](./14-cdn-hook.md) | pending | createImageHandle(), R2 serving, ETag/304 |
 | 15 | [Svelte Image Component](./15-image-component.md) | pending | Image.svelte, decodeThumbHash(), imageURL() |
 
@@ -58,7 +58,7 @@ Specs 10 and 11 can be done in parallel after 09.
 - [x] Complete spec 08 — Special Formats
 - [x] Complete spec 09 — Container DO
 - [x] Complete specs 10–11 — Worker-side integration (parallelizable)
-- [ ] Complete specs 12–13 — Advanced features (parallelizable)
+- [x] Complete specs 12–13 — Advanced features (parallelizable)
 - [ ] Complete spec 14 — SvelteKit CDN Hook
 - [ ] Complete spec 15 — Svelte Image Component
 - [ ] End-to-end integration test (Mode 1: upload → alarm → processed → CDN → component)
@@ -72,6 +72,7 @@ Specs 10 and 11 can be done in parallel after 09.
 
 | Date | Change |
 |------|--------|
+| 2026-02-18 | Specs 12–13 complete — Face-crop avatar mode, watermark compositing (text/image, repeat/center/corner) |
 | 2026-02-18 | Specs 10–11 complete — processImage() standalone helper, defineImageTable(), imageProcessing() factory |
 | 2026-02-18 | Spec 09 complete — ImageProcessorContainer DO with RPC, multipart parsing, watermark pre-fetch |
 | 2026-02-18 | Spec 08 complete — SVG sanitization, PDF rendering, animated image support |
