@@ -9,26 +9,26 @@ Implement `createImageHandle()`, a factory that returns a SvelteKit `Handle` fun
 
 ## Tasks
 
-- [ ] Create `src/handle.ts`
-- [ ] Implement `createImageHandle(options)` factory function
-- [ ] Parse URL path into `id` and `variant` segments
-- [ ] Read R2 object by key (`{prefix}/{id}/{variant}`)
-- [ ] Return the object body with correct Content-Type from R2 httpMetadata
-- [ ] Set Cache-Control from R2 httpMetadata (or default to immutable)
-- [ ] Set ETag from R2 object
-- [ ] Handle `If-None-Match` header — return 304 when ETag matches
-- [ ] Expose image dimensions as `X-Image-Width` / `X-Image-Height` response headers
-- [ ] Set Content-Disposition for `original` variant (download with original filename)
-- [ ] Set `X-Content-Type-Options: nosniff` security header
-- [ ] Return customizable SVG 404 placeholder when object not found
-- [ ] 404 uses `Cache-Control: no-cache` so browser retries after processing completes
-- [ ] Default variant when none specified in URL (configurable, default: `'default'`)
-- [ ] Pass through non-image requests to the next handler via `resolve(event)`
-- [ ] Test: serves image with correct Content-Type
-- [ ] Test: returns 304 for matching ETag
-- [ ] Test: returns 404 SVG placeholder for missing image
-- [ ] Test: Content-Disposition on original variant
-- [ ] Test: non-image paths pass through
+- [x] Create `src/handle.ts`
+- [x] Implement `createImageHandle(options)` factory function
+- [x] Parse URL path into `id` and `variant` segments
+- [x] Read R2 object by key (`{prefix}/{id}/{variant}`)
+- [x] Return the object body with correct Content-Type from R2 httpMetadata
+- [x] Set Cache-Control from R2 httpMetadata (or default to immutable)
+- [x] Set ETag from R2 object
+- [x] Handle `If-None-Match` header — return 304 when ETag matches
+- [x] Expose image dimensions as `X-Image-Width` / `X-Image-Height` response headers
+- [x] Set Content-Disposition for `original` variant (download with original filename)
+- [x] Set `X-Content-Type-Options: nosniff` security header
+- [x] Return customizable SVG 404 placeholder when object not found
+- [x] 404 uses `Cache-Control: no-cache` so browser retries after processing completes
+- [x] Default variant when none specified in URL (configurable, default: `'default'`)
+- [x] Pass through non-image requests to the next handler via `resolve(event)`
+- [x] Test: serves image with correct Content-Type
+- [x] Test: returns 304 for matching ETag
+- [x] Test: returns 404 SVG placeholder for missing image
+- [x] Test: Content-Disposition on original variant
+- [x] Test: non-image paths pass through
 
 ## Details
 
