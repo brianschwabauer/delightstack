@@ -478,11 +478,134 @@ export class DatabaseServer<
 	}
 
 	/**
+	 * Gets multiple entities from the database in a batch.
+	 * Groups requests by entity type and uses `WHERE id IN (...)` for efficiency.
+	 * Returns results in the same order as the input array.
+	 * Throws a 404 if any entity is not found.
+	 */
+	get<
+		Type extends keyof DatabaseConfig & string,
+		Table extends DatabaseConfig[Type],
+		Entity extends Database.Entity<DatabaseConfig[Type]>,
+		ExpandedFields extends
+			| Array<keyof Table['config']['foreign_keys'] & string>
+			| undefined,
+		Output extends ExpandedFields extends Array<any>
+			? Entity & { expanded: { [K in ExpandedFields[number]]: any } }
+			: Entity,
+	>(
+		requests: Array<{
+			entity_type: Type;
+			id: string | number;
+			expand?: ExpandedFields;
+		}>,
+	): Output[];
+
+	/**
 	 * Gets an entity from the database with the given type/id
 	 * An array of expand fields can be provided to expand the entity with the given fields
 	 * @example expand: ['creator_id'] -> adds the full creator data to the entity in {expanded: {creator_id: {...}}}
 	 */
 	get<
+		Type extends keyof DatabaseConfig & string,
+		Table extends DatabaseConfig[Type],
+		Entity extends Database.Entity<DatabaseConfig[Type]>,
+		ExpandedFields extends
+			| Array<keyof Table['config']['foreign_keys'] & string>
+			| undefined,
+		Output extends ExpandedFields extends Array<any>
+			? Entity & { expanded: { [K in ExpandedFields[number]]: any } }
+			: Entity,
+	>(entity_type: Type, id: string | number, expand?: ExpandedFields): Output;
+
+	get(
+		entity_type_or_requests: any,
+		id?: string | number,
+		expand?: any,
+	): any {
+		// Batch overload: array of requests
+		if (Array.isArray(entity_type_or_requests)) {
+			return this.getBatch(entity_type_or_requests);
+		}
+		// Single entity overload
+		return this.getSingle(entity_type_or_requests, id!, expand);
+	}
+
+	/** Internal: batch get implementation */
+	private getBatch(
+		requests: Array<{
+			entity_type: string;
+			id: string | number;
+			expand?: string[];
+		}>,
+	): any[] {
+		if (!requests.length) return [];
+
+		// Group by entity_type for efficient batching
+		const groups = new Map<string, Array<{ index: number; id: string | number; expand?: string[] }>>();
+		for (let i = 0; i < requests.length; i++) {
+			const req = requests[i];
+			let group = groups.get(req.entity_type);
+			if (!group) {
+				group = [];
+				groups.set(req.entity_type, group);
+			}
+			group.push({ index: i, id: req.id, expand: req.expand });
+		}
+
+		const results: any[] = new Array(requests.length);
+
+		for (const [entity_type, group] of groups) {
+			const table = this.config[entity_type];
+			if (!table) {
+				throw { status: 400, message: `Entity type ${entity_type} is not valid` };
+			}
+			const sanitized_table = this.sanitize(entity_type);
+			const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+			const ids = group.map((g) => g.id);
+			const placeholders = ids.map(() => '?').join(', ');
+
+			try {
+				const cursor = this.ctx.storage.sql.exec(
+					`SELECT * FROM ${sanitized_table} WHERE ${primary_key} IN (${placeholders})`,
+					...ids,
+				);
+
+				// Index fetched rows by their primary key
+				const fetched = new Map<string | number, any>();
+				for (const row of cursor) {
+					const entity = this.toEntityValue(entity_type, row);
+					if (entity) {
+						fetched.set((entity as any)[table.config.primary_key || 'id'], entity);
+					}
+				}
+
+				// Map results back in order and handle expansions
+				for (const { index, id, expand } of group) {
+					const data = fetched.get(id);
+					if (!data) {
+						const entity_name = this.sanitize(entity_type);
+						throw { status: 404, message: `${entity_name} not found` };
+					}
+					if (expand?.length) {
+						// Delegate to getSingle for expansion (expansions are typically few)
+						results[index] = this.getSingle(entity_type, id, expand);
+					} else {
+						results[index] = data;
+					}
+				}
+			} catch (error: any) {
+				if (error?.status) throw error;
+				console.error('Database error fetching entities:', error);
+				throw { status: 500, message: 'Database error occurred while fetching entities' };
+			}
+		}
+
+		return results;
+	}
+
+	/** Internal: single get implementation */
+	private getSingle<
 		Type extends keyof DatabaseConfig & string,
 		Table extends DatabaseConfig[Type],
 		Entity extends Database.Entity<DatabaseConfig[Type]>,

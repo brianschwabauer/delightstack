@@ -269,6 +269,17 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 				) {
 					return;
 				}
+				if (where.is === 'LIKE' || where.is === 'NOT LIKE') {
+					// Escape LIKE wildcards (%, _, \) in user input so they match literally
+					const escaped = String(where.value)
+						.replace(/\\/g, '\\\\')
+						.replace(/%/g, '\\%')
+						.replace(/_/g, '\\_');
+					return {
+						clause: `${sanitizedKey} ${where.is} ? ESCAPE '\\'`,
+						values: [escaped],
+					};
+				}
 				return { clause: `${sanitizedKey} ${where.is} ?`, values: [where.value] };
 			}
 			// Build the where clause

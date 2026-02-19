@@ -241,6 +241,8 @@ interface VectorField
 	searchable: true;
 	/** The dimensionality of the vector (also known as 'size') */
 	dimensions: number;
+	/** The zod schema used to validate/parse the vector field */
+	schema: z.ZodArray<z.ZodNumber>;
 }
 
 /** The options for a primary key field */
@@ -1388,6 +1390,7 @@ class BooleanFieldGenerator {
 	 */
 	readonly(): Omit<ReadOnly<this>, 'readonly'> {
 		this._.readonly = true;
+		this._.schema = this._.schema.readonly() as any;
 		return this as Omit<ReadOnly<this>, 'readonly'>;
 	}
 }
@@ -1396,6 +1399,9 @@ class EnumFieldGenerator<Options extends string[]> {
 	readonly _: EnumField<Options>;
 
 	constructor(options: Options) {
+		if (!options.length) {
+			throw new Error('schema.enum() requires at least one option');
+		}
 		this._ = {
 			type: 'enum',
 			options,
@@ -1463,26 +1469,31 @@ class VectorFieldGenerator {
 	readonly _: VectorField;
 
 	constructor(size?: number) {
+		const dimensions = size ?? 0;
 		this._ = {
 			type: 'vector',
-			dimensions: size ?? 0,
+			dimensions,
 			searchable: true,
+			schema: dimensions > 0
+				? z.array(z.number()).length(dimensions) as any
+				: z.array(z.number()) as any,
 		};
 	}
 
 	/** Sets the size (number of dimensions) of the vector */
 	size(dimensions: number): Omit<this, 'size'> {
 		this._.dimensions = dimensions;
+		this._.schema = z.array(z.number()).length(dimensions) as any;
 		return this as Omit<this, 'size'>;
 	}
 
 	/**
-	 * Calls the zod.enum().optional() method which marks the enum as optional.
-	 * Since we are using sqlite, optional enums will be stored as NULL in the database.
-	 * Thus, there is no 'nullable' method since optional enums already cover that case.
+	 * Marks the vector as optional (nullable).
+	 * Since we are using sqlite, optional vectors will be stored as NULL in the database.
 	 */
 	optional(): Omit<OptionalValue<this>, 'optional' | 'unique' | 'primary'> {
 		this._.optional = true;
+		this._.schema = this._.schema.optional().nullable() as any;
 		return this as Omit<OptionalValue<this>, 'optional' | 'unique' | 'primary'>;
 	}
 
@@ -1492,6 +1503,7 @@ class VectorFieldGenerator {
 	 */
 	readonly(): Omit<ReadOnly<this>, 'readonly'> {
 		this._.readonly = true;
+		this._.schema = this._.schema.readonly() as any;
 		return this as Omit<ReadOnly<this>, 'readonly'>;
 	}
 }
@@ -1682,9 +1694,8 @@ class ObjectFieldGenerator<Properties extends Record<string, FieldGenerator>> {
 	}
 
 	/**
-	 * Calls the zod.enum().optional() method which marks the enum as optional.
-	 * Since we are using sqlite, optional enums will be stored as NULL in the database.
-	 * Thus, there is no 'nullable' method since optional enums already cover that case.
+	 * Marks the object as optional (nullable).
+	 * Since we are using sqlite, optional objects will be stored as NULL in the database.
 	 */
 	optional(): Omit<OptionalValue<this>, 'optional'> {
 		this._.optional = true;
@@ -1748,9 +1759,8 @@ class ArrayFieldGenerator<Items extends FieldGenerator> {
 	}
 
 	/**
-	 * Calls the zod.enum().optional() method which marks the enum as optional.
-	 * Since we are using sqlite, optional enums will be stored as NULL in the database.
-	 * Thus, there is no 'nullable' method since optional enums already cover that case.
+	 * Marks the array as optional (nullable).
+	 * Since we are using sqlite, optional arrays will be stored as NULL in the database.
 	 */
 	optional(): Omit<OptionalValue<this>, 'optional'> {
 		this._.optional = true;
