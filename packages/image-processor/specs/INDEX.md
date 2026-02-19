@@ -19,8 +19,8 @@ Read the specs in order. Each spec lists its dependencies — don't start a spec
 | 07 | [Processing Pipeline Orchestration](./07-pipeline-orchestration.md) | done | Wire together 03–06 for static images, result assembly |
 | 08 | [Special Formats](./08-special-formats.md) | done | Animated images, SVG sanitization, PDF rendering |
 | 09 | [Container DO](./09-container-do.md) | done | ImageProcessorContainer class, RPC bridge |
-| 10 | [Standalone Mode](./10-standalone-mode.md) | pending | processImage() helper (Mode 2) |
-| 11 | [Database Integration](./11-database-integration.md) | pending | defineImageTable(), imageProcessing() factory, upload, processAlarm |
+| 10 | [Standalone Mode](./10-standalone-mode.md) | done | processImage() helper (Mode 2) |
+| 11 | [Database Integration](./11-database-integration.md) | done | defineImageTable(), imageProcessing() factory, upload, processAlarm |
 | 12 | [Avatar Mode](./12-avatar-mode.md) | pending | Face detection, square crop, avatar defaults |
 | 13 | [Watermarks](./13-watermarks.md) | pending | Text/image watermarks, layouts, compositing |
 | 14 | [SvelteKit CDN Hook](./14-cdn-hook.md) | pending | createImageHandle(), R2 serving, ETag/304 |
@@ -57,7 +57,7 @@ Specs 10 and 11 can be done in parallel after 09.
 - [x] Complete spec 07 — Pipeline Orchestration (integrates 03–06)
 - [x] Complete spec 08 — Special Formats
 - [x] Complete spec 09 — Container DO
-- [ ] Complete specs 10–11 — Worker-side integration (parallelizable)
+- [x] Complete specs 10–11 — Worker-side integration (parallelizable)
 - [ ] Complete specs 12–13 — Advanced features (parallelizable)
 - [ ] Complete spec 14 — SvelteKit CDN Hook
 - [ ] Complete spec 15 — Svelte Image Component
@@ -72,6 +72,7 @@ Specs 10 and 11 can be done in parallel after 09.
 
 | Date | Change |
 |------|--------|
+| 2026-02-18 | Specs 10–11 complete — processImage() standalone helper, defineImageTable(), imageProcessing() factory |
 | 2026-02-18 | Spec 09 complete — ImageProcessorContainer DO with RPC, multipart parsing, watermark pre-fetch |
 | 2026-02-18 | Spec 08 complete — SVG sanitization, PDF rendering, animated image support |
 | 2026-02-18 | Spec 07 complete — Pipeline orchestration wiring all stages together |

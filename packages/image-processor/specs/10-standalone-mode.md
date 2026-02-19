@@ -9,19 +9,19 @@ Implement the `processImage()` helper function for Mode 2 (standalone, without `
 
 ## Tasks
 
-- [ ] Create `src/process.ts`
-- [ ] Implement `processImage(binding, options)` function
-- [ ] Read input file from R2 bucket
-- [ ] Call Container DO via RPC with image bytes + processing options
-- [ ] Write variants back to R2 (extensionless keys)
-- [ ] Write compressed original to R2 (if applicable)
-- [ ] Set correct R2 metadata on all written objects (Content-Type, Cache-Control, dimensions)
-- [ ] Strip binary data from result before returning (caller doesn't need buffers)
-- [ ] Handle FILE_NOT_FOUND (R2 key doesn't exist)
-- [ ] Pass R2 bucket through to container DO for watermark image fetching
-- [ ] Test: end-to-end with mock container + R2
-- [ ] Test: FILE_NOT_FOUND error path
-- [ ] Test: variant skipping — only written variants appear in result
+- [x] Create `src/process.ts`
+- [x] Implement `processImage(binding, options)` function
+- [x] Read input file from R2 bucket
+- [x] Call Container DO via RPC with image bytes + processing options
+- [x] Write variants back to R2 (extensionless keys)
+- [x] Write compressed original to R2 (if applicable)
+- [x] Set correct R2 metadata on all written objects (Content-Type, Cache-Control, dimensions)
+- [x] Strip binary data from result before returning (caller doesn't need buffers)
+- [x] Handle FILE_NOT_FOUND (R2 key doesn't exist)
+- [x] Pass R2 bucket through to container DO for watermark image fetching
+- [x] Test: end-to-end with mock container + R2
+- [x] Test: FILE_NOT_FOUND error path
+- [x] Test: variant skipping — only written variants appear in result
 
 ## Details
 

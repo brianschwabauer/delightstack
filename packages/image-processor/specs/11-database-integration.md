@@ -10,32 +10,32 @@ Implement the `@delightstack/database` integration: `defineImageTable()` for sch
 ## Tasks
 
 ### defineImageTable()
-- [ ] Create `src/schema.ts`
-- [ ] Implement `defineImageTable(callback?)` using `@delightstack/database` table builder
-- [ ] Define all built-in columns (id, base_path, file_name, alt_text, processing_status, error_code, all metadata columns, thumbhash, variants, created_at, updated_at)
-- [ ] Support optional callback for custom fields: `defineImageTable((schema) => ({ user_id: schema.string() }))`
-- [ ] Merge custom fields with built-in fields
-- [ ] Verify type inference flows through to `db.create()`, `db.get()`, etc.
-- [ ] Test: basic table without custom fields
-- [ ] Test: table with custom fields — types are correct
+- [x] Create `src/schema.ts`
+- [x] Implement `defineImageTable(callback?)` using `@delightstack/database` table builder
+- [x] Define all built-in columns (id, base_path, file_name, alt_text, processing_status, error_code, all metadata columns, thumbhash, variants, created_at, updated_at)
+- [x] Support optional callback for custom fields: `defineImageTable((schema) => ({ user_id: schema.string() }))`
+- [x] Merge custom fields with built-in fields
+- [x] Verify type inference flows through to `db.create()`, `db.get()`, etc.
+- [x] Test: basic table without custom fields
+- [x] Test: table with custom fields — types are correct
 
 ### imageProcessing() Factory
-- [ ] Create `src/integration.ts`
-- [ ] Implement `imageProcessing(db, options)` — returns helper object
-- [ ] Accept `container` and `bucket` as lazy getters (functions, not values)
-- [ ] Accept optional `keep_original`, `compress_original`, `variants` defaults
+- [x] Create `src/integration.ts`
+- [x] Implement `imageProcessing(db, options)` — returns helper object
+- [x] Accept `container` and `bucket` as lazy getters (functions, not values)
+- [x] Accept optional `keep_original`, `compress_original`, `variants` defaults
 
 ### upload()
-- [ ] Generate timestamp-based unique ID
-- [ ] Extract file_name from File object (or use options.file_name)
-- [ ] Write original to R2 at `{prefix}/{id}/original` with httpMetadata and customMetadata
-- [ ] Create pending image record with `db.create('image', {..., ...options.data})`
-- [ ] Schedule alarm using "set only if earlier" strategy
-- [ ] Return the image record immediately
+- [x] Generate timestamp-based unique ID
+- [x] Extract file_name from File object (or use options.file_name)
+- [x] Write original to R2 at `{prefix}/{id}/original` with httpMetadata and customMetadata
+- [x] Create pending image record with `db.create('image', {..., ...options.data})`
+- [x] Schedule alarm using "set only if earlier" strategy
+- [x] Return the image record immediately
 
 ### processAlarm()
-- [ ] Query pending images: `SELECT * FROM image WHERE processing_status = 'pending' LIMIT 10`
-- [ ] For each pending image:
+- [x] Query pending images: `SELECT * FROM image WHERE processing_status = 'pending' LIMIT 10`
+- [x] For each pending image:
   - Mark as `'processing'`
   - Read original from R2
   - Call Container DO via RPC (pass variant configs, compress_original, avatar)
@@ -44,31 +44,31 @@ Implement the `@delightstack/database` integration: `defineImageTable()` for sch
   - Write compressed original to R2 (if applicable)
   - Update record to `'processed'` with all metadata
   - On error: update record to `'failed'` with error_code
-- [ ] Reschedule alarm if more pending images remain
-- [ ] Handle "set only if earlier" alarm scheduling correctly
+- [x] Reschedule alarm if more pending images remain
+- [x] Handle "set only if earlier" alarm scheduling correctly
 
 ### delete()
-- [ ] Delete image record from database
-- [ ] Delete all R2 objects under `{base_path}/` (original + all variants)
-- [ ] Handle case where image is currently being processed (processAlarm detects deletion and cleans up)
+- [x] Delete image record from database
+- [x] Delete all R2 objects under `{base_path}/` (original + all variants)
+- [x] Handle case where image is currently being processed (processAlarm detects deletion and cleans up)
 
 ### retry()
-- [ ] Reset processing_status from `'failed'` to `'pending'`
-- [ ] Clear error_code
-- [ ] Schedule alarm
+- [x] Reset processing_status from `'failed'` to `'pending'`
+- [x] Clear error_code
+- [x] Schedule alarm
 
 ### getStatus()
-- [ ] Return the image record via `db.get('image', id)`
+- [x] Return the image record via `db.get('image', id)`
 
 ### Tests
-- [ ] Test: upload creates record + R2 object + schedules alarm
-- [ ] Test: processAlarm processes pending images end-to-end
-- [ ] Test: processAlarm handles deletion during processing
-- [ ] Test: processAlarm reschedules when more pending
-- [ ] Test: processAlarm does nothing when no pending
-- [ ] Test: delete cleans up R2 objects
-- [ ] Test: retry resets failed image to pending
-- [ ] Test: custom fields flow through upload → record
+- [x] Test: upload creates record + R2 object + schedules alarm
+- [x] Test: processAlarm processes pending images end-to-end
+- [x] Test: processAlarm handles deletion during processing
+- [x] Test: processAlarm reschedules when more pending
+- [x] Test: processAlarm does nothing when no pending
+- [x] Test: delete cleans up R2 objects
+- [x] Test: retry resets failed image to pending
+- [x] Test: custom fields flow through upload → record
 
 ## Details
 
