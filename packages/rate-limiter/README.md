@@ -14,29 +14,29 @@ Token bucket rate limiter for Cloudflare Workers, implemented as a Durable Objec
 ## Architecture
 
 ```
-  ┌──────────────────────────────────────────────────────────────────┐
-  │                     Your Cloudflare Worker                       │
-  │                                                                  │
-  │  const id = env.LIMITER.idFromName(ip_address);                  │
-  │  const limiter = env.LIMITER.get(id);                            │
-  │  const allowed = await limiter.consume('api', 1);                │
-  │                            │                                     │
-  └────────────────────────────┼─────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                     Your Cloudflare Worker                      │
+  │                                                                 │
+  │  const id = env.LIMITER.idFromName(ip_address);                 │
+  │  const limiter = env.LIMITER.get(id);                           │
+  │  const allowed = await limiter.consume('api', 1);               │
+  │                            │                                    │
+  └────────────────────────────┼────────────────────────────────────┘
                                │ DO RPC (direct method call)
                                ▼
-  ┌──────────────────────────────────────────────────────────────────┐
-  │               RateLimiterServer (Durable Object)                 │
-  │                                                                  │
-  │  ┌──────────────────────────────────────────────────────┐        │
-  │  │              In-Memory Bucket Map                     │        │
-  │  │                                                      │        │
+  ┌─────────────────────────────────────────────────────────────────┐
+  │               RateLimiterServer (Durable Object)                │
+  │                                                                 │
+  │  ┌─────────────────────────────────────────────────────┐        │
+  │  │              In-Memory Bucket Map                   │        │
+  │  │                                                     │        │
   │  │  "api"     → { count: 7, last_refill: 1708300000 }  │        │
   │  │  "login"   → { count: 0, last_refill: 1708300050 }  │        │
   │  │  "upload"  → { count: 3, last_refill: 1708300020 }  │        │
-  │  └──────────────────────────────────────────────────────┘        │
-  │                                                                  │
-  │  setOptions()  check()  consume()  getStatus()  reset()          │
-  └──────────────────────────────────────────────────────────────────┘
+  │  └─────────────────────────────────────────────────────┘        │
+  │                                                                 │
+  │  setOptions()  check()  consume()  getStatus()  reset()         │
+  └─────────────────────────────────────────────────────────────────┘
 ```
 
 **One instance per identity.** You choose the Durable Object ID via `idFromName()`. Use an IP address for per-IP limiting, a user ID for per-user limiting, or a fixed string like `"global"` for a global rate limit. Cloudflare guarantees a single instance per ID, so there are no race conditions between concurrent requests.
@@ -69,29 +69,29 @@ new_classes = ["RateLimiterServer"]
 
 ```typescript
 export default {
-  async fetch(request: Request, env: Env) {
-    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    const limiter = env.LIMITER.get(env.LIMITER.idFromName(ip));
+	async fetch(request: Request, env: Env) {
+		const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+		const limiter = env.LIMITER.get(env.LIMITER.idFromName(ip));
 
-    // Configure: 10 requests per 60 seconds
-    await limiter.setOptions({ max_tokens: 10, refill_every_seconds: 60 });
+		// Configure: 10 requests per 60 seconds
+		await limiter.setOptions({ max_tokens: 10, refill_every_seconds: 60 });
 
-    // Try to consume a token
-    const allowed = await limiter.consume('api', 1);
-    if (!allowed) {
-      const status = await limiter.getStatus('api');
-      return new Response('Too Many Requests', {
-        status: 429,
-        headers: {
-          'Retry-After': String(Math.ceil(status.reset_in_ms / 1000)),
-          'X-RateLimit-Limit': String(status.limit),
-          'X-RateLimit-Remaining': String(status.remaining),
-        },
-      });
-    }
+		// Try to consume a token
+		const allowed = await limiter.consume('api', 1);
+		if (!allowed) {
+			const status = await limiter.getStatus('api');
+			return new Response('Too Many Requests', {
+				status: 429,
+				headers: {
+					'Retry-After': String(Math.ceil(status.reset_in_ms / 1000)),
+					'X-RateLimit-Limit': String(status.limit),
+					'X-RateLimit-Remaining': String(status.remaining),
+				},
+			});
+		}
 
-    return new Response('OK');
-  },
+		return new Response('OK');
+	},
 };
 ```
 
@@ -133,10 +133,10 @@ Configures the rate limiter. Only the provided fields are updated; omitted field
 
 ```typescript
 interface RateLimiterOptions {
-  /** Maximum tokens the bucket can hold (default: 10) */
-  max_tokens?: number;
-  /** Seconds between each token refill (default: 10) */
-  refill_every_seconds?: number;
+	/** Maximum tokens the bucket can hold (default: 10) */
+	max_tokens?: number;
+	/** Seconds between each token refill (default: 10) */
+	refill_every_seconds?: number;
 }
 ```
 
@@ -163,7 +163,7 @@ Attempts to consume `cost` tokens from the bucket. Returns `true` if the tokens 
 ```typescript
 const allowed = await limiter.consume('api', 1);
 if (!allowed) {
-  return new Response('Too Many Requests', { status: 429 });
+	return new Response('Too Many Requests', { status: 429 });
 }
 ```
 
@@ -173,12 +173,12 @@ Returns the current state of a bucket. Useful for populating rate-limit response
 
 ```typescript
 interface RateLimiterStatus {
-  /** Tokens currently available */
-  remaining: number;
-  /** Maximum tokens (bucket capacity) */
-  limit: number;
-  /** Milliseconds until the next token is added (0 if full) */
-  reset_in_ms: number;
+	/** Tokens currently available */
+	remaining: number;
+	/** Maximum tokens (bucket capacity) */
+	limit: number;
+	/** Milliseconds until the next token is added (0 if full) */
+	reset_in_ms: number;
 }
 ```
 
@@ -215,8 +215,8 @@ const limiter = env.LIMITER.get(env.LIMITER.idFromName(user.id));
 await limiter.setOptions({ max_tokens: 100, refill_every_seconds: 60 });
 
 // Different keys for different actions within the same limiter
-await limiter.consume('api', 1);      // 100 API calls/minute
-await limiter.consume('upload', 10);  // 10 uploads/minute (costs 10 tokens each)
+await limiter.consume('api', 1); // 100 API calls/minute
+await limiter.consume('upload', 10); // 10 uploads/minute (costs 10 tokens each)
 ```
 
 ### Login brute-force protection
@@ -228,13 +228,13 @@ await limiter.setOptions({ max_tokens: 5, refill_every_seconds: 300 });
 // Check before attempting login
 const allowed = await limiter.check('login', 1);
 if (!allowed) {
-  return new Response('Too many login attempts. Try again later.', { status: 429 });
+	return new Response('Too many login attempts. Try again later.', { status: 429 });
 }
 
 // Only consume on failed attempt
 const success = await authenticate(email, password);
 if (!success) {
-  await limiter.consume('login', 1);
+	await limiter.consume('login', 1);
 }
 ```
 
@@ -242,9 +242,9 @@ if (!success) {
 
 ```typescript
 // Different operations cost different amounts of tokens
-await limiter.consume('api', 1);   // Read: 1 token
-await limiter.consume('api', 5);   // Write: 5 tokens
-await limiter.consume('api', 10);  // Bulk operation: 10 tokens
+await limiter.consume('api', 1); // Read: 1 token
+await limiter.consume('api', 5); // Write: 5 tokens
+await limiter.consume('api', 10); // Bulk operation: 10 tokens
 ```
 
 ## Design Decisions
