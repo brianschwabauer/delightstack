@@ -19,6 +19,23 @@ type Post = Database.Entity<typeof POST>;
 // Explicit PK: 'slug' should be present, no extra 'id'
 assertType<Post>({} as { readonly slug: string; title: string; readonly created_at: number; readonly updated_at: number });
 
+// Derived fields should NOT appear in Entity type
+const PERSON_WITH_DERIVED = Database.table('person_derived', (schema) => ({
+	first_name: schema.string().searchable(),
+	last_name: schema.string().searchable(),
+	name: schema.string().derived((data) => `${data.first_name} ${data.last_name}`).sortable(),
+}));
+type PersonWithDerived = Database.Entity<typeof PERSON_WITH_DERIVED>;
+
+// Entity should have first_name, last_name, auto-id, timestamps — but NOT name
+assertType<PersonWithDerived>({} as {
+	readonly id: string;
+	first_name: string;
+	last_name: string;
+	readonly created_at: number;
+	readonly updated_at: number;
+});
+
 describe('Schema: Database.table()', () => {
 	it('should create a table with basic fields', () => {
 		const table = Database.table('posts', (schema) => ({
@@ -490,5 +507,184 @@ describe('Schema: ArrayFieldGenerator', () => {
 		}));
 
 		expect(table._['tags']._['optional']).toBe(true);
+	});
+});
+
+describe('Schema: derived() modifier', () => {
+	it('should NOT include derived fields in table_definition', () => {
+		const table = Database.table('person_d1', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string(),
+			last_name: schema.string(),
+			name: schema.string().derived((data) => `${data.first_name} ${data.last_name}`),
+		}));
+
+		expect(table.config.table_definition).toHaveProperty('id');
+		expect(table.config.table_definition).toHaveProperty('first_name');
+		expect(table.config.table_definition).toHaveProperty('last_name');
+		expect(table.config.table_definition).not.toHaveProperty('name');
+	});
+
+	it('should automatically include derived fields in searchable_fields', () => {
+		const table = Database.table('person_d2', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string(),
+			name: schema.string().derived((data) => data.first_name),
+		}));
+
+		expect(table.config.searchable_fields).toContain('name');
+	});
+
+	it('should include derived fields in sortable_fields when marked sortable', () => {
+		const table = Database.table('person_d3', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string(),
+			name: schema.string().derived((data) => data.first_name).sortable(),
+		}));
+
+		expect(table.config.sortable_fields).toContain('name');
+	});
+
+	it('should include derived fields in orama schema', () => {
+		const table = Database.table('person_d4', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string(),
+			name: schema.string().derived((data) => data.first_name),
+		}));
+
+		expect(table.config.orama.schema).toHaveProperty('name', 'string');
+	});
+
+	it('should NOT include derived fields in parse output', () => {
+		const table = Database.table('person_d5', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string(),
+			name: schema.string().derived((data) => data.first_name),
+		}));
+
+		const result = table.parse({ id: 'x', first_name: 'Alice' } as any);
+		expect(result).toHaveProperty('first_name', 'Alice');
+		expect(result).not.toHaveProperty('name');
+	});
+
+	it('should compute string derived values in toSparse', () => {
+		const table = Database.table('person_d6', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string().searchable(),
+			last_name: schema.string().searchable(),
+			name: schema.string().derived((data) => `${data.first_name} ${data.last_name}`),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			first_name: 'Alice',
+			last_name: 'Smith',
+			created_at: 100,
+			updated_at: 200,
+		} as any);
+
+		expect(sparse).toHaveProperty('name', 'Alice Smith');
+		expect(sparse).toHaveProperty('first_name', 'Alice');
+		expect(sparse).toHaveProperty('last_name', 'Smith');
+	});
+
+	it('should compute number derived values in toSparse', () => {
+		const table = Database.table('stats_d', (schema) => ({
+			id: schema.primaryKey(),
+			width: schema.number().searchable(),
+			height: schema.number().searchable(),
+			area: schema.number().derived((data) => data.width * data.height),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			width: 10,
+			height: 20,
+			created_at: 100,
+			updated_at: 200,
+		} as any);
+
+		expect(sparse).toHaveProperty('area', 200);
+	});
+
+	it('should compute boolean derived values in toSparse', () => {
+		const table = Database.table('items_d', (schema) => ({
+			id: schema.primaryKey(),
+			age: schema.number().searchable(),
+			is_adult: schema.boolean().derived((data) => data.age >= 18),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			age: 25,
+			created_at: 100,
+			updated_at: 200,
+		} as any);
+
+		expect(sparse).toHaveProperty('is_adult', true);
+	});
+
+	it('should compute enum derived values in toSparse', () => {
+		const table = Database.table('items_de', (schema) => ({
+			id: schema.primaryKey(),
+			score: schema.number().searchable(),
+			grade: schema.enum(['A', 'B', 'C', 'F']).derived((data) => {
+				if (data.score >= 90) return 'A';
+				if (data.score >= 80) return 'B';
+				if (data.score >= 70) return 'C';
+				return 'F';
+			}),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			score: 95,
+			created_at: 100,
+			updated_at: 200,
+		} as any);
+
+		expect(sparse).toHaveProperty('grade', 'A');
+	});
+
+	it('should NOT include derived fields in form field props', () => {
+		const table = Database.table('person_d7', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string(),
+			name: schema.string().derived((data) => data.first_name),
+		}));
+
+		expect(table.form.field).not.toHaveProperty('name');
+		expect(table.form.field).toHaveProperty('first_name');
+	});
+
+	it('should silently handle errors in derived functions during toSparse', () => {
+		const table = Database.table('person_d9', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string().searchable(),
+			bad_field: schema.string().derived(() => {
+				throw new Error('oops');
+			}),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			first_name: 'Alice',
+			created_at: 100,
+			updated_at: 200,
+		} as any);
+
+		expect(sparse).toHaveProperty('first_name', 'Alice');
+		expect(sparse).not.toHaveProperty('bad_field');
+	});
+
+	it('should set derived flag on field metadata', () => {
+		const table = Database.table('person_d10', (schema) => ({
+			id: schema.primaryKey(),
+			first_name: schema.string(),
+			name: schema.string().derived((data) => data.first_name),
+		}));
+
+		expect((table._['name']._ as any)['derived']).toBe(true);
+		expect((table._['first_name']._ as any)['derived']).toBeUndefined();
 	});
 });

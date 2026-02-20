@@ -296,6 +296,7 @@ type Unique<T extends { _: any }> = T & { _: T['_'] & { unique: true } };
 type Sortable<T extends { _: any }> = T & { _: T['_'] & { sortable: true } };
 type OptionalValue<T extends { _: any }> = T & { _: T['_'] & { optional: true } };
 type ReadOnly<T extends { _: any }> = T & { _: T['_'] & { readonly: true } };
+type DerivedValue<T extends { _: any }> = T & { _: T['_'] & { derived: true } };
 type Column<T extends { _: any }> = T & { _: T['_'] & { column: true } };
 type IntegerValue<T extends { _: any }> = T & {
 	_: T['_'] & { type: 'number'; integer: true };
@@ -348,6 +349,13 @@ type IsBoolean<T> = T extends { _: infer U & { type: 'boolean' } } ? true : fals
 type IsNumber<T> = T extends { _: infer U & { type: 'number' } } ? true : false;
 type IsString<T> = T extends { _: infer U & { type: 'string' } } ? true : false;
 type IsEnum<T> = T extends { _: infer U & { type: 'enum' } } ? true : false;
+type IsDerived<T> = T extends { _: infer U }
+	? unknown extends U
+		? false
+		: U extends { derived: true }
+			? true
+			: false
+	: false;
 
 type OmitNeverProperties<T> = {
 	[K in keyof T as T[K] extends never ? never : K]: T[K];
@@ -748,7 +756,7 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 					ExtractFormFieldProps<
 						FlattenFormFieldProps<
 							OmitNeverProperties<{
-								[Key in keyof T & string]: FormFieldProps<T[Key], Key>;
+								[Key in keyof T & string]: IsDerived<T[Key]> extends true ? never : FormFieldProps<T[Key], Key>;
 							}>
 						>
 					>
@@ -810,7 +818,9 @@ type SqliteColumnDefinition<Schema extends FieldGenerator> =
 type SqliteTableDefinition<Schema extends Record<string, FieldGenerator>> = Flatten<
 	OmitNeverProperties<{
 		[Key in keyof Schema | 'json' | 'created_at' | 'updated_at']: Key extends keyof Schema
-			? SqliteColumnDefinition<Schema[Key]>
+			? IsDerived<Schema[Key]> extends true
+				? never
+				: SqliteColumnDefinition<Schema[Key]>
 			: Key extends 'json'
 				? 'TEXT'
 				: 'INTEGER NOT NULL';
@@ -1143,6 +1153,18 @@ class StringFieldGenerator {
 		this._.schema = z.url(...options);
 		return this as Omit<FormattedString<this, 'url'>, StringFieldFormat>;
 	}
+
+	/**
+	 * Marks this field as derived (computed from other fields).
+	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
+	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 */
+	derived(fn: (data: Record<string, any>) => string): Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'> {
+		(this as any)._.derived = true;
+		(this as any)._.derived_fn = fn;
+		(this as any)._.searchable = true;
+		return this as Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'>;
+	}
 }
 
 /** Helper functions for defining attributes & validators for number fields */
@@ -1318,6 +1340,18 @@ class NumberFieldGenerator {
 		this._.schema = this._.schema.readonly() as any;
 		return this as Omit<ReadOnly<this>, 'readonly'>;
 	}
+
+	/**
+	 * Marks this field as derived (computed from other fields).
+	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
+	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 */
+	derived(fn: (data: Record<string, any>) => number): Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'> {
+		(this as any)._.derived = true;
+		(this as any)._.derived_fn = fn;
+		(this as any)._.searchable = true;
+		return this as Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'>;
+	}
 }
 
 /** Helper functions for defining attributes & validators for boolean fields */
@@ -1400,6 +1434,18 @@ class BooleanFieldGenerator {
 		this._.schema = this._.schema.readonly() as any;
 		return this as Omit<ReadOnly<this>, 'readonly'>;
 	}
+
+	/**
+	 * Marks this field as derived (computed from other fields).
+	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
+	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 */
+	derived(fn: (data: Record<string, any>) => boolean): Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'> {
+		(this as any)._.derived = true;
+		(this as any)._.derived_fn = fn;
+		(this as any)._.searchable = true;
+		return this as Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'>;
+	}
 }
 
 class EnumFieldGenerator<Options extends string[]> {
@@ -1469,6 +1515,18 @@ class EnumFieldGenerator<Options extends string[]> {
 		this._.readonly = true;
 		this._.schema = this._.schema.readonly() as any;
 		return this as Omit<ReadOnly<this>, 'readonly'>;
+	}
+
+	/**
+	 * Marks this field as derived (computed from other fields).
+	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
+	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 */
+	derived(fn: (data: Record<string, any>) => Options[number]): Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'> {
+		(this as any)._.derived = true;
+		(this as any)._.derived_fn = fn;
+		(this as any)._.searchable = true;
+		return this as Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'>;
 	}
 }
 
@@ -1943,19 +2001,23 @@ export namespace Database {
 		AddQuestionMarks<
 			OmitNeverProperties<
 				{
-					// Mark readonly fields as readonly in the resulting type
-					readonly [Key in keyof Table['_'] as IsReadOnly<Table['_'][Key]> extends true
-						? Key
-						: never]: FieldType<Table['_'][Key]> extends infer FieldTypeValue
+					// Mark readonly fields as readonly in the resulting type (exclude derived fields)
+					readonly [Key in keyof Table['_'] as IsDerived<Table['_'][Key]> extends true
+						? never
+						: IsReadOnly<Table['_'][Key]> extends true
+							? Key
+							: never]: FieldType<Table['_'][Key]> extends infer FieldTypeValue
 						? IsOptional<Table['_'][Key]> extends true
 							? FieldTypeValue | undefined | null
 							: FieldTypeValue
 						: never;
 				} & {
-					// Keep non-readonly fields as normal (not readonly) in the resulting type
-					[Key in keyof Table['_'] as IsReadOnly<Table['_'][Key]> extends true
+					// Keep non-readonly fields as normal (exclude derived fields)
+					[Key in keyof Table['_'] as IsDerived<Table['_'][Key]> extends true
 						? never
-						: Key]: FieldType<Table['_'][Key]> extends infer FieldTypeValue
+						: IsReadOnly<Table['_'][Key]> extends true
+							? never
+							: Key]: FieldType<Table['_'][Key]> extends infer FieldTypeValue
 						? IsOptional<Table['_'][Key]> extends true
 							? FieldTypeValue | undefined | null
 							: FieldTypeValue
@@ -2152,11 +2214,13 @@ export namespace Database {
 				? string
 				: Key extends 'created_at' | 'updated_at'
 					? number
-					: FieldType<Table['_'][Key]> extends infer FieldTypeValue
-						? FieldTypeValue extends string | boolean | number
-							? FieldTypeValue
-							: never
-						: never;
+					: IsDerived<Table['_'][Key]> extends true
+						? never
+						: FieldType<Table['_'][Key]> extends infer FieldTypeValue
+							? FieldTypeValue extends string | boolean | number
+								? FieldTypeValue
+								: never
+							: never;
 		}>
 	>;
 
@@ -2381,6 +2445,25 @@ export namespace Database {
 				} else {
 					orama_sort.unsortableProperties!.push(fieldName);
 				}
+				continue;
+			}
+
+			// Derived fields: search-only, skip SQLite column/indexes/form but build orama schema
+			// derived() always marks the field as searchable
+			if ('derived' in field && (field as any).derived) {
+				searchable_fields.push(fieldName as SearchableColumn);
+				if ('sortable' in field && field.sortable) {
+					sortable_fields.push(fieldName as SortableColumn);
+					orama_sort.enabled = true;
+				} else {
+					orama_sort.unsortableProperties!.push(fieldName);
+				}
+				let orama_type: string | undefined;
+				if (field.type === 'string') orama_type = 'string';
+				else if (field.type === 'number') orama_type = 'number';
+				else if (field.type === 'boolean') orama_type = 'boolean';
+				else if (field.type === 'enum') orama_type = 'enum';
+				if (orama_type) (orama_schema as any)[fieldName] = orama_type;
 				continue;
 			}
 
@@ -2668,6 +2751,9 @@ export namespace Database {
 			const parsedData = {} as any;
 			const issues: Array<{ path: string[]; message: string }> = [];
 			for (const [fieldName, fieldDef] of Object.entries(table_config)) {
+				// Skip derived fields — they are computed in toSparse(), not stored
+				if ('derived' in (fieldDef as any)['_'] && (fieldDef as any)['_'].derived) continue;
+
 				function recursivelyParseField(
 					field: DatabaseField,
 					value: any,
@@ -2932,6 +3018,24 @@ export namespace Database {
 						}
 						sparse_data = sparse_data[field];
 						current = (current as any)[field];
+					}
+				}
+			}
+
+			// Compute derived field values for search indexing
+			for (const [fieldName, fieldDef] of Object.entries(table_config)) {
+				const field = (fieldDef as any)['_'];
+				if (field.derived && typeof field.derived_fn === 'function') {
+					try {
+						const value = field.derived_fn(data);
+						if (value !== undefined && value !== null) {
+							root[fieldName] = value;
+						} else {
+							delete root[fieldName];
+						}
+					} catch {
+						// Silently skip — don't let one bad derived function break indexing
+						delete root[fieldName];
 					}
 				}
 			}
