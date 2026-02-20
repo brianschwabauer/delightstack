@@ -1,0 +1,19 @@
+{
+	"name": "@delightstack/rate-limiter",
+	"type": "module",
+	"private": true,
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"test": "vitest",
+		"lint": "prettier --ignore-path .gitignore --check --plugin-search-dir=. . && eslint .",
+		"format": "prettier --ignore-path .gitignore --write --plugin-search-dir=. ."
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20251120.0",
+		"@edge-runtime/vm": "^5.0.0",
+		"typescript": "^5.8.3",
+		"vitest": "^3.2.1"
+	}
+}

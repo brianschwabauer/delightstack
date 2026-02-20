@@ -279,9 +279,6 @@ importers:
       '@orama/orama':
         specifier: ^3.1.16
         version: 3.1.16
-      argon2-wasm-edge:
-        specifier: ^1.0.23
-        version: 1.0.23
       fast-equals:
         specifier: ^6.0.0
         version: 6.0.0
@@ -320,6 +317,21 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20251120.0
         version: 4.20251120.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.1
+        version: 3.2.4(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.1.0)(sass@1.89.2)
+
+  packages/rate-limiter:
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20251120.0
+        version: 4.20251120.0
+      '@edge-runtime/vm':
+        specifier: ^5.0.0
+        version: 5.0.0
       typescript:
         specifier: ^5.8.3
         version: 5.9.3

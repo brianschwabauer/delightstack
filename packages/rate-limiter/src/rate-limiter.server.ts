@@ -1,105 +1,126 @@
-import { ApiError } from '@packages/lib';
 import { DurableObject } from 'cloudflare:workers';
+
+/** Configuration options for the rate limiter */
+export interface RateLimiterOptions {
+	/** The maximum number of tokens the bucket can hold */
+	max_tokens?: number;
+	/** How often one token is added to the bucket, in seconds */
+	refill_every_seconds?: number;
+}
+
+/** Status of a rate limit bucket */
+export interface RateLimiterStatus {
+	/** Number of tokens currently available */
+	remaining: number;
+	/** Maximum tokens (bucket capacity) */
+	limit: number;
+	/** Milliseconds until the next token is added (0 if bucket is full) */
+	reset_in_ms: number;
+}
+
+/** Internal representation of a token bucket */
+interface TokenBucket {
+	count: number;
+	last_refill: number;
+}
 
 /**
  * A Durable Object that implements a rate limiter using a 'token bucket' algorithm.
  * A bucket is filled at a constant rate and can hold a maximum number of tokens.
  * Each request consumes a token (cost), and requests are rejected if the bucket is empty.
- * We don't save the rate limiting to the database because when the durable object is evicted from memory,
- * the rate limiting will be reset. This is fine because the rate limiting is meant to be temporary.
+ * State is held in-memory only — when the Durable Object is evicted, all buckets reset.
+ *
  * @example
- * const limiter_id = this.LIMITER.idFromName(ip_address); // use ip address or user_id or some other unique identifier
- * const limiter = this.LIMITER.get(limiter_id);
- * limiter.max_tokens = 10;
- * limiter.refill_every_seconds = 10;
- * // Check if the request is allowed
- * const is_allowed = limiter.check('login_attempt', 1);
- * // On a login attempt, consume a token
- * limiter.consume('login_attempt', 1);
+ * const limiter_id = env.LIMITER.idFromName(ip_address);
+ * const limiter = env.LIMITER.get(limiter_id);
+ * await limiter.setOptions({ max_tokens: 10, refill_every_seconds: 10 });
+ *
+ * const is_allowed = await limiter.check('login_attempt', 1);
+ * const consumed = await limiter.consume('login_attempt', 1);
+ * const status = await limiter.getStatus('login_attempt');
  */
 export class RateLimiterServer extends DurableObject {
-	/** The maximum about of items in the 'bucket' before it's full */
+	/** The maximum number of tokens in the bucket before it is full */
 	private max_tokens = 10;
 
 	/** The rate at which the bucket refills (adds one token every X seconds) */
 	private refill_every_seconds = 10;
 
-	constructor(ctx: DurableObjectState, env: Env) {
-		super(ctx, env);
-	}
-
-	private storage = new Map<string, { count: number; last_refill: number }>();
-
-	/** The fetch event handler that should only be called in protected environments */
-	async fetch(input: string | URL | Request, init?: RequestInit) {
-		const url = input instanceof Request ? new URL(input.url) : new URL(input);
-		const method = input instanceof Request ? input.method : init?.method || 'GET';
-		if (url.pathname === '/rpc' && method === 'POST') {
-			const body: any = await (input instanceof Request ? input.json() : init?.body);
-			if (body?.method && body?.args && body.method in this) {
-				try {
-					const result = (this as any)[body.method](...body.args);
-					const response = result instanceof Promise ? await result : result;
-					return new Response(JSON.stringify(response), {
-						headers: { 'content-type': 'application/json' },
-					});
-				} catch (error: any) {
-					const responseError = ApiError.from(error);
-					return new Response(responseError.toJSON(), {
-						status: responseError.status || 500,
-						headers: { 'content-type': 'application/json' },
-					});
-				}
-			}
-		}
-		return new Response(JSON.stringify({ status: 404, message: 'Not found' }), {
-			status: 404,
-		});
-	}
+	/** In-memory storage for token buckets (intentionally not persisted) */
+	private buckets = new Map<string, TokenBucket>();
 
 	/** Sets the options for how the rate limiter should function */
-	setOptions(options?: { max_tokens?: number; refill_every_seconds?: number }) {
-		this.max_tokens = options?.max_tokens ?? 10;
-		this.refill_every_seconds = options?.refill_every_seconds ?? 10;
+	setOptions(options: RateLimiterOptions): void {
+		if (options.max_tokens !== undefined) {
+			this.max_tokens = options.max_tokens;
+		}
+		if (options.refill_every_seconds !== undefined) {
+			this.refill_every_seconds = options.refill_every_seconds;
+		}
 	}
 
-	/** Return true if there are at least 'cost' amount of tokens in the bucket with the given key */
+	/** Returns true if there are at least `cost` tokens available in the bucket for the given key */
 	check(key: string, cost: number): boolean {
-		const bucket = this.storage.get(key) ?? null;
-		if (bucket === null) return true;
+		const bucket = this.buckets.get(key);
+		if (!bucket) return cost <= this.max_tokens;
 		const now = Date.now();
-		const refill = Math.floor(
-			(now - bucket.last_refill) / (this.refill_every_seconds * 1000),
-		);
-		if (refill > 0) {
-			return Math.min(bucket.count + refill, this.max_tokens) >= cost;
-		}
-		return bucket.count >= cost;
+		const refill_interval_ms = this.refill_every_seconds * 1000;
+		const refills = Math.floor((now - bucket.last_refill) / refill_interval_ms);
+		const current_count = Math.min(bucket.count + refills, this.max_tokens);
+		return current_count >= cost;
 	}
 
 	/**
-	 * Uses up 'cost' amount of tokens in the bucket with the given key
-	 * @returns true if the request is allowed, false if the bucket is empty (after the consumption)
+	 * Consumes `cost` tokens from the bucket for the given key.
+	 * @returns true if the tokens were consumed, false if there were not enough tokens
 	 */
 	consume(key: string, cost: number): boolean {
-		let bucket = this.storage.get(key) ?? null;
+		let bucket = this.buckets.get(key);
 		const now = Date.now();
-		if (bucket === null) {
-			bucket = {
-				count: this.max_tokens - cost,
-				last_refill: now,
-			};
-			this.storage.set(key, bucket);
+
+		if (!bucket) {
+			if (cost > this.max_tokens) return false;
+			bucket = { count: this.max_tokens - cost, last_refill: now };
+			this.buckets.set(key, bucket);
 			return true;
 		}
-		const refill = Math.floor(
-			(now - bucket.last_refill) / (this.refill_every_seconds * 1000),
-		);
-		bucket.count = Math.min(bucket.count + refill, this.max_tokens);
-		bucket.last_refill = now;
+
+		const refill_interval_ms = this.refill_every_seconds * 1000;
+		const refills = Math.floor((now - bucket.last_refill) / refill_interval_ms);
+		if (refills > 0) {
+			bucket.count = Math.min(bucket.count + refills, this.max_tokens);
+			bucket.last_refill += refills * refill_interval_ms;
+		}
+
 		if (bucket.count < cost) return false;
 		bucket.count -= cost;
-		this.storage.set(key, bucket);
 		return true;
+	}
+
+	/** Returns the current status of a rate limit bucket */
+	getStatus(key: string): RateLimiterStatus {
+		const bucket = this.buckets.get(key);
+		const now = Date.now();
+
+		if (!bucket) {
+			return { remaining: this.max_tokens, limit: this.max_tokens, reset_in_ms: 0 };
+		}
+
+		const refill_interval_ms = this.refill_every_seconds * 1000;
+		const refills = Math.floor((now - bucket.last_refill) / refill_interval_ms);
+		const current_count = Math.min(bucket.count + refills, this.max_tokens);
+		const ms_since_last_refill =
+			now - bucket.last_refill - refills * refill_interval_ms;
+		const reset_in_ms =
+			current_count >= this.max_tokens
+				? 0
+				: refill_interval_ms - ms_since_last_refill;
+
+		return { remaining: current_count, limit: this.max_tokens, reset_in_ms };
+	}
+
+	/** Resets a rate limit bucket, restoring it to full capacity on next access */
+	reset(key: string): void {
+		this.buckets.delete(key);
 	}
 }
