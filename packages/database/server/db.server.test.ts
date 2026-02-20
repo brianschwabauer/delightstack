@@ -442,3 +442,257 @@ describe('DatabaseServer', () => {
 		expect(results).toEqual([{ count: 42 }]);
 	});
 });
+
+// ── FK-Derived Fields Tests ─────────────────────────────────────────────────
+
+describe('DatabaseServer: FK-derived fields', () => {
+	let dbServer: DatabaseServer<Record<string, Database.Table>>;
+	let mockSql: { exec: Mock };
+	let executedQueries: { sql: string; args: any[] }[];
+
+	// Derived function for computing author_name from FK ref
+	const authorNameFn = (data: any, refs: any) => refs.author_id?.name ?? 'Unknown';
+
+	const fkTestConfig: Record<string, Database.Table> = {
+		authors: {
+			name: 'authors',
+			_: {} as any,
+			config: {
+				primary_key: 'id',
+				primary_key_type: 'string',
+				table_definition: {
+					id: 'TEXT PRIMARY KEY',
+					name: 'TEXT',
+				},
+				indexes: [],
+				foreign_keys: {},
+				derived_fields: {},
+				sortable_fields: ['updated_at'],
+				searchable_fields: ['id', 'name'],
+				unique_fields: [],
+				orama: {
+					schema: { id: 'string', name: 'string', updated_at: 'number' },
+					sort: { enabled: false },
+				},
+			},
+			parse: vi.fn((data: any) => data),
+			toSparse: vi.fn((data: any) => ({
+				id: data.id,
+				name: data.name,
+				updated_at: data.updated_at,
+				created_at: data.created_at,
+			})),
+		} as unknown as Database.Table,
+		books: {
+			name: 'books',
+			_: {
+				author_name: {
+					_: {
+						type: 'string',
+						derived: true,
+						derived_fn: authorNameFn,
+						derived_foreign_keys: ['author_id'],
+						searchable: true,
+					},
+				},
+			} as any,
+			config: {
+				primary_key: 'id',
+				primary_key_type: 'string',
+				table_definition: {
+					id: 'TEXT PRIMARY KEY',
+					title: 'TEXT',
+					author_id: 'TEXT REFERENCES authors(id)',
+				},
+				indexes: [],
+				foreign_keys: {
+					author_id: { type: 'string', table: 'authors', column: 'id' },
+				},
+				derived_fields: {
+					author_name: { foreign_keys: ['author_id'] },
+				},
+				sortable_fields: ['updated_at'],
+				searchable_fields: ['id', 'title', 'author_name'],
+				unique_fields: [],
+				orama: {
+					schema: { id: 'string', title: 'string', author_name: 'string', updated_at: 'number' },
+					sort: { enabled: false },
+				},
+			},
+			parse: vi.fn((data: any) => data),
+			toSparse: vi.fn((data: any) => ({
+				id: data.id,
+				title: data.title,
+				updated_at: data.updated_at,
+				created_at: data.created_at,
+			})),
+		} as unknown as Database.Table,
+	};
+
+	beforeEach(() => {
+		executedQueries = [];
+
+		mockSql = {
+			exec: vi.fn((sql: string, ...args: any[]) => {
+				executedQueries.push({ sql, args });
+
+				if (sql.includes('SELECT * FROM state WHERE id = main')) {
+					return mockCursor([{
+						id: 'main',
+						json: '{}',
+						created_at: Date.now(),
+						updated_at: Date.now(),
+						table_config: {},
+						sql_indexes: [],
+					}]);
+				}
+
+				if (sql.includes('SELECT * FROM search_index')) {
+					return emptyCursor();
+				}
+
+				return emptyCursor();
+			}),
+		};
+
+		const mockStorage = {
+			sql: mockSql,
+			transactionSync: vi.fn((cb: () => void) => cb()),
+			getAlarm: vi.fn(),
+			setAlarm: vi.fn(),
+			deleteAlarm: vi.fn(),
+			deleteAll: vi.fn(),
+			getBookmarkForTime: vi.fn(),
+			onNextSessionRestoreBookmark: vi.fn(),
+		};
+
+		const mockCtx = {
+			id: { toString: () => 'mock-id' },
+			storage: mockStorage,
+			abort: vi.fn(),
+		};
+
+		const mockEnv = { DEV: true };
+
+		dbServer = new DatabaseServer(
+			fkTestConfig,
+			() => ({}) as any,
+			mockCtx as any,
+			mockEnv,
+		);
+	});
+
+	it('should build reverse FK map from config', () => {
+		// The reverse FK map should know that updating 'authors' may affect 'books'
+		// We can't directly access #reverse_fk_map, but we can test the behavior
+		// by verifying cascade reindexing occurs on author update
+		expect(dbServer).toBeDefined();
+	});
+
+	it('should compute FK-derived fields on create', () => {
+		const mockAuthor = { id: 'a1', name: 'Alice', created_at: 100, updated_at: 100 };
+		const mockBook = { id: 'b1', title: 'Book 1', author_id: 'a1', created_at: 200, updated_at: 200 };
+
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			// When creating the book, the system will fetch the referenced author
+			if (sql.includes('SELECT * FROM authors WHERE id = ?') && args[0] === 'a1') {
+				return mockCursor([mockAuthor]);
+			}
+			if (sql.startsWith('INSERT INTO books')) {
+				return mockCursor([mockBook]);
+			}
+			if (sql.includes('SELECT * FROM search_index')) {
+				return emptyCursor();
+			}
+			return emptyCursor();
+		});
+
+		const results = dbServer.transaction([
+			{ create: { type: 'books', data: { title: 'Book 1', author_id: 'a1' } } },
+		]);
+
+		expect(results).toHaveLength(1);
+
+		// Verify the author was fetched for FK-derived computation
+		const authorFetch = executedQueries.find(
+			(q) => q.sql.includes('SELECT * FROM authors WHERE id = ?') && q.args[0] === 'a1',
+		);
+		expect(authorFetch).toBeDefined();
+	});
+
+	it('should cascade reindex books when author is updated', () => {
+		const mockAuthor = { id: 'a1', name: 'New Name', created_at: 100, updated_at: 300 };
+		const mockExistingAuthor = { id: 'a1', name: 'Old Name', created_at: 100, updated_at: 100 };
+		const mockBook1 = { id: 'b1', title: 'Book 1', author_id: 'a1', created_at: 200, updated_at: 200 };
+		const mockBook2 = { id: 'b2', title: 'Book 2', author_id: 'a1', created_at: 200, updated_at: 200 };
+
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			// GET existing author for update
+			if (sql.includes('SELECT * FROM authors WHERE id = ?') && args[0] === 'a1') {
+				return mockCursor([mockExistingAuthor]);
+			}
+			// UPDATE author
+			if (sql.startsWith('UPDATE authors')) {
+				return mockCursor([mockAuthor]);
+			}
+			// CASCADE: find books referencing this author
+			if (sql.includes('SELECT * FROM books WHERE author_id = ?') && args[0] === 'a1') {
+				return mockCursor([mockBook1, mockBook2]);
+			}
+			// CASCADE: fetch author for each book's FK-derived recomputation
+			if (sql.includes('SELECT * FROM authors WHERE id = ? LIMIT 1')) {
+				return mockCursor([mockAuthor]);
+			}
+			if (sql.includes('SELECT * FROM search_index')) {
+				return emptyCursor();
+			}
+			return emptyCursor();
+		});
+
+		const results = dbServer.transaction([
+			{ update: { type: 'authors', id: 'a1', data: { name: 'New Name' } } },
+		]);
+
+		expect(results).toHaveLength(1);
+
+		// Verify cascade query was executed — books referencing author a1 were found
+		const cascadeQuery = executedQueries.find(
+			(q) => q.sql.includes('SELECT * FROM books WHERE author_id = ?') && q.args[0] === 'a1',
+		);
+		expect(cascadeQuery).toBeDefined();
+	});
+
+	it('should cascade reindex books when author is deleted', () => {
+		const mockBook1 = { id: 'b1', title: 'Book 1', author_id: 'a1', created_at: 200, updated_at: 200 };
+
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			// CASCADE: find books referencing this author
+			if (sql.includes('SELECT * FROM books WHERE author_id = ?') && args[0] === 'a1') {
+				return mockCursor([mockBook1]);
+			}
+			// CASCADE: fetch author for FK-derived recomputation (author is now deleted)
+			if (sql.includes('SELECT * FROM authors WHERE id = ? LIMIT 1')) {
+				return emptyCursor(); // Author no longer exists
+			}
+			if (sql.includes('SELECT * FROM search_index')) {
+				return emptyCursor();
+			}
+			return emptyCursor();
+		});
+
+		const results = dbServer.transaction([
+			{ delete: { type: 'authors', id: 'a1' } },
+		]);
+
+		expect(results).toHaveLength(1);
+
+		// Verify cascade query was executed
+		const cascadeQuery = executedQueries.find(
+			(q) => q.sql.includes('SELECT * FROM books WHERE author_id = ?') && q.args[0] === 'a1',
+		);
+		expect(cascadeQuery).toBeDefined();
+	});
+});

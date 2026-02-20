@@ -756,7 +756,9 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 					ExtractFormFieldProps<
 						FlattenFormFieldProps<
 							OmitNeverProperties<{
-								[Key in keyof T & string]: IsDerived<T[Key]> extends true ? never : FormFieldProps<T[Key], Key>;
+								[Key in keyof T & string]: IsDerived<T[Key]> extends true
+									? never
+									: FormFieldProps<T[Key], Key>;
 							}>
 						>
 					>
@@ -1158,12 +1160,44 @@ class StringFieldGenerator {
 	 * Marks this field as derived (computed from other fields).
 	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
 	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 * Can optionally depend on foreign key fields for cross-table derived values.
 	 */
-	derived(fn: (data: Record<string, any>) => string): Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'> {
+	derived(
+		fn: (data: Record<string, any>) => string,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	>;
+	derived(
+		foreign_keys: string[],
+		fn: (
+			data: Record<string, any>,
+			refs: Record<string, Record<string, any> | undefined>,
+		) => string,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	>;
+	derived(
+		fn_or_fks: any,
+		fn?: any,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	> {
 		(this as any)._.derived = true;
-		(this as any)._.derived_fn = fn;
 		(this as any)._.searchable = true;
-		return this as Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'>;
+		(this as any)._.readonly = true;
+		if (Array.isArray(fn_or_fks)) {
+			(this as any)._.derived_foreign_keys = fn_or_fks;
+			(this as any)._.derived_fn = fn;
+		} else {
+			(this as any)._.derived_fn = fn_or_fks;
+		}
+		return this as Omit<
+			ReadOnly<Searchable<DerivedValue<this>>>,
+			'derived' | 'searchable' | 'readonly'
+		>;
 	}
 }
 
@@ -1345,12 +1379,44 @@ class NumberFieldGenerator {
 	 * Marks this field as derived (computed from other fields).
 	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
 	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 * Can optionally depend on foreign key fields for cross-table derived values.
 	 */
-	derived(fn: (data: Record<string, any>) => number): Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'> {
+	derived(
+		fn: (data: Record<string, any>) => number,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	>;
+	derived(
+		foreign_keys: string[],
+		fn: (
+			data: Record<string, any>,
+			refs: Record<string, Record<string, any> | undefined>,
+		) => number,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	>;
+	derived(
+		fn_or_fks: any,
+		fn?: any,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	> {
 		(this as any)._.derived = true;
-		(this as any)._.derived_fn = fn;
 		(this as any)._.searchable = true;
-		return this as Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'>;
+		(this as any)._.readonly = true;
+		if (Array.isArray(fn_or_fks)) {
+			(this as any)._.derived_foreign_keys = fn_or_fks;
+			(this as any)._.derived_fn = fn;
+		} else {
+			(this as any)._.derived_fn = fn_or_fks;
+		}
+		return this as Omit<
+			ReadOnly<Searchable<DerivedValue<this>>>,
+			'derived' | 'searchable' | 'readonly'
+		>;
 	}
 }
 
@@ -1439,12 +1505,44 @@ class BooleanFieldGenerator {
 	 * Marks this field as derived (computed from other fields).
 	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
 	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 * Can optionally depend on foreign key fields for cross-table derived values.
 	 */
-	derived(fn: (data: Record<string, any>) => boolean): Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'> {
+	derived(
+		fn: (data: Record<string, any>) => boolean,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	>;
+	derived(
+		foreign_keys: string[],
+		fn: (
+			data: Record<string, any>,
+			refs: Record<string, Record<string, any> | undefined>,
+		) => boolean,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	>;
+	derived(
+		fn_or_fks: any,
+		fn?: any,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	> {
 		(this as any)._.derived = true;
-		(this as any)._.derived_fn = fn;
 		(this as any)._.searchable = true;
-		return this as Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'>;
+		(this as any)._.readonly = true;
+		if (Array.isArray(fn_or_fks)) {
+			(this as any)._.derived_foreign_keys = fn_or_fks;
+			(this as any)._.derived_fn = fn;
+		} else {
+			(this as any)._.derived_fn = fn_or_fks;
+		}
+		return this as Omit<
+			ReadOnly<Searchable<DerivedValue<this>>>,
+			'derived' | 'searchable' | 'readonly'
+		>;
 	}
 }
 
@@ -1521,12 +1619,44 @@ class EnumFieldGenerator<Options extends string[]> {
 	 * Marks this field as derived (computed from other fields).
 	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
 	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 * Can optionally depend on foreign key fields for cross-table derived values.
 	 */
-	derived(fn: (data: Record<string, any>) => Options[number]): Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'> {
+	derived(
+		fn: (data: Record<string, any>) => Options[number],
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	>;
+	derived(
+		foreign_keys: string[],
+		fn: (
+			data: Record<string, any>,
+			refs: Record<string, Record<string, any> | undefined>,
+		) => Options[number],
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	>;
+	derived(
+		fn_or_fks: any,
+		fn?: any,
+	): Omit<
+		ReadOnly<Searchable<DerivedValue<this>>>,
+		'derived' | 'searchable' | 'readonly'
+	> {
 		(this as any)._.derived = true;
-		(this as any)._.derived_fn = fn;
 		(this as any)._.searchable = true;
-		return this as Omit<Searchable<DerivedValue<this>>, 'derived' | 'searchable'>;
+		(this as any)._.readonly = true;
+		if (Array.isArray(fn_or_fks)) {
+			(this as any)._.derived_foreign_keys = fn_or_fks;
+			(this as any)._.derived_fn = fn;
+		} else {
+			(this as any)._.derived_fn = fn_or_fks;
+		}
+		return this as Omit<
+			ReadOnly<Searchable<DerivedValue<this>>>,
+			'derived' | 'searchable' | 'readonly'
+		>;
 	}
 }
 
@@ -2076,9 +2206,9 @@ export namespace Database {
 	> = Partial<TypedDocument<Orama<OramaSchemaConfig>>> & {
 		[Key in PrimaryKeyColumn]: string;
 	} & (true extends HasPrimaryKeyField<Table['_']> ? {} : { id: string }) & {
-		created_at: number;
-		updated_at: number;
-	};
+			created_at: number;
+			updated_at: number;
+		};
 
 	/**
 	 * A name of a field that is searchable in the database table.
@@ -2329,6 +2459,8 @@ export namespace Database {
 				table_definition: SqliteTableDefinition<TableConfig>;
 				/** The list of indexes to create for the table */
 				indexes: SqlIndexes;
+				/** A record of derived fields and their FK dependencies (for FK-aware reindexing) */
+				derived_fields: Record<string, { foreign_keys?: string[] }>;
 			};
 		},
 		PrimaryKeyColumn extends keyof TableConfig & string = {
@@ -2371,6 +2503,7 @@ export namespace Database {
 		let searchable_fields: SearchableColumn[] = [];
 		let sortable_fields: SortableColumn[] = [];
 		let foreign_keys: ForeignKeys = {} as ForeignKeys;
+		const derived_fields: Record<string, { foreign_keys?: string[] }> = {};
 		const indexes: Table['config']['indexes'] = [];
 		const form_field = {} as FormFieldProps<TableConfig>;
 		const table_definition = {} as SqliteTableDefinition<TableConfig>;
@@ -2464,6 +2597,11 @@ export namespace Database {
 				else if (field.type === 'boolean') orama_type = 'boolean';
 				else if (field.type === 'enum') orama_type = 'enum';
 				if (orama_type) (orama_schema as any)[fieldName] = orama_type;
+				// Store FK dependency metadata for cross-table derived fields
+				const fk_deps = (field as any).derived_foreign_keys;
+				if (Array.isArray(fk_deps) && fk_deps.length > 0) {
+					derived_fields[fieldName] = { foreign_keys: fk_deps };
+				}
 				continue;
 			}
 
@@ -2735,6 +2873,18 @@ export namespace Database {
 		// At this point primary_key is guaranteed to be set (either user-defined or auto-injected)
 		if (!primary_key) throw { message: 'Table must have a primary key defined' };
 
+		// Validate that FK-derived fields reference actual foreign key fields
+		for (const [fieldName, meta] of Object.entries(derived_fields)) {
+			if (!meta.foreign_keys) continue;
+			for (const fk_name of meta.foreign_keys) {
+				if (!(fk_name in foreign_keys)) {
+					throw {
+						message: `Derived field '${fieldName}' declares '${fk_name}' as a foreign key dependency, but '${fk_name}' is not a foreign key field in table '${tableName}'.`,
+					};
+				}
+			}
+		}
+
 		/** Coerces a timestamp value to an epoch number (ms). Accepts numbers, ISO strings, or Date objects. */
 		function toEpoch(value: unknown): number {
 			if (typeof value === 'number') return value;
@@ -2752,7 +2902,8 @@ export namespace Database {
 			const issues: Array<{ path: string[]; message: string }> = [];
 			for (const [fieldName, fieldDef] of Object.entries(table_config)) {
 				// Skip derived fields — they are computed in toSparse(), not stored
-				if ('derived' in (fieldDef as any)['_'] && (fieldDef as any)['_'].derived) continue;
+				if ('derived' in (fieldDef as any)['_'] && (fieldDef as any)['_'].derived)
+					continue;
 
 				function recursivelyParseField(
 					field: DatabaseField,
@@ -3004,6 +3155,10 @@ export namespace Database {
 		function toSparse(data: Entity): SearchEntity {
 			const root = {} as any;
 			for (const field_dot_notation of searchable_fields) {
+				// Skip FK-derived fields — they don't exist in entity data and are computed in db.server.ts
+				const top_field = field_dot_notation.split('.')[0];
+				if (top_field in derived_fields) continue;
+
 				const field_path = field_dot_notation.split('.');
 				let current = data;
 				let sparse_data = root;
@@ -3022,10 +3177,17 @@ export namespace Database {
 				}
 			}
 
-			// Compute derived field values for search indexing
+			// Compute same-table derived field values for search indexing
+			// FK-derived fields are skipped here — they are computed in db.server.ts where DB access is available
 			for (const [fieldName, fieldDef] of Object.entries(table_config)) {
 				const field = (fieldDef as any)['_'];
 				if (field.derived && typeof field.derived_fn === 'function') {
+					if (
+						Array.isArray(field.derived_foreign_keys) &&
+						field.derived_foreign_keys.length > 0
+					) {
+						continue;
+					}
 					try {
 						const value = field.derived_fn(data);
 						if (value !== undefined && value !== null) {
@@ -3061,6 +3223,7 @@ export namespace Database {
 				sortable_fields,
 				unique_fields,
 				foreign_keys,
+				derived_fields,
 				table_definition,
 				indexes,
 				orama: {

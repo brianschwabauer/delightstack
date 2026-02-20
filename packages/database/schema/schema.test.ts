@@ -688,3 +688,196 @@ describe('Schema: derived() modifier', () => {
 		expect((table._['first_name']._ as any)['derived']).toBeUndefined();
 	});
 });
+
+// FK-derived fields should NOT appear in Entity type
+const BOOK_WITH_FK_DERIVED = Database.table('book_fk', (schema) => ({
+	title: schema.string().searchable(),
+	author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+	author_name: schema.string().derived(
+		['author_id'],
+		(data, refs) => refs.author_id?.name ?? 'Unknown',
+	),
+}));
+type BookWithFkDerived = Database.Entity<typeof BOOK_WITH_FK_DERIVED>;
+
+// Entity should have title, author_id, auto-id, timestamps — but NOT author_name
+assertType<BookWithFkDerived>({} as {
+	readonly id: string;
+	title: string;
+	author_id: string;
+	readonly created_at: number;
+	readonly updated_at: number;
+});
+
+describe('Schema: FK-derived fields', () => {
+	it('should store derived_foreign_keys metadata on the field', () => {
+		const table = Database.table('book_fk1', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema.string().derived(
+				['author_id'],
+				(data, refs) => refs.author_id?.name ?? 'Unknown',
+			),
+		}));
+
+		expect((table._['author_name']._ as any)['derived']).toBe(true);
+		expect((table._['author_name']._ as any)['derived_foreign_keys']).toEqual(['author_id']);
+	});
+
+	it('should automatically include FK-derived fields in searchable_fields', () => {
+		const table = Database.table('book_fk2', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema.string().derived(
+				['author_id'],
+				(data, refs) => refs.author_id?.name ?? 'Unknown',
+			),
+		}));
+
+		expect(table.config.searchable_fields).toContain('author_name');
+	});
+
+	it('should include FK-derived fields in orama schema', () => {
+		const table = Database.table('book_fk3', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema.string().derived(
+				['author_id'],
+				(data, refs) => refs.author_id?.name ?? 'Unknown',
+			),
+		}));
+
+		expect(table.config.orama.schema).toHaveProperty('author_name', 'string');
+	});
+
+	it('should NOT include FK-derived fields in table_definition', () => {
+		const table = Database.table('book_fk4', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema.string().derived(
+				['author_id'],
+				(data, refs) => refs.author_id?.name ?? 'Unknown',
+			),
+		}));
+
+		expect(table.config.table_definition).not.toHaveProperty('author_name');
+		expect(table.config.table_definition).toHaveProperty('title');
+		expect(table.config.table_definition).toHaveProperty('author_id');
+	});
+
+	it('should store derived_fields config with FK dependencies', () => {
+		const table = Database.table('book_fk5', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema.string().derived(
+				['author_id'],
+				(data, refs) => refs.author_id?.name ?? 'Unknown',
+			),
+		}));
+
+		expect(table.config.derived_fields).toEqual({
+			author_name: { foreign_keys: ['author_id'] },
+		});
+	});
+
+	it('should NOT compute FK-derived fields in toSparse', () => {
+		const table = Database.table('book_fk6', (schema) => ({
+			title: schema.string().searchable(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema.string().derived(
+				['author_id'],
+				(data, refs) => refs.author_id?.name ?? 'Unknown',
+			),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			title: 'Test Book',
+			author_id: 'author-1',
+			created_at: 100,
+			updated_at: 200,
+		} as any);
+
+		// FK-derived field should NOT be computed by toSparse (db.server handles it)
+		expect(sparse).not.toHaveProperty('author_name');
+		expect(sparse).toHaveProperty('title', 'Test Book');
+	});
+
+	it('should still compute same-table derived fields in toSparse', () => {
+		const table = Database.table('book_fk7', (schema) => ({
+			title: schema.string().searchable(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			title_upper: schema.string().derived((data) => data.title.toUpperCase()),
+			author_name: schema.string().derived(
+				['author_id'],
+				(data, refs) => refs.author_id?.name ?? 'Unknown',
+			),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			title: 'Test Book',
+			author_id: 'author-1',
+			created_at: 100,
+			updated_at: 200,
+		} as any);
+
+		expect(sparse).toHaveProperty('title_upper', 'TEST BOOK');
+		expect(sparse).not.toHaveProperty('author_name');
+	});
+
+	it('should NOT include FK-derived fields in form field props', () => {
+		const table = Database.table('book_fk8', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema.string().derived(
+				['author_id'],
+				(data, refs) => refs.author_id?.name ?? 'Unknown',
+			),
+		}));
+
+		expect(table.form.field).not.toHaveProperty('author_name');
+		expect(table.form.field).toHaveProperty('title');
+	});
+
+	it('should throw if FK dep references a non-FK field', () => {
+		expect(() =>
+			Database.table('book_fk9', (schema) => ({
+				title: schema.string(),
+				author_name: schema.string().derived(
+					['title'],
+					(data, refs) => refs.title?.name ?? 'Unknown',
+				),
+			})),
+		).toThrow(/not a foreign key field/);
+	});
+
+	it('should support multiple FK dependencies', () => {
+		const table = Database.table('review_fk', (schema) => ({
+			book_id: schema.foreignKey({ type: 'string', table: 'books', column: 'id' }),
+			reviewer_id: schema.foreignKey({ type: 'string', table: 'users', column: 'id' }),
+			summary: schema.string().derived(
+				['book_id', 'reviewer_id'],
+				(data, refs) => `${refs.reviewer_id?.name} reviewed ${refs.book_id?.title}`,
+			),
+		}));
+
+		expect(table.config.derived_fields).toEqual({
+			summary: { foreign_keys: ['book_id', 'reviewer_id'] },
+		});
+		expect((table._['summary']._ as any)['derived_foreign_keys']).toEqual(['book_id', 'reviewer_id']);
+	});
+
+	it('should support number FK-derived fields', () => {
+		const table = Database.table('item_fk', (schema) => ({
+			category_id: schema.foreignKey({ type: 'string', table: 'categories', column: 'id' }),
+			category_priority: schema.number().derived(
+				['category_id'],
+				(data, refs) => refs.category_id?.priority ?? 0,
+			),
+		}));
+
+		expect((table._['category_priority']._ as any)['derived']).toBe(true);
+		expect(table.config.orama.schema).toHaveProperty('category_priority', 'number');
+	});
+});

@@ -298,6 +298,9 @@ export class DatabaseServer<
 		[TableName in keyof DatabaseConfig]?: SearchIndex;
 	} = {};
 
+	/** Reverse FK map: for each table, which other tables have FK-derived fields depending on it */
+	#reverse_fk_map: Map<string, Array<{ table: string; fk_field: string }>> = new Map();
+
 	public get id() {
 		return this.ctx.id.toString();
 	}
@@ -475,6 +478,29 @@ export class DatabaseServer<
 				});
 			}
 		}
+
+		// Build reverse FK map for cascading reindex of FK-derived fields
+		for (const [table_name, table] of Object.entries(this.config)) {
+			const derived = (table as any)?.config?.derived_fields as
+				| Record<string, { foreign_keys?: string[] }>
+				| undefined;
+			if (!derived) continue;
+			for (const [_, meta] of Object.entries(derived)) {
+				if (!meta.foreign_keys?.length) continue;
+				for (const fk_field of meta.foreign_keys) {
+					const fk_meta = (table as any).config.foreign_keys[fk_field];
+					if (!fk_meta) continue;
+					const referenced_table = fk_meta.table as string;
+					if (!this.#reverse_fk_map.has(referenced_table)) {
+						this.#reverse_fk_map.set(referenced_table, []);
+					}
+					const entries = this.#reverse_fk_map.get(referenced_table)!;
+					if (!entries.some((e) => e.table === table_name && e.fk_field === fk_field)) {
+						entries.push({ table: table_name, fk_field });
+					}
+				}
+			}
+		}
 	}
 
 	/**
@@ -518,11 +544,7 @@ export class DatabaseServer<
 			: Entity,
 	>(entity_type: Type, id: string | number, expand?: ExpandedFields): Output;
 
-	get(
-		entity_type_or_requests: any,
-		id?: string | number,
-		expand?: any,
-	): any {
+	get(entity_type_or_requests: any, id?: string | number, expand?: any): any {
 		// Batch overload: array of requests
 		if (Array.isArray(entity_type_or_requests)) {
 			return this.getBatch(entity_type_or_requests);
@@ -542,7 +564,10 @@ export class DatabaseServer<
 		if (!requests.length) return [];
 
 		// Group by entity_type for efficient batching
-		const groups = new Map<string, Array<{ index: number; id: string | number; expand?: string[] }>>();
+		const groups = new Map<
+			string,
+			Array<{ index: number; id: string | number; expand?: string[] }>
+		>();
 		for (let i = 0; i < requests.length; i++) {
 			const req = requests[i];
 			let group = groups.get(req.entity_type);
@@ -1231,10 +1256,17 @@ export class DatabaseServer<
 					const result = this.ctx.storage.sql.exec(query_sql, ...bindings);
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
 					const sparse_entity = table.toSparse(output_data);
+					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
 					insertIntoOrama(index.orama, sparse_entity);
 					index.last_updated_at = now.getTime();
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
+					this.cascadeReindexReferencing(
+						entity_type,
+						output_data[primary_key] || output_data.id,
+						indexes_to_save,
+						now,
+					);
 					results.push({
 						entity: {
 							type: entity_type,
@@ -1299,11 +1331,18 @@ export class DatabaseServer<
 					const result = this.ctx.storage.sql.exec(query_sql, ...bindings);
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
 					const sparse_entity = table.toSparse(output_data);
+					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
 					removeFromOrama(index.orama, id.toString());
 					insertIntoOrama(index.orama, sparse_entity);
 					index.last_updated_at = now.getTime();
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
+					this.cascadeReindexReferencing(
+						entity_type,
+						output_data[primary_key] || output_data.id || id,
+						indexes_to_save,
+						now,
+					);
 
 					results.push({
 						entity: {
@@ -1337,6 +1376,7 @@ export class DatabaseServer<
 					index.last_updated_at = now.getTime();
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
+					this.cascadeReindexReferencing(entity_type, id, indexes_to_save, now);
 					results.push({
 						entity: {
 							type: entity_type,
@@ -1467,7 +1507,9 @@ export class DatabaseServer<
 		for (const row of rows) {
 			const entity = this.toEntityValue(entity_type, row) as any;
 			if (entity) {
-				entities.push(table.toSparse(entity as any));
+				const sparse = table.toSparse(entity as any) as any;
+				this.computeFkDerivedFields(entity_type as string, entity, sparse);
+				entities.push(sparse);
 				if (entity.updated_at && entity.updated_at > index.last_updated_at) {
 					index.last_updated_at = entity.updated_at;
 				}
@@ -1526,6 +1568,130 @@ export class DatabaseServer<
 			);
 			saved_bytes += chunk.length;
 			i++;
+		}
+	}
+
+	/**
+	 * Computes FK-derived field values for a sparse entity object.
+	 * Fetches referenced entities from SQLite and calls derived functions with refs.
+	 */
+	private computeFkDerivedFields(
+		entity_type: string,
+		entity_data: Record<string, any>,
+		sparse: Record<string, any>,
+	): void {
+		const table = this.config[entity_type as keyof DatabaseConfig] as any;
+		const derived = table?.config?.derived_fields as
+			| Record<string, { foreign_keys?: string[] }>
+			| undefined;
+		if (!derived) return;
+
+		// Collect which FK fields need fetching
+		const fk_fields = new Set<string>();
+		for (const meta of Object.values(derived)) {
+			if (meta.foreign_keys?.length) {
+				meta.foreign_keys.forEach((fk: string) => fk_fields.add(fk));
+			}
+		}
+		if (fk_fields.size === 0) return;
+
+		// Fetch each referenced entity
+		const refs: Record<string, Record<string, any> | undefined> = {};
+		for (const fk_field of fk_fields) {
+			const fk_value = entity_data[fk_field];
+			if (fk_value == null) {
+				refs[fk_field] = undefined;
+				continue;
+			}
+			const fk_meta = table.config.foreign_keys[fk_field] as any;
+			if (!fk_meta) {
+				refs[fk_field] = undefined;
+				continue;
+			}
+			try {
+				const result = this.ctx.storage.sql.exec(
+					`SELECT * FROM ${this.sanitize(fk_meta.table)} WHERE ${this.sanitize(fk_meta.column)} = ? LIMIT 1`,
+					fk_value,
+				);
+				const row = result.one();
+				refs[fk_field] = row
+					? (this.toEntityValue(fk_meta.table, row) as any)
+					: undefined;
+			} catch {
+				refs[fk_field] = undefined;
+			}
+		}
+
+		// Compute each FK-derived field
+		const table_config = table._ as Record<string, any>;
+		for (const [field_name, meta] of Object.entries(derived)) {
+			if (!meta.foreign_keys?.length) continue;
+			const field = table_config[field_name]?._;
+			if (!field?.derived_fn) continue;
+			try {
+				const value = field.derived_fn(entity_data, refs);
+				if (value != null) {
+					sparse[field_name] = value;
+				} else {
+					delete sparse[field_name];
+				}
+			} catch {
+				delete sparse[field_name];
+			}
+		}
+	}
+
+	/**
+	 * Reindexes all records in other tables that reference the given entity via FK-derived fields.
+	 * Called after create/update/delete so dependent search indexes stay current.
+	 */
+	private cascadeReindexReferencing(
+		entity_type: string,
+		entity_id: string | number,
+		indexes_to_save: Set<string>,
+		now: Date,
+	): void {
+		const dependents = this.#reverse_fk_map.get(entity_type);
+		if (!dependents?.length) return;
+
+		for (const dep of dependents) {
+			const dep_table = this.config[dep.table as keyof DatabaseConfig] as any;
+			const dep_index = this.getIndex(dep.table as keyof DatabaseConfig & string);
+			if (!dep_table || !dep_index) continue;
+
+			// Find all records in dep.table where dep.fk_field = entity_id
+			const rows = this.ctx.storage.sql
+				.exec(
+					`SELECT * FROM ${this.sanitize(dep.table)} WHERE ${this.sanitize(dep.fk_field)} = ?`,
+					entity_id,
+				)
+				.toArray();
+
+			for (const row of rows) {
+				const dep_entity = this.toEntityValue(
+					dep.table as keyof DatabaseConfig & string,
+					row,
+				) as any;
+				if (!dep_entity) continue;
+
+				const dep_pk = dep_table.config.primary_key || 'id';
+				const dep_id = String(dep_entity[dep_pk]);
+
+				// Recompute sparse (same-table derived first, then FK-derived)
+				const sparse = dep_table.toSparse(dep_entity) as any;
+				this.computeFkDerivedFields(dep.table, dep_entity, sparse);
+
+				// Update Orama
+				try {
+					removeFromOrama(dep_index.orama, dep_id);
+				} catch {
+					// May not exist yet
+				}
+				insertIntoOrama(dep_index.orama, sparse);
+				dep_index.last_updated_at = now.getTime();
+				if (!dep_index.first_updated_at) dep_index.first_updated_at = now.getTime();
+				indexes_to_save.add(dep.table);
+			}
 		}
 	}
 
