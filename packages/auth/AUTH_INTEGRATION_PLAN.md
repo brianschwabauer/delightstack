@@ -1524,10 +1524,10 @@ export const load = requirePermission('org:admin', ({ locals }) => {
 
 ### Phase 1: Core Server Handler
 
-- [ ] Create `types/error.type.ts` with `AuthErrorCode`, `AUTH_ERROR_MAP`, `resolveErrorCode()`
-- [ ] Create `server/auth.config.ts` with `AuthConfig` types and `defineAuthConfig()`
-- [ ] Create `sveltekit/cookies.ts` for cookie read/write/delete utilities
-- [ ] Create `server/auth.handler.ts` with `createAuthHandle()`:
+- [x] Create `types/error.type.ts` with `AuthErrorCode`, `AUTH_ERROR_MAP`, `resolveErrorCode()`
+- [x] Create `server/auth.config.ts` with `AuthConfig` types and `defineAuthConfig()`
+- [x] Create `sveltekit/cookies.ts` for cookie read/write/delete utilities
+- [x] Create `server/auth.handler.ts` with `createAuthHandle()`:
   - JWT extraction (cookie > Authorization header > ?auth= query)
   - JWT decode/verify + auto-refresh on `auth/expired`
   - Meta extraction (IP, CF geo headers, user agent)
@@ -1536,7 +1536,7 @@ export const load = requirePermission('org:admin', ({ locals }) => {
   - AuthLocals population (lazy DO getter for dev proxy)
   - Route dispatch to `auth.routes.ts`
   - Post-resolve 500 normalization via `ApiError.from()`
-- [ ] Create `server/auth.routes.ts` with all route handlers:
+- [x] Create `server/auth.routes.ts` with all route handlers:
   - Authentication (signin/email, signin/email/magic, signin/email/verify, signup/email, signin/:vendor, signin/:vendor/callback, signout)
   - Session (get, refresh, list, revoke)
   - Password (reset, reset/confirm, change, check)
@@ -1546,34 +1546,34 @@ export const load = requirePermission('org:admin', ({ locals }) => {
   - Invitation (list, get, create, update, delete, accept)
   - OAuth account linking (connect, callback, list, disconnect)
   - OAuth application (CRUD, secrets, authorize, token)
-- [ ] Add type definitions for `App.Locals` via `AuthLocals`
+- [x] Add type definitions for `App.Locals` via `AuthLocals`
 
 ### Phase 2: Guards
 
-- [ ] Create `sveltekit/guards.ts` with `createAuthGuards()` factory
-- [ ] Create `sveltekit/index.ts` exporting guards + cookies
+- [x] Create `sveltekit/guards.ts` with `createAuthGuards()` factory
+- [x] Create `sveltekit/index.ts` exporting guards + cookies
 
 ### Phase 3: Client Library
 
-- [ ] Create `client/auth.client.svelte.ts` with `AuthClient` class:
+- [x] Create `client/auth.client.svelte.ts` with `AuthClient` class:
   - Reactive state (`$state`, `$derived`, `$derived.by`)
   - `.api` namespace with all method groups
   - Auto-refresh timer
   - `toJSON()` / `static from()` hydration
   - `isAllowed()` permission check
   - `destroy()` cleanup
-- [ ] Create `client/index.ts` exporting `AuthClient`
+- [x] Create `client/index.ts` exporting `AuthClient`
 
 ### Phase 4: Components (Headless-First)
 
-- [ ] Create `client/components/SignInForm.svelte`
-- [ ] Create `client/components/SignUpForm.svelte`
-- [ ] Create `client/components/OAuthButton.svelte`
-- [ ] Create `client/components/AuthGuard.svelte`
+- [x] Create `client/components/SignInForm.svelte`
+- [x] Create `client/components/SignUpForm.svelte`
+- [x] Create `client/components/OAuthButton.svelte`
+- [x] Create `client/components/AuthGuard.svelte`
 
 ### Phase 5: Packaging & Testing
 
-- [ ] Update `package.json` exports map (`@delightstack/auth/server`, `/client`, `/client/components`, `/sveltekit`)
+- [x] Update `package.json` exports map (`@delightstack/auth/server`, `/client`, `/client/components`, `/sveltekit`)
 - [ ] Add JSDoc comments to all public APIs
 - [ ] Migrate example-app to new API
 - [ ] Write tests for route handlers

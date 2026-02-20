@@ -6,6 +6,14 @@
 		"lint": "prettier --ignore-path .gitignore --check --plugin-search-dir=. . && eslint .",
 		"format": "prettier --ignore-path .gitignore --write --plugin-search-dir=. ."
 	},
+	"exports": {
+		".": "./index.ts",
+		"./types": "./types/index.ts",
+		"./server": "./server/index.ts",
+		"./client": "./client/index.ts",
+		"./client/components": "./client/components/index.ts",
+		"./sveltekit": "./sveltekit/index.ts"
+	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251120.0",
 		"typescript": "^5.8.3"
