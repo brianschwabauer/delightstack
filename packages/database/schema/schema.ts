@@ -331,6 +331,11 @@ type ForeignKey<
 
 type IsPrimaryKey<T> = T extends { _: infer U & { type: 'primary_key' } } ? true : false;
 type IsForeignKey<T> = T extends { _: infer U & { type: 'foreign_key' } } ? true : false;
+
+/** Checks if any field in a table config is a primary key (produces `true` or `never`) */
+type HasPrimaryKeyField<TC extends Record<string, FieldGenerator>> = {
+	[K in keyof TC]: IsPrimaryKey<TC[K]> extends true ? true : never;
+}[keyof TC];
 type IsColumn<T> = T extends { _: infer U & { column: true } } ? true : false;
 type IsSearchable<T> = T extends { _: infer U & { searchable: true } } ? true : false;
 type IsIndexable<T> = T extends { _: infer U & { indexable: true } } ? true : false;
@@ -804,9 +809,11 @@ type SqliteColumnDefinition<Schema extends FieldGenerator> =
 
 type SqliteTableDefinition<Schema extends Record<string, FieldGenerator>> = Flatten<
 	OmitNeverProperties<{
-		[Key in keyof Schema | 'json']: Key extends keyof Schema
+		[Key in keyof Schema | 'json' | 'created_at' | 'updated_at']: Key extends keyof Schema
 			? SqliteColumnDefinition<Schema[Key]>
-			: 'TEXT';
+			: Key extends 'json'
+				? 'TEXT'
+				: 'INTEGER NOT NULL';
 	}>
 >;
 
@@ -1955,7 +1962,13 @@ export namespace Database {
 						: never;
 				}
 			>
-		>
+		> &
+			// Auto-add 'id' primary key if no primary key is defined in the table schema
+			(true extends HasPrimaryKeyField<Table['_']> ? {} : { readonly id: string }) & {
+				// Auto-managed timestamp fields (set by the server on create/update)
+				readonly created_at: number;
+				readonly updated_at: number;
+			}
 	>;
 
 	/** Infers the type of the schema used to initialize the search library Orama */
@@ -1966,7 +1979,11 @@ export namespace Database {
 	> = Flatten<
 		OmitNeverProperties<{
 			[Key in keyof Table['_']]: OramaType<Table['_'][Key]>;
-		}>
+		}> & {
+			/** Timestamps are stored as epoch numbers in the Orama search index */
+			created_at: 'number';
+			updated_at: 'number';
+		}
 	>;
 
 	/** The type used to initialize the orama library using orama({...}) */
@@ -1996,6 +2013,9 @@ export namespace Database {
 		}[keyof Table['_']],
 	> = Partial<TypedDocument<Orama<OramaSchemaConfig>>> & {
 		[Key in PrimaryKeyColumn]: string;
+	} & (true extends HasPrimaryKeyField<Table['_']> ? {} : { id: string }) & {
+		created_at: number;
+		updated_at: number;
 	};
 
 	/**
@@ -2128,13 +2148,15 @@ export namespace Database {
 		},
 	> = Flatten<
 		OmitNeverProperties<{
-			[Key in keyof Table['_'] | 'json']: Key extends 'json'
+			[Key in keyof Table['_'] | 'json' | 'created_at' | 'updated_at']: Key extends 'json'
 				? string
-				: FieldType<Table['_'][Key]> extends infer FieldTypeValue
-					? FieldTypeValue extends string | boolean | number
-						? FieldTypeValue
-						: never
-					: never;
+				: Key extends 'created_at' | 'updated_at'
+					? number
+					: FieldType<Table['_'][Key]> extends infer FieldTypeValue
+						? FieldTypeValue extends string | boolean | number
+							? FieldTypeValue
+							: never
+						: never;
 		}>
 	>;
 
@@ -2304,6 +2326,26 @@ export namespace Database {
 			Array.isArray(table_config)
 		) {
 			throw { message: 'Table schema callback must return a non-empty object' };
+		}
+
+		// Validate reserved field names
+		if ('created_at' in table_config) {
+			throw {
+				message: `'created_at' is a reserved field name that is auto-managed by the database. Remove it from your table schema.`,
+			};
+		}
+		if ('updated_at' in table_config) {
+			throw {
+				message: `'updated_at' is a reserved field name that is auto-managed by the database. Remove it from your table schema.`,
+			};
+		}
+
+		// Auto-inject 'id' primary key if none is defined
+		const has_explicit_primary_key = Object.values(table_config).some(
+			(f: any) => f?.['_']?.type === 'primary_key',
+		);
+		if (!has_explicit_primary_key) {
+			(table_config as any)['id'] = generator.primaryKey();
 		}
 
 		// Collect primary key, indexable fields, etc.
@@ -2596,8 +2638,27 @@ export namespace Database {
 			recursivelyBuildFormFieldProps(field, fieldName);
 		}
 
-		// Ensure the table has a valid config
+		// Add auto-managed timestamp columns to the SQLite table definition
+		(table_definition as any)['created_at'] = 'INTEGER NOT NULL';
+		(table_definition as any)['updated_at'] = 'INTEGER NOT NULL';
+
+		// Add timestamps to the Orama search schema as sortable numbers (epoch ms)
+		(orama_schema as any)['updated_at'] = 'number';
+		(orama_schema as any)['created_at'] = 'number';
+		orama_sort.enabled = true;
+		// updated_at should be sortable (needed for sync/change detection)
+		sortable_fields.push('updated_at' as SortableColumn);
+
+		// At this point primary_key is guaranteed to be set (either user-defined or auto-injected)
 		if (!primary_key) throw { message: 'Table must have a primary key defined' };
+
+		/** Coerces a timestamp value to an epoch number (ms). Accepts numbers, ISO strings, or Date objects. */
+		function toEpoch(value: unknown): number {
+			if (typeof value === 'number') return value;
+			if (typeof value === 'string') return new Date(value).getTime();
+			if (value instanceof Date) return value.getTime();
+			return 0;
+		}
 
 		/**
 		 * The parse function to validate data against the table schema
@@ -2836,6 +2897,10 @@ export namespace Database {
 				]);
 			}
 
+			// Pass through auto-managed timestamp fields, coercing strings to epoch ms
+			if (data.created_at !== undefined) parsedData.created_at = toEpoch(data.created_at);
+			if (data.updated_at !== undefined) parsedData.updated_at = toEpoch(data.updated_at);
+
 			// If there are any validation issues, throw an error with details
 			if (issues.length) {
 				throw {
@@ -2870,6 +2935,12 @@ export namespace Database {
 					}
 				}
 			}
+
+			// Always include timestamps for Orama sorting/filtering, coercing to epoch if needed
+			const entity = data as any;
+			if (entity.updated_at !== undefined) root.updated_at = toEpoch(entity.updated_at);
+			if (entity.created_at !== undefined) root.created_at = toEpoch(entity.created_at);
+
 			return root as SearchEntity;
 		}
 

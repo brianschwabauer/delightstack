@@ -1,5 +1,23 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, assertType } from 'vitest';
 import { Database } from './schema';
+
+// ── Type-level tests ─────────────────────────────────────────────────────────
+// These verify that Database.Entity<> produces the correct TypeScript type
+
+const PERSON = Database.table('person', (schema) => ({ name: schema.string() }));
+type Person = Database.Entity<typeof PERSON>;
+
+// Auto-id: 'id' should be present when no primary key is defined
+assertType<Person>({} as { readonly id: string; name: string; readonly created_at: number; readonly updated_at: number });
+
+const POST = Database.table('post', (schema) => ({
+	slug: schema.primaryKey(),
+	title: schema.string(),
+}));
+type Post = Database.Entity<typeof POST>;
+
+// Explicit PK: 'slug' should be present, no extra 'id'
+assertType<Post>({} as { readonly slug: string; title: string; readonly created_at: number; readonly updated_at: number });
 
 describe('Schema: Database.table()', () => {
 	it('should create a table with basic fields', () => {
@@ -83,13 +101,83 @@ describe('Schema: Database.table()', () => {
 
 	it('should convert numeric primary keys to string in getDocumentIndexId', () => {
 		const table = Database.table('items', (schema) => ({
-			item_id: schema.primaryKey('number'),
+			item_id: schema.primaryKey({ type: 'number' }),
 			name: schema.string(),
 		}));
 
 		expect(table.config.primary_key).toBe('item_id');
 		const getId = table.config.orama.components.getDocumentIndexId;
 		expect(getId({ item_id: 42, name: 'test' })).toBe('42');
+	});
+
+	it('should auto-inject id primary key when none is defined', () => {
+		const table = Database.table('people', (schema) => ({
+			name: schema.string(),
+		}));
+
+		expect(table.config.primary_key).toBe('id');
+		expect(table.config.primary_key_type).toBe('string');
+		expect(table.config.table_definition).toHaveProperty('id', 'TEXT PRIMARY KEY');
+		expect(table.config.searchable_fields).toContain('id');
+	});
+
+	it('should not auto-inject id when a primary key is explicitly defined', () => {
+		const table = Database.table('items', (schema) => ({
+			slug: schema.primaryKey(),
+			name: schema.string(),
+		}));
+
+		expect(table.config.primary_key).toBe('slug');
+		// Should not have a separate 'id' field
+		expect(table.config.table_definition).not.toHaveProperty('id');
+	});
+
+	it('should auto-add created_at and updated_at to table definition', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+		}));
+
+		expect(table.config.table_definition).toHaveProperty('created_at', 'INTEGER NOT NULL');
+		expect(table.config.table_definition).toHaveProperty('updated_at', 'INTEGER NOT NULL');
+	});
+
+	it('should add updated_at to orama schema as a number', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+		}));
+
+		expect(table.config.orama.schema).toHaveProperty('updated_at', 'number');
+		expect(table.config.orama.schema).toHaveProperty('created_at', 'number');
+	});
+
+	it('should make updated_at sortable for sync/change detection', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+		}));
+
+		expect(table.config.sortable_fields).toContain('updated_at');
+		expect(table.config.orama.sort.enabled).toBe(true);
+	});
+
+	it('should throw if created_at is used as a field name', () => {
+		expect(() => {
+			Database.table('bad', (schema) => ({
+				id: schema.primaryKey(),
+				created_at: schema.string(),
+			}));
+		}).toThrow('created_at');
+	});
+
+	it('should throw if updated_at is used as a field name', () => {
+		expect(() => {
+			Database.table('bad', (schema) => ({
+				id: schema.primaryKey(),
+				updated_at: schema.string(),
+			}));
+		}).toThrow('updated_at');
 	});
 });
 
@@ -166,6 +254,41 @@ describe('Schema: toSparse()', () => {
 		// name should NOT be inside address
 		expect((sparse as any).address).not.toHaveProperty('name');
 	});
+
+	it('should convert ISO string timestamps to epoch numbers', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string().searchable(),
+		}));
+
+		const date = new Date('2024-01-15T12:00:00.000Z');
+		const sparse = table.toSparse({
+			id: '1',
+			name: 'test',
+			created_at: date.toISOString(),
+			updated_at: date.toISOString(),
+		} as any);
+
+		expect(sparse).toHaveProperty('updated_at', date.getTime());
+		expect(sparse).toHaveProperty('created_at', date.getTime());
+	});
+
+	it('should pass through numeric timestamps in toSparse', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string().searchable(),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			name: 'test',
+			created_at: 1000,
+			updated_at: 2000,
+		} as any);
+
+		expect(sparse).toHaveProperty('updated_at', 2000);
+		expect(sparse).toHaveProperty('created_at', 1000);
+	});
 });
 
 describe('Schema: parse()', () => {
@@ -187,6 +310,49 @@ describe('Schema: parse()', () => {
 		}));
 
 		const result = table.parse({ id: 'x', name: 'test', description: null } as any);
+		expect(result).toHaveProperty('name', 'test');
+	});
+
+	it('should coerce ISO string timestamps to epoch numbers in parse', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+		}));
+
+		const date = new Date('2024-01-15T12:00:00.000Z');
+		const result = table.parse({
+			id: 'x',
+			name: 'test',
+			created_at: date.toISOString(),
+			updated_at: date.toISOString(),
+		} as any);
+		expect(result).toHaveProperty('created_at', date.getTime());
+		expect(result).toHaveProperty('updated_at', date.getTime());
+	});
+
+	it('should pass through numeric timestamps in parse', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+		}));
+
+		const result = table.parse({
+			id: 'x',
+			name: 'test',
+			created_at: 1705320000000,
+			updated_at: 1705320000000,
+		} as any);
+		expect(result).toHaveProperty('created_at', 1705320000000);
+		expect(result).toHaveProperty('updated_at', 1705320000000);
+	});
+
+	it('should parse tables with auto-injected id', () => {
+		const table = Database.table('items', (schema) => ({
+			name: schema.string(),
+		}));
+
+		const result = table.parse({ id: 'abc', name: 'test' } as any);
+		expect(result).toHaveProperty('id', 'abc');
 		expect(result).toHaveProperty('name', 'test');
 	});
 });

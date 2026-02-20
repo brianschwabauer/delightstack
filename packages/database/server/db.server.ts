@@ -180,7 +180,7 @@ export type DatabaseSyncResponse<DatabaseConfig extends Record<string, any>> = {
 			 * The schema/config used to setup the Orama library for searching. This is included only when the Orama schema changes.
 			 * When this changes, the client will completely reindex the data using the new schema.
 			 */
-			config?: Database.SearchConfig<DatabaseConfig[Type]>;
+			config?: Database.Table['config']['orama'];
 			/** The version number of the config/schema for the search data. If this changes, the full list needs to be synced */
 			config_version: number;
 			/** The list of IDs of entities that have been deleted */
@@ -1214,8 +1214,8 @@ export class DatabaseServer<
 						...data_copy,
 						[primary_key]:
 							table.config.primary_key_type === 'string' ? generateTimestampID() : 0,
-						created_at: now.toISOString(),
-						updated_at: now.toISOString(),
+						created_at: now.getTime(),
+						updated_at: now.getTime(),
 					}) as any;
 
 					// For numeric primary keys, we let the database auto-increment the ID
@@ -1286,7 +1286,7 @@ export class DatabaseServer<
 					input_data = table.parse({
 						...deepMerge(input_data, data_copy),
 						[primary_key]: (current_data as any)[primary_key],
-						updated_at: now.toISOString(),
+						updated_at: now.getTime(),
 						created_at: (current_data as any).created_at,
 					}) as any;
 
