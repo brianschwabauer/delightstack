@@ -1092,13 +1092,11 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('DELETE', '/invitation/:id', invitationDelete),
 	defineRoute('POST', '/invitation/:id/accept', invitationAccept),
 
-	// OAuth Account Linking
+	// OAuth Account Linking (static routes before :vendor catch-all)
 	defineRoute('GET', '/oauth/accounts', oauthListAccounts),
 	defineRoute('DELETE', '/oauth/accounts/:id', oauthDisconnectAccount),
-	defineRoute('GET', '/oauth/:vendor/callback', oauthConnectCallback),
-	defineRoute('GET', '/oauth/:vendor', oauthConnect),
 
-	// OAuth Application / Provider
+	// OAuth Application / Provider (static routes before :vendor catch-all)
 	defineRoute('GET', '/oauth/authorize', oauthAuthorizeGet),
 	defineRoute('POST', '/oauth/authorize', oauthAuthorizePost),
 	defineRoute('POST', '/oauth/token', oauthTokenExchange),
@@ -1110,6 +1108,10 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('POST', '/oauth/application/:id/secret', oauthAppCreateSecret),
 	defineRoute('DELETE', '/oauth/application/:id/secret/:secret_id', oauthAppDeleteSecret),
 	defineRoute('POST', '/oauth/application/:id/revoke', oauthAppRevoke),
+
+	// OAuth :vendor catch-all (MUST be after all static /oauth/* routes)
+	defineRoute('GET', '/oauth/:vendor/callback', oauthConnectCallback),
+	defineRoute('GET', '/oauth/:vendor', oauthConnect),
 ];
 
 /** Matches an incoming request to a route handler */

@@ -1576,9 +1576,9 @@ export const load = requirePermission('org:admin', ({ locals }) => {
 - [x] Update `package.json` exports map (`@delightstack/auth/server`, `/client`, `/client/components`, `/sveltekit`)
 - [x] Add JSDoc comments to all public APIs
 - [x] Migrate example-app to new API
-- [ ] Write tests for route handlers
-- [ ] Write tests for guards
-- [ ] Write tests for client error handling
+- [x] Write tests for route handlers
+- [x] Write tests for guards
+- [x] Write tests for client error handling
 
 ---
 
