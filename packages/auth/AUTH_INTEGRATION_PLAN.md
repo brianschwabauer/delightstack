@@ -1574,8 +1574,8 @@ export const load = requirePermission('org:admin', ({ locals }) => {
 ### Phase 5: Packaging & Testing
 
 - [x] Update `package.json` exports map (`@delightstack/auth/server`, `/client`, `/client/components`, `/sveltekit`)
-- [ ] Add JSDoc comments to all public APIs
-- [ ] Migrate example-app to new API
+- [x] Add JSDoc comments to all public APIs
+- [x] Migrate example-app to new API
 - [ ] Write tests for route handlers
 - [ ] Write tests for guards
 - [ ] Write tests for client error handling

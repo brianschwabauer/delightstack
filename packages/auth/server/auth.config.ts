@@ -1,6 +1,10 @@
 import type { UserPermissionMap, OauthCapabilityMap, UserSessionMeta } from '../types';
 import type { AuthOperationResult } from './auth.db.server';
 
+/**
+ * Configuration for the auth integration layer.
+ * Pass to `defineAuthConfig()` to fill in defaults, or directly to `createAuthHandle()`.
+ */
 export interface AuthConfig<
 	PermissionMap extends UserPermissionMap = UserPermissionMap,
 	CapabilityMap extends OauthCapabilityMap = OauthCapabilityMap,

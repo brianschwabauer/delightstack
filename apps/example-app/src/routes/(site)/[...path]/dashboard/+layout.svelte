@@ -19,9 +19,8 @@
 	import { PostModal } from '$lib/modals/PostModal';
 
 	const { children, data } = $props();
-	const { authState } = $derived(data);
-	setContext('entities', data.entities);
-	setContext('auth', data.authState);
+	const { auth } = $derived(data);
+	setContext('auth', data.auth);
 
 	let isDarkMode = $state<boolean>(false);
 	$effect.pre(() => {
@@ -72,7 +71,7 @@
 				round
 				dense
 				transparent
-				href="/{authState.orgID}/dashboard"
+				href="/{auth.org_id}/dashboard"
 				active={!!page.url.pathname.match(/\/dashboard$/)}>
 				Stories
 			</Button>
@@ -80,7 +79,7 @@
 				round
 				dense
 				transparent
-				href="/{authState.orgID}/dashboard/gallery"
+				href="/{auth.org_id}/dashboard/gallery"
 				active={!!page.url.pathname.match(/\/dashboard\/gallery$/)}>
 				Gallery
 			</Button>
@@ -88,7 +87,7 @@
 				round
 				dense
 				transparent
-				href="/{authState.orgID}/dashboard/map"
+				href="/{auth.org_id}/dashboard/map"
 				active={!!page.url.pathname.match(/\/dashboard\/map$/)}>
 				Map
 			</Button>
@@ -96,7 +95,7 @@
 				round
 				dense
 				transparent
-				href="/{authState.orgID}/dashboard/document"
+				href="/{auth.org_id}/dashboard/document"
 				active={!!page.url.pathname.match(/\/dashboard\/document$/)}>
 				Documents
 			</Button>
@@ -108,7 +107,7 @@
 				round
 				dense
 				transparent
-				href="/{authState.orgID}/dashboard/person"
+				href="/{auth.org_id}/dashboard/person"
 				active={!!page.url.pathname.match(/\/dashboard\/person$/)}>
 				Directory
 			</Button>
@@ -116,7 +115,7 @@
 				round
 				dense
 				transparent
-				href="/{authState.orgID}/dashboard/family"
+				href="/{auth.org_id}/dashboard/family"
 				active={!!page.url.pathname.match(/\/dashboard\/family$/)}>
 				Family Tree
 			</Button>
@@ -124,7 +123,7 @@
 				round
 				dense
 				transparent
-				href="/{authState.orgID}/dashboard/share"
+				href="/{auth.org_id}/dashboard/share"
 				active={!!page.url.pathname.match(/\/dashboard\/share$/)}>
 				Share
 			</Button>
@@ -136,13 +135,13 @@
 		</Button>
 		<Button
 			transparent
-			href="/{authState.orgID}/dashboard"
+			href="/{auth.org_id}/dashboard"
 			active={!!page.url.pathname.match(/\/dashboard$/)}>
 			<StoriesIcon /> Memories
 		</Button>
 		<Button
 			transparent
-			href="/{authState.orgID}/dashboard/person"
+			href="/{auth.org_id}/dashboard/person"
 			active={!!page.url.pathname.match(/\/dashboard\/person$/)}>
 			<PeopleIcon /> People
 		</Button>
@@ -164,65 +163,65 @@
 			<Button
 				transparent
 				fullWidth
-				href="/{authState.orgID}/dashboard"
+				href="/{auth.org_id}/dashboard"
 				active={!!page.url.pathname.match(/\/dashboard$/)}>
 				<StoriesIcon /> Stories
 			</Button>
 			<Button
 				transparent
 				fullWidth
-				href="/{authState.orgID}/dashboard/gallery"
+				href="/{auth.org_id}/dashboard/gallery"
 				active={!!page.url.pathname.match(/\/dashboard\/gallery$/)}>
 				<GalleryIcon /> Gallery
 			</Button>
 			<Button
 				transparent
 				fullWidth
-				href="/{authState.orgID}/dashboard/person"
+				href="/{auth.org_id}/dashboard/person"
 				active={!!page.url.pathname.match(/\/dashboard\/person$/)}>
 				<PeopleIcon /> People
 			</Button>
 			<Button
 				transparent
 				fullWidth
-				href="/{authState.orgID}/dashboard/family"
+				href="/{auth.org_id}/dashboard/family"
 				active={!!page.url.pathname.match(/\/dashboard\/family$/)}>
 				<FamilyTreeIcon /> Family Tree
 			</Button>
 			<Button
 				transparent
 				fullWidth
-				href="/{authState.orgID}/dashboard/map"
+				href="/{auth.org_id}/dashboard/map"
 				active={!!page.url.pathname.match(/\/dashboard\/map$/)}>
 				<MapIcon /> Map
 			</Button>
 			<Button
 				transparent
 				fullWidth
-				href="/{authState.orgID}/dashboard/document"
+				href="/{auth.org_id}/dashboard/document"
 				active={!!page.url.pathname.match(/\/dashboard\/document$/)}>
 				<DocumentIcon /> Documents
 			</Button>
 			<Button
 				transparent
 				fullWidth
-				href="/{authState.orgID}/dashboard/share"
+				href="/{auth.org_id}/dashboard/share"
 				active={!!page.url.pathname.match(/\/dashboard\/share$/)}>
 				<ShareIcon /> Share
 			</Button>
 		</div>
 		<!-- <small style="margin-top: 2rem; width: 100%; text-align: center;">
-			WebSockets {authState.ws_status.toUpperCase()}
+			WebSockets {auth.ws_status.toUpperCase()}
 		</small>
 		<small style="margin-top: 0rem; width: 100%; text-align: center;">
-			WebSocket Clients {authState.ws_num_connected}
+			WebSocket Clients {auth.ws_num_connected}
 		</small> -->
 		<div style="flex: 1;"></div>
 		<div class="links">
 			<Button
 				transparent
 				fullWidth
-				href="/{authState.orgID}/dashboard/support"
+				href="/{auth.org_id}/dashboard/support"
 				active={!!page.url.pathname.match(/\/dashboard\/support$/)}>
 				<SupportIcon /> Support
 			</Button>
@@ -233,7 +232,7 @@
 				active={!!page.url.searchParams.get('modal')?.startsWith('/account')}>
 				<AccountIcon /> Account
 			</Button>
-			<AccountModal {authState} ondarkmodechange={(darkMode) => (isDarkMode = darkMode)}
+			<AccountModal {auth} ondarkmodechange={(darkMode) => (isDarkMode = darkMode)}
 			></AccountModal>
 		</div>
 	</nav>

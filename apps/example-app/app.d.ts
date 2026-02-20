@@ -8,23 +8,8 @@ declare namespace App {
 		message: string;
 	}
 
-	interface Locals {
-		/** The class for handling auth related functions (like signin, signup, passwords, etc) */
-		auth: DurableObjectStub<
-			Omit<
-				import('./../server/src').AuthDatabaseServer,
-				| 'alarm'
-				| 'webSocketMessage'
-				| 'webSocketClose'
-				| 'webSocketError'
-				| 'fetch'
-				| 'Rpc'
-			>
-		>;
-
-		/** The current auth state of the request (whether signed in, the current user id, etc) */
-		authState: import('./lib/state/auth.state.svelte').AuthState;
-
+	interface Locals
+		extends import('./packages/auth/server/auth.handler').AuthLocals {
 		/** The class for accessing the main database for the current org */
 		db:
 			| Omit<
@@ -37,6 +22,12 @@ declare namespace App {
 					| 'Rpc'
 			  >
 			| undefined;
+
+		/** KV namespace for caching */
+		kv: KVNamespace;
+
+		/** R2 bucket for file storage */
+		r2: R2Bucket;
 	}
 
 	interface PageData {}
@@ -62,6 +53,7 @@ declare namespace App {
 	}
 	interface CloudflareEnvVariables {
 		AUTH: DurableObjectNamespace<import('./../server/src').AuthDatabaseServer>;
+		DB: DurableObjectNamespace;
 		BROWSER: Fetcher;
 		KV: KVNamespace;
 		R2: R2Bucket;

@@ -23,6 +23,7 @@ export type AuthServer = DurableObjectStub<
 	>
 >;
 
+/** Options for `createAuthHandle()` */
 export interface AuthHandleOptions<Config extends AuthConfig> {
 	/** The auth configuration */
 	config: Config;
@@ -37,6 +38,7 @@ export interface AuthHandleOptions<Config extends AuthConfig> {
 	building?: boolean;
 }
 
+/** Auth-related properties populated on `event.locals` by the auth handler */
 export interface AuthLocals {
 	/** The decoded session token (null if not authenticated) */
 	session: SessionToken<'auth'> | null;

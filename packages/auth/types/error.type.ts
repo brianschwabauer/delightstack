@@ -1,3 +1,4 @@
+/** Typed error codes returned by auth API responses */
 export type AuthErrorCode =
 	| 'invalid_credentials'
 	| 'email_taken'

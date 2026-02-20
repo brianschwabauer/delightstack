@@ -1,5 +1,5 @@
-import { AuthState } from '$lib/state/auth.state.svelte';
+import { AuthClient } from '@delightstack/auth/client';
 
 export async function load({ data }) {
-	return { authState: AuthState.from(data.authState) };
+	return { auth: new AuthClient(data.auth) };
 }

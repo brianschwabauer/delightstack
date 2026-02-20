@@ -112,11 +112,12 @@ export class AuthClient {
 		if (this.session) this.startAutoRefresh();
 	}
 
-	// -- Hydration --
+	/** Serializes state for SSR hydration (used by `+layout.server.ts`) */
 	toJSON(): AuthClientData {
 		return { jwt: this.jwt, session: this.session, org_id: this._org_id };
 	}
 
+	/** Creates an AuthClient from serialized data (used by `+layout.ts`) */
 	static from(
 		data: AuthClientData,
 		options?: { base_path?: string },
@@ -124,7 +125,7 @@ export class AuthClient {
 		return new AuthClient(data, options);
 	}
 
-	// -- Permission checking --
+	/** Checks if the current org role includes the given permission bit */
 	isAllowed(
 		permission: string,
 		permission_map?: Record<string, number>,
@@ -572,6 +573,7 @@ export class AuthClient {
 		}
 	}
 
+	/** Stops auto-refresh timer. Call when the AuthClient is no longer needed. */
 	destroy() {
 		this.stopAutoRefresh();
 	}

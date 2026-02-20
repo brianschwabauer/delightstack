@@ -10,6 +10,7 @@ import { getOauthToken } from './oauth.helper';
 import type { AuthOperationResult } from './auth.db.server';
 import type { OauthToken } from '../types';
 
+/** Context passed to each auth route handler */
 interface AuthRouteContext {
 	event: RequestEvent;
 	config: ResolvedAuthConfig;
