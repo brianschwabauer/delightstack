@@ -99,7 +99,6 @@ export class AuthClient {
 	/** The list of org IDs that the user currently belongs to */
 	readonly org_ids = $derived(this.orgs.map((o) => o.id));
 
-	// -- Config --
 	private base_path: string;
 	private refresh_threshold_ms: number;
 	private refresh_timer: ReturnType<typeof setTimeout> | null = null;
@@ -141,7 +140,7 @@ export class AuthClient {
 		return (this.org.role & (1 << bit)) !== 0;
 	}
 
-	// -- All API methods nested under .api --
+	/** All API methods nested under .api */
 	readonly api = {
 		signIn: {
 			email: async (data: {
@@ -181,7 +180,7 @@ export class AuthClient {
 				if (options?.redirect_to) params.set('redirect', options.redirect_to);
 				window.location.href = `${this.base_path}/signin/${vendor}?${params}`;
 			},
-		},
+		} as const,
 
 		signUp: {
 			email: async (data: {
@@ -202,7 +201,7 @@ export class AuthClient {
 				}
 				return result;
 			},
-		},
+		} as const,
 
 		signOut: async (): Promise<AuthResult<void>> => {
 			const res = await this.fetchFn(`${this.base_path}/signout`, {
@@ -263,7 +262,7 @@ export class AuthClient {
 			revoke: async (session_id: string): Promise<AuthResult<void>> => {
 				return this.delete(`/session/${session_id}`);
 			},
-		},
+		} as const,
 
 		password: {
 			reset: async (email: string): Promise<AuthResult<void>> => {
@@ -309,7 +308,7 @@ export class AuthClient {
 			): Promise<AuthResult<{ strong: boolean }>> => {
 				return this.post('/password/check', { password });
 			},
-		},
+		} as const,
 
 		email: {
 			requestVerification: async (): Promise<AuthResult<void>> => {
@@ -325,7 +324,7 @@ export class AuthClient {
 				const params = new URLSearchParams({ email });
 				return this.get(`/email/check?${params}`);
 			},
-		},
+		} as const,
 
 		user: {
 			get: async (): Promise<
@@ -366,7 +365,7 @@ export class AuthClient {
 			removeSignInMethod: async (method_id: string): Promise<AuthResult<void>> => {
 				return this.delete(`/user/signin-methods/${method_id}`);
 			},
-		},
+		} as const,
 
 		org: {
 			create: async (data: {
@@ -449,7 +448,7 @@ export class AuthClient {
 			removeUser: async (org_id: string, user_id: string): Promise<AuthResult<void>> => {
 				return this.delete(`/org/${org_id}/users/${user_id}`);
 			},
-		},
+		} as const,
 
 		invitation: {
 			list: async (): Promise<
@@ -502,7 +501,7 @@ export class AuthClient {
 				}
 				return result;
 			},
-		},
+		} as const,
 
 		oauth: {
 			connect: (
@@ -528,7 +527,7 @@ export class AuthClient {
 				return this.delete(`/oauth/accounts/${id}`);
 			},
 		},
-	};
+	} as const;
 
 	/** Auto-refresh session tokens when they are about to expire, to keep the user signed in without interruption. */
 	private startAutoRefresh() {
