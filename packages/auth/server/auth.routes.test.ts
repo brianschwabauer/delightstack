@@ -94,6 +94,11 @@ describe('matchRoute', () => {
 			expect(result).not.toBeNull();
 		});
 
+		it('matches PATCH /preference', () => {
+			const result = matchRoute('PATCH', '/preference');
+			expect(result).not.toBeNull();
+		});
+
 		it('matches POST /org', () => {
 			const result = matchRoute('POST', '/org');
 			expect(result).not.toBeNull();
@@ -194,6 +199,12 @@ describe('matchRoute', () => {
 			expect(result).not.toBeNull();
 			expect(result!.params.id).toBe('org_abc');
 			expect(result!.params.user_id).toBe('user_123');
+		});
+
+		it('matches PATCH /org/:id/state and extracts id param', () => {
+			const result = matchRoute('PATCH', '/org/org_abc/state');
+			expect(result).not.toBeNull();
+			expect(result!.params.id).toBe('org_abc');
 		});
 
 		it('matches GET /invitation/:id', () => {

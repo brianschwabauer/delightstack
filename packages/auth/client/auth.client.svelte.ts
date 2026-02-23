@@ -162,14 +162,71 @@ export class AuthClient {
 		return (this.org.role & (1 << bit)) !== 0;
 	}
 
-	/** Update local preferences state. Call after persisting to server via your own endpoint. */
-	updatePreferences(updates: Record<string, unknown>) {
-		this.#preferences = { ...this.#preferences, ...updates };
+	/**
+	 * Merge updates into the user preferences. Set a value to null/undefined to remove it.
+	 * - **Browser**: sends PATCH /preference to persist the signed cookie, then updates local state.
+	 * - **Server**: updates local state only. Use `locals.setPreferences()` to persist cookie changes.
+	 */
+	async setPreferences(updates: Record<string, unknown>): Promise<AuthResult<Record<string, unknown>>> {
+		if (typeof window === 'undefined') {
+			const merged = { ...this.#preferences };
+			for (const [key, value] of Object.entries(updates)) {
+				if (value === undefined || value === null) {
+					delete merged[key];
+				} else {
+					merged[key] = value;
+				}
+			}
+			this.#preferences = merged;
+			return { ok: true, data: this.#preferences };
+		}
+		const result = await this.patch<Record<string, unknown>>('/preference', updates);
+		if (result.ok) {
+			this.#preferences = result.data;
+		}
+		return result;
 	}
 
-	/** Update local org state. Call after persisting to server via your own endpoint. */
-	updateOrgState(updates: Record<string, unknown>) {
-		this.#org_state = { ...this.#org_state, ...updates };
+	/**
+	 * Merge updates into an org's state. Set a value to null/undefined to remove it.
+	 * Defaults to the current org if `org_id` is omitted.
+	 * - **Browser**: sends PATCH /org/:id/state to persist the signed cookie, then updates local state.
+	 * - **Server**: updates local state only. Use `locals.setOrgState()` to persist cookie changes.
+	 */
+	async setOrgState(
+		updates: Record<string, unknown>,
+		org_id?: string,
+	): Promise<AuthResult<Record<string, unknown>>> {
+		const target = org_id ?? this.#org_id;
+		if (!target) {
+			return {
+				ok: false,
+				error: {
+					code: 'unknown',
+					message: 'No organization selected',
+					status: 400,
+				},
+			};
+		}
+		if (typeof window === 'undefined') {
+			if (target === this.#org_id) {
+				const merged = { ...this.#org_state };
+				for (const [key, value] of Object.entries(updates)) {
+					if (value === undefined || value === null) {
+						delete merged[key];
+					} else {
+						merged[key] = value;
+					}
+				}
+				this.#org_state = merged;
+			}
+			return { ok: true, data: target === this.#org_id ? this.#org_state : {} };
+		}
+		const result = await this.patch<Record<string, unknown>>(`/org/${target}/state`, updates);
+		if (result.ok && target === this.#org_id) {
+			this.#org_state = result.data;
+		}
+		return result;
 	}
 
 	/** All API methods nested under .api */

@@ -9,6 +9,7 @@ import { EmailPasswordSignIn, EmailSignUp, UpdateUser } from '../types';
 import { getOauthToken } from './oauth.helper';
 import type { AuthOperationResult } from './auth.db.server';
 import type { OauthToken } from '../types';
+import { getOrgStateCookie, setOrgStateCookie } from '../sveltekit/cookies';
 
 /** Context passed to each auth route handler */
 interface AuthRouteContext {
@@ -530,6 +531,59 @@ const userSignInMethodRevoke: AuthRouteHandler = (ctx) =>
 		if (!id) throw new ApiError('Sign-in method ID is required', 400);
 		await ctx.auth.revokeSignInMethod(id);
 		return noContent();
+	});
+
+// ============================================
+// Preferences & State Routes
+// ============================================
+
+const preferencesUpdate: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const body = await ctx.event.request.json();
+		if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+			throw new ApiError('Request body must be a JSON object', 400);
+		}
+		ctx.locals.setPreferences(body as Record<string, unknown>);
+		return json(ctx.locals.preferences);
+	});
+
+const orgStateUpdate: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const id = ctx.event.params.id;
+		if (!id) throw new ApiError('Organization ID is required', 400);
+		if (!ctx.locals.session!.org[id]) {
+			throw new ApiError('You do not have access to this organization', 403);
+		}
+		const body = await ctx.event.request.json();
+		if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+			throw new ApiError('Request body must be a JSON object', 400);
+		}
+		const updates = body as Record<string, unknown>;
+
+		// If this is the current org, use the locals setter (handler will flush)
+		if (id === ctx.locals.org_id) {
+			ctx.locals.setOrgState(updates);
+			return json(ctx.locals.org_state);
+		}
+
+		// Otherwise, read/merge/write directly for a different org
+		const current = await getOrgStateCookie(
+			ctx.event.cookies,
+			ctx.config,
+			ctx.config.secret,
+			id,
+		);
+		for (const [key, value] of Object.entries(updates)) {
+			if (value === undefined || value === null) {
+				delete current[key];
+			} else {
+				current[key] = value;
+			}
+		}
+		await setOrgStateCookie(ctx.event.cookies, ctx.config, ctx.config.secret, id, current);
+		return json(current);
 	});
 
 // ============================================
@@ -1079,6 +1133,9 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('GET', '/user/signin-method', userSignInMethods),
 	defineRoute('DELETE', '/user/signin-method/:id', userSignInMethodRevoke),
 
+	// Preferences
+	defineRoute('PATCH', '/preference', preferencesUpdate),
+
 	// Organization
 	defineRoute('POST', '/org', orgCreate),
 	defineRoute('POST', '/org/switch', orgSwitch),
@@ -1087,6 +1144,7 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('GET', '/org/:id/user', orgListUsers),
 	defineRoute('PATCH', '/org/:id/user/:user_id', orgUpdateUserPermission),
 	defineRoute('DELETE', '/org/:id/user/:user_id', orgRemoveUser),
+	defineRoute('PATCH', '/org/:id/state', orgStateUpdate),
 
 	// Invitation
 	defineRoute('GET', '/invitation', invitationList),
