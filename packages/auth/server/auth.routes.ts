@@ -1072,17 +1072,17 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('GET', '/user', userGet),
 	defineRoute('PATCH', '/user', userUpdate),
 	defineRoute('DELETE', '/user', userDelete),
-	defineRoute('GET', '/user/signin-methods', userSignInMethods),
-	defineRoute('DELETE', '/user/signin-methods/:id', userSignInMethodRevoke),
+	defineRoute('GET', '/user/signin-method', userSignInMethods),
+	defineRoute('DELETE', '/user/signin-method/:id', userSignInMethodRevoke),
 
 	// Organization
 	defineRoute('POST', '/org', orgCreate),
 	defineRoute('POST', '/org/switch', orgSwitch),
 	defineRoute('PATCH', '/org/:id', orgUpdate),
 	defineRoute('DELETE', '/org/:id', orgDelete),
-	defineRoute('GET', '/org/:id/users', orgListUsers),
-	defineRoute('PATCH', '/org/:id/users/:user_id', orgUpdateUserPermission),
-	defineRoute('DELETE', '/org/:id/users/:user_id', orgRemoveUser),
+	defineRoute('GET', '/org/:id/user', orgListUsers),
+	defineRoute('PATCH', '/org/:id/user/:user_id', orgUpdateUserPermission),
+	defineRoute('DELETE', '/org/:id/user/:user_id', orgRemoveUser),
 
 	// Invitation
 	defineRoute('GET', '/invitation', invitationList),
@@ -1093,8 +1093,8 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('POST', '/invitation/:id/accept', invitationAccept),
 
 	// OAuth Account Linking (static routes before :vendor catch-all)
-	defineRoute('GET', '/oauth/accounts', oauthListAccounts),
-	defineRoute('DELETE', '/oauth/accounts/:id', oauthDisconnectAccount),
+	defineRoute('GET', '/oauth/account', oauthListAccounts),
+	defineRoute('DELETE', '/oauth/account/:id', oauthDisconnectAccount),
 
 	// OAuth Application / Provider (static routes before :vendor catch-all)
 	defineRoute('GET', '/oauth/authorize', oauthAuthorizeGet),

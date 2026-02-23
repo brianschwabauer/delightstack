@@ -360,10 +360,10 @@ export class AuthClient {
 					hasMore: boolean;
 				}>
 			> => {
-				return this.get('/user/signin-methods');
+				return this.get('/user/signin-method');
 			},
 			removeSignInMethod: async (method_id: string): Promise<AuthResult<void>> => {
-				return this.delete(`/user/signin-methods/${method_id}`);
+				return this.delete(`/user/signin-method/${method_id}`);
 			},
 		} as const,
 
@@ -434,19 +434,19 @@ export class AuthClient {
 					hasMore: boolean;
 				}>
 			> => {
-				return this.get(`/org/${org_id}/users`);
+				return this.get(`/org/${org_id}/user`);
 			},
 			updateUserPermission: async (
 				org_id: string,
 				user_id: string,
 				permission: number | string[],
 			): Promise<AuthResult<void>> => {
-				return this.patch(`/org/${org_id}/users/${user_id}`, {
+				return this.patch(`/org/${org_id}/user/${user_id}`, {
 					permission,
 				});
 			},
 			removeUser: async (org_id: string, user_id: string): Promise<AuthResult<void>> => {
-				return this.delete(`/org/${org_id}/users/${user_id}`);
+				return this.delete(`/org/${org_id}/user/${user_id}`);
 			},
 		} as const,
 
@@ -521,10 +521,10 @@ export class AuthClient {
 					hasMore: boolean;
 				}>
 			> => {
-				return this.get('/oauth/accounts');
+				return this.get('/oauth/account');
 			},
 			disconnectAccount: async (id: string): Promise<AuthResult<void>> => {
-				return this.delete(`/oauth/accounts/${id}`);
+				return this.delete(`/oauth/account/${id}`);
 			},
 		},
 	} as const;

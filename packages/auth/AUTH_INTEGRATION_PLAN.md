@@ -531,8 +531,8 @@ try {
 | GET    | `/user`                    | —               | `getUser()`            | `User`                      |
 | PATCH  | `/user`                    | `UpdateUser`    | `updateUser()`         | `User`                      |
 | DELETE | `/user`                    | —               | `markUserDeleted()`    | `204 No Content`            |
-| GET    | `/user/signin-methods`     | —               | `listSignInMethods()`  | `{ list, count, has_more }` |
-| DELETE | `/user/signin-methods/:id` | —               | `revokeSignInMethod()` | `204 No Content`            |
+| GET    | `/user/signin-method`     | —               | `listSignInMethods()`  | `{ list, count, has_more }` |
+| DELETE | `/user/signin-method/:id` | —               | `revokeSignInMethod()` | `204 No Content`            |
 
 #### Organization Routes
 
@@ -542,9 +542,9 @@ try {
 | POST   | `/org/switch`             | `z.object({ org_id: z.string() })`       | — (set cookie, refresh)   | `{ jwt, decoded_jwt, org_id }` |
 | PATCH  | `/org/:id`                | `z.object({ name, owner_id }).partial()` | `updateOrg()`             | `204 No Content`               |
 | DELETE | `/org/:id`                | —                                        | `markOrgDeleted()`        | `204 No Content`               |
-| GET    | `/org/:id/users`          | —                                        | `listOrgUsers()`          | `{ list, count, has_more }`    |
-| PATCH  | `/org/:id/users/:user_id` | `z.object({ permission })`               | `updateUserPermission()`  | `204 No Content`               |
-| DELETE | `/org/:id/users/:user_id` | —                                        | `updateUserPermission(0)` | `204 No Content`               |
+| GET    | `/org/:id/user`          | —                                        | `listOrgUsers()`          | `{ list, count, has_more }`    |
+| PATCH  | `/org/:id/user/:user_id` | `z.object({ permission })`               | `updateUserPermission()`  | `204 No Content`               |
+| DELETE | `/org/:id/user/:user_id` | —                                        | `updateUserPermission(0)` | `204 No Content`               |
 
 #### Invitation Routes
 
@@ -565,8 +565,8 @@ For users linking external OAuth accounts (e.g., Google Drive) to their existing
 | ------ | ------------------------- | -------------------------- | --------------------------- |
 | GET    | `/oauth/:vendor`          | — (build OAuth URL)        | `302 redirect`              |
 | GET    | `/oauth/:vendor/callback` | `connectOauthAccount()`    | `302 redirect`              |
-| GET    | `/oauth/accounts`         | `listOauthAccounts()`      | `{ list, count, has_more }` |
-| DELETE | `/oauth/accounts/:id`     | `disconnectOauthAccount()` | `204 No Content`            |
+| GET    | `/oauth/account`         | `listOauthAccounts()`      | `{ list, count, has_more }` |
+| DELETE | `/oauth/account/:id`     | `disconnectOauthAccount()` | `204 No Content`            |
 
 #### OAuth Application / Provider Routes
 
@@ -926,10 +926,10 @@ export class AuthClient {
 			listSignInMethods: async (): Promise<
 				AuthResult<{ list: UserSignInMethod[]; count: number; has_more: boolean }>
 			> => {
-				return this.get('/user/signin-methods');
+				return this.get('/user/signin-method');
 			},
 			removeSignInMethod: async (method_id: string): Promise<AuthResult<void>> => {
-				return this.del(`/user/signin-methods/${method_id}`);
+				return this.del(`/user/signin-method/${method_id}`);
 			},
 		},
 
@@ -1049,10 +1049,10 @@ export class AuthClient {
 			listAccounts: async (): Promise<
 				AuthResult<{ list: OauthAccount[]; count: number; has_more: boolean }>
 			> => {
-				return this.get('/oauth/accounts');
+				return this.get('/oauth/account');
 			},
 			disconnectAccount: async (id: string): Promise<AuthResult<void>> => {
-				return this.del(`/oauth/accounts/${id}`);
+				return this.del(`/oauth/account/${id}`);
 			},
 		},
 	};

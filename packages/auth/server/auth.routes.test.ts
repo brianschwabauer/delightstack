@@ -114,8 +114,8 @@ describe('matchRoute', () => {
 			expect(result).not.toBeNull();
 		});
 
-		it('matches GET /oauth/accounts', () => {
-			const result = matchRoute('GET', '/oauth/accounts');
+		it('matches GET /oauth/account', () => {
+			const result = matchRoute('GET', '/oauth/account');
 			expect(result).not.toBeNull();
 		});
 
@@ -176,21 +176,21 @@ describe('matchRoute', () => {
 			expect(result!.params.id).toBe('org_xyz');
 		});
 
-		it('matches GET /org/:id/users', () => {
-			const result = matchRoute('GET', '/org/org_abc/users');
+		it('matches GET /org/:id/user', () => {
+			const result = matchRoute('GET', '/org/org_abc/user');
 			expect(result).not.toBeNull();
 			expect(result!.params.id).toBe('org_abc');
 		});
 
-		it('matches PATCH /org/:id/users/:user_id and extracts both params', () => {
-			const result = matchRoute('PATCH', '/org/org_abc/users/user_123');
+		it('matches PATCH /org/:id/user/:user_id and extracts both params', () => {
+			const result = matchRoute('PATCH', '/org/org_abc/user/user_123');
 			expect(result).not.toBeNull();
 			expect(result!.params.id).toBe('org_abc');
 			expect(result!.params.user_id).toBe('user_123');
 		});
 
-		it('matches DELETE /org/:id/users/:user_id and extracts both params', () => {
-			const result = matchRoute('DELETE', '/org/org_abc/users/user_123');
+		it('matches DELETE /org/:id/user/:user_id and extracts both params', () => {
+			const result = matchRoute('DELETE', '/org/org_abc/user/user_123');
 			expect(result).not.toBeNull();
 			expect(result!.params.id).toBe('org_abc');
 			expect(result!.params.user_id).toBe('user_123');
@@ -208,8 +208,8 @@ describe('matchRoute', () => {
 			expect(result!.params.id).toBe('inv_abc');
 		});
 
-		it('matches DELETE /oauth/accounts/:id', () => {
-			const result = matchRoute('DELETE', '/oauth/accounts/oa_123');
+		it('matches DELETE /oauth/account/:id', () => {
+			const result = matchRoute('DELETE', '/oauth/account/oa_123');
 			expect(result).not.toBeNull();
 			expect(result!.params.id).toBe('oa_123');
 		});
@@ -254,8 +254,8 @@ describe('matchRoute', () => {
 			expect(result!.params.id).toBe('app_123');
 		});
 
-		it('matches DELETE /user/signin-methods/:id', () => {
-			const result = matchRoute('DELETE', '/user/signin-methods/method_123');
+		it('matches DELETE /user/signin-method/:id', () => {
+			const result = matchRoute('DELETE', '/user/signin-method/method_123');
 			expect(result).not.toBeNull();
 			expect(result!.params.id).toBe('method_123');
 		});
@@ -293,8 +293,8 @@ describe('matchRoute', () => {
 			expect(result!.params.vendor).toBeUndefined();
 		});
 
-		it('prefers /oauth/accounts over /oauth/:vendor for accounts', () => {
-			const result = matchRoute('GET', '/oauth/accounts');
+		it('prefers /oauth/account over /oauth/:vendor for accounts', () => {
+			const result = matchRoute('GET', '/oauth/account');
 			expect(result).not.toBeNull();
 			expect(result!.params.vendor).toBeUndefined();
 		});
