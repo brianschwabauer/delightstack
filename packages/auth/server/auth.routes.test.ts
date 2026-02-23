@@ -29,6 +29,11 @@ describe('matchRoute', () => {
 			expect(result).not.toBeNull();
 		});
 
+		it('matches GET /signout', () => {
+			const result = matchRoute('GET', '/signout');
+			expect(result).not.toBeNull();
+		});
+
 		it('matches GET /session', () => {
 			const result = matchRoute('GET', '/session');
 			expect(result).not.toBeNull();

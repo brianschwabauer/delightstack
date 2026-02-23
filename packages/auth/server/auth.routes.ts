@@ -311,6 +311,21 @@ const signOut: AuthRouteHandler = (ctx) =>
 		return noContent();
 	});
 
+const signOutRedirect: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		if (ctx.locals.session) {
+			const session_id = ctx.locals.session.jti;
+			await ctx.auth.revokeSession(session_id);
+			if (ctx.config.hooks?.onSignOut) {
+				await ctx.config.hooks.onSignOut({
+					user_id: ctx.locals.session.uid,
+					session_id,
+				});
+			}
+		}
+		return redirect('/');
+	});
+
 // ============================================
 // Session Routes
 // ============================================
@@ -1112,6 +1127,7 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('GET', '/signin/:vendor/callback', signInOauthCallback),
 	defineRoute('GET', '/signin/:vendor', signInOauth),
 	defineRoute('POST', '/signout', signOut),
+	defineRoute('GET', '/signout', signOutRedirect),
 
 	// Session
 	defineRoute('GET', '/session', sessionGet),

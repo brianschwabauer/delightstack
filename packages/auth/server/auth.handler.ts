@@ -415,7 +415,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 				}
 
 				// On signout: clear session + org state cookies (preferences persist across signouts)
-				if (route_path === '/signout' && response.status === 204) {
+				if (route_path === '/signout' && (response.status === 204 || response.status === 302)) {
 					deleteSessionCookie(event.cookies, config);
 					// Delete all org state cookies (caching only — not persisted to DB)
 					if (session) {
