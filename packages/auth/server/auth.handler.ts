@@ -160,8 +160,12 @@ function verifyCsrf(
 	return true;
 }
 
-/** Resolve org_id from URL params, query, header, or auto-select */
-function resolveOrgId(
+/**
+ * Default org_id resolver.
+ * Priority: URL params (org_id) > query (?org=) > header (Org-ID) > auto-select (single org).
+ * Verifies the user has access to the resolved org.
+ */
+function defaultResolveOrgId(
 	event: RequestEvent,
 	session: SessionToken<'auth'> | null,
 ): string | null {
@@ -274,7 +278,8 @@ export function createAuthHandle<Config extends AuthConfig>(
 		let preferences_dirty = false;
 		let preferences_persist = false; // when true, flush also writes to user DB for cross-device sync
 
-		// 8. Resolve org_id (URL params > query > header > auto-select — no cookie)
+		// 8. Resolve org_id (custom resolver or default: URL params > query > header > auto-select)
+		const resolveOrgId = config.resolveOrgId ?? defaultResolveOrgId;
 		const org_id = resolveOrgId(event, session);
 
 		// 9. Read org state cookie for current org

@@ -79,6 +79,21 @@ export interface AuthConfig<
 		base_url?: string;
 	};
 
+	/**
+	 * Custom org_id resolver. Called on every request to determine the active organization.
+	 * Receives the SvelteKit RequestEvent and the decoded session (null if not authenticated).
+	 * Return the org_id string or null if no org is selected.
+	 *
+	 * @default Resolves from: URL params (org_id) > query (?org=) > header (Org-ID) > auto-select (single org)
+	 *
+	 * @example
+	 * ```ts
+	 * // Route-based org selection from /org/[org_id]/...
+	 * resolveOrgId: (event, session) => event.params.org_id || null
+	 * ```
+	 */
+	resolveOrgId?: (event: import('@sveltejs/kit').RequestEvent, session: import('../types').SessionToken<'auth'> | null) => string | null;
+
 	/** Base path for auth API routes @default '/api/auth' */
 	base_path?: string;
 
