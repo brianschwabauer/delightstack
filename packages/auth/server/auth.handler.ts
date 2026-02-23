@@ -9,9 +9,12 @@ import {
 	getSessionCookie,
 	setSessionCookie,
 	deleteSessionCookie,
-	getOrgCookie,
-	setOrgCookie,
-	deleteOrgCookie,
+	getPreferencesCookie,
+	setPreferencesCookie,
+	deletePreferencesCookie,
+	getOrgStateCookie,
+	setOrgStateCookie,
+	deleteOrgStateCookie,
 } from '../sveltekit/cookies';
 import { defineAuthConfig } from './auth.config';
 
@@ -56,7 +59,7 @@ export interface AuthLocals {
 		user_session_id: string;
 	} | null;
 
-	/** The current organization ID */
+	/** The current organization ID (resolved from URL params/query/header/auto-select) */
 	org_id: string | null;
 
 	/** Current org info from the session token */
@@ -67,6 +70,18 @@ export interface AuthLocals {
 		db?: string;
 		plan?: number;
 	} | null;
+
+	/** Global user preferences from the signed preferences cookie */
+	preferences: Record<string, unknown>;
+
+	/** Per-org state from the signed org state cookie for the current org */
+	org_state: Record<string, unknown>;
+
+	/** Merge updates into the user preferences cookie. Set a value to null/undefined to remove it. */
+	setPreferences: (updates: Record<string, unknown>) => void;
+
+	/** Merge updates into the current org's state cookie. Set a value to null/undefined to remove it. */
+	setOrgState: (updates: Record<string, unknown>) => void;
 
 	/** User session metadata (IP, geo, user agent) */
 	meta: UserSessionMeta;
@@ -134,21 +149,19 @@ function verifyCsrf(
 	return true;
 }
 
-/** Resolve org_id from various sources */
+/** Resolve org_id from URL params, query, header, or auto-select */
 function resolveOrgId(
 	event: RequestEvent,
 	session: SessionToken<'auth'> | null,
-	config: ResolvedAuthConfig,
 ): string | null {
 	const { url, request } = event;
 	const params = event.params;
 
-	// Priority: URL params > query > header > cookie > auto-select
+	// Priority: URL params > query > header > auto-select
 	let org_id: string | null =
 		params.org_id ||
 		url.searchParams.get('org') ||
 		request.headers.get('Org-ID') ||
-		getOrgCookie(event.cookies, config) ||
 		null;
 
 	// Auto-select if user has exactly one org
@@ -232,7 +245,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 			}
 		}
 
-		// 6. Update cookies
+		// 6. Update session cookie
 		if (session && jwt) {
 			const current_cookie = getSessionCookie(event.cookies, config);
 			if (current_cookie !== jwt) {
@@ -242,22 +255,25 @@ export function createAuthHandle<Config extends AuthConfig>(
 			const has_cookie = !!getSessionCookie(event.cookies, config);
 			if (has_cookie) {
 				deleteSessionCookie(event.cookies, config);
-				deleteOrgCookie(event.cookies, config);
 			}
 		}
 
-		// 7. Resolve org_id
-		const org_id = resolveOrgId(event, session, config);
+		// 7. Read preferences cookie
+		let preferences = session
+			? await getPreferencesCookie(event.cookies, config, config.secret)
+			: {};
+		let preferences_dirty = false;
 
-		// Update org cookie
-		if (org_id) {
-			const current_org = getOrgCookie(event.cookies, config);
-			if (current_org !== org_id) {
-				setOrgCookie(event.cookies, config, org_id);
-			}
-		}
+		// 8. Resolve org_id (URL params > query > header > auto-select — no cookie)
+		const org_id = resolveOrgId(event, session);
 
-		// 8. Build user convenience object
+		// 9. Read org state cookie for current org
+		let org_state = org_id
+			? await getOrgStateCookie(event.cookies, config, config.secret, org_id)
+			: {};
+		let org_state_dirty = false;
+
+		// 10. Build user convenience object
 		const user = session
 			? {
 					id: session.uid,
@@ -269,7 +285,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 				}
 			: null;
 
-		// 9. Build org object
+		// 11. Build org object
 		const org =
 			session && org_id && session.org?.[org_id]
 				? {
@@ -281,13 +297,41 @@ export function createAuthHandle<Config extends AuthConfig>(
 					}
 				: null;
 
-		// 10. Populate event.locals with AuthLocals (lazy auth getter)
+		// 12. Build setState closures
+		const setPreferences = (updates: Record<string, unknown>) => {
+			for (const [key, value] of Object.entries(updates)) {
+				if (value === undefined || value === null) {
+					delete preferences[key];
+				} else {
+					preferences[key] = value;
+				}
+			}
+			preferences_dirty = true;
+		};
+
+		const setOrgState = (updates: Record<string, unknown>) => {
+			if (!org_id) return;
+			for (const [key, value] of Object.entries(updates)) {
+				if (value === undefined || value === null) {
+					delete org_state[key];
+				} else {
+					org_state[key] = value;
+				}
+			}
+			org_state_dirty = true;
+		};
+
+		// 13. Populate event.locals with AuthLocals
 		const locals: AuthLocals = {
 			session,
 			jwt: jwt || null,
 			user,
 			org_id,
 			org,
+			preferences,
+			org_state,
+			setPreferences,
+			setOrgState,
 			meta,
 			get auth() {
 				return getAuth();
@@ -295,7 +339,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 		};
 		Object.assign(event.locals, locals);
 
-		// 11. Check if URL matches auth routes
+		// 14. Check if URL matches auth routes
 		const base_path = config.base_path;
 		const pathname = event.url.pathname;
 
@@ -328,7 +372,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 					meta,
 				});
 
-				// After route: update cookies from response data if it contains a jwt
+				// After route: update session cookie from response JWT
 				if (response.status >= 200 && response.status < 300 && response.headers.get('Content-Type')?.includes('application/json')) {
 					try {
 						const cloned = response.clone();
@@ -336,28 +380,49 @@ export function createAuthHandle<Config extends AuthConfig>(
 						if (data.jwt && typeof data.jwt === 'string') {
 							setSessionCookie(event.cookies, config, data.jwt);
 						}
-						if (data.org_id && typeof data.org_id === 'string') {
-							setOrgCookie(event.cookies, config, data.org_id);
-						}
 					} catch {
 						// ignore parse errors
 					}
 				}
 
-				// On signout: clear cookies
+				// On signout: clear all cookies
 				if (route_path === '/signout' && response.status === 204) {
 					deleteSessionCookie(event.cookies, config);
-					deleteOrgCookie(event.cookies, config);
+					deletePreferencesCookie(event.cookies, config);
+					// Delete all org state cookies using org map from session
+					if (session) {
+						for (const oid of Object.keys(session.org || {})) {
+							deleteOrgStateCookie(event.cookies, config, oid);
+						}
+					}
+					preferences_dirty = false;
+					org_state_dirty = false;
+				}
+
+				// Flush dirty cookies before returning auth route response
+				if (preferences_dirty) {
+					await setPreferencesCookie(event.cookies, config, config.secret, preferences);
+				}
+				if (org_state_dirty && org_id) {
+					await setOrgStateCookie(event.cookies, config, config.secret, org_id, org_state);
 				}
 
 				return response;
 			}
 		}
 
-		// 12. Not an auth route — resolve normally
+		// 15. Not an auth route — resolve normally
 		const response = await resolve(event);
 
-		// 13. Post-resolve: intercept 500 JSON responses and normalize
+		// 16. Flush dirty cookies
+		if (preferences_dirty) {
+			await setPreferencesCookie(event.cookies, config, config.secret, preferences);
+		}
+		if (org_state_dirty && org_id) {
+			await setOrgStateCookie(event.cookies, config, config.secret, org_id, org_state);
+		}
+
+		// 17. Post-resolve: intercept 500 JSON responses and normalize
 		if (
 			response.status === 500 &&
 			response.headers.get('content-type')?.startsWith('application/json')

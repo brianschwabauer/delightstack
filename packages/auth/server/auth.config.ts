@@ -33,8 +33,10 @@ export interface AuthConfig<
 	cookies?: {
 		/** Session cookie name @default 'auth-session' */
 		session_name?: string;
-		/** Org cookie name @default 'auth-org' */
-		org_name?: string;
+		/** User preferences cookie name @default 'auth-pref' */
+		preferences_name?: string;
+		/** Per-org state cookie name prefix @default 'auth-org-' */
+		org_state_prefix?: string;
 		/** Cookie path @default '/' */
 		path?: string;
 		/** Secure cookies (HTTPS only) @default !dev */
@@ -138,7 +140,8 @@ export function defineAuthConfig<
 		csrf: config.csrf ?? true,
 		cookies: {
 			session_name: 'auth-session',
-			org_name: 'auth-org',
+			preferences_name: 'auth-pref',
+			org_state_prefix: 'auth-org-',
 			path: '/',
 			http_only: true,
 			secure: !dev,

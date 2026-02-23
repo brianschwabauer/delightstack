@@ -17,6 +17,8 @@ export interface AuthClientData {
 	jwt: string | null;
 	session: SessionToken<'auth'> | null;
 	org_id: string | null;
+	preferences: Record<string, unknown>;
+	org_state: Record<string, unknown>;
 }
 
 /**
@@ -41,6 +43,8 @@ export class AuthClient {
 	#jwt = $state<string | null>(null);
 	#session = $state<SessionToken<'auth'> | null>(null);
 	#org_id = $state<string | null>(null);
+	#preferences = $state<Record<string, unknown>>({});
+	#org_state = $state<Record<string, unknown>>({});
 
 	/** The raw JWT token (null if not signed in) */
 	get jwt() {
@@ -50,6 +54,16 @@ export class AuthClient {
 	/** The current user session - decoded from the jwt (null if not signed in) */
 	get session() {
 		return this.#session;
+	}
+
+	/** Global user preferences from the signed preferences cookie */
+	get preferences() {
+		return this.#preferences;
+	}
+
+	/** Per-org state from the signed org state cookie for the current org */
+	get org_state() {
+		return this.#org_state;
 	}
 
 	readonly signed_in = $derived(!!this.#session);
@@ -115,6 +129,8 @@ export class AuthClient {
 		this.#jwt = data?.jwt ?? null;
 		this.#session = data?.session ?? null;
 		this.#org_id = data?.org_id ?? null;
+		this.#preferences = data?.preferences ?? {};
+		this.#org_state = data?.org_state ?? {};
 		this.base_path = options?.base_path ?? '/api/auth';
 		this.refresh_threshold_ms = options?.refresh_threshold_ms ?? 600_000;
 		this.fetchFn = options?.fetch ?? fetch;
@@ -124,7 +140,13 @@ export class AuthClient {
 
 	/** Serializes state for SSR hydration (used by svelte's +layout files) */
 	toJSON(): AuthClientData {
-		return { jwt: this.#jwt, session: this.#session, org_id: this.#org_id };
+		return {
+			jwt: this.#jwt,
+			session: this.#session,
+			org_id: this.#org_id,
+			preferences: this.#preferences,
+			org_state: this.#org_state,
+		};
 	}
 
 	/** Creates an AuthClient from serialized data (used by svelte's +layout files) */
@@ -138,6 +160,16 @@ export class AuthClient {
 		const bit = permission_map[permission];
 		if (bit === undefined) return false;
 		return (this.org.role & (1 << bit)) !== 0;
+	}
+
+	/** Update local preferences state. Call after persisting to server via your own endpoint. */
+	updatePreferences(updates: Record<string, unknown>) {
+		this.#preferences = { ...this.#preferences, ...updates };
+	}
+
+	/** Update local org state. Call after persisting to server via your own endpoint. */
+	updateOrgState(updates: Record<string, unknown>) {
+		this.#org_state = { ...this.#org_state, ...updates };
 	}
 
 	/** All API methods nested under .api */
@@ -211,6 +243,8 @@ export class AuthClient {
 			this.#jwt = null;
 			this.#session = null;
 			this.#org_id = null;
+			this.#preferences = {};
+			this.#org_state = {};
 			this.stopAutoRefresh();
 			return { ok: true, data: undefined };
 		},

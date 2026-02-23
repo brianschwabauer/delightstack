@@ -175,8 +175,8 @@ export function extractJwtRefreshToken(jwt: string) {
 	return jti;
 }
 
-// Creates the crypto key with the given key_id from the env variable
-async function getSecretKey(secret: string) {
+/** Creates the crypto key from the hex-encoded secret for HMAC-SHA256 operations */
+export async function getSecretKey(secret: string) {
 	// Convert the hex key to a Uint8Array for use in the web crypto API
 	let keyBytes = new Uint8Array(secret.length / 2);
 	for (let i = 0; i < secret.length; i += 2) {

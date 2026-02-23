@@ -202,8 +202,10 @@ export interface AuthConfig<
 	cookies?: {
 		/** Session cookie name @default 'auth-session' */
 		session_name?: string;
-		/** Org cookie name @default 'auth-org' */
-		org_name?: string;
+		/** User preferences cookie name @default 'auth-pref' */
+		preferences_name?: string;
+		/** Per-org state cookie name prefix @default 'auth-org-' */
+		org_state_prefix?: string;
 		/** Cookie path @default '/' */
 		path?: string;
 		/** Secure cookies (HTTPS only) @default !dev */
@@ -289,7 +291,8 @@ export function defineAuthConfig<
 		csrf: config.csrf ?? true,
 		cookies: {
 			session_name: 'auth-session',
-			org_name: 'auth-org',
+			preferences_name: 'auth-pref',
+			org_state_prefix: 'auth-org-',
 			path: '/',
 			http_only: true,
 			secure: !dev,
@@ -352,7 +355,7 @@ export interface AuthLocals {
 		user_session_id: string;
 	} | null;
 
-	/** The current organization ID */
+	/** The current organization ID (resolved from URL params/query/header/auto-select) */
 	org_id: string | null;
 
 	/** Current org info from the session token */
@@ -363,6 +366,18 @@ export interface AuthLocals {
 		db?: string;
 		plan?: number;
 	} | null;
+
+	/** Global user preferences from the signed preferences cookie */
+	preferences: Record<string, unknown>;
+
+	/** Per-org state from the signed org state cookie for the current org */
+	org_state: Record<string, unknown>;
+
+	/** Merge updates into the user preferences cookie */
+	setPreferences: (updates: Record<string, unknown>) => void;
+
+	/** Merge updates into the current org's state cookie */
+	setOrgState: (updates: Record<string, unknown>) => void;
 
 	/** User session metadata (IP, geo, user agent) */
 	meta: UserSessionMeta;
@@ -381,7 +396,7 @@ export interface AuthLocals {
  * 3. Extract JWT from: cookie > Authorization header > ?auth= query param
  * 4. Decode JWT with decodeJwt(). On 'auth/expired', refresh via auth.refreshSession()
  * 5. Set/clear session cookie based on JWT state
- * 6. Resolve org_id from: URL params > ?org= query > Org-ID header > cookie > auto-select
+ * 6. Resolve org_id from: URL params > ?org= query > Org-ID header > auto-select (no cookie)
  * 7. Populate event.locals with AuthLocals (lazy auth getter for DO proxy in dev)
  * 8. Verify CSRF on POST/PATCH/DELETE (Origin/Referer check) if enabled
  * 9. If URL matches base_path + route, dispatch to auth.routes.ts and return Response
@@ -692,6 +707,8 @@ export interface AuthClientData {
 	jwt: string | null;
 	session: SessionToken<'auth'> | null;
 	org_id: string | null;
+	preferences: Record<string, unknown>;
+	org_state: Record<string, unknown>;
 }
 
 export class AuthClient {
@@ -1393,6 +1410,8 @@ export async function load({ locals }) {
 			jwt: authLocals.jwt,
 			session: authLocals.session,
 			org_id: authLocals.org_id,
+			preferences: authLocals.preferences,
+			org_state: authLocals.org_state,
 		},
 	};
 }
@@ -1531,7 +1550,7 @@ export const load = requirePermission('org:admin', ({ locals }) => {
   - JWT extraction (cookie > Authorization header > ?auth= query)
   - JWT decode/verify + auto-refresh on `auth/expired`
   - Meta extraction (IP, CF geo headers, user agent)
-  - Org ID resolution (URL params > headers > cookies > auto-select)
+  - Org ID resolution (URL params > query > header > auto-select — no cookie)
   - CSRF check (Origin/Referer on POST/PATCH/DELETE)
   - AuthLocals population (lazy DO getter for dev proxy)
   - Route dispatch to `auth.routes.ts`
@@ -1634,7 +1653,20 @@ Combining `createAuthState()` and `createAuthClient()` into a single `AuthClient
 
 Uses `!dev` from `$app/environment` passed via `config.dev`. In dev mode, cookies are not secure (HTTP works). In production, cookies are secure (HTTPS only). `httpOnly: true` is always the default.
 
-### 9. Lifecycle hooks — Config callbacks, not HTTP webhooks
+### 9. Cookies — Three-cookie architecture (session + preferences + per-org state)
+
+Instead of a single `auth-org` cookie that breaks with multi-tab org access, the handler uses three cookie types:
+- **Session cookie** (`auth-session`): The signed JWT token. Unchanged.
+- **Preferences cookie** (`auth-pref`): HMAC-SHA256 signed JSON for global user preferences (theme, locale, etc.). Optional — only created when `setPreferences()` is called.
+- **Per-org state cookies** (`auth-org-{org_id}`): HMAC-SHA256 signed JSON for per-org cached data and preferences. One per org, optional — only created when `setOrgState()` is called.
+
+**Key change**: org_id is resolved from URL params/query/header/auto-select — NOT from cookies. This allows multiple tabs to be open to different orgs simultaneously.
+
+Both preferences and org state cookies use the same HMAC-SHA256 secret as JWTs and share cookie security settings (httpOnly, secure, sameSite). All three cookie types are cleared on signout.
+
+Consumers update state via `locals.setPreferences()` and `locals.setOrgState()` in server-side code. The client receives state via SSR hydration and can update it locally with `auth.updatePreferences()` and `auth.updateOrgState()` after persisting through custom server routes.
+
+### 10. Lifecycle hooks — Config callbacks, not HTTP webhooks
 
 Hooks run in-process after auth operations: `onSignIn`, `onSignUp`, `onSignOut`, `onPasswordReset`, `onEmailVerified`, `onOrgJoined`. These are config callbacks, not external webhooks.
 

@@ -19,7 +19,8 @@ const authHandle = createAuthHandle({
 		dev,
 		cookies: {
 			session_name: 'foreverfamily-session',
-			org_name: 'foreverfamily-org',
+			preferences_name: 'foreverfamily-pref',
+			org_state_prefix: 'foreverfamily-org-',
 		},
 	},
 	getAuthServer: (event) => {
