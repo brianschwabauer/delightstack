@@ -274,8 +274,12 @@ const signInOauthCallback: AuthRouteHandler = (ctx) =>
 		)) as AuthOperationResult;
 
 		const is_new_user = result.type === 'signup';
+		const is_new_method = result.type === 'new-signin-method';
 		if (is_new_user && ctx.config.hooks?.onSignUp) {
 			await ctx.config.hooks.onSignUp({ result, method: 'oauth', meta: ctx.meta });
+		}
+		if (is_new_method && ctx.config.hooks?.onNewSignInMethod) {
+			await ctx.config.hooks.onNewSignInMethod({ result, vendor, meta: ctx.meta });
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({

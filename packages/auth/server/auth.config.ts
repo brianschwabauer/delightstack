@@ -101,6 +101,12 @@ export interface AuthConfig<
 			meta: UserSessionMeta;
 		}) => Promise<void>;
 
+		onNewSignInMethod?: (ctx: {
+			result: AuthOperationResult;
+			vendor: string;
+			meta: UserSessionMeta;
+		}) => Promise<void>;
+
 		onSignOut?: (ctx: { user_id: string; session_id: string }) => Promise<void>;
 
 		onPasswordReset?: (ctx: { user_id: string; email: string }) => Promise<void>;
