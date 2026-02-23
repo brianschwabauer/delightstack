@@ -10,7 +10,7 @@ interface GuardOptions {
 }
 
 /**
- * Creates typed auth guard functions bound to your permission_map.
+ * Creates typed auth guard functions bound to your permissions array.
  *
  * @example
  * ```ts
@@ -21,8 +21,8 @@ interface GuardOptions {
  * export const load = requirePermission('org:admin', ({ locals }) => ({ user: locals.user }));
  * ```
  */
-export function createAuthGuards<Config extends AuthConfig>(config: Config) {
-	type Permission = keyof Config['permission_map'] & string;
+export function createAuthGuards<const Config extends AuthConfig>(config: Config) {
+	type Permission = Config['permissions'][number];
 
 	function requireAuth<T>(
 		loadFn: (event: ServerLoadEvent & { locals: AuthLocals }) => T | Promise<T>,
@@ -80,7 +80,7 @@ export function createAuthGuards<Config extends AuthConfig>(config: Config) {
 			if (!locals.org_id || !locals.org) {
 				throw redirect(302, '/org/select');
 			}
-			const permissions = decodePermissions(config.permission_map, locals.org.role);
+			const permissions = decodePermissions(config.permissions, locals.org.role);
 			if (!permissions.includes(permission)) {
 				throw redirect(302, options?.forbidden_redirect ?? '/403');
 			}

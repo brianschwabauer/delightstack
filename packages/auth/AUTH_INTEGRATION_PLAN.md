@@ -171,24 +171,27 @@ export function resolveErrorCode(error: {
 ### 2. Server Configuration (`server/auth.config.ts`)
 
 ```typescript
-import type { UserPermissionMap, OauthCapabilityMap, UserSessionMeta } from '../types';
+import type { UserSessionMeta } from '../types';
 import type { AuthOperationResult } from './auth.db.server';
 
-export interface AuthConfig<
-	PermissionMap extends UserPermissionMap = UserPermissionMap,
-	CapabilityMap extends OauthCapabilityMap = OauthCapabilityMap,
-> {
+export interface AuthConfig {
 	/** JWT signing secret (hex-encoded HMAC-SHA256 key) */
 	secret: string;
 
 	/** JWT issuer identifier */
 	issuer: string;
 
-	/** Permission map for bitwise encoding */
-	permission_map: PermissionMap;
+	/**
+	 * Permission names for bitwise role encoding.
+	 * Array index = bit position. Append-only: never reorder or remove entries.
+	 */
+	permissions: readonly string[];
 
-	/** OAuth capability map for bitwise encoding */
-	oauth_capability_map: CapabilityMap;
+	/**
+	 * OAuth scope names for bitwise capability encoding.
+	 * Array index = bit position. Append-only: never reorder or remove entries.
+	 */
+	oauth_scopes: readonly string[];
 
 	/**
 	 * Whether the app is running in dev mode.
@@ -280,10 +283,7 @@ export interface AuthConfig<
 	};
 }
 
-export function defineAuthConfig<
-	P extends UserPermissionMap,
-	C extends OauthCapabilityMap,
->(config: AuthConfig<P, C>): AuthConfig<P, C> {
+export function defineAuthConfig(config: AuthConfig): ResolvedAuthConfig {
 	const dev = config.dev ?? false;
 	return {
 		...config,
@@ -603,7 +603,7 @@ For apps that want to BE an OAuth provider (third-party app management, authoriz
 
 ### 5. Route Guards (`sveltekit/guards.ts`)
 
-Guards need access to `permission_map` for permission checking. Solution: a factory function.
+Guards need access to the `permissions` array for permission checking. Solution: a factory function.
 
 ```typescript
 import { redirect } from '@sveltejs/kit';
@@ -618,10 +618,10 @@ interface GuardOptions {
 }
 
 /**
- * Creates typed auth guard functions bound to your permission_map.
+ * Creates typed auth guard functions bound to your permissions array.
  */
-export function createAuthGuards<Config extends AuthConfig>(config: Config) {
-	type Permission = keyof Config['permission_map'] & string;
+export function createAuthGuards<const Config extends AuthConfig>(config: Config) {
+	type Permission = Config['permissions'][number];
 
 	function requireAuth<T>(
 		loadFn: (event: ServerLoadEvent & { locals: AuthLocals }) => T | Promise<T>,
@@ -671,7 +671,7 @@ export function createAuthGuards<Config extends AuthConfig>(config: Config) {
 			if (!locals.org_id || !locals.org) {
 				throw redirect(302, '/org/select');
 			}
-			const permissions = decodePermissions(config.permission_map, locals.org.role);
+			const permissions = decodePermissions(config.permissions, locals.org.role);
 			if (!permissions.includes(permission)) {
 				throw redirect(302, options?.forbidden_redirect ?? '/403');
 			}
@@ -787,10 +787,10 @@ export class AuthClient {
 	}
 
 	// -- Permission checking --
-	isAllowed(permission: string, permission_map?: Record<string, number>): boolean {
-		if (!this.org || !permission_map) return false;
-		const bit = permission_map[permission];
-		if (bit === undefined) return false;
+	isAllowed(permission: string): boolean {
+		if (!this.org) return false;
+		const bit = this.permissions.indexOf(permission);
+		if (bit === -1) return false;
 		return (this.org.role & (1 << bit)) !== 0;
 	}
 
@@ -1337,8 +1337,8 @@ export const OAUTH_CAPABILITIES = {
 export const authConfig = defineAuthConfig({
 	secret: '', // Set at runtime from platform.env
 	issuer: 'my-app',
-	permission_map: PERMISSIONS,
-	oauth_capability_map: OAUTH_CAPABILITIES,
+	permissions: PERMISSIONS,
+	oauth_scopes: OAUTH_SCOPES,
 	dev,
 
 	oauth: {
@@ -1647,7 +1647,7 @@ Combining `createAuthState()` and `createAuthClient()` into a single `AuthClient
 
 ### 7. Guard factory pattern
 
-`createAuthGuards(config)` is called once with the config and returns bound guard functions with access to `permission_map`. Keeps route files clean.
+`createAuthGuards(config)` is called once with the config and returns bound guard functions with access to the `permissions` array. Keeps route files clean.
 
 ### 8. Cookie `secure` default — From `$app/environment`
 

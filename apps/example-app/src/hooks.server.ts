@@ -14,8 +14,8 @@ const authHandle = createAuthHandle({
 	config: {
 		secret: env.JWT_KEY_SECRET,
 		issuer: 'foreverfamily',
-		permission_map: {},
-		oauth_capability_map: {},
+		permissions: [],
+		oauth_scopes: [],
 		dev,
 		cookies: {
 			session_name: 'foreverfamily-session',

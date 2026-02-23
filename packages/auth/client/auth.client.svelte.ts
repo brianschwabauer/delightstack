@@ -120,6 +120,7 @@ export class AuthClient {
 	readonly org_ids = $derived(this.orgs.map((o) => o.id));
 
 	private base_path: string;
+	private permissions: readonly string[];
 	private refresh_threshold_ms: number;
 	private refresh_timer: ReturnType<typeof setTimeout> | null = null;
 	private fetchFn: typeof fetch;
@@ -128,6 +129,11 @@ export class AuthClient {
 		data?: AuthClientData,
 		options?: {
 			base_path?: string;
+			/**
+			 * Permission names for bitwise role encoding (same array passed to auth config).
+			 * Required for `isAllowed()` to work. Array index = bit position.
+			 */
+			permissions?: readonly string[];
 			refresh_threshold_ms?: number;
 			fetch?: typeof fetch;
 		},
@@ -138,6 +144,7 @@ export class AuthClient {
 		this.#preferences = data?.preferences ?? {};
 		this.#org_state = data?.org_state ?? {};
 		this.base_path = options?.base_path ?? '/api/auth';
+		this.permissions = options?.permissions ?? [];
 		this.refresh_threshold_ms = options?.refresh_threshold_ms ?? 600_000;
 		this.fetchFn = options?.fetch ?? fetch;
 
@@ -160,11 +167,11 @@ export class AuthClient {
 		return new AuthClient(data, options);
 	}
 
-	/** Checks if the current org role includes the given permission bit */
-	isAllowed(permission: string, permission_map?: Record<string, number>): boolean {
-		if (!this.org || !permission_map) return false;
-		const bit = permission_map[permission];
-		if (bit === undefined) return false;
+	/** Checks if the current org role includes the given permission */
+	isAllowed(permission: string): boolean {
+		if (!this.org) return false;
+		const bit = this.permissions.indexOf(permission);
+		if (bit === -1) return false;
 		return (this.org.role & (1 << bit)) !== 0;
 	}
 

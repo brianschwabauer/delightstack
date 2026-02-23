@@ -16,18 +16,11 @@ vi.mock('@sveltejs/kit', () => ({
 	},
 }));
 
-const PERMISSION_MAP = {
-	'org:read': 0,
-	'org:write': 1,
-	'org:admin': 2,
-	'org:owner': 3,
-} as const;
-
 const guards = createAuthGuards({
 	secret: 'test-secret',
 	issuer: 'test',
-	permission_map: PERMISSION_MAP,
-	oauth_capability_map: {},
+	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
+	oauth_scopes: [],
 });
 
 function makeLocals(overrides: Partial<AuthLocals> = {}): AuthLocals {

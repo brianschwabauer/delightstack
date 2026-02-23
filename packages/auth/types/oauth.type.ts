@@ -2,40 +2,40 @@ import { z } from 'zod/v4';
 import { Meta } from './meta.type';
 
 /**
- * A map of oauth capabilities to the index of the bit that will be flipped to 1 when true
- * E.g. { profile: 0, email: 1 } means that if both profile and email are granted,
- * the resulting bitwise integer will have bits 0 and 1 set to 1.
+ * Encodes the given OAuth scope names into a bitwise integer for storing in the database.
+ * The array index of each scope name is its bit position.
+ *
+ * @param scopes - The full list of OAuth scope names (array index = bit position). Append-only: never reorder or remove entries.
+ * @param values - The scope names to encode (must be entries from `scopes`)
  */
-export interface OauthCapabilityMap {
-	[capability: string]: number;
+export function encodeOauthScopes<const T extends readonly string[]>(
+	scopes: T,
+	values: T[number][],
+): number {
+	let encoded = 0;
+	for (const value of values) {
+		const bit = scopes.indexOf(value);
+		if (bit !== -1) encoded |= 1 << bit;
+	}
+	return encoded;
 }
 
-/** Encodes the organization's given capabilities into a bitwise integer for storing in the database */
-export function encodeOauthCapability<
-	CapabilityMap extends OauthCapabilityMap,
-	Capability extends keyof CapabilityMap & string,
->(capabilityMap: CapabilityMap, capabilities: Capability[]) {
-	let capability = 0;
-	capabilities.forEach((key) => {
-		if (capabilityMap[key] === undefined) return;
-		capability |= 1 << capabilityMap[key];
-	});
-	return capability;
-}
-
-/** Decodes a bitwise integer representing an organization's capabilities and returns the capabilities */
-export function decodeOauthCapability<
-	CapabilityMap extends OauthCapabilityMap,
-	Capability extends keyof CapabilityMap & string,
->(capabilityMap: CapabilityMap, capability: number) {
-	const capabilities: Capability[] = [];
-	Object.entries(capabilityMap).forEach(([key, value]) => {
-		if (typeof value !== 'number') return;
-		if (capability & (1 << value)) {
-			capabilities.push(key as Capability);
-		}
-	});
-	return capabilities;
+/**
+ * Decodes a bitwise integer into the OAuth scope names it represents.
+ * The array index of each scope name is its bit position.
+ *
+ * @param scopes - The full list of OAuth scope names (array index = bit position)
+ * @param encoded - The bitwise integer to decode
+ */
+export function decodeOauthScopes<const T extends readonly string[]>(
+	scopes: T,
+	encoded: number,
+): T[number][] {
+	const result: T[number][] = [];
+	for (let i = 0; i < scopes.length; i++) {
+		if (encoded & (1 << i)) result.push(scopes[i]);
+	}
+	return result;
 }
 
 /** The configuration used to authorize an oauth2 connection to an API */

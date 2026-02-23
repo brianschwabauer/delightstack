@@ -4,17 +4,15 @@ import { AUTH_DATABASE_UPGRADES, AuthDatabaseSchema } from './auth.sql.schema';
 import { ApiError, generateID, parseSchema, apiError } from '@delightstack/utilities';
 import { generateJwt, decodeJwt } from './jwt.server';
 import {
-	decodeOauthCapability,
+	decodeOauthScopes,
 	decodePermissions,
 	encodePermissions,
 	OauthApplication,
-	OauthCapabilityMap,
 	OauthToken,
 	SessionToken,
-	UserPermissionMap,
 	UserSession,
 	UserSessionMeta,
-	encodeOauthCapability,
+	encodeOauthScopes,
 	OauthAccount,
 	UserSignInMethod,
 	UpdateUser,
@@ -50,10 +48,7 @@ interface Env {
 	DEV: boolean;
 }
 
-export interface AuthDatabaseServerOptions<
-	PermissionMap extends UserPermissionMap = UserPermissionMap,
-	CapabilityMap extends OauthCapabilityMap = OauthCapabilityMap,
-> {
+export interface AuthDatabaseServerOptions {
 	/**
 	 * The secret used to sign the jwt tokens.
 	 * To generate a new secret key, use the following code:
@@ -71,27 +66,34 @@ export interface AuthDatabaseServerOptions<
 	/** The id/name issuer of the JWT tokens. Can be any string - usually unique to an application */
 	issuer: string;
 
-	/** The map of user permissions used to encode/decode user permissions */
-	permissionMap: PermissionMap;
+	/**
+	 * Permission names for bitwise role encoding.
+	 * Array index = bit position. Append-only: never reorder or remove entries.
+	 * @example permissions: ['org:read', 'org:write', 'org:admin', 'org:owner']
+	 */
+	permissions: readonly string[];
 
-	/** The map of oauth capabilities used to encode/decode oauth capabilities */
-	oauthCapabilityMap: CapabilityMap;
+	/**
+	 * OAuth scope names for bitwise capability encoding.
+	 * Array index = bit position. Append-only: never reorder or remove entries.
+	 * @example oauth_scopes: ['profile', 'email', 'calendar']
+	 */
+	oauth_scopes: readonly string[];
 
 	/**
 	 * The permission required for a user to be an admin of an organization.
 	 * This is necessary because we will add this permission automatically to users that create new organizations.
-	 * This permission string must be a key in the `permissionMap`.
+	 * This permission string must be an entry in the `permissions` array.
 	 * @default 'org:admin'
 	 */
-	orgAdminPermission?: keyof PermissionMap & string;
+	orgAdminPermission?: string;
 
 	/**
-	 * The capability required for an oauth application to access the user's profile information.
-	 * We need this to know which capability to check when fetching the user's profile from the oauth provider.
-	 * This capability string must be a key in the `capabilityMap`.
+	 * The OAuth scope required to access the user's profile information from an OAuth provider.
+	 * This scope string must be an entry in the `oauth_scopes` array.
 	 * @default 'profile'
 	 */
-	oauthProfileCapability?: keyof CapabilityMap & string;
+	oauthProfileScope?: string;
 }
 
 /** A Durable Object for handling database requests */
@@ -101,8 +103,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	private get orgAdminPermission() {
 		return this.options.orgAdminPermission || 'org:admin';
 	}
-	private get oauthProfileCapability() {
-		return this.options.oauthProfileCapability || 'profile';
+	private get oauthProfileScope() {
+		return this.options.oauthProfileScope || 'profile';
 	}
 
 	/**
@@ -254,12 +256,12 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			});
 			if (existing_permission) {
 				const existing_permissions = decodePermissions(
-					this.options.permissionMap,
+					this.options.permissions,
 					existing_permission.permission,
 				);
-				const new_permissions = decodePermissions(this.options.permissionMap, permission);
+				const new_permissions = decodePermissions(this.options.permissions, permission);
 				const all_permissions = encodePermissions(
-					this.options.permissionMap,
+					this.options.permissions,
 					Array.from(new Set([...existing_permissions, ...new_permissions])),
 				);
 				this.sql.update('org_user', existing_permission.id, {
@@ -369,12 +371,12 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			});
 			if (existing_permission) {
 				const existing_permissions = decodePermissions(
-					this.options.permissionMap,
+					this.options.permissions,
 					existing_permission.permission,
 				);
-				const new_permissions = decodePermissions(this.options.permissionMap, permission);
+				const new_permissions = decodePermissions(this.options.permissions, permission);
 				const all_permissions = encodePermissions(
-					this.options.permissionMap,
+					this.options.permissions,
 					Array.from(new Set([...existing_permissions, ...new_permissions])),
 				);
 				this.sql.update('org_user', existing_permission.id, {
@@ -715,14 +717,14 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				type = 'signin';
 			}
 			if (!user_auth) {
-				const hasProfilePermision = decodeOauthCapability(
-					this.options.oauthCapabilityMap,
+				const hasProfilePermision = decodeOauthScopes(
+					this.options.oauth_scopes,
 					existing_token.capability,
-				).includes(this.oauthProfileCapability);
+				).includes(this.oauthProfileScope);
 				if (!hasProfilePermision) {
 					throw apiError({
 						status: 400,
-						message: `This oauth account is already connected to another user and doesn't have ${this.oauthProfileCapability} permissions`,
+						message: `This oauth account is already connected to another user and doesn't have the ${this.oauthProfileScope} scope`,
 					});
 				}
 				// The oauth token is not being used as a sign in method. It is being used for another vendor api (like Google Drive)
@@ -821,15 +823,15 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				});
 				if (existing_permission) {
 					const existing_permissions = decodePermissions(
-						this.options.permissionMap,
+						this.options.permissions,
 						existing_permission.permission,
 					);
 					const new_permissions = decodePermissions(
-						this.options.permissionMap,
+						this.options.permissions,
 						permission,
 					);
 					const all_permissions = encodePermissions(
-						this.options.permissionMap,
+						this.options.permissions,
 						Array.from(new Set([...existing_permissions, ...new_permissions])),
 					);
 					permission = all_permissions;
@@ -899,15 +901,15 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 					account_email: email,
 					account_name: oauth_token.account_name,
 					account_image: oauth_token.account_image,
-					capability: encodeOauthCapability(
-						this.options.oauthCapabilityMap,
+					capability: encodeOauthScopes(
+						this.options.oauth_scopes,
 						oauth_token.capabilities,
 					),
 				});
 				this.sql.insert('oauth_token_permission', undefined, {
 					oauth_token_id,
 					user_id,
-					permission: encodePermissions(this.options.permissionMap, [
+					permission: encodePermissions(this.options.permissions, [
 						this.orgAdminPermission,
 					]),
 				});
@@ -1269,7 +1271,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			this.sql.insert('oauth_token_permission', undefined, {
 				oauth_token_id: new_token.id,
 				user_id,
-				permission: encodePermissions(this.options.permissionMap, [
+				permission: encodePermissions(this.options.permissions, [
 					this.orgAdminPermission,
 				]),
 			});
@@ -1325,7 +1327,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				or: [
 					{ key: 'user_id', is: '=', value: user_id },
 					...org_permissions.map((permission) => {
-						const org_permission = encodePermissions(this.options.permissionMap, [
+						const org_permission = encodePermissions(this.options.permissions, [
 							permission,
 						]);
 						return {
@@ -1341,7 +1343,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const oauth_token_permissions = token_permissions.reduce(
 			(acc, token_permission) => {
 				const new_permissions = decodePermissions(
-					this.options.permissionMap,
+					this.options.permissions,
 					token_permission.permission,
 				);
 				acc[token_permission.oauth_token_id] = Array.from(
@@ -1359,8 +1361,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 					vendor: oauth_token.vendor,
 					vendor_id: oauth_token.vendor_id,
 					permissions: permissions,
-					capabilities: decodeOauthCapability(
-						this.options.oauthCapabilityMap,
+					capabilities: decodeOauthScopes(
+						this.options.oauth_scopes,
 						oauth_token.capability,
 					),
 					account_name: oauth_token.account_name,
@@ -1390,7 +1392,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 						or: [
 							{ key: 'user_id', is: '=', value: user_id },
 							...org_permissions.map((permission) => {
-								const org_permission = encodePermissions(this.options.permissionMap, [
+								const org_permission = encodePermissions(this.options.permissions, [
 									permission,
 								]);
 								return {
@@ -1405,10 +1407,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				],
 			},
 		});
-		let permissions = [] as (keyof typeof this.options.permissionMap & string)[];
+		let permissions: string[] = [];
 		token_permissions.forEach((token_permission) =>
 			permissions.push(
-				...decodePermissions(this.options.permissionMap, token_permission.permission),
+				...decodePermissions(this.options.permissions, token_permission.permission),
 			),
 		);
 		permissions = Array.from(new Set(permissions));
@@ -1472,7 +1474,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (!org_user) return { list: [], count: 0, hasMore: false };
-		const list = decodePermissions(this.options.permissionMap, org_user.permission);
+		const list = decodePermissions(this.options.permissions, org_user.permission);
 		return {
 			list,
 			count: list.length,
@@ -1489,15 +1491,13 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	updateUserPermission(
 		user_id: string,
 		org_id: string,
-		encodedOrDecodedPermission:
-			| number
-			| (keyof typeof this.options.permissionMap & string)[],
+		encodedOrDecodedPermission: number | string[],
 	) {
 		const permission =
 			typeof encodedOrDecodedPermission === 'number'
 				? encodedOrDecodedPermission
-				: encodePermissions(this.options.permissionMap, encodedOrDecodedPermission);
-		const decoded = decodePermissions(this.options.permissionMap, permission);
+				: encodePermissions(this.options.permissions, encodedOrDecodedPermission);
+		const decoded = decodePermissions(this.options.permissions, permission);
 		if (decoded.includes('superadmin:read') || decoded.includes('superadmin:write')) {
 			throw apiError({
 				status: 400,
@@ -1514,7 +1514,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		const current_permissions = decodePermissions(
-			this.options.permissionMap,
+			this.options.permissions,
 			current_org_user?.permission || 0,
 		);
 
@@ -1554,7 +1554,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 					{
 						key: 'permission',
 						is: '&=',
-						value: encodePermissions(this.options.permissionMap, ['org:write']),
+						value: encodePermissions(this.options.permissions, ['org:write']),
 					},
 				],
 			},
@@ -2255,7 +2255,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			this.sql.insert('org_user', null, {
 				org_id: created_org.id,
 				user_id: org.owner_id,
-				permission: encodePermissions(this.options.permissionMap, [
+				permission: encodePermissions(this.options.permissions, [
 					this.orgAdminPermission,
 				]),
 			});
@@ -2283,11 +2283,11 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			});
 			if (new_owners_permissions) {
 				const current_permissions = decodePermissions(
-					this.options.permissionMap,
+					this.options.permissions,
 					new_owners_permissions.permission,
 				);
 				this.sql.update('org_user', new_owners_permissions.id, {
-					permission: encodePermissions(this.options.permissionMap, [
+					permission: encodePermissions(this.options.permissions, [
 						...current_permissions,
 						this.orgAdminPermission,
 					]),
@@ -2296,7 +2296,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				this.sql.insert('org_user', null, {
 					org_id: id,
 					user_id: org.owner_id,
-					permission: encodePermissions(this.options.permissionMap, [
+					permission: encodePermissions(this.options.permissions, [
 						this.orgAdminPermission,
 					]),
 				});
@@ -3403,8 +3403,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			access_token_expires_at: token.access_token_expires_at,
 			refresh_token: token.refresh_token,
 			refresh_token_expires_at: token.refresh_token_expires_at,
-			capabilities: decodeOauthCapability(
-				this.options.oauthCapabilityMap,
+			capabilities: decodeOauthScopes(
+				this.options.oauth_scopes,
 				token.capability,
 			),
 			vendor: token.vendor,
@@ -3425,8 +3425,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			access_token_expires_at: token.access_token_expires_at,
 			refresh_token: token.refresh_token,
 			refresh_token_expires_at: token.refresh_token_expires_at,
-			capability: encodeOauthCapability(
-				this.options.oauthCapabilityMap,
+			capability: encodeOauthScopes(
+				this.options.oauth_scopes,
 				token.capabilities,
 			),
 			vendor: token.vendor,

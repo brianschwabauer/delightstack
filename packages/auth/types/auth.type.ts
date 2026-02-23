@@ -6,44 +6,40 @@ export const EncodedPermission = z.number().int().nonnegative();
 export type EncodedPermission = z.infer<typeof EncodedPermission>;
 
 /**
- * A map of user permissions to the index of the bit that will be flipped to 1 when true
- * E.g. { 'account:read': 0, 'account:write': 1 } means that if both account:read and account:write are granted,
- * the resulting bitwise integer will have bits 0 and 1 set to 1.
+ * Encodes the given permission names into a bitwise integer for storing in the database.
+ * The array index of each permission name is its bit position.
+ *
+ * @param permissions - The full list of permission names (array index = bit position). Append-only: never reorder or remove entries.
+ * @param values - The permission names to encode (must be entries from `permissions`)
  */
-export interface UserPermissionMap {
-	/**
-	 * The permission string - @example 'account:read', 'org:write', etc.
-	 * The value is the index of the bit that will be set to 1 when the permission is granted.
-	 */
-	[permission: string]: number;
-}
-
-/** Encodes the user's given permissions into a bitwise integer for storing in the database */
-export function encodePermissions<
-	PermissionMap extends UserPermissionMap,
-	Permission extends keyof PermissionMap & string,
->(permissionMap: PermissionMap, permissions: Permission[]): EncodedPermission {
+export function encodePermissions<const T extends readonly string[]>(
+	permissions: T,
+	values: T[number][],
+): EncodedPermission {
 	let encoded = 0;
-	Array.from(new Set(permissions)).forEach((key) => {
-		if (permissionMap[key] === undefined) return;
-		encoded |= 1 << permissionMap[key];
-	});
+	for (const value of values) {
+		const bit = permissions.indexOf(value);
+		if (bit !== -1) encoded |= 1 << bit;
+	}
 	return encoded;
 }
 
-/** Decodes a bitwise integer representing an organization's permissions and returns the permissions */
-export function decodePermissions<
-	PermissionMap extends UserPermissionMap,
-	Permission extends keyof PermissionMap & string,
->(permissionMap: PermissionMap, encodedPermission: EncodedPermission): Permission[] {
-	const decoded: Permission[] = [];
-	Object.entries(permissionMap).forEach(([key, value]) => {
-		if (typeof value !== 'number') return;
-		if (encodedPermission & (1 << value)) {
-			decoded.push(key as Permission);
-		}
-	});
-	return decoded;
+/**
+ * Decodes a bitwise integer into the permission names it represents.
+ * The array index of each permission name is its bit position.
+ *
+ * @param permissions - The full list of permission names (array index = bit position)
+ * @param encoded - The bitwise integer to decode
+ */
+export function decodePermissions<const T extends readonly string[]>(
+	permissions: T,
+	encoded: EncodedPermission,
+): T[number][] {
+	const result: T[number][] = [];
+	for (let i = 0; i < permissions.length; i++) {
+		if (encoded & (1 << i)) result.push(permissions[i]);
+	}
+	return result;
 }
 
 /** Generic fields added to each JWT */

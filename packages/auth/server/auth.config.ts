@@ -1,25 +1,30 @@
-import type { UserPermissionMap, OauthCapabilityMap, UserSessionMeta } from '../types';
+import type { UserSessionMeta } from '../types';
 import type { AuthOperationResult } from './auth.db.server';
 
 /**
  * Configuration for the auth integration layer.
  * Pass to `defineAuthConfig()` to fill in defaults, or directly to `createAuthHandle()`.
  */
-export interface AuthConfig<
-	PermissionMap extends UserPermissionMap = UserPermissionMap,
-	CapabilityMap extends OauthCapabilityMap = OauthCapabilityMap,
-> {
+export interface AuthConfig {
 	/** JWT signing secret (hex-encoded HMAC-SHA256 key) */
 	secret: string;
 
 	/** JWT issuer identifier */
 	issuer: string;
 
-	/** Permission map for bitwise encoding */
-	permission_map: PermissionMap;
+	/**
+	 * Permission names for bitwise role encoding.
+	 * Array index = bit position. Append-only: never reorder or remove entries.
+	 * @example permissions: ['org:read', 'org:write', 'org:admin', 'org:owner']
+	 */
+	permissions: readonly string[];
 
-	/** OAuth capability map for bitwise encoding */
-	oauth_capability_map: CapabilityMap;
+	/**
+	 * OAuth scope names for bitwise capability encoding.
+	 * Array index = bit position. Append-only: never reorder or remove entries.
+	 * @example oauth_scopes: ['profile', 'email', 'calendar']
+	 */
+	oauth_scopes: readonly string[];
 
 	/**
 	 * Whether the app is running in dev mode.
@@ -142,10 +147,7 @@ export interface AuthConfig<
 }
 
 /** Resolved auth config with all defaults filled in */
-export interface ResolvedAuthConfig<
-	PermissionMap extends UserPermissionMap = UserPermissionMap,
-	CapabilityMap extends OauthCapabilityMap = OauthCapabilityMap,
-> extends AuthConfig<PermissionMap, CapabilityMap> {
+export interface ResolvedAuthConfig extends AuthConfig {
 	base_path: string;
 	csrf: boolean | { allowed_origins?: string[] };
 	cookies: Required<NonNullable<AuthConfig['cookies']>>;
@@ -153,10 +155,7 @@ export interface ResolvedAuthConfig<
 }
 
 /** Creates an auth config with sensible defaults */
-export function defineAuthConfig<
-	P extends UserPermissionMap,
-	C extends OauthCapabilityMap,
->(config: AuthConfig<P, C>): ResolvedAuthConfig<P, C> {
+export function defineAuthConfig(config: AuthConfig): ResolvedAuthConfig {
 	const dev = config.dev ?? false;
 	return {
 		...config,
