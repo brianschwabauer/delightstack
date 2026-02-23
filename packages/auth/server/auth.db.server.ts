@@ -1437,6 +1437,28 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		});
 	}
 
+	/**
+	 * Reads the user's preferences from the `user.json` column.
+	 * Preferences are stored under the `preferences` key within the JSON object.
+	 * Returns an empty object if no preferences exist.
+	 */
+	getUserPreferences(user_id: string): Record<string, unknown> {
+		const user = this.sql.get('user', user_id);
+		const json = JSON.parse(user?.json || '{}');
+		return (json.preferences as Record<string, unknown>) || {};
+	}
+
+	/**
+	 * Writes user preferences into the `user.json` column under the `preferences` key.
+	 * Preserves any other data already stored in the JSON column.
+	 */
+	setUserPreferences(user_id: string, preferences: Record<string, unknown>): void {
+		const user = this.sql.get('user', user_id);
+		const json = JSON.parse(user?.json || '{}');
+		json.preferences = preferences;
+		this.sql.update('user', user_id, { json: JSON.stringify(json) });
+	}
+
 	/** Returns the list of permissions the user has in the given org */
 	getUserPermissions(user_id: string, org_id: string) {
 		const [org_user] = this.sql.list('org_user', {

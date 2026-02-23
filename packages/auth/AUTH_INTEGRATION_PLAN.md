@@ -367,16 +367,16 @@ export interface AuthLocals {
 		plan?: number;
 	} | null;
 
-	/** Global user preferences from the signed preferences cookie */
+	/** Global user preferences (persists across signouts, synced to user DB) */
 	preferences: Record<string, unknown>;
 
-	/** Per-org state from the signed org state cookie for the current org */
+	/** Per-org state for current org (cleared on signout, NOT synced to DB) */
 	org_state: Record<string, unknown>;
 
-	/** Merge updates into the user preferences cookie */
+	/** Merge updates into preferences (auto-persists to cookie + user DB) */
 	setPreferences: (updates: Record<string, unknown>) => void;
 
-	/** Merge updates into the current org's state cookie */
+	/** Merge updates into org state (cookie only, not synced to DB) */
 	setOrgState: (updates: Record<string, unknown>) => void;
 
 	/** User session metadata (IP, geo, user agent) */
@@ -1656,15 +1656,15 @@ Uses `!dev` from `$app/environment` passed via `config.dev`. In dev mode, cookie
 ### 9. Cookies — Three-cookie architecture (session + preferences + per-org state)
 
 Instead of a single `auth-org` cookie that breaks with multi-tab org access, the handler uses three cookie types:
-- **Session cookie** (`auth-session`): The signed JWT token. Unchanged.
-- **Preferences cookie** (`auth-pref`): HMAC-SHA256 signed JSON for global user preferences (theme, locale, etc.). Optional — only created when `setPreferences()` is called.
-- **Per-org state cookies** (`auth-org-{org_id}`): HMAC-SHA256 signed JSON for per-org cached data and preferences. One per org, optional — only created when `setOrgState()` is called.
+- **Session cookie** (`auth-session`): The signed JWT token. Cleared on signout.
+- **Preferences cookie** (`auth-pref`): HMAC-SHA256 signed JSON for global user preferences (theme, locale, etc.). **Persists across signouts** and is synced to the user DB (`user.json.preferences`) for cross-device access. On sign-in, DB preferences are merged into the cookie (DB wins on conflict, cookie fills gaps). Optional — only created when `setPreferences()` is called.
+- **Per-org state cookies** (`auth-org-{org_id}`): HMAC-SHA256 signed JSON for per-org cached data. One per org. **Cleared on signout, NOT synced to DB** — intended for caching org data like org name. Optional — only created when `setOrgState()` is called.
 
 **Key change**: org_id is resolved from URL params/query/header/auto-select — NOT from cookies. This allows multiple tabs to be open to different orgs simultaneously.
 
-Both preferences and org state cookies use the same HMAC-SHA256 secret as JWTs and share cookie security settings (httpOnly, secure, sameSite). All three cookie types are cleared on signout.
+All cookies use the same HMAC-SHA256 secret as JWTs and share cookie security settings (httpOnly, secure, sameSite).
 
-Consumers update state via `locals.setPreferences()` and `locals.setOrgState()` in server-side code. The client receives state via SSR hydration and can update it locally with `auth.updatePreferences()` and `auth.updateOrgState()` after persisting through custom server routes.
+Consumers update preferences via `locals.setPreferences()` (server) or `auth.setPreferences()` (client). The client method auto-persists via `PATCH /preference` in the browser. Org state is updated via `locals.setOrgState()` (server) or `auth.setOrgState()` (client, auto-persists via `PATCH /org/:id/state`).
 
 ### 10. Lifecycle hooks — Config callbacks, not HTTP webhooks
 

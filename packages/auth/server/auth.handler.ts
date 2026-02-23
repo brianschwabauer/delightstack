@@ -11,7 +11,6 @@ import {
 	deleteSessionCookie,
 	getPreferencesCookie,
 	setPreferencesCookie,
-	deletePreferencesCookie,
 	getOrgStateCookie,
 	setOrgStateCookie,
 	deleteOrgStateCookie,
@@ -71,16 +70,28 @@ export interface AuthLocals {
 		plan?: number;
 	} | null;
 
-	/** Global user preferences from the signed preferences cookie */
+	/**
+	 * Global user preferences (from signed preferences cookie).
+	 * Persists across signouts and is synced to the user DB for cross-device access.
+	 */
 	preferences: Record<string, unknown>;
 
-	/** Per-org state from the signed org state cookie for the current org */
+	/**
+	 * Per-org state for the current org (from signed org state cookie).
+	 * Cleared on signout. NOT synced to DB — intended for caching org data like org name.
+	 */
 	org_state: Record<string, unknown>;
 
-	/** Merge updates into the user preferences cookie. Set a value to null/undefined to remove it. */
+	/**
+	 * Merge updates into the user preferences cookie. Set a value to null/undefined to remove it.
+	 * Changes are automatically persisted to both the signed cookie and the user DB.
+	 */
 	setPreferences: (updates: Record<string, unknown>) => void;
 
-	/** Merge updates into the current org's state cookie. Set a value to null/undefined to remove it. */
+	/**
+	 * Merge updates into the current org's state cookie. Set a value to null/undefined to remove it.
+	 * Changes are written to the signed cookie only (not synced to DB).
+	 */
 	setOrgState: (updates: Record<string, unknown>) => void;
 
 	/** User session metadata (IP, geo, user agent) */
@@ -258,11 +269,10 @@ export function createAuthHandle<Config extends AuthConfig>(
 			}
 		}
 
-		// 7. Read preferences cookie
-		let preferences = session
-			? await getPreferencesCookie(event.cookies, config, config.secret)
-			: {};
+		// 7. Read preferences cookie (always — persists across signouts for things like dark mode)
+		let preferences = await getPreferencesCookie(event.cookies, config, config.secret);
 		let preferences_dirty = false;
+		let preferences_persist = false; // when true, flush also writes to user DB for cross-device sync
 
 		// 8. Resolve org_id (URL params > query > header > auto-select — no cookie)
 		const org_id = resolveOrgId(event, session);
@@ -307,6 +317,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 				}
 			}
 			preferences_dirty = true;
+			preferences_persist = true;
 		};
 
 		const setOrgState = (updates: Record<string, unknown>) => {
@@ -379,29 +390,50 @@ export function createAuthHandle<Config extends AuthConfig>(
 						const data = (await cloned.json()) as Record<string, unknown>;
 						if (data.jwt && typeof data.jwt === 'string') {
 							setSessionCookie(event.cookies, config, data.jwt);
+
+							// Restore preferences from DB on sign-in (DB wins on conflict for cross-device sync)
+							const decoded = data.decoded_jwt as { uid?: string } | undefined;
+							if (decoded?.uid) {
+								try {
+									const db_prefs = await getAuth().getUserPreferences(decoded.uid) as Record<string, unknown>;
+									if (Object.keys(db_prefs).length > 0) {
+										preferences = { ...preferences, ...db_prefs };
+										preferences_dirty = true;
+										// preferences_persist stays false — no need to write back what we just read
+									}
+								} catch { /* ignore DB errors */ }
+							}
 						}
 					} catch {
 						// ignore parse errors
 					}
 				}
 
-				// On signout: clear all cookies
+				// On signout: clear session + org state cookies (preferences persist across signouts)
 				if (route_path === '/signout' && response.status === 204) {
 					deleteSessionCookie(event.cookies, config);
-					deletePreferencesCookie(event.cookies, config);
-					// Delete all org state cookies using org map from session
+					// Delete all org state cookies (caching only — not persisted to DB)
 					if (session) {
 						for (const oid of Object.keys(session.org || {})) {
 							deleteOrgStateCookie(event.cookies, config, oid);
 						}
 					}
+					// Preferences cookie is intentionally kept — it persists across signouts
+					// so users don't lose settings like dark mode. Preferences are also synced
+					// to the user DB, so they restore automatically on sign-in from any device.
 					preferences_dirty = false;
+					preferences_persist = false;
 					org_state_dirty = false;
 				}
 
 				// Flush dirty cookies before returning auth route response
 				if (preferences_dirty) {
 					await setPreferencesCookie(event.cookies, config, config.secret, preferences);
+					preferences_dirty = false;
+				}
+				if (preferences_persist && session) {
+					try { await getAuth().setUserPreferences(session.uid, preferences); } catch { /* ignore */ }
+					preferences_persist = false;
 				}
 				if (org_state_dirty && org_id) {
 					await setOrgStateCookie(event.cookies, config, config.secret, org_id, org_state);
@@ -417,6 +449,11 @@ export function createAuthHandle<Config extends AuthConfig>(
 		// 16. Flush dirty cookies
 		if (preferences_dirty) {
 			await setPreferencesCookie(event.cookies, config, config.secret, preferences);
+			preferences_dirty = false;
+		}
+		if (preferences_persist && session) {
+			try { await getAuth().setUserPreferences(session.uid, preferences); } catch { /* ignore */ }
+			preferences_persist = false;
 		}
 		if (org_state_dirty && org_id) {
 			await setOrgStateCookie(event.cookies, config, config.secret, org_id, org_state);

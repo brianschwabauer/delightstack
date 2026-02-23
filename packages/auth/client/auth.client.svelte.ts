@@ -56,12 +56,18 @@ export class AuthClient {
 		return this.#session;
 	}
 
-	/** Global user preferences from the signed preferences cookie */
+	/**
+	 * Global user preferences (from signed preferences cookie).
+	 * Persists across signouts and is synced to the user DB for cross-device access.
+	 */
 	get preferences() {
 		return this.#preferences;
 	}
 
-	/** Per-org state from the signed org state cookie for the current org */
+	/**
+	 * Per-org state for the current org (from signed org state cookie).
+	 * Cleared on signout. NOT synced to DB — intended for caching org data.
+	 */
 	get org_state() {
 		return this.#org_state;
 	}
@@ -164,8 +170,9 @@ export class AuthClient {
 
 	/**
 	 * Merge updates into the user preferences. Set a value to null/undefined to remove it.
-	 * - **Browser**: sends PATCH /preference to persist the signed cookie, then updates local state.
-	 * - **Server**: updates local state only. Use `locals.setPreferences()` to persist cookie changes.
+	 * Preferences persist across signouts and are synced to the user DB for cross-device access.
+	 * - **Browser**: sends PATCH /preference to persist to both signed cookie and user DB.
+	 * - **Server**: updates local state only. Use `locals.setPreferences()` to persist.
 	 */
 	async setPreferences(updates: Record<string, unknown>): Promise<AuthResult<Record<string, unknown>>> {
 		if (typeof window === 'undefined') {
@@ -190,8 +197,9 @@ export class AuthClient {
 	/**
 	 * Merge updates into an org's state. Set a value to null/undefined to remove it.
 	 * Defaults to the current org if `org_id` is omitted.
-	 * - **Browser**: sends PATCH /org/:id/state to persist the signed cookie, then updates local state.
-	 * - **Server**: updates local state only. Use `locals.setOrgState()` to persist cookie changes.
+	 * Org state is cleared on signout and NOT synced to DB — intended for caching org data.
+	 * - **Browser**: sends PATCH /org/:id/state to persist the signed cookie.
+	 * - **Server**: updates local state only. Use `locals.setOrgState()` to persist.
 	 */
 	async setOrgState(
 		updates: Record<string, unknown>,
@@ -300,7 +308,7 @@ export class AuthClient {
 			this.#jwt = null;
 			this.#session = null;
 			this.#org_id = null;
-			this.#preferences = {};
+			// Preferences intentionally kept — they persist across signouts (e.g. dark mode)
 			this.#org_state = {};
 			this.stopAutoRefresh();
 			return { ok: true, data: undefined };
