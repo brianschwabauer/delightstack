@@ -113,6 +113,7 @@ const signInEmailMagic: AuthRouteHandler = (ctx) =>
 			const link = `${base_url}${ctx.config.base_path}/signin/email/verify?token=${result.jwt}`;
 			await ctx.config.email.sendEmail({
 				to: body.email,
+				link,
 				subject: 'Sign in to your account',
 				html: `<a href="${link}">Click here to sign in</a>`,
 				text: `Sign in by visiting: ${link}`,
@@ -182,6 +183,7 @@ const signUpEmail: AuthRouteHandler = (ctx) =>
 			const link = `${base_url}${ctx.config.base_path}/email/verify/confirm?token=${verificationResult.jwt}`;
 			await ctx.config.email.sendEmail({
 				to: body.email,
+				link,
 				subject: 'Verify your email',
 				html: `<a href="${link}">Click here to verify your email</a>`,
 				text: `Verify your email by visiting: ${link}`,
@@ -370,6 +372,7 @@ const passwordReset: AuthRouteHandler = (ctx) =>
 			const link = `${base_url}${ctx.config.base_path}/password/reset/confirm?token=${result.jwt}`;
 			await ctx.config.email.sendEmail({
 				to: body.email,
+				link,
 				subject: 'Reset your password',
 				html: `<a href="${link}">Click here to reset your password</a>`,
 				text: `Reset your password by visiting: ${link}`,
@@ -439,6 +442,7 @@ const emailVerify: AuthRouteHandler = (ctx) =>
 			const link = `${base_url}${ctx.config.base_path}/email/verify/confirm?token=${result.jwt}`;
 			await ctx.config.email.sendEmail({
 				to: ctx.locals.user!.email,
+				link,
 				subject: 'Verify your email',
 				html: `<a href="${link}">Click here to verify your email</a>`,
 				text: `Verify your email by visiting: ${link}`,

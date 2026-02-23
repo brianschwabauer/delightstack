@@ -66,12 +66,21 @@ export interface AuthConfig<
 		};
 	};
 
-	/** Email sending function for magic links, verification, password reset */
+	/**
+	 * Email sending configuration for magic links, verification, and password reset.
+	 * The `sendEmail` function receives default `subject`, `html`, and `text` along with the
+	 * action `link`. Use the defaults as-is or build custom email content using the `link`.
+	 */
 	email?: {
 		sendEmail: (options: {
 			to: string;
+			/** The action URL the user should visit (e.g. verification link, password reset link) */
+			link: string;
+			/** Default subject line — use as-is or replace with your own */
 			subject: string;
+			/** Default HTML body — use as-is or replace with your own using `link` */
 			html: string;
+			/** Default plain text body — use as-is or replace with your own using `link` */
 			text: string;
 			type: 'magic-link' | 'verification' | 'password-reset' | 'new-signin-method';
 		}) => Promise<void>;
