@@ -13,6 +13,7 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
 - **Form generation** — Schema definitions automatically produce HTML form field attributes (type, required, min, max, pattern, placeholder, label).
 - **Declarative API routes** — Define entity routes with lifecycle hooks instead of writing repetitive CRUD boilerplate. Plug into SvelteKit's `handle` via `createDatabaseHandle()`.
 - **Two server classes** — `DatabaseServer` for schema-driven CRUD with search, `SqlServer` for raw SQL when you need full control.
+- **Reactive client (Svelte 5)** — `DatabaseClient` gives you reactive entity state, live search, IndexedDB caching, and optimistic updates — all running off-thread in a SharedWorker.
 
 ## Architecture
 
@@ -491,33 +492,33 @@ import { createDatabaseHandle, defineRoute } from '@delightstack/database';
 import { personTable, postTable } from './tables';
 
 const personRoute = defineRoute({
-  entity: 'person', // route defaults to '/api/person'
-  table: personTable,
-  hooks: {
-    beforeCreate: ({ event }) => {
-      if (!event.locals.user) throw apiError({ status: 401 });
-    },
-    beforeUpdate: ({ existing, event }) => {
-      if (existing.creator_id !== event.locals.user?.id) {
-        throw apiError({ status: 403, message: 'Not authorized' });
-      }
-    },
-    beforeDelete: ({ existing, event }) => {
-      if (existing.creator_id !== event.locals.user?.id) {
-        throw apiError({ status: 403, message: 'Not authorized' });
-      }
-    },
-  },
+	entity: 'person', // route defaults to '/api/person'
+	table: personTable,
+	hooks: {
+		beforeCreate: ({ event }) => {
+			if (!event.locals.user) throw apiError({ status: 401 });
+		},
+		beforeUpdate: ({ existing, event }) => {
+			if (existing.creator_id !== event.locals.user?.id) {
+				throw apiError({ status: 403, message: 'Not authorized' });
+			}
+		},
+		beforeDelete: ({ existing, event }) => {
+			if (existing.creator_id !== event.locals.user?.id) {
+				throw apiError({ status: 403, message: 'Not authorized' });
+			}
+		},
+	},
 });
 
 const postRoute = defineRoute({
-  entity: 'post', // route defaults to '/api/post'
-  table: postTable,
+	entity: 'post', // route defaults to '/api/post'
+	table: postTable,
 });
 
 const databaseHandle = createDatabaseHandle({
-  getDatabase: (event) => event.locals.db,
-  routes: [personRoute, postRoute],
+	getDatabase: (event) => event.locals.db,
+	routes: [personRoute, postRoute],
 });
 
 export const handle = sequence(authHandle, appHandle, databaseHandle);
@@ -529,13 +530,13 @@ This replaces all the `+server.ts` files you would otherwise need for `/api/pers
 
 For each registered route (e.g. `/api/person`), the handler maps HTTP methods to CRUD operations:
 
-| Method   | Path               | Operation     | DB Call                    |
-| -------- | ------------------ | ------------- | -------------------------- |
-| `GET`    | `/api/person`      | **list**      | `db.list('person', query)` |
-| `POST`   | `/api/person`      | **create**    | `db.create('person', data)`|
-| `GET`    | `/api/person/:id`  | **get**       | `db.get('person', id)`     |
-| `PATCH`  | `/api/person/:id`  | **update**    | `db.update('person', id, data)` |
-| `DELETE` | `/api/person/:id`  | **delete**    | `db.delete('person', id)`  |
+| Method   | Path              | Operation  | DB Call                         |
+| -------- | ----------------- | ---------- | ------------------------------- |
+| `GET`    | `/api/person`     | **list**   | `db.list('person', query)`      |
+| `POST`   | `/api/person`     | **create** | `db.create('person', data)`     |
+| `GET`    | `/api/person/:id` | **get**    | `db.get('person', id)`          |
+| `PATCH`  | `/api/person/:id` | **update** | `db.update('person', id, data)` |
+| `DELETE` | `/api/person/:id` | **delete** | `db.delete('person', id)`       |
 
 Any other method returns `405 Method Not Allowed`. URLs that don't match any route are passed through to SvelteKit's normal routing via `resolve(event)`.
 
@@ -545,21 +546,21 @@ All hooks receive an `event` property (the SvelteKit `RequestEvent`), giving you
 
 **Before hooks** — throw to reject the operation. Optionally return modified data.
 
-| Hook             | Context Properties          | Notes |
-| ---------------- | --------------------------- | ----- |
-| `beforeCreate`   | `data`, `event`             | `data` is parsed via `table.parse()`. Return an object to override. |
-| `beforeUpdate`   | `id`, `data`, `existing`, `event` | `existing` is pre-fetched from DB. `data` is the raw partial update. Return an object to override. |
-| `beforeDelete`   | `id`, `existing`, `event`   | `existing` is pre-fetched from DB. |
-| `beforeGet`      | `id`, `event`               | Lightweight guard — entity is not pre-fetched. |
-| `beforeList`     | `query`, `event`            | `query` is decoded from URL search params. Return an object to override. |
+| Hook           | Context Properties                | Notes                                                                                              |
+| -------------- | --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `beforeCreate` | `data`, `event`                   | `data` is parsed via `table.parse()`. Return an object to override.                                |
+| `beforeUpdate` | `id`, `data`, `existing`, `event` | `existing` is pre-fetched from DB. `data` is the raw partial update. Return an object to override. |
+| `beforeDelete` | `id`, `existing`, `event`         | `existing` is pre-fetched from DB.                                                                 |
+| `beforeGet`    | `id`, `event`                     | Lightweight guard — entity is not pre-fetched.                                                     |
+| `beforeList`   | `query`, `event`                  | `query` is decoded from URL search params. Return an object to override.                           |
 
 **After hooks** — for side effects (logging, notifications, cache invalidation).
 
-| Hook           | Context Properties | Notes |
-| -------------- | ------------------ | ----- |
-| `afterCreate`  | `data`, `event`    | `data` is the created entity from the DB. |
-| `afterUpdate`  | `data`, `event`    | `data` is the updated entity from the DB. |
-| `afterDelete`  | `id`, `event`      | Entity has been deleted. |
+| Hook          | Context Properties | Notes                                     |
+| ------------- | ------------------ | ----------------------------------------- |
+| `afterCreate` | `data`, `event`    | `data` is the created entity from the DB. |
+| `afterUpdate` | `data`, `event`    | `data` is the updated entity from the DB. |
+| `afterDelete` | `id`, `event`      | Entity has been deleted.                  |
 
 ### Type Safety
 
@@ -567,15 +568,15 @@ All hooks receive an `event` property (the SvelteKit `RequestEvent`), giving you
 
 ```typescript
 const personRoute = defineRoute({
-  entity: 'person',
-  table: personTable,
-  hooks: {
-    beforeUpdate: ({ existing, data, event }) => {
-      // 'existing' is typed as Database.Entity<typeof personTable>
-      // TypeScript knows about existing.creator_id, existing.name, etc.
-      console.log(existing.name);
-    },
-  },
+	entity: 'person',
+	table: personTable,
+	hooks: {
+		beforeUpdate: ({ existing, data, event }) => {
+			// 'existing' is typed as Database.Entity<typeof personTable>
+			// TypeScript knows about existing.creator_id, existing.name, etc.
+			console.log(existing.name);
+		},
+	},
 });
 ```
 
@@ -583,16 +584,16 @@ const personRoute = defineRoute({
 
 `GET` requests to collection routes decode URL search params into a search query:
 
-| Param    | Example                          | Description |
-| -------- | -------------------------------- | ----------- |
-| `limit`  | `?limit=20`                      | Max results to return |
-| `offset` | `?offset=40`                     | Skip N results |
-| `cursor` | `?cursor=abc123`                 | Cursor-based pagination token |
-| `term`   | `?term=alice`                    | Full-text search term |
-| `q`      | `?q=alice`                       | Alias for `term` |
-| `order`  | `?order=name:ASC,created_at:DESC`| Comma-separated `field:direction` pairs |
-| `where`  | `?where={"role":"admin"}`        | JSON-encoded Orama WHERE clause |
-| `sparse` | `?sparse=false`                  | `false` for full entities, `true` for search fields only |
+| Param    | Example                           | Description                                              |
+| -------- | --------------------------------- | -------------------------------------------------------- |
+| `limit`  | `?limit=20`                       | Max results to return                                    |
+| `offset` | `?offset=40`                      | Skip N results                                           |
+| `cursor` | `?cursor=abc123`                  | Cursor-based pagination token                            |
+| `term`   | `?term=alice`                     | Full-text search term                                    |
+| `q`      | `?q=alice`                        | Alias for `term`                                         |
+| `order`  | `?order=name:ASC,created_at:DESC` | Comma-separated `field:direction` pairs                  |
+| `where`  | `?where={"role":"admin"}`         | JSON-encoded Orama WHERE clause                          |
+| `sparse` | `?sparse=false`                   | `false` for full entities, `true` for search fields only |
 
 ### Modifying Data in Hooks
 
@@ -654,6 +655,295 @@ const table = Database.table('user', (schema) => ({
 
 Spread these directly onto HTML input elements or use them to drive form component libraries.
 
+## Client (Svelte 5)
+
+The client package provides a reactive, type-safe API client for the browser. It uses the same table definitions as the server — single source of truth — and gives you local search via Orama, IndexedDB caching, optimistic updates, and automatic fallback to server-side search when entity counts exceed a threshold.
+
+> **Svelte 5 required.** The client uses Svelte 5 runes (`$state`, `$derived`, `$effect`) and is not compatible with other frameworks. The server and schema packages have no framework dependency.
+
+### How it works
+
+```
+┌─ Browser Main Thread ─────────────────────────────────────┐
+│                                                           │
+│  DatabaseClient                                           │
+│  ├─ entity(type, id) → EntityState     (reactive wrapper) │
+│  ├─ create/update/delete(type, ...)    (optimistic CRUD)  │
+│  ├─ search(type, query) → DatabaseSearch (live results)   │
+│  └─ list(type, query) → Promise        (one-shot fetch)   │
+│           │                                               │
+│           │ comlink proxy                                 │
+│           ▼                                               │
+│  SharedWorker (prod) / Worker (dev)                       │
+│  ┌────────────────────────────────────────────────────┐   │
+│  │  DatabaseWorker                                    │   │
+│  │  ├─ Orama search indices (per entity, in-memory)   │   │
+│  │  ├─ IndexedDB cache (entities + sync metadata)     │   │
+│  │  ├─ CRUD → fetch + index update                    │   │
+│  │  └─ sync() → /api/sync → update indices + IDB      │   │
+│  └────────────────────────────────────────────────────┘   │
+│                         │                                 │
+└─────────────────────────┼─────────────────────────────────┘
+                          │ fetch
+                          ▼
+              ┌─────────────────────┐
+              │  Server (SvelteKit) │
+              │  /api/{entity}      │
+              │  /api/{entity}/:id  │
+              │  /api/sync          │
+              └─────────────────────┘
+```
+
+All heavy work (Orama indexing, IndexedDB reads/writes, fetch calls) runs in a Web Worker. In production, a SharedWorker is used so multiple tabs share a single index. In dev mode, a regular Worker is used for HMR compatibility.
+
+### Setup
+
+```typescript
+import { DatabaseClient } from '@delightstack/database/client';
+import { personTable, postTable, commentTable } from './tables';
+
+const db = new DatabaseClient({
+	// Same table definitions used on the server
+	tables: { person: personTable, post: postTable, comment: commentTable },
+
+	// IndexedDB database name — scope per org/context
+	db_name: `org-${org_id}`,
+
+	// Per-entity overrides (all optional)
+	entities: {
+		comment: { search_mode: 'server' }, // never try client-side search
+		person: { threshold: 10_000 }, // custom threshold (default 5000)
+		post: { cache: false }, // disable IDB cache for this entity
+	},
+
+	// Dev mode uses regular Worker instead of SharedWorker
+	dev: import.meta.env.DEV,
+
+	// Hooks for external integration (e.g. websocket)
+	hooks: {
+		onEntityChange: (event) => {
+			/* { type, entity_type, id, data } */
+		},
+		onSubscribe: (callback) => {
+			return websocket.on('entity:*', callback);
+		},
+	},
+});
+
+await db.init();
+```
+
+### CRUD
+
+All CRUD methods are type-safe — the entity type flows through from your table definitions.
+
+```typescript
+// Create
+const person = await db.create('person', { name: 'Alice', email: 'a@b.com' });
+
+// Get (returns from IDB cache with background refresh)
+const alice = await db.get('person', person.id);
+
+// Update (optimistically updates local search index)
+const updated = await db.update('person', person.id, { name: 'Alice B.' });
+
+// Delete (optimistically removes from local search index)
+await db.delete('person', person.id);
+```
+
+### EntityState (reactive wrapper)
+
+`EntityState` wraps a single entity with reactive state. It auto-loads from the server when first accessed in a Svelte component, tracks unsaved changes, and provides save/delete/reset methods.
+
+```typescript
+// Get a reactive wrapper (cached singleton per entity:id)
+const person = db.entity('person', 'abc123');
+
+// Or with initial data (e.g. from SSR page data)
+const person = db.entity('person', 'abc123', { name: 'Alice' });
+
+// Or for creating a new entity (no ID)
+const person = db.entity('person');
+```
+
+Use it in Svelte components — reactive properties update the UI automatically:
+
+```svelte
+<script>
+	const person = db.entity('person', id);
+</script>
+
+{#if person.loading}
+	<p>Loading...</p>
+{:else}
+	<input bind:value={person.value.name} />
+
+	{#if person.has_changes}
+		<button onclick={() => person.save()}>Save</button>
+		<button onclick={() => person.reset()}>Discard</button>
+	{/if}
+
+	{#if person.saving}
+		<p>Saving...</p>
+	{/if}
+{/if}
+```
+
+**Reactive properties:**
+
+| Property       | Type                            | Description                                       |
+| -------------- | ------------------------------- | ------------------------------------------------- |
+| `value`        | `Database.Entity<T>`            | Current local state (editable, bind-friendly)     |
+| `server_value` | `Database.Entity<T> \| null`    | Last confirmed server state                       |
+| `has_changes`  | `boolean`                       | Whether local differs from server                 |
+| `saving`       | `boolean`                       | Whether a save is in progress                     |
+| `loading`      | `boolean`                       | Whether entity is being fetched                   |
+| `loaded`       | `boolean`                       | Whether entity has been fetched at least once     |
+| `id`           | `string \| number \| undefined` | Entity ID (set after first save for new entities) |
+| `entity_type`  | `string` (literal)              | The entity type string                            |
+| `created_at`   | `number \| undefined`           | Creation timestamp                                |
+| `updated_at`   | `number \| undefined`           | Last update timestamp                             |
+
+**Methods:**
+
+| Method                             | Description                                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `save(changes?)`                   | Save to server. Creates if no ID, updates otherwise. Pass partial changes or omit to save the full `value`. |
+| `load({ force_refresh?, fetch? })` | Fetch fresh from server. Called automatically on first access.                                              |
+| `delete()`                         | Delete from server. Clears local state and removes from cache.                                              |
+| `reset()`                          | Discard local changes, revert to `server_value`.                                                            |
+| `toJSON()`                         | Clean snapshot of the current value.                                                                        |
+
+**Standalone usage (without DatabaseClient):**
+
+```typescript
+import { EntityState } from '@delightstack/database/client';
+
+// Use EntityState.from() for singleton caching
+const person = EntityState.from<typeof personTable>('person', id);
+
+// Or create directly
+const person = new EntityState('person', id);
+```
+
+### DatabaseSearch (reactive search)
+
+`DatabaseSearch` provides live search results that auto-update when the underlying Orama index changes (e.g. after a create/update/delete). When the entity count exceeds the threshold, it automatically switches to server-side search.
+
+```typescript
+const search = db.search('person', { term: 'alice', limit: 20 });
+```
+
+```svelte
+<script>
+	const search = db.search('person', { term: '', limit: 20 });
+</script>
+
+<input bind:value={search.query.term} />
+
+{#if search.loading}
+	<p>Searching...</p>
+{:else}
+	<p>{search.count} results ({search.mode} mode)</p>
+	{#each search.docs as person}
+		<p>{person.name}</p>
+	{/each}
+{/if}
+```
+
+**Reactive properties:**
+
+| Property      | Type                         | Description                                             |
+| ------------- | ---------------------------- | ------------------------------------------------------- |
+| `results`     | `SearchHit<T>[]`             | Array of hits with `id`, `document`, and `score`        |
+| `docs`        | `Database.SearchEntity<T>[]` | Convenience — just the documents                        |
+| `count`       | `number`                     | Total matching count                                    |
+| `loading`     | `boolean`                    | Whether search is in progress                           |
+| `error`       | `unknown`                    | Any error from the search                               |
+| `mode`        | `'client' \| 'server'`       | Current search mode                                     |
+| `query`       | `WorkerSearchQuery`          | Get/set the search query. Setting triggers a re-search. |
+| `entity_type` | `string` (literal)           | The entity type string                                  |
+
+**Methods:**
+
+| Method      | Description                                         |
+| ----------- | --------------------------------------------------- |
+| `refresh()` | Manually re-execute the search.                     |
+| `destroy()` | Clean up subscriptions and effects. Call when done. |
+
+### One-shot list
+
+For simple server queries that don't need live updates:
+
+```typescript
+const results = await db.list('person', { term: 'alice', limit: 20 });
+// results.hits, results.count
+```
+
+### Lifecycle
+
+```typescript
+// Change scope (e.g. user switches org) — clears cache, re-initializes
+await db.setScope(`org-${new_org_id}`);
+
+// Cleanup — terminates worker, clears subscriptions
+await db.destroy();
+```
+
+**Reactive state on DatabaseClient:**
+
+| Property      | Type      | Description                             |
+| ------------- | --------- | --------------------------------------- |
+| `initialized` | `boolean` | Whether `init()` has completed          |
+| `syncing`     | `boolean` | Whether the initial sync is in progress |
+| `synced`      | `boolean` | Whether the initial sync has completed  |
+
+### Search modes
+
+Each entity type operates in one of two search modes:
+
+- **`client`** (default) — Entities are synced to an in-memory Orama index in the worker. Searches are instant and offline-capable. When the cumulative entity count during sync exceeds the threshold (default 5000), the entity automatically switches to server mode.
+- **`server`** — Searches hit the server API. No local index is maintained. Use this for large or infrequently-searched entity types.
+
+You can force the mode per entity in the config:
+
+```typescript
+entities: {
+  comment: { search_mode: 'server' },  // always server
+  person: { threshold: 10_000 },        // switch at 10k instead of 5k
+}
+```
+
+### Error handling
+
+CRUD errors from the worker are reconstructed as `DatabaseError` instances on the main thread:
+
+```typescript
+import { DatabaseError } from '@delightstack/database/client';
+
+try {
+	await db.create('person', data);
+} catch (error) {
+	if (error instanceof DatabaseError) {
+		console.log(error.status); // HTTP status code
+		console.log(error.body); // Server error body
+		console.log(error.message); // Error message
+	}
+}
+```
+
+### Without SvelteKit
+
+The client package requires **Svelte 5** for its reactive state (`$state`, `$derived`, `$effect`). It does not depend on SvelteKit specifically — you can use it in any Svelte 5 app that has a bundler supporting Web Workers (Vite, webpack, etc.).
+
+The server-side code _does_ work without Svelte or SvelteKit:
+
+- **Schema definitions** (`Database.table()`) are framework-agnostic. Use them in any TypeScript project.
+- **DatabaseServer** and **SqlServer** are Cloudflare Durable Object classes. They work with any framework that deploys to Cloudflare Workers (Hono, itty-router, plain Workers, etc.).
+- **`createDatabaseHandle()`** is SvelteKit-specific (it returns a SvelteKit `Handle`). For other frameworks, call `DatabaseServer` methods directly from your route handlers.
+
+If you're using a non-Svelte frontend, you can still use the server package and call the REST API endpoints directly — the client package just provides convenience wrappers for the reactive patterns that Svelte enables.
+
 ## Design Decisions
 
 **Why SQLite + Orama (not just SQLite)?**
@@ -673,6 +963,8 @@ Offset-based pagination (`OFFSET 100 LIMIT 10`) degrades on large tables because
 
 ## Exports
 
+### `@delightstack/database` (server + schema)
+
 | Export                            | Description                                                         |
 | --------------------------------- | ------------------------------------------------------------------- |
 | `Database`                        | Namespace containing `table()`, `Entity<T>`, and search query types |
@@ -690,11 +982,25 @@ Offset-based pagination (`OFFSET 100 LIMIT 10`) degrades on large tables because
 | `DatabaseRouteConfig`             | Type for a configured entity route                                  |
 | `DatabaseRouteHooks`              | Type for lifecycle hooks on an entity route                         |
 
+### `@delightstack/database/client` (Svelte 5 only)
+
+| Export                 | Description                                                           |
+| ---------------------- | --------------------------------------------------------------------- |
+| `DatabaseClient`       | Main client class — CRUD, search, entity state, sync, lifecycle       |
+| `EntityState`          | Reactive per-entity wrapper with auto-load, save, and change tracking |
+| `DatabaseSearch`       | Reactive search with live results from Orama or server fallback       |
+| `DatabaseError`        | Structured error with `status` and `body` for CRUD failures           |
+| `DatabaseClientConfig` | Type for `DatabaseClient` constructor config                          |
+| `SearchHit`            | Type for a single search result hit                                   |
+| `SearchResult`         | Type for a search result set                                          |
+| `WorkerSearchQuery`    | Type for search query parameters                                      |
+| `WorkerSearchResult`   | Type for search results from the worker                               |
+
 ## Project Structure
 
 ```
 packages/database/
-  index.ts                    # Package entry — re-exports everything
+  index.ts                    # Package entry — re-exports server + schema
   schema/
     schema.ts                 # Schema definition system (field types, validators, form generation)
   server/
@@ -704,4 +1010,11 @@ packages/database/
     db.server.test.ts         # Tests for DatabaseServer
     sql.server.ts             # SqlServer class (raw SQL wrapper)
     sql.helper.ts             # SQL query builder utilities and types
+  client/
+    index.ts                  # Client entry — re-exports client classes (Svelte 5)
+    database.client.svelte.ts # DatabaseClient, EntityState, DatabaseSearch
+    database.worker.ts        # Web Worker — Orama indices, IDB cache, fetch, sync
+    database.worker.init.ts   # SharedWorker/Worker singleton factory
+    database.idb.ts           # IndexedDB helper utilities
+    database.error.ts         # DatabaseError for comlink worker-to-main transfer
 ```
