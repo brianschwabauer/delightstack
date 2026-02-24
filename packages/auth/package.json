@@ -11,7 +11,6 @@
 		"./types": "./types/index.ts",
 		"./server": "./server/index.ts",
 		"./client": "./client/index.ts",
-		"./client/components": "./client/components/index.ts",
 		"./sveltekit": "./sveltekit/index.ts"
 	},
 	"devDependencies": {

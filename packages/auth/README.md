@@ -680,13 +680,7 @@ packages/auth/
 │
 ├── client/
 │   ├── index.ts                   # Client barrel exports
-│   ├── auth.client.svelte.ts      # AuthClient reactive class
-│   └── components/
-│       ├── index.ts               # Component barrel exports
-│       ├── SignInForm.svelte       # Email/password sign-in form
-│       ├── SignUpForm.svelte       # Sign-up form
-│       ├── OAuthButton.svelte     # OAuth provider button
-│       └── AuthGuard.svelte       # Content protection wrapper
+│   └── auth.client.svelte.ts      # AuthClient reactive class
 │
 ├── sveltekit/
 │   ├── index.ts                   # SvelteKit utilities barrel exports
