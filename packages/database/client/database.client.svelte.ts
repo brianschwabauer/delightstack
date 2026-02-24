@@ -64,16 +64,14 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	};
 }
 
-type EntityOf<T extends Database.Table> = ReturnType<T['parse']>;
-
 type EntityInput<T extends Database.Table> = Omit<
-	EntityOf<T>,
+	Database.Entity<T>,
 	'id' | 'created_at' | 'updated_at'
 >;
 
 export interface SearchHit<T extends Database.Table = Database.Table> {
 	id: string;
-	document: EntityOf<T>;
+	document: Database.SearchEntity<T>;
 	score: number;
 }
 
@@ -99,8 +97,8 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	}) => void;
 	#subscriber: () => void;
 
-	#value = $state<EntityOf<T>>();
-	#server_value = $state.raw<EntityOf<T> | undefined | null>();
+	#value = $state<Database.Entity<T>>();
+	#server_value = $state.raw<Database.Entity<T> | undefined | null>();
 	#saving = $state(false);
 	#loading = $state(false);
 	#loaded = $state(false);
@@ -112,24 +110,24 @@ export class EntityState<T extends Database.Table = Database.Table> {
 
 	/** Reusable comlink proxy for background refresh callback */
 	#refresh_proxy = proxy((fresh: Record<string, unknown>) => {
-		this.#server_value = fresh as EntityOf<T>;
+		this.#server_value = fresh as Database.Entity<T>;
 		if (!untrack(() => this.#has_changes)) {
-			this.#value = fresh as EntityOf<T>;
+			this.#value = fresh as Database.Entity<T>;
 		}
 	});
 
 	/** The current local state (editable) */
-	get value(): EntityOf<T> {
+	get value(): Database.Entity<T> {
 		this.#subscriber();
 		return this.#value!;
 	}
 
-	set value(v: EntityOf<T>) {
+	set value(v: Database.Entity<T>) {
 		this.#value = v;
 	}
 
 	/** Last confirmed server state */
-	get server_value(): EntityOf<T> | undefined | null {
+	get server_value(): Database.Entity<T> | undefined | null {
 		this.#subscriber();
 		return this.#server_value;
 	}
@@ -176,7 +174,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		id: string | number | undefined,
 		worker: Remote<DatabaseWorker> | null,
 		options?: {
-			initial_data?: Partial<EntityOf<T>>;
+			initial_data?: Partial<Database.Entity<T>>;
 			primary_key?: string;
 			onChange?: (event: {
 				type: 'create' | 'update' | 'delete';
@@ -191,7 +189,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		this.#primary_key = options?.primary_key ?? 'id';
 		this.#onChange = options?.onChange;
 		if (options?.initial_data) {
-			this.#value = options.initial_data as EntityOf<T>;
+			this.#value = options.initial_data as Database.Entity<T>;
 		}
 		this.#subscriber = createSubscriber(() => {
 			// Auto-load when first subscribed
@@ -202,7 +200,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	}
 
 	/** Save changes to server. Creates if no ID, updates otherwise. */
-	async save(changes?: Partial<EntityOf<T>>): Promise<this> {
+	async save(changes?: Partial<Database.Entity<T>>): Promise<this> {
 		if (untrack(() => this.#saving)) return this;
 		this.#saving = true;
 		try {
@@ -210,7 +208,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 				changes ?? ($state.snapshot(this.#value) as Record<string, unknown>);
 
 			const worker = this.#getWorker();
-			let result: EntityOf<T>;
+			let result: Database.Entity<T>;
 			if (!this.#id) {
 				// No ID — create new entity
 				let raw: Record<string, unknown>;
@@ -222,13 +220,13 @@ export class EntityState<T extends Database.Table = Database.Table> {
 				} catch (error) {
 					throw DatabaseError.fromWorker(error) ?? error;
 				}
-				result = raw as EntityOf<T>;
+				result = raw as Database.Entity<T>;
 				// Update ID from server response using configured primary key
 				const pk = raw[this.#primary_key] as string | number;
 				this.#id = pk;
 				// Update cache key
 				EntityState.#cache.delete(`${this.#entity_type}:`);
-				EntityState.#cache.set(`${this.#entity_type}:${pk}`, this);
+				EntityState.#cache.set(`${this.#entity_type}:${pk}`, this as EntityState);
 				// Fire change hook
 				this.#onChange?.({ type: 'create', id: pk, data: raw });
 			} else {
@@ -243,7 +241,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 				} catch (error) {
 					throw DatabaseError.fromWorker(error) ?? error;
 				}
-				result = raw as EntityOf<T>;
+				result = raw as Database.Entity<T>;
 				// Fire change hook
 				this.#onChange?.({ type: 'update', id: this.#id, data: raw });
 			}
@@ -266,7 +264,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		if (!this.#id) return;
 		this.#loading = true;
 		try {
-			let data: EntityOf<T> | undefined;
+			let data: Database.Entity<T> | undefined;
 
 			if (this.#worker) {
 				// Worker path — normal browser environment
@@ -276,13 +274,13 @@ export class EntityState<T extends Database.Table = Database.Table> {
 					this.#id,
 					options?.force_refresh,
 					this.#refresh_proxy,
-				)) as EntityOf<T> | undefined;
+				)) as Database.Entity<T> | undefined;
 			} else {
 				// SSR path — direct fetch without worker
 				const fetchFn = options?.fetch ?? globalThis.fetch;
 				const response = await fetchFn(`/api/${this.#entity_type}/${this.#id}`);
 				if (response.ok) {
-					data = (await response.json()) as EntityOf<T>;
+					data = (await response.json()) as Database.Entity<T>;
 				}
 			}
 
@@ -319,13 +317,13 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	/** Discard local changes, revert to server_value. */
 	reset(): void {
 		if (this.#server_value) {
-			this.#value = structuredClone($state.snapshot(this.#server_value)) as EntityOf<T>;
+			this.#value = structuredClone($state.snapshot(this.#server_value)) as Database.Entity<T>;
 		}
 	}
 
 	/** Clean snapshot of the current value. */
-	toJSON(): EntityOf<T> {
-		return $state.snapshot(this.#value) as EntityOf<T>;
+	toJSON(): Database.Entity<T> {
+		return $state.snapshot(this.#value) as Database.Entity<T>;
 	}
 
 	#getWorker(): Remote<DatabaseWorker> {
@@ -346,7 +344,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		id: string | number | undefined,
 		worker: Remote<DatabaseWorker> | null,
 		options?: {
-			initial_data?: Partial<EntityOf<T>>;
+			initial_data?: Partial<Database.Entity<T>>;
 			primary_key?: string;
 			onChange?: (event: {
 				type: 'create' | 'update' | 'delete';
@@ -359,9 +357,9 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		if (EntityState.#cache.has(key)) {
 			return EntityState.#cache.get(key) as EntityState<T>;
 		}
-		const instance = new EntityState(entity_type, id, worker, options);
-		EntityState.#cache.set(key, instance);
-		return instance as EntityState<T>;
+		const instance = new EntityState(entity_type, id, worker, options) as EntityState<T>;
+		EntityState.#cache.set(key, instance as EntityState);
+		return instance;
 	}
 
 	/** Clear all cached EntityState instances (used on scope change). */
@@ -384,7 +382,7 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 	#effect_cleanup: (() => void) | null = null;
 
 	#results = $state<SearchHit<T>[]>([]);
-	#docs = $derived<EntityOf<T>[]>(this.#results.map((h) => h.document));
+	#docs = $derived<Database.SearchEntity<T>[]>(this.#results.map((h) => h.document));
 	#count = $state(0);
 	#loading = $state(true);
 	#error = $state<unknown>(null);
@@ -398,7 +396,7 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 	}
 
 	/** Convenience accessor for just the documents */
-	get docs(): EntityOf<T>[] {
+	get docs(): Database.SearchEntity<T>[] {
 		this.#subscriber();
 		return this.#docs;
 	}
@@ -658,7 +656,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	async create<K extends keyof T & string>(
 		entity_type: K,
 		data: EntityInput<T[K]>,
-	): Promise<EntityOf<T[K]>> {
+	): Promise<Database.Entity<T[K]>> {
 		const worker = this.#getWorker();
 		let result: Record<string, unknown>;
 		try {
@@ -672,24 +670,24 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			id: result[this.#config.tables[entity_type].config.primary_key] as string,
 			data: result,
 		});
-		return result as EntityOf<T[K]>;
+		return result as Database.Entity<T[K]>;
 	}
 
 	/** Get a single entity by ID. Returns from IDB cache with background refresh. */
 	async get<K extends keyof T & string>(
 		entity_type: K,
 		id: string | number,
-	): Promise<EntityOf<T[K]> | undefined> {
+	): Promise<Database.Entity<T[K]> | undefined> {
 		const worker = this.#getWorker();
-		return (await worker.get(entity_type, id)) as EntityOf<T[K]> | undefined;
+		return (await worker.get(entity_type, id)) as Database.Entity<T[K]> | undefined;
 	}
 
 	/** Update an entity. Optimistically updates local index. */
 	async update<K extends keyof T & string>(
 		entity_type: K,
 		id: string | number,
-		data: Partial<EntityOf<T[K]>>,
-	): Promise<EntityOf<T[K]>> {
+		data: Partial<Database.Entity<T[K]>>,
+	): Promise<Database.Entity<T[K]>> {
 		const worker = this.#getWorker();
 		let result: Record<string, unknown>;
 		try {
@@ -703,7 +701,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			id,
 			data: result,
 		});
-		return result as EntityOf<T[K]>;
+		return result as Database.Entity<T[K]>;
 	}
 
 	/** Delete an entity. Optimistically removes from local index. */
@@ -732,7 +730,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	entity<K extends keyof T & string>(
 		entity_type: K,
 		id?: string | number,
-		initial_data?: Partial<EntityOf<T[K]>>,
+		initial_data?: Partial<Database.Entity<T[K]>>,
 	): EntityState<T[K]> {
 		const table = this.#config.tables[entity_type];
 		return EntityState.from(entity_type, id, this.#worker, {

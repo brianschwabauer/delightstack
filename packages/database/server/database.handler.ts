@@ -6,12 +6,9 @@ import { ApiError } from '@delightstack/utilities';
 // Type helpers
 // ---------------------------------------------------------------------------
 
-/** Extract the entity type from a Database.Table */
-type EntityOf<T extends Database.Table> = ReturnType<T['parse']>;
-
 /** Entity input (without auto-managed fields) */
 type EntityInput<T extends Database.Table> = Omit<
-	EntityOf<T>,
+	Database.Entity<T>,
 	'id' | 'created_at' | 'updated_at'
 >;
 
@@ -34,7 +31,7 @@ export interface BeforeUpdateContext<T extends Database.Table> {
 	/** The raw partial update data from the request body */
 	data: Record<string, unknown>;
 	/** The existing entity fetched from the database */
-	existing: EntityOf<T>;
+	existing: Database.Entity<T>;
 	/** The SvelteKit request event */
 	event: RequestEvent;
 }
@@ -44,7 +41,7 @@ export interface BeforeDeleteContext<T extends Database.Table> {
 	/** The entity ID from the URL */
 	id: string;
 	/** The existing entity fetched from the database */
-	existing: EntityOf<T>;
+	existing: Database.Entity<T>;
 	/** The SvelteKit request event */
 	event: RequestEvent;
 }
@@ -68,7 +65,7 @@ export interface BeforeListContext {
 /** Context passed to `afterCreate` and `afterUpdate` hooks */
 export interface AfterWriteContext<T extends Database.Table> {
 	/** The entity as returned from the database after the write */
-	data: EntityOf<T>;
+	data: Database.Entity<T>;
 	/** The SvelteKit request event */
 	event: RequestEvent;
 }
@@ -399,7 +396,7 @@ async function handleCreate(
 	const created = await db.create(route.entity, data);
 
 	if (route.hooks?.afterCreate) {
-		await route.hooks.afterCreate({ data: created as EntityOf<Database.Table>, event });
+		await route.hooks.afterCreate({ data: created as Database.Entity<Database.Table>, event });
 	}
 
 	return jsonResponse(created);
@@ -439,7 +436,7 @@ async function handleUpdate(
 		const result = await route.hooks.beforeUpdate({
 			id,
 			data,
-			existing: existing as EntityOf<Database.Table>,
+			existing: existing as Database.Entity<Database.Table>,
 			event,
 		});
 		if (result && typeof result === 'object') {
@@ -450,7 +447,7 @@ async function handleUpdate(
 	const updated = await db.update(route.entity, id, data);
 
 	if (route.hooks?.afterUpdate) {
-		await route.hooks.afterUpdate({ data: updated as EntityOf<Database.Table>, event });
+		await route.hooks.afterUpdate({ data: updated as Database.Entity<Database.Table>, event });
 	}
 
 	return jsonResponse(updated);
@@ -468,7 +465,7 @@ async function handleDelete(
 	if (route.hooks?.beforeDelete) {
 		await route.hooks.beforeDelete({
 			id,
-			existing: existing as EntityOf<Database.Table>,
+			existing: existing as Database.Entity<Database.Table>,
 			event,
 		});
 	}
