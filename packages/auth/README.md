@@ -143,8 +143,9 @@ import { AuthClient } from '@delightstack/auth/client';
 
 export const load = ({ data }) => {
 	const auth = new AuthClient(data.auth, {
-		permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'],
+		permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
 	});
+	// auth is AuthClient<'org:read' | 'org:write' | 'org:admin' | 'org:owner'>
 	return { auth };
 };
 ```
@@ -388,11 +389,12 @@ await auth.api.oauth.disconnectAccount(account_id);
 
 ```typescript
 const auth = new AuthClient(data.auth, {
-	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'],
+	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
 });
 
-// No need to pass the permission map — it's baked into the client
+// Fully typed — autocomplete for 'org:read' | 'org:write' | 'org:admin' | 'org:owner'
 auth.isAllowed('org:admin'); // true if current org role has bit 2 set
+auth.isAllowed('invalid');   // TS error: Argument of type '"invalid"' is not assignable
 ```
 
 ### Preferences & Org State
@@ -415,10 +417,10 @@ On the server (SSR), these methods update local state only. Use `locals.setPrefe
 // Server: serialize to JSON
 const data = auth.toJSON(); // { jwt, session, org_id, preferences, org_state }
 
-// Client: hydrate from server data
-const auth = new AuthClient(data, { permissions: [...] });
+// Client: hydrate from server data (pass as const for typed permissions)
+const auth = new AuthClient(data, { permissions: ['org:read', 'org:admin'] as const });
 // or
-const auth = AuthClient.from(data, { permissions: [...] });
+const auth = AuthClient.from(data, { permissions: ['org:read', 'org:admin'] as const });
 ```
 
 ### Auto-Refresh

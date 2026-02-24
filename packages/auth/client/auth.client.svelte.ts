@@ -39,7 +39,7 @@ export interface AuthClientData {
  * auth.api.signOut()
  * ```
  */
-export class AuthClient {
+export class AuthClient<P extends string = string> {
 	#jwt = $state<string | null>(null);
 	#session = $state<SessionToken<'auth'> | null>(null);
 	#org_id = $state<string | null>(null);
@@ -120,7 +120,7 @@ export class AuthClient {
 	readonly org_ids = $derived(this.orgs.map((o) => o.id));
 
 	private base_path: string;
-	private permissions: readonly string[];
+	private permissions: readonly P[];
 	private refresh_threshold_ms: number;
 	private refresh_timer: ReturnType<typeof setTimeout> | null = null;
 	private fetchFn: typeof fetch;
@@ -133,7 +133,7 @@ export class AuthClient {
 			 * Permission names for bitwise role encoding (same array passed to auth config).
 			 * Required for `isAllowed()` to work. Array index = bit position.
 			 */
-			permissions?: readonly string[];
+			permissions?: readonly P[];
 			refresh_threshold_ms?: number;
 			fetch?: typeof fetch;
 		},
@@ -163,12 +163,15 @@ export class AuthClient {
 	}
 
 	/** Creates an AuthClient from serialized data (used by svelte's +layout files) */
-	static from(data: AuthClientData, options?: { base_path?: string }): AuthClient {
-		return new AuthClient(data, options);
+	static from<const P extends string = string>(
+		data: AuthClientData,
+		options?: { base_path?: string; permissions?: readonly P[] },
+	): AuthClient<P> {
+		return new AuthClient<P>(data, options);
 	}
 
 	/** Checks if the current org role includes the given permission */
-	isAllowed(permission: string): boolean {
+	isAllowed(permission: P): boolean {
 		if (!this.org) return false;
 		const bit = this.permissions.indexOf(permission);
 		if (bit === -1) return false;

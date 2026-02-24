@@ -5,7 +5,7 @@ import type { AuthOperationResult } from './auth.db.server';
  * Configuration for the auth integration layer.
  * Pass to `defineAuthConfig()` to fill in defaults, or directly to `createAuthHandle()`.
  */
-export interface AuthConfig {
+export interface AuthConfig<P extends string = string, S extends string = string> {
 	/** JWT signing secret (hex-encoded HMAC-SHA256 key) */
 	secret: string;
 
@@ -17,14 +17,14 @@ export interface AuthConfig {
 	 * Array index = bit position. Append-only: never reorder or remove entries.
 	 * @example permissions: ['org:read', 'org:write', 'org:admin', 'org:owner']
 	 */
-	permissions: readonly string[];
+	permissions: readonly P[];
 
 	/**
 	 * OAuth scope names for bitwise capability encoding.
 	 * Array index = bit position. Append-only: never reorder or remove entries.
 	 * @example oauth_scopes: ['profile', 'email', 'calendar']
 	 */
-	oauth_scopes: readonly string[];
+	oauth_scopes: readonly S[];
 
 	/**
 	 * Whether the app is running in dev mode.
@@ -147,7 +147,7 @@ export interface AuthConfig {
 }
 
 /** Resolved auth config with all defaults filled in */
-export interface ResolvedAuthConfig extends AuthConfig {
+export interface ResolvedAuthConfig<P extends string = string, S extends string = string> extends AuthConfig<P, S> {
 	base_path: string;
 	csrf: boolean | { allowed_origins?: string[] };
 	cookies: Required<NonNullable<AuthConfig['cookies']>>;
@@ -155,7 +155,7 @@ export interface ResolvedAuthConfig extends AuthConfig {
 }
 
 /** Creates an auth config with sensible defaults */
-export function defineAuthConfig(config: AuthConfig): ResolvedAuthConfig {
+export function defineAuthConfig<const P extends string, const S extends string>(config: AuthConfig<P, S>): ResolvedAuthConfig<P, S> {
 	const dev = config.dev ?? false;
 	return {
 		...config,
