@@ -85,8 +85,11 @@ export interface SearchResult<T extends Database.Table = Database.Table> {
 // EntityState — reactive per-entity wrapper
 // ---------------------------------------------------------------------------
 
-export class EntityState<T extends Database.Table = Database.Table> {
-	#entity_type: string;
+export class EntityState<
+	T extends Database.Table = Database.Table,
+	EntityType extends string = string,
+> {
+	readonly entity_type: EntityType;
 	#id: string | number | undefined;
 	#worker: Remote<DatabaseWorker> | null;
 	#primary_key: string;
@@ -170,7 +173,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	}
 
 	constructor(
-		entity_type: string,
+		entity_type: EntityType,
 		id: string | number | undefined,
 		options?: {
 			worker?: Remote<DatabaseWorker> | null;
@@ -183,7 +186,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 			}) => void;
 		},
 	) {
-		this.#entity_type = entity_type;
+		this.entity_type = entity_type;
 		this.#id = id;
 		this.#worker = options?.worker ?? null;
 		this.#primary_key = options?.primary_key ?? 'id';
@@ -212,7 +215,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 				let raw: Record<string, unknown>;
 				try {
 					raw = await worker.create(
-						this.#entity_type,
+						this.entity_type,
 						data_to_save as Record<string, unknown>,
 					);
 				} catch (error) {
@@ -223,8 +226,8 @@ export class EntityState<T extends Database.Table = Database.Table> {
 				const pk = raw[this.#primary_key] as string | number;
 				this.#id = pk;
 				// Update cache key
-				EntityState.#cache.delete(`${this.#entity_type}:`);
-				EntityState.#cache.set(`${this.#entity_type}:${pk}`, this as EntityState);
+				EntityState.#cache.delete(`${this.entity_type}:`);
+				EntityState.#cache.set(`${this.entity_type}:${pk}`, this as EntityState);
 				// Fire change hook
 				this.#onChange?.({ type: 'create', id: pk, data: raw });
 			} else {
@@ -232,7 +235,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 				let raw: Record<string, unknown>;
 				try {
 					raw = await worker.update(
-						this.#entity_type,
+						this.entity_type,
 						this.#id,
 						data_to_save as Record<string, unknown>,
 					);
@@ -268,7 +271,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 				// Worker path — normal browser environment
 				// Reuse stored proxy to avoid creating new MessageChannel ports
 				data = (await this.#worker.get(
-					this.#entity_type,
+					this.entity_type,
 					this.#id,
 					options?.force_refresh,
 					this.#refresh_proxy,
@@ -276,7 +279,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 			} else {
 				// SSR path — direct fetch without worker
 				const fetchFn = options?.fetch ?? globalThis.fetch;
-				const response = await fetchFn(`/api/${this.#entity_type}/${this.#id}`);
+				const response = await fetchFn(`/api/${this.entity_type}/${this.#id}`);
 				if (response.ok) {
 					data = (await response.json()) as Database.Entity<T>;
 				}
@@ -302,14 +305,14 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		if (!this.#id) return;
 		const worker = this.#getWorker();
 		try {
-			await worker.delete(this.#entity_type, this.#id);
+			await worker.delete(this.entity_type, this.#id);
 		} catch (error) {
 			throw DatabaseError.fromWorker(error) ?? error;
 		}
 		// Fire change hook
 		this.#onChange?.({ type: 'delete', id: this.#id });
 		// Remove from cache
-		EntityState.#cache.delete(`${this.#entity_type}:${this.#id}`);
+		EntityState.#cache.delete(`${this.entity_type}:${this.#id}`);
 	}
 
 	/** Discard local changes, revert to server_value. */
@@ -339,8 +342,8 @@ export class EntityState<T extends Database.Table = Database.Table> {
 
 	static #cache = new Map<string, EntityState>();
 
-	static from<T extends Database.Table>(
-		entity_type: string,
+	static from<T extends Database.Table, EntityType extends string = string>(
+		entity_type: EntityType,
 		id: string | number | undefined,
 		options?: {
 			worker?: Remote<DatabaseWorker> | null;
@@ -352,16 +355,15 @@ export class EntityState<T extends Database.Table = Database.Table> {
 				data?: Record<string, unknown>;
 			}) => void;
 		},
-	): EntityState<T> {
+	): EntityState<T, EntityType> {
 		const key = `${entity_type}:${id ?? ''}`;
 		if (EntityState.#cache.has(key)) {
-			return EntityState.#cache.get(key) as EntityState<T>;
+			return EntityState.#cache.get(key) as EntityState<T, EntityType>;
 		}
-		const instance = new EntityState(
-			entity_type,
-			id,
-			options,
-		) as EntityState<T>;
+		const instance = new EntityState(entity_type, id, options) as EntityState<
+			T,
+			EntityType
+		>;
 		EntityState.#cache.set(key, instance as EntityState);
 		return instance;
 	}
@@ -376,8 +378,11 @@ export class EntityState<T extends Database.Table = Database.Table> {
 // DatabaseSearch — reactive search wrapper
 // ---------------------------------------------------------------------------
 
-export class DatabaseSearch<T extends Database.Table = Database.Table> {
-	#entity_type: string;
+export class DatabaseSearch<
+	T extends Database.Table = Database.Table,
+	EntityType extends string = string,
+> {
+	readonly entity_type: EntityType;
 	#worker: Remote<DatabaseWorker>;
 	#subscriber_id: string | null = null;
 	#init_promise: Promise<void> | null = null;
@@ -438,11 +443,11 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 	}
 
 	constructor(
-		entity_type: string,
+		entity_type: EntityType,
 		worker: Remote<DatabaseWorker>,
 		query?: WorkerSearchQuery,
 	) {
-		this.#entity_type = entity_type;
+		this.entity_type = entity_type;
 		this.#worker = worker;
 		if (query) this.#query_state = query;
 
@@ -472,7 +477,7 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 		try {
 			this.#loading = true;
 			const result = await this.#worker.search(
-				this.#entity_type,
+				this.entity_type,
 				$state.snapshot(this.#query_state) as WorkerSearchQuery,
 			);
 			this.#results = result.hits as SearchHit<T>[];
@@ -505,11 +510,11 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 
 		this.#init_promise = (async () => {
 			try {
-				const mode = await this.#worker.getSearchMode(this.#entity_type);
+				const mode = await this.#worker.getSearchMode(this.entity_type);
 				this.#mode = mode;
 
 				this.#subscriber_id = await this.#worker.subscribe(
-					this.#entity_type,
+					this.entity_type,
 					$state.snapshot(this.#query_state) as WorkerSearchQuery,
 					proxy((result: WorkerSearchResult) => {
 						if (this.#destroyed) return;
@@ -737,7 +742,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		entity_type: K,
 		id?: string | number,
 		initial_data?: Partial<Database.Entity<T[K]>>,
-	): EntityState<T[K]> {
+	): EntityState<T[K], K> {
 		const table = this.#config.tables[entity_type];
 		return EntityState.from(entity_type, id, {
 			worker: this.#worker,
@@ -760,7 +765,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	search<K extends keyof T & string>(
 		entity_type: K,
 		query?: WorkerSearchQuery,
-	): DatabaseSearch<T[K]> {
+	): DatabaseSearch<T[K], K> {
 		const worker = this.#getWorker();
 		return new DatabaseSearch(entity_type, worker, query);
 	}
