@@ -256,7 +256,7 @@ describe('decodeJwt', () => {
 			email: 'alice@example.com',
 			verified: true,
 			org: {
-				org_1: { name: 'Acme', role: 0b1111, db: 'db_1', plan: 1 },
+				org_1: { n: 'Acme', p: 0b1111, d: 'db_1', e: 1 },
 			},
 		};
 
@@ -265,8 +265,8 @@ describe('decodeJwt', () => {
 
 		expect(decoded.uid).toBe('user_42');
 		expect(decoded.name).toBe('Alice');
-		expect(decoded.org.org_1.name).toBe('Acme');
-		expect(decoded.org.org_1.role).toBe(0b1111);
+		expect(decoded.org.org_1.n).toBe('Acme');
+		expect(decoded.org.org_1.p).toBe(0b1111);
 	});
 });
 

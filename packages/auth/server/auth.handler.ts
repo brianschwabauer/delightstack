@@ -66,9 +66,9 @@ export interface AuthLocals {
 	org: {
 		id: string;
 		name: string;
-		role: number;
+		permissions: number;
 		db?: string;
-		plan?: number;
+		entitlements?: number;
 	} | null;
 
 	/**
@@ -190,7 +190,7 @@ function defaultResolveOrgId(
 	}
 
 	// Verify user has access to this org
-	if (org_id && session && !session.org?.[org_id]?.role) {
+	if (org_id && session && !(org_id in (session.org || {}))) {
 		org_id = null;
 	}
 
@@ -304,17 +304,17 @@ export function createAuthHandle<Config extends AuthConfig>(
 				}
 			: null;
 
-		// 11. Build org object
-		const org =
-			session && org_id && session.org?.[org_id]
-				? {
-						id: org_id,
-						name: session.org[org_id].name,
-						role: session.org[org_id].role,
-						db: session.org[org_id].db,
-						plan: session.org[org_id].plan,
-					}
-				: null;
+		// 11. Build org object (map short token keys to developer-facing names)
+		const org_token = session && org_id ? session.org?.[org_id] : undefined;
+		const org = org_token && org_id
+			? {
+					id: org_id,
+					name: org_token.n,
+					permissions: org_token.p,
+					db: org_token.d,
+					entitlements: org_token.e,
+				}
+			: null;
 
 		// 12. Build setState closures
 		const setPreferences = (updates: Record<string, unknown>) => {
@@ -359,6 +359,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 				preferences,
 				org_state,
 				permissions: config.permissions,
+				entitlements: config.entitlements,
 			},
 			meta,
 			get auth() {

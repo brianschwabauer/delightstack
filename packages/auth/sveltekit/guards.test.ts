@@ -16,7 +16,10 @@ vi.mock('@sveltejs/kit', () => ({
 	},
 }));
 
-const guards = createAuthGuards(['org:read', 'org:write', 'org:admin', 'org:owner'] as const);
+const guards = createAuthGuards({
+	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
+	entitlements: ['premium', 'video-uploads', 'extra-usage'] as const,
+});
 
 function makeLocals(overrides: Partial<AuthLocals> = {}): AuthLocals {
 	return {
@@ -36,7 +39,7 @@ function makeLocals(overrides: Partial<AuthLocals> = {}): AuthLocals {
 	};
 }
 
-function makeAuthLocals(role = 0b1111): AuthLocals {
+function makeAuthLocals(permissions = 0b1111, entitlements = 0b111): AuthLocals {
 	const session = {
 		typ: 'auth',
 		uid: 'user_1',
@@ -46,7 +49,7 @@ function makeAuthLocals(role = 0b1111): AuthLocals {
 		sub: 'ua_1',
 		jti: 'us_1',
 		org: {
-			org_1: { name: 'Test Org', role, db: 'db_1', plan: 1 },
+			org_1: { n: 'Test Org', p: permissions, d: 'db_1', e: entitlements },
 		},
 		iss: 'test',
 		iat: Math.floor(Date.now() / 1000),
@@ -65,7 +68,7 @@ function makeAuthLocals(role = 0b1111): AuthLocals {
 			user_session_id: 'us_1',
 		},
 		org_id: 'org_1',
-		org: { id: 'org_1', name: 'Test Org', role, db: 'db_1', plan: 1 },
+		org: { id: 'org_1', name: 'Test Org', permissions, db: 'db_1', entitlements },
 	});
 }
 
@@ -228,6 +231,88 @@ describe('createAuthGuards', () => {
 				const error = err as { location: string };
 				expect(error.location).toBe('/org/select');
 			}
+		});
+	});
+
+	describe('requireEntitlement', () => {
+		it('calls the load function when org has the required entitlement', async () => {
+			// entitlements = 0b111 means all 3 entitlements (bits 0,1,2) are set
+			const loadFn = vi.fn().mockResolvedValue({ data: true });
+			const guarded = guards.requireEntitlement('premium', loadFn);
+			const event = makeEvent(makeAuthLocals(0b1111, 0b111));
+
+			const result = await guarded(event);
+			expect(result).toEqual({ data: true });
+		});
+
+		it('redirects to /403 when org lacks the entitlement', async () => {
+			// entitlements = 0b001 means only bit 0 (premium) is set
+			const loadFn = vi.fn();
+			const guarded = guards.requireEntitlement('video-uploads', loadFn);
+			const event = makeEvent(makeAuthLocals(0b1111, 0b001));
+
+			try {
+				await guarded(event);
+			} catch (err: unknown) {
+				const error = err as { location: string };
+				expect(error.location).toBe('/403');
+			}
+			expect(loadFn).not.toHaveBeenCalled();
+		});
+
+		it('uses custom forbidden_redirect when provided', async () => {
+			const loadFn = vi.fn();
+			const guarded = guards.requireEntitlement('video-uploads', loadFn, {
+				forbidden_redirect: '/upgrade',
+			});
+			const event = makeEvent(makeAuthLocals(0b1111, 0b001));
+
+			try {
+				await guarded(event);
+			} catch (err: unknown) {
+				const error = err as { location: string };
+				expect(error.location).toBe('/upgrade');
+			}
+		});
+
+		it('redirects to /signin when not authenticated', async () => {
+			const loadFn = vi.fn();
+			const guarded = guards.requireEntitlement('premium', loadFn);
+			const event = makeEvent(makeLocals());
+
+			await expect(guarded(event)).rejects.toThrow('Redirect: 302');
+		});
+
+		it('redirects to /org/select when no org is selected', async () => {
+			const locals = makeAuthLocals();
+			locals.org_id = null;
+			locals.org = null;
+			const loadFn = vi.fn();
+			const guarded = guards.requireEntitlement('premium', loadFn);
+			const event = makeEvent(locals);
+
+			try {
+				await guarded(event);
+			} catch (err: unknown) {
+				const error = err as { location: string };
+				expect(error.location).toBe('/org/select');
+			}
+		});
+
+		it('redirects to /403 when entitlements is undefined on org', async () => {
+			const locals = makeAuthLocals(0b1111, undefined as unknown as number);
+			locals.org = { ...locals.org!, entitlements: undefined };
+			const loadFn = vi.fn();
+			const guarded = guards.requireEntitlement('premium', loadFn);
+			const event = makeEvent(locals);
+
+			try {
+				await guarded(event);
+			} catch (err: unknown) {
+				const error = err as { location: string };
+				expect(error.location).toBe('/403');
+			}
+			expect(loadFn).not.toHaveBeenCalled();
 		});
 	});
 });

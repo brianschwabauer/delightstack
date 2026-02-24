@@ -1083,7 +1083,7 @@ const oauthAuthorizePost: AuthRouteHandler = (ctx) =>
 			{
 				user_id: ctx.locals.session!.uid,
 				org_id: ctx.locals.org_id!,
-				permission: ctx.locals.org!.role,
+				permission: ctx.locals.org!.permissions,
 				redirect_uri: body.redirect_uri || '',
 			},
 		);

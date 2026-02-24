@@ -18,6 +18,8 @@ export interface AuthClientData {
 	org_state: Record<string, unknown>;
 	/** Permission names for bitwise role encoding (populated automatically from auth config) */
 	permissions?: readonly string[];
+	/** Entitlement names for bitwise org-level feature encoding (populated automatically from auth config) */
+	entitlements?: readonly string[];
 }
 
 /**
@@ -39,7 +41,7 @@ export interface AuthClientData {
  * await auth.api.signOut()
  * ```
  */
-export class AuthClient<P extends string = string> {
+export class AuthClient<P extends string = string, E extends string = string> {
 	#jwt = $state<string | null>(null);
 	#session = $state<SessionToken<'auth'> | null>(null);
 	#org_id = $state<string | null>(null);
@@ -97,10 +99,10 @@ export class AuthClient<P extends string = string> {
 		if (!org) return null;
 		return {
 			id: this.#org_id,
-			name: org.name,
-			role: org.role,
-			db: org.db,
-			plan: org.plan,
+			name: org.n,
+			permissions: org.p,
+			db: org.d,
+			entitlements: org.e,
 		};
 	});
 
@@ -109,10 +111,10 @@ export class AuthClient<P extends string = string> {
 		if (!this.#session) return [];
 		return Object.entries(this.#session.org).map(([id, o]) => ({
 			id,
-			name: o.name,
-			role: o.role,
-			db: o.db,
-			plan: o.plan,
+			name: o.n,
+			permissions: o.p,
+			db: o.d,
+			entitlements: o.e,
 		}));
 	});
 
@@ -121,6 +123,7 @@ export class AuthClient<P extends string = string> {
 
 	private base_path: string;
 	private permissions: readonly P[];
+	private entitlements: readonly E[];
 	private refresh_threshold_ms: number;
 	private refresh_timer: ReturnType<typeof setTimeout> | null = null;
 	private fetchFn: typeof fetch;
@@ -135,6 +138,11 @@ export class AuthClient<P extends string = string> {
 			 * Required for `hasPermission()` to work. Array index = bit position.
 			 */
 			permissions?: readonly P[];
+			/**
+			 * Entitlement names for bitwise org-level feature encoding (same array passed to auth config).
+			 * Required for `hasEntitlement()` to work. Array index = bit position.
+			 */
+			entitlements?: readonly E[];
 			refresh_threshold_ms?: number;
 			fetch?: typeof fetch;
 			/** Called when auto-refresh fails (e.g. session expired). Use to redirect to login. */
@@ -148,6 +156,7 @@ export class AuthClient<P extends string = string> {
 		this.#org_state = data?.org_state ?? {};
 		this.base_path = options?.base_path ?? '/api/auth';
 		this.permissions = options?.permissions ?? (data?.permissions as readonly P[]) ?? [];
+		this.entitlements = options?.entitlements ?? (data?.entitlements as readonly E[]) ?? [];
 		this.refresh_threshold_ms = options?.refresh_threshold_ms ?? 600_000;
 		this.fetchFn = options?.fetch ?? fetch;
 		this.onRefreshFailed = options?.onRefreshFailed;
@@ -164,19 +173,21 @@ export class AuthClient<P extends string = string> {
 			preferences: this.#preferences,
 			org_state: this.#org_state,
 			permissions: this.permissions,
+			entitlements: this.entitlements,
 		};
 	}
 
 	/** Creates an AuthClient from serialized data (used by svelte's +layout files) */
-	static from<const P extends string = string>(
+	static from<const P extends string = string, const E extends string = string>(
 		data: AuthClientData,
 		options?: {
 			base_path?: string;
 			permissions?: readonly P[];
+			entitlements?: readonly E[];
 			onRefreshFailed?: (error: AuthClientError) => void;
 		},
-	): AuthClient<P> {
-		return new AuthClient<P>(data, options);
+	): AuthClient<P, E> {
+		return new AuthClient<P, E>(data, options);
 	}
 
 	/** Checks if the current org role includes the given permission */
@@ -184,7 +195,15 @@ export class AuthClient<P extends string = string> {
 		if (!this.org) return false;
 		const bit = this.permissions.indexOf(permission);
 		if (bit === -1) return false;
-		return (this.org.role & (1 << bit)) !== 0;
+		return (this.org.permissions & (1 << bit)) !== 0;
+	}
+
+	/** Checks if the current org has the given entitlement */
+	hasEntitlement(entitlement: E): boolean {
+		if (!this.org || this.org.entitlements == null) return false;
+		const bit = this.entitlements.indexOf(entitlement);
+		if (bit === -1) return false;
+		return (this.org.entitlements & (1 << bit)) !== 0;
 	}
 
 	/**

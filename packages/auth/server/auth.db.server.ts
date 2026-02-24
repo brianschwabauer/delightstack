@@ -100,6 +100,14 @@ export interface AuthDatabaseServerOptions {
 	oauth_scopes: readonly string[];
 
 	/**
+	 * Entitlement names for bitwise org-level feature encoding.
+	 * Array index = bit position. Append-only: never reorder or remove entries.
+	 * @example entitlements: ['premium', 'video-uploads', 'extra-usage']
+	 * @default []
+	 */
+	entitlements?: readonly string[];
+
+	/**
 	 * The permission required for a user to be an admin of an organization.
 	 * This is necessary because we will add this permission automatically to users that create new organizations.
 	 * This permission string must be an entry in the `permissions` array.
@@ -506,10 +514,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				org_id && org && permission
 					? {
 							[org_id]: {
-								role: permission,
-								db: org.db_id,
-								plan: org.plan,
-								name: org.name,
+								p: permission,
+								n: org.name,
+								...(org.db_id ? { d: org.db_id } : {}),
+								...(org.plan != null ? { e: org.plan } : {}),
 							},
 						}
 					: undefined,
@@ -2159,8 +2167,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		user_auth_id: string;
 		/** The ID of the user session record to encode in this token */
 		user_session_id?: string;
-		/** A record of organizations the user belongs to */
-		org?: Record<string, { role: number; db?: string; plan?: number; name: string }>;
+		/** A record of organizations the user belongs to (short keys: p=permissions, d=db, e=entitlements, n=name) */
+		org?: Record<string, { p: number; d?: string; e?: number; n: string }>;
 		/** The number of seconds the token will expire in. @default 3600 */
 		expires_in?: number;
 		/** The name of the user. If not provided, it will look it up in the database */
@@ -2180,10 +2188,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 					const org = this.sql.get('org', org_user.org_id);
 					if (org.deleted_at) return acc;
 					acc[org_user.org_id] = {
-						role: org_user.permission,
-						db: org.db_id,
-						plan: org.plan,
-						name: org.name,
+						p: org_user.permission,
+						n: org.name,
+						...(org.db_id ? { d: org.db_id } : {}),
+						...(org.plan != null ? { e: org.plan } : {}),
 					};
 					return acc;
 				},
@@ -3150,7 +3158,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				typ: 'oauth_application',
 				sub: oauth_application_auth_code.org_id, // The org ID the user is signing in to
 				uid: oauth_application_auth_code.user_id, // The user's ID
-				role: oauth_application_auth_code.permission,
+				p: oauth_application_auth_code.permission,
 				iat: Math.floor(now / 1000),
 				exp: Math.floor(now / 1000) + 60 * 60,
 				iss: this.options.issuer,
@@ -3204,7 +3212,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			uid: token.user_id, // The user's ID
 			iat: Math.floor(now / 1000),
 			exp: Math.floor(now / 1000) + 60 * 60,
-			role: token.permission,
+			p: token.permission,
 			iss: this.options.issuer,
 		});
 		const updated_token = this.sql.update('oauth_application_token', token.id, {

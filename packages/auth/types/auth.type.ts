@@ -126,14 +126,14 @@ export const AuthSessionToken = GenericSessionToken.merge(
 		org: z.record(
 			z.string(),
 			z.object({
-				/** The bitwise encoded permission the user has in the organization */
-				role: EncodedPermission,
-				/** The ID of the durable object. This is encoded here for fast retrieval */
-				db: z.string().optional(),
-				/** The integer representing the current subscription plan the organization is on */
-				plan: z.number().optional(),
-				/** The name of the organization */
-				name: z.string(),
+				/** Permissions — bitwise encoded permission the user has in the organization */
+				p: EncodedPermission,
+				/** Database — the ID of the durable object. Encoded here for fast retrieval */
+				d: z.string().optional(),
+				/** Entitlements — bitwise encoded entitlements the organization has */
+				e: EncodedPermission.optional(),
+				/** Name — the name of the organization */
+				n: z.string(),
 			}),
 		),
 	}),
@@ -148,8 +148,8 @@ export const OauthApplicationSessionToken = GenericSessionToken.merge(
 	z.object({
 		/** The type of token. @default auth */
 		typ: z.literal('oauth_application'),
-		/** The permissions this token has */
-		role: EncodedPermission,
+		/** Permissions — bitwise encoded permissions this token has */
+		p: EncodedPermission,
 	}),
 );
 

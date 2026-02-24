@@ -5,7 +5,7 @@ import type { AuthOperationResult } from './auth.db.server';
  * Configuration for the auth integration layer.
  * Pass to `defineAuthConfig()` to fill in defaults, or directly to `createAuthHandle()`.
  */
-export interface AuthConfig<P extends string = string, S extends string = string> {
+export interface AuthConfig<P extends string = string, S extends string = string, E extends string = string> {
 	/** JWT signing secret (hex-encoded HMAC-SHA256 key) */
 	secret: string;
 
@@ -25,6 +25,14 @@ export interface AuthConfig<P extends string = string, S extends string = string
 	 * @example oauth_scopes: ['profile', 'email', 'calendar']
 	 */
 	oauth_scopes: readonly S[];
+
+	/**
+	 * Entitlement names for bitwise org-level feature encoding.
+	 * Array index = bit position. Append-only: never reorder or remove entries.
+	 * @example entitlements: ['premium', 'video-uploads', 'extra-usage']
+	 * @default []
+	 */
+	entitlements?: readonly E[];
 
 	/**
 	 * Whether the app is running in dev mode.
@@ -170,7 +178,8 @@ export interface AuthConfig<P extends string = string, S extends string = string
 }
 
 /** Resolved auth config with all defaults filled in */
-export interface ResolvedAuthConfig<P extends string = string, S extends string = string> extends AuthConfig<P, S> {
+export interface ResolvedAuthConfig<P extends string = string, S extends string = string, E extends string = string> extends AuthConfig<P, S, E> {
+	entitlements: readonly E[];
 	base_path: string;
 	csrf: boolean | { allowed_origins?: string[] };
 	cookies: Required<NonNullable<AuthConfig['cookies']>>;
@@ -178,7 +187,7 @@ export interface ResolvedAuthConfig<P extends string = string, S extends string 
 }
 
 /** Creates an auth config with sensible defaults */
-export function defineAuthConfig<const P extends string, const S extends string>(config: AuthConfig<P, S>): ResolvedAuthConfig<P, S> {
+export function defineAuthConfig<const P extends string, const S extends string, const E extends string>(config: AuthConfig<P, S, E>): ResolvedAuthConfig<P, S, E> {
 	if (!/^[0-9a-fA-F]{64,}$/.test(config.secret)) {
 		throw new Error(
 			'Auth config: secret must be a hex-encoded string of at least 64 characters (32 bytes). ' +
@@ -191,9 +200,14 @@ export function defineAuthConfig<const P extends string, const S extends string>
 	if (config.oauth_scopes.length > 32) {
 		throw new Error(`Auth config: oauth_scopes array exceeds 32 entries (got ${config.oauth_scopes.length}). Bitwise encoding uses a 32-bit integer.`);
 	}
+	const entitlements = config.entitlements ?? [];
+	if (entitlements.length > 32) {
+		throw new Error(`Auth config: entitlements array exceeds 32 entries (got ${entitlements.length}). Bitwise encoding uses a 32-bit integer.`);
+	}
 	const dev = config.dev ?? false;
 	return {
 		...config,
+		entitlements,
 		base_path: config.base_path ?? '/api/auth',
 		csrf: config.csrf ?? true,
 		cookies: {

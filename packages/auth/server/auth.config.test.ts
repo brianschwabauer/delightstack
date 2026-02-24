@@ -7,6 +7,7 @@ describe('defineAuthConfig', () => {
 		issuer: 'test',
 		permissions: ['read', 'write'] as const,
 		oauth_scopes: ['profile'] as const,
+		entitlements: ['premium', 'video-uploads'] as const,
 	};
 
 	it('fills in default base_path', () => {
@@ -101,5 +102,26 @@ describe('defineAuthConfig', () => {
 	it('allows exactly 32 permissions', () => {
 		const permissions = Array.from({ length: 32 }, (_, i) => `perm_${i}`);
 		expect(() => defineAuthConfig({ ...minimal, permissions })).not.toThrow();
+	});
+
+	it('preserves entitlements from input', () => {
+		const config = defineAuthConfig(minimal);
+		expect(config.entitlements).toEqual(['premium', 'video-uploads']);
+	});
+
+	it('defaults entitlements to empty array', () => {
+		const { entitlements: _, ...withoutEntitlements } = minimal;
+		const config = defineAuthConfig(withoutEntitlements);
+		expect(config.entitlements).toEqual([]);
+	});
+
+	it('throws if entitlements array exceeds 32 entries', () => {
+		const entitlements = Array.from({ length: 33 }, (_, i) => `ent_${i}`);
+		expect(() => defineAuthConfig({ ...minimal, entitlements })).toThrow('entitlements array exceeds 32');
+	});
+
+	it('allows exactly 32 entitlements', () => {
+		const entitlements = Array.from({ length: 32 }, (_, i) => `ent_${i}`);
+		expect(() => defineAuthConfig({ ...minimal, entitlements })).not.toThrow();
 	});
 });

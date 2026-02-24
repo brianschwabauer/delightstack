@@ -10,7 +10,7 @@ Full-stack authentication for SvelteKit apps on Cloudflare Workers. Email/passwo
 - **Multi-organization** — Users belong to multiple orgs with bitwise-encoded role permissions. Org switching, user management, and invitations built in
 - **Invitation system** — Email or link-based invitations with configurable permissions, expiry, and max redemptions
 - **Reactive client** — Svelte 5 `AuthClient` class with `$state`/`$derived` runes, auto-refresh, and nested `.api` methods
-- **Route guards** — `requireAuth`, `requireOrg`, and `requirePermission` guards for SvelteKit server loads
+- **Route guards** — `requireAuth`, `requireOrg`, `requirePermission`, and `requireEntitlement` guards for SvelteKit server loads
 - **Three-cookie architecture** — Session JWT, cross-device preferences (persists across signouts, synced to DB), and per-org state (cache-only)
 - **OAuth 2.0 server** — Be an OAuth provider: application registration, authorization codes, access/refresh tokens, secret rotation
 - **Lifecycle hooks** — `onSignIn`, `onSignUp`, `onSignOut`, `onPasswordReset`, `onEmailVerified`, `onOrgJoined`
@@ -67,6 +67,7 @@ export const authConfig = defineAuthConfig({
 	issuer: 'my-app',
 	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
 	oauth_scopes: ['profile', 'email'] as const,
+	entitlements: ['premium', 'video-uploads', 'extra-usage'] as const,
 	dev,
 	cookies: {
 		session_name: 'my-app-session',
@@ -172,6 +173,7 @@ export const load = ({ data }) => ({
 | `issuer`                    | `string`                                            | _required_                         | JWT issuer identifier                                                    |
 | `permissions`               | `readonly string[]`                                 | _required_                         | Permission names for bitwise role encoding (index = bit position)        |
 | `oauth_scopes`              | `readonly string[]`                                 | _required_                         | OAuth scope names for bitwise capability encoding (index = bit position) |
+| `entitlements`              | `readonly string[]`                                 | `[]`                               | Entitlement names for bitwise org-level feature encoding (index = bit position) |
 | `dev`                       | `boolean`                                           | `false`                            | Dev mode — disables secure cookies                                       |
 | `base_path`                 | `string`                                            | `'/api/auth'`                      | Base path for auth API routes                                            |
 | `csrf`                      | `boolean \| { allowed_origins }`                    | `true`                             | CSRF protection via Origin/Referer headers                               |
@@ -314,8 +316,8 @@ All properties are reactive via `$state`/`$derived` runes:
 | `email`       | `string \| null`                         | User email                                  |
 | `verified`    | `boolean`                                | Whether email is verified                   |
 | `org_id`      | `string \| null`                         | Current organization ID                     |
-| `org`         | `{ id, name, role, db?, plan? } \| null` | Current org info                            |
-| `orgs`        | `Array<{ id, name, role, db?, plan? }>`  | All orgs the user belongs to                |
+| `org`         | `{ id, name, permissions, db?, entitlements? } \| null` | Current org info                            |
+| `orgs`        | `Array<{ id, name, permissions, db?, entitlements? }>`  | All orgs the user belongs to                |
 | `org_ids`     | `string[]`                               | All org IDs                                 |
 | `jwt`         | `string \| null`                         | Raw JWT token                               |
 | `session`     | `SessionToken<'auth'> \| null`           | Decoded session token                       |
@@ -387,14 +389,14 @@ await auth.api.oauth.disconnectAccount(account_id);
 ```typescript
 // Permissions are included automatically from config via auth_client_data
 const auth = new AuthClient(data.auth);
-auth.isAllowed('org:admin'); // true if current org role has bit 2 set
+auth.hasPermission('org:admin'); // true if current org permissions has bit 2 set
 
 // For typed autocomplete, pass permissions explicitly with as const:
 const auth = new AuthClient(data.auth, {
 	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
 });
-auth.isAllowed('org:admin'); // autocomplete for the 4 permission strings
-auth.isAllowed('invalid');   // TS error: Argument of type '"invalid"' is not assignable
+auth.hasPermission('org:admin'); // autocomplete for the 4 permission strings
+auth.hasPermission('invalid');   // TS error: Argument of type '"invalid"' is not assignable
 ```
 
 ### Preferences & Org State
@@ -435,11 +437,9 @@ const auth = AuthClient.from(data);
 // src/lib/auth.guards.ts
 import { createAuthGuards } from '@delightstack/auth/sveltekit';
 
-export const { requireAuth, requireOrg, requirePermission } = createAuthGuards({
-	secret: '', // not used by guards, but required by AuthConfig
-	issuer: '',
+export const { requireAuth, requireOrg, requirePermission, requireEntitlement } = createAuthGuards({
 	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
-	oauth_scopes: [],
+	entitlements: ['premium', 'video-uploads', 'extra-usage'] as const,
 });
 
 // src/routes/dashboard/+layout.server.ts
@@ -457,13 +457,14 @@ export const load = requirePermission('org:admin', ({ locals }) => {
 });
 ```
 
-| Guard                     | Redirects to                        | When                                      |
-| ------------------------- | ----------------------------------- | ----------------------------------------- |
-| `requireAuth`             | `/signin?redirect=...`              | No session                                |
-| `requireOrg`              | `/signin` or `/org/select`          | No session or no org selected             |
-| `requirePermission(perm)` | `/signin`, `/org/select`, or `/403` | No session, no org, or missing permission |
+| Guard                         | Redirects to                        | When                                         |
+| ----------------------------- | ----------------------------------- | -------------------------------------------- |
+| `requireAuth`                 | `/signin?redirect=...`              | No session                                   |
+| `requireOrg`                  | `/signin` or `/org/select`          | No session or no org selected                |
+| `requirePermission(perm)`     | `/signin`, `/org/select`, or `/403` | No session, no org, or missing permission    |
+| `requireEntitlement(ent)`     | `/signin`, `/org/select`, or `/403` | No session, no org, or missing entitlement   |
 
-All guards accept an options object: `{ redirect_to?: string }` and `requirePermission` also accepts `{ forbidden_redirect?: string }`.
+All guards accept an options object: `{ redirect_to?: string }` and `requirePermission`/`requireEntitlement` also accept `{ forbidden_redirect?: string }`.
 
 ## Cookies
 
@@ -500,6 +501,30 @@ decodePermissions(permissions, 5); // ['org:read', 'org:admin']
 ```
 
 The permissions array is **append-only** — never reorder or remove entries, as that would change the meaning of stored permission integers. Add new permissions to the end.
+
+## Entitlements
+
+Entitlements are org-level feature flags using the same bitwise encoding as permissions. They describe what an org *has access to* (e.g. plan features), while permissions describe what a *user can do* within an org.
+
+```typescript
+// Config
+defineAuthConfig({
+	entitlements: ['premium', 'video-uploads', 'extra-usage'] as const,
+	// ...
+});
+
+// Client
+auth.hasEntitlement('video-uploads'); // true if org entitlements has bit 1 set
+
+// Server guard
+export const load = requireEntitlement('premium', ({ locals }) => {
+	return { org: locals.org };
+});
+```
+
+The `entitlements` array is **append-only** — same rules as permissions. The entitlements value is stored in the JWT token alongside permissions and is available on both `auth.org.entitlements` (client) and `locals.org.entitlements` (server).
+
+> **Implementation detail:** JWT tokens use single-letter keys (`p` for permissions, `e` for entitlements, `d` for database ID, `n` for name) to minimize token size. This is transparent — the developer-facing API always uses full names.
 
 ## OAuth Providers
 
@@ -796,7 +821,7 @@ auth.setUserPreferences(user_id, { theme: 'dark' });
 
 | Export                   | Description                                                         |
 | ------------------------ | ------------------------------------------------------------------- |
-| `createAuthGuards()`     | Factory for `requireAuth`, `requireOrg`, `requirePermission` guards |
+| `createAuthGuards()`     | Factory for `requireAuth`, `requireOrg`, `requirePermission`, `requireEntitlement` guards |
 | `getSessionCookie()`     | Get session JWT from cookies                                        |
 | `setSessionCookie()`     | Set session JWT cookie                                              |
 | `deleteSessionCookie()`  | Delete session cookie                                               |

@@ -16,7 +16,7 @@ function makeSession(
 		email: 'test@example.com',
 		verified: true,
 		org: {
-			org_1: { name: 'Test Org', role: 0b1111, db: 'db_1', plan: 1 },
+			org_1: { n: 'Test Org', p: 0b1111, d: 'db_1', e: 1 },
 		},
 		iat: now,
 		exp: now + 3600,
@@ -32,6 +32,7 @@ function makeData(overrides: Partial<AuthClientData> = {}): AuthClientData {
 		preferences: { theme: 'dark' },
 		org_state: { last_page: '/dashboard' },
 		permissions: ['read', 'write', 'admin', 'owner'],
+		entitlements: ['premium', 'video-uploads', 'extra-usage'],
 		...overrides,
 	};
 }
@@ -157,7 +158,7 @@ describe('AuthClient', () => {
 		it('returns true for set permission bits', () => {
 			const data = makeData();
 			data.session = makeSession({
-				org: { org_1: { name: 'Test', role: 0b1111, db: 'db_1', plan: 1 } },
+				org: { org_1: { n: 'Test', p: 0b1111, d: 'db_1', e: 1 } },
 			});
 			const client = new AuthClient(data, { permissions });
 
@@ -170,7 +171,7 @@ describe('AuthClient', () => {
 		it('returns false for unset permission bits', () => {
 			const data = makeData();
 			data.session = makeSession({
-				org: { org_1: { name: 'Test', role: 0b0001, db: 'db_1', plan: 1 } },
+				org: { org_1: { n: 'Test', p: 0b0001, d: 'db_1', e: 1 } },
 			});
 			const client = new AuthClient(data, { permissions });
 
@@ -195,6 +196,60 @@ describe('AuthClient', () => {
 			const data = makeData();
 			const client = new AuthClient(data, { permissions });
 			expect(client.hasPermission('nonexistent' as never)).toBe(false);
+		});
+	});
+
+	describe('hasEntitlement', () => {
+		const entitlements = ['premium', 'video-uploads', 'extra-usage'] as const;
+
+		it('returns true for set entitlement bits', () => {
+			const data = makeData();
+			data.session = makeSession({
+				org: { org_1: { n: 'Test', p: 0b1111, d: 'db_1', e: 0b111 } },
+			});
+			const client = new AuthClient(data, { entitlements });
+
+			expect(client.hasEntitlement('premium')).toBe(true); // bit 0
+			expect(client.hasEntitlement('video-uploads')).toBe(true); // bit 1
+			expect(client.hasEntitlement('extra-usage')).toBe(true); // bit 2
+		});
+
+		it('returns false for unset entitlement bits', () => {
+			const data = makeData();
+			data.session = makeSession({
+				org: { org_1: { n: 'Test', p: 0b1111, d: 'db_1', e: 0b001 } },
+			});
+			const client = new AuthClient(data, { entitlements });
+
+			expect(client.hasEntitlement('premium')).toBe(true); // bit 0 set
+			expect(client.hasEntitlement('video-uploads')).toBe(false); // bit 1 not set
+			expect(client.hasEntitlement('extra-usage')).toBe(false); // bit 2 not set
+		});
+
+		it('returns false when not signed in', () => {
+			const client = new AuthClient(undefined, { entitlements });
+			expect(client.hasEntitlement('premium')).toBe(false);
+		});
+
+		it('returns false when no org is selected', () => {
+			const data = makeData({ org_id: null });
+			const client = new AuthClient(data, { entitlements });
+			expect(client.hasEntitlement('premium')).toBe(false);
+		});
+
+		it('returns false when entitlements is undefined on org', () => {
+			const data = makeData();
+			data.session = makeSession({
+				org: { org_1: { n: 'Test', p: 0b1111, d: 'db_1' } },
+			});
+			const client = new AuthClient(data, { entitlements });
+			expect(client.hasEntitlement('premium')).toBe(false);
+		});
+
+		it('returns false for unknown entitlement', () => {
+			const data = makeData();
+			const client = new AuthClient(data, { entitlements });
+			expect(client.hasEntitlement('nonexistent' as never)).toBe(false);
 		});
 	});
 
@@ -243,9 +298,9 @@ describe('AuthClient', () => {
 			expect(client.org).toEqual({
 				id: 'org_1',
 				name: 'Test Org',
-				role: 0b1111,
+				permissions: 0b1111,
 				db: 'db_1',
-				plan: 1,
+				entitlements: 1,
 			});
 		});
 
@@ -257,8 +312,8 @@ describe('AuthClient', () => {
 		it('orgs returns list of organizations', () => {
 			const session = makeSession({
 				org: {
-					org_1: { name: 'Org A', role: 1, db: 'db_1', plan: 1 },
-					org_2: { name: 'Org B', role: 3, db: 'db_2', plan: 2 },
+					org_1: { n: 'Org A', p: 1, d: 'db_1', e: 1 },
+					org_2: { n: 'Org B', p: 3, d: 'db_2', e: 2 },
 				},
 			});
 			const client = new AuthClient(makeData({ session }));
@@ -275,8 +330,8 @@ describe('AuthClient', () => {
 		it('org_ids returns list of org IDs', () => {
 			const session = makeSession({
 				org: {
-					org_1: { name: 'Org A', role: 1, db: 'db_1', plan: 1 },
-					org_2: { name: 'Org B', role: 3, db: 'db_2', plan: 2 },
+					org_1: { n: 'Org A', p: 1, d: 'db_1', e: 1 },
+					org_2: { n: 'Org B', p: 3, d: 'db_2', e: 2 },
 				},
 			});
 			const client = new AuthClient(makeData({ session }));
