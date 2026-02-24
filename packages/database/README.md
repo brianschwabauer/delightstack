@@ -299,12 +299,12 @@ class DatabaseServer<Config, Meta> extends DurableObject {
 
 ### CRUD
 
-| Method     | Signature                         | Notes                                                                             |
-| ---------- | --------------------------------- | --------------------------------------------------------------------------------- |
-| **create** | `create(type, data) → Entity`     | Auto-generates ID and timestamps. Validates with Zod. Updates search index.       |
-| **get**    | `get(type, id, expand?) → Entity` | Throws `{ status: 404 }` if not found. `expand` populates foreign key references. |
-| **update** | `update(type, id, data) → Entity` | Deep partial merge. Validates merged result. Updates search index.                |
-| **delete** | `delete(type, id) → void`         | Removes from SQLite and search index. Tracks deletion for sync.                   |
+| Method     | Signature                         | Notes                                                                                |
+| ---------- | --------------------------------- | ------------------------------------------------------------------------------------ |
+| **create** | `create(type, data) → Entity`     | Auto-generates ID and timestamps. Validates with Zod. Updates search index.          |
+| **get**    | `get(type, id, expand?) → Entity` | Throws `DelightError` (404) if not found. `expand` populates foreign key references. |
+| **update** | `update(type, id, data) → Entity` | Deep partial merge. Validates merged result. Updates search index.                   |
+| **delete** | `delete(type, id) → void`         | Removes from SQLite and search index. Tracks deletion for sync.                      |
 
 All CRUD methods are **synchronous** (SQLite in Durable Objects is synchronous).
 
@@ -496,16 +496,16 @@ const personRoute = defineRoute({
 	table: personTable,
 	hooks: {
 		beforeCreate: ({ event }) => {
-			if (!event.locals.user) throw apiError({ status: 401 });
+			if (!event.locals.user) throw DelightError.unauthorized('Authentication required');
 		},
 		beforeUpdate: ({ existing, event }) => {
 			if (existing.creator_id !== event.locals.user?.id) {
-				throw apiError({ status: 403, message: 'Not authorized' });
+				throw DelightError.forbidden('Not authorized');
 			}
 		},
 		beforeDelete: ({ existing, event }) => {
 			if (existing.creator_id !== event.locals.user?.id) {
-				throw apiError({ status: 403, message: 'Not authorized' });
+				throw DelightError.forbidden('Not authorized');
 			}
 		},
 	},
@@ -613,13 +613,15 @@ beforeList: ({ query, event }) => {
 
 ### Error Handling
 
-All errors are normalized through `ApiError.from()` and returned as JSON responses:
+All errors are normalized through `DelightError.from()` and returned as JSON responses:
 
 ```json
 { "message": "Not authorized", "status": 403 }
 ```
 
 If `getDatabase()` returns `undefined` (e.g. no org selected), the handler returns a 500 error.
+
+See the [Error Handling](#error-handling-1) section below for the full `DelightError` API.
 
 ## Form Generation
 
@@ -916,18 +918,18 @@ entities: {
 
 ### Error handling
 
-CRUD errors from the worker are reconstructed as `DatabaseError` instances on the main thread:
+CRUD errors from the worker are reconstructed as `DelightError` instances on the main thread:
 
 ```typescript
-import { DatabaseError } from '@delightstack/database/client';
+import { DelightError } from '@delightstack/utilities';
 
 try {
 	await db.create('person', data);
 } catch (error) {
-	if (error instanceof DatabaseError) {
+	if (DelightError.is(error)) {
 		console.log(error.status); // HTTP status code
-		console.log(error.body); // Server error body
 		console.log(error.message); // Error message
+		console.log(error.detail); // Technical detail (if any)
 	}
 }
 ```
@@ -984,17 +986,17 @@ Offset-based pagination (`OFFSET 100 LIMIT 10`) degrades on large tables because
 
 ### `@delightstack/database/client` (Svelte 5 only)
 
-| Export                 | Description                                                           |
-| ---------------------- | --------------------------------------------------------------------- |
-| `DatabaseClient`       | Main client class — CRUD, search, entity state, sync, lifecycle       |
-| `EntityState`          | Reactive per-entity wrapper with auto-load, save, and change tracking |
-| `DatabaseSearch`       | Reactive search with live results from Orama or server fallback       |
-| `DatabaseError`        | Structured error with `status` and `body` for CRUD failures           |
-| `DatabaseClientConfig` | Type for `DatabaseClient` constructor config                          |
-| `SearchHit`            | Type for a single search result hit                                   |
-| `SearchResult`         | Type for a search result set                                          |
-| `WorkerSearchQuery`    | Type for search query parameters                                      |
-| `WorkerSearchResult`   | Type for search results from the worker                               |
+| Export                 | Description                                                            |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `DatabaseClient`       | Main client class — CRUD, search, entity state, sync, lifecycle        |
+| `EntityState`          | Reactive per-entity wrapper with auto-load, save, and change tracking  |
+| `DatabaseSearch`       | Reactive search with live results from Orama or server fallback        |
+| ~~`DatabaseError`~~    | **Removed.** Use `DelightError` from `@delightstack/utilities` instead |
+| `DatabaseClientConfig` | Type for `DatabaseClient` constructor config                           |
+| `SearchHit`            | Type for a single search result hit                                    |
+| `SearchResult`         | Type for a search result set                                           |
+| `WorkerSearchQuery`    | Type for search query parameters                                       |
+| `WorkerSearchResult`   | Type for search results from the worker                                |
 
 ## Project Structure
 
