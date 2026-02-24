@@ -10,6 +10,33 @@ import { getOauthToken } from './oauth.helper';
 import type { AuthOperationResult } from './auth.db.server';
 import type { OauthToken } from '../types';
 import { getOrgStateCookie, setOrgStateCookie } from '../sveltekit/cookies';
+import { getSecretKey } from './jwt.server';
+
+/** Sign an OAuth state payload with HMAC-SHA256 to prevent CSRF/tampering */
+async function signOauthState(data: Record<string, unknown>, secret: string): Promise<string> {
+	const payload = btoa(JSON.stringify(data)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+	const key = await getSecretKey(secret);
+	const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
+	const sig_b64 = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+	return `${payload}.${sig_b64}`;
+}
+
+/** Verify and parse a signed OAuth state. Returns null if invalid/tampered. */
+async function verifyOauthState(state: string, secret: string): Promise<Record<string, unknown> | null> {
+	const dot = state.lastIndexOf('.');
+	if (dot === -1) return null;
+	const payload = state.slice(0, dot);
+	const sig_b64 = state.slice(dot + 1);
+	try {
+		const key = await getSecretKey(secret);
+		const sig = Uint8Array.from(atob(sig_b64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+		const valid = await crypto.subtle.verify('HMAC', key, sig, new TextEncoder().encode(payload));
+		if (!valid) return null;
+		return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+	} catch {
+		return null;
+	}
+}
 
 /** Context passed to each auth route handler */
 interface AuthRouteContext {
@@ -66,7 +93,7 @@ function redirect(url: string): Response {
 /** Requires that the user is authenticated. Throws 401 if not. */
 function requireAuth(locals: AuthLocals) {
 	if (!locals.session || !locals.user) {
-		throw new ApiError('Authentication required', 401);
+		throw { status: 401, message: 'Authentication required' };
 	}
 }
 
@@ -74,7 +101,7 @@ function requireAuth(locals: AuthLocals) {
 function requireOrg(locals: AuthLocals) {
 	requireAuth(locals);
 	if (!locals.org_id) {
-		throw new ApiError('Organization is required', 400);
+		throw { status: 400, message: 'Organization is required' };
 	}
 }
 
@@ -127,7 +154,7 @@ const signInEmailMagic: AuthRouteHandler = (ctx) =>
 const signInEmailVerify: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		const token = ctx.event.url.searchParams.get('token');
-		if (!token) throw new ApiError('Token is required', 400);
+		if (!token) throw { status: 400, message: 'Token is required' };
 
 		const invitation_id = ctx.event.url.searchParams.get('invitation_id') || undefined;
 		const result = (await ctx.auth.signInWithEmailToken(
@@ -175,7 +202,7 @@ const signUpEmail: AuthRouteHandler = (ctx) =>
 		}
 
 		if (ctx.config.email?.sendEmail) {
-			const verificationResult = await ctx.auth.createEmailVerficationToken(
+			const verificationResult = await ctx.auth.createEmailVerificationToken(
 				result.user_session_id,
 				ctx.meta,
 			);
@@ -197,25 +224,23 @@ const signUpEmail: AuthRouteHandler = (ctx) =>
 const signInOauth: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		const vendor = ctx.event.params.vendor;
-		if (!vendor) throw new ApiError('OAuth vendor is required', 400);
+		if (!vendor) throw { status: 400, message: 'OAuth vendor is required' };
 
 		const oauth_config = ctx.config.oauth?.[vendor];
-		if (!oauth_config) throw new ApiError(`Unknown OAuth provider: ${vendor}`, 400);
+		if (!oauth_config) throw { status: 400, message: `Unknown OAuth provider: ${vendor}` };
 
 		const redirect_to = ctx.event.url.searchParams.get('redirect') || '/';
 		const invitation_id = ctx.event.url.searchParams.get('invitation_id') || undefined;
 		const signup_name = ctx.event.url.searchParams.get('name') || undefined;
 		const signup_org_name = ctx.event.url.searchParams.get('org_name') || undefined;
 
-		const state = btoa(
-			JSON.stringify({
-				redirect: redirect_to,
-				invitation_id,
-				signup: signup_name || signup_org_name
-					? { name: signup_name, org_name: signup_org_name }
-					: undefined,
-			}),
-		);
+		const state = await signOauthState({
+			redirect: redirect_to,
+			invitation_id,
+			signup: signup_name || signup_org_name
+				? { name: signup_name, org_name: signup_org_name }
+				: undefined,
+		}, ctx.config.secret);
 
 		const callback_url = `${ctx.event.url.origin}${ctx.config.base_path}/signin/${vendor}/callback`;
 		const scopes = oauth_config.scopes || [];
@@ -234,20 +259,20 @@ const signInOauth: AuthRouteHandler = (ctx) =>
 const signInOauthCallback: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		const vendor = ctx.event.params.vendor;
-		if (!vendor) throw new ApiError('OAuth vendor is required', 400);
+		if (!vendor) throw { status: 400, message: 'OAuth vendor is required' };
 
 		const oauth_config = ctx.config.oauth?.[vendor];
-		if (!oauth_config) throw new ApiError(`Unknown OAuth provider: ${vendor}`, 400);
+		if (!oauth_config) throw { status: 400, message: `Unknown OAuth provider: ${vendor}` };
 
 		const code = ctx.event.url.searchParams.get('code');
-		if (!code) throw new ApiError('OAuth authorization code is required', 400);
+		if (!code) throw { status: 400, message: 'OAuth authorization code is required' };
 
 		const state_raw = ctx.event.url.searchParams.get('state');
 		let state: { redirect?: string; invitation_id?: string; signup?: { name?: string; org_name?: string } } = {};
-		try {
-			if (state_raw) state = JSON.parse(atob(state_raw));
-		} catch {
-			// ignore invalid state
+		if (state_raw) {
+			const verified = await verifyOauthState(state_raw, ctx.config.secret);
+			if (!verified) throw { status: 400, message: 'Invalid OAuth state' };
+			state = verified as typeof state;
 		}
 
 		const callback_url = `${ctx.event.url.origin}${ctx.config.base_path}/signin/${vendor}/callback`;
@@ -365,7 +390,7 @@ const sessionRevoke: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Session ID is required', 400);
+		if (!id) throw { status: 400, message: 'Session ID is required' };
 		await ctx.auth.revokeSession(id);
 		return noContent();
 	});
@@ -447,7 +472,7 @@ const passwordCheck: AuthRouteHandler = (ctx) =>
 const emailVerify: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
-		const result = await ctx.auth.createEmailVerficationToken(
+		const result = await ctx.auth.createEmailVerificationToken(
 			ctx.locals.session!.jti,
 			ctx.meta,
 		);
@@ -471,7 +496,7 @@ const emailVerify: AuthRouteHandler = (ctx) =>
 const emailVerifyConfirm: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		const token = ctx.event.url.searchParams.get('token');
-		if (!token) throw new ApiError('Token is required', 400);
+		if (!token) throw { status: 400, message: 'Token is required' };
 
 		const result = await ctx.auth.verifyEmail(token, ctx.meta);
 
@@ -493,7 +518,7 @@ const emailVerifyConfirm: AuthRouteHandler = (ctx) =>
 const emailCheck: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		const email = ctx.event.url.searchParams.get('email');
-		if (!email) throw new ApiError('Email is required', 400);
+		if (!email) throw { status: 400, message: 'Email is required' };
 
 		try {
 			await ctx.auth.checkEmailAvailability({
@@ -547,7 +572,7 @@ const userSignInMethodRevoke: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Sign-in method ID is required', 400);
+		if (!id) throw { status: 400, message: 'Sign-in method ID is required' };
 		await ctx.auth.revokeSignInMethod(id);
 		return noContent();
 	});
@@ -561,7 +586,7 @@ const preferencesUpdate: AuthRouteHandler = (ctx) =>
 		requireAuth(ctx.locals);
 		const body = await ctx.event.request.json();
 		if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-			throw new ApiError('Request body must be a JSON object', 400);
+			throw { status: 400, message: 'Request body must be a JSON object' };
 		}
 		ctx.locals.setPreferences(body as Record<string, unknown>);
 		return json(ctx.locals.preferences);
@@ -571,13 +596,13 @@ const orgStateUpdate: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Organization ID is required', 400);
+		if (!id) throw { status: 400, message: 'Organization ID is required' };
 		if (!ctx.locals.session!.org[id]) {
-			throw new ApiError('You do not have access to this organization', 403);
+			throw { status: 403, message: 'You do not have access to this organization' };
 		}
 		const body = await ctx.event.request.json();
 		if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-			throw new ApiError('Request body must be a JSON object', 400);
+			throw { status: 400, message: 'Request body must be a JSON object' };
 		}
 		const updates = body as Record<string, unknown>;
 
@@ -653,7 +678,7 @@ const orgSwitch: AuthRouteHandler = (ctx) =>
 
 		// Verify user has access to this org
 		if (!ctx.locals.session!.org[body.org_id]) {
-			throw new ApiError('You do not have access to this organization', 403);
+			throw { status: 403, message: 'You do not have access to this organization' };
 		}
 
 		// Refresh session to get latest data
@@ -670,7 +695,7 @@ const orgUpdate: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Organization ID is required', 400);
+		if (!id) throw { status: 400, message: 'Organization ID is required' };
 		const body = parseSchema(
 			z.object({ name: z.string().optional(), owner_id: z.string().optional() }),
 			await ctx.event.request.json(),
@@ -683,7 +708,7 @@ const orgDelete: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Organization ID is required', 400);
+		if (!id) throw { status: 400, message: 'Organization ID is required' };
 		await ctx.auth.markOrgDeleted(id);
 		return noContent();
 	});
@@ -692,7 +717,7 @@ const orgListUsers: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Organization ID is required', 400);
+		if (!id) throw { status: 400, message: 'Organization ID is required' };
 		const result = await ctx.auth.listOrgUsers(id);
 		return json(result);
 	});
@@ -702,8 +727,8 @@ const orgUpdateUserPermission: AuthRouteHandler = (ctx) =>
 		requireAuth(ctx.locals);
 		const org_id = ctx.event.params.id;
 		const user_id = ctx.event.params.user_id;
-		if (!org_id) throw new ApiError('Organization ID is required', 400);
-		if (!user_id) throw new ApiError('User ID is required', 400);
+		if (!org_id) throw { status: 400, message: 'Organization ID is required' };
+		if (!user_id) throw { status: 400, message: 'User ID is required' };
 		const body = parseSchema(
 			z.object({ permission: z.union([z.number(), z.array(z.string())]) }),
 			await ctx.event.request.json(),
@@ -717,8 +742,8 @@ const orgRemoveUser: AuthRouteHandler = (ctx) =>
 		requireAuth(ctx.locals);
 		const org_id = ctx.event.params.id;
 		const user_id = ctx.event.params.user_id;
-		if (!org_id) throw new ApiError('Organization ID is required', 400);
-		if (!user_id) throw new ApiError('User ID is required', 400);
+		if (!org_id) throw { status: 400, message: 'Organization ID is required' };
+		if (!user_id) throw { status: 400, message: 'User ID is required' };
 		await ctx.auth.updateUserPermission(user_id, org_id, 0);
 		return noContent();
 	});
@@ -737,7 +762,7 @@ const invitationList: AuthRouteHandler = (ctx) =>
 const invitationGet: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Invitation ID is required', 400);
+		if (!id) throw { status: 400, message: 'Invitation ID is required' };
 		const invitation = await ctx.auth.getInvitationIfValid(id);
 		return json(invitation);
 	});
@@ -769,7 +794,7 @@ const invitationUpdate: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireOrg(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Invitation ID is required', 400);
+		if (!id) throw { status: 400, message: 'Invitation ID is required' };
 		const body = parseSchema(
 			z.object({
 				permission: z.number().optional(),
@@ -785,7 +810,7 @@ const invitationDelete: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireOrg(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Invitation ID is required', 400);
+		if (!id) throw { status: 400, message: 'Invitation ID is required' };
 		await ctx.auth.deleteInvitation(id);
 		return noContent();
 	});
@@ -794,7 +819,7 @@ const invitationAccept: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Invitation ID is required', 400);
+		if (!id) throw { status: 400, message: 'Invitation ID is required' };
 
 		await ctx.auth.acceptInvitation(id, ctx.locals.session!.uid);
 
@@ -824,21 +849,19 @@ const oauthConnect: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const vendor = ctx.event.params.vendor;
-		if (!vendor) throw new ApiError('OAuth vendor is required', 400);
+		if (!vendor) throw { status: 400, message: 'OAuth vendor is required' };
 
 		const oauth_config = ctx.config.oauth?.[vendor];
-		if (!oauth_config) throw new ApiError(`Unknown OAuth provider: ${vendor}`, 400);
+		if (!oauth_config) throw { status: 400, message: `Unknown OAuth provider: ${vendor}` };
 
 		const redirect_to = ctx.event.url.searchParams.get('redirect') || '/';
 		const capabilities = ctx.event.url.searchParams.get('capabilities')?.split(',') || [];
 
-		const state = btoa(
-			JSON.stringify({
-				redirect: redirect_to,
-				connect: true,
-				capabilities,
-			}),
-		);
+		const state = await signOauthState({
+			redirect: redirect_to,
+			connect: true,
+			capabilities,
+		}, ctx.config.secret);
 
 		const callback_url = `${ctx.event.url.origin}${ctx.config.base_path}/oauth/${vendor}/callback`;
 		const scopes = oauth_config.scopes || [];
@@ -858,20 +881,20 @@ const oauthConnectCallback: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const vendor = ctx.event.params.vendor;
-		if (!vendor) throw new ApiError('OAuth vendor is required', 400);
+		if (!vendor) throw { status: 400, message: 'OAuth vendor is required' };
 
 		const oauth_config = ctx.config.oauth?.[vendor];
-		if (!oauth_config) throw new ApiError(`Unknown OAuth provider: ${vendor}`, 400);
+		if (!oauth_config) throw { status: 400, message: `Unknown OAuth provider: ${vendor}` };
 
 		const code = ctx.event.url.searchParams.get('code');
-		if (!code) throw new ApiError('OAuth authorization code is required', 400);
+		if (!code) throw { status: 400, message: 'OAuth authorization code is required' };
 
 		const state_raw = ctx.event.url.searchParams.get('state');
 		let state: { redirect?: string; capabilities?: string[] } = {};
-		try {
-			if (state_raw) state = JSON.parse(atob(state_raw));
-		} catch {
-			// ignore invalid state
+		if (state_raw) {
+			const verified = await verifyOauthState(state_raw, ctx.config.secret);
+			if (!verified) throw { status: 400, message: 'Invalid OAuth state' };
+			state = verified as typeof state;
 		}
 
 		const callback_url = `${ctx.event.url.origin}${ctx.config.base_path}/oauth/${vendor}/callback`;
@@ -914,7 +937,7 @@ const oauthDisconnectAccount: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('OAuth account ID is required', 400);
+		if (!id) throw { status: 400, message: 'OAuth account ID is required' };
 		const token = (await ctx.auth.getOauthToken(id)) as OauthToken;
 		await ctx.auth.disconnectOauthAccount(token);
 		return noContent();
@@ -958,7 +981,7 @@ const oauthAppGet: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Application ID is required', 400);
+		if (!id) throw { status: 400, message: 'Application ID is required' };
 		const app = await ctx.auth.getOauthApplication(id);
 		return json(app);
 	});
@@ -967,7 +990,7 @@ const oauthAppUpdate: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Application ID is required', 400);
+		if (!id) throw { status: 400, message: 'Application ID is required' };
 		const body = parseSchema(
 			z.object({
 				name: z.string().optional(),
@@ -989,7 +1012,7 @@ const oauthAppDelete: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Application ID is required', 400);
+		if (!id) throw { status: 400, message: 'Application ID is required' };
 		await ctx.auth.deleteOauthApplication(id);
 		return noContent();
 	});
@@ -998,7 +1021,7 @@ const oauthAppCreateSecret: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Application ID is required', 400);
+		if (!id) throw { status: 400, message: 'Application ID is required' };
 		const result = await ctx.auth.createOauthApplicationSecret(id);
 		return json(result, 201);
 	});
@@ -1008,8 +1031,8 @@ const oauthAppDeleteSecret: AuthRouteHandler = (ctx) =>
 		requireAuth(ctx.locals);
 		const app_id = ctx.event.params.id;
 		const secret_id = ctx.event.params.secret_id;
-		if (!app_id) throw new ApiError('Application ID is required', 400);
-		if (!secret_id) throw new ApiError('Secret ID is required', 400);
+		if (!app_id) throw { status: 400, message: 'Application ID is required' };
+		if (!secret_id) throw { status: 400, message: 'Secret ID is required' };
 		await ctx.auth.deleteOauthApplicationSecret(app_id, secret_id);
 		return noContent();
 	});
@@ -1018,7 +1041,7 @@ const oauthAppRevoke: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
-		if (!id) throw new ApiError('Application ID is required', 400);
+		if (!id) throw { status: 400, message: 'Application ID is required' };
 		requireOrg(ctx.locals);
 		await ctx.auth.revokeAuthorizedOauthApplication(
 			id,
@@ -1031,7 +1054,7 @@ const oauthAuthorizeGet: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
 		const client_id = ctx.event.url.searchParams.get('client_id');
-		if (!client_id) throw new ApiError('client_id is required', 400);
+		if (!client_id) throw { status: 400, message: 'client_id is required' };
 		const app = await ctx.auth.getOauthApplication(client_id);
 		return json({
 			application: app,

@@ -15,7 +15,7 @@ import { apiError, generateID } from '@delightstack/utilities';
  */
 export async function generateJwt<Type = SessionToken['typ']>(
 	secret: string, // jwt key secret in hex format
-	claims: Partial<SessionToken> & { [additionalClaims: string]: any },
+	claims: Partial<SessionToken> & Record<string, unknown>,
 ) {
 	const iat = claims.iat || Math.floor(new Date().getTime() / 1000);
 	const kid = Array.from(
@@ -58,8 +58,7 @@ export async function generateJwt<Type = SessionToken['typ']>(
 	// Sign the header/payload buffer with the created web crypto key
 	const signature = await crypto.subtle
 		.sign({ name: 'HMAC' }, key, buffer)
-		.catch((error: any) => {
-			console.error(error);
+		.catch(() => {
 			throw apiError({ status: 500, message: `Error signing JWT` });
 		});
 
@@ -83,14 +82,13 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 ): Promise<SessionToken<Type>> {
 	if (!jwt) throw apiError({ status: 400, message: `JWT not provided` });
 
-	let parts: string[], header: any, payload: any, signature: string;
+	let parts: string[], header: Record<string, unknown>, payload: Record<string, unknown>, signature: string;
 	try {
 		parts = jwt.split('.');
 		header = JSON.parse(atob(parts[0].replace(/_/g, '/').replace(/-/g, '+')));
 		payload = JSON.parse(atob(parts[1].replace(/_/g, '/').replace(/-/g, '+')));
 		signature = atob(parts[2].replace(/_/g, '/').replace(/-/g, '+'));
-	} catch (error) {
-		console.error(error);
+	} catch {
 		throw apiError({ status: 400, message: `Invalid auth token format` });
 	}
 
@@ -100,8 +98,8 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 	}
 
 	// Check the expiration & issued date of the token
-	const expiryDate = (payload?.exp || 0) * 1000;
-	const issuedDate = (payload?.iat || 0) * 1000;
+	const expiryDate = (Number(payload?.exp) || 0) * 1000;
+	const issuedDate = (Number(payload?.iat) || 0) * 1000;
 	const currentDate = Date.now();
 	if (
 		expiryDate <= currentDate - 1000 * 60 * 10 ||
@@ -121,7 +119,7 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 		.map((b) => b.toString(16).padStart(2, '0'))
 		.join('')
 		.slice(0, 10);
-	if (header.kid !== key_id) {
+	if (String(header.kid) !== key_id) {
 		throw apiError({
 			status: 401,
 			message: `Invalid auth token. Key ID does not match`,
@@ -130,23 +128,23 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 
 	// Check if the signature matches the private key
 	const signatureArray = new Uint8Array(
-		Array.from(signature).map((c: any) => c.charCodeAt(0)),
+		Array.from(signature).map((c) => c.charCodeAt(0)),
 	);
 	const encoder = new TextEncoder();
 	const data = encoder.encode([parts[0], parts[1]].join('.'));
-	const hash = `SHA-${header.alg.match(/\d+/)?.[0] || 256}`;
+	const alg = String(header.alg);
+	const hash = `SHA-${alg.match(/\d+/)?.[0] || 256}`;
 	let algorithm = 'RSASSA-PKCS1-v1_5';
-	if (header.alg.match(/^ES\d+$/)) algorithm = 'ECDSA';
-	if (header.alg.match(/^HS\d+$/)) algorithm = 'HMAC';
-	if (header.alg.match(/^PS\d+$/)) algorithm = 'RSASSA-PSS';
-	if (header.alg.match(/^RS\d+$/)) algorithm = 'HMAC';
+	if (alg.match(/^ES\d+$/)) algorithm = 'ECDSA';
+	if (alg.match(/^HS\d+$/)) algorithm = 'HMAC';
+	if (alg.match(/^PS\d+$/)) algorithm = 'RSASSA-PSS';
+	if (alg.match(/^RS\d+$/)) algorithm = 'HMAC';
 
 	// Import the key from the env variable
 	const key = await getSecretKey(secret);
 	const verified = await crypto.subtle
 		.verify({ hash, name: algorithm }, key, signatureArray, data)
-		.catch((error: any) => {
-			console.error(error);
+		.catch(() => {
 			throw apiError({ status: 500, message: `Error verifying jwt signature` });
 		});
 	if (!verified) {
@@ -157,7 +155,7 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 	}
 
 	// Return the decoded JWT payload
-	return payload;
+	return payload as SessionToken<Type>;
 }
 
 /** Extracts the refresh token id from the raw jwt without validating the jwt's signature & expiry */
@@ -167,8 +165,7 @@ export function extractJwtRefreshToken(jwt: string) {
 		const parts = jwt.split('.');
 		const payload = JSON.parse(atob(parts[1].replace(/_/g, '/').replace(/-/g, '+')));
 		jti = payload?.jti;
-	} catch (error) {
-		console.error(error);
+	} catch {
 		throw apiError({ status: 400, message: `Invalid auth token format` });
 	}
 	if (!jti) throw apiError({ status: 400, message: `Invalid auth token format` });
@@ -193,8 +190,7 @@ export async function getSecretKey(secret: string) {
 			['sign', 'verify'],
 		);
 		return key;
-	} catch (error) {
-		console.error(error);
+	} catch {
 		throw apiError({ status: 500, message: `Error importing private key` });
 	}
 }

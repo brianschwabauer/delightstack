@@ -28,6 +28,25 @@ import argon2WASM from 'argon2-wasm-edge/wasm/argon2.wasm'; // <-- imports of wa
 import blake2bWASM from 'argon2-wasm-edge/wasm/blake2b.wasm';
 setWASMModules({ argon2WASM, blake2bWASM });
 
+/** Pre-computed dummy hash for constant-time auth checks (prevents timing-based email enumeration) */
+let _dummy_hash: string | undefined;
+async function getDummyHash(): Promise<string> {
+	if (!_dummy_hash) {
+		const salt = new Uint8Array(16);
+		crypto.getRandomValues(salt);
+		_dummy_hash = await argon2id({
+			salt,
+			password: 'dummy-password-for-timing-safety',
+			parallelism: 1,
+			iterations: 256,
+			memorySize: 512,
+			hashLength: 32,
+			outputType: 'encoded',
+		});
+	}
+	return _dummy_hash;
+}
+
 export interface AuthOperationResult<Type = SessionToken['typ']> {
 	user_id: string;
 	user_auth_id: string;
@@ -128,15 +147,16 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const url = input instanceof Request ? new URL(input.url) : new URL(input);
 		const method = input instanceof Request ? input.method : init?.method || 'GET';
 		if (url.pathname === '/rpc' && method === 'POST') {
-			const body: any = await (input instanceof Request ? input.json() : init?.body);
+			const body = await (input instanceof Request ? input.json() : init?.body) as { method?: string; args?: unknown[] };
 			if (body?.method && body?.args && body.method in this) {
 				try {
-					const result = (this as any)[body.method](...body.args);
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const result = (this as unknown as Record<string, (...args: unknown[]) => unknown>)[body.method](...body.args);
 					const response = result instanceof Promise ? await result : result;
 					return new Response(JSON.stringify(response), {
 						headers: { 'content-type': 'application/json' },
 					});
-				} catch (error: any) {
+				} catch (error: unknown) {
 					const responseError = ApiError.from(error);
 					return new Response(responseError.toJSON(), {
 						status: responseError.status || 500,
@@ -221,6 +241,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (!user_auth?.password_hash) {
+			// Always run Argon2 against a dummy hash to prevent timing-based email enumeration
+			await argon2Verify({ hash: await getDummyHash(), password }).catch(() => {});
 			throw apiError({ status: 401, message: 'Incorrect email or password' });
 		}
 		await this.verifyPasswordHash(password, user_auth.password_hash);
@@ -1650,7 +1672,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	}
 
 	/** Creates an email verification JWT that can be sent to the user's email */
-	async createEmailVerficationToken(user_session_id: string, meta: UserSessionMeta) {
+	async createEmailVerificationToken(user_session_id: string, meta: UserSessionMeta) {
 		if (!user_session_id) {
 			throw apiError({ status: 400, message: 'User session ID is required' });
 		}
@@ -1675,7 +1697,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				iss: this.options.issuer,
 			});
 		} catch (error) {
-			throw apiError({ status: 500, message: 'Failed to generate password reset token' });
+			throw apiError({ status: 500, message: 'Failed to generate email verification token' });
 		}
 
 		try {
@@ -1688,7 +1710,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				json: JSON.stringify(meta || {}),
 			});
 		} catch (error) {
-			throw apiError({ status: 500, message: 'Failed to create password reset token' });
+			throw apiError({ status: 500, message: 'Failed to create email verification token' });
 		}
 		return {
 			user_id,
@@ -1877,7 +1899,6 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		for (const item of items) {
 			const hashSuffix = item.slice(0, 35).toLowerCase();
 			if (hash === hashPrefix + hashSuffix) {
-				console.log(`Found a password hash that matches a common password`);
 				throw apiError({
 					status: 400,
 					message:
@@ -1926,6 +1947,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (!user_auth?.password_hash) {
+			await argon2Verify({ hash: await getDummyHash(), password }).catch(() => {});
 			throw apiError({ status: 401, message: 'Incorrect email or password' });
 		}
 		await this.verifyPasswordHash(password, user_auth.password_hash);

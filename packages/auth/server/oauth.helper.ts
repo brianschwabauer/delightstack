@@ -43,10 +43,10 @@ export const getOauthToken = async (
 
 	// Parse the body as JSON if possible
 	const raw = await response.text();
-	let body: any = {};
+	let body: Record<string, string | number | undefined> = {};
 	try {
 		body = JSON.parse(raw);
-	} catch (error) {
+	} catch {
 		new URLSearchParams(raw).forEach((val, key) => (body[key] = val));
 	}
 
@@ -60,30 +60,30 @@ export const getOauthToken = async (
 	}
 
 	// Get the access token expiry information
-	let expiresIn: number = +body.expires_in || +body.x_expires_in || 0;
+	let expiresIn = Number(body.expires_in) || Number(body.x_expires_in) || 0;
 	expiresIn = expiresIn * (expiresIn > 100000000000 ? 1 : 1000);
-	let expiresAt: number = body.expires_at || body.x_expires_at || 0;
+	let expiresAt = Number(body.expires_at) || Number(body.x_expires_at) || 0;
 	expiresAt = `${expiresAt}`.match(/^\d+$/)
-		? +expiresAt * (+expiresAt > 100000000000 ? 1 : 1000)
-		: Date.parse(`${expiresAt}`) || 0;
+		? expiresAt * (expiresAt > 100000000000 ? 1 : 1000)
+		: Date.parse(`${body.expires_at || body.x_expires_at}`) || 0;
 	const expires = expiresIn ? expiresIn + Date.now() : expiresAt;
 
 	// Get the refresh token expiry information
-	let refreshExpiresIn: number =
-		+body.refresh_token_expires_in || +body.x_refresh_token_expires_in || 0;
+	let refreshExpiresIn =
+		Number(body.refresh_token_expires_in) || Number(body.x_refresh_token_expires_in) || 0;
 	refreshExpiresIn = refreshExpiresIn * (refreshExpiresIn > 100000000000 ? 1 : 1000);
-	let refreshExpiresAt: number =
-		body.refresh_token_expires_at || body.x_refresh_token_expires_at || 0;
+	let refreshExpiresAt =
+		Number(body.refresh_token_expires_at) || Number(body.x_refresh_token_expires_at) || 0;
 	refreshExpiresAt = `${refreshExpiresAt}`.match(/^\d+$/)
-		? +refreshExpiresAt * (+refreshExpiresAt > 100000000000 ? 1 : 1000)
-		: Date.parse(`${refreshExpiresAt}`) || 0;
+		? refreshExpiresAt * (refreshExpiresAt > 100000000000 ? 1 : 1000)
+		: Date.parse(`${body.refresh_token_expires_at || body.x_refresh_token_expires_at}`) || 0;
 	const refreshExpires = refreshExpiresIn
 		? refreshExpiresIn + Date.now()
 		: refreshExpiresAt;
 
 	return {
-		access_token: body.access_token,
-		refresh_token: body.refresh_token,
+		access_token: String(body.access_token || ''),
+		refresh_token: body.refresh_token as string | undefined,
 		access_token_expires_at: expires,
 		refresh_token_expires_at: refreshExpires,
 		capabilities: 'capabilities' in token ? token.capabilities : [],
