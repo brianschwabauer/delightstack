@@ -210,6 +210,13 @@ export interface DatabaseHandleOptions {
 
 	/** The list of entity routes to handle */
 	routes: DatabaseRouteConfig[];
+
+	/**
+	 * Enable the sync endpoint for client-side search index synchronization.
+	 * Set to `true` to expose `POST /api/sync`, or pass `{ path: '/custom/sync' }`.
+	 * Requires the database RPC to implement `sync()`.
+	 */
+	sync?: boolean | { path: string };
 }
 
 /**
@@ -222,6 +229,7 @@ interface DatabaseRpc {
 	list(entity_type: string, query: unknown): unknown;
 	update(entity_type: string, id: string | number, data: unknown): unknown;
 	delete(entity_type: string, id: string | number): void;
+	sync?(query?: unknown): unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +483,41 @@ async function handleDelete(
 }
 
 // ---------------------------------------------------------------------------
+// Sync handler
+// ---------------------------------------------------------------------------
+
+async function handleSync(
+	db: DatabaseRpc,
+	event: RequestEvent,
+): Promise<Response> {
+	if (!db.sync) {
+		throw new ApiError('Sync not supported by this database', 501);
+	}
+
+	// Support both POST body and URL search params for the sync query
+	let query: Record<string, unknown> = {};
+	if (event.request.method === 'POST') {
+		const body = await event.request.json().catch(() => undefined);
+		if (body && typeof body === 'object') {
+			query = body as Record<string, unknown>;
+		}
+	}
+
+	// Also merge URL params (start, end, limit)
+	const start = event.url.searchParams.get('start');
+	if (start) query.start_updated_at = query.start_updated_at ?? parseInt(start, 10);
+
+	const end = event.url.searchParams.get('end');
+	if (end) query.end_updated_at = query.end_updated_at ?? parseInt(end, 10);
+
+	const limit = event.url.searchParams.get('limit');
+	if (limit) query.limit = query.limit ?? parseInt(limit, 10);
+
+	const data = await db.sync(query);
+	return jsonResponse(data);
+}
+
+// ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 
@@ -500,6 +543,7 @@ async function handleDelete(
  * const databaseHandle = createDatabaseHandle({
  *   getDatabase: (event) => event.locals.db,
  *   routes: [personRoute],
+ *   sync: true,
  * });
  *
  * export const handle = sequence(authHandle, appHandle, databaseHandle);
@@ -514,9 +558,29 @@ export function createDatabaseHandle(options: DatabaseHandleOptions): Handle {
 		}))
 		.sort((a, b) => b.route.length - a.route.length);
 
+	// Resolve sync path
+	const sync_path = options.sync
+		? typeof options.sync === 'object'
+			? options.sync.path
+			: '/api/sync'
+		: null;
+
 	return async ({ event, resolve }) => {
 		const pathname = event.url.pathname;
 		const method = event.request.method;
+
+		// Handle sync route
+		if (sync_path && pathname === sync_path && (method === 'POST' || method === 'GET')) {
+			const db = options.getDatabase(event);
+			if (!db) {
+				return errorResponse(new ApiError('Database not available', 500));
+			}
+			try {
+				return await handleSync(db, event);
+			} catch (error) {
+				return errorResponse(error);
+			}
+		}
 
 		const match = matchRoute(pathname, routes);
 		if (!match) {
