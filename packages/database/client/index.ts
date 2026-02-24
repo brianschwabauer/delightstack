@@ -5,7 +5,8 @@ export {
 	type DatabaseClientConfig,
 } from './database.client.svelte';
 
-export type {
-	WorkerSearchQuery,
-	WorkerSearchResult,
+export {
+	DatabaseError,
+	type WorkerSearchQuery,
+	type WorkerSearchResult,
 } from './database.worker';

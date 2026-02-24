@@ -2,6 +2,7 @@ import type { Remote } from 'comlink';
 import type { DatabaseWorker } from './database.worker';
 
 let cached: Promise<Remote<DatabaseWorker>> | undefined;
+let raw_worker: Worker | SharedWorker | undefined;
 
 /**
  * Returns a comlink-wrapped DatabaseWorker instance.
@@ -15,24 +16,32 @@ export function getWorker(dev = false): Promise<Remote<DatabaseWorker>> {
 		const { wrap } = await import('comlink');
 
 		if (typeof SharedWorker !== 'undefined' && !dev) {
-			const sw = new SharedWorker(
-				new URL('./database.worker.ts', import.meta.url),
-				{ type: 'module' },
-			);
+			const sw = new SharedWorker(new URL('./database.worker.ts', import.meta.url), {
+				type: 'module',
+			});
+			raw_worker = sw;
 			return wrap<DatabaseWorker>(sw.port) as Remote<DatabaseWorker>;
 		}
 
-		const w = new Worker(
-			new URL('./database.worker.ts', import.meta.url),
-			{ type: 'module' },
-		);
+		const w = new Worker(new URL('./database.worker.ts', import.meta.url), {
+			type: 'module',
+		});
+		raw_worker = w;
 		return wrap<DatabaseWorker>(w) as Remote<DatabaseWorker>;
 	})();
 
 	return cached;
 }
 
-/** Clears the cached worker instance (used when scope changes). */
+/** Terminates the worker and clears the cached instance. */
 export function resetWorker(): void {
+	if (raw_worker) {
+		if (raw_worker instanceof SharedWorker) {
+			raw_worker.port.close();
+		} else {
+			raw_worker.terminate();
+		}
+		raw_worker = undefined;
+	}
 	cached = undefined;
 }

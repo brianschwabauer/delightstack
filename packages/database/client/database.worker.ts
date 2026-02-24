@@ -17,10 +17,12 @@ import {
 	idbGet,
 	idbPut,
 	idbDelete,
+	idbBatch,
 	type SyncMeta,
 	type CachedEntity,
 	type CachedSearchIndex,
 } from './database.idb';
+
 /** Inline sync response type to avoid importing server module in worker context. */
 interface SyncEntityResult {
 	config?: { schema: Record<string, unknown>; sort: unknown };
@@ -117,7 +119,8 @@ export class DatabaseWorker {
 	#search_subscribers: SearchSubscriber[] = [];
 	#subscriber_counter = 0;
 	#default_threshold = 5000;
-	#initialized = false;
+	#pending_notify = new Set<string>();
+	#notify_scheduled = false;
 
 	// -----------------------------------------------------------------------
 	// Lifecycle
@@ -156,10 +159,7 @@ export class DatabaseWorker {
 					'search_index',
 					entity_type,
 				);
-				if (
-					cached?.index &&
-					cached.config_version === (meta?.config_version ?? 0)
-				) {
+				if (cached?.index && cached.config_version === (meta?.config_version ?? 0)) {
 					try {
 						loadOrama(orama, cached.index as RawData);
 					} catch {
@@ -186,10 +186,7 @@ export class DatabaseWorker {
 			};
 		}
 
-		this.#initialized = true;
-
-		// Kick off initial sync for client-mode entities
-		await this.sync();
+		// Sync is NOT awaited here — the main thread controls sync lifecycle
 	}
 
 	async destroy(): Promise<void> {
@@ -199,7 +196,6 @@ export class DatabaseWorker {
 			this.#db = null;
 		}
 		this.#entities = {};
-		this.#initialized = false;
 	}
 
 	async setScope(db_name: string): Promise<void> {
@@ -217,9 +213,7 @@ export class DatabaseWorker {
 		if (!this.#db) return;
 
 		const types = entity_types ?? Object.keys(this.#entities);
-		const client_types = types.filter(
-			(t) => this.#entities[t]?.search_mode === 'client',
-		);
+		const client_types = types.filter((t) => this.#entities[t]?.search_mode === 'client');
 
 		if (client_types.length === 0) return;
 
@@ -248,9 +242,7 @@ export class DatabaseWorker {
 			if (is_initial) {
 				// Descending sync — get newest first
 				const min_start = Math.min(
-					...client_types.map(
-						(t) => this.#entities[t].start_updated_at ?? Infinity,
-					),
+					...client_types.map((t) => this.#entities[t].start_updated_at ?? Infinity),
 				);
 				if (isFinite(min_start) && min_start > 0) {
 					params.set('end', String(min_start));
@@ -279,9 +271,9 @@ export class DatabaseWorker {
 
 			if (!response.ok) break;
 
-			const body = (await response.json().catch(
-				() => undefined,
-			)) as SyncResponse | undefined;
+			const body = (await response.json().catch(() => undefined)) as
+				| SyncResponse
+				| undefined;
 			if (!body) break;
 
 			let any_data = false;
@@ -323,19 +315,15 @@ export class DatabaseWorker {
 				if (inserts.length > 0) {
 					any_data = true;
 					// Remove then re-insert to handle updates
-					const ids = inserts.map(
-						(e) => String((e as Record<string, unknown>)[state.primary_key]),
+					const ids = inserts.map((e) =>
+						String((e as Record<string, unknown>)[state.primary_key]),
 					);
 					removeMultiple(state.orama, ids);
-					insertMultiple(
-						state.orama,
-						inserts as Record<string, unknown>[],
-					);
+					insertMultiple(state.orama, inserts as Record<string, unknown>[]);
 
 					// Check threshold
 					const total_inserted =
-						(entity_result.created?.length ?? 0) +
-						(entity_result.updated?.length ?? 0);
+						(entity_result.created?.length ?? 0) + (entity_result.updated?.length ?? 0);
 					if (total_inserted >= state.threshold) {
 						await this.#switchToServerMode(entity_type);
 						continue;
@@ -365,7 +353,7 @@ export class DatabaseWorker {
 				};
 			}
 
-			// Persist updated state
+			// Persist updated state (save index to IDB as we go)
 			await this.#persistSyncState(client_types);
 
 			// Check if we need more pages
@@ -412,6 +400,7 @@ export class DatabaseWorker {
 	// CRUD
 	// -----------------------------------------------------------------------
 
+	/** Create — no optimistic insert, POST to server first */
 	async create(
 		entity_type: string,
 		data: Record<string, unknown>,
@@ -419,66 +408,27 @@ export class DatabaseWorker {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
 
-		// Optimistically insert into local index with temp data
-		const temp_id = `_temp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-		const temp_entity = {
-			...data,
-			[state.primary_key]: temp_id,
-			created_at: Date.now(),
-			updated_at: Date.now(),
-		};
-
-		if (state.orama && state.search_mode === 'client') {
-			try {
-				insertIntoOrama(state.orama, temp_entity);
-			} catch {
-				// Best effort optimistic insert
-			}
-			this.#notifySubscribers([entity_type]);
-		}
-
 		// POST to server
-		let server_entity: Record<string, unknown>;
-		try {
-			const response = await fetch(`/api/${entity_type}`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(data),
-			});
-			if (!response.ok) {
-				const error_body = await response.json().catch(() => ({}));
-				// Rollback optimistic insert
-				if (state.orama && state.search_mode === 'client') {
-					try {
-						removeFromOrama(state.orama, temp_id);
-					} catch {
-						// ignore
-					}
-					this.#notifySubscribers([entity_type]);
-				}
-				throw Object.assign(new Error('Create failed'), error_body);
-			}
-			server_entity = (await response.json()) as Record<string, unknown>;
-		} catch (error) {
-			// Rollback optimistic insert on network error
-			if (state.orama && state.search_mode === 'client') {
-				try {
-					removeFromOrama(state.orama, temp_id);
-				} catch {
-					// ignore
-				}
-				this.#notifySubscribers([entity_type]);
-			}
-			throw error;
+		const response = await fetch(`/api/${entity_type}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(data),
+		});
+		if (!response.ok) {
+			const error_body = (await response.json().catch(() => ({}))) as Record<
+				string,
+				unknown
+			>;
+			throw this.#createError(
+				`Create ${entity_type} failed`,
+				response.status,
+				error_body,
+			);
 		}
+		const server_entity = (await response.json()) as Record<string, unknown>;
 
-		// Replace temp entry with real server data
+		// Insert into Orama index on success
 		if (state.orama && state.search_mode === 'client') {
-			try {
-				removeFromOrama(state.orama, temp_id);
-			} catch {
-				// ignore
-			}
 			try {
 				insertIntoOrama(state.orama, server_entity);
 			} catch {
@@ -501,39 +451,32 @@ export class DatabaseWorker {
 		return server_entity;
 	}
 
+	/** Get — returns IDB cache with background refresh (#18) */
 	async get(
 		entity_type: string,
 		id: string | number,
+		force_refresh?: boolean,
+		on_refresh?: (data: Record<string, unknown>) => void,
 	): Promise<Record<string, unknown> | undefined> {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
 
-		// Try IDB cache first
-		if (state.cache_enabled && this.#db) {
+		// Try IDB cache first (unless force_refresh)
+		if (!force_refresh && state.cache_enabled && this.#db) {
 			const cached = await idbGet<CachedEntity>(
 				this.#db,
 				'entities',
 				`${entity_type}/${id}`,
 			);
-			if (cached?.data) return cached.data;
+			if (cached?.data) {
+				// Fire background refresh without blocking the response
+				this.#backgroundRefresh(entity_type, id, on_refresh).catch(() => {});
+				return cached.data;
+			}
 		}
 
 		// Fetch from server
-		const response = await fetch(`/api/${entity_type}/${id}`);
-		if (!response.ok) return undefined;
-		const data = (await response.json()) as Record<string, unknown>;
-
-		// Cache
-		if (state.cache_enabled && this.#db) {
-			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
-				entity_type,
-				id,
-				data,
-				updated_at: Date.now(),
-			} satisfies CachedEntity);
-		}
-
-		return data;
+		return this.#fetchAndCache(entity_type, id);
 	}
 
 	async update(
@@ -587,7 +530,10 @@ export class DatabaseWorker {
 				body: JSON.stringify(data),
 			});
 			if (!response.ok) {
-				const error_body = await response.json().catch(() => ({}));
+				const error_body = (await response.json().catch(() => ({}))) as Record<
+					string,
+					unknown
+				>;
 				// Rollback
 				if (prev_doc && state.orama && state.search_mode === 'client') {
 					try {
@@ -602,10 +548,15 @@ export class DatabaseWorker {
 					}
 					this.#notifySubscribers([entity_type]);
 				}
-				throw Object.assign(new Error('Update failed'), error_body);
+				throw this.#createError(
+					`Update ${entity_type}/${id} failed`,
+					response.status,
+					error_body,
+				);
 			}
 			server_entity = (await response.json()) as Record<string, unknown>;
 		} catch (error) {
+			if (error instanceof DatabaseError) throw error;
 			// Rollback on network error
 			if (prev_doc && state.orama && state.search_mode === 'client') {
 				try {
@@ -686,7 +637,10 @@ export class DatabaseWorker {
 				method: 'DELETE',
 			});
 			if (!response.ok) {
-				const error_body = await response.json().catch(() => ({}));
+				const error_body = (await response.json().catch(() => ({}))) as Record<
+					string,
+					unknown
+				>;
 				// Rollback
 				if (prev_doc && state.orama && state.search_mode === 'client') {
 					try {
@@ -696,9 +650,14 @@ export class DatabaseWorker {
 					}
 					this.#notifySubscribers([entity_type]);
 				}
-				throw Object.assign(new Error('Delete failed'), error_body);
+				throw this.#createError(
+					`Delete ${entity_type}/${id} failed`,
+					response.status,
+					error_body,
+				);
 			}
 		} catch (error) {
+			if (error instanceof DatabaseError) throw error;
 			// Rollback on network error
 			if (prev_doc && state.orama && state.search_mode === 'client') {
 				try {
@@ -747,6 +706,13 @@ export class DatabaseWorker {
 		};
 	}
 
+	/** One-shot list that always hits the server */
+	async list(entity_type: string, query: WorkerSearchQuery): Promise<WorkerSearchResult> {
+		const state = this.#entities[entity_type];
+		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
+		return this.#serverSearch(entity_type, query);
+	}
+
 	/** Subscribe to search results that auto-update when the index changes. */
 	async subscribe(
 		entity_type: string,
@@ -793,9 +759,7 @@ export class DatabaseWorker {
 	}
 
 	/** Get the current search mode for an entity type. */
-	async getSearchMode(
-		entity_type: string,
-	): Promise<'client' | 'server'> {
+	async getSearchMode(entity_type: string): Promise<'client' | 'server'> {
 		return this.#entities[entity_type]?.search_mode ?? 'server';
 	}
 
@@ -818,17 +782,12 @@ export class DatabaseWorker {
 		if (query.offset) params.set('offset', String(query.offset));
 		if (query.where) params.set('where', JSON.stringify(query.where));
 		if (query.sortBy) {
-			params.set(
-				'order',
-				`${query.sortBy.property}:${query.sortBy.order ?? 'ASC'}`,
-			);
+			params.set('order', `${query.sortBy.property}:${query.sortBy.order ?? 'ASC'}`);
 		}
 		params.set('sparse', 'true');
 
 		const qs = params.toString();
-		const response = await fetch(
-			`/api/${entity_type}${qs ? '?' : ''}${qs}`,
-		);
+		const response = await fetch(`/api/${entity_type}${qs ? '?' : ''}${qs}`);
 		if (!response.ok) {
 			return { hits: [], count: 0 };
 		}
@@ -843,6 +802,47 @@ export class DatabaseWorker {
 		};
 	}
 
+	/** Fetch from server and cache in IDB. */
+	async #fetchAndCache(
+		entity_type: string,
+		id: string | number,
+	): Promise<Record<string, unknown> | undefined> {
+		const state = this.#entities[entity_type];
+		if (!state) return undefined;
+
+		const response = await fetch(`/api/${entity_type}/${id}`);
+		if (!response.ok) return undefined;
+		const data = (await response.json()) as Record<string, unknown>;
+
+		// Cache in IDB
+		if (state.cache_enabled && this.#db) {
+			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
+				entity_type,
+				id,
+				data,
+				updated_at: Date.now(),
+			} satisfies CachedEntity);
+		}
+
+		return data;
+	}
+
+	/** Background refresh: fetches fresh data from server, updates IDB, notifies caller */
+	async #backgroundRefresh(
+		entity_type: string,
+		id: string | number,
+		on_refresh?: (data: Record<string, unknown>) => void,
+	): Promise<void> {
+		const fresh = await this.#fetchAndCache(entity_type, id);
+		if (fresh && on_refresh) {
+			try {
+				on_refresh(fresh);
+			} catch {
+				// ignore
+			}
+		}
+	}
+
 	async #switchToServerMode(entity_type: string): Promise<void> {
 		const state = this.#entities[entity_type];
 		if (!state) return;
@@ -852,68 +852,126 @@ export class DatabaseWorker {
 
 		// Persist mode to IDB
 		if (this.#db) {
-			await idbPut(this.#db, 'sync_meta', entity_type, {
-				entity_type,
-				search_mode: 'server',
-				config_version: state.config_version,
-				last_synced_at: state.last_synced_at,
-				start_updated_at: state.start_updated_at ?? 0,
-				end_updated_at: state.end_updated_at ?? 0,
-			} satisfies SyncMeta);
-
-			// Remove cached search index to free IDB space
-			await idbDelete(this.#db, 'search_index', entity_type);
+			await idbBatch(this.#db, [
+				{
+					store: 'sync_meta',
+					type: 'put',
+					key: entity_type,
+					value: {
+						entity_type,
+						search_mode: 'server',
+						config_version: state.config_version,
+						last_synced_at: state.last_synced_at,
+						start_updated_at: state.start_updated_at ?? 0,
+						end_updated_at: state.end_updated_at ?? 0,
+					} satisfies SyncMeta,
+				},
+				{
+					store: 'search_index',
+					type: 'delete',
+					key: entity_type,
+				},
+			]);
 		}
 	}
 
+	/** Persist sync state using batched IDB writes */
 	async #persistSyncState(entity_types: string[]): Promise<void> {
 		if (!this.#db) return;
+
+		const ops: {
+			store: 'sync_meta' | 'search_index';
+			type: 'put';
+			key: string;
+			value: SyncMeta | CachedSearchIndex;
+		}[] = [];
 
 		for (const entity_type of entity_types) {
 			const state = this.#entities[entity_type];
 			if (!state) continue;
 
 			// Save sync meta
-			await idbPut(this.#db, 'sync_meta', entity_type, {
-				entity_type,
-				search_mode: state.search_mode,
-				config_version: state.config_version,
-				last_synced_at: state.last_synced_at,
-				start_updated_at: state.start_updated_at ?? 0,
-				end_updated_at: state.end_updated_at ?? 0,
-			} satisfies SyncMeta);
+			ops.push({
+				store: 'sync_meta',
+				type: 'put',
+				key: entity_type,
+				value: {
+					entity_type,
+					search_mode: state.search_mode,
+					config_version: state.config_version,
+					last_synced_at: state.last_synced_at,
+					start_updated_at: state.start_updated_at ?? 0,
+					end_updated_at: state.end_updated_at ?? 0,
+				} satisfies SyncMeta,
+			});
 
 			// Save Orama index
 			if (state.orama && state.search_mode === 'client') {
 				const saved = saveOrama(state.orama);
-				await idbPut(this.#db, 'search_index', entity_type, {
-					entity_type,
-					index: saved,
-					config_version: state.config_version,
-					updated_at: Date.now(),
-				} satisfies CachedSearchIndex);
+				ops.push({
+					store: 'search_index',
+					type: 'put',
+					key: entity_type,
+					value: {
+						entity_type,
+						index: saved,
+						config_version: state.config_version,
+						updated_at: Date.now(),
+					} satisfies CachedSearchIndex,
+				});
 			}
 		}
+
+		await idbBatch(this.#db, ops);
 	}
 
+	/** Microtask-batched subscriber notification */
 	#notifySubscribers(entity_types: string[]): void {
-		const entity_set = new Set(entity_types);
-		for (const sub of this.#search_subscribers) {
-			if (!entity_set.has(sub.entity_type)) continue;
-			// Re-run search asynchronously
-			this.search(sub.entity_type, sub.query).then(
-				(result) => {
-					try {
-						sub.callback(result);
-					} catch {
-						// ignore
-					}
-				},
-				() => {
-					// ignore search errors in notification
-				},
-			);
-		}
+		for (const t of entity_types) this.#pending_notify.add(t);
+		if (this.#notify_scheduled) return;
+		this.#notify_scheduled = true;
+		queueMicrotask(() => {
+			this.#notify_scheduled = false;
+			const types = new Set(this.#pending_notify);
+			this.#pending_notify.clear();
+			for (const sub of this.#search_subscribers) {
+				if (!types.has(sub.entity_type)) continue;
+				this.search(sub.entity_type, sub.query).then(
+					(result) => {
+						try {
+							sub.callback(result);
+						} catch {
+							// ignore
+						}
+					},
+					() => {
+						// ignore search errors in notification
+					},
+				);
+			}
+		});
+	}
+
+	/** Create a structured error with status and body */
+	#createError(
+		message: string,
+		status: number,
+		body: Record<string, unknown>,
+	): DatabaseError {
+		return new DatabaseError(message, status, body);
+	}
+}
+
+/** Structured error for CRUD operations */
+export class DatabaseError extends Error {
+	readonly status: number;
+	readonly body: Record<string, unknown>;
+
+	constructor(message: string, status: number, body: Record<string, unknown>) {
+		super(message);
+		this.name = 'DatabaseError';
+		this.status = status;
+		this.body = body;
 	}
 }
 

@@ -105,15 +105,42 @@ export function idbClear(db: IDBDatabase, store: IDBStoreName): Promise<void> {
 }
 
 /** Get all keys from an object store. */
-export function idbGetAllKeys(
-	db: IDBDatabase,
-	store: IDBStoreName,
-): Promise<string[]> {
+export function idbGetAllKeys(db: IDBDatabase, store: IDBStoreName): Promise<string[]> {
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction(store, 'readonly');
 		const request = tx.objectStore(store).getAllKeys();
 		request.onsuccess = () => resolve(request.result as string[]);
 		request.onerror = () => reject(request.error);
+	});
+}
+
+/** Batch multiple put/delete operations in a single transaction. */
+export function idbBatch(
+	db: IDBDatabase,
+	ops: {
+		store: IDBStoreName;
+		type: 'put' | 'delete';
+		key: string;
+		value?: unknown;
+	}[],
+): Promise<void> {
+	if (ops.length === 0) return Promise.resolve();
+
+	// Collect unique stores needed for this batch
+	const stores = [...new Set(ops.map((op) => op.store))];
+
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(stores, 'readwrite');
+		for (const op of ops) {
+			const store = tx.objectStore(op.store);
+			if (op.type === 'put') {
+				store.put(op.value, op.key);
+			} else {
+				store.delete(op.key);
+			}
+		}
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
 	});
 }
 

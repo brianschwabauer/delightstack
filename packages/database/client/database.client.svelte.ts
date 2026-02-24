@@ -4,7 +4,11 @@ import { createSubscriber } from 'svelte/reactivity';
 import { untrack } from 'svelte';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
-import type { DatabaseWorker, WorkerSearchQuery, WorkerSearchResult } from './database.worker';
+import type {
+	DatabaseWorker,
+	WorkerSearchQuery,
+	WorkerSearchResult,
+} from './database.worker';
 import { getWorker, resetWorker } from './database.worker.init';
 
 // ---------------------------------------------------------------------------
@@ -72,9 +76,8 @@ type EntityInput<T extends Database.Table> = Omit<
 
 export class EntityState<T extends Database.Table = Database.Table> {
 	#entity_type: string;
-	#table: T;
-	#id: string | number;
-	#worker: Remote<DatabaseWorker>;
+	#id: string | number | undefined;
+	#worker: Remote<DatabaseWorker> | null;
 	#subscriber: () => void;
 
 	#value = $state<EntityOf<T>>();
@@ -127,33 +130,27 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	}
 
 	/** Entity ID */
-	get id(): string | number {
+	get id(): string | number | undefined {
 		return this.#id;
 	}
 
 	/** Timestamp (epoch ms) when entity was created */
 	get created_at(): number | undefined {
-		return (this.#value as Record<string, unknown>)?.created_at as
-			| number
-			| undefined;
+		return (this.#value as Record<string, unknown>)?.created_at as number | undefined;
 	}
 
 	/** Timestamp (epoch ms) when entity was last updated */
 	get updated_at(): number | undefined {
-		return (this.#value as Record<string, unknown>)?.updated_at as
-			| number
-			| undefined;
+		return (this.#value as Record<string, unknown>)?.updated_at as number | undefined;
 	}
 
 	constructor(
 		entity_type: string,
-		table: T,
-		id: string | number,
-		worker: Remote<DatabaseWorker>,
+		id: string | number | undefined,
+		worker: Remote<DatabaseWorker> | null,
 		initial_data?: Partial<EntityOf<T>>,
 	) {
 		this.#entity_type = entity_type;
-		this.#table = table;
 		this.#id = id;
 		this.#worker = worker;
 		if (initial_data) {
@@ -168,7 +165,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		});
 	}
 
-	/** Save changes to server. Optionally pass specific changes. */
+	/** Save changes to server. Creates if no ID, updates otherwise. */
 	async save(changes?: Partial<EntityOf<T>>): Promise<this> {
 		if (untrack(() => this.#saving)) return this;
 		this.#saving = true;
@@ -176,11 +173,28 @@ export class EntityState<T extends Database.Table = Database.Table> {
 			const data_to_save =
 				changes ?? ($state.snapshot(this.#value) as Record<string, unknown>);
 
-			const result = (await this.#worker.update(
-				this.#entity_type,
-				this.#id,
-				data_to_save as Record<string, unknown>,
-			)) as EntityOf<T>;
+			const worker = this.#getWorker();
+			let result: EntityOf<T>;
+			if (!this.#id) {
+				// No ID — create new entity
+				result = (await worker.create(
+					this.#entity_type,
+					data_to_save as Record<string, unknown>,
+				)) as EntityOf<T>;
+				// Update ID from server response
+				const pk = (result as Record<string, unknown>).id as string | number;
+				this.#id = pk;
+				// Update cache key
+				EntityState.#cache.delete(`${this.#entity_type}:`);
+				EntityState.#cache.set(`${this.#entity_type}:${pk}`, this);
+			} else {
+				// Has ID — update existing entity
+				result = (await worker.update(
+					this.#entity_type,
+					this.#id,
+					data_to_save as Record<string, unknown>,
+				)) as EntityOf<T>;
+			}
 
 			this.#server_value = result;
 			this.#value = result;
@@ -191,15 +205,41 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		return this;
 	}
 
-	/** Fetch fresh data from server. */
-	async load(): Promise<void> {
+	/** Fetch fresh data from server. Supports force_refresh and SSR (#7). */
+	async load(options?: {
+		force_refresh?: boolean;
+		fetch?: typeof globalThis.fetch;
+	}): Promise<void> {
 		if (this.#loading) return;
+		if (!this.#id) return;
 		this.#loading = true;
 		try {
-			const data = (await this.#worker.get(
-				this.#entity_type,
-				this.#id,
-			)) as EntityOf<T> | undefined;
+			let data: EntityOf<T> | undefined;
+
+			if (this.#worker) {
+				// Worker path — normal browser environment
+				const refresh_callback = proxy((fresh: Record<string, unknown>) => {
+					this.#server_value = fresh as EntityOf<T>;
+					// Only update local value if no unsaved changes
+					if (!untrack(() => this.#has_changes)) {
+						this.#value = fresh as EntityOf<T>;
+					}
+				});
+				data = (await this.#worker.get(
+					this.#entity_type,
+					this.#id,
+					options?.force_refresh,
+					refresh_callback,
+				)) as EntityOf<T> | undefined;
+			} else {
+				// SSR path — direct fetch without worker
+				const fetchFn = options?.fetch ?? globalThis.fetch;
+				const response = await fetchFn(`/api/${this.#entity_type}/${this.#id}`);
+				if (response.ok) {
+					data = (await response.json()) as EntityOf<T>;
+				}
+			}
+
 			if (data) {
 				this.#server_value = data;
 				if (!this.#loaded) {
@@ -212,12 +252,19 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		}
 	}
 
+	/** Delete this entity from the server (#8). */
+	async delete(): Promise<void> {
+		if (!this.#id) return;
+		const worker = this.#getWorker();
+		await worker.delete(this.#entity_type, this.#id);
+		// Remove from cache
+		EntityState.#cache.delete(`${this.#entity_type}:${this.#id}`);
+	}
+
 	/** Discard local changes, revert to server_value. */
 	reset(): void {
 		if (this.#server_value) {
-			this.#value = structuredClone(
-				$state.snapshot(this.#server_value),
-			) as EntityOf<T>;
+			this.#value = structuredClone($state.snapshot(this.#server_value)) as EntityOf<T>;
 		}
 	}
 
@@ -226,22 +273,30 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		return $state.snapshot(this.#value) as EntityOf<T>;
 	}
 
+	#getWorker(): Remote<DatabaseWorker> {
+		if (!this.#worker) {
+			throw new Error(
+				'Worker not available. Call `await db.init()` first or provide fetch option for SSR.',
+			);
+		}
+		return this.#worker;
+	}
+
 	// -- Static singleton cache --
 
 	static #cache = new Map<string, EntityState>();
 
 	static from<T extends Database.Table>(
 		entity_type: string,
-		table: T,
-		id: string | number,
-		worker: Remote<DatabaseWorker>,
+		id: string | number | undefined,
+		worker: Remote<DatabaseWorker> | null,
 		initial_data?: Partial<EntityOf<T>>,
 	): EntityState<T> {
-		const key = `${entity_type}:${id}`;
+		const key = `${entity_type}:${id ?? ''}`;
 		if (EntityState.#cache.has(key)) {
 			return EntityState.#cache.get(key) as EntityState<T>;
 		}
-		const instance = new EntityState(entity_type, table, id, worker, initial_data);
+		const instance = new EntityState(entity_type, id, worker, initial_data);
 		EntityState.#cache.set(key, instance);
 		return instance as EntityState<T>;
 	}
@@ -260,8 +315,10 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 	#entity_type: string;
 	#worker: Remote<DatabaseWorker>;
 	#subscriber_id: string | null = null;
+	#init_promise: Promise<void> | null = null;
 	#subscriber: () => void;
 	#destroyed = false;
+	#effect_cleanup: (() => void) | null = null;
 
 	#results = $state<WorkerSearchResult['hits']>([]);
 	#count = $state(0);
@@ -274,6 +331,12 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 	get results(): WorkerSearchResult['hits'] {
 		this.#subscriber();
 		return this.#results;
+	}
+
+	/** Convenience accessor for just the documents */
+	get docs(): Record<string, unknown>[] {
+		this.#subscriber();
+		return this.#results.map((h) => h.document);
 	}
 
 	/** Total matching count */
@@ -320,14 +383,14 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 		if (query) this.#query_state = query;
 
 		this.#subscriber = createSubscriber(() => {
-			if (!this.#subscriber_id && !this.#destroyed) {
+			if (!this.#subscriber_id && !this.#init_promise && !this.#destroyed) {
 				this.#initSubscription();
 			}
 			return () => {};
 		});
 
-		// Also set up a reactive effect to re-search when query changes
-		$effect.root(() => {
+		// Set up a reactive effect to re-search when query changes
+		this.#effect_cleanup = $effect.root(() => {
 			let first = true;
 			$effect(() => {
 				// Read the query to trigger on changes
@@ -362,37 +425,47 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 		}
 	}
 
-	/** Cleanup subscription. */
+	/** Cleanup subscription — clean up effect root. */
 	destroy(): void {
 		this.#destroyed = true;
+		if (this.#effect_cleanup) {
+			this.#effect_cleanup();
+			this.#effect_cleanup = null;
+		}
 		if (this.#subscriber_id) {
 			this.#worker.unsubscribe(this.#subscriber_id).catch(() => {});
 			this.#subscriber_id = null;
 		}
 	}
 
+	/** Dedup subscription init using promise */
 	async #initSubscription(): Promise<void> {
 		if (this.#destroyed) return;
+		if (this.#init_promise) return;
 
-		try {
-			const mode = await this.#worker.getSearchMode(this.#entity_type);
-			this.#mode = mode;
+		this.#init_promise = (async () => {
+			try {
+				const mode = await this.#worker.getSearchMode(this.#entity_type);
+				this.#mode = mode;
 
-			this.#subscriber_id = await this.#worker.subscribe(
-				this.#entity_type,
-				$state.snapshot(this.#query_state) as WorkerSearchQuery,
-				proxy((result: WorkerSearchResult) => {
-					if (this.#destroyed) return;
-					this.#results = result.hits;
-					this.#count = result.count;
-					this.#loading = false;
-					this.#error = null;
-				}),
-			);
-		} catch (e) {
-			this.#error = e;
-			this.#loading = false;
-		}
+				this.#subscriber_id = await this.#worker.subscribe(
+					this.#entity_type,
+					$state.snapshot(this.#query_state) as WorkerSearchQuery,
+					proxy((result: WorkerSearchResult) => {
+						if (this.#destroyed) return;
+						this.#results = result.hits;
+						this.#count = result.count;
+						this.#loading = false;
+						this.#error = null;
+					}),
+				);
+			} catch (e) {
+				this.#error = e;
+				this.#loading = false;
+			}
+		})();
+
+		await this.#init_promise;
 	}
 
 	async #updateSubscription(): Promise<void> {
@@ -421,8 +494,18 @@ export class DatabaseSearch<T extends Database.Table = Database.Table> {
 export class DatabaseClient<T extends TableMap = TableMap> {
 	#config: DatabaseClientConfig<T>;
 	#worker: Remote<DatabaseWorker> | null = null;
-	#initialized = false;
+	#initialized = $state(false);
 	#external_unsubscribe: (() => void) | void = undefined;
+
+	/** Whether the initial sync is in progress */
+	syncing = $state(false);
+
+	/** Whether the initial sync has completed */
+	synced = $state(false);
+
+	get initialized() {
+		return this.#initialized;
+	}
 
 	constructor(config: DatabaseClientConfig<T>) {
 		this.#config = {
@@ -476,15 +559,25 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 		this.#initialized = true;
 
+		// Fire sync in background — main thread tracks state
+		this.syncing = true;
+		this.#worker
+			.sync()
+			.then(() => {
+				this.synced = true;
+			})
+			.catch(() => {})
+			.finally(() => {
+				this.syncing = false;
+			});
+
 		// Wire up external subscription hook (e.g. websocket)
 		if (this.#config.hooks?.onSubscribe) {
-			this.#external_unsubscribe = this.#config.hooks.onSubscribe(
-				(event) => {
-					if (!this.#worker) return;
-					// When an external event arrives, re-sync the affected entity
-					this.#worker.sync([event.entity_type]).catch(() => {});
-				},
-			);
+			this.#external_unsubscribe = this.#config.hooks.onSubscribe((event) => {
+				if (!this.#worker) return;
+				// When an external event arrives, re-sync the affected entity
+				this.#worker.sync([event.entity_type]).catch(() => {});
+			});
 		}
 	}
 
@@ -492,16 +585,13 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	// CRUD
 	// -----------------------------------------------------------------------
 
-	/** Create a new entity. Optimistically adds to local index. */
+	/** Create a new entity. */
 	async create<K extends keyof T & string>(
 		entity_type: K,
 		data: EntityInput<T[K]>,
 	): Promise<EntityOf<T[K]>> {
 		const worker = this.#getWorker();
-		const result = await worker.create(
-			entity_type,
-			data as Record<string, unknown>,
-		);
+		const result = await worker.create(entity_type, data as Record<string, unknown>);
 		this.#config.hooks?.onEntityChange?.({
 			type: 'create',
 			entity_type,
@@ -511,7 +601,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		return result as EntityOf<T[K]>;
 	}
 
-	/** Get a single entity by ID. Returns from IDB cache if available. */
+	/** Get a single entity by ID. Returns from IDB cache with background refresh. */
 	async get<K extends keyof T & string>(
 		entity_type: K,
 		id: string | number,
@@ -527,11 +617,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		data: Partial<EntityOf<T[K]>>,
 	): Promise<EntityOf<T[K]>> {
 		const worker = this.#getWorker();
-		const result = await worker.update(
-			entity_type,
-			id,
-			data as Record<string, unknown>,
-		);
+		const result = await worker.update(entity_type, id, data as Record<string, unknown>);
 		this.#config.hooks?.onEntityChange?.({
 			type: 'update',
 			entity_type,
@@ -562,17 +648,10 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** Get a reactive EntityState wrapper for an entity (cached singleton per entity:id). */
 	entity<K extends keyof T & string>(
 		entity_type: K,
-		id: string | number,
+		id?: string | number,
 		initial_data?: Partial<EntityOf<T[K]>>,
 	): EntityState<T[K]> {
-		const worker = this.#getWorker();
-		return EntityState.from(
-			entity_type,
-			this.#config.tables[entity_type],
-			id,
-			worker,
-			initial_data,
-		);
+		return EntityState.from(entity_type, id, this.#worker, initial_data);
 	}
 
 	// -----------------------------------------------------------------------
@@ -588,13 +667,13 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		return new DatabaseSearch(entity_type, worker, query);
 	}
 
-	/** One-shot list (always hits server). */
+	/** One-shot list — always hits server. */
 	async list<K extends keyof T & string>(
 		entity_type: K,
 		query?: WorkerSearchQuery,
 	): Promise<WorkerSearchResult> {
 		const worker = this.#getWorker();
-		return worker.search(entity_type, query ?? {});
+		return worker.list(entity_type, query ?? {});
 	}
 
 	// -----------------------------------------------------------------------
@@ -610,6 +689,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		resetWorker();
 		this.#worker = null;
 		this.#initialized = false;
+		this.syncing = false;
+		this.synced = false;
 		this.#config.db_name = db_name;
 		await this.init();
 	}
@@ -626,6 +707,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		}
 		resetWorker();
 		this.#initialized = false;
+		this.syncing = false;
+		this.synced = false;
 	}
 
 	// -----------------------------------------------------------------------
@@ -634,9 +717,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 	#getWorker(): Remote<DatabaseWorker> {
 		if (!this.#worker) {
-			throw new Error(
-				'DatabaseClient not initialized. Call `await db.init()` first.',
-			);
+			throw new Error('DatabaseClient not initialized. Call `await db.init()` first.');
 		}
 		return this.#worker;
 	}
