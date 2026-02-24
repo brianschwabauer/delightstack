@@ -97,7 +97,7 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	}) => void;
 	#subscriber: () => void;
 
-	#value = $state<Database.Entity<T>>();
+	#value = $state({} as Database.Entity<T>);
 	#server_value = $state.raw<Database.Entity<T> | undefined | null>();
 	#saving = $state(false);
 	#loading = $state(false);
@@ -116,10 +116,10 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		}
 	});
 
-	/** The current local state (editable) */
+	/** The current local state (editable). Always non-null — initialized from initial_data. */
 	get value(): Database.Entity<T> {
 		this.#subscriber();
-		return this.#value!;
+		return this.#value;
 	}
 
 	set value(v: Database.Entity<T>) {
@@ -161,19 +161,19 @@ export class EntityState<T extends Database.Table = Database.Table> {
 
 	/** Timestamp (epoch ms) when entity was created */
 	get created_at(): number | undefined {
-		return (this.#value as Record<string, unknown>)?.created_at as number | undefined;
+		return (this.#value as Record<string, unknown>).created_at as number | undefined;
 	}
 
 	/** Timestamp (epoch ms) when entity was last updated */
 	get updated_at(): number | undefined {
-		return (this.#value as Record<string, unknown>)?.updated_at as number | undefined;
+		return (this.#value as Record<string, unknown>).updated_at as number | undefined;
 	}
 
 	constructor(
 		entity_type: string,
 		id: string | number | undefined,
-		worker: Remote<DatabaseWorker> | null,
 		options?: {
+			worker?: Remote<DatabaseWorker> | null;
 			initial_data?: Partial<Database.Entity<T>>;
 			primary_key?: string;
 			onChange?: (event: {
@@ -185,12 +185,10 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	) {
 		this.#entity_type = entity_type;
 		this.#id = id;
-		this.#worker = worker;
+		this.#worker = options?.worker ?? null;
 		this.#primary_key = options?.primary_key ?? 'id';
 		this.#onChange = options?.onChange;
-		if (options?.initial_data) {
-			this.#value = options.initial_data as Database.Entity<T>;
-		}
+		this.#value = (options?.initial_data ?? {}) as Database.Entity<T>;
 		this.#subscriber = createSubscriber(() => {
 			// Auto-load when first subscribed
 			if (!this.#loaded && !this.#loading && this.#id) {
@@ -317,7 +315,9 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	/** Discard local changes, revert to server_value. */
 	reset(): void {
 		if (this.#server_value) {
-			this.#value = structuredClone($state.snapshot(this.#server_value)) as Database.Entity<T>;
+			this.#value = structuredClone(
+				$state.snapshot(this.#server_value),
+			) as Database.Entity<T>;
 		}
 	}
 
@@ -342,8 +342,8 @@ export class EntityState<T extends Database.Table = Database.Table> {
 	static from<T extends Database.Table>(
 		entity_type: string,
 		id: string | number | undefined,
-		worker: Remote<DatabaseWorker> | null,
 		options?: {
+			worker?: Remote<DatabaseWorker> | null;
 			initial_data?: Partial<Database.Entity<T>>;
 			primary_key?: string;
 			onChange?: (event: {
@@ -357,7 +357,11 @@ export class EntityState<T extends Database.Table = Database.Table> {
 		if (EntityState.#cache.has(key)) {
 			return EntityState.#cache.get(key) as EntityState<T>;
 		}
-		const instance = new EntityState(entity_type, id, worker, options) as EntityState<T>;
+		const instance = new EntityState(
+			entity_type,
+			id,
+			options,
+		) as EntityState<T>;
 		EntityState.#cache.set(key, instance as EntityState);
 		return instance;
 	}
@@ -551,6 +555,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	#config: DatabaseClientConfig<T>;
 	#worker: Remote<DatabaseWorker> | null = null;
 	#initialized = $state(false);
+	#destroyed = false;
 	#external_unsubscribe: (() => void) | void = undefined;
 
 	/** Whether the initial sync is in progress */
@@ -582,6 +587,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	async init(): Promise<void> {
 		if (typeof window === 'undefined') return; // SSR guard
 
+		this.#destroyed = false;
 		this.#worker = await getWorker(this.#config.dev);
 
 		// Extract serializable config from table definitions
@@ -631,11 +637,11 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		this.#worker
 			.sync()
 			.then(() => {
-				this.#synced = true;
+				if (!this.#destroyed) this.#synced = true;
 			})
 			.catch(() => {})
 			.finally(() => {
-				this.#syncing = false;
+				if (!this.#destroyed) this.#syncing = false;
 			});
 
 		// Wire up external subscription hook (e.g. websocket)
@@ -733,7 +739,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		initial_data?: Partial<Database.Entity<T[K]>>,
 	): EntityState<T[K]> {
 		const table = this.#config.tables[entity_type];
-		return EntityState.from(entity_type, id, this.#worker, {
+		return EntityState.from(entity_type, id, {
+			worker: this.#worker,
 			initial_data,
 			primary_key: table.config.primary_key,
 			onChange: (event) => {
@@ -778,9 +785,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** Change scope (e.g. user switches org). Clears cache and re-initializes. */
 	async setScope(db_name: string): Promise<void> {
 		EntityState.clearCache();
-		if (this.#worker) {
-			await this.#worker.setScope(db_name);
-		}
+		if (this.#worker) await this.#worker.destroy();
 		resetWorker();
 		this.#worker = null;
 		this.#initialized = false;
@@ -792,6 +797,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 	/** Cleanup — terminates worker, clears subscriptions. */
 	async destroy(): Promise<void> {
+		this.#destroyed = true;
 		if (this.#external_unsubscribe) {
 			this.#external_unsubscribe();
 		}

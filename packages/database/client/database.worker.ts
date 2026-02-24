@@ -88,7 +88,7 @@ export interface WorkerSearchResult {
 	elapsed?: unknown;
 }
 
-interface EntityState {
+interface EntitySyncState {
 	orama: AnyOrama | null;
 	search_mode: 'client' | 'server';
 	config_version: number;
@@ -117,8 +117,7 @@ const REFRESH_STALE_MS = 30_000;
 
 export class DatabaseWorker {
 	#db: IDBDatabase | null = null;
-	#db_name = '';
-	#entities: Record<string, EntityState> = {};
+	#entities: Record<string, EntitySyncState> = {};
 	#tables: WorkerInitConfig['tables'] = {};
 	#search_subscribers: SearchSubscriber[] = [];
 	#subscriber_counter = 0;
@@ -132,7 +131,6 @@ export class DatabaseWorker {
 	// -----------------------------------------------------------------------
 
 	async init(config: WorkerInitConfig): Promise<void> {
-		this.#db_name = config.db_name;
 		this.#tables = config.tables;
 		this.#default_threshold = config.default_threshold;
 
@@ -202,11 +200,6 @@ export class DatabaseWorker {
 		}
 		this.#entities = {};
 		this.#pending_refreshes.clear();
-	}
-
-	async setScope(db_name: string): Promise<void> {
-		await this.destroy();
-		this.#db_name = db_name;
 	}
 
 	// -----------------------------------------------------------------------
@@ -308,7 +301,11 @@ export class DatabaseWorker {
 
 				// Apply deletes
 				if (entity_result.deleted?.length) {
-					removeMultiple(state.orama, entity_result.deleted as string[]);
+					try {
+						removeMultiple(state.orama, entity_result.deleted as string[]);
+					} catch {
+						// Some IDs may not exist in the index
+					}
 				}
 
 				// Apply inserts (created + updated treated the same for indexing)
@@ -322,8 +319,16 @@ export class DatabaseWorker {
 					const ids = inserts.map((e) =>
 						String((e as Record<string, unknown>)[state.primary_key]),
 					);
-					removeMultiple(state.orama, ids);
-					insertMultiple(state.orama, inserts as Record<string, unknown>[]);
+					try {
+						removeMultiple(state.orama, ids);
+					} catch {
+						// Some IDs may not exist
+					}
+					try {
+						insertMultiple(state.orama, inserts as Record<string, unknown>[]);
+					} catch {
+						// Schema mismatch or corrupt data
+					}
 
 					// Check threshold
 					const total_inserted =
@@ -552,20 +557,7 @@ export class DatabaseWorker {
 					string,
 					unknown
 				>;
-				// Rollback
-				if (prev_doc && state.orama && state.search_mode === 'client') {
-					try {
-						removeFromOrama(state.orama, String(id));
-					} catch {
-						// ignore
-					}
-					try {
-						insertIntoOrama(state.orama, prev_doc);
-					} catch {
-						// ignore
-					}
-					this.#notifySubscribers([entity_type]);
-				}
+				this.#rollbackOrama(entity_type, id, prev_doc);
 				throw DatabaseError.transferable(
 					`Update ${entity_type}/${id} failed`,
 					response.status,
@@ -575,20 +567,7 @@ export class DatabaseWorker {
 			server_entity = (await response.json()) as Record<string, unknown>;
 		} catch (error) {
 			if (error instanceof DatabaseError) throw error;
-			// Rollback on network error
-			if (prev_doc && state.orama && state.search_mode === 'client') {
-				try {
-					removeFromOrama(state.orama, String(id));
-				} catch {
-					// ignore
-				}
-				try {
-					insertIntoOrama(state.orama, prev_doc);
-				} catch {
-					// ignore
-				}
-				this.#notifySubscribers([entity_type]);
-			}
+			this.#rollbackOrama(entity_type, id, prev_doc);
 			throw error;
 		}
 
@@ -659,15 +638,7 @@ export class DatabaseWorker {
 					string,
 					unknown
 				>;
-				// Rollback
-				if (prev_doc && state.orama && state.search_mode === 'client') {
-					try {
-						insertIntoOrama(state.orama, prev_doc);
-					} catch {
-						// ignore
-					}
-					this.#notifySubscribers([entity_type]);
-				}
+				this.#rollbackOrama(entity_type, id, prev_doc);
 				throw DatabaseError.transferable(
 					`Delete ${entity_type}/${id} failed`,
 					response.status,
@@ -676,15 +647,7 @@ export class DatabaseWorker {
 			}
 		} catch (error) {
 			if (error instanceof DatabaseError) throw error;
-			// Rollback on network error
-			if (prev_doc && state.orama && state.search_mode === 'client') {
-				try {
-					insertIntoOrama(state.orama, prev_doc);
-				} catch {
-					// ignore
-				}
-				this.#notifySubscribers([entity_type]);
-			}
+			this.#rollbackOrama(entity_type, id, prev_doc);
 			throw error;
 		}
 
@@ -787,6 +750,27 @@ export class DatabaseWorker {
 	// -----------------------------------------------------------------------
 	// Private helpers
 	// -----------------------------------------------------------------------
+
+	/** Rollback an Orama index change by removing the current entry and re-inserting the previous doc. */
+	#rollbackOrama(
+		entity_type: string,
+		id: string | number,
+		prev_doc: Record<string, unknown> | undefined,
+	): void {
+		const state = this.#entities[entity_type];
+		if (!prev_doc || !state?.orama || state.search_mode !== 'client') return;
+		try {
+			removeFromOrama(state.orama, String(id));
+		} catch {
+			// may not exist
+		}
+		try {
+			insertIntoOrama(state.orama, prev_doc);
+		} catch {
+			// ignore
+		}
+		this.#notifySubscribers([entity_type]);
+	}
 
 	/** Server-side search. Throws on error when throw_on_error is true. */
 	async #serverSearch(
