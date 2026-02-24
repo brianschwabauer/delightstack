@@ -34,6 +34,7 @@ function makeLocals(overrides: Partial<AuthLocals> = {}): AuthLocals {
 		org_state: {},
 		setPreferences: vi.fn(),
 		setOrgState: vi.fn(),
+		auth_client_data: { jwt: null, session: null, org_id: null, preferences: {}, org_state: {} },
 		meta: {},
 		auth: {} as AuthLocals['auth'],
 		...overrides,

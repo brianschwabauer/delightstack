@@ -1,6 +1,7 @@
 import type { Handle, RequestEvent } from '@sveltejs/kit';
 import type { AuthConfig, ResolvedAuthConfig } from './auth.config';
 import type { AuthDatabaseServer } from './auth.db.server';
+import type { AuthClientData } from '../client/auth.client.svelte';
 import type { SessionToken, UserSessionMeta } from '../types';
 import { ApiError } from '@delightstack/utilities';
 import { decodeJwt, extractJwtRefreshToken } from './jwt.server';
@@ -93,6 +94,9 @@ export interface AuthLocals {
 	 * Changes are written to the signed cookie only (not synced to DB).
 	 */
 	setOrgState: (updates: Record<string, unknown>) => void;
+
+	/** Pre-built serialized auth data for passing to the client via +layout.server.ts */
+	auth_client_data: AuthClientData;
 
 	/** User session metadata (IP, geo, user agent) */
 	meta: UserSessionMeta;
@@ -348,6 +352,14 @@ export function createAuthHandle<Config extends AuthConfig>(
 			org_state,
 			setPreferences,
 			setOrgState,
+			auth_client_data: {
+				jwt: jwt || null,
+				session,
+				org_id,
+				preferences,
+				org_state,
+				permissions: config.permissions,
+			},
 			meta,
 			get auth() {
 				return getAuth();

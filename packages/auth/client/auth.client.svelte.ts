@@ -19,6 +19,8 @@ export interface AuthClientData {
 	org_id: string | null;
 	preferences: Record<string, unknown>;
 	org_state: Record<string, unknown>;
+	/** Permission names for bitwise role encoding (populated automatically from auth config) */
+	permissions?: readonly string[];
 }
 
 /**
@@ -144,7 +146,7 @@ export class AuthClient<P extends string = string> {
 		this.#preferences = data?.preferences ?? {};
 		this.#org_state = data?.org_state ?? {};
 		this.base_path = options?.base_path ?? '/api/auth';
-		this.permissions = options?.permissions ?? [];
+		this.permissions = options?.permissions ?? (data?.permissions as readonly P[]) ?? [];
 		this.refresh_threshold_ms = options?.refresh_threshold_ms ?? 600_000;
 		this.fetchFn = options?.fetch ?? fetch;
 
@@ -159,6 +161,7 @@ export class AuthClient<P extends string = string> {
 			org_id: this.#org_id,
 			preferences: this.#preferences,
 			org_state: this.#org_state,
+			permissions: this.permissions,
 		};
 	}
 

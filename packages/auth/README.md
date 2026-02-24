@@ -133,21 +133,18 @@ export const handle = sequence(authHandle);
 
 ```typescript
 // src/routes/+layout.server.ts
-export const load = ({ locals }) => {
-	const { jwt, session, org_id, preferences, org_state } = locals;
-	return { auth: { jwt, session, org_id, preferences, org_state } };
-};
+import type { AuthLocals } from '@delightstack/auth/server';
+
+export const load = ({ locals }) => ({
+	auth: (locals as AuthLocals).auth_client_data,
+});
 
 // src/routes/+layout.ts
 import { AuthClient } from '@delightstack/auth/client';
 
-export const load = ({ data }) => {
-	const auth = new AuthClient(data.auth, {
-		permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
-	});
-	// auth is AuthClient<'org:read' | 'org:write' | 'org:admin' | 'org:owner'>
-	return { auth };
-};
+export const load = ({ data }) => ({
+	auth: new AuthClient(data.auth), // permissions included automatically from config
+});
 ```
 
 ```svelte
@@ -388,12 +385,15 @@ await auth.api.oauth.disconnectAccount(account_id);
 ### Permission Checking
 
 ```typescript
+// Permissions are included automatically from config via auth_client_data
+const auth = new AuthClient(data.auth);
+auth.isAllowed('org:admin'); // true if current org role has bit 2 set
+
+// For typed autocomplete, pass permissions explicitly with as const:
 const auth = new AuthClient(data.auth, {
 	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
 });
-
-// Fully typed — autocomplete for 'org:read' | 'org:write' | 'org:admin' | 'org:owner'
-auth.isAllowed('org:admin'); // true if current org role has bit 2 set
+auth.isAllowed('org:admin'); // autocomplete for the 4 permission strings
 auth.isAllowed('invalid');   // TS error: Argument of type '"invalid"' is not assignable
 ```
 
@@ -414,13 +414,13 @@ On the server (SSR), these methods update local state only. Use `locals.setPrefe
 ### SSR Hydration
 
 ```typescript
-// Server: serialize to JSON
-const data = auth.toJSON(); // { jwt, session, org_id, preferences, org_state }
+// Server: serialize to JSON (includes permissions)
+const data = auth.toJSON(); // { jwt, session, org_id, preferences, org_state, permissions }
 
-// Client: hydrate from server data (pass as const for typed permissions)
-const auth = new AuthClient(data, { permissions: ['org:read', 'org:admin'] as const });
+// Client: hydrate from server data (permissions included automatically)
+const auth = new AuthClient(data);
 // or
-const auth = AuthClient.from(data, { permissions: ['org:read', 'org:admin'] as const });
+const auth = AuthClient.from(data);
 ```
 
 ### Auto-Refresh
