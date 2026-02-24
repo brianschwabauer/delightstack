@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { AuthClient, type AuthClientData } from './auth.client.svelte';
 import type { SessionToken } from '../types';
 
-function makeSession(overrides: Partial<SessionToken<'auth'>> = {}): SessionToken<'auth'> {
+function makeSession(
+	overrides: Partial<SessionToken<'auth'>> = {},
+): SessionToken<'auth'> {
 	const now = Math.floor(Date.now() / 1000);
 	return {
 		typ: 'auth',
@@ -154,24 +156,28 @@ describe('AuthClient', () => {
 
 		it('returns true for set permission bits', () => {
 			const data = makeData();
-			data.session = makeSession({ org: { org_1: { name: 'Test', role: 0b1111, db: 'db_1', plan: 1 } } });
+			data.session = makeSession({
+				org: { org_1: { name: 'Test', role: 0b1111, db: 'db_1', plan: 1 } },
+			});
 			const client = new AuthClient(data, { permissions });
 
-			expect(client.hasPermission('read')).toBe(true);   // bit 0
-			expect(client.hasPermission('write')).toBe(true);   // bit 1
-			expect(client.hasPermission('admin')).toBe(true);   // bit 2
-			expect(client.hasPermission('owner')).toBe(true);   // bit 3
+			expect(client.hasPermission('read')).toBe(true); // bit 0
+			expect(client.hasPermission('write')).toBe(true); // bit 1
+			expect(client.hasPermission('admin')).toBe(true); // bit 2
+			expect(client.hasPermission('owner')).toBe(true); // bit 3
 		});
 
 		it('returns false for unset permission bits', () => {
 			const data = makeData();
-			data.session = makeSession({ org: { org_1: { name: 'Test', role: 0b0001, db: 'db_1', plan: 1 } } });
+			data.session = makeSession({
+				org: { org_1: { name: 'Test', role: 0b0001, db: 'db_1', plan: 1 } },
+			});
 			const client = new AuthClient(data, { permissions });
 
-			expect(client.hasPermission('read')).toBe(true);    // bit 0 set
-			expect(client.hasPermission('write')).toBe(false);   // bit 1 not set
-			expect(client.hasPermission('admin')).toBe(false);   // bit 2 not set
-			expect(client.hasPermission('owner')).toBe(false);   // bit 3 not set
+			expect(client.hasPermission('read')).toBe(true); // bit 0 set
+			expect(client.hasPermission('write')).toBe(false); // bit 1 not set
+			expect(client.hasPermission('admin')).toBe(false); // bit 2 not set
+			expect(client.hasPermission('owner')).toBe(false); // bit 3 not set
 		});
 
 		it('returns false when not signed in', () => {
@@ -189,17 +195,6 @@ describe('AuthClient', () => {
 			const data = makeData();
 			const client = new AuthClient(data, { permissions });
 			expect(client.hasPermission('nonexistent' as never)).toBe(false);
-		});
-	});
-
-	describe('isAllowed (deprecated)', () => {
-		it('delegates to hasPermission', () => {
-			const data = makeData();
-			const client = new AuthClient(data, {
-				permissions: ['read', 'write', 'admin', 'owner'] as const,
-			});
-			expect(client.isAllowed('read')).toBe(true);
-			expect(client.isAllowed('admin')).toBe(true);
 		});
 	});
 
@@ -291,16 +286,20 @@ describe('AuthClient', () => {
 
 	describe('setPreferences', () => {
 		function mockFetch(response: Record<string, unknown>) {
-			return vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
-				status: 200,
-				headers: { 'Content-Type': 'application/json' },
-			}));
+			return vi.fn().mockResolvedValue(
+				new Response(JSON.stringify(response), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' },
+				}),
+			);
 		}
 
 		it('sends PATCH and updates preferences on success', async () => {
 			const merged = { theme: 'dark', language: 'en' };
 			const fetch = mockFetch(merged);
-			const client = new AuthClient(makeData({ preferences: { theme: 'dark' } }), { fetch });
+			const client = new AuthClient(makeData({ preferences: { theme: 'dark' } }), {
+				fetch,
+			});
 			const result = await client.setPreferences({ language: 'en' });
 
 			expect(result).toEqual(merged);
@@ -312,7 +311,10 @@ describe('AuthClient', () => {
 		it('removes null values via API', async () => {
 			const merged = { language: 'en' };
 			const fetch = mockFetch(merged);
-			const client = new AuthClient(makeData({ preferences: { theme: 'dark', language: 'en' } }), { fetch });
+			const client = new AuthClient(
+				makeData({ preferences: { theme: 'dark', language: 'en' } }),
+				{ fetch },
+			);
 			const result = await client.setPreferences({ theme: null });
 
 			expect(result).toEqual(merged);
@@ -322,16 +324,20 @@ describe('AuthClient', () => {
 
 	describe('setOrgState', () => {
 		function mockFetch(response: Record<string, unknown>) {
-			return vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
-				status: 200,
-				headers: { 'Content-Type': 'application/json' },
-			}));
+			return vi.fn().mockResolvedValue(
+				new Response(JSON.stringify(response), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' },
+				}),
+			);
 		}
 
 		it('sends PATCH and updates org state on success', async () => {
 			const merged = { page: '/home', filter: 'active' };
 			const fetch = mockFetch(merged);
-			const client = new AuthClient(makeData({ org_state: { page: '/home' } }), { fetch });
+			const client = new AuthClient(makeData({ org_state: { page: '/home' } }), {
+				fetch,
+			});
 			const result = await client.setOrgState({ filter: 'active' });
 
 			expect(result).toEqual(merged);
