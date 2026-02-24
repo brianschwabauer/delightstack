@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
-import { ApiError, decodeJwt, generateID } from '@packages/lib';
+import { DelightError } from '@delightstack/utilities';
+import { decodeJwt, generateID } from '@packages/lib';
 import { parse as parseCookie } from 'cookie';
 import { decodePermissions, WebSocketErrorEvent, WebSocketEvent } from '@packages/types';
 
@@ -235,12 +236,8 @@ export class WebsocketServer extends DurableObject {
 					return new Response(JSON.stringify(response), {
 						headers: { 'content-type': 'application/json' },
 					});
-				} catch (error: any) {
-					const responseError = ApiError.from(error);
-					return new Response(responseError.toJSON(), {
-						status: responseError.status || 500,
-						headers: { 'content-type': 'application/json' },
-					});
+				} catch (error: unknown) {
+					return DelightError.from(error).toResponse();
 				}
 			}
 		}

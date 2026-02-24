@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { SqlServer, type SqlEntityQuery } from '@delightstack/database';
 import { AUTH_DATABASE_UPGRADES, AuthDatabaseSchema } from './auth.sql.schema';
-import { ApiError, generateID, parseSchema, apiError } from '@delightstack/utilities';
+import { DelightError, generateID, parseSchema } from '@delightstack/utilities';
 import { generateJwt, decodeJwt } from './jwt.server';
 import {
 	decodeOauthScopes,
@@ -155,21 +155,23 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const url = input instanceof Request ? new URL(input.url) : new URL(input);
 		const method = input instanceof Request ? input.method : init?.method || 'GET';
 		if (url.pathname === '/rpc' && method === 'POST') {
-			const body = await (input instanceof Request ? input.json() : init?.body) as { method?: string; args?: unknown[] };
+			const body = (await (input instanceof Request ? input.json() : init?.body)) as {
+				method?: string;
+				args?: unknown[];
+			};
 			if (body?.method && body?.args && body.method in this) {
 				try {
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const result = (this as unknown as Record<string, (...args: unknown[]) => unknown>)[body.method](...body.args);
+					const result = (
+						this as unknown as Record<string, (...args: unknown[]) => unknown>
+					)[body.method](...body.args);
 					const response = result instanceof Promise ? await result : result;
 					return new Response(JSON.stringify(response), {
 						headers: { 'content-type': 'application/json' },
 					});
 				} catch (error: unknown) {
-					const responseError = ApiError.from(error);
-					return new Response(responseError.toJSON(), {
-						status: responseError.status || 500,
-						headers: { 'content-type': 'application/json' },
-					});
+					const responseError = DelightError.from(error);
+					return responseError.toResponse();
 				}
 			}
 		}
@@ -222,8 +224,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			EmailPasswordSignIn,
 			unsafe_data,
 		);
-		if (!email) throw apiError({ status: 400, message: 'Email is required' });
-		if (!password) throw apiError({ status: 400, message: 'Password is required' });
+		if (!email) throw new DelightError({ message: 'Email is required', status: 400 });
+		if (!password)
+			throw new DelightError({ message: 'Password is required', status: 400 });
 		const ip_address = meta.ip_address;
 
 		// Limit the number of requests that can be made to this endpoint
@@ -232,9 +235,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			refill_every_seconds: 10,
 		});
 		if (!is_allowed) {
-			throw apiError({
-				status: 429,
+			throw new DelightError({
 				message: 'Too many failed sign in attempts. Please try again later',
+				status: 429,
 			});
 		}
 
@@ -251,16 +254,16 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		if (!user_auth?.password_hash) {
 			// Always run Argon2 against a dummy hash to prevent timing-based email enumeration
 			await argon2Verify({ hash: await getDummyHash(), password }).catch(() => {});
-			throw apiError({ status: 401, message: 'Incorrect email or password' });
+			throw new DelightError({ message: 'Incorrect email or password', status: 401 });
 		}
 		await this.verifyPasswordHash(password, user_auth.password_hash);
 		const user = this.sql
 			.setError(`Couldn't find user with given id`)
 			.get('user', user_auth.user_id);
 		if (user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: 'This account has been deleted. Please contact support for help.',
+				status: 401,
 			});
 		}
 
@@ -347,13 +350,13 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		try {
 			token = await decodeJwt(this.options.secret, email_signin_token);
 		} catch (error) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Invalid or expired email sign-in link',
+				status: 400,
 			});
 		}
 		if (token.typ !== 'email_signin') {
-			throw apiError({ status: 400, message: 'Invalid email sign-in link' });
+			throw new DelightError({ message: 'Invalid email sign-in link', status: 400 });
 		}
 
 		// Check if the token has already been used (deleted from database)
@@ -368,9 +371,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			.setError(`Couldn't find user with given id`)
 			.get('user', user_id);
 		if (user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `This account has been deleted. Please contact support for help.`,
+				status: 401,
 			});
 		}
 
@@ -477,9 +480,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			refill_every_seconds: 10,
 		});
 		if (!is_allowed) {
-			throw apiError({
-				status: 429,
+			throw new DelightError({
 				message: 'Too many failed sign up attempts. Please try again later',
+				status: 429,
 			});
 		}
 
@@ -575,12 +578,13 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const user_auth_id = generateID();
 		const user_session_id = generateID();
 		const email = raw_email.trim().toLowerCase();
-		if (!email) throw apiError({ status: 400, message: `Must provide an email address` });
+		if (!email)
+			throw new DelightError({ message: `Must provide an email address`, status: 400 });
 		const user = this.sql.setError(`Could not find user`).get('user', user_id);
 		if (user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: 'This account has been deleted. Please contact support for help.',
+				status: 401,
 			});
 		}
 		if (password) await this.checkPasswordStrength(password);
@@ -591,9 +595,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			refill_every_seconds: 10,
 		});
 		if (!is_allowed) {
-			throw apiError({
-				status: 429,
+			throw new DelightError({
 				message: 'Too many failed sign up attempts. Please try again later',
+				status: 429,
 			});
 		}
 
@@ -717,7 +721,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	) {
 		const email = oauth_token.account_email?.trim()?.toLowerCase();
 		if (!email) {
-			throw apiError({ status: 400, message: `Oauth account does not have an email` });
+			throw new DelightError({
+				message: `Oauth account does not have an email`,
+				status: 400,
+			});
 		}
 		let type: AuthOperationResult['type'] | undefined;
 		let user_id: string | undefined;
@@ -737,9 +744,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		// The user is attempting to sign in to an existing account
 		if (existing_token) {
 			if (data.connect_user_id) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: `Can't connect an oauth account that is already connected to another user`,
+					status: 400,
 				});
 			}
 			// Check if the existing oauth token is being used as a sign in method
@@ -757,9 +764,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 					existing_token.capability,
 				).includes(this.oauthProfileScope);
 				if (!hasProfilePermision) {
-					throw apiError({
-						status: 400,
+					throw new DelightError({
 						message: `This oauth account is already connected to another user and doesn't have the ${this.oauthProfileScope} scope`,
+						status: 400,
 					});
 				}
 				// The oauth token is not being used as a sign in method. It is being used for another vendor api (like Google Drive)
@@ -775,9 +782,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 					},
 				});
 				if (!oauth_token_permission?.user_id) {
-					throw apiError({
-						status: 400,
+					throw new DelightError({
 						message: `This oauth account is already connected to another user and doesn't have a user id`,
+						status: 400,
 					});
 				}
 
@@ -791,9 +798,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		// Check if the user is attempting to connect an oauth account to an existing user
 		if (data.connect_user_id) {
 			if (user_id && user_id !== data.connect_user_id) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: `Can't connect an oauth account that is already connected to another user`,
+					status: 400,
 				});
 			}
 			user_id = data.connect_user_id;
@@ -801,9 +808,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				.setError(`Could not find user with id ${user_id}`, 404)
 				.get('user', user_id);
 			if (user.deleted_at) {
-				throw apiError({
-					status: 401,
+				throw new DelightError({
 					message: 'This account has been deleted. Please contact support for help.',
+					status: 401,
 				});
 			}
 			type = 'new-signin-method';
@@ -823,9 +830,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 					.setError(`Could not find user with id ${user_id}`, 404)
 					.get('user', user_id);
 				if (user.deleted_at) {
-					throw apiError({
-						status: 401,
+					throw new DelightError({
 						message: 'This account has been deleted. Please contact support for help.',
+						status: 401,
 					});
 				}
 				type = 'new-signin-method';
@@ -861,10 +868,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 						this.options.permissions,
 						existing_permission.permission,
 					);
-					const new_permissions = decodePermissions(
-						this.options.permissions,
-						permission,
-					);
+					const new_permissions = decodePermissions(this.options.permissions, permission);
 					const all_permissions = encodePermissions(
 						this.options.permissions,
 						Array.from(new Set([...existing_permissions, ...new_permissions])),
@@ -880,9 +884,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				.setError(`Couldn't find user with given id`)
 				.get('user', user_id);
 			if (user.deleted_at) {
-				throw apiError({
-					status: 401,
+				throw new DelightError({
 					message: `Can't sign-in to a deleted account. Please contact support for help.`,
+					status: 401,
 				});
 			}
 		}
@@ -1078,9 +1082,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			.setError(`Could not find user with id ${user_id}`, 404)
 			.get('user', user_id);
 		if (user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `Can't revoke a sign-in method for an account that is being deleted`,
+				status: 401,
 			});
 		}
 		const alternative_auths = this.sql.list('user_auth', {
@@ -1095,9 +1099,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (!alternative_auths.length) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `You cannot revoke the last verified sign in method. Please add a new sign in method before revoking this one`,
+				status: 400,
 			});
 		}
 		if (
@@ -1106,9 +1110,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				(auth) => auth.created_at < Date.now() - 1000 * 60 * 60 * 24,
 			)
 		) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `For security reasons, you cannot revoke a sign in method if you added a new sign in method recently. Please wait 24 hours before revoking this sign in method`,
+				status: 400,
 			});
 		}
 		let oauth_token: AuthDatabaseSchema['oauth_token'] | undefined;
@@ -1139,7 +1143,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	/** Changes the password for the user auth of the given user session. Returns new session information */
 	async updateSignInMethodPassword(user_session_id: string, password: string) {
 		if (!user_session_id) {
-			throw apiError({ status: 400, message: 'User session ID is required' });
+			throw new DelightError({ message: 'User session ID is required', status: 400 });
 		}
 		const user_session = this.sql
 			.setError(`User session not found`)
@@ -1152,23 +1156,23 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			.setError(`Couldn't find user with given id`)
 			.get('user', user_auth.user_id);
 		if (user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `Can't update password for an account that is being deleted`,
+				status: 401,
 			});
 		}
 
 		if (user_auth.oauth_token_id) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'You cannot change your password when using an OAuth account',
+				status: 400,
 			});
 		}
 		const signedInToday = user_session.created_at > Date.now() - 1000 * 60 * 60 * 24;
 		if (!signedInToday) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'For security reasons, you must sign in again to change your password',
+				status: 400,
 			});
 		}
 
@@ -1252,9 +1256,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				},
 			});
 			if (existing_permission) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: `User already has permission to access this oauth account`,
+					status: 400,
 				});
 			}
 		}
@@ -1325,9 +1329,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (user_auth) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `You cannot revoke an oauth account that is used to sign in`,
+				status: 400,
 			});
 		}
 		this.sql.delete('oauth_token', oauth_token.id);
@@ -1461,9 +1465,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const user = parseSchema(UpdateUser, unsafe_data);
 		const current_user = this.sql.get('user', user_id);
 		if (current_user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `Can't update an account that is being deleted`,
+				status: 401,
 			});
 		}
 		if (!Object.keys(user).length) return current_user;
@@ -1534,9 +1538,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				: encodePermissions(this.options.permissions, encodedOrDecodedPermission);
 		const decoded = decodePermissions(this.options.permissions, permission);
 		if (decoded.includes('superadmin:read') || decoded.includes('superadmin:write')) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `You cannot assign superadmin permissions to a user`,
+				status: 400,
 			});
 		}
 		const [current_org_user] = this.sql.list('org_user', {
@@ -1595,9 +1599,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (!other_admin) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Cannot remove the only admin from the organization',
+				status: 400,
 			});
 		}
 		this.sql.delete('org_user', current_org_user.id);
@@ -1633,28 +1637,25 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	}) {
 		const email = raw_email.trim().toLowerCase();
 		if (!email) {
-			throw apiError({ status: 400, message: 'Email is required' });
+			throw new DelightError({ message: 'Email is required', status: 400 });
 		}
 		if (email.length > 255) {
-			throw apiError({ status: 400, message: 'Email is too long' });
+			throw new DelightError({ message: 'Email is too long', status: 400 });
 		}
 		if (!email.includes('@')) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `Invalid email. Email doesn't contain '@' symbol`,
+				status: 400,
 			});
 		}
 		if (!email.match(/^[^@]+@/)) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `Invalid email. Email doesn't contain a character before the '@' symbol`,
+				status: 400,
 			});
 		}
 		if (!email.match(/@[^\.]+\.[^\.]+/)) {
-			throw apiError({
-				status: 400,
-				message: `Invalid email domain`,
-			});
+			throw new DelightError({ message: `Invalid email domain`, status: 400 });
 		}
 
 		// Limit the number of requests that can be made to this endpoint
@@ -1663,9 +1664,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			refill_every_seconds: 10,
 		});
 		if (!is_allowed) {
-			throw apiError({
-				status: 429,
+			throw new DelightError({
 				message: 'Too many email availability checks. Please try again later',
+				status: 429,
 			});
 		}
 
@@ -1680,14 +1681,14 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (user_auth) {
-			throw apiError({ status: 400, message: 'Email is already in use' });
+			throw new DelightError({ message: 'Email is already in use', status: 400 });
 		}
 	}
 
 	/** Creates an email verification JWT that can be sent to the user's email */
 	async createEmailVerificationToken(user_session_id: string, meta: UserSessionMeta) {
 		if (!user_session_id) {
-			throw apiError({ status: 400, message: 'User session ID is required' });
+			throw new DelightError({ message: 'User session ID is required', status: 400 });
 		}
 		const user_session = this.sql
 			.setError(`User session not found`)
@@ -1710,7 +1711,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				iss: this.options.issuer,
 			});
 		} catch (error) {
-			throw apiError({ status: 500, message: 'Failed to generate email verification token' });
+			throw new DelightError({
+				message: 'Failed to generate email verification token',
+				status: 500,
+			});
 		}
 
 		try {
@@ -1723,7 +1727,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				json: JSON.stringify(meta || {}),
 			});
 		} catch (error) {
-			throw apiError({ status: 500, message: 'Failed to create email verification token' });
+			throw new DelightError({
+				message: 'Failed to create email verification token',
+				status: 500,
+			});
 		}
 		return {
 			user_id,
@@ -1745,7 +1752,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		meta: UserSessionMeta,
 	): Promise<AuthOperationResult<'email_signin'>> {
 		if (!email) {
-			throw apiError({ status: 400, message: 'Email is required' });
+			throw new DelightError({ message: 'Email is required', status: 400 });
 		}
 
 		// Get the user's auth details
@@ -1762,9 +1769,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			.setError(`Couldn't find user with given email`)
 			.get('user', user_auth.user_id);
 		if (user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: 'This account has been deleted. Please contact support for help.',
+				status: 401,
 			});
 		}
 
@@ -1780,7 +1787,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				iss: this.options.issuer,
 			});
 		} catch (error) {
-			throw apiError({ status: 500, message: 'Failed to generate email sign in token' });
+			throw new DelightError({
+				message: 'Failed to generate email sign in token',
+				status: 500,
+			});
 		}
 
 		try {
@@ -1793,7 +1803,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				json: JSON.stringify(meta || {}),
 			});
 		} catch (error) {
-			throw apiError({ status: 500, message: 'Failed to create email sign in token' });
+			throw new DelightError({
+				message: 'Failed to create email sign in token',
+				status: 500,
+			});
 		}
 		return {
 			user_id: user_auth.user_id,
@@ -1811,13 +1824,13 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		try {
 			token = await decodeJwt(this.options.secret, email_verification_token);
 		} catch (error) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Invalid or expired email verification link',
+				status: 400,
 			});
 		}
 		if (token.typ !== 'email_verification') {
-			throw apiError({ status: 400, message: 'Invalid email verification link' });
+			throw new DelightError({ message: 'Invalid email verification link', status: 400 });
 		}
 
 		// Check if the token has already been used (deleted from database)
@@ -1832,9 +1845,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			.setError(`Couldn't find user with given id`)
 			.get('user', user_id);
 		if (user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `This account has been deleted. Please contact support for help.`,
+				status: 401,
 			});
 		}
 
@@ -1843,9 +1856,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			.setError(`Could not find email sign in method`)
 			.get('user_auth', user_auth_id);
 		if (user_auth.verified_at) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `Email is already verified. You can now sign in using this email`,
+				status: 400,
 			});
 		}
 
@@ -1890,15 +1903,15 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	/** Checks the strength of the password. @throws an error if it's not strong enough */
 	async checkPasswordStrength(password: string) {
 		if (password.length < 8) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Password must be at least 8 characters long',
+				status: 400,
 			});
 		}
 		if (password.length > 255) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Password must be less than 256 characters long',
+				status: 400,
 			});
 		}
 		const sha1 = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(password));
@@ -1912,10 +1925,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		for (const item of items) {
 			const hashSuffix = item.slice(0, 35).toLowerCase();
 			if (hash === hashPrefix + hashSuffix) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message:
 						'Password is too common or has been compromised. Please choose a unique password.',
+					status: 400,
 				});
 			}
 		}
@@ -1937,18 +1950,18 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			refill_every_seconds: 10,
 		});
 		if (!is_allowed) {
-			throw apiError({
-				status: 429,
+			throw new DelightError({
 				message: 'Too many email & password checks. Please try again later',
+				status: 429,
 			});
 		}
 
 		const formatted_email = email.trim().toLowerCase();
 		if (!formatted_email) {
-			throw apiError({ status: 400, message: 'Email is required' });
+			throw new DelightError({ message: 'Email is required', status: 400 });
 		}
 		if (!password) {
-			throw apiError({ status: 400, message: 'Password is required' });
+			throw new DelightError({ message: 'Password is required', status: 400 });
 		}
 		const [user_auth] = this.sql.list('user_auth', {
 			limit: 1,
@@ -1961,7 +1974,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		});
 		if (!user_auth?.password_hash) {
 			await argon2Verify({ hash: await getDummyHash(), password }).catch(() => {});
-			throw apiError({ status: 401, message: 'Incorrect email or password' });
+			throw new DelightError({ message: 'Incorrect email or password', status: 401 });
 		}
 		await this.verifyPasswordHash(password, user_auth.password_hash);
 	}
@@ -1974,9 +1987,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			refill_every_seconds: 60,
 		});
 		if (!is_allowed) {
-			throw apiError({
-				status: 429,
+			throw new DelightError({
 				message: 'Too many password reset requests. Please try again later',
+				status: 429,
 			});
 		}
 
@@ -1992,9 +2005,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (!user_auth) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `Account with provided email doesn't exist or is using an oauth vendor to sign in`,
+				status: 400,
 			});
 		}
 		const user_id = user_auth.user_id;
@@ -2010,7 +2023,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				iss: this.options.issuer,
 			});
 		} catch (error) {
-			throw apiError({ status: 500, message: 'Failed to generate password reset token' });
+			throw new DelightError({
+				message: 'Failed to generate password reset token',
+				status: 500,
+			});
 		}
 
 		try {
@@ -2023,7 +2039,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				json: JSON.stringify(meta || {}),
 			});
 		} catch (error) {
-			throw apiError({ status: 500, message: 'Failed to create password reset token' });
+			throw new DelightError({
+				message: 'Failed to create password reset token',
+				status: 500,
+			});
 		}
 		return {
 			user_id,
@@ -2054,7 +2073,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	async verifyPasswordHash(password: string, hash: string) {
 		const matches = await argon2Verify({ hash, password });
 		if (!matches) {
-			throw apiError({ status: 401, message: 'Incorrect email or password' });
+			throw new DelightError({ message: 'Incorrect email or password', status: 401 });
 		}
 	}
 
@@ -2068,10 +2087,13 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		try {
 			token = await decodeJwt(this.options.secret, password_reset_token);
 		} catch (error) {
-			throw apiError({ status: 400, message: 'Invalid or expired reset password link' });
+			throw new DelightError({
+				message: 'Invalid or expired reset password link',
+				status: 400,
+			});
 		}
 		if (token.typ !== 'password_reset') {
-			throw apiError({ status: 400, message: 'Invalid reset password link' });
+			throw new DelightError({ message: 'Invalid reset password link', status: 400 });
 		}
 
 		// Check if the token has already been used (deleted from database)
@@ -2085,9 +2107,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			.setError(`Couldn't find user with given id`)
 			.get('user', user_id);
 		if (user.deleted_at) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `This account has been deleted. Please contact support for help.`,
+				status: 401,
 			});
 		}
 
@@ -2100,9 +2122,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		// Check if the password hash is the same as the user's current password hash
 		const user_auth = this.sql.get('user_auth', user_auth_id);
 		if (user_auth.password_hash === hash) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Password must be different from the current password',
+				status: 400,
 			});
 		}
 
@@ -2202,9 +2224,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		if (name === undefined) {
 			const user = this.sql.get('user', user_id);
 			if (user.deleted_at) {
-				throw apiError({
-					status: 401,
+				throw new DelightError({
 					message: `This account has been deleted. Please contact support for help.`,
+					status: 401,
 				});
 			}
 			name = user.name;
@@ -2380,9 +2402,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	getInvitationIfValid(id: string) {
 		const invitation = this.sql.get('org_invitation', id);
 		if ((invitation.expires_at || Infinity) < Date.now()) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Invitation has been deleted or is expired',
+				status: 400,
 			});
 		}
 		let max_redemptions = invitation.max_redemptions || -1;
@@ -2395,9 +2417,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			no_redemptions_left = redemptions.length >= max_redemptions;
 		}
 		if (no_redemptions_left) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Invitation has reached its maximum number of redemptions',
+				status: 400,
 			});
 		}
 		return invitation;
@@ -2461,9 +2483,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			.setError(`Invitation not found`)
 			.get('org_invitation', id);
 		if ((invitation.expires_at || Infinity) < Date.now()) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Invitation has been deleted or is expired',
+				status: 400,
 			});
 		}
 
@@ -2478,9 +2500,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (org_user) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'User already belongs to the organization',
+				status: 400,
 			});
 		}
 
@@ -2495,9 +2517,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			no_redemptions_left = redemptions.length >= max_redemptions;
 		}
 		if (no_redemptions_left) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Invitation has reached its maximum number of redemptions',
+				status: 400,
 			});
 		}
 
@@ -2509,10 +2531,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			return !invitation.email || auth.email === invitation.email;
 		});
 		if (!user_auth) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message:
 					'The email used to sign in does not match the email that was invited to join this organization. Please sign in/up with the email that was invited to join this organization',
+				status: 400,
 			});
 		}
 
@@ -2564,10 +2586,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		default_redirect_url?: string;
 	}): OauthApplication {
 		if (!application.name) {
-			throw apiError({ status: 400, message: 'Application name is required' });
+			throw new DelightError({ message: 'Application name is required', status: 400 });
 		}
 		if (!application.user_id) {
-			throw apiError({ status: 400, message: 'Application admin is required' });
+			throw new DelightError({ message: 'Application admin is required', status: 400 });
 		}
 		// Ensure the application name is unique
 		const existing_applications = this.sql.list('oauth_application', {
@@ -2575,9 +2597,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			where: { key: 'name', is: '=', value: application.name },
 		});
 		if (existing_applications.length) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `Application with name "${application.name}" already exists`,
+				status: 400,
 			});
 		}
 
@@ -2587,18 +2609,18 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		// Ensure the redirect URLs are valid
 		if (application.redirect_urls) {
 			if (!Array.isArray(application.redirect_urls)) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: 'Redirect URLs must be an array of strings',
+					status: 400,
 				});
 			}
 			application.redirect_urls.forEach((href) => {
 				try {
 					new URL(href);
 				} catch (error) {
-					throw apiError({
-						status: 400,
+					throw new DelightError({
 						message: `Invalid redirect URL: "${href}". Must be a valid URL`,
+						status: 400,
 					});
 				}
 			});
@@ -2609,18 +2631,18 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			try {
 				new URL(application.default_redirect_url);
 			} catch (error) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: `Invalid default redirect URL: "${application.default_redirect_url}". Must be a valid URL`,
+					status: 400,
 				});
 			}
 			if (
 				!application.redirect_urls ||
 				!application.redirect_urls.includes(application.default_redirect_url)
 			) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: `Default redirect URL must be one of the redirect URLs`,
+					status: 400,
 				});
 			}
 		}
@@ -2685,9 +2707,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			Array.isArray(json.client_secrets) &&
 			json.client_secrets.length >= 5
 		) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Application already has the maximum number of client secrets (5)',
+				status: 400,
 			});
 		}
 
@@ -2715,9 +2737,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 
 		const json = JSON.parse(existing_application.json || '{}') as Record<string, any>;
 		if (!json.client_secrets || !Array.isArray(json.client_secrets)) {
-			throw apiError({
-				status: 404,
+			throw new DelightError({
 				message: 'No client secrets found for this application',
+				status: 404,
 			});
 		}
 
@@ -2732,9 +2754,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		});
 
 		if (!secret_found) {
-			throw apiError({
-				status: 404,
+			throw new DelightError({
 				message: 'Client secret not found for this application',
+				status: 404,
 			});
 		}
 
@@ -2758,9 +2780,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 
 		const json = JSON.parse(existing_application.json || '{}') as Record<string, any>;
 		if (!json.client_secrets || !Array.isArray(json.client_secrets)) {
-			throw apiError({
-				status: 403,
+			throw new DelightError({
 				message: 'No client secrets found for this application',
+				status: 403,
 			});
 		}
 
@@ -2772,9 +2794,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				continue; // Try the next secret if this one doesn't match
 			}
 		}
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: 'Invalid client secret for this application',
+			status: 403,
 		});
 	}
 
@@ -2801,7 +2823,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		},
 	): OauthApplication {
 		if (!updates) {
-			throw apiError({ status: 400, message: 'No updates provided' });
+			throw new DelightError({ message: 'No updates provided', status: 400 });
 		}
 
 		const existing_application = this.sql.get('oauth_application', id);
@@ -2817,9 +2839,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				where: { key: 'name', is: '=', value: updates.name },
 			});
 			if (existing_applications.length) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: `Application with name "${updates.name}" already exists`,
+					status: 400,
 				});
 			}
 		}
@@ -2827,18 +2849,18 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		// Ensure the redirect URLs are valid
 		if (updates.redirect_urls) {
 			if (!Array.isArray(updates.redirect_urls)) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: 'Redirect URLs must be an array of strings',
+					status: 400,
 				});
 			}
 			updates.redirect_urls.forEach((href) => {
 				try {
 					new URL(href);
 				} catch (error) {
-					throw apiError({
-						status: 400,
+					throw new DelightError({
 						message: `Invalid redirect URL: "${href}". Must be a valid URL`,
+						status: 400,
 					});
 				}
 			});
@@ -2849,18 +2871,18 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			try {
 				new URL(updates.default_redirect_url);
 			} catch (error) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: `Invalid default redirect URL: "${updates.default_redirect_url}". Must be a valid URL`,
+					status: 400,
 				});
 			}
 			if (
 				!updates.redirect_urls ||
 				!updates.redirect_urls.includes(updates.default_redirect_url)
 			) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: `Default redirect URL must be one of the redirect URLs`,
+					status: 400,
 				});
 			}
 		}
@@ -3001,9 +3023,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (existing.length) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `User with ID ${user_id} is already an admin of the application with ID ${application_id}`,
+				status: 400,
 			});
 		}
 
@@ -3040,9 +3062,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (!existing.length) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `User with ID ${user_id} is not an admin of the application with ID ${application_id}`,
+				status: 400,
 			});
 		}
 
@@ -3082,10 +3104,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			!authorization.redirect_uri ||
 			!registered_redirect_urls.includes(authorization.redirect_uri)
 		) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message:
 					'Invalid redirect_uri. The provided redirect_uri is not registered for this application or is missing.',
+				status: 400,
 			});
 		}
 
@@ -3124,9 +3146,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		refresh_token?: string;
 	}) {
 		if (!auth_code && !refresh_token) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: 'Either auth_code or refresh_token must be provided',
+				status: 400,
 			});
 		}
 
@@ -3146,9 +3168,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 
 			// Ensure the auth code has not expired
 			if (oauth_application_auth_code.expires_at < Date.now()) {
-				throw apiError({
-					status: 400,
+				throw new DelightError({
 					message: 'OAuth application authorization code has expired',
+					status: 400,
 				});
 			}
 
@@ -3180,9 +3202,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				});
 			});
 			if (!token) {
-				throw apiError({
-					status: 500,
+				throw new DelightError({
 					message: 'Failed to create OAuth application token',
+					status: 500,
 				});
 			}
 			return {
@@ -3197,10 +3219,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			where: { key: 'refresh_token', is: '=', value: refresh_token },
 		});
 		if (!token) {
-			throw apiError({
-				status: 404,
+			throw new DelightError({
 				message:
 					'Refresh token not found for this application. It may have been revoked or expired.',
+				status: 404,
 			});
 		}
 
@@ -3279,9 +3301,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			},
 		});
 		if (!tokens) {
-			throw apiError({
-				status: 404,
+			throw new DelightError({
 				message: 'OAuth application token not found for this organization',
+				status: 404,
 			});
 		}
 
@@ -3302,7 +3324,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			existing_key = this.sql.get('global_key', key);
 		} catch (err) {}
 		if (existing_key && existing_key?.org_id !== org_id) {
-			throw apiError({ status: 400, message: `${key} is already taken` });
+			throw new DelightError({ message: `${key} is already taken`, status: 400 });
 		}
 		if (existing_key) {
 			if (json) this.sql.update('global_key', key, { json });
@@ -3323,9 +3345,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			existing_key = this.sql.get('global_key', key);
 		} catch (err) {}
 		if (existing_key && existing_key?.org_id !== org_id) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `${key} is not reserved by this organization`,
+				status: 400,
 			});
 		}
 		if (existing_key) this.sql.delete('global_key', key);
@@ -3447,10 +3469,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			access_token_expires_at: token.access_token_expires_at,
 			refresh_token: token.refresh_token,
 			refresh_token_expires_at: token.refresh_token_expires_at,
-			capabilities: decodeOauthScopes(
-				this.options.oauth_scopes,
-				token.capability,
-			),
+			capabilities: decodeOauthScopes(this.options.oauth_scopes, token.capability),
 			vendor: token.vendor,
 			vendor_id: token.vendor_id,
 			account_email: token.account_email,
@@ -3469,10 +3488,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			access_token_expires_at: token.access_token_expires_at,
 			refresh_token: token.refresh_token,
 			refresh_token_expires_at: token.refresh_token_expires_at,
-			capability: encodeOauthScopes(
-				this.options.oauth_scopes,
-				token.capabilities,
-			),
+			capability: encodeOauthScopes(this.options.oauth_scopes, token.capabilities),
 			vendor: token.vendor,
 			vendor_id: token.vendor_id,
 			account_email: token.account_email,

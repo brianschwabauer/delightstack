@@ -1,15 +1,18 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 
 export async function DELETE({ locals, params }) {
 	if (!locals.authState.id) {
-		throw apiError({ status: 401, message: `Must be signed in to revoke a session` });
+		throw new DelightError({
+			message: `Must be signed in to revoke a session`,
+			status: 401,
+		});
 	}
 	const user_auth_id = params.user_auth_id;
 	const signInMethod = await locals.auth
 		.getSignInMethod(user_auth_id)
 		.catch(() => undefined);
 	if (!signInMethod) {
-		throw apiError({ status: 403, message: `Sign in method not found` });
+		throw new DelightError({ message: `Sign in method not found`, status: 403 });
 	}
 	await locals.auth.revokeSignInMethod(user_auth_id);
 	if (locals.ws) {

@@ -9,7 +9,7 @@ import type {
 	WorkerSearchQuery,
 	WorkerSearchResult,
 } from './database.worker';
-import { DatabaseError } from './database.error';
+import { DelightError } from '@delightstack/utilities';
 import { getWorker, resetWorker } from './database.worker.init';
 
 // ---------------------------------------------------------------------------
@@ -219,7 +219,7 @@ export class EntityState<
 						data_to_save as Record<string, unknown>,
 					);
 				} catch (error) {
-					throw DatabaseError.fromWorker(error) ?? error;
+					throw DelightError.fromWorker(error) ?? error;
 				}
 				result = raw as Database.Entity<T>;
 				// Update ID from server response using configured primary key
@@ -240,7 +240,7 @@ export class EntityState<
 						data_to_save as Record<string, unknown>,
 					);
 				} catch (error) {
-					throw DatabaseError.fromWorker(error) ?? error;
+					throw DelightError.fromWorker(error) ?? error;
 				}
 				result = raw as Database.Entity<T>;
 				// Fire change hook
@@ -307,7 +307,7 @@ export class EntityState<
 		try {
 			await worker.delete(this.entity_type, this.#id);
 		} catch (error) {
-			throw DatabaseError.fromWorker(error) ?? error;
+			throw DelightError.fromWorker(error) ?? error;
 		}
 		// Fire change hook
 		this.#onChange?.({ type: 'delete', id: this.#id });
@@ -677,7 +677,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		try {
 			result = await worker.create(entity_type, data as Record<string, unknown>);
 		} catch (error) {
-			throw DatabaseError.fromWorker(error) ?? error;
+			throw DelightError.fromWorker(error) ?? error;
 		}
 		this.#config.hooks?.onEntityChange?.({
 			type: 'create',
@@ -708,7 +708,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		try {
 			result = await worker.update(entity_type, id, data as Record<string, unknown>);
 		} catch (error) {
-			throw DatabaseError.fromWorker(error) ?? error;
+			throw DelightError.fromWorker(error) ?? error;
 		}
 		this.#config.hooks?.onEntityChange?.({
 			type: 'update',
@@ -728,7 +728,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		try {
 			await worker.delete(entity_type, id);
 		} catch (error) {
-			throw DatabaseError.fromWorker(error) ?? error;
+			throw DelightError.fromWorker(error) ?? error;
 		}
 		this.#config.hooks?.onEntityChange?.({
 			type: 'delete',
@@ -783,7 +783,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		try {
 			return (await worker.list(entity_type, query ?? {})) as SearchResult<T[K]>;
 		} catch (error) {
-			throw DatabaseError.fromWorker(error) ?? error;
+			throw DelightError.fromWorker(error) ?? error;
 		}
 	}
 

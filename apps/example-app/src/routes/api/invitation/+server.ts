@@ -1,4 +1,4 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import {
 	CreateOrgInvitation,
 	decodePermissions,
@@ -8,15 +8,15 @@ import { json } from '@sveltejs/kit';
 
 export async function GET({ locals }) {
 	if (!locals.authState.id || !locals.authState.token || !locals.authState.orgID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `You must be signed in to list invitations`,
+			status: 401,
 		});
 	}
 	if (!locals.authState.isAllowed('org:write')) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be an admin to list invitations`,
+			status: 403,
 		});
 	}
 
@@ -28,26 +28,26 @@ export async function GET({ locals }) {
 
 export async function POST({ request, locals }) {
 	if (!locals.authState.id || !locals.authState.token || !locals.authState.orgID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `You must be signed in to create invitations`,
+			status: 401,
 		});
 	}
 	if (!locals.authState.isAllowed('org:write')) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be an admin to create invitations`,
+			status: 403,
 		});
 	}
 	const invitation = CreateOrgInvitation.parse(await request.json());
 	const permission = encodePermissions(decodePermissions(invitation.permission));
 	if (!permission) {
-		throw apiError({ status: 400, message: `Invalid invitation permission` });
+		throw new DelightError({ message: `Invalid invitation permission`, status: 400 });
 	}
 	if (invitation.expires_at && invitation.expires_at < Date.now()) {
-		throw apiError({
-			status: 400,
+		throw new DelightError({
 			message: `Invitation has expiration date in the past`,
+			status: 400,
 		});
 	}
 	const created_invitation = await locals.auth.createInvitation({

@@ -1,12 +1,12 @@
 import { requireAuthScope } from '$lib/server';
-import { apiError, decodeSearchQuery, parseSchema } from '@packages/lib';
+import { DelightError, decodeSearchQuery, parseSchema } from '@packages/lib';
 import { Site } from '@packages/types';
 import { json } from '@sveltejs/kit';
 
 export async function GET({ locals, url }) {
 	requireAuthScope('site:read');
 	const { db } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 	const query = decodeSearchQuery(url.searchParams);
 	// const sites = await db.list('site', query);
 	// return json(sites);
@@ -16,9 +16,9 @@ export async function GET({ locals, url }) {
 export async function POST({ locals, request }) {
 	requireAuthScope('site:write');
 	const { db, auth, authState } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 	if (!authState.orgID) {
-		throw apiError({ status: 500, message: 'Auth state not found' });
+		throw new DelightError({ message: 'Auth state not found', status: 500 });
 	}
 	const unsafe_data = await request.json<any>().catch(() => undefined);
 	const data = parseSchema(

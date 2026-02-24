@@ -1,4 +1,4 @@
-import { ApiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { SCOPES } from '@packages/types';
 import { error, redirect } from '@sveltejs/kit';
 
@@ -41,7 +41,7 @@ export async function load({ locals, url }) {
 			redirect_uri,
 		};
 	} catch (err) {
-		const parsed = ApiError.from(err);
-		throw error(parsed.status, parsed.messageText);
+		const parsed = DelightError.from(err);
+		throw error(parsed.status, parsed.message);
 	}
 }

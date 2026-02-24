@@ -2,7 +2,7 @@ import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { createAuthHandle, type AuthServer } from '@delightstack/auth/server';
 import type { AuthLocals } from '@delightstack/auth/server';
-import { ApiError } from '@delightstack/utilities';
+import { DelightError } from '@delightstack/utilities';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
 
@@ -66,5 +66,6 @@ const appHandle: Handle = async ({ event, resolve }) => {
 export const handle = sequence(authHandle, appHandle);
 
 export const handleError: HandleServerError = ({ error }) => {
-	return ApiError.from(error);
+	const err = DelightError.from(error);
+	return { message: err.message, status: err.status };
 };

@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { apiError, ApiError, generateJwt } from '@packages/lib';
+import { DelightError, generateJwt } from '@packages/lib';
 import { type OauthVendor } from '@packages/lib';
 import { OAUTH_CAPABILITIES, type OauthCapability } from '@packages/types';
 import { error, redirect } from '@sveltejs/kit';
@@ -26,9 +26,9 @@ export async function load({ locals, params, url }) {
 		).filter((val) => val in OAUTH_CAPABILITIES);
 		if (capabilities.length === 0) capabilities.push('profile');
 		if (authState.signed_out) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `You must be signed in to connect your ${params.vendor} account`,
+				status: 401,
 			});
 		}
 		const vendor_api = await getVendorApi(params.vendor as OauthVendor);
@@ -62,7 +62,7 @@ export async function load({ locals, params, url }) {
 		});
 		redirect_url.searchParams.set('state', jwt);
 	} catch (err) {
-		const parsed = ApiError.from(err);
+		const parsed = DelightError.from(err);
 		throw error(parsed.status, parsed.message);
 	}
 	throw redirect(307, redirect_url);

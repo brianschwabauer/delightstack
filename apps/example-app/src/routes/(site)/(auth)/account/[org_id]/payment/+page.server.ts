@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { error, redirect } from '@sveltejs/kit';
 import Stripe from 'stripe';
-import { ApiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { PLANS } from '../subscription/plans';
 
 export async function load({ locals, url }) {
@@ -90,12 +90,12 @@ export async function load({ locals, url }) {
 	}
 
 	const customer = await stripe.customers.retrieve(customer_id).catch((err) => {
-		throw error(500, ApiError.from(err).toString());
+		throw error(500, DelightError.from(err).toString());
 	});
 	const paymentMethods = await stripe.paymentMethods
 		.list({ customer: customer_id })
 		.catch((err) => {
-			throw error(500, ApiError.from(err).toString());
+			throw error(500, DelightError.from(err).toString());
 		});
 	function toBrand(text: string) {
 		return text
@@ -158,7 +158,7 @@ export async function load({ locals, url }) {
 				}
 			}
 		} catch (err) {
-			throw error(500, ApiError.from(err).toString());
+			throw error(500, DelightError.from(err).toString());
 		}
 	}
 

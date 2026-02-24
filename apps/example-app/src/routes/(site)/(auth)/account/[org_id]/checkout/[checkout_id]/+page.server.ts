@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
 import Stripe from 'stripe';
-import { ApiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { PLANS } from '../../subscription/plans';
 import { syncStripeSubscription } from '$lib/server/stripe.server';
 
@@ -152,7 +152,7 @@ export async function load({ locals, url, params }) {
 					'toast',
 					[
 						`An error occurred while updating your subscription`,
-						ApiError.from(err).toString(),
+						DelightError.from(err).toString(),
 					]
 						.filter(Boolean)
 						.join('. '),
@@ -180,7 +180,7 @@ export async function load({ locals, url, params }) {
 					'toast',
 					[
 						`An error occurred while subscribing to the plan`,
-						ApiError.from(err).toString(),
+						DelightError.from(err).toString(),
 					]
 						.filter(Boolean)
 						.join('. '),

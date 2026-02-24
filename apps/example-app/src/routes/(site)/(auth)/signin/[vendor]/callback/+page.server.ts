@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { ApiError, decodeJwt } from '@packages/lib';
+import { DelightError, decodeJwt } from '@packages/lib';
 import { getOauthToken } from '@packages/lib';
 import { type OauthVendor } from '@packages/lib';
 import type { OauthToken, SessionToken } from '@packages/types';
@@ -114,7 +114,7 @@ export async function load({ locals, params, url, cookies }) {
 			} catch (error) {}
 		}
 	} catch (err) {
-		const parsed = ApiError.from(err);
+		const parsed = DelightError.from(err);
 		throw error(parsed.status, parsed.message);
 	}
 	throw redirect(307, redirect_after_signin);

@@ -1,12 +1,12 @@
-import { ApiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { error, redirect } from '@sveltejs/kit';
 
 export async function load({ locals, params, cookies }) {
 	const invitation = await locals.auth
 		.getInvitation(params.invitation_id)
 		.catch((err) => {
-			const parsed = ApiError.from(err);
-			throw error(parsed.status, parsed.messageText);
+			const parsed = DelightError.from(err);
+			throw error(parsed.status, parsed.message);
 		});
 	if (!locals.authState.id || !locals.authState.user_session_id) {
 		throw redirect(307, `/invitation/${invitation.id}`);
@@ -15,8 +15,8 @@ export async function load({ locals, params, cookies }) {
 		throw redirect(307, `/${invitation.org_id}/dashboard`);
 	}
 	await locals.auth.acceptInvitation(invitation.id, locals.authState.id).catch((err) => {
-		const parsed = ApiError.from(err);
-		throw error(parsed.status, parsed.messageText);
+		const parsed = DelightError.from(err);
+		throw error(parsed.status, parsed.message);
 	});
 	const session = await locals.auth
 		.refreshSession(locals.authState.user_session_id, locals.authState.meta)

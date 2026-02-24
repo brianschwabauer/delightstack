@@ -1,10 +1,13 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 
 export async function GET({ locals, request }) {
 	const { ws } = locals;
 	if (request.headers.get('Upgrade') === 'websocket') {
 		if (!ws) {
-			throw apiError({ status: 500, message: `Websocket server couldn't be reached` });
+			throw new DelightError({
+				message: `Websocket server couldn't be reached`,
+				status: 500,
+			});
 		}
 		return ws.fetch(request);
 	}

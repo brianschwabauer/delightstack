@@ -14,7 +14,7 @@ import {
 import { encode as encodeMsgPack, decode as decodeMsgPack } from '@msgpack/msgpack';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
-import { generateTimestampID } from '@delightstack/utilities';
+import { generateTimestampID, DelightError } from '@delightstack/utilities';
 
 interface Env {
 	DEV: boolean;
@@ -583,7 +583,10 @@ export class DatabaseServer<
 		for (const [entity_type, group] of groups) {
 			const table = this.config[entity_type];
 			if (!table) {
-				throw { status: 400, message: `Entity type ${entity_type} is not valid` };
+				throw new DelightError({
+					message: `Entity type ${entity_type} is not valid`,
+					status: 400,
+				});
 			}
 			const sanitized_table = this.sanitize(entity_type);
 			const primary_key = this.sanitize(table.config.primary_key || 'rowid');
@@ -610,7 +613,7 @@ export class DatabaseServer<
 					const data = fetched.get(id);
 					if (!data) {
 						const entity_name = this.sanitize(entity_type);
-						throw { status: 404, message: `${entity_name} not found` };
+						throw new DelightError({ message: `${entity_name} not found`, status: 404 });
 					}
 					if (expand?.length) {
 						// Delegate to getSingle for expansion (expansions are typically few)
@@ -622,7 +625,10 @@ export class DatabaseServer<
 			} catch (error: any) {
 				if (error?.status) throw error;
 				console.error('Database error fetching entities:', error);
-				throw { status: 500, message: 'Database error occurred while fetching entities' };
+				throw new DelightError({
+					message: 'Database error occurred while fetching entities',
+					status: 500,
+				});
 			}
 		}
 
@@ -643,10 +649,10 @@ export class DatabaseServer<
 	>(entity_type: Type, id: string | number, expand?: ExpandedFields): Output {
 		const table = this.config[entity_type];
 		if (!table) {
-			throw {
-				status: 400,
+			throw new DelightError({
 				message: `Entity type ${entity_type} is not valid`,
-			};
+				status: 400,
+			});
 		}
 		const sanitized_table = this.sanitize(entity_type);
 		const primary_key = this.sanitize(table.config.primary_key || 'rowid');
@@ -659,11 +665,14 @@ export class DatabaseServer<
 			data = this.toEntityValue(entity_type, result.next()?.value);
 		} catch (error) {
 			console.error('Database error fetching entity:', error);
-			throw { status: 500, message: 'Database error occurred while fetching entity' };
+			throw new DelightError({
+				message: 'Database error occurred while fetching entity',
+				status: 500,
+			});
 		}
 		if (!data) {
 			const entity_name = this.sanitize(entity_type);
-			throw { status: 404, message: `${entity_name} not found` };
+			throw new DelightError({ message: `${entity_name} not found`, status: 404 });
 		}
 
 		// Expand the requested fields
@@ -692,10 +701,10 @@ export class DatabaseServer<
 					}
 					expanded[field] = temp as Entity;
 				} catch (error) {
-					throw {
-						status: 500,
+					throw new DelightError({
 						message: 'Database error occurred while fetching entity expansions',
-					};
+						status: 500,
+					});
 				}
 			});
 		}
@@ -717,10 +726,10 @@ export class DatabaseServer<
 			{ create: { type: entity_type, data: unsafe_data } },
 		]);
 		if (!result || !('entity' in result)) {
-			throw {
-				status: 500,
+			throw new DelightError({
 				message: 'Database transaction did not return created entity',
-			};
+				status: 500,
+			});
 		}
 		return result.entity.data as OutputData;
 	}
@@ -740,10 +749,10 @@ export class DatabaseServer<
 			{ update: { type: entity_type, id, data: unsafe_data } },
 		]);
 		if (!result || !('entity' in result)) {
-			throw {
-				status: 500,
+			throw new DelightError({
 				message: 'Database transaction did not return updated entity',
-			};
+				status: 500,
+			});
 		}
 		return result.entity.data as OutputData;
 	}
@@ -911,10 +920,10 @@ export class DatabaseServer<
 		const index = this.getIndex(entity_type);
 		const table = this.config[entity_type];
 		if (!index || !table) {
-			throw {
-				status: 400,
+			throw new DelightError({
 				message: `Entity type ${entity_type} does not have a search index`,
-			};
+				status: 400,
+			});
 		}
 		let sparse = raw_query.sparse ?? true;
 		let previous_cursor_data: Omit<Database.SearchQuery<Table>, 'cursor'> | undefined;
@@ -946,10 +955,10 @@ export class DatabaseServer<
 		} satisfies Database.SearchQuery<Table>;
 		query.order.forEach(({ key }) => {
 			if (!table.config.sortable_fields.includes(key)) {
-				throw {
-					status: 400,
+				throw new DelightError({
 					message: `Invalid order key ${key}. Must be one of ${table.config.sortable_fields.join(', ')}.`,
-				};
+					status: 400,
+				});
 			}
 		});
 
@@ -1077,10 +1086,10 @@ export class DatabaseServer<
 	/** Returns the latest org data */
 	getMeta() {
 		if (!this.#state?.meta) {
-			throw {
-				status: 500,
+			throw new DelightError({
 				message: `No metadata found in Durable Object. Use setMeta() to add it to this durable object`,
-			};
+				status: 500,
+			});
 		}
 		return this.#state.meta;
 	}
@@ -1164,16 +1173,16 @@ export class DatabaseServer<
 		}
 		const parsed = sql_statement_or_query_function(prepareSql);
 		if (!parsed) {
-			throw {
-				status: 400,
+			throw new DelightError({
 				message: `Must return a tagged template literal to build SQL queries`,
-			};
+				status: 400,
+			});
 		}
 		if (!(parsed as any)?.__safelyInterpretedSql__) {
-			throw {
-				status: 400,
+			throw new DelightError({
 				message: `Must use the 'sql' tagged template literal to build SQL queries`,
-			};
+				status: 400,
+			});
 		}
 		const { query, values } = parsed;
 		const start = performance.now();
@@ -1197,10 +1206,10 @@ export class DatabaseServer<
 	): DatabaseServerTransactionResult<DatabaseConfig>[] {
 		if (!operations || !Array.isArray(operations) || operations.length === 0) return [];
 		if (operations.length > 5000) {
-			throw {
-				status: 400,
+			throw new DelightError({
 				message: `Too many operations in a single transaction. Maximum is 5000.`,
-			};
+				status: 400,
+			});
 		}
 		const results: DatabaseServerTransactionResult<DatabaseConfig>[] = [];
 		const now = new Date();
@@ -1222,10 +1231,10 @@ export class DatabaseServer<
 					const table = this.config[entity_type];
 					const index = this.getIndex(entity_type);
 					if (!table || !index) {
-						throw {
-							status: 400,
+						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
-						};
+							status: 400,
+						});
 					}
 					const data_copy = { ...unsafe_data };
 					delete data_copy.id;
@@ -1283,10 +1292,10 @@ export class DatabaseServer<
 					const table = this.config[entity_type];
 					const index = this.getIndex(entity_type);
 					if (!table || !index) {
-						throw {
-							status: 400,
+						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
-						};
+							status: 400,
+						});
 					}
 					const data_copy = { ...unsafe_data };
 					delete data_copy.id;
@@ -1360,10 +1369,10 @@ export class DatabaseServer<
 					const table = this.config[entity_type];
 					const index = this.getIndex(entity_type);
 					if (!table || !index) {
-						throw {
-							status: 400,
+						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
-						};
+							status: 400,
+						});
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
@@ -1706,10 +1715,10 @@ export class DatabaseServer<
 		Data extends Database.Entity<Table>,
 	>(entity_type: Type, value?: Record<string, SqlStorageValue>): Data | undefined {
 		if (!entity_type) {
-			throw {
-				status: 400,
+			throw new DelightError({
 				message: `Entity type ${entity_type} is not valid`,
-			};
+				status: 400,
+			});
 		}
 		if (!value || typeof value !== 'object') return;
 		let temp = { ...value, ...JSON.parse((value?.json as any) || '{}') };
@@ -1731,10 +1740,10 @@ export class DatabaseServer<
 	>(entity_type: Type, input_data?: Data): Record<string, SqlStorageValue> | undefined {
 		const table = this.config[entity_type];
 		if (!table) {
-			throw {
-				status: 400,
+			throw new DelightError({
 				message: `Entity type ${entity_type} is not valid`,
-			};
+				status: 400,
+			});
 		}
 		if (!input_data) return;
 		const column_names = Object.keys(table.config.table_definition).map((col) =>

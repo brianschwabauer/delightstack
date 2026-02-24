@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { json } from '@sveltejs/kit';
 import Stripe from 'stripe';
 
@@ -8,27 +8,27 @@ export async function POST({ locals }) {
 	const userID = locals.authState.id;
 	const org = locals.authState.org;
 	if (!locals.authState.token || !userID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to create a payment method session`,
+			status: 401,
 		});
 	}
 	if (!orgID || !org || org.id !== orgID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to an organization create a payment method session`,
+			status: 401,
 		});
 	}
 	if (org.owner_id !== userID) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be the account owner of "${org.name}" to add the account payment methods.`,
+			status: 403,
 		});
 	}
 	if (!locals.db) {
-		throw apiError({
-			status: 500,
+		throw new DelightError({
 			message: `Database not available`,
+			status: 500,
 		});
 	}
 
@@ -53,9 +53,9 @@ export async function POST({ locals }) {
 		}
 	}
 	if (!customer_id) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Unable to create customer in payment provider`,
+			status: 401,
 		});
 	}
 
@@ -73,9 +73,9 @@ export async function POST({ locals }) {
 		},
 	});
 	if (!checkout_session.client_secret) {
-		throw apiError({
-			status: 500,
+		throw new DelightError({
 			message: `Unable to create payment method session`,
+			status: 500,
 		});
 	}
 	return json({ client_secret: checkout_session.client_secret }, { status: 201 });

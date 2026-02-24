@@ -1,21 +1,20 @@
 import { dev } from '$app/environment';
 import { proxyDurableObject } from '$lib/utility/rpc.helper';
-import { ApiError, generateID } from '@packages/lib';
-import { apiError } from '@packages/lib';
+import { DelightError, generateID } from '@packages/lib';
 import { Org } from '@packages/types';
 import { json } from '@sveltejs/kit';
 
 export async function POST({ locals, request, cookies, platform }) {
 	if (!locals.authState.id || !locals.authState.user_session_id) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to create an organization`,
+			status: 401,
 		});
 	}
 	if (!platform) {
-		throw apiError({
-			status: 500,
+		throw new DelightError({
 			message: `Cloudflare platform not available`,
+			status: 500,
 		});
 	}
 
@@ -24,9 +23,9 @@ export async function POST({ locals, request, cookies, platform }) {
 		await locals.auth.getSession(locals.authState.user_session_id).catch(() => {
 			cookies.delete('foreverfamily-session', { path: '/' });
 			cookies.delete('foreverfamily-org', { path: '/' });
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `You must sign in again to create an organization`,
+				status: 401,
 			});
 		});
 	}
@@ -73,7 +72,7 @@ export async function POST({ locals, request, cookies, platform }) {
 		}
 	} catch (error) {
 		await locals.auth.deleteOrg(org_id).catch(() => undefined);
-		throw ApiError.from(error);
+		throw DelightError.from(error);
 	}
 
 	const session = await locals.auth
@@ -92,12 +91,12 @@ export async function POST({ locals, request, cookies, platform }) {
 
 export async function DELETE({ platform, locals, cookies }) {
 	if (!platform?.env?.SERVER || !locals.auth) {
-		throw apiError({ status: 500, message: `Server not available` });
+		throw new DelightError({ message: `Server not available`, status: 500 });
 	}
 	if (!locals.authState.id) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `You must be signed in to delete your account`,
+			status: 401,
 		});
 	}
 
@@ -108,22 +107,22 @@ export async function DELETE({ platform, locals, cookies }) {
 			.catch(() => {
 				cookies.delete('foreverfamily-session', { path: '/' });
 				cookies.delete('foreverfamily-org', { path: '/' });
-				throw apiError({
-					status: 401,
+				throw new DelightError({
 					message: `You must be signed in to delete your account`,
+					status: 401,
 				});
 			});
 		if (session.created_at < Date.now() - 1000 * 60 * 12) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `For security reasons, you must have recently signed in to delete your account. Please sign out/in and try again.`,
+				status: 401,
 			});
 		}
 	}
 
 	const user = await locals.auth.getUser(locals.authState.id);
 	if (!user) {
-		throw apiError({ status: 404, message: `User not found` });
+		throw new DelightError({ message: `User not found`, status: 404 });
 	}
 	await locals.auth.revokeUserSessions(locals.authState.id).catch(() => undefined);
 	await locals.auth.markUserDeleted(locals.authState.id);
@@ -141,7 +140,7 @@ export async function DELETE({ platform, locals, cookies }) {
 		});
 	} catch (error) {
 		await locals.auth.markUserDeleted(locals.authState.id, true);
-		throw apiError({ status: 500, message: 'Failed to start workflow' });
+		throw new DelightError({ message: 'Failed to start workflow', status: 500 });
 	}
 	cookies.delete('foreverfamily-session', { path: '/' });
 	cookies.delete('foreverfamily-org', { path: '/' });

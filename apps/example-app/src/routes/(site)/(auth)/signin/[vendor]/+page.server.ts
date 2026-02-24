@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { ApiError, generateJwt } from '@packages/lib';
+import { DelightError, generateJwt } from '@packages/lib';
 import { type OauthVendor } from '@packages/lib';
 import type { OauthCapability, SessionToken } from '@packages/types';
 import { error, redirect } from '@sveltejs/kit';
@@ -70,7 +70,7 @@ export async function load({ locals, params, url }) {
 		});
 		redirect_url.searchParams.set('state', jwt);
 	} catch (err) {
-		const parsed = ApiError.from(err);
+		const parsed = DelightError.from(err);
 		throw error(parsed.status, parsed.message);
 	}
 	throw redirect(307, redirect_url);

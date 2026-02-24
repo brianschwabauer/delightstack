@@ -1,4 +1,4 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { json } from '@sveltejs/kit';
 
 export async function POST({ locals, url }) {
@@ -8,18 +8,18 @@ export async function POST({ locals, url }) {
 	const redirect_uri = url.searchParams.get('redirect_uri');
 
 	if (!client_id) {
-		throw apiError({ status: 400, message: 'Missing client_id parameter.' });
+		throw new DelightError({ message: 'Missing client_id parameter.', status: 400 });
 	}
 	if (!redirect_uri) {
-		throw apiError({ status: 400, message: 'Missing redirect_uri parameter.' });
+		throw new DelightError({ message: 'Missing redirect_uri parameter.', status: 400 });
 	}
 	if (!client_secret) {
-		throw apiError({ status: 400, message: 'Missing client_secret parameter.' });
+		throw new DelightError({ message: 'Missing client_secret parameter.', status: 400 });
 	}
 	if (grant_type !== 'code' && grant_type !== 'refresh_token') {
-		throw apiError({
-			status: 400,
+		throw new DelightError({
 			message: 'Invalid grant_type. Only "code" and "refresh_token" are supported.',
+			status: 400,
 		});
 	}
 	await locals.auth.verifyOauthApplicationSecret(client_id, client_secret);
@@ -28,13 +28,13 @@ export async function POST({ locals, url }) {
 	if (grant_type === 'code') {
 		const code = url.searchParams.get('code');
 		if (!code) {
-			throw apiError({ status: 400, message: 'Missing authorization code.' });
+			throw new DelightError({ message: 'Missing authorization code.', status: 400 });
 		}
 		const token = await locals.auth.createOauthApplicationToken({
 			auth_code: code,
 		});
 		if (!token) {
-			throw apiError({ status: 400, message: 'Invalid authorization code.' });
+			throw new DelightError({ message: 'Invalid authorization code.', status: 400 });
 		}
 		return json({
 			access_token: token.access_token,
@@ -55,11 +55,11 @@ export async function POST({ locals, url }) {
 	if (grant_type === 'refresh_token') {
 		const refresh_token = url.searchParams.get('refresh_token');
 		if (!refresh_token) {
-			throw apiError({ status: 400, message: 'Missing refresh token.' });
+			throw new DelightError({ message: 'Missing refresh token.', status: 400 });
 		}
 		const token = await locals.auth.createOauthApplicationToken({ refresh_token });
 		if (!token) {
-			throw apiError({ status: 400, message: 'Invalid refresh token.' });
+			throw new DelightError({ message: 'Invalid refresh token.', status: 400 });
 		}
 		return json({
 			access_token: token.access_token,
@@ -74,5 +74,5 @@ export async function POST({ locals, url }) {
 		});
 	}
 
-	throw apiError({ status: 400, message: 'Unsupported grant type.' });
+	throw new DelightError({ message: 'Unsupported grant type.', status: 400 });
 }

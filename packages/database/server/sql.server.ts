@@ -5,7 +5,7 @@ import {
 	SqlTableRow,
 } from './sql.helper';
 import { prepareSql, SqlEntityQuery, SqlQueryFn } from './sql.helper';
-import { generateTimestampID } from '@delightstack/utilities';
+import { DelightError, generateTimestampID } from '@delightstack/utilities';
 
 /** A helper class for writing/getting data to/from CloudFlare D1 using SQL commands */
 export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
@@ -39,7 +39,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		// We're doing this just to be safe and for peace of mind
 		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z_]/g, '');
 		if (!sanitizedTable) {
-			throw { status: 400, message: 'Missing database table name' };
+			throw new DelightError({ message: 'Missing database table name', status: 400 });
 		}
 		const updates = Object.entries({
 			...data,
@@ -56,7 +56,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			})
 			.filter((v) => !!v);
 		if (!updates.length) {
-			throw { status: 400, message: 'No data provided to insert' };
+			throw new DelightError({ message: 'No data provided to insert', status: 400 });
 		}
 		if (id !== null) updates.push(['id', id ?? generateTimestampID()]);
 		const bindings = updates.map(([_, value]) => value);
@@ -93,9 +93,9 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		// We're doing this just to be safe and for peace of mind
 		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z_]/g, '');
 		if (!sanitizedTable) {
-			throw { status: 400, message: 'Missing database table name' };
+			throw new DelightError({ message: 'Missing database table name', status: 400 });
 		}
-		if (!id) throw { status: 400, message: 'Item ID not provided' };
+		if (!id) throw new DelightError({ message: 'Item ID not provided', status: 400 });
 
 		const updates = Object.entries({
 			...data,
@@ -111,7 +111,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			})
 			.filter((v) => !!v);
 		if (!updates.length) {
-			throw { status: 400, message: 'No data provided to update' };
+			throw new DelightError({ message: 'No data provided to update', status: 400 });
 		}
 		const bindings = [...updates.map(([_, value]) => value), id];
 		const updateFields = updates.map(([column]) => `${column} = ?`).join(', ');
@@ -136,10 +136,13 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		// We're doing this just to be safe and for peace of mind
 		const sanitizedTable = table.toLowerCase().replace(/[^a-z_]/g, '');
 		if (!sanitizedTable) {
-			throw { status: 400, message: `Must provide a table to delete from` };
+			throw new DelightError({
+				message: 'Must provide a table to delete from',
+				status: 400,
+			});
 		}
 		if (!id) {
-			throw { status: 400, message: `Must provide an ID to delete` };
+			throw new DelightError({ message: 'Must provide an ID to delete', status: 400 });
 		}
 		const result = this.exec(
 			`DELETE FROM ${sanitizedTable} WHERE id = ? RETURNING *`,
@@ -246,10 +249,10 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 						isNaN(where.value) ||
 						!isFinite(where.value)
 					) {
-						throw {
+						throw new DelightError({
+							message: 'Invalid value for bitwise AND operator',
 							status: 400,
-							message: `Invalid value for bitwise AND operator`,
-						};
+						});
 					}
 					return {
 						clause: `(${sanitizedKey} & ${where.value}) == ${where.value}`,
@@ -340,7 +343,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		const data = result.next()?.value;
 		if (!data) {
 			const tableName = table.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-			throw { status: 404, message: `${tableName} not found` };
+			throw new DelightError({ message: `${tableName} not found`, status: 404 });
 		}
 		return data;
 	}
@@ -362,16 +365,16 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	run<T extends Record<string, SqlStorageValue>>(queryFn: SqlQueryFn) {
 		const parsed = queryFn(prepareSql);
 		if (!parsed) {
-			throw {
+			throw new DelightError({
+				message: 'Must return a tagged template literal to build SQL queries',
 				status: 400,
-				message: `Must return a tagged template literal to build SQL queries`,
-			};
+			});
 		}
 		if (!(parsed as any)?.__safelyInterpretedSql__) {
-			throw {
+			throw new DelightError({
+				message: "Must use the 'sql' tagged template literal to build SQL queries",
 				status: 400,
-				message: `Must use the 'sql' tagged template literal to build SQL queries`,
-			};
+			});
 		}
 		const { query, values } = parsed;
 		const start = performance.now();
@@ -422,11 +425,11 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 						try {
 							return (target[prop] as any)(...args);
 						} catch (error: any) {
-							throw {
-								status: status || error?.status || 500,
+							throw new DelightError({
 								message,
+								status: status || error?.status || 500,
 								detail: error ? error.toString() : undefined,
-							};
+							});
 						}
 					};
 				}
@@ -457,7 +460,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		if (data instanceof ArrayBuffer || data instanceof Blob) return data as any;
 		if (data instanceof Date) return data.getTime();
 		if (typeof data === 'object') return JSON.stringify(data);
-		throw { status: 400, message: `Invalid data type: ${typeof data}` };
+		throw new DelightError({ message: `Invalid data type: ${typeof data}`, status: 400 });
 	}
 
 	/** Executes the given query and writes better error messages than the default sqlite ones */
@@ -475,11 +478,11 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 				'\n',
 				query.replace(/\t+/g, ''),
 			);
-			throw {
+			throw new DelightError({
+				message: 'Uh oh, a database error occurred. Please try again later.',
 				status: 500,
-				message: `Uh oh, a database error occurred. Please try again later.`,
-				detail: error?.message || `Unknown database error`,
-			};
+				detail: error?.message || 'Unknown database error',
+			});
 		}
 	}
 }

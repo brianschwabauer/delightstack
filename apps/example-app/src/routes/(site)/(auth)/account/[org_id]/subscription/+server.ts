@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { syncStripeSubscription } from '$lib/server/stripe.server';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import Stripe from 'stripe';
 import { PLANS } from './plans';
 
@@ -9,33 +9,33 @@ export async function PUT({ locals, request }) {
 	const userID = locals.authState.id;
 	const org = locals.authState.org;
 	if (!locals.db) {
-		throw apiError({
-			status: 500,
+		throw new DelightError({
 			message: `Database not available`,
+			status: 500,
 		});
 	}
 	if (!locals.authState.token || !userID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to update an account's subscription`,
+			status: 401,
 		});
 	}
 	if (!orgID || !org || org.id !== orgID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to an organization to update an account's subscription`,
+			status: 401,
 		});
 	}
 	if (org.owner_id !== userID) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be the account owner of "${org.name}" to update the subscription.`,
+			status: 403,
 		});
 	}
 	if (!org.customer_id) {
-		throw apiError({
-			status: 400,
+		throw new DelightError({
 			message: `No customer_id found for "${org.name}"`,
+			status: 400,
 		});
 	}
 
@@ -45,9 +45,9 @@ export async function PUT({ locals, request }) {
 	const payment_method_id = body?.payment_method_id;
 	const plan = PLANS.find((plan) => plan.id === plan_id);
 	if (!plan_id || !plan) {
-		throw apiError({
-			status: 400,
+		throw new DelightError({
 			message: `Invalid plan_id "${plan_id}"`,
+			status: 400,
 		});
 	}
 
@@ -90,9 +90,9 @@ export async function PUT({ locals, request }) {
 			return true;
 		});
 		if (!promotion) {
-			throw apiError({
-				status: 400,
+			throw new DelightError({
 				message: `Invalid coupon code "${coupon}"`,
+				status: 400,
 			});
 		}
 	}
@@ -168,27 +168,27 @@ export async function DELETE({ locals }) {
 	const userID = locals.authState.id;
 	const org = locals.authState.org;
 	if (!locals.db) {
-		throw apiError({
-			status: 500,
+		throw new DelightError({
 			message: `Database not available`,
+			status: 500,
 		});
 	}
 	if (!locals.authState.token || !userID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to cancel an account's subscription`,
+			status: 401,
 		});
 	}
 	if (!orgID || !org || org.id !== orgID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to an organization cancel an account's subscription`,
+			status: 401,
 		});
 	}
 	if (org.owner_id !== userID) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be the account owner of "${org.name}" to cancel the subscription.`,
+			status: 403,
 		});
 	}
 	if (!org.customer_id || !org.subscription_id) {

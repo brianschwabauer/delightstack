@@ -6,7 +6,7 @@
 	import Button from '$lib/form/Button.svelte';
 	import Input from '$lib/form/Input.svelte';
 	import Select from '$lib/form/Select.svelte';
-	import { ApiError, formatToString, isEqual } from '@packages/lib';
+	import { DelightError, formatToString, isEqual } from '@packages/lib';
 	import {
 		CreateOrgInvitation,
 		decodePermissions,
@@ -52,7 +52,7 @@
 			active_sessions = active_sessions.filter((session) => session.id !== session_id);
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}
@@ -66,7 +66,7 @@
 			active_methods = active_methods.filter((v) => v.id !== signin_method_id);
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}
@@ -80,7 +80,7 @@
 			active_accounts = active_accounts.filter((v) => v.id !== oauth_token_id);
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}
@@ -104,7 +104,7 @@
 			password = '';
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}
@@ -118,7 +118,7 @@
 			window.location.href = '/account';
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}
@@ -132,7 +132,7 @@
 			window.location.href = '/';
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}
@@ -161,7 +161,7 @@
 		} else {
 			saving_invitation = false;
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}
@@ -175,7 +175,7 @@
 			active_invitations = active_invitations.filter((v) => v.id !== invitation_id);
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}
@@ -192,7 +192,7 @@
 			);
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}

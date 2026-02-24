@@ -22,7 +22,7 @@ export type AuthErrorCode =
 	| 'unknown';
 
 /**
- * Maps known ApiError detail/message strings to AuthErrorCode.
+ * Maps known DelightError detail/message strings to AuthErrorCode.
  * Used by route handlers to attach a typed `code` field to error responses.
  */
 export const AUTH_ERROR_MAP: Record<string, AuthErrorCode> = {
@@ -48,7 +48,7 @@ export const AUTH_ERROR_MAP: Record<string, AuthErrorCode> = {
 	'Cannot remove the only admin from the organization': 'permission_denied',
 };
 
-/** Resolves an AuthErrorCode from an ApiError's detail or message string */
+/** Resolves an AuthErrorCode from a DelightError's detail or message string */
 export function resolveErrorCode(error: {
 	detail?: string;
 	message?: string;

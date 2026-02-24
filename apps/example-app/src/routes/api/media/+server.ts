@@ -1,11 +1,11 @@
 import { requireAuthScope } from '$lib/server';
-import { apiError, decodeSearchQuery } from '@packages/lib';
+import { DelightError, decodeSearchQuery } from '@packages/lib';
 import { json } from '@sveltejs/kit';
 
 export async function GET({ locals, url }) {
 	requireAuthScope('content:read');
 	const { db } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 	const query = decodeSearchQuery(url.searchParams);
 	const medias = await db.list('media', query);
 	return json(medias);
@@ -14,9 +14,9 @@ export async function GET({ locals, url }) {
 export async function POST({ locals, request, platform }) {
 	requireAuthScope('content:write');
 	const { db, authState } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 	if (!authState.orgID) {
-		throw apiError({ status: 500, message: 'Auth state not found' });
+		throw new DelightError({ message: 'Auth state not found', status: 500 });
 	}
 	const data = await request.json<any>().catch(() => undefined);
 	const media = await db.create('media', data);

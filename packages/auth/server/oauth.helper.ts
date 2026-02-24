@@ -1,4 +1,5 @@
 import { CreateOauthToken, OauthConfig, OauthToken } from '../types';
+import { DelightError } from '@delightstack/utilities';
 
 /**
  * Returns an oauth token for the given oauth credential
@@ -12,7 +13,7 @@ export const getOauthToken = async (
 	token: OauthToken | CreateOauthToken,
 ): Promise<Omit<OauthToken, 'id' | 'created_at' | 'updated_at'>> => {
 	if (!config.access_token_url) {
-		throw { status: 400, message: `Access token URL not provided` };
+		throw DelightError.badRequest('Access token URL not provided');
 	}
 
 	// Check if the provided token is not expired. If not expired, return it
@@ -56,7 +57,11 @@ export const getOauthToken = async (
 			body.error_description || body.error || `Unknown error. Couldn't connect to vendor`;
 		const code = `oauth/${body.error || 'unknown'}`;
 		console.error(`Error getting access token: ${message}`, body);
-		throw { status: response.status || 500, code, message };
+		throw new DelightError({
+			message: String(message),
+			status: response.status || 500,
+			code,
+		});
 	}
 
 	// Get the access token expiry information
@@ -76,7 +81,8 @@ export const getOauthToken = async (
 		Number(body.refresh_token_expires_at) || Number(body.x_refresh_token_expires_at) || 0;
 	refreshExpiresAt = `${refreshExpiresAt}`.match(/^\d+$/)
 		? refreshExpiresAt * (refreshExpiresAt > 100000000000 ? 1 : 1000)
-		: Date.parse(`${body.refresh_token_expires_at || body.x_refresh_token_expires_at}`) || 0;
+		: Date.parse(`${body.refresh_token_expires_at || body.x_refresh_token_expires_at}`) ||
+			0;
 	const refreshExpires = refreshExpiresIn
 		? refreshExpiresIn + Date.now()
 		: refreshExpiresAt;

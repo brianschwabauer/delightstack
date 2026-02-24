@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { ApiError, decodeJwt } from '@packages/lib';
+import { DelightError, decodeJwt } from '@packages/lib';
 import { error, redirect } from '@sveltejs/kit';
 
 export async function load({ locals, url, cookies }) {
@@ -25,7 +25,7 @@ export async function load({ locals, url, cookies }) {
 				signed_in = true;
 			}
 		} catch (err) {
-			const parsed = ApiError.from(err);
+			const parsed = DelightError.from(err);
 			throw error(parsed.status, parsed.toJSON());
 		}
 	}

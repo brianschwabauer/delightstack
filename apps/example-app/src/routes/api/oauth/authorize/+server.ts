@@ -1,4 +1,4 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { encodePermissions, SCOPES } from '@packages/types';
 import { json } from '@sveltejs/kit';
 
@@ -12,15 +12,15 @@ export async function POST({ locals, request }) {
 	const requested_scopes = body?.scopes || [];
 	const state = body?.state || '';
 	if (!client_id) {
-		throw apiError({ status: 400, message: 'Missing client_id parameter.' });
+		throw new DelightError({ message: 'Missing client_id parameter.', status: 400 });
 	}
 	if (!redirect_uri) {
-		throw apiError({ status: 400, message: 'Missing redirect_uri parameter.' });
+		throw new DelightError({ message: 'Missing redirect_uri parameter.', status: 400 });
 	}
 	if (!user_id || !org_id) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: 'You must be signed in to authorize applications.',
+			status: 401,
 		});
 	}
 	if (
@@ -28,10 +28,10 @@ export async function POST({ locals, request }) {
 			(org) => org.id === org_id && org.permissions.includes('org:write'),
 		)
 	) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message:
 				'You do not have permission to authorize applications for this organization.',
+			status: 403,
 		});
 	}
 

@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { toast } from '$lib/components';
 	import Button from '$lib/form/Button.svelte';
-	import { ApiError } from '@packages/lib';
+	import { DelightError } from '@packages/lib';
 
 	const { data } = $props();
 	const { authState } = $derived(data);
@@ -23,7 +23,7 @@
 		);
 		if (!response.ok) {
 			const error = await response.json();
-			toast.error(ApiError.from(error).toString());
+			toast.error(DelightError.from(error).toString());
 			throw error;
 		} else {
 			toast.success('Check your email for a link to verify your email');

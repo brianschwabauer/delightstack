@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Button from '$lib/form/Button.svelte';
-	import { ApiError, formatToString } from '@packages/lib';
+	import { DelightError, formatToString } from '@packages/lib';
 	import Input from '$lib/form/Input.svelte';
 	import { PLANS } from './plans.js';
 	import Expand from '$lib/components/Expand.svelte';
@@ -30,7 +30,7 @@
 				window.location.reload();
 			}
 		} catch (error) {
-			toast.error(ApiError.from(error).toString());
+			toast.error(DelightError.from(error).toString());
 			throw error;
 		} finally {
 			cancelingSubscription = false;

@@ -1,4 +1,4 @@
-import { ApiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { redirect, error } from '@sveltejs/kit';
 
 export async function load({ locals, params }) {
@@ -9,7 +9,7 @@ export async function load({ locals, params }) {
 		const application = await locals.auth.getOauthApplication(application_id);
 		return { application };
 	} catch (err: any) {
-		const parsed = ApiError.from(err);
-		throw error(parsed.status, parsed.messageText);
+		const parsed = DelightError.from(err);
+		throw error(parsed.status, parsed.message);
 	}
 }

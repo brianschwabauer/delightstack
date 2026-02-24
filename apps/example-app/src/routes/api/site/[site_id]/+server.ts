@@ -1,6 +1,6 @@
 import { requireAuthScope } from '$lib/server';
 import { parseSchema } from '@packages/lib';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { Site } from '@packages/types';
 import { json } from '@sveltejs/kit';
 
@@ -8,7 +8,7 @@ export async function GET({ locals, params }) {
 	requireAuthScope('site:read');
 	const { site_id } = params;
 	const { db } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 	const site = await db.get('site', site_id);
 	return json(site);
 }
@@ -17,16 +17,16 @@ export async function PATCH({ locals, params, request }) {
 	requireAuthScope(['site:edit', 'site:write']);
 	const { site_id } = params;
 	const { authState, db, auth } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 	if (!authState.orgID) {
-		throw apiError({ status: 500, message: 'Auth state not found' });
+		throw new DelightError({ message: 'Auth state not found', status: 500 });
 	}
 	if (!authState.isAllowed('site:edit')) {
 		const site = await db.get('site', site_id);
 		if (site.creator_id !== authState.id) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `You don't have permission to update sites created by other users`,
+				status: 401,
 			});
 		}
 	}
@@ -53,16 +53,16 @@ export async function DELETE({ locals, params }) {
 	requireAuthScope(['site:edit', 'site:write']);
 	const { site_id } = params;
 	const { authState, db, auth } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 	if (!authState.orgID) {
-		throw apiError({ status: 500, message: 'Auth state not found' });
+		throw new DelightError({ message: 'Auth state not found', status: 500 });
 	}
 	if (!authState.isAllowed('site:edit')) {
 		const site = await db.get('site', site_id);
 		if (site.creator_id !== authState.id) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `You don't have permission to delete sites created by other users`,
+				status: 401,
 			});
 		}
 	}

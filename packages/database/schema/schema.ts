@@ -2522,19 +2522,19 @@ export namespace Database {
 			!Object.keys(table_config).length ||
 			Array.isArray(table_config)
 		) {
-			throw { message: 'Table schema callback must return a non-empty object' };
+			throw new Error('Table schema callback must return a non-empty object');
 		}
 
 		// Validate reserved field names
 		if ('created_at' in table_config) {
-			throw {
-				message: `'created_at' is a reserved field name that is auto-managed by the database. Remove it from your table schema.`,
-			};
+			throw new Error(
+				`'created_at' is a reserved field name that is auto-managed by the database. Remove it from your table schema.`,
+			);
 		}
 		if ('updated_at' in table_config) {
-			throw {
-				message: `'updated_at' is a reserved field name that is auto-managed by the database. Remove it from your table schema.`,
-			};
+			throw new Error(
+				`'updated_at' is a reserved field name that is auto-managed by the database. Remove it from your table schema.`,
+			);
 		}
 
 		// Auto-inject 'id' primary key if none is defined
@@ -2548,16 +2548,16 @@ export namespace Database {
 		// Collect primary key, indexable fields, etc.
 		for (const [fieldName, fieldDef] of Object.entries(table_config)) {
 			if (!fieldDef['_']) {
-				throw {
-					message: `Field '${fieldName}' is not a valid field definition. Did you forget to call a field generator method?`,
-				};
+				throw new Error(
+					`Field '${fieldName}' is not a valid field definition. Did you forget to call a field generator method?`,
+				);
 			}
 			const field = fieldDef['_'] as DatabaseField;
 			if (field.type === 'primary_key') {
 				if (primary_key) {
-					throw {
-						message: `Table can only have one primary key defined. Fields ${fieldName} and ${primary_key} are both defined as primary keys.`,
-					};
+					throw new Error(
+						`Table can only have one primary key defined. Fields ${fieldName} and ${primary_key} are both defined as primary keys.`,
+					);
 				}
 			}
 
@@ -2665,14 +2665,14 @@ export namespace Database {
 			if (field.type === 'foreign_key') {
 				// Do a sanity check for invalid table names (in the off chance someone puts a bad table name here)
 				if (field.foreign_key.table.match(/[^a-zA-Z0-9_]/)) {
-					throw {
-						message: `Foreign key field '${fieldName}' has an invalid table name '${field.foreign_key.table}'. Table names can only contain alphanumeric characters and underscores.`,
-					};
+					throw new Error(
+						`Foreign key field '${fieldName}' has an invalid table name '${field.foreign_key.table}'. Table names can only contain alphanumeric characters and underscores.`,
+					);
 				}
 				if (field.foreign_key.column.match(/[^a-zA-Z0-9_]/)) {
-					throw {
-						message: `Foreign key field '${fieldName}' has an invalid column name '${field.foreign_key.column}'. Column names can only contain alphanumeric characters and underscores.`,
-					};
+					throw new Error(
+						`Foreign key field '${fieldName}' has an invalid column name '${field.foreign_key.column}'. Column names can only contain alphanumeric characters and underscores.`,
+					);
 				}
 				sqliteColumnDef += ` REFERENCES ${field.foreign_key.table}(${field.foreign_key.column})`;
 				if (field.foreign_key.on_update) {
@@ -2871,16 +2871,16 @@ export namespace Database {
 		sortable_fields.push('updated_at' as SortableColumn);
 
 		// At this point primary_key is guaranteed to be set (either user-defined or auto-injected)
-		if (!primary_key) throw { message: 'Table must have a primary key defined' };
+		if (!primary_key) throw new Error('Table must have a primary key defined');
 
 		// Validate that FK-derived fields reference actual foreign key fields
 		for (const [fieldName, meta] of Object.entries(derived_fields)) {
 			if (!meta.foreign_keys) continue;
 			for (const fk_name of meta.foreign_keys) {
 				if (!(fk_name in foreign_keys)) {
-					throw {
-						message: `Derived field '${fieldName}' declares '${fk_name}' as a foreign key dependency, but '${fk_name}' is not a foreign key field in table '${tableName}'.`,
-					};
+					throw new Error(
+						`Derived field '${fieldName}' declares '${fk_name}' as a foreign key dependency, but '${fk_name}' is not a foreign key field in table '${tableName}'.`,
+					);
 				}
 			}
 		}
@@ -3140,10 +3140,7 @@ export namespace Database {
 
 			// If there are any validation issues, throw an error with details
 			if (issues.length) {
-				throw {
-					message: issues[0].message,
-					issues,
-				};
+				throw Object.assign(new Error(issues[0].message), { issues });
 			}
 			return parsedData as Entity;
 		}

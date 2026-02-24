@@ -1,21 +1,21 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { json } from '@sveltejs/kit';
 
 export async function GET({ locals, url }) {
 	const { authState, db } = locals;
 	if (!authState.signed_in) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `You must be signed in to sync the database`,
+			status: 401,
 		});
 	}
 	if (!authState.isAllowed('content:read')) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Not enough permissions to sync the database`,
+			status: 401,
 		});
 	}
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 	let entity: any;
 	try {
 		entity = JSON.parse(url.searchParams.get('entity') || 'null');

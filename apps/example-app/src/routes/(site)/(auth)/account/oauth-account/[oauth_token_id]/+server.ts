@@ -1,11 +1,11 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import type { OauthApi, OauthToken } from '@packages/types';
 
 export async function DELETE({ locals, params }) {
 	if (!locals.authState.id) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to disconnect an oauth account`,
+			status: 401,
 		});
 	}
 	const oauth_token_id = params.oauth_token_id;

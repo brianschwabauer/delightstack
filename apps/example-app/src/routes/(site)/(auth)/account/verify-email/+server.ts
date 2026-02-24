@@ -1,9 +1,9 @@
 import { env } from '$env/dynamic/private';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 
 export async function POST({ locals, url }) {
 	if (!locals.authState.user_session_id || !locals.authState.email) {
-		throw apiError({ status: 401, message: `Unauthorized` });
+		throw new DelightError({ message: `Unauthorized`, status: 401 });
 	}
 	if (locals.authState.verified) return new Response(null, { status: 204 });
 
@@ -38,7 +38,10 @@ export async function POST({ locals, url }) {
 		}),
 	});
 	if (!response.ok) {
-		throw apiError({ status: 500, message: `Failed to send email verification email` });
+		throw new DelightError({
+			message: `Failed to send email verification email`,
+			status: 500,
+		});
 	}
 	return new Response(null, { status: 204 });
 }

@@ -1,5 +1,5 @@
 import { SessionToken } from '../types';
-import { apiError, generateID } from '@delightstack/utilities';
+import { DelightError, generateID } from '@delightstack/utilities';
 
 /**
  * Generates & signs a jwt with the given claims
@@ -56,11 +56,9 @@ export async function generateJwt<Type = SessionToken['typ']>(
 	const buffer = new TextEncoder().encode(binstr);
 
 	// Sign the header/payload buffer with the created web crypto key
-	const signature = await crypto.subtle
-		.sign({ name: 'HMAC' }, key, buffer)
-		.catch(() => {
-			throw apiError({ status: 500, message: `Error signing JWT` });
-		});
+	const signature = await crypto.subtle.sign({ name: 'HMAC' }, key, buffer).catch(() => {
+		throw new DelightError({ message: 'Error signing JWT', status: 500 });
+	});
 
 	// Format the signature in the JWT signature format (encoded base64 with period separators)
 	let encodedSignature = '';
@@ -80,21 +78,24 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 	secret: string,
 	jwt: string,
 ): Promise<SessionToken<Type>> {
-	if (!jwt) throw apiError({ status: 400, message: `JWT not provided` });
+	if (!jwt) throw new DelightError({ message: 'JWT not provided', status: 400 });
 
-	let parts: string[], header: Record<string, unknown>, payload: Record<string, unknown>, signature: string;
+	let parts: string[],
+		header: Record<string, unknown>,
+		payload: Record<string, unknown>,
+		signature: string;
 	try {
 		parts = jwt.split('.');
 		header = JSON.parse(atob(parts[0].replace(/_/g, '/').replace(/-/g, '+')));
 		payload = JSON.parse(atob(parts[1].replace(/_/g, '/').replace(/-/g, '+')));
 		signature = atob(parts[2].replace(/_/g, '/').replace(/-/g, '+'));
 	} catch {
-		throw apiError({ status: 400, message: `Invalid auth token format` });
+		throw new DelightError({ message: 'Invalid auth token format', status: 400 });
 	}
 
 	// Check for a valid algorithm
 	if (!header?.alg) {
-		throw apiError({ status: 401, message: `Invalid auth token. No algorithm` });
+		throw new DelightError({ message: 'Invalid auth token. No algorithm', status: 401 });
 	}
 
 	// Check the expiration & issued date of the token
@@ -105,9 +106,9 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 		expiryDate <= currentDate - 1000 * 60 * 10 ||
 		issuedDate > currentDate + 1000 * 60 * 10
 	) {
-		throw apiError({
+		throw new DelightError({
+			message: 'Auth token expired',
 			status: 401,
-			message: `Auth token expired`,
 			detail: 'auth/expired',
 		});
 	}
@@ -120,9 +121,9 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 		.join('')
 		.slice(0, 10);
 	if (String(header.kid) !== key_id) {
-		throw apiError({
+		throw new DelightError({
+			message: 'Invalid auth token. Key ID does not match',
 			status: 401,
-			message: `Invalid auth token. Key ID does not match`,
 		});
 	}
 
@@ -145,12 +146,12 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 	const verified = await crypto.subtle
 		.verify({ hash, name: algorithm }, key, signatureArray, data)
 		.catch(() => {
-			throw apiError({ status: 500, message: `Error verifying jwt signature` });
+			throw new DelightError({ message: 'Error verifying jwt signature', status: 500 });
 		});
 	if (!verified) {
-		throw apiError({
+		throw new DelightError({
+			message: 'Invalid auth token. Signature is invalid',
 			status: 401,
-			message: `Invalid auth token. Signature is invalid`,
 		});
 	}
 
@@ -166,9 +167,9 @@ export function extractJwtRefreshToken(jwt: string) {
 		const payload = JSON.parse(atob(parts[1].replace(/_/g, '/').replace(/-/g, '+')));
 		jti = payload?.jti;
 	} catch {
-		throw apiError({ status: 400, message: `Invalid auth token format` });
+		throw new DelightError({ message: 'Invalid auth token format', status: 400 });
 	}
-	if (!jti) throw apiError({ status: 400, message: `Invalid auth token format` });
+	if (!jti) throw new DelightError({ message: 'Invalid auth token format', status: 400 });
 	return jti;
 }
 
@@ -191,6 +192,6 @@ export async function getSecretKey(secret: string) {
 		);
 		return key;
 	} catch {
-		throw apiError({ status: 500, message: `Error importing private key` });
+		throw new DelightError({ message: 'Error importing private key', status: 500 });
 	}
 }

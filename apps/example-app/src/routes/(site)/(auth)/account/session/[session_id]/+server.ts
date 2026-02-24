@@ -1,13 +1,16 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 
 export async function DELETE({ locals, params }) {
 	if (!locals.authState.id) {
-		throw apiError({ status: 401, message: `Must be signed in to revoke a session` });
+		throw new DelightError({
+			message: `Must be signed in to revoke a session`,
+			status: 401,
+		});
 	}
 	const session_id = params.session_id;
 	const session = await locals.auth.getSession(session_id).catch(() => undefined);
 	if (!session) {
-		throw apiError({ status: 403, message: `Session not found` });
+		throw new DelightError({ message: `Session not found`, status: 403 });
 	}
 	await locals.auth.revokeSession(session_id);
 	if (locals.ws) {

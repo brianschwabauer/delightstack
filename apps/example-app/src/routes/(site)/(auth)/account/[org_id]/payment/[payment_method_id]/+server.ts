@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import Stripe from 'stripe';
 
 export async function PATCH({ locals, request, params }) {
@@ -7,33 +7,33 @@ export async function PATCH({ locals, request, params }) {
 	const userID = locals.authState.id;
 	const org = locals.authState.org;
 	if (!locals.authState.token || !userID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to delete a payment method`,
+			status: 401,
 		});
 	}
 	if (!orgID || !org || org.id !== orgID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to an organization delete a payment method`,
+			status: 401,
 		});
 	}
 	if (org.owner_id !== userID) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be the account owner of "${org.name}" to delete payment methods.`,
+			status: 403,
 		});
 	}
 	if (!locals.db) {
-		throw apiError({
-			status: 500,
+		throw new DelightError({
 			message: `Database not available`,
+			status: 500,
 		});
 	}
 	if (!org.customer_id) {
-		throw apiError({
-			status: 400,
+		throw new DelightError({
 			message: `No customer_id found for "${org.name}"`,
+			status: 400,
 		});
 	}
 
@@ -57,33 +57,33 @@ export async function DELETE({ locals, params }) {
 	const userID = locals.authState.id;
 	const org = locals.authState.org;
 	if (!locals.authState.token || !userID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to delete a payment method`,
+			status: 401,
 		});
 	}
 	if (!orgID || !org || org.id !== orgID) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `Must be signed in to an organization delete a payment method`,
+			status: 401,
 		});
 	}
 	if (org.owner_id !== userID) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be the account owner of "${org.name}" to delete payment methods.`,
+			status: 403,
 		});
 	}
 	if (!locals.db) {
-		throw apiError({
-			status: 500,
+		throw new DelightError({
 			message: `Database not available`,
+			status: 500,
 		});
 	}
 	if (!org.customer_id) {
-		throw apiError({
-			status: 400,
+		throw new DelightError({
 			message: `No customer_id found for "${org.name}"`,
+			status: 400,
 		});
 	}
 
@@ -92,9 +92,9 @@ export async function DELETE({ locals, params }) {
 	});
 
 	await stripe.paymentMethods.detach(params.payment_method_id).catch(() => {
-		throw apiError({
-			status: 500,
+		throw new DelightError({
 			message: `Unable to delete payment method with id "${params.payment_method_id}"`,
+			status: 500,
 		});
 	});
 	return new Response(null, { status: 204 });

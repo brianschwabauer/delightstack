@@ -1,21 +1,24 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { decodePermissions, encodePermissions } from '@packages/types';
 
 export async function PUT({ locals, params }) {
 	if (!locals.authState.id) {
-		throw apiError({ status: 401, message: `Must be signed in to update a permission` });
+		throw new DelightError({
+			message: `Must be signed in to update a permission`,
+			status: 401,
+		});
 	}
 	if (!locals.authState.orgID || !locals.authState.isAllowed('org:write')) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `Must be an organization admin to update a permission`,
+			status: 403,
 		});
 	}
 	const user_id = params.user_id;
 	if (locals.authState.org?.owner_id === user_id) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You cannot update the permissions of the owner of the organization`,
+			status: 403,
 		});
 	}
 	const permissions = decodePermissions(parseInt(params.encoded_permission));

@@ -22,7 +22,7 @@ import {
 	type CachedEntity,
 	type CachedSearchIndex,
 } from './database.idb';
-import { DatabaseError } from './database.error';
+import { DelightError } from '@delightstack/utilities';
 
 /** Inline sync response type to avoid importing server module in worker context. */
 interface SyncEntityResult {
@@ -434,11 +434,11 @@ export class DatabaseWorker {
 				string,
 				unknown
 			>;
-			throw DatabaseError.transferable(
-				`Create ${entity_type} failed`,
-				response.status,
-				error_body,
-			);
+			throw DelightError.transferable({
+				message: (error_body.message as string) || `Create ${entity_type} failed`,
+				status: response.status,
+				detail: error_body.detail as string | undefined,
+			});
 		}
 		const server_entity = (await response.json()) as Record<string, unknown>;
 
@@ -561,15 +561,15 @@ export class DatabaseWorker {
 					unknown
 				>;
 				this.#rollbackOrama(entity_type, id, prev_doc);
-				throw DatabaseError.transferable(
-					`Update ${entity_type}/${id} failed`,
-					response.status,
-					error_body,
-				);
+				throw DelightError.transferable({
+					message: (error_body.message as string) || `Update ${entity_type}/${id} failed`,
+					status: response.status,
+					detail: error_body.detail as string | undefined,
+				});
 			}
 			server_entity = (await response.json()) as Record<string, unknown>;
 		} catch (error) {
-			if (error instanceof DatabaseError) throw error;
+			if (DelightError.is(error)) throw error;
 			this.#rollbackOrama(entity_type, id, prev_doc);
 			throw error;
 		}
@@ -642,14 +642,14 @@ export class DatabaseWorker {
 					unknown
 				>;
 				this.#rollbackOrama(entity_type, id, prev_doc);
-				throw DatabaseError.transferable(
-					`Delete ${entity_type}/${id} failed`,
-					response.status,
-					error_body,
-				);
+				throw DelightError.transferable({
+					message: (error_body.message as string) || `Delete ${entity_type}/${id} failed`,
+					status: response.status,
+					detail: error_body.detail as string | undefined,
+				});
 			}
 		} catch (error) {
-			if (error instanceof DatabaseError) throw error;
+			if (DelightError.is(error)) throw error;
 			this.#rollbackOrama(entity_type, id, prev_doc);
 			throw error;
 		}
@@ -799,11 +799,11 @@ export class DatabaseWorker {
 					string,
 					unknown
 				>;
-				throw DatabaseError.transferable(
-					`List ${entity_type} failed`,
-					response.status,
-					error_body,
-				);
+				throw DelightError.transferable({
+					message: (error_body.message as string) || `List ${entity_type} failed`,
+					status: response.status,
+					detail: error_body.detail as string | undefined,
+				});
 			}
 			return { hits: [], count: 0 };
 		}

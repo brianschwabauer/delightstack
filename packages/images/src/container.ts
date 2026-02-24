@@ -1,5 +1,12 @@
 import { Container } from '@cloudflare/containers';
-import type { VariantConfig, ContainerProcessResult, ContainerOutputVariant, ImageMetadata, ErrorCode } from './types';
+import type {
+	VariantConfig,
+	ContainerProcessResult,
+	ContainerOutputVariant,
+	ImageMetadata,
+	ErrorCode,
+} from './types';
+import { DelightError } from '@delightstack/utilities';
 import { createError } from './errors';
 
 const BOUNDARY = '----imgproc';
@@ -13,7 +20,9 @@ interface ContainerProcessOptions {
 }
 
 /** Parse a multipart/mixed response from the container into structured data */
-async function parseMultipartResponse(response: Response): Promise<ContainerProcessResult> {
+async function parseMultipartResponse(
+	response: Response,
+): Promise<ContainerProcessResult> {
 	const contentType = response.headers.get('Content-Type') ?? '';
 	const boundaryMatch = contentType.match(/boundary=(.+)/);
 	const boundary = boundaryMatch?.[1] ?? BOUNDARY;
@@ -38,7 +47,9 @@ async function parseMultipartResponse(response: Response): Promise<ContainerProc
 	}
 
 	if (positions.length < 2) {
-		throw createError('INTERNAL_ERROR', { details: 'Invalid multipart response from container' });
+		throw createError('INTERNAL_ERROR', {
+			details: 'Invalid multipart response from container',
+		});
 	}
 
 	interface RawVariantJson {
@@ -77,7 +88,8 @@ async function parseMultipartResponse(response: Response): Promise<ContainerProc
 		if (headerEnd === -1) continue;
 
 		const headerStr = partStr.slice(0, headerEnd);
-		const bodyOffset = start + new TextEncoder().encode(partStr.slice(0, headerEnd + 4)).length;
+		const bodyOffset =
+			start + new TextEncoder().encode(partStr.slice(0, headerEnd + 4)).length;
 		const bodyEnd = end - 2; // strip trailing \r\n
 
 		const headers: Record<string, string> = {};
@@ -102,29 +114,33 @@ async function parseMultipartResponse(response: Response): Promise<ContainerProc
 	}
 
 	if (!jsonData) {
-		throw createError('INTERNAL_ERROR', { details: 'No JSON part in container response' });
+		throw createError('INTERNAL_ERROR', {
+			details: 'No JSON part in container response',
+		});
 	}
 
 	// Merge binary data with variant metadata
-	const variants: ContainerOutputVariant[] = (jsonData.variants ?? []).map((v: RawVariantJson) => {
-		const data = binaryParts.get(v.name);
-		if (!data || data.byteLength === 0) {
-			throw createError('INTERNAL_ERROR', {
-				message: `Missing binary data for variant '${v.name}' in container response`,
-			});
-		}
-		return {
-			name: v.name,
-			mime_type: v.mime_type,
-			width: v.width,
-			height: v.height,
-			file_size: v.file_size,
-			is_animated: v.is_animated ?? false,
-			fit: v.fit,
-			watermarked: v.watermarked ?? false,
-			data,
-		};
-	});
+	const variants: ContainerOutputVariant[] = (jsonData.variants ?? []).map(
+		(v: RawVariantJson) => {
+			const data = binaryParts.get(v.name);
+			if (!data || data.byteLength === 0) {
+				throw createError('INTERNAL_ERROR', {
+					message: `Missing binary data for variant '${v.name}' in container response`,
+				});
+			}
+			return {
+				name: v.name,
+				mime_type: v.mime_type,
+				width: v.width,
+				height: v.height,
+				file_size: v.file_size,
+				is_animated: v.is_animated ?? false,
+				fit: v.fit,
+				watermarked: v.watermarked ?? false,
+				data,
+			};
+		},
+	);
 
 	return {
 		metadata: jsonData.metadata,
@@ -203,21 +219,25 @@ export class ImageProcessorContainer extends Container {
 			if (!response.ok) {
 				let errorBody: { code?: string; details?: string | Record<string, unknown> };
 				try {
-					errorBody = await response.json() as { code?: string; details?: string | Record<string, unknown> };
+					errorBody = (await response.json()) as {
+						code?: string;
+						details?: string | Record<string, unknown>;
+					};
 				} catch {
 					throw createError('INTERNAL_ERROR', { status: response.status });
 				}
 				// Normalize details to Record<string, unknown> (container may send a string)
-				const details = typeof errorBody.details === 'string'
-					? { message: errorBody.details }
-					: (errorBody.details ?? {});
+				const details =
+					typeof errorBody.details === 'string'
+						? { message: errorBody.details }
+						: (errorBody.details ?? {});
 				throw createError((errorBody.code ?? 'INTERNAL_ERROR') as ErrorCode, details);
 			}
 
 			return parseMultipartResponse(response);
 		} catch (err: unknown) {
 			// If it's already one of our errors, re-throw
-			if (err instanceof Error && ['ImageProcessorError', 'ValidationError', 'ProcessingError', 'TimeoutError'].includes(err.name)) {
+			if (DelightError.is(err)) {
 				throw err;
 			}
 			// Connection or startup failure

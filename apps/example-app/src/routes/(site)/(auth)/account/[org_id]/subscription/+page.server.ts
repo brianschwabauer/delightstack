@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { PLANS } from './plans';
-import { ApiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { syncStripeSubscription } from '$lib/server/stripe.server';
 
 export async function load({ locals, url }) {
@@ -28,7 +28,7 @@ export async function load({ locals, url }) {
 		db: locals.db,
 		auth: locals.auth,
 	}).catch((err) => {
-		const parsedError = ApiError.from(err);
+		const parsedError = DelightError.from(err);
 		throw error(parsedError.status, parsedError.toString());
 	});
 	if (!result?.subscription) return;

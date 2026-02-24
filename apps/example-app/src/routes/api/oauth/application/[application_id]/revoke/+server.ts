@@ -1,5 +1,5 @@
 import { requireAuthScope } from '$lib/server';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 
 export async function POST({ locals, params }) {
 	requireAuthScope('profile:write');
@@ -11,9 +11,9 @@ export async function POST({ locals, params }) {
 			(org) => org.id === org_id && org.permissions.includes('org:write'),
 		)
 	) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: 'You do not have permission to revoke applications for this organization.',
+			status: 403,
 		});
 	}
 

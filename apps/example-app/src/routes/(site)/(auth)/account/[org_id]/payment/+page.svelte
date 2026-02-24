@@ -10,7 +10,7 @@
 
 <script lang="ts">
 	import Button from '$lib/form/Button.svelte';
-	import { ApiError, formatToString } from '@packages/lib';
+	import { DelightError, formatToString } from '@packages/lib';
 	import Expand from '$lib/components/Expand.svelte';
 	import { page } from '$app/state';
 	import List from '$lib/form/List.svelte';
@@ -129,7 +129,7 @@
 			});
 			loaded = true;
 		} catch (error) {
-			toast.error(ApiError.from(error).toString());
+			toast.error(DelightError.from(error).toString());
 		}
 		loading = false;
 	}
@@ -172,7 +172,7 @@
 				window.location.href = `/${authState.orgID}/dashboard?toast=${encodeURIComponent(message)}`;
 			} else {
 				const error = await response.json();
-				toast.error(ApiError.from(error).toString());
+				toast.error(DelightError.from(error).toString());
 			}
 			saving = false;
 			return;
@@ -204,7 +204,7 @@
 			window.location.reload();
 		} else {
 			const error = await response.json();
-			toast.error(ApiError.from(error).toString());
+			toast.error(DelightError.from(error).toString());
 		}
 		saving = false;
 	}
@@ -220,7 +220,7 @@
 			window.location.reload();
 		} else {
 			const error = await response.json();
-			toast.error(ApiError.from(error).toString());
+			toast.error(DelightError.from(error).toString());
 		}
 		saving = false;
 	}

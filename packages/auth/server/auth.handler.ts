@@ -3,7 +3,7 @@ import type { AuthConfig, ResolvedAuthConfig } from './auth.config';
 import type { AuthDatabaseServer } from './auth.db.server';
 import type { AuthClientData } from '../client/auth.client.svelte';
 import type { SessionToken, UserSessionMeta } from '../types';
-import { ApiError } from '@delightstack/utilities';
+import { DelightError } from '@delightstack/utilities';
 import { decodeJwt, extractJwtRefreshToken } from './jwt.server';
 import { matchRoute } from './auth.routes';
 import {
@@ -126,10 +126,7 @@ function extractMeta(event: RequestEvent): UserSessionMeta {
 }
 
 /** Verify CSRF by checking Origin/Referer headers */
-function verifyCsrf(
-	event: RequestEvent,
-	config: ResolvedAuthConfig,
-): boolean {
+function verifyCsrf(event: RequestEvent, config: ResolvedAuthConfig): boolean {
 	const method = event.request.method;
 	if (method !== 'POST' && method !== 'PATCH' && method !== 'DELETE') return true;
 
@@ -139,9 +136,8 @@ function verifyCsrf(
 	const referer = event.request.headers.get('Referer');
 	const host = event.url.origin;
 
-	const allowed_origins = typeof config.csrf === 'object'
-		? config.csrf.allowed_origins || []
-		: [];
+	const allowed_origins =
+		typeof config.csrf === 'object' ? config.csrf.allowed_origins || [] : [];
 
 	if (origin) {
 		if (origin === host) return true;
@@ -178,10 +174,7 @@ function defaultResolveOrgId(
 
 	// Priority: URL params > query > header > auto-select
 	let org_id: string | null =
-		params.org_id ||
-		url.searchParams.get('org') ||
-		request.headers.get('Org-ID') ||
-		null;
+		params.org_id || url.searchParams.get('org') || request.headers.get('Org-ID') || null;
 
 	// Auto-select if user has exactly one org
 	if (!org_id && session) {
@@ -207,7 +200,9 @@ export function createAuthHandle<Config extends AuthConfig>(
 	options: AuthHandleOptions<Config>,
 ): Handle {
 	const config = (
-		'cookies' in options.config && typeof options.config.cookies === 'object' && 'session_name' in (options.config.cookies || {})
+		'cookies' in options.config &&
+		typeof options.config.cookies === 'object' &&
+		'session_name' in (options.config.cookies || {})
 			? options.config
 			: defineAuthConfig(options.config)
 	) as ResolvedAuthConfig;
@@ -246,7 +241,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 					session = decoded;
 				}
 			} catch (error: unknown) {
-				const apiErr = error instanceof ApiError ? error : ApiError.from(error);
+				const apiErr = DelightError.is(error) ? error : DelightError.from(error);
 				if (apiErr.detail === 'auth/expired' && jwt) {
 					try {
 						const jti = extractJwtRefreshToken(jwt);
@@ -306,15 +301,16 @@ export function createAuthHandle<Config extends AuthConfig>(
 
 		// 11. Build org object (map short token keys to developer-facing names)
 		const org_token = session && org_id ? session.org?.[org_id] : undefined;
-		const org = org_token && org_id
-			? {
-					id: org_id,
-					name: org_token.n,
-					permissions: org_token.p,
-					db: org_token.d,
-					entitlements: org_token.e,
-				}
-			: null;
+		const org =
+			org_token && org_id
+				? {
+						id: org_id,
+						name: org_token.n,
+						permissions: org_token.p,
+						db: org_token.d,
+						entitlements: org_token.e,
+					}
+				: null;
 
 		// 12. Build setState closures
 		const setPreferences = (updates: Record<string, unknown>) => {
@@ -402,7 +398,11 @@ export function createAuthHandle<Config extends AuthConfig>(
 				});
 
 				// After route: update session cookie from response JWT
-				if (response.status >= 200 && response.status < 300 && response.headers.get('Content-Type')?.includes('application/json')) {
+				if (
+					response.status >= 200 &&
+					response.status < 300 &&
+					response.headers.get('Content-Type')?.includes('application/json')
+				) {
 					try {
 						const cloned = response.clone();
 						const data = (await cloned.json()) as Record<string, unknown>;
@@ -413,13 +413,17 @@ export function createAuthHandle<Config extends AuthConfig>(
 							const decoded = data.decoded_jwt as { uid?: string } | undefined;
 							if (decoded?.uid) {
 								try {
-									const db_prefs = await getAuth().getUserPreferences(decoded.uid) as Record<string, unknown>;
+									const db_prefs = (await getAuth().getUserPreferences(
+										decoded.uid,
+									)) as Record<string, unknown>;
 									if (Object.keys(db_prefs).length > 0) {
 										preferences = { ...preferences, ...db_prefs };
 										preferences_dirty = true;
 										// preferences_persist stays false — no need to write back what we just read
 									}
-								} catch { /* ignore DB errors */ }
+								} catch {
+									/* ignore DB errors */
+								}
 							}
 						}
 					} catch {
@@ -428,7 +432,10 @@ export function createAuthHandle<Config extends AuthConfig>(
 				}
 
 				// On signout: clear session + org state cookies (preferences persist across signouts)
-				if (route_path === '/signout' && (response.status === 204 || response.status === 302)) {
+				if (
+					route_path === '/signout' &&
+					(response.status === 204 || response.status === 302)
+				) {
 					deleteSessionCookie(event.cookies, config);
 					// Delete all org state cookies (caching only — not persisted to DB)
 					if (session) {
@@ -450,11 +457,21 @@ export function createAuthHandle<Config extends AuthConfig>(
 					preferences_dirty = false;
 				}
 				if (preferences_persist && session) {
-					try { await getAuth().setUserPreferences(session.uid, preferences); } catch { /* ignore */ }
+					try {
+						await getAuth().setUserPreferences(session.uid, preferences);
+					} catch {
+						/* ignore */
+					}
 					preferences_persist = false;
 				}
 				if (org_state_dirty && org_id) {
-					await setOrgStateCookie(event.cookies, config, config.secret, org_id, org_state);
+					await setOrgStateCookie(
+						event.cookies,
+						config,
+						config.secret,
+						org_id,
+						org_state,
+					);
 				}
 
 				return response;
@@ -470,7 +487,11 @@ export function createAuthHandle<Config extends AuthConfig>(
 			preferences_dirty = false;
 		}
 		if (preferences_persist && session) {
-			try { await getAuth().setUserPreferences(session.uid, preferences); } catch { /* ignore */ }
+			try {
+				await getAuth().setUserPreferences(session.uid, preferences);
+			} catch {
+				/* ignore */
+			}
 			preferences_persist = false;
 		}
 		if (org_state_dirty && org_id) {
@@ -484,11 +505,8 @@ export function createAuthHandle<Config extends AuthConfig>(
 		) {
 			try {
 				const body = await response.json();
-				const error = ApiError.from(body);
-				return new Response(error.toJSON(), {
-					status: error.status || 500,
-					headers: { 'Content-Type': 'application/json' },
-				});
+				const error = DelightError.from(body);
+				return error.toResponse();
 			} catch {
 				// ignore
 			}

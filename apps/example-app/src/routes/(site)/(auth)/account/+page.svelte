@@ -7,7 +7,7 @@
 	import Input from '$lib/form/Input.svelte';
 	import List from '$lib/form/List.svelte';
 	import ListItem from '$lib/form/ListItem.svelte';
-	import { ApiError } from '@packages/lib';
+	import { DelightError } from '@packages/lib';
 	import { Org } from '@packages/types';
 
 	const { data } = $props();
@@ -28,7 +28,7 @@
 		});
 		if (!response.ok) {
 			const error = await response.json();
-			toast.error(ApiError.from(error).toString());
+			toast.error(DelightError.from(error).toString());
 		} else {
 			const data = await response.json<Org>();
 			if (data.id) window.location.href = `/${data.id}/dashboard`;
@@ -44,7 +44,7 @@
 			window.location.href = '/account';
 		} else {
 			const data = await response.json().catch(() => undefined);
-			const errorMessage = ApiError.from(data).toString();
+			const errorMessage = DelightError.from(data).toString();
 			toast.error(errorMessage);
 			throw { message: errorMessage };
 		}

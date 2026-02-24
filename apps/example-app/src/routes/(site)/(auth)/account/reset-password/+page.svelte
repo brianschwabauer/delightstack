@@ -3,7 +3,7 @@
 	import { toast } from '$lib/components';
 	import Button from '$lib/form/Button.svelte';
 	import Input from '$lib/form/Input.svelte';
-	import { ApiError } from '@packages/lib';
+	import { DelightError } from '@packages/lib';
 
 	let email = $state('');
 	let sent = $state(false);
@@ -28,7 +28,7 @@
 		);
 		if (!response.ok) {
 			const error = await response.json();
-			toast.error(ApiError.from(error).toString());
+			toast.error(DelightError.from(error).toString());
 			throw error;
 		} else {
 			toast.success('Check your email for a link to reset your password');

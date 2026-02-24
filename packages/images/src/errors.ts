@@ -1,43 +1,8 @@
+import { DelightError } from '@delightstack/utilities';
 import type { ErrorCode } from './types';
 
-/** Base error class for all image processor errors */
-export class ImageProcessorError extends Error {
-	constructor(
-		public code: ErrorCode,
-		public status: number,
-		public details?: Record<string, unknown>,
-	) {
-		super(`${code}${details ? `: ${JSON.stringify(details)}` : ''}`);
-		this.name = 'ImageProcessorError';
-	}
-}
-
-/** Validation errors (4xx) — the input is bad */
-export class ValidationError extends ImageProcessorError {
-	constructor(code: ErrorCode, details?: Record<string, unknown>, status = 400) {
-		super(code, status, details);
-		this.name = 'ValidationError';
-	}
-}
-
-/** Processing errors (5xx) — something went wrong during processing */
-export class ProcessingError extends ImageProcessorError {
-	constructor(code: ErrorCode, details?: Record<string, unknown>, status = 500) {
-		super(code, status, details);
-		this.name = 'ProcessingError';
-	}
-}
-
-/** Timeout errors (504) — processing took too long */
-export class TimeoutError extends ImageProcessorError {
-	constructor(code: ErrorCode, details?: Record<string, unknown>, status = 504) {
-		super(code, status, details);
-		this.name = 'TimeoutError';
-	}
-}
-
-/** Construct the right error subclass for a given error code */
-export function createError(code: ErrorCode, details?: Record<string, unknown>): ImageProcessorError {
+/** Status code mapping for image error codes */
+function statusForCode(code: ErrorCode): number {
 	switch (code) {
 		case 'FILE_TOO_LARGE':
 		case 'DIMENSIONS_TOO_LARGE':
@@ -45,15 +10,29 @@ export function createError(code: ErrorCode, details?: Record<string, unknown>):
 		case 'TOO_MANY_FRAMES':
 		case 'CORRUPTED_FILE':
 		case 'SVG_MALICIOUS':
-			return new ValidationError(code, details);
+			return 400;
 		case 'FILE_NOT_FOUND':
-			return new ValidationError(code, details, 404);
+			return 404;
 		case 'PROCESSING_TIMEOUT':
-			return new TimeoutError(code, details);
+			return 504;
 		case 'CONTAINER_UNAVAILABLE':
-			return new ProcessingError(code, details, 503);
+			return 503;
 		case 'INTERNAL_ERROR':
 		default:
-			return new ProcessingError(code, details);
+			return 500;
 	}
+}
+
+/** Construct a DelightError for a given image error code */
+export function createError(
+	code: ErrorCode,
+	details?: Record<string, unknown>,
+): DelightError {
+	const detail = details ? JSON.stringify(details) : undefined;
+	return new DelightError({
+		message: `${code}${detail ? `: ${detail}` : ''}`,
+		status: statusForCode(code),
+		code,
+		detail,
+	});
 }

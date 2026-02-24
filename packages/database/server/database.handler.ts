@@ -1,6 +1,6 @@
 import type { Handle, RequestEvent } from '@sveltejs/kit';
 import type { Database } from '../schema/schema';
-import { ApiError } from '@delightstack/utilities';
+import { DelightError } from '@delightstack/utilities';
 
 // ---------------------------------------------------------------------------
 // Type helpers
@@ -99,10 +99,7 @@ export interface DatabaseRouteHooks<T extends Database.Table> {
 	 */
 	beforeUpdate?: (
 		ctx: BeforeUpdateContext<T>,
-	) =>
-		| void
-		| Record<string, unknown>
-		| Promise<void | Record<string, unknown>>;
+	) => void | Record<string, unknown> | Promise<void | Record<string, unknown>>;
 
 	/**
 	 * Called before deleting an entity. Throw to reject.
@@ -121,10 +118,7 @@ export interface DatabaseRouteHooks<T extends Database.Table> {
 	 */
 	beforeList?: (
 		ctx: BeforeListContext,
-	) =>
-		| void
-		| Record<string, unknown>
-		| Promise<void | Record<string, unknown>>;
+	) => void | Record<string, unknown> | Promise<void | Record<string, unknown>>;
 
 	/**
 	 * Called after an entity is created. Use for side effects (logging, notifications, etc.).
@@ -169,11 +163,11 @@ export interface DatabaseRouteConfig {
  *   table: personTable,
  *   hooks: {
  *     beforeCreate: ({ data, event }) => {
- *       if (!event.locals.user) throw apiError({ status: 401 });
+ *       if (!event.locals.user) throw new DelightError({ message: 'Unauthorized', status: 401 });
  *     },
  *     beforeUpdate: ({ existing, event }) => {
  *       if (existing.creator_id !== event.locals.user?.id) {
- *         throw apiError({ status: 403 });
+ *         throw new DelightError({ message: 'Forbidden', status: 403 });
  *       }
  *     },
  *   },
@@ -272,7 +266,14 @@ function decodeListQuery(search_params: URLSearchParams): Record<string, unknown
 
 	// Pass through any additional params that may be Orama-specific
 	const known_keys = new Set([
-		'limit', 'offset', 'cursor', 'term', 'q', 'sparse', 'order', 'where',
+		'limit',
+		'offset',
+		'cursor',
+		'term',
+		'q',
+		'sparse',
+		'order',
+		'where',
 	]);
 	for (const [key, value] of search_params.entries()) {
 		if (!known_keys.has(key) && !(key in query)) {
@@ -295,11 +296,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 function errorResponse(error: unknown): Response {
-	const api_error = ApiError.from(error);
-	return new Response(api_error.toJSON(), {
-		status: api_error.status || 500,
-		headers: { 'Content-Type': 'application/json' },
-	});
+	return DelightError.from(error).toResponse();
 }
 
 // ---------------------------------------------------------------------------
@@ -366,7 +363,7 @@ async function handleCreate(
 ): Promise<Response> {
 	const raw_body = await event.request.json().catch(() => undefined);
 	if (!raw_body || typeof raw_body !== 'object') {
-		throw new ApiError('Request body must be a JSON object', 400);
+		throw DelightError.badRequest('Request body must be a JSON object');
 	}
 
 	// Parse through the table's Zod schema for validation
@@ -380,14 +377,22 @@ async function handleCreate(
 			updated_at: Date.now(),
 		});
 		// Strip auto-managed fields — the DB will set them
-		const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = parsed as Record<string, unknown>;
+		const {
+			id: _id,
+			created_at: _ca,
+			updated_at: _ua,
+			...rest
+		} = parsed as Record<string, unknown>;
 		data = rest;
 	} catch (error) {
-		throw ApiError.from(error);
+		throw DelightError.from(error);
 	}
 
 	if (route.hooks?.beforeCreate) {
-		const result = await route.hooks.beforeCreate({ data: data as EntityInput<Database.Table>, event });
+		const result = await route.hooks.beforeCreate({
+			data: data as EntityInput<Database.Table>,
+			event,
+		});
 		if (result && typeof result === 'object') {
 			data = result as Record<string, unknown>;
 		}
@@ -396,7 +401,10 @@ async function handleCreate(
 	const created = await db.create(route.entity, data);
 
 	if (route.hooks?.afterCreate) {
-		await route.hooks.afterCreate({ data: created as Database.Entity<Database.Table>, event });
+		await route.hooks.afterCreate({
+			data: created as Database.Entity<Database.Table>,
+			event,
+		});
 	}
 
 	return jsonResponse(created);
@@ -426,7 +434,7 @@ async function handleUpdate(
 		| Record<string, unknown>
 		| undefined;
 	if (!data || typeof data !== 'object') {
-		throw new ApiError('Request body must be a JSON object', 400);
+		throw DelightError.badRequest('Request body must be a JSON object');
 	}
 
 	// Fetch existing entity for the hook (commonly needed for ownership checks)
@@ -447,7 +455,10 @@ async function handleUpdate(
 	const updated = await db.update(route.entity, id, data);
 
 	if (route.hooks?.afterUpdate) {
-		await route.hooks.afterUpdate({ data: updated as Database.Entity<Database.Table>, event });
+		await route.hooks.afterUpdate({
+			data: updated as Database.Entity<Database.Table>,
+			event,
+		});
 	}
 
 	return jsonResponse(updated);
@@ -483,12 +494,12 @@ async function handleDelete(
 // Sync handler
 // ---------------------------------------------------------------------------
 
-async function handleSync(
-	db: DatabaseRpc,
-	event: RequestEvent,
-): Promise<Response> {
+async function handleSync(db: DatabaseRpc, event: RequestEvent): Promise<Response> {
 	if (!db.sync) {
-		throw new ApiError('Sync not supported by this database', 501);
+		throw new DelightError({
+			message: 'Sync not supported by this database',
+			status: 501,
+		});
 	}
 
 	// Support both POST body and URL search params for the sync query
@@ -532,7 +543,7 @@ async function handleSync(
  *   table: personTable,
  *   hooks: {
  *     beforeCreate: ({ event }) => {
- *       if (!event.locals.user) throw apiError({ status: 401 });
+ *       if (!event.locals.user) throw new DelightError({ message: 'Unauthorized', status: 401 });
  *     },
  *   },
  * });
@@ -570,7 +581,7 @@ export function createDatabaseHandle(options: DatabaseHandleOptions): Handle {
 		if (sync_path && pathname === sync_path && (method === 'POST' || method === 'GET')) {
 			const db = options.getDatabase(event);
 			if (!db) {
-				return errorResponse(new ApiError('Database not available', 500));
+				return errorResponse(new DelightError('Database not available'));
 			}
 			try {
 				return await handleSync(db, event);
@@ -589,9 +600,7 @@ export function createDatabaseHandle(options: DatabaseHandleOptions): Handle {
 		// Get the database instance
 		const db = options.getDatabase(event);
 		if (!db) {
-			return errorResponse(
-				new ApiError('Database not available', 500),
-			);
+			return errorResponse(new DelightError('Database not available'));
 		}
 
 		try {
@@ -599,10 +608,7 @@ export function createDatabaseHandle(options: DatabaseHandleOptions): Handle {
 			if (id === undefined) {
 				if (method === 'GET') return await handleList(db, route, event);
 				if (method === 'POST') return await handleCreate(db, route, event);
-				return jsonResponse(
-					{ message: 'Method not allowed', status: 405 },
-					405,
-				);
+				return jsonResponse({ message: 'Method not allowed', status: 405 }, 405);
 			}
 
 			// Entity routes (with ID): GET = get, PATCH = update, DELETE = delete
@@ -610,10 +616,7 @@ export function createDatabaseHandle(options: DatabaseHandleOptions): Handle {
 			if (method === 'PATCH') return await handleUpdate(db, route, id, event);
 			if (method === 'DELETE') return await handleDelete(db, route, id, event);
 
-			return jsonResponse(
-				{ message: 'Method not allowed', status: 405 },
-				405,
-			);
+			return jsonResponse({ message: 'Method not allowed', status: 405 }, 405);
 		} catch (error) {
 			return errorResponse(error);
 		}

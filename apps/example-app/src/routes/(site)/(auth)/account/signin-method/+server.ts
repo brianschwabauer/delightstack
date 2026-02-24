@@ -1,10 +1,13 @@
 import { env } from '$env/dynamic/private';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { json } from '@sveltejs/kit';
 
 export async function GET({ locals }) {
 	if (!locals.authState.id) {
-		throw apiError({ status: 401, message: `Must be signed in to view sign in methods` });
+		throw new DelightError({
+			message: `Must be signed in to view sign in methods`,
+			status: 401,
+		});
 	}
 	const methods = await locals.auth.listSignInMethods(locals.authState.id);
 	return json(methods);
@@ -12,11 +15,14 @@ export async function GET({ locals }) {
 
 export async function POST({ locals, request, url }) {
 	if (!locals.authState.id) {
-		throw apiError({ status: 401, message: `Must be signed in to add sign in methods` });
+		throw new DelightError({
+			message: `Must be signed in to add sign in methods`,
+			status: 401,
+		});
 	}
 	const method = await request.json<any>();
 	if (!method?.email) {
-		throw apiError({ status: 400, message: `Must provide an email address` });
+		throw new DelightError({ message: `Must provide an email address`, status: 400 });
 	}
 	const { user_auth_id, user_id, decoded_jwt, user_session_id } =
 		await locals.auth.createEmailSignIn(

@@ -1,11 +1,11 @@
 import { requireAuthScope } from '$lib/server';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { json } from '@sveltejs/kit';
 
 export async function GET({ locals, params }) {
 	requireAuthScope('content:read');
 	const { db } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 
 	// TODO: Return the post revision with the given post_id and version (if it exists)
 	const { post_id, version } = params;
@@ -16,7 +16,7 @@ export async function GET({ locals, params }) {
 export async function PUT({ locals, request, params }) {
 	requireAuthScope('content:write');
 	const { db } = locals;
-	if (!db) throw apiError({ status: 500, message: 'Database not found' });
+	if (!db) throw new DelightError({ message: 'Database not found', status: 500 });
 
 	// TODO: Check if the "version" is a valid version of a post revision
 	// TODO: If the version is valid, make that version the current version of the post

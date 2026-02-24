@@ -1,10 +1,10 @@
 import { env } from '$env/dynamic/private';
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 
 export async function POST({ locals, request, url }) {
 	const unsafe_body = await request.json<any>();
 	const email = unsafe_body.email?.trim()?.toLowerCase();
-	if (!email) throw apiError({ status: 400, message: `Email is required` });
+	if (!email) throw new DelightError({ message: `Email is required`, status: 400 });
 
 	const password_reset_token = await locals.auth.createPasswordResetToken(
 		email,
@@ -37,7 +37,10 @@ export async function POST({ locals, request, url }) {
 		}),
 	});
 	if (!response.ok) {
-		throw apiError({ status: 500, message: `Failed to send password reset email` });
+		throw new DelightError({
+			message: `Failed to send password reset email`,
+			status: 500,
+		});
 	}
 	return new Response(null, { status: 204 });
 }

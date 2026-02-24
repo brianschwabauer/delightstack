@@ -3,7 +3,7 @@
 	import { toast } from '$lib/components';
 	import Button from '$lib/form/Button.svelte';
 	import Input from '$lib/form/Input.svelte';
-	import { ApiError } from '@packages/lib';
+	import { DelightError } from '@packages/lib';
 
 	const { data } = $props();
 	let password = $state('');
@@ -20,7 +20,7 @@
 		);
 		if (!response.ok) {
 			const error = await response.json();
-			toast.error(ApiError.from(error).toString());
+			toast.error(DelightError.from(error).toString());
 			throw error;
 		}
 		let path = page.url.searchParams.get('redirect') || '/dashboard';

@@ -1,22 +1,28 @@
-import { apiError } from '@packages/lib';
+import { DelightError } from '@packages/lib';
 import { UpdateOrg } from '@packages/types';
 
 export async function PATCH({ request, locals, params }) {
 	const org_id = params.org_id;
 	if (!locals.db) {
-		throw apiError({ status: 500, message: `Server not available` });
+		throw new DelightError({ message: `Server not available`, status: 500 });
 	}
 	const current_org = await locals.db.getOrg();
 	if (!current_org) {
-		throw apiError({ status: 500, message: `Couldn't find organization database` });
+		throw new DelightError({
+			message: `Couldn't find organization database`,
+			status: 500,
+		});
 	}
 	if (current_org.id !== org_id) {
-		throw apiError({ status: 500, message: `Organization's database id doesn't match` });
+		throw new DelightError({
+			message: `Organization's database id doesn't match`,
+			status: 500,
+		});
 	}
 	if (current_org.owner_id !== locals.authState.id) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be the owner of the organization to update it`,
+			status: 403,
 		});
 	}
 	const org = UpdateOrg.partial().parse(await request.json());
@@ -30,12 +36,12 @@ export async function PATCH({ request, locals, params }) {
 
 export async function DELETE({ locals, platform, params, cookies }) {
 	if (!platform?.env?.SERVER || !locals.auth) {
-		throw apiError({ status: 500, message: `Server not available` });
+		throw new DelightError({ message: `Server not available`, status: 500 });
 	}
 	if (!locals.authState.id || !locals.authState.token) {
-		throw apiError({
-			status: 401,
+		throw new DelightError({
 			message: `You must be signed in to delete an organization`,
+			status: 401,
 		});
 	}
 
@@ -46,27 +52,27 @@ export async function DELETE({ locals, platform, params, cookies }) {
 			.catch(() => {
 				cookies.delete('foreverfamily-session', { path: '/' });
 				cookies.delete('foreverfamily-org', { path: '/' });
-				throw apiError({
-					status: 401,
+				throw new DelightError({
 					message: `You must sign in again to delete this organization`,
+					status: 401,
 				});
 			});
 		if (session.created_at < Date.now() - 1000 * 60 * 12) {
-			throw apiError({
-				status: 401,
+			throw new DelightError({
 				message: `For security reasons, you must have recently signed in to delete your account. Please sign out/in and try again.`,
+				status: 401,
 			});
 		}
 	}
 
 	const org = await locals.auth.getOrg(params.org_id);
 	if (!org) {
-		throw apiError({ status: 404, message: `Organization not found` });
+		throw new DelightError({ message: `Organization not found`, status: 404 });
 	}
 	if (org.owner_id !== locals.authState.id) {
-		throw apiError({
-			status: 403,
+		throw new DelightError({
 			message: `You must be the owner of an organization to delete it`,
+			status: 403,
 		});
 	}
 	await locals.auth.markOrgDeleted(org.id, false);
@@ -76,7 +82,7 @@ export async function DELETE({ locals, platform, params, cookies }) {
 		});
 	} catch (error) {
 		await locals.auth.markOrgDeleted(org.id, true);
-		throw apiError({ status: 500, message: 'Failed to start workflow' });
+		throw new DelightError({ message: 'Failed to start workflow', status: 500 });
 	}
 	if (locals.ws) {
 		locals.ws.broadcast({
