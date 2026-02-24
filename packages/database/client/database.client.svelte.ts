@@ -396,7 +396,7 @@ export class DatabaseSearch<
 	#loading = $state(true);
 	#error = $state<unknown>(null);
 	#mode = $state<'client' | 'server'>('client');
-	#query_state = $state<SearchQueryInput>({});
+	#query_state = $state<Database.SearchQuery<T>>({});
 
 	/** Reactive array of search hits */
 	get results(): SearchHit<T>[] {
@@ -433,11 +433,11 @@ export class DatabaseSearch<
 	}
 
 	/** Get/set the search query. Setting triggers a re-search. */
-	get query(): SearchQueryInput {
+	get query(): Database.SearchQuery<T> {
 		return this.#query_state;
 	}
 
-	set query(q: SearchQueryInput) {
+	set query(q: Database.SearchQuery<T>) {
 		this.#query_state = q;
 		this.#updateSubscription();
 	}
@@ -445,7 +445,7 @@ export class DatabaseSearch<
 	constructor(
 		entity_type: EntityType,
 		worker: Remote<DatabaseWorker>,
-		query?: SearchQueryInput,
+		query?: Database.SearchQuery<T>,
 	) {
 		this.entity_type = entity_type;
 		this.#worker = worker;
@@ -765,7 +765,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** Create a reactive search that auto-updates when the index changes. */
 	search<K extends keyof T & string>(
 		entity_type: K,
-		query?: SearchQueryInput,
+		query?: Database.SearchQuery<T[K]>,
 	): DatabaseSearch<T[K], K> {
 		const worker = this.#getWorker();
 		return new DatabaseSearch(entity_type, worker, query);
@@ -774,11 +774,14 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** One-shot list — always hits server. */
 	async list<K extends keyof T & string>(
 		entity_type: K,
-		query?: SearchQueryInput,
+		query?: Database.SearchQuery<T[K]>,
 	): Promise<SearchResult<T[K]>> {
 		const worker = this.#getWorker();
 		try {
-			return (await worker.list(entity_type, query ?? {})) as SearchResult<T[K]>;
+			return (await worker.list(
+				entity_type,
+				(query ?? {}) as SearchQueryInput,
+			)) as SearchResult<T[K]>;
 		} catch (error) {
 			throw DelightError.fromWorker(error) ?? error;
 		}
