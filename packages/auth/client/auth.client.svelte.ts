@@ -187,18 +187,15 @@ export class AuthClient<P extends string = string> {
 		return (this.org.role & (1 << bit)) !== 0;
 	}
 
-	/** @deprecated Use `hasPermission()` instead */
-	isAllowed(permission: P): boolean {
-		return this.hasPermission(permission);
-	}
-
 	/**
 	 * Merge updates into the user preferences. Set a value to null/undefined to remove it.
 	 * Preferences persist across signouts and are synced to the user DB for cross-device access.
 	 * - **Browser**: sends PATCH /preference to persist to both signed cookie and user DB.
 	 * - **Server**: updates local state only (for SSR rendering). Use `locals.setPreferences()` to persist.
 	 */
-	async setPreferences(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
+	async setPreferences(
+		updates: Record<string, unknown>,
+	): Promise<Record<string, unknown>> {
 		if (typeof window === 'undefined') {
 			const merged = { ...this.#preferences };
 			for (const [key, value] of Object.entries(updates)) {
@@ -249,7 +246,10 @@ export class AuthClient<P extends string = string> {
 			}
 			return target === this.#org_id ? this.#org_state : {};
 		}
-		const result = await this.patch<Record<string, unknown>>(`/org/${target}/state`, updates);
+		const result = await this.patch<Record<string, unknown>>(
+			`/org/${target}/state`,
+			updates,
+		);
 		if (target === this.#org_id) {
 			this.#org_state = result;
 		}
@@ -394,9 +394,7 @@ export class AuthClient<P extends string = string> {
 				this.startAutoRefresh();
 				return result;
 			},
-			checkStrength: async (
-				password: string,
-			): Promise<{ strong: boolean }> => {
+			checkStrength: async (password: string): Promise<{ strong: boolean }> => {
 				return this.post('/password/check', { password });
 			},
 		} as const,
@@ -405,9 +403,7 @@ export class AuthClient<P extends string = string> {
 			requestVerification: async (): Promise<void> => {
 				await this.post<void>('/email/verify', undefined);
 			},
-			checkAvailability: async (
-				email: string,
-			): Promise<{ available: boolean }> => {
+			checkAvailability: async (email: string): Promise<{ available: boolean }> => {
 				const params = new URLSearchParams({ email });
 				return this.get(`/email/check?${params}`);
 			},
