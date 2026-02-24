@@ -275,6 +275,10 @@ export class DatabaseWorker {
 
 			let any_data = false;
 
+			// Track cumulative inserts per entity across all sync pages
+			const cumulative_inserts: Record<string, number> = {};
+			for (const t of client_types) cumulative_inserts[t] = 0;
+
 			for (const entity_type of client_types) {
 				const state = this.#entities[entity_type];
 				const entity_result = body.entity[entity_type];
@@ -330,10 +334,9 @@ export class DatabaseWorker {
 						// Schema mismatch or corrupt data
 					}
 
-					// Check threshold
-					const total_inserted =
-						(entity_result.created?.length ?? 0) + (entity_result.updated?.length ?? 0);
-					if (total_inserted >= state.threshold) {
+					// Check cumulative threshold across all pages
+					cumulative_inserts[entity_type] += inserts.length;
+					if (cumulative_inserts[entity_type] >= state.threshold) {
 						await this.#switchToServerMode(entity_type);
 						continue;
 					}
@@ -834,6 +837,21 @@ export class DatabaseWorker {
 				data,
 				updated_at: Date.now(),
 			} satisfies CachedEntity);
+		}
+
+		// Update Orama search index if in client search mode
+		if (state.orama && state.search_mode === 'client') {
+			try {
+				removeFromOrama(state.orama, String(id));
+			} catch {
+				/* may not exist */
+			}
+			try {
+				insertIntoOrama(state.orama, data);
+			} catch {
+				/* ignore */
+			}
+			this.#notifySubscribers([entity_type]);
 		}
 
 		return data;

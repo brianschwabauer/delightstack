@@ -107,7 +107,7 @@ export class EntityState<
 	#loaded = $state(false);
 
 	#has_changes = $derived.by(() => {
-		if (!this.#server_value || !this.#value) return false;
+		if (!this.#server_value) return false;
 		return !deepEqual(this.#value, this.#server_value);
 	});
 
@@ -311,6 +311,9 @@ export class EntityState<
 		}
 		// Fire change hook
 		this.#onChange?.({ type: 'delete', id: this.#id });
+		// Clear local state
+		this.#value = {} as Database.Entity<T>;
+		this.#server_value = null;
 		// Remove from cache
 		EntityState.#cache.delete(`${this.entity_type}:${this.#id}`);
 	}
