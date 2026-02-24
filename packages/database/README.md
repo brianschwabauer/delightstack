@@ -11,6 +11,7 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
 - **Transactions** — Batch multiple create/update/delete/exec operations into a single atomic transaction.
 - **Incremental sync** — `sync()` returns only the changes since a given timestamp, enabling efficient client-side search index mirroring.
 - **Form generation** — Schema definitions automatically produce HTML form field attributes (type, required, min, max, pattern, placeholder, label).
+- **Declarative API routes** — Define entity routes with lifecycle hooks instead of writing repetitive CRUD boilerplate. Plug into SvelteKit's `handle` via `createDatabaseHandle()`.
 - **Two server classes** — `DatabaseServer` for schema-driven CRUD with search, `SqlServer` for raw SQL when you need full control.
 
 ## Architecture
@@ -477,6 +478,151 @@ sql.exec('SELECT COUNT(*) as count FROM user');
 | Custom auth flows             | `SqlServer`      |
 | Complex joins or aggregations | `SqlServer`      |
 
+## Database Handler (SvelteKit)
+
+The database handler eliminates repetitive CRUD boilerplate by letting you define entity routes declaratively with lifecycle hooks. Instead of writing `+server.ts` files for every entity, define a route and its auth guards in one place.
+
+### Setup
+
+```typescript
+// hooks.server.ts
+import { sequence } from '@sveltejs/kit/hooks';
+import { createDatabaseHandle, defineRoute } from '@delightstack/database';
+import { personTable, postTable } from './tables';
+
+const personRoute = defineRoute({
+  route: '/api/person',
+  entity: 'person',
+  table: personTable,
+  hooks: {
+    beforeCreate: ({ event }) => {
+      if (!event.locals.user) throw apiError({ status: 401 });
+    },
+    beforeUpdate: ({ existing, event }) => {
+      if (existing.creator_id !== event.locals.user?.id) {
+        throw apiError({ status: 403, message: 'Not authorized' });
+      }
+    },
+    beforeDelete: ({ existing, event }) => {
+      if (existing.creator_id !== event.locals.user?.id) {
+        throw apiError({ status: 403, message: 'Not authorized' });
+      }
+    },
+  },
+});
+
+const postRoute = defineRoute({
+  route: '/api/post',
+  entity: 'post',
+  table: postTable,
+});
+
+const databaseHandle = createDatabaseHandle({
+  getDatabase: (event) => event.locals.db,
+  routes: [personRoute, postRoute],
+});
+
+export const handle = sequence(authHandle, appHandle, databaseHandle);
+```
+
+This replaces all the `+server.ts` files you would otherwise need for `/api/person`, `/api/person/[id]`, `/api/post`, and `/api/post/[id]`.
+
+### Route Mapping
+
+For each registered route (e.g. `/api/person`), the handler maps HTTP methods to CRUD operations:
+
+| Method   | Path               | Operation     | DB Call                    |
+| -------- | ------------------ | ------------- | -------------------------- |
+| `GET`    | `/api/person`      | **list**      | `db.list('person', query)` |
+| `POST`   | `/api/person`      | **create**    | `db.create('person', data)`|
+| `GET`    | `/api/person/:id`  | **get**       | `db.get('person', id)`     |
+| `PATCH`  | `/api/person/:id`  | **update**    | `db.update('person', id, data)` |
+| `DELETE` | `/api/person/:id`  | **delete**    | `db.delete('person', id)`  |
+
+Any other method returns `405 Method Not Allowed`. URLs that don't match any route are passed through to SvelteKit's normal routing via `resolve(event)`.
+
+### Lifecycle Hooks
+
+All hooks receive an `event` property (the SvelteKit `RequestEvent`), giving you access to `event.locals`, `event.url`, `event.params`, etc.
+
+**Before hooks** — throw to reject the operation. Optionally return modified data.
+
+| Hook             | Context Properties          | Notes |
+| ---------------- | --------------------------- | ----- |
+| `beforeCreate`   | `data`, `event`             | `data` is parsed via `table.parse()`. Return an object to override. |
+| `beforeUpdate`   | `id`, `data`, `existing`, `event` | `existing` is pre-fetched from DB. `data` is the raw partial update. Return an object to override. |
+| `beforeDelete`   | `id`, `existing`, `event`   | `existing` is pre-fetched from DB. |
+| `beforeGet`      | `id`, `event`               | Lightweight guard — entity is not pre-fetched. |
+| `beforeList`     | `query`, `event`            | `query` is decoded from URL search params. Return an object to override. |
+
+**After hooks** — for side effects (logging, notifications, cache invalidation).
+
+| Hook           | Context Properties | Notes |
+| -------------- | ------------------ | ----- |
+| `afterCreate`  | `data`, `event`    | `data` is the created entity from the DB. |
+| `afterUpdate`  | `data`, `event`    | `data` is the updated entity from the DB. |
+| `afterDelete`  | `id`, `event`      | Entity has been deleted. |
+
+### Type Safety
+
+`defineRoute()` is generic — the table type flows into all hook contexts:
+
+```typescript
+const personRoute = defineRoute({
+  route: '/api/person',
+  entity: 'person',
+  table: personTable,
+  hooks: {
+    beforeUpdate: ({ existing, data, event }) => {
+      // 'existing' is typed as Database.Entity<typeof personTable>
+      // TypeScript knows about existing.creator_id, existing.name, etc.
+      console.log(existing.name);
+    },
+  },
+});
+```
+
+### List Query Parameters
+
+`GET` requests to collection routes decode URL search params into a search query:
+
+| Param    | Example                          | Description |
+| -------- | -------------------------------- | ----------- |
+| `limit`  | `?limit=20`                      | Max results to return |
+| `offset` | `?offset=40`                     | Skip N results |
+| `cursor` | `?cursor=abc123`                 | Cursor-based pagination token |
+| `term`   | `?term=alice`                    | Full-text search term |
+| `q`      | `?q=alice`                       | Alias for `term` |
+| `order`  | `?order=name:ASC,created_at:DESC`| Comma-separated `field:direction` pairs |
+| `where`  | `?where={"role":"admin"}`        | JSON-encoded Orama WHERE clause |
+| `sparse` | `?sparse=false`                  | `false` for full entities, `true` for search fields only |
+
+### Modifying Data in Hooks
+
+Before hooks can optionally return modified data. If void is returned, the original data is used:
+
+```typescript
+beforeCreate: ({ data, event }) => {
+  // Inject creator_id from the session
+  return { ...data, creator_id: event.locals.user.id };
+},
+
+beforeList: ({ query, event }) => {
+  // Restrict results to the current user's data
+  return { ...query, where: { creator_id: event.locals.user.id } };
+},
+```
+
+### Error Handling
+
+All errors are normalized through `ApiError.from()` and returned as JSON responses:
+
+```json
+{ "message": "Not authorized", "status": 403 }
+```
+
+If `getDatabase()` returns `undefined` (e.g. no org selected), the handler returns a 500 error.
+
 ## Form Generation
 
 The schema automatically produces form field attributes:
@@ -542,6 +688,10 @@ Offset-based pagination (`OFFSET 100 LIMIT 10`) degrades on large tables because
 | `DatabaseSyncResponse`            | Type for sync response data                                         |
 | `SqlEntityQuery`                  | Type for SqlServer query parameters                                 |
 | `SqlEntityQueryWhereClause`       | Type for SqlServer WHERE clause                                     |
+| `createDatabaseHandle`            | SvelteKit Handle factory for declarative CRUD routes                |
+| `defineRoute`                     | Type-safe route definition helper for `createDatabaseHandle`        |
+| `DatabaseRouteConfig`             | Type for a configured entity route                                  |
+| `DatabaseRouteHooks`              | Type for lifecycle hooks on an entity route                         |
 
 ## Project Structure
 
@@ -552,6 +702,7 @@ packages/database/
     schema.ts                 # Schema definition system (field types, validators, form generation)
   server/
     index.ts                  # Server entry — re-exports server classes
+    database.handler.ts       # SvelteKit Handle for declarative CRUD routes with hooks
     db.server.ts              # DatabaseServer class (CRUD, search, sync, transactions)
     db.server.test.ts         # Tests for DatabaseServer
     sql.server.ts             # SqlServer class (raw SQL wrapper)
