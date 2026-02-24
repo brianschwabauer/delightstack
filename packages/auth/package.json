@@ -15,11 +15,13 @@
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251120.0",
+		"@sveltejs/vite-plugin-svelte": "^7.0.0",
+		"svelte": "^5.53.3",
 		"typescript": "^5.8.3"
 	},
 	"dependencies": {
-		"@delightstack/utilities": "workspace:*",
 		"@delightstack/database": "workspace:*",
+		"@delightstack/utilities": "workspace:*",
 		"argon2-wasm-edge": "^1.0.23",
 		"zod": "^4.1.12"
 	}
