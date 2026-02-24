@@ -1,7 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { ServerLoadEvent } from '@sveltejs/kit';
 import type { AuthLocals } from '../server/auth.handler';
-import type { AuthConfig } from '../server/auth.config';
 import { decodePermissions } from '../types';
 
 interface GuardOptions {
@@ -14,15 +13,17 @@ interface GuardOptions {
  *
  * @example
  * ```ts
- * const { requireAuth, requireOrg, requirePermission } = createAuthGuards(authConfig);
+ * const { requireAuth, requireOrg, requirePermission } = createAuthGuards(
+ *   ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
+ * );
  *
  * // In +layout.server.ts:
  * export const load = requireAuth(({ locals }) => ({ user: locals.user }));
  * export const load = requirePermission('org:admin', ({ locals }) => ({ user: locals.user }));
  * ```
  */
-export function createAuthGuards<const Config extends AuthConfig>(config: Config) {
-	type Permission = Config['permissions'][number];
+export function createAuthGuards<const P extends string>(permissions: readonly P[]) {
+	type Permission = P;
 
 	function requireAuth<T>(
 		loadFn: (event: ServerLoadEvent & { locals: AuthLocals }) => T | Promise<T>,
@@ -80,8 +81,8 @@ export function createAuthGuards<const Config extends AuthConfig>(config: Config
 			if (!locals.org_id || !locals.org) {
 				throw redirect(302, '/org/select');
 			}
-			const permissions = decodePermissions(config.permissions, locals.org.role);
-			if (!permissions.includes(permission)) {
+			const decoded = decodePermissions(permissions, locals.org.role);
+			if (!decoded.includes(permission)) {
 				throw redirect(302, options?.forbidden_redirect ?? '/403');
 			}
 			return loadFn(event as ServerLoadEvent & { locals: AuthLocals });

@@ -324,7 +324,7 @@ All properties are reactive via `$state`/`$derived` runes:
 
 ### API Methods
 
-All API methods are nested under `.api` and return `AuthResult<T>`:
+All API methods are nested under `.api` and throw `AuthClientError` on failure:
 
 ```typescript
 // Sign in
@@ -791,7 +791,6 @@ auth.setUserPreferences(user_id, { theme: 'dark' });
 | `AuthClient`      | Reactive auth state + API methods class |
 | `AuthClientData`  | Serialized form for SSR hydration       |
 | `AuthClientError` | Error shape from API methods            |
-| `AuthResult<T>`   | Typed result wrapper (`ok`/`error`)     |
 
 ### `@delightstack/auth/sveltekit`
 

@@ -1,16 +1,13 @@
 import type { SessionToken, UserSession, UserSignInMethod, OauthAccount } from '../types';
 import { resolveErrorCode, type AuthErrorCode } from '../types/error.type';
 
-/** Error shape returned by AuthClient API methods */
+/** Error shape thrown by AuthClient API methods */
 export interface AuthClientError {
 	code: AuthErrorCode;
 	message: string;
 	status: number;
 	detail?: string;
 }
-
-/** Typed result from API methods */
-export type AuthResult<T> = { ok: true; data: T } | { ok: false; error: AuthClientError };
 
 /** Serialized form for SSR hydration */
 export interface AuthClientData {
@@ -27,6 +24,7 @@ export interface AuthClientData {
  * A single reactive class combining auth state AND API methods.
  * Uses Svelte 5 `$state()` / `$derived()` runes.
  * State properties are at the top level; all API operations are nested under `.api`.
+ * API methods throw `AuthClientError` on failure and return data directly on success.
  *
  * @example
  * ```ts
@@ -37,8 +35,8 @@ export interface AuthClientData {
  * // In components:
  * auth.signed_in  // reactive boolean
  * auth.name       // reactive string
- * auth.api.signIn.email({ email, password })
- * auth.api.signOut()
+ * await auth.api.signIn.email({ email, password })
+ * await auth.api.signOut()
  * ```
  */
 export class AuthClient<P extends string = string> {
@@ -126,6 +124,7 @@ export class AuthClient<P extends string = string> {
 	private refresh_threshold_ms: number;
 	private refresh_timer: ReturnType<typeof setTimeout> | null = null;
 	private fetchFn: typeof fetch;
+	private onRefreshFailed?: (error: AuthClientError) => void;
 
 	constructor(
 		data?: AuthClientData,
@@ -133,11 +132,13 @@ export class AuthClient<P extends string = string> {
 			base_path?: string;
 			/**
 			 * Permission names for bitwise role encoding (same array passed to auth config).
-			 * Required for `isAllowed()` to work. Array index = bit position.
+			 * Required for `hasPermission()` to work. Array index = bit position.
 			 */
 			permissions?: readonly P[];
 			refresh_threshold_ms?: number;
 			fetch?: typeof fetch;
+			/** Called when auto-refresh fails (e.g. session expired). Use to redirect to login. */
+			onRefreshFailed?: (error: AuthClientError) => void;
 		},
 	) {
 		this.#jwt = data?.jwt ?? null;
@@ -149,6 +150,7 @@ export class AuthClient<P extends string = string> {
 		this.permissions = options?.permissions ?? (data?.permissions as readonly P[]) ?? [];
 		this.refresh_threshold_ms = options?.refresh_threshold_ms ?? 600_000;
 		this.fetchFn = options?.fetch ?? fetch;
+		this.onRefreshFailed = options?.onRefreshFailed;
 
 		if (this.#session) this.startAutoRefresh();
 	}
@@ -168,26 +170,35 @@ export class AuthClient<P extends string = string> {
 	/** Creates an AuthClient from serialized data (used by svelte's +layout files) */
 	static from<const P extends string = string>(
 		data: AuthClientData,
-		options?: { base_path?: string; permissions?: readonly P[] },
+		options?: {
+			base_path?: string;
+			permissions?: readonly P[];
+			onRefreshFailed?: (error: AuthClientError) => void;
+		},
 	): AuthClient<P> {
 		return new AuthClient<P>(data, options);
 	}
 
 	/** Checks if the current org role includes the given permission */
-	isAllowed(permission: P): boolean {
+	hasPermission(permission: P): boolean {
 		if (!this.org) return false;
 		const bit = this.permissions.indexOf(permission);
 		if (bit === -1) return false;
 		return (this.org.role & (1 << bit)) !== 0;
 	}
 
+	/** @deprecated Use `hasPermission()` instead */
+	isAllowed(permission: P): boolean {
+		return this.hasPermission(permission);
+	}
+
 	/**
 	 * Merge updates into the user preferences. Set a value to null/undefined to remove it.
 	 * Preferences persist across signouts and are synced to the user DB for cross-device access.
 	 * - **Browser**: sends PATCH /preference to persist to both signed cookie and user DB.
-	 * - **Server**: updates local state only. Use `locals.setPreferences()` to persist.
+	 * - **Server**: updates local state only (for SSR rendering). Use `locals.setPreferences()` to persist.
 	 */
-	async setPreferences(updates: Record<string, unknown>): Promise<AuthResult<Record<string, unknown>>> {
+	async setPreferences(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
 		if (typeof window === 'undefined') {
 			const merged = { ...this.#preferences };
 			for (const [key, value] of Object.entries(updates)) {
@@ -198,12 +209,10 @@ export class AuthClient<P extends string = string> {
 				}
 			}
 			this.#preferences = merged;
-			return { ok: true, data: this.#preferences };
+			return this.#preferences;
 		}
 		const result = await this.patch<Record<string, unknown>>('/preference', updates);
-		if (result.ok) {
-			this.#preferences = result.data;
-		}
+		this.#preferences = result;
 		return result;
 	}
 
@@ -212,22 +221,19 @@ export class AuthClient<P extends string = string> {
 	 * Defaults to the current org if `org_id` is omitted.
 	 * Org state is cleared on signout and NOT synced to DB — intended for caching org data.
 	 * - **Browser**: sends PATCH /org/:id/state to persist the signed cookie.
-	 * - **Server**: updates local state only. Use `locals.setOrgState()` to persist.
+	 * - **Server**: updates local state only (for SSR rendering). Use `locals.setOrgState()` to persist.
 	 */
 	async setOrgState(
 		updates: Record<string, unknown>,
 		org_id?: string,
-	): Promise<AuthResult<Record<string, unknown>>> {
+	): Promise<Record<string, unknown>> {
 		const target = org_id ?? this.#org_id;
 		if (!target) {
-			return {
-				ok: false,
-				error: {
-					code: 'unknown',
-					message: 'No organization selected',
-					status: 400,
-				},
-			};
+			throw {
+				code: 'unknown',
+				message: 'No organization selected',
+				status: 400,
+			} satisfies AuthClientError;
 		}
 		if (typeof window === 'undefined') {
 			if (target === this.#org_id) {
@@ -241,11 +247,11 @@ export class AuthClient<P extends string = string> {
 				}
 				this.#org_state = merged;
 			}
-			return { ok: true, data: target === this.#org_id ? this.#org_state : {} };
+			return target === this.#org_id ? this.#org_state : {};
 		}
 		const result = await this.patch<Record<string, unknown>>(`/org/${target}/state`, updates);
-		if (result.ok && target === this.#org_id) {
-			this.#org_state = result.data;
+		if (target === this.#org_id) {
+			this.#org_state = result;
 		}
 		return result;
 	}
@@ -256,34 +262,24 @@ export class AuthClient<P extends string = string> {
 			email: async (data: {
 				email: string;
 				password: string;
-			}): Promise<
-				AuthResult<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-					org_id?: string;
-				}>
-			> => {
+			}): Promise<{
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+				org_id?: string;
+			}> => {
 				const result = await this.post<{
 					jwt: string;
 					decoded_jwt: SessionToken<'auth'>;
 					org_id?: string;
 				}>('/signin/email', data);
-				if (result.ok) {
-					this.#jwt = result.data.jwt;
-					this.#session = result.data.decoded_jwt;
-					if (result.data.org_id) this.#org_id = result.data.org_id;
-					this.startAutoRefresh();
-				}
+				this.#jwt = result.jwt;
+				this.#session = result.decoded_jwt;
+				if (result.org_id) this.#org_id = result.org_id;
+				this.startAutoRefresh();
 				return result;
 			},
-			emailMagicLink: async (data: { email: string }): Promise<AuthResult<void>> => {
-				const res = await this.fetchFn(`${this.base_path}/signin/email/magic`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(data),
-				});
-				if (!res.ok) return { ok: false, error: await this.parseError(res) };
-				return { ok: true, data: undefined };
+			emailMagicLink: async (data: { email: string }): Promise<void> => {
+				await this.post<void>('/signin/email/magic', data);
 			},
 			oauth: (vendor: string, options?: { redirect_to?: string }) => {
 				const params = new URLSearchParams();
@@ -299,182 +295,155 @@ export class AuthClient<P extends string = string> {
 				password?: string;
 				org_name?: string;
 				invitation_id?: string;
-			}): Promise<AuthResult<{ jwt: string; decoded_jwt: SessionToken<'auth'> }>> => {
+			}): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
 				const result = await this.post<{
 					jwt: string;
 					decoded_jwt: SessionToken<'auth'>;
 				}>('/signup/email', data);
-				if (result.ok) {
-					this.#jwt = result.data.jwt;
-					this.#session = result.data.decoded_jwt;
-					this.startAutoRefresh();
-				}
+				this.#jwt = result.jwt;
+				this.#session = result.decoded_jwt;
+				this.startAutoRefresh();
 				return result;
 			},
 		} as const,
 
-		signOut: async (): Promise<AuthResult<void>> => {
-			const res = await this.fetchFn(`${this.base_path}/signout`, {
-				method: 'POST',
-			});
-			if (!res.ok) return { ok: false, error: await this.parseError(res) };
+		signOut: async (): Promise<void> => {
+			await this.post<void>('/signout', undefined);
 			this.#jwt = null;
 			this.#session = null;
 			this.#org_id = null;
 			// Preferences intentionally kept — they persist across signouts (e.g. dark mode)
 			this.#org_state = {};
 			this.stopAutoRefresh();
-			return { ok: true, data: undefined };
 		},
 
 		session: {
-			get: async (): Promise<
-				AuthResult<{
-					session: SessionToken<'auth'>;
-					user: {
-						id: string;
-						name: string;
-						email: string;
-						verified: boolean;
-					};
-					org_id: string | null;
-				}>
-			> => {
+			get: async (): Promise<{
+				session: SessionToken<'auth'>;
+				user: {
+					id: string;
+					name: string;
+					email: string;
+					verified: boolean;
+				};
+				org_id: string | null;
+			}> => {
 				return this.get('/session');
 			},
-			refresh: async (): Promise<
-				AuthResult<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-					org_id?: string;
-				}>
-			> => {
+			refresh: async (): Promise<{
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+				org_id?: string;
+			}> => {
 				const result = await this.post<{
 					jwt: string;
 					decoded_jwt: SessionToken<'auth'>;
 					org_id?: string;
 				}>('/session/refresh', undefined);
-				if (result.ok) {
-					this.#jwt = result.data.jwt;
-					this.#session = result.data.decoded_jwt;
-					if (result.data.org_id) this.#org_id = result.data.org_id;
-					this.startAutoRefresh();
-				}
+				this.#jwt = result.jwt;
+				this.#session = result.decoded_jwt;
+				if (result.org_id) this.#org_id = result.org_id;
+				this.startAutoRefresh();
 				return result;
 			},
-			list: async (): Promise<
-				AuthResult<{
-					list: UserSession[];
-					count: number;
-					hasMore: boolean;
-				}>
-			> => {
-				return this.get('/session/list');
+			list: async (options?: {
+				offset?: number;
+				limit?: number;
+			}): Promise<{
+				list: UserSession[];
+				count: number;
+				hasMore: boolean;
+			}> => {
+				const params = new URLSearchParams();
+				if (options?.offset != null) params.set('offset', String(options.offset));
+				if (options?.limit != null) params.set('limit', String(options.limit));
+				const qs = params.toString();
+				return this.get(`/session/list${qs ? `?${qs}` : ''}`);
 			},
-			revoke: async (session_id: string): Promise<AuthResult<void>> => {
+			revoke: async (session_id: string): Promise<void> => {
 				return this.delete(`/session/${session_id}`);
 			},
 		} as const,
 
 		password: {
-			reset: async (email: string): Promise<AuthResult<void>> => {
-				const res = await this.fetchFn(`${this.base_path}/password/reset`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ email }),
-				});
-				if (!res.ok) return { ok: false, error: await this.parseError(res) };
-				return { ok: true, data: undefined };
+			reset: async (email: string): Promise<void> => {
+				await this.post<void>('/password/reset', { email });
 			},
 			confirmReset: async (
 				token: string,
 				password: string,
-			): Promise<AuthResult<{ jwt: string; decoded_jwt: SessionToken<'auth'> }>> => {
+			): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
 				const result = await this.post<{
 					jwt: string;
 					decoded_jwt: SessionToken<'auth'>;
 				}>('/password/reset/confirm', { token, password });
-				if (result.ok) {
-					this.#jwt = result.data.jwt;
-					this.#session = result.data.decoded_jwt;
-					this.startAutoRefresh();
-				}
+				this.#jwt = result.jwt;
+				this.#session = result.decoded_jwt;
+				this.startAutoRefresh();
 				return result;
 			},
 			change: async (
 				password: string,
-			): Promise<AuthResult<{ jwt: string; decoded_jwt: SessionToken<'auth'> }>> => {
+			): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
 				const result = await this.patch<{
 					jwt: string;
 					decoded_jwt: SessionToken<'auth'>;
 				}>('/password', { password });
-				if (result.ok) {
-					this.#jwt = result.data.jwt;
-					this.#session = result.data.decoded_jwt;
-					this.startAutoRefresh();
-				}
+				this.#jwt = result.jwt;
+				this.#session = result.decoded_jwt;
+				this.startAutoRefresh();
 				return result;
 			},
 			checkStrength: async (
 				password: string,
-			): Promise<AuthResult<{ strong: boolean }>> => {
+			): Promise<{ strong: boolean }> => {
 				return this.post('/password/check', { password });
 			},
 		} as const,
 
 		email: {
-			requestVerification: async (): Promise<AuthResult<void>> => {
-				const res = await this.fetchFn(`${this.base_path}/email/verify`, {
-					method: 'POST',
-				});
-				if (!res.ok) return { ok: false, error: await this.parseError(res) };
-				return { ok: true, data: undefined };
+			requestVerification: async (): Promise<void> => {
+				await this.post<void>('/email/verify', undefined);
 			},
 			checkAvailability: async (
 				email: string,
-			): Promise<AuthResult<{ available: boolean }>> => {
+			): Promise<{ available: boolean }> => {
 				const params = new URLSearchParams({ email });
 				return this.get(`/email/check?${params}`);
 			},
 		} as const,
 
 		user: {
-			get: async (): Promise<
-				AuthResult<{
-					id: string;
-					name: string;
-					image?: string;
-					created_at: number;
-				}>
-			> => {
+			get: async (): Promise<{
+				id: string;
+				name: string;
+				image?: string;
+				created_at: number;
+			}> => {
 				return this.get('/user');
 			},
 			update: async (data: {
 				name?: string;
 				image?: string;
-			}): Promise<
-				AuthResult<{
-					id: string;
-					name: string;
-					image?: string;
-					created_at: number;
-				}>
-			> => {
+			}): Promise<{
+				id: string;
+				name: string;
+				image?: string;
+				created_at: number;
+			}> => {
 				return this.patch('/user', data);
 			},
-			delete: async (): Promise<AuthResult<void>> => {
+			delete: async (): Promise<void> => {
 				return this.delete('/user');
 			},
-			listSignInMethods: async (): Promise<
-				AuthResult<{
-					list: UserSignInMethod[];
-					count: number;
-					hasMore: boolean;
-				}>
-			> => {
+			listSignInMethods: async (): Promise<{
+				list: UserSignInMethod[];
+				count: number;
+				hasMore: boolean;
+			}> => {
 				return this.get('/user/signin-method');
 			},
-			removeSignInMethod: async (method_id: string): Promise<AuthResult<void>> => {
+			removeSignInMethod: async (method_id: string): Promise<void> => {
 				return this.delete(`/user/signin-method/${method_id}`);
 			},
 		} as const,
@@ -482,97 +451,85 @@ export class AuthClient<P extends string = string> {
 		org: {
 			create: async (data: {
 				name: string;
-			}): Promise<
-				AuthResult<{
-					org_id: string;
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-				}>
-			> => {
+			}): Promise<{
+				org_id: string;
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+			}> => {
 				const result = await this.post<{
 					org_id: string;
 					jwt: string;
 					decoded_jwt: SessionToken<'auth'>;
 				}>('/org', data);
-				if (result.ok) {
-					this.#jwt = result.data.jwt;
-					this.#session = result.data.decoded_jwt;
-					this.#org_id = result.data.org_id;
-					this.startAutoRefresh();
-				}
+				this.#jwt = result.jwt;
+				this.#session = result.decoded_jwt;
+				this.#org_id = result.org_id;
+				this.startAutoRefresh();
 				return result;
 			},
 			switch: async (
 				org_id: string,
-			): Promise<
-				AuthResult<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-					org_id: string;
-				}>
-			> => {
+			): Promise<{
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+				org_id: string;
+			}> => {
 				const result = await this.post<{
 					jwt: string;
 					decoded_jwt: SessionToken<'auth'>;
 					org_id: string;
 				}>('/org/switch', { org_id });
-				if (result.ok) {
-					this.#jwt = result.data.jwt;
-					this.#session = result.data.decoded_jwt;
-					this.#org_id = result.data.org_id;
-				}
+				this.#jwt = result.jwt;
+				this.#session = result.decoded_jwt;
+				this.#org_id = result.org_id;
 				return result;
 			},
 			update: async (
 				org_id: string,
 				data: { name?: string; owner_id?: string },
-			): Promise<AuthResult<void>> => {
+			): Promise<void> => {
 				return this.patch(`/org/${org_id}`, data);
 			},
-			delete: async (org_id: string): Promise<AuthResult<void>> => {
+			delete: async (org_id: string): Promise<void> => {
 				return this.delete(`/org/${org_id}`);
 			},
 			listUsers: async (
 				org_id: string,
-			): Promise<
-				AuthResult<{
-					list: Array<{
-						id: string;
-						name: string;
-						permission: number;
-						image?: string;
-					}>;
-					count: number;
-					hasMore: boolean;
-				}>
-			> => {
+			): Promise<{
+				list: Array<{
+					id: string;
+					name: string;
+					permission: number;
+					image?: string;
+				}>;
+				count: number;
+				hasMore: boolean;
+			}> => {
 				return this.get(`/org/${org_id}/user`);
 			},
 			updateUserPermission: async (
 				org_id: string,
 				user_id: string,
 				permission: number | string[],
-			): Promise<AuthResult<void>> => {
+			): Promise<void> => {
 				return this.patch(`/org/${org_id}/user/${user_id}`, {
 					permission,
 				});
 			},
-			removeUser: async (org_id: string, user_id: string): Promise<AuthResult<void>> => {
+			removeUser: async (org_id: string, user_id: string): Promise<void> => {
 				return this.delete(`/org/${org_id}/user/${user_id}`);
 			},
 		} as const,
 
 		invitation: {
-			list: async (): Promise<
-				AuthResult<{
-					list: Array<Record<string, unknown>>;
-					count: number;
-					hasMore: boolean;
-				}>
-			> => {
+			list: async (): Promise<{
+				list: Array<Record<string, unknown>>;
+				count: number;
+				hasMore: boolean;
+			}> => {
 				return this.get('/invitation');
 			},
-			get: async (id: string): Promise<AuthResult<Record<string, unknown>>> => {
+			get: async (id: string): Promise<Record<string, unknown>> => {
 				return this.get(`/invitation/${id}`);
 			},
 			create: async (data: {
@@ -580,37 +537,33 @@ export class AuthClient<P extends string = string> {
 				permission: number;
 				max_redemptions?: number;
 				expires_at?: number;
-			}): Promise<AuthResult<Record<string, unknown>>> => {
+			}): Promise<Record<string, unknown>> => {
 				return this.post('/invitation', data);
 			},
 			update: async (
 				id: string,
 				data: { permission?: number; max_redemptions?: number },
-			): Promise<AuthResult<Record<string, unknown>>> => {
+			): Promise<Record<string, unknown>> => {
 				return this.patch(`/invitation/${id}`, data);
 			},
-			delete: async (id: string): Promise<AuthResult<void>> => {
+			delete: async (id: string): Promise<void> => {
 				return this.delete(`/invitation/${id}`);
 			},
 			accept: async (
 				id: string,
-			): Promise<
-				AuthResult<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-					org_id: string;
-				}>
-			> => {
+			): Promise<{
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+				org_id: string;
+			}> => {
 				const result = await this.post<{
 					jwt: string;
 					decoded_jwt: SessionToken<'auth'>;
 					org_id: string;
 				}>(`/invitation/${id}/accept`, undefined);
-				if (result.ok) {
-					this.#jwt = result.data.jwt;
-					this.#session = result.data.decoded_jwt;
-					this.#org_id = result.data.org_id;
-				}
+				this.#jwt = result.jwt;
+				this.#session = result.decoded_jwt;
+				this.#org_id = result.org_id;
 				return result;
 			},
 		} as const,
@@ -626,16 +579,14 @@ export class AuthClient<P extends string = string> {
 					params.set('capabilities', options.capabilities.join(','));
 				window.location.href = `${this.base_path}/oauth/${vendor}?${params}`;
 			},
-			listAccounts: async (): Promise<
-				AuthResult<{
-					list: OauthAccount[];
-					count: number;
-					hasMore: boolean;
-				}>
-			> => {
+			listAccounts: async (): Promise<{
+				list: OauthAccount[];
+				count: number;
+				hasMore: boolean;
+			}> => {
 				return this.get('/oauth/account');
 			},
-			disconnectAccount: async (id: string): Promise<AuthResult<void>> => {
+			disconnectAccount: async (id: string): Promise<void> => {
 				return this.delete(`/oauth/account/${id}`);
 			},
 		},
@@ -650,8 +601,11 @@ export class AuthClient<P extends string = string> {
 		const refresh_at_ms = expires_at_ms - this.refresh_threshold_ms;
 		const delay = Math.max(refresh_at_ms - Date.now(), 0);
 		this.refresh_timer = setTimeout(async () => {
-			const result = await this.api.session.refresh();
-			if (result.ok) this.startAutoRefresh();
+			try {
+				await this.api.session.refresh();
+			} catch (error) {
+				this.onRefreshFailed?.(error as AuthClientError);
+			}
 		}, delay);
 	}
 
@@ -668,7 +622,7 @@ export class AuthClient<P extends string = string> {
 	}
 
 	// -- Internal fetch helpers --
-	private async post<T>(path: string, body: unknown): Promise<AuthResult<T>> {
+	private async post<T>(path: string, body: unknown): Promise<T> {
 		const res = await this.fetchFn(`${this.base_path}${path}`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -677,12 +631,12 @@ export class AuthClient<P extends string = string> {
 		return this.handleResponse<T>(res);
 	}
 
-	private async get<T>(path: string): Promise<AuthResult<T>> {
+	private async get<T>(path: string): Promise<T> {
 		const res = await this.fetchFn(`${this.base_path}${path}`);
 		return this.handleResponse<T>(res);
 	}
 
-	private async patch<T>(path: string, body: unknown): Promise<AuthResult<T>> {
+	private async patch<T>(path: string, body: unknown): Promise<T> {
 		const res = await this.fetchFn(`${this.base_path}${path}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
@@ -691,17 +645,17 @@ export class AuthClient<P extends string = string> {
 		return this.handleResponse<T>(res);
 	}
 
-	private async delete<T = void>(path: string): Promise<AuthResult<T>> {
+	private async delete<T = void>(path: string): Promise<T> {
 		const res = await this.fetchFn(`${this.base_path}${path}`, {
 			method: 'DELETE',
 		});
 		return this.handleResponse<T>(res);
 	}
 
-	private async handleResponse<T>(res: Response): Promise<AuthResult<T>> {
-		if (res.status === 204) return { ok: true, data: undefined as T };
-		if (!res.ok) return { ok: false, error: await this.parseError(res) };
-		return { ok: true, data: (await res.json()) as T };
+	private async handleResponse<T>(res: Response): Promise<T> {
+		if (res.status === 204) return undefined as T;
+		if (!res.ok) throw await this.parseError(res);
+		return (await res.json()) as T;
 	}
 
 	private async parseError(res: Response): Promise<AuthClientError> {

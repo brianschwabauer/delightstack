@@ -105,6 +105,29 @@ export interface AuthConfig<P extends string = string, S extends string = string
 	 * // Route-based org selection from /org/[org_id]/...
 	 * resolveOrgId: (event, session) => event.params.org_id || null
 	 * ```
+	 *
+	 * @example
+	 * ```ts
+	 * // Subdomain-based org selection (e.g. acme.myapp.com)
+	 * resolveOrgId: (event, session) => {
+	 *   const subdomain = event.url.hostname.split('.')[0];
+	 *   if (subdomain === 'www' || subdomain === 'myapp') return null;
+	 *   const match = session?.org ? Object.entries(session.org).find(([, o]) => o.name === subdomain) : null;
+	 *   return match?.[0] ?? null;
+	 * }
+	 * ```
+	 *
+	 * @example
+	 * ```ts
+	 * // From a cookie or custom header
+	 * resolveOrgId: (event) => event.cookies.get('org_id') ?? event.request.headers.get('X-Org-Id') ?? null
+	 * ```
+	 *
+	 * @example
+	 * ```ts
+	 * // Always select the first org (single-org apps)
+	 * resolveOrgId: (_event, session) => Object.keys(session?.org ?? {})[0] ?? null
+	 * ```
 	 */
 	resolveOrgId?: (event: import('@sveltejs/kit').RequestEvent, session: import('../types').SessionToken<'auth'> | null) => string | null;
 
@@ -156,6 +179,18 @@ export interface ResolvedAuthConfig<P extends string = string, S extends string 
 
 /** Creates an auth config with sensible defaults */
 export function defineAuthConfig<const P extends string, const S extends string>(config: AuthConfig<P, S>): ResolvedAuthConfig<P, S> {
+	if (!/^[0-9a-fA-F]{64,}$/.test(config.secret)) {
+		throw new Error(
+			'Auth config: secret must be a hex-encoded string of at least 64 characters (32 bytes). ' +
+			'Generate one with: openssl rand -hex 32',
+		);
+	}
+	if (config.permissions.length > 32) {
+		throw new Error(`Auth config: permissions array exceeds 32 entries (got ${config.permissions.length}). Bitwise encoding uses a 32-bit integer.`);
+	}
+	if (config.oauth_scopes.length > 32) {
+		throw new Error(`Auth config: oauth_scopes array exceeds 32 entries (got ${config.oauth_scopes.length}). Bitwise encoding uses a 32-bit integer.`);
+	}
 	const dev = config.dev ?? false;
 	return {
 		...config,

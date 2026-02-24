@@ -382,7 +382,10 @@ const sessionRefresh: AuthRouteHandler = (ctx) =>
 const sessionList: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
-		const result = await ctx.auth.listSessions(ctx.locals.session!.uid);
+		const params = ctx.event.url.searchParams;
+		const offset = params.has('offset') ? parseInt(params.get('offset')!, 10) : undefined;
+		const limit = params.has('limit') ? parseInt(params.get('limit')!, 10) : undefined;
+		const result = await ctx.auth.listSessions(ctx.locals.session!.uid, { offset, limit });
 		return json(result);
 	});
 

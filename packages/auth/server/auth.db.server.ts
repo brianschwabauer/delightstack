@@ -660,10 +660,13 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		} satisfies AuthOperationResult;
 	}
 
-	/** Returns a list of active user sessions for the user with the given id */
-	listSessions(user_id: string) {
+	/** Returns a paginated list of active user sessions for the user with the given id */
+	listSessions(user_id: string, options?: { offset?: number; limit?: number }) {
+		const limit = Math.min(Math.max(options?.limit ?? 10, 1), 50);
+		const offset = Math.max(options?.offset ?? 0, 0);
 		const sessions = this.sql.list('user_session', {
-			limit: 10,
+			limit: limit + 1,
+			offset,
 			select: ['user_auth_id', 'json', 'expires_at', 'created_at', 'updated_at', 'id'],
 			order: [{ key: 'updated_at', direction: 'DESC' }],
 			where: {
@@ -673,6 +676,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				],
 			},
 		});
+		const hasMore = sessions.length > limit;
+		if (hasMore) sessions.pop();
 		const list = sessions.map((session) => {
 			const user_auth = this.sql.get('user_auth', session.user_auth_id);
 			const oauth_token = user_auth.oauth_token_id
@@ -692,7 +697,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		return {
 			list,
 			count: list.length,
-			hasMore: false,
+			hasMore,
 		};
 	}
 
@@ -2229,9 +2234,18 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 
 	/** Revokes all sessions of the user with the given id */
 	revokeUserSessions(user_id: string) {
-		this.listSessions(user_id).list.forEach((session) => {
-			this.sql.delete('user_session', session.id);
-		});
+		this.sql
+			.list('user_session', {
+				where: {
+					and: [
+						{ key: 'type', is: '=', value: 'auth' },
+						{ key: 'user_id', is: '=', value: user_id },
+					],
+				},
+			})
+			.forEach((session) => {
+				this.sql.delete('user_session', session.id);
+			});
 	}
 
 	/** Revokes all sessions of all the users in the organization with the given id */

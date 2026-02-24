@@ -60,8 +60,8 @@ describe('AuthClient', () => {
 			const client = new AuthClient(data);
 
 			// isAllowed uses internal permissions
-			expect(client.isAllowed('read')).toBe(true);
-			expect(client.isAllowed('write')).toBe(true);
+			expect(client.hasPermission('read')).toBe(true);
+			expect(client.hasPermission('write')).toBe(true);
 		});
 
 		it('prefers options.permissions over data.permissions', () => {
@@ -71,9 +71,9 @@ describe('AuthClient', () => {
 			});
 
 			// 'read' is at index 0 in options, org role is 0b1111
-			expect(client.isAllowed('read')).toBe(true);
+			expect(client.hasPermission('read')).toBe(true);
 			// 'a' is not in the options permissions
-			expect(client.isAllowed('a' as never)).toBe(false);
+			expect(client.hasPermission('a' as never)).toBe(false);
 		});
 
 		it('uses default base_path', () => {
@@ -133,7 +133,7 @@ describe('AuthClient', () => {
 				permissions: ['read', 'write', 'admin', 'owner'] as const,
 			});
 
-			expect(client.isAllowed('read')).toBe(true);
+			expect(client.hasPermission('read')).toBe(true);
 		});
 
 		it('roundtrips through toJSON/from', () => {
@@ -149,7 +149,7 @@ describe('AuthClient', () => {
 		});
 	});
 
-	describe('isAllowed', () => {
+	describe('hasPermission', () => {
 		const permissions = ['read', 'write', 'admin', 'owner'] as const;
 
 		it('returns true for set permission bits', () => {
@@ -157,10 +157,10 @@ describe('AuthClient', () => {
 			data.session = makeSession({ org: { org_1: { name: 'Test', role: 0b1111, db: 'db_1', plan: 1 } } });
 			const client = new AuthClient(data, { permissions });
 
-			expect(client.isAllowed('read')).toBe(true);   // bit 0
-			expect(client.isAllowed('write')).toBe(true);   // bit 1
-			expect(client.isAllowed('admin')).toBe(true);   // bit 2
-			expect(client.isAllowed('owner')).toBe(true);   // bit 3
+			expect(client.hasPermission('read')).toBe(true);   // bit 0
+			expect(client.hasPermission('write')).toBe(true);   // bit 1
+			expect(client.hasPermission('admin')).toBe(true);   // bit 2
+			expect(client.hasPermission('owner')).toBe(true);   // bit 3
 		});
 
 		it('returns false for unset permission bits', () => {
@@ -168,27 +168,38 @@ describe('AuthClient', () => {
 			data.session = makeSession({ org: { org_1: { name: 'Test', role: 0b0001, db: 'db_1', plan: 1 } } });
 			const client = new AuthClient(data, { permissions });
 
-			expect(client.isAllowed('read')).toBe(true);    // bit 0 set
-			expect(client.isAllowed('write')).toBe(false);   // bit 1 not set
-			expect(client.isAllowed('admin')).toBe(false);   // bit 2 not set
-			expect(client.isAllowed('owner')).toBe(false);   // bit 3 not set
+			expect(client.hasPermission('read')).toBe(true);    // bit 0 set
+			expect(client.hasPermission('write')).toBe(false);   // bit 1 not set
+			expect(client.hasPermission('admin')).toBe(false);   // bit 2 not set
+			expect(client.hasPermission('owner')).toBe(false);   // bit 3 not set
 		});
 
 		it('returns false when not signed in', () => {
 			const client = new AuthClient(undefined, { permissions });
-			expect(client.isAllowed('read')).toBe(false);
+			expect(client.hasPermission('read')).toBe(false);
 		});
 
 		it('returns false when no org is selected', () => {
 			const data = makeData({ org_id: null });
 			const client = new AuthClient(data, { permissions });
-			expect(client.isAllowed('read')).toBe(false);
+			expect(client.hasPermission('read')).toBe(false);
 		});
 
 		it('returns false for unknown permission', () => {
 			const data = makeData();
 			const client = new AuthClient(data, { permissions });
-			expect(client.isAllowed('nonexistent' as never)).toBe(false);
+			expect(client.hasPermission('nonexistent' as never)).toBe(false);
+		});
+	});
+
+	describe('isAllowed (deprecated)', () => {
+		it('delegates to hasPermission', () => {
+			const data = makeData();
+			const client = new AuthClient(data, {
+				permissions: ['read', 'write', 'admin', 'owner'] as const,
+			});
+			expect(client.isAllowed('read')).toBe(true);
+			expect(client.isAllowed('admin')).toBe(true);
 		});
 	});
 
@@ -292,7 +303,7 @@ describe('AuthClient', () => {
 			const client = new AuthClient(makeData({ preferences: { theme: 'dark' } }), { fetch });
 			const result = await client.setPreferences({ language: 'en' });
 
-			expect(result.ok).toBe(true);
+			expect(result).toEqual(merged);
 			expect(fetch).toHaveBeenCalledOnce();
 			expect(fetch.mock.calls[0][0]).toContain('/preference');
 			expect(client.preferences).toEqual(merged);
@@ -304,7 +315,7 @@ describe('AuthClient', () => {
 			const client = new AuthClient(makeData({ preferences: { theme: 'dark', language: 'en' } }), { fetch });
 			const result = await client.setPreferences({ theme: null });
 
-			expect(result.ok).toBe(true);
+			expect(result).toEqual(merged);
 			expect(client.preferences).toEqual(merged);
 		});
 	});
@@ -323,20 +334,17 @@ describe('AuthClient', () => {
 			const client = new AuthClient(makeData({ org_state: { page: '/home' } }), { fetch });
 			const result = await client.setOrgState({ filter: 'active' });
 
-			expect(result.ok).toBe(true);
+			expect(result).toEqual(merged);
 			expect(fetch).toHaveBeenCalledOnce();
 			expect(fetch.mock.calls[0][0]).toContain('/org/org_1/state');
 			expect(client.org_state).toEqual(merged);
 		});
 
-		it('returns error when no org is selected', async () => {
+		it('throws when no org is selected', async () => {
 			const client = new AuthClient(makeData({ org_id: null }));
-			const result = await client.setOrgState({ key: 'value' });
-
-			expect(result.ok).toBe(false);
-			if (!result.ok) {
-				expect(result.error.message).toBe('No organization selected');
-			}
+			await expect(client.setOrgState({ key: 'value' })).rejects.toMatchObject({
+				message: 'No organization selected',
+			});
 		});
 	});
 

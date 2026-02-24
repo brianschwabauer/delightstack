@@ -3,7 +3,7 @@ import { defineAuthConfig } from './auth.config';
 
 describe('defineAuthConfig', () => {
 	const minimal = {
-		secret: 'abc123',
+		secret: 'a'.repeat(64),
 		issuer: 'test',
 		permissions: ['read', 'write'] as const,
 		oauth_scopes: ['profile'] as const,
@@ -74,5 +74,32 @@ describe('defineAuthConfig', () => {
 		const config = defineAuthConfig(minimal);
 		expect(config.permissions).toEqual(['read', 'write']);
 		expect(config.oauth_scopes).toEqual(['profile']);
+	});
+
+	it('throws if secret is not hex-encoded', () => {
+		expect(() => defineAuthConfig({ ...minimal, secret: 'not-hex!' })).toThrow('hex-encoded');
+	});
+
+	it('throws if secret is too short', () => {
+		expect(() => defineAuthConfig({ ...minimal, secret: 'abcdef' })).toThrow('hex-encoded');
+	});
+
+	it('accepts a valid 64-char hex secret', () => {
+		expect(() => defineAuthConfig({ ...minimal, secret: 'ab'.repeat(32) })).not.toThrow();
+	});
+
+	it('throws if permissions array exceeds 32 entries', () => {
+		const permissions = Array.from({ length: 33 }, (_, i) => `perm_${i}`);
+		expect(() => defineAuthConfig({ ...minimal, permissions })).toThrow('permissions array exceeds 32');
+	});
+
+	it('throws if oauth_scopes array exceeds 32 entries', () => {
+		const oauth_scopes = Array.from({ length: 33 }, (_, i) => `scope_${i}`);
+		expect(() => defineAuthConfig({ ...minimal, oauth_scopes })).toThrow('oauth_scopes array exceeds 32');
+	});
+
+	it('allows exactly 32 permissions', () => {
+		const permissions = Array.from({ length: 32 }, (_, i) => `perm_${i}`);
+		expect(() => defineAuthConfig({ ...minimal, permissions })).not.toThrow();
 	});
 });

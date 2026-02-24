@@ -16,12 +16,7 @@ vi.mock('@sveltejs/kit', () => ({
 	},
 }));
 
-const guards = createAuthGuards({
-	secret: 'test-secret',
-	issuer: 'test',
-	permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
-	oauth_scopes: [],
-});
+const guards = createAuthGuards(['org:read', 'org:write', 'org:admin', 'org:owner'] as const);
 
 function makeLocals(overrides: Partial<AuthLocals> = {}): AuthLocals {
 	return {
