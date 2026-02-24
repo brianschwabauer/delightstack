@@ -307,7 +307,17 @@ export class DatabaseServer<
 
 	constructor(
 		private config: DatabaseConfig,
-		private ws: () => any, // lazily returns the WebSocket Durable Object that is used for broadcasting events
+		private ws: () =>
+			| {
+					entityChanged(
+						action: 'created' | 'updated' | 'deleted',
+						entity_type: string,
+						id: string | number,
+						data?: unknown,
+						user_id?: string,
+					): void;
+			  }
+			| undefined, // lazily returns the WebSocket Durable Object that is used for broadcasting events
 		ctx: DurableObjectState,
 		protected env: Env,
 	) {
@@ -953,10 +963,7 @@ export class DatabaseServer<
 			sparse,
 			limit: Math.max(
 				1,
-				Math.min(
-					base_query.limit || (sparse ? 100 : 10),
-					sparse ? 5000 : 100,
-				),
+				Math.min(base_query.limit || (sparse ? 100 : 10), sparse ? 5000 : 100),
 			),
 		} satisfies Database.SearchQuery<Table>;
 		query.order.forEach(({ key }) => {
@@ -1407,6 +1414,28 @@ export class DatabaseServer<
 			// Save all modified indexes
 			indexes_to_save.forEach((entity_type) => this.saveIndex(entity_type));
 		});
+
+		// Broadcast entity changes via WebSocket (fire-and-forget, after transaction commits)
+		try {
+			const ws_do = this.ws();
+			if (ws_do?.entityChanged) {
+				for (let i = 0; i < operations.length; i++) {
+					const result = results[i];
+					if (!result || !('entity' in result)) continue;
+					const op = operations[i];
+					const action =
+						'create' in op ? 'created' : 'update' in op ? 'updated' : 'deleted';
+					ws_do.entityChanged(
+						action,
+						result.entity.type,
+						result.entity.id,
+						result.entity.data,
+					);
+				}
+			}
+		} catch {
+			// WebSocket broadcast failure must never block database operations
+		}
 
 		return results;
 	}

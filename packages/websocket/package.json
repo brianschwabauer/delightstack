@@ -1,0 +1,19 @@
+{
+	"name": "@delightstack/websocket",
+	"type": "module",
+	"private": true,
+	"exports": {
+		".": "./index.ts",
+		"./types": "./types/index.ts",
+		"./server": "./server/index.ts",
+		"./client": "./client/index.ts"
+	},
+	"dependencies": {
+		"@delightstack/utilities": "workspace:*",
+		"comlink": "^4.4.2"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20251120.0",
+		"typescript": "^5.8.3"
+	}
+}

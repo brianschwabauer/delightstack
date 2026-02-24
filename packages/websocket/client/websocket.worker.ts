@@ -1,0 +1,169 @@
+import { expose } from 'comlink';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ConnectOptions {
+	/** Full WebSocket URL (e.g. wss://example.com/api/websocket) */
+	url: string;
+	/** Channel name for BroadcastChannel event fan-out to tabs */
+	channel_name: string;
+}
+
+type WorkerStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
+
+// ---------------------------------------------------------------------------
+// Reconnection constants
+// ---------------------------------------------------------------------------
+
+const BASE_DELAY_MS = 1000;
+const MAX_DELAY_MS = 30_000;
+const JITTER_FACTOR = 0.3;
+
+// ---------------------------------------------------------------------------
+// WebsocketWorker
+// ---------------------------------------------------------------------------
+
+export class WebsocketWorker {
+	#ws: WebSocket | null = null;
+	#channel: BroadcastChannel | null = null;
+	#url: string | null = null;
+	#channel_name: string | null = null;
+	#status: WorkerStatus = 'disconnected';
+	#reconnect_attempts = 0;
+	#reconnect_timer: ReturnType<typeof setTimeout> | null = null;
+	#intentional_close = false;
+
+	/** Connect to the WebSocket server. Idempotent — does nothing if already connected. */
+	async connect(options: ConnectOptions): Promise<void> {
+		if (this.#ws && this.#status === 'connected') return;
+
+		this.#url = options.url;
+		this.#channel_name = options.channel_name;
+
+		// Create BroadcastChannel for fan-out to all tabs
+		if (!this.#channel || this.#channel_name !== options.channel_name) {
+			this.#channel?.close();
+			this.#channel = new BroadcastChannel(options.channel_name);
+		}
+
+		this.#intentional_close = false;
+		this.#doConnect();
+	}
+
+	/** Disconnect from the WebSocket server. Stops reconnection. */
+	async disconnect(): Promise<void> {
+		this.#intentional_close = true;
+		this.#clearReconnectTimer();
+		this.#reconnect_attempts = 0;
+		if (this.#ws) {
+			this.#ws.close(1000, 'Client disconnect');
+			this.#ws = null;
+		}
+		this.#setStatus('disconnected');
+		this.#channel?.close();
+		this.#channel = null;
+	}
+
+	/** Send a JSON message to the server. */
+	async send(message: Record<string, unknown>): Promise<void> {
+		if (!this.#ws || this.#ws.readyState !== WebSocket.OPEN) {
+			throw new Error('WebSocket not connected');
+		}
+		this.#ws.send(JSON.stringify(message));
+	}
+
+	/** Returns the current connection status. */
+	async getStatus(): Promise<WorkerStatus> {
+		return this.#status;
+	}
+
+	// -----------------------------------------------------------------------
+	// Private
+	// -----------------------------------------------------------------------
+
+	#doConnect(): void {
+		if (!this.#url) return;
+
+		this.#setStatus(this.#reconnect_attempts > 0 ? 'reconnecting' : 'connecting');
+
+		try {
+			this.#ws = new WebSocket(this.#url);
+		} catch {
+			this.#scheduleReconnect();
+			return;
+		}
+
+		this.#ws.onopen = () => {
+			this.#reconnect_attempts = 0;
+			this.#setStatus('connected');
+		};
+
+		this.#ws.onmessage = (event: MessageEvent) => {
+			try {
+				const data = JSON.parse(event.data as string);
+				// Fan out to all tabs via BroadcastChannel
+				this.#channel?.postMessage(data);
+			} catch {
+				// Ignore unparseable messages
+			}
+		};
+
+		this.#ws.onclose = () => {
+			this.#ws = null;
+			if (!this.#intentional_close) {
+				this.#setStatus('reconnecting');
+				this.#scheduleReconnect();
+			} else {
+				this.#setStatus('disconnected');
+			}
+		};
+
+		this.#ws.onerror = () => {
+			// onclose will fire after this, which handles reconnection
+		};
+	}
+
+	#scheduleReconnect(): void {
+		this.#clearReconnectTimer();
+		const delay = Math.min(
+			BASE_DELAY_MS * Math.pow(2, this.#reconnect_attempts),
+			MAX_DELAY_MS,
+		);
+		const jitter = delay * JITTER_FACTOR * (Math.random() * 2 - 1);
+		this.#reconnect_attempts++;
+		this.#reconnect_timer = setTimeout(() => {
+			this.#reconnect_timer = null;
+			this.#doConnect();
+		}, delay + jitter);
+	}
+
+	#clearReconnectTimer(): void {
+		if (this.#reconnect_timer !== null) {
+			clearTimeout(this.#reconnect_timer);
+			this.#reconnect_timer = null;
+		}
+	}
+
+	#setStatus(status: WorkerStatus): void {
+		this.#status = status;
+		// Broadcast status changes so tabs can update their reactive state
+		this.#channel?.postMessage({ event: '__ws_status', status });
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Expose via Comlink (supports SharedWorker and Worker)
+// ---------------------------------------------------------------------------
+
+const worker = new WebsocketWorker();
+
+// Regular Worker mode
+expose(worker);
+
+// SharedWorker mode — expose on each connecting port
+self.addEventListener('connect', (event) => {
+	const port = (event as MessageEvent)?.ports?.[0];
+	if (port) expose(worker, port);
+});
