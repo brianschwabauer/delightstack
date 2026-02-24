@@ -168,8 +168,7 @@ export interface DatabaseRouteConfig {
  * @example
  * ```ts
  * const personRoute = defineRoute({
- *   route: '/api/person',
- *   entity: 'person',
+ *   entity: 'person', // route defaults to '/api/person'
  *   table: personTable,
  *   hooks: {
  *     beforeCreate: ({ data, event }) => {
@@ -185,12 +184,16 @@ export interface DatabaseRouteConfig {
  * ```
  */
 export function defineRoute<T extends Database.Table>(options: {
-	route: string;
+	/** The base route path (e.g. `/api/person`). Defaults to `/api/${entity}`. */
+	route?: string;
 	entity: string;
 	table: T;
 	hooks?: DatabaseRouteHooks<T>;
 }): DatabaseRouteConfig {
-	return options as DatabaseRouteConfig;
+	return {
+		...options,
+		route: options.route || `/api/${options.entity}`,
+	} as DatabaseRouteConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -485,8 +488,7 @@ async function handleDelete(
  * import { createDatabaseHandle, defineRoute } from '@delightstack/database';
  *
  * const personRoute = defineRoute({
- *   route: '/api/person',
- *   entity: 'person',
+ *   entity: 'person', // route defaults to '/api/person'
  *   table: personTable,
  *   hooks: {
  *     beforeCreate: ({ event }) => {

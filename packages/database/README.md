@@ -491,8 +491,7 @@ import { createDatabaseHandle, defineRoute } from '@delightstack/database';
 import { personTable, postTable } from './tables';
 
 const personRoute = defineRoute({
-  route: '/api/person',
-  entity: 'person',
+  entity: 'person', // route defaults to '/api/person'
   table: personTable,
   hooks: {
     beforeCreate: ({ event }) => {
@@ -512,8 +511,7 @@ const personRoute = defineRoute({
 });
 
 const postRoute = defineRoute({
-  route: '/api/post',
-  entity: 'post',
+  entity: 'post', // route defaults to '/api/post'
   table: postTable,
 });
 
@@ -569,7 +567,6 @@ All hooks receive an `event` property (the SvelteKit `RequestEvent`), giving you
 
 ```typescript
 const personRoute = defineRoute({
-  route: '/api/person',
   entity: 'person',
   table: personTable,
   hooks: {
