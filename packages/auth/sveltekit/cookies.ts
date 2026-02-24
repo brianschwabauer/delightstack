@@ -36,29 +36,31 @@ export function deleteSessionCookie(
 	});
 }
 
-// ── Signed state cookie primitives ────────────────────────────
+// ── Signed state cookie primitives (JWT format) ──────────────
 
 /** Maximum cookie value size in bytes (leaves room for name + attributes within 4KB) */
 const MAX_STATE_BYTES = 3072;
 
+/** Precomputed base64url-encoded JWT header for HS256 */
+const JWT_HEADER = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'; // {"alg":"HS256","typ":"JWT"}
+
 /**
- * Signs a data object into a tamper-proof cookie value.
- * Format: base64url(json).base64url(hmac-sha256(payload, secret))
+ * Signs a data object into a JWT cookie value.
+ * Format: base64url(header).base64url(payload).base64url(hmac-sha256(header.payload, secret))
  */
 export async function signState(
 	data: Record<string, unknown>,
 	secret: string,
 ): Promise<string> {
-	const json = JSON.stringify(data);
-	const payload = base64urlEncode(json);
+	const payload = base64urlEncode(JSON.stringify(data));
+	const signing_input = `${JWT_HEADER}.${payload}`;
 	const key = await getSecretKey(secret);
 	const signature = await crypto.subtle.sign(
 		'HMAC',
 		key,
-		new TextEncoder().encode(payload),
+		new TextEncoder().encode(signing_input),
 	);
-	const sig = base64urlEncodeBuffer(signature);
-	const cookie_value = `${payload}.${sig}`;
+	const cookie_value = `${signing_input}.${base64urlEncodeBuffer(signature)}`;
 
 	if (new TextEncoder().encode(cookie_value).byteLength > MAX_STATE_BYTES) {
 		throw new Error(
@@ -70,18 +72,18 @@ export async function signState(
 }
 
 /**
- * Verifies a signed cookie value and returns the parsed data.
+ * Verifies a JWT cookie value and returns the parsed payload.
  * Returns null if the value is missing, malformed, or has an invalid signature.
  */
 export async function verifyState(
 	cookie_value: string,
 	secret: string,
 ): Promise<Record<string, unknown> | null> {
-	const dot_index = cookie_value.lastIndexOf('.');
-	if (dot_index === -1) return null;
+	const parts = cookie_value.split('.');
+	if (parts.length !== 3) return null;
 
-	const payload = cookie_value.slice(0, dot_index);
-	const sig = cookie_value.slice(dot_index + 1);
+	const [header, payload, sig] = parts;
+	if (!header || !payload || !sig) return null;
 
 	let key: CryptoKey;
 	try {
@@ -97,11 +99,12 @@ export async function verifyState(
 		return null;
 	}
 
+	const signing_input = `${header}.${payload}`;
 	const valid = await crypto.subtle.verify(
 		'HMAC',
 		key,
 		sig_bytes,
-		new TextEncoder().encode(payload),
+		new TextEncoder().encode(signing_input),
 	);
 	if (!valid) return null;
 

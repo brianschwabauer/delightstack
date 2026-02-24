@@ -52,7 +52,7 @@ Full-stack authentication for SvelteKit apps on Cloudflare Workers. Email/passwo
 
 **Stateless JWTs with server-side revocation:** Sessions are JWT tokens (HMAC-SHA256) containing user info, org memberships, and encoded permissions. The Durable Object stores session records for revocation and refresh. Expired tokens are auto-refreshed transparently in the Handle.
 
-**Three cookies:** The session JWT cookie carries the auth token. A separate signed preferences cookie persists across signouts for things like dark mode and is synced to the user DB for cross-device access. Per-org state cookies cache org-specific data and are cleared on signout.
+**Three cookies:** The session JWT cookie carries the auth token. A separate preferences JWT cookie persists across signouts for things like dark mode and is synced to the user DB for cross-device access. Per-org state JWT cookies cache org-specific data and are cleared on signout.
 
 ## Quickstart
 
@@ -475,11 +475,11 @@ Contains the JWT token. httpOnly, secure, SameSite=lax. Deleted on signout.
 
 ### Preferences Cookie
 
-Signed (HMAC-SHA256) JSON cookie for user preferences like dark mode. **Persists across signouts** so users don't lose settings. Automatically synced to the user DB (`user.json.preferences`) on write, and restored from DB on sign-in (DB wins on conflict for cross-device sync).
+Signed JWT (HS256) cookie for user preferences like dark mode. **Persists across signouts** so users don't lose settings. Automatically synced to the user DB (`user.json.preferences`) on write, and restored from DB on sign-in (DB wins on conflict for cross-device sync).
 
 ### Org State Cookie
 
-Signed JSON cookie namespaced per org (e.g., `auth-org-{org_id}`). Used for caching org-specific data. **Cleared on signout.** Not synced to DB — intended for transient cache data like sidebar state or last-viewed page.
+Signed JWT (HS256) cookie namespaced per org (e.g., `auth-org-{org_id}`). Used for caching org-specific data. **Cleared on signout.** Not synced to DB — intended for transient cache data like sidebar state or last-viewed page.
 
 ## Permissions
 
@@ -618,12 +618,12 @@ Origin/Referer checking is stateless, requires no hidden form fields or extra he
 | `getSessionCookie()`     | Get session JWT from cookies                                        |
 | `setSessionCookie()`     | Set session JWT cookie                                              |
 | `deleteSessionCookie()`  | Delete session cookie                                               |
-| `signState()`            | Sign state object into tamper-proof cookie                          |
-| `verifyState()`          | Verify and parse signed cookie                                      |
-| `getPreferencesCookie()` | Get user preferences from signed cookie                             |
-| `setPreferencesCookie()` | Set preferences signed cookie                                       |
-| `getOrgStateCookie()`    | Get org state from signed cookie                                    |
-| `setOrgStateCookie()`    | Set org state signed cookie                                         |
+| `signState()`            | Sign state object into JWT cookie                                   |
+| `verifyState()`          | Verify and parse JWT cookie                                         |
+| `getPreferencesCookie()` | Get user preferences from JWT cookie                                |
+| `setPreferencesCookie()` | Set preferences JWT cookie                                          |
+| `getOrgStateCookie()`    | Get org state from JWT cookie                                       |
+| `setOrgStateCookie()`    | Set org state JWT cookie                                            |
 | `deleteOrgStateCookie()` | Delete org state cookie                                             |
 
 ### `@delightstack/auth/types`
