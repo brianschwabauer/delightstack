@@ -279,7 +279,6 @@ export class DatabaseWorker {
 
 			let any_data = false;
 
-
 			for (const entity_type of client_types) {
 				const state = this.#entities[entity_type];
 				const entity_result = body.entity[entity_type];
