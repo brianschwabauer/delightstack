@@ -4,11 +4,8 @@ import { createSubscriber } from 'svelte/reactivity';
 import { untrack } from 'svelte';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
-import type {
-	DatabaseWorker,
-	WorkerSearchQuery,
-	WorkerSearchResult,
-} from './database.worker';
+import type { DatabaseWorker, WorkerSearchResult } from './database.worker';
+import type { SearchQueryInput } from '../search-query';
 import { DelightError } from '@delightstack/utilities';
 import { getWorker, resetWorker } from './database.worker.init';
 
@@ -399,7 +396,7 @@ export class DatabaseSearch<
 	#loading = $state(true);
 	#error = $state<unknown>(null);
 	#mode = $state<'client' | 'server'>('client');
-	#query_state = $state<WorkerSearchQuery>({});
+	#query_state = $state<SearchQueryInput>({});
 
 	/** Reactive array of search hits */
 	get results(): SearchHit<T>[] {
@@ -436,11 +433,11 @@ export class DatabaseSearch<
 	}
 
 	/** Get/set the search query. Setting triggers a re-search. */
-	get query(): WorkerSearchQuery {
+	get query(): SearchQueryInput {
 		return this.#query_state;
 	}
 
-	set query(q: WorkerSearchQuery) {
+	set query(q: SearchQueryInput) {
 		this.#query_state = q;
 		this.#updateSubscription();
 	}
@@ -448,7 +445,7 @@ export class DatabaseSearch<
 	constructor(
 		entity_type: EntityType,
 		worker: Remote<DatabaseWorker>,
-		query?: WorkerSearchQuery,
+		query?: SearchQueryInput,
 	) {
 		this.entity_type = entity_type;
 		this.#worker = worker;
@@ -481,7 +478,7 @@ export class DatabaseSearch<
 			this.#loading = true;
 			const result = await this.#worker.search(
 				this.entity_type,
-				$state.snapshot(this.#query_state) as WorkerSearchQuery,
+				$state.snapshot(this.#query_state) as SearchQueryInput,
 			);
 			this.#results = result.hits as SearchHit<T>[];
 			this.#count = result.count;
@@ -518,7 +515,7 @@ export class DatabaseSearch<
 
 				this.#subscriber_id = await this.#worker.subscribe(
 					this.entity_type,
-					$state.snapshot(this.#query_state) as WorkerSearchQuery,
+					$state.snapshot(this.#query_state) as SearchQueryInput,
 					proxy((result: WorkerSearchResult) => {
 						if (this.#destroyed) return;
 						this.#results = result.hits as SearchHit<T>[];
@@ -544,7 +541,7 @@ export class DatabaseSearch<
 			try {
 				await this.#worker.updateSubscription(
 					this.#subscriber_id,
-					$state.snapshot(this.#query_state) as WorkerSearchQuery,
+					$state.snapshot(this.#query_state) as SearchQueryInput,
 				);
 			} catch {
 				// Fallback to refresh
@@ -768,7 +765,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** Create a reactive search that auto-updates when the index changes. */
 	search<K extends keyof T & string>(
 		entity_type: K,
-		query?: WorkerSearchQuery,
+		query?: SearchQueryInput,
 	): DatabaseSearch<T[K], K> {
 		const worker = this.#getWorker();
 		return new DatabaseSearch(entity_type, worker, query);
@@ -777,7 +774,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** One-shot list — always hits server. */
 	async list<K extends keyof T & string>(
 		entity_type: K,
-		query?: WorkerSearchQuery,
+		query?: SearchQueryInput,
 	): Promise<SearchResult<T[K]>> {
 		const worker = this.#getWorker();
 		try {

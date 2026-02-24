@@ -1,5 +1,6 @@
 import { requireAuthScope } from '$lib/server';
-import { DelightError, decodeSearchQuery } from '@packages/lib';
+import { DelightError } from '@delightstack/utilities';
+import { decodeSearchQuery } from '@delightstack/database';
 import { json } from '@sveltejs/kit';
 
 export async function GET({ locals, url }) {

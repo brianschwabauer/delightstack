@@ -1,5 +1,6 @@
 import { requireAuthScope } from '$lib/server';
-import { DelightError, decodeSearchQuery, parseSchema } from '@packages/lib';
+import { DelightError, parseSchema } from '@delightstack/utilities';
+import { decodeSearchQuery } from '@delightstack/database';
 import { Site } from '@packages/types';
 import { json } from '@sveltejs/kit';
 

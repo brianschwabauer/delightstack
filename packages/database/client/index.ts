@@ -7,4 +7,6 @@ export {
 	type SearchResult,
 } from './database.client.svelte';
 
-export { type WorkerSearchQuery, type WorkerSearchResult } from './database.worker';
+export { type WorkerSearchResult } from './database.worker';
+
+export { type SearchQueryInput, encodeSearchQuery, decodeSearchQuery } from '../search-query';

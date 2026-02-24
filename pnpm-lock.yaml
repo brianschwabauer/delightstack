@@ -107,6 +107,9 @@ importers:
       '@delightstack/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@delightstack/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@delightstack/utilities':
         specifier: workspace:*
         version: link:../../packages/utilities

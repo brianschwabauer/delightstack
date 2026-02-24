@@ -23,6 +23,7 @@ import {
 	type CachedSearchIndex,
 } from './database.idb';
 import { DelightError } from '@delightstack/utilities';
+import { type SearchQueryInput, encodeSearchQuery } from '../search-query';
 
 /** Inline sync response type to avoid importing server module in worker context. */
 interface SyncEntityResult {
@@ -73,15 +74,6 @@ export interface WorkerInitConfig {
 	default_threshold: number;
 }
 
-export interface WorkerSearchQuery {
-	term?: string;
-	limit?: number;
-	offset?: number;
-	where?: Record<string, unknown>;
-	sortBy?: { property: string; order?: 'ASC' | 'DESC' };
-	[key: string]: unknown;
-}
-
 export interface WorkerSearchResult {
 	hits: { id: string; document: Record<string, unknown>; score: number }[];
 	count: number;
@@ -104,7 +96,7 @@ interface EntitySyncState {
 type SearchSubscriber = {
 	id: string;
 	entity_type: string;
-	query: WorkerSearchQuery;
+	query: SearchQueryInput;
 	callback: (result: WorkerSearchResult) => void;
 };
 
@@ -666,7 +658,7 @@ export class DatabaseWorker {
 
 	async search(
 		entity_type: string,
-		query: WorkerSearchQuery,
+		query: SearchQueryInput,
 	): Promise<WorkerSearchResult> {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
@@ -675,8 +667,25 @@ export class DatabaseWorker {
 			return this.#serverSearch(entity_type, query);
 		}
 
-		// Client-side Orama search
-		let result = searchOrama(state.orama, query as Record<string, unknown>);
+		// Client-side Orama search — convert SearchQueryInput to Orama-native params
+		const orama_params: Record<string, unknown> = { ...query };
+		// Resolve q alias
+		if (!orama_params.term && orama_params.q) orama_params.term = orama_params.q;
+		delete orama_params.q;
+		// Convert order[] → Orama's sortBy
+		if (Array.isArray(orama_params.order) && orama_params.order.length > 0) {
+			const orders = orama_params.order as { key: string; direction?: string }[];
+			orama_params.sortBy = {
+				property: orders[0].key,
+				order: (orders[0].direction || 'ASC').toUpperCase(),
+			};
+			delete orama_params.order;
+		}
+		// Remove fields Orama doesn't understand
+		delete orama_params.sparse;
+		delete orama_params.cursor;
+
+		let result = searchOrama(state.orama, orama_params);
 		if (result instanceof Promise) result = await result;
 
 		return {
@@ -691,7 +700,7 @@ export class DatabaseWorker {
 	}
 
 	/** One-shot list that always hits the server */
-	async list(entity_type: string, query: WorkerSearchQuery): Promise<WorkerSearchResult> {
+	async list(entity_type: string, query: SearchQueryInput): Promise<WorkerSearchResult> {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
 		return this.#serverSearch(entity_type, query, true);
@@ -700,7 +709,7 @@ export class DatabaseWorker {
 	/** Subscribe to search results that auto-update when the index changes. */
 	async subscribe(
 		entity_type: string,
-		query: WorkerSearchQuery,
+		query: SearchQueryInput,
 		callback: (result: WorkerSearchResult) => void,
 	): Promise<string> {
 		const id = `sub_${++this.#subscriber_counter}`;
@@ -719,7 +728,7 @@ export class DatabaseWorker {
 	/** Update the query for an existing subscription. */
 	async updateSubscription(
 		subscriber_id: string,
-		query: WorkerSearchQuery,
+		query: SearchQueryInput,
 	): Promise<void> {
 		const sub = this.#search_subscribers.find((s) => s.id === subscriber_id);
 		if (!sub) return;
@@ -778,19 +787,10 @@ export class DatabaseWorker {
 	/** Server-side search. Throws on error when throw_on_error is true. */
 	async #serverSearch(
 		entity_type: string,
-		query: WorkerSearchQuery,
+		query: SearchQueryInput,
 		throw_on_error = false,
 	): Promise<WorkerSearchResult> {
-		const params = new URLSearchParams();
-		if (query.term) params.set('term', query.term);
-		if (query.limit) params.set('limit', String(query.limit));
-		if (query.offset) params.set('offset', String(query.offset));
-		if (query.where) params.set('where', JSON.stringify(query.where));
-		if (query.sortBy) {
-			params.set('order', `${query.sortBy.property}:${query.sortBy.order ?? 'ASC'}`);
-		}
-		params.set('sparse', 'true');
-
+		const params = encodeSearchQuery({ sparse: true, ...query });
 		const qs = params.toString();
 		const response = await fetch(`/api/${entity_type}${qs ? '?' : ''}${qs}`);
 		if (!response.ok) {

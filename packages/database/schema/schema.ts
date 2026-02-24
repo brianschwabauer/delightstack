@@ -2284,6 +2284,9 @@ export namespace Database {
 			'boost' | 'distinctOn' | 'exact' | 'properties' | 'threshold' | 'tolerance'
 		> &
 		Pick<SearchParamsVector<OramaSchema>, 'vector'> & {
+			/** Alias for `term`. If both are provided, `term` takes precedence. */
+			q?: string;
+
 			/**
 			 * Whether only the sparse 'searchable' fields should be returned.
 			 * If this is false, all fields from sqlite will be returned (including those stored in the 'json' column).

@@ -940,15 +940,21 @@ export class DatabaseServer<
 				}
 			} catch (error) {}
 		}
+		// Resolve q alias: use q as term when term is not set
+		const base_query = previous_cursor_data || raw_query;
+		const resolved_term = base_query.term ?? base_query.q;
+
 		const query = {
 			order: [{ key: 'updated_at', direction: 'DESC' }],
-			...(previous_cursor_data || raw_query),
+			...base_query,
+			term: resolved_term,
+			q: undefined,
 			cursor: undefined,
 			sparse,
 			limit: Math.max(
 				1,
 				Math.min(
-					(previous_cursor_data || raw_query).limit || (sparse ? 100 : 10),
+					base_query.limit || (sparse ? 100 : 10),
 					sparse ? 5000 : 100,
 				),
 			),
