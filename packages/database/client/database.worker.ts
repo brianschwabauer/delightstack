@@ -233,6 +233,10 @@ export class DatabaseWorker {
 		);
 
 		let num_requests = 0;
+
+		// Track cumulative inserts per entity across all sync pages
+		const cumulative_inserts: Record<string, number> = {};
+		for (const t of client_types) cumulative_inserts[t] = 0;
 		while (num_requests++ < 50) {
 			const params = new URLSearchParams();
 
@@ -275,9 +279,6 @@ export class DatabaseWorker {
 
 			let any_data = false;
 
-			// Track cumulative inserts per entity across all sync pages
-			const cumulative_inserts: Record<string, number> = {};
-			for (const t of client_types) cumulative_inserts[t] = 0;
 
 			for (const entity_type of client_types) {
 				const state = this.#entities[entity_type];

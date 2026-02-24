@@ -530,6 +530,7 @@ export class DatabaseSearch<
 			} catch (e) {
 				this.#error = e;
 				this.#loading = false;
+				this.#init_promise = null;
 			}
 		})();
 
