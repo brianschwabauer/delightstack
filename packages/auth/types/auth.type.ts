@@ -59,99 +59,93 @@ const GenericSessionToken = z.object({
 });
 
 /** A session token that can be used to reset a user's password */
-const PasswordResetToken = GenericSessionToken.merge(
-	z.object({
-		/** The type of token */
-		typ: z.literal('password_reset'),
-	}),
-);
+const PasswordResetToken = z.object({
+	...GenericSessionToken.shape,
+	/** The type of token */
+	typ: z.literal('password_reset'),
+});
 
 /** A session token that can be used to verify a user's email */
-const EmailVerificationToken = GenericSessionToken.merge(
-	z.object({
-		/** The type of token */
-		typ: z.literal('email_verification'),
-	}),
-);
+const EmailVerificationToken = z.object({
+	...GenericSessionToken.shape,
+	/** The type of token */
+	typ: z.literal('email_verification'),
+});
 
 /** A session token that can be used as a "magic link" so the user can sign in via a link sent to their email */
-const EmailSignInToken = GenericSessionToken.merge(
-	z.object({
-		/** The type of token */
-		typ: z.literal('email_signin'),
-	}),
-);
+const EmailSignInToken = z.object({
+	...GenericSessionToken.shape,
+	/** The type of token */
+	typ: z.literal('email_signin'),
+});
 
 /** A session token that can be used to verify a user's email */
-const OauthAuthorizationToken = GenericSessionToken.merge(
-	z.object({
-		/** The type of token */
-		typ: z.literal('oauth_authorize'),
-		/** The org_id that will be authorized to use this oauth account */
-		org_id: z.string().optional(),
-		/** The list of oauth scopes being requested  */
-		scopes: z.array(z.string()).optional(),
-		/** The list of capabilities being requested  */
-		capabilities: z.array(z.string()).optional(),
-		/** The redirect URL (or path) that the user will be redirected to after signing in */
-		redirect: z.string().optional(),
-		/** The info that will be used to sign up the user with a new account */
-		signup: z
-			.object({
-				/** The name of the user */
-				name: z.string().optional(),
-				/** The name of the organization */
-				org_name: z.string().optional(),
-				/** The ID of the subscription plan that the user will be signed up to */
-				org_subscription_plan_id: z.string().optional(),
-				/** The ID of the invitation the user has accepted and thus will join the organization attached to the invitation */
-				invitation_id: z.string().optional(),
-			})
-			.optional(),
-	}),
-);
+const OauthAuthorizationToken = z.object({
+	...GenericSessionToken.shape,
+	/** The type of token */
+	typ: z.literal('oauth_authorize'),
+	/** The org_id that will be authorized to use this oauth account */
+	org_id: z.string().optional(),
+	/** The list of oauth scopes being requested  */
+	scopes: z.array(z.string()).optional(),
+	/** The list of capabilities being requested  */
+	capabilities: z.array(z.string()).optional(),
+	/** The redirect URL (or path) that the user will be redirected to after signing in */
+	redirect: z.string().optional(),
+	/** The info that will be used to sign up the user with a new account */
+	signup: z
+		.object({
+			/** The name of the user */
+			name: z.string().optional(),
+			/** The name of the organization */
+			org_name: z.string().optional(),
+			/** The ID of the subscription plan that the user will be signed up to */
+			org_subscription_plan_id: z.string().optional(),
+			/** The ID of the invitation the user has accepted and thus will join the organization attached to the invitation */
+			invitation_id: z.string().optional(),
+		})
+		.optional(),
+});
 
 /** The main session token for the user's session auth */
-export const AuthSessionToken = GenericSessionToken.merge(
-	z.object({
-		/** The type of token. @default auth */
-		typ: z.literal('auth'),
-		/** The name of the user signed in */
-		name: z.string(),
-		/** The email of the user signed in */
-		email: z.string(),
-		/** Whether the user's email has been verified */
-		verified: z.boolean(),
-		/** The record of orgs the user is a part of and their role/permissions */
-		org: z.record(
-			z.string(),
-			z.object({
-				/** Permissions — bitwise encoded permission the user has in the organization */
-				p: EncodedPermission,
-				/** Database — the ID of the durable object. Encoded here for fast retrieval */
-				d: z.string().optional(),
-				/** Entitlements — bitwise encoded entitlements the organization has */
-				e: EncodedPermission.optional(),
-				/** Name — the name of the organization */
-				n: z.string(),
-			}),
-		),
-	}),
-);
+export const AuthSessionToken = z.object({
+	...GenericSessionToken.shape,
+	/** The type of token. @default auth */
+	typ: z.literal('auth'),
+	/** The name of the user signed in */
+	name: z.string(),
+	/** The email of the user signed in */
+	email: z.string(),
+	/** Whether the user's email has been verified */
+	verified: z.boolean(),
+	/** The record of orgs the user is a part of and their role/permissions */
+	org: z.record(
+		z.string(),
+		z.object({
+			/** Permissions — bitwise encoded permission the user has in the organization */
+			p: EncodedPermission,
+			/** Database — the ID of the durable object. Encoded here for fast retrieval */
+			d: z.string().optional(),
+			/** Entitlements — bitwise encoded entitlements the organization has */
+			e: EncodedPermission.optional(),
+			/** Name — the name of the organization */
+			n: z.string(),
+		}),
+	),
+});
 
 /**
  * The session token for 3rd party oauth apps (like Zapier).
  * The 'uid' is the user ID of the user that authorized the oauth app.
  * The 'sub' is the ID of the organization that this oauth application has access to.
  */
-export const OauthApplicationSessionToken = GenericSessionToken.merge(
-	z.object({
-		/** The type of token. @default auth */
-		typ: z.literal('oauth_application'),
-		/** Permissions — bitwise encoded permissions this token has */
-		p: EncodedPermission,
-	}),
-);
+export const OauthApplicationSessionToken = z.object({
+	...GenericSessionToken.shape,
+	/** The type of token. @default auth */
+	typ: z.literal('oauth_application'),
+	/** Permissions — bitwise encoded permissions this token has */
+	p: EncodedPermission,
+});
 
 /** A JWT session token used to authenticate a user */
 export const SessionToken = z.union([
