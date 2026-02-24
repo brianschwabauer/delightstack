@@ -577,6 +577,189 @@ The session JWT changes on every refresh and is deleted on signout. Preferences 
 **Why CSRF via Origin/Referer (not tokens)?**
 Origin/Referer checking is stateless, requires no hidden form fields or extra headers from the client, and works out of the box with `fetch()`. The `Origin` header is present on all same-origin POST/PATCH/DELETE requests in modern browsers. Referer is used as a fallback. Non-browser clients (APIs, CLIs) that omit both headers are allowed through, since they aren't vulnerable to CSRF.
 
+## Usage Without SvelteKit
+
+The `createAuthHandle()`, `AuthClient`, route guards, and cookie helpers are SvelteKit-specific. However, the core `AuthDatabaseServer` Durable Object works with any Cloudflare Workers framework. You get the full auth backend — sign-up, sign-in, sessions, orgs, permissions, invitations, OAuth — and handle the HTTP/cookie layer yourself.
+
+### What's available
+
+| Layer                  | SvelteKit | Other frameworks |
+| ---------------------- | --------- | ---------------- |
+| Auth Durable Object    | Yes       | Yes              |
+| JWT generation/decode  | Yes       | Yes              |
+| Permission encode/decode | Yes     | Yes              |
+| `createAuthHandle()`   | Yes       | No               |
+| `AuthClient` (Svelte 5 runes) | Yes | No            |
+| Route guards           | Yes       | No               |
+| Cookie helpers         | Yes       | No               |
+
+### Hono
+
+```typescript
+import { Hono } from 'hono';
+import { setCookie, getCookie } from 'hono/cookie';
+import { AuthDatabaseServer } from '@delightstack/auth/server';
+import { generateJwt, decodeJwt } from '@delightstack/auth/server';
+
+// Re-export the DO for wrangler
+export { AuthDatabaseServer };
+
+type Env = {
+	Bindings: {
+		AUTH: DurableObjectNamespace<AuthDatabaseServer>;
+		JWT_KEY_SECRET: string;
+	};
+};
+
+const app = new Hono<Env>();
+
+function getAuth(c: Context<Env>) {
+	const id = c.env.AUTH.idFromName('main');
+	return c.env.AUTH.get(id);
+}
+
+app.post('/api/auth/signup', async (c) => {
+	const auth = getAuth(c);
+	const { name, email, password, org_name } = await c.req.json();
+	const meta = { ip_address: c.req.header('CF-Connecting-IP') };
+
+	const result = await auth.signUpWithEmail({ name, email, password, org_name }, meta);
+	setCookie(c, 'session', result.jwt, { httpOnly: true, secure: true, sameSite: 'Lax' });
+	return c.json(result);
+});
+
+app.post('/api/auth/signin', async (c) => {
+	const auth = getAuth(c);
+	const { email, password } = await c.req.json();
+	const meta = { ip_address: c.req.header('CF-Connecting-IP') };
+
+	const result = await auth.signInWithEmail({ email, password }, meta);
+	setCookie(c, 'session', result.jwt, { httpOnly: true, secure: true, sameSite: 'Lax' });
+	return c.json(result);
+});
+
+app.post('/api/auth/signout', async (c) => {
+	const jwt = getCookie(c, 'session');
+	if (jwt) {
+		const auth = getAuth(c);
+		await auth.revokeSessionToken(jwt);
+	}
+	setCookie(c, 'session', '', { maxAge: 0 });
+	return c.body(null, 204);
+});
+
+// Auth middleware
+app.use('/api/*', async (c, next) => {
+	const jwt = getCookie(c, 'session');
+	if (jwt) {
+		try {
+			const session = await decodeJwt(c.env.JWT_KEY_SECRET, jwt);
+			c.set('session', session);
+		} catch {
+			// expired or invalid — clear cookie
+			setCookie(c, 'session', '', { maxAge: 0 });
+		}
+	}
+	await next();
+});
+
+export default app;
+```
+
+### Plain Cloudflare Worker
+
+```typescript
+import { AuthDatabaseServer } from '@delightstack/auth/server';
+import { decodeJwt } from '@delightstack/auth/server';
+
+export { AuthDatabaseServer };
+
+export default {
+	async fetch(request: Request, env: Env): Promise<Response> {
+		const url = new URL(request.url);
+		const auth = env.AUTH.get(env.AUTH.idFromName('main'));
+		const meta = { ip_address: request.headers.get('CF-Connecting-IP') || undefined };
+
+		if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
+			const body = await request.json();
+			const result = await auth.signUpWithEmail(body, meta);
+			return Response.json(result, {
+				headers: {
+					'Set-Cookie': `session=${result.jwt}; HttpOnly; Secure; SameSite=Lax; Path=/`,
+				},
+			});
+		}
+
+		if (url.pathname === '/api/auth/signin' && request.method === 'POST') {
+			const body = await request.json();
+			const result = await auth.signInWithEmail(body, meta);
+			return Response.json(result, {
+				headers: {
+					'Set-Cookie': `session=${result.jwt}; HttpOnly; Secure; SameSite=Lax; Path=/`,
+				},
+			});
+		}
+
+		// Decode JWT from cookie for protected routes
+		const cookie = request.headers.get('Cookie') || '';
+		const jwt = cookie.match(/session=([^;]+)/)?.[1];
+		if (jwt) {
+			const session = await decodeJwt(env.JWT_KEY_SECRET, jwt);
+			// session.uid, session.org, session.email, etc.
+		}
+
+		return new Response('Not found', { status: 404 });
+	},
+};
+```
+
+### Key DO methods for direct use
+
+The `AuthDatabaseServer` exposes RPC methods you can call directly from any Cloudflare Worker:
+
+```typescript
+const auth = env.AUTH.get(env.AUTH.idFromName('main'));
+
+// Authentication
+await auth.signUpWithEmail({ name, email, password, org_name }, meta);
+await auth.signInWithEmail({ email, password }, meta);
+await auth.signInWithOauth(oauthToken, meta);
+await auth.refreshSession(session_id, meta);
+await auth.revokeSessionToken(jwt);
+
+// Users
+auth.getUser(user_id);
+auth.updateUser(user_id, { name: 'New Name' });
+auth.deleteUser(user_id);
+
+// Organizations
+auth.createOrg({ id, name, owner_id, ... });
+auth.getOrg(org_id);
+auth.listOrgUsers(org_id);
+auth.updateUserPermission(org_id, user_id, encoded_permission);
+
+// Sessions
+auth.listSessions(user_id);
+auth.revokeSession(session_id);
+auth.revokeUserSessions(user_id);
+
+// Invitations
+auth.createInvitation({ org_id, permission, email, ... });
+auth.acceptInvitation(invitation_id, user_id);
+auth.listInvitations(org_id);
+
+// Password
+await auth.resetPassword(token, new_password, meta);
+await auth.checkPasswordStrength(password);
+
+// Email verification
+await auth.verifyEmail(token, meta);
+
+// Preferences
+auth.getUserPreferences(user_id);
+auth.setUserPreferences(user_id, { theme: 'dark' });
+```
+
 ## Exports
 
 ### `@delightstack/auth/server`
