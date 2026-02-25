@@ -10,7 +10,7 @@ import type {
 	SessionListMessage,
 	ErrorMessage,
 } from '../types';
-import { getWsWorker, resetWsWorker } from './websocket.worker.init';
+import { getWsWorker } from './websocket.worker.init';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,9 +69,9 @@ export class WebsocketClient {
 	#config: WebsocketClientConfig;
 	#worker: Remote<WebsocketWorker> | null = null;
 	#channel: BroadcastChannel | null = null;
+	#channel_name: string | null = null;
 	#listeners = new Map<string, Set<EventCallback>>();
 	#entity_change_listeners = new Set<(event: EntityChangeEvent) => void>();
-	#has_tab = false;
 
 	// Reactive state (Svelte 5 runes)
 	#status = $state<ConnectionStatus>('disconnected');
@@ -102,20 +102,25 @@ export class WebsocketClient {
 	async connect(org_id: string): Promise<void> {
 		if (typeof window === 'undefined') return; // SSR guard
 
-		// Close previous channel if switching orgs
+		const channel_name = `ws:${org_id}`;
+
+		// Already connected to this org — nothing to do
+		if (this.#channel_name === channel_name) return;
+
+		// Disconnect from previous org if switching
+		if (this.#channel_name && this.#worker) {
+			await this.#worker.disconnect(this.#channel_name);
+		}
 		this.#channel?.close();
 		this.#channel = null;
 
 		this.#worker = await getWsWorker(this.#config.dev);
-		if (!this.#has_tab) {
-			await this.#worker.addTab();
-			this.#has_tab = true;
-		}
 
 		// Build the WebSocket URL from the current page origin
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const url = `${protocol}//${window.location.host}${this.#config.path}`;
-		const channel_name = `ws:${org_id}`;
+
+		this.#channel_name = channel_name;
 
 		// Set up BroadcastChannel to receive events from the SharedWorker
 		this.#channel = new BroadcastChannel(channel_name);
@@ -170,7 +175,7 @@ export class WebsocketClient {
 			}
 		};
 
-		// Tell the SharedWorker to connect
+		// Tell the SharedWorker to connect (increments tab count or creates new connection)
 		await this.#worker.connect({ url, channel_name });
 	}
 
@@ -180,14 +185,12 @@ export class WebsocketClient {
 	 * Call `destroy()` for full cleanup including listeners.
 	 */
 	async disconnect(): Promise<void> {
-		if (this.#worker) {
-			await this.#worker.removeTab();
-			this.#worker = null;
-			this.#has_tab = false;
+		if (this.#worker && this.#channel_name) {
+			await this.#worker.disconnect(this.#channel_name);
 		}
-		resetWsWorker();
 		this.#channel?.close();
 		this.#channel = null;
+		this.#channel_name = null;
 		this.#status = 'disconnected';
 	}
 
@@ -259,8 +262,8 @@ export class WebsocketClient {
 	 * The message must have an `event` field.
 	 */
 	async send(message: WebsocketMessage): Promise<void> {
-		if (!this.#worker) throw new Error('WebSocket not connected');
-		await this.#worker.send(message as Record<string, unknown>);
+		if (!this.#worker || !this.#channel_name) throw new Error('WebSocket not connected');
+		await this.#worker.send(this.#channel_name, message as Record<string, unknown>);
 	}
 
 	// -----------------------------------------------------------------------
