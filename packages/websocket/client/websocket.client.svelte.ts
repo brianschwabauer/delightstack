@@ -10,6 +10,7 @@ import type {
 	SessionListMessage,
 	ErrorMessage,
 	AuthSessionMeta,
+	SessionInfo,
 } from '../types';
 import { getWsWorker } from './websocket.worker.init';
 
@@ -27,8 +28,8 @@ export interface WebsocketClientConfig {
 	dev?: boolean;
 }
 
-/** Map of known event names to their message types (parameterized by session metadata) */
-type WebsocketEventMap<Meta extends Record<string, unknown>> = {
+/** Built-in event names and their message types */
+type BuiltinEventMap<Meta extends Record<string, unknown>> = {
 	'entity:created': EntityChangedMessage;
 	'entity:updated': EntityChangedMessage;
 	'entity:deleted': EntityChangedMessage;
@@ -38,6 +39,12 @@ type WebsocketEventMap<Meta extends Record<string, unknown>> = {
 	error: ErrorMessage;
 	'*': WebsocketMessage;
 };
+
+/** Full event map — built-in events merged with app-specific custom events */
+type WebsocketEventMap<
+	Meta extends Record<string, unknown>,
+	Events extends object,
+> = BuiltinEventMap<Meta> & Events;
 
 type EventCallback<T = WebsocketMessage> = (message: T) => void;
 
@@ -55,26 +62,31 @@ type EventCallback<T = WebsocketMessage> = (message: T) => void;
  *
  * @typeParam Meta - The session metadata shape. Defaults to `AuthSessionMeta`.
  *   Pass your own type to get typed `meta` access on session events.
+ * @typeParam Events - Custom event map for app-specific events.
+ *   Keys are event names, values are message types.
  *
  * @example
  * ```ts
- * // With @delightstack/auth (default — meta is AuthSessionMeta):
+ * // With @delightstack/auth (default):
  * const ws = new WebsocketClient({ dev: import.meta.env.DEV });
  * await ws.connect(org_id);
  * ws.on('session:connected', (msg) => {
  *   console.log(msg.meta?.user_name); // typed as string | undefined
  * });
+ * console.log(ws.sessions); // reactive list of connected sessions
  *
- * // Custom metadata:
- * interface MyMeta { role: string; color: string; }
- * const ws = new WebsocketClient<MyMeta>({ url: 'wss://example.com/ws' });
- * await ws.connect('my-room');
- * ws.on('session:connected', (msg) => {
- *   console.log(msg.meta?.role); // typed as string | undefined
- * });
+ * // With custom metadata and typed events:
+ * type MyEvents = {
+ *   'chat:message': { event: 'chat:message'; text: string; sender: string };
+ * };
+ * const ws = new WebsocketClient<AuthSessionMeta, MyEvents>();
+ * ws.on('chat:message', (msg) => msg.text); // typed!
  * ```
  */
-export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionMeta> {
+export class WebsocketClient<
+	Meta extends Record<string, unknown> = AuthSessionMeta,
+	Events extends object = object,
+> {
 	#config: WebsocketClientConfig;
 	#worker: Remote<WebsocketWorker> | null = null;
 	#channel: BroadcastChannel | null = null;
@@ -85,6 +97,7 @@ export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionM
 	// Reactive state (Svelte 5 runes)
 	#status = $state<ConnectionStatus>('disconnected');
 	#connected = $derived(this.#status === 'connected');
+	#sessions = $state<SessionInfo<Meta>[]>([]);
 
 	/** Current connection status (reactive) */
 	get status(): ConnectionStatus {
@@ -94,6 +107,11 @@ export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionM
 	/** Whether the WebSocket is currently connected (reactive) */
 	get connected(): boolean {
 		return this.#connected;
+	}
+
+	/** Currently connected sessions (reactive). Auto-updates from session events. */
+	get sessions(): readonly SessionInfo<Meta>[] {
+		return this.#sessions;
 	}
 
 	constructor(config?: WebsocketClientConfig) {
@@ -155,6 +173,9 @@ export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionM
 				return;
 			}
 
+			// Update reactive sessions state before dispatching to listeners
+			this.#updateSessions(message);
+
 			// Dispatch to event-specific listeners + wildcard
 			this.#dispatch(message.event, message);
 
@@ -203,6 +224,7 @@ export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionM
 		this.#channel?.close();
 		this.#channel = null;
 		this.#channel_name = null;
+		this.#sessions = [];
 		this.#status = 'disconnected';
 	}
 
@@ -234,9 +256,9 @@ export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionM
 	 * ws.on('*', (msg) => console.log(msg.event));
 	 * ```
 	 */
-	on<K extends keyof WebsocketEventMap<Meta>>(
+	on<K extends keyof WebsocketEventMap<Meta, Events>>(
 		event: K,
-		callback: EventCallback<WebsocketEventMap<Meta>[K]>,
+		callback: EventCallback<WebsocketEventMap<Meta, Events>[K]>,
 	): () => void;
 	on(event: string, callback: EventCallback): () => void;
 	on(event: string, callback: EventCallback): () => void {
@@ -256,9 +278,9 @@ export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionM
 	 * Listen for a specific event type once. The listener auto-removes after first invocation.
 	 * Returns an unsubscribe function in case you need to cancel before the event fires.
 	 */
-	once<K extends keyof WebsocketEventMap<Meta>>(
+	once<K extends keyof WebsocketEventMap<Meta, Events>>(
 		event: K,
-		callback: EventCallback<WebsocketEventMap<Meta>[K]>,
+		callback: EventCallback<WebsocketEventMap<Meta, Events>[K]>,
 	): () => void;
 	once(event: string, callback: EventCallback): () => void;
 	once(event: string, callback: EventCallback): () => void {
@@ -323,6 +345,30 @@ export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionM
 	// -----------------------------------------------------------------------
 	// Private
 	// -----------------------------------------------------------------------
+
+	#updateSessions(message: WebsocketMessage): void {
+		if (message.event === 'session:list') {
+			const msg = message as SessionListMessage;
+			this.#sessions = msg.sessions.map((s) => ({
+				ws_session_id: s.ws_session_id,
+				...(s.meta != null && { meta: s.meta as Meta }),
+			}));
+		} else if (message.event === 'session:connected') {
+			const msg = message as SessionConnectedMessage;
+			this.#sessions = [
+				...this.#sessions,
+				{
+					ws_session_id: msg.ws_session_id,
+					...(msg.meta != null && { meta: msg.meta as Meta }),
+				},
+			];
+		} else if (message.event === 'session:disconnected') {
+			const msg = message as SessionDisconnectedMessage;
+			this.#sessions = this.#sessions.filter(
+				(s) => s.ws_session_id !== msg.ws_session_id,
+			);
+		}
+	}
 
 	#dispatch(event_name: string, message: WebsocketMessage): void {
 		const listeners = this.#listeners.get(event_name);

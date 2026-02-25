@@ -132,6 +132,16 @@ export interface WebsocketSessionMeta<
 }
 
 // ---------------------------------------------------------------------------
+// Session info (client-side presence tracking)
+// ---------------------------------------------------------------------------
+
+/** A connected session as seen by the client (used by `WebsocketClient.sessions`) */
+export type SessionInfo<Meta extends Record<string, unknown> = Record<string, unknown>> = {
+	ws_session_id: string;
+	meta?: Meta;
+};
+
+// ---------------------------------------------------------------------------
 // Client connection status
 // ---------------------------------------------------------------------------
 

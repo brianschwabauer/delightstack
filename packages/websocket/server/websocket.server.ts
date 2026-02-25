@@ -28,6 +28,25 @@ export interface WebsocketServerConfig<Meta extends Record<string, unknown> = Au
 	) => WebsocketMessage | void | Promise<WebsocketMessage | void>;
 
 	/**
+	 * Called after a new WebSocket connection is fully set up
+	 * (session:list sent, session:connected broadcast).
+	 * Use for side effects like logging, analytics, or database writes.
+	 */
+	onConnect?: (
+		session: WebsocketSessionMeta<Meta>,
+		server: WebsocketServer<Meta>,
+	) => void | Promise<void>;
+
+	/**
+	 * Called after a WebSocket disconnects and session:disconnected is broadcast.
+	 * The session metadata is still available for cleanup logic.
+	 */
+	onDisconnect?: (
+		session: WebsocketSessionMeta<Meta>,
+		server: WebsocketServer<Meta>,
+	) => void | Promise<void>;
+
+	/**
 	 * Rate limit for incoming client messages (token bucket).
 	 * @default { max_tokens: 30, refill_every_seconds: 10 }
 	 */
@@ -63,14 +82,13 @@ interface Env {
  *   }
  * }
  *
- * // Custom metadata:
- * interface MyMeta { role: string; color: string; }
- * export class WebsocketDO extends WebsocketServer<MyMeta> {
+ * // With lifecycle hooks:
+ * export class WebsocketDO extends WebsocketServer {
  *   constructor(ctx: DurableObjectState, env: Env) {
  *     super({
- *       onMessage: (msg, session) => {
- *         console.log(session.meta?.role); // typed!
- *       },
+ *       onConnect: (session) => console.log(`${session.meta?.user_name} joined`),
+ *       onDisconnect: (session) => console.log(`${session.meta?.user_name} left`),
+ *       onMessage: (msg, session) => console.log(msg.event),
  *     }, ctx, env);
  *   }
  * }
@@ -215,6 +233,10 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 			);
 		}
 
+		if (this.config.onConnect) {
+			await this.config.onConnect(session_meta, this);
+		}
+
 		return new Response(null, { status: 101, webSocket: client });
 	}
 
@@ -307,7 +329,7 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 	// Private
 	// -----------------------------------------------------------------------
 
-	private handleDisconnect(ws: WebSocket): void {
+	private async handleDisconnect(ws: WebSocket): Promise<void> {
 		const session = this.sessions.get(ws);
 		this.sessions.delete(ws);
 		if (session) {
@@ -317,6 +339,9 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 				...sessionFields(session),
 				num_connections: this.getActiveSessions().length,
 			});
+			if (this.config.onDisconnect) {
+				await this.config.onDisconnect(session, this);
+			}
 		}
 	}
 
