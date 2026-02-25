@@ -166,11 +166,11 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 		_reason: string,
 		_wasClean: boolean,
 	): Promise<void> {
-		this.handleDisconnect(ws);
+		await this.handleDisconnect(ws);
 	}
 
 	async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
-		this.handleDisconnect(ws);
+		await this.handleDisconnect(ws);
 	}
 
 	// -----------------------------------------------------------------------
