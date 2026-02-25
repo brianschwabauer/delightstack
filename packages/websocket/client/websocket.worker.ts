@@ -50,10 +50,24 @@ export class WebsocketWorker {
 		}
 	}
 
-	/** Connect to the WebSocket server. Idempotent — does nothing if already connected or connecting. */
+	/** Connect to the WebSocket server. Handles org switching — disconnects the old connection if options changed. */
 	async connect(options: ConnectOptions): Promise<void> {
-		// Guard against duplicate connections in any non-disconnected state
-		if (this.#status !== 'disconnected') return;
+		// If already connected/connecting to the same target, do nothing
+		if (this.#status !== 'disconnected') {
+			if (this.#url === options.url && this.#channel_name === options.channel_name) {
+				return;
+			}
+			// Options changed (e.g. org switch) — tear down old connection
+			this.#clearReconnectTimer();
+			this.#reconnect_attempts = 0;
+			if (this.#ws) {
+				// Detach handlers to prevent stale close/error from triggering reconnect
+				this.#ws.onclose = null;
+				this.#ws.onerror = null;
+				this.#ws.close(1000, 'Switching connection');
+				this.#ws = null;
+			}
+		}
 
 		this.#url = options.url;
 

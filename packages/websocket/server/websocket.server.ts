@@ -354,8 +354,10 @@ export class WebsocketServer extends DurableObject<Env> {
 			const refill = Math.floor(
 				(now - bucket.last_refill) / (refill_every_seconds * 1000),
 			);
-			bucket.count = Math.min(bucket.count + refill, max_tokens);
-			bucket.last_refill = now;
+			if (refill > 0) {
+				bucket.count = Math.min(bucket.count + refill, max_tokens);
+				bucket.last_refill += refill * refill_every_seconds * 1000;
+			}
 			bucket.count = Math.max(0, bucket.count - 1);
 		}
 		this.rate_limit_buckets.set(key, bucket);

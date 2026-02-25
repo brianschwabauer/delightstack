@@ -71,6 +71,7 @@ export class WebsocketClient {
 	#channel: BroadcastChannel | null = null;
 	#listeners = new Map<string, Set<EventCallback>>();
 	#entity_change_listeners = new Set<(event: EntityChangeEvent) => void>();
+	#has_tab = false;
 
 	// Reactive state (Svelte 5 runes)
 	#status = $state<ConnectionStatus>('disconnected');
@@ -106,7 +107,10 @@ export class WebsocketClient {
 		this.#channel = null;
 
 		this.#worker = await getWsWorker(this.#config.dev);
-		await this.#worker.addTab();
+		if (!this.#has_tab) {
+			await this.#worker.addTab();
+			this.#has_tab = true;
+		}
 
 		// Build the WebSocket URL from the current page origin
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -179,6 +183,7 @@ export class WebsocketClient {
 		if (this.#worker) {
 			await this.#worker.removeTab();
 			this.#worker = null;
+			this.#has_tab = false;
 		}
 		resetWsWorker();
 		this.#channel?.close();
