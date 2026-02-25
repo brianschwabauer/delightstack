@@ -5,22 +5,26 @@ import type {
 	WebsocketSessionMeta,
 	EntityChangedMessage,
 	SessionListMessage,
+	AuthSessionMeta,
 } from '../types';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-/** Configuration for the WebsocketServer Durable Object */
-export interface WebsocketServerConfig {
+/**
+ * Configuration for the WebsocketServer Durable Object.
+ * @typeParam Meta - The session metadata shape. Defaults to `AuthSessionMeta`.
+ */
+export interface WebsocketServerConfig<Meta extends Record<string, unknown> = AuthSessionMeta> {
 	/**
 	 * Handler for incoming client messages. Return a message to send back, or void.
 	 * Only called for messages that are not handled internally (ping/pong is automatic).
 	 */
 	onMessage?: (
 		message: WebsocketMessage,
-		session: WebsocketSessionMeta,
-		server: WebsocketServer,
+		session: WebsocketSessionMeta<Meta>,
+		server: WebsocketServer<Meta>,
 	) => WebsocketMessage | void | Promise<WebsocketMessage | void>;
 
 	/**
@@ -48,19 +52,33 @@ interface Env {
  * Uses the Cloudflare Hibernation API for efficient connection management
  * and automatic ping/pong keep-alive.
  *
+ * @typeParam Meta - The session metadata shape. Defaults to `AuthSessionMeta`.
+ *
  * @example
  * ```ts
- * // In your app's Durable Object definition:
+ * // With @delightstack/auth (default metadata):
  * export class WebsocketDO extends WebsocketServer {
  *   constructor(ctx: DurableObjectState, env: Env) {
  *     super({}, ctx, env);
  *   }
  * }
+ *
+ * // Custom metadata:
+ * interface MyMeta { role: string; color: string; }
+ * export class WebsocketDO extends WebsocketServer<MyMeta> {
+ *   constructor(ctx: DurableObjectState, env: Env) {
+ *     super({
+ *       onMessage: (msg, session) => {
+ *         console.log(session.meta?.role); // typed!
+ *       },
+ *     }, ctx, env);
+ *   }
+ * }
  * ```
  */
-export class WebsocketServer extends DurableObject<Env> {
-	private sessions = new Map<WebSocket, WebsocketSessionMeta>();
-	private config: WebsocketServerConfig;
+export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionMeta> extends DurableObject<Env> {
+	private sessions = new Map<WebSocket, WebsocketSessionMeta<Meta>>();
+	private config: WebsocketServerConfig<Meta>;
 
 	// In-memory token bucket rate limiter (per ws_session_id)
 	private rate_limit_buckets = new Map<
@@ -68,7 +86,7 @@ export class WebsocketServer extends DurableObject<Env> {
 		{ count: number; last_refill: number }
 	>();
 
-	constructor(config: WebsocketServerConfig, ctx: DurableObjectState, env: Env) {
+	constructor(config: WebsocketServerConfig<Meta>, ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		this.config = config;
 
@@ -155,7 +173,7 @@ export class WebsocketServer extends DurableObject<Env> {
 		// Session metadata is passed as JSON by createWebsocketHandle().
 		// The DO trusts this header because it is only reachable via the CF binding.
 		const raw_meta = headers.get('X-WS-Meta');
-		let incoming_meta: Omit<WebsocketSessionMeta, 'ws_session_id'> = {};
+		let incoming_meta: Omit<WebsocketSessionMeta<Meta>, 'ws_session_id'> = {};
 		if (raw_meta) {
 			try {
 				incoming_meta = JSON.parse(raw_meta);
@@ -170,7 +188,7 @@ export class WebsocketServer extends DurableObject<Env> {
 
 		this.ctx.acceptWebSocket(server);
 
-		const session_meta: WebsocketSessionMeta = {
+		const session_meta: WebsocketSessionMeta<Meta> = {
 			...incoming_meta,
 			ws_session_id,
 		};
@@ -227,7 +245,7 @@ export class WebsocketServer extends DurableObject<Env> {
 	/** Broadcast a message to all connected clients. Optionally exclude one connection. */
 	broadcast(message: WebsocketMessage, exclude?: WebSocket): void {
 		const serialized = JSON.stringify(message);
-		const disconnected: WebsocketSessionMeta[] = [];
+		const disconnected: WebsocketSessionMeta<Meta>[] = [];
 
 		for (const ws of this.ctx.getWebSockets()) {
 			if (ws === exclude) continue;
@@ -273,7 +291,7 @@ export class WebsocketServer extends DurableObject<Env> {
 	}
 
 	/** Returns metadata for all active sessions. */
-	getActiveSessions(): WebsocketSessionMeta[] {
+	getActiveSessions(): WebsocketSessionMeta<Meta>[] {
 		return this.ctx
 			.getWebSockets()
 			.filter(
@@ -353,14 +371,10 @@ export class WebsocketServer extends DurableObject<Env> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract session fields for broadcast messages (omits internal-only fields) */
+/** Extract session fields for broadcast messages (omits internal-only fields like `room`) */
 function sessionFields(s: WebsocketSessionMeta) {
 	return {
 		ws_session_id: s.ws_session_id,
-		...(s.user_id != null && { user_id: s.user_id }),
-		...(s.user_name != null && { user_name: s.user_name }),
-		...(s.user_auth_id != null && { user_auth_id: s.user_auth_id }),
-		...(s.user_session_id != null && { user_session_id: s.user_session_id }),
 		...(s.meta != null && { meta: s.meta }),
 	};
 }

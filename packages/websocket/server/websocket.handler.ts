@@ -1,5 +1,5 @@
 import type { Handle, RequestEvent } from '@sveltejs/kit';
-import type { WebsocketSessionMeta } from '../types';
+import type { WebsocketSessionMeta, AuthSessionMeta } from '../types';
 
 // ---------------------------------------------------------------------------
 // Minimal auth locals shape (used by default authorize behavior)
@@ -71,13 +71,16 @@ export interface WebsocketHandleOptions {
 	 *   const token = event.url.searchParams.get('token');
 	 *   const user = verifyToken(token);
 	 *   if (!user) return undefined;
-	 *   return { user_id: user.id, user_name: user.name };
+	 *   return { room: 'my-room', meta: { user_id: user.id, role: user.role } };
 	 * }
 	 * ```
 	 */
 	authorize?: (
 		event: RequestEvent,
-	) => Omit<WebsocketSessionMeta, 'ws_session_id'> | undefined | Promise<Omit<WebsocketSessionMeta, 'ws_session_id'> | undefined>;
+	) =>
+		| Omit<WebsocketSessionMeta<Record<string, unknown>>, 'ws_session_id'>
+		| undefined
+		| Promise<Omit<WebsocketSessionMeta<Record<string, unknown>>, 'ws_session_id'> | undefined>;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +111,7 @@ export interface WebsocketHandleOptions {
  *   authorize: (event) => {
  *     const user = verifyMyAuth(event);
  *     if (!user) return undefined;
- *     return { user_id: user.id, user_name: user.name };
+ *     return { meta: { user_id: user.id, user_name: user.name } };
  *   },
  *   getWebsocket: (event) => {
  *     const platform = event.platform as App.Platform;
@@ -166,7 +169,7 @@ export function createWebsocketHandle(options: WebsocketHandleOptions): Handle {
 // Default authorize (uses @delightstack/auth locals)
 // ---------------------------------------------------------------------------
 
-function defaultAuthorize(event: RequestEvent): Omit<WebsocketSessionMeta, 'ws_session_id'> | undefined {
+function defaultAuthorize(event: RequestEvent): Omit<WebsocketSessionMeta<AuthSessionMeta>, 'ws_session_id'> | undefined {
 	const locals = event.locals as WebsocketAuthLocals;
 
 	if (!locals.session || !locals.user || !locals.org_id || !locals.org) {
@@ -174,11 +177,13 @@ function defaultAuthorize(event: RequestEvent): Omit<WebsocketSessionMeta, 'ws_s
 	}
 
 	return {
-		user_id: locals.user.id,
-		user_name: locals.user.name,
-		user_auth_id: locals.user.user_auth_id,
-		user_session_id: locals.user.user_session_id,
 		room: locals.org_id,
-		permission: locals.org.permissions,
+		meta: {
+			user_id: locals.user.id,
+			user_name: locals.user.name,
+			user_auth_id: locals.user.user_auth_id,
+			user_session_id: locals.user.user_session_id,
+			permission: locals.org.permissions,
+		},
 	};
 }

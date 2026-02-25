@@ -9,6 +9,7 @@ import type {
 	SessionDisconnectedMessage,
 	SessionListMessage,
 	ErrorMessage,
+	AuthSessionMeta,
 } from '../types';
 import { getWsWorker } from './websocket.worker.init';
 
@@ -26,17 +27,17 @@ export interface WebsocketClientConfig {
 	dev?: boolean;
 }
 
-/** Map of known event names to their message types */
-interface WebsocketEventMap {
+/** Map of known event names to their message types (parameterized by session metadata) */
+type WebsocketEventMap<Meta extends Record<string, unknown>> = {
 	'entity:created': EntityChangedMessage;
 	'entity:updated': EntityChangedMessage;
 	'entity:deleted': EntityChangedMessage;
-	'session:connected': SessionConnectedMessage;
-	'session:disconnected': SessionDisconnectedMessage;
-	'session:list': SessionListMessage;
+	'session:connected': SessionConnectedMessage<Meta>;
+	'session:disconnected': SessionDisconnectedMessage<Meta>;
+	'session:list': SessionListMessage<Meta>;
 	error: ErrorMessage;
 	'*': WebsocketMessage;
-}
+};
 
 type EventCallback<T = WebsocketMessage> = (message: T) => void;
 
@@ -52,30 +53,28 @@ type EventCallback<T = WebsocketMessage> = (message: T) => void;
  * The `room` parameter scopes the connection — use an org_id for multi-tenant apps,
  * or any arbitrary string for custom rooms/channels.
  *
+ * @typeParam Meta - The session metadata shape. Defaults to `AuthSessionMeta`.
+ *   Pass your own type to get typed `meta` access on session events.
+ *
  * @example
  * ```ts
- * // With @delightstack/auth (org-scoped):
+ * // With @delightstack/auth (default — meta is AuthSessionMeta):
  * const ws = new WebsocketClient({ dev: import.meta.env.DEV });
  * await ws.connect(org_id);
- *
- * // Standalone (custom room):
- * const ws = new WebsocketClient({ url: 'wss://example.com/ws' });
- * await ws.connect('my-room');
- *
- * // Listen for events
- * const unsub = ws.on('session:connected', (msg) => {
- *   console.log(`${msg.user_name} joined`);
+ * ws.on('session:connected', (msg) => {
+ *   console.log(msg.meta?.user_name); // typed as string | undefined
  * });
  *
- * // Wire into DatabaseClient for real-time sync
- * const db = new DatabaseClient({
- *   tables,
- *   db_name: `org:${org_id}`,
- *   hooks: ws.databaseHooks(),
+ * // Custom metadata:
+ * interface MyMeta { role: string; color: string; }
+ * const ws = new WebsocketClient<MyMeta>({ url: 'wss://example.com/ws' });
+ * await ws.connect('my-room');
+ * ws.on('session:connected', (msg) => {
+ *   console.log(msg.meta?.role); // typed as string | undefined
  * });
  * ```
  */
-export class WebsocketClient {
+export class WebsocketClient<Meta extends Record<string, unknown> = AuthSessionMeta> {
 	#config: WebsocketClientConfig;
 	#worker: Remote<WebsocketWorker> | null = null;
 	#channel: BroadcastChannel | null = null;
@@ -224,7 +223,7 @@ export class WebsocketClient {
 	 * @example
 	 * ```ts
 	 * const unsub = ws.on('session:connected', (msg) => {
-	 *   console.log('User connected:', msg.user_name);
+	 *   console.log('User connected:', msg.meta?.user_name);
 	 * });
 	 *
 	 * // Transport lifecycle
@@ -235,9 +234,9 @@ export class WebsocketClient {
 	 * ws.on('*', (msg) => console.log(msg.event));
 	 * ```
 	 */
-	on<K extends keyof WebsocketEventMap>(
+	on<K extends keyof WebsocketEventMap<Meta>>(
 		event: K,
-		callback: EventCallback<WebsocketEventMap[K]>,
+		callback: EventCallback<WebsocketEventMap<Meta>[K]>,
 	): () => void;
 	on(event: string, callback: EventCallback): () => void;
 	on(event: string, callback: EventCallback): () => void {
@@ -257,9 +256,9 @@ export class WebsocketClient {
 	 * Listen for a specific event type once. The listener auto-removes after first invocation.
 	 * Returns an unsubscribe function in case you need to cancel before the event fires.
 	 */
-	once<K extends keyof WebsocketEventMap>(
+	once<K extends keyof WebsocketEventMap<Meta>>(
 		event: K,
-		callback: EventCallback<WebsocketEventMap[K]>,
+		callback: EventCallback<WebsocketEventMap<Meta>[K]>,
 	): () => void;
 	once(event: string, callback: EventCallback): () => void;
 	once(event: string, callback: EventCallback): () => void {
