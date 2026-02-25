@@ -372,7 +372,7 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 // ---------------------------------------------------------------------------
 
 /** Extract session fields for broadcast messages (omits internal-only fields like `room`) */
-function sessionFields(s: WebsocketSessionMeta) {
+function sessionFields(s: WebsocketSessionMeta<Record<string, unknown>>) {
 	return {
 		ws_session_id: s.ws_session_id,
 		...(s.meta != null && { meta: s.meta }),
