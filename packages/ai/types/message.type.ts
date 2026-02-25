@@ -7,7 +7,8 @@ export interface AiStreamChunkMessage {
 	event: 'ai:stream:chunk';
 	stream_id: string;
 	delta: string;
-	accumulated: string;
+	/** Full accumulated text. Only sent on the final chunk (done=true). */
+	accumulated?: string;
 	done: boolean;
 	usage?: TokenUsage;
 	finish_reason?: string;

@@ -1,5 +1,5 @@
 import type { WebsocketClient } from '@delightstack/websocket/client';
-import type { CompletionOptions, TokenUsage } from '../types';
+import type { CompletionOptions, CompletionResult, TokenUsage } from '../types';
 import type { AiStreamChunkMessage, AiStreamErrorMessage } from '../types/message.type';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -27,10 +27,11 @@ export interface AiClientConfig {
  *   await ai.chat({ messages: [...], model: 'gpt-4o' });
  *
  *   // Reactive state (use in Svelte templates)
- *   {ai.streaming}   // boolean — true while generating
- *   {ai.content}     // string — accumulated text
- *   {ai.error}       // string | null — error message
- *   {ai.usage}       // TokenUsage | null — token counts (after completion)
+ *   {ai.streaming}       // boolean — true while generating
+ *   {ai.content}         // string — accumulated text
+ *   {ai.error}           // string | null — error message
+ *   {ai.usage}           // TokenUsage | null — token counts (after completion)
+ *   {ai.finish_reason}   // string | null — why generation stopped
  */
 export class AiClient {
 	#config: AiClientConfig;
@@ -44,6 +45,7 @@ export class AiClient {
 	error = $state<string | null>(null);
 	stream_id = $state<string | null>(null);
 	usage = $state<TokenUsage | null>(null);
+	finish_reason = $state<CompletionResult['finish_reason'] | null>(null);
 
 	constructor(config: AiClientConfig) {
 		this.#config = config;
@@ -68,6 +70,7 @@ export class AiClient {
 		this.error = null;
 		this.stream_id = null;
 		this.usage = null;
+		this.finish_reason = null;
 
 		try {
 			const response = await fetch(`${this.#apiPath}/stream`, {
@@ -102,6 +105,7 @@ export class AiClient {
 		this.error = null;
 		this.stream_id = null;
 		this.usage = null;
+		this.finish_reason = null;
 
 		try {
 			const response = await fetch(`${this.#apiPath}/complete`, {
@@ -117,13 +121,11 @@ export class AiClient {
 				throw new Error(body.message ?? `HTTP ${response.status}`);
 			}
 
-			const result = (await response.json()) as {
-				content: string;
-				usage: TokenUsage;
-			};
+			const result = (await response.json()) as CompletionResult;
 
 			this.content = result.content;
 			this.usage = result.usage;
+			this.finish_reason = result.finish_reason;
 		} catch (err: unknown) {
 			this.error = err instanceof Error ? err.message : 'Completion failed';
 		} finally {
@@ -172,11 +174,21 @@ export class AiClient {
 			const msg = raw as unknown as AiStreamChunkMessage;
 			if (msg.stream_id !== this.stream_id) return;
 
-			this.content = msg.accumulated;
+			// Accumulate from delta (server only sends delta per chunk)
+			if (msg.delta) {
+				this.content += msg.delta;
+			}
 
 			if (msg.done) {
+				// On final chunk, server sends accumulated — use it for consistency
+				if (msg.accumulated != null) {
+					this.content = msg.accumulated;
+				}
 				this.streaming = false;
 				if (msg.usage) this.usage = msg.usage;
+				if (msg.finish_reason) {
+					this.finish_reason = msg.finish_reason as CompletionResult['finish_reason'];
+				}
 			}
 		});
 

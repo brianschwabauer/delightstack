@@ -181,8 +181,8 @@ export interface AiProcessingOptions {
 	/** AI Gateway name. When set, requests are proxied through the gateway. */
 	gateway?: string;
 
-	/** The Durable Object storage for alarm scheduling */
-	storage: DurableObjectStorage;
+	/** The Durable Object storage for alarm scheduling. Required when `fields` is provided. */
+	storage?: DurableObjectStorage;
 
 	/** Default embedding model. Default: '@cf/baai/bge-base-en-v1.5' */
 	embedding_model?: string;

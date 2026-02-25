@@ -104,6 +104,24 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 		if (opts.tools?.length) body.tools = opts.tools;
 		if (opts.response_format) body.response_format = opts.response_format;
 		if (opts.user_id) body.user = opts.user_id;
+		if (opts.metadata) body.metadata = opts.metadata;
+		return body;
+	}
+
+	/** Build Workers AI run options from CompletionOptions */
+	function buildWorkersAiBody(
+		opts: CompletionOptions,
+		streaming: boolean,
+	): Record<string, unknown> {
+		const body: Record<string, unknown> = {
+			messages: buildMessages(opts).map((m) => ({ role: m.role, content: m.content })),
+			stream: streaming,
+		};
+		if (opts.max_tokens != null) body.max_tokens = opts.max_tokens;
+		if (opts.temperature != null) body.temperature = opts.temperature;
+		if (opts.top_p != null) body.top_p = opts.top_p;
+		if (opts.tools?.length) body.tools = opts.tools;
+		if (opts.response_format) body.response_format = opts.response_format;
 		return body;
 	}
 
@@ -145,16 +163,11 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 		async complete(opts: CompletionOptions): Promise<CompletionResult> {
 			// Workers AI models can be called directly
 			if (isWorkersAiModel(opts.model)) {
-				const messages = buildMessages(opts);
 				const gatewayOpts = gateway ? { gateway: { id: gateway } } : undefined;
 
 				const result = (await ai.run(
 					opts.model as Parameters<Ai['run']>[0],
-					{
-						messages: messages.map((m) => ({ role: m.role, content: m.content })),
-						max_tokens: opts.max_tokens,
-						temperature: opts.temperature,
-					} as Record<string, unknown>,
+					buildWorkersAiBody(opts, false),
 					gatewayOpts,
 				)) as Record<string, unknown>;
 
@@ -206,24 +219,21 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 			async function* generate(): AsyncGenerator<StreamChunk, void, unknown> {
 				// Workers AI streaming
 				if (isWorkersAiModel(opts.model)) {
-					const messages = buildMessages(opts);
 					const gatewayOpts = gateway ? { gateway: { id: gateway } } : undefined;
 
 					const result = await ai.run(
 						opts.model as Parameters<Ai['run']>[0],
-						{
-							messages: messages.map((m) => ({ role: m.role, content: m.content })),
-							max_tokens: opts.max_tokens,
-							temperature: opts.temperature,
-							stream: true,
-						} as Record<string, unknown>,
+						buildWorkersAiBody(opts, true),
 						gatewayOpts,
 					);
 
 					// Workers AI streaming returns a ReadableStream
 					const stream = result as unknown as ReadableStream<Uint8Array>;
 					const decoder = new TextDecoderStream();
-					stream.pipeTo(decoder.writable as WritableStream<Uint8Array>);
+					const pipePromise = stream.pipeTo(
+						decoder.writable as WritableStream<Uint8Array>,
+					);
+					pipePromise.catch(() => {}); // Errors surface via reader
 					const reader = decoder.readable.getReader();
 
 					let buffer = '';
@@ -286,7 +296,10 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 				}
 
 				const bodyDecoder = new TextDecoderStream();
-				body.pipeTo(bodyDecoder.writable as WritableStream<Uint8Array>);
+				const pipePromise = body.pipeTo(
+					bodyDecoder.writable as WritableStream<Uint8Array>,
+				);
+				pipePromise.catch(() => {}); // Errors surface via reader
 				const reader = bodyDecoder.readable.getReader();
 				let buffer = '';
 				let lastUsage: TokenUsage | undefined;

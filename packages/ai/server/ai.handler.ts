@@ -28,6 +28,121 @@ export interface AiHandleOptions {
 	authorize?: (event: RequestEventLike) => boolean | Promise<boolean>;
 }
 
+// ── Validation helpers ──────────────────────────────────────────────────────
+
+/** Maximum allowed max_tokens to prevent accidental budget burns */
+const MAX_TOKENS_LIMIT = 128_000;
+
+function validateCompletionOptions(body: unknown): CompletionOptions {
+	if (!body || typeof body !== 'object') {
+		throw DelightError.badRequest('Request body must be a JSON object');
+	}
+
+	const obj = body as Record<string, unknown>;
+
+	if (!Array.isArray(obj.messages) || obj.messages.length === 0) {
+		throw DelightError.badRequest('messages must be a non-empty array');
+	}
+
+	if (typeof obj.model !== 'string' || !obj.model.trim()) {
+		throw DelightError.badRequest('model must be a non-empty string');
+	}
+
+	if (obj.max_tokens != null) {
+		if (
+			typeof obj.max_tokens !== 'number' ||
+			obj.max_tokens < 1 ||
+			obj.max_tokens > MAX_TOKENS_LIMIT
+		) {
+			throw DelightError.badRequest(
+				`max_tokens must be between 1 and ${MAX_TOKENS_LIMIT}`,
+			);
+		}
+	}
+
+	if (obj.temperature != null) {
+		if (
+			typeof obj.temperature !== 'number' ||
+			obj.temperature < 0 ||
+			obj.temperature > 2
+		) {
+			throw DelightError.badRequest('temperature must be between 0 and 2');
+		}
+	}
+
+	// Validate each message has role + content
+	for (const msg of obj.messages) {
+		if (!msg || typeof msg !== 'object') {
+			throw DelightError.badRequest('Each message must be an object');
+		}
+		const m = msg as Record<string, unknown>;
+		if (
+			typeof m.role !== 'string' ||
+			!['system', 'user', 'assistant', 'tool'].includes(m.role)
+		) {
+			throw DelightError.badRequest('Each message must have a valid role');
+		}
+		if (typeof m.content !== 'string') {
+			throw DelightError.badRequest('Each message must have string content');
+		}
+	}
+
+	return obj as unknown as CompletionOptions;
+}
+
+function validateEmbeddingOptions(body: unknown): EmbeddingOptions {
+	if (!body || typeof body !== 'object') {
+		throw DelightError.badRequest('Request body must be a JSON object');
+	}
+
+	const obj = body as Record<string, unknown>;
+
+	if (typeof obj.input !== 'string' && !Array.isArray(obj.input)) {
+		throw DelightError.badRequest('input must be a string or array of strings');
+	}
+
+	if (Array.isArray(obj.input)) {
+		if (obj.input.length === 0) {
+			throw DelightError.badRequest('input array must not be empty');
+		}
+		for (const item of obj.input) {
+			if (typeof item !== 'string') {
+				throw DelightError.badRequest('Each input must be a string');
+			}
+		}
+	}
+
+	return obj as unknown as EmbeddingOptions;
+}
+
+function validateStreamId(body: unknown): { stream_id: string } {
+	if (!body || typeof body !== 'object') {
+		throw DelightError.badRequest('Request body must be a JSON object');
+	}
+
+	const obj = body as Record<string, unknown>;
+
+	if (typeof obj.stream_id !== 'string' || !obj.stream_id.trim()) {
+		throw DelightError.badRequest('stream_id must be a non-empty string');
+	}
+
+	return { stream_id: obj.stream_id };
+}
+
+function validateResumeOptions(body: unknown): {
+	stream_id: string;
+	last_offset: number;
+} {
+	const { stream_id } = validateStreamId(body);
+	const obj = body as Record<string, unknown>;
+
+	if (typeof obj.last_offset !== 'number' || obj.last_offset < 0) {
+		throw DelightError.badRequest('last_offset must be a non-negative number');
+	}
+
+	return { stream_id, last_offset: obj.last_offset };
+}
+
 // ── Handle ──────────────────────────────────────────────────────────────────
 
 /**
@@ -36,7 +151,7 @@ export interface AiHandleOptions {
  * - POST /api/ai/complete   — Non-streaming chat completion
  * - POST /api/ai/embed      — Generate embeddings
  * - POST /api/ai/stream     — Start a streaming completion (returns stream_id, streams via WebSocket)
- * - POST /api/ai/resume     — Resume a disconnected stream
+ * - POST /api/ai/resume     — Resume a disconnected stream (replays missed chunks via WebSocket)
  * - POST /api/ai/cancel     — Cancel an active stream
  *
  * Usage:
@@ -110,30 +225,40 @@ export function createAiHandle(options: AiHandleOptions): Handle {
 // ── Route handlers ──────────────────────────────────────────────────────────
 
 async function handleComplete(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = (await event.request.json()) as CompletionOptions;
-	const result = await ai.complete(body);
+	const body = await event.request.json();
+	const options = validateCompletionOptions(body);
+	const result = await ai.complete(options);
 	return Response.json(result);
 }
 
 async function handleEmbed(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = (await event.request.json()) as EmbeddingOptions;
-	const result = await ai.embed(body);
+	const body = await event.request.json();
+	const options = validateEmbeddingOptions(body);
+	const result = await ai.embed(options);
 	return Response.json(result);
 }
 
 async function handleStream(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = (await event.request.json()) as CompletionOptions;
-	const result = await ai.streamToClient(body);
+	const body = await event.request.json();
+	const options = validateCompletionOptions(body);
+	const result = await ai.streamToClient(options);
 	return Response.json(result);
 }
 
 async function handleResume(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = (await event.request.json()) as { stream_id: string; last_offset: number };
-	return Response.json({ ok: true, stream_id: body.stream_id });
+	const body = await event.request.json();
+	const { stream_id, last_offset } = validateResumeOptions(body);
+
+	// The resume endpoint can't directly send to the client's WebSocket
+	// from an HTTP handler — the client should send resume via WebSocket.
+	// This endpoint acknowledges the request and lets the client know
+	// to use WebSocket for actual resumption.
+	return Response.json({ ok: true, stream_id, last_offset, via: 'websocket' });
 }
 
 async function handleCancel(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = (await event.request.json()) as { stream_id: string };
-	ai.cancelStream(body.stream_id);
+	const body = await event.request.json();
+	const { stream_id } = validateStreamId(body);
+	ai.cancelStream(stream_id);
 	return Response.json({ ok: true });
 }

@@ -1,4 +1,3 @@
-import { generateTimestampID } from '@delightstack/utilities';
 import type { DatabaseServer } from '@delightstack/database';
 import type { WebsocketServer } from '@delightstack/websocket/server';
 
@@ -11,7 +10,6 @@ import type {
 	StreamChunk,
 	EmbeddingOptions,
 	EmbeddingResult,
-	EmbeddingFieldConfig,
 	AiErrorCode,
 } from '../types';
 import type { AiStreamChunkMessage, AiStreamErrorMessage } from '../types/message.type';
@@ -42,9 +40,7 @@ export interface AiServer {
 	/** Non-streaming chat completion */
 	complete(options: CompletionOptions): Promise<CompletionResult>;
 	/** Streaming chat completion (returns async iterable of chunks) */
-	stream(
-		options: CompletionOptions,
-	): AsyncGenerator<StreamChunk, void, unknown> & {
+	stream(options: CompletionOptions): AsyncGenerator<StreamChunk, void, unknown> & {
 		stream_id: string;
 		abort: () => void;
 	};
@@ -88,6 +84,9 @@ export interface AiServer {
 /** TTL for stream buffers (5 minutes) */
 const BUFFER_TTL = 5 * 60 * 1000;
 
+/** Maximum number of stream buffers to keep in memory */
+const MAX_BUFFERS = 100;
+
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 /**
@@ -117,19 +116,32 @@ const BUFFER_TTL = 5 * 60 * 1000;
  *   async alarm() { await ai.processAlarm(); }
  */
 export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): AiServer {
-	const gateway = createAiGateway({
-		ai: options.ai(),
-		gateway: options.gateway,
-	});
+	// Lazy gateway creation — AI binding may not be available at construction time
+	let _gateway: AiGatewayClient | null = null;
+	function getGateway(): AiGatewayClient {
+		if (!_gateway) {
+			_gateway = createAiGateway({
+				ai: options.ai(),
+				gateway: options.gateway,
+			});
+		}
+		return _gateway;
+	}
 
-	const embeddings = options.fields?.length
-		? aiEmbeddings(db, { ...options, fields: options.fields })
-		: null;
+	// Only create embeddings processor when fields and storage are provided
+	const embeddings =
+		options.fields?.length && options.storage
+			? aiEmbeddings(db, {
+					...options,
+					fields: options.fields,
+					storage: options.storage,
+				})
+			: null;
 
 	// In-memory stream buffers for resumability
 	const streamBuffers = new Map<string, StreamBuffer>();
 
-	/** Clean up expired stream buffers */
+	/** Clean up expired and excess stream buffers */
 	function cleanBuffers(): void {
 		const now = Date.now();
 		for (const [id, buffer] of streamBuffers) {
@@ -137,16 +149,41 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 				streamBuffers.delete(id);
 			}
 		}
+		// Safety cap: if too many buffers, remove oldest completed ones
+		if (streamBuffers.size > MAX_BUFFERS) {
+			const sorted = [...streamBuffers.entries()]
+				.filter(([, b]) => b.done)
+				.sort(([, a], [, b]) => a.created_at - b.created_at);
+			for (const [id] of sorted.slice(0, streamBuffers.size - MAX_BUFFERS)) {
+				streamBuffers.delete(id);
+			}
+		}
+	}
+
+	// Periodic cleanup interval (every 60s) to catch abandoned streams
+	let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+	function ensureCleanupInterval(): void {
+		if (cleanupInterval) return;
+		cleanupInterval = setInterval(() => {
+			cleanBuffers();
+			// Stop interval when no buffers remain
+			if (streamBuffers.size === 0 && cleanupInterval) {
+				clearInterval(cleanupInterval);
+				cleanupInterval = null;
+			}
+		}, 60_000);
 	}
 
 	return {
 		// ── Gateway pass-through ────────────────────────────────────────────
 
-		complete: (opts) => gateway.complete(opts),
-		stream: (opts) => gateway.stream(opts),
-		embed: (opts) => gateway.embed(opts),
-		getProviderUrl: (provider) => gateway.getProviderUrl(provider),
-		gateway,
+		complete: (opts) => getGateway().complete(opts),
+		stream: (opts) => getGateway().stream(opts),
+		embed: (opts) => getGateway().embed(opts),
+		getProviderUrl: (provider) => getGateway().getProviderUrl(provider),
+		get gateway() {
+			return getGateway();
+		},
 
 		// ── Resumable streaming via WebSocket ───────────────────────────────
 
@@ -158,7 +195,7 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 				});
 			}
 
-			const streamGen = gateway.stream(opts);
+			const streamGen = getGateway().stream(opts);
 			const { stream_id, abort } = streamGen;
 
 			// Create buffer
@@ -170,6 +207,7 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 				created_at: Date.now(),
 			};
 			streamBuffers.set(stream_id, buffer);
+			ensureCleanupInterval();
 
 			// Process stream in the background (non-blocking)
 			(async () => {
@@ -177,15 +215,25 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 					for await (const chunk of streamGen) {
 						buffer.accumulated = chunk.accumulated;
 
-						ws.broadcast({
-							event: 'ai:stream:chunk',
-							stream_id,
-							delta: chunk.delta,
-							accumulated: chunk.accumulated,
-							done: chunk.done,
-							usage: chunk.usage,
-							finish_reason: chunk.finish_reason,
-						} satisfies AiStreamChunkMessage);
+						// Only send delta per chunk; send accumulated on final chunk
+						if (chunk.done) {
+							ws.broadcast({
+								event: 'ai:stream:chunk',
+								stream_id,
+								delta: chunk.delta,
+								accumulated: chunk.accumulated,
+								done: true,
+								usage: chunk.usage,
+								finish_reason: chunk.finish_reason,
+							} satisfies AiStreamChunkMessage);
+						} else {
+							ws.broadcast({
+								event: 'ai:stream:chunk',
+								stream_id,
+								delta: chunk.delta,
+								done: false,
+							} satisfies AiStreamChunkMessage);
+						}
 
 						if (chunk.done) {
 							buffer.done = true;

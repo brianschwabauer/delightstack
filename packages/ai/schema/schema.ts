@@ -1,4 +1,5 @@
 import { Database } from '@delightstack/database';
+import { RESERVED_AI_FIELDS } from '../types';
 
 /** Extract the schema builder type from Database.table's callback parameter */
 type TableCallback = Parameters<typeof Database.table>[1];
@@ -33,8 +34,23 @@ export function defineAiTable(
 ) {
 	const dimensions = options?.dimensions ?? 768;
 
+	// Validate that custom fields don't shadow reserved AI fields
+	const sampleSchema = {} as AiSchemaBuilder;
+	const custom = customFields(sampleSchema);
+	for (const key of Object.keys(custom)) {
+		if (RESERVED_AI_FIELDS.has(key as any)) {
+			throw new Error(
+				`defineAiTable: custom field '${key}' conflicts with reserved AI field. ` +
+					`Reserved fields: ${[...RESERVED_AI_FIELDS].join(', ')}`,
+			);
+		}
+	}
+
 	return Database.table(table_name, (schema) => ({
 		id: schema.primaryKey(),
+
+		// Custom fields first, then reserved fields override any accidental collisions
+		...customFields(schema),
 
 		/** Vector embedding generated from source fields */
 		embedding: schema.vector(dimensions).optional(),
@@ -58,8 +74,6 @@ export function defineAiTable(
 
 		created_at: schema.string().datetime(),
 		updated_at: schema.string().datetime(),
-
-		...customFields(schema),
 	}));
 }
 
@@ -89,6 +103,18 @@ export function defineAiConversationTable(
 				role: schema.enum(['system', 'user', 'assistant', 'tool']),
 				content: schema.string(),
 				tool_call_id: schema.string().optional(),
+				tool_calls: schema
+					.array(
+						schema.object({
+							id: schema.string(),
+							type: schema.string(),
+							function: schema.object({
+								name: schema.string(),
+								arguments: schema.string(),
+							}),
+						}),
+					)
+					.optional(),
 				created_at: schema.string().datetime(),
 			}),
 		),

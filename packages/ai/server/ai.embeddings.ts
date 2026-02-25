@@ -23,17 +23,18 @@ async function scheduleAlarm(storage: DurableObjectStorage): Promise<void> {
 	}
 }
 
-/** Hash source text for change detection using SHA-256 */
-async function hashText(text: string): Promise<string> {
-	const encoded = new TextEncoder().encode(text);
-	const hash = await crypto.subtle.digest('SHA-256', encoded);
-	const bytes = new Uint8Array(hash);
-	// Use hex encoding for compact representation
-	let hex = '';
-	for (const b of bytes) {
-		hex += b.toString(16).padStart(2, '0');
+/**
+ * Simple synchronous hash for change detection.
+ * Not cryptographic — just needs to detect when source text changes.
+ * Uses djb2 algorithm for speed (called in afterCreate/afterUpdate hooks).
+ */
+function hashText(text: string): string {
+	let hash = 5381;
+	for (let i = 0; i < text.length; i++) {
+		hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0;
 	}
-	return hex;
+	// Include length to reduce collisions for short strings
+	return `${(hash >>> 0).toString(36)}_${text.length}`;
 }
 
 /** Safely get a record by ID, returning null instead of throwing on 404 */
@@ -71,6 +72,21 @@ function extractSourceText(
 		.join(separator);
 }
 
+/**
+ * Validate that an entity type is in the configured fields whitelist.
+ * Prevents SQL injection by only allowing known table names.
+ */
+function validateEntityType(
+	entityType: string,
+	fieldConfigs: Map<string, EmbeddingFieldConfig>,
+): void {
+	if (!fieldConfigs.has(entityType)) {
+		throw new Error(
+			`Unknown entity type '${entityType}'. Must be one of: ${[...fieldConfigs.keys()].join(', ')}`,
+		);
+	}
+}
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface EmbeddingRecord {
@@ -106,7 +122,10 @@ interface EmbeddingRecord {
  */
 export function aiEmbeddings(
 	db: AnyDatabaseServer,
-	options: AiProcessingOptions & { fields: EmbeddingFieldConfig[] },
+	options: AiProcessingOptions & {
+		fields: EmbeddingFieldConfig[];
+		storage: DurableObjectStorage;
+	},
 ) {
 	const storage = options.storage;
 	const embeddingModel = options.embedding_model ?? '@cf/baai/bge-base-en-v1.5';
@@ -114,10 +133,17 @@ export function aiEmbeddings(
 	const BATCH_SIZE = 10;
 	const fieldConfigs = new Map(options.fields.map((f) => [f.entity_type, f]));
 
-	const gateway = createAiGateway({
-		ai: options.ai(),
-		gateway: options.gateway,
-	});
+	// Lazy gateway creation — AI binding may not be available at construction time
+	let _gateway: ReturnType<typeof createAiGateway> | null = null;
+	function getGateway() {
+		if (!_gateway) {
+			_gateway = createAiGateway({
+				ai: options.ai(),
+				gateway: options.gateway,
+			});
+		}
+		return _gateway;
+	}
 
 	return {
 		/**
@@ -136,7 +162,7 @@ export function aiEmbeddings(
 			const sourceText = extractSourceText(data, config);
 			if (!sourceText.trim()) return;
 
-			const newHash = await hashText(sourceText);
+			const newHash = hashText(sourceText);
 			const existingHash = data._embedding_source as string | null;
 
 			// Skip if the source text hasn't changed
@@ -167,12 +193,18 @@ export function aiEmbeddings(
 		 * Handles stuck 'processing' records and retries failed ones.
 		 */
 		async processAlarm(): Promise<void> {
+			const gateway = getGateway();
+
 			// Collect all entity types that have embedding configs
 			const entityTypes = [...fieldConfigs.keys()];
 			let totalPending = 0;
 
 			for (const entityType of entityTypes) {
 				const config = fieldConfigs.get(entityType)!;
+
+				// Entity type is from developer-configured fieldConfigs (validated at init),
+				// but we still validate to be safe against any dynamic usage
+				validateEntityType(entityType, fieldConfigs);
 
 				// Fetch pending records
 				const pending = db.exec(
@@ -306,14 +338,14 @@ export function aiEmbeddings(
 		 * Force re-embed a specific record. Resets to pending and schedules alarm.
 		 */
 		async reembed(entity_type: string, id: string | number): Promise<void> {
+			validateEntityType(entity_type, fieldConfigs);
+
 			const record = tryGet(db, entity_type, id);
 			if (!record) return;
 
-			const config = fieldConfigs.get(entity_type);
-			if (!config) return;
-
+			const config = fieldConfigs.get(entity_type)!;
 			const sourceText = extractSourceText(record, config);
-			const newHash = sourceText.trim() ? await hashText(sourceText) : null;
+			const newHash = sourceText.trim() ? hashText(sourceText) : null;
 
 			db.update(
 				entity_type,
@@ -333,38 +365,40 @@ export function aiEmbeddings(
 		 * Useful for backfilling after adding AI to an existing table.
 		 */
 		async backfill(entity_type: string): Promise<{ processed: number; failed: number }> {
-			const config = fieldConfigs.get(entity_type);
-			if (!config) return { processed: 0, failed: 0 };
+			validateEntityType(entity_type, fieldConfigs);
 
-			// Mark all un-embedded records as pending
+			const config = fieldConfigs.get(entity_type)!;
+
+			// Fetch full records in one query to avoid N+1
 			const unembedded = db.exec(
-				`SELECT id FROM ${entity_type} WHERE embedding_status IS NULL OR embedding IS NULL`,
-			) as unknown as { id: string | number }[];
+				`SELECT * FROM ${entity_type} WHERE embedding_status IS NULL OR embedding IS NULL`,
+			) as unknown as EmbeddingRecord[];
 
 			let processed = 0;
 			let failed = 0;
 
-			for (const { id } of unembedded) {
-				const record = tryGet(db, entity_type, id);
-				if (!record) continue;
-
-				const sourceText = extractSourceText(record, config);
+			for (const record of unembedded) {
+				const sourceText = extractSourceText(record as Record<string, unknown>, config);
 				if (!sourceText.trim()) {
 					processed++;
 					continue;
 				}
 
-				const hash = await hashText(sourceText);
-				db.update(
-					entity_type,
-					id as string,
-					{
-						embedding_status: 'pending',
-						_embedding_source: hash,
-						embedding_error: null,
-					} as any,
-				);
-				processed++;
+				try {
+					const hash = hashText(sourceText);
+					db.update(
+						entity_type,
+						record.id as string,
+						{
+							embedding_status: 'pending',
+							_embedding_source: hash,
+							embedding_error: null,
+						} as any,
+					);
+					processed++;
+				} catch {
+					failed++;
+				}
 			}
 
 			// Schedule alarm to start processing
