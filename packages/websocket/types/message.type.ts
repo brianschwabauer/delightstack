@@ -35,12 +35,23 @@ export interface SessionDisconnectedMessage {
 	num_connections: number;
 }
 
+/** Sent to a newly connected client with all currently active sessions */
+export interface SessionListMessage {
+	event: 'session:list';
+	sessions: Array<{
+		user_id: string;
+		user_name: string;
+		user_auth_id: string;
+		user_session_id: string;
+		ws_session_id: string;
+	}>;
+}
+
 /** Error event sent to an individual connection */
 export interface ErrorMessage {
 	event: 'error';
 	message: string;
 	status: number;
-	request?: unknown;
 }
 
 /** Keep-alive ping (handled automatically by hibernation API) */
@@ -67,6 +78,7 @@ export type WebsocketMessage =
 	| EntityChangedMessage
 	| SessionConnectedMessage
 	| SessionDisconnectedMessage
+	| SessionListMessage
 	| ErrorMessage
 	| PingMessage
 	| PongMessage

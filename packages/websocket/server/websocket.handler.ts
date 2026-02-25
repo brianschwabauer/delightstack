@@ -111,7 +111,7 @@ export function createWebsocketHandle(options: WebsocketHandleOptions): Handle {
 		forward_headers.set('X-WS-User-ID', locals.user.id);
 		forward_headers.set('X-WS-User-Auth-ID', locals.user.user_auth_id);
 		forward_headers.set('X-WS-User-Session-ID', locals.user.user_session_id);
-		forward_headers.set('X-WS-User-Name', locals.user.name);
+		forward_headers.set('X-WS-User-Name', encodeURIComponent(locals.user.name));
 		forward_headers.set('X-WS-Org-ID', locals.org_id);
 		forward_headers.set('X-WS-Permission', String(locals.org.permissions));
 

@@ -5,6 +5,10 @@ import type {
 	ConnectionStatus,
 	EntityChangeEvent,
 	EntityChangedMessage,
+	SessionConnectedMessage,
+	SessionDisconnectedMessage,
+	SessionListMessage,
+	ErrorMessage,
 } from '../types';
 import { getWsWorker, resetWsWorker } from './websocket.worker.init';
 
@@ -20,7 +24,19 @@ export interface WebsocketClientConfig {
 	dev?: boolean;
 }
 
-type EventCallback = (message: WebsocketMessage) => void;
+/** Map of known event names to their message types */
+interface WebsocketEventMap {
+	'entity:created': EntityChangedMessage;
+	'entity:updated': EntityChangedMessage;
+	'entity:deleted': EntityChangedMessage;
+	'session:connected': SessionConnectedMessage;
+	'session:disconnected': SessionDisconnectedMessage;
+	'session:list': SessionListMessage;
+	error: ErrorMessage;
+	'*': WebsocketMessage;
+}
+
+type EventCallback<T = WebsocketMessage> = (message: T) => void;
 
 // ---------------------------------------------------------------------------
 // WebsocketClient
@@ -80,11 +96,17 @@ export class WebsocketClient {
 	/**
 	 * Connect to the WebSocket server for the given org.
 	 * The org_id is used to scope the BroadcastChannel so different orgs are isolated.
+	 * Safe to call multiple times — handles org switching automatically.
 	 */
 	async connect(org_id: string): Promise<void> {
 		if (typeof window === 'undefined') return; // SSR guard
 
+		// Close previous channel if switching orgs
+		this.#channel?.close();
+		this.#channel = null;
+
 		this.#worker = await getWsWorker(this.#config.dev);
+		await this.#worker.addTab();
 
 		// Build the WebSocket URL from the current page origin
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -99,33 +121,21 @@ export class WebsocketClient {
 
 			// Handle internal status updates from the worker
 			if (message.event === '__ws_status') {
-				this.#status = (message as unknown as { status: ConnectionStatus }).status;
+				const new_status = (message as unknown as { status: ConnectionStatus }).status;
+				const old_status = this.#status;
+				this.#status = new_status;
+
+				// Fire transport-level lifecycle events
+				if (new_status === 'connected' && old_status !== 'connected') {
+					this.#dispatch('ws:connected', message);
+				} else if (new_status === 'disconnected' && old_status !== 'disconnected') {
+					this.#dispatch('ws:disconnected', message);
+				}
 				return;
 			}
 
-			// Dispatch to event-specific listeners
-			const listeners = this.#listeners.get(message.event);
-			if (listeners) {
-				for (const cb of listeners) {
-					try {
-						cb(message);
-					} catch {
-						/* listener errors should not break the chain */
-					}
-				}
-			}
-
-			// Dispatch to wildcard listeners
-			const wildcard = this.#listeners.get('*');
-			if (wildcard) {
-				for (const cb of wildcard) {
-					try {
-						cb(message);
-					} catch {
-						/* listener errors should not break the chain */
-					}
-				}
-			}
+			// Dispatch to event-specific listeners + wildcard
+			this.#dispatch(message.event, message);
 
 			// Map entity events to EntityChangeEvent for DatabaseClient integration
 			if (
@@ -160,16 +170,28 @@ export class WebsocketClient {
 		await this.#worker.connect({ url, channel_name });
 	}
 
-	/** Disconnect and clean up all resources. */
+	/**
+	 * Disconnect and clean up resources.
+	 * Event listeners are preserved so they survive reconnection.
+	 * Call `destroy()` for full cleanup including listeners.
+	 */
 	async disconnect(): Promise<void> {
 		if (this.#worker) {
-			await this.#worker.disconnect();
+			await this.#worker.removeTab();
 			this.#worker = null;
 		}
 		resetWsWorker();
 		this.#channel?.close();
 		this.#channel = null;
 		this.#status = 'disconnected';
+	}
+
+	/**
+	 * Full teardown — disconnects and removes all event listeners.
+	 * Use when the WebsocketClient instance is being disposed of entirely.
+	 */
+	async destroy(): Promise<void> {
+		await this.disconnect();
 		this.#listeners.clear();
 		this.#entity_change_listeners.clear();
 	}
@@ -184,9 +206,19 @@ export class WebsocketClient {
 	 *   console.log('User connected:', msg.user_name);
 	 * });
 	 *
-	 * // Later: unsub();
+	 * // Transport lifecycle
+	 * ws.on('ws:connected', () => console.log('WebSocket connected'));
+	 * ws.on('ws:disconnected', () => console.log('WebSocket disconnected'));
+	 *
+	 * // Wildcard — receives any WebsocketMessage
+	 * ws.on('*', (msg) => console.log(msg.event));
 	 * ```
 	 */
+	on<K extends keyof WebsocketEventMap>(
+		event: K,
+		callback: EventCallback<WebsocketEventMap[K]>,
+	): () => void;
+	on(event: string, callback: EventCallback): () => void;
 	on(event: string, callback: EventCallback): () => void {
 		let set = this.#listeners.get(event);
 		if (!set) {
@@ -198,6 +230,23 @@ export class WebsocketClient {
 			set!.delete(callback);
 			if (set!.size === 0) this.#listeners.delete(event);
 		};
+	}
+
+	/**
+	 * Listen for a specific event type once. The listener auto-removes after first invocation.
+	 * Returns an unsubscribe function in case you need to cancel before the event fires.
+	 */
+	once<K extends keyof WebsocketEventMap>(
+		event: K,
+		callback: EventCallback<WebsocketEventMap[K]>,
+	): () => void;
+	once(event: string, callback: EventCallback): () => void;
+	once(event: string, callback: EventCallback): () => void {
+		const unsub = this.on(event, (message) => {
+			unsub();
+			callback(message);
+		});
+		return unsub;
 	}
 
 	/**
@@ -249,5 +298,36 @@ export class WebsocketClient {
 				};
 			},
 		};
+	}
+
+	// -----------------------------------------------------------------------
+	// Private
+	// -----------------------------------------------------------------------
+
+	#dispatch(event_name: string, message: WebsocketMessage): void {
+		const listeners = this.#listeners.get(event_name);
+		if (listeners) {
+			for (const cb of listeners) {
+				try {
+					cb(message);
+				} catch {
+					/* listener errors should not break the chain */
+				}
+			}
+		}
+
+		// Dispatch to wildcard listeners (skip for wildcard itself to avoid double-fire)
+		if (event_name !== '*') {
+			const wildcard = this.#listeners.get('*');
+			if (wildcard) {
+				for (const cb of wildcard) {
+					try {
+						cb(message);
+					} catch {
+						/* listener errors should not break the chain */
+					}
+				}
+			}
+		}
 	}
 }

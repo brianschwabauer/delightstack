@@ -20,6 +20,7 @@ type WorkerStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30_000;
 const JITTER_FACTOR = 0.3;
+const MAX_RECONNECT_ATTEMPTS = 20;
 
 // ---------------------------------------------------------------------------
 // WebsocketWorker
@@ -34,19 +35,34 @@ export class WebsocketWorker {
 	#reconnect_attempts = 0;
 	#reconnect_timer: ReturnType<typeof setTimeout> | null = null;
 	#intentional_close = false;
+	#tab_count = 0;
 
-	/** Connect to the WebSocket server. Idempotent — does nothing if already connected. */
+	/** Called when a new tab connects (via comlink port). */
+	async addTab(): Promise<void> {
+		this.#tab_count++;
+	}
+
+	/** Called when a tab disconnects. Closes WS when no tabs remain. */
+	async removeTab(): Promise<void> {
+		this.#tab_count = Math.max(0, this.#tab_count - 1);
+		if (this.#tab_count === 0) {
+			await this.disconnect();
+		}
+	}
+
+	/** Connect to the WebSocket server. Idempotent — does nothing if already connected or connecting. */
 	async connect(options: ConnectOptions): Promise<void> {
-		if (this.#ws && this.#status === 'connected') return;
+		// Guard against duplicate connections in any non-disconnected state
+		if (this.#status !== 'disconnected') return;
 
 		this.#url = options.url;
-		this.#channel_name = options.channel_name;
 
-		// Create BroadcastChannel for fan-out to all tabs
+		// Create or swap BroadcastChannel if the org changed
 		if (!this.#channel || this.#channel_name !== options.channel_name) {
 			this.#channel?.close();
 			this.#channel = new BroadcastChannel(options.channel_name);
 		}
+		this.#channel_name = options.channel_name;
 
 		this.#intentional_close = false;
 		this.#doConnect();
@@ -64,6 +80,8 @@ export class WebsocketWorker {
 		this.#setStatus('disconnected');
 		this.#channel?.close();
 		this.#channel = null;
+		this.#channel_name = null;
+		this.#url = null;
 	}
 
 	/** Send a JSON message to the server. */
@@ -113,7 +131,6 @@ export class WebsocketWorker {
 		this.#ws.onclose = () => {
 			this.#ws = null;
 			if (!this.#intentional_close) {
-				this.#setStatus('reconnecting');
 				this.#scheduleReconnect();
 			} else {
 				this.#setStatus('disconnected');
@@ -126,7 +143,14 @@ export class WebsocketWorker {
 	}
 
 	#scheduleReconnect(): void {
+		if (this.#reconnect_attempts >= MAX_RECONNECT_ATTEMPTS) {
+			this.#setStatus('disconnected');
+			return;
+		}
+
 		this.#clearReconnectTimer();
+		this.#setStatus('reconnecting');
+
 		const delay = Math.min(
 			BASE_DELAY_MS * Math.pow(2, this.#reconnect_attempts),
 			MAX_DELAY_MS,

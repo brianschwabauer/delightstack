@@ -4,7 +4,7 @@ import type {
 	WebsocketMessage,
 	WebsocketSessionMeta,
 	EntityChangedMessage,
-	ErrorMessage,
+	SessionListMessage,
 } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,15 @@ export interface WebsocketServerConfig {
 		session: WebsocketSessionMeta,
 		server: WebsocketServer,
 	) => WebsocketMessage | void | Promise<WebsocketMessage | void>;
+
+	/**
+	 * Rate limit for incoming client messages (token bucket).
+	 * @default { max_tokens: 30, refill_every_seconds: 10 }
+	 */
+	rate_limit?: {
+		max_tokens?: number;
+		refill_every_seconds?: number;
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +62,12 @@ export class WebsocketServer extends DurableObject<Env> {
 	private sessions = new Map<WebSocket, WebsocketSessionMeta>();
 	private config: WebsocketServerConfig;
 
+	// In-memory token bucket rate limiter (per ws_session_id)
+	private rate_limit_buckets = new Map<
+		string,
+		{ count: number; last_refill: number }
+	>();
+
 	constructor(config: WebsocketServerConfig, ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		this.config = config;
@@ -81,6 +96,14 @@ export class WebsocketServer extends DurableObject<Env> {
 			return this.sendError(ws, 'Binary messages are not supported', 400);
 		}
 
+		const session = this.sessions.get(ws);
+		if (!session) return;
+
+		// Rate limit incoming messages
+		if (!this.consumeRateToken(session.ws_session_id)) {
+			return this.sendError(ws, 'Too many messages. Please slow down.', 429);
+		}
+
 		let parsed: Record<string, unknown>;
 		try {
 			parsed = JSON.parse(raw_message);
@@ -91,9 +114,6 @@ export class WebsocketServer extends DurableObject<Env> {
 		if (!parsed?.event || typeof parsed.event !== 'string') {
 			return this.sendError(ws, 'Message missing event field', 400);
 		}
-
-		const session = this.sessions.get(ws);
-		if (!session) return;
 
 		// Delegate to app-provided handler (parsed is validated to have a string event field)
 		if (this.config.onMessage) {
@@ -137,13 +157,16 @@ export class WebsocketServer extends DurableObject<Env> {
 		const user_id = headers.get('X-WS-User-ID');
 		const user_auth_id = headers.get('X-WS-User-Auth-ID');
 		const user_session_id = headers.get('X-WS-User-Session-ID');
-		const user_name = headers.get('X-WS-User-Name');
+		const raw_user_name = headers.get('X-WS-User-Name');
 		const org_id = headers.get('X-WS-Org-ID');
 		const permission = parseInt(headers.get('X-WS-Permission') || '0', 10);
 
 		if (!user_id || !user_auth_id || !user_session_id || !org_id) {
 			return DelightError.unauthorized('Missing session metadata').toResponse();
 		}
+
+		// Decode the user name (encoded by createWebsocketHandle to handle special chars)
+		const user_name = raw_user_name ? decodeURIComponent(raw_user_name) : '';
 
 		const ws_session_id = generateID();
 		const webSocketPair = new WebSocketPair();
@@ -157,7 +180,7 @@ export class WebsocketServer extends DurableObject<Env> {
 			permission,
 			user_id,
 			user_auth_id,
-			user_name: user_name || '',
+			user_name,
 			org_id,
 			ws_session_id,
 		};
@@ -165,18 +188,33 @@ export class WebsocketServer extends DurableObject<Env> {
 		this.sessions.set(server, session_meta);
 		server.serializeAttachment(session_meta);
 
-		// Notify existing connections about the new user
+		// Send the new connection a list of all currently active sessions
 		const active = this.getActiveSessions();
+		this.send(server, {
+			event: 'session:list',
+			sessions: active.map((s) => ({
+				user_id: s.user_id,
+				user_name: s.user_name,
+				user_auth_id: s.user_auth_id,
+				user_session_id: s.user_session_id,
+				ws_session_id: s.ws_session_id,
+			})),
+		} satisfies SessionListMessage);
+
+		// Notify existing connections about the new user
 		if (active.length > 1) {
-			this.broadcast({
-				event: 'session:connected',
-				user_id,
-				user_auth_id,
-				user_name: user_name || '',
-				user_session_id,
-				ws_session_id,
-				num_connections: active.length,
-			});
+			this.broadcast(
+				{
+					event: 'session:connected',
+					user_id,
+					user_auth_id,
+					user_name,
+					user_session_id,
+					ws_session_id,
+					num_connections: active.length,
+				},
+				server, // exclude the new connection (it already got session:list)
+			);
 		}
 
 		return new Response(null, { status: 101, webSocket: client });
@@ -206,18 +244,17 @@ export class WebsocketServer extends DurableObject<Env> {
 		});
 	}
 
-	/** Broadcast a message to all connected clients in this org. */
-	broadcast(message: WebsocketMessage): void {
+	/** Broadcast a message to all connected clients in this org. Optionally exclude one connection. */
+	broadcast(message: WebsocketMessage, exclude?: WebSocket): void {
 		const serialized = JSON.stringify(message);
 		const disconnected: WebsocketSessionMeta[] = [];
 
 		for (const ws of this.ctx.getWebSockets()) {
+			if (ws === exclude) continue;
 			const session = this.sessions.get(ws);
 			if (!session) continue;
 			try {
-				session.last_sent_at = Date.now();
 				ws.send(serialized);
-				ws.serializeAttachment({ ...session });
 			} catch {
 				// Dead connection — collect for cleanup after the loop
 				this.sessions.delete(ws);
@@ -225,28 +262,34 @@ export class WebsocketServer extends DurableObject<Env> {
 			}
 		}
 
-		// Notify remaining connections about each disconnected session
-		for (const session of disconnected) {
-			this.broadcast({
-				event: 'session:disconnected',
-				user_id: session.user_id,
-				user_name: session.user_name,
-				user_auth_id: session.user_auth_id,
-				user_session_id: session.user_session_id,
-				ws_session_id: session.ws_session_id,
-				num_connections: this.getActiveSessions().length,
-			});
+		// Notify remaining connections about each disconnected session (non-recursive)
+		if (disconnected.length > 0) {
+			const active_count = this.getActiveSessions().length;
+			for (const session of disconnected) {
+				const disconnect_msg = JSON.stringify({
+					event: 'session:disconnected',
+					user_id: session.user_id,
+					user_name: session.user_name,
+					user_auth_id: session.user_auth_id,
+					user_session_id: session.user_session_id,
+					ws_session_id: session.ws_session_id,
+					num_connections: active_count,
+				});
+				for (const ws of this.ctx.getWebSockets()) {
+					if (!this.sessions.has(ws)) continue;
+					try {
+						ws.send(disconnect_msg);
+					} catch {
+						// Already dead — will be cleaned up on next broadcast
+					}
+				}
+			}
 		}
 	}
 
 	/** Send a message to a specific connection. */
 	send(ws: WebSocket, message: WebsocketMessage): void {
 		try {
-			const session = this.sessions.get(ws);
-			if (session) {
-				session.last_sent_at = Date.now();
-				ws.serializeAttachment({ ...session });
-			}
 			ws.send(JSON.stringify(message));
 		} catch {
 			// Dead connection — ignore
@@ -274,6 +317,7 @@ export class WebsocketServer extends DurableObject<Env> {
 		const session = this.sessions.get(ws);
 		this.sessions.delete(ws);
 		if (session) {
+			this.rate_limit_buckets.delete(session.ws_session_id);
 			this.broadcast({
 				event: 'session:disconnected',
 				user_id: session.user_id,
@@ -287,8 +331,44 @@ export class WebsocketServer extends DurableObject<Env> {
 	}
 
 	private sendError(ws: WebSocket, message: string, status: number): void {
-		ws.send(
-			JSON.stringify({ event: 'error', message, status } satisfies ErrorMessage),
-		);
+		try {
+			ws.send(JSON.stringify({ event: 'error', message, status }));
+		} catch {
+			// Connection already dead — nothing to do
+		}
+	}
+
+	/**
+	 * Token bucket rate limiter. Returns true if the request is allowed.
+	 * Cleans up stale buckets to prevent memory leaks.
+	 */
+	private consumeRateToken(key: string): boolean {
+		const now = Date.now();
+		const max_tokens = this.config.rate_limit?.max_tokens ?? 30;
+		const refill_every_seconds = this.config.rate_limit?.refill_every_seconds ?? 10;
+
+		let bucket = this.rate_limit_buckets.get(key);
+		if (!bucket) {
+			bucket = { count: max_tokens - 1, last_refill: now };
+		} else {
+			const refill = Math.floor(
+				(now - bucket.last_refill) / (refill_every_seconds * 1000),
+			);
+			bucket.count = Math.min(bucket.count + refill, max_tokens);
+			bucket.last_refill = now;
+			bucket.count = Math.max(0, bucket.count - 1);
+		}
+		this.rate_limit_buckets.set(key, bucket);
+
+		// Clean up stale buckets (older than 10 minutes)
+		if (this.rate_limit_buckets.size > 100) {
+			for (const [k, b] of this.rate_limit_buckets.entries()) {
+				if (b.last_refill < now - 600_000) {
+					this.rate_limit_buckets.delete(k);
+				}
+			}
+		}
+
+		return bucket.count > 0;
 	}
 }
