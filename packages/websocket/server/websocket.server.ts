@@ -349,7 +349,7 @@ export class WebsocketServer extends DurableObject<Env> {
 
 		let bucket = this.rate_limit_buckets.get(key);
 		if (!bucket) {
-			bucket = { count: max_tokens - 1, last_refill: now };
+			bucket = { count: max_tokens, last_refill: now };
 		} else {
 			const refill = Math.floor(
 				(now - bucket.last_refill) / (refill_every_seconds * 1000),
@@ -358,8 +358,10 @@ export class WebsocketServer extends DurableObject<Env> {
 				bucket.count = Math.min(bucket.count + refill, max_tokens);
 				bucket.last_refill += refill * refill_every_seconds * 1000;
 			}
-			bucket.count = Math.max(0, bucket.count - 1);
 		}
+
+		// Consume one token
+		bucket.count--;
 		this.rate_limit_buckets.set(key, bucket);
 
 		// Clean up stale buckets (older than 10 minutes)
@@ -371,6 +373,6 @@ export class WebsocketServer extends DurableObject<Env> {
 			}
 		}
 
-		return bucket.count > 0;
+		return bucket.count >= 0;
 	}
 }
