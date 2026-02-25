@@ -1,0 +1,22 @@
+{
+	"name": "@delightstack/ai",
+	"type": "module",
+	"private": true,
+	"exports": {
+		".": "./index.ts",
+		"./types": "./types/index.ts",
+		"./server": "./server/index.ts",
+		"./client": "./client/index.ts",
+		"./schema": "./schema/schema.ts"
+	},
+	"dependencies": {
+		"@delightstack/database": "workspace:*",
+		"@delightstack/utilities": "workspace:*",
+		"@delightstack/websocket": "workspace:*"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20251120.0",
+		"typescript": "^5.8.3",
+		"vitest": "^3.2.1"
+	}
+}
