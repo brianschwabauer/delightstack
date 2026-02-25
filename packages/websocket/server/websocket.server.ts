@@ -42,8 +42,8 @@ interface Env {
 }
 
 /**
- * Org-scoped WebSocket Durable Object that manages real-time connections.
- * One instance per organization — all connections belong to the same org.
+ * WebSocket Durable Object that manages real-time connections for a room.
+ * One instance per room/org — all connections belong to the same scope.
  *
  * Uses the Cloudflare Hibernation API for efficient connection management
  * and automatic ping/pong keep-alive.
@@ -152,21 +152,17 @@ export class WebsocketServer extends DurableObject<Env> {
 			});
 		}
 
-		// Session metadata is passed via headers by createWebsocketHandle().
-		// The DO trusts these headers because it is only reachable via the CF binding.
-		const user_id = headers.get('X-WS-User-ID');
-		const user_auth_id = headers.get('X-WS-User-Auth-ID');
-		const user_session_id = headers.get('X-WS-User-Session-ID');
-		const raw_user_name = headers.get('X-WS-User-Name');
-		const org_id = headers.get('X-WS-Org-ID');
-		const permission = parseInt(headers.get('X-WS-Permission') || '0', 10);
-
-		if (!user_id || !user_auth_id || !user_session_id || !org_id) {
-			return DelightError.unauthorized('Missing session metadata').toResponse();
+		// Session metadata is passed as JSON by createWebsocketHandle().
+		// The DO trusts this header because it is only reachable via the CF binding.
+		const raw_meta = headers.get('X-WS-Meta');
+		let incoming_meta: Omit<WebsocketSessionMeta, 'ws_session_id'> = {};
+		if (raw_meta) {
+			try {
+				incoming_meta = JSON.parse(raw_meta);
+			} catch {
+				return DelightError.badRequest('Invalid session metadata').toResponse();
+			}
 		}
-
-		// Decode the user name (encoded by createWebsocketHandle to handle special chars)
-		const user_name = raw_user_name ? decodeURIComponent(raw_user_name) : '';
 
 		const ws_session_id = generateID();
 		const webSocketPair = new WebSocketPair();
@@ -175,13 +171,7 @@ export class WebsocketServer extends DurableObject<Env> {
 		this.ctx.acceptWebSocket(server);
 
 		const session_meta: WebsocketSessionMeta = {
-			last_sent_at: 0,
-			user_session_id,
-			permission,
-			user_id,
-			user_auth_id,
-			user_name,
-			org_id,
+			...incoming_meta,
 			ws_session_id,
 		};
 
@@ -192,13 +182,7 @@ export class WebsocketServer extends DurableObject<Env> {
 		const active = this.getActiveSessions();
 		this.send(server, {
 			event: 'session:list',
-			sessions: active.map((s) => ({
-				user_id: s.user_id,
-				user_name: s.user_name,
-				user_auth_id: s.user_auth_id,
-				user_session_id: s.user_session_id,
-				ws_session_id: s.ws_session_id,
-			})),
+			sessions: active.map((s) => sessionFields(s)),
 		} satisfies SessionListMessage);
 
 		// Notify existing connections about the new user
@@ -206,11 +190,7 @@ export class WebsocketServer extends DurableObject<Env> {
 			this.broadcast(
 				{
 					event: 'session:connected',
-					user_id,
-					user_auth_id,
-					user_name,
-					user_session_id,
-					ws_session_id,
+					...sessionFields(session_meta),
 					num_connections: active.length,
 				},
 				server, // exclude the new connection (it already got session:list)
@@ -226,7 +206,7 @@ export class WebsocketServer extends DurableObject<Env> {
 
 	/**
 	 * Called by DatabaseServer after a create/update/delete to broadcast
-	 * the entity change to all connected WebSocket clients in this org.
+	 * the entity change to all connected WebSocket clients.
 	 */
 	entityChanged(
 		action: 'created' | 'updated' | 'deleted',
@@ -244,7 +224,7 @@ export class WebsocketServer extends DurableObject<Env> {
 		});
 	}
 
-	/** Broadcast a message to all connected clients in this org. Optionally exclude one connection. */
+	/** Broadcast a message to all connected clients. Optionally exclude one connection. */
 	broadcast(message: WebsocketMessage, exclude?: WebSocket): void {
 		const serialized = JSON.stringify(message);
 		const disconnected: WebsocketSessionMeta[] = [];
@@ -268,11 +248,7 @@ export class WebsocketServer extends DurableObject<Env> {
 			for (const session of disconnected) {
 				const disconnect_msg = JSON.stringify({
 					event: 'session:disconnected',
-					user_id: session.user_id,
-					user_name: session.user_name,
-					user_auth_id: session.user_auth_id,
-					user_session_id: session.user_session_id,
-					ws_session_id: session.ws_session_id,
+					...sessionFields(session),
 					num_connections: active_count,
 				});
 				for (const ws of this.ctx.getWebSockets()) {
@@ -296,7 +272,7 @@ export class WebsocketServer extends DurableObject<Env> {
 		}
 	}
 
-	/** Returns metadata for all active sessions in this org. */
+	/** Returns metadata for all active sessions. */
 	getActiveSessions(): WebsocketSessionMeta[] {
 		return this.ctx
 			.getWebSockets()
@@ -320,11 +296,7 @@ export class WebsocketServer extends DurableObject<Env> {
 			this.rate_limit_buckets.delete(session.ws_session_id);
 			this.broadcast({
 				event: 'session:disconnected',
-				user_id: session.user_id,
-				user_name: session.user_name,
-				user_auth_id: session.user_auth_id,
-				user_session_id: session.user_session_id,
-				ws_session_id: session.ws_session_id,
+				...sessionFields(session),
 				num_connections: this.getActiveSessions().length,
 			});
 		}
@@ -375,4 +347,20 @@ export class WebsocketServer extends DurableObject<Env> {
 
 		return bucket.count >= 0;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extract session fields for broadcast messages (omits internal-only fields) */
+function sessionFields(s: WebsocketSessionMeta) {
+	return {
+		ws_session_id: s.ws_session_id,
+		...(s.user_id != null && { user_id: s.user_id }),
+		...(s.user_name != null && { user_name: s.user_name }),
+		...(s.user_auth_id != null && { user_auth_id: s.user_auth_id }),
+		...(s.user_session_id != null && { user_session_id: s.user_session_id }),
+		...(s.meta != null && { meta: s.meta }),
+	};
 }

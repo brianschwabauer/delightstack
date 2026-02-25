@@ -18,8 +18,10 @@ import { getWsWorker } from './websocket.worker.init';
 
 /** Configuration for the WebsocketClient */
 export interface WebsocketClientConfig {
-	/** The WebSocket endpoint path @default '/api/websocket' */
+	/** The WebSocket endpoint path (used to build URL from window.location) @default '/api/websocket' */
 	path?: string;
+	/** Full WebSocket URL override — takes precedence over path. Use for external WS servers. */
+	url?: string;
 	/** Whether the app is in dev mode (uses regular Worker instead of SharedWorker) */
 	dev?: boolean;
 }
@@ -47,10 +49,18 @@ type EventCallback<T = WebsocketMessage> = (message: T) => void;
  * Manages a WebSocket connection via a SharedWorker (shared across browser tabs)
  * and provides event subscription and DatabaseClient integration.
  *
+ * The `room` parameter scopes the connection — use an org_id for multi-tenant apps,
+ * or any arbitrary string for custom rooms/channels.
+ *
  * @example
  * ```ts
+ * // With @delightstack/auth (org-scoped):
  * const ws = new WebsocketClient({ dev: import.meta.env.DEV });
  * await ws.connect(org_id);
+ *
+ * // Standalone (custom room):
+ * const ws = new WebsocketClient({ url: 'wss://example.com/ws' });
+ * await ws.connect('my-room');
  *
  * // Listen for events
  * const unsub = ws.on('session:connected', (msg) => {
@@ -95,19 +105,20 @@ export class WebsocketClient {
 	}
 
 	/**
-	 * Connect to the WebSocket server for the given org.
-	 * The org_id is used to scope the BroadcastChannel so different orgs are isolated.
-	 * Safe to call multiple times — handles org switching automatically.
+	 * Connect to the WebSocket server for the given room.
+	 * The room scopes the BroadcastChannel so different rooms are isolated.
+	 * Use an org_id for multi-tenant apps, or any string for custom rooms.
+	 * Safe to call multiple times — handles room switching automatically.
 	 */
-	async connect(org_id: string): Promise<void> {
+	async connect(room: string): Promise<void> {
 		if (typeof window === 'undefined') return; // SSR guard
 
-		const channel_name = `ws:${org_id}`;
+		const channel_name = `ws:${room}`;
 
-		// Already connected to this org — nothing to do
+		// Already connected to this room — nothing to do
 		if (this.#channel_name === channel_name) return;
 
-		// Disconnect from previous org if switching
+		// Disconnect from previous room if switching
 		if (this.#channel_name && this.#worker) {
 			await this.#worker.disconnect(this.#channel_name);
 		}
@@ -116,9 +127,11 @@ export class WebsocketClient {
 
 		this.#worker = await getWsWorker(this.#config.dev);
 
-		// Build the WebSocket URL from the current page origin
-		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const url = `${protocol}//${window.location.host}${this.#config.path}`;
+		// Build the WebSocket URL (full URL override or derive from page origin)
+		const url = this.#config.url ?? (() => {
+			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+			return `${protocol}//${window.location.host}${this.#config.path}`;
+		})();
 
 		this.#channel_name = channel_name;
 
