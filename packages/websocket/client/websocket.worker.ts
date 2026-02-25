@@ -21,6 +21,9 @@ const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30_000;
 const JITTER_FACTOR = 0.3;
 const MAX_RECONNECT_ATTEMPTS = 20;
+const PING_INTERVAL_MS = 30_000;
+
+const PING_MESSAGE = JSON.stringify({ event: 'ping' });
 
 // ---------------------------------------------------------------------------
 // WebsocketWorker
@@ -34,6 +37,7 @@ export class WebsocketWorker {
 	#status: WorkerStatus = 'disconnected';
 	#reconnect_attempts = 0;
 	#reconnect_timer: ReturnType<typeof setTimeout> | null = null;
+	#ping_timer: ReturnType<typeof setInterval> | null = null;
 	#intentional_close = false;
 	#tab_count = 0;
 
@@ -58,6 +62,7 @@ export class WebsocketWorker {
 				return;
 			}
 			// Options changed (e.g. org switch) — tear down old connection
+			this.#stopPing();
 			this.#clearReconnectTimer();
 			this.#reconnect_attempts = 0;
 			if (this.#ws) {
@@ -85,6 +90,7 @@ export class WebsocketWorker {
 	/** Disconnect from the WebSocket server. Stops reconnection. */
 	async disconnect(): Promise<void> {
 		this.#intentional_close = true;
+		this.#stopPing();
 		this.#clearReconnectTimer();
 		this.#reconnect_attempts = 0;
 		if (this.#ws) {
@@ -130,11 +136,14 @@ export class WebsocketWorker {
 		this.#ws.onopen = () => {
 			this.#reconnect_attempts = 0;
 			this.#setStatus('connected');
+			this.#startPing();
 		};
 
 		this.#ws.onmessage = (event: MessageEvent) => {
 			try {
 				const data = JSON.parse(event.data as string);
+				// Skip pong messages — they're just keep-alive responses
+				if (data?.event === 'pong') return;
 				// Fan out to all tabs via BroadcastChannel
 				this.#channel?.postMessage(data);
 			} catch {
@@ -144,6 +153,7 @@ export class WebsocketWorker {
 
 		this.#ws.onclose = () => {
 			this.#ws = null;
+			this.#stopPing();
 			if (!this.#intentional_close) {
 				this.#scheduleReconnect();
 			} else {
@@ -181,6 +191,22 @@ export class WebsocketWorker {
 		if (this.#reconnect_timer !== null) {
 			clearTimeout(this.#reconnect_timer);
 			this.#reconnect_timer = null;
+		}
+	}
+
+	#startPing(): void {
+		this.#stopPing();
+		this.#ping_timer = setInterval(() => {
+			if (this.#ws?.readyState === WebSocket.OPEN) {
+				this.#ws.send(PING_MESSAGE);
+			}
+		}, PING_INTERVAL_MS);
+	}
+
+	#stopPing(): void {
+		if (this.#ping_timer !== null) {
+			clearInterval(this.#ping_timer);
+			this.#ping_timer = null;
 		}
 	}
 
