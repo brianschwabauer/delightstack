@@ -1,4 +1,4 @@
-import type { TokenUsage, AiErrorCode } from './ai.type';
+import type { TokenUsage, AiErrorCode, ToolCall } from './ai.type';
 
 // ── WebSocket message types for AI streaming ────────────────────────────────
 
@@ -12,6 +12,7 @@ export interface AiStreamChunkMessage {
 	done: boolean;
 	usage?: TokenUsage;
 	finish_reason?: string;
+	tool_calls?: ToolCall[];
 }
 
 /** Server signals a stream error */

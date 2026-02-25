@@ -1,9 +1,11 @@
 import type { DatabaseServer } from '@delightstack/database';
+import type { WebsocketServer } from '@delightstack/websocket/server';
 import type {
 	AiProcessingOptions,
 	EmbeddingFieldConfig,
 	EmbeddingStatus,
 } from '../types';
+import type { AiEmbeddingUpdatedMessage } from '../types/message.type';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDatabaseServer = DatabaseServer<any>;
@@ -125,6 +127,7 @@ export function aiEmbeddings(
 	options: AiProcessingOptions & {
 		fields: EmbeddingFieldConfig[];
 		storage: DurableObjectStorage;
+		ws?: () => WebsocketServer | undefined;
 	},
 ) {
 	const storage = options.storage;
@@ -132,6 +135,22 @@ export function aiEmbeddings(
 	const MAX_RETRIES = options.max_retries ?? 5;
 	const BATCH_SIZE = 10;
 	const fieldConfigs = new Map(options.fields.map((f) => [f.entity_type, f]));
+
+	/** Broadcast embedding status change via WebSocket if available */
+	function broadcastEmbeddingUpdate(
+		entity_type: string,
+		id: string | number,
+		embedding_status: string,
+	): void {
+		const ws = options.ws?.();
+		if (!ws) return;
+		ws.broadcast({
+			event: 'ai:embedding:updated',
+			entity_type,
+			id,
+			embedding_status,
+		} satisfies AiEmbeddingUpdatedMessage);
+	}
 
 	// Lazy gateway creation — AI binding may not be available at construction time
 	let _gateway: ReturnType<typeof createAiGateway> | null = null;
@@ -232,6 +251,7 @@ export function aiEmbeddings(
 									embedding_error: 'Max retries exceeded',
 								} as any,
 							);
+							broadcastEmbeddingUpdate(entityType, record.id, 'failed');
 						} else {
 							db.update(
 								entityType,
@@ -241,9 +261,9 @@ export function aiEmbeddings(
 									embedding_error: `retry:${retries}`,
 								} as any,
 							);
+							totalPending++;
 						}
 					}
-					if (stuck.length) totalPending += stuck.length;
 					continue;
 				}
 
@@ -303,21 +323,26 @@ export function aiEmbeddings(
 								embedding_error: null,
 							} as any,
 						);
+						broadcastEmbeddingUpdate(entityType, record.id, 'embedded');
 					} catch (error: unknown) {
 						// Parse retry count
 						const retryMatch = record.embedding_error?.match(/^retry:(\d+)$/);
 						const retries = retryMatch ? parseInt(retryMatch[1], 10) + 1 : 1;
 						const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
+						const newStatus = retries >= MAX_RETRIES ? 'failed' : 'pending';
 						db.update(
 							entityType,
 							record.id as string,
 							{
-								embedding_status: retries >= MAX_RETRIES ? 'failed' : 'pending',
+								embedding_status: newStatus,
 								embedding_error:
 									retries >= MAX_RETRIES ? errorMessage : `retry:${retries}`,
 							} as any,
 						);
+						if (newStatus === 'failed') {
+							broadcastEmbeddingUpdate(entityType, record.id, 'failed');
+						}
 					}
 				}
 

@@ -50,6 +50,13 @@ function parseSSELine(line: string): string | null {
 	return null;
 }
 
+/** Throw if an abort signal has already been triggered */
+function throwIfAborted(signal?: AbortSignal): void {
+	if (signal?.aborted) {
+		throw createAiError('STREAM_INTERRUPTED', { message: 'Request was aborted' });
+	}
+}
+
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 /**
@@ -109,13 +116,9 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 	}
 
 	/** Build Workers AI run options from CompletionOptions */
-	function buildWorkersAiBody(
-		opts: CompletionOptions,
-		streaming: boolean,
-	): Record<string, unknown> {
+	function buildWorkersAiBody(opts: CompletionOptions): Record<string, unknown> {
 		const body: Record<string, unknown> = {
 			messages: buildMessages(opts).map((m) => ({ role: m.role, content: m.content })),
-			stream: streaming,
 		};
 		if (opts.max_tokens != null) body.max_tokens = opts.max_tokens;
 		if (opts.temperature != null) body.temperature = opts.temperature;
@@ -127,7 +130,9 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 
 	/**
 	 * Make a request through the AI Gateway's unified compat endpoint.
-	 * Falls back to the gateway.run() binding method.
+	 *
+	 * NOTE: The `query` field in Cloudflare's `gw.run()` binding is the
+	 * request body, not URL query params. This is Cloudflare's naming convention.
 	 */
 	async function gatewayFetch(
 		opts: CompletionOptions,
@@ -163,11 +168,13 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 		async complete(opts: CompletionOptions): Promise<CompletionResult> {
 			// Workers AI models can be called directly
 			if (isWorkersAiModel(opts.model)) {
+				throwIfAborted(opts.signal);
+
 				const gatewayOpts = gateway ? { gateway: { id: gateway } } : undefined;
 
 				const result = (await ai.run(
 					opts.model as Parameters<Ai['run']>[0],
-					buildWorkersAiBody(opts, false),
+					buildWorkersAiBody(opts),
 					gatewayOpts,
 				)) as Record<string, unknown>;
 
@@ -219,11 +226,13 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 			async function* generate(): AsyncGenerator<StreamChunk, void, unknown> {
 				// Workers AI streaming
 				if (isWorkersAiModel(opts.model)) {
+					throwIfAborted(opts.signal);
+
 					const gatewayOpts = gateway ? { gateway: { id: gateway } } : undefined;
 
 					const result = await ai.run(
 						opts.model as Parameters<Ai['run']>[0],
-						buildWorkersAiBody(opts, true),
+						{ ...buildWorkersAiBody(opts), stream: true },
 						gatewayOpts,
 					);
 
@@ -239,6 +248,9 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 					let buffer = '';
 					try {
 						while (true) {
+							// Check abort between reads
+							if (controller.signal.aborted) break;
+
 							const { done, value } = await reader.read();
 							if (done) break;
 
@@ -405,6 +417,7 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 				});
 			}
 
+			// NOTE: `query` is the request body in CF's gateway binding (confusing naming by CF)
 			const response = (await gw.run({
 				provider: 'compat',
 				endpoint: 'embeddings',

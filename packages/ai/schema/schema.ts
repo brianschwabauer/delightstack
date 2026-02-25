@@ -34,9 +34,14 @@ export function defineAiTable(
 ) {
 	const dimensions = options?.dimensions ?? 768;
 
-	// Validate that custom fields don't shadow reserved AI fields
-	const sampleSchema = {} as AiSchemaBuilder;
-	const custom = customFields(sampleSchema);
+	// Validate that custom fields don't shadow reserved AI fields.
+	// Use a Proxy-based mock schema so chained calls like schema.string().searchable() work.
+	const mockHandler: ProxyHandler<object> = {
+		get: () => new Proxy(() => {}, mockHandler),
+		apply: () => new Proxy(() => {}, mockHandler),
+	};
+	const mockSchema = new Proxy(() => {}, mockHandler) as unknown as AiSchemaBuilder;
+	const custom = customFields(mockSchema);
 	for (const key of Object.keys(custom)) {
 		if (RESERVED_AI_FIELDS.has(key as any)) {
 			throw new Error(

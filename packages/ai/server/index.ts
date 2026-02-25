@@ -1,4 +1,9 @@
-export { aiProcessing, type AiServerOptions, type AiServer } from './ai.server';
+export {
+	aiProcessing,
+	createAiMessageHandler,
+	type AiServerOptions,
+	type AiServer,
+} from './ai.server';
 export {
 	createAiGateway,
 	type AiGatewayOptions,

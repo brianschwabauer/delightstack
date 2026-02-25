@@ -1,5 +1,5 @@
 import type { WebsocketClient } from '@delightstack/websocket/client';
-import type { CompletionOptions, CompletionResult, TokenUsage } from '../types';
+import type { CompletionOptions, CompletionResult, TokenUsage, ToolCall } from '../types';
 import type { AiStreamChunkMessage, AiStreamErrorMessage } from '../types/message.type';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -46,6 +46,7 @@ export class AiClient {
 	stream_id = $state<string | null>(null);
 	usage = $state<TokenUsage | null>(null);
 	finish_reason = $state<CompletionResult['finish_reason'] | null>(null);
+	tool_calls = $state<ToolCall[]>([]);
 
 	constructor(config: AiClientConfig) {
 		this.#config = config;
@@ -71,6 +72,7 @@ export class AiClient {
 		this.stream_id = null;
 		this.usage = null;
 		this.finish_reason = null;
+		this.tool_calls = [];
 
 		try {
 			const response = await fetch(`${this.#apiPath}/stream`, {
@@ -106,6 +108,7 @@ export class AiClient {
 		this.stream_id = null;
 		this.usage = null;
 		this.finish_reason = null;
+		this.tool_calls = [];
 
 		try {
 			const response = await fetch(`${this.#apiPath}/complete`, {
@@ -126,6 +129,7 @@ export class AiClient {
 			this.content = result.content;
 			this.usage = result.usage;
 			this.finish_reason = result.finish_reason;
+			if (result.tool_calls) this.tool_calls = result.tool_calls;
 		} catch (err: unknown) {
 			this.error = err instanceof Error ? err.message : 'Completion failed';
 		} finally {
@@ -177,6 +181,11 @@ export class AiClient {
 			// Accumulate from delta (server only sends delta per chunk)
 			if (msg.delta) {
 				this.content += msg.delta;
+			}
+
+			// Accumulate tool call deltas
+			if (msg.tool_calls?.length) {
+				this.tool_calls = [...this.tool_calls, ...msg.tool_calls];
 			}
 
 			if (msg.done) {

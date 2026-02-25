@@ -26,12 +26,29 @@ export interface AiHandleOptions {
 	 * Default: checks event.locals.session is truthy.
 	 */
 	authorize?: (event: RequestEventLike) => boolean | Promise<boolean>;
+
+	/**
+	 * Model validation hook. Called before any completion or stream request.
+	 * Throw or return false to reject the model. Use this to restrict
+	 * which models clients can access (e.g. block expensive models).
+	 * Default: allows all models.
+	 */
+	validateModel?: (model: string, event: RequestEventLike) => boolean | Promise<boolean>;
 }
 
 // ── Validation helpers ──────────────────────────────────────────────────────
 
 /** Maximum allowed max_tokens to prevent accidental budget burns */
 const MAX_TOKENS_LIMIT = 128_000;
+
+/** Safely parse JSON from a request, returning a clean error on invalid JSON */
+async function parseJsonBody(request: Request): Promise<unknown> {
+	try {
+		return await request.json();
+	} catch {
+		throw DelightError.badRequest('Invalid JSON in request body');
+	}
+}
 
 function validateCompletionOptions(body: unknown): CompletionOptions {
 	if (!body || typeof body !== 'object') {
@@ -157,6 +174,7 @@ function validateResumeOptions(body: unknown): {
  * Usage:
  *   const aiHandle = createAiHandle({
  *     getAi: (event) => event.locals.ai,
+ *     validateModel: (model) => !model.startsWith('dynamic/admin'),
  *   });
  *   export const handle = sequence(authHandle, aiHandle, databaseHandle);
  */
@@ -200,13 +218,13 @@ export function createAiHandle(options: AiHandleOptions): Handle {
 		try {
 			switch (route) {
 				case '/complete':
-					return await handleComplete(event, ai);
+					return await handleComplete(event, ai, options);
 				case '/embed':
 					return await handleEmbed(event, ai);
 				case '/stream':
-					return await handleStream(event, ai);
+					return await handleStream(event, ai, options);
 				case '/resume':
-					return await handleResume(event, ai);
+					return await handleResume(event);
 				case '/cancel':
 					return await handleCancel(event, ai);
 				default:
@@ -224,40 +242,63 @@ export function createAiHandle(options: AiHandleOptions): Handle {
 
 // ── Route handlers ──────────────────────────────────────────────────────────
 
-async function handleComplete(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = await event.request.json();
+async function handleComplete(
+	event: RequestEventLike,
+	ai: AiServer,
+	handleOpts: AiHandleOptions,
+): Promise<Response> {
+	const body = await parseJsonBody(event.request);
 	const options = validateCompletionOptions(body);
+
+	if (handleOpts.validateModel) {
+		const allowed = await handleOpts.validateModel(options.model, event);
+		if (!allowed) {
+			throw DelightError.forbidden(`Model '${options.model}' is not allowed`);
+		}
+	}
+
 	const result = await ai.complete(options);
 	return Response.json(result);
 }
 
 async function handleEmbed(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = await event.request.json();
+	const body = await parseJsonBody(event.request);
 	const options = validateEmbeddingOptions(body);
 	const result = await ai.embed(options);
 	return Response.json(result);
 }
 
-async function handleStream(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = await event.request.json();
+async function handleStream(
+	event: RequestEventLike,
+	ai: AiServer,
+	handleOpts: AiHandleOptions,
+): Promise<Response> {
+	const body = await parseJsonBody(event.request);
 	const options = validateCompletionOptions(body);
+
+	if (handleOpts.validateModel) {
+		const allowed = await handleOpts.validateModel(options.model, event);
+		if (!allowed) {
+			throw DelightError.forbidden(`Model '${options.model}' is not allowed`);
+		}
+	}
+
 	const result = await ai.streamToClient(options);
 	return Response.json(result);
 }
 
-async function handleResume(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = await event.request.json();
+async function handleResume(event: RequestEventLike): Promise<Response> {
+	const body = await parseJsonBody(event.request);
 	const { stream_id, last_offset } = validateResumeOptions(body);
 
-	// The resume endpoint can't directly send to the client's WebSocket
-	// from an HTTP handler — the client should send resume via WebSocket.
-	// This endpoint acknowledges the request and lets the client know
-	// to use WebSocket for actual resumption.
+	// Resume is handled via WebSocket — the client sends an ai:stream:resume
+	// message and the server's onMessage handler (via createAiMessageHandler)
+	// calls ai.resumeStream(). This HTTP endpoint just validates the request.
 	return Response.json({ ok: true, stream_id, last_offset, via: 'websocket' });
 }
 
 async function handleCancel(event: RequestEventLike, ai: AiServer): Promise<Response> {
-	const body = await event.request.json();
+	const body = await parseJsonBody(event.request);
 	const { stream_id } = validateStreamId(body);
 	ai.cancelStream(stream_id);
 	return Response.json({ ok: true });

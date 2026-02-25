@@ -135,6 +135,7 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 					...options,
 					fields: options.fields,
 					storage: options.storage,
+					ws: options.ws,
 				})
 			: null;
 
@@ -149,12 +150,15 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 				streamBuffers.delete(id);
 			}
 		}
-		// Safety cap: if too many buffers, remove oldest completed ones
+		// Safety cap: evict oldest buffers (done first, then active) when over limit
 		if (streamBuffers.size > MAX_BUFFERS) {
-			const sorted = [...streamBuffers.entries()]
-				.filter(([, b]) => b.done)
-				.sort(([, a], [, b]) => a.created_at - b.created_at);
-			for (const [id] of sorted.slice(0, streamBuffers.size - MAX_BUFFERS)) {
+			const entries = [...streamBuffers.entries()].sort(([, a], [, b]) => {
+				// Sort done buffers before active ones, then by age
+				if (a.done !== b.done) return a.done ? -1 : 1;
+				return a.created_at - b.created_at;
+			});
+			for (const [id, buf] of entries.slice(0, streamBuffers.size - MAX_BUFFERS)) {
+				if (buf.abort) buf.abort();
 				streamBuffers.delete(id);
 			}
 		}
@@ -215,7 +219,7 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 					for await (const chunk of streamGen) {
 						buffer.accumulated = chunk.accumulated;
 
-						// Only send delta per chunk; send accumulated on final chunk
+						// Only send delta per chunk; send accumulated + metadata on final chunk
 						if (chunk.done) {
 							ws.broadcast({
 								event: 'ai:stream:chunk',
@@ -225,6 +229,15 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 								done: true,
 								usage: chunk.usage,
 								finish_reason: chunk.finish_reason,
+								tool_calls: chunk.tool_calls,
+							} satisfies AiStreamChunkMessage);
+						} else if (chunk.tool_calls?.length) {
+							ws.broadcast({
+								event: 'ai:stream:chunk',
+								stream_id,
+								delta: chunk.delta,
+								done: false,
+								tool_calls: chunk.tool_calls,
 							} satisfies AiStreamChunkMessage);
 						} else {
 							ws.broadcast({
@@ -314,5 +327,55 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 		backfill: embeddings
 			? (et) => embeddings.backfill(et)
 			: () => Promise.resolve({ processed: 0, failed: 0 }),
+	};
+}
+
+// ── WebSocket message handler ───────────────────────────────────────────────
+
+/**
+ * Creates an onMessage handler that wires AI-specific WebSocket messages
+ * (resume, cancel) to the AiServer automatically.
+ *
+ * Usage in a WebsocketServer subclass:
+ *   const ai = aiProcessing(db, { ... });
+ *   const aiMessageHandler = createAiMessageHandler(ai);
+ *
+ *   super({
+ *     onMessage: (msg, session, server) => {
+ *       // Handle AI messages first
+ *       const handled = aiMessageHandler(msg, session, server);
+ *       if (handled) return;
+ *
+ *       // Handle other messages...
+ *     },
+ *   }, ctx, env);
+ */
+export function createAiMessageHandler(ai: AiServer) {
+	return (
+		msg: { event: string; [key: string]: unknown },
+		_session: unknown,
+		_server: unknown,
+		ws?: WebSocket,
+	): boolean => {
+		switch (msg.event) {
+			case 'ai:stream:resume': {
+				if (
+					ws &&
+					typeof msg.stream_id === 'string' &&
+					typeof msg.last_offset === 'number'
+				) {
+					ai.resumeStream(ws, msg.stream_id, msg.last_offset);
+				}
+				return true;
+			}
+			case 'ai:stream:cancel': {
+				if (typeof msg.stream_id === 'string') {
+					ai.cancelStream(msg.stream_id);
+				}
+				return true;
+			}
+			default:
+				return false;
+		}
 	};
 }

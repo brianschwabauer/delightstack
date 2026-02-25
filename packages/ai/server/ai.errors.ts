@@ -27,10 +27,15 @@ export function createAiError(
 	code: AiErrorCode,
 	details?: Record<string, unknown>,
 ): DelightError {
+	// Use details.message as the human-readable message if available
+	const message = typeof details?.message === 'string' ? details.message : code;
 	const detail = details ? JSON.stringify(details) : undefined;
+	const status =
+		typeof details?.status === 'number' ? details.status : statusForCode(code);
+
 	return new DelightError({
-		message: `${code}${detail ? `: ${detail}` : ''}`,
-		status: statusForCode(code),
+		message,
+		status,
 		code,
 		detail,
 	});

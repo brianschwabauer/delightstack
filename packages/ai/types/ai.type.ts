@@ -47,9 +47,6 @@ export interface CompletionOptions {
 	 */
 	model: string;
 
-	/** Whether to stream the response. Default: false */
-	stream?: boolean;
-
 	/** Maximum tokens to generate */
 	max_tokens?: number;
 
