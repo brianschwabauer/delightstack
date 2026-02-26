@@ -82,6 +82,17 @@ export function defineAiTable(
 	}));
 }
 
+/** Fields managed by defineAiConversationTable — cannot be overridden in custom schemas */
+const RESERVED_CONVERSATION_FIELDS = new Set([
+	'id',
+	'messages',
+	'model',
+	'total_tokens',
+	'status',
+	'created_at',
+	'updated_at',
+]);
+
 /**
  * Define a conversation table for persisting chat history.
  *
@@ -99,6 +110,24 @@ export function defineAiTable(
 export function defineAiConversationTable(
 	customFields?: (schema: AiSchemaBuilder) => Record<string, unknown>,
 ) {
+	// Validate custom fields don't shadow reserved conversation fields
+	if (customFields) {
+		const mockHandler: ProxyHandler<object> = {
+			get: () => new Proxy(() => {}, mockHandler),
+			apply: () => new Proxy(() => {}, mockHandler),
+		};
+		const mockSchema = new Proxy(() => {}, mockHandler) as unknown as AiSchemaBuilder;
+		const custom = customFields(mockSchema);
+		for (const key of Object.keys(custom)) {
+			if (RESERVED_CONVERSATION_FIELDS.has(key)) {
+				throw new Error(
+					`defineAiConversationTable: custom field '${key}' conflicts with reserved field. ` +
+						`Reserved fields: ${[...RESERVED_CONVERSATION_FIELDS].join(', ')}`,
+				);
+			}
+		}
+	}
+
 	return Database.table('ai_conversation', (schema) => ({
 		id: schema.primaryKey(),
 
@@ -136,6 +165,7 @@ export function defineAiConversationTable(
 		created_at: schema.string().datetime(),
 		updated_at: schema.string().datetime(),
 
+		// Custom fields come after reserved fields (validated above to not collide)
 		...(customFields ? customFields(schema) : {}),
 	}));
 }

@@ -138,6 +138,8 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 		opts: CompletionOptions,
 		streaming: boolean,
 	): Promise<Response> {
+		throwIfAborted(opts.signal);
+
 		const gw = getGateway();
 		if (!gw) {
 			throw createAiError('GATEWAY_ERROR', { message: 'No gateway configured' });
@@ -265,13 +267,15 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 								try {
 									const parsed = JSON.parse(data) as Record<string, unknown>;
 									const delta = (parsed.response as string) ?? '';
-									if (!delta) continue;
+									const toolCalls = parsed.tool_calls as StreamChunk['tool_calls'];
+									if (!delta && !toolCalls?.length) continue;
 
 									accumulated += delta;
 									yield {
 										delta,
 										accumulated,
 										done: false,
+										tool_calls: toolCalls,
 									};
 								} catch {
 									// Skip malformed chunks
@@ -342,17 +346,18 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 								const finish = choice.finish_reason as
 									| CompletionResult['finish_reason']
 									| null;
+								const toolCalls = delta?.tool_calls as StreamChunk['tool_calls'];
 
 								if (parsed.usage) lastUsage = parsed.usage as TokenUsage;
 								if (finish) lastFinishReason = finish;
 
-								if (content) {
+								if (content || toolCalls?.length) {
 									accumulated += content;
 									yield {
 										delta: content,
 										accumulated,
 										done: false,
-										tool_calls: delta?.tool_calls as StreamChunk['tool_calls'],
+										tool_calls: toolCalls,
 									};
 								}
 							} catch {

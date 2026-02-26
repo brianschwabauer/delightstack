@@ -87,6 +87,12 @@ function validateCompletionOptions(body: unknown): CompletionOptions {
 		}
 	}
 
+	if (obj.top_p != null) {
+		if (typeof obj.top_p !== 'number' || obj.top_p < 0 || obj.top_p > 1) {
+			throw DelightError.badRequest('top_p must be between 0 and 1');
+		}
+	}
+
 	// Validate each message has role + content
 	for (const msg of obj.messages) {
 		if (!msg || typeof msg !== 'object') {
@@ -118,6 +124,12 @@ function validateEmbeddingOptions(body: unknown): EmbeddingOptions {
 		throw DelightError.badRequest('input must be a string or array of strings');
 	}
 
+	if (typeof obj.input === 'string') {
+		if (!obj.input.trim()) {
+			throw DelightError.badRequest('input must be a non-empty string');
+		}
+	}
+
 	if (Array.isArray(obj.input)) {
 		if (obj.input.length === 0) {
 			throw DelightError.badRequest('input array must not be empty');
@@ -125,6 +137,9 @@ function validateEmbeddingOptions(body: unknown): EmbeddingOptions {
 		for (const item of obj.input) {
 			if (typeof item !== 'string') {
 				throw DelightError.badRequest('Each input must be a string');
+			}
+			if (!item.trim()) {
+				throw DelightError.badRequest('Each input must be a non-empty string');
 			}
 		}
 	}
@@ -146,20 +161,6 @@ function validateStreamId(body: unknown): { stream_id: string } {
 	return { stream_id: obj.stream_id };
 }
 
-function validateResumeOptions(body: unknown): {
-	stream_id: string;
-	last_offset: number;
-} {
-	const { stream_id } = validateStreamId(body);
-	const obj = body as Record<string, unknown>;
-
-	if (typeof obj.last_offset !== 'number' || obj.last_offset < 0) {
-		throw DelightError.badRequest('last_offset must be a non-negative number');
-	}
-
-	return { stream_id, last_offset: obj.last_offset };
-}
-
 // ── Handle ──────────────────────────────────────────────────────────────────
 
 /**
@@ -168,8 +169,10 @@ function validateResumeOptions(body: unknown): {
  * - POST /api/ai/complete   — Non-streaming chat completion
  * - POST /api/ai/embed      — Generate embeddings
  * - POST /api/ai/stream     — Start a streaming completion (returns stream_id, streams via WebSocket)
- * - POST /api/ai/resume     — Resume a disconnected stream (replays missed chunks via WebSocket)
  * - POST /api/ai/cancel     — Cancel an active stream
+ *
+ * Resume is handled via WebSocket messages (ai:stream:resume), not HTTP.
+ * Use createAiMessageHandler() to wire up resume/cancel in your WebSocket server.
  *
  * Usage:
  *   const aiHandle = createAiHandle({
@@ -223,8 +226,6 @@ export function createAiHandle(options: AiHandleOptions): Handle {
 					return await handleEmbed(event, ai);
 				case '/stream':
 					return await handleStream(event, ai, options);
-				case '/resume':
-					return await handleResume(event);
 				case '/cancel':
 					return await handleCancel(event, ai);
 				default:
@@ -285,16 +286,6 @@ async function handleStream(
 
 	const result = await ai.streamToClient(options);
 	return Response.json(result);
-}
-
-async function handleResume(event: RequestEventLike): Promise<Response> {
-	const body = await parseJsonBody(event.request);
-	const { stream_id, last_offset } = validateResumeOptions(body);
-
-	// Resume is handled via WebSocket — the client sends an ai:stream:resume
-	// message and the server's onMessage handler (via createAiMessageHandler)
-	// calls ai.resumeStream(). This HTTP endpoint just validates the request.
-	return Response.json({ ok: true, stream_id, last_offset, via: 'websocket' });
 }
 
 async function handleCancel(event: RequestEventLike, ai: AiServer): Promise<Response> {

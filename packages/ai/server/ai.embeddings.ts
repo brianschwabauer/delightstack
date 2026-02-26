@@ -6,22 +6,23 @@ import type {
 	EmbeddingStatus,
 } from '../types';
 import type { AiEmbeddingUpdatedMessage } from '../types/message.type';
+import { createAiGateway, type AiGatewayClient } from './ai.gateway';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDatabaseServer = DatabaseServer<any>;
-import { createAiGateway } from './ai.gateway';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
  * Schedule an alarm using "set only if earlier" strategy.
- * Ensures we never push another alarm further into the future.
+ * Ensures we never push an existing alarm further into the future.
  * Same pattern as packages/images/src/integration.ts
  */
 async function scheduleAlarm(storage: DurableObjectStorage): Promise<void> {
+	const now = Date.now();
 	const existing = await storage.getAlarm();
-	if (existing === null || Date.now() < existing) {
-		await storage.setAlarm(Date.now());
+	if (existing === null || existing > now) {
+		await storage.setAlarm(now);
 	}
 }
 
@@ -128,6 +129,8 @@ export function aiEmbeddings(
 		fields: EmbeddingFieldConfig[];
 		storage: DurableObjectStorage;
 		ws?: () => WebsocketServer | undefined;
+		/** Pre-built gateway client (shared with aiProcessing to avoid duplicate instances) */
+		gateway_client?: AiGatewayClient;
 	},
 ) {
 	const storage = options.storage;
@@ -135,6 +138,15 @@ export function aiEmbeddings(
 	const MAX_RETRIES = options.max_retries ?? 5;
 	const BATCH_SIZE = 10;
 	const fieldConfigs = new Map(options.fields.map((f) => [f.entity_type, f]));
+
+	// In-memory retry tracker — survives across alarm cycles within the same DO instance.
+	// Keyed by `${entityType}:${id}`, stores retry count.
+	const retryTracker = new Map<string, number>();
+
+	/** Get the retry key for a record */
+	function retryKey(entityType: string, id: string | number): string {
+		return `${entityType}:${id}`;
+	}
 
 	/** Broadcast embedding status change via WebSocket if available */
 	function broadcastEmbeddingUpdate(
@@ -152,16 +164,17 @@ export function aiEmbeddings(
 		} satisfies AiEmbeddingUpdatedMessage);
 	}
 
-	// Lazy gateway creation — AI binding may not be available at construction time
-	let _gateway: ReturnType<typeof createAiGateway> | null = null;
-	function getGateway() {
-		if (!_gateway) {
-			_gateway = createAiGateway({
+	/** Get the gateway client — uses shared instance if provided, otherwise creates lazily */
+	let _ownGateway: AiGatewayClient | null = null;
+	function getGateway(): AiGatewayClient {
+		if (options.gateway_client) return options.gateway_client;
+		if (!_ownGateway) {
+			_ownGateway = createAiGateway({
 				ai: options.ai(),
 				gateway: options.gateway,
 			});
 		}
-		return _gateway;
+		return _ownGateway;
 	}
 
 	return {
@@ -204,7 +217,7 @@ export function aiEmbeddings(
 		 * Process pending embedding jobs. Called from the DO's alarm handler.
 		 *
 		 * Processes up to BATCH_SIZE records per alarm cycle:
-		 * 1. Fetches 'pending' records
+		 * 1. Fetches 'pending' records and marks them as 'processing' atomically
 		 * 2. Generates embeddings via Workers AI
 		 * 3. Updates records with the embedding vector
 		 * 4. Reschedules alarm if more pending
@@ -238,9 +251,9 @@ export function aiEmbeddings(
 					) as unknown as EmbeddingRecord[];
 
 					for (const record of stuck) {
-						// Parse retry count from error field (format: "retry:N")
-						const retryMatch = record.embedding_error?.match(/^retry:(\d+)$/);
-						const retries = retryMatch ? parseInt(retryMatch[1], 10) + 1 : 1;
+						const key = retryKey(entityType, record.id);
+						const retries = (retryTracker.get(key) ?? 0) + 1;
+						retryTracker.set(key, retries);
 
 						if (retries > MAX_RETRIES) {
 							db.update(
@@ -248,9 +261,10 @@ export function aiEmbeddings(
 								record.id as string,
 								{
 									embedding_status: 'failed',
-									embedding_error: 'Max retries exceeded',
+									embedding_error: 'Max retries exceeded (stuck processing)',
 								} as any,
 							);
+							retryTracker.delete(key);
 							broadcastEmbeddingUpdate(entityType, record.id, 'failed');
 						} else {
 							db.update(
@@ -258,7 +272,7 @@ export function aiEmbeddings(
 								record.id as string,
 								{
 									embedding_status: 'pending',
-									embedding_error: `retry:${retries}`,
+									embedding_error: null,
 								} as any,
 							);
 							totalPending++;
@@ -267,17 +281,19 @@ export function aiEmbeddings(
 					continue;
 				}
 
-				for (const record of pending) {
-					try {
-						// Mark as processing
-						db.update(
-							entityType,
-							record.id as string,
-							{
-								embedding_status: 'processing',
-							} as any,
-						);
+				// Mark all selected records as 'processing' before starting work,
+				// so a concurrent alarm cycle won't pick them up again
+				const pendingIds = pending.map((r) => r.id);
+				const placeholders = pendingIds.map(() => '?').join(',');
+				db.exec(
+					`UPDATE ${entityType} SET embedding_status = 'processing' WHERE id IN (${placeholders})`,
+					...pendingIds,
+				);
 
+				for (const record of pending) {
+					const key = retryKey(entityType, record.id);
+
+					try {
 						// Extract source text
 						const sourceText = extractSourceText(
 							record as Record<string, unknown>,
@@ -294,6 +310,7 @@ export function aiEmbeddings(
 									embedding_error: null,
 								} as any,
 							);
+							retryTracker.delete(key);
 							continue;
 						}
 
@@ -310,7 +327,10 @@ export function aiEmbeddings(
 
 						// Check if record was deleted during processing
 						const stillExists = tryGet(db, entityType, record.id);
-						if (!stillExists) continue;
+						if (!stillExists) {
+							retryTracker.delete(key);
+							continue;
+						}
 
 						// Update record with embedding
 						db.update(
@@ -323,11 +343,11 @@ export function aiEmbeddings(
 								embedding_error: null,
 							} as any,
 						);
+						retryTracker.delete(key);
 						broadcastEmbeddingUpdate(entityType, record.id, 'embedded');
 					} catch (error: unknown) {
-						// Parse retry count
-						const retryMatch = record.embedding_error?.match(/^retry:(\d+)$/);
-						const retries = retryMatch ? parseInt(retryMatch[1], 10) + 1 : 1;
+						const retries = (retryTracker.get(key) ?? 0) + 1;
+						retryTracker.set(key, retries);
 						const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
 						const newStatus = retries >= MAX_RETRIES ? 'failed' : 'pending';
@@ -336,11 +356,11 @@ export function aiEmbeddings(
 							record.id as string,
 							{
 								embedding_status: newStatus,
-								embedding_error:
-									retries >= MAX_RETRIES ? errorMessage : `retry:${retries}`,
+								embedding_error: errorMessage,
 							} as any,
 						);
 						if (newStatus === 'failed') {
+							retryTracker.delete(key);
 							broadcastEmbeddingUpdate(entityType, record.id, 'failed');
 						}
 					}
@@ -371,6 +391,9 @@ export function aiEmbeddings(
 			const config = fieldConfigs.get(entity_type)!;
 			const sourceText = extractSourceText(record, config);
 			const newHash = sourceText.trim() ? hashText(sourceText) : null;
+
+			// Reset retry counter
+			retryTracker.delete(retryKey(entity_type, id));
 
 			db.update(
 				entity_type,
@@ -404,8 +427,24 @@ export function aiEmbeddings(
 
 			for (const record of unembedded) {
 				const sourceText = extractSourceText(record as Record<string, unknown>, config);
+
+				// Records with no source text get marked as embedded (nothing to embed)
 				if (!sourceText.trim()) {
-					processed++;
+					try {
+						db.update(
+							entity_type,
+							record.id as string,
+							{
+								embedding_status: 'embedded',
+								embedding: null,
+								embedding_model: null,
+								embedding_error: null,
+							} as any,
+						);
+						processed++;
+					} catch {
+						failed++;
+					}
 					continue;
 				}
 

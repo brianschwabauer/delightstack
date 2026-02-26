@@ -59,9 +59,9 @@ export interface AiServer {
 	streamToClient(options: CompletionOptions): Promise<{ stream_id: string }>;
 	/**
 	 * Resume a previously interrupted stream from a given offset.
-	 * Replays buffered chunks then continues live.
+	 * Returns the replay message to send back to the requesting client.
 	 */
-	resumeStream(ws: WebSocket, stream_id: string, last_offset: number): void;
+	resumeStream(stream_id: string, last_offset: number): AiStreamChunkMessage | null;
 	/** Cancel an active stream */
 	cancelStream(stream_id: string): void;
 
@@ -81,8 +81,11 @@ export interface AiServer {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/** TTL for stream buffers (5 minutes) */
+/** TTL for completed stream buffers (5 minutes) */
 const BUFFER_TTL = 5 * 60 * 1000;
+
+/** TTL for active stream buffers — safety net for hung streams (30 minutes) */
+const ACTIVE_BUFFER_TTL = 30 * 60 * 1000;
 
 /** Maximum number of stream buffers to keep in memory */
 const MAX_BUFFERS = 100;
@@ -128,7 +131,8 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 		return _gateway;
 	}
 
-	// Only create embeddings processor when fields and storage are provided
+	// Only create embeddings processor when fields and storage are provided.
+	// Pass gateway_client getter so embeddings shares our gateway instance.
 	const embeddings =
 		options.fields?.length && options.storage
 			? aiEmbeddings(db, {
@@ -136,6 +140,9 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 					fields: options.fields,
 					storage: options.storage,
 					ws: options.ws,
+					get gateway_client() {
+						return getGateway();
+					},
 				})
 			: null;
 
@@ -147,6 +154,10 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 		const now = Date.now();
 		for (const [id, buffer] of streamBuffers) {
 			if (buffer.done && now - buffer.created_at > BUFFER_TTL) {
+				streamBuffers.delete(id);
+			} else if (!buffer.done && now - buffer.created_at > ACTIVE_BUFFER_TTL) {
+				// Safety net: abort and clean hung streams
+				if (buffer.abort) buffer.abort();
 				streamBuffers.delete(id);
 			}
 		}
@@ -276,34 +287,33 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 			return { stream_id };
 		},
 
-		resumeStream(targetWs: WebSocket, stream_id: string, last_offset: number): void {
-			const ws = options.ws?.();
-			if (!ws) return;
-
+		resumeStream(stream_id: string, last_offset: number): AiStreamChunkMessage | null {
 			const buffer = streamBuffers.get(stream_id);
-			if (!buffer) return;
+			if (!buffer) return null;
 
 			// Replay missed content from the buffer
 			const missed = buffer.accumulated.slice(last_offset);
 			if (missed) {
-				ws.send(targetWs, {
+				return {
 					event: 'ai:stream:chunk',
 					stream_id,
 					delta: missed,
 					accumulated: buffer.accumulated,
 					done: buffer.done,
-				} satisfies AiStreamChunkMessage);
+				};
 			} else if (buffer.done) {
 				// Stream completed while disconnected — send final signal
-				ws.send(targetWs, {
+				return {
 					event: 'ai:stream:chunk',
 					stream_id,
 					delta: '',
 					accumulated: buffer.accumulated,
 					done: true,
-				} satisfies AiStreamChunkMessage);
+				};
 			}
-			// If stream is still live, new chunks will arrive via normal broadcast
+
+			// Stream is still live and client is caught up — new chunks arrive via broadcast
+			return null;
 		},
 
 		cancelStream(stream_id: string): void {
@@ -336,46 +346,45 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
  * Creates an onMessage handler that wires AI-specific WebSocket messages
  * (resume, cancel) to the AiServer automatically.
  *
+ * The handler returns a WebsocketMessage for resume requests (which the
+ * WebsocketServer framework automatically sends back to the requesting client).
+ * Cancel requests are fire-and-forget with no response.
+ *
  * Usage in a WebsocketServer subclass:
  *   const ai = aiProcessing(db, { ... });
  *   const aiMessageHandler = createAiMessageHandler(ai);
  *
  *   super({
  *     onMessage: (msg, session, server) => {
- *       // Handle AI messages first
- *       const handled = aiMessageHandler(msg, session, server);
- *       if (handled) return;
+ *       // Handle AI messages — returns a reply for resume, undefined otherwise
+ *       const reply = aiMessageHandler(msg);
+ *       if (reply !== undefined) return reply;
  *
  *       // Handle other messages...
  *     },
  *   }, ctx, env);
  */
 export function createAiMessageHandler(ai: AiServer) {
-	return (
-		msg: { event: string; [key: string]: unknown },
-		_session: unknown,
-		_server: unknown,
-		ws?: WebSocket,
-	): boolean => {
+	return (msg: {
+		event: string;
+		[key: string]: unknown;
+	}): AiStreamChunkMessage | void => {
 		switch (msg.event) {
 			case 'ai:stream:resume': {
-				if (
-					ws &&
-					typeof msg.stream_id === 'string' &&
-					typeof msg.last_offset === 'number'
-				) {
-					ai.resumeStream(ws, msg.stream_id, msg.last_offset);
+				if (typeof msg.stream_id === 'string' && typeof msg.last_offset === 'number') {
+					const replay = ai.resumeStream(msg.stream_id, msg.last_offset);
+					if (replay) return replay;
 				}
-				return true;
+				return;
 			}
 			case 'ai:stream:cancel': {
 				if (typeof msg.stream_id === 'string') {
 					ai.cancelStream(msg.stream_id);
 				}
-				return true;
+				return;
 			}
 			default:
-				return false;
+				return;
 		}
 	};
 }
