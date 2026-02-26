@@ -6,6 +6,19 @@ type TableCallback = Parameters<typeof Database.table>[1];
 export type AiSchemaBuilder = Parameters<TableCallback>[0];
 
 /**
+ * Create a Proxy-based mock schema that handles arbitrary method chains
+ * (e.g. schema.string().searchable().optional()) without crashing.
+ * Used to inspect custom field keys at validation time.
+ */
+function createMockSchema(): AiSchemaBuilder {
+	const handler: ProxyHandler<object> = {
+		get: () => new Proxy(() => {}, handler),
+		apply: () => new Proxy(() => {}, handler),
+	};
+	return new Proxy(() => {}, handler) as unknown as AiSchemaBuilder;
+}
+
+/**
  * Define a table with auto-managed vector embeddings.
  *
  * Adds reserved fields for embedding storage, status tracking, and change
@@ -35,13 +48,7 @@ export function defineAiTable(
 	const dimensions = options?.dimensions ?? 768;
 
 	// Validate that custom fields don't shadow reserved AI fields.
-	// Use a Proxy-based mock schema so chained calls like schema.string().searchable() work.
-	const mockHandler: ProxyHandler<object> = {
-		get: () => new Proxy(() => {}, mockHandler),
-		apply: () => new Proxy(() => {}, mockHandler),
-	};
-	const mockSchema = new Proxy(() => {}, mockHandler) as unknown as AiSchemaBuilder;
-	const custom = customFields(mockSchema);
+	const custom = customFields(createMockSchema());
 	for (const key of Object.keys(custom)) {
 		if (RESERVED_AI_FIELDS.has(key as any)) {
 			throw new Error(
@@ -112,12 +119,7 @@ export function defineAiConversationTable(
 ) {
 	// Validate custom fields don't shadow reserved conversation fields
 	if (customFields) {
-		const mockHandler: ProxyHandler<object> = {
-			get: () => new Proxy(() => {}, mockHandler),
-			apply: () => new Proxy(() => {}, mockHandler),
-		};
-		const mockSchema = new Proxy(() => {}, mockHandler) as unknown as AiSchemaBuilder;
-		const custom = customFields(mockSchema);
+		const custom = customFields(createMockSchema());
 		for (const key of Object.keys(custom)) {
 			if (RESERVED_CONVERSATION_FIELDS.has(key)) {
 				throw new Error(

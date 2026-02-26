@@ -118,7 +118,12 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 	/** Build Workers AI run options from CompletionOptions */
 	function buildWorkersAiBody(opts: CompletionOptions): Record<string, unknown> {
 		const body: Record<string, unknown> = {
-			messages: buildMessages(opts).map((m) => ({ role: m.role, content: m.content })),
+			messages: buildMessages(opts).map((m) => {
+				const msg: Record<string, unknown> = { role: m.role, content: m.content };
+				if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+				if (m.tool_calls?.length) msg.tool_calls = m.tool_calls;
+				return msg;
+			}),
 		};
 		if (opts.max_tokens != null) body.max_tokens = opts.max_tokens;
 		if (opts.temperature != null) body.temperature = opts.temperature;

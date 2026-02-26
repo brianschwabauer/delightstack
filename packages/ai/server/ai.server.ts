@@ -342,13 +342,21 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 
 // ── WebSocket message handler ───────────────────────────────────────────────
 
+/** Result from the AI message handler */
+export type AiMessageHandlerResult = {
+	/** Whether the message was an AI event (consumed by this handler) */
+	handled: true;
+	/** Optional reply to send back to the requesting client */
+	reply?: AiStreamChunkMessage;
+} | null;
+
 /**
  * Creates an onMessage handler that wires AI-specific WebSocket messages
  * (resume, cancel) to the AiServer automatically.
  *
- * The handler returns a WebsocketMessage for resume requests (which the
- * WebsocketServer framework automatically sends back to the requesting client).
- * Cancel requests are fire-and-forget with no response.
+ * Returns `{ handled: true, reply? }` for AI events, or `null` for
+ * unrecognized events. When `reply` is present, return it from onMessage
+ * so the WebsocketServer framework sends it back to the requesting client.
  *
  * Usage in a WebsocketServer subclass:
  *   const ai = aiProcessing(db, { ... });
@@ -356,35 +364,31 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
  *
  *   super({
  *     onMessage: (msg, session, server) => {
- *       // Handle AI messages — returns a reply for resume, undefined otherwise
- *       const reply = aiMessageHandler(msg);
- *       if (reply !== undefined) return reply;
+ *       const result = aiMessageHandler(msg);
+ *       if (result) return result.reply;
  *
  *       // Handle other messages...
  *     },
  *   }, ctx, env);
  */
 export function createAiMessageHandler(ai: AiServer) {
-	return (msg: {
-		event: string;
-		[key: string]: unknown;
-	}): AiStreamChunkMessage | void => {
+	return (msg: { event: string; [key: string]: unknown }): AiMessageHandlerResult => {
 		switch (msg.event) {
 			case 'ai:stream:resume': {
 				if (typeof msg.stream_id === 'string' && typeof msg.last_offset === 'number') {
 					const replay = ai.resumeStream(msg.stream_id, msg.last_offset);
-					if (replay) return replay;
+					return { handled: true, reply: replay ?? undefined };
 				}
-				return;
+				return { handled: true };
 			}
 			case 'ai:stream:cancel': {
 				if (typeof msg.stream_id === 'string') {
 					ai.cancelStream(msg.stream_id);
 				}
-				return;
+				return { handled: true };
 			}
 			default:
-				return;
+				return null;
 		}
 	};
 }

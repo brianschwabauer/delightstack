@@ -3,6 +3,7 @@ export {
 	createAiMessageHandler,
 	type AiServerOptions,
 	type AiServer,
+	type AiMessageHandlerResult,
 } from './ai.server';
 export {
 	createAiGateway,
