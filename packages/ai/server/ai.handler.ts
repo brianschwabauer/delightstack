@@ -105,7 +105,12 @@ function validateCompletionOptions(body: unknown): CompletionOptions {
 		) {
 			throw DelightError.badRequest('Each message must have a valid role');
 		}
-		if (typeof m.content !== 'string') {
+		// Assistant messages may have null content (e.g. tool-call-only messages)
+		if (m.role === 'assistant') {
+			if (m.content != null && typeof m.content !== 'string') {
+				throw DelightError.badRequest('Assistant message content must be a string or null');
+			}
+		} else if (typeof m.content !== 'string') {
 			throw DelightError.badRequest('Each message must have string content');
 		}
 	}

@@ -291,6 +291,11 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 						reader.releaseLock();
 					}
 
+					// If aborted (cancelled), throw rather than yielding a normal completion
+					if (controller.signal.aborted) {
+						throw createAiError('STREAM_INTERRUPTED', { message: 'Stream was cancelled' });
+					}
+
 					yield {
 						delta: '',
 						accumulated,

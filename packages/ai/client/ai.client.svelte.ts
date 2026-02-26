@@ -143,17 +143,19 @@ export class AiClient {
 	async cancel(): Promise<void> {
 		if (!this.stream_id) return;
 
+		const stream_id = this.stream_id;
+		this.stream_id = null;
+		this.streaming = false;
+
 		try {
 			await fetch(`${this.#apiPath}/cancel`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ stream_id: this.stream_id }),
+				body: JSON.stringify({ stream_id }),
 			});
 		} catch {
 			// Best effort
 		}
-
-		this.streaming = false;
 	}
 
 	/**
@@ -183,9 +185,40 @@ export class AiClient {
 				this.content += msg.delta;
 			}
 
-			// Accumulate tool call deltas
+			// Merge streaming tool call deltas by index
 			if (msg.tool_calls?.length) {
-				this.tool_calls = [...this.tool_calls, ...msg.tool_calls];
+				const updated = [...this.tool_calls];
+				for (const tc of msg.tool_calls) {
+					// Streaming deltas include an `index` for positional merging
+					const pos =
+						((tc as unknown as Record<string, unknown>).index as number) ??
+						updated.length;
+					const existing = updated[pos];
+					if (existing) {
+						// Merge delta into existing entry (append argument fragments)
+						updated[pos] = {
+							id: tc.id || existing.id,
+							type: tc.type || existing.type,
+							function: {
+								name: tc.function?.name || existing.function.name,
+								arguments:
+									existing.function.arguments +
+									(tc.function?.arguments ?? ''),
+							},
+						};
+					} else {
+						// First chunk for this tool call
+						updated[pos] = {
+							id: tc.id ?? '',
+							type: tc.type ?? 'function',
+							function: {
+								name: tc.function?.name ?? '',
+								arguments: tc.function?.arguments ?? '',
+							},
+						};
+					}
+				}
+				this.tool_calls = updated;
 			}
 
 			if (msg.done) {
@@ -218,14 +251,17 @@ export class AiClient {
 		});
 	}
 
-	async #resume(): Promise<void> {
+	#resume(): void {
 		if (!this.stream_id) return;
 
-		// Send resume request via WebSocket message
-		this.#config.ws.send({
-			event: 'ai:stream:resume',
-			stream_id: this.stream_id,
-			last_offset: this.content.length,
-		});
+		try {
+			this.#config.ws.send({
+				event: 'ai:stream:resume',
+				stream_id: this.stream_id,
+				last_offset: this.content.length,
+			});
+		} catch {
+			// Best effort — WS may not be ready yet
+		}
 	}
 }
