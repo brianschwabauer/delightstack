@@ -424,6 +424,7 @@ export function aiEmbeddings(
 
 			let processed = 0;
 			let failed = 0;
+			let pendingCount = 0;
 
 			for (const record of unembedded) {
 				const sourceText = extractSourceText(record as Record<string, unknown>, config);
@@ -460,13 +461,14 @@ export function aiEmbeddings(
 						} as any,
 					);
 					processed++;
+					pendingCount++;
 				} catch {
 					failed++;
 				}
 			}
 
-			// Schedule alarm to start processing
-			if (processed > 0) {
+			// Schedule alarm only if records were set to pending
+			if (pendingCount > 0) {
 				await scheduleAlarm(storage);
 			}
 

@@ -32,6 +32,7 @@ interface StreamBuffer {
 	stream_id: string;
 	accumulated: string;
 	done: boolean;
+	cancelled: boolean;
 	abort: (() => void) | null;
 	created_at: number;
 }
@@ -218,6 +219,7 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 				stream_id,
 				accumulated: '',
 				done: false,
+				cancelled: false,
 				abort,
 				created_at: Date.now(),
 			};
@@ -268,16 +270,29 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 					buffer.done = true;
 					buffer.abort = null;
 
-					const code: AiErrorCode =
-						(error as { code?: AiErrorCode })?.code ?? 'STREAM_INTERRUPTED';
-					const message = error instanceof Error ? error.message : 'Stream interrupted';
+					if (buffer.cancelled) {
+						// Cancelled streams complete cleanly — no error broadcast
+						ws.broadcast({
+							event: 'ai:stream:chunk',
+							stream_id,
+							delta: '',
+							accumulated: buffer.accumulated,
+							done: true,
+							finish_reason: 'stop',
+						} satisfies AiStreamChunkMessage);
+					} else {
+						const code: AiErrorCode =
+							(error as { code?: AiErrorCode })?.code ?? 'STREAM_INTERRUPTED';
+						const message =
+							error instanceof Error ? error.message : 'Stream interrupted';
 
-					ws.broadcast({
-						event: 'ai:stream:error',
-						stream_id,
-						message,
-						code,
-					} satisfies AiStreamErrorMessage);
+						ws.broadcast({
+							event: 'ai:stream:error',
+							stream_id,
+							message,
+							code,
+						} satisfies AiStreamErrorMessage);
+					}
 				}
 
 				// Schedule cleanup
@@ -319,6 +334,7 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 		cancelStream(stream_id: string): void {
 			const buffer = streamBuffers.get(stream_id);
 			if (buffer?.abort) {
+				buffer.cancelled = true;
 				buffer.abort();
 				buffer.done = true;
 				buffer.abort = null;

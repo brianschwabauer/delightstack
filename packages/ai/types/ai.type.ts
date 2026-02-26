@@ -6,7 +6,8 @@ export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
 /** A single message in a conversation */
 export interface ConversationMessage {
 	role: MessageRole;
-	content: string;
+	/** Text content. Null for assistant messages that only contain tool_calls. */
+	content: string | null;
 	/** Tool call ID (for tool responses) */
 	tool_call_id?: string;
 	/** Tool calls requested by the assistant */
