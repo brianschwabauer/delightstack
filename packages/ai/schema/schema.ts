@@ -137,7 +137,7 @@ export function defineAiConversationTable(
 		messages: schema.array(
 			schema.object({
 				role: schema.enum(['system', 'user', 'assistant', 'tool']),
-				content: schema.string(),
+				content: schema.string().optional(),
 				tool_call_id: schema.string().optional(),
 				tool_calls: schema
 					.array(

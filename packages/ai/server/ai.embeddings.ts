@@ -419,7 +419,7 @@ export function aiEmbeddings(
 
 			// Fetch full records in one query to avoid N+1
 			const unembedded = db.exec(
-				`SELECT * FROM ${entity_type} WHERE embedding_status IS NULL OR embedding IS NULL`,
+				`SELECT * FROM ${entity_type} WHERE embedding_status IS NULL`,
 			) as unknown as EmbeddingRecord[];
 
 			let processed = 0;
