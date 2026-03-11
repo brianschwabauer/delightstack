@@ -382,13 +382,13 @@ Components for rich media content.
 
 | Component                       | Status         | Description                         |
 | ------------------------------- | -------------- | ----------------------------------- |
-| [Carousel](./media/Carousel.md) | 📋 Planned | Swipeable image/content slider      |
-| [Gallery](./media/Gallery.md)   | 📋 Planned | Image grid with lightbox            |
+| [Carousel](./media/Carousel.md) | ✅ Complete    | Swipeable image/content slider      |
+| [Gallery](./media/Gallery.md)   | ✅ Complete    | Image grid with lightbox            |
 | [Image](./media/Image.md)       | ✅ Complete    | Optimized image with loading states |
-| [Map](./media/Map.md)           | 📋 Planned | Interactive map display             |
-| [Panorama](./media/Panorama.md) | 📋 Planned | 360° image viewer                   |
-| [PDF](./media/PDF.md)           | 📋 Planned | PDF document viewer                 |
-| [Video](./media/Video.md)       | 📋 Planned | Video player with controls          |
+| [Map](./media/Map.md)           | ✅ Complete    | Interactive map display             |
+| [Panorama](./media/Panorama.md) | ✅ Complete    | 360° image viewer                   |
+| [PDF](./media/PDF.md)           | ✅ Complete    | PDF document viewer                 |
+| [Video](./media/Video.md)       | ✅ Complete    | Video player with controls          |
 
 ### Navigation
 
@@ -429,9 +429,9 @@ Additionally, the **Format** utility (date, number, currency, relative time form
 | Display        | 18       | 0           | 18     |
 | Feedback       | 4        | 0           | 4      |
 | Form           | 10       | 0           | 10     |
-| Media          | 1        | 6           | 7      |
+| Media          | 7        | 0           | 7      |
 | Navigation     | 7        | 0           | 7      |
-| **Total**      | **49**   | **6**       | **55** |
+| **Total**      | **55**   | **0**       | **55** |
 
 ---
 

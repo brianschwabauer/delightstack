@@ -1,1 +1,12 @@
+export { default as Carousel } from './Carousel.svelte';
+export { default as Gallery } from './Gallery.svelte';
+export type { GalleryImage } from './Gallery.svelte';
 export { default as Image } from './Image.svelte';
+export { default as Map, leafletProvider } from './Map.svelte';
+export type { MapMarker, MapInitOptions, MapProvider } from './Map.svelte';
+export { default as Panorama } from './Panorama.svelte';
+export type { Hotspot as PanoramaHotspot } from './Panorama.svelte';
+export { default as PDF } from './PDF.svelte';
+export type { PDFAnnotation } from './PDF.svelte';
+export { default as Video } from './Video.svelte';
+export type { Source as VideoSource, Track as VideoTrack } from './Video.svelte';
