@@ -6,7 +6,7 @@
 	import Popover from './Popover.svelte';
 	import ChevronDown from '~icons/mdi/chevron-down';
 	import type { Placement, Strategy } from '@floating-ui/dom';
-	import Loading from '../feedback/Loading.svelte';
+	import Progress from '../feedback/Progress.svelte';
 
 	const propId = $props.id();
 	let {
@@ -265,7 +265,7 @@
 					class="loading-icon"
 					in:loadingTransition={{ direction: 'in' }}
 					out:loadingTransition={{ direction: 'out' }}>
-					<Loading />
+					<Progress size="00" />
 				</div>
 			{/if}
 		{/if}
@@ -284,13 +284,13 @@
 			aria-expanded={dropdownActive}
 			title="Open for more actions"
 			{@attach ripple({
-				enabled: ripple && !disabled && !isLoading,
+				enabled: !disableRipple && !disabled && !isLoading,
 				zIndex: 1,
 			})}
 			bind:this={dropdownTrigger}>
 			<ChevronDown
 				style="pointer-events:none"
-				class="chevron {menuActive ? 'active' : ''}" />
+				class="chevron {dropdownActive ? 'active' : ''}" />
 		</button>
 	{/if}
 </div>

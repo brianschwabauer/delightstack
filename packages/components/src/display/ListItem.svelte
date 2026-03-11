@@ -7,7 +7,7 @@
 	import type { Placement } from '@floating-ui/dom';
 	import Button from './../actions/Button.svelte';
 	import MoreIcon from '~icons/material-symbols/more-vert';
-	import Loading from '../feedback/Loading.svelte';
+	import Progress from '../feedback/Progress.svelte';
 
 	const propId = $props.id();
 	let {
@@ -161,7 +161,7 @@
 							class="loading-icon"
 							in:loadingTransition={{ direction: 'in' }}
 							out:loadingTransition={{ direction: 'out' }}>
-							<Loading />
+							<Progress size="00" />
 						</div>
 					{/if}
 					{#if children}{@render children()}{/if}

@@ -1,13 +1,4 @@
 <script module lang="ts">
-	/**
-	 *
-	 * TODO:
-	 * - Add support for adding icons at the beginning or end of list items
-	 * - Add a slot for beginning and end of list items (to add something like an avatar or action button)
-	 * - Add support for virtualized lists for performance with large datasets (virtual scroll)
-	 * - Add support for sortable lists (drag and drop to reorder)
-	 */
-
 	export interface ListContext {
 		type: 'button' | 'text' | 'radio' | 'checkbox';
 		value: number[];
