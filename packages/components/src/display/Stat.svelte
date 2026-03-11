@@ -1,3 +1,415 @@
-<pre>
-	https://daisyui.com/components/stat/
-</pre>
+<script lang="ts">
+	import type { Component } from 'svelte';
+	import Counter from './Counter.svelte';
+
+	const propId = $props.id();
+	let {
+		/** Main statistic value to display */
+		value,
+
+		/** Descriptive label */
+		label = undefined as string | undefined,
+
+		/** Leading icon component */
+		icon: Icon = undefined as Component<Record<string, never>> | undefined,
+
+		/** Percentage change from previous period */
+		change = undefined as number | undefined,
+
+		/** Description for the change (e.g., "vs last month") */
+		changeLabel = undefined as string | undefined,
+
+		/** Override trend direction (auto-detected from change by default) */
+		trend = undefined as 'up' | 'down' | 'neutral' | undefined,
+
+		/** Component size */
+		size = '1' as '0' | '1' | '2' | '3',
+
+		/** Horizontal layout */
+		horizontal = false,
+
+		/** Animate value via Counter */
+		animated = true,
+
+		/** Show loading skeleton */
+		skeleton = false,
+
+		/** Element ID */
+		id = propId,
+
+		/** Additional CSS classes */
+		class: className = '',
+	}: {
+		value: string | number;
+		label?: string;
+		icon?: Component<Record<string, never>>;
+		change?: number;
+		changeLabel?: string;
+		trend?: 'up' | 'down' | 'neutral';
+		size?: '0' | '1' | '2' | '3';
+		horizontal?: boolean;
+		animated?: boolean;
+		skeleton?: boolean;
+		id?: string;
+		class?: string;
+	} = $props();
+
+	const is_numeric = $derived(typeof value === 'number');
+
+	const resolved_trend = $derived<'up' | 'down' | 'neutral'>(() => {
+		if (trend) return trend;
+		if (change === undefined || change === 0) return 'neutral';
+		return change > 0 ? 'up' : 'down';
+	}());
+
+	const trend_color = $derived<'success' | 'error' | 'neutral'>(() => {
+		if (resolved_trend === 'up') return 'success';
+		if (resolved_trend === 'down') return 'error';
+		return 'neutral';
+	}());
+
+	function formatChange(val: number): string {
+		const sign = val > 0 ? '+' : '';
+		const formatted = Math.abs(val) === Math.round(Math.abs(val))
+			? val.toFixed(0)
+			: val.toFixed(1);
+		return `${sign}${formatted}%`;
+	}
+
+	const change_text = $derived(change !== undefined ? formatChange(change) : '');
+
+	const change_aria_label = $derived(() => {
+		if (change === undefined) return '';
+		const direction = resolved_trend === 'up' ? 'increased' : resolved_trend === 'down' ? 'decreased' : 'unchanged';
+		const amount = Math.abs(change).toFixed(1);
+		const suffix = changeLabel ? `, ${changeLabel}` : '';
+		return `${direction} by ${amount} percent${suffix}`;
+	}());
+</script>
+
+<div
+	{id}
+	class={['stat', `size-${size}`, className].filter(Boolean).join(' ')}
+	class:horizontal
+	class:skeleton>
+
+	{#if skeleton}
+		<div class="stat-skeleton">
+			{#if Icon}
+				<div class="skeleton-icon"></div>
+			{/if}
+			<div class="skeleton-body">
+				<div class="skeleton-value"></div>
+				{#if label}
+					<div class="skeleton-label"></div>
+				{/if}
+				{#if change !== undefined}
+					<div class="skeleton-change"></div>
+				{/if}
+			</div>
+		</div>
+	{:else}
+		{#if Icon}
+			<div class="stat-icon">
+				<Icon />
+			</div>
+		{/if}
+
+		<div class="stat-body">
+			<div class="stat-value" aria-live="polite">
+				{#if is_numeric && animated}
+					<Counter value={value as number} />
+				{:else}
+					{value}
+				{/if}
+			</div>
+
+			{#if label}
+				<div class="stat-label">{label}</div>
+			{/if}
+
+			{#if change !== undefined}
+				<div
+					class="stat-change {trend_color}"
+					aria-label={change_aria_label}>
+					<svg
+						class="stat-change-arrow"
+						width="14"
+						height="14"
+						viewBox="0 0 14 14"
+						fill="none"
+						aria-hidden="true">
+						{#if resolved_trend === 'up'}
+							<path d="M3 10L10 3M10 3H5M10 3V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						{:else if resolved_trend === 'down'}
+							<path d="M3 4L10 11M10 11H5M10 11V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						{:else}
+							<path d="M3 7H11M11 7L8 4M11 7L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						{/if}
+					</svg>
+					<span class="stat-change-text">
+						{change_text}{#if changeLabel}{' '}{changeLabel}{/if}
+					</span>
+				</div>
+			{/if}
+		</div>
+	{/if}
+</div>
+
+<style>
+	.stat {
+		--stat-value-font: 28px;
+		--stat-label-font: 13px;
+		--stat-icon-size: 28px;
+
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.5rem;
+
+		&.size-0 {
+			--stat-value-font: 20px;
+			--stat-label-font: 11px;
+			--stat-icon-size: 20px;
+		}
+		&.size-1 {
+			--stat-value-font: 28px;
+			--stat-label-font: 13px;
+			--stat-icon-size: 28px;
+		}
+		&.size-2 {
+			--stat-value-font: 40px;
+			--stat-label-font: 15px;
+			--stat-icon-size: 36px;
+		}
+		&.size-3 {
+			--stat-value-font: 56px;
+			--stat-label-font: 17px;
+			--stat-icon-size: 48px;
+		}
+
+		&.horizontal {
+			flex-direction: row;
+			align-items: center;
+			gap: 0.75rem;
+		}
+	}
+
+	.stat-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: var(--stat-icon-size);
+		height: var(--stat-icon-size);
+		color: var(--color-action, light-dark(#3b82f6, #60a5fa));
+		flex-shrink: 0;
+
+		:global(svg) {
+			width: 100%;
+			height: 100%;
+		}
+	}
+
+	.stat-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+
+	.stat-value {
+		font-size: var(--stat-value-font);
+		font-weight: 600;
+		line-height: 1.15;
+		color: var(--color-text, light-dark(#111827, #f9fafb));
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	.stat-label {
+		font-size: var(--stat-label-font);
+		line-height: 1.3;
+		color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
+		white-space: nowrap;
+	}
+
+	.stat-change {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		font-size: var(--stat-label-font);
+		line-height: 1.3;
+		margin-top: 0.25rem;
+		white-space: nowrap;
+
+		&.success {
+			color: var(--color-success, light-dark(#16a34a, #4ade80));
+		}
+		&.error {
+			color: var(--color-error, light-dark(#dc2626, #f87171));
+		}
+		&.neutral {
+			color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
+		}
+	}
+
+	.stat-change-arrow {
+		flex-shrink: 0;
+	}
+
+	.stat-change-text {
+		display: inline;
+	}
+
+	/* ── Skeleton ───────────────────────────────────────────────── */
+
+	.stat.skeleton {
+		pointer-events: none;
+	}
+
+	.stat-skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		width: 100%;
+
+		.stat.horizontal & {
+			flex-direction: row;
+			align-items: center;
+			gap: 0.75rem;
+		}
+	}
+
+	.skeleton-icon {
+		width: var(--stat-icon-size);
+		height: var(--stat-icon-size);
+		border-radius: var(--radius-2, 0.25rem);
+		background: light-dark(
+			var(--color-border, #e5e7eb),
+			var(--color-border, #374151)
+		);
+		flex-shrink: 0;
+		position: relative;
+		overflow: hidden;
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				90deg,
+				rgb(from var(--color-text, #000) r g b / 0) 0,
+				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
+				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
+				rgb(from var(--color-text, #000) r g b / 0)
+			);
+			animation: stat-shimmer 2s infinite;
+		}
+	}
+
+	.skeleton-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.skeleton-value {
+		width: 6em;
+		height: var(--stat-value-font);
+		border-radius: var(--radius-2, 0.25rem);
+		background: light-dark(
+			var(--color-border, #e5e7eb),
+			var(--color-border, #374151)
+		);
+		position: relative;
+		overflow: hidden;
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				90deg,
+				rgb(from var(--color-text, #000) r g b / 0) 0,
+				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
+				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
+				rgb(from var(--color-text, #000) r g b / 0)
+			);
+			animation: stat-shimmer 2s infinite;
+		}
+	}
+
+	.skeleton-label {
+		width: 8em;
+		height: var(--stat-label-font);
+		border-radius: var(--radius-2, 0.25rem);
+		background: light-dark(
+			var(--color-border, #e5e7eb),
+			var(--color-border, #374151)
+		);
+		position: relative;
+		overflow: hidden;
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				90deg,
+				rgb(from var(--color-text, #000) r g b / 0) 0,
+				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
+				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
+				rgb(from var(--color-text, #000) r g b / 0)
+			);
+			animation: stat-shimmer 2s infinite;
+			animation-delay: 0.15s;
+		}
+	}
+
+	.skeleton-change {
+		width: 10em;
+		height: var(--stat-label-font);
+		border-radius: var(--radius-2, 0.25rem);
+		background: light-dark(
+			var(--color-border, #e5e7eb),
+			var(--color-border, #374151)
+		);
+		margin-top: 0.25rem;
+		position: relative;
+		overflow: hidden;
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				90deg,
+				rgb(from var(--color-text, #000) r g b / 0) 0,
+				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
+				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
+				rgb(from var(--color-text, #000) r g b / 0)
+			);
+			animation: stat-shimmer 2s infinite;
+			animation-delay: 0.3s;
+		}
+	}
+
+	@keyframes stat-shimmer {
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-icon::after,
+		.skeleton-value::after,
+		.skeleton-label::after,
+		.skeleton-change::after {
+			animation: none;
+		}
+	}
+</style>

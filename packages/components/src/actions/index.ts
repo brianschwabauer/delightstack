@@ -6,4 +6,6 @@ export { default as Alert, alert } from './Alert.svelte';
 export { default as Popover } from './Popover.svelte';
 export { default as ContextMenu, contextMenu } from './ContextMenu.svelte';
 export { default as Portal, portal } from './Portal.svelte';
+export { default as CommandPalette } from './CommandPalette.svelte';
+export type { CommandOption } from './CommandPalette.svelte';
 export { default as ThemeToggle } from './ThemeToggle.svelte';
