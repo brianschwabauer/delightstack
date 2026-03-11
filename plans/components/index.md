@@ -320,7 +320,7 @@ Interactive elements that trigger behaviors.
 | [Popover](./actions/Popover.md)               | ✅ Complete    | Floating content with smart positioning                            |
 | [ContextMenu](./actions/ContextMenu.md)       | ✅ Complete    | Right-click menu system                                            |
 | [Portal](./actions/Portal.md)                 | ✅ Complete    | Render children in different DOM locations                         |
-| [CommandPalette](./actions/CommandPalette.md) | 📋 Planned | Keyboard-driven command interface                                  |
+| [CommandPalette](./actions/CommandPalette.md) | ✅ Complete    | Keyboard-driven command interface                                  |
 | [ThemeToggle](./actions/ThemeToggle.md)       | ✅ Complete    | Light/dark/auto theme switcher                                     |
 
 ### Display
@@ -334,18 +334,18 @@ Components for presenting information.
 | [ListItem](./display/ListItem.md)        | ✅ Complete    | Rich list item with multiple interaction types |
 | [Accordion](./display/Accordion.md)      | ✅ Complete    | Collapsible content sections                   |
 | [Avatar](./display/Avatar.md)            | ✅ Complete    | User/entity profile image                      |
-| [AvatarGroup](./display/AvatarGroup.md)  | 📋 Planned | Stacked overlapping avatars                    |
-| [Calendar](./display/Calendar.md)        | 📋 Planned | Date display and selection                     |
-| [Chart](./display/Chart.md)              | 📋 Planned | Data visualization                             |
-| [Code](./display/Code.md)                | 📋 Planned | Syntax-highlighted code block                  |
+| [AvatarGroup](./display/AvatarGroup.md)  | ✅ Complete    | Stacked overlapping avatars                    |
+| [Calendar](./display/Calendar.md)        | ✅ Complete    | Date display and selection                     |
+| [Chart](./display/Chart.md)              | ✅ Complete    | Data visualization                             |
+| [Code](./display/Code.md)                | ✅ Complete    | Syntax-highlighted code block                  |
 | [Comparison](./display/Comparison.md)    | ✅ Complete    | Before/after image slider                      |
 | [Counter](./display/Counter.md)          | ✅ Complete    | Animated number display                        |
 | [QR](./display/QR.md)                    | ✅ Complete    | QR code generator                              |
-| [SplitPane](./display/SplitPane.md)      | 📋 Planned | Resizable split view                           |
-| [Stat](./display/Stat.md)                | 📋 Planned | Key metric display                             |
-| [Table](./display/Table.md)              | 📋 Planned | Data table with sorting/filtering              |
-| [Timeline](./display/Timeline.md)        | 📋 Planned | Chronological event display                    |
-| [Tree](./display/Tree.md)                | 📋 Planned | Hierarchical data display                      |
+| [SplitPane](./display/SplitPane.md)      | ✅ Complete    | Resizable split view                           |
+| [Stat](./display/Stat.md)                | ✅ Complete    | Key metric display                             |
+| [Table](./display/Table.md)              | ✅ Complete    | Data table with sorting/filtering              |
+| [Timeline](./display/Timeline.md)        | ✅ Complete    | Chronological event display                    |
+| [Tree](./display/Tree.md)                | ✅ Complete    | Hierarchical data display                      |
 | [Typewriter](./display/Typewriter.md)    | ✅ Complete    | Animated text typing effect                    |
 
 ### Feedback
@@ -425,13 +425,13 @@ Additionally, the **Format** utility (date, number, currency, relative time form
 
 | Category       | Complete | Placeholder | Total  |
 | -------------- | -------- | ----------- | ------ |
-| Actions        | 8        | 1           | 9      |
-| Display        | 9        | 9           | 18     |
+| Actions        | 9        | 0           | 9      |
+| Display        | 18       | 0           | 18     |
 | Feedback       | 4        | 0           | 4      |
 | Form           | 10       | 0           | 10     |
 | Media          | 1        | 6           | 7      |
 | Navigation     | 7        | 0           | 7      |
-| **Total**      | **39**   | **16**      | **55** |
+| **Total**      | **49**   | **6**       | **55** |
 
 ---
 
