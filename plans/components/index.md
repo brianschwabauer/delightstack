@@ -314,14 +314,14 @@ Interactive elements that trigger behaviors.
 | Component                                     | Status         | Description                                                        |
 | --------------------------------------------- | -------------- | ------------------------------------------------------------------ |
 | [Button](./actions/Button.md)                 | ✅ Complete    | Versatile button with ripple effects, loading states, and variants |
-| [ButtonGroup](./actions/ButtonGroup.md)       | 📋 Planned | Connected button container with shared borders                     |
+| [ButtonGroup](./actions/ButtonGroup.md)       | ✅ Complete    | Connected button container with shared borders                     |
 | [Modal](./actions/Modal.md)                   | ✅ Complete    | Dialog overlay with transitions and focus management               |
 | [Alert](./actions/Alert.md)                   | ✅ Complete    | Confirmation dialog built on Modal                                 |
 | [Popover](./actions/Popover.md)               | ✅ Complete    | Floating content with smart positioning                            |
 | [ContextMenu](./actions/ContextMenu.md)       | ✅ Complete    | Right-click menu system                                            |
 | [Portal](./actions/Portal.md)                 | ✅ Complete    | Render children in different DOM locations                         |
 | [CommandPalette](./actions/CommandPalette.md) | 📋 Planned | Keyboard-driven command interface                                  |
-| [ThemeToggle](./actions/ThemeToggle.md)       | 📋 Planned | Light/dark/auto theme switcher                                     |
+| [ThemeToggle](./actions/ThemeToggle.md)       | ✅ Complete    | Light/dark/auto theme switcher                                     |
 
 ### Display
 
@@ -366,15 +366,15 @@ Input components for user data entry.
 | Component                          | Status         | Description                         |
 | ---------------------------------- | -------------- | ----------------------------------- |
 | [Input](./form/Input.md)          | ✅ Complete    | Comprehensive text/data input field |
-| [Checkbox](./form/Checkbox.md)    | 📋 Planned | Boolean toggle with check mark      |
-| [Fieldset](./form/Fieldset.md)    | 📋 Planned | Form section grouping               |
+| [Checkbox](./form/Checkbox.md)    | ✅ Complete    | Boolean toggle with check mark      |
+| [Fieldset](./form/Fieldset.md)    | ✅ Complete    | Form section grouping               |
 | [FileUpload](./form/FileUpload.md)| 📋 Planned | Drag-and-drop file input            |
 | [Form](./form/Form.md)            | 📋 Planned | Form container with validation      |
-| [Radio](./form/Radio.md)          | 📋 Planned | Single-select option                |
-| [Range](./form/Range.md)          | 📋 Planned | Slider input                        |
-| [Rating](./form/Rating.md)        | 📋 Planned | Star/score input                    |
+| [Radio](./form/Radio.md)          | ✅ Complete    | Single-select option                |
+| [Range](./form/Range.md)          | ✅ Complete    | Slider input                        |
+| [Rating](./form/Rating.md)        | ✅ Complete    | Star/score input                    |
 | [Select](./form/Select.md)        | 📋 Planned | Dropdown selection                  |
-| [Toggle](./form/Toggle.md)        | 📋 Planned | On/off switch                       |
+| [Toggle](./form/Toggle.md)        | ✅ Complete    | On/off switch                       |
 
 ### Media
 
@@ -425,13 +425,13 @@ Additionally, the **Format** utility (date, number, currency, relative time form
 
 | Category       | Complete | Placeholder | Total  |
 | -------------- | -------- | ----------- | ------ |
-| Actions        | 6        | 3           | 9      |
+| Actions        | 8        | 1           | 9      |
 | Display        | 8        | 10          | 18     |
 | Feedback       | 2        | 2           | 4      |
-| Form           | 1        | 9           | 10     |
+| Form           | 7        | 3           | 10     |
 | Media          | 1        | 6           | 7      |
 | Navigation     | 0        | 7           | 7      |
-| **Total**      | **18**   | **37**      | **55** |
+| **Total**      | **26**   | **29**      | **55** |
 
 ---
 

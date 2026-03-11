@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { ripple, tooltip } from '@delightstack/utilities';
-	import { type Snippet } from 'svelte';
+	import { getContext, type Snippet } from 'svelte';
 	import { type TransitionConfig } from 'svelte/transition';
 	import { backOut, quartOut } from 'svelte/easing';
 	import Popover from './Popover.svelte';
 	import ChevronDown from '~icons/mdi/chevron-down';
 	import type { Placement, Strategy } from '@floating-ui/dom';
 	import Progress from '../feedback/Progress.svelte';
+	import type { ButtonGroupContext } from './ButtonGroup.svelte';
+
+	const groupContext = getContext<ButtonGroupContext | undefined>('button-group');
 
 	const propId = $props.id();
 	let {
@@ -162,6 +165,17 @@
 		...rest
 	} = $props();
 
+	// Merge ButtonGroup context with local props (local props take precedence when explicitly set)
+	const resolvedSize = $derived(size ?? groupContext?.size);
+	const resolvedOutline = $derived(outline || groupContext?.outline || false);
+	const resolvedTransparent = $derived(transparent || groupContext?.transparent || false);
+	const resolvedTranslucent = $derived(translucent || groupContext?.translucent || false);
+	const resolvedAccent = $derived(accent || groupContext?.accent || false);
+	const resolvedError = $derived(error || groupContext?.error || false);
+	const resolvedSuccess = $derived(success || groupContext?.success || false);
+	const resolvedDisabled = $derived(disabled || groupContext?.disabled || false);
+	const resolvedGrouped = $derived(grouped || !!groupContext);
+
 	let dropdownActive = $state(false);
 	let dropdownTrigger = $state(undefined as undefined | HTMLElement);
 	let menuActive = $state(false);
@@ -224,19 +238,21 @@
 	class:icon
 	class:pill
 	class:dense
+	class:grouped={resolvedGrouped}
 	class:full-width={fullWidth}
 	class:full-height={fullHeight}
 	class:overlay
-	class:transparent
-	class:translucent
-	class:success
-	class:accent
+	class:transparent={resolvedTransparent}
+	class:translucent={resolvedTranslucent}
+	class:outline={resolvedOutline}
+	class:success={resolvedSuccess}
+	class:accent={resolvedAccent}
 	class:active
-	class:error
+	class:error={resolvedError}
 	class:is-loading={isLoading}
 	class:loading={icon && isLoading}
 	{style}
-	style:font-size={size === undefined ? null : `var(--font-size-${size})`}
+	style:font-size={resolvedSize === undefined ? null : `var(--font-size-${resolvedSize})`}
 	{@attach tooltip(tooltipMessage)}>
 	{#if badge}
 		<div class="badge" class:dot={badge === true}>
@@ -247,14 +263,14 @@
 		this={href ? 'a' : 'button'}
 		type={href ? null : 'button'}
 		role="button"
-		tabindex={disabled || isLoading || (!mounted && !href) ? -1 : 0}
+		tabindex={resolvedDisabled || isLoading || (!mounted && !href) ? -1 : 0}
 		{...rest}
 		{target}
 		{href}
 		data-sveltekit-noscroll={href?.startsWith('?') ? true : null}
 		data-sveltekit-keepfocus={href?.startsWith('?') ? true : null}
-		{@attach ripple({ enabled: !disableRipple && !disabled && !isLoading, zIndex: 1 })}
-		disabled={disabled || onclickLoading || (!mounted && !href)}
+		{@attach ripple({ enabled: !disableRipple && !resolvedDisabled && !isLoading, zIndex: 1 })}
+		disabled={resolvedDisabled || onclickLoading || (!mounted && !href)}
 		aria-haspopup={!!menu}
 		aria-expanded={menu ? menuActive : null}
 		bind:this={menuTrigger}
@@ -284,7 +300,7 @@
 			aria-expanded={dropdownActive}
 			title="Open for more actions"
 			{@attach ripple({
-				enabled: !disableRipple && !disabled && !isLoading,
+				enabled: !disableRipple && !resolvedDisabled && !isLoading,
 				zIndex: 1,
 			})}
 			bind:this={dropdownTrigger}>

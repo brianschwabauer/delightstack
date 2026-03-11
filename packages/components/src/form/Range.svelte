@@ -1,525 +1,453 @@
-<script lang="ts" generics="Multiple extends boolean = false">
-	import { untrack } from 'svelte';
-	import { formatToString } from '@packages/lib';
-	import { browser } from '$app/environment';
-
-	interface RangeProps {
-		/** The name of the field (key) of the parent input element */
-		name?: string;
-		/** Whether multiple values should be selected (min/max). The first value in the array is min */
-		multiple?: Multiple;
-		/** Whether the range slider is disabled */
-		disabled?: boolean;
-		/** The minimum value of the slider. @default 0 */
-		min?: number;
-		/** The maximum value of the slider. @default 100 */
-		max?: number;
-		/** The step value of the slider. Increments the value by this amount */
-		step?: number;
-		/** The current value. If multiple is true, this is an array representing [min, max] @default 0 */
-		value: Multiple extends true ? [number, number] : number;
-		/** Whether the field has been touched (and blurred) */
-		touched?: boolean;
-		/** Whether the field has a value (field is filled in) */
-		dirty?: boolean;
-		/** Whether the slider displays tick marks along the slider track. */
-		showTickMarks?: boolean;
-		/** Whether the 'max' value represents any number greater than or equal to the max. Shows a greater than sign */
-		showGreaterThanMax?: boolean;
-		/** Whether the 'min' value represents any number less than or equal to the min. Shows a less than sign */
-		showLessThanMin?: boolean;
-		/** Whether the slider displays a numeric value label upon pressing the thumb. */
-		discrete?: boolean;
-		/**
-		 * Whether the background color should be the accent/primary/brand color.
-		 * If 'transparent' is also true, this will change the color of the text instead
-		 */
-		accent?: boolean;
-		/** The css style string added to the component from the parent */
-		style?: string;
-		/** Specifies a custom class name for the container element */
-		class?: string;
-		/** The ID of the range element. @defaults to a random ID */
-		id?: string;
-		/** Emits when the field has been touched (and blurred) */
-		ontouch?: () => void;
-		/** Emits when the field has a value (field is filled in) */
-		ondirty?: () => void;
-		/** Emits the current value of the input when it changes */
-		onchange?: (output: this['value']) => void;
-	}
+<script lang="ts">
+	import { tooltip } from '@delightstack/utilities';
 
 	const propId = $props.id();
 	let {
-		multiple = false as Multiple,
-		disabled = false,
+		/** Current value: number for single, [number, number] for range mode */
+		value = $bindable(0) as number | [number, number],
+
+		/** Minimum value */
 		min = 0,
+
+		/** Maximum value */
 		max = 100,
+
+		/** Step increment */
 		step = 1,
-		value = $bindable(multiple ? [min, max] : 0) as RangeProps['value'],
-		showTickMarks = false,
-		showGreaterThanMax = false,
-		showLessThanMin = false,
-		discrete = false,
-		accent = false,
-		touched = $bindable(false),
-		dirty = $bindable(false),
-		style = '',
-		class: className = '',
+
+		/** Whether to show two thumbs for range selection */
+		range = false,
+
+		/** Whether the slider is disabled */
+		disabled = false,
+
+		/** Size preset: 0=3px track, 1=5px, 2=7px, 3=8px */
+		size = '1' as '0' | '1' | '2' | '3',
+
+		/** Whether to show the current value near the thumb */
+		show_value = false,
+
+		/** Whether to display tick marks at each step */
+		show_ticks = false,
+
+		/** Custom labels for tick positions */
+		tick_labels = undefined as string[] | undefined,
+
+		/** Custom formatter for displayed values */
+		format_value = undefined as ((n: number) => string) | undefined,
+
+		/** Label text displayed above the slider */
+		label = undefined as string | undefined,
+
+		/** Tooltip message shown on hover */
+		tooltip: tooltip_message = undefined as string | undefined,
+
+		/** Whether the slider uses dense spacing */
+		dense = false,
+
+		/** Whether the slider uses comfortable spacing */
+		comfortable = false,
+
+		/** The id of the slider element */
 		id = propId,
-		ontouch = undefined,
-		ondirty = undefined,
-		onchange = undefined,
-	}: RangeProps = $props();
 
-	let lowerBound = $state(((Array.isArray(value) ? value[0] : value) as number) ?? min);
-	let upperBound = $state(((Array.isArray(value) ? value[1] : value) as number) ?? max);
+		/** Name attribute for hidden input(s) */
+		name = undefined as string | undefined,
 
-	// Update the local value when the value is changed by the parent
-	$effect(() => {
-		const lower = multiple ? Math.min(...(value as number[])) : <number>value;
-		const upper = multiple ? Math.max(...(value as number[])) : <number>value;
-		untrack(() => {
-			if (lowerBound !== lower) lowerBound = lower;
-			if (upperBound !== upper) upperBound = upper;
-		});
-	});
+		/** Custom class name */
+		class: class_name = '',
 
-	// Update the parent value when the value is changed by the local component
-	$effect(() => {
-		const lower = lowerBound;
-		const upper = upperBound;
-		untrack(() => {
-			if (!touched) touched = true;
-			if (!dirty) dirty = true;
-			if (multiple && Array.isArray(value)) {
-				if (value[0] !== lower || value[1] !== upper) {
-					value = [lower, upper] as RangeProps['value'];
-				}
-			}
-			if (!multiple && value !== lower) value = lower as RangeProps['value'];
-		});
-	});
+		/** Called when value changes (on pointerup / change) */
+		onchange = undefined as ((detail: { value: number | [number, number] }) => void) | undefined,
 
-	// Emit the necessary events when the field is touched or dirty or value changes
-	$effect(() => {
-		if (touched) ontouch?.();
-	});
-	$effect(() => {
-		if (dirty) ondirty?.();
-	});
-	$effect(() => {
-		onchange?.(value);
-	});
+		/** Called during dragging */
+		oninput = undefined as ((detail: { value: number | [number, number] }) => void) | undefined,
+	} = $props();
+
+	let lower_hovering = $state(false);
+	let upper_hovering = $state(false);
+	let lower_dragging = $state(false);
+	let upper_dragging = $state(false);
+
+	const lower_value = $derived(range && Array.isArray(value) ? value[0] : (value as number));
+	const upper_value = $derived(range && Array.isArray(value) ? value[1] : max);
+
+	const fill_left = $derived(range ? ((lower_value - min) / (max - min)) * 100 : 0);
+	const fill_right = $derived(
+		range
+			? ((upper_value - min) / (max - min)) * 100
+			: ((lower_value - min) / (max - min)) * 100
+	);
+
+	const tick_count = $derived(Math.floor((max - min) / step));
+
+	function formatDisplay(n: number): string {
+		if (format_value) return format_value(n);
+		return String(n);
+	}
+
+	function emitValue() {
+		const v = range ? ([lower_value, upper_value] as [number, number]) : lower_value;
+		return v;
+	}
+
+	function onLowerInput(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		let v = Number(input.value);
+		if (range) {
+			if (v > upper_value) v = upper_value;
+			value = [v, upper_value] as [number, number];
+		} else {
+			value = v;
+		}
+		oninput?.({ value: emitValue() });
+	}
+
+	function onUpperInput(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		let v = Number(input.value);
+		if (v < lower_value) v = lower_value;
+		value = [lower_value, v] as [number, number];
+		oninput?.({ value: emitValue() });
+	}
+
+	function onLowerChange() {
+		onchange?.({ value: emitValue() });
+	}
+
+	function onUpperChange() {
+		onchange?.({ value: emitValue() });
+	}
 </script>
 
-{#if multiple}
-	<div
-		class={['range', className].filter(Boolean).join(' ')}
-		class:accent
-		style:--step={`${step}`}
-		style:--min={`${min}`}
-		style:--max={`${max}`}
-		style:--value-a={`${lowerBound}`}
-		style:--value-b={`${upperBound}`}
-		style:--text-value-a={`'${showLessThanMin && lowerBound === min ? '<' : ''}${formatToString(lowerBound, { type: 'number', maximumFractionDigits: 0 })}'`}
-		style:--text-value-b={`'${formatToString(upperBound, { type: 'number', maximumFractionDigits: 0 })}${showGreaterThanMax && upperBound === max ? '+' : ''}'`}
-		style:--ticks-height={showTickMarks ? '' : '0px'}
-		style:--ticks-color={showTickMarks ? '' : 'transparent'}
-		style:--show-min-max={discrete ? '' : 'none'}
-		{style}>
+<div
+	class={['range-container', `size-${size}`, class_name].filter(Boolean).join(' ')}
+	class:disabled
+	class:dense
+	class:comfortable
+	class:has-ticks={show_ticks}
+	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
+	{#if label}
+		<label class="range-label" for={id}>{label}</label>
+	{/if}
+
+	<div class="range-wrapper">
+		{#if show_value && (lower_hovering || lower_dragging)}
+			<span
+				class="value-tooltip"
+				style:left="{fill_right}%"
+				style:--offset="{range ? fill_left : 0}%">
+				{formatDisplay(lower_value)}
+			</span>
+		{/if}
+		{#if range && show_value && (upper_hovering || upper_dragging)}
+			<span class="value-tooltip" style:left="{fill_right}%">
+				{formatDisplay(upper_value)}
+			</span>
+		{/if}
+
+		<div class="track">
+			<div
+				class="fill"
+				style:left="{fill_left}%"
+				style:width="{fill_right - fill_left}%"></div>
+		</div>
+
 		<input
 			type="range"
-			{step}
-			{min}
-			{max}
 			{id}
-			disabled={disabled || !browser}
-			bind:value={lowerBound}
-			onblur={() => touched || (touched = true)}
-			oninput={() =>
-				(upperBound = Math.min(max, Math.max(upperBound, lowerBound + step)))} />
-		{#if discrete}<output></output>{/if}
-		<input
-			type="range"
-			{step}
+			{name}
 			{min}
 			{max}
-			disabled={disabled || !browser}
-			bind:value={upperBound}
-			onblur={() => touched || (touched = true)}
-			oninput={() =>
-				(lowerBound = Math.max(min, Math.min(lowerBound, upperBound - step)))} />
-		{#if discrete}<output></output>{/if}
-		<div class="progress"></div>
-	</div>
-{:else}
-	<div
-		class="range {className}"
-		class:accent
-		{id}
-		style:--step={`${step}`}
-		style:--min={`${min}`}
-		style:--max={`${max}`}
-		style:--value={`${lowerBound}`}
-		style:--text-value={`'${showLessThanMin && lowerBound === min ? '<' : ''}${formatToString(lowerBound, { type: 'number', maximumFractionDigits: 0 })}${showGreaterThanMax && lowerBound === max ? '+' : ''}'`}
-		style:--ticks-height={showTickMarks ? '' : '0px'}
-		style:--ticks-color={showTickMarks ? '' : 'transparent'}
-		style:--show-min-max={discrete ? '' : 'none'}
-		{style}>
-		<input
-			type="range"
-			{min}
-			{max}
-			disabled={disabled || !browser}
 			{step}
-			bind:value={lowerBound}
-			onblur={() => touched || (touched = true)} />
-		{#if discrete}<output></output>{/if}
-		<div class="progress"></div>
+			{disabled}
+			value={lower_value}
+			class="thumb-input lower"
+			aria-valuenow={lower_value}
+			aria-valuemin={min}
+			aria-valuemax={range ? upper_value : max}
+			aria-label={label || 'Range value'}
+			oninput={onLowerInput}
+			onchange={onLowerChange}
+			onpointerenter={() => (lower_hovering = true)}
+			onpointerleave={() => (lower_hovering = false)}
+			onpointerdown={() => (lower_dragging = true)}
+			onpointerup={() => (lower_dragging = false)} />
+
+		{#if range}
+			<input
+				type="range"
+				{min}
+				{max}
+				{step}
+				{disabled}
+				value={upper_value}
+				class="thumb-input upper"
+				aria-valuenow={upper_value}
+				aria-valuemin={lower_value}
+				aria-valuemax={max}
+				aria-label={label ? `${label} upper` : 'Range upper value'}
+				oninput={onUpperInput}
+				onchange={onUpperChange}
+				onpointerenter={() => (upper_hovering = true)}
+				onpointerleave={() => (upper_hovering = false)}
+				onpointerdown={() => (upper_dragging = true)}
+				onpointerup={() => (upper_dragging = false)} />
+		{/if}
+
+		{#if show_ticks && tick_count <= 50}
+			<div class="ticks" aria-hidden="true">
+				{#each { length: tick_count + 1 } as _, i}
+					{@const tick_value = min + i * step}
+					<span
+						class="tick"
+						class:active={tick_value >= (range ? lower_value : min) &&
+							tick_value <= (range ? upper_value : lower_value)}
+						style:left="{((tick_value - min) / (max - min)) * 100}%">
+						{#if tick_labels && tick_labels[i] !== undefined}
+							<span class="tick-label">{tick_labels[i]}</span>
+						{/if}
+					</span>
+				{/each}
+			</div>
+		{/if}
 	</div>
-{/if}
 
-<style lang="scss">
-	.range {
-		&.accent {
-			--c-action: var(--c-accent);
-			--c-action-disabled: var(--c-accent-disabled);
-			--c-action-active: var(--c-accent-active);
-			--c-action-text: var(--c-accent-text);
-			--c-action-text-active: var(--c-accent-text-active);
-			--c-action-text-disabled: var(--c-accent-text-disabled);
-		}
-		--value-offset-y: var(--ticks-gap);
-		--value-active-color: var(--c-action-text-active);
-		--value-color: transparent;
-		--value-background: transparent;
-		--value-background-hover: var(--c-action-active);
+	{#if show_value && !show_ticks}
+		<div class="value-display">
+			<span>{formatDisplay(lower_value)}</span>
+			{#if range}
+				<span>{formatDisplay(upper_value)}</span>
+			{/if}
+		</div>
+	{/if}
+</div>
 
-		--fill-color: var(--c-action);
-		--fill-color-disabled: var(--c-action-disabled);
-		--progress-background: var(--c-bg-6);
-		--progress-background-disabled: var(--c-bg-4);
-		--progress-radius: var(--radius-round);
-		--track-height: calc(var(--thumb-size) / 3);
+<style>
+	.range-container {
+		--track-height: 5px;
+		--thumb-size: 18px;
+		--fill-color: var(--c-action, hsl(220 70% 55%));
+		--track-bg: var(--c-bg-6, hsl(0 0% 80%));
+		--thumb-color: var(--c-action-active, hsl(220 70% 50%));
 
-		--min-max-opacity: 0.5;
-		--min-max-x-offset: 10%; // 50% to center
+		display: flex;
+		flex-direction: column;
+		gap: 0.5em;
+		width: 100%;
+		font-size: var(--font-size-1, 0.875rem);
+	}
 
-		--thumb-size: 16px; // the size of the thumb, not including the overlay
-		--thumb-min-outer-size: 44px; // The minimum size of the thumb, including the overlay
-		--thumb-overlay-size: max(
-			calc(var(--thumb-size)),
-			calc(var(--thumb-min-outer-size) - var(--thumb-size))
-		);
-		--thumb-radius: var(--radius-round);
-		--thumb-color: var(--c-action-active);
-		--thumb-color-disabled: var(--c-action-disabled);
-		--thumb-shadow: 0 0 0 calc(var(--thumb-overlay-size) / 2) transparent inset;
-		--thumb-shadow-active:
-			0 0 0 calc(var(--thumb-overlay-size) / 2) rgb(from var(--c-text) r g b / 0.12) inset,
-			0 0 0 4px rgb(from var(--c-text) r g b / 0.12);
-		--thumb-shadow-hover: 0 0 0 calc(var(--thumb-overlay-size) / 2)
-			rgb(from var(--c-text) r g b / 0.12) inset;
+	.range-container.dense {
+		gap: 0.25em;
+	}
+	.range-container.comfortable {
+		gap: 0.75em;
+	}
 
-		--ticks-thickness: 1px;
-		--ticks-height: 5px;
-		// vertical space between the ticks and the progress bar
-		--ticks-gap: var(--ticks-height, 0);
-		--ticks-color: var(--fill-color);
+	/* Sizes */
+	.range-container.size-0 {
+		--track-height: 3px;
+		--thumb-size: 14px;
+		font-size: var(--font-size-0, 0.75rem);
+	}
+	.range-container.size-1 {
+		--track-height: 5px;
+		--thumb-size: 18px;
+		font-size: var(--font-size-1, 0.875rem);
+	}
+	.range-container.size-2 {
+		--track-height: 7px;
+		--thumb-size: 22px;
+		font-size: var(--font-size-2, 1rem);
+	}
+	.range-container.size-3 {
+		--track-height: 8px;
+		--thumb-size: 26px;
+		font-size: var(--font-size-3, 1.125rem);
+	}
 
-		// ⚠️ BELOW VARIABLES SHOULD NOT BE CHANGED
-		--step: 1;
-		--ticks-count: (var(--max) - var(--min)) / var(--step);
-		--maxTicksAllowed: 30;
-		--too-many-ticks: Min(1, Max(var(--ticks-count) - var(--maxTicksAllowed), 0));
-		--x-step: Max(
-			var(--step),
-			var(--too-many-ticks) * (var(--max) - var(--min))
-		); // manipulate the number of steps if too many ticks exist, so there would only be 2
-		// --tickInterval: 100/((var(--max) - var(--min)) / var(--step)) * var(--tickEvery, 1);
-		--tickIntervalPerc_1: Calc((var(--max) - var(--min)) / var(--x-step));
-		--tickIntervalPerc: calc(
-			(100% - var(--thumb-size) - var(--thumb-overlay-size)) / var(--tickIntervalPerc_1) *
-				var(--tickEvery, 1)
-		);
+	.range-label {
+		color: var(--c-text, inherit);
+		font-weight: 500;
+		line-height: 1.4;
+	}
 
-		--value-a: Clamp(
-			var(--min),
-			var(--value, 0),
-			var(--max)
-		); // default value ("--value" is used in single-range markup)
-		--value-b: var(--value, 0); // default value
-		--text-value-a: var(--text-value, '');
-
-		--completed-a: calc((var(--value-a) - var(--min)) / (var(--max) - var(--min)) * 100);
-		--completed-b: calc((var(--value-b) - var(--min)) / (var(--max) - var(--min)) * 100);
-		--ca: Min(var(--completed-a), var(--completed-b));
-		--cb: Max(var(--completed-a), var(--completed-b));
-
-		// breakdown of the below super-complex brain-breaking CSS math:
-		// "clamp" is used to ensure either "-1" or "1"
-		// "calc" is used to inflat the outcome into a huge number, to get rid of any value between -1 & 1
-		// if absolute diff of both completed % is above "5" (%)
-		// ".001" bumps the value just a bit, to avoid a scenario where calc resulted in "0" (then clamp will also be "0")
-		--thumbs-too-close: Clamp(
-			-1,
-			1000 * (Min(1, Max(var(--cb) - var(--ca) - 5, -1)) + 0.001),
-			1
-		);
-		--thumb-close-to-min: Min(1, Max(var(--ca) - 5, 0)); // 2% threshold
-		--thumb-close-to-max: Min(1, Max(95 - var(--cb), 0)); // 2% threshold
-
-		@mixin thumb {
-			appearance: none;
-			border: none;
-			height: calc(var(--thumb-size) + var(--thumb-overlay-size, '0px'));
-			width: calc(var(--thumb-size) + var(--thumb-overlay-size, '0px'));
-			transform: var(--thumb-transform);
-			border-radius: var(--thumb-radius, 50%);
-			background-color: transparent;
-			background-image: radial-gradient(
-				circle at center,
-				var(--thumb-color) 0%,
-				var(--thumb-color) calc((var(--thumb-size) / 2) - 1px),
-				transparent calc(var(--thumb-size) / 2)
-			);
-			box-shadow: var(--thumb-shadow);
-			pointer-events: auto;
-			transition: 0.1s;
-		}
-
-		min-width: 10em;
-		box-sizing: content-box;
-		display: inline-block;
-		height: max(var(--track-height), var(--thumb-size));
-		// margin: calc((var(--thumb-size) - var(--track-height)) * -.25) var(--thumb-size) 0;
-		margin: 0 calc(var(--thumb-size) * -0.5);
-		background: linear-gradient(
-				to right,
-				var(--ticks-color) var(--ticks-thickness),
-				transparent 1px
-			)
-			repeat-x;
-		background-size: var(--tickIntervalPerc) var(--ticks-height);
-		background-position-x: calc(
-			var(--thumb-size) / 2 + var(--thumb-overlay-size) / 2 - var(--ticks-thickness) / 2
-		);
-		background-position-y: var(--flip-y, bottom);
-
-		padding-bottom: var(--flip-y, var(--ticks-gap));
-		padding-top: calc(var(--flip-y) * var(--ticks-gap));
-
+	.range-wrapper {
 		position: relative;
-		z-index: 1;
+		height: var(--thumb-size);
+		display: flex;
+		align-items: center;
+	}
 
-		// mix/max texts
-		&::before,
-		&::after {
-			--offset: calc(var(--thumb-size) / 2 + var(--thumb-overlay-size) / 2);
-			content: counter(x);
-			display: var(--show-min-max, block);
-			font-size: var(--font-size-0);
-			position: absolute;
-			bottom: var(--flip-y, -2.5ch);
-			top: calc(-2.5ch * var(--flip-y));
-			opacity: Clamp(0, var(--at-edge), var(--min-max-opacity));
-			transform: translateX(calc(var(--min-max-x-offset) * var(--before, -1) * -1))
-				scale(var(--at-edge));
-			pointer-events: none;
-		}
+	/* Track */
+	.track {
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: var(--track-height);
+		background: var(--track-bg);
+		border-radius: var(--track-height);
+		pointer-events: none;
+	}
 
-		&::before {
-			--before: 1;
-			--at-edge: var(--thumb-close-to-min);
-			counter-reset: x var(--min);
-			left: var(--offset);
-		}
+	.fill {
+		position: absolute;
+		height: 100%;
+		background: var(--fill-color);
+		border-radius: inherit;
+		pointer-events: none;
+	}
 
-		&::after {
-			--at-edge: var(--thumb-close-to-max);
-			counter-reset: x var(--max);
-			right: var(--offset);
-		}
+	/* Native range inputs */
+	.thumb-input {
+		position: absolute;
+		width: 100%;
+		height: var(--thumb-size);
+		margin: 0;
+		padding: 0;
+		background: transparent;
+		appearance: none;
+		-webkit-appearance: none;
+		pointer-events: none;
+		outline: none;
+		z-index: 2;
+	}
 
-		.progress {
-			--start-end: calc(var(--thumb-size) / 2 + var(--thumb-overlay-size) / 2);
-			--clip-end: calc(100% - (var(--cb)) * 1%);
-			--clip-start: calc(var(--ca) * 1%);
-			--clip: inset(-20px var(--clip-end) -20px var(--clip-start));
-			position: absolute;
-			left: var(--start-end);
-			right: var(--start-end);
-			top: calc(
-				var(--ticks-gap) * var(--flip-y, 0) + var(--thumb-size) /
-					2 - var(--track-height) / 2
-			);
-			//  transform: var(--flip-y, translateY(-50%) translateZ(0));
-			height: calc(var(--track-height));
-			background: var(--progress-background, #eee);
-			pointer-events: none;
-			z-index: -1;
-			border-radius: var(--progress-radius);
+	.thumb-input::-webkit-slider-runnable-track {
+		height: var(--track-height);
+		background: transparent;
+		border: none;
+	}
+	.thumb-input::-moz-range-track {
+		height: var(--track-height);
+		background: transparent;
+		border: none;
+	}
 
-			// fill area
-			&::before {
-				content: '';
-				position: absolute;
-				// left: Clamp(0%, calc(var(--ca) * 1%), 100%); // confine to 0 or above
-				// width: Min(100%, calc((var(--cb) - var(--ca)) * 1%)); // confine to maximum 100%
-				left: 0;
-				right: 0;
-				clip-path: var(--clip);
-				top: 0;
-				bottom: 0;
-				background: var(--fill-color, black);
-				box-shadow: var(--progress-flll-shadow);
-				z-index: 1;
-				border-radius: inherit;
-			}
+	.thumb-input::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: var(--thumb-size);
+		height: var(--thumb-size);
+		border-radius: 50%;
+		background: var(--thumb-color);
+		border: 2px solid white;
+		box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+		cursor: pointer;
+		pointer-events: auto;
+		margin-top: calc((var(--track-height) - var(--thumb-size)) / 2);
+		transition: box-shadow 0.15s ease, transform 0.15s ease;
+	}
+	.thumb-input::-moz-range-thumb {
+		width: var(--thumb-size);
+		height: var(--thumb-size);
+		border-radius: 50%;
+		background: var(--thumb-color);
+		border: 2px solid white;
+		box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+		cursor: pointer;
+		pointer-events: auto;
+		transition: box-shadow 0.15s ease, transform 0.15s ease;
+	}
 
-			// shadow-effect
-			&::after {
-				content: '';
-				position: absolute;
-				top: 0;
-				right: 0;
-				bottom: 0;
-				left: 0;
-				box-shadow: var(--progress-shadow);
-				pointer-events: none;
-				border-radius: inherit;
-			}
-		}
+	.thumb-input:focus-visible::-webkit-slider-thumb {
+		outline: 2px solid var(--c-outline-active, currentColor);
+		outline-offset: 2px;
+	}
+	.thumb-input:focus-visible::-moz-range-thumb {
+		outline: 2px solid var(--c-outline-active, currentColor);
+		outline-offset: 2px;
+	}
 
-		& > input {
-			appearance: none;
-			-webkit-appearance: none;
-			width: 100%;
-			height: var(--thumb-size);
-			margin: 0;
-			position: absolute;
-			left: 0;
-			box-shadow: none;
-			top: calc(
-				50% - Max(var(--track-height), var(--thumb-size)) / 2 +
-					calc(var(--ticks-gap) / 2 * var(--flip-y, -1))
-			);
-			cursor: -webkit-grab;
-			cursor: grab;
-			outline: none;
-			background: none;
+	.thumb-input:not(:disabled)::-webkit-slider-thumb:hover {
+		box-shadow: 0 0 0 6px rgb(from var(--fill-color) r g b / 0.15);
+	}
+	.thumb-input:not(:disabled)::-moz-range-thumb:hover {
+		box-shadow: 0 0 0 6px rgb(from var(--fill-color) r g b / 0.15);
+	}
+	.thumb-input:not(:disabled):active::-webkit-slider-thumb {
+		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.2);
+		transform: scale(1.1);
+	}
+	.thumb-input:not(:disabled):active::-moz-range-thumb {
+		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.2);
+		transform: scale(1.1);
+	}
 
-			&:disabled {
-				cursor: -webkit-not-allowed;
-				cursor: not-allowed;
-				--thumb-color: var(--thumb-color-disabled);
-				~ .progress {
-					--fill-color: var(--fill-color-disabled);
-					--progress-background: var(--progress-background-disabled);
-				}
-			}
+	.thumb-input:disabled {
+		cursor: not-allowed;
+	}
+	.thumb-input:disabled::-webkit-slider-thumb {
+		background: var(--c-action-disabled, hsl(0 0% 70%));
+		cursor: not-allowed;
+	}
+	.thumb-input:disabled::-moz-range-thumb {
+		background: var(--c-action-disabled, hsl(0 0% 70%));
+		cursor: not-allowed;
+	}
 
-			&:not(:only-of-type) {
-				pointer-events: none;
-			}
+	.disabled {
+		opacity: 0.5;
+	}
 
-			&::-webkit-slider-thumb {
-				@include thumb;
-			}
-			&::-moz-range-thumb {
-				@include thumb;
-			}
-			&::-ms-thumb {
-				@include thumb;
-			}
+	/* Ticks */
+	.ticks {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: calc(50% + var(--thumb-size) / 2 + 4px);
+		height: 8px;
+		pointer-events: none;
+	}
 
-			&:hover:not(:disabled),
-			&:focus-visible:not(:disabled) {
-				--thumb-shadow: var(--thumb-shadow-hover);
-				--thumb-transform: var(--thumb-transform-hover);
-				& + output {
-					--value-background: var(--value-background-hover);
-					--y-offset: -5px;
-					color: var(--value-active-color);
-					box-shadow: 0 0 0 3px var(--value-background);
-				}
-			}
+	.tick {
+		position: absolute;
+		width: 1px;
+		height: 6px;
+		background: var(--c-bg-6, hsl(0 0% 75%));
+		transform: translateX(-50%);
+	}
+	.tick.active {
+		background: var(--fill-color);
+	}
 
-			&:active:not(:disabled) {
-				--thumb-shadow: var(--thumb-shadow-active);
-				--thumb-transform: var(--thumb-transform-active);
-				cursor: grabbing;
-				z-index: 2; // when sliding left thumb over the right or vice-versa, make sure the moved thumb is on top
-				+ output {
-					transition: 0s;
-				}
-			}
+	.tick-label {
+		position: absolute;
+		top: 10px;
+		left: 50%;
+		transform: translateX(-50%);
+		font-size: 0.75em;
+		color: var(--c-text-2, inherit);
+		white-space: nowrap;
+	}
 
-			&:nth-of-type(1) {
-				--is-left-most: Clamp(0, (var(--value-a) - var(--value-b)) * 99999, 1);
-				& + output {
-					&:not(:only-of-type) {
-						--flip: calc(var(--thumbs-too-close) * -1);
-					}
+	/* Value tooltip */
+	.value-tooltip {
+		position: absolute;
+		top: calc(-1.75em - 8px);
+		transform: translateX(-50%);
+		background: var(--c-action-active, hsl(220 70% 50%));
+		color: var(--c-action-text, white);
+		padding: 2px 8px;
+		border-radius: 4px;
+		font-size: 0.8em;
+		font-weight: 600;
+		white-space: nowrap;
+		pointer-events: none;
+		z-index: 3;
+	}
 
-					--value: var(--value-a);
-					--x-offset: calc(var(--completed-a) * -1%);
-					&::after {
-						content: var(--text-value-a);
-					}
-				}
-			}
+	/* Value display below */
+	.value-display {
+		display: flex;
+		justify-content: space-between;
+		color: var(--c-text-2, inherit);
+		font-size: 0.85em;
+		font-variant-numeric: tabular-nums;
+	}
 
-			&:nth-of-type(2) {
-				--is-left-most: Clamp(0, (var(--value-b) - var(--value-a)) * 99999, 1);
-				& + output {
-					--value: var(--value-b);
-				}
-			}
-
-			// non-multiple range should not clip start of progress bar
-			&:only-of-type {
-				~ .progress {
-					--clip-start: 0;
-				}
-			}
-
-			& + output {
-				--flip: -1;
-				--x-offset: calc(var(--completed-b) * -1%);
-				--pos: calc(((var(--value) - var(--min)) / (var(--max) - var(--min))) * 100%);
-
-				pointer-events: none;
-				position: absolute;
-				z-index: 2;
-				background: var(--value-background);
-				color: var(--value-color);
-				border-radius: 10px;
-				padding: 2px 6px;
-				left: var(--pos);
-				margin-left: calc(
-					(1 - ((var(--value) - var(--min)) / (var(--max) - var(--min)))) *
-						var(--thumb-overlay-size) - var(--thumb-overlay-size) / 2
-				);
-				transform: translate(
-					var(--x-offset),
-					calc(
-						150% * var(--flip) - (var(--y-offset, 0px) + var(--value-offset-y)) *
-							var(--flip)
-					)
-				);
-				transition:
-					all 0.12s ease-out,
-					left 0s;
-
-				&::after {
-					content: var(--text-value-b);
-					font-size: var(--font-size-1);
-					line-height: 1;
-					font-weight: bold;
-				}
-			}
-		}
+	.has-ticks .range-wrapper {
+		margin-bottom: 1.5em;
 	}
 </style>

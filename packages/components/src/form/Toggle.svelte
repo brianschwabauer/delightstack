@@ -1,411 +1,284 @@
-<script lang="ts" generics="Indeterminate extends boolean = false">
-	import { onMount, type Snippet } from 'svelte';
-	import { Popover } from '$lib/components';
-	import ChevronDown from '~icons/mdi/chevron-down';
-	import { browser } from '$app/environment';
+<script lang="ts">
+	import { tooltip } from '@delightstack/utilities';
+	import { type Snippet } from 'svelte';
 
 	const propId = $props.id();
 	let {
-		/**
-		 * Whether the toggle supports the 'indeterminate' state - where it's not a true/false
-		 * If true, the user can click toggle between the three states: true, false, and null
-		 */
-		indeterminate = false as Indeterminate,
-
-		/** The current value of the checkbox. 'null' means indeterminate */
-		value = $bindable() as Indeterminate extends true
-			? boolean | undefined | null
-			: boolean,
-
-		/** Whether the toggle should be smaller & denser */
-		dense = false,
-
-		/** Whether the toggle should be larger */
-		comfortable = false,
-
-		/** Whether or not the toggle must be checked to be valid */
-		required = false,
+		/** Whether the toggle is checked */
+		checked = $bindable(false),
 
 		/** Whether the toggle is disabled */
 		disabled = false,
 
-		/** Whether the toggle value is inverted (false shows true and true shows false) */
-		inverted = false,
+		/** Size preset: 0=32x18, 1=44x24, 2=52x28, 3=68x36 */
+		size = '1' as '0' | '1' | '2' | '3',
 
-		/** Whether the field has been touched (and blurred) */
-		touched = $bindable(false) as boolean,
+		/** Label text displayed alongside the toggle */
+		label = undefined as string | undefined,
 
-		/** Whether the toggle should be displayed in the vertical orientation */
-		vertical = false,
+		/** Position of the label relative to the toggle */
+		label_position = 'end' as 'start' | 'end',
 
-		/** Where the toggle button should be in relation to the label */
-		position = 'left' as 'left' | 'right',
+		/** Label displayed when toggle is on */
+		on_label = undefined as string | undefined,
 
-		/**
-		 * Whether the background color should be the accent/primary/brand color.
-		 * If 'transparent' is also true, this will change the color of the text instead
-		 */
-		accent = false,
+		/** Label displayed when toggle is off */
+		off_label = undefined as string | undefined,
 
-		/** Specifies a custom class name for the container element */
-		class: className = '',
+		/** Name attribute for the hidden input */
+		name = undefined as string | undefined,
 
-		/** The ID of the checkbox element. @defaults to a random ID */
+		/** Value attribute for the hidden input */
+		value = undefined as string | undefined,
+
+		/** Tooltip message shown on hover */
+		tooltip: tooltip_message = undefined as string | undefined,
+
+		/** Whether the toggle uses dense spacing */
+		dense = false,
+
+		/** Whether the toggle uses comfortable spacing */
+		comfortable = false,
+
+		/** The id of the toggle element */
 		id = propId,
 
-		/** The css style string added to the component from the parent */
-		style = '',
+		/** Custom class name */
+		class: class_name = '',
 
-		/** The content to show in a dropdown menu when the toggle label is clicked */
-		menu = undefined as undefined | Snippet,
+		/** Snippet for a custom icon inside the thumb */
+		thumb_icon = undefined as Snippet | undefined,
 
-		/** The child elements to display inside the element */
-		children = undefined as undefined | Snippet,
-
-		/** Called when the field is touched */
-		ontouch = undefined as (() => void) | undefined,
-
-		/** Called when the value changes */
-		onchange = undefined as
-			| ((val: Indeterminate extends true ? boolean | undefined | null : boolean) => void)
-			| undefined,
+		/** Called when the toggle value changes */
+		onchange = undefined as ((detail: { checked: boolean }) => void) | undefined,
 	} = $props();
 
-	let inputElement = $state<HTMLInputElement | undefined>();
-	let menuActive = $state(false);
-	let menuTrigger = $state(undefined as undefined | HTMLElement);
+	let pressed = $state(false);
 
-	// Emit the necessary events when the field is touched or dirty or value changes
-	$effect(() => {
-		if (touched && ontouch) ontouch();
-	});
+	const state_label = $derived(checked ? on_label : off_label);
 
-	/** Called when the input field value is changed */
-	function onInputChange(checked: boolean | null) {
-		const newValue = (!indeterminate ? !!checked : checked) as Indeterminate extends true
-			? boolean | undefined | null
-			: boolean;
-		if (newValue !== value) {
-			(value as any) = newValue;
-			if (onchange) onchange(newValue);
-		}
-	}
-
-	let thumbTransitionDuration = $state('');
-	let thumbPosition = $state('');
-	let isDragging = false;
-	let recentlyDragged = false;
-	let thumbsize = 0;
-	let padding = 0;
-	let middle = 0;
-	let upper = 0;
-
-	onMount(() => {
-		if (!inputElement) return;
-		const inputStyles = window.getComputedStyle(inputElement);
-		const thumbStyles = window.getComputedStyle(inputElement, ':before');
-		thumbsize = parseInt(thumbStyles.getPropertyValue('width'));
-		padding =
-			parseInt(inputStyles.getPropertyValue('padding-left')) +
-			parseInt(inputStyles.getPropertyValue('padding-right'));
-		middle = (inputElement.clientWidth - padding) / 4;
-		upper = inputElement.clientWidth - thumbsize - padding;
-	});
-
-	function dragInit() {
+	function toggle() {
 		if (disabled) return;
-		isDragging = true;
-		thumbTransitionDuration = '0s';
+		checked = !checked;
+		onchange?.({ checked });
 	}
 
-	function dragEnd() {
-		if (isDragging !== true) return;
-		const checked = determineChecked();
-		onInputChange(inverted ? !checked : checked);
-		thumbTransitionDuration = '';
-		thumbPosition = '';
-		isDragging = false;
-		padRelease();
-	}
-
-	function dragging(event: PointerEvent) {
-		if (isDragging !== true) return;
-		let pos = Math.round(event.offsetX - thumbsize / 2);
-		if (pos < 0) pos = 0;
-		if (pos > upper) pos = upper;
-		thumbPosition = `${pos}px`;
-	}
-
-	function determineChecked(): boolean | null {
-		let pos = Math.abs(Number.parseInt(thumbPosition));
-		if (indeterminate) {
-			if (isNaN(pos)) return value ? false : value === null ? true : null;
-			if (Math.abs(pos - middle) < upper * 0.33) return null;
-		}
-		if (isNaN(pos)) return !value;
-		return pos >= middle;
-	}
-
-	function padRelease() {
-		recentlyDragged = true;
-		setTimeout(() => (recentlyDragged = false), 300);
-	}
-
-	function onInputClick(e: MouseEvent) {
-		if (recentlyDragged) {
-			e.preventDefault();
-			e.stopPropagation();
-		}
-	}
-	function onKeyUp(e: KeyboardEvent) {
+	function onKeyDown(e: KeyboardEvent) {
 		if (e.key === ' ' || e.key === 'Enter') {
 			e.preventDefault();
-			e.stopPropagation();
-			if (indeterminate) {
-				onInputChange(value ? false : value === null ? true : null);
-			} else {
-				onInputChange(!value);
-			}
+			toggle();
 		}
 	}
 </script>
 
-<svelte:window onpointerup={dragEnd} />
-
 <label
-	for={id}
-	{style}
-	bind:this={menuTrigger}
-	class={['toggle', className].filter(Boolean).join(' ')}
-	class:label-right={position === 'right'}
+	class={['toggle', `size-${size}`, class_name].filter(Boolean).join(' ')}
+	class:checked
+	class:disabled
 	class:dense
 	class:comfortable
-	class:disabled={disabled || !browser}
-	class:vertical
-	class:indeterminate
-	class:accent>
+	class:pressed
+	class:label-start={label_position === 'start'}
+	for={id}
+	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
+	{#if label && label_position === 'start'}
+		<span class="label">{label}</span>
+	{/if}
+
 	<input
 		type="checkbox"
-		role="switch"
-		checked={inverted ? !value : !!value}
-		aria-checked={inverted ? !value : !!value}
-		bind:this={inputElement}
-		onchange={(e) =>
-			onInputChange(inverted ? !e.currentTarget.checked : e.currentTarget.checked)}
-		onpointerdown={dragInit}
-		onpointerup={dragEnd}
-		onpointermove={dragging}
-		onclick={onInputClick}
-		onkeyup={onKeyUp}
-		onblur={() => touched || (touched = true)}
-		style:--thumb-transition-duration={thumbTransitionDuration}
-		style:--thumb-position={thumbPosition}
-		{required}
+		bind:checked
+		{name}
+		{value}
 		{id}
-		disabled={disabled || !browser}
-		indeterminate={indeterminate && value === null} />
-	{#if menu}
-		<button class="menu-trigger" onclick={() => (menuActive = !menuActive)}>
-			{#if children}{@render children()}{/if}
-			<ChevronDown
-				style="pointer-events:none;"
-				class="chevron {menuActive ? 'active' : ''}" />
-		</button>
-	{:else if children}
-		{@render children()}
+		{disabled}
+		class="sr-only"
+		onchange={() => onchange?.({ checked })} />
+
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<span
+		class="track"
+		role="switch"
+		aria-checked={checked}
+		tabindex={disabled ? -1 : 0}
+		onkeydown={onKeyDown}
+		onpointerdown={() => (pressed = true)}
+		onpointerup={() => (pressed = false)}
+		onpointerleave={() => (pressed = false)}>
+		<span class="thumb">
+			{#if thumb_icon}
+				<span class="thumb-icon">{@render thumb_icon()}</span>
+			{/if}
+		</span>
+	</span>
+
+	{#if state_label}
+		<span class="state-label">{state_label}</span>
+	{/if}
+
+	{#if label && label_position === 'end'}
+		<span class="label">{label}</span>
 	{/if}
 </label>
 
-{#if menu}
-	<Popover
-		refElement={menuTrigger}
-		bind:opened={menuActive}
-		arrow={false}
-		closeOnInsideClick
-		placement="bottom-end">
-		{@render menu()}
-	</Popover>
-{/if}
-
-<style lang="scss">
-	:global(html[data-theme='dark']) .toggle {
-		--thumb-highlight: hsl(0 0% 100% / 25%);
-		& > input {
-			&:disabled {
-				&::before {
-					box-shadow: inset 0 0 0 2px hsl(0 0% 0% / 50%);
-				}
-			}
-		}
+<style>
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
+
 	.toggle {
-		&.accent {
-			--c-action: var(--c-accent);
-			--c-action-disabled: var(--c-accent-disabled);
-			--c-action: var(--c-accent-active);
-			--c-action-text: var(--c-accent-text);
-			--c-action-text-active: var(--c-accent-text-active);
-			--c-action-text-disabled: var(--c-accent-text-disabled);
-		}
-		&.dense {
-			--thumb-size: 1.1rem;
-			--track-padding: 1px;
-			gap: 1ch;
-		}
-		&.comfortable {
-			--thumb-size: 2rem;
-			--track-padding: 3px;
-		}
-		--thumb-size: 1.5rem;
-		--thumb-highlight: rgb(from var(--c-text) r g b / 0.25);
+		--track-width: 44px;
+		--track-height: 24px;
+		--thumb-size: 18px;
+		--thumb-offset: 3px;
+		--thumb-travel: calc(var(--track-width) - var(--thumb-size) - var(--thumb-offset) * 2);
+		--thumb-press-grow: 4px;
 
-		--track-size: calc(var(--thumb-size) * 2);
-		--track-padding: 2px;
-		--thumb: var(--c-action-text);
-		--track-inactive: var(--c-action-disabled);
-		--track-active: var(--c-action-active);
-
-		--thumb-color: var(--thumb);
-		--thumb-color-highlight: var(--thumb-highlight);
-		--track-color-inactive: var(--track-inactive);
-		--track-color-active: var(--track-active);
-
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		justify-content: flex-start;
-		gap: 1ch;
-
+		gap: 0.625em;
 		cursor: pointer;
 		user-select: none;
 		-webkit-tap-highlight-color: transparent;
-
-		&.disabled {
-			cursor: not-allowed;
-		}
-		&.indeterminate {
-			--track-size: calc(var(--thumb-size) * 2.5);
-		}
-
-		&.label-right {
-			flex-direction: row-reverse;
-			justify-content: space-between;
-		}
-
-		&.vertical {
-			min-block-size: calc(var(--track-size) + calc(var(--track-padding) * 2));
-
-			& > input {
-				transform: rotate(calc(90deg * -1));
-				touch-action: pan-x;
-			}
-		}
-
-		& > input {
-			--thumb-position: 0%;
-			--thumb-transition-duration: 0.25s;
-
-			padding: var(--track-padding);
-			background: var(--track-color-inactive);
-			inline-size: var(--track-size);
-			block-size: var(--thumb-size);
-			border-radius: var(--track-size);
-
-			appearance: none;
-			pointer-events: none;
-			touch-action: pan-y;
-			border: none;
-			outline-offset: 5px;
-			box-sizing: content-box;
-
-			flex-shrink: 0;
-			display: grid;
-			align-items: center;
-			grid: [track] 1fr / [track] 1fr;
-
-			transition: background-color 0.25s ease;
-
-			&::before {
-				--highlight-size: 0;
-
-				content: '';
-				cursor: pointer;
-				pointer-events: auto;
-				grid-area: track;
-				inline-size: var(--thumb-size);
-				block-size: var(--thumb-size);
-				background: var(--thumb-color);
-				box-shadow: 0 0 0 var(--highlight-size) var(--thumb-color-highlight);
-				border-radius: 50%;
-				transform: translateX(var(--thumb-position));
-				transition:
-					transform var(--thumb-transition-duration) ease,
-					background-color 0.25s ease,
-					box-shadow 0.25s ease;
-			}
-
-			&:not(:disabled) {
-				&:hover::before,
-				&:focus-visible::before {
-					--highlight-size: 0.5rem;
-				}
-			}
-
-			&:checked {
-				background: var(--track-color-active);
-				--thumb-position: calc((var(--track-size) - 100%));
-			}
-
-			&:not(:checked) {
-				&::before {
-					--thumb-color: var(--c-action-text-disabled);
-				}
-			}
-
-			&:indeterminate {
-				--thumb-position: calc(
-					calc(calc(var(--track-size) / 2) - calc(var(--thumb-size) / 2))
-				);
-			}
-
-			&:disabled {
-				cursor: not-allowed;
-				--thumb-color: transparent;
-
-				&::before {
-					cursor: not-allowed;
-					box-shadow: inset 0 0 0 2px hsl(0 0% 100% / 50%);
-				}
-			}
-		}
-
-		:global(.chevron) {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			pointer-events: none;
-			transform: rotate(0);
-			transition: transform 300ms var(--ease-out-back);
-			font-size: 1.5rem;
-		}
-		:global(.chevron.active) {
-			transform: rotate(-180deg);
-		}
+		position: relative;
 	}
 
-	button.menu-trigger {
-		background-color: transparent;
+	.toggle.label-start {
+		flex-direction: row-reverse;
+	}
+
+	/* Sizes */
+	.toggle.size-0 {
+		--track-width: 32px;
+		--track-height: 18px;
+		--thumb-size: 12px;
+		--thumb-offset: 3px;
+		--thumb-press-grow: 2px;
+		font-size: var(--font-size-0, 0.75rem);
+	}
+	.toggle.size-1 {
+		--track-width: 44px;
+		--track-height: 24px;
+		--thumb-size: 18px;
+		--thumb-offset: 3px;
+		--thumb-press-grow: 4px;
+		font-size: var(--font-size-1, 0.875rem);
+	}
+	.toggle.size-2 {
+		--track-width: 52px;
+		--track-height: 28px;
+		--thumb-size: 22px;
+		--thumb-offset: 3px;
+		--thumb-press-grow: 4px;
+		font-size: var(--font-size-2, 1rem);
+	}
+	.toggle.size-3 {
+		--track-width: 68px;
+		--track-height: 36px;
+		--thumb-size: 28px;
+		--thumb-offset: 4px;
+		--thumb-press-grow: 6px;
+		font-size: var(--font-size-3, 1.125rem);
+	}
+
+	.toggle.dense {
+		gap: 0.375em;
+	}
+	.toggle.comfortable {
+		gap: 1em;
+	}
+
+	/* Track */
+	.track {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		width: var(--track-width);
+		height: var(--track-height);
+		border-radius: var(--track-height);
+		background-color: var(--c-bg-6, hsl(0 0% 70%));
+		transition: background-color 0.2s ease;
+		flex-shrink: 0;
+		outline: none;
+	}
+
+	.track:focus-visible {
+		outline: 2px solid var(--c-outline-active, currentColor);
+		outline-offset: 2px;
+	}
+
+	.checked .track {
+		background-color: var(--c-action, hsl(220 70% 55%));
+	}
+
+	/* Thumb */
+	.thumb {
+		position: absolute;
+		left: var(--thumb-offset);
+		width: var(--thumb-size);
+		height: var(--thumb-size);
+		border-radius: 50%;
+		background-color: var(--c-action-text, white);
 		display: flex;
 		align-items: center;
-		color: var(--c-text);
-		padding: 0;
-		margin: 0;
-		cursor: pointer;
-		box-shadow: none;
-		border-radius: var(--radius-3);
-		&:focus-visible {
-			box-shadow: none;
-			outline: solid 2px var(--c-outline-active);
-			outline-offset: 6px;
-		}
+		justify-content: center;
+		transform: translateX(0);
+		transition:
+			transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1),
+			width 0.15s ease,
+			left 0.15s ease;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+	}
+
+	.checked .thumb {
+		transform: translateX(var(--thumb-travel));
+	}
+
+	/* Press state: widen thumb */
+	.pressed:not(.disabled) .thumb {
+		width: calc(var(--thumb-size) + var(--thumb-press-grow));
+	}
+	.pressed.checked:not(.disabled) .thumb {
+		width: calc(var(--thumb-size) + var(--thumb-press-grow));
+		transform: translateX(calc(var(--thumb-travel) - var(--thumb-press-grow)));
+	}
+
+	.thumb-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: calc(var(--thumb-size) * 0.6);
+		line-height: 1;
+		color: var(--c-action, hsl(220 70% 55%));
+	}
+
+	/* Disabled */
+	.disabled {
+		cursor: not-allowed;
+		opacity: 0.5;
+		pointer-events: none;
+	}
+	.disabled .track {
+		pointer-events: auto;
+		cursor: not-allowed;
+	}
+
+	/* Labels */
+	.label {
+		color: var(--c-text, inherit);
+		line-height: 1.4;
+	}
+	.state-label {
+		color: var(--c-text-2, inherit);
+		font-size: 0.875em;
+		line-height: 1.4;
 	}
 </style>

@@ -1,219 +1,304 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
-	import HelpIcon from '~icons/material-symbols/help';
-	import { tooltip as tooltipAction } from '@packages/lib';
+	import { type Snippet } from 'svelte';
+	import Expand from '../display/Expand.svelte';
 
+	const propId = $props.id();
 	let {
-		/** The label to show at the top of the field */
-		label = '',
-		/** Additional helpful information shown when hovering over the label. Adds a "question mark" icon to the label */
-		tooltip = '',
-		/** Whether the field is valid */
-		valid = true,
-		/** Whether the field should display in a condensed view (less padding) */
-		dense = false,
-		/** Whether the form should display in an expanded view (more padding) */
-		comfortable = false,
-		/** Whether the field is disabled */
-		disabled = false,
-		/** Whether the field should show an outline when hovered */
-		outlineOnHover = false,
-		/** Whether the field should show an outline when focused */
-		outlineOnFocus = false,
-		/** Whether there should be a border around the field. Use 'filled' to give the field a darker background */
-		outlined = true,
-		/** Whether the field should have a darker background */
+		/** Legend text for the fieldset */
+		legend = undefined as string | undefined,
+
+		/** Description text shown below the legend */
+		description = undefined as string | undefined,
+
+		/** Show a subtle border around the fieldset */
+		bordered = false,
+
+		/** Elevated card style */
+		card = false,
+
+		/** Filled background style */
 		filled = false,
-		/** The border radius of the field */
-		radius = 'var(--radius-3)',
-		/** Specifies a custom class name for the container element */
-		class: className = '',
-		/** The css style string added to the component from the parent */
-		style = '',
-		/** The child elements to display inside the field */
-		children = undefined as undefined | Snippet,
+
+		/** Whether the fieldset and all child inputs are disabled */
+		disabled = false,
+
+		/** Error message displayed below the fieldset */
+		error = undefined as string | undefined,
+
+		/** Whether the fieldset is required (shows asterisk after legend) */
+		required = false,
+
+		/** Whether the fieldset can be collapsed */
+		collapsible = false,
+
+		/** Whether the fieldset is currently collapsed (only when collapsible) */
+		collapsed = $bindable(false),
+
+		/** Lay out children in a CSS grid */
+		grid = false,
+
+		/** Number of grid columns when grid is true */
+		columns = 2,
+
+		/** Whether to show a skeleton loading state */
+		skeleton = false,
+
+		/** Whether the fieldset uses dense spacing */
+		dense = false,
+
+		/** Whether the fieldset uses comfortable spacing */
+		comfortable = false,
+
+		/** The id of the fieldset element */
+		id = propId,
+
+		/** Custom class name */
+		class: class_name = '',
+
+		/** Child elements rendered inside the fieldset */
+		children = undefined as Snippet | undefined,
 	} = $props();
+
+	const description_id = `${id}-desc`;
+	const error_id = `${id}-error`;
+
+	function toggleCollapsed() {
+		if (!collapsible) return;
+		collapsed = !collapsed;
+	}
+
+	function onKeyDown(e: KeyboardEvent) {
+		if (!collapsible) return;
+		if (e.key === ' ' || e.key === 'Enter') {
+			e.preventDefault();
+			toggleCollapsed();
+		}
+	}
 </script>
 
-<div
-	class="fieldset"
-	class:error={!valid}
+<fieldset
+	{id}
+	{disabled}
+	class={['fieldset', class_name].filter(Boolean).join(' ')}
+	class:bordered
+	class:card
+	class:filled
 	class:dense
 	class:comfortable
+	class:has-error={!!error}
+	class:skeleton
 	class:disabled
-	class:outline-on-hover={outlineOnHover}
-	class:outline-on-focus={outlineOnFocus}
-	class:outlined
-	class:filled
-	class:has-label={!!label}
-	style:--fieldset-radius={radius}
-	{style}>
-	<div class="label">
-		{label}
-		{#if tooltip}
-			<div class="tooltip-icon" use:tooltipAction={tooltip}>
-				<HelpIcon />
+	aria-describedby={description ? description_id : error ? error_id : undefined}>
+	{#if legend}
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<legend
+			class="legend"
+			class:collapsible
+			role={collapsible ? 'button' : undefined}
+			tabindex={collapsible ? 0 : undefined}
+			aria-expanded={collapsible ? !collapsed : undefined}
+			onclick={collapsible ? toggleCollapsed : undefined}
+			onkeydown={collapsible ? onKeyDown : undefined}>
+			<span class="legend-text">
+				{legend}
+				{#if required}
+					<span class="required-mark" aria-hidden="true">*</span>
+				{/if}
+			</span>
+			{#if collapsible}
+				<svg
+					class="collapse-icon"
+					class:rotated={!collapsed}
+					width="20"
+					height="20"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true">
+					<polyline points="6 9 12 15 18 9"></polyline>
+				</svg>
+			{/if}
+		</legend>
+	{/if}
+
+	{#if description}
+		<p class="description" id={description_id}>{description}</p>
+	{/if}
+
+	{#if collapsible}
+		<Expand show={!collapsed}>
+			<div
+				class="content"
+				class:grid
+				style:--columns={grid ? columns : undefined}>
+				{#if children}
+					{@render children()}
+				{/if}
 			</div>
-		{/if}
-	</div>
-	<div class="field {className}">
-		{#if children}{@render children()}{/if}
-	</div>
-</div>
+		</Expand>
+	{:else}
+		<div
+			class="content"
+			class:grid
+			style:--columns={grid ? columns : undefined}>
+			{#if children}
+				{@render children()}
+			{/if}
+		</div>
+	{/if}
 
-<style lang="scss">
-	$label-font-size: 0.8em;
-	$label-margin: 0.4em;
+	{#if error}
+		<p class="error-message" id={error_id} role="alert">{error}</p>
+	{/if}
+</fieldset>
 
+<style>
 	.fieldset {
-		--c-outline-width: 1px;
-		width: 100%;
-		color: inherit;
-		caret-color: currentColor;
+		border: none;
+		margin: 0;
+		padding: 1em;
+		min-inline-size: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75em;
+		border-radius: var(--radius-3, 8px);
+		position: relative;
+	}
+
+	.fieldset.dense {
+		padding: 0.5em;
+		gap: 0.5em;
+	}
+	.fieldset.comfortable {
+		padding: 1.5em;
+		gap: 1em;
+	}
+
+	/* Bordered style */
+	.fieldset.bordered {
+		border: 1px solid var(--c-outline, hsl(0 0% 80%));
+	}
+
+	/* Card style */
+	.fieldset.card {
+		background: var(--c-bg-card, var(--c-bg, white));
+		box-shadow: var(--shadow-2, 0 1px 3px rgb(0 0 0 / 0.1));
+		border: 1px solid var(--c-outline, hsl(0 0% 90%));
+	}
+
+	/* Filled style */
+	.fieldset.filled {
+		background: var(--c-bg-2, hsl(0 0% 96%));
+	}
+
+	/* Error state */
+	.fieldset.has-error {
+		border-color: var(--c-error, hsl(0 70% 55%));
+	}
+
+	/* Disabled */
+	.fieldset.disabled {
+		opacity: 0.6;
+	}
+
+	/* Skeleton */
+	.fieldset.skeleton {
+		pointer-events: none;
+	}
+	.fieldset.skeleton .legend-text,
+	.fieldset.skeleton .description,
+	.fieldset.skeleton .content {
+		background: var(--c-bg-4, hsl(0 0% 90%));
+		color: transparent;
+		border-radius: var(--radius-2, 4px);
+		animation: skeleton-pulse 1.5s ease-in-out infinite;
+	}
+	@keyframes skeleton-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.5; }
+	}
+
+	/* Legend */
+	.legend {
 		display: flex;
 		align-items: center;
-		position: relative;
-		min-height: calc(var(--height) + $label-margin);
-		border-radius: var(--fieldset-radius);
-		padding: 1em;
-		margin-bottom: 0.4em;
-
-		.field {
-			width: 100%;
-		}
-
-		&.dense {
-			padding: 0.5em;
-		}
-		&.comfortable {
-			padding: 1.5em;
-		}
-		&.outline-on-hover:not(.disabled):hover {
-			--c-outline: var(--c-outline-high);
-			--c-outline-width: 2px;
-		}
-		&.outline-on-focus:not(.disabled):focus-within {
-			--c-outline: var(--c-outline-high);
-			--c-outline-width: 2px;
-		}
-		&.disabled {
-			pointer-events: none;
-			color: var(--c-text-disabled);
-
-			.label {
-				color: var(--c-text-disabled);
-			}
-		}
-		&.error {
-			color: var(--c-error);
-			--c-outline: var(--c-error);
-			--c-text-disabled: var(--c-error);
-			.input-inner:hover,
-			&:focus-within {
-				color: var(--c-error-active);
-			}
-		}
-		&:not(.outlined) {
-			--c-outline: transparent;
-			--c-outline: transparent;
-		}
-		&.filled {
-			.label {
-				background-color: var(--c-bg-active);
-				z-index: -1;
-			}
-		}
-
-		> :global(*) {
-			margin-top: $label-margin;
-		}
-
-		&::before {
-			border-radius: inherit;
-			width: inherit;
-			bottom: calc(-1 * var(--c-outline-width));
-			content: '';
-			left: 0;
-			position: absolute;
-			pointer-events: none;
-			border-color: var(--c-outline);
-			border-style: solid;
-			top: $label-margin;
-			border-width: var(--c-outline-width);
-			box-sizing: border-box;
-			transition: border-color 0.1s;
-		}
-	}
-
-	.label {
-		position: absolute;
-		text-overflow: ellipsis;
-		transform-origin: top left;
-		top: 0;
-		left: 0;
-		display: flex;
-		width: 100%;
-		min-height: calc(100% - $label-margin);
-		max-height: 100%;
-		max-width: 100%;
-		line-height: 0;
-		height: auto;
+		gap: 0.5em;
+		font-weight: 600;
+		font-size: 1em;
+		color: var(--c-text, inherit);
 		padding: 0;
-		transform: none;
-		transition: color 0.1s;
-		overflow: visible;
-		border-radius: var(--fieldset-radius);
-		color: var(--c-text-disabled);
-		pointer-events: none;
-		font-size: $label-font-size;
-		.tooltip-icon {
-			line-height: 0px;
-			margin: -0.5em 0 0 0.5em;
-			cursor: default;
-			pointer-events: all;
-		}
-		&::before,
-		&::after {
-			content: '';
-			display: block;
-			box-sizing: border-box;
-			min-width: max(var(--fieldset-radius), 1em);
-			width: 0;
-			height: var(--fieldset-radius);
-			pointer-events: none;
-			border-top: solid var(--c-outline-width) transparent;
-			margin-top: 0.1em;
-		}
-		&::before {
-			margin-right: 0;
-			border-radius: var(--fieldset-radius) 0;
-			transition:
-				margin-right 0.2s,
-				width 0.3s;
-			border-left: solid var(--c-outline-width) transparent;
-		}
-		&::after {
-			flex-grow: 1;
-			margin-left: 4px;
-			border-radius: 0 var(--fieldset-radius);
-			border-right: solid var(--c-outline-width) transparent;
-		}
+		line-height: 1.4;
+		border: none;
+		background: none;
 	}
 
-	.has-label {
-		&::before {
-			border-top-color: transparent;
-		}
-		.label {
-			&::before {
-				margin-right: 4px;
-			}
-			&::before,
-			&::after {
-				// The top border when there is a value in the input and the input is not focused
-				// The placeholder text shows up at the top
-				border-top: solid var(--c-outline-width) var(--c-outline);
-			}
-		}
+	.legend.collapsible {
+		cursor: pointer;
+		user-select: none;
+		-webkit-tap-highlight-color: transparent;
+		border-radius: var(--radius-2, 4px);
+	}
+	.legend.collapsible:hover {
+		color: var(--c-action, hsl(220 70% 55%));
+	}
+	.legend.collapsible:focus-visible {
+		outline: 2px solid var(--c-outline-active, currentColor);
+		outline-offset: 2px;
+	}
+
+	.legend-text {
+		display: inline;
+	}
+
+	.required-mark {
+		color: var(--c-error, hsl(0 70% 55%));
+		margin-left: 0.125em;
+		font-weight: 700;
+	}
+
+	.collapse-icon {
+		flex-shrink: 0;
+		transition: transform 250ms ease;
+		transform: rotate(-90deg);
+	}
+	.collapse-icon.rotated {
+		transform: rotate(0deg);
+	}
+
+	/* Description */
+	.description {
+		margin: 0;
+		font-size: 0.875em;
+		color: var(--c-text-2, hsl(0 0% 45%));
+		line-height: 1.5;
+	}
+
+	/* Content */
+	.content {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75em;
+	}
+	.dense .content {
+		gap: 0.5em;
+	}
+	.comfortable .content {
+		gap: 1em;
+	}
+
+	.content.grid {
+		display: grid;
+		grid-template-columns: repeat(var(--columns, 2), 1fr);
+	}
+
+	/* Error message */
+	.error-message {
+		margin: 0;
+		font-size: 0.8em;
+		color: var(--c-error, hsl(0 70% 55%));
+		line-height: 1.4;
 	}
 </style>
