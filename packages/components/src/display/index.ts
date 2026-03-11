@@ -1,3 +1,4 @@
+export { default as Accordion, AccordionItem } from './Accordion.svelte';
 export { default as Avatar } from './Avatar.svelte';
 export { default as Comparison } from './Comparison.svelte';
 export { default as Counter } from './Counter.svelte';

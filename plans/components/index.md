@@ -332,7 +332,7 @@ Components for presenting information.
 | [Expand](./display/Expand.md)            | ✅ Complete    | Animated show/hide container                   |
 | [List](./display/List.md)                | ✅ Complete    | Flexible list container with selection modes   |
 | [ListItem](./display/ListItem.md)        | ✅ Complete    | Rich list item with multiple interaction types |
-| [Accordion](./display/Accordion.md)      | 📋 Planned | Collapsible content sections                   |
+| [Accordion](./display/Accordion.md)      | ✅ Complete    | Collapsible content sections                   |
 | [Avatar](./display/Avatar.md)            | ✅ Complete    | User/entity profile image                      |
 | [AvatarGroup](./display/AvatarGroup.md)  | 📋 Planned | Stacked overlapping avatars                    |
 | [Calendar](./display/Calendar.md)        | 📋 Planned | Date display and selection                     |
@@ -354,10 +354,10 @@ Components that communicate state and progress.
 
 | Component                          | Status         | Description                                          |
 | ---------------------------------- | -------------- | ---------------------------------------------------- |
-| [Callout](./feedback/Callout.md)   | 📋 Planned | Highlighted information block (inline + banner mode) |
+| [Callout](./feedback/Callout.md)   | ✅ Complete    | Highlighted information block (inline + banner mode) |
 | [Confetti](./feedback/Confetti.md) | ✅ Complete    | Celebration animation                                |
 | [Progress](./feedback/Progress.md) | ✅ Complete    | Progress bar, spinner, and loading indicator          |
-| [Toast](./feedback/Toast.md)       | 📋 Planned | Temporary notification messages                      |
+| [Toast](./feedback/Toast.md)       | ✅ Complete    | Temporary notification messages                      |
 
 ### Form
 
@@ -368,12 +368,12 @@ Input components for user data entry.
 | [Input](./form/Input.md)          | ✅ Complete    | Comprehensive text/data input field |
 | [Checkbox](./form/Checkbox.md)    | ✅ Complete    | Boolean toggle with check mark      |
 | [Fieldset](./form/Fieldset.md)    | ✅ Complete    | Form section grouping               |
-| [FileUpload](./form/FileUpload.md)| 📋 Planned | Drag-and-drop file input            |
-| [Form](./form/Form.md)            | 📋 Planned | Form container with validation      |
+| [FileUpload](./form/FileUpload.md)| ✅ Complete    | Drag-and-drop file input            |
+| [Form](./form/Form.md)            | ✅ Complete    | Form container with validation      |
 | [Radio](./form/Radio.md)          | ✅ Complete    | Single-select option                |
 | [Range](./form/Range.md)          | ✅ Complete    | Slider input                        |
 | [Rating](./form/Rating.md)        | ✅ Complete    | Star/score input                    |
-| [Select](./form/Select.md)        | 📋 Planned | Dropdown selection                  |
+| [Select](./form/Select.md)        | ✅ Complete    | Dropdown selection                  |
 | [Toggle](./form/Toggle.md)        | ✅ Complete    | On/off switch                       |
 
 ### Media
@@ -396,13 +396,13 @@ Components for moving through the application.
 
 | Component                                  | Status         | Description                   |
 | ------------------------------------------ | -------------- | ----------------------------- |
-| [BottomSheet](./navigation/BottomSheet.md) | 📋 Planned | Mobile-style slide-up panel   |
-| [Breadcrumbs](./navigation/Breadcrumbs.md) | 📋 Planned | Hierarchical navigation trail |
-| [Drawer](./navigation/Drawer.md)           | 📋 Planned | Slide-out side panel          |
-| [Menu](./navigation/Menu.md)               | 📋 Planned | Dropdown menu                 |
-| [Pagination](./navigation/Pagination.md)   | 📋 Planned | Page navigation controls      |
-| [Steps](./navigation/Steps.md)             | 📋 Planned | Multi-step progress indicator |
-| [Tabs](./navigation/Tabs.md)               | 📋 Planned | Tabbed content switcher       |
+| [BottomSheet](./navigation/BottomSheet.md) | ✅ Complete    | Mobile-style slide-up panel   |
+| [Breadcrumbs](./navigation/Breadcrumbs.md) | ✅ Complete    | Hierarchical navigation trail |
+| [Drawer](./navigation/Drawer.md)           | ✅ Complete    | Slide-out side panel          |
+| [Menu](./navigation/Menu.md)               | ✅ Complete    | Dropdown menu                 |
+| [Pagination](./navigation/Pagination.md)   | ✅ Complete    | Page navigation controls      |
+| [Steps](./navigation/Steps.md)             | ✅ Complete    | Multi-step progress indicator |
+| [Tabs](./navigation/Tabs.md)               | ✅ Complete    | Tabbed content switcher       |
 
 ---
 
@@ -426,12 +426,12 @@ Additionally, the **Format** utility (date, number, currency, relative time form
 | Category       | Complete | Placeholder | Total  |
 | -------------- | -------- | ----------- | ------ |
 | Actions        | 8        | 1           | 9      |
-| Display        | 8        | 10          | 18     |
-| Feedback       | 2        | 2           | 4      |
-| Form           | 7        | 3           | 10     |
+| Display        | 9        | 9           | 18     |
+| Feedback       | 4        | 0           | 4      |
+| Form           | 10       | 0           | 10     |
 | Media          | 1        | 6           | 7      |
-| Navigation     | 0        | 7           | 7      |
-| **Total**      | **26**   | **29**      | **55** |
+| Navigation     | 7        | 0           | 7      |
+| **Total**      | **39**   | **16**      | **55** |
 
 ---
 

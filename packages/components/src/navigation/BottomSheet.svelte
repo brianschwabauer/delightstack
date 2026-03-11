@@ -1,859 +1,535 @@
-<!-- svelte-ignore state_referenced_locally -->
 <script lang="ts">
-	import WebsiteIcon from '~icons/tabler/world';
-	import DeliveryPageIcon from '~icons/ion/ios-rocket';
-	import MessengerIcon from '~icons/fa6-solid/paper-plane';
-	import MediaIcon from '~icons/fa6-solid/images';
-	import LoadingIcon from '~icons/eos-icons/bubble-loading';
-	import InvoiceIcon from '~icons/fa6-solid/file-invoice-dollar';
-	import DownloadIcon from '~icons/material-symbols/cloud-download';
-	import PreviewIcon from '~icons/material-symbols/preview';
-	import CloseIcon from '~icons/ion/md-close';
-	import ProjectsIcon from '~icons/entypo/archive';
-	import MailIcon from '~icons/material-symbols/mail';
-	import SettingsIcon from '~icons/fa/cog';
-	import { browser } from '$app/environment';
-	import { getContext, onDestroy, tick, untrack } from 'svelte';
-	import { quartOut, quadInOut, expoOut } from 'svelte/easing';
-	import { getSearchParamString, ripple } from '@packages/lib';
-	import { type Entities } from './../state';
-	import { Image } from '../components';
-	import { Button } from '../form';
-	import ProfilePicture from '../components/ProfilePicture.svelte';
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
+	import { type Snippet, untrack } from 'svelte';
+	import { portal } from '../actions/Portal.svelte';
 
+	const propId = $props.id();
 	let {
-		/** Whether or not the bottom sheet is currently opened */
-		opened = $bindable(false) as boolean,
+		/** Whether the bottom sheet is open */
+		open = $bindable(false) as boolean,
 
-		/** The progress percent (0-1) that the background should be faded */
-		fadePercent = $bindable(0) as number,
+		/** Snap points as fractions of viewport height (0-1) */
+		snapPoints = [0.5, 1] as number[],
 
-		/** The progress percent (0-1) that the panel is morphed between the two open/closed states */
-		morphPercent = $bindable(0) as number,
+		/** Default snap point index when opening */
+		defaultSnap = 0,
+
+		/** Current snap point index */
+		snap = $bindable(0) as number,
+
+		/** Whether the sheet can be dismissed by dragging down */
+		dismissible = true,
+
+		/** Whether to show the drag handle */
+		showHandle = true,
+
+		/** Whether to show the backdrop overlay */
+		showBackdrop = true,
+
+		/** Whether to lock body scroll when open */
+		blocking = true,
+
+		/** Element ID */
+		id = propId,
+
+		/** Additional CSS classes */
+		class: className = '',
+
+		/** Main content */
+		children = undefined as undefined | Snippet,
+
+		/** Header content rendered below the handle */
+		header = undefined as undefined | Snippet,
+
+		/** Called when the sheet opens */
+		onopen = undefined as undefined | (() => void),
+
+		/** Called when the sheet closes */
+		onclose = undefined as undefined | (() => void),
+
+		/** Called when the sheet snaps to a point */
+		onsnap = undefined as undefined | ((detail: { index: number; height: number }) => void),
 	} = $props();
 
-	interface Pointer {
-		id: string;
-		x: number;
-		y: number;
-		dx: number;
-		dy: number;
-		dt: number;
-		vx: number;
-		vy: number;
-		primary: boolean;
-		time: number;
-		startT: number;
-		startX: number;
-		startY: number;
-	}
+	// --- Element refs ---
+	let sheet_el = $state<HTMLElement | undefined>();
+	let content_el = $state<HTMLElement | undefined>();
 
-	/** The number of pixels from the bottom of the viewport that the morph transition should start */
-	const morphStart = 108;
-
-	/** The number of pixels from the bottom of the viewport that the morph transition should complete */
-	const morphEnd = 300;
-
-	/** The number of pixels from the bottom of the viewport that the fade transition should start */
-	const fadeStart = 108;
-
-	/** The number of pixels from the bottom of the viewport that the fade transition should be complete */
-	const fadeEnd = 600;
-
-	/** The container element (used to find the bounds of bottom sheet) */
-	let viewport = $state<HTMLElement | undefined>();
-
-	/** The width of the viewport element */
-	let viewportH = $state(0);
-	let viewportX = $state(0);
-	let viewportY = $state(0);
-
-	/** The element of the bottom sheet panel (used for gestures) */
-	let container = $state<HTMLElement | undefined>();
-	let containerH = $state(0);
-
-	/** The number of pixels from the bottom the panel is offset (used to drag the element) */
-	let offset = $state(0);
-	let targetOffset = 0;
-	const maxOffset = $derived(Math.min(viewportH || Infinity, containerH || Infinity));
-	const maximized = $derived(offset >= maxOffset);
-
-	/** Whether or not the container is being dragged */
+	// --- Internal state ---
 	let dragging = $state(false);
+	let animating = $state(false);
+	let sheet_y = $state(0); // current sheet height from bottom (0 = fully hidden)
+	let viewport_height = $state(0);
+	let was_open = $state(false);
+	let scroll_dragging = $state(false);
 
-	/** A record of touch/mouse event pointers that are currently active */
-	let pointers: { [id: string]: Pointer } = {};
+	// --- Pointer tracking ---
+	let pointer_start_y = 0;
+	let pointer_start_sheet_y = 0;
+	let pointer_last_y = 0;
+	let pointer_last_time = 0;
+	let velocity = 0;
 
-	/** The element of the panel content container (used for determining if the panel content is scrolled) */
-	let panelContentContainer = $state<HTMLElement | undefined>();
+	// --- Animation ---
+	let animation_frame = 0;
+	let animation_start_time = 0;
+	let animation_start_y = 0;
+	let animation_target_y = 0;
+	let animation_duration = 350;
 
-	/** Whether the panel content has been scrolled down or not (disables pulling the sheet down when scrolled down) */
-	let panelContentScrolled = $state(false);
+	// --- Derived ---
+	const sorted_snaps = $derived([...snapPoints].sort((a, b) => a - b));
+	const snap_heights = $derived(sorted_snaps.map((s) => s * viewport_height));
+	const max_snap_height = $derived(snap_heights[snap_heights.length - 1] ?? 0);
+	const at_highest_snap = $derived(
+		snap_heights.length > 0 &&
+			Math.abs(sheet_y - snap_heights[snap_heights.length - 1]) < 2,
+	);
 
-	const url = $derived(page.url);
-	const entities = getContext('entities') as Entities;
-	const clientID = $derived(
-		(url.searchParams.get('sheet') || '').match(/^\/client\/([\w-]+)/)?.[1] ||
-			url.pathname.match(/\/dashboard\/client\/([\w-]+)/)?.[1],
-	);
-	const client = $derived(entities.get('client', clientID || ''));
-	const dashboardPath = $derived(
-		url.pathname.replace(/\/dashboard(\/.*)?$/, '/dashboard'),
-	);
-	const activePageMatches = $derived(
-		url.pathname.match(/\/dashboard\/client\/[\w-]+(?:\/([\w-]+))?(?:\/([\w-]+))?/),
-	);
-	const activePage = $derived(
-		!activePageMatches
-			? undefined
-			: (activePageMatches?.[1] as 'project' | 'invoice' | 'site' | 'message' | 'new') ||
-					'project',
-	);
-	const activePageID = $derived(activePageMatches?.[2] || undefined);
-	const remainOpen = $derived(!!activePage);
-	if (activePage || activePageID) {
-		opened = true;
-		offset = morphStart;
+	// --- Viewport tracking ---
+	function onResize() {
+		viewport_height = window.innerHeight;
 	}
+
 	$effect(() => {
-		fadePercent = !remainOpen
-			? quartOut(Math.max(0, Math.min(1, (offset - 72) / (fadeEnd - 72))))
-			: quartOut(Math.max(0, Math.min(1, (offset - fadeStart) / (fadeEnd - fadeStart))));
-	});
-	$effect(() => {
-		morphPercent = !remainOpen
-			? 1
-			: quadInOut(
-					Math.max(0, Math.min(1, (offset - morphStart) / (morphEnd - morphStart))),
-				);
-	});
-	$effect(() => {
-		client && client.load();
+		viewport_height = window.innerHeight;
 	});
 
-	export async function close() {
-		await animateSheet(0);
-		const newURL = new URL(url);
-		if (activePage) newURL.pathname = `${dashboardPath}/client`;
-		newURL.searchParams.delete('sheet');
-		goto(newURL, { replaceState: !activePage, noScroll: true });
-	}
-
-	/** Called when a multi-pointer interaction starts */
-	function onInteractionStart(e: PointerEvent) {
-		if (!viewport || !container) return;
-		if (!dragging) dragging = true;
-		document.removeEventListener('pointermove', onPointerMove);
-		document.removeEventListener('pointerup', onPointerUp);
-		document.removeEventListener('pointercancel', onPointerUp);
-		document.addEventListener('pointermove', onPointerMove, { passive: true });
-		document.addEventListener('pointerup', onPointerUp, { passive: false });
-		document.addEventListener('pointercancel', onPointerUp, { passive: false });
-		const viewportRect = viewport.getBoundingClientRect();
-		viewportY = viewportRect.top;
-		viewportX = viewportRect.left;
-		viewportH = viewportRect.height;
-		const containerRect = container.getBoundingClientRect();
-		containerH = containerRect.height;
-	}
-
-	/** Called when a multi-pointer interaction ends */
-	function onInteractionEnd(e: PointerEvent) {
-		if (dragging) dragging = false;
-		document.removeEventListener('pointermove', onPointerMove);
-		document.removeEventListener('pointerup', onPointerUp);
-		document.removeEventListener('pointercancel', onPointerUp);
-		const primary =
-			Object.values(pointers).find((p) => p.primary) || Object.values(pointers)[0];
-		const duration = primary.time - primary.startT;
-		const dist = primary.y - primary.startY;
-		const movedFast = Math.abs(primary.vy) > 0.2;
-		const movedFar = Math.abs(dist) > 50 && Math.abs(primary.vy) > 0.05;
-		const movedDown = primary.vy > 0;
-		const clicked = duration < 250 && Math.abs(dist) < 10;
-
-		if (clicked) {
-			let el = e.target as HTMLElement;
-			let elAction: 'link' | 'toggle' | undefined;
-			while (el && !elAction) {
-				if (
-					el.classList.contains('spacer') ||
-					el.classList.contains('profile') ||
-					el.classList.contains('cover') ||
-					el.tagName === 'H2'
-				) {
-					elAction = 'toggle';
-					break;
-				}
-				if (el.tagName === 'A') {
-					elAction = 'link';
-					break;
-				}
-				if (el === container) break;
-				el = el.parentElement as HTMLElement;
-			}
-			if (e.type !== 'pointercancel') {
-				if (elAction === 'toggle') {
-					if (offset > morphStart) {
-						if (remainOpen) {
-							animateSheet(morphStart);
-						} else {
-							close();
-						}
-					} else {
-						animateSheet(maxOffset);
-					}
-				}
-				if (elAction === 'link' && el) {
-					const href = (el as HTMLAnchorElement).href;
-					if (href) {
-						e.preventDefault();
-						goto(href, { replaceState: !remainOpen });
-					}
-				}
-			}
-		} else if (movedFast || movedFar) {
-			if (movedDown) {
-				if (remainOpen && offset > morphStart) {
-					animateSheet(morphStart);
-				} else {
-					close();
-				}
-			} else {
-				animateSheet(maxOffset);
-			}
-		} else {
-			if (offset < morphStart * 0.75) {
-				close();
-			} else if (offset < (morphEnd - morphStart) * 0.75 + morphStart) {
-				animateSheet(morphStart);
-			} else {
-				animateSheet(maxOffset);
-			}
-		}
-		pointers = {};
-	}
-
-	/** Called when a pointer (touch or mouse) moves */
-	function onPointerMove(e: PointerEvent) {
-		if (e.button === 2) return; // Ignore right clicks
-		const pointer = pointers[`${e.pointerId}`];
-		if (!pointer) return;
-		const x = e.clientX - viewportX;
-		const y = e.clientY - viewportY;
-		pointers[pointer.id] = {
-			id: `${e.pointerId}`,
-			x: x,
-			y: y,
-			dx: x - pointer.x,
-			dy: y - pointer.y,
-			dt: Math.max(1, e.timeStamp - pointer.time),
-			vx: (x - pointer.x) / Math.max(1, e.timeStamp - pointer.time),
-			vy: (y - pointer.y) / Math.max(1, e.timeStamp - pointer.time),
-			primary: e.isPrimary,
-			time: e.timeStamp,
-			startT: pointer.startT || e.timeStamp,
-			startX: pointer.startX || x,
-			startY: pointer.startY || y,
-		};
-		const primary =
-			Object.values(pointers).find((p) => p.primary) || Object.values(pointers)[0];
-		offset = Math.min(viewportH, containerH, Math.max(0, offset - primary.dy));
-	}
-
-	/** Called when a pointer (touch or mouse) unpresses */
-	function onPointerUp(e: PointerEvent) {
-		if (e.button === 2) return; // Ignore right clicks
-		if (!Object.keys(pointers).length) return;
-		// Check if all the pointers have finished their interaction
-		const hasOtherPointers = Object.keys(pointers).some((k) => k !== `${e.pointerId}`);
-		if (hasOtherPointers) {
-			delete pointers[`${e.pointerId}`];
-		} else {
-			pointers[`${e.pointerId}`] = {
-				...pointers[`${e.pointerId}`],
-				time: e.timeStamp,
+	// --- Body scroll lock ---
+	$effect(() => {
+		if (open && blocking) {
+			const original = document.body.style.overflow;
+			document.body.style.overflow = 'hidden';
+			return () => {
+				document.body.style.overflow = original;
 			};
-			onInteractionEnd(e);
-		}
-	}
-
-	/** Called when a pointer (touch or mouse) presses down */
-	function onPointerDown(e: PointerEvent) {
-		if (e.button === 2) return; // Ignore right clicks
-
-		// Check if the pointer is within the panel content.
-		// If so, we might need to ignore the drag so scrolling can work within the panel content element
-		let el = e.target as HTMLElement;
-		let isPanelContent = false;
-		while (el) {
-			if (el.classList.contains('panel-content')) {
-				isPanelContent = true;
-				break;
-			}
-			if (el === container) break;
-			el = el.parentElement as HTMLElement;
-		}
-		if (isPanelContent && panelContentScrolled) return;
-
-		if (!isPanelContent) {
-			// Check if the pointer is within a link element.
-			// If so, we might need to allow the link to be clicked
-			el = e.target as HTMLElement;
-			let isLinkOrButton = false;
-			while (el) {
-				if (el.tagName === 'A' || el.tagName === 'BUTTON') {
-					isLinkOrButton = true;
-					break;
-				}
-				if (el === container) break;
-				el = el.parentElement as HTMLElement;
-			}
-			if (!isLinkOrButton) {
-				// This is commented out because it was in here before and I don't know why.
-				// But by stoping propagation, it prevents the pointer events from becoming 'click' events
-				// This makes it so the Popover component won't close when the bottom sheet is opened
-				// By allowing the click events to propagate, the Popover component can close when the bottom sheet is opened
-				// If this line is needed, we'll need to find a different way to fix the Popover component closing issue
-				// e.preventDefault();
-				// e.stopPropagation();
-			}
-		}
-
-		// Check if this is the first pointer to start interacting
-		if (!Object.keys(pointers).length) onInteractionStart(e);
-
-		const x = e.clientX - viewportX;
-		const y = e.clientY - viewportY;
-		pointers[`${e.pointerId}`] = {
-			id: `${e.pointerId}`,
-			x,
-			y,
-			dx: 0,
-			dy: 0,
-			dt: 0,
-			vx: 0,
-			vy: 0,
-			primary: e.isPrimary,
-			time: e.timeStamp,
-			startT: e.timeStamp,
-			startX: x,
-			startY: y,
-		};
-	}
-
-	function onPanelContentScroll(e: Event) {
-		if (!panelContentContainer) return;
-		const scrolled = panelContentContainer.scrollTop > 0;
-		if (scrolled !== panelContentScrolled) panelContentScrolled = scrolled;
-	}
-
-	/** Initializes the event listeners when the bottom sheet is visible */
-	$effect(() => {
-		if (!container || !viewport) return;
-		destroyEventListeners();
-		container.addEventListener('pointerdown', onPointerDown, { passive: false });
-		const boundingRect = viewport.getBoundingClientRect();
-		viewportY = boundingRect.top;
-		viewportX = boundingRect.left;
-	});
-
-	/** Destroys the event listeners when the bottom sheet is not being shown */
-	function destroyEventListeners() {
-		if (!browser) return;
-		if (container) {
-			container.removeEventListener('pointerdown', onPointerDown);
-		}
-	}
-	onDestroy(() => destroyEventListeners());
-
-	$effect(() => {
-		document.body.style.userSelect = dragging ? 'none' : '';
-		document.body.style.overflow = offset > morphStart || dragging ? 'hidden' : '';
-	});
-
-	// Initialize the initial offset
-	$effect(() => {
-		if (!viewport || !container) return;
-		if (!clientID || viewport.clientWidth >= 1024) {
-			offset = 0;
-		} else if (activePageID) {
-			animateSheet(morphStart);
-		} else if (activePage) {
-			animateSheet(morphStart);
-		} else {
-			animateSheet(
-				Math.min(460, window.innerHeight, container.clientHeight || Infinity),
-				650,
-				expoOut,
-			);
 		}
 	});
+
+	// --- Open/close lifecycle ---
 	$effect(() => {
-		if (opened && offset <= 0) opened = false;
-		if (!opened && offset > 0) opened = true;
-	});
-	$effect(() => {
-		if (opened) {
-			tick().then(() => {
-				if (!container) return;
-				containerH = container.clientHeight;
+		if (open && !was_open) {
+			was_open = true;
+			const target_index = Math.min(defaultSnap, snap_heights.length - 1);
+			const target_height = snap_heights[target_index] ?? snap_heights[0] ?? viewport_height * 0.5;
+			snap = target_index;
+			animateTo(target_height, 350);
+			onopen?.();
+		} else if (!open && was_open) {
+			was_open = false;
+			animateTo(0, 250, () => {
+				onclose?.();
 			});
 		}
 	});
 
-	// Animate the bottom sheet to a target location
-	let requestAnimationFrameID: number;
-	let requestAnimationFrameStart: number;
-	function animateSheet(
-		nextOffset: number,
-		duration = 350,
-		easing: (t: number) => number = quartOut,
-	) {
-		return new Promise<void>((resolve) => {
-			targetOffset = nextOffset;
-			if (targetOffset === untrack(() => offset)) return resolve();
-			const start = +(document.timeline.currentTime || Date.now());
-			const startOffset = untrack(() => offset);
-			requestAnimationFrameStart = start;
-			function animate(time: number) {
-				cancelAnimationFrame(requestAnimationFrameID);
-				const percent = easing(Math.min(1, Math.max(0, (time - start) / duration)));
-				const dist = targetOffset - startOffset;
-				const nextOffset = startOffset + dist * percent;
-				if (nextOffset !== untrack(() => offset)) offset = nextOffset;
-				if (percent < 1 && start === requestAnimationFrameStart) {
-					requestAnimationFrameID = requestAnimationFrame(animate);
-				} else {
-					resolve();
-				}
+	// --- Snap to nearest ---
+	function findNearestSnap(y: number): number {
+		let closest_index = 0;
+		let closest_dist = Infinity;
+		for (let i = 0; i < snap_heights.length; i++) {
+			const dist = Math.abs(y - snap_heights[i]);
+			if (dist < closest_dist) {
+				closest_dist = dist;
+				closest_index = i;
 			}
-			cancelAnimationFrame(requestAnimationFrameID);
-			requestAnimationFrameID = requestAnimationFrame(animate);
-		});
+		}
+		return closest_index;
 	}
-</script>
 
-<div
-	class="sheet"
-	class:remain-open={remainOpen}
-	class:dragging
-	bind:this={viewport}
-	style:--offset="{offset}px"
-	style:--fade-percent={fadePercent}
-	style:--morph-percent={morphPercent}
-	style:--morph-start="{morphStart}px"
-	style:--morph-end="{morphEnd}px">
-	<div class="panel-container" bind:this={container}>
-		<div class="panel">
-			<div class="drag-indicator"></div>
-			<div class="spacer"></div>
-			<div class="profile">
-				<ProfilePicture {client} />
-			</div>
-			<div class="cover">
-				{#if client.loaded && client.logo}
-					<Image checkForUploading src={client.logo} fit="contain" disablePreview />
-					<div class="cover-bg">
-						<Image checkForUploading src={client.logo} disablePreview />
-					</div>
-				{/if}
-			</div>
-			<h2>
-				{client?.name || (!client?.initialized ? 'Loading...' : 'Unnamed Client')}
-			</h2>
-			{#if remainOpen}
-				<div class="close">
-					<Button onclick={close} icon transparent size="0">
-						<CloseIcon />
-					</Button>
-				</div>
-			{/if}
-			<div class="actions">
-				{#if activePage === 'site'}
-					<Button
-						dense
-						translucent
-						href={url.pathname + '/preview' + getSearchParamString(url)}>
-						Preview
-					</Button>
-					{#if client.diff}
-						<Button dense onclick={() => client.save()}>Save Changes</Button>
-					{:else}
-						<Button dense translucent href="?modal=/mail/new">Deliver</Button>
-					{/if}
-				{:else}
-					<Button dense translucent href="?modal=/mail/new">
-						<MailIcon />
-						Message
-					</Button>
-					<Button dense translucent href="?modal=/client/{clientID}">
-						<SettingsIcon />
-						Settings
-					</Button>
-				{/if}
-			</div>
-			<div
-				class="panel-content"
-				onscroll={onPanelContentScroll}
-				bind:this={panelContentContainer}
-				style:touch-action="pan-x {!maximized
-					? ''
-					: panelContentScrolled
-						? 'pan-y'
-						: 'pan-down'}">
-				<div class="info">
-					{#if client.company}<p>{client.company}</p>{/if}
-					{#if client.email}<p>{client.email}</p>{/if}
-				</div>
-				<nav data-sveltekit-keepfocus>
-					<a
-						href="{dashboardPath}/client/{clientID}{getSearchParamString(url)}"
-						use:ripple
-						class:active={activePage === 'project'}>
-						<ProjectsIcon /> Projects
-					</a>
-					<a
-						href="{dashboardPath}/client/{clientID}/invoice{getSearchParamString(url)}"
-						use:ripple
-						class:active={activePage === 'invoice'}>
-						<InvoiceIcon /> Invoices
-					</a>
-					<a
-						href="{dashboardPath}/client/{clientID}/message{getSearchParamString(url)}"
-						use:ripple
-						class:active={url.pathname === `${dashboardPath}/client/${clientID}/message`}>
-						<MessengerIcon style="padding: 0 2px" /> Messages
-					</a>
-					<!-- <a
-						href="/dashbaord/client/{clientID}/new{getSearchParamString(url)}"
-						class="create"
-						use:ripple
-						class:active={url.pathname === `{dashboardPath}/client/${clientID}/new`}>
-						Create
-					</a> -->
-				</nav>
-			</div>
-		</div>
-	</div>
-	<div
-		class="bg"
-		role={offset > morphStart ? 'button' : 'presentation'}
-		tabindex="-1"
-		style:pointer-events={offset > morphStart ? 'all' : 'none'}
-		onpointerdown={() => (remainOpen ? animateSheet(morphStart) : close())}>
-	</div>
-</div>
+	function findHigherSnap(current_index: number): number {
+		return Math.min(current_index + 1, snap_heights.length - 1);
+	}
 
-<style lang="scss">
-	:global(html) {
-		--sheet-height: 108px;
-		@include desktop {
-			--sheet-height: 0px;
+	function findLowerSnap(current_index: number): number {
+		return Math.max(current_index - 1, 0);
+	}
+
+	// --- Animation ---
+	function animateTo(target: number, duration = 350, oncomplete?: () => void) {
+		cancelAnimationFrame(animation_frame);
+		animating = true;
+		animation_start_time = performance.now();
+		animation_start_y = untrack(() => sheet_y);
+		animation_target_y = target;
+		animation_duration = duration;
+
+		function step(time: number) {
+			const elapsed = time - animation_start_time;
+			const progress = Math.min(elapsed / animation_duration, 1);
+			// Spring-like cubic-bezier(0.32, 0.72, 0, 1) approximation
+			const eased = 1 - Math.pow(1 - progress, 3);
+			sheet_y = animation_start_y + (animation_target_y - animation_start_y) * eased;
+
+			if (progress < 1) {
+				animation_frame = requestAnimationFrame(step);
+			} else {
+				sheet_y = animation_target_y;
+				animating = false;
+				oncomplete?.();
+			}
+		}
+
+		animation_frame = requestAnimationFrame(step);
+	}
+
+	// --- Rubber banding ---
+	function rubberBand(overscroll: number): number {
+		return overscroll * 0.3;
+	}
+
+	// --- Gesture handling ---
+	function onHandlePointerDown(e: PointerEvent) {
+		if (e.button !== 0) return;
+		startDrag(e);
+	}
+
+	function onHeaderPointerDown(e: PointerEvent) {
+		if (e.button !== 0) return;
+		startDrag(e);
+	}
+
+	function startDrag(e: PointerEvent) {
+		cancelAnimationFrame(animation_frame);
+		dragging = true;
+		scroll_dragging = false;
+		pointer_start_y = e.clientY;
+		pointer_start_sheet_y = untrack(() => sheet_y);
+		pointer_last_y = e.clientY;
+		pointer_last_time = e.timeStamp;
+		velocity = 0;
+
+		document.body.style.userSelect = 'none';
+
+		(e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
+	}
+
+	function onDragMove(e: PointerEvent) {
+		if (!dragging) return;
+
+		const current_y = e.clientY;
+		const dt = Math.max(1, e.timeStamp - pointer_last_time);
+		velocity = (pointer_last_y - current_y) / dt; // positive = dragging up
+		pointer_last_y = current_y;
+		pointer_last_time = e.timeStamp;
+
+		const delta = pointer_start_y - current_y; // positive = dragging up
+		let new_y = pointer_start_sheet_y + delta;
+
+		// Apply rubber banding when dragging past top snap
+		if (new_y > max_snap_height) {
+			const overscroll = new_y - max_snap_height;
+			new_y = max_snap_height + rubberBand(overscroll);
+		}
+
+		// Don't allow dragging below 0
+		if (new_y < 0) {
+			new_y = 0;
+		}
+
+		sheet_y = new_y;
+	}
+
+	function onDragEnd(e: PointerEvent) {
+		if (!dragging) return;
+		dragging = false;
+		document.body.style.userSelect = '';
+
+		const speed = Math.abs(velocity); // px/ms
+		const current_snap_index = findNearestSnap(sheet_y);
+
+		if (speed > 0.5) {
+			// Fast swipe
+			if (velocity < 0) {
+				// Swiping down
+				if (dismissible && current_snap_index === 0) {
+					dismiss();
+				} else {
+					const lower = findLowerSnap(current_snap_index);
+					if (lower === current_snap_index && dismissible) {
+						dismiss();
+					} else {
+						snapTo(lower);
+					}
+				}
+			} else {
+				// Swiping up
+				const higher = findHigherSnap(current_snap_index);
+				snapTo(higher);
+			}
+		} else {
+			// Slow release - snap to nearest
+			const nearest = findNearestSnap(sheet_y);
+
+			// If below the lowest snap and dismissible, dismiss
+			if (dismissible && sheet_y < snap_heights[0] * 0.5) {
+				dismiss();
+			} else {
+				snapTo(nearest);
+			}
 		}
 	}
-	.sheet {
-		--profile-size-2: 120px;
-		--profile-size-1: 80px;
-		--profile-header-height: 125px;
-		--padding-x: 1rem;
-		--padding-y: 1.5rem;
-		--h2-height: 2.5rem;
+
+	function snapTo(index: number) {
+		const clamped = Math.max(0, Math.min(index, snap_heights.length - 1));
+		const height = snap_heights[clamped];
+		snap = clamped;
+		animateTo(height, 350, () => {
+			onsnap?.({ index: clamped, height });
+		});
+	}
+
+	function dismiss() {
+		open = false;
+	}
+
+	// --- Scroll-to-dismiss ---
+	function onContentScroll() {
+		// handled in pointer events below
+	}
+
+	function onContentPointerDown(e: PointerEvent) {
+		if (e.button !== 0) return;
+		if (!at_highest_snap) {
+			// Not at highest snap, start normal sheet drag
+			startDrag(e);
+			return;
+		}
+
+		// At highest snap, let scroll handle it unless at scroll top
+		if (content_el && content_el.scrollTop <= 0) {
+			// At scroll top - could be a pull-to-dismiss gesture
+			scroll_dragging = true;
+			pointer_start_y = e.clientY;
+			pointer_start_sheet_y = untrack(() => sheet_y);
+			pointer_last_y = e.clientY;
+			pointer_last_time = e.timeStamp;
+			velocity = 0;
+		}
+	}
+
+	function onContentPointerMove(e: PointerEvent) {
+		if (!scroll_dragging) return;
+		if (!content_el) return;
+
+		const delta_from_start = pointer_start_y - e.clientY; // positive = up
+
+		// If pulling down and at scroll top, transition to sheet drag
+		if (delta_from_start < 0 && content_el.scrollTop <= 0) {
+			if (!dragging) {
+				// Transition from scroll to sheet drag
+				dragging = true;
+				document.body.style.userSelect = 'none';
+				// Prevent the content from scrolling
+				if (content_el) {
+					content_el.style.overflowY = 'hidden';
+				}
+			}
+			onDragMove(e);
+		} else if (dragging) {
+			// Was dragging but now pulling up, stop drag
+			onDragMove(e);
+		}
+	}
+
+	function onContentPointerUp(e: PointerEvent) {
+		if (scroll_dragging) {
+			scroll_dragging = false;
+			if (content_el) {
+				content_el.style.overflowY = '';
+			}
+			if (dragging) {
+				onDragEnd(e);
+				return;
+			}
+		}
+	}
+
+	// --- Backdrop click ---
+	function onBackdropClick() {
+		if (dismissible) {
+			dismiss();
+		}
+	}
+
+	// --- Keyboard ---
+	function onKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && dismissible) {
+			dismiss();
+		}
+	}
+
+	// --- Computed styles ---
+	const translate_y = $derived(sheet_y <= 0 ? 100 : Math.max(0, 100 - (sheet_y / viewport_height) * 100));
+	const backdrop_opacity = $derived(
+		max_snap_height > 0 ? Math.min(1, sheet_y / max_snap_height) : 0,
+	);
+
+	// --- Aria values for handle slider ---
+	const aria_value_now = $derived(snap_heights.length > 0 ? Math.round((sheet_y / viewport_height) * 100) : 0);
+	const aria_value_min = $derived(0);
+	const aria_value_max = $derived(Math.round((max_snap_height / viewport_height) * 100));
+</script>
+
+<svelte:window onresize={onResize} onkeydown={open ? onKeyDown : undefined} />
+
+{#if open || sheet_y > 0}
+	<div
+		use:portal={'body'}
+		class={['bottom-sheet-wrapper', className].filter(Boolean).join(' ')}
+		{id}>
+		{#if showBackdrop}
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<div
+				class="bottom-sheet-backdrop"
+				class:no-transition={dragging || animating}
+				style:opacity={backdrop_opacity}
+				style:pointer-events={sheet_y > 0 ? 'auto' : 'none'}
+				role="button"
+				tabindex="-1"
+				onclick={onBackdropClick}>
+			</div>
+		{/if}
+
+		<div
+			class="bottom-sheet"
+			class:no-transition={dragging || animating}
+			bind:this={sheet_el}
+			role="dialog"
+			aria-modal="true"
+			style:transform="translateY({translate_y}%)">
+			{#if showHandle}
+				<div
+					class="bottom-sheet-handle"
+					role="slider"
+					tabindex="0"
+					aria-label="Sheet height"
+					aria-valuemin={aria_value_min}
+					aria-valuemax={aria_value_max}
+					aria-valuenow={aria_value_now}
+					onpointerdown={onHandlePointerDown}
+					onpointermove={onDragMove}
+					onpointerup={onDragEnd}
+					onpointercancel={onDragEnd}>
+					<div class="bottom-sheet-handle-bar"></div>
+				</div>
+			{/if}
+
+			{#if header}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="bottom-sheet-header"
+					onpointerdown={onHeaderPointerDown}
+					onpointermove={onDragMove}
+					onpointerup={onDragEnd}
+					onpointercancel={onDragEnd}>
+					{@render header()}
+				</div>
+			{/if}
+
+			{#if children}
+				<div
+					class="bottom-sheet-content"
+					bind:this={content_el}
+					onscroll={onContentScroll}
+					onpointerdown={onContentPointerDown}
+					onpointermove={onContentPointerMove}
+					onpointerup={onContentPointerUp}
+					onpointercancel={onContentPointerUp}>
+					{@render children()}
+				</div>
+			{/if}
+		</div>
+	</div>
+{/if}
+
+<style>
+	.bottom-sheet-wrapper {
+		display: contents;
+	}
+
+	.bottom-sheet-backdrop {
+		position: fixed;
+		inset: 0;
+		background: var(--color-backdrop, rgba(0, 0, 0, 0.5));
+		z-index: var(--layer-modal, 400);
+		transition: opacity 150ms ease;
+
+		&.no-transition {
+			transition: none;
+		}
+	}
+
+	.bottom-sheet {
 		position: fixed;
 		bottom: 0;
 		left: 0;
-		width: 100%;
-		height: 100%;
-		display: flex;
-		justify-content: center;
-		pointer-events: none;
-		z-index: var(--layer-4);
-		@include tablet {
-			z-index: var(--layer-2);
-		}
-		@include desktop {
-			display: none;
-		}
-		&.dragging {
-			.panel {
-				cursor: grabbing;
-			}
-		}
-	}
-	.panel-container {
-		background-color: var(--panel);
-		border-top-left-radius: var(--radius-5);
-		border-top-right-radius: var(--radius-5);
-		z-index: 2;
-		width: 100%;
-		min-height: var(--morph-start);
-		max-width: 768px;
-		position: absolute;
-		top: 100%;
-		transform: translate3d(0px, min(0px, max(-100%, calc(-1 * var(--offset)))), 0px);
-		cursor: grab;
-		pointer-events: all;
-		max-height: 100vh;
-		max-height: 100svh;
-		height: 100%;
-		height: max-content;
-		touch-action: pan-x pinch-zoom;
-		box-shadow: 0px 0px 0px 1px color-mix(in oklch, transparent, var(--text) 12%);
-		@include tablet {
-			max-width: 500px;
-		}
-	}
-	.panel {
-		max-height: 100vh;
-		max-height: 100svh;
-		width: 100%;
-		position: relative;
-		margin: 0 auto;
+		right: 0;
+		background: light-dark(var(--color-surface-1, white), var(--color-surface-1, #1a1a1a));
+		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+		box-shadow: var(--shadow-lg);
+		z-index: var(--layer-modal, 400);
+		transform: translateY(100%);
+		max-height: calc(100vh - env(safe-area-inset-top) - 1rem);
 		display: flex;
 		flex-direction: column;
-	}
-	.bg {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		z-index: 1;
-		opacity: var(--fade-percent, 0);
-		&::after {
-			content: '';
-			background-color: black;
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			bottom: 0;
-			opacity: 0.35;
+		touch-action: none;
+
+		&.no-transition {
+			transition: none;
 		}
-		@supports (backdrop-filter: blur(10px)) {
-			backdrop-filter: blur(10px);
-			&::after {
-				opacity: 0.2;
-			}
-		}
-	}
-	.drag-indicator {
-		position: absolute;
-		top: 0.5rem;
-		left: 50%;
-		width: 35px;
-		height: 4px;
-		transform: translateX(-50%);
-		background-color: var(--panel-text-low);
-		border-radius: var(--radius-round);
-		pointer-events: none;
 	}
 
-	.cover {
-		--pos-y-1: calc(var(--padding-x) + 7rem);
-		--pos-y-2: calc(var(--padding-y));
-		--pos-x-1: calc(var(--padding-x));
-		--pos-x-2: calc(var(--padding-x));
-		background-color: rgba(var(--contrast-rgb-high) / 0.2);
-		touch-action: none;
-		position: absolute;
-		top: calc(
-			(var(--pos-y-1) * (1 - var(--morph-percent))) +
-				(var(--pos-y-2) * (var(--morph-percent)))
-		);
-		left: calc(
-			(var(--pos-x-1) * (1 - var(--morph-percent))) +
-				(var(--pos-x-2) * (var(--morph-percent)))
-		);
-		width: calc(100% - var(--padding-x) * 2);
-		height: var(--profile-header-height);
-		border-radius: var(--radius-4);
-		overflow: hidden;
-		z-index: 3;
-		padding: 1rem;
-		:global(.image) {
-			height: 100%;
-		}
-		.cover-bg {
-			z-index: -1;
-			position: absolute;
-			top: 0;
-			bottom: 0;
-			left: 0;
-			right: 0;
-			transform: scale(1.1);
-			filter: brightness(1.5) contrast(0.9) blur(30px);
-		}
-	}
-	.profile {
-		position: relative;
-		--border-size: 11px;
-		--pos-y-1: calc(var(--padding-y) - 0.5rem - var(--border-size));
-		--pos-y-2: calc(
-			var(--padding-y) + var(--profile-header-height) -
-				(var(--profile-size-2) / 2) - var(--border-size)
-		);
-		--pos-x-1: calc(var(--padding-x) - var(--border-size));
-		--pos-x-2: calc(var(--padding-x) - var(--border-size));
-		--size-1: var(--profile-size-1);
-		--size-2: var(--profile-size-2);
-		padding: var(--border-size);
-		box-sizing: content-box;
-		touch-action: none;
-		position: absolute;
-		top: calc(
-			(var(--pos-y-1) * (1 - var(--morph-percent))) +
-				(var(--pos-y-2) * (var(--morph-percent)))
-		);
-		left: calc(
-			(var(--pos-x-1) * (1 - var(--morph-percent))) +
-				(var(--pos-x-2) * (var(--morph-percent)))
-		);
-		width: calc(
-			(var(--size-1) * (1 - var(--morph-percent))) +
-				(var(--size-2) * (var(--morph-percent)))
-		);
-		height: calc(
-			(var(--size-1) * (1 - var(--morph-percent))) +
-				(var(--size-2) * (var(--morph-percent)))
-		);
-		overflow: hidden;
-		z-index: 4;
-		:global(.image) {
-			height: 100%;
-		}
-
-		&::before {
-			content: '';
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			bottom: 0;
-			border-radius: var(--radius-round);
-			border: solid var(--border-size) var(--panel);
-			background-color: var(--panel-high);
-		}
-	}
-	h2 {
-		--pos-y-1: calc(var(--padding-y) - 0.5rem);
-		--pos-y-2: calc(
-			var(--padding-y) + var(--profile-header-height) +
-				var(--profile-size-2) - var(--h2-height) - 0.5rem
-		);
-		--pos-x-1: calc(var(--padding-x) + var(--profile-size-1) + 1rem);
-		--pos-x-2: calc(var(--padding-x) + 0.5rem);
-		--max-width-1: calc(100% - var(--pos-x-1) - var(--padding-x));
-		--max-width-2: calc(100% - (var(--padding-x) * 2) - 1rem);
-		z-index: 4;
+	.bottom-sheet-handle {
 		display: flex;
-		align-items: center;
-		position: absolute;
-		text-wrap: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		line-height: var(--h2-height);
-		height: var(--h2-height);
-		max-width: calc(
-			(var(--max-width-1) * (1 - var(--morph-percent))) +
-				(var(--max-width-2) * (var(--morph-percent)))
-		);
-		top: calc(
-			(var(--pos-y-1) * (1 - var(--morph-percent))) +
-				(var(--pos-y-2) * (var(--morph-percent)))
-		);
-		left: calc(
-			(var(--pos-x-1) * (1 - var(--morph-percent))) +
-				(var(--pos-x-2) * (var(--morph-percent)))
-		);
-	}
-	.spacer {
-		height: calc(
-			var(--padding-y) + (var(--profile-size-2) / 2) + var(--profile-header-height) +
-				var(--h2-height)
-		);
+		justify-content: center;
+		padding: 0.75rem 0 0.5rem;
+		cursor: grab;
+		touch-action: none;
 		flex-shrink: 0;
-	}
-	.close {
-		position: absolute;
-		top: 0;
-		height: var(--morph-start);
-		right: 0.5rem;
-		display: flex;
-		align-items: center;
-		opacity: calc(1 - var(--morph-percent));
-		transform: translate3d(0px, calc(var(--morph-percent) * 300px), 0px);
-	}
-	.actions {
-		position: absolute;
-		top: calc(var(--padding-y) + var(--h2-height) - 0.25rem);
-		left: calc(var(--padding-x) + var(--profile-size-1));
-		padding: 0 1rem;
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		opacity: calc(1 - var(--morph-percent));
-		z-index: 1;
-		transform: translate3d(0px, calc(var(--morph-percent) * 300px), 0px);
-	}
-	.panel-content {
-		overflow-y: auto;
-		overflow-x: hidden;
-		@media (pointer: coarse) {
-			scrollbar-width: 0px;
-			&::-webkit-scrollbar {
-				display: none;
-			}
+
+		&:active {
+			cursor: grabbing;
 		}
-		@media (pointer: fine) {
-			@include scrollbar(0.5rem, var(--panel-high), var(--panel-text-low));
-		}
-		.info {
-			padding: 0 1.5rem;
-			p {
-				margin: 0.5rem 0;
-			}
+
+		&:focus-visible {
+			outline: 2px solid var(--color-accent, #0066ff);
+			outline-offset: -2px;
+			border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 		}
 	}
 
-	nav {
-		padding: 1rem 0.5rem 2rem;
-		a {
-			display: flex;
-			align-items: center;
-			justify-content: flex-start;
-			border-radius: var(--radius-round);
-			background-color: var(--panel);
-			text-decoration: none;
-			height: 3.75rem;
-			margin: 1px 0 0;
-			padding: 0.5rem 0.25rem;
-			transition:
-				background-color 100ms ease,
-				color 100ms ease;
-			font-size: var(--font-size-2);
-			position: relative;
-			z-index: 1;
-			:global(svg) {
-				color: var(--text-low);
-				margin: 0 0.75rem;
-				width: 1.75rem;
-				height: 1.75rem;
-				transition: color 100ms ease;
-			}
-			&.active {
-				background-color: var(--panel-high);
-			}
-			&.active,
-			&:hover,
-			&:focus-visible {
-				color: var(--text-high);
-				:global(svg) {
-					color: var(--text-high);
-				}
-			}
+	.bottom-sheet-handle-bar {
+		width: 36px;
+		height: 4px;
+		border-radius: 9999px;
+		background: var(--color-text-disabled, #a3a3a3);
+	}
+
+	.bottom-sheet-header {
+		flex-shrink: 0;
+		touch-action: none;
+		cursor: grab;
+
+		&:active {
+			cursor: grabbing;
+		}
+	}
+
+	.bottom-sheet-content {
+		flex: 1;
+		overflow-y: auto;
+		overscroll-behavior: none;
+		padding-bottom: env(safe-area-inset-bottom);
+		touch-action: pan-y;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bottom-sheet {
+			transition: none;
+		}
+
+		.bottom-sheet-backdrop {
+			transition: none;
 		}
 	}
 </style>
