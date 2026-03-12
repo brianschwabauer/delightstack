@@ -357,9 +357,11 @@
 		background: transparent;
 		color: inherit;
 		cursor: pointer;
+		margin: 0;
 		padding: 0 0.375em;
+		font: inherit;
 		font-size: inherit;
-		font-family: inherit;
+		line-height: 1;
 		gap: 0.25em;
 		transition: background 100ms ease;
 		white-space: nowrap;
@@ -401,6 +403,7 @@
 		justify-content: center;
 		min-width: var(--pg-min-width);
 		height: var(--pg-height);
+		line-height: 1;
 		color: var(--color-text-muted, #6b7280);
 		user-select: none;
 	}
