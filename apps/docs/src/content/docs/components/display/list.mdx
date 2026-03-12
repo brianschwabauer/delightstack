@@ -1,0 +1,139 @@
+---
+title: List
+description: A flexible container for list items with selection handling, multiple interaction modes, and consistent styling.
+---
+
+## Import
+
+```svelte
+import { List, ListItem } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<List>
+  <ListItem onclick={() => console.log('clicked')}>Action Item</ListItem>
+  <ListItem onclick={() => console.log('clicked')}>Another Action</ListItem>
+</List>
+```
+
+## Examples
+
+### Radio Selection
+
+Single-select mode using radio buttons. Bind `value` to track the selected index.
+
+```svelte
+<script>
+  import { List, ListItem } from '@delightstack/components';
+
+  let selected = $state<number[]>([]);
+</script>
+
+<List type="radio" bind:value={selected}>
+  <ListItem>Small</ListItem>
+  <ListItem>Medium</ListItem>
+  <ListItem>Large</ListItem>
+</List>
+```
+
+### Checkbox Multi-Select
+
+Multiple-select mode using checkboxes. The `value` array contains all selected indices.
+
+```svelte
+<script>
+  import { List, ListItem } from '@delightstack/components';
+
+  let selected = $state<number[]>([]);
+</script>
+
+<List type="checkbox" bind:value={selected}>
+  <ListItem>Notifications</ListItem>
+  <ListItem>Email Updates</ListItem>
+  <ListItem>SMS Alerts</ListItem>
+</List>
+```
+
+### Dense Menu Actions
+
+Compact spacing for action-oriented lists.
+
+```svelte
+<List dense>
+  <ListItem onclick={() => handleEdit()}>Edit</ListItem>
+  <ListItem onclick={() => handleDuplicate()}>Duplicate</ListItem>
+  <ListItem onclick={() => handleDelete()}>Delete</ListItem>
+</List>
+```
+
+### Text Mode (Non-Interactive)
+
+Display-only list with no hover effects or click handlers.
+
+```svelte
+<List type="text">
+  <ListItem>Read-only item</ListItem>
+  <ListItem>Another item</ListItem>
+</List>
+```
+
+### Skeleton Loading
+
+Show placeholder items while data loads.
+
+```svelte
+<List skeleton skeletonCount={4} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `type` | `'button' \| 'text' \| 'radio' \| 'checkbox'` | `'button'` | Interaction mode for items |
+| `value` | `number[]` | `[]` | Selected item indices (bindable) |
+| `dense` | `boolean` | `false` | Compact spacing |
+| `comfortable` | `boolean` | `false` | Relaxed spacing |
+| `disabled` | `boolean` | `false` | Disable all items |
+| `touched` | `boolean` | `false` | Whether the user has interacted (bindable) |
+| `paddingX` | `string` | - | Horizontal padding override (e.g. `'16px'`) |
+| `paddingY` | `string` | - | Vertical padding override (e.g. `'16px'`) |
+| `skeleton` | `boolean` | `false` | Show loading skeleton items |
+| `skeletonCount` | `number` | `5` | Number of skeleton items to show |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `style` | `string` | `''` | Additional inline styles |
+| `children` | `Snippet` | - | ListItem children |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `ontouch` | `() => void` | Called when the first interaction occurs |
+| `onchange` | `(value: number[]) => void` | Called when selection changes |
+
+## Types
+
+The List component exports a `ListContext` interface used for parent-child communication via Svelte context:
+
+```typescript
+interface ListContext {
+  type: 'button' | 'text' | 'radio' | 'checkbox';
+  value: number[];
+  dense: boolean;
+  comfortable: boolean;
+  disabled: boolean;
+  level: number;
+  id: string;
+}
+```
+
+## Accessibility
+
+- Renders as a `<ul>` element with proper list semantics
+- `aria-selected` applied on items in selection modes
+- Full keyboard navigation: Arrow Up/Down to move focus, Home/End to jump, Space/Enter to activate
+- Focus management tracked via the `onFocusWithin` utility attachment
+- Disabled state communicated to assistive technology
+- Nested lists inherit parent context with incremented `level`

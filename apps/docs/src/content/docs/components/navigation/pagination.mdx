@@ -1,0 +1,132 @@
+---
+title: Pagination
+description: A page navigation control with ellipsis algorithm, simple/compact display modes, page size selector, and item range info.
+---
+
+## Import
+
+```svelte
+import { Pagination } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Pagination } from '@delightstack/components';
+
+  let page = $state(1);
+</script>
+
+<Pagination bind:page totalPages={20} />
+```
+
+## Examples
+
+### Simple Mode
+
+A minimal prev/next layout with "Page X of Y" text.
+
+```svelte
+<Pagination bind:page totalPages={10} simple />
+```
+
+### Compact Mode
+
+An even more minimal layout with just arrows and "X / Y".
+
+```svelte
+<Pagination bind:page totalPages={10} compact />
+```
+
+### Page Size Selector
+
+Show a dropdown to change the number of items per page.
+
+```svelte
+<script>
+  import { Pagination } from '@delightstack/components';
+
+  let page = $state(1);
+  let pageSize = $state(25);
+</script>
+
+<Pagination
+  bind:page
+  bind:pageSize
+  totalPages={40}
+  showPageSize
+  pageSizeOptions={[10, 25, 50, 100]}
+  onpagesizechange={({ pageSize: size }) => {
+    page = 1; // Reset to first page
+  }}
+/>
+```
+
+### Item Range Info
+
+Show "Showing X-Y of Z" alongside pagination.
+
+```svelte
+<Pagination bind:page totalPages={20} totalItems={500} pageSize={25} showInfo />
+```
+
+### Custom Ellipsis Behavior
+
+Control how many sibling and boundary pages are visible.
+
+```svelte
+<Pagination bind:page totalPages={50} siblingCount={2} boundaryCount={2} />
+```
+
+### Sizes
+
+```svelte
+<Pagination bind:page totalPages={10} size="0" />  <!-- Small -->
+<Pagination bind:page totalPages={10} size="2" />  <!-- Medium -->
+<Pagination bind:page totalPages={10} size="3" />  <!-- Large -->
+```
+
+### Skeleton Loading
+
+```svelte
+<Pagination skeleton />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `page` | `number` | `1` | Current page number, 1-based (`$bindable`) |
+| `totalPages` | `number` | required | Total number of pages |
+| `totalItems` | `number` | `undefined` | Total number of items (used for info display) |
+| `pageSize` | `number` | `10` | Number of items per page (`$bindable`) |
+| `pageSizeOptions` | `number[]` | `[10, 25, 50, 100]` | Options for the page size selector |
+| `simple` | `boolean` | `false` | Simple mode: prev/next with "Page X of Y" |
+| `compact` | `boolean` | `false` | Compact mode: minimal prev/next with "X / Y" |
+| `showPageSize` | `boolean` | `false` | Show a page size selector |
+| `showInfo` | `boolean` | `false` | Show item range info ("Showing X-Y of Z") |
+| `siblingCount` | `number` | `1` | Number of sibling pages to show around the current page |
+| `boundaryCount` | `number` | `1` | Number of pages to always show at the start and end |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size of the pagination buttons |
+| `skeleton` | `boolean` | `false` | Show skeleton placeholder |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ page: number }` | Fires when the page changes |
+| `onpagesizechange` | `{ pageSize: number }` | Fires when the page size changes |
+
+## Accessibility
+
+- Uses `<nav>` with `aria-label="Pagination"`
+- Page buttons are `<button>` elements with `aria-label="Page N"`
+- Current page button has `aria-current="page"`
+- Prev/next buttons have `aria-label="Previous page"` / `aria-label="Next page"`
+- Disabled buttons (first/last page) have `disabled` attribute
+- Ellipsis markers are `aria-hidden="true"`
+- Page size selector has `aria-label="Items per page"`
+- Focus-visible outlines on all interactive elements

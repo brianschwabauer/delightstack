@@ -14,16 +14,58 @@ export default defineConfig({
 			],
 			sidebar: [
 				{
-					label: 'Guides',
+					label: 'Getting Started',
 					items: [
-						// Each item here is one entry in the navigation menu.
-						{ label: 'Example Guide', slug: 'guides/example' },
-						{ label: 'Example Code', slug: 'guides/code-test' },
+						{ label: 'Introduction', slug: 'getting-started/introduction' },
+						{ label: 'Installation', slug: 'getting-started/installation' },
+						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
 					],
 				},
 				{
-					label: 'Reference',
-					autogenerate: { directory: 'reference' },
+					label: 'Guides',
+					items: [
+						{ label: 'Design Tokens', slug: 'guides/design-tokens' },
+						{ label: 'Theming', slug: 'guides/theming' },
+						{ label: 'Dark Mode', slug: 'guides/dark-mode' },
+						{ label: 'Accessibility', slug: 'guides/accessibility' },
+						{ label: 'Working with Forms', slug: 'guides/forms' },
+					],
+				},
+				{
+					label: 'Components',
+					items: [
+						{ label: 'Overview', slug: 'components/overview' },
+						{
+							label: 'Actions',
+							collapsed: true,
+							autogenerate: { directory: 'components/actions' },
+						},
+						{
+							label: 'Display',
+							collapsed: true,
+							autogenerate: { directory: 'components/display' },
+						},
+						{
+							label: 'Feedback',
+							collapsed: true,
+							autogenerate: { directory: 'components/feedback' },
+						},
+						{
+							label: 'Form',
+							collapsed: true,
+							autogenerate: { directory: 'components/form' },
+						},
+						{
+							label: 'Media',
+							collapsed: true,
+							autogenerate: { directory: 'components/media' },
+						},
+						{
+							label: 'Navigation',
+							collapsed: true,
+							autogenerate: { directory: 'components/navigation' },
+						},
+					],
 				},
 			],
 		}),

@@ -1,0 +1,184 @@
+---
+title: Steps
+description: A multi-step progress indicator with horizontal and vertical layouts, clickable navigation, wizard mode with step content, and error states.
+---
+
+## Import
+
+Steps uses a compound component pattern. The `Step` sub-component is re-exported from the same module.
+
+```svelte
+import { Steps, Step } from '@delightstack/components';
+import type { StepsContext } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Steps, Step } from '@delightstack/components';
+
+  let current = $state(0);
+</script>
+
+<Steps bind:current>
+  <Step title="Account" description="Create your account" />
+  <Step title="Profile" description="Set up your profile" />
+  <Step title="Review" description="Review and confirm" />
+</Steps>
+```
+
+## Examples
+
+### Clickable Steps
+
+Allow users to navigate back to completed steps by clicking on them.
+
+```svelte
+<Steps bind:current clickable>
+  <Step title="Shipping" />
+  <Step title="Payment" />
+  <Step title="Confirmation" />
+</Steps>
+```
+
+### Non-Linear Navigation
+
+Allow jumping to any step, not just completed ones.
+
+```svelte
+<Steps bind:current clickable linear={false}>
+  <Step title="Overview" />
+  <Step title="Details" />
+  <Step title="Summary" />
+</Steps>
+```
+
+### Vertical Layout
+
+Stack steps vertically for sidebar or mobile layouts.
+
+```svelte
+<Steps bind:current orientation="vertical">
+  <Step title="Step 1" description="First step description" />
+  <Step title="Step 2" description="Second step description" />
+  <Step title="Step 3" description="Third step description" />
+</Steps>
+```
+
+### Error and Optional Steps
+
+Mark steps with error states or as optional.
+
+```svelte
+<Steps bind:current>
+  <Step title="Account" />
+  <Step title="Verification" error />
+  <Step title="Preferences" optional />
+  <Step title="Done" />
+</Steps>
+```
+
+### Wizard Mode with Step Content
+
+Render content for each step, shown when that step is active.
+
+```svelte
+<script>
+  import { Steps, Step } from '@delightstack/components';
+
+  let current = $state(0);
+</script>
+
+<Steps bind:current orientation="vertical">
+  <Step title="Personal Info">
+    <form>
+      <input placeholder="Full Name" />
+      <input placeholder="Email" />
+      <button onclick={() => current++}>Next</button>
+    </form>
+  </Step>
+  <Step title="Address">
+    <form>
+      <input placeholder="Street" />
+      <input placeholder="City" />
+      <button onclick={() => current--}>Back</button>
+      <button onclick={() => current++}>Next</button>
+    </form>
+  </Step>
+  <Step title="Confirm">
+    <p>All done!</p>
+    <button onclick={() => current--}>Back</button>
+  </Step>
+</Steps>
+```
+
+### Skeleton Loading
+
+```svelte
+<Steps skeleton skeletonCount={4} />
+```
+
+## Props
+
+### Steps (Container)
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `current` | `number` | `0` | The current active step index (`$bindable`) |
+| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Layout orientation |
+| `clickable` | `boolean` | `false` | Whether completed steps are clickable for navigation |
+| `linear` | `boolean` | `true` | Whether navigation is restricted to sequential order |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size variant |
+| `skeleton` | `boolean` | `false` | Show skeleton shimmer placeholders |
+| `skeletonCount` | `number` | `4` | Number of skeleton placeholder steps |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | `undefined` | Step children |
+
+### Step (Item)
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | The title text for this step |
+| `description` | `string` | `''` | Optional description text below the title |
+| `optional` | `boolean` | `false` | Whether this step is optional |
+| `error` | `boolean` | `false` | Whether this step is in an error state |
+| `children` | `Snippet` | `undefined` | Step content (for wizard mode, shown when active) |
+
+## Events
+
+### Steps (Container)
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ step: number }` | Fires when the active step changes |
+| `oncomplete` | none | Fires when all steps are completed |
+
+## Types
+
+### StepsContext
+
+```typescript
+interface StepsContext {
+  current: number;
+  orientation: 'horizontal' | 'vertical';
+  clickable: boolean;
+  linear: boolean;
+  size: string;
+  totalSteps: number;
+  register: () => number;
+  navigate: (index: number) => void;
+}
+```
+
+## Accessibility
+
+- Container uses `role="navigation"` with `aria-label="Progress steps"`
+- Each step uses `role="listitem"` with `aria-current="step"` for the active step
+- Step indicators show completion state with `aria-label` (e.g. "Step 1: Account - Completed")
+- Clickable steps are focusable `<button>` elements
+- Error steps are announced via `aria-label` with error state
+- Optional steps display "(Optional)" text
+- Focus-visible outlines on clickable step indicators
+- Connector lines between steps indicate progress visually

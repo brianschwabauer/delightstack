@@ -1,0 +1,319 @@
+---
+title: Working with Forms
+description: How to build validated forms with the Form component using Standard Schema validators like Zod, Valibot, and ArkType.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+DelightStack provides a `Form` component that handles validation, error display, and submission state management. It integrates with **Standard Schema** — a universal interface supported by Zod, Valibot, ArkType, and other validation libraries.
+
+## Basic Form Setup
+
+Wrap your form fields in a `Form` component and pass a `schema` for validation:
+
+```svelte
+<script>
+  import { Form, Input, Button } from '@delightstack/components';
+  import { z } from 'zod';
+
+  const schema = z.object({
+    name: z.string().min(2, 'Name must be at least 2 characters'),
+    email: z.string().email('Please enter a valid email'),
+  });
+
+  let data = $state({ name: '', email: '' });
+
+  async function handleSubmit({ data, is_valid }) {
+    if (!is_valid) return;
+    await fetch('/api/user', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+</script>
+
+<Form {schema} bind:data onsubmit={handleSubmit}>
+  <Input name="name" label="Name" />
+  <Input name="email" label="Email" type="email" />
+  <Button type="submit">Create Account</Button>
+</Form>
+```
+
+## How It Works
+
+The `Form` component creates a **form context** that child components (`Input`, `Select`, `Checkbox`, `Radio`, `Toggle`, `Range`, `Rating`) consume automatically. When a field has a `name` prop, it registers with the form context and:
+
+1. **Reads its value** from `data[name]`
+2. **Writes changes** back to `data[name]`
+3. **Displays errors** from the validation result for that field
+4. **Reports touched state** when the user interacts with it
+
+You do not need to wire up `bind:value` or error display manually — the form context handles it.
+
+<Aside type="tip">
+Form fields still work independently outside of a `Form` component. The `name` prop only activates form context integration when a parent `Form` exists.
+</Aside>
+
+## Choosing a Validation Library
+
+The `Form` component accepts any validator that implements the [Standard Schema](https://github.com/standard-schema/standard-schema) interface. Here is the same validation written in three libraries:
+
+<Tabs>
+  <TabItem label="Zod">
+    ```typescript
+    import { z } from 'zod';
+
+    const schema = z.object({
+      name: z.string().min(2, 'Name is required'),
+      email: z.string().email('Invalid email'),
+      age: z.number().min(18, 'Must be 18 or older'),
+    });
+    ```
+  </TabItem>
+  <TabItem label="Valibot">
+    ```typescript
+    import * as v from 'valibot';
+
+    const schema = v.object({
+      name: v.pipe(v.string(), v.minLength(2, 'Name is required')),
+      email: v.pipe(v.string(), v.email('Invalid email')),
+      age: v.pipe(v.number(), v.minValue(18, 'Must be 18 or older')),
+    });
+    ```
+  </TabItem>
+  <TabItem label="ArkType">
+    ```typescript
+    import { type } from 'arktype';
+
+    const schema = type({
+      name: 'string>=2',
+      email: 'string.email',
+      age: 'number>=18',
+    });
+    ```
+  </TabItem>
+</Tabs>
+
+All three produce identical behavior when passed to the `Form` component's `schema` prop.
+
+## Validation Modes
+
+The `validate_on` prop controls when fields are validated:
+
+| Mode       | Behavior                                                            |
+| ---------- | ------------------------------------------------------------------- |
+| `'change'` | Validate immediately as the user types or changes a value           |
+| `'blur'`   | Validate when the user leaves the field (default)                   |
+| `'submit'` | Only validate when the form is submitted                            |
+
+```svelte
+<!-- Validate as the user types -->
+<Form {schema} bind:data validate_on="change" onsubmit={handleSubmit}>
+  ...
+</Form>
+
+<!-- Validate only on form submission -->
+<Form {schema} bind:data validate_on="submit" onsubmit={handleSubmit}>
+  ...
+</Form>
+```
+
+<Aside>
+The `'blur'` mode is the default and works well for most forms. It provides feedback after the user finishes a field without being intrusive during typing.
+</Aside>
+
+## Error Display
+
+When validation fails, each field automatically displays its error message below the input. The error is associated via `aria-describedby` for screen reader accessibility.
+
+Errors are only shown for fields that have been **touched** (interacted with by the user), so a freshly loaded form does not show a wall of errors.
+
+On submit, all fields are marked as touched and all errors become visible.
+
+## Form Context
+
+The `Form` component provides a context object that child components read. You can also access it programmatically in your own components:
+
+```typescript
+import type { FormContext } from '@delightstack/components';
+```
+
+The context provides:
+
+| Property        | Type                         | Description                              |
+| --------------- | ---------------------------- | ---------------------------------------- |
+| `data`          | `Record<string, unknown>`    | Current form data                        |
+| `errors`        | `Record<string, string>`     | Validation errors by field name          |
+| `touched`       | `Record<string, boolean>`    | Which fields have been interacted with   |
+| `is_dirty`      | `boolean`                    | Whether any field has changed            |
+| `is_submitting` | `boolean`                    | Whether submission is in progress        |
+| `is_valid`      | `boolean`                    | Whether all fields pass validation       |
+| `disabled`      | `boolean`                    | Whether the form is disabled             |
+| `validate_on`   | `'change' \| 'blur' \| 'submit'` | Current validation mode             |
+
+And these methods:
+
+| Method           | Description                           |
+| ---------------- | ------------------------------------- |
+| `setValue(name, value)`   | Update a field's value         |
+| `setTouched(name)`       | Mark a field as touched        |
+| `validateField(name)`    | Validate a single field        |
+| `register(name, el)`     | Register a field element       |
+| `unregister(name)`       | Unregister a field             |
+
+## Form Props
+
+| Prop              | Type                    | Default | Description                                      |
+| ----------------- | ----------------------- | ------- | ------------------------------------------------ |
+| `data`            | `Record<string, unknown>` | `{}`  | Form data object (bindable)                      |
+| `schema`          | `StandardSchema`        | —       | Standard Schema validator                        |
+| `validate_on`     | `'change' \| 'blur' \| 'submit'` | `'blur'` | When to validate fields              |
+| `disabled`        | `boolean`               | `false` | Disable the entire form                          |
+| `reset_on_submit` | `boolean`               | `false` | Reset to initial values after successful submit  |
+| `dense`           | `boolean`               | `false` | Compact spacing between fields                   |
+| `comfortable`     | `boolean`               | `false` | Relaxed spacing between fields                   |
+
+## Form Events
+
+| Event      | Detail                              | Description                         |
+| ---------- | ----------------------------------- | ----------------------------------- |
+| `onsubmit` | `{ data, is_valid }`                | Called on form submission            |
+| `onchange` | `{ data, errors }`                  | Called when form data changes        |
+| `onerror`  | `{ errors }`                        | Called when validation fails on submit |
+
+## Complete Example
+
+Here is a registration form with multiple field types, validation, and user feedback:
+
+```svelte
+<script>
+  import {
+    Form,
+    Input,
+    Select,
+    Checkbox,
+    Toggle,
+    Rating,
+    Fieldset,
+    Button,
+    Toaster,
+    toast,
+  } from '@delightstack/components';
+  import { z } from 'zod';
+
+  const schema = z.object({
+    first_name: z.string().min(1, 'First name is required'),
+    last_name: z.string().min(1, 'Last name is required'),
+    email: z.string().email('Please enter a valid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    role: z.string().min(1, 'Please select a role'),
+    experience: z.number().min(1, 'Please rate your experience'),
+    terms: z.literal(true, {
+      errorMap: () => ({ message: 'You must accept the terms' }),
+    }),
+  });
+
+  let data = $state({
+    first_name: '',
+    last_name: '',
+    email: '',
+    password: '',
+    role: '',
+    experience: 0,
+    newsletter: false,
+    terms: false,
+  });
+
+  const role_options = [
+    { value: 'developer', label: 'Developer' },
+    { value: 'designer', label: 'Designer' },
+    { value: 'manager', label: 'Product Manager' },
+    { value: 'other', label: 'Other' },
+  ];
+
+  async function handleSubmit({ data, is_valid }) {
+    if (!is_valid) return;
+
+    await fetch('/api/user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    toast.success('Account created successfully!');
+  }
+
+  function handleError({ errors }) {
+    toast.error('Please fix the errors above.');
+  }
+</script>
+
+<Toaster />
+
+<Form
+  {schema}
+  bind:data
+  validate_on="blur"
+  reset_on_submit
+  onsubmit={handleSubmit}
+  onerror={handleError}
+>
+  <Fieldset legend="Personal Information">
+    <Input name="first_name" label="First Name" />
+    <Input name="last_name" label="Last Name" />
+    <Input name="email" label="Email" type="email" />
+    <Input name="password" label="Password" type="password" />
+  </Fieldset>
+
+  <Fieldset legend="Profile">
+    <Select
+      name="role"
+      label="Role"
+      placeholder="Select your role"
+      options={role_options}
+    />
+    <Rating name="experience" label="Experience Level" />
+  </Fieldset>
+
+  <Fieldset legend="Preferences">
+    <Toggle name="newsletter" label="Subscribe to newsletter" />
+    <Checkbox name="terms" label="I agree to the terms and conditions" />
+  </Fieldset>
+
+  <Button type="submit">Create Account</Button>
+</Form>
+```
+
+<Aside type="tip">
+The `reset_on_submit` prop resets the form data back to its initial values after a successful submission. The `onsubmit` callback supports returning a Promise — the form automatically sets `is_submitting` to `true` while it resolves, disabling the submit button.
+</Aside>
+
+## Using Fields Without a Form
+
+Every form component works independently when used without a parent `Form`:
+
+```svelte
+<script>
+  import { Input, Select, Toggle } from '@delightstack/components';
+
+  let search = $state('');
+  let sort = $state('newest');
+  let compact = $state(false);
+</script>
+
+<Input label="Search" bind:value={search} placeholder="Search..." />
+
+<Select
+  label="Sort by"
+  bind:value={sort}
+  options={[
+    { value: 'newest', label: 'Newest First' },
+    { value: 'oldest', label: 'Oldest First' },
+    { value: 'name', label: 'Name' },
+  ]}
+/>
+
+<Toggle label="Compact view" bind:value={compact} />
+```
+
+In this case, you manage state with `bind:value` and handle validation yourself.

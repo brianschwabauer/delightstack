@@ -1,0 +1,137 @@
+---
+title: Breadcrumbs
+description: A navigation trail with automatic home icon, collapsible middle items, Schema.org structured data, and customizable separators.
+---
+
+## Import
+
+```svelte
+import { Breadcrumbs } from '@delightstack/components';
+import type { BreadcrumbItem } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Breadcrumbs } from '@delightstack/components';
+  import type { BreadcrumbItem } from '@delightstack/components';
+
+  const items: BreadcrumbItem[] = [
+    { label: 'Products', href: '/products' },
+    { label: 'Electronics', href: '/products/electronics' },
+    { label: 'Headphones' },
+  ];
+</script>
+
+<Breadcrumbs {items} />
+```
+
+## Examples
+
+### Collapsed Middle Items
+
+When the trail is long, collapse middle items into an ellipsis dropdown.
+
+```svelte
+<script>
+  import { Breadcrumbs } from '@delightstack/components';
+
+  const items = [
+    { label: 'Category', href: '/cat' },
+    { label: 'Subcategory', href: '/cat/sub' },
+    { label: 'Brand', href: '/cat/sub/brand' },
+    { label: 'Model', href: '/cat/sub/brand/model' },
+    { label: 'Product' },
+  ];
+</script>
+
+<Breadcrumbs {items} maxItems={3} />
+```
+
+### Without Home Icon
+
+Hide the automatic home breadcrumb.
+
+```svelte
+<Breadcrumbs {items} showHome={false} />
+```
+
+### Custom Separator
+
+Replace the default chevron separator with a custom snippet.
+
+```svelte
+<Breadcrumbs {items}>
+  {#snippet separator()}
+    <span>/</span>
+  {/snippet}
+</Breadcrumbs>
+```
+
+### Sizes
+
+```svelte
+<Breadcrumbs {items} size="0" />  <!-- Small -->
+<Breadcrumbs {items} size="2" />  <!-- Medium -->
+<Breadcrumbs {items} size="3" />  <!-- Large -->
+```
+
+### Click Handler
+
+React to breadcrumb clicks without relying solely on native navigation.
+
+```svelte
+<Breadcrumbs {items} onclick={({ item, index }) => {
+  console.log('Navigating to', item.label);
+}} />
+```
+
+### Skeleton Loading
+
+```svelte
+<Breadcrumbs skeleton skeletonCount={4} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `items` | `BreadcrumbItem[]` | `[]` | The breadcrumb items to display |
+| `maxItems` | `number` | `undefined` | Max visible items before collapsing middle items into an ellipsis dropdown |
+| `showHome` | `boolean` | `true` | Whether to show a home icon as the first breadcrumb |
+| `homeHref` | `string` | `'/'` | The href for the home breadcrumb |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size of the breadcrumbs |
+| `skeleton` | `boolean` | `false` | Show skeleton loading state |
+| `skeletonCount` | `number` | `3` | Number of skeleton placeholder items |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | `undefined` | Custom rendering snippet (replaces default rendering) |
+| `separator` | `Snippet` | `undefined` | Custom separator snippet |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onclick` | `{ item: BreadcrumbItem, index: number }` | Fires when a breadcrumb item is clicked |
+
+## Types
+
+### BreadcrumbItem
+
+```typescript
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+```
+
+## Accessibility
+
+- Uses `<nav>` with `aria-label="Breadcrumb"`
+- Semantic `<ol>` list for the breadcrumb trail
+- Last item has `aria-current="page"`
+- Home icon includes screen-reader-only text (`<span class="sr-only">`)
+- Ellipsis dropdown button has `aria-label="Show hidden breadcrumbs"` and `aria-expanded`
+- Focus-visible outlines on all links and buttons
+- Automatically generates Schema.org `BreadcrumbList` JSON-LD for SEO

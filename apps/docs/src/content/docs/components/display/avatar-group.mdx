@@ -1,0 +1,134 @@
+---
+title: AvatarGroup
+description: A stacked group of overlapping avatars with overflow indicator, commonly used to show participants.
+---
+
+## Import
+
+```svelte
+import { AvatarGroup } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { AvatarGroup } from '@delightstack/components';
+
+  const members = [
+    { name: 'Alice', src: '/avatars/alice.jpg' },
+    { name: 'Bob', src: '/avatars/bob.jpg' },
+    { name: 'Charlie', src: '/avatars/charlie.jpg' },
+  ];
+</script>
+
+<AvatarGroup avatars={members} />
+```
+
+## Examples
+
+### Limiting Visible Avatars
+
+When the number of avatars exceeds `max`, a "+N" overflow indicator appears.
+
+```svelte
+<script>
+  const team = [
+    { name: 'Alice', src: '/avatars/alice.jpg' },
+    { name: 'Bob', src: '/avatars/bob.jpg' },
+    { name: 'Charlie', src: '/avatars/charlie.jpg' },
+    { name: 'Diana', src: '/avatars/diana.jpg' },
+    { name: 'Eve', src: '/avatars/eve.jpg' },
+    { name: 'Frank', src: '/avatars/frank.jpg' },
+  ];
+</script>
+
+<AvatarGroup avatars={team} max={3} />
+```
+
+### Different Sizes
+
+```svelte
+<AvatarGroup avatars={team} size="0" max={4} />
+<AvatarGroup avatars={team} size="2" max={4} />
+<AvatarGroup avatars={team} size="3" max={4} />
+```
+
+### Expandable Overflow
+
+When `expandable` is true, clicking the overflow indicator reveals all hidden avatars.
+
+```svelte
+<AvatarGroup
+  avatars={team}
+  max={3}
+  expandable
+/>
+```
+
+### Clickable Avatars
+
+```svelte
+<AvatarGroup
+  avatars={team}
+  onclick={({ avatar, index }) => openProfile(avatar)}
+/>
+```
+
+### With Overflow Click Handler
+
+```svelte
+<AvatarGroup
+  avatars={team}
+  max={3}
+  onoverflowclick={({ remaining }) => showAllParticipants(remaining)}
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<AvatarGroup skeleton skeletonCount={4} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `avatars` | `AvatarData[]` | `[]` | Array of avatar data |
+| `max` | `number` | `5` | Maximum visible avatars before overflow |
+| `size` | `'0' \| '1' \| '2' \| '3' \| '4' \| '5'` | `'1'` | Avatar size (passed to each Avatar) |
+| `overlap` | `number` | `0.25` | Overlap ratio (0-1) |
+| `direction` | `'left' \| 'right'` | `'right'` | Stack direction |
+| `ringColor` | `string` | `'var(--color-bg)'` | Ring/border color around each avatar |
+| `expandable` | `boolean` | `false` | Click overflow to reveal all |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `4` | Number of skeleton circles to show |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onclick` | `{ avatar: AvatarData, index: number }` | Individual avatar clicked |
+| `onoverflowclick` | `{ remaining: AvatarData[] }` | Overflow "+N" indicator clicked |
+
+## Types
+
+```typescript
+interface AvatarData {
+  src?: string;
+  name: string;
+  href?: string;
+}
+```
+
+## Accessibility
+
+- Container has `role="group"` with `aria-label="Avatar group"`
+- Each avatar has an accessible name from the `name` field in `AvatarData`
+- Tooltips display each avatar's name on hover
+- Overflow indicator has `aria-label` (e.g., "3 more avatars")
+- When `expandable` or `onoverflowclick` is set, the overflow indicator has `role="button"` and is keyboard accessible (Enter/Space)
+- Hovered avatar rises slightly with `translateY(-2px)` for visual feedback

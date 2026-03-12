@@ -1,0 +1,161 @@
+---
+title: Toggle
+description: An on/off switch component for binary choices with slide animation, bounce physics, and optional thumb icon.
+---
+
+## Import
+
+```svelte
+import { Toggle } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Toggle } from '@delightstack/components';
+
+  let darkMode = $state(false);
+</script>
+
+<Toggle bind:checked={darkMode} label="Dark Mode" />
+```
+
+## Examples
+
+### Simple Toggle
+
+```svelte
+<Toggle bind:checked={darkMode} label="Dark Mode" />
+```
+
+### With On/Off Labels
+
+Dynamic text that changes based on the toggle state.
+
+```svelte
+<Toggle
+  bind:checked={notifications}
+  on_label="Notifications On"
+  off_label="Notifications Off"
+/>
+```
+
+### Label Position
+
+Place the label before or after the toggle.
+
+```svelte
+<Toggle bind:checked={setting} label="Setting" label_position="start" />
+<Toggle bind:checked={setting} label="Setting" label_position="end" />
+```
+
+### Custom Thumb Icon
+
+Use the `thumb_icon` snippet to render an icon inside the thumb.
+
+```svelte
+<Toggle bind:checked={sound}>
+  {#snippet thumb_icon()}
+    {#if sound}
+      <VolumeIcon />
+    {:else}
+      <MuteIcon />
+    {/if}
+  {/snippet}
+</Toggle>
+```
+
+### Form Integration
+
+Use `name` and `value` for native form submission.
+
+```svelte
+<Toggle
+  bind:checked={premium}
+  name="premium"
+  value="true"
+  label="Enable premium features"
+/>
+```
+
+### Sizes
+
+```svelte
+<Toggle size="0" bind:checked={a} label="Small (32x18)" />
+<Toggle size="1" bind:checked={b} label="Default (44x24)" />
+<Toggle size="2" bind:checked={c} label="Medium (52x28)" />
+<Toggle size="3" bind:checked={d} label="Large (68x36)" />
+```
+
+### Settings List
+
+```svelte
+<script>
+  import { Toggle } from '@delightstack/components';
+
+  let settings = $state({
+    notifications: true,
+    autoSave: true,
+    sounds: true,
+  });
+</script>
+
+<div style="display: flex; flex-direction: column; gap: 1rem;">
+  <Toggle
+    bind:checked={settings.notifications}
+    label="Push Notifications"
+    name="notifications"
+    value="enabled"
+  />
+  <Toggle
+    bind:checked={settings.autoSave}
+    label="Auto-save"
+    name="autosave"
+    value="enabled"
+  />
+  <Toggle
+    bind:checked={settings.sounds}
+    label="Sound Effects"
+    name="sounds"
+    value="enabled"
+  />
+</div>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `checked` | `boolean` | `false` | Toggle state, bindable |
+| `disabled` | `boolean` | `false` | Disable toggle |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Toggle size |
+| `label` | `string` | - | Label text |
+| `label_position` | `'start' \| 'end'` | `'end'` | Label placement relative to toggle |
+| `on_label` | `string` | - | Label text when on |
+| `off_label` | `string` | - | Label text when off |
+| `name` | `string` | - | Form field name for submission |
+| `value` | `string` | - | Form value when checked |
+| `tooltip` | `string` | - | Tooltip text on hover |
+| `dense` | `boolean` | `false` | Tighter label spacing |
+| `comfortable` | `boolean` | `false` | More label spacing |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `thumb_icon` | `Snippet` | - | Custom icon rendered inside the thumb |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ checked: boolean }` | State changed |
+
+## Accessibility
+
+- Hidden native `<input type="checkbox">` for form submission and semantics
+- `role="switch"` on the custom element
+- `aria-checked` reflects toggle state
+- Full keyboard support: Space and Enter to toggle
+- Focus ring visible on keyboard focus (`:focus-visible`)
+- Label associated via `<label>` element
+- Thumb slides with a spring-physics bounce animation (`cubic-bezier(0.34, 1.4, 0.64, 1)`)
+- Press state widens the thumb for tactile feedback

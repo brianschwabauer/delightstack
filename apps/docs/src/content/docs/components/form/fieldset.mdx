@@ -1,0 +1,143 @@
+---
+title: Fieldset
+description: A semantic grouping component for related form fields with support for bordered, card, and filled visual styles, grid layout, and collapsible sections.
+---
+
+## Import
+
+```svelte
+import { Fieldset } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Fieldset, Input } from '@delightstack/components';
+</script>
+
+<Fieldset legend="Personal Information">
+  <Input label="First Name" name="firstName" />
+  <Input label="Last Name" name="lastName" />
+  <Input label="Email" type="email" name="email" />
+</Fieldset>
+```
+
+## Examples
+
+### Visual Styles
+
+Choose between default (no border), bordered, card, and filled styles. Only one style boolean should be set at a time.
+
+```svelte
+<!-- Default: no visible border, just spacing -->
+<Fieldset legend="Default Style">
+  <Input label="Name" name="name" />
+</Fieldset>
+
+<!-- Bordered: subtle border -->
+<Fieldset bordered legend="Account Settings">
+  <Input label="Username" name="username" required />
+  <Input label="Password" type="password" name="password" required />
+</Fieldset>
+
+<!-- Card: elevated with shadow -->
+<Fieldset card legend="Payment Information">
+  <Input label="Card Number" name="cardNumber" />
+  <Input label="Expiry" name="expiry" />
+  <Input label="CVV" name="cvv" />
+</Fieldset>
+
+<!-- Filled: light background -->
+<Fieldset filled legend="Optional Details">
+  <Input label="Nickname" name="nickname" />
+  <Input label="Bio" type="textarea" name="bio" />
+</Fieldset>
+```
+
+### Grid Layout
+
+Use `grid` to arrange children in a CSS grid. Children can span columns with inline styles.
+
+```svelte
+<Fieldset legend="Address" grid columns={2}>
+  <Input label="Street Address" name="street" style="grid-column: 1 / -1" />
+  <Input label="City" name="city" />
+  <Input label="State" name="state" />
+  <Input label="ZIP Code" name="zip" />
+  <Input label="Country" name="country" />
+</Fieldset>
+```
+
+### Collapsible
+
+Click the legend to expand or collapse the content. Bind `collapsed` for controlled state.
+
+```svelte
+<script>
+  import { Fieldset, Input, Toggle } from '@delightstack/components';
+
+  let collapsed = $state(false);
+</script>
+
+<Fieldset legend="Advanced Options" collapsible bind:collapsed filled>
+  <Input label="Custom Domain" name="domain" />
+  <Toggle label="Enable API Access" name="api" />
+</Fieldset>
+```
+
+### With Description and Error
+
+```svelte
+<Fieldset legend="Profile" description="This information is publicly visible">
+  <Input label="Display Name" name="displayName" />
+  <Input label="Bio" type="textarea" name="bio" />
+</Fieldset>
+
+<Fieldset legend="Permissions" required error="Select at least one permission">
+  <Checkbox value="read" label="Read" />
+  <Checkbox value="write" label="Write" />
+</Fieldset>
+```
+
+### Skeleton Loading
+
+```svelte
+<Fieldset skeleton legend="User Profile">
+  <Input label="Name" name="name" skeleton />
+  <Input label="Email" name="email" skeleton />
+</Fieldset>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `legend` | `string` | - | Section title rendered as `<legend>` |
+| `description` | `string` | - | Helper text below legend |
+| `bordered` | `boolean` | `false` | Subtle border style |
+| `card` | `boolean` | `false` | Card style with shadow |
+| `filled` | `boolean` | `false` | Light background fill style |
+| `disabled` | `boolean` | `false` | Disable all child fields natively |
+| `error` | `string` | - | Group-level error message |
+| `required` | `boolean` | `false` | Show required asterisk on legend |
+| `collapsible` | `boolean` | `false` | Allow collapsing the content |
+| `collapsed` | `boolean` | `false` | Collapsed state, bindable |
+| `grid` | `boolean` | `false` | Enable CSS Grid layout for children |
+| `columns` | `number` | `2` | Number of grid columns (when `grid` is true) |
+| `skeleton` | `boolean` | `false` | Show skeleton loading state |
+| `dense` | `boolean` | `false` | Compact spacing between fields |
+| `comfortable` | `boolean` | `false` | Relaxed spacing between fields |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | - | Form field content |
+
+## Accessibility
+
+- Semantic `<fieldset>` and `<legend>` HTML elements
+- `aria-describedby` links to description and error text
+- `aria-required` when `required` is set
+- Collapsible legend is a `<button>` with `aria-expanded`
+- Native `<fieldset disabled>` propagates disabled state to all child form controls
+- Error message uses `role="alert"` for screen reader announcements
+- Required indicator shows red asterisk with `aria-hidden="true"`

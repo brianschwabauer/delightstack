@@ -1,0 +1,197 @@
+---
+title: Radio
+description: A styled radio button for single-selection with dot scale animation, supporting standalone use or coordinated groups via RadioGroup.
+---
+
+## Import
+
+```svelte
+import { Radio, RadioGroup } from '@delightstack/components';
+```
+
+The `RadioGroup` is re-exported from the same module. The context type is also available:
+
+```svelte
+import type { RadioGroupContext } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Radio, RadioGroup } from '@delightstack/components';
+
+  let selectedSize = $state('medium');
+</script>
+
+<RadioGroup bind:value={selectedSize} name="size" label="Size">
+  <Radio value="small" label="Small" />
+  <Radio value="medium" label="Medium" />
+  <Radio value="large" label="Large" />
+</RadioGroup>
+```
+
+## Examples
+
+### Vertical Group (Default)
+
+```svelte
+<script>
+  import { Radio, RadioGroup } from '@delightstack/components';
+
+  let selectedSize = $state('medium');
+</script>
+
+<RadioGroup bind:value={selectedSize} name="size" label="Size">
+  <Radio value="small" label="Small" />
+  <Radio value="medium" label="Medium" />
+  <Radio value="large" label="Large" />
+</RadioGroup>
+```
+
+### Horizontal Layout
+
+```svelte
+<RadioGroup horizontal bind:value={preference} name="preference" label="Preference">
+  <Radio value="yes" label="Yes" />
+  <Radio value="no" label="No" />
+  <Radio value="maybe" label="Maybe" />
+</RadioGroup>
+```
+
+### With Descriptions
+
+```svelte
+<RadioGroup bind:value={plan} name="plan" label="Select a plan">
+  <Radio value="free" label="Free" description="Basic features, forever free" />
+  <Radio value="pro" label="Pro" description="Advanced features, $10/mo" />
+  <Radio value="enterprise" label="Enterprise" description="Custom pricing" />
+</RadioGroup>
+```
+
+### With Error
+
+```svelte
+<RadioGroup
+  bind:value={agreement}
+  required
+  error={!agreement ? 'Please select an option' : ''}
+  name="agreement"
+>
+  <Radio value="agree" label="I agree" />
+  <Radio value="disagree" label="I disagree" />
+</RadioGroup>
+```
+
+### Standalone Radio
+
+A Radio can be used without a RadioGroup by managing `checked` directly.
+
+```svelte
+<script>
+  import { Radio } from '@delightstack/components';
+
+  let selected = $state('option1');
+</script>
+
+<Radio
+  value="option1"
+  checked={selected === 'option1'}
+  onchange={() => selected = 'option1'}
+  label="Option 1"
+/>
+<Radio
+  value="option2"
+  checked={selected === 'option2'}
+  onchange={() => selected = 'option2'}
+  label="Option 2"
+/>
+```
+
+### Sizes
+
+```svelte
+<RadioGroup bind:value={val} name="sizes" size="0" label="Small">
+  <Radio value="a" label="Option A" />
+  <Radio value="b" label="Option B" />
+</RadioGroup>
+
+<RadioGroup bind:value={val} name="sizes2" size="3" label="Large">
+  <Radio value="a" label="Option A" />
+  <Radio value="b" label="Option B" />
+</RadioGroup>
+```
+
+## Props
+
+### Radio
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string` | `''` | Option value (bindable) |
+| `checked` | `boolean` | `false` | Selected state, bindable (for standalone use) |
+| `disabled` | `boolean` | `false` | Disable this option |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Radio size |
+| `label` | `string` | `''` | Label text |
+| `description` | `string` | `''` | Helper text below label |
+| `tooltip` | `string` | `''` | Tooltip text on hover |
+| `dense` | `boolean` | `false` | Tighter label/circle spacing |
+| `comfortable` | `boolean` | `false` | More label/circle spacing |
+| `id` | `string` | auto | Element ID |
+| `name` | `string` | `''` | Form field name |
+| `class` | `string` | `''` | Additional CSS classes |
+
+### RadioGroup
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string` | `''` | Selected value, bindable |
+| `name` | `string` | `''` | Shared group name |
+| `disabled` | `boolean` | `false` | Disable all radio options |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size for all child radios |
+| `horizontal` | `boolean` | `false` | Horizontal layout |
+| `label` | `string` | `''` | Group label |
+| `error` | `string` | `''` | Group-level error message |
+| `required` | `boolean` | `false` | Selection is required |
+| `dense` | `boolean` | `false` | Compact spacing between options |
+| `comfortable` | `boolean` | `false` | Relaxed spacing between options |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | - | Radio children |
+
+## Events
+
+### Radio
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ value: string }` | Selection changed |
+
+### RadioGroup
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ value: string }` | Selection changed |
+
+## Types
+
+```typescript
+interface RadioGroupContext {
+  name: string;
+  value: string;
+  disabled: boolean;
+  size: '0' | '1' | '2' | '3';
+  select: (value: string) => void;
+}
+```
+
+## Accessibility
+
+- Hidden native `<input type="radio">` for form submission and semantics
+- `aria-checked` reflects selection state
+- `aria-describedby` for description text
+- `aria-required` when required
+- RadioGroup rendered as `<div role="radiogroup">` with `aria-labelledby`
+- Full keyboard navigation: Arrow keys move between options within a group, Tab moves between groups
+- Focus ring visible only on keyboard focus (`:focus-visible`)
+- Selection dot animates with `scale()` for satisfying visual feedback

@@ -1,0 +1,159 @@
+---
+title: FileUpload
+description: A file upload component with drag-and-drop support, image previews, and three visual variants -- dropzone, compact, and avatar.
+---
+
+## Import
+
+```svelte
+import { FileUpload } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { FileUpload } from '@delightstack/components';
+
+  let files = $state<File[]>([]);
+</script>
+
+<FileUpload bind:files accept="image/*" label="Upload images" />
+```
+
+## Examples
+
+### Dropzone (Default)
+
+A large dashed-border area that accepts drag-and-drop or click-to-browse.
+
+```svelte
+<script>
+  import { FileUpload } from '@delightstack/components';
+
+  let files = $state<File[]>([]);
+</script>
+
+<FileUpload
+  bind:files
+  accept="image/*"
+  multiple
+  label="Upload images"
+/>
+```
+
+### Compact Variant
+
+A button-style trigger with a file list rendered below.
+
+```svelte
+<FileUpload
+  compact
+  bind:files
+  accept="image/*,application/pdf"
+  multiple
+  maxFiles={5}
+/>
+```
+
+### Avatar Variant
+
+A circular upload area for profile pictures. Automatically single-file only.
+
+```svelte
+<FileUpload
+  avatar
+  accept="image/*"
+  maxSize={5 * 1024 * 1024}
+  onselect={({ files }) => updateAvatar(files[0])}
+/>
+```
+
+### File Validation
+
+Validate file type, size, and count. Errors are reported per file via the `onerror` callback.
+
+```svelte
+<FileUpload
+  bind:files
+  accept=".pdf,.doc,.docx"
+  maxSize={10 * 1024 * 1024}
+  maxFiles={3}
+  multiple
+  onerror={({ file, error }) => console.log(error)}
+/>
+```
+
+### Custom File Item Rendering
+
+Use the `fileItem` snippet to customize how each file appears in the list. Useful for showing upload progress.
+
+```svelte
+<script>
+  import { FileUpload, Progress } from '@delightstack/components';
+
+  let files = $state<File[]>([]);
+  let progress = $state<Record<string, number>>({});
+</script>
+
+<FileUpload bind:files multiple>
+  {#snippet fileItem({ file, index, remove })}
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span>{file.name}</span>
+      <Progress circular={false} value={progress[file.name] ?? 0} size="0" />
+      <button onclick={remove}>Remove</button>
+    </div>
+  {/snippet}
+</FileUpload>
+```
+
+### With Error
+
+```svelte
+<FileUpload
+  bind:files
+  accept="image/*"
+  error="Please upload at least one image"
+/>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `files` | `File[]` | `[]` | Selected files, bindable |
+| `accept` | `string` | - | Accepted file types (e.g. `'image/*'`, `'.pdf,.doc'`) |
+| `multiple` | `boolean` | `false` | Allow multiple files |
+| `maxSize` | `number` | - | Max file size in bytes |
+| `maxFiles` | `number` | - | Max number of files |
+| `disabled` | `boolean` | `false` | Disable upload |
+| `preview` | `boolean` | `true` | Show image thumbnails in file list |
+| `dropzone` | `boolean` | `true` | Large drop target variant (default) |
+| `compact` | `boolean` | `false` | Button-style trigger variant |
+| `avatar` | `boolean` | `false` | Circular avatar upload variant |
+| `size` | `'0' \| '1' \| '2'` | `'1'` | Component size |
+| `skeleton` | `boolean` | `false` | Show skeleton loading state |
+| `label` | `string` | - | Instruction text / accessible label |
+| `error` | `string` | - | Global error message |
+| `dense` | `boolean` | `false` | Compact internal padding |
+| `comfortable` | `boolean` | `false` | Relaxed internal padding |
+| `id` | `string` | auto | Element ID |
+| `name` | `string` | - | Form field name |
+| `class` | `string` | `''` | Additional CSS classes |
+| `fileItem` | `Snippet<[{ file, index, remove }]>` | - | Custom file list item rendering |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onselect` | `{ files: File[] }` | Files selected (via click or drop) |
+| `onremove` | `{ file: File, index: number }` | File removed from list |
+| `onerror` | `{ file: File, error: string }` | File validation failed |
+
+## Accessibility
+
+- Keyboard navigation: Tab to focus, Enter/Space to open file picker
+- `aria-label` on the drop zone describes the action
+- Each file in the list has a labeled remove button
+- Focus management after file selection
+- Drag-and-drop provides visual feedback with border and background color changes

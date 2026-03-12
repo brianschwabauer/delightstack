@@ -1,0 +1,157 @@
+---
+title: Chart
+description: A data visualization component supporting line, area, bar, horizontal bar, pie, and donut chart types.
+---
+
+## Import
+
+```svelte
+import { Chart } from '@delightstack/components';
+```
+
+The `ChartData` and `Dataset` types are also exported:
+
+```svelte
+import type { ChartData, Dataset } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Chart } from '@delightstack/components';
+
+  const data = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+    datasets: [
+      { label: 'Revenue', data: [12, 19, 3, 5, 2, 3] },
+    ],
+  };
+</script>
+
+<Chart data={data} />
+```
+
+## Examples
+
+### Line Chart
+
+```svelte
+<script>
+  const salesData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+    datasets: [
+      { label: '2025', data: [12, 19, 3, 5, 2, 3] },
+      { label: '2024', data: [8, 15, 7, 8, 4, 6] },
+    ],
+  };
+</script>
+
+<Chart type="line" data={salesData} height={250} />
+```
+
+### Area Chart with Data Points
+
+```svelte
+<Chart type="area" data={salesData} showPoints />
+```
+
+### Stacked Bar Chart
+
+```svelte
+<Chart type="bar" data={salesData} stacked />
+```
+
+### Horizontal Bar Chart
+
+```svelte
+<Chart type="horizontal-bar" data={salesData} height={300} />
+```
+
+### Donut Chart
+
+```svelte
+<Chart
+  type="donut"
+  data={{
+    labels: ['Desktop', 'Mobile', 'Tablet'],
+    datasets: [{ label: 'Traffic', data: [65, 30, 5] }],
+  }}
+  innerRadius={0.6}
+  height={300}
+/>
+```
+
+### Pie Chart
+
+```svelte
+<Chart
+  type="pie"
+  data={{
+    labels: ['Chrome', 'Firefox', 'Safari', 'Edge'],
+    datasets: [{ label: 'Browser Share', data: [65, 15, 12, 8] }],
+  }}
+/>
+```
+
+### Custom Colors
+
+```svelte
+<Chart
+  type="bar"
+  data={salesData}
+  colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']}
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<Chart type="bar" skeleton height={300} />
+<Chart type="pie" skeleton height={300} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `type` | `'line' \| 'area' \| 'bar' \| 'horizontal-bar' \| 'pie' \| 'donut'` | `'line'` | Chart type |
+| `data` | `ChartData` | required | Data to display |
+| `height` | `number` | `300` | Chart height in pixels |
+| `colors` | `string[]` | - | Custom color palette (overrides 8-color default) |
+| `showGrid` | `boolean` | `true` | Show grid lines |
+| `showLegend` | `boolean` | `true` | Show legend |
+| `showTooltip` | `boolean` | `true` | Enable interactive tooltips |
+| `animate` | `boolean` | `true` | Animate on initial load and data changes |
+| `stacked` | `boolean` | `false` | Stack datasets (bar, area) |
+| `curved` | `boolean` | `true` | Smooth curves for line/area charts |
+| `showPoints` | `boolean` | `false` | Show data points on line/area charts |
+| `innerRadius` | `number` | `0` | Inner radius ratio for donut (0 = pie, >0 = donut) |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Types
+
+```typescript
+interface ChartData {
+  labels: string[];
+  datasets: Dataset[];
+}
+
+interface Dataset {
+  label: string;
+  data: number[];
+  color?: string;
+}
+```
+
+## Accessibility
+
+- SVG chart has `role="img"` with an `aria-label` describing the chart type
+- Legend items are interactive buttons for toggling dataset visibility
+- Tooltips appear on hover showing exact values and dataset labels
+- Click legend items to toggle datasets on or off (at least one dataset must remain visible)
+- Responsive width via `resizeObserver` attachment -- height is fixed via the `height` prop
+- Empty state displays a "No data available" message
+- Respects `prefers-reduced-motion` by disabling all animations

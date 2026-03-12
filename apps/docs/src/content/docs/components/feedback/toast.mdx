@@ -1,0 +1,235 @@
+---
+title: Toast
+description: Non-blocking toast notifications created programmatically via the toast() function and rendered by a Toaster container component.
+---
+
+## Import
+
+```svelte
+import { Toaster, toast } from '@delightstack/components';
+```
+
+The `Toaster` component is mounted once in your root layout. The `toast` function is called anywhere to create notifications.
+
+```svelte
+import type { ToastOptions } from '@delightstack/components';
+```
+
+## Basic Usage
+
+Place `<Toaster />` once in your root layout, then call `toast()` from anywhere.
+
+```svelte
+<script>
+  import { Toaster, toast } from '@delightstack/components';
+</script>
+
+<Toaster />
+
+<button onclick={() => toast('Message saved')}>
+  Show Toast
+</button>
+```
+
+## Examples
+
+### Variant Shortcuts
+
+```svelte
+<script>
+  import { toast } from '@delightstack/components';
+</script>
+
+<button onclick={() => toast('A general notification')}>Default</button>
+<button onclick={() => toast.success('File uploaded successfully')}>Success</button>
+<button onclick={() => toast.error('Failed to save changes')}>Error</button>
+<button onclick={() => toast.warning('You have unsaved changes')}>Warning</button>
+```
+
+### With Action Button
+
+Toasts with an action automatically get 2 seconds of extra display time.
+
+```svelte
+<script>
+  import { toast } from '@delightstack/components';
+
+  function handleDelete() {
+    deleteItem();
+    toast('Item deleted', {
+      action: {
+        label: 'Undo',
+        onclick: () => restoreItem(),
+      },
+    });
+  }
+</script>
+
+<button onclick={handleDelete}>Delete Item</button>
+```
+
+### Promise Toast
+
+Track async operations with automatic loading, success, and error states.
+
+```svelte
+<script>
+  import { toast } from '@delightstack/components';
+
+  async function handleUpload() {
+    toast.promise(uploadFile(), {
+      loading: 'Uploading...',
+      success: 'Upload complete!',
+      error: (err) => `Upload failed: ${err.message}`,
+    });
+  }
+</script>
+
+<button onclick={handleUpload}>Upload</button>
+```
+
+### Dynamic Promise Messages
+
+The success and error messages can be functions that receive the result or error.
+
+```svelte
+<script>
+  import { toast } from '@delightstack/components';
+</script>
+
+<button onclick={() => toast.promise(saveData(), {
+  loading: 'Saving...',
+  success: (result) => `Saved ${result.filename}`,
+  error: (err) => `Failed: ${err.message}`,
+})}>
+  Save
+</button>
+```
+
+### Persistent Toast
+
+Set `persistent: true` to prevent auto-dismiss. The toast stays until manually dismissed.
+
+```svelte
+<button onclick={() => toast.warning('Session expiring soon', { persistent: true })}>
+  Show Persistent Warning
+</button>
+```
+
+### Custom Duration
+
+```svelte
+<button onclick={() => toast('Quick notice', { duration: 2000 })}>
+  2 Second Toast
+</button>
+
+<button onclick={() => toast('Longer notice', { duration: 8000 })}>
+  8 Second Toast
+</button>
+```
+
+### Dismissing Toasts
+
+```svelte
+<script>
+  import { toast } from '@delightstack/components';
+
+  function showAndDismiss() {
+    const id = toast('This will be dismissed programmatically');
+    setTimeout(() => toast.dismiss(id), 2000);
+  }
+</script>
+
+<button onclick={showAndDismiss}>Show then Dismiss</button>
+<button onclick={() => toast.dismiss()}>Clear All Toasts</button>
+```
+
+## Toaster Props
+
+The `<Toaster />` component accepts these configuration props.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `position` | `Position` | `'bottom-right'` | Screen position for the toast stack |
+| `max_visible` | `number` | `5` | Maximum visible toasts before queuing |
+| `gap` | `number` | `8` | Spacing between toasts (px) |
+| `width` | `number` | `360` | Toast width (px) |
+| `duration` | `number` | `4000` | Default auto-dismiss duration (ms) |
+| `progress` | `boolean` | `true` | Show countdown progress bar by default |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Toast Options
+
+Options passed to `toast()`, `toast.success()`, `toast.error()`, and `toast.warning()`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `duration` | `number` | `4000` | Auto-dismiss time in ms |
+| `dismissible` | `boolean` | `true` | Show close button |
+| `success` | `boolean` | `false` | Success variant |
+| `warning` | `boolean` | `false` | Warning variant |
+| `error` | `boolean` | `false` | Error variant |
+| `action` | `{ label: string; onclick: () => void }` | - | Action button in the toast |
+| `persistent` | `boolean` | `false` | Never auto-dismiss |
+| `progress` | `boolean` | `true` | Show countdown progress bar |
+| `id` | `string` | auto-generated | Custom toast ID |
+
+## Types
+
+```typescript
+type Position =
+  | 'top-left' | 'top-center' | 'top-right'
+  | 'bottom-left' | 'bottom-center' | 'bottom-right';
+
+interface ToastOptions {
+  duration?: number;
+  dismissible?: boolean;
+  success?: boolean;
+  warning?: boolean;
+  error?: boolean;
+  action?: { label: string; onclick: () => void };
+  persistent?: boolean;
+  progress?: boolean;
+  id?: string;
+}
+```
+
+## API Reference
+
+### `toast(message, options?): string`
+
+Show a default toast. Returns the toast ID.
+
+### `toast.success(message, options?): string`
+
+Show a success toast with a checkmark icon.
+
+### `toast.error(message, options?): string`
+
+Show an error toast with an X icon.
+
+### `toast.warning(message, options?): string`
+
+Show a warning toast with an alert icon.
+
+### `toast.promise<T>(promise, messages, options?): Promise<T>`
+
+Track a promise through loading, success, and error states. Returns the original promise.
+
+### `toast.dismiss(id?): void`
+
+Dismiss a specific toast by ID, or all toasts if no ID is provided.
+
+## Accessibility
+
+- Uses `role="status"` for default and success toasts (polite announcement)
+- Uses `role="alert"` for warning and error toasts (assertive announcement)
+- Each toast is an `aria-live` region so screen readers announce new toasts
+- Close button has `aria-label="Dismiss notification"`
+- Action button is keyboard-focusable
+- `Escape` key dismisses the most recent toast
+- Focus does not move to toasts automatically (non-intrusive)
+- Supports swipe-to-dismiss on touch devices
+- Hover over the toast stack pauses all countdown timers
+- Respects `prefers-reduced-motion` (disables slide/scale animations, uses opacity-only transitions)

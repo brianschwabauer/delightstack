@@ -1,36 +1,69 @@
 ---
-title: Welcome to Starlight
-description: Get started building your docs site with Starlight.
+title: DelightStack
+description: A polished, opinionated Svelte 5 component library focused on delightful user experiences.
 template: splash
 hero:
-  tagline: Congrats on setting up a new Starlight project!
-  image:
-    file: ../../assets/houston.webp
+  tagline: A polished, opinionated Svelte 5 component library focused on delightful user experiences. Every component is crafted with attention to detail, thoughtful micro-animations, and a cohesive visual language.
   actions:
-    - text: Example Guide
-      link: /guides/example/
+    - text: Get Started
+      link: /getting-started/introduction/
       icon: right-arrow
-    - text: Read the Starlight docs
-      link: https://starlight.astro.build
-      icon: external
+    - text: Components
+      link: /components/overview/
+      icon: open-book
       variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Next steps
+## Why DelightStack?
 
 <CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
+	<Card title="55 Components" icon="puzzle">
+		A comprehensive library covering actions, display, feedback, forms, media, and navigation — everything you need to build modern web apps.
 	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
+	<Card title="Svelte 5 Native" icon="rocket">
+		Built from the ground up with Svelte 5 runes (`$props`, `$state`, `$derived`, `$effect`), snippets, and the `{@attach}` directive.
 	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
+	<Card title="Dark Mode Built-in" icon="moon">
+		Every component supports light and dark mode out of the box using CSS `light-dark()` — no JavaScript theme switching required.
 	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
+	<Card title="Accessible" icon="approve-check">
+		ARIA attributes, keyboard navigation, focus management, and `prefers-reduced-motion` support are built into every component.
+	</Card>
+	<Card title="Design System Included" icon="seti:css">
+		A complete set of CSS custom properties for colors, spacing, typography, shadows, and animations — fully customizable.
+	</Card>
+	<Card title="Zero Runtime Dependencies" icon="star">
+		Components use plain CSS with modern features like `color-mix()`, container queries, and relative color syntax. No CSS-in-JS overhead.
+	</Card>
+</CardGrid>
+
+## Component Categories
+
+<CardGrid>
+	<Card title="Actions" icon="right-caret">
+		Buttons, modals, popovers, context menus, command palettes, and theme toggles.
+		[Browse Actions →](/components/actions/button/)
+	</Card>
+	<Card title="Display" icon="right-caret">
+		Avatars, tables, calendars, charts, timelines, trees, accordions, and more.
+		[Browse Display →](/components/display/accordion/)
+	</Card>
+	<Card title="Feedback" icon="right-caret">
+		Toast notifications, progress indicators, callouts, and confetti celebrations.
+		[Browse Feedback →](/components/feedback/callout/)
+	</Card>
+	<Card title="Form" icon="right-caret">
+		Inputs, selects, checkboxes, toggles, file uploads, ratings, and form validation.
+		[Browse Form →](/components/form/input/)
+	</Card>
+	<Card title="Media" icon="right-caret">
+		Image galleries, carousels, video players, maps, 360° panoramas, and PDF viewers.
+		[Browse Media →](/components/media/carousel/)
+	</Card>
+	<Card title="Navigation" icon="right-caret">
+		Tabs, drawers, menus, breadcrumbs, pagination, steps, and bottom sheets.
+		[Browse Navigation →](/components/navigation/tabs/)
 	</Card>
 </CardGrid>

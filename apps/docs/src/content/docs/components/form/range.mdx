@@ -1,0 +1,161 @@
+---
+title: Range
+description: A slider input for selecting a value or range, with support for two-thumb range mode, tick marks, custom labels, and value tooltips.
+---
+
+## Import
+
+```svelte
+import { Range } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Range } from '@delightstack/components';
+
+  let volume = $state(50);
+</script>
+
+<Range bind:value={volume} label="Volume" />
+```
+
+## Examples
+
+### Single Value with Display
+
+```svelte
+<script>
+  import { Range } from '@delightstack/components';
+
+  let volume = $state(50);
+</script>
+
+<Range bind:value={volume} show_value label="Volume" />
+```
+
+### Range Selection (Two Thumbs)
+
+Set `range` to enable two thumbs. The value becomes a `[number, number]` tuple.
+
+```svelte
+<script>
+  import { Range } from '@delightstack/components';
+
+  let priceRange = $state<[number, number]>([100, 500]);
+</script>
+
+<Range
+  range
+  bind:value={priceRange}
+  min={0}
+  max={1000}
+  step={50}
+  format_value={(v) => `$${v}`}
+  show_value
+  label="Price range"
+/>
+```
+
+### With Tick Marks
+
+```svelte
+<Range
+  bind:value={quality}
+  min={1}
+  max={5}
+  step={1}
+  show_ticks
+  label="Quality"
+/>
+```
+
+### Custom Tick Labels
+
+Provide an array of labels that align with each tick position.
+
+```svelte
+<Range
+  bind:value={difficulty}
+  min={0}
+  max={100}
+  step={25}
+  show_ticks
+  tick_labels={['Low', 'Medium', 'High', 'Very High', 'Max']}
+  label="Difficulty"
+/>
+```
+
+### Value Formatting
+
+Use `format_value` to customize how the value is displayed.
+
+```svelte
+<Range
+  bind:value={price}
+  min={0}
+  max={1000}
+  show_value
+  format_value={(v) => `$${v}`}
+  label="Budget"
+/>
+
+<Range
+  bind:value={opacity}
+  min={0}
+  max={100}
+  show_value
+  format_value={(v) => `${v}%`}
+  label="Opacity"
+/>
+```
+
+### Sizes
+
+```svelte
+<Range size="0" bind:value={a} label="Small" />
+<Range size="1" bind:value={b} label="Default" />
+<Range size="2" bind:value={c} label="Medium" />
+<Range size="3" bind:value={d} label="Large" />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `number \| [number, number]` | `0` | Current value, bindable. Tuple for range mode |
+| `min` | `number` | `0` | Minimum value |
+| `max` | `number` | `100` | Maximum value |
+| `step` | `number` | `1` | Step increment |
+| `range` | `boolean` | `false` | Enable two-thumb range selection |
+| `disabled` | `boolean` | `false` | Disable slider |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Slider size |
+| `show_value` | `boolean` | `false` | Show value tooltip above thumb |
+| `show_ticks` | `boolean` | `false` | Show step tick marks on track |
+| `tick_labels` | `string[]` | - | Custom labels at tick positions |
+| `format_value` | `(n: number) => string` | - | Value formatter for display |
+| `label` | `string` | - | Accessible label text |
+| `tooltip` | `string` | - | Tooltip on the overall component |
+| `dense` | `boolean` | `false` | Tighter vertical spacing |
+| `comfortable` | `boolean` | `false` | More vertical spacing |
+| `id` | `string` | auto | Element ID |
+| `name` | `string` | - | Form field name |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ value: number \| [number, number] }` | Value changed (on release) |
+| `oninput` | `{ value: number \| [number, number] }` | Value changing (during drag) |
+
+## Accessibility
+
+- Uses native `<input type="range">` elements for each thumb
+- `aria-valuenow`, `aria-valuemin`, `aria-valuemax` set on each thumb
+- `aria-label` from the `label` prop
+- Full keyboard navigation: Arrow keys adjust by step, Home/End jump to min/max
+- Range mode: two inputs with appropriate min/max constraints (thumbs cannot cross)
+- Focus ring on active thumb via `:focus-visible`
+- Hover and active states scale the thumb for visual feedback

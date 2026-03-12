@@ -1,0 +1,174 @@
+---
+title: Accordion
+description: A vertically stacked set of collapsible sections built on semantic details/summary elements with smooth animations.
+---
+
+## Import
+
+```svelte
+import { Accordion, AccordionItem } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Accordion, AccordionItem } from '@delightstack/components';
+
+  let openSection = $state('faq-1');
+</script>
+
+<Accordion bind:value={openSection}>
+  <AccordionItem value="faq-1" title="How do I get started?">
+    <p>Getting started is easy! Simply create an account and follow the onboarding steps.</p>
+  </AccordionItem>
+
+  <AccordionItem value="faq-2" title="What payment methods do you accept?">
+    <p>We accept all major credit cards, PayPal, and bank transfers.</p>
+  </AccordionItem>
+
+  <AccordionItem value="faq-3" title="How can I contact support?">
+    <p>You can reach our support team via email at support@example.com or through the in-app chat.</p>
+  </AccordionItem>
+</Accordion>
+```
+
+## Examples
+
+### Multiple Panels Open
+
+Allow multiple sections to be expanded simultaneously. When `multiple` is true, `value` is an array of strings.
+
+```svelte
+<script>
+  let openSections = $state(['section-1']);
+</script>
+
+<Accordion multiple bind:value={openSections}>
+  <AccordionItem value="section-1" title="First Section">
+    <p>Content for the first section.</p>
+  </AccordionItem>
+  <AccordionItem value="section-2" title="Second Section">
+    <p>Content for the second section.</p>
+  </AccordionItem>
+  <AccordionItem value="section-3" title="Third Section">
+    <p>Content for the third section.</p>
+  </AccordionItem>
+</Accordion>
+```
+
+### Always One Open
+
+Prevent all sections from being collapsed by setting `collapsible` to `false`.
+
+```svelte
+<Accordion collapsible={false} value="first">
+  <AccordionItem value="first" title="Always Visible">
+    <p>At least one section is always open.</p>
+  </AccordionItem>
+  <AccordionItem value="second" title="Another Section">
+    <p>Click to switch which section is open.</p>
+  </AccordionItem>
+</Accordion>
+```
+
+### Custom Trigger
+
+Use the `trigger` snippet to replace the default title rendering with custom content.
+
+```svelte
+<AccordionItem value="settings">
+  {#snippet trigger()}
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span>Advanced Settings</span>
+    </div>
+  {/snippet}
+
+  <p>Custom trigger content for the settings panel.</p>
+</AccordionItem>
+```
+
+### Dense and Comfortable Spacing
+
+```svelte
+<!-- Compact spacing -->
+<Accordion dense>
+  <AccordionItem value="a" title="Compact Item">
+    <p>Less padding for dense layouts.</p>
+  </AccordionItem>
+</Accordion>
+
+<!-- Relaxed spacing -->
+<Accordion comfortable>
+  <AccordionItem value="a" title="Spacious Item">
+    <p>More padding for a relaxed feel.</p>
+  </AccordionItem>
+</Accordion>
+```
+
+### Skeleton Loading
+
+```svelte
+<Accordion skeleton skeletonCount={4} />
+```
+
+### Nested Accordions
+
+```svelte
+<script>
+  let outerSection = $state('parent');
+  let innerSection = $state('');
+</script>
+
+<Accordion bind:value={outerSection}>
+  <AccordionItem value="parent" title="Parent Section">
+    <Accordion bind:value={innerSection}>
+      <AccordionItem value="child-1" title="Child Section">
+        <p>Nested content</p>
+      </AccordionItem>
+    </Accordion>
+  </AccordionItem>
+</Accordion>
+```
+
+## Props
+
+### Accordion
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string \| string[]` | `''` | Currently open item(s), bindable |
+| `multiple` | `boolean` | `false` | Allow multiple panels open simultaneously |
+| `collapsible` | `boolean` | `true` | Allow closing all items |
+| `disabled` | `boolean` | `false` | Disable all items |
+| `dense` | `boolean` | `false` | Compact header/content padding |
+| `comfortable` | `boolean` | `false` | Relaxed header/content padding |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `3` | Number of skeleton items to render |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | - | AccordionItem children |
+
+### AccordionItem
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string` | required | Unique identifier for this item |
+| `title` | `string` | `''` | Header text shown in the summary |
+| `disabled` | `boolean` | `false` | Disable this individual item |
+| `trigger` | `Snippet` | - | Custom header content replacing title text |
+| `children` | `Snippet` | - | Panel content |
+
+## Accessibility
+
+- Uses semantic `<details>`/`<summary>` elements for native accessibility
+- `aria-expanded` on each `<summary>` reflects its open/closed state
+- `aria-controls` links each `<summary>` to its content panel
+- `role="region"` on each content panel with `aria-labelledby`
+- **Tab** moves focus between summary elements
+- **Arrow Down / Arrow Up** moves focus to next/previous summary
+- **Enter / Space** toggles the focused item
+- **Home** moves focus to the first summary
+- **End** moves focus to the last summary
+- Disabled items are excluded from arrow key navigation
+- Respects `prefers-reduced-motion` for chevron transitions

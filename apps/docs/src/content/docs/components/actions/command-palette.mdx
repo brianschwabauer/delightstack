@@ -1,0 +1,221 @@
+---
+title: CommandPalette
+description: A keyboard-driven command interface with fuzzy search, recent commands tracking, category grouping, and match highlighting.
+---
+
+## Import
+
+```svelte
+import { CommandPalette } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { CommandPalette } from '@delightstack/components';
+
+  let paletteOpen = $state(false);
+
+  const commands = [
+    {
+      id: 'settings',
+      title: 'Settings',
+      description: 'Open application settings',
+      category: 'Navigation',
+      onselect: () => goto('/settings')
+    }
+  ];
+</script>
+
+<CommandPalette bind:open={paletteOpen} {commands} />
+```
+
+The palette automatically registers a global `Ctrl/Cmd + K` keyboard shortcut to toggle visibility.
+
+## Examples
+
+### Full Command Setup
+
+```svelte
+<script>
+  import { CommandPalette } from '@delightstack/components';
+  import { goto } from '$app/navigation';
+  import PlusIcon from '~icons/mdi/plus';
+  import SettingsIcon from '~icons/mdi/cog';
+  import ThemeIcon from '~icons/mdi/brightness-6';
+
+  let paletteOpen = $state(false);
+
+  const commands = [
+    {
+      id: 'new-project',
+      title: 'New Project',
+      description: 'Create a new project',
+      category: 'Projects',
+      icon: PlusIcon,
+      shortcut: ['Ctrl', 'N'],
+      onselect: () => goto('/projects/new')
+    },
+    {
+      id: 'settings',
+      title: 'Settings',
+      description: 'Open application settings',
+      category: 'Navigation',
+      icon: SettingsIcon,
+      shortcut: ['Ctrl', ','],
+      onselect: () => goto('/settings')
+    },
+    {
+      id: 'theme-toggle',
+      title: 'Toggle Theme',
+      description: 'Switch between light and dark mode',
+      category: 'Preferences',
+      icon: ThemeIcon,
+      keywords: ['dark', 'light', 'appearance'],
+      onselect: () => toggleTheme()
+    }
+  ];
+</script>
+
+<CommandPalette bind:open={paletteOpen} {commands} />
+```
+
+### Compact / Dense Mode
+
+Use `dense` for tighter spacing in smaller interfaces.
+
+```svelte
+<CommandPalette bind:open={paletteOpen} {commands} dense />
+```
+
+### Without Category Grouping
+
+Disable grouping to show a flat list of results.
+
+```svelte
+<CommandPalette bind:open={paletteOpen} {commands} groupBy="none" />
+```
+
+### With Selection Callback
+
+Track when any command is selected using the `onselect` prop.
+
+```svelte
+<CommandPalette
+  bind:open={paletteOpen}
+  {commands}
+  onselect={(command) => {
+    analytics.track('command_used', { id: command.id });
+  }}
+/>
+```
+
+### Promise-Aware Commands
+
+When a command's `onselect` returns a `Promise`, a spinner appears while executing. On success, the palette closes. On failure, it stays open.
+
+```svelte
+const commands = [
+  {
+    id: 'sync',
+    title: 'Sync Data',
+    description: 'Synchronize with the server',
+    onselect: async () => {
+      await api.syncAll();
+    }
+  }
+];
+```
+
+### Custom Placeholder
+
+```svelte
+<CommandPalette
+  bind:open={paletteOpen}
+  {commands}
+  placeholder="Search commands, pages, or settings..."
+/>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `open` | `boolean` | `false` | Controls visibility (`$bindable()`) |
+| `commands` | `CommandOption[]` | `[]` | Available commands to search |
+| `placeholder` | `string` | `'Type a command or search...'` | Input placeholder text |
+| `recentLimit` | `number` | `5` | Number of recent items to show when input is empty |
+| `groupBy` | `'category' \| 'none'` | `'category'` | How to group results |
+| `dense` | `boolean` | `false` | Compact result item spacing |
+| `onselect` | `(command: CommandOption) => void` | `undefined` | Called when any command is selected |
+| `id` | `string` | auto-generated | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onselect` | `CommandOption` | Fires when a command is selected, before executing `command.onselect` |
+
+## Types
+
+```typescript
+interface CommandOption {
+  /** Unique identifier for the command */
+  id: string;
+
+  /** Display title of the command */
+  title: string;
+
+  /** Optional description shown below the title */
+  description?: string;
+
+  /** Category for grouping commands */
+  category?: string;
+
+  /** Optional icon component */
+  icon?: Component;
+
+  /** Keyboard shortcut keys to display (e.g. ['Ctrl', 'K']) */
+  shortcut?: string[];
+
+  /** Additional search keywords */
+  keywords?: string[];
+
+  /** Whether the command is disabled */
+  disabled?: boolean;
+
+  /** Called when the command is selected */
+  onselect: () => void | Promise<void>;
+}
+```
+
+## Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| `Ctrl/Cmd + K` | Toggle open (global shortcut) |
+| `Arrow Up` / `Arrow Down` | Navigate results |
+| `Enter` | Execute selected command |
+| `Escape` | Close palette |
+
+## Fuzzy Search
+
+The palette uses a built-in fuzzy search engine that scores matches across `title`, `description`, `category`, and `keywords` fields. Matching characters in the title are highlighted in the results.
+
+Scoring priority: exact match > starts with > word boundary match > contains > fuzzy character match. Title matches are weighted highest, followed by keywords, description, and category.
+
+## Recent Commands
+
+Recently used commands are tracked in memory and shown when the input is empty. The list is sorted by recency and limited by the `recentLimit` prop.
+
+## Accessibility
+
+- ARIA combobox pattern (`role="combobox"` on input, `role="listbox"` on results)
+- `aria-activedescendant` tracks the highlighted result
+- `aria-expanded` reflects whether results are visible
+- `aria-autocomplete="list"` on the input
+- `role="option"` with `aria-selected` and `aria-disabled` on each result item
+- Focus trap keeps focus within the palette while open
+- Input is always focused while the palette is open

@@ -1,0 +1,180 @@
+---
+title: Modal
+description: A polished dialog overlay with smooth animations, focus trapping, backdrop blur, and crossfade transitions.
+---
+
+## Import
+
+```svelte
+import { Modal } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Modal, Button } from '@delightstack/components';
+
+  let showModal = $state(false);
+</script>
+
+<Button onclick={() => showModal = true}>
+  Open Modal
+</Button>
+
+<Modal bind:open={showModal} title="Example">
+  <p>Modal content goes here.</p>
+</Modal>
+```
+
+## Examples
+
+### With Footer Actions
+
+```svelte
+<script>
+  import { Modal, Button } from '@delightstack/components';
+
+  let showModal = $state(false);
+
+  async function handleConfirm() {
+    await api.performAction();
+    showModal = false;
+  }
+</script>
+
+<Button onclick={() => showModal = true}>Open</Button>
+
+<Modal bind:open={showModal} title="Confirm Action">
+  <p>Are you sure you want to proceed?</p>
+
+  {#snippet footer()}
+    <Button transparent onclick={() => showModal = false}>Cancel</Button>
+    <Button onclick={handleConfirm}>Confirm</Button>
+  {/snippet}
+</Modal>
+```
+
+### Custom Header
+
+Replace the entire header with a custom snippet.
+
+```svelte
+<Modal bind:open={showSettings}>
+  {#snippet header()}
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <span>Configure your preferences</span>
+    </div>
+  {/snippet}
+
+  <!-- Settings content -->
+</Modal>
+```
+
+### Header Start and End Slots
+
+Add content before the title or after it (before the close button).
+
+```svelte
+<Modal bind:open={showModal} title="Document">
+  {#snippet headerStart()}
+    <span class="status-badge">Draft</span>
+  {/snippet}
+
+  {#snippet headerEnd()}
+    <Button transparent dense icon aria-label="Share">
+      <!-- ShareIcon -->
+    </Button>
+  {/snippet}
+
+  <p>Document content...</p>
+</Modal>
+```
+
+### Custom Width and Height
+
+Override the default sizing with explicit CSS values.
+
+```svelte
+<Modal bind:open={showModal} title="Wide Modal" width="800px" height="600px">
+  <p>This modal has a custom size.</p>
+</Modal>
+```
+
+### Non-Closable Modal
+
+Prevent closing via Escape key and backdrop click for required flows.
+
+```svelte
+<Modal bind:open={showModal} title="Required Step" closable={false}>
+  <p>You must complete this step before continuing.</p>
+  <Button onclick={() => showModal = false}>Done</Button>
+</Modal>
+```
+
+### Transition from Element
+
+Animate the modal from a specific trigger element for a connected spatial experience.
+
+```svelte
+<script>
+  import { Modal, Button } from '@delightstack/components';
+
+  let showModal = $state(false);
+  let triggerEl = $state<HTMLElement>();
+</script>
+
+<Button bind:element={triggerEl} onclick={() => showModal = true}>
+  Open
+</Button>
+
+<Modal bind:open={showModal} title="Hero Transition" transitionTarget={triggerEl}>
+  <p>This modal animated from the button.</p>
+</Modal>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `open` | `boolean` | `false` | Controls visibility (`$bindable()`) |
+| `title` | `string` | `''` | Modal title text |
+| `closable` | `boolean` | `true` | Allow closing via Escape key and backdrop click |
+| `disableCloseIcon` | `boolean` | `false` | Hide the X close button |
+| `modalID` | `string` | `''` | ID used for transition target tracking |
+| `width` | `string` | `''` | Explicit CSS width (desktop) |
+| `height` | `string` | `''` | Explicit CSS height (desktop) |
+| `maxWidth` | `string` | `'calc(100vw - 2rem)'` | Maximum width |
+| `maxHeight` | `string` | `'calc(100svh - 2rem)'` | Maximum height |
+| `transitionTarget` | `HTMLElement \| Element` | `undefined` | Element to animate from when opening |
+| `style` | `string` | `''` | Inline CSS styles |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | `undefined` | Main modal content |
+| `header` | `Snippet` | `undefined` | Replace entire header |
+| `headerStart` | `Snippet` | `undefined` | Content before the title |
+| `headerEnd` | `Snippet` | `undefined` | Content after the title (before close button) |
+| `footer` | `Snippet` | `undefined` | Footer content area |
+| `footerStart` | `Snippet` | `undefined` | Left side of footer |
+| `footerEnd` | `Snippet` | `undefined` | Right side of footer |
+| `onopen` | `() => void` | `undefined` | Called when the modal opens |
+| `onclose` | `() => boolean \| undefined \| void` | `undefined` | Called when the modal closes. Return `false` to prevent closing. |
+| `onbackdropclick` | `() => void` | `undefined` | Called when the backdrop is clicked |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onopen` | none | Fires when the modal mounts |
+| `onclose` | none | Fires when the modal is being closed. Return `false` to prevent it. |
+| `onbackdropclick` | none | Fires when the backdrop overlay is clicked |
+
+## Accessibility
+
+- `role="dialog"` with `aria-modal="true"`
+- `aria-labelledby` pointing to the title element
+- `aria-describedby` pointing to the body content
+- Focus trap via `focusTrap` from `@delightstack/utilities` (Tab cycles within modal only)
+- Escape key dismissal (when `closable` is true)
+- Body scroll is locked while the modal is open (`html { overflow: hidden }`)
+- Backdrop has a blur effect for visual depth

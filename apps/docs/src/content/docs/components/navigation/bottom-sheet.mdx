@@ -1,0 +1,134 @@
+---
+title: BottomSheet
+description: A mobile-optimized slide-up panel with configurable snap points, spring-physics gestures, pull-to-dismiss, and scroll-aware drag behavior.
+---
+
+## Import
+
+```svelte
+import { BottomSheet } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { BottomSheet, Button } from '@delightstack/components';
+
+  let open = $state(false);
+</script>
+
+<Button onclick={() => open = true}>Open Sheet</Button>
+
+<BottomSheet bind:open>
+  <div style="padding: 1rem;">
+    <h2>Sheet Content</h2>
+    <p>This is a bottom sheet panel.</p>
+  </div>
+</BottomSheet>
+```
+
+## Examples
+
+### Multiple Snap Points
+
+Define multiple snap heights as fractions of the viewport. The user can drag between them.
+
+```svelte
+<script>
+  import { BottomSheet } from '@delightstack/components';
+
+  let open = $state(false);
+  let snap = $state(0);
+</script>
+
+<BottomSheet
+  bind:open
+  bind:snap
+  snapPoints={[0.3, 0.6, 1]}
+  defaultSnap={0}
+  onsnap={({ index, height }) => console.log('Snapped to', index)}>
+  <div style="padding: 1rem;">
+    <p>Drag to resize. Current snap index: {snap}</p>
+  </div>
+</BottomSheet>
+```
+
+### With Header
+
+Add a draggable header area above the scrollable content.
+
+```svelte
+<BottomSheet bind:open>
+  {#snippet header()}
+    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border);">
+      <h3 style="margin: 0;">Filters</h3>
+    </div>
+  {/snippet}
+
+  <div style="padding: 1rem;">
+    <p>Scrollable filter content here.</p>
+  </div>
+</BottomSheet>
+```
+
+### Non-Dismissible
+
+Prevent the sheet from being dismissed by dragging down or tapping the backdrop.
+
+```svelte
+<BottomSheet bind:open dismissible={false}>
+  <div style="padding: 1rem;">
+    <p>You must complete this action.</p>
+    <button onclick={() => open = false}>Done</button>
+  </div>
+</BottomSheet>
+```
+
+### No Backdrop
+
+Open the sheet without a backdrop overlay and without blocking body scroll.
+
+```svelte
+<BottomSheet bind:open showBackdrop={false} blocking={false}>
+  <div style="padding: 1rem;">
+    <p>Non-blocking sheet content.</p>
+  </div>
+</BottomSheet>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `open` | `boolean` | `false` | Controls visibility (`$bindable`) |
+| `snapPoints` | `number[]` | `[0.5, 1]` | Snap points as fractions of viewport height (0-1) |
+| `defaultSnap` | `number` | `0` | Default snap point index when opening |
+| `snap` | `number` | `0` | Current snap point index (`$bindable`) |
+| `dismissible` | `boolean` | `true` | Whether the sheet can be dismissed by dragging down |
+| `showHandle` | `boolean` | `true` | Whether to show the drag handle |
+| `showBackdrop` | `boolean` | `true` | Whether to show the backdrop overlay |
+| `blocking` | `boolean` | `true` | Whether to lock body scroll when open |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | `undefined` | Main scrollable content |
+| `header` | `Snippet` | `undefined` | Header content rendered below the handle |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onopen` | none | Fires when the sheet opens |
+| `onclose` | none | Fires when the sheet closes |
+| `onsnap` | `{ index: number, height: number }` | Fires when the sheet snaps to a point |
+
+## Accessibility
+
+- `role="dialog"` with `aria-modal="true"` on the sheet
+- Drag handle uses `role="slider"` with `aria-label="Sheet height"` and aria-value attributes
+- **Escape** dismisses the sheet (when `dismissible` is true)
+- Backdrop click dismisses the sheet (when `dismissible` is true)
+- Body scroll is locked when `blocking` is true
+- Spring-physics animation with rubber banding at extremes
+- Scroll-aware drag: content scrolls at the highest snap point, transitions to sheet drag when pulling down at scroll top
+- Respects `prefers-reduced-motion`

@@ -1,0 +1,142 @@
+---
+title: Typewriter
+description: An animated text component that simulates character-by-character typing with natural variation, smart punctuation pauses, and text cycling.
+---
+
+## Import
+
+```svelte
+import { Typewriter } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<Typewriter text="Welcome to our platform." />
+```
+
+## Examples
+
+### Hero Section
+
+```svelte
+<h1>
+  <Typewriter
+    text="Build something amazing."
+    speed={60}
+    delay={500}
+  />
+</h1>
+```
+
+### Cycling Through Multiple Texts
+
+When an array of strings is provided, the component types each one, backspaces, and types the next. Common prefixes are preserved during transitions.
+
+```svelte
+<p>
+  We help you
+  <Typewriter
+    text={["ship faster", "delight users", "scale easily"]}
+    loop
+    pauseBetween={3000}
+  />
+</p>
+```
+
+### Block Cursor Style
+
+A terminal-like block cursor for code snippets.
+
+```svelte
+<Typewriter
+  text="$ npm install @delightstack/components"
+  cursor="block"
+  speed={40}
+/>
+```
+
+### Chat-Like Interface
+
+Fire a callback when typing completes.
+
+```svelte
+<script>
+  import { Typewriter } from '@delightstack/components';
+
+  let showInput = $state(false);
+</script>
+
+<Typewriter
+  text="Hi! How can I help you today?"
+  speed={30}
+  oncomplete={() => showInput = true}
+/>
+
+{#if showInput}
+  <input placeholder="Type your message..." />
+{/if}
+```
+
+### Controlled Animation
+
+Pause and resume the animation programmatically.
+
+```svelte
+<script>
+  import { Typewriter } from '@delightstack/components';
+
+  let isPaused = $state(false);
+</script>
+
+<Typewriter text="This can be paused." paused={isPaused} />
+<button onclick={() => isPaused = !isPaused}>
+  {isPaused ? 'Resume' : 'Pause'}
+</button>
+```
+
+### Underscore Cursor
+
+```svelte
+<Typewriter text="Retro terminal style." cursor="underscore" />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string \| string[]` | required | Text to type (single or array for cycling) |
+| `speed` | `number` | `50` | Base typing speed in milliseconds per character |
+| `delay` | `number` | `1000` | Delay before typing starts (ms) |
+| `loop` | `boolean` | `false` | Loop through texts continuously |
+| `pauseBetween` | `number` | `2000` | Pause between texts when cycling (ms) |
+| `cursor` | `'block' \| 'line' \| 'underscore' \| false` | `'line'` | Cursor style |
+| `cursorBlink` | `boolean` | `true` | Blink cursor when idle |
+| `deleteSpeed` | `number` | `30` | Backspace speed in milliseconds per character |
+| `paused` | `boolean` | `false` | Programmatically pause the animation |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onstart` | - | Typing started |
+| `oncomplete` | - | All text typed (or full cycle completed) |
+| `onloop` | `{ index: number }` | Loop iteration started |
+
+## Natural Typing Behavior
+
+The component simulates human-like typing with several features:
+
+- **Variable speed**: Each character's delay is randomized around the base `speed` (80-120% of base)
+- **Micro-pauses**: 5% chance of a 2x speed pause to simulate thinking
+- **Smart punctuation pauses**: Periods, question marks, and exclamation marks add a 3x pause; commas add 1.8x; semicolons and colons add 2x
+- **Common prefix preservation**: When cycling between "I love coding" and "I love designing", only "coding" is deleted and "designing" is typed
+
+## Accessibility
+
+- The component renders an `aria-label` on the outer `<span>` containing the full text (or all texts joined for arrays)
+- The visual typing animation is wrapped in `aria-hidden="true"` so screen readers see the complete text immediately
+- When `prefers-reduced-motion` is active, the full text is displayed immediately with no character-by-character animation
+- The cursor blink animation is also disabled under reduced motion preferences

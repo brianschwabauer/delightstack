@@ -1,0 +1,135 @@
+---
+title: Carousel
+description: A swipeable content slider with CSS scroll-snap, auto-play, loop mode, and configurable multi-slide views.
+---
+
+## Import
+
+```svelte
+import { Carousel } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Carousel } from '@delightstack/components';
+
+  const slides = [
+    { title: 'Welcome', image: '/slides/welcome.jpg' },
+    { title: 'Features', image: '/slides/features.jpg' },
+    { title: 'Get Started', image: '/slides/start.jpg' },
+  ];
+
+  let current = $state(0);
+</script>
+
+<Carousel items={slides} bind:current>
+  {#snippet slide(item, index)}
+    <img src={item.image} alt={item.title} style="width:100%; display:block;" />
+  {/snippet}
+</Carousel>
+```
+
+## Examples
+
+### Auto-Play with Loop
+
+Enable continuous cycling with a custom interval. Autoplay is automatically paused on hover and disabled when the user prefers reduced motion.
+
+```svelte
+<Carousel items={slides} autoplay={3000} loop>
+  {#snippet slide(item, index)}
+    <img src={item.image} alt={item.title} style="width:100%; display:block;" />
+  {/snippet}
+</Carousel>
+```
+
+### Multiple Slides Per View
+
+Show several slides at once with a gap between them and a peek of adjacent slides.
+
+```svelte
+<Carousel items={products} slidesPerView={3} gap="1rem" peek="2rem">
+  {#snippet slide(item, index)}
+    <div class="product-card">
+      <img src={item.image} alt={item.name} />
+      <h3>{item.name}</h3>
+    </div>
+  {/snippet}
+</Carousel>
+```
+
+### Vertical Orientation
+
+Stack slides vertically instead of horizontally. Arrow keys change to up/down.
+
+```svelte
+<div style="height: 400px;">
+  <Carousel items={stories} orientation="vertical">
+    {#snippet slide(item, index)}
+      <div class="story">{item.content}</div>
+    {/snippet}
+  </Carousel>
+</div>
+```
+
+### Minimal (No Arrows or Dots)
+
+Hide navigation controls for a clean swipe-only experience.
+
+```svelte
+<Carousel items={images} showArrows={false} showDots={false}>
+  {#snippet slide(item, index)}
+    <img src={item.src} alt={item.alt} style="width:100%; display:block;" />
+  {/snippet}
+</Carousel>
+```
+
+### Skeleton Loading
+
+Show a placeholder skeleton while slide data is being fetched.
+
+```svelte
+<Carousel skeleton slidesPerView={3} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `items` | `unknown[]` | `[]` | Array of items to display in the carousel |
+| `current` | `number` | `0` | Current slide index (`$bindable`) |
+| `loop` | `boolean` | `false` | Enable infinite loop by cloning edge slides |
+| `autoplay` | `boolean \| number` | `false` | Auto-advance interval in ms; `true` = 5000ms; disabled when `prefers-reduced-motion` |
+| `pauseOnHover` | `boolean` | `true` | Pause autoplay on hover or touch |
+| `showArrows` | `boolean` | `true` | Show prev/next arrow buttons |
+| `showDots` | `boolean` | `true` | Show dot indicators |
+| `slidesPerView` | `number` | `1` | Number of visible slides at once |
+| `gap` | `string` | `'0'` | CSS gap between slides |
+| `peek` | `string` | `'0'` | Adjacent slide peek amount (CSS length) |
+| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Scroll direction |
+| `skeleton` | `boolean` | `false` | Show a loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
+| `slide` | `Snippet<[item, index]>` | `undefined` | Render snippet for each slide |
+| `children` | `Snippet` | `undefined` | Default slot content (alternative to `slide` snippet) |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ index: number }` | Fires when the active slide changes |
+
+## Accessibility
+
+- `role="region"` with `aria-roledescription="carousel"` on the container
+- Each slide has `role="group"` with `aria-roledescription="slide"`
+- Dot indicators use `role="tablist"` / `role="tab"` with `aria-selected`
+- Live region announces "Slide X of Y" to screen readers
+- **Arrow Left / Arrow Right** (or **Up / Down** for vertical) navigates slides
+- **Home** goes to the first slide, **End** goes to the last
+- Arrow buttons include `aria-label="Previous slide"` / `aria-label="Next slide"`
+- Autoplay is disabled when `prefers-reduced-motion: reduce` is active
+- Focus-visible outline on the carousel container

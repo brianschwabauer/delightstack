@@ -1,0 +1,173 @@
+---
+title: SplitPane
+description: A resizable split view container that divides space between two panes with drag, keyboard, snap, and collapse support.
+---
+
+## Import
+
+```svelte
+import { SplitPane } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<SplitPane>
+  {#snippet first()}
+    <div>Left Pane</div>
+  {/snippet}
+  {#snippet second()}
+    <div>Right Pane</div>
+  {/snippet}
+</SplitPane>
+```
+
+## Examples
+
+### Sidebar Layout
+
+A horizontal split with constrained sidebar size and snap points.
+
+```svelte
+<script>
+  import { SplitPane } from '@delightstack/components';
+
+  let sidebarSize = $state(25);
+</script>
+
+<SplitPane
+  bind:size={sidebarSize}
+  minSize={15}
+  maxSize={40}
+  snap={[25, 33]}
+  collapsible
+>
+  {#snippet first()}
+    <nav>Sidebar</nav>
+  {/snippet}
+  {#snippet second()}
+    <main>Content</main>
+  {/snippet}
+</SplitPane>
+```
+
+### Vertical Split
+
+Stack panes top and bottom instead of left and right.
+
+```svelte
+<SplitPane vertical size={70}>
+  {#snippet first()}
+    <div>Editor</div>
+  {/snippet}
+  {#snippet second()}
+    <div>Terminal</div>
+  {/snippet}
+</SplitPane>
+```
+
+### Collapsible Panes
+
+Double-click the divider to collapse the smaller pane. An expand button appears on the collapsed edge.
+
+```svelte
+<script>
+  import { SplitPane } from '@delightstack/components';
+
+  let collapsed = $state<'first' | 'second' | null>(null);
+</script>
+
+<SplitPane collapsible bind:collapsed>
+  {#snippet first()}
+    <div>First Pane</div>
+  {/snippet}
+  {#snippet second()}
+    <div>Second Pane</div>
+  {/snippet}
+</SplitPane>
+```
+
+### Nested Three-Pane Layout
+
+Combine multiple SplitPanes for complex layouts.
+
+```svelte
+<SplitPane size={20} collapsible>
+  {#snippet first()}
+    <div>File Tree</div>
+  {/snippet}
+  {#snippet second()}
+    <SplitPane vertical size={70}>
+      {#snippet first()}
+        <div>Editor</div>
+      {/snippet}
+      {#snippet second()}
+        <div>Output</div>
+      {/snippet}
+    </SplitPane>
+  {/snippet}
+</SplitPane>
+```
+
+### Snap Points
+
+The divider snaps to specified percentage positions during drag.
+
+```svelte
+<SplitPane snap={[25, 50, 75]} snapThreshold={5}>
+  {#snippet first()}
+    <div>Pane A</div>
+  {/snippet}
+  {#snippet second()}
+    <div>Pane B</div>
+  {/snippet}
+</SplitPane>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `vertical` | `boolean` | `false` | Vertical split (top/bottom) instead of horizontal (left/right) |
+| `size` | `number` | `50` | First pane size as a percentage (bindable) |
+| `minSize` | `number` | `10` | Minimum first pane size (%) |
+| `maxSize` | `number` | `90` | Maximum first pane size (%) |
+| `snap` | `number[]` | `[]` | Snap points as percentages |
+| `snapThreshold` | `number` | `3` | Distance in % to trigger snap |
+| `collapsible` | `boolean` | `false` | Allow collapsing panes |
+| `collapsed` | `'first' \| 'second' \| null` | `null` | Which pane is collapsed (bindable) |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `first` | `Snippet` | - | First pane content |
+| `second` | `Snippet` | - | Second pane content |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onresize` | `{ size: number }` | Fired when pane size changes |
+| `oncollapse` | `{ pane: 'first' \| 'second' \| null }` | Fired when a pane is collapsed or expanded |
+
+## Keyboard Navigation
+
+The divider is focusable and supports the following keyboard controls:
+
+| Key | Action |
+|-----|--------|
+| Arrow Left / Arrow Up | Decrease first pane size by 1% |
+| Arrow Right / Arrow Down | Increase first pane size by 1% |
+| Shift + Arrow | Adjust by 5% |
+| Home | Set to `minSize` |
+| End | Set to `maxSize` |
+| Enter | Toggle collapse of the smaller pane (when `collapsible`) |
+
+## Accessibility
+
+- Divider has `role="separator"` with `aria-orientation` matching the layout direction
+- `aria-valuenow`, `aria-valuemin`, and `aria-valuemax` reflect the current pane size
+- `aria-label="Resize panes"` on the divider
+- Collapsed panes have `aria-hidden="true"`
+- Expand buttons have descriptive `aria-label` attributes
+- Focus indicator visible on the divider via `focus-visible`
+- Touch support with `touch-action: none` on the divider
+- Respects `prefers-reduced-motion` for collapse transitions

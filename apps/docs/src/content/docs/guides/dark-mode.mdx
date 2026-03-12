@@ -1,0 +1,225 @@
+---
+title: Dark Mode
+description: How dark mode works in DelightStack and how to set it up in your application.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+DelightStack uses the CSS `light-dark()` function for dark mode. This is a native CSS approach — no JavaScript theme provider, no class toggling on every element, and no flash of unstyled content.
+
+## How It Works
+
+Every color token in the design system specifies both its light and dark values using `light-dark()`:
+
+```css
+--color-bg: light-dark(#ffffff, #0a0a0a);
+--color-text: light-dark(#171717, #fafafa);
+--color-action: light-dark(#2563eb, #3b82f6);
+```
+
+The browser selects the correct value based on the `color-scheme` property set on the element or its ancestors. That is the entire mechanism — a single CSS property controls which branch of every `light-dark()` call is used.
+
+## Setting Up Dark Mode
+
+<Steps>
+
+1. **Set `color-scheme` on `:root`:**
+
+   ```css
+   :root {
+     color-scheme: light dark;
+   }
+   ```
+
+   With `color-scheme: light dark`, the browser automatically follows the user's system preference (`prefers-color-scheme`).
+
+2. **Define your tokens using `light-dark()`:**
+
+   ```css
+   :root {
+     color-scheme: light dark;
+
+     --color-bg: light-dark(#ffffff, #0a0a0a);
+     --color-text: light-dark(#171717, #fafafa);
+     /* ... rest of your tokens */
+   }
+   ```
+
+3. **That is it.** All DelightStack components will automatically render in the correct mode.
+
+</Steps>
+
+## Controlling the Mode
+
+### Follow System Preference (Default)
+
+```css
+:root {
+  color-scheme: light dark;
+}
+```
+
+The browser uses the user's OS preference. When they switch their system theme, your app follows.
+
+### Force Light Mode
+
+```css
+:root {
+  color-scheme: light;
+}
+```
+
+### Force Dark Mode
+
+```css
+:root {
+  color-scheme: dark;
+}
+```
+
+### Toggle with JavaScript
+
+To let users override the system preference, change the `color-scheme` property at runtime:
+
+```javascript
+function setMode(mode) {
+  document.documentElement.style.colorScheme = mode;
+}
+
+setMode('dark');         // Force dark
+setMode('light');        // Force light
+setMode('light dark');   // Follow system
+```
+
+## The ThemeToggle Component
+
+DelightStack includes a `ThemeToggle` component that handles all of this for you — including persisting the user's choice in `localStorage`:
+
+```svelte
+<script>
+  import { ThemeToggle } from '@delightstack/components';
+</script>
+
+<ThemeToggle />
+```
+
+The `ThemeToggle` cycles between three states: **light**, **dark**, and **auto** (system preference). It updates the `color-scheme` property on `<html>` and remembers the user's choice across sessions.
+
+## Using `light-dark()` in Your Own CSS
+
+You can use the same `light-dark()` function in your own custom styles to stay consistent with the design system:
+
+```css
+.custom-card {
+  background: light-dark(#f8fafc, #1e293b);
+  border: 1px solid light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.08));
+  color: light-dark(#334155, #e2e8f0);
+}
+
+.highlight {
+  background: light-dark(
+    color-mix(in oklch, var(--color-action) 10%, transparent),
+    color-mix(in oklch, var(--color-action) 20%, transparent)
+  );
+}
+```
+
+<Aside type="tip">
+Prefer referencing the design tokens (e.g., `var(--color-surface-2)`) rather than hardcoding colors in `light-dark()`. The tokens already handle both modes and keep your styles consistent with the rest of the design system.
+</Aside>
+
+## Respecting User Preferences
+
+### `prefers-color-scheme`
+
+When `color-scheme` is set to `light dark`, the browser automatically respects the user's `prefers-color-scheme` setting. You can also use this media query directly for styles that fall outside the design token system:
+
+```css
+@media (prefers-color-scheme: dark) {
+  .custom-element {
+    /* Dark-specific styles */
+    filter: brightness(0.9);
+  }
+}
+```
+
+### `prefers-reduced-motion`
+
+DelightStack components respect `prefers-reduced-motion` automatically, disabling or simplifying animations for users who prefer reduced motion. If you add custom animations, follow the same pattern:
+
+```css
+.custom-animation {
+  transition: transform var(--duration-normal) var(--ease-default);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .custom-animation {
+    transition: none;
+  }
+}
+```
+
+## Dark Mode Design Patterns
+
+DelightStack components follow specific patterns in dark mode that are worth understanding if you build custom components:
+
+### Elevation via Borders, Not Shadows
+
+Shadows are invisible on dark backgrounds. Instead, dark mode uses stronger borders and subtle inset highlights:
+
+```css
+.elevated-panel {
+  background: var(--color-surface-2);
+  border: 1px solid var(--border-elevated-2);
+  box-shadow: var(--shadow-md);
+  /* Light: real shadow. Dark: subtle inset top highlight */
+}
+```
+
+### Tinted Text on Colored Backgrounds
+
+Text on action-colored backgrounds uses a barely-tinted off-white, not pure white. On hover, it transitions to pure white — a subtle "revelation" effect:
+
+```css
+.action-button {
+  background: var(--color-action);
+  color: var(--color-action-text);          /* tinted off-white */
+}
+
+.action-button:hover {
+  background: var(--color-action-hover);
+  color: var(--color-action-text-hover);    /* pure white */
+}
+```
+
+### Backdrop Blur for Focus
+
+Modal backdrops use `backdrop-filter: blur()` to focus attention. Small popovers and menus skip the blur to avoid distraction:
+
+```css
+.modal-backdrop {
+  background: var(--color-backdrop);
+  backdrop-filter: blur(var(--backdrop-blur));
+}
+```
+
+## Preventing Flash of Incorrect Theme
+
+If you allow users to choose a theme (stored in `localStorage`), apply the preference in a blocking `<script>` in `<head>` to prevent a flash of the wrong theme on page load:
+
+```html
+<head>
+  <script>
+    const stored = localStorage.getItem('theme');
+    if (stored === 'dark') {
+      document.documentElement.style.colorScheme = 'dark';
+    } else if (stored === 'light') {
+      document.documentElement.style.colorScheme = 'light';
+    }
+  </script>
+</head>
+```
+
+<Aside>
+The `ThemeToggle` component handles this automatically — it injects an inline script that reads the stored preference before the page renders.
+</Aside>

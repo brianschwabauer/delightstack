@@ -1,0 +1,144 @@
+---
+title: Rating
+description: A star rating input for collecting user ratings or displaying scores, with half-star precision, custom icons, and a read-only display mode.
+---
+
+## Import
+
+```svelte
+import { Rating } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Rating } from '@delightstack/components';
+
+  let rating = $state(0);
+</script>
+
+<Rating bind:value={rating} />
+```
+
+## Examples
+
+### Interactive Rating
+
+```svelte
+<script>
+  import { Rating } from '@delightstack/components';
+
+  let rating = $state(0);
+</script>
+
+<Rating bind:value={rating} tooltip="Rate this item" />
+```
+
+### Half-Star Precision
+
+Set `precision={0.5}` to allow half-star selections. The left half of each star registers a 0.5 increment.
+
+```svelte
+<script>
+  import { Rating } from '@delightstack/components';
+
+  let rating = $state(0);
+</script>
+
+<Rating bind:value={rating} precision={0.5} showValue />
+```
+
+### Read-Only Display
+
+Use `readonly` to show a rating without interaction. Ideal for displaying average ratings.
+
+```svelte
+<div style="display: flex; align-items: center; gap: 0.5rem;">
+  <Rating value={4.3} readonly showValue />
+  <span>(128 reviews)</span>
+</div>
+```
+
+### Custom Icons and Colors
+
+Replace the default stars with any Svelte component. Use `color` to override the fill color.
+
+```svelte
+<script>
+  import { Rating } from '@delightstack/components';
+  import HeartIcon from '~icons/mdi/heart';
+  import HeartOutlineIcon from '~icons/mdi/heart-outline';
+
+  let likes = $state(0);
+</script>
+
+<Rating
+  bind:value={likes}
+  max={3}
+  icon={HeartIcon}
+  emptyIcon={HeartOutlineIcon}
+  color="var(--color-error)"
+/>
+```
+
+### Clearable
+
+Allow clicking the current rating again to clear it to 0.
+
+```svelte
+<Rating bind:value={rating} clearable />
+```
+
+### Sizes
+
+```svelte
+<Rating size="0" value={3} readonly />  <!-- 16px -->
+<Rating size="1" value={3} readonly />  <!-- 24px (default) -->
+<Rating size="2" value={3} readonly />  <!-- 32px -->
+<Rating size="3" value={3} readonly />  <!-- 40px -->
+```
+
+### Custom Max
+
+```svelte
+<Rating bind:value={rating} max={10} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `number` | `0` | Current rating, bindable |
+| `max` | `number` | `5` | Maximum number of icons |
+| `precision` | `0.5 \| 1` | `1` | Half or whole icon precision |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Icon size |
+| `readonly` | `boolean` | `false` | Display only, no interaction |
+| `disabled` | `boolean` | `false` | Disable input |
+| `color` | `string` | `''` | Override filled icon color (CSS value) |
+| `showValue` | `boolean` | `false` | Show numeric value beside icons |
+| `clearable` | `boolean` | `false` | Allow clicking current rating to clear (set to 0) |
+| `tooltip` | `string` | `''` | Tooltip text on hover |
+| `dense` | `boolean` | `false` | Tighter spacing between icons |
+| `comfortable` | `boolean` | `false` | More spacing between icons |
+| `id` | `string` | auto | Element ID |
+| `name` | `string` | `''` | Form field name |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ value: number }` | Rating changed |
+| `onhover` | `{ value: number }` | Hovering over a rating value |
+
+## Accessibility
+
+- Uses `role="slider"` pattern on the container
+- `aria-valuenow`, `aria-valuemin`, `aria-valuemax` set appropriately
+- `aria-label="Rating"` for screen readers
+- Keyboard navigation: Arrow Right/Up to increase, Arrow Left/Down to decrease, Home for 0, End for max
+- Focus ring visible on `:focus-visible`
+- Read-only mode prevents interaction but remains visible
+- Hidden `<input type="hidden">` for form submission
+- Half-star precision uses CSS `clip-path` for clean visual rendering

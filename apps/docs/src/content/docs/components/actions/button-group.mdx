@@ -1,0 +1,155 @@
+---
+title: ButtonGroup
+description: A container that groups related buttons with shared borders, coordinated styling, and context-driven prop inheritance.
+---
+
+## Import
+
+```svelte
+import { ButtonGroup, Button } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<ButtonGroup aria-label="Document actions">
+  <Button onclick={save}>Save</Button>
+  <Button onclick={saveAs}>Save As</Button>
+  <Button onclick={discard}>Discard</Button>
+</ButtonGroup>
+```
+
+## Examples
+
+### Toggle Group (Single Selection)
+
+Use the `active` prop on child Buttons to create a toggle group.
+
+```svelte
+<script>
+  import { ButtonGroup, Button } from '@delightstack/components';
+
+  let viewMode = $state<'grid' | 'list'>('grid');
+</script>
+
+<ButtonGroup size="0" aria-label="View mode">
+  <Button
+    active={viewMode === 'grid'}
+    onclick={() => viewMode = 'grid'}
+    icon
+    aria-label="Grid view">
+    <!-- GridIcon -->
+  </Button>
+  <Button
+    active={viewMode === 'list'}
+    onclick={() => viewMode = 'list'}
+    icon
+    aria-label="List view">
+    <!-- ListIcon -->
+  </Button>
+</ButtonGroup>
+```
+
+### Variant Inheritance
+
+Set variant props on the group to apply them to all children at once.
+
+```svelte
+<ButtonGroup outline accent aria-label="Accent group">
+  <Button>First</Button>
+  <Button>Second</Button>
+  <Button>Third</Button>
+</ButtonGroup>
+```
+
+### Vertical Orientation
+
+Stack buttons vertically instead of horizontally.
+
+```svelte
+<ButtonGroup orientation="vertical" aria-label="Options">
+  <Button>Option 1</Button>
+  <Button>Option 2</Button>
+  <Button>Option 3</Button>
+</ButtonGroup>
+```
+
+### Split Button with Dropdown
+
+Combine a primary action button with a dropdown trigger inside a group.
+
+```svelte
+<script>
+  import { ButtonGroup, Button } from '@delightstack/components';
+</script>
+
+<ButtonGroup aria-label="Save options">
+  <Button onclick={primarySave}>Save</Button>
+  <Button icon aria-label="More save options">
+    <!-- ChevronDownIcon -->
+    {#snippet menu({ close })}
+      <button onclick={() => { saveAs(); close(); }}>Save As...</button>
+      <button onclick={() => { saveCopy(); close(); }}>Save Copy</button>
+    {/snippet}
+  </Button>
+</ButtonGroup>
+```
+
+### Detached (Non-Attached) Mode
+
+Set `attached={false}` to add a small gap between buttons instead of merging borders.
+
+```svelte
+<ButtonGroup attached={false} aria-label="Spaced actions">
+  <Button>One</Button>
+  <Button>Two</Button>
+  <Button>Three</Button>
+</ButtonGroup>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `'0000' \| '000' \| '00' \| '0' \| '1' \| '2' \| '3' \| '4' \| '5' \| '6'` | `undefined` | Size applied to all child Buttons via context |
+| `outline` | `boolean` | `false` | Apply outline variant to all children |
+| `transparent` | `boolean` | `false` | Apply transparent variant to all children |
+| `translucent` | `boolean` | `false` | Apply translucent variant to all children |
+| `accent` | `boolean` | `false` | Apply accent color to all children |
+| `error` | `boolean` | `false` | Apply error color to all children |
+| `success` | `boolean` | `false` | Apply success color to all children |
+| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Layout direction |
+| `disabled` | `boolean` | `false` | Disable all child Buttons via context |
+| `attached` | `boolean` | `true` | Visually connect buttons (shared borders, merged radii) |
+| `id` | `string` | auto-generated | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | `undefined` | Child Button components |
+
+## Types
+
+The ButtonGroup exports a `ButtonGroupContext` interface used for its context contract with child Buttons:
+
+```typescript
+interface ButtonGroupContext {
+  size:
+    | undefined
+    | '0000' | '000' | '00' | '0'
+    | '1' | '2' | '3' | '4' | '5' | '6';
+  outline: boolean;
+  transparent: boolean;
+  translucent: boolean;
+  accent: boolean;
+  error: boolean;
+  success: boolean;
+  disabled: boolean;
+}
+```
+
+Child Buttons read this context via `getContext('button-group')` and merge the group values with their own props (own props take precedence when explicitly set).
+
+## Accessibility
+
+- `role="group"` on the container element
+- Provide an `aria-label` to describe the group's purpose
+- Buttons remain individually focusable
+- Hovered and focused buttons are raised above siblings via `z-index` for clean border visibility

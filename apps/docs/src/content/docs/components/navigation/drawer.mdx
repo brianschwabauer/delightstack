@@ -1,0 +1,146 @@
+---
+title: Drawer
+description: A slide-out side panel supporting four positions, three modes (overlay, push, persistent), responsive breakpoints, focus trapping, and swipe-to-close.
+---
+
+## Import
+
+```svelte
+import { Drawer } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Drawer, Button } from '@delightstack/components';
+
+  let open = $state(false);
+</script>
+
+<Button onclick={() => open = true}>Open Drawer</Button>
+
+<Drawer bind:open>
+  <p style="padding: 1rem;">Drawer content goes here.</p>
+</Drawer>
+```
+
+## Examples
+
+### Right-Side Drawer
+
+Position the drawer on the right edge of the viewport.
+
+```svelte
+<Drawer bind:open right>
+  <p style="padding: 1rem;">Right drawer content.</p>
+</Drawer>
+```
+
+### With Header and Footer
+
+Add structured header and footer sections using snippets.
+
+```svelte
+<Drawer bind:open width="320px">
+  {#snippet header()}
+    <div style="padding: 1rem; border-bottom: 1px solid var(--color-border);">
+      <h2 style="margin: 0;">Settings</h2>
+    </div>
+  {/snippet}
+
+  <div style="padding: 1rem;">
+    <p>Main scrollable content.</p>
+  </div>
+
+  {#snippet footer()}
+    <div style="padding: 1rem; border-top: 1px solid var(--color-border);">
+      <button onclick={() => open = false}>Close</button>
+    </div>
+  {/snippet}
+</Drawer>
+```
+
+### Persistent Mode
+
+Always-visible drawer that becomes part of the layout flow (no backdrop, no transitions).
+
+```svelte
+<div style="display: flex; height: 100vh;">
+  <Drawer open persistent width="250px">
+    <nav style="padding: 1rem;">
+      <a href="/dashboard">Dashboard</a>
+      <a href="/settings">Settings</a>
+    </nav>
+  </Drawer>
+  <main style="flex: 1; padding: 1rem;">
+    <p>Main content area.</p>
+  </main>
+</div>
+```
+
+### Responsive Breakpoint
+
+Automatically switch between persistent (desktop) and overlay (mobile) based on a media query.
+
+```svelte
+<Drawer bind:open breakpoint="(min-width: 1024px)" width="280px">
+  <nav style="padding: 1rem;">
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+  </nav>
+</Drawer>
+```
+
+### Top / Bottom Drawers
+
+Slide drawers from the top or bottom edge. Use `height` to set the panel size.
+
+```svelte
+<Drawer bind:open top height="200px">
+  <p style="padding: 1rem;">Top drawer content.</p>
+</Drawer>
+
+<Drawer bind:open bottom height="300px">
+  <p style="padding: 1rem;">Bottom drawer content.</p>
+</Drawer>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `open` | `boolean` | `false` | Controls visibility (`$bindable`) |
+| `right` | `boolean` | `false` | Position the drawer on the right edge |
+| `top` | `boolean` | `false` | Position the drawer on the top edge |
+| `bottom` | `boolean` | `false` | Position the drawer on the bottom edge |
+| `push` | `boolean` | `false` | Use push mode: content shifts, no backdrop |
+| `persistent` | `boolean` | `false` | Use persistent mode: always visible, part of layout flow |
+| `width` | `string` | `'280px'` | Width of the drawer (used for left/right positions) |
+| `height` | `string` | `'280px'` | Height of the drawer (used for top/bottom positions) |
+| `closeOnOutsideClick` | `boolean` | `true` | Whether clicking outside the drawer closes it |
+| `closeOnEscape` | `boolean` | `true` | Whether pressing Escape closes the drawer |
+| `breakpoint` | `string` | `undefined` | Media query breakpoint for switching between persistent and overlay modes |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | `undefined` | Main drawer content |
+| `header` | `Snippet` | `undefined` | Header content |
+| `footer` | `Snippet` | `undefined` | Footer content |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onopen` | none | Fires when the drawer opens |
+| `onclose` | none | Fires when the drawer closes |
+
+## Accessibility
+
+- Overlay mode: `role="dialog"` with `aria-modal="true"`, focus trapped via `focusTrap`
+- Persistent mode: rendered as `<aside>` with `aria-label="Side panel"`
+- **Escape** closes the drawer (when `closeOnEscape` is true and not persistent)
+- Backdrop click closes the drawer (when `closeOnOutsideClick` is true)
+- Body scroll is locked in overlay mode
+- Focus is restored to the previously focused element on close
+- Swipe-to-close gesture on touch devices (30% threshold of drawer size)
+- CSS transition animation with `prefers-reduced-motion: reduce` support

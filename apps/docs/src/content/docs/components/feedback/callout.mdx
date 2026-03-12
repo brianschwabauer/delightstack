@@ -1,0 +1,154 @@
+---
+title: Callout
+description: A highlighted information block for drawing attention to important content, supporting inline callouts and full-width banners.
+---
+
+## Import
+
+```svelte
+import { Callout } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<Callout>
+  Your changes are automatically saved.
+</Callout>
+```
+
+## Examples
+
+### Variants
+
+Use boolean props to set the visual variant. When none is set, the default `info` style is used.
+
+```svelte
+<Callout>
+  This is an informational callout.
+</Callout>
+
+<Callout success>
+  Your changes have been saved successfully.
+</Callout>
+
+<Callout warning title="Heads up">
+  This action cannot be undone.
+</Callout>
+
+<Callout error>
+  Failed to connect to the server. Please try again.
+</Callout>
+
+<Callout tip title="Pro Tip">
+  Press <kbd>Cmd+K</kbd> to open the command palette.
+</Callout>
+```
+
+### Dismissible
+
+Add `dismissible` to show a close button. Use `ondismiss` to handle the event.
+
+```svelte
+<script>
+  import { Callout } from '@delightstack/components';
+</script>
+
+<Callout tip title="Pro Tip" dismissible ondismiss={() => console.log('dismissed')}>
+  You can use keyboard shortcuts to speed up your workflow.
+</Callout>
+```
+
+### Custom Icon and Action
+
+Override the default icon or add an action area using snippets.
+
+```svelte
+<Callout>
+  {#snippet icon()}
+    <RocketIcon />
+  {/snippet}
+
+  New feature available! Check out our latest update.
+
+  {#snippet action()}
+    <Button size="0" transparent>Learn more</Button>
+  {/snippet}
+</Callout>
+```
+
+### Banner Mode
+
+Set `banner` for a full-width banner with solid background. Combine with `sticky` to pin it to the top on scroll.
+
+```svelte
+<script>
+  import { Callout } from '@delightstack/components';
+
+  let showBanner = $state(true);
+</script>
+
+{#if showBanner}
+  <Callout banner dismissible ondismiss={() => showBanner = false}>
+    We've updated our privacy policy.
+
+    {#snippet action()}
+      <a href="/privacy">Learn more</a>
+    {/snippet}
+  </Callout>
+{/if}
+
+<Callout banner warning sticky>
+  Scheduled maintenance tonight at 11pm UTC.
+</Callout>
+```
+
+### Dense and Comfortable Spacing
+
+```svelte
+<Callout dense>Compact callout with less padding.</Callout>
+
+<Callout comfortable>Spacious callout with more padding.</Callout>
+```
+
+### Skeleton Loading
+
+```svelte
+<Callout skeleton />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `success` | `boolean` | `false` | Success variant (green) |
+| `warning` | `boolean` | `false` | Warning variant (yellow/orange) |
+| `error` | `boolean` | `false` | Error variant (red) |
+| `tip` | `boolean` | `false` | Tip variant (accent/purple) |
+| `banner` | `boolean` | `false` | Full-width banner mode with solid background |
+| `title` | `string` | `''` | Optional heading text |
+| `dismissible` | `boolean` | `false` | Show close/dismiss button |
+| `sticky` | `boolean` | `false` | Stick to top on scroll (banner mode only) |
+| `dense` | `boolean` | `false` | Compact padding |
+| `comfortable` | `boolean` | `false` | Relaxed padding |
+| `skeleton` | `boolean` | `false` | Show loading skeleton state |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | - | Main content |
+| `icon` | `Snippet` | - | Custom icon (overrides default variant icon) |
+| `action` | `Snippet` | - | Action area (button, link, etc.) |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `ondismiss` | `() => void` | Called when the dismiss button is clicked |
+
+## Accessibility
+
+- Uses `role="alert"` for warning and error variants
+- Uses `role="status"` for info, success, and tip variants
+- Banner mode renders as a semantic `<aside>` element, inline mode uses `<div>`
+- Icon has `aria-hidden="true"`
+- Dismiss button has `aria-label="Dismiss"`
+- Respects `prefers-reduced-motion` (disables slide/scale animations)

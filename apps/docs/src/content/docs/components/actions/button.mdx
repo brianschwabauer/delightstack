@@ -1,0 +1,197 @@
+---
+title: Button
+description: A versatile, polished button with ripple effects, promise-aware loading states, dropdown menus, and confirmation flows.
+---
+
+## Import
+
+```svelte
+import { Button } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<Button onclick={() => console.log('clicked')}>
+  Click Me
+</Button>
+```
+
+## Examples
+
+### Variants
+
+Combine variant booleans freely. The default appearance (solid action-colored) requires no variant props.
+
+```svelte
+<Button>Solid (default)</Button>
+<Button outline>Outline</Button>
+<Button transparent>Transparent</Button>
+<Button translucent>Translucent</Button>
+```
+
+### Color Schemes
+
+Apply semantic color schemes with the `accent`, `error`, or `success` props. These combine with any variant.
+
+```svelte
+<Button accent>Accent</Button>
+<Button error>Error</Button>
+<Button success>Success</Button>
+<Button transparent error>Transparent Error</Button>
+<Button outline accent>Outline Accent</Button>
+<Button translucent success>Translucent Success</Button>
+```
+
+### Sizes
+
+The `size` prop controls font size, which drives padding and dimensions via `em` units.
+
+```svelte
+<Button size="00">Extra Small</Button>
+<Button size="0">Small</Button>
+<Button size="1">Default</Button>
+<Button size="2">Large</Button>
+<Button size="3">Extra Large</Button>
+```
+
+### Promise-Aware Click Handler
+
+When `onclick` returns a `Promise`, the button automatically shows a loading spinner until the promise settles. On success, a brief checkmark flash confirms the action.
+
+```svelte
+<script>
+  import { Button } from '@delightstack/components';
+
+  async function handleSave(e) {
+    await api.save(data);
+  }
+</script>
+
+<Button onclick={handleSave}>
+  Save
+</Button>
+```
+
+### Icon Button
+
+Set `icon` to render a circular icon-only button. Provide a `tooltip` or `aria-label` for accessibility.
+
+```svelte
+<script>
+  import { Button } from '@delightstack/components';
+  import TrashIcon from '~icons/mdi/delete';
+</script>
+
+<Button icon transparent error tooltip="Delete item">
+  <TrashIcon />
+</Button>
+```
+
+### Dropdown Menu
+
+Pass a `menu` snippet to render a popover dropdown when the button is clicked. The snippet receives a `{ close }` function.
+
+```svelte
+<script>
+  import { Button } from '@delightstack/components';
+</script>
+
+<Button
+  menu={(close) => {}}
+  showChevron>
+  Options
+  {#snippet menu({ close })}
+    <button onclick={() => { edit(); close(); }}>Edit</button>
+    <button onclick={() => { remove(); close(); }}>Remove</button>
+  {/snippet}
+</Button>
+```
+
+### Split Button with Dropdown
+
+Use the `dropdown` snippet for a secondary dropdown trigger alongside the main button action.
+
+```svelte
+<script>
+  import { Button } from '@delightstack/components';
+</script>
+
+<Button onclick={primarySave}>
+  Save
+  {#snippet dropdown({ close })}
+    <button onclick={() => { saveAs(); close(); }}>Save As...</button>
+    <button onclick={() => { saveCopy(); close(); }}>Save Copy</button>
+  {/snippet}
+</Button>
+```
+
+### Badge
+
+Display a notification indicator. Pass `true` for a dot or a string for a count.
+
+```svelte
+<Button badge={true} icon transparent>
+  <!-- icon -->
+</Button>
+<Button badge="3" pill>
+  Notifications
+</Button>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `'0000' \| '000' \| '00' \| '0' \| '1' \| '2' \| '3' \| '4' \| '5' \| '6'` | `undefined` | Font size tier, driving all dimensions via `em` units |
+| `icon` | `boolean` | `false` | Render as a circular icon-only button |
+| `pill` | `boolean` | `false` | Fully rounded corners |
+| `transparent` | `boolean` | `false` | No background or border (ghost style) |
+| `translucent` | `boolean` | `false` | Semi-transparent tinted background with backdrop blur |
+| `outline` | `boolean` | `false` | Transparent background with visible border |
+| `grouped` | `boolean` | `false` | Indicates the button is part of a group (border radius adjusted) |
+| `error` | `boolean` | `false` | Red/destructive color scheme |
+| `success` | `boolean` | `false` | Green/success color scheme |
+| `accent` | `boolean` | `false` | Accent/brand color scheme |
+| `overlay` | `boolean` | `false` | Dark overlay style with backdrop blur |
+| `dense` | `boolean` | `false` | Reduced padding for compact layouts |
+| `fullWidth` | `boolean` | `false` | Stretch to container width |
+| `fullHeight` | `boolean` | `false` | Stretch to container height |
+| `disableRipple` | `boolean` | `false` | Disable the ripple click effect |
+| `href` | `string` | `undefined` | Renders as `<a>` instead of `<button>` |
+| `target` | `'_self' \| '_blank' \| '_parent' \| '_top'` | `undefined` | Link target attribute (when `href` is set) |
+| `tooltip` | `string` | `''` | Hover tooltip text |
+| `disabled` | `boolean` | `false` | Disable interaction |
+| `active` | `boolean` | `false` | Visually pressed/selected state (useful in toggle groups) |
+| `loading` | `boolean` | `undefined` | Show loading spinner manually |
+| `loadingSuccess` | `boolean` | `false` | Show checkmark success state manually |
+| `badge` | `string \| boolean` | `undefined` | Badge indicator; `true` renders a dot, a string renders the text |
+| `menu` | `Snippet<[{ close: () => void }]>` | `undefined` | Popover dropdown content triggered by clicking the button |
+| `showChevron` | `boolean` | `false` | Show a chevron icon (useful with `menu`) |
+| `dropdown` | `Snippet<[{ close: () => void }]>` | `undefined` | Content for a secondary dropdown trigger |
+| `loadingContent` | `Snippet<[{ close: () => void }]>` | `undefined` | Content shown during loading state |
+| `disableDropdown` | `boolean` | `false` | Disable and hide the secondary dropdown trigger |
+| `popoverCloseOnInsideClick` | `boolean` | `false` | Close the popover when clicking a button-like element inside it |
+| `popoverPlacement` | `Placement` | `'bottom-end'` | Floating UI placement for the popover |
+| `popoverStrategy` | `Strategy` | `'fixed'` | CSS positioning strategy for the popover |
+| `popoverDisableInitialFocus` | `boolean` | `false` | Skip auto-focusing content when the popover opens |
+| `children` | `Snippet<[{ isLoading: boolean; isLoadingSuccess: boolean }]>` | `undefined` | Button label content (receives loading state) |
+| `id` | `string` | auto-generated | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `style` | `string` | `''` | Inline CSS styles |
+| `onclick` | `(e: MouseEvent) => void \| Promise<void>` | `undefined` | Click handler; returning a Promise enables automatic loading state |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onclick` | `MouseEvent` | Fires on click. If it returns a `Promise`, the button enters loading state until settled. |
+
+## Accessibility
+
+- Full keyboard activation via Space and Enter keys
+- Clear focus ring using inset box-shadow
+- `aria-haspopup` and `aria-expanded` set automatically when a `menu` snippet is provided
+- Disabled state communicated via the `disabled` attribute
+- Loading state disables pointer events and sets `tabindex="-1"`
+- Ripple effect is suppressed when the button is disabled

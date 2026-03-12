@@ -1,0 +1,256 @@
+---
+title: Tree
+description: A hierarchical data display component for folder structures and nested data with expand/collapse, checkboxes, drag-and-drop, lazy loading, and search filtering.
+---
+
+## Import
+
+```svelte
+import { Tree } from '@delightstack/components';
+import type { TreeNode, FlatTreeNode } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Tree } from '@delightstack/components';
+
+  const data = [
+    {
+      id: '1',
+      label: 'src',
+      children: [
+        { id: '1-1', label: 'app.ts' },
+        { id: '1-2', label: 'index.ts' },
+      ],
+    },
+    { id: '2', label: 'package.json' },
+  ];
+</script>
+
+<Tree {data} />
+```
+
+## Examples
+
+### Selectable with Icons
+
+```svelte
+<script>
+  import { Tree } from '@delightstack/components';
+  import FolderIcon from '~icons/mdi/folder';
+  import FileIcon from '~icons/mdi/file';
+
+  const fileTree = [
+    {
+      id: '1',
+      label: 'src',
+      icon: FolderIcon,
+      children: [
+        {
+          id: '1-1',
+          label: 'components',
+          icon: FolderIcon,
+          children: [
+            { id: '1-1-1', label: 'Button.svelte', icon: FileIcon },
+            { id: '1-1-2', label: 'Modal.svelte', icon: FileIcon },
+          ],
+        },
+        { id: '1-2', label: 'app.ts', icon: FileIcon },
+      ],
+    },
+    { id: '2', label: 'package.json', icon: FileIcon },
+  ];
+
+  let selected = $state<string[]>([]);
+  let expanded = $state<string[]>(['1']);
+</script>
+
+<Tree
+  data={fileTree}
+  selectable
+  bind:selected
+  bind:expanded
+/>
+```
+
+### Checkbox Selection
+
+Parent checkboxes reflect children state with an indeterminate state when partially selected. Checking a parent checks all children.
+
+```svelte
+<Tree data={categories} checkboxes multiSelect bind:selected />
+```
+
+### Flat Data with Parent IDs
+
+The component automatically detects flat data (arrays with `parentId` properties) and builds the tree structure internally.
+
+```svelte
+<Tree
+  data={[
+    { id: '1', parentId: null, label: 'Root' },
+    { id: '2', parentId: '1', label: 'Child 1' },
+    { id: '3', parentId: '1', label: 'Child 2' },
+    { id: '4', parentId: '2', label: 'Grandchild' },
+  ]}
+  selectable
+/>
+```
+
+### Search/Filter
+
+Nodes matching the filter term are highlighted. Non-matching branches without matching descendants are hidden, and parent nodes auto-expand to reveal matches.
+
+```svelte
+<script>
+  import { Tree } from '@delightstack/components';
+
+  let searchTerm = $state('');
+</script>
+
+<input bind:value={searchTerm} placeholder="Search..." />
+<Tree data={fileTree} filter={searchTerm} />
+```
+
+### Drag-and-Drop
+
+Enable drag-and-drop reordering between nodes.
+
+```svelte
+<Tree
+  data={fileTree}
+  draggable
+  ondrop={({ node, target, position }) => {
+    updateTree(node, target, position);
+  }}
+/>
+```
+
+### Lazy Loading
+
+Load children on demand when a node is expanded. A loading spinner replaces the chevron during the fetch.
+
+```svelte
+<Tree
+  data={rootNodes}
+  loadChildren={async (node) => {
+    return await fetchChildren(node.id);
+  }}
+/>
+```
+
+### Connecting Lines
+
+```svelte
+<Tree data={fileTree} showLines bind:expanded />
+```
+
+### Custom Node Content
+
+```svelte
+{#snippet customNode({ node, level })}
+  <span>{node.label}</span>
+  {#if node.data?.badge}
+    <Badge>{node.data.badge}</Badge>
+  {/if}
+{/snippet}
+
+<Tree data={fileTree} nodeContent={customNode} />
+```
+
+### Skeleton Loading
+
+```svelte
+<Tree skeleton skeletonCount={6} skeletonDepth={2} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `data` | `TreeNode[] \| FlatTreeNode[]` | required | Tree data (nested or flat with parent IDs) |
+| `selected` | `string[]` | `[]` | Selected node IDs (bindable) |
+| `expanded` | `string[]` | `[]` | Expanded node IDs (bindable) |
+| `selectable` | `boolean` | `false` | Enable node selection |
+| `multiSelect` | `boolean` | `false` | Allow multiple selection |
+| `checkboxes` | `boolean` | `false` | Show checkboxes for selection |
+| `showLines` | `boolean` | `false` | Show connecting lines between nodes |
+| `draggable` | `boolean` | `false` | Enable drag-and-drop reordering |
+| `filter` | `string` | - | Search/filter term to highlight and filter matches |
+| `dense` | `boolean` | `false` | Compact node spacing |
+| `comfortable` | `boolean` | `false` | Relaxed node spacing |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `5` | Number of skeleton nodes |
+| `skeletonDepth` | `number` | `2` | Nesting depth of skeleton nodes |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `loadChildren` | `(node: TreeNode) => Promise<TreeNode[]>` | - | Lazy load children on expand |
+| `nodeContent` | `Snippet<[{ node: TreeNode; level: number }]>` | - | Custom node content renderer |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onselect` | `{ node: TreeNode, selected: string[] }` | Selection changed |
+| `onexpand` | `{ node: TreeNode, expanded: boolean }` | Node expanded or collapsed |
+| `ondrop` | `{ node: TreeNode, target: TreeNode, position: 'before' \| 'after' \| 'inside' }` | Node dropped after drag |
+
+## Types
+
+### TreeNode
+
+The nested tree data format:
+
+```typescript
+interface TreeNode {
+  id: string;
+  label: string;
+  icon?: Component;
+  children?: TreeNode[];
+  disabled?: boolean;
+  data?: unknown;
+}
+```
+
+### FlatTreeNode
+
+The flat data format with parent references:
+
+```typescript
+interface FlatTreeNode {
+  id: string;
+  parentId: string | null;
+  label: string;
+  icon?: Component;
+  disabled?: boolean;
+  data?: unknown;
+}
+```
+
+## Keyboard Navigation
+
+| Key | Action |
+|-----|--------|
+| Arrow Down | Move focus to next visible node |
+| Arrow Up | Move focus to previous visible node |
+| Arrow Right | Expand focused node, or move to first child if already expanded |
+| Arrow Left | Collapse focused node, or move to parent if already collapsed |
+| Enter / Space | Select or toggle checkbox on focused node |
+| Home | Move focus to first visible node |
+| End | Move focus to last visible node |
+| * (asterisk) | Expand all siblings of the focused node |
+
+## Accessibility
+
+- Container has `role="tree"`, each node has `role="treeitem"`
+- `aria-expanded` on expandable nodes
+- `aria-selected` on selectable nodes
+- `aria-level` indicating nesting depth
+- `aria-activedescendant` for focus management
+- `aria-multiselectable` when multiple selection is enabled
+- `aria-disabled` on disabled nodes
+- Full keyboard navigation with arrow keys, Home, End, Enter, Space
+- Expand/collapse animations respect `prefers-reduced-motion`
+- Search matches are highlighted with `<mark>` elements

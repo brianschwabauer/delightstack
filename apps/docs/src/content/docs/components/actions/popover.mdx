@@ -1,0 +1,172 @@
+---
+title: Popover
+description: A floating content container with smart Floating UI positioning, multiple trigger modes, focus trapping, and hover trapezoid for safe diagonal mouse movement.
+---
+
+## Import
+
+```svelte
+import { Popover } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Popover, Button } from '@delightstack/components';
+
+  let buttonRef = $state<HTMLElement>();
+  let isOpen = $state(false);
+</script>
+
+<Button bind:element={buttonRef} onclick={() => isOpen = !isOpen}>
+  Show Popover
+</Button>
+
+<Popover bind:opened={isOpen} refElement={buttonRef}>
+  <div style="padding: 1rem;">
+    <p>Popover content here</p>
+  </div>
+</Popover>
+```
+
+## Examples
+
+### Click-Triggered with Auto-Toggle
+
+Set `openOnClick` to let the Popover component manage the click toggle automatically.
+
+```svelte
+<script>
+  import { Popover } from '@delightstack/components';
+
+  let triggerRef = $state<HTMLElement>();
+</script>
+
+<button bind:this={triggerRef}>Toggle Popover</button>
+
+<Popover refElement={triggerRef} openOnClick placement="bottom-start">
+  <div style="padding: 1rem;">
+    <p>Click the button again to close.</p>
+  </div>
+</Popover>
+```
+
+### Hover Info Popover
+
+Open on hover with a delay. The hover trapezoid allows safe diagonal mouse movement between the trigger and the popover.
+
+```svelte
+<script>
+  import { Popover } from '@delightstack/components';
+
+  let infoRef = $state<HTMLElement>();
+</script>
+
+<span bind:this={infoRef}>Hover over me</span>
+
+<Popover
+  refElement={infoRef}
+  openOnHover
+  hoverDelay={200}
+  placement="top">
+  <p style="padding: 0.5rem 1rem;">Helpful tooltip-like info</p>
+</Popover>
+```
+
+### Context Menu Positioning (x/y)
+
+Position the popover at an arbitrary coordinate instead of relative to a reference element. Useful for right-click menus.
+
+```svelte
+<script>
+  import { Popover } from '@delightstack/components';
+
+  let menuOpen = $state(false);
+  let menuX = $state(0);
+  let menuY = $state(0);
+</script>
+
+<div oncontextmenu={(e) => {
+  e.preventDefault();
+  menuX = e.clientX;
+  menuY = e.clientY;
+  menuOpen = true;
+}}>
+  Right-click in this area
+</div>
+
+<Popover bind:opened={menuOpen} x={menuX} y={menuY} strategy="fixed">
+  <p style="padding: 0.5rem 1rem;">Custom context menu</p>
+</Popover>
+```
+
+### Custom Placement and Arrow
+
+Control placement and arrow visibility.
+
+```svelte
+<Popover refElement={triggerRef} openOnClick placement="right-start" arrow={false}>
+  <div style="padding: 1rem;">No arrow, positioned to the right</div>
+</Popover>
+```
+
+### Focus-Triggered Popover
+
+Open when the reference element receives focus, close on blur.
+
+```svelte
+<script>
+  import { Popover } from '@delightstack/components';
+
+  let inputRef = $state<HTMLElement>();
+</script>
+
+<input bind:this={inputRef} placeholder="Focus to see suggestions" />
+
+<Popover refElement={inputRef} openOnFocus placement="bottom-start">
+  <ul style="padding: 0.5rem;">
+    <li>Suggestion 1</li>
+    <li>Suggestion 2</li>
+  </ul>
+</Popover>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `refElement` | `HTMLElement` | `undefined` | Element to position relative to |
+| `opened` | `boolean` | `false` | Controls visibility (`$bindable()`) |
+| `placement` | `Placement` | `'bottom'` | Preferred Floating UI placement |
+| `strategy` | `'absolute' \| 'fixed'` | `'fixed'` | CSS positioning strategy. `'fixed'` renders through a Portal. |
+| `arrow` | `boolean` | `true` | Show arrow pointer toward the trigger |
+| `x` | `number` | `undefined` | X coordinate for virtual positioning (used instead of `refElement`) |
+| `y` | `number` | `undefined` | Y coordinate for virtual positioning (used instead of `refElement`) |
+| `openOnHover` | `boolean` | `false` | Open when the reference element is hovered |
+| `openOnClick` | `boolean` | `false` | Open when the reference element is clicked |
+| `openOnFocus` | `boolean` | `false` | Open when the reference element receives focus |
+| `closeOnOutsideClick` | `boolean` | `true` | Close when clicking outside the popover |
+| `closeOnInsideClick` | `boolean` | `false` | Close when a button-like element inside is clicked |
+| `closeOnEscapeKey` | `boolean` | `true` | Close on Escape key |
+| `disableInitialFocus` | `boolean` | `false` | Do not auto-focus content when opened |
+| `hoverDelay` | `number` | `100` | Delay in ms before opening on hover |
+| `radius` | `string` | `undefined` | Border radius override via `--popover-radius` |
+| `children` | `Snippet` | `undefined` | Popover content |
+| `id` | `string` | auto-generated | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `style` | `string` | `''` | Inline CSS styles |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `opened` (bindable) | `boolean` | Reactive state reflecting whether the popover is open |
+
+## Accessibility
+
+- Focus trap via `focusTrap` from `@delightstack/utilities` keeps Tab cycling within the popover
+- Escape key closes the popover (respects nested popovers -- closes innermost first)
+- Focus returns to the trigger element on close
+- Keyboard activation on the trigger element via Enter/Space (when `openOnClick` or `openOnFocus` is used)
+- Proper `z-index` stacking with `data-popover-index` for nested popovers

@@ -1,0 +1,86 @@
+---
+title: Introduction
+description: DelightStack is a polished, opinionated Svelte 5 component library focused on delightful user experiences.
+---
+
+import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+DelightStack is a comprehensive **Svelte 5 component library** with 55 production-ready components across 6 categories. Every component is crafted with attention to detail, thoughtful micro-animations, and a cohesive visual language.
+
+## Design Philosophy
+
+- **Details Matter** — Every pixel, every transition, every interaction is intentional.
+- **Delight Users** — Subtle animations, smooth transitions, and unexpected moments of joy.
+- **Opinionated by Default** — Components look great out of the box with sensible defaults.
+- **Modern CSS** — Plain CSS with custom properties, `light-dark()`, `color-mix()`, and container queries. No CSS-in-JS overhead.
+- **Self-Contained** — Each component is readable and maintainable in a single file.
+
+## Key Features
+
+<CardGrid>
+  <Card title="Svelte 5 Native" icon="rocket">
+    Built from the ground up with runes (`$props`, `$state`, `$derived`, `$effect`), snippets, and the `{@attach}` directive. No legacy compatibility layers.
+  </Card>
+  <Card title="55 Components" icon="puzzle">
+    Everything you need — buttons, modals, forms, tables, charts, maps, video players, and more.
+  </Card>
+  <Card title="Dark Mode Built-in" icon="moon">
+    Every component supports light and dark mode via CSS `light-dark()`. No JavaScript theme switching required.
+  </Card>
+  <Card title="Accessible" icon="approve-check">
+    ARIA attributes, keyboard navigation, focus management, and `prefers-reduced-motion` support baked into every component.
+  </Card>
+  <Card title="Design System Included" icon="seti:css">
+    A complete set of CSS custom properties for colors, typography, spacing, shadows, and animations — fully customizable.
+  </Card>
+  <Card title="Type-Safe" icon="seti:typescript">
+    Full TypeScript support with exported types for all component props, events, and data structures.
+  </Card>
+</CardGrid>
+
+## Component Categories
+
+### Actions
+Interactive elements that trigger behaviors: **Button**, **ButtonGroup**, **Modal**, **Alert**, **Popover**, **ContextMenu**, **Portal**, **CommandPalette**, and **ThemeToggle**.
+
+### Display
+Components for presenting information: **Accordion**, **Avatar**, **AvatarGroup**, **Calendar**, **Chart**, **Code**, **Comparison**, **Counter**, **Expand**, **List**, **ListItem**, **QR**, **SplitPane**, **Stat**, **Table**, **Timeline**, **Tree**, and **Typewriter**.
+
+### Feedback
+Components that communicate state and progress: **Callout**, **Confetti**, **Progress**, and **Toaster** (toast notifications).
+
+### Form
+Input components for user data entry: **Input**, **Checkbox**, **Fieldset**, **FileUpload**, **Form** (with Standard Schema validation), **Radio**, **Range**, **Rating**, **Select**, and **Toggle**.
+
+### Media
+Rich media components: **Carousel**, **Gallery**, **Image**, **Map**, **Panorama**, **PDF**, and **Video**.
+
+### Navigation
+Components for moving through the application: **BottomSheet**, **Breadcrumbs**, **Drawer**, **Menu**, **Pagination**, **Steps**, and **Tabs**.
+
+## How It Works
+
+All 55 components are available from a single import path:
+
+```svelte
+<script>
+  import { Button, Input, Modal } from '@delightstack/components';
+</script>
+
+<Button onclick={() => console.log('clicked!')}>
+  Click Me
+</Button>
+```
+
+Components use **callback props** (`onclick`, `onchange`) instead of dispatched events, support **two-way binding** via `bind:value`, and automatically handle loading states when callbacks return Promises.
+
+<Aside type="tip">
+Ready to get started? Head to the [Installation](/getting-started/installation/) page to set up your project, or jump straight to the [Quick Start](/getting-started/quick-start/) for a hands-on example.
+</Aside>
+
+## Next Steps
+
+- [Installation](/getting-started/installation/) — Add DelightStack to your project
+- [Quick Start](/getting-started/quick-start/) — Build your first form in minutes
+- [Component Overview](/components/overview/) — Browse all 55 components
+- [Design Tokens](/guides/design-tokens/) — Understand the design system

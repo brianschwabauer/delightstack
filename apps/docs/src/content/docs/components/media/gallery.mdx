@@ -1,0 +1,142 @@
+---
+title: Gallery
+description: An image grid with configurable columns, masonry layout, and a built-in lightbox with keyboard navigation and touch swipe support.
+---
+
+## Import
+
+```svelte
+import { Gallery } from '@delightstack/components';
+import type { GalleryImage } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Gallery } from '@delightstack/components';
+  import type { GalleryImage } from '@delightstack/components';
+
+  const images: GalleryImage[] = [
+    { src: '/photos/beach.jpg', alt: 'Beach sunset', caption: 'Sunset at the coast' },
+    { src: '/photos/mountain.jpg', alt: 'Mountain peak' },
+    { src: '/photos/forest.jpg', alt: 'Forest trail', caption: 'Autumn hike' },
+    { src: '/photos/city.jpg', alt: 'City skyline' },
+    { src: '/photos/lake.jpg', alt: 'Calm lake' },
+    { src: '/photos/desert.jpg', alt: 'Desert dunes' },
+  ];
+</script>
+
+<Gallery {images} />
+```
+
+## Examples
+
+### Masonry Layout
+
+Use a CSS columns-based masonry layout for images with varying aspect ratios.
+
+```svelte
+<Gallery {images} masonry columns={4} />
+```
+
+### Fixed Aspect Ratio
+
+Force all thumbnails to a uniform aspect ratio.
+
+```svelte
+<Gallery {images} columns={4} aspect_ratio="1" />
+```
+
+### Custom Item Rendering
+
+Override the default thumbnail with a custom snippet.
+
+```svelte
+<Gallery {images} columns={3}>
+  {#snippet item(image, index)}
+    <div class="custom-card">
+      <img src={image.thumbnail || image.src} alt={image.alt} />
+      <p>{image.caption ?? `Photo ${index + 1}`}</p>
+    </div>
+  {/snippet}
+</Gallery>
+```
+
+### Without Lightbox
+
+Disable the built-in lightbox and handle clicks manually.
+
+```svelte
+<Gallery {images} lightbox={false} onselect={({ image, index }) => {
+  console.log('Selected', image.alt, 'at index', index);
+}} />
+```
+
+### Dense and Comfortable Spacing
+
+```svelte
+<!-- Tight grid -->
+<Gallery {images} dense />
+
+<!-- Relaxed grid -->
+<Gallery {images} comfortable />
+```
+
+### Skeleton Loading
+
+```svelte
+<Gallery skeleton skeletonCount={9} columns={3} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `images` | `GalleryImage[]` | `[]` | Array of gallery images |
+| `columns` | `number` | `3` | Number of columns in the grid |
+| `gap` | `string` | `'0.5rem'` | Gap between grid items |
+| `masonry` | `boolean` | `false` | Use CSS columns masonry layout instead of grid |
+| `aspect_ratio` | `string` | `undefined` | Thumbnail aspect ratio (e.g. `'1'`, `'4/3'`); omit for natural ratio |
+| `lightbox` | `boolean` | `true` | Enable lightbox on click |
+| `dense` | `boolean` | `false` | Compact grid gap (0.25rem) |
+| `comfortable` | `boolean` | `false` | Relaxed grid gap (1rem) |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `6` | Number of skeleton items to render |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
+| `item` | `Snippet<[image, index]>` | `undefined` | Custom render snippet for each grid item |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onselect` | `{ image: GalleryImage, index: number }` | Fires when an image is clicked |
+| `onlightboxopen` | `{ index: number }` | Fires when the lightbox opens |
+| `onlightboxclose` | none | Fires when the lightbox closes |
+
+## Types
+
+### GalleryImage
+
+```typescript
+interface GalleryImage {
+  src: string;
+  thumbnail?: string;
+  alt: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+}
+```
+
+## Accessibility
+
+- Grid items use `role="list"` / `role="listitem"` semantics
+- Each thumbnail button has `aria-label` set to the image's `alt` text
+- Lightbox navigation: **Arrow Left** / **Arrow Right** to navigate, **Home** / **End** to jump
+- Lightbox supports touch swipe gestures for mobile navigation
+- Counter announces "X of Y" via `aria-live="polite"`
+- Close button and navigation buttons have descriptive `aria-label` attributes
+- Focus-visible outlines on all interactive elements

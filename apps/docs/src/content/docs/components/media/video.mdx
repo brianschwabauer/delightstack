@@ -1,0 +1,165 @@
+---
+title: Video
+description: A custom video player with playback controls, quality switching, captions, picture-in-picture, fullscreen, and keyboard shortcuts.
+---
+
+## Import
+
+```svelte
+import { Video } from '@delightstack/components';
+import type { Source, Track } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Video } from '@delightstack/components';
+</script>
+
+<Video src="/videos/intro.mp4" />
+```
+
+## Examples
+
+### Multiple Quality Sources
+
+Provide multiple sources with resolution labels for quality switching.
+
+```svelte
+<script>
+  import { Video } from '@delightstack/components';
+  import type { Source } from '@delightstack/components';
+
+  const sources: Source[] = [
+    { src: '/videos/demo-1080.mp4', type: 'video/mp4', size: 1080 },
+    { src: '/videos/demo-720.mp4', type: 'video/mp4', size: 720 },
+    { src: '/videos/demo-480.mp4', type: 'video/mp4', size: 480 },
+  ];
+</script>
+
+<Video src={sources} poster="/videos/demo-poster.jpg" />
+```
+
+### With Captions
+
+Add subtitle or caption tracks.
+
+```svelte
+<script>
+  import { Video } from '@delightstack/components';
+  import type { Track } from '@delightstack/components';
+
+  const captions: Track[] = [
+    { kind: 'subtitles', src: '/subs/en.vtt', srclang: 'en', label: 'English', default: true },
+    { kind: 'subtitles', src: '/subs/es.vtt', srclang: 'es', label: 'Spanish' },
+  ];
+</script>
+
+<Video src="/videos/lecture.mp4" {captions} />
+```
+
+### Autoplay Muted
+
+Auto-playing videos must be muted to comply with browser policies.
+
+```svelte
+<Video src="/videos/background.mp4" autoplay muted loop controls={false} />
+```
+
+### Accessing the Player
+
+Bind the native `HTMLVideoElement` for programmatic control.
+
+```svelte
+<script>
+  import { Video } from '@delightstack/components';
+
+  let player = $state<HTMLVideoElement>();
+</script>
+
+<Video src="/videos/clip.mp4" bind:player onready={({ player: p }) => {
+  console.log('Video ready, duration:', p.duration);
+}} />
+
+<button onclick={() => player?.play()}>Play</button>
+```
+
+### Skeleton Loading
+
+```svelte
+<Video skeleton />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `src` | `string \| Source[]` | required | Video source URL or array of sources with quality options |
+| `poster` | `string` | `undefined` | Poster image URL |
+| `autoplay` | `boolean` | `false` | Auto-play (requires `muted` for most browsers) |
+| `muted` | `boolean` | `false` | Start muted (`$bindable`) |
+| `loop` | `boolean` | `false` | Loop playback |
+| `controls` | `boolean` | `true` | Show custom controls |
+| `aspectRatio` | `string` | `'16/9'` | CSS aspect ratio |
+| `preload` | `'auto' \| 'metadata' \| 'none'` | `'metadata'` | Preload behavior |
+| `captions` | `Track[]` | `[]` | Caption/subtitle tracks |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
+| `player` | `HTMLVideoElement` | `undefined` | Bindable reference to the video element (`$bindable`) |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onplay` | none | Fires when playback starts |
+| `onpause` | none | Fires when playback pauses |
+| `onended` | none | Fires when playback ends |
+| `ontimeupdate` | `{ currentTime: number, duration: number }` | Fires on time update |
+| `onerror` | `{ error: MediaError }` | Fires when a playback error occurs |
+| `onenterfullscreen` | none | Fires when entering fullscreen |
+| `onexitfullscreen` | none | Fires when exiting fullscreen |
+| `onenterpip` | none | Fires when entering picture-in-picture |
+| `onexitpip` | none | Fires when exiting picture-in-picture |
+| `onready` | `{ player: HTMLVideoElement }` | Fires when the video element is ready |
+
+## Types
+
+### Source
+
+```typescript
+interface Source {
+  src: string;
+  type: string;
+  size?: number;
+}
+```
+
+### Track
+
+```typescript
+interface Track {
+  kind: 'captions' | 'subtitles';
+  src: string;
+  srclang: string;
+  label: string;
+  default?: boolean;
+}
+```
+
+## Accessibility
+
+- Container has `role="group"` with `aria-label="Video player"`
+- `tabindex="0"` for keyboard focus
+- **Space / K** toggles play/pause
+- **Arrow Left / Right** seeks backward/forward 10 seconds
+- **Arrow Up / Down** adjusts volume
+- **M** toggles mute, **F** toggles fullscreen, **C** toggles captions
+- Progress bar uses `role="slider"` with `aria-label="Seek"` and `aria-valuenow`/`aria-valuemax`
+- Volume slider uses `role="slider"` with `aria-label="Volume"`
+- All control buttons have descriptive `aria-label` attributes
+- Quality and speed menus use `aria-haspopup` and `aria-expanded`
+- Controls auto-hide during playback and reappear on mouse/touch/keyboard activity
+- Focus-visible outlines on all interactive elements

@@ -1,0 +1,164 @@
+---
+title: ThemeToggle
+description: A theme switcher that cycles between light, dark, and auto modes with animated sun-to-moon icon morphing and localStorage persistence.
+---
+
+## Import
+
+```svelte
+import { ThemeToggle } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { ThemeToggle } from '@delightstack/components';
+</script>
+
+<ThemeToggle />
+```
+
+## Examples
+
+### Bindable Theme State
+
+Bind to the `theme` prop to read or control the current theme preference.
+
+```svelte
+<script>
+  import { ThemeToggle } from '@delightstack/components';
+
+  let theme = $state<'light' | 'dark' | 'auto'>('auto');
+</script>
+
+<ThemeToggle bind:theme />
+<p>Current theme: {theme}</p>
+```
+
+### Two-State Toggle (No Auto)
+
+Disable the system/auto option to cycle only between light and dark.
+
+```svelte
+<ThemeToggle disableAuto />
+```
+
+### Detecting Effective Dark Mode
+
+Bind to `isDark` to get the resolved dark state (taking system preference into account when theme is `'auto'`).
+
+```svelte
+<script>
+  import { ThemeToggle } from '@delightstack/components';
+
+  let theme = $state<'light' | 'dark' | 'auto'>('auto');
+  let isDark = $state(false);
+</script>
+
+<ThemeToggle bind:theme bind:isDark />
+
+{#if isDark}
+  <p>Dark mode is active</p>
+{:else}
+  <p>Light mode is active</p>
+{/if}
+```
+
+### In a Header / Navbar
+
+Use a smaller size to fit in navigation bars.
+
+```svelte
+<script>
+  import { ThemeToggle } from '@delightstack/components';
+</script>
+
+<header>
+  <nav><!-- nav items --></nav>
+  <ThemeToggle size="0" />
+</header>
+```
+
+### Reacting to Changes
+
+Use the `onchange` callback to run logic when the theme changes.
+
+```svelte
+<ThemeToggle
+  onchange={(newTheme) => {
+    console.log('Theme changed to:', newTheme);
+  }}
+/>
+```
+
+### Custom Tooltip
+
+Override the default tooltip text.
+
+```svelte
+<ThemeToggle tooltip="Change appearance" />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Current theme preference (`$bindable()`) |
+| `isDark` | `boolean` | `false` | Computed resolved dark state (`$bindable()`, read-only). True when effective appearance is dark. |
+| `size` | `'0' \| '1' \| '2'` | `'1'` | Component size (`'0'` = 18px icon, `'1'` = 24px icon, `'2'` = 32px icon) |
+| `disableAuto` | `boolean` | `false` | Hide the auto/system option (two-state toggle only) |
+| `tooltip` | `string` | `''` | Override the default tooltip text. Defaults to the `aria-label` value. |
+| `id` | `string` | `undefined` | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `onchange` | `(theme: 'light' \| 'dark' \| 'auto') => void` | `undefined` | Called when the theme changes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `'light' \| 'dark' \| 'auto'` | Fires after cycling to a new theme state |
+
+## Theme Cycle Order
+
+| Mode | Cycle |
+|------|-------|
+| Three-state (default) | `light` -> `dark` -> `auto` -> `light` |
+| Two-state (`disableAuto`) | `light` -> `dark` -> `light` |
+
+## Theme Application
+
+When the theme changes, the component:
+
+1. Sets `document.documentElement.style.colorScheme` to `'light'` or `'dark'` based on the effective dark state.
+2. Saves the preference to `localStorage` under the key `'delightstack:theme'`.
+3. Watches for system preference changes via `matchMedia('(prefers-color-scheme: dark)')` and updates `isDark` reactively when theme is `'auto'`.
+
+### Anti-Flash Script
+
+To prevent a flash of wrong theme on page load, add the following inline script to your HTML `<head>` (runs synchronously before the body renders):
+
+```html
+<head>
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('delightstack:theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = (saved === 'light' || saved === 'dark' || saved === 'auto') ? saved : 'auto';
+        var isDark = theme === 'dark' || (theme === 'auto' && prefersDark);
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+      } catch(e) {}
+    })();
+  </script>
+</head>
+```
+
+## Accessibility
+
+- Renders as a `<button>` element with a descriptive `aria-label` (e.g., "Theme: dark", "Theme: auto (system preference)")
+- Keyboard toggle via Space and Enter keys
+- Focus ring on `:focus-visible`
+- Tooltip via `{@attach tooltip()}` showing the current state
+- The SVG icon uses `aria-hidden="true"` since the button's `aria-label` conveys the meaning
+- When theme is `'auto'`, a small "A" indicator appears on the button

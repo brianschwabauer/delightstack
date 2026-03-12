@@ -1,0 +1,197 @@
+---
+title: Calendar
+description: A full-featured date display and selection component with single, range, and multiple selection modes.
+---
+
+## Import
+
+```svelte
+import { Calendar } from '@delightstack/components';
+```
+
+The `CalendarEvent` and `MarkedDate` types are also exported:
+
+```svelte
+import type { CalendarEvent, MarkedDate } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Calendar } from '@delightstack/components';
+
+  let selectedDate = $state<Date | undefined>(undefined);
+</script>
+
+<Calendar bind:value={selectedDate} />
+```
+
+## Examples
+
+### Single Date Selection
+
+```svelte
+<script>
+  let date = $state<Date | undefined>(undefined);
+</script>
+
+<Calendar bind:value={date} />
+```
+
+### Date Range Selection
+
+First click sets the start date, second click sets the end date. Hovering between clicks previews the range.
+
+```svelte
+<script>
+  let dateRange = $state<[Date, Date] | undefined>(undefined);
+</script>
+
+<Calendar mode="range" bind:value={dateRange} />
+```
+
+### Multiple Date Selection
+
+Click to toggle individual dates on or off.
+
+```svelte
+<script>
+  let selectedDates = $state<Date[]>([]);
+</script>
+
+<Calendar mode="multiple" bind:value={selectedDates} />
+```
+
+### With Date Constraints
+
+```svelte
+<Calendar
+  bind:value={date}
+  min={new Date()}
+  max={new Date(2026, 11, 31)}
+/>
+```
+
+### With Marked Dates
+
+```svelte
+<Calendar
+  bind:value={date}
+  marked={[
+    { date: new Date(2026, 2, 15), color: 'var(--color-accent)', label: 'Meeting' },
+    { date: new Date(2026, 2, 20), color: 'var(--color-error)', label: 'Deadline' },
+  ]}
+/>
+```
+
+### With Events
+
+```svelte
+<script>
+  const events = [
+    { id: '1', title: 'Team Standup', start: new Date(2026, 2, 12) },
+    { id: '2', title: 'Sprint Review', start: new Date(2026, 2, 15), end: new Date(2026, 2, 16), color: '#10b981' },
+  ];
+</script>
+
+<Calendar bind:value={date} events={events} />
+```
+
+### Locale and Week Start
+
+```svelte
+<!-- German locale, Monday start -->
+<Calendar bind:value={date} locale="de-DE" weekStartsOn={1} />
+
+<!-- US locale, Sunday start -->
+<Calendar bind:value={date} locale="en-US" weekStartsOn={0} />
+```
+
+### With Time Slots
+
+```svelte
+<Calendar
+  bind:value={date}
+  showTimeSlots
+  timeSlotInterval={15}
+  timeSlotMin="09:00"
+  timeSlotMax="17:00"
+  ontimeslotselect={({ time, date }) => console.log(time, date)}
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<Calendar skeleton />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `Date \| Date[] \| [Date, Date]` | - | Selected date(s), bindable |
+| `mode` | `'single' \| 'range' \| 'multiple'` | `'single'` | Selection mode |
+| `month` | `Date` | `new Date()` | Currently displayed month, bindable |
+| `min` | `Date` | - | Minimum selectable date |
+| `max` | `Date` | - | Maximum selectable date |
+| `disabled` | `Date[] \| ((date: Date) => boolean)` | `[]` | Disabled dates (array or predicate function) |
+| `marked` | `MarkedDate[]` | `[]` | Dates with colored dot markers |
+| `events` | `CalendarEvent[]` | `[]` | Events to display on dates |
+| `weekStartsOn` | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6` | `1` | First day of week (0=Sunday) |
+| `locale` | `string` | - | BCP 47 locale string for formatting |
+| `showTimeSlots` | `boolean` | `false` | Show time slot picker alongside calendar |
+| `timeSlotInterval` | `number` | `30` | Time slot interval in minutes |
+| `timeSlotMin` | `string` | `'00:00'` | Earliest time slot |
+| `timeSlotMax` | `string` | `'23:59'` | Latest time slot |
+| `dense` | `boolean` | `false` | Compact cell spacing |
+| `comfortable` | `boolean` | `false` | Relaxed cell spacing |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onselect` | `{ value: Date \| Date[] \| [Date, Date] }` | Selection changed |
+| `onmonthchange` | `{ month: Date }` | Navigated to a different month |
+| `ontimeslotselect` | `{ time: string, date: Date }` | Time slot selected |
+
+## Types
+
+```typescript
+interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end?: Date;
+  color?: string;
+  allDay?: boolean;
+}
+
+interface MarkedDate {
+  date: Date;
+  color?: string;
+  label?: string;
+}
+```
+
+## Accessibility
+
+- Calendar container has `role="group"` with `aria-label="Calendar"`
+- Day grid has `role="grid"` with `aria-label="Calendar dates"`
+- Weekday headers use `role="columnheader"`
+- Each day cell is a `<button>` with `role="gridcell"`, `aria-selected`, and `aria-disabled`
+- Today and event information included in each cell's `aria-label`
+- Month/year header uses `aria-live="polite"` for screen reader announcements
+- Navigation buttons have `aria-label` ("Previous month", "Next month")
+- Time slots panel has `role="listbox"` with `role="option"` on each slot
+- Full keyboard navigation:
+  - **Arrow keys** move focus between days
+  - **Page Up / Page Down** moves by month (with Shift, by year)
+  - **Home / End** moves to start/end of week
+  - **Enter / Space** selects the focused date
+- Focus wraps across month boundaries automatically
+- Respects `prefers-reduced-motion`

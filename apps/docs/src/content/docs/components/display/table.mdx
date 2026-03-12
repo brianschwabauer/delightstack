@@ -1,0 +1,206 @@
+---
+title: Table
+description: A full-featured data table with sorting, row selection, custom cell rendering, column resizing, row grouping, expandable rows, and CSV/JSON export.
+---
+
+## Import
+
+```svelte
+import { Table } from '@delightstack/components';
+import type { Column } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Table } from '@delightstack/components';
+
+  const users = [
+    { name: 'Alice', email: 'alice@example.com' },
+    { name: 'Bob', email: 'bob@example.com' },
+  ];
+</script>
+
+<Table
+  data={users}
+  columns={[
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+  ]}
+/>
+```
+
+## Examples
+
+### Sortable Columns
+
+Mark columns as `sortable` and bind the sort state.
+
+```svelte
+<script>
+  import { Table } from '@delightstack/components';
+
+  let sortBy = $state('name');
+  let sortDirection = $state<'asc' | 'desc'>('asc');
+
+  const data = [
+    { name: 'Alice', age: 30 },
+    { name: 'Bob', age: 25 },
+    { name: 'Carol', age: 35 },
+  ];
+</script>
+
+<Table
+  {data}
+  columns={[
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'age', label: 'Age', sortable: true, align: 'right' },
+  ]}
+  bind:sortBy
+  bind:sortDirection
+/>
+```
+
+### Custom Cell Rendering
+
+Use Svelte snippets to render custom cell content.
+
+```svelte
+<script>
+  import { Table, Badge, Button } from '@delightstack/components';
+</script>
+
+{#snippet statusCell({ value })}
+  <Badge color={value === 'active' ? 'success' : 'warning'}>{value}</Badge>
+{/snippet}
+
+{#snippet actionsCell({ row })}
+  <Button size="0" onclick={() => editUser(row)}>Edit</Button>
+{/snippet}
+
+<Table
+  data={users}
+  columns={[
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'status', label: 'Status', cell: statusCell },
+    { key: 'actions', label: '', cell: actionsCell, width: '100px' },
+  ]}
+/>
+```
+
+### Row Selection with Checkboxes
+
+Enable `selectable` to show checkboxes. Supports shift-click range selection.
+
+```svelte
+<script>
+  import { Table } from '@delightstack/components';
+
+  let selectedUsers = $state<typeof users>([]);
+</script>
+
+<Table
+  data={users}
+  columns={columns}
+  selectable
+  bind:selected={selectedUsers}
+/>
+```
+
+### Striped and Dense
+
+```svelte
+<Table data={users} columns={columns} striped dense />
+```
+
+### Expandable Rows
+
+```svelte
+{#snippet rowDetail(row)}
+  <p>Details for {row.name}: {row.bio}</p>
+{/snippet}
+
+<Table
+  data={users}
+  columns={columns}
+  expandable
+  expandedRow={rowDetail}
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<Table
+  skeleton
+  skeletonCount={5}
+  columns={[
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'status', label: 'Status' },
+  ]}
+  data={[]}
+/>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `data` | `T[]` | `[]` | Array of row data |
+| `columns` | `Column<T>[]` | `[]` | Column definitions |
+| `sortBy` | `string` | - | Current sort column key (bindable) |
+| `sortDirection` | `'asc' \| 'desc'` | `'asc'` | Sort direction (bindable) |
+| `selectable` | `boolean` | `false` | Enable row selection with checkboxes |
+| `selected` | `T[]` | `[]` | Selected rows (bindable) |
+| `striped` | `boolean` | `false` | Alternating row background colors |
+| `dense` | `boolean` | `false` | Compact cell padding |
+| `comfortable` | `boolean` | `false` | Relaxed cell padding |
+| `stickyHeader` | `boolean` | `true` | Sticky header on vertical scroll |
+| `resizableColumns` | `boolean` | `false` | Allow column width resizing by dragging |
+| `expandable` | `boolean` | `false` | Enable row expansion |
+| `groupBy` | `string` | - | Column key to group rows by |
+| `exportable` | `boolean` | `false` | Enable CSV/JSON export functionality |
+| `skeleton` | `boolean` | `false` | Show loading skeleton rows |
+| `skeletonCount` | `number` | `5` | Number of skeleton rows |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `empty` | `Snippet` | - | Custom empty state content |
+| `expandedRow` | `Snippet<[T]>` | - | Content for expanded rows |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onsort` | `{ column: string, direction: 'asc' \| 'desc' }` | Sort changed (use for server-side sorting) |
+| `onselect` | `{ selected: T[] }` | Selection changed |
+| `onrowclick` | `{ row: T, index: number }` | Row clicked |
+| `oncolumnresize` | `{ column: string, width: number }` | Column resized |
+
+## Types
+
+The `Column` interface defines column configuration:
+
+```typescript
+interface Column<T> {
+  key: string;
+  label: string;
+  sortable?: boolean;
+  width?: string;
+  minWidth?: string;
+  align?: 'left' | 'center' | 'right';
+  cell?: Snippet<[{ value: unknown; row: T; index: number }]>;
+  header?: Snippet<[{ column: Column<T> }]>;
+}
+```
+
+## Accessibility
+
+- Uses semantic `<table>`, `<thead>`, `<tbody>`, `<th>`, and `<td>` elements
+- `aria-sort` on sortable column headers indicates current sort state
+- Checkbox selection uses proper `<input type="checkbox">` with `aria-label`
+- Row expansion uses `aria-expanded` on toggle buttons
+- Keyboard navigation: Tab through interactive elements, Enter to sort columns
+- Header checkbox has `aria-label="Select all rows"`
+- Respects `prefers-reduced-motion` for skeleton shimmer and chevron animations

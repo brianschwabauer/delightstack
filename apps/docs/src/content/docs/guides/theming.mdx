@@ -1,0 +1,244 @@
+---
+title: Theming
+description: Customize the look and feel of DelightStack by overriding CSS custom properties.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+DelightStack's entire visual system is controlled by CSS custom properties. To create a custom theme, you override these tokens in your global CSS — no build step, no JavaScript, no configuration files.
+
+## How Theming Works
+
+Every component reads its colors, spacing, typography, and other visual properties from CSS custom properties defined on `:root`. When you change a token, every component that uses it updates automatically.
+
+```css
+/* Your global CSS — override any token */
+:root {
+  --color-action: light-dark(#059669, #34d399);
+  --radius-md: 0.75rem;
+}
+```
+
+That is all it takes. Every Button, Input, Select, and other interactive component now uses your green action color and slightly rounder corners.
+
+## Creating a Custom Theme
+
+Here is a complete example of a brand-colored theme. You only need to override the tokens you want to change — everything else falls back to the defaults.
+
+### Example: Emerald Brand Theme
+
+```css
+:root {
+  color-scheme: light dark;
+
+  /* Brand colors */
+  --color-action: light-dark(#059669, #34d399);
+  --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
+  --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
+  --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
+  --color-action-text-hover: white;
+
+  --color-accent: light-dark(#0891b2, #22d3ee);
+  --color-accent-hover: oklch(from var(--color-accent) calc(l - 0.05) c h);
+  --color-accent-active: oklch(from var(--color-accent) calc(l - 0.1) c h);
+  --color-accent-text: oklch(from var(--color-accent) 0.92 calc(c * 0.15) h);
+  --color-accent-text-hover: white;
+
+  /* Warmer backgrounds */
+  --color-bg: light-dark(#fafaf9, #0c0a09);
+  --color-bg-subtle: light-dark(#f5f5f4, #1c1917);
+
+  /* Rounder corners */
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+
+  /* Custom font */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+```
+
+### Example: Rose Brand Theme
+
+```css
+:root {
+  color-scheme: light dark;
+
+  --color-action: light-dark(#e11d48, #fb7185);
+  --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
+  --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
+  --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
+  --color-action-text-hover: white;
+
+  --color-accent: light-dark(#7c3aed, #a78bfa);
+  --color-accent-hover: oklch(from var(--color-accent) calc(l - 0.05) c h);
+  --color-accent-active: oklch(from var(--color-accent) calc(l - 0.1) c h);
+  --color-accent-text: oklch(from var(--color-accent) 0.92 calc(c * 0.15) h);
+  --color-accent-text-hover: white;
+
+  /* Sharper corners for a crisp look */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.375rem;
+}
+```
+
+## Overriding Derived Colors
+
+The action and accent colors use the `oklch(from ...)` relative color syntax to automatically derive hover, active, and text states. When you change the base color, the derived states update automatically:
+
+```css
+:root {
+  /* Just change the base — everything else follows */
+  --color-action: light-dark(#7c3aed, #a78bfa);
+}
+```
+
+If you want full control over the derived states, override them explicitly:
+
+```css
+:root {
+  --color-action: #7c3aed;
+  --color-action-hover: #6d28d9;     /* Custom hover */
+  --color-action-active: #5b21b6;    /* Custom active */
+  --color-action-text: #f5f3ff;      /* Custom text on action bg */
+  --color-action-text-hover: white;
+}
+```
+
+## Per-Component Overrides
+
+CSS custom properties cascade, so you can scope overrides to specific parts of your page:
+
+### Scoped to a Container
+
+```css
+.sidebar {
+  --color-action: light-dark(#7c3aed, #a78bfa);
+  --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
+  --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
+  --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
+  --color-action-text-hover: white;
+}
+```
+
+```svelte
+<div class="sidebar">
+  <!-- These buttons use the purple action color -->
+  <Button>Sidebar Action</Button>
+  <Input label="Search" />
+</div>
+
+<!-- These buttons use the global action color -->
+<Button>Main Action</Button>
+```
+
+### Scoped with Inline Styles
+
+For one-off overrides, use inline `style` attributes:
+
+```svelte
+<Button style="--color-action: #dc2626; --color-action-text: white;">
+  Delete
+</Button>
+```
+
+## Customizing Specific Token Groups
+
+### Typography
+
+```css
+:root {
+  /* Use a custom font */
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Adjust the type scale */
+  --text-base: 0.9375rem;  /* 15px instead of 16px */
+  --text-lg: 1.0625rem;
+}
+```
+
+### Border Radius
+
+```css
+:root {
+  /* Sharp, minimal look */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 12px;
+}
+```
+
+```css
+:root {
+  /* Fully rounded, playful look */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+}
+```
+
+### Shadows
+
+```css
+:root {
+  /* Softer, more diffused shadows */
+  --shadow-md: light-dark(
+    0 4px 12px -2px rgb(0 0 0 / 0.06),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06)
+  );
+}
+```
+
+### Transitions
+
+```css
+:root {
+  /* Snappier animations */
+  --duration-fast: 75ms;
+  --duration-normal: 150ms;
+  --duration-slow: 200ms;
+
+  /* Or slower, more deliberate */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+}
+```
+
+## Theme Switching
+
+To support runtime theme switching (beyond light/dark), use a CSS class on `:root` or `<body>`:
+
+```css
+:root.theme-ocean {
+  --color-action: light-dark(#0284c7, #38bdf8);
+  --color-accent: light-dark(#0891b2, #22d3ee);
+  --color-bg: light-dark(#f0f9ff, #0c0a09);
+}
+
+:root.theme-forest {
+  --color-action: light-dark(#059669, #34d399);
+  --color-accent: light-dark(#65a30d, #a3e635);
+  --color-bg: light-dark(#f0fdf4, #052e16);
+}
+```
+
+```svelte
+<script>
+  function setTheme(name: string) {
+    document.documentElement.className = `theme-${name}`;
+  }
+</script>
+
+<button onclick={() => setTheme('ocean')}>Ocean</button>
+<button onclick={() => setTheme('forest')}>Forest</button>
+```
+
+<Aside type="tip">
+For light/dark mode switching specifically, use the built-in `ThemeToggle` component and the `color-scheme` property. See the [Dark Mode](/guides/dark-mode/) guide for details.
+</Aside>

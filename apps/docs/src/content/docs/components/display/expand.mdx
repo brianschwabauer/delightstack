@@ -1,0 +1,126 @@
+---
+title: Expand
+description: A smooth animated container that expands and collapses content using CSS Grid height animation.
+---
+
+## Import
+
+```svelte
+import { Expand } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Expand } from '@delightstack/components';
+
+  let showDetails = $state(false);
+</script>
+
+<button onclick={() => showDetails = !showDetails}>
+  {showDetails ? 'Hide' : 'Show'} Details
+</button>
+
+<Expand bind:show={showDetails}>
+  <div>
+    <p>Additional information that can be expanded and collapsed smoothly.</p>
+    <p>The height animates from 0 to auto without any JavaScript measurement.</p>
+  </div>
+</Expand>
+```
+
+## Examples
+
+### Toggle with a Button
+
+```svelte
+<script>
+  import { Expand, Button } from '@delightstack/components';
+
+  let visible = $state(false);
+</script>
+
+<Button onclick={() => visible = !visible}>
+  {visible ? 'Collapse' : 'Expand'}
+</Button>
+
+<Expand bind:show={visible}>
+  <div style="padding: 1rem;">
+    <p>This content slides in and out smoothly.</p>
+  </div>
+</Expand>
+```
+
+### Conditional Sections
+
+```svelte
+<script>
+  let showAdvanced = $state(false);
+</script>
+
+<label>
+  <input type="checkbox" bind:checked={showAdvanced} />
+  Show advanced options
+</label>
+
+<Expand show={showAdvanced}>
+  <div style="padding: 1rem 0;">
+    <p>Advanced configuration fields go here.</p>
+  </div>
+</Expand>
+```
+
+### Used by Accordion
+
+The Expand component is used internally by the Accordion component for its expand/collapse behavior.
+
+```svelte
+{#each sections as section}
+  <div class="accordion-item">
+    <button onclick={() => active = section.id}>
+      {section.title}
+    </button>
+    <Expand show={active === section.id}>
+      <div>{section.content}</div>
+    </Expand>
+  </div>
+{/each}
+```
+
+### With Custom Inline Style
+
+```svelte
+<Expand show={visible} style="border-top: 1px solid #eee;">
+  <div style="padding: 1rem;">
+    Styled expand container.
+  </div>
+</Expand>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `show` | `boolean` | `false` | Controls expanded/collapsed state, bindable |
+| `style` | `string` | `''` | Additional inline styles |
+| `children` | `Snippet` | - | Content to expand/collapse |
+
+## How It Works
+
+The component uses the CSS Grid trick for animating height to/from auto:
+
+- **Collapsed**: `grid-template-rows: min-content 0fr` with `opacity: 0`
+- **Expanded**: `grid-template-rows: min-content 1fr` with `opacity: 1`
+- A `::before` pseudo-element with `min-content` row prevents layout collapse
+- Content uses `visibility: hidden` when collapsed and `visibility: visible` when expanded
+
+This approach provides smooth height animation without any JavaScript measurement of content height.
+
+## Accessibility
+
+- Uses the `inert` attribute when collapsed to prevent focus trapping in hidden content
+- Screen readers skip collapsed content entirely (content is not focusable or readable when hidden)
+- No explicit ARIA attributes are needed -- the `inert` attribute handles accessibility
+- Content opacity fades alongside height for a polished transition
+- Collapsed state takes zero space in the layout

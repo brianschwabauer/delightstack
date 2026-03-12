@@ -1,0 +1,177 @@
+---
+title: Alert
+description: A streamlined confirmation dialog built on Modal, providing consistent yes/no decision flows with a programmatic API.
+---
+
+## Import
+
+```svelte
+import { Alert } from '@delightstack/components';
+```
+
+For the programmatic API:
+
+```typescript
+import { alert } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Alert, Button } from '@delightstack/components';
+
+  let showAlert = $state(false);
+</script>
+
+<Button onclick={() => showAlert = true}>Confirm Action</Button>
+
+<Alert
+  bind:open={showAlert}
+  title="Save Changes?"
+  message="You have unsaved changes. Would you like to save before leaving?"
+  continueText="Save"
+  oncontinue={async () => {
+    await saveChanges();
+    showAlert = false;
+  }}
+  oncancel={() => showAlert = false}
+/>
+```
+
+## Examples
+
+### Destructive Action
+
+The confirm button uses the error color scheme when `destructive` is true.
+
+```svelte
+<script>
+  import { Alert, Button } from '@delightstack/components';
+
+  let showDelete = $state(false);
+</script>
+
+<Button error onclick={() => showDelete = true}>Delete Item</Button>
+
+<Alert
+  bind:open={showDelete}
+  title="Delete Item"
+  message="This action cannot be undone. Are you sure?"
+  continueText="Delete"
+  cancelText="Keep It"
+  destructive
+  oncontinue={async () => {
+    await api.deleteItem(itemId);
+    showDelete = false;
+  }}
+  oncancel={() => showDelete = false}
+/>
+```
+
+### With Icon
+
+Display an icon above the title for visual emphasis.
+
+```svelte
+<script>
+  import { Alert } from '@delightstack/components';
+  import WarningIcon from '~icons/mdi/alert-circle';
+
+  let showWarning = $state(false);
+</script>
+
+<Alert
+  bind:open={showWarning}
+  title="Warning"
+  message="This will overwrite existing data."
+  icon={WarningIcon}
+  destructive
+  oncontinue={() => { showWarning = false; }}
+  oncancel={() => { showWarning = false; }}
+/>
+```
+
+### Programmatic API
+
+Create an alert dialog imperatively using the `alert()` function. It returns a `Promise<boolean>` that resolves to `true` (confirmed) or `false` (cancelled).
+
+```typescript
+import { alert } from '@delightstack/components';
+
+const confirmed = await alert({
+  title: 'Delete?',
+  message: 'This cannot be undone.',
+  destructive: true,
+  continueText: 'Delete'
+});
+
+if (confirmed) {
+  await api.deleteItem(id);
+}
+```
+
+### Promise-Aware Confirm
+
+When `oncontinue` returns a `Promise`, the confirm button automatically enters loading state until the promise resolves.
+
+```svelte
+<Alert
+  bind:open={showAlert}
+  title="Process Data"
+  message="This may take a moment."
+  continueText="Process"
+  oncontinue={async () => {
+    await api.processData();
+    showAlert = false;
+  }}
+/>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `open` | `boolean` | `false` | Controls visibility (`$bindable()`) |
+| `title` | `string` | `'Confirm'` | Alert title |
+| `message` | `string` | `''` | Alert message / question |
+| `cancelText` | `string` | `'Cancel'` | Cancel button label |
+| `continueText` | `string` | `'Continue'` | Confirm button label |
+| `destructive` | `boolean` | `false` | Style confirm button with `error` color |
+| `icon` | `Component` | `undefined` | Optional icon component displayed above the title |
+| `id` | `string` | auto-generated | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `oncancel` | `() => void` | `undefined` | Called when Cancel is clicked |
+| `oncontinue` | `() => void \| Promise<void>` | `undefined` | Called when Confirm is clicked; promise-aware (button shows loading until resolved) |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `oncancel` | none | Fires when the user cancels (Cancel button, backdrop click, or Escape key) |
+| `oncontinue` | none | Fires when the user confirms. If it returns a `Promise`, the button shows a loading state. |
+
+## Types
+
+The component exports the `AlertOptions` interface for the programmatic API and the `alert` function:
+
+```typescript
+interface AlertOptions {
+  title?: string;
+  message: string;
+  cancelText?: string;
+  continueText?: string;
+  destructive?: boolean;
+  icon?: Component;
+}
+
+function alert(options: AlertOptions): Promise<boolean>;
+```
+
+## Accessibility
+
+- Inherits all Modal accessibility features (`role="dialog"`, `aria-modal`, focus trap)
+- Clear button labeling with Cancel on the left and Confirm on the right
+- Keyboard navigable: Tab between Cancel and Confirm buttons
+- Escape key and backdrop click trigger the cancel action
+- When `destructive` is true, the `icon` section is styled with the error color

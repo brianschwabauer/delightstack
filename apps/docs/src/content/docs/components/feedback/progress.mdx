@@ -1,0 +1,168 @@
+---
+title: Progress
+description: A unified progress and loading indicator component supporting circular spinners, linear bars, overlays, and fullscreen loading states.
+---
+
+## Import
+
+```svelte
+import { Progress } from '@delightstack/components';
+```
+
+## Basic Usage
+
+By default, Progress renders as a circular indeterminate spinner.
+
+```svelte
+<Progress />
+```
+
+## Examples
+
+### Indeterminate Spinner
+
+Omit the `value` prop for an indeterminate loading animation.
+
+```svelte
+<!-- Default circular spinner -->
+<Progress />
+
+<!-- Inline spinner in text -->
+<p>Loading data <Progress size="00" /></p>
+
+<!-- Linear indeterminate bar -->
+<Progress circular={false} />
+```
+
+### Determinate Progress
+
+Provide a `value` (0-100) to show progress.
+
+```svelte
+<script>
+  import { Progress } from '@delightstack/components';
+
+  let uploadProgress = $state(45);
+</script>
+
+<!-- Circular progress with percentage -->
+<Progress value={75} showValue />
+
+<!-- Linear progress bar -->
+<Progress circular={false} value={uploadProgress} />
+
+<!-- Linear with label and percentage -->
+<Progress circular={false} value={uploadProgress} showValue label="Uploading..." />
+```
+
+### Sizes
+
+```svelte
+<!-- Circular sizes -->
+<Progress size="00" />  <!-- 16px, inline in text/buttons -->
+<Progress size="0" />   <!-- 24px, small indicator -->
+<Progress size="1" />   <!-- 40px, default -->
+<Progress size="2" />   <!-- 64px, prominent -->
+<Progress size="3" />   <!-- 96px, hero/overlay -->
+
+<!-- Linear sizes -->
+<Progress circular={false} value={60} size="00" />  <!-- 2px height -->
+<Progress circular={false} value={60} size="1" />   <!-- 8px height -->
+<Progress circular={false} value={60} size="3" />   <!-- 16px height -->
+```
+
+### Striped Bar
+
+Add an animated stripe effect to a linear progress bar.
+
+```svelte
+<Progress circular={false} value={60} striped />
+```
+
+### Multi-Segment Progress
+
+Display multiple segments with different colors in a single linear bar.
+
+```svelte
+<Progress
+  circular={false}
+  segments={[
+    { value: 40, color: 'var(--color-success)', label: 'Complete' },
+    { value: 25, color: 'var(--color-warning)', label: 'In Progress' },
+    { value: 10, color: 'var(--color-error)', label: 'Failed' },
+  ]}
+/>
+```
+
+### Overlay and Fullscreen
+
+Use `overlay` to cover a parent element, or `fullScreen` to cover the entire viewport.
+
+```svelte
+<script>
+  import { Progress } from '@delightstack/components';
+
+  let isLoading = $state(true);
+  let appLoading = $state(false);
+</script>
+
+<!-- Overlay on parent container -->
+<div style="position: relative;">
+  <p>Table content here...</p>
+  {#if isLoading}
+    <Progress overlay label="Loading data..." />
+  {/if}
+</div>
+
+<!-- Full-screen loading -->
+{#if appLoading}
+  <Progress fullScreen label="Starting application..." />
+{/if}
+```
+
+### Color Variants
+
+```svelte
+<Progress value={100} success />
+<Progress value={30} error />
+<Progress value={50} color="var(--color-accent)" />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `number` | - | Progress value (0-100). Omit for indeterminate |
+| `max` | `number` | `100` | Maximum value |
+| `circular` | `boolean` | `true` | Circular mode (false = linear bar) |
+| `loading` | `boolean` | `false` | Force indeterminate animation regardless of value |
+| `size` | `'00' \| '0' \| '1' \| '2' \| '3'` | `'1'` | Size of the indicator |
+| `color` | `string` | - | Custom fill color (overrides `currentColor`) |
+| `label` | `string` | - | Text label (below spinner or beside bar) |
+| `showValue` | `boolean` | `false` | Display the current percentage |
+| `striped` | `boolean` | `false` | Striped animation on fill (linear mode only) |
+| `overlay` | `boolean` | `false` | Cover parent element with backdrop |
+| `fullScreen` | `boolean` | `false` | Cover entire viewport |
+| `success` | `boolean` | `false` | Success color variant |
+| `error` | `boolean` | `false` | Error color variant |
+| `segments` | `ProgressSegment[]` | - | Multi-segment progress (linear only) |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Types
+
+```typescript
+interface ProgressSegment {
+  value: number;
+  color?: string;
+  label?: string;
+}
+```
+
+## Accessibility
+
+- Uses `role="progressbar"` for determinate mode with `aria-valuenow`, `aria-valuemin`, and `aria-valuemax`
+- Uses `role="status"` for indeterminate mode
+- `aria-label` provides context (e.g., "Uploading file" or "75% complete")
+- Respects `prefers-reduced-motion` -- shows a static partial arc instead of spinning
+- Overlay mode uses `backdrop-filter: blur(2px)` for subtle background blur

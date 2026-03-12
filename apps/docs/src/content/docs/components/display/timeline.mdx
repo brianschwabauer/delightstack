@@ -1,0 +1,183 @@
+---
+title: Timeline
+description: A chronological event display for vertical or horizontal timelines with scroll-reveal animations, status markers, and on-demand loading.
+---
+
+## Import
+
+```svelte
+import { Timeline, TimelineItem } from '@delightstack/components';
+```
+
+The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` and `TimelineItem` are backed by the same Svelte component -- when used inside a Timeline context, it renders as an item; at the top level, it renders as the container.
+
+## Basic Usage
+
+```svelte
+<Timeline>
+  <TimelineItem title="Step 1" date="Jan 10" status="complete">
+    First step completed.
+  </TimelineItem>
+  <TimelineItem title="Step 2" date="Jan 11" status="active">
+    Currently in progress.
+  </TimelineItem>
+  <TimelineItem title="Step 3" status="pending" />
+</Timeline>
+```
+
+## Examples
+
+### Order Tracking
+
+```svelte
+<script>
+  import { Timeline, TimelineItem } from '@delightstack/components';
+  import CheckIcon from '~icons/mdi/check';
+  import ShippingIcon from '~icons/mdi/truck';
+  import PackageIcon from '~icons/mdi/package';
+</script>
+
+<Timeline>
+  <TimelineItem
+    status="complete"
+    date="Jan 10"
+    title="Order Confirmed"
+    icon={CheckIcon}
+  >
+    Your order has been confirmed.
+  </TimelineItem>
+  <TimelineItem
+    status="complete"
+    date="Jan 11"
+    title="Shipped"
+    icon={ShippingIcon}
+  >
+    Package picked up by carrier.
+  </TimelineItem>
+  <TimelineItem
+    status="active"
+    date="Jan 12"
+    title="Out for Delivery"
+    icon={ShippingIcon}
+  >
+    Expected delivery today.
+  </TimelineItem>
+  <TimelineItem
+    status="pending"
+    title="Delivered"
+    icon={PackageIcon}
+  />
+</Timeline>
+```
+
+### Horizontal Process Steps
+
+```svelte
+<Timeline horizontal>
+  <TimelineItem status="complete" title="Order Placed" />
+  <TimelineItem status="complete" title="Processing" />
+  <TimelineItem status="active" title="Shipping" />
+  <TimelineItem status="pending" title="Delivered" />
+</Timeline>
+```
+
+### Alternating Sides
+
+Events alternate between left and right in vertical mode.
+
+```svelte
+<Timeline alternate>
+  <TimelineItem date="Jan 1" title="Event A">Description A</TimelineItem>
+  <TimelineItem date="Feb 1" title="Event B">Description B</TimelineItem>
+  <TimelineItem date="Mar 1" title="Event C">Description C</TimelineItem>
+</Timeline>
+```
+
+### On-Demand Loading
+
+Load more events as the user scrolls near the end of the timeline.
+
+```svelte
+<Timeline onloadmore={loadMoreEvents} pending>
+  {#each events as event}
+    <TimelineItem
+      date={event.date}
+      title={event.title}
+      status={event.status}
+    >
+      {event.description}
+    </TimelineItem>
+  {/each}
+</Timeline>
+```
+
+### Custom Marker Color
+
+```svelte
+<Timeline>
+  <TimelineItem title="Custom Color" color="var(--color-error)">
+    A red-themed event marker.
+  </TimelineItem>
+</Timeline>
+```
+
+### Skeleton Loading
+
+```svelte
+<Timeline skeleton skeletonCount={4} />
+```
+
+## Timeline Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `horizontal` | `boolean` | `false` | Horizontal layout instead of vertical |
+| `alternate` | `boolean` | `false` | Alternate items left/right (vertical) or top/bottom (horizontal) |
+| `pending` | `boolean` | `false` | Show a pending/loading indicator at the end |
+| `dense` | `boolean` | `false` | Compact event spacing |
+| `comfortable` | `boolean` | `false` | Relaxed event spacing |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeletonCount` | `number` | `3` | Number of skeleton items |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | - | TimelineItem children |
+
+## Timeline Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onloadmore` | `() => void \| Promise<void>` | Called when scrolling near the end for on-demand loading |
+
+## TimelineItem Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `date` | `Date \| string` | - | Event timestamp |
+| `title` | `string` | `''` | Event title |
+| `icon` | `Component` | - | Marker icon component |
+| `color` | `string` | - | Marker color override (CSS color value) |
+| `status` | `'complete' \| 'active' \| 'pending'` | - | Event status for marker styling |
+| `children` | `Snippet` | - | Event body content |
+
+## Types
+
+The Timeline exports a `TimelineContext` interface for internal context:
+
+```typescript
+interface TimelineContext {
+  horizontal: boolean;
+  alternate: boolean;
+  dense: boolean;
+  comfortable: boolean;
+  register: () => number;
+}
+```
+
+## Accessibility
+
+- Timeline renders as an ordered list (`<ol>`) with `role="list"` for semantic structure
+- Dates use `<time>` elements with `datetime` attributes
+- Status is communicated visually through marker styling (filled, pulsing, dashed)
+- Scroll-reveal animations respect `prefers-reduced-motion` -- items appear without animation when reduced motion is preferred
+- The load-more sentinel and skeleton items use `aria-hidden="true"`
+- Horizontal mode supports native touch/swipe scrolling with CSS snap points

@@ -1,0 +1,169 @@
+---
+title: Checkbox
+description: A styled checkbox input with animated SVG checkmark, indeterminate state support, and an optional CheckboxGroup for managing multiple selections.
+---
+
+## Import
+
+```svelte
+import { Checkbox, CheckboxGroup } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Checkbox } from '@delightstack/components';
+
+  let agreed = $state(false);
+</script>
+
+<Checkbox bind:checked={agreed} label="I agree to the terms and conditions" />
+```
+
+## Examples
+
+### With Description
+
+```svelte
+<Checkbox
+  bind:checked={marketing}
+  label="Marketing emails"
+  description="Receive updates about new features and offers"
+/>
+```
+
+### With Error
+
+```svelte
+<Checkbox
+  bind:checked={termsAgreed}
+  label="Accept terms"
+  required
+  error={!termsAgreed ? 'You must accept the terms' : ''}
+/>
+```
+
+### Indeterminate State
+
+Use `indeterminate` for tree-style parent checkboxes where some children are selected.
+
+```svelte
+<script>
+  import { Checkbox } from '@delightstack/components';
+
+  let someSelected = $state(true);
+  let allSelected = $state(false);
+</script>
+
+<Checkbox
+  checked={someSelected}
+  indeterminate={someSelected && !allSelected}
+  onchange={handleParentToggle}
+  label="Select all"
+/>
+```
+
+### Checkbox Group
+
+Use `CheckboxGroup` to manage multiple related checkboxes. The group's `value` is an array of selected values.
+
+```svelte
+<script>
+  import { Checkbox, CheckboxGroup } from '@delightstack/components';
+
+  let notifications = $state(['email', 'push']);
+</script>
+
+<CheckboxGroup bind:value={notifications} label="Notification preferences" name="notifications">
+  <Checkbox value="email" label="Email notifications" />
+  <Checkbox value="sms" label="SMS notifications" />
+  <Checkbox value="push" label="Push notifications" />
+</CheckboxGroup>
+```
+
+### Group with Error
+
+```svelte
+<CheckboxGroup
+  bind:value={permissions}
+  label="Permissions"
+  required
+  error={permissions.length === 0 ? 'Select at least one permission' : ''}
+>
+  <Checkbox value="read" label="Read" />
+  <Checkbox value="write" label="Write" />
+  <Checkbox value="admin" label="Admin" />
+</CheckboxGroup>
+```
+
+### Sizes
+
+```svelte
+<Checkbox size="0" label="Small (16px)" bind:checked={a} />
+<Checkbox size="1" label="Default (20px)" bind:checked={b} />
+<Checkbox size="2" label="Medium (24px)" bind:checked={c} />
+<Checkbox size="3" label="Large (28px)" bind:checked={d} />
+```
+
+## Props
+
+### Checkbox
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `checked` | `boolean` | `false` | Checked state, bindable |
+| `indeterminate` | `boolean` | `false` | Indeterminate state (horizontal dash) |
+| `value` | `string` | `''` | Value when used in a CheckboxGroup or form |
+| `disabled` | `boolean` | `false` | Disable the checkbox |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Checkbox size |
+| `label` | `string` | `''` | Label text |
+| `description` | `string` | `''` | Helper text below label |
+| `error` | `string` | `''` | Error message |
+| `required` | `boolean` | `false` | Mark as required |
+| `tooltip` | `string` | `''` | Tooltip text on hover |
+| `dense` | `boolean` | `false` | Tighter label/box spacing |
+| `comfortable` | `boolean` | `false` | More label/box spacing |
+| `id` | `string` | auto | Element ID |
+| `name` | `string` | `''` | Form field name |
+| `class` | `string` | `''` | Additional CSS classes |
+
+### CheckboxGroup
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `any[]` | `[]` | Array of selected values, bindable |
+| `disabled` | `boolean` | `false` | Disable all child checkboxes |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size for all child checkboxes |
+| `label` | `string` | - | Group label |
+| `error` | `string` | - | Group-level error message |
+| `required` | `boolean` | `false` | At least one must be checked |
+| `dense` | `boolean` | `false` | Compact spacing between checkboxes |
+| `comfortable` | `boolean` | `false` | Relaxed spacing between checkboxes |
+| `id` | `string` | auto | Element ID |
+| `name` | `string` | - | Shared form field name |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+### Checkbox
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ checked: boolean, value: string }` | State changed |
+
+### CheckboxGroup
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ value: any[] }` | Selection changed |
+
+## Accessibility
+
+- Hidden native `<input type="checkbox">` for form submission and semantics
+- `aria-checked` reflects state (`true`, `false`, or `mixed` for indeterminate)
+- `aria-describedby` links to description and error text
+- `aria-required` when required
+- Full keyboard support: Space to toggle, Tab to navigate
+- Label click toggles the checkbox
+- Focus ring visible only on keyboard focus (`:focus-visible`)

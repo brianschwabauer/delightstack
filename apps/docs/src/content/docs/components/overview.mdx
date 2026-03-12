@@ -1,0 +1,226 @@
+---
+title: Component Overview
+description: Browse all 55 DelightStack components organized by category.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+DelightStack includes **55 components** across 6 categories. All components are available from a single import:
+
+```svelte
+<script>
+  import { Button, Input, Modal, Table } from '@delightstack/components';
+</script>
+```
+
+## Actions
+
+Interactive elements that trigger behaviors.
+
+| Component | Description |
+| --------- | ----------- |
+| [Button](/components/actions/button/) | Versatile button with ripple effects, loading states, and variants |
+| [ButtonGroup](/components/actions/buttongroup/) | Connected button container with shared borders |
+| [Modal](/components/actions/modal/) | Dialog overlay with transitions and focus management |
+| [Alert](/components/actions/alert/) | Confirmation dialog built on Modal |
+| [Popover](/components/actions/popover/) | Floating content with smart positioning |
+| [ContextMenu](/components/actions/contextmenu/) | Right-click menu system |
+| [Portal](/components/actions/portal/) | Render children in different DOM locations |
+| [CommandPalette](/components/actions/commandpalette/) | Keyboard-driven command interface |
+| [ThemeToggle](/components/actions/themetoggle/) | Light/dark/auto theme switcher |
+
+## Display
+
+Components for presenting information.
+
+| Component | Description |
+| --------- | ----------- |
+| [Accordion](/components/display/accordion/) | Collapsible content sections |
+| [Avatar](/components/display/avatar/) | User/entity profile image |
+| [AvatarGroup](/components/display/avatargroup/) | Stacked overlapping avatars |
+| [Calendar](/components/display/calendar/) | Date display and selection |
+| [Chart](/components/display/chart/) | Data visualization (line, bar, area, pie, donut) |
+| [Code](/components/display/code/) | Syntax-highlighted code block |
+| [Comparison](/components/display/comparison/) | Before/after image slider |
+| [Counter](/components/display/counter/) | Animated number display |
+| [Expand](/components/display/expand/) | Animated show/hide container |
+| [List](/components/display/list/) | Flexible list container with selection modes |
+| [ListItem](/components/display/listitem/) | Rich list item with multiple interaction types |
+| [QR](/components/display/qr/) | QR code generator |
+| [SplitPane](/components/display/splitpane/) | Resizable split view |
+| [Stat](/components/display/stat/) | Key metric display |
+| [Table](/components/display/table/) | Data table with sorting and filtering |
+| [Timeline](/components/display/timeline/) | Chronological event display |
+| [Tree](/components/display/tree/) | Hierarchical data display |
+| [Typewriter](/components/display/typewriter/) | Animated text typing effect |
+
+## Feedback
+
+Components that communicate state and progress.
+
+| Component | Description |
+| --------- | ----------- |
+| [Callout](/components/feedback/callout/) | Highlighted information block (inline and banner mode) |
+| [Confetti](/components/feedback/confetti/) | Celebration animation |
+| [Progress](/components/feedback/progress/) | Progress bar, spinner, and loading indicator |
+| [Toaster](/components/feedback/toast/) | Temporary notification messages |
+
+## Form
+
+Input components for user data entry.
+
+| Component | Description |
+| --------- | ----------- |
+| [Input](/components/form/input/) | Comprehensive text/data input field |
+| [Checkbox](/components/form/checkbox/) | Boolean toggle with check mark |
+| [Fieldset](/components/form/fieldset/) | Form section grouping |
+| [FileUpload](/components/form/fileupload/) | Drag-and-drop file input |
+| [Form](/components/form/form/) | Form container with Standard Schema validation |
+| [Radio](/components/form/radio/) | Single-select option |
+| [Range](/components/form/range/) | Slider input |
+| [Rating](/components/form/rating/) | Star/score input |
+| [Select](/components/form/select/) | Dropdown selection |
+| [Toggle](/components/form/toggle/) | On/off switch |
+
+## Media
+
+Components for rich media content.
+
+| Component | Description |
+| --------- | ----------- |
+| [Carousel](/components/media/carousel/) | Swipeable image/content slider |
+| [Gallery](/components/media/gallery/) | Image grid with lightbox |
+| [Image](/components/media/image/) | Optimized image with loading states |
+| [Map](/components/media/map/) | Interactive map display (requires `leaflet`) |
+| [Panorama](/components/media/panorama/) | 360-degree image viewer (requires `three`) |
+| [PDF](/components/media/pdf/) | PDF document viewer (requires `pdfjs-dist`) |
+| [Video](/components/media/video/) | Video player with controls |
+
+## Navigation
+
+Components for moving through the application.
+
+| Component | Description |
+| --------- | ----------- |
+| [BottomSheet](/components/navigation/bottomsheet/) | Mobile-style slide-up panel |
+| [Breadcrumbs](/components/navigation/breadcrumbs/) | Hierarchical navigation trail |
+| [Drawer](/components/navigation/drawer/) | Slide-out side panel |
+| [Menu](/components/navigation/menu/) | Dropdown menu with items, groups, and separators |
+| [Pagination](/components/navigation/pagination/) | Page navigation controls |
+| [Steps](/components/navigation/steps/) | Multi-step progress indicator |
+| [Tabs](/components/navigation/tabs/) | Tabbed content switcher |
+
+## Common Patterns
+
+### Size System
+
+Components use a numeric size scale where `'1'` is the default:
+
+```svelte
+<Button size="0">Small</Button>
+<Button>Normal</Button>
+<Button size="3">Large</Button>
+```
+
+### Variant Booleans
+
+Visual variants are expressed as boolean props. They can be combined:
+
+```svelte
+<Button outline>Outlined</Button>
+<Button transparent>Ghost</Button>
+<Button outline accent>Accent Outlined</Button>
+```
+
+### Density
+
+Where appropriate, components support `dense` and `comfortable` props:
+
+```svelte
+<List dense>Tight spacing</List>
+<List>Default spacing</List>
+<List comfortable>Relaxed spacing</List>
+```
+
+### Cross-Cutting Props
+
+Several props appear across many components:
+
+| Prop       | Type               | Description                                |
+| ---------- | ------------------ | ------------------------------------------ |
+| `skeleton` | `boolean`          | Shows a loading shimmer placeholder        |
+| `tooltip`  | `string`           | Hover tooltip text                         |
+| `badge`    | `number \| boolean`| Notification badge (`true` = dot, number = count) |
+
+### Async Callbacks
+
+When an `onclick` or `onsubmit` callback returns a Promise, the component automatically manages a loading state:
+
+```svelte
+<Button onclick={async () => {
+  await saveData();
+}}>
+  Save
+</Button>
+```
+
+## Exported Types
+
+The library exports TypeScript types for component data structures:
+
+```typescript
+import type {
+  // Actions
+  ButtonGroupContext,
+  CommandOption,
+
+  // Display
+  AvatarData,
+  CalendarEvent,
+  MarkedDate,
+  ChartData,
+  ChartDataset,
+  TableColumn,
+  TreeNode,
+  FlatTreeNode,
+
+  // Feedback
+  ConfettiOptions,
+  ToastOptions,
+
+  // Form
+  FormContext,
+  StandardSchema,
+  InputType,
+  InputOption,
+  SelectOption,
+
+  // Media
+  GalleryImage,
+  MapMarker,
+  MapProvider,
+  MapInitOptions,
+  PanoramaHotspot,
+  PDFAnnotation,
+  VideoSource,
+  VideoTrack,
+
+  // Navigation
+  BreadcrumbItem,
+  MenuContext,
+  TabsContext,
+} from '@delightstack/components';
+```
+
+## Imperative APIs
+
+Some components export functions alongside their default component export:
+
+| Export          | From Component | Description                        |
+| --------------- | -------------- | ---------------------------------- |
+| `toast`         | Toaster        | `toast.success()`, `toast.error()`, `toast.info()`, `toast.warning()` |
+| `alert`         | Alert          | Programmatic confirmation dialogs  |
+| `confetti`      | Confetti       | Trigger confetti animations        |
+| `contextMenu`   | ContextMenu    | Programmatic context menu          |
+| `portal`        | Portal         | Portal action for use with `{@attach}` |
+| `leafletProvider` | Map          | Default Leaflet map tile provider  |

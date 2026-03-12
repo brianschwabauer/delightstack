@@ -1,0 +1,220 @@
+---
+title: Tabs
+description: A tabbed navigation component with sliding indicator animation, multiple visual variants (pills, boxed, segmented), horizontal and vertical orientations.
+---
+
+## Import
+
+Tabs uses a compound component pattern. The `Tab` and `TabContent` sub-components are re-exported from the same module.
+
+```svelte
+import { Tabs, Tab, TabContent } from '@delightstack/components';
+import type { TabsContext } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Tabs, Tab, TabContent } from '@delightstack/components';
+
+  let activeTab = $state('overview');
+</script>
+
+<Tabs bind:value={activeTab}>
+  <Tab value="overview" label="Overview" />
+  <Tab value="features" label="Features" />
+  <Tab value="pricing" label="Pricing" />
+</Tabs>
+
+<TabContent value="overview">
+  <p>Overview content goes here.</p>
+</TabContent>
+<TabContent value="features">
+  <p>Features content goes here.</p>
+</TabContent>
+<TabContent value="pricing">
+  <p>Pricing content goes here.</p>
+</TabContent>
+```
+
+## Examples
+
+### Pill Variant
+
+Rounded pill-shaped tab buttons.
+
+```svelte
+<Tabs bind:value={activeTab} pills>
+  <Tab value="all" label="All" />
+  <Tab value="active" label="Active" badge="3" />
+  <Tab value="archived" label="Archived" />
+</Tabs>
+```
+
+### Boxed Variant
+
+Tabs enclosed in a bordered container.
+
+```svelte
+<Tabs bind:value={activeTab} boxed>
+  <Tab value="tab1" label="Tab 1" />
+  <Tab value="tab2" label="Tab 2" />
+  <Tab value="tab3" label="Tab 3" />
+</Tabs>
+```
+
+### Segmented Control
+
+A segmented-control style, useful for toggling between a small set of options.
+
+```svelte
+<Tabs bind:value={activeTab} segment>
+  <Tab value="day" label="Day" />
+  <Tab value="week" label="Week" />
+  <Tab value="month" label="Month" />
+</Tabs>
+```
+
+### Vertical Orientation
+
+Stack tabs vertically for sidebar-style navigation.
+
+```svelte
+<div style="display: flex; gap: 1rem;">
+  <Tabs bind:value={activeTab} orientation="vertical">
+    <Tab value="general" label="General" />
+    <Tab value="security" label="Security" />
+    <Tab value="notifications" label="Notifications" />
+  </Tabs>
+  <div style="flex: 1;">
+    <TabContent value="general"><p>General settings.</p></TabContent>
+    <TabContent value="security"><p>Security settings.</p></TabContent>
+    <TabContent value="notifications"><p>Notification settings.</p></TabContent>
+  </div>
+</div>
+```
+
+### With Badges
+
+Display badges next to tab labels.
+
+```svelte
+<Tabs bind:value={activeTab}>
+  <Tab value="inbox" label="Inbox" badge={12} />
+  <Tab value="sent" label="Sent" />
+  <Tab value="drafts" label="Drafts" badge="2" />
+</Tabs>
+```
+
+### Full Width
+
+Stretch tabs to fill the available width evenly.
+
+```svelte
+<Tabs bind:value={activeTab} fullWidth>
+  <Tab value="a" label="First" />
+  <Tab value="b" label="Second" />
+  <Tab value="c" label="Third" />
+</Tabs>
+```
+
+### Disabled
+
+Disable all tabs or individual tabs.
+
+```svelte
+<!-- All tabs disabled -->
+<Tabs bind:value={activeTab} disabled>
+  <Tab value="a" label="Tab A" />
+  <Tab value="b" label="Tab B" />
+</Tabs>
+
+<!-- Individual tab disabled -->
+<Tabs bind:value={activeTab}>
+  <Tab value="a" label="Available" />
+  <Tab value="b" label="Coming Soon" disabled />
+</Tabs>
+```
+
+### Skeleton Loading
+
+```svelte
+<Tabs skeleton skeletonCount={4} />
+```
+
+## Props
+
+### Tabs (Container)
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string` | `''` | The currently selected tab value (`$bindable`) |
+| `pills` | `boolean` | `false` | Use pill-shaped tab buttons |
+| `boxed` | `boolean` | `false` | Use boxed tab style |
+| `segment` | `boolean` | `false` | Use segmented-control style |
+| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Tab list orientation |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size of the tabs |
+| `fullWidth` | `boolean` | `false` | Stretch tabs to fill available width |
+| `disabled` | `boolean` | `false` | Disable all tabs |
+| `skeleton` | `boolean` | `false` | Show skeleton loading state |
+| `skeletonCount` | `number` | `3` | Number of skeleton tab placeholders |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | `undefined` | Tab children |
+
+### Tab (Item)
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string` | `''` | The unique value for this tab |
+| `label` | `string` | `''` | The label text for this tab |
+| `badge` | `string \| number` | `undefined` | Badge displayed next to the label |
+| `disabled` | `boolean` | `false` | Whether this individual tab is disabled |
+
+### TabContent
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string` | `''` | The tab value this content panel belongs to |
+| `children` | `Snippet` | `undefined` | Panel content (rendered only when the matching tab is active) |
+
+## Events
+
+### Tabs (Container)
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ value: string }` | Fires when the active tab changes |
+
+## Types
+
+### TabsContext
+
+```typescript
+interface TabsContext {
+  value: string;
+  pills: boolean;
+  boxed: boolean;
+  segment: boolean;
+  size: string;
+  orientation: 'horizontal' | 'vertical';
+  disabled: boolean;
+  select: (value: string) => void;
+  register: (value: string, el: HTMLElement) => void;
+  unregister: (value: string) => void;
+}
+```
+
+## Accessibility
+
+- Tab list uses `role="tablist"` with `aria-orientation`
+- Each tab button uses `role="tab"` with `aria-selected` and `aria-controls`
+- Tab content panels use `role="tabpanel"` with `aria-labelledby`
+- **Arrow Left / Right** (or **Up / Down** for vertical) navigates between tabs
+- **Home** / **End** jumps to the first / last tab
+- **Enter / Space** activates the focused tab
+- Disabled tabs are excluded from keyboard navigation (`aria-disabled`, `tabindex="-1"`)
+- Sliding indicator animation highlights the active tab
+- Focus-visible outlines on tab buttons
+- Respects `prefers-reduced-motion` for indicator transitions

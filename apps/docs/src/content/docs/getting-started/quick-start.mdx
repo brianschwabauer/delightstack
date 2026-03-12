@@ -1,0 +1,221 @@
+---
+title: Quick Start
+description: Build your first form with DelightStack components in minutes.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+This guide walks you through building a complete contact form with validation, feedback, and polished interactions — all in a single Svelte component.
+
+## Import Syntax
+
+All components are available from a single entry point:
+
+```svelte
+<script>
+  import { Button, Input, Modal } from '@delightstack/components';
+</script>
+```
+
+There are no sub-paths or category-specific imports. Unused components are tree-shaken automatically.
+
+## Your First Component
+
+Every component works out of the box with sensible defaults:
+
+```svelte
+<script>
+  import { Button } from '@delightstack/components';
+</script>
+
+<Button onclick={() => console.log('clicked!')}>
+  Click Me
+</Button>
+```
+
+## Bindable Props
+
+Form components support two-way binding with `bind:value`, so your state stays in sync automatically:
+
+```svelte
+<script>
+  import { Input, Toggle } from '@delightstack/components';
+
+  let name = $state('');
+  let notifications = $state(false);
+</script>
+
+<Input label="Name" bind:value={name} />
+<Toggle label="Enable notifications" bind:value={notifications} />
+
+<p>Hello, {name}! Notifications: {notifications ? 'on' : 'off'}</p>
+```
+
+## Callback Props
+
+Components use callback props (`onclick`, `onchange`, `onsubmit`) instead of dispatched events. When a callback returns a Promise, the component automatically shows a loading state:
+
+```svelte
+<script>
+  import { Button } from '@delightstack/components';
+
+  async function handleSave() {
+    await fetch('/api/data', { method: 'POST' });
+  }
+</script>
+
+<!-- Button shows a spinner while the Promise resolves -->
+<Button onclick={handleSave}>
+  Save Changes
+</Button>
+```
+
+## Complete Example: Contact Form
+
+Here is a realistic form using `Input`, `Select`, `Toggle`, `Button`, and `Toaster` for feedback:
+
+```svelte
+<script>
+  import {
+    Input,
+    Select,
+    Toggle,
+    Button,
+    Toaster,
+    toast,
+  } from '@delightstack/components';
+
+  let name = $state('');
+  let email = $state('');
+  let subject = $state('');
+  let message = $state('');
+  let subscribe = $state(false);
+
+  const subject_options = [
+    { value: 'general', label: 'General Inquiry' },
+    { value: 'support', label: 'Technical Support' },
+    { value: 'billing', label: 'Billing Question' },
+    { value: 'feedback', label: 'Feedback' },
+  ];
+
+  async function handleSubmit() {
+    await fetch('/api/contact', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, subject, message, subscribe }),
+    });
+
+    toast.success('Message sent! We\'ll get back to you soon.');
+
+    // Reset form
+    name = '';
+    email = '';
+    subject = '';
+    message = '';
+    subscribe = false;
+  }
+</script>
+
+<!-- Place Toaster once in your layout -->
+<Toaster />
+
+<form onsubmit|preventDefault={() => {}}>
+  <Input
+    label="Name"
+    placeholder="Your full name"
+    required
+    bind:value={name}
+  />
+
+  <Input
+    label="Email"
+    type="email"
+    placeholder="you@example.com"
+    required
+    bind:value={email}
+  />
+
+  <Select
+    label="Subject"
+    placeholder="Choose a topic"
+    options={subject_options}
+    bind:value={subject}
+  />
+
+  <Input
+    label="Message"
+    type="textarea"
+    placeholder="How can we help?"
+    required
+    bind:value={message}
+  />
+
+  <Toggle
+    label="Subscribe to updates"
+    bind:value={subscribe}
+  />
+
+  <Button onclick={handleSubmit}>
+    Send Message
+  </Button>
+</form>
+```
+
+<Aside type="tip">
+The `Button` automatically displays a loading spinner while `handleSubmit` runs because the `onclick` callback returns a Promise. No manual loading state management needed.
+</Aside>
+
+## Using the Form Component with Validation
+
+For built-in validation, wrap your fields in a `Form` component with a Standard Schema validator (Zod, Valibot, or ArkType):
+
+```svelte
+<script>
+  import { Form, Input, Select, Button } from '@delightstack/components';
+  import { z } from 'zod';
+
+  const schema = z.object({
+    name: z.string().min(2, 'Name must be at least 2 characters'),
+    email: z.string().email('Please enter a valid email'),
+    subject: z.string().min(1, 'Please select a subject'),
+  });
+
+  let data = $state({
+    name: '',
+    email: '',
+    subject: '',
+  });
+
+  async function handleSubmit({ data, is_valid }) {
+    if (!is_valid) return;
+    await fetch('/api/contact', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+</script>
+
+<Form {schema} bind:data onsubmit={handleSubmit} validate_on="blur">
+  <Input name="name" label="Name" />
+  <Input name="email" label="Email" type="email" />
+  <Select
+    name="subject"
+    label="Subject"
+    options={[
+      { value: 'general', label: 'General' },
+      { value: 'support', label: 'Support' },
+    ]}
+  />
+  <Button type="submit">Submit</Button>
+</Form>
+```
+
+<Aside>
+The `Form` component validates fields using the `validate_on` mode (`'change'`, `'blur'`, or `'submit'`) and displays error messages inline on each field. See the [Working with Forms](/guides/forms/) guide for more details.
+</Aside>
+
+## Next Steps
+
+- [Design Tokens](/guides/design-tokens/) — Understand the CSS custom properties system
+- [Theming](/guides/theming/) — Customize colors and styles
+- [Dark Mode](/guides/dark-mode/) — Configure light/dark theme support
+- [Component Overview](/components/overview/) — Browse all 55 components

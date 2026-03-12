@@ -1,0 +1,148 @@
+---
+title: Avatar
+description: A profile image component with initials fallback, status indicators, and deterministic OKLCH color generation.
+---
+
+## Import
+
+```svelte
+import { Avatar } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<Avatar src="/avatars/alice.jpg" name="Alice Johnson" />
+```
+
+## Examples
+
+### With Image
+
+```svelte
+<Avatar
+  src={user.avatar_url}
+  name={user.name}
+  size="3"
+  status="online"
+/>
+```
+
+### Initials Fallback
+
+When no `src` is provided (or the image fails to load), the avatar displays initials derived from the `name` prop on a deterministic OKLCH-hashed background color.
+
+```svelte
+<Avatar name="John Doe" size="2" />
+<Avatar name="Alice" size="2" />
+<Avatar name="Jean-Pierre Martin" size="2" />
+```
+
+### Sizes
+
+Six size presets are available, from inline mentions to hero sections.
+
+```svelte
+<Avatar name="A" size="0" /> <!-- 24px -->
+<Avatar name="A" size="1" /> <!-- 32px (default) -->
+<Avatar name="A" size="2" /> <!-- 40px -->
+<Avatar name="A" size="3" /> <!-- 56px -->
+<Avatar name="A" size="4" /> <!-- 80px -->
+<Avatar name="A" size="5" /> <!-- 120px -->
+```
+
+### Status Indicator
+
+```svelte
+<Avatar name="Online User" status="online" />
+<Avatar name="Away User" status="away" />
+<Avatar name="Busy User" status="busy" />
+<Avatar name="Offline User" status="offline" />
+
+<!-- Status dot on top -->
+<Avatar name="Top Status" status="online" statusPosition="top" />
+```
+
+### Badge
+
+```svelte
+<!-- Dot indicator -->
+<Avatar name="Dot Badge" badge={true} />
+
+<!-- Numeric badge -->
+<Avatar name="Count Badge" badge={5} />
+
+<!-- Numbers above 99 display as "99+" -->
+<Avatar name="Many Notifications" badge={150} />
+```
+
+### Square Shape and Ring
+
+```svelte
+<Avatar name="Square" square size="3" />
+<Avatar name="Ringed" ring size="3" />
+<Avatar name="Custom Ring" ring ringColor="red" size="3" />
+```
+
+### Interactive Avatar
+
+When `onclick` is provided, the avatar becomes a focusable button with hover/active states.
+
+```svelte
+<Avatar
+  src={user.avatar_url}
+  name={user.name}
+  onclick={() => openProfile(user)}
+/>
+```
+
+### With Tooltip
+
+```svelte
+<Avatar
+  name="Alice Johnson"
+  tooltip="Alice Johnson - Online"
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<Avatar skeleton size="3" />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `src` | `string` | - | Image URL |
+| `name` | `string` | - | Name for initials fallback and auto alt text |
+| `size` | `'0' \| '1' \| '2' \| '3' \| '4' \| '5'` | `'1'` | Avatar size preset |
+| `square` | `boolean` | `false` | Rounded square shape instead of circle |
+| `status` | `'online' \| 'away' \| 'busy' \| 'offline'` | - | Status indicator dot |
+| `statusPosition` | `'top' \| 'bottom'` | `'bottom'` | Status dot position |
+| `badge` | `number \| boolean` | - | Notification badge (true for dot, number for count) |
+| `ring` | `boolean` | `false` | Show colored ring around avatar |
+| `ringColor` | `string` | - | Custom ring color |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `tooltip` | `string` | `''` | Tooltip text |
+| `onclick` | `(e: MouseEvent) => void` | - | Click handler (makes avatar interactive) |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | - | Custom fallback content |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onclick` | `MouseEvent` | Fires when an interactive avatar is clicked |
+
+## Accessibility
+
+- `name` prop auto-generates `alt` text on the image element
+- Decorative avatars (no name) use `alt=""`
+- Status indicator has `aria-label` (e.g., "Online")
+- Badge has `aria-label` (e.g., "5 notifications")
+- Interactive avatars (with `onclick`) receive `role="button"`, are focusable, and support Enter/Space activation
+- Focus ring is visible on keyboard navigation
+- Respects `prefers-reduced-motion` for pulse animation on online status

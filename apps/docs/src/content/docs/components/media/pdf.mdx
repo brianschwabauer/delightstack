@@ -1,0 +1,158 @@
+---
+title: PDF
+description: A full-featured PDF viewer with toolbar controls, virtualized page rendering, text search, zoom, annotations, and keyboard shortcuts.
+---
+
+## Import
+
+```svelte
+import { PDF } from '@delightstack/components';
+import type { PDFAnnotation } from '@delightstack/components';
+```
+
+## Peer Dependency
+
+PDF requires `pdfjs-dist` as a peer dependency (loaded lazily at runtime):
+
+```bash
+pnpm add pdfjs-dist
+```
+
+The PDF worker is loaded automatically from unpkg at runtime.
+
+## Basic Usage
+
+```svelte
+<script>
+  import { PDF } from '@delightstack/components';
+
+  let currentPage = $state(1);
+</script>
+
+<PDF src="/documents/report.pdf" bind:page={currentPage} />
+```
+
+## Examples
+
+### Controlled Zoom
+
+Bind the zoom level for external control.
+
+```svelte
+<script>
+  import { PDF } from '@delightstack/components';
+
+  let zoom = $state(1);
+</script>
+
+<button onclick={() => zoom = 1.5}>150%</button>
+<button onclick={() => zoom = 1}>100%</button>
+
+<PDF src="/documents/report.pdf" bind:zoom />
+```
+
+### Binary Source
+
+Load a PDF from an `ArrayBuffer` or `Uint8Array` (e.g. from a file input).
+
+```svelte
+<script>
+  import { PDF } from '@delightstack/components';
+
+  let pdfData = $state<ArrayBuffer | undefined>();
+
+  async function handleFile(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) pdfData = await file.arrayBuffer();
+  }
+</script>
+
+<input type="file" accept=".pdf" onchange={handleFile} />
+{#if pdfData}
+  <PDF src={pdfData} />
+{/if}
+```
+
+### With Annotations
+
+Enable annotation tools (highlight and note modes) in the toolbar.
+
+```svelte
+<PDF
+  src="/documents/contract.pdf"
+  annotatable
+  onannotation={(annotation) => {
+    console.log(annotation.type, 'on page', annotation.page, annotation.data);
+  }}
+/>
+```
+
+### Minimal Viewer
+
+Hide the toolbar and download button for an embedded read-only view.
+
+```svelte
+<PDF src="/documents/preview.pdf" showToolbar={false} height="400px" />
+```
+
+### Skeleton Loading
+
+```svelte
+<PDF skeleton height="600px" />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `src` | `string \| ArrayBuffer \| Uint8Array` | required | PDF source: URL string, ArrayBuffer, or Uint8Array |
+| `page` | `number` | `1` | Current page number, 1-based (`$bindable`) |
+| `zoom` | `number` | `1` | Zoom level where 1 = 100% (`$bindable`) |
+| `rotation` | `number` | `0` | Rotation in degrees (0, 90, 180, 270) |
+| `fit` | `'width' \| 'height' \| 'page'` | `'width'` | Initial fit mode |
+| `showToolbar` | `boolean` | `true` | Show the toolbar |
+| `showDownload` | `boolean` | `true` | Show the download button in the toolbar |
+| `searchable` | `boolean` | `true` | Enable text search |
+| `annotatable` | `boolean` | `false` | Enable annotation tools |
+| `height` | `string` | `'600px'` | Container height |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onpagechange` | `{ page: number, total_pages: number }` | Fires when the current page changes |
+| `onload` | `{ total_pages: number }` | Fires when the PDF finishes loading |
+| `onerror` | `{ error: Error }` | Fires when the PDF fails to load |
+| `ondownload` | none | Fires when the download button is clicked |
+| `onannotation` | `PDFAnnotation` | Fires when an annotation is created |
+
+## Types
+
+### PDFAnnotation
+
+```typescript
+interface PDFAnnotation {
+  type: 'highlight' | 'note';
+  page: number;
+  data: unknown;
+}
+```
+
+## Accessibility
+
+- Container has `role="document"` with `aria-label="PDF viewer"`
+- `tabindex="0"` for keyboard focus
+- **Ctrl/Cmd + F** opens text search
+- **Ctrl/Cmd + +/-** zooms in/out, **Ctrl/Cmd + 0** resets zoom
+- **Arrow Left / Page Up** goes to the previous page
+- **Arrow Right / Page Down** goes to the next page
+- **Home** / **End** jumps to the first / last page
+- Search input supports **Enter** for next match, **Shift+Enter** for previous match
+- Toolbar buttons have descriptive `aria-label` attributes
+- Page input has `aria-label="Page number"`
+- Text is selectable for highlighting annotations
+- Focus-visible outlines on all interactive elements

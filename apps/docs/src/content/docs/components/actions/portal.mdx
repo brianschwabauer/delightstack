@@ -1,0 +1,137 @@
+---
+title: Portal
+description: A utility component that renders children in a different DOM location, escaping parent overflow and stacking contexts.
+---
+
+## Import
+
+```svelte
+import { Portal } from '@delightstack/components';
+```
+
+The `portal` action is also available for direct element usage:
+
+```svelte
+import { portal } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<Portal>
+  <div>This content renders in the .portals container at the end of body.</div>
+</Portal>
+```
+
+## Examples
+
+### Default Target (.portals)
+
+By default, Portal creates (or reuses) a `.portals` container at the end of `<body>`:
+
+```svelte
+<Portal>
+  <div class="floating-widget">
+    This escapes any overflow:hidden ancestors.
+  </div>
+</Portal>
+```
+
+The resulting DOM structure:
+
+```html
+<body>
+  <!-- Your app content -->
+  <div class="portals">
+    <!-- Portal content rendered here -->
+  </div>
+</body>
+```
+
+### Custom CSS Selector Target
+
+Specify a CSS selector to portal content to a specific element.
+
+```svelte
+<Portal target="#notification-area">
+  <div class="toast">Saved successfully</div>
+</Portal>
+```
+
+### HTMLElement Target
+
+Pass a direct DOM element reference as the target.
+
+```svelte
+<script>
+  import { Portal } from '@delightstack/components';
+
+  let targetEl = $state<HTMLElement>();
+</script>
+
+<div bind:this={targetEl} class="custom-container"></div>
+
+<Portal target={targetEl}>
+  <p>Content portaled into the custom container.</p>
+</Portal>
+```
+
+### Svelte Action Usage
+
+The `portal` function is also exported as a Svelte action for use with `use:portal`:
+
+```svelte
+<script>
+  import { portal } from '@delightstack/components';
+</script>
+
+<div use:portal={'#my-target'}>
+  Content moved to #my-target
+</div>
+```
+
+### Escaping Overflow Containers
+
+A common use case is rendering floating content that would otherwise be clipped by a parent with `overflow: hidden`.
+
+```svelte
+<div style="overflow: hidden; height: 200px;">
+  <p>This container clips its children.</p>
+
+  <Portal>
+    <!-- This dropdown escapes the overflow container -->
+    <div class="dropdown-menu">
+      <button>Option 1</button>
+      <button>Option 2</button>
+    </div>
+  </Portal>
+</div>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `target` | `string \| HTMLElement` | `'.portals'` | Destination element or CSS selector |
+| `children` | `Snippet` | `undefined` | Content to portal |
+| `id` | `string` | auto-generated | Element ID for the portal wrapper |
+
+## How It Works
+
+1. Children are rendered normally in the Svelte component tree (reactivity stays intact).
+2. On mount, the DOM nodes are moved to the target element using `use:portal`.
+3. Svelte reactivity, event handlers, and bindings continue to work across the portal boundary.
+4. On unmount, nodes are removed from the target and cleaned up.
+
+The portal wrapper uses `display: contents` so it does not affect layout at the target location.
+
+## Accessibility
+
+- Maintains proper reactivity and event handling across the portal boundary
+- DOM order should match visual order when possible
+- Combine with `focusTrap` from `@delightstack/utilities` for modal-like portaled content
+- Screen readers follow DOM order, so portaled content appears at the portal target location
+
+:::note
+Most overlay components (Modal, Popover, CommandPalette) handle portaling internally. Direct Portal usage is typically only needed for custom overlay patterns or when building new overlay components.
+:::

@@ -1,0 +1,131 @@
+---
+title: Comparison
+description: An interactive before/after image comparison slider using CSS clip-path for the reveal effect.
+---
+
+## Import
+
+```svelte
+import { Comparison } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Comparison } from '@delightstack/components';
+</script>
+
+<Comparison
+  before="/images/photo-original.jpg"
+  after="/images/photo-edited.jpg"
+/>
+```
+
+## Examples
+
+### With Alt Text
+
+```svelte
+<Comparison
+  before="/images/photo-original.jpg"
+  after="/images/photo-edited.jpg"
+  before_alt="Original photo"
+  after_alt="Edited photo with filters applied"
+/>
+```
+
+### Custom Labels
+
+```svelte
+<Comparison
+  before="/images/design-v1.png"
+  after="/images/design-v2.png"
+  label_before="Version 1"
+  label_after="Version 2"
+/>
+```
+
+### Without Labels
+
+```svelte
+<Comparison
+  before="/images/before.jpg"
+  after="/images/after.jpg"
+  show_labels={false}
+/>
+```
+
+### Vertical Orientation
+
+The divider moves up and down instead of left and right.
+
+```svelte
+<Comparison
+  before="/images/before.jpg"
+  after="/images/after.jpg"
+  vertical
+/>
+```
+
+### Controlled Position
+
+Bind to the `position` prop to control or read the slider position (0-100).
+
+```svelte
+<script>
+  let position = $state(50);
+</script>
+
+<Comparison
+  before="/images/before.jpg"
+  after="/images/after.jpg"
+  bind:position
+/>
+
+<p>Position: {position}%</p>
+```
+
+### Skeleton Loading
+
+```svelte
+<Comparison skeleton />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `before` | `string` | required | Before image URL |
+| `after` | `string` | required | After image URL |
+| `before_alt` | `string` | `'Before'` | Before image alt text |
+| `after_alt` | `string` | `'After'` | After image alt text |
+| `position` | `number` | `50` | Divider position (0-100), bindable |
+| `vertical` | `boolean` | `false` | Vertical orientation (divider moves up/down) |
+| `show_labels` | `boolean` | `true` | Show before/after labels |
+| `label_before` | `string` | `'Before'` | Before label text |
+| `label_after` | `string` | `'After'` | After label text |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ position: number }` | Fired when the divider position changes |
+
+## Accessibility
+
+- Divider handle has `role="slider"` with `aria-valuenow`, `aria-valuemin="0"`, and `aria-valuemax="100"`
+- `aria-label="Comparison slider"` on the handle
+- Both images have descriptive alt text
+- Full keyboard support:
+  - **Tab** to focus the handle
+  - **Arrow Left/Right** (horizontal) or **Arrow Up/Down** (vertical) moves in 1% increments
+  - **Shift+Arrow** moves in 10% increments
+  - **Home** moves to 0%
+  - **End** moves to 100%
+- Click anywhere on the image to jump the divider to that position
+- `touch-action: none` prevents scroll interference on mobile
+- Images have `draggable="false"` to prevent native drag behavior

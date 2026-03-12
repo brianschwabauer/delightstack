@@ -1,0 +1,244 @@
+---
+title: Confetti
+description: A canvas-based celebration animation with both a programmatic API and a declarative component for firing confetti particles.
+---
+
+## Import
+
+```svelte
+import { Confetti, confetti } from '@delightstack/components';
+```
+
+The `confetti` function and `Confetti` component can be imported together. Types are also available:
+
+```svelte
+import type { ConfettiOptions, ConfettiShape, CannonOptions, RainOptions } from '@delightstack/components';
+```
+
+## Basic Usage
+
+### Programmatic API
+
+The simplest way to fire confetti is with the `confetti()` function. No component mounting required.
+
+```svelte
+<script>
+  import { confetti } from '@delightstack/components';
+</script>
+
+<button onclick={() => confetti()}>Celebrate!</button>
+```
+
+### Component API
+
+Mount `<Confetti />` and control it with the `active` prop.
+
+```svelte
+<script>
+  import { Confetti } from '@delightstack/components';
+
+  let celebrating = $state(false);
+</script>
+
+<button onclick={() => celebrating = true}>Celebrate!</button>
+<Confetti active={celebrating} onend={() => celebrating = false} />
+```
+
+## Examples
+
+### Customized Burst
+
+```svelte
+<script>
+  import { confetti } from '@delightstack/components';
+
+  function celebrate() {
+    confetti({
+      particle_count: 100,
+      spread: 70,
+      origin: { x: 0.5, y: 0.6 },
+      colors: ['#ff0000', '#00ff00', '#0000ff'],
+    });
+  }
+</script>
+
+<button onclick={celebrate}>Custom Burst</button>
+```
+
+### Preset Animations
+
+All presets are available as methods on the `confetti` function.
+
+```svelte
+<script>
+  import { confetti } from '@delightstack/components';
+</script>
+
+<!-- Single burst (same as confetti()) -->
+<button onclick={() => confetti.burst()}>Burst</button>
+
+<!-- Continuous cannon stream -->
+<button onclick={() => confetti.cannon({ duration: 3000 })}>Cannon</button>
+
+<!-- Multiple random bursts -->
+<button onclick={() => confetti.fireworks()}>Fireworks</button>
+
+<!-- Bursts from both screen edges -->
+<button onclick={() => confetti.sides()}>Sides</button>
+
+<!-- Gentle particles falling from top -->
+<button onclick={() => confetti.rain({ duration: 4000 })}>Rain</button>
+```
+
+### Stopping Continuous Effects
+
+`confetti.cannon()` and `confetti.rain()` return a `stop()` function. You can also use `confetti.stop()` to stop all active animations.
+
+```svelte
+<script>
+  import { confetti } from '@delightstack/components';
+
+  let stopCannon: (() => void) | undefined;
+
+  function startCannon() {
+    stopCannon = confetti.cannon({ duration: 10000 });
+  }
+</script>
+
+<button onclick={startCannon}>Start Cannon</button>
+<button onclick={() => stopCannon?.()}>Stop Cannon</button>
+<button onclick={() => confetti.stop()}>Stop All</button>
+```
+
+### Component with Presets
+
+```svelte
+<script>
+  import { Confetti } from '@delightstack/components';
+
+  let celebrating = $state(false);
+</script>
+
+<button onclick={() => celebrating = true}>Complete Task</button>
+<Confetti
+  active={celebrating}
+  preset="cannon"
+  duration={2000}
+  onend={() => celebrating = false}
+/>
+```
+
+### Custom Shapes and Colors
+
+```svelte
+<script>
+  import { confetti } from '@delightstack/components';
+</script>
+
+<button onclick={() => confetti({
+  shapes: ['star'],
+  colors: ['#ffd700', '#ffb700'],
+  particle_count: 80,
+})}>
+  Gold Stars
+</button>
+```
+
+## Programmatic API Reference
+
+### `confetti(options?)`
+
+Fire a single burst of confetti. Shorthand for `confetti.burst()`.
+
+### `confetti.burst(options?)`
+
+Single explosion from the origin point.
+
+### `confetti.cannon(options?): () => void`
+
+Continuous stream of particles. Returns a `stop()` function.
+
+### `confetti.fireworks(options?)`
+
+Multiple timed bursts from random positions across the viewport.
+
+### `confetti.sides(options?)`
+
+Simultaneous bursts from both screen edges, angled inward.
+
+### `confetti.rain(options?): () => void`
+
+Gentle particles falling from the top. Returns a `stop()` function.
+
+### `confetti.stop()`
+
+Stop all active animations and clean up the canvas.
+
+## Props
+
+Component props for `<Confetti />`:
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `active` | `boolean` | `false` | Trigger confetti when set to `true` |
+| `preset` | `'burst' \| 'cannon' \| 'fireworks' \| 'sides' \| 'rain'` | `'burst'` | Animation preset |
+| `particle_count` | `number` | `50` | Number of particles (max 500) |
+| `spread` | `number` | `60` | Spread angle in degrees |
+| `start_velocity` | `number` | `30` | Initial launch speed |
+| `decay` | `number` | `0.94` | Velocity decay per frame (0-1) |
+| `gravity` | `number` | `1` | Gravity multiplier |
+| `drift` | `number` | `0` | Horizontal drift |
+| `ticks` | `number` | `200` | Frames before particle fades |
+| `origin` | `{ x: number, y: number }` | `{ x: 0.5, y: 1.0 }` | Origin point (0-1 normalized) |
+| `colors` | `string[]` | Rainbow palette | Particle color palette |
+| `shapes` | `ConfettiShape[]` | `['circle', 'square', 'star']` | Particle shapes |
+| `scalar` | `number` | `1` | Particle size multiplier |
+| `z_index` | `number` | `1000` | Canvas z-index |
+| `duration` | `number` | `3000` | Duration for cannon/rain presets (ms) |
+| `disable_for_reduced_motion` | `boolean` | `true` | Respect `prefers-reduced-motion` |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onend` | `() => void` | Called when all particles have finished animating |
+
+## Types
+
+```typescript
+type ConfettiShape = 'circle' | 'square' | 'star';
+
+interface ConfettiOptions {
+  particle_count?: number;
+  spread?: number;
+  start_velocity?: number;
+  decay?: number;
+  gravity?: number;
+  drift?: number;
+  ticks?: number;
+  origin?: { x: number; y: number };
+  colors?: string[];
+  shapes?: ConfettiShape[];
+  scalar?: number;
+  z_index?: number;
+  angle?: number;
+}
+
+interface CannonOptions extends ConfettiOptions {
+  interval?: number;
+  duration?: number;
+}
+
+interface RainOptions extends ConfettiOptions {
+  duration?: number;
+}
+```
+
+## Accessibility
+
+- Canvas element has `aria-hidden="true"` (purely decorative)
+- `pointer-events: none` on the canvas so it never blocks interaction
+- Respects `prefers-reduced-motion` by default -- when active, `confetti()` is a no-op
+- No sound effects or other sensory output

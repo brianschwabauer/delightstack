@@ -1,0 +1,134 @@
+---
+title: ListItem
+description: A versatile list item that adapts to its parent List context, supporting buttons, radios, checkboxes, async click handling, and submenu support.
+---
+
+## Import
+
+```svelte
+import { List, ListItem } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<List>
+  <ListItem onclick={() => console.log('clicked')}>Click Me</ListItem>
+</List>
+```
+
+## Examples
+
+### Navigation Links
+
+ListItems can render as anchor elements when `href` is provided.
+
+```svelte
+<List>
+  <ListItem href="/profile">Profile</ListItem>
+  <ListItem href="/settings">Settings</ListItem>
+  <ListItem onclick={handleLogout}>Log Out</ListItem>
+</List>
+```
+
+### Async Click Handling
+
+When `onclick` returns a Promise, a loading spinner is shown until it resolves.
+
+```svelte
+<List>
+  <ListItem onclick={async () => {
+    await api.saveItem();
+  }}>
+    Save Item
+  </ListItem>
+</List>
+```
+
+### Content Slots
+
+Use `start` and `end` snippets for leading/trailing content.
+
+```svelte
+<List>
+  <ListItem href="/profile">
+    {#snippet start()}
+      <UserIcon />
+    {/snippet}
+    Profile
+    {#snippet end()}
+      <ChevronIcon />
+    {/snippet}
+  </ListItem>
+</List>
+```
+
+### Submenu via Menu Snippet
+
+Provide a `menu` snippet to show a more-options button with a dropdown.
+
+```svelte
+<List>
+  <ListItem>
+    More Options
+    {#snippet menu()}
+      <List>
+        <ListItem onclick={() => edit()}>Edit</ListItem>
+        <ListItem onclick={() => remove()}>Delete</ListItem>
+      </List>
+    {/snippet}
+  </ListItem>
+</List>
+```
+
+### Active State
+
+Force a selected/active appearance on an item.
+
+```svelte
+<List>
+  <ListItem active>Currently Selected</ListItem>
+  <ListItem>Another Item</ListItem>
+</List>
+```
+
+### Disabled Item
+
+```svelte
+<List>
+  <ListItem disabled>Unavailable Action</ListItem>
+  <ListItem>Available Action</ListItem>
+</List>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `disabled` | `boolean` | `false` | Disable interaction |
+| `active` | `boolean` | `false` | Force active/selected appearance |
+| `href` | `string` | - | Render as an anchor link |
+| `target` | `'_self' \| '_blank' \| '_parent' \| '_top'` | - | Link target attribute |
+| `menu` | `Snippet` | - | Submenu content (renders a more-options button) |
+| `popoverPlacement` | `Placement` | `'bottom-end'` | Submenu popover position |
+| `popoverCloseOnInsideClick` | `boolean` | `false` | Close submenu on inside click |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `style` | `string` | `''` | Additional inline styles |
+| `children` | `Snippet` | - | Main content |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onclick` | `(e: MouseEvent) => void \| Promise<void>` | Click handler; returns a Promise to show a loading spinner |
+| `onchange` | `(value: boolean) => void` | Called when selection state changes (radio/checkbox modes) |
+
+## Accessibility
+
+- Renders the appropriate interactive element based on the parent List type: `<button>`, `<a>`, `<label>`, or plain content
+- `aria-selected` / `aria-checked` applied for selection states
+- `aria-disabled` set on disabled anchor elements
+- Keyboard navigation handled by the parent List
+- Focus indicators via `focus-visible`
+- Ripple feedback attachment for tactile click response

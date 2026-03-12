@@ -1,0 +1,234 @@
+---
+title: Select
+description: A dropdown selection component with search, multi-select with chips, option groups, async loading, creatable mode, and virtual scrolling for large lists.
+---
+
+## Import
+
+```svelte
+import { Select } from '@delightstack/components';
+```
+
+The `SelectOption` type is also available:
+
+```svelte
+import type { SelectOption } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Select } from '@delightstack/components';
+
+  let country = $state('');
+
+  const countries = [
+    { value: 'us', label: 'United States' },
+    { value: 'ca', label: 'Canada' },
+    { value: 'uk', label: 'United Kingdom' },
+    { value: 'de', label: 'Germany' },
+  ];
+</script>
+
+<Select bind:value={country} options={countries} label="Country" placeholder="Select a country" />
+```
+
+## Examples
+
+### Searchable
+
+Enable `searchable` to add a filter input in the dropdown.
+
+```svelte
+<Select
+  searchable
+  bind:value={country}
+  options={countries}
+  label="Country"
+/>
+```
+
+### Multi-Select with Chips
+
+Selected values appear as chips in the trigger. Each chip has a remove button.
+
+```svelte
+<script>
+  import { Select } from '@delightstack/components';
+
+  let selectedTags = $state<string[]>([]);
+
+  const tags = [
+    { value: 'featured', label: 'Featured' },
+    { value: 'new', label: 'New' },
+    { value: 'sale', label: 'On Sale' },
+  ];
+</script>
+
+<Select multiple bind:value={selectedTags} options={tags} label="Tags" clearable />
+```
+
+### Option Groups
+
+Options with a `group` property are visually grouped under section headers.
+
+```svelte
+<script>
+  import { Select } from '@delightstack/components';
+
+  const options = [
+    { value: 'apple', label: 'Apple', group: 'Fruits' },
+    { value: 'banana', label: 'Banana', group: 'Fruits' },
+    { value: 'carrot', label: 'Carrot', group: 'Vegetables' },
+    { value: 'broccoli', label: 'Broccoli', group: 'Vegetables' },
+  ];
+</script>
+
+<Select bind:value={selected} options={options} label="Food" />
+```
+
+### Async Loading
+
+Use `onsearch` to load options dynamically. The component debounces search input internally.
+
+```svelte
+<script>
+  import { Select } from '@delightstack/components';
+
+  let selected = $state('');
+  let options = $state([]);
+  let isLoading = $state(false);
+</script>
+
+<Select
+  searchable
+  loading={isLoading}
+  onsearch={async ({ query }) => {
+    isLoading = true;
+    options = await searchAPI(query);
+    isLoading = false;
+  }}
+  bind:value={selected}
+  {options}
+  label="Search users"
+/>
+```
+
+### Creatable Mode
+
+Allow users to type new values when no match is found.
+
+```svelte
+<script>
+  import { Select } from '@delightstack/components';
+
+  let selected = $state([]);
+  let tags = $state([
+    { value: 'featured', label: 'Featured' },
+    { value: 'new', label: 'New' },
+  ]);
+</script>
+
+<Select
+  creatable
+  searchable
+  multiple
+  bind:value={selected}
+  options={tags}
+  label="Tags"
+  oncreate={({ value }) => {
+    tags = [...tags, { value, label: value }];
+  }}
+/>
+```
+
+### With Error
+
+```svelte
+<Select
+  bind:value={category}
+  options={categories}
+  label="Category"
+  required
+  error={!category ? 'Please select a category' : ''}
+/>
+```
+
+### Custom Option Rendering
+
+Use the `option` snippet to customize how each option appears in the dropdown.
+
+```svelte
+<Select options={users} bind:value={selectedUser} label="User">
+  {#snippet option(opt)}
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <Avatar src={opt.avatar} size="0" />
+      <div>
+        <span>{opt.label}</span>
+        <span style="font-size: 0.8em; opacity: 0.6;">{opt.description}</span>
+      </div>
+    </div>
+  {/snippet}
+</Select>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `unknown` | - | Selected value (single or array for multi), bindable |
+| `options` | `SelectOption[]` | `[]` | Available options |
+| `multiple` | `boolean` | `false` | Allow multi-select |
+| `searchable` | `boolean` | `false` | Enable search/filter input |
+| `clearable` | `boolean` | `false` | Show clear button on trigger |
+| `creatable` | `boolean` | `false` | Allow creating new options |
+| `loading` | `boolean` | `false` | Show loading state in dropdown |
+| `disabled` | `boolean` | `false` | Disable select |
+| `placeholder` | `string` | `'Select...'` | Placeholder text |
+| `label` | `string` | - | Field label |
+| `error` | `string` | - | Error message |
+| `required` | `boolean` | `false` | Mark as required |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Trigger and option size |
+| `skeleton` | `boolean` | `false` | Show skeleton loading state |
+| `tooltip` | `string` | - | Tooltip text on hover |
+| `dense` | `boolean` | `false` | Compact option spacing |
+| `comfortable` | `boolean` | `false` | Relaxed option spacing |
+| `id` | `string` | auto | Element ID |
+| `name` | `string` | - | Form field name |
+| `class` | `string` | `''` | Additional CSS classes |
+| `renderValue` | `Snippet<[selected]>` | - | Custom rendering of selected value in trigger |
+| `option` | `Snippet<[opt]>` | - | Custom rendering of each option |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onchange` | `{ value: unknown }` | Selection changed |
+| `onsearch` | `{ query: string }` | Search query changed (for async loading) |
+| `oncreate` | `{ value: string }` | New value created. Return `false` to reject |
+| `onopen` | - | Dropdown opened |
+| `onclose` | - | Dropdown closed |
+
+## Types
+
+```typescript
+interface SelectOption {
+  value: unknown;
+  label: string;
+  disabled?: boolean;
+  description?: string;
+  group?: string;
+}
+```
+
+## Accessibility
+
+- Trigger: `role="combobox"`, `aria-expanded`, `aria-haspopup="listbox"`
+- Dropdown: `role="listbox"`
+- Options: `role="option"`, `aria-selected`
+- Multi-select: `aria-multiselectable="true"` on listbox
+- Search input: `aria-label="Search options"`
+- Full keyboard navigation: Tab, Arrow keys, Enter to select, Escape to close, Home/End
+- Focus management: focus moves to search/first option on open, returns to trigger on close
+- Virtual scrolling activates automatically for 100+ options

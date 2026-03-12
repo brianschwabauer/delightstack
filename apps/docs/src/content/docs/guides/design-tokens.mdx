@@ -1,0 +1,367 @@
+---
+title: Design Tokens
+description: Complete reference of all CSS custom properties used by DelightStack components.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+DelightStack uses **CSS custom properties** (design tokens) for all visual styling. Components reference these tokens internally, so customizing them changes the look of every component at once.
+
+Define these tokens on `:root` in your global CSS file. All tokens include built-in light and dark mode values via `light-dark()`.
+
+## Colors
+
+### Background
+
+```css
+:root {
+  --color-bg: light-dark(#ffffff, #0a0a0a);
+  --color-bg-subtle: light-dark(#f5f5f5, #141414);
+  --color-bg-muted: light-dark(#e5e5e5, #262626);
+  --color-bg-disabled: light-dark(#f5f5f5, #1a1a1a);
+}
+```
+
+| Token                | Light       | Dark        | Usage                          |
+| -------------------- | ----------- | ----------- | ------------------------------ |
+| `--color-bg`         | `#ffffff`   | `#0a0a0a`   | Page background                |
+| `--color-bg-subtle`  | `#f5f5f5`   | `#141414`   | Subtle background areas        |
+| `--color-bg-muted`   | `#e5e5e5`   | `#262626`   | Muted/recessed areas           |
+| `--color-bg-disabled`| `#f5f5f5`   | `#1a1a1a`   | Disabled element backgrounds   |
+
+### Text
+
+```css
+:root {
+  --color-text: light-dark(#171717, #fafafa);
+  --color-text-muted: light-dark(#525252, #a3a3a3);
+  --color-text-disabled: light-dark(#a3a3a3, #525252);
+}
+```
+
+| Token                  | Light       | Dark        | Usage                       |
+| ---------------------- | ----------- | ----------- | --------------------------- |
+| `--color-text`         | `#171717`   | `#fafafa`   | Primary text                |
+| `--color-text-muted`   | `#525252`   | `#a3a3a3`   | Secondary/helper text       |
+| `--color-text-disabled`| `#a3a3a3`   | `#525252`   | Disabled text               |
+
+### Borders
+
+```css
+:root {
+  --color-border: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.1));
+  --color-border-strong: light-dark(rgb(0 0 0 / 0.2), rgb(255 255 255 / 0.2));
+  --color-border-disabled: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.05));
+}
+```
+
+### Surfaces
+
+Elevated layers use progressively lighter backgrounds in dark mode:
+
+```css
+:root {
+  --color-surface-1: light-dark(#ffffff, #0a0a0a);
+  --color-surface-2: light-dark(#fafafa, #141414);
+  --color-surface-3: light-dark(#f5f5f5, #1f1f1f);
+  --color-surface-4: light-dark(#e5e5e5, #292929);
+}
+```
+
+### Action (Primary Interactive)
+
+Define only the base color — hover, active, and text states are derived automatically using relative color syntax:
+
+```css
+:root {
+  --color-action: light-dark(#2563eb, #3b82f6);
+
+  /* Auto-derived states */
+  --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
+  --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
+
+  /* Tinted off-white text on action backgrounds */
+  --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
+  --color-action-text-hover: white;
+}
+```
+
+<Aside type="tip">
+The text color formula `oklch(from var(...) 0.92 calc(c * 0.15) h)` creates a barely-tinted off-white that subtly matches the button color. On hover, it becomes pure white — a "revelation" effect that feels intentional.
+</Aside>
+
+### Accent (Secondary Interactive)
+
+Follows the same pattern as action colors:
+
+```css
+:root {
+  --color-accent: light-dark(#7c3aed, #a78bfa);
+  --color-accent-hover: oklch(from var(--color-accent) calc(l - 0.05) c h);
+  --color-accent-active: oklch(from var(--color-accent) calc(l - 0.1) c h);
+  --color-accent-text: oklch(from var(--color-accent) 0.92 calc(c * 0.15) h);
+  --color-accent-text-hover: white;
+}
+```
+
+### Feedback
+
+Semantic colors for success, warning, error, and info states. Each has a base color and a soft background for callouts and alerts:
+
+```css
+:root {
+  --color-success: light-dark(#16a34a, #22c55e);
+  --color-warning: light-dark(#ca8a04, #facc15);
+  --color-error: light-dark(#dc2626, #ef4444);
+  --color-info: light-dark(#0891b2, #06b6d4);
+
+  /* Soft backgrounds for callouts/alerts */
+  --color-success-bg: light-dark(#f0fdf4, #052e16);
+  --color-warning-bg: light-dark(#fefce8, #422006);
+  --color-error-bg: light-dark(#fef2f2, #450a0a);
+  --color-info-bg: light-dark(#ecfeff, #083344);
+}
+```
+
+### Selection and Focus
+
+```css
+:root {
+  --color-selection: color-mix(in oklch, var(--color-action) 15%, transparent);
+  --color-selection-strong: color-mix(in oklch, var(--color-action) 25%, transparent);
+
+  --color-focus-ring: var(--color-action);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+}
+```
+
+### Backdrop and Overlay
+
+```css
+:root {
+  --color-backdrop: light-dark(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.7));
+  --backdrop-blur: 8px;
+  --color-overlay-hover: light-dark(rgb(0 0 0 / 0.03), rgb(255 255 255 / 0.03));
+}
+```
+
+## Border Radius
+
+```css
+:root {
+  --radius-none: 0;
+  --radius-sm: 0.25rem;   /* 4px — subtle rounding */
+  --radius-md: 0.5rem;    /* 8px — default for most elements */
+  --radius-lg: 0.75rem;   /* 12px — cards, modals */
+  --radius-xl: 1rem;      /* 16px — large containers */
+  --radius-2xl: 1.5rem;   /* 24px — prominent elements */
+  --radius-full: 9999px;  /* pill shape */
+}
+```
+
+| Token            | Value      | Typical Usage              |
+| ---------------- | ---------- | -------------------------- |
+| `--radius-none`  | `0`        | Sharp corners              |
+| `--radius-sm`    | `0.25rem`  | Inputs, small elements     |
+| `--radius-md`    | `0.5rem`   | Buttons, default elements  |
+| `--radius-lg`    | `0.75rem`  | Cards, modals              |
+| `--radius-xl`    | `1rem`     | Large containers           |
+| `--radius-2xl`   | `1.5rem`   | Prominent/hero elements    |
+| `--radius-full`  | `9999px`   | Pill shapes, avatars       |
+
+## Shadows and Elevation
+
+In light mode, components use traditional box shadows. In dark mode, shadows are replaced with subtle inset highlights (a frosted glass edge effect) since dark shadows are invisible on dark backgrounds:
+
+```css
+:root {
+  --shadow-sm: light-dark(
+    0 1px 2px 0 rgb(0 0 0 / 0.05),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.04)
+  );
+  --shadow-md: light-dark(
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06)
+  );
+  --shadow-lg: light-dark(
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.08)
+  );
+  --shadow-xl: light-dark(
+    0 20px 25px -5px rgb(0 0 0 / 0.1),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.1)
+  );
+}
+```
+
+### Elevated Borders
+
+Border strength increases with elevation in dark mode to reinforce the visual layer:
+
+```css
+:root {
+  --border-elevated-1: light-dark(var(--color-border), var(--color-border));
+  --border-elevated-2: light-dark(var(--color-border), var(--color-border-strong));
+  --border-elevated-3: light-dark(var(--color-border), rgb(255 255 255 / 0.15));
+  --border-elevated-4: light-dark(var(--color-border), rgb(255 255 255 / 0.18));
+}
+```
+
+**Usage pattern for elevated components:**
+
+```css
+.card {
+  background: var(--color-surface-2);
+  border: 1px solid var(--border-elevated-2);
+  box-shadow: var(--shadow-md);
+}
+
+.modal {
+  background: var(--color-surface-3);
+  border: 1px solid var(--border-elevated-3);
+  box-shadow: var(--shadow-xl);
+}
+```
+
+## Z-Index Layers
+
+A well-defined z-index scale prevents stacking context conflicts:
+
+```css
+:root {
+  --layer-base: 0;
+  --layer-dropdown: 100;
+  --layer-sticky: 200;
+  --layer-drawer: 300;
+  --layer-modal: 400;
+  --layer-popover: 500;
+  --layer-toast: 600;
+  --layer-tooltip: 700;
+}
+```
+
+| Token              | Value | Components                     |
+| ------------------ | ----- | ------------------------------ |
+| `--layer-base`     | `0`   | Default content                |
+| `--layer-dropdown` | `100` | Select dropdowns, menus        |
+| `--layer-sticky`   | `200` | Sticky headers                 |
+| `--layer-drawer`   | `300` | Drawer, BottomSheet            |
+| `--layer-modal`    | `400` | Modal, Alert                   |
+| `--layer-popover`  | `500` | Popover, ContextMenu           |
+| `--layer-toast`    | `600` | Toast notifications            |
+| `--layer-tooltip`  | `700` | Tooltips (always on top)       |
+
+## Typography
+
+### Font Families
+
+```css
+:root {
+  --font-sans: ui-sans-serif, system-ui, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji';
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+}
+```
+
+### Font Sizes
+
+A major second (1.125) type scale:
+
+```css
+:root {
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.875rem;   /* 14px */
+  --text-base: 1rem;     /* 16px */
+  --text-lg: 1.125rem;   /* 18px */
+  --text-xl: 1.25rem;    /* 20px */
+  --text-2xl: 1.5rem;    /* 24px */
+  --text-3xl: 1.875rem;  /* 30px */
+  --text-4xl: 2.25rem;   /* 36px */
+}
+```
+
+### Font Weights
+
+```css
+:root {
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
+```
+
+### Line Heights
+
+```css
+:root {
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+}
+```
+
+## Transitions
+
+### Durations
+
+```css
+:root {
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 500ms;
+}
+```
+
+### Easing Functions
+
+```css
+:root {
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+```
+
+| Token            | Curve                               | Usage                          |
+| ---------------- | ----------------------------------- | ------------------------------ |
+| `--ease-default` | `cubic-bezier(0.4, 0, 0.2, 1)`     | General-purpose transitions    |
+| `--ease-in`      | `cubic-bezier(0.4, 0, 1, 1)`       | Elements leaving view          |
+| `--ease-out`     | `cubic-bezier(0, 0, 0.2, 1)`       | Elements entering view         |
+| `--ease-in-out`  | `cubic-bezier(0.4, 0, 0.2, 1)`     | Symmetrical transitions        |
+| `--ease-spring`  | `cubic-bezier(0.175, 0.885, 0.32, 1.275)` | Playful bounce effect   |
+
+## Size System
+
+Components use a numeric size scale where `'1'` is the default/normal size. The size maps to `font-size` internally, and the rest of the component scales via `em` units:
+
+```
+'0000' → '000' → '00' → '0' → '1' (default) → '2' → '3' → '4' → '5' → '6'
+```
+
+Not every component uses the full scale — each defines the relevant subset:
+
+```svelte
+<Button size="0">Small</Button>
+<Button>Normal (default)</Button>
+<Button size="3">Large</Button>
+```
+
+## Breakpoints
+
+Used sparingly for page-level layout. Components prefer container queries for internal responsiveness:
+
+```css
+--breakpoint-sm: 640px;
+--breakpoint-md: 768px;
+--breakpoint-lg: 1024px;
+--breakpoint-xl: 1280px;
+```
+
+## Complete Token Stylesheet
+
+For a copy-paste-ready stylesheet with every token, see the [Theming](/guides/theming/) guide.

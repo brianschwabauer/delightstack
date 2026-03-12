@@ -1,0 +1,129 @@
+---
+title: Installation
+description: How to install and configure @delightstack/components in your Svelte 5 project.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Prerequisites
+
+DelightStack requires **Svelte 5** (`^5.36.0`). It works with:
+- **SvelteKit** — the recommended framework for Svelte apps
+- **Vite + Svelte** — for standalone Svelte projects
+
+## Install the Package
+
+<Steps>
+
+1. **Add the component library to your project:**
+
+   ```bash
+   pnpm add @delightstack/components
+   ```
+
+   <Aside>
+   The `@delightstack/utilities` package is included automatically as a dependency — you do not need to install it separately.
+   </Aside>
+
+2. **Set up the design tokens:**
+
+   DelightStack components use CSS custom properties (design tokens) for colors, typography, spacing, and more. Add the base tokens to your global CSS file (e.g., `src/app.css` in SvelteKit):
+
+   ```css
+   :root {
+     color-scheme: light dark;
+
+     /* Background */
+     --color-bg: light-dark(#ffffff, #0a0a0a);
+     --color-bg-subtle: light-dark(#f5f5f5, #141414);
+     --color-bg-muted: light-dark(#e5e5e5, #262626);
+
+     /* Text */
+     --color-text: light-dark(#171717, #fafafa);
+     --color-text-muted: light-dark(#525252, #a3a3a3);
+
+     /* Borders */
+     --color-border: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.1));
+     --color-border-strong: light-dark(rgb(0 0 0 / 0.2), rgb(255 255 255 / 0.2));
+
+     /* Surfaces */
+     --color-surface-1: light-dark(#ffffff, #0a0a0a);
+     --color-surface-2: light-dark(#fafafa, #141414);
+     --color-surface-3: light-dark(#f5f5f5, #1f1f1f);
+
+     /* Action (primary interactive color) */
+     --color-action: light-dark(#2563eb, #3b82f6);
+     --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
+     --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
+     --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
+     --color-action-text-hover: white;
+
+     /* Feedback */
+     --color-success: light-dark(#16a34a, #22c55e);
+     --color-warning: light-dark(#ca8a04, #facc15);
+     --color-error: light-dark(#dc2626, #ef4444);
+     --color-info: light-dark(#0891b2, #06b6d4);
+
+     /* Typography */
+     --font-sans: ui-sans-serif, system-ui, sans-serif,
+       'Apple Color Emoji', 'Segoe UI Emoji';
+     --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+   }
+
+   body {
+     font-family: var(--font-sans);
+     color: var(--color-text);
+     background: var(--color-bg);
+   }
+   ```
+
+   <Aside type="tip">
+   This is a minimal set of tokens to get started. See the [Design Tokens](/guides/design-tokens/) reference for the complete list of available custom properties.
+   </Aside>
+
+3. **Start using components:**
+
+   ```svelte
+   <script>
+     import { Button } from '@delightstack/components';
+   </script>
+
+   <Button onclick={() => alert('It works!')}>
+     Hello, DelightStack
+   </Button>
+   ```
+
+</Steps>
+
+## Optional Peer Dependencies
+
+Some components require additional libraries that are not bundled with DelightStack. Install them only if you use the corresponding component:
+
+| Component    | Peer Dependency           | Install Command                     |
+| ------------ | ------------------------- | ----------------------------------- |
+| **Map**      | `leaflet`                 | `pnpm add leaflet`                  |
+| **Panorama** | `three`                   | `pnpm add three`                    |
+| **PDF**      | `pdfjs-dist`              | `pnpm add pdfjs-dist`               |
+
+These are loaded dynamically at runtime, so they will not affect your bundle size unless you actually use the component.
+
+## TypeScript
+
+TypeScript types are included automatically — no additional `@types/*` packages or configuration needed. The library exports types for all component props, event details, and data structures:
+
+```typescript
+import type {
+  SelectOption,
+  TableColumn,
+  TreeNode,
+  GalleryImage,
+  CommandOption,
+  CalendarEvent,
+} from '@delightstack/components';
+```
+
+## Next Steps
+
+- [Quick Start](/getting-started/quick-start/) — Build a complete form example
+- [Design Tokens](/guides/design-tokens/) — Full reference of CSS custom properties
+- [Theming](/guides/theming/) — Customize the look and feel

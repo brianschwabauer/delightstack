@@ -1,0 +1,148 @@
+---
+title: Code
+description: A syntax-highlighted code block with line numbers, copy-to-clipboard, line highlighting, and diff display.
+---
+
+## Import
+
+```svelte
+import { Code } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Code } from '@delightstack/components';
+
+  const snippet = `function greet(name: string) {
+  console.log(\`Hello, \${name}!\`);
+}
+
+greet('World');`;
+</script>
+
+<Code code={snippet} language="typescript" />
+```
+
+## Examples
+
+### With Filename
+
+A header bar appears when `filename` or `showCopy` is set.
+
+```svelte
+<Code
+  code={snippet}
+  language="typescript"
+  filename="greeting.ts"
+/>
+```
+
+### Line Highlighting
+
+Draw attention to specific lines by providing their line numbers.
+
+```svelte
+<Code
+  code={snippet}
+  language="typescript"
+  highlightLines={[2, 3]}
+/>
+```
+
+### Without Line Numbers
+
+```svelte
+<Code
+  code="npm install @delightstack/components"
+  language="bash"
+  showLineNumbers={false}
+/>
+```
+
+### Diff Display
+
+Lines starting with `+` get a green background, lines starting with `-` get a red background, and `@@` lines are styled as section headers.
+
+```svelte
+<script>
+  const diffOutput = `@@ -1,3 +1,4 @@
+ function greet(name) {
+-  console.log("Hello");
++  console.log("Hello, " + name);
++  return name;
+ }`;
+</script>
+
+<Code code={diffOutput} diff />
+```
+
+### Max Height with Scroll
+
+Long code blocks can be constrained with a maximum height. The content scrolls vertically while the header stays visible.
+
+```svelte
+<Code
+  code={longCodeBlock}
+  language="python"
+  maxHeight="300px"
+/>
+```
+
+### Line Wrapping
+
+```svelte
+<Code
+  code={longLineCode}
+  language="javascript"
+  wrap
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<Code skeleton />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `code` | `string` | required | Code string to display |
+| `language` | `string` | `'plaintext'` | Language for syntax highlighting |
+| `filename` | `string` | - | Filename displayed in the header |
+| `showLineNumbers` | `boolean` | `true` | Show line numbers |
+| `showCopy` | `boolean` | `true` | Show copy-to-clipboard button |
+| `startLine` | `number` | `1` | Starting line number |
+| `highlightLines` | `number[]` | `[]` | Line numbers to highlight |
+| `diff` | `boolean` | `false` | Render as unified diff |
+| `wrap` | `boolean` | `false` | Wrap long lines instead of horizontal scroll |
+| `maxHeight` | `string` | - | Max height with vertical scroll (e.g., `'400px'`) |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Supported Languages
+
+The built-in tokenizer supports these languages out of the box:
+
+- JavaScript / TypeScript (js, jsx, ts, tsx)
+- HTML / XML
+- CSS / SCSS / Sass / Less
+- JSON / JSONC
+- Python
+- Bash / Shell / Zsh
+- SQL
+- Svelte
+- Markdown
+- Plaintext (default)
+
+## Accessibility
+
+- Uses semantic `<pre><code>` markup
+- Copy button is keyboard accessible with `aria-label` ("Copy code" / "Copied")
+- Line numbers are decorative (`aria-hidden="true"`) and excluded from text selection via `user-select: none`
+- Focus ring on the copy button for keyboard navigation
+- Respects `prefers-reduced-motion` for skeleton animations

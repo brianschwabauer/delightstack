@@ -1,0 +1,144 @@
+---
+title: Panorama
+description: A 360-degree panorama viewer powered by Three.js with drag, pinch-zoom, gyroscope control, interactive hotspots, and auto-rotation.
+---
+
+## Import
+
+```svelte
+import { Panorama } from '@delightstack/components';
+import type { Hotspot } from '@delightstack/components';
+```
+
+## Peer Dependency
+
+Panorama requires `three` as a peer dependency (loaded lazily at runtime):
+
+```bash
+pnpm add three
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Panorama } from '@delightstack/components';
+</script>
+
+<Panorama src="/panoramas/mountain-360.jpg" />
+```
+
+## Examples
+
+### Auto-Rotate
+
+Enable gentle continuous rotation. Rotation pauses when the user interacts and resumes after 3 seconds of inactivity.
+
+```svelte
+<Panorama src="/panoramas/cityscape.jpg" autoRotate autoRotateSpeed={1.5} />
+```
+
+### Custom Initial View
+
+Start the viewer facing a specific direction.
+
+```svelte
+<Panorama
+  src="/panoramas/interior.jpg"
+  initialView={{ pitch: 10, yaw: 90 }}
+  fov={60}
+/>
+```
+
+### Interactive Hotspots
+
+Add clickable markers at specific positions within the panorama.
+
+```svelte
+<script>
+  import { Panorama } from '@delightstack/components';
+  import type { Hotspot } from '@delightstack/components';
+
+  const hotspots: Hotspot[] = [
+    { position: { pitch: 5, yaw: 45 }, label: 'Living Room' },
+    { position: { pitch: -10, yaw: 180 }, label: 'Kitchen' },
+    { position: { pitch: 0, yaw: 270 }, label: 'Garden', data: { room_id: 3 } },
+  ];
+</script>
+
+<Panorama
+  src="/panoramas/house.jpg"
+  {hotspots}
+  onhotspotclick={({ hotspot }) => console.log('Clicked', hotspot.label)}
+/>
+```
+
+### Static Fallback
+
+Provide a fallback image for browsers without WebGL support.
+
+```svelte
+<Panorama
+  src="/panoramas/beach.jpg"
+  fallback="/panoramas/beach-preview.jpg"
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<Panorama skeleton />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `src` | `string` | required | Equirectangular panorama image URL |
+| `initialView` | `{ pitch: number, yaw: number }` | `{ pitch: 0, yaw: 0 }` | Starting camera orientation in degrees |
+| `fov` | `number` | `75` | Field of view in degrees (30-120) |
+| `autoRotate` | `boolean` | `false` | Enable gentle continuous rotation |
+| `autoRotateSpeed` | `number` | `1` | Rotation speed multiplier |
+| `showControls` | `boolean` | `true` | Show zoom, fullscreen, and reset buttons |
+| `interactive` | `boolean` | `true` | Enable drag, touch, and scroll interaction |
+| `gyroscope` | `boolean` | `false` | Enable device orientation control on mobile |
+| `hotspots` | `Hotspot[]` | `[]` | Interactive markers in the panorama |
+| `fallback` | `string` | `undefined` | Static image URL when WebGL is unavailable |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onviewchange` | `{ pitch: number, yaw: number, fov: number }` | Fires when the camera orientation changes (throttled) |
+| `onhotspotclick` | `{ hotspot: Hotspot }` | Fires when a hotspot is clicked |
+| `onload` | none | Fires when the panorama is ready |
+| `onerror` | `{ error: Error }` | Fires when loading fails |
+
+## Types
+
+### Hotspot
+
+```typescript
+interface Hotspot {
+  position: { pitch: number; yaw: number };
+  label?: string;
+  data?: Record<string, unknown>;
+}
+```
+
+## Accessibility
+
+- Container has `role="application"` with `aria-label="360 degree panorama viewer"`
+- `tabindex="0"` for keyboard focus
+- **Arrow keys** pan the view, **+/-** zoom in/out
+- **Home** resets the view to the initial position
+- **Space** toggles auto-rotation pause
+- Hotspot buttons have `aria-label` set to the hotspot label or "Hotspot N"
+- Control buttons (zoom in, zoom out, fullscreen, reset) have descriptive `aria-label`
+- Focus-visible outlines on all interactive elements
+- Auto-rotation respects `prefers-reduced-motion`
+- Pauses rendering when the element is not visible (IntersectionObserver)

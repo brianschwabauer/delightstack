@@ -1,0 +1,121 @@
+---
+title: Stat
+description: A component for displaying key metrics with optional labels, icons, change indicators, and animated number display.
+---
+
+## Import
+
+```svelte
+import { Stat } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<Stat value={1234} label="Total Users" />
+```
+
+## Examples
+
+### With Change Indicator
+
+Positive changes show a green up-arrow, negative changes show a red down-arrow.
+
+```svelte
+<Stat
+  value="$12,450"
+  label="Revenue"
+  change={12.5}
+  changeLabel="vs last month"
+/>
+```
+
+### With Icon
+
+Pass any Svelte component as the `icon` prop.
+
+```svelte
+<script>
+  import { Stat } from '@delightstack/components';
+  import UsersIcon from '~icons/mdi/account-group';
+</script>
+
+<Stat
+  value={1234}
+  label="Total Users"
+  icon={UsersIcon}
+  change={15}
+  changeLabel="this week"
+/>
+```
+
+### Size Variants
+
+Four sizes are available for different contexts.
+
+```svelte
+<Stat value={42} label="Tasks" size="0" />
+<Stat value={42} label="Tasks" size="1" />
+<Stat value={42} label="Tasks" size="2" />
+<Stat value={42} label="Tasks" size="3" />
+```
+
+### Horizontal Layout
+
+```svelte
+<Stat horizontal value="99.9%" label="Uptime" />
+```
+
+### Override Trend Direction
+
+When a decrease is positive (e.g., bug count going down), override the trend color.
+
+```svelte
+<Stat
+  value={23}
+  label="Open Bugs"
+  change={-15}
+  trend="up"
+  changeLabel="fewer than last week"
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<Stat skeleton size="2" />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string \| number` | required | Main statistic to display |
+| `label` | `string` | - | Descriptive label |
+| `icon` | `Component` | - | Leading icon component |
+| `change` | `number` | - | Percentage change from previous period |
+| `changeLabel` | `string` | - | Description for the change (e.g., "vs last month") |
+| `trend` | `'up' \| 'down' \| 'neutral'` | auto | Override trend direction (auto-detected from `change`) |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Component size |
+| `horizontal` | `boolean` | `false` | Horizontal layout instead of vertical |
+| `animated` | `boolean` | `true` | Animate numeric values via the Counter component |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Size Reference
+
+| Size | Value Font | Label Font | Use Case |
+|------|-----------|-----------|----------|
+| `'0'` | 20px | 11px | Dense dashboards |
+| `'1'` | 28px | 13px | Cards, summaries |
+| `'2'` | 40px | 15px | Hero stats |
+| `'3'` | 56px | 17px | Landing pages |
+
+## Accessibility
+
+- The stat value uses `aria-live="polite"` so screen readers announce value changes
+- Change indicator includes an `aria-label` with direction and value (e.g., "increased by 12.5 percent, vs last month")
+- Trend direction is communicated via text, not just color
+- The arrow icon is `aria-hidden="true"` since the text conveys the information
+- Respects `prefers-reduced-motion` for skeleton shimmer animations

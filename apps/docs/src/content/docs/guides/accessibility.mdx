@@ -1,0 +1,213 @@
+---
+title: Accessibility
+description: Built-in accessibility features in DelightStack components and best practices for building inclusive interfaces.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Accessibility is not an add-on in DelightStack — it is built into every component from the start. Components use semantic HTML, proper ARIA attributes, keyboard navigation, and focus management by default.
+
+## Built-in Features
+
+### Semantic HTML
+
+Components render appropriate semantic elements:
+- `Button` renders `<button>` (not `<div>`)
+- `Input` uses `<input>` with proper `type` attributes and linked `<label>` elements
+- `Modal` and `Alert` use `<dialog>`
+- `List` renders `<ul>` / `<ol>` with `<li>` items
+- `Tabs` uses `role="tablist"`, `role="tab"`, and `role="tabpanel"`
+- `Accordion` uses semantic `<details>` / `<summary>`
+- `Breadcrumbs` renders a `<nav>` with `aria-label="Breadcrumb"`
+- `Progress` uses `<progress>` or `role="progressbar"` with `aria-valuenow`
+
+### ARIA Attributes
+
+Components set ARIA attributes automatically based on their state:
+
+```svelte
+<!-- Alert automatically sets role="alertdialog" -->
+<Alert title="Confirm" open>Are you sure?</Alert>
+
+<!-- Input sets aria-invalid and aria-describedby for error messages -->
+<Input label="Email" error="Please enter a valid email" />
+
+<!-- Toggle sets role="switch" and aria-checked -->
+<Toggle label="Notifications" value={true} />
+
+<!-- Expandable content uses aria-expanded and aria-controls -->
+<Accordion>...</Accordion>
+```
+
+### Focus Management
+
+Components handle focus automatically where it matters:
+
+- **Modal and Alert** — Focus moves into the dialog when it opens and returns to the trigger element when it closes.
+- **Drawer and BottomSheet** — Same focus-on-open/restore-on-close behavior.
+- **CommandPalette** — Focus moves to the search input immediately on open.
+- **Select** — Focus moves to the dropdown list when opened and back to the trigger on selection.
+- **Menu and ContextMenu** — Focus moves to the first item when opened.
+
+### Focus Trapping
+
+Overlay components trap focus to prevent tabbing out into the background content:
+
+- **Modal** — Tab and Shift+Tab cycle within the dialog.
+- **Alert** — Focus is confined to the confirmation actions.
+- **Drawer** — Focus stays inside the slide-out panel.
+- **BottomSheet** — Focus is trapped within the sheet.
+
+Focus trapping is implemented via the `focusTrap` utility from `@delightstack/utilities`, which handles edge cases like dynamic content and nested focusable elements.
+
+<Aside type="tip">
+When a Modal or Drawer is open, the background content receives `aria-hidden="true"` and `inert` to prevent screen readers from accessing it.
+</Aside>
+
+### Reduced Motion
+
+All component animations respect the `prefers-reduced-motion` media query. When a user has motion reduction enabled:
+
+- Transitions are shortened or removed entirely
+- Slide animations become instant reveals
+- Ripple effects on buttons are disabled
+- Confetti and counter animations are simplified
+- Carousel slides snap without sliding transitions
+
+Components handle this internally — you do not need to add any reduced motion logic yourself.
+
+## Keyboard Navigation
+
+### Button and Interactive Elements
+
+| Key        | Action              |
+| ---------- | ------------------- |
+| `Enter`    | Activate the button |
+| `Space`    | Activate the button |
+
+### Modal, Alert, Drawer, BottomSheet
+
+| Key        | Action                    |
+| ---------- | ------------------------- |
+| `Escape`   | Close the overlay         |
+| `Tab`      | Cycle forward through focusable elements |
+| `Shift+Tab`| Cycle backward through focusable elements |
+
+### Select and Menu
+
+| Key          | Action                        |
+| ------------ | ----------------------------- |
+| `Enter`      | Open dropdown / select item   |
+| `Space`      | Open dropdown / select item   |
+| `ArrowDown`  | Move to next option           |
+| `ArrowUp`    | Move to previous option       |
+| `Home`       | Jump to first option          |
+| `End`        | Jump to last option           |
+| `Escape`     | Close dropdown                |
+| Type-ahead   | Jump to matching option       |
+
+### Tabs
+
+| Key          | Action                    |
+| ------------ | ------------------------- |
+| `ArrowLeft`  | Previous tab              |
+| `ArrowRight` | Next tab                  |
+| `Home`       | First tab                 |
+| `End`        | Last tab                  |
+
+### Accordion
+
+| Key          | Action                    |
+| ------------ | ------------------------- |
+| `Enter`      | Toggle section            |
+| `Space`      | Toggle section            |
+
+### CommandPalette
+
+| Key          | Action                    |
+| ------------ | ------------------------- |
+| `ArrowDown`  | Next result               |
+| `ArrowUp`    | Previous result           |
+| `Enter`      | Execute selected command  |
+| `Escape`     | Close palette             |
+
+### Tree
+
+| Key          | Action                    |
+| ------------ | ------------------------- |
+| `ArrowDown`  | Next visible node         |
+| `ArrowUp`    | Previous visible node     |
+| `ArrowRight` | Expand node / move to child |
+| `ArrowLeft`  | Collapse node / move to parent |
+| `Enter`      | Select/activate node      |
+| `Home`       | First node                |
+| `End`        | Last visible node         |
+
+### Table
+
+| Key          | Action                    |
+| ------------ | ------------------------- |
+| `ArrowDown`  | Next row                  |
+| `ArrowUp`    | Previous row              |
+| `Enter`      | Activate row              |
+
+### Range / Rating
+
+| Key          | Action                    |
+| ------------ | ------------------------- |
+| `ArrowRight` | Increase value            |
+| `ArrowLeft`  | Decrease value            |
+| `ArrowUp`    | Increase value            |
+| `ArrowDown`  | Decrease value            |
+| `Home`       | Minimum value             |
+| `End`        | Maximum value             |
+
+## Color Contrast
+
+The default design tokens are chosen to meet WCAG AA contrast requirements:
+
+- **Body text** (`--color-text` on `--color-bg`) exceeds 4.5:1 contrast ratio in both light and dark modes.
+- **Muted text** (`--color-text-muted` on `--color-bg`) meets 4.5:1 for normal-sized text.
+- **Action text** (`--color-action-text` on `--color-action`) is designed for legibility on colored backgrounds.
+- **Feedback colors** are chosen to be distinguishable for common forms of color vision deficiency.
+
+<Aside type="caution">
+If you customize the color tokens, verify that your custom colors maintain sufficient contrast. Tools like the [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/) can help.
+</Aside>
+
+## Screen Reader Considerations
+
+### Live Regions
+
+- **Toast** notifications use `aria-live="polite"` so screen readers announce them without interrupting the current task.
+- **Progress** uses `aria-live="polite"` to announce progress changes.
+- **Form** validation errors are announced via `aria-describedby` links from the input to the error message.
+
+### Decorative Content
+
+- **Confetti** is marked as `aria-hidden="true"` since it is purely decorative.
+- **Counter** animations are invisible to screen readers — the final value is the only thing read.
+- **Comparison** slider provides a text description of the comparison for screen readers.
+
+### Labels and Descriptions
+
+- **Input** and **Select** automatically associate labels via `id` and `for` attributes.
+- **Toggle** and **Checkbox** render proper label associations.
+- **Rating** announces the current value (e.g., "3 out of 5 stars").
+- **Pagination** uses `aria-label` on navigation and `aria-current="page"` on the active page.
+
+## Best Practices
+
+When building with DelightStack, keep these accessibility guidelines in mind:
+
+1. **Always provide labels for form inputs.** The `label` prop on `Input`, `Select`, `Checkbox`, `Toggle`, and `Radio` generates a properly associated `<label>`. If you need a visually hidden label, use CSS to hide it while keeping it accessible.
+
+2. **Use descriptive button text.** Avoid generic text like "Click here". If a Button only contains an icon, provide a `tooltip` or `aria-label` for screen readers.
+
+3. **Provide alt text for images.** The `Image`, `Gallery`, and `Carousel` components accept `alt` text. Always describe the meaningful content of the image.
+
+4. **Test with keyboard only.** Navigate your interface using only Tab, Enter, Space, and arrow keys. Every interactive element should be reachable and operable.
+
+5. **Test with a screen reader.** Tools like VoiceOver (macOS), NVDA (Windows), or Orca (Linux) reveal issues that visual testing misses.
+
+6. **Do not disable focus styles.** Components have visible focus indicators using `--color-focus-ring`. If you customize styles, ensure focus remains visible.

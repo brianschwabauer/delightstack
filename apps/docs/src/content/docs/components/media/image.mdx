@@ -1,0 +1,112 @@
+---
+title: Image
+description: An optimized image component with lazy loading, blur-up placeholder transitions, skeleton shimmer, and error fallback handling.
+---
+
+## Import
+
+```svelte
+import { Image } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Image } from '@delightstack/components';
+</script>
+
+<Image src="/photos/hero.jpg" alt="Hero landscape" />
+```
+
+## Examples
+
+### Aspect Ratio Container
+
+Prevent cumulative layout shift by setting a fixed aspect ratio.
+
+```svelte
+<Image src="/photos/banner.jpg" alt="Banner" aspect_ratio="16/9" />
+```
+
+### Blur-Up Placeholder
+
+Provide a tiny placeholder image for a smooth blur-up transition as the full image loads.
+
+```svelte
+<Image
+  src="/photos/portrait.jpg"
+  alt="Portrait"
+  placeholder="/photos/portrait-thumb.jpg"
+  aspect_ratio="3/4"
+/>
+```
+
+### Error Fallback
+
+Show a built-in broken-image icon or a custom fallback image when loading fails.
+
+```svelte
+<!-- Built-in fallback icon -->
+<Image src="/missing.jpg" alt="Missing" fallback={true} aspect_ratio="16/9" />
+
+<!-- Custom fallback image -->
+<Image src="/missing.jpg" alt="Missing" fallback="/fallback.png" aspect_ratio="16/9" />
+```
+
+### Responsive srcset
+
+Pass `srcset` and `sizes` for responsive image resolution switching.
+
+```svelte
+<Image
+  src="/photos/landscape.jpg"
+  alt="Landscape"
+  srcset="/photos/landscape-400.jpg 400w, /photos/landscape-800.jpg 800w, /photos/landscape-1200.jpg 1200w"
+  sizes="(max-width: 600px) 400px, (max-width: 1000px) 800px, 1200px"
+/>
+```
+
+### Skeleton Loading
+
+Show a shimmer animation while the image loads (alternative to blur-up placeholder).
+
+```svelte
+<Image src="/photos/product.jpg" alt="Product" skeleton aspect_ratio="1" />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `src` | `string` | required | The image source URL |
+| `alt` | `string` | required | The alt text for the image |
+| `width` | `number` | `undefined` | Intrinsic width in pixels |
+| `height` | `number` | `undefined` | Intrinsic height in pixels |
+| `aspect_ratio` | `string` | `undefined` | Container aspect ratio (e.g. `'16/9'`) to prevent CLS |
+| `fit` | `'cover' \| 'contain' \| 'fill' \| 'none'` | `'cover'` | How the image is scaled within its container |
+| `position` | `string` | `'center'` | The position of the image within its container (`object-position`) |
+| `lazy` | `boolean` | `true` | Whether to lazily load the image |
+| `placeholder` | `string` | `undefined` | A small placeholder image URL for blur-up effect |
+| `fallback` | `string \| boolean` | `false` | Error fallback: `true` = built-in icon, string = fallback image URL |
+| `srcset` | `string` | `undefined` | Responsive srcset attribute |
+| `sizes` | `string` | `undefined` | Responsive sizes attribute |
+| `skeleton` | `boolean` | `false` | Show a skeleton shimmer while loading |
+| `id` | `string` | `undefined` | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onload` | `{ natural_width: number, natural_height: number }` | Fires when the full image loads successfully |
+| `onerror` | `{ error: Event }` | Fires when the image fails to load |
+
+## Accessibility
+
+- Standard `<img>` element with required `alt` text
+- `loading="lazy"` attribute for native lazy loading (when `lazy` is true)
+- Placeholder image is marked `aria-hidden="true"` to avoid screen reader confusion
+- Fallback state shows a visual indicator without disrupting the accessibility tree
+- Smooth opacity transitions respect `prefers-reduced-motion`

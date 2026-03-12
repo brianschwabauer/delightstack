@@ -1,0 +1,112 @@
+---
+title: QR
+description: A QR code generator component that renders scannable codes as crisp SVGs with customizable colors, logo overlay, and download support.
+---
+
+## Import
+
+```svelte
+import { QR } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<QR value="https://example.com" />
+```
+
+## Examples
+
+### Custom Size and Colors
+
+```svelte
+<QR
+  value="https://example.com"
+  size={250}
+  foreground="oklch(0.3 0.1 250)"
+  background="oklch(0.95 0.02 250)"
+/>
+```
+
+### Rounded Modules
+
+```svelte
+<QR
+  value="https://example.com"
+  rounded
+  foreground="var(--color-action)"
+/>
+```
+
+### Logo Overlay
+
+When a `logo` is provided, the error correction level is automatically upgraded to `'H'` to ensure scannability despite covered modules.
+
+```svelte
+<QR
+  value="https://example.com"
+  logo="/logo.png"
+  logoSize={0.25}
+/>
+```
+
+### High Error Correction
+
+Use level `'H'` for environments where the QR code may be partially obscured or damaged.
+
+```svelte
+<QR value="https://example.com" level="H" />
+```
+
+### Downloadable
+
+Show a download button that exports the QR code as a PNG.
+
+```svelte
+<QR
+  value="https://example.com"
+  downloadable
+  downloadFilename="my-share-code"
+/>
+```
+
+### Skeleton Loading
+
+```svelte
+<QR value="" skeleton size={200} />
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `value` | `string` | required | Data to encode (URL, text, etc.) |
+| `size` | `number` | `200` | Size in pixels (width and height) |
+| `level` | `'L' \| 'M' \| 'Q' \| 'H'` | `'M'` | Error correction level |
+| `foreground` | `string` | `'#000000'` | Module (dark) color |
+| `background` | `string` | `'#ffffff'` | Background (light) color |
+| `margin` | `number` | `4` | Quiet zone in modules around the QR code |
+| `logo` | `string` | - | Center logo image URL |
+| `logoSize` | `number` | `0.25` | Logo size as a fraction of QR size (0 to 1) |
+| `rounded` | `boolean` | `false` | Round module corners |
+| `downloadable` | `boolean` | `false` | Show a download button |
+| `downloadFilename` | `string` | `'qr-code'` | Filename for the downloaded PNG (without extension) |
+| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+
+## Error Correction Levels
+
+| Level | Recovery | Use Case |
+|-------|----------|----------|
+| `L` | ~7% | Clean environments, maximum data capacity |
+| `M` | ~15% | General use (default) |
+| `Q` | ~25% | Moderate damage expected |
+| `H` | ~30% | Required when using logo overlay, harsh environments |
+
+## Accessibility
+
+- SVG element has `role="img"` with an `aria-label` describing the encoded content (e.g., "QR code for https://example.com")
+- Download button has `aria-label="Download QR code as PNG"`
+- Skeleton state has `aria-label="Loading QR code"`
+- Respects `prefers-reduced-motion` for shimmer animations

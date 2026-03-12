@@ -1,0 +1,240 @@
+---
+title: Form
+description: A form container with Standard Schema validation, promise-aware submission, auto-focus on errors, and context-based state management for child form controls.
+---
+
+## Import
+
+```svelte
+import { Form } from '@delightstack/components';
+```
+
+Types are also available:
+
+```svelte
+import type { FormContext, StandardSchema } from '@delightstack/components';
+```
+
+## Basic Usage
+
+```svelte
+<script>
+  import { Form, Input, Button } from '@delightstack/components';
+  import { z } from 'zod';
+
+  let formData = $state({
+    email: '',
+    password: '',
+  });
+
+  const schema = z.object({
+    email: z.string().email('Invalid email'),
+    password: z.string().min(8, 'At least 8 characters'),
+  });
+</script>
+
+<Form bind:data={formData} {schema} onsubmit={({ data }) => console.log(data)}>
+  <Input name="email" label="Email" type="email" />
+  <Input name="password" label="Password" type="password" />
+  <Button type="submit">Sign In</Button>
+</Form>
+```
+
+## Examples
+
+### Validation with Zod
+
+The `schema` prop accepts any [Standard Schema](https://github.com/standard-schema/standard-schema) compatible validator. Zod, Valibot, and ArkType all work.
+
+```svelte
+<script>
+  import { Form, Input, Select, Checkbox, Button, Fieldset } from '@delightstack/components';
+  import { z } from 'zod';
+
+  let formData = $state({
+    name: '',
+    email: '',
+    password: '',
+    role: '',
+    terms: false,
+  });
+
+  const schema = z.object({
+    name: z.string().min(1, 'Name is required'),
+    email: z.string().email('Invalid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    role: z.string().min(1, 'Please select a role'),
+    terms: z.literal(true, { errorMap: () => ({ message: 'You must accept the terms' }) }),
+  });
+
+  async function handleSubmit({ data }) {
+    await api.createAccount(data);
+    goto('/dashboard');
+  }
+</script>
+
+<Form bind:data={formData} {schema} onsubmit={handleSubmit} validate_on="blur">
+  <Fieldset legend="Create Account" card>
+    <Input name="name" label="Name" />
+    <Input name="email" label="Email" type="email" />
+    <Input name="password" label="Password" type="password" />
+    <Select
+      name="role"
+      label="Role"
+      options={[
+        { value: 'user', label: 'User' },
+        { value: 'admin', label: 'Admin' },
+      ]}
+    />
+    <Checkbox name="terms" label="I accept the terms and conditions" />
+  </Fieldset>
+
+  <div style="display: flex; gap: 1rem;">
+    <Button type="reset" ghost>Reset</Button>
+    <Button type="submit">Create Account</Button>
+  </div>
+</Form>
+```
+
+### Validation with Valibot
+
+```svelte
+<script>
+  import { Form, Input, Button } from '@delightstack/components';
+  import * as v from 'valibot';
+
+  let formData = $state({ name: '', age: 0 });
+
+  const schema = v.object({
+    name: v.pipe(v.string(), v.minLength(2, 'At least 2 characters')),
+    age: v.pipe(v.number(), v.minValue(18, 'Must be 18+')),
+  });
+</script>
+
+<Form bind:data={formData} {schema} onsubmit={handleSubmit}>
+  <Input name="name" label="Name" />
+  <Input name="age" label="Age" type="number" />
+  <Button type="submit">Submit</Button>
+</Form>
+```
+
+### Promise-Aware Submission
+
+If `onsubmit` returns a Promise, the form automatically sets `is_submitting` to `true`, disabling all fields and preventing double-submit.
+
+```svelte
+<Form
+  bind:data={formData}
+  {schema}
+  onsubmit={async ({ data }) => {
+    await api.createAccount(data);
+    goto('/dashboard');
+  }}
+>
+  <Input name="email" label="Email" type="email" />
+  <Button type="submit">Submit</Button>
+</Form>
+```
+
+### Validation Timing
+
+Control when fields are validated with `validate_on`.
+
+```svelte
+<!-- Validate on blur (default) -->
+<Form validate_on="blur" ...>
+
+<!-- Validate on every keystroke (after first touch) -->
+<Form validate_on="change" ...>
+
+<!-- Only validate on submit -->
+<Form validate_on="submit" ...>
+```
+
+### Reset
+
+A native `<button type="reset">` triggers form reset, clearing all values, errors, and touched states.
+
+```svelte
+<Form bind:data={formData} {schema} reset_on_submit>
+  <Input name="email" label="Email" />
+  <Button type="reset">Reset</Button>
+  <Button type="submit">Submit</Button>
+</Form>
+```
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `data` | `object` | `{}` | Form data object, bindable |
+| `schema` | `StandardSchema` | - | Any Standard Schema compatible validator |
+| `validate_on` | `'change' \| 'blur' \| 'submit'` | `'blur'` | When to validate fields |
+| `disabled` | `boolean` | `false` | Disable all child fields |
+| `reset_on_submit` | `boolean` | `false` | Reset form after successful submission |
+| `dense` | `boolean` | `false` | Compact spacing between child fields |
+| `comfortable` | `boolean` | `false` | Relaxed spacing between child fields |
+| `id` | `string` | auto | Element ID |
+| `class` | `string` | `''` | Additional CSS classes |
+| `children` | `Snippet` | - | Form content |
+
+## Events
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `onsubmit` | `{ data, is_valid }` | Form submitted. Can return a Promise for automatic loading state |
+| `onchange` | `{ data, errors }` | Form data changed |
+| `onerror` | `{ errors }` | Validation failed on submit |
+| `onreset` | - | Form was reset |
+
+## Types
+
+```typescript
+interface FormContext {
+  data: Record<string, unknown>;
+  errors: Record<string, string>;
+  touched: Record<string, boolean>;
+  is_dirty: boolean;
+  is_submitting: boolean;
+  is_valid: boolean;
+  disabled: boolean;
+  validate_on: 'change' | 'blur' | 'submit';
+  register: (name: string, element: HTMLElement) => void;
+  unregister: (name: string) => void;
+  setValue: (name: string, value: unknown) => void;
+  setTouched: (name: string) => void;
+  validateField: (name: string) => void;
+}
+
+interface StandardSchema<Input = unknown, Output = Input> {
+  readonly '~standard': {
+    readonly version: 1;
+    readonly vendor: string;
+    readonly validate: (
+      value: unknown,
+    ) => { value: Output } | { issues: Array<{ message: string; path?: Array<PropertyKey> }> };
+  };
+}
+```
+
+## How Context Works
+
+Child form controls (Input, Select, Checkbox, etc.) auto-register when they have a `name` prop and are inside a `<Form>`. The Form provides a `FormContext` via `setContext`, and child controls:
+
+1. Call `register(name, element)` on mount
+2. Read `errors[name]` to display field-level errors
+3. Read `touched[name]` to know when to show errors
+4. Call `setValue(name, value)` when value changes
+5. Call `setTouched(name)` on blur
+6. Call `unregister(name)` on destroy
+
+This means child controls work the same whether inside a Form or standalone.
+
+## Accessibility
+
+- Semantic `<form>` element
+- `aria-live="polite"` region for form-level errors
+- Field errors linked via `aria-describedby` (handled by child controls)
+- Auto-focus on first error field on submit validation failure
+- `scrollIntoView({ behavior: 'smooth', block: 'center' })` for off-screen errors
+- `aria-disabled` when form is disabled
