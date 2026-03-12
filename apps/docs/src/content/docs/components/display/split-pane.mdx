@@ -3,6 +3,10 @@ title: SplitPane
 description: A resizable split view container that divides space between two panes with drag, keyboard, snap, and collapse support.
 ---
 
+import { SplitPane } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import SplitPaneDemo from '../../../../components/demos/SplitPaneDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -11,16 +15,16 @@ import { SplitPane } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<SplitPane>
+<ComponentPreview code={`<SplitPane>
   {#snippet first()}
     <div>Left Pane</div>
   {/snippet}
   {#snippet second()}
     <div>Right Pane</div>
   {/snippet}
-</SplitPane>
-```
+</SplitPane>`}>
+  <SplitPaneDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

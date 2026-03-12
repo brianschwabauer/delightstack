@@ -3,6 +3,9 @@ title: Confetti
 description: A canvas-based celebration animation with both a programmatic API and a declarative component for firing confetti particles.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ConfettiDemo from '../../../../components/demos/ConfettiDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -21,13 +24,16 @@ import type { ConfettiOptions, ConfettiShape, CannonOptions, RainOptions } from 
 
 The simplest way to fire confetti is with the `confetti()` function. No component mounting required.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { confetti } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
 </script>
 
-<button onclick={() => confetti()}>Celebrate!</button>
-```
+<Button onclick={() => confetti()}>Burst</Button>
+<Button outline onclick={() => confetti.fireworks()}>Fireworks</Button>
+<Button outline onclick={() => confetti.sides()}>Sides</Button>`}>
+	<ConfettiDemo client:load />
+</ComponentPreview>
 
 ### Component API
 

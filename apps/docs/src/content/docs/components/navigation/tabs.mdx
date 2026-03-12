@@ -3,6 +3,9 @@ title: Tabs
 description: A tabbed navigation component with sliding indicator animation, multiple visual variants (pills, boxed, segmented), horizontal and vertical orientations.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import TabsDemo from '../../../../components/demos/TabsDemo.svelte';
+
 ## Import
 
 Tabs uses a compound component pattern. The `Tab` and `TabContent` sub-components are re-exported from the same module.
@@ -14,8 +17,7 @@ import type { TabsContext } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Tabs, Tab, TabContent } from '@delightstack/components';
 
   let activeTab = $state('overview');
@@ -35,8 +37,9 @@ import type { TabsContext } from '@delightstack/components';
 </TabContent>
 <TabContent value="pricing">
   <p>Pricing content goes here.</p>
-</TabContent>
-```
+</TabContent>`}>
+	<TabsDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

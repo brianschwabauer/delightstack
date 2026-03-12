@@ -3,6 +3,9 @@ title: Checkbox
 description: A styled checkbox input with animated SVG checkmark, indeterminate state support, and an optional CheckboxGroup for managing multiple selections.
 ---
 
+import { Checkbox } from '@delightstack/components/form';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,27 +14,20 @@ import { Checkbox, CheckboxGroup } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Checkbox } from '@delightstack/components';
-
-  let agreed = $state(false);
-</script>
-
-<Checkbox bind:checked={agreed} label="I agree to the terms and conditions" />
-```
+<ComponentPreview code={`<Checkbox label="I agree to the terms and conditions" />`}>
+	<Checkbox client:load label="I agree to the terms and conditions" />
+</ComponentPreview>
 
 ## Examples
 
 ### With Description
 
-```svelte
-<Checkbox
-  bind:checked={marketing}
+<ComponentPreview code={`<Checkbox
   label="Marketing emails"
   description="Receive updates about new features and offers"
-/>
-```
+/>`}>
+	<Checkbox client:load label="Marketing emails" description="Receive updates about new features and offers" />
+</ComponentPreview>
 
 ### With Error
 
@@ -97,14 +93,25 @@ Use `CheckboxGroup` to manage multiple related checkboxes. The group's `value` i
 </CheckboxGroup>
 ```
 
+### Disabled
+
+<ComponentPreview code={`<Checkbox label="Disabled unchecked" disabled />
+<Checkbox label="Disabled checked" disabled checked />`}>
+	<Checkbox client:load label="Disabled unchecked" disabled />
+	<Checkbox client:load label="Disabled checked" disabled checked />
+</ComponentPreview>
+
 ### Sizes
 
-```svelte
-<Checkbox size="0" label="Small (16px)" bind:checked={a} />
-<Checkbox size="1" label="Default (20px)" bind:checked={b} />
-<Checkbox size="2" label="Medium (24px)" bind:checked={c} />
-<Checkbox size="3" label="Large (28px)" bind:checked={d} />
-```
+<ComponentPreview code={`<Checkbox size="0" label="Small (16px)" />
+<Checkbox size="1" label="Default (20px)" />
+<Checkbox size="2" label="Medium (24px)" />
+<Checkbox size="3" label="Large (28px)" />`}>
+	<Checkbox client:load size="0" label="Small (16px)" />
+	<Checkbox client:load size="1" label="Default (20px)" />
+	<Checkbox client:load size="2" label="Medium (24px)" />
+	<Checkbox client:load size="3" label="Large (28px)" />
+</ComponentPreview>
 
 ## Props
 

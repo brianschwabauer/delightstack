@@ -3,6 +3,10 @@ title: ContextMenu
 description: A right-click context menu system using the {@attach contextMenu()} Svelte attachment API with Popover-based positioning and List rendering.
 ---
 
+import { ContextMenu, contextMenu } from '@delightstack/components/actions';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ContextMenuDemo from '../../../../components/demos/ContextMenuDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -18,6 +22,24 @@ import { ContextMenu } from '@delightstack/components';
 ## Basic Usage
 
 Attach a context menu to any element using `{@attach contextMenu()}`. The `ContextMenu` component must be mounted somewhere in your component tree (usually in your root layout).
+
+<ComponentPreview code={`<script>
+  import { contextMenu, ContextMenu } from '@delightstack/components';
+</script>
+
+<div {@attach contextMenu({
+  actions: [
+    { label: 'Edit', onclick: () => editItem() },
+    { label: 'Duplicate', onclick: () => duplicateItem() },
+    { label: 'Delete', onclick: () => deleteItem() },
+  ]
+})}>
+  Right-click in this area
+</div>
+
+<ContextMenu />`}>
+  <ContextMenuDemo client:load />
+</ComponentPreview>
 
 ```svelte
 <script>

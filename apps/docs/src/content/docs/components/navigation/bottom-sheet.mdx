@@ -3,6 +3,9 @@ title: BottomSheet
 description: A mobile-optimized slide-up panel with configurable snap points, spring-physics gestures, pull-to-dismiss, and scroll-aware drag behavior.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import BottomSheetDemo from '../../../../components/demos/BottomSheetDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -11,22 +14,23 @@ import { BottomSheet } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { BottomSheet, Button } from '@delightstack/components';
 
   let open = $state(false);
 </script>
 
-<Button onclick={() => open = true}>Open Sheet</Button>
+<Button onclick={() => open = true}>Open Bottom Sheet</Button>
 
-<BottomSheet bind:open>
-  <div style="padding: 1rem;">
-    <h2>Sheet Content</h2>
-    <p>This is a bottom sheet panel.</p>
+<BottomSheet bind:open snapPoints={[0.4, 0.8]}>
+  <div style="padding: 1.5rem;">
+    <h3>Bottom Sheet</h3>
+    <p>Drag the handle to resize or dismiss.</p>
+    <Button outline onclick={() => open = false}>Close</Button>
   </div>
-</BottomSheet>
-```
+</BottomSheet>`}>
+	<BottomSheetDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

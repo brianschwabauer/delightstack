@@ -3,6 +3,9 @@ title: Avatar
 description: A profile image component with initials fallback, status indicators, and deterministic OKLCH color generation.
 ---
 
+import { Avatar } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,9 +14,9 @@ import { Avatar } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<Avatar src="/avatars/alice.jpg" name="Alice Johnson" />
-```
+<ComponentPreview code={`<Avatar src="/avatars/alice.jpg" name="Alice Johnson" />`}>
+	<Avatar client:load name="Alice Johnson" />
+</ComponentPreview>
 
 ## Examples
 
@@ -32,57 +35,72 @@ import { Avatar } from '@delightstack/components';
 
 When no `src` is provided (or the image fails to load), the avatar displays initials derived from the `name` prop on a deterministic OKLCH-hashed background color.
 
-```svelte
-<Avatar name="John Doe" size="2" />
+<ComponentPreview code={`<Avatar name="John Doe" size="2" />
 <Avatar name="Alice" size="2" />
-<Avatar name="Jean-Pierre Martin" size="2" />
-```
+<Avatar name="Jean-Pierre Martin" size="2" />`}>
+	<Avatar client:load name="John Doe" size="2" />
+	<Avatar client:load name="Alice" size="2" />
+	<Avatar client:load name="Jean-Pierre Martin" size="2" />
+</ComponentPreview>
 
 ### Sizes
 
 Six size presets are available, from inline mentions to hero sections.
 
-```svelte
-<Avatar name="A" size="0" /> <!-- 24px -->
+<ComponentPreview code={`<Avatar name="A" size="0" /> <!-- 24px -->
 <Avatar name="A" size="1" /> <!-- 32px (default) -->
 <Avatar name="A" size="2" /> <!-- 40px -->
 <Avatar name="A" size="3" /> <!-- 56px -->
 <Avatar name="A" size="4" /> <!-- 80px -->
-<Avatar name="A" size="5" /> <!-- 120px -->
-```
+<Avatar name="A" size="5" /> <!-- 120px -->`}>
+	<Avatar client:load name="A" size="0" />
+	<Avatar client:load name="A" size="1" />
+	<Avatar client:load name="A" size="2" />
+	<Avatar client:load name="A" size="3" />
+	<Avatar client:load name="A" size="4" />
+	<Avatar client:load name="A" size="5" />
+</ComponentPreview>
 
 ### Status Indicator
 
-```svelte
-<Avatar name="Online User" status="online" />
+<ComponentPreview code={`<Avatar name="Online User" status="online" />
 <Avatar name="Away User" status="away" />
 <Avatar name="Busy User" status="busy" />
 <Avatar name="Offline User" status="offline" />
 
 <!-- Status dot on top -->
-<Avatar name="Top Status" status="online" statusPosition="top" />
-```
+<Avatar name="Top Status" status="online" statusPosition="top" />`}>
+	<Avatar client:load name="Online User" status="online" />
+	<Avatar client:load name="Away User" status="away" />
+	<Avatar client:load name="Busy User" status="busy" />
+	<Avatar client:load name="Offline User" status="offline" />
+	<Avatar client:load name="Top Status" status="online" statusPosition="top" />
+</ComponentPreview>
 
 ### Badge
 
-```svelte
-<!-- Dot indicator -->
+<ComponentPreview code={`<!-- Dot indicator -->
 <Avatar name="Dot Badge" badge={true} />
 
 <!-- Numeric badge -->
 <Avatar name="Count Badge" badge={5} />
 
 <!-- Numbers above 99 display as "99+" -->
-<Avatar name="Many Notifications" badge={150} />
-```
+<Avatar name="Many Notifications" badge={150} />`}>
+	<Avatar client:load name="Dot Badge" badge={true} />
+	<Avatar client:load name="Count Badge" badge={5} />
+	<Avatar client:load name="Many Notifications" badge={150} />
+</ComponentPreview>
 
 ### Square Shape and Ring
 
-```svelte
-<Avatar name="Square" square size="3" />
+<ComponentPreview code={`<Avatar name="Square" square size="3" />
 <Avatar name="Ringed" ring size="3" />
-<Avatar name="Custom Ring" ring ringColor="red" size="3" />
-```
+<Avatar name="Custom Ring" ring ringColor="red" size="3" />`}>
+	<Avatar client:load name="Square" square size="3" />
+	<Avatar client:load name="Ringed" ring size="3" />
+	<Avatar client:load name="Custom Ring" ring ringColor="red" size="3" />
+</ComponentPreview>
 
 ### Interactive Avatar
 
@@ -98,18 +116,18 @@ When `onclick` is provided, the avatar becomes a focusable button with hover/act
 
 ### With Tooltip
 
-```svelte
-<Avatar
+<ComponentPreview code={`<Avatar
   name="Alice Johnson"
   tooltip="Alice Johnson - Online"
-/>
-```
+/>`}>
+	<Avatar client:load name="Alice Johnson" tooltip="Alice Johnson - Online" />
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Avatar skeleton size="3" />
-```
+<ComponentPreview code={`<Avatar skeleton size="3" />`}>
+	<Avatar client:load skeleton size="3" />
+</ComponentPreview>
 
 ## Props
 

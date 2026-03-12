@@ -3,6 +3,10 @@ title: Popover
 description: A floating content container with smart Floating UI positioning, multiple trigger modes, focus trapping, and hover trapezoid for safe diagonal mouse movement.
 ---
 
+import { Popover } from '@delightstack/components/actions';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import PopoverDemo from '../../../../components/demos/PopoverDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -10,6 +14,24 @@ import { Popover } from '@delightstack/components';
 ```
 
 ## Basic Usage
+
+<ComponentPreview code={`<script>
+  import { Popover } from '@delightstack/components';
+
+  let triggerRef = $state<HTMLElement>();
+</script>
+
+<button bind:this={triggerRef}>Click for Popover</button>
+
+<Popover refElement={triggerRef} openOnClick placement="bottom">
+  <div style="padding: 0.75rem 1rem;">
+    <p style="font-weight: 600;">Popover Title</p>
+    <p>Positioned automatically using Floating UI.
+    Click outside to dismiss.</p>
+  </div>
+</Popover>`}>
+  <PopoverDemo client:load />
+</ComponentPreview>
 
 ```svelte
 <script>

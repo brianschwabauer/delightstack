@@ -3,6 +3,9 @@ title: Image
 description: An optimized image component with lazy loading, blur-up placeholder transitions, skeleton shimmer, and error fallback handling.
 ---
 
+import Image from '@delightstack/components/media/Image.svelte';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,13 +14,13 @@ import { Image } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Image } from '@delightstack/components';
 </script>
 
-<Image src="/photos/hero.jpg" alt="Hero landscape" />
-```
+<Image src="/photos/hero.jpg" alt="Hero landscape" />`}>
+	<Image client:load src="https://picsum.photos/400/300" alt="Hero landscape" />
+</ComponentPreview>
 
 ## Examples
 
@@ -25,9 +28,9 @@ import { Image } from '@delightstack/components';
 
 Prevent cumulative layout shift by setting a fixed aspect ratio.
 
-```svelte
-<Image src="/photos/banner.jpg" alt="Banner" aspect_ratio="16/9" />
-```
+<ComponentPreview code={`<Image src="/photos/banner.jpg" alt="Banner" aspect_ratio="16/9" />`}>
+	<Image client:load src="https://picsum.photos/800/450" alt="Banner" aspect_ratio="16/9" />
+</ComponentPreview>
 
 ### Blur-Up Placeholder
 
@@ -46,13 +49,13 @@ Provide a tiny placeholder image for a smooth blur-up transition as the full ima
 
 Show a built-in broken-image icon or a custom fallback image when loading fails.
 
-```svelte
-<!-- Built-in fallback icon -->
+<ComponentPreview code={`<!-- Built-in fallback icon -->
 <Image src="/missing.jpg" alt="Missing" fallback={true} aspect_ratio="16/9" />
 
 <!-- Custom fallback image -->
-<Image src="/missing.jpg" alt="Missing" fallback="/fallback.png" aspect_ratio="16/9" />
-```
+<Image src="/missing.jpg" alt="Missing" fallback="/fallback.png" aspect_ratio="16/9" />`}>
+	<Image client:load src="/missing.jpg" alt="Missing" fallback={true} aspect_ratio="16/9" />
+</ComponentPreview>
 
 ### Responsive srcset
 
@@ -71,9 +74,9 @@ Pass `srcset` and `sizes` for responsive image resolution switching.
 
 Show a shimmer animation while the image loads (alternative to blur-up placeholder).
 
-```svelte
-<Image src="/photos/product.jpg" alt="Product" skeleton aspect_ratio="1" />
-```
+<ComponentPreview code={`<Image src="/photos/product.jpg" alt="Product" skeleton aspect_ratio="1" />`}>
+	<Image client:load src="https://picsum.photos/400/400" alt="Product" skeleton aspect_ratio="1" />
+</ComponentPreview>
 
 ## Props
 

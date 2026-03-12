@@ -3,6 +3,9 @@ title: Select
 description: A dropdown selection component with search, multi-select with chips, option groups, async loading, creatable mode, and virtual scrolling for large lists.
 ---
 
+import { Select } from '@delightstack/components/form';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -35,6 +38,21 @@ import type { SelectOption } from '@delightstack/components';
 ```
 
 ## Examples
+
+### Simple Select
+
+<ComponentPreview code={`<Select
+  options={[
+    { value: 'us', label: 'United States' },
+    { value: 'ca', label: 'Canada' },
+    { value: 'uk', label: 'United Kingdom' },
+    { value: 'de', label: 'Germany' },
+  ]}
+  label="Country"
+  placeholder="Select a country"
+/>`}>
+	<Select client:load options={[{ value: 'us', label: 'United States' }, { value: 'ca', label: 'Canada' }, { value: 'uk', label: 'United Kingdom' }, { value: 'de', label: 'Germany' }]} label="Country" placeholder="Select a country" />
+</ComponentPreview>
 
 ### Searchable
 

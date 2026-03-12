@@ -3,6 +3,9 @@ title: ThemeToggle
 description: A theme switcher that cycles between light, dark, and auto modes with animated sun-to-moon icon morphing and localStorage persistence.
 ---
 
+import { ThemeToggle } from '@delightstack/components/actions';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,13 +14,9 @@ import { ThemeToggle } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { ThemeToggle } from '@delightstack/components';
-</script>
-
-<ThemeToggle />
-```
+<ComponentPreview code={`<ThemeToggle />`}>
+	<ThemeToggle client:load />
+</ComponentPreview>
 
 ## Examples
 
@@ -40,9 +39,9 @@ Bind to the `theme` prop to read or control the current theme preference.
 
 Disable the system/auto option to cycle only between light and dark.
 
-```svelte
-<ThemeToggle disableAuto />
-```
+<ComponentPreview code={`<ThemeToggle disableAuto />`}>
+	<ThemeToggle client:load disableAuto />
+</ComponentPreview>
 
 ### Detecting Effective Dark Mode
 
@@ -96,9 +95,9 @@ Use the `onchange` callback to run logic when the theme changes.
 
 Override the default tooltip text.
 
-```svelte
-<ThemeToggle tooltip="Change appearance" />
-```
+<ComponentPreview code={`<ThemeToggle tooltip="Change appearance" />`}>
+	<ThemeToggle client:load tooltip="Change appearance" />
+</ComponentPreview>
 
 ## Props
 

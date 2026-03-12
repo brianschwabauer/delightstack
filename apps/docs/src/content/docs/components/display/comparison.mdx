@@ -3,6 +3,9 @@ title: Comparison
 description: An interactive before/after image comparison slider using CSS clip-path for the reveal effect.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ComparisonDemo from '../../../../components/demos/ComparisonDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -11,16 +14,18 @@ import { Comparison } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Comparison } from '@delightstack/components';
 </script>
 
 <Comparison
   before="/images/photo-original.jpg"
   after="/images/photo-edited.jpg"
-/>
-```
+  label_before="Photo A"
+  label_after="Photo B"
+/>`}>
+  <ComparisonDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

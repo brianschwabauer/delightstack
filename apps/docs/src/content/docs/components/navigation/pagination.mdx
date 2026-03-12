@@ -3,6 +3,9 @@ title: Pagination
 description: A page navigation control with ellipsis algorithm, simple/compact display modes, page size selector, and item range info.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import PaginationDemo from '../../../../components/demos/PaginationDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -11,15 +14,15 @@ import { Pagination } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Pagination } from '@delightstack/components';
 
   let page = $state(1);
 </script>
 
-<Pagination bind:page totalPages={20} />
-```
+<Pagination bind:page totalPages={10} />`}>
+	<PaginationDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

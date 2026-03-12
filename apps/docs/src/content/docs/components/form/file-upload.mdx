@@ -3,6 +3,9 @@ title: FileUpload
 description: A file upload component with drag-and-drop support, image previews, and three visual variants -- dropzone, compact, and avatar.
 ---
 
+import { FileUpload } from '@delightstack/components/form';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -27,47 +30,25 @@ import { FileUpload } from '@delightstack/components';
 
 A large dashed-border area that accepts drag-and-drop or click-to-browse.
 
-```svelte
-<script>
-  import { FileUpload } from '@delightstack/components';
-
-  let files = $state<File[]>([]);
-</script>
-
-<FileUpload
-  bind:files
-  accept="image/*"
-  multiple
-  label="Upload images"
-/>
-```
+<ComponentPreview code={`<FileUpload accept="image/*" multiple label="Upload images" />`}>
+	<FileUpload client:load accept="image/*" multiple label="Upload images" />
+</ComponentPreview>
 
 ### Compact Variant
 
 A button-style trigger with a file list rendered below.
 
-```svelte
-<FileUpload
-  compact
-  bind:files
-  accept="image/*,application/pdf"
-  multiple
-  maxFiles={5}
-/>
-```
+<ComponentPreview code={`<FileUpload compact accept="image/*,application/pdf" multiple />`}>
+	<FileUpload client:load compact accept="image/*,application/pdf" multiple />
+</ComponentPreview>
 
 ### Avatar Variant
 
 A circular upload area for profile pictures. Automatically single-file only.
 
-```svelte
-<FileUpload
-  avatar
-  accept="image/*"
-  maxSize={5 * 1024 * 1024}
-  onselect={({ files }) => updateAvatar(files[0])}
-/>
-```
+<ComponentPreview code={`<FileUpload avatar accept="image/*" />`}>
+	<FileUpload client:load avatar accept="image/*" />
+</ComponentPreview>
 
 ### File Validation
 
@@ -109,13 +90,9 @@ Use the `fileItem` snippet to customize how each file appears in the list. Usefu
 
 ### With Error
 
-```svelte
-<FileUpload
-  bind:files
-  accept="image/*"
-  error="Please upload at least one image"
-/>
-```
+<ComponentPreview code={`<FileUpload accept="image/*" error="Please upload at least one image" />`}>
+	<FileUpload client:load accept="image/*" error="Please upload at least one image" />
+</ComponentPreview>
 
 ## Props
 

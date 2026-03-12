@@ -3,6 +3,10 @@ title: Accordion
 description: A vertically stacked set of collapsible sections built on semantic details/summary elements with smooth animations.
 ---
 
+import { Accordion, AccordionItem } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import AccordionDemo from '../../../../components/demos/AccordionDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -11,27 +15,27 @@ import { Accordion, AccordionItem } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Accordion, AccordionItem } from '@delightstack/components';
 
   let openSection = $state('faq-1');
 </script>
 
 <Accordion bind:value={openSection}>
-  <AccordionItem value="faq-1" title="How do I get started?">
-    <p>Getting started is easy! Simply create an account and follow the onboarding steps.</p>
+  <AccordionItem value="faq-1" title="Getting Started">
+    <p>Getting started is easy! Create an account and follow the onboarding steps.</p>
   </AccordionItem>
 
-  <AccordionItem value="faq-2" title="What payment methods do you accept?">
+  <AccordionItem value="faq-2" title="Payment Methods">
     <p>We accept all major credit cards, PayPal, and bank transfers.</p>
   </AccordionItem>
 
-  <AccordionItem value="faq-3" title="How can I contact support?">
-    <p>You can reach our support team via email at support@example.com or through the in-app chat.</p>
+  <AccordionItem value="faq-3" title="Contact Support">
+    <p>Reach our support team via email or through the in-app chat.</p>
   </AccordionItem>
-</Accordion>
-```
+</Accordion>`}>
+  <AccordionDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
@@ -61,16 +65,23 @@ Allow multiple sections to be expanded simultaneously. When `multiple` is true, 
 
 Prevent all sections from being collapsed by setting `collapsible` to `false`.
 
-```svelte
-<Accordion collapsible={false} value="first">
+<ComponentPreview code={`<Accordion collapsible={false} value="first">
   <AccordionItem value="first" title="Always Visible">
     <p>At least one section is always open.</p>
   </AccordionItem>
   <AccordionItem value="second" title="Another Section">
     <p>Click to switch which section is open.</p>
   </AccordionItem>
-</Accordion>
-```
+</Accordion>`}>
+	<Accordion client:load collapsible={false} value="first">
+		<AccordionItem client:load value="first" title="Always Visible">
+			<p>At least one section is always open.</p>
+		</AccordionItem>
+		<AccordionItem client:load value="second" title="Another Section">
+			<p>Click to switch which section is open.</p>
+		</AccordionItem>
+	</Accordion>
+</ComponentPreview>
 
 ### Custom Trigger
 
@@ -108,9 +119,9 @@ Use the `trigger` snippet to replace the default title rendering with custom con
 
 ### Skeleton Loading
 
-```svelte
-<Accordion skeleton skeletonCount={4} />
-```
+<ComponentPreview code={`<Accordion skeleton skeletonCount={4} />`}>
+	<Accordion client:load skeleton skeletonCount={4} />
+</ComponentPreview>
 
 ### Nested Accordions
 

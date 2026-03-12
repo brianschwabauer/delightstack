@@ -3,6 +3,9 @@ title: Typewriter
 description: An animated text component that simulates character-by-character typing with natural variation, smart punctuation pauses, and text cycling.
 ---
 
+import { Typewriter } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,23 +14,21 @@ import { Typewriter } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<Typewriter text="Welcome to our platform." />
-```
+<ComponentPreview code={`<Typewriter text="Welcome to our platform." />`}>
+  <Typewriter client:load text="Welcome to our platform." />
+</ComponentPreview>
 
 ## Examples
 
 ### Hero Section
 
-```svelte
-<h1>
-  <Typewriter
-    text="Build something amazing."
-    speed={60}
-    delay={500}
-  />
-</h1>
-```
+<ComponentPreview code={`<Typewriter
+  text="Build something amazing."
+  speed={60}
+  delay={500}
+/>`}>
+  <Typewriter client:load text="Build something amazing." speed={60} delay={500} />
+</ComponentPreview>
 
 ### Cycling Through Multiple Texts
 
@@ -48,13 +49,13 @@ When an array of strings is provided, the component types each one, backspaces, 
 
 A terminal-like block cursor for code snippets.
 
-```svelte
-<Typewriter
+<ComponentPreview code={`<Typewriter
   text="$ npm install @delightstack/components"
   cursor="block"
   speed={40}
-/>
-```
+/>`}>
+  <Typewriter client:load text="$ npm install @delightstack/components" cursor="block" speed={40} />
+</ComponentPreview>
 
 ### Chat-Like Interface
 
@@ -97,9 +98,9 @@ Pause and resume the animation programmatically.
 
 ### Underscore Cursor
 
-```svelte
-<Typewriter text="Retro terminal style." cursor="underscore" />
-```
+<ComponentPreview code={`<Typewriter text="Retro terminal style." cursor="underscore" />`}>
+  <Typewriter client:load text="Retro terminal style." cursor="underscore" />
+</ComponentPreview>
 
 ## Props
 

@@ -3,6 +3,9 @@ title: Drawer
 description: A slide-out side panel supporting four positions, three modes (overlay, push, persistent), responsive breakpoints, focus trapping, and swipe-to-close.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import DrawerDemo from '../../../../components/demos/DrawerDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -11,8 +14,7 @@ import { Drawer } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Drawer, Button } from '@delightstack/components';
 
   let open = $state(false);
@@ -20,10 +22,15 @@ import { Drawer } from '@delightstack/components';
 
 <Button onclick={() => open = true}>Open Drawer</Button>
 
-<Drawer bind:open>
-  <p style="padding: 1rem;">Drawer content goes here.</p>
-</Drawer>
-```
+<Drawer bind:open width="320px">
+  <div style="padding: 1.5rem;">
+    <h3>Drawer Panel</h3>
+    <p>This is a slide-out drawer panel. Click outside or press Escape to close.</p>
+    <Button outline onclick={() => open = false}>Close</Button>
+  </div>
+</Drawer>`}>
+	<DrawerDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

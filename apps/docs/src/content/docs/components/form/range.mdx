@@ -3,6 +3,9 @@ title: Range
 description: A slider input for selecting a value or range, with support for two-thumb range mode, tick marks, custom labels, and value tooltips.
 ---
 
+import { Range } from '@delightstack/components/form';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,29 +14,17 @@ import { Range } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Range } from '@delightstack/components';
-
-  let volume = $state(50);
-</script>
-
-<Range bind:value={volume} label="Volume" />
-```
+<ComponentPreview code={`<Range value={50} label="Volume" />`}>
+	<Range client:load value={50} label="Volume" />
+</ComponentPreview>
 
 ## Examples
 
 ### Single Value with Display
 
-```svelte
-<script>
-  import { Range } from '@delightstack/components';
-
-  let volume = $state(50);
-</script>
-
-<Range bind:value={volume} show_value label="Volume" />
-```
+<ComponentPreview code={`<Range value={50} show_value label="Volume" />`}>
+	<Range client:load value={50} show_value label="Volume" />
+</ComponentPreview>
 
 ### Range Selection (Two Thumbs)
 
@@ -60,16 +51,9 @@ Set `range` to enable two thumbs. The value becomes a `[number, number]` tuple.
 
 ### With Tick Marks
 
-```svelte
-<Range
-  bind:value={quality}
-  min={1}
-  max={5}
-  step={1}
-  show_ticks
-  label="Quality"
-/>
-```
+<ComponentPreview code={`<Range value={3} min={1} max={5} step={1} show_ticks label="Quality" />`}>
+	<Range client:load value={3} min={1} max={5} step={1} show_ticks label="Quality" />
+</ComponentPreview>
 
 ### Custom Tick Labels
 
@@ -88,8 +72,6 @@ Provide an array of labels that align with each tick position.
 ```
 
 ### Value Formatting
-
-Use `format_value` to customize how the value is displayed.
 
 ```svelte
 <Range
@@ -113,12 +95,15 @@ Use `format_value` to customize how the value is displayed.
 
 ### Sizes
 
-```svelte
-<Range size="0" bind:value={a} label="Small" />
-<Range size="1" bind:value={b} label="Default" />
-<Range size="2" bind:value={c} label="Medium" />
-<Range size="3" bind:value={d} label="Large" />
-```
+<ComponentPreview code={`<Range size="0" value={25} label="Small" />
+<Range size="1" value={50} label="Default" />
+<Range size="2" value={75} label="Medium" />
+<Range size="3" value={100} label="Large" />`}>
+	<Range client:load size="0" value={25} label="Small" />
+	<Range client:load size="1" value={50} label="Default" />
+	<Range client:load size="2" value={75} label="Medium" />
+	<Range client:load size="3" value={100} label="Large" />
+</ComponentPreview>
 
 ## Props
 

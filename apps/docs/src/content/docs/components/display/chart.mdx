@@ -3,6 +3,9 @@ title: Chart
 description: A data visualization component supporting line, area, bar, horizontal bar, pie, and donut chart types.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ChartDemo from '../../../../components/demos/ChartDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -17,20 +20,21 @@ import type { ChartData, Dataset } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Chart } from '@delightstack/components';
 
   const data = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
     datasets: [
-      { label: 'Revenue', data: [12, 19, 3, 5, 2, 3] },
+      { label: 'Revenue', data: [4200, 5800, 4900, 7100, 6300, 8500] },
+      { label: 'Expenses', data: [3100, 3400, 3800, 4200, 3600, 4100] },
     ],
   };
 </script>
 
-<Chart data={data} />
-```
+<Chart type="bar" data={data} height={300} />`}>
+  <ChartDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

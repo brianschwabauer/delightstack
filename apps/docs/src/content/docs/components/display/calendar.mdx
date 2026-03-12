@@ -3,6 +3,10 @@ title: Calendar
 description: A full-featured date display and selection component with single, range, and multiple selection modes.
 ---
 
+import { Calendar } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import CalendarDemo from '../../../../components/demos/CalendarDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -17,15 +21,15 @@ import type { CalendarEvent, MarkedDate } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Calendar } from '@delightstack/components';
 
   let selectedDate = $state<Date | undefined>(undefined);
 </script>
 
-<Calendar bind:value={selectedDate} />
-```
+<Calendar bind:value={selectedDate} />`}>
+  <CalendarDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
@@ -123,9 +127,9 @@ Click to toggle individual dates on or off.
 
 ### Skeleton Loading
 
-```svelte
-<Calendar skeleton />
-```
+<ComponentPreview code={`<Calendar skeleton />`}>
+	<Calendar client:load skeleton />
+</ComponentPreview>
 
 ## Props
 

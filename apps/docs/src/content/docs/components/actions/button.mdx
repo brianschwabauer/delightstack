@@ -3,6 +3,9 @@ title: Button
 description: A versatile, polished button with ripple effects, promise-aware loading states, dropdown menus, and confirmation flows.
 ---
 
+import { Button } from '@delightstack/components/actions';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,11 +14,11 @@ import { Button } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<Button onclick={() => console.log('clicked')}>
+<ComponentPreview code={`<Button onclick={() => console.log('clicked')}>
   Click Me
-</Button>
-```
+</Button>`}>
+  <Button client:load>Click Me</Button>
+</ComponentPreview>
 
 ## Examples
 
@@ -23,37 +26,69 @@ import { Button } from '@delightstack/components';
 
 Combine variant booleans freely. The default appearance (solid action-colored) requires no variant props.
 
-```svelte
-<Button>Solid (default)</Button>
+<ComponentPreview code={`<Button>Solid (default)</Button>
 <Button outline>Outline</Button>
 <Button transparent>Transparent</Button>
-<Button translucent>Translucent</Button>
-```
+<Button translucent>Translucent</Button>`}>
+  <Button client:load>Solid (default)</Button>
+  <Button client:load outline>Outline</Button>
+  <Button client:load transparent>Transparent</Button>
+  <Button client:load translucent>Translucent</Button>
+</ComponentPreview>
 
 ### Color Schemes
 
 Apply semantic color schemes with the `accent`, `error`, or `success` props. These combine with any variant.
 
-```svelte
-<Button accent>Accent</Button>
+<ComponentPreview code={`<Button accent>Accent</Button>
 <Button error>Error</Button>
 <Button success>Success</Button>
 <Button transparent error>Transparent Error</Button>
 <Button outline accent>Outline Accent</Button>
-<Button translucent success>Translucent Success</Button>
-```
+<Button translucent success>Translucent Success</Button>`}>
+  <Button client:load accent>Accent</Button>
+  <Button client:load error>Error</Button>
+  <Button client:load success>Success</Button>
+  <Button client:load transparent error>Transparent Error</Button>
+  <Button client:load outline accent>Outline Accent</Button>
+  <Button client:load translucent success>Translucent Success</Button>
+</ComponentPreview>
 
 ### Sizes
 
 The `size` prop controls font size, which drives padding and dimensions via `em` units.
 
-```svelte
-<Button size="00">Extra Small</Button>
+<ComponentPreview code={`<Button size="00">Extra Small</Button>
 <Button size="0">Small</Button>
 <Button size="1">Default</Button>
 <Button size="2">Large</Button>
-<Button size="3">Extra Large</Button>
-```
+<Button size="3">Extra Large</Button>`}>
+  <Button client:load size="00">Extra Small</Button>
+  <Button client:load size="0">Small</Button>
+  <Button client:load size="1">Default</Button>
+  <Button client:load size="2">Large</Button>
+  <Button client:load size="3">Extra Large</Button>
+</ComponentPreview>
+
+### Pill & Dense
+
+<ComponentPreview code={`<Button pill>Pill Button</Button>
+<Button dense>Dense</Button>
+<Button pill dense>Pill Dense</Button>`}>
+  <Button client:load pill>Pill Button</Button>
+  <Button client:load dense>Dense</Button>
+  <Button client:load pill dense>Pill Dense</Button>
+</ComponentPreview>
+
+### Disabled & Loading
+
+<ComponentPreview code={`<Button disabled>Disabled</Button>
+<Button loading>Loading</Button>
+<Button loadingSuccess>Success</Button>`}>
+  <Button client:load disabled>Disabled</Button>
+  <Button client:load loading>Loading</Button>
+  <Button client:load loadingSuccess>Success</Button>
+</ComponentPreview>
 
 ### Promise-Aware Click Handler
 
@@ -68,38 +103,35 @@ When `onclick` returns a `Promise`, the button automatically shows a loading spi
   }
 </script>
 
-<Button onclick={handleSave}>
-  Save
-</Button>
+<Button onclick={handleSave}>Save</Button>
 ```
 
-### Icon Button
+### Badge
 
-Set `icon` to render a circular icon-only button. Provide a `tooltip` or `aria-label` for accessibility.
+Display a notification indicator. Pass `true` for a dot or a string for a count.
 
-```svelte
-<script>
-  import { Button } from '@delightstack/components';
-  import TrashIcon from '~icons/mdi/delete';
-</script>
+<ComponentPreview code={`<Button badge={true}>Notifications</Button>
+<Button badge="3" pill>Messages</Button>`}>
+  <Button client:load badge={true}>Notifications</Button>
+  <Button client:load badge="3" pill>Messages</Button>
+</ComponentPreview>
 
-<Button icon transparent error tooltip="Delete item">
-  <TrashIcon />
-</Button>
-```
+### Link Button
+
+When `href` is set, the button renders as an `<a>` element.
+
+<ComponentPreview code={`<Button href="https://example.com" target="_blank">
+  Visit Site
+</Button>`}>
+  <Button client:load href="https://example.com" target="_blank">Visit Site</Button>
+</ComponentPreview>
 
 ### Dropdown Menu
 
-Pass a `menu` snippet to render a popover dropdown when the button is clicked. The snippet receives a `{ close }` function.
+Pass a `menu` snippet to render a popover dropdown when the button is clicked.
 
 ```svelte
-<script>
-  import { Button } from '@delightstack/components';
-</script>
-
-<Button
-  menu={(close) => {}}
-  showChevron>
+<Button showChevron>
   Options
   {#snippet menu({ close })}
     <button onclick={() => { edit(); close(); }}>Edit</button>
@@ -113,29 +145,12 @@ Pass a `menu` snippet to render a popover dropdown when the button is clicked. T
 Use the `dropdown` snippet for a secondary dropdown trigger alongside the main button action.
 
 ```svelte
-<script>
-  import { Button } from '@delightstack/components';
-</script>
-
 <Button onclick={primarySave}>
   Save
   {#snippet dropdown({ close })}
     <button onclick={() => { saveAs(); close(); }}>Save As...</button>
     <button onclick={() => { saveCopy(); close(); }}>Save Copy</button>
   {/snippet}
-</Button>
-```
-
-### Badge
-
-Display a notification indicator. Pass `true` for a dot or a string for a count.
-
-```svelte
-<Button badge={true} icon transparent>
-  <!-- icon -->
-</Button>
-<Button badge="3" pill>
-  Notifications
 </Button>
 ```
 
@@ -169,9 +184,8 @@ Display a notification indicator. Pass `true` for a dot or a string for a count.
 | `menu` | `Snippet<[{ close: () => void }]>` | `undefined` | Popover dropdown content triggered by clicking the button |
 | `showChevron` | `boolean` | `false` | Show a chevron icon (useful with `menu`) |
 | `dropdown` | `Snippet<[{ close: () => void }]>` | `undefined` | Content for a secondary dropdown trigger |
-| `loadingContent` | `Snippet<[{ close: () => void }]>` | `undefined` | Content shown during loading state |
 | `disableDropdown` | `boolean` | `false` | Disable and hide the secondary dropdown trigger |
-| `popoverCloseOnInsideClick` | `boolean` | `false` | Close the popover when clicking a button-like element inside it |
+| `popoverCloseOnInsideClick` | `boolean` | `false` | Close the popover when clicking inside it |
 | `popoverPlacement` | `Placement` | `'bottom-end'` | Floating UI placement for the popover |
 | `popoverStrategy` | `Strategy` | `'fixed'` | CSS positioning strategy for the popover |
 | `popoverDisableInitialFocus` | `boolean` | `false` | Skip auto-focusing content when the popover opens |
@@ -181,12 +195,6 @@ Display a notification indicator. Pass `true` for a dot or a string for a count.
 | `style` | `string` | `''` | Inline CSS styles |
 | `onclick` | `(e: MouseEvent) => void \| Promise<void>` | `undefined` | Click handler; returning a Promise enables automatic loading state |
 
-## Events
-
-| Event | Detail | Description |
-|-------|--------|-------------|
-| `onclick` | `MouseEvent` | Fires on click. If it returns a `Promise`, the button enters loading state until settled. |
-
 ## Accessibility
 
 - Full keyboard activation via Space and Enter keys
@@ -194,4 +202,4 @@ Display a notification indicator. Pass `true` for a dot or a string for a count.
 - `aria-haspopup` and `aria-expanded` set automatically when a `menu` snippet is provided
 - Disabled state communicated via the `disabled` attribute
 - Loading state disables pointer events and sets `tabindex="-1"`
-- Ripple effect is suppressed when the button is disabled
+- Ripple effect respects `prefers-reduced-motion`

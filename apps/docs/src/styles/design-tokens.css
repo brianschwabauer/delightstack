@@ -1,0 +1,234 @@
+/**
+ * Design tokens from @delightstack/styles, scoped to component preview areas only.
+ * This avoids overriding Starlight's base styles while making the tokens
+ * available for the delightstack components rendered inside previews.
+ */
+.preview-area {
+	color-scheme: light dark;
+
+	--color-dashboard: #616969;
+	--color-primary: #005640;
+	--color-secondary: #005640;
+	--color-50: oklch(from var(--color-dashboard) 99% min(0.01, c) h);
+	--color-100: oklch(from var(--color-dashboard) 97% min(0.015, c) h);
+	--color-150: oklch(from var(--color-dashboard) 95% min(0.02, c) h);
+	--color-200: oklch(from var(--color-dashboard) 92% min(0.03, c) h);
+	--color-250: oklch(from var(--color-dashboard) 87% min(0.04, c) h);
+	--color-300: oklch(from var(--color-dashboard) 82% min(0.05, c) h);
+	--color-350: oklch(from var(--color-dashboard) 76% min(0.06, c) h);
+	--color-400: oklch(from var(--color-dashboard) 70% min(0.07, c) h);
+	--color-450: oklch(from var(--color-dashboard) 65% min(0.08, c) h);
+	--color-500: oklch(from var(--color-dashboard) 60% min(0.08, c) h);
+	--color-550: oklch(from var(--color-dashboard) 55% min(0.08, c) h);
+	--color-600: oklch(from var(--color-dashboard) 48% min(0.07, c) h);
+	--color-650: oklch(from var(--color-dashboard) 41% min(0.06, c) h);
+	--color-700: oklch(from var(--color-dashboard) 35% min(0.05, c) h);
+	--color-750: oklch(from var(--color-dashboard) 29% min(0.04, c) h);
+	--color-800: oklch(from var(--color-dashboard) 24% min(0.03, c) h);
+	--color-850: oklch(from var(--color-dashboard) 21% min(0.02, c) h);
+	--color-900: oklch(from var(--color-dashboard) 18% min(0.015, c) h);
+	--color-950: oklch(from var(--color-dashboard) 15% min(0.01, c) h);
+
+	--color-bg-max-contrast: light-dark(white, black);
+	--color-bg-00: light-dark(white, black);
+	--color-bg-0: light-dark(var(--color-50), var(--color-950));
+	--color-bg-1: light-dark(var(--color-100), var(--color-900));
+	--color-bg-2: light-dark(var(--color-150), var(--color-850));
+	--color-bg-3: light-dark(var(--color-200), var(--color-800));
+	--color-bg-4: light-dark(var(--color-250), var(--color-750));
+	--color-bg-5: light-dark(var(--color-300), var(--color-700));
+	--color-bg-6: light-dark(var(--color-350), var(--color-650));
+	--color-bg-7: light-dark(var(--color-400), var(--color-600));
+	--color-bg-8: light-dark(var(--color-450), var(--color-550));
+	--color-bg-9: light-dark(var(--color-500), var(--color-500));
+	--color-bg-10: light-dark(var(--color-550), var(--color-450));
+	--color-bg-11: light-dark(var(--color-600), var(--color-400));
+	--color-bg-12: light-dark(var(--color-650), var(--color-350));
+	--color-bg-13: light-dark(var(--color-700), var(--color-300));
+	--color-bg-14: light-dark(var(--color-750), var(--color-250));
+	--color-bg-15: light-dark(var(--color-800), var(--color-200));
+	--color-bg-16: light-dark(var(--color-850), var(--color-150));
+	--color-bg-17: light-dark(var(--color-900), var(--color-100));
+	--color-bg-18: light-dark(var(--color-950), var(--color-50));
+	--color-bg: var(--color-bg-1);
+	--color-bg-disabled: var(--color-bg-0);
+	--color-bg-active: var(--color-bg-2);
+
+	--color-text-max-contrast: light-dark(black, white);
+	--color-text-light: oklch(from var(--color-dashboard) 76% min(0.06, c) h);
+	--color-text-dark: oklch(from var(--color-dashboard) 46% min(0.06, c) h);
+	--color-text-disabled: light-dark(oklch(from currentColor calc(l + 0.2) c h), oklch(from currentColor calc(l - 0.2) c h));
+	--color-text-active: light-dark(oklch(from currentColor calc(l - 0.3) c h), oklch(from currentColor calc(l + 0.2) c h));
+	--color-text: light-dark(var(--color-text-dark), var(--color-text-light));
+
+	--color-outline: light-dark(oklch(from currentColor 85% min(c, .1) h), oklch(from currentColor 40% min(c, .09) h));
+	--color-outline-disabled: light-dark(oklch(from currentColor 90% min(c, .1) h), oklch(from currentColor 30% min(c, .09) h));
+	--color-outline-active: light-dark(oklch(from currentColor 75% min(c, .1) h), oklch(from currentColor 50% min(c, .09) h));
+
+	--color-action: light-dark(oklch(from var(--color-primary) clamp(0.3, l, 0.5) min(.3, c) h), oklch(from var(--color-primary) clamp(0.4, l, 0.6) min(.3, c) h));
+	--color-action-disabled: light-dark(oklch(from var(--color-action) calc(l + .08) calc(c - .01) h), oklch(from var(--color-action) calc(l - .1) calc(c - .02) h));
+	--color-action-active: light-dark(oklch(from var(--color-action) calc(l - .06) calc(c + .02) h), oklch(from var(--color-action) calc(l + .07) calc(c + .02) h));
+	--color-action-text: light-dark(oklch(from var(--color-primary) 94% min(.05, c) h), oklch(from var(--color-primary) 94% min(.05, c) h));
+	--color-action-text-disabled: light-dark(oklch(from var(--color-primary) 82% min(.09, c) h), oklch(from var(--color-primary) 66% min(.09, c) h));
+	--color-action-text-active: light-dark(oklch(from var(--color-primary) 99% min(.03, c) h), oklch(from var(--color-primary) 99% min(.03, c) h));
+
+	--color-accent: light-dark(oklch(from var(--color-secondary) clamp(0.3, l, 0.5) min(.3, c) h), oklch(from var(--color-secondary) clamp(0.4, l, 0.6) min(.3, c) h));
+	--color-accent-disabled: light-dark(oklch(from var(--color-accent) calc(l + .08) calc(c - .01) h), oklch(from var(--color-accent) calc(l - .1) calc(c - .02) h));
+	--color-accent-active: light-dark(oklch(from var(--color-accent) calc(l - .06) calc(c + .02) h), oklch(from var(--color-accent) calc(l + .07) calc(c + .02) h));
+	--color-accent-text: light-dark(oklch(from var(--color-secondary) 94% min(.05, c) h), oklch(from var(--color-secondary) 94% min(.05, c) h));
+	--color-accent-text-disabled: light-dark(oklch(from var(--color-secondary) 82% min(.09, c) h), oklch(from var(--color-secondary) 66% min(.09, c) h));
+	--color-accent-text-active: light-dark(oklch(from var(--color-secondary) 99% min(.03, c) h), oklch(from var(--color-secondary) 99% min(.03, c) h));
+
+	--color-error: light-dark(#ef6262, #b04343);
+	--color-error-disabled: light-dark(#b38383, #5e2a2a);
+	--color-error-active: light-dark(#ca3030, #f55d5d);
+	--color-error-text: light-dark(#ffe6e6, #fac0c0);
+	--color-error-text-disabled: light-dark(#ffadad, #d96868);
+	--color-error-text-active: light-dark(#ffffff, #ffffff);
+
+	--color-success: light-dark(#00b7a1, #2c8f83);
+	--color-success-disabled: light-dark(#83b3ad, #2a5e58);
+	--color-success-active: light-dark(#289487, #00b7a1);
+	--color-success-text: light-dark(#f5fefd, #b7f1eb);
+	--color-success-text-disabled: light-dark(#58e0d0, #4ec2b3);
+	--color-success-text-active: light-dark(#ffffff, #ffffff);
+
+	--layer-1: 1;
+	--layer-2: 2;
+	--layer-3: 3;
+	--layer-4: 4;
+	--layer-5: 5;
+	--layer-important: 2147483647;
+
+	--radius: 10px;
+	--radius-1: 2px;
+	--radius-2: 5px;
+	--radius-3: 10px;
+	--radius-4: 20px;
+	--radius-5: 30px;
+	--radius-6: 60px;
+	--radius-round: 1e5px;
+
+	--font-sans: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+	--font-serif: 'Playfair Display', ui-serif, serif;
+	--font-mono: Dank Mono, Operator Mono, Inconsolata, Fira Mono, ui-monospace, SF Mono, Monaco, Droid Sans Mono, Source Code Pro, monospace;
+	--font-weight-1: 100;
+	--font-weight-2: 200;
+	--font-weight-3: 300;
+	--font-weight-4: 400;
+	--font-weight-5: 500;
+	--font-weight-6: 600;
+	--font-weight-7: 700;
+	--font-weight-8: 800;
+	--font-weight-9: 900;
+	--font-lineheight-00: 0.95;
+	--font-lineheight-0: 1.1;
+	--font-lineheight-1: 1.25;
+	--font-lineheight-2: 1.375;
+	--font-lineheight-3: 1.5;
+	--font-lineheight-4: 1.75;
+	--font-lineheight-5: 2;
+	--font-letterspacing-0: -0.05em;
+	--font-letterspacing-1: 0.025em;
+	--font-letterspacing-2: 0.05em;
+	--font-letterspacing-3: 0.075em;
+	--font-letterspacing-4: 0.15em;
+	--font-letterspacing-5: 0.5em;
+	--font-letterspacing-6: 0.75em;
+	--font-letterspacing-7: 1em;
+	--font-size-00: 0.65rem;
+	--font-size-0: 0.815rem;
+	--font-size-1: 1rem;
+	--font-size-2: 1.1rem;
+	--font-size-3: 1.25rem;
+	--font-size-4: 1.5rem;
+	--font-size-5: 2rem;
+	--font-size-6: 2.5rem;
+	--font-size-7: 3rem;
+	--font-size-8: 3.5rem;
+	--font-size-fluid-0: clamp(0.75rem, 2vw, 1rem);
+	--font-size-fluid-1: clamp(1rem, 4vw, 1.5rem);
+	--font-size-fluid-2: clamp(1.5rem, 6vw, 2.5rem);
+	--font-size-fluid-3: clamp(2rem, 9vw, 3.5rem);
+
+	--shadow-hls: 220 3% 15%;
+	--shadow-strength: 15%;
+	--shadow-color: light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 9%)), transparent);
+	--shadow-1: 0 1px 3px -1px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 19%)), transparent);
+	--shadow-2: 0 3px 5px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+		0 7px 14px -5px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent);
+	--shadow-3: 0 -1px 3px 0 light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+		0 1px 2px -5px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+		0 2px 5px -5px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
+		0 4px 12px -5px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
+		0 12px 15px -5px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 7%)), transparent);
+	--shadow-4: 0 -2px 5px 0 light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+		0 1px 1px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+		0 2px 2px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+		0 5px 5px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
+		0 9px 9px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
+		0 16px 16px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 6%)), transparent);
+	--shadow-5: 0 -1px 2px 0 light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+		0 2px 1px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+		0 5px 5px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+		0 10px 10px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
+		0 20px 20px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
+		0 40px 40px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 7%)), transparent);
+	--shadow-6: 0 -1px 2px 0 light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+		0 3px 2px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+		0 7px 5px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+		0 12px 10px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
+		0 22px 18px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
+		0 41px 33px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 6%)), transparent),
+		0 100px 80px -2px light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 7%)), transparent);
+
+	--size-000: -0.5rem;
+	--size-00: -0.25rem;
+	--size-1: 0.25rem;
+	--size-2: 0.5rem;
+	--size-3: 1rem;
+	--size-4: 1.25rem;
+	--size-5: 1.5rem;
+	--size-6: 1.75rem;
+	--size-7: 2rem;
+	--size-8: 3rem;
+	--size-9: 4rem;
+	--size-10: 5rem;
+	--size-11: 7.5rem;
+	--size-12: 10rem;
+	--size-13: 15rem;
+	--size-14: 20rem;
+	--size-15: 30rem;
+
+	--ease-out-1: cubic-bezier(0.61, 1, 0.88, 1);
+	--ease-out-2: cubic-bezier(0.5, 1, 0.89, 1);
+	--ease-out-3: cubic-bezier(0.33, 1, 0.68, 1);
+	--ease-out-4: cubic-bezier(0.25, 1, 0.5, 1);
+	--ease-out-5: cubic-bezier(0.22, 1, 0.36, 1);
+	--ease-out-6: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-in-1: cubic-bezier(0.12, 0, 0.39, 0);
+	--ease-in-2: cubic-bezier(0.11, 0, 0.5, 0);
+	--ease-in-3: cubic-bezier(0.32, 0, 0.67, 0);
+	--ease-in-4: cubic-bezier(0.5, 0, 0.75, 0);
+	--ease-in-5: cubic-bezier(0.64, 0, 0.78, 0);
+	--ease-in-6: cubic-bezier(0.7, 0, 0.84, 0);
+	--ease-in-out-1: cubic-bezier(0.37, 0, 0.63, 1);
+	--ease-in-out-2: cubic-bezier(0.45, 0, 0.55, 1);
+	--ease-in-out-3: cubic-bezier(0.65, 0, 0.35, 1);
+	--ease-in-out-4: cubic-bezier(0.76, 0, 0.24, 1);
+	--ease-in-out-5: cubic-bezier(0.83, 0, 0.17, 1);
+	--ease-in-out-6: cubic-bezier(0.87, 0, 0.13, 1);
+	--ease-in-back: cubic-bezier(0.36, 0, 0.66, -0.56);
+	--ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+	--ease-in-out-back: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+	--ease: var(--ease-in-out-4);
+
+	font-family: var(--font-sans);
+	color: var(--color-text);
+}
+
+/* Keyframes needed by some components */
+@keyframes spinAround {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(359deg); }
+}

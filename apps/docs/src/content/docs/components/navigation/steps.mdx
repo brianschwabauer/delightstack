@@ -3,6 +3,9 @@ title: Steps
 description: A multi-step progress indicator with horizontal and vertical layouts, clickable navigation, wizard mode with step content, and error states.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import StepsDemo from '../../../../components/demos/StepsDemo.svelte';
+
 ## Import
 
 Steps uses a compound component pattern. The `Step` sub-component is re-exported from the same module.
@@ -14,19 +17,24 @@ import type { StepsContext } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Steps, Step } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
 
-  let current = $state(0);
+  let current = $state(1);
 </script>
 
 <Steps bind:current>
   <Step title="Account" description="Create your account" />
   <Step title="Profile" description="Set up your profile" />
-  <Step title="Review" description="Review and confirm" />
+  <Step title="Review" description="Review details" />
+  <Step title="Complete" description="All done" />
 </Steps>
-```
+
+<Button outline onclick={() => current = Math.max(0, current - 1)}>Back</Button>
+<Button onclick={() => current = Math.min(4, current + 1)}>Next</Button>`}>
+	<StepsDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

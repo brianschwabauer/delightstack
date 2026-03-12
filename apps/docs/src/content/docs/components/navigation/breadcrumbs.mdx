@@ -3,6 +3,9 @@ title: Breadcrumbs
 description: A navigation trail with automatic home icon, collapsible middle items, Schema.org structured data, and customizable separators.
 ---
 
+import { Breadcrumbs } from '@delightstack/components/navigation';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -12,8 +15,7 @@ import type { BreadcrumbItem } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Breadcrumbs } from '@delightstack/components';
   import type { BreadcrumbItem } from '@delightstack/components';
 
@@ -24,8 +26,9 @@ import type { BreadcrumbItem } from '@delightstack/components';
   ];
 </script>
 
-<Breadcrumbs {items} />
-```
+<Breadcrumbs {items} />`}>
+	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Electronics', href: '/products/electronics' }, { label: 'Headphones' }]} />
+</ComponentPreview>
 
 ## Examples
 
@@ -33,8 +36,7 @@ import type { BreadcrumbItem } from '@delightstack/components';
 
 When the trail is long, collapse middle items into an ellipsis dropdown.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Breadcrumbs } from '@delightstack/components';
 
   const items = [
@@ -46,16 +48,17 @@ When the trail is long, collapse middle items into an ellipsis dropdown.
   ];
 </script>
 
-<Breadcrumbs {items} maxItems={3} />
-```
+<Breadcrumbs {items} maxItems={3} />`}>
+	<Breadcrumbs client:load items={[{ label: 'Category', href: '/cat' }, { label: 'Subcategory', href: '/cat/sub' }, { label: 'Brand', href: '/cat/sub/brand' }, { label: 'Model', href: '/cat/sub/brand/model' }, { label: 'Product' }]} maxItems={3} />
+</ComponentPreview>
 
 ### Without Home Icon
 
 Hide the automatic home breadcrumb.
 
-```svelte
-<Breadcrumbs {items} showHome={false} />
-```
+<ComponentPreview code={`<Breadcrumbs {items} showHome={false} />`}>
+	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Electronics', href: '/products/electronics' }, { label: 'Headphones' }]} showHome={false} />
+</ComponentPreview>
 
 ### Custom Separator
 
@@ -71,11 +74,13 @@ Replace the default chevron separator with a custom snippet.
 
 ### Sizes
 
-```svelte
-<Breadcrumbs {items} size="0" />  <!-- Small -->
+<ComponentPreview code={`<Breadcrumbs {items} size="0" />  <!-- Small -->
 <Breadcrumbs {items} size="2" />  <!-- Medium -->
-<Breadcrumbs {items} size="3" />  <!-- Large -->
-```
+<Breadcrumbs {items} size="3" />  <!-- Large -->`}>
+	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="0" />
+	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="2" />
+	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="3" />
+</ComponentPreview>
 
 ### Click Handler
 
@@ -89,9 +94,9 @@ React to breadcrumb clicks without relying solely on native navigation.
 
 ### Skeleton Loading
 
-```svelte
-<Breadcrumbs skeleton skeletonCount={4} />
-```
+<ComponentPreview code={`<Breadcrumbs skeleton skeletonCount={4} />`}>
+	<Breadcrumbs client:load skeleton skeletonCount={4} />
+</ComponentPreview>
 
 ## Props
 

@@ -3,6 +3,10 @@ title: Modal
 description: A polished dialog overlay with smooth animations, focus trapping, backdrop blur, and crossfade transitions.
 ---
 
+import { Modal } from '@delightstack/components/actions';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ModalDemo from '../../../../components/demos/ModalDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -10,6 +14,21 @@ import { Modal } from '@delightstack/components';
 ```
 
 ## Basic Usage
+
+<ComponentPreview code={`<script>
+  import { Modal, Button } from '@delightstack/components';
+
+  let showModal = $state(false);
+</script>
+
+<Button onclick={() => showModal = true}>Open Modal</Button>
+
+<Modal bind:open={showModal} title="Example Modal">
+  <p>This is a modal dialog with some example content.
+  Click outside or press Escape to close.</p>
+</Modal>`}>
+  <ModalDemo client:load />
+</ComponentPreview>
 
 ```svelte
 <script>

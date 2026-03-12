@@ -3,6 +3,9 @@ title: Toggle
 description: An on/off switch component for binary choices with slide animation, bounce physics, and optional thumb icon.
 ---
 
+import { Toggle } from '@delightstack/components/form';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,44 +14,35 @@ import { Toggle } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Toggle } from '@delightstack/components';
-
-  let darkMode = $state(false);
-</script>
-
-<Toggle bind:checked={darkMode} label="Dark Mode" />
-```
+<ComponentPreview code={`<Toggle label="Dark Mode" />`}>
+	<Toggle client:load label="Dark Mode" />
+</ComponentPreview>
 
 ## Examples
 
 ### Simple Toggle
 
-```svelte
-<Toggle bind:checked={darkMode} label="Dark Mode" />
-```
+<ComponentPreview code={`<Toggle label="Dark Mode" />`}>
+	<Toggle client:load label="Dark Mode" />
+</ComponentPreview>
 
 ### With On/Off Labels
 
 Dynamic text that changes based on the toggle state.
 
-```svelte
-<Toggle
-  bind:checked={notifications}
-  on_label="Notifications On"
-  off_label="Notifications Off"
-/>
-```
+<ComponentPreview code={`<Toggle on_label="Notifications On" off_label="Notifications Off" />`}>
+	<Toggle client:load on_label="Notifications On" off_label="Notifications Off" />
+</ComponentPreview>
 
 ### Label Position
 
 Place the label before or after the toggle.
 
-```svelte
-<Toggle bind:checked={setting} label="Setting" label_position="start" />
-<Toggle bind:checked={setting} label="Setting" label_position="end" />
-```
+<ComponentPreview code={`<Toggle label="Setting" label_position="start" />
+<Toggle label="Setting" label_position="end" />`}>
+	<Toggle client:load label="Setting" label_position="start" />
+	<Toggle client:load label="Setting" label_position="end" />
+</ComponentPreview>
 
 ### Custom Thumb Icon
 
@@ -70,23 +64,29 @@ Use the `thumb_icon` snippet to render an icon inside the thumb.
 
 Use `name` and `value` for native form submission.
 
-```svelte
-<Toggle
-  bind:checked={premium}
-  name="premium"
-  value="true"
-  label="Enable premium features"
-/>
-```
+<ComponentPreview code={`<Toggle name="premium" value="true" label="Enable premium features" />`}>
+	<Toggle client:load name="premium" value="true" label="Enable premium features" />
+</ComponentPreview>
+
+### Disabled
+
+<ComponentPreview code={`<Toggle label="Disabled off" disabled />
+<Toggle label="Disabled on" disabled checked />`}>
+	<Toggle client:load label="Disabled off" disabled />
+	<Toggle client:load label="Disabled on" disabled checked />
+</ComponentPreview>
 
 ### Sizes
 
-```svelte
-<Toggle size="0" bind:checked={a} label="Small (32x18)" />
-<Toggle size="1" bind:checked={b} label="Default (44x24)" />
-<Toggle size="2" bind:checked={c} label="Medium (52x28)" />
-<Toggle size="3" bind:checked={d} label="Large (68x36)" />
-```
+<ComponentPreview code={`<Toggle size="0" label="Small (32x18)" />
+<Toggle size="1" label="Default (44x24)" />
+<Toggle size="2" label="Medium (52x28)" />
+<Toggle size="3" label="Large (68x36)" />`}>
+	<Toggle client:load size="0" label="Small (32x18)" />
+	<Toggle client:load size="1" label="Default (44x24)" />
+	<Toggle client:load size="2" label="Medium (52x28)" />
+	<Toggle client:load size="3" label="Large (68x36)" />
+</ComponentPreview>
 
 ### Settings List
 

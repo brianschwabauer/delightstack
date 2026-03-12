@@ -3,6 +3,9 @@ title: Timeline
 description: A chronological event display for vertical or horizontal timelines with scroll-reveal animations, status markers, and on-demand loading.
 ---
 
+import { Timeline, TimelineItem } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -13,8 +16,7 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
 
 ## Basic Usage
 
-```svelte
-<Timeline>
+<ComponentPreview code={`<Timeline>
   <TimelineItem title="Step 1" date="Jan 10" status="complete">
     First step completed.
   </TimelineItem>
@@ -22,8 +24,17 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
     Currently in progress.
   </TimelineItem>
   <TimelineItem title="Step 3" status="pending" />
-</Timeline>
-```
+</Timeline>`}>
+  <Timeline client:load>
+    <TimelineItem client:load title="Step 1" date="Jan 10" status="complete">
+      First step completed.
+    </TimelineItem>
+    <TimelineItem client:load title="Step 2" date="Jan 11" status="active">
+      Currently in progress.
+    </TimelineItem>
+    <TimelineItem client:load title="Step 3" status="pending" />
+  </Timeline>
+</ComponentPreview>
 
 ## Examples
 
@@ -72,14 +83,19 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
 
 ### Horizontal Process Steps
 
-```svelte
-<Timeline horizontal>
+<ComponentPreview code={`<Timeline horizontal>
   <TimelineItem status="complete" title="Order Placed" />
   <TimelineItem status="complete" title="Processing" />
   <TimelineItem status="active" title="Shipping" />
   <TimelineItem status="pending" title="Delivered" />
-</Timeline>
-```
+</Timeline>`}>
+  <Timeline client:load horizontal>
+    <TimelineItem client:load status="complete" title="Order Placed" />
+    <TimelineItem client:load status="complete" title="Processing" />
+    <TimelineItem client:load status="active" title="Shipping" />
+    <TimelineItem client:load status="pending" title="Delivered" />
+  </Timeline>
+</ComponentPreview>
 
 ### Alternating Sides
 
@@ -113,19 +129,23 @@ Load more events as the user scrolls near the end of the timeline.
 
 ### Custom Marker Color
 
-```svelte
-<Timeline>
+<ComponentPreview code={`<Timeline>
   <TimelineItem title="Custom Color" color="var(--color-error)">
     A red-themed event marker.
   </TimelineItem>
-</Timeline>
-```
+</Timeline>`}>
+  <Timeline client:load>
+    <TimelineItem client:load title="Custom Color" color="var(--color-error)">
+      A red-themed event marker.
+    </TimelineItem>
+  </Timeline>
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Timeline skeleton skeletonCount={4} />
-```
+<ComponentPreview code={`<Timeline skeleton skeletonCount={4} />`}>
+  <Timeline client:load skeleton skeletonCount={4} />
+</ComponentPreview>
 
 ## Timeline Props
 

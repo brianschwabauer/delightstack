@@ -3,6 +3,9 @@ title: Expand
 description: A smooth animated container that expands and collapses content using CSS Grid height animation.
 ---
 
+import { Expand } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -87,6 +90,22 @@ The Expand component is used internally by the Accordion component for its expan
   </div>
 {/each}
 ```
+
+### Always Expanded
+
+A simple example showing the Expand container in its open state.
+
+<ComponentPreview code={`<Expand show={true}>
+  <div style="padding: 1rem;">
+    This content is visible because show is true.
+  </div>
+</Expand>`}>
+	<Expand client:load show={true}>
+		<div style="padding: 1rem;">
+			This content is visible because show is true.
+		</div>
+	</Expand>
+</ComponentPreview>
 
 ### With Custom Inline Style
 

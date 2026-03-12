@@ -1,0 +1,102 @@
+---
+/**
+ * A preview container that shows a live component with a toggleable code view.
+ * Usage in MDX:
+ *   <ComponentPreview code={`<Button>Click me</Button>`}>
+ *     <Button client:load>Click me</Button>
+ *   </ComponentPreview>
+ */
+import { Code } from 'astro-expressive-code/components';
+
+interface Props {
+	code: string;
+	title?: string;
+}
+
+const { code, title } = Astro.props;
+---
+
+<div class="component-preview">
+	{title && <div class="preview-title">{title}</div>}
+	<div class="preview-area">
+		<slot />
+	</div>
+	<details class="code-details">
+		<summary>
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+			View code
+		</summary>
+		<div class="code-area">
+			<Code code={code.trim()} lang="svelte" />
+		</div>
+	</details>
+</div>
+
+<style>
+	.component-preview {
+		border: 1px solid var(--sl-color-gray-5);
+		border-radius: 0.5rem;
+		overflow: hidden;
+		margin: 1rem 0;
+	}
+
+	.preview-title {
+		padding: 0.5rem 1rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--sl-color-gray-3);
+		border-bottom: 1px solid var(--sl-color-gray-5);
+		background: var(--sl-color-gray-6);
+	}
+
+	.preview-area {
+		padding: 2rem;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem;
+		min-height: 4rem;
+	}
+
+	.code-details {
+		border-top: 1px solid var(--sl-color-gray-5);
+	}
+
+	.code-details summary {
+		padding: 0.5rem 1rem;
+		font-size: 0.8rem;
+		cursor: pointer;
+		user-select: none;
+		color: var(--sl-color-gray-3);
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		background: var(--sl-color-gray-6);
+		list-style: none;
+	}
+
+	.code-details summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.code-details summary:hover {
+		color: var(--sl-color-white);
+	}
+
+	.code-details[open] summary {
+		border-bottom: 1px solid var(--sl-color-gray-5);
+	}
+
+	.code-area {
+		overflow-x: auto;
+	}
+
+	.code-area :global(.expressive-code) {
+		margin: 0;
+	}
+
+	.code-area :global(.expressive-code .frame) {
+		border-radius: 0;
+		border: none;
+	}
+</style>

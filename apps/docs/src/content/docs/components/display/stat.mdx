@@ -3,6 +3,9 @@ title: Stat
 description: A component for displaying key metrics with optional labels, icons, change indicators, and animated number display.
 ---
 
+import { Stat } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,9 +14,9 @@ import { Stat } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<Stat value={1234} label="Total Users" />
-```
+<ComponentPreview code={`<Stat value={1234} label="Total Users" />`}>
+  <Stat client:load value={1234} label="Total Users" />
+</ComponentPreview>
 
 ## Examples
 
@@ -21,14 +24,14 @@ import { Stat } from '@delightstack/components';
 
 Positive changes show a green up-arrow, negative changes show a red down-arrow.
 
-```svelte
-<Stat
+<ComponentPreview code={`<Stat
   value="$12,450"
   label="Revenue"
   change={12.5}
   changeLabel="vs last month"
-/>
-```
+/>`}>
+  <Stat client:load value="$12,450" label="Revenue" change={12.5} changeLabel="vs last month" />
+</ComponentPreview>
 
 ### With Icon
 
@@ -53,38 +56,41 @@ Pass any Svelte component as the `icon` prop.
 
 Four sizes are available for different contexts.
 
-```svelte
-<Stat value={42} label="Tasks" size="0" />
+<ComponentPreview code={`<Stat value={42} label="Tasks" size="0" />
 <Stat value={42} label="Tasks" size="1" />
 <Stat value={42} label="Tasks" size="2" />
-<Stat value={42} label="Tasks" size="3" />
-```
+<Stat value={42} label="Tasks" size="3" />`}>
+  <Stat client:load value={42} label="Tasks" size="0" />
+  <Stat client:load value={42} label="Tasks" size="1" />
+  <Stat client:load value={42} label="Tasks" size="2" />
+  <Stat client:load value={42} label="Tasks" size="3" />
+</ComponentPreview>
 
 ### Horizontal Layout
 
-```svelte
-<Stat horizontal value="99.9%" label="Uptime" />
-```
+<ComponentPreview code={`<Stat horizontal value="99.9%" label="Uptime" />`}>
+  <Stat client:load horizontal value="99.9%" label="Uptime" />
+</ComponentPreview>
 
 ### Override Trend Direction
 
 When a decrease is positive (e.g., bug count going down), override the trend color.
 
-```svelte
-<Stat
+<ComponentPreview code={`<Stat
   value={23}
   label="Open Bugs"
   change={-15}
   trend="up"
   changeLabel="fewer than last week"
-/>
-```
+/>`}>
+  <Stat client:load value={23} label="Open Bugs" change={-15} trend="up" changeLabel="fewer than last week" />
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Stat skeleton size="2" />
-```
+<ComponentPreview code={`<Stat skeleton size="2" />`}>
+  <Stat client:load skeleton size="2" />
+</ComponentPreview>
 
 ## Props
 

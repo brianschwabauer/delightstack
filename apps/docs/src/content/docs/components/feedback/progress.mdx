@@ -3,6 +3,9 @@ title: Progress
 description: A unified progress and loading indicator component supporting circular spinners, linear bars, overlays, and fullscreen loading states.
 ---
 
+import { Progress } from '@delightstack/components/feedback';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -13,9 +16,9 @@ import { Progress } from '@delightstack/components';
 
 By default, Progress renders as a circular indeterminate spinner.
 
-```svelte
-<Progress />
-```
+<ComponentPreview code={`<Progress />`}>
+	<Progress client:load />
+</ComponentPreview>
 
 ## Examples
 
@@ -23,61 +26,63 @@ By default, Progress renders as a circular indeterminate spinner.
 
 Omit the `value` prop for an indeterminate loading animation.
 
-```svelte
-<!-- Default circular spinner -->
+<ComponentPreview code={`<!-- Default circular spinner -->
 <Progress />
 
-<!-- Inline spinner in text -->
-<p>Loading data <Progress size="00" /></p>
-
 <!-- Linear indeterminate bar -->
-<Progress circular={false} />
-```
+<Progress circular={false} />`}>
+	<Progress client:load />
+	<Progress client:load circular={false} />
+</ComponentPreview>
 
 ### Determinate Progress
 
 Provide a `value` (0-100) to show progress.
 
-```svelte
-<script>
-  import { Progress } from '@delightstack/components';
-
-  let uploadProgress = $state(45);
-</script>
-
-<!-- Circular progress with percentage -->
+<ComponentPreview code={`<!-- Circular progress with percentage -->
 <Progress value={75} showValue />
 
 <!-- Linear progress bar -->
-<Progress circular={false} value={uploadProgress} />
+<Progress circular={false} value={45} />
 
 <!-- Linear with label and percentage -->
-<Progress circular={false} value={uploadProgress} showValue label="Uploading..." />
-```
+<Progress circular={false} value={45} showValue label="Uploading..." />`}>
+	<Progress client:load value={75} showValue />
+	<Progress client:load circular={false} value={45} />
+	<Progress client:load circular={false} value={45} showValue label="Uploading..." />
+</ComponentPreview>
 
 ### Sizes
 
-```svelte
-<!-- Circular sizes -->
-<Progress size="00" />  <!-- 16px, inline in text/buttons -->
-<Progress size="0" />   <!-- 24px, small indicator -->
-<Progress size="1" />   <!-- 40px, default -->
-<Progress size="2" />   <!-- 64px, prominent -->
-<Progress size="3" />   <!-- 96px, hero/overlay -->
+<ComponentPreview code={`<!-- Circular sizes -->
+<Progress size="00" />
+<Progress size="0" />
+<Progress size="1" />
+<Progress size="2" />
+<Progress size="3" />`} title="Circular sizes">
+	<Progress client:load size="00" />
+	<Progress client:load size="0" />
+	<Progress client:load size="1" />
+	<Progress client:load size="2" />
+	<Progress client:load size="3" />
+</ComponentPreview>
 
-<!-- Linear sizes -->
-<Progress circular={false} value={60} size="00" />  <!-- 2px height -->
-<Progress circular={false} value={60} size="1" />   <!-- 8px height -->
-<Progress circular={false} value={60} size="3" />   <!-- 16px height -->
-```
+<ComponentPreview code={`<!-- Linear sizes -->
+<Progress circular={false} value={60} size="00" />
+<Progress circular={false} value={60} size="1" />
+<Progress circular={false} value={60} size="3" />`} title="Linear sizes">
+	<Progress client:load circular={false} value={60} size="00" />
+	<Progress client:load circular={false} value={60} size="1" />
+	<Progress client:load circular={false} value={60} size="3" />
+</ComponentPreview>
 
 ### Striped Bar
 
 Add an animated stripe effect to a linear progress bar.
 
-```svelte
-<Progress circular={false} value={60} striped />
-```
+<ComponentPreview code={`<Progress circular={false} value={60} striped />`}>
+	<Progress client:load circular={false} value={60} striped />
+</ComponentPreview>
 
 ### Multi-Segment Progress
 
@@ -122,11 +127,11 @@ Use `overlay` to cover a parent element, or `fullScreen` to cover the entire vie
 
 ### Color Variants
 
-```svelte
-<Progress value={100} success />
-<Progress value={30} error />
-<Progress value={50} color="var(--color-accent)" />
-```
+<ComponentPreview code={`<Progress value={100} success />
+<Progress value={30} error />`}>
+	<Progress client:load value={100} success />
+	<Progress client:load value={30} error />
+</ComponentPreview>
 
 ## Props
 

@@ -7,6 +7,52 @@
 			"types": "./dist/index.d.ts",
 			"svelte": "./dist/index.js",
 			"import": "./dist/index.js"
+		},
+		"./actions": {
+			"types": "./dist/actions/index.d.ts",
+			"svelte": "./dist/actions/index.js",
+			"import": "./dist/actions/index.js"
+		},
+		"./display": {
+			"types": "./dist/display/index.d.ts",
+			"svelte": "./dist/display/index.js",
+			"import": "./dist/display/index.js"
+		},
+		"./feedback": {
+			"types": "./dist/feedback/index.d.ts",
+			"svelte": "./dist/feedback/index.js",
+			"import": "./dist/feedback/index.js"
+		},
+		"./form": {
+			"types": "./dist/form/index.d.ts",
+			"svelte": "./dist/form/index.js",
+			"import": "./dist/form/index.js"
+		},
+		"./media": {
+			"types": "./dist/media/index.d.ts",
+			"svelte": "./dist/media/index.js",
+			"import": "./dist/media/index.js"
+		},
+		"./media/Carousel.svelte": {
+			"svelte": "./dist/media/Carousel.svelte",
+			"import": "./dist/media/Carousel.svelte"
+		},
+		"./media/Gallery.svelte": {
+			"svelte": "./dist/media/Gallery.svelte",
+			"import": "./dist/media/Gallery.svelte"
+		},
+		"./media/Image.svelte": {
+			"svelte": "./dist/media/Image.svelte",
+			"import": "./dist/media/Image.svelte"
+		},
+		"./media/Video.svelte": {
+			"svelte": "./dist/media/Video.svelte",
+			"import": "./dist/media/Video.svelte"
+		},
+		"./navigation": {
+			"types": "./dist/navigation/index.d.ts",
+			"svelte": "./dist/navigation/index.js",
+			"import": "./dist/navigation/index.js"
 		}
 	},
 	"files": [

@@ -3,6 +3,9 @@ title: Fieldset
 description: A semantic grouping component for related form fields with support for bordered, card, and filled visual styles, grid layout, and collapsible sections.
 ---
 
+import { Fieldset, Input } from '@delightstack/components/form';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,17 +14,17 @@ import { Fieldset } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Fieldset, Input } from '@delightstack/components';
-</script>
-
-<Fieldset legend="Personal Information">
+<ComponentPreview code={`<Fieldset legend="Personal Information">
   <Input label="First Name" name="firstName" />
   <Input label="Last Name" name="lastName" />
   <Input label="Email" type="email" name="email" />
-</Fieldset>
-```
+</Fieldset>`}>
+	<Fieldset client:load legend="Personal Information">
+		<Input client:load label="First Name" name="firstName" />
+		<Input client:load label="Last Name" name="lastName" />
+		<Input client:load label="Email" type="email" name="email" />
+	</Fieldset>
+</ComponentPreview>
 
 ## Examples
 
@@ -29,31 +32,33 @@ import { Fieldset } from '@delightstack/components';
 
 Choose between default (no border), bordered, card, and filled styles. Only one style boolean should be set at a time.
 
-```svelte
-<!-- Default: no visible border, just spacing -->
-<Fieldset legend="Default Style">
-  <Input label="Name" name="name" />
-</Fieldset>
-
-<!-- Bordered: subtle border -->
-<Fieldset bordered legend="Account Settings">
+<ComponentPreview title="Bordered" code={`<Fieldset bordered legend="Account Settings">
   <Input label="Username" name="username" required />
   <Input label="Password" type="password" name="password" required />
-</Fieldset>
+</Fieldset>`}>
+	<Fieldset client:load bordered legend="Account Settings">
+		<Input client:load label="Username" name="username" required />
+		<Input client:load label="Password" type="password" name="password" required />
+	</Fieldset>
+</ComponentPreview>
 
-<!-- Card: elevated with shadow -->
-<Fieldset card legend="Payment Information">
+<ComponentPreview title="Card" code={`<Fieldset card legend="Payment Information">
   <Input label="Card Number" name="cardNumber" />
   <Input label="Expiry" name="expiry" />
-  <Input label="CVV" name="cvv" />
-</Fieldset>
+</Fieldset>`}>
+	<Fieldset client:load card legend="Payment Information">
+		<Input client:load label="Card Number" name="cardNumber" />
+		<Input client:load label="Expiry" name="expiry" />
+	</Fieldset>
+</ComponentPreview>
 
-<!-- Filled: light background -->
-<Fieldset filled legend="Optional Details">
+<ComponentPreview title="Filled" code={`<Fieldset filled legend="Optional Details">
   <Input label="Nickname" name="nickname" />
-  <Input label="Bio" type="textarea" name="bio" />
-</Fieldset>
-```
+</Fieldset>`}>
+	<Fieldset client:load filled legend="Optional Details">
+		<Input client:load label="Nickname" name="nickname" />
+	</Fieldset>
+</ComponentPreview>
 
 ### Grid Layout
 

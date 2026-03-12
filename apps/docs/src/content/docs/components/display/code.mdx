@@ -3,6 +3,9 @@ title: Code
 description: A syntax-highlighted code block with line numbers, copy-to-clipboard, line highlighting, and diff display.
 ---
 
+import { Code as DSCode } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -53,13 +56,13 @@ Draw attention to specific lines by providing their line numbers.
 
 ### Without Line Numbers
 
-```svelte
-<Code
+<ComponentPreview code={`<Code
   code="npm install @delightstack/components"
   language="bash"
   showLineNumbers={false}
-/>
-```
+/>`}>
+	<DSCode client:load code="npm install @delightstack/components" language="bash" showLineNumbers={false} />
+</ComponentPreview>
 
 ### Diff Display
 
@@ -102,9 +105,9 @@ Long code blocks can be constrained with a maximum height. The content scrolls v
 
 ### Skeleton Loading
 
-```svelte
-<Code skeleton />
-```
+<ComponentPreview code={`<Code skeleton />`}>
+	<DSCode client:load code="" skeleton />
+</ComponentPreview>
 
 ## Props
 

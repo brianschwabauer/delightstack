@@ -3,6 +3,10 @@ title: Alert
 description: A streamlined confirmation dialog built on Modal, providing consistent yes/no decision flows with a programmatic API.
 ---
 
+import { Alert, alert } from '@delightstack/components/actions';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import AlertDemo from '../../../../components/demos/AlertDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -16,6 +20,23 @@ import { alert } from '@delightstack/components';
 ```
 
 ## Basic Usage
+
+<ComponentPreview code={`<script>
+  import { Alert, Button } from '@delightstack/components';
+
+  let showAlert = $state(false);
+</script>
+
+<Button onclick={() => showAlert = true}>Confirm Action</Button>
+
+<Alert
+  bind:open={showAlert}
+  title="Save Changes?"
+  message="Would you like to save your changes before leaving?"
+  continueText="Save"
+/>`}>
+  <AlertDemo client:load />
+</ComponentPreview>
 
 ```svelte
 <script>

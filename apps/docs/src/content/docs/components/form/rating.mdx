@@ -3,6 +3,9 @@ title: Rating
 description: A star rating input for collecting user ratings or displaying scores, with half-star precision, custom icons, and a read-only display mode.
 ---
 
+import { Rating } from '@delightstack/components/form';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,54 +14,33 @@ import { Rating } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Rating } from '@delightstack/components';
-
-  let rating = $state(0);
-</script>
-
-<Rating bind:value={rating} />
-```
+<ComponentPreview code={`<Rating value={0} />`}>
+	<Rating client:load value={0} />
+</ComponentPreview>
 
 ## Examples
 
 ### Interactive Rating
 
-```svelte
-<script>
-  import { Rating } from '@delightstack/components';
-
-  let rating = $state(0);
-</script>
-
-<Rating bind:value={rating} tooltip="Rate this item" />
-```
+<ComponentPreview code={`<Rating value={0} tooltip="Rate this item" />`}>
+	<Rating client:load value={0} tooltip="Rate this item" />
+</ComponentPreview>
 
 ### Half-Star Precision
 
 Set `precision={0.5}` to allow half-star selections. The left half of each star registers a 0.5 increment.
 
-```svelte
-<script>
-  import { Rating } from '@delightstack/components';
-
-  let rating = $state(0);
-</script>
-
-<Rating bind:value={rating} precision={0.5} showValue />
-```
+<ComponentPreview code={`<Rating value={3.5} precision={0.5} showValue />`}>
+	<Rating client:load value={3.5} precision={0.5} showValue />
+</ComponentPreview>
 
 ### Read-Only Display
 
 Use `readonly` to show a rating without interaction. Ideal for displaying average ratings.
 
-```svelte
-<div style="display: flex; align-items: center; gap: 0.5rem;">
-  <Rating value={4.3} readonly showValue />
-  <span>(128 reviews)</span>
-</div>
-```
+<ComponentPreview code={`<Rating value={4.3} readonly showValue />`}>
+	<Rating client:load value={4.3} readonly showValue />
+</ComponentPreview>
 
 ### Custom Icons and Colors
 
@@ -86,18 +68,21 @@ Replace the default stars with any Svelte component. Use `color` to override the
 
 Allow clicking the current rating again to clear it to 0.
 
-```svelte
-<Rating bind:value={rating} clearable />
-```
+<ComponentPreview code={`<Rating value={3} clearable />`}>
+	<Rating client:load value={3} clearable />
+</ComponentPreview>
 
 ### Sizes
 
-```svelte
-<Rating size="0" value={3} readonly />  <!-- 16px -->
-<Rating size="1" value={3} readonly />  <!-- 24px (default) -->
-<Rating size="2" value={3} readonly />  <!-- 32px -->
-<Rating size="3" value={3} readonly />  <!-- 40px -->
-```
+<ComponentPreview code={`<Rating size="0" value={3} readonly />
+<Rating size="1" value={3} readonly />
+<Rating size="2" value={3} readonly />
+<Rating size="3" value={3} readonly />`}>
+	<Rating client:load size="0" value={3} readonly />
+	<Rating client:load size="1" value={3} readonly />
+	<Rating client:load size="2" value={3} readonly />
+	<Rating client:load size="3" value={3} readonly />
+</ComponentPreview>
 
 ### Custom Max
 

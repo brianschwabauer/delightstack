@@ -3,6 +3,9 @@ title: Input
 description: A comprehensive form input component supporting 13 input types, floating labels, autocomplete, chips mode, password strength, input masking, and Form context integration.
 ---
 
+import { Input } from '@delightstack/components/form';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -17,15 +20,9 @@ import type { InputType, InputOption } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Input } from '@delightstack/components';
-
-  let name = $state('');
-</script>
-
-<Input label="Name" placeholder="Enter your name" bind:value={name} required />
-```
+<ComponentPreview code={`<Input label="Name" placeholder="Enter your name" required />`}>
+	<Input client:load label="Name" placeholder="Enter your name" required />
+</ComponentPreview>
 
 ## Input Types
 
@@ -51,19 +48,21 @@ The `type` prop supports 13 input types:
 
 ### Text Inputs
 
-```svelte
-<Input type="text" label="Username" bind:value={username} />
-<Input type="email" label="Email" bind:value={email} />
-<Input type="url" label="Website" bind:value={website} />
-<Input type="tel" label="Phone" bind:value={phone} />
-<Input type="search" label="Search" bind:value={query} clearable />
-```
+<ComponentPreview code={`<Input type="text" label="Username" placeholder="Enter username" />
+<Input type="email" label="Email" placeholder="you@example.com" />
+<Input type="url" label="Website" placeholder="https://example.com" />
+<Input type="tel" label="Phone" placeholder="(555) 555-5555" />`}>
+	<Input client:load type="text" label="Username" placeholder="Enter username" />
+	<Input client:load type="email" label="Email" placeholder="you@example.com" />
+	<Input client:load type="url" label="Website" placeholder="https://example.com" />
+	<Input client:load type="tel" label="Phone" placeholder="(555) 555-5555" />
+</ComponentPreview>
 
 ### Number Input
 
-```svelte
-<Input type="number" label="Quantity" bind:value={qty} min={0} max={100} step={5} />
-```
+<ComponentPreview code={`<Input type="number" label="Quantity" min={0} max={100} step={5} />`}>
+	<Input client:load type="number" label="Quantity" min={0} max={100} step={5} />
+</ComponentPreview>
 
 ### Textarea
 
@@ -156,37 +155,40 @@ Enable `multiple` to collect an array of values as chips/tags.
 
 ### Prefix and Suffix
 
-```svelte
-<Input label="Price" prefix="$" suffix="USD" type="number" bind:value={price} />
-<Input label="Website" prefix="https://" bind:value={domain} />
-```
+<ComponentPreview code={`<Input label="Price" prefix="$" suffix="USD" type="number" />
+<Input label="Website" prefix="https://" placeholder="example.com" />`}>
+	<Input client:load label="Price" prefix="$" suffix="USD" type="number" />
+	<Input client:load label="Website" prefix="https://" placeholder="example.com" />
+</ComponentPreview>
 
-### With Icon
+### Disabled
 
-```svelte
-<Input label="Search" icon={SearchIcon} bind:value={query} clearable />
-```
+<ComponentPreview code={`<Input label="Disabled input" placeholder="Cannot edit" disabled />`}>
+	<Input client:load label="Disabled input" placeholder="Cannot edit" disabled />
+</ComponentPreview>
 
 ### Sizes
 
-```svelte
-<Input size="0" label="Small (28px)" bind:value={a} />
-<Input size="1" label="Default (36px)" bind:value={b} />
-<Input size="2" label="Medium (44px)" bind:value={c} />
-<Input size="3" label="Large (52px)" bind:value={d} />
-```
+<ComponentPreview code={`<Input size="0" label="Small (28px)" placeholder="Small" />
+<Input size="1" label="Default (36px)" placeholder="Default" />
+<Input size="2" label="Medium (44px)" placeholder="Medium" />
+<Input size="3" label="Large (52px)" placeholder="Large" />`}>
+	<Input client:load size="0" label="Small (28px)" placeholder="Small" />
+	<Input client:load size="1" label="Default (36px)" placeholder="Default" />
+	<Input client:load size="2" label="Medium (44px)" placeholder="Medium" />
+	<Input client:load size="3" label="Large (52px)" placeholder="Large" />
+</ComponentPreview>
 
 ### Error and Helper Text
 
-```svelte
-<Input
+<ComponentPreview code={`<Input
   label="Email"
   type="email"
-  bind:value={email}
-  error={emailError}
+  error="Please enter a valid email address"
   helper="We'll never share your email"
-/>
-```
+/>`}>
+	<Input client:load label="Email" type="email" error="Please enter a valid email address" helper="We'll never share your email" />
+</ComponentPreview>
 
 ### Skeleton Loading
 

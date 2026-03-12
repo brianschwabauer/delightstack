@@ -3,6 +3,9 @@ title: Counter
 description: An animated number display that counts up or down with IntersectionObserver-triggered animation and locale-aware formatting.
 ---
 
+import { Counter } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,27 +14,23 @@ import { Counter } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Counter } from '@delightstack/components';
-</script>
-
-<Counter value={1234} />
-```
+<ComponentPreview code={`<Counter value={1234} />`}>
+	<Counter client:load value={1234} />
+</ComponentPreview>
 
 ## Examples
 
 ### Revenue with Prefix
 
-```svelte
-<Counter value={1234567} prefix="$" />
-```
+<ComponentPreview code={`<Counter value={1234567} prefix="$" />`}>
+	<Counter client:load value={1234567} prefix="$" />
+</ComponentPreview>
 
 ### Percentage with Suffix
 
-```svelte
-<Counter value={87.5} suffix="%" decimals={1} />
-```
+<ComponentPreview code={`<Counter value={87.5} suffix="%" decimals={1} />`}>
+	<Counter client:load value={87.5} suffix="%" decimals={1} />
+</ComponentPreview>
 
 ### Custom Formatter
 
@@ -52,17 +51,17 @@ Override the default `Intl.NumberFormat` with a custom function for compact disp
 
 Digits flip individually like a mechanical counter with staggered 3D transforms.
 
-```svelte
-<Counter value={42} animation="flip" />
-```
+<ComponentPreview code={`<Counter value={42} animation="flip" />`}>
+	<Counter client:load value={42} animation="flip" />
+</ComponentPreview>
 
 ### Fade Animation
 
 Cross-fade between old and new values.
 
-```svelte
-<Counter value={100} animation="fade" />
-```
+<ComponentPreview code={`<Counter value={100} animation="fade" />`}>
+	<Counter client:load value={100} animation="fade" />
+</ComponentPreview>
 
 ### Locale-Aware Formatting
 
@@ -78,15 +77,15 @@ Number separators adapt to the specified locale.
 
 ### With Delay and Duration
 
-```svelte
-<Counter value={9999} duration={2000} delay={500} />
-```
+<ComponentPreview code={`<Counter value={9999} duration={2000} delay={500} />`}>
+	<Counter client:load value={9999} duration={2000} delay={500} />
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Counter value={0} skeleton />
-```
+<ComponentPreview code={`<Counter value={0} skeleton />`}>
+	<Counter client:load value={0} skeleton />
+</ComponentPreview>
 
 ## Props
 

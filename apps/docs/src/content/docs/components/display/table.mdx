@@ -3,6 +3,9 @@ title: Table
 description: A full-featured data table with sorting, row selection, custom cell rendering, column resizing, row grouping, expandable rows, and CSV/JSON export.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import TableDemo from '../../../../components/demos/TableDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -12,24 +15,29 @@ import type { Column } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Table } from '@delightstack/components';
 
   const users = [
-    { name: 'Alice', email: 'alice@example.com' },
-    { name: 'Bob', email: 'bob@example.com' },
+    { name: 'Alice Johnson', email: 'alice@example.com', role: 'Admin' },
+    { name: 'Bob Smith', email: 'bob@example.com', role: 'Editor' },
+    { name: 'Carol White', email: 'carol@example.com', role: 'Viewer' },
+    { name: 'Dave Brown', email: 'dave@example.com', role: 'Editor' },
+    { name: 'Eve Davis', email: 'eve@example.com', role: 'Admin' },
   ];
 </script>
 
 <Table
   data={users}
   columns={[
-    { key: 'name', label: 'Name' },
-    { key: 'email', label: 'Email' },
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'email', label: 'Email', sortable: true },
+    { key: 'role', label: 'Role', sortable: true },
   ]}
-/>
-```
+  striped
+/>`}>
+  <TableDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

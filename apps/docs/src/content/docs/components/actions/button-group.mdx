@@ -3,6 +3,9 @@ title: ButtonGroup
 description: A container that groups related buttons with shared borders, coordinated styling, and context-driven prop inheritance.
 ---
 
+import { ButtonGroup, Button } from '@delightstack/components/actions';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,13 +14,17 @@ import { ButtonGroup, Button } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<ButtonGroup aria-label="Document actions">
-  <Button onclick={save}>Save</Button>
-  <Button onclick={saveAs}>Save As</Button>
-  <Button onclick={discard}>Discard</Button>
-</ButtonGroup>
-```
+<ComponentPreview code={`<ButtonGroup aria-label="Document actions">
+	<Button>Save</Button>
+	<Button>Save As</Button>
+	<Button>Discard</Button>
+</ButtonGroup>`}>
+	<ButtonGroup client:load aria-label="Document actions">
+		<Button client:load>Save</Button>
+		<Button client:load>Save As</Button>
+		<Button client:load>Discard</Button>
+	</ButtonGroup>
+</ComponentPreview>
 
 ## Examples
 
@@ -54,25 +61,33 @@ Use the `active` prop on child Buttons to create a toggle group.
 
 Set variant props on the group to apply them to all children at once.
 
-```svelte
-<ButtonGroup outline accent aria-label="Accent group">
-  <Button>First</Button>
-  <Button>Second</Button>
-  <Button>Third</Button>
-</ButtonGroup>
-```
+<ComponentPreview code={`<ButtonGroup outline accent aria-label="Accent group">
+	<Button>First</Button>
+	<Button>Second</Button>
+	<Button>Third</Button>
+</ButtonGroup>`}>
+	<ButtonGroup client:load outline accent aria-label="Accent group">
+		<Button client:load>First</Button>
+		<Button client:load>Second</Button>
+		<Button client:load>Third</Button>
+	</ButtonGroup>
+</ComponentPreview>
 
 ### Vertical Orientation
 
 Stack buttons vertically instead of horizontally.
 
-```svelte
-<ButtonGroup orientation="vertical" aria-label="Options">
-  <Button>Option 1</Button>
-  <Button>Option 2</Button>
-  <Button>Option 3</Button>
-</ButtonGroup>
-```
+<ComponentPreview code={`<ButtonGroup orientation="vertical" aria-label="Options">
+	<Button>Option 1</Button>
+	<Button>Option 2</Button>
+	<Button>Option 3</Button>
+</ButtonGroup>`}>
+	<ButtonGroup client:load orientation="vertical" aria-label="Options">
+		<Button client:load>Option 1</Button>
+		<Button client:load>Option 2</Button>
+		<Button client:load>Option 3</Button>
+	</ButtonGroup>
+</ComponentPreview>
 
 ### Split Button with Dropdown
 
@@ -99,13 +114,17 @@ Combine a primary action button with a dropdown trigger inside a group.
 
 Set `attached={false}` to add a small gap between buttons instead of merging borders.
 
-```svelte
-<ButtonGroup attached={false} aria-label="Spaced actions">
-  <Button>One</Button>
-  <Button>Two</Button>
-  <Button>Three</Button>
-</ButtonGroup>
-```
+<ComponentPreview code={`<ButtonGroup attached={false} aria-label="Spaced actions">
+	<Button>One</Button>
+	<Button>Two</Button>
+	<Button>Three</Button>
+</ButtonGroup>`}>
+	<ButtonGroup client:load attached={false} aria-label="Spaced actions">
+		<Button client:load>One</Button>
+		<Button client:load>Two</Button>
+		<Button client:load>Three</Button>
+	</ButtonGroup>
+</ComponentPreview>
 
 ## Props
 

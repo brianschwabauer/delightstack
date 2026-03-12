@@ -3,6 +3,9 @@ title: QR
 description: A QR code generator component that renders scannable codes as crisp SVGs with customizable colors, logo overlay, and download support.
 ---
 
+import { QR } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,32 +14,31 @@ import { QR } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<QR value="https://example.com" />
-```
+<ComponentPreview code={`<QR value="https://example.com" />`}>
+  <QR client:load value="https://example.com" />
+</ComponentPreview>
 
 ## Examples
 
 ### Custom Size and Colors
 
-```svelte
-<QR
+<ComponentPreview code={`<QR
   value="https://example.com"
   size={250}
   foreground="oklch(0.3 0.1 250)"
   background="oklch(0.95 0.02 250)"
-/>
-```
+/>`}>
+  <QR client:load value="https://example.com" size={250} foreground="oklch(0.3 0.1 250)" background="oklch(0.95 0.02 250)" />
+</ComponentPreview>
 
 ### Rounded Modules
 
-```svelte
-<QR
+<ComponentPreview code={`<QR
   value="https://example.com"
   rounded
-  foreground="var(--color-action)"
-/>
-```
+/>`}>
+  <QR client:load value="https://example.com" rounded />
+</ComponentPreview>
 
 ### Logo Overlay
 
@@ -54,27 +56,27 @@ When a `logo` is provided, the error correction level is automatically upgraded 
 
 Use level `'H'` for environments where the QR code may be partially obscured or damaged.
 
-```svelte
-<QR value="https://example.com" level="H" />
-```
+<ComponentPreview code={`<QR value="https://example.com" level="H" />`}>
+  <QR client:load value="https://example.com" level="H" />
+</ComponentPreview>
 
 ### Downloadable
 
 Show a download button that exports the QR code as a PNG.
 
-```svelte
-<QR
+<ComponentPreview code={`<QR
   value="https://example.com"
   downloadable
   downloadFilename="my-share-code"
-/>
-```
+/>`}>
+  <QR client:load value="https://example.com" downloadable downloadFilename="my-share-code" />
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<QR value="" skeleton size={200} />
-```
+<ComponentPreview code={`<QR value="" skeleton size={200} />`}>
+  <QR client:load value="" skeleton size={200} />
+</ComponentPreview>
 
 ## Props
 

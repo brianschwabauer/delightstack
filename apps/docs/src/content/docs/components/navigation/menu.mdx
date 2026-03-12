@@ -3,6 +3,9 @@ title: Menu
 description: A dropdown menu with keyboard navigation, checkbox items, radio groups, grouped sections, separators, and shortcut hints.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import MenuDemo from '../../../../components/demos/MenuDemo.svelte';
+
 ## Import
 
 Menu uses a compound component pattern. All sub-components are re-exported from the same module.
@@ -22,25 +25,27 @@ import type { MenuContext } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Menu, MenuItem, MenuSeparator, Button } from '@delightstack/components';
+<ComponentPreview code={`<script>
+  import { Menu, MenuItem, MenuSeparator } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
 
   let menuOpen = $state(false);
-  let triggerEl = $state<HTMLElement>();
+  let triggerEl = $state();
 </script>
 
-<Button bind:element={triggerEl} onclick={() => menuOpen = !menuOpen}>
-  Actions
-</Button>
+<span bind:this={triggerEl}>
+  <Button onclick={() => menuOpen = !menuOpen}>Open Menu</Button>
+</span>
 
 <Menu bind:open={menuOpen} trigger={triggerEl}>
-  <MenuItem onclick={() => console.log('Edit')}>Edit</MenuItem>
-  <MenuItem onclick={() => console.log('Duplicate')}>Duplicate</MenuItem>
+  <MenuItem onclick={() => {}}>Edit</MenuItem>
+  <MenuItem onclick={() => {}}>Duplicate</MenuItem>
+  <MenuItem shortcut="Ctrl+S" onclick={() => {}}>Save</MenuItem>
   <MenuSeparator />
-  <MenuItem danger onclick={() => console.log('Delete')}>Delete</MenuItem>
-</Menu>
-```
+  <MenuItem danger onclick={() => {}}>Delete</MenuItem>
+</Menu>`}>
+	<MenuDemo client:load />
+</ComponentPreview>
 
 ## Examples
 

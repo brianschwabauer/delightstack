@@ -3,6 +3,9 @@ title: AvatarGroup
 description: A stacked group of overlapping avatars with overflow indicator, commonly used to show participants.
 ---
 
+import { AvatarGroup } from '@delightstack/components/display';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,8 +14,7 @@ import { AvatarGroup } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { AvatarGroup } from '@delightstack/components';
 
   const members = [
@@ -22,8 +24,9 @@ import { AvatarGroup } from '@delightstack/components';
   ];
 </script>
 
-<AvatarGroup avatars={members} />
-```
+<AvatarGroup avatars={members} />`}>
+	<AvatarGroup client:load avatars={[{ name: 'Alice' }, { name: 'Bob' }, { name: 'Charlie' }]} />
+</ComponentPreview>
 
 ## Examples
 
@@ -48,11 +51,13 @@ When the number of avatars exceeds `max`, a "+N" overflow indicator appears.
 
 ### Different Sizes
 
-```svelte
-<AvatarGroup avatars={team} size="0" max={4} />
+<ComponentPreview code={`<AvatarGroup avatars={team} size="0" max={4} />
 <AvatarGroup avatars={team} size="2" max={4} />
-<AvatarGroup avatars={team} size="3" max={4} />
-```
+<AvatarGroup avatars={team} size="3" max={4} />`}>
+	<AvatarGroup client:load avatars={[{ name: 'Alice' }, { name: 'Bob' }, { name: 'Charlie' }, { name: 'Diana' }]} size="0" max={4} />
+	<AvatarGroup client:load avatars={[{ name: 'Alice' }, { name: 'Bob' }, { name: 'Charlie' }, { name: 'Diana' }]} size="2" max={4} />
+	<AvatarGroup client:load avatars={[{ name: 'Alice' }, { name: 'Bob' }, { name: 'Charlie' }, { name: 'Diana' }]} size="3" max={4} />
+</ComponentPreview>
 
 ### Expandable Overflow
 
@@ -87,9 +92,9 @@ When `expandable` is true, clicking the overflow indicator reveals all hidden av
 
 ### Skeleton Loading
 
-```svelte
-<AvatarGroup skeleton skeletonCount={4} />
-```
+<ComponentPreview code={`<AvatarGroup skeleton skeletonCount={4} />`}>
+	<AvatarGroup client:load skeleton skeletonCount={4} />
+</ComponentPreview>
 
 ## Props
 

@@ -12,6 +12,7 @@ export default defineConfig({
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/brianschwabauer' },
 			],
+			customCss: ['./src/styles/design-tokens.css'],
 			sidebar: [
 				{
 					label: 'Getting Started',
@@ -72,4 +73,12 @@ export default defineConfig({
 		svelte(),
 	],
 	// adapter: cloudflare({}),
+	vite: {
+		build: {
+			rollupOptions: {
+				// Optional peer deps of @delightstack/components media components
+				external: ['leaflet', 'three', 'pdfjs-dist'],
+			},
+		},
+	},
 });

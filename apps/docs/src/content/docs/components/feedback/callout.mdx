@@ -3,6 +3,9 @@ title: Callout
 description: A highlighted information block for drawing attention to important content, supporting inline callouts and full-width banners.
 ---
 
+import { Callout } from '@delightstack/components/feedback';
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+
 ## Import
 
 ```svelte
@@ -11,11 +14,13 @@ import { Callout } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<Callout>
+<ComponentPreview code={`<Callout>
   Your changes are automatically saved.
-</Callout>
-```
+</Callout>`}>
+	<Callout client:load>
+		Your changes are automatically saved.
+	</Callout>
+</ComponentPreview>
 
 ## Examples
 
@@ -23,27 +28,45 @@ import { Callout } from '@delightstack/components';
 
 Use boolean props to set the visual variant. When none is set, the default `info` style is used.
 
-```svelte
-<Callout>
+<ComponentPreview code={`<Callout>
   This is an informational callout.
-</Callout>
+</Callout>`} title="Info (default)">
+	<Callout client:load>
+		This is an informational callout.
+	</Callout>
+</ComponentPreview>
 
-<Callout success>
+<ComponentPreview code={`<Callout success>
   Your changes have been saved successfully.
-</Callout>
+</Callout>`} title="Success">
+	<Callout client:load success>
+		Your changes have been saved successfully.
+	</Callout>
+</ComponentPreview>
 
-<Callout warning title="Heads up">
+<ComponentPreview code={`<Callout warning title="Heads up">
   This action cannot be undone.
-</Callout>
+</Callout>`} title="Warning">
+	<Callout client:load warning title="Heads up">
+		This action cannot be undone.
+	</Callout>
+</ComponentPreview>
 
-<Callout error>
+<ComponentPreview code={`<Callout error>
   Failed to connect to the server. Please try again.
-</Callout>
+</Callout>`} title="Error">
+	<Callout client:load error>
+		Failed to connect to the server. Please try again.
+	</Callout>
+</ComponentPreview>
 
-<Callout tip title="Pro Tip">
-  Press <kbd>Cmd+K</kbd> to open the command palette.
-</Callout>
-```
+<ComponentPreview code={`<Callout tip title="Pro Tip">
+  Press Cmd+K to open the command palette.
+</Callout>`} title="Tip">
+	<Callout client:load tip title="Pro Tip">
+		Press Cmd+K to open the command palette.
+	</Callout>
+</ComponentPreview>
 
 ### Dismissible
 
@@ -105,17 +128,18 @@ Set `banner` for a full-width banner with solid background. Combine with `sticky
 
 ### Dense and Comfortable Spacing
 
-```svelte
-<Callout dense>Compact callout with less padding.</Callout>
+<ComponentPreview code={`<Callout dense>Compact callout with less padding.</Callout>
 
-<Callout comfortable>Spacious callout with more padding.</Callout>
-```
+<Callout comfortable>Spacious callout with more padding.</Callout>`}>
+	<Callout client:load dense>Compact callout with less padding.</Callout>
+	<Callout client:load comfortable>Spacious callout with more padding.</Callout>
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Callout skeleton />
-```
+<ComponentPreview code={`<Callout skeleton />`}>
+	<Callout client:load skeleton />
+</ComponentPreview>
 
 ## Props
 

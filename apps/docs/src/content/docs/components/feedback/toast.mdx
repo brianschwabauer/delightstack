@@ -3,6 +3,9 @@ title: Toast
 description: Non-blocking toast notifications created programmatically via the toast() function and rendered by a Toaster container component.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ToastDemo from '../../../../components/demos/ToastDemo.svelte';
+
 ## Import
 
 ```svelte
@@ -19,17 +22,19 @@ import type { ToastOptions } from '@delightstack/components';
 
 Place `<Toaster />` once in your root layout, then call `toast()` from anywhere.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Toaster, toast } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
 </script>
 
-<Toaster />
+<Button onclick={() => toast.success('Changes saved successfully!')}>Success Toast</Button>
+<Button error onclick={() => toast.error('Something went wrong!')}>Error Toast</Button>
+<Button outline onclick={() => toast.warning('You have unsaved changes')}>Warning Toast</Button>
+<Button onclick={() => toast('This is an info notification')}>Info Toast</Button>
 
-<button onclick={() => toast('Message saved')}>
-  Show Toast
-</button>
-```
+<Toaster />`}>
+	<ToastDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
