@@ -5,7 +5,7 @@
 	const propId = $props.id();
 	let {
 		/** The array of items to display in the carousel */
-		items = [] as any[],
+		items = [] as unknown[],
 
 		/** The current slide index (bindable) */
 		current = $bindable(0),
@@ -50,7 +50,7 @@
 		element = $bindable(undefined as HTMLElement | undefined),
 
 		/** Render snippet for each slide */
-		slide = undefined as Snippet<[item: any, index: number]> | undefined,
+		slide = undefined as Snippet<[item: unknown, index: number]> | undefined,
 
 		/** Default slot content */
 		children = undefined as Snippet | undefined,
@@ -58,7 +58,7 @@
 		/** Called when the active slide changes */
 		onchange = undefined as ((detail: { index: number }) => void) | undefined,
 	}: {
-		items?: any[];
+		items?: unknown[];
 		current?: number;
 		autoplay?: boolean | number;
 		pauseOnHover?: boolean;
@@ -73,7 +73,7 @@
 		id?: string;
 		class?: string;
 		element?: HTMLElement | undefined;
-		slide?: Snippet<[item: any, index: number]> | undefined;
+		slide?: Snippet<[item: unknown, index: number]> | undefined;
 		children?: Snippet;
 		onchange?: (detail: { index: number }) => void;
 	} = $props();
@@ -327,7 +327,7 @@
 		{/if}
 	</div>
 {:else}
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_no_noninteractive_tabindex -->
 	<div
 		class={['carousel', className].filter(Boolean).join(' ')}
 		class:vertical={!isHorizontal}

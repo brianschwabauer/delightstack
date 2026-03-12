@@ -4,7 +4,6 @@
 	import { type TransitionConfig } from 'svelte/transition';
 	import { backOut, quartOut } from 'svelte/easing';
 	import Popover from './Popover.svelte';
-	import ChevronDown from '~icons/mdi/chevron-down';
 	import type { Placement, Strategy } from '@floating-ui/dom';
 	import Progress from '../feedback/Progress.svelte';
 	import type { ButtonGroupContext } from './ButtonGroup.svelte';
@@ -160,7 +159,7 @@
 		onclick = undefined as
 			| undefined
 			| ((e: MouseEvent) => void)
-			| ((e: MouseEvent) => Promise<any>),
+			| ((e: MouseEvent) => Promise<void>),
 
 		...rest
 	} = $props();
@@ -287,9 +286,7 @@
 		{/if}
 		{#if children}{@render children({ isLoading, isLoadingSuccess })}{/if}
 		{#if showChevron && menu}
-			<ChevronDown
-				style="pointer-events:none;"
-				class="chevron {menuActive ? 'active' : ''}" />
+			<svg viewBox="0 0 24 24" fill="currentColor" style="pointer-events:none;" class="chevron {menuActive ? 'active' : ''}" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
 		{/if}
 	</svelte:element>
 	{#if dropdown && !disableDropdown}
@@ -298,15 +295,14 @@
 			type="button"
 			aria-haspopup="true"
 			aria-expanded={dropdownActive}
+			aria-label="Toggle dropdown"
 			title="Open for more actions"
 			{@attach ripple({
 				enabled: !disableRipple && !resolvedDisabled && !isLoading,
 				zIndex: 1,
 			})}
 			bind:this={dropdownTrigger}>
-			<ChevronDown
-				style="pointer-events:none"
-				class="chevron {dropdownActive ? 'active' : ''}" />
+			<svg viewBox="0 0 24 24" fill="currentColor" style="pointer-events:none" class="chevron {dropdownActive ? 'active' : ''}" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
 		</button>
 	{/if}
 </div>

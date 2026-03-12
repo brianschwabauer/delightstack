@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { scale } from 'svelte/transition';
 	import { backOut, backIn } from 'svelte/easing';
-	import { browser } from '$app/environment';
 	import { focusTrap } from '@delightstack/utilities';
 	import type { Placement, Strategy } from '@floating-ui/dom';
 	import { tick, untrack, type Snippet } from 'svelte';
@@ -153,7 +152,7 @@
 
 	/** Determines the position of the popover panel so that it fits on screen */
 	async function initPopoverPosition() {
-		if (!browser) return;
+		if (typeof window === 'undefined') return;
 		let bounds: DOMRect;
 		let borderRadius: number;
 		const {
@@ -578,7 +577,7 @@
 				enabled: !openOnFocus,
 				initialFocus: disableInitialFocus ? false : undefined,
 				clickOutsideDeactivates: (e) => {
-					if ((e as any).button === 2) return false; // Ignore right clicks
+					if ((e as MouseEvent).button === 2) return false; // Ignore right clicks
 					if (!closeOnOutsideClick) return false;
 					if (openOnClick) return false;
 					let el = e.target as HTMLElement | null | undefined;

@@ -9,7 +9,85 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 
-	type THREE = typeof import('three');
+	/* ── Minimal Three.js type surface ───────────────────────── */
+
+	interface ThreeVector2 {
+		x: number;
+		y: number;
+	}
+
+	interface ThreeVector3 {
+		x: number;
+		y: number;
+		z: number;
+		clone(): ThreeVector3;
+		normalize(): ThreeVector3;
+		project(camera: ThreeCamera): ThreeVector3;
+		dot(v: ThreeVector3): number;
+	}
+
+	interface ThreeTexture {
+		colorSpace: string;
+		dispose(): void;
+	}
+
+	interface ThreeMaterial {
+		map: ThreeTexture | null;
+		needsUpdate: boolean;
+		dispose(): void;
+	}
+
+	interface ThreeMesh {
+		// no methods/properties used directly
+	}
+
+	interface ThreeGeometry {
+		dispose(): void;
+	}
+
+	interface ThreeCamera {
+		position: { set(x: number, y: number, z: number): void };
+		fov: number;
+		aspect: number;
+		lookAt(x: number, y: number, z: number): void;
+		updateProjectionMatrix(): void;
+		getWorldDirection(target: ThreeVector3): ThreeVector3;
+	}
+
+	interface ThreeRenderer {
+		setSize(width: number, height: number): void;
+		setPixelRatio(ratio: number): void;
+		getSize(target: ThreeVector2): ThreeVector2;
+		render(scene: ThreeScene, camera: ThreeCamera): void;
+		dispose(): void;
+	}
+
+	interface ThreeScene {
+		add(object: ThreeMesh): void;
+	}
+
+	interface ThreeTextureLoader {
+		load(
+			url: string,
+			onLoad: (texture: ThreeTexture) => void,
+			onProgress: undefined,
+			onError: (err: unknown) => void,
+		): void;
+	}
+
+	interface ThreeModule {
+		Scene: new () => ThreeScene;
+		PerspectiveCamera: new (fov: number, aspect: number, near: number, far: number) => ThreeCamera;
+		WebGLRenderer: new (params: { canvas: HTMLCanvasElement; antialias: boolean }) => ThreeRenderer;
+		SphereGeometry: new (radius: number, widthSegments: number, heightSegments: number) => ThreeGeometry;
+		MeshBasicMaterial: new (params: { map: ThreeTexture; side: number }) => ThreeMaterial;
+		Mesh: new (geometry: ThreeGeometry, material: ThreeMaterial) => ThreeMesh;
+		TextureLoader: new () => ThreeTextureLoader;
+		Vector2: new () => ThreeVector2;
+		Vector3: new (x?: number, y?: number, z?: number) => ThreeVector3;
+		SRGBColorSpace: string;
+		BackSide: number;
+	}
 
 	const DEG2RAD = Math.PI / 180;
 	const FOV_MIN = 30;
@@ -117,17 +195,17 @@
 
 	/* ── Internals (not reactive) ─────────────────────────────── */
 
-	let three: THREE | undefined;
-	let renderer: InstanceType<THREE['WebGLRenderer']> | undefined;
-	let scene: InstanceType<THREE['Scene']> | undefined;
-	let camera: InstanceType<THREE['PerspectiveCamera']> | undefined;
-	let sphere_mesh: InstanceType<THREE['Mesh']> | undefined;
-	let texture: InstanceType<THREE['Texture']> | undefined;
-	let material: InstanceType<THREE['MeshBasicMaterial']> | undefined;
-	let geometry: InstanceType<THREE['SphereGeometry']> | undefined;
+	let three: ThreeModule | undefined;
+	let renderer: ThreeRenderer | undefined;
+	let scene: ThreeScene | undefined;
+	let camera: ThreeCamera | undefined;
+	let sphere_mesh: ThreeMesh | undefined;
+	let texture: ThreeTexture | undefined;
+	let material: ThreeMaterial | undefined;
+	let geometry: ThreeGeometry | undefined;
 
 	let animation_frame_id = 0;
-	let is_dragging = false;
+	let is_dragging = $state(false);
 	let drag_start_x = 0;
 	let drag_start_y = 0;
 	let drag_start_yaw = 0;
@@ -576,6 +654,7 @@
 		error_state = false;
 
 		try {
+			// @ts-ignore — three is an optional peer dependency
 			three = await import('three');
 		} catch (err) {
 			error_state = true;
@@ -614,7 +693,7 @@
 		// Load texture
 		const loader = new three.TextureLoader();
 		try {
-			texture = await new Promise<InstanceType<THREE['Texture']>>(
+			texture = await new Promise<ThreeTexture>(
 				(resolve, reject) => {
 					loader.load(
 						src,
@@ -800,7 +879,7 @@
 	});
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions -->
 <div
 	{id}
 	class={['panorama-container', className].filter(Boolean).join(' ')}

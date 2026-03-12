@@ -13,7 +13,6 @@
 <script lang="ts">
 	import { onFocusWithin } from '@delightstack/utilities';
 	import { getContext, setContext, type Snippet } from 'svelte';
-	import { browser } from '$app/environment';
 
 	const propId = $props.id();
 	let {
@@ -120,7 +119,7 @@
 		class={['list', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
-		class:disabled={disabled || !browser}
+		class:disabled={disabled}
 		style:--list-pad-x={paddingX}
 		style:--list-pad-y={paddingY}
 		{@attach onFocusWithin({

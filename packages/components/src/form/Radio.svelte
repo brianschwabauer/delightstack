@@ -77,7 +77,8 @@
 	/* ------------------------------------------------------------------ */
 	/*  RadioGroup behaviour (when children are provided)                 */
 	/* ------------------------------------------------------------------ */
-	const isGroup = $derived(!!children);
+	// svelte-ignore state_referenced_locally
+	const isGroup = !!children;
 
 	const sizes: Record<string, number> = { '0': 16, '1': 20, '2': 24, '3': 28 };
 
@@ -192,6 +193,7 @@
 		<!-- Hidden native input for form submission -->
 		<input
 			type="radio"
+			id="{id}-input"
 			class="native-input"
 			name={effectiveName}
 			{value}
@@ -227,9 +229,8 @@
 		{#if label || description}
 			<div class="content">
 				{#if label}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-					<label id="{id}-label" class="label" onclick={select}>{label}</label>
+					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions a11y_label_has_associated_control -->
+					<label id="{id}-label" for="{id}-input" class="label" onclick={select}>{label}</label>
 				{/if}
 				{#if description}
 					<span class="description">{description}</span>

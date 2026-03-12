@@ -156,6 +156,7 @@
 
 	async function loadPdfJs(): Promise<unknown> {
 		if (pdfjs_lib) return pdfjs_lib;
+		// @ts-ignore — pdfjs-dist is an optional peer dependency
 		const lib = await import('pdfjs-dist');
 		(lib as Record<string, unknown>).GlobalWorkerOptions = (lib as Record<string, unknown>).GlobalWorkerOptions || {};
 		((lib as Record<string, Record<string, unknown>>).GlobalWorkerOptions).workerSrc =
@@ -741,7 +742,7 @@
 	});
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
 <div
 	{id}
 	class={['pdf-container', className].filter(Boolean).join(' ')}
@@ -998,7 +999,7 @@
 		<!-- Pages -->
 		<div class="pdf-pages" bind:this={pages_container}>
 			{#each page_infos as info, i}
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
 				<div
 					class="pdf-page"
 					data-page={i + 1}

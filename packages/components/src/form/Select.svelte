@@ -1,6 +1,6 @@
 <script lang="ts" module>
 	export interface SelectOption {
-		value: any;
+		value: unknown;
 		label: string;
 		disabled?: boolean;
 		description?: string;
@@ -16,7 +16,7 @@
 	const propId = $props.id();
 	let {
 		/** The current value (single) or values (multi) */
-		value = $bindable() as any,
+		value = $bindable() as unknown,
 
 		/** The list of options to choose from */
 		options = [] as SelectOption[],
@@ -76,7 +76,7 @@
 		class: className = '',
 
 		/** Called when the value changes */
-		onchange = undefined as ((detail: { value: any }) => void) | undefined,
+		onchange = undefined as ((detail: { value: unknown }) => void) | undefined,
 
 		/** Called when the search query changes (debounced 300ms) */
 		onsearch = undefined as ((detail: { query: string }) => void) | undefined,
@@ -181,7 +181,7 @@
 	);
 
 	/** Whether an option value is selected */
-	function isSelected(optValue: any): boolean {
+	function isSelected(optValue: unknown): boolean {
 		if (multiple) {
 			return Array.isArray(value) && value.includes(optValue);
 		}
@@ -209,11 +209,11 @@
 	}
 
 	/** Remove a value from multi-select */
-	function removeValue(optValue: any, e: Event) {
+	function removeValue(optValue: unknown, e: Event) {
 		e.stopPropagation();
 		if (disabled) return;
 		if (!multiple || !Array.isArray(value)) return;
-		value = value.filter((v: any) => v !== optValue);
+		value = value.filter((v: unknown) => v !== optValue);
 		onchange?.({ value });
 	}
 
@@ -530,7 +530,7 @@
 
 		<div class="select-value" bind:this={chipsContainer}>
 			{#if hasValue && renderValue}
-				{@render renderValue(selectedOptions as any)}
+				{@render renderValue(selectedOptions as SelectOption | SelectOption[])}
 			{:else if multiple && Array.isArray(selectedOptions) && selectedOptions.length > 0}
 				{#each selectedOptions as opt (opt.value)}
 					<span class="select-chip">
@@ -621,6 +621,7 @@
 						class:highlighted={highlightedIndex === flatIndex}
 						class:disabled={opt.disabled}
 						role="option"
+						tabindex="-1"
 						aria-selected={isSelected(opt.value)}
 						aria-disabled={opt.disabled || undefined}
 						onpointerdown={(e) => e.preventDefault()}
@@ -667,6 +668,7 @@
 							class:highlighted={highlightedIndex === flatIndex}
 							class:disabled={opt.disabled}
 							role="option"
+							tabindex="-1"
 							aria-selected={isSelected(opt.value)}
 							aria-disabled={opt.disabled || undefined}
 							onpointerdown={(e) => e.preventDefault()}
@@ -709,6 +711,7 @@
 						class="select-option select-create"
 						class:highlighted={highlightedIndex === flatSelectableOptions.length || highlightedIndex === -1}
 						role="option"
+						tabindex="-1"
 						aria-selected={false}
 						onpointerdown={(e) => e.preventDefault()}
 						onclick={handleCreate}

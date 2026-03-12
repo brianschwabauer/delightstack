@@ -66,7 +66,6 @@
 			message,
 			variant,
 			options: {
-				duration: effective_duration,
 				dismissible: true,
 				persistent: false,
 				progress: true,
@@ -313,6 +312,8 @@
 		{id}
 		use:portal={'body'}
 		bind:this={toaster_el}
+		role="region"
+		aria-label="Notifications"
 		onmouseenter={() => (hovered = true)}
 		onmouseleave={() => (hovered = false)}>
 		{#each visible_toasts as t, i (t.id)}
@@ -327,7 +328,7 @@
 				role={getRole(t)}
 				aria-live={t.variant === 'warning' || t.variant === 'error' ? 'assertive' : 'polite'}
 				style="{getStackStyle(i, visible_toasts.length)}{getSwipeStyle(t.id)}"
-				touch-action="pan-y"
+				style:touch-action="pan-y"
 				onpointerdown={(e) => onPointerDown(e, t.id)}
 				onpointermove={onPointerMove}
 				onpointerup={onPointerUp}>

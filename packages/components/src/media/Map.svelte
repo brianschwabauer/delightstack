@@ -24,15 +24,46 @@
 		on(event: string, handler: Function): void;
 	}
 
+	/* ── Minimal Leaflet type surface for the default provider ── */
+
+	interface LeafletMarkerRef {
+		remove(): void;
+		addTo(map: LeafletMap): LeafletMarkerRef;
+		on(event: string, handler: Function): void;
+	}
+
+	interface LeafletMap {
+		setView(center: [number, number], zoom: number, options?: { animate?: boolean }): void;
+		getZoom(): number;
+		setZoom(zoom: number, options?: { animate?: boolean }): void;
+		fitBounds(bounds: unknown, options?: { padding?: [number, number] }): void;
+		on(event: string, handler: Function): void;
+		remove(): void;
+		getCenter(): { lat: number; lng: number };
+	}
+
+	interface LeafletTileLayer {
+		setUrl(url: string): void;
+		addTo(map: LeafletMap): LeafletTileLayer;
+	}
+
+	interface LeafletNamespace {
+		map(container: HTMLElement, options?: Record<string, unknown>): LeafletMap;
+		tileLayer(url: string, options?: Record<string, unknown>): LeafletTileLayer;
+		icon(options: Record<string, unknown>): unknown;
+		marker(latlng: [number, number], options?: Record<string, unknown>): LeafletMarkerRef;
+		featureGroup(layers: LeafletMarkerRef[]): { getBounds(): unknown };
+	}
+
 	const DEFAULT_LIGHT_TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 	const DEFAULT_DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
 	/** Default Leaflet provider — consumer must have `leaflet` installed */
 	export function leafletProvider(options?: { tileUrl?: string; darkTileUrl?: string }): MapProvider {
-		let L: typeof import('leaflet');
-		let map: import('leaflet').Map | undefined;
-		let tile_layer: import('leaflet').TileLayer | undefined;
-		let marker_refs: import('leaflet').Marker[] = [];
+		let L: LeafletNamespace | undefined;
+		let map: LeafletMap | undefined;
+		let tile_layer: LeafletTileLayer | undefined;
+		let marker_refs: LeafletMarkerRef[] = [];
 		let dark_query: MediaQueryList | undefined;
 		let theme_handler: (() => void) | undefined;
 
@@ -53,7 +84,8 @@
 
 		return {
 			async init(container, opts) {
-				L = await import('leaflet');
+				// @ts-ignore — leaflet is an optional peer dependency
+				L = await import('leaflet') as LeafletNamespace;
 
 				map = L.map(container, {
 					center: opts.center,
@@ -107,7 +139,7 @@
 			addMarker(marker, onClick) {
 				if (!map || !L) return undefined;
 
-				const marker_options: import('leaflet').MarkerOptions = {};
+				const marker_options: Record<string, unknown> = {};
 
 				if (marker.title) {
 					marker_options.title = marker.title;
@@ -134,7 +166,7 @@
 
 			removeMarker(markerRef) {
 				if (!map) return;
-				const m = markerRef as import('leaflet').Marker;
+				const m = markerRef as LeafletMarkerRef;
 				m.remove();
 				marker_refs = marker_refs.filter(ref => ref !== m);
 			},
@@ -153,7 +185,7 @@
 			},
 
 			on(event, handler) {
-				map?.on(event, handler as import('leaflet').LeafletEventHandlerFn);
+				map?.on(event, handler);
 			},
 		};
 	}
@@ -413,6 +445,7 @@
 	</div>
 {/if}
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
 	{id}
 	class={['ds-map', className].filter(Boolean).join(' ')}

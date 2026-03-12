@@ -151,7 +151,7 @@
 	const header_label = $derived(month_year_formatter.format(new Date(view_year, view_month, 1)));
 
 	/** Day-of-week headers respecting weekStartsOn */
-	const weekday_headers = $derived(() => {
+	const weekday_headers = $derived.by(() => {
 		const headers: string[] = [];
 		// Use a known reference: Jan 4 2026 is a Sunday (day 0)
 		for (let i = 0; i < 7; i++) {
@@ -162,7 +162,7 @@
 			headers.push(day_name_formatter.format(ref));
 		}
 		return headers;
-	}());
+	});
 
 	interface CalendarDay {
 		date: Date;
@@ -181,7 +181,7 @@
 	}
 
 	/** Compute full 6-week grid of days */
-	const calendar_days = $derived(() => {
+	const calendar_days = $derived.by(() => {
 		const first_of_month = new Date(view_year, view_month, 1);
 		const first_weekday = first_of_month.getDay(); // 0=Sun
 		// How many days to go back to reach the start of the grid
@@ -211,16 +211,16 @@
 			});
 		}
 		return days;
-	}());
+	});
 
 	/** Determine if a row (week) is fully outside the month -- trim to 5 or 6 rows */
-	const visible_days = $derived(() => {
+	const visible_days = $derived.by(() => {
 		const days = calendar_days;
 		// Check if last row (days 35-41) has any current-month days
 		const last_row = days.slice(35);
 		const has_current_month = last_row.some(d => d.is_current_month);
 		return has_current_month ? days : days.slice(0, 35);
-	}());
+	});
 
 	/* ------------------------------------------------------------------ */
 	/*  Disabled check                                                    */
@@ -314,7 +314,7 @@
 		return { hours: h, minutes: m };
 	}
 
-	const time_slots = $derived(() => {
+	const time_slots = $derived.by(() => {
 		if (!showTimeSlots) return [];
 		const start = parseTime(timeSlotMin);
 		const end = parseTime(timeSlotMax);
@@ -327,7 +327,7 @@
 			slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
 		}
 		return slots;
-	}());
+	});
 
 	const time_formatter = $derived(
 		new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }),
@@ -588,10 +588,11 @@
 			</div>
 
 			<!-- Day grid -->
-			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_interactive_supports_focus -->
 			<div
 				class="calendar-grid"
 				role="grid"
+				tabindex="0"
 				aria-label="Calendar dates"
 				onkeydown={handleGridKeyDown}
 				onmouseleave={handleGridMouseLeave}>

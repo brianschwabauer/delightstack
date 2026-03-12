@@ -1,2264 +1,1771 @@
 <script lang="ts" module>
-	/**
-	 * 
-	 * Single-line Text Field: Basic text input.
-	
-	Password Field: Masks input characters.
-	
-	Email Field: Specific validation for email format.
-	
-	Number Field (Spinbutton): Numeric input with increment/decrement arrows.
-	
-	Search Input: Often with a clear button or search icon.
-	
-	Textarea: Multi-line text input.
-	
-	Labeled Input: Input field with an associated label.
-	
-	Placeholder Text: Example text within the input field.
-	
-	Helper Text / Hint Text: Provides context or instructions.
-	
-	Validation States (Error, Success, Warning): Visual feedback for input validity.
-	
-	Input with Icon: Prefix/suffix icons for visual cues.
-	
-	Masked Input: Enforces a specific input format (e.g., phone number, credit card).
+	export type InputType =
+		| 'text'
+		| 'email'
+		| 'password'
+		| 'url'
+		| 'tel'
+		| 'search'
+		| 'number'
+		| 'textarea'
+		| 'date'
+		| 'time'
+		| 'datetime-local'
+		| 'color'
+		| 'file';
 
-	Date Picker: Allows selection of a single date.
-
-	Date Range Picker: Selects a start and end date.
-
-	Time Picker: Selects a specific time.
-
-	Date & Time Picker: Combines both.
-
-	Color Picker: Allows users to select a color from a palette or gradient.
-
-	Copyable Input: Input field with a copy button to easily copy its content.
-
-	https://flowbite-svelte.com/docs/forms/input-field
-
-	https://flowbite-svelte.com/docs/forms/search-input
-	
-	https://next.melt-ui.com/components/combobox/
-	
-	 */
-
-	type InputTypeMap = {
-		text: string | null;
-		textarea: string | null;
-		color: string | null;
-		date: number | null | undefined;
-		time: number | null | undefined; // Number of ms since midnight
-		datetime: number | null | undefined;
-		email: string | null;
-		file: File | null;
-		number: number | null;
-		password: string | null;
-		phone: string | null;
-		search: string | null;
-		url: string | null;
-		custom: any | null;
-	};
-
-	/** Converts the given value to a string that an html input field can use */
-	function convertFromValueToHtmlInputString<Type extends keyof InputTypeMap>(
-		type: Type,
-		data?: InputTypeMap[Type],
-	) {
-		if (Array.isArray(data)) return '';
-		if (type === 'time') {
-			if (data && typeof data === 'number') {
-				if (data < 24 * 60 * 60 * 1000) {
-					const hours = Math.floor(data / (60 * 60 * 1000));
-					const minutes = Math.floor((data - hours * 60 * 60 * 1000) / (60 * 1000));
-					return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-				}
-				const date = new Date(data);
-				return `${String(date.getHours()).padStart(2, '0')}:${String(
-					date.getMinutes(),
-				).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-			}
-		}
-		if (type === 'date') {
-			if (typeof data === 'number') {
-				try {
-					const date = new Date(data);
-					return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-						2,
-						'0',
-					)}-${String(date.getDate()).padStart(2, '0')}`;
-				} catch (error) {
-					return '';
-				}
-			}
-		}
-		if (type === 'datetime') {
-			if (typeof data === 'number') {
-				try {
-					const date = new Date(data);
-					return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(
-						2,
-						'0',
-					)}-${String(date.getUTCDate()).padStart(2, '0')}T${String(
-						date.getUTCHours(),
-					).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}:${String(
-						date.getUTCSeconds(),
-					).padStart(2, '0')}`;
-				} catch (error) {
-					return '';
-				}
-			}
-		}
-		if (type === 'color') {
-			if (typeof data !== 'string' || !data) return '';
-			if (data.match(/^#[0-9a-fA-F]{6}$/)) return data.toUpperCase();
-			if (data.match(/^\[/)) return data;
-			try {
-				const div = document.createElement('div');
-				div.style.backgroundColor = data;
-				document.body.appendChild(div);
-				const rgb = getComputedStyle(div).backgroundColor;
-				let hex = rgbSringToHex(rgb);
-				if (typeof hex === 'string') hex = hex.toUpperCase();
-				document.body.removeChild(div);
-				return hex;
-			} catch (error) {
-				return '';
-			}
-		}
-		return data ?? '';
+	export interface InputOption {
+		value: string;
+		label: string;
+		disabled?: boolean;
+		description?: string;
 	}
 </script>
 
-<script
-	lang="ts"
-	generics="InputType extends keyof InputTypeMap = 'text', Multiple extends boolean = false">
-	import type { FullAutoFill, HTMLInputTypeAttribute } from 'svelte/elements';
-	import {
-		rgbSringToHex,
-		ripple,
-		autoAnimate,
-		truncateText,
-		focusWithin,
-		tooltip as tooltipAction,
-		isEqual,
-	} from '@packages/lib';
-	import { browser } from '$app/environment';
-	import { untrack, tick, type Snippet } from 'svelte';
-	import CalendarIcon from '~icons/material-symbols/calendar-today';
-	import ClockIcon from '~icons/mdi/clock';
-	import CloseIcon from '~icons/ion/md-close-circle';
-	import HelpIcon from '~icons/material-symbols/help';
-	import Portal from './../components/Portal.svelte';
-	import { cubicOut } from 'svelte/easing';
+<script lang="ts">
+	import { tooltip } from '@delightstack/utilities';
+	import { getContext, type Component, type Snippet } from 'svelte';
+	import type { FormContext } from './Form.svelte';
+	import Popover from '../actions/Popover.svelte';
 
-	interface InputProps {
-		/** The type of value the input expects */
-		type?: InputType;
-		/** The current validated value of the input */
-		value?: InputType extends keyof InputTypeMap
-			? Multiple extends true
-				? Array<NonNullable<InputTypeMap[InputType]>>
-				: InputTypeMap[InputType]
-			: string;
-		/** The list of values that are suggested in a dropdown when the user types */
-		options?: NonNullable<InputTypeMap[InputType]>[];
-		/**
-		 * The mode of the options dropdown.
-		 * 'autocomplete' shows a list of options as the user types. The user doesn't have to choose one of the options
-		 * 'select' does the same as autocomplete, but requires the user to select one of the options
-		 */
-		optionsMode?: 'autocomplete' | 'select';
-		/** The snippet that will be used to render the options list */
-		optionsDisplay?: Snippet<[NonNullable<InputTypeMap[InputType]>, number]>;
-		/** The snippet that will be used to render the chips list. Only valid if 'multiple' is true */
-		chipsDisplay?: Snippet<[NonNullable<InputTypeMap[InputType]>, number]>;
-		/** Whether the input should autofocus when the page loads */
-		autofocus?: boolean;
-		/** The browser html input autocomplete attribute which tells the browser how the input can be autofilled */
-		autocomplete?: FullAutoFill;
-		/**
-		 * Whether the input should include less padding
-		 * Note - this doesn't change font size - just spacing.
-		 * To change font size, set the font-size on the parent element
-		 */
-		dense?: boolean;
-		/** Whether the input should have more padding */
-		comfortable?: boolean;
-		/** Whether the input should be rounded (larger border-radius) */
-		rounded?: boolean;
-		/** Whether the input should be outlined @default true */
-		outlined?: boolean;
-		/** Whether the input is currently loading (shows a loading spinner) */
-		loading?: boolean;
-		/** Whether a 'clear' button (with X) should be added to the input to clear the contents */
-		clearable?: boolean;
-		/** Whether the input is readonly (disallows edits) */
-		readonly?: boolean;
-		/** Whether the input is a required field in the form */
-		required?: boolean;
-		/** Whether the input is disabled and accepts no interactions */
-		disabled?: boolean;
-		/** Whether the field has been touched (and blurred) */
-		touched?: boolean;
-		/** Whether the field has a value (field is filled in) */
-		dirty?: boolean;
-		/** Whether or not multiple values are allowed. If true, the values will show up as 'chips' beside the input */
-		multiple?: Multiple;
-		/**
-		 * The list of mime types the input will accept. Only valid if 'type' === 'file'
-		 * @example ['image/png', 'image/jpeg', 'image/*', 'video/*', 'audio/*', 'application/pdf']
-		 */
-		accept?: string[];
-		/** The text in the input field when there is no value yet */
-		label?: string;
-		/**
-		 * How the label should be displayed.
-		 * 'floating' - the label floats above the input when there is a value
-		 * 'placeholder' - the label is a placeholder inside the input
-		 * @default 'floating'
-		 */
-		labelDisplay?: 'floating' | 'placeholder';
-		/** Additional helpful information shown when hovering over the label. Adds a "question mark" icon to the label */
-		tooltip?: string;
-		/** Small text under the input that gives additional helpful information */
-		hint?: string;
-		/** The ID of the input element. @defaults to a random ID */
-		id?: string;
-		/** The css style string added to the component from the parent */
-		style?: string;
-		/** The maximum length the input string can be. Only valid for certain inputs - like text, email, etc */
-		maxlength?: number;
-		/** The minimum length the input string can be. Only valid for certain inputs - like text, email, etc */
-		minlength?: number;
-		/** The maximum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
-		max?: string | number;
-		/** The minimum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
-		min?: string | number;
-		/** The amount the number should be increased/decreased with each 'step' */
-		step?: number;
-		/** The maximum amount of digits allowed in a number input. 0 makes the number an integer */
-		maxDigits?: number;
-		/** The regular expression the input must match (handled by the native browser input) */
-		pattern?: string;
-		/**
-		 * The raw input text shown in the input field. May or may not be the same as value
-		 * This can be used by the parent component to get the text of the input field without the value validation/parsing
-		 * The parent component could then use the input field text to search an autocomplete list
-		 */
-		input?: string;
-
-		/**
-		 * A function that when given the current value of the input, should return the stringified version of the value
-		 * This value will be used to show the value in the input field, or in the autocomplete panel
-		 */
-		toDisplayString?: (value: this['value']) => string;
-
-		/**
-		 * A function for converting the current value to the input to the html stringified version that the input element is expecting
-		 * This is necessary because the 'value' might be a complex object, but the input element only accepts strings
-		 */
-		toHtmlString?: (value: this['value']) => string;
-		/**
-		 * A function that is called on every change
-		 * If it throws and error, the error can contain a "message" field that will be shown to the user
-		 */
-		validate?: (value: any) => void;
-		/** The native browser input element. This is exported so parent components can access it easily */
-		inputElement?: HTMLInputElement | HTMLTextAreaElement;
-		/** Specifies a custom class name for the container element */
-		class?: string;
-		/** Whether the label text and outlines should show an "error" red color */
-		error?: boolean;
-		/** The error message to display from the parent component */
-		errorMessage?: string;
-		/** The snippet for displaying html before the input element (but inside the container) */
-		prepend?: Snippet;
-		/** The snippet for displaying html right before the input element */
-		content?: Snippet;
-		/** The snippet for displaying the clear/close icon inside the input box */
-		clearIcon?: Snippet;
-		/** The snippet for displaying html after the input element */
-		append?: Snippet;
-		/** The snippet for displaying html in the input label/placeholder */
-		children?: Snippet;
-		/** Emits when the field has been focused */
-		onfocus?: (e: FocusEvent) => void;
-		/** Emits when the field has been blurred */
-		onblur?: (e: FocusEvent) => void;
-		/** Emits when a key is pressed down in the input field */
-		onkeydown?: (e: KeyboardEvent) => void;
-		/** Emits when a key is released in the input field */
-		onkeyup?: (e: KeyboardEvent) => void;
-		/** Emits the new input value when the user pastes text into the field */
-		onpaste?: (value: this['value'] | undefined, e: ClipboardEvent) => void;
-		/** Emits when the field has been touched (and blurred) */
-		ontouch?: () => void;
-		/** Emits when the field has a value (field is filled in) */
-		ondirty?: () => void;
-		/** Emits the current value of the input when it changes */
-		onchange?: (output: this['value']) => void;
-		/** Emits the string value of the input field when the user types */
-		oninput?: (input: string) => void;
-		/** Emits the current value of the input when the user 'submits' the input via 'Enter' key */
-		onsubmit?: (output: this['value']) => void;
-		/** Emits the value that was selected using the autocomplete panel */
-		onselect?: (output: this['value']) => void;
-		/** Emits when the input has been marked as valid */
-		onvalid?: () => void;
-		/** Emits when the input has been marked as invalid */
-		oninvalid?: () => void;
-	}
+	type InputValue = string | number | boolean | string[] | File | File[] | null | undefined;
 
 	const propId = $props.id();
 	let {
+		/* ---- Core ---- */
+		/** Input type */
 		type = 'text' as InputType,
-		value = $bindable(),
-		toDisplayString,
-		toHtmlString,
-		options,
-		optionsMode = 'autocomplete',
-		optionsDisplay,
-		chipsDisplay,
-		autocomplete = '',
-		autofocus = false,
-		dense = false,
-		comfortable = false,
-		rounded = false,
-		outlined = true,
-		loading = $bindable(false) as boolean,
-		clearable = false,
-		readonly = false,
-		required = false,
+
+		/** Current value (bindable) */
+		value = $bindable() as InputValue,
+
+		/** Floating label text */
+		label = undefined as string | undefined,
+
+		/** Placeholder text */
+		placeholder = undefined as string | undefined,
+
+		/** Whether the input is disabled */
 		disabled = false,
-		touched = false,
-		dirty = false,
-		multiple = false as Multiple,
-		accept,
-		label = '',
-		labelDisplay = 'floating',
-		tooltip = '',
-		hint = '',
+
+		/** Whether the input is read-only */
+		readonly = false,
+
+		/** Whether the input is required */
+		required = false,
+
+		/** Form field name (used for Form context registration) */
+		name = undefined as string | undefined,
+
+		/** Show skeleton loading state */
+		skeleton = false,
+
+		/** Tooltip text */
+		tooltip: tooltip_message = undefined as string | undefined,
+
+		/* ---- Validation ---- */
+		/** Error message or boolean error state */
+		error = undefined as string | boolean | undefined,
+
+		/** Regex pattern for validation */
+		pattern = undefined as string | undefined,
+
+		/** Minimum length */
+		minlength = undefined as number | undefined,
+
+		/** Maximum length */
+		maxlength = undefined as number | undefined,
+
+		/** Minimum value (number/date) */
+		min = undefined as number | string | undefined,
+
+		/** Maximum value (number/date) */
+		max = undefined as number | string | undefined,
+
+		/** Step value for number inputs */
+		step = undefined as number | undefined,
+
+		/* ---- Visual Options ---- */
+		/** Input size */
+		size = '1' as '0' | '1' | '2' | '3',
+
+		/** Text displayed before the input */
+		prefix = undefined as string | undefined,
+
+		/** Text displayed after the input */
+		suffix = undefined as string | undefined,
+
+		/** Leading icon component */
+		icon = undefined as Component | undefined,
+
+		/** Show clear button when value is present */
+		clearable = false,
+
+		/** Show character count */
+		showCounter = false,
+
+		/** Helper text displayed below the input */
+		helper = undefined as string | undefined,
+
+		/** Tighter internal spacing */
+		dense = false,
+
+		/** More internal spacing */
+		comfortable = false,
+
+		/** Element ID */
 		id = propId,
-		style = '',
-		maxlength,
-		minlength,
-		max,
-		min,
-		step,
-		maxDigits,
-		pattern,
-		validate,
-		inputElement = $bindable() as HTMLInputElement | HTMLTextAreaElement | undefined,
-		class: className = '',
-		error = false,
-		errorMessage = $bindable('') as string,
-		append,
-		prepend,
-		clearIcon,
-		content,
-		children,
-		onfocus,
-		onblur,
-		oninput,
-		onkeydown,
-		onkeyup,
-		onpaste,
-		ontouch,
-		ondirty,
-		onchange,
-		onsubmit,
-		onselect,
-		onvalid,
-		oninvalid,
-	}: InputProps = $props();
 
-	/** The native browser autocomplete panel element */
-	let autocompleteElement = $state<HTMLDivElement | undefined>(undefined);
+		/** Additional CSS classes */
+		class: class_name = '',
 
-	const TEXTAREA_MIN_LINES = 3;
-	let labelElement = $state<HTMLLabelElement | undefined>(undefined);
-	let inputParentElement = $state<HTMLDivElement | undefined>(undefined);
-	let inputContainerElement = $state<HTMLDivElement | undefined>(undefined);
-	let focusedChipIndex = $state(0);
-	let popoverIndex = $state(0);
+		/* ---- Autocomplete ---- */
+		/** Suggestion options for autocomplete */
+		options = undefined as InputOption[] | undefined,
 
-	/** The index of the currently active/focused autocomplete item */
-	let autocompleteIndex = $state(0);
+		/** Async filter callback for loading suggestions */
+		onfilter = undefined as ((query: string) => Promise<InputOption[]>) | undefined,
 
-	/** Whether or not the autocomplete panel is currently being shown */
-	let autocompleteShown = $state(false);
+		/* ---- Multiple/Chips ---- */
+		/** Enable chips/tags mode (value becomes string[]) */
+		multiple = false,
 
-	/** Whether or not any element is focused inside of the input container */
-	let focused = $state(false);
+		/* ---- Textarea ---- */
+		/** Initial rows for textarea */
+		rows = 3,
 
-	/** The type to use for the input element. Must be a valid input type (like 'text') */
-	const elType = $derived.by<HTMLInputTypeAttribute>(() => {
-		if (type === 'phone') return 'tel';
-		if (type === 'datetime') return 'datetime-local';
-		if (type === 'number') return 'number';
-		if (type === 'date') return 'date';
-		if (type === 'time') return 'time';
-		if (type === 'email') return 'email';
-		if (type === 'file') return 'file';
-		if (type === 'phone') return 'tel';
-		if (type === 'url') return 'url';
-		if (type === 'password') return 'password';
-		return 'text';
-	});
+		/** Auto-grow textarea to fit content */
+		autoResize = false,
 
-	/** The value of the input element. Different than 'value' because html inputs only support certain types */
-	let elValue = $derived(
-		toHtmlString ? toHtmlString(value) : convertFromValueToHtmlInputString(type, value),
-	);
+		/* ---- Password ---- */
+		/** Show password visibility toggle */
+		showToggle = false,
 
-	/** Whether the input value is valid based on the contraints (and validator function) */
-	const valid = $derived(!!errorMessage);
+		/** Show password strength meter */
+		strengthIndicator = false,
 
-	/** The list of chips to display (only used when 'multiple' is true) */
-	const chips = $derived<InputTypeMap[InputType][]>(
-		!multiple
-			? []
-			: Array.isArray(value)
-				? value
-				: value !== null && value !== undefined && value !== ''
-					? [value]
-					: [],
-	);
-	const hasLabel = $derived(labelDisplay === 'floating' && (children || label));
-	const labelText = $derived(
-		(multiple && !!chips.length ? 'Add ' : '') +
-			(label || labelElement?.innerText || ' '),
-	);
-	const canShowError = $derived(!focused && dirty && errorMessage);
+		/* ---- Mask ---- */
+		/** Input mask pattern (#=digit, A=letter, *=any) */
+		mask = undefined as string | undefined,
 
-	// Autofocus the input element if necessary
+		/* ---- File ---- */
+		/** Accepted file types */
+		accept = undefined as string | undefined,
+
+		/* ---- Autocomplete option snippet ---- */
+		/** Custom snippet for rendering an autocomplete option */
+		option: option_snippet = undefined as Snippet<[InputOption]> | undefined,
+
+		/* ---- Events ---- */
+		/** Called when value is changing */
+		oninput = undefined as ((detail: { value: InputValue }) => void) | undefined,
+
+		/** Called when value is committed */
+		onchange = undefined as ((detail: { value: InputValue }) => void) | undefined,
+
+		/** Called when input is focused */
+		onfocus = undefined as (() => void) | undefined,
+
+		/** Called when input is blurred */
+		onblur = undefined as (() => void) | undefined,
+	} = $props();
+
+	/* ------------------------------------------------------------------ */
+	/*  Form context integration                                           */
+	/* ------------------------------------------------------------------ */
+
+	const form_ctx = getContext<FormContext | undefined>('form');
+
 	$effect(() => {
-		if (inputElement && autofocus) {
-			setTimeout(() => inputElement?.focus(), 100);
-		}
-	});
-
-	// Reset the autocomplete index when the autocomplete list changes
-	$effect(() => {
-		if (options?.length) autocompleteIndex = 0;
-	});
-
-	// Scroll the autocomplete panel to the currently selected item
-	$effect(() => {
-		if (autocompleteElement && autocompleteIndex > -1 && options?.length) {
-			const items = autocompleteElement.querySelectorAll('.autocomplete-item');
-			const item = items?.[autocompleteIndex];
-			if (item) {
-				item.scrollIntoView({
-					block: 'nearest',
-					inline: 'nearest',
-				});
-			}
-		}
-	});
-
-	// Update the error message when the field value changes
-	$effect(() => {
-		if (validate) {
-			try {
-				validate(value);
-				errorMessage = '';
-			} catch (error: any) {
-				if (typeof error === 'string') errorMessage = error;
-				else if (error?.message) errorMessage = error.message;
-				else if (error instanceof Error) errorMessage = error.message;
-				else errorMessage = 'Invalid value';
-			}
-			return;
-		}
-		if (
-			required &&
-			((Array.isArray(value) && !value.length) ||
-				(!value && value !== 0 && value !== false))
-		) {
-			errorMessage = 'Please fill out this field';
-			return;
-		}
-		const tempElement = document.createElement('input');
-		tempElement.type = elType;
-		if (maxlength) tempElement.maxLength = maxlength;
-		if (minlength) tempElement.minLength = minlength;
-		if (pattern) tempElement.pattern = pattern;
-		if (min) tempElement.min = min.toString();
-		if (max) tempElement.max = max.toString();
-		if (step) tempElement.step = step.toString();
-		tempElement.value = elValue;
-
-		try {
-			const isValid = tempElement.checkValidity();
-			errorMessage = isValid
-				? ''
-				: tempElement.validationMessage.replace(/^\w/, (c) => c.toUpperCase());
-		} catch (error: any) {
-			errorMessage = (
-				(typeof error?.message === 'string'
-					? error?.message
-					: tempElement.validationMessage) || 'Invalid value'
-			).replace(/^\w/, (c: string) => c.toUpperCase());
-		} finally {
-			tempElement.remove();
-		}
-	});
-
-	// Emit the 'onvalid' or 'oninvalid' event when the validity state changes
-	$effect(() => {
-		if (valid) {
-			if (onvalid) onvalid();
-		} else {
-			if (oninvalid) oninvalid();
-		}
-	});
-
-	/** Sanitizes, validates and updates the value to the given value */
-	function updateValue(rawValue: any) {
-		const unstated = $state.snapshot(rawValue);
-		let array = Array.isArray(unstated) ? unstated : [unstated];
-
-		function maybeSplitEmails(email: string): string[] {
-			if (!email || typeof email !== 'string') return [];
-			const isEmail = (v: string) => v.match(/^[^@]+@[^@]+\.[^@]+$/);
-			return email
-				.split(',')
-				.map((v) => v.trim())
-				.filter((email) => isEmail(email));
-		}
-
-		const addedValues: any[] = [];
-		for (let i = 0; i < array.length; i++) {
-			if (type === 'number') {
-				if (typeof array[i] === 'string' && array[i]) {
-					array[i] = +array[i];
-				}
-				if (typeof array[i] === 'number') {
-					if (typeof maxDigits === 'number') {
-						if (maxDigits === 0) {
-							array[i] = `${array[i]}`.replace(/\.\d*/g, '');
-						} else if (typeof array[i] === 'string' && array[i].includes('.')) {
-							array[i] = array[i].replace(
-								new RegExp(`^(\\d*\\.\\d{0,${maxDigits}})\.*`),
-								'$1',
-							);
-						}
-					}
-					if (typeof max === 'number') {
-						array[i] = Math.min(max, array[i]);
-					}
-					if (typeof min === 'number') {
-						array[i] = Math.max(min, array[i]);
-					}
-				}
-			} else if (type === 'color') {
-				if (typeof array[i] !== 'string' || !array[i]) {
-					array[i] = undefined;
-				} else if (array[i].match(/^#[0-9a-fA-F]{6}$/)) {
-					array[i] = array[i].toUpperCase();
-				} else if (!array[i].match(/^\[/)) {
-					try {
-						const div = document.createElement('div');
-						div.style.backgroundColor = array[i];
-						document.body.appendChild(div);
-						const rgb = getComputedStyle(div).backgroundColor;
-						let hex = rgbSringToHex(rgb);
-						if (typeof hex === 'string') hex = hex.toUpperCase();
-						document.body.removeChild(div);
-						array[i] = hex.toUpperCase();
-					} catch (error) {
-						array[i] = undefined;
-					}
-				}
-			} else if (type === 'date' || type === 'datetime') {
-				if (typeof array[i] === 'string') {
-					try {
-						array[i] = new Date(array[i]).getTime();
-					} catch (error) {
-						array[i] = undefined;
-					}
-				}
-				if (typeof array[i] !== 'number') {
-					array[i] = undefined;
-				} else {
-					if (typeof max === 'number') {
-						array[i] = Math.min(max, array[i]);
-					}
-					if (typeof min === 'number') {
-						array[i] = Math.max(min, array[i]);
-					}
-				}
-			} else if (type === 'time') {
-				if (typeof array[i] === 'string') {
-					try {
-						const [hours, minutes] = array[i].split(':').map((v: string) => +v);
-						array[i] = (hours * 60 + minutes) * 60 * 1000;
-					} catch (error) {
-						array[i] = undefined;
-					}
-				}
-				if (typeof array[i] !== 'number') {
-					array[i] = undefined;
-				} else {
-					array[i] = Math.max(
-						0,
-						+min! || 0,
-						Math.min(1000 * 60 * 60 * 24, +max! || Infinity, array[i]),
-					);
-				}
-			} else if (type === 'file') {
-				if (array[i] instanceof File) {
-					if (accept?.length) {
-						const isValidType = accept.some((mime) => {
-							return array[i].type.startsWith(mime.replace(/\*/g, ''));
-						});
-						if (!isValidType) array[i] = undefined;
-					}
-				} else {
-					array[i] = undefined;
-				}
-			} else if (type === 'email') {
-				const emails = maybeSplitEmails(array[i]);
-				array[i] = emails[0];
-				if (emails.length > 1) {
-					emails.slice(1).forEach((email) => addedValues.push(email));
-				}
-			} else if (type === 'text' || type === 'textarea') {
-				if (typeof array[i] === 'string') {
-					if (maxlength) {
-						array[i] = array[i].slice(0, maxlength);
-					}
-				}
-			}
-		}
-		array = [...array, ...addedValues];
-
-		// Remove invalid & duplicate values
-		array = array.reduce((acc: any[], val: any, i) => {
-			if (val || val === 0) {
-				const isUnique = !acc.slice(0, i).some((v) => isEqual(v, val));
-				if (isUnique) acc.push(val);
-			}
-			return acc;
-		}, []);
-
-		value = multiple ? array : array[0];
-		if (!dirty) {
-			dirty = true;
-			if (ondirty) ondirty();
-		}
-		if (onchange) onchange(value!);
-	}
-
-	/** Adds an item to the 'chips' list for when 'multiple' is true */
-	function addChips(val: any[]) {
-		if (!multiple || !val?.length) return;
-		if (!value || !Array.isArray(value)) value = [] as any;
-		updateValue([...(value as any[]), ...val]);
-		if (inputElement) inputElement.value = '';
-	}
-
-	/** Removes the item at the given index for when 'multiple' is true and there are multiple selected items */
-	async function removeChip(index: number) {
-		if (!multiple) {
-			updateValue('');
-			return;
-		}
-		if (!value || !Array.isArray(value) || (value as any[])[index] === undefined) return;
-		const list = [...value] as any[];
-		list.splice(index, 1);
-		updateValue(list);
-		await tick();
-		if (!(value as any[]).length) inputElement?.focus();
-	}
-
-	/** Focuses the 'chip' at the given index so the user can remove it with the keyboard - via backspace or delete key */
-	async function focusChip(index: number) {
-		if (!multiple || !browser || !document || !inputParentElement) return;
-		const numChips = (value as unknown as any[])?.length || 0;
-		focusedChipIndex = Math.max(0, Math.min(numChips - 1, index));
-		await tick();
-		if (document.activeElement !== inputParentElement) inputParentElement.focus();
-	}
-
-	/** Returns whether the key code from a keyboard event is a key that doesn't effect an input field */
-	function isSystemKey(key: string) {
-		return (
-			key.match(/^F\d+$/) ||
-			[
-				'Enter',
-				'Escape',
-				'Tab',
-				'Control',
-				'Shift',
-				'Alt',
-				'Meta',
-				'PageDown',
-				'PageUp',
-				'ArrowUp',
-				'ArrowDown',
-				'ArrowLeft',
-				'ArrowRight',
-				'Home',
-				'End',
-			].includes(key)
-		);
-	}
-
-	/** Handles when the value changes on the input field */
-	function onInputChange(evt: Event) {
-		const element = (evt.target as HTMLInputElement) || inputElement;
-		if (!element) return;
-		if (type === 'file') {
-			if (multiple) addChips(Array.from(element?.files || []));
-			if (!multiple) updateValue(element?.files?.[0]);
-			return;
-		}
-		if (type === 'time') {
-			try {
-				const [hours, minutes] = element.value.split(':').map((v: string) => +v);
-				const time = Math.max(
-					0,
-					+min! || 0,
-					Math.min(
-						1000 * 60 * 60 * 24,
-						+max! || Infinity,
-						(hours * 60 + minutes) * 60 * 1000,
-					),
-				);
-				element.value = convertFromValueToHtmlInputString(type, time);
-			} catch (error) {}
-		}
-		elValue = element.value;
-		oninput?.(element.value);
-		if (!multiple) updateValue(element.value);
-	}
-
-	/** Called when the input field is blurred */
-	function onInputBlur() {
-		if (!touched) {
-			touched = true;
-			if (ontouch) ontouch();
-		}
-		if (optionsMode === 'select') {
-			if (
-				elValue &&
-				options &&
-				options[autocompleteIndex] &&
-				!options.some((v) => isEqual(v, value))
-			) {
-				onAutocompleteClick(options[autocompleteIndex], autocompleteIndex);
-			}
-		} else if (multiple) {
-			if (autocompleteShown) {
-				if (elValue && options && options[autocompleteIndex]) {
-					// Add the autocomplete value with a delay to allow the input's width to be set to 0
-					// This prevents the input from jumping around when the chip is added
-					const autocompleteValue = options[autocompleteIndex];
-					setTimeout(() => onAutocompleteClick(autocompleteValue, autocompleteIndex), 50);
-				}
-			} else {
-				if (elValue || elValue === 0) {
-					// Add the chip with a delay to allow the input's width to be set to 0
-					// This prevents the input from jumping around when the chip is added
-					const chipValue = elValue;
-					setTimeout(() => addChips([chipValue]), 50);
-				}
-			}
-		}
-	}
-
-	/** Handles the key down event for the main input field */
-	let prevInput: any;
-	function onInputKeyDown(evt: KeyboardEvent) {
-		const element = (evt.target as HTMLInputElement) || inputElement;
-		if (!element) return;
-		prevInput = element.value;
-		if (autocompleteShown && options) {
-			if (evt.key === 'ArrowDown') {
-				evt.preventDefault();
-				autocompleteIndex = (autocompleteIndex + 1) % options.length;
-			} else if (evt.key === 'ArrowUp') {
-				evt.preventDefault();
-				autocompleteIndex = (autocompleteIndex + options.length - 1) % options.length;
-			}
-		}
-		if (type === 'number' && evt.key.toLowerCase() === 'e') {
-			evt.preventDefault();
-		}
-	}
-
-	/** Handles the key up event for the main input field */
-	function onInputKeyUp(evt: KeyboardEvent) {
-		if (evt.key === 'Enter') {
-			if (autocompleteShown && options && options.length) {
-				onAutocompleteClick(options[autocompleteIndex], autocompleteIndex);
-			} else if (multiple) {
-				if (inputElement) addChips([inputElement.value]);
-			} else if (valid && type !== 'textarea') {
-				if (onsubmit) onsubmit(value!);
-			}
-		}
-		if (evt.key === 'Escape') {
-			if (autocompleteShown) {
-				autocompleteShown = false;
-				evt.preventDefault();
-				evt.stopPropagation();
-			}
-		}
-		if (
-			evt.key &&
-			(!isSystemKey(evt.key) || evt.key === 'ArrowDown' || evt.key === 'ArrowUp')
-		) {
-			if (!autocompleteShown && options?.length) autocompleteShown = true;
-			evt.preventDefault();
-		}
-		if (evt.key === 'Backspace' && multiple && !prevInput && !elValue && chips.length) {
-			focusChip(chips.length - 1);
-		}
-		if (evt.key === ',' && multiple) {
-			addChips(
-				elValue
-					.split(/,/g)
-					.map((v: string) => v.trim())
-					.filter(Boolean),
-			);
-			elValue = '';
-		}
-	}
-
-	/** Handles when text is pasted into the input field */
-	function onInputPaste(evt: ClipboardEvent) {
-		if (!evt?.clipboardData) return;
-		const paste = evt.clipboardData.getData('text');
-		if (!paste || typeof paste !== 'string') return;
-		if (multiple) {
-			evt.preventDefault();
-			addChips(
-				paste
-					.split(/,/g)
-					.map((v: string) => v.trim())
-					.filter(Boolean),
-			);
-		}
-		setTimeout(() => {
-			onpaste && onpaste(value, evt);
-		}, 0);
-	}
-
-	/** Handles when the picker input (like the color picker input) has a key pressed */
-	function onInputPickerKeyUp(evt: KeyboardEvent | Event) {
-		evt.preventDefault();
-		if (('key' in evt && evt.key !== 'Enter') || !inputElement) return;
-		const target = evt.target as HTMLElement;
-		const element = target?.querySelector('input') || inputElement;
-		if ('showPicker' in HTMLInputElement.prototype) {
-			(element as HTMLInputElement).showPicker();
-		} else {
-			element.click();
-		}
-	}
-
-	/** Called when a picker input element 'input' event fires - happens on every keypress */
-	function onInputPickerInput(evt: Event) {
-		const element = (evt.target as HTMLInputElement) || inputElement;
-		if (!element) return;
-		elValue = element.value;
-		if (type === 'color' && !multiple && elValue) {
-			updateValue(elValue);
-		}
-	}
-
-	/** Called when a picker input element 'change' event fires - happens after a selection is made */
-	function onInputPickerChange(evt: Event) {
-		const element = (evt.target as HTMLInputElement) || inputElement;
-		if (!element) return;
-		if (type === 'time') {
-			try {
-				const [hours, minutes] = element.value.split(':').map((v: string) => +v);
-				const time = Math.max(
-					0,
-					+min! || 0,
-					Math.min(
-						1000 * 60 * 60 * 24,
-						+max! || Infinity,
-						(hours * 60 + minutes) * 60 * 1000,
-					),
-				);
-				element.value = convertFromValueToHtmlInputString(type, time);
-			} catch (error) {}
-		}
-		elValue = element.value;
-		if (multiple) addChips([elValue]);
-		if (!multiple) updateValue(elValue);
-	}
-
-	/** Called when the focus withint the input container changes */
-	function onInputFocusChange(isFocused: boolean) {
-		focused = isFocused;
-		if (disabled) return;
-		autocompleteShown = focused && (options?.length || 0) > 0;
-		if (isFocused && !touched) {
-			touched = true;
-			if (ontouch) ontouch();
-		}
-		if (!focused) {
-			if (
-				optionsMode === 'select' &&
-				elValue &&
-				options &&
-				options[autocompleteIndex] &&
-				!options.some((v) => isEqual(v, value))
-			) {
-				onAutocompleteClick(options[autocompleteIndex], autocompleteIndex);
-			}
-			if (multiple) {
-				elValue = '';
-				if (inputElement) inputElement.value = '';
-			}
-		}
-	}
-
-	/** Handles when a key is pressed down on a chip (only when 'multiple' is true) */
-	function onChipsKeyDown(evt: KeyboardEvent) {
-		if (!multiple || !browser || !document || !inputParentElement) return;
-		if (document.activeElement !== inputParentElement) return;
-		if (evt.key !== 'Tab') {
-			evt.preventDefault();
-			evt.stopPropagation();
-		}
-	}
-
-	/** Handles when a key is pressed up on a chip (only when 'multiple' is true) */
-	function onChipsKeyUp(evt: KeyboardEvent) {
-		if (!multiple || !browser || !document || !inputParentElement) return;
-		if (document.activeElement !== inputParentElement) return;
-		evt.preventDefault();
-		evt.stopPropagation();
-		const numChips = chips.length || 0;
-		const index = Math.min(focusedChipIndex, chips.length - 1);
-		if (evt.key === 'ArrowLeft' || evt.key === 'ArrowUp') {
-			focusedChipIndex = (index - 1 + numChips) % numChips;
-		} else if (evt.key === 'ArrowRight' || evt.key === 'ArrowDown') {
-			focusedChipIndex = (index + 1) % numChips;
-		} else if (evt.key === 'Backspace' || evt.key === 'Delete' || evt.key === 'Enter') {
-			removeChip(index);
-		}
-	}
-
-	/** Handles when an autocomplete item is clicked/selected */
-	function onAutocompleteClick(item: InputTypeMap[InputType], index: number) {
-		if (autocompleteIndex !== index) autocompleteIndex = index;
-		autocompleteShown = false;
-		if (item === 'new') {
-			if (loading || !elValue.trim()) {
-				return;
-			}
-			loading = true;
-			return;
-		}
-		if (multiple) addChips([item]);
-		if (!multiple) updateValue(item);
-		tick().then(() => {
-			if (onselect) onselect(value ?? item);
-		});
-	}
-
-	/** Autoresizes the text area to fit the content */
-	function resizeTextArea() {
-		if (type !== 'textarea' || !inputElement) return;
-		const styles = getComputedStyle(inputElement);
-		const fontSize = parseInt(styles.fontSize);
-		const lineHeight = parseInt(styles.lineHeight);
-		const padding = parseInt(styles.paddingTop) + parseInt(styles.paddingBottom);
-		const minSize = (TEXTAREA_MIN_LINES * lineHeight + padding) / fontSize;
-		inputElement.style.height = `${minSize}em`;
-		const scrollHeight = inputElement.scrollHeight / fontSize;
-		inputElement.style.height = Math.max(minSize, scrollHeight) + 'em';
-	}
-
-	/** Determines the position of the autocomplete panel so that it fits on screen */
-	let autocompletePositionDestroy = () => {};
-	$effect(() => {
-		if (browser && autocompleteElement && inputContainerElement) {
-			let lastPosition: 'top' | 'bottom' | undefined = undefined;
-			untrack(async () => {
-				const { computePosition, autoUpdate, flip, size } = await import(
-					'@floating-ui/dom'
-				);
-				if (!inputContainerElement || !autocompleteElement) return;
-				autocompletePositionDestroy();
-				autocompletePositionDestroy = autoUpdate(
-					inputContainerElement,
-					autocompleteElement,
-					async () => {
-						if (!inputContainerElement || !autocompleteElement || !autocompleteShown) {
-							return;
-						}
-						let { placement, x, y } = await computePosition(
-							inputContainerElement,
-							autocompleteElement,
-							{
-								placement: 'bottom',
-								strategy: 'fixed',
-								middleware: [
-									flip(),
-									size({
-										apply({ rects, elements }) {
-											Object.assign(elements.floating.style, {
-												width: `${rects.reference.width}px`,
-											});
-										},
-									}),
-								],
-							},
-						);
-						const position = placement.startsWith('bottom') ? 'bottom' : 'top';
-						if (position === 'top' && label && labelDisplay === 'floating') y -= 6;
-						const currentY = parseFloat(autocompleteElement.style.top || '');
-						const shouldAnimateOn = !lastPosition;
-						const shouldAnimateFlip =
-							lastPosition !== position && lastPosition && Math.abs(currentY - y) > 5;
-						lastPosition = position;
-						autocompleteElement.style.left = `${x}px`;
-						autocompleteElement.style.top = `${y}px`;
-						autocompleteElement.style.transformOrigin =
-							position === 'bottom' ? 'top' : 'bottom';
-						if (shouldAnimateOn) {
-							const animation = autocompleteElement.animate(
-								[
-									{
-										opacity: 1,
-										transform: 'translateZ(0) scale(1)',
-									},
-								],
-								{
-									duration: 200,
-									easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-									fill: 'forwards',
-								},
-							);
-							await animation.finished.catch(() => undefined);
-							try {
-								animation.commitStyles();
-								animation.cancel();
-							} catch (error) {
-								// ignore
-							}
-						}
-						if (shouldAnimateFlip) {
-							const animations = autocompleteElement.getAnimations();
-							animations.forEach((animation) => {
-								try {
-									animation.commitStyles();
-									animation.cancel();
-								} catch (error) {
-									// ignore
-								}
-							});
-							const animation = autocompleteElement.animate(
-								[
-									{ transform: `translate3d(0px, ${Math.floor(currentY - y)}px, 0px)` },
-									{ transform: 'translate3d(0px, 0px, 0px)' },
-								],
-								{
-									duration: 200,
-									easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-									fill: 'forwards',
-								},
-							);
-							await animation.finished.catch(() => undefined);
-							try {
-								animation.commitStyles();
-								animation.cancel();
-							} catch (error) {
-								// ignore
-							}
-						}
-					},
-				);
-			});
-		}
-		return () => autocompletePositionDestroy();
-	});
-
-	function panelTransitionOut(element: HTMLElement) {
+		if (!form_ctx || !name) return;
+		const el = input_element ?? textarea_element;
+		if (el) form_ctx.register(name, el);
 		return () => {
-			return {
-				duration: 80,
-				easing: cubicOut,
-				css: (t: number) => `transform: translateZ(0) scale(1, ${t * 0.75 + 0.25});`,
-			};
+			if (name) form_ctx.unregister(name);
 		};
+	});
+
+	/** Error from form context or local prop */
+	const resolved_error = $derived.by(() => {
+		if (error !== undefined) return error;
+		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
+		return undefined;
+	});
+
+	/** Whether the input is effectively disabled */
+	const effectively_disabled = $derived(disabled || (form_ctx?.disabled ?? false));
+
+	/* ------------------------------------------------------------------ */
+	/*  Internal state                                                     */
+	/* ------------------------------------------------------------------ */
+
+	let input_element = $state<HTMLInputElement | HTMLButtonElement | undefined>(undefined);
+	let textarea_element = $state<HTMLTextAreaElement | undefined>(undefined);
+	let wrapper_element = $state<HTMLElement | undefined>(undefined);
+	let focused = $state(false);
+	let password_visible = $state(false);
+	let chip_input_value = $state('');
+
+	/* Autocomplete state */
+	let ac_open = $state(false);
+	let ac_highlighted = $state(-1);
+	let ac_loading = $state(false);
+	let ac_filtered = $state<InputOption[]>([]);
+	let ac_debounce_timer: ReturnType<typeof setTimeout> | undefined;
+	let dropdown_element = $state<HTMLElement | undefined>(undefined);
+
+	/* File state */
+	let file_input_element = $state<HTMLInputElement | undefined>(undefined);
+
+	/* ------------------------------------------------------------------ */
+	/*  Derived values                                                     */
+	/* ------------------------------------------------------------------ */
+
+	const is_textarea = $derived(type === 'textarea');
+	const is_password = $derived(type === 'password');
+	const is_number = $derived(type === 'number');
+	const is_search = $derived(type === 'search');
+	const is_file = $derived(type === 'file');
+	const is_color = $derived(type === 'color');
+	const has_autocomplete = $derived(!!(options || onfilter));
+
+	/** Resolved HTML input type */
+	const html_type = $derived.by(() => {
+		if (is_password) return password_visible ? 'text' : 'password';
+		if (type === 'datetime-local') return 'datetime-local';
+		if (is_textarea || is_file || is_color) return 'text';
+		return type;
+	});
+
+	/** Whether the label should float (up position) */
+	const label_floated = $derived.by(() => {
+		if (!label) return false;
+		if (focused) return true;
+		if (multiple && Array.isArray(value) && value.length > 0) return true;
+		if (is_file && value) return true;
+		if (is_color) return true;
+		if (value !== undefined && value !== null && value !== '') return true;
+		if (placeholder) return true;
+		return false;
+	});
+
+	/** Whether there is a displayable error */
+	const has_error = $derived(!!resolved_error);
+	const error_message = $derived(typeof resolved_error === 'string' ? resolved_error : '');
+
+	/** Display string for value length */
+	const value_length = $derived.by(() => {
+		if (typeof value === 'string') return value.length;
+		return 0;
+	});
+
+	/** Visible autocomplete options */
+	const ac_options = $derived.by((): InputOption[] => {
+		if (onfilter) return ac_filtered;
+		if (!options) return [];
+		const q = typeof value === 'string' ? value.toLowerCase().trim() : '';
+		if (!q) return options;
+		return options.filter((o) => o.label.toLowerCase().includes(q));
+	});
+
+	/** Password strength (0-4) */
+	const password_strength = $derived.by((): number => {
+		if (!strengthIndicator || type !== 'password' || typeof value !== 'string' || !value) return 0;
+		let score = 0;
+		if (value.length >= 8) score++;
+		if (value.length >= 12) score++;
+		if (/[A-Z]/.test(value) && /[a-z]/.test(value)) score++;
+		if (/[0-9]/.test(value)) score++;
+		if (/[^A-Za-z0-9]/.test(value)) score++;
+		return Math.min(score, 4);
+	});
+
+	const strength_label = $derived.by(() => {
+		const labels = ['', 'Weak', 'Fair', 'Strong', 'Very strong'];
+		return labels[password_strength] ?? '';
+	});
+
+	const strength_color = $derived.by(() => {
+		const colors = [
+			'var(--color-border, hsl(0 0% 80%))',
+			'var(--color-error, #d32f2f)',
+			'var(--color-warning, #f59e0b)',
+			'var(--color-success, #16a34a)',
+			'var(--color-success, #16a34a)',
+		];
+		return colors[password_strength] ?? colors[0];
+	});
+
+	/** Size config */
+	const size_config = $derived.by(() => {
+		const configs: Record<string, { height: string; font: string; icon_size: number }> = {
+			'0': { height: '28px', font: '13px', icon_size: 14 },
+			'1': { height: '36px', font: '15px', icon_size: 16 },
+			'2': { height: '44px', font: '17px', icon_size: 18 },
+			'3': { height: '52px', font: '19px', icon_size: 20 },
+		};
+		return configs[size] ?? configs['1'];
+	});
+
+	/* ------------------------------------------------------------------ */
+	/*  Mask logic                                                         */
+	/* ------------------------------------------------------------------ */
+
+	function applyMask(raw: string): string {
+		if (!mask) return raw;
+		let result = '';
+		let raw_idx = 0;
+		for (let i = 0; i < mask.length && raw_idx < raw.length; i++) {
+			const m = mask[i];
+			if (m === '#') {
+				/* digit */
+				while (raw_idx < raw.length && !/\d/.test(raw[raw_idx])) raw_idx++;
+				if (raw_idx < raw.length) {
+					result += raw[raw_idx];
+					raw_idx++;
+				} else break;
+			} else if (m === 'A') {
+				/* letter */
+				while (raw_idx < raw.length && !/[a-zA-Z]/.test(raw[raw_idx])) raw_idx++;
+				if (raw_idx < raw.length) {
+					result += raw[raw_idx];
+					raw_idx++;
+				} else break;
+			} else if (m === '*') {
+				/* any */
+				result += raw[raw_idx];
+				raw_idx++;
+			} else {
+				/* literal */
+				result += m;
+			}
+		}
+		return result;
 	}
 
-	$effect.pre(() => {
-		if (!autocompleteShown) return;
-		let highestIndex = -1;
-		document.querySelectorAll('[data-popover-index]').forEach((el) => {
-			highestIndex = Math.max(
-				highestIndex,
-				+((el as HTMLElement).dataset.popoverIndex || '0'),
-			);
+	function stripMask(masked: string): string {
+		if (!mask) return masked;
+		let result = '';
+		for (let i = 0; i < masked.length && i < mask.length; i++) {
+			const m = mask[i];
+			if (m === '#' || m === 'A' || m === '*') {
+				result += masked[i];
+			}
+		}
+		return result;
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Textarea auto-resize                                               */
+	/* ------------------------------------------------------------------ */
+
+	function autoResizeTextarea() {
+		if (!autoResize || !textarea_element) return;
+		textarea_element.style.height = 'auto';
+		textarea_element.style.height = textarea_element.scrollHeight + 'px';
+	}
+
+	$effect(() => {
+		if (autoResize && textarea_element && value !== undefined) {
+			autoResizeTextarea();
+		}
+	});
+
+	/* ------------------------------------------------------------------ */
+	/*  Autocomplete                                                       */
+	/* ------------------------------------------------------------------ */
+
+	function openAutocomplete() {
+		if (!has_autocomplete || effectively_disabled || readonly) return;
+		ac_open = true;
+		ac_highlighted = -1;
+	}
+
+	function closeAutocomplete() {
+		ac_open = false;
+		ac_highlighted = -1;
+	}
+
+	async function filterAutocomplete(query: string) {
+		if (!onfilter) return;
+		ac_loading = true;
+		try {
+			ac_filtered = await onfilter(query);
+		} finally {
+			ac_loading = false;
+		}
+	}
+
+	function selectAutocompleteOption(opt: InputOption) {
+		if (opt.disabled) return;
+		value = opt.value;
+		closeAutocomplete();
+		onchange?.({ value });
+	}
+
+	function scrollAcHighlightedIntoView() {
+		requestAnimationFrame(() => {
+			if (!dropdown_element) return;
+			const items = dropdown_element.querySelectorAll('[role="option"]');
+			const item = items[ac_highlighted];
+			if (item) item.scrollIntoView({ block: 'nearest' });
 		});
-		popoverIndex = highestIndex + 1;
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Event handlers                                                     */
+	/* ------------------------------------------------------------------ */
+
+	function handleFocus() {
+		focused = true;
+		if (has_autocomplete) openAutocomplete();
+		onfocus?.();
+	}
+
+	function handleBlur() {
+		focused = false;
+		if (form_ctx && name) form_ctx.setTouched(name);
+		/* Delay close so click on option registers */
+		setTimeout(() => {
+			if (!focused) closeAutocomplete();
+		}, 200);
+		onblur?.();
+	}
+
+	function handleInput(e: Event) {
+		const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+		let new_value: string | number | null = target.value;
+
+		if (mask) {
+			const masked = new_value as string;
+			const raw = stripMask(masked) + masked.slice((value as string)?.length ?? 0);
+			new_value = applyMask(raw.replace(/[^a-zA-Z0-9]/g, ''));
+			target.value = new_value as string;
+		}
+
+		if (is_number) {
+			new_value = target.value === '' ? null : Number(target.value);
+		}
+
+		value = new_value;
+
+		if (form_ctx && name) form_ctx.setValue(name, value);
+		oninput?.({ value });
+
+		if (is_textarea && autoResize) autoResizeTextarea();
+
+		/* Autocomplete filtering */
+		if (has_autocomplete && typeof new_value === 'string') {
+			openAutocomplete();
+			if (onfilter) {
+				clearTimeout(ac_debounce_timer);
+				ac_debounce_timer = setTimeout(() => filterAutocomplete(new_value), 300);
+			}
+		}
+	}
+
+	function handleChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		if (is_number) {
+			value = target.value === '' ? null : Number(target.value);
+		}
+		if (form_ctx && name) form_ctx.setValue(name, value);
+		onchange?.({ value });
+	}
+
+	function handleClear() {
+		if (multiple) {
+			value = [];
+		} else if (is_number) {
+			value = null;
+		} else if (is_file) {
+			value = null;
+			if (file_input_element) file_input_element.value = '';
+		} else {
+			value = '';
+		}
+		if (form_ctx && name) form_ctx.setValue(name, value);
+		oninput?.({ value });
+		onchange?.({ value });
+
+		const el = input_element ?? textarea_element;
+		el?.focus();
+	}
+
+	function handleNumberIncrement(delta: number) {
+		if (effectively_disabled || readonly) return;
+		const current = typeof value === 'number' ? value : 0;
+		const s = step ?? 1;
+		let next = current + delta * s;
+		if (min !== undefined && typeof min === 'number') next = Math.max(min, next);
+		if (max !== undefined && typeof max === 'number') next = Math.min(max, next);
+		/* Round to step precision to avoid float issues */
+		const precision = String(s).includes('.') ? String(s).split('.')[1].length : 0;
+		value = Number(next.toFixed(precision));
+		if (form_ctx && name) form_ctx.setValue(name, value);
+		oninput?.({ value });
+		onchange?.({ value });
+	}
+
+	function handlePasswordToggle() {
+		password_visible = !password_visible;
+		input_element?.focus();
+	}
+
+	function handleFileClick() {
+		file_input_element?.click();
+	}
+
+	function handleFileChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const files = target.files;
+		if (!files || files.length === 0) {
+			value = null;
+		} else if (multiple) {
+			value = Array.from(files);
+		} else {
+			value = files[0];
+		}
+		if (form_ctx && name) form_ctx.setValue(name, value);
+		onchange?.({ value });
+	}
+
+	function handleFileDrop(e: DragEvent) {
+		e.preventDefault();
+		if (effectively_disabled || readonly) return;
+		const files = e.dataTransfer?.files;
+		if (!files || files.length === 0) return;
+		if (multiple) {
+			value = Array.from(files);
+		} else {
+			value = files[0];
+		}
+		if (form_ctx && name) form_ctx.setValue(name, value);
+		onchange?.({ value });
+	}
+
+	function handleFileDragOver(e: DragEvent) {
+		e.preventDefault();
+	}
+
+	/* ---- Chips / Multiple ---- */
+	function handleChipKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === ',') {
+			e.preventDefault();
+			addChip();
+		} else if (e.key === 'Backspace' && chip_input_value === '' && Array.isArray(value) && value.length > 0) {
+			removeChip(value.length - 1);
+		}
+	}
+
+	function addChip() {
+		const trimmed = chip_input_value.trim();
+		if (!trimmed) return;
+		if (!Array.isArray(value)) value = [];
+		const chips = value as string[];
+		if (!chips.includes(trimmed)) {
+			value = [...chips, trimmed];
+			if (form_ctx && name) form_ctx.setValue(name, value);
+			oninput?.({ value });
+			onchange?.({ value });
+		}
+		chip_input_value = '';
+	}
+
+	function removeChip(index: number) {
+		if (!Array.isArray(value)) return;
+		const chips = value as string[];
+		value = chips.filter((_, i) => i !== index);
+		if (form_ctx && name) form_ctx.setValue(name, value);
+		oninput?.({ value });
+		onchange?.({ value });
+	}
+
+	/* ---- Autocomplete keyboard ---- */
+	function handleKeyDown(e: KeyboardEvent) {
+		if (!has_autocomplete || !ac_open) return;
+
+		switch (e.key) {
+			case 'ArrowDown': {
+				e.preventDefault();
+				const opts = ac_options;
+				if (opts.length === 0) break;
+				ac_highlighted = ac_highlighted < opts.length - 1 ? ac_highlighted + 1 : 0;
+				/* Skip disabled */
+				let attempts = 0;
+				while (opts[ac_highlighted]?.disabled && attempts < opts.length) {
+					ac_highlighted = ac_highlighted < opts.length - 1 ? ac_highlighted + 1 : 0;
+					attempts++;
+				}
+				scrollAcHighlightedIntoView();
+				break;
+			}
+			case 'ArrowUp': {
+				e.preventDefault();
+				const opts = ac_options;
+				if (opts.length === 0) break;
+				ac_highlighted = ac_highlighted > 0 ? ac_highlighted - 1 : opts.length - 1;
+				let attempts = 0;
+				while (opts[ac_highlighted]?.disabled && attempts < opts.length) {
+					ac_highlighted = ac_highlighted > 0 ? ac_highlighted - 1 : opts.length - 1;
+					attempts++;
+				}
+				scrollAcHighlightedIntoView();
+				break;
+			}
+			case 'Enter': {
+				e.preventDefault();
+				if (ac_highlighted >= 0 && ac_highlighted < ac_options.length) {
+					selectAutocompleteOption(ac_options[ac_highlighted]);
+				}
+				break;
+			}
+			case 'Escape': {
+				e.preventDefault();
+				closeAutocomplete();
+				break;
+			}
+		}
+	}
+
+	/* ---- Display values ---- */
+	const file_display = $derived.by(() => {
+		if (!is_file || !value) return '';
+		if (Array.isArray(value)) {
+			return (value as File[]).map((f) => f.name).join(', ');
+		}
+		if (value instanceof File) return value.name;
+		return '';
+	});
+
+	/** Whether the clear button should show */
+	const show_clear = $derived.by(() => {
+		if (!clearable || effectively_disabled || readonly) return false;
+		if (multiple) return Array.isArray(value) && value.length > 0;
+		if (is_file) return !!value;
+		if (is_number) return value !== null && value !== undefined;
+		return value !== undefined && value !== null && value !== '';
+	});
+
+	/** Highlight matching text in autocomplete option */
+	function highlightMatch(text: string): string {
+		const q = typeof value === 'string' ? value.trim() : '';
+		if (!q) return text;
+		const idx = text.toLowerCase().indexOf(q.toLowerCase());
+		if (idx === -1) return text;
+		const before = text.slice(0, idx);
+		const match = text.slice(idx, idx + q.length);
+		const after = text.slice(idx + q.length);
+		return `${before}<strong>${match}</strong>${after}`;
+	}
+
+	/** Counter warning state */
+	const counter_state = $derived.by((): 'normal' | 'warning' | 'error' => {
+		if (!showCounter || !maxlength) return 'normal';
+		const ratio = value_length / maxlength;
+		if (ratio >= 1) return 'error';
+		if (ratio >= 0.8) return 'warning';
+		return 'normal';
 	});
 </script>
 
+<!-- ================================================================== -->
+<!--  TEMPLATE                                                           -->
+<!-- ================================================================== -->
+
 <div
-	class={['input', className].filter(Boolean).join(' ')}
-	class:error={(canShowError && errorMessage) || error}
-	class:dense
-	class:outlined
-	class:comfortable
+	class={['ds-input', `ds-input-size-${size}`, class_name].filter(Boolean).join(' ')}
+	class:focused
+	class:disabled={effectively_disabled}
 	class:readonly
-	class:disabled={disabled || !browser}
-	use:focusWithin={{ onfocuswithin: (focused) => onInputFocusChange(focused) }}
-	bind:this={inputContainerElement}
-	use:autoAnimate={{ easing: 'cubic-bezier(0.25, 1, 0.5, 1)', start: 0.5 }}
-	{style}>
-	<div class="input-outer">
-		<div class="input-inner" class:rounded class:has-label={hasLabel} class:loading>
-			{#if prepend}
-				<div class="prepend">{@render prepend()}</div>
+	class:has-error={has_error}
+	class:skeleton
+	class:dense
+	class:comfortable
+	class:has-label={!!label}
+	class:has-prefix={!!prefix}
+	class:has-suffix={!!suffix}
+	class:has-icon={!!icon}
+	class:is-textarea={is_textarea}
+	class:is-file={is_file}
+	class:is-color={is_color}
+	class:multiple
+	style:--input-height={size_config.height}
+	style:--input-font={size_config.font}
+	style:--input-icon-size="{size_config.icon_size}px"
+	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
+
+	{#if skeleton}
+		<!-- Skeleton loading state -->
+		<div class="input-skeleton">
+			{#if label}
+				<div class="skeleton-label"></div>
+			{/if}
+			<div class="skeleton-field"></div>
+		</div>
+	{:else}
+		<!-- Main input wrapper -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="input-wrapper"
+			class:focused
+			class:has-error={has_error}
+			bind:this={wrapper_element}
+			ondrop={is_file ? handleFileDrop : undefined}
+			ondragover={is_file ? handleFileDragOver : undefined}>
+
+			<!-- Leading icon -->
+			{#if icon}
+				<span class="input-icon" aria-hidden="true">
+					{@render iconRender(icon)}
+				</span>
 			{/if}
 
-			<div
-				class="input-box"
-				role="combobox"
-				aria-expanded={autocompleteShown}
-				aria-controls={id + '-autocomplete'}
-				class:chips={multiple}
-				class:has-chips={!!chips.length}
-				bind:this={inputParentElement}
-				tabindex={!!chips.length && !disabled && browser ? 0 : -1}
-				data-autoanimate-ignore="transform,width"
-				onkeydown={!!chips.length ? onChipsKeyDown : () => {}}
-				onkeyup={!!chips.length ? onChipsKeyUp : () => {}}
-				onblur={() => (focusedChipIndex = 0)}
-				use:autoAnimate={{
-					disableOnBlur: true,
-					easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
-				}}>
-				{#if !!chips.length}
-					{#each chips as chip, i (chip)}
-						<button
-							type="button"
-							class="chip"
-							role="row"
-							disabled={disabled || !browser}
-							class:active={Math.min(focusedChipIndex, chips.length - 1) === i}
-							tabindex="-1"
-							aria-label="Remove item {i + 1}"
-							use:ripple
-							onclick={() => removeChip(i)}>
-							{#if chipsDisplay}
-								{@render chipsDisplay(chip, i)}
-							{:else if toDisplayString}
-								<span>{toDisplayString(chip)}</span>
-							{:else if type === 'color'}
-								<figure style:background-color={chip}></figure>
-								<span>{chip}</span>
-							{:else if type === 'date' || type === 'datetime'}
-								{@const date = new Date(chip)}
-								<span>
-									{date.toLocaleDateString(undefined, { dateStyle: 'medium' })}
-									{#if type === 'datetime'}
-										{date.toLocaleTimeString(undefined, { timeStyle: 'short' })}
-									{/if}
-								</span>
-							{:else if type === 'time'}
-								{@const date = new Date(chip)}
-								<span>
-									{date.toLocaleTimeString(undefined, {
-										timeZone: 'UTC',
-										timeStyle: 'short',
-									})}
-								</span>
-							{:else if type === 'file'}
-								<span use:truncateText={{ limit: 30 }}>{chip.name}</span>
-							{:else if type === 'password'}
-								<span>{new Array(chip.length).fill('*').join('')}</span>
-							{:else}
-								<span>{chip}</span>
-							{/if}
-							<CloseIcon />
-						</button>
+			<!-- Prefix -->
+			{#if prefix}
+				<span class="input-prefix" aria-hidden="true">{prefix}</span>
+			{/if}
+
+			<!-- Color swatch -->
+			{#if is_color}
+				<span
+					class="color-swatch"
+					style:background={typeof value === 'string' && value ? value : '#000000'}
+					aria-hidden="true"></span>
+			{/if}
+
+			<!-- Multiple chips -->
+			{#if multiple && Array.isArray(value)}
+				<div class="chips-container">
+					{#each value as chip, i (chip + '-' + i)}
+						<span class="chip">
+							<span class="chip-text">{chip}</span>
+							<button
+								type="button"
+								class="chip-remove"
+								aria-label="Remove {chip}"
+								tabindex={-1}
+								onclick={() => removeChip(i)}
+								disabled={effectively_disabled}>
+								<!-- close icon -->
+								<svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+									<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+								</svg>
+							</button>
+						</span>
 					{/each}
-				{/if}
-
-				{#if content}{@render content()}{/if}
-				{#if type === 'textarea'}
-					<!-- svelte-ignore element_invalid_self_closing_tag -->
-					<textarea
-						placeholder={labelText}
-						bind:this={inputElement}
-						aria-invalid={!valid}
-						aria-describedby={id + '-error'}
-						value={elValue}
-						disabled={disabled || !browser}
-						{id}
-						{required}
-						{readonly}
-						{minlength}
-						{maxlength}
-						oninput={onInputChange}
-						onblur={(e) => {
-							onInputBlur();
-							if (onblur) onblur(e);
-						}}
-						onkeydown={(e) => {
-							onInputKeyDown(e);
-							resizeTextArea();
-							if (onkeydown) onkeydown(e);
-						}}
-						onkeyup={(e) => {
-							onInputKeyUp(e);
-							resizeTextArea();
-							if (onkeyup) onkeyup(e);
-						}}
-						onpaste={onInputPaste}
-						{onfocus}
-						rows={TEXTAREA_MIN_LINES} />
-				{:else}
 					<input
-						type={elType}
-						placeholder={labelText}
-						bind:this={inputElement}
-						aria-invalid={!valid}
-						aria-describedby={id + '-error'}
-						data-autoanimate-ignore="all"
-						value={elValue}
-						disabled={disabled || !browser}
+						type="text"
+						class="chip-input"
+						bind:this={input_element}
+						bind:value={chip_input_value}
 						{id}
-						{required}
+						{placeholder}
+						disabled={effectively_disabled}
 						{readonly}
-						{minlength}
-						{maxlength}
-						autocomplete={autocomplete ? (autocomplete as FullAutoFill) : undefined}
-						style:min-width={focused || !multiple ? null : '0px'}
-						style:width={focused || !multiple ? null : '0px'}
-						min={type === 'date' || type === 'datetime' || type === 'time'
-							? toHtmlString
-								? toHtmlString(min as any)
-								: convertFromValueToHtmlInputString(type, min)
-							: min}
-						max={type === 'date' || type === 'datetime' || type === 'time'
-							? toHtmlString
-								? toHtmlString(max as any)
-								: convertFromValueToHtmlInputString(type, max)
-							: max}
-						{step}
-						{pattern}
-						multiple={type === 'file' && multiple}
-						accept={type === 'file' && accept ? accept.join(',') : undefined}
-						oninput={onInputChange}
-						{onfocus}
-						onblur={(e) => {
-							onInputBlur();
-							if (onblur) onblur(e);
-						}}
-						onkeydown={(e) => {
-							onInputKeyDown(e);
-							if (onkeydown) onkeydown(e);
-						}}
-						onkeyup={(e) => {
-							onInputKeyUp(e);
-							resizeTextArea();
-							if (onkeyup) onkeyup(e);
-						}}
-						onpaste={onInputPaste}
-						onclick={() => {
-							if (disabled || !browser) return;
-							if (!autocompleteShown && (options?.length || 0) > 0 && multiple) {
-								autocompleteShown = true;
-							}
-						}}
-						oninvalid={(e) => {
-							if (focused) e.preventDefault();
-						}} />
-				{/if}
-				{#if hasLabel}
-					<label
-						for={id}
-						bind:this={labelElement}
-						data-autoanimate-ignore="transform,width">
-						{#if children}
-							{@render children()}
-						{:else}
-							{label}
-						{/if}
-						{#if tooltip}
-							<div class="tooltip-icon" use:tooltipAction={tooltip}>
-								<HelpIcon />
-							</div>
-						{/if}
-					</label>
-				{/if}
-				{#if type === 'file'}
-					<div class="file-picker">
-						<span class="button">Choose File{multiple ? 's' : ''}</span>
-						{#if !multiple}
-							<span class="selection">
-								{#if value && typeof value === 'object' && 'name' in value}
-									{value.name}
-								{:else}
-									No file{multiple ? 's' : ''} selected
-								{/if}
-							</span>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
-			{#if clearable && elValue !== ''}
-				<button type="button" onclick={() => (value = undefined)} class="blank clear">
-					<!-- Slot for the icon when `clearable` is true. -->
-					{#if clearIcon}
-						{@render clearIcon()}
+						aria-label={label || placeholder || 'Add tag'}
+						onfocus={handleFocus}
+						onblur={handleBlur}
+						onkeydown={handleChipKeyDown} />
+				</div>
+			{:else if is_textarea}
+				<!-- Textarea -->
+				<textarea
+					bind:this={textarea_element}
+					{id}
+					{name}
+					class="input-field"
+					{placeholder}
+					disabled={effectively_disabled}
+					{readonly}
+					{required}
+					{rows}
+					{maxlength}
+					{minlength}
+					aria-invalid={has_error || undefined}
+					aria-required={required || undefined}
+					aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+					onfocus={handleFocus}
+					onblur={handleBlur}
+					oninput={handleInput}
+					onchange={handleChange}
+					value={(value ?? '') as string}></textarea>
+			{:else if is_file}
+				<!-- File input: hidden native + visible display -->
+				<input
+					bind:this={file_input_element}
+					type="file"
+					{name}
+					{accept}
+					multiple={multiple}
+					disabled={effectively_disabled}
+					class="file-native"
+					aria-hidden="true"
+					tabindex={-1}
+					onchange={handleFileChange} />
+				<button
+					type="button"
+					bind:this={input_element}
+					{id}
+					class="input-field file-display"
+					disabled={effectively_disabled}
+					aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+					onfocus={handleFocus}
+					onblur={handleBlur}
+					onclick={handleFileClick}>
+					{#if file_display}
+						<span class="file-name">{file_display}</span>
 					{:else}
-						<CloseIcon />
+						<span class="file-placeholder">{placeholder ?? 'Choose file...'}</span>
+					{/if}
+				</button>
+			{:else if is_color}
+				<!-- Color: native picker + text display -->
+				<input
+					type="color"
+					class="color-native"
+					value={typeof value === 'string' && value ? value : '#000000'}
+					disabled={effectively_disabled}
+					oninput={(e) => {
+						value = (e.target as HTMLInputElement).value;
+						if (form_ctx && name) form_ctx.setValue(name, value);
+						oninput?.({ value });
+					}}
+					onchange={(e) => {
+						value = (e.target as HTMLInputElement).value;
+						onchange?.({ value });
+					}}
+					aria-hidden="true"
+					tabindex={-1} />
+				<input
+					bind:this={input_element}
+					{id}
+					{name}
+					type="text"
+					class="input-field"
+					{placeholder}
+					disabled={effectively_disabled}
+					{readonly}
+					{required}
+					value={value ?? ''}
+					aria-invalid={has_error || undefined}
+					aria-required={required || undefined}
+					aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+					onfocus={handleFocus}
+					onblur={handleBlur}
+					oninput={handleInput}
+					onchange={handleChange} />
+			{:else}
+				<!-- Standard input -->
+				<input
+					bind:this={input_element}
+					{id}
+					{name}
+					type={html_type}
+					class="input-field"
+					class:has-autocomplete={has_autocomplete}
+					{placeholder}
+					disabled={effectively_disabled}
+					{readonly}
+					{required}
+					{maxlength}
+					{minlength}
+					{pattern}
+					min={min}
+					max={max}
+					step={is_number ? step : undefined}
+					autocomplete={has_autocomplete ? 'off' : undefined}
+					role={has_autocomplete ? 'combobox' : undefined}
+					aria-expanded={has_autocomplete ? ac_open : undefined}
+					aria-autocomplete={has_autocomplete ? 'list' : undefined}
+					aria-controls={has_autocomplete ? `${id}-listbox` : undefined}
+					aria-activedescendant={has_autocomplete && ac_highlighted >= 0 ? `${id}-option-${ac_highlighted}` : undefined}
+					aria-invalid={has_error || undefined}
+					aria-required={required || undefined}
+					aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+					value={is_number ? (value ?? '') : (value ?? '')}
+					onfocus={handleFocus}
+					onblur={handleBlur}
+					oninput={handleInput}
+					onchange={handleChange}
+					onkeydown={has_autocomplete ? handleKeyDown : undefined} />
+			{/if}
+
+			<!-- Floating label -->
+			{#if label}
+				<label class="input-label" class:floated={label_floated} for={id}>
+					{label}{#if required}<span class="required-mark" aria-hidden="true"> *</span>{/if}
+				</label>
+			{/if}
+
+			<!-- Suffix -->
+			{#if suffix}
+				<span class="input-suffix" aria-hidden="true">{suffix}</span>
+			{/if}
+
+			<!-- Number buttons -->
+			{#if is_number}
+				<div class="number-buttons">
+					<button
+						type="button"
+						class="number-btn"
+						tabindex={-1}
+						aria-label="Decrease"
+						disabled={effectively_disabled || (min !== undefined && typeof min === 'number' && typeof value === 'number' && value <= min)}
+						onclick={() => handleNumberIncrement(-1)}>
+						<!-- minus icon -->
+						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+							<path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+						</svg>
+					</button>
+					<button
+						type="button"
+						class="number-btn"
+						tabindex={-1}
+						aria-label="Increase"
+						disabled={effectively_disabled || (max !== undefined && typeof max === 'number' && typeof value === 'number' && value >= max)}
+						onclick={() => handleNumberIncrement(1)}>
+						<!-- plus icon -->
+						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
+							<path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+						</svg>
+					</button>
+				</div>
+			{/if}
+
+			<!-- Password toggle -->
+			{#if is_password && showToggle}
+				<button
+					type="button"
+					class="input-action-btn"
+					tabindex={-1}
+					aria-label={password_visible ? 'Hide password' : 'Show password'}
+					onclick={handlePasswordToggle}>
+					{#if password_visible}
+						<!-- eye-off icon -->
+						<svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+							<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							<line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+						</svg>
+					{:else}
+						<!-- eye icon -->
+						<svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+							<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							<circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+						</svg>
 					{/if}
 				</button>
 			{/if}
 
-			<!-- Slot for append inside the input. -->
-			{#if append}
-				<div style="z-index: 2;">
-					{@render append()}
-				</div>
+			<!-- Search icon -->
+			{#if is_search && !icon}
+				<span class="input-icon search-icon" aria-hidden="true">
+					<svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+						<circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+						<path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+					</svg>
+				</span>
 			{/if}
 
-			<!-- The native date picker button -->
-			{#if type === 'date' || type === 'datetime' || type === 'time'}
-				<button type="button" class="picker" onkeyup={onInputPickerKeyUp}>
-					{#if type === 'time'}<ClockIcon />{:else}<CalendarIcon />{/if}
-					<input
-						min={toHtmlString
-							? toHtmlString(min as any)
-							: convertFromValueToHtmlInputString(type, min)}
-						max={toHtmlString
-							? toHtmlString(max as any)
-							: convertFromValueToHtmlInputString(type, max)}
-						type={elType}
-						disabled={disabled || !browser}
-						tabindex="-1"
-						value={elValue}
-						onchange={onInputPickerChange}
-						oninput={onInputPickerInput} />
+			<!-- Clear button -->
+			{#if show_clear}
+				<button
+					type="button"
+					class="input-action-btn clear-btn"
+					tabindex={-1}
+					aria-label="Clear"
+					onclick={handleClear}>
+					<svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+						<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+					</svg>
 				</button>
 			{/if}
+		</div>
 
-			<!-- The native color picker button/input -->
-			{#if type === 'color'}
-				<div class="picker">
-					<input
-						type="color"
-						disabled={disabled || !browser}
-						id={id + '-picker'}
-						value={(toHtmlString
-							? toHtmlString(elValue)
-							: convertFromValueToHtmlInputString(type, elValue)) || '#000000'}
-						onchange={onInputPickerChange}
-						oninput={onInputPickerInput} />
-					<label for={id + '-picker'} style:--picker-color={elValue || 'black'}></label>
+		<!-- Password strength indicator -->
+		{#if is_password && strengthIndicator && typeof value === 'string' && value.length > 0}
+			<div class="strength-meter" aria-label="Password strength: {strength_label}">
+				<div class="strength-track">
+					{#each [1, 2, 3, 4] as segment}
+						<div
+							class="strength-segment"
+							class:active={password_strength >= segment}
+							style:background={password_strength >= segment ? strength_color : undefined}></div>
+					{/each}
 				</div>
-			{/if}
-		</div>
-	</div>
+				<span class="strength-label" style:color={strength_color}>{strength_label}</span>
+			</div>
+		{/if}
 
-	<!-- The helper text below the input field - to show hints and error messages -->
-	{#if (maxlength && isFinite(maxlength)) || hint || (canShowError && errorMessage)}
-		<div class="input-details">
-			<span id={id + '-error'}>{errorMessage || hint || ''}</span>
-			{#if maxlength && isFinite(maxlength) && elValue}
-				<span class="counter">{elValue.length} / {maxlength}</span>
-			{/if}
-		</div>
+		<!-- Footer row: error, helper, counter -->
+		{#if has_error || helper || (showCounter && maxlength)}
+			<div class="input-footer">
+				{#if has_error && error_message}
+					<span class="input-error" id="{id}-error" role="alert">{error_message}</span>
+				{:else if helper}
+					<span class="input-helper" id="{id}-helper">{helper}</span>
+				{:else}
+					<span></span>
+				{/if}
+
+				{#if showCounter && maxlength}
+					<span class="input-counter" class:counter-warning={counter_state === 'warning'} class:counter-error={counter_state === 'error'}>
+						{value_length}/{maxlength}
+					</span>
+				{/if}
+			</div>
+		{/if}
+
+		<!-- Autocomplete dropdown -->
+		{#if has_autocomplete}
+			<Popover
+				refElement={wrapper_element}
+				bind:opened={ac_open}
+				openOnClick={false}
+				arrow={false}
+				placement="bottom"
+				closeOnOutsideClick
+				closeOnEscapeKey
+				closeOnInsideClick={false}
+				disableInitialFocus>
+
+				<div
+					class="ac-dropdown"
+					bind:this={dropdown_element}
+					role="listbox"
+					id="{id}-listbox">
+
+					{#if ac_loading}
+						<div class="ac-loading">
+							<span class="ac-spinner" aria-hidden="true"></span>
+							Loading...
+						</div>
+					{:else if ac_options.length === 0}
+						<div class="ac-empty">No results</div>
+					{:else}
+						{#each ac_options as opt, i (opt.value)}
+							<!-- svelte-ignore a11y_click_events_have_key_events -->
+							<div
+								id="{id}-option-{i}"
+								class="ac-option"
+								class:highlighted={ac_highlighted === i}
+								class:disabled={opt.disabled}
+								role="option"
+								tabindex={-1}
+								aria-selected={value === opt.value}
+								aria-disabled={opt.disabled || undefined}
+								onpointerdown={(e) => e.preventDefault()}
+								onclick={() => selectAutocompleteOption(opt)}
+								onpointerenter={() => { if (!opt.disabled) ac_highlighted = i; }}>
+								{#if option_snippet}
+									{@render option_snippet(opt)}
+								{:else}
+									<span class="ac-option-content">
+										<span class="ac-option-label">{@html highlightMatch(opt.label)}</span>
+										{#if opt.description}
+											<span class="ac-option-desc">{opt.description}</span>
+										{/if}
+									</span>
+								{/if}
+							</div>
+						{/each}
+					{/if}
+				</div>
+			</Popover>
+		{/if}
 	{/if}
 </div>
 
-<!-- The panel of autocomplete suggestions that shows when focused -->
-{#if options}
-	<Portal>
-		{#if autocompleteShown}
-			<div
-				id={id + '-autocomplete'}
-				class="autocomplete"
-				role="listbox"
-				data-popover-index={popoverIndex}
-				style="opacity: 0; transform: translateZ(0) scale(1, 0);"
-				bind:this={autocompleteElement}
-				out:panelTransitionOut>
-				{#each options as item, i (item)}
-					<div
-						class="autocomplete-item"
-						role="option"
-						tabindex="-1"
-						use:ripple
-						onpointerdown={(e) => e.preventDefault()}
-						onclick={() => onAutocompleteClick(item, i)}
-						onkeyup={() => {}}
-						aria-selected={autocompleteIndex === i}
-						class:active={autocompleteIndex === i}>
-						{#if optionsDisplay}
-							{@render optionsDisplay(item, i)}
-						{:else if toDisplayString}
-							{toDisplayString(item)}
-						{:else if type === 'date' || type === 'datetime'}
-							{@const date = new Date(item)}
-							{date.toLocaleDateString(undefined, { dateStyle: 'medium' })}
-							{#if type === 'datetime'}
-								{date.toLocaleTimeString(undefined, { timeStyle: 'short' })}
-							{/if}
-						{:else if type === 'time'}
-							{@const date = new Date(item)}
-							{date.toLocaleTimeString(undefined, {
-								timeZone: 'UTC',
-								timeStyle: 'short',
-							})}
-						{:else}
-							{item}
-						{/if}
-					</div>
-				{/each}
-			</div>
-		{/if}
-	</Portal>
+<!-- Hidden native input for form submission (non-textarea, non-file types) -->
+{#if name && !is_textarea && !is_file && !multiple}
+	<input type="hidden" {name} value={value ?? ''} />
+{/if}
+{#if name && multiple && Array.isArray(value)}
+	{#each value as v (v)}
+		<input type="hidden" {name} value={v} />
+	{/each}
 {/if}
 
+{#snippet iconRender(IconComponent: Component)}
+	<IconComponent />
+{/snippet}
+
 <style>
-	/** The outer most container */
-	.input {
-		--label-font-size: 0.8em;
-		--label-margin: 0.4em;
-		flex: 1 1 auto;
-		font-size: 1em;
-		letter-spacing: normal;
-		max-width: 100%;
-		text-align: left;
-		--height: 3.5em;
+	/* ================================================================== */
+	/*  ROOT                                                               */
+	/* ================================================================== */
 
-		&.dense {
-			--height: 2.5em;
-			input,
-			textarea {
-				padding: 0.25em 0.75em;
-			}
-		}
-		&.comfortable {
-			--height: 4em;
-			input,
-			textarea {
-				padding: 0 1.5em;
-			}
-		}
+	.ds-input {
+		--_height: var(--input-height, 36px);
+		--_font: var(--input-font, 15px);
+		--_icon-size: var(--input-icon-size, 16px);
+		--_border: var(--color-border, hsl(0 0% 80%));
+		--_border-focus: var(--color-action, hsl(220 70% 55%));
+		--_border-error: var(--color-error, #d32f2f);
+		--_bg: light-dark(white, var(--color-surface, hsl(0 0% 10%)));
+		--_text: var(--color-text, inherit);
+		--_text-muted: var(--color-text-muted, hsl(0 0% 55%));
+		--_focus-ring: var(--color-focus-ring, color-mix(in oklch, var(--color-action, hsl(220 70% 55%)) 20%, transparent));
+		--_radius: var(--radius-md, 6px);
+		--_duration: var(--duration-fast, 150ms);
+		--_ease: var(--ease-default, ease);
 
-		input,
-		textarea {
-			color: var(--color-text);
-
-			&:invalid {
-				box-shadow: none;
-			}
-
-			&:focus,
-			&:active {
-				outline: none;
-			}
-			&::placeholder {
-				color: transparent;
-			}
-		}
-
-		&.disabled {
-			cursor: not-allowed;
-			color: var(--color-text-disabled);
-
-			input,
-			textarea {
-				cursor: not-allowed;
-				color: var(--color-text-disabled);
-			}
-
-			label {
-				cursor: not-allowed;
-				color: var(--color-text-disabled);
-			}
-		}
-
-		&.input-inner.has-label {
-			input,
-			textarea {
-				&::placeholder {
-					color: transparent;
-				}
-			}
-		}
-
-		&:not(.outlined) {
-			input,
-			textarea {
-				&::placeholder {
-					color: var(--color-text-disabled);
-				}
-			}
-			.input-inner {
-				&::before {
-					display: none;
-				}
-			}
-			.input-box {
-				> label {
-					border: none !important;
-					&::before,
-					&::after {
-						border: none !important;
-					}
-				}
-			}
-		}
-	}
-
-	/** The parent of the .input-inner div - used for flex */
-	.input-outer {
-		border-radius: inherit;
-		align-items: center;
-		color: inherit;
-		display: flex;
 		position: relative;
 		width: 100%;
-		margin-bottom: var(--label-margin);
-		z-index: 1;
+		font-size: var(--_font);
 	}
 
-	/** Information below the main input field */
-	.input-details {
-		color: var(--color-text-disabled);
+	.ds-input.disabled {
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	.ds-input.dense .input-wrapper {
+		padding: 0 0.5rem;
+	}
+	.ds-input.comfortable .input-wrapper {
+		padding: 0 1rem;
+	}
+
+	/* ================================================================== */
+	/*  SKELETON                                                           */
+	/* ================================================================== */
+
+	.input-skeleton {
 		display: flex;
-		justify-content: space-between;
-		flex: 1 0 auto;
-		max-width: 100%;
-		font-size: 0.75em;
-		overflow: hidden;
-		margin-top: calc(-1 * var(--label-margin));
-		margin-bottom: var(--label-margin);
-
-		span {
-			flex-grow: 1;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-			padding: 0.25em 0.5em 0;
-		}
-		.counter {
-			flex-grow: 0;
-			flex-shrink: 0;
-		}
+		flex-direction: column;
+		gap: 0.375rem;
 	}
 
-	/** The div containing the input, prepend, append elements*/
-	.input-inner {
+	.skeleton-label {
+		width: 30%;
+		height: 0.75em;
+		border-radius: var(--radius-sm, 4px);
+		background: var(--color-bg-muted, hsl(0 0% 90%));
+		animation: input-skeleton-pulse 1.5s ease-in-out infinite;
+	}
+
+	.skeleton-field {
 		width: 100%;
-		color: inherit;
-		caret-color: currentColor;
+		height: var(--_height);
+		border-radius: var(--_radius);
+		background: var(--color-bg-muted, hsl(0 0% 90%));
+		animation: input-skeleton-pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes input-skeleton-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.5; }
+	}
+
+	/* ================================================================== */
+	/*  WRAPPER                                                            */
+	/* ================================================================== */
+
+	.input-wrapper {
+		position: relative;
 		display: flex;
 		align-items: center;
-		min-height: calc(var(--height) + var(--label-margin));
-		border-radius: var(--radius);
-
-		> :global(*) {
-			margin-top: var(--label-margin);
-		}
-
-		&.loading {
-			--loading-size: 2rem;
-			&:global(::after) {
-				top: calc(50% - (var(--loading-size) / 2) + 0.2em);
-				left: unset;
-				right: 0.5rem;
-			}
-		}
-
-		&.rounded {
-			--radius: calc((var(--height) / 2) + var(--label-margin));
-			.input-box > label {
-				&::before {
-					transition:
-						border-color 0.1s,
-						margin-right 0.2s,
-						width 0.3s;
-				}
-				&::after {
-					transition:
-						border-color 0.1s,
-						margin-right 0.2s,
-						width 0.3s;
-				}
-			}
-			&:focus-within:not(:hover) {
-				.input-box > label {
-					&::after,
-					&::before {
-						transition:
-							border-color 0.2s,
-							margin-right 0.2s,
-							width 0.3s;
-					}
-				}
-			}
-		}
-
-		&::before {
-			border-radius: inherit;
-			width: inherit;
-			bottom: -1px;
-			content: '';
-			left: 0;
-			position: absolute;
-			pointer-events: none;
-			border-color: var(--color-outline);
-			border-style: solid;
-			top: var(--label-margin);
-			border-width: 1px;
-			box-sizing: border-box;
-			transition: border-color 0.1s;
-		}
-
-		& > .prepend {
-			min-width: 3em;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-		}
-		& > .prepend ~ .input-box {
-			> input:not(:focus):placeholder-shown + label::before,
-			> textarea:not(:focus):placeholder-shown + label::before {
-				width: 3em;
-				transition:
-					margin-right 0.2s cubic-bezier(0, 0.54, 0.47, 1),
-					width 0.2s cubic-bezier(0, 0.54, 0.47, 1);
-			}
-		}
-		& > :global([slot='append']) {
-			min-width: 3em;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-		}
+		gap: 0.5rem;
+		min-height: var(--_height);
+		padding: 0 0.75rem;
+		border: 1px solid var(--_border);
+		border-radius: var(--_radius);
+		background: var(--_bg);
+		transition:
+			border-color var(--_duration) var(--_ease),
+			box-shadow var(--_duration) var(--_ease);
+		cursor: text;
 	}
 
-	/** Change the colors of the input when hovered or errored */
-	.input-inner:hover {
-		.input-box > label {
-			color: currentColor;
-		}
-		&::before {
-			border-color: currentColor;
-		}
-		&.has-label {
-			&::before {
-				border-top-color: transparent;
-			}
-			label {
-				border-color: currentColor;
-			}
-		}
-		input:not(:placeholder-shown) + label,
-		textarea:not(:placeholder-shown) + label,
-		.input-box.has-chips > label {
-			&::before,
-			&::after {
-				border-top-color: currentColor;
-			}
-		}
-	}
-	.input.error {
-		color: var(--color-error);
-		--color-outline: var(--color-error);
-		--color-text-disabled: var(--color-error);
-		.input-inner:hover,
-		&:focus-within {
-			color: var(--color-error-active);
-		}
-		.input-inner:hover,
-		&:focus-within .input-inner {
-			&::before {
-				border-color: var(--color-error-active);
-			}
-			&.has-label {
-				&::before {
-					border-top-color: transparent;
-				}
-			}
-		}
+	.ds-input.is-textarea .input-wrapper {
+		align-items: flex-start;
+		min-height: auto;
 	}
 
-	/** The element that contains the input/label elements */
-	.input-box {
-		display: flex;
-		flex-grow: 1;
-		flex-wrap: wrap;
+	.input-wrapper.focused {
+		border-color: var(--_border-focus);
+		box-shadow: 0 0 0 2px var(--_focus-ring);
+	}
+
+	.input-wrapper.has-error {
+		border-color: var(--_border-error);
+		animation: input-shake 300ms ease;
+	}
+
+	.input-wrapper.has-error.focused {
+		box-shadow: 0 0 0 2px color-mix(in oklch, var(--_border-error) 20%, transparent);
+	}
+
+	@keyframes input-shake {
+		0%, 100% { transform: translateX(0); }
+		20% { transform: translateX(-4px); }
+		40% { transform: translateX(4px); }
+		60% { transform: translateX(-2px); }
+		80% { transform: translateX(2px); }
+	}
+
+	/* ================================================================== */
+	/*  INPUT FIELD                                                        */
+	/* ================================================================== */
+
+	.input-field {
+		flex: 1;
+		min-width: 0;
+		border: none;
+		outline: none;
+		background: transparent;
+		font: inherit;
+		font-size: var(--_font);
+		color: var(--_text);
+		padding: 0;
+		height: var(--_height);
+		line-height: var(--_height);
+	}
+
+	.input-field::placeholder {
+		color: var(--_text-muted);
+		opacity: 0.7;
+	}
+
+	/* With floating label, shift the input down slightly */
+	.ds-input.has-label .input-field {
+		padding-top: 0.625em;
+	}
+
+	.ds-input.has-label.ds-input-size-0 .input-field {
+		padding-top: 0.5em;
+	}
+
+	/* Textarea specifics */
+	textarea.input-field {
+		height: auto;
+		line-height: 1.5;
+		resize: vertical;
+		padding-top: 0.75rem;
+	}
+
+	.ds-input.has-label textarea.input-field {
+		padding-top: 1.25rem;
+	}
+
+	/* Number: hide native spinner */
+	input[type="number"].input-field {
+		appearance: textfield;
+		-moz-appearance: textfield;
+	}
+	input[type="number"].input-field::-webkit-outer-spin-button,
+	input[type="number"].input-field::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+
+	/* Search: hide native clear */
+	input[type="search"].input-field::-webkit-search-cancel-button {
+		-webkit-appearance: none;
+	}
+
+	/* ================================================================== */
+	/*  FLOATING LABEL                                                     */
+	/* ================================================================== */
+
+	.input-label {
+		position: absolute;
+		left: 0.75rem;
+		top: 50%;
+		transform: translateY(-50%);
+		font-size: var(--_font);
+		color: var(--_text-muted);
+		pointer-events: none;
+		transition:
+			top 200ms var(--_ease),
+			font-size 200ms var(--_ease),
+			color var(--_duration) var(--_ease);
+		white-space: nowrap;
 		overflow: hidden;
-		position: inherit !important; // overwrite the autoAnimate 'position: relative' styles
-		align-items: center;
-		z-index: 1;
-
-		// Animate the label when the input is focused (but only when the input is empty)
-		&:not(.has-chips) {
-			> input:placeholder-shown,
-			> textarea:placeholder-shown {
-				+ label {
-					transition:
-						border-color 0.1s,
-						color 0.1s,
-						top 0.2s cubic-bezier(0, 0.54, 0.47, 1),
-						font-size 0.2s,
-						line-height 0.2s;
-					&::before {
-						transition:
-							border-color 0.1s,
-							margin-right 0.2s,
-							width 0.3s;
-					}
-				}
-			}
-		}
-
-		> label {
-			position: absolute;
-			text-overflow: ellipsis;
-			transform-origin: top left;
-			top: var(--label-margin);
-			left: 0;
-			display: flex;
-			width: 100%;
-			min-height: calc(100% - var(--label-margin));
-			max-height: 100%;
-			max-width: 100%;
-			line-height: calc(var(--height) - (var(--label-margin) / 2));
-			height: auto;
-			padding: 0;
-			transform: none;
-			cursor: text;
-			overflow: visible;
-			font-size: 1em;
-			border-top: solid 1px var(--color-outline);
-			border-radius: var(--radius);
-			color: var(--color-text-disabled);
-			.tooltip-icon {
-				line-height: 0px;
-				margin: -0.5em 0 0 0.5em;
-				cursor: default;
-				display: none;
-			}
-			&::before,
-			&::after {
-				content: '';
-				display: block;
-				box-sizing: border-box;
-				min-width: max(var(--radius), 1em);
-				width: 0;
-				height: var(--radius);
-				pointer-events: none;
-				border-top: solid 1px transparent;
-				margin-top: 0.1em;
-			}
-			&::before {
-				margin-right: 0;
-				border-radius: var(--radius) 0;
-				border-left: solid 1px transparent;
-				border-bottom: solid 1px transparent;
-			}
-			&::after {
-				flex-grow: 1;
-				margin-left: 4px;
-				border-radius: 0 var(--radius);
-				border-right: solid 1px transparent;
-				border-bottom: solid 1px transparent;
-			}
-		}
-
-		input,
-		textarea {
-			caret-color: inherit;
-			flex: 1 1 auto;
-			line-height: 1em;
-			padding: 0 0 0 1em;
-			max-width: 100%;
-			min-width: 0;
-			width: 100%;
-			background-color: transparent;
-			border-style: none;
-			box-shadow: none;
-			z-index: 1;
-		}
-		textarea {
-			padding: 1em;
-			line-height: 1.5em;
-			overflow-x: hidden;
-			overflow-y: auto;
-		}
-		> input[type='date'],
-		> input[type='datetime-local'],
-		> input[type='time'] {
-			&::-webkit-calendar-picker-indicator {
-				display: none;
-				opacity: 0;
-			}
-		}
-	}
-	.prepend + .input-box {
-		input,
-		textarea {
-			padding-left: 0;
-		}
+		text-overflow: ellipsis;
+		max-width: calc(100% - 1.5rem);
+		line-height: 1;
 	}
 
-	/** Overwrites for the input label positioning and the active state of the input */
-	.input-inner {
-		&.has-label {
-			&:focus-within::before,
-			&:before {
-				border-top-color: transparent;
-			}
-		}
-
-		&:focus-within {
-			&::after {
-				transform: scale(1);
-			}
-			&::before {
-				border-color: currentColor;
-				border-width: 2px;
-			}
-			.input-box > label {
-				color: inherit;
-				// top: calc(var(--label-margin) + 2px);
-			}
-			.input-box {
-				&:not(.has-chips) > input:not(:focus):placeholder-shown,
-				&:not(.has-chips) > textarea:not(:focus):placeholder-shown {
-					+ label {
-						// The input is empty (so the placeholder text is in the down position) and a picker button is focused
-						border-top: solid 2px currentColor;
-					}
-				}
-				> input:focus,
-				> textarea:focus,
-				> input:not(:placeholder-shown),
-				> textarea:not(:placeholder-shown) {
-					+ label {
-						// The top border when the input is focused and there is placeholder text
-						&::after,
-						&::before {
-							border-top: solid 2px currentColor;
-						}
-					}
-				}
-				&.has-chips > input,
-				&.has-chips > textarea {
-					+ label {
-						border-top-color: transparent;
-						&::after,
-						&::before {
-							border-top: solid 2px currentColor;
-						}
-					}
-				}
-			}
-		}
+	.ds-input.has-icon .input-label {
+		left: calc(0.75rem + var(--_icon-size) + 0.5rem);
 	}
-	.input-box {
-		input:not(:placeholder-shown) + label,
-		textarea:not(:placeholder-shown) + label,
-		&.has-chips > label {
-			&::before,
-			&::after {
-				// The top border when there is a value in the input and the input is not focused
-				// The placeholder text shows up at the top
-				border-top: solid 1px var(--color-outline);
-			}
-		}
-		input:focus + label,
-		textarea:focus + label,
-		input:not(:placeholder-shown) + label,
-		textarea:not(:placeholder-shown) + label,
-		&.has-chips > label {
-			line-height: 0px !important;
-			font-size: var(--label-font-size);
-			border-top: transparent;
-			.tooltip-icon {
-				@media (min-width: 768px) {
-					display: inline-block;
-				}
-			}
-			&::before {
-				margin-right: 4px;
-			}
-		}
+	.ds-input.has-prefix .input-label {
+		left: auto;
 	}
 
-	button.clear {
-		z-index: 1;
-		min-height: var(--height);
-		min-width: var(--height);
+	.ds-input.is-textarea .input-label {
+		top: 0.875rem;
+		transform: none;
 	}
 
-	/** The container for the button that launches the browser native input picker (like color/date/etc) */
-	.picker {
-		z-index: 1;
-		flex-shrink: 0;
-		margin-left: 0.1em;
-		margin-right: 0.1em;
+	.input-label.floated {
+		top: 0.25rem;
+		font-size: calc(var(--_font) * 0.7);
+		transform: none;
+	}
+
+	.ds-input.is-textarea .input-label.floated {
+		top: 0.25rem;
+	}
+
+	.ds-input-size-0 .input-label.floated {
+		top: 0.125rem;
+		font-size: calc(var(--_font) * 0.75);
+	}
+
+	.ds-input.focused .input-label {
+		color: var(--_border-focus);
+	}
+
+	.ds-input.has-error .input-label {
+		color: var(--_border-error);
+	}
+
+	.required-mark {
+		color: var(--_border-error);
+	}
+
+	/* ================================================================== */
+	/*  ICONS & PREFIX / SUFFIX                                            */
+	/* ================================================================== */
+
+	.input-icon {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		aspect-ratio: 1 / 1;
-		min-height: var(--height);
-		position: relative;
-		color: inherit;
-
-		input {
-			position: absolute;
-			left: 0;
-			right: 0;
-			width: 100%;
-			min-height: var(--height);
-			opacity: 0;
-			cursor: pointer;
-			outline: none;
-			border: none;
-			&[type='color'] + label {
-				border: none;
-				outline: none;
-				padding: 10px;
-				width: 100%;
-				height: 100%;
-				border-radius: var(--radius-round);
-				&::after {
-					content: '';
-					background-color: var(--picker-color, 'black');
-					border-radius: var(--radius-round);
-					display: block;
-					width: 100%;
-					height: 100%;
-					outline: solid 1px currentColor;
-				}
-			}
-			&[type='color']:hover,
-			&[type='color']:focus {
-				+ label {
-					outline: solid 2px currentColor;
-					outline-offset: -8px;
-				}
-			}
-			&::-webkit-calendar-picker-indicator {
-				position: absolute;
-				left: 0;
-				right: 0;
-				width: 100%;
-				height: 100%;
-				margin: 0;
-				padding: 0;
-				cursor: pointer;
-			}
-		}
-	}
-	button.picker {
-		background-color: transparent;
-		color: inherit;
-		border-radius: 0;
-		position: relative;
-		border: none;
-		outline: none;
-		box-shadow: none;
-		&::after {
-			content: '';
-			background-color: var(--color-bg);
-			width: calc(100% - var(--label-font-size));
-			height: calc(100% - var(--label-font-size));
-			position: absolute;
-			top: 0.4em;
-			left: 0.4em;
-			z-index: -1;
-			pointer-events: none;
-			border-radius: 100%;
-			border: solid 1px transparent;
-			opacity: 0;
-		}
-		&:focus,
-		&:hover {
-			&::after {
-				opacity: 1;
-			}
-		}
-		&:focus-visible {
-			&::after {
-				opacity: 1;
-				border-color: currentColor;
-			}
-		}
+		color: var(--_text-muted);
+		flex-shrink: 0;
+		width: var(--_icon-size);
+		height: var(--_icon-size);
 	}
 
-	/** The styles for the 'chips' (selected items if 'multiple' is true) */
-	.input-box {
-		&.chips {
-			gap: 0.5em;
-			padding: calc(1em + 1px);
-			padding-top: calc(1em + var(--label-margin) + 1px);
-			margin: 0;
-			&:focus,
-			&:focus-visible {
-				outline: none;
-				border: none;
-				box-shadow: none;
-			}
-			&:focus-visible {
-				.chip.active {
-					background-color: var(--color-bg-4);
-					color: var(--color-text-active);
-				}
-			}
-			input,
-			textarea {
-				width: 11em;
-				max-width: 100%;
-				min-width: 25%;
-				flex-grow: 1;
-				padding-left: 0;
-			}
-			&.has-chips:focus-within {
-				input,
-				textarea {
-					&::placeholder {
-						color: var(--color-text-disabled);
-					}
-				}
-			}
-		}
-		.chip {
-			position: relative;
-			display: flex;
-			align-items: center;
-			background-color: var(--color-bg-3);
-			border-radius: var(--radius-round);
-			color: var(--color-text);
-			border: none;
-			outline: none;
-			padding: 0.25em 0.5em 0.25em 1em;
-			font-size: 0.875em;
-			max-width: 100%;
-			z-index: 2;
-			height: 2em;
-			transition: background-color 100ms;
-			cursor: pointer;
-
-			figure {
-				height: 2em;
-				width: 2em;
-				display: block;
-				border-radius: 100%;
-				margin-left: -1em;
-				margin-right: 0.25em;
-				border: solid 1px var(--color-bg-2);
-			}
-
-			span {
-				flex: 1;
-				text-overflow: ellipsis;
-				overflow: hidden;
-				white-space: nowrap;
-				margin-right: 0.5em;
-			}
-			&:disabled {
-				opacity: 0.75;
-				cursor: not-allowed;
-			}
-			&:not(:disabled):hover {
-				background-color: var(--color-bg-4);
-				color: var(--color-text-active);
-			}
-		}
-	}
-	.input.dense {
-		.input-box.chips {
-			padding: 0.5em 1em 0.5em;
-			padding-top: calc(0.75em + var(--label-margin));
-			gap: 0.5em;
-			input,
-			textarea {
-				padding: 0;
-			}
-			.chip {
-				padding: 0.15em 0.25em 0.15em 0.5em;
-				height: 1.75em;
-				span {
-					margin-right: 0.25em;
-				}
-			}
-		}
+	.search-icon {
+		order: -1;
 	}
 
-	/** The styles of the button for when the input is a file input */
-	.file-picker {
+	.input-prefix,
+	.input-suffix {
+		flex-shrink: 0;
+		color: var(--_text-muted);
+		font-size: 0.9em;
+		user-select: none;
+		white-space: nowrap;
+	}
+
+	.input-suffix {
+		order: 1;
+	}
+
+	/* ================================================================== */
+	/*  ACTION BUTTONS (clear, toggle, etc.)                               */
+	/* ================================================================== */
+
+	.input-action-btn {
 		display: flex;
 		align-items: center;
-		.button {
-			display: block;
-			border-radius: var(--radius);
-			background-color: var(--color-action);
-			color: var(--color-action-text);
-			outline: none;
-			border: none;
-			margin: 0 1em;
-			padding: 0.25em 0.5em;
-			font-size: 0.9em;
-			&:hover {
-				background-color: var(--color-action);
-				color: var(--color-action-text-active);
-			}
-		}
-	}
-	.input-box.chips {
-		.file-picker {
-			.button {
-				margin: 0;
-			}
-		}
-	}
-	input[type='file'] {
-		opacity: 0;
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
+		justify-content: center;
+		padding: 0.125rem;
+		border: none;
+		background: transparent;
+		color: var(--_text-muted);
 		cursor: pointer;
-		+ label {
-			cursor: pointer;
-		}
-		&:hover,
-		&:focus {
-			~ .file-picker {
-				.button {
-					background-color: var(--color-action);
-					color: var(--color-action-text-active);
-				}
-			}
-		}
+		border-radius: var(--radius-sm, 4px);
+		flex-shrink: 0;
+		transition: color var(--_duration) var(--_ease), opacity var(--_duration) var(--_ease);
+		opacity: 0.5;
 	}
 
-	.autocomplete {
-		--radius: var(--radius-4);
-		--border-inset: 6px;
-		position: fixed;
-		z-index: var(--layer-5);
-		background-color: var(--color-bg-0);
-		color: var(--color-text);
-		border-radius: var(--radius);
-		overflow-x: hidden;
-		overflow-y: auto;
-		box-shadow: var(--shadow-2);
-		max-height: calc((3.5em * 5) + 16px);
-		scrollbar-color: var(--color-bg-1) transparent;
-		scrollbar-width: thin;
-		margin: 2px 0;
-		&::-webkit-scrollbar {
-			width: 0.5rem;
-		}
-		&::-webkit-scrollbar-track {
-			box-shadow: none;
-			background-color: transparent;
-		}
-		&::-webkit-scrollbar-track-piece:start {
-			margin-top: var(--radius);
-		}
-		&::-webkit-scrollbar-track-piece:end {
-			margin-bottom: var(--radius);
-		}
-		&::-webkit-scrollbar-thumb {
-			background-color: var(--color-action);
-			border-radius: 9999px;
-			min-height: 2rem;
-			&:hover {
-				background-color: var(--color-action-active);
-				cursor: pointer;
-			}
-		}
+	.input-action-btn:hover {
+		opacity: 1;
+		color: var(--_text);
+	}
 
-		.autocomplete-item {
-			display: flex;
-			align-items: center;
-			position: relative;
-			cursor: pointer;
-			height: 3.5em;
-			padding: 1.5em;
-			z-index: 1;
-			:global(> .ripple) {
-				inset: 2px var(--border-inset) !important;
-				border-radius: calc(var(--radius) - var(--border-inset)) !important;
-			}
-			&:first-child {
-				padding-top: calc(var(--border-inset, 0px) + 1.5em - 2px);
-				&::before {
-					top: var(--border-inset);
-				}
-				:global(> .ripple) {
-					top: var(--border-inset) !important;
-				}
-			}
-			&:last-child {
-				padding-bottom: calc(var(--border-inset, 0px) + 1.5em - 2px);
-				&::before {
-					bottom: var(--border-inset);
-				}
-				:global(> .ripple) {
-					bottom: var(--border-inset) !important;
-				}
-			}
-			&::before {
-				display: block;
-				position: absolute;
-				top: 2px;
-				bottom: 2px;
-				left: var(--border-inset);
-				right: var(--border-inset);
-				border-radius: calc(var(--radius) - var(--border-inset));
-				background-color: var(--color-bg-1);
-				z-index: -1;
-			}
-			&:hover,
-			&.active {
-				color: var(--color-text-active);
-				&::before {
-					content: '';
-				}
-			}
-			&:hover {
-				transition:
-					background-color 100ms,
-					color 100ms;
-			}
-			:global(small) {
-				color: var(--color-text-disabled);
-				font-size: var(--font-size-0);
-				margin-left: 0.5em;
-				display: inline-block;
-				overflow: hidden;
-				text-overflow: ellipsis;
-				white-space: nowrap;
-			}
-			:global(strong) {
-				font-weight: bold;
-			}
-			:global(p) {
-				flex-shrink: 0;
-			}
-		}
+	.clear-btn {
+		opacity: 0;
+		transition: opacity var(--_duration) var(--_ease);
+	}
+	.input-wrapper:hover .clear-btn,
+	.input-wrapper.focused .clear-btn {
+		opacity: 0.5;
+	}
+	.input-wrapper:hover .clear-btn:hover,
+	.input-wrapper.focused .clear-btn:hover {
+		opacity: 1;
+	}
+
+	/* ================================================================== */
+	/*  NUMBER INCREMENT / DECREMENT                                       */
+	/* ================================================================== */
+
+	.number-buttons {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		flex-shrink: 0;
+		margin: -0.25rem 0;
+	}
+
+	.number-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		width: 1.25rem;
+		height: calc(var(--_height) / 2 - 2px);
+		border: none;
+		background: transparent;
+		color: var(--_text-muted);
+		cursor: pointer;
+		border-radius: var(--radius-sm, 4px);
+		transition: background var(--_duration) var(--_ease), color var(--_duration) var(--_ease);
+	}
+
+	.number-btn:hover:not(:disabled) {
+		background: light-dark(var(--color-bg-muted, hsl(0 0% 93%)), var(--color-bg-muted, hsl(0 0% 20%)));
+		color: var(--_text);
+	}
+
+	.number-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	/* ================================================================== */
+	/*  COLOR INPUT                                                        */
+	/* ================================================================== */
+
+	.color-swatch {
+		width: 1.25rem;
+		height: 1.25rem;
+		border-radius: var(--radius-sm, 4px);
+		border: 1px solid var(--_border);
+		flex-shrink: 0;
+	}
+
+	.color-native {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		border: 0;
+		padding: 0;
+		margin: -1px;
+	}
+
+	/* ================================================================== */
+	/*  FILE INPUT                                                         */
+	/* ================================================================== */
+
+	.file-native {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		border: 0;
+		padding: 0;
+		margin: -1px;
+	}
+
+	.file-display {
+		cursor: pointer;
+		text-align: left;
+		font: inherit;
+	}
+
+	.file-placeholder {
+		color: var(--_text-muted);
+		opacity: 0.7;
+	}
+
+	.file-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	/* ================================================================== */
+	/*  CHIPS (Multiple mode)                                              */
+	/* ================================================================== */
+
+	.chips-container {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.25rem;
+		flex: 1;
+		min-width: 0;
+		padding: 0.25rem 0;
+	}
+
+	.ds-input.has-label .chips-container {
+		padding-top: 0.875rem;
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.125rem;
+		padding: 0.0625rem 0.375rem;
+		border-radius: var(--radius-sm, 4px);
+		background: light-dark(var(--color-bg-muted, hsl(0 0% 91%)), var(--color-bg-muted, hsl(0 0% 22%)));
+		font-size: 0.85em;
+		max-width: 100%;
+		line-height: 1.5;
+	}
+
+	.chip-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.chip-remove {
+		display: flex;
+		align-items: center;
+		padding: 0;
+		border: none;
+		background: none;
+		color: inherit;
+		cursor: pointer;
+		opacity: 0.5;
+		flex-shrink: 0;
+		transition: opacity var(--_duration) var(--_ease);
+	}
+
+	.chip-remove:hover {
+		opacity: 1;
+	}
+
+	.chip-input {
+		flex: 1;
+		min-width: 4rem;
+		border: none;
+		outline: none;
+		background: transparent;
+		font: inherit;
+		font-size: var(--_font);
+		color: var(--_text);
+		padding: 0;
+		height: 1.75em;
+	}
+
+	.chip-input::placeholder {
+		color: var(--_text-muted);
+		opacity: 0.7;
+	}
+
+	/* ================================================================== */
+	/*  PASSWORD STRENGTH                                                  */
+	/* ================================================================== */
+
+	.strength-meter {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 0.375rem;
+	}
+
+	.strength-track {
+		display: flex;
+		gap: 3px;
+		flex: 1;
+	}
+
+	.strength-segment {
+		height: 3px;
+		flex: 1;
+		border-radius: 2px;
+		background: var(--_border);
+		transition: background 300ms var(--_ease);
+	}
+
+	.strength-label {
+		font-size: 0.75em;
+		white-space: nowrap;
+		transition: color 300ms var(--_ease);
+	}
+
+	/* ================================================================== */
+	/*  FOOTER (error, helper, counter)                                    */
+	/* ================================================================== */
+
+	.input-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 0.5rem;
+		margin-top: 0.25rem;
+		min-height: 1.25em;
+	}
+
+	.input-error {
+		font-size: 0.8em;
+		color: var(--_border-error);
+		animation: input-error-in 200ms var(--_ease);
+	}
+
+	@keyframes input-error-in {
+		from { opacity: 0; transform: translateY(-4px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	.input-helper {
+		font-size: 0.8em;
+		color: var(--_text-muted);
+	}
+
+	.input-counter {
+		font-size: 0.75em;
+		color: var(--_text-muted);
+		margin-left: auto;
+		font-variant-numeric: tabular-nums;
+		transition: color var(--_duration) var(--_ease);
+	}
+
+	.input-counter.counter-warning {
+		color: var(--color-warning, #f59e0b);
+	}
+
+	.input-counter.counter-error {
+		color: var(--_border-error);
+		font-weight: 600;
+	}
+
+	/* ================================================================== */
+	/*  AUTOCOMPLETE DROPDOWN                                              */
+	/* ================================================================== */
+
+	.ac-dropdown {
+		min-width: 100%;
+		max-height: 240px;
+		overflow-y: auto;
+		padding: 0.25rem;
+	}
+
+	.ac-option {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm, 4px);
+		cursor: pointer;
+		transition: background 100ms;
+		user-select: none;
+	}
+
+	.ac-option:hover,
+	.ac-option.highlighted {
+		background: light-dark(var(--color-bg-subtle, hsl(0 0% 96%)), var(--color-bg-subtle, hsl(0 0% 18%)));
+	}
+
+	.ac-option.disabled {
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	.ac-option-content {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.ac-option-label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ac-option-desc {
+		font-size: 0.8em;
+		color: var(--_text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ac-loading {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		color: var(--_text-muted);
+		font-size: 0.9em;
+	}
+
+	.ac-spinner {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--_border);
+		border-top-color: var(--_border-focus);
+		border-radius: 50%;
+		animation: input-ac-spin 0.6s linear infinite;
+		flex-shrink: 0;
+	}
+
+	@keyframes input-ac-spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.ac-empty {
+		padding: 0.75rem;
+		text-align: center;
+		color: var(--_text-muted);
+		font-size: 0.9em;
+	}
+
+	/* ================================================================== */
+	/*  SIZE OVERRIDES                                                     */
+	/* ================================================================== */
+
+	.ds-input-size-0 .input-wrapper {
+		min-height: 28px;
+		padding: 0 0.5rem;
+		gap: 0.375rem;
+	}
+	.ds-input-size-0 .input-field {
+		height: 28px;
+		line-height: 28px;
+	}
+	.ds-input-size-0 .input-label {
+		left: 0.5rem;
+	}
+
+	.ds-input-size-2 .input-wrapper {
+		min-height: 44px;
+		padding: 0 0.875rem;
+	}
+	.ds-input-size-2 .input-field {
+		height: 44px;
+		line-height: 44px;
+	}
+	.ds-input-size-2 .input-label {
+		left: 0.875rem;
+	}
+
+	.ds-input-size-3 .input-wrapper {
+		min-height: 52px;
+		padding: 0 1rem;
+	}
+	.ds-input-size-3 .input-field {
+		height: 52px;
+		line-height: 52px;
+	}
+	.ds-input-size-3 .input-label {
+		left: 1rem;
+	}
+
+	/* ================================================================== */
+	/*  READONLY                                                           */
+	/* ================================================================== */
+
+	.ds-input.readonly .input-wrapper {
+		background: light-dark(var(--color-bg-muted, hsl(0 0% 96%)), var(--color-bg-muted, hsl(0 0% 14%)));
+		cursor: default;
 	}
 </style>

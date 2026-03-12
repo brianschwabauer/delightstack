@@ -477,6 +477,7 @@
 						<div
 							id={option_id}
 							role="option"
+							tabindex="-1"
 							aria-selected={is_selected}
 							aria-disabled={command.disabled || false}
 							class="command-palette-item"

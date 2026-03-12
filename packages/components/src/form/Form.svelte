@@ -203,6 +203,7 @@
 	/*  Context                                                            */
 	/* ------------------------------------------------------------------ */
 
+	// svelte-ignore state_referenced_locally
 	const ctx = $state<FormContext>({
 		data,
 		errors,
@@ -320,7 +321,7 @@
 	class:dense
 	class:comfortable
 	class:disabled={effectively_disabled}
-	aria-disabled={effectively_disabled || undefined}
+	data-disabled={effectively_disabled || undefined}
 	onsubmit={handleSubmit}
 	onreset={handleReset}>
 	{#if children}

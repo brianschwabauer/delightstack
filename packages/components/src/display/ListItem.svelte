@@ -6,7 +6,6 @@
 	import { backOut, quartOut } from 'svelte/easing';
 	import type { Placement } from '@floating-ui/dom';
 	import Button from './../actions/Button.svelte';
-	import MoreIcon from '~icons/material-symbols/more-vert';
 	import Progress from '../feedback/Progress.svelte';
 
 	const propId = $props.id();
@@ -55,7 +54,7 @@
 		onclick = undefined as
 			| undefined
 			| ((e: MouseEvent) => void)
-			| ((e: MouseEvent) => Promise<any>),
+			| ((e: MouseEvent) => Promise<void>),
 	} = $props();
 
 	let element = $state<HTMLElement | undefined>(undefined);
@@ -179,7 +178,7 @@
 				{popoverCloseOnInsideClick}
 				{popoverPlacement}
 				{menu}>
-				<MoreIcon></MoreIcon>
+				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
 			</Button>
 		{/if}
 	</li>

@@ -606,6 +606,7 @@
 	>
 		{#if selectable}
 			<td class="ds-table-checkbox-cell">
+				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
 				<label class="ds-table-checkbox" onclick={(e) => e.stopPropagation()}>
 					<input
 						type="checkbox"

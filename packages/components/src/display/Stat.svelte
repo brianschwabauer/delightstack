@@ -56,17 +56,17 @@
 
 	const is_numeric = $derived(typeof value === 'number');
 
-	const resolved_trend = $derived<'up' | 'down' | 'neutral'>(() => {
+	const resolved_trend = $derived.by<'up' | 'down' | 'neutral'>(() => {
 		if (trend) return trend;
 		if (change === undefined || change === 0) return 'neutral';
 		return change > 0 ? 'up' : 'down';
-	}());
+	});
 
-	const trend_color = $derived<'success' | 'error' | 'neutral'>(() => {
+	const trend_color = $derived.by<'success' | 'error' | 'neutral'>(() => {
 		if (resolved_trend === 'up') return 'success';
 		if (resolved_trend === 'down') return 'error';
 		return 'neutral';
-	}());
+	});
 
 	function formatChange(val: number): string {
 		const sign = val > 0 ? '+' : '';
@@ -78,13 +78,13 @@
 
 	const change_text = $derived(change !== undefined ? formatChange(change) : '');
 
-	const change_aria_label = $derived(() => {
+	const change_aria_label = $derived.by(() => {
 		if (change === undefined) return '';
 		const direction = resolved_trend === 'up' ? 'increased' : resolved_trend === 'down' ? 'decreased' : 'unchanged';
 		const amount = Math.abs(change).toFixed(1);
 		const suffix = changeLabel ? `, ${changeLabel}` : '';
 		return `${direction} by ${amount} percent${suffix}`;
-	}());
+	});
 </script>
 
 <div

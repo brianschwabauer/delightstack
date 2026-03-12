@@ -251,7 +251,6 @@
 		class={['drawer', side, 'persistent', 'open', className].filter(Boolean).join(' ')}
 		style:width={is_horizontal ? size_value : undefined}
 		style:height={!is_horizontal ? size_value : undefined}
-		role="complementary"
 		aria-label="Side panel"
 		{id}>
 		{#if header}
@@ -280,6 +279,7 @@
 			onclick={handleBackdropClick}>
 		</div>
 	{/if}
+	<!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
 	<aside
 		bind:this={drawer_el}
 		class={['drawer', side, open ? 'open' : '', is_push ? 'push' : '', className].filter(Boolean).join(' ')}

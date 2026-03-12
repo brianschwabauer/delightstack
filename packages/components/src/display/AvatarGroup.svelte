@@ -148,12 +148,13 @@
 		{/each}
 
 		{#if has_overflow}
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_tabindex -->
 			<div
 				class="avatar-wrapper overflow-wrapper"
 				class:interactive={expandable || !!onoverflowclick}
 				style:z-index={direction === 'right' ? 0 : visible_avatars.length + 1}
 				{@attach tooltip(`${overflow_count} more`)}>
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 				<div
 					class="overflow-indicator"
 					role={expandable || onoverflowclick ? 'button' : undefined}

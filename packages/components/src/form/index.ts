@@ -3,6 +3,8 @@ export { default as Fieldset } from './Fieldset.svelte';
 export { default as FileUpload } from './FileUpload.svelte';
 export { default as Form } from './Form.svelte';
 export type { FormContext, StandardSchema } from './Form.svelte';
+export { default as Input } from './Input.svelte';
+export type { InputType, InputOption } from './Input.svelte';
 export { default as Radio, RadioGroup } from './Radio.svelte';
 export type { RadioGroupContext } from './Radio.svelte';
 export { default as Range } from './Range.svelte';

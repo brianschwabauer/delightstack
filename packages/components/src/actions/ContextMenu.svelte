@@ -21,7 +21,7 @@
 			/** Whether this action is disabled or not */
 			disabled?: boolean;
 			/** The icon component to display before the label text */
-			icon?: Component<any>;
+			icon?: Component<Record<string, unknown>>;
 			/** An optional snippet that will be used to render the content of the action (instead of using 'label') */
 			snippet?: Snippet<[ContextMenuOptions & { el: HTMLElement }]>;
 		}>;
