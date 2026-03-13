@@ -349,6 +349,7 @@
 		padding-right: calc(1.5rem + var(--list-pad-x, 0px));
 		padding-left: calc(1.5rem + var(--list-pad-x, 0px) + ((var(--level) - 1) * 1rem));
 		margin: 0;
+		border: none;
 		display: flex;
 		align-items: center;
 		width: max-content;
