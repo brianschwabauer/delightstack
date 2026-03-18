@@ -1,11 +1,14 @@
 /**
- * Design tokens from @delightstack/styles, scoped to component preview areas only.
- * This avoids overriding Starlight's base styles while making the tokens
- * available for the delightstack components rendered inside previews.
+ * Design tokens from @delightstack/styles.
+ *
+ * CSS custom properties are declared on :root so they're available to portaled
+ * elements (CommandPalette, Drawer, Toast, etc.) that get moved to <body>.
+ * Starlight uses --sl-* prefixed variables, so there's no naming collision.
+ *
+ * Direct property declarations (font-family, color) stay scoped to
+ * .preview-area to avoid overriding Starlight's base typography.
  */
-.preview-area {
-	color-scheme: light dark;
-
+:root {
 	--color-dashboard: #616969;
 	--color-primary: #005640;
 	--color-secondary: #005640;
@@ -222,7 +225,10 @@
 	--ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
 	--ease-in-out-back: cubic-bezier(0.68, -0.6, 0.32, 1.6);
 	--ease: var(--ease-in-out-4);
+}
 
+.preview-area {
+	color-scheme: light dark;
 	font-family: var(--font-sans);
 	color: var(--color-text);
 }
