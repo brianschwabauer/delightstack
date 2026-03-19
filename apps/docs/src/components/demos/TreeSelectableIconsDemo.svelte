@@ -1,38 +1,55 @@
 <script>
 	import { Tree } from '@delightstack/components/display';
 
+	function FolderIcon() {
+		return {
+			render: () => {}
+		};
+	}
+
 	const fileTree = [
 		{
-			id: '1',
+			id: 'src',
 			label: 'src',
 			children: [
 				{
-					id: '1-1',
+					id: 'components',
 					label: 'components',
 					children: [
-						{ id: '1-1-1', label: 'Button.svelte' },
-						{ id: '1-1-2', label: 'Modal.svelte' },
+						{ id: 'button', label: 'Button.svelte' },
+						{ id: 'modal', label: 'Modal.svelte' },
 					],
 				},
-				{ id: '1-2', label: 'app.ts' },
+				{ id: 'app', label: 'app.ts' },
 			],
 		},
-		{ id: '2', label: 'package.json' },
+		{ id: 'pkg', label: 'package.json' },
+		{ id: 'readme', label: 'README.md' },
 	];
 
 	let selected = $state([]);
-	let expanded = $state(['1']);
+	let expanded = $state(['src', 'components']);
+
+	const nodeMap = new Map();
+	function indexNodes(nodes) {
+		for (const n of nodes) {
+			nodeMap.set(n.id, n);
+			if (n.children) indexNodes(n.children);
+		}
+	}
+	indexNodes(fileTree);
 </script>
 
 <Tree
 	data={fileTree}
 	selectable
+	multiSelect
 	bind:selected
 	bind:expanded
 />
 
 {#if selected.length > 0}
-	<p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--color-text-secondary);">
-		Selected: {selected.join(', ')}
+	<p style="margin-top: 0.5rem; font-size: 0.875rem; opacity: 0.7;">
+		Selected: {selected.map(id => nodeMap.get(id)?.label ?? id).join(', ')}
 	</p>
 {/if}

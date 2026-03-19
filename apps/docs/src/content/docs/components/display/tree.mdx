@@ -13,7 +13,7 @@ import TreeDragDropDemo from '../../../../components/demos/TreeDragDropDemo.svel
 import TreeLazyLoadDemo from '../../../../components/demos/TreeLazyLoadDemo.svelte';
 import TreeLinesDemo from '../../../../components/demos/TreeLinesDemo.svelte';
 import TreeCustomNodeDemo from '../../../../components/demos/TreeCustomNodeDemo.svelte';
-
+import TreeSkeletonDemo from '../../../../components/demos/TreeSkeletonDemo.svelte';
 
 ## Import
 
@@ -221,9 +221,9 @@ Load children on demand when a node is expanded. A loading spinner replaces the 
 
 ### Skeleton Loading
 
-```svelte
-<Tree skeleton skeletonCount={6} skeletonDepth={2} />
-```
+<ComponentPreview code={`<Tree skeleton skeletonCount={6} skeletonDepth={3} />`}>
+	<TreeSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 

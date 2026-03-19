@@ -1117,8 +1117,11 @@
 		top: 0;
 		bottom: 0.875rem;
 		left: calc(0.625rem + var(--line-offset, 0px));
-		width: 1px;
-		background: light-dark(var(--color-border, #e0e0e0), var(--color-border, #3a3a3a));
+		width: 1.5px;
+		background: light-dark(
+			rgb(from var(--color-text, #000) r g b / 0.15),
+			rgb(from var(--color-text, #fff) r g b / 0.2)
+		);
 	}
 
 	/*

@@ -28,6 +28,7 @@
 
 <Tree
 	data={categories}
+	selectable
 	checkboxes
 	multiSelect
 	bind:selected
@@ -35,7 +36,7 @@
 />
 
 {#if selected.length > 0}
-	<p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--color-text-secondary);">
+	<p style="margin-top: 0.5rem; font-size: 0.875rem; opacity: 0.7;">
 		Checked: {selected.join(', ')}
 	</p>
 {/if}
