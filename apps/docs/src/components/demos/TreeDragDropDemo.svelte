@@ -5,6 +5,7 @@
 		{
 			id: 'documents',
 			label: 'Documents',
+			allowChildren: true,
 			children: [
 				{ id: 'report', label: 'report.pdf' },
 				{ id: 'notes', label: 'notes.txt' },
@@ -13,6 +14,7 @@
 		{
 			id: 'images',
 			label: 'Images',
+			allowChildren: true,
 			children: [
 				{ id: 'photo1', label: 'photo1.png' },
 				{ id: 'photo2', label: 'photo2.jpg' },
@@ -29,15 +31,10 @@
 	}
 </script>
 
-<Tree
-	{data}
-	bind:expanded
-	draggable
-	ondrop={handleDrop}
-/>
+<Tree {data} bind:expanded draggable ondrop={handleDrop} />
 
 {#if lastDrop}
-	<p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--color-text-secondary);">
+	<p style="margin-top: 0.5rem; font-size: 0.875rem; opacity: 0.7;">
 		{lastDrop}
 	</p>
 {/if}

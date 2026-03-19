@@ -5,6 +5,8 @@
 		icon?: import('svelte').Component;
 		children?: TreeNode[];
 		disabled?: boolean;
+		/** Whether this node can accept children via drag-and-drop (defaults to true if node has children array) */
+		allowChildren?: boolean;
 		data?: unknown;
 	}
 
@@ -438,6 +440,7 @@
 	/* ------------------------------------------------------------------ */
 
 	let focused_id = $state<string | null>(null);
+	let keyboard_nav = $state(false);
 	let tree_element: HTMLElement | undefined = $state(undefined);
 
 	function focusNode(node_id: string) {
@@ -454,6 +457,7 @@
 	/* ------------------------------------------------------------------ */
 
 	function handleTreeKeyDown(e: KeyboardEvent) {
+		keyboard_nav = true;
 		const visible = getVisibleNodeOrder();
 		if (visible.length === 0) return;
 
@@ -590,12 +594,19 @@
 		const height = rect.height;
 		const threshold = height / 4;
 
+		const can_have_children = node.allowChildren !== undefined
+			? node.allowChildren
+			: !!node.children;
+
 		if (y < threshold) {
 			drop_position = 'before';
 		} else if (y > height - threshold) {
 			drop_position = 'after';
-		} else {
+		} else if (can_have_children) {
 			drop_position = 'inside';
+		} else {
+			// Can't drop inside a leaf — snap to nearest edge
+			drop_position = y < height / 2 ? 'before' : 'after';
 		}
 	}
 
@@ -768,7 +779,7 @@
 			class="tree-node"
 			class:expanded={node_expanded}
 			class:selected={is_selected}
-			class:focused={is_focused}
+			class:focused={is_focused && keyboard_nav}
 			class:disabled={node.disabled}
 			class:dragged={drag_node_id === node.id}
 			class:drop-before={is_drag_target && drop_position === 'before'}
@@ -784,6 +795,7 @@
 			<div
 				class="node-row"
 				style:padding-left="{(level - 1) * 1.25}rem"
+				onpointerdown={() => { keyboard_nav = false; }}
 				onclick={(e) => {
 					if (selectable) {
 						selectNode(node, e);
