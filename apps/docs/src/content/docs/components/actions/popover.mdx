@@ -34,7 +34,7 @@ import { Popover } from '@delightstack/components';
     Click outside to dismiss.</p>
   </div>
 </Popover>`}>
-  <PopoverDemo client:load />
+  <PopoverDemo client:only="svelte" />
 </ComponentPreview>
 
 ## Examples
@@ -56,7 +56,7 @@ Set `openOnClick` to let the Popover component manage the click toggle automatic
     <p>Click the button again to close.</p>
   </div>
 </Popover>`}>
-	<PopoverClickDemo client:load />
+	<PopoverClickDemo client:only="svelte" />
 </ComponentPreview>
 
 ### Hover Info Popover
@@ -68,7 +68,7 @@ Open on hover with a delay. The hover trapezoid allows safe diagonal mouse movem
 <Popover refElement={triggerRef} openOnHover hoverDelay={200} placement="bottom-start">
   <p style="padding: 0.5rem 1rem;">Helpful tooltip-like info</p>
 </Popover>`}>
-	<PopoverHoverDemo client:load />
+	<PopoverHoverDemo client:only="svelte" />
 </ComponentPreview>
 
 ### Context Menu Positioning (x/y)
@@ -87,7 +87,7 @@ Position the popover at an arbitrary coordinate instead of relative to a referen
 <Popover bind:opened={menuOpen} x={menuX} y={menuY} strategy="fixed">
   <p>Custom context menu</p>
 </Popover>`}>
-	<PopoverContextMenuDemo client:load />
+	<PopoverContextMenuDemo client:only="svelte" />
 </ComponentPreview>
 
 ### Custom Placement and Arrow
@@ -97,7 +97,7 @@ Control placement and arrow visibility.
 <ComponentPreview code={`<Popover refElement={triggerRef} openOnClick placement="right-start" arrow={false}>
   <div style="padding: 1rem;">No arrow, positioned to the right</div>
 </Popover>`}>
-	<PopoverPlacementDemo client:load />
+	<PopoverPlacementDemo client:only="svelte" />
 </ComponentPreview>
 
 ### Focus-Triggered Popover
@@ -112,7 +112,7 @@ Open when the reference element receives focus, close on blur.
     <li>Suggestion 2</li>
   </ul>
 </Popover>`}>
-	<PopoverFocusDemo client:load />
+	<PopoverFocusDemo client:only="svelte" />
 </ComponentPreview>
 
 ## Props
