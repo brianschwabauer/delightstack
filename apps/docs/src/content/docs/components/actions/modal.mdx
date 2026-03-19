@@ -3,10 +3,13 @@ title: Modal
 description: A polished dialog overlay with smooth animations, focus trapping, backdrop blur, and crossfade transitions.
 ---
 
-import { Modal } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
-import ModalDemo from '../../../../components/demos/ModalDemo.svelte';
-import ModalDemoAll from '../../../../components/demos/ModalDemoAll.svelte';
+import ModalBasicDemo from '../../../../components/demos/ModalBasicDemo.svelte';
+import ModalFooterDemo from '../../../../components/demos/ModalFooterDemo.svelte';
+import ModalCustomHeaderDemo from '../../../../components/demos/ModalCustomHeaderDemo.svelte';
+import ModalHeaderSlotsDemo from '../../../../components/demos/ModalHeaderSlotsDemo.svelte';
+import ModalCustomSizeDemo from '../../../../components/demos/ModalCustomSizeDemo.svelte';
+import ModalNonClosableDemo from '../../../../components/demos/ModalNonClosableDemo.svelte';
 
 ## Import
 
@@ -18,117 +21,93 @@ import { Modal } from '@delightstack/components';
 
 <ComponentPreview code={`<script>
   import { Modal, Button } from '@delightstack/components';
-
-  let showModal = $state(false);
-</script>
-
-<Button onclick={() => showModal = true}>Open Modal</Button>
-
-<Modal bind:open={showModal} title="Example Modal">
-  <p>This is a modal dialog with some example content.
-  Click outside or press Escape to close.</p>
-</Modal>`}>
-  <ModalDemo client:load />
-</ComponentPreview>
-
-```svelte
-<script>
-  import { Modal, Button } from '@delightstack/components';
-
-  let showModal = $state(false);
-</script>
-
-<Button onclick={() => showModal = true}>
-  Open Modal
-</Button>
-
-<Modal bind:open={showModal} title="Example">
-  <p>Modal content goes here.</p>
-</Modal>
-```
-
-## Examples
-
-### With Footer Actions
-
-<ComponentPreview code={`<script>
-  import { Modal, Button } from '@delightstack/components';
-
   let open = $state(false);
 </script>
 
 <Button onclick={() => open = true}>Open Modal</Button>
 
-<Modal bind:open title="Edit Profile">
-  <p style="margin: 0; color: var(--color-text);">
-    Update your profile information below.
-  </p>
+<Modal bind:open title="Example Modal">
+  <p>This is a modal dialog with some example content.
+  Click outside or press Escape to close.</p>
+</Modal>`}>
+	<ModalBasicDemo client:load />
+</ComponentPreview>
 
-  {#snippet footer({ close })}
-    <Button transparent onclick={close}>Cancel</Button>
-    <Button accent onclick={close}>Save Changes</Button>
+## Examples
+
+### With Footer Actions
+
+<ComponentPreview code={`<Modal bind:open title="Edit Profile">
+  <p>Update your profile information below.</p>
+
+  {#snippet footer()}
+    <Button transparent onclick={() => open = false}>Cancel</Button>
+    <Button accent onclick={() => open = false}>Save Changes</Button>
   {/snippet}
 </Modal>`}>
-	<ModalDemoAll client:load />
+	<ModalFooterDemo client:load />
 </ComponentPreview>
 
 ### Custom Header
 
 Replace the entire header with a custom snippet.
 
-```svelte
-<Modal bind:open={showSettings}>
+<ComponentPreview code={`<Modal bind:open>
   {#snippet header()}
-    <div class="settings-header">
-      <h2>Settings</h2>
-      <span>Configure your preferences</span>
+    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+      <h2 style="margin: 0; font-size: 1.25rem;">Settings</h2>
+      <span style="font-size: 0.85rem; opacity: 0.7;">Configure your preferences</span>
     </div>
   {/snippet}
 
-  <!-- Settings content -->
-</Modal>
-```
+  <p>Settings content goes here.</p>
+</Modal>`}>
+	<ModalCustomHeaderDemo client:load />
+</ComponentPreview>
 
 ### Header Start and End Slots
 
 Add content before the title or after it (before the close button).
 
-```svelte
-<Modal bind:open={showModal} title="Document">
+<ComponentPreview code={`<Modal bind:open title="Document">
   {#snippet headerStart()}
     <span class="status-badge">Draft</span>
   {/snippet}
 
   {#snippet headerEnd()}
     <Button transparent dense icon aria-label="Share">
-      <!-- ShareIcon -->
+      <ShareIcon />
     </Button>
   {/snippet}
 
   <p>Document content...</p>
-</Modal>
-```
+</Modal>`}>
+	<ModalHeaderSlotsDemo client:load />
+</ComponentPreview>
 
 ### Custom Width and Height
 
 Override the default sizing with explicit CSS values.
 
-```svelte
-<Modal bind:open={showModal} title="Wide Modal" width="800px" height="600px">
-  <p>This modal has a custom size.</p>
-</Modal>
-```
+<ComponentPreview code={`<Modal bind:open title="Wide Modal" width="800px" height="500px">
+  <p>This modal has a custom size of 800x500px.</p>
+</Modal>`}>
+	<ModalCustomSizeDemo client:load />
+</ComponentPreview>
 
 ### Non-Closable Modal
 
 Prevent closing via Escape key and backdrop click for required flows.
 
-```svelte
-<Modal bind:open={showModal} title="Required Step" closable={false}>
+<ComponentPreview code={`<Modal bind:open title="Required Step" closable={false}>
   <p>You must complete this step before continuing.</p>
-  <Button onclick={() => showModal = false}>Done</Button>
-</Modal>
-```
+
+  {#snippet footer()}
+    <Button accent onclick={() => open = false}>Done</Button>
+  {/snippet}
+</Modal>`}>
+	<ModalNonClosableDemo client:load />
+</ComponentPreview>
 
 ### Transition from Element
 

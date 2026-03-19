@@ -186,6 +186,17 @@
 				</header>
 			{/if}
 			{#if children}{@render children()}{/if}
+			{#if footer || footerStart || footerEnd}
+				<footer class="modal-footer">
+					{#if footer}
+						{@render footer()}
+					{:else}
+						{#if footerStart}{@render footerStart()}{/if}
+						<div class="spacer"></div>
+						{#if footerEnd}{@render footerEnd()}{/if}
+					{/if}
+				</footer>
+			{/if}
 		</div>
 		<div class="modal-fg"></div>
 	</div>
@@ -333,6 +344,15 @@
 		&::-webkit-scrollbar-track-piece:end {
 			margin-bottom: var(--radius);
 		}
+	}
+	.modal-footer {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		justify-content: flex-end;
+		padding: 0.75rem 0;
+		margin-top: 1rem;
+		border-top: 1px solid var(--color-border, rgb(from var(--color-text) r g b / 0.1));
 	}
 	.modal-fg {
 		view-transition-name: modal-fg;
