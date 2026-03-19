@@ -5,6 +5,9 @@ description: A versatile, polished button with ripple effects, promise-aware loa
 
 import { Button } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ButtonPromiseDemo from '../../../../components/demos/ButtonPromiseDemo.svelte';
+import ButtonDropdownMenuDemo from '../../../../components/demos/ButtonDropdownMenuDemo.svelte';
+import ButtonSplitDropdownDemo from '../../../../components/demos/ButtonSplitDropdownDemo.svelte';
 
 ## Import
 
@@ -94,8 +97,7 @@ The `size` prop controls font size, which drives padding and dimensions via `em`
 
 When `onclick` returns a `Promise`, the button automatically shows a loading spinner until the promise settles. On success, a brief checkmark flash confirms the action.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Button } from '@delightstack/components';
 
   async function handleSave(e) {
@@ -103,8 +105,9 @@ When `onclick` returns a `Promise`, the button automatically shows a loading spi
   }
 </script>
 
-<Button onclick={handleSave}>Save</Button>
-```
+<Button onclick={handleSave}>Save</Button>`}>
+	<ButtonPromiseDemo client:load />
+</ComponentPreview>
 
 ### Badge
 
@@ -130,29 +133,29 @@ When `href` is set, the button renders as an `<a>` element.
 
 Pass a `menu` snippet to render a popover dropdown when the button is clicked.
 
-```svelte
-<Button showChevron>
+<ComponentPreview code={`<Button showChevron>
   Options
   {#snippet menu({ close })}
     <button onclick={() => { edit(); close(); }}>Edit</button>
     <button onclick={() => { remove(); close(); }}>Remove</button>
   {/snippet}
-</Button>
-```
+</Button>`}>
+	<ButtonDropdownMenuDemo client:load />
+</ComponentPreview>
 
 ### Split Button with Dropdown
 
 Use the `dropdown` snippet for a secondary dropdown trigger alongside the main button action.
 
-```svelte
-<Button onclick={primarySave}>
+<ComponentPreview code={`<Button onclick={primarySave}>
   Save
   {#snippet dropdown({ close })}
     <button onclick={() => { saveAs(); close(); }}>Save As...</button>
     <button onclick={() => { saveCopy(); close(); }}>Save Copy</button>
   {/snippet}
-</Button>
-```
+</Button>`}>
+	<ButtonSplitDropdownDemo client:load />
+</ComponentPreview>
 
 ## Props
 
