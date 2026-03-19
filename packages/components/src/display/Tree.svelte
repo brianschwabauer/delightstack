@@ -5,6 +5,8 @@
 		icon?: import('svelte').Component;
 		children?: TreeNode[];
 		disabled?: boolean;
+		/** Whether this node can be selected. When undefined, inherits from the tree's selectable prop. Set to false to make clicking expand/collapse instead. */
+		selectable?: boolean;
 		/** Whether this node can accept children via drag-and-drop (defaults to true if node has children array) */
 		allowChildren?: boolean;
 		data?: unknown;
@@ -16,6 +18,8 @@
 		label: string;
 		icon?: import('svelte').Component;
 		disabled?: boolean;
+		/** Whether this node can be selected. When undefined, inherits from the tree's selectable prop. */
+		selectable?: boolean;
 		data?: unknown;
 	}
 </script>
@@ -118,6 +122,7 @@
 				label: item.label,
 				icon: item.icon,
 				disabled: item.disabled,
+				selectable: item.selectable,
 				data: item.data,
 				children: [],
 			});
@@ -340,8 +345,13 @@
 		return 'unchecked';
 	}
 
+	function isNodeSelectable(node: TreeNode): boolean {
+		if (node.selectable !== undefined) return node.selectable;
+		return selectable;
+	}
+
 	function selectNode(node: TreeNode, e?: MouseEvent | KeyboardEvent) {
-		if (!selectable || node.disabled) return;
+		if (!isNodeSelectable(node) || node.disabled) return;
 
 		if (checkboxes) {
 			const state = getCheckState(node);
@@ -514,7 +524,7 @@
 			case ' ': {
 				e.preventDefault();
 				if (current_node) {
-					if (selectable) {
+					if (isNodeSelectable(current_node)) {
 						selectNode(current_node, e);
 					} else if (hasChildren(current_node) || hasLoadableChildren(current_node)) {
 						toggleExpand(current_node);
@@ -797,7 +807,7 @@
 				ondragend={handleDragEnd}
 				onpointerdown={() => { keyboard_nav = false; }}
 				onclick={(e) => {
-					if (selectable) {
+					if (isNodeSelectable(node)) {
 						selectNode(node, e);
 					} else if (has_kids || hasLoadableChildren(node)) {
 						toggleExpand(node);
@@ -807,7 +817,7 @@
 					if (e.key === 'Enter' || e.key === ' ') {
 						e.preventDefault();
 						e.stopPropagation();
-						if (selectable) selectNode(node, e);
+						if (isNodeSelectable(node)) selectNode(node, e);
 						else if (has_kids) toggleExpand(node);
 					}
 				}}

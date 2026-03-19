@@ -5,10 +5,12 @@
 		{
 			id: 'src',
 			label: 'src',
+			selectable: false,
 			children: [
 				{
 					id: 'components',
 					label: 'components',
+					selectable: false,
 					children: [
 						{ id: 'button', label: 'Button.svelte' },
 						{ id: 'modal', label: 'Modal.svelte' },
@@ -61,5 +63,9 @@
 {#if selected.length > 0}
 	<p style="margin-top: 0.5rem; font-size: 0.875rem; opacity: 0.7;">
 		Selected: {selected.map((id) => nodeMap.get(id)?.label ?? id).join(', ')}
+	</p>
+{:else}
+	<p style="margin-top: 0.5rem; font-size: 0.875rem; opacity: 0.5;">
+		Click a file to select it. Folders expand/collapse on click.
 	</p>
 {/if}
