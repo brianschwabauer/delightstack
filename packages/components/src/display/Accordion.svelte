@@ -142,7 +142,7 @@
 		if (!container) return;
 
 		const summaries = Array.from(
-			container.querySelectorAll<HTMLElement>('summary:not([aria-disabled="true"])'),
+			container.querySelectorAll<HTMLElement>('.summary:not([aria-disabled="true"])'),
 		);
 		const idx = summaries.indexOf(target);
 		if (idx === -1) return;
@@ -165,14 +165,17 @@
 
 {#if isItem}
 	<!-- AccordionItem -->
-	<details
+	<div
 		class={['accordion-item', className].filter(Boolean).join(' ')}
+		class:open={isOpen}
 		class:dense={isDense}
 		class:comfortable={isComfortable}
 		class:disabled={isDisabled}
-		open={isOpen}
 		{id}>
-		<summary
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="summary"
+			role="button"
 			id={triggerId}
 			tabindex={isDisabled ? -1 : 0}
 			aria-expanded={isOpen}
@@ -190,7 +193,7 @@
 					{title}
 				{/if}
 			</span>
-		</summary>
+		</div>
 		<div id={contentId} role="region" aria-labelledby={triggerId}>
 			<Expand show={isOpen}>
 				<div class="panel-content">
@@ -198,7 +201,7 @@
 				</div>
 			</Expand>
 		</div>
-	</details>
+	</div>
 {:else if skeleton}
 	<!-- Skeleton -->
 	<div
@@ -244,12 +247,11 @@
 		}
 	}
 
-	.accordion-item summary {
+	.accordion-item .summary {
 		display: flex;
 		align-items: center;
 		cursor: pointer;
 		padding: 1rem 1.25rem;
-		list-style: none;
 		gap: 0.75rem;
 		user-select: none;
 		outline: none;
@@ -269,17 +271,13 @@
 		}
 	}
 
-	.accordion-item summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.accordion-item.dense summary {
+	.accordion-item.dense .summary {
 		padding: 0.5rem 0.75rem;
 		gap: 0.5rem;
 		font-size: 0.875rem;
 	}
 
-	.accordion-item.comfortable summary {
+	.accordion-item.comfortable .summary {
 		padding: 1.25rem 1.5rem;
 		gap: 1rem;
 	}
@@ -290,7 +288,7 @@
 		color: light-dark(var(--color-text-disabled, #888), var(--color-text-disabled, #888));
 	}
 
-	.accordion-item[open] .chevron {
+	.accordion-item.open .chevron {
 		transform: rotate(90deg);
 	}
 
