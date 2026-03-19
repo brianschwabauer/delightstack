@@ -784,17 +784,17 @@
 			class:dragged={drag_node_id === node.id}
 			class:drop-before={is_drag_target && drop_position === 'before'}
 			class:drop-after={is_drag_target && drop_position === 'after'}
-			class:drop-inside={is_drag_target && drop_position === 'inside'}
-			draggable={draggable && !node.disabled ? 'true' : undefined}
-			ondragstart={(e) => handleDragStart(e, node)}
-			ondragover={(e) => handleDragOver(e, node)}
-			ondragleave={handleDragLeave}
-			ondrop={(e) => handleDrop(e, node)}
-			ondragend={handleDragEnd}>
+			class:drop-inside={is_drag_target && drop_position === 'inside'}>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="node-row"
 				style:padding-left="{(level - 1) * 1.25}rem"
+				draggable={draggable && !node.disabled ? 'true' : undefined}
+				ondragstart={(e) => handleDragStart(e, node)}
+				ondragover={(e) => { e.stopPropagation(); handleDragOver(e, node); }}
+				ondragleave={handleDragLeave}
+				ondrop={(e) => { e.stopPropagation(); handleDrop(e, node); }}
+				ondragend={handleDragEnd}
 				onpointerdown={() => { keyboard_nav = false; }}
 				onclick={(e) => {
 					if (selectable) {
