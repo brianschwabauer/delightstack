@@ -577,6 +577,49 @@
 				);
 			}
 		}
+		/* Icon button badge cutouts */
+		&.icon:has(> .badge:not(.dot)) {
+			button,
+			a {
+				mask-image: radial-gradient(
+					circle at calc(100% - 0.15em) 0.15em,
+					transparent calc(0.85em + 3px),
+					black calc(0.85em + 5px)
+				);
+			}
+		}
+		&.icon:has(> .badge.dot) {
+			button,
+			a {
+				mask-image: radial-gradient(
+					circle at calc(100% - 0.375rem) 0.375rem,
+					transparent calc(0.375rem + 3px),
+					black calc(0.375rem + 5px)
+				);
+			}
+		}
+		&.icon.transparent:has(> .badge:not(.dot)),
+		&.icon.translucent:has(> .badge:not(.dot)) {
+			button,
+			a {
+				mask-image: radial-gradient(
+					circle at calc(100% - 1.15em) 1.15em,
+					transparent calc(0.65em + 3px),
+					black calc(0.65em + 5px)
+				);
+			}
+		}
+		&.icon.transparent:has(> .badge.dot),
+		&.icon.translucent:has(> .badge.dot) {
+			button,
+			a {
+				mask-image: radial-gradient(
+					circle at calc(100% - 0.75em - 0.375rem) calc(0.75em + 0.375rem),
+					transparent calc(0.375rem + 3px),
+					black calc(0.375rem + 5px)
+				);
+			}
+		}
 
 		button,
 		a {
