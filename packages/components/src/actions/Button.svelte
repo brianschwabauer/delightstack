@@ -282,7 +282,7 @@
 					class="loading-icon"
 					in:loadingTransition={{ direction: 'in' }}
 					out:loadingTransition={{ direction: 'out' }}>
-					<Progress size="00" />
+					<Progress size="00" color="currentColor" />
 				</div>
 			{/if}
 		{/if}
@@ -594,6 +594,9 @@
 				aspect-ratio: 1;
 				flex-shrink: 0;
 				flex-grow: 0;
+			}
+			:global(circle.track) {
+				stroke: rgb(from currentColor r g b / 0.2);
 			}
 		}
 
