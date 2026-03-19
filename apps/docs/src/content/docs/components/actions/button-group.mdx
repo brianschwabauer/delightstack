@@ -3,8 +3,11 @@ title: ButtonGroup
 description: A container that groups related buttons with shared borders, coordinated styling, and context-driven prop inheritance.
 ---
 
-import { ButtonGroup, Button } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ButtonGroupDemo from '../../../../components/demos/ButtonGroupDemo.svelte';
+import ButtonGroupVariantDemo from '../../../../components/demos/ButtonGroupVariantDemo.svelte';
+import ButtonGroupVerticalDemo from '../../../../components/demos/ButtonGroupVerticalDemo.svelte';
+import ButtonGroupDetachedDemo from '../../../../components/demos/ButtonGroupDetachedDemo.svelte';
 
 ## Import
 
@@ -19,11 +22,7 @@ import { ButtonGroup, Button } from '@delightstack/components';
 	<Button>Save As</Button>
 	<Button>Discard</Button>
 </ButtonGroup>`}>
-	<ButtonGroup client:load aria-label="Document actions">
-		<Button client:load>Save</Button>
-		<Button client:load>Save As</Button>
-		<Button client:load>Discard</Button>
-	</ButtonGroup>
+	<ButtonGroupDemo client:load />
 </ComponentPreview>
 
 ## Examples
@@ -66,11 +65,7 @@ Set variant props on the group to apply them to all children at once.
 	<Button>Second</Button>
 	<Button>Third</Button>
 </ButtonGroup>`}>
-	<ButtonGroup client:load outline accent aria-label="Accent group">
-		<Button client:load>First</Button>
-		<Button client:load>Second</Button>
-		<Button client:load>Third</Button>
-	</ButtonGroup>
+	<ButtonGroupVariantDemo client:load />
 </ComponentPreview>
 
 ### Vertical Orientation
@@ -82,11 +77,7 @@ Stack buttons vertically instead of horizontally.
 	<Button>Option 2</Button>
 	<Button>Option 3</Button>
 </ButtonGroup>`}>
-	<ButtonGroup client:load orientation="vertical" aria-label="Options">
-		<Button client:load>Option 1</Button>
-		<Button client:load>Option 2</Button>
-		<Button client:load>Option 3</Button>
-	</ButtonGroup>
+	<ButtonGroupVerticalDemo client:load />
 </ComponentPreview>
 
 ### Split Button with Dropdown
@@ -119,11 +110,7 @@ Set `attached={false}` to add a small gap between buttons instead of merging bor
 	<Button>Two</Button>
 	<Button>Three</Button>
 </ButtonGroup>`}>
-	<ButtonGroup client:load attached={false} aria-label="Spaced actions">
-		<Button client:load>One</Button>
-		<Button client:load>Two</Button>
-		<Button client:load>Three</Button>
-	</ButtonGroup>
+	<ButtonGroupDetachedDemo client:load />
 </ComponentPreview>
 
 ## Props

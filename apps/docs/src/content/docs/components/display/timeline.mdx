@@ -3,8 +3,11 @@ title: Timeline
 description: A chronological event display for vertical or horizontal timelines with scroll-reveal animations, status markers, and on-demand loading.
 ---
 
-import { Timeline, TimelineItem } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import TimelineDemo from '../../../../components/demos/TimelineDemo.svelte';
+import TimelineHorizontalDemo from '../../../../components/demos/TimelineHorizontalDemo.svelte';
+import TimelineColorDemo from '../../../../components/demos/TimelineColorDemo.svelte';
+import { Timeline } from '@delightstack/components/display';
 
 ## Import
 
@@ -25,15 +28,7 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
   </TimelineItem>
   <TimelineItem title="Step 3" status="pending" />
 </Timeline>`}>
-  <Timeline client:load>
-    <TimelineItem client:load title="Step 1" date="Jan 10" status="complete">
-      First step completed.
-    </TimelineItem>
-    <TimelineItem client:load title="Step 2" date="Jan 11" status="active">
-      Currently in progress.
-    </TimelineItem>
-    <TimelineItem client:load title="Step 3" status="pending" />
-  </Timeline>
+  <TimelineDemo client:load />
 </ComponentPreview>
 
 ## Examples
@@ -89,12 +84,7 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
   <TimelineItem status="active" title="Shipping" />
   <TimelineItem status="pending" title="Delivered" />
 </Timeline>`}>
-  <Timeline client:load horizontal>
-    <TimelineItem client:load status="complete" title="Order Placed" />
-    <TimelineItem client:load status="complete" title="Processing" />
-    <TimelineItem client:load status="active" title="Shipping" />
-    <TimelineItem client:load status="pending" title="Delivered" />
-  </Timeline>
+  <TimelineHorizontalDemo client:load />
 </ComponentPreview>
 
 ### Alternating Sides
@@ -134,11 +124,7 @@ Load more events as the user scrolls near the end of the timeline.
     A red-themed event marker.
   </TimelineItem>
 </Timeline>`}>
-  <Timeline client:load>
-    <TimelineItem client:load title="Custom Color" color="var(--color-error)">
-      A red-themed event marker.
-    </TimelineItem>
-  </Timeline>
+  <TimelineColorDemo client:load />
 </ComponentPreview>
 
 ### Skeleton Loading

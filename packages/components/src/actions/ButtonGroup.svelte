@@ -19,6 +19,8 @@
 		error: boolean;
 		success: boolean;
 		disabled: boolean;
+		orientation: 'horizontal' | 'vertical';
+		attached: boolean;
 	}
 </script>
 
@@ -76,6 +78,8 @@
 		error,
 		success,
 		disabled,
+		orientation,
+		attached,
 	});
 	setContext<ButtonGroupContext>('button-group', context);
 
@@ -88,6 +92,8 @@
 		context.error = error;
 		context.success = success;
 		context.disabled = disabled;
+		context.orientation = orientation;
+		context.attached = attached;
 	});
 </script>
 
@@ -111,91 +117,6 @@
 		}
 		&.vertical {
 			flex-direction: column;
-		}
-
-		/* Attached mode: merge borders and adjust border-radius */
-		&.attached {
-			&.horizontal {
-				/* Remove border-radius from middle children */
-				:global(> .button:not(:first-child):not(:last-child)) {
-					border-radius: 0;
-				}
-				:global(> .button:not(:first-child):not(:last-child) button),
-				:global(> .button:not(:first-child):not(:last-child) a) {
-					border-radius: 0;
-				}
-
-				/* First child: keep left radius, remove right */
-				:global(> .button:first-child) {
-					border-top-right-radius: 0;
-					border-bottom-right-radius: 0;
-				}
-				:global(> .button:first-child button),
-				:global(> .button:first-child a) {
-					border-top-right-radius: 0;
-					border-bottom-right-radius: 0;
-				}
-
-				/* Last child: keep right radius, remove left */
-				:global(> .button:last-child) {
-					border-top-left-radius: 0;
-					border-bottom-left-radius: 0;
-				}
-				:global(> .button:last-child button),
-				:global(> .button:last-child a) {
-					border-top-left-radius: 0;
-					border-bottom-left-radius: 0;
-				}
-
-				/* Merge borders between adjacent children */
-				:global(> .button + .button) {
-					margin-left: -1px;
-				}
-			}
-
-			&.vertical {
-				/* Remove border-radius from middle children */
-				:global(> .button:not(:first-child):not(:last-child)) {
-					border-radius: 0;
-				}
-				:global(> .button:not(:first-child):not(:last-child) button),
-				:global(> .button:not(:first-child):not(:last-child) a) {
-					border-radius: 0;
-				}
-
-				/* First child: keep top radius, remove bottom */
-				:global(> .button:first-child) {
-					border-bottom-left-radius: 0;
-					border-bottom-right-radius: 0;
-				}
-				:global(> .button:first-child button),
-				:global(> .button:first-child a) {
-					border-bottom-left-radius: 0;
-					border-bottom-right-radius: 0;
-				}
-
-				/* Last child: keep bottom radius, remove top */
-				:global(> .button:last-child) {
-					border-top-left-radius: 0;
-					border-top-right-radius: 0;
-				}
-				:global(> .button:last-child button),
-				:global(> .button:last-child a) {
-					border-top-left-radius: 0;
-					border-top-right-radius: 0;
-				}
-
-				/* Merge borders between adjacent children */
-				:global(> .button + .button) {
-					margin-top: -1px;
-				}
-			}
-
-			/* Ensure hovered/focused buttons appear above siblings for border visibility */
-			:global(> .button:hover),
-			:global(> .button:focus-within) {
-				z-index: 1;
-			}
 		}
 
 		/* Non-attached mode: small gap between buttons */

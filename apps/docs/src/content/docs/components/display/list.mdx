@@ -3,8 +3,9 @@ title: List
 description: A flexible container for list items with selection handling, multiple interaction modes, and consistent styling.
 ---
 
-import { List, ListItem } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ListTextDemo from '../../../../components/demos/ListTextDemo.svelte';
+import { List } from '@delightstack/components/display';
 
 ## Import
 
@@ -79,10 +80,7 @@ Display-only list with no hover effects or click handlers.
   <ListItem>Read-only item</ListItem>
   <ListItem>Another item</ListItem>
 </List>`}>
-  <List client:load type="text">
-    <ListItem client:load>Read-only item</ListItem>
-    <ListItem client:load>Another item</ListItem>
-  </List>
+  <ListTextDemo client:load />
 </ComponentPreview>
 
 ### Skeleton Loading

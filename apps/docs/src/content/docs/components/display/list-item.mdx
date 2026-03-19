@@ -3,8 +3,9 @@ title: ListItem
 description: A versatile list item that adapts to its parent List context, supporting buttons, radios, checkboxes, async click handling, and submenu support.
 ---
 
-import { List, ListItem } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ListItemActiveDemo from '../../../../components/demos/ListItemActiveDemo.svelte';
+import ListItemDisabledDemo from '../../../../components/demos/ListItemDisabledDemo.svelte';
 
 ## Import
 
@@ -92,10 +93,7 @@ Force a selected/active appearance on an item.
   <ListItem active>Currently Selected</ListItem>
   <ListItem>Another Item</ListItem>
 </List>`}>
-  <List client:load type="text">
-    <ListItem client:load active>Currently Selected</ListItem>
-    <ListItem client:load>Another Item</ListItem>
-  </List>
+  <ListItemActiveDemo client:load />
 </ComponentPreview>
 
 ### Disabled Item
@@ -104,10 +102,7 @@ Force a selected/active appearance on an item.
   <ListItem disabled>Unavailable Action</ListItem>
   <ListItem>Available Action</ListItem>
 </List>`}>
-  <List client:load type="text">
-    <ListItem client:load disabled>Unavailable Action</ListItem>
-    <ListItem client:load>Available Action</ListItem>
-  </List>
+  <ListItemDisabledDemo client:load />
 </ComponentPreview>
 
 ## Props
