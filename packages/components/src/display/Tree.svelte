@@ -401,15 +401,11 @@
 		while (parent) {
 			if (parent.disabled) break;
 			const descendant_ids = getAllDescendantIds(parent);
-			const all_checked =
-				descendant_ids.every((id) => selected.includes(id)) &&
-				selected.includes(parent.id) === false
-					? false
-					: descendant_ids.every((id) => selected.includes(id));
+			const all_descendants_checked = descendant_ids.every((id) => selected.includes(id));
 
-			if (all_checked && !selected.includes(parent.id)) {
+			if (all_descendants_checked && !selected.includes(parent.id)) {
 				selected = [...selected, parent.id];
-			} else if (!all_checked && selected.includes(parent.id)) {
+			} else if (!all_descendants_checked && selected.includes(parent.id)) {
 				selected = selected.filter((id) => id !== parent!.id);
 			}
 
@@ -737,6 +733,11 @@
 			if (!focused_id) {
 				const visible = getVisibleNodeOrder();
 				if (visible.length > 0) focused_id = visible[0];
+			}
+		}}
+		onfocusout={(e) => {
+			if (!tree_element?.contains(e.relatedTarget as Node)) {
+				focused_id = null;
 			}
 		}}>
 		{#each tree as node (node.id)}
@@ -1104,6 +1105,10 @@
 
 	.children-container.show {
 		grid-template-rows: 1fr;
+
+		> :global(ul) {
+			overflow: visible;
+		}
 	}
 
 	/* ========== Connecting Lines ========== */
