@@ -96,6 +96,8 @@
 	strategy="fixed"
 	closeOnEscapeKey
 	closeOnOutsideClick
+	arrow={false}
+	radius="var(--radius-3)"
 	x={contextMenuLocationX}
 	y={contextMenuLocationY}>
 	{#if !!activeContextMenu?.actions?.length}

@@ -688,6 +688,7 @@
 		--easing: var(--ease-out-back);
 		z-index: var(--layer);
 		background-color: var(--color-bg);
+		border: 1px solid var(--color-border, transparent);
 		border-radius: var(--popover-radius, var(--radius-5));
 		box-shadow: var(--shadow);
 		max-width: calc(100vw - 1rem);
