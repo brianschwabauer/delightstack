@@ -103,25 +103,10 @@
 	class:vertical={orientation === 'vertical'}
 	class:horizontal={orientation === 'horizontal'}
 	class:attached
-	role="group">
+	role="group"
+	style:display="inline-flex"
+	style:align-items="stretch"
+	style:flex-direction={orientation === 'vertical' ? 'column' : 'row'}
+	style:gap={attached ? null : '0.25em'}>
 	{#if children}{@render children()}{/if}
 </div>
-
-<style>
-	.button-group {
-		display: inline-flex;
-		align-items: stretch;
-
-		&.horizontal {
-			flex-direction: row;
-		}
-		&.vertical {
-			flex-direction: column;
-		}
-
-		/* Non-attached mode: small gap between buttons */
-		&:not(.attached) {
-			gap: 0.25em;
-		}
-	}
-</style>

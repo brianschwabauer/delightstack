@@ -823,12 +823,19 @@
 					border-bottom-left-radius: 0;
 				}
 			}
+			/* Remove right border on non-last so outline buttons share a single border */
+			&:not(:last-child) {
+				button,
+				a {
+					border-right: none;
+				}
+			}
 			& + :global(.button) {
 				margin-left: -1px;
 			}
 		}
 		&.group-v {
-			width: 100%;
+			width: auto;
 			button,
 			a {
 				width: 100%;
@@ -856,6 +863,13 @@
 				a {
 					border-top-left-radius: 0;
 					border-top-right-radius: 0;
+				}
+			}
+			/* Remove bottom border on non-last so outline buttons share a single border */
+			&:not(:last-child) {
+				button,
+				a {
+					border-bottom: none;
 				}
 			}
 			& + :global(.button) {
