@@ -238,8 +238,12 @@
 	class:pill
 	class:dense
 	class:grouped={resolvedGrouped}
-	class:group-h={resolvedGrouped && groupContext?.attached && groupContext?.orientation === 'horizontal'}
-	class:group-v={resolvedGrouped && groupContext?.attached && groupContext?.orientation === 'vertical'}
+	class:group-h={resolvedGrouped &&
+		groupContext?.attached &&
+		groupContext?.orientation === 'horizontal'}
+	class:group-v={resolvedGrouped &&
+		groupContext?.attached &&
+		groupContext?.orientation === 'vertical'}
 	class:full-width={fullWidth}
 	class:full-height={fullHeight}
 	class:overlay
@@ -270,7 +274,10 @@
 		{href}
 		data-sveltekit-noscroll={href?.startsWith('?') ? true : null}
 		data-sveltekit-keepfocus={href?.startsWith('?') ? true : null}
-		{@attach ripple({ enabled: !disableRipple && !resolvedDisabled && !isLoading, zIndex: 1 })}
+		{@attach ripple({
+			enabled: !disableRipple && !resolvedDisabled && !isLoading,
+			zIndex: 1,
+		})}
 		disabled={resolvedDisabled || onclickLoading || (!mounted && !href)}
 		aria-haspopup={!!menu}
 		aria-expanded={menu ? menuActive : null}
@@ -288,7 +295,14 @@
 		{/if}
 		{#if children}{@render children({ isLoading, isLoadingSuccess })}{/if}
 		{#if showChevron && menu}
-			<svg viewBox="0 0 24 24" fill="currentColor" style="pointer-events:none;" class="chevron {menuActive ? 'active' : ''}" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+			<svg
+				viewBox="0 0 24 24"
+				fill="currentColor"
+				style="pointer-events:none;"
+				class="chevron {menuActive ? 'active' : ''}"
+				aria-hidden="true">
+				<path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+			</svg>
 		{/if}
 	</svelte:element>
 	{#if dropdown && !disableDropdown}
@@ -304,7 +318,14 @@
 				zIndex: 1,
 			})}
 			bind:this={dropdownTrigger}>
-			<svg viewBox="0 0 24 24" fill="currentColor" style="pointer-events:none" class="chevron {dropdownActive ? 'active' : ''}" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+			<svg
+				viewBox="0 0 24 24"
+				fill="currentColor"
+				style="pointer-events:none"
+				class="chevron {dropdownActive ? 'active' : ''}"
+				aria-hidden="true">
+				<path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
+			</svg>
 		</button>
 	{/if}
 </div>
@@ -532,6 +553,28 @@
 						right: 0.75em;
 					}
 				}
+			}
+		}
+
+		/* Badge cutout: mask the inner button so the badge sits in a clean gap */
+		&:not(.icon):has(> .badge:not(.dot)) {
+			button,
+			a {
+				mask-image: radial-gradient(
+					circle at calc(100% - 0.65em) 0.65em,
+					transparent calc(0.65em + 3px),
+					black calc(0.65em + 5px)
+				);
+			}
+		}
+		&:not(.icon):has(> .badge.dot) {
+			button,
+			a {
+				mask-image: radial-gradient(
+					circle at calc(100% - 0.375rem) 0.375rem,
+					transparent calc(0.375rem + 3px),
+					black calc(0.375rem + 5px)
+				);
 			}
 		}
 
