@@ -1105,11 +1105,21 @@
 	/* ========== Children Container (Expand Animation) ========== */
 	.children-container {
 		display: grid;
-		grid-template-rows: 0fr;
-		transition: grid-template-rows 200ms ease;
+		grid-template-rows: min-content 0fr;
+		transition:
+			grid-template-rows 200ms ease,
+			opacity 150ms;
+		opacity: 0;
+
+		&::before {
+			content: '';
+		}
 
 		> :global(ul) {
 			overflow: hidden;
+			visibility: hidden;
+			transition-behavior: allow-discrete;
+			transition: visibility 0ms 200ms;
 			list-style: none;
 			margin: 0;
 			padding: 0;
@@ -1117,10 +1127,12 @@
 	}
 
 	.children-container.show {
-		grid-template-rows: 1fr;
+		grid-template-rows: min-content 1fr;
+		opacity: 1;
 
 		> :global(ul) {
-			overflow: visible;
+			visibility: visible;
+			transition: visibility 0ms;
 		}
 	}
 
