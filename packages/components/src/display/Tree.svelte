@@ -563,6 +563,7 @@
 			e.preventDefault();
 			return;
 		}
+		e.stopPropagation();
 		drag_node_id = node.id;
 		if (e.dataTransfer) {
 			e.dataTransfer.effectAllowed = 'move';
