@@ -171,8 +171,7 @@
 		class:comfortable={isComfortable}
 		class:disabled={isDisabled}
 		open={isOpen}
-		{id}
-		ontoggle={handleToggle}>
+		{id}>
 		<summary
 			id={triggerId}
 			tabindex={isDisabled ? -1 : 0}
