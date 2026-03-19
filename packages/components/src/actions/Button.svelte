@@ -785,6 +785,11 @@
 			}
 		}
 		&.group-v {
+			width: 100%;
+			button,
+			a {
+				width: 100%;
+			}
 			&:not(:first-child):not(:last-child) {
 				border-radius: 0;
 				button,

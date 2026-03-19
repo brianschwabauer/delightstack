@@ -5,6 +5,7 @@ description: A versatile, polished button with ripple effects, promise-aware loa
 
 import { Button } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ButtonIconDemo from '../../../../components/demos/ButtonIconDemo.svelte';
 import ButtonPromiseDemo from '../../../../components/demos/ButtonPromiseDemo.svelte';
 import ButtonDropdownMenuDemo from '../../../../components/demos/ButtonDropdownMenuDemo.svelte';
 import ButtonSplitDropdownDemo from '../../../../components/demos/ButtonSplitDropdownDemo.svelte';
@@ -81,6 +82,21 @@ The `size` prop controls font size, which drives padding and dimensions via `em`
   <Button client:load pill>Pill Button</Button>
   <Button client:load dense>Dense</Button>
   <Button client:load pill dense>Pill Dense</Button>
+</ComponentPreview>
+
+### Icon Buttons
+
+Set `icon` for circular icon-only buttons. Combine with any variant or badge.
+
+<ComponentPreview code={`<Button icon><HeartIcon /></Button>
+<Button icon outline><SettingsIcon /></Button>
+<Button icon transparent><BellIcon /></Button>
+<Button icon translucent><HeartIcon /></Button>
+<Button icon accent><SettingsIcon /></Button>
+<Button icon error><HeartIcon /></Button>
+<Button icon badge={true}><BellIcon /></Button>
+<Button icon badge="5" accent><HeartIcon /></Button>`}>
+	<ButtonIconDemo client:load />
 </ComponentPreview>
 
 ### Disabled & Loading
