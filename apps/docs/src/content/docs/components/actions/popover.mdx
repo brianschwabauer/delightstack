@@ -3,10 +3,13 @@ title: Popover
 description: A floating content container with smart Floating UI positioning, multiple trigger modes, focus trapping, and hover trapezoid for safe diagonal mouse movement.
 ---
 
-import { Popover } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import PopoverDemo from '../../../../components/demos/PopoverDemo.svelte';
 import PopoverClickDemo from '../../../../components/demos/PopoverClickDemo.svelte';
+import PopoverHoverDemo from '../../../../components/demos/PopoverHoverDemo.svelte';
+import PopoverContextMenuDemo from '../../../../components/demos/PopoverContextMenuDemo.svelte';
+import PopoverPlacementDemo from '../../../../components/demos/PopoverPlacementDemo.svelte';
+import PopoverFocusDemo from '../../../../components/demos/PopoverFocusDemo.svelte';
 
 ## Import
 
@@ -34,25 +37,6 @@ import { Popover } from '@delightstack/components';
   <PopoverDemo client:load />
 </ComponentPreview>
 
-```svelte
-<script>
-  import { Popover, Button } from '@delightstack/components';
-
-  let buttonRef = $state<HTMLElement>();
-  let isOpen = $state(false);
-</script>
-
-<Button bind:element={buttonRef} onclick={() => isOpen = !isOpen}>
-  Show Popover
-</Button>
-
-<Popover bind:opened={isOpen} refElement={buttonRef}>
-  <div style="padding: 1rem;">
-    <p>Popover content here</p>
-  </div>
-</Popover>
-```
-
 ## Examples
 
 ### Click-Triggered with Auto-Toggle
@@ -79,38 +63,19 @@ Set `openOnClick` to let the Popover component manage the click toggle automatic
 
 Open on hover with a delay. The hover trapezoid allows safe diagonal mouse movement between the trigger and the popover.
 
-```svelte
-<script>
-  import { Popover } from '@delightstack/components';
+<ComponentPreview code={`<span bind:this={triggerRef}>Hover over me</span>
 
-  let infoRef = $state<HTMLElement>();
-</script>
-
-<span bind:this={infoRef}>Hover over me</span>
-
-<Popover
-  refElement={infoRef}
-  openOnHover
-  hoverDelay={200}
-  placement="top">
+<Popover refElement={triggerRef} openOnHover hoverDelay={200} placement="bottom-start">
   <p style="padding: 0.5rem 1rem;">Helpful tooltip-like info</p>
-</Popover>
-```
+</Popover>`}>
+	<PopoverHoverDemo client:load />
+</ComponentPreview>
 
 ### Context Menu Positioning (x/y)
 
 Position the popover at an arbitrary coordinate instead of relative to a reference element. Useful for right-click menus.
 
-```svelte
-<script>
-  import { Popover } from '@delightstack/components';
-
-  let menuOpen = $state(false);
-  let menuX = $state(0);
-  let menuY = $state(0);
-</script>
-
-<div oncontextmenu={(e) => {
+<ComponentPreview code={`<div oncontextmenu={(e) => {
   e.preventDefault();
   menuX = e.clientX;
   menuY = e.clientY;
@@ -120,40 +85,35 @@ Position the popover at an arbitrary coordinate instead of relative to a referen
 </div>
 
 <Popover bind:opened={menuOpen} x={menuX} y={menuY} strategy="fixed">
-  <p style="padding: 0.5rem 1rem;">Custom context menu</p>
-</Popover>
-```
+  <p>Custom context menu</p>
+</Popover>`}>
+	<PopoverContextMenuDemo client:load />
+</ComponentPreview>
 
 ### Custom Placement and Arrow
 
 Control placement and arrow visibility.
 
-```svelte
-<Popover refElement={triggerRef} openOnClick placement="right-start" arrow={false}>
+<ComponentPreview code={`<Popover refElement={triggerRef} openOnClick placement="right-start" arrow={false}>
   <div style="padding: 1rem;">No arrow, positioned to the right</div>
-</Popover>
-```
+</Popover>`}>
+	<PopoverPlacementDemo client:load />
+</ComponentPreview>
 
 ### Focus-Triggered Popover
 
 Open when the reference element receives focus, close on blur.
 
-```svelte
-<script>
-  import { Popover } from '@delightstack/components';
-
-  let inputRef = $state<HTMLElement>();
-</script>
-
-<input bind:this={inputRef} placeholder="Focus to see suggestions" />
+<ComponentPreview code={`<input bind:this={inputRef} placeholder="Focus to see suggestions" />
 
 <Popover refElement={inputRef} openOnFocus placement="bottom-start">
   <ul style="padding: 0.5rem;">
     <li>Suggestion 1</li>
     <li>Suggestion 2</li>
   </ul>
-</Popover>
-```
+</Popover>`}>
+	<PopoverFocusDemo client:load />
+</ComponentPreview>
 
 ## Props
 
