@@ -26,7 +26,13 @@ export function focusTrap(options?: FocusTrapOptions): Attachment {
 			if (options.oninit) options.oninit(trap);
 		}
 		const shouldEnable = options?.enabled ?? true;
-		if (shouldEnable && !trap.active) trap.activate();
+		if (shouldEnable && !trap.active) {
+			try {
+				trap.activate();
+			} catch {
+				// Focus trap activation can fail when the container has no tabbable nodes
+			}
+		}
 		if (!shouldEnable && trap.active) trap.deactivate();
 		return () => trap?.deactivate();
 	};
