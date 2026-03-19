@@ -6,6 +6,14 @@ description: A full-featured date display and selection component with single, r
 import { Calendar } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CalendarDemo from '../../../../components/demos/CalendarDemo.svelte';
+import CalendarSingleDemo from '../../../../components/demos/CalendarSingleDemo.svelte';
+import CalendarRangeDemo from '../../../../components/demos/CalendarRangeDemo.svelte';
+import CalendarMultipleDemo from '../../../../components/demos/CalendarMultipleDemo.svelte';
+import CalendarConstraintsDemo from '../../../../components/demos/CalendarConstraintsDemo.svelte';
+import CalendarMarkedDemo from '../../../../components/demos/CalendarMarkedDemo.svelte';
+import CalendarEventsDemo from '../../../../components/demos/CalendarEventsDemo.svelte';
+import CalendarLocaleDemo from '../../../../components/demos/CalendarLocaleDemo.svelte';
+import CalendarTimeSlotsDemo from '../../../../components/demos/CalendarTimeSlotsDemo.svelte';
 
 ## Import
 
@@ -35,95 +43,95 @@ import type { CalendarEvent, MarkedDate } from '@delightstack/components';
 
 ### Single Date Selection
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   let date = $state<Date | undefined>(undefined);
 </script>
 
-<Calendar bind:value={date} />
-```
+<Calendar bind:value={date} />`}>
+  <CalendarSingleDemo client:load />
+</ComponentPreview>
 
 ### Date Range Selection
 
 First click sets the start date, second click sets the end date. Hovering between clicks previews the range.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   let dateRange = $state<[Date, Date] | undefined>(undefined);
 </script>
 
-<Calendar mode="range" bind:value={dateRange} />
-```
+<Calendar mode="range" bind:value={dateRange} />`}>
+  <CalendarRangeDemo client:load />
+</ComponentPreview>
 
 ### Multiple Date Selection
 
 Click to toggle individual dates on or off.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   let selectedDates = $state<Date[]>([]);
 </script>
 
-<Calendar mode="multiple" bind:value={selectedDates} />
-```
+<Calendar mode="multiple" bind:value={selectedDates} />`}>
+  <CalendarMultipleDemo client:load />
+</ComponentPreview>
 
 ### With Date Constraints
 
-```svelte
-<Calendar
+<ComponentPreview code={`<Calendar
   bind:value={date}
   min={new Date()}
   max={new Date(2026, 11, 31)}
-/>
-```
+/>`}>
+  <CalendarConstraintsDemo client:load />
+</ComponentPreview>
 
 ### With Marked Dates
 
-```svelte
-<Calendar
+<ComponentPreview code={`<Calendar
   bind:value={date}
   marked={[
     { date: new Date(2026, 2, 15), color: 'var(--color-accent)', label: 'Meeting' },
     { date: new Date(2026, 2, 20), color: 'var(--color-error)', label: 'Deadline' },
   ]}
-/>
-```
+/>`}>
+  <CalendarMarkedDemo client:load />
+</ComponentPreview>
 
 ### With Events
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   const events = [
     { id: '1', title: 'Team Standup', start: new Date(2026, 2, 12) },
     { id: '2', title: 'Sprint Review', start: new Date(2026, 2, 15), end: new Date(2026, 2, 16), color: '#10b981' },
   ];
 </script>
 
-<Calendar bind:value={date} events={events} />
-```
+<Calendar bind:value={date} events={events} />`}>
+  <CalendarEventsDemo client:load />
+</ComponentPreview>
 
 ### Locale and Week Start
 
-```svelte
-<!-- German locale, Monday start -->
+<ComponentPreview code={`<!-- German locale, Monday start -->
 <Calendar bind:value={date} locale="de-DE" weekStartsOn={1} />
 
 <!-- US locale, Sunday start -->
-<Calendar bind:value={date} locale="en-US" weekStartsOn={0} />
-```
+<Calendar bind:value={date} locale="en-US" weekStartsOn={0} />`}>
+  <CalendarLocaleDemo client:load />
+</ComponentPreview>
 
 ### With Time Slots
 
-```svelte
-<Calendar
+<ComponentPreview code={`<Calendar
   bind:value={date}
   showTimeSlots
   timeSlotInterval={15}
   timeSlotMin="09:00"
   timeSlotMax="17:00"
   ontimeslotselect={({ time, date }) => console.log(time, date)}
-/>
-```
+/>`}>
+  <CalendarTimeSlotsDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 

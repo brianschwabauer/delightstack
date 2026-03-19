@@ -6,6 +6,11 @@ description: A resizable split view container that divides space between two pan
 import { SplitPane } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import SplitPaneDemo from '../../../../components/demos/SplitPaneDemo.svelte';
+import SplitPaneSidebarDemo from '../../../../components/demos/SplitPaneSidebarDemo.svelte';
+import SplitPaneVerticalDemo from '../../../../components/demos/SplitPaneVerticalDemo.svelte';
+import SplitPaneCollapsibleDemo from '../../../../components/demos/SplitPaneCollapsibleDemo.svelte';
+import SplitPaneNestedDemo from '../../../../components/demos/SplitPaneNestedDemo.svelte';
+import SplitPaneSnapDemo from '../../../../components/demos/SplitPaneSnapDemo.svelte';
 
 ## Import
 
@@ -32,8 +37,7 @@ import { SplitPane } from '@delightstack/components';
 
 A horizontal split with constrained sidebar size and snap points.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { SplitPane } from '@delightstack/components';
 
   let sidebarSize = $state(25);
@@ -52,30 +56,30 @@ A horizontal split with constrained sidebar size and snap points.
   {#snippet second()}
     <main>Content</main>
   {/snippet}
-</SplitPane>
-```
+</SplitPane>`}>
+  <SplitPaneSidebarDemo client:load />
+</ComponentPreview>
 
 ### Vertical Split
 
 Stack panes top and bottom instead of left and right.
 
-```svelte
-<SplitPane vertical size={70}>
+<ComponentPreview code={`<SplitPane vertical size={70}>
   {#snippet first()}
     <div>Editor</div>
   {/snippet}
   {#snippet second()}
     <div>Terminal</div>
   {/snippet}
-</SplitPane>
-```
+</SplitPane>`}>
+  <SplitPaneVerticalDemo client:load />
+</ComponentPreview>
 
 ### Collapsible Panes
 
 Double-click the divider to collapse the smaller pane. An expand button appears on the collapsed edge.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { SplitPane } from '@delightstack/components';
 
   let collapsed = $state<'first' | 'second' | null>(null);
@@ -88,15 +92,15 @@ Double-click the divider to collapse the smaller pane. An expand button appears 
   {#snippet second()}
     <div>Second Pane</div>
   {/snippet}
-</SplitPane>
-```
+</SplitPane>`}>
+  <SplitPaneCollapsibleDemo client:load />
+</ComponentPreview>
 
 ### Nested Three-Pane Layout
 
 Combine multiple SplitPanes for complex layouts.
 
-```svelte
-<SplitPane size={20} collapsible>
+<ComponentPreview code={`<SplitPane size={20} collapsible>
   {#snippet first()}
     <div>File Tree</div>
   {/snippet}
@@ -110,23 +114,24 @@ Combine multiple SplitPanes for complex layouts.
       {/snippet}
     </SplitPane>
   {/snippet}
-</SplitPane>
-```
+</SplitPane>`}>
+  <SplitPaneNestedDemo client:load />
+</ComponentPreview>
 
 ### Snap Points
 
 The divider snaps to specified percentage positions during drag.
 
-```svelte
-<SplitPane snap={[25, 50, 75]} snapThreshold={5}>
+<ComponentPreview code={`<SplitPane snap={[25, 50, 75]} snapThreshold={5}>
   {#snippet first()}
     <div>Pane A</div>
   {/snippet}
   {#snippet second()}
     <div>Pane B</div>
   {/snippet}
-</SplitPane>
-```
+</SplitPane>`}>
+  <SplitPaneSnapDemo client:load />
+</ComponentPreview>
 
 ## Props
 

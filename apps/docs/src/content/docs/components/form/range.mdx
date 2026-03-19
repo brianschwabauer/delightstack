@@ -6,6 +6,8 @@ description: A slider input for selecting a value or range, with support for two
 import { Range } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import RangeDoubleDemo from '../../../../components/demos/RangeDoubleDemo.svelte';
+import RangeTickLabelsDemo from '../../../../components/demos/RangeTickLabelsDemo.svelte';
+import RangeFormatDemo from '../../../../components/demos/RangeFormatDemo.svelte';
 
 ## Import
 
@@ -60,8 +62,7 @@ Set `range` to enable two thumbs. The value becomes a `[number, number]` tuple.
 
 Provide an array of labels that align with each tick position.
 
-```svelte
-<Range
+<ComponentPreview code={`<Range
   bind:value={difficulty}
   min={0}
   max={100}
@@ -69,18 +70,18 @@ Provide an array of labels that align with each tick position.
   show_ticks
   tick_labels={['Low', 'Medium', 'High', 'Very High', 'Max']}
   label="Difficulty"
-/>
-```
+/>`}>
+	<RangeTickLabelsDemo client:load />
+</ComponentPreview>
 
 ### Value Formatting
 
-```svelte
-<Range
+<ComponentPreview code={`<Range
   bind:value={price}
   min={0}
   max={1000}
   show_value
-  format_value={(v) => `$${v}`}
+  format_value={(v) => \`$\${v}\`}
   label="Budget"
 />
 
@@ -89,10 +90,11 @@ Provide an array of labels that align with each tick position.
   min={0}
   max={100}
   show_value
-  format_value={(v) => `${v}%`}
+  format_value={(v) => \`\${v}%\`}
   label="Opacity"
-/>
-```
+/>`}>
+	<RangeFormatDemo client:load />
+</ComponentPreview>
 
 ### Sizes
 

@@ -5,6 +5,8 @@ description: A navigation trail with automatic home icon, collapsible middle ite
 
 import { Breadcrumbs } from '@delightstack/components/navigation';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import BreadcrumbsSeparatorDemo from '../../../../components/demos/BreadcrumbsSeparatorDemo.svelte';
+import BreadcrumbsClickDemo from '../../../../components/demos/BreadcrumbsClickDemo.svelte';
 
 ## Import
 
@@ -64,13 +66,13 @@ Hide the automatic home breadcrumb.
 
 Replace the default chevron separator with a custom snippet.
 
-```svelte
-<Breadcrumbs {items}>
+<ComponentPreview code={`<Breadcrumbs {items}>
   {#snippet separator()}
     <span>/</span>
   {/snippet}
-</Breadcrumbs>
-```
+</Breadcrumbs>`}>
+	<BreadcrumbsSeparatorDemo client:load />
+</ComponentPreview>
 
 ### Sizes
 
@@ -86,11 +88,27 @@ Replace the default chevron separator with a custom snippet.
 
 React to breadcrumb clicks without relying solely on native navigation.
 
-```svelte
-<Breadcrumbs {items} onclick={({ item, index }) => {
-  console.log('Navigating to', item.label);
-}} />
-```
+<ComponentPreview code={`<script>
+  import { Breadcrumbs } from '@delightstack/components';
+
+  const items = [
+    { label: 'Home', href: '/' },
+    { label: 'Products', href: '/products' },
+    { label: 'Detail' },
+  ];
+
+  let lastClicked = $state('');
+</script>
+
+<Breadcrumbs
+  {items}
+  showHome={false}
+  onclick={({ item, index }) => {
+    lastClicked = \`Clicked "\${item.label}" (index \${index})\`;
+  }}
+/>`}>
+	<BreadcrumbsClickDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 

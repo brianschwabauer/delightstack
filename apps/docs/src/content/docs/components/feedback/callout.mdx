@@ -6,6 +6,8 @@ description: A highlighted information block for drawing attention to important 
 import { Callout } from '@delightstack/components/feedback';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CalloutDismissibleDemo from '../../../../components/demos/CalloutDismissibleDemo.svelte';
+import CalloutCustomIconDemo from '../../../../components/demos/CalloutCustomIconDemo.svelte';
+import CalloutBannerDemo from '../../../../components/demos/CalloutBannerDemo.svelte';
 
 ## Import
 
@@ -91,26 +93,33 @@ Add `dismissible` to show a close button. Use `ondismiss` to handle the event.
 
 Override the default icon or add an action area using snippets.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Callout } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
+</script>
+
 <Callout>
   {#snippet icon()}
-    <RocketIcon />
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+      <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+    </svg>
   {/snippet}
 
-  New feature available! Check out our latest update.
+  New feature available! Check out our latest update with improved performance.
 
   {#snippet action()}
     <Button size="0" transparent>Learn more</Button>
   {/snippet}
-</Callout>
-```
+</Callout>`}>
+  <CalloutCustomIconDemo client:load />
+</ComponentPreview>
 
 ### Banner Mode
 
 Set `banner` for a full-width banner with solid background. Combine with `sticky` to pin it to the top on scroll.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Callout } from '@delightstack/components';
 
   let showBanner = $state(true);
@@ -118,7 +127,7 @@ Set `banner` for a full-width banner with solid background. Combine with `sticky
 
 {#if showBanner}
   <Callout banner dismissible ondismiss={() => showBanner = false}>
-    We've updated our privacy policy.
+    We've updated our privacy policy. Please review the changes.
 
     {#snippet action()}
       <a href="/privacy">Learn more</a>
@@ -126,10 +135,11 @@ Set `banner` for a full-width banner with solid background. Combine with `sticky
   </Callout>
 {/if}
 
-<Callout banner warning sticky>
+<Callout banner warning>
   Scheduled maintenance tonight at 11pm UTC.
-</Callout>
-```
+</Callout>`}>
+  <CalloutBannerDemo client:load />
+</ComponentPreview>
 
 ### Dense and Comfortable Spacing
 

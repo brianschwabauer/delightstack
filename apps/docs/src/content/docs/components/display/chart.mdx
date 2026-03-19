@@ -5,6 +5,14 @@ description: A data visualization component supporting line, area, bar, horizont
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ChartDemo from '../../../../components/demos/ChartDemo.svelte';
+import ChartLineDemo from '../../../../components/demos/ChartLineDemo.svelte';
+import ChartAreaDemo from '../../../../components/demos/ChartAreaDemo.svelte';
+import ChartStackedBarDemo from '../../../../components/demos/ChartStackedBarDemo.svelte';
+import ChartHorizontalBarDemo from '../../../../components/demos/ChartHorizontalBarDemo.svelte';
+import ChartDonutDemo from '../../../../components/demos/ChartDonutDemo.svelte';
+import ChartPieDemo from '../../../../components/demos/ChartPieDemo.svelte';
+import ChartCustomColorsDemo from '../../../../components/demos/ChartCustomColorsDemo.svelte';
+import ChartSkeletonDemo from '../../../../components/demos/ChartSkeletonDemo.svelte';
 
 ## Import
 
@@ -40,8 +48,7 @@ import type { ChartData, Dataset } from '@delightstack/components';
 
 ### Line Chart
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   const salesData = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
     datasets: [
@@ -51,31 +58,31 @@ import type { ChartData, Dataset } from '@delightstack/components';
   };
 </script>
 
-<Chart type="line" data={salesData} height={250} />
-```
+<Chart type="line" data={salesData} height={250} />`}>
+  <ChartLineDemo client:load />
+</ComponentPreview>
 
 ### Area Chart with Data Points
 
-```svelte
-<Chart type="area" data={salesData} showPoints />
-```
+<ComponentPreview code={`<Chart type="area" data={salesData} showPoints />`}>
+  <ChartAreaDemo client:load />
+</ComponentPreview>
 
 ### Stacked Bar Chart
 
-```svelte
-<Chart type="bar" data={salesData} stacked />
-```
+<ComponentPreview code={`<Chart type="bar" data={salesData} stacked />`}>
+  <ChartStackedBarDemo client:load />
+</ComponentPreview>
 
 ### Horizontal Bar Chart
 
-```svelte
-<Chart type="horizontal-bar" data={salesData} height={300} />
-```
+<ComponentPreview code={`<Chart type="horizontal-bar" data={salesData} height={300} />`}>
+  <ChartHorizontalBarDemo client:load />
+</ComponentPreview>
 
 ### Donut Chart
 
-```svelte
-<Chart
+<ComponentPreview code={`<Chart
   type="donut"
   data={{
     labels: ['Desktop', 'Mobile', 'Tablet'],
@@ -83,37 +90,38 @@ import type { ChartData, Dataset } from '@delightstack/components';
   }}
   innerRadius={0.6}
   height={300}
-/>
-```
+/>`}>
+  <ChartDonutDemo client:load />
+</ComponentPreview>
 
 ### Pie Chart
 
-```svelte
-<Chart
+<ComponentPreview code={`<Chart
   type="pie"
   data={{
     labels: ['Chrome', 'Firefox', 'Safari', 'Edge'],
     datasets: [{ label: 'Browser Share', data: [65, 15, 12, 8] }],
   }}
-/>
-```
+/>`}>
+  <ChartPieDemo client:load />
+</ComponentPreview>
 
 ### Custom Colors
 
-```svelte
-<Chart
+<ComponentPreview code={`<Chart
   type="bar"
   data={salesData}
   colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']}
-/>
-```
+/>`}>
+  <ChartCustomColorsDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Chart type="bar" skeleton height={300} />
-<Chart type="pie" skeleton height={300} />
-```
+<ComponentPreview code={`<Chart type="bar" skeleton height={300} />
+<Chart type="pie" skeleton height={300} />`}>
+  <ChartSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 

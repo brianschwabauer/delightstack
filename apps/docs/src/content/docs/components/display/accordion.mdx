@@ -8,6 +8,8 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import AccordionDemo from '../../../../components/demos/AccordionDemo.svelte';
 import AccordionMultipleDemo from '../../../../components/demos/AccordionMultipleDemo.svelte';
 import AccordionDenseDemo from '../../../../components/demos/AccordionDenseDemo.svelte';
+import AccordionCustomTriggerDemo from '../../../../components/demos/AccordionCustomTriggerDemo.svelte';
+import AccordionNestedDemo from '../../../../components/demos/AccordionNestedDemo.svelte';
 
 ## Import
 
@@ -89,17 +91,35 @@ Prevent all sections from being collapsed by setting `collapsible` to `false`.
 
 Use the `trigger` snippet to replace the default title rendering with custom content.
 
-```svelte
-<AccordionItem value="settings">
-  {#snippet trigger()}
-    <div style="display: flex; align-items: center; gap: 0.5rem;">
-      <span>Advanced Settings</span>
-    </div>
-  {/snippet}
+<ComponentPreview code={`<script>
+  import { Accordion, AccordionItem } from '@delightstack/components';
 
-  <p>Custom trigger content for the settings panel.</p>
-</AccordionItem>
-```
+  let value = $state('settings');
+</script>
+
+<Accordion bind:value>
+  <AccordionItem value="profile">
+    {#snippet trigger()}
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <UserIcon />
+        <span>Profile Settings</span>
+      </div>
+    {/snippet}
+    <p>Manage your name, avatar, and public profile information.</p>
+  </AccordionItem>
+
+  <AccordionItem value="settings">
+    {#snippet trigger()}
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <SettingsIcon />
+        <span>Advanced Settings</span>
+      </div>
+    {/snippet}
+    <p>Configure advanced options like API keys, webhooks, and integrations.</p>
+  </AccordionItem>
+</Accordion>`}>
+  <AccordionCustomTriggerDemo client:load />
+</ComponentPreview>
 
 ### Dense and Comfortable Spacing
 
@@ -133,22 +153,30 @@ Use the `trigger` snippet to replace the default title rendering with custom con
 
 ### Nested Accordions
 
-```svelte
-<script>
-  let outerSection = $state('parent');
-  let innerSection = $state('');
+<ComponentPreview code={`<script>
+  import { Accordion, AccordionItem } from '@delightstack/components';
+
+  let outerValue = $state('parent-1');
+  let innerValue = $state('');
 </script>
 
-<Accordion bind:value={outerSection}>
-  <AccordionItem value="parent" title="Parent Section">
-    <Accordion bind:value={innerSection}>
-      <AccordionItem value="child-1" title="Child Section">
-        <p>Nested content</p>
+<Accordion bind:value={outerValue}>
+  <AccordionItem value="parent-1" title="Frontend Frameworks">
+    <Accordion bind:value={innerValue}>
+      <AccordionItem value="child-1" title="Svelte">
+        <p>A compiler-based framework that shifts work to build time.</p>
+      </AccordionItem>
+      <AccordionItem value="child-2" title="React">
+        <p>A library for building user interfaces with a virtual DOM.</p>
       </AccordionItem>
     </Accordion>
   </AccordionItem>
-</Accordion>
-```
+  <AccordionItem value="parent-2" title="Backend Languages">
+    <p>Popular choices include Node.js, Python, Go, and Rust.</p>
+  </AccordionItem>
+</Accordion>`}>
+  <AccordionNestedDemo client:load />
+</ComponentPreview>
 
 ## Props
 

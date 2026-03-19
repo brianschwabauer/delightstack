@@ -9,6 +9,7 @@ import TimelineHorizontalDemo from '../../../../components/demos/TimelineHorizon
 import TimelineColorDemo from '../../../../components/demos/TimelineColorDemo.svelte';
 import TimelineOrderDemo from '../../../../components/demos/TimelineOrderDemo.svelte';
 import TimelineAlternateDemo from '../../../../components/demos/TimelineAlternateDemo.svelte';
+import TimelineLoadMoreDemo from '../../../../components/demos/TimelineLoadMoreDemo.svelte';
 import { Timeline } from '@delightstack/components/display';
 
 ## Import
@@ -83,8 +84,7 @@ Events alternate between left and right in vertical mode.
 
 Load more events as the user scrolls near the end of the timeline.
 
-```svelte
-<Timeline onloadmore={loadMoreEvents} pending>
+<ComponentPreview code={`<Timeline onloadmore={loadMoreEvents} pending>
   {#each events as event}
     <TimelineItem
       date={event.date}
@@ -94,8 +94,9 @@ Load more events as the user scrolls near the end of the timeline.
       {event.description}
     </TimelineItem>
   {/each}
-</Timeline>
-```
+</Timeline>`}>
+  <TimelineLoadMoreDemo client:load />
+</ComponentPreview>
 
 ### Custom Marker Color
 

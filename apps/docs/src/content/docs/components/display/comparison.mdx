@@ -5,6 +5,12 @@ description: An interactive before/after image comparison slider using CSS clip-
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ComparisonDemo from '../../../../components/demos/ComparisonDemo.svelte';
+import ComparisonAltTextDemo from '../../../../components/demos/ComparisonAltTextDemo.svelte';
+import ComparisonCustomLabelsDemo from '../../../../components/demos/ComparisonCustomLabelsDemo.svelte';
+import ComparisonNoLabelsDemo from '../../../../components/demos/ComparisonNoLabelsDemo.svelte';
+import ComparisonVerticalDemo from '../../../../components/demos/ComparisonVerticalDemo.svelte';
+import ComparisonControlledDemo from '../../../../components/demos/ComparisonControlledDemo.svelte';
+import ComparisonSkeletonDemo from '../../../../components/demos/ComparisonSkeletonDemo.svelte';
 
 ## Import
 
@@ -31,54 +37,53 @@ import { Comparison } from '@delightstack/components';
 
 ### With Alt Text
 
-```svelte
-<Comparison
+<ComponentPreview code={`<Comparison
   before="/images/photo-original.jpg"
   after="/images/photo-edited.jpg"
   before_alt="Original photo"
   after_alt="Edited photo with filters applied"
-/>
-```
+/>`}>
+  <ComparisonAltTextDemo client:load />
+</ComponentPreview>
 
 ### Custom Labels
 
-```svelte
-<Comparison
+<ComponentPreview code={`<Comparison
   before="/images/design-v1.png"
   after="/images/design-v2.png"
   label_before="Version 1"
   label_after="Version 2"
-/>
-```
+/>`}>
+  <ComparisonCustomLabelsDemo client:load />
+</ComponentPreview>
 
 ### Without Labels
 
-```svelte
-<Comparison
+<ComponentPreview code={`<Comparison
   before="/images/before.jpg"
   after="/images/after.jpg"
   show_labels={false}
-/>
-```
+/>`}>
+  <ComparisonNoLabelsDemo client:load />
+</ComponentPreview>
 
 ### Vertical Orientation
 
 The divider moves up and down instead of left and right.
 
-```svelte
-<Comparison
+<ComponentPreview code={`<Comparison
   before="/images/before.jpg"
   after="/images/after.jpg"
   vertical
-/>
-```
+/>`}>
+  <ComparisonVerticalDemo client:load />
+</ComponentPreview>
 
 ### Controlled Position
 
 Bind to the `position` prop to control or read the slider position (0-100).
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   let position = $state(50);
 </script>
 
@@ -88,14 +93,15 @@ Bind to the `position` prop to control or read the slider position (0-100).
   bind:position
 />
 
-<p>Position: {position}%</p>
-```
+<p>Position: {position}%</p>`}>
+  <ComparisonControlledDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Comparison skeleton />
-```
+<ComponentPreview code={`<Comparison skeleton />`}>
+  <ComparisonSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 

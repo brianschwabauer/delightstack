@@ -6,6 +6,10 @@ description: A slide-out side panel supporting four positions, three modes (over
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import DrawerDemo from '../../../../components/demos/DrawerDemo.svelte';
 import DrawerRightDemo from '../../../../components/demos/DrawerRightDemo.svelte';
+import DrawerHeaderFooterDemo from '../../../../components/demos/DrawerHeaderFooterDemo.svelte';
+import DrawerPersistentDemo from '../../../../components/demos/DrawerPersistentDemo.svelte';
+import DrawerResponsiveDemo from '../../../../components/demos/DrawerResponsiveDemo.svelte';
+import DrawerTopBottomDemo from '../../../../components/demos/DrawerTopBottomDemo.svelte';
 
 ## Import
 
@@ -49,8 +53,7 @@ Position the drawer on the right edge of the viewport.
 
 Add structured header and footer sections using snippets.
 
-```svelte
-<Drawer bind:open width="320px">
+<ComponentPreview code={`<Drawer bind:open width="320px">
   {#snippet header()}
     <div style="padding: 1rem; border-bottom: 1px solid var(--color-border);">
       <h2 style="margin: 0;">Settings</h2>
@@ -63,56 +66,60 @@ Add structured header and footer sections using snippets.
 
   {#snippet footer()}
     <div style="padding: 1rem; border-top: 1px solid var(--color-border);">
-      <button onclick={() => open = false}>Close</button>
+      <Button outline onclick={() => open = false}>Cancel</Button>
+      <Button onclick={() => open = false}>Save</Button>
     </div>
   {/snippet}
-</Drawer>
-```
+</Drawer>`}>
+	<DrawerHeaderFooterDemo client:load />
+</ComponentPreview>
 
 ### Persistent Mode
 
 Always-visible drawer that becomes part of the layout flow (no backdrop, no transitions).
 
-```svelte
-<div style="display: flex; height: 100vh;">
-  <Drawer open persistent width="250px">
+<ComponentPreview code={`<div style="display: flex; height: 200px;">
+  <Drawer open persistent width="180px">
     <nav style="padding: 1rem;">
       <a href="/dashboard">Dashboard</a>
       <a href="/settings">Settings</a>
+      <a href="/profile">Profile</a>
     </nav>
   </Drawer>
   <main style="flex: 1; padding: 1rem;">
     <p>Main content area.</p>
   </main>
-</div>
-```
+</div>`}>
+	<DrawerPersistentDemo client:load />
+</ComponentPreview>
 
 ### Responsive Breakpoint
 
 Automatically switch between persistent (desktop) and overlay (mobile) based on a media query.
 
-```svelte
-<Drawer bind:open breakpoint="(min-width: 1024px)" width="280px">
+<ComponentPreview code={`<Drawer bind:open breakpoint="(min-width: 1024px)" width="220px">
   <nav style="padding: 1rem;">
     <a href="/">Home</a>
     <a href="/about">About</a>
+    <a href="/contact">Contact</a>
   </nav>
-</Drawer>
-```
+</Drawer>`}>
+	<DrawerResponsiveDemo client:load />
+</ComponentPreview>
 
 ### Top / Bottom Drawers
 
 Slide drawers from the top or bottom edge. Use `height` to set the panel size.
 
-```svelte
-<Drawer bind:open top height="200px">
+<ComponentPreview code={`<Drawer bind:open={topOpen} top height="200px">
   <p style="padding: 1rem;">Top drawer content.</p>
 </Drawer>
 
-<Drawer bind:open bottom height="300px">
+<Drawer bind:open={bottomOpen} bottom height="200px">
   <p style="padding: 1rem;">Bottom drawer content.</p>
-</Drawer>
-```
+</Drawer>`}>
+	<DrawerTopBottomDemo client:load />
+</ComponentPreview>
 
 ## Props
 

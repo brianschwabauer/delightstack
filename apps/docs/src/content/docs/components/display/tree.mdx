@@ -5,6 +5,15 @@ description: A hierarchical data display component for folder structures and nes
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import TreeDemo from '../../../../components/demos/TreeDemo.svelte';
+import TreeSelectableIconsDemo from '../../../../components/demos/TreeSelectableIconsDemo.svelte';
+import TreeCheckboxDemo from '../../../../components/demos/TreeCheckboxDemo.svelte';
+import TreeFlatDataDemo from '../../../../components/demos/TreeFlatDataDemo.svelte';
+import TreeSearchDemo from '../../../../components/demos/TreeSearchDemo.svelte';
+import TreeDragDropDemo from '../../../../components/demos/TreeDragDropDemo.svelte';
+import TreeLazyLoadDemo from '../../../../components/demos/TreeLazyLoadDemo.svelte';
+import TreeLinesDemo from '../../../../components/demos/TreeLinesDemo.svelte';
+import TreeCustomNodeDemo from '../../../../components/demos/TreeCustomNodeDemo.svelte';
+
 
 ## Import
 
@@ -60,35 +69,30 @@ import type { TreeNode, FlatTreeNode } from '@delightstack/components';
 
 ### Selectable with Icons
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Tree } from '@delightstack/components';
-  import FolderIcon from '~icons/mdi/folder';
-  import FileIcon from '~icons/mdi/file';
 
   const fileTree = [
     {
       id: '1',
       label: 'src',
-      icon: FolderIcon,
       children: [
         {
           id: '1-1',
           label: 'components',
-          icon: FolderIcon,
           children: [
-            { id: '1-1-1', label: 'Button.svelte', icon: FileIcon },
-            { id: '1-1-2', label: 'Modal.svelte', icon: FileIcon },
+            { id: '1-1-1', label: 'Button.svelte' },
+            { id: '1-1-2', label: 'Modal.svelte' },
           ],
         },
-        { id: '1-2', label: 'app.ts', icon: FileIcon },
+        { id: '1-2', label: 'app.ts' },
       ],
     },
-    { id: '2', label: 'package.json', icon: FileIcon },
+    { id: '2', label: 'package.json' },
   ];
 
-  let selected = $state<string[]>([]);
-  let expanded = $state<string[]>(['1']);
+  let selected = $state([]);
+  let expanded = $state(['1']);
 </script>
 
 <Tree
@@ -96,93 +100,124 @@ import type { TreeNode, FlatTreeNode } from '@delightstack/components';
   selectable
   bind:selected
   bind:expanded
-/>
-```
+/>`}>
+  <TreeSelectableIconsDemo client:load />
+</ComponentPreview>
 
 ### Checkbox Selection
 
 Parent checkboxes reflect children state with an indeterminate state when partially selected. Checking a parent checks all children.
 
-```svelte
-<Tree data={categories} checkboxes multiSelect bind:selected />
-```
+<ComponentPreview code={`<script>
+  import { Tree } from '@delightstack/components';
+
+  const categories = [
+    {
+      id: 'fruits',
+      label: 'Fruits',
+      children: [
+        { id: 'apple', label: 'Apple' },
+        { id: 'banana', label: 'Banana' },
+        { id: 'cherry', label: 'Cherry' },
+      ],
+    },
+    {
+      id: 'vegetables',
+      label: 'Vegetables',
+      children: [
+        { id: 'carrot', label: 'Carrot' },
+        { id: 'broccoli', label: 'Broccoli' },
+        { id: 'spinach', label: 'Spinach' },
+      ],
+    },
+  ];
+
+  let selected = $state([]);
+  let expanded = $state(['fruits', 'vegetables']);
+</script>
+
+<Tree data={categories} checkboxes multiSelect bind:selected bind:expanded />`}>
+  <TreeCheckboxDemo client:load />
+</ComponentPreview>
 
 ### Flat Data with Parent IDs
 
 The component automatically detects flat data (arrays with `parentId` properties) and builds the tree structure internally.
 
-```svelte
-<Tree
+<ComponentPreview code={`<Tree
   data={[
     { id: '1', parentId: null, label: 'Root' },
     { id: '2', parentId: '1', label: 'Child 1' },
     { id: '3', parentId: '1', label: 'Child 2' },
-    { id: '4', parentId: '2', label: 'Grandchild' },
+    { id: '4', parentId: '2', label: 'Grandchild 1' },
+    { id: '5', parentId: '2', label: 'Grandchild 2' },
+    { id: '6', parentId: '3', label: 'Grandchild 3' },
   ]}
   selectable
-/>
-```
+/>`}>
+  <TreeFlatDataDemo client:load />
+</ComponentPreview>
 
 ### Search/Filter
 
 Nodes matching the filter term are highlighted. Non-matching branches without matching descendants are hidden, and parent nodes auto-expand to reveal matches.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Tree } from '@delightstack/components';
 
   let searchTerm = $state('');
 </script>
 
 <input bind:value={searchTerm} placeholder="Search..." />
-<Tree data={fileTree} filter={searchTerm} />
-```
+<Tree data={fileTree} filter={searchTerm} />`}>
+  <TreeSearchDemo client:load />
+</ComponentPreview>
 
 ### Drag-and-Drop
 
 Enable drag-and-drop reordering between nodes.
 
-```svelte
-<Tree
+<ComponentPreview code={`<Tree
   data={fileTree}
   draggable
   ondrop={({ node, target, position }) => {
     updateTree(node, target, position);
   }}
-/>
-```
+/>`}>
+  <TreeDragDropDemo client:load />
+</ComponentPreview>
 
 ### Lazy Loading
 
 Load children on demand when a node is expanded. A loading spinner replaces the chevron during the fetch.
 
-```svelte
-<Tree
+<ComponentPreview code={`<Tree
   data={rootNodes}
   loadChildren={async (node) => {
     return await fetchChildren(node.id);
   }}
-/>
-```
+/>`}>
+  <TreeLazyLoadDemo client:load />
+</ComponentPreview>
 
 ### Connecting Lines
 
-```svelte
-<Tree data={fileTree} showLines bind:expanded />
-```
+<ComponentPreview code={`<Tree data={fileTree} showLines bind:expanded />`}>
+  <TreeLinesDemo client:load />
+</ComponentPreview>
 
 ### Custom Node Content
 
-```svelte
-{#snippet customNode({ node, level })}
+<ComponentPreview code={`{#snippet customNode({ node, level })}
   <span>{node.label}</span>
   {#if node.data?.badge}
-    <Badge>{node.data.badge}</Badge>
+    <span class="badge">{node.data.badge}</span>
   {/if}
 {/snippet}
 
-<Tree data={fileTree} nodeContent={customNode} />
-```
+<Tree data={fileTree} nodeContent={customNode} />`}>
+  <TreeCustomNodeDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 

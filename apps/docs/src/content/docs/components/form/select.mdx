@@ -11,6 +11,7 @@ import SelectMultiDemo from '../../../../components/demos/SelectMultiDemo.svelte
 import SelectGroupedDemo from '../../../../components/demos/SelectGroupedDemo.svelte';
 import SelectCreatableDemo from '../../../../components/demos/SelectCreatableDemo.svelte';
 import SelectErrorDemo from '../../../../components/demos/SelectErrorDemo.svelte';
+import SelectCustomOptionDemo from '../../../../components/demos/SelectCustomOptionDemo.svelte';
 
 ## Import
 
@@ -183,19 +184,34 @@ Allow users to type new values when no match is found.
 
 Use the `option` snippet to customize how each option appears in the dropdown.
 
-```svelte
-<Select options={users} bind:value={selectedUser} label="User">
+<ComponentPreview code={`<script>
+  import { Select } from '@delightstack/components';
+
+  let selectedUser = $state('');
+
+  const users = [
+    { value: 'alice', label: 'Alice Johnson', description: 'Engineering', initials: 'AJ' },
+    { value: 'bob', label: 'Bob Smith', description: 'Design', initials: 'BS' },
+    { value: 'carol', label: 'Carol Williams', description: 'Marketing', initials: 'CW' },
+    { value: 'dave', label: 'Dave Brown', description: 'Sales', initials: 'DB' },
+  ];
+</script>
+
+<Select options={users} bind:value={selectedUser} label="Assign to" placeholder="Select a team member">
   {#snippet option(opt)}
     <div style="display: flex; align-items: center; gap: 0.5rem;">
-      <Avatar src={opt.avatar} size="0" />
+      <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--c-primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">
+        {opt.initials}
+      </div>
       <div>
         <span>{opt.label}</span>
         <span style="font-size: 0.8em; opacity: 0.6;">{opt.description}</span>
       </div>
     </div>
   {/snippet}
-</Select>
-```
+</Select>`}>
+	<SelectCustomOptionDemo client:load />
+</ComponentPreview>
 
 ## Props
 

@@ -5,6 +5,8 @@ description: A star rating input for collecting user ratings or displaying score
 
 import { Rating } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import RatingCustomDemo from '../../../../components/demos/RatingCustomDemo.svelte';
+import RatingCustomMaxDemo from '../../../../components/demos/RatingCustomMaxDemo.svelte';
 
 ## Import
 
@@ -42,27 +44,20 @@ Use `readonly` to show a rating without interaction. Ideal for displaying averag
 	<Rating client:load value={4.3} readonly showValue />
 </ComponentPreview>
 
-### Custom Icons and Colors
+### Custom Colors
 
-Replace the default stars with any Svelte component. Use `color` to override the fill color.
+Use `color` to override the fill color of the stars.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Rating } from '@delightstack/components';
-  import HeartIcon from '~icons/mdi/heart';
-  import HeartOutlineIcon from '~icons/mdi/heart-outline';
 
-  let likes = $state(0);
+  let likes = $state(2);
 </script>
 
-<Rating
-  bind:value={likes}
-  max={3}
-  icon={HeartIcon}
-  emptyIcon={HeartOutlineIcon}
-  color="var(--color-error)"
-/>
-```
+<Rating bind:value={likes} max={3} color="var(--c-error, hsl(0 70% 55%))" showValue />
+<Rating value={4} readonly color="hsl(140 60% 45%)" showValue />`}>
+	<RatingCustomDemo client:load />
+</ComponentPreview>
 
 ### Clearable
 
@@ -86,9 +81,9 @@ Allow clicking the current rating again to clear it to 0.
 
 ### Custom Max
 
-```svelte
-<Rating bind:value={rating} max={10} />
-```
+<ComponentPreview code={`<Rating bind:value={rating} max={10} showValue />`}>
+	<RatingCustomMaxDemo client:load />
+</ComponentPreview>
 
 ## Props
 

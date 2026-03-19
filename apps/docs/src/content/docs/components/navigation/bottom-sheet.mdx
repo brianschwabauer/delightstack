@@ -8,6 +8,7 @@ import BottomSheetDemo from '../../../../components/demos/BottomSheetDemo.svelte
 import BottomSheetSnapDemo from '../../../../components/demos/BottomSheetSnapDemo.svelte';
 import BottomSheetHeaderDemo from '../../../../components/demos/BottomSheetHeaderDemo.svelte';
 import BottomSheetNonDismissibleDemo from '../../../../components/demos/BottomSheetNonDismissibleDemo.svelte';
+import BottomSheetNoBackdropDemo from '../../../../components/demos/BottomSheetNoBackdropDemo.svelte';
 
 ## Import
 
@@ -118,13 +119,13 @@ Prevent the sheet from being dismissed by dragging down or tapping the backdrop.
 
 Open the sheet without a backdrop overlay and without blocking body scroll.
 
-```svelte
-<BottomSheet bind:open showBackdrop={false} blocking={false}>
+<ComponentPreview code={`<BottomSheet bind:open showBackdrop={false} blocking={false}>
   <div style="padding: 1rem;">
     <p>Non-blocking sheet content.</p>
   </div>
-</BottomSheet>
-```
+</BottomSheet>`}>
+	<BottomSheetNoBackdropDemo client:load />
+</ComponentPreview>
 
 ## Props
 

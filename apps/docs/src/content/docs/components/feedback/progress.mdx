@@ -5,6 +5,8 @@ description: A unified progress and loading indicator component supporting circu
 
 import { Progress } from '@delightstack/components/feedback';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ProgressMultiSegmentDemo from '../../../../components/demos/ProgressMultiSegmentDemo.svelte';
+import ProgressOverlayDemo from '../../../../components/demos/ProgressOverlayDemo.svelte';
 
 ## Import
 
@@ -88,42 +90,39 @@ Add an animated stripe effect to a linear progress bar.
 
 Display multiple segments with different colors in a single linear bar.
 
-```svelte
-<Progress
+<ComponentPreview code={`<Progress
   circular={false}
   segments={[
-    { value: 40, color: 'var(--color-success)', label: 'Complete' },
-    { value: 25, color: 'var(--color-warning)', label: 'In Progress' },
-    { value: 10, color: 'var(--color-error)', label: 'Failed' },
+    { value: 40, color: 'var(--color-success)', label: 'Documents' },
+    { value: 25, color: 'var(--color-warning)', label: 'Photos' },
+    { value: 10, color: 'var(--color-error)', label: 'System' },
   ]}
-/>
-```
+/>`}>
+  <ProgressMultiSegmentDemo client:load />
+</ComponentPreview>
 
 ### Overlay and Fullscreen
 
 Use `overlay` to cover a parent element, or `fullScreen` to cover the entire viewport.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Progress } from '@delightstack/components';
 
-  let isLoading = $state(true);
-  let appLoading = $state(false);
+  let isLoading = $state(false);
 </script>
 
-<!-- Overlay on parent container -->
+<button onclick={() => { isLoading = true; setTimeout(() => isLoading = false, 3000); }}>
+  Reload Table Data
+</button>
+
 <div style="position: relative;">
-  <p>Table content here...</p>
+  <table>...</table>
   {#if isLoading}
     <Progress overlay label="Loading data..." />
   {/if}
-</div>
-
-<!-- Full-screen loading -->
-{#if appLoading}
-  <Progress fullScreen label="Starting application..." />
-{/if}
-```
+</div>`}>
+  <ProgressOverlayDemo client:load />
+</ComponentPreview>
 
 ### Color Variants
 

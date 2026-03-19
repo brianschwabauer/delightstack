@@ -12,6 +12,7 @@ import TabsVerticalDemo from '../../../../components/demos/TabsVerticalDemo.svel
 import TabsBadgesDemo from '../../../../components/demos/TabsBadgesDemo.svelte';
 import TabsFullWidthDemo from '../../../../components/demos/TabsFullWidthDemo.svelte';
 import TabsDisabledDemo from '../../../../components/demos/TabsDisabledDemo.svelte';
+import TabsSkeletonDemo from '../../../../components/demos/TabsSkeletonDemo.svelte';
 
 ## Import
 
@@ -149,9 +150,9 @@ Disable all tabs or individual tabs.
 
 ### Skeleton Loading
 
-```svelte
-<Tabs skeleton skeletonCount={4} />
-```
+<ComponentPreview code={`<Tabs skeleton skeletonCount={4} />`}>
+	<TabsSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 

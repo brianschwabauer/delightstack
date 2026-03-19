@@ -7,6 +7,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ListTextDemo from '../../../../components/demos/ListTextDemo.svelte';
 import ListRadioDemo from '../../../../components/demos/ListRadioDemo.svelte';
 import ListCheckboxDemo from '../../../../components/demos/ListCheckboxDemo.svelte';
+import ListDenseDemo from '../../../../components/demos/ListDenseDemo.svelte';
 import { List } from '@delightstack/components/display';
 
 ## Import
@@ -66,13 +67,13 @@ Multiple-select mode using checkboxes. The `value` array contains all selected i
 
 Compact spacing for action-oriented lists.
 
-```svelte
-<List dense>
+<ComponentPreview code={`<List dense>
   <ListItem onclick={() => handleEdit()}>Edit</ListItem>
   <ListItem onclick={() => handleDuplicate()}>Duplicate</ListItem>
   <ListItem onclick={() => handleDelete()}>Delete</ListItem>
-</List>
-```
+</List>`}>
+  <ListDenseDemo client:load />
+</ComponentPreview>
 
 ### Text Mode (Non-Interactive)
 

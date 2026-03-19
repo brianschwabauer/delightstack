@@ -7,6 +7,8 @@ import { Checkbox } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CheckboxErrorDemo from '../../../../components/demos/CheckboxErrorDemo.svelte';
 import CheckboxIndeterminateDemo from '../../../../components/demos/CheckboxIndeterminateDemo.svelte';
+import CheckboxGroupDemo from '../../../../components/demos/CheckboxGroupDemo.svelte';
+import CheckboxGroupErrorDemo from '../../../../components/demos/CheckboxGroupErrorDemo.svelte';
 
 ## Import
 
@@ -64,36 +66,76 @@ Use `indeterminate` for tree-style parent checkboxes where some children are sel
 
 ### Checkbox Group
 
-Use `CheckboxGroup` to manage multiple related checkboxes. The group's `value` is an array of selected values.
+Group multiple related checkboxes to manage selections together.
 
-```svelte
-<script>
-  import { Checkbox, CheckboxGroup } from '@delightstack/components';
+<ComponentPreview code={`<script>
+  import { Checkbox } from '@delightstack/components';
 
   let notifications = $state(['email', 'push']);
+
+  function toggle(val) {
+    if (notifications.includes(val)) {
+      notifications = notifications.filter((v) => v !== val);
+    } else {
+      notifications = [...notifications, val];
+    }
+  }
 </script>
 
-<CheckboxGroup bind:value={notifications} label="Notification preferences" name="notifications">
-  <Checkbox value="email" label="Email notifications" />
-  <Checkbox value="sms" label="SMS notifications" />
-  <Checkbox value="push" label="Push notifications" />
-</CheckboxGroup>
-```
+<Checkbox
+  checked={notifications.includes('email')}
+  onchange={() => toggle('email')}
+  label="Email notifications"
+/>
+<Checkbox
+  checked={notifications.includes('sms')}
+  onchange={() => toggle('sms')}
+  label="SMS notifications"
+/>
+<Checkbox
+  checked={notifications.includes('push')}
+  onchange={() => toggle('push')}
+  label="Push notifications"
+/>`}>
+	<CheckboxGroupDemo client:load />
+</ComponentPreview>
 
 ### Group with Error
 
-```svelte
-<CheckboxGroup
-  bind:value={permissions}
-  label="Permissions"
-  required
-  error={permissions.length === 0 ? 'Select at least one permission' : ''}
->
-  <Checkbox value="read" label="Read" />
-  <Checkbox value="write" label="Write" />
-  <Checkbox value="admin" label="Admin" />
-</CheckboxGroup>
-```
+<ComponentPreview code={`<script>
+  import { Checkbox } from '@delightstack/components';
+
+  let permissions = $state([]);
+
+  function toggle(val) {
+    if (permissions.includes(val)) {
+      permissions = permissions.filter((v) => v !== val);
+    } else {
+      permissions = [...permissions, val];
+    }
+  }
+</script>
+
+<Checkbox
+  checked={permissions.includes('read')}
+  onchange={() => toggle('read')}
+  label="Read"
+/>
+<Checkbox
+  checked={permissions.includes('write')}
+  onchange={() => toggle('write')}
+  label="Write"
+/>
+<Checkbox
+  checked={permissions.includes('admin')}
+  onchange={() => toggle('admin')}
+  label="Admin"
+/>
+{#if permissions.length === 0}
+  <p style="color: var(--c-error);">Select at least one permission</p>
+{/if}`}>
+	<CheckboxGroupErrorDemo client:load />
+</ComponentPreview>
 
 ### Disabled
 

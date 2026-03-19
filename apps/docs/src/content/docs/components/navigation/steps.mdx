@@ -10,6 +10,7 @@ import StepsNonLinearDemo from '../../../../components/demos/StepsNonLinearDemo.
 import StepsVerticalDemo from '../../../../components/demos/StepsVerticalDemo.svelte';
 import StepsErrorDemo from '../../../../components/demos/StepsErrorDemo.svelte';
 import StepsWizardDemo from '../../../../components/demos/StepsWizardDemo.svelte';
+import StepsSkeletonDemo from '../../../../components/demos/StepsSkeletonDemo.svelte';
 
 ## Import
 
@@ -155,9 +156,9 @@ Render content for each step, shown when that step is active.
 
 ### Skeleton Loading
 
-```svelte
-<Steps skeleton skeletonCount={4} />
-```
+<ComponentPreview code={`<Steps skeleton skeletonCount={4} />`}>
+	<StepsSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 

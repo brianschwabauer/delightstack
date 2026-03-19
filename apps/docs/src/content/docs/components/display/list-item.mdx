@@ -6,6 +6,10 @@ description: A versatile list item that adapts to its parent List context, suppo
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ListItemActiveDemo from '../../../../components/demos/ListItemActiveDemo.svelte';
 import ListItemDisabledDemo from '../../../../components/demos/ListItemDisabledDemo.svelte';
+import ListItemNavDemo from '../../../../components/demos/ListItemNavDemo.svelte';
+import ListItemAsyncDemo from '../../../../components/demos/ListItemAsyncDemo.svelte';
+import ListItemSlotsDemo from '../../../../components/demos/ListItemSlotsDemo.svelte';
+import ListItemSubmenuDemo from '../../../../components/demos/ListItemSubmenuDemo.svelte';
 
 ## Import
 
@@ -27,63 +31,67 @@ import { List, ListItem } from '@delightstack/components';
 
 ListItems can render as anchor elements when `href` is provided.
 
-```svelte
-<List>
+<ComponentPreview code={`<List>
   <ListItem href="/profile">Profile</ListItem>
   <ListItem href="/settings">Settings</ListItem>
   <ListItem onclick={handleLogout}>Log Out</ListItem>
-</List>
-```
+</List>`}>
+  <ListItemNavDemo client:load />
+</ComponentPreview>
 
 ### Async Click Handling
 
 When `onclick` returns a Promise, a loading spinner is shown until it resolves.
 
-```svelte
-<List>
+<ComponentPreview code={`<List>
   <ListItem onclick={async () => {
     await api.saveItem();
   }}>
     Save Item
   </ListItem>
-</List>
-```
+</List>`}>
+  <ListItemAsyncDemo client:load />
+</ComponentPreview>
 
 ### Content Slots
 
-Use `start` and `end` snippets for leading/trailing content.
+Use inline SVG or icons as leading/trailing content within list items.
 
-```svelte
-<List>
+<ComponentPreview code={`<List>
   <ListItem href="/profile">
-    {#snippet start()}
-      <UserIcon />
-    {/snippet}
+    <UserIcon style="margin-right: 0.75rem;" />
     Profile
-    {#snippet end()}
-      <ChevronIcon />
-    {/snippet}
+    <span style="flex: 1;" />
+    <ChevronIcon />
   </ListItem>
-</List>
-```
+  <ListItem href="/settings">
+    <SettingsIcon style="margin-right: 0.75rem;" />
+    Settings
+    <span style="flex: 1;" />
+    <ChevronIcon />
+  </ListItem>
+</List>`}>
+  <ListItemSlotsDemo client:load />
+</ComponentPreview>
 
 ### Submenu via Menu Snippet
 
 Provide a `menu` snippet to show a more-options button with a dropdown.
 
-```svelte
-<List>
+<ComponentPreview code={`<List>
   <ListItem>
-    More Options
+    Document A
     {#snippet menu()}
       <List>
         <ListItem onclick={() => edit()}>Edit</ListItem>
+        <ListItem onclick={() => duplicate()}>Duplicate</ListItem>
         <ListItem onclick={() => remove()}>Delete</ListItem>
       </List>
     {/snippet}
   </ListItem>
-</List>
-```
+</List>`}>
+  <ListItemSubmenuDemo client:load />
+</ComponentPreview>
 
 ### Active State
 

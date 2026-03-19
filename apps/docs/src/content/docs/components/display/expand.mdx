@@ -7,6 +7,9 @@ import { Expand } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ExpandBasicDemo from '../../../../components/demos/ExpandBasicDemo.svelte';
 import ExpandButtonDemo from '../../../../components/demos/ExpandButtonDemo.svelte';
+import ExpandConditionalDemo from '../../../../components/demos/ExpandConditionalDemo.svelte';
+import ExpandAccordionDemo from '../../../../components/demos/ExpandAccordionDemo.svelte';
+import ExpandCustomStyleDemo from '../../../../components/demos/ExpandCustomStyleDemo.svelte';
 
 ## Import
 
@@ -59,8 +62,9 @@ import { Expand } from '@delightstack/components';
 
 ### Conditional Sections
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
+  import { Expand } from '@delightstack/components';
+
   let showAdvanced = $state(false);
 </script>
 
@@ -73,25 +77,38 @@ import { Expand } from '@delightstack/components';
   <div style="padding: 1rem 0;">
     <p>Advanced configuration fields go here.</p>
   </div>
-</Expand>
-```
+</Expand>`}>
+  <ExpandConditionalDemo client:load />
+</ComponentPreview>
 
 ### Used by Accordion
 
 The Expand component is used internally by the Accordion component for its expand/collapse behavior.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Expand } from '@delightstack/components';
+
+  const sections = [
+    { id: 'about', title: 'About', content: 'We are a team dedicated to building great developer tools.' },
+    { id: 'features', title: 'Features', content: 'Smooth animations, accessible by default, and easy to customize.' },
+    { id: 'pricing', title: 'Pricing', content: 'Free for open-source projects. Contact us for enterprise plans.' },
+  ];
+
+  let active = $state('about');
+</script>
+
 {#each sections as section}
   <div class="accordion-item">
-    <button onclick={() => active = section.id}>
+    <button onclick={() => active = active === section.id ? '' : section.id}>
       {section.title}
     </button>
     <Expand show={active === section.id}>
       <div>{section.content}</div>
     </Expand>
   </div>
-{/each}
-```
+{/each}`}>
+  <ExpandAccordionDemo client:load />
+</ComponentPreview>
 
 ### Always Expanded
 
@@ -111,13 +128,23 @@ A simple example showing the Expand container in its open state.
 
 ### With Custom Inline Style
 
-```svelte
-<Expand show={visible} style="border-top: 1px solid #eee;">
-  <div style="padding: 1rem;">
-    Styled expand container.
+<ComponentPreview code={`<script>
+  import { Expand } from '@delightstack/components';
+
+  let visible = $state(false);
+</script>
+
+<button onclick={() => visible = !visible}>
+  {visible ? 'Hide' : 'Show'} Styled Content
+</button>
+
+<Expand show={visible} style="border-top: 2px solid #6366f1; margin-top: 0.75rem;">
+  <div style="padding: 1rem; background: #f5f3ff; border-radius: 0 0 8px 8px;">
+    <p>This expand container has a custom inline style with an accent border and tinted background.</p>
   </div>
-</Expand>
-```
+</Expand>`}>
+  <ExpandCustomStyleDemo client:load />
+</ComponentPreview>
 
 ## Props
 

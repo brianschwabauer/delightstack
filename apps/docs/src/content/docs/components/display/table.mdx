@@ -7,6 +7,10 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import TableDemo from '../../../../components/demos/TableDemo.svelte';
 import TableSortableDemo from '../../../../components/demos/TableSortableDemo.svelte';
 import TableStripedDemo from '../../../../components/demos/TableStripedDemo.svelte';
+import TableCustomCellDemo from '../../../../components/demos/TableCustomCellDemo.svelte';
+import TableSelectableDemo from '../../../../components/demos/TableSelectableDemo.svelte';
+import TableExpandableDemo from '../../../../components/demos/TableExpandableDemo.svelte';
+import TableSkeletonDemo from '../../../../components/demos/TableSkeletonDemo.svelte';
 
 ## Import
 
@@ -76,13 +80,12 @@ Mark columns as `sortable` and bind the sort state.
 
 Use Svelte snippets to render custom cell content.
 
-```svelte
-<script>
-  import { Table, Badge, Button } from '@delightstack/components';
+<ComponentPreview code={`<script>
+  import { Table, Button } from '@delightstack/components';
 </script>
 
 {#snippet statusCell({ value })}
-  <Badge color={value === 'active' ? 'success' : 'warning'}>{value}</Badge>
+  <span class="status-badge">{value}</span>
 {/snippet}
 
 {#snippet actionsCell({ row })}
@@ -94,20 +97,21 @@ Use Svelte snippets to render custom cell content.
   columns={[
     { key: 'name', label: 'Name', sortable: true },
     { key: 'status', label: 'Status', cell: statusCell },
+    { key: 'role', label: 'Role' },
     { key: 'actions', label: '', cell: actionsCell, width: '100px' },
   ]}
-/>
-```
+/>`}>
+  <TableCustomCellDemo client:load />
+</ComponentPreview>
 
 ### Row Selection with Checkboxes
 
 Enable `selectable` to show checkboxes. Supports shift-click range selection.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Table } from '@delightstack/components';
 
-  let selectedUsers = $state<typeof users>([]);
+  let selectedUsers = $state([]);
 </script>
 
 <Table
@@ -115,8 +119,9 @@ Enable `selectable` to show checkboxes. Supports shift-click range selection.
   columns={columns}
   selectable
   bind:selected={selectedUsers}
-/>
-```
+/>`}>
+  <TableSelectableDemo client:load />
+</ComponentPreview>
 
 ### Striped and Dense
 
@@ -126,8 +131,7 @@ Enable `selectable` to show checkboxes. Supports shift-click range selection.
 
 ### Expandable Rows
 
-```svelte
-{#snippet rowDetail(row)}
+<ComponentPreview code={`{#snippet rowDetail(row)}
   <p>Details for {row.name}: {row.bio}</p>
 {/snippet}
 
@@ -136,13 +140,13 @@ Enable `selectable` to show checkboxes. Supports shift-click range selection.
   columns={columns}
   expandable
   expandedRow={rowDetail}
-/>
-```
+/>`}>
+  <TableExpandableDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Table
+<ComponentPreview code={`<Table
   skeleton
   skeletonCount={5}
   columns={[
@@ -151,8 +155,9 @@ Enable `selectable` to show checkboxes. Supports shift-click range selection.
     { key: 'status', label: 'Status' },
   ]}
   data={[]}
-/>
-```
+/>`}>
+  <TableSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 

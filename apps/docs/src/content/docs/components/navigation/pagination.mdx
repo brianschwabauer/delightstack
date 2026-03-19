@@ -8,6 +8,10 @@ import PaginationDemo from '../../../../components/demos/PaginationDemo.svelte';
 import PaginationSimpleDemo from '../../../../components/demos/PaginationSimpleDemo.svelte';
 import PaginationCompactDemo from '../../../../components/demos/PaginationCompactDemo.svelte';
 import PaginationSizesDemo from '../../../../components/demos/PaginationSizesDemo.svelte';
+import PaginationPageSizeDemo from '../../../../components/demos/PaginationPageSizeDemo.svelte';
+import PaginationInfoDemo from '../../../../components/demos/PaginationInfoDemo.svelte';
+import PaginationEllipsisDemo from '../../../../components/demos/PaginationEllipsisDemo.svelte';
+import PaginationSkeletonDemo from '../../../../components/demos/PaginationSkeletonDemo.svelte';
 
 ## Import
 
@@ -49,8 +53,7 @@ An even more minimal layout with just arrows and "X / Y".
 
 Show a dropdown to change the number of items per page.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Pagination } from '@delightstack/components';
 
   let page = $state(1);
@@ -63,27 +66,28 @@ Show a dropdown to change the number of items per page.
   totalPages={40}
   showPageSize
   pageSizeOptions={[10, 25, 50, 100]}
-  onpagesizechange={({ pageSize: size }) => {
-    page = 1; // Reset to first page
+  onpagesizechange={() => {
+    page = 1;
   }}
-/>
-```
+/>`}>
+	<PaginationPageSizeDemo client:load />
+</ComponentPreview>
 
 ### Item Range Info
 
 Show "Showing X-Y of Z" alongside pagination.
 
-```svelte
-<Pagination bind:page totalPages={20} totalItems={500} pageSize={25} showInfo />
-```
+<ComponentPreview code={`<Pagination bind:page totalPages={20} totalItems={500} pageSize={25} showInfo />`}>
+	<PaginationInfoDemo client:load />
+</ComponentPreview>
 
 ### Custom Ellipsis Behavior
 
 Control how many sibling and boundary pages are visible.
 
-```svelte
-<Pagination bind:page totalPages={50} siblingCount={2} boundaryCount={2} />
-```
+<ComponentPreview code={`<Pagination bind:page totalPages={50} siblingCount={2} boundaryCount={2} />`}>
+	<PaginationEllipsisDemo client:load />
+</ComponentPreview>
 
 ### Sizes
 
@@ -95,9 +99,9 @@ Control how many sibling and boundary pages are visible.
 
 ### Skeleton Loading
 
-```svelte
-<Pagination skeleton />
-```
+<ComponentPreview code={`<Pagination skeleton />`}>
+	<PaginationSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 

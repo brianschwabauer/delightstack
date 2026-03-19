@@ -9,6 +9,8 @@ import MenuShortcutsDemo from '../../../../components/demos/MenuShortcutsDemo.sv
 import MenuGroupedDemo from '../../../../components/demos/MenuGroupedDemo.svelte';
 import MenuCheckboxDemo from '../../../../components/demos/MenuCheckboxDemo.svelte';
 import MenuRadioDemo from '../../../../components/demos/MenuRadioDemo.svelte';
+import MenuDisabledDemo from '../../../../components/demos/MenuDisabledDemo.svelte';
+import MenuPlacementDemo from '../../../../components/demos/MenuPlacementDemo.svelte';
 
 ## Import
 
@@ -164,23 +166,27 @@ Single-selection items within a radio group.
 
 ### Disabled Items
 
-```svelte
-<Menu bind:open={menuOpen} trigger={triggerEl}>
-  <MenuItem onclick={handleSave}>Save</MenuItem>
+<ComponentPreview code={`<Menu bind:open={menuOpen} trigger={triggerEl}>
+  <MenuItem onclick={() => {}}>Save</MenuItem>
   <MenuItem disabled>Save As... (Pro)</MenuItem>
-</Menu>
-```
+  <MenuSeparator />
+  <MenuItem onclick={() => {}}>Export</MenuItem>
+  <MenuItem disabled>Import (Coming Soon)</MenuItem>
+</Menu>`}>
+	<MenuDisabledDemo client:load />
+</ComponentPreview>
 
 ### Custom Placement
 
 Position the menu relative to the trigger using Floating UI placements.
 
-```svelte
-<Menu bind:open={menuOpen} trigger={triggerEl} placement="right-start">
-  <MenuItem>Option A</MenuItem>
-  <MenuItem>Option B</MenuItem>
-</Menu>
-```
+<ComponentPreview code={`<Menu bind:open={menuOpen} trigger={triggerEl} placement="right-start">
+  <MenuItem onclick={() => {}}>Option A</MenuItem>
+  <MenuItem onclick={() => {}}>Option B</MenuItem>
+  <MenuItem onclick={() => {}}>Option C</MenuItem>
+</Menu>`}>
+	<MenuPlacementDemo client:load />
+</ComponentPreview>
 
 ## Props
 

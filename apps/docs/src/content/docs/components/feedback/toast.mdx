@@ -7,6 +7,11 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ToastDemo from '../../../../components/demos/ToastDemo.svelte';
 import ToastVariantsDemo from '../../../../components/demos/ToastVariantsDemo.svelte';
 import ToastPromiseDemo from '../../../../components/demos/ToastPromiseDemo.svelte';
+import ToastActionDemo from '../../../../components/demos/ToastActionDemo.svelte';
+import ToastDynamicPromiseDemo from '../../../../components/demos/ToastDynamicPromiseDemo.svelte';
+import ToastPersistentDemo from '../../../../components/demos/ToastPersistentDemo.svelte';
+import ToastCustomDurationDemo from '../../../../components/demos/ToastCustomDurationDemo.svelte';
+import ToastDismissDemo from '../../../../components/demos/ToastDismissDemo.svelte';
 
 ## Import
 
@@ -57,23 +62,22 @@ Place `<Toaster />` once in your root layout, then call `toast()` from anywhere.
 
 Toasts with an action automatically get 2 seconds of extra display time.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { toast } from '@delightstack/components';
 
   function handleDelete() {
-    deleteItem();
     toast('Item deleted', {
       action: {
         label: 'Undo',
-        onclick: () => restoreItem(),
+        onclick: () => toast.success('Item restored!'),
       },
     });
   }
 </script>
 
-<button onclick={handleDelete}>Delete Item</button>
-```
+<button onclick={handleDelete}>Delete Item</button>`}>
+  <ToastActionDemo client:load />
+</ComponentPreview>
 
 ### Promise Toast
 
@@ -99,57 +103,70 @@ Track async operations with automatic loading, success, and error states.
 
 The success and error messages can be functions that receive the result or error.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { toast } from '@delightstack/components';
+
+  function handleSave() {
+    const promise = new Promise((resolve) =>
+      setTimeout(() => resolve({ filename: 'report.pdf' }), 2000)
+    );
+    toast.promise(promise, {
+      loading: 'Saving...',
+      success: (result) => \`Saved \${result.filename}\`,
+      error: (err) => \`Failed: \${err.message}\`,
+    });
+  }
 </script>
 
-<button onclick={() => toast.promise(saveData(), {
-  loading: 'Saving...',
-  success: (result) => `Saved ${result.filename}`,
-  error: (err) => `Failed: ${err.message}`,
-})}>
-  Save
-</button>
-```
+<button onclick={handleSave}>Save File</button>`}>
+  <ToastDynamicPromiseDemo client:load />
+</ComponentPreview>
 
 ### Persistent Toast
 
 Set `persistent: true` to prevent auto-dismiss. The toast stays until manually dismissed.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { toast } from '@delightstack/components';
+</script>
+
 <button onclick={() => toast.warning('Session expiring soon', { persistent: true })}>
   Show Persistent Warning
-</button>
-```
+</button>`}>
+  <ToastPersistentDemo client:load />
+</ComponentPreview>
 
 ### Custom Duration
 
-```svelte
+<ComponentPreview code={`<script>
+  import { toast } from '@delightstack/components';
+</script>
+
 <button onclick={() => toast('Quick notice', { duration: 2000 })}>
   2 Second Toast
 </button>
 
 <button onclick={() => toast('Longer notice', { duration: 8000 })}>
   8 Second Toast
-</button>
-```
+</button>`}>
+  <ToastCustomDurationDemo client:load />
+</ComponentPreview>
 
 ### Dismissing Toasts
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { toast } from '@delightstack/components';
 
   function showAndDismiss() {
-    const id = toast('This will be dismissed programmatically');
+    const id = toast('This will be dismissed in 2 seconds');
     setTimeout(() => toast.dismiss(id), 2000);
   }
 </script>
 
 <button onclick={showAndDismiss}>Show then Dismiss</button>
-<button onclick={() => toast.dismiss()}>Clear All Toasts</button>
-```
+<button onclick={() => toast.dismiss()}>Clear All Toasts</button>`}>
+  <ToastDismissDemo client:load />
+</ComponentPreview>
 
 ## Toaster Props
 

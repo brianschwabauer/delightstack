@@ -7,6 +7,8 @@ import { Fieldset, Input } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import FieldsetGridDemo from '../../../../components/demos/FieldsetGridDemo.svelte';
 import FieldsetCollapsibleDemo from '../../../../components/demos/FieldsetCollapsibleDemo.svelte';
+import FieldsetDescErrorDemo from '../../../../components/demos/FieldsetDescErrorDemo.svelte';
+import FieldsetSkeletonDemo from '../../../../components/demos/FieldsetSkeletonDemo.svelte';
 
 ## Import
 
@@ -95,26 +97,26 @@ Click the legend to expand or collapse the content. Bind `collapsed` for control
 
 ### With Description and Error
 
-```svelte
-<Fieldset legend="Profile" description="This information is publicly visible">
+<ComponentPreview code={`<Fieldset legend="Profile" description="This information is publicly visible" bordered>
   <Input label="Display Name" name="displayName" />
-  <Input label="Bio" type="textarea" name="bio" />
+  <Input label="Bio" name="bio" />
 </Fieldset>
 
-<Fieldset legend="Permissions" required error="Select at least one permission">
-  <Checkbox value="read" label="Read" />
-  <Checkbox value="write" label="Write" />
-</Fieldset>
-```
+<Fieldset legend="Permissions" required error="Select at least one permission" bordered>
+  <Checkbox checked={false} label="Read" />
+  <Checkbox checked={false} label="Write" />
+</Fieldset>`}>
+	<FieldsetDescErrorDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 
-```svelte
-<Fieldset skeleton legend="User Profile">
+<ComponentPreview code={`<Fieldset skeleton legend="User Profile">
   <Input label="Name" name="name" skeleton />
   <Input label="Email" name="email" skeleton />
-</Fieldset>
-```
+</Fieldset>`}>
+	<FieldsetSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 

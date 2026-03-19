@@ -7,6 +7,7 @@ import { Radio, RadioGroup } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import RadioErrorDemo from '../../../../components/demos/RadioErrorDemo.svelte';
 import RadioSizesDemo from '../../../../components/demos/RadioSizesDemo.svelte';
+import RadioStandaloneDemo from '../../../../components/demos/RadioStandaloneDemo.svelte';
 
 ## Import
 
@@ -105,8 +106,7 @@ import type { RadioGroupContext } from '@delightstack/components';
 
 A Radio can be used without a RadioGroup by managing `checked` directly.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Radio } from '@delightstack/components';
 
   let selected = $state('option1');
@@ -123,8 +123,9 @@ A Radio can be used without a RadioGroup by managing `checked` directly.
   checked={selected === 'option2'}
   onchange={() => selected = 'option2'}
   label="Option 2"
-/>
-```
+/>`}>
+	<RadioStandaloneDemo client:load />
+</ComponentPreview>
 
 ### Sizes
 
