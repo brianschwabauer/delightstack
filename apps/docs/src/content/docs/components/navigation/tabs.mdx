@@ -5,6 +5,13 @@ description: A tabbed navigation component with sliding indicator animation, mul
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import TabsDemo from '../../../../components/demos/TabsDemo.svelte';
+import TabsPillDemo from '../../../../components/demos/TabsPillDemo.svelte';
+import TabsBoxedDemo from '../../../../components/demos/TabsBoxedDemo.svelte';
+import TabsSegmentedDemo from '../../../../components/demos/TabsSegmentedDemo.svelte';
+import TabsVerticalDemo from '../../../../components/demos/TabsVerticalDemo.svelte';
+import TabsBadgesDemo from '../../../../components/demos/TabsBadgesDemo.svelte';
+import TabsFullWidthDemo from '../../../../components/demos/TabsFullWidthDemo.svelte';
+import TabsDisabledDemo from '../../../../components/demos/TabsDisabledDemo.svelte';
 
 ## Import
 
@@ -47,44 +54,43 @@ import type { TabsContext } from '@delightstack/components';
 
 Rounded pill-shaped tab buttons.
 
-```svelte
-<Tabs bind:value={activeTab} pills>
+<ComponentPreview code={`<Tabs bind:value={activeTab} pills>
   <Tab value="all" label="All" />
   <Tab value="active" label="Active" badge="3" />
   <Tab value="archived" label="Archived" />
-</Tabs>
-```
+</Tabs>`}>
+	<TabsPillDemo client:load />
+</ComponentPreview>
 
 ### Boxed Variant
 
 Tabs enclosed in a bordered container.
 
-```svelte
-<Tabs bind:value={activeTab} boxed>
+<ComponentPreview code={`<Tabs bind:value={activeTab} boxed>
   <Tab value="tab1" label="Tab 1" />
   <Tab value="tab2" label="Tab 2" />
   <Tab value="tab3" label="Tab 3" />
-</Tabs>
-```
+</Tabs>`}>
+	<TabsBoxedDemo client:load />
+</ComponentPreview>
 
 ### Segmented Control
 
 A segmented-control style, useful for toggling between a small set of options.
 
-```svelte
-<Tabs bind:value={activeTab} segment>
+<ComponentPreview code={`<Tabs bind:value={activeTab} segment>
   <Tab value="day" label="Day" />
   <Tab value="week" label="Week" />
   <Tab value="month" label="Month" />
-</Tabs>
-```
+</Tabs>`}>
+	<TabsSegmentedDemo client:load />
+</ComponentPreview>
 
 ### Vertical Orientation
 
 Stack tabs vertically for sidebar-style navigation.
 
-```svelte
-<div style="display: flex; gap: 1rem;">
+<ComponentPreview code={`<div style="display: flex; gap: 1rem;">
   <Tabs bind:value={activeTab} orientation="vertical">
     <Tab value="general" label="General" />
     <Tab value="security" label="Security" />
@@ -95,39 +101,39 @@ Stack tabs vertically for sidebar-style navigation.
     <TabContent value="security"><p>Security settings.</p></TabContent>
     <TabContent value="notifications"><p>Notification settings.</p></TabContent>
   </div>
-</div>
-```
+</div>`}>
+	<TabsVerticalDemo client:load />
+</ComponentPreview>
 
 ### With Badges
 
 Display badges next to tab labels.
 
-```svelte
-<Tabs bind:value={activeTab}>
+<ComponentPreview code={`<Tabs bind:value={activeTab}>
   <Tab value="inbox" label="Inbox" badge={12} />
   <Tab value="sent" label="Sent" />
   <Tab value="drafts" label="Drafts" badge="2" />
-</Tabs>
-```
+</Tabs>`}>
+	<TabsBadgesDemo client:load />
+</ComponentPreview>
 
 ### Full Width
 
 Stretch tabs to fill the available width evenly.
 
-```svelte
-<Tabs bind:value={activeTab} fullWidth>
+<ComponentPreview code={`<Tabs bind:value={activeTab} fullWidth>
   <Tab value="a" label="First" />
   <Tab value="b" label="Second" />
   <Tab value="c" label="Third" />
-</Tabs>
-```
+</Tabs>`}>
+	<TabsFullWidthDemo client:load />
+</ComponentPreview>
 
 ### Disabled
 
 Disable all tabs or individual tabs.
 
-```svelte
-<!-- All tabs disabled -->
+<ComponentPreview code={`<!-- All tabs disabled -->
 <Tabs bind:value={activeTab} disabled>
   <Tab value="a" label="Tab A" />
   <Tab value="b" label="Tab B" />
@@ -137,8 +143,9 @@ Disable all tabs or individual tabs.
 <Tabs bind:value={activeTab}>
   <Tab value="a" label="Available" />
   <Tab value="b" label="Coming Soon" disabled />
-</Tabs>
-```
+</Tabs>`}>
+	<TabsDisabledDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 

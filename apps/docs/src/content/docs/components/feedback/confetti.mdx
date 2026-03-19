@@ -5,6 +5,12 @@ description: A canvas-based celebration animation with both a programmatic API a
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ConfettiDemo from '../../../../components/demos/ConfettiDemo.svelte';
+import ConfettiComponentDemo from '../../../../components/demos/ConfettiComponentDemo.svelte';
+import ConfettiCustomDemo from '../../../../components/demos/ConfettiCustomDemo.svelte';
+import ConfettiPresetsDemo from '../../../../components/demos/ConfettiPresetsDemo.svelte';
+import ConfettiStopDemo from '../../../../components/demos/ConfettiStopDemo.svelte';
+import ConfettiComponentPresetsDemo from '../../../../components/demos/ConfettiComponentPresetsDemo.svelte';
+import ConfettiShapesDemo from '../../../../components/demos/ConfettiShapesDemo.svelte';
 
 ## Import
 
@@ -39,23 +45,22 @@ The simplest way to fire confetti is with the `confetti()` function. No componen
 
 Mount `<Confetti />` and control it with the `active` prop.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Confetti } from '@delightstack/components';
 
   let celebrating = $state(false);
 </script>
 
 <button onclick={() => celebrating = true}>Celebrate!</button>
-<Confetti active={celebrating} onend={() => celebrating = false} />
-```
+<Confetti active={celebrating} onend={() => celebrating = false} />`}>
+  <ConfettiComponentDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
 ### Customized Burst
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { confetti } from '@delightstack/components';
 
   function celebrate() {
@@ -68,15 +73,15 @@ Mount `<Confetti />` and control it with the `active` prop.
   }
 </script>
 
-<button onclick={celebrate}>Custom Burst</button>
-```
+<button onclick={celebrate}>Custom Burst</button>`}>
+  <ConfettiCustomDemo client:load />
+</ComponentPreview>
 
 ### Preset Animations
 
 All presets are available as methods on the `confetti` function.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { confetti } from '@delightstack/components';
 </script>
 
@@ -93,15 +98,15 @@ All presets are available as methods on the `confetti` function.
 <button onclick={() => confetti.sides()}>Sides</button>
 
 <!-- Gentle particles falling from top -->
-<button onclick={() => confetti.rain({ duration: 4000 })}>Rain</button>
-```
+<button onclick={() => confetti.rain({ duration: 4000 })}>Rain</button>`}>
+  <ConfettiPresetsDemo client:load />
+</ComponentPreview>
 
 ### Stopping Continuous Effects
 
 `confetti.cannon()` and `confetti.rain()` return a `stop()` function. You can also use `confetti.stop()` to stop all active animations.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { confetti } from '@delightstack/components';
 
   let stopCannon: (() => void) | undefined;
@@ -113,13 +118,13 @@ All presets are available as methods on the `confetti` function.
 
 <button onclick={startCannon}>Start Cannon</button>
 <button onclick={() => stopCannon?.()}>Stop Cannon</button>
-<button onclick={() => confetti.stop()}>Stop All</button>
-```
+<button onclick={() => confetti.stop()}>Stop All</button>`}>
+  <ConfettiStopDemo client:load />
+</ComponentPreview>
 
 ### Component with Presets
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Confetti } from '@delightstack/components';
 
   let celebrating = $state(false);
@@ -131,13 +136,13 @@ All presets are available as methods on the `confetti` function.
   preset="cannon"
   duration={2000}
   onend={() => celebrating = false}
-/>
-```
+/>`}>
+  <ConfettiComponentPresetsDemo client:load />
+</ComponentPreview>
 
 ### Custom Shapes and Colors
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { confetti } from '@delightstack/components';
 </script>
 
@@ -147,8 +152,9 @@ All presets are available as methods on the `confetti` function.
   particle_count: 80,
 })}>
   Gold Stars
-</button>
-```
+</button>`}>
+  <ConfettiShapesDemo client:load />
+</ComponentPreview>
 
 ## Programmatic API Reference
 

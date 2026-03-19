@@ -5,6 +5,11 @@ description: A multi-step progress indicator with horizontal and vertical layout
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import StepsDemo from '../../../../components/demos/StepsDemo.svelte';
+import StepsClickableDemo from '../../../../components/demos/StepsClickableDemo.svelte';
+import StepsNonLinearDemo from '../../../../components/demos/StepsNonLinearDemo.svelte';
+import StepsVerticalDemo from '../../../../components/demos/StepsVerticalDemo.svelte';
+import StepsErrorDemo from '../../../../components/demos/StepsErrorDemo.svelte';
+import StepsWizardDemo from '../../../../components/demos/StepsWizardDemo.svelte';
 
 ## Import
 
@@ -42,84 +47,111 @@ import type { StepsContext } from '@delightstack/components';
 
 Allow users to navigate back to completed steps by clicking on them.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Steps, Step } from '@delightstack/components';
+
+  let current = $state(1);
+</script>
+
 <Steps bind:current clickable>
-  <Step title="Shipping" />
-  <Step title="Payment" />
-  <Step title="Confirmation" />
-</Steps>
-```
+  <Step title="Account" />
+  <Step title="Profile" />
+  <Step title="Review" />
+  <Step title="Complete" />
+</Steps>`}>
+	<StepsClickableDemo client:load />
+</ComponentPreview>
 
 ### Non-Linear Navigation
 
 Allow jumping to any step, not just completed ones.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Steps, Step } from '@delightstack/components';
+
+  let current = $state(0);
+</script>
+
 <Steps bind:current clickable linear={false}>
   <Step title="Overview" />
   <Step title="Details" />
   <Step title="Summary" />
-</Steps>
-```
+</Steps>`}>
+	<StepsNonLinearDemo client:load />
+</ComponentPreview>
 
 ### Vertical Layout
 
 Stack steps vertically for sidebar or mobile layouts.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Steps, Step } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
+
+  let current = $state(1);
+</script>
+
 <Steps bind:current orientation="vertical">
-  <Step title="Step 1" description="First step description" />
-  <Step title="Step 2" description="Second step description" />
-  <Step title="Step 3" description="Third step description" />
+  <Step title="Cart" description="Review items" />
+  <Step title="Shipping" description="Enter address" />
+  <Step title="Payment" description="Add payment method" />
+  <Step title="Confirm" description="Place order" />
 </Steps>
-```
+
+<Button outline onclick={() => current = Math.max(0, current - 1)}>Back</Button>
+<Button onclick={() => current = Math.min(4, current + 1)}>Next</Button>`}>
+	<StepsVerticalDemo client:load />
+</ComponentPreview>
 
 ### Error and Optional Steps
 
 Mark steps with error states or as optional.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Steps, Step } from '@delightstack/components';
+
+  let current = $state(2);
+</script>
+
 <Steps bind:current>
   <Step title="Account" />
   <Step title="Verification" error />
   <Step title="Preferences" optional />
   <Step title="Done" />
-</Steps>
-```
+</Steps>`}>
+	<StepsErrorDemo client:load />
+</ComponentPreview>
 
 ### Wizard Mode with Step Content
 
 Render content for each step, shown when that step is active.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Steps, Step } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
 
   let current = $state(0);
 </script>
 
 <Steps bind:current orientation="vertical">
   <Step title="Personal Info">
-    <form>
-      <input placeholder="Full Name" />
-      <input placeholder="Email" />
-      <button onclick={() => current++}>Next</button>
-    </form>
+    <input placeholder="Full Name" />
+    <input placeholder="Email" />
+    <Button onclick={() => current++}>Next</Button>
   </Step>
   <Step title="Address">
-    <form>
-      <input placeholder="Street" />
-      <input placeholder="City" />
-      <button onclick={() => current--}>Back</button>
-      <button onclick={() => current++}>Next</button>
-    </form>
+    <input placeholder="Street" />
+    <input placeholder="City" />
+    <Button outline onclick={() => current--}>Back</Button>
+    <Button onclick={() => current++}>Next</Button>
   </Step>
   <Step title="Confirm">
     <p>All done!</p>
-    <button onclick={() => current--}>Back</button>
+    <Button outline onclick={() => current--}>Back</Button>
   </Step>
-</Steps>
-```
+</Steps>`}>
+	<StepsWizardDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 

@@ -6,6 +6,8 @@ description: A vertically stacked set of collapsible sections built on semantic 
 import { Accordion, AccordionItem } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import AccordionDemo from '../../../../components/demos/AccordionDemo.svelte';
+import AccordionMultipleDemo from '../../../../components/demos/AccordionMultipleDemo.svelte';
+import AccordionDenseDemo from '../../../../components/demos/AccordionDenseDemo.svelte';
 
 ## Import
 
@@ -43,8 +45,7 @@ import { Accordion, AccordionItem } from '@delightstack/components';
 
 Allow multiple sections to be expanded simultaneously. When `multiple` is true, `value` is an array of strings.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   let openSections = $state(['section-1']);
 </script>
 
@@ -58,8 +59,9 @@ Allow multiple sections to be expanded simultaneously. When `multiple` is true, 
   <AccordionItem value="section-3" title="Third Section">
     <p>Content for the third section.</p>
   </AccordionItem>
-</Accordion>
-```
+</Accordion>`}>
+  <AccordionMultipleDemo client:load />
+</ComponentPreview>
 
 ### Always One Open
 
@@ -101,21 +103,27 @@ Use the `trigger` snippet to replace the default title rendering with custom con
 
 ### Dense and Comfortable Spacing
 
-```svelte
-<!-- Compact spacing -->
+<ComponentPreview code={`<!-- Compact spacing -->
 <Accordion dense>
-  <AccordionItem value="a" title="Compact Item">
+  <AccordionItem value="a" title="Compact Item A">
     <p>Less padding for dense layouts.</p>
+  </AccordionItem>
+  <AccordionItem value="b" title="Compact Item B">
+    <p>Tighter spacing between items.</p>
   </AccordionItem>
 </Accordion>
 
 <!-- Relaxed spacing -->
 <Accordion comfortable>
-  <AccordionItem value="a" title="Spacious Item">
+  <AccordionItem value="a" title="Spacious Item A">
     <p>More padding for a relaxed feel.</p>
   </AccordionItem>
-</Accordion>
-```
+  <AccordionItem value="b" title="Spacious Item B">
+    <p>Extra breathing room between items.</p>
+  </AccordionItem>
+</Accordion>`}>
+  <AccordionDenseDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 

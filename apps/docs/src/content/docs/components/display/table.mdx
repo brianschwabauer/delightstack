@@ -5,6 +5,8 @@ description: A full-featured data table with sorting, row selection, custom cell
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import TableDemo from '../../../../components/demos/TableDemo.svelte';
+import TableSortableDemo from '../../../../components/demos/TableSortableDemo.svelte';
+import TableStripedDemo from '../../../../components/demos/TableStripedDemo.svelte';
 
 ## Import
 
@@ -45,8 +47,7 @@ import type { Column } from '@delightstack/components';
 
 Mark columns as `sortable` and bind the sort state.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Table } from '@delightstack/components';
 
   let sortBy = $state('name');
@@ -67,8 +68,9 @@ Mark columns as `sortable` and bind the sort state.
   ]}
   bind:sortBy
   bind:sortDirection
-/>
-```
+/>`}>
+	<TableSortableDemo client:load />
+</ComponentPreview>
 
 ### Custom Cell Rendering
 
@@ -118,9 +120,9 @@ Enable `selectable` to show checkboxes. Supports shift-click range selection.
 
 ### Striped and Dense
 
-```svelte
-<Table data={users} columns={columns} striped dense />
-```
+<ComponentPreview code={`<Table data={users} columns={columns} striped dense />`}>
+	<TableStripedDemo client:load />
+</ComponentPreview>
 
 ### Expandable Rows
 

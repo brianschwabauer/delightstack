@@ -5,6 +5,11 @@ description: A comprehensive form input component supporting 13 input types, flo
 
 import { Input } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import InputTextareaDemo from '../../../../components/demos/InputTextareaDemo.svelte';
+import InputPasswordDemo from '../../../../components/demos/InputPasswordDemo.svelte';
+import InputMaskedDemo from '../../../../components/demos/InputMaskedDemo.svelte';
+import InputAutocompleteDemo from '../../../../components/demos/InputAutocompleteDemo.svelte';
+import InputChipsDemo from '../../../../components/demos/InputChipsDemo.svelte';
 
 ## Import
 
@@ -66,8 +71,7 @@ The `type` prop supports 13 input types:
 
 ### Textarea
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Input } from '@delightstack/components';
 
   let bio = $state('');
@@ -81,37 +85,37 @@ The `type` prop supports 13 input types:
   autoResize
   maxlength={500}
   showCounter
-/>
-```
+/>`}>
+	<InputTextareaDemo client:load />
+</ComponentPreview>
 
 ### Password with Strength Indicator
 
-```svelte
-<Input
+<ComponentPreview code={`<Input
   type="password"
   label="Password"
   bind:value={password}
   showToggle
   strengthIndicator
-/>
-```
+/>`}>
+	<InputPasswordDemo client:load />
+</ComponentPreview>
 
 ### Masked Input
 
 Use `mask` to auto-format user input. `#` = digit, `A` = letter, `*` = any character.
 
-```svelte
-<Input label="Phone" mask="(###) ###-####" bind:value={phone} />
+<ComponentPreview code={`<Input label="Phone" mask="(###) ###-####" bind:value={phone} />
 <Input label="Card Number" mask="#### #### #### ####" bind:value={card} />
-<Input label="Expiry" mask="##/##" bind:value={expiry} />
-```
+<Input label="Expiry" mask="##/##" bind:value={expiry} />`}>
+	<InputMaskedDemo client:load />
+</ComponentPreview>
 
 ### Autocomplete
 
 Provide `options` for dropdown suggestions. Use `onfilter` for async loading.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Input } from '@delightstack/components';
 
   const cities = [
@@ -123,8 +127,9 @@ Provide `options` for dropdown suggestions. Use `onfilter` for async loading.
   let selectedCity = $state('');
 </script>
 
-<Input label="City" options={cities} bind:value={selectedCity} />
-```
+<Input label="City" options={cities} bind:value={selectedCity} />`}>
+	<InputAutocompleteDemo client:load />
+</ComponentPreview>
 
 ### Async Autocomplete
 
@@ -143,15 +148,15 @@ Provide `options` for dropdown suggestions. Use `onfilter` for async loading.
 
 Enable `multiple` to collect an array of values as chips/tags.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Input } from '@delightstack/components';
 
   let tags = $state<string[]>([]);
 </script>
 
-<Input label="Tags" multiple bind:value={tags} placeholder="Add tags..." />
-```
+<Input label="Tags" multiple bind:value={tags} placeholder="Add tags..." />`}>
+	<InputChipsDemo client:load />
+</ComponentPreview>
 
 ### Prefix and Suffix
 

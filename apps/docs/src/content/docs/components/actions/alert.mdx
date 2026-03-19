@@ -6,6 +6,7 @@ description: A streamlined confirmation dialog built on Modal, providing consist
 import { Alert, alert } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import AlertDemo from '../../../../components/demos/AlertDemo.svelte';
+import AlertDestructiveDemo from '../../../../components/demos/AlertDestructiveDemo.svelte';
 
 ## Import
 
@@ -66,8 +67,7 @@ import { alert } from '@delightstack/components';
 
 The confirm button uses the error color scheme when `destructive` is true.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Alert, Button } from '@delightstack/components';
 
   let showDelete = $state(false);
@@ -78,17 +78,13 @@ The confirm button uses the error color scheme when `destructive` is true.
 <Alert
   bind:open={showDelete}
   title="Delete Item"
-  message="This action cannot be undone. Are you sure?"
+  message="This action cannot be undone. Are you sure you want to delete this item?"
   continueText="Delete"
   cancelText="Keep It"
   destructive
-  oncontinue={async () => {
-    await api.deleteItem(itemId);
-    showDelete = false;
-  }}
-  oncancel={() => showDelete = false}
-/>
-```
+/>`}>
+	<AlertDestructiveDemo client:load />
+</ComponentPreview>
 
 ### With Icon
 

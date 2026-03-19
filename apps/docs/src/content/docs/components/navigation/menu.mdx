@@ -5,6 +5,10 @@ description: A dropdown menu with keyboard navigation, checkbox items, radio gro
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import MenuDemo from '../../../../components/demos/MenuDemo.svelte';
+import MenuShortcutsDemo from '../../../../components/demos/MenuShortcutsDemo.svelte';
+import MenuGroupedDemo from '../../../../components/demos/MenuGroupedDemo.svelte';
+import MenuCheckboxDemo from '../../../../components/demos/MenuCheckboxDemo.svelte';
+import MenuRadioDemo from '../../../../components/demos/MenuRadioDemo.svelte';
 
 ## Import
 
@@ -53,59 +57,100 @@ import type { MenuContext } from '@delightstack/components';
 
 Display keyboard shortcut hints and badges on menu items.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Menu, MenuItem, MenuSeparator } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
+
+  let menuOpen = $state(false);
+  let triggerEl = $state();
+</script>
+
+<span bind:this={triggerEl}>
+  <Button onclick={() => menuOpen = !menuOpen}>Open Menu</Button>
+</span>
+
 <Menu bind:open={menuOpen} trigger={triggerEl}>
-  <MenuItem shortcut="Ctrl+C" onclick={handleCopy}>Copy</MenuItem>
-  <MenuItem shortcut="Ctrl+V" onclick={handlePaste}>Paste</MenuItem>
+  <MenuItem shortcut="⌘C" onclick={() => {}}>Copy</MenuItem>
+  <MenuItem shortcut="⌘V" onclick={() => {}}>Paste</MenuItem>
   <MenuSeparator />
-  <MenuItem badge="3" onclick={handleNotifications}>Notifications</MenuItem>
-</Menu>
-```
+  <MenuItem badge="3" onclick={() => {}}>Notifications</MenuItem>
+</Menu>`}>
+	<MenuShortcutsDemo client:load />
+</ComponentPreview>
 
 ### Grouped Items
 
 Organize related items under labeled groups.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Menu, MenuItem, MenuGroup } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
+
+  let menuOpen = $state(false);
+  let triggerEl = $state();
+</script>
+
+<span bind:this={triggerEl}>
+  <Button onclick={() => menuOpen = !menuOpen}>File Menu</Button>
+</span>
+
 <Menu bind:open={menuOpen} trigger={triggerEl}>
   <MenuGroup label="File">
-    <MenuItem onclick={handleNew}>New</MenuItem>
-    <MenuItem onclick={handleOpen}>Open</MenuItem>
-    <MenuItem onclick={handleSave}>Save</MenuItem>
+    <MenuItem onclick={() => {}}>New</MenuItem>
+    <MenuItem onclick={() => {}}>Open</MenuItem>
+    <MenuItem onclick={() => {}}>Save</MenuItem>
   </MenuGroup>
   <MenuGroup label="Edit">
-    <MenuItem onclick={handleUndo}>Undo</MenuItem>
-    <MenuItem onclick={handleRedo}>Redo</MenuItem>
+    <MenuItem onclick={() => {}}>Undo</MenuItem>
+    <MenuItem onclick={() => {}}>Redo</MenuItem>
   </MenuGroup>
-</Menu>
-```
+</Menu>`}>
+	<MenuGroupedDemo client:load />
+</ComponentPreview>
 
 ### Checkbox Items
 
 Toggle-able menu items with a checked state.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
+  import { Menu, MenuCheckboxItem, MenuGroup } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
+
+  let menuOpen = $state(false);
+  let triggerEl = $state();
   let showGrid = $state(true);
   let showRulers = $state(false);
 </script>
 
-<Menu bind:open={menuOpen} trigger={triggerEl}>
+<span bind:this={triggerEl}>
+  <Button onclick={() => menuOpen = !menuOpen}>View Options</Button>
+</span>
+
+<Menu bind:open={menuOpen} trigger={triggerEl} close_on_select={false}>
   <MenuGroup label="View">
     <MenuCheckboxItem bind:checked={showGrid}>Show Grid</MenuCheckboxItem>
     <MenuCheckboxItem bind:checked={showRulers}>Show Rulers</MenuCheckboxItem>
   </MenuGroup>
-</Menu>
-```
+</Menu>`}>
+	<MenuCheckboxDemo client:load />
+</ComponentPreview>
 
 ### Radio Group
 
 Single-selection items within a radio group.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
+  import { Menu, MenuRadioGroup, MenuRadioItem } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
+
+  let menuOpen = $state(false);
+  let triggerEl = $state();
   let theme = $state('system');
 </script>
+
+<span bind:this={triggerEl}>
+  <Button onclick={() => menuOpen = !menuOpen}>Theme</Button>
+</span>
 
 <Menu bind:open={menuOpen} trigger={triggerEl}>
   <MenuRadioGroup bind:value={theme}>
@@ -113,8 +158,9 @@ Single-selection items within a radio group.
     <MenuRadioItem value="dark">Dark</MenuRadioItem>
     <MenuRadioItem value="system">System</MenuRadioItem>
   </MenuRadioGroup>
-</Menu>
-```
+</Menu>`}>
+	<MenuRadioDemo client:load />
+</ComponentPreview>
 
 ### Disabled Items
 

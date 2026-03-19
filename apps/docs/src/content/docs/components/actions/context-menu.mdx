@@ -6,6 +6,9 @@ description: A right-click context menu system using the {@attach contextMenu()}
 import { ContextMenu, contextMenu } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ContextMenuDemo from '../../../../components/demos/ContextMenuDemo.svelte';
+import ContextMenuIconsDemo from '../../../../components/demos/ContextMenuIconsDemo.svelte';
+import ContextMenuLinksDemo from '../../../../components/demos/ContextMenuLinksDemo.svelte';
+import ContextMenuActiveDemo from '../../../../components/demos/ContextMenuActiveDemo.svelte';
 
 ## Import
 
@@ -63,55 +66,68 @@ Attach a context menu to any element using `{@attach contextMenu()}`. The `Conte
 
 ### With Icons
 
-```svelte
-<script>
-  import { contextMenu } from '@delightstack/components';
-  import EditIcon from '~icons/mdi/pencil';
-  import CopyIcon from '~icons/mdi/content-copy';
-  import DeleteIcon from '~icons/mdi/delete';
+<ComponentPreview code={`<script>
+  import { contextMenu, ContextMenu } from '@delightstack/components';
+
+  let lastAction = $state('');
 </script>
 
 <div {@attach contextMenu({
   actions: [
-    { label: 'Edit', icon: EditIcon, onclick: () => editFile() },
-    { label: 'Copy', icon: CopyIcon, onclick: () => copyFile() },
-    { label: 'Delete', icon: DeleteIcon, onclick: async () => {
-      await api.deleteFile(fileId);
-    }}
+    { label: 'Edit', onclick: () => lastAction = 'Edit clicked' },
+    { label: 'Copy', onclick: () => lastAction = 'Copy clicked' },
+    { label: 'Delete', onclick: () => lastAction = 'Delete clicked' },
   ]
 })}>
   Right-click for file options
 </div>
-```
+
+<ContextMenu />`}>
+	<ContextMenuIconsDemo client:load />
+</ComponentPreview>
 
 ### With Links
 
 Actions can navigate using `href` and `target` instead of `onclick`.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { contextMenu, ContextMenu } from '@delightstack/components';
+</script>
+
 <div {@attach contextMenu({
   actions: [
-    { label: 'View Profile', href: '/user/123' },
-    { label: 'Open in New Tab', href: '/user/123', target: '_blank' }
+    { label: 'View Profile', href: '#profile' },
+    { label: 'Open in New Tab', href: '#profile', target: '_blank' },
   ]
 })}>
-  Right-click for navigation
+  Right-click for navigation options
 </div>
-```
+
+<ContextMenu />`}>
+	<ContextMenuLinksDemo client:load />
+</ComponentPreview>
 
 ### With Active State and Disabled Items
 
-```svelte
+<ComponentPreview code={`<script>
+  import { contextMenu, ContextMenu } from '@delightstack/components';
+
+  let viewMode = $state('grid');
+</script>
+
 <div {@attach contextMenu({
   actions: [
     { label: 'Grid View', active: viewMode === 'grid', onclick: () => viewMode = 'grid' },
     { label: 'List View', active: viewMode === 'list', onclick: () => viewMode = 'list' },
-    { label: 'Table View', disabled: true }
+    { label: 'Table View', disabled: true },
   ]
 })}>
-  Right-click to change view
+  Right-click to change view (current: {viewMode})
 </div>
-```
+
+<ContextMenu />`}>
+	<ContextMenuActiveDemo client:load />
+</ComponentPreview>
 
 ### Custom Rendered Items
 

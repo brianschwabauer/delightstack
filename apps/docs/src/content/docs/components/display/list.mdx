@@ -5,6 +5,8 @@ description: A flexible container for list items with selection handling, multip
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ListTextDemo from '../../../../components/demos/ListTextDemo.svelte';
+import ListRadioDemo from '../../../../components/demos/ListRadioDemo.svelte';
+import ListCheckboxDemo from '../../../../components/demos/ListCheckboxDemo.svelte';
 import { List } from '@delightstack/components/display';
 
 ## Import
@@ -28,8 +30,7 @@ import { List, ListItem } from '@delightstack/components';
 
 Single-select mode using radio buttons. Bind `value` to track the selected index.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { List, ListItem } from '@delightstack/components';
 
   let selected = $state<number[]>([]);
@@ -39,15 +40,15 @@ Single-select mode using radio buttons. Bind `value` to track the selected index
   <ListItem>Small</ListItem>
   <ListItem>Medium</ListItem>
   <ListItem>Large</ListItem>
-</List>
-```
+</List>`}>
+  <ListRadioDemo client:load />
+</ComponentPreview>
 
 ### Checkbox Multi-Select
 
 Multiple-select mode using checkboxes. The `value` array contains all selected indices.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { List, ListItem } from '@delightstack/components';
 
   let selected = $state<number[]>([]);
@@ -57,8 +58,9 @@ Multiple-select mode using checkboxes. The `value` array contains all selected i
   <ListItem>Notifications</ListItem>
   <ListItem>Email Updates</ListItem>
   <ListItem>SMS Alerts</ListItem>
-</List>
-```
+</List>`}>
+  <ListCheckboxDemo client:load />
+</ComponentPreview>
 
 ### Dense Menu Actions
 

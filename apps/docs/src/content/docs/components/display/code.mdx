@@ -5,6 +5,8 @@ description: A syntax-highlighted code block with line numbers, copy-to-clipboar
 
 import { Code as DSCode } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import CodeBasicDemo from '../../../../components/demos/CodeBasicDemo.svelte';
+import CodeFilenameDemo from '../../../../components/demos/CodeFilenameDemo.svelte';
 
 ## Import
 
@@ -14,19 +16,19 @@ import { Code } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Code } from '@delightstack/components';
 
-  const snippet = `function greet(name: string) {
-  console.log(\`Hello, \${name}!\`);
+  const snippet = \`function greet(name: string) {
+  console.log(\\\`Hello, \\\${name}!\\\`);
 }
 
-greet('World');`;
+greet('World');\`;
 </script>
 
-<Code code={snippet} language="typescript" />
-```
+<Code code={snippet} language="typescript" />`}>
+  <CodeBasicDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
@@ -34,13 +36,13 @@ greet('World');`;
 
 A header bar appears when `filename` or `showCopy` is set.
 
-```svelte
-<Code
+<ComponentPreview code={`<Code
   code={snippet}
   language="typescript"
   filename="greeting.ts"
-/>
-```
+/>`}>
+  <CodeFilenameDemo client:load />
+</ComponentPreview>
 
 ### Line Highlighting
 

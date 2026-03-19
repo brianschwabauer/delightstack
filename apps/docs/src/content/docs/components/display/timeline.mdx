@@ -7,6 +7,8 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import TimelineDemo from '../../../../components/demos/TimelineDemo.svelte';
 import TimelineHorizontalDemo from '../../../../components/demos/TimelineHorizontalDemo.svelte';
 import TimelineColorDemo from '../../../../components/demos/TimelineColorDemo.svelte';
+import TimelineOrderDemo from '../../../../components/demos/TimelineOrderDemo.svelte';
+import TimelineAlternateDemo from '../../../../components/demos/TimelineAlternateDemo.svelte';
 import { Timeline } from '@delightstack/components/display';
 
 ## Import
@@ -35,46 +37,24 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
 
 ### Order Tracking
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Timeline, TimelineItem } from '@delightstack/components';
-  import CheckIcon from '~icons/mdi/check';
-  import ShippingIcon from '~icons/mdi/truck';
-  import PackageIcon from '~icons/mdi/package';
 </script>
 
 <Timeline>
-  <TimelineItem
-    status="complete"
-    date="Jan 10"
-    title="Order Confirmed"
-    icon={CheckIcon}
-  >
+  <TimelineItem status="complete" date="Jan 10" title="Order Confirmed">
     Your order has been confirmed.
   </TimelineItem>
-  <TimelineItem
-    status="complete"
-    date="Jan 11"
-    title="Shipped"
-    icon={ShippingIcon}
-  >
+  <TimelineItem status="complete" date="Jan 11" title="Shipped">
     Package picked up by carrier.
   </TimelineItem>
-  <TimelineItem
-    status="active"
-    date="Jan 12"
-    title="Out for Delivery"
-    icon={ShippingIcon}
-  >
+  <TimelineItem status="active" date="Jan 12" title="Out for Delivery">
     Expected delivery today.
   </TimelineItem>
-  <TimelineItem
-    status="pending"
-    title="Delivered"
-    icon={PackageIcon}
-  />
-</Timeline>
-```
+  <TimelineItem status="pending" title="Delivered" />
+</Timeline>`}>
+  <TimelineOrderDemo client:load />
+</ComponentPreview>
 
 ### Horizontal Process Steps
 
@@ -91,13 +71,13 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
 
 Events alternate between left and right in vertical mode.
 
-```svelte
-<Timeline alternate>
+<ComponentPreview code={`<Timeline alternate>
   <TimelineItem date="Jan 1" title="Event A">Description A</TimelineItem>
   <TimelineItem date="Feb 1" title="Event B">Description B</TimelineItem>
   <TimelineItem date="Mar 1" title="Event C">Description C</TimelineItem>
-</Timeline>
-```
+</Timeline>`}>
+  <TimelineAlternateDemo client:load />
+</ComponentPreview>
 
 ### On-Demand Loading
 

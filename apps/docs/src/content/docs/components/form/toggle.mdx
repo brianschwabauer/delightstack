@@ -5,6 +5,8 @@ description: An on/off switch component for binary choices with slide animation,
 
 import { Toggle } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ToggleCustomIconDemo from '../../../../components/demos/ToggleCustomIconDemo.svelte';
+import ToggleSettingsDemo from '../../../../components/demos/ToggleSettingsDemo.svelte';
 
 ## Import
 
@@ -48,17 +50,25 @@ Place the label before or after the toggle.
 
 Use the `thumb_icon` snippet to render an icon inside the thumb.
 
-```svelte
-<Toggle bind:checked={sound}>
+<ComponentPreview code={`<script>
+  import { Toggle } from '@delightstack/components';
+
+  let sound = $state(true);
+</script>
+
+<Toggle bind:checked={sound} label={sound ? 'Sound On' : 'Sound Off'}>
   {#snippet thumb_icon()}
     {#if sound}
-      <VolumeIcon />
+      <!-- Volume icon (inline SVG) -->
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
     {:else}
-      <MuteIcon />
+      <!-- Mute icon (inline SVG) -->
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
     {/if}
   {/snippet}
-</Toggle>
-```
+</Toggle>`}>
+	<ToggleCustomIconDemo client:load />
+</ComponentPreview>
 
 ### Form Integration
 
@@ -90,14 +100,13 @@ Use `name` and `value` for native form submission.
 
 ### Settings List
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Toggle } from '@delightstack/components';
 
   let settings = $state({
     notifications: true,
     autoSave: true,
-    sounds: true,
+    sounds: false,
   });
 </script>
 
@@ -120,8 +129,9 @@ Use `name` and `value` for native form submission.
     name="sounds"
     value="enabled"
   />
-</div>
-```
+</div>`}>
+	<ToggleSettingsDemo client:load />
+</ComponentPreview>
 
 ## Props
 

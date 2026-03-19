@@ -5,6 +5,9 @@ description: A mobile-optimized slide-up panel with configurable snap points, sp
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import BottomSheetDemo from '../../../../components/demos/BottomSheetDemo.svelte';
+import BottomSheetSnapDemo from '../../../../components/demos/BottomSheetSnapDemo.svelte';
+import BottomSheetHeaderDemo from '../../../../components/demos/BottomSheetHeaderDemo.svelte';
+import BottomSheetNonDismissibleDemo from '../../../../components/demos/BottomSheetNonDismissibleDemo.svelte';
 
 ## Import
 
@@ -38,31 +41,42 @@ import { BottomSheet } from '@delightstack/components';
 
 Define multiple snap heights as fractions of the viewport. The user can drag between them.
 
-```svelte
-<script>
-  import { BottomSheet } from '@delightstack/components';
+<ComponentPreview code={`<script>
+  import { BottomSheet, Button } from '@delightstack/components';
 
   let open = $state(false);
   let snap = $state(0);
 </script>
 
+<Button onclick={() => open = true}>Open Multi-Snap Sheet</Button>
+
 <BottomSheet
   bind:open
   bind:snap
   snapPoints={[0.3, 0.6, 1]}
-  defaultSnap={0}
-  onsnap={({ index, height }) => console.log('Snapped to', index)}>
-  <div style="padding: 1rem;">
-    <p>Drag to resize. Current snap index: {snap}</p>
+  defaultSnap={0}>
+  <div style="padding: 1.5rem;">
+    <h3>Drag Me!</h3>
+    <p>This sheet has three snap points at 30%, 60%, and 100%.</p>
+    <p>Current snap index: {snap}</p>
+    <Button outline onclick={() => open = false}>Close</Button>
   </div>
-</BottomSheet>
-```
+</BottomSheet>`}>
+	<BottomSheetSnapDemo client:load />
+</ComponentPreview>
 
 ### With Header
 
 Add a draggable header area above the scrollable content.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { BottomSheet, Button } from '@delightstack/components';
+
+  let open = $state(false);
+</script>
+
+<Button onclick={() => open = true}>Open Sheet with Header</Button>
+
 <BottomSheet bind:open>
   {#snippet header()}
     <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border);">
@@ -72,22 +86,33 @@ Add a draggable header area above the scrollable content.
 
   <div style="padding: 1rem;">
     <p>Scrollable filter content here.</p>
+    <Button outline onclick={() => open = false}>Close</Button>
   </div>
-</BottomSheet>
-```
+</BottomSheet>`}>
+	<BottomSheetHeaderDemo client:load />
+</ComponentPreview>
 
 ### Non-Dismissible
 
 Prevent the sheet from being dismissed by dragging down or tapping the backdrop.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { BottomSheet, Button } from '@delightstack/components';
+
+  let open = $state(false);
+</script>
+
+<Button onclick={() => open = true}>Open Non-Dismissible Sheet</Button>
+
 <BottomSheet bind:open dismissible={false}>
-  <div style="padding: 1rem;">
-    <p>You must complete this action.</p>
-    <button onclick={() => open = false}>Done</button>
+  <div style="padding: 1.5rem;">
+    <h3>Required Action</h3>
+    <p>You must complete this action. Dragging down or tapping the backdrop will not dismiss this sheet.</p>
+    <Button onclick={() => open = false}>Done</Button>
   </div>
-</BottomSheet>
-```
+</BottomSheet>`}>
+	<BottomSheetNonDismissibleDemo client:load />
+</ComponentPreview>
 
 ### No Backdrop
 

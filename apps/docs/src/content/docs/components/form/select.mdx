@@ -5,6 +5,12 @@ description: A dropdown selection component with search, multi-select with chips
 
 import { Select } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import SelectBasicDemo from '../../../../components/demos/SelectBasicDemo.svelte';
+import SelectSearchableDemo from '../../../../components/demos/SelectSearchableDemo.svelte';
+import SelectMultiDemo from '../../../../components/demos/SelectMultiDemo.svelte';
+import SelectGroupedDemo from '../../../../components/demos/SelectGroupedDemo.svelte';
+import SelectCreatableDemo from '../../../../components/demos/SelectCreatableDemo.svelte';
+import SelectErrorDemo from '../../../../components/demos/SelectErrorDemo.svelte';
 
 ## Import
 
@@ -20,8 +26,7 @@ import type { SelectOption } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Select } from '@delightstack/components';
 
   let country = $state('');
@@ -34,8 +39,9 @@ import type { SelectOption } from '@delightstack/components';
   ];
 </script>
 
-<Select bind:value={country} options={countries} label="Country" placeholder="Select a country" />
-```
+<Select bind:value={country} options={countries} label="Country" placeholder="Select a country" />`}>
+	<SelectBasicDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
@@ -58,21 +64,20 @@ import type { SelectOption } from '@delightstack/components';
 
 Enable `searchable` to add a filter input in the dropdown.
 
-```svelte
-<Select
+<ComponentPreview code={`<Select
   searchable
   bind:value={country}
   options={countries}
   label="Country"
-/>
-```
+/>`}>
+	<SelectSearchableDemo client:load />
+</ComponentPreview>
 
 ### Multi-Select with Chips
 
 Selected values appear as chips in the trigger. Each chip has a remove button.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Select } from '@delightstack/components';
 
   let selectedTags = $state<string[]>([]);
@@ -84,15 +89,15 @@ Selected values appear as chips in the trigger. Each chip has a remove button.
   ];
 </script>
 
-<Select multiple bind:value={selectedTags} options={tags} label="Tags" clearable />
-```
+<Select multiple bind:value={selectedTags} options={tags} label="Tags" clearable />`}>
+	<SelectMultiDemo client:load />
+</ComponentPreview>
 
 ### Option Groups
 
 Options with a `group` property are visually grouped under section headers.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Select } from '@delightstack/components';
 
   const options = [
@@ -103,8 +108,9 @@ Options with a `group` property are visually grouped under section headers.
   ];
 </script>
 
-<Select bind:value={selected} options={options} label="Food" />
-```
+<Select bind:value={selected} options={options} label="Food" />`}>
+	<SelectGroupedDemo client:load />
+</ComponentPreview>
 
 ### Async Loading
 
@@ -137,8 +143,7 @@ Use `onsearch` to load options dynamically. The component debounces search input
 
 Allow users to type new values when no match is found.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Select } from '@delightstack/components';
 
   let selected = $state([]);
@@ -158,20 +163,21 @@ Allow users to type new values when no match is found.
   oncreate={({ value }) => {
     tags = [...tags, { value, label: value }];
   }}
-/>
-```
+/>`}>
+	<SelectCreatableDemo client:load />
+</ComponentPreview>
 
 ### With Error
 
-```svelte
-<Select
+<ComponentPreview code={`<Select
   bind:value={category}
   options={categories}
   label="Category"
   required
   error={!category ? 'Please select a category' : ''}
-/>
-```
+/>`}>
+	<SelectErrorDemo client:load />
+</ComponentPreview>
 
 ### Custom Option Rendering
 

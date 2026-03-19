@@ -5,6 +5,7 @@ description: A highlighted information block for drawing attention to important 
 
 import { Callout } from '@delightstack/components/feedback';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import CalloutDismissibleDemo from '../../../../components/demos/CalloutDismissibleDemo.svelte';
 
 ## Import
 
@@ -72,15 +73,19 @@ Use boolean props to set the visual variant. When none is set, the default `info
 
 Add `dismissible` to show a close button. Use `ondismiss` to handle the event.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Callout } from '@delightstack/components';
+
+  let visible = $state(true);
 </script>
 
-<Callout tip title="Pro Tip" dismissible ondismiss={() => console.log('dismissed')}>
-  You can use keyboard shortcuts to speed up your workflow.
-</Callout>
-```
+{#if visible}
+  <Callout tip title="Pro Tip" dismissible ondismiss={() => (visible = false)}>
+    You can use keyboard shortcuts to speed up your workflow.
+  </Callout>
+{/if}`}>
+  <CalloutDismissibleDemo client:load />
+</ComponentPreview>
 
 ### Custom Icon and Action
 

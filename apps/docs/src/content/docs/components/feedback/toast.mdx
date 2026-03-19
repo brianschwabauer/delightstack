@@ -5,6 +5,8 @@ description: Non-blocking toast notifications created programmatically via the t
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ToastDemo from '../../../../components/demos/ToastDemo.svelte';
+import ToastVariantsDemo from '../../../../components/demos/ToastVariantsDemo.svelte';
+import ToastPromiseDemo from '../../../../components/demos/ToastPromiseDemo.svelte';
 
 ## Import
 
@@ -40,16 +42,16 @@ Place `<Toaster />` once in your root layout, then call `toast()` from anywhere.
 
 ### Variant Shortcuts
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { toast } from '@delightstack/components';
 </script>
 
 <button onclick={() => toast('A general notification')}>Default</button>
 <button onclick={() => toast.success('File uploaded successfully')}>Success</button>
 <button onclick={() => toast.error('Failed to save changes')}>Error</button>
-<button onclick={() => toast.warning('You have unsaved changes')}>Warning</button>
-```
+<button onclick={() => toast.warning('You have unsaved changes')}>Warning</button>`}>
+	<ToastVariantsDemo client:load />
+</ComponentPreview>
 
 ### With Action Button
 
@@ -77,21 +79,21 @@ Toasts with an action automatically get 2 seconds of extra display time.
 
 Track async operations with automatic loading, success, and error states.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { toast } from '@delightstack/components';
 
   async function handleUpload() {
     toast.promise(uploadFile(), {
       loading: 'Uploading...',
       success: 'Upload complete!',
-      error: (err) => `Upload failed: ${err.message}`,
+      error: (err) => \`Upload failed: \${err.message}\`,
     });
   }
 </script>
 
-<button onclick={handleUpload}>Upload</button>
-```
+<button onclick={handleUpload}>Upload</button>`}>
+	<ToastPromiseDemo client:load />
+</ComponentPreview>
 
 ### Dynamic Promise Messages
 

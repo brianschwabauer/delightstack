@@ -5,6 +5,7 @@ description: A slider input for selecting a value or range, with support for two
 
 import { Range } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import RangeDoubleDemo from '../../../../components/demos/RangeDoubleDemo.svelte';
 
 ## Import
 
@@ -30,11 +31,10 @@ import { Range } from '@delightstack/components';
 
 Set `range` to enable two thumbs. The value becomes a `[number, number]` tuple.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Range } from '@delightstack/components';
 
-  let priceRange = $state<[number, number]>([100, 500]);
+  let priceRange = $state([100, 500]);
 </script>
 
 <Range
@@ -43,11 +43,12 @@ Set `range` to enable two thumbs. The value becomes a `[number, number]` tuple.
   min={0}
   max={1000}
   step={50}
-  format_value={(v) => `$${v}`}
+  format_value={(v) => \`$\${v}\`}
   show_value
   label="Price range"
-/>
-```
+/>`}>
+	<RangeDoubleDemo client:load />
+</ComponentPreview>
 
 ### With Tick Marks
 

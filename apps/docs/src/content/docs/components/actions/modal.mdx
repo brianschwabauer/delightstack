@@ -6,6 +6,7 @@ description: A polished dialog overlay with smooth animations, focus trapping, b
 import { Modal } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ModalDemo from '../../../../components/demos/ModalDemo.svelte';
+import ModalDemoAll from '../../../../components/demos/ModalDemoAll.svelte';
 
 ## Import
 
@@ -50,29 +51,26 @@ import { Modal } from '@delightstack/components';
 
 ### With Footer Actions
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Modal, Button } from '@delightstack/components';
 
-  let showModal = $state(false);
-
-  async function handleConfirm() {
-    await api.performAction();
-    showModal = false;
-  }
+  let open = $state(false);
 </script>
 
-<Button onclick={() => showModal = true}>Open</Button>
+<Button onclick={() => open = true}>Open Modal</Button>
 
-<Modal bind:open={showModal} title="Confirm Action">
-  <p>Are you sure you want to proceed?</p>
+<Modal bind:open title="Edit Profile">
+  <p style="margin: 0; color: var(--color-text);">
+    Update your profile information below.
+  </p>
 
-  {#snippet footer()}
-    <Button transparent onclick={() => showModal = false}>Cancel</Button>
-    <Button onclick={handleConfirm}>Confirm</Button>
+  {#snippet footer({ close })}
+    <Button transparent onclick={close}>Cancel</Button>
+    <Button accent onclick={close}>Save Changes</Button>
   {/snippet}
-</Modal>
-```
+</Modal>`}>
+	<ModalDemoAll client:load />
+</ComponentPreview>
 
 ### Custom Header
 

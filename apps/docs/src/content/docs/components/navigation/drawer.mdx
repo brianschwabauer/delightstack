@@ -5,6 +5,7 @@ description: A slide-out side panel supporting four positions, three modes (over
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import DrawerDemo from '../../../../components/demos/DrawerDemo.svelte';
+import DrawerRightDemo from '../../../../components/demos/DrawerRightDemo.svelte';
 
 ## Import
 
@@ -38,11 +39,11 @@ import { Drawer } from '@delightstack/components';
 
 Position the drawer on the right edge of the viewport.
 
-```svelte
-<Drawer bind:open right>
+<ComponentPreview code={`<Drawer bind:open right>
   <p style="padding: 1rem;">Right drawer content.</p>
-</Drawer>
-```
+</Drawer>`}>
+	<DrawerRightDemo client:load />
+</ComponentPreview>
 
 ### With Header and Footer
 

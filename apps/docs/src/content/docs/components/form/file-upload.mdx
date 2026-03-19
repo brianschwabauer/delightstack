@@ -5,6 +5,8 @@ description: A file upload component with drag-and-drop support, image previews,
 
 import { FileUpload } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import FileUploadBasicDemo from '../../../../components/demos/FileUploadBasicDemo.svelte';
+import FileUploadValidationDemo from '../../../../components/demos/FileUploadValidationDemo.svelte';
 
 ## Import
 
@@ -14,15 +16,15 @@ import { FileUpload } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { FileUpload } from '@delightstack/components';
 
   let files = $state<File[]>([]);
 </script>
 
-<FileUpload bind:files accept="image/*" label="Upload images" />
-```
+<FileUpload bind:files accept="image/*" label="Upload images" />`}>
+	<FileUploadBasicDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
@@ -54,16 +56,16 @@ A circular upload area for profile pictures. Automatically single-file only.
 
 Validate file type, size, and count. Errors are reported per file via the `onerror` callback.
 
-```svelte
-<FileUpload
+<ComponentPreview code={`<FileUpload
   bind:files
   accept=".pdf,.doc,.docx"
   maxSize={10 * 1024 * 1024}
   maxFiles={3}
   multiple
-  onerror={({ file, error }) => console.log(error)}
-/>
-```
+  label="Upload documents (PDF, DOC — max 3 files, 10MB each)"
+/>`}>
+	<FileUploadValidationDemo client:load />
+</ComponentPreview>
 
 ### Custom File Item Rendering
 

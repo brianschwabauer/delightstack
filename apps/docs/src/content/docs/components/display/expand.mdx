@@ -5,6 +5,8 @@ description: A smooth animated container that expands and collapses content usin
 
 import { Expand } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ExpandBasicDemo from '../../../../components/demos/ExpandBasicDemo.svelte';
+import ExpandButtonDemo from '../../../../components/demos/ExpandButtonDemo.svelte';
 
 ## Import
 
@@ -14,8 +16,7 @@ import { Expand } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Expand } from '@delightstack/components';
 
   let showDetails = $state(false);
@@ -30,15 +31,15 @@ import { Expand } from '@delightstack/components';
     <p>Additional information that can be expanded and collapsed smoothly.</p>
     <p>The height animates from 0 to auto without any JavaScript measurement.</p>
   </div>
-</Expand>
-```
+</Expand>`}>
+  <ExpandBasicDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
 ### Toggle with a Button
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Expand, Button } from '@delightstack/components';
 
   let visible = $state(false);
@@ -52,8 +53,9 @@ import { Expand } from '@delightstack/components';
   <div style="padding: 1rem;">
     <p>This content slides in and out smoothly.</p>
   </div>
-</Expand>
-```
+</Expand>`}>
+  <ExpandButtonDemo client:load />
+</ComponentPreview>
 
 ### Conditional Sections
 

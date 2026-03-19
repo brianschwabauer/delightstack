@@ -5,6 +5,9 @@ description: A page navigation control with ellipsis algorithm, simple/compact d
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import PaginationDemo from '../../../../components/demos/PaginationDemo.svelte';
+import PaginationSimpleDemo from '../../../../components/demos/PaginationSimpleDemo.svelte';
+import PaginationCompactDemo from '../../../../components/demos/PaginationCompactDemo.svelte';
+import PaginationSizesDemo from '../../../../components/demos/PaginationSizesDemo.svelte';
 
 ## Import
 
@@ -30,17 +33,17 @@ import { Pagination } from '@delightstack/components';
 
 A minimal prev/next layout with "Page X of Y" text.
 
-```svelte
-<Pagination bind:page totalPages={10} simple />
-```
+<ComponentPreview code={`<Pagination bind:page totalPages={10} simple />`}>
+	<PaginationSimpleDemo client:load />
+</ComponentPreview>
 
 ### Compact Mode
 
 An even more minimal layout with just arrows and "X / Y".
 
-```svelte
-<Pagination bind:page totalPages={10} compact />
-```
+<ComponentPreview code={`<Pagination bind:page totalPages={10} compact />`}>
+	<PaginationCompactDemo client:load />
+</ComponentPreview>
 
 ### Page Size Selector
 
@@ -84,11 +87,11 @@ Control how many sibling and boundary pages are visible.
 
 ### Sizes
 
-```svelte
-<Pagination bind:page totalPages={10} size="0" />  <!-- Small -->
+<ComponentPreview code={`<Pagination bind:page totalPages={10} size="0" />  <!-- Small -->
 <Pagination bind:page totalPages={10} size="2" />  <!-- Medium -->
-<Pagination bind:page totalPages={10} size="3" />  <!-- Large -->
-```
+<Pagination bind:page totalPages={10} size="3" />  <!-- Large -->`}>
+	<PaginationSizesDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 

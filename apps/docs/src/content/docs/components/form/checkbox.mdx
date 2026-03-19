@@ -5,6 +5,8 @@ description: A styled checkbox input with animated SVG checkmark, indeterminate 
 
 import { Checkbox } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import CheckboxErrorDemo from '../../../../components/demos/CheckboxErrorDemo.svelte';
+import CheckboxIndeterminateDemo from '../../../../components/demos/CheckboxIndeterminateDemo.svelte';
 
 ## Import
 
@@ -31,21 +33,20 @@ import { Checkbox, CheckboxGroup } from '@delightstack/components';
 
 ### With Error
 
-```svelte
-<Checkbox
+<ComponentPreview code={`<Checkbox
   bind:checked={termsAgreed}
   label="Accept terms"
   required
   error={!termsAgreed ? 'You must accept the terms' : ''}
-/>
-```
+/>`}>
+	<CheckboxErrorDemo client:load />
+</ComponentPreview>
 
 ### Indeterminate State
 
 Use `indeterminate` for tree-style parent checkboxes where some children are selected.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Checkbox } from '@delightstack/components';
 
   let someSelected = $state(true);
@@ -57,8 +58,9 @@ Use `indeterminate` for tree-style parent checkboxes where some children are sel
   indeterminate={someSelected && !allSelected}
   onchange={handleParentToggle}
   label="Select all"
-/>
-```
+/>`}>
+	<CheckboxIndeterminateDemo client:load />
+</ComponentPreview>
 
 ### Checkbox Group
 

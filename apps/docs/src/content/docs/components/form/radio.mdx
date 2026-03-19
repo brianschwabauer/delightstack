@@ -5,6 +5,8 @@ description: A styled radio button for single-selection with dot scale animation
 
 import { Radio, RadioGroup } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import RadioErrorDemo from '../../../../components/demos/RadioErrorDemo.svelte';
+import RadioSizesDemo from '../../../../components/demos/RadioSizesDemo.svelte';
 
 ## Import
 
@@ -80,17 +82,24 @@ import type { RadioGroupContext } from '@delightstack/components';
 
 ### With Error
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Radio, RadioGroup } from '@delightstack/components';
+
+  let agreement = $state('');
+</script>
+
 <RadioGroup
   bind:value={agreement}
   required
   error={!agreement ? 'Please select an option' : ''}
   name="agreement"
+  label="Agreement"
 >
   <Radio value="agree" label="I agree" />
   <Radio value="disagree" label="I disagree" />
-</RadioGroup>
-```
+</RadioGroup>`}>
+	<RadioErrorDemo client:load />
+</ComponentPreview>
 
 ### Standalone Radio
 
@@ -119,17 +128,27 @@ A Radio can be used without a RadioGroup by managing `checked` directly.
 
 ### Sizes
 
-```svelte
-<RadioGroup bind:value={val} name="sizes" size="0" label="Small">
+<ComponentPreview code={`<RadioGroup bind:value={val0} name="size0" size="0" label="Small (size 0)">
   <Radio value="a" label="Option A" />
   <Radio value="b" label="Option B" />
 </RadioGroup>
 
-<RadioGroup bind:value={val} name="sizes2" size="3" label="Large">
+<RadioGroup bind:value={val1} name="size1" size="1" label="Default (size 1)">
   <Radio value="a" label="Option A" />
   <Radio value="b" label="Option B" />
 </RadioGroup>
-```
+
+<RadioGroup bind:value={val2} name="size2" size="2" label="Medium (size 2)">
+  <Radio value="a" label="Option A" />
+  <Radio value="b" label="Option B" />
+</RadioGroup>
+
+<RadioGroup bind:value={val3} name="size3" size="3" label="Large (size 3)">
+  <Radio value="a" label="Option A" />
+  <Radio value="b" label="Option B" />
+</RadioGroup>`}>
+	<RadioSizesDemo client:load />
+</ComponentPreview>
 
 ## Props
 

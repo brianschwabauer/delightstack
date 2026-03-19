@@ -5,6 +5,8 @@ description: A semantic grouping component for related form fields with support 
 
 import { Fieldset, Input } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import FieldsetGridDemo from '../../../../components/demos/FieldsetGridDemo.svelte';
+import FieldsetCollapsibleDemo from '../../../../components/demos/FieldsetCollapsibleDemo.svelte';
 
 ## Import
 
@@ -64,22 +66,21 @@ Choose between default (no border), bordered, card, and filled styles. Only one 
 
 Use `grid` to arrange children in a CSS grid. Children can span columns with inline styles.
 
-```svelte
-<Fieldset legend="Address" grid columns={2}>
+<ComponentPreview code={`<Fieldset legend="Address" grid columns={2}>
   <Input label="Street Address" name="street" style="grid-column: 1 / -1" />
   <Input label="City" name="city" />
   <Input label="State" name="state" />
   <Input label="ZIP Code" name="zip" />
   <Input label="Country" name="country" />
-</Fieldset>
-```
+</Fieldset>`}>
+	<FieldsetGridDemo client:load />
+</ComponentPreview>
 
 ### Collapsible
 
 Click the legend to expand or collapse the content. Bind `collapsed` for controlled state.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Fieldset, Input, Toggle } from '@delightstack/components';
 
   let collapsed = $state(false);
@@ -88,8 +89,9 @@ Click the legend to expand or collapse the content. Bind `collapsed` for control
 <Fieldset legend="Advanced Options" collapsible bind:collapsed filled>
   <Input label="Custom Domain" name="domain" />
   <Toggle label="Enable API Access" name="api" />
-</Fieldset>
-```
+</Fieldset>`}>
+	<FieldsetCollapsibleDemo client:load />
+</ComponentPreview>
 
 ### With Description and Error
 

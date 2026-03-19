@@ -6,6 +6,7 @@ description: A floating content container with smart Floating UI positioning, mu
 import { Popover } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import PopoverDemo from '../../../../components/demos/PopoverDemo.svelte';
+import PopoverClickDemo from '../../../../components/demos/PopoverClickDemo.svelte';
 
 ## Import
 
@@ -58,8 +59,7 @@ import { Popover } from '@delightstack/components';
 
 Set `openOnClick` to let the Popover component manage the click toggle automatically.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Popover } from '@delightstack/components';
 
   let triggerRef = $state<HTMLElement>();
@@ -71,8 +71,9 @@ Set `openOnClick` to let the Popover component manage the click toggle automatic
   <div style="padding: 1rem;">
     <p>Click the button again to close.</p>
   </div>
-</Popover>
-```
+</Popover>`}>
+	<PopoverClickDemo client:load />
+</ComponentPreview>
 
 ### Hover Info Popover
 
