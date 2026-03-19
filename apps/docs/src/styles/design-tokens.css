@@ -10,8 +10,8 @@
  */
 :root {
 	--color-dashboard: #616969;
-	--color-primary: #005640;
-	--color-secondary: #005640;
+	--color-primary: #1a81bc;
+	--color-secondary: #1a81bc;
 	--color-50: oklch(from var(--color-dashboard) 99% min(0.01, c) h);
 	--color-100: oklch(from var(--color-dashboard) 97% min(0.015, c) h);
 	--color-150: oklch(from var(--color-dashboard) 95% min(0.02, c) h);

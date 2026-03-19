@@ -385,6 +385,37 @@
 			--color-text-disabled: var(--color-success-text-disabled);
 		}
 
+		&.outline:not(.transparent):not(.translucent) {
+			--color-bg: transparent;
+			--color-bg-disabled: transparent;
+			--color-bg-active: rgb(from var(--color-action) r g b / 0.08);
+			--color-text: var(--color-action);
+			--color-text-disabled: var(--color-action-disabled);
+			--color-text-active: var(--color-action-active);
+			--color-action-outline: 1px solid currentColor;
+			--color-action-outline-disabled: 1px solid currentColor;
+			--color-action-outline-active: 1px solid currentColor;
+
+			&.accent {
+				--color-bg-active: rgb(from var(--color-accent) r g b / 0.08);
+				--color-text: var(--color-accent);
+				--color-text-disabled: var(--color-accent-disabled);
+				--color-text-active: var(--color-accent-active);
+			}
+			&.error {
+				--color-bg-active: rgb(from var(--color-error) r g b / 0.08);
+				--color-text: var(--color-error);
+				--color-text-disabled: var(--color-error-disabled);
+				--color-text-active: var(--color-error-active);
+			}
+			&.success {
+				--color-bg-active: rgb(from var(--color-success) r g b / 0.08);
+				--color-text: var(--color-success);
+				--color-text-disabled: var(--color-success-disabled);
+				--color-text-active: var(--color-success-active);
+			}
+		}
+
 		&.transparent {
 			--color-bg: transparent;
 			--color-bg-disabled: transparent;
