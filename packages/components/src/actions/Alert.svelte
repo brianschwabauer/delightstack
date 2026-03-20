@@ -138,11 +138,11 @@
 			<p class="alert-message">{message}</p>
 		{/if}
 		<div class="alert-actions">
-			<Button transparent onclick={handleCancel}>
-				{cancelText}
-			</Button>
-			<Button error={destructive} onclick={oncontinue}>
+			<Button accent={!destructive} error={destructive} fullWidth onclick={oncontinue}>
 				{continueText}
+			</Button>
+			<Button translucent fullWidth onclick={handleCancel}>
+				{cancelText}
 			</Button>
 		</div>
 	</div>
@@ -182,7 +182,7 @@
 
 	.alert-actions {
 		display: flex;
-		justify-content: flex-end;
+		flex-direction: column;
 		gap: 0.5rem;
 		padding-top: 1.5rem;
 	}
