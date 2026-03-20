@@ -665,7 +665,9 @@
 			}}
 			in:scale={{ start: 0.7, easing: backOut, duration: TRANSITION_IN_DURATION }}
 			out:scale={{ start: 0.7, easing: backIn, duration: TRANSITION_OUT_DURATION }}>
-			{#if children}{@render children()}{/if}
+			<div class="popover-content">
+				{#if children}{@render children()}{/if}
+			</div>
 			{#if arrow}
 				<div
 					class="arrow"
@@ -740,7 +742,6 @@
 		--layer: var(--layer-5);
 		--easing: var(--ease-out-back);
 		z-index: var(--layer);
-		padding: 1rem 1.25rem;
 		background-color: var(--color-bg);
 		border: 1px solid var(--color-border, transparent);
 		border-radius: var(--popover-radius, var(--radius-5));
@@ -748,13 +749,20 @@
 		max-width: calc(100vw - 1rem);
 		max-height: calc(100vh - 1rem);
 		transition: none;
-		overflow: auto;
-		scrollbar-color: transparent transparent;
-		scrollbar-width: none;
-		&.dense {
+		overflow: visible;
+		.popover-content {
+			padding: 1rem 1.25rem;
+			overflow: auto;
+			scrollbar-color: transparent transparent;
+			scrollbar-width: none;
+			max-height: inherit;
+			max-width: inherit;
+			border-radius: inherit;
+		}
+		&.dense .popover-content {
 			padding: 0.5rem 0.75rem;
 		}
-		&.comfortable {
+		&.comfortable .popover-content {
 			padding: 1.5rem 2rem;
 		}
 		.arrow {
