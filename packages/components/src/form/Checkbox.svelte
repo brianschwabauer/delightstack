@@ -81,7 +81,8 @@
 	class:comfortable
 	class:disabled
 	class:has-error={!!error}
-	{@attach tooltip(tooltipMessage)}>
+	{@attach tooltip(tooltipMessage)}
+	style:--size="{px}px">
 	<!-- Hidden native input for form submission -->
 	<input
 		type="checkbox"
@@ -107,8 +108,7 @@
 		aria-labelledby={label ? `${id}-label` : undefined}
 		{@attach ripple({ enabled: !disabled, centered: true, opacity: 0.15 })}
 		onclick={toggle}
-		onkeydown={onKeyDown}
-		style:--size="{px}px">
+		onkeydown={onKeyDown}>
 		<svg
 			class="indicator"
 			class:checked
@@ -330,7 +330,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.1em;
-		padding-top: 0.55em;
+		padding-top: calc((var(--size) + 20px) / 2 - 0.7em);
 		margin-left: -8px;
 	}
 

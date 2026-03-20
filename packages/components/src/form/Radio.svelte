@@ -196,7 +196,8 @@
 		class:dense
 		class:comfortable
 		class:disabled={isDisabled}
-		{@attach tooltip(tooltipMessage)}>
+		{@attach tooltip(tooltipMessage)}
+		style:--size="{px}px">
 		<!-- Hidden native input for form submission -->
 		<input
 			type="radio"
@@ -220,8 +221,7 @@
 			aria-labelledby={label ? `${id}-label` : undefined}
 			{@attach ripple({ enabled: !isDisabled, centered: true, opacity: 0.15 })}
 			onclick={select}
-			onkeydown={onKeyDown}
-			style:--size="{px}px">
+			onkeydown={onKeyDown}>
 			<svg
 				class="indicator"
 				class:selected={isSelected}
@@ -424,7 +424,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.1em;
-		padding-top: 0.55em;
+		padding-top: calc((var(--size) + 20px) / 2 - 0.7em);
 		margin-left: -8px;
 	}
 
