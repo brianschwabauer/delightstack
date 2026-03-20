@@ -21,13 +21,13 @@
 		/** Whether the slider is disabled */
 		disabled = false,
 
-		/** Size preset: 0=3px track, 1=5px, 2=7px, 3=8px */
+		/** Size preset: 0=small, 1=default, 2=medium, 3=large */
 		size = '1' as '0' | '1' | '2' | '3',
 
 		/** Whether to show the current value near the thumb */
 		show_value = false,
 
-		/** Whether to display tick marks at each step */
+		/** Whether to display stop indicator dots at each step */
 		show_ticks = false,
 
 		/** Custom labels for tick positions */
@@ -58,10 +58,14 @@
 		class: class_name = '',
 
 		/** Called when value changes (on pointerup / change) */
-		onchange = undefined as ((detail: { value: number | [number, number] }) => void) | undefined,
+		onchange = undefined as
+			| ((detail: { value: number | [number, number] }) => void)
+			| undefined,
 
 		/** Called during dragging */
-		oninput = undefined as ((detail: { value: number | [number, number] }) => void) | undefined,
+		oninput = undefined as
+			| ((detail: { value: number | [number, number] }) => void)
+			| undefined,
 	} = $props();
 
 	let lower_hovering = $state(false);
@@ -69,15 +73,20 @@
 	let lower_dragging = $state(false);
 	let upper_dragging = $state(false);
 
-	const lower_value = $derived(range && Array.isArray(value) ? value[0] : (value as number));
+	const lower_value = $derived(
+		range && Array.isArray(value) ? value[0] : (value as number),
+	);
 	const upper_value = $derived(range && Array.isArray(value) ? value[1] : max);
 
-	const fill_left = $derived(range ? ((lower_value - min) / (max - min)) * 100 : 0);
-	const fill_right = $derived(
-		range
-			? ((upper_value - min) / (max - min)) * 100
-			: ((lower_value - min) / (max - min)) * 100
-	);
+	const lower_pct = $derived(((lower_value - min) / (max - min)) * 100);
+	const upper_pct = $derived(((upper_value - min) / (max - min)) * 100);
+
+	// Native range inputs offset the thumb center from raw percentage by
+	// handleWidth * (0.5 - ratio). Compute this so track segments align with the thumb.
+	const lower_thumb_offset = $derived(0.5 - lower_pct / 100);
+	const upper_thumb_offset = $derived(0.5 - upper_pct / 100);
+
+	const is_dragging = $derived(lower_dragging || upper_dragging);
 
 	const tick_count = $derived(Math.floor((max - min) / step));
 
@@ -87,16 +96,14 @@
 	}
 
 	function emitValue() {
-		const v = range ? ([lower_value, upper_value] as [number, number]) : lower_value;
-		return v;
+		return range ? ([lower_value, upper_value] as [number, number]) : lower_value;
 	}
 
 	function onLowerInput(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
-		let v = Number(input.value);
+		const v = Number(input.value);
 		if (range) {
-			if (v > upper_value) v = upper_value;
-			value = [v, upper_value] as [number, number];
+			value = [v, Math.max(v, upper_value)] as [number, number];
 		} else {
 			value = v;
 		}
@@ -105,9 +112,8 @@
 
 	function onUpperInput(e: Event) {
 		const input = e.currentTarget as HTMLInputElement;
-		let v = Number(input.value);
-		if (v < lower_value) v = lower_value;
-		value = [lower_value, v] as [number, number];
+		const v = Number(input.value);
+		value = [Math.min(v, lower_value), v] as [number, number];
 		oninput?.({ value: emitValue() });
 	}
 
@@ -118,6 +124,69 @@
 	function onUpperChange() {
 		onchange?.({ value: emitValue() });
 	}
+
+	let drag_wrapper: HTMLElement | null = null;
+	let active_thumb: 'lower' | 'upper' | null = null;
+
+	function valueFromPointer(e: PointerEvent): number {
+		if (!drag_wrapper) return min;
+		const rect = drag_wrapper.getBoundingClientRect();
+		const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+		const raw = min + pct * (max - min);
+		const snapped = Math.round(raw / step) * step;
+		return Math.max(min, Math.min(max, snapped));
+	}
+
+	function setValueForThumb(v: number) {
+		if (range && Array.isArray(value)) {
+			if (active_thumb === 'lower') {
+				value = [v, Math.max(v, upper_value)] as [number, number];
+			} else {
+				value = [Math.min(v, lower_value), v] as [number, number];
+			}
+		} else {
+			value = v;
+		}
+	}
+
+	function onTrackPointerDown(e: PointerEvent) {
+		if (disabled) return;
+		if (e.target instanceof HTMLInputElement) return;
+		e.preventDefault();
+
+		drag_wrapper = e.currentTarget as HTMLElement;
+		const v = valueFromPointer(e);
+
+		if (range && Array.isArray(value)) {
+			const lower_dist = Math.abs(v - lower_value);
+			const upper_dist = Math.abs(v - upper_value);
+			active_thumb = lower_dist <= upper_dist ? 'lower' : 'upper';
+		} else {
+			active_thumb = 'lower';
+		}
+
+		setValueForThumb(v);
+		oninput?.({ value: emitValue() });
+
+		drag_wrapper.setPointerCapture(e.pointerId);
+		if (active_thumb === 'lower') lower_dragging = true;
+		else upper_dragging = true;
+	}
+
+	function onTrackPointerMove(e: PointerEvent) {
+		if (!active_thumb) return;
+		setValueForThumb(valueFromPointer(e));
+		oninput?.({ value: emitValue() });
+	}
+
+	function onTrackPointerUp() {
+		if (!active_thumb) return;
+		if (active_thumb === 'lower') lower_dragging = false;
+		else upper_dragging = false;
+		active_thumb = null;
+		drag_wrapper = null;
+		onchange?.({ value: emitValue() });
+	}
 </script>
 
 <div
@@ -125,33 +194,68 @@
 	class:disabled
 	class:dense
 	class:comfortable
-	class:has-ticks={show_ticks}
+	class:has-tick-labels={show_ticks && !!tick_labels?.length}
+	class:dragging={is_dragging}
 	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
 	{#if label}
 		<label class="range-label" for={id}>{label}</label>
 	{/if}
 
-	<div class="range-wrapper">
-		{#if show_value && (lower_hovering || lower_dragging)}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="range-wrapper"
+		onpointerdown={onTrackPointerDown}
+		onpointermove={onTrackPointerMove}
+		onpointerup={onTrackPointerUp}>
+		{#if show_value}
 			<span
 				class="value-tooltip"
-				style:left="{fill_right}%"
-				style:--offset="{range ? fill_left : 0}%">
+				class:visible={lower_hovering || lower_dragging}
+				style:left="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset})">
 				{formatDisplay(lower_value)}
 			</span>
-		{/if}
-		{#if range && show_value && (upper_hovering || upper_dragging)}
-			<span class="value-tooltip" style:left="{fill_right}%">
-				{formatDisplay(upper_value)}
-			</span>
+			{#if range}
+				<span
+					class="value-tooltip"
+					class:visible={upper_hovering || upper_dragging}
+					style:left="calc({upper_pct}% + var(--handle-width) * {upper_thumb_offset})">
+					{formatDisplay(upper_value)}
+				</span>
+			{/if}
 		{/if}
 
-		<div class="track">
+		<!-- Track segments with gaps around handles.
+			 Native inputs offset thumb center from raw % by handleWidth * (0.5 - ratio).
+			 We apply the same offset so the gap is symmetric around the actual thumb center. -->
+		{#if range}
 			<div
-				class="fill"
-				style:left="{fill_left}%"
-				style:width="{fill_right - fill_left}%"></div>
-		</div>
+				class="track-segment inactive"
+				style:left="0"
+				style:width="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} - var(--gap))">
+			</div>
+			<div
+				class="track-segment active"
+				style:left="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} + var(--gap))"
+				style:width="calc({upper_pct - lower_pct}% + var(--handle-width) * {upper_thumb_offset -
+					lower_thumb_offset} - var(--gap) * 2)">
+			</div>
+			<div
+				class="track-segment inactive"
+				style:left="calc({upper_pct}% + var(--handle-width) * {upper_thumb_offset} + var(--gap))"
+				style:right="0">
+			</div>
+		{:else}
+			<div
+				class="track-segment active"
+				style:left="0"
+				style:width="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} - var(--gap))">
+			</div>
+			<div
+				class="track-segment inactive"
+				style:left="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} + var(--gap))"
+				style:right="0">
+			</div>
+		{/if}
 
 		<input
 			type="range"
@@ -199,11 +303,13 @@
 			<div class="ticks" aria-hidden="true">
 				{#each { length: tick_count + 1 } as _, i}
 					{@const tick_value = min + i * step}
+					{@const tick_pct = ((tick_value - min) / (max - min)) * 100}
+					{@const tick_offset = 0.5 - tick_pct / 100}
 					<span
 						class="tick"
 						class:active={tick_value >= (range ? lower_value : min) &&
 							tick_value <= (range ? upper_value : lower_value)}
-						style:left="{((tick_value - min) / (max - min)) * 100}%">
+						style:left="calc({tick_pct}% + var(--handle-width) * {tick_offset})">
 						{#if tick_labels && tick_labels[i] !== undefined}
 							<span class="tick-label">{tick_labels[i]}</span>
 						{/if}
@@ -225,11 +331,13 @@
 
 <style>
 	.range-container {
-		--track-height: 5px;
-		--thumb-size: 18px;
+		--handle-width: 8px;
+		--handle-height: 20px;
+		--active-height: 6px;
+		--inactive-height: 4px;
+		--gap: 6px;
 		--fill-color: var(--c-action, hsl(220 70% 55%));
 		--track-bg: var(--c-bg-6, hsl(0 0% 80%));
-		--thumb-color: var(--c-action-active, hsl(220 70% 50%));
 
 		display: flex;
 		flex-direction: column;
@@ -247,23 +355,35 @@
 
 	/* Sizes */
 	.range-container.size-0 {
-		--track-height: 3px;
-		--thumb-size: 14px;
+		--handle-width: 6px;
+		--handle-height: 16px;
+		--active-height: 4px;
+		--inactive-height: 4px;
+		--gap: 5px;
 		font-size: var(--font-size-0, 0.75rem);
 	}
 	.range-container.size-1 {
-		--track-height: 5px;
-		--thumb-size: 18px;
+		--handle-width: 8px;
+		--handle-height: 20px;
+		--active-height: 6px;
+		--inactive-height: 4px;
+		--gap: 6px;
 		font-size: var(--font-size-1, 0.875rem);
 	}
 	.range-container.size-2 {
-		--track-height: 7px;
-		--thumb-size: 22px;
+		--handle-width: 10px;
+		--handle-height: 24px;
+		--active-height: 7px;
+		--inactive-height: 4px;
+		--gap: 7px;
 		font-size: var(--font-size-2, 1rem);
 	}
 	.range-container.size-3 {
-		--track-height: 8px;
-		--thumb-size: 26px;
+		--handle-width: 12px;
+		--handle-height: 28px;
+		--active-height: 8px;
+		--inactive-height: 5px;
+		--gap: 8px;
 		font-size: var(--font-size-3, 1.125rem);
 	}
 
@@ -275,35 +395,65 @@
 
 	.range-wrapper {
 		position: relative;
-		height: var(--thumb-size);
+		height: var(--handle-height);
 		display: flex;
 		align-items: center;
+		cursor: pointer;
 	}
 
-	/* Track */
-	.track {
+	/* Track segments */
+	.track-segment {
 		position: absolute;
-		left: 0;
-		right: 0;
-		height: var(--track-height);
-		background: var(--track-bg);
-		border-radius: var(--track-height);
+		top: 50%;
+		transform: translateY(-50%);
+		border-radius: 999px;
 		pointer-events: none;
 	}
 
-	.fill {
-		position: absolute;
-		height: 100%;
+	.track-segment.active {
+		height: var(--active-height);
 		background: var(--fill-color);
-		border-radius: inherit;
-		pointer-events: none;
+		transition:
+			left 100ms ease,
+			width 100ms ease,
+			height 200ms ease,
+			box-shadow 200ms ease;
+	}
+
+	.track-segment.inactive {
+		height: var(--inactive-height);
+		background: var(--track-bg);
+		transition:
+			left 100ms ease,
+			width 100ms ease,
+			right 100ms ease,
+			height 200ms ease;
+	}
+
+	/* Disable position transitions during drag */
+	.dragging .track-segment.active {
+		transition:
+			height 200ms ease,
+			box-shadow 200ms ease;
+		box-shadow: 0 0 8px rgb(from var(--fill-color) r g b / 0.35);
+	}
+	.dragging .track-segment.inactive {
+		transition: height 200ms ease;
+	}
+
+	/* Track grows on hover */
+	.range-container:not(.disabled):hover .track-segment.active {
+		height: calc(var(--active-height) + 2px);
+	}
+	.range-container:not(.disabled):hover .track-segment.inactive {
+		height: calc(var(--inactive-height) + 2px);
 	}
 
 	/* Native range inputs */
 	.thumb-input {
 		position: absolute;
 		width: 100%;
-		height: var(--thumb-size);
+		height: var(--handle-height);
 		margin: 0;
 		padding: 0;
 		background: transparent;
@@ -315,42 +465,68 @@
 	}
 
 	.thumb-input::-webkit-slider-runnable-track {
-		height: var(--track-height);
+		height: var(--active-height);
 		background: transparent;
 		border: none;
 	}
 	.thumb-input::-moz-range-track {
-		height: var(--track-height);
+		height: var(--active-height);
 		background: transparent;
 		border: none;
 	}
 
+	/* M3-style vertical bar handle */
 	.thumb-input::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
-		width: var(--thumb-size);
-		height: var(--thumb-size);
-		border-radius: 50%;
-		background: var(--thumb-color);
-		border: 2px solid white;
-		box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+		width: var(--handle-width);
+		height: var(--handle-height);
+		border-radius: calc(var(--handle-width) / 2);
+		background: var(--fill-color);
+		border: none;
+		box-shadow: none;
 		cursor: pointer;
 		pointer-events: auto;
-		margin-top: calc((var(--track-height) - var(--thumb-size)) / 2);
-		transition: box-shadow 0.15s ease, transform 0.15s ease;
+		margin-top: calc((var(--active-height) - var(--handle-height)) / 2);
+		transition:
+			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			box-shadow 150ms ease;
 	}
 	.thumb-input::-moz-range-thumb {
-		width: var(--thumb-size);
-		height: var(--thumb-size);
-		border-radius: 50%;
-		background: var(--thumb-color);
-		border: 2px solid white;
-		box-shadow: 0 1px 4px rgb(0 0 0 / 0.2);
+		width: var(--handle-width);
+		height: var(--handle-height);
+		border-radius: calc(var(--handle-width) / 2);
+		background: var(--fill-color);
+		border: none;
+		box-shadow: none;
 		cursor: pointer;
 		pointer-events: auto;
-		transition: box-shadow 0.15s ease, transform 0.15s ease;
+		transition:
+			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			box-shadow 150ms ease;
 	}
 
+	/* Handle hover: widen + grow taller + halo */
+	.thumb-input:not(:disabled)::-webkit-slider-thumb:hover {
+		transform: scale(1.5, 1.3);
+		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.12);
+	}
+	.thumb-input:not(:disabled)::-moz-range-thumb:hover {
+		transform: scale(1.5, 1.3);
+		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.12);
+	}
+
+	/* Handle active: widen + grow taller + larger halo */
+	.thumb-input:not(:disabled):active::-webkit-slider-thumb {
+		transform: scale(1.5, 1.15);
+		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
+	}
+	.thumb-input:not(:disabled):active::-moz-range-thumb {
+		transform: scale(1.5, 1.15);
+		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
+	}
+
+	/* Focus ring */
 	.thumb-input:focus-visible::-webkit-slider-thumb {
 		outline: 2px solid var(--c-outline-active, currentColor);
 		outline-offset: 2px;
@@ -358,21 +534,6 @@
 	.thumb-input:focus-visible::-moz-range-thumb {
 		outline: 2px solid var(--c-outline-active, currentColor);
 		outline-offset: 2px;
-	}
-
-	.thumb-input:not(:disabled)::-webkit-slider-thumb:hover {
-		box-shadow: 0 0 0 6px rgb(from var(--fill-color) r g b / 0.15);
-	}
-	.thumb-input:not(:disabled)::-moz-range-thumb:hover {
-		box-shadow: 0 0 0 6px rgb(from var(--fill-color) r g b / 0.15);
-	}
-	.thumb-input:not(:disabled):active::-webkit-slider-thumb {
-		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.2);
-		transform: scale(1.1);
-	}
-	.thumb-input:not(:disabled):active::-moz-range-thumb {
-		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.2);
-		transform: scale(1.1);
 	}
 
 	.thumb-input:disabled {
@@ -391,30 +552,35 @@
 		opacity: 0.5;
 	}
 
-	/* Ticks */
+	/* Ticks — M3 stop indicator dots on the track */
 	.ticks {
 		position: absolute;
 		left: 0;
 		right: 0;
-		top: calc(50% + var(--thumb-size) / 2 + 4px);
-		height: 8px;
+		top: 0;
+		bottom: 0;
 		pointer-events: none;
+		z-index: 3;
 	}
 
 	.tick {
 		position: absolute;
-		width: 1px;
-		height: 6px;
-		background: var(--c-bg-6, hsl(0 0% 75%));
-		transform: translateX(-50%);
+		top: 50%;
+		width: 4px;
+		height: 4px;
+		border-radius: 50%;
+		background: var(--fill-color);
+		opacity: 0.6;
+		transform: translate(-50%, -50%);
 	}
 	.tick.active {
-		background: var(--fill-color);
+		background: var(--c-action-text, white);
+		opacity: 0.6;
 	}
 
 	.tick-label {
 		position: absolute;
-		top: 10px;
+		top: calc(var(--handle-height) / 2 + 6px);
 		left: 50%;
 		transform: translateX(-50%);
 		font-size: 0.75em;
@@ -425,8 +591,8 @@
 	/* Value tooltip */
 	.value-tooltip {
 		position: absolute;
-		top: calc(-1.75em - 8px);
-		transform: translateX(-50%);
+		bottom: calc(100% + 8px);
+		transform: translateX(-50%) translateY(4px);
 		background: var(--c-action-active, hsl(220 70% 50%));
 		color: var(--c-action-text, white);
 		padding: 2px 8px;
@@ -436,6 +602,29 @@
 		white-space: nowrap;
 		pointer-events: none;
 		z-index: 3;
+		opacity: 0;
+		visibility: hidden;
+		transition:
+			opacity 150ms ease,
+			transform 150ms ease,
+			visibility 150ms ease;
+	}
+
+	.value-tooltip.visible {
+		opacity: 1;
+		visibility: visible;
+		transform: translateX(-50%) translateY(0);
+	}
+
+	/* Tooltip arrow */
+	.value-tooltip::after {
+		content: '';
+		position: absolute;
+		top: 100%;
+		left: 50%;
+		transform: translateX(-50%);
+		border: 4px solid transparent;
+		border-top-color: var(--c-action-active, hsl(220 70% 50%));
 	}
 
 	/* Value display below */
@@ -447,7 +636,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	.has-ticks .range-wrapper {
+	.has-tick-labels .range-wrapper {
 		margin-bottom: 1.5em;
 	}
 </style>
