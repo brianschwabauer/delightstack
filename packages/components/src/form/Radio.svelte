@@ -116,13 +116,20 @@
 	const effectiveName = $derived(group ? group.name : name);
 	const px = $derived(sizes[effectiveSize] ?? 20);
 
+	let animating = $state(false);
+
 	function select() {
 		if (isDisabled) return;
+		const wasSelected = isSelected;
 		if (group) {
 			group.select(value);
 		} else {
 			checked = true;
 			onchange?.({ value });
+		}
+		if (!wasSelected) {
+			animating = true;
+			setTimeout(() => (animating = false), 350);
 		}
 	}
 
@@ -205,6 +212,7 @@
 
 		<div
 			class="indicator-wrapper"
+			class:selected={isSelected}
 			role="radio"
 			tabindex={isDisabled ? -1 : 0}
 			aria-checked={isSelected}
@@ -217,6 +225,7 @@
 			<svg
 				class="indicator"
 				class:selected={isSelected}
+				class:animating
 				viewBox="0 0 24 24"
 				width={px}
 				height={px}
@@ -230,7 +239,9 @@
 			<div class="content">
 				{#if label}
 					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions a11y_label_has_associated_control -->
-					<label id="{id}-label" for="{id}-input" class="label" onclick={select}>{label}</label>
+					<label id="{id}-label" for="{id}-input" class="label" onclick={select}>
+						{label}
+					</label>
 				{/if}
 				{#if description}
 					<span class="description">{description}</span>
@@ -301,6 +312,20 @@
 			opacity: 0.5;
 			pointer-events: none;
 		}
+
+		/* Hover: circular background tint on indicator (triggers from label hover too) */
+		&:not(.disabled):hover > .indicator-wrapper {
+			background: var(--hover-tint);
+			transition: none;
+		}
+
+		/* Active: press scale on indicator (triggers from label click too) */
+		&:not(.disabled):active > .indicator-wrapper {
+			transform: scale(0.9);
+			transition:
+				transform 80ms ease,
+				background 200ms ease;
+		}
 	}
 
 	.native-input {
@@ -320,14 +345,23 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: calc(var(--size) + 12px);
-		height: calc(var(--size) + 12px);
+		width: calc(var(--size) + 20px);
+		height: calc(var(--size) + 20px);
 		border-radius: 50%;
 		cursor: pointer;
 		flex-shrink: 0;
 		overflow: hidden;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
+		--hover-tint: color-mix(in srgb, var(--color-text, currentColor) 12%, transparent);
+		transition:
+			background 200ms ease,
+			transform 150ms ease;
+
+		/* Accent-tinted hover when selected */
+		&.selected {
+			--hover-tint: color-mix(in srgb, var(--color-accent, #1976d2) 16%, transparent);
+		}
 
 		&:focus-visible {
 			box-shadow: 0 0 0 2px var(--color-text, currentColor);
@@ -361,13 +395,37 @@
 				transform: scale(1);
 			}
 		}
+
+		/* Select animation: elastic dot scale + ring pulse */
+		&.animating {
+			animation: ring-pulse 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+			.dot {
+				transition:
+					fill 150ms ease,
+					transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			}
+		}
+	}
+
+	@keyframes ring-pulse {
+		0% {
+			transform: scale(1);
+		}
+		40% {
+			transform: scale(1.1);
+		}
+		100% {
+			transform: scale(1);
+		}
 	}
 
 	.content {
 		display: flex;
 		flex-direction: column;
 		gap: 0.1em;
-		padding-top: 0.4em;
+		padding-top: 0.55em;
+		margin-left: -8px;
 	}
 
 	.label {
