@@ -4,7 +4,7 @@
 	import { type ListContext } from './List.svelte';
 	import type { TransitionConfig } from 'svelte/transition';
 	import { backOut, quartOut } from 'svelte/easing';
-	import type { Placement } from '@floating-ui/dom';
+	import type { PopoverPlacement } from './../actions/Popover.svelte';
 	import Button from './../actions/Button.svelte';
 	import Progress from '../feedback/Progress.svelte';
 
@@ -29,7 +29,7 @@
 		popoverCloseOnInsideClick = false,
 
 		/** The placement of the popover (used when either "menu" or "dropdown" is provided) */
-		popoverPlacement = 'bottom-end' as Placement,
+		popoverPlacement = 'bottom-end' as PopoverPlacement,
 
 		/** The css style string added to the component from the parent */
 		style = '',

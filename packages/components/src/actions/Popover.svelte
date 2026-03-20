@@ -1,15 +1,24 @@
 <script lang="ts" module>
-	export type {
-		Placement as PopoverPlacement,
-		Strategy as PopoverStrategy,
-	} from '@floating-ui/dom';
+	export type PopoverPlacement =
+		| 'top'
+		| 'top-start'
+		| 'top-end'
+		| 'bottom'
+		| 'bottom-start'
+		| 'bottom-end'
+		| 'left'
+		| 'left-start'
+		| 'left-end'
+		| 'right'
+		| 'right-start'
+		| 'right-end';
+	export type PopoverStrategy = 'fixed' | 'absolute';
 </script>
 
 <script lang="ts">
 	import { scale } from 'svelte/transition';
 	import { backOut, backIn } from 'svelte/easing';
 	import { focusTrap } from '@delightstack/utilities';
-	import type { Placement, Strategy } from '@floating-ui/dom';
 	import { tick, untrack, type Snippet } from 'svelte';
 	import Portal from './Portal.svelte';
 
@@ -22,10 +31,10 @@
 		opened = $bindable(false) as boolean,
 
 		/** Where the popover should be attempted to be placed (it can move to fit on screen) */
-		placement = 'bottom' as Placement,
+		placement = 'bottom' as PopoverPlacement,
 
 		/** How the item should be placed with css */
-		strategy = 'fixed' as Strategy,
+		strategy = 'fixed' as PopoverStrategy,
 
 		/** Whether the 'arrow' pointing to the target element should be shown */
 		arrow = true,
@@ -106,7 +115,8 @@
 	let forcedOpened = $state(false);
 	let positioned = $state(false);
 	let popoverIndex = $state(0);
-	let popoverPositionDestroy = () => {};
+
+	const anchorOffset = $derived(arrow ? OFFSET_WITH_ARROW : OFFSET);
 
 	const hitBoxShape = $derived.by(() => {
 		const points: string[] = [];
@@ -163,153 +173,261 @@
 		}
 	});
 
-	/** Determines the position of the popover panel so that it fits on screen */
-	async function initPopoverPosition() {
-		if (typeof window === 'undefined') return;
-		let bounds: DOMRect;
-		let borderRadius: number;
-		const {
-			computePosition,
-			autoUpdate,
-			flip,
-			offset,
-			arrow: arrowMiddleware,
-			shift,
-			size,
-		} = await import('@floating-ui/dom');
-		popoverPositionDestroy();
-
-		if (!refElement) {
-			if (typeof x !== 'number' || typeof y !== 'number') return;
-			const {
-				placement: calculatedPlacement,
-				x: calculatedX,
-				y: calculatedY,
-				middlewareData,
-			} = await computePosition(
-				{
-					getBoundingClientRect: () => ({
-						x,
-						y,
-						width: 0,
-						height: 0,
-						top: y,
-						right: x,
-						bottom: y,
-						left: x,
-					}),
-				},
-				popoverElement!,
-				{
-					placement,
-					strategy,
-					middleware: [
-						offset({ mainAxis: arrow ? OFFSET_WITH_ARROW : OFFSET }),
-						flip({ crossAxis: false }),
-						shift(),
-						...(!arrow
-							? []
-							: [arrowMiddleware({ element: arrowElement!, padding: ARROW_PADDING })]),
-						size({
-							padding: 8,
-							apply({ availableHeight, availableWidth }) {
-								if (popoverElement) {
-									popoverElement.style.maxHeight = `${availableHeight}px`;
-									popoverElement.style.maxWidth = `${availableWidth}px`;
-								}
-							},
-						}),
-					],
-				},
-			);
-			realPlacement = calculatedPlacement;
-			left = `${calculatedX}px`;
-			top = `${calculatedY}px`;
-			positioned = true;
-			transformOrigin = `${calculatedPlacement === 'top' ? 'bottom' : 'top'} center`;
-			if (middlewareData.arrow) {
-				arrowX = middlewareData.arrow?.x ? `${middlewareData.arrow.x || 0}px` : '';
-				arrowY = middlewareData.arrow?.y ? `${middlewareData.arrow.y || 0}px` : '';
-			}
-			return;
+	// Set anchor-name on refElement before DOM update so CSS anchor positioning resolves on first paint
+	$effect.pre(() => {
+		if (shown && refElement) {
+			const el = refElement;
+			(el.style as any).anchorName = `--popover-anchor-${id}`;
 		}
+	});
 
-		popoverPositionDestroy = autoUpdate(refElement, popoverElement!, async () => {
-			if (!refElement || !popoverElement || !opened) return;
-			const {
-				placement: calculatedPlacement,
-				x,
-				y,
-				middlewareData,
-			} = await computePosition(refElement, popoverElement, {
-				placement,
-				strategy,
-				middleware: [
-					offset({ mainAxis: arrow ? OFFSET_WITH_ARROW : OFFSET }),
-					flip({ crossAxis: false }),
-					shift(),
-					...(!arrow
-						? []
-						: [arrowMiddleware({ element: arrowElement!, padding: ARROW_PADDING })]),
-					size({
-						padding: 8,
-						apply({ availableHeight, availableWidth }) {
-							if (popoverElement) {
-								popoverElement.style.maxHeight = `${availableHeight}px`;
-								popoverElement.style.maxWidth = `${availableWidth}px`;
-							}
-						},
-					}),
-				],
-			});
-			if (openOnHover && untrack(() => !forcedOpened)) {
-				if (borderRadius === undefined) {
-					borderRadius = parseInt(getComputedStyle(popoverElement).borderRadius);
-				}
-				if (!bounds || calculatedPlacement !== untrack(() => realPlacement)) {
-					bounds = refElement.getBoundingClientRect();
-				}
-				if (
-					calculatedPlacement.startsWith('top') ||
-					calculatedPlacement.startsWith('bottom')
-				) {
-					hitBoxLengthZ =
-						Math.min(16, bounds.height / 2) + (arrow ? OFFSET_WITH_ARROW : OFFSET);
-					hitBoxLength = popoverElement.clientWidth;
-					hitBoxLengthA = popoverElement.clientWidth - borderRadius * 2;
-					hitBoxLengthB = bounds.width;
-					hitBoxOffsetA = borderRadius;
-					hitBoxOffsetB = bounds.x - x;
-				} else {
-					hitBoxLengthZ =
-						Math.min(16, bounds.width / 2) + (arrow ? OFFSET_WITH_ARROW : OFFSET);
-					hitBoxLength = popoverElement.clientHeight;
-					hitBoxLengthA = popoverElement.clientHeight - borderRadius * 2;
-					hitBoxLengthB = bounds.height;
-					hitBoxOffsetA = borderRadius;
-					hitBoxOffsetB = bounds.y - y;
-				}
-			}
-			realPlacement = calculatedPlacement;
-			left = `${x}px`;
-			top = `${y}px`;
-			positioned = true;
-			transformOrigin = `${calculatedPlacement === 'top' ? 'bottom' : 'top'} center`;
-			if (middlewareData.arrow) {
-				arrowX = middlewareData.arrow?.x ? `${middlewareData.arrow.x || 0}px` : '';
-				arrowY = middlewareData.arrow?.y ? `${middlewareData.arrow.y || 0}px` : '';
-			}
-			await new Promise((resolve) => setTimeout(resolve, 20));
-		});
+	// CSS anchor positioning style for real element path
+	const anchorPositionStyle = $derived.by(() => {
+		if (!refElement) return '';
+		const anchor = `--popover-anchor-${id}`;
+		const parts = [`position: ${strategy}`, `position-anchor: ${anchor}`, 'inset: auto'];
+		switch (placement) {
+			case 'bottom':
+				parts.push(
+					`top: anchor(bottom)`,
+					`justify-self: anchor-center`,
+					`margin-top: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-block`,
+				);
+				break;
+			case 'bottom-start':
+				parts.push(
+					`top: anchor(bottom)`,
+					`left: anchor(left)`,
+					`margin-top: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-block`,
+				);
+				break;
+			case 'bottom-end':
+				parts.push(
+					`top: anchor(bottom)`,
+					`right: anchor(right)`,
+					`margin-top: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-block`,
+				);
+				break;
+			case 'top':
+				parts.push(
+					`bottom: anchor(top)`,
+					`justify-self: anchor-center`,
+					`margin-bottom: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-block`,
+				);
+				break;
+			case 'top-start':
+				parts.push(
+					`bottom: anchor(top)`,
+					`left: anchor(left)`,
+					`margin-bottom: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-block`,
+				);
+				break;
+			case 'top-end':
+				parts.push(
+					`bottom: anchor(top)`,
+					`right: anchor(right)`,
+					`margin-bottom: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-block`,
+				);
+				break;
+			case 'left':
+				parts.push(
+					`right: anchor(left)`,
+					`align-self: anchor-center`,
+					`margin-right: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-inline`,
+				);
+				break;
+			case 'left-start':
+				parts.push(
+					`right: anchor(left)`,
+					`top: anchor(top)`,
+					`margin-right: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-inline`,
+				);
+				break;
+			case 'left-end':
+				parts.push(
+					`right: anchor(left)`,
+					`bottom: anchor(bottom)`,
+					`margin-right: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-inline`,
+				);
+				break;
+			case 'right':
+				parts.push(
+					`left: anchor(right)`,
+					`align-self: anchor-center`,
+					`margin-left: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-inline`,
+				);
+				break;
+			case 'right-start':
+				parts.push(
+					`left: anchor(right)`,
+					`top: anchor(top)`,
+					`margin-left: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-inline`,
+				);
+				break;
+			case 'right-end':
+				parts.push(
+					`left: anchor(right)`,
+					`bottom: anchor(bottom)`,
+					`margin-left: ${anchorOffset}px`,
+					`position-try-fallbacks: flip-inline`,
+				);
+				break;
+		}
+		return parts.join('; ') + ';';
+	});
+
+	// Computed position style (anchor positioning for real elements, left/top for virtual)
+	const positionStyle = $derived.by(() => {
+		if (refElement) return anchorPositionStyle;
+		return `position: ${strategy}; left: ${left}; top: ${top};`;
+	});
+
+	function getTransformOrigin(p: string): string {
+		if (p.startsWith('top')) return 'bottom center';
+		if (p.startsWith('bottom')) return 'top center';
+		if (p.startsWith('left')) return 'center right';
+		if (p.startsWith('right')) return 'center left';
+		return 'top center';
 	}
 
-	$effect(() => {
-		if (shown) {
-			untrack(() => initPopoverPosition());
+	/** Detects actual placement after CSS anchor positioning resolves, then updates arrow/transform-origin/hit-box */
+	function detectAndUpdate() {
+		if (!popoverElement || !refElement) return;
+		const popRect = popoverElement.getBoundingClientRect();
+		const refRect = refElement.getBoundingClientRect();
+
+		// Detect primary axis based on which side of the ref the popover ended up
+		const suffix = placement.includes('-') ? '-' + placement.split('-')[1] : '';
+		if (placement.startsWith('bottom') || placement.startsWith('top')) {
+			const popMidY = (popRect.top + popRect.bottom) / 2;
+			const refMidY = (refRect.top + refRect.bottom) / 2;
+			realPlacement = ((popMidY > refMidY ? 'bottom' : 'top') +
+				suffix) as PopoverPlacement;
 		} else {
-			popoverPositionDestroy();
+			const popMidX = (popRect.left + popRect.right) / 2;
+			const refMidX = (refRect.left + refRect.right) / 2;
+			realPlacement = ((popMidX > refMidX ? 'right' : 'left') +
+				suffix) as PopoverPlacement;
 		}
-		return () => popoverPositionDestroy();
+
+		transformOrigin = getTransformOrigin(realPlacement);
+
+		// Arrow positioning
+		if (arrow) {
+			if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
+				const anchorCenterX = refRect.left + refRect.width / 2;
+				arrowX = `${Math.max(ARROW_PADDING, Math.min(anchorCenterX - popRect.left, popRect.width - ARROW_PADDING))}px`;
+				arrowY = '';
+			} else {
+				const anchorCenterY = refRect.top + refRect.height / 2;
+				arrowY = `${Math.max(ARROW_PADDING, Math.min(anchorCenterY - popRect.top, popRect.height - ARROW_PADDING))}px`;
+				arrowX = '';
+			}
+		}
+
+		// Hit box for hover popovers
+		if (openOnHover && !untrack(() => forcedOpened)) {
+			const borderRadius = parseInt(getComputedStyle(popoverElement).borderRadius);
+			if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
+				hitBoxLengthZ = Math.min(16, refRect.height / 2) + anchorOffset;
+				hitBoxLength = popoverElement.clientWidth;
+				hitBoxLengthA = popoverElement.clientWidth - borderRadius * 2;
+				hitBoxLengthB = refRect.width;
+				hitBoxOffsetA = borderRadius;
+				hitBoxOffsetB = refRect.x - popRect.x;
+			} else {
+				hitBoxLengthZ = Math.min(16, refRect.width / 2) + anchorOffset;
+				hitBoxLength = popoverElement.clientHeight;
+				hitBoxLengthA = popoverElement.clientHeight - borderRadius * 2;
+				hitBoxLengthB = refRect.height;
+				hitBoxOffsetA = borderRadius;
+				hitBoxOffsetB = refRect.y - popRect.y;
+			}
+		}
+
+		positioned = true;
+	}
+
+	/** Position calculation for virtual reference (context menu) — one-shot, no autoUpdate */
+	function calculateVirtualPosition() {
+		if (!popoverElement || typeof x !== 'number' || typeof y !== 'number') return;
+
+		const popRect = popoverElement.getBoundingClientRect();
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+
+		let calcX = x;
+		let calcY = y + anchorOffset;
+		let calcPlacement = placement;
+
+		// Flip vertically if overflows bottom
+		if (calcY + popRect.height > vh && y - popRect.height - anchorOffset > 0) {
+			calcY = y - popRect.height - anchorOffset;
+			const suffix = placement.includes('-') ? '-' + placement.split('-')[1] : '';
+			calcPlacement = ('top' + suffix) as PopoverPlacement;
+		}
+
+		// Clamp to viewport
+		calcX = Math.max(8, Math.min(calcX, vw - popRect.width - 8));
+		calcY = Math.max(8, Math.min(calcY, vh - popRect.height - 8));
+
+		left = `${calcX}px`;
+		top = `${calcY}px`;
+		realPlacement = calcPlacement;
+		transformOrigin = getTransformOrigin(calcPlacement);
+		positioned = true;
+
+		if (arrow) {
+			if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
+				arrowX = `${Math.max(ARROW_PADDING, Math.min(x - calcX, popRect.width - ARROW_PADDING))}px`;
+				arrowY = '';
+			} else {
+				arrowY = `${Math.max(ARROW_PADDING, Math.min(y - calcY, popRect.height - ARROW_PADDING))}px`;
+				arrowX = '';
+			}
+		}
+	}
+
+	// Positioning effect — detects actual placement for arrow/transform-origin/hit-box
+	$effect(() => {
+		if (!shown || !popoverElement) return;
+		placement; // re-run when placement changes (so the arrow location gets update dynamically)
+
+		if (refElement) {
+			// Real element path: CSS anchor positioning handles layout, we just detect the result
+			const el = refElement;
+			const popEl = popoverElement;
+			const onUpdate = () => untrack(() => detectAndUpdate());
+			const rafId = requestAnimationFrame(onUpdate);
+
+			window.addEventListener('scroll', onUpdate, true);
+			window.addEventListener('resize', onUpdate);
+
+			const resizeObserver = new ResizeObserver(onUpdate);
+			resizeObserver.observe(popEl);
+			resizeObserver.observe(el);
+
+			return () => {
+				cancelAnimationFrame(rafId);
+				window.removeEventListener('scroll', onUpdate, true);
+				window.removeEventListener('resize', onUpdate);
+				resizeObserver.disconnect();
+			};
+		} else {
+			// Virtual reference path (context menu) — one-shot JS positioning
+			untrack(() => calculateVirtualPosition());
+		}
 	});
 
 	// Close the popover when clicked outside (fallback for when focus-trap doesn't activate)
@@ -616,15 +734,12 @@
 			class:positioned
 			class:dense
 			class:comfortable
-			style:position={strategy}
 			bind:this={popoverElement}
-			{style}
+			style="{style}; {positionStyle}"
+			style:--popover-radius={radius}
+			style:transform-origin={transformOrigin}
 			{id}
 			data-popover-index={popoverIndex}
-			style:--popover-radius={radius}
-			style:left
-			style:top
-			style:transform-origin={transformOrigin}
 			role="presentation"
 			{@attach focusTrap({
 				enabled: !openOnFocus,
@@ -664,7 +779,10 @@
 				if (isButtonLike && opened) opened = false;
 			}}
 			in:scale={{ start: 0.7, easing: backOut, duration: TRANSITION_IN_DURATION }}
-			out:scale={{ start: 0.7, easing: backIn, duration: TRANSITION_OUT_DURATION }}>
+			out:scale={{ start: 0.7, easing: backIn, duration: TRANSITION_OUT_DURATION }}
+			onoutroend={() => {
+				if (refElement) (refElement.style as any).anchorName = '';
+			}}>
 			<div class="popover-content">
 				{#if children}{@render children()}{/if}
 			</div>

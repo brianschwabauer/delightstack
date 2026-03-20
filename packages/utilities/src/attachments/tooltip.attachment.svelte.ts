@@ -5,7 +5,6 @@ import type { Attachment } from 'svelte/attachments';
 export function tooltip(tooltipMessage: string): Attachment<HTMLElement> {
 	return (parent: HTMLElement) => {
 		const oldDescribeBy = parent.getAttribute('aria-describedby');
-		let destroyFloatingUi = () => {};
 		let el: HTMLDivElement | undefined;
 		let message = (tooltipMessage || '').trim();
 		let destroyed = false;
@@ -46,11 +45,23 @@ export function tooltip(tooltipMessage: string): Attachment<HTMLElement> {
 			if (e.key === 'Escape') hideTooltip();
 		}
 
-		async function createTooltip() {
+		function detectTransformOrigin() {
+			if (!el || !parent) return;
+			const tooltipRect = el.getBoundingClientRect();
+			const parentRect = parent.getBoundingClientRect();
+			const tooltipMidY = (tooltipRect.top + tooltipRect.bottom) / 2;
+			const parentMidY = (parentRect.top + parentRect.bottom) / 2;
+			el.style.transformOrigin =
+				tooltipMidY < parentMidY ? 'bottom center' : 'top center';
+		}
+
+		function createTooltip() {
 			if (el) return;
 			el = document.createElement('div');
 			const id = generateID();
+			const anchorName = `--tooltip-anchor-${id}`;
 			parent.setAttribute('aria-describedby', id);
+			(parent.style as any).anchorName = anchorName;
 			el.id = id;
 			el.setAttribute('role', 'tooltip');
 			el.setAttribute('inert', 'true');
@@ -58,9 +69,13 @@ export function tooltip(tooltipMessage: string): Attachment<HTMLElement> {
 			Object.assign(el.style, {
 				display: 'block',
 				width: 'max-content',
-				position: 'absolute',
-				top: '0',
-				left: '0',
+				position: 'fixed',
+				inset: 'auto',
+				positionAnchor: anchorName,
+				bottom: 'anchor(top)',
+				justifySelf: 'anchor-center',
+				marginBottom: '8px',
+				positionTryFallbacks: 'flip-block',
 				background: 'var(--panel)',
 				color: 'var(--panel-text)',
 				padding: '10px 14px',
@@ -83,24 +98,9 @@ export function tooltip(tooltipMessage: string): Attachment<HTMLElement> {
 				document.body.appendChild(portal);
 			}
 			portal.appendChild(el);
-			const { computePosition, autoUpdate, flip, offset, shift } = await import(
-				'@floating-ui/dom'
-			);
-			destroyFloatingUi();
 			if (destroyed) return;
-			destroyFloatingUi = autoUpdate(parent, el, async () => {
-				if (!parent || !el) return;
-				const { placement, x, y } = await computePosition(parent, el, {
-					placement: 'top',
-					strategy: 'absolute',
-					middleware: [offset(8), flip(), shift()],
-				});
-				Object.assign(el.style, {
-					left: `${x}px`,
-					top: `${y}px`,
-					'transform-origin': `${placement === 'top' ? 'bottom' : 'top'} center`,
-				});
-			});
+			// Detect transform-origin after first layout
+			requestAnimationFrame(() => detectTransformOrigin());
 		}
 
 		function startListening() {
@@ -118,7 +118,7 @@ export function tooltip(tooltipMessage: string): Attachment<HTMLElement> {
 			parent.removeEventListener('blur', delayHideTooltip);
 			parent.removeEventListener('keyup', onKeyDown);
 			parent.setAttribute('aria-describedby', oldDescribeBy || '');
-			destroyFloatingUi();
+			(parent.style as any).anchorName = '';
 			if (el) el.remove();
 			if (el) el = undefined;
 		}

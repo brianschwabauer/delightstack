@@ -3,8 +3,7 @@
 	import { getContext, type Snippet } from 'svelte';
 	import { type TransitionConfig } from 'svelte/transition';
 	import { backOut, quartOut } from 'svelte/easing';
-	import Popover from './Popover.svelte';
-	import type { Placement, Strategy } from '@floating-ui/dom';
+	import Popover, { type PopoverPlacement, type PopoverStrategy } from './Popover.svelte';
 	import Progress from '../feedback/Progress.svelte';
 	import type { ButtonGroupContext } from './ButtonGroup.svelte';
 
@@ -129,10 +128,10 @@
 		popoverCloseOnInsideClick = false,
 
 		/** The placement of the popover (used when either "menu" or "dropdown" is provided) */
-		popoverPlacement = 'bottom-end' as Placement,
+		popoverPlacement = 'bottom-end' as PopoverPlacement,
 
 		/** The placement of the popover (used when either "menu" or "dropdown" is provided) */
-		popoverStrategy = 'fixed' as Strategy,
+		popoverStrategy = 'fixed' as PopoverStrategy,
 
 		/** Whether the intial focus should not be set automatically when opening the popover */
 		popoverDisableInitialFocus = false,
@@ -333,7 +332,7 @@
 </div>
 {#if menu}
 	<Popover
-		refElement={menuTrigger}
+		refElement={buttonElement}
 		bind:opened={menuActive}
 		openOnClick
 		arrow={false}

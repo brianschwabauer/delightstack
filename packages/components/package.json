@@ -82,8 +82,7 @@
 		"vite": "^6.3.5"
 	},
 	"dependencies": {
-		"@delightstack/utilities": "workspace:*",
-		"@floating-ui/dom": "^1.6.12"
+		"@delightstack/utilities": "workspace:*"
 	},
 	"peerDependencies": {
 		"svelte": "^5.36.0"

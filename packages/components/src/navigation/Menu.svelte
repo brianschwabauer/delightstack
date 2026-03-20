@@ -22,7 +22,7 @@
 
 <script lang="ts">
 	import { getContext, setContext, onMount, type Snippet } from 'svelte';
-	import Popover from '../actions/Popover.svelte';
+	import Popover, { type PopoverPlacement } from '../actions/Popover.svelte';
 
 	const propId = $props.id();
 
@@ -35,7 +35,7 @@
 		trigger = undefined as HTMLElement | undefined,
 
 		/** Popover placement relative to the trigger */
-		placement = 'bottom-start' as import('@floating-ui/dom').Placement,
+		placement = 'bottom-start' as PopoverPlacement,
 
 		/** Whether the menu closes when an item is selected */
 		close_on_select = true,
@@ -79,7 +79,9 @@
 
 		/* --- Shared --- */
 		/** Change handler for checkbox or radio group */
-		onchange = undefined as ((detail: { checked?: boolean; value?: string }) => void) | undefined,
+		onchange = undefined as
+			| ((detail: { checked?: boolean; value?: string }) => void)
+			| undefined,
 
 		/** The ID of the element */
 		id = propId,
@@ -255,7 +257,9 @@
 			targetIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % allItems.length;
 		} else {
 			targetIdx =
-				currentIdx === -1 ? allItems.length - 1 : (currentIdx - 1 + allItems.length) % allItems.length;
+				currentIdx === -1
+					? allItems.length - 1
+					: (currentIdx - 1 + allItems.length) % allItems.length;
 		}
 		allItems[targetIdx]?.focus();
 	}
@@ -418,7 +422,12 @@
 		<span class="menu-item-indicator">
 			{#if checked}
 				<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-					<path d="M2.5 7.5L5.5 10.5L11.5 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+					<path
+						d="M2.5 7.5L5.5 10.5L11.5 4"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round" />
 				</svg>
 			{/if}
 		</span>
@@ -498,7 +507,10 @@
 
 		&:hover,
 		&:focus-visible {
-			background: light-dark(var(--color-bg-subtle, #f5f5f5), var(--color-bg-subtle, #1a1a1a));
+			background: light-dark(
+				var(--color-bg-subtle, #f5f5f5),
+				var(--color-bg-subtle, #1a1a1a)
+			);
 			outline: none;
 		}
 

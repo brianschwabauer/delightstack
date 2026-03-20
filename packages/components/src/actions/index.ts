@@ -8,10 +8,6 @@ export {
 	type PopoverPlacement,
 	type PopoverStrategy,
 } from './Popover.svelte';
-// export type {
-// 	Placement as PopoverPlacement,
-// 	Strategy as PopoverStrategy,
-// } from '@floating-ui/dom';
 export { default as ContextMenu, contextMenu } from './ContextMenu.svelte';
 export { default as Portal, portal } from './Portal.svelte';
 export { default as CommandPalette } from './CommandPalette.svelte';
