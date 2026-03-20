@@ -31,6 +31,18 @@
 
 			let instance: Record<string, unknown>;
 
+			const props = $state({
+				open: false,
+				title: options.title || 'Confirm',
+				message: options.message,
+				cancelText: options.cancelText || 'Cancel',
+				continueText: options.continueText || 'Continue',
+				destructive: options.destructive || false,
+				icon: options.icon,
+				oncancel: () => cleanup(false),
+				oncontinue: () => cleanup(true),
+			});
+
 			function cleanup(result: boolean) {
 				resolve(result);
 				try {
@@ -43,17 +55,12 @@
 
 			instance = mount(AlertComponent, {
 				target: wrapper,
-				props: {
-					open: true,
-					title: options.title || 'Confirm',
-					message: options.message,
-					cancelText: options.cancelText || 'Cancel',
-					continueText: options.continueText || 'Continue',
-					destructive: options.destructive || false,
-					icon: options.icon,
-					oncancel: () => cleanup(false),
-					oncontinue: () => cleanup(true),
-				},
+				props,
+			});
+
+			// Flip open on next frame so the Modal sees the false→true transition and animates in
+			requestAnimationFrame(() => {
+				props.open = true;
 			});
 		});
 	}
