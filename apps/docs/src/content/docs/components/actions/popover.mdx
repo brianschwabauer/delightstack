@@ -5,69 +5,122 @@ description: A floating content container with smart Floating UI positioning, mu
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import PopoverDemo from '../../../../components/demos/PopoverDemo.svelte';
-import PopoverClickDemo from '../../../../components/demos/PopoverClickDemo.svelte';
+import PopoverStateDemo from '../../../../components/demos/PopoverStateDemo.svelte';
 import PopoverHoverDemo from '../../../../components/demos/PopoverHoverDemo.svelte';
 import PopoverContextMenuDemo from '../../../../components/demos/PopoverContextMenuDemo.svelte';
-import PopoverPlacementDemo from '../../../../components/demos/PopoverPlacementDemo.svelte';
 import PopoverFocusDemo from '../../../../components/demos/PopoverFocusDemo.svelte';
+import PopoverDenseDemo from '../../../../components/demos/PopoverDenseDemo.svelte';
 
 ## Import
 
 ```svelte
-import { Popover } from '@delightstack/components';
+import {Popover} from '@delightstack/components';
 ```
 
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Popover } from '@delightstack/components';
-
-  let triggerRef = $state<HTMLElement>();
+    import { Button, Popover } from '@delightstack/components/actions';
+    let refElement = $state(undefined);
 </script>
 
-<button bind:this={triggerRef}>Click for Popover</button>
-
-<Popover refElement={triggerRef} openOnClick placement="bottom">
-  <div style="padding: 0.75rem 1rem;">
-    <p style="font-weight: 600;">Popover Title</p>
-    <p>Positioned automatically using Floating UI.
-    Click outside to dismiss.</p>
-  </div>
-</Popover>`}>
+<Button bind:buttonElement={refElement}>Toggle Popover</Button>
+<Popover {refElement} openOnClick>
+    <h2>Popover Title</h2>
+    <p>Positioned automatically using Floating UI.</p>
+    <p>Click outside to dismiss.</p>
+</Popover>
+`}>
   <PopoverDemo client:only="svelte" />
 </ComponentPreview>
 
 ## Examples
 
-### Click-Triggered with Auto-Toggle
+### Popover State Demo
 
-Set `openOnClick` to let the Popover component manage the click toggle automatically.
+Control the state of the popover externally
 
-<ComponentPreview code={`<script>
-  import { Popover } from '@delightstack/components';
+<ComponentPreview code={`<script lang="ts">
+	import { Select, Toggle } from '@delightstack/components/form';
+	import { Popover, type PopoverPlacement } from '@delightstack/components/actions';
 
-  let triggerRef = $state<HTMLElement>();
+    let refElement = $state<HTMLElement | undefined>(undefined);
+    let opened = $state(false);
+    let placement = $state<PopoverPlacement>('bottom');
+    const placements: PopoverPlacement[] = [
+    	'top',
+    	'top-start',
+    	'top-end',
+    	'bottom',
+    	'bottom-start',
+    	'bottom-end',
+    	'left',
+    	'left-start',
+    	'left-end',
+    	'right',
+    	'right-start',
+    	'right-end',
+    ];
+
 </script>
 
-<button bind:this={triggerRef}>Toggle Popover</button>
+<div class="controls">
+    <Toggle bind:checked={opened} label={opened ? 'Popover Opened' : 'Popover Closed'} />
+    <Select
+      options={placements.map((p) => ({ label: p, value: p }))}
+      bind:value={placement} />
+</div>
+<div bind:this={refElement} class="ref-element">
+    Popover position reference
+    <p style="margin: 0; font-size: 0.875rem; opacity: 0.8;">
+      Resize the container to see the popover reposition.
+    </p>
+</div>
+<Popover
+    bind:opened
+    bind:refElement
+    closeOnOutsideClick={false}
+    closeOnEscapeKey={false}
+    {placement}>
+    <h2>Popover Title</h2>
+    <p>Popover opened state is controlled outside the popover component.</p>
+</Popover>
 
-<Popover refElement={triggerRef} openOnClick placement="bottom-start">
-  <div style="padding: 1rem;">
-    <p>Click the button again to close.</p>
-  </div>
-</Popover>`}>
-	<PopoverClickDemo client:only="svelte" />
+<style>
+    .controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        align-items: center;
+        width: 100%;
+    }
+    .ref-element {
+        background-color: var(--color-bg-active);
+        border: dashed 2px var(--color-outline);
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        margin: 1rem 0 0;
+        resize: both;
+        overflow: auto;
+    }
+</style>
+
+`}>
+
+<PopoverStateDemo client:only="svelte" />
+
 </ComponentPreview>
 
 ### Hover Info Popover
 
 Open on hover with a delay. The hover trapezoid allows safe diagonal mouse movement between the trigger and the popover.
 
-<ComponentPreview code={`<span bind:this={triggerRef}>Hover over me</span>
-
-<Popover refElement={triggerRef} openOnHover hoverDelay={200} placement="bottom-start">
-  <p style="padding: 0.5rem 1rem;">Helpful tooltip-like info</p>
-</Popover>`}>
+<ComponentPreview
+	code={`<span bind:this={refElement}>Hover over me for info</span>
+<Popover {refElement} openOnHover>
+    Helpful tooltip-like information appears on hover.
+</Popover>
+`}>
 	<PopoverHoverDemo client:only="svelte" />
 </ComponentPreview>
 
@@ -76,28 +129,18 @@ Open on hover with a delay. The hover trapezoid allows safe diagonal mouse movem
 Position the popover at an arbitrary coordinate instead of relative to a reference element. Useful for right-click menus.
 
 <ComponentPreview code={`<div oncontextmenu={(e) => {
-  e.preventDefault();
-  menuX = e.clientX;
-  menuY = e.clientY;
-  menuOpen = true;
-}}>
-  Right-click in this area
+    e.preventDefault();
+    menuX = e.clientX;
+    menuY = e.clientY;
+    menuOpen = true;
+  }}>
+    Right-click in this area
 </div>
 
 <Popover bind:opened={menuOpen} x={menuX} y={menuY} strategy="fixed">
-  <p>Custom context menu</p>
+    <p>Custom context menu</p>
 </Popover>`}>
 	<PopoverContextMenuDemo client:only="svelte" />
-</ComponentPreview>
-
-### Custom Placement and Arrow
-
-Control placement and arrow visibility.
-
-<ComponentPreview code={`<Popover refElement={triggerRef} openOnClick placement="right-start" arrow={false}>
-  <div style="padding: 1rem;">No arrow, positioned to the right</div>
-</Popover>`}>
-	<PopoverPlacementDemo client:only="svelte" />
 </ComponentPreview>
 
 ### Focus-Triggered Popover
@@ -107,43 +150,57 @@ Open when the reference element receives focus, close on blur.
 <ComponentPreview code={`<input bind:this={inputRef} placeholder="Focus to see suggestions" />
 
 <Popover refElement={inputRef} openOnFocus placement="bottom-start">
-  <ul style="padding: 0.5rem;">
-    <li>Suggestion 1</li>
-    <li>Suggestion 2</li>
-  </ul>
+    <ul style="padding: 0.5rem;">
+        <li>Suggestion 1</li>
+        <li>Suggestion 2</li>
+        <li>Suggestion 3</li>
+    </ul>
 </Popover>`}>
 	<PopoverFocusDemo client:only="svelte" />
 </ComponentPreview>
 
+### Dense and Comfortable
+
+Control the padding with `dense` or `comfortable` props.
+
+<ComponentPreview
+	code={`<Popover dense>Compact</Popover>
+<Popover>Default</Popover>
+<Popover comfortable>Spacious</Popover>`}>
+	<PopoverDenseDemo client:only="svelte" />
+</ComponentPreview>
+
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `refElement` | `HTMLElement` | `undefined` | Element to position relative to |
-| `opened` | `boolean` | `false` | Controls visibility (`$bindable()`) |
-| `placement` | `Placement` | `'bottom'` | Preferred Floating UI placement |
-| `strategy` | `'absolute' \| 'fixed'` | `'fixed'` | CSS positioning strategy. `'fixed'` renders through a Portal. |
-| `arrow` | `boolean` | `true` | Show arrow pointer toward the trigger |
-| `x` | `number` | `undefined` | X coordinate for virtual positioning (used instead of `refElement`) |
-| `y` | `number` | `undefined` | Y coordinate for virtual positioning (used instead of `refElement`) |
-| `openOnHover` | `boolean` | `false` | Open when the reference element is hovered |
-| `openOnClick` | `boolean` | `false` | Open when the reference element is clicked |
-| `openOnFocus` | `boolean` | `false` | Open when the reference element receives focus |
-| `closeOnOutsideClick` | `boolean` | `true` | Close when clicking outside the popover |
-| `closeOnInsideClick` | `boolean` | `false` | Close when a button-like element inside is clicked |
-| `closeOnEscapeKey` | `boolean` | `true` | Close on Escape key |
-| `disableInitialFocus` | `boolean` | `false` | Do not auto-focus content when opened |
-| `hoverDelay` | `number` | `100` | Delay in ms before opening on hover |
-| `radius` | `string` | `undefined` | Border radius override via `--popover-radius` |
-| `children` | `Snippet` | `undefined` | Popover content |
-| `id` | `string` | auto-generated | Element ID |
-| `class` | `string` | `''` | Additional CSS classes |
-| `style` | `string` | `''` | Inline CSS styles |
+| Prop                  | Type                    | Default        | Description                                                         |
+| --------------------- | ----------------------- | -------------- | ------------------------------------------------------------------- |
+| `refElement`          | `HTMLElement`           | `undefined`    | Element to position relative to                                     |
+| `opened`              | `boolean`               | `false`        | Controls visibility (`$bindable()`)                                 |
+| `placement`           | `Placement`             | `'bottom'`     | Preferred Floating UI placement                                     |
+| `strategy`            | `'absolute' \| 'fixed'` | `'fixed'`      | CSS positioning strategy. `'fixed'` renders through a Portal.       |
+| `arrow`               | `boolean`               | `true`         | Show arrow pointer toward the trigger                               |
+| `x`                   | `number`                | `undefined`    | X coordinate for virtual positioning (used instead of `refElement`) |
+| `y`                   | `number`                | `undefined`    | Y coordinate for virtual positioning (used instead of `refElement`) |
+| `openOnHover`         | `boolean`               | `false`        | Open when the reference element is hovered                          |
+| `openOnClick`         | `boolean`               | `false`        | Open when the reference element is clicked                          |
+| `openOnFocus`         | `boolean`               | `false`        | Open when the reference element receives focus                      |
+| `closeOnOutsideClick` | `boolean`               | `true`         | Close when clicking outside the popover                             |
+| `closeOnInsideClick`  | `boolean`               | `false`        | Close when a button-like element inside is clicked                  |
+| `closeOnEscapeKey`    | `boolean`               | `true`         | Close on Escape key                                                 |
+| `disableInitialFocus` | `boolean`               | `false`        | Do not auto-focus content when opened                               |
+| `hoverDelay`          | `number`                | `100`          | Delay in ms before opening on hover                                 |
+| `dense`               | `boolean`               | `false`        | Reduced padding (`0.5rem 0.75rem`)                                  |
+| `comfortable`         | `boolean`               | `false`        | Increased padding (`1.5rem 2rem`)                                   |
+| `radius`              | `string`                | `undefined`    | Border radius override via `--popover-radius`                       |
+| `children`            | `Snippet`               | `undefined`    | Popover content                                                     |
+| `id`                  | `string`                | auto-generated | Element ID                                                          |
+| `class`               | `string`                | `''`           | Additional CSS classes                                              |
+| `style`               | `string`                | `''`           | Inline CSS styles                                                   |
 
 ## Events
 
-| Event | Detail | Description |
-|-------|--------|-------------|
+| Event               | Detail    | Description                                           |
+| ------------------- | --------- | ----------------------------------------------------- |
 | `opened` (bindable) | `boolean` | Reactive state reflecting whether the popover is open |
 
 ## Accessibility

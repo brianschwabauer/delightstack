@@ -1,3 +1,10 @@
+<script lang="ts" module>
+	export type {
+		Placement as PopoverPlacement,
+		Strategy as PopoverStrategy,
+	} from '@floating-ui/dom';
+</script>
+
 <script lang="ts">
 	import { scale } from 'svelte/transition';
 	import { backOut, backIn } from 'svelte/easing';
@@ -9,7 +16,7 @@
 	const propId = $props.id();
 	let {
 		/** The HTML element that the popover will be attached to */
-		refElement = undefined as HTMLElement | undefined,
+		refElement = $bindable() as HTMLElement | undefined,
 
 		/** Whether the popover is currently open */
 		opened = $bindable(false) as boolean,
@@ -52,6 +59,12 @@
 
 		/** The number of milliseconds that the popover wait before popping up. Only applies when 'openOnHover' is true */
 		hoverDelay = 100,
+
+		/** Whether the popover should have less padding */
+		dense = false,
+
+		/** Whether the popover should have more padding */
+		comfortable = false,
 
 		/** The border radius of the popover */
 		radius = undefined as string | undefined,
@@ -297,6 +310,44 @@
 			popoverPositionDestroy();
 		}
 		return () => popoverPositionDestroy();
+	});
+
+	// Close the popover when clicked outside (fallback for when focus-trap doesn't activate)
+	$effect(() => {
+		if (!opened || !closeOnOutsideClick) return;
+		function onDocumentPointerDown(e: PointerEvent) {
+			if (!popoverElement || !opened) return;
+			let el = e.target as HTMLElement | null | undefined;
+			while (el) {
+				if (
+					el === popoverElement ||
+					el === refElement ||
+					(el.classList.contains('portal') && el.id === 'portal_' + id)
+				) {
+					return;
+				}
+				el = el.parentElement;
+			}
+			let highestPopoverIndex = -1;
+			document.querySelectorAll('[data-popover-index]').forEach((el) => {
+				highestPopoverIndex = Math.max(
+					highestPopoverIndex,
+					+((el as HTMLElement).dataset.popoverIndex || '0'),
+				);
+			});
+			if (highestPopoverIndex <= popoverIndex) {
+				opened = false;
+				forcedOpened = false;
+			}
+		}
+		// Delay adding the listener to avoid catching the click that opened the popover
+		const timeout = setTimeout(() => {
+			document.addEventListener('pointerdown', onDocumentPointerDown);
+		}, 0);
+		return () => {
+			clearTimeout(timeout);
+			document.removeEventListener('pointerdown', onDocumentPointerDown);
+		};
 	});
 
 	// Handle the popover opening and closing when the ref element is hovered over
@@ -563,6 +614,8 @@
 		<div
 			class="popover {className}"
 			class:positioned
+			class:dense
+			class:comfortable
 			style:position={strategy}
 			bind:this={popoverElement}
 			{style}
@@ -687,6 +740,7 @@
 		--layer: var(--layer-5);
 		--easing: var(--ease-out-back);
 		z-index: var(--layer);
+		padding: 1rem 1.25rem;
 		background-color: var(--color-bg);
 		border: 1px solid var(--color-border, transparent);
 		border-radius: var(--popover-radius, var(--radius-5));
@@ -697,6 +751,12 @@
 		overflow: auto;
 		scrollbar-color: transparent transparent;
 		scrollbar-width: none;
+		&.dense {
+			padding: 0.5rem 0.75rem;
+		}
+		&.comfortable {
+			padding: 1.5rem 2rem;
+		}
 		.arrow {
 			position: absolute;
 			pointer-events: none;

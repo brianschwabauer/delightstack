@@ -145,6 +145,9 @@
 		/** The ID of the element. @defaults to a random ID */
 		id = propId,
 
+		/** A reference to the button element */
+		buttonElement = $bindable() as HTMLElement | undefined,
+
 		/** Specifies a custom class name for the container element */
 		class: className = '',
 
@@ -178,7 +181,6 @@
 	let dropdownActive = $state(false);
 	let dropdownTrigger = $state(undefined as undefined | HTMLElement);
 	let menuActive = $state(false);
-	let menuTrigger = $state(undefined as undefined | HTMLElement);
 	let onclickLoading = $state(false);
 	let onclickLoadingSuccess = $state(false);
 	let mounted = $state(false);
@@ -281,7 +283,7 @@
 		disabled={resolvedDisabled || onclickLoading || (!mounted && !href)}
 		aria-haspopup={!!menu}
 		aria-expanded={menu ? menuActive : null}
-		bind:this={menuTrigger}
+		bind:this={buttonElement}
 		onclick={handleClick}>
 		{#if !icon}
 			{#if isLoading || isLoadingSuccess}
