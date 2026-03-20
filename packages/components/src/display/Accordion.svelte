@@ -74,7 +74,11 @@
 		},
 		toggle(val: string) {
 			if (multiple) {
-				const arr: string[] = Array.isArray(value) ? [...value] : value ? [value as string] : [];
+				const arr: string[] = Array.isArray(value)
+					? [...value]
+					: value
+						? [value as string]
+						: [];
 				const idx = arr.indexOf(val);
 				if (idx >= 0) {
 					if (!collapsible && arr.length === 1) return;
@@ -184,7 +188,12 @@
 			onclick={handleToggle}
 			onkeydown={handleKeyDown}>
 			<svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
-				<path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+				<path
+					d="M6 3L11 8L6 13"
+					stroke="currentColor"
+					stroke-width="1.5"
+					stroke-linecap="round"
+					stroke-linejoin="round" />
 			</svg>
 			<span class="trigger-content">
 				{#if trigger}
@@ -239,7 +248,8 @@
 
 	/* ========== AccordionItem ========== */
 	.accordion-item {
-		border-bottom: 1px solid light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		border-bottom: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 
 		&.disabled {
 			opacity: 0.5;
@@ -257,6 +267,7 @@
 		outline: none;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		-webkit-tap-highlight-color: transparent;
+		transition: background-color 300ms;
 
 		&:focus-visible {
 			box-shadow: inset 0 0 0 2px var(--color-accent, #1976d2);
@@ -268,6 +279,7 @@
 				rgb(from var(--color-text, #000) r g b / 0.04),
 				rgb(from var(--color-text, #fff) r g b / 0.06)
 			);
+			transition: none;
 		}
 	}
 
@@ -317,7 +329,8 @@
 	}
 
 	.skeleton-item {
-		border-bottom: 1px solid light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		border-bottom: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		padding: 1rem 1.25rem;
 	}
 
@@ -325,10 +338,7 @@
 		height: 1.25rem;
 		width: 60%;
 		border-radius: 4px;
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

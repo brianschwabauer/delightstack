@@ -77,13 +77,17 @@
 		class: className = '',
 
 		/** Selection changed */
-		onselect = undefined as ((payload: { value: Date | Date[] | [Date, Date] }) => void) | undefined,
+		onselect = undefined as
+			| ((payload: { value: Date | Date[] | [Date, Date] }) => void)
+			| undefined,
 
 		/** Month navigated */
 		onmonthchange = undefined as ((payload: { month: Date }) => void) | undefined,
 
 		/** Time slot selected */
-		ontimeslotselect = undefined as ((payload: { time: string; date: Date }) => void) | undefined,
+		ontimeslotselect = undefined as
+			| ((payload: { time: string; date: Date }) => void)
+			| undefined,
 	} = $props();
 
 	/* ------------------------------------------------------------------ */
@@ -95,9 +99,11 @@
 	}
 
 	function sameDay(a: Date, b: Date): boolean {
-		return a.getFullYear() === b.getFullYear() &&
+		return (
+			a.getFullYear() === b.getFullYear() &&
 			a.getMonth() === b.getMonth() &&
-			a.getDate() === b.getDate();
+			a.getDate() === b.getDate()
+		);
 	}
 
 	function stripTime(d: Date): Date {
@@ -148,7 +154,9 @@
 	const view_year = $derived(month.getFullYear());
 	const view_month = $derived(month.getMonth());
 
-	const header_label = $derived(month_year_formatter.format(new Date(view_year, view_month, 1)));
+	const header_label = $derived(
+		month_year_formatter.format(new Date(view_year, view_month, 1)),
+	);
 
 	/** Day-of-week headers respecting weekStartsOn */
 	const weekday_headers = $derived.by(() => {
@@ -185,14 +193,15 @@
 		const first_of_month = new Date(view_year, view_month, 1);
 		const first_weekday = first_of_month.getDay(); // 0=Sun
 		// How many days to go back to reach the start of the grid
-		const offset = ((first_weekday - weekStartsOn) + 7) % 7;
+		const offset = (first_weekday - weekStartsOn + 7) % 7;
 		const grid_start = addDays(first_of_month, -offset);
 
 		const days: CalendarDay[] = [];
 		for (let i = 0; i < 42; i++) {
 			const date = addDays(grid_start, i);
 			const key = toDateKey(date);
-			const is_current_month = date.getMonth() === view_month && date.getFullYear() === view_year;
+			const is_current_month =
+				date.getMonth() === view_month && date.getFullYear() === view_year;
 
 			days.push({
 				date,
@@ -218,7 +227,7 @@
 		const days = calendar_days;
 		// Check if last row (days 35-41) has any current-month days
 		const last_row = days.slice(35);
-		const has_current_month = last_row.some(d => d.is_current_month);
+		const has_current_month = last_row.some((d) => d.is_current_month);
 		return has_current_month ? days : days.slice(0, 35);
 	});
 
@@ -231,7 +240,7 @@
 		if (max && isAfter(date, max)) return true;
 		if (typeof disabled === 'function') return disabled(date);
 		if (Array.isArray(disabled)) {
-			return disabled.some(d => sameDay(d, date));
+			return disabled.some((d) => sameDay(d, date));
 		}
 		return false;
 	}
@@ -246,7 +255,7 @@
 			return value instanceof Date && sameDay(value, date);
 		}
 		if (mode === 'multiple') {
-			return Array.isArray(value) && (value as Date[]).some(d => sameDay(d, date));
+			return Array.isArray(value) && (value as Date[]).some((d) => sameDay(d, date));
 		}
 		if (mode === 'range') {
 			if (!Array.isArray(value)) return false;
@@ -293,13 +302,17 @@
 	/* ------------------------------------------------------------------ */
 
 	function getMarkers(date: Date): MarkedDate[] {
-		return marked.filter(m => sameDay(m.date, date));
+		return marked.filter((m) => sameDay(m.date, date));
 	}
 
 	function getEvents(date: Date): CalendarEvent[] {
-		return events.filter(e => {
+		return events.filter((e) => {
 			if (e.end) {
-				return isBetween(date, e.start, e.end) || sameDay(date, e.start) || sameDay(date, e.end);
+				return (
+					isBetween(date, e.start, e.end) ||
+					sameDay(date, e.start) ||
+					sameDay(date, e.end)
+				);
 			}
 			return sameDay(e.start, date);
 		});
@@ -363,7 +376,7 @@
 			onselect?.({ value: stripped });
 		} else if (mode === 'multiple') {
 			const current = Array.isArray(value) ? [...(value as Date[])] : [];
-			const idx = current.findIndex(d => sameDay(d, stripped));
+			const idx = current.findIndex((d) => sameDay(d, stripped));
 			if (idx >= 0) {
 				current.splice(idx, 1);
 			} else {
@@ -372,7 +385,10 @@
 			value = current;
 			onselect?.({ value: current });
 		} else if (mode === 'range') {
-			if (!Array.isArray(value) || (value as [Date, Date | undefined]).length === 2 && (value as [Date, Date])[1]) {
+			if (
+				!Array.isArray(value) ||
+				((value as [Date, Date | undefined]).length === 2 && (value as [Date, Date])[1])
+			) {
 				// Start new range
 				value = [stripped] as unknown as [Date, Date];
 				onselect?.({ value: [stripped] as unknown as [Date, Date] });
@@ -416,10 +432,13 @@
 	function ensureFocusedDate(): Date {
 		if (focused_date) return focused_date;
 		if (mode === 'single' && value instanceof Date) return stripTime(value);
-		if (mode === 'range' && Array.isArray(value) && value.length > 0) return stripTime((value as Date[])[0]);
-		if (mode === 'multiple' && Array.isArray(value) && value.length > 0) return stripTime((value as Date[])[0]);
+		if (mode === 'range' && Array.isArray(value) && value.length > 0)
+			return stripTime((value as Date[])[0]);
+		if (mode === 'multiple' && Array.isArray(value) && value.length > 0)
+			return stripTime((value as Date[])[0]);
 		// Default to today if it's in the current month, otherwise first of month
-		if (today.getMonth() === view_month && today.getFullYear() === view_year) return today;
+		if (today.getMonth() === view_month && today.getFullYear() === view_year)
+			return today;
 		return new Date(view_year, view_month, 1);
 	}
 
@@ -434,7 +453,9 @@
 		// Focus the DOM element after update
 		requestAnimationFrame(() => {
 			const key = toDateKey(date);
-			const el = document.querySelector(`[data-calendar-id="${id}"] [data-date="${key}"]`) as HTMLElement | null;
+			const el = document.querySelector(
+				`[data-calendar-id="${id}"] [data-date="${key}"]`,
+			) as HTMLElement | null;
 			el?.focus();
 		});
 	}
@@ -463,24 +484,40 @@
 			case 'PageUp':
 				e.preventDefault();
 				if (e.shiftKey) {
-					next = new Date(current.getFullYear() - 1, current.getMonth(), current.getDate());
+					next = new Date(
+						current.getFullYear() - 1,
+						current.getMonth(),
+						current.getDate(),
+					);
 				} else {
-					next = new Date(current.getFullYear(), current.getMonth() - 1, current.getDate());
+					next = new Date(
+						current.getFullYear(),
+						current.getMonth() - 1,
+						current.getDate(),
+					);
 				}
 				break;
 			case 'PageDown':
 				e.preventDefault();
 				if (e.shiftKey) {
-					next = new Date(current.getFullYear() + 1, current.getMonth(), current.getDate());
+					next = new Date(
+						current.getFullYear() + 1,
+						current.getMonth(),
+						current.getDate(),
+					);
 				} else {
-					next = new Date(current.getFullYear(), current.getMonth() + 1, current.getDate());
+					next = new Date(
+						current.getFullYear(),
+						current.getMonth() + 1,
+						current.getDate(),
+					);
 				}
 				break;
 			case 'Home':
 				e.preventDefault();
 				{
 					const day_of_week = current.getDay();
-					const diff = ((day_of_week - weekStartsOn) + 7) % 7;
+					const diff = (day_of_week - weekStartsOn + 7) % 7;
 					next = addDays(current, -diff);
 				}
 				break;
@@ -488,7 +525,7 @@
 				e.preventDefault();
 				{
 					const day_of_week = current.getDay();
-					const diff = ((day_of_week - weekStartsOn) + 7) % 7;
+					const diff = (day_of_week - weekStartsOn + 7) % 7;
 					next = addDays(current, 6 - diff);
 				}
 				break;
@@ -561,7 +598,12 @@
 					aria-label="Previous month"
 					onclick={() => navigateMonth(-1)}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						<path
+							d="M10 3L5 8L10 13"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					</svg>
 				</button>
 				<div class="calendar-title" aria-live="polite">
@@ -573,7 +615,12 @@
 					aria-label="Next month"
 					onclick={() => navigateMonth(1)}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						<path
+							d="M6 3L11 8L6 13"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					</svg>
 				</button>
 			</div>
@@ -598,10 +645,22 @@
 				onmouseleave={handleGridMouseLeave}>
 				{#each visible_days as day (day.key)}
 					{@const has_dots = day.markers.length > 0 || day.day_events.length > 0}
-					{@const dot_items = [...day.markers.slice(0, 3).map(m => m.color || 'var(--color-action, #3b82f6)'), ...day.day_events.slice(0, Math.max(0, 3 - day.markers.length)).map(e => e.color || 'var(--color-action, #3b82f6)')].slice(0, 3)}
-					{@const marker_labels = day.markers.filter(m => m.label).map(m => m.label).join(', ')}
-					{@const event_labels = day.day_events.map(e => e.title).join(', ')}
-					{@const aria_desc_parts = [marker_labels, event_labels].filter(Boolean).join('; ')}
+					{@const dot_items = [
+						...day.markers
+							.slice(0, 3)
+							.map((m) => m.color || 'var(--color-action, #3b82f6)'),
+						...day.day_events
+							.slice(0, Math.max(0, 3 - day.markers.length))
+							.map((e) => e.color || 'var(--color-action, #3b82f6)'),
+					].slice(0, 3)}
+					{@const marker_labels = day.markers
+						.filter((m) => m.label)
+						.map((m) => m.label)
+						.join(', ')}
+					{@const event_labels = day.day_events.map((e) => e.title).join(', ')}
+					{@const aria_desc_parts = [marker_labels, event_labels]
+						.filter(Boolean)
+						.join('; ')}
 					<button
 						type="button"
 						class="calendar-day"
@@ -617,7 +676,13 @@
 						aria-selected={day.is_selected}
 						aria-disabled={day.is_disabled}
 						aria-label={`${day.date.getDate()}${day.is_today ? ', today' : ''}${aria_desc_parts ? `, ${aria_desc_parts}` : ''}`}
-						tabindex={focused_date ? (sameDay(day.date, focused_date) ? 0 : -1) : (day.is_today && day.is_current_month ? 0 : -1)}
+						tabindex={focused_date
+							? sameDay(day.date, focused_date)
+								? 0
+								: -1
+							: day.is_today && day.is_current_month
+								? 0
+								: -1}
 						data-date={day.key}
 						disabled={day.is_disabled}
 						onclick={() => selectDate(day.date)}
@@ -730,6 +795,7 @@
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
+			transition: none;
 		}
 
 		&:focus-visible {
@@ -817,7 +883,9 @@
 		font-family: inherit;
 		font-variant-numeric: tabular-nums;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-		transition: background 100ms ease, color 100ms ease;
+		transition:
+			background 100ms ease,
+			color 100ms ease;
 		outline: none;
 
 		&:hover:not(.disabled) {
@@ -825,6 +893,7 @@
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
+			transition: none;
 		}
 
 		&:focus-visible {
@@ -849,10 +918,8 @@
 
 	/* Today ring */
 	.calendar-day.today {
-		box-shadow: inset 0 0 0 1.5px light-dark(
-			var(--color-border, #d1d5db),
-			var(--color-border, #4b5563)
-		);
+		box-shadow: inset 0 0 0 1.5px
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 	}
 
 	/* Selected */
@@ -863,6 +930,7 @@
 		&:hover:not(.disabled) {
 			background: var(--color-action, #3b82f6);
 			filter: brightness(1.1);
+			transition: none;
 		}
 	}
 
@@ -991,6 +1059,7 @@
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
+			transition: none;
 		}
 
 		&:focus-visible {
@@ -1038,10 +1107,7 @@
 
 	.skeleton-bar {
 		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

@@ -294,7 +294,7 @@
 
 		let next = current;
 		for (let i = 0; i < total; i++) {
-			next = ((next + direction) % total + total) % total;
+			next = (((next + direction) % total) + total) % total;
 			if (!flatSelectableOptions[next].disabled) return next;
 		}
 		return -1;
@@ -329,9 +329,15 @@
 				e.preventDefault();
 				if (!open) {
 					openDropdown();
-				} else if (showCreateOption && (highlightedIndex === -1 || highlightedIndex >= flatSelectableOptions.length)) {
+				} else if (
+					showCreateOption &&
+					(highlightedIndex === -1 || highlightedIndex >= flatSelectableOptions.length)
+				) {
 					handleCreate();
-				} else if (highlightedIndex >= 0 && highlightedIndex < flatSelectableOptions.length) {
+				} else if (
+					highlightedIndex >= 0 &&
+					highlightedIndex < flatSelectableOptions.length
+				) {
 					selectOption(flatSelectableOptions[highlightedIndex]);
 				}
 				break;
@@ -360,7 +366,14 @@
 			}
 			default: {
 				// Type-ahead in non-searchable mode
-				if (!searchable && !open && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+				if (
+					!searchable &&
+					!open &&
+					e.key.length === 1 &&
+					!e.ctrlKey &&
+					!e.metaKey &&
+					!e.altKey
+				) {
 					clearTimeout(typeAheadTimer);
 					typeAheadBuffer += e.key.toLowerCase();
 					typeAheadTimer = setTimeout(() => {
@@ -401,9 +414,15 @@
 			}
 			case 'Enter': {
 				e.preventDefault();
-				if (showCreateOption && (highlightedIndex === -1 || highlightedIndex >= flatSelectableOptions.length)) {
+				if (
+					showCreateOption &&
+					(highlightedIndex === -1 || highlightedIndex >= flatSelectableOptions.length)
+				) {
 					handleCreate();
-				} else if (highlightedIndex >= 0 && highlightedIndex < flatSelectableOptions.length) {
+				} else if (
+					highlightedIndex >= 0 &&
+					highlightedIndex < flatSelectableOptions.length
+				) {
 					selectOption(flatSelectableOptions[highlightedIndex]);
 				}
 				break;
@@ -497,7 +516,9 @@
 
 <!-- Label -->
 {#if label}
-	<label class="select-label" for={id}>{label}{#if required}<span aria-hidden="true"> *</span>{/if}</label>
+	<label class="select-label" for={id}>
+		{label}{#if required}<span aria-hidden="true">*</span>{/if}
+	</label>
 {/if}
 
 <div
@@ -509,7 +530,6 @@
 	class:has-error={!!error}
 	style:font-size={sizeMap[size] ?? sizeMap['1']}
 	{@attach tooltipMessage ? tooltip(tooltipMessage) : () => {}}>
-
 	<!-- Trigger button -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
@@ -527,7 +547,6 @@
 		tabindex={disabled ? -1 : 0}
 		onclick={toggleDropdown}
 		onkeydown={onTriggerKeyDown}>
-
 		<div class="select-value" bind:this={chipsContainer}>
 			{#if hasValue && renderValue}
 				{@render renderValue(selectedOptions as SelectOption | SelectOption[])}
@@ -539,7 +558,12 @@
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<span class="select-chip-remove" onclick={(e) => removeValue(opt.value, e)}>
 							<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-								<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+								<path
+									d="M18 6L6 18M6 6l12 12"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									fill="none" />
 							</svg>
 						</span>
 					</span>
@@ -563,14 +587,25 @@
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<span class="select-clear" onclick={clearValue} aria-label="Clear selection">
 				<svg viewBox="0 0 24 24" width="16" height="16">
-					<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+					<path
+						d="M18 6L6 18M6 6l12 12"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						fill="none" />
 				</svg>
 			</span>
 		{/if}
 
 		<span class="select-chevron" class:open aria-hidden="true">
 			<svg viewBox="0 0 24 24" width="18" height="18">
-				<path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+				<path
+					d="M6 9l6 6 6-6"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					fill="none" />
 			</svg>
 		</span>
 	</div>
@@ -586,14 +621,12 @@
 		closeOnEscapeKey
 		closeOnInsideClick={false}
 		disableInitialFocus={searchable}>
-
 		<div
 			class="select-dropdown"
 			bind:this={dropdownElement}
 			role="listbox"
 			id="{id}-listbox"
 			aria-multiselectable={multiple || undefined}>
-
 			{#if searchable}
 				<div class="select-search">
 					<input
@@ -626,12 +659,20 @@
 						aria-disabled={opt.disabled || undefined}
 						onpointerdown={(e) => e.preventDefault()}
 						onclick={() => selectOption(opt)}
-						onpointerenter={() => { if (!opt.disabled) highlightedIndex = flatIndex; }}>
+						onpointerenter={() => {
+							if (!opt.disabled) highlightedIndex = flatIndex;
+						}}>
 						{#if multiple}
 							<span class="select-check" aria-hidden="true">
 								{#if isSelected(opt.value)}
 									<svg viewBox="0 0 24 24" width="16" height="16">
-										<path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+										<path
+											d="M5 13l4 4L19 7"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											fill="none" />
 									</svg>
 								{/if}
 							</span>
@@ -649,7 +690,13 @@
 						{#if !multiple && isSelected(opt.value)}
 							<span class="select-check-single" aria-hidden="true">
 								<svg viewBox="0 0 24 24" width="16" height="16">
-									<path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+									<path
+										d="M5 13l4 4L19 7"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										fill="none" />
 								</svg>
 							</span>
 						{/if}
@@ -660,7 +707,8 @@
 				{#each [...groupedOptions.groups] as [groupName, groupOpts] (groupName)}
 					<div class="select-group-label">{groupName}</div>
 					{#each groupOpts as opt, gi (opt.value)}
-						{@const flatIndex = groupedOptions.ungrouped.length + getFlatGroupIndex(groupName, gi)}
+						{@const flatIndex =
+							groupedOptions.ungrouped.length + getFlatGroupIndex(groupName, gi)}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<div
 							class="select-option"
@@ -673,12 +721,20 @@
 							aria-disabled={opt.disabled || undefined}
 							onpointerdown={(e) => e.preventDefault()}
 							onclick={() => selectOption(opt)}
-							onpointerenter={() => { if (!opt.disabled) highlightedIndex = flatIndex; }}>
+							onpointerenter={() => {
+								if (!opt.disabled) highlightedIndex = flatIndex;
+							}}>
 							{#if multiple}
 								<span class="select-check" aria-hidden="true">
 									{#if isSelected(opt.value)}
 										<svg viewBox="0 0 24 24" width="16" height="16">
-											<path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+											<path
+												d="M5 13l4 4L19 7"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												fill="none" />
 										</svg>
 									{/if}
 								</span>
@@ -696,7 +752,13 @@
 							{#if !multiple && isSelected(opt.value)}
 								<span class="select-check-single" aria-hidden="true">
 									<svg viewBox="0 0 24 24" width="16" height="16">
-										<path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+										<path
+											d="M5 13l4 4L19 7"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											fill="none" />
 									</svg>
 								</span>
 							{/if}
@@ -709,13 +771,16 @@
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
 						class="select-option select-create"
-						class:highlighted={highlightedIndex === flatSelectableOptions.length || highlightedIndex === -1}
+						class:highlighted={highlightedIndex === flatSelectableOptions.length ||
+							highlightedIndex === -1}
 						role="option"
 						tabindex="-1"
 						aria-selected={false}
 						onpointerdown={(e) => e.preventDefault()}
 						onclick={handleCreate}
-						onpointerenter={() => { highlightedIndex = flatSelectableOptions.length; }}>
+						onpointerenter={() => {
+							highlightedIndex = flatSelectableOptions.length;
+						}}>
 						Create '{searchQuery.trim()}'
 					</div>
 				{/if}
@@ -735,7 +800,7 @@
 				<input type="hidden" {name} value={v} />
 			{/each}
 		{:else if value !== undefined && value !== null}
-			<input type="hidden" {name} value={value} />
+			<input type="hidden" {name} {value} />
 		{/if}
 	{/if}
 </div>
@@ -773,8 +838,13 @@
 		animation: select-skeleton-pulse 1.5s ease-in-out infinite;
 	}
 	@keyframes select-skeleton-pulse {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.5; }
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.5;
+		}
 	}
 
 	.select-trigger {
@@ -798,7 +868,8 @@
 	.select-trigger:focus-within,
 	.select-trigger.open {
 		border-color: var(--color-action, hsl(220 70% 55%));
-		box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-action, hsl(220 70% 55%)) 20%, transparent);
+		box-shadow: 0 0 0 2px
+			color-mix(in oklch, var(--color-action, hsl(220 70% 55%)) 20%, transparent);
 	}
 
 	.select-trigger.error {
@@ -881,6 +952,7 @@
 	}
 	.select-chip-remove:hover {
 		opacity: 1;
+		transition: none;
 	}
 
 	/* Clear button */
@@ -894,6 +966,7 @@
 	}
 	.select-clear:hover {
 		opacity: 0.8;
+		transition: none;
 	}
 
 	/* Chevron */
@@ -920,7 +993,9 @@
 		flex-shrink: 0;
 	}
 	@keyframes select-spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	/* Dropdown */
@@ -958,7 +1033,11 @@
 	}
 	.select-option:hover,
 	.select-option.highlighted {
-		background: light-dark(var(--color-bg-subtle, #f5f5f5), var(--color-bg-subtle, #1a1a1a));
+		background: light-dark(
+			var(--color-bg-subtle, #f5f5f5),
+			var(--color-bg-subtle, #1a1a1a)
+		);
+		transition: none;
 	}
 	.select-option.selected {
 		color: var(--color-action, hsl(220 70% 55%));

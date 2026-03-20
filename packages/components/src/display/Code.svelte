@@ -96,7 +96,12 @@
 		let remaining = line;
 
 		while (remaining.length > 0) {
-			let earliest_match: { index: number; length: number; type: string; text: string } | null = null;
+			let earliest_match: {
+				index: number;
+				length: number;
+				type: string;
+				text: string;
+			} | null = null;
 
 			for (const [regex, type] of patterns) {
 				regex.lastIndex = 0;
@@ -122,9 +127,11 @@
 		return tokens.length ? tokens : [{ type: 'plain', content: '' }];
 	}
 
-	const js_keywords = /\b(abstract|arguments|async|await|boolean|break|byte|case|catch|char|class|const|continue|debugger|default|delete|do|double|else|enum|export|extends|final|finally|float|for|from|function|goto|if|implements|import|in|instanceof|int|interface|let|long|native|new|null|of|package|private|protected|public|return|short|static|super|switch|synchronized|this|throw|throws|transient|try|typeof|undefined|var|void|volatile|while|with|yield|true|false)\b/g;
+	const js_keywords =
+		/\b(abstract|arguments|async|await|boolean|break|byte|case|catch|char|class|const|continue|debugger|default|delete|do|double|else|enum|export|extends|final|finally|float|for|from|function|goto|if|implements|import|in|instanceof|int|interface|let|long|native|new|null|of|package|private|protected|public|return|short|static|super|switch|synchronized|this|throw|throws|transient|try|typeof|undefined|var|void|volatile|while|with|yield|true|false)\b/g;
 
-	const ts_keywords = /\b(abstract|arguments|as|async|await|boolean|break|byte|case|catch|char|class|const|continue|debugger|declare|default|delete|do|double|else|enum|export|extends|final|finally|float|for|from|function|goto|if|implements|import|in|infer|instanceof|int|interface|is|keyof|let|long|module|namespace|native|never|new|null|of|package|private|protected|public|readonly|return|short|static|string|number|super|switch|synchronized|this|throw|throws|transient|try|type|typeof|undefined|unknown|var|void|volatile|while|with|yield|true|false)\b/g;
+	const ts_keywords =
+		/\b(abstract|arguments|as|async|await|boolean|break|byte|case|catch|char|class|const|continue|debugger|declare|default|delete|do|double|else|enum|export|extends|final|finally|float|for|from|function|goto|if|implements|import|in|infer|instanceof|int|interface|is|keyof|let|long|module|namespace|native|never|new|null|of|package|private|protected|public|readonly|return|short|static|string|number|super|switch|synchronized|this|throw|throws|transient|try|type|typeof|undefined|unknown|var|void|volatile|while|with|yield|true|false)\b/g;
 
 	function tokenizeJS(line: string): Token[] {
 		return tokenizeByPatterns(line, [
@@ -189,7 +196,8 @@
 		]);
 	}
 
-	const python_keywords = /\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b/g;
+	const python_keywords =
+		/\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b/g;
 
 	function tokenizePython(line: string): Token[] {
 		return tokenizeByPatterns(line, [
@@ -216,13 +224,17 @@
 			[/\$\{[^}]*\}/g, 'variable'],
 			[/\$[\w]+/g, 'variable'],
 			[/\b\d+\.?\d*\b/g, 'number'],
-			[/\b(alias|bg|bind|break|builtin|caller|case|cd|command|compgen|complete|continue|declare|dirs|disown|do|done|echo|elif|else|enable|esac|eval|exec|exit|export|false|fc|fg|fi|for|function|getopts|hash|help|history|if|in|jobs|kill|let|local|logout|popd|printf|pushd|pwd|read|readonly|return|select|set|shift|shopt|source|suspend|test|then|time|times|trap|true|type|typeset|ulimit|umask|unalias|unset|until|wait|while)\b/g, 'keyword'],
+			[
+				/\b(alias|bg|bind|break|builtin|caller|case|cd|command|compgen|complete|continue|declare|dirs|disown|do|done|echo|elif|else|enable|esac|eval|exec|exit|export|false|fc|fg|fi|for|function|getopts|hash|help|history|if|in|jobs|kill|let|local|logout|popd|printf|pushd|pwd|read|readonly|return|select|set|shift|shopt|source|suspend|test|then|time|times|trap|true|type|typeset|ulimit|umask|unalias|unset|until|wait|while)\b/g,
+				'keyword',
+			],
 			[/\b[\w./-]+(?=\s|$)/g, 'function'],
 			[/[|&;<>]+/g, 'operator'],
 		]);
 	}
 
-	const sql_keywords = /\b(ADD|ALL|ALTER|AND|ANY|AS|ASC|BACKUP|BETWEEN|BY|CASE|CHECK|COLUMN|CONSTRAINT|CREATE|DATABASE|DEFAULT|DELETE|DESC|DISTINCT|DROP|EACH|ELSE|END|EXEC|EXISTS|FOREIGN|FROM|FULL|GROUP|HAVING|IF|IN|INDEX|INNER|INSERT|INTO|IS|JOIN|KEY|LEFT|LIKE|LIMIT|NOT|NULL|OFFSET|ON|OR|ORDER|OUTER|PRIMARY|PROCEDURE|REFERENCES|REPLACE|RIGHT|ROWNUM|SELECT|SET|TABLE|THEN|TOP|TRUNCATE|UNION|UNIQUE|UPDATE|VALUES|VIEW|WHEN|WHERE|WITH)\b/gi;
+	const sql_keywords =
+		/\b(ADD|ALL|ALTER|AND|ANY|AS|ASC|BACKUP|BETWEEN|BY|CASE|CHECK|COLUMN|CONSTRAINT|CREATE|DATABASE|DEFAULT|DELETE|DESC|DISTINCT|DROP|EACH|ELSE|END|EXEC|EXISTS|FOREIGN|FROM|FULL|GROUP|HAVING|IF|IN|INDEX|INNER|INSERT|INTO|IS|JOIN|KEY|LEFT|LIKE|LIMIT|NOT|NULL|OFFSET|ON|OR|ORDER|OUTER|PRIMARY|PROCEDURE|REFERENCES|REPLACE|RIGHT|ROWNUM|SELECT|SET|TABLE|THEN|TOP|TRUNCATE|UNION|UNIQUE|UPDATE|VALUES|VIEW|WHEN|WHERE|WITH)\b/gi;
 
 	function tokenizeSQL(line: string): Token[] {
 		return tokenizeByPatterns(line, [
@@ -317,9 +329,7 @@
 
 	const lines = $derived(code.split('\n'));
 
-	const tokenized_lines = $derived(
-		lines.map((line) => tokenizeLine(line, language)),
-	);
+	const tokenized_lines = $derived(lines.map((line) => tokenizeLine(line, language)));
 
 	const highlight_set = $derived(new Set(highlightLines));
 
@@ -352,10 +362,7 @@
 		</div>
 	</div>
 {:else}
-	<div
-		class={['ds-code', className].filter(Boolean).join(' ')}
-		class:wrap
-		{id}>
+	<div class={['ds-code', className].filter(Boolean).join(' ')} class:wrap {id}>
 		{#if show_header}
 			<div class="code-header">
 				{#if filename}
@@ -370,13 +377,38 @@
 						onclick={handleCopy}
 						aria-label={copy_state === 'copied' ? 'Copied' : 'Copy code'}>
 						{#if copy_state === 'copied'}
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<path d="M3 8.5L6.5 12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+							<svg
+								width="16"
+								height="16"
+								viewBox="0 0 16 16"
+								fill="none"
+								aria-hidden="true">
+								<path
+									d="M3 8.5L6.5 12L13 4"
+									stroke="currentColor"
+									stroke-width="1.5"
+									stroke-linecap="round"
+									stroke-linejoin="round" />
 							</svg>
 						{:else}
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.25" />
-								<path d="M10.5 5.5V3.5C10.5 2.67 9.83 2 9 2H3.5C2.67 2 2 2.67 2 3.5V9C2 9.83 2.67 10.5 3.5 10.5H5.5" stroke="currentColor" stroke-width="1.25" />
+							<svg
+								width="16"
+								height="16"
+								viewBox="0 0 16 16"
+								fill="none"
+								aria-hidden="true">
+								<rect
+									x="5.5"
+									y="5.5"
+									width="8"
+									height="8"
+									rx="1.5"
+									stroke="currentColor"
+									stroke-width="1.25" />
+								<path
+									d="M10.5 5.5V3.5C10.5 2.67 9.83 2 9 2H3.5C2.67 2 2 2.67 2 3.5V9C2 9.83 2.67 10.5 3.5 10.5H5.5"
+									stroke="currentColor"
+									stroke-width="1.25" />
 							</svg>
 						{/if}
 					</button>
@@ -385,17 +417,20 @@
 		{/if}
 
 		<div class="code-body" style:max-height={maxHeight}>
-			<pre><code>{#each tokenized_lines as tokens, i}{@const line_num = startLine + i}{@const is_highlighted = highlight_set.has(line_num)}{@const raw_line = lines[i]}<span
-						class="code-line"
-						class:highlighted={is_highlighted}
-						class:diff-add={diff && getDiffClass(raw_line) === 'diff-add'}
-						class:diff-remove={diff && getDiffClass(raw_line) === 'diff-remove'}
-						class:diff-section={diff && getDiffClass(raw_line) === 'diff-section'}
-					>{#if showLineNumbers}<span
-							class="line-number"
+			<pre><code>{#each tokenized_lines as tokens, i}{@const line_num =
+							startLine + i}{@const is_highlighted =
+							highlight_set.has(line_num)}{@const raw_line = lines[i]}<span
+							class="code-line"
 							class:highlighted={is_highlighted}
-							aria-hidden="true"
-						>{line_num}</span>{/if}<span class="line-content">{#each tokens as token}<span class="token-{token.type}">{token.content}</span>{/each}</span>
+							class:diff-add={diff && getDiffClass(raw_line) === 'diff-add'}
+							class:diff-remove={diff && getDiffClass(raw_line) === 'diff-remove'}
+							class:diff-section={diff &&
+								getDiffClass(raw_line) === 'diff-section'}>{#if showLineNumbers}<span
+									class="line-number"
+									class:highlighted={is_highlighted}
+									aria-hidden="true">{line_num}</span>{/if}<span
+								class="line-content">{#each tokens as token}<span
+										class="token-{token.type}">{token.content}</span>{/each}</span>
 </span>{/each}</code></pre>
 		</div>
 	</div>
@@ -409,7 +444,9 @@
 		border: 1px solid light-dark(#e2e8f0, #334155);
 		background: light-dark(#f8fafc, #1e293b);
 		overflow: hidden;
-		font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+		font-family:
+			ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas,
+			'DejaVu Sans Mono', monospace;
 		font-size: 0.875rem;
 		line-height: 1.6;
 	}
@@ -449,11 +486,14 @@
 		color: light-dark(#64748b, #94a3b8);
 		cursor: pointer;
 		flex-shrink: 0;
-		transition: color 150ms ease, background 150ms ease;
+		transition:
+			color 150ms ease,
+			background 150ms ease;
 
 		&:hover {
 			background: light-dark(rgb(0 0 0 / 0.06), rgb(255 255 255 / 0.08));
 			color: light-dark(#334155, #e2e8f0);
+			transition: none;
 		}
 
 		&:active {
@@ -659,10 +699,7 @@
 		height: 0.75rem;
 		width: 6rem;
 		border-radius: var(--radius-3, 0.5rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -692,10 +729,7 @@
 	.skeleton-line {
 		height: 0.875rem;
 		border-radius: var(--radius-3, 0.5rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

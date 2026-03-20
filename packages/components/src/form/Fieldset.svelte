@@ -130,20 +130,14 @@
 
 	{#if collapsible}
 		<Expand show={!collapsed}>
-			<div
-				class="content"
-				class:grid
-				style:--columns={grid ? columns : undefined}>
+			<div class="content" class:grid style:--columns={grid ? columns : undefined}>
 				{#if children}
 					{@render children()}
 				{/if}
 			</div>
 		</Expand>
 	{:else}
-		<div
-			class="content"
-			class:grid
-			style:--columns={grid ? columns : undefined}>
+		<div class="content" class:grid style:--columns={grid ? columns : undefined}>
 			{#if children}
 				{@render children()}
 			{/if}
@@ -217,8 +211,13 @@
 		animation: skeleton-pulse 1.5s ease-in-out infinite;
 	}
 	@keyframes skeleton-pulse {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.5; }
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.5;
+		}
 	}
 
 	/* Legend */
@@ -243,6 +242,7 @@
 	}
 	.legend.collapsible:hover {
 		color: var(--c-action, hsl(220 70% 55%));
+		transition: none;
 	}
 	.legend.collapsible:focus-visible {
 		outline: 2px solid var(--c-outline-active, currentColor);

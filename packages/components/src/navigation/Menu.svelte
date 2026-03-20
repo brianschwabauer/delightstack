@@ -512,6 +512,7 @@
 				var(--color-bg-subtle, #1a1a1a)
 			);
 			outline: none;
+			transition: none;
 		}
 
 		&.danger {

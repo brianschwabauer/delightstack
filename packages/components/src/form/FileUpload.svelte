@@ -70,7 +70,9 @@
 		onerror = undefined as ((detail: { file: File; error: string }) => void) | undefined,
 
 		/** Custom snippet for rendering each file item */
-		fileItem = undefined as Snippet<[{ file: File; index: number; remove: () => void }]> | undefined,
+		fileItem = undefined as
+			| Snippet<[{ file: File; index: number; remove: () => void }]>
+			| undefined,
 	} = $props();
 
 	let drag_counter = $state(0);
@@ -79,12 +81,12 @@
 
 	const is_drag_over = $derived(drag_counter > 0);
 
-	const variant = $derived(
-		avatar ? 'avatar' : compact ? 'compact' : 'dropzone',
-	);
+	const variant = $derived(avatar ? 'avatar' : compact ? 'compact' : 'dropzone');
 
 	const avatar_preview_url = $derived(
-		avatar && files.length > 0 && isImage(files[0]) ? preview_urls.get(files[0]) : undefined,
+		avatar && files.length > 0 && isImage(files[0])
+			? preview_urls.get(files[0])
+			: undefined,
 	);
 
 	/** Create and clean up object URLs for image previews */
@@ -152,7 +154,10 @@
 		for (const file of incoming) {
 			// Type validation
 			if (accept && !matchesAccept(file, accept)) {
-				onerror?.({ file, error: `File type "${file.type || file.name}" is not accepted` });
+				onerror?.({
+					file,
+					error: `File type "${file.type || file.name}" is not accepted`,
+				});
 				continue;
 			}
 
@@ -249,7 +254,9 @@
 </script>
 
 <div
-	class={['file-upload', `size-${size}`, `variant-${variant}`, class_name].filter(Boolean).join(' ')}
+	class={['file-upload', `size-${size}`, `variant-${variant}`, class_name]
+		.filter(Boolean)
+		.join(' ')}
 	class:disabled
 	class:dense
 	class:comfortable
@@ -288,15 +295,22 @@
 			onclick={openFilePicker}
 			onkeydown={onKeyDown}>
 			{#if avatar_preview_url}
-				<img
-					class="avatar-preview"
-					src={avatar_preview_url}
-					alt="Avatar preview" />
+				<img class="avatar-preview" src={avatar_preview_url} alt="Avatar preview" />
 			{/if}
 			<div class="avatar-overlay">
 				<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-					<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="currentColor" stroke-width="2" fill="none"/>
-					<circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
+					<path
+						d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+						stroke="currentColor"
+						stroke-width="2"
+						fill="none" />
+					<circle
+						cx="12"
+						cy="13"
+						r="4"
+						stroke="currentColor"
+						stroke-width="2"
+						fill="none" />
 				</svg>
 			</div>
 		</div>
@@ -313,8 +327,19 @@
 			ondragleave={onDragLeave}
 			ondrop={onDrop}
 			onclick={openFilePicker}>
-			<svg class="upload-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-				<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+			<svg
+				class="upload-icon"
+				viewBox="0 0 24 24"
+				width="16"
+				height="16"
+				aria-hidden="true">
+				<path
+					d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					fill="none" />
 			</svg>
 			<span>Choose file{multiple ? 's' : ''}</span>
 		</button>
@@ -334,7 +359,13 @@
 			onclick={openFilePicker}
 			onkeydown={onKeyDown}>
 			<svg class="upload-icon" viewBox="0 0 24 24" aria-hidden="true">
-				<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+				<path
+					d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					fill="none" />
 			</svg>
 			<p class="dropzone-text">
 				Drop files here or <span class="browse-link">browse</span>
@@ -354,10 +385,7 @@
 				{:else}
 					<div class="file-item" role="listitem">
 						{#if preview && isImage(file) && preview_urls.get(file)}
-							<img
-								class="file-preview"
-								src={preview_urls.get(file)}
-								alt={file.name} />
+							<img class="file-preview" src={preview_urls.get(file)} alt={file.name} />
 						{/if}
 						<div class="file-info">
 							<span class="file-name">{file.name}</span>
@@ -369,7 +397,12 @@
 							aria-label="Remove {file.name}"
 							onclick={() => removeFile(index)}>
 							<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-								<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+								<path
+									d="M18 6L6 18M6 6l12 12"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									fill="none" />
 							</svg>
 						</button>
 					</div>
@@ -442,8 +475,13 @@
 		visibility: hidden;
 	}
 	@keyframes skeleton-pulse {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.5; }
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.5;
+		}
 	}
 
 	/* Label */
@@ -461,7 +499,9 @@
 		padding: 2rem;
 		text-align: center;
 		cursor: pointer;
-		transition: border-color 200ms, background 200ms;
+		transition:
+			border-color 200ms,
+			background 200ms;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -472,6 +512,7 @@
 
 	.dropzone:hover {
 		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		transition: none;
 	}
 
 	.dropzone:focus-visible {
@@ -481,7 +522,12 @@
 
 	.dropzone.drag-over {
 		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
-		background: color-mix(in oklch, var(--color-action, var(--c-action, hsl(220 70% 55%))) 5%, transparent);
+		background: color-mix(
+			in oklch,
+			var(--color-action, var(--c-action, hsl(220 70% 55%))) 5%,
+			transparent
+		);
+		transition: none;
 	}
 
 	.disabled .dropzone {
@@ -526,12 +572,15 @@
 		font-size: 0.875em;
 		font-family: inherit;
 		cursor: pointer;
-		transition: border-color 200ms, background 200ms;
+		transition:
+			border-color 200ms,
+			background 200ms;
 		outline: none;
 	}
 
 	.compact-trigger:hover:not(:disabled) {
 		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		transition: none;
 	}
 
 	.compact-trigger:focus-visible {
@@ -541,7 +590,11 @@
 
 	.compact-trigger.drag-over {
 		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
-		background: color-mix(in oklch, var(--color-action, var(--c-action, hsl(220 70% 55%))) 5%, transparent);
+		background: color-mix(
+			in oklch,
+			var(--color-action, var(--c-action, hsl(220 70% 55%))) 5%,
+			transparent
+		);
 	}
 
 	.compact-trigger:disabled {
@@ -563,7 +616,10 @@
 		position: relative;
 		cursor: pointer;
 		border: 2px dashed var(--color-border, var(--c-outline, hsl(0 0% 80%)));
-		background: light-dark(var(--color-bg-subtle, #f5f5f5), var(--color-bg-subtle, #1a1a1a));
+		background: light-dark(
+			var(--color-bg-subtle, #f5f5f5),
+			var(--color-bg-subtle, #1a1a1a)
+		);
 		transition: border-color 200ms;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
@@ -571,6 +627,7 @@
 
 	.avatar-upload:hover {
 		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		transition: none;
 	}
 
 	.avatar-upload:focus-visible {
@@ -580,6 +637,7 @@
 
 	.avatar-upload.drag-over {
 		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		transition: none;
 	}
 
 	.disabled .avatar-upload {
@@ -627,7 +685,10 @@
 		gap: 0.5rem;
 		padding: 0.5rem;
 		border-radius: var(--radius-sm, var(--radius-2, 4px));
-		background: light-dark(var(--color-bg-subtle, #f5f5f5), var(--color-bg-subtle, #1a1a1a));
+		background: light-dark(
+			var(--color-bg-subtle, #f5f5f5),
+			var(--color-bg-subtle, #1a1a1a)
+		);
 	}
 
 	.file-preview {
@@ -669,13 +730,16 @@
 		color: var(--c-text-2, hsl(0 0% 45%));
 		cursor: pointer;
 		border-radius: var(--radius-sm, var(--radius-2, 4px));
-		transition: color 150ms, background 150ms;
+		transition:
+			color 150ms,
+			background 150ms;
 		flex-shrink: 0;
 	}
 
 	.remove-button:hover {
 		color: var(--c-error, hsl(0 70% 55%));
 		background: color-mix(in oklch, var(--c-error, hsl(0 70% 55%)) 10%, transparent);
+		transition: none;
 	}
 
 	.remove-button:focus-visible {

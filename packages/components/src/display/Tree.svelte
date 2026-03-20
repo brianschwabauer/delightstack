@@ -100,7 +100,7 @@
 					node: TreeNode;
 					target: TreeNode;
 					position: 'before' | 'after' | 'inside';
-				}) => void)
+			  }) => void)
 			| undefined,
 	} = $props();
 
@@ -338,8 +338,10 @@
 			return selected.includes(node.id) ? 'checked' : 'unchecked';
 		}
 		const self_checked = selected.includes(node.id);
-		const all_checked = descendant_ids.every((id) => selected.includes(id)) && self_checked;
-		const some_checked = descendant_ids.some((id) => selected.includes(id)) || self_checked;
+		const all_checked =
+			descendant_ids.every((id) => selected.includes(id)) && self_checked;
+		const some_checked =
+			descendant_ids.some((id) => selected.includes(id)) || self_checked;
 		if (all_checked) return 'checked';
 		if (some_checked) return 'indeterminate';
 		return 'unchecked';
@@ -551,9 +553,11 @@
 				// Expand all siblings of current node
 				if (current_node) {
 					const parent = parent_map.get(current_node.id);
-					const siblings = parent ? (getVisibleChildren(parent)) : tree;
+					const siblings = parent ? getVisibleChildren(parent) : tree;
 					const ids_to_expand = siblings
-						.filter((s) => (hasChildren(s) || hasLoadableChildren(s)) && !isExpanded(s.id))
+						.filter(
+							(s) => (hasChildren(s) || hasLoadableChildren(s)) && !isExpanded(s.id),
+						)
 						.map((s) => s.id);
 					if (ids_to_expand.length > 0) {
 						expanded = [...expanded, ...ids_to_expand];
@@ -604,9 +608,8 @@
 		const height = rect.height;
 		const threshold = height / 4;
 
-		const can_have_children = node.allowChildren !== undefined
-			? node.allowChildren
-			: !!node.children;
+		const can_have_children =
+			node.allowChildren !== undefined ? node.allowChildren : !!node.children;
 
 		if (y < threshold) {
 			drop_position = 'before';
@@ -667,7 +670,10 @@
 	/*  Filter text highlighting                                          */
 	/* ------------------------------------------------------------------ */
 
-	function highlightMatch(label: string, term: string): { text: string; bold: boolean }[] {
+	function highlightMatch(
+		label: string,
+		term: string,
+	): { text: string; bold: boolean }[] {
 		if (!term) return [{ text: label, bold: false }];
 		const lower = label.toLowerCase();
 		const idx = lower.indexOf(term);
@@ -686,17 +692,28 @@
 	/* ------------------------------------------------------------------ */
 
 	setContext('tree', {
-		get selectable() { return selectable; },
-		get checkboxes() { return checkboxes; },
-		get dense() { return dense; },
-		get comfortable() { return comfortable; },
+		get selectable() {
+			return selectable;
+		},
+		get checkboxes() {
+			return checkboxes;
+		},
+		get dense() {
+			return dense;
+		},
+		get comfortable() {
+			return comfortable;
+		},
 	});
 
 	/* ------------------------------------------------------------------ */
 	/*  Skeleton helpers                                                  */
 	/* ------------------------------------------------------------------ */
 
-	function generateSkeletonNodes(count: number, depth: number): { level: number; width: number }[] {
+	function generateSkeletonNodes(
+		count: number,
+		depth: number,
+	): { level: number; width: number }[] {
 		const nodes: { level: number; width: number }[] = [];
 		let current_level = 0;
 
@@ -729,7 +746,10 @@
 		{id}
 		aria-hidden="true">
 		{#each skeleton_nodes as skel, i}
-			<div class="skeleton-node" style:padding-left="{skel.level * 1.25}rem" style:animation-delay="{i * 100}ms">
+			<div
+				class="skeleton-node"
+				style:padding-left="{skel.level * 1.25}rem"
+				style:animation-delay="{i * 100}ms">
 				<div class="skeleton-chevron"></div>
 				<div class="skeleton-bar" style:width="{skel.width}%"></div>
 			</div>
@@ -801,11 +821,19 @@
 				style:padding-left="{(level - 1) * 1.25}rem"
 				draggable={draggable && !node.disabled ? 'true' : undefined}
 				ondragstart={(e) => handleDragStart(e, node)}
-				ondragover={(e) => { e.stopPropagation(); handleDragOver(e, node); }}
+				ondragover={(e) => {
+					e.stopPropagation();
+					handleDragOver(e, node);
+				}}
 				ondragleave={handleDragLeave}
-				ondrop={(e) => { e.stopPropagation(); handleDrop(e, node); }}
+				ondrop={(e) => {
+					e.stopPropagation();
+					handleDrop(e, node);
+				}}
 				ondragend={handleDragEnd}
-				onpointerdown={() => { keyboard_nav = false; }}
+				onpointerdown={() => {
+					keyboard_nav = false;
+				}}
 				onclick={(e) => {
 					if (isNodeSelectable(node)) {
 						selectNode(node, e);
@@ -835,11 +863,30 @@
 					}}>
 					{#if is_loading}
 						<svg class="spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
-							<circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" stroke-dasharray="28" stroke-dashoffset="8" stroke-linecap="round" />
+							<circle
+								cx="8"
+								cy="8"
+								r="6"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-dasharray="28"
+								stroke-dashoffset="8"
+								stroke-linecap="round" />
 						</svg>
 					{:else if has_kids || hasLoadableChildren(node)}
-						<svg class="chevron-icon" class:rotated={node_expanded} width="16" height="16" viewBox="0 0 16 16" fill="none">
-							<path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						<svg
+							class="chevron-icon"
+							class:rotated={node_expanded}
+							width="16"
+							height="16"
+							viewBox="0 0 16 16"
+							fill="none">
+							<path
+								d="M6 3L11 8L6 13"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round" />
 						</svg>
 					{/if}
 				</button>
@@ -851,23 +898,37 @@
 						tabindex={-1}
 						type="button"
 						aria-hidden="true"
-						onclick={(e) => { e.stopPropagation(); selectNode(node); }}>
+						onclick={(e) => {
+							e.stopPropagation();
+							selectNode(node);
+						}}>
 						<svg viewBox="0 0 24 24" width="18" height="18" fill="none">
 							<rect
 								class="check-box"
 								class:checked={check_state === 'checked'}
 								class:indeterminate={check_state === 'indeterminate'}
-								x="2" y="2" width="20" height="20" rx="3" stroke-width="2" />
+								x="2"
+								y="2"
+								width="20"
+								height="20"
+								rx="3"
+								stroke-width="2" />
 							{#if check_state === 'indeterminate'}
 								<line
 									class="check-dash"
-									x1="7" y1="12" x2="17" y2="12"
-									stroke-width="2.5" stroke-linecap="round" />
+									x1="7"
+									y1="12"
+									x2="17"
+									y2="12"
+									stroke-width="2.5"
+									stroke-linecap="round" />
 							{:else if check_state === 'checked'}
 								<path
 									class="check-mark"
 									d="M6 12.5 L10 16.5 L18 8"
-									stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+									stroke-width="2.5"
+									stroke-linecap="round"
+									stroke-linejoin="round" />
 							{/if}
 						</svg>
 					</button>
@@ -953,6 +1014,7 @@
 			rgb(from var(--color-text, #000) r g b / 0.06),
 			rgb(from var(--color-text, #fff) r g b / 0.08)
 		);
+		transition: none;
 	}
 
 	.tree-node.selected > .node-row {
@@ -967,6 +1029,7 @@
 			rgb(from var(--color-action, #1976d2) r g b / 0.15),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.22)
 		);
+		transition: none;
 	}
 
 	.tree-node.focused > .node-row {
@@ -1019,6 +1082,7 @@
 				rgb(from var(--color-text, #000) r g b / 0.08),
 				rgb(from var(--color-text, #fff) r g b / 0.1)
 			);
+			transition: none;
 		}
 	}
 
@@ -1061,7 +1125,9 @@
 	.check-box {
 		stroke: light-dark(var(--color-text-muted, #999), var(--color-text-muted, #777));
 		fill: transparent;
-		transition: stroke 150ms ease, fill 150ms ease;
+		transition:
+			stroke 150ms ease,
+			fill 150ms ease;
 	}
 
 	.check-box.checked,
@@ -1177,15 +1243,33 @@
 		--line-offset: 1.25rem;
 	}
 
-	.ds-tree.show-lines .tree-node .tree-node .tree-node > .children-container > :global(ul) {
+	.ds-tree.show-lines
+		.tree-node
+		.tree-node
+		.tree-node
+		> .children-container
+		> :global(ul) {
 		--line-offset: 2.5rem;
 	}
 
-	.ds-tree.show-lines .tree-node .tree-node .tree-node .tree-node > .children-container > :global(ul) {
+	.ds-tree.show-lines
+		.tree-node
+		.tree-node
+		.tree-node
+		.tree-node
+		> .children-container
+		> :global(ul) {
 		--line-offset: 3.75rem;
 	}
 
-	.ds-tree.show-lines .tree-node .tree-node .tree-node .tree-node .tree-node > .children-container > :global(ul) {
+	.ds-tree.show-lines
+		.tree-node
+		.tree-node
+		.tree-node
+		.tree-node
+		.tree-node
+		> .children-container
+		> :global(ul) {
 		--line-offset: 5rem;
 	}
 

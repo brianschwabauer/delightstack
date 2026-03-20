@@ -78,7 +78,9 @@
 		expandedRow = undefined as Snippet<[T]> | undefined,
 
 		/** Sort changed */
-		onsort = undefined as ((payload: { column: string; direction: 'asc' | 'desc' }) => void) | undefined,
+		onsort = undefined as
+			| ((payload: { column: string; direction: 'asc' | 'desc' }) => void)
+			| undefined,
 
 		/** Selection changed */
 		onselect = undefined as ((payload: { selected: T[] }) => void) | undefined,
@@ -87,12 +89,18 @@
 		onrowclick = undefined as ((payload: { row: T; index: number }) => void) | undefined,
 
 		/** Column resized */
-		oncolumnresize = undefined as ((payload: { column: string; width: number }) => void) | undefined,
+		oncolumnresize = undefined as
+			| ((payload: { column: string; width: number }) => void)
+			| undefined,
 	} = $props();
 
 	// ---- Internal state ----
 	let columnWidths = $state<Record<string, number>>({});
-	let resizing = $state<{ column_key: string; start_x: number; start_width: number } | null>(null);
+	let resizing = $state<{
+		column_key: string;
+		start_x: number;
+		start_width: number;
+	} | null>(null);
 	let expandedRows = $state(new Set<number>());
 	let collapsedGroups = $state(new Set<string>());
 	let lastSelectedIndex = $state<number | null>(null);
@@ -152,7 +160,9 @@
 	});
 
 	// ---- Total columns count ----
-	const totalColumns = $derived(columns.length + (selectable ? 1 : 0) + (expandable ? 1 : 0));
+	const totalColumns = $derived(
+		columns.length + (selectable ? 1 : 0) + (expandable ? 1 : 0),
+	);
 
 	// ---- Select all state ----
 	const allSelected = $derived(data.length > 0 && selected.length === data.length);
@@ -238,7 +248,10 @@
 			if (!resizing) return;
 			const col = columns.find((c) => c.key === resizing!.column_key);
 			const minW = parseInt(col?.minWidth || '50', 10);
-			const newWidth = Math.max(minW, resizing.start_width + (ev.clientX - resizing.start_x));
+			const newWidth = Math.max(
+				minW,
+				resizing.start_width + (ev.clientX - resizing.start_x),
+			);
 			columnWidths[resizing.column_key] = newWidth;
 		}
 
@@ -292,7 +305,8 @@
 	function handleRowClick(row: T, index: number, event: MouseEvent) {
 		// Don't fire row click if clicking checkbox or expand button
 		const target = event.target as HTMLElement;
-		if (target.closest('.ds-table-checkbox') || target.closest('.ds-table-expand-btn')) return;
+		if (target.closest('.ds-table-checkbox') || target.closest('.ds-table-expand-btn'))
+			return;
 
 		if (expandable) {
 			toggleExpand(index);
@@ -388,7 +402,6 @@
 			showExportMenu = false;
 		}
 	}
-
 </script>
 
 <div
@@ -396,8 +409,7 @@
 	class:ds-table-dense={dense}
 	class:ds-table-comfortable={comfortable}
 	class:ds-table-striped={striped}
-	{id}
->
+	{id}>
 	{#if exportable}
 		<div class="ds-table-toolbar">
 			<div class="ds-table-export" onfocusout={handleExportBlur}>
@@ -406,22 +418,39 @@
 					type="button"
 					aria-haspopup="true"
 					aria-expanded={showExportMenu}
-					onclick={() => (showExportMenu = !showExportMenu)}
-				>
+					onclick={() => (showExportMenu = !showExportMenu)}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path d="M8 2v8M8 10L5 7M8 10l3-3M3 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path
+							d="M8 2v8M8 10L5 7M8 10l3-3M3 12h10"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					</svg>
 					Export
 					<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-						<path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						<path
+							d="M3 5l3 3 3-3"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					</svg>
 				</button>
 				{#if showExportMenu}
 					<div class="ds-table-export-menu" role="menu">
-						<button class="ds-table-export-option" type="button" role="menuitem" onclick={exportCSV}>
+						<button
+							class="ds-table-export-option"
+							type="button"
+							role="menuitem"
+							onclick={exportCSV}>
 							Export CSV
 						</button>
-						<button class="ds-table-export-option" type="button" role="menuitem" onclick={exportJSON}>
+						<button
+							class="ds-table-export-option"
+							type="button"
+							role="menuitem"
+							onclick={exportJSON}>
 							Export JSON
 						</button>
 					</div>
@@ -442,16 +471,34 @@
 									checked={allSelected}
 									indeterminate={someSelected}
 									aria-label="Select all rows"
-									onchange={toggleSelectAll}
-								/>
+									onchange={toggleSelectAll} />
 								<span class="ds-table-checkbox-icon">
 									{#if allSelected}
-										<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-											<path d="M2.5 7.5L5.5 10.5L11.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+										<svg
+											width="14"
+											height="14"
+											viewBox="0 0 14 14"
+											fill="none"
+											aria-hidden="true">
+											<path
+												d="M2.5 7.5L5.5 10.5L11.5 3.5"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+												stroke-linejoin="round" />
 										</svg>
 									{:else if someSelected}
-										<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-											<path d="M3 7h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+										<svg
+											width="14"
+											height="14"
+											viewBox="0 0 14 14"
+											fill="none"
+											aria-hidden="true">
+											<path
+												d="M3 7h8"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round" />
 										</svg>
 									{/if}
 								</span>
@@ -465,8 +512,7 @@
 						<th
 							style={getColumnStyle(col)}
 							aria-sort={getAriaSort(col)}
-							class:ds-table-sortable={col.sortable}
-						>
+							class:ds-table-sortable={col.sortable}>
 							<div class="ds-table-th-content">
 								{#if col.header}
 									{@render col.header({ column: col })}
@@ -475,21 +521,53 @@
 										class="ds-table-sort-btn"
 										type="button"
 										onclick={() => handleSort(col.key)}
-										onkeydown={(e) => handleSortKeydown(e, col.key)}
-									>
+										onkeydown={(e) => handleSortKeydown(e, col.key)}>
 										<span>{col.label}</span>
-										<span class="ds-table-sort-icon" class:ds-table-sort-active={sortBy === col.key}>
+										<span
+											class="ds-table-sort-icon"
+											class:ds-table-sort-active={sortBy === col.key}>
 											{#if sortBy === col.key && sortDirection === 'asc'}
-												<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-													<path d="M7 11V3M7 3L3.5 6.5M7 3l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+												<svg
+													width="14"
+													height="14"
+													viewBox="0 0 14 14"
+													fill="none"
+													aria-hidden="true">
+													<path
+														d="M7 11V3M7 3L3.5 6.5M7 3l3.5 3.5"
+														stroke="currentColor"
+														stroke-width="1.5"
+														stroke-linecap="round"
+														stroke-linejoin="round" />
 												</svg>
 											{:else if sortBy === col.key && sortDirection === 'desc'}
-												<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-													<path d="M7 3v8M7 11l3.5-3.5M7 11L3.5 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+												<svg
+													width="14"
+													height="14"
+													viewBox="0 0 14 14"
+													fill="none"
+													aria-hidden="true">
+													<path
+														d="M7 3v8M7 11l3.5-3.5M7 11L3.5 7.5"
+														stroke="currentColor"
+														stroke-width="1.5"
+														stroke-linecap="round"
+														stroke-linejoin="round" />
 												</svg>
 											{:else}
-												<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style="opacity: 0.3">
-													<path d="M7 3v8M7 3L4 6M7 3l3 3M7 11L4 8M7 11l3-3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+												<svg
+													width="14"
+													height="14"
+													viewBox="0 0 14 14"
+													fill="none"
+													aria-hidden="true"
+													style="opacity: 0.3">
+													<path
+														d="M7 3v8M7 3L4 6M7 3l3 3M7 11L4 8M7 11l3-3"
+														stroke="currentColor"
+														stroke-width="1.25"
+														stroke-linecap="round"
+														stroke-linejoin="round" />
 												</svg>
 											{/if}
 										</span>
@@ -502,8 +580,8 @@
 									<span
 										class="ds-table-resize-handle"
 										onmousedown={(e) => startResize(e, col.key)}
-										ondblclick={(e) => autoFitColumn(e, col.key)}
-									></span>
+										ondblclick={(e) => autoFitColumn(e, col.key)}>
+									</span>
 								{/if}
 							</div>
 						</th>
@@ -516,17 +594,29 @@
 						<tr class="ds-table-skeleton-row" aria-hidden="true">
 							{#if selectable}
 								<td class="ds-table-checkbox-cell">
-									<div class="ds-table-skeleton-bar" style="width: 18px; height: 18px; border-radius: 4px;"></div>
+									<div
+										class="ds-table-skeleton-bar"
+										style="width: 18px; height: 18px; border-radius: 4px;">
+									</div>
 								</td>
 							{/if}
 							{#if expandable}
 								<td class="ds-table-expand-cell">
-									<div class="ds-table-skeleton-bar" style="width: 18px; height: 18px; border-radius: 50%;"></div>
+									<div
+										class="ds-table-skeleton-bar"
+										style="width: 18px; height: 18px; border-radius: 50%;">
+									</div>
 								</td>
 							{/if}
 							{#each columns as col, ci (col.key)}
 								<td style={col.align ? `text-align: ${col.align}` : ''}>
-									<div class="ds-table-skeleton-bar" style="width: {getSkeletonWidth(ri, ci)}; animation-delay: {(ri * columns.length + ci) * 50}ms"></div>
+									<div
+										class="ds-table-skeleton-bar"
+										style="width: {getSkeletonWidth(ri, ci)}; animation-delay: {(ri *
+											columns.length +
+											ci) *
+											50}ms">
+									</div>
 								</td>
 							{/each}
 						</tr>
@@ -538,10 +628,38 @@
 								{@render empty()}
 							{:else}
 								<div class="ds-table-empty">
-									<svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-										<rect x="6" y="10" width="36" height="28" rx="4" stroke="currentColor" stroke-width="2" fill="none" opacity="0.3"/>
-										<line x1="6" y1="18" x2="42" y2="18" stroke="currentColor" stroke-width="2" opacity="0.3"/>
-										<line x1="18" y1="18" x2="18" y2="38" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+									<svg
+										width="48"
+										height="48"
+										viewBox="0 0 48 48"
+										fill="none"
+										aria-hidden="true">
+										<rect
+											x="6"
+											y="10"
+											width="36"
+											height="28"
+											rx="4"
+											stroke="currentColor"
+											stroke-width="2"
+											fill="none"
+											opacity="0.3" />
+										<line
+											x1="6"
+											y1="18"
+											x2="42"
+											y2="18"
+											stroke="currentColor"
+											stroke-width="2"
+											opacity="0.3" />
+										<line
+											x1="18"
+											y1="18"
+											x2="18"
+											y2="38"
+											stroke="currentColor"
+											stroke-width="2"
+											opacity="0.2" />
 									</svg>
 									<p>No data available</p>
 								</div>
@@ -556,8 +674,7 @@
 									class="ds-table-group-toggle"
 									type="button"
 									onclick={() => toggleGroup(group.key)}
-									aria-expanded={!collapsedGroups.has(group.key)}
-								>
+									aria-expanded={!collapsedGroups.has(group.key)}>
 									<svg
 										class="ds-table-group-chevron"
 										class:ds-table-group-collapsed={collapsedGroups.has(group.key)}
@@ -565,9 +682,13 @@
 										height="14"
 										viewBox="0 0 14 14"
 										fill="none"
-										aria-hidden="true"
-									>
-										<path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+										aria-hidden="true">
+										<path
+											d="M5 3l4 4-4 4"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round" />
 									</svg>
 									<span class="ds-table-group-label">{group.label}</span>
 									<span class="ds-table-group-count">({group.rows.length})</span>
@@ -602,8 +723,7 @@
 		class:ds-table-row-selected={selectable && isSelected(row)}
 		class:ds-table-row-expanded={expandable && expandedRows.has(index)}
 		class:ds-table-row-clickable={!!onrowclick || expandable}
-		onclick={(e) => handleRowClick(row, index, e)}
-	>
+		onclick={(e) => handleRowClick(row, index, e)}>
 		{#if selectable}
 			<td class="ds-table-checkbox-cell">
 				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
@@ -612,12 +732,21 @@
 						type="checkbox"
 						checked={isSelected(row)}
 						aria-label="Select row {index + 1}"
-						onclick={(e) => toggleSelectRow(row, index, e as unknown as MouseEvent)}
-					/>
+						onclick={(e) => toggleSelectRow(row, index, e as unknown as MouseEvent)} />
 					<span class="ds-table-checkbox-icon">
 						{#if isSelected(row)}
-							<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-								<path d="M2.5 7.5L5.5 10.5L11.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 14 14"
+								fill="none"
+								aria-hidden="true">
+								<path
+									d="M2.5 7.5L5.5 10.5L11.5 3.5"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round" />
 							</svg>
 						{/if}
 					</span>
@@ -631,8 +760,10 @@
 					type="button"
 					aria-expanded={expandedRows.has(index)}
 					aria-label={expandedRows.has(index) ? 'Collapse row' : 'Expand row'}
-					onclick={(e) => { e.stopPropagation(); toggleExpand(index); }}
-				>
+					onclick={(e) => {
+						e.stopPropagation();
+						toggleExpand(index);
+					}}>
 					<svg
 						class="ds-table-expand-chevron"
 						class:ds-table-expanded={expandedRows.has(index)}
@@ -640,9 +771,13 @@
 						height="14"
 						viewBox="0 0 14 14"
 						fill="none"
-						aria-hidden="true"
-					>
-						<path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+						aria-hidden="true">
+						<path
+							d="M5 3l4 4-4 4"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					</svg>
 				</button>
 			</td>
@@ -696,7 +831,8 @@
 		padding: 0.375rem 0.75rem;
 		font-size: 0.8125rem;
 		font-family: inherit;
-		border: 1px solid light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		border: 1px solid
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		border-radius: var(--radius-3, 6px);
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
@@ -708,6 +844,7 @@
 				rgb(from var(--color-text, #000) r g b / 0.04),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
+			transition: none;
 		}
 	}
 
@@ -718,7 +855,8 @@
 		margin-top: 0.25rem;
 		min-width: 140px;
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		border: 1px solid light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		border: 1px solid
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		border-radius: var(--radius-3, 6px);
 		box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
 		z-index: 10;
@@ -745,7 +883,8 @@
 		}
 
 		&:not(:last-child) {
-			border-bottom: 1px solid light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+			border-bottom: 1px solid
+				light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		}
 	}
 
@@ -773,7 +912,8 @@
 	}
 
 	thead tr {
-		border-bottom: 2px solid light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		border-bottom: 2px solid
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 	}
 
 	th {
@@ -857,7 +997,8 @@
 
 	/* ========== Body Rows ========== */
 	tbody tr {
-		border-bottom: 1px solid light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		border-bottom: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 	}
 
 	td {
@@ -939,10 +1080,13 @@
 		justify-content: center;
 		width: 18px;
 		height: 18px;
-		border: 2px solid light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		border: 2px solid
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		border-radius: 4px;
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		transition: border-color 150ms ease, background-color 150ms ease;
+		transition:
+			border-color 150ms ease,
+			background-color 150ms ease;
 		flex-shrink: 0;
 		color: light-dark(var(--color-action-text, #fff), var(--color-action-text, #fff));
 	}
@@ -954,7 +1098,9 @@
 	}
 
 	.ds-table-checkbox input[type='checkbox']:focus-visible + .ds-table-checkbox-icon {
-		box-shadow: 0 0 0 2px light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a)), 0 0 0 4px var(--color-action, #1976d2);
+		box-shadow:
+			0 0 0 2px light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a)),
+			0 0 0 4px var(--color-action, #1976d2);
 	}
 
 	/* ========== Expand Cell ========== */

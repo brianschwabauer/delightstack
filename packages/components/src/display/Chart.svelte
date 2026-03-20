@@ -80,8 +80,14 @@
 	} = $props();
 
 	const DEFAULT_COLORS = [
-		'#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-		'#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+		'#3b82f6',
+		'#ef4444',
+		'#10b981',
+		'#f59e0b',
+		'#8b5cf6',
+		'#ec4899',
+		'#06b6d4',
+		'#84cc16',
 	];
 
 	let container_width = $state(0);
@@ -97,7 +103,9 @@
 	$effect(() => {
 		if (animate) {
 			has_animated = false;
-			const timer = setTimeout(() => { has_animated = true; }, 50);
+			const timer = setTimeout(() => {
+				has_animated = true;
+			}, 50);
 			return () => clearTimeout(timer);
 		} else {
 			has_animated = true;
@@ -113,8 +121,10 @@
 	/* ── Data helpers ─────────────────────────────────────────── */
 
 	const is_empty = $derived(
-		!data || !data.datasets || data.datasets.length === 0 ||
-		data.datasets.every(d => d.data.length === 0),
+		!data ||
+			!data.datasets ||
+			data.datasets.length === 0 ||
+			data.datasets.every((d) => d.data.length === 0),
 	);
 
 	const visible_datasets = $derived(
@@ -122,7 +132,7 @@
 	);
 
 	const visible_indices = $derived(
-		data.datasets.map((_, i) => i).filter(i => !hidden_datasets.has(i)),
+		data.datasets.map((_, i) => i).filter((i) => !hidden_datasets.has(i)),
 	);
 
 	const is_cartesian = $derived(
@@ -136,10 +146,16 @@
 	const PADDING_TOP = 20;
 	const PADDING_BOTTOM = 30;
 
-	const chart_width = $derived(Math.max(0, container_width - PADDING_LEFT - PADDING_RIGHT));
+	const chart_width = $derived(
+		Math.max(0, container_width - PADDING_LEFT - PADDING_RIGHT),
+	);
 	const chart_height = $derived(Math.max(0, height - PADDING_TOP - PADDING_BOTTOM));
 
-	function computeYRange(datasets: Dataset[], indices: number[], is_stacked: boolean): { min: number; max: number } {
+	function computeYRange(
+		datasets: Dataset[],
+		indices: number[],
+		is_stacked: boolean,
+	): { min: number; max: number } {
 		if (indices.length === 0) return { min: 0, max: 1 };
 
 		let min_val = 0;
@@ -165,12 +181,18 @@
 		}
 
 		if (min_val === max_val) {
-			return min_val === 0 ? { min: 0, max: 1 } : { min: min_val * 0.9, max: max_val * 1.1 };
+			return min_val === 0
+				? { min: 0, max: 1 }
+				: { min: min_val * 0.9, max: max_val * 1.1 };
 		}
 		return { min: min_val, max: max_val };
 	}
 
-	function computeNiceTicks(min_val: number, max_val: number, target_count: number = 5): number[] {
+	function computeNiceTicks(
+		min_val: number,
+		max_val: number,
+		target_count: number = 5,
+	): number[] {
 		if (min_val === max_val) return [min_val];
 		const range = max_val - min_val;
 		const rough_step = range / target_count;
@@ -192,22 +214,34 @@
 		return ticks;
 	}
 
-	const y_range = $derived(is_cartesian
-		? computeYRange(data.datasets, visible_indices, stacked && type !== 'horizontal-bar')
-		: { min: 0, max: 1 });
+	const y_range = $derived(
+		is_cartesian
+			? computeYRange(
+					data.datasets,
+					visible_indices,
+					stacked && type !== 'horizontal-bar',
+				)
+			: { min: 0, max: 1 },
+	);
 
-	const y_ticks = $derived(is_cartesian ? computeNiceTicks(y_range.min, y_range.max) : []);
+	const y_ticks = $derived(
+		is_cartesian ? computeNiceTicks(y_range.min, y_range.max) : [],
+	);
 
 	const axis_min = $derived(y_ticks.length > 0 ? y_ticks[0] : 0);
 	const axis_max = $derived(y_ticks.length > 0 ? y_ticks[y_ticks.length - 1] : 1);
 	const axis_range = $derived(Math.max(axis_max - axis_min, 1e-10));
 
 	/* For horizontal-bar charts we swap axes logic */
-	const h_range = $derived(type === 'horizontal-bar'
-		? computeYRange(data.datasets, visible_indices, stacked)
-		: { min: 0, max: 1 });
+	const h_range = $derived(
+		type === 'horizontal-bar'
+			? computeYRange(data.datasets, visible_indices, stacked)
+			: { min: 0, max: 1 },
+	);
 
-	const h_ticks = $derived(type === 'horizontal-bar' ? computeNiceTicks(h_range.min, h_range.max) : []);
+	const h_ticks = $derived(
+		type === 'horizontal-bar' ? computeNiceTicks(h_range.min, h_range.max) : [],
+	);
 
 	const h_axis_min = $derived(h_ticks.length > 0 ? h_ticks[0] : 0);
 	const h_axis_max = $derived(h_ticks.length > 0 ? h_ticks[h_ticks.length - 1] : 1);
@@ -297,13 +331,17 @@
 		return d;
 	}
 
-	function buildAreaPath(points: PointCoord[], base_y: number | number[], use_curve: boolean): string {
+	function buildAreaPath(
+		points: PointCoord[],
+		base_y: number | number[],
+		use_curve: boolean,
+	): string {
 		if (points.length === 0) return '';
 
 		const line = buildLinePath(points, use_curve);
 		const base_points = Array.isArray(base_y)
 			? points.map((p, i) => ({ x: p.x, y: base_y[i] }))
-			: points.map(p => ({ x: p.x, y: base_y }));
+			: points.map((p) => ({ x: p.x, y: base_y }));
 
 		const reversed = [...base_points].reverse();
 		let close = '';
@@ -348,7 +386,7 @@
 			if (stacked) {
 				values = buildStackedValues(di);
 				const base_arr = buildStackedBaseValues(di);
-				base_values = base_arr.map(v => mapY(v));
+				base_values = base_arr.map((v) => mapY(v));
 			} else {
 				values = ds.data.slice(0, count);
 				base_values = mapY(Math.max(axis_min, 0));
@@ -418,7 +456,8 @@
 					const val = ds.data[li] ?? 0;
 					const y_top = mapY(cumulative + val);
 					const y_bottom = mapY(cumulative);
-					const bar_x = PADDING_LEFT + li * group_width + bar_padding + (available - bar_width) / 2;
+					const bar_x =
+						PADDING_LEFT + li * group_width + bar_padding + (available - bar_width) / 2;
 					rects.push({
 						x: bar_x,
 						y: Math.min(y_top, y_bottom),
@@ -469,7 +508,9 @@
 	const H_PADDING_TOP = 20;
 	const H_PADDING_BOTTOM = 30;
 
-	const h_chart_width = $derived(Math.max(0, container_width - H_PADDING_LEFT - H_PADDING_RIGHT));
+	const h_chart_width = $derived(
+		Math.max(0, container_width - H_PADDING_LEFT - H_PADDING_RIGHT),
+	);
 	const h_chart_height = $derived(Math.max(0, height - H_PADDING_TOP - H_PADDING_BOTTOM));
 
 	function mapHX(value: number): number {
@@ -512,7 +553,11 @@
 					const val = ds.data[li] ?? 0;
 					const x_left = mapHX(cumulative);
 					const x_right = mapHX(cumulative + val);
-					const bar_y = H_PADDING_TOP + li * group_height + bar_padding + (available - bar_height) / 2;
+					const bar_y =
+						H_PADDING_TOP +
+						li * group_height +
+						bar_padding +
+						(available - bar_height) / 2;
 
 					rects.push({
 						x: Math.min(x_left, x_right),
@@ -583,7 +628,8 @@
 		const cx = container_width / 2;
 		const cy = height / 2;
 		const outer_r = Math.min(cx, cy) - 30;
-		const inner_r = type === 'donut' ? outer_r * Math.max(0, Math.min(1, innerRadius || 0.6)) : 0;
+		const inner_r =
+			type === 'donut' ? outer_r * Math.max(0, Math.min(1, innerRadius || 0.6)) : 0;
 
 		const segments: PieSegment[] = [];
 		let start_angle = -Math.PI / 2;
@@ -645,9 +691,16 @@
 
 	/* ── Tooltip helpers ──────────────────────────────────────── */
 
-	function showTooltipAt(event: MouseEvent, label: string, dataset: string, value: string) {
+	function showTooltipAt(
+		event: MouseEvent,
+		label: string,
+		dataset: string,
+		value: string,
+	) {
 		if (!showTooltip) return;
-		const rect = (event.currentTarget as Element).closest('.chart')?.getBoundingClientRect();
+		const rect = (event.currentTarget as Element)
+			.closest('.chart')
+			?.getBoundingClientRect();
 		if (!rect) return;
 		tooltip_x = event.clientX - rect.left;
 		tooltip_y = event.clientY - rect.top - 40;
@@ -680,8 +733,10 @@
 	/* ── Tick formatting ──────────────────────────────────────── */
 
 	function formatTick(value: number): string {
-		if (Math.abs(value) >= 1_000_000) return (value / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
-		if (Math.abs(value) >= 1_000) return (value / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+		if (Math.abs(value) >= 1_000_000)
+			return (value / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+		if (Math.abs(value) >= 1_000)
+			return (value / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
 		if (Number.isInteger(value)) return value.toString();
 		return value.toFixed(1);
 	}
@@ -695,9 +750,10 @@
 	class:animated={animate && has_animated}
 	style:height="{height}px"
 	{@attach resizeObserver({
-		onresize: (el) => { container_width = (el as HTMLElement).clientWidth; },
+		onresize: (el) => {
+			container_width = (el as HTMLElement).clientWidth;
+		},
 	})}>
-
 	{#if skeleton}
 		<!-- Skeleton -->
 		<div class="chart-skeleton" style:height="{height}px">
@@ -730,7 +786,6 @@
 				class="chart-svg"
 				role="img"
 				aria-label="{type} chart">
-
 				{#if showGrid}
 					{#each y_ticks as tick}
 						<line
@@ -803,14 +858,19 @@
 								stroke={showPoints ? 'var(--color-bg, white)' : 'none'}
 								stroke-width={showPoints ? 2 : 0}
 								class="data-point"
-								onmouseenter={(e) => showTooltipAt(e, data.labels[pi], ds.label, (ds.values[pi] ?? 0).toLocaleString())}
+								onmouseenter={(e) =>
+									showTooltipAt(
+										e,
+										data.labels[pi],
+										ds.label,
+										(ds.values[pi] ?? 0).toLocaleString(),
+									)}
 								onmouseleave={hideTooltip}
 								role="presentation" />
 						{/if}
 					{/each}
 				{/each}
 			</svg>
-
 		{:else if type === 'bar'}
 			<!-- Bar Chart -->
 			<svg
@@ -820,7 +880,6 @@
 				class="chart-svg"
 				role="img"
 				aria-label="bar chart">
-
 				{#if showGrid}
 					{#each y_ticks as tick}
 						<line
@@ -867,13 +926,14 @@
 						fill={bar.color}
 						rx="2"
 						class="chart-bar"
-						style:transform-origin="{bar.x + bar.width / 2}px {PADDING_TOP + chart_height}px"
-						onmouseenter={(e) => showTooltipAt(e, bar.label, bar.dataset_label, bar.value.toLocaleString())}
+						style:transform-origin="{bar.x + bar.width / 2}px {PADDING_TOP +
+							chart_height}px"
+						onmouseenter={(e) =>
+							showTooltipAt(e, bar.label, bar.dataset_label, bar.value.toLocaleString())}
 						onmouseleave={hideTooltip}
 						role="presentation" />
 				{/each}
 			</svg>
-
 		{:else if type === 'horizontal-bar'}
 			<!-- Horizontal Bar Chart -->
 			<svg
@@ -883,7 +943,6 @@
 				class="chart-svg"
 				role="img"
 				aria-label="horizontal bar chart">
-
 				{#if showGrid}
 					{#each h_ticks as tick}
 						<line
@@ -931,12 +990,12 @@
 						rx="2"
 						class="chart-hbar"
 						style:transform-origin="{H_PADDING_LEFT}px {bar.y + bar.height / 2}px"
-						onmouseenter={(e) => showTooltipAt(e, bar.label, bar.dataset_label, bar.value.toLocaleString())}
+						onmouseenter={(e) =>
+							showTooltipAt(e, bar.label, bar.dataset_label, bar.value.toLocaleString())}
 						onmouseleave={hideTooltip}
 						role="presentation" />
 				{/each}
 			</svg>
-
 		{:else if type === 'pie' || type === 'donut'}
 			<!-- Pie / Donut Chart -->
 			<svg
@@ -946,15 +1005,22 @@
 				class="chart-svg"
 				role="img"
 				aria-label="{type} chart">
-
-				<g class="pie-group" style:transform-origin="{container_width / 2}px {height / 2}px">
+				<g
+					class="pie-group"
+					style:transform-origin="{container_width / 2}px {height / 2}px">
 					{#each pie_segments as seg}
 						<path
 							d={seg.path}
 							fill={seg.color}
 							class="pie-segment"
 							style:transform-origin="{container_width / 2}px {height / 2}px"
-							onmouseenter={(e) => showTooltipAt(e, seg.label, '', `${seg.value.toLocaleString()} (${seg.percentage.toFixed(1)}%)`)}
+							onmouseenter={(e) =>
+								showTooltipAt(
+									e,
+									seg.label,
+									'',
+									`${seg.value.toLocaleString()} (${seg.percentage.toFixed(1)}%)`,
+								)}
 							onmouseleave={hideTooltip}
 							role="presentation" />
 					{/each}
@@ -964,10 +1030,7 @@
 
 		<!-- Tooltip -->
 		{#if showTooltip && tooltip_visible}
-			<div
-				class="chart-tooltip"
-				style:left="{tooltip_x}px"
-				style:top="{tooltip_y}px">
+			<div class="chart-tooltip" style:left="{tooltip_x}px" style:top="{tooltip_y}px">
 				{#if tooltip_dataset}
 					<span class="tooltip-dataset">{tooltip_dataset}</span>
 				{/if}
@@ -997,7 +1060,8 @@
 							class:hidden-dataset={hidden_datasets.has(i)}
 							type="button"
 							onclick={() => toggleDataset(i)}>
-							<span class="legend-dot" style:background-color={ds.color ?? getColor(i)}></span>
+							<span class="legend-dot" style:background-color={ds.color ?? getColor(i)}>
+							</span>
 							<span class="legend-label">{ds.label}</span>
 						</button>
 					{/each}
@@ -1064,6 +1128,7 @@
 	.data-point:hover {
 		r: 6;
 		fill-opacity: 1;
+		transition: none;
 	}
 
 	/* ── Bar ──────────────────────────────────────────────────── */
@@ -1079,6 +1144,7 @@
 	.chart-bar:hover {
 		opacity: 0.8;
 		cursor: pointer;
+		transition: none;
 	}
 
 	@keyframes chart-bar-grow {
@@ -1103,6 +1169,7 @@
 	.chart-hbar:hover {
 		opacity: 0.8;
 		cursor: pointer;
+		transition: none;
 	}
 
 	@keyframes chart-hbar-grow {
@@ -1198,10 +1265,8 @@
 		transition: opacity 0.15s ease;
 
 		&:hover {
-			background: light-dark(
-				rgb(0 0 0 / 0.05),
-				rgb(255 255 255 / 0.05)
-			);
+			background: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.05));
+			transition: none;
 		}
 
 		&.hidden-dataset {
@@ -1256,10 +1321,7 @@
 	.skeleton-bar {
 		flex: 1;
 		border-radius: var(--radius-3, 0.5rem) var(--radius-3, 0.5rem) 0 0;
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1283,10 +1345,7 @@
 		width: min(200px, 60%);
 		aspect-ratio: 1;
 		border-radius: 50%;
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

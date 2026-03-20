@@ -43,7 +43,9 @@
 		onresize = undefined as ((detail: { size: number }) => void) | undefined,
 
 		/** Called when a pane is collapsed or expanded */
-		oncollapse = undefined as ((detail: { pane: 'first' | 'second' | null }) => void) | undefined,
+		oncollapse = undefined as
+			| ((detail: { pane: 'first' | 'second' | null }) => void)
+			| undefined,
 	}: {
 		vertical?: boolean;
 		size?: number;
@@ -282,7 +284,6 @@
 	class:collapsed-second={collapsed === 'second'}
 	{id}
 	bind:this={container}>
-
 	<!-- First pane -->
 	<div
 		class="pane pane-first"
@@ -300,9 +301,21 @@
 				onclick={handleExpand}>
 				<svg viewBox="0 0 16 16" aria-hidden="true">
 					{#if vertical}
-						<path d="M3 6l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+						<path
+							d="M3 6l5 5 5-5"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					{:else}
-						<path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+						<path
+							d="M6 3l5 5-5 5"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					{/if}
 				</svg>
 			</button>
@@ -342,9 +355,21 @@
 				onclick={handleExpand}>
 				<svg viewBox="0 0 16 16" aria-hidden="true">
 					{#if vertical}
-						<path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+						<path
+							d="M3 10l5-5 5 5"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					{:else}
-						<path d="M10 3l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+						<path
+							d="M10 3l-5 5 5 5"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					{/if}
 				</svg>
 			</button>
@@ -416,10 +441,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: light-dark(
-			var(--color-border, #e0e0e0),
-			var(--color-border, #3a3a3a)
-		);
+		background: light-dark(var(--color-border, #e0e0e0), var(--color-border, #3a3a3a));
 		touch-action: none;
 		outline: none;
 		z-index: 1;
@@ -436,10 +458,8 @@
 
 		&:hover,
 		&:active {
-			background: light-dark(
-				var(--color-action, #1976d2),
-				var(--color-action, #5c9ce6)
-			);
+			background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
+			transition: none;
 		}
 
 		&:focus-visible {
@@ -448,10 +468,7 @@
 		}
 
 		.dragging & {
-			background: light-dark(
-				var(--color-action, #1976d2),
-				var(--color-action, #5c9ce6)
-			);
+			background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 		}
 	}
 
@@ -477,14 +494,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border: 1px solid light-dark(
-			var(--color-border, #e0e0e0),
-			var(--color-border, #3a3a3a)
-		);
-		background: light-dark(
-			var(--color-bg, #ffffff),
-			var(--color-bg, #1e1e1e)
-		);
+		border: 1px solid
+			light-dark(var(--color-border, #e0e0e0), var(--color-border, #3a3a3a));
+		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e1e1e));
 		color: light-dark(
 			var(--color-text-secondary, #666),
 			var(--color-text-secondary, #aaa)
@@ -494,17 +506,17 @@
 		width: 20px;
 		height: 20px;
 		border-radius: var(--radius-2, 4px);
-		transition: color 150ms ease, background 150ms ease;
+		transition:
+			color 150ms ease,
+			background 150ms ease;
 
 		&:hover {
-			color: light-dark(
-				var(--color-action, #1976d2),
-				var(--color-action, #5c9ce6)
-			);
+			color: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 			background: light-dark(
 				var(--color-bg-hover, #f5f5f5),
 				var(--color-bg-hover, #2a2a2a)
 			);
+			transition: none;
 		}
 
 		&:focus-visible {

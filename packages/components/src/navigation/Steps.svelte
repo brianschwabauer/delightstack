@@ -177,15 +177,13 @@
 	};
 
 	const resolvedCircleSize = $derived(
-		isItem
-			? CIRCLE_SIZES[parentContext.size] ?? 32
-			: CIRCLE_SIZES[size] ?? 32,
+		isItem ? (CIRCLE_SIZES[parentContext.size] ?? 32) : (CIRCLE_SIZES[size] ?? 32),
 	);
 
 	const resolvedFontSize = $derived(
 		isItem
-			? FONT_SIZES[parentContext.size] ?? '0.75rem'
-			: FONT_SIZES[size] ?? '0.75rem',
+			? (FONT_SIZES[parentContext.size] ?? '0.75rem')
+			: (FONT_SIZES[size] ?? '0.75rem'),
 	);
 
 	const resolvedOrientation = $derived(isItem ? parentContext.orientation : orientation);
@@ -211,28 +209,57 @@
 					onkeydown={handleKeyDown}>
 					{#if isError}
 						<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-							<path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" />
+							<path
+								d="M6 18L18 6M6 6l12 12"
+								stroke="currentColor"
+								stroke-width="2.5"
+								stroke-linecap="round"
+								fill="none" />
 						</svg>
 					{:else if isComplete}
-						<svg class="checkmark" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-							<path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+						<svg
+							class="checkmark"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							aria-hidden="true">
+							<path
+								d="M5 13l4 4L19 7"
+								stroke="currentColor"
+								stroke-width="2.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								fill="none" />
 						</svg>
 					{:else}
 						<span class="step-number">{stepIndex + 1}</span>
 					{/if}
 				</button>
 			{:else}
-				<span
-					class="step-circle"
-					role="img"
-					aria-label={ariaLabel}>
+				<span class="step-circle" role="img" aria-label={ariaLabel}>
 					{#if isError}
 						<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-							<path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none" />
+							<path
+								d="M6 18L18 6M6 6l12 12"
+								stroke="currentColor"
+								stroke-width="2.5"
+								stroke-linecap="round"
+								fill="none" />
 						</svg>
 					{:else if isComplete}
-						<svg class="checkmark" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-							<path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+						<svg
+							class="checkmark"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							aria-hidden="true">
+							<path
+								d="M5 13l4 4L19 7"
+								stroke="currentColor"
+								stroke-width="2.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								fill="none" />
 						</svg>
 					{:else if isCurrent}
 						<span class="step-number">{stepIndex + 1}</span>
@@ -280,8 +307,14 @@
 				<div class="step-main">
 					<div class="skeleton-circle" style:animation-delay="{i * 150}ms"></div>
 					<div class="step-label">
-						<div class="skeleton-bar skeleton-title" style:animation-delay="{i * 150 + 50}ms"></div>
-						<div class="skeleton-bar skeleton-desc" style:animation-delay="{i * 150 + 100}ms"></div>
+						<div
+							class="skeleton-bar skeleton-title"
+							style:animation-delay="{i * 150 + 50}ms">
+						</div>
+						<div
+							class="skeleton-bar skeleton-desc"
+							style:animation-delay="{i * 150 + 100}ms">
+						</div>
 					</div>
 				</div>
 				{#if i < skeletonCount - 1}
@@ -362,9 +395,13 @@
 		justify-content: center;
 		font-weight: 500;
 		font-size: var(--step-font-size);
-		border: 2px solid light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		border: 2px solid
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		background: transparent;
-		color: light-dark(var(--color-text-disabled, #9ca3af), var(--color-text-disabled, #6b7280));
+		color: light-dark(
+			var(--color-text-disabled, #9ca3af),
+			var(--color-text-disabled, #6b7280)
+		);
 		position: relative;
 		padding: 0;
 		cursor: default;
@@ -386,6 +423,7 @@
 
 		&:hover {
 			opacity: 0.8;
+			transition: none;
 		}
 
 		&:focus-visible {
@@ -453,19 +491,28 @@
 	}
 
 	.step.upcoming .step-title {
-		color: light-dark(var(--color-text-disabled, #9ca3af), var(--color-text-disabled, #6b7280));
+		color: light-dark(
+			var(--color-text-disabled, #9ca3af),
+			var(--color-text-disabled, #6b7280)
+		);
 	}
 
 	.step-description {
 		font-size: calc(var(--step-font-size) * 0.85);
-		color: light-dark(var(--color-text-disabled, #9ca3af), var(--color-text-disabled, #6b7280));
+		color: light-dark(
+			var(--color-text-disabled, #9ca3af),
+			var(--color-text-disabled, #6b7280)
+		);
 		line-height: 1.3;
 	}
 
 	.step-optional {
 		font-size: calc(var(--step-font-size) * 0.8);
 		font-style: italic;
-		color: light-dark(var(--color-text-disabled, #9ca3af), var(--color-text-disabled, #6b7280));
+		color: light-dark(
+			var(--color-text-disabled, #9ca3af),
+			var(--color-text-disabled, #6b7280)
+		);
 	}
 
 	/* ========== Connector ========== */
@@ -636,7 +683,8 @@
 
 	/* ========== Animations ========== */
 	@keyframes steps-pulse {
-		0%, 100% {
+		0%,
+		100% {
 			box-shadow: 0 0 0 0 rgb(from var(--color-action, #2563eb) r g b / 0.4);
 		}
 		50% {
@@ -645,7 +693,8 @@
 	}
 
 	@keyframes steps-shake {
-		0%, 100% {
+		0%,
+		100% {
 			transform: translateX(0);
 		}
 		20% {

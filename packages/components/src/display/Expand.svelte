@@ -19,7 +19,7 @@
 		display: grid;
 		grid-template-rows: min-content 0fr;
 		transition:
-			grid-template-rows 300ms ease,
+			grid-template-rows 300ms cubic-bezier(0.23, 1, 0.32, 1),
 			opacity 200ms;
 		opacity: 0;
 		&::before {

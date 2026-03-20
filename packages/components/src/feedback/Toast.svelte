@@ -122,19 +122,39 @@
 		options?: ToastOptions,
 	): Promise<T> {
 		const id = options?.id ?? generateId();
-		addToast(messages.loading, 'loading', { ...options, id, persistent: true, progress: false });
+		addToast(messages.loading, 'loading', {
+			...options,
+			id,
+			persistent: true,
+			progress: false,
+		});
 
 		try {
 			const result = await p;
-			const msg = typeof messages.success === 'function' ? messages.success(result) : messages.success;
-			addToast(msg, 'success', { ...options, id, persistent: false, progress: true, success: true });
+			const msg =
+				typeof messages.success === 'function'
+					? messages.success(result)
+					: messages.success;
+			addToast(msg, 'success', {
+				...options,
+				id,
+				persistent: false,
+				progress: true,
+				success: true,
+			});
 			return result;
 		} catch (err) {
 			const msg =
 				typeof messages.error === 'function'
 					? messages.error(err instanceof Error ? err : new Error(String(err)))
 					: messages.error;
-			addToast(msg, 'error', { ...options, id, persistent: false, progress: true, error: true });
+			addToast(msg, 'error', {
+				...options,
+				id,
+				persistent: false,
+				progress: true,
+				error: true,
+			});
 			throw err;
 		}
 	};
@@ -234,7 +254,9 @@
 	$effect(() => {
 		function onKeydown(e: KeyboardEvent) {
 			if (e.key === 'Escape') {
-				const active = toasts.filter((t) => !t.dismissed && t.options.dismissible !== false);
+				const active = toasts.filter(
+					(t) => !t.dismissed && t.options.dismissible !== false,
+				);
 				if (active.length > 0) {
 					active[active.length - 1].dismissed = true;
 				}
@@ -326,37 +348,79 @@
 				class:dismissed={t.dismissed}
 				class:hovered
 				role={getRole(t)}
-				aria-live={t.variant === 'warning' || t.variant === 'error' ? 'assertive' : 'polite'}
+				aria-live={t.variant === 'warning' || t.variant === 'error'
+					? 'assertive'
+					: 'polite'}
 				style="{getStackStyle(i, visible_toasts.length)}{getSwipeStyle(t.id)}"
 				style:touch-action="pan-y"
 				onpointerdown={(e) => onPointerDown(e, t.id)}
 				onpointermove={onPointerMove}
 				onpointerup={onPointerUp}>
-
 				<!-- Icon -->
 				<span class="toast-icon">
 					{#if t.variant === 'success'}
-						<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<svg
+							viewBox="0 0 24 24"
+							width="20"
+							height="20"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round">
 							<path d="M20 6L9 17l-5-5" />
 						</svg>
 					{:else if t.variant === 'error'}
-						<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<svg
+							viewBox="0 0 24 24"
+							width="20"
+							height="20"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round">
 							<circle cx="12" cy="12" r="10" />
 							<line x1="15" y1="9" x2="9" y2="15" />
 							<line x1="9" y1="9" x2="15" y2="15" />
 						</svg>
 					{:else if t.variant === 'warning'}
-						<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+						<svg
+							viewBox="0 0 24 24"
+							width="20"
+							height="20"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round">
+							<path
+								d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
 							<line x1="12" y1="9" x2="12" y2="13" />
 							<line x1="12" y1="17" x2="12.01" y2="17" />
 						</svg>
 					{:else if t.variant === 'loading'}
-						<svg class="spinner-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+						<svg
+							class="spinner-icon"
+							viewBox="0 0 24 24"
+							width="20"
+							height="20"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round">
 							<path d="M12 2a10 10 0 0110 10" />
 						</svg>
 					{:else}
-						<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<svg
+							viewBox="0 0 24 24"
+							width="20"
+							height="20"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round">
 							<circle cx="12" cy="12" r="10" />
 							<line x1="12" y1="16" x2="12" y2="12" />
 							<line x1="12" y1="8" x2="12.01" y2="8" />
@@ -369,10 +433,7 @@
 
 				<!-- Action button -->
 				{#if t.options.action}
-					<button
-						class="toast-action"
-						type="button"
-						onclick={t.options.action.onclick}>
+					<button class="toast-action" type="button" onclick={t.options.action.onclick}>
 						{t.options.action.label}
 					</button>
 				{/if}
@@ -384,7 +445,15 @@
 						type="button"
 						aria-label="Dismiss notification"
 						onclick={() => removeToast(t.id)}>
-						<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<svg
+							viewBox="0 0 24 24"
+							width="16"
+							height="16"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round">
 							<line x1="18" y1="6" x2="6" y2="18" />
 							<line x1="6" y1="6" x2="18" y2="18" />
 						</svg>
@@ -454,7 +523,11 @@
 		padding: 0.75rem 1rem;
 		border-radius: var(--radius-md, 0.5rem);
 		background: light-dark(white, #1a1a1a);
-		box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
+		box-shadow: var(
+			--shadow-lg,
+			0 10px 15px -3px rgb(0 0 0 / 0.1),
+			0 4px 6px -4px rgb(0 0 0 / 0.1)
+		);
 		border: 1px solid var(--color-border, rgb(0 0 0 / 0.1));
 		width: var(--toast-width, 360px);
 		max-width: calc(100vw - 2rem);
@@ -462,7 +535,9 @@
 		overflow: hidden;
 		margin-bottom: var(--toast-gap, 8px);
 		color: light-dark(#1a1a1a, #f5f5f5);
-		transition: transform 200ms ease, opacity 200ms ease;
+		transition:
+			transform 200ms ease,
+			opacity 200ms ease;
 		animation: toast-enter 200ms ease both;
 		cursor: default;
 
@@ -521,6 +596,7 @@
 
 		&:hover {
 			background: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.1));
+			transition: none;
 		}
 
 		&:active {
@@ -541,11 +617,14 @@
 		color: light-dark(rgb(0 0 0 / 0.4), rgb(255 255 255 / 0.4));
 		cursor: pointer;
 		padding: 0;
-		transition: background 120ms ease, color 120ms ease;
+		transition:
+			background 120ms ease,
+			color 120ms ease;
 
 		&:hover {
 			background: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.12));
 			color: light-dark(rgb(0 0 0 / 0.7), rgb(255 255 255 / 0.7));
+			transition: none;
 		}
 	}
 

@@ -118,7 +118,10 @@
 		bind:this={element}
 		class:active={checked || active}
 		style:--level={context.level}
-		{@attach ripple({ zIndex: 1, enabled: !context.disabled && !disabled })}>
+		{@attach ripple({
+			zIndex: 1,
+			enabled: !context.disabled && !disabled && context.type !== 'text',
+		})}>
 		{#if context.type === 'checkbox'}
 			<label for="checkbox-{id}">
 				{#if children}{@render children()}{/if}
@@ -178,7 +181,10 @@
 				{popoverCloseOnInsideClick}
 				{popoverPlacement}
 				{menu}>
-				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+					<path
+						d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+				</svg>
 			</Button>
 		{/if}
 	</li>
@@ -323,6 +329,7 @@
 				&:hover:not(:disabled):not([aria-disabled='true']) {
 					&::before {
 						opacity: 0.06;
+						transition: opacity 0ms ease;
 					}
 				}
 			}
@@ -369,7 +376,7 @@
 			left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
 			border-radius: calc(var(--radius) - var(--border-inset));
 			background-color: var(--color-text);
-			transition: opacity 100ms ease;
+			transition: opacity 300ms ease;
 		}
 	}
 	a[aria-disabled='true'] {

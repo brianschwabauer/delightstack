@@ -640,9 +640,9 @@
 			cursor: pointer;
 			padding: 0.75em 1.5em;
 			transition:
-				background-color 100ms,
-				color 100ms,
-				box-shadow 200ms ease;
+				background-color 300ms,
+				color 300ms,
+				box-shadow 300ms ease;
 			box-shadow: inset 0px 0px 0px 0px var(--color-text);
 			gap: 0.5em;
 
@@ -661,6 +661,7 @@
 				background-color: var(--color-bg-active);
 				color: var(--color-text-active);
 				border: var(--color-action-outline-active);
+				transition: none;
 			}
 		}
 
@@ -908,6 +909,9 @@
 					box-shadow: none;
 					outline: solid 2px white;
 					outline-offset: 1px;
+				}
+				&:hover:not(:disabled):not([aria-disabled='true']) {
+					transition: none;
 				}
 				&:hover:not(:disabled):not([aria-disabled='true']),
 				&:focus-visible:not(:disabled):not([aria-disabled='true']) {

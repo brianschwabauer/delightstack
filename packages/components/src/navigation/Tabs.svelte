@@ -187,7 +187,9 @@
 	let tabEl = $state<HTMLElement | undefined>(undefined);
 
 	const isSelected = $derived(parentContext ? parentContext.value === value : false);
-	const isDisabled = $derived(parentContext ? parentContext.disabled || disabled : disabled);
+	const isDisabled = $derived(
+		parentContext ? parentContext.disabled || disabled : disabled,
+	);
 
 	if (!isContainer) {
 		onMount(() => {
@@ -491,6 +493,7 @@
 
 		&:hover:not(.disabled) {
 			color: var(--color-text, #333);
+			transition: none;
 		}
 
 		&:focus-visible {
@@ -515,6 +518,7 @@
 
 			&:hover:not(.disabled):not(.active) {
 				background: rgb(from var(--color-text, #333) r g b / 0.06);
+				transition: none;
 			}
 
 			&.active {

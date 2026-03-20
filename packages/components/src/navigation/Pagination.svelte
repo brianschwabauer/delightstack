@@ -71,8 +71,15 @@
 		onpagesizechange?: (detail: { pageSize: number }) => void;
 	} = $props();
 
-	const SIZE_MAP: Record<string, { min_width: string; height: string; font_size: string }> = {
-		'0': { min_width: '1.5rem', height: '1.5rem', font_size: 'var(--font-size-0, 0.75rem)' },
+	const SIZE_MAP: Record<
+		string,
+		{ min_width: string; height: string; font_size: string }
+	> = {
+		'0': {
+			min_width: '1.5rem',
+			height: '1.5rem',
+			font_size: 'var(--font-size-0, 0.75rem)',
+		},
 		'1': { min_width: '2rem', height: '2rem', font_size: 'var(--font-size-1, 0.875rem)' },
 		'2': { min_width: '2.5rem', height: '2.5rem', font_size: 'var(--font-size-2, 1rem)' },
 		'3': { min_width: '3rem', height: '3rem', font_size: 'var(--font-size-3, 1.125rem)' },
@@ -170,7 +177,6 @@
 	style:--pg-min-width={sizeConfig.min_width}
 	style:--pg-height={sizeConfig.height}
 	style:--pg-font-size={sizeConfig.font_size}>
-
 	{#if skeleton}
 		<div class="skeleton-inner"></div>
 	{:else}
@@ -203,7 +209,13 @@
 					aria-label="Go to previous page"
 					onclick={handlePrev}>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+						<path
+							d="M15 18l-6-6 6-6"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							fill="none" />
 					</svg>
 				</button>
 				<span class="pagination-compact-info">{page} / {totalPages}</span>
@@ -215,7 +227,13 @@
 					aria-label="Go to next page"
 					onclick={handleNext}>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+						<path
+							d="M9 18l6-6-6-6"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							fill="none" />
 					</svg>
 				</button>
 			{:else if simple}
@@ -228,7 +246,13 @@
 					aria-label="Go to previous page"
 					onclick={handlePrev}>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+						<path
+							d="M15 18l-6-6 6-6"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							fill="none" />
 					</svg>
 					<span>Prev</span>
 				</button>
@@ -242,7 +266,13 @@
 					onclick={handleNext}>
 					<span>Next</span>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+						<path
+							d="M9 18l6-6-6-6"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							fill="none" />
 					</svg>
 				</button>
 			{:else}
@@ -255,7 +285,13 @@
 					aria-label="Go to previous page"
 					onclick={handlePrev}>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+						<path
+							d="M15 18l-6-6 6-6"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							fill="none" />
 					</svg>
 					<span>Prev</span>
 				</button>
@@ -285,7 +321,13 @@
 					onclick={handleNext}>
 					<span>Next</span>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+						<path
+							d="M9 18l6-6-6-6"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							fill="none" />
 					</svg>
 				</button>
 			{/if}
@@ -315,10 +357,7 @@
 		height: 100%;
 		position: absolute;
 		inset: 0;
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		border-radius: var(--radius-md, 0.375rem);
 
 		&::after {
@@ -371,6 +410,7 @@
 				var(--color-bg-subtle, #f5f5f5),
 				var(--color-bg-subtle, #1a1a1a)
 			);
+			transition: none;
 		}
 
 		&:focus-visible {
@@ -384,6 +424,7 @@
 
 			&:hover {
 				background: var(--color-action-active, #1d4ed8);
+				transition: none;
 			}
 		}
 
@@ -437,15 +478,10 @@
 
 	.page-size-select {
 		appearance: auto;
-		border: 1px solid light-dark(
-			var(--color-border, #d1d5db),
-			var(--color-border, #4b5563)
-		);
+		border: 1px solid
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		border-radius: var(--radius-md, 0.375rem);
-		background: light-dark(
-			var(--color-bg, white),
-			var(--color-bg, #0a0a0a)
-		);
+		background: light-dark(var(--color-bg, white), var(--color-bg, #0a0a0a));
 		color: inherit;
 		font-size: inherit;
 		font-family: inherit;
