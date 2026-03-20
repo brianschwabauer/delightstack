@@ -3,10 +3,11 @@ title: Alert
 description: A streamlined confirmation dialog built on Modal, providing consistent yes/no decision flows with a programmatic API.
 ---
 
-import { Alert, alert } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import AlertDemo from '../../../../components/demos/AlertDemo.svelte';
-import AlertDestructiveDemo from '../../../../components/demos/AlertDestructiveDemo.svelte';
+import AlertIconDemo from '../../../../components/demos/AlertIconDemo.svelte';
+import AlertProgrammaticDemo from '../../../../components/demos/AlertProgrammaticDemo.svelte';
+import AlertPromiseDemo from '../../../../components/demos/AlertPromiseDemo.svelte';
 
 ## Import
 
@@ -26,77 +27,43 @@ import { alert } from '@delightstack/components';
   import { Alert, Button } from '@delightstack/components';
 
   let showAlert = $state(false);
+  let showDestructive = $state(false);
 </script>
 
 <Button onclick={() => showAlert = true}>Confirm Action</Button>
+<Button error onclick={() => showDestructive = true}>Delete Item</Button>
 
 <Alert
   bind:open={showAlert}
   title="Save Changes?"
   message="Would you like to save your changes before leaving?"
   continueText="Save"
+/>
+
+<Alert
+  bind:open={showDestructive}
+  title="Delete Item"
+  message="This action cannot be undone. Are you sure you want to delete this item?"
+  continueText="Delete"
+  destructive
 />`}>
   <AlertDemo client:load />
 </ComponentPreview>
 
-```svelte
-<script>
-  import { Alert, Button } from '@delightstack/components';
-
-  let showAlert = $state(false);
-</script>
-
-<Button onclick={() => showAlert = true}>Confirm Action</Button>
-
-<Alert
-  bind:open={showAlert}
-  title="Save Changes?"
-  message="You have unsaved changes. Would you like to save before leaving?"
-  continueText="Save"
-  oncontinue={async () => {
-    await saveChanges();
-    showAlert = false;
-  }}
-  oncancel={() => showAlert = false}
-/>
-```
-
 ## Examples
-
-### Destructive Action
-
-The confirm button uses the error color scheme when `destructive` is true.
-
-<ComponentPreview code={`<script>
-  import { Alert, Button } from '@delightstack/components';
-
-  let showDelete = $state(false);
-</script>
-
-<Button error onclick={() => showDelete = true}>Delete Item</Button>
-
-<Alert
-  bind:open={showDelete}
-  title="Delete Item"
-  message="This action cannot be undone. Are you sure you want to delete this item?"
-  continueText="Delete"
-  cancelText="Keep It"
-  destructive
-/>`}>
-	<AlertDestructiveDemo client:load />
-</ComponentPreview>
 
 ### With Icon
 
-Display an icon above the title for visual emphasis.
+Display an icon component above the title for visual emphasis.
 
-```svelte
-<script>
-  import { Alert } from '@delightstack/components';
-  import WarningIcon from '~icons/mdi/alert-circle';
+<ComponentPreview code={`<script>
+  import { Alert, Button } from '@delightstack/components';
+  import WarningIcon from './WarningIcon.svelte';
 
   let showWarning = $state(false);
 </script>
+
+<Button onclick={() => showWarning = true}>Show Warning</Button>
 
 <Alert
   bind:open={showWarning}
@@ -104,46 +71,62 @@ Display an icon above the title for visual emphasis.
   message="This will overwrite existing data."
   icon={WarningIcon}
   destructive
-  oncontinue={() => { showWarning = false; }}
-  oncancel={() => { showWarning = false; }}
-/>
-```
+/>`}>
+  <AlertIconDemo client:load />
+</ComponentPreview>
 
 ### Programmatic API
 
 Create an alert dialog imperatively using the `alert()` function. It returns a `Promise<boolean>` that resolves to `true` (confirmed) or `false` (cancelled).
 
-```typescript
-import { alert } from '@delightstack/components';
+<ComponentPreview code={`<script>
+  import { alert } from '@delightstack/components';
+  import { Button } from '@delightstack/components';
 
-const confirmed = await alert({
-  title: 'Delete?',
-  message: 'This cannot be undone.',
-  destructive: true,
-  continueText: 'Delete'
-});
+  async function handleClick() {
+    const confirmed = await alert({
+      title: 'Delete?',
+      message: 'This cannot be undone.',
+      destructive: true,
+      continueText: 'Delete',
+    });
 
-if (confirmed) {
-  await api.deleteItem(id);
-}
-```
+    if (confirmed) {
+      await api.deleteItem(id);
+    }
+  }
+</script>
+
+<Button error onclick={handleClick}>Delete Item</Button>`}>
+  <AlertProgrammaticDemo client:load />
+</ComponentPreview>
 
 ### Promise-Aware Confirm
 
 When `oncontinue` returns a `Promise`, the confirm button automatically enters loading state until the promise resolves.
 
-```svelte
+<ComponentPreview code={`<script>
+  import { Alert, Button } from '@delightstack/components';
+
+  let showAlert = $state(false);
+
+  async function handleContinue() {
+    await api.processData();
+    showAlert = false;
+  }
+</script>
+
+<Button accent onclick={() => showAlert = true}>Process Data</Button>
+
 <Alert
   bind:open={showAlert}
   title="Process Data"
   message="This may take a moment."
   continueText="Process"
-  oncontinue={async () => {
-    await api.processData();
-    showAlert = false;
-  }}
-/>
-```
+  oncontinue={handleContinue}
+/>`}>
+  <AlertPromiseDemo client:load />
+</ComponentPreview>
 
 ## Props
 
@@ -188,7 +171,6 @@ function alert(options: AlertOptions): Promise<boolean>;
 ## Accessibility
 
 - Inherits all Modal accessibility features (`role="dialog"`, `aria-modal`, focus trap)
-- Clear button labeling with Cancel on the left and Confirm on the right
-- Keyboard navigable: Tab between Cancel and Confirm buttons
+- Keyboard navigable: Tab between Confirm and Cancel buttons
 - Escape key and backdrop click trigger the cancel action
 - When `destructive` is true, the `icon` section is styled with the error color
