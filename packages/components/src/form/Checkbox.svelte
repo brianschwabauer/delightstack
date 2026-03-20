@@ -49,19 +49,21 @@
 		class: className = '',
 
 		/** Called when the checked state changes */
-		onchange = undefined as ((detail: { checked: boolean; value: string }) => void) | undefined,
+		onchange = undefined as
+			| ((detail: { checked: boolean; value: string }) => void)
+			| undefined,
 	} = $props();
 
 	const sizes: Record<string, number> = { '0': 16, '1': 20, '2': 24, '3': 28 };
 	const px = $derived(sizes[size] ?? 20);
 
-	let animating = $state(false);
+	let animation = $state<'none' | 'check' | 'uncheck'>('none');
 
 	function toggle() {
 		if (disabled) return;
 		checked = !checked;
-		animating = true;
-		setTimeout(() => (animating = false), 300);
+		animation = checked ? 'check' : 'uncheck';
+		setTimeout(() => (animation = 'none'), checked ? 350 : 50);
 		onchange?.({ checked, value });
 	}
 
@@ -89,13 +91,15 @@
 		{value}
 		{required}
 		{disabled}
-		checked={checked}
-		indeterminate={indeterminate}
+		{checked}
+		{indeterminate}
 		tabindex={-1}
 		aria-hidden="true" />
 
 	<div
 		class="indicator-wrapper"
+		class:checked
+		class:indeterminate
 		role="checkbox"
 		tabindex={disabled ? -1 : 0}
 		aria-checked={indeterminate ? 'mixed' : checked}
@@ -109,19 +113,13 @@
 			class="indicator"
 			class:checked
 			class:indeterminate
-			class:animating
+			class:animating-check={animation === 'check'}
+			class:animating-uncheck={animation === 'uncheck'}
 			viewBox="0 0 24 24"
 			width={px}
 			height={px}
 			fill="none">
-			<rect
-				class="box"
-				x="2"
-				y="2"
-				width="20"
-				height="20"
-				rx="3"
-				stroke-width="2" />
+			<rect class="box" x="2" y="2" width="20" height="20" rx="3" stroke-width="2" />
 			{#if indeterminate}
 				<line
 					class="dash"
@@ -187,6 +185,20 @@
 				display: block;
 			}
 		}
+
+		/* Hover: circular background tint on indicator (triggers from label hover too) */
+		&:not(.disabled):hover > .indicator-wrapper {
+			background: var(--hover-tint);
+			transition: none;
+		}
+
+		/* Active: press scale on indicator (triggers from label click too) */
+		&:not(.disabled):active > .indicator-wrapper {
+			transform: scale(0.9);
+			transition:
+				transform 80ms ease,
+				background 200ms ease;
+		}
 	}
 
 	.native-input {
@@ -206,14 +218,24 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: calc(var(--size) + 12px);
-		height: calc(var(--size) + 12px);
+		width: calc(var(--size) + 20px);
+		height: calc(var(--size) + 20px);
 		border-radius: 50%;
 		cursor: pointer;
 		flex-shrink: 0;
 		overflow: hidden;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
+		--hover-tint: color-mix(in srgb, var(--color-text, currentColor) 12%, transparent);
+		transition:
+			background 200ms ease,
+			transform 150ms ease;
+
+		/* Accent-tinted hover when checked or indeterminate */
+		&.checked,
+		&.indeterminate {
+			--hover-tint: color-mix(in srgb, var(--color-accent, #1976d2) 16%, transparent);
+		}
 
 		&:focus-visible {
 			box-shadow: 0 0 0 2px var(--color-text, currentColor);
@@ -268,11 +290,39 @@
 			}
 		}
 
-		&.animating.checked {
+		/* Check-in: elastic checkmark draw with overshoot + scale pulse */
+		&.animating-check {
+			animation: box-pulse 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
 			.check {
 				stroke-dashoffset: 0;
-				transition: stroke-dashoffset 300ms cubic-bezier(0.4, 0, 0.2, 1);
+				transition: stroke-dashoffset 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 			}
+		}
+
+		/* Uncheck: visible stroke retraction, box holds fill then fades */
+		&.animating-uncheck {
+			.check {
+				stroke: var(--color-accent-text, #fff);
+				stroke-dashoffset: 28;
+				transition: stroke-dashoffset 50ms cubic-bezier(0.4, 0, 0.2, 1);
+			}
+			.box {
+				stroke: var(--color-accent, #1976d2);
+				fill: var(--color-accent, #1976d2);
+			}
+		}
+	}
+
+	@keyframes box-pulse {
+		0% {
+			transform: scale(1);
+		}
+		40% {
+			transform: scale(1.1);
+		}
+		100% {
+			transform: scale(1);
 		}
 	}
 
@@ -280,7 +330,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.1em;
-		padding-top: 0.4em;
+		padding-top: 0.55em;
+		margin-left: -8px;
 	}
 
 	.label {
