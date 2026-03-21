@@ -314,14 +314,11 @@
 	}
 
 	.star-half.left {
-		width: 50%;
 		clip-path: inset(0 50% 0 0);
 		z-index: 1;
 	}
 
 	.star-half.right {
-		left: 50%;
-		width: 50%;
 		clip-path: inset(0 0 0 50%);
 	}
 
