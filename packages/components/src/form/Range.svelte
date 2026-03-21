@@ -126,7 +126,8 @@
 	}
 
 	let drag_wrapper: HTMLElement | null = null;
-	let active_thumb: 'lower' | 'upper' | null = null;
+	let active_thumb = $state<'lower' | 'upper' | null>(null);
+	let overshoot_px = $state(0);
 
 	function valueFromPointer(e: PointerEvent): number {
 		if (!drag_wrapper) return min;
@@ -149,6 +150,8 @@
 		}
 	}
 
+	// --- Track click-and-drag (custom pointer capture on wrapper) ---
+
 	function onTrackPointerDown(e: PointerEvent) {
 		if (disabled) return;
 		if (e.target instanceof HTMLInputElement) return;
@@ -157,20 +160,20 @@
 		drag_wrapper = e.currentTarget as HTMLElement;
 		const v = valueFromPointer(e);
 
+		let thumb: 'lower' | 'upper' = 'lower';
 		if (range && Array.isArray(value)) {
 			const lower_dist = Math.abs(v - lower_value);
 			const upper_dist = Math.abs(v - upper_value);
-			active_thumb = lower_dist <= upper_dist ? 'lower' : 'upper';
-		} else {
-			active_thumb = 'lower';
+			thumb = lower_dist <= upper_dist ? 'lower' : 'upper';
 		}
+
+		active_thumb = thumb;
+		drag_wrapper.setPointerCapture(e.pointerId);
+		if (thumb === 'lower') lower_dragging = true;
+		else upper_dragging = true;
 
 		setValueForThumb(v);
 		oninput?.({ value: emitValue() });
-
-		drag_wrapper.setPointerCapture(e.pointerId);
-		if (active_thumb === 'lower') lower_dragging = true;
-		else upper_dragging = true;
 	}
 
 	function onTrackPointerMove(e: PointerEvent) {
@@ -184,9 +187,54 @@
 		if (active_thumb === 'lower') lower_dragging = false;
 		else upper_dragging = false;
 		active_thumb = null;
+		overshoot_px = 0;
 		drag_wrapper = null;
 		onchange?.({ value: emitValue() });
 	}
+
+	// --- Native thumb drag detection via pointer capture events ---
+	// The browser internally sets pointer capture on the input when dragging
+	// the thumb. gotpointercapture/lostpointercapture fire regardless of
+	// the CSS pointer-events property.
+
+	function onThumbCaptureStart(thumb: 'lower' | 'upper', e: Event) {
+		if (active_thumb) return; // Already in a custom track drag
+		active_thumb = thumb;
+		drag_wrapper = (e.currentTarget as HTMLElement).parentElement as HTMLElement;
+		if (thumb === 'lower') lower_dragging = true;
+		else upper_dragging = true;
+	}
+
+	function onThumbCaptureEnd(thumb: 'lower' | 'upper') {
+		if (active_thumb !== thumb) return; // Wasn't our drag
+		if (thumb === 'lower') lower_dragging = false;
+		else upper_dragging = false;
+		active_thumb = null;
+		overshoot_px = 0;
+		drag_wrapper = null;
+	}
+
+	// --- Window-level pointermove for overshoot (works for both drag sources) ---
+
+	$effect(() => {
+		if (!is_dragging) return;
+
+		function onMove(e: PointerEvent) {
+			if (!drag_wrapper) return;
+			const rect = drag_wrapper.getBoundingClientRect();
+			const raw_pct = (e.clientX - rect.left) / rect.width;
+			if (raw_pct < 0 || raw_pct > 1) {
+				const overflow_px = (raw_pct < 0 ? raw_pct : raw_pct - 1) * rect.width;
+				const max_shift = 24;
+				overshoot_px = max_shift * Math.tanh(overflow_px / 100);
+			} else {
+				overshoot_px = 0;
+			}
+		}
+
+		window.addEventListener('pointermove', onMove);
+		return () => window.removeEventListener('pointermove', onMove);
+	});
 </script>
 
 <div
@@ -267,6 +315,8 @@
 			{disabled}
 			value={lower_value}
 			class="thumb-input lower"
+			class:dragging={lower_dragging}
+			style:--thumb-overshoot="{active_thumb === 'lower' ? overshoot_px : 0}px"
 			aria-valuenow={lower_value}
 			aria-valuemin={min}
 			aria-valuemax={range ? upper_value : max}
@@ -275,8 +325,8 @@
 			onchange={onLowerChange}
 			onpointerenter={() => (lower_hovering = true)}
 			onpointerleave={() => (lower_hovering = false)}
-			onpointerdown={() => (lower_dragging = true)}
-			onpointerup={() => (lower_dragging = false)} />
+			ongotpointercapture={(e) => onThumbCaptureStart('lower', e)}
+			onlostpointercapture={() => onThumbCaptureEnd('lower')} />
 
 		{#if range}
 			<input
@@ -287,6 +337,8 @@
 				{disabled}
 				value={upper_value}
 				class="thumb-input upper"
+				class:dragging={upper_dragging}
+				style:--thumb-overshoot="{active_thumb === 'upper' ? overshoot_px : 0}px"
 				aria-valuenow={upper_value}
 				aria-valuemin={lower_value}
 				aria-valuemax={max}
@@ -295,8 +347,8 @@
 				onchange={onUpperChange}
 				onpointerenter={() => (upper_hovering = true)}
 				onpointerleave={() => (upper_hovering = false)}
-				onpointerdown={() => (upper_dragging = true)}
-				onpointerup={() => (upper_dragging = false)} />
+				ongotpointercapture={(e) => onThumbCaptureStart('upper', e)}
+				onlostpointercapture={() => onThumbCaptureEnd('upper')} />
 		{/if}
 
 		{#if show_ticks && tick_count <= 50}
@@ -462,6 +514,14 @@
 		pointer-events: none;
 		outline: none;
 		z-index: 2;
+		/* Overshoot applied to the input element (not pseudo) to avoid native clipping */
+		transform: translateX(var(--thumb-overshoot, 0px));
+		transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	/* Disable overshoot transition during drag for instant tracking */
+	.thumb-input.dragging {
+		transition: none;
 	}
 
 	.thumb-input::-webkit-slider-runnable-track {
@@ -524,6 +584,16 @@
 	.thumb-input:not(:disabled):active::-moz-range-thumb {
 		transform: scale(1.5, 1.15);
 		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
+	}
+
+	/* During custom drag: show active scale, no pseudo transition */
+	.thumb-input.dragging::-webkit-slider-thumb {
+		transform: scale(1.5, 1.15);
+		transition: box-shadow 150ms ease;
+	}
+	.thumb-input.dragging::-moz-range-thumb {
+		transform: scale(1.5, 1.15);
+		transition: box-shadow 150ms ease;
 	}
 
 	/* Focus ring */
