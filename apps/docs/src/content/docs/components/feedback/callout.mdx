@@ -18,7 +18,7 @@ import { Callout } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<Callout>
-  Your changes are automatically saved.
+${'  '}Your changes are automatically saved.
 </Callout>`}>
 	<Callout client:load>
 		Your changes are automatically saved.
@@ -32,7 +32,7 @@ import { Callout } from '@delightstack/components';
 Use boolean props to set the visual variant. When none is set, the default `info` style is used.
 
 <ComponentPreview code={`<Callout>
-  This is an informational callout.
+${'  '}This is an informational callout.
 </Callout>`} title="Info (default)">
 	<Callout client:load>
 		This is an informational callout.
@@ -40,7 +40,7 @@ Use boolean props to set the visual variant. When none is set, the default `info
 </ComponentPreview>
 
 <ComponentPreview code={`<Callout success>
-  Your changes have been saved successfully.
+${'  '}Your changes have been saved successfully.
 </Callout>`} title="Success">
 	<Callout client:load success>
 		Your changes have been saved successfully.
@@ -48,7 +48,7 @@ Use boolean props to set the visual variant. When none is set, the default `info
 </ComponentPreview>
 
 <ComponentPreview code={`<Callout warning title="Heads up">
-  This action cannot be undone.
+${'  '}This action cannot be undone.
 </Callout>`} title="Warning">
 	<Callout client:load warning title="Heads up">
 		This action cannot be undone.
@@ -56,7 +56,7 @@ Use boolean props to set the visual variant. When none is set, the default `info
 </ComponentPreview>
 
 <ComponentPreview code={`<Callout error>
-  Failed to connect to the server. Please try again.
+${'  '}Failed to connect to the server. Please try again.
 </Callout>`} title="Error">
 	<Callout client:load error>
 		Failed to connect to the server. Please try again.
@@ -64,7 +64,7 @@ Use boolean props to set the visual variant. When none is set, the default `info
 </ComponentPreview>
 
 <ComponentPreview code={`<Callout tip title="Pro Tip">
-  Press Cmd+K to open the command palette.
+${'  '}Press Cmd+K to open the command palette.
 </Callout>`} title="Tip">
 	<Callout client:load tip title="Pro Tip">
 		Press Cmd+K to open the command palette.
@@ -76,15 +76,15 @@ Use boolean props to set the visual variant. When none is set, the default `info
 Add `dismissible` to show a close button. Use `ondismiss` to handle the event.
 
 <ComponentPreview code={`<script>
-  import { Callout } from '@delightstack/components';
+${'  '}import { Callout } from '@delightstack/components';
 
-  let visible = $state(true);
+${'  '}let visible = $state(true);
 </script>
 
 {#if visible}
-  <Callout tip title="Pro Tip" dismissible ondismiss={() => (visible = false)}>
-    You can use keyboard shortcuts to speed up your workflow.
-  </Callout>
+${'  '}<Callout tip title="Pro Tip" dismissible ondismiss={() => (visible = false)}>
+${'  '}${'  '}You can use keyboard shortcuts to speed up your workflow.
+${'  '}</Callout>
 {/if}`}>
   <CalloutDismissibleDemo client:load />
 </ComponentPreview>
@@ -94,23 +94,23 @@ Add `dismissible` to show a close button. Use `ondismiss` to handle the event.
 Override the default icon or add an action area using snippets.
 
 <ComponentPreview code={`<script>
-  import { Callout } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Callout } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 </script>
 
 <Callout>
-  {#snippet icon()}
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
-      <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
-    </svg>
-  {/snippet}
+${'  '}{#snippet icon()}
+${'  '}${'  '}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+${'  '}${'  '}${'  '}<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+${'  '}${'  '}${'  '}<path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+${'  '}${'  '}</svg>
+${'  '}{/snippet}
 
-  New feature available! Check out our latest update with improved performance.
+${'  '}New feature available! Check out our latest update with improved performance.
 
-  {#snippet action()}
-    <Button size="0" transparent>Learn more</Button>
-  {/snippet}
+${'  '}{#snippet action()}
+${'  '}${'  '}<Button size="0" transparent>Learn more</Button>
+${'  '}{/snippet}
 </Callout>`}>
   <CalloutCustomIconDemo client:load />
 </ComponentPreview>
@@ -120,23 +120,23 @@ Override the default icon or add an action area using snippets.
 Set `banner` for a full-width banner with solid background. Combine with `sticky` to pin it to the top on scroll.
 
 <ComponentPreview code={`<script>
-  import { Callout } from '@delightstack/components';
+${'  '}import { Callout } from '@delightstack/components';
 
-  let showBanner = $state(true);
+${'  '}let showBanner = $state(true);
 </script>
 
 {#if showBanner}
-  <Callout banner dismissible ondismiss={() => showBanner = false}>
-    We've updated our privacy policy. Please review the changes.
+${'  '}<Callout banner dismissible ondismiss={() => showBanner = false}>
+${'  '}${'  '}We've updated our privacy policy. Please review the changes.
 
-    {#snippet action()}
-      <a href="/privacy">Learn more</a>
-    {/snippet}
-  </Callout>
+${'  '}${'  '}{#snippet action()}
+${'  '}${'  '}${'  '}<a href="/privacy">Learn more</a>
+${'  '}${'  '}{/snippet}
+${'  '}</Callout>
 {/if}
 
 <Callout banner warning>
-  Scheduled maintenance tonight at 11pm UTC.
+${'  '}Scheduled maintenance tonight at 11pm UTC.
 </Callout>`}>
   <CalloutBannerDemo client:load />
 </ComponentPreview>

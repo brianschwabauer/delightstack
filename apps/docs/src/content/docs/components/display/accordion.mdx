@@ -20,23 +20,23 @@ import { Accordion, AccordionItem } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Accordion, AccordionItem } from '@delightstack/components';
+${'  '}import { Accordion, AccordionItem } from '@delightstack/components';
 
-  let openSection = $state('faq-1');
+${'  '}let openSection = $state('faq-1');
 </script>
 
 <Accordion bind:value={openSection}>
-  <AccordionItem value="faq-1" title="Getting Started">
-    <p>Getting started is easy! Create an account and follow the onboarding steps.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="faq-1" title="Getting Started">
+${'  '}${'  '}<p>Getting started is easy! Create an account and follow the onboarding steps.</p>
+${'  '}</AccordionItem>
 
-  <AccordionItem value="faq-2" title="Payment Methods">
-    <p>We accept all major credit cards, PayPal, and bank transfers.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="faq-2" title="Payment Methods">
+${'  '}${'  '}<p>We accept all major credit cards, PayPal, and bank transfers.</p>
+${'  '}</AccordionItem>
 
-  <AccordionItem value="faq-3" title="Contact Support">
-    <p>Reach our support team via email or through the in-app chat.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="faq-3" title="Contact Support">
+${'  '}${'  '}<p>Reach our support team via email or through the in-app chat.</p>
+${'  '}</AccordionItem>
 </Accordion>`}>
   <AccordionDemo client:load />
 </ComponentPreview>
@@ -48,19 +48,19 @@ import { Accordion, AccordionItem } from '@delightstack/components';
 Allow multiple sections to be expanded simultaneously. When `multiple` is true, `value` is an array of strings.
 
 <ComponentPreview code={`<script>
-  let openSections = $state(['section-1']);
+${'  '}let openSections = $state(['section-1']);
 </script>
 
 <Accordion multiple bind:value={openSections}>
-  <AccordionItem value="section-1" title="First Section">
-    <p>Content for the first section.</p>
-  </AccordionItem>
-  <AccordionItem value="section-2" title="Second Section">
-    <p>Content for the second section.</p>
-  </AccordionItem>
-  <AccordionItem value="section-3" title="Third Section">
-    <p>Content for the third section.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="section-1" title="First Section">
+${'  '}${'  '}<p>Content for the first section.</p>
+${'  '}</AccordionItem>
+${'  '}<AccordionItem value="section-2" title="Second Section">
+${'  '}${'  '}<p>Content for the second section.</p>
+${'  '}</AccordionItem>
+${'  '}<AccordionItem value="section-3" title="Third Section">
+${'  '}${'  '}<p>Content for the third section.</p>
+${'  '}</AccordionItem>
 </Accordion>`}>
   <AccordionMultipleDemo client:load />
 </ComponentPreview>
@@ -70,12 +70,12 @@ Allow multiple sections to be expanded simultaneously. When `multiple` is true, 
 Prevent all sections from being collapsed by setting `collapsible` to `false`.
 
 <ComponentPreview code={`<Accordion collapsible={false} value="first">
-  <AccordionItem value="first" title="Always Visible">
-    <p>At least one section is always open.</p>
-  </AccordionItem>
-  <AccordionItem value="second" title="Another Section">
-    <p>Click to switch which section is open.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="first" title="Always Visible">
+${'  '}${'  '}<p>At least one section is always open.</p>
+${'  '}</AccordionItem>
+${'  '}<AccordionItem value="second" title="Another Section">
+${'  '}${'  '}<p>Click to switch which section is open.</p>
+${'  '}</AccordionItem>
 </Accordion>`}>
 	<Accordion client:load collapsible={false} value="first">
 		<AccordionItem client:load value="first" title="Always Visible">
@@ -92,31 +92,31 @@ Prevent all sections from being collapsed by setting `collapsible` to `false`.
 Use the `trigger` snippet to replace the default title rendering with custom content.
 
 <ComponentPreview code={`<script>
-  import { Accordion, AccordionItem } from '@delightstack/components';
+${'  '}import { Accordion, AccordionItem } from '@delightstack/components';
 
-  let value = $state('settings');
+${'  '}let value = $state('settings');
 </script>
 
 <Accordion bind:value>
-  <AccordionItem value="profile">
-    {#snippet trigger()}
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <UserIcon />
-        <span>Profile Settings</span>
-      </div>
-    {/snippet}
-    <p>Manage your name, avatar, and public profile information.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="profile">
+${'  '}${'  '}{#snippet trigger()}
+${'  '}${'  '}${'  '}<div style="display: flex; align-items: center; gap: 0.5rem;">
+${'  '}${'  '}${'  '}${'  '}<UserIcon />
+${'  '}${'  '}${'  '}${'  '}<span>Profile Settings</span>
+${'  '}${'  '}${'  '}</div>
+${'  '}${'  '}{/snippet}
+${'  '}${'  '}<p>Manage your name, avatar, and public profile information.</p>
+${'  '}</AccordionItem>
 
-  <AccordionItem value="settings">
-    {#snippet trigger()}
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <SettingsIcon />
-        <span>Advanced Settings</span>
-      </div>
-    {/snippet}
-    <p>Configure advanced options like API keys, webhooks, and integrations.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="settings">
+${'  '}${'  '}{#snippet trigger()}
+${'  '}${'  '}${'  '}<div style="display: flex; align-items: center; gap: 0.5rem;">
+${'  '}${'  '}${'  '}${'  '}<SettingsIcon />
+${'  '}${'  '}${'  '}${'  '}<span>Advanced Settings</span>
+${'  '}${'  '}${'  '}</div>
+${'  '}${'  '}{/snippet}
+${'  '}${'  '}<p>Configure advanced options like API keys, webhooks, and integrations.</p>
+${'  '}</AccordionItem>
 </Accordion>`}>
   <AccordionCustomTriggerDemo client:load />
 </ComponentPreview>
@@ -125,22 +125,22 @@ Use the `trigger` snippet to replace the default title rendering with custom con
 
 <ComponentPreview code={`<!-- Compact spacing -->
 <Accordion dense>
-  <AccordionItem value="a" title="Compact Item A">
-    <p>Less padding for dense layouts.</p>
-  </AccordionItem>
-  <AccordionItem value="b" title="Compact Item B">
-    <p>Tighter spacing between items.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="a" title="Compact Item A">
+${'  '}${'  '}<p>Less padding for dense layouts.</p>
+${'  '}</AccordionItem>
+${'  '}<AccordionItem value="b" title="Compact Item B">
+${'  '}${'  '}<p>Tighter spacing between items.</p>
+${'  '}</AccordionItem>
 </Accordion>
 
 <!-- Relaxed spacing -->
 <Accordion comfortable>
-  <AccordionItem value="a" title="Spacious Item A">
-    <p>More padding for a relaxed feel.</p>
-  </AccordionItem>
-  <AccordionItem value="b" title="Spacious Item B">
-    <p>Extra breathing room between items.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="a" title="Spacious Item A">
+${'  '}${'  '}<p>More padding for a relaxed feel.</p>
+${'  '}</AccordionItem>
+${'  '}<AccordionItem value="b" title="Spacious Item B">
+${'  '}${'  '}<p>Extra breathing room between items.</p>
+${'  '}</AccordionItem>
 </Accordion>`}>
   <AccordionDenseDemo client:load />
 </ComponentPreview>
@@ -154,26 +154,26 @@ Use the `trigger` snippet to replace the default title rendering with custom con
 ### Nested Accordions
 
 <ComponentPreview code={`<script>
-  import { Accordion, AccordionItem } from '@delightstack/components';
+${'  '}import { Accordion, AccordionItem } from '@delightstack/components';
 
-  let outerValue = $state('parent-1');
-  let innerValue = $state('');
+${'  '}let outerValue = $state('parent-1');
+${'  '}let innerValue = $state('');
 </script>
 
 <Accordion bind:value={outerValue}>
-  <AccordionItem value="parent-1" title="Frontend Frameworks">
-    <Accordion bind:value={innerValue}>
-      <AccordionItem value="child-1" title="Svelte">
-        <p>A compiler-based framework that shifts work to build time.</p>
-      </AccordionItem>
-      <AccordionItem value="child-2" title="React">
-        <p>A library for building user interfaces with a virtual DOM.</p>
-      </AccordionItem>
-    </Accordion>
-  </AccordionItem>
-  <AccordionItem value="parent-2" title="Backend Languages">
-    <p>Popular choices include Node.js, Python, Go, and Rust.</p>
-  </AccordionItem>
+${'  '}<AccordionItem value="parent-1" title="Frontend Frameworks">
+${'  '}${'  '}<Accordion bind:value={innerValue}>
+${'  '}${'  '}${'  '}<AccordionItem value="child-1" title="Svelte">
+${'  '}${'  '}${'  '}${'  '}<p>A compiler-based framework that shifts work to build time.</p>
+${'  '}${'  '}${'  '}</AccordionItem>
+${'  '}${'  '}${'  '}<AccordionItem value="child-2" title="React">
+${'  '}${'  '}${'  '}${'  '}<p>A library for building user interfaces with a virtual DOM.</p>
+${'  '}${'  '}${'  '}</AccordionItem>
+${'  '}${'  '}</Accordion>
+${'  '}</AccordionItem>
+${'  '}<AccordionItem value="parent-2" title="Backend Languages">
+${'  '}${'  '}<p>Popular choices include Node.js, Python, Go, and Rust.</p>
+${'  '}</AccordionItem>
 </Accordion>`}>
   <AccordionNestedDemo client:load />
 </ComponentPreview>

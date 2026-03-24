@@ -19,9 +19,9 @@ import { ButtonGroup, Button } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<ButtonGroup aria-label="Document actions">
-	<Button>Save</Button>
-	<Button>Save As</Button>
-	<Button>Discard</Button>
+${'  '}<Button>Save</Button>
+${'  '}<Button>Save As</Button>
+${'  '}<Button>Discard</Button>
 </ButtonGroup>`}>
 	<ButtonGroupDemo client:load />
 </ComponentPreview>
@@ -33,30 +33,30 @@ import { ButtonGroup, Button } from '@delightstack/components';
 Use the `active` prop on child Buttons to create a toggle group.
 
 <ComponentPreview code={`<script>
-  import { ButtonGroup, Button } from '@delightstack/components';
+${'  '}import { ButtonGroup, Button } from '@delightstack/components';
 
-  let viewMode = $state('grid');
+${'  '}let viewMode = $state('grid');
 </script>
 
 <ButtonGroup size="0" aria-label="View mode">
-  <Button
-    active={viewMode === 'grid'}
-    onclick={() => viewMode = 'grid'}
-    icon
-    aria-label="Grid view">
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M3 3h8v8H3V3zm0 10h8v8H3v-8zm10-10h8v8h-8V3zm0 10h8v8h-8v-8z"/>
-    </svg>
-  </Button>
-  <Button
-    active={viewMode === 'list'}
-    onclick={() => viewMode = 'list'}
-    icon
-    aria-label="List view">
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
-    </svg>
-  </Button>
+${'  '}<Button
+${'  '}${'  '}active={viewMode === 'grid'}
+${'  '}${'  '}onclick={() => viewMode = 'grid'}
+${'  '}${'  '}icon
+${'  '}${'  '}aria-label="Grid view">
+${'  '}${'  '}<svg viewBox="0 0 24 24" fill="currentColor">
+${'  '}${'  '}${'  '}<path d="M3 3h8v8H3V3zm0 10h8v8H3v-8zm10-10h8v8h-8V3zm0 10h8v8h-8v-8z"/>
+${'  '}${'  '}</svg>
+${'  '}</Button>
+${'  '}<Button
+${'  '}${'  '}active={viewMode === 'list'}
+${'  '}${'  '}onclick={() => viewMode = 'list'}
+${'  '}${'  '}icon
+${'  '}${'  '}aria-label="List view">
+${'  '}${'  '}<svg viewBox="0 0 24 24" fill="currentColor">
+${'  '}${'  '}${'  '}<path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+${'  '}${'  '}</svg>
+${'  '}</Button>
 </ButtonGroup>`}>
 	<ButtonGroupToggleDemo client:load />
 </ComponentPreview>
@@ -66,9 +66,9 @@ Use the `active` prop on child Buttons to create a toggle group.
 Set variant props on the group to apply them to all children at once.
 
 <ComponentPreview code={`<ButtonGroup outline accent aria-label="Accent group">
-	<Button>First</Button>
-	<Button>Second</Button>
-	<Button>Third</Button>
+${'  '}<Button>First</Button>
+${'  '}<Button>Second</Button>
+${'  '}<Button>Third</Button>
 </ButtonGroup>`}>
 	<ButtonGroupVariantDemo client:load />
 </ComponentPreview>
@@ -78,9 +78,9 @@ Set variant props on the group to apply them to all children at once.
 Stack buttons vertically instead of horizontally.
 
 <ComponentPreview code={`<ButtonGroup orientation="vertical" aria-label="Options">
-	<Button>Option 1</Button>
-	<Button>Option 2</Button>
-	<Button>Option 3</Button>
+${'  '}<Button>Option 1</Button>
+${'  '}<Button>Option 2</Button>
+${'  '}<Button>Option 3</Button>
 </ButtonGroup>`}>
 	<ButtonGroupVerticalDemo client:load />
 </ComponentPreview>
@@ -111,9 +111,9 @@ Combine a primary action button with a dropdown trigger inside a group.
 Set `attached={false}` to add a small gap between buttons instead of merging borders.
 
 <ComponentPreview code={`<ButtonGroup attached={false} aria-label="Spaced actions">
-	<Button>One</Button>
-	<Button>Two</Button>
-	<Button>Three</Button>
+${'  '}<Button>One</Button>
+${'  '}<Button>Two</Button>
+${'  '}<Button>Three</Button>
 </ButtonGroup>`}>
 	<ButtonGroupDetachedDemo client:load />
 </ComponentPreview>

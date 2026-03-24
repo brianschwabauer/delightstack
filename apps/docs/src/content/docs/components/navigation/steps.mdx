@@ -24,17 +24,17 @@ import type { StepsContext } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Steps, Step } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Steps, Step } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  let current = $state(1);
+${'  '}let current = $state(1);
 </script>
 
 <Steps bind:current>
-  <Step title="Account" description="Create your account" />
-  <Step title="Profile" description="Set up your profile" />
-  <Step title="Review" description="Review details" />
-  <Step title="Complete" description="All done" />
+${'  '}<Step title="Account" description="Create your account" />
+${'  '}<Step title="Profile" description="Set up your profile" />
+${'  '}<Step title="Review" description="Review details" />
+${'  '}<Step title="Complete" description="All done" />
 </Steps>
 
 <Button outline onclick={() => current = Math.max(0, current - 1)}>Back</Button>
@@ -49,16 +49,16 @@ import type { StepsContext } from '@delightstack/components';
 Allow users to navigate back to completed steps by clicking on them.
 
 <ComponentPreview code={`<script>
-  import { Steps, Step } from '@delightstack/components';
+${'  '}import { Steps, Step } from '@delightstack/components';
 
-  let current = $state(1);
+${'  '}let current = $state(1);
 </script>
 
 <Steps bind:current clickable>
-  <Step title="Account" />
-  <Step title="Profile" />
-  <Step title="Review" />
-  <Step title="Complete" />
+${'  '}<Step title="Account" />
+${'  '}<Step title="Profile" />
+${'  '}<Step title="Review" />
+${'  '}<Step title="Complete" />
 </Steps>`}>
 	<StepsClickableDemo client:load />
 </ComponentPreview>
@@ -68,15 +68,15 @@ Allow users to navigate back to completed steps by clicking on them.
 Allow jumping to any step, not just completed ones.
 
 <ComponentPreview code={`<script>
-  import { Steps, Step } from '@delightstack/components';
+${'  '}import { Steps, Step } from '@delightstack/components';
 
-  let current = $state(0);
+${'  '}let current = $state(0);
 </script>
 
 <Steps bind:current clickable linear={false}>
-  <Step title="Overview" />
-  <Step title="Details" />
-  <Step title="Summary" />
+${'  '}<Step title="Overview" />
+${'  '}<Step title="Details" />
+${'  '}<Step title="Summary" />
 </Steps>`}>
 	<StepsNonLinearDemo client:load />
 </ComponentPreview>
@@ -86,17 +86,17 @@ Allow jumping to any step, not just completed ones.
 Stack steps vertically for sidebar or mobile layouts.
 
 <ComponentPreview code={`<script>
-  import { Steps, Step } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Steps, Step } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  let current = $state(1);
+${'  '}let current = $state(1);
 </script>
 
 <Steps bind:current orientation="vertical">
-  <Step title="Cart" description="Review items" />
-  <Step title="Shipping" description="Enter address" />
-  <Step title="Payment" description="Add payment method" />
-  <Step title="Confirm" description="Place order" />
+${'  '}<Step title="Cart" description="Review items" />
+${'  '}<Step title="Shipping" description="Enter address" />
+${'  '}<Step title="Payment" description="Add payment method" />
+${'  '}<Step title="Confirm" description="Place order" />
 </Steps>
 
 <Button outline onclick={() => current = Math.max(0, current - 1)}>Back</Button>
@@ -109,16 +109,16 @@ Stack steps vertically for sidebar or mobile layouts.
 Mark steps with error states or as optional.
 
 <ComponentPreview code={`<script>
-  import { Steps, Step } from '@delightstack/components';
+${'  '}import { Steps, Step } from '@delightstack/components';
 
-  let current = $state(2);
+${'  '}let current = $state(2);
 </script>
 
 <Steps bind:current>
-  <Step title="Account" />
-  <Step title="Verification" error />
-  <Step title="Preferences" optional />
-  <Step title="Done" />
+${'  '}<Step title="Account" />
+${'  '}<Step title="Verification" error />
+${'  '}<Step title="Preferences" optional />
+${'  '}<Step title="Done" />
 </Steps>`}>
 	<StepsErrorDemo client:load />
 </ComponentPreview>
@@ -128,28 +128,28 @@ Mark steps with error states or as optional.
 Render content for each step, shown when that step is active.
 
 <ComponentPreview code={`<script>
-  import { Steps, Step } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Steps, Step } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  let current = $state(0);
+${'  '}let current = $state(0);
 </script>
 
 <Steps bind:current orientation="vertical">
-  <Step title="Personal Info">
-    <input placeholder="Full Name" />
-    <input placeholder="Email" />
-    <Button onclick={() => current++}>Next</Button>
-  </Step>
-  <Step title="Address">
-    <input placeholder="Street" />
-    <input placeholder="City" />
-    <Button outline onclick={() => current--}>Back</Button>
-    <Button onclick={() => current++}>Next</Button>
-  </Step>
-  <Step title="Confirm">
-    <p>All done!</p>
-    <Button outline onclick={() => current--}>Back</Button>
-  </Step>
+${'  '}<Step title="Personal Info">
+${'  '}${'  '}<input placeholder="Full Name" />
+${'  '}${'  '}<input placeholder="Email" />
+${'  '}${'  '}<Button onclick={() => current++}>Next</Button>
+${'  '}</Step>
+${'  '}<Step title="Address">
+${'  '}${'  '}<input placeholder="Street" />
+${'  '}${'  '}<input placeholder="City" />
+${'  '}${'  '}<Button outline onclick={() => current--}>Back</Button>
+${'  '}${'  '}<Button onclick={() => current++}>Next</Button>
+${'  '}</Step>
+${'  '}<Step title="Confirm">
+${'  '}${'  '}<p>All done!</p>
+${'  '}${'  '}<Button outline onclick={() => current--}>Back</Button>
+${'  '}</Step>
 </Steps>`}>
 	<StepsWizardDemo client:load />
 </ComponentPreview>

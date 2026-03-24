@@ -28,16 +28,16 @@ import type { SelectOption } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Select } from '@delightstack/components';
+${'  '}import { Select } from '@delightstack/components';
 
-  let country = $state('');
+${'  '}let country = $state('');
 
-  const countries = [
-    { value: 'us', label: 'United States' },
-    { value: 'ca', label: 'Canada' },
-    { value: 'uk', label: 'United Kingdom' },
-    { value: 'de', label: 'Germany' },
-  ];
+${'  '}const countries = [
+${'  '}${'  '}{ value: 'us', label: 'United States' },
+${'  '}${'  '}{ value: 'ca', label: 'Canada' },
+${'  '}${'  '}{ value: 'uk', label: 'United Kingdom' },
+${'  '}${'  '}{ value: 'de', label: 'Germany' },
+${'  '}];
 </script>
 
 <Select bind:value={country} options={countries} label="Country" placeholder="Select a country" />`}>
@@ -49,14 +49,14 @@ import type { SelectOption } from '@delightstack/components';
 ### Simple Select
 
 <ComponentPreview code={`<Select
-  options={[
-    { value: 'us', label: 'United States' },
-    { value: 'ca', label: 'Canada' },
-    { value: 'uk', label: 'United Kingdom' },
-    { value: 'de', label: 'Germany' },
-  ]}
-  label="Country"
-  placeholder="Select a country"
+${'  '}options={[
+${'  '}${'  '}{ value: 'us', label: 'United States' },
+${'  '}${'  '}{ value: 'ca', label: 'Canada' },
+${'  '}${'  '}{ value: 'uk', label: 'United Kingdom' },
+${'  '}${'  '}{ value: 'de', label: 'Germany' },
+${'  '}]}
+${'  '}label="Country"
+${'  '}placeholder="Select a country"
 />`}>
 	<Select client:load options={[{ value: 'us', label: 'United States' }, { value: 'ca', label: 'Canada' }, { value: 'uk', label: 'United Kingdom' }, { value: 'de', label: 'Germany' }]} label="Country" placeholder="Select a country" />
 </ComponentPreview>
@@ -66,10 +66,10 @@ import type { SelectOption } from '@delightstack/components';
 Enable `searchable` to add a filter input in the dropdown.
 
 <ComponentPreview code={`<Select
-  searchable
-  bind:value={country}
-  options={countries}
-  label="Country"
+${'  '}searchable
+${'  '}bind:value={country}
+${'  '}options={countries}
+${'  '}label="Country"
 />`}>
 	<SelectSearchableDemo client:load />
 </ComponentPreview>
@@ -79,15 +79,15 @@ Enable `searchable` to add a filter input in the dropdown.
 Selected values appear as chips in the trigger. Each chip has a remove button.
 
 <ComponentPreview code={`<script>
-  import { Select } from '@delightstack/components';
+${'  '}import { Select } from '@delightstack/components';
 
-  let selectedTags = $state<string[]>([]);
+${'  '}let selectedTags = $state<string[]>([]);
 
-  const tags = [
-    { value: 'featured', label: 'Featured' },
-    { value: 'new', label: 'New' },
-    { value: 'sale', label: 'On Sale' },
-  ];
+${'  '}const tags = [
+${'  '}${'  '}{ value: 'featured', label: 'Featured' },
+${'  '}${'  '}{ value: 'new', label: 'New' },
+${'  '}${'  '}{ value: 'sale', label: 'On Sale' },
+${'  '}];
 </script>
 
 <Select multiple bind:value={selectedTags} options={tags} label="Tags" clearable />`}>
@@ -99,14 +99,14 @@ Selected values appear as chips in the trigger. Each chip has a remove button.
 Options with a `group` property are visually grouped under section headers.
 
 <ComponentPreview code={`<script>
-  import { Select } from '@delightstack/components';
+${'  '}import { Select } from '@delightstack/components';
 
-  const options = [
-    { value: 'apple', label: 'Apple', group: 'Fruits' },
-    { value: 'banana', label: 'Banana', group: 'Fruits' },
-    { value: 'carrot', label: 'Carrot', group: 'Vegetables' },
-    { value: 'broccoli', label: 'Broccoli', group: 'Vegetables' },
-  ];
+${'  '}const options = [
+${'  '}${'  '}{ value: 'apple', label: 'Apple', group: 'Fruits' },
+${'  '}${'  '}{ value: 'banana', label: 'Banana', group: 'Fruits' },
+${'  '}${'  '}{ value: 'carrot', label: 'Carrot', group: 'Vegetables' },
+${'  '}${'  '}{ value: 'broccoli', label: 'Broccoli', group: 'Vegetables' },
+${'  '}];
 </script>
 
 <Select bind:value={selected} options={options} label="Food" />`}>
@@ -145,25 +145,25 @@ Use `onsearch` to load options dynamically. The component debounces search input
 Allow users to type new values when no match is found.
 
 <ComponentPreview code={`<script>
-  import { Select } from '@delightstack/components';
+${'  '}import { Select } from '@delightstack/components';
 
-  let selected = $state([]);
-  let tags = $state([
-    { value: 'featured', label: 'Featured' },
-    { value: 'new', label: 'New' },
-  ]);
+${'  '}let selected = $state([]);
+${'  '}let tags = $state([
+${'  '}${'  '}{ value: 'featured', label: 'Featured' },
+${'  '}${'  '}{ value: 'new', label: 'New' },
+${'  '}]);
 </script>
 
 <Select
-  creatable
-  searchable
-  multiple
-  bind:value={selected}
-  options={tags}
-  label="Tags"
-  oncreate={({ value }) => {
-    tags = [...tags, { value, label: value }];
-  }}
+${'  '}creatable
+${'  '}searchable
+${'  '}multiple
+${'  '}bind:value={selected}
+${'  '}options={tags}
+${'  '}label="Tags"
+${'  '}oncreate={({ value }) => {
+${'  '}${'  '}tags = [...tags, { value, label: value }];
+${'  '}}}
 />`}>
 	<SelectCreatableDemo client:load />
 </ComponentPreview>
@@ -171,11 +171,11 @@ Allow users to type new values when no match is found.
 ### With Error
 
 <ComponentPreview code={`<Select
-  bind:value={category}
-  options={categories}
-  label="Category"
-  required
-  error={!category ? 'Please select a category' : ''}
+${'  '}bind:value={category}
+${'  '}options={categories}
+${'  '}label="Category"
+${'  '}required
+${'  '}error={!category ? 'Please select a category' : ''}
 />`}>
 	<SelectErrorDemo client:load />
 </ComponentPreview>
@@ -185,30 +185,30 @@ Allow users to type new values when no match is found.
 Use the `option` snippet to customize how each option appears in the dropdown.
 
 <ComponentPreview code={`<script>
-  import { Select } from '@delightstack/components';
+${'  '}import { Select } from '@delightstack/components';
 
-  let selectedUser = $state('');
+${'  '}let selectedUser = $state('');
 
-  const users = [
-    { value: 'alice', label: 'Alice Johnson', description: 'Engineering', initials: 'AJ' },
-    { value: 'bob', label: 'Bob Smith', description: 'Design', initials: 'BS' },
-    { value: 'carol', label: 'Carol Williams', description: 'Marketing', initials: 'CW' },
-    { value: 'dave', label: 'Dave Brown', description: 'Sales', initials: 'DB' },
-  ];
+${'  '}const users = [
+${'  '}${'  '}{ value: 'alice', label: 'Alice Johnson', description: 'Engineering', initials: 'AJ' },
+${'  '}${'  '}{ value: 'bob', label: 'Bob Smith', description: 'Design', initials: 'BS' },
+${'  '}${'  '}{ value: 'carol', label: 'Carol Williams', description: 'Marketing', initials: 'CW' },
+${'  '}${'  '}{ value: 'dave', label: 'Dave Brown', description: 'Sales', initials: 'DB' },
+${'  '}];
 </script>
 
 <Select options={users} bind:value={selectedUser} label="Assign to" placeholder="Select a team member">
-  {#snippet option(opt)}
-    <div style="display: flex; align-items: center; gap: 0.5rem;">
-      <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--c-primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">
-        {opt.initials}
-      </div>
-      <div>
-        <span>{opt.label}</span>
-        <span style="font-size: 0.8em; opacity: 0.6;">{opt.description}</span>
-      </div>
-    </div>
-  {/snippet}
+${'  '}{#snippet option(opt)}
+${'  '}${'  '}<div style="display: flex; align-items: center; gap: 0.5rem;">
+${'  '}${'  '}${'  '}<div style="width: 28px; height: 28px; border-radius: 50%; background: var(--c-primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">
+${'  '}${'  '}${'  '}${'  '}{opt.initials}
+${'  '}${'  '}${'  '}</div>
+${'  '}${'  '}${'  '}<div>
+${'  '}${'  '}${'  '}${'  '}<span>{opt.label}</span>
+${'  '}${'  '}${'  '}${'  '}<span style="font-size: 0.8em; opacity: 0.6;">{opt.description}</span>
+${'  '}${'  '}${'  '}</div>
+${'  '}${'  '}</div>
+${'  '}{/snippet}
 </Select>`}>
 	<SelectCustomOptionDemo client:load />
 </ComponentPreview>

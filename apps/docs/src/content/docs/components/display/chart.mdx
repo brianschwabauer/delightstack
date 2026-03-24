@@ -29,15 +29,15 @@ import type { ChartData, Dataset } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Chart } from '@delightstack/components';
+${'  '}import { Chart } from '@delightstack/components';
 
-  const data = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      { label: 'Revenue', data: [4200, 5800, 4900, 7100, 6300, 8500] },
-      { label: 'Expenses', data: [3100, 3400, 3800, 4200, 3600, 4100] },
-    ],
-  };
+${'  '}const data = {
+${'  '}${'  '}labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+${'  '}${'  '}datasets: [
+${'  '}${'  '}${'  '}{ label: 'Revenue', data: [4200, 5800, 4900, 7100, 6300, 8500] },
+${'  '}${'  '}${'  '}{ label: 'Expenses', data: [3100, 3400, 3800, 4200, 3600, 4100] },
+${'  '}${'  '}],
+${'  '}};
 </script>
 
 <Chart type="bar" data={data} height={300} />`}>
@@ -49,13 +49,13 @@ import type { ChartData, Dataset } from '@delightstack/components';
 ### Line Chart
 
 <ComponentPreview code={`<script>
-  const salesData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      { label: '2025', data: [12, 19, 3, 5, 2, 3] },
-      { label: '2024', data: [8, 15, 7, 8, 4, 6] },
-    ],
-  };
+${'  '}const salesData = {
+${'  '}${'  '}labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+${'  '}${'  '}datasets: [
+${'  '}${'  '}${'  '}{ label: '2025', data: [12, 19, 3, 5, 2, 3] },
+${'  '}${'  '}${'  '}{ label: '2024', data: [8, 15, 7, 8, 4, 6] },
+${'  '}${'  '}],
+${'  '}};
 </script>
 
 <Chart type="line" data={salesData} height={250} />`}>
@@ -83,13 +83,13 @@ import type { ChartData, Dataset } from '@delightstack/components';
 ### Donut Chart
 
 <ComponentPreview code={`<Chart
-  type="donut"
-  data={{
-    labels: ['Desktop', 'Mobile', 'Tablet'],
-    datasets: [{ label: 'Traffic', data: [65, 30, 5] }],
-  }}
-  innerRadius={0.6}
-  height={300}
+${'  '}type="donut"
+${'  '}data={{
+${'  '}${'  '}labels: ['Desktop', 'Mobile', 'Tablet'],
+${'  '}${'  '}datasets: [{ label: 'Traffic', data: [65, 30, 5] }],
+${'  '}}}
+${'  '}innerRadius={0.6}
+${'  '}height={300}
 />`}>
   <ChartDonutDemo client:load />
 </ComponentPreview>
@@ -97,11 +97,11 @@ import type { ChartData, Dataset } from '@delightstack/components';
 ### Pie Chart
 
 <ComponentPreview code={`<Chart
-  type="pie"
-  data={{
-    labels: ['Chrome', 'Firefox', 'Safari', 'Edge'],
-    datasets: [{ label: 'Browser Share', data: [65, 15, 12, 8] }],
-  }}
+${'  '}type="pie"
+${'  '}data={{
+${'  '}${'  '}labels: ['Chrome', 'Firefox', 'Safari', 'Edge'],
+${'  '}${'  '}datasets: [{ label: 'Browser Share', data: [65, 15, 12, 8] }],
+${'  '}}}
 />`}>
   <ChartPieDemo client:load />
 </ComponentPreview>
@@ -109,9 +109,9 @@ import type { ChartData, Dataset } from '@delightstack/components';
 ### Custom Colors
 
 <ComponentPreview code={`<Chart
-  type="bar"
-  data={salesData}
-  colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']}
+${'  '}type="bar"
+${'  '}data={salesData}
+${'  '}colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']}
 />`}>
   <ChartCustomColorsDemo client:load />
 </ComponentPreview>

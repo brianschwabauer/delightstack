@@ -22,25 +22,25 @@ import type { Column } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Table } from '@delightstack/components';
+${'  '}import { Table } from '@delightstack/components';
 
-  const users = [
-    { name: 'Alice Johnson', email: 'alice@example.com', role: 'Admin' },
-    { name: 'Bob Smith', email: 'bob@example.com', role: 'Editor' },
-    { name: 'Carol White', email: 'carol@example.com', role: 'Viewer' },
-    { name: 'Dave Brown', email: 'dave@example.com', role: 'Editor' },
-    { name: 'Eve Davis', email: 'eve@example.com', role: 'Admin' },
-  ];
+${'  '}const users = [
+${'  '}${'  '}{ name: 'Alice Johnson', email: 'alice@example.com', role: 'Admin' },
+${'  '}${'  '}{ name: 'Bob Smith', email: 'bob@example.com', role: 'Editor' },
+${'  '}${'  '}{ name: 'Carol White', email: 'carol@example.com', role: 'Viewer' },
+${'  '}${'  '}{ name: 'Dave Brown', email: 'dave@example.com', role: 'Editor' },
+${'  '}${'  '}{ name: 'Eve Davis', email: 'eve@example.com', role: 'Admin' },
+${'  '}];
 </script>
 
 <Table
-  data={users}
-  columns={[
-    { key: 'name', label: 'Name', sortable: true },
-    { key: 'email', label: 'Email', sortable: true },
-    { key: 'role', label: 'Role', sortable: true },
-  ]}
-  striped
+${'  '}data={users}
+${'  '}columns={[
+${'  '}${'  '}{ key: 'name', label: 'Name', sortable: true },
+${'  '}${'  '}{ key: 'email', label: 'Email', sortable: true },
+${'  '}${'  '}{ key: 'role', label: 'Role', sortable: true },
+${'  '}]}
+${'  '}striped
 />`}>
   <TableDemo client:load />
 </ComponentPreview>
@@ -52,26 +52,26 @@ import type { Column } from '@delightstack/components';
 Mark columns as `sortable` and bind the sort state.
 
 <ComponentPreview code={`<script>
-  import { Table } from '@delightstack/components';
+${'  '}import { Table } from '@delightstack/components';
 
-  let sortBy = $state('name');
-  let sortDirection = $state<'asc' | 'desc'>('asc');
+${'  '}let sortBy = $state('name');
+${'  '}let sortDirection = $state<'asc' | 'desc'>('asc');
 
-  const data = [
-    { name: 'Alice', age: 30 },
-    { name: 'Bob', age: 25 },
-    { name: 'Carol', age: 35 },
-  ];
+${'  '}const data = [
+${'  '}${'  '}{ name: 'Alice', age: 30 },
+${'  '}${'  '}{ name: 'Bob', age: 25 },
+${'  '}${'  '}{ name: 'Carol', age: 35 },
+${'  '}];
 </script>
 
 <Table
-  {data}
-  columns={[
-    { key: 'name', label: 'Name', sortable: true },
-    { key: 'age', label: 'Age', sortable: true, align: 'right' },
-  ]}
-  bind:sortBy
-  bind:sortDirection
+${'  '}{data}
+${'  '}columns={[
+${'  '}${'  '}{ key: 'name', label: 'Name', sortable: true },
+${'  '}${'  '}{ key: 'age', label: 'Age', sortable: true, align: 'right' },
+${'  '}]}
+${'  '}bind:sortBy
+${'  '}bind:sortDirection
 />`}>
 	<TableSortableDemo client:load />
 </ComponentPreview>
@@ -81,25 +81,25 @@ Mark columns as `sortable` and bind the sort state.
 Use Svelte snippets to render custom cell content.
 
 <ComponentPreview code={`<script>
-  import { Table, Button } from '@delightstack/components';
+${'  '}import { Table, Button } from '@delightstack/components';
 </script>
 
 {#snippet statusCell({ value })}
-  <span class="status-badge">{value}</span>
+${'  '}<span class="status-badge">{value}</span>
 {/snippet}
 
 {#snippet actionsCell({ row })}
-  <Button size="0" onclick={() => editUser(row)}>Edit</Button>
+${'  '}<Button size="0" onclick={() => editUser(row)}>Edit</Button>
 {/snippet}
 
 <Table
-  data={users}
-  columns={[
-    { key: 'name', label: 'Name', sortable: true },
-    { key: 'status', label: 'Status', cell: statusCell },
-    { key: 'role', label: 'Role' },
-    { key: 'actions', label: '', cell: actionsCell, width: '100px' },
-  ]}
+${'  '}data={users}
+${'  '}columns={[
+${'  '}${'  '}{ key: 'name', label: 'Name', sortable: true },
+${'  '}${'  '}{ key: 'status', label: 'Status', cell: statusCell },
+${'  '}${'  '}{ key: 'role', label: 'Role' },
+${'  '}${'  '}{ key: 'actions', label: '', cell: actionsCell, width: '100px' },
+${'  '}]}
 />`}>
   <TableCustomCellDemo client:load />
 </ComponentPreview>
@@ -109,16 +109,16 @@ Use Svelte snippets to render custom cell content.
 Enable `selectable` to show checkboxes. Supports shift-click range selection.
 
 <ComponentPreview code={`<script>
-  import { Table } from '@delightstack/components';
+${'  '}import { Table } from '@delightstack/components';
 
-  let selectedUsers = $state([]);
+${'  '}let selectedUsers = $state([]);
 </script>
 
 <Table
-  data={users}
-  columns={columns}
-  selectable
-  bind:selected={selectedUsers}
+${'  '}data={users}
+${'  '}columns={columns}
+${'  '}selectable
+${'  '}bind:selected={selectedUsers}
 />`}>
   <TableSelectableDemo client:load />
 </ComponentPreview>
@@ -132,14 +132,14 @@ Enable `selectable` to show checkboxes. Supports shift-click range selection.
 ### Expandable Rows
 
 <ComponentPreview code={`{#snippet rowDetail(row)}
-  <p>Details for {row.name}: {row.bio}</p>
+${'  '}<p>Details for {row.name}: {row.bio}</p>
 {/snippet}
 
 <Table
-  data={users}
-  columns={columns}
-  expandable
-  expandedRow={rowDetail}
+${'  '}data={users}
+${'  '}columns={columns}
+${'  '}expandable
+${'  '}expandedRow={rowDetail}
 />`}>
   <TableExpandableDemo client:load />
 </ComponentPreview>
@@ -147,14 +147,14 @@ Enable `selectable` to show checkboxes. Supports shift-click range selection.
 ### Skeleton Loading
 
 <ComponentPreview code={`<Table
-  skeleton
-  skeletonCount={5}
-  columns={[
-    { key: 'name', label: 'Name' },
-    { key: 'email', label: 'Email' },
-    { key: 'status', label: 'Status' },
-  ]}
-  data={[]}
+${'  '}skeleton
+${'  '}skeletonCount={5}
+${'  '}columns={[
+${'  '}${'  '}{ key: 'name', label: 'Name' },
+${'  '}${'  '}{ key: 'email', label: 'Email' },
+${'  '}${'  '}{ key: 'status', label: 'Status' },
+${'  '}]}
+${'  '}data={[]}
 />`}>
   <TableSkeletonDemo client:load />
 </ComponentPreview>

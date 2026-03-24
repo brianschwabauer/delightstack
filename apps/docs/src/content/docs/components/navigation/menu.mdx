@@ -32,23 +32,23 @@ import type { MenuContext } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Menu, MenuItem, MenuSeparator } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Menu, MenuItem, MenuSeparator } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  let menuOpen = $state(false);
-  let triggerEl = $state();
+${'  '}let menuOpen = $state(false);
+${'  '}let triggerEl = $state();
 </script>
 
 <span bind:this={triggerEl}>
-  <Button onclick={() => menuOpen = !menuOpen}>Open Menu</Button>
+${'  '}<Button onclick={() => menuOpen = !menuOpen}>Open Menu</Button>
 </span>
 
 <Menu bind:open={menuOpen} trigger={triggerEl}>
-  <MenuItem onclick={() => {}}>Edit</MenuItem>
-  <MenuItem onclick={() => {}}>Duplicate</MenuItem>
-  <MenuItem shortcut="Ctrl+S" onclick={() => {}}>Save</MenuItem>
-  <MenuSeparator />
-  <MenuItem danger onclick={() => {}}>Delete</MenuItem>
+${'  '}<MenuItem onclick={() => {}}>Edit</MenuItem>
+${'  '}<MenuItem onclick={() => {}}>Duplicate</MenuItem>
+${'  '}<MenuItem shortcut="Ctrl+S" onclick={() => {}}>Save</MenuItem>
+${'  '}<MenuSeparator />
+${'  '}<MenuItem danger onclick={() => {}}>Delete</MenuItem>
 </Menu>`}>
 	<MenuDemo client:load />
 </ComponentPreview>
@@ -60,22 +60,22 @@ import type { MenuContext } from '@delightstack/components';
 Display keyboard shortcut hints and badges on menu items.
 
 <ComponentPreview code={`<script>
-  import { Menu, MenuItem, MenuSeparator } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Menu, MenuItem, MenuSeparator } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  let menuOpen = $state(false);
-  let triggerEl = $state();
+${'  '}let menuOpen = $state(false);
+${'  '}let triggerEl = $state();
 </script>
 
 <span bind:this={triggerEl}>
-  <Button onclick={() => menuOpen = !menuOpen}>Open Menu</Button>
+${'  '}<Button onclick={() => menuOpen = !menuOpen}>Open Menu</Button>
 </span>
 
 <Menu bind:open={menuOpen} trigger={triggerEl}>
-  <MenuItem shortcut="⌘C" onclick={() => {}}>Copy</MenuItem>
-  <MenuItem shortcut="⌘V" onclick={() => {}}>Paste</MenuItem>
-  <MenuSeparator />
-  <MenuItem badge="3" onclick={() => {}}>Notifications</MenuItem>
+${'  '}<MenuItem shortcut="⌘C" onclick={() => {}}>Copy</MenuItem>
+${'  '}<MenuItem shortcut="⌘V" onclick={() => {}}>Paste</MenuItem>
+${'  '}<MenuSeparator />
+${'  '}<MenuItem badge="3" onclick={() => {}}>Notifications</MenuItem>
 </Menu>`}>
 	<MenuShortcutsDemo client:load />
 </ComponentPreview>
@@ -85,27 +85,27 @@ Display keyboard shortcut hints and badges on menu items.
 Organize related items under labeled groups.
 
 <ComponentPreview code={`<script>
-  import { Menu, MenuItem, MenuGroup } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Menu, MenuItem, MenuGroup } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  let menuOpen = $state(false);
-  let triggerEl = $state();
+${'  '}let menuOpen = $state(false);
+${'  '}let triggerEl = $state();
 </script>
 
 <span bind:this={triggerEl}>
-  <Button onclick={() => menuOpen = !menuOpen}>File Menu</Button>
+${'  '}<Button onclick={() => menuOpen = !menuOpen}>File Menu</Button>
 </span>
 
 <Menu bind:open={menuOpen} trigger={triggerEl}>
-  <MenuGroup label="File">
-    <MenuItem onclick={() => {}}>New</MenuItem>
-    <MenuItem onclick={() => {}}>Open</MenuItem>
-    <MenuItem onclick={() => {}}>Save</MenuItem>
-  </MenuGroup>
-  <MenuGroup label="Edit">
-    <MenuItem onclick={() => {}}>Undo</MenuItem>
-    <MenuItem onclick={() => {}}>Redo</MenuItem>
-  </MenuGroup>
+${'  '}<MenuGroup label="File">
+${'  '}${'  '}<MenuItem onclick={() => {}}>New</MenuItem>
+${'  '}${'  '}<MenuItem onclick={() => {}}>Open</MenuItem>
+${'  '}${'  '}<MenuItem onclick={() => {}}>Save</MenuItem>
+${'  '}</MenuGroup>
+${'  '}<MenuGroup label="Edit">
+${'  '}${'  '}<MenuItem onclick={() => {}}>Undo</MenuItem>
+${'  '}${'  '}<MenuItem onclick={() => {}}>Redo</MenuItem>
+${'  '}</MenuGroup>
 </Menu>`}>
 	<MenuGroupedDemo client:load />
 </ComponentPreview>
@@ -115,24 +115,24 @@ Organize related items under labeled groups.
 Toggle-able menu items with a checked state.
 
 <ComponentPreview code={`<script>
-  import { Menu, MenuCheckboxItem, MenuGroup } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Menu, MenuCheckboxItem, MenuGroup } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  let menuOpen = $state(false);
-  let triggerEl = $state();
-  let showGrid = $state(true);
-  let showRulers = $state(false);
+${'  '}let menuOpen = $state(false);
+${'  '}let triggerEl = $state();
+${'  '}let showGrid = $state(true);
+${'  '}let showRulers = $state(false);
 </script>
 
 <span bind:this={triggerEl}>
-  <Button onclick={() => menuOpen = !menuOpen}>View Options</Button>
+${'  '}<Button onclick={() => menuOpen = !menuOpen}>View Options</Button>
 </span>
 
 <Menu bind:open={menuOpen} trigger={triggerEl} close_on_select={false}>
-  <MenuGroup label="View">
-    <MenuCheckboxItem bind:checked={showGrid}>Show Grid</MenuCheckboxItem>
-    <MenuCheckboxItem bind:checked={showRulers}>Show Rulers</MenuCheckboxItem>
-  </MenuGroup>
+${'  '}<MenuGroup label="View">
+${'  '}${'  '}<MenuCheckboxItem bind:checked={showGrid}>Show Grid</MenuCheckboxItem>
+${'  '}${'  '}<MenuCheckboxItem bind:checked={showRulers}>Show Rulers</MenuCheckboxItem>
+${'  '}</MenuGroup>
 </Menu>`}>
 	<MenuCheckboxDemo client:load />
 </ComponentPreview>
@@ -142,24 +142,24 @@ Toggle-able menu items with a checked state.
 Single-selection items within a radio group.
 
 <ComponentPreview code={`<script>
-  import { Menu, MenuRadioGroup, MenuRadioItem } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Menu, MenuRadioGroup, MenuRadioItem } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  let menuOpen = $state(false);
-  let triggerEl = $state();
-  let theme = $state('system');
+${'  '}let menuOpen = $state(false);
+${'  '}let triggerEl = $state();
+${'  '}let theme = $state('system');
 </script>
 
 <span bind:this={triggerEl}>
-  <Button onclick={() => menuOpen = !menuOpen}>Theme</Button>
+${'  '}<Button onclick={() => menuOpen = !menuOpen}>Theme</Button>
 </span>
 
 <Menu bind:open={menuOpen} trigger={triggerEl}>
-  <MenuRadioGroup bind:value={theme}>
-    <MenuRadioItem value="light">Light</MenuRadioItem>
-    <MenuRadioItem value="dark">Dark</MenuRadioItem>
-    <MenuRadioItem value="system">System</MenuRadioItem>
-  </MenuRadioGroup>
+${'  '}<MenuRadioGroup bind:value={theme}>
+${'  '}${'  '}<MenuRadioItem value="light">Light</MenuRadioItem>
+${'  '}${'  '}<MenuRadioItem value="dark">Dark</MenuRadioItem>
+${'  '}${'  '}<MenuRadioItem value="system">System</MenuRadioItem>
+${'  '}</MenuRadioGroup>
 </Menu>`}>
 	<MenuRadioDemo client:load />
 </ComponentPreview>
@@ -167,11 +167,11 @@ Single-selection items within a radio group.
 ### Disabled Items
 
 <ComponentPreview code={`<Menu bind:open={menuOpen} trigger={triggerEl}>
-  <MenuItem onclick={() => {}}>Save</MenuItem>
-  <MenuItem disabled>Save As... (Pro)</MenuItem>
-  <MenuSeparator />
-  <MenuItem onclick={() => {}}>Export</MenuItem>
-  <MenuItem disabled>Import (Coming Soon)</MenuItem>
+${'  '}<MenuItem onclick={() => {}}>Save</MenuItem>
+${'  '}<MenuItem disabled>Save As... (Pro)</MenuItem>
+${'  '}<MenuSeparator />
+${'  '}<MenuItem onclick={() => {}}>Export</MenuItem>
+${'  '}<MenuItem disabled>Import (Coming Soon)</MenuItem>
 </Menu>`}>
 	<MenuDisabledDemo client:load />
 </ComponentPreview>
@@ -181,9 +181,9 @@ Single-selection items within a radio group.
 Position the menu relative to the trigger using Floating UI placements.
 
 <ComponentPreview code={`<Menu bind:open={menuOpen} trigger={triggerEl} placement="right-start">
-  <MenuItem onclick={() => {}}>Option A</MenuItem>
-  <MenuItem onclick={() => {}}>Option B</MenuItem>
-  <MenuItem onclick={() => {}}>Option C</MenuItem>
+${'  '}<MenuItem onclick={() => {}}>Option A</MenuItem>
+${'  '}<MenuItem onclick={() => {}}>Option B</MenuItem>
+${'  '}<MenuItem onclick={() => {}}>Option C</MenuItem>
 </Menu>`}>
 	<MenuPlacementDemo client:load />
 </ComponentPreview>

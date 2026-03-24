@@ -21,10 +21,10 @@ import { Code } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Code } from '@delightstack/components';
+${'  '}import { Code } from '@delightstack/components';
 
-  const snippet = \`function greet(name: string) {
-  console.log(\\\`Hello, \\\${name}!\\\`);
+${'  '}const snippet = \`function greet(name: string) {
+${'  '}console.log(\\\`Hello, \\\${name}!\\\`);
 }
 
 greet('World');\`;
@@ -41,9 +41,9 @@ greet('World');\`;
 A header bar appears when `filename` or `showCopy` is set.
 
 <ComponentPreview code={`<Code
-  code={snippet}
-  language="typescript"
-  filename="greeting.ts"
+${'  '}code={snippet}
+${'  '}language="typescript"
+${'  '}filename="greeting.ts"
 />`}>
   <CodeFilenameDemo client:load />
 </ComponentPreview>
@@ -53,14 +53,14 @@ A header bar appears when `filename` or `showCopy` is set.
 Draw attention to specific lines by providing their line numbers.
 
 <ComponentPreview code={`<script>
-  import { Code } from '@delightstack/components';
+${'  '}import { Code } from '@delightstack/components';
 
-  const snippet = \`function calculateTotal(items) {
-  let total = 0;
-  for (const item of items) {
-    total += item.price * item.quantity;
-  }
-  return total;
+${'  '}const snippet = \`function calculateTotal(items) {
+${'  '}let total = 0;
+${'  '}for (const item of items) {
+${'  '}${'  '}total += item.price * item.quantity;
+${'  '}}
+${'  '}return total;
 }\`;
 </script>
 
@@ -71,9 +71,9 @@ Draw attention to specific lines by providing their line numbers.
 ### Without Line Numbers
 
 <ComponentPreview code={`<Code
-  code="npm install @delightstack/components"
-  language="bash"
-  showLineNumbers={false}
+${'  '}code="npm install @delightstack/components"
+${'  '}language="bash"
+${'  '}showLineNumbers={false}
 />`}>
 	<DSCode client:load code="npm install @delightstack/components" language="bash" showLineNumbers={false} />
 </ComponentPreview>
@@ -83,9 +83,9 @@ Draw attention to specific lines by providing their line numbers.
 Lines starting with `+` get a green background, lines starting with `-` get a red background, and `@@` lines are styled as section headers.
 
 <ComponentPreview code={`<script>
-  import { Code } from '@delightstack/components';
+${'  '}import { Code } from '@delightstack/components';
 
-  const diffOutput = \`@@ -1,5 +1,6 @@
+${'  '}const diffOutput = \`@@ -1,5 +1,6 @@
  function greet(name) {
 -  console.log("Hello");
 +  console.log("Hello, " + name);
@@ -105,10 +105,10 @@ Lines starting with `+` get a green background, lines starting with `-` get a re
 Long code blocks can be constrained with a maximum height. The content scrolls vertically while the header stays visible.
 
 <ComponentPreview code={`<Code
-  code={longCodeBlock}
-  language="python"
-  maxHeight="200px"
-  filename="math_utils.py"
+${'  '}code={longCodeBlock}
+${'  '}language="python"
+${'  '}maxHeight="200px"
+${'  '}filename="math_utils.py"
 />`}>
   <CodeMaxHeightDemo client:load />
 </ComponentPreview>
@@ -116,10 +116,10 @@ Long code blocks can be constrained with a maximum height. The content scrolls v
 ### Line Wrapping
 
 <ComponentPreview code={`<Code
-  code={longLineCode}
-  language="typescript"
-  wrap
-  filename="utils.ts"
+${'  '}code={longLineCode}
+${'  '}language="typescript"
+${'  '}wrap
+${'  '}filename="utils.ts"
 />`}>
   <CodeWrapDemo client:load />
 </ComponentPreview>

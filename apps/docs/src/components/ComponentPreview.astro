@@ -14,6 +14,10 @@ interface Props {
 }
 
 const { code, title } = Astro.props;
+
+// MDX strips tab characters from template literal content during parsing.
+// As a safety net, convert any remaining tabs to 2 spaces.
+const normalizedCode = code.trim().replace(/\t/g, '  ');
 ---
 
 <div class="component-preview">
@@ -27,7 +31,7 @@ const { code, title } = Astro.props;
 			View code
 		</summary>
 		<div class="code-area">
-			<Code code={code.trim()} lang="svelte" />
+			<Code code={normalizedCode} lang="svelte" />
 		</div>
 	</details>
 </div>
@@ -98,5 +102,7 @@ const { code, title } = Astro.props;
 	.code-area :global(.expressive-code .frame) {
 		border-radius: 0;
 		border: none;
+		tab-size: 2;
+		-moz-tab-size: 2;
 	}
 </style>

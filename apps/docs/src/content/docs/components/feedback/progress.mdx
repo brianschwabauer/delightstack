@@ -91,12 +91,12 @@ Add an animated stripe effect to a linear progress bar.
 Display multiple segments with different colors in a single linear bar.
 
 <ComponentPreview code={`<Progress
-  circular={false}
-  segments={[
-    { value: 40, color: 'var(--color-success)', label: 'Documents' },
-    { value: 25, color: 'var(--color-warning)', label: 'Photos' },
-    { value: 10, color: 'var(--color-error)', label: 'System' },
-  ]}
+${'  '}circular={false}
+${'  '}segments={[
+${'  '}${'  '}{ value: 40, color: 'var(--color-success)', label: 'Documents' },
+${'  '}${'  '}{ value: 25, color: 'var(--color-warning)', label: 'Photos' },
+${'  '}${'  '}{ value: 10, color: 'var(--color-error)', label: 'System' },
+${'  '}]}
 />`}>
   <ProgressMultiSegmentDemo client:load />
 </ComponentPreview>
@@ -106,20 +106,20 @@ Display multiple segments with different colors in a single linear bar.
 Use `overlay` to cover a parent element, or `fullScreen` to cover the entire viewport.
 
 <ComponentPreview code={`<script>
-  import { Progress } from '@delightstack/components';
+${'  '}import { Progress } from '@delightstack/components';
 
-  let isLoading = $state(false);
+${'  '}let isLoading = $state(false);
 </script>
 
 <button onclick={() => { isLoading = true; setTimeout(() => isLoading = false, 3000); }}>
-  Reload Table Data
+${'  '}Reload Table Data
 </button>
 
 <div style="position: relative;">
-  <table>...</table>
-  {#if isLoading}
-    <Progress overlay label="Loading data..." />
-  {/if}
+${'  '}<table>...</table>
+${'  '}{#if isLoading}
+${'  '}${'  '}<Progress overlay label="Loading data..." />
+${'  '}{/if}
 </div>`}>
   <ProgressOverlayDemo client:load />
 </ComponentPreview>

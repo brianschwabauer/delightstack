@@ -20,19 +20,19 @@ import { Drawer } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Drawer, Button } from '@delightstack/components';
+${'  '}import { Drawer, Button } from '@delightstack/components';
 
-  let open = $state(false);
+${'  '}let open = $state(false);
 </script>
 
 <Button onclick={() => open = true}>Open Drawer</Button>
 
 <Drawer bind:open width="320px">
-  <div style="padding: 1.5rem;">
-    <h3>Drawer Panel</h3>
-    <p>This is a slide-out drawer panel. Click outside or press Escape to close.</p>
-    <Button outline onclick={() => open = false}>Close</Button>
-  </div>
+${'  '}<div style="padding: 1.5rem;">
+${'  '}${'  '}<h3>Drawer Panel</h3>
+${'  '}${'  '}<p>This is a slide-out drawer panel. Click outside or press Escape to close.</p>
+${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
+${'  '}</div>
 </Drawer>`}>
 	<DrawerDemo client:load />
 </ComponentPreview>
@@ -44,7 +44,7 @@ import { Drawer } from '@delightstack/components';
 Position the drawer on the right edge of the viewport.
 
 <ComponentPreview code={`<Drawer bind:open right>
-  <p style="padding: 1rem;">Right drawer content.</p>
+${'  '}<p style="padding: 1rem;">Right drawer content.</p>
 </Drawer>`}>
 	<DrawerRightDemo client:load />
 </ComponentPreview>
@@ -54,22 +54,22 @@ Position the drawer on the right edge of the viewport.
 Add structured header and footer sections using snippets.
 
 <ComponentPreview code={`<Drawer bind:open width="320px">
-  {#snippet header()}
-    <div style="padding: 1rem; border-bottom: 1px solid var(--color-border);">
-      <h2 style="margin: 0;">Settings</h2>
-    </div>
-  {/snippet}
+${'  '}{#snippet header()}
+${'  '}${'  '}<div style="padding: 1rem; border-bottom: 1px solid var(--color-border);">
+${'  '}${'  '}${'  '}<h2 style="margin: 0;">Settings</h2>
+${'  '}${'  '}</div>
+${'  '}{/snippet}
 
-  <div style="padding: 1rem;">
-    <p>Main scrollable content.</p>
-  </div>
+${'  '}<div style="padding: 1rem;">
+${'  '}${'  '}<p>Main scrollable content.</p>
+${'  '}</div>
 
-  {#snippet footer()}
-    <div style="padding: 1rem; border-top: 1px solid var(--color-border);">
-      <Button outline onclick={() => open = false}>Cancel</Button>
-      <Button onclick={() => open = false}>Save</Button>
-    </div>
-  {/snippet}
+${'  '}{#snippet footer()}
+${'  '}${'  '}<div style="padding: 1rem; border-top: 1px solid var(--color-border);">
+${'  '}${'  '}${'  '}<Button outline onclick={() => open = false}>Cancel</Button>
+${'  '}${'  '}${'  '}<Button onclick={() => open = false}>Save</Button>
+${'  '}${'  '}</div>
+${'  '}{/snippet}
 </Drawer>`}>
 	<DrawerHeaderFooterDemo client:load />
 </ComponentPreview>
@@ -79,16 +79,16 @@ Add structured header and footer sections using snippets.
 Always-visible drawer that becomes part of the layout flow (no backdrop, no transitions).
 
 <ComponentPreview code={`<div style="display: flex; height: 200px;">
-  <Drawer open persistent width="180px">
-    <nav style="padding: 1rem;">
-      <a href="/dashboard">Dashboard</a>
-      <a href="/settings">Settings</a>
-      <a href="/profile">Profile</a>
-    </nav>
-  </Drawer>
-  <main style="flex: 1; padding: 1rem;">
-    <p>Main content area.</p>
-  </main>
+${'  '}<Drawer open persistent width="180px">
+${'  '}${'  '}<nav style="padding: 1rem;">
+${'  '}${'  '}${'  '}<a href="/dashboard">Dashboard</a>
+${'  '}${'  '}${'  '}<a href="/settings">Settings</a>
+${'  '}${'  '}${'  '}<a href="/profile">Profile</a>
+${'  '}${'  '}</nav>
+${'  '}</Drawer>
+${'  '}<main style="flex: 1; padding: 1rem;">
+${'  '}${'  '}<p>Main content area.</p>
+${'  '}</main>
 </div>`}>
 	<DrawerPersistentDemo client:load />
 </ComponentPreview>
@@ -98,11 +98,11 @@ Always-visible drawer that becomes part of the layout flow (no backdrop, no tran
 Automatically switch between persistent (desktop) and overlay (mobile) based on a media query.
 
 <ComponentPreview code={`<Drawer bind:open breakpoint="(min-width: 1024px)" width="220px">
-  <nav style="padding: 1rem;">
-    <a href="/">Home</a>
-    <a href="/about">About</a>
-    <a href="/contact">Contact</a>
-  </nav>
+${'  '}<nav style="padding: 1rem;">
+${'  '}${'  '}<a href="/">Home</a>
+${'  '}${'  '}<a href="/about">About</a>
+${'  '}${'  '}<a href="/contact">Contact</a>
+${'  '}</nav>
 </Drawer>`}>
 	<DrawerResponsiveDemo client:load />
 </ComponentPreview>
@@ -112,11 +112,11 @@ Automatically switch between persistent (desktop) and overlay (mobile) based on 
 Slide drawers from the top or bottom edge. Use `height` to set the panel size.
 
 <ComponentPreview code={`<Drawer bind:open={topOpen} top height="200px">
-  <p style="padding: 1rem;">Top drawer content.</p>
+${'  '}<p style="padding: 1rem;">Top drawer content.</p>
 </Drawer>
 
 <Drawer bind:open={bottomOpen} bottom height="200px">
-  <p style="padding: 1rem;">Bottom drawer content.</p>
+${'  '}<p style="padding: 1rem;">Bottom drawer content.</p>
 </Drawer>`}>
 	<DrawerTopBottomDemo client:load />
 </ComponentPreview>

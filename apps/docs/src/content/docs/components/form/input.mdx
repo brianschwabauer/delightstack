@@ -72,19 +72,19 @@ The `type` prop supports 13 input types:
 ### Textarea
 
 <ComponentPreview code={`<script>
-  import { Input } from '@delightstack/components';
+${'  '}import { Input } from '@delightstack/components';
 
-  let bio = $state('');
+${'  '}let bio = $state('');
 </script>
 
 <Input
-  type="textarea"
-  label="Bio"
-  bind:value={bio}
-  rows={4}
-  autoResize
-  maxlength={500}
-  showCounter
+${'  '}type="textarea"
+${'  '}label="Bio"
+${'  '}bind:value={bio}
+${'  '}rows={4}
+${'  '}autoResize
+${'  '}maxlength={500}
+${'  '}showCounter
 />`}>
 	<InputTextareaDemo client:load />
 </ComponentPreview>
@@ -92,11 +92,11 @@ The `type` prop supports 13 input types:
 ### Password with Strength Indicator
 
 <ComponentPreview code={`<Input
-  type="password"
-  label="Password"
-  bind:value={password}
-  showToggle
-  strengthIndicator
+${'  '}type="password"
+${'  '}label="Password"
+${'  '}bind:value={password}
+${'  '}showToggle
+${'  '}strengthIndicator
 />`}>
 	<InputPasswordDemo client:load />
 </ComponentPreview>
@@ -116,15 +116,15 @@ Use `mask` to auto-format user input. `#` = digit, `A` = letter, `*` = any chara
 Provide `options` for dropdown suggestions. Use `onfilter` for async loading.
 
 <ComponentPreview code={`<script>
-  import { Input } from '@delightstack/components';
+${'  '}import { Input } from '@delightstack/components';
 
-  const cities = [
-    { value: 'nyc', label: 'New York' },
-    { value: 'la', label: 'Los Angeles' },
-    { value: 'chi', label: 'Chicago' },
-  ];
+${'  '}const cities = [
+${'  '}${'  '}{ value: 'nyc', label: 'New York' },
+${'  '}${'  '}{ value: 'la', label: 'Los Angeles' },
+${'  '}${'  '}{ value: 'chi', label: 'Chicago' },
+${'  '}];
 
-  let selectedCity = $state('');
+${'  '}let selectedCity = $state('');
 </script>
 
 <Input label="City" options={cities} bind:value={selectedCity} />`}>
@@ -149,9 +149,9 @@ Provide `options` for dropdown suggestions. Use `onfilter` for async loading.
 Enable `multiple` to collect an array of values as chips/tags.
 
 <ComponentPreview code={`<script>
-  import { Input } from '@delightstack/components';
+${'  '}import { Input } from '@delightstack/components';
 
-  let tags = $state<string[]>([]);
+${'  '}let tags = $state<string[]>([]);
 </script>
 
 <Input label="Tags" multiple bind:value={tags} placeholder="Add tags..." />`}>
@@ -187,10 +187,10 @@ Enable `multiple` to collect an array of values as chips/tags.
 ### Error and Helper Text
 
 <ComponentPreview code={`<Input
-  label="Email"
-  type="email"
-  error="Please enter a valid email address"
-  helper="We'll never share your email"
+${'  '}label="Email"
+${'  '}type="email"
+${'  '}error="Please enter a valid email address"
+${'  '}helper="We'll never share your email"
 />`}>
 	<Input client:load label="Email" type="email" error="Please enter a valid email address" helper="We'll never share your email" />
 </ComponentPreview>

@@ -20,20 +20,20 @@ import { Expand } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Expand } from '@delightstack/components';
+${'  '}import { Expand } from '@delightstack/components';
 
-  let showDetails = $state(false);
+${'  '}let showDetails = $state(false);
 </script>
 
 <button onclick={() => showDetails = !showDetails}>
-  {showDetails ? 'Hide' : 'Show'} Details
+${'  '}{showDetails ? 'Hide' : 'Show'} Details
 </button>
 
 <Expand bind:show={showDetails}>
-  <div>
-    <p>Additional information that can be expanded and collapsed smoothly.</p>
-    <p>The height animates from 0 to auto without any JavaScript measurement.</p>
-  </div>
+${'  '}<div>
+${'  '}${'  '}<p>Additional information that can be expanded and collapsed smoothly.</p>
+${'  '}${'  '}<p>The height animates from 0 to auto without any JavaScript measurement.</p>
+${'  '}</div>
 </Expand>`}>
   <ExpandBasicDemo client:load />
 </ComponentPreview>
@@ -43,19 +43,19 @@ import { Expand } from '@delightstack/components';
 ### Toggle with a Button
 
 <ComponentPreview code={`<script>
-  import { Expand, Button } from '@delightstack/components';
+${'  '}import { Expand, Button } from '@delightstack/components';
 
-  let visible = $state(false);
+${'  '}let visible = $state(false);
 </script>
 
 <Button onclick={() => visible = !visible}>
-  {visible ? 'Collapse' : 'Expand'}
+${'  '}{visible ? 'Collapse' : 'Expand'}
 </Button>
 
 <Expand bind:show={visible}>
-  <div style="padding: 1rem;">
-    <p>This content slides in and out smoothly.</p>
-  </div>
+${'  '}<div style="padding: 1rem;">
+${'  '}${'  '}<p>This content slides in and out smoothly.</p>
+${'  '}</div>
 </Expand>`}>
   <ExpandButtonDemo client:load />
 </ComponentPreview>
@@ -63,20 +63,20 @@ import { Expand } from '@delightstack/components';
 ### Conditional Sections
 
 <ComponentPreview code={`<script>
-  import { Expand } from '@delightstack/components';
+${'  '}import { Expand } from '@delightstack/components';
 
-  let showAdvanced = $state(false);
+${'  '}let showAdvanced = $state(false);
 </script>
 
 <label>
-  <input type="checkbox" bind:checked={showAdvanced} />
-  Show advanced options
+${'  '}<input type="checkbox" bind:checked={showAdvanced} />
+${'  '}Show advanced options
 </label>
 
 <Expand show={showAdvanced}>
-  <div style="padding: 1rem 0;">
-    <p>Advanced configuration fields go here.</p>
-  </div>
+${'  '}<div style="padding: 1rem 0;">
+${'  '}${'  '}<p>Advanced configuration fields go here.</p>
+${'  '}</div>
 </Expand>`}>
   <ExpandConditionalDemo client:load />
 </ComponentPreview>
@@ -86,26 +86,26 @@ import { Expand } from '@delightstack/components';
 The Expand component is used internally by the Accordion component for its expand/collapse behavior.
 
 <ComponentPreview code={`<script>
-  import { Expand } from '@delightstack/components';
+${'  '}import { Expand } from '@delightstack/components';
 
-  const sections = [
-    { id: 'about', title: 'About', content: 'We are a team dedicated to building great developer tools.' },
-    { id: 'features', title: 'Features', content: 'Smooth animations, accessible by default, and easy to customize.' },
-    { id: 'pricing', title: 'Pricing', content: 'Free for open-source projects. Contact us for enterprise plans.' },
-  ];
+${'  '}const sections = [
+${'  '}${'  '}{ id: 'about', title: 'About', content: 'We are a team dedicated to building great developer tools.' },
+${'  '}${'  '}{ id: 'features', title: 'Features', content: 'Smooth animations, accessible by default, and easy to customize.' },
+${'  '}${'  '}{ id: 'pricing', title: 'Pricing', content: 'Free for open-source projects. Contact us for enterprise plans.' },
+${'  '}];
 
-  let active = $state('about');
+${'  '}let active = $state('about');
 </script>
 
 {#each sections as section}
-  <div class="accordion-item">
-    <button onclick={() => active = active === section.id ? '' : section.id}>
-      {section.title}
-    </button>
-    <Expand show={active === section.id}>
-      <div>{section.content}</div>
-    </Expand>
-  </div>
+${'  '}<div class="accordion-item">
+${'  '}${'  '}<button onclick={() => active = active === section.id ? '' : section.id}>
+${'  '}${'  '}${'  '}{section.title}
+${'  '}${'  '}</button>
+${'  '}${'  '}<Expand show={active === section.id}>
+${'  '}${'  '}${'  '}<div>{section.content}</div>
+${'  '}${'  '}</Expand>
+${'  '}</div>
 {/each}`}>
   <ExpandAccordionDemo client:load />
 </ComponentPreview>
@@ -115,9 +115,9 @@ The Expand component is used internally by the Accordion component for its expan
 A simple example showing the Expand container in its open state.
 
 <ComponentPreview code={`<Expand show={true}>
-  <div style="padding: 1rem;">
-    This content is visible because show is true.
-  </div>
+${'  '}<div style="padding: 1rem;">
+${'  '}${'  '}This content is visible because show is true.
+${'  '}</div>
 </Expand>`}>
 	<Expand client:load show={true}>
 		<div style="padding: 1rem;">
@@ -129,19 +129,19 @@ A simple example showing the Expand container in its open state.
 ### With Custom Inline Style
 
 <ComponentPreview code={`<script>
-  import { Expand } from '@delightstack/components';
+${'  '}import { Expand } from '@delightstack/components';
 
-  let visible = $state(false);
+${'  '}let visible = $state(false);
 </script>
 
 <button onclick={() => visible = !visible}>
-  {visible ? 'Hide' : 'Show'} Styled Content
+${'  '}{visible ? 'Hide' : 'Show'} Styled Content
 </button>
 
 <Expand show={visible} style="border-top: 2px solid #6366f1; margin-top: 0.75rem;">
-  <div style="padding: 1rem; background: #f5f3ff; border-radius: 0 0 8px 8px;">
-    <p>This expand container has a custom inline style with an accent border and tinted background.</p>
-  </div>
+${'  '}<div style="padding: 1rem; background: #f5f3ff; border-radius: 0 0 8px 8px;">
+${'  '}${'  '}<p>This expand container has a custom inline style with an accent border and tinted background.</p>
+${'  '}</div>
 </Expand>`}>
   <ExpandCustomStyleDemo client:load />
 </ComponentPreview>

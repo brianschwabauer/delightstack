@@ -32,9 +32,9 @@ import { List, ListItem } from '@delightstack/components';
 ListItems can render as anchor elements when `href` is provided.
 
 <ComponentPreview code={`<List>
-  <ListItem href="/profile">Profile</ListItem>
-  <ListItem href="/settings">Settings</ListItem>
-  <ListItem onclick={handleLogout}>Log Out</ListItem>
+${'  '}<ListItem href="/profile">Profile</ListItem>
+${'  '}<ListItem href="/settings">Settings</ListItem>
+${'  '}<ListItem onclick={handleLogout}>Log Out</ListItem>
 </List>`}>
   <ListItemNavDemo client:load />
 </ComponentPreview>
@@ -44,11 +44,11 @@ ListItems can render as anchor elements when `href` is provided.
 When `onclick` returns a Promise, a loading spinner is shown until it resolves.
 
 <ComponentPreview code={`<List>
-  <ListItem onclick={async () => {
-    await api.saveItem();
-  }}>
-    Save Item
-  </ListItem>
+${'  '}<ListItem onclick={async () => {
+${'  '}${'  '}await api.saveItem();
+${'  '}}}>
+${'  '}${'  '}Save Item
+${'  '}</ListItem>
 </List>`}>
   <ListItemAsyncDemo client:load />
 </ComponentPreview>
@@ -58,18 +58,18 @@ When `onclick` returns a Promise, a loading spinner is shown until it resolves.
 Use inline SVG or icons as leading/trailing content within list items.
 
 <ComponentPreview code={`<List>
-  <ListItem href="/profile">
-    <UserIcon style="margin-right: 0.75rem;" />
-    Profile
-    <span style="flex: 1;" />
-    <ChevronIcon />
-  </ListItem>
-  <ListItem href="/settings">
-    <SettingsIcon style="margin-right: 0.75rem;" />
-    Settings
-    <span style="flex: 1;" />
-    <ChevronIcon />
-  </ListItem>
+${'  '}<ListItem href="/profile">
+${'  '}${'  '}<UserIcon style="margin-right: 0.75rem;" />
+${'  '}${'  '}Profile
+${'  '}${'  '}<span style="flex: 1;" />
+${'  '}${'  '}<ChevronIcon />
+${'  '}</ListItem>
+${'  '}<ListItem href="/settings">
+${'  '}${'  '}<SettingsIcon style="margin-right: 0.75rem;" />
+${'  '}${'  '}Settings
+${'  '}${'  '}<span style="flex: 1;" />
+${'  '}${'  '}<ChevronIcon />
+${'  '}</ListItem>
 </List>`}>
   <ListItemSlotsDemo client:load />
 </ComponentPreview>
@@ -79,16 +79,16 @@ Use inline SVG or icons as leading/trailing content within list items.
 Provide a `menu` snippet to show a more-options button with a dropdown.
 
 <ComponentPreview code={`<List>
-  <ListItem>
-    Document A
-    {#snippet menu()}
-      <List>
-        <ListItem onclick={() => edit()}>Edit</ListItem>
-        <ListItem onclick={() => duplicate()}>Duplicate</ListItem>
-        <ListItem onclick={() => remove()}>Delete</ListItem>
-      </List>
-    {/snippet}
-  </ListItem>
+${'  '}<ListItem>
+${'  '}${'  '}Document A
+${'  '}${'  '}{#snippet menu()}
+${'  '}${'  '}${'  '}<List>
+${'  '}${'  '}${'  '}${'  '}<ListItem onclick={() => edit()}>Edit</ListItem>
+${'  '}${'  '}${'  '}${'  '}<ListItem onclick={() => duplicate()}>Duplicate</ListItem>
+${'  '}${'  '}${'  '}${'  '}<ListItem onclick={() => remove()}>Delete</ListItem>
+${'  '}${'  '}${'  '}</List>
+${'  '}${'  '}{/snippet}
+${'  '}</ListItem>
 </List>`}>
   <ListItemSubmenuDemo client:load />
 </ComponentPreview>
@@ -98,8 +98,8 @@ Provide a `menu` snippet to show a more-options button with a dropdown.
 Force a selected/active appearance on an item.
 
 <ComponentPreview code={`<List type="text">
-  <ListItem active>Currently Selected</ListItem>
-  <ListItem>Another Item</ListItem>
+${'  '}<ListItem active>Currently Selected</ListItem>
+${'  '}<ListItem>Another Item</ListItem>
 </List>`}>
   <ListItemActiveDemo client:load />
 </ComponentPreview>
@@ -107,8 +107,8 @@ Force a selected/active appearance on an item.
 ### Disabled Item
 
 <ComponentPreview code={`<List type="text">
-  <ListItem disabled>Unavailable Action</ListItem>
-  <ListItem>Available Action</ListItem>
+${'  '}<ListItem disabled>Unavailable Action</ListItem>
+${'  '}<ListItem>Available Action</ListItem>
 </List>`}>
   <ListItemDisabledDemo client:load />
 </ComponentPreview>

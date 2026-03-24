@@ -21,14 +21,14 @@ import { Comparison } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Comparison } from '@delightstack/components';
+${'  '}import { Comparison } from '@delightstack/components';
 </script>
 
 <Comparison
-  before="/images/photo-original.jpg"
-  after="/images/photo-edited.jpg"
-  label_before="Photo A"
-  label_after="Photo B"
+${'  '}before="/images/photo-original.jpg"
+${'  '}after="/images/photo-edited.jpg"
+${'  '}label_before="Photo A"
+${'  '}label_after="Photo B"
 />`}>
   <ComparisonDemo client:load />
 </ComponentPreview>
@@ -38,10 +38,10 @@ import { Comparison } from '@delightstack/components';
 ### With Alt Text
 
 <ComponentPreview code={`<Comparison
-  before="/images/photo-original.jpg"
-  after="/images/photo-edited.jpg"
-  before_alt="Original photo"
-  after_alt="Edited photo with filters applied"
+${'  '}before="/images/photo-original.jpg"
+${'  '}after="/images/photo-edited.jpg"
+${'  '}before_alt="Original photo"
+${'  '}after_alt="Edited photo with filters applied"
 />`}>
   <ComparisonAltTextDemo client:load />
 </ComponentPreview>
@@ -49,10 +49,10 @@ import { Comparison } from '@delightstack/components';
 ### Custom Labels
 
 <ComponentPreview code={`<Comparison
-  before="/images/design-v1.png"
-  after="/images/design-v2.png"
-  label_before="Version 1"
-  label_after="Version 2"
+${'  '}before="/images/design-v1.png"
+${'  '}after="/images/design-v2.png"
+${'  '}label_before="Version 1"
+${'  '}label_after="Version 2"
 />`}>
   <ComparisonCustomLabelsDemo client:load />
 </ComponentPreview>
@@ -60,9 +60,9 @@ import { Comparison } from '@delightstack/components';
 ### Without Labels
 
 <ComponentPreview code={`<Comparison
-  before="/images/before.jpg"
-  after="/images/after.jpg"
-  show_labels={false}
+${'  '}before="/images/before.jpg"
+${'  '}after="/images/after.jpg"
+${'  '}show_labels={false}
 />`}>
   <ComparisonNoLabelsDemo client:load />
 </ComponentPreview>
@@ -72,9 +72,9 @@ import { Comparison } from '@delightstack/components';
 The divider moves up and down instead of left and right.
 
 <ComponentPreview code={`<Comparison
-  before="/images/before.jpg"
-  after="/images/after.jpg"
-  vertical
+${'  '}before="/images/before.jpg"
+${'  '}after="/images/after.jpg"
+${'  '}vertical
 />`}>
   <ComparisonVerticalDemo client:load />
 </ComponentPreview>
@@ -84,13 +84,13 @@ The divider moves up and down instead of left and right.
 Bind to the `position` prop to control or read the slider position (0-100).
 
 <ComponentPreview code={`<script>
-  let position = $state(50);
+${'  '}let position = $state(50);
 </script>
 
 <Comparison
-  before="/images/before.jpg"
-  after="/images/after.jpg"
-  bind:position
+${'  '}before="/images/before.jpg"
+${'  '}after="/images/after.jpg"
+${'  '}bind:position
 />
 
 <p>Position: {position}%</p>`}>

@@ -13,13 +13,13 @@ import RangeVerticalDemo from '../../../../components/demos/RangeVerticalDemo.sv
 ## Import
 
 ```svelte
-import { Range } from '@delightstack/components';
+import {Range} from '@delightstack/components';
 ```
 
 ## Basic Usage
 
 <ComponentPreview code={`<Range value={50} label="Volume" />`}>
-	<Range client:load value={50} label="Volume" />
+  <Range client:load value={50} label="Volume" />
 </ComponentPreview>
 
 ## Examples
@@ -27,7 +27,7 @@ import { Range } from '@delightstack/components';
 ### Single Value with Display
 
 <ComponentPreview code={`<Range value={50} show_value label="Volume" />`}>
-	<Range client:load value={50} show_value label="Volume" />
+  <Range client:load value={50} show_value label="Volume" />
 </ComponentPreview>
 
 ### Range Selection (Two Thumbs)
@@ -35,78 +35,81 @@ import { Range } from '@delightstack/components';
 Set `range` to enable two thumbs. The value becomes a `[number, number]` tuple.
 
 <ComponentPreview code={`<script>
-  import { Range } from '@delightstack/components';
+${'  '}import { Range } from '@delightstack/components';
 
-  let priceRange = $state([100, 500]);
+${'  '}let priceRange = $state([100, 500]);
 </script>
 
 <Range
-  range
-  bind:value={priceRange}
-  min={0}
-  max={1000}
-  step={50}
-  format_value={(v) => \`$\${v}\`}
-  show_value
-  label="Price range"
+${'  '}range
+${'  '}bind:value={priceRange}
+${'  '}min={0}
+${'  '}max={1000}
+${'  '}step={50}
+${'  '}format_value={(v) => \`$\${v}\`}
+${'  '}show_value
+${'  '}label="Price range"
 />`}>
-	<RangeDoubleDemo client:load />
+  <RangeDoubleDemo client:load />
 </ComponentPreview>
 
 ### With Tick Marks
 
-<ComponentPreview code={`<Range value={3} min={1} max={5} step={1} show_ticks label="Quality" />`}>
-	<Range client:load value={3} min={1} max={5} step={1} show_ticks label="Quality" />
+<ComponentPreview
+  code={`<Range value={3} min={1} max={5} step={1} show_ticks label="Quality" />`}>
+  <Range client:load value={3} min={1} max={5} step={1} show_ticks label="Quality" />
 </ComponentPreview>
 
 ### Custom Tick Labels
 
 Provide an array of labels that align with each tick position.
 
-<ComponentPreview code={`<Range
-  bind:value={difficulty}
-  min={0}
-  max={100}
-  step={25}
-  show_ticks
-  tick_labels={['Low', 'Medium', 'High', 'Very High', 'Max']}
-  label="Difficulty"
+<ComponentPreview
+  code={`<Range
+${'  '}bind:value={difficulty}
+${'  '}min={0}
+${'  '}max={100}
+${'  '}step={25}
+${'  '}show_ticks
+${'  '}tick_labels={['Low', 'Medium', 'High', 'Very High', 'Max']}
+${'  '}label="Difficulty"
 />`}>
-	<RangeTickLabelsDemo client:load />
+  <RangeTickLabelsDemo client:load />
 </ComponentPreview>
 
 ### Value Formatting
 
 <ComponentPreview code={`<Range
-  bind:value={price}
-  min={0}
-  max={1000}
-  show_value
-  format_value={(v) => \`$\${v}\`}
-  label="Budget"
+${'  '}bind:value={price}
+${'  '}min={0}
+${'  '}max={1000}
+${'  '}show_value
+${'  '}format_value={(v) => \`$\${v}\`}
+${'  '}label="Budget"
 />
 
 <Range
-  bind:value={opacity}
-  min={0}
-  max={100}
-  show_value
-  format_value={(v) => \`\${v}%\`}
-  label="Opacity"
+${'  '}bind:value={opacity}
+${'  '}min={0}
+${'  '}max={100}
+${'  '}show_value
+${'  '}format_value={(v) => \`\${v}%\`}
+${'  '}label="Opacity"
 />`}>
-	<RangeFormatDemo client:load />
+  <RangeFormatDemo client:load />
 </ComponentPreview>
 
 ### Sizes
 
-<ComponentPreview code={`<Range size="0" value={25} label="Small" />
+<ComponentPreview
+  code={`<Range size="0" value={25} label="Small" />
 <Range size="1" value={50} label="Default" />
 <Range size="2" value={75} label="Medium" />
 <Range size="3" value={100} label="Large" />`}>
-	<Range client:load size="0" value={25} label="Small" />
-	<Range client:load size="1" value={50} label="Default" />
-	<Range client:load size="2" value={75} label="Medium" />
-	<Range client:load size="3" value={100} label="Large" />
+  <Range client:load size="0" value={25} label="Small" />
+  <Range client:load size="1" value={50} label="Default" />
+  <Range client:load size="2" value={75} label="Medium" />
+  <Range client:load size="3" value={100} label="Large" />
 </ComponentPreview>
 
 ### Vertical
@@ -114,51 +117,51 @@ Provide an array of labels that align with each tick position.
 Set `vertical` to render the slider vertically. Height defaults to `200px` and can be customized with the `--range-height` CSS variable.
 
 <ComponentPreview code={`<script>
-  import { Range } from '@delightstack/components';
+${'  '}import { Range } from '@delightstack/components';
 
-  let volume = $state(60);
-  let bass = $state(40);
-  let treble = $state(75);
+${'  '}let volume = $state(60);
+${'  '}let bass = $state(40);
+${'  '}let treble = $state(75);
 </script>
 
 <div style="display: flex; gap: 3rem; align-items: flex-end;">
-  <Range vertical value={volume} label="Volume" show_value format_value={(v) => \`\${v}%\`} />
-  <Range vertical value={bass} min={0} max={100} step={10} show_ticks label="Bass" />
-  <Range vertical value={treble} label="Treble" />
+${'  '}<Range vertical value={volume} label="Volume" show_value format_value={(v) => \`\${v}%\`} />
+${'  '}<Range vertical value={bass} min={0} max={100} step={10} show_ticks label="Bass" />
+${'  '}<Range vertical value={treble} label="Treble" />
 </div>`}>
-	<RangeVerticalDemo client:load />
+  <RangeVerticalDemo client:load />
 </ComponentPreview>
 
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `value` | `number \| [number, number]` | `0` | Current value, bindable. Tuple for range mode |
-| `min` | `number` | `0` | Minimum value |
-| `max` | `number` | `100` | Maximum value |
-| `step` | `number` | `1` | Step increment |
-| `range` | `boolean` | `false` | Enable two-thumb range selection |
-| `disabled` | `boolean` | `false` | Disable slider |
-| `vertical` | `boolean` | `false` | Display slider vertically |
-| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Slider size |
-| `show_value` | `boolean` | `false` | Show value tooltip above thumb |
-| `show_ticks` | `boolean` | `false` | Show step tick marks on track |
-| `tick_labels` | `string[]` | - | Custom labels at tick positions |
-| `format_value` | `(n: number) => string` | - | Value formatter for display |
-| `label` | `string` | - | Accessible label text |
-| `tooltip` | `string` | - | Tooltip on the overall component |
-| `dense` | `boolean` | `false` | Tighter vertical spacing |
-| `comfortable` | `boolean` | `false` | More vertical spacing |
-| `id` | `string` | auto | Element ID |
-| `name` | `string` | - | Form field name |
-| `class` | `string` | `''` | Additional CSS classes |
+| Prop           | Type                         | Default | Description                                   |
+| -------------- | ---------------------------- | ------- | --------------------------------------------- |
+| `value`        | `number \| [number, number]` | `0`     | Current value, bindable. Tuple for range mode |
+| `min`          | `number`                     | `0`     | Minimum value                                 |
+| `max`          | `number`                     | `100`   | Maximum value                                 |
+| `step`         | `number`                     | `1`     | Step increment                                |
+| `range`        | `boolean`                    | `false` | Enable two-thumb range selection              |
+| `disabled`     | `boolean`                    | `false` | Disable slider                                |
+| `vertical`     | `boolean`                    | `false` | Display slider vertically                     |
+| `size`         | `'0' \| '1' \| '2' \| '3'`   | `'1'`   | Slider size                                   |
+| `show_value`   | `boolean`                    | `false` | Show value tooltip above thumb                |
+| `show_ticks`   | `boolean`                    | `false` | Show step tick marks on track                 |
+| `tick_labels`  | `string[]`                   | -       | Custom labels at tick positions               |
+| `format_value` | `(n: number) => string`      | -       | Value formatter for display                   |
+| `label`        | `string`                     | -       | Accessible label text                         |
+| `tooltip`      | `string`                     | -       | Tooltip on the overall component              |
+| `dense`        | `boolean`                    | `false` | Tighter vertical spacing                      |
+| `comfortable`  | `boolean`                    | `false` | More vertical spacing                         |
+| `id`           | `string`                     | auto    | Element ID                                    |
+| `name`         | `string`                     | -       | Form field name                               |
+| `class`        | `string`                     | `''`    | Additional CSS classes                        |
 
 ## Events
 
-| Event | Detail | Description |
-|-------|--------|-------------|
-| `onchange` | `{ value: number \| [number, number] }` | Value changed (on release) |
-| `oninput` | `{ value: number \| [number, number] }` | Value changing (during drag) |
+| Event      | Detail                                  | Description                  |
+| ---------- | --------------------------------------- | ---------------------------- |
+| `onchange` | `{ value: number \| [number, number] }` | Value changed (on release)   |
+| `oninput`  | `{ value: number \| [number, number] }` | Value changing (during drag) |
 
 ## Accessibility
 

@@ -26,25 +26,25 @@ import type { TabsContext } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Tabs, Tab, TabContent } from '@delightstack/components';
+${'  '}import { Tabs, Tab, TabContent } from '@delightstack/components';
 
-  let activeTab = $state('overview');
+${'  '}let activeTab = $state('overview');
 </script>
 
 <Tabs bind:value={activeTab}>
-  <Tab value="overview" label="Overview" />
-  <Tab value="features" label="Features" />
-  <Tab value="pricing" label="Pricing" />
+${'  '}<Tab value="overview" label="Overview" />
+${'  '}<Tab value="features" label="Features" />
+${'  '}<Tab value="pricing" label="Pricing" />
 </Tabs>
 
 <TabContent value="overview">
-  <p>Overview content goes here.</p>
+${'  '}<p>Overview content goes here.</p>
 </TabContent>
 <TabContent value="features">
-  <p>Features content goes here.</p>
+${'  '}<p>Features content goes here.</p>
 </TabContent>
 <TabContent value="pricing">
-  <p>Pricing content goes here.</p>
+${'  '}<p>Pricing content goes here.</p>
 </TabContent>`}>
 	<TabsDemo client:load />
 </ComponentPreview>
@@ -56,9 +56,9 @@ import type { TabsContext } from '@delightstack/components';
 Rounded pill-shaped tab buttons.
 
 <ComponentPreview code={`<Tabs bind:value={activeTab} pills>
-  <Tab value="all" label="All" />
-  <Tab value="active" label="Active" badge="3" />
-  <Tab value="archived" label="Archived" />
+${'  '}<Tab value="all" label="All" />
+${'  '}<Tab value="active" label="Active" badge="3" />
+${'  '}<Tab value="archived" label="Archived" />
 </Tabs>`}>
 	<TabsPillDemo client:load />
 </ComponentPreview>
@@ -68,9 +68,9 @@ Rounded pill-shaped tab buttons.
 Tabs enclosed in a bordered container.
 
 <ComponentPreview code={`<Tabs bind:value={activeTab} boxed>
-  <Tab value="tab1" label="Tab 1" />
-  <Tab value="tab2" label="Tab 2" />
-  <Tab value="tab3" label="Tab 3" />
+${'  '}<Tab value="tab1" label="Tab 1" />
+${'  '}<Tab value="tab2" label="Tab 2" />
+${'  '}<Tab value="tab3" label="Tab 3" />
 </Tabs>`}>
 	<TabsBoxedDemo client:load />
 </ComponentPreview>
@@ -80,9 +80,9 @@ Tabs enclosed in a bordered container.
 A segmented-control style, useful for toggling between a small set of options.
 
 <ComponentPreview code={`<Tabs bind:value={activeTab} segment>
-  <Tab value="day" label="Day" />
-  <Tab value="week" label="Week" />
-  <Tab value="month" label="Month" />
+${'  '}<Tab value="day" label="Day" />
+${'  '}<Tab value="week" label="Week" />
+${'  '}<Tab value="month" label="Month" />
 </Tabs>`}>
 	<TabsSegmentedDemo client:load />
 </ComponentPreview>
@@ -92,16 +92,16 @@ A segmented-control style, useful for toggling between a small set of options.
 Stack tabs vertically for sidebar-style navigation.
 
 <ComponentPreview code={`<div style="display: flex; gap: 1rem;">
-  <Tabs bind:value={activeTab} orientation="vertical">
-    <Tab value="general" label="General" />
-    <Tab value="security" label="Security" />
-    <Tab value="notifications" label="Notifications" />
-  </Tabs>
-  <div style="flex: 1;">
-    <TabContent value="general"><p>General settings.</p></TabContent>
-    <TabContent value="security"><p>Security settings.</p></TabContent>
-    <TabContent value="notifications"><p>Notification settings.</p></TabContent>
-  </div>
+${'  '}<Tabs bind:value={activeTab} orientation="vertical">
+${'  '}${'  '}<Tab value="general" label="General" />
+${'  '}${'  '}<Tab value="security" label="Security" />
+${'  '}${'  '}<Tab value="notifications" label="Notifications" />
+${'  '}</Tabs>
+${'  '}<div style="flex: 1;">
+${'  '}${'  '}<TabContent value="general"><p>General settings.</p></TabContent>
+${'  '}${'  '}<TabContent value="security"><p>Security settings.</p></TabContent>
+${'  '}${'  '}<TabContent value="notifications"><p>Notification settings.</p></TabContent>
+${'  '}</div>
 </div>`}>
 	<TabsVerticalDemo client:load />
 </ComponentPreview>
@@ -111,9 +111,9 @@ Stack tabs vertically for sidebar-style navigation.
 Display badges next to tab labels.
 
 <ComponentPreview code={`<Tabs bind:value={activeTab}>
-  <Tab value="inbox" label="Inbox" badge={12} />
-  <Tab value="sent" label="Sent" />
-  <Tab value="drafts" label="Drafts" badge="2" />
+${'  '}<Tab value="inbox" label="Inbox" badge={12} />
+${'  '}<Tab value="sent" label="Sent" />
+${'  '}<Tab value="drafts" label="Drafts" badge="2" />
 </Tabs>`}>
 	<TabsBadgesDemo client:load />
 </ComponentPreview>
@@ -123,9 +123,9 @@ Display badges next to tab labels.
 Stretch tabs to fill the available width evenly.
 
 <ComponentPreview code={`<Tabs bind:value={activeTab} fullWidth>
-  <Tab value="a" label="First" />
-  <Tab value="b" label="Second" />
-  <Tab value="c" label="Third" />
+${'  '}<Tab value="a" label="First" />
+${'  '}<Tab value="b" label="Second" />
+${'  '}<Tab value="c" label="Third" />
 </Tabs>`}>
 	<TabsFullWidthDemo client:load />
 </ComponentPreview>
@@ -136,14 +136,14 @@ Disable all tabs or individual tabs.
 
 <ComponentPreview code={`<!-- All tabs disabled -->
 <Tabs bind:value={activeTab} disabled>
-  <Tab value="a" label="Tab A" />
-  <Tab value="b" label="Tab B" />
+${'  '}<Tab value="a" label="Tab A" />
+${'  '}<Tab value="b" label="Tab B" />
 </Tabs>
 
 <!-- Individual tab disabled -->
 <Tabs bind:value={activeTab}>
-  <Tab value="a" label="Available" />
-  <Tab value="b" label="Coming Soon" disabled />
+${'  '}<Tab value="a" label="Available" />
+${'  '}<Tab value="b" label="Coming Soon" disabled />
 </Tabs>`}>
 	<TabsDisabledDemo client:load />
 </ComponentPreview>

@@ -19,7 +19,7 @@ import { Button } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<Button onclick={() => console.log('clicked')}>
-  Click Me
+${'  '}Click Me
 </Button>`}>
   <Button client:load>Click Me</Button>
 </ComponentPreview>
@@ -114,11 +114,11 @@ Set `icon` for circular icon-only buttons. Combine with any variant or badge.
 When `onclick` returns a `Promise`, the button automatically shows a loading spinner until the promise settles. On success, a brief checkmark flash confirms the action.
 
 <ComponentPreview code={`<script>
-  import { Button } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 
-  async function handleSave(e) {
-    await api.save(data);
-  }
+${'  '}async function handleSave(e) {
+${'  '}${'  '}await api.save(data);
+${'  '}}
 </script>
 
 <Button onclick={handleSave}>Save</Button>`}>
@@ -140,7 +140,7 @@ Display a notification indicator. Pass `true` for a dot or a string for a count.
 When `href` is set, the button renders as an `<a>` element.
 
 <ComponentPreview code={`<Button href="https://example.com" target="_blank">
-  Visit Site
+${'  '}Visit Site
 </Button>`}>
   <Button client:load href="https://example.com" target="_blank">Visit Site</Button>
 </ComponentPreview>
@@ -150,11 +150,11 @@ When `href` is set, the button renders as an `<a>` element.
 Pass a `menu` snippet to render a popover dropdown when the button is clicked.
 
 <ComponentPreview code={`<Button showChevron>
-  Options
-  {#snippet menu({ close })}
-    <button onclick={() => { edit(); close(); }}>Edit</button>
-    <button onclick={() => { remove(); close(); }}>Remove</button>
-  {/snippet}
+${'  '}Options
+${'  '}{#snippet menu({ close })}
+${'  '}${'  '}<button onclick={() => { edit(); close(); }}>Edit</button>
+${'  '}${'  '}<button onclick={() => { remove(); close(); }}>Remove</button>
+${'  '}{/snippet}
 </Button>`}>
 	<ButtonDropdownMenuDemo client:load />
 </ComponentPreview>
@@ -164,11 +164,11 @@ Pass a `menu` snippet to render a popover dropdown when the button is clicked.
 Use the `dropdown` snippet for a secondary dropdown trigger alongside the main button action.
 
 <ComponentPreview code={`<Button onclick={primarySave}>
-  Save
-  {#snippet dropdown({ close })}
-    <button onclick={() => { saveAs(); close(); }}>Save As...</button>
-    <button onclick={() => { saveCopy(); close(); }}>Save Copy</button>
-  {/snippet}
+${'  '}Save
+${'  '}{#snippet dropdown({ close })}
+${'  '}${'  '}<button onclick={() => { saveAs(); close(); }}>Save As...</button>
+${'  '}${'  '}<button onclick={() => { saveCopy(); close(); }}>Save Copy</button>
+${'  '}{/snippet}
 </Button>`}>
 	<ButtonSplitDropdownDemo client:load />
 </ComponentPreview>

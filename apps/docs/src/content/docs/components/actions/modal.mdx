@@ -20,15 +20,15 @@ import { Modal } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Modal, Button } from '@delightstack/components';
-  let open = $state(false);
+${'  '}import { Modal, Button } from '@delightstack/components';
+${'  '}let open = $state(false);
 </script>
 
 <Button onclick={() => open = true}>Open Modal</Button>
 
 <Modal bind:open title="Example Modal">
-  <p>This is a modal dialog with some example content.
-  Click outside or press Escape to close.</p>
+${'  '}<p>This is a modal dialog with some example content.
+${'  '}Click outside or press Escape to close.</p>
 </Modal>`}>
 	<ModalBasicDemo client:load />
 </ComponentPreview>
@@ -38,12 +38,12 @@ import { Modal } from '@delightstack/components';
 ### With Footer Actions
 
 <ComponentPreview code={`<Modal bind:open title="Edit Profile">
-  <p>Update your profile information below.</p>
+${'  '}<p>Update your profile information below.</p>
 
-  {#snippet footer()}
-    <Button transparent onclick={() => open = false}>Cancel</Button>
-    <Button accent onclick={() => open = false}>Save Changes</Button>
-  {/snippet}
+${'  '}{#snippet footer()}
+${'  '}${'  '}<Button transparent onclick={() => open = false}>Cancel</Button>
+${'  '}${'  '}<Button accent onclick={() => open = false}>Save Changes</Button>
+${'  '}{/snippet}
 </Modal>`}>
 	<ModalFooterDemo client:load />
 </ComponentPreview>
@@ -53,14 +53,14 @@ import { Modal } from '@delightstack/components';
 Replace the entire header with a custom snippet.
 
 <ComponentPreview code={`<Modal bind:open>
-  {#snippet header()}
-    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-      <h2 style="margin: 0; font-size: 1.25rem;">Settings</h2>
-      <span style="font-size: 0.85rem; opacity: 0.7;">Configure your preferences</span>
-    </div>
-  {/snippet}
+${'  '}{#snippet header()}
+${'  '}${'  '}<div style="display: flex; flex-direction: column; gap: 0.25rem;">
+${'  '}${'  '}${'  '}<h2 style="margin: 0; font-size: 1.25rem;">Settings</h2>
+${'  '}${'  '}${'  '}<span style="font-size: 0.85rem; opacity: 0.7;">Configure your preferences</span>
+${'  '}${'  '}</div>
+${'  '}{/snippet}
 
-  <p>Settings content goes here.</p>
+${'  '}<p>Settings content goes here.</p>
 </Modal>`}>
 	<ModalCustomHeaderDemo client:load />
 </ComponentPreview>
@@ -70,17 +70,17 @@ Replace the entire header with a custom snippet.
 Add content before the title or after it (before the close button).
 
 <ComponentPreview code={`<Modal bind:open title="Document">
-  {#snippet headerStart()}
-    <span class="status-badge">Draft</span>
-  {/snippet}
+${'  '}{#snippet headerStart()}
+${'  '}${'  '}<span class="status-badge">Draft</span>
+${'  '}{/snippet}
 
-  {#snippet headerEnd()}
-    <Button transparent dense icon aria-label="Share">
-      <ShareIcon />
-    </Button>
-  {/snippet}
+${'  '}{#snippet headerEnd()}
+${'  '}${'  '}<Button transparent dense icon aria-label="Share">
+${'  '}${'  '}${'  '}<ShareIcon />
+${'  '}${'  '}</Button>
+${'  '}{/snippet}
 
-  <p>Document content...</p>
+${'  '}<p>Document content...</p>
 </Modal>`}>
 	<ModalHeaderSlotsDemo client:load />
 </ComponentPreview>
@@ -90,7 +90,7 @@ Add content before the title or after it (before the close button).
 Override the default sizing with explicit CSS values.
 
 <ComponentPreview code={`<Modal bind:open title="Wide Modal" width="800px" height="500px">
-  <p>This modal has a custom size of 800x500px.</p>
+${'  '}<p>This modal has a custom size of 800x500px.</p>
 </Modal>`}>
 	<ModalCustomSizeDemo client:load />
 </ComponentPreview>
@@ -100,11 +100,11 @@ Override the default sizing with explicit CSS values.
 Prevent closing via Escape key and backdrop click for required flows.
 
 <ComponentPreview code={`<Modal bind:open title="Required Step" closable={false}>
-  <p>You must complete this step before continuing.</p>
+${'  '}<p>You must complete this step before continuing.</p>
 
-  {#snippet footer()}
-    <Button accent onclick={() => open = false}>Done</Button>
-  {/snippet}
+${'  '}{#snippet footer()}
+${'  '}${'  '}<Button accent onclick={() => open = false}>Done</Button>
+${'  '}{/snippet}
 </Modal>`}>
 	<ModalNonClosableDemo client:load />
 </ComponentPreview>

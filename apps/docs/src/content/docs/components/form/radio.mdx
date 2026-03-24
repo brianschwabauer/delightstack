@@ -42,9 +42,9 @@ import type { RadioGroupContext } from '@delightstack/components';
 ### Vertical Group (Default)
 
 <ComponentPreview code={`<RadioGroup name="size" label="Size">
-  <Radio value="small" label="Small" />
-  <Radio value="medium" label="Medium" />
-  <Radio value="large" label="Large" />
+${'  '}<Radio value="small" label="Small" />
+${'  '}<Radio value="medium" label="Medium" />
+${'  '}<Radio value="large" label="Large" />
 </RadioGroup>`}>
 	<RadioGroup client:load name="size" label="Size">
 		<Radio client:load value="small" label="Small" />
@@ -56,9 +56,9 @@ import type { RadioGroupContext } from '@delightstack/components';
 ### Horizontal Layout
 
 <ComponentPreview code={`<RadioGroup horizontal name="preference" label="Preference">
-  <Radio value="yes" label="Yes" />
-  <Radio value="no" label="No" />
-  <Radio value="maybe" label="Maybe" />
+${'  '}<Radio value="yes" label="Yes" />
+${'  '}<Radio value="no" label="No" />
+${'  '}<Radio value="maybe" label="Maybe" />
 </RadioGroup>`}>
 	<RadioGroup client:load horizontal name="preference" label="Preference">
 		<Radio client:load value="yes" label="Yes" />
@@ -70,9 +70,9 @@ import type { RadioGroupContext } from '@delightstack/components';
 ### With Descriptions
 
 <ComponentPreview code={`<RadioGroup name="plan" label="Select a plan">
-  <Radio value="free" label="Free" description="Basic features, forever free" />
-  <Radio value="pro" label="Pro" description="Advanced features, $10/mo" />
-  <Radio value="enterprise" label="Enterprise" description="Custom pricing" />
+${'  '}<Radio value="free" label="Free" description="Basic features, forever free" />
+${'  '}<Radio value="pro" label="Pro" description="Advanced features, $10/mo" />
+${'  '}<Radio value="enterprise" label="Enterprise" description="Custom pricing" />
 </RadioGroup>`}>
 	<RadioGroup client:load name="plan" label="Select a plan">
 		<Radio client:load value="free" label="Free" description="Basic features, forever free" />
@@ -84,20 +84,20 @@ import type { RadioGroupContext } from '@delightstack/components';
 ### With Error
 
 <ComponentPreview code={`<script>
-  import { Radio, RadioGroup } from '@delightstack/components';
+${'  '}import { Radio, RadioGroup } from '@delightstack/components';
 
-  let agreement = $state('');
+${'  '}let agreement = $state('');
 </script>
 
 <RadioGroup
-  bind:value={agreement}
-  required
-  error={!agreement ? 'Please select an option' : ''}
-  name="agreement"
-  label="Agreement"
+${'  '}bind:value={agreement}
+${'  '}required
+${'  '}error={!agreement ? 'Please select an option' : ''}
+${'  '}name="agreement"
+${'  '}label="Agreement"
 >
-  <Radio value="agree" label="I agree" />
-  <Radio value="disagree" label="I disagree" />
+${'  '}<Radio value="agree" label="I agree" />
+${'  '}<Radio value="disagree" label="I disagree" />
 </RadioGroup>`}>
 	<RadioErrorDemo client:load />
 </ComponentPreview>
@@ -107,22 +107,22 @@ import type { RadioGroupContext } from '@delightstack/components';
 A Radio can be used without a RadioGroup by managing `checked` directly.
 
 <ComponentPreview code={`<script>
-  import { Radio } from '@delightstack/components';
+${'  '}import { Radio } from '@delightstack/components';
 
-  let selected = $state('option1');
+${'  '}let selected = $state('option1');
 </script>
 
 <Radio
-  value="option1"
-  checked={selected === 'option1'}
-  onchange={() => selected = 'option1'}
-  label="Option 1"
+${'  '}value="option1"
+${'  '}checked={selected === 'option1'}
+${'  '}onchange={() => selected = 'option1'}
+${'  '}label="Option 1"
 />
 <Radio
-  value="option2"
-  checked={selected === 'option2'}
-  onchange={() => selected = 'option2'}
-  label="Option 2"
+${'  '}value="option2"
+${'  '}checked={selected === 'option2'}
+${'  '}onchange={() => selected = 'option2'}
+${'  '}label="Option 2"
 />`}>
 	<RadioStandaloneDemo client:load />
 </ComponentPreview>
@@ -130,23 +130,23 @@ A Radio can be used without a RadioGroup by managing `checked` directly.
 ### Sizes
 
 <ComponentPreview code={`<RadioGroup bind:value={val0} name="size0" size="0" label="Small (size 0)">
-  <Radio value="a" label="Option A" />
-  <Radio value="b" label="Option B" />
+${'  '}<Radio value="a" label="Option A" />
+${'  '}<Radio value="b" label="Option B" />
 </RadioGroup>
 
 <RadioGroup bind:value={val1} name="size1" size="1" label="Default (size 1)">
-  <Radio value="a" label="Option A" />
-  <Radio value="b" label="Option B" />
+${'  '}<Radio value="a" label="Option A" />
+${'  '}<Radio value="b" label="Option B" />
 </RadioGroup>
 
 <RadioGroup bind:value={val2} name="size2" size="2" label="Medium (size 2)">
-  <Radio value="a" label="Option A" />
-  <Radio value="b" label="Option B" />
+${'  '}<Radio value="a" label="Option A" />
+${'  '}<Radio value="b" label="Option B" />
 </RadioGroup>
 
 <RadioGroup bind:value={val3} name="size3" size="3" label="Large (size 3)">
-  <Radio value="a" label="Option A" />
-  <Radio value="b" label="Option B" />
+${'  '}<Radio value="a" label="Option A" />
+${'  '}<Radio value="b" label="Option B" />
 </RadioGroup>`}>
 	<RadioSizesDemo client:load />
 </ComponentPreview>

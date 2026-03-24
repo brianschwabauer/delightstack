@@ -19,19 +19,19 @@ import { BottomSheet } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { BottomSheet, Button } from '@delightstack/components';
+${'  '}import { BottomSheet, Button } from '@delightstack/components';
 
-  let open = $state(false);
+${'  '}let open = $state(false);
 </script>
 
 <Button onclick={() => open = true}>Open Bottom Sheet</Button>
 
 <BottomSheet bind:open snapPoints={[0.4, 0.8]}>
-  <div style="padding: 1.5rem;">
-    <h3>Bottom Sheet</h3>
-    <p>Drag the handle to resize or dismiss.</p>
-    <Button outline onclick={() => open = false}>Close</Button>
-  </div>
+${'  '}<div style="padding: 1.5rem;">
+${'  '}${'  '}<h3>Bottom Sheet</h3>
+${'  '}${'  '}<p>Drag the handle to resize or dismiss.</p>
+${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
+${'  '}</div>
 </BottomSheet>`}>
 	<BottomSheetDemo client:load />
 </ComponentPreview>
@@ -43,25 +43,25 @@ import { BottomSheet } from '@delightstack/components';
 Define multiple snap heights as fractions of the viewport. The user can drag between them.
 
 <ComponentPreview code={`<script>
-  import { BottomSheet, Button } from '@delightstack/components';
+${'  '}import { BottomSheet, Button } from '@delightstack/components';
 
-  let open = $state(false);
-  let snap = $state(0);
+${'  '}let open = $state(false);
+${'  '}let snap = $state(0);
 </script>
 
 <Button onclick={() => open = true}>Open Multi-Snap Sheet</Button>
 
 <BottomSheet
-  bind:open
-  bind:snap
-  snapPoints={[0.3, 0.6, 1]}
-  defaultSnap={0}>
-  <div style="padding: 1.5rem;">
-    <h3>Drag Me!</h3>
-    <p>This sheet has three snap points at 30%, 60%, and 100%.</p>
-    <p>Current snap index: {snap}</p>
-    <Button outline onclick={() => open = false}>Close</Button>
-  </div>
+${'  '}bind:open
+${'  '}bind:snap
+${'  '}snapPoints={[0.3, 0.6, 1]}
+${'  '}defaultSnap={0}>
+${'  '}<div style="padding: 1.5rem;">
+${'  '}${'  '}<h3>Drag Me!</h3>
+${'  '}${'  '}<p>This sheet has three snap points at 30%, 60%, and 100%.</p>
+${'  '}${'  '}<p>Current snap index: {snap}</p>
+${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
+${'  '}</div>
 </BottomSheet>`}>
 	<BottomSheetSnapDemo client:load />
 </ComponentPreview>
@@ -71,24 +71,24 @@ Define multiple snap heights as fractions of the viewport. The user can drag bet
 Add a draggable header area above the scrollable content.
 
 <ComponentPreview code={`<script>
-  import { BottomSheet, Button } from '@delightstack/components';
+${'  '}import { BottomSheet, Button } from '@delightstack/components';
 
-  let open = $state(false);
+${'  '}let open = $state(false);
 </script>
 
 <Button onclick={() => open = true}>Open Sheet with Header</Button>
 
 <BottomSheet bind:open>
-  {#snippet header()}
-    <div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border);">
-      <h3 style="margin: 0;">Filters</h3>
-    </div>
-  {/snippet}
+${'  '}{#snippet header()}
+${'  '}${'  '}<div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border);">
+${'  '}${'  '}${'  '}<h3 style="margin: 0;">Filters</h3>
+${'  '}${'  '}</div>
+${'  '}{/snippet}
 
-  <div style="padding: 1rem;">
-    <p>Scrollable filter content here.</p>
-    <Button outline onclick={() => open = false}>Close</Button>
-  </div>
+${'  '}<div style="padding: 1rem;">
+${'  '}${'  '}<p>Scrollable filter content here.</p>
+${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
+${'  '}</div>
 </BottomSheet>`}>
 	<BottomSheetHeaderDemo client:load />
 </ComponentPreview>
@@ -98,19 +98,19 @@ Add a draggable header area above the scrollable content.
 Prevent the sheet from being dismissed by dragging down or tapping the backdrop.
 
 <ComponentPreview code={`<script>
-  import { BottomSheet, Button } from '@delightstack/components';
+${'  '}import { BottomSheet, Button } from '@delightstack/components';
 
-  let open = $state(false);
+${'  '}let open = $state(false);
 </script>
 
 <Button onclick={() => open = true}>Open Non-Dismissible Sheet</Button>
 
 <BottomSheet bind:open dismissible={false}>
-  <div style="padding: 1.5rem;">
-    <h3>Required Action</h3>
-    <p>You must complete this action. Dragging down or tapping the backdrop will not dismiss this sheet.</p>
-    <Button onclick={() => open = false}>Done</Button>
-  </div>
+${'  '}<div style="padding: 1.5rem;">
+${'  '}${'  '}<h3>Required Action</h3>
+${'  '}${'  '}<p>You must complete this action. Dragging down or tapping the backdrop will not dismiss this sheet.</p>
+${'  '}${'  '}<Button onclick={() => open = false}>Done</Button>
+${'  '}</div>
 </BottomSheet>`}>
 	<BottomSheetNonDismissibleDemo client:load />
 </ComponentPreview>
@@ -120,9 +120,9 @@ Prevent the sheet from being dismissed by dragging down or tapping the backdrop.
 Open the sheet without a backdrop overlay and without blocking body scroll.
 
 <ComponentPreview code={`<BottomSheet bind:open showBackdrop={false} blocking={false}>
-  <div style="padding: 1rem;">
-    <p>Non-blocking sheet content.</p>
-  </div>
+${'  '}<div style="padding: 1rem;">
+${'  '}${'  '}<p>Non-blocking sheet content.</p>
+${'  '}</div>
 </BottomSheet>`}>
 	<BottomSheetNoBackdropDemo client:load />
 </ComponentPreview>

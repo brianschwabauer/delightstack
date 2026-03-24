@@ -30,8 +30,8 @@ import type { ToastOptions } from '@delightstack/components';
 Place `<Toaster />` once in your root layout, then call `toast()` from anywhere.
 
 <ComponentPreview code={`<script>
-  import { Toaster, toast } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { Toaster, toast } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 </script>
 
 <Button onclick={() => toast.success('Changes saved successfully!')}>Success Toast</Button>
@@ -48,7 +48,7 @@ Place `<Toaster />` once in your root layout, then call `toast()` from anywhere.
 ### Variant Shortcuts
 
 <ComponentPreview code={`<script>
-  import { toast } from '@delightstack/components';
+${'  '}import { toast } from '@delightstack/components';
 </script>
 
 <button onclick={() => toast('A general notification')}>Default</button>
@@ -63,16 +63,16 @@ Place `<Toaster />` once in your root layout, then call `toast()` from anywhere.
 Toasts with an action automatically get 2 seconds of extra display time.
 
 <ComponentPreview code={`<script>
-  import { toast } from '@delightstack/components';
+${'  '}import { toast } from '@delightstack/components';
 
-  function handleDelete() {
-    toast('Item deleted', {
-      action: {
-        label: 'Undo',
-        onclick: () => toast.success('Item restored!'),
-      },
-    });
-  }
+${'  '}function handleDelete() {
+${'  '}${'  '}toast('Item deleted', {
+${'  '}${'  '}${'  '}action: {
+${'  '}${'  '}${'  '}${'  '}label: 'Undo',
+${'  '}${'  '}${'  '}${'  '}onclick: () => toast.success('Item restored!'),
+${'  '}${'  '}${'  '}},
+${'  '}${'  '}});
+${'  '}}
 </script>
 
 <button onclick={handleDelete}>Delete Item</button>`}>
@@ -84,15 +84,15 @@ Toasts with an action automatically get 2 seconds of extra display time.
 Track async operations with automatic loading, success, and error states.
 
 <ComponentPreview code={`<script>
-  import { toast } from '@delightstack/components';
+${'  '}import { toast } from '@delightstack/components';
 
-  async function handleUpload() {
-    toast.promise(uploadFile(), {
-      loading: 'Uploading...',
-      success: 'Upload complete!',
-      error: (err) => \`Upload failed: \${err.message}\`,
-    });
-  }
+${'  '}async function handleUpload() {
+${'  '}${'  '}toast.promise(uploadFile(), {
+${'  '}${'  '}${'  '}loading: 'Uploading...',
+${'  '}${'  '}${'  '}success: 'Upload complete!',
+${'  '}${'  '}${'  '}error: (err) => \`Upload failed: \${err.message}\`,
+${'  '}${'  '}});
+${'  '}}
 </script>
 
 <button onclick={handleUpload}>Upload</button>`}>
@@ -104,18 +104,18 @@ Track async operations with automatic loading, success, and error states.
 The success and error messages can be functions that receive the result or error.
 
 <ComponentPreview code={`<script>
-  import { toast } from '@delightstack/components';
+${'  '}import { toast } from '@delightstack/components';
 
-  function handleSave() {
-    const promise = new Promise((resolve) =>
-      setTimeout(() => resolve({ filename: 'report.pdf' }), 2000)
-    );
-    toast.promise(promise, {
-      loading: 'Saving...',
-      success: (result) => \`Saved \${result.filename}\`,
-      error: (err) => \`Failed: \${err.message}\`,
-    });
-  }
+${'  '}function handleSave() {
+${'  '}${'  '}const promise = new Promise((resolve) =>
+${'  '}${'  '}${'  '}setTimeout(() => resolve({ filename: 'report.pdf' }), 2000)
+${'  '}${'  '});
+${'  '}${'  '}toast.promise(promise, {
+${'  '}${'  '}${'  '}loading: 'Saving...',
+${'  '}${'  '}${'  '}success: (result) => \`Saved \${result.filename}\`,
+${'  '}${'  '}${'  '}error: (err) => \`Failed: \${err.message}\`,
+${'  '}${'  '}});
+${'  '}}
 </script>
 
 <button onclick={handleSave}>Save File</button>`}>
@@ -127,11 +127,11 @@ The success and error messages can be functions that receive the result or error
 Set `persistent: true` to prevent auto-dismiss. The toast stays until manually dismissed.
 
 <ComponentPreview code={`<script>
-  import { toast } from '@delightstack/components';
+${'  '}import { toast } from '@delightstack/components';
 </script>
 
 <button onclick={() => toast.warning('Session expiring soon', { persistent: true })}>
-  Show Persistent Warning
+${'  '}Show Persistent Warning
 </button>`}>
   <ToastPersistentDemo client:load />
 </ComponentPreview>
@@ -139,15 +139,15 @@ Set `persistent: true` to prevent auto-dismiss. The toast stays until manually d
 ### Custom Duration
 
 <ComponentPreview code={`<script>
-  import { toast } from '@delightstack/components';
+${'  '}import { toast } from '@delightstack/components';
 </script>
 
 <button onclick={() => toast('Quick notice', { duration: 2000 })}>
-  2 Second Toast
+${'  '}2 Second Toast
 </button>
 
 <button onclick={() => toast('Longer notice', { duration: 8000 })}>
-  8 Second Toast
+${'  '}8 Second Toast
 </button>`}>
   <ToastCustomDurationDemo client:load />
 </ComponentPreview>
@@ -155,12 +155,12 @@ Set `persistent: true` to prevent auto-dismiss. The toast stays until manually d
 ### Dismissing Toasts
 
 <ComponentPreview code={`<script>
-  import { toast } from '@delightstack/components';
+${'  '}import { toast } from '@delightstack/components';
 
-  function showAndDismiss() {
-    const id = toast('This will be dismissed in 2 seconds');
-    setTimeout(() => toast.dismiss(id), 2000);
-  }
+${'  '}function showAndDismiss() {
+${'  '}${'  '}const id = toast('This will be dismissed in 2 seconds');
+${'  '}${'  '}setTimeout(() => toast.dismiss(id), 2000);
+${'  '}}
 </script>
 
 <button onclick={showAndDismiss}>Show then Dismiss</button>

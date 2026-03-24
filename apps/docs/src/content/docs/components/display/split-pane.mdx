@@ -21,12 +21,12 @@ import { SplitPane } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<SplitPane>
-  {#snippet first()}
-    <div>Left Pane</div>
-  {/snippet}
-  {#snippet second()}
-    <div>Right Pane</div>
-  {/snippet}
+${'  '}{#snippet first()}
+${'  '}${'  '}<div>Left Pane</div>
+${'  '}{/snippet}
+${'  '}{#snippet second()}
+${'  '}${'  '}<div>Right Pane</div>
+${'  '}{/snippet}
 </SplitPane>`}>
   <SplitPaneDemo client:load />
 </ComponentPreview>
@@ -38,24 +38,24 @@ import { SplitPane } from '@delightstack/components';
 A horizontal split with constrained sidebar size and snap points.
 
 <ComponentPreview code={`<script>
-  import { SplitPane } from '@delightstack/components';
+${'  '}import { SplitPane } from '@delightstack/components';
 
-  let sidebarSize = $state(25);
+${'  '}let sidebarSize = $state(25);
 </script>
 
 <SplitPane
-  bind:size={sidebarSize}
-  minSize={15}
-  maxSize={40}
-  snap={[25, 33]}
-  collapsible
+${'  '}bind:size={sidebarSize}
+${'  '}minSize={15}
+${'  '}maxSize={40}
+${'  '}snap={[25, 33]}
+${'  '}collapsible
 >
-  {#snippet first()}
-    <nav>Sidebar</nav>
-  {/snippet}
-  {#snippet second()}
-    <main>Content</main>
-  {/snippet}
+${'  '}{#snippet first()}
+${'  '}${'  '}<nav>Sidebar</nav>
+${'  '}{/snippet}
+${'  '}{#snippet second()}
+${'  '}${'  '}<main>Content</main>
+${'  '}{/snippet}
 </SplitPane>`}>
   <SplitPaneSidebarDemo client:load />
 </ComponentPreview>
@@ -65,12 +65,12 @@ A horizontal split with constrained sidebar size and snap points.
 Stack panes top and bottom instead of left and right.
 
 <ComponentPreview code={`<SplitPane vertical size={70}>
-  {#snippet first()}
-    <div>Editor</div>
-  {/snippet}
-  {#snippet second()}
-    <div>Terminal</div>
-  {/snippet}
+${'  '}{#snippet first()}
+${'  '}${'  '}<div>Editor</div>
+${'  '}{/snippet}
+${'  '}{#snippet second()}
+${'  '}${'  '}<div>Terminal</div>
+${'  '}{/snippet}
 </SplitPane>`}>
   <SplitPaneVerticalDemo client:load />
 </ComponentPreview>
@@ -80,18 +80,18 @@ Stack panes top and bottom instead of left and right.
 Double-click the divider to collapse the smaller pane. An expand button appears on the collapsed edge.
 
 <ComponentPreview code={`<script>
-  import { SplitPane } from '@delightstack/components';
+${'  '}import { SplitPane } from '@delightstack/components';
 
-  let collapsed = $state<'first' | 'second' | null>(null);
+${'  '}let collapsed = $state<'first' | 'second' | null>(null);
 </script>
 
 <SplitPane collapsible bind:collapsed>
-  {#snippet first()}
-    <div>First Pane</div>
-  {/snippet}
-  {#snippet second()}
-    <div>Second Pane</div>
-  {/snippet}
+${'  '}{#snippet first()}
+${'  '}${'  '}<div>First Pane</div>
+${'  '}{/snippet}
+${'  '}{#snippet second()}
+${'  '}${'  '}<div>Second Pane</div>
+${'  '}{/snippet}
 </SplitPane>`}>
   <SplitPaneCollapsibleDemo client:load />
 </ComponentPreview>
@@ -101,19 +101,19 @@ Double-click the divider to collapse the smaller pane. An expand button appears 
 Combine multiple SplitPanes for complex layouts.
 
 <ComponentPreview code={`<SplitPane size={20} collapsible>
-  {#snippet first()}
-    <div>File Tree</div>
-  {/snippet}
-  {#snippet second()}
-    <SplitPane vertical size={70}>
-      {#snippet first()}
-        <div>Editor</div>
-      {/snippet}
-      {#snippet second()}
-        <div>Output</div>
-      {/snippet}
-    </SplitPane>
-  {/snippet}
+${'  '}{#snippet first()}
+${'  '}${'  '}<div>File Tree</div>
+${'  '}{/snippet}
+${'  '}{#snippet second()}
+${'  '}${'  '}<SplitPane vertical size={70}>
+${'  '}${'  '}${'  '}{#snippet first()}
+${'  '}${'  '}${'  '}${'  '}<div>Editor</div>
+${'  '}${'  '}${'  '}{/snippet}
+${'  '}${'  '}${'  '}{#snippet second()}
+${'  '}${'  '}${'  '}${'  '}<div>Output</div>
+${'  '}${'  '}${'  '}{/snippet}
+${'  '}${'  '}</SplitPane>
+${'  '}{/snippet}
 </SplitPane>`}>
   <SplitPaneNestedDemo client:load />
 </ComponentPreview>
@@ -123,12 +123,12 @@ Combine multiple SplitPanes for complex layouts.
 The divider snaps to specified percentage positions during drag.
 
 <ComponentPreview code={`<SplitPane snap={[25, 50, 75]} snapThreshold={5}>
-  {#snippet first()}
-    <div>Pane A</div>
-  {/snippet}
-  {#snippet second()}
-    <div>Pane B</div>
-  {/snippet}
+${'  '}{#snippet first()}
+${'  '}${'  '}<div>Pane A</div>
+${'  '}{/snippet}
+${'  '}{#snippet second()}
+${'  '}${'  '}<div>Pane B</div>
+${'  '}{/snippet}
 </SplitPane>`}>
   <SplitPaneSnapDemo client:load />
 </ComponentPreview>

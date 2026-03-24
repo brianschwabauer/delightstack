@@ -25,10 +25,10 @@ import { Stat } from '@delightstack/components';
 Positive changes show a green up-arrow, negative changes show a red down-arrow.
 
 <ComponentPreview code={`<Stat
-  value="$12,450"
-  label="Revenue"
-  change={12.5}
-  changeLabel="vs last month"
+${'  '}value="$12,450"
+${'  '}label="Revenue"
+${'  '}change={12.5}
+${'  '}changeLabel="vs last month"
 />`}>
   <Stat client:load value="$12,450" label="Revenue" change={12.5} changeLabel="vs last month" />
 </ComponentPreview>
@@ -77,11 +77,11 @@ Four sizes are available for different contexts.
 When a decrease is positive (e.g., bug count going down), override the trend color.
 
 <ComponentPreview code={`<Stat
-  value={23}
-  label="Open Bugs"
-  change={-15}
-  trend="up"
-  changeLabel="fewer than last week"
+${'  '}value={23}
+${'  '}label="Open Bugs"
+${'  '}change={-15}
+${'  '}trend="up"
+${'  '}changeLabel="fewer than last week"
 />`}>
   <Stat client:load value={23} label="Open Bugs" change={-15} trend="up" changeLabel="fewer than last week" />
 </ComponentPreview>

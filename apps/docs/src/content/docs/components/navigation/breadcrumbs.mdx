@@ -18,14 +18,14 @@ import type { BreadcrumbItem } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Breadcrumbs } from '@delightstack/components';
-  import type { BreadcrumbItem } from '@delightstack/components';
+${'  '}import { Breadcrumbs } from '@delightstack/components';
+${'  '}import type { BreadcrumbItem } from '@delightstack/components';
 
-  const items: BreadcrumbItem[] = [
-    { label: 'Products', href: '/products' },
-    { label: 'Electronics', href: '/products/electronics' },
-    { label: 'Headphones' },
-  ];
+${'  '}const items: BreadcrumbItem[] = [
+${'  '}${'  '}{ label: 'Products', href: '/products' },
+${'  '}${'  '}{ label: 'Electronics', href: '/products/electronics' },
+${'  '}${'  '}{ label: 'Headphones' },
+${'  '}];
 </script>
 
 <Breadcrumbs {items} />`}>
@@ -39,15 +39,15 @@ import type { BreadcrumbItem } from '@delightstack/components';
 When the trail is long, collapse middle items into an ellipsis dropdown.
 
 <ComponentPreview code={`<script>
-  import { Breadcrumbs } from '@delightstack/components';
+${'  '}import { Breadcrumbs } from '@delightstack/components';
 
-  const items = [
-    { label: 'Category', href: '/cat' },
-    { label: 'Subcategory', href: '/cat/sub' },
-    { label: 'Brand', href: '/cat/sub/brand' },
-    { label: 'Model', href: '/cat/sub/brand/model' },
-    { label: 'Product' },
-  ];
+${'  '}const items = [
+${'  '}${'  '}{ label: 'Category', href: '/cat' },
+${'  '}${'  '}{ label: 'Subcategory', href: '/cat/sub' },
+${'  '}${'  '}{ label: 'Brand', href: '/cat/sub/brand' },
+${'  '}${'  '}{ label: 'Model', href: '/cat/sub/brand/model' },
+${'  '}${'  '}{ label: 'Product' },
+${'  '}];
 </script>
 
 <Breadcrumbs {items} maxItems={3} />`}>
@@ -67,9 +67,9 @@ Hide the automatic home breadcrumb.
 Replace the default chevron separator with a custom snippet.
 
 <ComponentPreview code={`<Breadcrumbs {items}>
-  {#snippet separator()}
-    <span>/</span>
-  {/snippet}
+${'  '}{#snippet separator()}
+${'  '}${'  '}<span>/</span>
+${'  '}{/snippet}
 </Breadcrumbs>`}>
 	<BreadcrumbsSeparatorDemo client:load />
 </ComponentPreview>
@@ -89,23 +89,23 @@ Replace the default chevron separator with a custom snippet.
 React to breadcrumb clicks without relying solely on native navigation.
 
 <ComponentPreview code={`<script>
-  import { Breadcrumbs } from '@delightstack/components';
+${'  '}import { Breadcrumbs } from '@delightstack/components';
 
-  const items = [
-    { label: 'Home', href: '/' },
-    { label: 'Products', href: '/products' },
-    { label: 'Detail' },
-  ];
+${'  '}const items = [
+${'  '}${'  '}{ label: 'Home', href: '/' },
+${'  '}${'  '}{ label: 'Products', href: '/products' },
+${'  '}${'  '}{ label: 'Detail' },
+${'  '}];
 
-  let lastClicked = $state('');
+${'  '}let lastClicked = $state('');
 </script>
 
 <Breadcrumbs
-  {items}
-  showHome={false}
-  onclick={({ item, index }) => {
-    lastClicked = \`Clicked "\${item.label}" (index \${index})\`;
-  }}
+${'  '}{items}
+${'  '}showHome={false}
+${'  '}onclick={({ item, index }) => {
+${'  '}${'  '}lastClicked = \`Clicked "\${item.label}" (index \${index})\`;
+${'  '}}}
 />`}>
 	<BreadcrumbsClickDemo client:load />
 </ComponentPreview>

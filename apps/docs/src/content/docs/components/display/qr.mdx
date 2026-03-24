@@ -23,10 +23,10 @@ import { QR } from '@delightstack/components';
 ### Custom Size and Colors
 
 <ComponentPreview code={`<QR
-  value="https://example.com"
-  size={250}
-  foreground="oklch(0.3 0.1 250)"
-  background="oklch(0.95 0.02 250)"
+${'  '}value="https://example.com"
+${'  '}size={250}
+${'  '}foreground="oklch(0.3 0.1 250)"
+${'  '}background="oklch(0.95 0.02 250)"
 />`}>
   <QR client:load value="https://example.com" size={250} foreground="oklch(0.3 0.1 250)" background="oklch(0.95 0.02 250)" />
 </ComponentPreview>
@@ -34,8 +34,8 @@ import { QR } from '@delightstack/components';
 ### Rounded Modules
 
 <ComponentPreview code={`<QR
-  value="https://example.com"
-  rounded
+${'  '}value="https://example.com"
+${'  '}rounded
 />`}>
   <QR client:load value="https://example.com" rounded />
 </ComponentPreview>
@@ -65,9 +65,9 @@ Use level `'H'` for environments where the QR code may be partially obscured or 
 Show a download button that exports the QR code as a PNG.
 
 <ComponentPreview code={`<QR
-  value="https://example.com"
-  downloadable
-  downloadFilename="my-share-code"
+${'  '}value="https://example.com"
+${'  '}downloadable
+${'  '}downloadFilename="my-share-code"
 />`}>
   <QR client:load value="https://example.com" downloadable downloadFilename="my-share-code" />
 </ComponentPreview>

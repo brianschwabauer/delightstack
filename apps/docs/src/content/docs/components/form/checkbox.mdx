@@ -27,8 +27,8 @@ import { Checkbox, CheckboxGroup } from '@delightstack/components';
 ### With Description
 
 <ComponentPreview code={`<Checkbox
-  label="Marketing emails"
-  description="Receive updates about new features and offers"
+${'  '}label="Marketing emails"
+${'  '}description="Receive updates about new features and offers"
 />`}>
 	<Checkbox client:load label="Marketing emails" description="Receive updates about new features and offers" />
 </ComponentPreview>
@@ -36,10 +36,10 @@ import { Checkbox, CheckboxGroup } from '@delightstack/components';
 ### With Error
 
 <ComponentPreview code={`<Checkbox
-  bind:checked={termsAgreed}
-  label="Accept terms"
-  required
-  error={!termsAgreed ? 'You must accept the terms' : ''}
+${'  '}bind:checked={termsAgreed}
+${'  '}label="Accept terms"
+${'  '}required
+${'  '}error={!termsAgreed ? 'You must accept the terms' : ''}
 />`}>
 	<CheckboxErrorDemo client:load />
 </ComponentPreview>
@@ -49,17 +49,17 @@ import { Checkbox, CheckboxGroup } from '@delightstack/components';
 Use `indeterminate` for tree-style parent checkboxes where some children are selected.
 
 <ComponentPreview code={`<script>
-  import { Checkbox } from '@delightstack/components';
+${'  '}import { Checkbox } from '@delightstack/components';
 
-  let someSelected = $state(true);
-  let allSelected = $state(false);
+${'  '}let someSelected = $state(true);
+${'  '}let allSelected = $state(false);
 </script>
 
 <Checkbox
-  checked={someSelected}
-  indeterminate={someSelected && !allSelected}
-  onchange={handleParentToggle}
-  label="Select all"
+${'  '}checked={someSelected}
+${'  '}indeterminate={someSelected && !allSelected}
+${'  '}onchange={handleParentToggle}
+${'  '}label="Select all"
 />`}>
 	<CheckboxIndeterminateDemo client:load />
 </ComponentPreview>
@@ -69,33 +69,33 @@ Use `indeterminate` for tree-style parent checkboxes where some children are sel
 Group multiple related checkboxes to manage selections together.
 
 <ComponentPreview code={`<script>
-  import { Checkbox } from '@delightstack/components';
+${'  '}import { Checkbox } from '@delightstack/components';
 
-  let notifications = $state(['email', 'push']);
+${'  '}let notifications = $state(['email', 'push']);
 
-  function toggle(val) {
-    if (notifications.includes(val)) {
-      notifications = notifications.filter((v) => v !== val);
-    } else {
-      notifications = [...notifications, val];
-    }
-  }
+${'  '}function toggle(val) {
+${'  '}${'  '}if (notifications.includes(val)) {
+${'  '}${'  '}${'  '}notifications = notifications.filter((v) => v !== val);
+${'  '}${'  '}} else {
+${'  '}${'  '}${'  '}notifications = [...notifications, val];
+${'  '}${'  '}}
+${'  '}}
 </script>
 
 <Checkbox
-  checked={notifications.includes('email')}
-  onchange={() => toggle('email')}
-  label="Email notifications"
+${'  '}checked={notifications.includes('email')}
+${'  '}onchange={() => toggle('email')}
+${'  '}label="Email notifications"
 />
 <Checkbox
-  checked={notifications.includes('sms')}
-  onchange={() => toggle('sms')}
-  label="SMS notifications"
+${'  '}checked={notifications.includes('sms')}
+${'  '}onchange={() => toggle('sms')}
+${'  '}label="SMS notifications"
 />
 <Checkbox
-  checked={notifications.includes('push')}
-  onchange={() => toggle('push')}
-  label="Push notifications"
+${'  '}checked={notifications.includes('push')}
+${'  '}onchange={() => toggle('push')}
+${'  '}label="Push notifications"
 />`}>
 	<CheckboxGroupDemo client:load />
 </ComponentPreview>
@@ -103,36 +103,36 @@ Group multiple related checkboxes to manage selections together.
 ### Group with Error
 
 <ComponentPreview code={`<script>
-  import { Checkbox } from '@delightstack/components';
+${'  '}import { Checkbox } from '@delightstack/components';
 
-  let permissions = $state([]);
+${'  '}let permissions = $state([]);
 
-  function toggle(val) {
-    if (permissions.includes(val)) {
-      permissions = permissions.filter((v) => v !== val);
-    } else {
-      permissions = [...permissions, val];
-    }
-  }
+${'  '}function toggle(val) {
+${'  '}${'  '}if (permissions.includes(val)) {
+${'  '}${'  '}${'  '}permissions = permissions.filter((v) => v !== val);
+${'  '}${'  '}} else {
+${'  '}${'  '}${'  '}permissions = [...permissions, val];
+${'  '}${'  '}}
+${'  '}}
 </script>
 
 <Checkbox
-  checked={permissions.includes('read')}
-  onchange={() => toggle('read')}
-  label="Read"
+${'  '}checked={permissions.includes('read')}
+${'  '}onchange={() => toggle('read')}
+${'  '}label="Read"
 />
 <Checkbox
-  checked={permissions.includes('write')}
-  onchange={() => toggle('write')}
-  label="Write"
+${'  '}checked={permissions.includes('write')}
+${'  '}onchange={() => toggle('write')}
+${'  '}label="Write"
 />
 <Checkbox
-  checked={permissions.includes('admin')}
-  onchange={() => toggle('admin')}
-  label="Admin"
+${'  '}checked={permissions.includes('admin')}
+${'  '}onchange={() => toggle('admin')}
+${'  '}label="Admin"
 />
 {#if permissions.length === 0}
-  <p style="color: var(--c-error);">Select at least one permission</p>
+${'  '}<p style="color: var(--c-error);">Select at least one permission</p>
 {/if}`}>
 	<CheckboxGroupErrorDemo client:load />
 </ComponentPreview>

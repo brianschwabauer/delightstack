@@ -31,8 +31,8 @@ import type { ConfettiOptions, ConfettiShape, CannonOptions, RainOptions } from 
 The simplest way to fire confetti is with the `confetti()` function. No component mounting required.
 
 <ComponentPreview code={`<script>
-  import { confetti } from '@delightstack/components';
-  import { Button } from '@delightstack/components';
+${'  '}import { confetti } from '@delightstack/components';
+${'  '}import { Button } from '@delightstack/components';
 </script>
 
 <Button onclick={() => confetti()}>Burst</Button>
@@ -46,9 +46,9 @@ The simplest way to fire confetti is with the `confetti()` function. No componen
 Mount `<Confetti />` and control it with the `active` prop.
 
 <ComponentPreview code={`<script>
-  import { Confetti } from '@delightstack/components';
+${'  '}import { Confetti } from '@delightstack/components';
 
-  let celebrating = $state(false);
+${'  '}let celebrating = $state(false);
 </script>
 
 <button onclick={() => celebrating = true}>Celebrate!</button>
@@ -61,16 +61,16 @@ Mount `<Confetti />` and control it with the `active` prop.
 ### Customized Burst
 
 <ComponentPreview code={`<script>
-  import { confetti } from '@delightstack/components';
+${'  '}import { confetti } from '@delightstack/components';
 
-  function celebrate() {
-    confetti({
-      particle_count: 100,
-      spread: 70,
-      origin: { x: 0.5, y: 0.6 },
-      colors: ['#ff0000', '#00ff00', '#0000ff'],
-    });
-  }
+${'  '}function celebrate() {
+${'  '}${'  '}confetti({
+${'  '}${'  '}${'  '}particle_count: 100,
+${'  '}${'  '}${'  '}spread: 70,
+${'  '}${'  '}${'  '}origin: { x: 0.5, y: 0.6 },
+${'  '}${'  '}${'  '}colors: ['#ff0000', '#00ff00', '#0000ff'],
+${'  '}${'  '}});
+${'  '}}
 </script>
 
 <button onclick={celebrate}>Custom Burst</button>`}>
@@ -82,7 +82,7 @@ Mount `<Confetti />` and control it with the `active` prop.
 All presets are available as methods on the `confetti` function.
 
 <ComponentPreview code={`<script>
-  import { confetti } from '@delightstack/components';
+${'  '}import { confetti } from '@delightstack/components';
 </script>
 
 <!-- Single burst (same as confetti()) -->
@@ -107,13 +107,13 @@ All presets are available as methods on the `confetti` function.
 `confetti.cannon()` and `confetti.rain()` return a `stop()` function. You can also use `confetti.stop()` to stop all active animations.
 
 <ComponentPreview code={`<script>
-  import { confetti } from '@delightstack/components';
+${'  '}import { confetti } from '@delightstack/components';
 
-  let stopCannon: (() => void) | undefined;
+${'  '}let stopCannon: (() => void) | undefined;
 
-  function startCannon() {
-    stopCannon = confetti.cannon({ duration: 10000 });
-  }
+${'  '}function startCannon() {
+${'  '}${'  '}stopCannon = confetti.cannon({ duration: 10000 });
+${'  '}}
 </script>
 
 <button onclick={startCannon}>Start Cannon</button>
@@ -125,17 +125,17 @@ All presets are available as methods on the `confetti` function.
 ### Component with Presets
 
 <ComponentPreview code={`<script>
-  import { Confetti } from '@delightstack/components';
+${'  '}import { Confetti } from '@delightstack/components';
 
-  let celebrating = $state(false);
+${'  '}let celebrating = $state(false);
 </script>
 
 <button onclick={() => celebrating = true}>Complete Task</button>
 <Confetti
-  active={celebrating}
-  preset="cannon"
-  duration={2000}
-  onend={() => celebrating = false}
+${'  '}active={celebrating}
+${'  '}preset="cannon"
+${'  '}duration={2000}
+${'  '}onend={() => celebrating = false}
 />`}>
   <ConfettiComponentPresetsDemo client:load />
 </ComponentPreview>
@@ -143,15 +143,15 @@ All presets are available as methods on the `confetti` function.
 ### Custom Shapes and Colors
 
 <ComponentPreview code={`<script>
-  import { confetti } from '@delightstack/components';
+${'  '}import { confetti } from '@delightstack/components';
 </script>
 
 <button onclick={() => confetti({
-  shapes: ['star'],
-  colors: ['#ffd700', '#ffb700'],
-  particle_count: 80,
+${'  '}shapes: ['star'],
+${'  '}colors: ['#ffd700', '#ffb700'],
+${'  '}particle_count: 80,
 })}>
-  Gold Stars
+${'  '}Gold Stars
 </button>`}>
   <ConfettiShapesDemo client:load />
 </ComponentPreview>

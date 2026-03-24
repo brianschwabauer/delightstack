@@ -22,9 +22,9 @@ import { Pagination } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { Pagination } from '@delightstack/components';
+${'  '}import { Pagination } from '@delightstack/components';
 
-  let page = $state(1);
+${'  '}let page = $state(1);
 </script>
 
 <Pagination bind:page totalPages={10} />`}>
@@ -54,21 +54,21 @@ An even more minimal layout with just arrows and "X / Y".
 Show a dropdown to change the number of items per page.
 
 <ComponentPreview code={`<script>
-  import { Pagination } from '@delightstack/components';
+${'  '}import { Pagination } from '@delightstack/components';
 
-  let page = $state(1);
-  let pageSize = $state(25);
+${'  '}let page = $state(1);
+${'  '}let pageSize = $state(25);
 </script>
 
 <Pagination
-  bind:page
-  bind:pageSize
-  totalPages={40}
-  showPageSize
-  pageSizeOptions={[10, 25, 50, 100]}
-  onpagesizechange={() => {
-    page = 1;
-  }}
+${'  '}bind:page
+${'  '}bind:pageSize
+${'  '}totalPages={40}
+${'  '}showPageSize
+${'  '}pageSizeOptions={[10, 25, 50, 100]}
+${'  '}onpagesizechange={() => {
+${'  '}${'  '}page = 1;
+${'  '}}}
 />`}>
 	<PaginationPageSizeDemo client:load />
 </ComponentPreview>

@@ -16,16 +16,16 @@ import { CommandPalette } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-  import { CommandPalette, Button } from '@delightstack/components';
+${'  '}import { CommandPalette, Button } from '@delightstack/components';
 
-  let open = $state(false);
+${'  '}let open = $state(false);
 
-  const commands = [
-    { id: 'new', title: 'New File', category: 'File', shortcut: ['Ctrl', 'N'], onselect: () => {} },
-    { id: 'save', title: 'Save', category: 'File', shortcut: ['Ctrl', 'S'], onselect: () => {} },
-    { id: 'copy', title: 'Copy', category: 'Edit', shortcut: ['Ctrl', 'C'], onselect: () => {} },
-    { id: 'theme', title: 'Toggle Theme', category: 'View', onselect: () => {} },
-  ];
+${'  '}const commands = [
+${'  '}${'  '}{ id: 'new', title: 'New File', category: 'File', shortcut: ['Ctrl', 'N'], onselect: () => {} },
+${'  '}${'  '}{ id: 'save', title: 'Save', category: 'File', shortcut: ['Ctrl', 'S'], onselect: () => {} },
+${'  '}${'  '}{ id: 'copy', title: 'Copy', category: 'Edit', shortcut: ['Ctrl', 'C'], onselect: () => {} },
+${'  '}${'  '}{ id: 'theme', title: 'Toggle Theme', category: 'View', onselect: () => {} },
+${'  '}];
 </script>
 
 <Button onclick={() => open = true}>Open Command Palette</Button>

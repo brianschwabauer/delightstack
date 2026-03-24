@@ -23,13 +23,13 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
 ## Basic Usage
 
 <ComponentPreview code={`<Timeline>
-  <TimelineItem title="Step 1" date="Jan 10" status="complete">
-    First step completed.
-  </TimelineItem>
-  <TimelineItem title="Step 2" date="Jan 11" status="active">
-    Currently in progress.
-  </TimelineItem>
-  <TimelineItem title="Step 3" status="pending" />
+${'  '}<TimelineItem title="Step 1" date="Jan 10" status="complete">
+${'  '}${'  '}First step completed.
+${'  '}</TimelineItem>
+${'  '}<TimelineItem title="Step 2" date="Jan 11" status="active">
+${'  '}${'  '}Currently in progress.
+${'  '}</TimelineItem>
+${'  '}<TimelineItem title="Step 3" status="pending" />
 </Timeline>`}>
   <TimelineDemo client:load />
 </ComponentPreview>
@@ -39,20 +39,20 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
 ### Order Tracking
 
 <ComponentPreview code={`<script>
-  import { Timeline, TimelineItem } from '@delightstack/components';
+${'  '}import { Timeline, TimelineItem } from '@delightstack/components';
 </script>
 
 <Timeline>
-  <TimelineItem status="complete" date="Jan 10" title="Order Confirmed">
-    Your order has been confirmed.
-  </TimelineItem>
-  <TimelineItem status="complete" date="Jan 11" title="Shipped">
-    Package picked up by carrier.
-  </TimelineItem>
-  <TimelineItem status="active" date="Jan 12" title="Out for Delivery">
-    Expected delivery today.
-  </TimelineItem>
-  <TimelineItem status="pending" title="Delivered" />
+${'  '}<TimelineItem status="complete" date="Jan 10" title="Order Confirmed">
+${'  '}${'  '}Your order has been confirmed.
+${'  '}</TimelineItem>
+${'  '}<TimelineItem status="complete" date="Jan 11" title="Shipped">
+${'  '}${'  '}Package picked up by carrier.
+${'  '}</TimelineItem>
+${'  '}<TimelineItem status="active" date="Jan 12" title="Out for Delivery">
+${'  '}${'  '}Expected delivery today.
+${'  '}</TimelineItem>
+${'  '}<TimelineItem status="pending" title="Delivered" />
 </Timeline>`}>
   <TimelineOrderDemo client:load />
 </ComponentPreview>
@@ -60,10 +60,10 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
 ### Horizontal Process Steps
 
 <ComponentPreview code={`<Timeline horizontal>
-  <TimelineItem status="complete" title="Order Placed" />
-  <TimelineItem status="complete" title="Processing" />
-  <TimelineItem status="active" title="Shipping" />
-  <TimelineItem status="pending" title="Delivered" />
+${'  '}<TimelineItem status="complete" title="Order Placed" />
+${'  '}<TimelineItem status="complete" title="Processing" />
+${'  '}<TimelineItem status="active" title="Shipping" />
+${'  '}<TimelineItem status="pending" title="Delivered" />
 </Timeline>`}>
   <TimelineHorizontalDemo client:load />
 </ComponentPreview>
@@ -73,9 +73,9 @@ The `TimelineItem` is re-exported from the `Timeline` module. Both `Timeline` an
 Events alternate between left and right in vertical mode.
 
 <ComponentPreview code={`<Timeline alternate>
-  <TimelineItem date="Jan 1" title="Event A">Description A</TimelineItem>
-  <TimelineItem date="Feb 1" title="Event B">Description B</TimelineItem>
-  <TimelineItem date="Mar 1" title="Event C">Description C</TimelineItem>
+${'  '}<TimelineItem date="Jan 1" title="Event A">Description A</TimelineItem>
+${'  '}<TimelineItem date="Feb 1" title="Event B">Description B</TimelineItem>
+${'  '}<TimelineItem date="Mar 1" title="Event C">Description C</TimelineItem>
 </Timeline>`}>
   <TimelineAlternateDemo client:load />
 </ComponentPreview>
@@ -85,15 +85,15 @@ Events alternate between left and right in vertical mode.
 Load more events as the user scrolls near the end of the timeline.
 
 <ComponentPreview code={`<Timeline onloadmore={loadMoreEvents} pending>
-  {#each events as event}
-    <TimelineItem
-      date={event.date}
-      title={event.title}
-      status={event.status}
-    >
-      {event.description}
-    </TimelineItem>
-  {/each}
+${'  '}{#each events as event}
+${'  '}${'  '}<TimelineItem
+${'  '}${'  '}${'  '}date={event.date}
+${'  '}${'  '}${'  '}title={event.title}
+${'  '}${'  '}${'  '}status={event.status}
+${'  '}${'  '}>
+${'  '}${'  '}${'  '}{event.description}
+${'  '}${'  '}</TimelineItem>
+${'  '}{/each}
 </Timeline>`}>
   <TimelineLoadMoreDemo client:load />
 </ComponentPreview>
@@ -101,9 +101,9 @@ Load more events as the user scrolls near the end of the timeline.
 ### Custom Marker Color
 
 <ComponentPreview code={`<Timeline>
-  <TimelineItem title="Custom Color" color="var(--color-error)">
-    A red-themed event marker.
-  </TimelineItem>
+${'  '}<TimelineItem title="Custom Color" color="var(--color-error)">
+${'  '}${'  '}A red-themed event marker.
+${'  '}</TimelineItem>
 </Timeline>`}>
   <TimelineColorDemo client:load />
 </ComponentPreview>

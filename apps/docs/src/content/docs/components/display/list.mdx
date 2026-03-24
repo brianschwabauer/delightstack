@@ -32,15 +32,15 @@ import { List, ListItem } from '@delightstack/components';
 Single-select mode using radio buttons. Bind `value` to track the selected index.
 
 <ComponentPreview code={`<script>
-  import { List, ListItem } from '@delightstack/components';
+${'  '}import { List, ListItem } from '@delightstack/components';
 
-  let selected = $state<number[]>([]);
+${'  '}let selected = $state<number[]>([]);
 </script>
 
 <List type="radio" bind:value={selected}>
-  <ListItem>Small</ListItem>
-  <ListItem>Medium</ListItem>
-  <ListItem>Large</ListItem>
+${'  '}<ListItem>Small</ListItem>
+${'  '}<ListItem>Medium</ListItem>
+${'  '}<ListItem>Large</ListItem>
 </List>`}>
   <ListRadioDemo client:load />
 </ComponentPreview>
@@ -50,15 +50,15 @@ Single-select mode using radio buttons. Bind `value` to track the selected index
 Multiple-select mode using checkboxes. The `value` array contains all selected indices.
 
 <ComponentPreview code={`<script>
-  import { List, ListItem } from '@delightstack/components';
+${'  '}import { List, ListItem } from '@delightstack/components';
 
-  let selected = $state<number[]>([]);
+${'  '}let selected = $state<number[]>([]);
 </script>
 
 <List type="checkbox" bind:value={selected}>
-  <ListItem>Notifications</ListItem>
-  <ListItem>Email Updates</ListItem>
-  <ListItem>SMS Alerts</ListItem>
+${'  '}<ListItem>Notifications</ListItem>
+${'  '}<ListItem>Email Updates</ListItem>
+${'  '}<ListItem>SMS Alerts</ListItem>
 </List>`}>
   <ListCheckboxDemo client:load />
 </ComponentPreview>
@@ -68,9 +68,9 @@ Multiple-select mode using checkboxes. The `value` array contains all selected i
 Compact spacing for action-oriented lists.
 
 <ComponentPreview code={`<List dense>
-  <ListItem onclick={() => handleEdit()}>Edit</ListItem>
-  <ListItem onclick={() => handleDuplicate()}>Duplicate</ListItem>
-  <ListItem onclick={() => handleDelete()}>Delete</ListItem>
+${'  '}<ListItem onclick={() => handleEdit()}>Edit</ListItem>
+${'  '}<ListItem onclick={() => handleDuplicate()}>Duplicate</ListItem>
+${'  '}<ListItem onclick={() => handleDelete()}>Delete</ListItem>
 </List>`}>
   <ListDenseDemo client:load />
 </ComponentPreview>
@@ -80,8 +80,8 @@ Compact spacing for action-oriented lists.
 Display-only list with no hover effects or click handlers.
 
 <ComponentPreview code={`<List type="text">
-  <ListItem>Read-only item</ListItem>
-  <ListItem>Another item</ListItem>
+${'  '}<ListItem>Read-only item</ListItem>
+${'  '}<ListItem>Another item</ListItem>
 </List>`}>
   <ListTextDemo client:load />
 </ComponentPreview>
