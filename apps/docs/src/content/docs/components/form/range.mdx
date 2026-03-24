@@ -8,6 +8,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import RangeDoubleDemo from '../../../../components/demos/RangeDoubleDemo.svelte';
 import RangeTickLabelsDemo from '../../../../components/demos/RangeTickLabelsDemo.svelte';
 import RangeFormatDemo from '../../../../components/demos/RangeFormatDemo.svelte';
+import RangeVerticalDemo from '../../../../components/demos/RangeVerticalDemo.svelte';
 
 ## Import
 
@@ -108,6 +109,26 @@ Provide an array of labels that align with each tick position.
 	<Range client:load size="3" value={100} label="Large" />
 </ComponentPreview>
 
+### Vertical
+
+Set `vertical` to render the slider vertically. Height defaults to `200px` and can be customized with the `--range-height` CSS variable.
+
+<ComponentPreview code={`<script>
+  import { Range } from '@delightstack/components';
+
+  let volume = $state(60);
+  let bass = $state(40);
+  let treble = $state(75);
+</script>
+
+<div style="display: flex; gap: 3rem; align-items: flex-end;">
+  <Range vertical value={volume} label="Volume" show_value format_value={(v) => \`\${v}%\`} />
+  <Range vertical value={bass} min={0} max={100} step={10} show_ticks label="Bass" />
+  <Range vertical value={treble} label="Treble" />
+</div>`}>
+	<RangeVerticalDemo client:load />
+</ComponentPreview>
+
 ## Props
 
 | Prop | Type | Default | Description |
@@ -118,6 +139,7 @@ Provide an array of labels that align with each tick position.
 | `step` | `number` | `1` | Step increment |
 | `range` | `boolean` | `false` | Enable two-thumb range selection |
 | `disabled` | `boolean` | `false` | Disable slider |
+| `vertical` | `boolean` | `false` | Display slider vertically |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Slider size |
 | `show_value` | `boolean` | `false` | Show value tooltip above thumb |
 | `show_ticks` | `boolean` | `false` | Show step tick marks on track |

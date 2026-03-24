@@ -48,6 +48,9 @@
 		/** Whether the slider uses comfortable spacing */
 		comfortable = false,
 
+		/** Whether to display the slider vertically */
+		vertical = false,
+
 		/** The id of the slider element */
 		id = propId,
 
@@ -136,10 +139,16 @@
 		onchange?.({ value: emitValue() });
 	}
 
-	function valueFromPointer(e: PointerEvent): number {
-		if (!drag_wrapper) return min;
+	function rawPctFromPointer(e: PointerEvent): number {
+		if (!drag_wrapper) return 0;
 		const rect = drag_wrapper.getBoundingClientRect();
-		const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+		return vertical
+			? 1 - (e.clientY - rect.top) / rect.height
+			: (e.clientX - rect.left) / rect.width;
+	}
+
+	function valueFromPointer(e: PointerEvent): number {
+		const pct = Math.max(0, Math.min(1, rawPctFromPointer(e)));
 		const raw = min + pct * (max - min);
 		const snapped = Math.round(raw / step) * step;
 		return Math.max(min, Math.min(max, snapped));
@@ -228,12 +237,14 @@
 
 	// --- Overshoot computation (shared by pointermove and oninput) ---
 
-	let last_pointer_x = 0;
+	let last_pointer_coord = 0;
 
 	function updateOvershoot() {
 		if (!drag_wrapper) return;
 		const rect = drag_wrapper.getBoundingClientRect();
-		const raw_pct = (last_pointer_x - rect.left) / rect.width;
+		const raw_pct = vertical
+			? 1 - (last_pointer_coord - rect.top) / rect.height
+			: (last_pointer_coord - rect.left) / rect.width;
 
 		if (raw_pct < 0 || raw_pct > 1) {
 			// Edge rubber band
@@ -270,7 +281,7 @@
 		if (!is_dragging) return;
 
 		function onMove(e: PointerEvent) {
-			last_pointer_x = e.clientX;
+			last_pointer_coord = vertical ? e.clientY : e.clientX;
 			updateOvershoot();
 		}
 
@@ -284,6 +295,7 @@
 	class:disabled
 	class:dense
 	class:comfortable
+	class:vertical
 	class:has-tick-labels={show_ticks && !!tick_labels?.length}
 	class:dragging={is_dragging}
 	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
@@ -754,5 +766,45 @@
 
 	.has-tick-labels .range-wrapper {
 		margin-bottom: 1.5em;
+	}
+
+	/* ========== Vertical mode ========== */
+	.range-container.vertical {
+		width: fit-content;
+		height: var(--range-height, 200px);
+		align-items: center;
+		overflow: visible;
+	}
+
+	.range-container.vertical .range-wrapper {
+		/* Rotate the horizontal slider to render vertically.
+		   The wrapper's CSS "width" becomes the visual height. */
+		width: var(--range-height, 200px);
+		transform-origin: 0 0;
+		transform: rotate(-90deg) translateX(-100%);
+	}
+
+	/* Vertical tooltip: reposition to the right of the handle, counter-rotate text */
+	.range-container.vertical .value-tooltip {
+		/* In rotated space, "bottom: 100%" places the tooltip to the visual-left.
+		   Switch to "top: 100%" so it appears to the visual-right instead. */
+		bottom: auto;
+		top: calc(100% + 8px);
+		transform: translateX(-50%) translateY(-4px) rotate(90deg) translateX(18px);
+	}
+	.range-container.vertical .value-tooltip.visible {
+		transform: translateX(-50%) translateY(0) rotate(90deg) translateX(10px);
+	}
+	/* Arrow points left instead of down */
+	.range-container.vertical .value-tooltip::after {
+		top: 50%;
+		left: auto;
+		right: 100%;
+		transform: translateY(-50%);
+		border-top-color: transparent;
+		border-right-color: var(--c-action-active, hsl(220 70% 50%));
+	}
+	.range-container.vertical .tick-label {
+		transform: translateX(-50%) rotate(90deg);
 	}
 </style>
