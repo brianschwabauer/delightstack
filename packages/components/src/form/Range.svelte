@@ -72,6 +72,9 @@
 	let upper_hovering = $state(false);
 	let lower_dragging = $state(false);
 	let upper_dragging = $state(false);
+	let drag_wrapper: HTMLElement | null = null;
+	let active_thumb = $state<'lower' | 'upper' | null>(null);
+	let overshoot_px = $state(0);
 
 	const lower_value = $derived(
 		range && Array.isArray(value) ? value[0] : (value as number),
@@ -87,6 +90,10 @@
 	const upper_thumb_offset = $derived(0.5 - upper_pct / 100);
 
 	const is_dragging = $derived(lower_dragging || upper_dragging);
+
+	// Visual pixel offsets for track segments to follow the handle during magnetic drag
+	const lower_visual_offset = $derived(active_thumb === 'lower' ? overshoot_px : 0);
+	const upper_visual_offset = $derived(active_thumb === 'upper' ? overshoot_px : 0);
 
 	const tick_count = $derived(Math.floor((max - min) / step));
 
@@ -108,6 +115,9 @@
 			value = v;
 		}
 		oninput?.({ value: emitValue() });
+		// Recompute overshoot now that value has snapped, so the DOM update
+		// includes an overshoot consistent with the new thumb position
+		if (is_dragging) updateOvershoot();
 	}
 
 	function onUpperInput(e: Event) {
@@ -115,6 +125,7 @@
 		const v = Number(input.value);
 		value = [Math.min(v, lower_value), v] as [number, number];
 		oninput?.({ value: emitValue() });
+		if (is_dragging) updateOvershoot();
 	}
 
 	function onLowerChange() {
@@ -124,10 +135,6 @@
 	function onUpperChange() {
 		onchange?.({ value: emitValue() });
 	}
-
-	let drag_wrapper: HTMLElement | null = null;
-	let active_thumb = $state<'lower' | 'upper' | null>(null);
-	let overshoot_px = $state(0);
 
 	function valueFromPointer(e: PointerEvent): number {
 		if (!drag_wrapper) return min;
@@ -178,8 +185,13 @@
 
 	function onTrackPointerMove(e: PointerEvent) {
 		if (!active_thumb) return;
-		setValueForThumb(valueFromPointer(e));
-		oninput?.({ value: emitValue() });
+		// Only update value for track-initiated drags (wrapper has capture, so
+		// target is the wrapper). For native thumb drags the event bubbles from
+		// the input and the native oninput handler manages the value instead.
+		if (!(e.target instanceof HTMLInputElement)) {
+			setValueForThumb(valueFromPointer(e));
+			oninput?.({ value: emitValue() });
+		}
 	}
 
 	function onTrackPointerUp() {
@@ -214,22 +226,52 @@
 		drag_wrapper = null;
 	}
 
+	// --- Overshoot computation (shared by pointermove and oninput) ---
+
+	let last_pointer_x = 0;
+
+	function updateOvershoot() {
+		if (!drag_wrapper) return;
+		const rect = drag_wrapper.getBoundingClientRect();
+		const raw_pct = (last_pointer_x - rect.left) / rect.width;
+
+		if (raw_pct < 0 || raw_pct > 1) {
+			// Edge rubber band
+			const overflow_px = (raw_pct < 0 ? raw_pct : raw_pct - 1) * rect.width;
+			const max_shift = 24;
+			overshoot_px = max_shift * Math.tanh(overflow_px / 100);
+		} else {
+			// Magnetic tick gravity — uses the ACTUAL current value (not our
+			// own snap) so the overshoot is always consistent with the thumb
+			// position. Uses a smooth easing that reaches full-follow at the
+			// midpoint between ticks, guaranteeing visual continuity at snaps.
+			const current_val = active_thumb === 'lower' ? lower_value : upper_value;
+			const snapped_pct = (current_val - min) / (max - min);
+			const pull_px = (raw_pct - snapped_pct) * rect.width;
+			const step_px = (step / (max - min)) * rect.width;
+			const half_step_px = step_px / 2;
+
+			if (half_step_px < 1) {
+				overshoot_px = 0;
+			} else {
+				// Smooth ease: starts at gravity rate near tick, reaches
+				// full follow at midpoint (continuity across snaps)
+				const t = Math.min(1, Math.abs(pull_px) / half_step_px);
+				const gravity = 0.15;
+				const eased = gravity * t + (1 - gravity) * t * t;
+				overshoot_px = Math.sign(pull_px) * eased * half_step_px;
+			}
+		}
+	}
+
 	// --- Window-level pointermove for overshoot (works for both drag sources) ---
 
 	$effect(() => {
 		if (!is_dragging) return;
 
 		function onMove(e: PointerEvent) {
-			if (!drag_wrapper) return;
-			const rect = drag_wrapper.getBoundingClientRect();
-			const raw_pct = (e.clientX - rect.left) / rect.width;
-			if (raw_pct < 0 || raw_pct > 1) {
-				const overflow_px = (raw_pct < 0 ? raw_pct : raw_pct - 1) * rect.width;
-				const max_shift = 24;
-				overshoot_px = max_shift * Math.tanh(overflow_px / 100);
-			} else {
-				overshoot_px = 0;
-			}
+			last_pointer_x = e.clientX;
+			updateOvershoot();
 		}
 
 		window.addEventListener('pointermove', onMove);
@@ -272,35 +314,39 @@
 			{/if}
 		{/if}
 
-		<!-- Track segments with gaps around handles.
-			 Native inputs offset thumb center from raw % by handleWidth * (0.5 - ratio).
-			 We apply the same offset so the gap is symmetric around the actual thumb center. -->
+		<!-- Track segments follow the handle's visual position (including magnetic overshoot) -->
 		{#if range}
 			<div
 				class="track-segment inactive"
 				style:left="0"
-				style:width="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} - var(--gap))">
+				style:width="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} - var(--gap)
+				+ {lower_visual_offset}px)">
 			</div>
 			<div
 				class="track-segment active"
-				style:left="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} + var(--gap))"
+				style:left="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} + var(--gap)
+				+ {lower_visual_offset}px)"
 				style:width="calc({upper_pct - lower_pct}% + var(--handle-width) * {upper_thumb_offset -
-					lower_thumb_offset} - var(--gap) * 2)">
+					lower_thumb_offset} - var(--gap) * 2 + {upper_visual_offset -
+					lower_visual_offset}px)">
 			</div>
 			<div
 				class="track-segment inactive"
-				style:left="calc({upper_pct}% + var(--handle-width) * {upper_thumb_offset} + var(--gap))"
+				style:left="calc({upper_pct}% + var(--handle-width) * {upper_thumb_offset} + var(--gap)
+				+ {upper_visual_offset}px)"
 				style:right="0">
 			</div>
 		{:else}
 			<div
 				class="track-segment active"
 				style:left="0"
-				style:width="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} - var(--gap))">
+				style:width="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} - var(--gap)
+				+ {lower_visual_offset}px)">
 			</div>
 			<div
 				class="track-segment inactive"
-				style:left="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} + var(--gap))"
+				style:left="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset} + var(--gap)
+				+ {lower_visual_offset}px)"
 				style:right="0">
 			</div>
 		{/if}
@@ -384,10 +430,10 @@
 <style>
 	.range-container {
 		--handle-width: 8px;
-		--handle-height: 20px;
+		--handle-height: 24px;
 		--active-height: 6px;
 		--inactive-height: 4px;
-		--gap: 6px;
+		--gap: 7px;
 		--fill-color: var(--c-action, hsl(220 70% 55%));
 		--track-bg: var(--c-bg-6, hsl(0 0% 80%));
 
@@ -408,34 +454,34 @@
 	/* Sizes */
 	.range-container.size-0 {
 		--handle-width: 6px;
-		--handle-height: 16px;
+		--handle-height: 20px;
 		--active-height: 4px;
 		--inactive-height: 4px;
-		--gap: 5px;
+		--gap: 6px;
 		font-size: var(--font-size-0, 0.75rem);
 	}
 	.range-container.size-1 {
 		--handle-width: 8px;
-		--handle-height: 20px;
+		--handle-height: 24px;
 		--active-height: 6px;
 		--inactive-height: 4px;
-		--gap: 6px;
+		--gap: 7px;
 		font-size: var(--font-size-1, 0.875rem);
 	}
 	.range-container.size-2 {
 		--handle-width: 10px;
-		--handle-height: 24px;
+		--handle-height: 28px;
 		--active-height: 7px;
 		--inactive-height: 4px;
-		--gap: 7px;
+		--gap: 9px;
 		font-size: var(--font-size-2, 1rem);
 	}
 	.range-container.size-3 {
 		--handle-width: 12px;
-		--handle-height: 28px;
+		--handle-height: 32px;
 		--active-height: 8px;
 		--inactive-height: 5px;
-		--gap: 8px;
+		--gap: 10px;
 		font-size: var(--font-size-3, 1.125rem);
 	}
 
@@ -482,7 +528,7 @@
 			height 200ms ease;
 	}
 
-	/* Disable position transitions during drag */
+	/* During drag: no position transition (track follows handle via reactive offset) */
 	.dragging .track-segment.active {
 		transition:
 			height 200ms ease,
