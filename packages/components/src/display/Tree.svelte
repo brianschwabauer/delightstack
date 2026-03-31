@@ -994,6 +994,7 @@
 	.tree-node {
 		list-style: none;
 		position: relative;
+		perspective: 100px;
 	}
 
 	/* ========== Node Row ========== */
@@ -1006,7 +1007,9 @@
 		border-radius: var(--radius-2, 4px);
 		position: relative;
 		min-height: 1.75rem;
-		transition: background-color 100ms ease;
+		transition:
+			background-color 100ms ease,
+			translate 200ms ease;
 	}
 
 	.node-row:hover {
@@ -1014,7 +1017,15 @@
 			rgb(from var(--color-text, #000) r g b / 0.06),
 			rgb(from var(--color-text, #fff) r g b / 0.08)
 		);
-		transition: none;
+		transition: translate 200ms ease;
+	}
+
+	.node-row:active {
+		translate: 0px 4px clamp(-5px, calc(0.2em - 5px), -2px);
+	}
+
+	.tree-node.disabled > .node-row:active {
+		translate: none;
 	}
 
 	.tree-node.selected > .node-row {
@@ -1029,7 +1040,7 @@
 			rgb(from var(--color-action, #1976d2) r g b / 0.15),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.22)
 		);
-		transition: none;
+		transition: translate 200ms ease;
 	}
 
 	.tree-node.focused > .node-row {

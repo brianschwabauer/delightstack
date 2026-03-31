@@ -535,6 +535,7 @@
 		overflow: hidden;
 		margin-bottom: var(--toast-gap, 8px);
 		color: light-dark(#1a1a1a, #f5f5f5);
+		perspective: 100px;
 		transition:
 			transform 200ms ease,
 			opacity 200ms ease;
@@ -592,15 +593,18 @@
 		color: inherit;
 		cursor: pointer;
 		white-space: nowrap;
-		transition: background 120ms ease;
+		transition:
+			background 120ms ease,
+			translate 200ms ease;
 
 		&:hover {
 			background: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.1));
-			transition: none;
+			transition: translate 200ms ease;
 		}
 
 		&:active {
 			background: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.15));
+			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
 		}
 	}
 
@@ -619,12 +623,17 @@
 		padding: 0;
 		transition:
 			background 120ms ease,
-			color 120ms ease;
+			color 120ms ease,
+			translate 200ms ease;
 
 		&:hover {
 			background: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.12));
 			color: light-dark(rgb(0 0 0 / 0.7), rgb(255 255 255 / 0.7));
-			transition: none;
+			transition: translate 200ms ease;
+		}
+
+		&:active {
+			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
 		}
 	}
 

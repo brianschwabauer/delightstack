@@ -149,10 +149,7 @@
 	{@attach tooltip(tooltipMessage)}
 	{id}>
 	<!-- Hidden native input for form submission -->
-	<input
-		type="hidden"
-		{name}
-		value={value.toString()} />
+	<input type="hidden" {name} value={value.toString()} />
 
 	<div class="stars" style:--star-color={color || null}>
 		{#each { length: max } as _, i}
@@ -170,7 +167,7 @@
 						type="button"
 						class="star-half left"
 						tabindex={-1}
-						disabled={disabled}
+						{disabled}
 						aria-hidden="true"
 						onclick={() => selectValue(vals.half)}
 						onmouseenter={() => hoverStar(vals.half)}>
@@ -191,7 +188,7 @@
 						type="button"
 						class="star-half right"
 						tabindex={-1}
-						disabled={disabled}
+						{disabled}
 						aria-hidden="true"
 						onclick={() => selectValue(vals.full)}
 						onmouseenter={() => hoverStar(vals.full)}>
@@ -201,10 +198,7 @@
 							height={px}
 							aria-hidden="true"
 							style="clip-path: inset(0 0 0 50%)">
-							<path
-								d={starPath}
-								class="star-path"
-								class:filled={fill === 'full'} />
+							<path d={starPath} class="star-path" class:filled={fill === 'full'} />
 						</svg>
 					</button>
 				{:else}
@@ -217,11 +211,7 @@
 						aria-hidden="true"
 						onclick={() => selectValue(vals.full)}
 						onmouseenter={() => hoverStar(vals.full)}>
-						<svg
-							viewBox="0 0 24 24"
-							width={px}
-							height={px}
-							aria-hidden="true">
+						<svg viewBox="0 0 24 24" width={px} height={px} aria-hidden="true">
 							<path
 								d={starPath}
 								class="star-path"
@@ -278,6 +268,7 @@
 		position: relative;
 		display: inline-flex;
 		flex-shrink: 0;
+		perspective: 100px;
 
 		&.bouncing {
 			animation: bounce 300ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -302,6 +293,11 @@
 		box-shadow: none;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
+		transition: translate 200ms ease;
+
+		&:active:not(:disabled) {
+			translate: 0px 1px clamp(-20px, calc(0.2em - 17px), -2px);
+		}
 
 		&:disabled {
 			cursor: default;

@@ -996,6 +996,10 @@
 	}
 
 	/* ========== Body Rows ========== */
+	tbody {
+		perspective: 100px;
+	}
+
 	tbody tr {
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
@@ -1019,6 +1023,11 @@
 
 	.ds-table-row-clickable {
 		cursor: pointer;
+		transition: translate 200ms ease;
+
+		&:active {
+			translate: 0px 4px clamp(-5px, calc(0.2em - 5px), -2px);
+		}
 	}
 
 	.ds-table-row:hover {

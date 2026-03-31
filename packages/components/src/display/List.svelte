@@ -141,6 +141,7 @@
 		padding: 0;
 		margin: 0;
 		background-color: var(--color-bg);
+		perspective: 100px;
 		&.disabled {
 			color: var(--color-text-disabled);
 			cursor: not-allowed;

@@ -202,6 +202,7 @@
 		list-style: none;
 		display: flex;
 		align-items: center;
+		perspective: 100px;
 		:global(> .ripple) {
 			inset: 1px var(--border-inset) 1px
 				calc(var(--border-inset) + ((var(--level) - 1) * 1rem)) !important;
@@ -366,6 +367,11 @@
 		background-color: transparent;
 		text-decoration: none;
 		box-shadow: none;
+		transition: translate 200ms ease;
+
+		&:active:not(:disabled):not([aria-disabled='true']) {
+			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
+		}
 		&::before {
 			content: '';
 			opacity: 0;

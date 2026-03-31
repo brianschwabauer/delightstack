@@ -821,6 +821,7 @@
 	.ds-select {
 		position: relative;
 		width: 100%;
+		perspective: 100px;
 	}
 
 	.ds-select.disabled {
@@ -856,13 +857,19 @@
 		border-radius: var(--radius-md, 6px);
 		background: light-dark(white, var(--color-surface-1, hsl(0 0% 12%)));
 		cursor: pointer;
-		transition: border-color 150ms;
+		transition:
+			border-color 150ms,
+			translate 200ms ease;
 		min-height: 2.25rem;
 		width: 100%;
 		outline: none;
 		font: inherit;
 		color: inherit;
 		text-align: left;
+
+		&:active:not(.disabled) {
+			translate: 0px 3px clamp(-6px, calc(0.2em - 5px), -2px);
+		}
 	}
 
 	.select-trigger:focus-within,

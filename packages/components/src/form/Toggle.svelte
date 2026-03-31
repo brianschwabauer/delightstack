@@ -139,7 +139,9 @@
 		--track-height: 24px;
 		--thumb-size: 18px;
 		--thumb-offset: 3px;
-		--thumb-travel: calc(var(--track-width) - var(--thumb-size) - var(--thumb-offset) * 2);
+		--thumb-travel: calc(
+			var(--track-width) - var(--thumb-size) - var(--thumb-offset) * 2
+		);
 		--thumb-press-grow: 4px;
 
 		display: inline-flex;
@@ -149,6 +151,7 @@
 		user-select: none;
 		-webkit-tap-highlight-color: transparent;
 		position: relative;
+		perspective: 100px;
 	}
 
 	.toggle.label-start {
@@ -205,9 +208,19 @@
 		height: var(--track-height);
 		border-radius: var(--track-height);
 		background-color: var(--c-bg-6, hsl(0 0% 70%));
-		transition: background-color 0.2s ease;
+		transition:
+			background-color 0.2s ease,
+			translate 200ms ease;
 		flex-shrink: 0;
 		outline: none;
+
+		&:active {
+			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
+		}
+	}
+
+	.disabled .track:active {
+		translate: none;
 	}
 
 	.track:focus-visible {
@@ -275,10 +288,18 @@
 	.label {
 		color: var(--c-text, inherit);
 		line-height: 1.4;
+		transition: translate 200ms ease;
+		&:active {
+			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
+		}
 	}
 	.state-label {
 		color: var(--c-text-2, inherit);
 		font-size: 0.875em;
 		line-height: 1.4;
+		transition: translate 200ms ease;
+		&:active {
+			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
+		}
 	}
 </style>

@@ -634,13 +634,13 @@
 		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.12);
 	}
 
-	/* Handle active: widen + grow taller + larger halo */
+	/* Handle active: widen + grow taller + larger halo + push down */
 	.thumb-input:not(:disabled):active::-webkit-slider-thumb {
-		transform: scale(1.5, 1.15);
+		transform: scale(1.5, 1.15) translateY(2px);
 		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
 	}
 	.thumb-input:not(:disabled):active::-moz-range-thumb {
-		transform: scale(1.5, 1.15);
+		transform: scale(1.5, 1.15) translateY(2px);
 		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
 	}
 

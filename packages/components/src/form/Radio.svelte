@@ -302,6 +302,12 @@
 		gap: 0.5em;
 		cursor: default;
 		position: relative;
+		perspective: 100px;
+		transition: translate 200ms ease;
+
+		&:not(.disabled):active {
+			translate: 0px 3px clamp(-10px, calc(0.2em - 12px), -2px);
+		}
 
 		&.dense {
 			gap: 0.25em;
