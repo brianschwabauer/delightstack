@@ -341,6 +341,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		font-size: var(--pg-font-size);
+		perspective: 100px;
 	}
 
 	.pagination.skeleton {
@@ -402,7 +403,9 @@
 		font-size: inherit;
 		line-height: 1;
 		gap: 0.25em;
-		transition: background 100ms ease;
+		transition:
+			background 100ms ease,
+			translate 200ms ease;
 		white-space: nowrap;
 
 		&:hover:not(:disabled) {
@@ -410,7 +413,10 @@
 				var(--color-bg-subtle, #f5f5f5),
 				var(--color-bg-subtle, #1a1a1a)
 			);
-			transition: none;
+			transition: translate 200ms ease;
+		}
+		&:active:not(:disabled) {
+			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
 		}
 
 		&:focus-visible {

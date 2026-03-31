@@ -369,6 +369,7 @@
 		position: relative;
 		border-bottom: 1px solid var(--color-border, #e0e0e0);
 		gap: 0;
+		perspective: 100px;
 
 		.ds-tabs.vertical & {
 			flex-direction: column;
@@ -487,13 +488,17 @@
 		white-space: nowrap;
 		transition:
 			color 150ms ease,
-			background-color 150ms ease;
+			background-color 150ms ease,
+			translate 200ms ease;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
 
 		&:hover:not(.disabled) {
 			color: var(--color-text, #333);
-			transition: none;
+			transition: translate 200ms ease;
+		}
+		&:active:not(.disabled) {
+			translate: 0px 3px 0px;
 		}
 
 		&:focus-visible {

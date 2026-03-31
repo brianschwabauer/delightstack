@@ -366,6 +366,7 @@
 		position: relative;
 		width: fit-content;
 		border-radius: var(--radius);
+		perspective: 100px;
 
 		&.pill {
 			--radius: var(--radius-round);
@@ -642,7 +643,8 @@
 			transition:
 				background-color 300ms,
 				color 300ms,
-				box-shadow 300ms ease;
+				box-shadow 300ms ease,
+				translate 200ms ease;
 			box-shadow: inset 0px 0px 0px 0px var(--color-text);
 			gap: 0.5em;
 
@@ -661,7 +663,10 @@
 				background-color: var(--color-bg-active);
 				color: var(--color-text-active);
 				border: var(--color-action-outline-active);
-				transition: none;
+				transition: translate 200ms ease;
+			}
+			&:active:not(:disabled):not([aria-disabled='true']) {
+				translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
 			}
 		}
 

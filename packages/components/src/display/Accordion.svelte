@@ -250,6 +250,7 @@
 	.accordion-item {
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		perspective: 100px;
 
 		&.disabled {
 			opacity: 0.5;
@@ -267,7 +268,9 @@
 		outline: none;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		-webkit-tap-highlight-color: transparent;
-		transition: background-color 300ms;
+		transition:
+			background-color 300ms,
+			translate 200ms ease;
 
 		&:focus-visible {
 			box-shadow: inset 0 0 0 2px var(--color-accent, #1976d2);
@@ -279,7 +282,10 @@
 				rgb(from var(--color-text, #000) r g b / 0.04),
 				rgb(from var(--color-text, #fff) r g b / 0.06)
 			);
-			transition: none;
+			transition: translate 200ms ease;
+		}
+		&:active {
+			translate: 0px 6px clamp(-7px, calc(0.2em - 6px), -2px);
 		}
 	}
 

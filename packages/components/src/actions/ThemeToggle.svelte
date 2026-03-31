@@ -192,12 +192,17 @@
 		cursor: pointer;
 		color: currentColor;
 		border-radius: var(--radius-round, 50%);
-		transition: background-color 300ms;
+		transition:
+			background-color 300ms,
+			translate 200ms ease;
 		-webkit-tap-highlight-color: transparent;
 
 		&:hover {
 			background-color: rgb(from currentColor r g b / 0.08);
-			transition: none;
+			transition: translate 200ms ease;
+		}
+		&:active {
+			translate: 0px 3px clamp(-10px, calc(0.2em - 12px), -2px);
 		}
 		&:focus-visible {
 			outline: 2px solid currentColor;
