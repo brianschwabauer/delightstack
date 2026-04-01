@@ -593,6 +593,14 @@
 		}
 	}
 
+	/* Explicit cross-axis size so nested components with height/width: 100% resolve correctly */
+	.horizontal > .pane {
+		height: 100%;
+	}
+	.vertical > .pane {
+		width: 100%;
+	}
+
 	.divider {
 		flex-shrink: 0;
 		position: relative;
@@ -604,16 +612,6 @@
 		outline: none;
 		z-index: 1;
 
-		.horizontal & {
-			width: 4px;
-			cursor: col-resize;
-		}
-
-		.vertical & {
-			height: 4px;
-			cursor: row-resize;
-		}
-
 		&:hover,
 		&:active {
 			background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
@@ -624,26 +622,33 @@
 			outline: 2px solid var(--color-action, #1976d2);
 			outline-offset: -2px;
 		}
+	}
 
-		.dragging & {
-			background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
-		}
+	/* Direct child selectors prevent leaking into nested SplitPane instances */
+	.horizontal > .divider {
+		width: 4px;
+		cursor: col-resize;
+	}
+	.vertical > .divider {
+		height: 4px;
+		cursor: row-resize;
+	}
+	.dragging > .divider {
+		background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 	}
 
 	.divider-handle {
 		position: absolute;
-
-		.horizontal & {
-			width: 12px;
-			height: 100%;
-			left: -4px;
-		}
-
-		.vertical & {
-			height: 12px;
-			width: 100%;
-			top: -4px;
-		}
+	}
+	.horizontal > .divider > .divider-handle {
+		width: 12px;
+		height: 100%;
+		left: -4px;
+	}
+	.vertical > .divider > .divider-handle {
+		height: 12px;
+		width: 100%;
+		top: -4px;
 	}
 
 	.expand-button {
