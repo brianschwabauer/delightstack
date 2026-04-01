@@ -190,7 +190,7 @@
 {:else if skeleton}
 	<!-- Skeleton -->
 	<ol
-		class={['ds-timeline skeleton', horizontal ? 'horizontal' : 'vertical', className].filter(Boolean).join(' ')}
+		class={['timeline skeleton', horizontal ? 'horizontal' : 'vertical', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		{id}
@@ -212,7 +212,7 @@
 {:else}
 	<!-- Timeline container -->
 	<ol
-		class={['ds-timeline', horizontal ? 'horizontal' : 'vertical', className].filter(Boolean).join(' ')}
+		class={['timeline', horizontal ? 'horizontal' : 'vertical', className].filter(Boolean).join(' ')}
 		class:alternate
 		class:dense
 		class:comfortable
@@ -238,7 +238,7 @@
 
 <style>
 	/* ========== Timeline Container ========== */
-	.ds-timeline {
+	.timeline {
 		list-style: none;
 		padding: 0;
 		margin: 0;
@@ -322,7 +322,7 @@
 	}
 
 	/* ========== Alternate Mode (vertical) ========== */
-	.ds-timeline.vertical.alternate {
+	.timeline.vertical.alternate {
 		padding-left: 50%;
 	}
 
@@ -634,7 +634,7 @@
 	}
 
 	/* ========== Skeleton ========== */
-	.ds-timeline.skeleton {
+	.timeline.skeleton {
 		pointer-events: none;
 	}
 

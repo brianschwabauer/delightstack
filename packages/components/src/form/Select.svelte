@@ -522,7 +522,7 @@
 {/if}
 
 <div
-	class={['ds-select', `size-${size}`, className].filter(Boolean).join(' ')}
+	class={['select', `size-${size}`, className].filter(Boolean).join(' ')}
 	class:dense
 	class:comfortable
 	class:disabled
@@ -818,21 +818,21 @@
 		color: var(--color-text-muted, hsl(0 0% 55%));
 	}
 
-	.ds-select {
+	.select {
 		position: relative;
 		width: 100%;
 		perspective: 100px;
 	}
 
-	.ds-select.disabled {
+	.select.disabled {
 		opacity: 0.5;
 		pointer-events: none;
 	}
 
-	.ds-select.skeleton {
+	.select.skeleton {
 		pointer-events: none;
 	}
-	.ds-select.skeleton .select-trigger {
+	.select.skeleton .select-trigger {
 		background: var(--color-bg-muted, hsl(0 0% 90%));
 		color: transparent;
 		border-color: transparent;
@@ -889,12 +889,12 @@
 	}
 
 	/* Dense / Comfortable */
-	.ds-select.dense .select-trigger {
+	.select.dense .select-trigger {
 		padding: 0.25rem 0.5rem;
 		min-height: 1.75rem;
 		gap: 0.25rem;
 	}
-	.ds-select.comfortable .select-trigger {
+	.select.comfortable .select-trigger {
 		padding: 0.75rem 1rem;
 		min-height: 2.75rem;
 		gap: 0.625rem;

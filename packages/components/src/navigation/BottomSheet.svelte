@@ -375,12 +375,12 @@
 {#if open || sheet_y > 0}
 	<div
 		use:portal={'body'}
-		class={['bottom-sheet-wrapper', className].filter(Boolean).join(' ')}
+		class={['wrapper', className].filter(Boolean).join(' ')}
 		{id}>
 		{#if showBackdrop}
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div
-				class="bottom-sheet-backdrop"
+				class="backdrop"
 				class:no-transition={dragging || animating}
 				style:opacity={backdrop_opacity}
 				style:pointer-events={sheet_y > 0 ? 'auto' : 'none'}
@@ -391,7 +391,7 @@
 		{/if}
 
 		<div
-			class="bottom-sheet"
+			class="sheet"
 			class:no-transition={dragging || animating}
 			bind:this={sheet_el}
 			role="dialog"
@@ -399,7 +399,7 @@
 			style:transform="translateY({translate_y}%)">
 			{#if showHandle}
 				<div
-					class="bottom-sheet-handle"
+					class="handle"
 					role="slider"
 					tabindex="0"
 					aria-label="Sheet height"
@@ -410,14 +410,14 @@
 					onpointermove={onDragMove}
 					onpointerup={onDragEnd}
 					onpointercancel={onDragEnd}>
-					<div class="bottom-sheet-handle-bar"></div>
+					<div class="handle-bar"></div>
 				</div>
 			{/if}
 
 			{#if header}
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
-					class="bottom-sheet-header"
+					class="header"
 					onpointerdown={onHeaderPointerDown}
 					onpointermove={onDragMove}
 					onpointerup={onDragEnd}
@@ -428,7 +428,7 @@
 
 			{#if children}
 				<div
-					class="bottom-sheet-content"
+					class="content"
 					bind:this={content_el}
 					onscroll={onContentScroll}
 					onpointerdown={onContentPointerDown}
@@ -443,11 +443,11 @@
 {/if}
 
 <style>
-	.bottom-sheet-wrapper {
+	.wrapper {
 		display: contents;
 	}
 
-	.bottom-sheet-backdrop {
+	.backdrop {
 		position: fixed;
 		inset: 0;
 		background: var(--color-backdrop, rgba(0, 0, 0, 0.5));
@@ -459,7 +459,7 @@
 		}
 	}
 
-	.bottom-sheet {
+	.sheet {
 		position: fixed;
 		bottom: 0;
 		left: 0;
@@ -479,7 +479,7 @@
 		}
 	}
 
-	.bottom-sheet-handle {
+	.handle {
 		display: flex;
 		justify-content: center;
 		padding: 0.75rem 0 0.5rem;
@@ -498,14 +498,14 @@
 		}
 	}
 
-	.bottom-sheet-handle-bar {
+	.handle-bar {
 		width: 36px;
 		height: 4px;
 		border-radius: 9999px;
 		background: var(--color-text-disabled, #a3a3a3);
 	}
 
-	.bottom-sheet-header {
+	.header {
 		flex-shrink: 0;
 		touch-action: none;
 		cursor: grab;
@@ -515,7 +515,7 @@
 		}
 	}
 
-	.bottom-sheet-content {
+	.content {
 		flex: 1;
 		overflow-y: auto;
 		overscroll-behavior: none;
@@ -524,11 +524,11 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.bottom-sheet {
+		.sheet {
 			transition: none;
 		}
 
-		.bottom-sheet-backdrop {
+		.backdrop {
 			transition: none;
 		}
 	}

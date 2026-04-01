@@ -317,7 +317,7 @@
 
 <form
 	{id}
-	class={['ds-form', class_name].filter(Boolean).join(' ')}
+	class={['form', class_name].filter(Boolean).join(' ')}
 	class:dense
 	class:comfortable
 	class:disabled={effectively_disabled}
@@ -330,21 +330,21 @@
 </form>
 
 <style>
-	.ds-form {
+	.form {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
 	}
 
-	.ds-form.dense {
+	.form.dense {
 		gap: 0.5rem;
 	}
 
-	.ds-form.comfortable {
+	.form.comfortable {
 		gap: 1.5rem;
 	}
 
-	.ds-form.disabled {
+	.form.disabled {
 		opacity: 0.6;
 		pointer-events: none;
 	}

@@ -399,7 +399,7 @@
 {#if open}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
-		class="command-palette-backdrop"
+		class="backdrop"
 		role="button"
 		tabindex="-1"
 		onclick={close}
@@ -409,7 +409,7 @@
 	</div>
 	<div
 		{id}
-		class={['command-palette', className].filter(Boolean).join(' ')}
+		class={['palette', className].filter(Boolean).join(' ')}
 		class:dense
 		role="dialog"
 		aria-modal="true"
@@ -423,7 +423,7 @@
 			initialFocus: false,
 		})}
 		use:portal>
-		<div class="command-palette-input-wrapper">
+		<div class="input-wrapper">
 			<!-- Search icon -->
 			<svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<circle cx="11" cy="11" r="8" />
@@ -456,16 +456,16 @@
 			id={listbox_id}
 			role="listbox"
 			aria-label="Commands"
-			class="command-palette-results"
+			class="results"
 		>
 			{#if visible_commands.length === 0}
-				<div class="command-palette-empty">
+				<div class="empty">
 					No results found
 				</div>
 			{:else}
 				{#each grouped_commands as group}
 					{#if group.label}
-						<div class="command-palette-group-header" role="presentation">
+						<div class="group-header" role="presentation">
 							{group.label}
 						</div>
 					{/if}
@@ -480,19 +480,19 @@
 							tabindex="-1"
 							aria-selected={is_selected}
 							aria-disabled={command.disabled || false}
-							class="command-palette-item"
+							class="item"
 							class:selected={is_selected}
 							class:disabled={command.disabled}
 							onpointerenter={() => { selected_index = flat_index; }}
 							onclick={() => { if (!command.disabled) executeCommand(command); }}
 						>
 							{#if command.icon}
-								<span class="command-palette-item-icon">
+								<span class="item-icon">
 									<command.icon />
 								</span>
 							{/if}
-							<div class="command-palette-item-content">
-								<span class="command-palette-item-title">
+							<div class="item-content">
+								<span class="item-title">
 									{#each getSegments(command) as segment}
 										{#if segment.highlighted}
 											<mark>{segment.text}</mark>
@@ -502,11 +502,11 @@
 									{/each}
 								</span>
 								{#if command.description}
-									<span class="command-palette-item-description">{command.description}</span>
+									<span class="item-description">{command.description}</span>
 								{/if}
 							</div>
 							{#if command.shortcut && command.shortcut.length > 0}
-								<div class="command-palette-item-shortcut">
+								<div class="item-shortcut">
 									{#each command.shortcut as key}
 										<kbd>{key}</kbd>
 									{/each}
@@ -521,7 +521,7 @@
 {/if}
 
 <style>
-	.command-palette-backdrop {
+	.backdrop {
 		position: fixed;
 		top: 0;
 		left: 0;
@@ -542,7 +542,7 @@
 		}
 	}
 
-	.command-palette {
+	.palette {
 		position: fixed;
 		top: 20vh;
 		left: 50%;
@@ -558,7 +558,7 @@
 		overflow: hidden;
 	}
 
-	.command-palette-input-wrapper {
+	.input-wrapper {
 		display: flex;
 		align-items: center;
 		padding: 0.75rem 1rem;
@@ -607,7 +607,7 @@
 		to { transform: rotate(360deg); }
 	}
 
-	.command-palette-results {
+	.results {
 		max-height: 400px;
 		overflow-y: auto;
 		padding: 0.5rem 0;
@@ -617,14 +617,14 @@
 		}
 	}
 
-	.command-palette-empty {
+	.empty {
 		padding: 2rem 1rem;
 		text-align: center;
 		color: var(--color-text-muted);
 		font-size: 0.875rem;
 	}
 
-	.command-palette-group-header {
+	.group-header {
 		padding: 0.5rem 1rem 0.25rem;
 		font-size: 0.7rem;
 		font-weight: 600;
@@ -638,7 +638,7 @@
 		}
 	}
 
-	.command-palette-item {
+	.item {
 		display: flex;
 		align-items: center;
 		padding: 0.5rem 1rem;
@@ -661,7 +661,7 @@
 		}
 	}
 
-	.command-palette-item-icon {
+	.item-icon {
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
@@ -676,7 +676,7 @@
 		}
 	}
 
-	.command-palette-item-content {
+	.item-content {
 		flex: 1;
 		min-width: 0;
 		display: flex;
@@ -684,7 +684,7 @@
 		gap: 0.125rem;
 	}
 
-	.command-palette-item-title {
+	.item-title {
 		font-size: 0.875rem;
 		color: var(--color-text);
 		white-space: nowrap;
@@ -702,7 +702,7 @@
 		}
 	}
 
-	.command-palette-item-description {
+	.item-description {
 		font-size: 0.75rem;
 		color: var(--color-text-muted);
 		white-space: nowrap;
@@ -714,7 +714,7 @@
 		}
 	}
 
-	.command-palette-item-shortcut {
+	.item-shortcut {
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;

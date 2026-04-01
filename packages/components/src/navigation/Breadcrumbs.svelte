@@ -123,7 +123,7 @@
 
 {#if skeleton}
 	<nav
-		class={['ds-breadcrumbs', className].filter(Boolean).join(' ')}
+		class={['breadcrumbs', className].filter(Boolean).join(' ')}
 		aria-label="Breadcrumb"
 		aria-hidden="true"
 		style:font-size={sizeMap[size] ?? sizeMap['1']}
@@ -149,7 +149,7 @@
 	</nav>
 {:else if children}
 	<nav
-		class={['ds-breadcrumbs', className].filter(Boolean).join(' ')}
+		class={['breadcrumbs', className].filter(Boolean).join(' ')}
 		aria-label="Breadcrumb"
 		style:font-size={sizeMap[size] ?? sizeMap['1']}
 		{id}>
@@ -160,7 +160,7 @@
 	{/if}
 {:else}
 	<nav
-		class={['ds-breadcrumbs', className].filter(Boolean).join(' ')}
+		class={['breadcrumbs', className].filter(Boolean).join(' ')}
 		aria-label="Breadcrumb"
 		style:font-size={sizeMap[size] ?? sizeMap['1']}
 		{id}>
@@ -322,7 +322,7 @@
 
 <style>
 	/* ========== Breadcrumbs Container ========== */
-	.ds-breadcrumbs {
+	.breadcrumbs {
 		display: block;
 	}
 

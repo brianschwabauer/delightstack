@@ -529,7 +529,7 @@
 		if (!quality_open && !speed_open) return;
 		function onClickOutside(e: MouseEvent) {
 			const target = e.target as HTMLElement;
-			if (!target.closest('.ds-video-menu')) {
+			if (!target.closest('.menu')) {
 				closeAllMenus();
 			}
 		}
@@ -553,7 +553,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
 	{id}
-	class={['ds-video', className].filter(Boolean).join(' ')}
+	class={['video', className].filter(Boolean).join(' ')}
 	class:is-fullscreen={is_fullscreen}
 	style:aspect-ratio={is_fullscreen ? undefined : aspectRatio}
 	bind:this={element}
@@ -566,7 +566,7 @@
 	aria-label="Video player">
 
 	{#if skeleton && !is_ready}
-		<div class="ds-video-skeleton" aria-hidden="true"></div>
+		<div class="skeleton" aria-hidden="true"></div>
 	{/if}
 
 	<!-- Video element -->
@@ -579,7 +579,7 @@
 		muted={is_muted}
 		playsinline
 		crossorigin="anonymous"
-		class="ds-video-element"
+		class="element"
 		onclick={togglePlay}
 		onplay={handleVideoPlay}
 		onpause={handleVideoPause}
@@ -609,7 +609,7 @@
 	<!-- Big play button overlay -->
 	{#if !has_started && !playing}
 		<button
-			class="ds-video-big-play"
+			class="big-play"
 			type="button"
 			aria-label="Play video"
 			onclick={togglePlay}>
@@ -621,7 +621,7 @@
 
 	<!-- Error overlay -->
 	{#if has_error}
-		<div class="ds-video-error">
+		<div class="error">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 				<circle cx="12" cy="12" r="10" />
 				<line x1="12" y1="8" x2="12" y2="12" />
@@ -634,13 +634,13 @@
 	<!-- Custom controls -->
 	{#if controls}
 		<div
-			class="ds-video-controls"
+			class="controls"
 			class:visible={show_controls || !playing}
 			class:hidden={!show_controls && playing}>
 
 			<!-- Progress bar -->
 			<div
-				class="ds-video-progress"
+				class="progress"
 				role="slider"
 				aria-label="Seek"
 				aria-valuenow={Math.floor(current_time)}
@@ -653,25 +653,25 @@
 				onpointerenter={() => (show_seek_tooltip = true)}
 				onpointerleave={() => { show_seek_tooltip = false; is_seeking = false; }}>
 
-				<div class="ds-video-progress-track">
-					<div class="ds-video-progress-buffered" style:width="{buffered_percent}%"></div>
-					<div class="ds-video-progress-fill" style:width="{progress_percent}%"></div>
+				<div class="progress-track">
+					<div class="progress-buffered" style:width="{buffered_percent}%"></div>
+					<div class="progress-fill" style:width="{progress_percent}%"></div>
 				</div>
 
 				{#if show_seek_tooltip && duration > 0}
-					<div class="ds-video-seek-tooltip" style:left="{seek_hover_x}px">
+					<div class="seek-tooltip" style:left="{seek_hover_x}px">
 						{formatTime(seek_hover_time)}
 					</div>
 				{/if}
 			</div>
 
 			<!-- Control bar -->
-			<div class="ds-video-control-bar">
+			<div class="control-bar">
 				<!-- Left controls -->
-				<div class="ds-video-controls-left">
+				<div class="controls-left">
 					<!-- Play/Pause -->
 					<button
-						class="ds-video-btn"
+						class="btn"
 						type="button"
 						aria-label={playing ? 'Pause' : 'Play'}
 						onclick={togglePlay}>
@@ -688,9 +688,9 @@
 					</button>
 
 					<!-- Volume -->
-					<div class="ds-video-volume-group">
+					<div class="volume-group">
 						<button
-							class="ds-video-btn"
+							class="btn"
 							type="button"
 							aria-label={is_muted ? 'Unmute' : 'Mute'}
 							onclick={toggleMute}>
@@ -715,7 +715,7 @@
 						</button>
 
 						<div
-							class="ds-video-volume-slider"
+							class="volume-slider"
 							role="slider"
 							aria-label="Volume"
 							aria-valuenow={Math.round(volume * 100)}
@@ -725,24 +725,24 @@
 							onpointerdown={handleVolumePointerDown}
 							onpointermove={handleVolumePointerMove}
 							onpointerup={handleVolumePointerUp}>
-							<div class="ds-video-volume-track">
-								<div class="ds-video-volume-fill" style:width="{is_muted ? 0 : volume * 100}%"></div>
+							<div class="volume-track">
+								<div class="volume-fill" style:width="{is_muted ? 0 : volume * 100}%"></div>
 							</div>
 						</div>
 					</div>
 
 					<!-- Time display -->
-					<span class="ds-video-time">
+					<span class="time">
 						{formatTime(current_time)} / {formatTime(duration)}
 					</span>
 				</div>
 
 				<!-- Right controls -->
-				<div class="ds-video-controls-right">
+				<div class="controls-right">
 					<!-- Playback speed -->
-					<div class="ds-video-menu">
+					<div class="menu">
 						<button
-							class="ds-video-btn ds-video-btn-text"
+							class="btn btn-text"
 							type="button"
 							aria-label="Playback speed"
 							aria-haspopup="true"
@@ -751,10 +751,10 @@
 							{playback_rate === 1 ? '1x' : `${playback_rate}x`}
 						</button>
 						{#if speed_open}
-							<div class="ds-video-dropdown" role="menu">
+							<div class="dropdown" role="menu">
 								{#each SPEEDS as speed}
 									<button
-										class="ds-video-dropdown-item"
+										class="dropdown-item"
 										class:active={playback_rate === speed}
 										type="button"
 										role="menuitem"
@@ -768,9 +768,9 @@
 
 					<!-- Quality selector -->
 					{#if has_quality_options}
-						<div class="ds-video-menu">
+						<div class="menu">
 							<button
-								class="ds-video-btn ds-video-btn-text"
+								class="btn btn-text"
 								type="button"
 								aria-label="Video quality"
 								aria-haspopup="true"
@@ -779,10 +779,10 @@
 								{active_quality_label}
 							</button>
 							{#if quality_open}
-								<div class="ds-video-dropdown" role="menu">
+								<div class="dropdown" role="menu">
 									{#each quality_sources as source, i}
 										<button
-											class="ds-video-dropdown-item"
+											class="dropdown-item"
 											class:active={active_source_index === i}
 											type="button"
 											role="menuitem"
@@ -798,7 +798,7 @@
 					<!-- Captions toggle -->
 					{#if captions.length > 0}
 						<button
-							class="ds-video-btn"
+							class="btn"
 							class:active={captions_active}
 							type="button"
 							aria-label={captions_active ? 'Disable captions' : 'Enable captions'}
@@ -815,7 +815,7 @@
 					<!-- PiP -->
 					{#if pip_supported}
 						<button
-							class="ds-video-btn"
+							class="btn"
 							class:active={is_pip}
 							type="button"
 							aria-label={is_pip ? 'Exit picture-in-picture' : 'Picture-in-picture'}
@@ -829,7 +829,7 @@
 
 					<!-- Fullscreen -->
 					<button
-						class="ds-video-btn"
+						class="btn"
 						type="button"
 						aria-label={is_fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
 						onclick={toggleFullscreen}>
@@ -856,7 +856,7 @@
 </div>
 
 <style>
-	.ds-video {
+	.video {
 		position: relative;
 		overflow: hidden;
 		background: black;
@@ -868,19 +868,19 @@
 		-webkit-user-select: none;
 	}
 
-	.ds-video:focus-visible {
+	.video:focus-visible {
 		outline: 2px solid var(--color-action, #2563eb);
 		outline-offset: 2px;
 	}
 
-	.ds-video.is-fullscreen {
+	.video.is-fullscreen {
 		border-radius: 0;
 		width: 100%;
 		height: 100%;
 	}
 
 	/* Skeleton */
-	.ds-video-skeleton {
+	.skeleton {
 		position: absolute;
 		inset: 0;
 		z-index: 1;
@@ -891,16 +891,16 @@
 			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 75%
 		);
 		background-size: 200% 100%;
-		animation: ds-video-shimmer 1.5s ease-in-out infinite;
+		animation: shimmer 1.5s ease-in-out infinite;
 	}
 
-	@keyframes ds-video-shimmer {
+	@keyframes shimmer {
 		0% { background-position: 200% 0; }
 		100% { background-position: -200% 0; }
 	}
 
 	/* Video element */
-	.ds-video-element {
+	.element {
 		display: block;
 		width: 100%;
 		height: 100%;
@@ -909,7 +909,7 @@
 	}
 
 	/* Big play button */
-	.ds-video-big-play {
+	.big-play {
 		position: absolute;
 		top: 50%;
 		left: 50%;
@@ -931,22 +931,22 @@
 		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 	}
 
-	.ds-video-big-play:hover {
+	.big-play:hover {
 		transform: translate(-50%, -50%) scale(1.08);
 	}
 
-	.ds-video-big-play:active {
+	.big-play:active {
 		transform: translate(-50%, -50%) scale(0.96);
 	}
 
-	.ds-video-big-play svg {
+	.big-play svg {
 		width: 32px;
 		height: 32px;
 		margin-left: 3px;
 	}
 
 	/* Error overlay */
-	.ds-video-error {
+	.error {
 		position: absolute;
 		inset: 0;
 		z-index: 5;
@@ -960,14 +960,14 @@
 		font-size: var(--text-sm, 0.875rem);
 	}
 
-	.ds-video-error svg {
+	.error svg {
 		width: 32px;
 		height: 32px;
 		opacity: 0.7;
 	}
 
 	/* Controls container */
-	.ds-video-controls {
+	.controls {
 		position: absolute;
 		bottom: 0;
 		left: 0;
@@ -982,18 +982,18 @@
 		pointer-events: none;
 	}
 
-	.ds-video-controls.visible {
+	.controls.visible {
 		opacity: 1;
 		pointer-events: auto;
 	}
 
-	.ds-video-controls.hidden {
+	.controls.hidden {
 		opacity: 0;
 		pointer-events: none;
 	}
 
 	/* Progress bar */
-	.ds-video-progress {
+	.progress {
 		position: relative;
 		height: 20px;
 		cursor: pointer;
@@ -1003,7 +1003,7 @@
 		touch-action: none;
 	}
 
-	.ds-video-progress-track {
+	.progress-track {
 		position: relative;
 		width: 100%;
 		height: 4px;
@@ -1013,11 +1013,11 @@
 		transition: height var(--duration-fast, 150ms) var(--ease-default, ease);
 	}
 
-	.ds-video-progress:hover .ds-video-progress-track {
+	.progress:hover .progress-track {
 		height: 6px;
 	}
 
-	.ds-video-progress-buffered {
+	.progress-buffered {
 		position: absolute;
 		top: 0;
 		left: 0;
@@ -1027,7 +1027,7 @@
 		pointer-events: none;
 	}
 
-	.ds-video-progress-fill {
+	.progress-fill {
 		position: absolute;
 		top: 0;
 		left: 0;
@@ -1038,7 +1038,7 @@
 	}
 
 	/* Seek tooltip */
-	.ds-video-seek-tooltip {
+	.seek-tooltip {
 		position: absolute;
 		top: -28px;
 		transform: translateX(-50%);
@@ -1053,7 +1053,7 @@
 	}
 
 	/* Control bar */
-	.ds-video-control-bar {
+	.control-bar {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -1061,20 +1061,20 @@
 		gap: 4px;
 	}
 
-	.ds-video-controls-left {
+	.controls-left {
 		display: flex;
 		align-items: center;
 		gap: 4px;
 	}
 
-	.ds-video-controls-right {
+	.controls-right {
 		display: flex;
 		align-items: center;
 		gap: 4px;
 	}
 
 	/* Button base */
-	.ds-video-btn {
+	.btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1090,25 +1090,25 @@
 		flex-shrink: 0;
 	}
 
-	.ds-video-btn:hover {
+	.btn:hover {
 		background: rgba(255, 255, 255, 0.15);
 	}
 
-	.ds-video-btn:active {
+	.btn:active {
 		background: rgba(255, 255, 255, 0.25);
 	}
 
-	.ds-video-btn.active {
+	.btn.active {
 		color: var(--color-action, #2563eb);
 	}
 
-	.ds-video-btn svg {
+	.btn svg {
 		width: 20px;
 		height: 20px;
 	}
 
 	/* Text-style button (speed, quality) */
-	.ds-video-btn-text {
+	.btn-text {
 		width: auto;
 		padding: 0 8px;
 		font-size: var(--text-xs, 0.75rem);
@@ -1119,13 +1119,13 @@
 	}
 
 	/* Volume group */
-	.ds-video-volume-group {
+	.volume-group {
 		display: flex;
 		align-items: center;
 		gap: 0;
 	}
 
-	.ds-video-volume-slider {
+	.volume-slider {
 		width: 0;
 		overflow: hidden;
 		transition: width var(--duration-fast, 150ms) var(--ease-default, ease);
@@ -1136,12 +1136,12 @@
 		touch-action: none;
 	}
 
-	.ds-video-volume-group:hover .ds-video-volume-slider {
+	.volume-group:hover .volume-slider {
 		width: 64px;
 		padding: 0 4px;
 	}
 
-	.ds-video-volume-track {
+	.volume-track {
 		position: relative;
 		width: 100%;
 		height: 4px;
@@ -1150,7 +1150,7 @@
 		overflow: hidden;
 	}
 
-	.ds-video-volume-fill {
+	.volume-fill {
 		position: absolute;
 		top: 0;
 		left: 0;
@@ -1161,7 +1161,7 @@
 	}
 
 	/* Time display */
-	.ds-video-time {
+	.time {
 		color: rgba(255, 255, 255, 0.9);
 		font-size: var(--text-xs, 0.75rem);
 		font-variant-numeric: tabular-nums;
@@ -1170,11 +1170,11 @@
 	}
 
 	/* Dropdown menus */
-	.ds-video-menu {
+	.menu {
 		position: relative;
 	}
 
-	.ds-video-dropdown {
+	.dropdown {
 		position: absolute;
 		bottom: 100%;
 		right: 0;
@@ -1190,7 +1190,7 @@
 		z-index: 20;
 	}
 
-	.ds-video-dropdown-item {
+	.dropdown-item {
 		display: block;
 		width: 100%;
 		padding: 6px 12px;
@@ -1206,11 +1206,11 @@
 		transition: background var(--duration-fast, 150ms) var(--ease-default, ease);
 	}
 
-	.ds-video-dropdown-item:hover {
+	.dropdown-item:hover {
 		background: rgba(255, 255, 255, 0.1);
 	}
 
-	.ds-video-dropdown-item.active {
+	.dropdown-item.active {
 		color: var(--color-action, #2563eb);
 		font-weight: 600;
 	}

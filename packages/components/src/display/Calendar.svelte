@@ -558,7 +558,7 @@
 
 {#if skeleton}
 	<div
-		class={['ds-calendar skeleton', className].filter(Boolean).join(' ')}
+		class={['calendar skeleton', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		{id}
@@ -581,7 +581,7 @@
 	</div>
 {:else}
 	<div
-		class={['ds-calendar', className].filter(Boolean).join(' ')}
+		class={['calendar', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:has-time-slots={showTimeSlots}
@@ -721,7 +721,7 @@
 
 <style>
 	/* ========== Container ========== */
-	.ds-calendar {
+	.calendar {
 		display: inline-flex;
 		font-family: inherit;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
@@ -1079,7 +1079,7 @@
 	}
 
 	/* ========== Skeleton ========== */
-	.ds-calendar.skeleton {
+	.calendar.skeleton {
 		pointer-events: none;
 	}
 

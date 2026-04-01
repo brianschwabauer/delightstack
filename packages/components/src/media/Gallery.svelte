@@ -168,21 +168,21 @@
 {#if skeleton}
 	<div
 		{id}
-		class={['ds-gallery', masonry ? 'ds-gallery-masonry' : 'ds-gallery-grid', className].filter(Boolean).join(' ')}
+		class={['gallery', masonry ? 'masonry' : 'grid', className].filter(Boolean).join(' ')}
 		style:--gallery-columns={columns}
 		style:--gallery-gap={effective_gap}
 		bind:this={element}
 		role="list">
 		{#each skeleton_items as _, i (i)}
-			<div class="ds-gallery-skeleton" role="listitem">
-				<div class="ds-gallery-skeleton-shimmer"></div>
+			<div class="skeleton" role="listitem">
+				<div class="skeleton-shimmer"></div>
 			</div>
 		{/each}
 	</div>
 {:else}
 	<div
 		{id}
-		class={['ds-gallery', masonry ? 'ds-gallery-masonry' : 'ds-gallery-grid', className].filter(Boolean).join(' ')}
+		class={['gallery', masonry ? 'masonry' : 'grid', className].filter(Boolean).join(' ')}
 		style:--gallery-columns={columns}
 		style:--gallery-gap={effective_gap}
 		bind:this={element}
@@ -190,7 +190,7 @@
 		{#each images as image, index (index)}
 			{#if item}
 				<div
-					class="ds-gallery-item"
+					class="item"
 					role="listitem"
 					style:aspect-ratio={aspect_ratio}>
 					{@render item(image, index)}
@@ -198,7 +198,7 @@
 			{:else}
 				<div role="listitem" style:aspect-ratio={aspect_ratio}>
 					<button
-						class="ds-gallery-item"
+						class="item"
 						type="button"
 						style:aspect-ratio={aspect_ratio}
 						onclick={() => handleImageClick(image, index)}
@@ -212,7 +212,7 @@
 							height={image.height}
 							aspect_ratio={aspect_ratio} />
 						{#if lightbox}
-							<div class="ds-gallery-overlay" aria-hidden="true">
+							<div class="overlay" aria-hidden="true">
 								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
 									<circle cx="11" cy="11" r="8" />
 									<line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -233,22 +233,22 @@
 			closable={true}
 			maxWidth="95vw"
 			maxHeight="95svh"
-			class="ds-gallery-lightbox"
+			class="lightbox"
 			onclose={onlightboxclose}>
 			{#snippet children()}
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
-					class="ds-lightbox-content"
+					class="lightbox-content"
 					ontouchstart={handleTouchStart}
 					ontouchend={handleTouchEnd}>
 					<!-- Counter -->
-					<div class="ds-lightbox-counter" aria-live="polite">
+					<div class="lightbox-counter" aria-live="polite">
 						{lightbox_index + 1} of {images.length}
 					</div>
 
 					<!-- Close button -->
 					<button
-						class="ds-lightbox-close"
+						class="lightbox-close"
 						type="button"
 						aria-label="Close lightbox"
 						onclick={closeLightbox}>
@@ -261,7 +261,7 @@
 					<!-- Previous button -->
 					{#if images.length > 1}
 						<button
-							class="ds-lightbox-nav ds-lightbox-prev"
+							class="lightbox-nav lightbox-prev"
 							type="button"
 							aria-label="Previous image"
 							onclick={navigatePrev}>
@@ -273,9 +273,9 @@
 
 					<!-- Image -->
 					{#key lightbox_index}
-						<div class="ds-lightbox-image-wrapper">
+						<div class="lightbox-image-wrapper">
 							<img
-								class="ds-lightbox-image"
+								class="lightbox-image"
 								src={current_image.src}
 								alt={current_image.alt}
 								style:max-width="100%"
@@ -286,7 +286,7 @@
 					<!-- Next button -->
 					{#if images.length > 1}
 						<button
-							class="ds-lightbox-nav ds-lightbox-next"
+							class="lightbox-nav lightbox-next"
 							type="button"
 							aria-label="Next image"
 							onclick={navigateNext}>
@@ -298,7 +298,7 @@
 
 					<!-- Caption -->
 					{#if current_image.caption}
-						<p class="ds-lightbox-caption">{current_image.caption}</p>
+						<p class="lightbox-caption">{current_image.caption}</p>
 					{/if}
 				</div>
 			{/snippet}
@@ -308,25 +308,25 @@
 
 <style>
 	/* Grid layout */
-	.ds-gallery-grid {
+	.grid {
 		display: grid;
 		grid-template-columns: repeat(var(--gallery-columns, 3), 1fr);
 		gap: var(--gallery-gap, 0.5rem);
 	}
 
 	/* Masonry layout */
-	.ds-gallery-masonry {
+	.masonry {
 		columns: var(--gallery-columns, 3);
 		column-gap: var(--gallery-gap, 0.5rem);
 	}
 
-	.ds-gallery-masonry > :global(*) {
+	.masonry > :global(*) {
 		break-inside: avoid;
 		margin-bottom: var(--gallery-gap, 0.5rem);
 	}
 
 	/* Gallery item */
-	.ds-gallery-item {
+	.item {
 		position: relative;
 		overflow: hidden;
 		border-radius: var(--radius-sm);
@@ -338,26 +338,26 @@
 		width: 100%;
 	}
 
-	button.ds-gallery-item {
+	button.item {
 		appearance: none;
 		font: inherit;
 		color: inherit;
 		text-align: inherit;
 	}
 
-	.ds-gallery-item :global(.ds-image) {
+	.item :global(.image) {
 		display: block;
 		width: 100%;
 		height: 100%;
 		transition: transform var(--duration-fast, 150ms) var(--ease-default, ease);
 	}
 
-	.ds-gallery-item:hover :global(.ds-image) {
+	.item:hover :global(.image) {
 		transform: scale(1.03);
 	}
 
 	/* Hover overlay */
-	.ds-gallery-overlay {
+	.overlay {
 		position: absolute;
 		inset: 0;
 		display: flex;
@@ -370,17 +370,17 @@
 		pointer-events: none;
 	}
 
-	.ds-gallery-item:hover .ds-gallery-overlay {
+	.item:hover .overlay {
 		opacity: 1;
 	}
 
-	.ds-gallery-item:focus-visible {
+	.item:focus-visible {
 		outline: 2px solid var(--color-action, #3b82f6);
 		outline-offset: 2px;
 	}
 
 	/* Skeleton */
-	.ds-gallery-skeleton {
+	.skeleton {
 		position: relative;
 		overflow: hidden;
 		border-radius: var(--radius-sm);
@@ -388,7 +388,7 @@
 		background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
 	}
 
-	.ds-gallery-skeleton-shimmer {
+	.skeleton-shimmer {
 		position: absolute;
 		inset: 0;
 		background: linear-gradient(
@@ -398,10 +398,10 @@
 			transparent 75%
 		);
 		background-size: 200% 100%;
-		animation: ds-gallery-shimmer 1.5s ease-in-out infinite;
+		animation: gallery-shimmer 1.5s ease-in-out infinite;
 	}
 
-	@keyframes ds-gallery-shimmer {
+	@keyframes gallery-shimmer {
 		0% {
 			background-position: 200% 0;
 		}
@@ -411,7 +411,7 @@
 	}
 
 	/* Lightbox content */
-	.ds-lightbox-content {
+	.lightbox-content {
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -423,7 +423,7 @@
 	}
 
 	/* Counter */
-	.ds-lightbox-counter {
+	.lightbox-counter {
 		position: absolute;
 		top: 0;
 		left: 50%;
@@ -437,7 +437,7 @@
 	}
 
 	/* Close button */
-	.ds-lightbox-close {
+	.lightbox-close {
 		position: absolute;
 		top: 0;
 		right: 0;
@@ -454,17 +454,17 @@
 		transition: color var(--duration-fast, 150ms) var(--ease-default, ease);
 	}
 
-	.ds-lightbox-close:hover {
+	.lightbox-close:hover {
 		color: var(--color-text, #fff);
 	}
 
-	.ds-lightbox-close:focus-visible {
+	.lightbox-close:focus-visible {
 		outline: 2px solid var(--color-action, #3b82f6);
 		outline-offset: 2px;
 	}
 
 	/* Nav buttons */
-	.ds-lightbox-nav {
+	.lightbox-nav {
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
@@ -481,33 +481,33 @@
 		transition: color var(--duration-fast, 150ms) var(--ease-default, ease);
 	}
 
-	.ds-lightbox-nav:hover {
+	.lightbox-nav:hover {
 		color: var(--color-text, #fff);
 	}
 
-	.ds-lightbox-nav:focus-visible {
+	.lightbox-nav:focus-visible {
 		outline: 2px solid var(--color-action, #3b82f6);
 		outline-offset: 2px;
 	}
 
-	.ds-lightbox-prev {
+	.lightbox-prev {
 		left: 0;
 	}
 
-	.ds-lightbox-next {
+	.lightbox-next {
 		right: 0;
 	}
 
 	/* Image wrapper for fade animation */
-	.ds-lightbox-image-wrapper {
+	.lightbox-image-wrapper {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		padding: 2rem 3rem;
-		animation: ds-lightbox-fade-in var(--duration-fast, 150ms) var(--ease-default, ease);
+		animation: lightbox-fade-in var(--duration-fast, 150ms) var(--ease-default, ease);
 	}
 
-	@keyframes ds-lightbox-fade-in {
+	@keyframes lightbox-fade-in {
 		from {
 			opacity: 0;
 		}
@@ -516,7 +516,7 @@
 		}
 	}
 
-	.ds-lightbox-image {
+	.lightbox-image {
 		display: block;
 		max-width: 100%;
 		max-height: calc(95svh - 8rem);
@@ -526,16 +526,16 @@
 	}
 
 	/* Caption */
-	.ds-lightbox-caption {
+	.lightbox-caption {
 		color: var(--color-text-muted, #999);
 		font-size: 0.875rem;
 		text-align: center;
 		margin: 0.5rem 0 0;
 		padding: 0 1rem;
-		animation: ds-lightbox-caption-in calc(var(--duration-fast, 150ms) * 2) var(--ease-default, ease);
+		animation: lightbox-caption-in calc(var(--duration-fast, 150ms) * 2) var(--ease-default, ease);
 	}
 
-	@keyframes ds-lightbox-caption-in {
+	@keyframes lightbox-caption-in {
 		0%,
 		50% {
 			opacity: 0;

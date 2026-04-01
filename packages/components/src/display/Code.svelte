@@ -345,7 +345,7 @@
 
 {#if skeleton}
 	<div
-		class={['ds-code skeleton', className].filter(Boolean).join(' ')}
+		class={['code skeleton', className].filter(Boolean).join(' ')}
 		{id}
 		aria-hidden="true">
 		<div class="skeleton-header">
@@ -362,7 +362,7 @@
 		</div>
 	</div>
 {:else}
-	<div class={['ds-code', className].filter(Boolean).join(' ')} class:wrap {id}>
+	<div class={['code', className].filter(Boolean).join(' ')} class:wrap {id}>
 		{#if show_header}
 			<div class="code-header">
 				{#if filename}
@@ -439,7 +439,7 @@
 <style>
 	/* ========== Container ========== */
 
-	.ds-code {
+	.code {
 		border-radius: var(--radius-3, 0.5rem);
 		border: 1px solid light-dark(#e2e8f0, #334155);
 		background: light-dark(#f8fafc, #1e293b);
@@ -529,7 +529,7 @@
 		min-height: 1.6em;
 	}
 
-	.ds-code.wrap .line-content {
+	.code.wrap .line-content {
 		white-space: pre-wrap;
 		word-break: break-all;
 	}
@@ -678,7 +678,7 @@
 
 	/* ========== Skeleton ========== */
 
-	.ds-code.skeleton {
+	.code.skeleton {
 		pointer-events: none;
 		border-radius: var(--radius-3, 0.5rem);
 		border: 1px solid light-dark(#e2e8f0, #334155);

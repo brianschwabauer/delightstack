@@ -440,7 +440,7 @@
 
 <!-- Hidden container for rendering popup snippet content -->
 {#if popup && popup_marker}
-	<div class="ds-map-popup-render" bind:this={popup_container} aria-hidden="true">
+	<div class="popup-render" bind:this={popup_container} aria-hidden="true">
 		{@render popup(popup_marker)}
 	</div>
 {/if}
@@ -448,7 +448,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
 	{id}
-	class={['ds-map', className].filter(Boolean).join(' ')}
+	class={['map', className].filter(Boolean).join(' ')}
 	style:height
 	bind:this={element}
 	role={interactive ? 'application' : 'img'}
@@ -456,9 +456,9 @@
 	tabindex={interactive ? 0 : undefined}>
 
 	{#if skeleton}
-		<div class="ds-map-skeleton">
-			<div class="ds-map-skeleton-shimmer"></div>
-			<div class="ds-map-skeleton-icon" aria-hidden="true">
+		<div class="skeleton">
+			<div class="skeleton-shimmer"></div>
+			<div class="skeleton-icon" aria-hidden="true">
 				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="48" height="48">
 					<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
 					<circle cx="12" cy="10" r="3" />
@@ -466,33 +466,33 @@
 			</div>
 		</div>
 	{:else}
-		<div class="ds-map-container" bind:this={container}></div>
+		<div class="container" bind:this={container}></div>
 	{/if}
 </div>
 
 <style>
-	.ds-map {
+	.map {
 		position: relative;
 		width: 100%;
 		border-radius: var(--radius-md, 0.5rem);
 		overflow: hidden;
 	}
 
-	.ds-map:focus-visible {
+	.map:focus-visible {
 		outline: 2px solid var(--color-action, #3b82f6);
 		outline-offset: 2px;
 	}
 
 	/* ── Map container ─────────────────────────────────────────── */
 
-	.ds-map-container {
+	.container {
 		width: 100%;
 		height: 100%;
 	}
 
 	/* ── Hidden popup render target ────────────────────────────── */
 
-	.ds-map-popup-render {
+	.popup-render {
 		position: absolute;
 		pointer-events: none;
 		visibility: hidden;
@@ -503,7 +503,7 @@
 
 	/* ── Skeleton ──────────────────────────────────────────────── */
 
-	.ds-map-skeleton {
+	.skeleton {
 		position: relative;
 		width: 100%;
 		height: 100%;
@@ -513,7 +513,7 @@
 		justify-content: center;
 	}
 
-	.ds-map-skeleton-shimmer {
+	.skeleton-shimmer {
 		position: absolute;
 		inset: 0;
 		background: linear-gradient(
@@ -523,10 +523,10 @@
 			transparent 75%
 		);
 		background-size: 200% 100%;
-		animation: ds-map-shimmer 1.5s ease-in-out infinite;
+		animation: map-shimmer 1.5s ease-in-out infinite;
 	}
 
-	@keyframes ds-map-shimmer {
+	@keyframes map-shimmer {
 		0% {
 			background-position: 200% 0;
 		}
@@ -535,7 +535,7 @@
 		}
 	}
 
-	.ds-map-skeleton-icon {
+	.skeleton-icon {
 		position: relative;
 		z-index: 1;
 		color: light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.1));
@@ -543,14 +543,14 @@
 
 	/* ── Popup styling ─────────────────────────────────────────── */
 
-	:global(.ds-map-popup-render) {
+	:global(.popup-render) {
 		font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
 		font-size: var(--text-sm, 0.875rem);
 		color: var(--color-text, light-dark(#111827, #f9fafb));
 	}
 
 	/* Override Leaflet default popup styles */
-	.ds-map-container :global(.leaflet-popup-content-wrapper) {
+	.container :global(.leaflet-popup-content-wrapper) {
 		border-radius: var(--radius-md, 0.5rem);
 		border: 1px solid var(--color-border, light-dark(#e5e7eb, #374151));
 		box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
@@ -560,11 +560,11 @@
 		background: light-dark(#ffffff, #1f2937);
 	}
 
-	.ds-map-container :global(.leaflet-popup-content) {
+	.container :global(.leaflet-popup-content) {
 		margin: 0.75rem;
 	}
 
-	.ds-map-container :global(.leaflet-popup-tip) {
+	.container :global(.leaflet-popup-tip) {
 		background: light-dark(#ffffff, #1f2937);
 		border: 1px solid var(--color-border, light-dark(#e5e7eb, #374151));
 	}
@@ -572,7 +572,7 @@
 	/* ── Reduced motion ────────────────────────────────────────── */
 
 	@media (prefers-reduced-motion: reduce) {
-		.ds-map-skeleton-shimmer {
+		.skeleton-shimmer {
 			animation: none;
 		}
 	}

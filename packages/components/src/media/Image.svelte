@@ -124,18 +124,18 @@
 
 <div
 	{id}
-	class={['ds-image', className].filter(Boolean).join(' ')}
+	class={['image', className].filter(Boolean).join(' ')}
 	style={container_style}
 	bind:this={element}>
 	<!-- Skeleton shimmer -->
 	{#if show_skeleton}
-		<div class="ds-image-skeleton"></div>
+		<div class="skeleton"></div>
 	{/if}
 
 	<!-- Blur-up placeholder -->
 	{#if has_placeholder}
 		<img
-			class="ds-image-placeholder"
+			class="placeholder"
 			class:fade-out={state === 'loaded'}
 			src={placeholder}
 			alt=""
@@ -147,7 +147,7 @@
 	<!-- Main image -->
 	{#if state !== 'error'}
 		<img
-			class="ds-image-main"
+			class="main"
 			class:visible={show_image}
 			{src}
 			{alt}
@@ -166,13 +166,13 @@
 	{#if show_fallback}
 		{#if fallback_is_url}
 			<img
-				class="ds-image-fallback-img"
+				class="fallback-img"
 				src={fallback as string}
 				{alt}
 				style:object-fit={fit}
 				style:object-position={position} />
 		{:else}
-			<div class="ds-image-fallback">
+			<div class="fallback">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 24 24"
@@ -181,7 +181,7 @@
 					stroke-width="1.5"
 					stroke-linecap="round"
 					stroke-linejoin="round"
-					class="ds-image-fallback-icon"
+					class="fallback-icon"
 					aria-hidden="true">
 					<rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
 					<circle cx="8.5" cy="8.5" r="1.5" />
@@ -194,7 +194,7 @@
 </div>
 
 <style>
-	.ds-image {
+	.image {
 		position: relative;
 		overflow: hidden;
 		display: block;
@@ -202,7 +202,7 @@
 	}
 
 	/* Skeleton shimmer */
-	.ds-image-skeleton {
+	.skeleton {
 		position: absolute;
 		inset: 0;
 		z-index: 1;
@@ -213,10 +213,10 @@
 			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 75%
 		);
 		background-size: 200% 100%;
-		animation: ds-image-shimmer 1.5s ease-in-out infinite;
+		animation: image-shimmer 1.5s ease-in-out infinite;
 	}
 
-	@keyframes ds-image-shimmer {
+	@keyframes image-shimmer {
 		0% {
 			background-position: 200% 0;
 		}
@@ -226,7 +226,7 @@
 	}
 
 	/* Blur-up placeholder */
-	.ds-image-placeholder {
+	.placeholder {
 		position: absolute;
 		inset: 0;
 		z-index: 2;
@@ -240,13 +240,13 @@
 			filter 300ms ease;
 	}
 
-	.ds-image-placeholder.fade-out {
+	.placeholder.fade-out {
 		opacity: 0;
 		filter: blur(0px);
 	}
 
 	/* Main image */
-	.ds-image-main {
+	.main {
 		display: block;
 		width: 100%;
 		height: 100%;
@@ -254,19 +254,19 @@
 		transition: opacity 300ms ease;
 	}
 
-	.ds-image-main.visible {
+	.main.visible {
 		opacity: 1;
 	}
 
 	/* Fallback image (URL) */
-	.ds-image-fallback-img {
+	.fallback-img {
 		display: block;
 		width: 100%;
 		height: 100%;
 	}
 
 	/* Fallback icon container */
-	.ds-image-fallback {
+	.fallback {
 		position: absolute;
 		inset: 0;
 		display: flex;
@@ -276,7 +276,7 @@
 		color: var(--color-text-secondary, rgba(128, 128, 128, 0.6));
 	}
 
-	.ds-image-fallback-icon {
+	.fallback-icon {
 		width: 2.5em;
 		height: 2.5em;
 	}

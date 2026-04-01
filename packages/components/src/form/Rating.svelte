@@ -133,7 +133,7 @@
 </script>
 
 <div
-	class={['ds-rating', className].filter(Boolean).join(' ')}
+	class={['rating', className].filter(Boolean).join(' ')}
 	class:readonly
 	class:disabled
 	class:dense
@@ -229,7 +229,7 @@
 </div>
 
 <style>
-	.ds-rating {
+	.rating {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5em;

@@ -278,7 +278,7 @@
 	<!-- Tabs Container -->
 	<div
 		{id}
-		class={['ds-tabs', className].filter(Boolean).join(' ')}
+		class={['tabs', className].filter(Boolean).join(' ')}
 		class:pills
 		class:boxed
 		class:segment
@@ -310,7 +310,7 @@
 	<button
 		type="button"
 		role="tab"
-		class={['ds-tab', className].filter(Boolean).join(' ')}
+		class={['tab', className].filter(Boolean).join(' ')}
 		class:active={isSelected}
 		class:disabled={isDisabled}
 		class:pills={parentContext?.pills}
@@ -337,7 +337,7 @@
 	<!-- TabContent Panel -->
 	{#if parentContext && parentContext.value === value}
 		<div
-			class={['ds-tab-content', className].filter(Boolean).join(' ')}
+			class={['tab-content', className].filter(Boolean).join(' ')}
 			role="tabpanel"
 			id="tabpanel-{value}"
 			aria-labelledby={value ? `tab-${value}` : undefined}
@@ -349,7 +349,7 @@
 
 <style>
 	/* ========== Tabs Container ========== */
-	.ds-tabs {
+	.tabs {
 		display: flex;
 		flex-direction: column;
 		width: 100%;
@@ -371,22 +371,22 @@
 		gap: 0;
 		perspective: 100px;
 
-		.ds-tabs.vertical & {
+		.tabs.vertical & {
 			flex-direction: column;
 			border-bottom: none;
 			border-right: 1px solid var(--color-border, #e0e0e0);
 		}
 
-		.ds-tabs.pills & {
+		.tabs.pills & {
 			border-bottom: none;
 			gap: 0.25rem;
 		}
 
-		.ds-tabs.pills.vertical & {
+		.tabs.pills.vertical & {
 			border-right: none;
 		}
 
-		.ds-tabs.boxed & {
+		.tabs.boxed & {
 			background: var(--color-surface-1, #f5f5f5);
 			border: 1px solid var(--color-border, #e0e0e0);
 			border-radius: var(--radius-3, 0.5rem);
@@ -394,7 +394,7 @@
 			gap: 0;
 		}
 
-		.ds-tabs.segment & {
+		.tabs.segment & {
 			background: var(--color-surface-2, #ebebeb);
 			border-radius: var(--radius-3, 0.5rem);
 			padding: 0.25rem;
@@ -402,10 +402,10 @@
 			gap: 0;
 		}
 
-		.ds-tabs.full-width & {
+		.tabs.full-width & {
 			width: 100%;
 
-			:global(> .ds-tab) {
+			:global(> .tab) {
 				flex: 1;
 			}
 		}
@@ -428,7 +428,7 @@
 		z-index: 1;
 		opacity: 0;
 
-		.ds-tabs.vertical & {
+		.tabs.vertical & {
 			bottom: auto;
 			left: auto;
 			right: 0;
@@ -437,11 +437,11 @@
 			height: auto;
 		}
 
-		.ds-tabs.pills & {
+		.tabs.pills & {
 			display: none;
 		}
 
-		.ds-tabs.boxed & {
+		.tabs.boxed & {
 			bottom: 0;
 			top: 0;
 			height: auto;
@@ -450,7 +450,7 @@
 			box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
 		}
 
-		.ds-tabs.segment & {
+		.tabs.segment & {
 			bottom: 0;
 			top: 0;
 			height: auto;
@@ -461,8 +461,8 @@
 				0 1px 2px rgb(0 0 0 / 0.06);
 		}
 
-		.ds-tabs.vertical.boxed &,
-		.ds-tabs.vertical.segment & {
+		.tabs.vertical.boxed &,
+		.tabs.vertical.segment & {
 			left: 0;
 			right: 0;
 			top: 0;
@@ -471,7 +471,7 @@
 	}
 
 	/* ========== Tab Item ========== */
-	.ds-tab {
+	.tab {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -573,7 +573,7 @@
 		font-weight: 600;
 		pointer-events: none;
 
-		.ds-tab.pills.active & {
+		.tab.pills.active & {
 			background: var(--color-accent-text, #fff);
 			color: var(--color-accent, #1976d2);
 		}
@@ -599,7 +599,7 @@
 	}
 
 	/* ========== TabContent Panel ========== */
-	.ds-tab-content {
+	.tab-content {
 		padding: 1em 0;
 		outline: none;
 

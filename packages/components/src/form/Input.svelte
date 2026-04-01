@@ -674,7 +674,7 @@
 <!-- ================================================================== -->
 
 <div
-	class={['ds-input', `ds-input-size-${size}`, class_name].filter(Boolean).join(' ')}
+	class={['input', `size-${size}`, class_name].filter(Boolean).join(' ')}
 	class:focused
 	class:disabled={effectively_disabled}
 	class:readonly
@@ -1030,24 +1030,24 @@
 				disableInitialFocus>
 
 				<div
-					class="ac-dropdown"
+					class="dropdown"
 					bind:this={dropdown_element}
 					role="listbox"
 					id="{id}-listbox">
 
 					{#if ac_loading}
-						<div class="ac-loading">
-							<span class="ac-spinner" aria-hidden="true"></span>
+						<div class="loading">
+							<span class="spinner" aria-hidden="true"></span>
 							Loading...
 						</div>
 					{:else if ac_options.length === 0}
-						<div class="ac-empty">No results</div>
+						<div class="empty">No results</div>
 					{:else}
 						{#each ac_options as opt, i (opt.value)}
 							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<div
 								id="{id}-option-{i}"
-								class="ac-option"
+								class="option"
 								class:highlighted={ac_highlighted === i}
 								class:disabled={opt.disabled}
 								role="option"
@@ -1060,10 +1060,10 @@
 								{#if option_snippet}
 									{@render option_snippet(opt)}
 								{:else}
-									<span class="ac-option-content">
-										<span class="ac-option-label">{@html highlightMatch(opt.label)}</span>
+									<span class="option-content">
+										<span class="option-label">{@html highlightMatch(opt.label)}</span>
 										{#if opt.description}
-											<span class="ac-option-desc">{opt.description}</span>
+											<span class="option-desc">{opt.description}</span>
 										{/if}
 									</span>
 								{/if}
@@ -1095,7 +1095,7 @@
 	/*  ROOT                                                               */
 	/* ================================================================== */
 
-	.ds-input {
+	.input {
 		--_height: var(--input-height, 36px);
 		--_font: var(--input-font, 15px);
 		--_icon-size: var(--input-icon-size, 16px);
@@ -1115,15 +1115,15 @@
 		font-size: var(--_font);
 	}
 
-	.ds-input.disabled {
+	.input.disabled {
 		opacity: 0.5;
 		pointer-events: none;
 	}
 
-	.ds-input.dense .input-wrapper {
+	.input.dense .input-wrapper {
 		padding: 0 0.5rem;
 	}
-	.ds-input.comfortable .input-wrapper {
+	.input.comfortable .input-wrapper {
 		padding: 0 1rem;
 	}
 
@@ -1178,7 +1178,7 @@
 		cursor: text;
 	}
 
-	.ds-input.is-textarea .input-wrapper {
+	.input.is-textarea .input-wrapper {
 		align-items: flex-start;
 		min-height: auto;
 	}
@@ -1229,11 +1229,11 @@
 	}
 
 	/* With floating label, shift the input down slightly */
-	.ds-input.has-label .input-field {
+	.input.has-label .input-field {
 		padding-top: 0.625em;
 	}
 
-	.ds-input.has-label.ds-input-size-0 .input-field {
+	.input.has-label.size-0 .input-field {
 		padding-top: 0.5em;
 	}
 
@@ -1245,7 +1245,7 @@
 		padding-top: 0.75rem;
 	}
 
-	.ds-input.has-label textarea.input-field {
+	.input.has-label textarea.input-field {
 		padding-top: 1.25rem;
 	}
 
@@ -1288,14 +1288,14 @@
 		line-height: 1;
 	}
 
-	.ds-input.has-icon .input-label {
+	.input.has-icon .input-label {
 		left: calc(0.75rem + var(--_icon-size) + 0.5rem);
 	}
-	.ds-input.has-prefix .input-label {
+	.input.has-prefix .input-label {
 		left: auto;
 	}
 
-	.ds-input.is-textarea .input-label {
+	.input.is-textarea .input-label {
 		top: 0.875rem;
 		transform: none;
 	}
@@ -1306,20 +1306,20 @@
 		transform: none;
 	}
 
-	.ds-input.is-textarea .input-label.floated {
+	.input.is-textarea .input-label.floated {
 		top: 0.25rem;
 	}
 
-	.ds-input-size-0 .input-label.floated {
+	.size-0 .input-label.floated {
 		top: 0.125rem;
 		font-size: calc(var(--_font) * 0.75);
 	}
 
-	.ds-input.focused .input-label {
+	.input.focused .input-label {
 		color: var(--_border-focus);
 	}
 
-	.ds-input.has-error .input-label {
+	.input.has-error .input-label {
 		color: var(--_border-error);
 	}
 
@@ -1501,7 +1501,7 @@
 		padding: 0.25rem 0;
 	}
 
-	.ds-input.has-label .chips-container {
+	.input.has-label .chips-container {
 		padding-top: 0.875rem;
 	}
 
@@ -1639,14 +1639,14 @@
 	/*  AUTOCOMPLETE DROPDOWN                                              */
 	/* ================================================================== */
 
-	.ac-dropdown {
+	.dropdown {
 		min-width: 100%;
 		max-height: 240px;
 		overflow-y: auto;
 		padding: 0.25rem;
 	}
 
-	.ac-option {
+	.option {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -1657,30 +1657,30 @@
 		user-select: none;
 	}
 
-	.ac-option:hover,
-	.ac-option.highlighted {
+	.option:hover,
+	.option.highlighted {
 		background: light-dark(var(--color-bg-subtle, hsl(0 0% 96%)), var(--color-bg-subtle, hsl(0 0% 18%)));
 	}
 
-	.ac-option.disabled {
+	.option.disabled {
 		opacity: 0.5;
 		pointer-events: none;
 	}
 
-	.ac-option-content {
+	.option-content {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
 		flex: 1;
 	}
 
-	.ac-option-label {
+	.option-label {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.ac-option-desc {
+	.option-desc {
 		font-size: 0.8em;
 		color: var(--_text-muted);
 		overflow: hidden;
@@ -1688,7 +1688,7 @@
 		white-space: nowrap;
 	}
 
-	.ac-loading {
+	.loading {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -1697,22 +1697,22 @@
 		font-size: 0.9em;
 	}
 
-	.ac-spinner {
+	.spinner {
 		display: inline-block;
 		width: 14px;
 		height: 14px;
 		border: 2px solid var(--_border);
 		border-top-color: var(--_border-focus);
 		border-radius: 50%;
-		animation: input-ac-spin 0.6s linear infinite;
+		animation: input-spin 0.6s linear infinite;
 		flex-shrink: 0;
 	}
 
-	@keyframes input-ac-spin {
+	@keyframes input-spin {
 		to { transform: rotate(360deg); }
 	}
 
-	.ac-empty {
+	.empty {
 		padding: 0.75rem;
 		text-align: center;
 		color: var(--_text-muted);
@@ -1723,40 +1723,40 @@
 	/*  SIZE OVERRIDES                                                     */
 	/* ================================================================== */
 
-	.ds-input-size-0 .input-wrapper {
+	.size-0 .input-wrapper {
 		min-height: 28px;
 		padding: 0 0.5rem;
 		gap: 0.375rem;
 	}
-	.ds-input-size-0 .input-field {
+	.size-0 .input-field {
 		height: 28px;
 		line-height: 28px;
 	}
-	.ds-input-size-0 .input-label {
+	.size-0 .input-label {
 		left: 0.5rem;
 	}
 
-	.ds-input-size-2 .input-wrapper {
+	.size-2 .input-wrapper {
 		min-height: 44px;
 		padding: 0 0.875rem;
 	}
-	.ds-input-size-2 .input-field {
+	.size-2 .input-field {
 		height: 44px;
 		line-height: 44px;
 	}
-	.ds-input-size-2 .input-label {
+	.size-2 .input-label {
 		left: 0.875rem;
 	}
 
-	.ds-input-size-3 .input-wrapper {
+	.size-3 .input-wrapper {
 		min-height: 52px;
 		padding: 0 1rem;
 	}
-	.ds-input-size-3 .input-field {
+	.size-3 .input-field {
 		height: 52px;
 		line-height: 52px;
 	}
-	.ds-input-size-3 .input-label {
+	.size-3 .input-label {
 		left: 1rem;
 	}
 
@@ -1764,7 +1764,7 @@
 	/*  READONLY                                                           */
 	/* ================================================================== */
 
-	.ds-input.readonly .input-wrapper {
+	.input.readonly .input-wrapper {
 		background: light-dark(var(--color-bg-muted, hsl(0 0% 96%)), var(--color-bg-muted, hsl(0 0% 14%)));
 		cursor: default;
 	}

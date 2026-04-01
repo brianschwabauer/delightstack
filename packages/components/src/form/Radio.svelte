@@ -151,7 +151,7 @@
 	}
 
 	function focusSibling(current: HTMLElement, direction: number) {
-		const groupEl = current.closest('.ds-radio-group');
+		const groupEl = current.closest('.radio-group');
 		if (!groupEl) return;
 		const radios = Array.from(
 			groupEl.querySelectorAll<HTMLElement>('[role="radio"]:not([aria-disabled="true"])'),
@@ -169,7 +169,7 @@
 {#if isGroup}
 	<!-- RadioGroup wrapper -->
 	<div
-		class={['ds-radio-group', className].filter(Boolean).join(' ')}
+		class={['radio-group', className].filter(Boolean).join(' ')}
 		class:horizontal
 		class:dense
 		class:comfortable
@@ -192,7 +192,7 @@
 {:else}
 	<!-- Individual Radio -->
 	<div
-		class={['ds-radio', className].filter(Boolean).join(' ')}
+		class={['radio', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:disabled={isDisabled}
@@ -254,7 +254,7 @@
 
 <style>
 	/* ========== RadioGroup ========== */
-	.ds-radio-group {
+	.radio-group {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25em;
@@ -296,7 +296,7 @@
 	}
 
 	/* ========== Radio ========== */
-	.ds-radio {
+	.radio {
 		display: flex;
 		align-items: flex-start;
 		gap: 0.5em;

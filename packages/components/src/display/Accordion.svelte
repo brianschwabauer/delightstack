@@ -142,7 +142,7 @@
 			return;
 		}
 
-		const container = target.closest('.ds-accordion');
+		const container = target.closest('.accordion');
 		if (!container) return;
 
 		const summaries = Array.from(
@@ -214,7 +214,7 @@
 {:else if skeleton}
 	<!-- Skeleton -->
 	<div
-		class={['ds-accordion skeleton', className].filter(Boolean).join(' ')}
+		class={['accordion skeleton', className].filter(Boolean).join(' ')}
 		{id}
 		aria-hidden="true">
 		{#each { length: skeletonCount } as _, i}
@@ -226,7 +226,7 @@
 {:else}
 	<!-- Accordion container -->
 	<div
-		class={['ds-accordion', className].filter(Boolean).join(' ')}
+		class={['accordion', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:disabled
@@ -237,7 +237,7 @@
 
 <style>
 	/* ========== Accordion Container ========== */
-	.ds-accordion {
+	.accordion {
 		width: 100%;
 
 		&.disabled {
@@ -330,7 +330,7 @@
 	}
 
 	/* ========== Skeleton ========== */
-	.ds-accordion.skeleton {
+	.accordion.skeleton {
 		pointer-events: none;
 	}
 

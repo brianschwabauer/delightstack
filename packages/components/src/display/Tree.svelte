@@ -740,7 +740,7 @@
 {#if skeleton}
 	<!-- Skeleton loading state -->
 	<div
-		class={['ds-tree skeleton', className].filter(Boolean).join(' ')}
+		class={['tree skeleton', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		{id}
@@ -759,7 +759,7 @@
 	<!-- Tree -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<ul
-		class={['ds-tree', className].filter(Boolean).join(' ')}
+		class={['tree', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:show-lines={showLines}
@@ -973,7 +973,7 @@
 
 <style>
 	/* ========== Tree Container ========== */
-	.ds-tree {
+	.tree {
 		width: 100%;
 		list-style: none;
 		margin: 0;
@@ -1055,14 +1055,14 @@
 	}
 
 	/* ========== Dense / Comfortable ========== */
-	.ds-tree.dense .node-row {
+	.tree.dense .node-row {
 		padding-top: 0.0625rem;
 		padding-bottom: 0.0625rem;
 		min-height: 1.375rem;
 		font-size: 0.8125rem;
 	}
 
-	.ds-tree.comfortable .node-row {
+	.tree.comfortable .node-row {
 		padding-top: 0.5rem;
 		padding-bottom: 0.5rem;
 		min-height: 2.25rem;
@@ -1224,11 +1224,11 @@
 	}
 
 	/* ========== Connecting Lines ========== */
-	.ds-tree.show-lines .children-container > :global(ul) {
+	.tree.show-lines .children-container > :global(ul) {
 		position: relative;
 	}
 
-	.ds-tree.show-lines .tree-node > .children-container > :global(ul)::before {
+	.tree.show-lines .tree-node > .children-container > :global(ul)::before {
 		content: '';
 		position: absolute;
 		top: 0;
@@ -1246,15 +1246,15 @@
 	 * Each level adds 1.25rem of padding-left, so the vertical line
 	 * needs to sit at the center of the chevron for that parent level.
 	 */
-	.ds-tree.show-lines > .tree-node > .children-container > :global(ul) {
+	.tree.show-lines > .tree-node > .children-container > :global(ul) {
 		--line-offset: 0rem;
 	}
 
-	.ds-tree.show-lines .tree-node .tree-node > .children-container > :global(ul) {
+	.tree.show-lines .tree-node .tree-node > .children-container > :global(ul) {
 		--line-offset: 1.25rem;
 	}
 
-	.ds-tree.show-lines
+	.tree.show-lines
 		.tree-node
 		.tree-node
 		.tree-node
@@ -1263,7 +1263,7 @@
 		--line-offset: 2.5rem;
 	}
 
-	.ds-tree.show-lines
+	.tree.show-lines
 		.tree-node
 		.tree-node
 		.tree-node
@@ -1273,7 +1273,7 @@
 		--line-offset: 3.75rem;
 	}
 
-	.ds-tree.show-lines
+	.tree.show-lines
 		.tree-node
 		.tree-node
 		.tree-node
@@ -1323,16 +1323,16 @@
 		);
 	}
 
-	.ds-tree.dragging {
+	.tree.dragging {
 		cursor: grabbing;
 	}
 
-	.ds-tree.dragging .node-row {
+	.tree.dragging .node-row {
 		cursor: grabbing;
 	}
 
 	/* ========== Skeleton ========== */
-	.ds-tree.skeleton {
+	.tree.skeleton {
 		pointer-events: none;
 	}
 

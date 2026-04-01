@@ -76,7 +76,7 @@
 </script>
 
 <div
-	class={['ds-checkbox', className].filter(Boolean).join(' ')}
+	class={['checkbox', className].filter(Boolean).join(' ')}
 	class:dense
 	class:comfortable
 	class:disabled
@@ -159,7 +159,7 @@
 </div>
 
 <style>
-	.ds-checkbox {
+	.checkbox {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: flex-start;

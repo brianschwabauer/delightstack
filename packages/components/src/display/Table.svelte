@@ -305,7 +305,7 @@
 	function handleRowClick(row: T, index: number, event: MouseEvent) {
 		// Don't fire row click if clicking checkbox or expand button
 		const target = event.target as HTMLElement;
-		if (target.closest('.ds-table-checkbox') || target.closest('.ds-table-expand-btn'))
+		if (target.closest('.checkbox') || target.closest('.expand-btn'))
 			return;
 
 		if (expandable) {
@@ -398,23 +398,23 @@
 	// ---- Close export menu on outside click ----
 	function handleExportBlur(e: FocusEvent) {
 		const related = e.relatedTarget as HTMLElement | null;
-		if (!related?.closest('.ds-table-export')) {
+		if (!related?.closest('.export')) {
 			showExportMenu = false;
 		}
 	}
 </script>
 
 <div
-	class={['ds-table-wrapper', className].filter(Boolean).join(' ')}
-	class:ds-table-dense={dense}
-	class:ds-table-comfortable={comfortable}
-	class:ds-table-striped={striped}
+	class={['wrapper', className].filter(Boolean).join(' ')}
+	class:dense={dense}
+	class:comfortable={comfortable}
+	class:striped={striped}
 	{id}>
 	{#if exportable}
-		<div class="ds-table-toolbar">
-			<div class="ds-table-export" onfocusout={handleExportBlur}>
+		<div class="toolbar">
+			<div class="export" onfocusout={handleExportBlur}>
 				<button
-					class="ds-table-export-btn"
+					class="export-btn"
 					type="button"
 					aria-haspopup="true"
 					aria-expanded={showExportMenu}
@@ -438,16 +438,16 @@
 					</svg>
 				</button>
 				{#if showExportMenu}
-					<div class="ds-table-export-menu" role="menu">
+					<div class="export-menu" role="menu">
 						<button
-							class="ds-table-export-option"
+							class="export-option"
 							type="button"
 							role="menuitem"
 							onclick={exportCSV}>
 							Export CSV
 						</button>
 						<button
-							class="ds-table-export-option"
+							class="export-option"
 							type="button"
 							role="menuitem"
 							onclick={exportJSON}>
@@ -459,20 +459,20 @@
 		</div>
 	{/if}
 
-	<div class="ds-table-scroll">
+	<div class="scroll">
 		<table role="grid">
-			<thead class:ds-table-sticky={stickyHeader}>
+			<thead class:sticky={stickyHeader}>
 				<tr>
 					{#if selectable}
-						<th class="ds-table-checkbox-cell" style="width: 3rem">
-							<label class="ds-table-checkbox">
+						<th class="checkbox-cell" style="width: 3rem">
+							<label class="checkbox">
 								<input
 									type="checkbox"
 									checked={allSelected}
 									indeterminate={someSelected}
 									aria-label="Select all rows"
 									onchange={toggleSelectAll} />
-								<span class="ds-table-checkbox-icon">
+								<span class="checkbox-icon">
 									{#if allSelected}
 										<svg
 											width="14"
@@ -506,26 +506,26 @@
 						</th>
 					{/if}
 					{#if expandable}
-						<th class="ds-table-expand-cell" style="width: 2.5rem"></th>
+						<th class="expand-cell" style="width: 2.5rem"></th>
 					{/if}
 					{#each columns as col (col.key)}
 						<th
 							style={getColumnStyle(col)}
 							aria-sort={getAriaSort(col)}
-							class:ds-table-sortable={col.sortable}>
-							<div class="ds-table-th-content">
+							class:sortable={col.sortable}>
+							<div class="th-content">
 								{#if col.header}
 									{@render col.header({ column: col })}
 								{:else if col.sortable}
 									<button
-										class="ds-table-sort-btn"
+										class="sort-btn"
 										type="button"
 										onclick={() => handleSort(col.key)}
 										onkeydown={(e) => handleSortKeydown(e, col.key)}>
 										<span>{col.label}</span>
 										<span
-											class="ds-table-sort-icon"
-											class:ds-table-sort-active={sortBy === col.key}>
+											class="sort-icon"
+											class:sort-active={sortBy === col.key}>
 											{#if sortBy === col.key && sortDirection === 'asc'}
 												<svg
 													width="14"
@@ -578,7 +578,7 @@
 								{#if resizableColumns}
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<span
-										class="ds-table-resize-handle"
+										class="resize-handle"
 										onmousedown={(e) => startResize(e, col.key)}
 										ondblclick={(e) => autoFitColumn(e, col.key)}>
 									</span>
@@ -591,19 +591,19 @@
 			<tbody>
 				{#if skeleton}
 					{#each { length: skeletonCount } as _, ri}
-						<tr class="ds-table-skeleton-row" aria-hidden="true">
+						<tr class="skeleton-row" aria-hidden="true">
 							{#if selectable}
-								<td class="ds-table-checkbox-cell">
+								<td class="checkbox-cell">
 									<div
-										class="ds-table-skeleton-bar"
+										class="skeleton-bar"
 										style="width: 18px; height: 18px; border-radius: 4px;">
 									</div>
 								</td>
 							{/if}
 							{#if expandable}
-								<td class="ds-table-expand-cell">
+								<td class="expand-cell">
 									<div
-										class="ds-table-skeleton-bar"
+										class="skeleton-bar"
 										style="width: 18px; height: 18px; border-radius: 50%;">
 									</div>
 								</td>
@@ -611,7 +611,7 @@
 							{#each columns as col, ci (col.key)}
 								<td style={col.align ? `text-align: ${col.align}` : ''}>
 									<div
-										class="ds-table-skeleton-bar"
+										class="skeleton-bar"
 										style="width: {getSkeletonWidth(ri, ci)}; animation-delay: {(ri *
 											columns.length +
 											ci) *
@@ -622,12 +622,12 @@
 						</tr>
 					{/each}
 				{:else if data.length === 0}
-					<tr class="ds-table-empty-row">
+					<tr class="empty-row">
 						<td colspan={totalColumns}>
 							{#if empty}
 								{@render empty()}
 							{:else}
-								<div class="ds-table-empty">
+								<div class="empty">
 									<svg
 										width="48"
 										height="48"
@@ -668,16 +668,16 @@
 					</tr>
 				{:else if groupedData}
 					{#each groupedData as group (group.key)}
-						<tr class="ds-table-group-row">
+						<tr class="group-row">
 							<td colspan={totalColumns}>
 								<button
-									class="ds-table-group-toggle"
+									class="group-toggle"
 									type="button"
 									onclick={() => toggleGroup(group.key)}
 									aria-expanded={!collapsedGroups.has(group.key)}>
 									<svg
-										class="ds-table-group-chevron"
-										class:ds-table-group-collapsed={collapsedGroups.has(group.key)}
+										class="group-chevron"
+										class:group-collapsed={collapsedGroups.has(group.key)}
 										width="14"
 										height="14"
 										viewBox="0 0 14 14"
@@ -690,8 +690,8 @@
 											stroke-linecap="round"
 											stroke-linejoin="round" />
 									</svg>
-									<span class="ds-table-group-label">{group.label}</span>
-									<span class="ds-table-group-count">({group.rows.length})</span>
+									<span class="group-label">{group.label}</span>
+									<span class="group-count">({group.rows.length})</span>
 								</button>
 							</td>
 						</tr>
@@ -719,21 +719,21 @@
 
 {#snippet dataRow(row: T, index: number)}
 	<tr
-		class="ds-table-row"
-		class:ds-table-row-selected={selectable && isSelected(row)}
-		class:ds-table-row-expanded={expandable && expandedRows.has(index)}
-		class:ds-table-row-clickable={!!onrowclick || expandable}
+		class="row"
+		class:selected={selectable && isSelected(row)}
+		class:expanded={expandable && expandedRows.has(index)}
+		class:clickable={!!onrowclick || expandable}
 		onclick={(e) => handleRowClick(row, index, e)}>
 		{#if selectable}
-			<td class="ds-table-checkbox-cell">
+			<td class="checkbox-cell">
 				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-				<label class="ds-table-checkbox" onclick={(e) => e.stopPropagation()}>
+				<label class="checkbox" onclick={(e) => e.stopPropagation()}>
 					<input
 						type="checkbox"
 						checked={isSelected(row)}
 						aria-label="Select row {index + 1}"
 						onclick={(e) => toggleSelectRow(row, index, e as unknown as MouseEvent)} />
-					<span class="ds-table-checkbox-icon">
+					<span class="checkbox-icon">
 						{#if isSelected(row)}
 							<svg
 								width="14"
@@ -754,9 +754,9 @@
 			</td>
 		{/if}
 		{#if expandable}
-			<td class="ds-table-expand-cell">
+			<td class="expand-cell">
 				<button
-					class="ds-table-expand-btn"
+					class="expand-btn"
 					type="button"
 					aria-expanded={expandedRows.has(index)}
 					aria-label={expandedRows.has(index) ? 'Collapse row' : 'Expand row'}
@@ -765,8 +765,8 @@
 						toggleExpand(index);
 					}}>
 					<svg
-						class="ds-table-expand-chevron"
-						class:ds-table-expanded={expandedRows.has(index)}
+						class="expand-chevron"
+						class:expanded={expandedRows.has(index)}
 						width="14"
 						height="14"
 						viewBox="0 0 14 14"
@@ -795,9 +795,9 @@
 {/snippet}
 
 {#snippet expandedRowTr(row: T, index: number)}
-	<tr class="ds-table-expanded-row">
+	<tr class="expanded-row">
 		<td colspan={totalColumns}>
-			<div class="ds-table-expanded-content">
+			<div class="expanded-content">
 				{#if expandedRow}
 					{@render expandedRow(row)}
 				{/if}
@@ -808,23 +808,23 @@
 
 <style>
 	/* ========== Wrapper ========== */
-	.ds-table-wrapper {
+	.wrapper {
 		width: 100%;
 		position: relative;
 	}
 
 	/* ========== Toolbar ========== */
-	.ds-table-toolbar {
+	.toolbar {
 		display: flex;
 		justify-content: flex-end;
 		padding: 0 0 0.5rem;
 	}
 
-	.ds-table-export {
+	.export {
 		position: relative;
 	}
 
-	.ds-table-export-btn {
+	.export-btn {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.375rem;
@@ -848,7 +848,7 @@
 		}
 	}
 
-	.ds-table-export-menu {
+	.export-menu {
 		position: absolute;
 		top: 100%;
 		right: 0;
@@ -863,7 +863,7 @@
 		overflow: hidden;
 	}
 
-	.ds-table-export-option {
+	.export-option {
 		display: block;
 		width: 100%;
 		padding: 0.5rem 0.75rem;
@@ -889,7 +889,7 @@
 	}
 
 	/* ========== Scroll Container ========== */
-	.ds-table-scroll {
+	.scroll {
 		overflow-x: auto;
 	}
 
@@ -904,7 +904,7 @@
 
 	/* ========== Header ========== */
 	thead {
-		&.ds-table-sticky {
+		&.sticky {
 			position: sticky;
 			top: 0;
 			z-index: 1;
@@ -927,23 +927,23 @@
 		user-select: none;
 	}
 
-	.ds-table-dense th {
+	.dense th {
 		padding: 0.375rem 0.75rem;
 		font-size: 0.75rem;
 	}
 
-	.ds-table-comfortable th {
+	.comfortable th {
 		padding: 1rem 1.25rem;
 	}
 
 	/* ========== Sort Button ========== */
-	.ds-table-th-content {
+	.th-content {
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
 	}
 
-	.ds-table-sort-btn {
+	.sort-btn {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
@@ -967,19 +967,19 @@
 		}
 	}
 
-	.ds-table-sort-icon {
+	.sort-icon {
 		display: inline-flex;
 		align-items: center;
 		flex-shrink: 0;
 		transition: opacity 150ms ease;
 	}
 
-	.ds-table-sort-active {
+	.sort-active {
 		color: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 	}
 
 	/* ========== Resize Handle ========== */
-	.ds-table-resize-handle {
+	.resize-handle {
 		position: absolute;
 		right: 0;
 		top: 0;
@@ -991,7 +991,7 @@
 		transition: opacity 150ms ease;
 	}
 
-	th:hover .ds-table-resize-handle {
+	th:hover .resize-handle {
 		opacity: 1;
 	}
 
@@ -1012,16 +1012,16 @@
 		text-overflow: ellipsis;
 	}
 
-	.ds-table-dense td {
+	.dense td {
 		padding: 0.375rem 0.75rem;
 		font-size: 0.8125rem;
 	}
 
-	.ds-table-comfortable td {
+	.comfortable td {
 		padding: 1rem 1.25rem;
 	}
 
-	.ds-table-row-clickable {
+	.clickable {
 		cursor: pointer;
 		transition: translate 200ms ease;
 
@@ -1030,14 +1030,14 @@
 		}
 	}
 
-	.ds-table-row:hover {
+	.row:hover {
 		background: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.03),
 			rgb(from var(--color-text, #fff) r g b / 0.04)
 		);
 	}
 
-	.ds-table-row-selected {
+	.selected {
 		background: light-dark(
 			rgb(from var(--color-action, #1976d2) r g b / 0.08),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.12)
@@ -1045,14 +1045,14 @@
 	}
 
 	/* ========== Striped ========== */
-	.ds-table-striped tbody tr.ds-table-row:nth-child(even) {
+	.striped tbody tr.row:nth-child(even) {
 		background: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.02),
 			rgb(from var(--color-text, #fff) r g b / 0.03)
 		);
 	}
 
-	.ds-table-striped tbody tr.ds-table-row:nth-child(even):hover {
+	.striped tbody tr.row:nth-child(even):hover {
 		background: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.05),
 			rgb(from var(--color-text, #fff) r g b / 0.06)
@@ -1060,14 +1060,14 @@
 	}
 
 	/* ========== Checkbox Cell ========== */
-	.ds-table-checkbox-cell {
+	.checkbox-cell {
 		width: 3rem;
 		text-align: center;
 		padding-left: 0.75rem !important;
 		padding-right: 0.25rem !important;
 	}
 
-	.ds-table-checkbox {
+	.checkbox {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -1075,7 +1075,7 @@
 		position: relative;
 	}
 
-	.ds-table-checkbox input[type='checkbox'] {
+	.checkbox input[type='checkbox'] {
 		position: absolute;
 		opacity: 0;
 		width: 0;
@@ -1083,7 +1083,7 @@
 		pointer-events: none;
 	}
 
-	.ds-table-checkbox-icon {
+	.checkbox-icon {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -1100,27 +1100,27 @@
 		color: light-dark(var(--color-action-text, #fff), var(--color-action-text, #fff));
 	}
 
-	.ds-table-checkbox input[type='checkbox']:checked + .ds-table-checkbox-icon,
-	.ds-table-checkbox input[type='checkbox']:indeterminate + .ds-table-checkbox-icon {
+	.checkbox input[type='checkbox']:checked + .checkbox-icon,
+	.checkbox input[type='checkbox']:indeterminate + .checkbox-icon {
 		background: var(--color-action, #1976d2);
 		border-color: var(--color-action, #1976d2);
 	}
 
-	.ds-table-checkbox input[type='checkbox']:focus-visible + .ds-table-checkbox-icon {
+	.checkbox input[type='checkbox']:focus-visible + .checkbox-icon {
 		box-shadow:
 			0 0 0 2px light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a)),
 			0 0 0 4px var(--color-action, #1976d2);
 	}
 
 	/* ========== Expand Cell ========== */
-	.ds-table-expand-cell {
+	.expand-cell {
 		width: 2.5rem;
 		text-align: center;
 		padding-left: 0.5rem !important;
 		padding-right: 0.25rem !important;
 	}
 
-	.ds-table-expand-btn {
+	.expand-btn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -1147,51 +1147,51 @@
 		}
 	}
 
-	.ds-table-expand-chevron {
+	.expand-chevron {
 		transition: transform 200ms ease;
 	}
 
-	.ds-table-expanded {
+	.expanded {
 		transform: rotate(90deg);
 	}
 
 	/* ========== Expanded Row ========== */
-	.ds-table-expanded-row {
+	.expanded-row {
 		background: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.015),
 			rgb(from var(--color-text, #fff) r g b / 0.02)
 		);
 	}
 
-	.ds-table-expanded-row td {
+	.expanded-row td {
 		padding: 0;
 	}
 
-	.ds-table-expanded-content {
+	.expanded-content {
 		padding: 1rem 1.25rem;
 	}
 
-	.ds-table-dense .ds-table-expanded-content {
+	.dense .expanded-content {
 		padding: 0.5rem 0.75rem;
 	}
 
-	.ds-table-comfortable .ds-table-expanded-content {
+	.comfortable .expanded-content {
 		padding: 1.25rem 1.5rem;
 	}
 
 	/* ========== Group Row ========== */
-	.ds-table-group-row {
+	.group-row {
 		background: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.03),
 			rgb(from var(--color-text, #fff) r g b / 0.05)
 		);
 	}
 
-	.ds-table-group-row td {
+	.group-row td {
 		padding: 0;
 	}
 
-	.ds-table-group-toggle {
+	.group-toggle {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -1221,27 +1221,27 @@
 		}
 	}
 
-	.ds-table-group-chevron {
+	.group-chevron {
 		transition: transform 200ms ease;
 		flex-shrink: 0;
 	}
 
-	.ds-table-group-chevron:not(.ds-table-group-collapsed) {
+	.group-chevron:not(.group-collapsed) {
 		transform: rotate(90deg);
 	}
 
-	.ds-table-group-count {
+	.group-count {
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		font-weight: 400;
 		font-size: 0.75rem;
 	}
 
 	/* ========== Empty State ========== */
-	.ds-table-empty-row td {
+	.empty-row td {
 		padding: 0;
 	}
 
-	.ds-table-empty {
+	.empty {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -1250,17 +1250,17 @@
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 	}
 
-	.ds-table-empty p {
+	.empty p {
 		margin: 0.75rem 0 0;
 		font-size: 0.875rem;
 	}
 
 	/* ========== Skeleton ========== */
-	.ds-table-skeleton-row {
+	.skeleton-row {
 		pointer-events: none;
 	}
 
-	.ds-table-skeleton-bar {
+	.skeleton-bar {
 		height: 1rem;
 		border-radius: var(--radius-3, 6px);
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
@@ -1282,22 +1282,22 @@
 				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
 				rgb(from var(--color-text, #000) r g b / 0)
 			);
-			animation: ds-table-shimmer 2s infinite;
+			animation: shimmer 2s infinite;
 		}
 	}
 
-	@keyframes ds-table-shimmer {
+	@keyframes shimmer {
 		100% {
 			transform: translateX(100%);
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.ds-table-skeleton-bar::after {
+		.skeleton-bar::after {
 			animation: none;
 		}
-		.ds-table-expand-chevron,
-		.ds-table-group-chevron {
+		.expand-chevron,
+		.group-chevron {
 			transition: none;
 		}
 	}
