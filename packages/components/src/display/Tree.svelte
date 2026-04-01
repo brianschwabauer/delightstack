@@ -448,17 +448,23 @@
 	}
 
 	/* ------------------------------------------------------------------ */
-	/*  Adjacent-selected corner flattening                               */
+	/*  Adjacent-highlighted corner flattening                            */
 	/* ------------------------------------------------------------------ */
 
-	const selected_set = $derived(new Set(selected));
+	let hovered_id = $state<string | null>(null);
 
-	/** Nodes whose top/bottom corners should flatten because the visually adjacent node is also selected */
+	/** Selected + hovered nodes — any two adjacent highlighted nodes flatten their touching corners */
+	const highlighted_set = $derived.by(() => {
+		const s = new Set(selected);
+		if (hovered_id) s.add(hovered_id);
+		return s;
+	});
+
 	const adj_top = $derived.by(() => {
 		const s = new Set<string>();
 		const order = getVisibleNodeOrder();
 		for (let i = 1; i < order.length; i++) {
-			if (selected_set.has(order[i]) && selected_set.has(order[i - 1])) {
+			if (highlighted_set.has(order[i]) && highlighted_set.has(order[i - 1])) {
 				s.add(order[i]);
 			}
 		}
@@ -469,7 +475,7 @@
 		const s = new Set<string>();
 		const order = getVisibleNodeOrder();
 		for (let i = 0; i < order.length - 1; i++) {
-			if (selected_set.has(order[i]) && selected_set.has(order[i + 1])) {
+			if (highlighted_set.has(order[i]) && highlighted_set.has(order[i + 1])) {
 				s.add(order[i]);
 			}
 		}
@@ -850,6 +856,8 @@
 				class:adj-top={adj_top.has(node.id)}
 				class:adj-bottom={adj_bottom.has(node.id)}
 				style:padding-left="{(level - 1) * 1.25}rem"
+				onmouseenter={() => (hovered_id = node.id)}
+				onmouseleave={() => { if (hovered_id === node.id) hovered_id = null; }}
 				draggable={draggable && !node.disabled ? 'true' : undefined}
 				ondragstart={(e) => handleDragStart(e, node)}
 				ondragover={(e) => {
@@ -1066,13 +1074,15 @@
 		);
 	}
 
-	/* Flatten touching corners between visually adjacent selected nodes */
-	.tree-node.selected > .node-row.adj-bottom {
+	/* Flatten touching corners between visually adjacent highlighted nodes */
+	.tree-node.selected > .node-row.adj-bottom,
+	.node-row:hover.adj-bottom {
 		border-bottom-left-radius: 0;
 		border-bottom-right-radius: 0;
 	}
 
-	.tree-node.selected > .node-row.adj-top {
+	.tree-node.selected > .node-row.adj-top,
+	.node-row:hover.adj-top {
 		border-top-left-radius: 0;
 		border-top-right-radius: 0;
 	}
