@@ -23,11 +23,6 @@ const authHandle = createAuthHandle({
 		oauth_scopes: [] as const,
 		entitlements: ['ai', 'images'] as const,
 		dev,
-		cookies: {
-			session_name: 'ff-session',
-			preferences_name: 'ff-pref',
-			org_state_prefix: 'ff-org-',
-		},
 	},
 	getAuthServer: (event) => {
 		const auth = (event.platform as App.Platform | undefined)?.env?.AUTH;

@@ -199,13 +199,7 @@ function defaultResolveOrgId(
 export function createAuthHandle<Config extends AuthConfig>(
 	options: AuthHandleOptions<Config>,
 ): Handle {
-	const config = (
-		'cookies' in options.config &&
-		typeof options.config.cookies === 'object' &&
-		'session_name' in (options.config.cookies || {})
-			? options.config
-			: defineAuthConfig(options.config)
-	) as ResolvedAuthConfig;
+	const config = defineAuthConfig(options.config) as ResolvedAuthConfig;
 
 	return async ({ event, resolve }) => {
 		// 1. Skip during static builds
