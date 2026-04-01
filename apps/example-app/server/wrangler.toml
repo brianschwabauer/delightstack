@@ -1,28 +1,22 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "foreverfamily-server"
 main = "src/index.ts"
-compatibility_date = "2024-12-30"
+compatibility_date = "2025-05-08"
 account_id = "92cb4bb9b2a55d24f5688f2f61864079"
 workers_dev = false
 
-# Workers Logs
 [observability]
 enabled = true
 
-# Durable Object migrations.
+# Durable Object migrations
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = [
 	"AuthDatabaseServer",
 	"OrgDatabaseServer",
-	"WebsocketServer",
+	"AppWebsocketServer",
 	"RateLimiterServer",
-	"SiteDatabaseServer",
 ]
-
-[[migrations]]
-tag = "v2"
-deleted_classes = ["SiteDatabaseServer"]
 
 [ai]
 binding = "AI"
@@ -38,39 +32,23 @@ class_name = "OrgDatabaseServer"
 
 [[durable_objects.bindings]]
 name = "WS"
-class_name = "WebsocketServer"
+class_name = "AppWebsocketServer"
 
 [[durable_objects.bindings]]
 name = "RATE_LIMITER"
 class_name = "RateLimiterServer"
 
-# KV Namspace
+# KV Namespace
 [[kv_namespaces]]
 binding = "KV"
 id = "86eb734b0be94ef6bd522185e1ef9e42"
 
 # R2 Storage Buckets
-# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#r2-buckets
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "foreverfamily"
 
-# Workflows
-[[workflows]]
-name = "media-workflow"
-binding = "MEDIA_WORKFLOW"
-class_name = "MediaWorkflowServer"
-
-[[workflows]]
-name = "delete-org-workflow"
-binding = "DELETE_ORG_WORKFLOW"
-class_name = "DeleteOrgWorkflowServer"
-
-[[workflows]]
-name = "delete-user-workflow"
-binding = "DELETE_USER_WORKFLOW"
-class_name = "DeleteUserWorkflowServer"
-
+# Services
 [[services]]
 binding = "IMAGE_PROCESSOR"
 service = "image-processor"
@@ -96,37 +74,19 @@ class_name = "OrgDatabaseServer"
 
 [[env.staging.durable_objects.bindings]]
 name = "WS"
-class_name = "WebsocketServer"
+class_name = "AppWebsocketServer"
 
 [[env.staging.durable_objects.bindings]]
 name = "RATE_LIMITER"
 class_name = "RateLimiterServer"
 
-
 [[env.staging.r2_buckets]]
 binding = "R2"
 bucket_name = "foreverfamily-server-staging"
 
-# Bind a KV Namespace. Use KV as persistent storage for small key-value pairs.
-# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#kv-namespaces
 [[env.staging.kv_namespaces]]
 binding = "KV"
 id = "19098fe743e642bc825b946e11d30a7c"
-
-[[env.staging.workflows]]
-name = "media-workflow"
-binding = "MEDIA_WORKFLOW"
-class_name = "MediaWorkflowServer"
-
-[[env.staging.workflows]]
-name = "delete-org-workflow"
-binding = "DELETE_ORG_WORKFLOW"
-class_name = "DeleteOrgWorkflowServer"
-
-[[env.staging.workflows]]
-name = "delete-user-workflow"
-binding = "DELETE_USER_WORKFLOW"
-class_name = "DeleteUserWorkflowServer"
 
 [[env.staging.services]]
 binding = "IMAGE_PROCESSOR"

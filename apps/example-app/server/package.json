@@ -7,16 +7,21 @@
 		"dev": "wrangler dev --env staging --persist-to ./../../.wrangler/state"
 	},
 	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20250428.0",
-		"typescript": "^5.5.2",
-		"wrangler": "^4.14.0"
+		"@cloudflare/workers-types": "^4.20251120.0",
+		"typescript": "^5.9.3",
+		"wrangler": "^4.49.1"
 	},
 	"dependencies": {
+		"@delightstack/ai": "workspace:*",
+		"@delightstack/auth": "workspace:*",
+		"@delightstack/database": "workspace:*",
+		"@delightstack/images": "workspace:*",
+		"@delightstack/rate-limiter": "workspace:*",
+		"@delightstack/utilities": "workspace:*",
+		"@delightstack/websocket": "workspace:*",
 		"@orama/orama": "^3.0.4",
-		"@delightstack/types": "workspace:*",
 		"argon2-wasm-edge": "^1.0.23",
-		"cookie": "^1.0.2",
 		"stripe": "17.4.0-beta.2",
-		"zod": "^3.25.7"
+		"zod": "^4.1.12"
 	}
 }
