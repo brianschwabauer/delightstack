@@ -10,6 +10,7 @@ import ComparisonCustomLabelsDemo from '../../../../components/demos/ComparisonC
 import ComparisonNoLabelsDemo from '../../../../components/demos/ComparisonNoLabelsDemo.svelte';
 import ComparisonVerticalDemo from '../../../../components/demos/ComparisonVerticalDemo.svelte';
 import ComparisonControlledDemo from '../../../../components/demos/ComparisonControlledDemo.svelte';
+import ComparisonSnapsDemo from '../../../../components/demos/ComparisonSnapsDemo.svelte';
 import ComparisonSkeletonDemo from '../../../../components/demos/ComparisonSkeletonDemo.svelte';
 
 ## Import
@@ -29,6 +30,7 @@ ${'  '}before="/images/photo-original.jpg"
 ${'  '}after="/images/photo-edited.jpg"
 ${'  '}label_before="Photo A"
 ${'  '}label_after="Photo B"
+${'  '}snaps={[50]}
 />`}>
   <ComparisonDemo client:load />
 </ComponentPreview>
@@ -97,6 +99,18 @@ ${'  '}bind:position
   <ComparisonControlledDemo client:load />
 </ComponentPreview>
 
+### Snap Points
+
+Define snap points that the divider magnetically locks to. The divider uses springy magnetic gravity near snap points and a rubber-band effect when dragged past the edges.
+
+<ComponentPreview code={`<Comparison
+${'  '}before="/images/before.jpg"
+${'  '}after="/images/after.jpg"
+${'  '}snaps={[25, 50, 75]}
+/>`}>
+  <ComparisonSnapsDemo client:load />
+</ComponentPreview>
+
 ### Skeleton Loading
 
 <ComponentPreview code={`<Comparison skeleton />`}>
@@ -117,6 +131,7 @@ ${'  '}bind:position
 | `label_before` | `string` | `'Before'` | Before label text |
 | `label_after` | `string` | `'After'` | After label text |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `snaps` | `number[]` | `[]` | Snap points the divider magnetically locks to (0-100) |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 

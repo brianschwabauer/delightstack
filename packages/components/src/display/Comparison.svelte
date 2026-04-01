@@ -31,6 +31,9 @@
 		/** Whether to show a skeleton loading state */
 		skeleton = false,
 
+		/** Snap points the divider magnetically locks to (percentage values 0-100) */
+		snaps = [] as number[],
+
 		/** The ID of the component @defaults to a random ID */
 		id = propId,
 
@@ -50,6 +53,7 @@
 		label_before?: string;
 		label_after?: string;
 		skeleton?: boolean;
+		snaps?: number[];
 		id?: string;
 		class?: string;
 		onchange?: (detail: { position: number }) => void;
@@ -57,14 +61,20 @@
 
 	let container: HTMLElement | undefined = $state(undefined);
 	let dragging = $state(false);
+	let overshoot_px = $state(0);
+	let last_pointer_coord = 0;
+	let force_overflow = $state(false);
+	let overflow_timer: ReturnType<typeof setTimeout> | undefined;
+
+	const SNAP_RADIUS = 5;
 
 	const clampedPosition = $derived(Math.min(100, Math.max(0, position)));
 
-	/** Clip-path for the "after" image based on orientation and position */
+	/** Clip-path for the "after" image based on orientation and position (includes overshoot) */
 	const afterClipPath = $derived(
 		vertical
-			? `inset(${clampedPosition}% 0 0 0)`
-			: `inset(0 0 0 ${clampedPosition}%)`,
+			? `inset(calc(${clampedPosition}% + ${overshoot_px}px) 0 0 0)`
+			: `inset(0 0 0 calc(${clampedPosition}% + ${overshoot_px}px))`,
 	);
 
 	/** CSS for the divider position */
@@ -74,19 +84,81 @@
 			: `left: ${clampedPosition}%; top: 0; bottom: 0;`,
 	);
 
+	const needs_visible_overflow = $derived(dragging || force_overflow);
+
+	function snapPosition(raw: number): number {
+		if (snaps.length === 0) return raw;
+
+		let nearest_snap = -1;
+		let min_dist = Infinity;
+
+		for (const snap of snaps) {
+			const dist = Math.abs(raw - snap);
+			if (dist < min_dist && dist <= SNAP_RADIUS) {
+				min_dist = dist;
+				nearest_snap = snap;
+			}
+		}
+
+		return nearest_snap >= 0 ? nearest_snap : raw;
+	}
+
 	function updatePosition(clientX: number, clientY: number) {
 		if (!container) return;
 		const rect = container.getBoundingClientRect();
-		let newPosition: number;
+		let raw: number;
 		if (vertical) {
-			newPosition = ((clientY - rect.top) / rect.height) * 100;
+			raw = ((clientY - rect.top) / rect.height) * 100;
 		} else {
-			newPosition = ((clientX - rect.left) / rect.width) * 100;
+			raw = ((clientX - rect.left) / rect.width) * 100;
 		}
-		newPosition = Math.min(100, Math.max(0, Math.round(newPosition * 100) / 100));
+
+		let newPosition: number;
+		if (raw < 0) {
+			newPosition = 0;
+		} else if (raw > 100) {
+			newPosition = 100;
+		} else {
+			newPosition = Math.round(raw * 100) / 100;
+			newPosition = snapPosition(newPosition);
+		}
+
 		if (newPosition !== position) {
 			position = newPosition;
 			onchange?.({ position });
+		}
+	}
+
+	function updateOvershoot() {
+		if (!container) return;
+		const rect = container.getBoundingClientRect();
+		const dimension = vertical ? rect.height : rect.width;
+		const raw_pct = vertical
+			? (last_pointer_coord - rect.top) / rect.height
+			: (last_pointer_coord - rect.left) / rect.width;
+
+		if (raw_pct < 0 || raw_pct > 1) {
+			// Edge rubber band (tanh bounded)
+			const overflow_px = (raw_pct < 0 ? raw_pct : raw_pct - 1) * dimension;
+			const max_shift = 24;
+			overshoot_px = max_shift * Math.tanh(overflow_px / 100);
+		} else if (snaps.length > 0 && snaps.some((s) => Math.abs(position - s) < 0.01)) {
+			// Magnetic snap gravity — smooth easing that reaches full-follow
+			// at the snap zone boundary, guaranteeing visual continuity
+			const snapped_pct = position / 100;
+			const pull_px = (raw_pct - snapped_pct) * dimension;
+			const snap_radius_px = (SNAP_RADIUS / 100) * dimension;
+
+			if (snap_radius_px < 1) {
+				overshoot_px = 0;
+			} else {
+				const t = Math.min(1, Math.abs(pull_px) / snap_radius_px);
+				const gravity = 0.15;
+				const eased = gravity * t + (1 - gravity) * t * t;
+				overshoot_px = Math.sign(pull_px) * eased * snap_radius_px;
+			}
+		} else {
+			overshoot_px = 0;
 		}
 	}
 
@@ -94,8 +166,10 @@
 		if (skeleton) return;
 		e.preventDefault();
 		dragging = true;
+		last_pointer_coord = vertical ? e.clientY : e.clientX;
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		updatePosition(e.clientX, e.clientY);
+		updateOvershoot();
 	}
 
 	function handlePointerMove(e: PointerEvent) {
@@ -107,12 +181,19 @@
 	function handlePointerUp(e: PointerEvent) {
 		if (!dragging) return;
 		dragging = false;
+		if (Math.abs(overshoot_px) > 0.5) {
+			force_overflow = true;
+			clearTimeout(overflow_timer);
+			overflow_timer = setTimeout(() => {
+				force_overflow = false;
+			}, 400);
+		}
+		overshoot_px = 0;
 		(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
 	}
 
 	function handleContainerClick(e: MouseEvent) {
 		if (skeleton) return;
-		// Only handle clicks directly on the container (not on the handle itself during drag)
 		updatePosition(e.clientX, e.clientY);
 	}
 
@@ -150,6 +231,19 @@
 			onchange?.({ position });
 		}
 	}
+
+	// Window-level pointermove for overshoot (works even when pointer is outside container)
+	$effect(() => {
+		if (!dragging) return;
+
+		function onMove(e: PointerEvent) {
+			last_pointer_coord = vertical ? e.clientY : e.clientX;
+			updateOvershoot();
+		}
+
+		window.addEventListener('pointermove', onMove);
+		return () => window.removeEventListener('pointermove', onMove);
+	});
 </script>
 
 {#if skeleton}
@@ -165,6 +259,7 @@
 		class={['comparison', className].filter(Boolean).join(' ')}
 		class:vertical
 		class:dragging
+		class:overflowing={needs_visible_overflow}
 		{id}
 		bind:this={container}
 		onclick={handleContainerClick}
@@ -191,7 +286,8 @@
 			<span class="label label-after">{label_after}</span>
 		{/if}
 
-		<div class="divider" class:vertical style={dividerStyle}>
+		<div class="divider" class:vertical style={dividerStyle}
+			style:--divider-overshoot="{overshoot_px}px">
 			<div
 				class="handle"
 				role="slider"
@@ -243,6 +339,10 @@
 			cursor: grabbing;
 		}
 
+		&.overflowing {
+			overflow: visible;
+		}
+
 		&.skeleton {
 			cursor: default;
 			touch-action: auto;
@@ -252,14 +352,22 @@
 
 	.skeleton-inner {
 		width: 100%;
-		height: 100%;
 		min-height: 200px;
 		border-radius: var(--radius-4, 8px);
+		background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
+		position: relative;
+		overflow: hidden;
+	}
+
+	.skeleton-inner::after {
+		content: '';
+		position: absolute;
+		inset: 0;
 		background: linear-gradient(
 			90deg,
-			var(--color-bg-active, #e0e0e0) 25%,
-			var(--color-bg-hover, #f0f0f0) 50%,
-			var(--color-bg-active, #e0e0e0) 75%
+			transparent 25%,
+			light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04)) 50%,
+			transparent 75%
 		);
 		background-size: 200% 100%;
 		animation: skeleton-pulse 1.5s ease-in-out infinite;
@@ -271,6 +379,12 @@
 		}
 		100% {
 			background-position: -200% 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-inner::after {
+			animation: none;
 		}
 	}
 
@@ -287,6 +401,7 @@
 		&.after {
 			position: absolute;
 			inset: 0;
+			transition: clip-path 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 		}
 	}
 
@@ -330,6 +445,7 @@
 		align-items: center;
 		justify-content: center;
 		pointer-events: none;
+		transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 
 		&::before {
 			content: '';
@@ -339,6 +455,7 @@
 
 		&:not(.vertical) {
 			width: 0;
+			transform: translateX(var(--divider-overshoot, 0px));
 			&::before {
 				width: var(--divider-width);
 				top: 0;
@@ -349,6 +466,7 @@
 
 		&.vertical {
 			height: 0;
+			transform: translateY(var(--divider-overshoot, 0px));
 			&::before {
 				height: var(--divider-width);
 				left: 0;
@@ -356,6 +474,14 @@
 				top: calc(var(--divider-width) / -2);
 			}
 		}
+	}
+
+	.dragging .divider {
+		transition: none;
+	}
+
+	.dragging .comparison-image.after {
+		transition: none;
 	}
 
 	.handle {

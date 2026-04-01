@@ -10,6 +10,7 @@
 		after="https://picsum.photos/id/1016/800/400"
 		label_before="Photo A"
 		label_after="Photo B"
+		snaps={[50]}
 		bind:position
 	/>
 </div>
