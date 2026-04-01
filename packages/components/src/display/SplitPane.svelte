@@ -19,7 +19,7 @@
 		snap = [] as number[],
 
 		/** Distance in percentage to trigger snap */
-		snapThreshold = 3,
+		snapThreshold = 5,
 
 		/** Whether panes can be collapsed */
 		collapsible = false,
@@ -66,24 +66,32 @@
 	let container: HTMLElement | undefined = $state(undefined);
 	let dragging = $state(false);
 	let animating = $state(false);
+	let overshoot_px = $state(0);
+	let snapping = $state(false);
+	let snap_timer: ReturnType<typeof setTimeout> | undefined;
+	let last_pointer_coord = 0;
+	let snapped_to: number | null = null;
+	let expanded_during_drag = false;
+
+	const COLLAPSE_THRESHOLD = 5;
 
 	/** The size value before a collapse, so we can restore it on expand */
 	let size_before_collapse = $state(50);
 
 	const clamped_size = $derived(Math.min(maxSize, Math.max(minSize, size)));
 
-	/** The flex-basis for the first pane */
+	/** The flex-basis for the first pane (includes overshoot for smooth snap/rubber band) */
 	const first_basis = $derived.by(() => {
 		if (collapsed === 'first') return '0%';
 		if (collapsed === 'second') return '100%';
-		return `${clamped_size}%`;
+		return `calc(${clamped_size}% + ${overshoot_px}px)`;
 	});
 
-	/** The flex-basis for the second pane */
+	/** The flex-basis for the second pane (includes overshoot for smooth snap/rubber band) */
 	const second_basis = $derived.by(() => {
 		if (collapsed === 'first') return '100%';
 		if (collapsed === 'second') return '0%';
-		return `${100 - clamped_size}%`;
+		return `calc(${100 - clamped_size}% - ${overshoot_px}px)`;
 	});
 
 	/** Convert a pointer position to a percentage of the container */
@@ -104,13 +112,26 @@
 		// Clamp to min/max
 		let result = Math.min(maxSize, Math.max(minSize, percent));
 
-		// Apply snap points
+		// Apply snap points with hysteresis: once snapped, require a larger
+		// movement to escape (1.6x threshold), making snaps feel sticky
 		if (snap.length > 0) {
+			const threshold = snapped_to !== null ? snapThreshold * 1.6 : snapThreshold;
+			let best_snap = -1;
+			let min_dist = Infinity;
+
 			for (const point of snap) {
-				if (Math.abs(result - point) <= snapThreshold) {
-					result = point;
-					break;
+				const dist = Math.abs(result - point);
+				if (dist < min_dist && dist <= threshold) {
+					min_dist = dist;
+					best_snap = point;
 				}
+			}
+
+			if (best_snap >= 0) {
+				result = best_snap;
+				snapped_to = best_snap;
+			} else {
+				snapped_to = null;
 			}
 		}
 
@@ -125,6 +146,65 @@
 			size = constrained;
 			onresize?.({ size });
 		}
+	}
+
+	/** Compute visual overshoot for magnetic snap gravity and edge rubber band */
+	function updateOvershoot() {
+		if (!container) return;
+		const rect = container.getBoundingClientRect();
+		const dimension = vertical ? rect.height : rect.width;
+		const raw_pct = vertical
+			? (last_pointer_coord - rect.top) / rect.height
+			: (last_pointer_coord - rect.left) / rect.width;
+		const raw_percent = raw_pct * 100;
+
+		if (raw_percent < minSize) {
+			// Edge rubber band past min (tanh bounded)
+			const overflow_px = ((raw_percent - minSize) / 100) * dimension;
+			const max_shift = 24;
+			overshoot_px = max_shift * Math.tanh(overflow_px / 80);
+		} else if (raw_percent > maxSize) {
+			// Edge rubber band past max (tanh bounded)
+			const overflow_px = ((raw_percent - maxSize) / 100) * dimension;
+			const max_shift = 24;
+			overshoot_px = max_shift * Math.tanh(overflow_px / 80);
+		} else if (snapped_to !== null) {
+			// Magnetic snap gravity — smooth easing that reaches full-follow
+			// at the snap zone boundary, guaranteeing visual continuity.
+			// Uses the wider escape threshold to match hysteresis zone.
+			const snapped_pct = snapped_to / 100;
+			const pull_px = (raw_pct - snapped_pct) * dimension;
+			const escape_radius_px = (snapThreshold * 1.6 / 100) * dimension;
+
+			if (escape_radius_px < 1) {
+				overshoot_px = 0;
+			} else {
+				const t = Math.min(1, Math.abs(pull_px) / escape_radius_px);
+				const gravity = 0.35;
+				const eased = gravity * t + (1 - gravity) * t * t;
+				overshoot_px = Math.sign(pull_px) * eased * escape_radius_px;
+			}
+		} else {
+			overshoot_px = 0;
+		}
+	}
+
+	/** Clean up drag state and listeners */
+	function stopDrag(trigger_snap_back = true) {
+		dragging = false;
+		snapped_to = null;
+		if (trigger_snap_back && Math.abs(overshoot_px) > 0.5) {
+			snapping = true;
+			clearTimeout(snap_timer);
+			snap_timer = setTimeout(() => {
+				snapping = false;
+			}, 400);
+		}
+		overshoot_px = 0;
+		document.removeEventListener('mousemove', handlePointerMove);
+		document.removeEventListener('mouseup', handlePointerUp);
+		document.removeEventListener('touchmove', handleTouchMove);
+		document.removeEventListener('touchend', handleTouchEnd);
 	}
 
 	/** Collapse or expand a pane */
@@ -166,9 +246,12 @@
 	// ---- Pointer drag handling ----
 
 	function handlePointerDown(e: MouseEvent) {
-		if (collapsed !== null) return;
 		e.preventDefault();
 		dragging = true;
+		snapping = false;
+		expanded_during_drag = false;
+		clearTimeout(snap_timer);
+		last_pointer_coord = vertical ? e.clientY : e.clientX;
 		document.addEventListener('mousemove', handlePointerMove);
 		document.addEventListener('mouseup', handlePointerUp);
 	}
@@ -176,22 +259,57 @@
 	function handlePointerMove(e: MouseEvent) {
 		if (!dragging) return;
 		e.preventDefault();
-		const percent = pointerToPercent(e.clientX, e.clientY);
-		updateSize(percent);
+		const raw = pointerToPercent(e.clientX, e.clientY);
+
+		// Expand collapsed pane by dragging away from edge
+		if (collapsed !== null) {
+			const should_expand =
+				(collapsed === 'first' && raw > COLLAPSE_THRESHOLD) ||
+				(collapsed === 'second' && raw < 100 - COLLAPSE_THRESHOLD);
+			if (should_expand) {
+				collapsed = null;
+				expanded_during_drag = true;
+				oncollapse?.({ pane: null });
+				updateSize(raw);
+				last_pointer_coord = vertical ? e.clientY : e.clientX;
+				updateOvershoot();
+			}
+			return;
+		}
+
+		// Don't re-collapse in the same drag that expanded a pane
+		if (collapsible && !expanded_during_drag) {
+			if (raw < COLLAPSE_THRESHOLD) {
+				stopDrag(false);
+				setCollapsed('first');
+				return;
+			}
+			if (raw > 100 - COLLAPSE_THRESHOLD) {
+				stopDrag(false);
+				setCollapsed('second');
+				return;
+			}
+		}
+
+		updateSize(raw);
+		last_pointer_coord = vertical ? e.clientY : e.clientX;
+		updateOvershoot();
 	}
 
-	function handlePointerUp(e: MouseEvent) {
+	function handlePointerUp() {
 		if (!dragging) return;
-		dragging = false;
-		document.removeEventListener('mousemove', handlePointerMove);
-		document.removeEventListener('mouseup', handlePointerUp);
+		stopDrag();
 	}
 
 	// Touch handling
 	function handleTouchStart(e: TouchEvent) {
-		if (collapsed !== null) return;
 		e.preventDefault();
 		dragging = true;
+		snapping = false;
+		expanded_during_drag = false;
+		clearTimeout(snap_timer);
+		const touch = e.touches[0];
+		last_pointer_coord = vertical ? touch.clientY : touch.clientX;
 		document.addEventListener('touchmove', handleTouchMove, { passive: false });
 		document.addEventListener('touchend', handleTouchEnd);
 	}
@@ -200,15 +318,46 @@
 		if (!dragging) return;
 		e.preventDefault();
 		const touch = e.touches[0];
-		const percent = pointerToPercent(touch.clientX, touch.clientY);
-		updateSize(percent);
+		const raw = pointerToPercent(touch.clientX, touch.clientY);
+
+		// Expand collapsed pane by dragging away from edge
+		if (collapsed !== null) {
+			const should_expand =
+				(collapsed === 'first' && raw > COLLAPSE_THRESHOLD) ||
+				(collapsed === 'second' && raw < 100 - COLLAPSE_THRESHOLD);
+			if (should_expand) {
+				collapsed = null;
+				expanded_during_drag = true;
+				oncollapse?.({ pane: null });
+				updateSize(raw);
+				last_pointer_coord = vertical ? touch.clientY : touch.clientX;
+				updateOvershoot();
+			}
+			return;
+		}
+
+		// Don't re-collapse in the same drag that expanded a pane
+		if (collapsible && !expanded_during_drag) {
+			if (raw < COLLAPSE_THRESHOLD) {
+				stopDrag(false);
+				setCollapsed('first');
+				return;
+			}
+			if (raw > 100 - COLLAPSE_THRESHOLD) {
+				stopDrag(false);
+				setCollapsed('second');
+				return;
+			}
+		}
+
+		updateSize(raw);
+		last_pointer_coord = vertical ? touch.clientY : touch.clientX;
+		updateOvershoot();
 	}
 
 	function handleTouchEnd() {
 		if (!dragging) return;
-		dragging = false;
-		document.removeEventListener('touchmove', handleTouchMove);
-		document.removeEventListener('touchend', handleTouchEnd);
+		stopDrag();
 	}
 
 	// Double-click to collapse
@@ -279,6 +428,7 @@
 	class:vertical
 	class:horizontal={!vertical}
 	class:dragging
+	class:snapping
 	class:animating
 	class:collapsed-first={collapsed === 'first'}
 	class:collapsed-second={collapsed === 'second'}
@@ -412,8 +562,16 @@
 		min-width: 0;
 		min-height: 0;
 
+		.snapping & {
+			transition: flex-basis 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+		}
+
 		.animating & {
 			transition: flex-basis 200ms ease;
+		}
+
+		.dragging & {
+			transition: none;
 		}
 	}
 
