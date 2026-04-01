@@ -10,6 +10,7 @@
 		".": "./index.ts",
 		"./types": "./types/index.ts",
 		"./server": "./server/index.ts",
+		"./worker": "./worker/index.ts",
 		"./client": "./client/index.ts",
 		"./sveltekit": "./sveltekit/index.ts"
 	},

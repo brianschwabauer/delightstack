@@ -127,11 +127,7 @@ export function defineImageTable(customFields?: (schema: ImageSchemaBuilder) => 
 		/** Internal processing state (options + retry count). Cleared after processing completes. */
 		_processing: schema.string().optional(),
 
-		/** ISO 8601 timestamp of when the record was created */
-		created_at: schema.string().datetime(),
-
-		/** ISO 8601 timestamp of the last update to the record */
-		updated_at: schema.string().datetime(),
+		// created_at and updated_at are auto-managed by DatabaseServer
 
 		...(customFields ? customFields(schema) : {}),
 	}));

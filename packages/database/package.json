@@ -2,6 +2,13 @@
 	"name": "@delightstack/database",
 	"type": "module",
 	"private": true,
+	"exports": {
+		".": "./index.ts",
+		"./server": "./server/index.ts",
+		"./worker": "./worker/index.ts",
+		"./client": "./client/index.ts",
+		"./schema": "./schema/schema.ts"
+	},
 	"scripts": {
 		"test": "vitest",
 		"lint": "prettier --ignore-path .gitignore --check --plugin-search-dir=. . && eslint .",
