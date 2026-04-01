@@ -448,6 +448,35 @@
 	}
 
 	/* ------------------------------------------------------------------ */
+	/*  Adjacent-selected corner flattening                               */
+	/* ------------------------------------------------------------------ */
+
+	const selected_set = $derived(new Set(selected));
+
+	/** Nodes whose top/bottom corners should flatten because the visually adjacent node is also selected */
+	const adj_top = $derived.by(() => {
+		const s = new Set<string>();
+		const order = getVisibleNodeOrder();
+		for (let i = 1; i < order.length; i++) {
+			if (selected_set.has(order[i]) && selected_set.has(order[i - 1])) {
+				s.add(order[i]);
+			}
+		}
+		return s;
+	});
+
+	const adj_bottom = $derived.by(() => {
+		const s = new Set<string>();
+		const order = getVisibleNodeOrder();
+		for (let i = 0; i < order.length - 1; i++) {
+			if (selected_set.has(order[i]) && selected_set.has(order[i + 1])) {
+				s.add(order[i]);
+			}
+		}
+		return s;
+	});
+
+	/* ------------------------------------------------------------------ */
 	/*  Focus management                                                  */
 	/* ------------------------------------------------------------------ */
 
@@ -818,6 +847,8 @@
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="node-row"
+				class:adj-top={adj_top.has(node.id)}
+				class:adj-bottom={adj_bottom.has(node.id)}
 				style:padding-left="{(level - 1) * 1.25}rem"
 				draggable={draggable && !node.disabled ? 'true' : undefined}
 				ondragstart={(e) => handleDragStart(e, node)}
@@ -986,7 +1017,7 @@
 
 		&:focus-visible {
 			box-shadow: inset 0 0 0 2px var(--color-action, #1976d2);
-			border-radius: var(--radius-2, 4px);
+			border-radius: 8px;
 		}
 	}
 
@@ -1004,7 +1035,7 @@
 		gap: 0.125rem;
 		padding: 0.25rem 0.5rem 0.25rem 0;
 		cursor: pointer;
-		border-radius: var(--radius-2, 4px);
+		border-radius: 8px;
 		position: relative;
 		min-height: 1.75rem;
 		transition:
@@ -1033,6 +1064,17 @@
 			rgb(from var(--color-action, #1976d2) r g b / 0.1),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.15)
 		);
+	}
+
+	/* Flatten touching corners between visually adjacent selected nodes */
+	.tree-node.selected > .node-row.adj-bottom {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+
+	.tree-node.selected > .node-row.adj-top {
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
 	}
 
 	.tree-node.selected > .node-row:hover {
@@ -1254,12 +1296,7 @@
 		--line-offset: 1.25rem;
 	}
 
-	.tree.show-lines
-		.tree-node
-		.tree-node
-		.tree-node
-		> .children-container
-		> :global(ul) {
+	.tree.show-lines .tree-node .tree-node .tree-node > .children-container > :global(ul) {
 		--line-offset: 2.5rem;
 	}
 
@@ -1316,7 +1353,7 @@
 	.tree-node.drop-inside > .node-row {
 		outline: 2px solid var(--color-action, #1976d2);
 		outline-offset: -2px;
-		border-radius: var(--radius-2, 4px);
+		border-radius: 8px;
 		background: light-dark(
 			rgb(from var(--color-action, #1976d2) r g b / 0.08),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.12)
