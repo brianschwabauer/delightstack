@@ -20,7 +20,7 @@
 		error = '';
 		loading = true;
 		try {
-			const result = await fetch('/api/auth/signin', {
+			const result = await fetch('/api/auth/signin/email', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email, password }),
@@ -74,10 +74,10 @@
 		<div class="divider"><span>or</span></div>
 
 		<div class="oauth-buttons">
-			<Button href="/api/auth/oauth/github" fullWidth transparent>
+			<Button href="/api/auth/signin/github" fullWidth transparent>
 				Continue with GitHub
 			</Button>
-			<Button href="/api/auth/oauth/google" fullWidth transparent>
+			<Button href="/api/auth/signin/google" fullWidth transparent>
 				Continue with Google
 			</Button>
 		</div>
