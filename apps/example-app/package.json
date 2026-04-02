@@ -3,7 +3,9 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
-		"dev": "vite dev --port 5174",
+		"dev": "turbo run dev:svelte dev:worker",
+		"dev:svelte": "vite dev --port 5174",
+		"dev:worker": "cd server && wrangler dev --config wrangler.toml --env staging --persist-to ./../.wrangler/state",
 		"build": "vite build",
 		"build:ci": "vite build --mode $VITE_MODE",
 		"deploy": "wrangler deploy .svelte-kit/cloudflare/_worker.js --name example-app --assets .svelte-kit/cloudflare --compatibility-date 2025-02-14",

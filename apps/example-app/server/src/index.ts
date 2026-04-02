@@ -1,16 +1,33 @@
 // Worker entry point — imports from /worker paths which depend on cloudflare:workers.
 // SvelteKit app code should import from /server paths instead.
 import { DatabaseServer } from '@delightstack/database/worker';
-import { AuthDatabaseServer } from '@delightstack/auth/worker';
+import { AuthDatabaseServer as BaseAuthDatabaseServer } from '@delightstack/auth/worker';
 import { WebsocketServer } from '@delightstack/websocket/worker';
 import { RateLimiterServer } from '@delightstack/rate-limiter';
 import { ImageProcessorContainer } from '@delightstack/images/worker';
 import { aiProcessing } from '@delightstack/ai/server';
 import { imageProcessing } from '@delightstack/images';
+import { createDevRpcHandler } from '@delightstack/utilities';
 import { tables } from '../../src/lib/schema';
 
 // Re-export Durable Object classes for wrangler to discover
-export { AuthDatabaseServer, RateLimiterServer, ImageProcessorContainer };
+export { RateLimiterServer, ImageProcessorContainer };
+
+/**
+ * Auth database — wraps the base class with app-specific configuration.
+ * Workerd only passes (ctx, env) to DO constructors, so we inject options here.
+ */
+export class AuthDatabaseServer extends BaseAuthDatabaseServer {
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(ctx, env, {
+			secret: env.JWT_KEY_SECRET || 'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
+			issuer: 'foreverfamily',
+			permissions: ['admin', 'editor', 'viewer'],
+			oauth_scopes: [],
+			entitlements: ['ai', 'images'],
+		});
+	}
+}
 
 /**
  * Organization database — one instance per org.
@@ -59,6 +76,19 @@ export class AppWebsocketServer extends WebsocketServer {
 	}
 }
 
+/**
+ * Default fetch handler — bridges dev proxy HTTP requests to real Durable Objects.
+ * In production this is unused (the SvelteKit worker is deployed separately).
+ */
+export default {
+	async fetch(request: Request, env: Env) {
+		return createDevRpcHandler(request, {
+			AUTH: env.AUTH,
+			DB: env.DB,
+		});
+	},
+};
+
 interface Env {
 	AUTH: DurableObjectNamespace;
 	DB: DurableObjectNamespace;
@@ -68,5 +98,6 @@ interface Env {
 	AI: Ai;
 	KV: KVNamespace;
 	R2: R2Bucket;
+	JWT_KEY_SECRET?: string;
 	DEV?: boolean;
 }

@@ -513,6 +513,39 @@ export class DatabaseServer<
 		}
 	}
 
+	/** Dev RPC fetch handler — dispatches `POST /rpc` with `{ method, args }` to public methods. */
+	async fetch(request: Request) {
+		const url = new URL(request.url);
+		if (url.pathname === '/rpc' && request.method === 'POST') {
+			const body = (await request.json()) as { method?: string; args?: unknown[] };
+			if (body?.method && body?.args) {
+				// Resolve dotted paths (e.g. 'ai.complete' → this.ai.complete)
+				const parts = body.method.split('.');
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				let target: any = this;
+				for (let i = 0; i < parts.length - 1; i++) {
+					target = target?.[parts[i]];
+					if (!target) break;
+				}
+				const fn = target?.[parts[parts.length - 1]];
+				if (typeof fn === 'function') {
+					try {
+						const result = await fn.apply(target, body.args);
+						return new Response(JSON.stringify(result ?? null), {
+							headers: { 'content-type': 'application/json' },
+						});
+					} catch (error: unknown) {
+						return DelightError.from(error).toResponse();
+					}
+				}
+			}
+		}
+		return new Response(JSON.stringify({ message: 'Not found', status: 404 }), {
+			status: 404,
+			headers: { 'content-type': 'application/json' },
+		});
+	}
+
 	/**
 	 * Gets multiple entities from the database in a batch.
 	 * Groups requests by entity type and uses `WHERE id IN (...)` for efficiency.
