@@ -139,10 +139,11 @@ const signInEmail: AuthRouteHandler = (ctx) =>
 		const is_new_user = result.type === 'signup';
 
 		if (is_new_user && ctx.config.hooks?.onSignUp) {
-			await ctx.config.hooks.onSignUp({ result, method: 'email', meta: ctx.meta });
+			await ctx.config.hooks.onSignUp({ auth: ctx.auth, result, method: 'email', meta: ctx.meta });
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({
+				auth: ctx.auth,
 				result,
 				method: 'email',
 				is_new_user,
@@ -194,10 +195,11 @@ const signInEmailVerify: AuthRouteHandler = (ctx) =>
 
 		const is_new_user = result.type === 'signup';
 		if (is_new_user && ctx.config.hooks?.onSignUp) {
-			await ctx.config.hooks.onSignUp({ result, method: 'magic-link', meta: ctx.meta });
+			await ctx.config.hooks.onSignUp({ auth: ctx.auth, result, method: 'magic-link', meta: ctx.meta });
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({
+				auth: ctx.auth,
 				result,
 				method: 'magic-link',
 				is_new_user,
@@ -223,10 +225,11 @@ const signUpEmail: AuthRouteHandler = (ctx) =>
 		)) as AuthOperationResult;
 
 		if (ctx.config.hooks?.onSignUp) {
-			await ctx.config.hooks.onSignUp({ result, method: 'email', meta: ctx.meta });
+			await ctx.config.hooks.onSignUp({ auth: ctx.auth, result, method: 'email', meta: ctx.meta });
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({
+				auth: ctx.auth,
 				result,
 				method: 'email',
 				is_new_user: true,
@@ -360,13 +363,14 @@ const signInOauthCallback: AuthRouteHandler = (ctx) =>
 		const is_new_user = result.type === 'signup';
 		const is_new_method = result.type === 'new-signin-method';
 		if (is_new_user && ctx.config.hooks?.onSignUp) {
-			await ctx.config.hooks.onSignUp({ result, method: 'oauth', meta: ctx.meta });
+			await ctx.config.hooks.onSignUp({ auth: ctx.auth, result, method: 'oauth', meta: ctx.meta });
 		}
 		if (is_new_method && ctx.config.hooks?.onNewSignInMethod) {
-			await ctx.config.hooks.onNewSignInMethod({ result, vendor, meta: ctx.meta });
+			await ctx.config.hooks.onNewSignInMethod({ auth: ctx.auth, result, vendor, meta: ctx.meta });
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({
+				auth: ctx.auth,
 				result,
 				method: 'oauth',
 				is_new_user,
@@ -384,6 +388,7 @@ const signOut: AuthRouteHandler = (ctx) =>
 			await ctx.auth.revokeSession(session_id);
 			if (ctx.config.hooks?.onSignOut) {
 				await ctx.config.hooks.onSignOut({
+					auth: ctx.auth,
 					user_id: ctx.locals.session.uid,
 					session_id,
 				});
@@ -399,6 +404,7 @@ const signOutRedirect: AuthRouteHandler = (ctx) =>
 			await ctx.auth.revokeSession(session_id);
 			if (ctx.config.hooks?.onSignOut) {
 				await ctx.config.hooks.onSignOut({
+					auth: ctx.auth,
 					user_id: ctx.locals.session.uid,
 					session_id,
 				});
@@ -492,6 +498,7 @@ const passwordResetConfirm: AuthRouteHandler = (ctx) =>
 
 		if (ctx.config.hooks?.onPasswordReset) {
 			await ctx.config.hooks.onPasswordReset({
+				auth: ctx.auth,
 				user_id: result.user_id,
 				email: result.decoded_jwt.email,
 			});
@@ -561,6 +568,7 @@ const emailVerifyConfirm: AuthRouteHandler = (ctx) =>
 
 		if (ctx.config.hooks?.onEmailVerified) {
 			await ctx.config.hooks.onEmailVerified({
+				auth: ctx.auth,
 				user_id: result.user_id,
 				email: result.decoded_jwt.email,
 			});
@@ -732,6 +740,7 @@ const orgCreate: AuthRouteHandler = (ctx) =>
 
 		if (ctx.config.hooks?.onOrgJoined) {
 			await ctx.config.hooks.onOrgJoined({
+				auth: ctx.auth,
 				user_id: ctx.locals.session!.uid,
 				org_id,
 			});
@@ -920,6 +929,7 @@ const invitationAccept: AuthRouteHandler = (ctx) =>
 
 		if (ctx.config.hooks?.onOrgJoined) {
 			await ctx.config.hooks.onOrgJoined({
+				auth: ctx.auth,
 				user_id: ctx.locals.session!.uid,
 				org_id: invitation.org_id,
 			});

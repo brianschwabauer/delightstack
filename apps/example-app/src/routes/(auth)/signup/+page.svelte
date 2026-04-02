@@ -29,6 +29,17 @@
 				error = data.message || 'Sign up failed';
 				return;
 			}
+			// Create an org for the new user (the session cookie is now set)
+			const orgResult = await fetch('/api/auth/org', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: `${name}'s Family` }),
+			});
+			if (!orgResult.ok) {
+				const data = await orgResult.json();
+				error = data.message || 'Failed to create organization';
+				return;
+			}
 			window.location.href = '/dashboard';
 		} catch {
 			error = 'An unexpected error occurred';
