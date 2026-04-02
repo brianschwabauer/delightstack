@@ -6,3 +6,4 @@ export * from './id.helper';
 export * from './random.helper';
 export * from './string.helper';
 export * from './url.helper';
+export * from './dev-proxy.helper';

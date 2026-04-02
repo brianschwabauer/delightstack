@@ -7,7 +7,7 @@ import { createDatabaseHandle, defineRoute } from '@delightstack/database/server
 import { createBillingHandle } from '@delightstack/stripe/server';
 import { createAiHandle } from '@delightstack/ai/server';
 import { createImageHandle } from '@delightstack/images';
-import { DelightError } from '@delightstack/utilities';
+import { DelightError, createDevHandle } from '@delightstack/utilities';
 import { env } from '$env/dynamic/private';
 import { building, dev } from '$app/environment';
 import { personTable, postTable } from '$lib/schema';
@@ -189,6 +189,7 @@ const appHandle: Handle = async ({ event, resolve }) => {
 // Compose all handles
 // ---------------------------------------------------------------------------
 export const handle = sequence(
+	...(dev ? [createDevHandle()] : []),
 	authHandle,
 	appHandle,
 	websocketHandle,

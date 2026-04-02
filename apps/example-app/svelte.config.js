@@ -16,7 +16,7 @@ const config = {
 			platformProxy: {
 				configPath: './wrangler.jsonc',
 				environment: 'staging',
-				persist: true,
+				persist: { path: '.wrangler/state/v3' },
 			},
 		}),
 		version: { name: `v${packageJson.version}` },

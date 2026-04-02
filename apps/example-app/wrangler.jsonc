@@ -41,8 +41,12 @@
 			"browser": {
 				"binding": "BROWSER",
 			},
-			"kv_namespaces": [],
-			"r2_buckets": [],
+			"kv_namespaces": [
+				{ "binding": "KV", "id": "dev-kv" },
+			],
+			"r2_buckets": [
+				{ "binding": "R2", "bucket_name": "dev-r2" },
+			],
 			"services": [
 				{
 					"binding": "SELF",
