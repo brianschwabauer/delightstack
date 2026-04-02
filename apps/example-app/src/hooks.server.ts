@@ -17,7 +17,9 @@ import { personTable, postTable } from '$lib/schema';
 // ---------------------------------------------------------------------------
 const authHandle = createAuthHandle({
 	config: {
-		secret: env.JWT_KEY_SECRET ?? 'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
+		secret:
+			env.JWT_KEY_SECRET ??
+			'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
 		issuer: 'foreverfamily',
 		permissions: ['admin', 'editor', 'viewer'] as const,
 		oauth_scopes: [] as const,
@@ -41,9 +43,7 @@ const websocketHandle = createWebsocketHandle({
 		if (!locals.org_id) return undefined;
 		const platform = event.platform as App.Platform | undefined;
 		if (!platform) return undefined;
-		return platform.env.WS.get(
-			platform.env.WS.idFromName(locals.org_id),
-		);
+		return platform.env.WS.get(platform.env.WS.idFromName(locals.org_id));
 	},
 });
 
@@ -100,7 +100,9 @@ const databaseHandle = createDatabaseHandle({
 // 5. Billing — Stripe subscription routes at /api/billing/*
 //    Disabled when STRIPE_SECRET_KEY / PUBLIC_STRIPE_PUBLISHABLE_KEY are not set.
 // ---------------------------------------------------------------------------
-const has_stripe = env.STRIPE_SECRET_KEY?.startsWith('sk_') && env.PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith('pk_');
+const has_stripe =
+	env.STRIPE_SECRET_KEY?.startsWith('sk_') &&
+	env.PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith('pk_');
 
 const billingHandle: Handle = has_stripe
 	? createBillingHandle({
@@ -142,7 +144,9 @@ const billingHandle: Handle = has_stripe
 	: ({ event, resolve }) => resolve(event);
 
 if (!has_stripe && dev) {
-	console.warn('[@delightstack/stripe] Billing disabled — set STRIPE_SECRET_KEY and PUBLIC_STRIPE_PUBLISHABLE_KEY to enable.');
+	console.warn(
+		'[@delightstack/stripe] Billing disabled — set STRIPE_SECRET_KEY and PUBLIC_STRIPE_PUBLISHABLE_KEY to enable.',
+	);
 }
 
 // ---------------------------------------------------------------------------

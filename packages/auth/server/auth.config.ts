@@ -1,5 +1,10 @@
 import type { UserSessionMeta } from '../types';
-import type { AuthOperationResult } from './auth.db.server';
+import type { AuthOperationResult, AuthDatabaseServer } from './auth.db.server';
+
+/** The auth DO stub type — matches DurableObjectStub<AuthDatabaseServer> minus lifecycle methods. */
+type AuthStub = DurableObjectStub<
+	Omit<AuthDatabaseServer, 'alarm' | 'webSocketMessage' | 'webSocketClose' | 'webSocketError' | 'fetch' | 'Rpc'>
+>;
 
 /**
  * Configuration for the auth integration layer.
@@ -148,9 +153,10 @@ export interface AuthConfig<P extends string = string, S extends string = string
 	 */
 	csrf?: boolean | { allowed_origins?: string[] };
 
-	/** Lifecycle hooks for auth events */
+	/** Lifecycle hooks for auth events. Each hook receives `auth` — the Durable Object stub for the current request. */
 	hooks?: {
 		onSignIn?: (ctx: {
+			auth: AuthStub;
 			result: AuthOperationResult;
 			method: 'email' | 'magic-link' | 'oauth';
 			is_new_user: boolean;
@@ -158,22 +164,24 @@ export interface AuthConfig<P extends string = string, S extends string = string
 		}) => Promise<void>;
 
 		onSignUp?: (ctx: {
+			auth: AuthStub;
 			result: AuthOperationResult;
 			method: 'email' | 'magic-link' | 'oauth';
 			meta: UserSessionMeta;
 		}) => Promise<void>;
 
 		onNewSignInMethod?: (ctx: {
+			auth: AuthStub;
 			result: AuthOperationResult;
 			vendor: string;
 			meta: UserSessionMeta;
 		}) => Promise<void>;
 
-		onSignOut?: (ctx: { user_id: string; session_id: string }) => Promise<void>;
+		onSignOut?: (ctx: { auth: AuthStub; user_id: string; session_id: string }) => Promise<void>;
 
-		onPasswordReset?: (ctx: { user_id: string; email: string }) => Promise<void>;
-		onEmailVerified?: (ctx: { user_id: string; email: string }) => Promise<void>;
-		onOrgJoined?: (ctx: { user_id: string; org_id: string }) => Promise<void>;
+		onPasswordReset?: (ctx: { auth: AuthStub; user_id: string; email: string }) => Promise<void>;
+		onEmailVerified?: (ctx: { auth: AuthStub; user_id: string; email: string }) => Promise<void>;
+		onOrgJoined?: (ctx: { auth: AuthStub; user_id: string; org_id: string }) => Promise<void>;
 	};
 }
 
