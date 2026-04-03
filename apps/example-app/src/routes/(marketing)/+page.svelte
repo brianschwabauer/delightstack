@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { Button, Stat } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
-	import { ripple } from '@delightstack/utilities';
 
 	const { data } = $props();
 	const { auth } = $derived(data);
@@ -73,9 +72,7 @@
 			and stay connected — powered by the Delightstack framework.
 		</p>
 		<div class="hero-actions">
-			<a href="/signup" class="cta-button" {@attach ripple()}>
-				Start for Free
-			</a>
+			<Button href="/signup">Start for Free</Button>
 			<Button href="/signin" transparent>Sign In</Button>
 		</div>
 	</section>
@@ -212,20 +209,6 @@
 		align-items: center;
 		margin-top: var(--size-3);
 	}
-	.cta-button {
-		display: inline-flex;
-		align-items: center;
-		padding: var(--size-3) var(--size-5);
-		background: var(--color-action);
-		color: var(--color-action-text);
-		border-radius: var(--radius-3);
-		font-weight: var(--font-weight-6);
-		transition: background 0.15s;
-		position: relative;
-		overflow: hidden;
-		&:hover { background: var(--color-action-active); }
-	}
-
 	/* Stats */
 	.stats {
 		display: flex;

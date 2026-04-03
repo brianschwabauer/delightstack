@@ -47,7 +47,7 @@
 		<p class="subtitle">Start your Forever Family</p>
 
 		{#if error}
-			<Callout type="error">{error}</Callout>
+			<Callout error>{error}</Callout>
 		{/if}
 
 		<form onsubmit={(e) => { e.preventDefault(); handleSignUp(); }}>

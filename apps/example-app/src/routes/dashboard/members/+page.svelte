@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Input, Avatar, AvatarGroup, Table, Modal, Callout } from '@delightstack/components';
+	import { Button, Input, AvatarGroup, Table, Modal, Callout } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import { tooltip } from '@delightstack/utilities';
 
@@ -58,10 +58,10 @@
 	<section class="invite-section">
 		<h3>Invite a Family Member</h3>
 		{#if invite_error}
-			<Callout type="error">{invite_error}</Callout>
+			<Callout error>{invite_error}</Callout>
 		{/if}
 		{#if invite_success}
-			<Callout type="success">{invite_success}</Callout>
+			<Callout success>{invite_success}</Callout>
 		{/if}
 		<form onsubmit={(e) => { e.preventDefault(); sendInvite(); }} class="invite-form">
 			<Input
@@ -81,13 +81,9 @@
 		<section class="online-section">
 			<h3>Online Now</h3>
 			<div class="online-list">
-				<AvatarGroup>
-					{#each ws.sessions as session}
-						<div class="online-member" {@attach tooltip(session.meta?.user_name ?? 'User')}>
-							<Avatar name={session.meta?.user_name ?? 'User'} />
-						</div>
-					{/each}
-				</AvatarGroup>
+				<AvatarGroup
+					avatars={ws.sessions.map((s) => ({ name: s.meta?.user_name ?? 'User' }))}
+				/>
 				<small>{ws.sessions.length} member{ws.sessions.length === 1 ? '' : 's'} online</small>
 			</div>
 		</section>
@@ -139,9 +135,6 @@
 		align-items: center;
 		gap: var(--size-3);
 		small { color: var(--color-text-disabled); }
-	}
-	.online-member {
-		display: inline-flex;
 	}
 	.status-section {
 		padding-top: var(--size-3);

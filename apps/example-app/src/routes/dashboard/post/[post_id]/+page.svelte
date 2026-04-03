@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { Button, Input, Toggle, Modal, Callout, Progress } from '@delightstack/components';
+	import { toast } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { toast } from '@delightstack/components';
 
 	const { data } = $props();
-	const { db, ai } = $derived(data);
+	const { auth, db, ai } = $derived(data);
 
 	const post_id = $derived(page.params.post_id);
 	const post = $derived(db.get('post', post_id));
@@ -117,10 +117,7 @@
 		{#if editing}
 			<div class="edit-section">
 				<Input label="Title" bind:value={edit_title} />
-				<div class="content-field">
-					<label for="content">Content</label>
-					<textarea id="content" bind:value={edit_content} rows={15}></textarea>
-				</div>
+				<Input label="Content" type="textarea" bind:value={edit_content} />
 				<Toggle bind:checked={edit_is_public} label="Share publicly" />
 				<Input label="Tags" bind:value={edit_tags} placeholder="Comma-separated tags" />
 
@@ -134,7 +131,7 @@
 						</Button>
 					</div>
 					{#if ai.streaming}
-						<Progress indeterminate />
+						<Progress loading />
 					{/if}
 					{#if ai.content}
 						<div class="ai-suggestion">
@@ -210,26 +207,6 @@
 		flex-direction: column;
 		gap: var(--size-3);
 		max-width: 700px;
-	}
-	.content-field {
-		display: flex;
-		flex-direction: column;
-		gap: var(--size-1);
-		label {
-			font-size: var(--font-size-0);
-			font-weight: var(--font-weight-6);
-		}
-		textarea {
-			width: 100%;
-			padding: var(--size-3);
-			border: 1px solid var(--color-outline);
-			border-radius: var(--radius-2);
-			background: var(--color-bg-0);
-			color: var(--color-text);
-			resize: vertical;
-			font-family: var(--font-sans);
-			line-height: var(--font-lineheight-3);
-		}
 	}
 	.post-content {
 		max-width: var(--size-content-3);

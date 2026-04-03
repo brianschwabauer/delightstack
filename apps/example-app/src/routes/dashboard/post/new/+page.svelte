@@ -1,16 +1,17 @@
 <script lang="ts">
-	import { Button, Input, Toggle, SplitPane, Progress } from '@delightstack/components';
+	import { Button, Input, Toggle, SplitPane, Progress, Callout } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import { goto } from '$app/navigation';
 
 	const { data } = $props();
-	const { db, ai } = $derived(data);
+	const { auth, db, ai } = $derived(data);
 
 	let title = $state('');
 	let content = $state('');
 	let is_public = $state(false);
 	let tags_input = $state('');
 	let saving = $state(false);
+	let save_error = $state('');
 
 	// AI assist
 	let ai_prompt = $state('');
@@ -24,15 +25,19 @@
 
 	async function savePost() {
 		if (!title.trim() || !content.trim()) return;
+		save_error = '';
 		saving = true;
 		try {
 			const post = await db.create('post', {
 				title: title.trim(),
 				content: content.trim(),
+				author_id: auth.id!,
 				is_public,
 				tags: tags.length ? tags : undefined,
 			});
 			goto(`/dashboard/post/${post.id}`);
+		} catch (e) {
+			save_error = e instanceof Error ? e.message : 'Failed to publish post';
 		} finally {
 			saving = false;
 		}
@@ -75,20 +80,21 @@
 		</div>
 	</header>
 
-	<SplitPane direction="horizontal" min={300}>
+	{#if save_error}
+		<Callout error>{save_error}</Callout>
+	{/if}
+
+	<SplitPane>
 		{#snippet first()}
 			<div class="editor">
 				<Input label="Title" bind:value={title} placeholder="Give your story a title" />
 
-				<div class="content-field">
-					<label for="content">Story</label>
-					<textarea
-						id="content"
-						bind:value={content}
-						placeholder="Write your family story..."
-						rows={12}
-					></textarea>
-				</div>
+				<Input
+					label="Story"
+					type="textarea"
+					bind:value={content}
+					placeholder="Write your family story..."
+				/>
 
 				<div class="post-options">
 					<Toggle bind:checked={is_public} label="Share publicly" />
@@ -120,7 +126,7 @@
 				</div>
 
 				{#if ai.streaming}
-					<Progress indeterminate />
+					<Progress loading />
 				{/if}
 
 				{#if ai.content}
@@ -165,26 +171,6 @@
 		flex-direction: column;
 		gap: var(--size-4);
 		padding-right: var(--size-3);
-	}
-	.content-field {
-		display: flex;
-		flex-direction: column;
-		gap: var(--size-1);
-		label {
-			font-size: var(--font-size-0);
-			font-weight: var(--font-weight-6);
-		}
-		textarea {
-			width: 100%;
-			padding: var(--size-3);
-			border: 1px solid var(--color-outline);
-			border-radius: var(--radius-2);
-			background: var(--color-bg-0);
-			color: var(--color-text);
-			resize: vertical;
-			font-family: var(--font-sans);
-			line-height: var(--font-lineheight-3);
-		}
 	}
 	.post-options {
 		display: flex;

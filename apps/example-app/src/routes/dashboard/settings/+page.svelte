@@ -81,7 +81,7 @@
 <div class="page">
 	<h1>Settings</h1>
 
-	<Tabs bind:active={active_tab}>
+	<Tabs bind:value={active_tab}>
 		<Tab value="profile">Profile</Tab>
 		<Tab value="security">Security</Tab>
 		<Tab value="preferences">Preferences</Tab>
@@ -116,7 +116,7 @@
 			<section class="section">
 				<h3>Change Password</h3>
 				{#if password_error}
-					<Callout type="error">{password_error}</Callout>
+					<Callout error>{password_error}</Callout>
 				{/if}
 				<form onsubmit={(e) => { e.preventDefault(); changePassword(); }} class="form">
 					<Input label="Current Password" type="password" bind:value={current_password} required />

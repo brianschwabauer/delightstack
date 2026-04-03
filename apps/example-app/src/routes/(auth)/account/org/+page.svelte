@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button, Input, Callout } from '@delightstack/components';
+	import { List, ListItem } from '@delightstack/components/display';
 	import { goto } from '$app/navigation';
 
 	const { data } = $props();
@@ -51,22 +52,17 @@
 		</p>
 
 		{#if error}
-			<Callout type="error">{error}</Callout>
+			<Callout error>{error}</Callout>
 		{/if}
 
 		{#if auth.orgs.length}
-			<div class="org-list">
+			<List>
 				{#each auth.orgs as org}
-					<button
-						class="org-card"
-						disabled={loading}
-						onclick={() => selectOrg(org.id)}
-					>
-						<span class="org-name">{org.name}</span>
-						<span class="org-arrow">&#8594;</span>
-					</button>
+					<ListItem onclick={() => selectOrg(org.id)} disabled={loading}>
+						{org.name}
+					</ListItem>
 				{/each}
-			</div>
+			</List>
 
 			<div class="divider"><span>or create a new one</span></div>
 		{/if}
@@ -125,36 +121,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--size-3);
-	}
-	.org-list {
-		display: flex;
-		flex-direction: column;
-		gap: var(--size-2);
-	}
-	.org-card {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: var(--size-3) var(--size-4);
-		border: 1px solid var(--color-outline);
-		border-radius: var(--radius-3);
-		background: var(--color-surface-1);
-		cursor: pointer;
-		transition: border-color 0.15s, background 0.15s;
-		&:hover {
-			border-color: var(--color-action);
-			background: var(--color-surface-2);
-		}
-		&:disabled {
-			opacity: 0.6;
-			cursor: not-allowed;
-		}
-	}
-	.org-name {
-		font-weight: var(--font-weight-6);
-	}
-	.org-arrow {
-		color: var(--color-text-disabled);
 	}
 	.divider {
 		display: flex;

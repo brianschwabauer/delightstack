@@ -8,23 +8,23 @@
 	let show_upload = $state(false);
 	let uploading = $state(false);
 	let upload_error = $state('');
-	let selected_image: Record<string, unknown> | null = $state(null);
+	let selected_image: (typeof images)['docs'][number] | null = $state(null);
 	let show_preview = $state(false);
 
 	const images = $derived(
 		db.search('image', {
 			limit: 100,
-			sortBy: { property: 'created_at', order: 'DESC' },
+			order: [{ key: 'created_at', direction: 'DESC' }],
 		}),
 	);
 
-	async function handleUpload(files: FileList | null) {
-		if (!files?.length) return;
+	async function handleUpload(detail: { files: File[] }) {
+		if (!detail.files.length) return;
 		uploading = true;
 		upload_error = '';
 
 		try {
-			for (const file of files) {
+			for (const file of detail.files) {
 				const form_data = new FormData();
 				form_data.append('file', file);
 				form_data.append('caption', file.name);
@@ -63,7 +63,7 @@
 	</header>
 
 	<div class="gallery-grid">
-		{#if images.loaded && images.docs.length === 0}
+		{#if !images.loading && images.docs.length === 0}
 			<div class="empty">
 				<p>No photos yet. Upload some family memories!</p>
 				<Button onclick={() => (show_upload = true)}>Upload Photos</Button>
@@ -74,7 +74,7 @@
 					class="gallery-item"
 					onclick={() => { selected_image = image; show_preview = true; }}
 				>
-					<Image {image} variant="thumbnail" />
+					<Image {image} sizes="200px" />
 					{#if image.caption}
 						<span class="caption">{image.caption}</span>
 					{/if}
@@ -87,23 +87,23 @@
 <!-- Upload Modal -->
 <Modal bind:open={show_upload} title="Upload Photos">
 	{#if upload_error}
-		<Callout type="error">{upload_error}</Callout>
+		<Callout error>{upload_error}</Callout>
 	{/if}
 
 	<FileUpload
 		accept="image/*"
 		multiple
-		onchange={(e) => handleUpload(e.currentTarget.files)}
+		onselect={handleUpload}
 	/>
 
 	{#if uploading}
-		<Progress indeterminate />
+		<Progress loading />
 		<p class="upload-status">Uploading...</p>
 	{/if}
 </Modal>
 
 <!-- Image Preview Modal -->
-<Modal bind:open={show_preview} title={selected_image?.caption ?? 'Photo'} onclose={() => { selected_image = null; }}>
+<Modal bind:open={show_preview} title={String(selected_image?.caption ?? 'Photo')} onclose={() => { selected_image = null; }}>
 	{#if selected_image}
 		<div class="preview">
 			<Image image={selected_image} />
