@@ -827,7 +827,11 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 	#getWorker(): Remote<DatabaseWorker> {
 		if (!this.#worker) {
-			throw new Error('DatabaseClient not initialized. Call `await db.init()` first.');
+			// Return a no-op proxy during SSR and before init() so that
+			// $derived expressions (which run before $effect) don't throw.
+			return new Proxy({} as Remote<DatabaseWorker>, {
+				get: () => () => Promise.resolve(undefined),
+			});
 		}
 		return this.#worker;
 	}
