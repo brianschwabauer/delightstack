@@ -49,7 +49,7 @@ export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
 			ai: () => env.AI,
 			gateway: 'foreverfamily',
 			storage: ctx.storage,
-			ws: () => undefined,
+			ws: () => env.WS.get(env.WS.idFromName('main')) as unknown as WebsocketServer,
 			fields: [
 				{ entity_type: 'post', source_fields: ['title', 'content', 'tags'] },
 			],
