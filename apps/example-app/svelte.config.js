@@ -11,6 +11,11 @@ const config = {
 	preprocess: vitePreprocess({
 		script: true,
 	}),
+	compilerOptions: {
+		experimental: {
+			async: true,
+		},
+	},
 	kit: {
 		adapter: adapter({
 			platformProxy: {

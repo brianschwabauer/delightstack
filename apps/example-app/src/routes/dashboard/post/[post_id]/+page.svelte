@@ -9,7 +9,7 @@
 	const { auth, db, ai } = $derived(data);
 
 	const post_id = $derived(page.params.post_id);
-	const post = $derived(db.get('post', post_id));
+	const post = $derived(await db.get('post', post_id));
 
 	let editing = $state(false);
 	let show_delete = $state(false);
