@@ -1,19 +1,11 @@
 <script lang="ts">
 	import { Button, Input, Callout } from '@delightstack/components';
-	import { goto } from '$app/navigation';
-
-	const { data } = $props();
-	const { auth } = $derived(data);
 
 	let name = $state('');
 	let email = $state('');
 	let password = $state('');
 	let error = $state('');
 	let loading = $state(false);
-
-	$effect(() => {
-		if (auth.signed_in) goto('/dashboard');
-	});
 
 	async function handleSignUp() {
 		error = '';
@@ -36,8 +28,8 @@
 				body: JSON.stringify({ name: `${name}'s Family` }),
 			});
 			if (!orgResult.ok) {
-				const data = await orgResult.json();
-				error = data.message || 'Failed to create organization';
+				// Account created but org failed — send to org page to finish setup
+				window.location.href = '/account/org';
 				return;
 			}
 			window.location.href = '/dashboard';

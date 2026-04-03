@@ -1,20 +1,10 @@
 <script lang="ts">
 	import { Button, Input, Callout } from '@delightstack/components';
-	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-
-	const { data } = $props();
-	const { auth } = $derived(data);
 
 	let email = $state('');
 	let password = $state('');
 	let error = $state('');
 	let loading = $state(false);
-
-	// Redirect if already signed in
-	$effect(() => {
-		if (auth.signed_in) goto('/dashboard');
-	});
 
 	async function handleSignIn() {
 		error = '';
