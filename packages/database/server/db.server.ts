@@ -394,15 +394,17 @@ export class DatabaseServer<
 			const existing_table_def = this.#state?.table_config?.[table_config.name];
 			const table_name = table_config.name.toLowerCase();
 
+			// Ensure the internal `json` column (for overflow/non-column fields) is in the definition
+			const full_definition = { ...table_definition, json: 'TEXT' as const };
+
 			// The table hasn't been created yet
 			if (!existing_table_def) {
-				const columns = Object.entries(table_definition).map(
+				const columns = Object.entries(full_definition).map(
 					([column, def]) => `${column} ${def}`,
 				);
 				this.ctx.storage.transactionSync(() => {
 					console.log(`Creating table ${table_name} (${columns.join(', ')})`);
-					(this.#state.table_config as any)[table_name] =
-						table_config.config.table_definition;
+					(this.#state.table_config as any)[table_name] = full_definition;
 					this.ctx.storage.sql.exec(
 						`CREATE TABLE IF NOT EXISTS ${table_name} (${columns.join(', ')});`,
 					);
@@ -422,7 +424,7 @@ export class DatabaseServer<
 
 			// The table has already been created, check if we need to add columns
 			// Note: we don't support removing/renaming columns for now (as it can lead to data loss)
-			for (const [column, def] of Object.entries(table_definition)) {
+			for (const [column, def] of Object.entries(full_definition)) {
 				if (existing_table_def[column as keyof typeof existing_table_def]) continue;
 				console.log(`Adding column ${column} to table ${table_name}`);
 				this.ctx.storage.transactionSync(() => {
