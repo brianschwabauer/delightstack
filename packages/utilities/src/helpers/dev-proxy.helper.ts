@@ -155,11 +155,19 @@ function createStubProxy(base_url: string, binding: string, id_name: string, id_
 						body: JSON.stringify({ method, args }),
 					});
 					if (!res.ok) {
-						const body = await res.json().catch(() => ({
-							message: `RPC call ${binding}.${method} failed (${res.status})`,
-							status: res.status,
-						}));
-						throw new DelightError(body as { message: string; status?: number; code?: string; detail?: string });
+						const text = await res.text().catch(() => '');
+						let body: { message: string; status?: number; code?: string; detail?: string };
+						try {
+							body = JSON.parse(text);
+						} catch {
+							// Extract a useful message from the raw error text
+							const msg = text.slice(0, 200).trim() || `${res.status} ${res.statusText}`;
+							body = {
+								message: `${binding}.${method} failed: ${msg}`,
+								status: res.status,
+							};
+						}
+						throw new DelightError(body);
 					}
 					const text = await res.text();
 					return text ? JSON.parse(text) : undefined;
