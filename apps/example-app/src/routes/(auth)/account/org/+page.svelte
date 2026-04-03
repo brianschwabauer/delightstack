@@ -77,7 +77,7 @@
 				/>
 			</div>
 
-			<Button type="submit" disabled={loading || !org_name.trim()} fullWidth>
+			<Button onclick={createOrg} disabled={loading || !org_name.trim()} fullWidth>
 				{loading ? 'Creating...' : 'Create Organization'}
 			</Button>
 		</form>

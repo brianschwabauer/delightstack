@@ -56,7 +56,7 @@
 				/>
 			</div>
 
-			<Button type="submit" disabled={loading} fullWidth>
+			<Button onclick={handleSignIn} disabled={loading} fullWidth>
 				{loading ? 'Signing in...' : 'Sign In'}
 			</Button>
 		</form>

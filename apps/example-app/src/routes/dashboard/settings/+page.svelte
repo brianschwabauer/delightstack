@@ -94,7 +94,7 @@
 					<Input label="Email" value={auth.email ?? ''} disabled />
 					<small class="hint">Email cannot be changed here</small>
 
-					<Button type="submit" disabled={saving_profile}>
+					<Button onclick={updateProfile} disabled={saving_profile}>
 						{saving_profile ? 'Saving...' : 'Save Changes'}
 					</Button>
 				</form>
@@ -122,7 +122,7 @@
 					<Input label="Current Password" type="password" bind:value={current_password} required />
 					<Input label="New Password" type="password" bind:value={new_password} required />
 					<Input label="Confirm New Password" type="password" bind:value={confirm_password} required />
-					<Button type="submit" disabled={changing_password}>
+					<Button onclick={changePassword} disabled={changing_password}>
 						{changing_password ? 'Changing...' : 'Change Password'}
 					</Button>
 				</form>

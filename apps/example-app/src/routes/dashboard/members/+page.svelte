@@ -70,7 +70,7 @@
 				placeholder="Email address"
 				required
 			/>
-			<Button type="submit" disabled={inviting || !invite_email.trim()}>
+			<Button onclick={sendInvite} disabled={inviting || !invite_email.trim()}>
 				{inviting ? 'Sending...' : 'Send Invite'}
 			</Button>
 		</form>
