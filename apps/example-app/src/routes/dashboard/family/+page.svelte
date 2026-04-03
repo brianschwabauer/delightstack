@@ -20,7 +20,7 @@
 		db.search('person', {
 			term: search_term,
 			limit: 100,
-			sortBy: { property: 'name', order: 'ASC' },
+			order: [{ key: 'name', direction: 'ASC' }],
 		}),
 	);
 
@@ -84,14 +84,14 @@
 	</div>
 
 	<div class="people-grid">
-		{#if people.loaded && people.docs.length === 0}
+		{#if !people.loading && people.docs.length === 0}
 			<div class="empty">
 				<p>No family members yet. Add someone to get started!</p>
 			</div>
 		{:else}
 			{#each people.docs as person}
 				<a href="/dashboard/family/{person.id}" class="person-card">
-					<Avatar name={person.name} size="lg" />
+					<Avatar name={person.name} size="3" />
 					<div class="person-info">
 						<strong>{person.name}</strong>
 						{#if person.relationship}
@@ -112,7 +112,7 @@
 <!-- Add Person Modal -->
 <Modal bind:open={show_add} title="Add Family Member">
 	{#if error}
-		<Callout type="error">{error}</Callout>
+		<Callout error>{error}</Callout>
 	{/if}
 
 	<form onsubmit={(e) => { e.preventDefault(); addPerson(); }} class="add-form">

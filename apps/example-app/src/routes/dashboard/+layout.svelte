@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { Button, Avatar, AvatarGroup, ThemeToggle } from '@delightstack/components';
+	import { Button, AvatarGroup, ThemeToggle } from '@delightstack/components';
+	import { List, ListItem } from '@delightstack/components/display';
 	import { tooltip } from '@delightstack/utilities';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 
 	const { data, children } = $props();
 	const { auth, ws, db } = $derived(data);
@@ -30,6 +32,11 @@
 		if (href === '/dashboard') return current_path === '/dashboard';
 		return current_path.startsWith(href);
 	}
+
+	async function signOut() {
+		await auth.api.signOut();
+		goto('/signin');
+	}
 </script>
 
 <div class="dashboard">
@@ -41,34 +48,32 @@
 		</div>
 
 		<div class="sidebar-nav">
-			{#each nav_items as item}
-				<a
-					href={item.href}
-					class="nav-item"
-					class:active={isActive(item.href)}
-				>
-					<span class="nav-icon">{item.icon}</span>
-					{item.label}
-				</a>
-			{/each}
+			<List>
+				{#each nav_items as item}
+					<ListItem href={item.href} active={isActive(item.href)}>
+						<span class="nav-icon">{item.icon}</span>
+						{item.label}
+					</ListItem>
+				{/each}
+			</List>
 		</div>
 
 		<div class="sidebar-footer">
 			<!-- Online presence -->
 			{#if ws.connected && ws.sessions.length > 0}
 				<div class="presence" {@attach tooltip('Online family members')}>
-					<AvatarGroup max={3}>
-						{#each ws.sessions as session}
-							<Avatar name={session.meta?.user_name ?? 'User'} size="sm" />
-						{/each}
-					</AvatarGroup>
+					<AvatarGroup
+						avatars={ws.sessions.map((s) => ({ name: s.meta?.user_name ?? 'User' }))}
+						max={3}
+						size="0"
+					/>
 					<small>{ws.sessions.length} online</small>
 				</div>
 			{/if}
 
 			<div class="footer-actions">
 				<ThemeToggle />
-				<Button href="/signin" transparent dense>Sign Out</Button>
+				<Button onclick={signOut} transparent dense>Sign Out</Button>
 			</div>
 		</div>
 	</nav>
@@ -127,25 +132,7 @@
 	.sidebar-nav {
 		display: flex;
 		flex-direction: column;
-		gap: var(--size-1);
 		flex: 1;
-	}
-	.nav-item {
-		display: flex;
-		align-items: center;
-		gap: var(--size-2);
-		padding: var(--size-2) var(--size-3);
-		border-radius: var(--radius-3);
-		color: var(--color-text);
-		font-size: var(--font-size-0);
-		transition: background 0.15s;
-		&:hover {
-			background: var(--color-bg-2);
-		}
-		&.active {
-			background: var(--color-bg-3);
-			font-weight: var(--font-weight-6);
-		}
 	}
 	.nav-icon {
 		font-size: var(--font-size-2);

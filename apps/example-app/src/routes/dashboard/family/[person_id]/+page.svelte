@@ -81,7 +81,7 @@
 
 	{#if person}
 		<div class="profile-header">
-			<Avatar name={person.name} size="xl" />
+			<Avatar name={person.name} size="4" />
 			<div class="profile-info">
 				<h1>{person.name}</h1>
 				{#if person.relationship}
@@ -112,8 +112,8 @@
 			</form>
 		{:else}
 			<div class="details">
-				<Accordion>
-					<AccordionItem title="Contact Info" open>
+				<Accordion value="contact" multiple>
+					<AccordionItem title="Contact Info" value="contact">
 						<div class="detail-grid">
 							{#if person.email}
 								<div class="detail">
@@ -139,7 +139,7 @@
 						</div>
 					</AccordionItem>
 					{#if person.notes}
-						<AccordionItem title="Notes">
+						<AccordionItem title="Notes" value="notes">
 							<p>{person.notes}</p>
 						</AccordionItem>
 					{/if}

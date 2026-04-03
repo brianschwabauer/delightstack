@@ -12,12 +12,12 @@
 		db.search('post', {
 			term: search_term,
 			limit: 50,
-			sortBy: { property: 'updated_at', order: 'DESC' },
+			order: [{ key: 'updated_at', direction: 'DESC' }],
 		}),
 	);
 
-	function formatDate(iso: string) {
-		return new Date(iso).toLocaleDateString(undefined, {
+	function formatDate(timestamp: string | number) {
+		return new Date(timestamp).toLocaleDateString(undefined, {
 			month: 'short',
 			day: 'numeric',
 			year: 'numeric',
@@ -47,7 +47,7 @@
 	</div>
 
 	<div class="posts-grid">
-		{#if posts.loaded && posts.docs.length === 0}
+		{#if !posts.loading && posts.docs.length === 0}
 			<div class="empty">
 				<p>No posts yet. Write your first family story!</p>
 				<Button href="/dashboard/post/new">Get Started</Button>
