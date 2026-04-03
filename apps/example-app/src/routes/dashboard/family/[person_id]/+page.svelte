@@ -7,7 +7,7 @@
 	const { db } = $derived(data);
 
 	const person_id = $derived(page.params.person_id);
-	const person = $derived(db.get('person', person_id));
+	const person = $derived(await db.get('person', person_id));
 
 	let editing = $state(false);
 	let show_delete = $state(false);
