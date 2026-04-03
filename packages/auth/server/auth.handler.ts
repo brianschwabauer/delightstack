@@ -10,6 +10,8 @@ import {
 	getSessionCookie,
 	setSessionCookie,
 	deleteSessionCookie,
+	serializeSessionCookie,
+	serializeDeleteSessionCookie,
 	getPreferencesCookie,
 	setPreferencesCookie,
 	getOrgStateCookie,
@@ -468,6 +470,16 @@ export function createAuthHandle<Config extends AuthConfig>(
 					);
 				}
 
+				// SvelteKit only adds event.cookies to responses that go through resolve().
+				// Since we return our own Response for auth routes, we must add the
+				// session cookie header manually.
+				const final_jwt = getSessionCookie(event.cookies, config);
+				if (final_jwt) {
+					response.headers.append('Set-Cookie', serializeSessionCookie(config, final_jwt));
+				} else if (session && !getSessionCookie(event.cookies, config)) {
+					// Session was deleted during this request (e.g. signout)
+					response.headers.append('Set-Cookie', serializeDeleteSessionCookie(config));
+				}
 				return response;
 			}
 		}

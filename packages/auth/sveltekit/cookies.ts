@@ -18,12 +18,7 @@ export function setSessionCookie(
 	config: ResolvedAuthConfig,
 	jwt: string,
 ): void {
-	cookies.set(config.cookies.session_name, jwt, {
-		path: config.cookies.path,
-		httpOnly: config.cookies.http_only,
-		secure: config.cookies.secure,
-		sameSite: config.cookies.same_site,
-	});
+	cookies.set(config.cookies.session_name, jwt, sessionCookieOptions(config));
 }
 
 /** Deletes the session JWT cookie */
@@ -34,6 +29,36 @@ export function deleteSessionCookie(
 	cookies.delete(config.cookies.session_name, {
 		path: config.cookies.path,
 	});
+}
+
+/** Returns the cookie options used for session cookies */
+function sessionCookieOptions(config: ResolvedAuthConfig) {
+	return {
+		path: config.cookies.path,
+		httpOnly: config.cookies.http_only,
+		secure: config.cookies.secure,
+		sameSite: config.cookies.same_site as 'lax' | 'strict' | 'none',
+	};
+}
+
+/**
+ * Serializes a Set-Cookie header for the session JWT.
+ * Use this when returning a Response directly from a handle (bypassing SvelteKit's
+ * cookie pipeline which only adds cookies to responses that go through resolve()).
+ */
+export function serializeSessionCookie(config: ResolvedAuthConfig, jwt: string): string {
+	const opts = sessionCookieOptions(config);
+	const parts = [`${config.cookies.session_name}=${encodeURIComponent(jwt)}`];
+	if (opts.path) parts.push(`Path=${opts.path}`);
+	if (opts.httpOnly) parts.push('HttpOnly');
+	if (opts.secure) parts.push('Secure');
+	if (opts.sameSite) parts.push(`SameSite=${opts.sameSite.charAt(0).toUpperCase() + opts.sameSite.slice(1)}`);
+	return parts.join('; ');
+}
+
+/** Serializes a Set-Cookie header that deletes the session cookie. */
+export function serializeDeleteSessionCookie(config: ResolvedAuthConfig): string {
+	return `${config.cookies.session_name}=; Path=${config.cookies.path}; Max-Age=0`;
 }
 
 // ── Signed state cookie primitives (JWT format) ──────────────
