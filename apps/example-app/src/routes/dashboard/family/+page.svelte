@@ -20,7 +20,7 @@
 		db.search('person', {
 			term: search_term,
 			limit: 100,
-			order: [{ key: 'name', direction: 'ASC' }],
+			order: [{ key: 'updated_at', direction: 'DESC' }],
 		}),
 	);
 
