@@ -349,9 +349,18 @@ export class DatabaseServer<
 			'main',
 		);
 		const now = Date.now();
-		let state = result.next()?.value as
-			| DatabaseServerState<DatabaseConfig, Meta>
+		const raw_row = result.next()?.value as
+			| { id: string; json: string; created_at: number; updated_at: number }
 			| undefined;
+		let state: DatabaseServerState<DatabaseConfig, Meta> | undefined;
+		if (raw_row) {
+			const parsed = JSON.parse(raw_row.json);
+			state = {
+				...parsed,
+				created_at: raw_row.created_at,
+				updated_at: raw_row.updated_at,
+			};
+		}
 
 		if (!state) {
 			state = {
