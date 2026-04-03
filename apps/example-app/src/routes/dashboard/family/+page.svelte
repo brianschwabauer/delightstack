@@ -123,7 +123,7 @@
 
 		<div class="modal-actions">
 			<Button onclick={() => (show_add = false)} transparent>Cancel</Button>
-			<Button type="submit" disabled={saving || !new_name.trim()}>
+			<Button onclick={addPerson} disabled={saving || !new_name.trim()}>
 				{saving ? 'Adding...' : 'Add Person'}
 			</Button>
 		</div>
