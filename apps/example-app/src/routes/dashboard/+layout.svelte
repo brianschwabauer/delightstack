@@ -4,13 +4,14 @@
 	import { page } from '$app/state';
 
 	const { data, children } = $props();
-	const { auth, ws } = $derived(data);
+	const { auth, ws, db } = $derived(data);
 
 	const current_path = $derived(page.url.pathname);
 
-	// Connect WebSocket when dashboard mounts
+	// Initialize database client and connect WebSocket when dashboard mounts
 	$effect(() => {
 		if (auth.org_id) {
+			db.init();
 			ws.connect(auth.org_id);
 			return () => ws.disconnect();
 		}
