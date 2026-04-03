@@ -10,7 +10,7 @@ export const load: LayoutLoad = async ({ parent }) => {
 	const { auth } = await parent();
 
 	if (auth.signed_out) throw redirect(307, '/signin');
-	if (!auth.org_id) throw redirect(307, '/signin');
+	if (!auth.org_id) throw redirect(307, '/account/org');
 
 	const ws = new WebsocketClient({ dev });
 	const db = new DatabaseClient({
