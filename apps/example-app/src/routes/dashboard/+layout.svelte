@@ -10,10 +10,9 @@
 
 	const current_path = $derived(page.url.pathname);
 
-	// Initialize database client and connect WebSocket when dashboard mounts
+	// Connect WebSocket when dashboard mounts (db is initialized in +layout.ts)
 	$effect(() => {
 		if (auth.org_id) {
-			db.init();
 			ws.connect(auth.org_id);
 			return () => ws.disconnect();
 		}
