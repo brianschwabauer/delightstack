@@ -21,5 +21,7 @@ export const load: LayoutLoad = async ({ parent }) => {
 	});
 	const ai = new AiClient({ ws });
 
+	await db.init();
+
 	return { auth, ws, db, ai };
 };
