@@ -65,7 +65,7 @@
 				},
 				{ role: 'user', content: prompt },
 			],
-			model: 'dynamic/@cf/meta/llama-3.1-8b-instruct',
+			model: '@cf/meta/llama-3.1-8b-instruct',
 		});
 	}
 
