@@ -1,34 +1,13 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { Button, Input } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import Icon from '$lib/Icon.svelte';
 	import { tooltip } from '@delightstack/utilities';
 
 	const { data } = $props();
-	const { auth, db } = $derived(data);
+	const { db } = $derived(data);
 
-	let search_term = $state('');
-
-	const posts = untrack(() =>
-		db.search('post', {
-			limit: 50,
-			order: [{ key: 'updated_at', direction: 'DESC' }],
-		}),
-	);
-
-	$effect(() => {
-		const term = search_term;
-		untrack(() => {
-			posts.query = {
-				term,
-				limit: 50,
-				order: [{ key: 'updated_at', direction: 'DESC' }],
-			};
-		});
-	});
-
-	$effect(() => () => posts.destroy());
+	const posts = db.search('post', { limit: 50 });
 
 	function formatDate(timestamp: string | number) {
 		return new Date(timestamp).toLocaleDateString(undefined, {
@@ -56,11 +35,7 @@
 	</header>
 
 	<div class="search-bar">
-		<Input
-			placeholder="Search posts..."
-			bind:value={search_term}
-			type="search"
-		/>
+		<Input placeholder="Search posts..." bind:value={posts.query.term} type="search" />
 	</div>
 
 	<div class="posts-grid">
@@ -92,8 +67,8 @@
 
 		{#if posts.docs.length === 0 && !posts.loading}
 			<div class="empty">
-				{#if search_term}
-					<p>No posts match "{search_term}".</p>
+				{#if posts.query.term}
+					<p>No posts match "{posts.query.term}".</p>
 				{:else}
 					<p>No posts yet. Write your first family story!</p>
 					<Button href="/dashboard/post/new">Get Started</Button>
@@ -120,7 +95,9 @@
 			font-size: var(--font-size-4);
 			letter-spacing: -0.01em;
 		}
-		p { color: var(--color-text-disabled); }
+		p {
+			color: var(--color-text-disabled);
+		}
 	}
 	.search-bar {
 		max-width: 400px;
@@ -137,7 +114,9 @@
 		padding: var(--size-4);
 		border: 1px solid var(--color-outline);
 		border-radius: var(--radius-3);
-		transition: background 0.15s, box-shadow 0.15s;
+		transition:
+			background 0.15s,
+			box-shadow 0.15s;
 		&:hover {
 			background: var(--color-bg-2);
 			box-shadow: var(--shadow-1);
@@ -147,7 +126,9 @@
 		display: flex;
 		align-items: center;
 		gap: var(--size-2);
-		h3 { flex: 1; }
+		h3 {
+			flex: 1;
+		}
 	}
 	.post-summary {
 		color: var(--color-text-disabled);
@@ -158,7 +139,9 @@
 		display: flex;
 		align-items: center;
 		gap: var(--size-3);
-		small { color: var(--color-text-disabled); }
+		small {
+			color: var(--color-text-disabled);
+		}
 	}
 	.tags {
 		display: flex;
@@ -171,6 +154,8 @@
 		flex-direction: column;
 		align-items: center;
 		gap: var(--size-3);
-		p { color: var(--color-text-disabled); }
+		p {
+			color: var(--color-text-disabled);
+		}
 	}
 </style>

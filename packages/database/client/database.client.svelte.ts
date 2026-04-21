@@ -378,6 +378,17 @@ export class EntityState<
 // DatabaseSearch — reactive search wrapper
 // ---------------------------------------------------------------------------
 
+/** Baseline defaults applied to every search. Callers override selectively. */
+const DEFAULT_SEARCH_QUERY = {
+	term: '',
+	limit: 100,
+	order: [{ key: 'updated_at', direction: 'DESC' as const }],
+};
+
+export type SearchQueryInit<T extends Database.Table = Database.Table> =
+	| Partial<Database.SearchQuery<T>>
+	| (() => Partial<Database.SearchQuery<T>>);
+
 export class DatabaseSearch<
 	T extends Database.Table = Database.Table,
 	EntityType extends string = string,
@@ -389,11 +400,15 @@ export class DatabaseSearch<
 	#subscriber: () => void;
 	#destroyed = false;
 	#effect_cleanup: (() => void) | null = null;
+	#reactive_query: (() => Partial<Database.SearchQuery<T>>) | null = null;
+	#defaults: Database.SearchQuery<T>;
 
 	#results = $state<SearchHit<T>[]>([]);
 	#docs = $derived<Database.SearchEntity<T>[]>(this.#results.map((h) => h.document));
 	#count = $state(0);
 	#loading = $state(true);
+	#searching = $state(false);
+	#loaded = $state(false);
 	#error = $state<unknown>(null);
 	#mode = $state<'client' | 'server'>('client');
 	#query_state = $state<Database.SearchQuery<T>>({});
@@ -416,10 +431,22 @@ export class DatabaseSearch<
 		return this.#count;
 	}
 
-	/** Whether search is in progress */
+	/** Whether the initial load is in progress (true until the first result arrives). */
 	get loading(): boolean {
 		this.#subscriber();
 		return this.#loading;
+	}
+
+	/** Whether a background re-query is in progress. Previous results remain visible. */
+	get searching(): boolean {
+		this.#subscriber();
+		return this.#searching;
+	}
+
+	/** Whether the first result has arrived. */
+	get loaded(): boolean {
+		this.#subscriber();
+		return this.#loaded;
 	}
 
 	/** Any error from the search */
@@ -432,50 +459,58 @@ export class DatabaseSearch<
 		return this.#mode;
 	}
 
-	/** Get/set the search query. Setting triggers a re-search. */
+	/**
+	 * The live, reactive query. Mutate fields directly (`posts.query.term = 'x'`)
+	 * or bind to them (`<Input bind:value={posts.query.term} />`); the class
+	 * re-queries automatically. Assigning a new object merges over defaults
+	 * rather than overwriting them.
+	 */
 	get query(): Database.SearchQuery<T> {
+		this.#subscriber();
 		return this.#query_state;
 	}
 
-	set query(q: Database.SearchQuery<T>) {
-		this.#query_state = q;
-		this.#updateSubscription();
+	set query(q: Partial<Database.SearchQuery<T>>) {
+		this.#applyQuery({ ...this.#defaults, ...q });
 	}
 
 	constructor(
 		entity_type: EntityType,
 		worker: Remote<DatabaseWorker>,
-		query?: Database.SearchQuery<T>,
+		query?: SearchQueryInit<T>,
 	) {
 		this.entity_type = entity_type;
 		this.#worker = worker;
-		if (query) this.#query_state = query;
+		this.#defaults = { ...DEFAULT_SEARCH_QUERY } as Database.SearchQuery<T>;
 
+		let initial: Partial<Database.SearchQuery<T>> = {};
+		if (typeof query === 'function') {
+			this.#reactive_query = query;
+			initial = untrack(() => query()) ?? {};
+		} else if (query) {
+			initial = query;
+		}
+		this.#applyQuery({ ...this.#defaults, ...initial });
+
+		// createSubscriber drives the subscription lifecycle: the first reactive
+		// read (from a template or effect) starts the effect root and worker
+		// subscription; the cleanup runs automatically when the last listener
+		// stops reading (e.g. the component unmounts).
 		this.#subscriber = createSubscriber(() => {
-			if (!this.#subscriber_id && !this.#init_promise && !this.#destroyed) {
-				this.#initSubscription();
-			}
-		});
-
-		// Set up a reactive effect to re-search when query changes
-		this.#effect_cleanup = $effect.root(() => {
-			let first = true;
-			$effect(() => {
-				// Read the query to trigger on changes
-				const _ = $state.snapshot(this.#query_state);
-				if (first) {
-					first = false;
-					return;
-				}
-				this.#updateSubscription();
-			});
+			if (this.#destroyed) return;
+			this.#start();
+			return () => this.#stop();
 		});
 	}
 
-	/** Manually refresh search results. */
+	/**
+	 * Manually refresh search results. Usually not needed — subscriptions
+	 * auto-update. Useful for forced re-fetch or when subscription is down.
+	 */
 	async refresh(): Promise<void> {
 		try {
-			this.#loading = true;
+			if (!this.#loaded) this.#loading = true;
+			else this.#searching = true;
 			const result = await this.#worker.search(
 				this.entity_type,
 				$state.snapshot(this.#query_state) as SearchQueryInput,
@@ -483,16 +518,59 @@ export class DatabaseSearch<
 			this.#results = result.hits as SearchHit<T>[];
 			this.#count = result.count;
 			this.#error = null;
+			this.#loaded = true;
 		} catch (e) {
 			this.#error = e;
 		} finally {
 			this.#loading = false;
+			this.#searching = false;
 		}
 	}
 
-	/** Cleanup subscription — clean up effect root. */
+	/**
+	 * Force full cleanup. Not normally needed — the class auto-cleans when the
+	 * last reactive listener stops reading. Call this only to force teardown
+	 * while readers are still active (e.g. on scope change).
+	 */
 	destroy(): void {
 		this.#destroyed = true;
+		this.#stop();
+	}
+
+	// -- private --
+
+	/** Start the subscription and reactive effects. Called by createSubscriber. */
+	#start(): void {
+		if (this.#effect_cleanup) return;
+
+		this.#effect_cleanup = $effect.root(() => {
+			// If a reactive query function was passed, keep #query_state in sync.
+			if (this.#reactive_query) {
+				$effect(() => {
+					const q = this.#reactive_query!();
+					untrack(() => {
+						this.#applyQuery({ ...this.#defaults, ...q });
+					});
+				});
+			}
+
+			// Watch #query_state and push changes to the worker subscription.
+			let first = true;
+			$effect(() => {
+				$state.snapshot(this.#query_state);
+				if (first) {
+					first = false;
+					return;
+				}
+				this.#pushQuery();
+			});
+		});
+
+		this.#initSubscription();
+	}
+
+	/** Tear down subscription and effects. Called by createSubscriber cleanup. */
+	#stop(): void {
 		if (this.#effect_cleanup) {
 			this.#effect_cleanup();
 			this.#effect_cleanup = null;
@@ -501,9 +579,39 @@ export class DatabaseSearch<
 			this.#worker.unsubscribe(this.#subscriber_id).catch(() => {});
 			this.#subscriber_id = null;
 		}
+		this.#init_promise = null;
 	}
 
-	/** Dedup subscription init using promise */
+	/** Replace #query_state contents in place so reactive bindings stay stable. */
+	#applyQuery(q: Database.SearchQuery<T>): void {
+		const state = this.#query_state as Record<string, unknown>;
+		for (const k of Object.keys(state)) {
+			if (!(k in q)) delete state[k];
+		}
+		for (const [k, v] of Object.entries(q)) {
+			if (!deepEqual(state[k], v)) state[k] = v;
+		}
+	}
+
+	async #pushQuery(): Promise<void> {
+		if (this.#destroyed) return;
+		if (this.#subscriber_id) {
+			this.#searching = true;
+			try {
+				await this.#worker.updateSubscription(
+					this.#subscriber_id,
+					$state.snapshot(this.#query_state) as SearchQueryInput,
+				);
+			} catch {
+				await this.refresh();
+			} finally {
+				this.#searching = false;
+			}
+		} else {
+			await this.refresh();
+		}
+	}
+
 	async #initSubscription(): Promise<void> {
 		if (this.#destroyed) return;
 		if (this.#init_promise) return;
@@ -521,6 +629,8 @@ export class DatabaseSearch<
 						this.#results = result.hits as SearchHit<T>[];
 						this.#count = result.count;
 						this.#loading = false;
+						this.#searching = false;
+						this.#loaded = true;
 						this.#error = null;
 					}),
 				);
@@ -532,24 +642,6 @@ export class DatabaseSearch<
 		})();
 
 		await this.#init_promise;
-	}
-
-	async #updateSubscription(): Promise<void> {
-		if (this.#destroyed) return;
-
-		if (this.#subscriber_id) {
-			try {
-				await this.#worker.updateSubscription(
-					this.#subscriber_id,
-					$state.snapshot(this.#query_state) as SearchQueryInput,
-				);
-			} catch {
-				// Fallback to refresh
-				await this.refresh();
-			}
-		} else {
-			await this.refresh();
-		}
 	}
 }
 
@@ -762,10 +854,23 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	// Search
 	// -----------------------------------------------------------------------
 
-	/** Create a reactive search that auto-updates when the index changes. */
+	/**
+	 * Create a reactive search that auto-updates when the index changes.
+	 *
+	 * The returned search has a live reactive `query` object with sensible
+	 * defaults (order by `updated_at` DESC, limit 100). Mutate fields on it
+	 * (`posts.query.term = 'x'`) or bind to them directly
+	 * (`<Input bind:value={posts.query.term} />`).
+	 *
+	 * Pass an object to override defaults, or a function to drive the query
+	 * from other reactive state (the function's reactive reads are tracked).
+	 *
+	 * Subscriptions clean up automatically when no reactive context is reading
+	 * the search anymore (e.g. on component unmount).
+	 */
 	search<K extends keyof T & string>(
 		entity_type: K,
-		query?: Database.SearchQuery<T[K]>,
+		query?: SearchQueryInit<T[K]>,
 	): DatabaseSearch<T[K], K> {
 		const worker = this.#getWorker();
 		return new DatabaseSearch(entity_type, worker, query);
