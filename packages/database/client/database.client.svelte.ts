@@ -1,6 +1,6 @@
 import { proxy } from 'comlink';
 import type { Remote } from 'comlink';
-import { createSubscriber } from 'svelte/reactivity';
+import { createSubscriber, SvelteMap } from 'svelte/reactivity';
 import { untrack } from 'svelte';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
@@ -673,6 +673,21 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	#destroyed = false;
 	#external_unsubscribe: (() => void) | void = undefined;
 
+	/**
+	 * Per-entity reactive version counter. `db.get` reads the version for its
+	 * `type:id` key synchronously before awaiting, which registers a reactive
+	 * dependency when called from inside `$derived`/`$effect`. Mutations bump
+	 * the matching key so reactive reads automatically re-run.
+	 */
+	#entity_versions = new SvelteMap<string, number>();
+
+	/**
+	 * Cached comlink proxies (one per `type:id`) passed to `worker.get` for
+	 * background-refresh notifications. Caching avoids spinning up a fresh
+	 * MessageChannel for every `$derived` re-run.
+	 */
+	#refresh_proxies = new Map<string, (data: Record<string, unknown>) => void>();
+
 	/** Whether the initial sync is in progress */
 	#syncing = $state(false);
 
@@ -763,8 +778,15 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		if (this.#config.hooks?.onSubscribe) {
 			this.#external_unsubscribe = this.#config.hooks.onSubscribe((event) => {
 				if (!this.#worker) return;
-				// When an external event arrives, re-sync the affected entity
-				this.#worker.sync([event.entity_type]).catch(() => {});
+				// When an external event arrives, re-sync the affected entity.
+				// After the sync lands (IDB is now fresh), bump the entity's
+				// version so any reactive `db.get` readers pick up the change.
+				this.#worker
+					.sync([event.entity_type])
+					.then(() => {
+						this.#invalidateEntity(event.entity_type, event.id);
+					})
+					.catch(() => {});
 			});
 		}
 	}
@@ -785,10 +807,14 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		} catch (error) {
 			throw DelightError.fromWorker(error) ?? error;
 		}
+		const id = result[this.#config.tables[entity_type].config.primary_key] as
+			| string
+			| number;
+		this.#invalidateEntity(entity_type, id);
 		this.#config.hooks?.onEntityChange?.({
 			type: 'create',
 			entity_type,
-			id: result[this.#config.tables[entity_type].config.primary_key] as string,
+			id,
 			data: result,
 		});
 		return result as Database.Entity<T[K]>;
@@ -825,10 +851,19 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		entity_type: K,
 		id: string | number,
 	): Promise<Database.Entity<T[K]> | undefined> {
+		// Register a reactive dependency on this entity's version. When any
+		// mutation (via db.update/delete/create) or worker-side refresh bumps
+		// the version, enclosing $derived/$effect re-runs and a fresh get
+		// promise is produced — no manual invalidate wiring required.
+		this.#trackEntity(entity_type, id);
+
 		if (this.#worker) {
-			return (await this.#worker.get(entity_type, id)) as
-				| Database.Entity<T[K]>
-				| undefined;
+			return (await this.#worker.get(
+				entity_type,
+				id,
+				false,
+				this.#refreshProxyFor(entity_type, id),
+			)) as Database.Entity<T[K]> | undefined;
 		}
 		// No worker: SSR or pre-init. Use the configured fetch to preserve
 		// the original request's auth context.
@@ -863,6 +898,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		} catch (error) {
 			throw DelightError.fromWorker(error) ?? error;
 		}
+		this.#invalidateEntity(entity_type, id);
 		this.#config.hooks?.onEntityChange?.({
 			type: 'update',
 			entity_type,
@@ -883,6 +919,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		} catch (error) {
 			throw DelightError.fromWorker(error) ?? error;
 		}
+		this.#invalidateEntity(entity_type, id);
 		this.#config.hooks?.onEntityChange?.({
 			type: 'delete',
 			entity_type,
@@ -1035,6 +1072,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** Change scope (e.g. user switches org). Clears cache and re-initializes. */
 	async setScope(db_name: string): Promise<void> {
 		EntityState.clearCache();
+		this.#entity_versions.clear();
+		this.#refresh_proxies.clear();
 		if (this.#worker) await this.#worker.destroy();
 		resetWorker();
 		this.#worker = null;
@@ -1052,6 +1091,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			this.#external_unsubscribe();
 		}
 		EntityState.clearCache();
+		this.#entity_versions.clear();
+		this.#refresh_proxies.clear();
 		if (this.#worker) {
 			await this.#worker.destroy();
 			this.#worker = null;
@@ -1075,5 +1116,32 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			});
 		}
 		return this.#worker;
+	}
+
+	/** Register a reactive read for `entity_type:id`. */
+	#trackEntity(entity_type: string, id: string | number): void {
+		this.#entity_versions.get(`${entity_type}:${id}`);
+	}
+
+	/** Bump the version for `entity_type:id`, re-running reactive readers. */
+	#invalidateEntity(entity_type: string, id: string | number): void {
+		const key = `${entity_type}:${id}`;
+		this.#entity_versions.set(key, (this.#entity_versions.get(key) ?? 0) + 1);
+	}
+
+	/**
+	 * Comlink proxy passed to `worker.get` so the worker can notify us when a
+	 * background refresh returns fresh data — we bump the entity's version so
+	 * live `$derived(await db.get(...))` readers see the update.
+	 */
+	#refreshProxyFor(entity_type: string, id: string | number) {
+		const key = `${entity_type}:${id}`;
+		const cached = this.#refresh_proxies.get(key);
+		if (cached) return cached;
+		const p = proxy(() => {
+			this.#invalidateEntity(entity_type, id);
+		});
+		this.#refresh_proxies.set(key, p);
+		return p;
 	}
 }
