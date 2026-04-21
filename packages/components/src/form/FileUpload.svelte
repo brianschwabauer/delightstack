@@ -89,36 +89,29 @@
 			: undefined,
 	);
 
-	/** Create and clean up object URLs for image previews */
-	$effect(() => {
-		const new_urls = new Map<File, string>();
-
-		for (const file of files) {
-			if (isImage(file)) {
-				const existing = preview_urls.get(file);
-				if (existing) {
-					new_urls.set(file, existing);
-				} else {
-					new_urls.set(file, URL.createObjectURL(file));
-				}
-			}
+	/**
+	 * Sync preview_urls with the given file list:
+	 * - Create object URLs for new image files
+	 * - Revoke object URLs for files that are no longer present
+	 * Called imperatively from validateAndAddFiles/removeFile/etc.
+	 */
+	function syncPreviewUrls(next_files: File[]) {
+		const next = new Map<File, string>();
+		for (const file of next_files) {
+			if (!isImage(file)) continue;
+			const existing = preview_urls.get(file);
+			next.set(file, existing ?? URL.createObjectURL(file));
 		}
-
-		// Revoke URLs that are no longer needed
+		// Revoke URLs for files that have been removed
 		for (const [file, url] of preview_urls) {
-			if (!new_urls.has(file) || new_urls.get(file) !== url) {
-				URL.revokeObjectURL(url);
-			}
+			if (next.get(file) !== url) URL.revokeObjectURL(url);
 		}
+		preview_urls = next;
+	}
 
-		preview_urls = new_urls;
-
-		return () => {
-			for (const url of new_urls.values()) {
-				URL.revokeObjectURL(url);
-			}
-		};
-	});
+	// Note: remaining object URLs are left to be garbage-collected by the
+	// browser when the page unloads; revoking them here would require reading
+	// the reactive `preview_urls` state which caused effect loops.
 
 	function isImage(file: File): boolean {
 		return file.type.startsWith('image/');
@@ -174,8 +167,10 @@
 
 		// For avatar, always replace
 		if (avatar) {
-			files = [valid_files[0]];
-			onselect?.({ files: [valid_files[0]] });
+			const next = [valid_files[0]];
+			files = next;
+			syncPreviewUrls(next);
+			onselect?.({ files: next });
 			return;
 		}
 
@@ -195,13 +190,16 @@
 		}
 
 		files = new_files;
+		syncPreviewUrls(new_files);
 		onselect?.({ files: new_files });
 	}
 
 	function removeFile(index: number) {
 		const file = files[index];
 		if (!file) return;
-		files = files.filter((_, i) => i !== index);
+		const next = files.filter((_, i) => i !== index);
+		files = next;
+		syncPreviewUrls(next);
 		onremove?.({ file, index });
 	}
 
