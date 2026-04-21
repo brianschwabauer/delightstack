@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { Button, Modal, FileUpload, Progress, Callout } from '@delightstack/components';
 	import Image from '@delightstack/images/component';
+	import Icon from '$lib/Icon.svelte';
 
 	const { data } = $props();
 	const { db } = $derived(data);
@@ -11,13 +13,15 @@
 	let selected_image: (typeof images)['docs'][number] | null = $state(null);
 	let show_preview = $state(false);
 
-	const images = $derived(
+	const images = untrack(() =>
 		db.search('image', {
 			limit: 100,
 			order: [{ key: 'updated_at', direction: 'DESC' }],
 			sparse: false,
 		}),
 	);
+
+	$effect(() => () => images.destroy());
 
 	async function handleUpload(detail: { files: File[] }) {
 		if (!detail.files.length) return;
@@ -60,27 +64,30 @@
 			<h1>Family Gallery</h1>
 			<p>Photos and memories</p>
 		</div>
-		<Button onclick={() => (show_upload = true)}>Upload Photos</Button>
+		<Button onclick={() => (show_upload = true)}>
+			<Icon name="plus" size={16} />
+			<span>Upload photos</span>
+		</Button>
 	</header>
 
 	<div class="gallery-grid">
-		{#if !images.loading && images.docs.length === 0}
+		{#each images.docs as image (image.id)}
+			<button
+				class="gallery-item"
+				onclick={() => { selected_image = image; show_preview = true; }}
+			>
+				<Image {image} sizes="200px" />
+				{#if image.caption}
+					<span class="caption">{image.caption}</span>
+				{/if}
+			</button>
+		{/each}
+
+		{#if images.docs.length === 0 && !images.loading}
 			<div class="empty">
 				<p>No photos yet. Upload some family memories!</p>
 				<Button onclick={() => (show_upload = true)}>Upload Photos</Button>
 			</div>
-		{:else}
-			{#each images.docs as image}
-				<button
-					class="gallery-item"
-					onclick={() => { selected_image = image; show_preview = true; }}
-				>
-					<Image {image} sizes="200px" />
-					{#if image.caption}
-						<span class="caption">{image.caption}</span>
-					{/if}
-				</button>
-			{/each}
 		{/if}
 	</div>
 </div>
@@ -124,6 +131,11 @@
 		align-items: flex-start;
 		gap: var(--size-3);
 		flex-wrap: wrap;
+		h1 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-4);
+			letter-spacing: -0.01em;
+		}
 		p { color: var(--color-text-disabled); }
 	}
 	.gallery-grid {

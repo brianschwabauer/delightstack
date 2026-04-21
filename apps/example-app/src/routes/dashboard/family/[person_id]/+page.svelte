@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button, Input, Select, Avatar, Modal, Accordion, AccordionItem, Breadcrumbs, Callout } from '@delightstack/components';
+	import Icon from '$lib/Icon.svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 
@@ -95,8 +96,14 @@
 						{saving ? 'Saving...' : 'Save'}
 					</Button>
 				{:else}
-					<Button onclick={startEditing} transparent>Edit</Button>
-					<Button onclick={() => (show_delete = true)} error transparent>Delete</Button>
+					<Button onclick={startEditing} transparent dense>
+						<Icon name="edit" size={14} />
+						<span>Edit</span>
+					</Button>
+					<Button onclick={() => (show_delete = true)} error transparent dense>
+						<Icon name="trash" size={14} />
+						<span>Delete</span>
+					</Button>
 				{/if}
 			</div>
 		</div>
@@ -171,13 +178,25 @@
 		align-items: center;
 		gap: var(--size-4);
 		flex-wrap: wrap;
+		padding: var(--size-4);
+		background: var(--color-bg-1);
+		border: 1px solid var(--color-outline);
+		border-radius: var(--radius-3);
 	}
 	.profile-info {
 		flex: 1;
-		h1 { font-family: var(--font-serif); }
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		h1 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-4);
+			letter-spacing: -0.01em;
+		}
 		.relationship {
 			text-transform: capitalize;
 			color: var(--color-text-disabled);
+			font-size: var(--font-size-0);
 		}
 	}
 	.actions {

@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { Button, Input, Select, Avatar, Modal, Callout } from '@delightstack/components';
+	import Icon from '$lib/Icon.svelte';
 	import { tooltip } from '@delightstack/utilities';
 
 	const { data } = $props();
@@ -16,13 +18,25 @@
 	let saving = $state(false);
 	let error = $state('');
 
-	const people = $derived(
+	const people = untrack(() =>
 		db.search('person', {
-			term: search_term,
 			limit: 100,
 			order: [{ key: 'updated_at', direction: 'DESC' }],
 		}),
 	);
+
+	$effect(() => {
+		const term = search_term;
+		untrack(() => {
+			people.query = {
+				term,
+				limit: 100,
+				order: [{ key: 'updated_at', direction: 'DESC' }],
+			};
+		});
+	});
+
+	$effect(() => () => people.destroy());
 
 	const relationship_options = [
 		{ value: '', label: 'Select...' },
@@ -60,10 +74,6 @@
 			saving = false;
 		}
 	}
-
-	function getInitials(name: string) {
-		return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-	}
 </script>
 
 <svelte:head>
@@ -76,7 +86,10 @@
 			<h1>Family Members</h1>
 			<p>Manage your family directory</p>
 		</div>
-		<Button onclick={() => (show_add = true)}>Add Person</Button>
+		<Button onclick={() => (show_add = true)}>
+			<Icon name="plus" size={16} />
+			<span>Add person</span>
+		</Button>
 	</header>
 
 	<div class="search-bar">
@@ -84,27 +97,32 @@
 	</div>
 
 	<div class="people-grid">
-		{#if !people.loading && people.docs.length === 0}
+		{#each people.docs as person (person.id)}
+			<a href="/dashboard/family/{person.id}" class="person-card">
+				<Avatar name={person.name} size="3" />
+				<div class="person-info">
+					<strong>{person.name}</strong>
+					{#if person.relationship}
+						<small {@attach tooltip(person.relationship ?? '')}>
+							{person.relationship}
+						</small>
+					{/if}
+					{#if person.email}
+						<small class="email">{person.email}</small>
+					{/if}
+				</div>
+			</a>
+		{/each}
+
+		{#if people.docs.length === 0 && !people.loading}
 			<div class="empty">
-				<p>No family members yet. Add someone to get started!</p>
+				{#if search_term}
+					<p>No family members match "{search_term}".</p>
+				{:else}
+					<p>No family members yet. Add someone to get started!</p>
+					<Button onclick={() => (show_add = true)}>Add Person</Button>
+				{/if}
 			</div>
-		{:else}
-			{#each people.docs as person}
-				<a href="/dashboard/family/{person.id}" class="person-card">
-					<Avatar name={person.name} size="3" />
-					<div class="person-info">
-						<strong>{person.name}</strong>
-						{#if person.relationship}
-							<small {@attach tooltip(person.relationship ?? '')}>
-								{person.relationship}
-							</small>
-						{/if}
-						{#if person.email}
-							<small class="email">{person.email}</small>
-						{/if}
-					</div>
-				</a>
-			{/each}
 		{/if}
 	</div>
 </div>
@@ -142,6 +160,11 @@
 		align-items: flex-start;
 		gap: var(--size-3);
 		flex-wrap: wrap;
+		h1 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-4);
+			letter-spacing: -0.01em;
+		}
 		p { color: var(--color-text-disabled); }
 	}
 	.search-bar {

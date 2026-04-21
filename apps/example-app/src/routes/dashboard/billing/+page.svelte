@@ -89,7 +89,7 @@
 <div class="page">
 	<header>
 		<h1>Billing & Subscription</h1>
-		<p>Manage your family's plan</p>
+		<p>Manage your family's plan and invoice history</p>
 	</header>
 
 	<!-- Current plan -->
@@ -165,7 +165,7 @@
 		<section class="invoices">
 			<h2>Invoice History</h2>
 			<div class="invoice-list">
-				{#each invoices as invoice}
+				{#each invoices as invoice (invoice.id ?? invoice.number ?? invoice.created)}
 					<div class="invoice-row">
 						<span>{invoice.number ?? 'Invoice'}</span>
 						<span>{formatPrice(invoice.total ?? 0)}</span>
@@ -188,7 +188,15 @@
 		gap: var(--size-5);
 	}
 	header {
-		p { color: var(--color-text-disabled); }
+		h1 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-4);
+			letter-spacing: -0.01em;
+		}
+		p {
+			color: var(--color-text-disabled);
+			margin-top: var(--size-1);
+		}
 	}
 	.current-plan {
 		display: flex;

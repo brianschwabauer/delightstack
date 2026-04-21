@@ -4,6 +4,7 @@
 	import { tooltip } from '@delightstack/utilities';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import Icon from '$lib/Icon.svelte';
 
 	const { data, children } = $props();
 	const { auth, ws, db } = $derived(data);
@@ -19,13 +20,13 @@
 	});
 
 	const nav_items = [
-		{ href: '/dashboard', label: 'Home', icon: '🏠' },
-		{ href: '/dashboard/family', label: 'Family', icon: '👨‍👩‍👧‍👦' },
-		{ href: '/dashboard/gallery', label: 'Gallery', icon: '🖼' },
-		{ href: '/dashboard/members', label: 'Members', icon: '👥' },
-		{ href: '/dashboard/billing', label: 'Billing', icon: '💳' },
-		{ href: '/dashboard/settings', label: 'Settings', icon: '⚙' },
-	];
+		{ href: '/dashboard', label: 'Home', icon: 'home' },
+		{ href: '/dashboard/family', label: 'Family', icon: 'family' },
+		{ href: '/dashboard/gallery', label: 'Gallery', icon: 'gallery' },
+		{ href: '/dashboard/members', label: 'Members', icon: 'members' },
+		{ href: '/dashboard/billing', label: 'Billing', icon: 'billing' },
+		{ href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
+	] as const;
 
 	function isActive(href: string) {
 		if (href === '/dashboard') return current_path === '/dashboard';
@@ -48,9 +49,9 @@
 
 		<div class="sidebar-nav">
 			<List>
-				{#each nav_items as item}
+				{#each nav_items as item (item.href)}
 					<ListItem href={item.href} active={isActive(item.href)}>
-						<span class="nav-icon">{item.icon}</span>
+						<span class="nav-icon"><Icon name={item.icon} size={18} /></span>
 						{item.label}
 					</ListItem>
 				{/each}
@@ -84,13 +85,13 @@
 
 	<!-- Bottom nav (mobile) -->
 	<nav class="bottom-nav mobile-only">
-		{#each nav_items.slice(0, 5) as item}
+		{#each nav_items.slice(0, 5) as item (item.href)}
 			<a
 				href={item.href}
 				class="bottom-nav-item"
 				class:active={isActive(item.href)}
 			>
-				<span>{item.icon}</span>
+				<Icon name={item.icon} size={22} />
 				<small>{item.label}</small>
 			</a>
 		{/each}
@@ -134,9 +135,11 @@
 		flex: 1;
 	}
 	.nav-icon {
-		font-size: var(--font-size-2);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		width: 1.5em;
-		text-align: center;
+		color: var(--color-text-disabled);
 	}
 
 	.sidebar-footer {

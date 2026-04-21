@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { Button, Input, Avatar } from '@delightstack/components';
+	import { untrack } from 'svelte';
+	import { Button, Input } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import { tooltip } from '@delightstack/utilities';
 
 	const { data } = $props();
@@ -8,13 +10,25 @@
 
 	let search_term = $state('');
 
-	const posts = $derived(
+	const posts = untrack(() =>
 		db.search('post', {
-			term: search_term,
 			limit: 50,
 			order: [{ key: 'updated_at', direction: 'DESC' }],
 		}),
 	);
+
+	$effect(() => {
+		const term = search_term;
+		untrack(() => {
+			posts.query = {
+				term,
+				limit: 50,
+				order: [{ key: 'updated_at', direction: 'DESC' }],
+			};
+		});
+	});
+
+	$effect(() => () => posts.destroy());
 
 	function formatDate(timestamp: string | number) {
 		return new Date(timestamp).toLocaleDateString(undefined, {
@@ -35,7 +49,10 @@
 			<h1>Family Stories</h1>
 			<p>Share memories and moments with your family</p>
 		</div>
-		<Button href="/dashboard/post/new">Write a Post</Button>
+		<Button href="/dashboard/post/new">
+			<Icon name="plus" size={16} />
+			<span>Write a post</span>
+		</Button>
 	</header>
 
 	<div class="search-bar">
@@ -47,37 +64,41 @@
 	</div>
 
 	<div class="posts-grid">
-		{#if !posts.loading && posts.docs.length === 0}
-			<div class="empty">
-				<p>No posts yet. Write your first family story!</p>
-				<Button href="/dashboard/post/new">Get Started</Button>
-			</div>
-		{:else}
-			{#each posts.docs as post}
-				<a href="/dashboard/post/{post.id}" class="post-card">
-					<div class="post-header">
-						<h3>{post.title}</h3>
-						{#if post.is_public}
-							<Badge {@attach tooltip('Visible to anyone with the link')}>Public</Badge>
-						{/if}
-					</div>
-					{#if post.summary}
-						<p class="post-summary">{post.summary}</p>
-					{:else if post.content}
-						<p class="post-summary">{post.content.slice(0, 150)}...</p>
+		{#each posts.docs as post (post.id)}
+			<a href="/dashboard/post/{post.id}" class="post-card">
+				<div class="post-header">
+					<h3>{post.title}</h3>
+					{#if post.is_public}
+						<Badge {@attach tooltip('Visible to anyone with the link')}>Public</Badge>
 					{/if}
-					<div class="post-meta">
-						<small>{formatDate(post.created_at)}</small>
-						{#if post.tags?.length}
-							<div class="tags">
-								{#each post.tags.slice(0, 3) as tag}
-									<Badge dense>{tag}</Badge>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</a>
-			{/each}
+				</div>
+				{#if post.summary}
+					<p class="post-summary">{post.summary}</p>
+				{:else if post.content}
+					<p class="post-summary">{post.content.slice(0, 150)}...</p>
+				{/if}
+				<div class="post-meta">
+					<small>{formatDate(post.created_at)}</small>
+					{#if post.tags?.length}
+						<div class="tags">
+							{#each post.tags.slice(0, 3) as tag (tag)}
+								<Badge dense>{tag}</Badge>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</a>
+		{/each}
+
+		{#if posts.docs.length === 0 && !posts.loading}
+			<div class="empty">
+				{#if search_term}
+					<p>No posts match "{search_term}".</p>
+				{:else}
+					<p>No posts yet. Write your first family story!</p>
+					<Button href="/dashboard/post/new">Get Started</Button>
+				{/if}
+			</div>
 		{/if}
 	</div>
 </div>
@@ -94,6 +115,11 @@
 		align-items: flex-start;
 		gap: var(--size-3);
 		flex-wrap: wrap;
+		h1 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-4);
+			letter-spacing: -0.01em;
+		}
 		p { color: var(--color-text-disabled); }
 	}
 	.search-bar {

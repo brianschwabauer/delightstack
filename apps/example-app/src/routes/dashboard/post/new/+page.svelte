@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button, Input, Toggle, SplitPane, Progress, Callout } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import { goto } from '$app/navigation';
 
 	const { data } = $props();
@@ -70,8 +71,13 @@
 </svelte:head>
 
 <div class="page">
+	<a href="/dashboard" class="back">
+		<Icon name="arrow-left" size={16} />
+		<span>All stories</span>
+	</a>
+
 	<header>
-		<h1>Write a Post</h1>
+		<h1>Write a post</h1>
 		<div class="actions">
 			<Button href="/dashboard" transparent>Cancel</Button>
 			<Button onclick={savePost} disabled={saving || !title.trim() || !content.trim()}>
@@ -112,13 +118,16 @@
 
 		{#snippet second()}
 			<div class="ai-panel">
-				<h3>AI Writing Assistant</h3>
-				<p class="ai-description">Get help writing your family story</p>
+				<div class="ai-title">
+					<Icon name="sparkles" size={16} />
+					<h3>AI writing assistant</h3>
+				</div>
+				<p class="ai-description">Get help writing your family story.</p>
 
 				<div class="ai-input">
 					<Input
 						bind:value={ai_prompt}
-						placeholder="Ask AI for help, e.g. 'Write about our beach trip'"
+						placeholder="e.g. 'Write about our beach trip'"
 					/>
 					<Button onclick={askAi} disabled={ai.streaming} dense>
 						{ai.streaming ? 'Writing...' : 'Ask AI'}
@@ -156,11 +165,28 @@
 		flex-direction: column;
 		gap: var(--size-4);
 	}
+	.back {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--size-1);
+		color: var(--color-text-disabled);
+		font-size: var(--font-size-0);
+		width: fit-content;
+		transition: color 0.15s;
+		&:hover { color: var(--color-text); }
+	}
 	header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		gap: var(--size-3);
+		padding-bottom: var(--size-3);
+		border-bottom: 1px solid var(--color-outline);
+		h1 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-4);
+			letter-spacing: -0.01em;
+		}
 	}
 	.actions {
 		display: flex;
@@ -190,7 +216,16 @@
 		gap: var(--size-3);
 		padding-left: var(--size-3);
 		border-left: 1px solid var(--color-outline);
-		h3 { font-size: var(--font-size-2); }
+	}
+	.ai-title {
+		display: flex;
+		align-items: center;
+		gap: var(--size-1);
+		color: var(--color-text-disabled);
+		h3 {
+			font-size: var(--font-size-1);
+			color: var(--color-text);
+		}
 	}
 	.ai-description {
 		color: var(--color-text-disabled);
