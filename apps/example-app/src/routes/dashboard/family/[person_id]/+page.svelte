@@ -93,7 +93,7 @@
 
 	{#if person}
 		<div class="profile-header">
-			<Avatar name={person.name} size="4" />
+			<Avatar name={person.name} colorSeed={person_id} size="4" />
 			<div class="profile-info">
 				<h1>{person.name}</h1>
 				{#if person.relationship}
