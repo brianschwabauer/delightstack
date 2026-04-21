@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Button, Input, AvatarGroup, Table, Modal, Callout } from '@delightstack/components';
-	import Badge from '$lib/Badge.svelte';
+	import { Button, Input, AvatarGroup, Callout } from '@delightstack/components';
+	import Icon from '$lib/Icon.svelte';
 	import { tooltip } from '@delightstack/utilities';
 
 	const { data } = $props();
@@ -36,10 +36,6 @@
 		}
 	}
 
-	// Check which members are currently online
-	function isOnline(user_id: string) {
-		return ws.sessions.some((s) => s.meta?.user_id === user_id);
-	}
 </script>
 
 <svelte:head>
@@ -56,7 +52,10 @@
 
 	<!-- Invite section -->
 	<section class="invite-section">
-		<h3>Invite a Family Member</h3>
+		<div class="section-heading">
+			<h3>Invite a family member</h3>
+			<small>They'll receive an email with a signup link.</small>
+		</div>
 		{#if invite_error}
 			<Callout error>{invite_error}</Callout>
 		{/if}
@@ -67,38 +66,39 @@
 			<Input
 				type="email"
 				bind:value={invite_email}
-				placeholder="Email address"
+				placeholder="name@example.com"
 				required
 			/>
 			<Button onclick={sendInvite} disabled={inviting || !invite_email.trim()}>
-				{inviting ? 'Sending...' : 'Send Invite'}
+				<Icon name="plus" size={16} />
+				<span>{inviting ? 'Sending...' : 'Send invite'}</span>
 			</Button>
 		</form>
 	</section>
 
 	<!-- Online now -->
-	{#if ws.connected && ws.sessions.length > 0}
-		<section class="online-section">
-			<h3>Online Now</h3>
+	<section class="online-section">
+		<div class="section-heading">
+			<h3>Online now</h3>
+			<div class="status-indicator">
+				<span
+					class="dot"
+					class:connected={ws.connected}
+					{@attach tooltip(ws.connected ? 'Connected' : 'Disconnected')}
+				></span>
+				<small>{ws.status}</small>
+			</div>
+		</div>
+		{#if ws.connected && ws.sessions.length > 0}
 			<div class="online-list">
 				<AvatarGroup
 					avatars={ws.sessions.map((s) => ({ name: s.meta?.user_name ?? 'User' }))}
 				/>
 				<small>{ws.sessions.length} member{ws.sessions.length === 1 ? '' : 's'} online</small>
 			</div>
-		</section>
-	{/if}
-
-	<!-- Connection status -->
-	<section class="status-section">
-		<div class="status-indicator">
-			<span
-				class="dot"
-				class:connected={ws.connected}
-				{@attach tooltip(ws.connected ? 'Connected' : 'Disconnected')}
-			></span>
-			<small>WebSocket: {ws.status}</small>
-		</div>
+		{:else}
+			<p class="empty-inline">No one else is online right now.</p>
+		{/if}
 	</section>
 </div>
 
@@ -109,7 +109,21 @@
 		gap: var(--size-5);
 	}
 	header {
+		h1 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-4);
+			letter-spacing: -0.01em;
+		}
 		p { color: var(--color-text-disabled); }
+	}
+	.section-heading {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: var(--size-2);
+		flex-wrap: wrap;
+		h3 { font-size: var(--font-size-1); }
+		small { color: var(--color-text-disabled); }
 	}
 	.invite-section {
 		display: flex;
@@ -118,6 +132,7 @@
 		padding: var(--size-4);
 		border: 1px solid var(--color-outline);
 		border-radius: var(--radius-3);
+		background: var(--color-bg-1);
 	}
 	.invite-form {
 		display: flex;
@@ -134,17 +149,22 @@
 		display: flex;
 		align-items: center;
 		gap: var(--size-3);
+		padding: var(--size-3);
+		border: 1px solid var(--color-outline);
+		border-radius: var(--radius-3);
 		small { color: var(--color-text-disabled); }
 	}
-	.status-section {
-		padding-top: var(--size-3);
-		border-top: 1px solid var(--color-outline);
+	.empty-inline {
+		padding: var(--size-3);
+		color: var(--color-text-disabled);
+		font-size: var(--font-size-0);
+		border: 1px dashed var(--color-outline);
+		border-radius: var(--radius-3);
 	}
 	.status-indicator {
 		display: flex;
 		align-items: center;
-		gap: var(--size-2);
-		small { color: var(--color-text-disabled); }
+		gap: var(--size-1);
 	}
 	.dot {
 		width: 8px;

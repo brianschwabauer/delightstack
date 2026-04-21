@@ -2,6 +2,7 @@
 	import { Button, Input, Toggle, Modal, Callout, Progress } from '@delightstack/components';
 	import { toast } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
+	import Icon from '$lib/Icon.svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 
@@ -82,6 +83,14 @@
 			toast('Share link copied!');
 		}
 	}
+
+	function formatDate(ts: string | number) {
+		return new Date(ts).toLocaleDateString(undefined, {
+			month: 'long',
+			day: 'numeric',
+			year: 'numeric',
+		});
+	}
 </script>
 
 <svelte:head>
@@ -89,41 +98,34 @@
 </svelte:head>
 
 <div class="page">
-	{#if post}
-		<header>
-			<div class="title-area">
-				<Button href="/dashboard" transparent dense>Back</Button>
-				<h1>{post.title}</h1>
-				{#if post.is_public}
-					<Badge>Public</Badge>
-				{/if}
-			</div>
-			<div class="actions">
-				{#if post.is_public}
-					<Button onclick={copyShareLink} transparent dense>Copy Link</Button>
-				{/if}
-				{#if editing}
-					<Button onclick={() => (editing = false)} transparent>Cancel</Button>
-					<Button onclick={savePost} disabled={saving}>
-						{saving ? 'Saving...' : 'Save'}
-					</Button>
-				{:else}
-					<Button onclick={startEditing} transparent>Edit</Button>
-					<Button onclick={() => (show_delete = true)} error transparent dense>Delete</Button>
-				{/if}
-			</div>
-		</header>
+	<a href="/dashboard" class="back">
+		<Icon name="arrow-left" size={16} />
+		<span>All stories</span>
+	</a>
 
+	{#if post}
 		{#if editing}
-			<div class="edit-section">
+			<div class="edit-card">
+				<div class="edit-header">
+					<h2>Edit story</h2>
+					<div class="actions">
+						<Button onclick={() => (editing = false)} transparent>Cancel</Button>
+						<Button onclick={savePost} disabled={saving}>
+							{saving ? 'Saving...' : 'Save changes'}
+						</Button>
+					</div>
+				</div>
+
 				<Input label="Title" bind:value={edit_title} />
 				<Input label="Content" type="textarea" bind:value={edit_content} />
-				<Toggle bind:checked={edit_is_public} label="Share publicly" />
 				<Input label="Tags" bind:value={edit_tags} placeholder="Comma-separated tags" />
+				<Toggle bind:checked={edit_is_public} label="Share publicly" />
 
-				<!-- AI Assist inline -->
 				<div class="ai-inline">
-					<h4>AI Writing Assistant</h4>
+					<div class="ai-header">
+						<Icon name="sparkles" size={16} />
+						<h4>AI writing assistant</h4>
+					</div>
 					<div class="ai-row">
 						<Input bind:value={ai_prompt} placeholder="Ask AI to improve your post..." />
 						<Button onclick={improveWithAi} disabled={ai.streaming} dense>
@@ -142,36 +144,78 @@
 				</div>
 			</div>
 		{:else}
-			<article class="post-content">
-				{#each post.content.split('\n') as paragraph}
-					{#if paragraph.trim()}
-						<p>{paragraph}</p>
-					{/if}
-				{/each}
-			</article>
+			<article class="article">
+				<header class="article-header">
+					<div class="meta-row">
+						<time datetime={String(post.created_at)}>{formatDate(post.created_at)}</time>
+						{#if post.is_public}
+							<span class="dot">•</span>
+							<span class="public-tag">
+								<Icon name="eye" size={14} />
+								Public
+							</span>
+						{/if}
+					</div>
 
-			{#if post.tags?.length}
-				<div class="tag-list">
-					{#each post.tags as tag}
-						<Badge dense>{tag}</Badge>
+					<h1>{post.title}</h1>
+
+					{#if post.summary}
+						<p class="lead">{post.summary}</p>
+					{/if}
+
+					<div class="toolbar">
+						{#if post.is_public}
+							<Button onclick={copyShareLink} transparent dense>
+								<Icon name="share" size={14} />
+								<span>Copy link</span>
+							</Button>
+						{/if}
+						<Button onclick={startEditing} transparent dense>
+							<Icon name="edit" size={14} />
+							<span>Edit</span>
+						</Button>
+						<Button onclick={() => (show_delete = true)} error transparent dense>
+							<Icon name="trash" size={14} />
+							<span>Delete</span>
+						</Button>
+					</div>
+				</header>
+
+				<div class="article-body">
+					{#each post.content.split('\n') as paragraph, i (i)}
+						{#if paragraph.trim()}
+							<p>{paragraph}</p>
+						{/if}
 					{/each}
 				</div>
-			{/if}
 
-			<small class="post-date">
-				Created {new Date(post.created_at).toLocaleDateString()}
-				{#if post.updated_at !== post.created_at}
-					&middot; Updated {new Date(post.updated_at).toLocaleDateString()}
-				{/if}
-			</small>
+				<footer class="article-footer">
+					{#if post.tags?.length}
+						<div class="tag-list">
+							<Icon name="tag" size={14} />
+							{#each post.tags as tag (tag)}
+								<Badge dense>{tag}</Badge>
+							{/each}
+						</div>
+					{/if}
+
+					<small class="post-date">
+						{#if post.updated_at !== post.created_at}
+							Last updated {formatDate(post.updated_at)}
+						{/if}
+					</small>
+				</footer>
+			</article>
 		{/if}
 	{:else}
-		<Callout>Loading post...</Callout>
+		<div class="loading">
+			<Callout>Loading story...</Callout>
+		</div>
 	{/if}
 </div>
 
-<Modal bind:open={show_delete} title="Delete Post">
-	<p>Are you sure you want to delete "<strong>{post?.title}</strong>"? This cannot be undone.</p>
+<Modal bind:open={show_delete} title="Delete story">
+	<p>Are you sure you want to delete <strong>"{post?.title}"</strong>? This cannot be undone.</p>
 	<div class="modal-actions">
 		<Button onclick={() => (show_delete = false)} transparent>Cancel</Button>
 		<Button onclick={deletePost} error>Delete</Button>
@@ -183,46 +227,134 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--size-4);
+		max-width: var(--size-content-3);
+		margin: 0 auto;
+		width: 100%;
 	}
-	header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		gap: var(--size-3);
-		flex-wrap: wrap;
-	}
-	.title-area {
-		display: flex;
+	.back {
+		display: inline-flex;
 		align-items: center;
-		gap: var(--size-2);
-		flex-wrap: wrap;
-		h1 { font-family: var(--font-serif); }
+		gap: var(--size-1);
+		color: var(--color-text-disabled);
+		font-size: var(--font-size-0);
+		width: fit-content;
+		transition: color 0.15s;
+		&:hover { color: var(--color-text); }
 	}
-	.actions {
+	.loading {
+		padding: var(--size-5) 0;
+	}
+
+	/* Article view */
+	.article {
 		display: flex;
-		gap: var(--size-2);
+		flex-direction: column;
+		gap: var(--size-5);
 	}
-	.edit-section {
+	.article-header {
 		display: flex;
 		flex-direction: column;
 		gap: var(--size-3);
-		max-width: 700px;
+		padding-bottom: var(--size-4);
+		border-bottom: 1px solid var(--color-outline);
 	}
-	.post-content {
-		max-width: var(--size-content-3);
-		p {
-			margin-bottom: var(--size-3);
-			line-height: var(--font-lineheight-4);
+	.meta-row {
+		display: flex;
+		align-items: center;
+		gap: var(--size-2);
+		color: var(--color-text-disabled);
+		font-size: var(--font-size-0);
+		time { font-variant-numeric: tabular-nums; }
+	}
+	.public-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--size-1);
+	}
+	.dot { opacity: 0.5; }
+	.article-header h1 {
+		font-family: var(--font-serif);
+		font-size: var(--font-size-6);
+		line-height: var(--font-lineheight-1);
+		letter-spacing: -0.01em;
+		@media (max-width: 600px) {
+			font-size: var(--font-size-5);
 		}
+	}
+	.lead {
+		font-size: var(--font-size-2);
+		line-height: var(--font-lineheight-3);
+		color: var(--color-text-disabled);
+	}
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--size-1);
+		margin-top: var(--size-2);
+	}
+
+	.article-body {
+		font-size: var(--font-size-2);
+		line-height: var(--font-lineheight-5);
+		p {
+			margin-bottom: var(--size-4);
+			&:first-child::first-letter {
+				font-family: var(--font-serif);
+				font-size: var(--font-size-6);
+				font-weight: var(--font-weight-6);
+				float: left;
+				line-height: 0.9;
+				margin: 4px var(--size-2) 0 0;
+				color: var(--color-action);
+			}
+		}
+	}
+	.article-footer {
+		display: flex;
+		flex-direction: column;
+		gap: var(--size-2);
+		padding-top: var(--size-4);
+		border-top: 1px solid var(--color-outline);
 	}
 	.tag-list {
 		display: flex;
 		gap: var(--size-1);
 		flex-wrap: wrap;
+		align-items: center;
+		color: var(--color-text-disabled);
 	}
 	.post-date {
 		color: var(--color-text-disabled);
+		font-size: var(--font-size-00);
 	}
+
+	/* Edit view */
+	.edit-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--size-3);
+		padding: var(--size-4);
+		border: 1px solid var(--color-outline);
+		border-radius: var(--radius-3);
+		background: var(--color-bg-1);
+	}
+	.edit-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: var(--size-2);
+		padding-bottom: var(--size-3);
+		border-bottom: 1px solid var(--color-outline);
+		h2 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-3);
+		}
+	}
+	.actions {
+		display: flex;
+		gap: var(--size-2);
+	}
+
 	.ai-inline {
 		background: var(--color-bg-2);
 		padding: var(--size-3);
@@ -230,7 +362,17 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--size-2);
-		h4 { font-size: var(--font-size-0); }
+		margin-top: var(--size-2);
+	}
+	.ai-header {
+		display: flex;
+		align-items: center;
+		gap: var(--size-1);
+		color: var(--color-text-disabled);
+		h4 {
+			font-size: var(--font-size-0);
+			font-weight: var(--font-weight-6);
+		}
 	}
 	.ai-row {
 		display: flex;
@@ -241,10 +383,12 @@
 		background: var(--color-bg-0);
 		padding: var(--size-3);
 		border-radius: var(--radius-2);
+		border: 1px solid var(--color-outline);
 		p {
 			font-size: var(--font-size-0);
 			white-space: pre-wrap;
 			line-height: var(--font-lineheight-3);
+			margin-bottom: var(--size-2);
 		}
 	}
 	.modal-actions {

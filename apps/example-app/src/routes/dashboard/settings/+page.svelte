@@ -79,7 +79,10 @@
 </svelte:head>
 
 <div class="page">
-	<h1>Settings</h1>
+	<header>
+		<h1>Settings</h1>
+		<p>Manage your profile, security, and preferences</p>
+	</header>
 
 	<Tabs bind:value={active_tab}>
 		<Tab value="profile">Profile</Tab>
@@ -171,6 +174,17 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--size-5);
+	}
+	header {
+		h1 {
+			font-family: var(--font-serif);
+			font-size: var(--font-size-4);
+			letter-spacing: -0.01em;
+		}
+		p {
+			color: var(--color-text-disabled);
+			margin-top: var(--size-1);
+		}
 	}
 	.section {
 		display: flex;
