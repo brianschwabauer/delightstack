@@ -12,7 +12,7 @@ RUN apk add --no-cache \
     libpng-dev \
     libwebp-dev \
     libheif-dev \
-    libaom-dev \
+    aom-dev \
     libraw-dev \
     librsvg-dev \
     poppler-dev \
@@ -39,7 +39,7 @@ RUN apk add --no-cache \
     libpng \
     libwebp \
     libheif \
-    libaom \
+    aom-libs \
     libraw \
     librsvg \
     poppler \

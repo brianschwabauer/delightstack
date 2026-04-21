@@ -54,14 +54,43 @@ function r2Key(base_path: string, id: string, name: string): string {
 }
 
 /**
- * Schedule an alarm using "set only if earlier" strategy.
- * Ensures we never push another alarm further into the future.
+ * Schedule an alarm for processing. Sets the alarm to now if there isn't one
+ * already scheduled for the future — i.e. if no alarm exists, or the existing
+ * alarm is already in the past (meaning it should fire or refire immediately).
  */
 async function scheduleAlarm(storage: DurableObjectStorage): Promise<void> {
 	const existing = await storage.getAlarm();
-	if (existing === null || Date.now() < existing) {
+	if (existing === null || existing <= Date.now()) {
 		await storage.setAlarm(Date.now());
 	}
+}
+
+/**
+ * Pre-fetch watermark images from R2 before calling the container.
+ * R2Bucket itself cannot cross DO RPC boundaries, so we read the bytes here
+ * (where we have R2 access) and pass the data through.
+ */
+async function prefetchWatermarkImages(
+	bucket: R2Bucket,
+	variants?: VariantConfig[],
+): Promise<Map<string, ArrayBuffer> | undefined> {
+	if (!variants?.length) return undefined;
+	const image_paths = new Set<string>();
+	for (const v of variants) {
+		if (v.watermark?.image) image_paths.add(v.watermark.image);
+	}
+	if (!image_paths.size) return undefined;
+	const result = new Map<string, ArrayBuffer>();
+	for (const path of image_paths) {
+		if (path.startsWith('http://') || path.startsWith('https://')) {
+			const res = await fetch(path);
+			if (res.ok) result.set(path, await res.arrayBuffer());
+		} else {
+			const obj = await bucket.get(path);
+			if (obj) result.set(path, await obj.arrayBuffer());
+		}
+	}
+	return result.size ? result : undefined;
 }
 
 interface ProcessingData {
@@ -263,14 +292,18 @@ export function imageProcessing(
 						continue;
 					}
 
-					// Call Container DO via RPC
+					// Call Container DO via RPC. We pre-fetch watermark images here
+					// (where we have R2 access) because R2Bucket itself cannot be
+					// serialized across DO RPC boundaries.
+					const variants_config = proc.variants ?? defaultVariants;
+					const watermark_images = await prefetchWatermarkImages(bucket, variants_config);
 					const stub = container.getByName('image-processor') as unknown as ImageProcessorContainer;
 					const result = await stub.process(await object.arrayBuffer(), {
-						variants: proc.variants ?? defaultVariants,
+						variants: variants_config,
 						compress_original: proc.compress_original ?? defaultCompressOriginal,
 						avatar: proc.avatar,
-						bucket,
-					});
+						watermark_images,
+					} as unknown as Parameters<ImageProcessorContainer['process']>[1]);
 
 					// Write variants to R2 (parallel)
 					const outputVariants: OutputVariant[] = await Promise.all(
@@ -329,7 +362,24 @@ export function imageProcessing(
 						_processing: null,
 					} as any);
 				} catch (error: unknown) {
-					const code = (error as { code?: string })?.code ?? 'INTERNAL_ERROR';
+					// Narrow caller errors to the image error-code enum — stray error
+					// codes (e.g. DelightError.unauthorized → 'unauthorized') would
+					// fail enum validation when persisted on the record.
+					const IMAGE_ERROR_CODES = new Set([
+						'FILE_NOT_FOUND',
+						'FILE_TOO_LARGE',
+						'DIMENSIONS_TOO_LARGE',
+						'UNSUPPORTED_FORMAT',
+						'TOO_MANY_FRAMES',
+						'CORRUPTED_FILE',
+						'SVG_MALICIOUS',
+						'PROCESSING_TIMEOUT',
+						'CONTAINER_UNAVAILABLE',
+						'INTERNAL_ERROR',
+					]);
+					const raw_code = (error as { code?: string })?.code;
+					const code =
+						raw_code && IMAGE_ERROR_CODES.has(raw_code) ? raw_code : 'INTERNAL_ERROR';
 					const retries = (proc.retry_count ?? 0) + 1;
 					db.update('image', image.id, {
 						processing_status: retries >= MAX_RETRIES ? 'failed' : 'pending',
