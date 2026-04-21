@@ -17,3 +17,5 @@ node_modules
 .turbo
 /**/.wrangler
 TODO.md
+/.claude/scheduled_tasks.lock
+/.claude/settings.local.json
