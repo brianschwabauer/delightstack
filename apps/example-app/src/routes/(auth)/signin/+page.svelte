@@ -1,30 +1,19 @@
 <script lang="ts">
-	import { Button, Input, Callout } from '@delightstack/components';
+	import { Button, Input, Callout, Form } from '@delightstack/components';
 
-	let email = $state('');
-	let password = $state('');
+	const { data } = $props();
+	const { auth } = $derived(data);
+
+	let form_data = $state({ email: '', password: '' });
 	let error = $state('');
-	let loading = $state(false);
 
 	async function handleSignIn() {
 		error = '';
-		loading = true;
 		try {
-			const result = await fetch('/api/auth/signin/email', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password }),
-			});
-			if (!result.ok) {
-				const data = await result.json();
-				error = data.message || 'Sign in failed';
-				return;
-			}
+			await auth.signIn.email({ email: form_data.email, password: form_data.password });
 			window.location.href = '/dashboard';
-		} catch {
-			error = 'An unexpected error occurred';
-		} finally {
-			loading = false;
+		} catch (e) {
+			error = (e as { message?: string })?.message || 'Sign in failed';
 		}
 	}
 </script>
@@ -38,28 +27,26 @@
 			<Callout error>{error}</Callout>
 		{/if}
 
-		<form onsubmit={(e) => { e.preventDefault(); handleSignIn(); }}>
+		<Form bind:data={form_data} onsubmit={handleSignIn}>
 			<div class="fields">
 				<Input
 					label="Email"
 					type="email"
-					bind:value={email}
+					bind:value={form_data.email}
 					required
 					placeholder="you@example.com"
 				/>
 				<Input
 					label="Password"
 					type="password"
-					bind:value={password}
+					bind:value={form_data.password}
 					required
 					placeholder="Your password"
 				/>
 			</div>
 
-			<Button onclick={handleSignIn} disabled={loading} fullWidth>
-				{loading ? 'Signing in...' : 'Sign In'}
-			</Button>
-		</form>
+			<Button type="submit" fullWidth>Sign In</Button>
+		</Form>
 
 		<div class="divider"><span>or</span></div>
 
@@ -102,9 +89,7 @@
 		color: var(--color-text-disabled);
 		margin-top: var(--size-000);
 	}
-	form {
-		display: flex;
-		flex-direction: column;
+	:global(form.form) {
 		gap: var(--size-4);
 	}
 	.fields {

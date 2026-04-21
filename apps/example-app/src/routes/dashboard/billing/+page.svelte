@@ -1,45 +1,15 @@
 <script lang="ts">
-	import { Button, Callout, Stat, Table } from '@delightstack/components';
+	import { Button, confetti, toast } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
-	import { confetti } from '@delightstack/components';
-	import { toast } from '@delightstack/components';
 	import { formatToString } from '@delightstack/utilities';
+	import { invalidate } from '$app/navigation';
+	import { plans } from '$lib/plans';
 
 	const { data } = $props();
-	const { auth } = $derived(data);
+	const subscription = $derived(data.subscription as Record<string, unknown> | null);
+	const invoices = $derived((data.invoices ?? []) as Array<Record<string, unknown>>);
 
 	let loading_action = $state('');
-	let plans: Array<{ id: string; name: string; description: string; amount: number; interval: string; entitlements: string[] }> = $state([]);
-	let subscription: Record<string, unknown> | null = $state(null);
-	let invoices: Array<Record<string, unknown>> = $state([]);
-
-	// Fetch billing data on mount
-	$effect(() => {
-		fetchPlans();
-		fetchSubscription();
-		fetchInvoices();
-	});
-
-	async function fetchPlans() {
-		try {
-			const res = await fetch('/api/billing/plan');
-			if (res.ok) plans = await res.json();
-		} catch { /* ignore */ }
-	}
-
-	async function fetchSubscription() {
-		try {
-			const res = await fetch('/api/billing/subscription');
-			if (res.ok) subscription = await res.json();
-		} catch { /* ignore */ }
-	}
-
-	async function fetchInvoices() {
-		try {
-			const res = await fetch('/api/billing/invoice');
-			if (res.ok) invoices = await res.json();
-		} catch { /* ignore */ }
-	}
 
 	async function subscribe(plan_id: string) {
 		loading_action = plan_id;
@@ -50,13 +20,13 @@
 				body: JSON.stringify({ plan_id }),
 			});
 			if (res.ok) {
-				const data = await res.json();
-				if (data.url) {
-					window.location.href = data.url;
+				const body = await res.json();
+				if (body.url) {
+					window.location.href = body.url;
 				} else {
 					confetti();
 					toast('Subscription updated!');
-					fetchSubscription();
+					await invalidate('app:billing-subscription');
 				}
 			}
 		} finally {
@@ -70,7 +40,7 @@
 			const res = await fetch('/api/billing/subscription', { method: 'DELETE' });
 			if (res.ok) {
 				toast('Subscription cancelled');
-				fetchSubscription();
+				await invalidate('app:billing-subscription');
 			}
 		} finally {
 			loading_action = '';
@@ -79,6 +49,11 @@
 
 	function formatPrice(amount: number) {
 		return formatToString(amount / 100, { type: 'currency', currency: 'USD' });
+	}
+
+	function isCurrent(plan_id: string) {
+		const ids = subscription?.plan_ids as string[] | undefined;
+		return ids?.[0] === plan_id;
 	}
 </script>
 
@@ -95,10 +70,19 @@
 	<!-- Current plan -->
 	{#if subscription}
 		<section class="current-plan">
-			<Stat label="Current Plan" value={subscription.plan_ids?.[0] === 'family-pro' ? 'Family Pro' : 'Free'} />
-			<Stat label="Status" value={subscription.status ?? 'active'} />
+			<div class="stat">
+				<small>Current Plan</small>
+				<strong>{plans.find((p) => isCurrent(p.id))?.name ?? 'Free'}</strong>
+			</div>
+			<div class="stat">
+				<small>Status</small>
+				<strong>{subscription.status ?? 'active'}</strong>
+			</div>
 			{#if subscription.current_period_end}
-				<Stat label="Renews" value={new Date(subscription.current_period_end).toLocaleDateString()} />
+				<div class="stat">
+					<small>Renews</small>
+					<strong>{new Date(subscription.current_period_end as number).toLocaleDateString()}</strong>
+				</div>
 			{/if}
 		</section>
 	{/if}
@@ -107,56 +91,47 @@
 	<section class="plans">
 		<h2>Available Plans</h2>
 		<div class="plans-grid">
-			<!-- Free Plan -->
-			<div class="plan-card">
-				<h3>Free</h3>
-				<div class="price">
-					<span class="amount">$0</span>
-					<span class="interval">/month</span>
-				</div>
-				<p>Basic family management for small families</p>
-				<ul>
-					<li>Unlimited family members</li>
-					<li>Create and share posts</li>
-					<li>Real-time collaboration</li>
-				</ul>
-				{#if !subscription || subscription.plan_ids?.[0] !== 'family-pro'}
-					<Badge>Current Plan</Badge>
-				{:else}
-					<Button onclick={() => subscribe('free')} transparent fullWidth disabled={loading_action === 'free'}>
-						Downgrade
-					</Button>
-				{/if}
-			</div>
-
-			<!-- Pro Plan -->
-			<div class="plan-card featured">
-				<Badge>Recommended</Badge>
-				<h3>Family Pro</h3>
-				<div class="price">
-					<span class="amount">$4.99</span>
-					<span class="interval">/month</span>
-				</div>
-				<p>AI-powered writing, image uploads, and more</p>
-				<ul>
-					<li>Everything in Free</li>
-					<li>AI writing assistant</li>
-					<li>Photo gallery & uploads</li>
-					<li>Priority support</li>
-				</ul>
-				{#if subscription?.plan_ids?.[0] === 'family-pro'}
-					<div class="plan-actions">
-						<Badge>Current Plan</Badge>
-						<Button onclick={cancelSubscription} error transparent dense disabled={loading_action === 'cancel'}>
-							Cancel
-						</Button>
+			{#each plans as plan (plan.id)}
+				<div class="plan-card" class:featured={'entitlements' in plan}>
+					{#if 'entitlements' in plan}
+						<Badge>Recommended</Badge>
+					{/if}
+					<h3>{plan.name}</h3>
+					<div class="price">
+						<span class="amount">{plan.amount === 0 ? '$0' : formatPrice(plan.amount)}</span>
+						<span class="interval">/{plan.interval}</span>
 					</div>
-				{:else}
-					<Button onclick={() => subscribe('family-pro')} fullWidth disabled={loading_action === 'family-pro'}>
-						{loading_action === 'family-pro' ? 'Processing...' : 'Upgrade to Pro'}
-					</Button>
-				{/if}
-			</div>
+					<p>{plan.description}</p>
+					<ul>
+						{#each plan.features as feature (feature)}
+							<li>{feature}</li>
+						{/each}
+					</ul>
+					{#if isCurrent(plan.id) || (!subscription && plan.amount === 0)}
+						<div class="plan-actions">
+							<Badge>Current Plan</Badge>
+							{#if plan.amount > 0}
+								<Button onclick={cancelSubscription} error transparent dense disabled={loading_action === 'cancel'}>
+									Cancel
+								</Button>
+							{/if}
+						</div>
+					{:else}
+						<Button
+							onclick={() => subscribe(plan.id)}
+							fullWidth
+							transparent={plan.amount === 0}
+							disabled={loading_action === plan.id}
+						>
+							{loading_action === plan.id
+								? 'Processing...'
+								: plan.amount === 0
+									? 'Downgrade'
+									: `Upgrade to ${plan.name}`}
+						</Button>
+					{/if}
+				</div>
+			{/each}
 		</div>
 	</section>
 
@@ -167,12 +142,16 @@
 			<div class="invoice-list">
 				{#each invoices as invoice (invoice.id ?? invoice.number ?? invoice.created)}
 					<div class="invoice-row">
-						<span>{invoice.number ?? 'Invoice'}</span>
-						<span>{formatPrice(invoice.total ?? 0)}</span>
-						<Badge dense>{invoice.status}</Badge>
-						<small>{new Date(invoice.created).toLocaleDateString()}</small>
+						<span>{String(invoice.number ?? 'Invoice')}</span>
+						<span>{formatPrice((invoice.total as number | undefined) ?? 0)}</span>
+						<Badge dense>{String(invoice.status ?? '')}</Badge>
+						<small
+							>{new Date(invoice.created as number).toLocaleDateString()}</small
+						>
 						{#if invoice.hosted_invoice_url}
-							<Button href={invoice.hosted_invoice_url} transparent dense>View</Button>
+							<Button href={invoice.hosted_invoice_url as string} transparent dense
+								>View</Button
+							>
 						{/if}
 					</div>
 				{/each}
@@ -205,6 +184,21 @@
 		padding: var(--size-4);
 		background: var(--color-bg-2);
 		border-radius: var(--radius-3);
+	}
+	.stat {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		small {
+			color: var(--color-text-disabled);
+			font-size: var(--font-size-00);
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+		}
+		strong {
+			font-size: var(--font-size-2);
+			text-transform: capitalize;
+		}
 	}
 	.plans-grid {
 		display: grid;

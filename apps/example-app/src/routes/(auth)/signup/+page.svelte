@@ -1,42 +1,25 @@
 <script lang="ts">
-	import { Button, Input, Callout } from '@delightstack/components';
+	import { Button, Input, Callout, Form } from '@delightstack/components';
 
-	let name = $state('');
-	let email = $state('');
-	let password = $state('');
+	const { data } = $props();
+	const { auth } = $derived(data);
+
+	let form_data = $state({ name: '', email: '', password: '' });
 	let error = $state('');
-	let loading = $state(false);
 
 	async function handleSignUp() {
 		error = '';
-		loading = true;
 		try {
-			const result = await fetch('/api/auth/signup/email', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name, email, password }),
-			});
-			if (!result.ok) {
-				const data = await result.json();
-				error = data.message || 'Sign up failed';
-				return;
-			}
-			// Create an org for the new user (the session cookie is now set)
-			const orgResult = await fetch('/api/auth/org', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: `${name}'s Family` }),
-			});
-			if (!orgResult.ok) {
+			await auth.signUp.email(form_data);
+			try {
+				await auth.createOrg({ name: `${form_data.name}'s Family` });
+				window.location.href = '/dashboard';
+			} catch {
 				// Account created but org failed — send to org page to finish setup
 				window.location.href = '/account/org';
-				return;
 			}
-			window.location.href = '/dashboard';
-		} catch {
-			error = 'An unexpected error occurred';
-		} finally {
-			loading = false;
+		} catch (e) {
+			error = (e as { message?: string })?.message || 'Sign up failed';
 		}
 	}
 </script>
@@ -50,34 +33,32 @@
 			<Callout error>{error}</Callout>
 		{/if}
 
-		<form onsubmit={(e) => { e.preventDefault(); handleSignUp(); }}>
+		<Form bind:data={form_data} onsubmit={handleSignUp}>
 			<div class="fields">
 				<Input
 					label="Name"
-					bind:value={name}
+					bind:value={form_data.name}
 					required
 					placeholder="Your name"
 				/>
 				<Input
 					label="Email"
 					type="email"
-					bind:value={email}
+					bind:value={form_data.email}
 					required
 					placeholder="you@example.com"
 				/>
 				<Input
 					label="Password"
 					type="password"
-					bind:value={password}
+					bind:value={form_data.password}
 					required
 					placeholder="Choose a password"
 				/>
 			</div>
 
-			<Button onclick={handleSignUp} disabled={loading} fullWidth>
-				{loading ? 'Creating account...' : 'Create Account'}
-			</Button>
-		</form>
+			<Button type="submit" fullWidth>Create Account</Button>
+		</Form>
 
 		<div class="divider"><span>or</span></div>
 
@@ -120,9 +101,7 @@
 		color: var(--color-text-disabled);
 		margin-top: var(--size-000);
 	}
-	form {
-		display: flex;
-		flex-direction: column;
+	:global(form.form) {
 		gap: var(--size-4);
 	}
 	.fields {

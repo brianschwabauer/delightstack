@@ -21,24 +21,11 @@
 
 		try {
 			for (const file of detail.files) {
-				const form_data = new FormData();
-				form_data.append('file', file);
-				form_data.append('caption', file.name);
-
-				const response = await fetch('/api/image', {
-					method: 'POST',
-					body: form_data,
-				});
-
-				if (!response.ok) {
-					const err = await response.json();
-					upload_error = err.message || 'Upload failed';
-					return;
-				}
+				await db.uploadImage(file, { caption: file.name });
 			}
 			show_upload = false;
-		} catch {
-			upload_error = 'Failed to upload image';
+		} catch (e) {
+			upload_error = e instanceof Error ? e.message : 'Failed to upload image';
 		} finally {
 			uploading = false;
 		}

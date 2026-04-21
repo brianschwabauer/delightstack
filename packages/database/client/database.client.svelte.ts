@@ -13,7 +13,7 @@ import { getWorker, resetWorker } from './database.worker.init';
 // Types
 // ---------------------------------------------------------------------------
 
-type TableMap = Record<string, Database.Table>;
+type TableMap = Record<string, Database.AnyTable>;
 
 export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	/** Same table definitions used on the server — single source of truth */
@@ -78,18 +78,18 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	};
 }
 
-type EntityInput<T extends Database.Table> = Omit<
+type EntityInput<T extends Database.AnyTable> = Omit<
 	Database.Entity<T>,
 	'id' | 'created_at' | 'updated_at'
 >;
 
-export interface SearchHit<T extends Database.Table = Database.Table> {
+export interface SearchHit<T extends Database.AnyTable = Database.Table> {
 	id: string;
 	document: Database.SearchEntity<T>;
 	score: number;
 }
 
-export interface SearchResult<T extends Database.Table = Database.Table> {
+export interface SearchResult<T extends Database.AnyTable = Database.Table> {
 	hits: SearchHit<T>[];
 	count: number;
 	elapsed?: unknown;
@@ -100,7 +100,7 @@ export interface SearchResult<T extends Database.Table = Database.Table> {
 // ---------------------------------------------------------------------------
 
 export class EntityState<
-	T extends Database.Table = Database.Table,
+	T extends Database.AnyTable = Database.Table,
 	EntityType extends string = string,
 > {
 	readonly entity_type: EntityType;
@@ -359,7 +359,7 @@ export class EntityState<
 
 	static #cache = new Map<string, EntityState>();
 
-	static from<T extends Database.Table, EntityType extends string = string>(
+	static from<T extends Database.AnyTable, EntityType extends string = string>(
 		entity_type: EntityType,
 		id: string | number | undefined,
 		options?: {
@@ -402,12 +402,12 @@ const DEFAULT_SEARCH_QUERY = {
 	order: [{ key: 'updated_at', direction: 'DESC' as const }],
 };
 
-export type SearchQueryInit<T extends Database.Table = Database.Table> =
+export type SearchQueryInit<T extends Database.AnyTable = Database.Table> =
 	| Partial<Database.SearchQuery<T>>
 	| (() => Partial<Database.SearchQuery<T>>);
 
 export class DatabaseSearch<
-	T extends Database.Table = Database.Table,
+	T extends Database.AnyTable = Database.Table,
 	EntityType extends string = string,
 > {
 	readonly entity_type: EntityType;
@@ -716,7 +716,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		for (const [name, table] of Object.entries(this.#config.tables)) {
 			tables[name] = {
 				orama: {
-					schema: table.config.orama.schema,
+					schema: table.config.orama.schema as Record<string, unknown>,
 					sort: table.config.orama.sort,
 				},
 				primary_key: table.config.primary_key,
@@ -888,6 +888,78 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			entity_type,
 			id,
 		});
+	}
+
+	/**
+	 * Upload an image file. POSTs multipart form data to `/api/image`; the
+	 * server runs the full processing pipeline (variants, thumbhash, EXIF)
+	 * and returns the resulting image record.
+	 *
+	 * Pass an `onProgress` callback for upload progress (0..1). Progress
+	 * reflects the HTTP upload only — server-side processing continues in
+	 * the background after the upload completes and can be tracked via the
+	 * image entity's `processing_status` field.
+	 */
+	async uploadImage(
+		file: File | Blob,
+		options?: {
+			caption?: string;
+			file_name?: string;
+			fields?: Record<string, string>;
+			onProgress?: (fraction: number) => void;
+		},
+	): Promise<Record<string, unknown>> {
+		const form = new FormData();
+		form.append('file', file, options?.file_name);
+		if (options?.caption !== undefined) form.append('caption', options.caption);
+		for (const [k, v] of Object.entries(options?.fields ?? {})) {
+			form.append(k, v);
+		}
+
+		if (options?.onProgress && typeof XMLHttpRequest !== 'undefined') {
+			return new Promise<Record<string, unknown>>((resolve, reject) => {
+				const xhr = new XMLHttpRequest();
+				xhr.open('POST', '/api/image');
+				xhr.responseType = 'json';
+				xhr.upload.onprogress = (e) => {
+					if (e.lengthComputable) options.onProgress!(e.loaded / e.total);
+				};
+				xhr.onerror = () =>
+					reject(new DelightError({ message: 'Upload failed', status: 0 }));
+				xhr.onload = () => {
+					if (xhr.status >= 200 && xhr.status < 300) {
+						resolve(xhr.response as Record<string, unknown>);
+					} else {
+						const body = xhr.response as
+							| { message?: string; status?: number; code?: string; detail?: string }
+							| null;
+						reject(
+							new DelightError({
+								message: body?.message ?? xhr.statusText,
+								status: body?.status ?? xhr.status,
+								code: body?.code,
+								detail: body?.detail,
+							}),
+						);
+					}
+				};
+				xhr.send(form);
+			});
+		}
+
+		const response = await fetch('/api/image', { method: 'POST', body: form });
+		if (!response.ok) {
+			const body = (await response.json().catch(() => null)) as
+				| { message?: string; status?: number; code?: string; detail?: string }
+				| null;
+			throw new DelightError({
+				message: body?.message ?? response.statusText,
+				status: body?.status ?? response.status,
+				code: body?.code,
+				detail: body?.detail,
+			});
+		}
+		return (await response.json()) as Record<string, unknown>;
 	}
 
 	// -----------------------------------------------------------------------

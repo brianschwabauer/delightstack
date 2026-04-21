@@ -25,14 +25,10 @@
 	async function updateProfile() {
 		saving_profile = true;
 		try {
-			const res = await fetch('/api/auth/user', {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: edit_name.trim() }),
-			});
-			if (res.ok) {
-				toast('Profile updated');
-			}
+			await auth.user.update({ name: edit_name.trim() });
+			toast('Profile updated');
+		} catch {
+			// swallow — toast is skipped on failure
 		} finally {
 			saving_profile = false;
 		}
@@ -46,30 +42,21 @@
 		password_error = '';
 		changing_password = true;
 		try {
-			const res = await fetch('/api/auth/password', {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					current_password,
-					new_password,
-				}),
-			});
-			if (!res.ok) {
-				const data = await res.json();
-				password_error = data.message || 'Failed to change password';
-				return;
-			}
+			await auth.password.change(new_password);
 			current_password = '';
 			new_password = '';
 			confirm_password = '';
 			toast('Password changed');
+		} catch (e) {
+			password_error =
+				(e as { message?: string })?.message || 'Failed to change password';
 		} finally {
 			changing_password = false;
 		}
 	}
 
 	async function signOut() {
-		await fetch('/api/auth/signout', { method: 'POST' });
+		await auth.signOut();
 		window.location.href = '/signin';
 	}
 </script>

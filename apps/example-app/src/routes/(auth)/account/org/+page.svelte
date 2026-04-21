@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { Button, Input, Callout } from '@delightstack/components';
-	import { List, ListItem } from '@delightstack/components/display';
+	import { Button, Input, Callout, List, ListItem } from '@delightstack/components';
 	import { goto } from '$app/navigation';
 
 	const { data } = $props();
@@ -18,7 +17,7 @@
 		error = '';
 		loading = true;
 		try {
-			await auth.api.org.switch(org_id);
+			await auth.switchOrg(org_id);
 			window.location.href = '/dashboard';
 		} catch (e: unknown) {
 			error = (e as { message?: string })?.message || 'Failed to switch organization';
@@ -32,7 +31,7 @@
 		error = '';
 		loading = true;
 		try {
-			await auth.api.org.create({ name: org_name.trim() });
+			await auth.createOrg({ name: org_name.trim() });
 			window.location.href = '/dashboard';
 		} catch (e: unknown) {
 			error = (e as { message?: string })?.message || 'Failed to create organization';

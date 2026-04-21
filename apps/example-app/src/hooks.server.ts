@@ -3,14 +3,15 @@ import { sequence } from '@sveltejs/kit/hooks';
 import { createAuthHandle, type AuthServer } from '@delightstack/auth/server';
 import type { AuthLocals } from '@delightstack/auth/server';
 import { createWebsocketHandle } from '@delightstack/websocket/server';
-import { createDatabaseHandle, defineRoute } from '@delightstack/database/server';
+import { createDatabaseHandle } from '@delightstack/database/server';
+import { tables } from '$lib/schema';
+import { plans, entitlements as billingEntitlements } from '$lib/plans';
 import { createBillingHandle } from '@delightstack/stripe/server';
 import { createAiHandle } from '@delightstack/ai/server';
 import { createImageHandle } from '@delightstack/images';
 import { DelightError, createDevHandle } from '@delightstack/utilities';
 import { env } from '$env/dynamic/private';
 import { building, dev } from '$app/environment';
-import { personTable, postTable, imageTable } from '$lib/schema';
 
 // ---------------------------------------------------------------------------
 // 1. Auth — JWT sessions, org resolution, /api/auth/* routes
@@ -55,57 +56,21 @@ const imageHandle = createImageHandle({
 });
 
 // ---------------------------------------------------------------------------
-// 4. Database — declarative CRUD routes for person & post
+// 4. Database — auto-generated CRUD routes for every table. `requireAuth`
+//    (default true) rejects CUD without a session; only per-entity extras
+//    (like stamping author_id on posts) need explicit hooks.
 // ---------------------------------------------------------------------------
-const personRoute = defineRoute({
-	entity: 'person',
-	table: personTable,
-	hooks: {
-		beforeCreate: ({ event }) => {
-			if (!event.locals.session) throw DelightError.unauthorized();
-		},
-		beforeUpdate: ({ event }) => {
-			if (!event.locals.session) throw DelightError.unauthorized();
-		},
-		beforeDelete: ({ event }) => {
-			if (!event.locals.session) throw DelightError.unauthorized();
-		},
-	},
-});
-
-const postRoute = defineRoute({
-	entity: 'post',
-	table: postTable,
-	hooks: {
-		beforeCreate: ({ data, event }) => {
-			if (!event.locals.session) throw DelightError.unauthorized();
-			return { ...data, author_id: event.locals.user!.id };
-		},
-		beforeUpdate: ({ event }) => {
-			if (!event.locals.session) throw DelightError.unauthorized();
-		},
-		beforeDelete: ({ event }) => {
-			if (!event.locals.session) throw DelightError.unauthorized();
-		},
-	},
-});
-
-const imageRoute = defineRoute({
-	entity: 'image',
-	table: imageTable,
-	hooks: {
-		beforeCreate: ({ event }) => {
-			if (!event.locals.session) throw DelightError.unauthorized();
-		},
-		beforeDelete: ({ event }) => {
-			if (!event.locals.session) throw DelightError.unauthorized();
-		},
-	},
-});
-
 const databaseHandle = createDatabaseHandle({
 	getDatabase: (event) => event.locals.db,
-	routes: [personRoute, postRoute, imageRoute],
+	tables,
+	hooks: {
+		post: {
+			beforeCreate: ({ data, event }) => ({
+				...data,
+				author_id: event.locals.user!.id,
+			}),
+		},
+	},
 	sync: true,
 });
 
@@ -208,26 +173,8 @@ const billingHandle: Handle = has_stripe
 				secret_key: env.STRIPE_SECRET_KEY,
 				publishable_key: env.PUBLIC_STRIPE_PUBLISHABLE_KEY,
 				billing_scope: 'org',
-				plans: [
-					{
-						id: 'free',
-						name: 'Free',
-						description: 'Basic family management for small families',
-						lookup_key: 'free',
-						amount: 0,
-						interval: 'month',
-					},
-					{
-						id: 'family-pro',
-						name: 'Family Pro',
-						description: 'AI-powered writing, image uploads, and more',
-						lookup_key: 'family-pro',
-						amount: 499,
-						interval: 'month',
-						entitlements: ['ai', 'images'],
-					},
-				],
-				entitlements: ['ai', 'images'] as const,
+				plans: plans.map(({ features, ...p }) => p),
+				entitlements: billingEntitlements,
 				dev,
 			},
 			getAuthServer: (event) => {

@@ -15,10 +15,21 @@
 	let saving = $state(false);
 
 	// Edit form state
+	type Relationship =
+		| 'parent'
+		| 'child'
+		| 'sibling'
+		| 'spouse'
+		| 'grandparent'
+		| 'grandchild'
+		| 'aunt-uncle'
+		| 'cousin'
+		| 'friend'
+		| 'other';
 	let edit_name = $state('');
 	let edit_email = $state('');
 	let edit_phone = $state('');
-	let edit_relationship = $state('');
+	let edit_relationship = $state<Relationship | ''>('');
 	let edit_birthday = $state('');
 	let edit_notes = $state('');
 
@@ -41,7 +52,7 @@
 		edit_name = person.name;
 		edit_email = person.email ?? '';
 		edit_phone = person.phone ?? '';
-		edit_relationship = person.relationship ?? '';
+		edit_relationship = (person.relationship ?? '') as Relationship | '';
 		edit_birthday = person.birthday ?? '';
 		edit_notes = person.notes ?? '';
 		editing = true;
@@ -54,7 +65,7 @@
 				name: edit_name.trim(),
 				email: edit_email.trim() || undefined,
 				phone: edit_phone.trim() || undefined,
-				relationship: edit_relationship || undefined,
+				relationship: edit_relationship === '' ? undefined : edit_relationship,
 				birthday: edit_birthday || undefined,
 				notes: edit_notes.trim() || undefined,
 			});
