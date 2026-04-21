@@ -16,7 +16,17 @@ interface ContainerProcessOptions {
 	variants?: VariantConfig[];
 	compress_original?: boolean;
 	avatar?: boolean;
+	/**
+	 * R2 bucket for fetching watermark images. Only used for standalone
+	 * `processImage()` calls — the DO-integration path pre-fetches watermarks
+	 * before calling process() because R2Bucket can't cross DO RPC boundaries.
+	 */
 	bucket?: R2Bucket;
+	/**
+	 * Pre-fetched watermark images keyed by R2 path or URL. Provided by the
+	 * DO-integration path so the container doesn't need R2 access.
+	 */
+	watermark_images?: Map<string, ArrayBuffer>;
 }
 
 /** Parse a multipart/mixed response from the container into structured data */
@@ -178,8 +188,10 @@ export class ImageProcessorContainer extends Container {
 		imageData: ArrayBuffer,
 		options?: ContainerProcessOptions,
 	): Promise<ContainerProcessResult> {
-		// Pre-fetch watermark images
-		const watermarkImages = await this.fetchWatermarkImages(options);
+		// Use pre-fetched watermark images if the caller provided them,
+		// otherwise try to fetch them from the bucket (standalone mode).
+		const watermarkImages =
+			options?.watermark_images ?? (await this.fetchWatermarkImages(options));
 
 		// Build options to send to container
 		const containerOptions: Record<string, unknown> = {
@@ -198,6 +210,11 @@ export class ImageProcessorContainer extends Container {
 		}
 
 		try {
+			// Boot the container and wait for port 8080 to be reachable before
+			// issuing the process request. Without this, workerd throws
+			// "Container ingress proxy is not running."
+			await this.startAndWaitForPorts(8080);
+
 			const port = this.ctx.container!.getTcpPort(8080);
 			const abortController = new AbortController();
 			const timeoutId = setTimeout(() => abortController.abort(), RPC_TIMEOUT_MS);
