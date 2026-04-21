@@ -6,7 +6,7 @@ import { tables } from '$lib/schema';
 import { dev } from '$app/environment';
 import type { LayoutLoad } from './$types';
 
-export const load: LayoutLoad = async ({ parent }) => {
+export const load: LayoutLoad = async ({ parent, fetch }) => {
 	const { auth } = await parent();
 
 	if (auth.signed_out) throw redirect(307, '/signin');
@@ -22,6 +22,7 @@ export const load: LayoutLoad = async ({ parent }) => {
 	const db = new DatabaseClient({
 		tables,
 		db_name: `foreverfamily:${auth.org_id}`,
+		fetch,
 		hooks: ws.databaseHooks(),
 		// Images aren't indexed with searchable fields, so route image
 		// searches through the server to get full entity data (including
