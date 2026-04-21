@@ -10,6 +10,9 @@
 		/** Name used for initials fallback and alt text */
 		name = undefined as string | undefined,
 
+		/** Stable seed for the generated background color; falls back to `name` when absent */
+		colorSeed = undefined as string | undefined,
+
 		/** Size preset: 0=24px, 1=32px, 2=40px, 3=56px, 4=80px, 5=120px */
 		size = '1' as '0' | '1' | '2' | '3' | '4' | '5',
 
@@ -78,7 +81,8 @@
 	const showInitials = $derived(!showImage && name);
 	const showIcon = $derived(!showImage && !name);
 	const initials = $derived(name ? getInitials(name) : '');
-	const nameColor = $derived(name ? getNameColor(name) : undefined);
+	const colorKey = $derived(colorSeed ?? name);
+	const nameColor = $derived(colorKey ? getNameColor(colorKey) : undefined);
 	const isInteractive = $derived(!!onclick);
 	const badgeText = $derived(
 		badge === true ? undefined : typeof badge === 'number' ? (badge > 99 ? '99+' : String(badge)) : undefined,
