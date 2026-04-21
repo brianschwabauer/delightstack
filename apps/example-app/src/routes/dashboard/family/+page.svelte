@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { Button, Input, Select, Avatar, Modal, Callout } from '@delightstack/components';
 	import Icon from '$lib/Icon.svelte';
 	import { tooltip } from '@delightstack/utilities';
@@ -7,7 +6,6 @@
 	const { data } = $props();
 	const { db } = $derived(data);
 
-	let search_term = $state('');
 	let show_add = $state(false);
 
 	// New person form
@@ -18,25 +16,7 @@
 	let saving = $state(false);
 	let error = $state('');
 
-	const people = untrack(() =>
-		db.search('person', {
-			limit: 100,
-			order: [{ key: 'updated_at', direction: 'DESC' }],
-		}),
-	);
-
-	$effect(() => {
-		const term = search_term;
-		untrack(() => {
-			people.query = {
-				term,
-				limit: 100,
-				order: [{ key: 'updated_at', direction: 'DESC' }],
-			};
-		});
-	});
-
-	$effect(() => () => people.destroy());
+	const people = db.search('person');
 
 	const relationship_options = [
 		{ value: '', label: 'Select...' },
@@ -93,7 +73,7 @@
 	</header>
 
 	<div class="search-bar">
-		<Input placeholder="Search family members..." bind:value={search_term} type="search" />
+		<Input placeholder="Search family members..." bind:value={people.query.term} type="search" />
 	</div>
 
 	<div class="people-grid">
@@ -116,8 +96,8 @@
 
 		{#if people.docs.length === 0 && !people.loading}
 			<div class="empty">
-				{#if search_term}
-					<p>No family members match "{search_term}".</p>
+				{#if people.query.term}
+					<p>No family members match "{people.query.term}".</p>
 				{:else}
 					<p>No family members yet. Add someone to get started!</p>
 					<Button onclick={() => (show_add = true)}>Add Person</Button>

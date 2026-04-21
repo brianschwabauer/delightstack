@@ -5,6 +5,7 @@ export {
 	type DatabaseClientConfig,
 	type SearchHit,
 	type SearchResult,
+	type SearchQueryInit,
 } from './database.client.svelte';
 
 export { type WorkerSearchResult } from './database.worker';

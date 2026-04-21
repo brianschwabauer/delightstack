@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { Button, Modal, FileUpload, Progress, Callout } from '@delightstack/components';
 	import Image from '@delightstack/images/component';
 	import Icon from '$lib/Icon.svelte';
@@ -13,15 +12,7 @@
 	let selected_image: (typeof images)['docs'][number] | null = $state(null);
 	let show_preview = $state(false);
 
-	const images = untrack(() =>
-		db.search('image', {
-			limit: 100,
-			order: [{ key: 'updated_at', direction: 'DESC' }],
-			sparse: false,
-		}),
-	);
-
-	$effect(() => () => images.destroy());
+	const images = db.search('image', { sparse: false });
 
 	async function handleUpload(detail: { files: File[] }) {
 		if (!detail.files.length) return;
