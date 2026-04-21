@@ -14,7 +14,8 @@
 	const images = $derived(
 		db.search('image', {
 			limit: 100,
-			order: [{ key: 'created_at', direction: 'DESC' }],
+			order: [{ key: 'updated_at', direction: 'DESC' }],
+			sparse: false,
 		}),
 	);
 

@@ -16,6 +16,7 @@ new_sqlite_classes = [
 	"OrgDatabaseServer",
 	"AppWebsocketServer",
 	"RateLimiterServer",
+	"ImageProcessorContainer",
 ]
 
 [ai]
@@ -38,6 +39,18 @@ class_name = "AppWebsocketServer"
 name = "RATE_LIMITER"
 class_name = "RateLimiterServer"
 
+[[durable_objects.bindings]]
+name = "IMAGE_PROCESSOR"
+class_name = "ImageProcessorContainer"
+
+# Image processing container — Bun + Sharp/libvips for variant generation,
+# thumbhash, EXIF, color extraction, face-aware cropping.
+[[containers]]
+class_name = "ImageProcessorContainer"
+image = "../../../packages/images/container/Dockerfile"
+max_instances = 5
+instance_type = "lite"
+
 # KV Namespace
 [[kv_namespaces]]
 binding = "KV"
@@ -47,11 +60,6 @@ id = "86eb734b0be94ef6bd522185e1ef9e42"
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "foreverfamily"
-
-# Services
-[[services]]
-binding = "IMAGE_PROCESSOR"
-service = "image-processor"
 
 
 # -------------------------------------------------------------------------------------------------
@@ -80,6 +88,16 @@ class_name = "AppWebsocketServer"
 name = "RATE_LIMITER"
 class_name = "RateLimiterServer"
 
+[[env.staging.durable_objects.bindings]]
+name = "IMAGE_PROCESSOR"
+class_name = "ImageProcessorContainer"
+
+[[env.staging.containers]]
+class_name = "ImageProcessorContainer"
+image = "../../../packages/images/container/Dockerfile"
+max_instances = 5
+instance_type = "standard-1"
+
 [[env.staging.r2_buckets]]
 binding = "R2"
 bucket_name = "foreverfamily-server-staging"
@@ -87,7 +105,3 @@ bucket_name = "foreverfamily-server-staging"
 [[env.staging.kv_namespaces]]
 binding = "KV"
 id = "19098fe743e642bc825b946e11d30a7c"
-
-[[env.staging.services]]
-binding = "IMAGE_PROCESSOR"
-service = "image-processor"

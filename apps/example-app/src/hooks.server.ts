@@ -10,7 +10,7 @@ import { createImageHandle } from '@delightstack/images';
 import { DelightError, createDevHandle } from '@delightstack/utilities';
 import { env } from '$env/dynamic/private';
 import { building, dev } from '$app/environment';
-import { personTable, postTable } from '$lib/schema';
+import { personTable, postTable, imageTable } from '$lib/schema';
 
 // ---------------------------------------------------------------------------
 // 1. Auth — JWT sessions, org resolution, /api/auth/* routes
@@ -90,11 +90,109 @@ const postRoute = defineRoute({
 	},
 });
 
+const imageRoute = defineRoute({
+	entity: 'image',
+	table: imageTable,
+	hooks: {
+		beforeCreate: ({ event }) => {
+			if (!event.locals.session) throw DelightError.unauthorized();
+		},
+		beforeDelete: ({ event }) => {
+			if (!event.locals.session) throw DelightError.unauthorized();
+		},
+	},
+});
+
 const databaseHandle = createDatabaseHandle({
 	getDatabase: (event) => event.locals.db,
-	routes: [personRoute, postRoute],
+	routes: [personRoute, postRoute, imageRoute],
 	sync: true,
 });
+
+// ---------------------------------------------------------------------------
+// 4b. Image upload — routes multipart uploads through the real imageProcessing
+//     pipeline (container → variants + thumbhash + EXIF). In prod the DO
+//     binding is available directly; in dev we forward to the wrangler dev
+//     worker because the JSON RPC proxy cannot pass a File/Blob through.
+// ---------------------------------------------------------------------------
+const imageUploadHandle: Handle = async ({ event, resolve }) => {
+	if (
+		event.url.pathname !== '/api/image' ||
+		event.request.method !== 'POST' ||
+		!event.request.headers.get('content-type')?.includes('multipart/form-data')
+	) {
+		return resolve(event);
+	}
+
+	if (!event.locals.session) return DelightError.unauthorized().toResponse();
+
+	const locals = event.locals as AuthLocals & App.Locals;
+	if (!locals.org_id) return DelightError.badRequest('No organization').toResponse();
+
+	if (dev) {
+		// Dev: forward to the wrangler dev worker which has real DO bindings.
+		// Buffer the body first so undici doesn't need duplex streaming, and
+		// rebuild headers minimally to avoid forwarding host/cookie junk.
+		const body = await event.request.arrayBuffer();
+		const content_type = event.request.headers.get('content-type') ?? '';
+		try {
+			const res = await fetch('http://localhost:8787/api/image', {
+				method: 'POST',
+				headers: {
+					'content-type': content_type,
+					'X-Org-Id': locals.org_id,
+					'X-Session-Uid': event.locals.session.uid,
+				},
+				body,
+			});
+			// Buffer the body so SvelteKit's adapter can serialize the Response
+			// correctly — returning an undici-streamed Response fails silently.
+			const buf = await res.arrayBuffer();
+			return new Response(buf, {
+				status: res.status,
+				headers: {
+					'content-type': res.headers.get('content-type') ?? 'application/json',
+				},
+			});
+		} catch (error) {
+			return DelightError.from(error).toResponse();
+		}
+	}
+
+	// Prod: DO binding is a real stub. Pass an ArrayBuffer + mime_type because
+	// Cloudflare RPC cannot serialize a File object directly.
+	const formData = await event.request.formData();
+	const file = formData.get('file') as File | null;
+	const caption = (formData.get('caption') as string) || null;
+	if (!file) return DelightError.badRequest('No file provided').toResponse();
+
+	const db = locals.db as {
+		uploadImage: (
+			data: ArrayBuffer,
+			options?: {
+				file_name?: string;
+				mime_type?: string;
+				data?: Record<string, unknown>;
+			},
+		) => Promise<unknown>;
+	} | undefined;
+	if (!db) return DelightError.badRequest('Database not available').toResponse();
+
+	try {
+		const buffer = await file.arrayBuffer();
+		const record = await db.uploadImage(buffer, {
+			file_name: file.name,
+			mime_type: file.type || undefined,
+			data: { caption, uploader_id: event.locals.session.uid },
+		});
+		return new Response(JSON.stringify(record), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	} catch (error) {
+		return DelightError.from(error).toResponse();
+	}
+};
 
 // ---------------------------------------------------------------------------
 // 5. Billing — Stripe subscription routes at /api/billing/*
@@ -198,6 +296,7 @@ export const handle = sequence(
 	appHandle,
 	websocketHandle,
 	imageHandle,
+	imageUploadHandle,
 	databaseHandle,
 	billingHandle,
 	aiHandle,
