@@ -1,16 +1,14 @@
 <script lang="ts">
-	import { Button, Input, Toggle, Modal, Callout, Progress } from '@delightstack/components';
+	import { Button, Input, Toggle, Modal, Progress } from '@delightstack/components';
 	import { toast } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import Icon from '$lib/Icon.svelte';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 
 	const { data } = $props();
-	const { auth, db, ai } = $derived(data);
-
+	const { db, ai, post } = $derived(data);
 	const post_id = $derived(page.params.post_id);
-	const post = $derived(await db.get('post', post_id));
 
 	let editing = $state(false);
 	let show_delete = $state(false);
@@ -26,7 +24,6 @@
 	let ai_prompt = $state('');
 
 	function startEditing() {
-		if (!post) return;
 		edit_title = post.title;
 		edit_content = post.content;
 		edit_is_public = post.is_public;
@@ -44,6 +41,7 @@
 				is_public: edit_is_public,
 				tags: tags.length ? tags : undefined,
 			});
+			await invalidate(`post:${post_id}`);
 			editing = false;
 			toast('Post updated');
 		} finally {
@@ -57,7 +55,7 @@
 	}
 
 	async function improveWithAi() {
-		const prompt = ai_prompt.trim() || `Improve this family story while keeping its personal tone:\n\n${editing ? edit_content : post?.content}`;
+		const prompt = ai_prompt.trim() || `Improve this family story while keeping its personal tone:\n\n${editing ? edit_content : post.content}`;
 		await ai.chat({
 			messages: [
 				{
@@ -78,7 +76,7 @@
 	}
 
 	function copyShareLink() {
-		if (post?.is_public) {
+		if (post.is_public) {
 			navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
 			toast('Share link copied!');
 		}
@@ -94,7 +92,7 @@
 </script>
 
 <svelte:head>
-	<title>{post?.title ?? 'Post'} | Forever Family</title>
+	<title>{post.title} | Forever Family</title>
 </svelte:head>
 
 <div class="page">
@@ -103,119 +101,113 @@
 		<span>All stories</span>
 	</a>
 
-	{#if post}
-		{#if editing}
-			<div class="edit-card">
-				<div class="edit-header">
-					<h2>Edit story</h2>
-					<div class="actions">
-						<Button onclick={() => (editing = false)} transparent>Cancel</Button>
-						<Button onclick={savePost} disabled={saving}>
-							{saving ? 'Saving...' : 'Save changes'}
-						</Button>
-					</div>
-				</div>
-
-				<Input label="Title" bind:value={edit_title} />
-				<Input label="Content" type="textarea" bind:value={edit_content} />
-				<Input label="Tags" bind:value={edit_tags} placeholder="Comma-separated tags" />
-				<Toggle bind:checked={edit_is_public} label="Share publicly" />
-
-				<div class="ai-inline">
-					<div class="ai-header">
-						<Icon name="sparkles" size={16} />
-						<h4>AI writing assistant</h4>
-					</div>
-					<div class="ai-row">
-						<Input bind:value={ai_prompt} placeholder="Ask AI to improve your post..." />
-						<Button onclick={improveWithAi} disabled={ai.streaming} dense>
-							{ai.streaming ? 'Writing...' : 'Improve'}
-						</Button>
-					</div>
-					{#if ai.streaming}
-						<Progress loading />
-					{/if}
-					{#if ai.content}
-						<div class="ai-suggestion">
-							<p>{ai.content}</p>
-							<Button onclick={applyAiContent} dense transparent>Apply suggestion</Button>
-						</div>
-					{/if}
+	{#if editing}
+		<div class="edit-card">
+			<div class="edit-header">
+				<h2>Edit story</h2>
+				<div class="actions">
+					<Button onclick={() => (editing = false)} transparent>Cancel</Button>
+					<Button onclick={savePost} disabled={saving}>
+						{saving ? 'Saving...' : 'Save changes'}
+					</Button>
 				</div>
 			</div>
-		{:else}
-			<article class="article">
-				<header class="article-header">
-					<div class="meta-row">
-						<time datetime={String(post.created_at)}>{formatDate(post.created_at)}</time>
-						{#if post.is_public}
-							<span class="dot">•</span>
-							<span class="public-tag">
-								<Icon name="eye" size={14} />
-								Public
-							</span>
-						{/if}
+
+			<Input label="Title" bind:value={edit_title} />
+			<Input label="Content" type="textarea" bind:value={edit_content} />
+			<Input label="Tags" bind:value={edit_tags} placeholder="Comma-separated tags" />
+			<Toggle bind:checked={edit_is_public} label="Share publicly" />
+
+			<div class="ai-inline">
+				<div class="ai-header">
+					<Icon name="sparkles" size={16} />
+					<h4>AI writing assistant</h4>
+				</div>
+				<div class="ai-row">
+					<Input bind:value={ai_prompt} placeholder="Ask AI to improve your post..." />
+					<Button onclick={improveWithAi} disabled={ai.streaming} dense>
+						{ai.streaming ? 'Writing...' : 'Improve'}
+					</Button>
+				</div>
+				{#if ai.streaming}
+					<Progress loading />
+				{/if}
+				{#if ai.content}
+					<div class="ai-suggestion">
+						<p>{ai.content}</p>
+						<Button onclick={applyAiContent} dense transparent>Apply suggestion</Button>
 					</div>
-
-					<h1>{post.title}</h1>
-
-					{#if post.summary}
-						<p class="lead">{post.summary}</p>
+				{/if}
+			</div>
+		</div>
+	{:else}
+		<article class="article">
+			<header class="article-header">
+				<div class="meta-row">
+					<time datetime={String(post.created_at)}>{formatDate(post.created_at)}</time>
+					{#if post.is_public}
+						<span class="dot">•</span>
+						<span class="public-tag">
+							<Icon name="eye" size={14} />
+							Public
+						</span>
 					{/if}
-
-					<div class="toolbar">
-						{#if post.is_public}
-							<Button onclick={copyShareLink} transparent dense>
-								<Icon name="share" size={14} />
-								<span>Copy link</span>
-							</Button>
-						{/if}
-						<Button onclick={startEditing} transparent dense>
-							<Icon name="edit" size={14} />
-							<span>Edit</span>
-						</Button>
-						<Button onclick={() => (show_delete = true)} error transparent dense>
-							<Icon name="trash" size={14} />
-							<span>Delete</span>
-						</Button>
-					</div>
-				</header>
-
-				<div class="article-body">
-					{#each post.content.split('\n') as paragraph, i (i)}
-						{#if paragraph.trim()}
-							<p>{paragraph}</p>
-						{/if}
-					{/each}
 				</div>
 
-				<footer class="article-footer">
-					{#if post.tags?.length}
-						<div class="tag-list">
-							<Icon name="tag" size={14} />
-							{#each post.tags as tag (tag)}
-								<Badge dense>{tag}</Badge>
-							{/each}
-						</div>
-					{/if}
+				<h1>{post.title}</h1>
 
-					<small class="post-date">
-						{#if post.updated_at !== post.created_at}
-							Last updated {formatDate(post.updated_at)}
-						{/if}
-					</small>
-				</footer>
-			</article>
-		{/if}
-	{:else}
-		<div class="loading">
-			<Callout>Loading story...</Callout>
-		</div>
+				{#if post.summary}
+					<p class="lead">{post.summary}</p>
+				{/if}
+
+				<div class="toolbar">
+					{#if post.is_public}
+						<Button onclick={copyShareLink} transparent dense>
+							<Icon name="share" size={14} />
+							<span>Copy link</span>
+						</Button>
+					{/if}
+					<Button onclick={startEditing} transparent dense>
+						<Icon name="edit" size={14} />
+						<span>Edit</span>
+					</Button>
+					<Button onclick={() => (show_delete = true)} error transparent dense>
+						<Icon name="trash" size={14} />
+						<span>Delete</span>
+					</Button>
+				</div>
+			</header>
+
+			<div class="article-body">
+				{#each post.content.split('\n') as paragraph, i (i)}
+					{#if paragraph.trim()}
+						<p>{paragraph}</p>
+					{/if}
+				{/each}
+			</div>
+
+			<footer class="article-footer">
+				{#if post.tags?.length}
+					<div class="tag-list">
+						<Icon name="tag" size={14} />
+						{#each post.tags as tag (tag)}
+							<Badge dense>{tag}</Badge>
+						{/each}
+					</div>
+				{/if}
+
+				<small class="post-date">
+					{#if post.updated_at !== post.created_at}
+						Last updated {formatDate(post.updated_at)}
+					{/if}
+				</small>
+			</footer>
+		</article>
 	{/if}
 </div>
 
 <Modal bind:open={show_delete} title="Delete story">
-	<p>Are you sure you want to delete <strong>"{post?.title}"</strong>? This cannot be undone.</p>
+	<p>Are you sure you want to delete <strong>"{post.title}"</strong>? This cannot be undone.</p>
 	<div class="modal-actions">
 		<Button onclick={() => (show_delete = false)} transparent>Cancel</Button>
 		<Button onclick={deletePost} error>Delete</Button>
@@ -240,9 +232,6 @@
 		width: fit-content;
 		transition: color 0.15s;
 		&:hover { color: var(--color-text); }
-	}
-	.loading {
-		padding: var(--size-5) 0;
 	}
 
 	/* Article view */

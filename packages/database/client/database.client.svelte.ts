@@ -40,6 +40,23 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	/** Whether the app is in dev mode (uses regular Worker instead of SharedWorker) */
 	dev?: boolean;
 
+	/**
+	 * `fetch` implementation used when no web worker is available (SSR).
+	 * Pass the `fetch` from your SvelteKit load event so server-side calls
+	 * carry the original request's cookies and auth context. Ignored on the
+	 * client once the worker has initialized.
+	 *
+	 * ```ts
+	 * // +layout.ts
+	 * export const load: LayoutLoad = async ({ fetch }) => {
+	 *   const db = new DatabaseClient({ tables, db_name, fetch });
+	 *   await db.init();
+	 *   return { db };
+	 * };
+	 * ```
+	 */
+	fetch?: typeof globalThis.fetch;
+
 	/** Hooks for external integration (e.g. websocket) */
 	hooks?: {
 		/** Called after any local CRUD operation */
@@ -777,13 +794,60 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		return result as Database.Entity<T[K]>;
 	}
 
-	/** Get a single entity by ID. Returns from IDB cache with background refresh. */
+	/**
+	 * Get a single entity by ID.
+	 *
+	 * **Client:** returns from IDB cache with background refresh via the
+	 * web worker.
+	 *
+	 * **SSR:** falls back to the auto-generated `/api/${entity}/${id}` HTTP
+	 * endpoint using the `fetch` passed to the `DatabaseClient` config.
+	 * Provide it once at construction time (typically from your SvelteKit
+	 * load event) and every `db.get` call works on both server and client:
+	 *
+	 * ```ts
+	 * // +layout.ts
+	 * export const load: LayoutLoad = async ({ fetch }) => {
+	 *   const db = new DatabaseClient({ tables, db_name, fetch });
+	 *   await db.init();
+	 *   return { db };
+	 * };
+	 *
+	 * // +page.ts
+	 * export const load: PageLoad = async ({ params, parent }) => {
+	 *   const { db } = await parent();
+	 *   const post = await db.get('post', params.post_id);
+	 *   return { post };
+	 * };
+	 * ```
+	 */
 	async get<K extends keyof T & string>(
 		entity_type: K,
 		id: string | number,
 	): Promise<Database.Entity<T[K]> | undefined> {
-		const worker = this.#getWorker();
-		return (await worker.get(entity_type, id)) as Database.Entity<T[K]> | undefined;
+		if (this.#worker) {
+			return (await this.#worker.get(entity_type, id)) as
+				| Database.Entity<T[K]>
+				| undefined;
+		}
+		// No worker: SSR or pre-init. Use the configured fetch to preserve
+		// the original request's auth context.
+		const fetchFn = this.#config.fetch;
+		if (!fetchFn) return undefined;
+		const response = await fetchFn(`/api/${entity_type}/${id}`);
+		if (response.status === 404) return undefined;
+		if (!response.ok) {
+			const body = (await response.json().catch(() => null)) as
+				| { message?: string; status?: number; code?: string; detail?: string }
+				| null;
+			throw new DelightError({
+				message: body?.message ?? response.statusText,
+				status: body?.status ?? response.status,
+				code: body?.code,
+				detail: body?.detail,
+			});
+		}
+		return (await response.json()) as Database.Entity<T[K]>;
 	}
 
 	/** Update an entity. Optimistically updates local index. */
