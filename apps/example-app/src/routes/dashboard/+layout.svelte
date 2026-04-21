@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { Button, AvatarGroup, ThemeToggle } from '@delightstack/components';
-	import { List, ListItem } from '@delightstack/components/display';
+	import { Button, AvatarGroup, ThemeToggle, List, ListItem } from '@delightstack/components';
 	import { tooltip } from '@delightstack/utilities';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -34,7 +33,7 @@
 	}
 
 	async function signOut() {
-		await auth.api.signOut();
+		await auth.signOut();
 		goto('/signin');
 	}
 </script>

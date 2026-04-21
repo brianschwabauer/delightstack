@@ -22,6 +22,7 @@
 
 	// AI assist
 	let ai_prompt = $state('');
+	let ai_stream = $state<ReturnType<typeof ai.chat> | null>(null);
 
 	function startEditing() {
 		edit_title = post.title;
@@ -54,9 +55,9 @@
 		goto('/dashboard');
 	}
 
-	async function improveWithAi() {
+	function improveWithAi() {
 		const prompt = ai_prompt.trim() || `Improve this family story while keeping its personal tone:\n\n${editing ? edit_content : post.content}`;
-		await ai.chat({
+		ai_stream = ai.chat({
 			messages: [
 				{
 					role: 'system',
@@ -69,8 +70,8 @@
 	}
 
 	function applyAiContent() {
-		if (ai.content) {
-			edit_content = ai.content;
+		if (ai_stream?.content) {
+			edit_content = ai_stream.content;
 			toast('AI suggestion applied');
 		}
 	}
@@ -125,16 +126,16 @@
 				</div>
 				<div class="ai-row">
 					<Input bind:value={ai_prompt} placeholder="Ask AI to improve your post..." />
-					<Button onclick={improveWithAi} disabled={ai.streaming} dense>
-						{ai.streaming ? 'Writing...' : 'Improve'}
+					<Button onclick={improveWithAi} disabled={ai_stream?.streaming} dense>
+						{ai_stream?.streaming ? 'Writing...' : 'Improve'}
 					</Button>
 				</div>
-				{#if ai.streaming}
+				{#if ai_stream?.streaming}
 					<Progress loading />
 				{/if}
-				{#if ai.content}
+				{#if ai_stream?.content}
 					<div class="ai-suggestion">
-						<p>{ai.content}</p>
+						<p>{ai_stream.content}</p>
 						<Button onclick={applyAiContent} dense transparent>Apply suggestion</Button>
 					</div>
 				{/if}

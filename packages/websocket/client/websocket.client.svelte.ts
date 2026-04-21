@@ -24,8 +24,23 @@ export interface WebsocketClientConfig {
 	path?: string;
 	/** Full WebSocket URL override — takes precedence over path. Use for external WS servers. */
 	url?: string;
-	/** Whether the app is in dev mode (uses regular Worker instead of SharedWorker) */
+	/**
+	 * Whether the app is in dev mode. When true:
+	 * - a regular Worker is used instead of a SharedWorker (Vite SSR limitation);
+	 * - if no `url` is provided, the client connects directly to the wrangler
+	 *   worker at `ws://localhost:${dev_worker_port}${path}` because Vite can't
+	 *   proxy WebSocket upgrades through its dev server's RPC proxy.
+	 */
 	dev?: boolean;
+	/** Port of the wrangler dev worker. Used only when `dev` is true. @default 8787 */
+	dev_worker_port?: number;
+	/**
+	 * Query params appended to the WebSocket URL in dev mode. Use to pass
+	 * identity/session metadata (e.g. user_id, user_name) to the dev worker,
+	 * since SvelteKit's auth handle is bypassed when connecting directly.
+	 * Ignored in prod.
+	 */
+	dev_query?: Record<string, string | undefined>;
 }
 
 /** Built-in event names and their message types */
@@ -144,10 +159,25 @@ export class WebsocketClient<
 
 		this.#worker = await getWsWorker(this.#config.dev);
 
-		// Build the WebSocket URL (full URL override or derive from page origin)
+		// Build the WebSocket URL. Precedence:
+		//   1. explicit `url` override
+		//   2. dev mode → direct connection to the wrangler worker at the
+		//      configured port, with `room` and any `dev_query` appended
+		//      (Vite can't proxy WS upgrades, so we bypass it in dev)
+		//   3. prod → wss(s)://<host><path> derived from window.location
 		const url = this.#config.url ?? (() => {
+			const path = this.#config.path ?? '/api/websocket';
+			if (this.#config.dev) {
+				const port = this.#config.dev_worker_port ?? 8787;
+				const params = new URLSearchParams();
+				params.set('room', room);
+				for (const [key, value] of Object.entries(this.#config.dev_query ?? {})) {
+					if (value !== undefined) params.set(key, value);
+				}
+				return `ws://localhost:${port}${path}?${params.toString()}`;
+			}
 			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-			return `${protocol}//${window.location.host}${this.#config.path}`;
+			return `${protocol}//${window.location.host}${path}`;
 		})();
 
 		this.#channel_name = channel_name;

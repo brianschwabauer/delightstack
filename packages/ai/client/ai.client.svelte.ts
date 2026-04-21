@@ -11,144 +11,148 @@ export interface AiClientConfig {
 	api_path?: string;
 }
 
-// ── Client ──────────────────────────────────────────────────────────────────
+// ── AiClient ────────────────────────────────────────────────────────────────
 
 /**
- * Reactive AI client for Svelte 5.
+ * Factory for reactive AI completion streams.
  *
- * Integrates with WebsocketClient for resumable streaming. The server
- * streams completion chunks over WebSocket, and the client automatically
- * resumes on reconnection.
+ * Each call to `ai.chat(...)` or `ai.complete(...)` returns an independent
+ * `ChatStream` — a per-request reactive handle with its own `content`,
+ * `streaming`, `error`, `usage`, and an `abort()` method. This lets
+ * multiple concurrent completions coexist without clobbering each other's
+ * state.
  *
- * Usage:
- *   const ai = new AiClient({ ws });
+ * Streaming responses arrive over the provided `WebsocketClient` and
+ * auto-resume on reconnect.
  *
- *   // Start a streaming completion
- *   await ai.chat({ messages: [...], model: 'gpt-4o' });
+ * @example
+ * ```ts
+ * const ai = new AiClient({ ws });
  *
- *   // Reactive state (use in Svelte templates)
- *   {ai.streaming}       // boolean — true while generating
- *   {ai.content}         // string — accumulated text
- *   {ai.error}           // string | null — error message
- *   {ai.usage}           // TokenUsage | null — token counts (after completion)
- *   {ai.finish_reason}   // string | null — why generation stopped
+ * const stream = ai.chat({ messages, model });
+ * // → stream.streaming, stream.content (reactive)
+ *
+ * await stream.finished;   // optional — wait for completion
+ * stream.abort();          // optional — cancel mid-stream
+ * ```
  */
 export class AiClient {
 	#config: AiClientConfig;
-	#unsub_chunk: (() => void) | null = null;
-	#unsub_error: (() => void) | null = null;
-	#unsub_reconnect: (() => void) | null = null;
-
-	// Reactive state (Svelte 5 runes)
-	streaming = $state(false);
-	content = $state('');
-	error = $state<string | null>(null);
-	stream_id = $state<string | null>(null);
-	usage = $state<TokenUsage | null>(null);
-	finish_reason = $state<CompletionResult['finish_reason'] | null>(null);
-	tool_calls = $state<ToolCall[]>([]);
 
 	constructor(config: AiClientConfig) {
 		this.#config = config;
-		this.#setupListeners();
 	}
 
-	/** The API base URL */
 	get #apiPath(): string {
 		return this.#config.api_path ?? '/api/ai';
 	}
 
 	/**
-	 * Start a streaming chat completion.
-	 *
-	 * Sends the request to the server, which starts streaming chunks
-	 * back over the WebSocket connection. Previous content is cleared.
+	 * Start a streaming chat completion. Returns a reactive handle that
+	 * accumulates chunks into `content` as they arrive. Call `abort()` to
+	 * cancel; await `finished` to wait for completion.
 	 */
-	async chat(options: CompletionOptions): Promise<void> {
-		// Reset state
-		this.streaming = true;
-		this.content = '';
-		this.error = null;
-		this.stream_id = null;
-		this.usage = null;
-		this.finish_reason = null;
-		this.tool_calls = [];
+	chat(options: CompletionOptions): ChatStream {
+		return new ChatStream(this.#config.ws, this.#apiPath, 'stream', options);
+	}
 
-		try {
-			const response = await fetch(`${this.#apiPath}/stream`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(options),
-			});
+	/**
+	 * Run a non-streaming chat completion. The returned handle is still
+	 * reactive (use `complete.streaming` / `complete.content`) but the
+	 * full response arrives in one step.
+	 */
+	complete(options: CompletionOptions): ChatStream {
+		return new ChatStream(this.#config.ws, this.#apiPath, 'complete', options);
+	}
+}
 
-			if (!response.ok) {
-				const body = (await response
-					.json()
-					.catch(() => ({ message: 'Request failed' }))) as { message?: string };
-				throw new Error(body.message ?? `HTTP ${response.status}`);
-			}
+// ── ChatStream ──────────────────────────────────────────────────────────────
 
-			const result = (await response.json()) as { stream_id: string };
-			this.stream_id = result.stream_id;
-		} catch (err: unknown) {
-			this.streaming = false;
-			this.error = err instanceof Error ? err.message : 'Failed to start stream';
+/**
+ * A single in-flight AI completion. Exposes reactive state for templates
+ * and an imperative `abort()` method. Cleans up its own WebSocket
+ * listeners when the stream ends (done, error, or abort).
+ */
+export class ChatStream {
+	#ws: WebsocketClient;
+	#api_path: string;
+
+	#content = $state('');
+	#streaming = $state(true);
+	#error = $state<string | null>(null);
+	#usage = $state<TokenUsage | null>(null);
+	#finish_reason = $state<CompletionResult['finish_reason'] | null>(null);
+	#tool_calls = $state<ToolCall[]>([]);
+	#stream_id = $state<string | null>(null);
+
+	#unsub_chunk: (() => void) | null = null;
+	#unsub_error: (() => void) | null = null;
+	#unsub_reconnect: (() => void) | null = null;
+
+	#finished_resolve!: () => void;
+	/** Resolves when the stream finishes for any reason (done, error, or abort). */
+	readonly finished: Promise<void> = new Promise<void>((resolve) => {
+		this.#finished_resolve = resolve;
+	});
+
+	/** Accumulated response text (reactive). */
+	get content(): string {
+		return this.#content;
+	}
+	/** Whether the completion is still in flight (reactive). */
+	get streaming(): boolean {
+		return this.#streaming;
+	}
+	/** Error message if the stream failed (reactive). */
+	get error(): string | null {
+		return this.#error;
+	}
+	/** Token usage, populated on completion (reactive). */
+	get usage(): TokenUsage | null {
+		return this.#usage;
+	}
+	/** Why generation stopped (reactive). */
+	get finish_reason(): CompletionResult['finish_reason'] | null {
+		return this.#finish_reason;
+	}
+	/** Tool calls emitted during generation (reactive). */
+	get tool_calls(): ToolCall[] {
+		return this.#tool_calls;
+	}
+	/** Server-side stream ID (null until the request is acknowledged). */
+	get stream_id(): string | null {
+		return this.#stream_id;
+	}
+
+	constructor(
+		ws: WebsocketClient,
+		api_path: string,
+		mode: 'stream' | 'complete',
+		options: CompletionOptions,
+	) {
+		this.#ws = ws;
+		this.#api_path = api_path;
+
+		if (mode === 'stream') {
+			this.#attachStreamListeners();
+			void this.#startStream(options);
+		} else {
+			void this.#runComplete(options);
 		}
 	}
 
 	/**
-	 * Run a non-streaming chat completion.
-	 *
-	 * Returns the full result at once. Updates reactive state.
+	 * Cancel the stream. Resolves the `finished` promise. Safe to call
+	 * multiple times or after completion.
 	 */
-	async complete(options: CompletionOptions): Promise<void> {
-		this.streaming = true;
-		this.content = '';
-		this.error = null;
-		this.stream_id = null;
-		this.usage = null;
-		this.finish_reason = null;
-		this.tool_calls = [];
+	async abort(): Promise<void> {
+		if (!this.#streaming) return;
+		const stream_id = this.#stream_id;
+		this.#finish('abort');
 
+		if (!stream_id) return;
 		try {
-			const response = await fetch(`${this.#apiPath}/complete`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(options),
-			});
-
-			if (!response.ok) {
-				const body = (await response
-					.json()
-					.catch(() => ({ message: 'Request failed' }))) as { message?: string };
-				throw new Error(body.message ?? `HTTP ${response.status}`);
-			}
-
-			const result = (await response.json()) as CompletionResult;
-
-			this.content = result.content;
-			this.usage = result.usage;
-			this.finish_reason = result.finish_reason;
-			if (result.tool_calls) this.tool_calls = result.tool_calls;
-		} catch (err: unknown) {
-			this.error = err instanceof Error ? err.message : 'Completion failed';
-		} finally {
-			this.streaming = false;
-		}
-	}
-
-	/**
-	 * Cancel the current stream.
-	 */
-	async cancel(): Promise<void> {
-		if (!this.stream_id) return;
-
-		const stream_id = this.stream_id;
-		this.stream_id = null;
-		this.streaming = false;
-
-		try {
-			await fetch(`${this.#apiPath}/cancel`, {
+			await fetch(`${this.#api_path}/cancel`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ stream_id }),
@@ -158,44 +162,75 @@ export class AiClient {
 		}
 	}
 
-	/**
-	 * Clean up all listeners. Call when the component is destroyed.
-	 */
-	destroy(): void {
-		this.#unsub_chunk?.();
-		this.#unsub_error?.();
-		this.#unsub_reconnect?.();
-		this.#unsub_chunk = null;
-		this.#unsub_error = null;
-		this.#unsub_reconnect = null;
+	// -----------------------------------------------------------------------
+	// Private
+	// -----------------------------------------------------------------------
+
+	async #startStream(options: CompletionOptions): Promise<void> {
+		try {
+			const response = await fetch(`${this.#api_path}/stream`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(options),
+			});
+			if (!response.ok) {
+				const body = (await response
+					.json()
+					.catch(() => ({ message: 'Request failed' }))) as { message?: string };
+				throw new Error(body.message ?? `HTTP ${response.status}`);
+			}
+			const result = (await response.json()) as { stream_id: string };
+			this.#stream_id = result.stream_id;
+		} catch (err: unknown) {
+			this.#error = err instanceof Error ? err.message : 'Failed to start stream';
+			this.#finish('error');
+		}
 	}
 
-	// ── Private ─────────────────────────────────────────────────────────────
+	async #runComplete(options: CompletionOptions): Promise<void> {
+		try {
+			const response = await fetch(`${this.#api_path}/complete`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(options),
+			});
+			if (!response.ok) {
+				const body = (await response
+					.json()
+					.catch(() => ({ message: 'Request failed' }))) as { message?: string };
+				throw new Error(body.message ?? `HTTP ${response.status}`);
+			}
+			const result = (await response.json()) as CompletionResult;
+			this.#content = result.content;
+			this.#usage = result.usage;
+			this.#finish_reason = result.finish_reason;
+			if (result.tool_calls) this.#tool_calls = result.tool_calls;
+			this.#finish('done');
+		} catch (err: unknown) {
+			this.#error = err instanceof Error ? err.message : 'Completion failed';
+			this.#finish('error');
+		}
+	}
 
-	#setupListeners(): void {
-		const ws = this.#config.ws;
+	#attachStreamListeners(): void {
+		const ws = this.#ws;
 
-		// Listen for stream chunks
 		this.#unsub_chunk = ws.on('ai:stream:chunk', (raw) => {
 			const msg = raw as unknown as AiStreamChunkMessage;
-			if (msg.stream_id !== this.stream_id) return;
+			if (msg.stream_id !== this.#stream_id) return;
 
-			// Accumulate from delta (server only sends delta per chunk)
 			if (msg.delta) {
-				this.content += msg.delta;
+				this.#content += msg.delta;
 			}
 
-			// Merge streaming tool call deltas by index
 			if (msg.tool_calls?.length) {
-				const updated = [...this.tool_calls];
+				const updated = [...this.#tool_calls];
 				for (const tc of msg.tool_calls) {
-					// Streaming deltas include an `index` for positional merging
 					const pos =
 						((tc as unknown as Record<string, unknown>).index as number) ??
 						updated.length;
 					const existing = updated[pos];
 					if (existing) {
-						// Merge delta into existing entry (append argument fragments)
 						updated[pos] = {
 							id: tc.id || existing.id,
 							type: tc.type || existing.type,
@@ -207,7 +242,6 @@ export class AiClient {
 							},
 						};
 					} else {
-						// First chunk for this tool call
 						updated[pos] = {
 							id: tc.id ?? '',
 							type: tc.type ?? 'function',
@@ -218,50 +252,50 @@ export class AiClient {
 						};
 					}
 				}
-				this.tool_calls = updated;
+				this.#tool_calls = updated;
 			}
 
 			if (msg.done) {
-				// On final chunk, server sends accumulated — use it for consistency
-				if (msg.accumulated != null) {
-					this.content = msg.accumulated;
-				}
-				this.streaming = false;
-				if (msg.usage) this.usage = msg.usage;
+				if (msg.accumulated != null) this.#content = msg.accumulated;
+				if (msg.usage) this.#usage = msg.usage;
 				if (msg.finish_reason) {
-					this.finish_reason = msg.finish_reason as CompletionResult['finish_reason'];
+					this.#finish_reason = msg.finish_reason as CompletionResult['finish_reason'];
 				}
+				this.#finish('done');
 			}
 		});
 
-		// Listen for stream errors
 		this.#unsub_error = ws.on('ai:stream:error', (raw) => {
 			const msg = raw as unknown as AiStreamErrorMessage;
-			if (msg.stream_id !== this.stream_id) return;
-
-			this.error = msg.message;
-			this.streaming = false;
+			if (msg.stream_id !== this.#stream_id) return;
+			this.#error = msg.message;
+			this.#finish('error');
 		});
 
-		// Auto-resume on WebSocket reconnection
 		this.#unsub_reconnect = ws.on('ws:connected', () => {
-			if (this.streaming && this.stream_id) {
-				this.#resume();
+			if (this.#streaming && this.#stream_id) {
+				try {
+					this.#ws.send({
+						event: 'ai:stream:resume',
+						stream_id: this.#stream_id,
+						last_offset: this.#content.length,
+					});
+				} catch {
+					// Best effort
+				}
 			}
 		});
 	}
 
-	#resume(): void {
-		if (!this.stream_id) return;
-
-		try {
-			this.#config.ws.send({
-				event: 'ai:stream:resume',
-				stream_id: this.stream_id,
-				last_offset: this.content.length,
-			});
-		} catch {
-			// Best effort — WS may not be ready yet
-		}
+	#finish(_reason: 'done' | 'error' | 'abort'): void {
+		if (!this.#streaming) return;
+		this.#streaming = false;
+		this.#unsub_chunk?.();
+		this.#unsub_error?.();
+		this.#unsub_reconnect?.();
+		this.#unsub_chunk = null;
+		this.#unsub_error = null;
+		this.#unsub_reconnect = null;
+		this.#finished_resolve();
 	}
 }

@@ -1,1 +1,1 @@
-export { AiClient, type AiClientConfig } from './ai.client.svelte';
+export { AiClient, ChatStream, type AiClientConfig } from './ai.client.svelte';

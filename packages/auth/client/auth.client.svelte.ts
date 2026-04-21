@@ -275,335 +275,347 @@ export class AuthClient<P extends string = string, E extends string = string> {
 		return result;
 	}
 
-	/** All API methods nested under .api */
-	readonly api = {
-		signIn: {
-			email: async (data: {
-				email: string;
-				password: string;
-			}): Promise<{
+	readonly signIn = {
+		email: async (data: {
+			email: string;
+			password: string;
+		}): Promise<{
+			jwt: string;
+			decoded_jwt: SessionToken<'auth'>;
+			org_id?: string;
+		}> => {
+			const result = await this.post<{
 				jwt: string;
 				decoded_jwt: SessionToken<'auth'>;
 				org_id?: string;
-			}> => {
-				const result = await this.post<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-					org_id?: string;
-				}>('/signin/email', data);
-				this.#jwt = result.jwt;
-				this.#session = result.decoded_jwt;
-				if (result.org_id) this.#org_id = result.org_id;
-				this.startAutoRefresh();
-				return result;
-			},
-			emailMagicLink: async (data: { email: string }): Promise<void> => {
-				await this.post<void>('/signin/email/magic', data);
-			},
-			oauth: (vendor: string, options?: { redirect_to?: string }) => {
-				const params = new URLSearchParams();
-				if (options?.redirect_to) params.set('redirect', options.redirect_to);
-				window.location.href = `${this.base_path}/signin/${vendor}?${params}`;
-			},
-		} as const,
-
-		signUp: {
-			email: async (data: {
-				name: string;
-				email: string;
-				password?: string;
-				org_name?: string;
-				invitation_id?: string;
-			}): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
-				const result = await this.post<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-				}>('/signup/email', data);
-				this.#jwt = result.jwt;
-				this.#session = result.decoded_jwt;
-				this.startAutoRefresh();
-				return result;
-			},
-		} as const,
-
-		signOut: async (): Promise<void> => {
-			await this.post<void>('/signout', undefined);
-			this.#jwt = null;
-			this.#session = null;
-			this.#org_id = null;
-			// Preferences intentionally kept — they persist across signouts (e.g. dark mode)
-			this.#org_state = {};
-			this.stopAutoRefresh();
+			}>('/signin/email', data);
+			this.#jwt = result.jwt;
+			this.#session = result.decoded_jwt;
+			if (result.org_id) this.#org_id = result.org_id;
+			this.startAutoRefresh();
+			return result;
 		},
+		emailMagicLink: async (data: { email: string }): Promise<void> => {
+			await this.post<void>('/signin/email/magic', data);
+		},
+		oauth: (vendor: string, options?: { redirect_to?: string }) => {
+			const params = new URLSearchParams();
+			if (options?.redirect_to) params.set('redirect', options.redirect_to);
+			window.location.href = `${this.base_path}/signin/${vendor}?${params}`;
+		},
+	} as const;
 
-		session: {
-			get: async (): Promise<{
-				session: SessionToken<'auth'>;
-				user: {
-					id: string;
-					name: string;
-					email: string;
-					verified: boolean;
-				};
-				org_id: string | null;
-			}> => {
-				return this.get('/session');
-			},
-			refresh: async (): Promise<{
+	readonly signUp = {
+		email: async (data: {
+			name: string;
+			email: string;
+			password?: string;
+			org_name?: string;
+			invitation_id?: string;
+		}): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
+			const result = await this.post<{
 				jwt: string;
 				decoded_jwt: SessionToken<'auth'>;
-				org_id?: string;
-			}> => {
-				const result = await this.post<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-					org_id?: string;
-				}>('/session/refresh', undefined);
-				this.#jwt = result.jwt;
-				this.#session = result.decoded_jwt;
-				if (result.org_id) this.#org_id = result.org_id;
-				this.startAutoRefresh();
-				return result;
-			},
-			list: async (options?: {
-				offset?: number;
-				limit?: number;
-			}): Promise<{
-				list: UserSession[];
-				count: number;
-				hasMore: boolean;
-			}> => {
-				const params = new URLSearchParams();
-				if (options?.offset != null) params.set('offset', String(options.offset));
-				if (options?.limit != null) params.set('limit', String(options.limit));
-				const qs = params.toString();
-				return this.get(`/session/list${qs ? `?${qs}` : ''}`);
-			},
-			revoke: async (session_id: string): Promise<void> => {
-				return this.delete(`/session/${session_id}`);
-			},
-		} as const,
+			}>('/signup/email', data);
+			this.#jwt = result.jwt;
+			this.#session = result.decoded_jwt;
+			this.startAutoRefresh();
+			return result;
+		},
+	} as const;
 
-		password: {
-			reset: async (email: string): Promise<void> => {
-				await this.post<void>('/password/reset', { email });
-			},
-			confirmReset: async (
-				token: string,
-				password: string,
-			): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
-				const result = await this.post<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-				}>('/password/reset/confirm', { token, password });
-				this.#jwt = result.jwt;
-				this.#session = result.decoded_jwt;
-				this.startAutoRefresh();
-				return result;
-			},
-			change: async (
-				password: string,
-			): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
-				const result = await this.patch<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-				}>('/password', { password });
-				this.#jwt = result.jwt;
-				this.#session = result.decoded_jwt;
-				this.startAutoRefresh();
-				return result;
-			},
-			checkStrength: async (password: string): Promise<{ strong: boolean }> => {
-				return this.post('/password/check', { password });
-			},
-		} as const,
+	readonly signOut = async (): Promise<void> => {
+		await this.post<void>('/signout', undefined);
+		this.#jwt = null;
+		this.#session = null;
+		this.#org_id = null;
+		// Preferences intentionally kept — they persist across signouts (e.g. dark mode)
+		this.#org_state = {};
+		this.stopAutoRefresh();
+	};
 
-		email: {
-			requestVerification: async (): Promise<void> => {
-				await this.post<void>('/email/verify', undefined);
-			},
-			checkAvailability: async (email: string): Promise<{ available: boolean }> => {
-				const params = new URLSearchParams({ email });
-				return this.get(`/email/check?${params}`);
-			},
-		} as const,
-
+	/** Fetch the current session from the server (includes user profile). */
+	fetchSession = async (): Promise<{
+		session: SessionToken<'auth'>;
 		user: {
-			get: async (): Promise<{
-				id: string;
-				name: string;
-				image?: string;
-				created_at: number;
-			}> => {
-				return this.get('/user');
-			},
-			update: async (data: {
-				name?: string;
-				image?: string;
-			}): Promise<{
-				id: string;
-				name: string;
-				image?: string;
-				created_at: number;
-			}> => {
-				return this.patch('/user', data);
-			},
-			delete: async (): Promise<void> => {
-				return this.delete('/user');
-			},
-			listSignInMethods: async (): Promise<{
-				list: UserSignInMethod[];
-				count: number;
-				hasMore: boolean;
-			}> => {
-				return this.get('/user/signin-method');
-			},
-			removeSignInMethod: async (method_id: string): Promise<void> => {
-				return this.delete(`/user/signin-method/${method_id}`);
-			},
-		} as const,
+			id: string;
+			name: string;
+			email: string;
+			verified: boolean;
+		};
+		org_id: string | null;
+	}> => {
+		return this.get('/session');
+	};
 
-		org: {
-			create: async (data: {
-				name: string;
-			}): Promise<{
-				org_id: string;
+	/** Refresh the JWT before expiry. Called automatically by the auto-refresh timer. */
+	refreshSession = async (): Promise<{
+		jwt: string;
+		decoded_jwt: SessionToken<'auth'>;
+		org_id?: string;
+	}> => {
+		const result = await this.post<{
+			jwt: string;
+			decoded_jwt: SessionToken<'auth'>;
+			org_id?: string;
+		}>('/session/refresh', undefined);
+		this.#jwt = result.jwt;
+		this.#session = result.decoded_jwt;
+		if (result.org_id) this.#org_id = result.org_id;
+		this.startAutoRefresh();
+		return result;
+	};
+
+	/** List all active sessions for the current user. */
+	listSessions = async (options?: {
+		offset?: number;
+		limit?: number;
+	}): Promise<{
+		list: UserSession[];
+		count: number;
+		hasMore: boolean;
+	}> => {
+		const params = new URLSearchParams();
+		if (options?.offset != null) params.set('offset', String(options.offset));
+		if (options?.limit != null) params.set('limit', String(options.limit));
+		const qs = params.toString();
+		return this.get(`/session/list${qs ? `?${qs}` : ''}`);
+	};
+
+	/** Revoke a specific session (signs that session out). */
+	revokeSession = async (session_id: string): Promise<void> => {
+		return this.delete(`/session/${session_id}`);
+	};
+
+	readonly password = {
+		reset: async (email: string): Promise<void> => {
+			await this.post<void>('/password/reset', { email });
+		},
+		confirmReset: async (
+			token: string,
+			password: string,
+		): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
+			const result = await this.post<{
 				jwt: string;
 				decoded_jwt: SessionToken<'auth'>;
-			}> => {
-				const result = await this.post<{
-					org_id: string;
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-				}>('/org', data);
-				this.#jwt = result.jwt;
-				this.#session = result.decoded_jwt;
-				this.#org_id = result.org_id;
-				this.startAutoRefresh();
-				return result;
-			},
-			switch: async (
-				org_id: string,
-			): Promise<{
+			}>('/password/reset/confirm', { token, password });
+			this.#jwt = result.jwt;
+			this.#session = result.decoded_jwt;
+			this.startAutoRefresh();
+			return result;
+		},
+		change: async (
+			password: string,
+		): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
+			const result = await this.patch<{
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+			}>('/password', { password });
+			this.#jwt = result.jwt;
+			this.#session = result.decoded_jwt;
+			this.startAutoRefresh();
+			return result;
+		},
+		checkStrength: async (password: string): Promise<{ strong: boolean }> => {
+			return this.post('/password/check', { password });
+		},
+	} as const;
+
+	/** Email verification and availability. Separate from the reactive `email` getter (which exposes the signed-in user's email). */
+	readonly emailVerification = {
+		request: async (): Promise<void> => {
+			await this.post<void>('/email/verify', undefined);
+		},
+		checkAvailability: async (email: string): Promise<{ available: boolean }> => {
+			const params = new URLSearchParams({ email });
+			return this.get(`/email/check?${params}`);
+		},
+	} as const;
+
+	readonly user = {
+		get: async (): Promise<{
+			id: string;
+			name: string;
+			image?: string;
+			created_at: number;
+		}> => {
+			return this.get('/user');
+		},
+		update: async (data: {
+			name?: string;
+			image?: string;
+		}): Promise<{
+			id: string;
+			name: string;
+			image?: string;
+			created_at: number;
+		}> => {
+			return this.patch('/user', data);
+		},
+		delete: async (): Promise<void> => {
+			return this.delete('/user');
+		},
+		listSignInMethods: async (): Promise<{
+			list: UserSignInMethod[];
+			count: number;
+			hasMore: boolean;
+		}> => {
+			return this.get('/user/signin-method');
+		},
+		removeSignInMethod: async (method_id: string): Promise<void> => {
+			return this.delete(`/user/signin-method/${method_id}`);
+		},
+	} as const;
+
+	/** Create a new organization and switch to it. */
+	createOrg = async (data: {
+		name: string;
+	}): Promise<{
+		org_id: string;
+		jwt: string;
+		decoded_jwt: SessionToken<'auth'>;
+	}> => {
+		const result = await this.post<{
+			org_id: string;
+			jwt: string;
+			decoded_jwt: SessionToken<'auth'>;
+		}>('/org', data);
+		this.#jwt = result.jwt;
+		this.#session = result.decoded_jwt;
+		this.#org_id = result.org_id;
+		this.startAutoRefresh();
+		return result;
+	};
+
+	/** Switch the active organization. */
+	switchOrg = async (
+		org_id: string,
+	): Promise<{
+		jwt: string;
+		decoded_jwt: SessionToken<'auth'>;
+		org_id: string;
+	}> => {
+		const result = await this.post<{
+			jwt: string;
+			decoded_jwt: SessionToken<'auth'>;
+			org_id: string;
+		}>('/org/switch', { org_id });
+		this.#jwt = result.jwt;
+		this.#session = result.decoded_jwt;
+		this.#org_id = result.org_id;
+		return result;
+	};
+
+	/** Update organization metadata (name, owner, etc). */
+	updateOrg = async (
+		org_id: string,
+		data: { name?: string; owner_id?: string },
+	): Promise<void> => {
+		return this.patch(`/org/${org_id}`, data);
+	};
+
+	/** Delete an organization. */
+	deleteOrg = async (org_id: string): Promise<void> => {
+		return this.delete(`/org/${org_id}`);
+	};
+
+	/** List users in an organization. */
+	listOrgUsers = async (
+		org_id: string,
+	): Promise<{
+		list: Array<{
+			id: string;
+			name: string;
+			permission: number;
+			image?: string;
+		}>;
+		count: number;
+		hasMore: boolean;
+	}> => {
+		return this.get(`/org/${org_id}/user`);
+	};
+
+	/** Update a user's permission bitmask within an org. */
+	updateOrgUserPermission = async (
+		org_id: string,
+		user_id: string,
+		permission: number | string[],
+	): Promise<void> => {
+		return this.patch(`/org/${org_id}/user/${user_id}`, { permission });
+	};
+
+	/** Remove a user from an organization. */
+	removeOrgUser = async (org_id: string, user_id: string): Promise<void> => {
+		return this.delete(`/org/${org_id}/user/${user_id}`);
+	};
+
+	readonly invitation = {
+		list: async (): Promise<{
+			list: Array<Record<string, unknown>>;
+			count: number;
+			hasMore: boolean;
+		}> => {
+			return this.get('/invitation');
+		},
+		get: async (id: string): Promise<Record<string, unknown>> => {
+			return this.get(`/invitation/${id}`);
+		},
+		create: async (data: {
+			email?: string;
+			permission: number;
+			max_redemptions?: number;
+			expires_at?: number;
+		}): Promise<Record<string, unknown>> => {
+			return this.post('/invitation', data);
+		},
+		update: async (
+			id: string,
+			data: { permission?: number; max_redemptions?: number },
+		): Promise<Record<string, unknown>> => {
+			return this.patch(`/invitation/${id}`, data);
+		},
+		delete: async (id: string): Promise<void> => {
+			return this.delete(`/invitation/${id}`);
+		},
+		accept: async (
+			id: string,
+		): Promise<{
+			jwt: string;
+			decoded_jwt: SessionToken<'auth'>;
+			org_id: string;
+		}> => {
+			const result = await this.post<{
 				jwt: string;
 				decoded_jwt: SessionToken<'auth'>;
 				org_id: string;
-			}> => {
-				const result = await this.post<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-					org_id: string;
-				}>('/org/switch', { org_id });
-				this.#jwt = result.jwt;
-				this.#session = result.decoded_jwt;
-				this.#org_id = result.org_id;
-				return result;
-			},
-			update: async (
-				org_id: string,
-				data: { name?: string; owner_id?: string },
-			): Promise<void> => {
-				return this.patch(`/org/${org_id}`, data);
-			},
-			delete: async (org_id: string): Promise<void> => {
-				return this.delete(`/org/${org_id}`);
-			},
-			listUsers: async (
-				org_id: string,
-			): Promise<{
-				list: Array<{
-					id: string;
-					name: string;
-					permission: number;
-					image?: string;
-				}>;
-				count: number;
-				hasMore: boolean;
-			}> => {
-				return this.get(`/org/${org_id}/user`);
-			},
-			updateUserPermission: async (
-				org_id: string,
-				user_id: string,
-				permission: number | string[],
-			): Promise<void> => {
-				return this.patch(`/org/${org_id}/user/${user_id}`, {
-					permission,
-				});
-			},
-			removeUser: async (org_id: string, user_id: string): Promise<void> => {
-				return this.delete(`/org/${org_id}/user/${user_id}`);
-			},
-		} as const,
+			}>(`/invitation/${id}/accept`, undefined);
+			this.#jwt = result.jwt;
+			this.#session = result.decoded_jwt;
+			this.#org_id = result.org_id;
+			return result;
+		},
+	} as const;
 
-		invitation: {
-			list: async (): Promise<{
-				list: Array<Record<string, unknown>>;
-				count: number;
-				hasMore: boolean;
-			}> => {
-				return this.get('/invitation');
-			},
-			get: async (id: string): Promise<Record<string, unknown>> => {
-				return this.get(`/invitation/${id}`);
-			},
-			create: async (data: {
-				email?: string;
-				permission: number;
-				max_redemptions?: number;
-				expires_at?: number;
-			}): Promise<Record<string, unknown>> => {
-				return this.post('/invitation', data);
-			},
-			update: async (
-				id: string,
-				data: { permission?: number; max_redemptions?: number },
-			): Promise<Record<string, unknown>> => {
-				return this.patch(`/invitation/${id}`, data);
-			},
-			delete: async (id: string): Promise<void> => {
-				return this.delete(`/invitation/${id}`);
-			},
-			accept: async (
-				id: string,
-			): Promise<{
-				jwt: string;
-				decoded_jwt: SessionToken<'auth'>;
-				org_id: string;
-			}> => {
-				const result = await this.post<{
-					jwt: string;
-					decoded_jwt: SessionToken<'auth'>;
-					org_id: string;
-				}>(`/invitation/${id}/accept`, undefined);
-				this.#jwt = result.jwt;
-				this.#session = result.decoded_jwt;
-				this.#org_id = result.org_id;
-				return result;
-			},
-		} as const,
-
-		oauth: {
-			connect: (
-				vendor: string,
-				options?: { redirect_to?: string; capabilities?: string[] },
-			) => {
-				const params = new URLSearchParams();
-				if (options?.redirect_to) params.set('redirect', options.redirect_to);
-				if (options?.capabilities)
-					params.set('capabilities', options.capabilities.join(','));
-				window.location.href = `${this.base_path}/oauth/${vendor}?${params}`;
-			},
-			listAccounts: async (): Promise<{
-				list: OauthAccount[];
-				count: number;
-				hasMore: boolean;
-			}> => {
-				return this.get('/oauth/account');
-			},
-			disconnectAccount: async (id: string): Promise<void> => {
-				return this.delete(`/oauth/account/${id}`);
-			},
+	readonly oauth = {
+		connect: (
+			vendor: string,
+			options?: { redirect_to?: string; capabilities?: string[] },
+		) => {
+			const params = new URLSearchParams();
+			if (options?.redirect_to) params.set('redirect', options.redirect_to);
+			if (options?.capabilities)
+				params.set('capabilities', options.capabilities.join(','));
+			window.location.href = `${this.base_path}/oauth/${vendor}?${params}`;
+		},
+		listAccounts: async (): Promise<{
+			list: OauthAccount[];
+			count: number;
+			hasMore: boolean;
+		}> => {
+			return this.get('/oauth/account');
+		},
+		disconnectAccount: async (id: string): Promise<void> => {
+			return this.delete(`/oauth/account/${id}`);
 		},
 	} as const;
 
@@ -617,7 +629,7 @@ export class AuthClient<P extends string = string, E extends string = string> {
 		const delay = Math.max(refresh_at_ms - Date.now(), 0);
 		this.refresh_timer = setTimeout(async () => {
 			try {
-				await this.api.session.refresh();
+				await this.refreshSession();
 			} catch (error) {
 				this.onRefreshFailed?.(error as AuthClientError);
 			}

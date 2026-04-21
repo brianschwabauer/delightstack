@@ -11,7 +11,18 @@
 	// New person form
 	let new_name = $state('');
 	let new_email = $state('');
-	let new_relationship = $state('');
+	type Relationship =
+		| 'parent'
+		| 'child'
+		| 'sibling'
+		| 'spouse'
+		| 'grandparent'
+		| 'grandchild'
+		| 'aunt-uncle'
+		| 'cousin'
+		| 'friend'
+		| 'other';
+	let new_relationship = $state<Relationship | ''>('');
 	let new_birthday = $state('');
 	let saving = $state(false);
 	let error = $state('');
@@ -40,7 +51,7 @@
 			await db.create('person', {
 				name: new_name.trim(),
 				email: new_email.trim() || undefined,
-				relationship: new_relationship || undefined,
+				relationship: new_relationship === '' ? undefined : new_relationship,
 				birthday: new_birthday || undefined,
 			});
 			new_name = '';
@@ -83,7 +94,7 @@
 				<div class="person-info">
 					<strong>{person.name}</strong>
 					{#if person.relationship}
-						<small {@attach tooltip(person.relationship ?? '')}>
+						<small {@attach tooltip(String(person.relationship))}>
 							{person.relationship}
 						</small>
 					{/if}

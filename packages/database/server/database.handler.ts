@@ -7,7 +7,7 @@ import { DelightError } from '@delightstack/utilities';
 // ---------------------------------------------------------------------------
 
 /** Entity input (without auto-managed fields) */
-type EntityInput<T extends Database.Table> = Omit<
+type EntityInput<T extends Database.AnyTable> = Omit<
 	Database.Entity<T>,
 	'id' | 'created_at' | 'updated_at'
 >;
@@ -17,7 +17,7 @@ type EntityInput<T extends Database.Table> = Omit<
 // ---------------------------------------------------------------------------
 
 /** Context passed to `beforeCreate` hooks */
-export interface BeforeCreateContext<T extends Database.Table> {
+export interface BeforeCreateContext<T extends Database.AnyTable> {
 	/** The parsed entity data (validated via table.parse) */
 	data: EntityInput<T>;
 	/** The SvelteKit request event */
@@ -25,7 +25,7 @@ export interface BeforeCreateContext<T extends Database.Table> {
 }
 
 /** Context passed to `beforeUpdate` hooks */
-export interface BeforeUpdateContext<T extends Database.Table> {
+export interface BeforeUpdateContext<T extends Database.AnyTable> {
 	/** The entity ID from the URL */
 	id: string;
 	/** The raw partial update data from the request body */
@@ -37,7 +37,7 @@ export interface BeforeUpdateContext<T extends Database.Table> {
 }
 
 /** Context passed to `beforeDelete` hooks */
-export interface BeforeDeleteContext<T extends Database.Table> {
+export interface BeforeDeleteContext<T extends Database.AnyTable> {
 	/** The entity ID from the URL */
 	id: string;
 	/** The existing entity fetched from the database */
@@ -63,7 +63,7 @@ export interface BeforeListContext {
 }
 
 /** Context passed to `afterCreate` and `afterUpdate` hooks */
-export interface AfterWriteContext<T extends Database.Table> {
+export interface AfterWriteContext<T extends Database.AnyTable> {
 	/** The entity as returned from the database after the write */
 	data: Database.Entity<T>;
 	/** The SvelteKit request event */
@@ -83,7 +83,7 @@ export interface AfterDeleteContext {
 // ---------------------------------------------------------------------------
 
 /** Lifecycle hooks for a database entity route */
-export interface DatabaseRouteHooks<T extends Database.Table> {
+export interface DatabaseRouteHooks<T extends Database.AnyTable> {
 	/**
 	 * Called before creating an entity. Throw to reject.
 	 * Optionally return modified data to override what gets written.
@@ -147,9 +147,9 @@ export interface DatabaseRouteConfig {
 	/** The entity type name matching the key in your DatabaseConfig (e.g. `'person'`) */
 	entity: string;
 	/** The table definition created by `Database.table()` */
-	table: Database.Table;
+	table: Database.AnyTable;
 	/** Optional lifecycle hooks */
-	hooks?: DatabaseRouteHooks<Database.Table>;
+	hooks?: DatabaseRouteHooks<Database.AnyTable>;
 }
 
 /**
@@ -174,7 +174,7 @@ export interface DatabaseRouteConfig {
  * });
  * ```
  */
-export function defineRoute<T extends Database.Table>(options: {
+export function defineRoute<T extends Database.AnyTable>(options: {
 	/** The base route path (e.g. `/api/person`). Defaults to `/api/${entity}`. */
 	route?: string;
 	entity: string;
@@ -192,15 +192,42 @@ export function defineRoute<T extends Database.Table>(options: {
 // ---------------------------------------------------------------------------
 
 /** Options for `createDatabaseHandle()` */
-export interface DatabaseHandleOptions {
+export interface DatabaseHandleOptions<
+	Tables extends Record<string, Database.AnyTable> = Record<string, Database.AnyTable>,
+> {
 	/**
 	 * Returns the database server instance for the current request.
 	 * Return `undefined` if no database is available (e.g. no org selected).
 	 */
 	getDatabase: (event: RequestEvent) => DatabaseRpc | undefined;
 
-	/** The list of entity routes to handle */
-	routes: DatabaseRouteConfig[];
+	/**
+	 * Tables to auto-generate CRUD routes for at `/api/${entity}`. Use with
+	 * `hooks` to customize per-entity behavior, or with `routes` for a
+	 * fully explicit config.
+	 */
+	tables?: Tables;
+
+	/**
+	 * Per-entity lifecycle hooks. Keyed by entity name. Only needed when
+	 * using `tables` — for `routes`, pass hooks inline via `defineRoute`.
+	 */
+	hooks?: { [K in keyof Tables]?: DatabaseRouteHooks<Tables[K]> };
+
+	/**
+	 * Require an authenticated session (`event.locals.session`) for
+	 * create/update/delete on all `tables`. Defaults to `true`. Read
+	 * operations are unaffected — wire auth there via `hooks[entity].beforeGet`
+	 * or `beforeList`.
+	 */
+	requireAuth?: boolean;
+
+	/**
+	 * Explicit route list. Use this for routes that need a custom path
+	 * or hooks that don't fit the `tables` + `hooks` shorthand. Merged
+	 * with any auto-generated routes from `tables`.
+	 */
+	routes?: DatabaseRouteConfig[];
 
 	/**
 	 * Enable the sync endpoint for client-side search index synchronization.
@@ -332,6 +359,40 @@ function matchRoute(
 	}
 
 	return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Hook composition helpers
+// ---------------------------------------------------------------------------
+
+/** Wraps before{Create,Update,Delete} hooks to reject requests without a session. */
+function withAuthGuards(
+	hooks: DatabaseRouteHooks<Database.Table>,
+): DatabaseRouteHooks<Database.Table> {
+	const requireSession = (event: RequestEvent) => {
+		if (!(event.locals as { session?: unknown }).session) {
+			throw new DelightError({
+				message: 'Unauthorized',
+				status: 401,
+				code: 'unauthorized',
+			});
+		}
+	};
+	return {
+		...hooks,
+		beforeCreate: async (ctx) => {
+			requireSession(ctx.event);
+			return hooks.beforeCreate?.(ctx);
+		},
+		beforeUpdate: async (ctx) => {
+			requireSession(ctx.event);
+			return hooks.beforeUpdate?.(ctx);
+		},
+		beforeDelete: async (ctx) => {
+			requireSession(ctx.event);
+			return hooks.beforeDelete?.(ctx);
+		},
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -533,38 +594,66 @@ async function handleSync(db: DatabaseRpc, event: RequestEvent): Promise<Respons
  * Creates a SvelteKit Handle that intercepts requests matching the configured
  * entity routes and performs CRUD operations with lifecycle hooks.
  *
- * @example
+ * Two usage modes:
+ *
+ * **Table-driven (recommended):** pass your `tables` map and optional
+ * per-entity `hooks`. CRUD routes at `/api/${entity}` are generated
+ * automatically. `requireAuth: true` (the default) rejects CUD without a
+ * session.
+ *
  * ```ts
- * // hooks.server.ts
- * import { createDatabaseHandle, defineRoute } from '@delightstack/database';
- *
- * const personRoute = defineRoute({
- *   entity: 'person', // route defaults to '/api/person'
- *   table: personTable,
- *   hooks: {
- *     beforeCreate: ({ event }) => {
- *       if (!event.locals.user) throw new DelightError({ message: 'Unauthorized', status: 401 });
- *     },
- *   },
- * });
- *
  * const databaseHandle = createDatabaseHandle({
  *   getDatabase: (event) => event.locals.db,
- *   routes: [personRoute],
+ *   tables,
+ *   hooks: {
+ *     post: {
+ *       beforeCreate: ({ data, event }) => ({ ...data, author_id: event.locals.user!.id }),
+ *     },
+ *   },
  *   sync: true,
  * });
- *
- * export const handle = sequence(authHandle, appHandle, databaseHandle);
  * ```
+ *
+ * **Explicit routes:** pass a `routes` array (optionally alongside
+ * `tables`) for full control over paths and hook composition.
  */
-export function createDatabaseHandle(options: DatabaseHandleOptions): Handle {
-	// Normalize routes (strip trailing slashes) and sort longest-first for correct matching
-	const routes = options.routes
-		.map((r) => ({
-			...r,
-			route: r.route.endsWith('/') ? r.route.slice(0, -1) : r.route,
-		}))
-		.sort((a, b) => b.route.length - a.route.length);
+export function createDatabaseHandle<
+	Tables extends Record<string, Database.AnyTable> = Record<string, Database.AnyTable>,
+>(options: DatabaseHandleOptions<Tables>): Handle {
+	const require_auth = options.requireAuth ?? true;
+
+	// Auto-generate routes from the tables map, merging per-entity hooks.
+	const auto_routes: DatabaseRouteConfig[] = options.tables
+		? Object.entries(options.tables).map(([entity, table]) => {
+				const user_hooks =
+					(options.hooks?.[entity as keyof Tables] as
+						| DatabaseRouteHooks<Database.Table>
+						| undefined) ?? {};
+				const hooks: DatabaseRouteHooks<Database.Table> = require_auth
+					? { ...withAuthGuards(user_hooks) }
+					: user_hooks;
+				return {
+					route: `/api/${entity}`,
+					entity,
+					table: table as Database.Table,
+					hooks,
+				};
+			})
+		: [];
+
+	const explicit = options.routes ?? [];
+
+	// Later routes override earlier ones (so users can shadow an auto
+	// route by providing the same path in `routes`).
+	const by_route = new Map<string, DatabaseRouteConfig>();
+	for (const r of [...auto_routes, ...explicit]) {
+		const route = r.route.endsWith('/') ? r.route.slice(0, -1) : r.route;
+		by_route.set(route, { ...r, route });
+	}
+
+	const routes = [...by_route.values()].sort(
+		(a, b) => b.route.length - a.route.length,
+	);
 
 	// Resolve sync path
 	const sync_path = options.sync

@@ -17,20 +17,11 @@
 		invite_success = '';
 		inviting = true;
 		try {
-			const response = await fetch('/api/auth/invitation', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email: invite_email.trim(), org_id: auth.org_id }),
-			});
-			if (!response.ok) {
-				const data = await response.json();
-				invite_error = data.message || 'Failed to send invitation';
-				return;
-			}
+			await auth.invitation.create({ email: invite_email.trim(), permission: 1 });
 			invite_success = `Invitation sent to ${invite_email}`;
 			invite_email = '';
-		} catch {
-			invite_error = 'Failed to send invitation';
+		} catch (e) {
+			invite_error = (e as { message?: string })?.message || 'Failed to send invitation';
 		} finally {
 			inviting = false;
 		}

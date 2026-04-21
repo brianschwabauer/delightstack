@@ -9,6 +9,12 @@
 
 	const groupContext = getContext<ButtonGroupContext | undefined>('button-group');
 
+	// When a Button with `type="submit"` lives inside a <Form>, auto-wire its
+	// loading and disabled state to the form's submission lifecycle. Callers
+	// can still override by passing explicit `loading` or `disabled`.
+	type _FormSubmitContext = { is_submitting: boolean; disabled: boolean };
+	const formContext = getContext<_FormSubmitContext | undefined>('form');
+
 	const propId = $props.id();
 	let {
 		/** The size of the button - referencing the font size options in css vars*/
@@ -87,6 +93,9 @@
 
 		/** The target of the link (only used if href is provided) */
 		target = undefined as '_self' | '_blank' | '_parent' | '_top' | undefined,
+
+		/** The button type (ignored when `href` is set). @default 'button' */
+		type = 'button' as 'button' | 'submit' | 'reset',
 
 		/** The tooltip message to show on hover */
 		tooltip: tooltipMessage = '',
@@ -174,7 +183,12 @@
 	const resolvedAccent = $derived(accent || groupContext?.accent || false);
 	const resolvedError = $derived(error || groupContext?.error || false);
 	const resolvedSuccess = $derived(success || groupContext?.success || false);
-	const resolvedDisabled = $derived(disabled || groupContext?.disabled || false);
+	// A submit button inside a <Form> inherits the form's submitting/disabled
+	// state unless the caller explicitly set `loading` / `disabled`.
+	const isFormSubmit = $derived(type === 'submit' && !!formContext);
+	const resolvedDisabled = $derived(
+		disabled || groupContext?.disabled || (isFormSubmit && formContext!.disabled) || false,
+	);
 	const resolvedGrouped = $derived(grouped || !!groupContext);
 
 	let dropdownActive = $state(false);
@@ -187,7 +201,13 @@
 		mounted = true;
 	});
 
-	const isLoading = $derived(loading || onclickLoading);
+	// `loading` prop wins if provided; otherwise a submit button tracks the
+	// surrounding form's is_submitting flag. Merge with the internal
+	// onclick-promise loading state.
+	const externalLoading = $derived(
+		loading ?? (isFormSubmit ? formContext!.is_submitting : undefined),
+	);
+	const isLoading = $derived(externalLoading || onclickLoading);
 	const isLoadingSuccess = $derived(loadingSuccess || onclickLoadingSuccess);
 
 	function loadingTransition(
@@ -267,7 +287,7 @@
 	{/if}
 	<svelte:element
 		this={href ? 'a' : 'button'}
-		type={href ? null : 'button'}
+		type={href ? null : type}
 		role="button"
 		tabindex={resolvedDisabled || isLoading || (!mounted && !href) ? -1 : 0}
 		{...rest}

@@ -16,6 +16,7 @@
 
 	// AI assist
 	let ai_prompt = $state('');
+	let ai_stream = $state<ReturnType<typeof ai.chat> | null>(null);
 
 	const tags = $derived(
 		tags_input
@@ -44,10 +45,10 @@
 		}
 	}
 
-	async function askAi() {
+	function askAi() {
 		if (!ai_prompt.trim() && !content.trim()) return;
 		const prompt = ai_prompt.trim() || `Help me improve this family story:\n\n${content}`;
-		await ai.chat({
+		ai_stream = ai.chat({
 			messages: [
 				{
 					role: 'system',
@@ -60,8 +61,8 @@
 	}
 
 	function useAiSuggestion() {
-		if (ai.content) {
-			content = content ? `${content}\n\n${ai.content}` : ai.content;
+		if (ai_stream?.content) {
+			content = content ? `${content}\n\n${ai_stream.content}` : ai_stream.content;
 		}
 	}
 </script>
@@ -129,30 +130,30 @@
 						bind:value={ai_prompt}
 						placeholder="e.g. 'Write about our beach trip'"
 					/>
-					<Button onclick={askAi} disabled={ai.streaming} dense>
-						{ai.streaming ? 'Writing...' : 'Ask AI'}
+					<Button onclick={askAi} disabled={ai_stream?.streaming} dense>
+						{ai_stream?.streaming ? 'Writing...' : 'Ask AI'}
 					</Button>
 				</div>
 
-				{#if ai.streaming}
+				{#if ai_stream?.streaming}
 					<Progress loading />
 				{/if}
 
-				{#if ai.content}
+				{#if ai_stream?.content}
 					<div class="ai-response">
-						<p>{ai.content}</p>
+						<p>{ai_stream.content}</p>
 						<Button onclick={useAiSuggestion} dense transparent>
 							Use this text
 						</Button>
 					</div>
 				{/if}
 
-				{#if ai.error}
-					<p class="ai-error">{ai.error}</p>
+				{#if ai_stream?.error}
+					<p class="ai-error">{ai_stream.error}</p>
 				{/if}
 
-				{#if ai.usage}
-					<small class="ai-usage">{ai.usage.total_tokens} tokens used</small>
+				{#if ai_stream?.usage}
+					<small class="ai-usage">{ai_stream.usage.total_tokens} tokens used</small>
 				{/if}
 			</div>
 		{/snippet}

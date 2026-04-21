@@ -2391,6 +2391,42 @@ export namespace Database {
 	/** The type returned by the `table` function */
 	export type Table = ReturnType<typeof table>;
 
+	/**
+	 * A structural subset of `Table` suitable as a generic constraint.
+	 *
+	 * Using `Table` directly as a constraint forces assignability checks
+	 * against its fully-computed per-field shape (e.g. SQLite template
+	 * literal types in `config.table_definition`). Concrete tables produced
+	 * by `table()` use narrower literal types that don't unify under the
+	 * `Table` index signature, which causes TS to widen `_` back to the
+	 * base `FieldGenerator` union — erasing every per-field type.
+	 *
+	 * `AnyTable` keeps only what callers actually read (`_` for Entity
+	 * inference and `config.primary_key` / `config.orama` for init),
+	 * letting TypeScript preserve narrow types through generic inference.
+	 * Use this as the constraint wherever you'd write `Table`.
+	 */
+	export type AnyTable = {
+		readonly _: Record<string, FieldGenerator>;
+		name: string;
+		parse(data: unknown): Record<string, unknown>;
+		toSparse(data: Record<string, unknown>): Record<string, unknown>;
+		config: {
+			primary_key: string;
+			primary_key_type?: 'string' | 'number';
+			orama: { schema: unknown; sort: unknown };
+			table_definition?: Record<string, unknown>;
+			indexes?: unknown;
+			indexable_fields?: readonly string[];
+			unique_fields?: readonly string[];
+			searchable_fields?: readonly string[];
+			sortable_fields?: readonly string[];
+			foreign_keys?: Record<string, unknown>;
+			derived_fields?: Record<string, { foreign_keys?: string[] }>;
+		};
+		form?: unknown;
+	};
+
 	/** Defines a database table schema using the provided callback function */
 	export function table<
 		TableName extends string,
