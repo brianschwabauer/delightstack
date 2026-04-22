@@ -155,8 +155,12 @@ export class EntityState<
 
 	/** Reusable comlink proxy for background refresh callback */
 	#refresh_proxy = proxy((fresh: Record<string, unknown>) => {
+		// Read `has_changes` before mutating `#server_value`, otherwise the
+		// derived would compare the stale `#value` against the incoming
+		// server row and incorrectly conclude there are unsaved edits.
+		const had_changes = untrack(() => this.#has_changes);
 		this.#server_value = fresh as Database.Entity<T>;
-		if (!untrack(() => this.#has_changes)) {
+		if (!had_changes) {
 			this.#value = fresh as Database.Entity<T>;
 		}
 	});
@@ -449,6 +453,38 @@ export class EntityState<
 		// Clear local state
 		this.#value = {} as Database.Entity<T>;
 		this.#server_value = null;
+	}
+
+	/**
+	 * Apply a fresh copy of the server-side entity from an external source
+	 * (e.g. a websocket push routed through `DatabaseClient`). Mirrors the
+	 * refresh-proxy behavior: always updates `server_value`; only updates
+	 * `value` when the user has no unsaved local changes, so a live push
+	 * doesn't clobber an open edit form.
+	 */
+	applyExternalUpdate(data: Record<string, unknown>): void {
+		// Read `has_changes` before mutating `#server_value`: the derived
+		// would otherwise see the stale `#value` against the new server row
+		// and incorrectly report unsaved edits, making us skip the `#value`
+		// update when the user has nothing in flight.
+		const had_changes = untrack(() => this.#has_changes);
+		this.#server_value = data as Database.Entity<T>;
+		if (!had_changes) {
+			this.#value = data as Database.Entity<T>;
+		}
+		this.#loaded = true;
+		this.#error = null;
+	}
+
+	/**
+	 * Drop local state in response to an external delete (e.g. the entity
+	 * was removed in another tab). Pair with a route redirect in the
+	 * component if the page only makes sense when the entity exists.
+	 */
+	applyExternalDelete(): void {
+		this.#server_value = null;
+		this.#value = {} as Database.Entity<T>;
+		this.#error = null;
 	}
 
 	/** Discard local changes, revert to server_value. */
@@ -1151,8 +1187,22 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 						event.id,
 						event.data,
 					)
-					.then(() => {
+					.then((applied) => {
 						this.#invalidateEntity(event.entity_type, event.id);
+						// `#invalidateEntity` wakes up `db.get` / `db.read`
+						// readers via `#entity_versions`, but `db.entity()`
+						// wrappers own their own reactive state — push the
+						// fresh row into any cached instance so detail pages
+						// live-update too.
+						const key = `${event.entity_type}:${event.id}`;
+						const cached = this.#entity_cache.get(key);
+						if (!cached) return;
+						if (event.type === 'delete') {
+							cached.applyExternalDelete();
+							this.#entity_cache.delete(key);
+						} else if (applied) {
+							cached.applyExternalUpdate(applied);
+						}
 					})
 					.catch(() => {});
 			});
