@@ -753,6 +753,76 @@ const updated = await db.update('person', person.id, { name: 'Alice B.' });
 await db.delete('person', person.id);
 ```
 
+`db.get` is also **reactive when called inside `$derived` / `$effect`**. After a mutation through `db.update` / `db.delete` / `db.create` — or a push via the `onSubscribe` hook — any reactive expression that read the same `type:id` re-runs automatically:
+
+```svelte
+<script lang="ts">
+	import { page } from '$app/state';
+
+	let person = $derived(await db.get('person', page.params.person_id));
+
+	async function rename(next: string) {
+		await db.update('person', page.params.person_id, { name: next });
+		// `person` re-evaluates — no invalidate() call needed.
+	}
+</script>
+```
+
+For richer reactive patterns see [Reactive reads](#reactive-reads) below.
+
+### Reactive reads
+
+Pick the primitive that matches what the page needs. All three share the same underlying cache + invalidation, so mutations through the client refresh every reader that touched the same entity.
+
+| Use                                  | API                                      | Returns                    |
+| ------------------------------------ | ---------------------------------------- | -------------------------- |
+| One-shot fetch (load functions, SSR) | `db.get(type, id)`                       | `Promise<Entity>`          |
+| Read-mostly page                     | `db.read(type, id)` → `EntityReader`     | sync reactive handle       |
+| Edit form / dirty-tracked state      | `db.entity(type, id)` → `EntityState`    | sync reactive handle       |
+
+- **`db.get`** — call it in a SvelteKit `load`, or inside `$derived(await …)` when you like the async-derived style. Reactive to mutations when read from a reactive context.
+- **`db.read`** — construct once, read `value`/`loading`/`error` in templates. Good for detail pages that just display data. Re-fetches automatically when the id changes or a mutation lands.
+- **`db.entity`** — use when the user will edit the value. Adds `has_changes`, `saving`, `reset()`, `save()` on top of what `db.read` offers.
+
+### EntityReader (`db.read`)
+
+Lightweight reactive wrapper for a single entity. Synchronous to construct; the first reactive read starts the underlying subscription, which tears down automatically when no one is reading anymore.
+
+```svelte
+<script>
+	import { page } from '$app/state';
+
+	// Pass a function for the id so it tracks `page.params` reactively.
+	const person = db.read('person', () => page.params.person_id);
+</script>
+
+{#if person.loading && !person.value}
+	Loading…
+{:else if person.error}
+	<Alert>{person.error.message}</Alert>
+{:else if person.value}
+	<h1>{person.value.name}</h1>
+{/if}
+```
+
+**Reactive properties:**
+
+| Property      | Type                      | Description                                                                        |
+| ------------- | ------------------------- | ---------------------------------------------------------------------------------- |
+| `value`       | `Database.Entity<T> \| undefined` | Current entity data; `undefined` before first load or if not found         |
+| `loading`     | `boolean`                 | `true` during the first fetch or whenever the id changes                           |
+| `loaded`      | `boolean`                 | `true` once the first fetch has resolved (even with no record)                     |
+| `error`       | `unknown`                 | Last fetch error, cleared on next successful load                                  |
+| `id`          | `string \| number \| undefined` | Currently tracked id (resolved from the id source)                           |
+| `entity_type` | `string` (literal)        | The entity type string                                                             |
+
+**Methods:**
+
+| Method      | Description                                                                    |
+| ----------- | ------------------------------------------------------------------------------ |
+| `reload()`  | Force a refetch, bypassing the IDB cache.                                      |
+| `destroy()` | Force cleanup. Normally not needed — auto-cleans on last reader disconnect.    |
+
 ### EntityState (reactive wrapper)
 
 `EntityState` wraps a single entity with reactive state. It auto-loads from the server when first accessed in a Svelte component, tracks unsaved changes, and provides save/delete/reset methods.
@@ -833,6 +903,8 @@ const person = new EntityState('person', id);
 
 `DatabaseSearch` provides live search results that auto-update when the underlying Orama index changes (e.g. after a create/update/delete). When the entity count exceeds the threshold, it automatically switches to server-side search.
 
+> **Sparse results.** Search documents only contain fields declared `searchable` in your Orama schema (typed as `Database.SearchEntity<T>`, *not* `Database.Entity<T>`). Both client and server search default to sparse — Orama client-side only has the sparse fields, and the server path defaults to `sparse: true` for efficient sync payloads. When you need the full entity, call `db.get('type', hit.id)` or `db.read('type', () => hit.id)` — those always return the full `Database.Entity<T>`.
+
 ```typescript
 const search = db.search('person', { term: 'alice', limit: 20 });
 ```
@@ -858,8 +930,8 @@ const search = db.search('person', { term: 'alice', limit: 20 });
 
 | Property      | Type                         | Description                                             |
 | ------------- | ---------------------------- | ------------------------------------------------------- |
-| `results`     | `SearchHit<T>[]`             | Array of hits with `id`, `document`, and `score`        |
-| `docs`        | `Database.SearchEntity<T>[]` | Convenience — just the documents                        |
+| `results`     | `SearchHit<T>[]`             | Array of hits with `id`, `document` (sparse), and `score` |
+| `docs`        | `Database.SearchEntity<T>[]` | Convenience — just the sparse documents                 |
 | `count`       | `number`                     | Total matching count                                    |
 | `loading`     | `boolean`                    | Whether search is in progress                           |
 | `error`       | `unknown`                    | Any error from the search                               |
@@ -990,6 +1062,7 @@ Offset-based pagination (`OFFSET 100 LIMIT 10`) degrades on large tables because
 | Export                 | Description                                                            |
 | ---------------------- | ---------------------------------------------------------------------- |
 | `DatabaseClient`       | Main client class — CRUD, search, entity state, sync, lifecycle        |
+| `EntityReader`         | Lightweight reactive single-entity reader (for `db.read`)              |
 | `EntityState`          | Reactive per-entity wrapper with auto-load, save, and change tracking  |
 | `DatabaseSearch`       | Reactive search with live results from Orama or server fallback        |
 | ~~`DatabaseError`~~    | **Removed.** Use `DelightError` from `@delightstack/utilities` instead |

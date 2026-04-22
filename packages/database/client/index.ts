@@ -1,6 +1,7 @@
 export {
 	DatabaseClient,
 	EntityState,
+	EntityReader,
 	DatabaseSearch,
 	type DatabaseClientConfig,
 	type SearchHit,

@@ -406,6 +406,199 @@ export class EntityState<
 }
 
 // ---------------------------------------------------------------------------
+// EntityReader — lightweight reactive reader for read-mostly pages
+// ---------------------------------------------------------------------------
+
+/**
+ * Dependencies EntityReader needs from the owning DatabaseClient. Passed in
+ * so the reader stays decoupled from client internals while still reusing
+ * the version-invalidation and comlink plumbing.
+ */
+interface EntityReaderDeps {
+	getWorker: () => Remote<DatabaseWorker> | null;
+	fetch?: typeof globalThis.fetch;
+	trackVersion: (entity_type: string, id: string | number) => void;
+	refreshProxy: (
+		entity_type: string,
+		id: string | number,
+	) => (data: Record<string, unknown>) => void;
+}
+
+/**
+ * Reactive single-entity reader. Construct synchronously, read the live
+ * `value`/`loading`/`error` fields in templates. Re-fetches automatically
+ * when:
+ *
+ *   - the id source returns a different id
+ *   - a mutation (via `db.create`/`db.update`/`db.delete`) hits the id
+ *   - the worker reports a background refresh or an external websocket
+ *     event touches this entity
+ *
+ * Cleanup is automatic — the underlying subscription tears down when the
+ * last reactive listener stops reading (e.g. on component unmount).
+ */
+export class EntityReader<
+	T extends Database.AnyTable = Database.Table,
+	EntityType extends string = string,
+> {
+	readonly entity_type: EntityType;
+	#id_source: () => string | number | undefined;
+	#deps: EntityReaderDeps;
+
+	#value = $state.raw<Database.Entity<T> | undefined>(undefined);
+	#loading = $state(true);
+	#loaded = $state(false);
+	#error = $state.raw<unknown>(null);
+	#current_id: string | number | undefined;
+
+	#subscriber: () => void;
+	#effect_cleanup: (() => void) | null = null;
+	#destroyed = false;
+
+	/** The current entity data, or `undefined` until loaded / if not found. */
+	get value(): Database.Entity<T> | undefined {
+		this.#subscriber();
+		return this.#value;
+	}
+
+	/** True while the initial load (or a fresh id) is in flight. */
+	get loading(): boolean {
+		this.#subscriber();
+		return this.#loading;
+	}
+
+	/** True once the first fetch has resolved (even with no record). */
+	get loaded(): boolean {
+		this.#subscriber();
+		return this.#loaded;
+	}
+
+	/** Last error from a fetch; cleared on the next successful load. */
+	get error(): unknown {
+		return this.#error;
+	}
+
+	/** The id currently being tracked (resolved from the id source). */
+	get id(): string | number | undefined {
+		return this.#current_id;
+	}
+
+	constructor(
+		entity_type: EntityType,
+		id_source: () => string | number | undefined,
+		deps: EntityReaderDeps,
+	) {
+		this.entity_type = entity_type;
+		this.#id_source = id_source;
+		this.#deps = deps;
+		this.#subscriber = createSubscriber(() => {
+			if (this.#destroyed) return;
+			this.#start();
+			return () => this.#stop();
+		});
+	}
+
+	/** Force a re-fetch, bypassing the worker's IDB cache. */
+	async reload(): Promise<void> {
+		await this.#fetch(untrack(() => this.#id_source()), true);
+	}
+
+	/**
+	 * Force full cleanup. Not normally needed — the reader auto-cleans when
+	 * the last reactive listener stops reading.
+	 */
+	destroy(): void {
+		this.#destroyed = true;
+		this.#stop();
+	}
+
+	#start(): void {
+		if (this.#effect_cleanup) return;
+		this.#effect_cleanup = $effect.root(() => {
+			$effect(() => {
+				// Reactive reads: id source + entity version. Either changing
+				// re-runs this effect and triggers a fresh fetch.
+				const id = this.#id_source();
+				if (id !== undefined) this.#deps.trackVersion(this.entity_type, id);
+				untrack(() => this.#fetch(id, false));
+			});
+		});
+	}
+
+	#stop(): void {
+		if (this.#effect_cleanup) {
+			this.#effect_cleanup();
+			this.#effect_cleanup = null;
+		}
+	}
+
+	async #fetch(
+		id: string | number | undefined,
+		force_refresh: boolean,
+	): Promise<void> {
+		const prev_id = this.#current_id;
+		this.#current_id = id;
+
+		if (id === undefined) {
+			this.#value = undefined;
+			this.#loading = false;
+			this.#loaded = true;
+			this.#error = null;
+			return;
+		}
+
+		// Flip `loading` true on the first fetch and on any id transition;
+		// stay quiet for same-id refetches (mutations, background refresh)
+		// so the UI doesn't flicker.
+		if (!this.#loaded || prev_id !== id) this.#loading = true;
+
+		const worker = this.#deps.getWorker();
+		try {
+			let data: Database.Entity<T> | undefined;
+			if (worker) {
+				data = (await worker.get(
+					this.entity_type,
+					id,
+					force_refresh,
+					this.#deps.refreshProxy(this.entity_type, id),
+				)) as Database.Entity<T> | undefined;
+			} else if (this.#deps.fetch) {
+				const response = await this.#deps.fetch(`/api/${this.entity_type}/${id}`);
+				if (response.status === 404) {
+					data = undefined;
+				} else if (response.ok) {
+					data = (await response.json()) as Database.Entity<T>;
+				} else {
+					const body = (await response.json().catch(() => null)) as
+						| { message?: string; status?: number; code?: string; detail?: string }
+						| null;
+					throw new DelightError({
+						message: body?.message ?? response.statusText,
+						status: body?.status ?? response.status,
+						code: body?.code,
+						detail: body?.detail,
+					});
+				}
+			}
+
+			// Ignore stale fetches: id changed (or reader destroyed) mid-flight.
+			if (this.#destroyed || this.#current_id !== id) return;
+
+			this.#value = data;
+			this.#loaded = true;
+			this.#error = null;
+		} catch (error) {
+			if (this.#destroyed || this.#current_id !== id) return;
+			this.#error = error;
+		} finally {
+			if (!this.#destroyed && this.#current_id === id) {
+				this.#loading = false;
+			}
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DatabaseSearch — reactive search wrapper
 // ---------------------------------------------------------------------------
 
@@ -1017,6 +1210,50 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			});
 		}
 		return (await response.json()) as Record<string, unknown>;
+	}
+
+	// -----------------------------------------------------------------------
+	// Reactive read primitives
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Lightweight reactive reader for a single entity. Use this on read-mostly
+	 * pages where you just need the current data; for edit forms use
+	 * `db.entity(...)` instead (it adds dirty-tracking, save/reset, etc.).
+	 *
+	 * The id can be a static value or a getter that depends on other reactive
+	 * state — when the id changes, the reader re-fetches automatically:
+	 *
+	 * ```svelte
+	 * <script>
+	 *   const person = db.read('person', () => page.params.person_id);
+	 * </script>
+	 *
+	 * {#if person.loading && !person.value}
+	 *   Loading…
+	 * {:else if person.error}
+	 *   <Alert>{person.error.message}</Alert>
+	 * {:else if person.value}
+	 *   <h1>{person.value.name}</h1>
+	 * {/if}
+	 * ```
+	 *
+	 * Mutations via `db.create`/`db.update`/`db.delete` and websocket-pushed
+	 * external changes automatically refresh the reader — no manual
+	 * invalidation required.
+	 */
+	read<K extends keyof T & string>(
+		entity_type: K,
+		id: string | number | (() => string | number | undefined),
+	): EntityReader<T[K], K> {
+		const id_source =
+			typeof id === 'function' ? (id as () => string | number | undefined) : () => id;
+		return new EntityReader(entity_type, id_source, {
+			getWorker: () => this.#worker,
+			fetch: this.#config.fetch,
+			trackVersion: (t, i) => this.#trackEntity(t, i),
+			refreshProxy: (t, i) => this.#refreshProxyFor(t, i),
+		});
 	}
 
 	// -----------------------------------------------------------------------
