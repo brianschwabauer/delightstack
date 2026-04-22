@@ -778,11 +778,17 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		if (this.#config.hooks?.onSubscribe) {
 			this.#external_unsubscribe = this.#config.hooks.onSubscribe((event) => {
 				if (!this.#worker) return;
-				// When an external event arrives, re-sync the affected entity.
-				// After the sync lands (IDB is now fresh), bump the entity's
-				// version so any reactive `db.get` readers pick up the change.
+				// Apply the single change in place — Orama + IDB + subscribers
+				// update for just this entity. A full `sync([entity_type])` is
+				// wasteful when we already know what changed; reconnect/page
+				// refresh still triggers full sync via init().
 				this.#worker
-					.sync([event.entity_type])
+					.applyExternalChange(
+						event.entity_type,
+						event.type,
+						event.id,
+						event.data,
+					)
 					.then(() => {
 						this.#invalidateEntity(event.entity_type, event.id);
 					})
