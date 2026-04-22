@@ -6,11 +6,11 @@
 	import Icon from '$lib/Icon.svelte';
 
 	const { data, children } = $props();
-	const { auth, ws, db } = $derived(data);
+	const { auth, ws } = $derived(data);
 
 	const current_path = $derived(page.url.pathname);
 
-	// Connect WebSocket when dashboard mounts (db is initialized in +layout.ts)
+	// Connect WebSocket when dashboard mounts (db is initialized in +layout.ts).
 	$effect(() => {
 		if (auth.org_id) {
 			ws.connect(auth.org_id);

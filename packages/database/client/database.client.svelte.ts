@@ -108,6 +108,13 @@ export class EntityState<
 	#worker: Remote<DatabaseWorker> | null;
 	#fetch: typeof globalThis.fetch | undefined;
 	#primary_key: string;
+	/**
+	 * Called by `load()` to decide whether to prefer a main-thread fetch
+	 * over the worker's IDB-backed read. Wired by `DatabaseClient.entity`
+	 * to `() => !db.hydrated` — before hydration we want fresh data (and
+	 * SvelteKit's fetch cache); after, we want the worker's IDB cache.
+	 */
+	#prefer_fetch?: () => boolean;
 	#onChange?: (event: {
 		type: 'create' | 'update' | 'delete';
 		id: string | number;
@@ -221,6 +228,12 @@ export class EntityState<
 			 */
 			initial_data?: Partial<Database.Entity<T>>;
 			primary_key?: string;
+			/**
+			 * Invoked by `load()` to decide whether to prefer the main-thread
+			 * fetch over the worker's IDB-backed read. See
+			 * `DatabaseClient.entity` for the default wiring.
+			 */
+			prefer_fetch?: () => boolean;
 			onChange?: (event: {
 				type: 'create' | 'update' | 'delete';
 				id: string | number;
@@ -233,6 +246,7 @@ export class EntityState<
 		this.#worker = options?.worker ?? null;
 		this.#fetch = options?.fetch;
 		this.#primary_key = options?.primary_key ?? 'id';
+		this.#prefer_fetch = options?.prefer_fetch;
 		this.#onChange = options?.onChange;
 		this.#value = (options?.initial_data ?? {}) as Database.Entity<T>;
 
@@ -304,7 +318,25 @@ export class EntityState<
 		return this;
 	}
 
-	/** Fetch fresh data from server. Supports force_refresh and SSR. */
+	/**
+	 * Fetch fresh data from the server.
+	 *
+	 * Picks its read path automatically:
+	 *
+	 * - **No worker (SSR / pre-init):** uses the configured `fetch` — on
+	 *   the server this is SvelteKit's scoped fetch, so the response is
+	 *   recorded for reuse during client hydration.
+	 * - **Worker + pre-hydration (initial page load / refresh):** fetches
+	 *   on the main thread (hits SvelteKit's hydration cache, so no new
+	 *   network request), then pushes the result into the worker's IDB +
+	 *   Orama index via `applyExternalChange`. Subsequent reads hit IDB.
+	 * - **Worker + post-hydration (client-side navigation):** delegates to
+	 *   `worker.get` which serves from IDB, falling back to the server
+	 *   behind the scenes — fastest path for nav-heavy flows.
+	 *
+	 * Pass `{ force_refresh: true }` to skip IDB on the worker path. A
+	 * per-call `fetch` override is accepted but rarely needed.
+	 */
 	async load(options?: {
 		force_refresh?: boolean;
 		fetch?: typeof globalThis.fetch;
@@ -314,25 +346,43 @@ export class EntityState<
 		this.#loading = true;
 		try {
 			let data: Database.Entity<T> | undefined;
+			const fetchFn = options?.fetch ?? this.#fetch ?? globalThis.fetch;
 
-			if (this.#worker) {
-				// Worker path — normal browser environment
-				// Reuse stored proxy to avoid creating new MessageChannel ports
+			// No worker means SSR / pre-init — we have to use the main-thread
+			// fetch. With a worker: prefer the main-thread fetch before the
+			// app has hydrated (so the SSR response is reused via SvelteKit's
+			// fetch cache), otherwise go through the worker's IDB cache. A
+			// `force_refresh: true` always goes through the worker so it
+			// bypasses IDB cleanly.
+			const force_refresh = options?.force_refresh === true;
+			const prefer_main_thread = this.#prefer_fetch?.() ?? false;
+			const use_fetch_path =
+				!this.#worker || (!force_refresh && prefer_main_thread);
+
+			if (use_fetch_path) {
+				const response = await fetchFn(
+					`/api/${this.entity_type}/${this.#id}`,
+				);
+				if (response.ok) {
+					data = (await response.json()) as Database.Entity<T>;
+					if (this.#worker && data) {
+						// Seed worker IDB + Orama so client-side nav reads
+						// back from cache.
+						await this.#worker.applyExternalChange(
+							this.entity_type,
+							'update',
+							this.#id,
+							data as unknown as Record<string, unknown>,
+						);
+					}
+				}
+			} else if (this.#worker) {
 				data = (await this.#worker.get(
 					this.entity_type,
 					this.#id,
 					options?.force_refresh,
 					this.#refresh_proxy,
 				)) as Database.Entity<T> | undefined;
-			} else {
-				// SSR / pre-init path — prefer the fetch configured on the
-				// DatabaseClient (carries auth), then the per-call override,
-				// falling back to a bare global fetch.
-				const fetchFn = options?.fetch ?? this.#fetch ?? globalThis.fetch;
-				const response = await fetchFn(`/api/${this.entity_type}/${this.#id}`);
-				if (response.ok) {
-					data = (await response.json()) as Database.Entity<T>;
-				}
 			}
 
 			if (data) {
@@ -924,6 +974,22 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** Whether the initial sync has completed */
 	#synced = $state(false);
 
+	/**
+	 * Whether the app has finished its initial hydration. Drives the read
+	 * path in `EntityState.load()`: pre-hydration uses a main-thread fetch
+	 * (so SSR + client share the SvelteKit fetch cache and the first paint
+	 * serves the latest data); post-hydration uses the worker's IDB cache
+	 * for instant client-side navigation.
+	 *
+	 * `init()` schedules a short timer to flip this automatically after the
+	 * browser has finished the initial hydration task — the timer fires
+	 * after the first `+page.ts` load has read the flag but well before the
+	 * user can interact with the page. `markHydrated()` is still public as
+	 * a manual override.
+	 */
+	#hydrated = $state(false);
+	#hydrate_timer: ReturnType<typeof setTimeout> | null = null;
+
 	get syncing(): boolean {
 		return this.#syncing;
 	}
@@ -934,6 +1000,25 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 	get initialized() {
 		return this.#initialized;
+	}
+
+	get hydrated(): boolean {
+		return this.#hydrated;
+	}
+
+	/**
+	 * Mark the client as hydrated, flipping `EntityState.load()` over to
+	 * the worker/IDB path. `init()` already schedules this automatically via
+	 * a short timer after boot, so manual calls are rarely needed — useful
+	 * as an override (e.g. if a route hard-depends on IDB-cached reads
+	 * happening right away).
+	 */
+	markHydrated(): void {
+		if (this.#hydrate_timer) {
+			clearTimeout(this.#hydrate_timer);
+			this.#hydrate_timer = null;
+		}
+		this.#hydrated = true;
 	}
 
 	constructor(config: DatabaseClientConfig<T>) {
@@ -991,6 +1076,18 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		this.#entity_cache.clear();
 
 		this.#initialized = true;
+
+		// Flip the hydration flag on the next macrotask. This runs after the
+		// current SvelteKit boot task drains — in particular after the
+		// initial `+page.ts` load has synchronously started and read the
+		// flag — but long before the user can interact with the page. 50ms
+		// is a generous buffer; macrotasks from here queue behind anything
+		// the browser is already chewing through for paint.
+		if (this.#hydrate_timer) clearTimeout(this.#hydrate_timer);
+		this.#hydrate_timer = setTimeout(() => {
+			this.#hydrate_timer = null;
+			if (!this.#destroyed) this.#hydrated = true;
+		}, 50);
 
 		// Fire sync in background — main thread tracks state
 		this.#syncing = true;
@@ -1330,6 +1427,10 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			fetch: this.#config.fetch,
 			initial_data,
 			primary_key: table.config.primary_key,
+			// Pre-hydration (SSR + initial client load) we want the SvelteKit
+			// fetch so SSR + hydration share a single response; after the
+			// first client navigation we want the worker's IDB cache.
+			prefer_fetch: () => !this.#hydrated,
 			onChange: (event) => {
 				// Keep the instance cache in sync with the entity's lifecycle:
 				// on create, rekey from `type:` to `type:${new_id}`; on delete,
@@ -1406,6 +1507,11 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		this.#entity_cache.clear();
 		this.#entity_versions.clear();
 		this.#refresh_proxies.clear();
+		if (this.#hydrate_timer) {
+			clearTimeout(this.#hydrate_timer);
+			this.#hydrate_timer = null;
+		}
+		this.#hydrated = false;
 		if (this.#worker) await this.#worker.destroy();
 		resetWorker();
 		this.#worker = null;
@@ -1425,6 +1531,10 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		this.#entity_cache.clear();
 		this.#entity_versions.clear();
 		this.#refresh_proxies.clear();
+		if (this.#hydrate_timer) {
+			clearTimeout(this.#hydrate_timer);
+			this.#hydrate_timer = null;
+		}
 		if (this.#worker) {
 			await this.#worker.destroy();
 			this.#worker = null;
