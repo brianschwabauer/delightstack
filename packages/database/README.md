@@ -868,6 +868,14 @@ export const load: PageLoad = async ({ params, parent }) => {
 
 The flag flips automatically — `init()` schedules a short macrotask (50ms) that fires after the browser finishes its initial hydration work but long before the user can interact with the page, so no wiring is required in your layouts. If you ever need to switch paths manually (for example, if a sub-route should always read from IDB right away), call `db.markHydrated()` — it cancels the pending timer and flips immediately.
 
+**Worker-side safety-net refresh.** `worker.get` has a fallback: if the cached entry's `updated_at` is older than ~30s, it returns the cached value immediately but spawns a background fetch to freshen IDB. That's the right behavior when no push channel is in play — but for apps wired to a websocket it's redundant, because `applyExternalChange` is already keeping IDB current in real time. Wire `hooks.isLive` to your websocket client's live-state signal (`@delightstack/websocket`'s `ws.databaseHooks()` supplies it for you) and the worker will skip the refresh whenever the feed is trusted:
+
+- currently connected → `isLive` is `true` → skip the refresh, IDB is authoritative.
+- just disconnected (< 60s ago) → still `true` → brief blips don't trigger a thundering herd of refetches.
+- offline longer, or never connected → `false` → the worker's stale-refresh kicks back in so apps without a push channel still converge.
+
+If the hook isn't provided, the worker keeps the refresh-if-stale behavior (unchanged pre-1.0 default).
+
 If you already have the entity data in hand — for example from a different load that returned the full record — you can still seed directly: `db.entity('person', id, fullPerson)` treats `initial_data` as the authoritative server state and skips the load entirely.
 
 Use it in Svelte components — reactive properties update the UI automatically:
