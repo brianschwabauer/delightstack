@@ -8,30 +8,10 @@
 	const { db } = $derived(data);
 
 	const person_id = $derived(page.params.person_id);
-	const person = $derived(await db.get('person', person_id));
+	const person = $derived(db.entity('person', person_id));
 
 	let editing = $state(false);
 	let show_delete = $state(false);
-	let saving = $state(false);
-
-	// Edit form state
-	type Relationship =
-		| 'parent'
-		| 'child'
-		| 'sibling'
-		| 'spouse'
-		| 'grandparent'
-		| 'grandchild'
-		| 'aunt-uncle'
-		| 'cousin'
-		| 'friend'
-		| 'other';
-	let edit_name = $state('');
-	let edit_email = $state('');
-	let edit_phone = $state('');
-	let edit_relationship = $state<Relationship | ''>('');
-	let edit_birthday = $state('');
-	let edit_notes = $state('');
 
 	const relationship_options = [
 		{ value: '', label: 'Select...' },
@@ -47,67 +27,57 @@
 		{ value: 'other', label: 'Other' },
 	];
 
-	function startEditing() {
-		if (!person) return;
-		edit_name = person.name;
-		edit_email = person.email ?? '';
-		edit_phone = person.phone ?? '';
-		edit_relationship = (person.relationship ?? '') as Relationship | '';
-		edit_birthday = person.birthday ?? '';
-		edit_notes = person.notes ?? '';
-		editing = true;
+	async function savePerson() {
+		const v = person.value;
+		await person.save({
+			name: v.name?.trim(),
+			email: v.email?.trim() || undefined,
+			phone: v.phone?.trim() || undefined,
+			relationship: v.relationship || undefined,
+			birthday: v.birthday || undefined,
+			notes: v.notes?.trim() || undefined,
+		});
+		editing = false;
 	}
 
-	async function savePerson() {
-		saving = true;
-		try {
-			await db.update('person', person_id, {
-				name: edit_name.trim(),
-				email: edit_email.trim() || undefined,
-				phone: edit_phone.trim() || undefined,
-				relationship: edit_relationship === '' ? undefined : edit_relationship,
-				birthday: edit_birthday || undefined,
-				notes: edit_notes.trim() || undefined,
-			});
-			editing = false;
-		} finally {
-			saving = false;
-		}
+	function cancelEdit() {
+		person.reset();
+		editing = false;
 	}
 
 	async function deletePerson() {
-		await db.delete('person', person_id);
+		await person.delete();
 		goto('/dashboard/family');
 	}
 </script>
 
 <svelte:head>
-	<title>{person?.name ?? 'Person'} | Forever Family</title>
+	<title>{person.value.name ?? 'Person'} | Forever Family</title>
 </svelte:head>
 
 <div class="page">
 	<Breadcrumbs items={[
 		{ label: 'Family', href: '/dashboard/family' },
-		{ label: person?.name ?? 'Loading...' },
+		{ label: person.value.name ?? 'Loading...' },
 	]} />
 
-	{#if person}
+	{#if person.loaded}
 		<div class="profile-header">
-			<Avatar name={person.name} colorSeed={person_id} size="4" />
+			<Avatar name={person.value.name} size="4" />
 			<div class="profile-info">
-				<h1>{person.name}</h1>
-				{#if person.relationship}
-					<span class="relationship">{person.relationship}</span>
+				<h1>{person.value.name}</h1>
+				{#if person.value.relationship}
+					<span class="relationship">{person.value.relationship}</span>
 				{/if}
 			</div>
 			<div class="actions">
 				{#if editing}
-					<Button onclick={() => (editing = false)} transparent>Cancel</Button>
-					<Button onclick={savePerson} disabled={saving}>
-						{saving ? 'Saving...' : 'Save'}
+					<Button onclick={cancelEdit} transparent>Cancel</Button>
+					<Button onclick={savePerson} disabled={person.saving}>
+						{person.saving ? 'Saving...' : 'Save'}
 					</Button>
 				{:else}
-					<Button onclick={startEditing} transparent dense>
+					<Button onclick={() => (editing = true)} transparent dense>
 						<Icon name="edit" size={14} />
 						<span>Edit</span>
 					</Button>
@@ -119,46 +89,50 @@
 			</div>
 		</div>
 
+		{#if person.error}
+			<Callout error>{(person.error as Error).message ?? 'Something went wrong.'}</Callout>
+		{/if}
+
 		{#if editing}
 			<form onsubmit={(e) => { e.preventDefault(); savePerson(); }} class="edit-form">
-				<Input label="Name" bind:value={edit_name} required />
-				<Input label="Email" type="email" bind:value={edit_email} />
-				<Input label="Phone" type="tel" bind:value={edit_phone} />
-				<Select label="Relationship" bind:value={edit_relationship} options={relationship_options} />
-				<Input label="Birthday" type="date" bind:value={edit_birthday} />
-				<Input label="Notes" bind:value={edit_notes} placeholder="Notes about this person..." />
+				<Input label="Name" bind:value={person.value.name} required />
+				<Input label="Email" type="email" bind:value={person.value.email} />
+				<Input label="Phone" type="tel" bind:value={person.value.phone} />
+				<Select label="Relationship" bind:value={person.value.relationship} options={relationship_options} />
+				<Input label="Birthday" type="date" bind:value={person.value.birthday} />
+				<Input label="Notes" bind:value={person.value.notes} placeholder="Notes about this person..." />
 			</form>
 		{:else}
 			<div class="details">
 				<Accordion value="contact" multiple>
 					<AccordionItem title="Contact Info" value="contact">
 						<div class="detail-grid">
-							{#if person.email}
+							{#if person.value.email}
 								<div class="detail">
 									<small>Email</small>
-									<span>{person.email}</span>
+									<span>{person.value.email}</span>
 								</div>
 							{/if}
-							{#if person.phone}
+							{#if person.value.phone}
 								<div class="detail">
 									<small>Phone</small>
-									<span>{person.phone}</span>
+									<span>{person.value.phone}</span>
 								</div>
 							{/if}
-							{#if person.birthday}
+							{#if person.value.birthday}
 								<div class="detail">
 									<small>Birthday</small>
-									<span>{person.birthday}</span>
+									<span>{person.value.birthday}</span>
 								</div>
 							{/if}
-							{#if !person.email && !person.phone && !person.birthday}
+							{#if !person.value.email && !person.value.phone && !person.value.birthday}
 								<p class="no-data">No contact info added yet.</p>
 							{/if}
 						</div>
 					</AccordionItem>
-					{#if person.notes}
+					{#if person.value.notes}
 						<AccordionItem title="Notes" value="notes">
-							<p>{person.notes}</p>
+							<p>{person.value.notes}</p>
 						</AccordionItem>
 					{/if}
 				</Accordion>
@@ -171,7 +145,7 @@
 
 <!-- Delete confirmation modal -->
 <Modal bind:open={show_delete} title="Delete Person">
-	<p>Are you sure you want to remove <strong>{person?.name}</strong> from your family?</p>
+	<p>Are you sure you want to remove <strong>{person.value.name}</strong> from your family?</p>
 	<div class="modal-actions">
 		<Button onclick={() => (show_delete = false)} transparent>Cancel</Button>
 		<Button onclick={deletePerson} error>Delete</Button>

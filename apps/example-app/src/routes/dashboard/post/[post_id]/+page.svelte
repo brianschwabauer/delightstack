@@ -1,23 +1,24 @@
 <script lang="ts">
-	import { Button, Input, Toggle, Modal, Progress } from '@delightstack/components';
+	import { Button, Input, Toggle, Modal, Progress, Callout } from '@delightstack/components';
 	import { toast } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import Icon from '$lib/Icon.svelte';
 	import { page } from '$app/state';
-	import { goto, invalidate } from '$app/navigation';
+	import { goto } from '$app/navigation';
 
 	const { data } = $props();
-	const { db, ai, post } = $derived(data);
+	const { db, ai } = $derived(data);
 	const post_id = $derived(page.params.post_id);
+
+	// Seed the EntityState with the SSR-loaded post so the first paint has
+	// content; subsequent reads go through the reactive wrapper.
+	const post = $derived(db.entity('post', post_id, data.post));
 
 	let editing = $state(false);
 	let show_delete = $state(false);
-	let saving = $state(false);
 
-	// Edit state
-	let edit_title = $state('');
-	let edit_content = $state('');
-	let edit_is_public = $state(false);
+	// Tags are stored as an array on the entity but edited as a comma list,
+	// so we keep a local string that initializes when edit mode opens.
 	let edit_tags = $state('');
 
 	// AI assist
@@ -25,38 +26,34 @@
 	let ai_stream = $state<ReturnType<typeof ai.chat> | null>(null);
 
 	function startEditing() {
-		edit_title = post.title;
-		edit_content = post.content;
-		edit_is_public = post.is_public;
-		edit_tags = post.tags?.join(', ') ?? '';
+		edit_tags = post.value.tags?.join(', ') ?? '';
 		editing = true;
 	}
 
+	function cancelEdit() {
+		post.reset();
+		editing = false;
+	}
+
 	async function savePost() {
-		saving = true;
-		try {
-			const tags = edit_tags.split(',').map((t) => t.trim()).filter(Boolean);
-			await db.update('post', post_id, {
-				title: edit_title.trim(),
-				content: edit_content.trim(),
-				is_public: edit_is_public,
-				tags: tags.length ? tags : undefined,
-			});
-			await invalidate(`post:${post_id}`);
-			editing = false;
-			toast('Post updated');
-		} finally {
-			saving = false;
-		}
+		const tags = edit_tags.split(',').map((t) => t.trim()).filter(Boolean);
+		await post.save({
+			title: post.value.title?.trim(),
+			content: post.value.content?.trim(),
+			is_public: post.value.is_public,
+			tags: tags.length ? tags : undefined,
+		});
+		editing = false;
+		toast('Post updated');
 	}
 
 	async function deletePost() {
-		await db.delete('post', post_id);
+		await post.delete();
 		goto('/dashboard');
 	}
 
 	function improveWithAi() {
-		const prompt = ai_prompt.trim() || `Improve this family story while keeping its personal tone:\n\n${editing ? edit_content : post.content}`;
+		const prompt = ai_prompt.trim() || `Improve this family story while keeping its personal tone:\n\n${post.value.content ?? ''}`;
 		ai_stream = ai.chat({
 			messages: [
 				{
@@ -71,14 +68,14 @@
 
 	function applyAiContent() {
 		if (ai_stream?.content) {
-			edit_content = ai_stream.content;
+			post.value.content = ai_stream.content;
 			toast('AI suggestion applied');
 		}
 	}
 
 	function copyShareLink() {
-		if (post.is_public) {
-			navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
+		if (post.value.is_public) {
+			navigator.clipboard.writeText(`${window.location.origin}/post/${post.value.id}`);
 			toast('Share link copied!');
 		}
 	}
@@ -93,7 +90,7 @@
 </script>
 
 <svelte:head>
-	<title>{post.title} | Forever Family</title>
+	<title>{post.value.title} | Forever Family</title>
 </svelte:head>
 
 <div class="page">
@@ -102,22 +99,26 @@
 		<span>All stories</span>
 	</a>
 
+	{#if post.error}
+		<Callout error>{(post.error as Error).message ?? 'Something went wrong.'}</Callout>
+	{/if}
+
 	{#if editing}
 		<div class="edit-card">
 			<div class="edit-header">
 				<h2>Edit story</h2>
 				<div class="actions">
-					<Button onclick={() => (editing = false)} transparent>Cancel</Button>
-					<Button onclick={savePost} disabled={saving}>
-						{saving ? 'Saving...' : 'Save changes'}
+					<Button onclick={cancelEdit} transparent>Cancel</Button>
+					<Button onclick={savePost} disabled={post.saving}>
+						{post.saving ? 'Saving...' : 'Save changes'}
 					</Button>
 				</div>
 			</div>
 
-			<Input label="Title" bind:value={edit_title} />
-			<Input label="Content" type="textarea" bind:value={edit_content} />
+			<Input label="Title" bind:value={post.value.title} />
+			<Input label="Content" type="textarea" bind:value={post.value.content} />
 			<Input label="Tags" bind:value={edit_tags} placeholder="Comma-separated tags" />
-			<Toggle bind:checked={edit_is_public} label="Share publicly" />
+			<Toggle bind:checked={post.value.is_public} label="Share publicly" />
 
 			<div class="ai-inline">
 				<div class="ai-header">
@@ -145,8 +146,8 @@
 		<article class="article">
 			<header class="article-header">
 				<div class="meta-row">
-					<time datetime={String(post.created_at)}>{formatDate(post.created_at)}</time>
-					{#if post.is_public}
+					<time datetime={String(post.value.created_at)}>{formatDate(post.value.created_at)}</time>
+					{#if post.value.is_public}
 						<span class="dot">•</span>
 						<span class="public-tag">
 							<Icon name="eye" size={14} />
@@ -155,14 +156,14 @@
 					{/if}
 				</div>
 
-				<h1>{post.title}</h1>
+				<h1>{post.value.title}</h1>
 
-				{#if post.summary}
-					<p class="lead">{post.summary}</p>
+				{#if post.value.summary}
+					<p class="lead">{post.value.summary}</p>
 				{/if}
 
 				<div class="toolbar">
-					{#if post.is_public}
+					{#if post.value.is_public}
 						<Button onclick={copyShareLink} transparent dense>
 							<Icon name="share" size={14} />
 							<span>Copy link</span>
@@ -180,7 +181,7 @@
 			</header>
 
 			<div class="article-body">
-				{#each post.content.split('\n') as paragraph, i (i)}
+				{#each (post.value.content ?? '').split('\n') as paragraph, i (i)}
 					{#if paragraph.trim()}
 						<p>{paragraph}</p>
 					{/if}
@@ -188,18 +189,18 @@
 			</div>
 
 			<footer class="article-footer">
-				{#if post.tags?.length}
+				{#if post.value.tags?.length}
 					<div class="tag-list">
 						<Icon name="tag" size={14} />
-						{#each post.tags as tag (tag)}
+						{#each post.value.tags as tag (tag)}
 							<Badge dense>{tag}</Badge>
 						{/each}
 					</div>
 				{/if}
 
 				<small class="post-date">
-					{#if post.updated_at !== post.created_at}
-						Last updated {formatDate(post.updated_at)}
+					{#if post.value.updated_at !== post.value.created_at}
+						Last updated {formatDate(post.value.updated_at)}
 					{/if}
 				</small>
 			</footer>
@@ -208,7 +209,7 @@
 </div>
 
 <Modal bind:open={show_delete} title="Delete story">
-	<p>Are you sure you want to delete <strong>"{post.title}"</strong>? This cannot be undone.</p>
+	<p>Are you sure you want to delete <strong>"{post.value.title}"</strong>? This cannot be undone.</p>
 	<div class="modal-actions">
 		<Button onclick={() => (show_delete = false)} transparent>Cancel</Button>
 		<Button onclick={deletePost} error>Delete</Button>
