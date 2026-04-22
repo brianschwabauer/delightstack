@@ -75,6 +75,17 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 				data?: Record<string, unknown>;
 			}) => void,
 		) => (() => void) | void;
+		/**
+		 * Optional predicate that answers "is there a reliable live change
+		 * feed right now?" — typically wired to a websocket's connection
+		 * state. When it returns `true`, `worker.get` skips its safety-net
+		 * stale-refresh because any recent server changes would already have
+		 * landed in IDB via `applyExternalChange`. When it returns `false`
+		 * (or when the hook is absent), the worker falls back to the
+		 * refresh-if-stale behavior so apps without a push channel still
+		 * stay in sync.
+		 */
+		isLive?: () => boolean;
 	};
 }
 
@@ -115,6 +126,14 @@ export class EntityState<
 	 * SvelteKit's fetch cache); after, we want the worker's IDB cache.
 	 */
 	#prefer_fetch?: () => boolean;
+
+	/**
+	 * Called by `load()` on the worker path to decide whether the worker's
+	 * safety-net stale refresh should be skipped. Wired to the app's
+	 * `hooks.isLive` so we skip redundant fetches while a websocket is
+	 * pushing changes in.
+	 */
+	#skip_background_refresh?: () => boolean;
 	#onChange?: (event: {
 		type: 'create' | 'update' | 'delete';
 		id: string | number;
@@ -234,6 +253,12 @@ export class EntityState<
 			 * `DatabaseClient.entity` for the default wiring.
 			 */
 			prefer_fetch?: () => boolean;
+			/**
+			 * Invoked by `load()` on the worker path to skip the worker's
+			 * safety-net stale refresh. Typically wired to the app's
+			 * `hooks.isLive` (websocket connection state).
+			 */
+			skip_background_refresh?: () => boolean;
 			onChange?: (event: {
 				type: 'create' | 'update' | 'delete';
 				id: string | number;
@@ -247,6 +272,7 @@ export class EntityState<
 		this.#fetch = options?.fetch;
 		this.#primary_key = options?.primary_key ?? 'id';
 		this.#prefer_fetch = options?.prefer_fetch;
+		this.#skip_background_refresh = options?.skip_background_refresh;
 		this.#onChange = options?.onChange;
 		this.#value = (options?.initial_data ?? {}) as Database.Entity<T>;
 
@@ -377,11 +403,13 @@ export class EntityState<
 					}
 				}
 			} else if (this.#worker) {
+				const skip_bg_refresh = this.#skip_background_refresh?.() ?? false;
 				data = (await this.#worker.get(
 					this.entity_type,
 					this.#id,
 					options?.force_refresh,
 					this.#refresh_proxy,
+					skip_bg_refresh,
 				)) as Database.Entity<T> | undefined;
 			}
 
@@ -487,6 +515,11 @@ interface EntityReaderDeps {
 		entity_type: string,
 		id: string | number,
 	) => (data: Record<string, unknown>) => void;
+	/**
+	 * Invoked on the worker read path to skip the safety-net stale
+	 * refresh. Wired to the app's `hooks.isLive`.
+	 */
+	skipBackgroundRefresh?: () => boolean;
 }
 
 /**
@@ -621,11 +654,13 @@ export class EntityReader<
 		try {
 			let data: Database.Entity<T> | undefined;
 			if (worker) {
+				const skip_bg_refresh = this.#deps.skipBackgroundRefresh?.() ?? false;
 				data = (await worker.get(
 					this.entity_type,
 					id,
 					force_refresh,
 					this.#deps.refreshProxy(this.entity_type, id),
+					skip_bg_refresh,
 				)) as Database.Entity<T> | undefined;
 			} else if (this.#deps.fetch) {
 				const response = await this.#deps.fetch(`/api/${this.entity_type}/${id}`);
@@ -1373,6 +1408,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			fetch: this.#config.fetch,
 			trackVersion: (t, i) => this.#trackEntity(t, i),
 			refreshProxy: (t, i) => this.#refreshProxyFor(t, i),
+			skipBackgroundRefresh: () => this.#config.hooks?.isLive?.() ?? false,
 		});
 	}
 
@@ -1431,6 +1467,10 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			// fetch so SSR + hydration share a single response; after the
 			// first client navigation we want the worker's IDB cache.
 			prefer_fetch: () => !this.#hydrated,
+			// When the app's change feed is live (websocket connected, or
+			// briefly dropped within the grace window) the worker skips its
+			// safety-net stale refresh — IDB is authoritative.
+			skip_background_refresh: () => this.#config.hooks?.isLive?.() ?? false,
 			onChange: (event) => {
 				// Keep the instance cache in sync with the entity's lifecycle:
 				// on create, rekey from `type:` to `type:${new_id}`; on delete,

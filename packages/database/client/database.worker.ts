@@ -464,12 +464,22 @@ export class DatabaseWorker {
 		return server_entity;
 	}
 
-	/** Get — returns IDB cache with background refresh */
+	/**
+	 * Get — returns IDB cache with background refresh.
+	 *
+	 * Pass `skip_background_refresh: true` when the caller trusts that its
+	 * IDB is being kept current through another channel (e.g. a live
+	 * websocket). In that mode we still return the cached row immediately
+	 * but don't spawn the safety-net refetch for stale entries. Defaults
+	 * to `false` so callers without a push channel keep the refresh-if-
+	 * stale behavior.
+	 */
 	async get(
 		entity_type: string,
 		id: string | number,
 		force_refresh?: boolean,
 		on_refresh?: (data: Record<string, unknown>) => void,
+		skip_background_refresh?: boolean,
 	): Promise<Record<string, unknown> | undefined> {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
@@ -482,14 +492,18 @@ export class DatabaseWorker {
 				`${entity_type}/${id}`,
 			);
 			if (cached?.data) {
-				// Only background refresh if stale and not already in-flight
-				const key = `${entity_type}/${id}`;
-				const stale = Date.now() - (cached.updated_at ?? 0) > REFRESH_STALE_MS;
-				if (stale && !this.#pending_refreshes.has(key)) {
-					this.#pending_refreshes.add(key);
-					this.#backgroundRefresh(entity_type, id, on_refresh)
-						.catch(() => {})
-						.finally(() => this.#pending_refreshes.delete(key));
+				// Only background refresh if stale and not already in-flight,
+				// and only when the caller hasn't opted out.
+				if (!skip_background_refresh) {
+					const key = `${entity_type}/${id}`;
+					const stale =
+						Date.now() - (cached.updated_at ?? 0) > REFRESH_STALE_MS;
+					if (stale && !this.#pending_refreshes.has(key)) {
+						this.#pending_refreshes.add(key);
+						this.#backgroundRefresh(entity_type, id, on_refresh)
+							.catch(() => {})
+							.finally(() => this.#pending_refreshes.delete(key));
+					}
 				}
 				return cached.data;
 			}
