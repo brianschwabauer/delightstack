@@ -114,6 +114,22 @@ export class WebsocketClient<
 	#connected = $derived(this.#status === 'connected');
 	#sessions = $state<SessionInfo<Meta>[]>([]);
 
+	/**
+	 * Epoch ms when we last transitioned from `connected` to `disconnected`.
+	 * `null` before we've ever been connected (or while currently connected).
+	 * Used by `isLive` to give the feed a short grace window across
+	 * transient drops so IDB-trusting consumers don't refetch on every blip.
+	 */
+	#disconnected_at: number | null = $state(null);
+
+	/**
+	 * How long after a disconnect we still consider the change feed
+	 * trustworthy. A drop longer than this means consumers (e.g. the
+	 * database client's stale-refresh path) should stop trusting the
+	 * local cache and go back to refetching.
+	 */
+	#live_grace_ms = 60_000;
+
 	/** Current connection status (reactive) */
 	get status(): ConnectionStatus {
 		return this.#status;
@@ -122,6 +138,20 @@ export class WebsocketClient<
 	/** Whether the WebSocket is currently connected (reactive) */
 	get connected(): boolean {
 		return this.#connected;
+	}
+
+	/**
+	 * Whether the client believes it has a trustworthy live change feed
+	 * right now — `true` when currently connected, or when we were connected
+	 * and disconnected less than ~60s ago (transient drop). `false` after a
+	 * longer outage or before the first connection. Used by `DatabaseClient`
+	 * via `databaseHooks().isLive` to decide whether to skip redundant
+	 * network refreshes.
+	 */
+	get isLive(): boolean {
+		if (this.#connected) return true;
+		if (this.#disconnected_at == null) return false;
+		return Date.now() - this.#disconnected_at < this.#live_grace_ms;
 	}
 
 	/** Currently connected sessions (reactive). Auto-updates from session events. */
@@ -165,20 +195,22 @@ export class WebsocketClient<
 		//      configured port, with `room` and any `dev_query` appended
 		//      (Vite can't proxy WS upgrades, so we bypass it in dev)
 		//   3. prod → wss(s)://<host><path> derived from window.location
-		const url = this.#config.url ?? (() => {
-			const path = this.#config.path ?? '/api/websocket';
-			if (this.#config.dev) {
-				const port = this.#config.dev_worker_port ?? 8787;
-				const params = new URLSearchParams();
-				params.set('room', room);
-				for (const [key, value] of Object.entries(this.#config.dev_query ?? {})) {
-					if (value !== undefined) params.set(key, value);
+		const url =
+			this.#config.url ??
+			(() => {
+				const path = this.#config.path ?? '/api/websocket';
+				if (this.#config.dev) {
+					const port = this.#config.dev_worker_port ?? 8787;
+					const params = new URLSearchParams();
+					params.set('room', room);
+					for (const [key, value] of Object.entries(this.#config.dev_query ?? {})) {
+						if (value !== undefined) params.set(key, value);
+					}
+					return `ws://localhost:${port}${path}?${params.toString()}`;
 				}
-				return `ws://localhost:${port}${path}?${params.toString()}`;
-			}
-			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-			return `${protocol}//${window.location.host}${path}`;
-		})();
+				const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+				return `${protocol}//${window.location.host}${path}`;
+			})();
 
 		this.#channel_name = channel_name;
 
@@ -196,8 +228,13 @@ export class WebsocketClient<
 
 				// Fire transport-level lifecycle events
 				if (new_status === 'connected' && old_status !== 'connected') {
+					// We're live again — clear the disconnect timestamp so any
+					// grace-window check returns to "fully trusted."
+					this.#disconnected_at = null;
 					this.#dispatch('ws:connected', message);
 				} else if (new_status === 'disconnected' && old_status !== 'disconnected') {
+					// Record the drop so `isLive` can grant a grace period.
+					this.#disconnected_at = Date.now();
 					this.#dispatch('ws:disconnected', message);
 				}
 				return;
@@ -248,6 +285,7 @@ export class WebsocketClient<
 	 * Call `destroy()` for full cleanup including listeners.
 	 */
 	async disconnect(): Promise<void> {
+		if (this.#status === 'connected') this.#disconnected_at = Date.now();
 		if (this.#worker && this.#channel_name) {
 			await this.#worker.disconnect(this.#channel_name);
 		}
@@ -356,6 +394,7 @@ export class WebsocketClient<
 	databaseHooks(): {
 		onEntityChange: (event: EntityChangeEvent) => void;
 		onSubscribe: (callback: (event: EntityChangeEvent) => void) => () => void;
+		isLive: () => boolean;
 	} {
 		return {
 			onEntityChange: () => {
@@ -369,6 +408,10 @@ export class WebsocketClient<
 					this.#entity_change_listeners.delete(callback);
 				};
 			},
+			// Lets DatabaseClient skip the worker's safety-net stale refresh
+			// while the websocket is live (or just briefly dropped): change
+			// events are flowing in, so IDB is the source of truth.
+			isLive: () => this.isLive,
 		};
 	}
 
