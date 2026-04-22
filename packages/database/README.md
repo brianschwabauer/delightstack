@@ -861,7 +861,12 @@ export const load: PageLoad = async ({ params, parent }) => {
 <button onclick={() => person.save()} disabled={!person.has_changes}>Save</button>
 ```
 
-On the server, `load()` uses the `fetch` you passed to `DatabaseClient` (so auth cookies go with the request). On client hydration, the load runs again; SvelteKit's fetch cache reuses the SSR response so there's no extra round-trip, and the just-populated entity cache satisfies the component's `db.entity(...)` call synchronously.
+**How `load()` picks its read path.** The client carries a `hydrated` flag that decides between two paths inside `EntityState.load()`:
+
+- **Pre-hydration (SSR + initial hydration / full refresh):** fetches on the main thread using the `fetch` you passed to `DatabaseClient`. On the server this is SvelteKit's scoped fetch, which records the response so the client's hydration re-run finds it in the fetch cache — one network request covers both renders. After the response lands on the client, it's pushed into the worker's IDB + Orama index via `applyExternalChange`, so subsequent navigations can read it back from cache.
+- **Post-hydration (client-side navigation):** delegates to `worker.get`, which serves from the IDB cache (live-updated by websockets and by applied local mutations) — zero network for nav-heavy flows. `force_refresh: true` still bypasses IDB and hits the server.
+
+The flag flips automatically — `init()` schedules a short macrotask (50ms) that fires after the browser finishes its initial hydration work but long before the user can interact with the page, so no wiring is required in your layouts. If you ever need to switch paths manually (for example, if a sub-route should always read from IDB right away), call `db.markHydrated()` — it cancels the pending timer and flips immediately.
 
 If you already have the entity data in hand — for example from a different load that returned the full record — you can still seed directly: `db.entity('person', id, fullPerson)` treats `initial_data` as the authoritative server state and skips the load entirely.
 
