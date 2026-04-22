@@ -801,6 +801,7 @@ Use it in Svelte components — reactive properties update the UI automatically:
 | `saving`       | `boolean`                       | Whether a save is in progress                     |
 | `loading`      | `boolean`                       | Whether entity is being fetched                   |
 | `loaded`       | `boolean`                       | Whether entity has been fetched at least once     |
+| `error`        | `unknown`                       | Last error from load/save/delete, cleared on next success |
 | `id`           | `string \| number \| undefined` | Entity ID (set after first save for new entities) |
 | `entity_type`  | `string` (literal)              | The entity type string                            |
 | `created_at`   | `number \| undefined`           | Creation timestamp                                |

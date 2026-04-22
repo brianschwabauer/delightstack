@@ -119,6 +119,7 @@ export class EntityState<
 	#saving = $state(false);
 	#loading = $state(false);
 	#loaded = $state(false);
+	#error = $state.raw<unknown>(null);
 
 	#has_changes = $derived.by(() => {
 		if (!this.#server_value) return false;
@@ -169,6 +170,15 @@ export class EntityState<
 	get loaded(): boolean {
 		this.#subscriber();
 		return this.#loaded;
+	}
+
+	/**
+	 * Last error from `load`, `save`, or `delete`. Cleared on the next
+	 * successful operation of the same kind. Bind in templates:
+	 * `{#if entity.error} <Alert>{entity.error.message}</Alert> {/if}`.
+	 */
+	get error(): unknown {
+		return this.#error;
 	}
 
 	/** Entity ID */
@@ -226,15 +236,12 @@ export class EntityState<
 			let result: Database.Entity<T>;
 			if (!this.#id) {
 				// No ID — create new entity
-				let raw: Record<string, unknown>;
-				try {
-					raw = await worker.create(
-						this.entity_type,
-						data_to_save as Record<string, unknown>,
-					);
-				} catch (error) {
+				const raw = (await worker.create(
+					this.entity_type,
+					data_to_save as Record<string, unknown>,
+				).catch((error) => {
 					throw DelightError.fromWorker(error) ?? error;
-				}
+				})) as Record<string, unknown>;
 				result = raw as Database.Entity<T>;
 				// Update ID from server response using configured primary key
 				const pk = raw[this.#primary_key] as string | number;
@@ -246,16 +253,13 @@ export class EntityState<
 				this.#onChange?.({ type: 'create', id: pk, data: raw });
 			} else {
 				// Has ID — update existing entity
-				let raw: Record<string, unknown>;
-				try {
-					raw = await worker.update(
-						this.entity_type,
-						this.#id,
-						data_to_save as Record<string, unknown>,
-					);
-				} catch (error) {
+				const raw = (await worker.update(
+					this.entity_type,
+					this.#id,
+					data_to_save as Record<string, unknown>,
+				).catch((error) => {
 					throw DelightError.fromWorker(error) ?? error;
-				}
+				})) as Record<string, unknown>;
 				result = raw as Database.Entity<T>;
 				// Fire change hook
 				this.#onChange?.({ type: 'update', id: this.#id, data: raw });
@@ -264,6 +268,10 @@ export class EntityState<
 			this.#server_value = result;
 			this.#value = result;
 			this.#loaded = true;
+			this.#error = null;
+		} catch (error) {
+			this.#error = error;
+			throw error;
 		} finally {
 			this.#saving = false;
 		}
@@ -309,6 +317,9 @@ export class EntityState<
 				}
 				this.#loaded = true;
 			}
+			this.#error = null;
+		} catch (error) {
+			this.#error = error;
 		} finally {
 			this.#loading = false;
 		}
@@ -321,8 +332,11 @@ export class EntityState<
 		try {
 			await worker.delete(this.entity_type, this.#id);
 		} catch (error) {
-			throw DelightError.fromWorker(error) ?? error;
+			const wrapped = DelightError.fromWorker(error) ?? error;
+			this.#error = wrapped;
+			throw wrapped;
 		}
+		this.#error = null;
 		// Fire change hook
 		this.#onChange?.({ type: 'delete', id: this.#id });
 		// Clear local state
