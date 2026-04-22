@@ -106,6 +106,7 @@ export class EntityState<
 	readonly entity_type: EntityType;
 	#id: string | number | undefined;
 	#worker: Remote<DatabaseWorker> | null;
+	#fetch: typeof globalThis.fetch | undefined;
 	#primary_key: string;
 	#onChange?: (event: {
 		type: 'create' | 'update' | 'delete';
@@ -201,6 +202,23 @@ export class EntityState<
 		id: string | number | undefined,
 		options?: {
 			worker?: Remote<DatabaseWorker> | null;
+			/**
+			 * `fetch` used on SSR / pre-init when no worker is available.
+			 * Typically supplied by `DatabaseClient` from its config so that
+			 * server-side requests carry the original request's auth context.
+			 */
+			fetch?: typeof globalThis.fetch;
+			/**
+			 * Starting value for the entity's local state.
+			 *
+			 * When passed together with an `id` it's also treated as the
+			 * authoritative server state — `server_value` is seeded and
+			 * `loaded` is set to `true`, so the first reactive read does
+			 * *not* trigger an auto-load. This is the right shape for SSR
+			 * hydration (pass the entity fetched in `+page.ts`). For
+			 * create-new-entity forms (no id), it's used as a scratch
+			 * starting point and no loaded-state is implied.
+			 */
 			initial_data?: Partial<Database.Entity<T>>;
 			primary_key?: string;
 			onChange?: (event: {
@@ -213,9 +231,19 @@ export class EntityState<
 		this.entity_type = entity_type;
 		this.#id = id;
 		this.#worker = options?.worker ?? null;
+		this.#fetch = options?.fetch;
 		this.#primary_key = options?.primary_key ?? 'id';
 		this.#onChange = options?.onChange;
 		this.#value = (options?.initial_data ?? {}) as Database.Entity<T>;
+
+		// SSR / hydration seed: if an existing entity is constructed with
+		// data in hand, treat it as the current server truth so we skip a
+		// redundant load and `has_changes` works from the first edit.
+		if (id !== undefined && options?.initial_data) {
+			this.#server_value = options.initial_data as Database.Entity<T>;
+			this.#loaded = true;
+		}
+
 		this.#subscriber = createSubscriber(() => {
 			// Auto-load when first subscribed
 			if (!this.#loaded && !this.#loading && this.#id) {
@@ -246,10 +274,8 @@ export class EntityState<
 				// Update ID from server response using configured primary key
 				const pk = raw[this.#primary_key] as string | number;
 				this.#id = pk;
-				// Update cache key
-				EntityState.#cache.delete(`${this.entity_type}:`);
-				EntityState.#cache.set(`${this.entity_type}:${pk}`, this as EntityState);
-				// Fire change hook
+				// Fire change hook — owners (e.g. DatabaseClient) rekey their
+				// caches and invalidate other readers off this event.
 				this.#onChange?.({ type: 'create', id: pk, data: raw });
 			} else {
 				// Has ID — update existing entity
@@ -299,8 +325,10 @@ export class EntityState<
 					this.#refresh_proxy,
 				)) as Database.Entity<T> | undefined;
 			} else {
-				// SSR path — direct fetch without worker
-				const fetchFn = options?.fetch ?? globalThis.fetch;
+				// SSR / pre-init path — prefer the fetch configured on the
+				// DatabaseClient (carries auth), then the per-call override,
+				// falling back to a bare global fetch.
+				const fetchFn = options?.fetch ?? this.#fetch ?? globalThis.fetch;
 				const response = await fetchFn(`/api/${this.entity_type}/${this.#id}`);
 				if (response.ok) {
 					data = (await response.json()) as Database.Entity<T>;
@@ -337,13 +365,12 @@ export class EntityState<
 			throw wrapped;
 		}
 		this.#error = null;
-		// Fire change hook
+		// Fire change hook — owners (e.g. DatabaseClient) drop cache entries
+		// and invalidate other readers off this event.
 		this.#onChange?.({ type: 'delete', id: this.#id });
 		// Clear local state
 		this.#value = {} as Database.Entity<T>;
 		this.#server_value = null;
-		// Remove from cache
-		EntityState.#cache.delete(`${this.entity_type}:${this.#id}`);
 	}
 
 	/** Discard local changes, revert to server_value. */
@@ -369,15 +396,17 @@ export class EntityState<
 		return this.#worker;
 	}
 
-	// -- Static singleton cache --
-
-	static #cache = new Map<string, EntityState>();
-
+	/**
+	 * Thin alias for `new EntityState(...)`. Kept for backwards compatibility
+	 * with standalone usage; prefer `db.entity(...)` via `DatabaseClient`,
+	 * which adds caching, version invalidation, and lifecycle management.
+	 */
 	static from<T extends Database.AnyTable, EntityType extends string = string>(
 		entity_type: EntityType,
 		id: string | number | undefined,
 		options?: {
 			worker?: Remote<DatabaseWorker> | null;
+			fetch?: typeof globalThis.fetch;
 			initial_data?: Partial<Database.Entity<T>>;
 			primary_key?: string;
 			onChange?: (event: {
@@ -387,21 +416,7 @@ export class EntityState<
 			}) => void;
 		},
 	): EntityState<T, EntityType> {
-		const key = `${entity_type}:${id ?? ''}`;
-		if (EntityState.#cache.has(key)) {
-			return EntityState.#cache.get(key) as EntityState<T, EntityType>;
-		}
-		const instance = new EntityState(entity_type, id, options) as EntityState<
-			T,
-			EntityType
-		>;
-		EntityState.#cache.set(key, instance as EntityState);
-		return instance;
-	}
-
-	/** Clear all cached EntityState instances (used on scope change). */
-	static clearCache(): void {
-		EntityState.#cache.clear();
+		return new EntityState(entity_type, id, options) as EntityState<T, EntityType>;
 	}
 }
 
@@ -895,6 +910,14 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 */
 	#refresh_proxies = new Map<string, (data: Record<string, unknown>) => void>();
 
+	/**
+	 * Cached `EntityState` instances keyed by `type:id`. Scoped to the
+	 * DatabaseClient so per-request SvelteKit SSR (where the layout creates
+	 * a fresh client) is cache-isolated, while client sessions still reuse
+	 * the same wrapper across navigations / multiple reads of the same id.
+	 */
+	#entity_cache = new Map<string, EntityState>();
+
 	/** Whether the initial sync is in progress */
 	#syncing = $state(false);
 
@@ -965,7 +988,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		});
 
 		// Clear stale EntityState cache so new instances get the active worker
-		EntityState.clearCache();
+		this.#entity_cache.clear();
 
 		this.#initialized = true;
 
@@ -1260,24 +1283,76 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	// Entity state (reactive singleton wrapper)
 	// -----------------------------------------------------------------------
 
-	/** Get a reactive EntityState wrapper for an entity (cached singleton per entity:id). */
+	/**
+	 * Reactive edit-form wrapper for a single entity (cached per `entity:id`
+	 * on this client). Adds dirty-tracking, save/reset/delete, and
+	 * saving/loading/error state on top of the underlying entity cache.
+	 *
+	 * **SSR pattern — preload in `+page.ts`, read in the component.**
+	 * The same `DatabaseClient` is used by both, so `db.entity(...)` in the
+	 * component returns the instance already loaded in the load function:
+	 *
+	 * ```ts
+	 * // +page.ts
+	 * export const load: PageLoad = async ({ params, parent }) => {
+	 *   const { db } = await parent();
+	 *   const person = db.entity('person', params.person_id);
+	 *   await person.load();
+	 *   if (!person.loaded) error(404, 'Not found');
+	 *   return {};
+	 * };
+	 *
+	 * // +page.svelte
+	 * const person = $derived(db.entity('person', page.params.person_id));
+	 * ```
+	 *
+	 * Server-side the load uses the `fetch` passed to `DatabaseClient`
+	 * (carrying auth cookies). On client hydration the load runs again but
+	 * reuses the SSR'd fetch response via SvelteKit's fetch cache, then
+	 * populates the same entity cache so the component reads it synchronously.
+	 *
+	 * **New-entity pattern.** Omit the id (and pass default fields as
+	 * `initial_data` if needed) — `save()` will `create` on the server and
+	 * attach the returned id to the wrapper.
+	 */
 	entity<K extends keyof T & string>(
 		entity_type: K,
 		id?: string | number,
 		initial_data?: Partial<Database.Entity<T[K]>>,
 	): EntityState<T[K], K> {
+		const key = `${entity_type}:${id ?? ''}`;
+		const cached = this.#entity_cache.get(key);
+		if (cached) return cached as EntityState<T[K], K>;
+
 		const table = this.#config.tables[entity_type];
-		return EntityState.from(entity_type, id, {
+		const instance = new EntityState<T[K], K>(entity_type, id, {
 			worker: this.#worker,
+			fetch: this.#config.fetch,
 			initial_data,
 			primary_key: table.config.primary_key,
 			onChange: (event) => {
+				// Keep the instance cache in sync with the entity's lifecycle:
+				// on create, rekey from `type:` to `type:${new_id}`; on delete,
+				// drop the entry entirely. Also bump the version map so any
+				// `db.get` / `db.read` readers for the same id re-fetch.
+				if (event.type === 'create') {
+					this.#entity_cache.delete(`${entity_type}:`);
+					this.#entity_cache.set(
+						`${entity_type}:${event.id}`,
+						instance as EntityState,
+					);
+				} else if (event.type === 'delete') {
+					this.#entity_cache.delete(`${entity_type}:${event.id}`);
+				}
+				this.#invalidateEntity(entity_type, event.id);
 				this.#config.hooks?.onEntityChange?.({
 					...event,
 					entity_type,
 				});
 			},
 		});
+		this.#entity_cache.set(key, instance as EntityState);
+		return instance;
 	}
 
 	// -----------------------------------------------------------------------
@@ -1328,7 +1403,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 	/** Change scope (e.g. user switches org). Clears cache and re-initializes. */
 	async setScope(db_name: string): Promise<void> {
-		EntityState.clearCache();
+		this.#entity_cache.clear();
 		this.#entity_versions.clear();
 		this.#refresh_proxies.clear();
 		if (this.#worker) await this.#worker.destroy();
@@ -1347,7 +1422,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		if (this.#external_unsubscribe) {
 			this.#external_unsubscribe();
 		}
-		EntityState.clearCache();
+		this.#entity_cache.clear();
 		this.#entity_versions.clear();
 		this.#refresh_proxies.clear();
 		if (this.#worker) {

@@ -831,12 +831,39 @@ Lightweight reactive wrapper for a single entity. Synchronous to construct; the 
 // Get a reactive wrapper (cached singleton per entity:id)
 const person = db.entity('person', 'abc123');
 
-// Or with initial data (e.g. from SSR page data)
-const person = db.entity('person', 'abc123', { name: 'Alice' });
-
-// Or for creating a new entity (no ID)
+// For creating a new entity (no ID) — save() will create on the server
 const person = db.entity('person');
 ```
+
+**SSR hydration — preload in `+page.ts`, read in the component.** `db.entity(type, id)` is cached on the `DatabaseClient` instance, so awaiting `.load()` inside the load function populates the same wrapper the component reads later. There's nothing to pass through `data`:
+
+```typescript
+// +page.ts
+export const load: PageLoad = async ({ params, parent }) => {
+  const { db } = await parent();
+  const person = db.entity('person', params.person_id);
+  await person.load();
+  if (!person.loaded) error(404, 'Person not found');
+  return {};
+};
+```
+
+```svelte
+<!-- +page.svelte -->
+<script lang="ts">
+  import { page } from '$app/state';
+  const { data } = $props();
+  const { db } = $derived(data);
+  const person = $derived(db.entity('person', page.params.person_id));
+</script>
+
+<input bind:value={person.value.name} />
+<button onclick={() => person.save()} disabled={!person.has_changes}>Save</button>
+```
+
+On the server, `load()` uses the `fetch` you passed to `DatabaseClient` (so auth cookies go with the request). On client hydration, the load runs again; SvelteKit's fetch cache reuses the SSR response so there's no extra round-trip, and the just-populated entity cache satisfies the component's `db.entity(...)` call synchronously.
+
+If you already have the entity data in hand — for example from a different load that returned the full record — you can still seed directly: `db.entity('person', id, fullPerson)` treats `initial_data` as the authoritative server state and skips the load entirely.
 
 Use it in Svelte components — reactive properties update the UI automatically:
 
@@ -892,12 +919,14 @@ Use it in Svelte components — reactive properties update the UI automatically:
 ```typescript
 import { EntityState } from '@delightstack/database/client';
 
-// Use EntityState.from() for singleton caching
-const person = EntityState.from<typeof personTable>('person', id);
-
-// Or create directly
-const person = new EntityState('person', id);
+const person = new EntityState('person', id, {
+  worker, // optional; falls back to `fetch` on SSR / pre-init
+  fetch,
+  primary_key: 'id',
+});
 ```
+
+Caching and version invalidation live on `DatabaseClient` — `new EntityState(...)` gives you a single unmanaged wrapper. Prefer `db.entity(...)` unless you have a specific reason to manage lifecycle yourself.
 
 ### DatabaseSearch (reactive search)
 
