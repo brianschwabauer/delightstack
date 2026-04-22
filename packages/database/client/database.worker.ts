@@ -652,6 +652,74 @@ export class DatabaseWorker {
 		}
 	}
 
+	/**
+	 * Apply a change that originated outside this tab (e.g. a websocket
+	 * event). Upserts/removes the single entity in Orama + IDB and notifies
+	 * search subscribers — much cheaper than a full `sync([entity_type])`.
+	 *
+	 * If `data` is omitted for a create/update event, fetches just that
+	 * entity from the server. Returns the applied entity (or `undefined`
+	 * for deletes / when a fetch fails).
+	 */
+	async applyExternalChange(
+		entity_type: string,
+		event_type: 'create' | 'update' | 'delete',
+		id: string | number,
+		data?: Record<string, unknown>,
+	): Promise<Record<string, unknown> | undefined> {
+		const state = this.#entities[entity_type];
+		if (!state) return undefined;
+
+		if (event_type === 'delete') {
+			if (state.orama && state.search_mode === 'client') {
+				try {
+					removeFromOrama(state.orama, String(id));
+				} catch {
+					// ignore — may not be in index
+				}
+			}
+			if (state.cache_enabled && this.#db) {
+				await idbDelete(this.#db, 'entities', `${entity_type}/${id}`);
+			}
+			this.#notifySubscribers([entity_type]);
+			return undefined;
+		}
+
+		// create / update — need the entity data
+		let entity = data;
+		if (!entity) {
+			// Fall back to a single-entity fetch rather than a full-type sync
+			entity = await this.#fetchAndCache(entity_type, id);
+			// #fetchAndCache already updates Orama + IDB + notifies
+			return entity;
+		}
+
+		if (state.cache_enabled && this.#db) {
+			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
+				entity_type,
+				id,
+				data: entity,
+				updated_at: Date.now(),
+			} satisfies CachedEntity);
+		}
+
+		if (state.orama && state.search_mode === 'client') {
+			try {
+				removeFromOrama(state.orama, String(id));
+			} catch {
+				// ignore — may not exist
+			}
+			try {
+				insertIntoOrama(state.orama, entity);
+			} catch {
+				// ignore
+			}
+		}
+
+		this.#notifySubscribers([entity_type]);
+		return entity;
+	}
+
 	// -----------------------------------------------------------------------
 	// Search
 	// -----------------------------------------------------------------------
