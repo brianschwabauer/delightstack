@@ -8,6 +8,8 @@
 	const { db } = $derived(data);
 
 	const person_id = $derived(page.params.person_id);
+	// +page.ts preloads the entity via this same client, so `db.entity` here
+	// returns the already-loaded instance from the cache.
 	const person = $derived(db.entity('person', person_id));
 
 	let editing = $state(false);

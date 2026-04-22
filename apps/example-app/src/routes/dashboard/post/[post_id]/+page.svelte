@@ -10,9 +10,9 @@
 	const { db, ai } = $derived(data);
 	const post_id = $derived(page.params.post_id);
 
-	// Seed the EntityState with the SSR-loaded post so the first paint has
-	// content; subsequent reads go through the reactive wrapper.
-	const post = $derived(db.entity('post', post_id, data.post));
+	// +page.ts preloads the entity via this same client, so `db.entity` here
+	// returns the already-loaded instance from the cache.
+	const post = $derived(db.entity('post', post_id));
 
 	let editing = $state(false);
 	let show_delete = $state(false);
