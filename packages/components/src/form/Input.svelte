@@ -1743,8 +1743,7 @@
 	/*  NUMBER STEPPERS                                                    */
 	/* ================================================================== */
 
-	/* The stepper pair sits after the suffix, set off by a thin divider so
-	   the value zone and the controls read as separate groups. */
+	/* The stepper pair sits after the suffix. */
 	.number-buttons {
 		display: flex;
 		flex-direction: row;
@@ -1755,7 +1754,9 @@
 		margin-right: -0.35em;
 	}
 
-	.number-buttons::before {
+	/* A thin divider sets the steppers off from the suffix — only needed when
+	   a suffix is present; without one the field reads cleaner divider-free. */
+	.input.has-suffix .number-buttons::before {
 		content: '';
 		align-self: center;
 		width: 1px;
