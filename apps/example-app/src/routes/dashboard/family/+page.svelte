@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { Button, Input, Select, Avatar, Modal, Callout } from '@delightstack/components';
+	import {
+		Button,
+		Input,
+		Select,
+		Avatar,
+		Modal,
+		Callout,
+	} from '@delightstack/components';
 	import Icon from '$lib/Icon.svelte';
 	import { tooltip } from '@delightstack/utilities';
 
@@ -84,7 +91,10 @@
 	</header>
 
 	<div class="search-bar">
-		<Input placeholder="Search family members..." bind:value={people.query.term} type="search" />
+		<Input
+			label="Search family members..."
+			bind:value={people.query.term}
+			type="search" />
 	</div>
 
 	<div class="people-grid">
@@ -124,10 +134,18 @@
 		<Callout error>{error}</Callout>
 	{/if}
 
-	<form onsubmit={(e) => { e.preventDefault(); addPerson(); }} class="add-form">
+	<form
+		onsubmit={(e) => {
+			e.preventDefault();
+			addPerson();
+		}}
+		class="add-form">
 		<Input label="Name" bind:value={new_name} required placeholder="Full name" />
 		<Input label="Email" type="email" bind:value={new_email} placeholder="Optional" />
-		<Select label="Relationship" bind:value={new_relationship} options={relationship_options} />
+		<Select
+			label="Relationship"
+			bind:value={new_relationship}
+			options={relationship_options} />
 		<Input label="Birthday" type="date" bind:value={new_birthday} />
 
 		<div class="modal-actions">
@@ -156,7 +174,9 @@
 			font-size: var(--font-size-4);
 			letter-spacing: -0.01em;
 		}
-		p { color: var(--color-text-disabled); }
+		p {
+			color: var(--color-text-disabled);
+		}
 	}
 	.search-bar {
 		max-width: 400px;
@@ -174,7 +194,9 @@
 		border: 1px solid var(--color-outline);
 		border-radius: var(--radius-3);
 		transition: background 0.15s;
-		&:hover { background: var(--color-bg-2); }
+		&:hover {
+			background: var(--color-bg-2);
+		}
 	}
 	.person-info {
 		display: flex;
@@ -184,13 +206,17 @@
 			color: var(--color-text-disabled);
 			text-transform: capitalize;
 		}
-		.email { text-transform: none; }
+		.email {
+			text-transform: none;
+		}
 	}
 	.empty {
 		grid-column: 1 / -1;
 		text-align: center;
 		padding: var(--size-9) 0;
-		p { color: var(--color-text-disabled); }
+		p {
+			color: var(--color-text-disabled);
+		}
 	}
 	.add-form {
 		display: flex;
