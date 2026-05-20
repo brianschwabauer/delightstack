@@ -27,8 +27,17 @@
 	import { getContext, type Component, type Snippet } from 'svelte';
 	import type { FormContext } from './Form.svelte';
 	import Popover from '../actions/Popover.svelte';
+	import Button from '../actions/Button.svelte';
 
-	type InputValue = string | number | boolean | string[] | File | File[] | null | undefined;
+	type InputValue =
+		| string
+		| number
+		| boolean
+		| string[]
+		| File
+		| File[]
+		| null
+		| undefined;
 
 	const propId = $props.id();
 	let {
@@ -178,7 +187,7 @@
 
 	$effect(() => {
 		if (!form_ctx || !name) return;
-		const el = input_element ?? textarea_element;
+		const el = input_element ?? textarea_element ?? file_input_element;
 		if (el) form_ctx.register(name, el);
 		return () => {
 			if (name) form_ctx.unregister(name);
@@ -192,8 +201,10 @@
 		return undefined;
 	});
 
-	/** Whether the input is effectively disabled */
-	const effectively_disabled = $derived(disabled || (form_ctx?.disabled ?? false));
+	/** Whether the input is effectively disabled (loading skeleton counts) */
+	const effectively_disabled = $derived(
+		disabled || skeleton || (form_ctx?.disabled ?? false),
+	);
 
 	/* ------------------------------------------------------------------ */
 	/*  Internal state                                                     */
@@ -227,6 +238,9 @@
 	const is_search = $derived(type === 'search');
 	const is_file = $derived(type === 'file');
 	const is_color = $derived(type === 'color');
+	const is_datelike = $derived(
+		type === 'date' || type === 'time' || type === 'datetime-local',
+	);
 	const has_autocomplete = $derived(!!(options || onfilter));
 
 	/** Resolved HTML input type */
@@ -237,21 +251,51 @@
 		return type;
 	});
 
+	/**
+	 * Types that render their own intrinsic content — a colour swatch, the
+	 * browser's native date format, a file button — and therefore can't use the
+	 * label as an in-field placeholder. Their label stays pinned to the top.
+	 */
+	const always_float_type = $derived(is_color || is_file || is_datelike);
+
+	/**
+	 * A placeholder is "distinct" only when it differs from the label. A distinct
+	 * placeholder pins the label to the top so the placeholder stays visible
+	 * inside the field; otherwise the label animates and doubles as the
+	 * placeholder (the legacy behaviour).
+	 */
+	const has_distinct_placeholder = $derived(!!placeholder && placeholder !== label);
+
+	/**
+	 * The placeholder handed to the native control. Suppressed while the label is
+	 * acting as the in-field placeholder, so the two never overlap.
+	 */
+	const native_placeholder = $derived.by(() => {
+		if (!label) return placeholder;
+		if (has_distinct_placeholder) return placeholder;
+		return undefined;
+	});
+
 	/** Whether the label should float (up position) */
 	const label_floated = $derived.by(() => {
 		if (!label) return false;
+		/* Pinned to the top: a distinct placeholder, an always-visible prefix,
+		   or a type that can't host the label as a placeholder. */
+		if (has_distinct_placeholder) return true;
+		if (always_float_type) return true;
+		if (prefix) return true;
+		/* Otherwise the label animates up on focus or once there's a value. */
 		if (focused) return true;
 		if (multiple && Array.isArray(value) && value.length > 0) return true;
-		if (is_file && value) return true;
-		if (is_color) return true;
 		if (value !== undefined && value !== null && value !== '') return true;
-		if (placeholder) return true;
 		return false;
 	});
 
 	/** Whether there is a displayable error */
 	const has_error = $derived(!!resolved_error);
-	const error_message = $derived(typeof resolved_error === 'string' ? resolved_error : '');
+	const error_message = $derived(
+		typeof resolved_error === 'string' ? resolved_error : '',
+	);
 
 	/** Display string for value length */
 	const value_length = $derived.by(() => {
@@ -270,7 +314,8 @@
 
 	/** Password strength (0-4) */
 	const password_strength = $derived.by((): number => {
-		if (!strengthIndicator || type !== 'password' || typeof value !== 'string' || !value) return 0;
+		if (!strengthIndicator || type !== 'password' || typeof value !== 'string' || !value)
+			return 0;
 		let score = 0;
 		if (value.length >= 8) score++;
 		if (value.length >= 12) score++;
@@ -298,11 +343,13 @@
 
 	/** Size config */
 	const size_config = $derived.by(() => {
-		const configs: Record<string, { height: string; font: string; icon_size: number }> = {
-			'0': { height: '28px', font: '13px', icon_size: 14 },
-			'1': { height: '36px', font: '15px', icon_size: 16 },
-			'2': { height: '44px', font: '17px', icon_size: 18 },
-			'3': { height: '52px', font: '19px', icon_size: 20 },
+		/* Heights are em-based (see CSS --_height) so the font size drives the
+		   overall scale, matching the legacy component's spacious feel. */
+		const configs: Record<string, { font: string; icon_size: number }> = {
+			'0': { font: '13px', icon_size: 15 },
+			'1': { font: '15px', icon_size: 17 },
+			'2': { font: '17px', icon_size: 19 },
+			'3': { font: '19px', icon_size: 21 },
 		};
 		return configs[size] ?? configs['1'];
 	});
@@ -516,36 +563,66 @@
 		file_input_element?.click();
 	}
 
-	function handleFileChange(e: Event) {
-		const target = e.target as HTMLInputElement;
-		const files = target.files;
-		if (!files || files.length === 0) {
-			value = null;
-		} else if (multiple) {
-			value = Array.from(files);
-		} else {
-			value = files[0];
-		}
+	/**
+	 * Mirror the component's file value back onto the native <input> via a
+	 * DataTransfer, so dropped files and per-file removals still submit
+	 * correctly when the input is inside a form.
+	 */
+	function syncFileInput(files: File[]) {
+		if (!file_input_element || typeof DataTransfer === 'undefined') return;
+		const dt = new DataTransfer();
+		for (const f of files) dt.items.add(f);
+		file_input_element.files = dt.files;
+	}
+
+	function commitFiles(next: File | File[] | null) {
+		value = next;
 		if (form_ctx && name) form_ctx.setValue(name, value);
+		oninput?.({ value });
 		onchange?.({ value });
+	}
+
+	function handleFileChange(e: Event) {
+		const picked = (e.target as HTMLInputElement).files;
+		if (!picked || picked.length === 0) return;
+		if (multiple) {
+			const merged = [...file_list, ...Array.from(picked)];
+			syncFileInput(merged);
+			commitFiles(merged);
+		} else {
+			commitFiles(picked[0]);
+		}
 	}
 
 	function handleFileDrop(e: DragEvent) {
 		e.preventDefault();
 		if (effectively_disabled || readonly) return;
-		const files = e.dataTransfer?.files;
-		if (!files || files.length === 0) return;
+		const dropped = e.dataTransfer?.files;
+		if (!dropped || dropped.length === 0) return;
 		if (multiple) {
-			value = Array.from(files);
+			const merged = [...file_list, ...Array.from(dropped)];
+			syncFileInput(merged);
+			commitFiles(merged);
 		} else {
-			value = files[0];
+			syncFileInput([dropped[0]]);
+			commitFiles(dropped[0]);
 		}
-		if (form_ctx && name) form_ctx.setValue(name, value);
-		onchange?.({ value });
 	}
 
 	function handleFileDragOver(e: DragEvent) {
 		e.preventDefault();
+	}
+
+	/** Remove a single selected file by index. */
+	function removeFile(index: number) {
+		if (multiple) {
+			const next = file_list.filter((_, i) => i !== index);
+			syncFileInput(next);
+			commitFiles(next);
+		} else {
+			if (file_input_element) file_input_element.value = '';
+			commitFiles(null);
+		}
 	}
 
 	/* ---- Chips / Multiple ---- */
@@ -553,7 +630,12 @@
 		if (e.key === 'Enter' || e.key === ',') {
 			e.preventDefault();
 			addChip();
-		} else if (e.key === 'Backspace' && chip_input_value === '' && Array.isArray(value) && value.length > 0) {
+		} else if (
+			e.key === 'Backspace' &&
+			chip_input_value === '' &&
+			Array.isArray(value) &&
+			value.length > 0
+		) {
 			removeChip(value.length - 1);
 		}
 	}
@@ -628,21 +710,36 @@
 		}
 	}
 
-	/* ---- Display values ---- */
-	const file_display = $derived.by(() => {
-		if (!is_file || !value) return '';
-		if (Array.isArray(value)) {
-			return (value as File[]).map((f) => f.name).join(', ');
-		}
-		if (value instanceof File) return value.name;
-		return '';
+	/* ---- File previews ---- */
+	/** The selected files, normalised to an array regardless of `multiple`. */
+	const file_list = $derived.by((): File[] => {
+		if (!is_file) return [];
+		if (Array.isArray(value)) return value.filter((f): f is File => f instanceof File);
+		if (value instanceof File) return [value];
+		return [];
+	});
+
+	/** Object-URL thumbnails for image files, revoked on change/unmount. */
+	let file_previews = $state<{ name: string; url: string | null }[]>([]);
+	$effect(() => {
+		const created: string[] = [];
+		file_previews = file_list.map((f) => {
+			if (f.type.startsWith('image/')) {
+				const url = URL.createObjectURL(f);
+				created.push(url);
+				return { name: f.name, url };
+			}
+			return { name: f.name, url: null };
+		});
+		return () => created.forEach((u) => URL.revokeObjectURL(u));
 	});
 
 	/** Whether the clear button should show */
 	const show_clear = $derived.by(() => {
 		if (!clearable || effectively_disabled || readonly) return false;
 		if (multiple) return Array.isArray(value) && value.length > 0;
-		if (is_file) return !!value;
+		/* File inputs carry their own per-file remove buttons. */
+		if (is_file) return false;
 		if (is_number) return value !== null && value !== undefined;
 		return value !== undefined && value !== null && value !== '';
 	});
@@ -685,147 +782,216 @@
 	class:has-label={!!label}
 	class:has-prefix={!!prefix}
 	class:has-suffix={!!suffix}
-	class:has-icon={!!icon}
+	class:has-icon={!!icon || is_search}
 	class:is-textarea={is_textarea}
 	class:is-file={is_file}
 	class:is-color={is_color}
 	class:multiple
-	style:--input-height={size_config.height}
 	style:--input-font={size_config.font}
 	style:--input-icon-size="{size_config.icon_size}px"
 	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
+	<!-- Main input wrapper -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="input-wrapper"
+		class:focused
+		class:has-error={has_error}
+		bind:this={wrapper_element}
+		ondrop={is_file ? handleFileDrop : undefined}
+		ondragover={is_file ? handleFileDragOver : undefined}>
+		<!-- Leading icon -->
+		{#if icon}
+			<span class="input-icon" aria-hidden="true">
+				{@render iconRender(icon)}
+			</span>
+		{/if}
 
-	{#if skeleton}
-		<!-- Skeleton loading state -->
-		<div class="input-skeleton">
-			{#if label}
-				<div class="skeleton-label"></div>
-			{/if}
-			<div class="skeleton-field"></div>
-		</div>
-	{:else}
-		<!-- Main input wrapper -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="input-wrapper"
-			class:focused
-			class:has-error={has_error}
-			bind:this={wrapper_element}
-			ondrop={is_file ? handleFileDrop : undefined}
-			ondragover={is_file ? handleFileDragOver : undefined}>
+		<!-- Prefix -->
+		{#if prefix}
+			<span class="input-prefix" aria-hidden="true">{prefix}</span>
+		{/if}
 
-			<!-- Leading icon -->
-			{#if icon}
-				<span class="input-icon" aria-hidden="true">
-					{@render iconRender(icon)}
-				</span>
-			{/if}
-
-			<!-- Prefix -->
-			{#if prefix}
-				<span class="input-prefix" aria-hidden="true">{prefix}</span>
-			{/if}
-
-			<!-- Color swatch -->
-			{#if is_color}
-				<span
-					class="color-swatch"
-					style:background={typeof value === 'string' && value ? value : '#000000'}
-					aria-hidden="true"></span>
-			{/if}
-
-			<!-- Multiple chips -->
-			{#if multiple && Array.isArray(value)}
-				<div class="chips-container">
-					{#each value as chip, i (chip + '-' + i)}
-						<span class="chip">
-							<span class="chip-text">{chip}</span>
-							<button
-								type="button"
-								class="chip-remove"
-								aria-label="Remove {chip}"
-								tabindex={-1}
-								onclick={() => removeChip(i)}
-								disabled={effectively_disabled}>
-								<!-- close icon -->
-								<svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
-									<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-								</svg>
-							</button>
-						</span>
-					{/each}
-					<input
-						type="text"
-						class="chip-input"
-						bind:this={input_element}
-						bind:value={chip_input_value}
-						{id}
-						{placeholder}
-						disabled={effectively_disabled}
-						{readonly}
-						aria-label={label || placeholder || 'Add tag'}
-						onfocus={handleFocus}
-						onblur={handleBlur}
-						onkeydown={handleChipKeyDown} />
-				</div>
-			{:else if is_textarea}
-				<!-- Textarea -->
-				<textarea
-					bind:this={textarea_element}
+		<!-- Multiple chips -->
+		{#if multiple && !is_file && Array.isArray(value)}
+			<div class="chips-container">
+				{#each value as chip, i (chip + '-' + i)}
+					<span class="chip">
+						<span class="chip-text">{chip}</span>
+						<Button
+							icon
+							dense
+							transparent
+							class="input-pill-btn"
+							tabindex={-1}
+							aria-label="Remove {chip}"
+							disabled={effectively_disabled}
+							onclick={() => removeChip(i)}>
+							<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+								<path
+									d="M18 6L6 18M6 6l12 12"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round" />
+							</svg>
+						</Button>
+					</span>
+				{/each}
+				<input
+					type="text"
+					class="chip-input"
+					bind:this={input_element}
+					bind:value={chip_input_value}
 					{id}
-					{name}
-					class="input-field"
-					{placeholder}
+					placeholder={native_placeholder}
 					disabled={effectively_disabled}
 					{readonly}
-					{required}
-					{rows}
-					{maxlength}
-					{minlength}
-					aria-invalid={has_error || undefined}
-					aria-required={required || undefined}
-					aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+					aria-label={label || placeholder || 'Add tag'}
 					onfocus={handleFocus}
 					onblur={handleBlur}
-					oninput={handleInput}
-					onchange={handleChange}
-					value={(value ?? '') as string}></textarea>
-			{:else if is_file}
-				<!-- File input: hidden native + visible display -->
-				<input
-					bind:this={file_input_element}
-					type="file"
-					{name}
-					{accept}
-					multiple={multiple}
-					disabled={effectively_disabled}
-					class="file-native"
-					aria-hidden="true"
-					tabindex={-1}
-					onchange={handleFileChange} />
+					onkeydown={handleChipKeyDown} />
+			</div>
+		{:else if is_textarea}
+			<!-- Textarea -->
+			<!-- svelte-ignore element_invalid_self_closing_tag -->
+			<textarea
+				bind:this={textarea_element}
+				{id}
+				{name}
+				class="input-field"
+				placeholder={native_placeholder}
+				disabled={effectively_disabled}
+				{readonly}
+				{required}
+				{rows}
+				{maxlength}
+				{minlength}
+				aria-invalid={has_error || undefined}
+				aria-required={required || undefined}
+				aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+				onfocus={handleFocus}
+				onblur={handleBlur}
+				oninput={handleInput}
+				onchange={handleChange}
+				value={(value ?? '') as string} />
+		{:else if is_file}
+			<!-- File: hidden native input + visible preview list -->
+			<input
+				bind:this={file_input_element}
+				type="file"
+				{name}
+				{accept}
+				{multiple}
+				disabled={effectively_disabled}
+				class="file-native"
+				aria-hidden="true"
+				tabindex={-1}
+				onchange={handleFileChange} />
+			{#if file_list.length === 0}
 				<button
 					type="button"
 					bind:this={input_element}
 					{id}
-					class="input-field file-display"
+					class="input-field file-trigger"
 					disabled={effectively_disabled}
-					aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+					aria-describedby={has_error
+						? `${id}-error`
+						: helper
+							? `${id}-helper`
+							: undefined}
 					onfocus={handleFocus}
 					onblur={handleBlur}
 					onclick={handleFileClick}>
-					{#if file_display}
-						<span class="file-name">{file_display}</span>
-					{:else}
-						<span class="file-placeholder">{placeholder ?? 'Choose file...'}</span>
-					{/if}
+					<span class="file-placeholder">
+						{native_placeholder ?? (multiple ? 'Choose files…' : 'Choose file…')}
+					</span>
 				</button>
-			{:else if is_color}
-				<!-- Color: native picker + text display -->
+			{:else}
+				<div class="file-items">
+					{#each file_previews as preview, i (preview.name + '-' + i)}
+						<span class="file-item">
+							<span class="file-thumb">
+								{#if preview.url}
+									<img src={preview.url} alt="" />
+								{:else}
+									<svg
+										viewBox="0 0 24 24"
+										width="100%"
+										height="100%"
+										fill="none"
+										aria-hidden="true">
+										<path
+											d="M14 3v4a1 1 0 0 0 1 1h4"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round" />
+										<path
+											d="M5 3h9l5 5v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linejoin="round" />
+									</svg>
+								{/if}
+							</span>
+							<span class="file-item-name">{preview.name}</span>
+							<Button
+								icon
+								dense
+								transparent
+								class="input-pill-btn"
+								aria-label="Remove {preview.name}"
+								disabled={effectively_disabled}
+								onclick={() => removeFile(i)}>
+								<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+									<path
+										d="M18 6L6 18M6 6l12 12"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round" />
+								</svg>
+							</Button>
+						</span>
+					{/each}
+					{#if multiple}
+						<div class="file-add-row">
+							<Button
+								translucent
+								dense
+								fullWidth
+								disabled={effectively_disabled}
+								onclick={handleFileClick}>
+								<svg
+									viewBox="0 0 24 24"
+									width="15"
+									height="15"
+									fill="none"
+									aria-hidden="true">
+									<path
+										d="M12 5v14M5 12h14"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round" />
+								</svg>
+								Add files
+							</Button>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		{:else if is_color}
+			<!-- Colour: the swatch overlays the native picker; text shows the value -->
+			<span class="color-control">
+				<span
+					class="color-swatch"
+					style:background={typeof value === 'string' && value ? value : '#000000'}
+					aria-hidden="true">
+				</span>
 				<input
 					type="color"
 					class="color-native"
 					value={typeof value === 'string' && value ? value : '#000000'}
 					disabled={effectively_disabled}
+					aria-label={label || 'Choose colour'}
 					oninput={(e) => {
 						value = (e.target as HTMLInputElement).value;
 						if (form_ctx && name) form_ctx.setValue(name, value);
@@ -835,244 +1001,292 @@
 						value = (e.target as HTMLInputElement).value;
 						onchange?.({ value });
 					}}
-					aria-hidden="true"
-					tabindex={-1} />
-				<input
-					bind:this={input_element}
-					{id}
-					{name}
-					type="text"
-					class="input-field"
-					{placeholder}
-					disabled={effectively_disabled}
-					{readonly}
-					{required}
-					value={value ?? ''}
-					aria-invalid={has_error || undefined}
-					aria-required={required || undefined}
-					aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
 					onfocus={handleFocus}
-					onblur={handleBlur}
-					oninput={handleInput}
-					onchange={handleChange} />
-			{:else}
-				<!-- Standard input -->
-				<input
-					bind:this={input_element}
-					{id}
-					{name}
-					type={html_type}
-					class="input-field"
-					class:has-autocomplete={has_autocomplete}
-					{placeholder}
-					disabled={effectively_disabled}
-					{readonly}
-					{required}
-					{maxlength}
-					{minlength}
-					{pattern}
-					min={min}
-					max={max}
-					step={is_number ? step : undefined}
-					autocomplete={has_autocomplete ? 'off' : undefined}
-					role={has_autocomplete ? 'combobox' : undefined}
-					aria-expanded={has_autocomplete ? ac_open : undefined}
-					aria-autocomplete={has_autocomplete ? 'list' : undefined}
-					aria-controls={has_autocomplete ? `${id}-listbox` : undefined}
-					aria-activedescendant={has_autocomplete && ac_highlighted >= 0 ? `${id}-option-${ac_highlighted}` : undefined}
-					aria-invalid={has_error || undefined}
-					aria-required={required || undefined}
-					aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
-					value={is_number ? (value ?? '') : (value ?? '')}
-					onfocus={handleFocus}
-					onblur={handleBlur}
-					oninput={handleInput}
-					onchange={handleChange}
-					onkeydown={has_autocomplete ? handleKeyDown : undefined} />
-			{/if}
+					onblur={handleBlur} />
+			</span>
+			<input
+				bind:this={input_element}
+				{id}
+				{name}
+				type="text"
+				class="input-field"
+				placeholder={native_placeholder}
+				disabled={effectively_disabled}
+				{readonly}
+				{required}
+				value={value ?? ''}
+				aria-invalid={has_error || undefined}
+				aria-required={required || undefined}
+				aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+				onfocus={handleFocus}
+				onblur={handleBlur}
+				oninput={handleInput}
+				onchange={handleChange} />
+		{:else}
+			<!-- Standard input -->
+			<input
+				bind:this={input_element}
+				{id}
+				{name}
+				type={html_type}
+				class="input-field"
+				class:has-autocomplete={has_autocomplete}
+				placeholder={native_placeholder}
+				disabled={effectively_disabled}
+				{readonly}
+				{required}
+				{maxlength}
+				{minlength}
+				{pattern}
+				{min}
+				{max}
+				step={is_number ? step : undefined}
+				autocomplete={has_autocomplete ? 'off' : undefined}
+				role={has_autocomplete ? 'combobox' : undefined}
+				aria-expanded={has_autocomplete ? ac_open : undefined}
+				aria-autocomplete={has_autocomplete ? 'list' : undefined}
+				aria-controls={has_autocomplete ? `${id}-listbox` : undefined}
+				aria-activedescendant={has_autocomplete && ac_highlighted >= 0
+					? `${id}-option-${ac_highlighted}`
+					: undefined}
+				aria-invalid={has_error || undefined}
+				aria-required={required || undefined}
+				aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+				value={is_number ? (value ?? '') : (value ?? '')}
+				onfocus={handleFocus}
+				onblur={handleBlur}
+				oninput={handleInput}
+				onchange={handleChange}
+				onkeydown={has_autocomplete ? handleKeyDown : undefined} />
+		{/if}
 
-			<!-- Floating label -->
-			{#if label}
-				<label class="input-label" class:floated={label_floated} for={id}>
-					{label}{#if required}<span class="required-mark" aria-hidden="true"> *</span>{/if}
-				</label>
-			{/if}
+		<!-- Floating label (notched-outline style) -->
+		{#if label}
+			<label class="input-label" class:floated={label_floated} for={id}>
+				<span class="input-label-text">
+					{label}{#if required}<span class="required-mark" aria-hidden="true">
+							*
+						</span>{/if}
+				</span>
+			</label>
+		{/if}
 
-			<!-- Suffix -->
-			{#if suffix}
-				<span class="input-suffix" aria-hidden="true">{suffix}</span>
-			{/if}
+		<!-- Suffix -->
+		{#if suffix}
+			<span class="input-suffix" aria-hidden="true">{suffix}</span>
+		{/if}
 
-			<!-- Number buttons -->
-			{#if is_number}
-				<div class="number-buttons">
-					<button
-						type="button"
-						class="number-btn"
-						tabindex={-1}
-						aria-label="Decrease"
-						disabled={effectively_disabled || (min !== undefined && typeof min === 'number' && typeof value === 'number' && value <= min)}
-						onclick={() => handleNumberIncrement(-1)}>
-						<!-- minus icon -->
-						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
-							<path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-						</svg>
-					</button>
-					<button
-						type="button"
-						class="number-btn"
-						tabindex={-1}
-						aria-label="Increase"
-						disabled={effectively_disabled || (max !== undefined && typeof max === 'number' && typeof value === 'number' && value >= max)}
-						onclick={() => handleNumberIncrement(1)}>
-						<!-- plus icon -->
-						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
-							<path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-						</svg>
-					</button>
-				</div>
-			{/if}
-
-			<!-- Password toggle -->
-			{#if is_password && showToggle}
-				<button
-					type="button"
-					class="input-action-btn"
+		<!-- Number steppers -->
+		{#if is_number}
+			<div class="number-buttons">
+				<Button
+					icon
+					transparent
+					class="input-icon-btn"
 					tabindex={-1}
-					aria-label={password_visible ? 'Hide password' : 'Show password'}
-					onclick={handlePasswordToggle}>
-					{#if password_visible}
-						<!-- eye-off icon -->
-						<svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
-							<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							<line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-						</svg>
-					{:else}
-						<!-- eye icon -->
-						<svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
-							<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-							<circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
-						</svg>
-					{/if}
-				</button>
+					aria-label="Decrease"
+					disabled={effectively_disabled ||
+						(min !== undefined &&
+							typeof min === 'number' &&
+							typeof value === 'number' &&
+							value <= min)}
+					onclick={() => handleNumberIncrement(-1)}>
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path
+							d="M5 12h14"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round" />
+					</svg>
+				</Button>
+				<Button
+					icon
+					transparent
+					class="input-icon-btn"
+					tabindex={-1}
+					aria-label="Increase"
+					disabled={effectively_disabled ||
+						(max !== undefined &&
+							typeof max === 'number' &&
+							typeof value === 'number' &&
+							value >= max)}
+					onclick={() => handleNumberIncrement(1)}>
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path
+							d="M12 5v14M5 12h14"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round" />
+					</svg>
+				</Button>
+			</div>
+		{/if}
+
+		<!-- Password toggle -->
+		{#if is_password && showToggle}
+			<Button
+				icon
+				transparent
+				class="input-icon-btn"
+				tabindex={-1}
+				aria-label={password_visible ? 'Hide password' : 'Show password'}
+				onclick={handlePasswordToggle}>
+				{#if password_visible}
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path
+							d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
+						<line
+							x1="1"
+							y1="1"
+							x2="23"
+							y2="23"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round" />
+					</svg>
+				{:else}
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path
+							d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
+						<circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" />
+					</svg>
+				{/if}
+			</Button>
+		{/if}
+
+		<!-- Search icon -->
+		{#if is_search && !icon}
+			<span class="input-icon search-icon" aria-hidden="true">
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+					<circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2" />
+					<path
+						d="M21 21l-4.35-4.35"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round" />
+				</svg>
+			</span>
+		{/if}
+
+		<!-- Clear button -->
+		{#if show_clear}
+			<Button
+				icon
+				dense
+				transparent
+				class="input-icon-btn input-clear-btn"
+				tabindex={-1}
+				aria-label="Clear"
+				onclick={handleClear}>
+				<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path
+						d="M18 6L6 18M6 6l12 12"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round" />
+				</svg>
+			</Button>
+		{/if}
+	</div>
+
+	<!-- Password strength indicator -->
+	{#if is_password && strengthIndicator && typeof value === 'string' && value.length > 0}
+		<div class="strength-meter" aria-label="Password strength: {strength_label}">
+			<div class="strength-track">
+				{#each [1, 2, 3, 4] as segment}
+					<div
+						class="strength-segment"
+						class:active={password_strength >= segment}
+						style:background={password_strength >= segment ? strength_color : undefined}>
+					</div>
+				{/each}
+			</div>
+			<span class="strength-label" style:color={strength_color}>{strength_label}</span>
+		</div>
+	{/if}
+
+	<!-- Footer row: error, helper, counter -->
+	{#if has_error || helper || (showCounter && maxlength)}
+		<div class="input-footer">
+			{#if has_error && error_message}
+				<span class="input-error" id="{id}-error" role="alert">{error_message}</span>
+			{:else if helper}
+				<span class="input-helper" id="{id}-helper">{helper}</span>
+			{:else}
+				<span></span>
 			{/if}
 
-			<!-- Search icon -->
-			{#if is_search && !icon}
-				<span class="input-icon search-icon" aria-hidden="true">
-					<svg viewBox="0 0 24 24" width="16" height="16" fill="none">
-						<circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
-						<path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-					</svg>
+			{#if showCounter && maxlength}
+				<span
+					class="input-counter"
+					class:counter-warning={counter_state === 'warning'}
+					class:counter-error={counter_state === 'error'}>
+					{value_length}/{maxlength}
 				</span>
 			{/if}
-
-			<!-- Clear button -->
-			{#if show_clear}
-				<button
-					type="button"
-					class="input-action-btn clear-btn"
-					tabindex={-1}
-					aria-label="Clear"
-					onclick={handleClear}>
-					<svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
-						<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-					</svg>
-				</button>
-			{/if}
 		</div>
+	{/if}
 
-		<!-- Password strength indicator -->
-		{#if is_password && strengthIndicator && typeof value === 'string' && value.length > 0}
-			<div class="strength-meter" aria-label="Password strength: {strength_label}">
-				<div class="strength-track">
-					{#each [1, 2, 3, 4] as segment}
-						<div
-							class="strength-segment"
-							class:active={password_strength >= segment}
-							style:background={password_strength >= segment ? strength_color : undefined}></div>
-					{/each}
-				</div>
-				<span class="strength-label" style:color={strength_color}>{strength_label}</span>
-			</div>
-		{/if}
-
-		<!-- Footer row: error, helper, counter -->
-		{#if has_error || helper || (showCounter && maxlength)}
-			<div class="input-footer">
-				{#if has_error && error_message}
-					<span class="input-error" id="{id}-error" role="alert">{error_message}</span>
-				{:else if helper}
-					<span class="input-helper" id="{id}-helper">{helper}</span>
+	<!-- Autocomplete dropdown -->
+	{#if has_autocomplete}
+		<Popover
+			refElement={wrapper_element}
+			bind:opened={ac_open}
+			openOnClick={false}
+			arrow={false}
+			placement="bottom"
+			closeOnOutsideClick
+			closeOnEscapeKey
+			closeOnInsideClick={false}
+			disableInitialFocus>
+			<div class="dropdown" bind:this={dropdown_element} role="listbox" id="{id}-listbox">
+				{#if ac_loading}
+					<div class="loading">
+						<span class="spinner" aria-hidden="true"></span>
+						Loading...
+					</div>
+				{:else if ac_options.length === 0}
+					<div class="empty">No results</div>
 				{:else}
-					<span></span>
-				{/if}
-
-				{#if showCounter && maxlength}
-					<span class="input-counter" class:counter-warning={counter_state === 'warning'} class:counter-error={counter_state === 'error'}>
-						{value_length}/{maxlength}
-					</span>
+					{#each ac_options as opt, i (opt.value)}
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<div
+							id="{id}-option-{i}"
+							class="option"
+							class:highlighted={ac_highlighted === i}
+							class:disabled={opt.disabled}
+							role="option"
+							tabindex={-1}
+							aria-selected={value === opt.value}
+							aria-disabled={opt.disabled || undefined}
+							onpointerdown={(e) => e.preventDefault()}
+							onclick={() => selectAutocompleteOption(opt)}
+							onpointerenter={() => {
+								if (!opt.disabled) ac_highlighted = i;
+							}}>
+							{#if option_snippet}
+								{@render option_snippet(opt)}
+							{:else}
+								<span class="option-content">
+									<span class="option-label">{@html highlightMatch(opt.label)}</span>
+									{#if opt.description}
+										<span class="option-desc">{opt.description}</span>
+									{/if}
+								</span>
+							{/if}
+						</div>
+					{/each}
 				{/if}
 			</div>
-		{/if}
-
-		<!-- Autocomplete dropdown -->
-		{#if has_autocomplete}
-			<Popover
-				refElement={wrapper_element}
-				bind:opened={ac_open}
-				openOnClick={false}
-				arrow={false}
-				placement="bottom"
-				closeOnOutsideClick
-				closeOnEscapeKey
-				closeOnInsideClick={false}
-				disableInitialFocus>
-
-				<div
-					class="dropdown"
-					bind:this={dropdown_element}
-					role="listbox"
-					id="{id}-listbox">
-
-					{#if ac_loading}
-						<div class="loading">
-							<span class="spinner" aria-hidden="true"></span>
-							Loading...
-						</div>
-					{:else if ac_options.length === 0}
-						<div class="empty">No results</div>
-					{:else}
-						{#each ac_options as opt, i (opt.value)}
-							<!-- svelte-ignore a11y_click_events_have_key_events -->
-							<div
-								id="{id}-option-{i}"
-								class="option"
-								class:highlighted={ac_highlighted === i}
-								class:disabled={opt.disabled}
-								role="option"
-								tabindex={-1}
-								aria-selected={value === opt.value}
-								aria-disabled={opt.disabled || undefined}
-								onpointerdown={(e) => e.preventDefault()}
-								onclick={() => selectAutocompleteOption(opt)}
-								onpointerenter={() => { if (!opt.disabled) ac_highlighted = i; }}>
-								{#if option_snippet}
-									{@render option_snippet(opt)}
-								{:else}
-									<span class="option-content">
-										<span class="option-label">{@html highlightMatch(opt.label)}</span>
-										{#if opt.description}
-											<span class="option-desc">{opt.description}</span>
-										{/if}
-									</span>
-								{/if}
-							</div>
-						{/each}
-					{/if}
-				</div>
-			</Popover>
-		{/if}
+		</Popover>
 	{/if}
 </div>
 
@@ -1080,7 +1294,7 @@
 {#if name && !is_textarea && !is_file && !multiple}
 	<input type="hidden" {name} value={value ?? ''} />
 {/if}
-{#if name && multiple && Array.isArray(value)}
+{#if name && multiple && !is_file && Array.isArray(value)}
 	{#each value as v (v)}
 		<input type="hidden" {name} value={v} />
 	{/each}
@@ -1096,66 +1310,83 @@
 	/* ================================================================== */
 
 	.input {
-		--_height: var(--input-height, 36px);
 		--_font: var(--input-font, 15px);
-		--_icon-size: var(--input-icon-size, 16px);
-		--_border: var(--color-border, hsl(0 0% 80%));
-		--_border-focus: var(--color-action, hsl(220 70% 55%));
-		--_border-error: var(--color-error, #d32f2f);
-		--_bg: light-dark(white, var(--color-surface, hsl(0 0% 10%)));
+		--_icon-size: var(--input-icon-size, 17px);
+		/* Height scales off --_font (a px value), so the whole component
+		   scales from one number — keeping the roomy, legacy-style feel
+		   while staying a plain length the label maths can divide by. */
+		--_height: calc(var(--_font) * 3.5);
+		--_radius: var(--radius-3, 10px);
+		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
+		--_border-hover: var(
+			--color-outline-active,
+			light-dark(hsl(0 0% 60%), hsl(0 0% 48%))
+		);
+		--_border-focus: var(--color-action, hsl(217 75% 52%));
+		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
+		--_bg: var(--color-bg-0, light-dark(#fff, hsl(0 0% 9%)));
+		--_panel: var(--color-bg-1, light-dark(#fff, hsl(0 0% 13%)));
+		--_panel-hover: var(--color-bg-active, light-dark(hsl(0 0% 95%), hsl(0 0% 18%)));
 		--_text: var(--color-text, inherit);
-		--_text-muted: var(--color-text-muted, hsl(0 0% 55%));
-		--_focus-ring: var(--color-focus-ring, color-mix(in oklch, var(--color-action, hsl(220 70% 55%)) 20%, transparent));
-		--_radius: var(--radius-md, 6px);
-		--_duration: var(--duration-fast, 150ms);
-		--_ease: var(--ease-default, ease);
+		--_text-muted: var(--color-text-light, light-dark(hsl(0 0% 46%), hsl(0 0% 62%)));
+		--_chip-bg: var(--color-action, hsl(217 75% 52%));
+		--_chip-bg-hover: var(--color-action-active, hsl(217 80% 46%));
+		--_chip-text: var(--color-action-text, #fff);
+		--_duration: 150ms;
+		--_ease: var(--ease-in-out-4, cubic-bezier(0.76, 0, 0.24, 1));
+		/* The legacy label glide easing */
+		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
 
 		position: relative;
 		width: 100%;
 		font-size: var(--_font);
+		text-align: left;
 	}
 
 	.input.disabled {
-		opacity: 0.5;
+		opacity: 0.55;
 		pointer-events: none;
 	}
 
-	.input.dense .input-wrapper {
-		padding: 0 0.5rem;
+	/* Density modifiers shift the em-based height (legacy: 2.5 / 3.5 / 4em) */
+	.input.dense {
+		--_height: calc(var(--_font) * 2.5);
 	}
-	.input.comfortable .input-wrapper {
-		padding: 0 1rem;
+	.input.comfortable {
+		--_height: calc(var(--_font) * 4);
 	}
 
 	/* ================================================================== */
-	/*  SKELETON                                                           */
+	/*  SKELETON / LOADING                                                 */
 	/* ================================================================== */
 
-	.input-skeleton {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
+	/*
+	 * The skeleton/loading state renders the real field (label and placeholder
+	 * are known up front) so there's no layout shift when it resolves. It is
+	 * disabled via `effectively_disabled`; a soft sweeping shimmer signals that
+	 * the page isn't ready yet.
+	 */
+	.input.skeleton .input-wrapper::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		background: linear-gradient(
+			100deg,
+			transparent 30%,
+			color-mix(in oklch, var(--_text, currentColor) 9%, transparent) 50%,
+			transparent 70%
+		);
+		background-size: 220% 100%;
+		background-position: 180% 0;
+		animation: input-skeleton-sweep 1.5s ease-in-out infinite;
+		pointer-events: none;
 	}
 
-	.skeleton-label {
-		width: 30%;
-		height: 0.75em;
-		border-radius: var(--radius-sm, 4px);
-		background: var(--color-bg-muted, hsl(0 0% 90%));
-		animation: input-skeleton-pulse 1.5s ease-in-out infinite;
-	}
-
-	.skeleton-field {
-		width: 100%;
-		height: var(--_height);
-		border-radius: var(--_radius);
-		background: var(--color-bg-muted, hsl(0 0% 90%));
-		animation: input-skeleton-pulse 1.5s ease-in-out infinite;
-	}
-
-	@keyframes input-skeleton-pulse {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.5; }
+	@keyframes input-skeleton-sweep {
+		to {
+			background-position: -180% 0;
+		}
 	}
 
 	/* ================================================================== */
@@ -1166,43 +1397,67 @@
 		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.5em;
 		min-height: var(--_height);
-		padding: 0 0.75rem;
-		border: 1px solid var(--_border);
+		/* Leaves room above for the floated label to straddle the outline */
+		margin-top: 0.5em;
+		padding: 0 1em;
 		border-radius: var(--_radius);
 		background: var(--_bg);
-		transition:
-			border-color var(--_duration) var(--_ease),
-			box-shadow var(--_duration) var(--_ease);
 		cursor: text;
 	}
 
-	.input.is-textarea .input-wrapper {
-		align-items: flex-start;
-		min-height: auto;
+	.input.dense .input-wrapper {
+		padding: 0 0.75em;
+	}
+	.input.comfortable .input-wrapper {
+		padding: 0 1.25em;
 	}
 
-	.input-wrapper.focused {
+	/* The outline is painted by a pseudo-element so the 1px -> 2px focus
+	   transition never nudges the field's contents. */
+	.input-wrapper::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border: 1px solid var(--_border);
+		border-radius: inherit;
+		pointer-events: none;
+		transition:
+			border-color var(--_duration) var(--_ease),
+			border-width var(--_duration) var(--_ease);
+	}
+
+	/* With a label present, the label itself paints the top edge (the notch) */
+	.input.has-label .input-wrapper::before {
+		border-top-color: transparent;
+	}
+
+	.input-wrapper:hover::before {
+		border-color: var(--_border-hover);
+	}
+	.input.has-label .input-wrapper:hover::before {
+		border-top-color: transparent;
+	}
+
+	.input-wrapper.focused::before {
 		border-color: var(--_border-focus);
-		box-shadow: 0 0 0 2px var(--_focus-ring);
+		border-width: 2px;
+	}
+	.input.has-label .input-wrapper.focused::before {
+		border-top-color: transparent;
 	}
 
-	.input-wrapper.has-error {
+	.input-wrapper.has-error::before {
 		border-color: var(--_border-error);
-		animation: input-shake 300ms ease;
+	}
+	.input.has-label .input-wrapper.has-error::before {
+		border-top-color: transparent;
 	}
 
-	.input-wrapper.has-error.focused {
-		box-shadow: 0 0 0 2px color-mix(in oklch, var(--_border-error) 20%, transparent);
-	}
-
-	@keyframes input-shake {
-		0%, 100% { transform: translateX(0); }
-		20% { transform: translateX(-4px); }
-		40% { transform: translateX(4px); }
-		60% { transform: translateX(-2px); }
-		80% { transform: translateX(2px); }
+	.input.is-textarea .input-wrapper {
+		align-items: stretch;
+		min-height: auto;
 	}
 
 	/* ================================================================== */
@@ -1214,6 +1469,10 @@
 		min-width: 0;
 		border: none;
 		outline: none;
+		/* The wrapper outline is the focus indicator — neutralise any focus
+		   ring a host app applies to bare controls (e.g. a global
+		   `*:focus-visible { box-shadow }` rule). */
+		box-shadow: none;
 		background: transparent;
 		font: inherit;
 		font-size: var(--_font);
@@ -1225,106 +1484,191 @@
 
 	.input-field::placeholder {
 		color: var(--_text-muted);
-		opacity: 0.7;
-	}
-
-	/* With floating label, shift the input down slightly */
-	.input.has-label .input-field {
-		padding-top: 0.625em;
-	}
-
-	.input.has-label.size-0 .input-field {
-		padding-top: 0.5em;
+		opacity: 0.85;
 	}
 
 	/* Textarea specifics */
 	textarea.input-field {
 		height: auto;
+		min-height: var(--_height);
 		line-height: 1.5;
 		resize: vertical;
-		padding-top: 0.75rem;
-	}
-
-	.input.has-label textarea.input-field {
-		padding-top: 1.25rem;
+		padding: 0.9em 0;
 	}
 
 	/* Number: hide native spinner */
-	input[type="number"].input-field {
+	input[type='number'].input-field {
 		appearance: textfield;
 		-moz-appearance: textfield;
 	}
-	input[type="number"].input-field::-webkit-outer-spin-button,
-	input[type="number"].input-field::-webkit-inner-spin-button {
+	input[type='number'].input-field::-webkit-outer-spin-button,
+	input[type='number'].input-field::-webkit-inner-spin-button {
 		-webkit-appearance: none;
 		margin: 0;
 	}
 
 	/* Search: hide native clear */
-	input[type="search"].input-field::-webkit-search-cancel-button {
+	input[type='search'].input-field::-webkit-search-cancel-button {
 		-webkit-appearance: none;
 	}
 
 	/* ================================================================== */
-	/*  FLOATING LABEL                                                     */
+	/*  FLOATING LABEL  (notched outline, legacy-style)                    */
 	/* ================================================================== */
 
+	/*
+	 * The label spans the full width of the wrapper and paints the top edge
+	 * of the outline itself. At rest it is a single continuous border with the
+	 * label text centred inside (acting as the placeholder). When floated, the
+	 * label's own border disappears and two short "shoulder" segments
+	 * (::before / ::after) light up instead, leaving a gap — the notch —
+	 * exactly the width of the shrunken label text.
+	 */
 	.input-label {
 		position: absolute;
-		left: 0.75rem;
-		top: 50%;
-		transform: translateY(-50%);
-		font-size: var(--_font);
+		inset: 0 0 auto 0;
+		display: flex;
+		align-items: center;
+		/* Fixed to the field's base height so the notch stays pinned to the
+		   top edge even when the wrapper grows (wrapping chips, textarea). */
+		height: var(--_height);
+		margin: 0;
+		padding: 0;
+		box-sizing: border-box;
+		border-top: 1px solid var(--_border);
+		border-radius: var(--_radius);
 		color: var(--_text-muted);
 		pointer-events: none;
 		transition:
-			top 200ms var(--_ease),
-			font-size 200ms var(--_ease),
+			border-color var(--_duration) var(--_ease),
 			color var(--_duration) var(--_ease);
+	}
+
+	/* Notch shoulders — short border runs either side of the label text,
+	   pinned to the top edge regardless of where the label text sits. */
+	.input-label::before,
+	.input-label::after {
+		content: '';
+		display: block;
+		box-sizing: border-box;
+		flex: 0 0 auto;
+		align-self: flex-start;
+		width: 0;
+		min-width: 1em;
+		height: var(--_radius);
+		border-top: 1px solid transparent;
+		transition:
+			border-color var(--_duration) var(--_ease),
+			min-width 200ms var(--_ease-label);
+	}
+	.input-label::before {
+		border-top-left-radius: var(--_radius);
+	}
+	.input-label::after {
+		flex: 1 1 auto;
+		min-width: 0.5em;
+		margin-left: 0.3em;
+		border-top-right-radius: var(--_radius);
+	}
+
+	/* While resting, a leading icon widens the left shoulder so the label text
+	   (acting as the placeholder) clears the icon. Once floated, the shoulder
+	   returns to its base width so the notch always sits in the top-left
+	   corner — even with an icon or prefix. */
+	.input.has-icon .input-label:not(.floated)::before {
+		min-width: calc(1em + var(--_icon-size) + 0.5em);
+	}
+
+	.input-label-text {
+		display: flex;
+		align-items: center;
+		max-width: 100%;
+		padding: 0;
+		font-size: var(--_font);
+		line-height: 1;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: calc(100% - 1.5rem);
-		line-height: 1;
+		transition:
+			font-size 200ms var(--_ease-label),
+			transform 200ms var(--_ease-label),
+			padding 200ms var(--_ease-label);
 	}
 
-	.input.has-icon .input-label {
-		left: calc(0.75rem + var(--_icon-size) + 0.5rem);
-	}
-	.input.has-prefix .input-label {
-		left: auto;
-	}
-
-	.input.is-textarea .input-label {
-		top: 0.875rem;
-		transform: none;
-	}
-
+	/* --- Floated state ------------------------------------------------- */
 	.input-label.floated {
-		top: 0.25rem;
-		font-size: calc(var(--_font) * 0.7);
-		transform: none;
+		border-top-color: transparent;
+	}
+	.input-label.floated::before,
+	.input-label.floated::after {
+		border-top-color: var(--_border);
+	}
+	/* Glide from the vertically-centred resting spot up onto the top edge.
+	   --_height is a plain length, so half of it lands the text exactly on
+	   the outline — and transform + font-size both animate smoothly. */
+	.input-label.floated .input-label-text {
+		font-size: calc(var(--_font) * 0.8);
+		transform: translateY(calc(var(--_height) / -2));
 	}
 
-	.input.is-textarea .input-label.floated {
-		top: 0.25rem;
+	/* --- Textarea: rest the label at the top, straddle the edge on float - */
+	.input.is-textarea .input-label {
+		align-items: flex-start;
+	}
+	.input.is-textarea .input-label-text {
+		padding-top: 0.9em;
+	}
+	.input.is-textarea .input-label.floated .input-label-text {
+		padding-top: 0;
+		transform: translateY(-50%);
 	}
 
-	.size-0 .input-label.floated {
-		top: 0.125rem;
-		font-size: calc(var(--_font) * 0.75);
+	/* --- Hover ---------------------------------------------------------- */
+	.input-wrapper:hover .input-label {
+		border-top-color: var(--_border-hover);
+	}
+	.input-wrapper:hover .input-label.floated {
+		border-top-color: transparent;
+	}
+	.input-wrapper:hover .input-label.floated::before,
+	.input-wrapper:hover .input-label.floated::after {
+		border-top-color: var(--_border-hover);
 	}
 
-	.input.focused .input-label {
+	/* --- Focused -------------------------------------------------------- */
+	.input-wrapper.focused .input-label {
+		border-top-color: var(--_border-focus);
+		border-top-width: 2px;
 		color: var(--_border-focus);
 	}
+	.input-wrapper.focused .input-label.floated {
+		border-top-color: transparent;
+	}
+	.input-wrapper.focused .input-label::before,
+	.input-wrapper.focused .input-label::after {
+		border-top-width: 2px;
+	}
+	.input-wrapper.focused .input-label.floated::before,
+	.input-wrapper.focused .input-label.floated::after {
+		border-top-color: var(--_border-focus);
+	}
 
-	.input.has-error .input-label {
+	/* --- Error ---------------------------------------------------------- */
+	.input-wrapper.has-error .input-label {
+		border-top-color: var(--_border-error);
 		color: var(--_border-error);
+	}
+	.input-wrapper.has-error .input-label.floated {
+		border-top-color: transparent;
+	}
+	.input-wrapper.has-error .input-label.floated::before,
+	.input-wrapper.has-error .input-label.floated::after {
+		border-top-color: var(--_border-error);
 	}
 
 	.required-mark {
 		color: var(--_border-error);
+		margin-left: 0.1em;
 	}
 
 	/* ================================================================== */
@@ -1339,6 +1683,14 @@
 		flex-shrink: 0;
 		width: var(--_icon-size);
 		height: var(--_icon-size);
+		transition: color var(--_duration) var(--_ease);
+	}
+
+	.input-wrapper.focused .input-icon {
+		color: var(--_border-focus);
+	}
+	.input-wrapper.has-error .input-icon {
+		color: var(--_border-error);
 	}
 
 	.search-icon {
@@ -1349,7 +1701,7 @@
 	.input-suffix {
 		flex-shrink: 0;
 		color: var(--_text-muted);
-		font-size: 0.9em;
+		font-size: 0.92em;
 		user-select: none;
 		white-space: nowrap;
 	}
@@ -1359,100 +1711,94 @@
 	}
 
 	/* ================================================================== */
-	/*  ACTION BUTTONS (clear, toggle, etc.)                               */
+	/*  IN-FIELD BUTTONS  (@delightstack Button, scaled to fit)            */
 	/* ================================================================== */
 
-	.input-action-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0.125rem;
-		border: none;
-		background: transparent;
-		color: var(--_text-muted);
-		cursor: pointer;
-		border-radius: var(--radius-sm, 4px);
+	/*
+	 * The clear, password-toggle, stepper and remove controls are all
+	 * <Button> instances. Button's icon mode is sized in `em` (4em square),
+	 * so a font-size keyed off --_font scales them to fit the field without
+	 * reaching into Button's internals.
+	 */
+	.input :global(.button.input-icon-btn) {
+		font-size: calc(var(--_font) * 0.5);
 		flex-shrink: 0;
-		transition: color var(--_duration) var(--_ease), opacity var(--_duration) var(--_ease);
-		opacity: 0.5;
+	}
+	.input :global(.button.input-pill-btn) {
+		font-size: calc(var(--_font) * 0.35);
+		flex-shrink: 0;
 	}
 
-	.input-action-btn:hover {
-		opacity: 1;
-		color: var(--_text);
-	}
-
-	.clear-btn {
+	/* The clear button fades in on hover/focus of the field. */
+	.input :global(.button.input-clear-btn) {
 		opacity: 0;
 		transition: opacity var(--_duration) var(--_ease);
 	}
-	.input-wrapper:hover .clear-btn,
-	.input-wrapper.focused .clear-btn {
-		opacity: 0.5;
-	}
-	.input-wrapper:hover .clear-btn:hover,
-	.input-wrapper.focused .clear-btn:hover {
+	.input-wrapper:hover :global(.button.input-clear-btn),
+	.input-wrapper.focused :global(.button.input-clear-btn) {
 		opacity: 1;
 	}
 
 	/* ================================================================== */
-	/*  NUMBER INCREMENT / DECREMENT                                       */
+	/*  NUMBER STEPPERS                                                    */
 	/* ================================================================== */
 
+	/* The stepper pair sits after the suffix, set off by a thin divider so
+	   the value zone and the controls read as separate groups. */
 	.number-buttons {
 		display: flex;
-		flex-direction: column;
-		gap: 1px;
-		flex-shrink: 0;
-		margin: -0.25rem 0;
-	}
-
-	.number-btn {
-		display: flex;
+		flex-direction: row;
 		align-items: center;
-		justify-content: center;
-		padding: 0;
-		width: 1.25rem;
-		height: calc(var(--_height) / 2 - 2px);
-		border: none;
-		background: transparent;
-		color: var(--_text-muted);
-		cursor: pointer;
-		border-radius: var(--radius-sm, 4px);
-		transition: background var(--_duration) var(--_ease), color var(--_duration) var(--_ease);
+		gap: 0.1em;
+		flex-shrink: 0;
+		order: 2;
+		margin-right: -0.35em;
 	}
 
-	.number-btn:hover:not(:disabled) {
-		background: light-dark(var(--color-bg-muted, hsl(0 0% 93%)), var(--color-bg-muted, hsl(0 0% 20%)));
-		color: var(--_text);
-	}
-
-	.number-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
+	.number-buttons::before {
+		content: '';
+		align-self: center;
+		width: 1px;
+		height: 1.5em;
+		margin-right: 0.35em;
+		background: var(--_border);
 	}
 
 	/* ================================================================== */
 	/*  COLOR INPUT                                                        */
 	/* ================================================================== */
 
-	.color-swatch {
-		width: 1.25rem;
-		height: 1.25rem;
-		border-radius: var(--radius-sm, 4px);
-		border: 1px solid var(--_border);
+	.color-control {
+		position: relative;
+		display: inline-flex;
 		flex-shrink: 0;
+		width: 1.6em;
+		height: 1.6em;
 	}
 
+	.color-swatch {
+		width: 100%;
+		height: 100%;
+		border-radius: var(--radius-2, 5px);
+		border: 1px solid var(--_border);
+		pointer-events: none;
+	}
+
+	/* The real <input type=color> sits invisibly over the swatch, so a click
+	   anywhere on it opens the native picker anchored at the swatch. */
 	.color-native {
 		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		border: 0;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		margin: 0;
 		padding: 0;
-		margin: -1px;
+		border: none;
+		opacity: 0;
+		cursor: pointer;
+	}
+	.color-native:disabled {
+		cursor: not-allowed;
 	}
 
 	/* ================================================================== */
@@ -1470,21 +1816,73 @@
 		margin: -1px;
 	}
 
-	.file-display {
+	.file-trigger {
 		cursor: pointer;
 		text-align: left;
-		font: inherit;
 	}
 
 	.file-placeholder {
 		color: var(--_text-muted);
-		opacity: 0.7;
+		opacity: 0.85;
 	}
 
-	.file-name {
+	.file-items {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4em;
+		flex: 1;
+		min-width: 0;
+		padding: 0.4em 0;
+	}
+	.input.has-label .file-items {
+		padding-top: 0.6em;
+	}
+
+	.file-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5em;
+		max-width: 100%;
+		padding: 0.25em 0.3em;
+		border-radius: var(--radius-2, 6px);
+		background: var(--_panel-hover);
+	}
+
+	.file-thumb {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2em;
+		height: 2em;
+		flex-shrink: 0;
+		overflow: hidden;
+		border-radius: var(--radius-1, 4px);
+		background: var(--_bg);
+		color: var(--_text-muted);
+	}
+	.file-thumb img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.file-thumb svg {
+		width: 62%;
+		height: 62%;
+	}
+
+	.file-item-name {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		font-size: 0.92em;
+	}
+
+	/* The "Add files" Button takes a full-width row of its own. */
+	.file-add-row {
+		flex-basis: 100%;
+		width: 100%;
+		margin-top: 0.1em;
 	}
 
 	/* ================================================================== */
@@ -1495,26 +1893,35 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.4em;
 		flex: 1;
 		min-width: 0;
-		padding: 0.25rem 0;
+		padding: 0.45em 0;
 	}
 
+	/* Keep chips clear of the floated label straddling the top edge */
 	.input.has-label .chips-container {
-		padding-top: 0.875rem;
+		padding-top: 0.7em;
 	}
 
 	.chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.125rem;
-		padding: 0.0625rem 0.375rem;
-		border-radius: var(--radius-sm, 4px);
-		background: light-dark(var(--color-bg-muted, hsl(0 0% 91%)), var(--color-bg-muted, hsl(0 0% 22%)));
+		gap: 0.35em;
+		padding: 0.2em 0.3em 0.2em 0.7em;
+		border-radius: var(--radius-round, 999px);
+		background: var(--_chip-bg);
+		color: var(--_chip-text);
 		font-size: 0.85em;
 		max-width: 100%;
-		line-height: 1.5;
+		line-height: 1.4;
+		transition:
+			background var(--_duration) var(--_ease),
+			scale 150ms var(--_ease);
+	}
+
+	.chip:active {
+		scale: 0.96;
 	}
 
 	.chip-text {
@@ -1526,36 +1933,44 @@
 	.chip-remove {
 		display: flex;
 		align-items: center;
+		justify-content: center;
+		width: 1.3em;
+		height: 1.3em;
 		padding: 0;
 		border: none;
+		border-radius: var(--radius-round, 999px);
 		background: none;
 		color: inherit;
 		cursor: pointer;
-		opacity: 0.5;
+		opacity: 0.75;
 		flex-shrink: 0;
-		transition: opacity var(--_duration) var(--_ease);
+		transition:
+			opacity var(--_duration) var(--_ease),
+			background var(--_duration) var(--_ease);
 	}
 
 	.chip-remove:hover {
 		opacity: 1;
+		background: color-mix(in oklch, currentColor 22%, transparent);
 	}
 
 	.chip-input {
 		flex: 1;
-		min-width: 4rem;
+		min-width: 5em;
 		border: none;
 		outline: none;
+		box-shadow: none;
 		background: transparent;
 		font: inherit;
 		font-size: var(--_font);
 		color: var(--_text);
 		padding: 0;
-		height: 1.75em;
+		height: 1.9em;
 	}
 
 	.chip-input::placeholder {
 		color: var(--_text-muted);
-		opacity: 0.7;
+		opacity: 0.85;
 	}
 
 	/* ================================================================== */
@@ -1565,8 +1980,9 @@
 	.strength-meter {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		margin-top: 0.375rem;
+		gap: 0.5em;
+		margin-top: 0.4em;
+		padding: 0 0.4em;
 	}
 
 	.strength-track {
@@ -1597,29 +2013,36 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
-		gap: 0.5rem;
-		margin-top: 0.25rem;
-		min-height: 1.25em;
+		gap: 0.5em;
+		margin-top: 0.35em;
+		padding: 0 0.5em;
+		min-height: 1.2em;
 	}
 
 	.input-error {
-		font-size: 0.8em;
+		font-size: 0.78em;
 		color: var(--_border-error);
 		animation: input-error-in 200ms var(--_ease);
 	}
 
 	@keyframes input-error-in {
-		from { opacity: 0; transform: translateY(-4px); }
-		to { opacity: 1; transform: translateY(0); }
+		from {
+			opacity: 0;
+			transform: translateY(-3px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	.input-helper {
-		font-size: 0.8em;
+		font-size: 0.78em;
 		color: var(--_text-muted);
 	}
 
 	.input-counter {
-		font-size: 0.75em;
+		font-size: 0.74em;
 		color: var(--_text-muted);
 		margin-left: auto;
 		font-variant-numeric: tabular-nums;
@@ -1641,25 +2064,26 @@
 
 	.dropdown {
 		min-width: 100%;
-		max-height: 240px;
+		max-height: 18em;
 		overflow-y: auto;
-		padding: 0.25rem;
+		padding: 0.3em;
+		scrollbar-width: thin;
 	}
 
 	.option {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm, 4px);
+		gap: 0.6em;
+		padding: 0.7em 0.85em;
+		border-radius: var(--radius-2, 6px);
 		cursor: pointer;
-		transition: background 100ms;
+		transition: background 120ms var(--_ease);
 		user-select: none;
 	}
 
 	.option:hover,
 	.option.highlighted {
-		background: light-dark(var(--color-bg-subtle, hsl(0 0% 96%)), var(--color-bg-subtle, hsl(0 0% 18%)));
+		background: var(--_panel-hover);
 	}
 
 	.option.disabled {
@@ -1691,8 +2115,8 @@
 	.loading {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem;
+		gap: 0.5em;
+		padding: 0.85em;
 		color: var(--_text-muted);
 		font-size: 0.9em;
 	}
@@ -1709,63 +2133,35 @@
 	}
 
 	@keyframes input-spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.empty {
-		padding: 0.75rem;
+		padding: 0.85em;
 		text-align: center;
 		color: var(--_text-muted);
 		font-size: 0.9em;
 	}
 
 	/* ================================================================== */
-	/*  SIZE OVERRIDES                                                     */
+	/*  SIZE                                                               */
 	/* ================================================================== */
 
-	.size-0 .input-wrapper {
-		min-height: 28px;
-		padding: 0 0.5rem;
-		gap: 0.375rem;
-	}
-	.size-0 .input-field {
-		height: 28px;
-		line-height: 28px;
-	}
-	.size-0 .input-label {
-		left: 0.5rem;
-	}
-
-	.size-2 .input-wrapper {
-		min-height: 44px;
-		padding: 0 0.875rem;
-	}
-	.size-2 .input-field {
-		height: 44px;
-		line-height: 44px;
-	}
-	.size-2 .input-label {
-		left: 0.875rem;
-	}
-
-	.size-3 .input-wrapper {
-		min-height: 52px;
-		padding: 0 1rem;
-	}
-	.size-3 .input-field {
-		height: 52px;
-		line-height: 52px;
-	}
-	.size-3 .input-label {
-		left: 1rem;
-	}
+	/*
+	 * Sizes 0–3 only set --input-font (inline, from size_config). Because the
+	 * field height, padding, icon gap and label are all em-based, the whole
+	 * component scales from that single font-size — no per-size overrides
+	 * needed.
+	 */
 
 	/* ================================================================== */
 	/*  READONLY                                                           */
 	/* ================================================================== */
 
 	.input.readonly .input-wrapper {
-		background: light-dark(var(--color-bg-muted, hsl(0 0% 96%)), var(--color-bg-muted, hsl(0 0% 14%)));
+		background: var(--color-bg-disabled, light-dark(hsl(0 0% 96%), hsl(0 0% 13%)));
 		cursor: default;
 	}
 </style>
