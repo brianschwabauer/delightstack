@@ -11,7 +11,6 @@
 <script lang="ts">
 	import { tooltip } from '@delightstack/utilities';
 	import { type Snippet } from 'svelte';
-	import Popover from '../actions/Popover.svelte';
 
 	const propId = $props.id();
 	let {
@@ -39,8 +38,13 @@
 		/** Whether the component is disabled */
 		disabled = false,
 
-		/** The placeholder text shown when no value is selected */
-		placeholder = 'Select...',
+		/**
+		 * Placeholder text shown in the trigger when there is no value. Only
+		 * visible when the label has floated to the top, or there is no label
+		 * (when a label is present and no distinct placeholder is set, the
+		 * label itself acts as the placeholder, legacy-style).
+		 */
+		placeholder = undefined as string | undefined,
 
 		/** The label text above the trigger */
 		label = undefined as string | undefined,
@@ -98,8 +102,10 @@
 	} = $props();
 
 	let open = $state(false);
+	let focused = $state(false);
 	let searchQuery = $state('');
 	let highlightedIndex = $state(-1);
+	let selectElement = $state<HTMLElement | undefined>(undefined);
 	let triggerElement = $state<HTMLElement | undefined>(undefined);
 	let searchInputElement = $state<HTMLInputElement | undefined>(undefined);
 	let dropdownElement = $state<HTMLElement | undefined>(undefined);
@@ -483,11 +489,31 @@
 		return value !== undefined && value !== null;
 	});
 
-	/** Track open state changes from Popover (handles Popover closing itself on outside click etc.) */
+	/** A distinct placeholder is one that differs from the label. */
+	const hasDistinctPlaceholder = $derived(!!placeholder && placeholder !== label);
+
+	/** Whether the floating label sits in its raised (notched) position. */
+	const labelFloated = $derived.by(() => {
+		if (!label) return false;
+		if (hasDistinctPlaceholder) return true;
+		if (open || focused) return true;
+		return hasValue;
+	});
+
+	/** Whether placeholder text should be shown inside the trigger. */
+	const showPlaceholder = $derived(
+		!hasValue && !!placeholder && (!label || hasDistinctPlaceholder),
+	);
+
+	/** A unique CSS anchor name, used for native anchor positioning. */
+	const anchorName = $derived(
+		`--ds-select-${String(id).replace(/[^a-zA-Z0-9_-]/g, '')}`,
+	);
+
+	/** Run open/close side effects when the dropdown state changes. */
 	let previousOpen = false;
 	$effect(() => {
 		if (open && !previousOpen) {
-			// Popover opened
 			onopen?.();
 			if (searchable) {
 				requestAnimationFrame(() => {
@@ -495,12 +521,43 @@
 				});
 			}
 		} else if (!open && previousOpen) {
-			// Popover closed (possibly by itself via outside click)
 			searchQuery = '';
 			highlightedIndex = -1;
 			onclose?.();
 		}
 		previousOpen = open;
+	});
+
+	/* Mirror `open` onto the native popover element. */
+	$effect(() => {
+		const el = dropdownElement;
+		if (!el) return;
+		const shown = el.matches(':popover-open');
+		if (open && !shown) {
+			try {
+				el.showPopover();
+			} catch {
+				/* not connected yet */
+			}
+		} else if (!open && shown) {
+			try {
+				el.hidePopover();
+			} catch {
+				/* already hidden */
+			}
+		}
+	});
+
+	/* Close when a pointer goes down outside the component while open. */
+	$effect(() => {
+		if (!open) return;
+		function onDocPointerDown(e: PointerEvent) {
+			if (selectElement && !selectElement.contains(e.target as Node)) {
+				closeDropdown();
+			}
+		}
+		document.addEventListener('pointerdown', onDocPointerDown, true);
+		return () => document.removeEventListener('pointerdown', onDocPointerDown, true);
 	});
 
 	/** Get the flat index offset for options within a group */
@@ -514,21 +571,21 @@
 	}
 </script>
 
-<!-- Label -->
-{#if label}
-	<label class="select-label" for={id}>
-		{label}{#if required}<span aria-hidden="true">*</span>{/if}
-	</label>
-{/if}
-
 <div
 	class={['select', `size-${size}`, className].filter(Boolean).join(' ')}
 	class:dense
 	class:comfortable
 	class:disabled
 	class:skeleton
+	class:open
+	class:has-label={!!label}
 	class:has-error={!!error}
-	style:font-size={sizeMap[size] ?? sizeMap['1']}
+	bind:this={selectElement}
+	style:--select-font={sizeMap[size] ?? sizeMap['1']}
+	onfocusin={() => (focused = true)}
+	onfocusout={(e) => {
+		if (!selectElement?.contains(e.relatedTarget as Node)) focused = false;
+	}}
 	{@attach tooltipMessage ? tooltip(tooltipMessage) : () => {}}>
 	<!-- Trigger button -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -545,6 +602,7 @@
 		aria-controls="{id}-listbox"
 		aria-disabled={disabled || undefined}
 		tabindex={disabled ? -1 : 0}
+		style:anchor-name={anchorName}
 		onclick={toggleDropdown}
 		onkeydown={onTriggerKeyDown}>
 		<div class="select-value" bind:this={chipsContainer}>
@@ -573,10 +631,18 @@
 				{/if}
 			{:else if !multiple && selectedOptions && !Array.isArray(selectedOptions)}
 				<span class="select-single-value">{selectedOptions.label}</span>
-			{:else}
+			{:else if showPlaceholder}
 				<span class="select-placeholder">{placeholder}</span>
 			{/if}
 		</div>
+
+		<!-- Floating notched-outline label -->
+		{#if label}
+			<label class="select-label" class:floated={labelFloated} for={id}>
+				<span class="select-label-text"
+					>{label}{#if required}<span class="select-required" aria-hidden="true">*</span>{/if}</span>
+			</label>
+		{/if}
 
 		{#if loading}
 			<span class="select-spinner" aria-hidden="true"></span>
@@ -610,43 +676,97 @@
 		</span>
 	</div>
 
-	<!-- Popover dropdown -->
-	<Popover
-		refElement={triggerElement}
-		bind:opened={open}
-		openOnClick={false}
-		arrow={false}
-		placement="bottom"
-		closeOnOutsideClick
-		closeOnEscapeKey
-		closeOnInsideClick={false}
-		disableInitialFocus={searchable}>
-		<div
-			class="select-dropdown"
-			bind:this={dropdownElement}
-			role="listbox"
-			id="{id}-listbox"
-			aria-multiselectable={multiple || undefined}>
-			{#if searchable}
-				<div class="select-search">
-					<input
-						bind:this={searchInputElement}
-						type="text"
-						placeholder="Search..."
-						value={searchQuery}
-						oninput={onSearchInput}
-						onkeydown={onSearchKeyDown}
-						aria-label="Search options"
-						autocomplete="off" />
-				</div>
-			{/if}
+	<!-- Dropdown — native popover, positioned with CSS anchor positioning -->
+	<div
+		class="select-dropdown"
+		popover="manual"
+		bind:this={dropdownElement}
+		role="listbox"
+		id="{id}-listbox"
+		aria-multiselectable={multiple || undefined}
+		style:position-anchor={anchorName}>
+		{#if searchable}
+			<div class="select-search">
+				<input
+					bind:this={searchInputElement}
+					type="text"
+					placeholder="Search..."
+					value={searchQuery}
+					oninput={onSearchInput}
+					onkeydown={onSearchKeyDown}
+					aria-label="Search options"
+					autocomplete="off" />
+			</div>
+		{/if}
 
-			{#if loading}
-				<div class="select-empty">Loading...</div>
-			{:else}
-				<!-- Ungrouped options -->
-				{#each groupedOptions.ungrouped as opt, i (opt.value)}
-					{@const flatIndex = i}
+		{#if loading}
+			<div class="select-empty">Loading...</div>
+		{:else}
+			<!-- Ungrouped options -->
+			{#each groupedOptions.ungrouped as opt, i (opt.value)}
+				{@const flatIndex = i}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<div
+					class="select-option"
+					class:selected={isSelected(opt.value)}
+					class:highlighted={highlightedIndex === flatIndex}
+					class:disabled={opt.disabled}
+					role="option"
+					tabindex="-1"
+					aria-selected={isSelected(opt.value)}
+					aria-disabled={opt.disabled || undefined}
+					onpointerdown={(e) => e.preventDefault()}
+					onclick={() => selectOption(opt)}
+					onpointerenter={() => {
+						if (!opt.disabled) highlightedIndex = flatIndex;
+					}}>
+					{#if multiple}
+						<span class="select-check" aria-hidden="true">
+							{#if isSelected(opt.value)}
+								<svg viewBox="0 0 24 24" width="16" height="16">
+									<path
+										d="M5 13l4 4L19 7"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										fill="none" />
+								</svg>
+							{/if}
+						</span>
+					{/if}
+					{#if optionSnippet}
+						{@render optionSnippet(opt)}
+					{:else}
+						<span class="select-option-content">
+							<span class="select-option-label">{opt.label}</span>
+							{#if opt.description}
+								<span class="select-option-description">{opt.description}</span>
+							{/if}
+						</span>
+					{/if}
+					{#if !multiple && isSelected(opt.value)}
+						<span class="select-check-single" aria-hidden="true">
+							<svg viewBox="0 0 24 24" width="16" height="16">
+								<path
+									d="M5 13l4 4L19 7"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									fill="none" />
+							</svg>
+						</span>
+					{/if}
+				</div>
+			{/each}
+
+			<!-- Grouped options -->
+			{#each [...groupedOptions.groups] as [groupName, groupOpts] (groupName)}
+				<div class="select-group-label">{groupName}</div>
+				{#each groupOpts as opt, gi (opt.value)}
+					{@const flatIndex =
+						groupedOptions.ungrouped.length + getFlatGroupIndex(groupName, gi)}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
 						class="select-option"
@@ -702,96 +822,33 @@
 						{/if}
 					</div>
 				{/each}
+			{/each}
 
-				<!-- Grouped options -->
-				{#each [...groupedOptions.groups] as [groupName, groupOpts] (groupName)}
-					<div class="select-group-label">{groupName}</div>
-					{#each groupOpts as opt, gi (opt.value)}
-						{@const flatIndex =
-							groupedOptions.ungrouped.length + getFlatGroupIndex(groupName, gi)}
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
-						<div
-							class="select-option"
-							class:selected={isSelected(opt.value)}
-							class:highlighted={highlightedIndex === flatIndex}
-							class:disabled={opt.disabled}
-							role="option"
-							tabindex="-1"
-							aria-selected={isSelected(opt.value)}
-							aria-disabled={opt.disabled || undefined}
-							onpointerdown={(e) => e.preventDefault()}
-							onclick={() => selectOption(opt)}
-							onpointerenter={() => {
-								if (!opt.disabled) highlightedIndex = flatIndex;
-							}}>
-							{#if multiple}
-								<span class="select-check" aria-hidden="true">
-									{#if isSelected(opt.value)}
-										<svg viewBox="0 0 24 24" width="16" height="16">
-											<path
-												d="M5 13l4 4L19 7"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												fill="none" />
-										</svg>
-									{/if}
-								</span>
-							{/if}
-							{#if optionSnippet}
-								{@render optionSnippet(opt)}
-							{:else}
-								<span class="select-option-content">
-									<span class="select-option-label">{opt.label}</span>
-									{#if opt.description}
-										<span class="select-option-description">{opt.description}</span>
-									{/if}
-								</span>
-							{/if}
-							{#if !multiple && isSelected(opt.value)}
-								<span class="select-check-single" aria-hidden="true">
-									<svg viewBox="0 0 24 24" width="16" height="16">
-										<path
-											d="M5 13l4 4L19 7"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											fill="none" />
-									</svg>
-								</span>
-							{/if}
-						</div>
-					{/each}
-				{/each}
-
-				<!-- Creatable option -->
-				{#if showCreateOption}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<div
-						class="select-option select-create"
-						class:highlighted={highlightedIndex === flatSelectableOptions.length ||
-							highlightedIndex === -1}
-						role="option"
-						tabindex="-1"
-						aria-selected={false}
-						onpointerdown={(e) => e.preventDefault()}
-						onclick={handleCreate}
-						onpointerenter={() => {
-							highlightedIndex = flatSelectableOptions.length;
-						}}>
-						Create '{searchQuery.trim()}'
-					</div>
-				{/if}
-
-				<!-- Empty state -->
-				{#if showEmpty}
-					<div class="select-empty">No options</div>
-				{/if}
+			<!-- Creatable option -->
+			{#if showCreateOption}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<div
+					class="select-option select-create"
+					class:highlighted={highlightedIndex === flatSelectableOptions.length ||
+						highlightedIndex === -1}
+					role="option"
+					tabindex="-1"
+					aria-selected={false}
+					onpointerdown={(e) => e.preventDefault()}
+					onclick={handleCreate}
+					onpointerenter={() => {
+						highlightedIndex = flatSelectableOptions.length;
+					}}>
+					Create '{searchQuery.trim()}'
+				</div>
 			{/if}
-		</div>
-	</Popover>
+
+			<!-- Empty state -->
+			{#if showEmpty}
+				<div class="select-empty">No options</div>
+			{/if}
+		{/if}
+	</div>
 
 	<!-- Hidden input(s) for form submission -->
 	{#if name}
@@ -811,104 +868,294 @@
 {/if}
 
 <style>
-	.select-label {
-		display: block;
-		font-size: 0.85em;
-		margin-bottom: 0.25rem;
-		color: var(--color-text-muted, hsl(0 0% 55%));
-	}
+	/* ================================================================== */
+	/*  ROOT                                                               */
+	/* ================================================================== */
 
 	.select {
+		--_font: var(--select-font, 1rem);
+		/* Height scales off the font so the whole control scales from one
+		   number — the roomy, legacy-style feel. */
+		--_height: calc(var(--_font) * 3.5);
+		--_radius: var(--radius-3, 10px);
+		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
+		--_border-hover: var(--color-outline-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
+		--_border-focus: var(--color-action, hsl(217 75% 52%));
+		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
+		--_bg: var(--color-bg-0, light-dark(#fff, hsl(0 0% 9%)));
+		--_panel: var(--color-bg-1, light-dark(#fff, hsl(0 0% 13%)));
+		--_panel-hover: var(--color-bg-active, light-dark(hsl(0 0% 95%), hsl(0 0% 18%)));
+		--_text: var(--color-text, inherit);
+		--_text-muted: var(--color-text-light, light-dark(hsl(0 0% 46%), hsl(0 0% 62%)));
+		--_chip-bg: var(--color-action, hsl(217 75% 52%));
+		--_chip-text: var(--color-action-text, #fff);
+		--_duration: 150ms;
+		--_ease: var(--ease-in-out-4, cubic-bezier(0.76, 0, 0.24, 1));
+		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
+
 		position: relative;
 		width: 100%;
-		perspective: 100px;
+		font-size: var(--_font);
+		text-align: left;
+	}
+
+	.select.dense {
+		--_height: calc(var(--_font) * 2.5);
+	}
+	.select.comfortable {
+		--_height: calc(var(--_font) * 4);
 	}
 
 	.select.disabled {
-		opacity: 0.5;
+		opacity: 0.55;
 		pointer-events: none;
 	}
 
+	/* ================================================================== */
+	/*  SKELETON / LOADING                                                 */
+	/* ================================================================== */
+
+	/* The skeleton renders the real trigger (non-interactive) with a soft
+	   sweeping shimmer — no layout shift when it resolves. */
 	.select.skeleton {
 		pointer-events: none;
 	}
-	.select.skeleton .select-trigger {
-		background: var(--color-bg-muted, hsl(0 0% 90%));
-		color: transparent;
-		border-color: transparent;
-		animation: select-skeleton-pulse 1.5s ease-in-out infinite;
-	}
-	@keyframes select-skeleton-pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.5;
-		}
-	}
-
-	.select-trigger {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		border: 1px solid var(--color-border, hsl(0 0% 80%));
-		border-radius: var(--radius-md, 6px);
-		background: light-dark(white, var(--color-surface-1, hsl(0 0% 12%)));
-		cursor: pointer;
-		transition:
-			border-color 150ms,
-			translate 200ms ease;
-		min-height: 2.25rem;
-		width: 100%;
-		outline: none;
-		font: inherit;
-		color: inherit;
-		text-align: left;
-
-		&:active:not(.disabled) {
-			translate: 0px 3px clamp(-6px, calc(0.2em - 5px), -2px);
-		}
-	}
-
-	.select-trigger:focus-within,
-	.select-trigger.open {
-		border-color: var(--color-action, hsl(220 70% 55%));
-		box-shadow: 0 0 0 2px
-			color-mix(in oklch, var(--color-action, hsl(220 70% 55%)) 20%, transparent);
-	}
-
-	.select-trigger.error {
-		border-color: var(--color-error, #d32f2f);
-	}
-
-	.select-trigger.disabled {
-		opacity: 0.5;
+	.select.skeleton .select-trigger::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		background: linear-gradient(
+			100deg,
+			transparent 30%,
+			color-mix(in oklch, var(--_text, currentColor) 9%, transparent) 50%,
+			transparent 70%
+		);
+		background-size: 220% 100%;
+		background-position: 180% 0;
+		animation: select-skeleton-sweep 1.5s ease-in-out infinite;
 		pointer-events: none;
 	}
+	@keyframes select-skeleton-sweep {
+		to { background-position: -180% 0; }
+	}
 
-	/* Dense / Comfortable */
+	/* ================================================================== */
+	/*  TRIGGER                                                            */
+	/* ================================================================== */
+
+	.select-trigger {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
+		min-height: var(--_height);
+		/* Leaves room above for the floated label to straddle the outline */
+		margin-top: 0.5em;
+		padding: 0 1em;
+		border-radius: var(--_radius);
+		background: var(--_bg);
+		cursor: pointer;
+		width: 100%;
+		font: inherit;
+		font-size: var(--_font);
+		color: var(--_text);
+		text-align: left;
+		outline: none;
+	}
+
 	.select.dense .select-trigger {
-		padding: 0.25rem 0.5rem;
-		min-height: 1.75rem;
-		gap: 0.25rem;
+		padding: 0 0.75em;
 	}
 	.select.comfortable .select-trigger {
-		padding: 0.75rem 1rem;
-		min-height: 2.75rem;
-		gap: 0.625rem;
+		padding: 0 1.25em;
 	}
+
+	/* The outline is painted by a pseudo-element so the 1px -> 2px focus
+	   transition never nudges the trigger's contents. */
+	.select-trigger::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border: 1px solid var(--_border);
+		border-radius: inherit;
+		pointer-events: none;
+		transition:
+			border-color var(--_duration) var(--_ease),
+			border-width var(--_duration) var(--_ease);
+	}
+
+	/* With a label present, the label paints the top edge (the notch) */
+	.select.has-label .select-trigger::before {
+		border-top-color: transparent;
+	}
+
+	.select-trigger:hover::before {
+		border-color: var(--_border-hover);
+	}
+	.select.has-label .select-trigger:hover::before {
+		border-top-color: transparent;
+	}
+
+	.select-trigger.open::before,
+	.select-trigger:focus-within::before {
+		border-color: var(--_border-focus);
+		border-width: 2px;
+	}
+	.select.has-label .select-trigger.open::before,
+	.select.has-label .select-trigger:focus-within::before {
+		border-top-color: transparent;
+	}
+
+	.select.has-error .select-trigger::before {
+		border-color: var(--_border-error);
+	}
+	.select.has-error .select-trigger.open::before,
+	.select.has-error .select-trigger:focus-within::before {
+		border-color: var(--_border-error);
+	}
+	.select.has-error.has-label .select-trigger::before {
+		border-top-color: transparent;
+	}
+
+	/* ================================================================== */
+	/*  FLOATING LABEL  (notched outline, legacy-style)                    */
+	/* ================================================================== */
+
+	.select-label {
+		position: absolute;
+		inset: 0 0 auto 0;
+		display: flex;
+		align-items: center;
+		height: var(--_height);
+		margin: 0;
+		padding: 0;
+		box-sizing: border-box;
+		border-top: 1px solid var(--_border);
+		border-radius: var(--_radius);
+		color: var(--_text-muted);
+		pointer-events: none;
+		transition:
+			border-color var(--_duration) var(--_ease),
+			color var(--_duration) var(--_ease);
+	}
+
+	/* Notch shoulders — short border runs either side of the label text */
+	.select-label::before,
+	.select-label::after {
+		content: '';
+		display: block;
+		box-sizing: border-box;
+		flex: 0 0 auto;
+		align-self: flex-start;
+		width: 0;
+		min-width: 1em;
+		height: var(--_radius);
+		border-top: 1px solid transparent;
+		transition: border-color var(--_duration) var(--_ease);
+	}
+	.select-label::before {
+		border-top-left-radius: var(--_radius);
+	}
+	.select-label::after {
+		flex: 1 1 auto;
+		min-width: 0.5em;
+		margin-left: 0.3em;
+		border-top-right-radius: var(--_radius);
+	}
+
+	.select-label-text {
+		display: flex;
+		align-items: center;
+		max-width: 100%;
+		font-size: var(--_font);
+		line-height: 1;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		transition:
+			font-size 200ms var(--_ease-label),
+			transform 200ms var(--_ease-label);
+	}
+
+	/* Floated: hide the label's own edge, light the notch shoulders, and
+	   glide the shrunken text up onto the outline. */
+	.select-label.floated {
+		border-top-color: transparent;
+	}
+	.select-label.floated::before,
+	.select-label.floated::after {
+		border-top-color: var(--_border);
+	}
+	.select-label.floated .select-label-text {
+		font-size: calc(var(--_font) * 0.8);
+		transform: translateY(calc(var(--_height) / -2));
+	}
+
+	.select-trigger:hover .select-label {
+		border-top-color: var(--_border-hover);
+	}
+	.select-trigger:hover .select-label.floated {
+		border-top-color: transparent;
+	}
+	.select-trigger:hover .select-label.floated::before,
+	.select-trigger:hover .select-label.floated::after {
+		border-top-color: var(--_border-hover);
+	}
+
+	.select-trigger.open .select-label,
+	.select-trigger:focus-within .select-label {
+		border-top-color: var(--_border-focus);
+		border-top-width: 2px;
+		color: var(--_border-focus);
+	}
+	.select-trigger.open .select-label.floated,
+	.select-trigger:focus-within .select-label.floated {
+		border-top-color: transparent;
+	}
+	.select-trigger.open .select-label::before,
+	.select-trigger.open .select-label::after,
+	.select-trigger:focus-within .select-label::before,
+	.select-trigger:focus-within .select-label::after {
+		border-top-width: 2px;
+	}
+	.select-trigger.open .select-label.floated::before,
+	.select-trigger.open .select-label.floated::after,
+	.select-trigger:focus-within .select-label.floated::before,
+	.select-trigger:focus-within .select-label.floated::after {
+		border-top-color: var(--_border-focus);
+	}
+
+	.select.has-error .select-label {
+		border-top-color: var(--_border-error);
+		color: var(--_border-error);
+	}
+	.select.has-error .select-label.floated {
+		border-top-color: transparent;
+	}
+	.select.has-error .select-label.floated::before,
+	.select.has-error .select-label.floated::after {
+		border-top-color: var(--_border-error);
+	}
+
+	.select-required {
+		color: var(--_border-error);
+		margin-left: 0.15em;
+	}
+
+	/* ================================================================== */
+	/*  VALUE / CHIPS                                                      */
+	/* ================================================================== */
 
 	.select-value {
 		flex: 1;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.25rem;
+		gap: 0.35em;
 		min-width: 0;
 		overflow: hidden;
-		max-height: 4.5rem;
+		max-height: calc(var(--_height) * 1.4);
 	}
 
 	.select-single-value {
@@ -918,62 +1165,73 @@
 	}
 
 	.select-placeholder {
-		color: var(--color-text-muted, hsl(0 0% 55%));
+		color: var(--_text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	/* Chips */
 	.select-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		padding: 0.125rem 0.375rem;
-		border-radius: var(--radius-sm, 4px);
-		background: light-dark(var(--color-bg-muted, #e5e5e5), var(--color-bg-muted, #333));
-		font-size: 0.85em;
+		gap: 0.3em;
+		padding: 0.2em 0.3em 0.2em 0.7em;
+		border-radius: var(--radius-round, 999px);
+		background: var(--_chip-bg);
+		color: var(--_chip-text);
+		font-size: 0.82em;
 		max-width: 100%;
+		line-height: 1.45;
+	}
+	.select-chip > span:first-child {
 		overflow: hidden;
-
-		> span:first-child {
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.select-chip.overflow {
-		opacity: 0.7;
-		font-style: italic;
+		background: var(--_panel-hover);
+		color: var(--_text-muted);
+		padding: 0.2em 0.6em;
 	}
 
 	.select-chip-remove {
-		cursor: pointer;
-		display: flex;
-		padding: 0;
-		border: none;
-		background: none;
-		opacity: 0.5;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.35em;
+		height: 1.35em;
 		flex-shrink: 0;
+		border-radius: var(--radius-round, 999px);
 		color: inherit;
+		cursor: pointer;
+		opacity: 0.75;
+		transition:
+			opacity var(--_duration) var(--_ease),
+			background var(--_duration) var(--_ease);
 	}
 	.select-chip-remove:hover {
 		opacity: 1;
-		transition: none;
+		background: color-mix(in oklch, currentColor 22%, transparent);
 	}
 
 	/* Clear button */
 	.select-clear {
 		display: flex;
 		align-items: center;
-		opacity: 0.4;
-		cursor: pointer;
+		justify-content: center;
 		flex-shrink: 0;
-		transition: opacity 150ms;
+		padding: 0.2em;
+		border-radius: var(--radius-round, 999px);
+		color: var(--_text-muted);
+		cursor: pointer;
+		opacity: 0.7;
+		transition:
+			opacity var(--_duration) var(--_ease),
+			background var(--_duration) var(--_ease);
 	}
 	.select-clear:hover {
-		opacity: 0.8;
-		transition: none;
+		opacity: 1;
+		background: var(--_panel-hover);
 	}
 
 	/* Chevron */
@@ -981,20 +1239,26 @@
 		display: flex;
 		align-items: center;
 		flex-shrink: 0;
-		opacity: 0.5;
-		transition: transform 200ms ease;
+		color: var(--_text-muted);
+		transition:
+			transform var(--_duration) var(--_ease),
+			color var(--_duration) var(--_ease);
 	}
 	.select-chevron.open {
 		transform: rotate(180deg);
+	}
+	.select-trigger.open .select-chevron,
+	.select-trigger:focus-within .select-chevron {
+		color: var(--_border-focus);
 	}
 
 	/* Spinner */
 	.select-spinner {
 		display: inline-block;
-		width: 16px;
-		height: 16px;
-		border: 2px solid var(--color-border, hsl(0 0% 80%));
-		border-top-color: var(--color-action, hsl(220 70% 55%));
+		width: 1.05em;
+		height: 1.05em;
+		border: 2px solid var(--_border);
+		border-top-color: var(--_border-focus);
 		border-radius: 50%;
 		animation: select-spin 0.6s linear infinite;
 		flex-shrink: 0;
@@ -1005,49 +1269,93 @@
 		}
 	}
 
-	/* Dropdown */
+	/* ================================================================== */
+	/*  DROPDOWN  (native popover, CSS anchor positioned)                  */
+	/* ================================================================== */
+
+	/*
+	 * The dropdown is a native `popover` element — it renders in the top
+	 * layer (no clipping, no z-index juggling, no Portal) and is placed with
+	 * CSS anchor positioning relative to the trigger. `position-anchor` is set
+	 * inline to a per-instance anchor name.
+	 */
 	.select-dropdown {
-		min-width: 100%;
-		max-height: 240px;
+		position: fixed;
+		top: anchor(bottom);
+		bottom: auto;
+		left: anchor(left);
+		right: auto;
+		width: anchor-size(width);
+		margin: 0.4em 0 0 0;
+		padding: 0.3em;
+		box-sizing: border-box;
+		max-height: 18em;
 		overflow-y: auto;
-		padding: 0.25rem;
+		border: none;
+		background: var(--_panel);
+		color: var(--_text);
+		border-radius: var(--radius-4, 16px);
+		box-shadow: var(--shadow-2, 0 8px 28px -8px rgb(0 0 0 / 0.3));
+		scrollbar-width: thin;
+		/* Flip above the trigger when there is no room below */
+		position-try-fallbacks: flip-block;
+		/* Fade through the native popover open/close lifecycle */
+		opacity: 1;
+		transition:
+			opacity var(--_duration) var(--_ease),
+			display var(--_duration) allow-discrete,
+			overlay var(--_duration) allow-discrete;
+	}
+	.select-dropdown:not(:popover-open) {
+		opacity: 0;
+	}
+	@starting-style {
+		.select-dropdown:popover-open {
+			opacity: 0;
+		}
 	}
 
 	/* Search */
 	.select-search {
-		padding: 0.5rem 0.75rem;
-		border-bottom: 1px solid var(--color-border, hsl(0 0% 80%));
+		padding: 0.25em 0.25em 0.4em;
 	}
 	.select-search input {
 		width: 100%;
-		border: none;
-		outline: none;
-		background: none;
-		color: inherit;
+		padding: 0.6em 0.8em;
+		border: 1px solid var(--_border);
+		border-radius: var(--radius-2, 6px);
+		background: var(--_bg);
+		color: var(--_text);
 		font: inherit;
+		outline: none;
+		box-shadow: none;
+		transition: border-color var(--_duration) var(--_ease);
+	}
+	.select-search input:focus {
+		border-color: var(--_border-focus);
+	}
+	.select-search input::placeholder {
+		color: var(--_text-muted);
 	}
 
 	/* Options */
 	.select-option {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		border-radius: var(--radius-sm, 4px);
+		gap: 0.6em;
+		padding: 0.7em 0.85em;
+		border-radius: var(--radius-2, 8px);
 		cursor: pointer;
-		transition: background 100ms;
+		transition: background 120ms var(--_ease);
 		user-select: none;
 	}
 	.select-option:hover,
 	.select-option.highlighted {
-		background: light-dark(
-			var(--color-bg-subtle, #f5f5f5),
-			var(--color-bg-subtle, #1a1a1a)
-		);
-		transition: none;
+		background: var(--_panel-hover);
 	}
 	.select-option.selected {
-		color: var(--color-action, hsl(220 70% 55%));
+		color: var(--_border-focus);
+		font-weight: 600;
 	}
 	.select-option.disabled {
 		opacity: 0.5;
@@ -1067,36 +1375,37 @@
 	}
 	.select-option-description {
 		font-size: 0.8em;
-		color: var(--color-text-muted, hsl(0 0% 55%));
+		color: var(--_text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	/* Checkmark space */
+	/* Checkmarks */
 	.select-check {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 16px;
-		height: 16px;
+		width: 1.1em;
+		height: 1.1em;
 		flex-shrink: 0;
-		color: var(--color-action, hsl(220 70% 55%));
+		color: var(--_border-focus);
 	}
 	.select-check-single {
 		display: flex;
 		align-items: center;
 		margin-left: auto;
 		flex-shrink: 0;
-		color: var(--color-action, hsl(220 70% 55%));
+		color: var(--_border-focus);
 	}
 
 	/* Group label */
 	.select-group-label {
-		padding: 0.375rem 0.75rem;
-		font-size: 0.75em;
-		font-weight: 500;
-		color: var(--color-text-muted, hsl(0 0% 55%));
+		padding: 0.5em 0.85em 0.25em;
+		font-size: 0.72em;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		color: var(--_text-muted);
 		text-transform: uppercase;
 		user-select: none;
 	}
@@ -1104,20 +1413,42 @@
 	/* Create option */
 	.select-create {
 		font-style: italic;
+		color: var(--_text-muted);
 	}
 
-	/* Empty state */
+	/* Empty / loading state */
 	.select-empty {
-		padding: 1rem;
+		padding: 0.9em;
 		text-align: center;
-		color: var(--color-text-muted, hsl(0 0% 55%));
+		color: var(--_text-muted);
+		font-size: 0.92em;
 	}
 
 	/* Error message */
 	.select-error {
-		font-size: 0.8em;
-		color: var(--color-error, #d32f2f);
-		margin-top: 0.25rem;
 		display: block;
+		font-size: 0.78em;
+		color: var(--_border-error);
+		margin-top: 0.35em;
+		padding: 0 0.5em;
+	}
+
+	/* Icons scale with the control's font size */
+	.select-chevron svg {
+		width: 1.15em;
+		height: 1.15em;
+	}
+	.select-clear svg {
+		width: 1.05em;
+		height: 1.05em;
+	}
+	.select-chip-remove svg {
+		width: 0.85em;
+		height: 0.85em;
+	}
+	.select-check svg,
+	.select-check-single svg {
+		width: 100%;
+		height: 100%;
 	}
 </style>
