@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Input } from '@delightstack/components';
+	import { Input, Select, type SelectOption } from '@delightstack/components';
 	import IconSearch from './IconSearch.svelte';
 	import IconMail from './IconMail.svelte';
 	import IconLock from './IconLock.svelte';
@@ -99,6 +99,52 @@
 			.filter((f) => f.toLowerCase().includes(q))
 			.map((f) => ({ value: f, label: f }));
 	}
+
+	/* ---- Select ------------------------------------------------------ */
+	let selBasic = $state<unknown>(undefined);
+	let selFilled = $state<unknown>('ca');
+	let selPlaceholder = $state<unknown>(undefined);
+	let selNoLabel = $state<unknown>(undefined);
+	let selMulti = $state<unknown[]>(['us', 'jp']);
+	let selSearch = $state<unknown>(undefined);
+	let selClear = $state<unknown>('gb');
+	let selColor = $state<unknown>(undefined);
+	let selGroup = $state<unknown>(undefined);
+	let selDesc = $state<unknown>('pro');
+	let selError = $state<unknown>(undefined);
+	let selS0 = $state<unknown>(undefined);
+	let selS1 = $state<unknown>(undefined);
+	let selS2 = $state<unknown>(undefined);
+	let selS3 = $state<unknown>(undefined);
+	let selDense = $state<unknown>(undefined);
+	let selDefault = $state<unknown>(undefined);
+	let selComfy = $state<unknown>(undefined);
+
+	let createdColors = $state<SelectOption[]>([
+		{ value: 'red', label: 'Red' },
+		{ value: 'blue', label: 'Blue' },
+	]);
+	function createColor(detail: { value: string }) {
+		createdColors = [
+			...createdColors,
+			{ value: detail.value.toLowerCase(), label: detail.value },
+		];
+	}
+
+	const groupedFood: SelectOption[] = [
+		{ value: 'apple', label: 'Apple', group: 'Fruit' },
+		{ value: 'banana', label: 'Banana', group: 'Fruit' },
+		{ value: 'cherry', label: 'Cherry', group: 'Fruit' },
+		{ value: 'carrot', label: 'Carrot', group: 'Vegetable' },
+		{ value: 'potato', label: 'Potato', group: 'Vegetable' },
+		{ value: 'spinach', label: 'Spinach', group: 'Vegetable' },
+	];
+	const plans: SelectOption[] = [
+		{ value: 'free', label: 'Free', description: 'For getting started' },
+		{ value: 'pro', label: 'Pro', description: '$12/mo, billed yearly' },
+		{ value: 'team', label: 'Team', description: 'Up to 10 seats' },
+		{ value: 'ent', label: 'Enterprise', description: 'Custom pricing', disabled: true },
+	];
 </script>
 
 <svelte:head><title>Input — Component Showcase</title></svelte:head>
@@ -327,6 +373,87 @@
 				<Input comfortable label="Comfortable field" bind:value={comfortable} /></figure>
 		</div>
 	</section>
+
+	<!-- ============================================================ -->
+	<header class="select-header">
+		<h1>Select</h1>
+		<p>
+			The <code>Select</code> component — legacy notched-outline styling, native
+			<code>popover</code> dropdown positioned with CSS anchor positioning.
+		</p>
+	</header>
+
+	<section>
+		<h2>Single select</h2>
+		<div class="grid">
+			<figure><figcaption>label — animates</figcaption>
+				<Select label="Country" options={countries} bind:value={selBasic} /></figure>
+			<figure><figcaption>filled</figcaption>
+				<Select label="Country" options={countries} bind:value={selFilled} /></figure>
+			<figure><figcaption>label + distinct placeholder</figcaption>
+				<Select label="Country" placeholder="Pick one…" options={countries} bind:value={selPlaceholder} /></figure>
+			<figure><figcaption>no label</figcaption>
+				<Select placeholder="Select a country…" options={countries} bind:value={selNoLabel} /></figure>
+		</div>
+	</section>
+
+	<section>
+		<h2>Features</h2>
+		<div class="grid">
+			<figure><figcaption>multiple (chips)</figcaption>
+				<Select label="Countries" multiple options={countries} bind:value={selMulti} /></figure>
+			<figure><figcaption>searchable</figcaption>
+				<Select label="Country" searchable options={countries} bind:value={selSearch} /></figure>
+			<figure><figcaption>clearable</figcaption>
+				<Select label="Country" clearable options={countries} bind:value={selClear} /></figure>
+			<figure><figcaption>searchable + creatable</figcaption>
+				<Select label="Colour" searchable creatable options={createdColors} oncreate={createColor} bind:value={selColor} /></figure>
+			<figure><figcaption>grouped options</figcaption>
+				<Select label="Food" options={groupedFood} bind:value={selGroup} /></figure>
+			<figure><figcaption>option descriptions</figcaption>
+				<Select label="Plan" options={plans} bind:value={selDesc} /></figure>
+		</div>
+	</section>
+
+	<section>
+		<h2>States</h2>
+		<div class="grid">
+			<figure><figcaption>loading</figcaption>
+				<Select label="Country" loading options={countries} /></figure>
+			<figure><figcaption>disabled</figcaption>
+				<Select label="Country" disabled options={countries} value="ca" /></figure>
+			<figure><figcaption>error</figcaption>
+				<Select label="Country" required error="Please choose a country" options={countries} bind:value={selError} /></figure>
+			<figure><figcaption>skeleton</figcaption>
+				<Select label="Loading…" skeleton options={countries} /></figure>
+		</div>
+	</section>
+
+	<section>
+		<h2>Sizes</h2>
+		<div class="grid">
+			<figure><figcaption>size 0</figcaption>
+				<Select size="0" label="Size 0" options={countries} bind:value={selS0} /></figure>
+			<figure><figcaption>size 1 (default)</figcaption>
+				<Select size="1" label="Size 1" options={countries} bind:value={selS1} /></figure>
+			<figure><figcaption>size 2</figcaption>
+				<Select size="2" label="Size 2" options={countries} bind:value={selS2} /></figure>
+			<figure><figcaption>size 3</figcaption>
+				<Select size="3" label="Size 3" options={countries} bind:value={selS3} /></figure>
+		</div>
+	</section>
+
+	<section>
+		<h2>Density</h2>
+		<div class="grid">
+			<figure><figcaption>dense</figcaption>
+				<Select dense label="Dense" options={countries} bind:value={selDense} /></figure>
+			<figure><figcaption>default</figcaption>
+				<Select label="Default" options={countries} bind:value={selDefault} /></figure>
+			<figure><figcaption>comfortable</figcaption>
+				<Select comfortable label="Comfortable" options={countries} bind:value={selComfy} /></figure>
+		</div>
+	</section>
 </div>
 
 <style>
@@ -343,6 +470,11 @@
 	header p {
 		color: var(--color-text-disabled);
 		margin-top: var(--size-1);
+	}
+	.select-header {
+		margin-top: var(--size-6);
+		padding-top: var(--size-6);
+		border-top: 1px solid var(--color-outline);
 	}
 	code {
 		font-family: var(--font-mono);
