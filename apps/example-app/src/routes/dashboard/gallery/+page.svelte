@@ -6,6 +6,7 @@
 		Progress,
 		Callout,
 		Gallery,
+		pickLargestSrc,
 		Select,
 		Toggle,
 		type GalleryDisplay,
@@ -30,6 +31,7 @@
 	let spacing = $state<GallerySpacing>('default');
 	let radius = $state<GalleryRadius>('small');
 	let metaDisplay = $state<'none' | 'always' | 'hover'>('hover');
+	let metaDisplayFullscreen = $state<'none' | 'always'>('always');
 	let actionDisplay = $state<'none' | 'always' | 'hover'>('hover');
 	let fit = $state<'cover' | 'contain'>('cover');
 	let autoplay = $state(false);
@@ -39,7 +41,7 @@
 
 	// Map the db image records into the new Gallery's generic GalleryItem shape.
 	const galleryItems = $derived<GalleryItem[]>(
-		images.docs.map((image) => {
+		images.docs.map((image, index) => {
 			const variants = (() => {
 				if (!image.variants) return [] as Array<{
 					name: string;
@@ -54,35 +56,30 @@
 					return [];
 				}
 			})();
-			const safe = variants
+			const cdn = '/cdn/image';
+			const src = variants
 				.filter(
 					(v: { name: string; watermarked?: boolean }) =>
 						v.name !== 'original' && !v.watermarked,
 				)
-				.sort((a: { width: number }, b: { width: number }) => a.width - b.width);
-			const cdn = '/cdn/image';
-			const srcset = safe
+				.sort((a: { width: number }, b: { width: number }) => a.width - b.width)
 				.map(
 					(v: { name: string; width: number }) =>
 						`${cdn}/${image.id}/${v.name} ${v.width}w`,
 				)
 				.join(', ');
-			const best = [...safe].sort(
-				(a: { width: number }, b: { width: number }) => b.width - a.width,
-			)[0];
-			const url = `${cdn}/${image.id}/${best?.name ?? 'default'}`;
-			const ratio =
-				image.aspect_ratio ||
-				(image.width && image.height ? image.width / image.height : 1);
 			return {
 				id: image.id,
-				url,
-				srcset,
+				src: src || `${cdn}/${image.id}/default`,
 				thumbhash: image.thumbhash || undefined,
-				name:
-					image.caption || image.file_name?.replace(/\.[^.]+$/, '') || 'Untitled photo',
-				ratio,
+				name: image.file_name?.replace(/\.[^.]+$/, '') || 'Untitled photo',
+				caption: image.caption || undefined,
+				alt: image.alt_text || undefined,
+				width: image.width || undefined,
+				height: image.height || undefined,
 				type: 'image' as const,
+				// First row above the fold gets eager loading + high fetch priority.
+				priority: index < 6,
 			};
 		}),
 	);
@@ -90,12 +87,12 @@
 	// One download action per item so the user can test the per-item action ui.
 	const galleryActions = $derived<GalleryItemAction[][]>(
 		galleryItems.map((item) => {
-			const href = typeof item === 'string' ? item : (item.url ?? '');
+			const src = typeof item === 'string' ? item : (item.src ?? '');
 			return [
 				{
 					name: 'Download',
 					tooltip: 'Download',
-					href,
+					href: pickLargestSrc(src),
 					target: '_blank' as const,
 				},
 			];
@@ -204,6 +201,15 @@
 		</div>
 		<div class="control">
 			<Select
+				label="Caption (modal)"
+				bind:value={metaDisplayFullscreen}
+				options={[
+					{ value: 'none', label: 'None' },
+					{ value: 'always', label: 'Always' },
+				]} />
+		</div>
+		<div class="control">
+			<Select
 				label="Actions"
 				bind:value={actionDisplay}
 				options={[
@@ -242,6 +248,7 @@
 			{spacing}
 			{radius}
 			{metaDisplay}
+			{metaDisplayFullscreen}
 			{actionDisplay}
 			{fit}
 			{autoplay}
