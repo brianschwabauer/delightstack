@@ -30,12 +30,12 @@
 	let sizing = $state<GallerySize>('default');
 	let spacing = $state<GallerySpacing>('default');
 	let radius = $state<GalleryRadius>('small');
-	let metaDisplay = $state<'none' | 'always' | 'hover'>('hover');
-	let metaDisplayFullscreen = $state<'none' | 'always'>('always');
-	let actionDisplay = $state<'none' | 'always' | 'hover'>('hover');
+	let meta_display = $state<'none' | 'always' | 'hover'>('hover');
+	let meta_display_fullscreen = $state<'none' | 'always'>('always');
+	let action_display = $state<'none' | 'always' | 'hover'>('hover');
 	let fit = $state<'cover' | 'contain'>('cover');
 	let autoplay = $state(false);
-	let aspectRatio = $state<'16/9' | '4/3' | '1/1' | 'auto'>('16/9');
+	let aspect_ratio = $state<'16/9' | '4/3' | '1/1' | 'auto'>('16/9');
 
 	const images = db.search('image', { sparse: false });
 
@@ -181,7 +181,7 @@
 		<div class="control">
 			<Select
 				label="Aspect ratio"
-				bind:value={aspectRatio}
+				bind:value={aspect_ratio}
 				options={[
 					{ value: '16/9', label: '16:9' },
 					{ value: '4/3', label: '4:3' },
@@ -192,7 +192,7 @@
 		<div class="control">
 			<Select
 				label="Meta"
-				bind:value={metaDisplay}
+				bind:value={meta_display}
 				options={[
 					{ value: 'none', label: 'None' },
 					{ value: 'hover', label: 'Hover' },
@@ -202,7 +202,7 @@
 		<div class="control">
 			<Select
 				label="Caption (modal)"
-				bind:value={metaDisplayFullscreen}
+				bind:value={meta_display_fullscreen}
 				options={[
 					{ value: 'none', label: 'None' },
 					{ value: 'always', label: 'Always' },
@@ -211,7 +211,7 @@
 		<div class="control">
 			<Select
 				label="Actions"
-				bind:value={actionDisplay}
+				bind:value={action_display}
 				options={[
 					{ value: 'none', label: 'None' },
 					{ value: 'hover', label: 'Hover' },
@@ -247,13 +247,13 @@
 			{sizing}
 			{spacing}
 			{radius}
-			{metaDisplay}
-			{metaDisplayFullscreen}
-			{actionDisplay}
+			{meta_display}
+			{meta_display_fullscreen}
+			{action_display}
 			{fit}
 			{autoplay}
 			actions={galleryActions}
-			aspectRatio={aspectRatio === 'auto' ? undefined : aspectRatio} />
+			aspect_ratio={aspect_ratio === 'auto' ? undefined : aspect_ratio} />
 	</div>
 </div>
 
