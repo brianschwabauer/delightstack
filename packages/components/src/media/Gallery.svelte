@@ -1,549 +1,2117 @@
 <script lang="ts" module>
-	export interface GalleryImage {
-		src: string;
-		thumbnail?: string;
-		alt: string;
-		caption?: string;
-		width?: number;
-		height?: number;
+	import type { Component } from 'svelte';
+	import type { CarouselItem } from './carousel';
+
+	/** A single action button that can be shown on a gallery item or in the carousel header. */
+	export interface GalleryItemAction {
+		/** The icon component to show for the action */
+		icon?: Component<Record<string, unknown>>;
+
+		/** The main action text - e.g. 'Download' or 'Pay now' */
+		name?: string;
+
+		/** A short descriptor of the action - e.g. file size or filename */
+		tooltip?: string;
+
+		/** The link that the button should go to */
+		href?: string;
+
+		/** Called when the button is clicked */
+		click?: (event: Event) => unknown;
+
+		/** Anchor target (only used if href is provided) */
+		target?: '_blank' | '_self';
+
+		/** The list of subactions (shown in a context menu) */
+		actions?: GalleryItemAction[];
 	}
+
+	export type GalleryDisplay =
+		| 'grid'
+		| 'masonry'
+		| 'masonry-row'
+		| 'list'
+		| 'slider'
+		| 'slideshow';
+
+	export type GallerySize = 'small' | 'default' | 'large';
+
+	export type GallerySpacing = 'none' | 'default' | 'large';
+
+	export type GalleryRadius = 'none' | 'small' | 'large';
+
+	export type GalleryItem = string | (Partial<CarouselItem> & { favorite?: boolean });
 </script>
 
 <script lang="ts">
-	import { type Snippet } from 'svelte';
-	import Modal from '../actions/Modal.svelte';
-	import Image from './Image.svelte';
+	import { type TransitionConfig, fade, scale } from 'svelte/transition';
+	import { backOut, circInOut } from 'svelte/easing';
+	import { onDestroy, onMount, untrack, type Snippet } from 'svelte';
+	import {
+		focusTrap,
+		intersectionObserver,
+		ripple,
+	} from '@delightstack/utilities';
 
-	const propId = $props.id();
+	// Minimal subset of the focus-trap instance we use, declared locally so the
+	// 'focus-trap' package doesn't need to be a direct dep of this package.
+	interface FocusTrapInstance {
+		active: boolean;
+		deactivate: () => void;
+	}
+	import Button from '../actions/Button.svelte';
+	import List from '../display/List.svelte';
+	import ListItem from '../display/ListItem.svelte';
+	import Portal from '../actions/Portal.svelte';
+	import { contextMenu } from '../actions/ContextMenu.svelte';
+	import Carousel from './Carousel.svelte';
+	import { normalizeCarouselItem } from './carousel';
+
 	let {
-		/** Array of gallery images */
-		images = [] as GalleryImage[],
+		/** How the gallery should be displayed - whether a grid, slideshow, etc */
+		display = 'masonry' as GalleryDisplay,
 
-		/** Number of columns in the grid */
-		columns = 3,
+		/** The size of the thumbnails in the gallery */
+		sizing = 'default' as GallerySize,
 
-		/** Gap between grid items */
-		gap = '0.5rem',
+		/** The size of the spacing between thumbnails in the gallery */
+		spacing = 'default' as GallerySpacing,
 
-		/** Use CSS columns masonry layout instead of grid */
-		masonry = false,
+		/** The border radius of the gallery items */
+		radius = 'small' as GalleryRadius,
 
-		/** Thumbnail aspect ratio (e.g. '1', '4/3'); omit for natural ratio */
-		aspect_ratio = undefined as string | undefined,
+		/** The currently displayed item index. -1 closes the modal/slider. */
+		slide = $bindable(display !== 'slider' ? -1 : 0) as number,
 
-		/** Enable lightbox on click */
-		lightbox = true,
+		/** The object-fit attribute for all items in the gallery */
+		fit = 'contain' as 'cover' | 'contain',
 
-		/** Compact grid gap (0.25rem) */
-		dense = false,
+		/** The list of items to display. Strings are treated as image URLs. */
+		items = [] as GalleryItem[],
 
-		/** Relaxed grid gap (1rem) */
-		comfortable = false,
+		/** The duration (in ms) between slide auto-transitions */
+		duration = 8000,
 
-		/** Show loading skeleton */
-		skeleton = false,
+		/** Whether the gallery should auto transition between slides */
+		autoplay = false,
 
-		/** Number of skeleton items to render */
-		skeletonCount = 6,
+		/** The css aspect ratio the gallery should be forced into (only when not a modal) */
+		aspectRatio = undefined as string | undefined,
 
-		/** Element ID */
-		id = propId,
+		/** Whether the full screen button should be disabled */
+		disableFullscreen = false,
 
-		/** Additional CSS classes */
-		class: className = '',
+		/**
+		 * Whether the gallery is 'inline' in the page - not a modal or fullscreen.
+		 * If 'inline', vertical gestures & mouse wheel are disabled.
+		 * @default true when display is 'slider' and not in fullscreen
+		 */
+		inline = undefined as boolean | undefined,
 
-		/** Bind to the underlying DOM element */
-		element = $bindable(undefined as HTMLElement | undefined),
+		/**
+		 * How the slider controls should be displayed.
+		 * - inline: the controls sit below the slideshow element
+		 * - overlay: the controls overlay on top of the slideshow element
+		 * - disable: the controls are not shown at all
+		 * - default: 'inline' when the carousel is inline, 'overlay' when modal
+		 */
+		controls = 'default' as 'default' | 'inline' | 'overlay' | 'disable',
 
-		/** Custom render snippet for each grid item */
-		item = undefined as undefined | Snippet<[image: GalleryImage, index: number]>,
+		/** The currently displayed page (a vertical carousel within the current slide - used for pdf pages) */
+		page = $bindable(0) as number,
 
-		/** Fired when an image is clicked */
-		onselect = undefined as undefined | ((detail: { image: GalleryImage; index: number }) => void),
+		/** The amount of pages available in the current slide (applies to PDFs) */
+		numPages = $bindable(1) as number,
 
-		/** Fired when lightbox opens */
-		onlightboxopen = undefined as undefined | ((detail: { index: number }) => void),
+		/** The display style of the metadata (name, description, etc) for each item */
+		metaDisplay = 'hover' as 'none' | 'always' | 'hover',
 
-		/** Fired when lightbox closes */
-		onlightboxclose = undefined as undefined | (() => void),
-	}: {
-		images?: GalleryImage[];
-		columns?: number;
-		gap?: string;
-		masonry?: boolean;
-		aspect_ratio?: string;
-		lightbox?: boolean;
-		dense?: boolean;
-		comfortable?: boolean;
-		skeleton?: boolean;
-		skeletonCount?: number;
-		id?: string;
-		class?: string;
-		element?: HTMLElement | undefined;
-		item?: Snippet<[image: GalleryImage, index: number]>;
-		onselect?: (detail: { image: GalleryImage; index: number }) => void;
-		onlightboxopen?: (detail: { index: number }) => void;
-		onlightboxclose?: () => void;
+		/** How file names should be displayed in the fullscreen/carousel view */
+		metaDisplayFullscreen = 'none' as 'none' | 'always',
+
+		/** The display style of the actions (download buttons, etc) for each item */
+		actionDisplay = 'hover' as 'none' | 'always' | 'hover',
+
+		/**
+		 * The list of potential actions a user can take on each gallery item.
+		 * Each gallery item can have multiple actions.
+		 */
+		actions = [] as GalleryItemAction[][],
+
+		/**
+		 * Snippet used to render PDF items in the carousel. Pass-through to Carousel.
+		 * Omit if you don't use PDFs (avoids loading pdfjs-dist).
+		 */
+		pdf = undefined as
+			| Snippet<
+					[
+						{
+							src: string;
+							pageBounds: Array<{ width: number; height: number }>;
+							disableRender: boolean;
+							onload: (detail: { numPages: number }) => void;
+						},
+					]
+			  >
+			| undefined,
+
+		/**
+		 * Snippet used to render panorama items in the carousel. Pass-through to Carousel.
+		 * Omit if you don't use panoramas (avoids loading three.js).
+		 */
+		panorama = undefined as
+			| Snippet<[{ src: string; inline: boolean; onload: () => void }]>
+			| undefined,
+
+		/**
+		 * Called when an item's thumbnail/text is clicked.
+		 * If the function returns false, the default behavior (opening the modal/slider) is prevented.
+		 */
+		onclick = undefined as
+			| undefined
+			| ((event: MouseEvent | KeyboardEvent, index: number) => void | false),
+
+		/** The css style string added to the component from the parent */
+		style = '',
 	} = $props();
 
-	let lightbox_open = $state(false);
-	let lightbox_index = $state(0);
-	let touch_start_x = $state(0);
-	let touch_start_y = $state(0);
+	/** The percent (0-1) of how 'closed' the gallery is - while swiping/dismissing the gallery away */
+	let dismissing = $state(0);
 
-	const effective_gap = $derived(dense ? '0.25rem' : comfortable ? '1rem' : gap);
-	const current_image = $derived(images[lightbox_index] as GalleryImage | undefined);
+	/** The instance of the focus trap class - used to programmatically deactivate the focus trap */
+	let focusTrapInstance: FocusTrapInstance | undefined;
 
-	function handleImageClick(image: GalleryImage, index: number) {
-		onselect?.({ image, index });
-		if (lightbox) {
-			lightbox_index = index;
-			lightbox_open = true;
-			onlightboxopen?.({ index });
+	/** The element that the carousel item will be animated from */
+	let animationTarget = $state<HTMLElement | undefined>(undefined);
+
+	/** The instance of the carousel (can be used to control it) */
+	let carousel = $state<ReturnType<typeof Carousel> | undefined>(undefined);
+
+	/** Whether or not the gallery is being viewed in fullscreen */
+	let fullscreenActive = $state(false);
+
+	/** Whether the slider element is currently visible on screen */
+	let intersected = $state(false);
+
+	const list = $derived(
+		items
+			.map((v) => normalizeCarouselItem(v as string | Partial<CarouselItem>))
+			.filter((v): v is CarouselItem => !!v)
+			.map((item, i) => {
+				const original = items[i] as Partial<CarouselItem> & { favorite?: boolean };
+				return {
+					...item,
+					favorite: typeof original === 'object' ? !!original?.favorite : false,
+				};
+			}),
+	);
+
+	const sliderActive = $derived(display === 'slider' || slide >= 0);
+	const isModal = $derived(fullscreenActive || (display !== 'slider' && slide >= 0));
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			if (isModal) {
+				window.document.body.style.overflow = 'hidden';
+			} else {
+				window.document.body.style.overflow = '';
+			}
+		}
+	});
+
+	// Prevent the modal from automatically being active when switching between display modes
+	let previousDisplay = undefined as typeof display | undefined;
+	$effect.pre(() => {
+		if (previousDisplay === 'slider') {
+			if (display !== 'slider') slide = -1;
+		} else {
+			if (display === 'slider') slide = 0;
+		}
+		if (previousDisplay) untrack(() => pause());
+		previousDisplay = display;
+	});
+
+	/** Autoplay state */
+	let autoplayPaused = $state(false);
+	const autoplayTransitionInterval = 300; // ms between progress ticks
+	let autoplayTransitionStart = $state<number | undefined>(undefined);
+	let autoplayTransitionProgress = $state<number | undefined>(undefined);
+	let autoplayTransitionTimer = $state<ReturnType<typeof setInterval> | undefined>(
+		undefined,
+	);
+	$effect.pre(() => {
+		if (autoplay && intersected && !autoplayTransitionTimer && !autoplayPaused) play();
+	});
+	onDestroy(() => pause());
+
+	/** Closes the gallery modal */
+	export function close() {
+		if (fullscreenActive) return closeFullscreen();
+		if (!sliderActive) return;
+		if (display === 'slider' && isModal) return closeFullscreen();
+		if (focusTrapInstance?.active) {
+			focusTrapInstance.deactivate();
+		} else {
+			slide = -1;
 		}
 	}
 
-	function closeLightbox() {
-		lightbox_open = false;
-		onlightboxclose?.();
+	/** Navigates to the item at the given index */
+	export function goto(i: number) {
+		if (!sliderActive || !list[i]) return;
+		pause();
+		slide = i;
 	}
 
-	function navigatePrev() {
-		if (images.length === 0) return;
-		lightbox_index = (lightbox_index - 1 + images.length) % images.length;
+	/** Navigates to the next item */
+	export function next(amount = 1) {
+		if (!sliderActive) return;
+		pause();
+		const target = Math.floor(slide + amount) % list.length;
+		slide = target;
 	}
 
-	function navigateNext() {
-		if (images.length === 0) return;
-		lightbox_index = (lightbox_index + 1) % images.length;
+	/** Navigates to the previous item */
+	export function prev(amount = 1) {
+		if (!sliderActive) return;
+		pause();
+		const target = Math.floor(slide - amount + list.length) % list.length;
+		slide = target;
 	}
 
-	function handleLightboxKeydown(event: KeyboardEvent) {
-		if (!lightbox_open) return;
-		switch (event.key) {
-			case 'ArrowLeft':
-				event.preventDefault();
-				navigatePrev();
-				break;
-			case 'ArrowRight':
-				event.preventDefault();
-				navigateNext();
-				break;
-			case 'Home':
-				event.preventDefault();
-				lightbox_index = 0;
-				break;
-			case 'End':
-				event.preventDefault();
-				lightbox_index = images.length - 1;
-				break;
+	/** Starts the slideshow */
+	export function play() {
+		if (!sliderActive || autoplayTransitionTimer) return;
+		autoplayPaused = false;
+		autoplayTransitionStart = Date.now();
+		autoplayTransitionTimer = setInterval(() => {
+			if (!autoplayTransitionStart) return clearInterval(autoplayTransitionTimer);
+			const now = Date.now();
+			if (!intersected) {
+				autoplayTransitionStart = Math.min(
+					now,
+					Math.floor(
+						now - duration * (autoplayTransitionProgress || 0) + autoplayTransitionInterval,
+					),
+				);
+				return;
+			}
+			autoplayTransitionProgress = (now - autoplayTransitionStart) / duration;
+			if (autoplayTransitionProgress >= 1) {
+				autoplayTransitionStart = now;
+				setTimeout(() => (autoplayTransitionProgress = 0), 10);
+				const target = Math.floor(slide + 1) % list.length;
+				slide = target;
+			}
+		}, autoplayTransitionInterval);
+	}
+
+	/** Pauses the slideshow */
+	export function pause() {
+		if (!autoplayTransitionTimer) return;
+		clearInterval(autoplayTransitionTimer);
+		autoplayTransitionTimer = undefined;
+		autoplayTransitionStart = undefined;
+		autoplayTransitionProgress = undefined;
+		autoplayPaused = true;
+	}
+
+	/** Handles when a grid item is clicked (opens the modal) */
+	function onItemClick(i: number, evt: MouseEvent | KeyboardEvent) {
+		if (onclick) {
+			const result = onclick(evt, i);
+			if (result === false) {
+				evt.preventDefault();
+				return;
+			}
+		}
+		let target = evt.target as HTMLElement;
+		let isActionButton = false;
+		while (target && !isActionButton && !target.classList.contains('gallery-item')) {
+			isActionButton =
+				target.classList.contains('actions') || target.classList.contains('button');
+			target = target.parentElement as HTMLElement;
+		}
+		if (isActionButton) return;
+		dismissing = 0;
+		animationTarget = (evt.target as HTMLElement) || undefined;
+		slide = i;
+	}
+
+	/** Returns the gallery item element that triggered this carousel open so focus can be returned to it */
+	function focusTrapSetReturnFocus(
+		elFocusedBeforeActivation: HTMLElement | SVGElement,
+	): HTMLElement | false {
+		const items = Array.from(document.querySelectorAll('.gallery.grid .gallery-item'));
+		const target = items[slide] as HTMLElement;
+		return target || elFocusedBeforeActivation;
+	}
+
+	/** Opens the media player in full screen mode */
+	async function openFullscreen() {
+		const promise =
+			document?.documentElement?.requestFullscreen() ||
+			(document?.documentElement as any)?.mozRequestFullScreen() ||
+			(document?.documentElement as any)?.webkitRequestFullscreen() ||
+			(document?.documentElement as any)?.msRequestFullscreen();
+		if (!promise) return;
+		fullscreenActive = true;
+		await promise.catch(() => {
+			fullscreenActive = false;
+		});
+		if (document.fullscreenElement === null && fullscreenActive) fullscreenActive = false;
+	}
+
+	/** Closes the fullscreen mode */
+	function closeFullscreen() {
+		document?.exitFullscreen() ||
+			(document as any)?.mozCancelFullScreen() ||
+			(document as any)?.webkitExitFullscreen() ||
+			(document as any)?.msExitFullscreen();
+		if (carousel) carousel.reset();
+	}
+
+	/** Toggles fullscreen mode */
+	export function toggleFullscreen() {
+		if (fullscreenActive) {
+			closeFullscreen();
+		} else {
+			openFullscreen();
 		}
 	}
 
-	function handleTouchStart(event: TouchEvent) {
-		const touch = event.touches[0];
-		if (!touch) return;
-		touch_start_x = touch.clientX;
-		touch_start_y = touch.clientY;
+	onMount(() => {
+		const listener = () => {
+			if (document.fullscreenElement === null) fullscreenActive = false;
+		};
+		document.addEventListener('fullscreenchange', listener);
+		document.addEventListener('webkitfullscreenchange', listener);
+		document.addEventListener('mozfullscreenchange', listener);
+		document.addEventListener('msfullscreenchange', listener);
+		return () => {
+			document.removeEventListener('fullscreenchange', listener);
+			document.removeEventListener('webkitfullscreenchange', listener);
+			document.removeEventListener('mozfullscreenchange', listener);
+			document.removeEventListener('msfullscreenchange', listener);
+		};
+	});
+
+	/** Animates the scale of the gallery item on dismiss */
+	function carouselCloseTransition(node: HTMLElement): () => TransitionConfig {
+		return () => {
+			const duration = 300;
+			const start = 0.5;
+			const el = node.querySelector<HTMLElement>('.carousel .item.active');
+			if (!el) {
+				const parentOpacity = +getComputedStyle(node).opacity;
+				return { duration: 150, css: (_t, u) => `opacity: ${parentOpacity - u}` };
+			}
+			const activePageEl = node.querySelector<HTMLElement>(
+				'.carousel .item.active > *.active:not(.preview)',
+			);
+			let inactivePageEls: HTMLElement[] = [];
+			if (activePageEl) {
+				inactivePageEls = Array.from(
+					node.querySelectorAll<HTMLElement>('.carousel .item.active > *:not(.active)'),
+				);
+			} else {
+				inactivePageEls = Array.from(
+					node.querySelectorAll<HTMLElement>(
+						'.carousel .item.active > *:not(:first-child)',
+					),
+				);
+			}
+			inactivePageEls.forEach((el) => {
+				el.style.opacity = '0';
+			});
+			const style = getComputedStyle(el);
+			const targetOpacity = +style.opacity;
+			const transform = style.transform === 'none' ? '' : style.transform;
+			return {
+				duration,
+				easing: circInOut,
+				tick: (_t, u) => {
+					const sd = 1 - start;
+					el.style.transformOrigin = 'center center';
+					el.style.opacity = `${targetOpacity - u}`;
+					el.style.transform = `${transform} perspective(100px) translate3d(0px, ${
+						500 * u
+					}px, ${sd * u * -300}px)`;
+				},
+			};
+		};
 	}
 
-	function handleTouchEnd(event: TouchEvent) {
-		const touch = event.changedTouches[0];
-		if (!touch) return;
-		const dx = touch.clientX - touch_start_x;
-		const dy = touch.clientY - touch_start_y;
-		const threshold = 50;
-		// Only swipe if horizontal movement is greater than vertical
-		if (Math.abs(dx) > threshold && Math.abs(dx) > Math.abs(dy)) {
-			if (dx < 0) navigateNext();
-			else navigatePrev();
-		}
+	/** The full set of context-menu actions for the slide at the given index */
+	function flattenActions(itemActions: GalleryItemAction[] | undefined) {
+		return (
+			itemActions?.flatMap((parentAction) =>
+				[parentAction, ...(parentAction.actions || [])]
+					.filter((action) => !!action?.name)
+					.map((action) => ({
+						label: action.name,
+						icon: action.icon || parentAction.icon,
+						href: action.href,
+						target: action.target,
+						onclick: action.click
+							? (event: PointerEvent) => {
+									action.click?.(event);
+								}
+							: undefined,
+					})),
+			) || []
+		);
 	}
-
-	const skeleton_items = $derived(Array.from({ length: skeletonCount }, (_, i) => i));
 </script>
 
-<svelte:window onkeydown={handleLightboxKeydown} />
+<!-- Inline icons (kept terse to avoid pulling in an icon dep) -->
+{#snippet iconPlay()}
+	<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+		<path d="M8 5v14l11-7L8 5z" />
+	</svg>
+{/snippet}
+{#snippet iconPause()}
+	<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+		<path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+	</svg>
+{/snippet}
+{#snippet iconDocument()}
+	<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+		<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 7V3.5L19.5 9H14z" />
+	</svg>
+{/snippet}
+{#snippet iconEmbed()}
+	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<polyline points="16 18 22 12 16 6" />
+		<polyline points="8 6 2 12 8 18" />
+	</svg>
+{/snippet}
+{#snippet iconPanorama()}
+	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<ellipse cx="12" cy="12" rx="10" ry="6" />
+		<path d="M2 12c4 2 16 2 20 0" />
+		<path d="M12 2c2 4 2 16 0 20" />
+	</svg>
+{/snippet}
+{#snippet iconChevronLeft()}
+	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<polyline points="15 18 9 12 15 6" />
+	</svg>
+{/snippet}
+{#snippet iconChevronRight()}
+	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<polyline points="9 18 15 12 9 6" />
+	</svg>
+{/snippet}
+{#snippet iconFullscreen()}
+	<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+		<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+	</svg>
+{/snippet}
+{#snippet iconFullscreenExit()}
+	<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+		<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
+	</svg>
+{/snippet}
+{#snippet iconClose()}
+	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<line x1="18" y1="6" x2="6" y2="18" />
+		<line x1="6" y1="6" x2="18" y2="18" />
+	</svg>
+{/snippet}
+{#snippet iconDownload()}
+	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+		<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+		<polyline points="7 10 12 15 17 10" />
+		<line x1="12" y1="15" x2="12" y2="3" />
+	</svg>
+{/snippet}
 
-{#if skeleton}
+{#snippet itemThumbnail(item: (typeof list)[number])}
+	{@const thumbnailUrl = item.thumbnail || item.url}
+	<img
+		class="thumbnail-img"
+		src={thumbnailUrl}
+		alt={item.name || ''}
+		loading="lazy" />
+{/snippet}
+
+{#snippet galleryItemAction(
+	index: number,
+	style: 'overlay' | 'transparent' = 'overlay',
+)}
+	{@const itemActions = actions?.[index]}
+	{#if itemActions?.length}
+		<div class="actions" class:hover-only={actionDisplay === 'hover'}>
+			{#each itemActions as action (action)}
+				{#if action?.actions?.length}
+					<Button
+						icon
+						overlay={style === 'overlay'}
+						transparent={style === 'transparent'}
+						dense
+						size="00"
+						tooltip={action.tooltip || action.name}>
+						{#if action.icon}
+							<action.icon></action.icon>
+						{:else}
+							{@render iconDownload()}
+						{/if}
+						{#snippet menu()}
+							<List>
+								{#each action?.actions || [] as subAction (subAction)}
+									<ListItem
+										onclick={(e) => {
+											if (subAction.click) subAction.click(e);
+										}}
+										href={subAction.href}
+										target={subAction.target}>
+										<span class="list-item-icon">
+											{#if subAction.icon}
+												<subAction.icon></subAction.icon>
+											{:else if action.icon}
+												<action.icon></action.icon>
+											{:else}
+												{@render iconDownload()}
+											{/if}
+										</span>
+										{subAction.name}
+									</ListItem>
+								{/each}
+							</List>
+						{/snippet}
+					</Button>
+				{:else}
+					<Button
+						icon
+						overlay={style === 'overlay'}
+						transparent={style === 'transparent'}
+						dense
+						size="00"
+						tooltip={action.tooltip || action.name}
+						href={action.href}
+						target={action.target}
+						onclick={(e) => {
+							if (action.click) action.click(e);
+						}}>
+						{#if action.icon}
+							<action.icon></action.icon>
+						{:else}
+							{@render iconDownload()}
+						{/if}
+					</Button>
+				{/if}
+			{/each}
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet galleryItem(item: (typeof list)[number], index: number)}
 	<div
-		{id}
-		class={['gallery', masonry ? 'masonry' : 'grid', className].filter(Boolean).join(' ')}
-		style:--gallery-columns={columns}
-		style:--gallery-gap={effective_gap}
-		bind:this={element}
-		role="list">
-		{#each skeleton_items as _, i (i)}
-			<div class="skeleton" role="listitem">
-				<div class="skeleton-shimmer"></div>
+		class="gallery-item"
+		role="button"
+		tabindex="0"
+		{@attach ripple({ zIndex: 1, opacity: 0.2, color: 'white' })}
+		class:favorite={item.favorite}
+		style:--ratio={display === 'masonry-row' || display === 'masonry'
+			? item.ratio
+			: undefined}
+		{@attach contextMenu({ actions: flattenActions(actions?.[index]) })}
+		onclick={(e) => onItemClick(index, e)}
+		onkeydown={(e) => e.key !== 'Enter' || onItemClick(index, e)}>
+		<div class="image">
+			{@render itemThumbnail(item)}
+		</div>
+		{#if item.type !== 'image' || item.panorama}
+			<div class="icon">
+				{#if item.type === 'video'}
+					{@render iconPlay()}
+				{:else if item.type === 'pdf'}
+					{@render iconDocument()}
+				{:else if item.type === 'embed'}
+					{@render iconEmbed()}
+				{:else if item.panorama}
+					{@render iconPanorama()}
+				{/if}
+			</div>
+		{/if}
+		{#if metaDisplay === 'always' || metaDisplay === 'hover'}
+			{#if item.name}
+				<div class="name" class:hover-only={metaDisplay === 'hover'}>{item.name}</div>
+			{/if}
+		{/if}
+		{#if actionDisplay === 'always' || actionDisplay === 'hover'}
+			{@render galleryItemAction(index, 'overlay')}
+		{/if}
+	</div>
+{/snippet}
+
+{#if display === 'grid' || display === 'masonry' || display === 'masonry-row'}
+	<div
+		class="gallery display-{display} sizing-{sizing} spacing-{spacing} radius-{radius}"
+		role="group"
+		{style}>
+		{#each list as item, i (i)}
+			{@render galleryItem(item, i)}
+		{/each}
+	</div>
+{/if}
+
+{#if display === 'list'}
+	<div
+		class="gallery display-list sizing-{sizing} spacing-{spacing} radius-{radius}"
+		role="group"
+		{style}>
+		{#each list as item, index (index)}
+			<div class="list-item">
+				<div
+					class="info"
+					role="button"
+					tabindex="0"
+					{@attach ripple({ zIndex: 1, opacity: 0.2, color: 'var(--color-text, currentColor)' })}
+					onclick={(e) => onItemClick(index, e)}
+					onkeydown={(e) => e.key !== 'Enter' || onItemClick(index, e)}
+					{@attach contextMenu({ actions: flattenActions(actions?.[index]) })}>
+					<div class="thumbnail">
+						{@render itemThumbnail(item)}
+						{#if item.type !== 'image' || item.panorama}
+							<div class="icon">
+								{#if item.type === 'video'}
+									{@render iconPlay()}
+								{:else if item.type === 'pdf'}
+									{@render iconDocument()}
+								{:else if item.type === 'embed'}
+									{@render iconEmbed()}
+								{:else if item.panorama}
+									{@render iconPanorama()}
+								{/if}
+							</div>
+						{/if}
+					</div>
+					<div class="name">{item.name || ''}</div>
+				</div>
+				{#if actionDisplay === 'always' || actionDisplay === 'hover'}
+					{@render galleryItemAction(index, 'transparent')}
+				{/if}
 			</div>
 		{/each}
 	</div>
-{:else}
+{/if}
+
+{#snippet sliderControls()}
 	<div
-		{id}
-		class={['gallery', masonry ? 'masonry' : 'grid', className].filter(Boolean).join(' ')}
-		style:--gallery-columns={columns}
-		style:--gallery-gap={effective_gap}
-		bind:this={element}
-		role="list">
-		{#each images as image, index (index)}
-			{#if item}
-				<div
-					class="item"
-					role="listitem"
-					style:aspect-ratio={aspect_ratio}>
-					{@render item(image, index)}
-				</div>
-			{:else}
-				<div role="listitem" style:aspect-ratio={aspect_ratio}>
-					<button
-						class="item"
-						type="button"
-						style:aspect-ratio={aspect_ratio}
-						onclick={() => handleImageClick(image, index)}
-						aria-label={image.alt}>
-						<Image
-							src={image.thumbnail || image.src}
-							alt={image.alt}
-							fit="cover"
-							lazy={true}
-							width={image.width}
-							height={image.height}
-							aspect_ratio={aspect_ratio} />
-						{#if lightbox}
-							<div class="overlay" aria-hidden="true">
-								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
-									<circle cx="11" cy="11" r="8" />
-									<line x1="21" y1="21" x2="16.65" y2="16.65" />
-									<line x1="11" y1="8" x2="11" y2="14" />
-									<line x1="8" y1="11" x2="14" y2="11" />
-								</svg>
-							</div>
-						{/if}
-					</button>
+		class="controls"
+		in:fade={{ duration: 150 }}
+		out:fade={{ duration: 150 }}
+		style:opacity={1 - dismissing}>
+		{#if numPages > 1}
+			{@const maxDisplayPages = 5}
+			{@const numDisplayPages = Math.min(numPages, maxDisplayPages)}
+			{@const offset = Math.max(0, Math.min(numPages - numDisplayPages, page - 2))}
+			<nav class="pages" transition:scale|global={{ duration: 300, easing: backOut }}>
+				{#if numPages > maxDisplayPages && offset >= 1}
+					<Button
+						icon
+						transparent
+						dense
+						size="0"
+						onclick={() => (page = 0)}
+						tooltip="First Page">
+						<span class="visuallyhidden">First Page</span>
+						{offset <= 1 ? 1 : '...'}
+					</Button>
+				{/if}
+				{#each Array(numDisplayPages) as _, i (i)}
+					<Button
+						icon
+						transparent
+						dense
+						size="0"
+						active={i + offset === page}
+						onclick={() => (page = i + offset)}
+						tooltip={`Page ${i + offset + 1}`}>
+						<span class="visuallyhidden">{`Page ${i + offset + 1}`}</span>
+						{i + offset + 1}
+					</Button>
+				{/each}
+				{#if numPages > maxDisplayPages && offset + numDisplayPages <= numPages - 1}
+					<Button
+						icon
+						transparent
+						dense
+						size="0"
+						onclick={() => (page = numPages - 1)}
+						tooltip="Last Page">
+						<span class="visuallyhidden">Last Page</span>
+						{offset + numDisplayPages >= numPages - 1 ? numPages : '...'}
+					</Button>
+				{/if}
+			</nav>
+		{/if}
+		{#if isModal}
+			<Button icon transparent dense size="0" class="close" onclick={() => close()}>
+				<span class="visuallyhidden">Close</span>
+				{@render iconClose()}
+			</Button>
+			{#if actions?.length}
+				{@render galleryItemAction(slide, 'transparent')}
+			{/if}
+		{:else}
+			{#if disableFullscreen === false}
+				<Button
+					icon
+					transparent
+					dense
+					size="0"
+					class="fullscreen"
+					tooltip="Toggle Fullscreen"
+					onclick={() => toggleFullscreen()}>
+					<span class="visuallyhidden">Fullscreen</span>
+					{#if fullscreenActive}
+						{@render iconFullscreenExit()}
+					{:else}
+						{@render iconFullscreen()}
+					{/if}
+				</Button>
+			{/if}
+			{#if list.length > 1}
+				<Button
+					icon
+					transparent
+					dense
+					size="0"
+					class="play"
+					tooltip={autoplayTransitionTimer ? 'Pause Slideshow' : 'Start Slideshow'}
+					onclick={() => (autoplayTransitionTimer ? pause() : play())}>
+					<span class="visuallyhidden">Start Slideshow</span>
+					{#if autoplayTransitionTimer}
+						{@render iconPause()}
+					{:else}
+						{@render iconPlay()}
+					{/if}
+					{#if autoplayTransitionTimer}
+						{@const progress = autoplayTransitionProgress || 0}
+						<svg
+							class="progress"
+							viewBox="0 0 56 56"
+							style:--progress={progress}
+							style:--speed="{autoplayTransitionInterval}ms"
+							style:transition={progress >= 0.99 || progress < 0.01 ? 'none' : null}>
+							<circle cx="28" cy="28" r="26" />
+						</svg>
+					{/if}
+				</Button>
+			{/if}
+		{/if}
+		<div class="spacer"></div>
+		{#if list.length > 1}
+			<div class="pagination">{Math.max(0, slide) + 1} / {list.length}</div>
+		{/if}
+		{#if list.length > 1}
+			<Button
+				icon
+				transparent
+				dense
+				size="0"
+				class="prev"
+				onclick={() => prev()}
+				tooltip="Previous Item">
+				<span class="visuallyhidden">Previous Item</span>
+				{@render iconChevronLeft()}
+			</Button>
+			<Button
+				icon
+				transparent
+				dense
+				size="0"
+				class="next"
+				onclick={() => next()}
+				tooltip="Next Item">
+				<span class="visuallyhidden">Next Item</span>
+				{@render iconChevronRight()}
+			</Button>
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet slider()}
+	{#if sliderActive}
+		<div
+			class="gallery slider sizing-{sizing} radius-{radius}"
+			class:modal={isModal}
+			class:controls-inline={controls === 'inline' ||
+				(controls === 'default' && !isModal)}
+			class:controls-overlay={controls === 'overlay' ||
+				(controls === 'default' && isModal)}
+			class:fullscreen={fullscreenActive}
+			style={!isModal && (display === 'slider' || display === 'slideshow') ? style : null}
+			style:--aspect-ratio={isModal || !aspectRatio ? null : aspectRatio}
+			aria-label="Media Gallery Carousel"
+			out:carouselCloseTransition
+			{@attach intersectionObserver({
+				enabled: true,
+				onintersectchange: (event) => (intersected = event.isIntersecting),
+			})}
+			{@attach focusTrap({
+				preventScroll: true,
+				onPostDeactivate: () => (slide = -1),
+				allowOutsideClick: true,
+				enabled: isModal,
+				escapeDeactivates: (e) => {
+					e.stopPropagation();
+					return true;
+				},
+				setReturnFocus: focusTrapSetReturnFocus,
+				oninit: (instance) => (focusTrapInstance = instance),
+				initialFocus: false,
+			})}
+			{@attach contextMenu({ actions: flattenActions(actions?.[slide]) })}>
+			<div
+				class="bg"
+				in:fade={{ duration: 350 }}
+				out:fade={{ duration: 350 }}
+				style:opacity={1 - dismissing}>
+			</div>
+			<Carousel
+				items={list}
+				bind:dismissing
+				bind:this={carousel}
+				bind:slide
+				bind:page
+				bind:numPages
+				animation={display === 'slider' && autoplayTransitionTimer && list.length > 1
+					? 'zoom'
+					: 'none'}
+				transition={display === 'slider' && autoplayTransitionTimer ? 'fade' : 'none'}
+				inline={inline ?? (display === 'slider' && !fullscreenActive)}
+				dismissable={isModal}
+				disableEntryExitAnimation={display === 'slider' || display === 'slideshow'}
+				{animationTarget}
+				{fit}
+				{pdf}
+				{panorama}
+				oninteraction={() => pause()}
+				onclose={() => {
+					if (fullscreenActive) return closeFullscreen();
+					slide = -1;
+				}} />
+			{#if metaDisplayFullscreen === 'always' && isModal && list[slide]?.name}
+				<div class="fullscreen-name" style:opacity={1 - dismissing}>
+					{list[slide].name}
 				</div>
 			{/if}
-		{/each}
-	</div>
-
-	{#if lightbox && current_image}
-		<Modal
-			bind:open={lightbox_open}
-			closable={true}
-			maxWidth="95vw"
-			maxHeight="95svh"
-			class="lightbox"
-			onclose={onlightboxclose}>
-			{#snippet children()}
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div
-					class="lightbox-content"
-					ontouchstart={handleTouchStart}
-					ontouchend={handleTouchEnd}>
-					<!-- Counter -->
-					<div class="lightbox-counter" aria-live="polite">
-						{lightbox_index + 1} of {images.length}
-					</div>
-
-					<!-- Close button -->
-					<button
-						class="lightbox-close"
-						type="button"
-						aria-label="Close lightbox"
-						onclick={closeLightbox}>
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
-							<line x1="18" y1="6" x2="6" y2="18" />
-							<line x1="6" y1="6" x2="18" y2="18" />
-						</svg>
-					</button>
-
-					<!-- Previous button -->
-					{#if images.length > 1}
-						<button
-							class="lightbox-nav lightbox-prev"
-							type="button"
-							aria-label="Previous image"
-							onclick={navigatePrev}>
-							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="32" height="32">
-								<polyline points="15 18 9 12 15 6" />
-							</svg>
-						</button>
-					{/if}
-
-					<!-- Image -->
-					{#key lightbox_index}
-						<div class="lightbox-image-wrapper">
-							<img
-								class="lightbox-image"
-								src={current_image.src}
-								alt={current_image.alt}
-								style:max-width="100%"
-								style:max-height="calc(95svh - 8rem)" />
-						</div>
-					{/key}
-
-					<!-- Next button -->
-					{#if images.length > 1}
-						<button
-							class="lightbox-nav lightbox-next"
-							type="button"
-							aria-label="Next image"
-							onclick={navigateNext}>
-							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="32" height="32">
-								<polyline points="9 18 15 12 9 6" />
-							</svg>
-						</button>
-					{/if}
-
-					<!-- Caption -->
-					{#if current_image.caption}
-						<p class="lightbox-caption">{current_image.caption}</p>
-					{/if}
-				</div>
-			{/snippet}
-		</Modal>
+			{#if controls !== 'disable'}
+				{@render sliderControls()}
+			{/if}
+			<div class="visuallyhidden" aria-live="polite" aria-atomic="true" inert>
+				Media Item {slide + 1} of {list.length}
+			</div>
+		</div>
 	{/if}
+{/snippet}
+
+{#if (display !== 'slider' && display !== 'slideshow') || isModal}
+	<Portal>
+		{@render slider()}
+	</Portal>
+{:else}
+	{@render slider()}
 {/if}
 
 <style>
-	/* Grid layout */
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(var(--gallery-columns, 3), 1fr);
-		gap: var(--gallery-gap, 0.5rem);
-	}
-
-	/* Masonry layout */
-	.masonry {
-		columns: var(--gallery-columns, 3);
-		column-gap: var(--gallery-gap, 0.5rem);
-	}
-
-	.masonry > :global(*) {
-		break-inside: avoid;
-		margin-bottom: var(--gallery-gap, 0.5rem);
-	}
-
-	/* Gallery item */
-	.item {
-		position: relative;
+	.visuallyhidden {
+		border: 0;
+		clip: rect(0 0 0 0);
+		clip-path: inset(50%);
+		height: 1px;
+		margin: -1px;
 		overflow: hidden;
-		border-radius: var(--radius-sm);
-		cursor: pointer;
-		border: none;
 		padding: 0;
-		background: none;
-		display: block;
-		width: 100%;
-	}
-
-	button.item {
-		appearance: none;
-		font: inherit;
-		color: inherit;
-		text-align: inherit;
-	}
-
-	.item :global(.image) {
-		display: block;
-		width: 100%;
-		height: 100%;
-		transition: transform var(--duration-fast, 150ms) var(--ease-default, ease);
-	}
-
-	.item:hover :global(.image) {
-		transform: scale(1.03);
-	}
-
-	/* Hover overlay */
-	.overlay {
 		position: absolute;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background-color: color-mix(in srgb, var(--color-surface-invert, #000) 40%, transparent);
-		opacity: 0;
-		transition: opacity var(--duration-fast, 150ms) var(--ease-default, ease);
-		color: #fff;
-		pointer-events: none;
-	}
-
-	.item:hover .overlay {
-		opacity: 1;
-	}
-
-	.item:focus-visible {
-		outline: 2px solid var(--color-action, #3b82f6);
-		outline-offset: 2px;
-	}
-
-	/* Skeleton */
-	.skeleton {
-		position: relative;
-		overflow: hidden;
-		border-radius: var(--radius-sm);
-		aspect-ratio: 1;
-		background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
-	}
-
-	.skeleton-shimmer {
-		position: absolute;
-		inset: 0;
-		background: linear-gradient(
-			90deg,
-			transparent 25%,
-			light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04)) 50%,
-			transparent 75%
-		);
-		background-size: 200% 100%;
-		animation: gallery-shimmer 1.5s ease-in-out infinite;
-	}
-
-	@keyframes gallery-shimmer {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
-
-	/* Lightbox content */
-	.lightbox-content {
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		min-height: 300px;
-		user-select: none;
-		-webkit-user-select: none;
-	}
-
-	/* Counter */
-	.lightbox-counter {
-		position: absolute;
-		top: 0;
-		left: 50%;
-		transform: translateX(-50%);
-		color: var(--color-text-muted, #999);
-		font-size: 0.875rem;
-		padding: 0.25rem 0.75rem;
-		border-radius: var(--radius-sm);
-		z-index: 2;
+		width: 1px;
 		white-space: nowrap;
 	}
 
-	/* Close button */
-	.lightbox-close {
-		position: absolute;
+	.pagination {
+		white-space: nowrap;
+	}
+
+	.list-item-icon {
+		display: inline-flex;
+		align-items: center;
+		padding-right: 0.5rem;
+		font-size: 1.1rem;
+	}
+
+	.list-item-icon :global(svg),
+	.icon :global(svg) {
+		width: 1em;
+		height: 1em;
+	}
+
+	.gallery-item {
+		position: relative;
+		display: grid;
+		grid-template-rows: 1fr;
+		grid-template-columns: 1fr;
+		cursor: pointer;
+		border-radius: var(--radius);
+		isolation: isolate;
+		overflow: hidden;
+		transition:
+			box-shadow 150ms ease,
+			scale 150ms ease;
+		box-shadow: var(--shadow-1);
+		background-color: var(--color-surface-2, var(--bg-high));
+
+		.image {
+			position: absolute;
+			inset: 0;
+			transition: transform 150ms ease;
+			transform: scale(1);
+			will-change: transform;
+			overflow: hidden;
+		}
+		.thumbnail-img {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+
+		&:active {
+			scale: 0.98;
+		}
+		&:hover {
+			box-shadow: var(--shadow-2);
+			.image {
+				opacity: 0.97;
+				transform: scale(1.018);
+			}
+		}
+		&:focus {
+			outline: solid 4px var(--color-text, var(--text));
+		}
+		&:focus:not(:focus-visible) {
+			outline: none;
+		}
+		> :global(*) {
+			grid-row: 1 / 1;
+			grid-column: 1 / 1;
+			position: relative;
+		}
+		.icon {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			justify-self: center;
+			align-self: center;
+			color: white;
+			background-color: rgba(0, 0, 0, 0.6);
+			border-radius: 100%;
+			width: min(max(20%, 3rem), 7rem);
+			aspect-ratio: 1 / 1;
+			padding: 0.5rem;
+			backdrop-filter: blur(10px);
+			:global(svg) {
+				width: max(2rem, 70%);
+				height: max(2rem, 70%);
+			}
+		}
+		.name {
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			width: 100%;
+			color: white;
+			background-color: rgba(0, 0, 0, 0.6);
+			padding: max(0.5rem, calc(var(--radius, 0px) / 2)) max(1rem, var(--radius, 0px));
+			text-overflow: ellipsis;
+			overflow: hidden;
+			white-space: nowrap;
+			backdrop-filter: blur(5px);
+			&.hover-only {
+				transition: transform 250ms ease;
+				backdrop-filter: none;
+				transform: translate3d(0, 100%, 0);
+			}
+		}
+		.actions {
+			position: absolute;
+			top: max(4px, min(16px, var(--radius, 0px)));
+			right: max(4px, min(16px, var(--radius, 0px)));
+			z-index: 2;
+			display: flex;
+			gap: 0.25rem;
+			&.hover-only {
+				opacity: 0;
+				transition: opacity 250ms ease;
+			}
+		}
+		&:focus-visible,
+		&:has(.actions:focus-within) {
+			.actions {
+				opacity: 1;
+			}
+			.name {
+				transform: translate3d(0px, 0px, 0px);
+			}
+		}
+
+		@media (hover: hover) and (pointer: fine) {
+			&:hover {
+				.name.hover-only {
+					transform: translate3d(0px, 0px, 0px);
+				}
+				.actions.hover-only {
+					opacity: 1;
+				}
+			}
+		}
+		@media not ((hover: hover) and (pointer: fine)) {
+			.actions.hover-only {
+				display: none;
+			}
+		}
+	}
+
+	.gallery.slider {
+		z-index: 1;
+		perspective: 100px;
+		perspective-origin: center center;
+		user-select: none;
+		-webkit-user-select: none;
+		-webkit-tap-highlight-color: transparent;
+		transform: translateZ(0px);
+		position: relative;
+		margin: 0 auto;
+
+		:global(.carousel) {
+			position: relative;
+			z-index: 1;
+			height: 100%;
+		}
+		.bg {
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: -1;
+		}
+
+		.controls {
+			display: flex;
+			position: absolute;
+			align-items: center;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			width: 100%;
+			height: 3.5rem;
+			gap: 1rem;
+			padding: 0 1rem;
+			pointer-events: none;
+			:global(.button) {
+				pointer-events: all;
+			}
+			.spacer {
+				flex: 1;
+			}
+		}
+
+		nav.pages {
+			position: absolute;
+			z-index: 2;
+			display: flex;
+			color: var(--color-text, var(--text));
+			background-color: var(--color-surface, var(--bg));
+			border-radius: 9999px;
+			box-shadow: var(--shadow-2);
+			border: none;
+			outline: none;
+			font-weight: bold;
+		}
+
+		.pagination {
+			z-index: 1;
+		}
+
+		:global(.play svg.progress) {
+			stroke-width: 3;
+			stroke-dasharray: 163.41;
+			stroke-dashoffset: calc(163.41 - (163.41 * var(--progress, 0)));
+			transition: stroke-dashoffset var(--speed, 300ms) linear;
+			width: 70%;
+			height: 70%;
+			stroke: white;
+			fill: none;
+			transform: rotate(-90deg) !important;
+			transform-origin: center center;
+			opacity: 0.25;
+			position: absolute;
+			top: 15%;
+			left: 15%;
+		}
+	}
+
+	.gallery.slider:not(.modal) {
+		container: gallery-slider / inline-size;
+		:global(.carousel) {
+			aspect-ratio: var(--aspect-ratio);
+		}
+		.bg {
+			background-color: var(--color-surface-2, var(--bg-high));
+		}
+		&.sizing-small {
+			--aspect-ratio: 1 / 1;
+			height: auto;
+			&.radius-small {
+				.bg,
+				:global(.carousel) {
+					@container (min-width: 80ch) {
+						border-radius: var(--radius-3, 0.5rem);
+					}
+				}
+			}
+			&.radius-large {
+				.bg,
+				:global(.carousel) {
+					@container (min-width: 80ch) {
+						border-radius: var(--radius-4, 0.75rem);
+					}
+				}
+			}
+		}
+		&.sizing-default {
+			&.radius-small {
+				.bg,
+				:global(.carousel) {
+					@container (min-width: 1200px) {
+						border-radius: var(--radius-4, 0.75rem);
+					}
+				}
+			}
+			&.radius-large {
+				.bg,
+				:global(.carousel) {
+					@container (min-width: 1200px) {
+						border-radius: var(--radius-5, 1rem);
+					}
+				}
+			}
+		}
+	}
+
+	.gallery.slider:not(.modal).controls-overlay {
+		&.radius-small {
+			.controls {
+				border-top-left-radius: var(--radius-4, 0.75rem);
+				border-top-right-radius: var(--radius-4, 0.75rem);
+			}
+		}
+		&.radius-large {
+			.controls {
+				border-top-left-radius: var(--radius-5, 1rem);
+				border-top-right-radius: var(--radius-5, 1rem);
+				border-bottom-left-radius: var(--radius-5, 1rem);
+				border-bottom-right-radius: var(--radius-5, 1rem);
+			}
+		}
+		.controls {
+			z-index: 2;
+			justify-content: center;
+			> .spacer {
+				display: none;
+			}
+			background-color: color-mix(
+				in oklch,
+				var(--color-surface-2, var(--bg-high)),
+				transparent 30%
+			);
+			backdrop-filter: blur(10px);
+			width: fit-content;
+			left: 50%;
+			transform: translateX(-50%);
+			padding: 0.25rem;
+			gap: 0.5rem;
+		}
+	}
+	.gallery.slider.modal.controls-overlay {
+		.controls {
+			z-index: 3;
+			bottom: 0.5rem;
+			gap: 0.5rem;
+			nav.pages {
+				left: 50%;
+				transform: translate3d(-50%, 0, 0);
+				bottom: 3.5rem;
+				z-index: 2;
+			}
+			:global(> .button) {
+				--color-text: #eeeeee;
+				--color-text-high: #ffffff;
+				--bg-high: rgba(0, 0, 0, 0.2);
+			}
+			:global(> .button:hover button) {
+				backdrop-filter: blur(3px);
+			}
+			.pagination {
+				margin: 0 0.5rem;
+			}
+			.actions {
+				position: absolute;
+				bottom: 0;
+				left: 5rem;
+				z-index: 2;
+				display: flex;
+				:global(> .button:hover button) {
+					backdrop-filter: blur(3px);
+				}
+				:global(> .button) {
+					--color-text: #eeeeee;
+					--color-text-high: #ffffff;
+					--bg-high: rgba(0, 0, 0, 0.2);
+				}
+				:global(> .button button svg) {
+					filter: drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.95))
+						drop-shadow(0px 0px 3px rgba(0, 0, 0, 0.25))
+						drop-shadow(0px 0px 10px rgba(0, 0, 0, 0.5));
+				}
+			}
+
+			@media (min-width: 768px) {
+				nav.pages {
+					bottom: 1rem;
+				}
+				display: block;
+				position: static;
+				height: unset;
+				width: unset;
+				bottom: unset;
+				left: unset;
+				right: unset;
+				:global(> .button) {
+					bottom: 1rem;
+					position: absolute;
+				}
+				:global(> .button button svg) {
+					filter: drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.95))
+						drop-shadow(0px 0px 3px rgba(0, 0, 0, 0.25))
+						drop-shadow(0px 0px 10px rgba(0, 0, 0, 0.5));
+				}
+				.actions {
+					position: absolute;
+					top: 4rem;
+					right: 0.5rem;
+					left: unset;
+					bottom: unset;
+					display: flex;
+					flex-direction: column;
+					justify-content: center;
+					align-items: center;
+				}
+				.pagination {
+					position: absolute;
+					font-size: 1.5rem;
+					top: 0.5rem;
+					right: 3.75rem;
+					height: 3rem;
+					margin: 0;
+					display: flex;
+					align-items: center;
+					text-align: right;
+					z-index: 2;
+					backdrop-filter: blur(5px);
+					padding: 0 1rem;
+					border-radius: 9999px;
+				}
+				:global(.play) {
+					z-index: 2;
+				}
+				:global(.close) {
+					right: 0.5rem;
+					top: 0.5rem;
+					z-index: 2;
+				}
+				:global(.prev),
+				:global(.next) {
+					top: 50%;
+					transform: translateY(-50%);
+					bottom: unset;
+					width: 4.5rem;
+					height: min(20rem, 50%);
+					box-shadow: none;
+					cursor: pointer;
+					z-index: 2;
+				}
+				:global(.prev button svg),
+				:global(.next button svg) {
+					height: 80%;
+					width: 80%;
+				}
+				:global(.prev) {
+					left: 0;
+					padding-left: 0.5rem;
+				}
+				:global(.next) {
+					right: 0;
+					padding-right: 0.5rem;
+				}
+			}
+		}
+	}
+	.gallery.slider.controls-inline {
+		nav.pages {
+			top: -4.5rem;
+			bottom: unset;
+		}
+		.controls {
+			justify-content: center;
+			gap: 0;
+			top: 100%;
+			bottom: unset;
+			@container (max-width: 500px) {
+				gap: 0.5rem;
+				padding: 0;
+				.pagination {
+					padding: 0 0.5rem;
+					font-size: 1rem;
+				}
+			}
+			.spacer {
+				display: none;
+				flex: 0;
+			}
+		}
+		.controls > .pagination {
+			color: var(--color-text, var(--text));
+			margin: 0 1rem;
+			font-weight: normal;
+			font-size: 1.5rem;
+		}
+		.controls > :global(.play) {
+			svg.progress {
+				stroke: var(--color-text-muted, var(--text-low));
+				opacity: 1;
+			}
+		}
+	}
+
+	.gallery.slider.modal {
+		position: fixed;
+		z-index: var(--layer-5, 1000);
 		top: 0;
-		right: 0;
-		z-index: 2;
-		background: none;
-		border: none;
-		padding: 0.5rem;
-		cursor: pointer;
-		color: var(--color-text-muted, #999);
-		border-radius: var(--radius-sm);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: color var(--duration-fast, 150ms) var(--ease-default, ease);
-	}
-
-	.lightbox-close:hover {
-		color: var(--color-text, #fff);
-	}
-
-	.lightbox-close:focus-visible {
-		outline: 2px solid var(--color-action, #3b82f6);
-		outline-offset: 2px;
-	}
-
-	/* Nav buttons */
-	.lightbox-nav {
-		position: absolute;
-		top: 50%;
-		transform: translateY(-50%);
-		z-index: 2;
-		background: none;
-		border: none;
-		padding: 0.5rem;
-		cursor: pointer;
-		color: var(--color-text-muted, #999);
-		border-radius: var(--radius-sm);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: color var(--duration-fast, 150ms) var(--ease-default, ease);
-	}
-
-	.lightbox-nav:hover {
-		color: var(--color-text, #fff);
-	}
-
-	.lightbox-nav:focus-visible {
-		outline: 2px solid var(--color-action, #3b82f6);
-		outline-offset: 2px;
-	}
-
-	.lightbox-prev {
 		left: 0;
+		bottom: 0;
+		width: 100%;
+		height: 100%;
+		.bg {
+			background-color: rgba(0, 0, 0, 0.85);
+			@supports (backdrop-filter: blur(25px)) {
+				filter: blur(0px);
+				backdrop-filter: blur(25px);
+				background-color: rgba(0, 0, 0, 0.7);
+			}
+		}
+		&.fullscreen {
+			.bg {
+				background-color: black !important;
+				opacity: 1 !important;
+			}
+		}
+		:global(.carousel) {
+			aspect-ratio: var(--aspect-ratio);
+			height: calc(100% - 4.5rem);
+		}
+		@media (min-width: 768px) {
+			:global(.carousel) {
+				height: 100%;
+			}
+		}
+
+		.fullscreen-name {
+			position: absolute;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			z-index: 2;
+			pointer-events: none;
+			&::before {
+				content: '';
+				position: absolute;
+				inset: 0;
+				background-image: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0));
+				z-index: -1;
+			}
+			text-align: center;
+			color: white;
+			font-size: var(--font-size-1, 1rem);
+			padding: 6rem 1rem 5rem;
+			text-shadow:
+				0 1px 2px rgba(0, 0, 0, 0.5),
+				0 0 10px rgba(0, 0, 0, 0.3);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			transition: opacity 1000ms ease;
+			@starting-style {
+				opacity: 0;
+			}
+		}
+		@media (min-width: 768px) {
+			.fullscreen-name {
+				padding: 3rem 5rem 1rem;
+			}
+		}
+
+		.pagination {
+			font-size: 1.3rem;
+			color: white;
+			text-shadow:
+				1px 1px 0 rgba(0, 0, 0, 0.5),
+				1px 1px 10px rgba(0, 0, 0, 0.5),
+				0 0 40px black;
+			font-weight: bold;
+		}
 	}
 
-	.lightbox-next {
-		right: 0;
+	.gallery.display-masonry {
+		width: 100%;
+		margin-inline: auto;
+		display: grid;
+		grid-auto-flow: dense;
+		gap: var(--gallery-gap, 12px);
+		padding: 0 var(--gallery-gap, 12px) var(--gallery-gap, 12px);
+		max-width: 2160px;
+		grid-auto-rows: 1fr;
+		--cols: 4;
+		--cols-per-image: 8;
+		--cols-desktop: calc(var(--cols) * var(--cols-per-image));
+		--cols-tablet: max(
+			var(--cols-per-image),
+			calc(
+				round((var(--cols-desktop) * 0.75) / var(--cols-per-image), 1) *
+					var(--cols-per-image)
+			)
+		);
+		--cols-phone: max(
+			var(--cols-per-image),
+			calc(
+				round((var(--cols-desktop) * 0.45) / var(--cols-per-image), 1) *
+					var(--cols-per-image)
+			)
+		);
+		grid-template-columns: repeat(var(--cols-phone), minmax(0, 1fr));
+		@container (min-width: 768px) {
+			grid-template-columns: repeat(var(--cols-tablet), minmax(0, 1fr));
+		}
+		@container (min-width: 1024px) {
+			grid-template-columns: repeat(var(--cols-desktop), minmax(0, 1fr));
+		}
+
+		&.radius-none {
+			--radius: 0px;
+		}
+
+		&.sizing-small {
+			--cols: 6;
+			.name {
+				font-size: 0.9rem;
+			}
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 0.65);
+			}
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(8px, 1.5cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(14px, 1.5cqw);
+			}
+		}
+		&.sizing-default {
+			--cols: 4;
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 0.8);
+			}
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(10px, 3cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(16px, 3cqw);
+			}
+		}
+		&.sizing-large {
+			--cols: 3;
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 1);
+			}
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(12px, 5cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(20px, 5cqw);
+			}
+		}
+
+		&::before {
+			content: '';
+			width: 0;
+			padding-bottom: 100%;
+			grid-row: 1 / 1;
+			grid-column: 1 / 1;
+			aspect-ratio: 1;
+		}
+
+		> .gallery-item {
+			grid-column-end: span var(--cols-per-image);
+			grid-row-end: span max(1, calc(var(--cols-per-image) * 1 / var(--ratio, 1)));
+			&.favorite {
+				--zero-if-one-column: min(
+					round(down, calc((var(--cols-phone) / var(--cols-per-image)) - 1), 1),
+					1
+				);
+				--favorite-cols: calc(
+					var(--cols-per-image) + var(--cols-per-image) * var(--zero-if-one-column)
+				);
+				grid-column-end: span calc(var(--cols-per-image) * 2);
+				grid-row-end: span
+					max(1, round(down, calc(var(--cols-per-image) * 2 / var(--ratio, 1)), 1));
+				@container (max-width: 767px) {
+					grid-column-end: span var(--favorite-cols);
+					grid-row-end: span
+						max(1, round(down, calc(var(--favorite-cols) * 1 / var(--ratio, 1)), 1));
+				}
+			}
+			&:first-child {
+				grid-column-start: 1;
+				grid-row-start: 1;
+			}
+		}
 	}
 
-	/* Image wrapper for fade animation */
-	.lightbox-image-wrapper {
+	.gallery.display-grid {
+		width: 100%;
+		margin-inline: auto;
+		display: grid;
+		grid-auto-flow: dense;
+		gap: var(--gallery-gap, 12px);
+		padding: 0 var(--gallery-gap, 12px) var(--gallery-gap, 12px);
+		max-width: 2160px;
+		grid-auto-rows: 1fr;
+		container: gallery-grid / inline-size;
+
+		&.radius-none {
+			--radius: 0px;
+		}
+		&.sizing-small {
+			grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+			.name {
+				font-size: 0.8rem;
+			}
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.35);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 0.55);
+			}
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(8px, 1.5cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(14px, 1.5cqw);
+			}
+			@container (min-width: 768px) {
+				grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+			}
+		}
+		&.sizing-default {
+			grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 0.8);
+			}
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(10px, 3cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(16px, 3cqw);
+			}
+			@container (min-width: 768px) {
+				grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+			}
+		}
+		&.sizing-large {
+			grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 1);
+			}
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(12px, 5cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(20px, 5cqw);
+			}
+			@container (min-width: 768px) {
+				grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+			}
+		}
+
+		&::before {
+			content: '';
+			width: 0;
+			padding-bottom: 100%;
+			grid-row: 1 / 1;
+			grid-column: 1 / 1;
+			aspect-ratio: 1;
+		}
+
+		> .gallery-item {
+			grid-row-end: span 1;
+			grid-column-end: span 1;
+			&.favorite {
+				grid-column-end: span 2;
+				grid-row-end: span 2;
+			}
+			&:first-child {
+				grid-column-start: 1;
+				grid-row-start: 1;
+			}
+		}
+	}
+
+	.gallery.display-masonry-row {
+		--row-height: 250px;
+		--max-row-height: 350px;
 		display: flex;
-		align-items: center;
+		flex-wrap: wrap;
 		justify-content: center;
-		padding: 2rem 3rem;
-		animation: lightbox-fade-in var(--duration-fast, 150ms) var(--ease-default, ease);
-	}
+		gap: var(--gallery-gap, 12px);
+		padding: 0 var(--gallery-gap, 12px) var(--gallery-gap, 12px);
+		max-width: 2160px;
+		margin-inline: auto;
 
-	@keyframes lightbox-fade-in {
-		from {
-			opacity: 0;
+		&.radius-none {
+			--radius: 0px;
 		}
-		to {
-			opacity: 1;
+		&.sizing-small {
+			--row-height: 70px;
+			--max-row-height: 110px;
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 0.55);
+			}
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(8px, 1.5cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(14px, 1.5cqw);
+			}
+			@container (min-width: 768px) {
+				--row-height: 150px;
+				--max-row-height: 200px;
+			}
+		}
+		&.sizing-default {
+			--row-height: 100px;
+			--max-row-height: 150px;
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.35);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+			}
+
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(10px, 3cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(16px, 3cqw);
+			}
+			@container (min-width: 768px) {
+				--row-height: 200px;
+				--max-row-height: 300px;
+				&.radius-small {
+					--radius: calc(var(--gallery-gap, 12px) * 0.45);
+				}
+				&.radius-large {
+					--radius: calc(var(--gallery-gap, 12px) * 0.8);
+				}
+			}
+		}
+		&.sizing-large {
+			--row-height: 250px;
+			--max-row-height: 350px;
+			&.radius-small {
+				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+			}
+			&.radius-large {
+				--radius: calc(var(--gallery-gap, 12px) * 1);
+			}
+			&.spacing-none {
+				--gallery-gap: 0px;
+			}
+			&.spacing-default {
+				--gallery-gap: min(12px, 5cqw);
+			}
+			&.spacing-large {
+				--gallery-gap: min(20px, 5cqw);
+			}
+			@container (max-width: 767px) {
+				--max-row-height: 700px;
+			}
+		}
+
+		> .gallery-item {
+			flex-basis: calc(var(--ratio, 1) * var(--row-height));
+			flex-grow: calc(var(--ratio, 1) * 100);
+			aspect-ratio: var(--ratio, 1);
+			max-height: var(--max-row-height);
+			max-width: calc(var(--ratio, 1) * var(--max-row-height) * 1.1);
 		}
 	}
 
-	.lightbox-image {
-		display: block;
-		max-width: 100%;
-		max-height: calc(95svh - 8rem);
-		object-fit: contain;
-		border-radius: var(--radius-sm);
-		box-shadow: var(--shadow-sm);
-	}
+	.gallery.display-list {
+		display: flex;
+		flex-direction: column;
+		max-width: 600px;
+		margin-inline: auto;
+		--line-height: 4rem;
 
-	/* Caption */
-	.lightbox-caption {
-		color: var(--color-text-muted, #999);
-		font-size: 0.875rem;
-		text-align: center;
-		margin: 0.5rem 0 0;
-		padding: 0 1rem;
-		animation: lightbox-caption-in calc(var(--duration-fast, 150ms) * 2) var(--ease-default, ease);
-	}
-
-	@keyframes lightbox-caption-in {
-		0%,
-		50% {
-			opacity: 0;
-			transform: translateY(4px);
+		&.radius-none {
+			--radius: 0px;
 		}
-		100% {
-			opacity: 1;
-			transform: translateY(0);
+		&.radius-small {
+			--radius: 4px;
+		}
+		&.radius-large {
+			--radius: 10px;
+		}
+		&.sizing-small {
+			--line-height: 2.75rem;
+			> .list-item {
+				padding: 0 0.35rem;
+			}
+		}
+		&.sizing-default {
+			--line-height: 3.5rem;
+		}
+		&.sizing-large {
+			--line-height: 4.5rem;
+		}
+
+		> .list-item {
+			display: flex;
+			height: var(--line-height);
+			align-items: center;
+			padding: 0 0.5rem;
+			border-bottom: solid 1px var(--color-border, var(--outline));
+			position: relative;
+			z-index: 1;
+			&:last-child {
+				border-bottom: none;
+			}
+			&:before {
+				content: '';
+				position: absolute;
+				top: 2px;
+				left: 0px;
+				right: 0px;
+				bottom: 2px;
+				background-color: var(--color-surface-2, var(--bg-high));
+				opacity: 0;
+				border-radius: var(--radius);
+				z-index: -1;
+				transition: opacity 150ms ease;
+			}
+			@media (hover: hover) and (pointer: fine) {
+				&:hover {
+					&:before {
+						opacity: 1;
+					}
+				}
+			}
+			.info {
+				display: flex;
+				flex: 1;
+				cursor: pointer;
+				align-items: center;
+				.thumbnail {
+					width: var(--line-height);
+					height: var(--line-height);
+					position: relative;
+					color: white;
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					border-radius: calc(var(--radius) - 0.5rem);
+					overflow: hidden;
+					.thumbnail-img {
+						max-height: calc(100% - 4px);
+						max-width: 100%;
+						object-fit: contain;
+						border-radius: calc(var(--radius) - 0.35rem);
+					}
+					.icon {
+						position: absolute;
+						width: 1.5rem;
+						height: 1.5rem;
+						top: calc(50% - 0.75rem);
+						left: calc(50% - 0.75rem);
+						z-index: 2;
+						background-color: rgba(0, 0, 0, 0.6);
+						backdrop-filter: blur(10px);
+						border-radius: 100%;
+						display: flex;
+						align-items: center;
+						justify-content: center;
+						:global(svg) {
+							width: 80%;
+							height: 80%;
+						}
+					}
+				}
+				.name {
+					flex: 1;
+					padding: 0 1rem;
+					text-overflow: ellipsis;
+					white-space: nowrap;
+					overflow: hidden;
+				}
+			}
+		}
+	}
+
+	/* Reduced layouts when only a few images */
+	.gallery.display-grid,
+	.gallery.display-masonry,
+	.gallery.display-masonry-row {
+		&:has(.gallery-item:first-child:nth-last-child(1)) {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: start;
+			justify-content: center;
+			&:before {
+				display: none;
+			}
+			&.radius-small {
+				--radius: var(--radius-2, 0.375rem);
+			}
+			&.radius-large {
+				--radius: var(--radius-3, 0.5rem);
+			}
+			> .gallery-item {
+				flex-basis: 100%;
+				flex-grow: 1;
+				max-width: none;
+				max-height: none;
+				aspect-ratio: max(var(--ratio, 1), 0.85);
+				.name {
+					font-size: 1rem;
+				}
+			}
+			@container (min-width: 768px) {
+				&.radius-small {
+					--radius: var(--radius-4, 0.75rem);
+				}
+				&.radius-large {
+					--radius: var(--radius-5, 1rem);
+				}
+			}
+		}
+
+		&:has(.gallery-item:first-child:nth-last-child(2)) {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: start;
+			justify-content: center;
+			&:before {
+				display: none;
+			}
+			&.radius-small {
+				--radius: var(--radius-2, 0.375rem);
+			}
+			&.radius-large {
+				--radius: var(--radius-3, 0.5rem);
+			}
+			> .gallery-item {
+				flex-basis: 0;
+				flex-grow: 1;
+				max-width: none;
+				max-height: none;
+				aspect-ratio: max(var(--ratio, 1), 0.75);
+				.name {
+					font-size: 1rem;
+				}
+			}
+			@container (min-width: 768px) {
+				&.radius-small {
+					--radius: var(--radius-3, 0.5rem);
+				}
+				&.radius-large {
+					--radius: var(--radius-4, 0.75rem);
+				}
+			}
+		}
+
+		&:has(.gallery-item:first-child:nth-last-child(3)) {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: start;
+			justify-content: center;
+			&:before {
+				display: none;
+			}
+			&.radius-small {
+				--radius: var(--radius-1, 0.25rem);
+			}
+			&.radius-large {
+				--radius: var(--radius-2, 0.375rem);
+			}
+			> .gallery-item {
+				flex-basis: 0;
+				flex-grow: 1;
+				max-width: none;
+				max-height: none;
+				aspect-ratio: max(var(--ratio, 1), 0.75);
+				.name {
+					font-size: 1rem;
+				}
+			}
+			@container (min-width: 768px) {
+				&.radius-small {
+					--radius: var(--radius-2, 0.375rem);
+				}
+				&.radius-large {
+					--radius: var(--radius-3, 0.5rem);
+				}
+			}
+			&.sizing-large {
+				@container (max-width: 767px) {
+					> .gallery-item {
+						flex-basis: 100%;
+					}
+				}
+			}
+		}
+
+		&:has(.gallery-item:first-child:nth-last-child(4)) {
+			&.sizing-small {
+				display: flex;
+				flex-wrap: wrap;
+				align-items: start;
+				justify-content: center;
+				&:before {
+					display: none;
+				}
+				&.radius-small {
+					--radius: var(--radius-1, 0.25rem);
+				}
+				&.radius-large {
+					--radius: var(--radius-2, 0.375rem);
+				}
+				> .gallery-item {
+					flex-basis: 0;
+					flex-grow: 1;
+					max-width: none;
+					max-height: none;
+					aspect-ratio: max(var(--ratio, 1), 0.75);
+					.name {
+						font-size: 1rem;
+					}
+				}
+				@container (min-width: 768px) {
+					&.radius-small {
+						--radius: var(--radius-2, 0.375rem);
+					}
+					&.radius-large {
+						--radius: var(--radius-3, 0.5rem);
+					}
+				}
+			}
+			&.sizing-large {
+				@container (max-width: 767px) {
+					> .gallery-item {
+						flex-basis: 100%;
+					}
+				}
+			}
+		}
+
+		&:has(.gallery-item:first-child:nth-last-child(5)).sizing-small:not(.display-grid) {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: start;
+			justify-content: center;
+			&:before {
+				display: none;
+			}
+			&.radius-small {
+				--radius: var(--radius-1, 0.25rem);
+			}
+			&.radius-large {
+				--radius: var(--radius-2, 0.375rem);
+			}
+			> .gallery-item {
+				flex-basis: 0;
+				flex-grow: 1;
+				max-width: none;
+				max-height: none;
+				aspect-ratio: max(var(--ratio, 1), 0.75);
+				.name {
+					font-size: 1rem;
+				}
+			}
+			@container (min-width: 768px) {
+				&.radius-small {
+					--radius: var(--radius-2, 0.375rem);
+				}
+				&.radius-large {
+					--radius: var(--radius-3, 0.5rem);
+				}
+			}
 		}
 	}
 </style>

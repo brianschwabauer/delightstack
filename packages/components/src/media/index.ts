@@ -1,6 +1,14 @@
 export { default as Carousel } from './Carousel.svelte';
+export type { CarouselItem, CarouselItemType, GalleryGesture } from './Carousel.svelte';
 export { default as Gallery } from './Gallery.svelte';
-export type { GalleryImage } from './Gallery.svelte';
+export type {
+	GalleryDisplay,
+	GalleryItem,
+	GalleryItemAction,
+	GalleryRadius,
+	GallerySize,
+	GallerySpacing,
+} from './Gallery.svelte';
 export { default as Image } from './Image.svelte';
 // Map is excluded from the barrel — it requires the optional leaflet dependency.
 // Import it directly: import Map from '@delightstack/components/map';
