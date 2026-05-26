@@ -66,7 +66,7 @@
 	import Portal from '../actions/Portal.svelte';
 	import { contextMenu } from '../actions/ContextMenu.svelte';
 	import Carousel from './Carousel.svelte';
-	import { decodeThumbHash, normalizeCarouselItem } from './carousel';
+	import { decodeThumbHash, normalizeCarouselItem, pickLargestSrc } from './carousel';
 
 	let {
 		/** How the gallery should be displayed - whether a grid, slideshow, etc */
@@ -187,8 +187,8 @@
 	 * for hydration.
 	 */
 	const fadingKeys = new SvelteSet<string>();
-	function thumbnailKey(item: { id?: string; url?: string }) {
-		return item.id || item.url || '';
+	function thumbnailKey(item: { id?: string; src?: string }) {
+		return item.id || item.src || '';
 	}
 
 	/** The instance of the focus trap class - used to programmatically deactivate the focus trap */
@@ -218,16 +218,6 @@
 				};
 			}),
 	);
-
-	/** A sensible `sizes` hint for grid thumbnails, used by `<img srcset>` so the browser */
-	/** picks an appropriately-sized variant. Roughly matches the column widths from the */
-	/** masonry/grid layouts below. */
-	const gridThumbSizes = $derived.by(() => {
-		if (display === 'list') return '64px';
-		if (sizing === 'small') return '(min-width: 1024px) 16vw, (min-width: 768px) 25vw, 33vw';
-		if (sizing === 'large') return '(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw';
-		return '(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw';
-	});
 
 	const sliderActive = $derived(display === 'slider' || slide >= 0);
 	const isModal = $derived(fullscreenActive || (display !== 'slider' && slide >= 0));
@@ -549,8 +539,9 @@
 	</svg>
 {/snippet}
 
-{#snippet itemThumbnail(item: (typeof list)[number], thumbSizes?: string)}
+{#snippet itemThumbnail(item: (typeof list)[number], sizesFallback: string)}
 	{@const key = thumbnailKey(item)}
+	{@const eager = !!item.priority}
 	{#if item.thumbhash}
 		<img
 			class="thumbnail-blur"
@@ -559,16 +550,17 @@
 			aria-hidden="true"
 			draggable="false" />
 	{/if}
-	{#if item.url}
+	{#if item.src}
 		<img
 			class="thumbnail-img"
 			class:fading={fadingKeys.has(key)}
 			class:no-blur={!item.thumbhash}
-			src={item.url}
-			srcset={item.srcset || undefined}
-			sizes={item.sizes || thumbSizes || '(max-width: 768px) 50vw, 33vw'}
-			alt={item.name || ''}
-			loading="lazy"
+			src={pickLargestSrc(item.src)}
+			srcset={item.src}
+			sizes={eager ? sizesFallback : `auto, ${sizesFallback}`}
+			alt={item.alt ?? item.name ?? ''}
+			loading={eager ? 'eager' : 'lazy'}
+			fetchpriority={eager ? 'high' : undefined}
 			draggable="false"
 			onload={() => fadingKeys.delete(key)}
 			onerror={() => fadingKeys.delete(key)}
@@ -657,14 +649,16 @@
 		tabindex="0"
 		{@attach ripple({ zIndex: 1, opacity: 0.2, color: 'white' })}
 		class:favorite={item.favorite}
-		style:--ratio={display === 'masonry-row' || display === 'masonry'
-			? item.ratio
+		style:--ratio={(display === 'masonry-row' || display === 'masonry') &&
+		item.width &&
+		item.height
+			? item.width / item.height
 			: undefined}
 		{@attach contextMenu({ actions: flattenActions(actions?.[index]) })}
 		onclick={(e) => onItemClick(index, e)}
 		onkeydown={(e) => e.key !== 'Enter' || onItemClick(index, e)}>
 		<div class="image">
-			{@render itemThumbnail(item, gridThumbSizes)}
+			{@render itemThumbnail(item, '100vw')}
 		</div>
 		{#if item.type !== 'image' || item.panorama}
 			<div class="icon">
@@ -939,9 +933,9 @@
 					if (fullscreenActive) return closeFullscreen();
 					slide = -1;
 				}} />
-			{#if metaDisplayFullscreen === 'always' && isModal && list[slide]?.name}
+			{#if metaDisplayFullscreen === 'always' && isModal && (list[slide]?.caption || list[slide]?.name)}
 				<div class="fullscreen-name" style:opacity={1 - dismissing}>
-					{list[slide].name}
+					{list[slide]?.caption || list[slide]?.name}
 				</div>
 			{/if}
 			{#if controls !== 'disable'}

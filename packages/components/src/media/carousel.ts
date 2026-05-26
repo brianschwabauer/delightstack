@@ -65,43 +65,52 @@ export type CarouselItemType = 'image' | 'video' | 'pdf' | 'embed';
  * Strings are also accepted as a shorthand for an image URL.
  */
 export interface CarouselItem {
-	/** A stable identifier for the item. If omitted, the url is used. */
+	/** A stable identifier for the item. If omitted, the src is used. */
 	id?: string;
 
 	/** The kind of media. @default 'image' */
 	type?: CarouselItemType;
 
-	/** The primary URL for the item (full-res image src, video src, pdf src, embed src) */
-	url: string;
+	/**
+	 * The source for the media. For images, accepts either a single URL or
+	 * a srcset string with width descriptors:
+	 *   src: "https://.../photo.jpg"
+	 *   src: "https://.../sm 400w, https://.../lg 1600w"
+	 * For videos / pdfs / embeds, always a single URL.
+	 */
+	src: string;
 
-	/** A responsive srcset string for image items (overrides url for the srcset attribute) */
-	srcset?: string;
+	/** The intrinsic width of the image in pixels (used for aspect ratio before load) */
+	width?: number;
 
-	/** A responsive sizes attribute for image items */
-	sizes?: string;
+	/** The intrinsic height of the image in pixels (used for aspect ratio before load) */
+	height?: number;
+
+	/** Short display label (e.g. file name). Used as the default alt text. */
+	name?: string;
+
+	/** Longer descriptive caption — shown in the carousel modal (preferred over name). */
+	caption?: string;
+
+	/** Explicit alt text override. If omitted, falls back to {@link name}. */
+	alt?: string;
 
 	/**
 	 * A base64-encoded [ThumbHash](https://evanw.github.io/thumbhash/) used as
 	 * a tiny blurred placeholder while the full image loads. The component
-	 * decodes this internally and only renders it when the source image is not
-	 * already in the browser's cache.
+	 * decodes this internally.
 	 */
 	thumbhash?: string;
 
-	/** The human-readable name of the item (used as the alt text & captions) */
-	name?: string;
-
-	/** The intrinsic width of the image in pixels (used for ratio calculations before load) */
-	width?: number;
-
-	/** The intrinsic height of the image in pixels (used for ratio calculations before load) */
-	height?: number;
-
-	/** The aspect ratio (width / height). Computed from width/height if not provided. */
-	ratio?: number;
-
 	/** Whether an image should be rendered as a 360° panorama */
 	panorama?: boolean;
+
+	/**
+	 * Mark this item as above-the-fold for faster initial paint. When true,
+	 * the image uses `loading="eager"` + `fetchpriority="high"` so the browser
+	 * prioritises it. Defaults to lazy loading.
+	 */
+	priority?: boolean;
 }
 
 /**
@@ -353,7 +362,7 @@ export function isScalable(item: CarouselItem | undefined | null) {
 }
 
 /**
- * Normalizes any acceptable carousel input (string url, partial item, or a full item)
+ * Normalizes any acceptable carousel input (string src, partial item, or a full item)
  * into a guaranteed CarouselItem. Returns `undefined` for inputs that can't be coerced.
  */
 export function normalizeCarouselItem(
@@ -361,16 +370,39 @@ export function normalizeCarouselItem(
 ): CarouselItem | undefined {
 	if (!input) return undefined;
 	if (typeof input === 'string') {
-		return { url: input, type: 'image' };
+		return { src: input, type: 'image' };
 	}
-	if (!input.url) return undefined;
-	const ratio =
-		input.ratio || (input.width && input.height ? input.width / input.height : 1);
+	if (!input.src) return undefined;
 	return {
 		type: input.type || 'image',
-		ratio,
 		...input,
 	} as CarouselItem;
+}
+
+/**
+ * Returns the highest-width URL from a srcset-style string, or the URL as-is if it's
+ * already a single URL. Used to extract a single `src` for elements that don't accept
+ * srcset (video, iframe, pdf consumers, download links).
+ */
+export function pickLargestSrc(src: string | undefined): string {
+	if (!src) return '';
+	if (!src.includes(',') && !src.includes(' ')) return src;
+	let bestUrl = '';
+	let bestWidth = -1;
+	for (const entry of src.split(',')) {
+		const trimmed = entry.trim();
+		if (!trimmed) continue;
+		const parts = trimmed.split(/\s+/);
+		const url = parts[0];
+		if (!url) continue;
+		const widthMatch = parts[1]?.match(/^(\d+)w$/);
+		const width = widthMatch ? parseInt(widthMatch[1], 10) : 0;
+		if (width > bestWidth) {
+			bestWidth = width;
+			bestUrl = url;
+		}
+	}
+	return bestUrl || src;
 }
 
 /** Module-level cache of "best resolution already loaded" per item id, so cross-mount renders */

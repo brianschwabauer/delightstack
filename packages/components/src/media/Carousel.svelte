@@ -28,6 +28,7 @@
 		isSwipeable,
 		normalizeCarouselItem,
 		normalizeWheel,
+		pickLargestSrc,
 		type Point,
 		type Pointer,
 		type Transform,
@@ -138,8 +139,14 @@
 		/** The aspect ratio of the image (width / height) */
 		ratio: number;
 
-		/** The name of the file (used for the alt tag) */
+		/** Short display label (used as fallback alt text) */
 		name: string;
+
+		/** Longer descriptive caption — shown in the carousel's fullscreen overlay */
+		caption: string;
+
+		/** Explicit alt text override */
+		alt: string;
 
 		/** Whether the media item should be treated as a panorama */
 		panorama: boolean;
@@ -147,14 +154,11 @@
 		/** A base64 ThumbHash used to render a tiny blurred preview before the full image loads */
 		thumbhash: string;
 
-		/** A full resolution srcset (or single URL) */
-		url: string;
+		/** The source for the media — URL or srcset (images), single URL otherwise */
+		src: string;
 
-		/** Explicit srcset attribute */
-		srcset?: string;
-
-		/** Explicit sizes attribute */
-		sizes?: string;
+		/** Whether this item should load eagerly with high fetch priority */
+		priority: boolean;
 
 		/** Whether the item is in view and should be loaded */
 		shouldLoad: boolean;
@@ -299,7 +303,7 @@
 		for (const raw of rawItems) {
 			const item = normalizeCarouselItem(raw);
 			if (!item) continue;
-			const id = item.id || item.url;
+			const id = item.id || item.src;
 			if (!id) continue;
 			const prevItem = list.find((v) => v.id === id);
 			const normalDistance = Math.abs(newList.length - index);
@@ -307,29 +311,22 @@
 			const shouldLoad = distance <= 0;
 			const initialResolution = Math.max(0, ...getLoadedResolutions(id));
 			const type = (item.type || 'image') as DecodedCarouselItem['type'];
-			let url = item.url;
-			if (type === 'pdf') {
-				try {
-					const newURL = new URL(url, browser ? window.location.href : 'http://x/');
-					newURL.pathname = newURL.pathname.replace(/\.\w+$/, '.pdf');
-					url = newURL.href;
-				} catch {
-					// ignore
-				}
-			}
+			const computedRatio =
+				item.width && item.height ? item.width / item.height : 0;
 			newList.push({
 				id,
 				type,
-				url,
-				srcset: item.srcset,
-				sizes: item.sizes,
+				src: item.src,
 				key: id + (newList.some((v) => v.id === id) ? newList.length : ''),
-				name: item.name || 'Unnamed Media',
+				name: item.name || '',
+				caption: item.caption || '',
+				alt: item.alt ?? item.name ?? '',
 				width: prevItem?.width || item.width || 0,
 				height: prevItem?.height || item.height || 0,
-				ratio: prevItem?.ratio || item.ratio || 1,
+				ratio: prevItem?.ratio || computedRatio || 1,
 				panorama: item.panorama ?? false,
 				thumbhash: item.thumbhash || '',
+				priority: item.priority ?? false,
 				shouldLoad: prevItem?.loaded || shouldLoad,
 				shouldPlay: false,
 				loaded: prevItem?.loaded ?? false,
@@ -1835,33 +1832,34 @@
 								style:opacity={(1 - dismissing) ** 4}
 								style:--ratio={item.ratio || '1'}
 								style:object-fit={fit || 'contain'}
-								alt="Blurred preview of media: {item.name || 'Unknown media'}"
+								alt=""
+								aria-hidden="true"
 								class="preview" />
 						{/if}
-						{#if item.url}
+						{#if item.src}
 							{#if item.type === 'image'}
 								{#if !item.panorama}
-									{@const resolution = item.loaded
-										? item.pages[item.page].resolutionW
-										: item.initialResolution}
 									<img
-										srcset={item.srcset || item.url}
+										src={pickLargestSrc(item.src)}
+										srcset={item.src}
 										class:explicit-size={fit === 'contain' && item.loaded}
 										style:object-fit={fit || 'contain'}
 										style:--ratio={item.ratio || '1'}
-										alt={item.name || 'Unknown media'}
-										sizes={item.sizes || (resolution ? `${resolution}px` : '100vw')}
+										alt={item.alt || item.name || ''}
+										sizes="100vw"
+										loading={item.priority ? 'eager' : 'lazy'}
+										fetchpriority={item.priority ? 'high' : undefined}
 										onload={(e) => onImageLoadEvent(i, e)} />
 								{:else if panorama}
 									{@render panorama({
-										src: item.url,
+										src: pickLargestSrc(item.src),
 										inline,
 										onload: () => item.loaded || (list[index].loaded = true),
 									})}
 								{/if}
 							{:else if item.type === 'pdf' && pdf}
 								{@render pdf({
-									src: item.url,
+									src: pickLargestSrc(item.src),
 									pageBounds: item.pages.map((_, j) => ({
 										width: item.pages[j].resolutionW,
 										height: item.pages[j].resolutionH,
@@ -1870,19 +1868,19 @@
 									onload: (e) => onPdfLoadEvent(i, e.numPages),
 								})}
 							{:else if item.type === 'video'}
-								{@const preview = item.url.replace(/\.[^.?]+(\?.*)?$/, '.mp4')}
-								{@const hls = item.url.replace(/\.[^.?]+(\?.*)?$/, '.m3u8')}
+								{@const videoSrc = pickLargestSrc(item.src)}
 								<Video
 									poster={item.thumbhash ? decodeThumbHash(item.thumbhash) : undefined}
-									src={item.url.endsWith('.m3u8') ? hls : preview}
+									src={videoSrc}
 									autoplay={i === index ? !!item.shouldPlay : false}
 									onready={() => item.loaded || (list[i].loaded = true)} />
 							{:else if item.type === 'embed'}
+								{@const embedSrc = pickLargestSrc(item.src)}
 								<iframe
 									class="embed"
-									class:video={item.url.match(/^(https?:\/\/)?(www\.)?(youtu.?be|vimeo)/)}
+									class:video={embedSrc.match(/^(https?:\/\/)?(www\.)?(youtu.?be|vimeo)/)}
 									title={item.name}
-									src={item.url}
+									src={embedSrc}
 									class:show={item.loaded}
 									allowfullscreen
 									allow="fullscreen; accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; magnetometer; xr-spatial-tracking;"
