@@ -88,8 +88,19 @@
 	];
 
 	const fruitList = [
-		'Apple', 'Apricot', 'Banana', 'Blackberry', 'Blueberry', 'Cherry',
-		'Grape', 'Lemon', 'Mango', 'Orange', 'Peach', 'Pear', 'Strawberry',
+		'Apple',
+		'Apricot',
+		'Banana',
+		'Blackberry',
+		'Blueberry',
+		'Cherry',
+		'Grape',
+		'Lemon',
+		'Mango',
+		'Orange',
+		'Peach',
+		'Pear',
+		'Strawberry',
 	];
 
 	async function filterFruit(query: string) {
@@ -124,11 +135,14 @@
 		{ value: 'red', label: 'Red' },
 		{ value: 'blue', label: 'Blue' },
 	]);
-	function createColor(detail: { value: string }) {
-		createdColors = [
-			...createdColors,
-			{ value: detail.value.toLowerCase(), label: detail.value },
-		];
+	function createColor(detail: { value: string }): SelectOption {
+		const created: SelectOption = {
+			value: detail.value.toLowerCase(),
+			label: detail.value,
+		};
+		createdColors = [...createdColors, created];
+		// Returning the option lets the Select select it immediately.
+		return created;
 	}
 
 	const groupedFood: SelectOption[] = [
@@ -152,27 +166,44 @@
 <div class="showcase">
 	<header>
 		<h1>Input</h1>
-		<p>Every variation of the <code>Input</code> component, for visual review.</p>
+		<p>
+			Every variation of the <code>Input</code>
+			 component, for visual review.
+		</p>
 	</header>
 
 	<!-- ============================================================ -->
 	<section>
 		<h2>Input types</h2>
 		<div class="grid">
-			<figure><figcaption>text</figcaption>
-				<Input label="Full name" bind:value={text} /></figure>
-			<figure><figcaption>email</figcaption>
-				<Input type="email" label="Email address" bind:value={email} /></figure>
-			<figure><figcaption>password</figcaption>
-				<Input type="password" label="Password" bind:value={password} /></figure>
-			<figure><figcaption>url</figcaption>
-				<Input type="url" label="Website" bind:value={url} /></figure>
-			<figure><figcaption>tel</figcaption>
-				<Input type="tel" label="Phone" bind:value={tel} /></figure>
-			<figure><figcaption>search</figcaption>
-				<Input type="search" label="Search" bind:value={search} /></figure>
-			<figure><figcaption>number</figcaption>
-				<Input type="number" label="Amount" bind:value={amount} /></figure>
+			<figure>
+				<figcaption>text</figcaption>
+				<Input label="Full name" bind:value={text} />
+			</figure>
+			<figure>
+				<figcaption>email</figcaption>
+				<Input type="email" label="Email address" bind:value={email} />
+			</figure>
+			<figure>
+				<figcaption>password</figcaption>
+				<Input type="password" label="Password" bind:value={password} />
+			</figure>
+			<figure>
+				<figcaption>url</figcaption>
+				<Input type="url" label="Website" bind:value={url} />
+			</figure>
+			<figure>
+				<figcaption>tel</figcaption>
+				<Input type="tel" label="Phone" bind:value={tel} />
+			</figure>
+			<figure>
+				<figcaption>search</figcaption>
+				<Input type="search" label="Search" bind:value={search} />
+			</figure>
+			<figure>
+				<figcaption>number</figcaption>
+				<Input type="number" label="Amount" bind:value={amount} />
+			</figure>
 		</div>
 	</section>
 
@@ -180,19 +211,33 @@
 	<section>
 		<h2>Label &amp; placeholder behaviour</h2>
 		<p class="note">
-			With no placeholder — or a placeholder equal to the label — the label
-			animates up on focus. A placeholder that differs from the label keeps
-			the label pinned to the top so the placeholder stays visible.
+			With no placeholder — or a placeholder equal to the label — the label animates up on
+			focus. A placeholder that differs from the label keeps the label pinned to the top
+			so the placeholder stays visible.
 		</p>
 		<div class="grid">
-			<figure><figcaption>label only — animates on focus</figcaption>
-				<Input label="Email address" bind:value={labelOnly} /></figure>
-			<figure><figcaption>label + matching placeholder — animates</figcaption>
-				<Input label="Email address" placeholder="Email address" bind:value={labelMatch} /></figure>
-			<figure><figcaption>label + distinct placeholder — label pinned</figcaption>
-				<Input label="Email address" placeholder="you@example.com" bind:value={labelDistinct} /></figure>
-			<figure><figcaption>no label — plain placeholder</figcaption>
-				<Input placeholder="Search anything…" bind:value={noLabel} /></figure>
+			<figure>
+				<figcaption>label only — animates on focus</figcaption>
+				<Input label="Email address" bind:value={labelOnly} />
+			</figure>
+			<figure>
+				<figcaption>label + matching placeholder — animates</figcaption>
+				<Input
+					label="Email address"
+					placeholder="Email address"
+					bind:value={labelMatch} />
+			</figure>
+			<figure>
+				<figcaption>label + distinct placeholder — label pinned</figcaption>
+				<Input
+					label="Email address"
+					placeholder="you@example.com"
+					bind:value={labelDistinct} />
+			</figure>
+			<figure>
+				<figcaption>no label — plain placeholder</figcaption>
+				<Input placeholder="Search anything…" bind:value={noLabel} />
+			</figure>
 		</div>
 	</section>
 
@@ -200,24 +245,45 @@
 	<section>
 		<h2>States</h2>
 		<div class="grid">
-			<figure><figcaption>default (empty)</figcaption>
-				<Input label="First name" /></figure>
-			<figure><figcaption>filled</figcaption>
-				<Input label="Full name" bind:value={prefilled} /></figure>
-			<figure><figcaption>required</figcaption>
-				<Input label="Email address" required bind:value={requiredValue} /></figure>
-			<figure><figcaption>helper text</figcaption>
-				<Input label="Username" helper="Letters, numbers and dashes only." /></figure>
-			<figure><figcaption>error</figcaption>
-				<Input label="Email address" value="not-an-email" error="Enter a valid email address" /></figure>
-			<figure><figcaption>error (boolean, no message)</figcaption>
-				<Input label="Code" value="abc" error /></figure>
-			<figure><figcaption>disabled</figcaption>
-				<Input label="Account ID" value="acct_8841" disabled /></figure>
-			<figure><figcaption>readonly</figcaption>
-				<Input label="Reference" value="REF-2026-0042" readonly /></figure>
-			<figure><figcaption>skeleton (loading)</figcaption>
-				<Input label="Loading…" skeleton /></figure>
+			<figure>
+				<figcaption>default (empty)</figcaption>
+				<Input label="First name" />
+			</figure>
+			<figure>
+				<figcaption>filled</figcaption>
+				<Input label="Full name" bind:value={prefilled} />
+			</figure>
+			<figure>
+				<figcaption>required</figcaption>
+				<Input label="Email address" required bind:value={requiredValue} />
+			</figure>
+			<figure>
+				<figcaption>helper text</figcaption>
+				<Input label="Username" helper="Letters, numbers and dashes only." />
+			</figure>
+			<figure>
+				<figcaption>error</figcaption>
+				<Input
+					label="Email address"
+					value="not-an-email"
+					error="Enter a valid email address" />
+			</figure>
+			<figure>
+				<figcaption>error (boolean, no message)</figcaption>
+				<Input label="Code" value="abc" error />
+			</figure>
+			<figure>
+				<figcaption>disabled</figcaption>
+				<Input label="Account ID" value="acct_8841" disabled />
+			</figure>
+			<figure>
+				<figcaption>readonly</figcaption>
+				<Input label="Reference" value="REF-2026-0042" readonly />
+			</figure>
+			<figure>
+				<figcaption>skeleton (loading)</figcaption>
+				<Input label="Loading…" skeleton />
+			</figure>
 		</div>
 	</section>
 
@@ -225,18 +291,26 @@
 	<section>
 		<h2>Date &amp; time</h2>
 		<p class="note">
-			These types render native content, so the label stays pinned to the top
-			and never overlaps the browser's date format.
+			These types render native content, so the label stays pinned to the top and never
+			overlaps the browser's date format.
 		</p>
 		<div class="grid">
-			<figure><figcaption>date (empty)</figcaption>
-				<Input type="date" label="Birthday" bind:value={date} /></figure>
-			<figure><figcaption>date (filled)</figcaption>
-				<Input type="date" label="Start date" bind:value={dateFilled} /></figure>
-			<figure><figcaption>time</figcaption>
-				<Input type="time" label="Reminder" bind:value={time} /></figure>
-			<figure><figcaption>datetime-local</figcaption>
-				<Input type="datetime-local" label="Scheduled for" bind:value={datetime} /></figure>
+			<figure>
+				<figcaption>date (empty)</figcaption>
+				<Input type="date" label="Birthday" bind:value={date} />
+			</figure>
+			<figure>
+				<figcaption>date (filled)</figcaption>
+				<Input type="date" label="Start date" bind:value={dateFilled} />
+			</figure>
+			<figure>
+				<figcaption>time</figcaption>
+				<Input type="time" label="Reminder" bind:value={time} />
+			</figure>
+			<figure>
+				<figcaption>datetime-local</figcaption>
+				<Input type="datetime-local" label="Scheduled for" bind:value={datetime} />
+			</figure>
 		</div>
 	</section>
 
@@ -244,14 +318,22 @@
 	<section>
 		<h2>Colour &amp; file</h2>
 		<div class="grid">
-			<figure><figcaption>color</figcaption>
-				<Input type="color" label="Brand colour" bind:value={color} /></figure>
-			<figure><figcaption>file</figcaption>
-				<Input type="file" label="Avatar" bind:value={file} /></figure>
-			<figure><figcaption>file — multiple</figcaption>
-				<Input type="file" label="Attachments" multiple bind:value={files} /></figure>
-			<figure><figcaption>file — accept images</figcaption>
-				<Input type="file" label="Photo" accept="image/*" /></figure>
+			<figure>
+				<figcaption>color</figcaption>
+				<Input type="color" label="Brand colour" bind:value={color} />
+			</figure>
+			<figure>
+				<figcaption>file</figcaption>
+				<Input type="file" label="Avatar" bind:value={file} />
+			</figure>
+			<figure>
+				<figcaption>file — multiple</figcaption>
+				<Input type="file" label="Attachments" multiple bind:value={files} />
+			</figure>
+			<figure>
+				<figcaption>file — accept images</figcaption>
+				<Input type="file" label="Photo" accept="image/*" />
+			</figure>
 		</div>
 	</section>
 
@@ -259,12 +341,23 @@
 	<section>
 		<h2>Textarea</h2>
 		<div class="grid">
-			<figure><figcaption>basic (3 rows)</figcaption>
-				<Input type="textarea" label="Bio" bind:value={bio} /></figure>
-			<figure><figcaption>auto-resize</figcaption>
-				<Input type="textarea" label="Notes" autoResize bind:value={notes} /></figure>
-			<figure><figcaption>with counter</figcaption>
-				<Input type="textarea" label="Message" maxlength={200} showCounter bind:value={counted} /></figure>
+			<figure>
+				<figcaption>basic (3 rows)</figcaption>
+				<Input type="textarea" label="Bio" bind:value={bio} />
+			</figure>
+			<figure>
+				<figcaption>auto-resize</figcaption>
+				<Input type="textarea" label="Notes" autoResize bind:value={notes} />
+			</figure>
+			<figure>
+				<figcaption>with counter</figcaption>
+				<Input
+					type="textarea"
+					label="Message"
+					maxlength={200}
+					showCounter
+					bind:value={counted} />
+			</figure>
 		</div>
 	</section>
 
@@ -272,14 +365,28 @@
 	<section>
 		<h2>Number</h2>
 		<div class="grid">
-			<figure><figcaption>stepper</figcaption>
-				<Input type="number" label="Quantity" bind:value={quantity} /></figure>
-			<figure><figcaption>min / max / step</figcaption>
-				<Input type="number" label="Rating" min={0} max={10} step={0.5} bind:value={weight} /></figure>
-			<figure><figcaption>with prefix</figcaption>
-				<Input type="number" label="Price" prefix="$" bind:value={price} /></figure>
-			<figure><figcaption>with suffix</figcaption>
-				<Input type="number" label="Weight" suffix="kg" /></figure>
+			<figure>
+				<figcaption>stepper</figcaption>
+				<Input type="number" label="Quantity" bind:value={quantity} />
+			</figure>
+			<figure>
+				<figcaption>min / max / step</figcaption>
+				<Input
+					type="number"
+					label="Rating"
+					min={0}
+					max={10}
+					step={0.5}
+					bind:value={weight} />
+			</figure>
+			<figure>
+				<figcaption>with prefix</figcaption>
+				<Input type="number" label="Price" prefix="$" bind:value={price} />
+			</figure>
+			<figure>
+				<figcaption>with suffix</figcaption>
+				<Input type="number" label="Weight" suffix="kg" />
+			</figure>
 		</div>
 	</section>
 
@@ -287,18 +394,33 @@
 	<section>
 		<h2>Adornments</h2>
 		<div class="grid">
-			<figure><figcaption>leading icon</figcaption>
-				<Input label="Search" icon={IconSearch} bind:value={withIcon} /></figure>
-			<figure><figcaption>leading icon + value</figcaption>
-				<Input label="Email" icon={IconMail} value="hello@delight.dev" /></figure>
-			<figure><figcaption>prefix</figcaption>
-				<Input label="Username" prefix="@" bind:value={withPrefix} /></figure>
-			<figure><figcaption>suffix</figcaption>
-				<Input label="Subdomain" suffix=".delight.dev" bind:value={withSuffix} /></figure>
-			<figure><figcaption>clearable</figcaption>
-				<Input label="Keyword" clearable bind:value={clearable} /></figure>
-			<figure><figcaption>tooltip</figcaption>
-				<Input label="API key" tooltip="Find this in your dashboard settings." bind:value={withTooltip} /></figure>
+			<figure>
+				<figcaption>leading icon</figcaption>
+				<Input label="Search" icon={IconSearch} bind:value={withIcon} />
+			</figure>
+			<figure>
+				<figcaption>leading icon + value</figcaption>
+				<Input label="Email" icon={IconMail} value="hello@delight.dev" />
+			</figure>
+			<figure>
+				<figcaption>prefix</figcaption>
+				<Input label="Username" prefix="@" bind:value={withPrefix} />
+			</figure>
+			<figure>
+				<figcaption>suffix</figcaption>
+				<Input label="Subdomain" suffix=".delight.dev" bind:value={withSuffix} />
+			</figure>
+			<figure>
+				<figcaption>clearable</figcaption>
+				<Input label="Keyword" clearable bind:value={clearable} />
+			</figure>
+			<figure>
+				<figcaption>tooltip</figcaption>
+				<Input
+					label="API key"
+					tooltip="Find this in your dashboard settings."
+					bind:value={withTooltip} />
+			</figure>
 		</div>
 	</section>
 
@@ -306,10 +428,14 @@
 	<section>
 		<h2>Autocomplete</h2>
 		<div class="grid">
-			<figure><figcaption>static options</figcaption>
-				<Input label="Country" options={countries} bind:value={country} /></figure>
-			<figure><figcaption>async filter (typeahead)</figcaption>
-				<Input label="Favourite fruit" onfilter={filterFruit} bind:value={fruit} /></figure>
+			<figure>
+				<figcaption>static options</figcaption>
+				<Input label="Country" options={countries} bind:value={country} />
+			</figure>
+			<figure>
+				<figcaption>async filter (typeahead)</figcaption>
+				<Input label="Favourite fruit" onfilter={filterFruit} bind:value={fruit} />
+			</figure>
 		</div>
 	</section>
 
@@ -317,10 +443,14 @@
 	<section>
 		<h2>Multiple / chips</h2>
 		<div class="grid">
-			<figure><figcaption>tags — prefilled</figcaption>
-				<Input label="Tags" multiple bind:value={tags} /></figure>
-			<figure><figcaption>tags — empty, distinct placeholder</figcaption>
-				<Input label="Tags" multiple placeholder="Add a tag…" bind:value={emptyTags} /></figure>
+			<figure>
+				<figcaption>tags — prefilled</figcaption>
+				<Input label="Tags" multiple bind:value={tags} />
+			</figure>
+			<figure>
+				<figcaption>tags — empty, distinct placeholder</figcaption>
+				<Input label="Tags" multiple placeholder="Add a tag…" bind:value={emptyTags} />
+			</figure>
 		</div>
 	</section>
 
@@ -328,10 +458,24 @@
 	<section>
 		<h2>Password</h2>
 		<div class="grid">
-			<figure><figcaption>visibility toggle</figcaption>
-				<Input type="password" label="Password" showToggle icon={IconLock} bind:value={pwToggle} /></figure>
-			<figure><figcaption>toggle + strength meter</figcaption>
-				<Input type="password" label="New password" showToggle strengthIndicator bind:value={pwStrength} /></figure>
+			<figure>
+				<figcaption>visibility toggle</figcaption>
+				<Input
+					type="password"
+					label="Password"
+					showToggle
+					icon={IconLock}
+					bind:value={pwToggle} />
+			</figure>
+			<figure>
+				<figcaption>toggle + strength meter</figcaption>
+				<Input
+					type="password"
+					label="New password"
+					showToggle
+					strengthIndicator
+					bind:value={pwStrength} />
+			</figure>
 		</div>
 	</section>
 
@@ -339,10 +483,14 @@
 	<section>
 		<h2>Masked input</h2>
 		<div class="grid">
-			<figure><figcaption>phone — (###) ###-####</figcaption>
-				<Input label="Phone number" mask="(###) ###-####" bind:value={phone} /></figure>
-			<figure><figcaption>card — #### #### #### ####</figcaption>
-				<Input label="Card number" mask="#### #### #### ####" bind:value={cardNumber} /></figure>
+			<figure>
+				<figcaption>phone — (###) ###-####</figcaption>
+				<Input label="Phone number" mask="(###) ###-####" bind:value={phone} />
+			</figure>
+			<figure>
+				<figcaption>card — #### #### #### ####</figcaption>
+				<Input label="Card number" mask="#### #### #### ####" bind:value={cardNumber} />
+			</figure>
 		</div>
 	</section>
 
@@ -350,14 +498,22 @@
 	<section>
 		<h2>Sizes</h2>
 		<div class="grid">
-			<figure><figcaption>size 0</figcaption>
-				<Input size="0" label="Size 0" bind:value={size0} /></figure>
-			<figure><figcaption>size 1 (default)</figcaption>
-				<Input size="1" label="Size 1" bind:value={size1} /></figure>
-			<figure><figcaption>size 2</figcaption>
-				<Input size="2" label="Size 2" bind:value={size2} /></figure>
-			<figure><figcaption>size 3</figcaption>
-				<Input size="3" label="Size 3" bind:value={size3} /></figure>
+			<figure>
+				<figcaption>size 0</figcaption>
+				<Input size="0" label="Size 0" bind:value={size0} />
+			</figure>
+			<figure>
+				<figcaption>size 1 (default)</figcaption>
+				<Input size="1" label="Size 1" bind:value={size1} />
+			</figure>
+			<figure>
+				<figcaption>size 2</figcaption>
+				<Input size="2" label="Size 2" bind:value={size2} />
+			</figure>
+			<figure>
+				<figcaption>size 3</figcaption>
+				<Input size="3" label="Size 3" bind:value={size3} />
+			</figure>
 		</div>
 	</section>
 
@@ -365,12 +521,18 @@
 	<section>
 		<h2>Density</h2>
 		<div class="grid">
-			<figure><figcaption>dense</figcaption>
-				<Input dense label="Dense field" bind:value={dense} /></figure>
-			<figure><figcaption>default</figcaption>
-				<Input label="Default field" bind:value={normal} /></figure>
-			<figure><figcaption>comfortable</figcaption>
-				<Input comfortable label="Comfortable field" bind:value={comfortable} /></figure>
+			<figure>
+				<figcaption>dense</figcaption>
+				<Input dense label="Dense field" bind:value={dense} />
+			</figure>
+			<figure>
+				<figcaption>default</figcaption>
+				<Input label="Default field" bind:value={normal} />
+			</figure>
+			<figure>
+				<figcaption>comfortable</figcaption>
+				<Input comfortable label="Comfortable field" bind:value={comfortable} />
+			</figure>
 		</div>
 	</section>
 
@@ -378,80 +540,146 @@
 	<header class="select-header">
 		<h1>Select</h1>
 		<p>
-			The <code>Select</code> component — legacy notched-outline styling, native
-			<code>popover</code> dropdown positioned with CSS anchor positioning.
+			The <code>Select</code>
+			component — legacy notched-outline styling, native
+			<code>popover</code>
+			 dropdown positioned with CSS anchor positioning.
 		</p>
 	</header>
 
 	<section>
 		<h2>Single select</h2>
 		<div class="grid">
-			<figure><figcaption>label — animates</figcaption>
-				<Select label="Country" options={countries} bind:value={selBasic} /></figure>
-			<figure><figcaption>filled</figcaption>
-				<Select label="Country" options={countries} bind:value={selFilled} /></figure>
-			<figure><figcaption>label + distinct placeholder</figcaption>
-				<Select label="Country" placeholder="Pick one…" options={countries} bind:value={selPlaceholder} /></figure>
-			<figure><figcaption>no label</figcaption>
-				<Select placeholder="Select a country…" options={countries} bind:value={selNoLabel} /></figure>
+			<figure>
+				<figcaption>label — animates</figcaption>
+				<Select label="Country" options={countries} bind:value={selBasic} />
+			</figure>
+			<figure>
+				<figcaption>filled</figcaption>
+				<Select label="Country" options={countries} bind:value={selFilled} />
+			</figure>
+			<figure>
+				<figcaption>label + distinct placeholder</figcaption>
+				<Select
+					label="Country"
+					placeholder="Pick one…"
+					options={countries}
+					bind:value={selPlaceholder} />
+			</figure>
+			<figure>
+				<figcaption>no label</figcaption>
+				<Select
+					placeholder="Select a country…"
+					options={countries}
+					bind:value={selNoLabel} />
+			</figure>
 		</div>
 	</section>
 
 	<section>
 		<h2>Features</h2>
 		<div class="grid">
-			<figure><figcaption>multiple (chips)</figcaption>
-				<Select label="Countries" multiple options={countries} bind:value={selMulti} /></figure>
-			<figure><figcaption>searchable</figcaption>
-				<Select label="Country" searchable options={countries} bind:value={selSearch} /></figure>
-			<figure><figcaption>clearable</figcaption>
-				<Select label="Country" clearable options={countries} bind:value={selClear} /></figure>
-			<figure><figcaption>searchable + creatable</figcaption>
-				<Select label="Colour" searchable creatable options={createdColors} oncreate={createColor} bind:value={selColor} /></figure>
-			<figure><figcaption>grouped options</figcaption>
-				<Select label="Food" options={groupedFood} bind:value={selGroup} /></figure>
-			<figure><figcaption>option descriptions</figcaption>
-				<Select label="Plan" options={plans} bind:value={selDesc} /></figure>
+			<figure>
+				<figcaption>multiple (chips)</figcaption>
+				<Select label="Countries" multiple options={countries} bind:value={selMulti} />
+			</figure>
+			<figure>
+				<figcaption>searchable</figcaption>
+				<Select label="Country" searchable options={countries} bind:value={selSearch} />
+			</figure>
+			<figure>
+				<figcaption>clearable</figcaption>
+				<Select label="Country" clearable options={countries} bind:value={selClear} />
+			</figure>
+			<figure>
+				<figcaption>searchable + creatable</figcaption>
+				<Select
+					label="Colour"
+					searchable
+					creatable
+					options={createdColors}
+					oncreate={createColor}
+					bind:value={selColor} />
+			</figure>
+			<figure>
+				<figcaption>grouped options</figcaption>
+				<Select label="Food" options={groupedFood} bind:value={selGroup} />
+			</figure>
+			<figure>
+				<figcaption>option descriptions</figcaption>
+				<Select label="Plan" options={plans} bind:value={selDesc} />
+			</figure>
 		</div>
 	</section>
 
 	<section>
 		<h2>States</h2>
 		<div class="grid">
-			<figure><figcaption>loading</figcaption>
-				<Select label="Country" loading options={countries} /></figure>
-			<figure><figcaption>disabled</figcaption>
-				<Select label="Country" disabled options={countries} value="ca" /></figure>
-			<figure><figcaption>error</figcaption>
-				<Select label="Country" required error="Please choose a country" options={countries} bind:value={selError} /></figure>
-			<figure><figcaption>skeleton</figcaption>
-				<Select label="Loading…" skeleton options={countries} /></figure>
+			<figure>
+				<figcaption>loading</figcaption>
+				<Select label="Country" loading options={countries} />
+			</figure>
+			<figure>
+				<figcaption>disabled</figcaption>
+				<Select label="Country" disabled options={countries} value="ca" />
+			</figure>
+			<figure>
+				<figcaption>error</figcaption>
+				<Select
+					label="Country"
+					required
+					error="Please choose a country"
+					options={countries}
+					bind:value={selError} />
+			</figure>
+			<figure>
+				<figcaption>skeleton</figcaption>
+				<Select label="Loading…" skeleton options={countries} />
+			</figure>
 		</div>
 	</section>
 
 	<section>
 		<h2>Sizes</h2>
 		<div class="grid">
-			<figure><figcaption>size 0</figcaption>
-				<Select size="0" label="Size 0" options={countries} bind:value={selS0} /></figure>
-			<figure><figcaption>size 1 (default)</figcaption>
-				<Select size="1" label="Size 1" options={countries} bind:value={selS1} /></figure>
-			<figure><figcaption>size 2</figcaption>
-				<Select size="2" label="Size 2" options={countries} bind:value={selS2} /></figure>
-			<figure><figcaption>size 3</figcaption>
-				<Select size="3" label="Size 3" options={countries} bind:value={selS3} /></figure>
+			<figure>
+				<figcaption>size 0</figcaption>
+				<Select size="0" label="Size 0" options={countries} bind:value={selS0} />
+			</figure>
+			<figure>
+				<figcaption>size 1 (default)</figcaption>
+				<Select size="1" label="Size 1" options={countries} bind:value={selS1} />
+			</figure>
+			<figure>
+				<figcaption>size 2</figcaption>
+				<Select size="2" label="Size 2" options={countries} bind:value={selS2} />
+			</figure>
+			<figure>
+				<figcaption>size 3</figcaption>
+				<Select size="3" label="Size 3" options={countries} bind:value={selS3} />
+			</figure>
 		</div>
 	</section>
 
 	<section>
 		<h2>Density</h2>
 		<div class="grid">
-			<figure><figcaption>dense</figcaption>
-				<Select dense label="Dense" options={countries} bind:value={selDense} /></figure>
-			<figure><figcaption>default</figcaption>
-				<Select label="Default" options={countries} bind:value={selDefault} /></figure>
-			<figure><figcaption>comfortable</figcaption>
-				<Select comfortable label="Comfortable" options={countries} bind:value={selComfy} /></figure>
+			<figure>
+				<figcaption>dense</figcaption>
+				<Select dense label="Dense" options={countries} bind:value={selDense} />
+			</figure>
+			<figure>
+				<figcaption>default</figcaption>
+				<Select label="Default" options={countries} bind:value={selDefault} />
+			</figure>
+			<figure>
+				<figcaption>comfortable</figcaption>
+				<Select
+					comfortable
+					label="Comfortable"
+					options={countries}
+					bind:value={selComfy} />
+			</figure>
 		</div>
 	</section>
 </div>

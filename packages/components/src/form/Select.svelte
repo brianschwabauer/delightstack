@@ -9,7 +9,7 @@
 </script>
 
 <script lang="ts">
-	import { tooltip } from '@delightstack/utilities';
+	import { tooltip, ripple } from '@delightstack/utilities';
 	import { type Snippet } from 'svelte';
 
 	const propId = $props.id();
@@ -85,8 +85,14 @@
 		/** Called when the search query changes (debounced 300ms) */
 		onsearch = undefined as ((detail: { query: string }) => void) | undefined,
 
-		/** Called when the user tries to create a new option */
-		oncreate = undefined as ((detail: { value: string }) => boolean | void) | undefined,
+		/**
+		 * Called when the user tries to create a new option. Return `false` to
+		 * reject it; return the created `SelectOption` to have the Select select
+		 * it immediately (otherwise the search text is selected as the value).
+		 */
+		oncreate = undefined as
+			| ((detail: { value: string }) => boolean | void | SelectOption)
+			| undefined,
 
 		/** Called when the dropdown opens */
 		onopen = undefined as (() => void) | undefined,
@@ -113,9 +119,9 @@
 	let typeAheadBuffer = $state('');
 	let typeAheadTimer: ReturnType<typeof setTimeout> | undefined;
 
-	// Track chips container overflow for "+N more"
-	let chipsContainer = $state<HTMLElement | undefined>(undefined);
-	let visibleChipCount = $state(0);
+	// Whether the dropdown was flipped above the trigger, so it can expand
+	// from the edge nearest the control.
+	let dropdownAbove = $state(false);
 
 	const sizeMap: Record<string, string> = {
 		'0': '0.75rem',
@@ -268,17 +274,34 @@
 		}
 	}
 
+	/** Select a value directly (single) or add it to the selection (multi). */
+	function selectByValue(optValue: unknown) {
+		if (multiple) {
+			const current = Array.isArray(value) ? [...value] : [];
+			if (!current.includes(optValue)) current.push(optValue);
+			value = current;
+		} else {
+			value = optValue;
+		}
+		onchange?.({ value });
+	}
+
 	/** Handle creating a new option */
 	function handleCreate() {
 		const trimmed = searchQuery.trim();
 		if (!trimmed) return;
 		const result = oncreate?.({ value: trimmed });
-		if (result !== false) {
-			searchQuery = '';
-			if (!multiple) {
-				closeDropdown();
-			}
-		}
+		if (result === false) return;
+		// Select the freshly created option so the user doesn't have to reopen
+		// the dropdown. `oncreate` may hand back the created option (with its
+		// real value); otherwise fall back to selecting the search text.
+		const createdValue =
+			result && typeof result === 'object' && 'value' in result
+				? (result as SelectOption).value
+				: trimmed;
+		selectByValue(createdValue);
+		searchQuery = '';
+		if (!multiple) closeDropdown();
 	}
 
 	/** Scroll the highlighted option into view */
@@ -454,33 +477,6 @@
 		}
 	}
 
-	/** Compute visible chip count for overflow "+N more" */
-	$effect(() => {
-		if (!multiple || !chipsContainer) {
-			visibleChipCount = 0;
-			return;
-		}
-		const chips = chipsContainer.querySelectorAll('.select-chip');
-		const containerRect = chipsContainer.getBoundingClientRect();
-		let count = 0;
-		for (const chip of chips) {
-			const chipRect = chip.getBoundingClientRect();
-			if (chipRect.top < containerRect.bottom) {
-				count++;
-			} else {
-				break;
-			}
-		}
-		visibleChipCount = count;
-	});
-
-	/** Whether there are overflowed chips */
-	const overflowCount = $derived.by(() => {
-		if (!multiple || !Array.isArray(selectedOptions)) return 0;
-		if (visibleChipCount === 0) return 0;
-		return selectedOptions.length - visibleChipCount;
-	});
-
 	/** Whether the trigger has a value to display */
 	const hasValue = $derived.by(() => {
 		if (multiple) {
@@ -506,9 +502,7 @@
 	);
 
 	/** A unique CSS anchor name, used for native anchor positioning. */
-	const anchorName = $derived(
-		`--ds-select-${String(id).replace(/[^a-zA-Z0-9_-]/g, '')}`,
-	);
+	const anchorName = $derived(`--ds-select-${String(id).replace(/[^a-zA-Z0-9_-]/g, '')}`);
 
 	/** Run open/close side effects when the dropdown state changes. */
 	let previousOpen = false;
@@ -528,7 +522,9 @@
 		previousOpen = open;
 	});
 
-	/* Mirror `open` onto the native popover element. */
+	/* Mirror `open` onto the native popover element, and detect whether the
+	   browser flipped it above the trigger so the panel expands from the edge
+	   nearest the control. */
 	$effect(() => {
 		const el = dropdownElement;
 		if (!el) return;
@@ -536,6 +532,15 @@
 		if (open && !shown) {
 			try {
 				el.showPopover();
+				/* Measure synchronously — `showPopover()` has already placed the
+				   popover (incl. any `flip-block` fallback), and reading layout
+				   here keeps the result in the same frame as the open
+				   transition, so the expand origin is correct from frame one. */
+				if (triggerElement) {
+					const t = triggerElement.getBoundingClientRect();
+					const d = el.getBoundingClientRect();
+					dropdownAbove = d.top < t.top;
+				}
 			} catch {
 				/* not connected yet */
 			}
@@ -605,7 +610,7 @@
 		style:anchor-name={anchorName}
 		onclick={toggleDropdown}
 		onkeydown={onTriggerKeyDown}>
-		<div class="select-value" bind:this={chipsContainer}>
+		<div class="select-value">
 			{#if hasValue && renderValue}
 				{@render renderValue(selectedOptions as SelectOption | SelectOption[])}
 			{:else if multiple && Array.isArray(selectedOptions) && selectedOptions.length > 0}
@@ -626,9 +631,6 @@
 						</span>
 					</span>
 				{/each}
-				{#if overflowCount > 0}
-					<span class="select-chip overflow">+{overflowCount} more</span>
-				{/if}
 			{:else if !multiple && selectedOptions && !Array.isArray(selectedOptions)}
 				<span class="select-single-value">{selectedOptions.label}</span>
 			{:else if showPlaceholder}
@@ -639,8 +641,11 @@
 		<!-- Floating notched-outline label -->
 		{#if label}
 			<label class="select-label" class:floated={labelFloated} for={id}>
-				<span class="select-label-text"
-					>{label}{#if required}<span class="select-required" aria-hidden="true">*</span>{/if}</span>
+				<span class="select-label-text">
+					{label}{#if required}<span class="select-required" aria-hidden="true">
+							*
+						</span>{/if}
+				</span>
 			</label>
 		{/if}
 
@@ -679,6 +684,7 @@
 	<!-- Dropdown — native popover, positioned with CSS anchor positioning -->
 	<div
 		class="select-dropdown"
+		class:above={dropdownAbove}
 		popover="manual"
 		bind:this={dropdownElement}
 		role="listbox"
@@ -719,7 +725,8 @@
 					onclick={() => selectOption(opt)}
 					onpointerenter={() => {
 						if (!opt.disabled) highlightedIndex = flatIndex;
-					}}>
+					}}
+					{@attach ripple({ enabled: !opt.disabled, zIndex: 1 })}>
 					{#if multiple}
 						<span class="select-check" aria-hidden="true">
 							{#if isSelected(opt.value)}
@@ -781,7 +788,8 @@
 						onclick={() => selectOption(opt)}
 						onpointerenter={() => {
 							if (!opt.disabled) highlightedIndex = flatIndex;
-						}}>
+						}}
+						{@attach ripple({ enabled: !opt.disabled, zIndex: 1 })}>
 						{#if multiple}
 							<span class="select-check" aria-hidden="true">
 								{#if isSelected(opt.value)}
@@ -838,7 +846,8 @@
 					onclick={handleCreate}
 					onpointerenter={() => {
 						highlightedIndex = flatSelectableOptions.length;
-					}}>
+					}}
+					{@attach ripple()}>
 					Create '{searchQuery.trim()}'
 				</div>
 			{/if}
@@ -879,7 +888,10 @@
 		--_height: calc(var(--_font) * 3.5);
 		--_radius: var(--radius-3, 10px);
 		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
-		--_border-hover: var(--color-outline-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
+		--_border-hover: var(
+			--color-outline-active,
+			light-dark(hsl(0 0% 60%), hsl(0 0% 48%))
+		);
 		--_border-focus: var(--color-action, hsl(217 75% 52%));
 		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
 		--_bg: var(--color-bg-0, light-dark(#fff, hsl(0 0% 9%)));
@@ -892,6 +904,8 @@
 		--_duration: 150ms;
 		--_ease: var(--ease-in-out-4, cubic-bezier(0.76, 0, 0.24, 1));
 		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
+		/* Snappy ease-out for the dropdown's expand-in animation */
+		--_ease-expand: cubic-bezier(0.16, 1, 0.3, 1);
 
 		position: relative;
 		width: 100%;
@@ -937,7 +951,9 @@
 		pointer-events: none;
 	}
 	@keyframes select-skeleton-sweep {
-		to { background-position: -180% 0; }
+		to {
+			background-position: -180% 0;
+		}
 	}
 
 	/* ================================================================== */
@@ -949,10 +965,13 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5em;
+		box-sizing: border-box;
 		min-height: var(--_height);
 		/* Leaves room above for the floated label to straddle the outline */
 		margin-top: 0.5em;
-		padding: 0 1em;
+		/* Vertical padding keeps wrapped chips off the rounded outline; the
+		   trigger grows past `min-height` when chips span multiple rows. */
+		padding: 0.5em 1em;
 		border-radius: var(--_radius);
 		background: var(--_bg);
 		cursor: pointer;
@@ -965,10 +984,10 @@
 	}
 
 	.select.dense .select-trigger {
-		padding: 0 0.75em;
+		padding: 0.4em 0.75em;
 	}
 	.select.comfortable .select-trigger {
-		padding: 0 1.25em;
+		padding: 0.6em 1.25em;
 	}
 
 	/* The outline is painted by a pseudo-element so the 1px -> 2px focus
@@ -1154,8 +1173,9 @@
 		align-items: center;
 		gap: 0.35em;
 		min-width: 0;
+		/* Chips wrap freely and the trigger grows to fit them; `overflow`
+		   only reins in an over-long single value. */
 		overflow: hidden;
-		max-height: calc(var(--_height) * 1.4);
 	}
 
 	.select-single-value {
@@ -1187,11 +1207,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.select-chip.overflow {
-		background: var(--_panel-hover);
-		color: var(--_text-muted);
-		padding: 0.2em 0.6em;
 	}
 
 	.select-chip-remove {
@@ -1297,21 +1312,34 @@
 		border-radius: var(--radius-4, 16px);
 		box-shadow: var(--shadow-2, 0 8px 28px -8px rgb(0 0 0 / 0.3));
 		scrollbar-width: thin;
+		/* Lets each option's pressed state recede slightly in 3D */
+		perspective: 100px;
 		/* Flip above the trigger when there is no room below */
 		position-try-fallbacks: flip-block;
-		/* Fade through the native popover open/close lifecycle */
+		/* Expand-in from the edge closest to the trigger — origin flips to
+		   `bottom` when the panel is placed above the control (`.above`). */
+		transform-origin: center top;
 		opacity: 1;
+		transform: scaleY(1);
 		transition:
-			opacity var(--_duration) var(--_ease),
-			display var(--_duration) allow-discrete,
-			overlay var(--_duration) allow-discrete;
+			opacity 200ms var(--_ease-expand),
+			transform 200ms var(--_ease-expand),
+			display 200ms allow-discrete,
+			overlay 200ms allow-discrete;
 	}
+	.select-dropdown.above {
+		transform-origin: center bottom;
+	}
+	/* Collapsed state — drives both the open (@starting-style) and close
+	   transitions, so the panel expands/collapses toward the trigger. */
 	.select-dropdown:not(:popover-open) {
 		opacity: 0;
+		transform: scaleY(0.6);
 	}
 	@starting-style {
 		.select-dropdown:popover-open {
 			opacity: 0;
+			transform: scaleY(0.6);
 		}
 	}
 
@@ -1340,13 +1368,16 @@
 
 	/* Options */
 	.select-option {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 0.6em;
 		padding: 0.7em 0.85em;
 		border-radius: var(--radius-2, 8px);
 		cursor: pointer;
-		transition: background 120ms var(--_ease);
+		transition:
+			background 120ms var(--_ease),
+			translate 200ms ease;
 		user-select: none;
 	}
 	.select-option:hover,
@@ -1360,6 +1391,10 @@
 	.select-option.disabled {
 		opacity: 0.5;
 		pointer-events: none;
+	}
+	/* Pressed feedback — matches the Button component's tactile dip */
+	.select-option:active:not(.disabled) {
+		translate: 0 1px clamp(-10px, calc(0.2em - 12px), -2px);
 	}
 
 	.select-option-content {
@@ -1399,15 +1434,23 @@
 		color: var(--_border-focus);
 	}
 
-	/* Group label */
+	/* Group label — set off from the preceding group with space and a rule */
 	.select-group-label {
-		padding: 0.5em 0.85em 0.25em;
+		margin-top: 0.5em;
+		padding: 0.7em 0.85em 0.3em;
+		border-top: 1px solid color-mix(in oklch, var(--_text) 9%, transparent);
 		font-size: 0.72em;
-		font-weight: 600;
-		letter-spacing: 0.04em;
+		font-weight: 700;
+		letter-spacing: 0.06em;
 		color: var(--_text-muted);
 		text-transform: uppercase;
 		user-select: none;
+	}
+	/* No rule above the first group when nothing precedes it in the panel */
+	.select-group-label:first-child {
+		margin-top: 0;
+		border-top: none;
+		padding-top: 0.4em;
 	}
 
 	/* Create option */
