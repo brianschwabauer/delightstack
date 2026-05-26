@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { decodeThumbHash } from './carousel';
+
 	type ImageState = 'loading' | 'loaded' | 'error';
 
 	let {
@@ -26,8 +28,21 @@
 		/** Whether the image should be lazily loaded */
 		lazy = true,
 
-		/** A small placeholder image URL for the blur-up effect */
+		/**
+		 * A base64-encoded [ThumbHash](https://evanw.github.io/thumbhash/) used as
+		 * a tiny blurred placeholder while the full image loads. The component
+		 * decodes this internally. Takes precedence over {@link placeholder}.
+		 */
+		thumbhash = undefined as string | undefined,
+
+		/** A small placeholder image URL for the blur-up effect (used when no thumbhash) */
 		placeholder = undefined as string | undefined,
+
+		/**
+		 * Mark this image as above-the-fold for faster initial paint. When true,
+		 * the image uses `loading="eager"` + `fetchpriority="high"`.
+		 */
+		priority = false,
 
 		/** Error fallback: true = built-in broken-image SVG, string = fallback image URL, false = disabled */
 		fallback = false as string | boolean,
@@ -35,7 +50,11 @@
 		/** Responsive srcset attribute passed through to the img element */
 		srcset = undefined as string | undefined,
 
-		/** Responsive sizes attribute passed through to the img element */
+		/**
+		 * Responsive sizes attribute. If omitted and the image is lazy with a
+		 * srcset, defaults to `auto, 100vw` — modern browsers use the actual
+		 * rendered width to pick a variant, older browsers fall back to 100vw.
+		 */
 		sizes = undefined as string | undefined,
 
 		/** Whether to show a skeleton shimmer animation while loading */
@@ -66,7 +85,9 @@
 		fit?: 'cover' | 'contain' | 'fill' | 'none';
 		position?: string;
 		lazy?: boolean;
+		thumbhash?: string;
 		placeholder?: string;
+		priority?: boolean;
 		fallback?: string | boolean;
 		srcset?: string;
 		sizes?: string;
@@ -78,15 +99,23 @@
 		onerror?: (detail: { error: Event }) => void;
 	} = $props();
 
-	let state = $state<ImageState>('loading');
+	let load_state = $state<ImageState>('loading');
+	let fading = $state(false);
+	let img_el = $state<HTMLImageElement | undefined>(undefined);
 
-	const has_placeholder = $derived(!!placeholder);
-	const show_skeleton = $derived(skeleton && state === 'loading' && !has_placeholder);
-	const show_placeholder = $derived(has_placeholder && state === 'loading');
-	const show_image = $derived(state === 'loaded');
-	const show_fallback = $derived(state === 'error' && fallback !== false);
-
+	const placeholder_src = $derived(
+		thumbhash ? decodeThumbHash(thumbhash) : placeholder,
+	);
+	const has_placeholder = $derived(!!placeholder_src);
+	const show_skeleton = $derived(skeleton && load_state === 'loading' && !has_placeholder);
+	const show_placeholder = $derived(has_placeholder && load_state !== 'error');
+	const show_fallback = $derived(load_state === 'error' && fallback !== false);
 	const fallback_is_url = $derived(typeof fallback === 'string');
+
+	const computed_sizes = $derived(
+		sizes ?? (lazy && srcset ? 'auto, 100vw' : undefined),
+	);
+	const computed_loading = $derived(priority ? 'eager' : lazy ? 'lazy' : 'eager');
 
 	const container_style = $derived.by(() => {
 		const parts: string[] = [];
@@ -97,7 +126,8 @@
 	});
 
 	function handleLoad(e: Event) {
-		state = 'loaded';
+		load_state = 'loaded';
+		fading = false;
 		if (onload) {
 			const img = e.target as HTMLImageElement;
 			onload({
@@ -108,17 +138,33 @@
 	}
 
 	function handleError(e: Event) {
-		state = 'error';
+		load_state = 'error';
+		fading = false;
 		if (onerror) {
 			onerror({ error: e });
 		}
 	}
 
-	/** Reset state when src changes */
+	/**
+	 * Sync load_state with the actual `<img>` load load_state. Runs once on mount and again
+	 * whenever `src` changes. For cached images, `el.complete` is `true`
+	 * synchronously — without this, the SSR/hydration race causes cached images
+	 * to stay invisible because the load event fires before Svelte attaches its
+	 * onload listener.
+	 */
 	$effect(() => {
-		// Track src to re-run when it changes
 		void src;
-		state = 'loading';
+		if (!img_el) return;
+		if (img_el.complete && img_el.naturalWidth > 0) {
+			load_state = 'loaded';
+			fading = false;
+		} else if (img_el.complete && img_el.naturalWidth === 0) {
+			load_state = 'error';
+			fading = false;
+		} else {
+			load_state = 'loading';
+			fading = true;
+		}
 	});
 </script>
 
@@ -127,42 +173,39 @@
 	class={['image', className].filter(Boolean).join(' ')}
 	style={container_style}
 	bind:this={element}>
-	<!-- Skeleton shimmer -->
 	{#if show_skeleton}
 		<div class="skeleton"></div>
 	{/if}
 
-	<!-- Blur-up placeholder -->
-	{#if has_placeholder}
+	{#if show_placeholder}
 		<img
 			class="placeholder"
-			class:fade-out={state === 'loaded'}
-			src={placeholder}
+			src={placeholder_src}
 			alt=""
 			aria-hidden="true"
 			style:object-fit={fit}
 			style:object-position={position} />
 	{/if}
 
-	<!-- Main image -->
-	{#if state !== 'error'}
+	{#if load_state !== 'error'}
 		<img
 			class="main"
-			class:visible={show_image}
+			class:fading
+			bind:this={img_el}
 			{src}
 			{alt}
 			{width}
 			{height}
 			{srcset}
-			{sizes}
-			loading={lazy ? 'lazy' : 'eager'}
+			sizes={computed_sizes}
+			loading={computed_loading}
+			fetchpriority={priority ? 'high' : undefined}
 			style:object-fit={fit}
 			style:object-position={position}
 			onload={handleLoad}
 			onerror={handleError} />
 	{/if}
 
-	<!-- Error fallback -->
 	{#if show_fallback}
 		{#if fallback_is_url}
 			<img
@@ -197,15 +240,17 @@
 	.image {
 		position: relative;
 		overflow: hidden;
-		display: block;
+		display: grid;
 		width: 100%;
+	}
+
+	.image > * {
+		grid-row: 1 / 1;
+		grid-column: 1 / 1;
 	}
 
 	/* Skeleton shimmer */
 	.skeleton {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
 		background: linear-gradient(
 			90deg,
 			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 25%,
@@ -225,50 +270,39 @@
 		}
 	}
 
-	/* Blur-up placeholder */
+	/* Blur-up placeholder — always renders underneath the main image so it shows
+	   through while the main image is loading, and is covered once it paints. */
 	.placeholder {
-		position: absolute;
-		inset: 0;
-		z-index: 2;
+		display: block;
 		width: 100%;
 		height: 100%;
 		filter: blur(20px);
 		transform: scale(1.1);
-		opacity: 1;
-		transition:
-			opacity 300ms ease,
-			filter 300ms ease;
+		pointer-events: none;
 	}
 
-	.placeholder.fade-out {
-		opacity: 0;
-		filter: blur(0px);
-	}
-
-	/* Main image */
+	/* Main image — defaults to opacity 1 so cached images paint instantly during
+	   SSR. The `fading` class is added by JS only when the image isn't already
+	   loaded; `onload` removes it, triggering the fade-in over the placeholder. */
 	.main {
 		display: block;
 		width: 100%;
 		height: 100%;
-		opacity: 0;
 		transition: opacity 300ms ease;
 	}
 
-	.main.visible {
-		opacity: 1;
+	.main.fading {
+		opacity: 0;
+		transition: none;
 	}
 
-	/* Fallback image (URL) */
 	.fallback-img {
 		display: block;
 		width: 100%;
 		height: 100%;
 	}
 
-	/* Fallback icon container */
 	.fallback {
-		position: absolute;
-		inset: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
