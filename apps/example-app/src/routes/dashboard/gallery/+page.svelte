@@ -6,7 +6,6 @@
 		Progress,
 		Callout,
 		Gallery,
-		Carousel,
 		Select,
 		Toggle,
 		type GalleryDisplay,
@@ -16,7 +15,6 @@
 		type GalleryItem,
 		type GalleryItemAction,
 	} from '@delightstack/components';
-	import { decodeThumbHash } from '@delightstack/images';
 	import Icon from '$lib/Icon.svelte';
 
 	const { data } = $props();
@@ -34,15 +32,13 @@
 	let metaDisplay = $state<'none' | 'always' | 'hover'>('hover');
 	let actionDisplay = $state<'none' | 'always' | 'hover'>('hover');
 	let fit = $state<'cover' | 'contain'>('cover');
-	let useSamples = $state(false);
 	let autoplay = $state(false);
 	let aspectRatio = $state<'16/9' | '4/3' | '1/1' | 'auto'>('16/9');
-	let showCarouselDemo = $state(false);
 
 	const images = db.search('image', { sparse: false });
 
 	// Map the db image records into the new Gallery's generic GalleryItem shape.
-	const dbItems = $derived<GalleryItem[]>(
+	const galleryItems = $derived<GalleryItem[]>(
 		images.docs.map((image) => {
 			const variants = (() => {
 				if (!image.variants) return [] as Array<{
@@ -75,7 +71,6 @@
 				(a: { width: number }, b: { width: number }) => b.width - a.width,
 			)[0];
 			const url = `${cdn}/${image.id}/${best?.name ?? 'default'}`;
-			const thumbnail = image.thumbhash ? decodeThumbHash(image.thumbhash) : undefined;
 			const ratio =
 				image.aspect_ratio ||
 				(image.width && image.height ? image.width / image.height : 1);
@@ -83,7 +78,7 @@
 				id: image.id,
 				url,
 				srcset,
-				thumbnail,
+				thumbhash: image.thumbhash || undefined,
 				name:
 					image.caption || image.file_name?.replace(/\.[^.]+$/, '') || 'Untitled photo',
 				ratio,
@@ -91,25 +86,6 @@
 			};
 		}),
 	);
-
-	// A handful of sample remote images so the gallery can be tested
-	// before any local uploads exist. Mixed aspect ratios show off masonry.
-	const sampleItems: GalleryItem[] = [
-		{ id: 's1', url: 'https://picsum.photos/seed/family01/1600/1067', thumbnail: 'https://picsum.photos/seed/family01/40/27', ratio: 1600 / 1067, name: 'Afternoon walk', type: 'image' },
-		{ id: 's2', url: 'https://picsum.photos/seed/family02/1067/1600', thumbnail: 'https://picsum.photos/seed/family02/27/40', ratio: 1067 / 1600, name: 'The reading nook', type: 'image' },
-		{ id: 's3', url: 'https://picsum.photos/seed/family03/1600/900', thumbnail: 'https://picsum.photos/seed/family03/40/23', ratio: 16 / 9, name: 'Coastline at sunset', type: 'image' },
-		{ id: 's4', url: 'https://picsum.photos/seed/family04/1200/1200', thumbnail: 'https://picsum.photos/seed/family04/30/30', ratio: 1, name: 'Square portrait', type: 'image' },
-		{ id: 's5', url: 'https://picsum.photos/seed/family05/1600/1067', thumbnail: 'https://picsum.photos/seed/family05/40/27', ratio: 1600 / 1067, name: 'Mountain trail', type: 'image' },
-		{ id: 's6', url: 'https://picsum.photos/seed/family06/900/1600', thumbnail: 'https://picsum.photos/seed/family06/23/40', ratio: 900 / 1600, name: 'Tall pines', type: 'image' },
-		{ id: 's7', url: 'https://picsum.photos/seed/family07/1600/1067', thumbnail: 'https://picsum.photos/seed/family07/40/27', ratio: 1600 / 1067, name: 'Old town square', type: 'image' },
-		{ id: 's8', url: 'https://picsum.photos/seed/family08/1600/1200', thumbnail: 'https://picsum.photos/seed/family08/40/30', ratio: 4 / 3, name: 'Window light', type: 'image' },
-		{ id: 's9', url: 'https://picsum.photos/seed/family09/1600/900', thumbnail: 'https://picsum.photos/seed/family09/40/23', ratio: 16 / 9, name: 'Open road', type: 'image' },
-		{ id: 's10', url: 'https://picsum.photos/seed/family10/1067/1600', thumbnail: 'https://picsum.photos/seed/family10/27/40', ratio: 1067 / 1600, name: 'Wildflowers', type: 'image' },
-		{ id: 's11', url: 'https://picsum.photos/seed/family11/1600/1067', thumbnail: 'https://picsum.photos/seed/family11/40/27', ratio: 1600 / 1067, name: 'River bend', type: 'image' },
-		{ id: 's12', url: 'https://picsum.photos/seed/family12/1600/1067', thumbnail: 'https://picsum.photos/seed/family12/40/27', ratio: 1600 / 1067, name: 'After the rain', type: 'image' },
-	];
-
-	const galleryItems = $derived(useSamples || !dbItems.length ? sampleItems : dbItems);
 
 	// One download action per item so the user can test the per-item action ui.
 	const galleryActions = $derived<GalleryItemAction[][]>(
@@ -154,9 +130,6 @@
 			<p>Photos and memories</p>
 		</div>
 		<div class="header-actions">
-			<Button onclick={() => (showCarouselDemo = true)}>
-				<span>Open carousel demo</span>
-			</Button>
 			<Button onclick={() => (show_upload = true)}>
 				<Icon name="plus" size={16} />
 				<span>Upload photos</span>
@@ -249,18 +222,15 @@
 				]} />
 		</div>
 		<div class="control toggle">
-			<Toggle bind:checked={useSamples} label="Use sample images" />
-		</div>
-		<div class="control toggle">
 			<Toggle bind:checked={autoplay} label="Autoplay slider" />
 		</div>
 	</section>
 
-	{#if dbItems.length === 0 && !useSamples}
+	{#if galleryItems.length === 0 && !images.loading}
 		<Callout>
-			You don't have any uploaded photos yet. The gallery is showing sample images so
-			you can try out the new component — toggle <strong>Use sample images</strong>
-			off after uploading some.
+			You don't have any uploaded photos yet. Click <strong>Upload photos</strong>
+			to add some — uploaded images will show their thumbhash blur while the
+			full-resolution version loads.
 		</Callout>
 	{/if}
 
@@ -292,17 +262,6 @@
 		<Progress loading />
 		<p class="upload-status">Uploading...</p>
 	{/if}
-</Modal>
-
-<!-- Standalone Carousel demo (testing the carousel without the gallery wrapper) -->
-<Modal
-	bind:open={showCarouselDemo}
-	title="Carousel — direct usage"
-	maxWidth="min(900px, 95vw)"
-	maxHeight="80svh">
-	<div class="carousel-demo">
-		<Carousel items={sampleItems} inline />
-	</div>
 </Modal>
 
 <style>
@@ -347,11 +306,6 @@
 
 	.gallery-wrapper {
 		min-height: 400px;
-	}
-
-	.carousel-demo {
-		height: min(70svh, 600px);
-		min-height: 320px;
 	}
 
 	.upload-status {
