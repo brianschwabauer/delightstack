@@ -97,10 +97,10 @@
 		autoplay = false,
 
 		/** The css aspect ratio the gallery should be forced into (only when not a modal) */
-		aspectRatio = undefined as string | undefined,
+		aspect_ratio = undefined as string | undefined,
 
 		/** Whether the full screen button should be disabled */
-		disableFullscreen = false,
+		disable_fullscreen = false,
 
 		/**
 		 * Whether the gallery is 'inline' in the page - not a modal or fullscreen.
@@ -122,16 +122,16 @@
 		page = $bindable(0) as number,
 
 		/** The amount of pages available in the current slide (applies to PDFs) */
-		numPages = $bindable(1) as number,
+		num_pages = $bindable(1) as number,
 
 		/** The display style of the metadata (name, description, etc) for each item */
-		metaDisplay = 'hover' as 'none' | 'always' | 'hover',
+		meta_display = 'hover' as 'none' | 'always' | 'hover',
 
 		/** How file names should be displayed in the fullscreen/carousel view */
-		metaDisplayFullscreen = 'none' as 'none' | 'always',
+		meta_display_fullscreen = 'none' as 'none' | 'always',
 
 		/** The display style of the actions (download buttons, etc) for each item */
-		actionDisplay = 'hover' as 'none' | 'always' | 'hover',
+		action_display = 'hover' as 'none' | 'always' | 'hover',
 
 		/**
 		 * The list of potential actions a user can take on each gallery item.
@@ -148,9 +148,9 @@
 					[
 						{
 							src: string;
-							pageBounds: Array<{ width: number; height: number }>;
-							disableRender: boolean;
-							onload: (detail: { numPages: number }) => void;
+							page_bounds: Array<{ width: number; height: number }>;
+							disable_render: boolean;
+							onload: (detail: { num_pages: number }) => void;
 						},
 					]
 			  >
@@ -578,7 +578,7 @@
 )}
 	{@const itemActions = actions?.[index]}
 	{#if itemActions?.length}
-		<div class="actions" class:hover-only={actionDisplay === 'hover'}>
+		<div class="actions" class:hover-only={action_display === 'hover'}>
 			{#each itemActions as action (action)}
 				{#if action?.actions?.length}
 					<Button
@@ -673,12 +673,12 @@
 				{/if}
 			</div>
 		{/if}
-		{#if metaDisplay === 'always' || metaDisplay === 'hover'}
+		{#if meta_display === 'always' || meta_display === 'hover'}
 			{#if item.name}
-				<div class="name" class:hover-only={metaDisplay === 'hover'}>{item.name}</div>
+				<div class="name" class:hover-only={meta_display === 'hover'}>{item.name}</div>
 			{/if}
 		{/if}
-		{#if actionDisplay === 'always' || actionDisplay === 'hover'}
+		{#if action_display === 'always' || action_display === 'hover'}
 			{@render galleryItemAction(index, 'overlay')}
 		{/if}
 	</div>
@@ -728,7 +728,7 @@
 					</div>
 					<div class="name">{item.name || ''}</div>
 				</div>
-				{#if actionDisplay === 'always' || actionDisplay === 'hover'}
+				{#if action_display === 'always' || action_display === 'hover'}
 					{@render galleryItemAction(index, 'transparent')}
 				{/if}
 			</div>
@@ -742,12 +742,12 @@
 		in:fade={{ duration: 150 }}
 		out:fade={{ duration: 150 }}
 		style:opacity={1 - dismissing}>
-		{#if numPages > 1}
+		{#if num_pages > 1}
 			{@const maxDisplayPages = 5}
-			{@const numDisplayPages = Math.min(numPages, maxDisplayPages)}
-			{@const offset = Math.max(0, Math.min(numPages - numDisplayPages, page - 2))}
+			{@const numDisplayPages = Math.min(num_pages, maxDisplayPages)}
+			{@const offset = Math.max(0, Math.min(num_pages - numDisplayPages, page - 2))}
 			<nav class="pages" transition:scale|global={{ duration: 300, easing: backOut }}>
-				{#if numPages > maxDisplayPages && offset >= 1}
+				{#if num_pages > maxDisplayPages && offset >= 1}
 					<Button
 						icon
 						transparent
@@ -772,16 +772,16 @@
 						{i + offset + 1}
 					</Button>
 				{/each}
-				{#if numPages > maxDisplayPages && offset + numDisplayPages <= numPages - 1}
+				{#if num_pages > maxDisplayPages && offset + numDisplayPages <= num_pages - 1}
 					<Button
 						icon
 						transparent
 						dense
 						size="0"
-						onclick={() => (page = numPages - 1)}
+						onclick={() => (page = num_pages - 1)}
 						tooltip="Last Page">
 						<span class="visuallyhidden">Last Page</span>
-						{offset + numDisplayPages >= numPages - 1 ? numPages : '...'}
+						{offset + numDisplayPages >= num_pages - 1 ? num_pages : '...'}
 					</Button>
 				{/if}
 			</nav>
@@ -795,7 +795,7 @@
 				{@render galleryItemAction(slide, 'transparent')}
 			{/if}
 		{:else}
-			{#if disableFullscreen === false}
+			{#if disable_fullscreen === false}
 				<Button
 					icon
 					transparent
@@ -883,7 +883,7 @@
 				(controls === 'default' && isModal)}
 			class:fullscreen={fullscreenActive}
 			style={!isModal && (display === 'slider' || display === 'slideshow') ? style : null}
-			style:--aspect-ratio={isModal || !aspectRatio ? null : aspectRatio}
+			style:--aspect-ratio={isModal || !aspect_ratio ? null : aspect_ratio}
 			aria-label="Media Gallery Carousel"
 			out:carouselCloseTransition
 			{@attach intersectionObserver({
@@ -916,15 +916,15 @@
 				bind:this={carousel}
 				bind:slide
 				bind:page
-				bind:numPages
+				bind:num_pages
 				animation={display === 'slider' && autoplayTransitionTimer && list.length > 1
 					? 'zoom'
 					: 'none'}
 				transition={display === 'slider' && autoplayTransitionTimer ? 'fade' : 'none'}
 				inline={inline ?? (display === 'slider' && !fullscreenActive)}
 				dismissable={isModal}
-				disableEntryExitAnimation={display === 'slider' || display === 'slideshow'}
-				{animationTarget}
+				disable_entry_exit_animation={display === 'slider' || display === 'slideshow'}
+				animation_target={animationTarget}
 				{fit}
 				{pdf}
 				{panorama}
@@ -933,7 +933,7 @@
 					if (fullscreenActive) return closeFullscreen();
 					slide = -1;
 				}} />
-			{#if metaDisplayFullscreen === 'always' && isModal && (list[slide]?.caption || list[slide]?.name)}
+			{#if meta_display_fullscreen === 'always' && isModal && (list[slide]?.caption || list[slide]?.name)}
 				<div class="fullscreen-name" style:opacity={1 - dismissing}>
 					{list[slide]?.caption || list[slide]?.name}
 				</div>

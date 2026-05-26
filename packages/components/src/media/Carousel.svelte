@@ -45,7 +45,7 @@
 		page = $bindable(0) as number,
 
 		/** The amount of pages available in the current slide (applies to PDFs) */
-		numPages = $bindable(0) as number,
+		num_pages = $bindable(0) as number,
 
 		/** The percent (0-1) of how 'closed' the gallery is - while swiping/dismissing the gallery away */
 		dismissing = $bindable(0) as number,
@@ -63,10 +63,10 @@
 		inline = false,
 
 		/** The element that the carousel item will be animated from */
-		animationTarget = undefined as HTMLElement | undefined,
+		animation_target = undefined as HTMLElement | undefined,
 
 		/** Whether the animation for the entry/exit of the carousel (defaults to zooming) should be disabled */
-		disableEntryExitAnimation = false,
+		disable_entry_exit_animation = false,
 
 		/** The transition type to use when navigating between slides */
 		transition = 'none' as 'none' | 'slide' | 'fade',
@@ -92,9 +92,9 @@
 					[
 						{
 							src: string;
-							pageBounds: Array<{ width: number; height: number }>;
-							disableRender: boolean;
-							onload: (detail: { numPages: number }) => void;
+							page_bounds: Array<{ width: number; height: number }>;
+							disable_render: boolean;
+							onload: (detail: { num_pages: number }) => void;
 						},
 					]
 			  >
@@ -298,7 +298,7 @@
 	}
 
 	async function initItems(rawItems: Array<string | Partial<CarouselItem>>) {
-		numPages = 1;
+		num_pages = 1;
 		const newList: DecodedCarouselItem[] = [];
 		for (const raw of rawItems) {
 			const item = normalizeCarouselItem(raw);
@@ -369,9 +369,9 @@
 		// Animate the main active item on from the animation target
 		await tick();
 		const el = getElementAtIndex(index, 0);
-		if (!el || inline || disableEntryExitAnimation) return (opening = false);
+		if (!el || inline || disable_entry_exit_animation) return (opening = false);
 		el.style.opacity = `0`;
-		const target = animationTarget?.getBoundingClientRect() || {
+		const target = animation_target?.getBoundingClientRect() || {
 			top: window.innerHeight / 2 - 50,
 			left: window.innerWidth / 2 - 50,
 			width: 100,
@@ -420,7 +420,7 @@
 		const prevIndex = index;
 		_page = list[next]?.page || 0;
 		page = _page;
-		numPages = list[next]?.pages?.length || 1;
+		num_pages = list[next]?.pages?.length || 1;
 		slide = next;
 		index = next;
 		loadItems(); // load only the next item before animating
@@ -1748,7 +1748,7 @@
 				matrix: createMatrix(),
 			})),
 		};
-		numPages = list[index]?.pages?.length || 1;
+		num_pages = list[index]?.pages?.length || 1;
 	}
 
 	/** Adds/removes the 'transitioning' class to the carousel container */
@@ -1860,12 +1860,12 @@
 							{:else if item.type === 'pdf' && pdf}
 								{@render pdf({
 									src: pickLargestSrc(item.src),
-									pageBounds: item.pages.map((_, j) => ({
+									page_bounds: item.pages.map((_, j) => ({
 										width: item.pages[j].resolutionW,
 										height: item.pages[j].resolutionH,
 									})),
-									disableRender: dragging || transitioning,
-									onload: (e) => onPdfLoadEvent(i, e.numPages),
+									disable_render: dragging || transitioning,
+									onload: (e) => onPdfLoadEvent(i, e.num_pages),
 								})}
 							{:else if item.type === 'video'}
 								{@const videoSrc = pickLargestSrc(item.src)}
