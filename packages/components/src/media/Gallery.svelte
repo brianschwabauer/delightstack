@@ -47,6 +47,7 @@
 	import { type TransitionConfig, fade, scale } from 'svelte/transition';
 	import { backOut, circInOut } from 'svelte/easing';
 	import { onDestroy, onMount, untrack, type Snippet } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		focusTrap,
 		intersectionObserver,
@@ -65,7 +66,7 @@
 	import Portal from '../actions/Portal.svelte';
 	import { contextMenu } from '../actions/ContextMenu.svelte';
 	import Carousel from './Carousel.svelte';
-	import { normalizeCarouselItem } from './carousel';
+	import { decodeThumbHash, normalizeCarouselItem } from './carousel';
 
 	let {
 		/** How the gallery should be displayed - whether a grid, slideshow, etc */
@@ -178,6 +179,18 @@
 	/** The percent (0-1) of how 'closed' the gallery is - while swiping/dismissing the gallery away */
 	let dismissing = $state(0);
 
+	/**
+	 * Item IDs whose `<img>` was *not* loaded at mount time and therefore needs
+	 * the fade-in transition when its `onload` eventually fires. On SSR this
+	 * stays empty so the rendered HTML has the main image at its default
+	 * (visible) opacity — cached images then paint instantly without waiting
+	 * for hydration.
+	 */
+	const fadingKeys = new SvelteSet<string>();
+	function thumbnailKey(item: { id?: string; url?: string }) {
+		return item.id || item.url || '';
+	}
+
 	/** The instance of the focus trap class - used to programmatically deactivate the focus trap */
 	let focusTrapInstance: FocusTrapInstance | undefined;
 
@@ -205,6 +218,16 @@
 				};
 			}),
 	);
+
+	/** A sensible `sizes` hint for grid thumbnails, used by `<img srcset>` so the browser */
+	/** picks an appropriately-sized variant. Roughly matches the column widths from the */
+	/** masonry/grid layouts below. */
+	const gridThumbSizes = $derived.by(() => {
+		if (display === 'list') return '64px';
+		if (sizing === 'small') return '(min-width: 1024px) 16vw, (min-width: 768px) 25vw, 33vw';
+		if (sizing === 'large') return '(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw';
+		return '(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw';
+	});
 
 	const sliderActive = $derived(display === 'slider' || slide >= 0);
 	const isModal = $derived(fullscreenActive || (display !== 'slider' && slide >= 0));
@@ -526,13 +549,35 @@
 	</svg>
 {/snippet}
 
-{#snippet itemThumbnail(item: (typeof list)[number])}
-	{@const thumbnailUrl = item.thumbnail || item.url}
-	<img
-		class="thumbnail-img"
-		src={thumbnailUrl}
-		alt={item.name || ''}
-		loading="lazy" />
+{#snippet itemThumbnail(item: (typeof list)[number], thumbSizes?: string)}
+	{@const key = thumbnailKey(item)}
+	{#if item.thumbhash}
+		<img
+			class="thumbnail-blur"
+			src={decodeThumbHash(item.thumbhash)}
+			alt=""
+			aria-hidden="true"
+			draggable="false" />
+	{/if}
+	{#if item.url}
+		<img
+			class="thumbnail-img"
+			class:fading={fadingKeys.has(key)}
+			class:no-blur={!item.thumbhash}
+			src={item.url}
+			srcset={item.srcset || undefined}
+			sizes={item.sizes || thumbSizes || '(max-width: 768px) 50vw, 33vw'}
+			alt={item.name || ''}
+			loading="lazy"
+			draggable="false"
+			onload={() => fadingKeys.delete(key)}
+			onerror={() => fadingKeys.delete(key)}
+			{@attach (el: HTMLImageElement) => {
+				if (!el.complete || el.naturalWidth === 0) {
+					fadingKeys.add(key);
+				}
+			}} />
+	{/if}
 {/snippet}
 
 {#snippet galleryItemAction(
@@ -619,7 +664,7 @@
 		onclick={(e) => onItemClick(index, e)}
 		onkeydown={(e) => e.key !== 'Enter' || onItemClick(index, e)}>
 		<div class="image">
-			{@render itemThumbnail(item)}
+			{@render itemThumbnail(item, gridThumbSizes)}
 		</div>
 		{#if item.type !== 'image' || item.panorama}
 			<div class="icon">
@@ -672,7 +717,7 @@
 					onkeydown={(e) => e.key !== 'Enter' || onItemClick(index, e)}
 					{@attach contextMenu({ actions: flattenActions(actions?.[index]) })}>
 					<div class="thumbnail">
-						{@render itemThumbnail(item)}
+						{@render itemThumbnail(item, '64px')}
 						{#if item.type !== 'image' || item.panorama}
 							<div class="icon">
 								{#if item.type === 'video'}
@@ -971,6 +1016,7 @@
 			will-change: transform;
 			overflow: hidden;
 		}
+		.thumbnail-blur,
 		.thumbnail-img {
 			position: absolute;
 			inset: 0;
@@ -978,6 +1024,34 @@
 			height: 100%;
 			object-fit: cover;
 			display: block;
+		}
+		.thumbnail-blur {
+			z-index: 0;
+			filter: blur(24px) saturate(1.2) contrast(1.05);
+			transform: scale(1.2);
+			pointer-events: none;
+			user-select: none;
+		}
+		.thumbnail-img {
+			z-index: 1;
+			opacity: 1;
+			transform: scale(1);
+			transition:
+				opacity 400ms ease,
+				transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+			&.no-blur {
+				transition:
+					opacity 250ms ease,
+					transform 400ms ease;
+			}
+			/* JS adds .fading after mount only when the image isn't already loaded.
+			   When .fading is removed (on `onload`), the default transition above
+			   smoothly fades the image in over the blur. */
+			&.fading {
+				opacity: 0;
+				transform: scale(1.04);
+				transition: none;
+			}
 		}
 
 		&:active {
@@ -1888,11 +1962,35 @@
 					justify-content: center;
 					border-radius: calc(var(--radius) - 0.5rem);
 					overflow: hidden;
+					.thumbnail-blur,
 					.thumbnail-img {
-						max-height: calc(100% - 4px);
-						max-width: 100%;
+						position: absolute;
+						inset: 2px;
+						width: calc(100% - 4px);
+						height: calc(100% - 4px);
 						object-fit: contain;
 						border-radius: calc(var(--radius) - 0.35rem);
+						display: block;
+					}
+					.thumbnail-blur {
+						z-index: 0;
+						object-fit: cover;
+						filter: blur(8px) saturate(1.2);
+						transform: scale(1.2);
+						pointer-events: none;
+						user-select: none;
+					}
+					.thumbnail-img {
+						z-index: 1;
+						opacity: 1;
+						transition: opacity 300ms ease;
+						&.no-blur {
+							transition: opacity 200ms ease;
+						}
+						&.fading {
+							opacity: 0;
+							transition: none;
+						}
 					}
 					.icon {
 						position: absolute;

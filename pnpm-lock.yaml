@@ -328,6 +328,9 @@ importers:
       '@delightstack/utilities':
         specifier: workspace:*
         version: link:../utilities
+      thumbhash:
+        specifier: ^0.1.1
+        version: 0.1.1
     devDependencies:
       '@sveltejs/kit':
         specifier: ^2.26.0

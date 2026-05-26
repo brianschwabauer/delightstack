@@ -19,6 +19,7 @@
 		center,
 		clampMatrix,
 		createMatrix,
+		decodeThumbHash,
 		type ElementAnimationOptions,
 		extractMatrixTransform,
 		type GalleryGesture,
@@ -143,8 +144,8 @@
 		/** Whether the media item should be treated as a panorama */
 		panorama: boolean;
 
-		/** A low resolution preview url before the full content loads */
-		thumbnail: string;
+		/** A base64 ThumbHash used to render a tiny blurred preview before the full image loads */
+		thumbhash: string;
 
 		/** A full resolution srcset (or single URL) */
 		url: string;
@@ -328,7 +329,7 @@
 				height: prevItem?.height || item.height || 0,
 				ratio: prevItem?.ratio || item.ratio || 1,
 				panorama: item.panorama ?? false,
-				thumbnail: item.thumbnail || '',
+				thumbhash: item.thumbhash || '',
 				shouldLoad: prevItem?.loaded || shouldLoad,
 				shouldPlay: false,
 				loaded: prevItem?.loaded ?? false,
@@ -1827,9 +1828,9 @@
 						: null}
 					style:grid-column-start={((list.length + i - index + offset) % list.length) + 1}>
 					{#if item.shouldLoad}
-						{#if !item.loaded && item.thumbnail && !opening}
+						{#if !item.loaded && item.thumbhash && !opening}
 							<img
-								src={item.thumbnail}
+								src={decodeThumbHash(item.thumbhash)}
 								class:explicit-size={fit === 'contain'}
 								style:opacity={(1 - dismissing) ** 4}
 								style:--ratio={item.ratio || '1'}
@@ -1872,7 +1873,7 @@
 								{@const preview = item.url.replace(/\.[^.?]+(\?.*)?$/, '.mp4')}
 								{@const hls = item.url.replace(/\.[^.?]+(\?.*)?$/, '.m3u8')}
 								<Video
-									poster={item.thumbnail || undefined}
+									poster={item.thumbhash ? decodeThumbHash(item.thumbhash) : undefined}
 									src={item.url.endsWith('.m3u8') ? hls : preview}
 									autoplay={i === index ? !!item.shouldPlay : false}
 									onready={() => item.loaded || (list[i].loaded = true)} />

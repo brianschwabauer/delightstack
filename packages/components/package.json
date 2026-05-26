@@ -94,7 +94,8 @@
 		"vite": "^6.3.5"
 	},
 	"dependencies": {
-		"@delightstack/utilities": "workspace:*"
+		"@delightstack/utilities": "workspace:*",
+		"thumbhash": "^0.1.1"
 	},
 	"peerDependencies": {
 		"svelte": "^5.36.0"

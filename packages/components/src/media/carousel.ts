@@ -1,3 +1,5 @@
+import { thumbHashToDataURL } from 'thumbhash';
+
 // const BACK_OUT_EASTING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 const BACK_OUT_EASTING = 'cubic-bezier(0.34, 1.30, 0.55, 1)';
 const DELTA_LINE_MULTIPLIER = 8;
@@ -78,8 +80,13 @@ export interface CarouselItem {
 	/** A responsive sizes attribute for image items */
 	sizes?: string;
 
-	/** A low-resolution preview/thumbnail URL used for the blur-up effect */
-	thumbnail?: string;
+	/**
+	 * A base64-encoded [ThumbHash](https://evanw.github.io/thumbhash/) used as
+	 * a tiny blurred placeholder while the full image loads. The component
+	 * decodes this internally and only renders it when the source image is not
+	 * already in the browser's cache.
+	 */
+	thumbhash?: string;
 
 	/** The human-readable name of the item (used as the alt text & captions) */
 	name?: string;
@@ -379,4 +386,23 @@ export function addLoadedResolution(id: string, resolution: number) {
 	const set = loadedResolutions.get(id) || new Set<number>();
 	set.add(resolution);
 	loadedResolutions.set(id, set);
+}
+
+/** Memoized base64-thumbhash → data:image/png URL conversions. */
+const thumbhashDecodeCache = new Map<string, string>();
+
+/**
+ * Decode a base64-encoded ThumbHash into a `data:image/png` URL suitable for
+ * use as an `<img src>` value. Decoded URLs are memoized so repeated renders
+ * of the same item don't pay the decode cost more than once.
+ */
+export function decodeThumbHash(base64: string): string {
+	const cached = thumbhashDecodeCache.get(base64);
+	if (cached) return cached;
+	const binary = atob(base64);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+	const url = thumbHashToDataURL(bytes);
+	thumbhashDecodeCache.set(base64, url);
+	return url;
 }
