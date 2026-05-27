@@ -1,142 +1,275 @@
 ---
 title: Gallery
-description: An image grid with configurable columns, masonry layout, and a built-in lightbox with keyboard navigation and touch swipe support.
+description: A media gallery with seven display modes — masonry, justified rows, uniform grid, list, inline slider, autoplay slideshow, and a headless lightbox for custom thumbnail layouts.
 ---
+
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import GalleryBasicDemo from '../../../../components/demos/GalleryBasicDemo.svelte';
+import GalleryDisplayModesDemo from '../../../../components/demos/GalleryDisplayModesDemo.svelte';
+import GallerySizingDemo from '../../../../components/demos/GallerySizingDemo.svelte';
+import GallerySpacingDemo from '../../../../components/demos/GallerySpacingDemo.svelte';
+import GalleryListDemo from '../../../../components/demos/GalleryListDemo.svelte';
+import GallerySliderDemo from '../../../../components/demos/GallerySliderDemo.svelte';
+import GallerySlideshowDemo from '../../../../components/demos/GallerySlideshowDemo.svelte';
+import GalleryActionsDemo from '../../../../components/demos/GalleryActionsDemo.svelte';
+import GalleryLightboxDemo from '../../../../components/demos/GalleryLightboxDemo.svelte';
+
+`Gallery` is a full-featured media component built on top of [`Carousel`](/components/media/carousel/). You give it a list of items and pick a `display` mode — the same data renders as a packed masonry grid, a justified row layout, a uniform grid, a file-list, an inline slider, an autoplaying slideshow, or a headless lightbox that you drive from your own thumbnails.
+
+Every mode (except `lightbox`, which has no thumbnails) opens a full-screen modal carousel on click, with pinch-to-zoom, swipe-to-dismiss, keyboard navigation, and an optional pages view for PDFs.
 
 ## Import
 
-```svelte
-import { Gallery } from '@delightstack/components';
-import type { GalleryImage } from '@delightstack/components';
+```ts
+import { Gallery, type GalleryItem, type GalleryDisplay } from '@delightstack/components';
 ```
 
-## Basic Usage
+## Basic usage
 
-```svelte
-<script>
-  import { Gallery } from '@delightstack/components';
-  import type { GalleryImage } from '@delightstack/components';
+The minimum is a list of items. Strings are treated as image URLs; objects accept the full [`GalleryItem`](#galleryitem) shape. Include `width` and `height` whenever you can — they let masonry layouts reserve the correct space before each image loads.
 
-  const images: GalleryImage[] = [
-    { src: '/photos/beach.jpg', alt: 'Beach sunset', caption: 'Sunset at the coast' },
-    { src: '/photos/mountain.jpg', alt: 'Mountain peak' },
-    { src: '/photos/forest.jpg', alt: 'Forest trail', caption: 'Autumn hike' },
-    { src: '/photos/city.jpg', alt: 'City skyline' },
-    { src: '/photos/lake.jpg', alt: 'Calm lake' },
-    { src: '/photos/desert.jpg', alt: 'Desert dunes' },
-  ];
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Gallery, type GalleryItem } from '@delightstack/components';
+
+${'  '}const items: GalleryItem[] = [
+${' '}{ src: '/photos/ridge.jpg', width: 1200, height: 800, name: 'Mountain ridge' },
+${'    '}{ src: '/photos/doorway.jpg', width: 800, height: 1200, name: 'Quiet doorway' },
+${' '}{ src: '/photos/coast.jpg', width: 1600, height: 900, name: 'Coastline' },
+${'    '}// ...
+${' '}];
+
 </script>
 
-<Gallery {images} />
-```
+<Gallery {items} />`}>
+	<GalleryBasicDemo client:load />
+</ComponentPreview>
 
-## Examples
+## Display modes
 
-### Masonry Layout
+The same `items` array can render seven different ways. Flip between them below to compare — note how the layout, aspect ratios, and clickable region differ.
 
-Use a CSS columns-based masonry layout for images with varying aspect ratios.
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Gallery, type GalleryDisplay } from '@delightstack/components';
 
-```svelte
-<Gallery {images} masonry columns={4} />
-```
+${' '}let display = $state<GalleryDisplay>('masonry');
 
-### Fixed Aspect Ratio
+</script>
 
-Force all thumbnails to a uniform aspect ratio.
+<Gallery {items} {display} aspect_ratio="16/9" />`}>
+	<GalleryDisplayModesDemo client:load />
+</ComponentPreview>
 
-```svelte
-<Gallery {images} columns={4} aspect_ratio="1" />
-```
+| Mode                  | Layout                                                                                                          | When to use it                                                                                                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `masonry` _(default)_ | Brick-packed grid that respects each image's aspect ratio. Wider images span more columns.                      | Photo sets where the original framing matters and the mix of orientations is part of the appeal.                                                               |
+| `masonry-row`         | Justified rows. Each row fills the full width edge-to-edge, varying the row height to preserve aspect ratios.   | Press galleries, photojournalism, or any "Flickr-style" gallery where horizontal alignment matters.                                                            |
+| `grid`                | Uniform square cells. Images crop to `object-fit: cover` to fit the cell.                                       | Product grids, contact sheets, or anywhere consistency beats faithfulness to the original ratio.                                                               |
+| `list`                | Vertical list with a small thumbnail + name. Compact, scannable.                                                | File managers, attachment lists, document libraries.                                                                                                           |
+| `slider`              | Inline carousel — one item at a time with paging controls below.                                                | Hero sections, product image switchers, embedded story viewers.                                                                                                |
+| `slideshow`           | Same shell as `slider` but tuned for autoplay (subtle zoom + crossfade).                                        | Background slideshows, kiosks, "now playing" displays.                                                                                                         |
+| `lightbox`            | **Renders nothing**. You provide your own thumbnails; the carousel opens when you set `slide` or call `open()`. | When you need full control of the thumbnail layout — mixed with text, in cards, scattered across the page, etc. See [Lightbox](#lightbox-headless-mode) below. |
 
-### Custom Item Rendering
+### Sizing
 
-Override the default thumbnail with a custom snippet.
+`sizing` adjusts how dense the thumbnails are. It changes column counts for grid/masonry, row heights for `masonry-row`, and row height for `list`.
 
-```svelte
-<Gallery {images} columns={3}>
-  {#snippet item(image, index)}
-    <div class="custom-card">
-      <img src={image.thumbnail || image.src} alt={image.alt} />
-      <p>{image.caption ?? `Photo ${index + 1}`}</p>
-    </div>
-  {/snippet}
-</Gallery>
-```
+<ComponentPreview code={`<Gallery {items} display="masonry" sizing="large" />`}>
+	<GallerySizingDemo client:load />
+</ComponentPreview>
 
-### Without Lightbox
+### Spacing and radius
 
-Disable the built-in lightbox and handle clicks manually.
+`spacing` controls the gap between items, and `radius` controls the corner radius. Both are tied to the same gallery-gap CSS variable so they scale together.
 
-```svelte
-<Gallery {images} lightbox={false} onselect={({ image, index }) => {
-  console.log('Selected', image.alt, 'at index', index);
-}} />
-```
+<ComponentPreview
+	code={`<Gallery {items} display="grid" spacing="large" radius="large" />`}>
+	<GallerySpacingDemo client:load />
+</ComponentPreview>
 
-### Dense and Comfortable Spacing
+### List mode
 
-```svelte
-<!-- Tight grid -->
-<Gallery {images} dense />
+List mode is the odd one out: a small thumbnail plus a name in a single row. Use it for any "library of files" feel.
 
-<!-- Relaxed grid -->
-<Gallery {images} comfortable />
-```
+<ComponentPreview code={`<Gallery {items} display="list" />`}>
+	<GalleryListDemo client:load />
+</ComponentPreview>
 
-### Skeleton Loading
+## Inline slider
 
-```svelte
-<Gallery skeleton skeletonCount={9} columns={3} />
-```
+`display="slider"` embeds a single-image carousel in the page flow with arrows, page counter, fullscreen toggle, and an optional play button. The `aspect_ratio` prop locks the frame to a fixed shape so the layout doesn't reflow as images load.
+
+<ComponentPreview code={`<Gallery {items} display="slider" aspect_ratio="16/9" />`}>
+	<GallerySliderDemo client:load />
+</ComponentPreview>
+
+## Slideshow with autoplay
+
+`display="slideshow"` is the same shell as `slider` but tuned for unattended playback: while autoplaying it applies a slow Ken-Burns-style zoom and crossfades between slides. Set `duration` (ms) to control the per-slide dwell time. Autoplay automatically pauses when the slideshow scrolls out of view.
+
+<ComponentPreview
+	code={`<Gallery
+${'  '}{items}
+${'  '}display="slideshow"
+${'  '}aspect_ratio="16/9"
+${'  '}autoplay
+${'  '}duration={4000}
+${'  '}meta_display_fullscreen="always" />`}>
+	<GallerySlideshowDemo client:load />
+</ComponentPreview>
+
+## Per-item actions
+
+The `actions` prop is a 2D array — one row per item, one entry per button. Each button can have an `icon`, `href`, `target`, `click` handler, and a nested `actions` array for a dropdown menu. Hover any thumbnail in the demo below to reveal its download button.
+
+<ComponentPreview code={`<script lang="ts">
+${'  '}import {
+${'    '}Gallery,
+${'    '}pickLargestSrc,
+${'    '}type GalleryItemAction,
+${'  '}} from '@delightstack/components';
+
+${'  '}const actions: GalleryItemAction[][] = items.map((item) => [
+${' '}{
+${'      '}name: 'Download',
+${' '}tooltip: 'Download original',
+${'      '}href: pickLargestSrc(item.src),
+${' '}target: '\_blank',
+${'    '}},
+${' '}]);
+
+</script>
+
+<Gallery {items} display="masonry" {actions} action_display="hover" />`}>
+	<GalleryActionsDemo client:load />
+</ComponentPreview>
+
+## Lightbox (headless mode)
+
+`display="lightbox"` is the "bring your own thumbnails" mode. Gallery renders nothing of its own — instead, you render the trigger elements (buttons, images, cards, anywhere on the page) and open the carousel by either:
+
+- **Setting `slide`** to the item index you want to open. `slide = -1` closes the modal.
+- **Calling `gallery.open(index, fromElement?)`** via `bind:this`. The optional `fromElement` anchors the open animation to your trigger so the modal appears to zoom out of it.
+
+Use this when the built-in grid modes don't fit — e.g. you want thumbnails interleaved with prose, displayed as cards with custom metadata, or scattered across several sections of the page.
+
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Gallery, pickLargestSrc } from '@delightstack/components';
+
+${' '}let gallery = $state<ReturnType<typeof Gallery>>();
+
+</script>
+
+<div class="thumbs">
+${'  '}{#each items as item, i}
+${'    '}<button onclick={(e) => gallery?.open(i, e.currentTarget)}>
+${'      '}<img src={pickLargestSrc(item.src)} alt={item.alt} />
+${'    '}</button>
+${'  '}{/each}
+</div>
+
+<Gallery bind:this={gallery} {items} display="lightbox" />`}>
+	<GalleryLightboxDemo client:load />
+</ComponentPreview>
 
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `images` | `GalleryImage[]` | `[]` | Array of gallery images |
-| `columns` | `number` | `3` | Number of columns in the grid |
-| `gap` | `string` | `'0.5rem'` | Gap between grid items |
-| `masonry` | `boolean` | `false` | Use CSS columns masonry layout instead of grid |
-| `aspect_ratio` | `string` | `undefined` | Thumbnail aspect ratio (e.g. `'1'`, `'4/3'`); omit for natural ratio |
-| `lightbox` | `boolean` | `true` | Enable lightbox on click |
-| `dense` | `boolean` | `false` | Compact grid gap (0.25rem) |
-| `comfortable` | `boolean` | `false` | Relaxed grid gap (1rem) |
-| `skeleton` | `boolean` | `false` | Show loading skeleton |
-| `skeletonCount` | `number` | `6` | Number of skeleton items to render |
-| `id` | `string` | auto | Element ID |
-| `class` | `string` | `''` | Additional CSS classes |
-| `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
-| `item` | `Snippet<[image, index]>` | `undefined` | Custom render snippet for each grid item |
+| Prop                      | Type                                              | Default                      | Notes                                                                                                 |
+| ------------------------- | ------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `items`                   | `GalleryItem[]`                                   | `[]`                         | Strings are treated as image URLs. See [GalleryItem](#galleryitem).                                   |
+| `display`                 | `GalleryDisplay`                                  | `'masonry'`                  | See [Display modes](#display-modes).                                                                  |
+| `sizing`                  | `'small' \| 'default' \| 'large'`                 | `'default'`                  | Thumbnail density.                                                                                    |
+| `spacing`                 | `'none' \| 'default' \| 'large'`                  | `'default'`                  | Gap between thumbnails.                                                                               |
+| `radius`                  | `'none' \| 'small' \| 'large'`                    | `'small'`                    | Corner radius of thumbnails.                                                                          |
+| `slide`                   | `number` _(bindable)_                             | `-1` _(or `0` for `slider`)_ | The currently displayed item index. `-1` keeps the modal closed.                                      |
+| `fit`                     | `'cover' \| 'contain'`                            | `'contain'`                  | `object-fit` for items inside the carousel.                                                           |
+| `aspect_ratio`            | `string`                                          | `undefined`                  | CSS aspect ratio for the slider/slideshow frame (e.g. `"16/9"`). Ignored when the modal is open.      |
+| `autoplay`                | `boolean`                                         | `false`                      | Auto-advance slides. Paused while scrolled off-screen.                                                |
+| `duration`                | `number`                                          | `8000`                       | Autoplay dwell time per slide (ms).                                                                   |
+| `inline`                  | `boolean`                                         | auto                         | When `true`, disables vertical/dismiss gestures. Defaults to `true` for `slider` when not fullscreen. |
+| `disable_fullscreen`      | `boolean`                                         | `false`                      | Hide the fullscreen toggle.                                                                           |
+| `controls`                | `'default' \| 'inline' \| 'overlay' \| 'disable'` | `'default'`                  | Where slider controls appear. `default` = inline when embedded, overlay when modal.                   |
+| `meta_display`            | `'none' \| 'always' \| 'hover'`                   | `'hover'`                    | When to show the name overlay on thumbnails.                                                          |
+| `meta_display_fullscreen` | `'none' \| 'always'`                              | `'none'`                     | When to show the caption in the fullscreen carousel.                                                  |
+| `action_display`          | `'none' \| 'always' \| 'hover'`                   | `'hover'`                    | When to show the action buttons on thumbnails.                                                        |
+| `actions`                 | `GalleryItemAction[][]`                           | `[]`                         | Per-item action buttons. See [GalleryItemAction](#galleryitemaction).                                 |
+| `page`                    | `number` _(bindable)_                             | `0`                          | Current page index inside a multi-page item (e.g. a PDF).                                             |
+| `num_pages`               | `number` _(bindable)_                             | `1`                          | Number of pages in the current item. Set by the `pdf` snippet.                                        |
+| `pdf`                     | `Snippet`                                         | `undefined`                  | Renderer for PDF items. Required if any item has `type: 'pdf'`.                                       |
+| `panorama`                | `Snippet`                                         | `undefined`                  | Renderer for 360° images. Required if any item has `panorama: true`.                                  |
+| `onclick`                 | `(event, index) => void \| false`                 | `undefined`                  | Return `false` from the handler to prevent the modal from opening.                                    |
+| `style`                   | `string`                                          | `''`                         | Inline style passed to the gallery root.                                                              |
 
-## Events
+## Methods
 
-| Event | Detail | Description |
-|-------|--------|-------------|
-| `onselect` | `{ image: GalleryImage, index: number }` | Fires when an image is clicked |
-| `onlightboxopen` | `{ index: number }` | Fires when the lightbox opens |
-| `onlightboxclose` | none | Fires when the lightbox closes |
+Bind the Gallery with `bind:this={gallery}` and call these directly:
+
+| Method               | Description                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open(index, from?)` | Open the modal at `index`. Pass an `HTMLElement` as `from` to anchor the open animation to that element (typical for `display="lightbox"`). |
+| `close()`            | Close the modal. Exits fullscreen first if active.                                                                                          |
+| `goto(i)`            | Jump to slide `i`. No-op when the modal isn't open.                                                                                         |
+| `next(amount=1)`     | Advance by `amount` slides (wraps at the end).                                                                                              |
+| `prev(amount=1)`     | Go back by `amount` slides (wraps at the start).                                                                                            |
+| `play()`             | Start the autoplay timer.                                                                                                                   |
+| `pause()`            | Pause the autoplay timer.                                                                                                                   |
+| `toggleFullscreen()` | Enter or exit the browser's fullscreen mode.                                                                                                |
 
 ## Types
 
-### GalleryImage
+### `GalleryItem`
 
-```typescript
-interface GalleryImage {
-  src: string;
-  thumbnail?: string;
-  alt: string;
-  caption?: string;
-  width?: number;
-  height?: number;
+```ts
+type GalleryItem = string | (Partial<CarouselItem> & { favorite?: boolean });
+```
+
+Items can be a plain image URL string, or an object:
+
+| Field              | Type                                     | Notes                                                                                                                                   |
+| ------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`               | `string`                                 | Stable key — defaults to `src`.                                                                                                         |
+| `type`             | `'image' \| 'video' \| 'pdf' \| 'embed'` | Defaults to `'image'`.                                                                                                                  |
+| `src`              | `string`                                 | URL, or a srcset string with width descriptors (`"sm.jpg 400w, lg.jpg 1600w"`).                                                         |
+| `width` / `height` | `number`                                 | Intrinsic pixel dimensions. Required for masonry layouts so each tile can reserve space before the image loads.                         |
+| `name`             | `string`                                 | Short label, shown on the thumbnail and used as fallback alt text.                                                                      |
+| `caption`          | `string`                                 | Longer caption, shown in the fullscreen overlay when `meta_display_fullscreen="always"`.                                                |
+| `alt`              | `string`                                 | Explicit alt text override.                                                                                                             |
+| `thumbhash`        | `string`                                 | Base64 [ThumbHash](https://evanw.github.io/thumbhash/) — decoded internally into a tiny blurred placeholder while the full image loads. |
+| `priority`         | `boolean`                                | Mark above-the-fold items so they get `loading="eager"` + `fetchpriority="high"`.                                                       |
+| `panorama`         | `boolean`                                | Render this image with the `panorama` snippet.                                                                                          |
+| `favorite`         | `boolean`                                | In masonry layouts, favorite items span twice the columns/rows.                                                                         |
+
+### `GalleryDisplay`
+
+```ts
+type GalleryDisplay =
+	| 'masonry'
+	| 'masonry-row'
+	| 'grid'
+	| 'list'
+	| 'slider'
+	| 'slideshow'
+	| 'lightbox';
+```
+
+### `GalleryItemAction`
+
+```ts
+interface GalleryItemAction {
+	icon?: Component;
+	name?: string; // "Download", "Share", etc.
+	tooltip?: string; // optional secondary label (filename, size, etc.)
+	href?: string;
+	target?: '_blank' | '_self';
+	click?: (event: Event) => unknown;
+	actions?: GalleryItemAction[]; // nested → renders as a dropdown menu
 }
 ```
 
 ## Accessibility
 
-- Grid items use `role="list"` / `role="listitem"` semantics
-- Each thumbnail button has `aria-label` set to the image's `alt` text
-- Lightbox navigation: **Arrow Left** / **Arrow Right** to navigate, **Home** / **End** to jump
-- Lightbox supports touch swipe gestures for mobile navigation
-- Counter announces "X of Y" via `aria-live="polite"`
-- Close button and navigation buttons have descriptive `aria-label` attributes
-- Focus-visible outlines on all interactive elements
+- The modal carousel uses [focus-trap](https://github.com/focus-trap/focus-trap) — `Tab` cycles within the modal, `Escape` closes it, and focus returns to the thumbnail that opened it (or, in `display="lightbox"`, to whatever element triggered `open()`).
+- Each thumbnail is keyboard-activatable (`Enter` opens the modal) and has a focus ring.
+- Slide changes are announced via a polite live region (`Media Item X of Y`).
+- Arrow buttons and the close button have `aria-label`s and visually-hidden text.
+- The right-click context menu mirrors the action buttons so keyboard / touch users get parity.
+- Autoplay pauses automatically when the gallery is offscreen or after any user interaction.

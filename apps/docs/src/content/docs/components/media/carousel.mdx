@@ -1,135 +1,202 @@
 ---
 title: Carousel
-description: A swipeable content slider with CSS scroll-snap, auto-play, loop mode, and configurable multi-slide views.
+description: The low-level media viewport that powers Gallery's modal — handles swipe, pinch-zoom, mouse-wheel pan, page transitions, and PDF/video/embed item types.
 ---
+
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import CarouselBasicDemo from '../../../../components/demos/CarouselBasicDemo.svelte';
+import CarouselTransitionsDemo from '../../../../components/demos/CarouselTransitionsDemo.svelte';
+import CarouselSlideshowDemo from '../../../../components/demos/CarouselSlideshowDemo.svelte';
+
+`Carousel` is the rendering and gesture primitive that [`Gallery`](/components/media/gallery/) uses for its modal view. Reach for it directly only when you need a bare media viewport without Gallery's chrome — for everything else, prefer Gallery (`display="slider"` or `display="slideshow"` for a one-up view; `display="lightbox"` if you want full control of the thumbnails).
+
+Carousel handles:
+
+- horizontal swipe / mouse-drag / mouse-wheel between items
+- pinch-to-zoom and pan within an item
+- vertical swipe-to-dismiss (when `dismissable`)
+- crossfade or slide transitions between items
+- a slow Ken-Burns-style zoom animation per item
+- automatic lazy loading of distant slides
+- four item types: `image`, `video`, `pdf`, `embed`
+
+It does **not** render any controls — no arrows, no dots, no page counter. You supply those yourself by binding `slide`.
 
 ## Import
 
-```svelte
-import { Carousel } from '@delightstack/components';
+```ts
+import { Carousel, type CarouselItem } from '@delightstack/components';
 ```
 
-## Basic Usage
+## Basic usage
 
-```svelte
-<script>
-  import { Carousel } from '@delightstack/components';
+Bind `slide` and provide your own prev/next controls. `inline` keeps the carousel in the page flow, and `dismissable={false}` disables the vertical swipe-to-close gesture (which only makes sense in a modal context).
 
-  const slides = [
-    { title: 'Welcome', image: '/slides/welcome.jpg' },
-    { title: 'Features', image: '/slides/features.jpg' },
-    { title: 'Get Started', image: '/slides/start.jpg' },
-  ];
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Carousel, type CarouselItem } from '@delightstack/components';
 
-  let current = $state(0);
+${'  '}const items: CarouselItem[] = [
+${' '}{ src: '/photos/ridge.jpg', width: 1200, height: 800 },
+${'    '}{ src: '/photos/doorway.jpg', width: 800, height: 1200 },
+${' '}// ...
+${' '}];
+
+${' '}let slide = $state(0);
+
 </script>
 
-<Carousel items={slides} bind:current>
-  {#snippet slide(item, index)}
-    <img src={item.image} alt={item.title} style="width:100%; display:block;" />
-  {/snippet}
-</Carousel>
-```
+<Carousel {items} bind:slide inline dismissable={false} fit="cover" />
 
-## Examples
+<button onclick={() => slide = (slide - 1 + items.length) % items.length}>‹ Prev</button>
+<button onclick={() => slide = (slide + 1) % items.length}>Next ›</button>`}>
+	<CarouselBasicDemo client:load />
+</ComponentPreview>
 
-### Auto-Play with Loop
+## Transitions
 
-Enable continuous cycling with a custom interval. Autoplay is automatically paused on hover and disabled when the user prefers reduced motion.
+`transition` controls how Carousel animates between items when `slide` changes programmatically (swipe gestures always feel "slide"-like regardless).
 
-```svelte
-<Carousel items={slides} autoplay={3000} loop>
-  {#snippet slide(item, index)}
-    <img src={item.image} alt={item.title} style="width:100%; display:block;" />
-  {/snippet}
-</Carousel>
-```
+- **`none`** _(default)_ — instant cut, no animation. Cheapest.
+- **`slide`** — horizontal slide between items. Matches the swipe gesture's direction.
+- **`fade`** — crossfade. Pairs naturally with `animation="zoom"` for a slideshow effect.
 
-### Multiple Slides Per View
+<ComponentPreview
+	code={`<Carousel {items} bind:slide transition="fade" inline dismissable={false} />`}>
+	<CarouselTransitionsDemo client:load />
+</ComponentPreview>
 
-Show several slides at once with a gap between them and a peek of adjacent slides.
+## Slideshow effect
 
-```svelte
-<Carousel items={products} slidesPerView={3} gap="1rem" peek="2rem">
-  {#snippet slide(item, index)}
-    <div class="product-card">
-      <img src={item.image} alt={item.name} />
-      <h3>{item.name}</h3>
-    </div>
-  {/snippet}
-</Carousel>
-```
+Combine `transition="fade"` with `animation="zoom"` to get a slow Ken-Burns push between slides. Drive it from your own timer to control the dwell time. (For most use cases this is exactly what `<Gallery display="slideshow" autoplay />` gives you for free.)
 
-### Vertical Orientation
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { onDestroy } from 'svelte';
+${'  '}import { Carousel } from '@delightstack/components';
 
-Stack slides vertically instead of horizontally. Arrow keys change to up/down.
+${'  '}let slide = $state(0);
+${' '}const timer = setInterval(() => slide = (slide + 1) % items.length, 4000);
+${' '}onDestroy(() => clearInterval(timer));
 
-```svelte
-<div style="height: 400px;">
-  <Carousel items={stories} orientation="vertical">
-    {#snippet slide(item, index)}
-      <div class="story">{item.content}</div>
-    {/snippet}
-  </Carousel>
-</div>
-```
+</script>
 
-### Minimal (No Arrows or Dots)
-
-Hide navigation controls for a clean swipe-only experience.
-
-```svelte
-<Carousel items={images} showArrows={false} showDots={false}>
-  {#snippet slide(item, index)}
-    <img src={item.src} alt={item.alt} style="width:100%; display:block;" />
-  {/snippet}
-</Carousel>
-```
-
-### Skeleton Loading
-
-Show a placeholder skeleton while slide data is being fetched.
-
-```svelte
-<Carousel skeleton slidesPerView={3} />
-```
+<Carousel
+${'  '}{items}
+${'  '}bind:slide
+${'  '}transition="fade"
+${'  '}animation="zoom"
+${'  '}inline
+${'  '}dismissable={false}
+${'  '}fit="cover" />`}>
+	<CarouselSlideshowDemo client:load />
+</ComponentPreview>
 
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `items` | `unknown[]` | `[]` | Array of items to display in the carousel |
-| `current` | `number` | `0` | Current slide index (`$bindable`) |
-| `loop` | `boolean` | `false` | Enable infinite loop by cloning edge slides |
-| `autoplay` | `boolean \| number` | `false` | Auto-advance interval in ms; `true` = 5000ms; disabled when `prefers-reduced-motion` |
-| `pauseOnHover` | `boolean` | `true` | Pause autoplay on hover or touch |
-| `showArrows` | `boolean` | `true` | Show prev/next arrow buttons |
-| `showDots` | `boolean` | `true` | Show dot indicators |
-| `slidesPerView` | `number` | `1` | Number of visible slides at once |
-| `gap` | `string` | `'0'` | CSS gap between slides |
-| `peek` | `string` | `'0'` | Adjacent slide peek amount (CSS length) |
-| `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Scroll direction |
-| `skeleton` | `boolean` | `false` | Show a loading skeleton |
-| `id` | `string` | auto | Element ID |
-| `class` | `string` | `''` | Additional CSS classes |
-| `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
-| `slide` | `Snippet<[item, index]>` | `undefined` | Render snippet for each slide |
-| `children` | `Snippet` | `undefined` | Default slot content (alternative to `slide` snippet) |
+| Prop                           | Type                                     | Default     | Notes                                                                                                             |
+| ------------------------------ | ---------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `items`                        | `Array<string \| Partial<CarouselItem>>` | `[]`        | Strings are treated as image URLs. See [CarouselItem](#carouselitem).                                             |
+| `slide`                        | `number` _(bindable)_                    | `0`         | Active item index. Changing it animates the transition.                                                           |
+| `page`                         | `number` _(bindable)_                    | `0`         | Active page inside a multi-page item (e.g. PDF).                                                                  |
+| `num_pages`                    | `number` _(bindable)_                    | `0`         | Number of pages in the current item. Set by the `pdf` snippet.                                                    |
+| `dismissing`                   | `number` _(bindable)_                    | `0`         | Progress (0–1) of an in-flight vertical swipe-to-dismiss gesture. Useful for fading a backdrop in sync.           |
+| `dismissable`                  | `boolean`                                | `true`      | Enable vertical swipe-to-dismiss. Pair with `onclose` to react.                                                   |
+| `fit`                          | `'cover' \| 'contain'`                   | `'contain'` | `object-fit` for items.                                                                                           |
+| `inline`                       | `boolean`                                | `false`     | Disable vertical gestures + mouse-wheel pan. Use this when embedded in the page flow rather than a modal overlay. |
+| `transition`                   | `'none' \| 'slide' \| 'fade'`            | `'none'`    | Between-slide transition for programmatic changes to `slide`.                                                     |
+| `animation`                    | `'none' \| 'zoom'`                       | `'none'`    | Per-item animation. `'zoom'` is a slow Ken-Burns push — combine with `transition="fade"` for slideshows.          |
+| `animation_target`             | `HTMLElement`                            | `undefined` | Anchor the entry animation to this element (used by Gallery to zoom out of the clicked thumbnail).                |
+| `disable_entry_exit_animation` | `boolean`                                | `false`     | Skip the entry/exit zoom. Useful when the Carousel is permanently inline.                                         |
+| `pdf`                          | `Snippet`                                | `undefined` | Renderer for PDF items. Required if any item has `type: 'pdf'`.                                                   |
+| `panorama`                     | `Snippet`                                | `undefined` | Renderer for 360° images. Required if any item has `panorama: true`.                                              |
+| `oninteraction`                | `() => void`                             | `undefined` | Fires on any user interaction (swipe, zoom, click). Common use: pause your autoplay timer.                        |
+| `onclose`                      | `() => boolean \| void`                  | `undefined` | Fires on dismiss / close. Return `false` to keep the carousel open.                                               |
+| `class`                        | `string`                                 | `''`        | Extra class names on the items list.                                                                              |
+| `style`                        | `string`                                 | `''`        | Inline style on the items list.                                                                                   |
 
-## Events
+## Methods
 
-| Event | Detail | Description |
-|-------|--------|-------------|
-| `onchange` | `{ index: number }` | Fires when the active slide changes |
+Bind the Carousel with `bind:this={carousel}` and call these directly:
+
+| Method                                      | Description                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `goToPage(itemIndex, pageIndex)`            | Jump to a specific page within a specific item.                                    |
+| `nextSlide(amount?)` / `prevSlide(amount?)` | Step between items.                                                                |
+| `nextPage(amount?)` / `prevPage(amount?)`   | Step between pages within the current item (e.g. PDF).                             |
+| `up()` / `down()` / `left()` / `right()`    | Directional navigation (handles page-vs-slide depending on zoom and content type). |
+| `zoomIn(targetScale?, x?, y?)`              | Programmatically zoom into the current item.                                       |
+| `zoomOut(targetScale?)`                     | Programmatically zoom out.                                                         |
+| `reset()`                                   | Reset zoom and pan on the current item.                                            |
+
+## Types
+
+### `CarouselItem`
+
+```ts
+interface CarouselItem {
+	id?: string;
+	type?: 'image' | 'video' | 'pdf' | 'embed'; // default: 'image'
+	src: string; // URL or srcset string
+	width?: number;
+	height?: number;
+	name?: string;
+	caption?: string;
+	alt?: string;
+	thumbhash?: string;
+	panorama?: boolean;
+	priority?: boolean;
+}
+```
+
+For the `src` field on images, you can pass either a single URL or a srcset string with width descriptors:
+
+```ts
+src: '/photos/sunset-sm.jpg 400w, /photos/sunset-md.jpg 800w, /photos/sunset-lg.jpg 1600w';
+```
+
+The carousel parses the srcset and picks the largest source for the active slide while letting the browser pick the right one for thumbnails.
+
+### `CarouselItemType`
+
+```ts
+type CarouselItemType = 'image' | 'video' | 'pdf' | 'embed';
+```
+
+- `image` _(default)_ — `<img>` with optional [ThumbHash](https://evanw.github.io/thumbhash/) blur placeholder. Supports pinch-zoom and pan.
+- `video` — rendered through the [`Video`](/components/media/video/) component.
+- `pdf` — rendered via the `pdf` snippet you provide (typically [`PDF`](/components/media/pdf/) from this package). Carousel handles vertical page navigation; the snippet handles rasterising pages.
+- `embed` — rendered in an `<iframe>` with permissive `allow` flags (YouTube, Vimeo, etc.).
+
+### `GalleryGesture`
+
+```ts
+type GalleryGesture =
+	| 'pinch-zoom' // two-finger zoom + pan
+	| 'pan-x' // horizontal pan between slides
+	| 'pan-y-dismiss' // vertical pan to close
+	| 'pan-y-page' // vertical pan between PDF pages
+	| 'pinch' // pinch gesture (mid-flight)
+	| 'indeterminate' // touch started but direction unknown
+	| 'none'; // not interacting
+```
+
+## Helpers
+
+The media module re-exports two helpers from `'./carousel'` that are handy when building your own thumbnails alongside Carousel:
+
+```ts
+import { pickLargestSrc, decodeThumbHash } from '@delightstack/components';
+
+// Returns the highest-resolution URL from a srcset string.
+const fullRes = pickLargestSrc(item.src);
+
+// Decodes a ThumbHash into a tiny data: URL you can render as a blurred placeholder.
+const blurDataUrl = decodeThumbHash(item.thumbhash);
+```
 
 ## Accessibility
 
-- `role="region"` with `aria-roledescription="carousel"` on the container
-- Each slide has `role="group"` with `aria-roledescription="slide"`
-- Dot indicators use `role="tablist"` / `role="tab"` with `aria-selected`
-- Live region announces "Slide X of Y" to screen readers
-- **Arrow Left / Arrow Right** (or **Up / Down** for vertical) navigates slides
-- **Home** goes to the first slide, **End** goes to the last
-- Arrow buttons include `aria-label="Previous slide"` / `aria-label="Next slide"`
-- Autoplay is disabled when `prefers-reduced-motion: reduce` is active
-- Focus-visible outline on the carousel container
+- The active slide is announced via a polite live region (`Media Item X of Y`).
+- Inactive slides are marked `inert` so screen readers and keyboard focus skip them.
+- Each slide has `aria-label="N of M"`.
+- All gestures have keyboard equivalents through Gallery's controls — when using Carousel directly, you're responsible for wiring up arrow-key handlers on your container.
+- Pinch-zoom is disabled when the user prefers reduced motion _(via the zoom animation only — direct gestures are always available)_.

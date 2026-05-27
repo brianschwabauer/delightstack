@@ -49,11 +49,7 @@
 	import { backOut, circInOut } from 'svelte/easing';
 	import { onDestroy, onMount, untrack, type Snippet } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
-	import {
-		focusTrap,
-		intersectionObserver,
-		ripple,
-	} from '@delightstack/utilities';
+	import { focusTrap, intersectionObserver, ripple } from '@delightstack/utilities';
 
 	// Minimal subset of the focus-trap instance we use, declared locally so the
 	// 'focus-trap' package doesn't need to be a direct dep of this package.
@@ -328,7 +324,9 @@
 				autoplayTransitionStart = Math.min(
 					now,
 					Math.floor(
-						now - duration * (autoplayTransitionProgress || 0) + autoplayTransitionInterval,
+						now -
+							duration * (autoplayTransitionProgress || 0) +
+							autoplayTransitionInterval,
 					),
 				);
 				return;
@@ -514,50 +512,95 @@
 {/snippet}
 {#snippet iconDocument()}
 	<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-		<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 7V3.5L19.5 9H14z" />
+		<path
+			d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 7V3.5L19.5 9H14z" />
 	</svg>
 {/snippet}
 {#snippet iconEmbed()}
-	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true">
 		<polyline points="16 18 22 12 16 6" />
 		<polyline points="8 6 2 12 8 18" />
 	</svg>
 {/snippet}
 {#snippet iconPanorama()}
-	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true">
 		<ellipse cx="12" cy="12" rx="10" ry="6" />
 		<path d="M2 12c4 2 16 2 20 0" />
 		<path d="M12 2c2 4 2 16 0 20" />
 	</svg>
 {/snippet}
 {#snippet iconChevronLeft()}
-	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true">
 		<polyline points="15 18 9 12 15 6" />
 	</svg>
 {/snippet}
 {#snippet iconChevronRight()}
-	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true">
 		<polyline points="9 18 15 12 9 6" />
 	</svg>
 {/snippet}
 {#snippet iconFullscreen()}
 	<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-		<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+		<path
+			d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
 	</svg>
 {/snippet}
 {#snippet iconFullscreenExit()}
 	<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-		<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
+		<path
+			d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
 	</svg>
 {/snippet}
 {#snippet iconClose()}
-	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true">
 		<line x1="18" y1="6" x2="6" y2="18" />
 		<line x1="6" y1="6" x2="18" y2="18" />
 	</svg>
 {/snippet}
 {#snippet iconDownload()}
-	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true">
 		<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
 		<polyline points="7 10 12 15 17 10" />
 		<line x1="12" y1="15" x2="12" y2="3" />
@@ -597,10 +640,7 @@
 	{/if}
 {/snippet}
 
-{#snippet galleryItemAction(
-	index: number,
-	style: 'overlay' | 'transparent' = 'overlay',
-)}
+{#snippet galleryItemAction(index: number, style: 'overlay' | 'transparent' = 'overlay')}
 	{@const itemActions = actions?.[index]}
 	{#if itemActions?.length}
 		<div class="actions" class:hover-only={action_display === 'hover'}>
@@ -731,7 +771,11 @@
 					class="info"
 					role="button"
 					tabindex="0"
-					{@attach ripple({ zIndex: 1, opacity: 0.2, color: 'var(--color-text, currentColor)' })}
+					{@attach ripple({
+						zIndex: 1,
+						opacity: 0.2,
+						color: 'var(--color-text, currentColor)',
+					})}
 					onclick={(e) => onItemClick(index, e)}
 					onkeydown={(e) => e.key !== 'Enter' || onItemClick(index, e)}
 					{@attach contextMenu({ actions: flattenActions(actions?.[index]) })}>
@@ -1436,6 +1480,7 @@
 					bottom: unset;
 					width: 4.5rem;
 					height: min(20rem, 50%);
+					aspect-ratio: auto;
 					box-shadow: none;
 					cursor: pointer;
 					z-index: 2;
