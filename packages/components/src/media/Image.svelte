@@ -39,10 +39,25 @@
 		placeholder = undefined as string | undefined,
 
 		/**
+		 * A solid background colour painted on the container — paints before any
+		 * image data arrives (no JS needed). Useful for SSR where a dominant
+		 * colour avoids any flash of empty box even before the thumbhash decodes.
+		 * Accepts any CSS colour value.
+		 */
+		bg_color = undefined as string | undefined,
+
+		/**
 		 * Mark this image as above-the-fold for faster initial paint. When true,
 		 * the image uses `loading="eager"` + `fetchpriority="high"`.
 		 */
 		priority = false,
+
+		/**
+		 * Retry-on-error. `true` retries 3 times with exponential backoff
+		 * (1s, 4s, 9s); a number sets the max retry count; `false` (default)
+		 * disables retries and transitions to the error state immediately.
+		 */
+		retry = false as boolean | number,
 
 		/** Error fallback: true = built-in broken-image SVG, string = fallback image URL, false = disabled */
 		fallback = false as string | boolean,
@@ -87,7 +102,9 @@
 		lazy?: boolean;
 		thumbhash?: string;
 		placeholder?: string;
+		bg_color?: string;
 		priority?: boolean;
+		retry?: boolean | number;
 		fallback?: string | boolean;
 		srcset?: string;
 		sizes?: string;
@@ -102,6 +119,12 @@
 	let load_state = $state<ImageState>('loading');
 	let fading = $state(false);
 	let img_el = $state<HTMLImageElement | undefined>(undefined);
+	let retry_count = $state(0);
+	let retry_timer: ReturnType<typeof setTimeout> | undefined;
+
+	const max_retries = $derived(
+		retry === true ? 3 : typeof retry === 'number' ? Math.max(0, retry) : 0,
+	);
 
 	const placeholder_src = $derived(
 		thumbhash ? decodeThumbHash(thumbhash) : placeholder,
@@ -122,12 +145,15 @@
 		if (aspect_ratio) parts.push(`aspect-ratio: ${aspect_ratio}`);
 		if (width) parts.push(`width: ${width}px`);
 		if (height && !aspect_ratio) parts.push(`height: ${height}px`);
+		if (bg_color) parts.push(`background-color: ${bg_color}`);
 		return parts.join('; ') || undefined;
 	});
 
 	function handleLoad(e: Event) {
 		load_state = 'loaded';
 		fading = false;
+		retry_count = 0;
+		clearTimeout(retry_timer);
 		if (onload) {
 			const img = e.target as HTMLImageElement;
 			onload({
@@ -138,12 +164,36 @@
 	}
 
 	function handleError(e: Event) {
+		// Opt-in retry — schedule another attempt with exponential backoff
+		// before transitioning to the error state.
+		if (retry_count < max_retries) {
+			retry_count++;
+			clearTimeout(retry_timer);
+			const delay = retry_count ** 2 * 1000; // 1s, 4s, 9s, …
+			retry_timer = setTimeout(() => {
+				if (!img_el || load_state === 'loaded') return;
+				const current = img_el.src;
+				img_el.src = '';
+				img_el.src = current;
+			}, delay);
+			return;
+		}
 		load_state = 'error';
 		fading = false;
 		if (onerror) {
 			onerror({ error: e });
 		}
 	}
+
+	// Reset retry counter when src changes so a new src gets its own retry budget.
+	$effect(() => {
+		void src;
+		retry_count = 0;
+		clearTimeout(retry_timer);
+	});
+
+	// Cancel any pending retry on unmount.
+	$effect(() => () => clearTimeout(retry_timer));
 
 	/**
 	 * Sync load_state with the actual `<img>` load load_state. Runs once on mount and again
