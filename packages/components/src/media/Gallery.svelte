@@ -32,7 +32,8 @@
 		| 'masonry-row'
 		| 'list'
 		| 'slider'
-		| 'slideshow';
+		| 'slideshow'
+		| 'lightbox';
 
 	export type GallerySize = 'small' | 'default' | 'large';
 
@@ -69,7 +70,16 @@
 	import { decodeThumbHash, normalizeCarouselItem, pickLargestSrc } from './carousel';
 
 	let {
-		/** How the gallery should be displayed - whether a grid, slideshow, etc */
+		/**
+		 * How the gallery should be displayed - whether a grid, slideshow, etc.
+		 *
+		 * Use `'lightbox'` for a headless mode: Gallery renders no thumbnails of its
+		 * own, and you provide your own trigger elements (buttons, images, cards) that
+		 * open the carousel by setting `slide` to the desired index (`-1` keeps it
+		 * closed). For a nice open animation from your trigger element, call the
+		 * exported `open(index, fromElement)` method instead of setting `slide`
+		 * directly.
+		 */
 		display = 'masonry' as GalleryDisplay,
 
 		/** The size of the thumbnails in the gallery */
@@ -255,6 +265,21 @@
 		if (autoplay && intersected && !autoplayTransitionTimer && !autoplayPaused) play();
 	});
 	onDestroy(() => pause());
+
+	/**
+	 * Opens the gallery modal at the given item index.
+	 *
+	 * Primarily intended for `display="lightbox"`, where the developer renders
+	 * their own thumbnails: pass `event.currentTarget` (or another element) as
+	 * `from` to anchor the open animation to that element. Equivalent to setting
+	 * `slide = index` directly, except it also captures the animation origin.
+	 */
+	export function open(index: number, from?: HTMLElement) {
+		if (!list[index]) return;
+		dismissing = 0;
+		animationTarget = from;
+		slide = index;
+	}
 
 	/** Closes the gallery modal */
 	export function close() {
