@@ -16,6 +16,7 @@
 		type GalleryItem,
 		type GalleryItemAction,
 	} from '@delightstack/components';
+	import { toImageProps } from '@delightstack/images';
 	import Icon from '$lib/Icon.svelte';
 
 	const { data } = $props();
@@ -39,44 +40,21 @@
 
 	const images = db.search('image', { sparse: false });
 
-	// Map the db image records into the new Gallery's generic GalleryItem shape.
+	// Map the db image records into the Gallery's generic item shape via the
+	// `@delightstack/images` helper. The Gallery's `src` field accepts the
+	// combined srcset string directly, so we prefer it over the single src.
 	const galleryItems = $derived<GalleryItem[]>(
 		images.docs.map((image, index) => {
-			const variants = (() => {
-				if (!image.variants) return [] as Array<{
-					name: string;
-					width: number;
-					height: number;
-					watermarked?: boolean;
-				}>;
-				if (typeof image.variants !== 'string') return image.variants;
-				try {
-					return JSON.parse(image.variants);
-				} catch {
-					return [];
-				}
-			})();
-			const cdn = '/cdn/image';
-			const src = variants
-				.filter(
-					(v: { name: string; watermarked?: boolean }) =>
-						v.name !== 'original' && !v.watermarked,
-				)
-				.sort((a: { width: number }, b: { width: number }) => a.width - b.width)
-				.map(
-					(v: { name: string; width: number }) =>
-						`${cdn}/${image.id}/${v.name} ${v.width}w`,
-				)
-				.join(', ');
+			const props = toImageProps(image);
 			return {
 				id: image.id,
-				src: src || `${cdn}/${image.id}/default`,
-				thumbhash: image.thumbhash || undefined,
+				src: props.srcset || props.src,
+				thumbhash: props.thumbhash,
+				alt: props.alt,
+				width: props.width,
+				height: props.height,
 				name: image.file_name?.replace(/\.[^.]+$/, '') || 'Untitled photo',
 				caption: image.caption || undefined,
-				alt: image.alt_text || undefined,
-				width: image.width || undefined,
-				height: image.height || undefined,
 				type: 'image' as const,
 				// First row above the fold gets eager loading + high fetch priority.
 				priority: index < 6,
