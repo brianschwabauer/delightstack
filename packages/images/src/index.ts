@@ -8,7 +8,8 @@ export type { ImageSchemaBuilder, ImageTable } from './schema';
 
 export { createImageHandle } from './handle';
 
-export { decodeThumbHash, imageURL } from './image-helpers';
+export { decodeThumbHash, imageURL, toImageProps } from './image-helpers';
+export type { ImageProps, ImageRecord, ImageVariant } from './image-helpers';
 
 // Note: ImageProcessorContainer is intentionally NOT exported from this barrel.
 // It imports @cloudflare/containers which depends on cloudflare:workers.

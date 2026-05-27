@@ -5,8 +5,7 @@
 	"private": true,
 	"exports": {
 		".": "./src/index.ts",
-		"./worker": "./src/worker.ts",
-		"./component": "./src/Image.svelte"
+		"./worker": "./src/worker.ts"
 	},
 	"scripts": {
 		"test": "vitest",
