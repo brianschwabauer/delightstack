@@ -1,6 +1,15 @@
 export { default as Carousel } from './Carousel.svelte';
 export type { CarouselItem, CarouselItemType, GalleryGesture } from './Carousel.svelte';
-export { decodeThumbHash, pickLargestSrc } from './carousel';
+export {
+	decodeThumbHash,
+	getItemThumbnailSrc,
+	isScalable,
+	isSwipeable,
+	isVideoEmbed,
+	normalizeCarouselItem,
+	normalizeEmbedSrc,
+	pickLargestSrc,
+} from './carousel';
 export { default as Gallery } from './Gallery.svelte';
 export type {
 	GalleryDisplay,

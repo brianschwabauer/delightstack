@@ -9,7 +9,7 @@
 
 <script lang="ts">
 	import { backOut, circOut, circInOut, circIn } from 'svelte/easing';
-	import { onDestroy, tick, untrack, type Snippet } from 'svelte';
+	import { onDestroy, tick, untrack, type Component, type Snippet } from 'svelte';
 	import {
 		addLoadedResolution,
 		animateElement,
@@ -26,16 +26,38 @@
 		getLoadedResolutions,
 		isScalable,
 		isSwipeable,
+		isVideoEmbed,
 		normalizeCarouselItem,
+		normalizeEmbedSrc,
 		normalizeWheel,
 		pickLargestSrc,
 		type Point,
 		type Pointer,
 		type Transform,
 	} from './carousel';
-	import Video from './Video.svelte';
 
 	const browser = typeof window !== 'undefined';
+
+	type RichRendererType = 'pdf' | 'panorama' | 'video';
+
+	/** Module-scope promise cache so multiple Carousel instances share one fetch per renderer. */
+	const richModulePromises: Record<RichRendererType, Promise<{ default: Component }> | null> = {
+		pdf: null,
+		panorama: null,
+		video: null,
+	};
+
+	function loadRichRenderer(type: RichRendererType): Promise<{ default: Component }> {
+		if (!richModulePromises[type]) {
+			richModulePromises[type] =
+				type === 'pdf'
+					? (import('./PDF.svelte') as Promise<{ default: Component }>)
+					: type === 'panorama'
+						? (import('./Panorama.svelte') as Promise<{ default: Component }>)
+						: (import('./Video.svelte') as Promise<{ default: Component }>);
+		}
+		return richModulePromises[type]!;
+	}
 
 	let {
 		/** The currently displayed item index. Changing this will change/animate the slide */
@@ -81,32 +103,30 @@
 		class: className = '',
 
 		/**
-		 * Snippet used to render a PDF item. Receives the source URL, a list of
-		 * { width, height } per page that the renderer should target, a flag for
-		 * whether rendering should pause (during transitions/drags), and an `onload`
-		 * callback that must be invoked once the PDF has loaded so the carousel
-		 * knows how many pages it contains.
+		 * Snippet used to render `type: 'custom'` items. Receives the full item
+		 * plus lifecycle helpers so the snippet can integrate cleanly with the
+		 * carousel:
+		 * - `onload()` — call when the custom renderer has finished loading so
+		 *   the carousel hides its loading state for this slide.
+		 * - `onerror(err)` — call if loading fails.
+		 * - `active` — true when this item is the currently displayed slide
+		 *   (useful for autoplay/pause-style behaviour in your renderer).
+		 * - `gesture_disabled` — true when the item has `disable_swipe` set
+		 *   (lets the renderer hide UI that would conflict with its own
+		 *   horizontal input).
 		 */
-		pdf = undefined as
+		custom = undefined as
 			| Snippet<
 					[
 						{
-							src: string;
-							page_bounds: Array<{ width: number; height: number }>;
-							disable_render: boolean;
-							onload: (detail: { num_pages: number }) => void;
+							item: CarouselItem;
+							onload: () => void;
+							onerror: (err: unknown) => void;
+							active: boolean;
+							gesture_disabled: boolean;
 						},
 					]
 			  >
-			| undefined,
-
-		/**
-		 * Snippet used to render a panorama (360°) image. Receives the source URL,
-		 * an `inline` flag for whether the carousel is inline, and an `onload`
-		 * callback that should be invoked once the panorama is ready.
-		 */
-		panorama = undefined as
-			| Snippet<[{ src: string; inline: boolean; onload: () => void }]>
 			| undefined,
 
 		/** Called when the user interacts with the carousel */
@@ -119,6 +139,12 @@
 	const CLAMP_PADDING = 100; // the number of pixels to pad the image when it is zoomed in & panned around
 	const DRAG_THRESHOLD = 10; // how far the user must drag before we consider it a gesture
 	const DISMISS_THRESHOLD = 300; // the number of pixels the user must drag to dismiss the gallery
+	// How many slides on each side of the active slide should keep a rich renderer (PDF, panorama,
+	// video, embed) mounted. Set to 0 so only the *active* slide ever holds a heavy renderer —
+	// pdfjs, three.js, vidstack-style video buffers, and YouTube/Vimeo iframes can each be
+	// substantial, and a slide that's at distance 1 (i.e. one swipe away) is rarely visible long
+	// enough to justify the cost. Adjacent rich slides mount in ~hundreds of ms when navigated to.
+	const RICH_NEIGHBOR_DISTANCE = 0;
 
 	interface DecodedCarouselItem {
 		/** The ID of the media item */
@@ -153,6 +179,9 @@
 
 		/** A base64 ThumbHash used to render a tiny blurred preview before the full image loads */
 		thumbhash: string;
+
+		/** Optional poster/thumbnail URL — used for video posters and Gallery thumbnails */
+		poster: string;
 
 		/** The source for the media — URL or srcset (images), single URL otherwise */
 		src: string;
@@ -197,10 +226,27 @@
 			offsetWidth: number;
 			offsetHeight: number;
 		}>;
+
+		/** Optional pass-throughs from the source item (gesture overrides for custom items) */
+		disable_swipe?: boolean;
+		disable_zoom?: boolean;
+
+		/** A direct ref to the underlying <video> element, when this item is a video. Used to pause on slide change. */
+		_player?: HTMLVideoElement;
+
+		/** PDF-only: multiplier for the rendered canvas resolution so a pinch-zoomed PDF page stays crisp. */
+		_pdf_pixel_density?: number;
 	}
 
 	// The sanitized/formatted list of items to display in the carousel
 	let list = $state<Array<DecodedCarouselItem>>([]);
+
+	/** Lazily-loaded rich renderer components. Each is null until its first item appears in `list`. */
+	let renderers = $state<Record<RichRendererType, Component | null>>({
+		pdf: null,
+		panorama: null,
+		video: null,
+	});
 
 	/** The container element (used to find the bounds of carousel) */
 	let viewport = $state<HTMLElement | undefined>();
@@ -271,6 +317,33 @@
 		untrack(() => initItems(trackedItems));
 	});
 	$effect(() => {
+		// Trigger lazy load of rich renderers, but only for items within RICH_NEIGHBOR_DISTANCE
+		// of the active slide. Items further away won't mount their rich renderer (see template),
+		// so there's no point downloading the heavy lib until the user navigates close to one.
+		const activeIndex = index;
+		const len = list.length;
+		const needed = new Set<RichRendererType>();
+		for (let i = 0; i < len; i++) {
+			const normalDist = Math.abs(i - activeIndex);
+			const dist = Math.min(normalDist, len - normalDist);
+			if (dist > RICH_NEIGHBOR_DISTANCE) continue;
+			const item = list[i];
+			if (!item) continue;
+			if (item.type === 'pdf') needed.add('pdf');
+			else if (item.type === 'video') needed.add('video');
+			else if (item.type === 'image' && item.panorama) needed.add('panorama');
+		}
+		untrack(() => {
+			for (const type of needed) {
+				if (!renderers[type]) {
+					loadRichRenderer(type).then((mod) => {
+						renderers[type] = mod.default;
+					});
+				}
+			}
+		});
+	});
+	$effect(() => {
 		if (slide === index || slide < 0) return;
 		untrack(() => goToSlide(slide));
 	});
@@ -285,6 +358,26 @@
 	$effect(() => {
 		if (animation !== 'none') return;
 		untrack(() => stopItemAnimation());
+	});
+
+	// Watch the active PDF page's scale and, after it settles, push a
+	// matching `pixel_density` so pdfjs re-rasterizes the canvas at a higher
+	// resolution. Debounced so it fires once per zoom gesture (pinch, wheel,
+	// double-tap) instead of for every intermediate frame.
+	let pdfPixelDensityDebounce: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		const item = list[index];
+		if (!item || item.type !== 'pdf') return;
+		const scale = item.pages[item.page]?.scale ?? 1;
+		untrack(() => {
+			clearTimeout(pdfPixelDensityDebounce);
+			pdfPixelDensityDebounce = setTimeout(() => {
+				const targetDensity = scale > 1.05 ? Math.min(4, Math.ceil(scale)) : 1;
+				if ((list[index]._pdf_pixel_density || 1) !== targetDensity) {
+					list[index]._pdf_pixel_density = targetDensity;
+				}
+			}, 220);
+		});
 	});
 
 	/** Loads the number of given items on each side of the current item */
@@ -325,7 +418,10 @@
 				height: prevItem?.height || item.height || 0,
 				ratio: prevItem?.ratio || computedRatio || 1,
 				panorama: item.panorama ?? false,
+				disable_swipe: item.disable_swipe ?? false,
+				disable_zoom: item.disable_zoom ?? false,
 				thumbhash: item.thumbhash || '',
+				poster: item.poster || '',
 				priority: item.priority ?? false,
 				shouldLoad: prevItem?.loaded || shouldLoad,
 				shouldPlay: false,
@@ -446,6 +542,15 @@
 		// Reset the position of each item in the carousel & animate to the default position/scale
 		list.forEach((item, i) => {
 			item.shouldPlay = false;
+			// Pause any video that's actively playing — `shouldPlay = false` only affects
+			// autoplay for newly-mounted videos; an already-playing <video> must be paused directly.
+			if (item._player && !item._player.paused) {
+				try {
+					item._player.pause();
+				} catch {
+					// ignore (e.g. media not yet attached)
+				}
+			}
 			const el = getElementAtIndex(index);
 			if (!el) return;
 			el.getAnimations().forEach((animation) => {
@@ -590,8 +695,12 @@
 		if (!pageContainer) return;
 		const children = Array.from(pageContainer.querySelectorAll('*:not(.preview)'));
 
-		// Reset the position of each page for this slide & animate to the default position/scale
+		// Reset the position of each page for this slide & animate to the default position/scale.
+		// `children` is `querySelectorAll('*:not(.preview)')` on the li, which for single_page
+		// rich renderers (e.g. PDF) returns 20+ nested DOM elements rather than one-per-page.
+		// Only the first `item.pages.length` entries correspond to actual page slots.
 		children.forEach((el, i) => {
+			if (!item.pages[i]) return;
 			el.getAnimations().forEach((animation) => {
 				try {
 					animation.commitStyles();
@@ -811,6 +920,20 @@
 		const parent = container.querySelector(`[data-index="${itemIndex}"]`) as HTMLElement;
 		if (!parent) return;
 		if (pageIndex === undefined) return parent as HTMLElement;
+		// PDFs render every page as an absolutely-positioned `.pdf-page` slot
+		// stacked vertically inside `.pdf-pages`. Each slot is sized to the
+		// full slide, so per-page matrices are applied directly to the slot —
+		// that keeps `clampMatrix` (which assumes one viewport-sized box) and
+		// zoom origin math correct on every page, not just the first.
+		if (list[itemIndex].type === 'pdf') {
+			const idx = pageIndex ?? list[itemIndex].page;
+			const slot = parent.querySelector(
+				`.pdf-page.single-page-slot[data-page="${idx + 1}"]`,
+			) as HTMLElement | null;
+			if (slot) return slot;
+			const pdfContainer = parent.querySelector('.pdf-container') as HTMLElement | null;
+			if (pdfContainer) return pdfContainer;
+		}
 		const children = parent.querySelectorAll('*:not(.preview)');
 		return (
 			(children[pageIndex ?? list[itemIndex].page] as HTMLElement) ||
@@ -900,8 +1023,14 @@
 		oninteraction?.();
 		const viewportX = targetX ?? viewportW / 2;
 		const viewportY = targetY ?? viewportH / 2;
+		// PDFs render all pages stacked inside a single transformed container,
+		// with the active page brought into view by translating the slide LI by
+		// -item.page * 100%. Add that translation back when converting pointer
+		// coords into the container's coordinate space so zooms anchor to the
+		// actual click location on page 2+.
+		const stackOffsetY = item.type === 'pdf' ? item.page * viewportH : 0;
 		const x = viewportX - (page.offsetX || 0);
-		const y = viewportY - (page.offsetY || 0);
+		const y = viewportY - (page.offsetY || 0) + stackOffsetY;
 
 		animatePage(index, item.page, {
 			duration: 200,
@@ -1061,9 +1190,11 @@
 			type === 'reset' ? 300 : Math.max(200, Math.min(600, viewportH * 0.35));
 		list[itemIndex] = { ...list[itemIndex], offsetY: 0, page: pageIndex };
 
+		const targetPercent = pageIndex * -100;
+
 		if (!navigator.vendor.match(/apple/i)) {
 			await animateElement(pageContainer, {
-				transform: `translate3d(0px, ${pageIndex * -100}%, 0px)`,
+				transform: `translate3d(0px, ${targetPercent}%, 0px)`,
 				easing: type === 'reset' ? 'back-out' : 'cubic-bezier(0.22, 1, 0.36, 1)',
 				duration,
 				id: `${type}_${Date.now()}`,
@@ -1087,7 +1218,7 @@
 					list[itemIndex].transform = `translate3d(0px, ${y}px, 0px)`;
 					requestAnimationFrame(nextFrame);
 				} else {
-					list[itemIndex].transform = `translate3d(0px, ${pageIndex * -100}%, 0px)`;
+					list[itemIndex].transform = `translate3d(0px, ${targetPercent}%, 0px)`;
 				}
 			}
 			requestAnimationFrame(nextFrame);
@@ -1256,6 +1387,7 @@
 		}
 
 		if (isTap || isDoubleTap) animateContainer('reset');
+
 		document.removeEventListener('pointermove', onPointerMove);
 		document.removeEventListener('pointerup', onPointerUp);
 		document.removeEventListener('pointercancel', onPointerUp);
@@ -1387,7 +1519,8 @@
 			}
 		} else if (gesture === 'pan-y-page') {
 			item.offsetY += transform.translateY;
-			const transformY = `calc(${item.page * -100}% + ${item.offsetY}px)`;
+			const baseY = item.page * -100;
+			const transformY = `calc(${baseY}% + ${item.offsetY}px)`;
 			item.transform = `translate3d(0px, ${transformY}, 0px)`;
 			if (scale > 1.01) {
 				matrix = clampMatrix(matrix.translate(transform.translateX / scale, 0), fit);
@@ -1510,14 +1643,42 @@
 		if (e.button === 2) return;
 		if (opening) return;
 
-		// Ignore clicks on the media controls (for the video elements)
-		let target = e.target as HTMLElement;
-		let ignore = false;
-		while (target && !ignore) {
-			ignore = target.tagName === 'MEDIA-CONTROLS';
-			target = target.parentElement as HTMLElement;
+		// If the active item can't be swiped OR zoomed by the carousel (panorama,
+		// embed, custom-with-both-gestures-disabled), let the inner renderer
+		// receive the pointer untouched. Svelte 5 delegates `on*` handlers to the
+		// document, so calling stopPropagation() here would prevent the inner
+		// component (e.g. Panorama's drag-to-look) from ever seeing the event.
+		const activeItem = list[index];
+		if (activeItem && !isSwipeable(activeItem) && !isScalable(activeItem)) {
+			return;
 		}
-		if (ignore) return;
+
+		// Skip carousel pointer handling for interactive elements inside the
+		// slide (video controls, buttons, sliders, links, form inputs). These
+		// need to receive the pointer themselves — preventDefault() here would
+		// block click event generation, and stopPropagation() would prevent
+		// Svelte-5 delegated handlers from firing at all.
+		let target = e.target as HTMLElement | null;
+		while (target && target !== e.currentTarget) {
+			const tag = target.tagName;
+			const role = target.getAttribute('role');
+			if (
+				tag === 'MEDIA-CONTROLS' ||
+				tag === 'BUTTON' ||
+				tag === 'A' ||
+				tag === 'INPUT' ||
+				tag === 'SELECT' ||
+				tag === 'TEXTAREA' ||
+				tag === 'LABEL' ||
+				role === 'slider' ||
+				role === 'button' ||
+				role === 'menuitem' ||
+				target.isContentEditable
+			) {
+				return;
+			}
+			target = target.parentElement;
+		}
 
 		e.preventDefault();
 		e.stopPropagation();
@@ -1573,8 +1734,13 @@
 		viewportX = boundingRect.left;
 		viewportY = boundingRect.top;
 		const scale = pageData.scale;
+		// See zoomIn() for the PDF stack-offset rationale: PDF pages are
+		// stacked in a single transformed container; the LI translation that
+		// brings the active page into view must be added back to map pointer
+		// coords into the container's coordinate space.
+		const stackOffsetY = item.type === 'pdf' ? item.page * viewportH : 0;
 		const originX = e.clientX - viewportX - pageData.offsetX;
-		const originY = e.clientY - viewportY - pageData.offsetY;
+		const originY = e.clientY - viewportY - pageData.offsetY + stackOffsetY;
 		const scrollScale = 1 - dy * 0.03;
 		let targetScale = Math.min(6, scale * scrollScale);
 		if (scrollScale < 1 && scale <= 1) {
@@ -1811,16 +1977,21 @@
 		{#each list as item, i (item.key)}
 			{@const normalDistance = Math.abs(i - index)}
 			{@const distance = Math.min(normalDistance, list.length - normalDistance)}
+			{@const richMounted =
+				distance <= RICH_NEIGHBOR_DISTANCE ||
+				(distance === 1 && (transitioning || dragging || swiping))}
 			{#if distance === 0 || (!opening && distance <= 5) || (item.shouldLoad && distance <= 20)}
 				<li
 					class="item"
 					class:active={i === index}
 					data-index={i}
 					aria-label="{i + 1} of {list.length}"
-					inert={i !== index || (!item.loaded && item.type !== 'image') || null}
+					inert={i !== index ||
+						(!item.loaded && item.type !== 'image' && item.type !== 'custom') ||
+						null}
 					class:pdf={item.type === 'pdf'}
 					style:transform={item.transform}
-					style:perspective-origin={item.pages?.length > 1
+					style:perspective-origin={item.pages?.length > 1 && item.type !== 'pdf'
 						? `50% ${50 + item.page * 100}%`
 						: null}
 					style:grid-column-start={((list.length + i - index + offset) % list.length) + 1}>
@@ -1836,7 +2007,17 @@
 								aria-hidden="true"
 								class="preview" />
 						{/if}
-						{#if item.src}
+						{#if item.type === 'custom'}
+							{#if custom}
+								{@render custom({
+									item: item as CarouselItem,
+									onload: () => item.loaded || (list[i].loaded = true),
+									onerror: () => {},
+									active: i === index,
+									gesture_disabled: !!item.disable_swipe,
+								})}
+							{/if}
+						{:else if item.src}
 							{#if item.type === 'image'}
 								{#if !item.panorama}
 									<img
@@ -1850,42 +2031,67 @@
 										loading={item.priority ? 'eager' : 'lazy'}
 										fetchpriority={item.priority ? 'high' : undefined}
 										onload={(e) => onImageLoadEvent(i, e)} />
-								{:else if panorama}
-									{@render panorama({
-										src: pickLargestSrc(item.src),
-										inline,
-										onload: () => item.loaded || (list[index].loaded = true),
-									})}
+								{:else if !richMounted}
+									<div class="rich-placeholder" aria-hidden="true"></div>
+								{:else if renderers.panorama}
+									{@const Panorama = renderers.panorama}
+									<Panorama
+										src={pickLargestSrc(item.src)}
+										showControls={false}
+										interactive={!inline}
+										onload={() => item.loaded || (list[i].loaded = true)} />
+								{:else}
+									<div class="rich-loading" aria-label="Loading panorama"><span class="spinner"></span></div>
 								{/if}
-							{:else if item.type === 'pdf' && pdf}
-								{@render pdf({
-									src: pickLargestSrc(item.src),
-									page_bounds: item.pages.map((_, j) => ({
-										width: item.pages[j].resolutionW,
-										height: item.pages[j].resolutionH,
-									})),
-									disable_render: dragging || transitioning,
-									onload: (e) => onPdfLoadEvent(i, e.num_pages),
-								})}
+							{:else if item.type === 'pdf'}
+								{#if richMounted && renderers.pdf}
+									{@const Pdf = renderers.pdf}
+									<Pdf
+										src={pickLargestSrc(item.src)}
+										page={item.page + 1}
+										showToolbar={false}
+										single_page={true}
+										fit="page"
+										pixel_density={item._pdf_pixel_density || 1}
+										onload={(detail: { total_pages: number }) =>
+											onPdfLoadEvent(i, detail.total_pages)}
+										onpagechange={(detail: { page: number; total_pages: number }) => {
+											if (detail.page - 1 !== item.page) {
+												goToPage(i, detail.page - 1);
+											}
+										}} />
+								{/if}
 							{:else if item.type === 'video'}
-								{@const videoSrc = pickLargestSrc(item.src)}
-								<Video
-									poster={item.thumbhash ? decodeThumbHash(item.thumbhash) : undefined}
-									src={videoSrc}
-									autoplay={i === index ? !!item.shouldPlay : false}
-									onready={() => item.loaded || (list[i].loaded = true)} />
+								{#if !richMounted}
+									<div class="rich-placeholder" aria-hidden="true"></div>
+								{:else if renderers.video}
+									{@const Video = renderers.video}
+									<Video
+										src={pickLargestSrc(item.src)}
+										poster={item.poster ??
+											(item.thumbhash ? decodeThumbHash(item.thumbhash) : undefined)}
+										autoplay={i === index && !!item.shouldPlay}
+										bind:player={item._player}
+										onready={() => item.loaded || (list[i].loaded = true)} />
+								{:else}
+									<div class="rich-loading" aria-label="Loading video"><span class="spinner"></span></div>
+								{/if}
 							{:else if item.type === 'embed'}
-								{@const embedSrc = pickLargestSrc(item.src)}
-								<iframe
-									class="embed"
-									class:video={embedSrc.match(/^(https?:\/\/)?(www\.)?(youtu.?be|vimeo)/)}
-									title={item.name}
-									src={embedSrc}
-									class:show={item.loaded}
-									allowfullscreen
-									allow="fullscreen; accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; magnetometer; xr-spatial-tracking;"
-									onload={() => item.loaded || (list[index].loaded = true)}>
-								</iframe>
+								{#if !richMounted}
+									<div class="rich-placeholder" aria-hidden="true"></div>
+								{:else}
+									{@const embedSrc = normalizeEmbedSrc(pickLargestSrc(item.src), i === index)}
+									<iframe
+										class="embed"
+										class:video={isVideoEmbed(embedSrc)}
+										title={item.name}
+										src={embedSrc}
+										class:show={item.loaded}
+										allowfullscreen
+										allow="fullscreen; accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; magnetometer; xr-spatial-tracking;"
+										onload={() => item.loaded || (list[i].loaded = true)}>
+									</iframe>
+								{/if}
 							{/if}
 						{/if}
 					{/if}
@@ -2075,6 +2281,34 @@
 			margin-top: var(--carousel-padding-top, 0px);
 			margin-bottom: var(--carousel-padding-bottom, 0px);
 			cursor: pointer;
+		}
+		> .rich-loading {
+			width: 100%;
+			height: 100%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			pointer-events: none;
+			> .spinner {
+				width: 36px;
+				height: 36px;
+				border-radius: 50%;
+				border: 3px solid currentColor;
+				border-top-color: transparent;
+				opacity: 0.6;
+				animation: carousel-spin 0.9s linear infinite;
+			}
+		}
+		> .rich-placeholder {
+			width: 100%;
+			height: 100%;
+			pointer-events: none;
+		}
+	}
+
+	@keyframes carousel-spin {
+		to {
+			transform: rotate(360deg);
 		}
 	}
 </style>

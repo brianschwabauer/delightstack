@@ -459,21 +459,56 @@
 	/* ── Control actions ──────────────────────────────────────── */
 
 	function zoomIn() {
-		current_fov = Math.max(FOV_MIN, current_fov - 10);
-		if (camera) {
-			camera.fov = current_fov;
-			camera.updateProjectionMatrix();
-		}
-		emitViewChange();
+		animateFovTo(Math.max(FOV_MIN, current_fov - 15));
 	}
 
 	function zoomOut() {
-		current_fov = Math.min(FOV_MAX, current_fov + 10);
-		if (camera) {
-			camera.fov = current_fov;
-			camera.updateProjectionMatrix();
-		}
-		emitViewChange();
+		animateFovTo(Math.min(FOV_MAX, current_fov + 15));
+	}
+
+	/**
+	 * Double-click / double-tap toggles between the initial `fov` and a
+	 * zoomed-in fov. If the user has already zoomed in via wheel/pinch,
+	 * the double-click resets to initial. The change is animated over
+	 * ~300ms to give physical-feeling zoom.
+	 */
+	let fov_tween_raf = 0;
+	function animateFovTo(target: number, duration_ms = 300) {
+		if (fov_tween_raf) cancelAnimationFrame(fov_tween_raf);
+		const start = current_fov;
+		const delta = target - start;
+		const t0 = performance.now();
+		const step = (now: number) => {
+			const t = Math.min(1, (now - t0) / duration_ms);
+			// easeOutCubic — fast start, gentle settle (feels like physical inertia)
+			const eased = 1 - Math.pow(1 - t, 3);
+			current_fov = start + delta * eased;
+			if (camera) {
+				camera.fov = current_fov;
+				camera.updateProjectionMatrix();
+			}
+			emitViewChange();
+			if (t < 1) {
+				fov_tween_raf = requestAnimationFrame(step);
+			} else {
+				fov_tween_raf = 0;
+			}
+		};
+		fov_tween_raf = requestAnimationFrame(step);
+	}
+
+	function handleDoubleClick(e: MouseEvent) {
+		if (!interactive) return;
+		e.preventDefault();
+		// Zoom in to roughly 1/3 of initial — closer than half feels noticeably
+		// punchy without crossing the FOV_MIN boundary (30°) for typical
+		// initial fovs (40-90°).
+		const zoomed_fov = Math.max(FOV_MIN, fov * 0.35);
+		// Consider "zoomed in" if current is meaningfully below initial.
+		const is_zoomed_in = current_fov < fov - 0.5;
+		const target = is_zoomed_in ? fov : zoomed_fov;
+		pauseAutoRotate();
+		animateFovTo(target);
 	}
 
 	function resetView() {
@@ -831,14 +866,15 @@
 		};
 	});
 
-	// React to src changes after initial load
+	// React to src changes after initial load. Use untrack inside so this
+	// effect only re-fires when src itself changes — without it, the read of
+	// `loaded` after init becoming true would cause the effect to refire and
+	// reload the same texture (visible as a second loading spinner flash).
 	$effect(() => {
-		// Track src
 		void src;
-
-		if (!loaded || !three || !material) return;
-
 		untrack(() => {
+			if (!loaded || !three || !material) return;
+
 			loading = true;
 			error_state = false;
 
@@ -949,17 +985,17 @@
 			onpointermove={handlePointerMove}
 			onpointerup={handlePointerUp}
 			onpointercancel={handlePointerUp}
+			ondblclick={handleDoubleClick}
 			onwheel={handleWheel}
 			ontouchstart={handleTouchStart}
 			ontouchmove={handleTouchMove}
 			ontouchend={handleTouchEnd}></canvas>
 
-		<!-- Loading overlay -->
-		{#if loading}
-			<div class="panorama-loading">
-				<div class="panorama-spinner"></div>
-			</div>
-		{/if}
+		<!-- Loading overlay: kept mounted so we can fade it out after the
+		     texture is in place, hiding the dark/empty WebGL canvas during load. -->
+		<div class="panorama-loading" class:is-loaded={!loading && loaded}>
+			<div class="panorama-spinner"></div>
+		</div>
 
 		<!-- Hotspots -->
 		{#each hotspots as hotspot, i}
@@ -1177,10 +1213,23 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: light-dark(
-			color-mix(in oklch, var(--color-surface, #fff) 80%, transparent),
-			color-mix(in oklch, var(--color-surface, #111) 80%, transparent)
-		);
+		/* Opaque while loading so the empty WebGL canvas (which clears to
+		   black) doesn't show through and make the panorama look "dark"
+		   the first time it appears. */
+		background: light-dark(var(--color-surface, #fff), var(--color-surface, #111));
+		opacity: 1;
+		transition:
+			opacity 220ms ease,
+			visibility 0s linear 0s;
+	}
+
+	.panorama-loading.is-loaded {
+		opacity: 0;
+		visibility: hidden;
+		pointer-events: none;
+		transition:
+			opacity 220ms ease,
+			visibility 0s linear 220ms;
 	}
 
 	.panorama-spinner {

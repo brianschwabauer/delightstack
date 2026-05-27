@@ -63,7 +63,12 @@
 	import Portal from '../actions/Portal.svelte';
 	import { contextMenu } from '../actions/ContextMenu.svelte';
 	import Carousel from './Carousel.svelte';
-	import { decodeThumbHash, normalizeCarouselItem, pickLargestSrc } from './carousel';
+	import {
+		decodeThumbHash,
+		getItemThumbnailSrc,
+		normalizeCarouselItem,
+		pickLargestSrc,
+	} from './carousel';
 
 	let {
 		/**
@@ -88,9 +93,7 @@
 		radius = 'small' as GalleryRadius,
 
 		/** The currently displayed item index. -1 closes the modal/slider. */
-		slide = $bindable(
-			display === 'slider' || display === 'slideshow' ? 0 : -1,
-		) as number,
+		slide = $bindable(display === 'slider' || display === 'slideshow' ? 0 : -1) as number,
 
 		/** The object-fit attribute for all items in the gallery */
 		fit = 'contain' as 'cover' | 'contain',
@@ -148,28 +151,22 @@
 		actions = [] as GalleryItemAction[][],
 
 		/**
-		 * Snippet used to render PDF items in the carousel. Pass-through to Carousel.
-		 * Omit if you don't use PDFs (avoids loading pdfjs-dist).
+		 * Snippet used to render `type: 'custom'` items in the carousel.
+		 * Pass-through to Carousel. See Carousel's `custom` prop for the
+		 * full signature.
 		 */
-		pdf = undefined as
+		custom = undefined as
 			| Snippet<
 					[
 						{
-							src: string;
-							page_bounds: Array<{ width: number; height: number }>;
-							disable_render: boolean;
-							onload: (detail: { num_pages: number }) => void;
+							item: CarouselItem;
+							onload: () => void;
+							onerror: (err: unknown) => void;
+							active: boolean;
+							gesture_disabled: boolean;
 						},
 					]
 			  >
-			| undefined,
-
-		/**
-		 * Snippet used to render panorama items in the carousel. Pass-through to Carousel.
-		 * Omit if you don't use panoramas (avoids loading three.js).
-		 */
-		panorama = undefined as
-			| Snippet<[{ src: string; inline: boolean; onload: () => void }]>
 			| undefined,
 
 		/**
@@ -231,8 +228,7 @@
 		display === 'slider' || display === 'slideshow' || slide >= 0,
 	);
 	const isModal = $derived(
-		fullscreenActive ||
-			(display !== 'slider' && display !== 'slideshow' && slide >= 0),
+		fullscreenActive || (display !== 'slider' && display !== 'slideshow' && slide >= 0),
 	);
 	$effect(() => {
 		if (typeof window !== 'undefined') {
@@ -247,8 +243,7 @@
 	// Prevent the modal from automatically being active when switching between display modes
 	let previousDisplay = undefined as typeof display | undefined;
 	$effect.pre(() => {
-		const wasSliderLike =
-			previousDisplay === 'slider' || previousDisplay === 'slideshow';
+		const wasSliderLike = previousDisplay === 'slider' || previousDisplay === 'slideshow';
 		const isSliderLike = display === 'slider' || display === 'slideshow';
 		if (wasSliderLike) {
 			if (!isSliderLike) slide = -1;
@@ -621,6 +616,8 @@
 {#snippet itemThumbnail(item: (typeof list)[number], sizesFallback: string)}
 	{@const key = thumbnailKey(item)}
 	{@const eager = !!item.priority}
+	{@const isImage = !item.type || item.type === 'image'}
+	{@const thumbSrc = getItemThumbnailSrc(item)}
 	{#if item.thumbhash}
 		<img
 			class="thumbnail-blur"
@@ -629,14 +626,14 @@
 			aria-hidden="true"
 			draggable="false" />
 	{/if}
-	{#if item.src}
+	{#if thumbSrc}
 		<img
 			class="thumbnail-img"
 			class:fading={fadingKeys.has(key)}
 			class:no-blur={!item.thumbhash}
-			src={pickLargestSrc(item.src)}
-			srcset={item.src}
-			sizes={eager ? sizesFallback : `auto, ${sizesFallback}`}
+			src={thumbSrc}
+			srcset={isImage ? item.src : undefined}
+			sizes={isImage ? (eager ? sizesFallback : `auto, ${sizesFallback}`) : undefined}
 			alt={item.alt ?? item.name ?? ''}
 			loading={eager ? 'eager' : 'lazy'}
 			fetchpriority={eager ? 'high' : undefined}
@@ -648,6 +645,11 @@
 					fadingKeys.add(key);
 				}
 			}} />
+	{:else}
+		<!-- No thumbnail available — render a styled placeholder so the type-icon
+		     overlay has a background and the layout slot still has its expected
+		     aspect ratio. -->
+		<div class="thumbnail-placeholder" aria-hidden="true"></div>
 	{/if}
 {/snippet}
 
@@ -823,47 +825,46 @@
 		out:fade={{ duration: 150 }}
 		style:opacity={1 - dismissing}>
 		{#if num_pages > 1}
-			{@const maxDisplayPages = 5}
-			{@const numDisplayPages = Math.min(num_pages, maxDisplayPages)}
-			{@const offset = Math.max(0, Math.min(num_pages - numDisplayPages, page - 2))}
 			<nav class="pages" transition:scale|global={{ duration: 300, easing: backOut }}>
-				{#if num_pages > maxDisplayPages && offset >= 1}
-					<Button
-						icon
-						transparent
-						dense
-						size="0"
-						onclick={() => (page = 0)}
-						tooltip="First Page">
-						<span class="visuallyhidden">First Page</span>
-						{offset <= 1 ? 1 : '...'}
-					</Button>
-				{/if}
-				{#each Array(numDisplayPages) as _, i (i)}
-					<Button
-						icon
-						transparent
-						dense
-						size="0"
-						active={i + offset === page}
-						onclick={() => (page = i + offset)}
-						tooltip={`Page ${i + offset + 1}`}>
-						<span class="visuallyhidden">{`Page ${i + offset + 1}`}</span>
-						{i + offset + 1}
-					</Button>
-				{/each}
-				{#if num_pages > maxDisplayPages && offset + numDisplayPages <= num_pages - 1}
-					<Button
-						icon
-						transparent
-						dense
-						size="0"
-						onclick={() => (page = num_pages - 1)}
-						tooltip="Last Page">
-						<span class="visuallyhidden">Last Page</span>
-						{offset + numDisplayPages >= num_pages - 1 ? num_pages : '...'}
-					</Button>
-				{/if}
+				<Button
+					icon
+					transparent
+					size="0"
+					disabled={page <= 0}
+					onclick={() => (page = Math.max(0, page - 1))}
+					tooltip="Previous page">
+					<span class="visuallyhidden">Previous page</span>
+					<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M10 3L5 8L10 13"
+							stroke="currentColor"
+							stroke-width="1.8"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
+					</svg>
+				</Button>
+				<span class="page-counter" aria-live="polite">
+					<span class="page-current">{page + 1}</span>
+					<span class="page-separator">/</span>
+					<span class="page-total">{num_pages}</span>
+				</span>
+				<Button
+					icon
+					transparent
+					size="0"
+					disabled={page >= num_pages - 1}
+					onclick={() => (page = Math.min(num_pages - 1, page + 1))}
+					tooltip="Next page">
+					<span class="visuallyhidden">Next page</span>
+					<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						<path
+							d="M6 3L11 8L6 13"
+							stroke="currentColor"
+							stroke-width="1.8"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
+					</svg>
+				</Button>
 			</nav>
 		{/if}
 		{#if isModal}
@@ -1012,8 +1013,7 @@
 				disable_entry_exit_animation={display === 'slider' || display === 'slideshow'}
 				animation_target={animationTarget}
 				{fit}
-				{pdf}
-				{panorama}
+				{custom}
 				oninteraction={() => pause()}
 				onclose={() => {
 					if (fullscreenActive) return closeFullscreen();
@@ -1097,7 +1097,8 @@
 			overflow: hidden;
 		}
 		.thumbnail-blur,
-		.thumbnail-img {
+		.thumbnail-img,
+		.thumbnail-placeholder {
 			position: absolute;
 			inset: 0;
 			width: 100%;
@@ -1111,6 +1112,14 @@
 			transform: scale(1.2);
 			pointer-events: none;
 			user-select: none;
+		}
+		.thumbnail-placeholder {
+			z-index: 0;
+			background: linear-gradient(
+				135deg,
+				light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04)),
+				light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1))
+			);
 		}
 		.thumbnail-img {
 			z-index: 1;
@@ -1280,13 +1289,52 @@
 			position: absolute;
 			z-index: 2;
 			display: flex;
-			color: var(--color-text, var(--text));
-			background-color: var(--color-surface, var(--bg));
+			align-items: center;
+			gap: 0.125rem;
+			padding-inline: 0.25rem;
+			/* Force a high-contrast white pill so the page numbers are
+			   readable on top of any media (dark images, videos, PDFs,
+			   panoramas) inside a modal. The inherited button colors
+			   pick this up via --color-text-high / --color-text. */
+			color: #1e293b;
+			--color-text: #1e293b;
+			--color-text-high: #0f172a;
+			--color-action: #3b82f6;
+			background-color: #ffffff;
 			border-radius: 9999px;
-			box-shadow: var(--shadow-2);
+			box-shadow:
+				0 4px 12px rgb(0 0 0 / 0.18),
+				0 1px 3px rgb(0 0 0 / 0.12);
 			border: none;
 			outline: none;
-			font-weight: bold;
+			font-weight: 500;
+
+			.page-counter {
+				display: inline-flex;
+				align-items: baseline;
+				gap: 0.25rem;
+				min-width: 4rem;
+				justify-content: center;
+				padding-inline: 0.5rem;
+				font-variant-numeric: tabular-nums;
+				font-size: 1.35rem;
+				line-height: 1;
+				user-select: none;
+			}
+
+			.page-separator {
+				opacity: 0.4;
+				font-weight: 400;
+			}
+
+			/* The chevron Buttons inherit `--color-text` from the pill. The
+			   `disabled` attribute lives on the inner <button> rendered by
+			   `Button.svelte`, so dim the wrapper via :has() — the transparent
+			   variant has no background of its own to dim otherwise. */
+			:global(.button:has(> button[disabled])) {
+				opacity: 0.3;
+				cursor: default;
+			}
 		}
 
 		.pagination {
@@ -2044,7 +2092,8 @@
 					border-radius: calc(var(--radius) - 0.5rem);
 					overflow: hidden;
 					.thumbnail-blur,
-					.thumbnail-img {
+					.thumbnail-img,
+					.thumbnail-placeholder {
 						position: absolute;
 						inset: 2px;
 						width: calc(100% - 4px);
@@ -2060,6 +2109,10 @@
 						transform: scale(1.2);
 						pointer-events: none;
 						user-select: none;
+					}
+					.thumbnail-placeholder {
+						z-index: 0;
+						background: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
 					}
 					.thumbnail-img {
 						z-index: 1;

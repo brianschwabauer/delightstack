@@ -7,6 +7,8 @@
 </script>
 
 <script lang="ts">
+	import { untrack } from 'svelte';
+
 	const propId = $props.id();
 
 	let {
@@ -39,6 +41,24 @@
 
 		/** Container height */
 		height = '600px',
+
+		/**
+		 * When true, only the current `page` is rendered (others hidden), the
+		 * internal scroll container is disabled, and the page is centered to
+		 * fill the container. The toolbar is typically also hidden via
+		 * `showToolbar={false}`. Used when an external orchestrator (e.g. the
+		 * Carousel component) drives page navigation.
+		 */
+		single_page = false,
+
+		/**
+		 * Multiplier applied to the rendered canvas resolution without changing
+		 * the displayed CSS size. Lets an external orchestrator (Carousel pinch
+		 * zoom) push more pixels into the canvas so a magnified page stays
+		 * crisp. Defaults to 1; bumping to 2 quadruples the rasterized pixel
+		 * count of each rendered page.
+		 */
+		pixel_density = 1,
 
 		/** Show loading skeleton */
 		skeleton = false,
@@ -77,6 +97,8 @@
 		searchable?: boolean;
 		annotatable?: boolean;
 		height?: string;
+		single_page?: boolean;
+		pixel_density?: number;
 		skeleton?: boolean;
 		id?: string;
 		class?: string;
@@ -133,6 +155,12 @@
 	// Track which pages are rendered
 	let rendered_pages = $state(new Set<number>());
 
+	// Track in-flight render tasks per page so rapid page switches don't
+	// fire concurrent renderPage() calls against the same canvas — that race
+	// causes `canvas.width = ...` to clear pixels in the middle of an
+	// already-running pdfjs render, making the page momentarily transparent.
+	const rendering_pages = new Map<number, Promise<void>>();
+
 	// Track the current fit mode for cycling
 	let current_fit = $state(fit);
 
@@ -158,9 +186,22 @@
 		if (pdfjs_lib) return pdfjs_lib;
 		// @ts-ignore — pdfjs-dist is an optional peer dependency
 		const lib = await import('pdfjs-dist');
-		(lib as Record<string, unknown>).GlobalWorkerOptions = (lib as Record<string, unknown>).GlobalWorkerOptions || {};
-		((lib as Record<string, Record<string, unknown>>).GlobalWorkerOptions).workerSrc =
-			`https://unpkg.com/pdfjs-dist@${(lib as Record<string, string>).version}/build/pdf.worker.min.mjs`;
+		const version = (lib as { version: string }).version;
+		// pdfjs-dist >= 5 auto-initializes GlobalWorkerOptions.workerSrc to a
+		// placeholder relative path ("./pdf.worker.mjs") at import time, which
+		// 404s in any non-bundled context. Always set it to a known-good CDN URL
+		// for our version. (Consumers who want a different worker can set it
+		// themselves before mounting <PDF> — we only overwrite the placeholder.)
+		const workerOptions = (lib as { GlobalWorkerOptions: { workerSrc: string } })
+			.GlobalWorkerOptions;
+		const cdnUrl = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
+		const isPlaceholder =
+			!workerOptions.workerSrc ||
+			workerOptions.workerSrc === './pdf.worker.mjs' ||
+			workerOptions.workerSrc === 'pdf.worker.mjs';
+		if (workerOptions && isPlaceholder) {
+			workerOptions.workerSrc = cdnUrl;
+		}
 		pdfjs_lib = lib;
 		return lib;
 	}
@@ -208,8 +249,8 @@
 			loading = false;
 			onload?.({ total_pages });
 
-			// Extract text for search
-			if (searchable) {
+			// Extract text for search (skipped in single_page mode where there's no search UI)
+			if (searchable && !single_page) {
 				extractAllText(typedDoc);
 			}
 		} catch (err) {
@@ -242,7 +283,23 @@
 
 	async function renderPage(page_num: number) {
 		if (!pdf_doc || rendered_pages.has(page_num)) return;
+		// If a render for this page is already in flight, let it finish —
+		// reissuing now would clear the canvas mid-paint and race the first
+		// render's `pdfjs.render(...).promise` against a fresh one.
+		const inFlight = rendering_pages.get(page_num);
+		if (inFlight) return inFlight;
 
+		const task = renderPageImpl(page_num);
+		rendering_pages.set(page_num, task);
+		try {
+			await task;
+		} finally {
+			rendering_pages.delete(page_num);
+		}
+	}
+
+	async function renderPageImpl(page_num: number) {
+		if (!pdf_doc) return;
 		const typedDoc = pdf_doc as { getPage: (n: number) => Promise<unknown> };
 		const pg = await typedDoc.getPage(page_num);
 		const typedPage = pg as {
@@ -251,33 +308,47 @@
 			getTextContent: () => Promise<{ items: { str?: string; transform?: number[]; width?: number; height?: number }[] }>;
 		};
 
-		const viewport = typedPage.getViewport({ scale: zoom, rotation });
+		// Display viewport drives the CSS size; the render viewport multiplies
+		// `pixel_density` so the canvas holds extra pixels for crisp display
+		// when an external orchestrator scales the canvas up (e.g. pinch zoom).
+		const display_viewport = typedPage.getViewport({ scale: zoom, rotation });
+		const effective_density = Math.max(1, pixel_density || 1);
+		const render_viewport =
+			effective_density === 1
+				? display_viewport
+				: typedPage.getViewport({ scale: zoom * effective_density, rotation });
 		const container_el = page_elements[page_num - 1];
 		if (!container_el) return;
 
-		// Canvas
-		let canvas = container_el.querySelector('canvas');
-		if (!canvas) {
-			canvas = document.createElement('canvas');
-			canvas.classList.add('pdf-page-canvas');
-			container_el.insertBefore(canvas, container_el.firstChild);
-		}
-		canvas.width = viewport.width;
-		canvas.height = viewport.height;
-		canvas.style.width = `${viewport.width}px`;
-		canvas.style.height = `${viewport.height}px`;
+		// Render into an offscreen canvas so the currently-displayed canvas
+		// (if any) keeps its pixels until the new draw is complete. Then swap
+		// the offscreen into the DOM atomically. Without this, setting
+		// `canvas.width` on an in-DOM canvas clears it to transparent and the
+		// page background appears to "vanish" until pdfjs finishes painting.
+		const next_canvas = document.createElement('canvas');
+		next_canvas.classList.add('pdf-page-canvas');
+		next_canvas.width = render_viewport.width;
+		next_canvas.height = render_viewport.height;
+		next_canvas.style.width = `${display_viewport.width}px`;
+		next_canvas.style.height = `${display_viewport.height}px`;
 
-		const ctx = canvas.getContext('2d');
+		const ctx = next_canvas.getContext('2d');
 		if (!ctx) return;
 
 		try {
-			await typedPage.render({ canvasContext: ctx, viewport }).promise;
+			await typedPage.render({ canvasContext: ctx, viewport: render_viewport }).promise;
 		} catch {
 			// render cancelled or failed, ignore
 			return;
 		}
 
-		// Text layer
+		// Swap: remove the old canvas (if any), insert the freshly painted one.
+		const old_canvas = container_el.querySelector('canvas');
+		if (old_canvas) old_canvas.remove();
+		container_el.insertBefore(next_canvas, container_el.firstChild);
+
+		// Text layer (anchored to display size so its hit targets stay aligned
+		// with the visible canvas, not the higher-resolution backing store).
 		let text_layer = container_el.querySelector('.pdf-text-layer') as HTMLDivElement | null;
 		if (!text_layer) {
 			text_layer = document.createElement('div');
@@ -285,8 +356,8 @@
 			container_el.appendChild(text_layer);
 		}
 		text_layer.innerHTML = '';
-		text_layer.style.width = `${viewport.width}px`;
-		text_layer.style.height = `${viewport.height}px`;
+		text_layer.style.width = `${display_viewport.width}px`;
+		text_layer.style.height = `${display_viewport.height}px`;
 
 		try {
 			const content = await typedPage.getTextContent();
@@ -296,7 +367,7 @@
 				span.textContent = item.str;
 				if (item.transform) {
 					const tx = item.transform[4] * zoom;
-					const ty = viewport.height - item.transform[5] * zoom;
+					const ty = display_viewport.height - item.transform[5] * zoom;
 					const font_size = Math.abs(item.transform[3]) * zoom;
 					span.style.position = 'absolute';
 					span.style.left = `${tx}px`;
@@ -311,22 +382,29 @@
 			// text extraction failed, ignore
 		}
 
-		// Update container size
-		container_el.style.width = `${viewport.width}px`;
-		container_el.style.height = `${viewport.height}px`;
+		// Update container size — skipped in single_page mode where the slot
+		// is sized to fill the slide and the canvas is centered inside it.
+		if (!single_page) {
+			container_el.style.width = `${display_viewport.width}px`;
+			container_el.style.height = `${display_viewport.height}px`;
+		}
 
 		rendered_pages = new Set([...rendered_pages, page_num]);
 	}
 
 	function clearRenderedPages() {
 		rendered_pages = new Set();
-		for (const el of page_elements) {
-			if (!el) continue;
-			const canvas = el.querySelector('canvas');
-			if (canvas) canvas.remove();
-			const text_layer = el.querySelector('.pdf-text-layer');
-			if (text_layer) text_layer.remove();
-		}
+		// Drop the in-flight render registrations too — any pending render
+		// will still complete and swap its (possibly stale) canvas into the
+		// DOM, but the next render call for that page will not be short-
+		// circuited by a stale promise.
+		rendering_pages.clear();
+		// Note: deliberately DO NOT remove the existing <canvas> nodes here.
+		// renderPage paints into an offscreen canvas and only swaps it into
+		// the DOM once the new render is complete, so leaving the old one
+		// in place prevents the page from going transparent during the
+		// re-render (which is what happens when zoom or pixel_density
+		// changes while the user is mid-interaction).
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -335,6 +413,9 @@
 
 	function setupObserver() {
 		if (!pages_container || typeof IntersectionObserver === 'undefined') return;
+		// In single_page mode the consumer drives the page index externally,
+		// so we skip the observer (it would fight the external `page` prop).
+		if (single_page) return;
 
 		const observer = new IntersectionObserver(
 			(entries) => {
@@ -394,7 +475,15 @@
 		const el = page_elements[page_num - 1];
 		if (!el || !pages_container) return;
 		programmatic_scroll = true;
-		el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		// Scroll the pages container directly. Compute the offset using
+		// bounding rects so it works regardless of which ancestor is the
+		// element's offsetParent — `el.scrollIntoView` walks all scrollable
+		// ancestors (including the window), which can result in the outer page
+		// scrolling instead of the PDF viewer when both are scrollable.
+		const elRect = el.getBoundingClientRect();
+		const containerRect = pages_container.getBoundingClientRect();
+		const target = pages_container.scrollTop + (elRect.top - containerRect.top);
+		pages_container.scrollTo({ top: target, behavior: 'smooth' });
 		setTimeout(() => {
 			programmatic_scroll = false;
 		}, 500);
@@ -420,9 +509,13 @@
 	/* ------------------------------------------------------------------ */
 
 	function setZoom(new_zoom: number) {
-		zoom = Math.max(0.25, Math.min(4, new_zoom));
+		const clamped = Math.max(0.25, Math.min(4, new_zoom));
+		// Tolerate floating-point drift so applyFit() — which is called on
+		// every page change — doesn't wipe the rendered canvases when the
+		// computed fit zoom is "the same" but differs by a hair.
+		if (Math.abs(clamped - zoom) < 0.001) return;
+		zoom = clamped;
 		clearRenderedPages();
-		// Re-render visible pages after re-layout
 		requestAnimationFrame(() => {
 			renderVisiblePages();
 		});
@@ -458,21 +551,26 @@
 	function applyFit() {
 		if (!pages_container || page_infos.length === 0) return;
 		const container_rect = pages_container.getBoundingClientRect();
-		const first_page = page_infos[0];
-		if (!first_page) return;
+		// In single_page mode the active page may be a different size than page 1.
+		const ref_page = single_page
+			? page_infos[Math.max(0, Math.min(page_infos.length - 1, page - 1))]
+			: page_infos[0];
+		if (!ref_page) return;
 
-		const padding = 32; // 1rem on each side
+		// In single_page mode the parent (e.g. Carousel) handles its own framing;
+		// don't reserve internal padding.
+		const padding = single_page ? 0 : 32;
 		const available_width = container_rect.width - padding;
 		const available_height = container_rect.height - padding;
 
 		if (current_fit === 'width') {
-			setZoom(available_width / first_page.width);
+			setZoom(available_width / ref_page.width);
 		} else if (current_fit === 'height') {
-			setZoom(available_height / first_page.height);
+			setZoom(available_height / ref_page.height);
 		} else {
 			// 'page' - fit the whole page
-			const scale_w = available_width / first_page.width;
-			const scale_h = available_height / first_page.height;
+			const scale_w = available_width / ref_page.width;
+			const scale_h = available_height / ref_page.height;
 			setZoom(Math.min(scale_w, scale_h));
 		}
 	}
@@ -483,6 +581,16 @@
 
 	function renderVisiblePages() {
 		if (!pages_container) return;
+		// In single_page mode, render the active page plus its immediate
+		// neighbors so that a vertical swipe in the parent Carousel can
+		// reveal the next/prev page mid-gesture without a flash of empty
+		// space. Distant pages stay unrendered to keep memory in check.
+		if (single_page) {
+			renderPage(page);
+			if (page > 1) renderPage(page - 1);
+			if (page < total_pages) renderPage(page + 1);
+			return;
+		}
 		const rect = pages_container.getBoundingClientRect();
 		for (let i = 0; i < page_elements.length; i++) {
 			const el = page_elements[i];
@@ -718,14 +826,20 @@
 		}
 	});
 
-	// Re-render when zoom/rotation changes
+	// Re-render when zoom/rotation/pixel_density changes — wrap body in
+	// untrack so `clearRenderedPages` (which iterates `page_elements`
+	// reactively) doesn't pull every page_elements mutation into this
+	// effect's dependency set.
 	$effect(() => {
 		void zoom;
 		void rotation;
-		if (total_pages > 0) {
-			clearRenderedPages();
-			requestAnimationFrame(() => renderVisiblePages());
-		}
+		void pixel_density;
+		untrack(() => {
+			if (total_pages > 0) {
+				clearRenderedPages();
+				requestAnimationFrame(() => renderVisiblePages());
+			}
+		});
 	});
 
 	// Sync page input value when page prop changes externally
@@ -733,12 +847,33 @@
 		page_input_value = String(page);
 	});
 
-	// Scroll to page when page changes externally
+	// React to external page changes — fire ONLY when `page` itself changes.
+	// applyFit/scrollToPage transitively read other reactive state (page_infos,
+	// page_elements, etc.) which mutate during rendering, so wrap the body in
+	// untrack() to keep this effect from running on every mutation.
 	$effect(() => {
 		void page;
-		if (total_pages > 0 && page >= 1 && page <= total_pages) {
-			scrollToPage(page);
-		}
+		untrack(() => {
+			if (total_pages > 0 && page >= 1 && page <= total_pages) {
+				if (single_page) {
+					// In single_page mode the active + adjacent pages are all
+					// rendered into the same DOM, stacked vertically. Switching
+					// to a neighboring page just needs to render any NEW
+					// neighbor that isn't already drawn — don't `clearRenderedPages`
+					// or the current page's canvas vanishes for a frame, leaving
+					// the slot transparent until pdfjs finishes the re-render.
+					// applyFit can change `zoom` if pages differ in size; the
+					// zoom effect handles a full re-render in that case.
+					const prevZoom = zoom;
+					applyFit();
+					if (prevZoom === zoom) {
+						requestAnimationFrame(() => renderVisiblePages());
+					}
+				} else {
+					scrollToPage(page);
+				}
+			}
+		});
 	});
 </script>
 
@@ -746,6 +881,7 @@
 <div
 	{id}
 	class={['pdf-container', className].filter(Boolean).join(' ')}
+	class:single-page={single_page}
 	style:--pdf-height={height}
 	bind:this={element}
 	onkeydown={handleKeydown}
@@ -753,8 +889,10 @@
 	role="document"
 	aria-label="PDF viewer"
 >
-	{#if skeleton || loading}
-		<!-- Skeleton / Loading -->
+	{#if (skeleton || loading) && !single_page}
+		<!-- Skeleton / Loading (suppressed in single_page mode — used inside
+		     the Carousel, which prefers a blank slide over a placeholder UI
+		     while the document is being fetched). -->
 		<div class="pdf-skeleton">
 			<div class="pdf-skeleton-toolbar">
 				<div class="pdf-skeleton-block" style="width: 6rem; height: 1.5rem;"></div>
@@ -1002,13 +1140,14 @@
 				<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
 				<div
 					class="pdf-page"
+					class:single-page-slot={single_page}
 					data-page={i + 1}
-					style={getPageStyle(i)}
+					style={single_page ? `top: ${i * 100}%;` : getPageStyle(i)}
 					bind:this={page_elements[i]}
 					onmouseup={() => handlePageMouseUp(i + 1)}
 					onclick={(e) => handlePageClick(e, i + 1)}
 				>
-					{#if !rendered_pages.has(i + 1)}
+					{#if !rendered_pages.has(i + 1) && !single_page}
 						<div class="pdf-page-placeholder">
 							<span class="pdf-page-placeholder-text">{i + 1}</span>
 						</div>
@@ -1186,6 +1325,59 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
+	}
+
+	.single-page {
+		height: 100%;
+		background: transparent;
+		border-radius: 0;
+		/* Allow adjacent pages to render outside the slide bounds so the
+		   Carousel can scroll between them with both pages visible at once. */
+		overflow: visible;
+	}
+
+	.single-page .pdf-pages {
+		/* The slide is one page tall; adjacent pages live at top: ±100%
+		   relative to this container and need to be visible during swipe
+		   transitions. */
+		overflow: visible;
+		padding: 0;
+		gap: 0;
+		display: block;
+		position: relative;
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+
+	.pdf-page.single-page-slot {
+		/* Each page slot is absolutely positioned in a vertical stack so a
+		   carousel `translateY(-page * 100%)` on the parent reveals the
+		   prev/next page during the swipe. The slot fills the slide; the
+		   actual page canvas is centered inside via flex.
+
+		   `transform-origin: 0 0` is required so the per-slot matrices applied
+		   by the Carousel (which already bake the origin into the matrix via
+		   the translate-scale-translate trick) anchor zooms at the click
+		   location rather than the slot's geometric center. */
+		position: absolute;
+		left: 0;
+		right: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: transparent;
+		box-shadow: none;
+		transform-origin: 0 0;
+		will-change: transform;
+	}
+
+	.pdf-page.single-page-slot :global(canvas) {
+		max-width: 100%;
+		max-height: 100%;
+		object-fit: contain;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.08);
 	}
 
 	/* ── Page ─────────────────────────────────────────────────── */

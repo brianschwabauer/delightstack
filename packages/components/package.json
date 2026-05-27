@@ -98,6 +98,20 @@
 		"thumbhash": "^0.1.1"
 	},
 	"peerDependencies": {
-		"svelte": "^5.36.0"
+		"svelte": "^5.36.0",
+		"pdfjs-dist": ">=4.0.0",
+		"three": ">=0.150.0",
+		"leaflet": ">=1.9.0"
+	},
+	"peerDependenciesMeta": {
+		"pdfjs-dist": {
+			"optional": true
+		},
+		"three": {
+			"optional": true
+		},
+		"leaflet": {
+			"optional": true
+		}
 	}
 }

@@ -58,7 +58,7 @@ export interface ElementAnimationOptions {
 }
 
 /** The kind of media displayed by the carousel */
-export type CarouselItemType = 'image' | 'video' | 'pdf' | 'embed';
+export type CarouselItemType = 'image' | 'video' | 'pdf' | 'embed' | 'custom';
 
 /**
  * A media item that can be rendered by the carousel.
@@ -106,11 +106,35 @@ export interface CarouselItem {
 	panorama?: boolean;
 
 	/**
+	 * URL of a poster/thumbnail image. Used by the Gallery thumbnail grid for
+	 * non-image items (video, pdf, embed, custom) where `src` isn't directly
+	 * renderable as an `<img>`. Falls back to `src` for images, and to a
+	 * derived URL for known providers (YouTube/Vimeo embeds, Cloudinary mp4s)
+	 * when omitted.
+	 */
+	poster?: string;
+
+	/**
 	 * Mark this item as above-the-fold for faster initial paint. When true,
 	 * the image uses `loading="eager"` + `fetchpriority="high"` so the browser
 	 * prioritises it. Defaults to lazy loading.
 	 */
 	priority?: boolean;
+
+	/**
+	 * Suppress the carousel's horizontal swipe-to-change-slide gesture for this
+	 * item. The slide can still be changed via nav buttons, keyboard, or
+	 * programmatic API. Useful for `custom` items that need horizontal pointer
+	 * input themselves (e.g. a 3D tour, a chart with pan/zoom).
+	 */
+	disable_swipe?: boolean;
+
+	/**
+	 * Suppress the carousel's pinch-zoom / double-tap-zoom gesture for this
+	 * item. Useful for `custom` items that handle their own zoom or shouldn't
+	 * be zoomable at all.
+	 */
+	disable_zoom?: boolean;
 }
 
 /**
@@ -349,16 +373,107 @@ export function normalizeWheel(e: WheelEvent) {
 	return [limit(dx, MAX_WHEEL_DELTA), limit(dy, MAX_WHEEL_DELTA)];
 }
 
-/** Returns whether the given item can be swiped left/right */
+/** Returns whether the given item can be swiped left/right to change slides */
 export function isSwipeable(item: CarouselItem | undefined | null) {
-	return !!item && item.type !== 'embed' && !item.panorama;
+	if (!item) return false;
+	if (item.disable_swipe) return false;
+	if (item.type === 'embed') return false;
+	if (item.type === 'image' && item.panorama) return false;
+	return true;
 }
 
 /** Returns whether the given item can be pinched/zoomed */
 export function isScalable(item: CarouselItem | undefined | null) {
-	return (
-		!!item && item.type !== 'embed' && item.type !== 'video' && item.panorama !== true
-	);
+	if (!item) return false;
+	if (item.disable_zoom) return false;
+	if (item.type === 'embed' || item.type === 'video') return false;
+	if (item.type === 'image' && item.panorama) return false;
+	if (item.type === 'custom') return false;
+	return true;
+}
+
+/**
+ * Normalizes an embed iframe URL: rewrites known providers (YouTube, Vimeo,
+ * iplayerhd, Matterport) so autoplay/play params reflect whether the iframe is
+ * eagerly loaded. Plain `vimeo.com/<id>` URLs are converted to the canonical
+ * `player.vimeo.com/video/<id>` embed form.
+ */
+export function normalizeEmbedSrc(src: string | undefined, eager: boolean): string {
+	if (!src) return '';
+	let url: URL;
+	try {
+		url = new URL(src);
+	} catch {
+		return src;
+	}
+	const host = url.hostname.replace(/^www\./, '');
+	if (
+		host === 'youtube.com' ||
+		host === 'youtu.be' ||
+		host === 'youtube-nocookie.com' ||
+		host === 'player.vimeo.com'
+	) {
+		url.searchParams.set('autoplay', eager ? '1' : '0');
+	} else if (host === 'vimeo.com') {
+		// vimeo.com/<id> → player.vimeo.com/video/<id>
+		const match = url.pathname.match(/^\/(\d+)(?:\/([0-9a-zA-Z]+))?/);
+		if (match) {
+			const id = match[1];
+			const hash = match[2];
+			url = new URL(
+				`https://player.vimeo.com/video/${id}${hash ? `?h=${hash}` : ''}`,
+			);
+			url.searchParams.set('autoplay', eager ? '1' : '0');
+		}
+	} else if (host === 'iplayerhd.com') {
+		url.searchParams.set('autoplay', eager ? 'true' : 'false');
+	} else if (host === 'matterport.com' || host === 'my.matterport.com') {
+		url.searchParams.set('play', eager ? '1' : '0');
+	}
+	return url.toString();
+}
+
+/**
+ * Returns true if the given URL points to an embed provider whose iframe
+ * renders video-like 16:9 content (YouTube, Vimeo). Used as a styling hint.
+ */
+export function isVideoEmbed(src: string | undefined): boolean {
+	if (!src) return false;
+	return /^(https?:\/\/)?(www\.)?(youtu\.?be|vimeo|youtube-nocookie)/.test(src);
+}
+
+/**
+ * Returns the best thumbnail URL for an item, in this order:
+ *   1. The explicit `item.poster` field.
+ *   2. For images, the largest src URL.
+ *   3. For known providers, a derived poster (YouTube → img.youtube.com,
+ *      Vimeo → vumbnail.com, Cloudinary `.mp4` → `.jpg`).
+ *   4. Otherwise `undefined` — callers should fall back to a placeholder
+ *      (the Gallery shows a type icon overlay over a styled placeholder block).
+ */
+export function getItemThumbnailSrc(
+	item: { type?: CarouselItemType; src?: string; poster?: string; panorama?: boolean },
+): string | undefined {
+	if (item.poster) return item.poster;
+	const src = item.src;
+	if (!src) return undefined;
+	// Images (including panoramas) just use the source image directly.
+	if (!item.type || item.type === 'image') return pickLargestSrc(src);
+	const single = pickLargestSrc(src);
+	// Cloudinary video URL → swap the file extension for `.jpg` to get the
+	// first frame as an image with all the same transforms applied.
+	if (/^https?:\/\/res\.cloudinary\.com\//.test(single) && /\.(mp4|webm|mov|m3u8)$/i.test(single)) {
+		return single.replace(/\.(mp4|webm|mov|m3u8)$/i, '.jpg');
+	}
+	// YouTube embed → `img.youtube.com` thumbnail.
+	const youtubeId = single.match(
+		/^https?:\/\/(?:www\.)?(?:youtube(?:-nocookie)?\.com\/embed\/|youtu\.be\/)([\w-]{6,})/,
+	)?.[1];
+	if (youtubeId) return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+	// Vimeo embed → vumbnail.com (free third-party thumbnail mirror).
+	const vimeoId = single.match(/^https?:\/\/player\.vimeo\.com\/video\/(\d+)/)?.[1];
+	if (vimeoId) return `https://vumbnail.com/${vimeoId}.jpg`;
+	return undefined;
 }
 
 /**
@@ -387,6 +502,11 @@ export function normalizeCarouselItem(
 export function pickLargestSrc(src: string | undefined): string {
 	if (!src) return '';
 	if (!src.includes(',') && !src.includes(' ')) return src;
+	// Only treat as a srcset if at least one entry actually has a `<n>w`
+	// width descriptor. URLs themselves can contain commas (e.g. Cloudinary
+	// transforms like `.../q_auto,w_640/dog.mp4`); without this guard we'd
+	// chop the URL on the first comma and return a broken prefix.
+	if (!/\s\d+w(?:\s*,|\s*$)/.test(src)) return src;
 	let bestUrl = '';
 	let bestWidth = -1;
 	for (const entry of src.split(',')) {

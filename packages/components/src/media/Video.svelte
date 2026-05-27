@@ -303,12 +303,17 @@
 
 	// --- Progress bar interaction ---
 	function handleProgressPointerDown(e: PointerEvent) {
+		// Without a known duration there's no meaningful position to seek to —
+		// blocking here avoids the "click bar to restart" footgun when metadata
+		// hasn't loaded yet.
+		if (!duration || duration <= 0) return;
 		is_seeking = true;
 		updateSeekPosition(e);
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 	}
 
 	function handleProgressPointerMove(e: PointerEvent) {
+		if (!duration || duration <= 0) return;
 		updateSeekPosition(e);
 		if (is_seeking && player) {
 			player.currentTime = seek_hover_time;
@@ -316,18 +321,22 @@
 	}
 
 	function handleProgressPointerUp(e: PointerEvent) {
-		if (is_seeking && player) {
+		if (is_seeking && player && duration > 0) {
 			player.currentTime = seek_hover_time;
 		}
 		is_seeking = false;
-		(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+		try {
+			(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+		} catch {
+			// no capture to release
+		}
 	}
 
 	function updateSeekPosition(e: PointerEvent) {
 		const bar = e.currentTarget as HTMLElement;
 		const rect = bar.getBoundingClientRect();
 		const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-		const pct = x / rect.width;
+		const pct = rect.width > 0 ? x / rect.width : 0;
 		seek_hover_time = pct * duration;
 		seek_hover_x = x;
 		show_seek_tooltip = true;
@@ -436,12 +445,28 @@
 	function handleVideoTimeUpdate() {
 		if (!player) return;
 		current_time = player.currentTime;
+		// `loadedmetadata` is supposed to be the canonical place to read
+		// duration, but some browser/codec combos fire `timeupdate` first
+		// (or never fire `loadedmetadata` at all for already-cached files).
+		// Mirror duration here too so the progress bar can't get stuck at 0.
+		if (duration === 0 && isFinite(player.duration) && player.duration > 0) {
+			duration = player.duration;
+		}
 		ontimeupdate?.({ currentTime: player.currentTime, duration: player.duration });
+	}
+
+	function handleVideoDurationChange() {
+		if (!player) return;
+		if (isFinite(player.duration) && player.duration > 0) {
+			duration = player.duration;
+		}
 	}
 
 	function handleVideoLoadedMetadata() {
 		if (!player) return;
-		duration = player.duration;
+		if (isFinite(player.duration) && player.duration > 0) {
+			duration = player.duration;
+		}
 		is_ready = true;
 		pip_supported = 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
 		onready?.({ player });
@@ -585,6 +610,7 @@
 		onpause={handleVideoPause}
 		onended={handleVideoEnded}
 		ontimeupdate={handleVideoTimeUpdate}
+		ondurationchange={handleVideoDurationChange}
 		onloadedmetadata={handleVideoLoadedMetadata}
 		onprogress={handleVideoProgress}
 		onvolumechange={handleVideoVolumeChange}
