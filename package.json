@@ -14,7 +14,7 @@
 		"test": "turbo run test --parallel",
 		"dev": "turbo run dev --parallel --filter=./apps/site --filter=./packages/components --filter=./packages/utilities",
 		"dev:example": "turbo run dev:svelte dev:worker --filter=@delightstack/example-app",
-		"dev-docs": "turbo run dev --parallel --filter=./apps/docs --filter=./packages/components",
+		"dev:docs": "turbo run dev --parallel --filter=./apps/docs --filter=./packages/components",
 		"lint": "turbo run lint"
 	},
 	"packageManager": "pnpm@9.11.0",
