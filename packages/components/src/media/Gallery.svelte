@@ -88,7 +88,9 @@
 		radius = 'small' as GalleryRadius,
 
 		/** The currently displayed item index. -1 closes the modal/slider. */
-		slide = $bindable(display !== 'slider' ? -1 : 0) as number,
+		slide = $bindable(
+			display === 'slider' || display === 'slideshow' ? 0 : -1,
+		) as number,
 
 		/** The object-fit attribute for all items in the gallery */
 		fit = 'contain' as 'cover' | 'contain',
@@ -225,8 +227,13 @@
 			}),
 	);
 
-	const sliderActive = $derived(display === 'slider' || slide >= 0);
-	const isModal = $derived(fullscreenActive || (display !== 'slider' && slide >= 0));
+	const sliderActive = $derived(
+		display === 'slider' || display === 'slideshow' || slide >= 0,
+	);
+	const isModal = $derived(
+		fullscreenActive ||
+			(display !== 'slider' && display !== 'slideshow' && slide >= 0),
+	);
 	$effect(() => {
 		if (typeof window !== 'undefined') {
 			if (isModal) {
@@ -240,10 +247,13 @@
 	// Prevent the modal from automatically being active when switching between display modes
 	let previousDisplay = undefined as typeof display | undefined;
 	$effect.pre(() => {
-		if (previousDisplay === 'slider') {
-			if (display !== 'slider') slide = -1;
+		const wasSliderLike =
+			previousDisplay === 'slider' || previousDisplay === 'slideshow';
+		const isSliderLike = display === 'slider' || display === 'slideshow';
+		if (wasSliderLike) {
+			if (!isSliderLike) slide = -1;
 		} else {
-			if (display === 'slider') slide = 0;
+			if (isSliderLike) slide = 0;
 		}
 		if (previousDisplay) untrack(() => pause());
 		previousDisplay = display;
@@ -281,7 +291,8 @@
 	export function close() {
 		if (fullscreenActive) return closeFullscreen();
 		if (!sliderActive) return;
-		if (display === 'slider' && isModal) return closeFullscreen();
+		if ((display === 'slider' || display === 'slideshow') && isModal)
+			return closeFullscreen();
 		if (focusTrapInstance?.active) {
 			focusTrapInstance.deactivate();
 		} else {
@@ -986,11 +997,17 @@
 				bind:slide
 				bind:page
 				bind:num_pages
-				animation={display === 'slider' && autoplayTransitionTimer && list.length > 1
+				animation={(display === 'slider' || display === 'slideshow') &&
+				autoplayTransitionTimer &&
+				list.length > 1
 					? 'zoom'
 					: 'none'}
-				transition={display === 'slider' && autoplayTransitionTimer ? 'fade' : 'none'}
-				inline={inline ?? (display === 'slider' && !fullscreenActive)}
+				transition={(display === 'slider' || display === 'slideshow') &&
+				autoplayTransitionTimer
+					? 'fade'
+					: 'none'}
+				inline={inline ??
+					((display === 'slider' || display === 'slideshow') && !fullscreenActive)}
 				dismissable={isModal}
 				disable_entry_exit_animation={display === 'slider' || display === 'slideshow'}
 				animation_target={animationTarget}
