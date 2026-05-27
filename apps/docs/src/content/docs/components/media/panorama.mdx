@@ -3,11 +3,18 @@ title: Panorama
 description: A 360-degree panorama viewer powered by Three.js with drag, pinch-zoom, gyroscope control, interactive hotspots, and auto-rotation.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import PanoramaBasicDemo from '../../../../components/demos/PanoramaBasicDemo.svelte';
+import PanoramaAutoRotateDemo from '../../../../components/demos/PanoramaAutoRotateDemo.svelte';
+import PanoramaHotspotsDemo from '../../../../components/demos/PanoramaHotspotsDemo.svelte';
+
 ## Import
 
-```svelte
-import { Panorama } from '@delightstack/components';
-import type { Hotspot } from '@delightstack/components';
+`Panorama` is exported from a subpath (not the main barrel) so it isn't bundled into apps that don't use it:
+
+```ts
+import Panorama from '@delightstack/components/panorama';
+import type { PanoramaHotspot } from '@delightstack/components';
 ```
 
 ## Peer Dependency
@@ -20,13 +27,14 @@ pnpm add three
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Panorama } from '@delightstack/components';
+<ComponentPreview code={`<script>
+${'  '}import Panorama from '@delightstack/components/panorama';
+
 </script>
 
-<Panorama src="/panoramas/mountain-360.jpg" />
-```
+<Panorama src="/panoramas/mountain-360.jpg" />`}>
+	<PanoramaBasicDemo client:visible />
+</ComponentPreview>
 
 ## Examples
 
@@ -34,9 +42,9 @@ pnpm add three
 
 Enable gentle continuous rotation. Rotation pauses when the user interacts and resumes after 3 seconds of inactivity.
 
-```svelte
-<Panorama src="/panoramas/cityscape.jpg" autoRotate autoRotateSpeed={1.5} />
-```
+<ComponentPreview code={`<Panorama src="/panoramas/cityscape.jpg" autoRotate autoRotateSpeed={1.5} />`}>
+	<PanoramaAutoRotateDemo client:visible />
+</ComponentPreview>
 
 ### Custom Initial View
 
@@ -54,24 +62,24 @@ Start the viewer facing a specific direction.
 
 Add clickable markers at specific positions within the panorama.
 
-```svelte
-<script>
-  import { Panorama } from '@delightstack/components';
-  import type { Hotspot } from '@delightstack/components';
+<ComponentPreview code={`<script>
+${'  '}import Panorama from '@delightstack/components/panorama';
+${'  '}import type { PanoramaHotspot } from '@delightstack/components';
 
-  const hotspots: Hotspot[] = [
-    { position: { pitch: 5, yaw: 45 }, label: 'Living Room' },
-    { position: { pitch: -10, yaw: 180 }, label: 'Kitchen' },
-    { position: { pitch: 0, yaw: 270 }, label: 'Garden', data: { room_id: 3 } },
-  ];
+${'  '}const hotspots: PanoramaHotspot[] = [
+${'    '}{ position: { pitch: 5, yaw: 45 }, label: 'Living Room' },
+${'    '}{ position: { pitch: -10, yaw: 180 }, label: 'Kitchen' },
+${'    '}{ position: { pitch: 0, yaw: 270 }, label: 'Garden', data: { room_id: 3 } },
+${'  '}];
+
 </script>
 
 <Panorama
-  src="/panoramas/house.jpg"
-  {hotspots}
-  onhotspotclick={({ hotspot }) => console.log('Clicked', hotspot.label)}
-/>
-```
+${'  '}src="/panoramas/house.jpg"
+${'  '}{hotspots}
+${'  '}onhotspotclick={({ hotspot }) => console.log('Clicked', hotspot.label)} />`}>
+	<PanoramaHotspotsDemo client:visible />
+</ComponentPreview>
 
 ### Static Fallback
 
@@ -102,7 +110,7 @@ Provide a fallback image for browsers without WebGL support.
 | `showControls` | `boolean` | `true` | Show zoom, fullscreen, and reset buttons |
 | `interactive` | `boolean` | `true` | Enable drag, touch, and scroll interaction |
 | `gyroscope` | `boolean` | `false` | Enable device orientation control on mobile |
-| `hotspots` | `Hotspot[]` | `[]` | Interactive markers in the panorama |
+| `hotspots` | `PanoramaHotspot[]` | `[]` | Interactive markers in the panorama |
 | `fallback` | `string` | `undefined` | Static image URL when WebGL is unavailable |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | auto | Element ID |
@@ -114,19 +122,19 @@ Provide a fallback image for browsers without WebGL support.
 | Event | Detail | Description |
 |-------|--------|-------------|
 | `onviewchange` | `{ pitch: number, yaw: number, fov: number }` | Fires when the camera orientation changes (throttled) |
-| `onhotspotclick` | `{ hotspot: Hotspot }` | Fires when a hotspot is clicked |
+| `onhotspotclick` | `{ hotspot: PanoramaHotspot }` | Fires when a hotspot is clicked |
 | `onload` | none | Fires when the panorama is ready |
 | `onerror` | `{ error: Error }` | Fires when loading fails |
 
 ## Types
 
-### Hotspot
+### PanoramaHotspot
 
-```typescript
-interface Hotspot {
-  position: { pitch: number; yaw: number };
-  label?: string;
-  data?: Record<string, unknown>;
+```ts
+interface PanoramaHotspot {
+	position: { pitch: number; yaw: number };
+	label?: string;
+	data?: Record<string, unknown>;
 }
 ```
 

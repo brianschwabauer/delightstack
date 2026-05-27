@@ -13,10 +13,12 @@ import GallerySliderDemo from '../../../../components/demos/GallerySliderDemo.sv
 import GallerySlideshowDemo from '../../../../components/demos/GallerySlideshowDemo.svelte';
 import GalleryActionsDemo from '../../../../components/demos/GalleryActionsDemo.svelte';
 import GalleryLightboxDemo from '../../../../components/demos/GalleryLightboxDemo.svelte';
+import GalleryRichMediaDemo from '../../../../components/demos/GalleryRichMediaDemo.svelte';
+import GalleryCustomTypeDemo from '../../../../components/demos/GalleryCustomTypeDemo.svelte';
 
 `Gallery` is a full-featured media component built on top of [`Carousel`](/components/media/carousel/). You give it a list of items and pick a `display` mode — the same data renders as a packed masonry grid, a justified row layout, a uniform grid, a file-list, an inline slider, an autoplaying slideshow, or a headless lightbox that you drive from your own thumbnails.
 
-Every mode (except `lightbox`, which has no thumbnails) opens a full-screen modal carousel on click, with pinch-to-zoom, swipe-to-dismiss, keyboard navigation, and an optional pages view for PDFs.
+Every mode (except `lightbox`, which has no thumbnails) opens a full-screen modal carousel on click, with pinch-to-zoom, swipe-to-dismiss, keyboard navigation, page navigation for PDFs, and built-in renderers for video, 360° panoramas, and iframe embeds.
 
 ## Import
 
@@ -171,6 +173,67 @@ ${'  '}{/each}
 	<GalleryLightboxDemo client:load />
 </ComponentPreview>
 
+## Rich media
+
+Gallery accepts the same item types as [Carousel](/components/media/carousel/#rich-media-built-in): `image`, `video`, `pdf`, `embed`, and `custom`. Set `type` (and `panorama: true` for 360° images) and Gallery handles the rest — the rich renderers load on demand the first time you open the lightbox on one.
+
+PDFs are easy to spot in the thumbnail grid (the lightbox shows them with a built-in viewer and vertical page-flipping); video items show a play icon overlay; embeds show an embed icon; panoramas show a 360° icon.
+
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Gallery, type GalleryItem } from '@delightstack/components';
+
+${'  '}// Tip: interleave images between rich items so the lightbox carousel never
+${'  '}// has to keep two heavy renderers (pdfjs, three.js, video) mounted at once.
+${'  '}const items: GalleryItem[] = [
+${'    '}{ src: '/photos/valley.jpg', width: 1600, height: 1000 },
+${'    '}{ src: '/photos/river.jpg', width: 1600, height: 1000 },
+${'    '}{ type: 'pdf', src: '/documents/paper.pdf', width: 850, height: 1100 },
+${'    '}{ src: '/photos/forest.jpg', width: 1600, height: 1000 },
+${'    '}{ type: 'image', panorama: true, src: '/panoramas/valley.jpg' },
+${'    '}{ src: '/photos/coast.jpg', width: 1600, height: 1000 },
+${'    '}{ type: 'video', src: '/videos/intro.mp4' },
+${'    '}{ src: '/photos/library.jpg', width: 1600, height: 1000 },
+${'  '}];
+
+</script>
+
+<Gallery {items} display="masonry-row" />`}>
+	<GalleryRichMediaDemo client:visible />
+</ComponentPreview>
+
+## Custom item type
+
+For media types the built-ins don't cover — a Matterport tour, a custom 3D viewer, a chart, an interactive form — set `type: 'custom'` on the item and provide the `custom` snippet. The snippet receives `{ item, active, gesture_disabled, onload, onerror }`. See [Carousel's custom type docs](/components/media/carousel/#custom-item-type) for the full snippet signature.
+
+Pair with `disable_swipe: true` when your widget needs horizontal pointer input.
+
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Gallery, type GalleryItem } from '@delightstack/components';
+
+${'  '}const items: GalleryItem[] = [
+${'    '}{
+${'      '}type: 'custom',
+${' '}src: '',
+${'      '}name: 'Interactive counter',
+${' '}disable_swipe: true,
+${'    '}},
+${'    '}{ type: 'image', src: '/photos/sunset.jpg' },
+${'  '}];
+
+${'  '}let count = $state(0);
+
+</script>
+
+<Gallery {items} display="grid">
+${'  '}{#snippet custom({ item, active })}
+${'    '}<div class="my-slide" class:active>
+${'      '}<button onclick={() => count++}>{count}</button>
+${'    '}</div>
+${'  '}{/snippet}
+</Gallery>`}>
+	<GalleryCustomTypeDemo client:visible />
+</ComponentPreview>
+
 ## Props
 
 | Prop                      | Type                                              | Default                      | Notes                                                                                                 |
@@ -193,9 +256,8 @@ ${'  '}{/each}
 | `action_display`          | `'none' \| 'always' \| 'hover'`                   | `'hover'`                    | When to show the action buttons on thumbnails.                                                        |
 | `actions`                 | `GalleryItemAction[][]`                           | `[]`                         | Per-item action buttons. See [GalleryItemAction](#galleryitemaction).                                 |
 | `page`                    | `number` _(bindable)_                             | `0`                          | Current page index inside a multi-page item (e.g. a PDF).                                             |
-| `num_pages`               | `number` _(bindable)_                             | `1`                          | Number of pages in the current item. Set by the `pdf` snippet.                                        |
-| `pdf`                     | `Snippet`                                         | `undefined`                  | Renderer for PDF items. Required if any item has `type: 'pdf'`.                                       |
-| `panorama`                | `Snippet`                                         | `undefined`                  | Renderer for 360° images. Required if any item has `panorama: true`.                                  |
+| `num_pages`               | `number` _(bindable)_                             | `1`                          | Number of pages in the current item. Set automatically for PDFs.                                      |
+| `custom`                  | `Snippet`                                         | `undefined`                  | Renderer for items with `type: 'custom'`. Forwarded to [Carousel](/components/media/carousel/#custom-item-type). |
 | `onclick`                 | `(event, index) => void \| false`                 | `undefined`                  | Return `false` from the handler to prevent the modal from opening.                                    |
 | `style`                   | `string`                                          | `''`                         | Inline style passed to the gallery root.                                                              |
 
@@ -224,19 +286,21 @@ type GalleryItem = string | (Partial<CarouselItem> & { favorite?: boolean });
 
 Items can be a plain image URL string, or an object:
 
-| Field              | Type                                     | Notes                                                                                                                                   |
-| ------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`               | `string`                                 | Stable key — defaults to `src`.                                                                                                         |
-| `type`             | `'image' \| 'video' \| 'pdf' \| 'embed'` | Defaults to `'image'`.                                                                                                                  |
-| `src`              | `string`                                 | URL, or a srcset string with width descriptors (`"sm.jpg 400w, lg.jpg 1600w"`).                                                         |
-| `width` / `height` | `number`                                 | Intrinsic pixel dimensions. Required for masonry layouts so each tile can reserve space before the image loads.                         |
-| `name`             | `string`                                 | Short label, shown on the thumbnail and used as fallback alt text.                                                                      |
-| `caption`          | `string`                                 | Longer caption, shown in the fullscreen overlay when `meta_display_fullscreen="always"`.                                                |
-| `alt`              | `string`                                 | Explicit alt text override.                                                                                                             |
-| `thumbhash`        | `string`                                 | Base64 [ThumbHash](https://evanw.github.io/thumbhash/) — decoded internally into a tiny blurred placeholder while the full image loads. |
-| `priority`         | `boolean`                                | Mark above-the-fold items so they get `loading="eager"` + `fetchpriority="high"`.                                                       |
-| `panorama`         | `boolean`                                | Render this image with the `panorama` snippet.                                                                                          |
-| `favorite`         | `boolean`                                | In masonry layouts, favorite items span twice the columns/rows.                                                                         |
+| Field              | Type                                                  | Notes                                                                                                                                   |
+| ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`               | `string`                                              | Stable key — defaults to `src`.                                                                                                         |
+| `type`             | `'image' \| 'video' \| 'pdf' \| 'embed' \| 'custom'`  | Defaults to `'image'`. See [Carousel types](/components/media/carousel/#carouselitemtype) for the full per-type behaviour.              |
+| `src`              | `string`                                              | URL, or a srcset string with width descriptors (`"sm.jpg 400w, lg.jpg 1600w"`). May be empty for `custom`.                              |
+| `width` / `height` | `number`                                              | Intrinsic pixel dimensions. Required for masonry layouts so each tile can reserve space before the image loads.                         |
+| `name`             | `string`                                              | Short label, shown on the thumbnail and used as fallback alt text.                                                                      |
+| `caption`          | `string`                                              | Longer caption, shown in the fullscreen overlay when `meta_display_fullscreen="always"`.                                                |
+| `alt`              | `string`                                              | Explicit alt text override.                                                                                                             |
+| `thumbhash`        | `string`                                              | Base64 [ThumbHash](https://evanw.github.io/thumbhash/) — decoded internally into a tiny blurred placeholder while the full image loads. |
+| `priority`         | `boolean`                                             | Mark above-the-fold items so they get `loading="eager"` + `fetchpriority="high"`.                                                       |
+| `panorama`         | `boolean`                                             | When `type: 'image'`, render the image as a 360° panorama (uses [`Panorama`](/components/media/panorama/), loaded lazily).              |
+| `disable_swipe`    | `boolean`                                             | Suppress the carousel's horizontal swipe-to-change-slide gesture for this item. Useful for custom items with their own horizontal input. |
+| `disable_zoom`     | `boolean`                                             | Suppress the carousel's pinch-zoom for this item.                                                                                       |
+| `favorite`         | `boolean`                                             | In masonry layouts, favorite items span twice the columns/rows.                                                                         |
 
 ### `GalleryDisplay`
 

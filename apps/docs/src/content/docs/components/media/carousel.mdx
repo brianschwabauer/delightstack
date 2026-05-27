@@ -7,6 +7,8 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CarouselBasicDemo from '../../../../components/demos/CarouselBasicDemo.svelte';
 import CarouselTransitionsDemo from '../../../../components/demos/CarouselTransitionsDemo.svelte';
 import CarouselSlideshowDemo from '../../../../components/demos/CarouselSlideshowDemo.svelte';
+import CarouselRichMediaDemo from '../../../../components/demos/CarouselRichMediaDemo.svelte';
+import CarouselCustomTypeDemo from '../../../../components/demos/CarouselCustomTypeDemo.svelte';
 
 `Carousel` is the rendering and gesture primitive that [`Gallery`](/components/media/gallery/) uses for its modal view. Reach for it directly only when you need a bare media viewport without Gallery's chrome — for everything else, prefer Gallery (`display="slider"` or `display="slideshow"` for a one-up view; `display="lightbox"` if you want full control of the thumbnails).
 
@@ -18,7 +20,9 @@ Carousel handles:
 - crossfade or slide transitions between items
 - a slow Ken-Burns-style zoom animation per item
 - automatic lazy loading of distant slides
-- four item types: `image`, `video`, `pdf`, `embed`
+- five item types: `image`, `video`, `pdf`, `embed`, `custom`
+
+The rich renderers (`video`, `pdf`, panorama images) load themselves on demand — a gallery of plain images never pays the cost of `pdfjs-dist`, `three`, or the video player.
 
 It does **not** render any controls — no arrows, no dots, no page counter. You supply those yourself by binding `slide`.
 
@@ -90,6 +94,98 @@ ${'  '}fit="cover" />`}>
 	<CarouselSlideshowDemo client:load />
 </ComponentPreview>
 
+## Rich media (built-in)
+
+`Carousel` renders `pdf`, `video`, `embed`, and panorama images natively — no snippets, no setup. The heavy renderers (`PDF.svelte` + `pdfjs-dist`, `Panorama.svelte` + `three`, `Video.svelte`) are loaded with dynamic `import()` the first time an item of that type appears, so a gallery of plain images never pays the cost. A small CSS spinner shows during the brief module load.
+
+Each rich type also gets gesture-aware integration that you can't replicate from the outside:
+
+- **PDF** — vertical swipe flips pages. Swiping past the last/first page transitions into the dismiss gesture instead of bouncing back.
+- **Video** — pressing space toggles play/pause on the active slide. Changing slides automatically calls `.pause()` on any playing video.
+- **Panorama** — horizontal swipe is suppressed so your finger pans the 360° view instead of changing slides; pinch-zoom is disabled (the panorama has its own zoom).
+- **Embed** — horizontal swipe and pinch-zoom are suppressed so pointer input goes through to the iframe (3D tours, video players, etc.). The embed URL is rewritten so `autoplay` reflects whether this is the active slide (works for YouTube, Vimeo, Matterport, iplayerhd out of the box).
+
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Carousel, type CarouselItem } from '@delightstack/components';
+
+${'  '}// Tip: interleave images between rich items so the carousel never has to
+${'  '}// mount two heavy renderers (pdfjs, three.js, video) at once.
+${'  '}const items: CarouselItem[] = [
+${'    '}{ src: '/photos/valley.jpg', width: 1600, height: 1000 },
+${'    '}{ src: '/photos/river.jpg', width: 1600, height: 1000 },
+${'    '}{ type: 'pdf', src: '/documents/paper.pdf', width: 850, height: 1100 },
+${'    '}{ src: '/photos/forest.jpg', width: 1600, height: 1000 },
+${'    '}{ type: 'image', panorama: true, src: '/panoramas/valley.jpg' },
+${'    '}{ src: '/photos/coast.jpg', width: 1600, height: 1000 },
+${'    '}{ type: 'video', src: '/videos/intro.mp4' },
+${'    '}{ src: '/photos/library.jpg', width: 1600, height: 1000 },
+${' '}];
+
+${' '}let slide = $state(0);
+
+</script>
+
+<Carousel {items} bind:slide inline dismissable={false} />`}>
+	<CarouselRichMediaDemo client:visible />
+</ComponentPreview>
+
+For iframe embeds (`type: 'embed'`), pass the URL directly. The Carousel rewrites known providers (YouTube, Vimeo, Matterport, iplayerhd) so `autoplay` only fires when the slide is active:
+
+```svelte
+<Carousel
+	items={[
+		{ src: '/photos/intro.jpg' },
+		{ type: 'embed', src: 'https://www.youtube.com/embed/aqz-KE-bpKQ' },
+		{ type: 'embed', src: 'https://my.matterport.com/show/?m=...' },
+	]}
+	bind:slide />
+```
+
+Embeds aren't included in the live demo above because third-party players (YouTube, Vimeo) load multi-megabyte JS bundles per iframe that would dominate the docs page.
+
+## Custom item type
+
+For anything that isn't one of the built-ins — a Matterport tour, a custom 3D viewer, a chart, an interactive form, etc. — use `type: 'custom'` and provide the `custom` snippet. The snippet receives the item plus a few lifecycle helpers:
+
+| Argument           | Type                  | Notes                                                                                                                          |
+| ------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `item`             | `CarouselItem`        | The original item, including any extra fields you added.                                                                       |
+| `active`           | `boolean`             | `true` when this is the current slide. Use it for play/pause-style behaviour.                                                  |
+| `gesture_disabled` | `boolean`             | Reflects `item.disable_swipe`. Lets your renderer hide UI that would conflict with its own horizontal input.                   |
+| `onload`           | `() => void`          | Optional — call when async content is ready. Custom slides are interactive on mount, so you only need this if you have a non-trivial loading state. |
+| `onerror`          | `(err: unknown) => void` | Optional — call if loading fails.                                                                                              |
+
+Pair the `custom` type with `disable_swipe: true` (and/or `disable_zoom: true`) when your widget needs the carousel's gestures out of the way:
+
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Carousel, type CarouselItem } from '@delightstack/components';
+
+${'  '}const items: CarouselItem[] = [
+${'    '}{ type: 'image', src: '/photos/before.jpg' },
+${'    '}{
+${'      '}type: 'custom',
+${'      '}src: '',
+${'      '}name: 'Color picker',
+${' '}disable_swipe: true, // horizontal pointer stays inside the widget
+${'    '}},
+${'    '}{ type: 'image', src: '/photos/after.jpg' },
+${' '}];
+
+${' '}let slide = $state(0);
+${' '}let hue = $state(200);
+
+</script>
+
+<Carousel {items} bind:slide inline dismissable={false}>
+${'  '}{#snippet custom({ item, active, gesture_disabled })}
+${' '}<div class="my-slide" style:background="hsl({hue} 70% 35%)">
+${'      '}<input type="range" min="0" max="360" bind:value={hue} />
+${' '}</div>
+${'  '}{/snippet}
+</Carousel>`}>
+	<CarouselCustomTypeDemo client:visible />
+</ComponentPreview>
+
 ## Props
 
 | Prop                           | Type                                     | Default     | Notes                                                                                                             |
@@ -97,7 +193,7 @@ ${'  '}fit="cover" />`}>
 | `items`                        | `Array<string \| Partial<CarouselItem>>` | `[]`        | Strings are treated as image URLs. See [CarouselItem](#carouselitem).                                             |
 | `slide`                        | `number` _(bindable)_                    | `0`         | Active item index. Changing it animates the transition.                                                           |
 | `page`                         | `number` _(bindable)_                    | `0`         | Active page inside a multi-page item (e.g. PDF).                                                                  |
-| `num_pages`                    | `number` _(bindable)_                    | `0`         | Number of pages in the current item. Set by the `pdf` snippet.                                                    |
+| `num_pages`                    | `number` _(bindable)_                    | `0`         | Number of pages in the current item. Set automatically for PDFs.                                                  |
 | `dismissing`                   | `number` _(bindable)_                    | `0`         | Progress (0–1) of an in-flight vertical swipe-to-dismiss gesture. Useful for fading a backdrop in sync.           |
 | `dismissable`                  | `boolean`                                | `true`      | Enable vertical swipe-to-dismiss. Pair with `onclose` to react.                                                   |
 | `fit`                          | `'cover' \| 'contain'`                   | `'contain'` | `object-fit` for items.                                                                                           |
@@ -106,8 +202,7 @@ ${'  '}fit="cover" />`}>
 | `animation`                    | `'none' \| 'zoom'`                       | `'none'`    | Per-item animation. `'zoom'` is a slow Ken-Burns push — combine with `transition="fade"` for slideshows.          |
 | `animation_target`             | `HTMLElement`                            | `undefined` | Anchor the entry animation to this element (used by Gallery to zoom out of the clicked thumbnail).                |
 | `disable_entry_exit_animation` | `boolean`                                | `false`     | Skip the entry/exit zoom. Useful when the Carousel is permanently inline.                                         |
-| `pdf`                          | `Snippet`                                | `undefined` | Renderer for PDF items. Required if any item has `type: 'pdf'`.                                                   |
-| `panorama`                     | `Snippet`                                | `undefined` | Renderer for 360° images. Required if any item has `panorama: true`.                                              |
+| `custom`                       | `Snippet`                                | `undefined` | Renderer for items with `type: 'custom'`. See [Custom item type](#custom-item-type).                              |
 | `oninteraction`                | `() => void`                             | `undefined` | Fires on any user interaction (swipe, zoom, click). Common use: pause your autoplay timer.                        |
 | `onclose`                      | `() => boolean \| void`                  | `undefined` | Fires on dismiss / close. Return `false` to keep the carousel open.                                               |
 | `class`                        | `string`                                 | `''`        | Extra class names on the items list.                                                                              |
@@ -134,16 +229,18 @@ Bind the Carousel with `bind:this={carousel}` and call these directly:
 ```ts
 interface CarouselItem {
 	id?: string;
-	type?: 'image' | 'video' | 'pdf' | 'embed'; // default: 'image'
-	src: string; // URL or srcset string
+	type?: 'image' | 'video' | 'pdf' | 'embed' | 'custom'; // default: 'image'
+	src: string; // URL or srcset string. May be empty for 'custom'.
 	width?: number;
 	height?: number;
 	name?: string;
 	caption?: string;
 	alt?: string;
 	thumbhash?: string;
-	panorama?: boolean;
+	panorama?: boolean; // when type === 'image', renders as a 360° panorama
 	priority?: boolean;
+	disable_swipe?: boolean; // suppress horizontal swipe-to-change-slide
+	disable_zoom?: boolean; // suppress pinch-zoom / double-tap zoom
 }
 ```
 
@@ -158,13 +255,14 @@ The carousel parses the srcset and picks the largest source for the active slide
 ### `CarouselItemType`
 
 ```ts
-type CarouselItemType = 'image' | 'video' | 'pdf' | 'embed';
+type CarouselItemType = 'image' | 'video' | 'pdf' | 'embed' | 'custom';
 ```
 
-- `image` _(default)_ — `<img>` with optional [ThumbHash](https://evanw.github.io/thumbhash/) blur placeholder. Supports pinch-zoom and pan.
-- `video` — rendered through the [`Video`](/components/media/video/) component.
-- `pdf` — rendered via the `pdf` snippet you provide (typically [`PDF`](/components/media/pdf/) from this package). Carousel handles vertical page navigation; the snippet handles rasterising pages.
-- `embed` — rendered in an `<iframe>` with permissive `allow` flags (YouTube, Vimeo, etc.).
+- `image` _(default)_ — `<img>` with optional [ThumbHash](https://evanw.github.io/thumbhash/) blur placeholder. Supports pinch-zoom and pan. Set `panorama: true` to render the image as a 360° panorama instead — drag pans the view, pinch/scroll zooms, horizontal swipe stays inside the panorama.
+- `video` — rendered via [`Video`](/components/media/video/), loaded lazily on first use. Spacebar toggles play/pause; changing slides pauses any playing video.
+- `pdf` — rendered via [`PDF`](/components/media/pdf/) (in single-page mode), loaded lazily on first use. Vertical swipe flips pages; swiping past the last/first page transitions into the dismiss gesture.
+- `embed` — rendered in an `<iframe>` with permissive `allow` flags. URLs for YouTube, Vimeo, Matterport, and iplayerhd are rewritten to set `autoplay` based on whether this is the active slide.
+- `custom` — rendered via the `custom` snippet you provide. The carousel hands the snippet `{ item, active, gesture_disabled, onload, onerror }`. Pair with `disable_swipe` / `disable_zoom` when your widget needs the carousel's gestures out of the way.
 
 ### `GalleryGesture`
 
@@ -181,16 +279,34 @@ type GalleryGesture =
 
 ## Helpers
 
-The media module re-exports two helpers from `'./carousel'` that are handy when building your own thumbnails alongside Carousel:
+The media module re-exports a handful of helpers that are useful when building your own thumbnails or wrappers around Carousel:
 
 ```ts
-import { pickLargestSrc, decodeThumbHash } from '@delightstack/components';
+import {
+	pickLargestSrc,
+	decodeThumbHash,
+	isSwipeable,
+	isScalable,
+	normalizeEmbedSrc,
+	normalizeCarouselItem,
+} from '@delightstack/components';
 
 // Returns the highest-resolution URL from a srcset string.
 const fullRes = pickLargestSrc(item.src);
 
 // Decodes a ThumbHash into a tiny data: URL you can render as a blurred placeholder.
 const blurDataUrl = decodeThumbHash(item.thumbhash);
+
+// Same predicates the Carousel uses internally — handy for matching cursor / hint UI.
+isSwipeable(item); // false for embed, panorama, custom-with-disable_swipe
+isScalable(item); // false for video, embed, panorama, custom
+
+// Coerces a string or partial item into a fully-formed CarouselItem.
+const item = normalizeCarouselItem(input);
+
+// Rewrites a YouTube / Vimeo / Matterport / iplayerhd embed URL so autoplay
+// reflects whether the iframe is currently the active slide.
+const embedSrc = normalizeEmbedSrc(url, isActive);
 ```
 
 ## Accessibility

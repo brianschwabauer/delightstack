@@ -3,22 +3,27 @@ title: Video
 description: A custom video player with playback controls, quality switching, captions, picture-in-picture, fullscreen, and keyboard shortcuts.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import VideoBasicDemo from '../../../../components/demos/VideoBasicDemo.svelte';
+import VideoAutoplayDemo from '../../../../components/demos/VideoAutoplayDemo.svelte';
+
 ## Import
 
-```svelte
+```ts
 import { Video } from '@delightstack/components';
 import type { Source, Track } from '@delightstack/components';
 ```
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { Video } from '@delightstack/components';
+<ComponentPreview code={`<script>
+${'  '}import { Video } from '@delightstack/components';
+
 </script>
 
-<Video src="/videos/intro.mp4" />
-```
+<Video src="/videos/intro.mp4" poster="/videos/intro-poster.jpg" />`}>
+	<VideoBasicDemo client:visible />
+</ComponentPreview>
 
 ## Examples
 
@@ -63,9 +68,9 @@ Add subtitle or caption tracks.
 
 Auto-playing videos must be muted to comply with browser policies.
 
-```svelte
-<Video src="/videos/background.mp4" autoplay muted loop controls={false} />
-```
+<ComponentPreview code={`<Video src="/videos/background.mp4" autoplay muted loop controls={false} />`}>
+	<VideoAutoplayDemo client:visible />
+</ComponentPreview>
 
 ### Accessing the Player
 

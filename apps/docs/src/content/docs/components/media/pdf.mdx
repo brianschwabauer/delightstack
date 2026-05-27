@@ -3,10 +3,17 @@ title: PDF
 description: A full-featured PDF viewer with toolbar controls, virtualized page rendering, text search, zoom, annotations, and keyboard shortcuts.
 ---
 
+import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import PdfBasicDemo from '../../../../components/demos/PdfBasicDemo.svelte';
+import PdfMinimalDemo from '../../../../components/demos/PdfMinimalDemo.svelte';
+import PdfSinglePageDemo from '../../../../components/demos/PdfSinglePageDemo.svelte';
+
 ## Import
 
-```svelte
-import { PDF } from '@delightstack/components';
+`PDF` is exported from a subpath (not the main barrel) so it isn't bundled into apps that don't use it:
+
+```ts
+import PDF from '@delightstack/components/pdf';
 import type { PDFAnnotation } from '@delightstack/components';
 ```
 
@@ -22,15 +29,16 @@ The PDF worker is loaded automatically from unpkg at runtime.
 
 ## Basic Usage
 
-```svelte
-<script>
-  import { PDF } from '@delightstack/components';
+<ComponentPreview code={`<script>
+${'  '}import PDF from '@delightstack/components/pdf';
 
-  let currentPage = $state(1);
+${' '}let page = $state(1);
+
 </script>
 
-<PDF src="/documents/report.pdf" bind:page={currentPage} />
-```
+<PDF src="/documents/report.pdf" bind:page height="500px" />`}>
+	<PdfBasicDemo client:visible />
+</ComponentPreview>
 
 ## Examples
 
@@ -40,7 +48,7 @@ Bind the zoom level for external control.
 
 ```svelte
 <script>
-  import { PDF } from '@delightstack/components';
+  import PDF from '@delightstack/components/pdf';
 
   let zoom = $state(1);
 </script>
@@ -57,7 +65,7 @@ Load a PDF from an `ArrayBuffer` or `Uint8Array` (e.g. from a file input).
 
 ```svelte
 <script>
-  import { PDF } from '@delightstack/components';
+  import PDF from '@delightstack/components/pdf';
 
   let pdfData = $state<ArrayBuffer | undefined>();
 
@@ -91,9 +99,36 @@ Enable annotation tools (highlight and note modes) in the toolbar.
 
 Hide the toolbar and download button for an embedded read-only view.
 
-```svelte
-<PDF src="/documents/preview.pdf" showToolbar={false} height="400px" />
-```
+<ComponentPreview code={`<PDF src="/documents/preview.pdf" showToolbar={false} height="400px" />`}>
+	<PdfMinimalDemo client:visible />
+</ComponentPreview>
+
+### Single-page mode
+
+`single_page` renders only the current page (no internal scroll, no page-stack), and lets an external page navigator drive `page`. This is the mode the Carousel uses when displaying PDF items, but you can use it directly any time you want to wire your own page controls.
+
+<ComponentPreview code={`<script>
+${'  '}import { Button } from '@delightstack/components';
+${'  '}import PDF from '@delightstack/components/pdf';
+
+${' '}let page = $state(1);
+${' '}let total_pages = $state(0);
+
+</script>
+
+<PDF
+${'  '}src="/documents/preview.pdf"
+${'  '}bind:page
+${'  '}single_page
+${'  '}showToolbar={false}
+${'  '}fit="page"
+${'  '}onload={(d) => total_pages = d.total_pages} />
+
+<Button onclick={() => page--} disabled={page <= 1}>‹ Prev page</Button>
+<span>Page {page} / {total_pages}</span>
+<Button onclick={() => page++} disabled={page >= total_pages}>Next page ›</Button>`}>
+	<PdfSinglePageDemo client:visible />
+</ComponentPreview>
 
 ### Skeleton Loading
 
@@ -115,6 +150,7 @@ Hide the toolbar and download button for an embedded read-only view.
 | `searchable` | `boolean` | `true` | Enable text search |
 | `annotatable` | `boolean` | `false` | Enable annotation tools |
 | `height` | `string` | `'600px'` | Container height |
+| `single_page` | `boolean` | `false` | Render only the current `page`, disable internal scroll, and fit the page to the container. Designed for embedding inside Gallery/Carousel or any external page navigator. |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
