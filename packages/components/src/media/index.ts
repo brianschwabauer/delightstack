@@ -3,6 +3,7 @@ export type { CarouselItem, CarouselItemType, GalleryGesture } from './Carousel.
 export {
 	decodeThumbHash,
 	getItemThumbnailSrc,
+	isResponsiveSrcset,
 	isScalable,
 	isSwipeable,
 	isVideoEmbed,

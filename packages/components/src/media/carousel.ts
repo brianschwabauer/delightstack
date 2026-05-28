@@ -495,6 +495,16 @@ export function normalizeCarouselItem(
 }
 
 /**
+ * Returns true if `src` is an actual srcset (multiple URLs with width descriptors),
+ * not just a single URL that happens to contain a comma in its path.
+ */
+export function isResponsiveSrcset(src: string | undefined): boolean {
+	if (!src) return false;
+	if (!src.includes(',') && !src.includes(' ')) return false;
+	return /\s\d+w(?:\s*,|\s*$)/.test(src);
+}
+
+/**
  * Returns the highest-width URL from a srcset-style string, or the URL as-is if it's
  * already a single URL. Used to extract a single `src` for elements that don't accept
  * srcset (video, iframe, pdf consumers, download links).
@@ -502,11 +512,7 @@ export function normalizeCarouselItem(
 export function pickLargestSrc(src: string | undefined): string {
 	if (!src) return '';
 	if (!src.includes(',') && !src.includes(' ')) return src;
-	// Only treat as a srcset if at least one entry actually has a `<n>w`
-	// width descriptor. URLs themselves can contain commas (e.g. Cloudinary
-	// transforms like `.../q_auto,w_640/dog.mp4`); without this guard we'd
-	// chop the URL on the first comma and return a broken prefix.
-	if (!/\s\d+w(?:\s*,|\s*$)/.test(src)) return src;
+	if (!isResponsiveSrcset(src)) return src;
 	let bestUrl = '';
 	let bestWidth = -1;
 	for (const entry of src.split(',')) {

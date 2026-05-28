@@ -1,10 +1,6 @@
 <!-- svelte-ignore state_referenced_locally -->
 <script lang="ts" module>
-	export type {
-		CarouselItem,
-		CarouselItemType,
-		GalleryGesture,
-	} from './carousel';
+	export type { CarouselItem, CarouselItemType, GalleryGesture } from './carousel';
 </script>
 
 <script lang="ts">
@@ -24,6 +20,7 @@
 		extractMatrixTransform,
 		type GalleryGesture,
 		getLoadedResolutions,
+		isResponsiveSrcset,
 		isScalable,
 		isSwipeable,
 		isVideoEmbed,
@@ -41,7 +38,10 @@
 	type RichRendererType = 'pdf' | 'panorama' | 'video';
 
 	/** Module-scope promise cache so multiple Carousel instances share one fetch per renderer. */
-	const richModulePromises: Record<RichRendererType, Promise<{ default: Component }> | null> = {
+	const richModulePromises: Record<
+		RichRendererType,
+		Promise<{ default: Component }> | null
+	> = {
 		pdf: null,
 		panorama: null,
 		video: null,
@@ -404,8 +404,7 @@
 			const shouldLoad = distance <= 0;
 			const initialResolution = Math.max(0, ...getLoadedResolutions(id));
 			const type = (item.type || 'image') as DecodedCarouselItem['type'];
-			const computedRatio =
-				item.width && item.height ? item.width / item.height : 0;
+			const computedRatio = item.width && item.height ? item.width / item.height : 0;
 			newList.push({
 				id,
 				type,
@@ -466,6 +465,8 @@
 		await tick();
 		const el = getElementAtIndex(index, 0);
 		if (!el || inline || disable_entry_exit_animation) return (opening = false);
+		const slideEl = getElementAtIndex(index);
+		const previewEl = slideEl?.querySelector<HTMLElement>(':scope > .preview') || null;
 		el.style.opacity = `0`;
 		const target = animation_target?.getBoundingClientRect() || {
 			top: window.innerHeight / 2 - 50,
@@ -477,6 +478,9 @@
 		const current = el.getBoundingClientRect();
 		const scaleX = target.width / current.width;
 		const scaleY = target.height / current.height;
+		// min(scaleX, scaleY) so the longer axis fits the target exactly — the
+		// shorter axis is contained inside it, which visually "originates" the
+		// animation from the thumbnail rather than overshooting it.
 		const scale = Math.max(MIN_SCALE, Math.min(scaleX, scaleY));
 		const newW = current.width * scale;
 		const newH = current.height * scale;
@@ -487,14 +491,32 @@
 		const dx = Math.max(0, Math.min(maxX, target.left - current.left - diffW / 2));
 		const dy = Math.max(0, Math.min(maxY, target.top - current.top - diffH / 2));
 		const matrix = createMatrix().translate(dx, dy).scale(scale, scale);
-		el.style.transform = matrix.toString();
+		const matrixStr = matrix.toString();
+		el.style.transform = matrixStr;
+		// If a thumbhash preview is rendered behind the main image, transform
+		// it along with the image so the user sees the blurred preview growing
+		// from the click target while the full image decodes underneath. This
+		// is what gives the open animation a visible "thing" the whole time
+		// instead of a blank rectangle until the <img> finally paints.
+		if (previewEl) previewEl.style.transform = matrixStr;
+		const easing = 'back-out';
+		const duration = 450;
+		const previewAnim = previewEl
+			? animateElement(previewEl, {
+					duration,
+					easing,
+					transform: createMatrix(),
+				})
+			: undefined;
 		await animateElement(el, {
-			duration: 450,
-			easing: 'back-out',
+			duration,
+			easing,
 			opacity: 1,
 			transform: createMatrix(),
 		});
+		await previewAnim;
 		el.style.removeProperty('opacity');
+		if (previewEl) previewEl.style.removeProperty('transform');
 		opening = false;
 		startItemAnimation();
 		setTimeout(() => {
@@ -1994,9 +2016,10 @@
 					style:perspective-origin={item.pages?.length > 1 && item.type !== 'pdf'
 						? `50% ${50 + item.page * 100}%`
 						: null}
-					style:grid-column-start={((list.length + i - index + offset) % list.length) + 1}>
+					style:grid-column-start={((list.length + i - index + offset) % list.length) +
+						1}>
 					{#if item.shouldLoad}
-						{#if !item.loaded && item.thumbhash && !opening}
+						{#if !item.loaded && item.thumbhash}
 							<img
 								src={decodeThumbHash(item.thumbhash)}
 								class:explicit-size={fit === 'contain'}
@@ -2020,16 +2043,26 @@
 						{:else if item.src}
 							{#if item.type === 'image'}
 								{#if !item.panorama}
+									{@const responsive = isResponsiveSrcset(item.src)}
+									<!--
+										Only emit srcset/sizes when item.src is an actual responsive
+										srcset (`url 400w, url 800w`). For a single-URL src, passing
+										srcset along with a `sizes` value that differs from the Gallery
+										thumbnail (`auto, 100vw` vs `100vw`) makes Chrome re-run its
+										responsive image selection — which, with "Disable cache" on,
+										triggers a brand-new fetch instead of reusing the thumbnail's
+										already-decoded pixels.
+									-->
 									<img
 										src={pickLargestSrc(item.src)}
-										srcset={item.src}
+										srcset={responsive ? item.src : undefined}
 										class:explicit-size={fit === 'contain' && item.loaded}
 										style:object-fit={fit || 'contain'}
 										style:--ratio={item.ratio || '1'}
 										alt={item.alt || item.name || ''}
-										sizes="100vw"
-										loading={item.priority ? 'eager' : 'lazy'}
-										fetchpriority={item.priority ? 'high' : undefined}
+										sizes={responsive ? '100vw' : undefined}
+										loading={item.priority || i === index ? 'eager' : 'lazy'}
+										fetchpriority={item.priority || i === index ? 'high' : undefined}
 										onload={(e) => onImageLoadEvent(i, e)} />
 								{:else if !richMounted}
 									<div class="rich-placeholder" aria-hidden="true"></div>
@@ -2041,7 +2074,9 @@
 										interactive={!inline}
 										onload={() => item.loaded || (list[i].loaded = true)} />
 								{:else}
-									<div class="rich-loading" aria-label="Loading panorama"><span class="spinner"></span></div>
+									<div class="rich-loading" aria-label="Loading panorama">
+										<span class="spinner"></span>
+									</div>
 								{/if}
 							{:else if item.type === 'pdf'}
 								{#if richMounted && renderers.pdf}
@@ -2074,13 +2109,18 @@
 										bind:player={item._player}
 										onready={() => item.loaded || (list[i].loaded = true)} />
 								{:else}
-									<div class="rich-loading" aria-label="Loading video"><span class="spinner"></span></div>
+									<div class="rich-loading" aria-label="Loading video">
+										<span class="spinner"></span>
+									</div>
 								{/if}
 							{:else if item.type === 'embed'}
 								{#if !richMounted}
 									<div class="rich-placeholder" aria-hidden="true"></div>
 								{:else}
-									{@const embedSrc = normalizeEmbedSrc(pickLargestSrc(item.src), i === index)}
+									{@const embedSrc = normalizeEmbedSrc(
+										pickLargestSrc(item.src),
+										i === index,
+									)}
 									<iframe
 										class="embed"
 										class:video={isVideoEmbed(embedSrc)}

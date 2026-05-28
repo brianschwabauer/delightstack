@@ -66,6 +66,7 @@
 	import {
 		decodeThumbHash,
 		getItemThumbnailSrc,
+		isResponsiveSrcset,
 		normalizeCarouselItem,
 		pickLargestSrc,
 	} from './carousel';
@@ -627,13 +628,21 @@
 			draggable="false" />
 	{/if}
 	{#if thumbSrc}
+		{@const responsive = isImage && isResponsiveSrcset(item.src)}
+		<!--
+			Match the Carousel's image attributes for single-URL sources so the
+			lightbox <img> hits this thumbnail's memory-cached pixels instead of
+			re-fetching. Mismatched srcset/sizes attributes between the two <img>
+			elements make Chrome treat them as separate "responsive selections"
+			and bypass the memory cache when devtools "Disable cache" is on.
+		-->
 		<img
 			class="thumbnail-img"
 			class:fading={fadingKeys.has(key)}
 			class:no-blur={!item.thumbhash}
 			src={thumbSrc}
-			srcset={isImage ? item.src : undefined}
-			sizes={isImage ? (eager ? sizesFallback : `auto, ${sizesFallback}`) : undefined}
+			srcset={responsive ? item.src : undefined}
+			sizes={responsive ? (eager ? sizesFallback : `auto, ${sizesFallback}`) : undefined}
 			alt={item.alt ?? item.name ?? ''}
 			loading={eager ? 'eager' : 'lazy'}
 			fetchpriority={eager ? 'high' : undefined}
