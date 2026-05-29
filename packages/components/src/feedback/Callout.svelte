@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import Button from '../actions/Button.svelte';
 
 	const propId = $props.id();
 	let {
@@ -188,24 +189,20 @@
 			{/if}
 
 			{#if dismissible && !skeleton}
-				<button
-					type="button"
-					class="callout-dismiss"
-					aria-label="Dismiss"
-					onclick={handleDismiss}>
-					<svg
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						width="16"
-						height="16">
-						<line x1="18" y1="6" x2="6" y2="18" />
-						<line x1="6" y1="6" x2="18" y2="18" />
-					</svg>
-				</button>
+				<div class="callout-dismiss">
+					<Button transparent icon size="0" tooltip="Dismiss" onclick={handleDismiss}>
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round">
+							<line x1="18" y1="6" x2="6" y2="18" />
+							<line x1="6" y1="6" x2="18" y2="18" />
+						</svg>
+					</Button>
+				</div>
 			{/if}
 		</div>
 	</svelte:element>
@@ -280,15 +277,6 @@
 			.callout-body {
 				color: rgba(255, 255, 255, 0.9);
 			}
-
-			.callout-dismiss {
-				color: rgba(255, 255, 255, 0.7);
-				&:hover {
-					color: white;
-					background: rgba(255, 255, 255, 0.15);
-					transition: none;
-				}
-			}
 		}
 
 		&.sticky {
@@ -324,12 +312,23 @@
 		overflow: hidden;
 	}
 
+	/* Icon vertical alignment:
+	 * - Single-line / short body: optically center on the first line of text.
+	 *   We achieve this by aligning the icon to the top and matching the
+	 *   text's first cap-height row via line-height math.
+	 * - With a title: center on the title text specifically.
+	 * - Long paragraphs naturally look balanced because the icon sits on the
+	 *   first line of body text. */
 	.callout-icon {
 		flex-shrink: 0;
 		color: var(--callout-color);
 		display: flex;
 		align-items: center;
-		padding-top: 0.1rem;
+		/* The icon is 20px and the body line-height ≈ 1.5em * 0.9375rem ≈ 22.5px,
+		 * the title is 1em with line-height 1.4 ≈ 22.4px. Center the 20px icon
+		 * inside a 22px line box. */
+		height: 1.4em;
+		line-height: 1.4em;
 
 		.visible & {
 			animation: icon-bounce 400ms ease 150ms both;
@@ -366,55 +365,38 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0.25rem;
-		border-radius: var(--radius-sm);
 		color: var(--callout-color);
-		opacity: 0.7;
-		transition:
-			opacity 150ms ease,
-			background-color 150ms ease;
-
-		&:hover {
-			opacity: 1;
-			background: rgba(0, 0, 0, 0.06);
-			transition: none;
-		}
-
-		&:focus-visible {
-			outline: 2px solid var(--callout-color);
-			outline-offset: 2px;
-			opacity: 1;
-		}
+	}
+	.callout-dismiss :global(.button) {
+		--color-text: var(--callout-color);
 	}
 
 	/* Skeleton */
 	.skeleton-line {
-		height: 0.875rem;
+		height: 0.75rem;
 		border-radius: var(--radius-sm);
-		background: linear-gradient(
+		background-color: color-mix(in oklch, var(--callout-color) 25%, transparent);
+		background-image: linear-gradient(
 			90deg,
-			var(--callout-color) 0%,
-			color-mix(in oklch, var(--callout-color) 40%, transparent) 50%,
-			var(--callout-color) 100%
+			transparent 0,
+			color-mix(in oklch, var(--callout-color) 50%, transparent) 50%,
+			transparent 100%
 		);
-		opacity: 0.15;
 		background-size: 200% 100%;
-		animation: skeleton-shimmer 1.5s ease-in-out infinite;
-		margin-bottom: 0.5rem;
+		animation: skeleton-shimmer 1.5s linear infinite;
+		margin-bottom: 0.45rem;
 
 		&:last-child {
 			margin-bottom: 0;
 		}
 		&.title-skeleton {
-			width: 40%;
-			height: 1rem;
-			opacity: 0.2;
+			width: 35%;
+			height: 0.9rem;
+			margin-bottom: 0.6rem;
+			background-color: color-mix(in oklch, var(--callout-color) 35%, transparent);
 		}
 		&.short {
-			width: 60%;
+			width: 55%;
 		}
 	}
 
