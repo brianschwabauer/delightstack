@@ -398,6 +398,9 @@
 	.text-content {
 		position: relative;
 		flex: 1;
+		/* Match the row's full height so the active background fills it (see the
+		 * align-self note on a/button/label). */
+		align-self: stretch;
 		padding-top: 1rem;
 		padding-bottom: 1rem;
 		padding-right: calc(1.5rem + var(--list-pad-x, 0px));
@@ -442,6 +445,15 @@
 		padding-left: calc(1.5rem + var(--list-pad-x, 0px) + ((var(--level) - 1) * 1rem));
 		margin: 0;
 		border: none;
+		/* Establish a containing block at rest so the ::before background is
+		 * always positioned against this element. The :active press applies a
+		 * translateZ, and a transformed element becomes the containing block for
+		 * its absolutely-positioned descendants — without this, the ::before's
+		 * containing block would switch from the <li> to here only while pressed,
+		 * snapping its size on mousedown/up. Being relative up front keeps it
+		 * stable, so the press just smoothly scales the background with the
+		 * content via the list's `perspective`. */
+		position: relative;
 		display: flex;
 		align-items: center;
 		/* Fill the full list-item width so the hover/active background spans
@@ -449,7 +461,14 @@
 		 * the hover-bg only as wide as the text, producing a tight inner
 		 * highlight that fought the wider ripple on click. */
 		width: 100%;
-		height: 100%;
+		/* Fill the row's full height. `height: 100%` can't be used here: the
+		 * <li>'s height comes from `min-height` (e.g. dense mode), which is
+		 * indefinite for percentage resolution, so the percentage collapses to
+		 * the element's intrinsic height — shorter than the row whenever padding
+		 * is small (dense). align-self stretches to the flex line's cross size,
+		 * which does honour min-height, so the ::before background (and the press
+		 * scale that rides on it) always matches the full row. */
+		align-self: stretch;
 		cursor: pointer;
 		color: var(--color-text);
 		background-color: transparent;
