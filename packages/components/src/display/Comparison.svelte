@@ -489,7 +489,7 @@
 		width: var(--handle-size);
 		height: var(--handle-size);
 		border-radius: 50%;
-		background: var(--handle-color);
+		background: color-mix(in oklch, var(--handle-color) 55%, transparent);
 		box-shadow: var(--handle-shadow);
 		display: flex;
 		align-items: center;
@@ -499,7 +499,14 @@
 		flex-shrink: 0;
 		z-index: 1;
 		outline: none;
-		transition: box-shadow 150ms ease;
+		backdrop-filter: blur(10px) saturate(140%);
+		-webkit-backdrop-filter: blur(10px) saturate(140%);
+		border: 1px solid rgba(255, 255, 255, 0.5);
+		transition: box-shadow 150ms ease, background 150ms ease;
+
+		&:hover {
+			background: color-mix(in oklch, var(--handle-color) 70%, transparent);
+		}
 
 		&:focus-visible {
 			box-shadow:
@@ -509,13 +516,14 @@
 
 		.dragging & {
 			cursor: grabbing;
+			background: color-mix(in oklch, var(--handle-color) 80%, transparent);
 		}
 	}
 
 	.handle-arrows {
 		width: 20px;
 		height: 20px;
-		color: rgba(0, 0, 0, 0.6);
+		color: rgba(0, 0, 0, 0.75);
 		pointer-events: none;
 	}
 </style>
