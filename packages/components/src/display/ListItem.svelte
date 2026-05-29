@@ -9,6 +9,7 @@
 	import Progress from '../feedback/Progress.svelte';
 	import Checkbox from '../form/Checkbox.svelte';
 	import Radio from '../form/Radio.svelte';
+	import ListContextReset from './ListContextReset.svelte';
 
 	const propId = $props.id();
 	let {
@@ -197,7 +198,7 @@
 				class="action"
 				{popoverCloseOnInsideClick}
 				{popoverPlacement}
-				{menu}>
+				menu={resetMenu}>
 				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 					<path
 						d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -206,6 +207,12 @@
 		{/if}
 	</li>
 {/if}
+
+{#snippet resetMenu()}
+	<ListContextReset>
+		{#if menu}{@render menu()}{/if}
+	</ListContextReset>
+{/snippet}
 
 <style>
 	li {
