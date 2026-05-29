@@ -13,6 +13,7 @@
 <script lang="ts">
 	import { intersectionObserver } from '@delightstack/utilities';
 	import { getContext, setContext, type Component, type Snippet } from 'svelte';
+	import Button from './../actions/Button.svelte';
 
 	const propId = $props.id();
 
@@ -249,15 +250,16 @@
 	<!-- Horizontal timeline container with chevron next/prev controls -->
 	<div class={['timeline-horizontal-wrap', className].filter(Boolean).join(' ')} {id}>
 		{#if can_scroll_prev}
-			<button
-				type="button"
+			<Button
+				icon
+				size="00"
 				class="timeline-nav timeline-nav-prev"
 				aria-label="Scroll back"
 				onclick={scrollPrev}>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<polyline points="15 18 9 12 15 6" />
 				</svg>
-			</button>
+			</Button>
 		{/if}
 		<ol
 			bind:this={scroll_el}
@@ -283,15 +285,16 @@
 			{/if}
 		</ol>
 		{#if can_scroll_next}
-			<button
-				type="button"
+			<Button
+				icon
+				size="00"
 				class="timeline-nav timeline-nav-next"
 				aria-label="Scroll forward"
 				onclick={scrollNext}>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<polyline points="9 18 15 12 9 6" />
 				</svg>
-			</button>
+			</Button>
 		{/if}
 	</div>
 {:else}
@@ -355,43 +358,25 @@
 		position: relative;
 		width: 100%;
 	}
-	.timeline-nav {
+	/* The nav controls are <Button icon> instances (rendered by the Button
+	 * component), so target their forwarded class names with :global, scoped
+	 * inside the wrap. We only position + float them; Button owns appearance. */
+	.timeline-horizontal-wrap :global(.timeline-nav) {
 		position: absolute;
-		top: 0;
-		bottom: 1.5rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.25rem;
-		border: none;
-		background: light-dark(
-			color-mix(in oklch, var(--color-bg, #fff) 88%, transparent),
-			color-mix(in oklch, var(--color-bg, #111) 80%, transparent)
-		);
-		backdrop-filter: blur(8px);
-		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-		cursor: pointer;
+		top: 50%;
+		transform: translateY(-50%);
 		z-index: 2;
-		border-radius: var(--radius-3, 8px);
+		box-shadow:
+			0 2px 6px rgba(0, 0, 0, 0.12),
+			0 1px 2px rgba(0, 0, 0, 0.08);
 		opacity: 0;
 		animation: timeline-nav-fade 200ms ease forwards;
-		transition: background 150ms ease;
 	}
-	.timeline-nav:hover {
-		background: light-dark(
-			color-mix(in oklch, var(--color-bg, #fff) 100%, transparent),
-			color-mix(in oklch, var(--color-bg, #111) 95%, transparent)
-		);
+	.timeline-horizontal-wrap :global(.timeline-nav-prev) {
+		left: -0.75rem;
 	}
-	.timeline-nav:focus-visible {
-		outline: 2px solid var(--color-action, currentColor);
-		outline-offset: 2px;
-	}
-	.timeline-nav-prev {
-		left: 0;
-	}
-	.timeline-nav-next {
-		right: 0;
+	.timeline-horizontal-wrap :global(.timeline-nav-next) {
+		right: -0.75rem;
 	}
 	@keyframes timeline-nav-fade {
 		to { opacity: 1; }
@@ -434,8 +419,8 @@
 		&.horizontal {
 			flex-direction: column;
 			align-items: center;
-			min-width: 200px;
-			padding-right: 1.5rem;
+			min-width: 140px;
+			padding-right: 1rem;
 			scroll-snap-align: start;
 
 			opacity: 0;
@@ -447,13 +432,13 @@
 			}
 
 			&.dense {
-				min-width: 140px;
-				padding-right: 0.75rem;
+				min-width: 104px;
+				padding-right: 0.625rem;
 			}
 
 			&.comfortable {
-				min-width: 260px;
-				padding-right: 2.25rem;
+				min-width: 200px;
+				padding-right: 1.75rem;
 			}
 		}
 	}
