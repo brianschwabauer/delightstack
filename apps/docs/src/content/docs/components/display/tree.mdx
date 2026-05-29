@@ -13,6 +13,7 @@ import TreeDragDropDemo from '../../../../components/demos/TreeDragDropDemo.svel
 import TreeLazyLoadDemo from '../../../../components/demos/TreeLazyLoadDemo.svelte';
 import TreeLinesDemo from '../../../../components/demos/TreeLinesDemo.svelte';
 import TreeCustomNodeDemo from '../../../../components/demos/TreeCustomNodeDemo.svelte';
+import TreeDensityDemo from '../../../../components/demos/TreeDensityDemo.svelte';
 import TreeSkeletonDemo from '../../../../components/demos/TreeSkeletonDemo.svelte';
 
 ## Import
@@ -217,6 +218,16 @@ ${'  '}{/if}
 
 <Tree data={fileTree} nodeContent={customNode} />`}>
   <TreeCustomNodeDemo client:load />
+</ComponentPreview>
+
+### Density
+
+Use `dense` for compact node spacing or `comfortable` for relaxed spacing. The default sits between the two.
+
+<ComponentPreview code={`<Tree data={fileTree} dense showLines />
+
+<Tree data={fileTree} comfortable showLines />`}>
+	<TreeDensityDemo client:load />
 </ComponentPreview>
 
 ### Skeleton Loading

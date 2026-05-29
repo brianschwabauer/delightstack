@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { type Snippet } from 'svelte';
 	import Expand from '../display/Expand.svelte';
+	import Button from '../actions/Button.svelte';
 
 	const propId = $props.id();
 	let {
@@ -126,34 +127,40 @@
 	{/if}
 
 	{#if collapsible}
-		{#if collapsed}
-			<button
-				type="button"
-				class="expand-stub"
-				onclick={expandIfCollapsed}
-				aria-label="Expand">
-				<span>Show more</span>
-				<svg
-					width="16"
-					height="16"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true">
-					<polyline points="6 9 12 15 18 9"></polyline>
-				</svg>
-			</button>
-		{/if}
-		<Expand show={!collapsed}>
-			<div class="content" class:grid style:--columns={grid ? columns : undefined}>
-				{#if children}
-					{@render children()}
-				{/if}
-			</div>
-		</Expand>
+		<div class="expand-container">
+			{#if collapsed}
+				<!-- The collapsed body is a single full-width transparent Button, so a
+			     click anywhere in the fieldset body expands it. -->
+				<Button
+					transparent
+					fullWidth
+					class="expand-button"
+					onclick={expandIfCollapsed}
+					aria-label="Expand">
+					<span class="expand-label">Show more</span>
+					<svg
+						class="expand-chevron"
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true">
+						<polyline points="6 9 12 15 18 9"></polyline>
+					</svg>
+				</Button>
+			{/if}
+			<Expand show={!collapsed}>
+				<div class="content" class:grid style:--columns={grid ? columns : undefined}>
+					{#if children}
+						{@render children()}
+					{/if}
+				</div>
+			</Expand>
+		</div>
 	{:else}
 		<div class="content" class:grid style:--columns={grid ? columns : undefined}>
 			{#if children}
@@ -207,56 +214,47 @@
 		opacity: 0.6;
 	}
 
-	/* Skeleton */
+	/* Skeleton — the legend is replaced with a shimmering placeholder bar while
+	   the child fields render their own skeleton states (so the real form shape
+	   shows through with no layout shift when it resolves). */
 	.fieldset.skeleton {
 		pointer-events: none;
 	}
 	.fieldset.skeleton .legend,
-	.fieldset.skeleton .description,
-	.fieldset.skeleton .content :global(*) {
+	.fieldset.skeleton .description {
 		visibility: hidden;
 	}
 	.fieldset.skeleton::before {
 		content: '';
 		position: absolute;
-		top: 0.5em;
+		top: 0.65em;
 		left: 1em;
-		height: 0.9em;
-		width: 8em;
-		background: var(--c-bg-4, var(--color-bg-active, hsl(0 0% 90%)));
+		height: 1em;
+		width: 9em;
 		border-radius: var(--radius-2, 4px);
-		animation: skeleton-pulse 1.5s ease-in-out infinite;
-	}
-	.fieldset.skeleton::after {
-		content: '';
-		position: absolute;
-		top: 2.2em;
-		left: 1em;
-		right: 1em;
-		bottom: 1em;
-		background: linear-gradient(
-			to bottom,
-			var(--c-bg-4, var(--color-bg-active, hsl(0 0% 90%))) 0,
-			var(--c-bg-4, var(--color-bg-active, hsl(0 0% 90%))) 2em,
-			transparent 2em,
-			transparent 2.5em,
-			var(--c-bg-4, var(--color-bg-active, hsl(0 0% 90%))) 2.5em,
-			var(--c-bg-4, var(--color-bg-active, hsl(0 0% 90%))) 4.5em,
-			transparent 4.5em,
-			transparent 5em,
-			var(--c-bg-4, var(--color-bg-active, hsl(0 0% 90%))) 5em,
-			var(--c-bg-4, var(--color-bg-active, hsl(0 0% 90%))) 7em
+		background-color: var(--c-bg-4, var(--color-bg-4, hsl(0 0% 90%)));
+		background-image: linear-gradient(
+			100deg,
+			transparent 30%,
+			color-mix(in oklch, var(--color-bg-0, #fff) 70%, transparent) 50%,
+			transparent 70%
 		);
-		border-radius: var(--radius-2, 4px);
-		animation: skeleton-pulse 1.5s ease-in-out infinite;
+		background-size: 220% 100%;
+		background-repeat: no-repeat;
+		background-position: 180% 0;
+		animation: fieldset-skeleton-sweep 1.5s ease-in-out infinite;
 	}
-	@keyframes skeleton-pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.6;
+	.fieldset.dense.skeleton::before {
+		top: 0.4em;
+		left: 0.5em;
+	}
+	.fieldset.comfortable.skeleton::before {
+		top: 1.15em;
+		left: 1.5em;
+	}
+	@keyframes fieldset-skeleton-sweep {
+		to {
+			background-position: -180% 0;
 		}
 	}
 
@@ -337,25 +335,29 @@
 		grid-template-columns: repeat(var(--columns, 2), 1fr);
 	}
 
-	/* Expand stub — clickable hint when the fieldset is collapsed. */
-	.expand-stub {
-		all: unset;
-		display: inline-flex;
-		align-items: center;
+	/* Expand button — fills the collapsed body so a click anywhere on it (the
+	   whole fieldset body) expands the section. */
+	.fieldset :global(.button.expand-button) {
+		width: 100%;
+		--color-text: var(--c-text-2, var(--color-text-light, hsl(0 0% 45%)));
+	}
+	.fieldset :global(.button.expand-button button) {
+		justify-content: space-between;
+		min-height: 3em;
 		gap: 0.4em;
-		font-size: 0.85em;
-		color: var(--c-text-2, var(--color-text-muted, hsl(0 0% 45%)));
-		cursor: pointer;
-		padding: 0.2em 0.4em;
-		border-radius: var(--radius-2, 4px);
-		align-self: flex-start;
+		font-size: 0.9em;
 	}
-	.expand-stub:hover {
-		color: var(--c-action, var(--color-action, hsl(220 70% 55%)));
+	.fieldset.dense :global(.button.expand-button button) {
+		min-height: 2.25em;
 	}
-	.expand-stub:focus-visible {
-		outline: 2px solid var(--c-outline-active, var(--color-outline-active, currentColor));
-		outline-offset: 2px;
+	.fieldset.comfortable :global(.button.expand-button button) {
+		min-height: 3.5em;
+	}
+	.fieldset :global(.button.expand-button:hover) {
+		--color-text: var(--c-action, var(--color-action, hsl(220 70% 55%)));
+	}
+	.expand-chevron {
+		flex-shrink: 0;
 	}
 
 	/* Error message */

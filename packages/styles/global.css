@@ -88,7 +88,17 @@ html {
 	--color-success-text: light-dark(#f5fefd, #b7f1eb);
 	--color-success-text-disabled: light-dark(#58e0d0, #4ec2b3);
 	--color-success-text-active: light-dark(#ffffff, #ffffff);
-	
+
+	--color-info: light-dark(#2f6fe0, #5b8def);
+	--color-warning: light-dark(#e89c08, #e0a020);
+
+	/* Soft tinted surfaces for feedback components (Callout, Toast, Avatar,
+	   Input). Mixed over the page background so they adapt to light/dark. */
+	--color-info-bg: color-mix(in oklch, var(--color-info) 14%, var(--color-bg-0));
+	--color-success-bg: color-mix(in oklch, var(--color-success) 14%, var(--color-bg-0));
+	--color-warning-bg: color-mix(in oklch, var(--color-warning) 16%, var(--color-bg-0));
+	--color-error-bg: color-mix(in oklch, var(--color-error) 14%, var(--color-bg-0));
+
 	--layer-1: 1;
 	--layer-2: 2;
 	--layer-3: 3;

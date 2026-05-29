@@ -301,6 +301,15 @@
 
 		&.skeleton {
 			pointer-events: none;
+			/* Inline callouts are shrink-to-fit; the skeleton lines have no
+			 * intrinsic width, so without a definite width here the content
+			 * column would collapse to 0 and nothing would render. */
+			width: min(100%, 30rem);
+
+			.callout-content {
+				min-width: 0;
+				flex: 1;
+			}
 		}
 	}
 

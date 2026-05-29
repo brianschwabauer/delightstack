@@ -622,6 +622,8 @@
 	.compact-wrapper .upload-icon {
 		width: 1em;
 		height: 1em;
+		/* Match the Button's text colour rather than the muted dropzone grey. */
+		color: currentColor;
 	}
 
 	/* Avatar variant */

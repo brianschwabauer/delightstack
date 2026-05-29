@@ -12,6 +12,7 @@
 	import { tooltip, ripple } from '@delightstack/utilities';
 	import { type Snippet } from 'svelte';
 	import { scale } from 'svelte/transition';
+	import { flip } from 'svelte/animate';
 	import { backOut, quintOut } from 'svelte/easing';
 
 	const propId = $props.id();
@@ -484,7 +485,10 @@
 		if (multiple) {
 			return Array.isArray(value) && value.length > 0;
 		}
-		return value !== undefined && value !== null;
+		/* Treat empty string as "no value" so a `let value = $state('')`
+		   binding leaves the label resting as the in-field placeholder (and
+		   floating only on open/focus/selection), matching <Input>. */
+		return value !== undefined && value !== null && value !== '';
 	});
 
 	/** A distinct placeholder is one that differs from the label. */
@@ -620,7 +624,8 @@
 					<span
 						class="select-chip"
 						in:scale={{ duration: 200, start: 0.6, easing: backOut }}
-						out:scale={{ duration: 150, start: 0.6, easing: quintOut }}>
+						out:scale={{ duration: 150, start: 0.6, easing: quintOut }}
+						animate:flip={{ duration: 150, easing: quintOut }}>
 						<span>{opt.label}</span>
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -911,6 +916,9 @@
 		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
 		/* Snappy ease-out for the dropdown's expand-in animation */
 		--_ease-expand: cubic-bezier(0.16, 1, 0.3, 1);
+		/* Back-out easing — overshoots the target so the chevron flip has a
+		   little bounce. */
+		--_ease-back: var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
 
 		position: relative;
 		width: 100%;
@@ -1261,7 +1269,7 @@
 		flex-shrink: 0;
 		color: var(--_text-muted);
 		transition:
-			transform var(--_duration) var(--_ease),
+			transform 300ms var(--_ease-back),
 			color var(--_duration) var(--_ease);
 	}
 	.select-chevron.open {
