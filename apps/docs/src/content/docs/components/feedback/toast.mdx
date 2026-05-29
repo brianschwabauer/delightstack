@@ -175,28 +175,31 @@ The `<Toaster />` component accepts these configuration props.
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `position` | `Position` | `'bottom-right'` | Screen position for the toast stack |
-| `max_visible` | `number` | `5` | Maximum visible toasts before queuing |
-| `gap` | `number` | `8` | Spacing between toasts (px) |
-| `width` | `number` | `360` | Toast width (px) |
+| `max_visible` | `number` | `3` | Toasts shown before older ones stack behind |
+| `gap` | `number` | `14` | Spacing between toasts when the stack is expanded (px) |
+| `width` | `number` | `356` | Toast width (px) |
 | `duration` | `number` | `4000` | Default auto-dismiss duration (ms) |
-| `progress` | `boolean` | `true` | Show countdown progress bar by default |
+| `richColors` | `boolean` | `false` | Use saturated, variant-colored backgrounds |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 
+Toasts collapse into a stack (like [sonner](https://github.com/emilkowalski/sonner)) and fan out into a list on hover. Hovering also pauses auto-dismiss. Toasts can be swiped away with the pointer.
+
 ## Toast Options
 
-Options passed to `toast()`, `toast.success()`, `toast.error()`, and `toast.warning()`.
+Options passed to `toast()`, `toast.success()`, `toast.error()`, `toast.warning()`, `toast.info()`, and `toast.loading()`.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `description` | `string` | - | Secondary line shown beneath the title |
 | `duration` | `number` | `4000` | Auto-dismiss time in ms |
-| `dismissible` | `boolean` | `true` | Show close button |
+| `dismissible` | `boolean` | `true` | Show close button (on hover) |
 | `success` | `boolean` | `false` | Success variant |
 | `warning` | `boolean` | `false` | Warning variant |
 | `error` | `boolean` | `false` | Error variant |
+| `info` | `boolean` | `false` | Info variant |
 | `action` | `{ label: string; onclick: () => void }` | - | Action button in the toast |
 | `persistent` | `boolean` | `false` | Never auto-dismiss |
-| `progress` | `boolean` | `true` | Show countdown progress bar |
 | `id` | `string` | auto-generated | Custom toast ID |
 
 ## Types
