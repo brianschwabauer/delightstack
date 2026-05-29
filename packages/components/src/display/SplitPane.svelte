@@ -19,7 +19,7 @@
 		snap = [] as number[],
 
 		/** Distance in percentage to trigger snap */
-		snapThreshold = 5,
+		snapThreshold = 8,
 
 		/** Whether panes can be collapsed */
 		collapsible = false,
@@ -112,10 +112,10 @@
 		// Clamp to min/max
 		let result = Math.min(maxSize, Math.max(minSize, percent));
 
-		// Apply snap points with hysteresis: once snapped, require a larger
-		// movement to escape (1.6x threshold), making snaps feel sticky
+		// Apply snap points with hysteresis: once snapped, require a much larger
+		// movement to escape (2.2x threshold), making snaps feel strongly sticky
 		if (snap.length > 0) {
-			const threshold = snapped_to !== null ? snapThreshold * 1.6 : snapThreshold;
+			const threshold = snapped_to !== null ? snapThreshold * 2.2 : snapThreshold;
 			let best_snap = -1;
 			let min_dist = Infinity;
 
@@ -174,13 +174,13 @@
 			// Uses the wider escape threshold to match hysteresis zone.
 			const snapped_pct = snapped_to / 100;
 			const pull_px = (raw_pct - snapped_pct) * dimension;
-			const escape_radius_px = (snapThreshold * 1.6 / 100) * dimension;
+			const escape_radius_px = (snapThreshold * 2.2 / 100) * dimension;
 
 			if (escape_radius_px < 1) {
 				overshoot_px = 0;
 			} else {
 				const t = Math.min(1, Math.abs(pull_px) / escape_radius_px);
-				const gravity = 0.35;
+				const gravity = 0.16;
 				const eased = gravity * t + (1 - gravity) * t * t;
 				overshoot_px = Math.sign(pull_px) * eased * escape_radius_px;
 			}
