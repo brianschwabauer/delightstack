@@ -224,6 +224,7 @@
 	let ac_filtered = $state<InputOption[]>([]);
 	let ac_debounce_timer: ReturnType<typeof setTimeout> | undefined;
 	let dropdown_element = $state<HTMLElement | undefined>(undefined);
+	let panel_width = $state<number | undefined>(undefined);
 
 	/* File state */
 	let file_input_element = $state<HTMLInputElement | undefined>(undefined);
@@ -422,6 +423,16 @@
 	/*  Autocomplete                                                       */
 	/* ------------------------------------------------------------------ */
 
+	$effect(() => {
+		if (!has_autocomplete || !ac_open || !wrapper_element) return;
+		panel_width = wrapper_element.offsetWidth;
+		const ro = new ResizeObserver(() => {
+			if (wrapper_element) panel_width = wrapper_element.offsetWidth;
+		});
+		ro.observe(wrapper_element);
+		return () => ro.disconnect();
+	});
+
 	function openAutocomplete() {
 		if (!has_autocomplete || effectively_disabled || readonly) return;
 		ac_open = true;
@@ -445,9 +456,12 @@
 
 	function selectAutocompleteOption(opt: InputOption) {
 		if (opt.disabled) return;
-		value = opt.value;
+		// Show the label in the input rather than the value — the value is
+		// for the form payload, but the human-readable label is what the user
+		// just clicked, so the displayed text should match.
+		value = opt.label;
 		closeAutocomplete();
-		onchange?.({ value });
+		onchange?.({ value: opt.value });
 	}
 
 	function scrollAcHighlightedIntoView() {
@@ -1247,7 +1261,12 @@
 			closeOnEscapeKey
 			closeOnInsideClick={false}
 			disableInitialFocus>
-			<div class="dropdown" bind:this={dropdown_element} role="listbox" id="{id}-listbox">
+			<div
+				class="dropdown"
+				bind:this={dropdown_element}
+				role="listbox"
+				id="{id}-listbox"
+				style:width={panel_width ? `${panel_width}px` : null}>
 				{#if ac_loading}
 					<div class="loading">
 						<span class="spinner" aria-hidden="true"></span>

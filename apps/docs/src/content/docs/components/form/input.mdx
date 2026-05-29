@@ -9,6 +9,8 @@ import InputTextareaDemo from '../../../../components/demos/InputTextareaDemo.sv
 import InputPasswordDemo from '../../../../components/demos/InputPasswordDemo.svelte';
 import InputMaskedDemo from '../../../../components/demos/InputMaskedDemo.svelte';
 import InputAutocompleteDemo from '../../../../components/demos/InputAutocompleteDemo.svelte';
+import InputAsyncAutocompleteDemo from '../../../../components/demos/InputAsyncAutocompleteDemo.svelte';
+import InputSkeletonDemo from '../../../../components/demos/InputSkeletonDemo.svelte';
 import InputChipsDemo from '../../../../components/demos/InputChipsDemo.svelte';
 
 ## Import
@@ -133,16 +135,16 @@ ${'  '}let selectedCity = $state('');
 
 ### Async Autocomplete
 
-```svelte
-<Input
+<ComponentPreview code={`<Input
   label="Search users"
   onfilter={async (query) => {
     const results = await searchUsers(query);
     return results.map(u => ({ value: u.id, label: u.name }));
   }}
   bind:value={selectedUser}
-/>
-```
+/>`}>
+  <InputAsyncAutocompleteDemo client:load />
+</ComponentPreview>
 
 ### Multiple / Chips Mode
 
@@ -197,9 +199,9 @@ ${'  '}helper="We'll never share your email"
 
 ### Skeleton Loading
 
-```svelte
-<Input label="Name" skeleton bind:value={name} />
-```
+<ComponentPreview code={`<Input label="Name" skeleton bind:value={name} />`}>
+  <InputSkeletonDemo client:load />
+</ComponentPreview>
 
 ## Props
 
