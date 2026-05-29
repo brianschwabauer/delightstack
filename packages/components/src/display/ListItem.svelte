@@ -7,6 +7,8 @@
 	import type { PopoverPlacement } from './../actions/Popover.svelte';
 	import Button from './../actions/Button.svelte';
 	import Progress from '../feedback/Progress.svelte';
+	import Checkbox from '../form/Checkbox.svelte';
+	import Radio from '../form/Radio.svelte';
 
 	const propId = $props.id();
 	let {
@@ -133,7 +135,15 @@
 					disabled={context.disabled || disabled}
 					{checked}
 					onchange={() => onchange?.(checked)} />
-				<div class="checkbox"></div>
+				<!-- Presentational only: the hidden native input above owns
+				     interaction, focus and a11y. `inert` keeps the Checkbox from
+				     becoming a second focusable/clickable control. -->
+				<span class="list-control" inert>
+					<Checkbox
+						{checked}
+						disabled={context.disabled || disabled}
+						size={context.dense ? '0' : '1'} />
+				</span>
 			</label>
 		{:else if context.type === 'radio'}
 			<label for="radio-{id}">
@@ -146,7 +156,12 @@
 					name={context.id}
 					onchange={() => onchange?.(checked)}
 					{checked} />
-				<div class="radio"></div>
+				<span class="list-control" inert>
+					<Radio
+						{checked}
+						disabled={context.disabled || disabled}
+						size={context.dense ? '0' : '1'} />
+				</span>
 			</label>
 		{:else if context.type === 'button'}
 			{#if href}
@@ -194,8 +209,6 @@
 
 <style>
 	li {
-		--radio-size: 1.25em;
-		--checkbox-size: 1.15em;
 		min-height: 3.5rem;
 		padding: 0;
 		margin: 0;
@@ -348,14 +361,32 @@
 		flex: 1;
 		min-width: 1.5rem;
 	}
+	/* The native inputs are visually hidden but remain the real, focusable
+	 * controls (the <label> toggles them, List delegates off their change
+	 * event). The adjacent <Checkbox>/<Radio> render the visual state. */
 	input[type='radio'],
 	input[type='checkbox'] {
-		margin: 0 1.5rem;
-		transform: scale(1.25);
+		opacity: 0;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: 0;
+		pointer-events: none;
 	}
-	li.dense input[type='radio'],
-	li.dense input[type='checkbox'] {
-		margin: 0 1rem;
+	.list-control {
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
+		margin-right: 0.5rem;
+		pointer-events: none;
+	}
+	li.dense .list-control {
+		margin-right: 0.25rem;
+	}
+	/* Keyboard focus ring, driven by the hidden native input's focus state */
+	label:has(input:focus-visible) .list-control :global(.indicator-wrapper) {
+		box-shadow: 0 0 0 2px var(--color-outline-active);
+		border-radius: 50%;
 	}
 	.text-content {
 		position: relative;
@@ -479,80 +510,6 @@
 			aspect-ratio: 1;
 			flex-shrink: 0;
 			flex-grow: 0;
-		}
-	}
-
-	input[type='radio'] {
-		opacity: 0;
-		position: absolute;
-		& + .radio {
-			position: relative;
-			width: var(--radio-size);
-			height: var(--radio-size);
-			border-radius: 100%;
-			background-color: var(--color-bg-active);
-			border: solid 1px var(--color-outline-active);
-		}
-		&:focus-visible + .radio {
-			outline: solid 2px var(--color-outline-active);
-			outline-offset: 6px;
-		}
-		&:checked + .radio {
-			background-color: var(--color-bg-active);
-			&::before {
-				content: '';
-				position: absolute;
-				top: calc((var(--radio-size) / 4) - 1px);
-				left: calc((var(--radio-size) / 4) - 1px);
-				width: calc(var(--radio-size) / 2);
-				height: calc(var(--radio-size) / 2);
-				border-radius: 100%;
-				background-color: var(--color-action-active);
-			}
-		}
-	}
-
-	input[type='checkbox'] {
-		opacity: 0;
-		position: absolute;
-		& + .checkbox {
-			position: relative;
-			width: var(--checkbox-size);
-			height: var(--checkbox-size);
-			border-radius: 30%;
-			background-color: var(--color-bg-active);
-			border: solid 1px var(--color-outline-active);
-		}
-		&:focus-visible + .checkbox {
-			outline: solid 2px var(--color-outline-active);
-			outline-offset: 6px;
-		}
-		&:checked + .checkbox {
-			background-color: var(--color-bg-active);
-			border: solid 1px var(--color-action-active);
-			&::before {
-				content: '';
-				position: absolute;
-				top: 0px;
-				left: 0px;
-				width: 100%;
-				height: 100%;
-				border-radius: 30%;
-				overflow: hidden;
-				background-color: var(--color-action-active);
-			}
-			&::after {
-				content: '';
-				display: block;
-				position: absolute;
-				top: -1px;
-				left: 5px;
-				width: 8px;
-				height: 15px;
-				border: solid var(--color-action-text-active);
-				border-width: 0 3px 3px 0;
-				transform: rotate(45deg);
-			}
 		}
 	}
 </style>
