@@ -1186,12 +1186,16 @@
 		align-items: center;
 		gap: 0.35em;
 		min-width: 0;
-		/* Chips wrap freely and the trigger grows to fit them; `overflow`
-		   only reins in an over-long single value. */
-		overflow: hidden;
+		/* Kept visible so each chip's enlarged (overflowing) remove-button
+		   touch target isn't clipped. Single value / placeholder truncate
+		   themselves below. */
+		overflow: visible;
 	}
 
-	.select-single-value {
+	.select-single-value,
+	.select-placeholder {
+		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -1199,9 +1203,6 @@
 
 	.select-placeholder {
 		color: var(--_text-muted);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.select-chip {
@@ -1223,6 +1224,7 @@
 	}
 
 	.select-chip-remove {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -1237,6 +1239,14 @@
 			opacity var(--_duration) var(--_ease),
 			background var(--_duration) var(--_ease);
 	}
+	/* Invisible hit area extending ~10px past the icon on every side so the
+	   button is easy to tap. The visible hover feedback stays the size of the
+	   element itself (above), not the touch target. */
+	.select-chip-remove::before {
+		content: '';
+		position: absolute;
+		inset: -10px;
+	}
 	.select-chip-remove:hover {
 		opacity: 1;
 		background: color-mix(in oklch, currentColor 22%, transparent);
@@ -1248,7 +1258,7 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		padding: 0.2em;
+		padding: 0.35em;
 		border-radius: var(--radius-round, 999px);
 		color: var(--_text-muted);
 		cursor: pointer;
@@ -1362,7 +1372,9 @@
 		width: 100%;
 		padding: 0.6em 0.8em;
 		border: 1px solid var(--_border);
-		border-radius: var(--radius-2, 6px);
+		/* A larger radius than the default so it doesn't read as sharper than
+		   the surrounding popover. */
+		border-radius: var(--radius-3, 10px);
 		background: var(--_bg);
 		color: var(--_text);
 		font: inherit;
@@ -1397,6 +1409,18 @@
 	.select-option:hover,
 	.select-option.highlighted {
 		background: var(--_panel-hover);
+	}
+	/* The first and last rows hug the panel's rounded corners (panel radius
+	   minus its 0.3em padding) so a highlighted edge item nests cleanly. */
+	.select-dropdown > .select-option:first-child,
+	.select-dropdown > .select-group-label:first-child {
+		border-top-left-radius: calc(var(--radius-4, 16px) - 0.3em);
+		border-top-right-radius: calc(var(--radius-4, 16px) - 0.3em);
+	}
+	.select-dropdown > .select-option:last-child,
+	.select-dropdown > .select-empty:last-child {
+		border-bottom-left-radius: calc(var(--radius-4, 16px) - 0.3em);
+		border-bottom-right-radius: calc(var(--radius-4, 16px) - 0.3em);
 	}
 	.select-option.selected {
 		color: var(--_border-focus);
@@ -1498,8 +1522,8 @@
 		height: 1.4em;
 	}
 	.select-clear svg {
-		width: 1.05em;
-		height: 1.05em;
+		width: 1.35em;
+		height: 1.35em;
 	}
 	.select-chip-remove svg {
 		width: 0.85em;
