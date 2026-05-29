@@ -78,7 +78,7 @@ export default defineConfig({
 		build: {
 			rollupOptions: {
 				// Optional peer deps of @delightstack/components media components
-				external: ['leaflet', 'three', 'pdfjs-dist'],
+				external: ['three', 'pdfjs-dist'],
 			},
 		},
 	},

@@ -334,9 +334,6 @@ importers:
       '@delightstack/utilities':
         specifier: workspace:*
         version: link:../utilities
-      leaflet:
-        specifier: '>=1.9.0'
-        version: 1.9.4
       pdfjs-dist:
         specifier: '>=4.0.0'
         version: 5.7.284
@@ -4041,9 +4038,6 @@ packages:
 
   kolorist@1.8.0:
     resolution: {integrity: sha512-Y+60/zizpJ3HRH8DCss+q95yr6145JXZo46OTpFvDZWLfRCE4qChOyk1b26nMaNpfHHgxagk9dXT5OP0Tfe+dQ==}
-
-  leaflet@1.9.4:
-    resolution: {integrity: sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==}
 
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
@@ -9419,8 +9413,6 @@ snapshots:
   known-css-properties@0.37.0: {}
 
   kolorist@1.8.0: {}
-
-  leaflet@1.9.4: {}
 
   levn@0.4.1:
     dependencies:

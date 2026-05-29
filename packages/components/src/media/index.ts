@@ -21,9 +21,6 @@ export type {
 	GallerySpacing,
 } from './Gallery.svelte';
 export { default as Image } from './Image.svelte';
-// Map is excluded from the barrel — it requires the optional leaflet dependency.
-// Import it directly: import Map from '@delightstack/components/map';
-export type { MapMarker, MapInitOptions, MapProvider } from './Map.svelte';
 // Panorama is excluded from the barrel — it requires the optional three (Three.js) dependency.
 // Import it directly: import Panorama from '@delightstack/components/panorama';
 export type { Hotspot as PanoramaHotspot } from './Panorama.svelte';
