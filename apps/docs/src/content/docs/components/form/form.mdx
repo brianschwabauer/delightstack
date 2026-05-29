@@ -5,6 +5,7 @@ description: A form container with Standard Schema validation, promise-aware sub
 
 import { Form } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import FormDemo from '../../../../components/demos/FormDemo.svelte';
 
 ## Import
 
@@ -20,8 +21,7 @@ import type { FormContext, StandardSchema } from '@delightstack/components';
 
 ## Basic Usage
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Form, Input, Button } from '@delightstack/components';
   import { z } from 'zod';
 
@@ -40,8 +40,9 @@ import type { FormContext, StandardSchema } from '@delightstack/components';
   <Input name="email" label="Email" type="email" />
   <Input name="password" label="Password" type="password" />
   <Button type="submit">Sign In</Button>
-</Form>
-```
+</Form>`}>
+  <FormDemo client:load />
+</ComponentPreview>
 
 ## Examples
 
@@ -77,7 +78,7 @@ The `schema` prop accepts any [Standard Schema](https://github.com/standard-sche
 </script>
 
 <Form bind:data={formData} {schema} onsubmit={handleSubmit} validate_on="blur">
-  <Fieldset legend="Create Account" card>
+  <Fieldset label="Create Account" bordered>
     <Input name="name" label="Name" />
     <Input name="email" label="Email" type="email" />
     <Input name="password" label="Password" type="password" />
