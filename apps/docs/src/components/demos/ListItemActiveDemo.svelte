@@ -2,7 +2,7 @@
 	import { List, ListItem } from '@delightstack/components/display';
 </script>
 
-<List type="text">
+<List>
 	<ListItem active>Currently Selected</ListItem>
 	<ListItem>Another Item</ListItem>
 </List>

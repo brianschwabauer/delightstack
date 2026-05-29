@@ -47,6 +47,12 @@
 		/** The css amount (@example '16px') to pad the list items in the Y direction */
 		paddingY = undefined as string | undefined,
 
+		/** Whether to show a skeleton loading placeholder instead of the items */
+		skeleton = false,
+
+		/** Number of skeleton rows to render when `skeleton` is true */
+		skeletonCount = 5,
+
 		/** The css style string added to the component from the parent */
 		style = '',
 
@@ -114,7 +120,22 @@
 	}
 </script>
 
-{#if !parentContext?.level}
+{#if skeleton && !parentContext?.level}
+	<ul
+		class={['list', 'skeleton', className].filter(Boolean).join(' ')}
+		class:dense
+		class:comfortable
+		style:--list-pad-x={paddingX}
+		style:--list-pad-y={paddingY}
+		{style}
+		aria-hidden="true">
+		{#each { length: skeletonCount } as _, i}
+			<li class="skeleton-item">
+				<span class="skeleton-bar" style:width={`${55 + ((i * 37) % 35)}%`}></span>
+			</li>
+		{/each}
+	</ul>
+{:else if !parentContext?.level}
 	<ul
 		class={['list', className].filter(Boolean).join(' ')}
 		class:dense
@@ -162,5 +183,41 @@
 			border-bottom-left-radius: var(--radius);
 			border-bottom-right-radius: var(--radius);
 		}
+	}
+
+	.skeleton-item {
+		list-style: none;
+		display: flex;
+		align-items: center;
+		min-height: 3.5rem;
+		padding: 0 1.5rem;
+	}
+	ul.dense .skeleton-item {
+		min-height: 3rem;
+		padding: 0 1rem;
+	}
+	ul.comfortable .skeleton-item {
+		min-height: 4rem;
+		padding: 0 2rem;
+	}
+	.skeleton-bar {
+		height: 0.85em;
+		border-radius: var(--radius-2, 4px);
+		background-color: color-mix(in oklch, var(--color-text, #000) 12%, transparent);
+		background-image: linear-gradient(
+			90deg,
+			transparent 0,
+			color-mix(in oklch, var(--color-text, #000) 8%, transparent) 50%,
+			transparent 100%
+		);
+		background-size: 200% 100%;
+		animation: list-skeleton-shimmer 1.5s linear infinite;
+	}
+	@keyframes list-skeleton-shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-bar { animation: none; }
 	}
 </style>

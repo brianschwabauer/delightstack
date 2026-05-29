@@ -170,7 +170,9 @@
 				</button>
 			{/if}
 		{:else if context.type === 'text'}
-			{#if children}{@render children()}{/if}
+			<span class="text-content">
+				{#if children}{@render children()}{/if}
+			</span>
 		{/if}
 		{#if menu}
 			<Button
@@ -216,6 +218,12 @@
 					opacity: 0.06;
 				}
 			}
+			.text-content::before {
+				opacity: 0.06;
+			}
+		}
+		&.disabled .text-content {
+			color: var(--color-text-disabled);
 		}
 		&::after {
 			content: '';
@@ -338,6 +346,7 @@
 	}
 	.spacer {
 		flex: 1;
+		min-width: 1.5rem;
 	}
 	input[type='radio'],
 	input[type='checkbox'] {
@@ -348,6 +357,43 @@
 	li.dense input[type='checkbox'] {
 		margin: 0 1rem;
 	}
+	.text-content {
+		position: relative;
+		flex: 1;
+		padding-top: 1rem;
+		padding-bottom: 1rem;
+		padding-right: calc(1.5rem + var(--list-pad-x, 0px));
+		padding-left: calc(1.5rem + var(--list-pad-x, 0px) + ((var(--level) - 1) * 1rem));
+		display: flex;
+		align-items: center;
+		color: var(--color-text);
+	}
+	.text-content::before {
+		content: '';
+		opacity: 0;
+		position: absolute;
+		top: 1px;
+		right: var(--border-inset);
+		bottom: 1px;
+		left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
+		border-radius: calc(var(--radius) - var(--border-inset));
+		background-color: var(--color-text);
+		transition: opacity 300ms ease;
+		z-index: 0;
+	}
+	li.dense .text-content {
+		padding-top: 0;
+		padding-bottom: 0;
+		padding-right: 1rem;
+		padding-left: calc(1rem + ((var(--level) - 1) * 1rem));
+	}
+	li:first-child .text-content {
+		padding-top: calc(var(--border-inset, 0px) + 1rem);
+	}
+	li:last-child .text-content {
+		padding-bottom: calc(var(--border-inset, 0px) + 1rem);
+	}
+
 	a,
 	button,
 	label {
@@ -360,7 +406,11 @@
 		border: none;
 		display: flex;
 		align-items: center;
-		width: max-content;
+		/* Fill the full list-item width so the hover/active background spans
+		 * the row uniformly with the ripple — previously `max-content` made
+		 * the hover-bg only as wide as the text, producing a tight inner
+		 * highlight that fought the wider ripple on click. */
+		width: 100%;
 		height: 100%;
 		cursor: pointer;
 		color: var(--color-text);
@@ -417,8 +467,8 @@
 		justify-content: center;
 		align-items: center;
 		width: 1.5em;
-		margin-left: -0.5em;
-		margin-right: 1em;
+		margin-left: -0.25em;
+		margin-right: 0.5em;
 		height: 100%;
 		flex-shrink: 0;
 		flex-grow: 0;
