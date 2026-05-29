@@ -45,8 +45,8 @@
 </script>
 
 <script lang="ts">
-	import { type TransitionConfig, fade, scale } from 'svelte/transition';
-	import { backOut, circInOut } from 'svelte/easing';
+	import { type TransitionConfig, fade } from 'svelte/transition';
+	import { circInOut } from 'svelte/easing';
 	import { onDestroy, onMount, untrack, type Snippet } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { focusTrap, intersectionObserver, ripple } from '@delightstack/utilities';
@@ -537,6 +537,9 @@
 	</svg>
 {/snippet}
 {#snippet iconPanorama()}
+	<!-- Panoramic photo: a wide frame with curved (barrel) top/bottom edges
+	     and a mountain scene — reads more clearly as "360 panorama" than the
+	     previous globe/grid ellipse. -->
 	<svg
 		viewBox="0 0 24 24"
 		fill="none"
@@ -545,9 +548,8 @@
 		stroke-linecap="round"
 		stroke-linejoin="round"
 		aria-hidden="true">
-		<ellipse cx="12" cy="12" rx="10" ry="6" />
-		<path d="M2 12c4 2 16 2 20 0" />
-		<path d="M12 2c2 4 2 16 0 20" />
+		<path d="M2 6c6.5 1.6 13.5 1.6 20 0v12c-6.5-1.6-13.5-1.6-20 0V6z" />
+		<path d="M6 15l3.5-4 2.5 3 3-4 3 5" />
 	</svg>
 {/snippet}
 {#snippet iconChevronLeft()}
@@ -833,49 +835,51 @@
 		in:fade={{ duration: 150 }}
 		out:fade={{ duration: 150 }}
 		style:opacity={1 - dismissing}>
-		{#if num_pages > 1}
-			<nav class="pages" transition:scale|global={{ duration: 300, easing: backOut }}>
-				<Button
-					icon
-					transparent
-					size="0"
-					disabled={page <= 0}
-					onclick={() => (page = Math.max(0, page - 1))}
-					tooltip="Previous page">
-					<span class="visuallyhidden">Previous page</span>
-					<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M10 3L5 8L10 13"
-							stroke="currentColor"
-							stroke-width="1.8"
-							stroke-linecap="round"
-							stroke-linejoin="round" />
-					</svg>
-				</Button>
-				<span class="page-counter" aria-live="polite">
-					<span class="page-current">{page + 1}</span>
-					<span class="page-separator">/</span>
-					<span class="page-total">{num_pages}</span>
-				</span>
-				<Button
-					icon
-					transparent
-					size="0"
-					disabled={page >= num_pages - 1}
-					onclick={() => (page = Math.min(num_pages - 1, page + 1))}
-					tooltip="Next page">
-					<span class="visuallyhidden">Next page</span>
-					<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path
-							d="M6 3L11 8L6 13"
-							stroke="currentColor"
-							stroke-width="1.8"
-							stroke-linecap="round"
-							stroke-linejoin="round" />
-					</svg>
-				</Button>
-			</nav>
-		{/if}
+		<!-- Always rendered (and positioned absolutely) so it never re-mounts as
+		     `num_pages` settles while a PDF loads its pages — that remounting was
+		     replaying the scale-in transition repeatedly. Visibility is toggled
+		     purely with CSS instead. -->
+		<nav class="pages" class:shown={num_pages > 1} aria-hidden={num_pages <= 1}>
+			<Button
+				icon
+				transparent
+				size="0"
+				disabled={page <= 0}
+				onclick={() => (page = Math.max(0, page - 1))}
+				tooltip="Previous page">
+				<span class="visuallyhidden">Previous page</span>
+				<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+					<path
+						d="M10 3L5 8L10 13"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round" />
+				</svg>
+			</Button>
+			<span class="page-counter" aria-live="polite">
+				<span class="page-current">{page + 1}</span>
+				<span class="page-separator">/</span>
+				<span class="page-total">{num_pages}</span>
+			</span>
+			<Button
+				icon
+				transparent
+				size="0"
+				disabled={page >= num_pages - 1}
+				onclick={() => (page = Math.min(num_pages - 1, page + 1))}
+				tooltip="Next page">
+				<span class="visuallyhidden">Next page</span>
+				<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+					<path
+						d="M6 3L11 8L6 13"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round" />
+				</svg>
+			</Button>
+		</nav>
 		{#if isModal}
 			<Button icon transparent dense size="0" class="close" onclick={() => close()}>
 				<span class="visuallyhidden">Close</span>
@@ -1301,6 +1305,25 @@
 			align-items: center;
 			gap: 0.125rem;
 			padding-inline: 0.25rem;
+			/* Show/hide via CSS (no remount) so the entry animation can't replay
+			   as num_pages settles during PDF load. */
+			transform-origin: center center;
+			opacity: 0;
+			scale: 0.6;
+			visibility: hidden;
+			transition:
+				opacity 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+				scale 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+				visibility 0s linear 300ms;
+			&.shown {
+				opacity: 1;
+				scale: 1;
+				visibility: visible;
+				transition:
+					opacity 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+					scale 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+					visibility 0s linear 0s;
+			}
 			/* Force a high-contrast white pill so the page numbers are
 			   readable on top of any media (dark images, videos, PDFs,
 			   panoramas) inside a modal. The inherited button colors

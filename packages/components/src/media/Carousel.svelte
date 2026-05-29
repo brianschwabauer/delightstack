@@ -964,6 +964,25 @@
 		);
 	}
 
+	/**
+	 * Shrinks just the active PDF page (its `<canvas>`) during a dismiss swipe
+	 * rather than scaling the whole document — cheaper, and the canvas's default
+	 * center transform-origin makes it recede toward its own center. Uses the
+	 * `scale` CSS property so it never touches the slot's `transform` matrix.
+	 */
+	function setPdfDismissScale(progress: number, animate = false) {
+		const item = list[index];
+		if (!item || item.type !== 'pdf') return;
+		const slot = getElementAtIndex(index, item.page);
+		const canvas = slot?.querySelector('canvas') as HTMLElement | null;
+		if (!canvas) return;
+		canvas.style.transformOrigin = 'center center';
+		canvas.style.transition = animate
+			? 'scale 280ms cubic-bezier(0.22, 1, 0.36, 1)'
+			: 'none';
+		canvas.style.scale = progress > 0 ? `${1 - progress * 0.25}` : '';
+	}
+
 	/** Updates the page's metadata to the latest matrix/transform state */
 	async function updatePageMatrix(
 		itemIndex: number,
@@ -1375,6 +1394,8 @@
 			} else {
 				animateItem(index, { easing: 'back-out' });
 				dismissing = 0;
+				// Ease the shrunk PDF page back to full size on snap-back.
+				setPdfDismissScale(0, true);
 			}
 		}
 
@@ -1535,9 +1556,15 @@
 					0,
 					Math.min(1, Math.abs(y + transform.translateY) / max),
 				);
+				// PDF pages live in a deep `.pdf-page` slot that isn't a direct child
+				// of the perspective container, so a Z-translate gets flattened and
+				// can't read as a shrink. The page still translates correctly here;
+				// the visual scale-down for PDFs is applied separately as a CSS
+				// `scale` on the slide element, driven by `dismissing` (see template).
 				const targetZ = circInOut(progress) * -200;
 				matrix = matrix.translate(-x, transform.translateY, targetZ - z);
 				dismissing = Math.max(0, Math.min(1, 1 - (300 - Math.abs(pageData.y)) / 300));
+				if (item.type === 'pdf') setPdfDismissScale(dismissing, false);
 			}
 		} else if (gesture === 'pan-y-page') {
 			item.offsetY += transform.translateY;
@@ -1612,7 +1639,12 @@
 			if (gesture === 'pinch-zoom' && targetScale > 1) matrix = clampMatrix(matrix, fit);
 		}
 
-		if (gesture !== 'pan-y-dismiss' && dismissing > 0) dismissing = 0;
+		if (gesture !== 'pan-y-dismiss' && dismissing > 0) {
+			dismissing = 0;
+			// The swipe turned into something else (pan-x/page) — ease the page
+			// back to full size.
+			setPdfDismissScale(0, true);
+		}
 
 		if (gesture !== 'pan-x' || scale > 1.01) updateItemMatrix(index, matrix);
 
@@ -2086,6 +2118,7 @@
 										page={item.page + 1}
 										showToolbar={false}
 										single_page={true}
+										autoPaginate={false}
 										fit="page"
 										pixel_density={item._pdf_pixel_density || 1}
 										onload={(detail: { total_pages: number }) =>

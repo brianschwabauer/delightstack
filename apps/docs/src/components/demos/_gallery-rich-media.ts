@@ -87,6 +87,19 @@ export const richMediaItems: GalleryItem[] = [
 		type: 'video',
 	},
 	{
+		id: 'rich-embed',
+		// A plain web page embedded via iframe. example.com is tiny and has no
+		// framing restrictions, so it loads quickly. The poster uses example.com's
+		// social preview image so the thumbnail isn't blank before the iframe mounts.
+		src: 'https://example.com',
+		poster: 'https://picsum.photos/seed/delight-embed/1200/630',
+		width: 1200,
+		height: 630,
+		name: 'Embedded page',
+		caption: 'An embedded web page (iframe). Any URL works — set a poster for the thumbnail.',
+		type: 'embed',
+	},
+	{
 		id: 'rich-image-5',
 		src: 'https://picsum.photos/seed/delight-rich-5/1600/1000',
 		width: 1600,

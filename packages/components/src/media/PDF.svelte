@@ -52,6 +52,13 @@
 		single_page = false,
 
 		/**
+		 * In single_page mode, automatically translate the stacked page slots so
+		 * the bound `page` is shown. Defaults to true for standalone use. The
+		 * Carousel sets this false because it drives the slide translation itself.
+		 */
+		autoPaginate = true,
+
+		/**
 		 * Multiplier applied to the rendered canvas resolution without changing
 		 * the displayed CSS size. Lets an external orchestrator (Carousel pinch
 		 * zoom) push more pixels into the canvas so a magnified page stays
@@ -98,6 +105,7 @@
 		annotatable?: boolean;
 		height?: string;
 		single_page?: boolean;
+		autoPaginate?: boolean;
 		pixel_density?: number;
 		skeleton?: boolean;
 		id?: string;
@@ -882,6 +890,7 @@
 	{id}
 	class={['pdf-container', className].filter(Boolean).join(' ')}
 	class:single-page={single_page}
+	class:auto-paginate={single_page && autoPaginate}
 	style:--pdf-height={height}
 	bind:this={element}
 	onkeydown={handleKeydown}
@@ -1135,7 +1144,12 @@
 		{/if}
 
 		<!-- Pages -->
-		<div class="pdf-pages" bind:this={pages_container}>
+		<div
+			class="pdf-pages"
+			bind:this={pages_container}
+			style={single_page && autoPaginate
+				? `transform: translateY(-${(page - 1) * 100}%); transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);`
+				: undefined}>
 			{#each page_infos as info, i}
 				<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
 				<div
@@ -1334,6 +1348,11 @@
 		/* Allow adjacent pages to render outside the slide bounds so the
 		   Carousel can scroll between them with both pages visible at once. */
 		overflow: visible;
+	}
+	/* When the PDF paginates itself (standalone single-page mode) clip to the
+	   container so only the active page shows during the translate. */
+	.single-page.auto-paginate {
+		overflow: hidden;
 	}
 
 	.single-page .pdf-pages {

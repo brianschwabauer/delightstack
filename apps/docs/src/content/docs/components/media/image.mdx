@@ -5,6 +5,7 @@ description: An optimized image component with lazy loading, blur-up placeholder
 
 import Image from '@delightstack/components/media/Image.svelte';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import ImageBlurUpDemo from '../../../../components/demos/ImageBlurUpDemo.svelte';
 
 ## Import
 
@@ -34,16 +35,25 @@ Prevent cumulative layout shift by setting a fixed aspect ratio.
 
 ### Blur-Up Placeholder
 
-Provide a tiny placeholder image for a smooth blur-up transition as the full image loads.
+Provide a tiny placeholder for a smooth blur-up transition as the full image loads. You can supply either a small `placeholder` image URL or a base64 [ThumbHash](https://evanw.github.io/thumbhash/) via `thumbhash` (decoded internally — no extra network request). `thumbhash` takes precedence when both are set.
 
-```svelte
+<ComponentPreview code={`<!-- Tiny placeholder image URL -->
 <Image
   src="/photos/portrait.jpg"
   alt="Portrait"
   placeholder="/photos/portrait-thumb.jpg"
-  aspect_ratio="3/4"
+  aspect_ratio="16/10"
 />
-```
+
+<!-- ThumbHash string (decoded to a blurred placeholder, no network cost) -->
+<Image
+  src="/photos/dog.jpg"
+  alt="Dog"
+  thumbhash="1QcSHQRnh493V4dIh4eXh1h4kJUI"
+  aspect_ratio="16/10"
+/>`}>
+	<ImageBlurUpDemo client:load />
+</ComponentPreview>
 
 ### Error Fallback
 
@@ -90,7 +100,10 @@ Show a shimmer animation while the image loads (alternative to blur-up placehold
 | `fit` | `'cover' \| 'contain' \| 'fill' \| 'none'` | `'cover'` | How the image is scaled within its container |
 | `position` | `string` | `'center'` | The position of the image within its container (`object-position`) |
 | `lazy` | `boolean` | `true` | Whether to lazily load the image |
+| `thumbhash` | `string` | `undefined` | Base64 [ThumbHash](https://evanw.github.io/thumbhash/) decoded internally into a tiny blurred placeholder (takes precedence over `placeholder`, no network request) |
 | `placeholder` | `string` | `undefined` | A small placeholder image URL for blur-up effect |
+| `bg_color` | `string` | `undefined` | Solid background colour painted before any image data arrives (great for SSR; avoids flash of empty box) |
+| `priority` | `boolean` | `false` | Mark as above-the-fold — uses `loading="eager"` + `fetchpriority="high"` |
 | `fallback` | `string \| boolean` | `false` | Error fallback: `true` = built-in icon, string = fallback image URL |
 | `srcset` | `string` | `undefined` | Responsive srcset attribute |
 | `sizes` | `string` | `undefined` | Responsive sizes attribute |

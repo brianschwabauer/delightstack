@@ -15,6 +15,7 @@
 </script>
 
 <script lang="ts">
+	import { ripple } from '@delightstack/utilities';
 	const propId = $props.id();
 
 	let {
@@ -44,6 +45,12 @@
 
 		/** Caption/subtitle tracks */
 		captions = [] as Track[],
+
+		/** URL to a WebVTT thumbnail track. Each cue's text should be the URL
+		 *  of a sprite image, optionally suffixed with `#xywh=x,y,w,h` to point
+		 *  at a region of a sprite sheet. When provided, hovering the seek bar
+		 *  shows a thumbnail preview at the cue's mapped time. */
+		thumbnails = undefined as string | undefined,
 
 		/** Show loading skeleton */
 		skeleton = false,
@@ -101,6 +108,7 @@
 		aspectRatio?: string;
 		preload?: 'auto' | 'metadata' | 'none';
 		captions?: Track[];
+		thumbnails?: string;
 		skeleton?: boolean;
 		id?: string;
 		class?: string;
@@ -142,6 +150,73 @@
 	let seek_hover_time = $state(0);
 	let seek_hover_x = $state(0);
 	let show_seek_tooltip = $state(false);
+
+	// Thumbnail track parsed cues
+	interface ThumbCue {
+		start: number;
+		end: number;
+		src: string;
+		xywh?: [number, number, number, number];
+	}
+	let thumb_cues = $state<ThumbCue[]>([]);
+
+	function parseTimestamp(ts: string): number {
+		const parts = ts.split(':').map((p) => parseFloat(p));
+		if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+		if (parts.length === 2) return parts[0] * 60 + parts[1];
+		return parts[0] || 0;
+	}
+
+	async function loadThumbnails(url: string) {
+		try {
+			const res = await fetch(url);
+			if (!res.ok) return;
+			const text = await res.text();
+			const lines = text.split(/\r?\n/);
+			const cues: ThumbCue[] = [];
+			const baseURL = new URL(url, window.location.href);
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+				const m = line.match(/(\d+(?::\d+){0,2}(?:\.\d+)?)\s*-->\s*(\d+(?::\d+){0,2}(?:\.\d+)?)/);
+				if (!m) continue;
+				const start = parseTimestamp(m[1]);
+				const end = parseTimestamp(m[2]);
+				const next = lines[i + 1]?.trim();
+				if (!next) continue;
+				const hashIdx = next.indexOf('#xywh=');
+				let src = next;
+				let xywh: [number, number, number, number] | undefined;
+				if (hashIdx !== -1) {
+					src = next.slice(0, hashIdx);
+					const parts = next.slice(hashIdx + 6).split(',').map((n) => parseInt(n, 10));
+					if (parts.length === 4 && parts.every((n) => !isNaN(n))) {
+						xywh = parts as [number, number, number, number];
+					}
+				}
+				const resolved = new URL(src, baseURL).href;
+				cues.push({ start, end, src: resolved, xywh });
+				i++;
+			}
+			thumb_cues = cues;
+		} catch {
+			thumb_cues = [];
+		}
+	}
+
+	$effect(() => {
+		if (thumbnails) loadThumbnails(thumbnails);
+		else thumb_cues = [];
+	});
+
+	const active_thumb = $derived.by<ThumbCue | undefined>(() => {
+		if (!thumb_cues.length || !show_seek_tooltip) return undefined;
+		const t = seek_hover_time;
+		// Cues are usually sorted; linear scan is fine for typical sizes.
+		for (const c of thumb_cues) {
+			if (t >= c.start && t < c.end) return c;
+		}
+		return thumb_cues[thumb_cues.length - 1];
+	});
 
 	// Inactivity timer
 	let inactivity_timer: ReturnType<typeof setTimeout> | undefined;
@@ -638,9 +713,10 @@
 			class="big-play"
 			type="button"
 			aria-label="Play video"
-			onclick={togglePlay}>
-			<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-				<path d="M8 5v14l11-7z" />
+			onclick={togglePlay}
+			{@attach ripple({})}>
+			<svg class="big-play-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+				<path d="M8.5 5.4a.8.8 0 0 1 1.2-.7l9 6.6a.8.8 0 0 1 0 1.3l-9 6.6a.8.8 0 0 1-1.2-.7V5.4z" />
 			</svg>
 		</button>
 	{/if}
@@ -686,7 +762,21 @@
 
 				{#if show_seek_tooltip && duration > 0}
 					<div class="seek-tooltip" style:left="{seek_hover_x}px">
-						{formatTime(seek_hover_time)}
+						{#if active_thumb}
+							{#if active_thumb.xywh}
+								<div
+									class="seek-thumb"
+									style:width="{active_thumb.xywh[2]}px"
+									style:height="{active_thumb.xywh[3]}px"
+									style:background-image="url('{active_thumb.src}')"
+									style:background-position="-{active_thumb.xywh[0]}px -{active_thumb.xywh[1]}px"
+									aria-hidden="true">
+								</div>
+							{:else}
+								<img class="seek-thumb-img" src={active_thumb.src} alt="" aria-hidden="true" />
+							{/if}
+						{/if}
+						<span class="seek-time">{formatTime(seek_hover_time)}</span>
 					</div>
 				{/if}
 			</div>
@@ -934,41 +1024,51 @@
 		cursor: pointer;
 	}
 
-	/* Big play button */
+	/* Big play button — semi-transparent black with backdrop blur for an
+	 * iOS/macOS player feel, white play glyph slightly cheated left so the
+	 * triangle reads optically centered against the round button. */
 	.big-play {
 		position: absolute;
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
 		z-index: 5;
-		width: 68px;
-		height: 68px;
+		width: 76px;
+		height: 76px;
 		border-radius: var(--radius-full, 50%);
-		background: var(--color-action, #2563eb);
-		color: var(--color-action-text, white);
+		background: rgba(0, 0, 0, 0.45);
+		color: white;
 		border: none;
+		overflow: hidden;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		backdrop-filter: blur(14px) saturate(160%);
+		-webkit-backdrop-filter: blur(14px) saturate(160%);
 		transition:
 			transform var(--duration-fast, 150ms) var(--ease-default, ease),
+			background var(--duration-fast, 150ms) var(--ease-default, ease),
 			opacity var(--duration-fast, 150ms) var(--ease-default, ease);
-		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 	}
 
 	.big-play:hover {
-		transform: translate(-50%, -50%) scale(1.08);
+		transform: translate(-50%, -50%) scale(1.06);
+		background: rgba(0, 0, 0, 0.55);
 	}
 
 	.big-play:active {
 		transform: translate(-50%, -50%) scale(0.96);
 	}
 
-	.big-play svg {
+	.big-play .big-play-icon {
 		width: 32px;
 		height: 32px;
-		margin-left: 3px;
+		/* Optical centering: the play triangle's visual mass sits to the right
+		 * of its geometric center, so nudge the icon left a few pixels. */
+		margin-left: -3px;
+		filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 	}
 
 	/* Error overlay */
@@ -1066,16 +1166,31 @@
 	/* Seek tooltip */
 	.seek-tooltip {
 		position: absolute;
-		top: -28px;
+		bottom: 16px;
 		transform: translateX(-50%);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
 		background: rgba(0, 0, 0, 0.85);
 		color: white;
-		padding: 2px 8px;
+		padding: 4px;
 		border-radius: var(--radius-sm, 4px);
 		font-size: var(--text-xs, 0.75rem);
 		white-space: nowrap;
 		pointer-events: none;
 		font-variant-numeric: tabular-nums;
+	}
+	.seek-thumb,
+	.seek-thumb-img {
+		display: block;
+		max-width: 200px;
+		max-height: 120px;
+		background-repeat: no-repeat;
+		border-radius: 2px;
+	}
+	.seek-time {
+		padding: 0 4px;
 	}
 
 	/* Control bar */
@@ -1099,8 +1214,9 @@
 		gap: 4px;
 	}
 
-	/* Button base */
+	/* Button base — matches delightstack Button's :active scale + ripple feel. */
 	.btn {
+		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1112,16 +1228,21 @@
 		color: white;
 		cursor: pointer;
 		padding: 0;
-		transition: background var(--duration-fast, 150ms) var(--ease-default, ease);
+		overflow: hidden;
+		transition:
+			background var(--duration-fast, 150ms) var(--ease-default, ease),
+			translate 200ms ease;
 		flex-shrink: 0;
 	}
 
 	.btn:hover {
 		background: rgba(255, 255, 255, 0.15);
+		transition: translate 200ms ease;
 	}
 
 	.btn:active {
 		background: rgba(255, 255, 255, 0.25);
+		translate: 0 1px;
 	}
 
 	.btn.active {

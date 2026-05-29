@@ -7,6 +7,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import PdfBasicDemo from '../../../../components/demos/PdfBasicDemo.svelte';
 import PdfMinimalDemo from '../../../../components/demos/PdfMinimalDemo.svelte';
 import PdfSinglePageDemo from '../../../../components/demos/PdfSinglePageDemo.svelte';
+import PdfSkeletonDemo from '../../../../components/demos/PdfSkeletonDemo.svelte';
 
 ## Import
 
@@ -132,9 +133,9 @@ ${'  '}onload={(d) => total_pages = d.total_pages} />
 
 ### Skeleton Loading
 
-```svelte
-<PDF skeleton height="600px" />
-```
+<ComponentPreview code={`<PDF skeleton height="600px" />`}>
+	<PdfSkeletonDemo client:visible />
+</ComponentPreview>
 
 ## Props
 

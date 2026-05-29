@@ -6,6 +6,7 @@ description: A custom video player with playback controls, quality switching, ca
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import VideoBasicDemo from '../../../../components/demos/VideoBasicDemo.svelte';
 import VideoAutoplayDemo from '../../../../components/demos/VideoAutoplayDemo.svelte';
+import VideoSkeletonDemo from '../../../../components/demos/VideoSkeletonDemo.svelte';
 
 ## Import
 
@@ -92,9 +93,9 @@ Bind the native `HTMLVideoElement` for programmatic control.
 
 ### Skeleton Loading
 
-```svelte
-<Video skeleton />
-```
+<ComponentPreview code={`<Video skeleton />`}>
+	<VideoSkeletonDemo client:visible />
+</ComponentPreview>
 
 ## Props
 

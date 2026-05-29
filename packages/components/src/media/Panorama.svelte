@@ -8,6 +8,7 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import Button from '../actions/Button.svelte';
 
 	/* ── Minimal Three.js type surface ───────────────────────── */
 
@@ -77,9 +78,21 @@
 
 	interface ThreeModule {
 		Scene: new () => ThreeScene;
-		PerspectiveCamera: new (fov: number, aspect: number, near: number, far: number) => ThreeCamera;
-		WebGLRenderer: new (params: { canvas: HTMLCanvasElement; antialias: boolean }) => ThreeRenderer;
-		SphereGeometry: new (radius: number, widthSegments: number, heightSegments: number) => ThreeGeometry;
+		PerspectiveCamera: new (
+			fov: number,
+			aspect: number,
+			near: number,
+			far: number,
+		) => ThreeCamera;
+		WebGLRenderer: new (params: {
+			canvas: HTMLCanvasElement;
+			antialias: boolean;
+		}) => ThreeRenderer;
+		SphereGeometry: new (
+			radius: number,
+			widthSegments: number,
+			heightSegments: number,
+		) => ThreeGeometry;
 		MeshBasicMaterial: new (params: { map: ThreeTexture; side: number }) => ThreeMaterial;
 		Mesh: new (geometry: ThreeGeometry, material: ThreeMaterial) => ThreeMesh;
 		TextureLoader: new () => ThreeTextureLoader;
@@ -114,8 +127,14 @@
 		/** Rotation speed multiplier */
 		autoRotateSpeed = 1,
 
-		/** Show zoom/fullscreen/reset buttons */
+		/** Show zoom/fullscreen buttons */
 		showControls = true,
+
+		/** Whether the panorama is being rendered inside an embedded context
+		 *  (Carousel/Gallery). When true, controls are hidden, keyboard text
+		 *  selection is disabled, and the canvas is rendered at lower DPR for
+		 *  better performance. */
+		embedded = false,
 
 		/** Enable drag/touch/scroll interaction */
 		interactive = true,
@@ -147,9 +166,7 @@
 			| ((detail: { pitch: number; yaw: number; fov: number }) => void),
 
 		/** Hotspot clicked */
-		onhotspotclick = undefined as
-			| undefined
-			| ((detail: { hotspot: Hotspot }) => void),
+		onhotspotclick = undefined as undefined | ((detail: { hotspot: Hotspot }) => void),
 
 		/** Panorama ready */
 		onload = undefined as undefined | (() => void),
@@ -163,6 +180,7 @@
 		autoRotate?: boolean;
 		autoRotateSpeed?: number;
 		showControls?: boolean;
+		embedded?: boolean;
 		interactive?: boolean;
 		gyroscope?: boolean;
 		hotspots?: Hotspot[];
@@ -231,8 +249,7 @@
 		try {
 			const test_canvas = document.createElement('canvas');
 			const ctx =
-				test_canvas.getContext('webgl') ||
-				test_canvas.getContext('experimental-webgl');
+				test_canvas.getContext('webgl') || test_canvas.getContext('experimental-webgl');
 			return !!ctx;
 		} catch {
 			return false;
@@ -385,10 +402,7 @@
 		const dist = getTouchDistance(e);
 		if (pinch_start_distance > 0 && dist > 0) {
 			const scale = pinch_start_distance / dist;
-			current_fov = Math.max(
-				FOV_MIN,
-				Math.min(FOV_MAX, pinch_start_fov * scale),
-			);
+			current_fov = Math.max(FOV_MIN, Math.min(FOV_MAX, pinch_start_fov * scale));
 			if (camera) {
 				camera.fov = current_fov;
 				camera.updateProjectionMatrix();
@@ -595,10 +609,8 @@
 		}
 
 		// Map device orientation to panorama view
-		current_yaw =
-			initialView.yaw + (e.alpha - gyro_initial_alpha!) * -1;
-		current_pitch =
-			initialView.pitch + (e.beta - gyro_initial_beta!) * -1;
+		current_yaw = initialView.yaw + (e.alpha - gyro_initial_alpha!) * -1;
+		current_pitch = initialView.pitch + (e.beta - gyro_initial_beta!) * -1;
 		current_pitch = Math.max(-85, Math.min(85, current_pitch));
 
 		updateCameraRotation();
@@ -636,12 +648,7 @@
 		if (!is_visible || !renderer || !scene || !camera) return;
 
 		// Auto-rotate
-		if (
-			autoRotate &&
-			!auto_rotate_paused &&
-			!is_dragging &&
-			!prefers_reduced_motion
-		) {
+		if (autoRotate && !auto_rotate_paused && !is_dragging && !prefers_reduced_motion) {
 			current_yaw += 0.02 * autoRotateSpeed;
 			updateCameraRotation();
 			emitViewChange();
@@ -664,7 +671,9 @@
 
 		const width = container.clientWidth;
 		const height = container.clientHeight;
-		const dpr = window.devicePixelRatio || 1;
+		const dpr = embedded
+			? Math.min(window.devicePixelRatio || 1, 1.5)
+			: window.devicePixelRatio || 1;
 
 		renderer.setSize(width, height);
 		renderer.setPixelRatio(dpr);
@@ -705,7 +714,9 @@
 
 		const width = container.clientWidth;
 		const height = container.clientHeight;
-		const dpr = window.devicePixelRatio || 1;
+		const dpr = embedded
+			? Math.min(window.devicePixelRatio || 1, 1.5)
+			: window.devicePixelRatio || 1;
 
 		// Scene
 		scene = new three.Scene();
@@ -728,24 +739,19 @@
 		// Load texture
 		const loader = new three.TextureLoader();
 		try {
-			texture = await new Promise<ThreeTexture>(
-				(resolve, reject) => {
-					loader.load(
-						src,
-						(tex) => resolve(tex),
-						undefined,
-						(err) => reject(err),
-					);
-				},
-			);
+			texture = await new Promise<ThreeTexture>((resolve, reject) => {
+				loader.load(
+					src,
+					(tex) => resolve(tex),
+					undefined,
+					(err) => reject(err),
+				);
+			});
 		} catch (err) {
 			error_state = true;
 			loading = false;
 			onerror?.({
-				error:
-					err instanceof Error
-						? err
-						: new Error('Failed to load panorama image'),
+				error: err instanceof Error ? err : new Error('Failed to load panorama image'),
 			});
 			return;
 		}
@@ -838,10 +844,7 @@
 			clearTimeout(auto_rotate_resume_timer);
 
 			if (gyro_enabled) {
-				window.removeEventListener(
-					'deviceorientation',
-					handleDeviceOrientation,
-				);
+				window.removeEventListener('deviceorientation', handleDeviceOrientation);
 			}
 
 			document.removeEventListener('fullscreenchange', handleFullscreenChange);
@@ -896,9 +899,7 @@
 					loading = false;
 					onerror?.({
 						error:
-							err instanceof Error
-								? err
-								: new Error('Failed to load panorama image'),
+							err instanceof Error ? err : new Error('Failed to load panorama image'),
 					});
 				},
 			);
@@ -989,7 +990,8 @@
 			onwheel={handleWheel}
 			ontouchstart={handleTouchStart}
 			ontouchmove={handleTouchMove}
-			ontouchend={handleTouchEnd}></canvas>
+			ontouchend={handleTouchEnd}>
+		</canvas>
 
 		<!-- Loading overlay: kept mounted so we can fade it out after the
 		     texture is in place, hiding the dark/empty WebGL canvas during load. -->
@@ -1032,14 +1034,9 @@
 		{/each}
 
 		<!-- Controls -->
-		{#if showControls && loaded}
+		{#if showControls && !embedded && loaded}
 			<div class="panorama-controls">
-				<button
-					class="panorama-control-btn"
-					type="button"
-					title="Zoom in"
-					aria-label="Zoom in"
-					onclick={zoomIn}>
+				<Button translucent icon size="0" tooltip="Zoom in" onclick={zoomIn}>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 24 24"
@@ -1048,19 +1045,12 @@
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						width="18"
-						height="18"
 						aria-hidden="true">
 						<line x1="12" y1="5" x2="12" y2="19" />
 						<line x1="5" y1="12" x2="19" y2="12" />
 					</svg>
-				</button>
-				<button
-					class="panorama-control-btn"
-					type="button"
-					title="Zoom out"
-					aria-label="Zoom out"
-					onclick={zoomOut}>
+				</Button>
+				<Button translucent icon size="0" tooltip="Zoom out" onclick={zoomOut}>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 24 24"
@@ -1069,17 +1059,15 @@
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						width="18"
-						height="18"
 						aria-hidden="true">
 						<line x1="5" y1="12" x2="19" y2="12" />
 					</svg>
-				</button>
-				<button
-					class="panorama-control-btn"
-					type="button"
-					title="Toggle fullscreen"
-					aria-label="Toggle fullscreen"
+				</Button>
+				<Button
+					translucent
+					icon
+					size="0"
+					tooltip={is_fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
 					onclick={toggleFullscreen}>
 					{#if is_fullscreen}
 						<svg
@@ -1090,8 +1078,6 @@
 							stroke-width="2"
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							width="18"
-							height="18"
 							aria-hidden="true">
 							<polyline points="4 14 8 14 8 18" />
 							<polyline points="20 10 16 10 16 6" />
@@ -1107,8 +1093,6 @@
 							stroke-width="2"
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							width="18"
-							height="18"
 							aria-hidden="true">
 							<polyline points="15 3 21 3 21 9" />
 							<polyline points="9 21 3 21 3 15" />
@@ -1116,28 +1100,7 @@
 							<line x1="3" y1="21" x2="10" y2="14" />
 						</svg>
 					{/if}
-				</button>
-				<button
-					class="panorama-control-btn"
-					type="button"
-					title="Reset view"
-					aria-label="Reset view"
-					onclick={resetView}>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						width="18"
-						height="18"
-						aria-hidden="true">
-						<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-						<path d="M3 3v5h5" />
-					</svg>
-				</button>
+				</Button>
 			</div>
 		{/if}
 	{/if}
@@ -1283,39 +1246,16 @@
 		right: 1rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.5rem;
 		z-index: 2;
-	}
-
-	.panorama-control-btn {
-		width: 36px;
-		height: 36px;
-		border-radius: var(--radius-sm, 0.25rem);
-		border: 1px solid var(--color-border, #d1d5db);
-		background: light-dark(
-			color-mix(in oklch, var(--color-surface, #fff) 90%, transparent),
-			color-mix(in oklch, var(--color-surface, #1f2937) 80%, transparent)
-		);
-		backdrop-filter: blur(4px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		cursor: pointer;
-		color: var(--color-text, inherit);
-		padding: 0;
-		transition: background 0.15s ease;
-	}
-
-	.panorama-control-btn:hover {
-		background: light-dark(
-			color-mix(in oklch, var(--color-surface, #fff) 100%, transparent),
-			color-mix(in oklch, var(--color-surface, #1f2937) 100%, transparent)
-		);
-	}
-
-	.panorama-control-btn:focus-visible {
-		outline: 2px solid var(--color-action, #3b82f6);
-		outline-offset: 2px;
+		:global(.button) {
+			--color-bg-active: rgb(0 0 0 / 0.55);
+			--color-bg: rgb(0 0 0 / 0.35);
+			--color-text: rgb(255 255 255 / 0.8);
+			--color-text-active: rgb(255 255 255 / 1);
+			--color-action-outline: transparent;
+			--color-action-outline-active: transparent;
+		}
 	}
 
 	/* ── Hotspots ─────────────────────────────────────────────── */
