@@ -77,11 +77,15 @@ ${'  '}{/snippet}
 ### Sizes
 
 <ComponentPreview code={`<Breadcrumbs {items} size="0" />  <!-- Small -->
+<Breadcrumbs {items} size="1" />  <!-- Default -->
 <Breadcrumbs {items} size="2" />  <!-- Medium -->
 <Breadcrumbs {items} size="3" />  <!-- Large -->`}>
-	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="0" />
-	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="2" />
-	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="3" />
+	<div style="display: flex; flex-direction: column; gap: 0.75rem;">
+		<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="0" />
+		<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="1" />
+		<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="2" />
+		<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="3" />
+	</div>
 </ComponentPreview>
 
 ### Click Handler
