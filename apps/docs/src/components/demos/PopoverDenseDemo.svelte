@@ -10,12 +10,11 @@
 </script>
 
 <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-	<div style="display:inline-block;position:relative;" bind:this={denseEl}>
+	<div style="display:inline-block;" bind:this={denseEl}>
 		<Button onclick={() => (denseOpen = !denseOpen)}>Dense Popover</Button>
 		<Popover
 			refElement={denseEl}
 			bind:opened={denseOpen}
-			strategy="absolute"
 			arrow={false}
 			placement="bottom-start"
 			dense>
@@ -23,12 +22,11 @@
 		</Popover>
 	</div>
 
-	<div style="display:inline-block;position:relative;" bind:this={defaultEl}>
+	<div style="display:inline-block;" bind:this={defaultEl}>
 		<Button onclick={() => (defaultOpen = !defaultOpen)}>Default</Button>
 		<Popover
 			refElement={defaultEl}
 			bind:opened={defaultOpen}
-			strategy="absolute"
 			arrow={false}
 			placement="bottom-start">
 			<p style="min-width: 200px; line-height: 1.5;">
@@ -37,14 +35,13 @@
 		</Popover>
 	</div>
 
-	<div style="display:inline-block;position:relative;" bind:this={comfortableEl}>
+	<div style="display:inline-block;" bind:this={comfortableEl}>
 		<Button onclick={() => (comfortableOpen = !comfortableOpen)}>
 			Comfortable Popover
 		</Button>
 		<Popover
 			refElement={comfortableEl}
 			bind:opened={comfortableOpen}
-			strategy="absolute"
 			arrow={false}
 			placement="bottom-start"
 			comfortable>

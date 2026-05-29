@@ -883,6 +883,17 @@
 		&.comfortable .popover-content {
 			padding: 1.5rem 2rem;
 		}
+		/* When the popover hosts a top-level list, drop the inner padding and
+		 * extra background so the list's own surface takes over — otherwise
+		 * users see a "container" of bg+padding wrapping the list. The list
+		 * comes from another component, so it must be matched with :global. */
+		&:has(> .popover-content > :global(ul.list:only-child)) {
+			background-color: transparent;
+			border-color: transparent;
+		}
+		&:has(> .popover-content > :global(ul.list:only-child)) .popover-content {
+			padding: 0;
+		}
 		.arrow {
 			position: absolute;
 			pointer-events: none;

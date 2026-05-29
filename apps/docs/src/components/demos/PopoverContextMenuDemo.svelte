@@ -1,5 +1,6 @@
 <script>
 	import { Popover } from '@delightstack/components/actions';
+	import { List, ListItem } from '@delightstack/components/display';
 
 	let opened = $state(false);
 	let menuX = $state(0);
@@ -11,6 +12,10 @@
 		menuY = e.clientY;
 		opened = true;
 	}
+
+	function close() {
+		opened = false;
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -20,9 +25,11 @@
 	Right-click anywhere in this area
 </div>
 <Popover bind:opened x={menuX} y={menuY} strategy="fixed" arrow={false} dense>
-	<div style="min-width: 140px; color: var(--color-text);">
-		<button style="display:block;width:100%;text-align:left;padding:0.375rem 0.5rem;border:none;background:none;color:inherit;cursor:pointer;font-size:0.875rem;font-family:inherit;border-radius:4px;" onclick={() => (opened = false)} onmouseenter={(e) => e.currentTarget.style.background='var(--color-bg-2,rgba(255,255,255,0.05))'} onmouseleave={(e) => e.currentTarget.style.background='none'}>Cut</button>
-		<button style="display:block;width:100%;text-align:left;padding:0.375rem 0.5rem;border:none;background:none;color:inherit;cursor:pointer;font-size:0.875rem;font-family:inherit;border-radius:4px;" onclick={() => (opened = false)} onmouseenter={(e) => e.currentTarget.style.background='var(--color-bg-2,rgba(255,255,255,0.05))'} onmouseleave={(e) => e.currentTarget.style.background='none'}>Copy</button>
-		<button style="display:block;width:100%;text-align:left;padding:0.375rem 0.5rem;border:none;background:none;color:inherit;cursor:pointer;font-size:0.875rem;font-family:inherit;border-radius:4px;" onclick={() => (opened = false)} onmouseenter={(e) => e.currentTarget.style.background='var(--color-bg-2,rgba(255,255,255,0.05))'} onmouseleave={(e) => e.currentTarget.style.background='none'}>Paste</button>
+	<div style="min-width: 160px;">
+		<List dense>
+			<ListItem onclick={close}>Cut</ListItem>
+			<ListItem onclick={close}>Copy</ListItem>
+			<ListItem onclick={close}>Paste</ListItem>
+		</List>
 	</div>
 </Popover>
