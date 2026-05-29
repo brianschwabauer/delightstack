@@ -61,12 +61,38 @@
 
 	let container: HTMLElement | undefined = $state(undefined);
 	let dragging = $state(false);
+	/** Whether the pointer moved during the current press, to distinguish a drag
+	 *  (already positioned live) from a click that should position on release. */
+	let pointer_moved = false;
 	let overshoot_px = $state(0);
 	let last_pointer_coord = 0;
 	let force_overflow = $state(false);
 	let overflow_timer: ReturnType<typeof setTimeout> | undefined;
+	let snapped_to: number | null = null;
 
-	const SNAP_RADIUS = 5;
+	/** Capture radius (%) — how close the divider must come before a snap grabs
+	 *  it. Small so you can rest near a snap point without being pulled in. */
+	const SNAP_RADIUS = 4;
+	/** Hold/well radius (%) — once snapped, how far the divider may travel before
+	 *  it breaks free. Kept large relative to SNAP_RADIUS so the magnet feels
+	 *  strong and sticky with a satisfying release spring (hysteresis). Capped
+	 *  per-direction by {@link snapReach} so neighbouring wells never overlap. */
+	const SNAP_ESCAPE = 10;
+
+	/** How far the handle may stray from `snap` toward `dir` (+1 / -1) before it
+	 *  hands off, and the radius of that snap's gravity well in that direction.
+	 *  Capped at the midpoint to the nearest neighbour so adjacent wells meet
+	 *  cleanly at the midpoint instead of overlapping — an overlap lets the next
+	 *  snap grab the handle partway into its well, teleporting the divider. */
+	function snapReach(snap: number, dir: number): number {
+		let reach = SNAP_ESCAPE;
+		for (const other of snaps) {
+			if (Math.sign(other - snap) === dir) {
+				reach = Math.min(reach, Math.abs(other - snap) / 2);
+			}
+		}
+		return reach;
+	}
 
 	const clampedPosition = $derived(Math.min(100, Math.max(0, position)));
 
@@ -89,18 +115,39 @@
 	function snapPosition(raw: number): number {
 		if (snaps.length === 0) return raw;
 
+		// Hysteresis: once locked to a snap, stay locked to *that* snap until the
+		// pointer moves past its (direction-aware) reach. Using snapReach instead
+		// of a flat SNAP_ESCAPE keeps the hold zone from overlapping the next
+		// snap's capture zone, so escaping one snap hands off to a free zone (or a
+		// clean snap-in) rather than teleporting straight into the neighbour.
+		if (snapped_to !== null) {
+			if (
+				Math.abs(raw - snapped_to) <= snapReach(snapped_to, Math.sign(raw - snapped_to))
+			) {
+				return snapped_to;
+			}
+			snapped_to = null;
+		}
+
+		// Not locked to anything: capture the nearest snap within SNAP_RADIUS
+		// (never reaching past the handoff midpoint for tightly-spaced snaps).
 		let nearest_snap = -1;
 		let min_dist = Infinity;
 
 		for (const snap of snaps) {
 			const dist = Math.abs(raw - snap);
-			if (dist < min_dist && dist <= SNAP_RADIUS) {
+			const capture = Math.min(SNAP_RADIUS, snapReach(snap, Math.sign(raw - snap)));
+			if (dist < min_dist && dist <= capture) {
 				min_dist = dist;
 				nearest_snap = snap;
 			}
 		}
 
-		return nearest_snap >= 0 ? nearest_snap : raw;
+		if (nearest_snap >= 0) {
+			snapped_to = nearest_snap;
+			return nearest_snap;
+		}
+		return raw;
 	}
 
 	function updatePosition(clientX: number, clientY: number) {
@@ -142,20 +189,26 @@
 			const overflow_px = (raw_pct < 0 ? raw_pct : raw_pct - 1) * dimension;
 			const max_shift = 24;
 			overshoot_px = max_shift * Math.tanh(overflow_px / 100);
-		} else if (snaps.length > 0 && snaps.some((s) => Math.abs(position - s) < 0.01)) {
-			// Magnetic snap gravity — smooth easing that reaches full-follow
-			// at the snap zone boundary, guaranteeing visual continuity
-			const snapped_pct = position / 100;
+		} else if (snapped_to !== null) {
+			// Magnetic snap gravity — the handle clings to the snap and only
+			// reluctantly follows the pointer until the escape boundary, giving
+			// an obvious "gravity well" feel before it pops free. The well radius
+			// must equal the escape reach (snapReach): at t === 1 the eased curve
+			// returns the full radius, so the divider sits exactly under the
+			// pointer at the boundary — making the handoff seamless instead of a
+			// jump when the snap releases the handle.
+			const snapped_pct = snapped_to / 100;
 			const pull_px = (raw_pct - snapped_pct) * dimension;
-			const snap_radius_px = (SNAP_RADIUS / 100) * dimension;
+			const well_radius_px =
+				(snapReach(snapped_to, Math.sign(raw_pct - snapped_pct)) / 100) * dimension;
 
-			if (snap_radius_px < 1) {
+			if (well_radius_px < 1) {
 				overshoot_px = 0;
 			} else {
-				const t = Math.min(1, Math.abs(pull_px) / snap_radius_px);
-				const gravity = 0.15;
+				const t = Math.min(1, Math.abs(pull_px) / well_radius_px);
+				const gravity = 0.16;
 				const eased = gravity * t + (1 - gravity) * t * t;
-				overshoot_px = Math.sign(pull_px) * eased * snap_radius_px;
+				overshoot_px = Math.sign(pull_px) * eased * well_radius_px;
 			}
 		} else {
 			overshoot_px = 0;
@@ -166,6 +219,7 @@
 		if (skeleton) return;
 		e.preventDefault();
 		dragging = true;
+		pointer_moved = false;
 		last_pointer_coord = vertical ? e.clientY : e.clientX;
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		updatePosition(e.clientX, e.clientY);
@@ -175,12 +229,14 @@
 	function handlePointerMove(e: PointerEvent) {
 		if (!dragging) return;
 		e.preventDefault();
+		pointer_moved = true;
 		updatePosition(e.clientX, e.clientY);
 	}
 
 	function handlePointerUp(e: PointerEvent) {
 		if (!dragging) return;
 		dragging = false;
+		snapped_to = null;
 		if (Math.abs(overshoot_px) > 0.5) {
 			force_overflow = true;
 			clearTimeout(overflow_timer);
@@ -194,6 +250,16 @@
 
 	function handleContainerClick(e: MouseEvent) {
 		if (skeleton) return;
+		// The browser fires a click after every press+release. When that release
+		// concluded a drag, the divider is already positioned (and may have just
+		// snapped) — re-running updatePosition here would reset position to the
+		// drop point with snap state cleared, leaving the release spring to settle
+		// somewhere other than the snap it animated toward. Only handle genuine
+		// clicks (no drag movement); presses are already positioned in pointerdown.
+		if (pointer_moved) {
+			pointer_moved = false;
+			return;
+		}
 		updatePosition(e.clientX, e.clientY);
 	}
 
@@ -247,9 +313,7 @@
 </script>
 
 {#if skeleton}
-	<div
-		class={['comparison', 'skeleton', className].filter(Boolean).join(' ')}
-		{id}>
+	<div class={['comparison', 'skeleton', className].filter(Boolean).join(' ')} {id}>
 		<div class="skeleton-inner"></div>
 	</div>
 {:else}
@@ -267,7 +331,6 @@
 		onpointermove={handlePointerMove}
 		onpointerup={handlePointerUp}
 		onpointercancel={handlePointerUp}>
-
 		<img
 			class="comparison-image before"
 			src={before}
@@ -286,7 +349,10 @@
 			<span class="label label-after">{label_after}</span>
 		{/if}
 
-		<div class="divider" class:vertical style={dividerStyle}
+		<div
+			class="divider"
+			class:vertical
+			style={dividerStyle}
 			style:--divider-overshoot="{overshoot_px}px">
 			<div
 				class="handle"
@@ -502,7 +568,9 @@
 		backdrop-filter: blur(10px) saturate(140%);
 		-webkit-backdrop-filter: blur(10px) saturate(140%);
 		border: 1px solid rgba(255, 255, 255, 0.5);
-		transition: box-shadow 150ms ease, background 150ms ease;
+		transition:
+			box-shadow 150ms ease,
+			background 150ms ease;
 
 		&:hover {
 			background: color-mix(in oklch, var(--handle-color) 70%, transparent);
