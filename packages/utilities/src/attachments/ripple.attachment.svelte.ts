@@ -78,7 +78,11 @@ function startRipple(
 	// Parent element
 	const target = ('touches' in e ? e.touches[0].target : e.currentTarget) as HTMLElement;
 	if (!target) return;
-	if (target.ariaDisabled || (<HTMLButtonElement>target).disabled) return;
+	// `ariaDisabled` reflects the attribute as a string, so an explicit
+	// `aria-disabled="false"` (valid, and common on toggle/grid widgets) would
+	// otherwise read as truthy and wrongly suppress the ripple.
+	if ((target.ariaDisabled && target.ariaDisabled !== 'false') || (<HTMLButtonElement>target).disabled)
+		return;
 
 	// Create ripple
 	const container = document.createElement('div');

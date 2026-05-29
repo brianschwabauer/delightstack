@@ -191,7 +191,6 @@
 		color: currentColor;
 		border-radius: var(--radius-round, 9999px);
 		font: inherit;
-		overflow: hidden;
 		transition:
 			background-color 250ms ease,
 			translate 200ms ease;
@@ -285,15 +284,35 @@
 		line-height: 1;
 	}
 
+	/* The "auto" badge sits in the lower-right corner. It's a small filled pill
+	 * (text-colored, with the letter knocked out in the background color) so it
+	 * reads clearly as an "A" and a ring separates it from the icon. The button
+	 * no longer clips its overflow, so the badge is never cut off. */
 	.auto-indicator {
 		position: absolute;
-		bottom: 0.15em;
-		right: 0.15em;
-		font-size: 0.55em;
-		font-weight: 700;
+		bottom: -0.05em;
+		right: -0.05em;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.15em;
+		height: 1.15em;
+		padding: 0 0.2em;
+		font-size: 0.62em;
+		font-weight: 800;
 		line-height: 1;
-		opacity: 0.7;
+		border-radius: var(--radius-round, 9999px);
+		/* Fill with the foreground color and knock the letter out in the
+		 * background color. Use explicit tokens (not currentColor) since this
+		 * element overrides its own `color`, which would collapse the contrast. */
+		background-color: var(--color-text, currentColor);
+		color: var(--color-bg, #fff);
+		box-shadow: 0 0 0 2px var(--color-bg, #fff);
 		pointer-events: none;
+	}
+	/* With a text label the mode is already spelled out, so the badge is redundant. */
+	.theme-toggle.has-label .auto-indicator {
+		display: none;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

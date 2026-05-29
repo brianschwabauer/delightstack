@@ -43,6 +43,16 @@ Disable the system/auto option to cycle only between light and dark.
 	<ThemeToggle client:load disableAuto />
 </ComponentPreview>
 
+### With a Text Label
+
+Set `showLabel` to display the current mode name ("Light" / "Dark" / "Auto") beside the icon. Pass `label` to override the text with your own.
+
+<ComponentPreview code={`<ThemeToggle showLabel />
+<ThemeToggle showLabel label="Appearance" />`}>
+	<ThemeToggle client:load showLabel />
+	<ThemeToggle client:load showLabel label="Appearance" />
+</ComponentPreview>
+
 ### Detecting Effective Dark Mode
 
 Bind to `isDark` to get the resolved dark state (taking system preference into account when theme is `'auto'`).
@@ -107,6 +117,8 @@ Override the default tooltip text.
 | `isDark` | `boolean` | `false` | Computed resolved dark state (`$bindable()`, read-only). True when effective appearance is dark. |
 | `size` | `'0' \| '1' \| '2'` | `'1'` | Component size (`'0'` = 18px icon, `'1'` = 24px icon, `'2'` = 32px icon) |
 | `disableAuto` | `boolean` | `false` | Hide the auto/system option (two-state toggle only) |
+| `showLabel` | `boolean` | `false` | Show a text label beside the icon ("Light" / "Dark" / "Auto") |
+| `label` | `string` | `undefined` | Custom label text override. Falls back to the current mode name when `showLabel` is set. |
 | `tooltip` | `string` | `''` | Override the default tooltip text. Defaults to the `aria-label` value. |
 | `id` | `string` | `undefined` | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |

@@ -171,7 +171,7 @@
 	.avatar {
 		--avatar-size: 32px;
 		--avatar-font: 0.75rem;
-		--avatar-status: 8px;
+		--avatar-status: 11px;
 		--avatar-radius: var(--radius-round, 9999px);
 
 		position: relative;
@@ -191,32 +191,32 @@
 		&.size-0 {
 			--avatar-size: 24px;
 			--avatar-font: 0.625rem;
-			--avatar-status: 9px;
+			--avatar-status: 10px;
 		}
 		&.size-1 {
 			--avatar-size: 32px;
 			--avatar-font: 0.75rem;
-			--avatar-status: 11px;
+			--avatar-status: 13px;
 		}
 		&.size-2 {
 			--avatar-size: 40px;
 			--avatar-font: 0.875rem;
-			--avatar-status: 13px;
+			--avatar-status: 15px;
 		}
 		&.size-3 {
 			--avatar-size: 56px;
 			--avatar-font: 1.125rem;
-			--avatar-status: 16px;
+			--avatar-status: 19px;
 		}
 		&.size-4 {
 			--avatar-size: 80px;
 			--avatar-font: 1.5rem;
-			--avatar-status: 20px;
+			--avatar-status: 25px;
 		}
 		&.size-5 {
 			--avatar-size: 120px;
 			--avatar-font: 2.25rem;
-			--avatar-status: 26px;
+			--avatar-status: 34px;
 		}
 
 		&.square {
@@ -343,26 +343,26 @@
 			}
 		}
 
-		/* Badges sit on the top-right corner of the avatar. Use a size that
-		 * scales with the avatar and positions the badge so its center sits
-		 * on the avatar's edge — that keeps long values like "99+" offset
-		 * rather than appearing centered on the avatar. */
+		/* Count badges hang off the top-right corner. Anchoring the badge's
+		 * LEFT edge to the avatar's right edge (rather than its right edge) makes
+		 * it grow outward to the right as the value widens, so long values like
+		 * "99+" stay pinned to the side instead of sliding back over the avatar. */
 		.badge {
 			position: absolute;
 			top: 0;
-			right: 0;
-			translate: 25% -25%;
+			left: 100%;
+			translate: -45% -30%;
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			background-color: var(--color-accent, var(--color-error, #ef4444));
 			color: var(--color-accent-text, #fff);
 			border-radius: var(--radius-round, 9999px);
-			font-size: 0.7rem;
+			font-size: 0.8rem;
 			font-weight: 700;
 			line-height: 1;
-			min-width: 1.4em;
-			height: 1.4em;
+			min-width: 1.5em;
+			height: 1.5em;
 			padding: 0 0.45em;
 			border: 2px solid light-dark(
 				var(--color-bg, #fff),
@@ -372,19 +372,23 @@
 			pointer-events: none;
 			white-space: nowrap;
 
+			/* A bare dot is square, so the width never grows — pin it to the
+			 * corner directly and let it hug the avatar's edge. */
 			&.dot {
-				width: 0.9em;
-				min-width: 0.9em;
-				height: 0.9em;
+				left: auto;
+				right: 0;
+				width: 0.95em;
+				min-width: 0.95em;
+				height: 0.95em;
 				padding: 0;
-				translate: 15% -15%;
+				translate: 25% -25%;
 			}
 		}
-		&.size-0 .badge { font-size: 0.55rem; }
-		&.size-2 .badge { font-size: 0.75rem; }
-		&.size-3 .badge { font-size: 0.85rem; }
-		&.size-4 .badge { font-size: 0.95rem; }
-		&.size-5 .badge { font-size: 1.1rem; }
+		&.size-0 .badge { font-size: 0.6rem; }
+		&.size-2 .badge { font-size: 0.85rem; }
+		&.size-3 .badge { font-size: 0.95rem; }
+		&.size-4 .badge { font-size: 1.1rem; }
+		&.size-5 .badge { font-size: 1.3rem; }
 
 		&.skeleton {
 			pointer-events: none;

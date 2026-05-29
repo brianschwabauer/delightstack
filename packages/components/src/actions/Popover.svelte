@@ -69,6 +69,13 @@
 		/** The number of milliseconds that the popover wait before popping up. Only applies when 'openOnHover' is true */
 		hoverDelay = 100,
 
+		/**
+		 * Whether the popover panel should be transparent — removes the background,
+		 * border, shadow, padding, and arrow so inner content (e.g. a List) provides
+		 * its own surface.
+		 */
+		transparent = false,
+
 		/** Whether the popover should have less padding */
 		dense = false,
 
@@ -732,6 +739,7 @@
 		<div
 			class="popover {className}"
 			class:positioned
+			class:transparent
 			class:dense
 			class:comfortable
 			bind:this={popoverElement}
@@ -893,6 +901,18 @@
 		}
 		&:has(> .popover-content > :global(ul.list:only-child)) .popover-content {
 			padding: 0;
+		}
+		/* Transparent panel: hand the surface entirely to the inner content. */
+		&.transparent {
+			background-color: transparent;
+			border-color: transparent;
+			box-shadow: none;
+		}
+		&.transparent .popover-content {
+			padding: 0;
+		}
+		&.transparent .arrow {
+			display: none;
 		}
 		.arrow {
 			position: absolute;

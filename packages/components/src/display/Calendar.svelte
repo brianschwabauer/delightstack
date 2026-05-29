@@ -598,7 +598,7 @@
 					class="calendar-nav-btn"
 					aria-label="Previous month"
 					onclick={() => navigateMonth(-1)}
-					{@attach ripple({})}>
+					{@attach ripple({ zIndex: 1 })}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3L5 8L10 13"
@@ -616,7 +616,7 @@
 					class="calendar-nav-btn"
 					aria-label="Next month"
 					onclick={() => navigateMonth(1)}
-					{@attach ripple({})}>
+					{@attach ripple({ zIndex: 1 })}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M6 3L11 8L6 13"
@@ -691,7 +691,7 @@
 						onclick={() => selectDate(day.date)}
 						onfocus={() => handleDayFocus(day.date)}
 						onmouseenter={() => handleDayHover(day.date)}
-						{@attach ripple({ enabled: !day.is_disabled })}>
+						{@attach ripple({ enabled: !day.is_disabled, zIndex: 1 })}>
 						<span class="day-number">{day.day_number}</span>
 						{#if has_dots}
 							<div class="day-dots">
@@ -715,7 +715,7 @@
 						role="option"
 						aria-selected={false}
 						onclick={() => selectTimeSlot(slot)}
-						{@attach ripple({})}>
+						{@attach ripple({ zIndex: 1 })}>
 						{formatTimeSlot(slot)}
 					</button>
 				{/each}
@@ -795,17 +795,22 @@
 		padding: 0;
 		position: relative;
 		overflow: hidden;
-		transition: background 120ms ease, translate 200ms ease;
+		transition:
+			background 120ms ease,
+			transform 200ms ease;
 
 		&:hover {
 			background: light-dark(
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
-			transition: translate 200ms ease;
+			transition: transform 200ms ease;
 		}
+		/* Per-button perspective so the press recedes toward this button's own
+		 * center, not the calendar's center. */
 		&:active {
-			translate: 0px 1px;
+			transform: perspective(20px)
+				translate3d(0px, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 		}
 
 		&:focus-visible {
@@ -897,7 +902,7 @@
 		transition:
 			background 100ms ease,
 			color 100ms ease,
-			translate 200ms ease;
+			transform 200ms ease;
 		outline: none;
 
 		&:hover:not(.disabled) {
@@ -905,10 +910,13 @@
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
-			transition: translate 200ms ease;
+			transition: transform 200ms ease;
 		}
+		/* Per-button perspective so the press recedes toward this cell's own
+		 * center, not the grid's center. */
 		&:active:not(.disabled) {
-			translate: 0px 1px;
+			transform: perspective(100px)
+				translate3d(0px, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 		}
 
 		&:focus-visible {
@@ -1067,14 +1075,24 @@
 		cursor: pointer;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		white-space: nowrap;
-		transition: background 100ms ease;
+		position: relative;
+		overflow: hidden;
+		transition:
+			background 100ms ease,
+			transform 200ms ease;
 
 		&:hover {
 			background: light-dark(
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
-			transition: none;
+			transition: transform 200ms ease;
+		}
+		/* Per-button perspective so the press recedes toward this slot's own
+		 * center, not the column's center. */
+		&:active {
+			transform: perspective(100px)
+				translate3d(0px, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 		}
 
 		&:focus-visible {

@@ -664,6 +664,11 @@
 			color: var(--color-text);
 			cursor: pointer;
 			padding: 0.75em 1.5em;
+			/* Set an explicit line-height so the label centers symmetrically
+			 * regardless of the host page's inherited line-height. Inheriting a
+			 * loose prose line-height (e.g. 1.75) leaves fractional half-leading
+			 * that rounds unevenly at small font sizes, pushing the text upward. */
+			line-height: normal;
 			transition:
 				background-color 300ms,
 				color 300ms,

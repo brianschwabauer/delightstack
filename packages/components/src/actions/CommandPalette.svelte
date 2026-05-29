@@ -235,6 +235,11 @@
 
 	let query = $state('');
 	let selected_index = $state(0);
+	// Tracks whether the highlighted row comes from keyboard navigation. When
+	// true the cursor row shows a persistent highlight; pointer movement turns
+	// it off so the mouse hover (instant-in, fade-out) drives the highlight
+	// instead — mirroring the List/ListItem interaction.
+	let keyboard_nav = $state(true);
 	let is_executing = $state(false);
 	let input_el = $state<HTMLInputElement | undefined>(undefined);
 	let listbox_el = $state<HTMLElement | undefined>(undefined);
@@ -334,6 +339,7 @@
 		if (open) {
 			query = '';
 			selected_index = 0;
+			keyboard_nav = true;
 			is_executing = false;
 			tick().then(() => input_el?.focus());
 		}
@@ -373,11 +379,13 @@
 		switch (e.key) {
 			case 'ArrowDown':
 				e.preventDefault();
+				keyboard_nav = true;
 				selected_index = (selected_index + 1) % count;
 				scrollSelectedIntoView();
 				break;
 			case 'ArrowUp':
 				e.preventDefault();
+				keyboard_nav = true;
 				selected_index = (selected_index - 1 + count) % count;
 				scrollSelectedIntoView();
 				break;
@@ -394,7 +402,7 @@
 		}
 	}
 
-	async function executeCommand(command: CommandOption) {
+	async function executeCommand(command: CommandOption, viaPointer = false) {
 		if (is_executing || command.disabled) return;
 
 		trackRecent(command.id, recentLimit);
@@ -409,6 +417,9 @@
 			} catch {
 				is_executing = false;
 			}
+		} else if (viaPointer) {
+			// Let the click ripple finish animating before the palette unmounts.
+			setTimeout(close, 220);
 		} else {
 			close();
 		}
@@ -492,7 +503,7 @@
 							{group.label}
 						</div>
 					{/if}
-					{#each group.commands as command (command.id)}
+					{#each group.commands as command, group_i (command.id)}
 						{@const flat_index = visible_commands.indexOf(command)}
 						{@const is_selected = flat_index === selected_index}
 						{@const option_id = `${id}-option-${command.id}`}
@@ -504,11 +515,13 @@
 							aria-selected={is_selected}
 							aria-disabled={command.disabled || false}
 							class="item"
-							class:selected={is_selected}
+							class:selected={is_selected && keyboard_nav}
+							class:first-in-group={group_i === 0}
+							class:last-in-group={group_i === group.commands.length - 1}
 							class:disabled={command.disabled}
-							onpointerenter={() => { selected_index = flat_index; }}
-							onclick={() => { if (!command.disabled) executeCommand(command); }}
-							{@attach ripple({ enabled: !command.disabled })}
+							onpointerenter={() => { keyboard_nav = false; selected_index = flat_index; }}
+							onclick={() => { if (!command.disabled) executeCommand(command, true); }}
+							{@attach ripple({ enabled: !command.disabled, zIndex: 1 })}
 						>
 							{#if command.icon}
 								<span class="item-icon">
@@ -670,16 +683,48 @@
 		margin: 0 0.5rem;
 		gap: 0.75rem;
 		cursor: pointer;
-		border-radius: var(--radius-4, 8px);
+		/* Square by default; the corners are rounded per group (top item rounded
+		 * on top, last item rounded on the bottom) so each category reads as a
+		 * connected block — the same idea as List/ListItem. */
+		border-radius: 0;
 		overflow: hidden;
-		transition: background-color 80ms ease, translate 200ms ease;
+		transition: transform 200ms ease;
 
-		&.selected {
-			background-color: var(--color-bg-active);
+		/* Hover/selection highlight. The base overlay fades (300ms); on hover it
+		 * appears instantly and fades away on leave — matching ListItem. The
+		 * keyboard cursor (.selected) uses the gentle fade in both directions. */
+		&::before {
+			content: '';
+			position: absolute;
+			inset: 0;
+			background-color: var(--color-text);
+			border-radius: inherit;
+			opacity: 0;
+			transition: opacity 300ms ease;
+			pointer-events: none;
+		}
+		&.selected::before {
+			opacity: 0.06;
+		}
+		&:hover:not(.disabled)::before {
+			opacity: 0.06;
+			transition-duration: 0ms;
 		}
 
+		&.first-in-group {
+			border-top-left-radius: var(--radius-4, 8px);
+			border-top-right-radius: var(--radius-4, 8px);
+		}
+		&.last-in-group {
+			border-bottom-left-radius: var(--radius-4, 8px);
+			border-bottom-right-radius: var(--radius-4, 8px);
+		}
+
+		/* Per-item perspective so the press recedes toward the item's own
+		 * center rather than the list's center (container perspective would
+		 * share one vanishing point across every row). */
 		&:active:not(.disabled) {
-			translate: 0 1px;
+			transform: perspective(100px) translate3d(0px, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 		}
 
 		&.disabled {

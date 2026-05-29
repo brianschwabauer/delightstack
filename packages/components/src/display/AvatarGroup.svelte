@@ -9,6 +9,8 @@
 <script lang="ts">
 	import Avatar from './Avatar.svelte';
 	import { tooltip } from '@delightstack/utilities';
+	import { scale } from 'svelte/transition';
+	import { backOut, cubicOut } from 'svelte/easing';
 
 	const propId = $props.id();
 
@@ -41,10 +43,14 @@
 		skeletonCount = 4,
 
 		/** Individual avatar clicked */
-		onclick = undefined as ((payload: { avatar: AvatarData; index: number }) => void) | undefined,
+		onclick = undefined as
+			| ((payload: { avatar: AvatarData; index: number }) => void)
+			| undefined,
 
 		/** Overflow indicator clicked */
-		onoverflowclick = undefined as ((payload: { remaining: AvatarData[] }) => void) | undefined,
+		onoverflowclick = undefined as
+			| ((payload: { remaining: AvatarData[] }) => void)
+			| undefined,
 
 		/** Element ID */
 		id = propId,
@@ -109,7 +115,6 @@
 	style:--overflow-font={font_map[size] || '0.625rem'}
 	role="group"
 	aria-label="Avatar group">
-
 	{#if skeleton}
 		{#each { length: skeletonCount } as _, i}
 			<div
@@ -124,7 +129,21 @@
 				class="avatar-wrapper"
 				class:interactive={!!onclick}
 				style:z-index={direction === 'right' ? visible_avatars.length - i : i + 1}
-				{@attach tooltip(avatar.name)}>
+				{@attach tooltip(avatar.name)}
+				in:scale|local={{
+					start: 0.3,
+					opacity: 0,
+					duration: 300,
+					delay: Math.max(0, Math.min(i - max, 20) * 30),
+					easing: backOut,
+				}}
+				out:scale|local={{
+					start: 0.4,
+					opacity: 0,
+					duration: 200,
+					delay: Math.max(0, visible_avatars.length - 1 - i) * 30,
+					easing: cubicOut,
+				}}>
 				{#if avatar.href}
 					<a href={avatar.href} class="avatar-link" aria-label={avatar.name}>
 						<Avatar
@@ -238,14 +257,8 @@
 		width: var(--avatar-size);
 		height: var(--avatar-size);
 		border-radius: var(--radius-round, 9999px);
-		background: light-dark(
-			var(--color-border, #d1d5db),
-			var(--color-border, #4b5563)
-		);
-		color: light-dark(
-			var(--color-text-muted, #6b7280),
-			var(--color-text-muted, #9ca3af)
-		);
+		background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		font-size: var(--overflow-font);
 		font-weight: 600;
 		line-height: 1;
