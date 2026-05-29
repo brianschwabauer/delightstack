@@ -5,6 +5,7 @@ description: A component for displaying key metrics with optional labels, icons,
 
 import { Stat } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import StatDemo from '../../../../components/demos/StatDemo.svelte';
 
 ## Import
 
@@ -15,7 +16,7 @@ import { Stat } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<Stat value={1234} label="Total Users" />`}>
-  <Stat client:load value={1234} label="Total Users" />
+  <StatDemo client:load value={1234} label="Total Users" />
 </ComponentPreview>
 
 ## Examples
@@ -30,7 +31,7 @@ ${'  '}label="Revenue"
 ${'  '}change={12.5}
 ${'  '}changeLabel="vs last month"
 />`}>
-  <Stat client:load value="$12,450" label="Revenue" change={12.5} changeLabel="vs last month" />
+  <StatDemo client:load value={12450} prefix="$" label="Revenue" change={12.5} changeLabel="vs last month" />
 </ComponentPreview>
 
 ### With Icon
@@ -60,16 +61,16 @@ Four sizes are available for different contexts.
 <Stat value={42} label="Tasks" size="1" />
 <Stat value={42} label="Tasks" size="2" />
 <Stat value={42} label="Tasks" size="3" />`}>
-  <Stat client:load value={42} label="Tasks" size="0" />
-  <Stat client:load value={42} label="Tasks" size="1" />
-  <Stat client:load value={42} label="Tasks" size="2" />
-  <Stat client:load value={42} label="Tasks" size="3" />
+  <StatDemo client:load value={42} label="Tasks" size="0" />
+  <StatDemo client:load value={42} label="Tasks" size="1" />
+  <StatDemo client:load value={42} label="Tasks" size="2" />
+  <StatDemo client:load value={42} label="Tasks" size="3" />
 </ComponentPreview>
 
 ### Horizontal Layout
 
 <ComponentPreview code={`<Stat horizontal value="99.9%" label="Uptime" />`}>
-  <Stat client:load horizontal value="99.9%" label="Uptime" />
+  <StatDemo client:load horizontal value={99.9} suffix="%" decimals={1} label="Uptime" />
 </ComponentPreview>
 
 ### Override Trend Direction
@@ -83,7 +84,7 @@ ${'  '}change={-15}
 ${'  '}trend="up"
 ${'  '}changeLabel="fewer than last week"
 />`}>
-  <Stat client:load value={23} label="Open Bugs" change={-15} trend="up" changeLabel="fewer than last week" />
+  <StatDemo client:load value={23} label="Open Bugs" change={-15} trend="up" changeLabel="fewer than last week" />
 </ComponentPreview>
 
 ### Skeleton Loading

@@ -5,6 +5,7 @@ description: An animated number display that counts up or down with Intersection
 
 import { Counter } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import CounterDemo from '../../../../components/demos/CounterDemo.svelte';
 
 ## Import
 
@@ -15,21 +16,23 @@ import { Counter } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<Counter value={1234} />`}>
-	<Counter client:load value={1234} />
+	<CounterDemo client:load value={1234} />
 </ComponentPreview>
 
 ## Examples
 
 ### Revenue with Prefix
 
+The prefix is rendered smaller and top-aligned, like a superscript.
+
 <ComponentPreview code={`<Counter value={1234567} prefix="$" />`}>
-	<Counter client:load value={1234567} prefix="$" />
+	<CounterDemo client:load value={1234567} prefix="$" />
 </ComponentPreview>
 
 ### Percentage with Suffix
 
 <ComponentPreview code={`<Counter value={87.5} suffix="%" decimals={1} />`}>
-	<Counter client:load value={87.5} suffix="%" decimals={1} />
+	<CounterDemo client:load value={87.5} suffix="%" decimals={1} />
 </ComponentPreview>
 
 ### Custom Formatter
@@ -49,36 +52,24 @@ Override the default `Intl.NumberFormat` with a custom function for compact disp
 
 ### Flip Animation
 
-Digits flip individually like a mechanical counter with staggered 3D transforms.
+Digits flip individually like a mechanical counter with 3D transforms.
 
 <ComponentPreview code={`<Counter value={42} animation="flip" />`}>
-	<Counter client:load value={42} animation="flip" />
-</ComponentPreview>
-
-### Fade Animation
-
-Cross-fade between old and new values.
-
-<ComponentPreview code={`<Counter value={100} animation="fade" />`}>
-	<Counter client:load value={100} animation="fade" />
+	<CounterDemo client:load value={42} animation="flip" />
 </ComponentPreview>
 
 ### Locale-Aware Formatting
 
 Number separators adapt to the specified locale.
 
-```svelte
-<!-- German: 1.234,56 -->
-<Counter value={1234.56} locale="de-DE" decimals={2} />
-
-<!-- US: 1,234.56 -->
-<Counter value={1234.56} locale="en-US" decimals={2} />
-```
+<ComponentPreview code={`<Counter value={1234.56} locale="de-DE" decimals={2} />`}>
+	<CounterDemo client:load value={1234.56} locale="de-DE" decimals={2} />
+</ComponentPreview>
 
 ### With Delay and Duration
 
 <ComponentPreview code={`<Counter value={9999} duration={2000} delay={500} />`}>
-	<Counter client:load value={9999} duration={2000} delay={500} />
+	<CounterDemo client:load value={9999} duration={2000} delay={500} />
 </ComponentPreview>
 
 ### Skeleton Loading
@@ -92,19 +83,25 @@ Number separators adapt to the specified locale.
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `value` | `number` | required | Target number to display |
-| `duration` | `number` | `1000` | Animation duration in milliseconds |
+| `duration` | `number` | `1500` | Animation duration in milliseconds |
 | `delay` | `number` | `0` | Delay before animation starts (ms) |
 | `decimals` | `number` | `0` | Number of decimal places |
-| `prefix` | `string` | - | Text before the number (e.g., "$") |
-| `suffix` | `string` | - | Text after the number (e.g., "%") |
+| `prefix` | `string` | - | Text before the number (rendered small + top) |
+| `suffix` | `string` | - | Text after the number (rendered small + top) |
 | `format` | `(n: number) => string` | - | Custom formatter (overrides Intl.NumberFormat) |
-| `animation` | `'count' \| 'flip' \| 'fade'` | `'count'` | Animation style |
+| `animation` | `'count' \| 'flip'` | `'count'` | Animation style |
 | `separator` | `boolean` | `true` | Use locale thousands separator |
 | `locale` | `string` | - | BCP 47 locale for number formatting |
-| `easing` | `(t: number) => number` | ease-out cubic | Animation easing function |
+| `easing` | `(t: number) => number` | quintOut | Animation easing function |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
+
+## Methods
+
+| Method | Description |
+|--------|-------------|
+| `restart()` | Reset and replay the count animation from `0` to `value`. Useful for demos and on-demand replays. |
 
 ## Events
 
@@ -117,7 +114,7 @@ Number separators adapt to the specified locale.
 - Element has `aria-live="polite"` so screen readers announce value changes
 - `role="img"` with a computed `aria-label` including prefix, value, and suffix
 - Final value is always accessible in the DOM (animation is visual only)
-- `prefers-reduced-motion` disables all animation -- the final value is shown immediately
+- `prefers-reduced-motion` disables all animation — the final value is shown immediately
 - `font-variant-numeric: tabular-nums` prevents layout shift during animation
-- Animation is triggered by `IntersectionObserver` -- starts only when the element scrolls into view
+- Animation is triggered by `IntersectionObserver` — starts only when the element scrolls into view
 - On the server (SSR), the final formatted value is rendered immediately with no animation

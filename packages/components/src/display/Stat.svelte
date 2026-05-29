@@ -31,6 +31,15 @@
 		/** Animate value via Counter */
 		animated = true,
 
+		/** Prefix shown smaller and top-aligned alongside the value (e.g. "$") */
+		prefix = undefined as string | undefined,
+
+		/** Suffix shown smaller and top-aligned alongside the value (e.g. "%") */
+		suffix = undefined as string | undefined,
+
+		/** Number of decimal places for numeric values */
+		decimals = 0,
+
 		/** Show loading skeleton */
 		skeleton = false,
 
@@ -49,10 +58,19 @@
 		size?: '0' | '1' | '2' | '3';
 		horizontal?: boolean;
 		animated?: boolean;
+		prefix?: string;
+		suffix?: string;
+		decimals?: number;
 		skeleton?: boolean;
 		id?: string;
 		class?: string;
 	} = $props();
+
+	let counter_ref = $state<{ restart: () => void } | undefined>(undefined);
+
+	export function restart() {
+		counter_ref?.restart();
+	}
 
 	const is_numeric = $derived(typeof value === 'number');
 
@@ -118,9 +136,16 @@
 		<div class="stat-body">
 			<div class="stat-value" aria-live="polite">
 				{#if is_numeric && animated}
-					<Counter value={value as number} />
+					<Counter
+						bind:this={counter_ref}
+						value={value as number}
+						{prefix}
+						{suffix}
+						{decimals} />
 				{:else}
+					{#if prefix}<span class="stat-affix stat-prefix">{prefix}</span>{/if}
 					{value}
+					{#if suffix}<span class="stat-affix stat-suffix">{suffix}</span>{/if}
 				{/if}
 			</div>
 
@@ -224,7 +249,19 @@
 		color: var(--color-text, light-dark(#111827, #f9fafb));
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
+		display: inline-flex;
+		align-items: flex-start;
 	}
+
+	.stat-affix {
+		font-size: 0.5em;
+		line-height: 1;
+		font-weight: 500;
+		opacity: 0.85;
+		padding-top: 0.15em;
+	}
+	.stat-prefix { margin-right: 0.1em; }
+	.stat-suffix { margin-left: 0.1em; }
 
 	.stat-label {
 		font-size: var(--stat-label-font);
