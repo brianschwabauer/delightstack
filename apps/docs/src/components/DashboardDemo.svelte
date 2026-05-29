@@ -10,7 +10,7 @@
 	import { Input, Select, Toggle, Checkbox, Radio, RadioGroup, Range, Rating, Fieldset } from '@delightstack/components/form';
 	import type { SelectOption } from '@delightstack/components/form';
 	import {
-		Tabs, Tab, Breadcrumbs, Pagination, Steps, Step, Drawer,
+		Tabs, Tab, Breadcrumbs, Pagination, Steps, Step,
 	} from '@delightstack/components/navigation';
 	import type { BreadcrumbItem } from '@delightstack/components/navigation';
 
@@ -208,7 +208,7 @@
 <Toaster />
 <CommandPalette bind:open={commandPaletteOpen} {commands} placeholder="Type a command..." />
 
-<Drawer bind:open={drawerOpen} right width="380px">
+<Modal bind:open={drawerOpen}>
 	{#snippet header()}
 		<div class="drawer-header-content">
 			<h3>Notifications</h3>
@@ -228,7 +228,7 @@
 			</ListItem>
 		{/each}
 	</List>
-</Drawer>
+</Modal>
 
 <div class="dashboard" class:sidebar-collapsed={sidebarCollapsed}>
 	<!-- ─── Sidebar ──────────────────────────────────────────────── -->
@@ -489,7 +489,7 @@
 						<div class="card settings-card">
 							<div class="card-header"><h3>Profile</h3></div>
 							<div class="settings-form">
-								<Fieldset legend="Personal Information" bordered>
+								<Fieldset label="Personal Information" bordered>
 									<div class="profile-photo-row">
 										<Avatar name={profileName} size="3" />
 										<Button outline size="0" onclick={() => toast.info('Photo upload coming soon')}>Change photo</Button>
@@ -501,7 +501,7 @@
 										onchange={({ value }) => { profileRole = value as string; }} />
 								</Fieldset>
 								<div class="fieldset-spacer"></div>
-								<Fieldset legend="Preferences" bordered>
+								<Fieldset label="Preferences" bordered>
 									<RadioGroup label="Theme" bind:value={profileTheme} horizontal>
 										<Radio value="light" label="Light" />
 										<Radio value="dark" label="Dark" />
