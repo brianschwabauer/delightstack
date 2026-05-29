@@ -258,14 +258,14 @@ Here is a registration form with multiple field types, validation, and user feed
   onsubmit={handleSubmit}
   onerror={handleError}
 >
-  <Fieldset legend="Personal Information">
+  <Fieldset label="Personal Information">
     <Input name="first_name" label="First Name" />
     <Input name="last_name" label="Last Name" />
     <Input name="email" label="Email" type="email" />
     <Input name="password" label="Password" type="password" />
   </Fieldset>
 
-  <Fieldset legend="Profile">
+  <Fieldset label="Profile">
     <Select
       name="role"
       label="Role"
@@ -275,7 +275,7 @@ Here is a registration form with multiple field types, validation, and user feed
     <Rating name="experience" label="Experience Level" />
   </Fieldset>
 
-  <Fieldset legend="Preferences">
+  <Fieldset label="Preferences">
     <Toggle name="newsletter" label="Subscribe to newsletter" />
     <Checkbox name="terms" label="I agree to the terms and conditions" />
   </Fieldset>

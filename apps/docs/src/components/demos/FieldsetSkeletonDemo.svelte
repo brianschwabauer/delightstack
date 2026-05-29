@@ -3,7 +3,7 @@
 </script>
 
 <div style="width: 100%;">
-	<Fieldset skeleton legend="User Profile">
+	<Fieldset skeleton label="User Profile" bordered>
 		<Input label="Name" name="name" skeleton />
 		<Input label="Email" name="email" skeleton />
 	</Fieldset>
