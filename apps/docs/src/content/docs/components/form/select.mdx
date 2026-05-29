@@ -12,6 +12,7 @@ import SelectGroupedDemo from '../../../../components/demos/SelectGroupedDemo.sv
 import SelectCreatableDemo from '../../../../components/demos/SelectCreatableDemo.svelte';
 import SelectErrorDemo from '../../../../components/demos/SelectErrorDemo.svelte';
 import SelectCustomOptionDemo from '../../../../components/demos/SelectCustomOptionDemo.svelte';
+import SelectAsyncDemo from '../../../../components/demos/SelectAsyncDemo.svelte';
 
 ## Import
 
@@ -117,8 +118,7 @@ ${'  '}];
 
 Use `onsearch` to load options dynamically. The component debounces search input internally.
 
-```svelte
-<script>
+<ComponentPreview code={`<script>
   import { Select } from '@delightstack/components';
 
   let selected = $state('');
@@ -137,8 +137,9 @@ Use `onsearch` to load options dynamically. The component debounces search input
   bind:value={selected}
   {options}
   label="Search users"
-/>
-```
+/>`}>
+  <SelectAsyncDemo client:load />
+</ComponentPreview>
 
 ### Creatable Mode
 

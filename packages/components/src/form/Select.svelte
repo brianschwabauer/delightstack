@@ -11,6 +11,8 @@
 <script lang="ts">
 	import { tooltip, ripple } from '@delightstack/utilities';
 	import { type Snippet } from 'svelte';
+	import { scale } from 'svelte/transition';
+	import { backOut, quintOut } from 'svelte/easing';
 
 	const propId = $props.id();
 	let {
@@ -615,7 +617,10 @@
 				{@render renderValue(selectedOptions as SelectOption | SelectOption[])}
 			{:else if multiple && Array.isArray(selectedOptions) && selectedOptions.length > 0}
 				{#each selectedOptions as opt (opt.value)}
-					<span class="select-chip">
+					<span
+						class="select-chip"
+						in:scale={{ duration: 200, start: 0.6, easing: backOut }}
+						out:scale={{ duration: 150, start: 0.6, easing: quintOut }}>
 						<span>{opt.label}</span>
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1312,8 +1317,6 @@
 		border-radius: var(--radius-4, 16px);
 		box-shadow: var(--shadow-2, 0 8px 28px -8px rgb(0 0 0 / 0.3));
 		scrollbar-width: thin;
-		/* Lets each option's pressed state recede slightly in 3D */
-		perspective: 100px;
 		/* Flip above the trigger when there is no room below */
 		position-try-fallbacks: flip-block;
 		/* Expand-in from the edge closest to the trigger — origin flips to
@@ -1375,9 +1378,12 @@
 		padding: 0.7em 0.85em;
 		border-radius: var(--radius-2, 8px);
 		cursor: pointer;
+		/* Self-contained perspective so the pressed dip recedes toward each
+		 * option's own center, not the center of the whole list. */
+		transform-origin: center center;
 		transition:
 			background 120ms var(--_ease),
-			translate 200ms ease;
+			transform 200ms ease;
 		user-select: none;
 	}
 	.select-option:hover,
@@ -1392,9 +1398,11 @@
 		opacity: 0.5;
 		pointer-events: none;
 	}
-	/* Pressed feedback — matches the Button component's tactile dip */
+	/* Pressed feedback — matches the Button component's tactile dip. The
+	 * perspective is baked into the transform so the recede is relative to
+	 * the option itself. */
 	.select-option:active:not(.disabled) {
-		translate: 0 1px clamp(-10px, calc(0.2em - 12px), -2px);
+		transform: perspective(120px) translate3d(0, 1px, -6px);
 	}
 
 	.select-option-content {
@@ -1478,8 +1486,8 @@
 
 	/* Icons scale with the control's font size */
 	.select-chevron svg {
-		width: 1.15em;
-		height: 1.15em;
+		width: 1.4em;
+		height: 1.4em;
 	}
 	.select-clear svg {
 		width: 1.05em;

@@ -11,4 +11,4 @@
 	];
 </script>
 
-<Select bind:value={country} options={countries} label="Country" placeholder="Select a country" />
+<Select bind:value={country} options={countries} label="Country" />
