@@ -4,6 +4,7 @@ description: A QR code generator component that renders scannable codes as crisp
 ---
 
 import { QR } from '@delightstack/components/display';
+import QrDownloadDemo from '../../../../components/demos/QrDownloadDemo.svelte';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 
 ## Import
@@ -62,14 +63,15 @@ Use level `'H'` for environments where the QR code may be partially obscured or 
 
 ### Downloadable
 
-Show a download button that exports the QR code as a PNG.
+The QR component exposes a `triggerDownload(filename?)` method so consumers can wire up their own download button.
 
-<ComponentPreview code={`<QR
-${'  '}value="https://example.com"
-${'  '}downloadable
-${'  '}downloadFilename="my-share-code"
-/>`}>
-  <QR client:load value="https://example.com" downloadable downloadFilename="my-share-code" />
+<ComponentPreview code={`<script>
+${'  '}let qr_ref = $state(undefined);
+</script>
+
+<QR bind:this={qr_ref} value="https://example.com" downloadFilename="my-share-code" />
+<Button outline onclick={() => qr_ref.triggerDownload()}>Download PNG</Button>`}>
+  <QrDownloadDemo client:load />
 </ComponentPreview>
 
 ### Skeleton Loading

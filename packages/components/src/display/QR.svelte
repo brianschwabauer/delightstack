@@ -897,9 +897,17 @@
 		logo_loaded = true;
 	}
 
-	async function handleDownload() {
+	/** Trigger a PNG download of the QR code. Consumers can call this to wire
+	 *  up their own download button. Returns a promise that resolves when the
+	 *  download has been initiated. */
+	export async function triggerDownload(filename?: string): Promise<void> {
+		await handleDownload(filename);
+	}
+
+	async function handleDownload(filenameOverride?: string) {
 		if (is_downloading || !matrix) return;
 		is_downloading = true;
+		const filename = filenameOverride ?? downloadFilename;
 
 		try {
 			const svg_el = document.getElementById(`${id}-svg`);
@@ -935,7 +943,7 @@
 						const download_url = URL.createObjectURL(blob);
 						const a = document.createElement('a');
 						a.href = download_url;
-						a.download = `${downloadFilename}.png`;
+						a.download = `${filename}.png`;
 						document.body.appendChild(a);
 						a.click();
 						document.body.removeChild(a);
@@ -1028,37 +1036,6 @@
 			{/if}
 		</svg>
 
-		{#if downloadable}
-			<button
-				class="download-btn"
-				onclick={handleDownload}
-				disabled={is_downloading}
-				aria-label="Download QR code as PNG"
-				type="button">
-				{#if is_downloading}
-					<svg
-						class="download-icon spin"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						aria-hidden="true">
-						<path
-							d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-					</svg>
-				{:else}
-					<svg
-						class="download-icon"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						aria-hidden="true">
-						<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-					</svg>
-				{/if}
-			</button>
-		{/if}
 	</div>
 {/if}
 
