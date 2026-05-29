@@ -16,6 +16,7 @@
 </script>
 
 <script lang="ts">
+	import { ripple } from '@delightstack/utilities';
 	const propId = $props.id();
 
 	let {
@@ -596,7 +597,8 @@
 					type="button"
 					class="calendar-nav-btn"
 					aria-label="Previous month"
-					onclick={() => navigateMonth(-1)}>
+					onclick={() => navigateMonth(-1)}
+					{@attach ripple({})}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3L5 8L10 13"
@@ -613,7 +615,8 @@
 					type="button"
 					class="calendar-nav-btn"
 					aria-label="Next month"
-					onclick={() => navigateMonth(1)}>
+					onclick={() => navigateMonth(1)}
+					{@attach ripple({})}>
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M6 3L11 8L6 13"
@@ -687,7 +690,8 @@
 						disabled={day.is_disabled}
 						onclick={() => selectDate(day.date)}
 						onfocus={() => handleDayFocus(day.date)}
-						onmouseenter={() => handleDayHover(day.date)}>
+						onmouseenter={() => handleDayHover(day.date)}
+						{@attach ripple({ enabled: !day.is_disabled })}>
 						<span class="day-number">{day.day_number}</span>
 						{#if has_dots}
 							<div class="day-dots">
@@ -710,7 +714,8 @@
 						class="time-slot"
 						role="option"
 						aria-selected={false}
-						onclick={() => selectTimeSlot(slot)}>
+						onclick={() => selectTimeSlot(slot)}
+						{@attach ripple({})}>
 						{formatTimeSlot(slot)}
 					</button>
 				{/each}
@@ -788,14 +793,19 @@
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		flex-shrink: 0;
 		padding: 0;
-		transition: background 120ms ease;
+		position: relative;
+		overflow: hidden;
+		transition: background 120ms ease, translate 200ms ease;
 
 		&:hover {
 			background: light-dark(
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
-			transition: none;
+			transition: translate 200ms ease;
+		}
+		&:active {
+			translate: 0px 1px;
 		}
 
 		&:focus-visible {
@@ -883,9 +893,11 @@
 		font-family: inherit;
 		font-variant-numeric: tabular-nums;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+		overflow: hidden;
 		transition:
 			background 100ms ease,
-			color 100ms ease;
+			color 100ms ease,
+			translate 200ms ease;
 		outline: none;
 
 		&:hover:not(.disabled) {
@@ -893,7 +905,10 @@
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
-			transition: none;
+			transition: translate 200ms ease;
+		}
+		&:active:not(.disabled) {
+			translate: 0px 1px;
 		}
 
 		&:focus-visible {
