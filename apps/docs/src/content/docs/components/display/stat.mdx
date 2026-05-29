@@ -6,6 +6,7 @@ description: A component for displaying key metrics with optional labels, icons,
 import { Stat } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import StatDemo from '../../../../components/demos/StatDemo.svelte';
+import StatSizesDemo from '../../../../components/demos/StatSizesDemo.svelte';
 
 ## Import
 
@@ -61,10 +62,7 @@ Four sizes are available for different contexts.
 <Stat value={42} label="Tasks" size="1" />
 <Stat value={42} label="Tasks" size="2" />
 <Stat value={42} label="Tasks" size="3" />`}>
-  <StatDemo client:load value={42} label="Tasks" size="0" />
-  <StatDemo client:load value={42} label="Tasks" size="1" />
-  <StatDemo client:load value={42} label="Tasks" size="2" />
-  <StatDemo client:load value={42} label="Tasks" size="3" />
+  <StatSizesDemo client:load />
 </ComponentPreview>
 
 ### Horizontal Layout

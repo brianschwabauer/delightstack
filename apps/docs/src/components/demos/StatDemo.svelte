@@ -18,7 +18,7 @@
 	let stat = $state();
 </script>
 
-<div style="display: inline-flex; align-items: center; gap: 1rem;">
+<div style="display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0.75rem;">
 	<Stat
 		bind:this={stat}
 		{value}
