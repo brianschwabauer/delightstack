@@ -904,58 +904,98 @@
 		await handleDownload(filename);
 	}
 
+	/** Load the logo for canvas export. Uses an anonymous CORS request so a
+	 *  successfully-loaded image never taints the canvas; resolves null on any
+	 *  failure so export can proceed without the logo. */
+	function loadLogoForExport(src: string): Promise<HTMLImageElement | null> {
+		return new Promise((resolve) => {
+			const img = new Image();
+			img.crossOrigin = 'anonymous';
+			img.onload = () => resolve(img);
+			img.onerror = () => resolve(null);
+			img.src = src;
+		});
+	}
+
 	async function handleDownload(filenameOverride?: string) {
-		if (is_downloading || !matrix) return;
+		const current = matrix;
+		if (is_downloading || !current) return;
 		is_downloading = true;
 		const filename = filenameOverride ?? downloadFilename;
 
 		try {
-			const svg_el = document.getElementById(`${id}-svg`);
-			if (!svg_el) return;
+			// Rasterise the QR directly from the matrix instead of serialising the
+			// <svg> and loading it through an <img>. The latter taints the canvas
+			// in several browsers, which makes canvas.toBlob() silently never fire
+			// its callback — the download promise never settles and the button
+			// spins forever. Drawing rects keeps the canvas clean.
+			const px = Math.max(4, Math.round((size * 2) / total_modules));
+			const dim = total_modules * px;
+			const canvas = document.createElement('canvas');
+			canvas.width = dim;
+			canvas.height = dim;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) return;
 
-			const serializer = new XMLSerializer();
-			const svg_string = serializer.serializeToString(svg_el);
-			const svg_blob = new Blob([svg_string], { type: 'image/svg+xml;charset=utf-8' });
-			const url = URL.createObjectURL(svg_blob);
+			// Background / quiet zone
+			ctx.fillStyle = background;
+			ctx.fillRect(0, 0, dim, dim);
 
-			const img = new Image();
-			img.width = size * 2;
-			img.height = size * 2;
-
-			await new Promise<void>((resolve, reject) => {
-				img.onload = () => {
-					const canvas = document.createElement('canvas');
-					canvas.width = size * 2;
-					canvas.height = size * 2;
-					const ctx = canvas.getContext('2d');
-					if (!ctx) {
-						reject(new Error('Canvas context unavailable'));
-						return;
+			// Modules
+			ctx.fillStyle = foreground;
+			const supports_round = typeof ctx.roundRect === 'function';
+			const r_px = rounded ? Math.min(px / 2, radius * px) : 0;
+			for (let r = 0; r < current.length; r++) {
+				const row = current[r];
+				for (let c = 0; c < row.length; c++) {
+					if (!row[c]) continue;
+					const x = (c + margin) * px;
+					const y = (r + margin) * px;
+					if (rounded && supports_round) {
+						ctx.beginPath();
+						ctx.roundRect(x, y, px, px, r_px);
+						ctx.fill();
+					} else {
+						ctx.fillRect(x, y, px, px);
 					}
-					ctx.drawImage(img, 0, 0, size * 2, size * 2);
-					URL.revokeObjectURL(url);
+				}
+			}
 
-					canvas.toBlob((blob) => {
-						if (!blob) {
-							reject(new Error('Failed to create blob'));
-							return;
-						}
-						const download_url = URL.createObjectURL(blob);
-						const a = document.createElement('a');
-						a.href = download_url;
-						a.download = `${filename}.png`;
-						document.body.appendChild(a);
-						a.click();
-						document.body.removeChild(a);
-						URL.revokeObjectURL(download_url);
-						resolve();
-					}, 'image/png');
-				};
-				img.onerror = () => {
-					URL.revokeObjectURL(url);
-					reject(new Error('Failed to load SVG as image'));
-				};
-			});
+			// Optional centre logo (best effort — skipped if it can't be loaded
+			// CORS-clean, so the canvas is never tainted)
+			if (logo && !logo_error) {
+				const logo_img = await loadLogoForExport(logo);
+				if (logo_img) {
+					ctx.fillStyle = background;
+					ctx.fillRect(
+						(logo_offset - 1) * px,
+						(logo_offset - 1) * px,
+						(logo_modules + 2) * px,
+						(logo_modules + 2) * px,
+					);
+					ctx.drawImage(
+						logo_img,
+						logo_offset * px,
+						logo_offset * px,
+						logo_modules * px,
+						logo_modules * px,
+					);
+				}
+			}
+
+			const blob = await new Promise<Blob | null>((resolve) =>
+				canvas.toBlob((b) => resolve(b), 'image/png'),
+			);
+			if (!blob) return;
+
+			const download_url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = download_url;
+			a.download = `${filename}.png`;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(download_url);
 		} finally {
 			is_downloading = false;
 		}
