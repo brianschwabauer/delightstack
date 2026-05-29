@@ -10,6 +10,7 @@ import AccordionMultipleDemo from '../../../../components/demos/AccordionMultipl
 import AccordionDenseDemo from '../../../../components/demos/AccordionDenseDemo.svelte';
 import AccordionCustomTriggerDemo from '../../../../components/demos/AccordionCustomTriggerDemo.svelte';
 import AccordionNestedDemo from '../../../../components/demos/AccordionNestedDemo.svelte';
+import AccordionAlwaysOpenDemo from '../../../../components/demos/AccordionAlwaysOpenDemo.svelte';
 
 ## Import
 
@@ -77,14 +78,7 @@ ${'  '}<AccordionItem value="second" title="Another Section">
 ${'  '}${'  '}<p>Click to switch which section is open.</p>
 ${'  '}</AccordionItem>
 </Accordion>`}>
-	<Accordion client:load collapsible={false} value="first">
-		<AccordionItem client:load value="first" title="Always Visible">
-			<p>At least one section is always open.</p>
-		</AccordionItem>
-		<AccordionItem client:load value="second" title="Another Section">
-			<p>Click to switch which section is open.</p>
-		</AccordionItem>
-	</Accordion>
+	<AccordionAlwaysOpenDemo client:load />
 </ComponentPreview>
 
 ### Custom Trigger
