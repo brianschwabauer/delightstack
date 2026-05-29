@@ -75,6 +75,12 @@ export default defineConfig({
 	],
 	// adapter: cloudflare({}),
 	vite: {
+		// hls.js is an optional peer dep of <Video>, pulled in via a dynamic
+		// import only for HLS sources. Pre-bundle it so Vite resolves it instead
+		// of stubbing it as an "absent" optional peer dependency in dev.
+		optimizeDeps: {
+			include: ['hls.js'],
+		},
 		build: {
 			rollupOptions: {
 				// Optional peer deps of @delightstack/components media components

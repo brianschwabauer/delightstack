@@ -95,10 +95,14 @@
 	},
 	"peerDependencies": {
 		"svelte": "^5.36.0",
+		"hls.js": ">=1.4.0",
 		"pdfjs-dist": ">=4.0.0",
 		"three": ">=0.150.0"
 	},
 	"peerDependenciesMeta": {
+		"hls.js": {
+			"optional": true
+		},
 		"pdfjs-dist": {
 			"optional": true
 		},

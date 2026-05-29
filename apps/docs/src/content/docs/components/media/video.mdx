@@ -7,6 +7,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import VideoBasicDemo from '../../../../components/demos/VideoBasicDemo.svelte';
 import VideoAutoplayDemo from '../../../../components/demos/VideoAutoplayDemo.svelte';
 import VideoSkeletonDemo from '../../../../components/demos/VideoSkeletonDemo.svelte';
+import VideoHlsDemo from '../../../../components/demos/VideoHlsDemo.svelte';
 
 ## Import
 
@@ -46,6 +47,20 @@ Provide multiple sources with resolution labels for quality switching.
 
 <Video src={sources} poster="/videos/demo-poster.jpg" />
 ```
+
+### HLS Streaming
+
+Point `src` at an `.m3u8` playlist (or pass a source with type `application/vnd.apple.mpegurl`) and the player handles HLS automatically. Browsers with native HLS support (Safari, iOS) play it directly; everywhere else the player lazy-loads [`hls.js`](https://github.com/video-dev/hls.js) only when an HLS source is detected. The custom controls — including a manifest-driven quality menu with an **Auto** option — are used in both cases.
+
+`hls.js` is an optional peer dependency. Install it for HLS support in non-Safari browsers:
+
+```sh
+pnpm add hls.js
+```
+
+<ComponentPreview code={`<Video src="https://stream.example.com/playlist.m3u8" />`}>
+	<VideoHlsDemo client:visible />
+</ComponentPreview>
 
 ### With Captions
 
@@ -101,7 +116,7 @@ Bind the native `HTMLVideoElement` for programmatic control.
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `src` | `string \| Source[]` | required | Video source URL or array of sources with quality options |
+| `src` | `string \| Source[]` | required | Video source URL or array of sources with quality options. `.m3u8` URLs (or sources typed `application/vnd.apple.mpegurl`) are played as HLS |
 | `poster` | `string` | `undefined` | Poster image URL |
 | `autoplay` | `boolean` | `false` | Auto-play (requires `muted` for most browsers) |
 | `muted` | `boolean` | `false` | Start muted (`$bindable`) |

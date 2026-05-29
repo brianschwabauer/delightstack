@@ -12,6 +12,71 @@
 		label: string;
 		default?: boolean;
 	}
+
+	// --- HLS helpers ---
+	const HLS_MIME = /(application\/(x-mpegurl|vnd\.apple\.mpegurl))/i;
+
+	/** True when a source MIME type identifies an HLS playlist. */
+	function isHlsType(type: string): boolean {
+		return HLS_MIME.test(type);
+	}
+
+	/** True when a URL points at an `.m3u8` playlist (ignoring query/hash). */
+	function isHlsUrl(url: string): boolean {
+		return /\.m3u8(?:[?#]|$)/i.test(url);
+	}
+
+	/** Best-guess MIME type for a bare string `src`. */
+	function inferType(url: string): string {
+		return isHlsUrl(url) ? 'application/vnd.apple.mpegurl' : 'video/mp4';
+	}
+
+	// Memoized once per browser — Safari/iOS play HLS through the media element
+	// directly, so hls.js is never needed there. `undefined` until first checked.
+	let nativeHlsSupport: boolean | undefined;
+
+	/** Whether the platform can play HLS natively (Safari, iOS). */
+	function supportsNativeHls(): boolean {
+		if (nativeHlsSupport !== undefined) return nativeHlsSupport;
+		if (typeof document === 'undefined') return false; // SSR — re-checked on client
+		const probe = document.createElement('video');
+		nativeHlsSupport =
+			probe.canPlayType('application/vnd.apple.mpegurl') !== '' ||
+			probe.canPlayType('application/x-mpegurl') !== '';
+		return nativeHlsSupport;
+	}
+
+	// Minimal structural types for the dynamically-imported hls.js, so we don't
+	// depend on the package's types being installed (it's an optional peer dep).
+	interface HlsLevelData {
+		height?: number;
+		bitrate?: number;
+	}
+	interface HlsErrorData {
+		fatal?: boolean;
+		type?: string;
+	}
+	interface HlsManifestData {
+		levels?: HlsLevelData[];
+	}
+	interface HlsInstance {
+		currentLevel: number;
+		loadSource(url: string): void;
+		attachMedia(media: HTMLMediaElement): void;
+		startLoad(): void;
+		recoverMediaError(): void;
+		destroy(): void;
+		on(
+			event: string,
+			cb: (event: string, data: HlsManifestData & HlsErrorData) => void,
+		): void;
+	}
+	interface HlsStatic {
+		new (config?: Record<string, unknown>): HlsInstance;
+		isSupported(): boolean;
+		Events: { MANIFEST_PARSED: string; ERROR: string };
+		ErrorTypes: { NETWORK_ERROR: string; MEDIA_ERROR: string };
+	}
 </script>
 
 <script lang="ts">
@@ -177,7 +242,9 @@
 			const baseURL = new URL(url, window.location.href);
 			for (let i = 0; i < lines.length; i++) {
 				const line = lines[i];
-				const m = line.match(/(\d+(?::\d+){0,2}(?:\.\d+)?)\s*-->\s*(\d+(?::\d+){0,2}(?:\.\d+)?)/);
+				const m = line.match(
+					/(\d+(?::\d+){0,2}(?:\.\d+)?)\s*-->\s*(\d+(?::\d+){0,2}(?:\.\d+)?)/,
+				);
 				if (!m) continue;
 				const start = parseTimestamp(m[1]);
 				const end = parseTimestamp(m[2]);
@@ -188,7 +255,10 @@
 				let xywh: [number, number, number, number] | undefined;
 				if (hashIdx !== -1) {
 					src = next.slice(0, hashIdx);
-					const parts = next.slice(hashIdx + 6).split(',').map((n) => parseInt(n, 10));
+					const parts = next
+						.slice(hashIdx + 6)
+						.split(',')
+						.map((n) => parseInt(n, 10));
 					if (parts.length === 4 && parts.every((n) => !isNaN(n))) {
 						xywh = parts as [number, number, number, number];
 					}
@@ -228,9 +298,20 @@
 	const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 	let playback_rate = $state(1);
 
+	// --- HLS state ---
+	interface HlsLevel {
+		index: number;
+		height: number;
+		bitrate: number;
+	}
+	let hls_instance: HlsInstance | undefined;
+	let hls_levels = $state<HlsLevel[]>([]);
+	// User-selected level: -1 = automatic (adaptive bitrate).
+	let hls_current_level = $state(-1);
+
 	// --- Derived ---
 	const sources = $derived(
-		typeof src === 'string' ? [{ src, type: 'video/mp4' }] : src,
+		typeof src === 'string' ? [{ src, type: inferType(src) }] : src,
 	);
 
 	const has_quality_options = $derived(
@@ -239,7 +320,9 @@
 
 	const quality_sources = $derived(
 		has_quality_options
-			? (src as Source[]).filter((s) => s.size != null).sort((a, b) => (b.size ?? 0) - (a.size ?? 0))
+			? (src as Source[])
+					.filter((s) => s.size != null)
+					.sort((a, b) => (b.size ?? 0) - (a.size ?? 0))
 			: [],
 	);
 
@@ -253,6 +336,18 @@
 		active_source?.size ? `${active_source.size}p` : '',
 	);
 
+	// HLS is delivered as a single playlist URL; quality comes from the manifest
+	// (handled by hls.js / the platform), not from the `Source[]` `size` field.
+	const is_hls_source = $derived(
+		!!active_source && (isHlsType(active_source.type) || isHlsUrl(active_source.src)),
+	);
+
+	const hls_quality_label = $derived(
+		hls_current_level === -1
+			? 'Auto'
+			: `${hls_levels.find((l) => l.index === hls_current_level)?.height ?? ''}p`,
+	);
+
 	const progress_percent = $derived(duration > 0 ? (current_time / duration) * 100 : 0);
 	const buffered_percent = $derived(duration > 0 ? (buffered_end / duration) * 100 : 0);
 
@@ -262,7 +357,8 @@
 		const h = Math.floor(seconds / 3600);
 		const m = Math.floor((seconds % 3600) / 60);
 		const s = Math.floor(seconds % 60);
-		if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+		if (h > 0)
+			return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 
@@ -374,6 +470,12 @@
 		playback_rate = speed;
 		player.playbackRate = speed;
 		speed_open = false;
+	}
+
+	function selectHlsLevel(index: number) {
+		hls_current_level = index;
+		if (hls_instance) hls_instance.currentLevel = index; // -1 re-enables auto
+		quality_open = false;
 	}
 
 	// --- Progress bar interaction ---
@@ -543,7 +645,8 @@
 			duration = player.duration;
 		}
 		is_ready = true;
-		pip_supported = 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
+		pip_supported =
+			'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
 		onready?.({ player });
 	}
 
@@ -570,7 +673,8 @@
 	$effect(() => {
 		function onFullscreenChange() {
 			const was = is_fullscreen;
-			is_fullscreen = !!document.fullscreenElement && document.fullscreenElement === element;
+			is_fullscreen =
+				!!document.fullscreenElement && document.fullscreenElement === element;
 			if (is_fullscreen && !was) onenterfullscreen?.();
 			if (!is_fullscreen && was) onexitfullscreen?.();
 		}
@@ -595,6 +699,90 @@
 		return () => {
 			vid.removeEventListener('enterpictureinpicture', onEnterPip);
 			vid.removeEventListener('leavepictureinpicture', onLeavePip);
+		};
+	});
+
+	// --- HLS attachment ---
+	// HLS playlists are never rendered as a <source> child (the browser can't
+	// load them, and it would error on non-Safari). Instead we wire the stream
+	// up here, client-side only: natively on Safari/iOS, otherwise via a
+	// lazily-imported hls.js. Either way the platform feeds our custom controls,
+	// so the native `controls` attribute is never set.
+	$effect(() => {
+		const vid = player;
+		if (!vid || !is_hls_source) return;
+		const url = active_source.src;
+
+		// Native HLS — hand the URL straight to the media element.
+		if (supportsNativeHls()) {
+			vid.src = url;
+			vid.load();
+			return () => {
+				vid.removeAttribute('src');
+				vid.load();
+			};
+		}
+
+		// Everywhere else — pull in hls.js on demand and attach it.
+		let cancelled = false;
+		let instance: HlsInstance | undefined;
+
+		(async () => {
+			try {
+				// @ts-ignore — hls.js is an optional peer dependency, loaded on demand
+				const mod: { default: HlsStatic } = await import('hls.js');
+				const Hls = mod.default;
+				if (cancelled || player !== vid) return;
+				if (!Hls.isSupported()) {
+					// No native HLS and no Media Source Extensions — nothing we can do.
+					has_error = true;
+					return;
+				}
+				instance = new Hls();
+				hls_instance = instance;
+
+				instance.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
+					hls_levels = (data.levels ?? [])
+						.map((l, i) => ({ index: i, height: l.height ?? 0, bitrate: l.bitrate ?? 0 }))
+						.filter((l) => l.height > 0)
+						.sort((a, b) => b.height - a.height);
+					hls_current_level = -1;
+					// The `autoplay` attribute can be missed when media is attached
+					// after load, so kick playback off explicitly when requested.
+					if (autoplay) vid.play().catch(() => {});
+				});
+
+				instance.on(Hls.Events.ERROR, (_e, data) => {
+					if (!data.fatal) return;
+					// Attempt the standard recoveries before surfacing an error.
+					if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+						instance?.startLoad();
+					} else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+						instance?.recoverMediaError();
+					} else {
+						has_error = true;
+					}
+				});
+
+				instance.loadSource(url);
+				instance.attachMedia(vid);
+			} catch {
+				has_error = true;
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+			if (instance) {
+				try {
+					instance.destroy();
+				} catch {
+					// already torn down
+				}
+			}
+			if (hls_instance === instance) hls_instance = undefined;
+			hls_levels = [];
+			hls_current_level = -1;
 		};
 	});
 
@@ -664,7 +852,6 @@
 	tabindex="0"
 	role="group"
 	aria-label="Video player">
-
 	{#if skeleton && !is_ready}
 		<div class="skeleton" aria-hidden="true"></div>
 	{/if}
@@ -690,7 +877,9 @@
 		onprogress={handleVideoProgress}
 		onvolumechange={handleVideoVolumeChange}
 		onerror={handleVideoError}>
-		{#if has_quality_options}
+		{#if is_hls_source}
+			<!-- HLS is attached programmatically (native or via hls.js) in an effect -->
+		{:else if has_quality_options}
 			<source src={active_source.src} type={active_source.type} />
 		{:else}
 			{#each sources as source}
@@ -715,8 +904,13 @@
 			aria-label="Play video"
 			onclick={togglePlay}
 			{@attach ripple({})}>
-			<svg class="big-play-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-				<path d="M8.5 5.4a.8.8 0 0 1 1.2-.7l9 6.6a.8.8 0 0 1 0 1.3l-9 6.6a.8.8 0 0 1-1.2-.7V5.4z" />
+			<svg
+				class="big-play-icon"
+				viewBox="0 0 24 24"
+				fill="currentColor"
+				aria-hidden="true">
+				<path
+					d="M8.5 5.4a.8.8 0 0 1 1.2-.7l9 6.6a.8.8 0 0 1 0 1.3l-9 6.6a.8.8 0 0 1-1.2-.7V5.4z" />
 			</svg>
 		</button>
 	{/if}
@@ -724,7 +918,14 @@
 	<!-- Error overlay -->
 	{#if has_error}
 		<div class="error">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<svg
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.5"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true">
 				<circle cx="12" cy="12" r="10" />
 				<line x1="12" y1="8" x2="12" y2="12" />
 				<line x1="12" y1="16" x2="12.01" y2="16" />
@@ -739,7 +940,6 @@
 			class="controls"
 			class:visible={show_controls || !playing}
 			class:hidden={!show_controls && playing}>
-
 			<!-- Progress bar -->
 			<div
 				class="progress"
@@ -753,8 +953,10 @@
 				onpointermove={handleProgressPointerMove}
 				onpointerup={handleProgressPointerUp}
 				onpointerenter={() => (show_seek_tooltip = true)}
-				onpointerleave={() => { show_seek_tooltip = false; is_seeking = false; }}>
-
+				onpointerleave={() => {
+					show_seek_tooltip = false;
+					is_seeking = false;
+				}}>
 				<div class="progress-track">
 					<div class="progress-buffered" style:width="{buffered_percent}%"></div>
 					<div class="progress-fill" style:width="{progress_percent}%"></div>
@@ -769,11 +971,16 @@
 									style:width="{active_thumb.xywh[2]}px"
 									style:height="{active_thumb.xywh[3]}px"
 									style:background-image="url('{active_thumb.src}')"
-									style:background-position="-{active_thumb.xywh[0]}px -{active_thumb.xywh[1]}px"
+									style:background-position="-{active_thumb.xywh[0]}px -{active_thumb
+										.xywh[1]}px"
 									aria-hidden="true">
 								</div>
 							{:else}
-								<img class="seek-thumb-img" src={active_thumb.src} alt="" aria-hidden="true" />
+								<img
+									class="seek-thumb-img"
+									src={active_thumb.src}
+									alt=""
+									aria-hidden="true" />
 							{/if}
 						{/if}
 						<span class="seek-time">{formatTime(seek_hover_time)}</span>
@@ -813,19 +1020,50 @@
 							{#if volume_icon === 'muted'}
 								<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 									<path d="M11 5L6 9H2v6h4l5 4V5z" />
-									<line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
-									<line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+									<line
+										x1="23"
+										y1="9"
+										x2="17"
+										y2="15"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										fill="none" />
+									<line
+										x1="17"
+										y1="9"
+										x2="23"
+										y2="15"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										fill="none" />
 								</svg>
 							{:else if volume_icon === 'low'}
 								<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 									<path d="M11 5L6 9H2v6h4l5 4V5z" />
-									<path d="M15.54 8.46a5 5 0 010 7.07" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+									<path
+										d="M15.54 8.46a5 5 0 010 7.07"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										fill="none" />
 								</svg>
 							{:else}
 								<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 									<path d="M11 5L6 9H2v6h4l5 4V5z" />
-									<path d="M15.54 8.46a5 5 0 010 7.07" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
-									<path d="M19.07 4.93a10 10 0 010 14.14" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+									<path
+										d="M15.54 8.46a5 5 0 010 7.07"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										fill="none" />
+									<path
+										d="M19.07 4.93a10 10 0 010 14.14"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										fill="none" />
 								</svg>
 							{/if}
 						</button>
@@ -842,7 +1080,8 @@
 							onpointermove={handleVolumePointerMove}
 							onpointerup={handleVolumePointerUp}>
 							<div class="volume-track">
-								<div class="volume-fill" style:width="{is_muted ? 0 : volume * 100}%"></div>
+								<div class="volume-fill" style:width="{is_muted ? 0 : volume * 100}%">
+								</div>
 							</div>
 						</div>
 					</div>
@@ -863,7 +1102,10 @@
 							aria-label="Playback speed"
 							aria-haspopup="true"
 							aria-expanded={speed_open}
-							onclick={() => { speed_open = !speed_open; quality_open = false; }}>
+							onclick={() => {
+								speed_open = !speed_open;
+								quality_open = false;
+							}}>
 							{playback_rate === 1 ? '1x' : `${playback_rate}x`}
 						</button>
 						{#if speed_open}
@@ -891,7 +1133,10 @@
 								aria-label="Video quality"
 								aria-haspopup="true"
 								aria-expanded={quality_open}
-								onclick={() => { quality_open = !quality_open; speed_open = false; }}>
+								onclick={() => {
+									quality_open = !quality_open;
+									speed_open = false;
+								}}>
 								{active_quality_label}
 							</button>
 							{#if quality_open}
@@ -909,6 +1154,44 @@
 								</div>
 							{/if}
 						</div>
+					{:else if hls_levels.length > 1}
+						<!-- HLS adaptive quality (manifest-driven, with an Auto option) -->
+						<div class="menu">
+							<button
+								class="btn btn-text"
+								type="button"
+								aria-label="Video quality"
+								aria-haspopup="true"
+								aria-expanded={quality_open}
+								onclick={() => {
+									quality_open = !quality_open;
+									speed_open = false;
+								}}>
+								{hls_quality_label}
+							</button>
+							{#if quality_open}
+								<div class="dropdown" role="menu">
+									<button
+										class="dropdown-item"
+										class:active={hls_current_level === -1}
+										type="button"
+										role="menuitem"
+										onclick={() => selectHlsLevel(-1)}>
+										Auto
+									</button>
+									{#each hls_levels as level}
+										<button
+											class="dropdown-item"
+											class:active={hls_current_level === level.index}
+											type="button"
+											role="menuitem"
+											onclick={() => selectHlsLevel(level.index)}>
+											{level.height}p
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
 					{/if}
 
 					<!-- Captions toggle -->
@@ -919,7 +1202,14 @@
 							type="button"
 							aria-label={captions_active ? 'Disable captions' : 'Enable captions'}
 							onclick={toggleCaptions}>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true">
 								<rect x="2" y="4" width="20" height="16" rx="2" />
 								<path d="M7 12h2" />
 								<path d="M15 12h2" />
@@ -936,7 +1226,14 @@
 							type="button"
 							aria-label={is_pip ? 'Exit picture-in-picture' : 'Picture-in-picture'}
 							onclick={togglePip}>
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true">
 								<rect x="2" y="3" width="20" height="14" rx="2" />
 								<rect x="12" y="9" width="8" height="6" rx="1" fill="currentColor" />
 							</svg>
@@ -950,14 +1247,28 @@
 						aria-label={is_fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
 						onclick={toggleFullscreen}>
 						{#if is_fullscreen}
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true">
 								<path d="M8 3v3a2 2 0 01-2 2H3" />
 								<path d="M21 8h-3a2 2 0 01-2-2V3" />
 								<path d="M3 16h3a2 2 0 012 2v3" />
 								<path d="M16 21v-3a2 2 0 012-2h3" />
 							</svg>
 						{:else}
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true">
 								<path d="M8 3H5a2 2 0 00-2 2v3" />
 								<path d="M21 8V5a2 2 0 00-2-2h-3" />
 								<path d="M3 16v3a2 2 0 002 2h3" />
@@ -1011,8 +1322,12 @@
 	}
 
 	@keyframes shimmer {
-		0% { background-position: 200% 0; }
-		100% { background-position: -200% 0; }
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
 	}
 
 	/* Video element */
