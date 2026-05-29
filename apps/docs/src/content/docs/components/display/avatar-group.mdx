@@ -5,6 +5,9 @@ description: A stacked group of overlapping avatars with overflow indicator, com
 
 import { AvatarGroup } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import AvatarGroupExpandableDemo from '../../../../components/demos/AvatarGroupExpandableDemo.svelte';
+import AvatarGroupClickableDemo from '../../../../components/demos/AvatarGroupClickableDemo.svelte';
+import AvatarGroupOverflowClickDemo from '../../../../components/demos/AvatarGroupOverflowClickDemo.svelte';
 
 ## Import
 
@@ -63,32 +66,32 @@ When the number of avatars exceeds `max`, a "+N" overflow indicator appears.
 
 When `expandable` is true, clicking the overflow indicator reveals all hidden avatars.
 
-```svelte
-<AvatarGroup
+<ComponentPreview code={`<AvatarGroup
   avatars={team}
   max={3}
   expandable
-/>
-```
+/>`}>
+  <AvatarGroupExpandableDemo client:load />
+</ComponentPreview>
 
 ### Clickable Avatars
 
-```svelte
-<AvatarGroup
+<ComponentPreview code={`<AvatarGroup
   avatars={team}
   onclick={({ avatar, index }) => openProfile(avatar)}
-/>
-```
+/>`}>
+  <AvatarGroupClickableDemo client:load />
+</ComponentPreview>
 
 ### With Overflow Click Handler
 
-```svelte
-<AvatarGroup
+<ComponentPreview code={`<AvatarGroup
   avatars={team}
   max={3}
   onoverflowclick={({ remaining }) => showAllParticipants(remaining)}
-/>
-```
+/>`}>
+  <AvatarGroupOverflowClickDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 

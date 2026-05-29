@@ -191,32 +191,32 @@
 		&.size-0 {
 			--avatar-size: 24px;
 			--avatar-font: 0.625rem;
-			--avatar-status: 6px;
+			--avatar-status: 9px;
 		}
 		&.size-1 {
 			--avatar-size: 32px;
 			--avatar-font: 0.75rem;
-			--avatar-status: 8px;
+			--avatar-status: 11px;
 		}
 		&.size-2 {
 			--avatar-size: 40px;
 			--avatar-font: 0.875rem;
-			--avatar-status: 10px;
+			--avatar-status: 13px;
 		}
 		&.size-3 {
 			--avatar-size: 56px;
 			--avatar-font: 1.125rem;
-			--avatar-status: 12px;
+			--avatar-status: 16px;
 		}
 		&.size-4 {
 			--avatar-size: 80px;
 			--avatar-font: 1.5rem;
-			--avatar-status: 14px;
+			--avatar-status: 20px;
 		}
 		&.size-5 {
 			--avatar-size: 120px;
 			--avatar-font: 2.25rem;
-			--avatar-status: 18px;
+			--avatar-status: 26px;
 		}
 
 		&.square {
@@ -343,38 +343,48 @@
 			}
 		}
 
+		/* Badges sit on the top-right corner of the avatar. Use a size that
+		 * scales with the avatar and positions the badge so its center sits
+		 * on the avatar's edge — that keeps long values like "99+" offset
+		 * rather than appearing centered on the avatar. */
 		.badge {
 			position: absolute;
-			top: -2px;
-			right: -2px;
+			top: 0;
+			right: 0;
+			translate: 25% -25%;
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			background-color: var(--color-accent, var(--color-error, #ef4444));
 			color: var(--color-accent-text, #fff);
 			border-radius: var(--radius-round, 9999px);
-			font-size: 0.625rem;
-			font-weight: 600;
+			font-size: 0.7rem;
+			font-weight: 700;
 			line-height: 1;
-			min-width: 16px;
-			height: 16px;
-			padding: 0 4px;
+			min-width: 1.4em;
+			height: 1.4em;
+			padding: 0 0.45em;
 			border: 2px solid light-dark(
 				var(--color-bg, #fff),
 				var(--color-bg, #1f2937)
 			);
 			z-index: 1;
 			pointer-events: none;
+			white-space: nowrap;
 
 			&.dot {
-				width: 10px;
-				height: 10px;
-				min-width: 10px;
+				width: 0.9em;
+				min-width: 0.9em;
+				height: 0.9em;
 				padding: 0;
-				top: 0;
-				right: 0;
+				translate: 15% -15%;
 			}
 		}
+		&.size-0 .badge { font-size: 0.55rem; }
+		&.size-2 .badge { font-size: 0.75rem; }
+		&.size-3 .badge { font-size: 0.85rem; }
+		&.size-4 .badge { font-size: 0.95rem; }
+		&.size-5 .badge { font-size: 1.1rem; }
 
 		&.skeleton {
 			pointer-events: none;

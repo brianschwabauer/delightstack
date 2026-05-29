@@ -178,15 +178,28 @@
 
 	.avatar-wrapper {
 		position: relative;
-		transition: transform 150ms ease, z-index 0ms;
+		/* Animate the lift smoothly. z-index can't be transitioned, but the
+		 * `transition-delay: 200ms` on the way out keeps the avatar on top
+		 * until its lift animation has finished returning to rest, hiding the
+		 * abrupt re-stack. */
+		transform-origin: center;
+		transition:
+			transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+			filter 250ms ease,
+			z-index 0s 200ms;
 
 		&:not(:first-child) {
 			margin-inline-start: calc(-1 * var(--overlap));
 		}
 
 		&:hover {
-			z-index: 100 !important;
-			transform: translateY(-2px);
+			z-index: 100;
+			transform: translateY(-4px) scale(1.06);
+			filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.18));
+			transition:
+				transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+				filter 250ms ease,
+				z-index 0s 0s;
 		}
 
 		&.interactive {
