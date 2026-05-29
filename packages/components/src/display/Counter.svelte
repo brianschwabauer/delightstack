@@ -57,7 +57,10 @@
 
 	let has_animated = $state(false);
 	let is_animating = $state(false);
-	let display_value = $state(value);
+	/** Start at 0 so SSR and the initial client render match (no hydration jump):
+	 *  the count then animates up from 0 once the element scrolls into view. The
+	 *  true value is always exposed via `aria-label` for assistive tech. */
+	let display_value = $state(0);
 	let raf_id = $state(0);
 
 	let prefers_reduced_motion = $state(false);

@@ -104,8 +104,8 @@ Number separators adapt to the specified locale.
 
 - Element has `aria-live="polite"` so screen readers announce value changes
 - `role="img"` with a computed `aria-label` including prefix, value, and suffix
-- Final value is always accessible in the DOM (animation is visual only)
+- The true value is always exposed via `aria-label`, so assistive tech reads it regardless of the animated visual value
 - `prefers-reduced-motion` disables all animation — the final value is shown immediately
 - `font-variant-numeric: tabular-nums` prevents layout shift during animation
 - Animation is triggered by `IntersectionObserver` — starts only when the element scrolls into view
-- On the server (SSR), the final formatted value is rendered immediately with no animation
+- On the server (SSR) the counter renders at `0`, matching the initial client render so hydration is seamless; it then counts up once visible (with JS disabled it stays at `0`, but the real value remains in `aria-label`)
