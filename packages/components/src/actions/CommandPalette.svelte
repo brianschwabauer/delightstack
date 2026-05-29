@@ -200,7 +200,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
-	import { focusTrap } from '@delightstack/utilities';
+	import { focusTrap, ripple } from '@delightstack/utilities';
 	import { portal } from './Portal.svelte';
 
 	const propId = $props.id();
@@ -253,10 +253,16 @@
 			.slice(0, recentLimit);
 	});
 
-	// The flat list of commands currently visible
+	// The flat list of commands currently visible. When there's no query,
+	// recent commands are pinned at the top of the full list (not used as
+	// a replacement) so users can still browse everything else.
 	const visible_commands = $derived.by((): CommandOption[] => {
 		if (query.trim()) return search_results.map((r) => r.command);
-		if (recent_commands.length > 0) return recent_commands;
+		if (recent_commands.length > 0) {
+			const recent_ids = new Set(recent_commands.map((c) => c.id));
+			const rest = commands.filter((c) => !recent_ids.has(c.id));
+			return [...recent_commands, ...rest];
+		}
 		return commands;
 	});
 
@@ -277,13 +283,27 @@
 
 	const grouped_commands = $derived.by((): CommandGroup[] => {
 		const cmds = visible_commands;
-		if (groupBy === 'none' || !query.trim() && recent_commands.length > 0) {
-			const label = !query.trim() && recent_commands.length > 0 ? 'Recent' : '';
-			return [{ label, commands: cmds }];
+		const has_recent = !query.trim() && recent_commands.length > 0;
+		if (groupBy === 'none') {
+			if (has_recent) {
+				const recent_ids = new Set(recent_commands.map((c) => c.id));
+				const rest = cmds.filter((c) => !recent_ids.has(c.id));
+				const groups: CommandGroup[] = [{ label: 'Recent', commands: recent_commands }];
+				if (rest.length) groups.push({ label: '', commands: rest });
+				return groups;
+			}
+			return [{ label: '', commands: cmds }];
 		}
 		const groups = new Map<string, CommandOption[]>();
 		const order: string[] = [];
+		// When recents exist, put them in their own pinned group at the top.
+		if (has_recent) {
+			order.push('__recent__');
+			groups.set('__recent__', recent_commands);
+		}
+		const recent_ids = new Set(recent_commands.map((c) => c.id));
 		for (const cmd of cmds) {
+			if (has_recent && recent_ids.has(cmd.id)) continue;
 			const key = cmd.category || '';
 			if (!groups.has(key)) {
 				groups.set(key, []);
@@ -291,7 +311,10 @@
 			}
 			groups.get(key)!.push(cmd);
 		}
-		return order.map((key) => ({ label: key, commands: groups.get(key)! }));
+		return order.map((key) => ({
+			label: key === '__recent__' ? 'Recent' : key,
+			commands: groups.get(key)!,
+		}));
 	});
 
 	// The active descendant ID
@@ -485,6 +508,7 @@
 							class:disabled={command.disabled}
 							onpointerenter={() => { selected_index = flat_index; }}
 							onclick={() => { if (!command.disabled) executeCommand(command); }}
+							{@attach ripple({ enabled: !command.disabled })}
 						>
 							{#if command.icon}
 								<span class="item-icon">
@@ -639,15 +663,23 @@
 	}
 
 	.item {
+		position: relative;
 		display: flex;
 		align-items: center;
-		padding: 0.5rem 1rem;
+		padding: 0.6rem 0.85rem;
+		margin: 0 0.5rem;
 		gap: 0.75rem;
 		cursor: pointer;
-		transition: background-color 50ms;
+		border-radius: var(--radius-4, 8px);
+		overflow: hidden;
+		transition: background-color 80ms ease, translate 200ms ease;
 
 		&.selected {
 			background-color: var(--color-bg-active);
+		}
+
+		&:active:not(.disabled) {
+			translate: 0 1px;
 		}
 
 		&.disabled {
@@ -656,7 +688,7 @@
 		}
 
 		.dense & {
-			padding: 0.375rem 0.75rem;
+			padding: 0.45rem 0.7rem;
 			gap: 0.5rem;
 		}
 	}

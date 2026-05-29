@@ -6,6 +6,8 @@ description: A keyboard-driven command interface with fuzzy search, recent comma
 import { CommandPalette } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CommandPaletteDemo from '../../../../components/demos/CommandPaletteDemo.svelte';
+import CommandPaletteDenseDemo from '../../../../components/demos/CommandPaletteDenseDemo.svelte';
+import CommandPaletteNoGroupingDemo from '../../../../components/demos/CommandPaletteNoGroupingDemo.svelte';
 
 ## Import
 
@@ -107,17 +109,17 @@ The palette automatically registers a global `Ctrl/Cmd + K` keyboard shortcut to
 
 Use `dense` for tighter spacing in smaller interfaces.
 
-```svelte
-<CommandPalette bind:open={paletteOpen} {commands} dense />
-```
+<ComponentPreview code={`<CommandPalette bind:open={paletteOpen} {commands} dense />`}>
+  <CommandPaletteDenseDemo client:load />
+</ComponentPreview>
 
 ### Without Category Grouping
 
 Disable grouping to show a flat list of results.
 
-```svelte
-<CommandPalette bind:open={paletteOpen} {commands} groupBy="none" />
-```
+<ComponentPreview code={`<CommandPalette bind:open={paletteOpen} {commands} groupBy="none" />`}>
+  <CommandPaletteNoGroupingDemo client:load />
+</ComponentPreview>
 
 ### With Selection Callback
 
