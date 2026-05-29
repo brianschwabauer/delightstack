@@ -26,8 +26,9 @@
 	import { tooltip } from '@delightstack/utilities';
 	import { getContext, type Component, type Snippet } from 'svelte';
 	import type { FormContext } from './Form.svelte';
-	import Popover from '../actions/Popover.svelte';
 	import Button from '../actions/Button.svelte';
+	import List from '../display/List.svelte';
+	import ListItem from '../display/ListItem.svelte';
 
 	type InputValue =
 		| string
@@ -224,7 +225,9 @@
 	let ac_filtered = $state<InputOption[]>([]);
 	let ac_debounce_timer: ReturnType<typeof setTimeout> | undefined;
 	let dropdown_element = $state<HTMLElement | undefined>(undefined);
-	let panel_width = $state<number | undefined>(undefined);
+	/* Whether the panel flipped above the field, so it can expand from the edge
+	   nearest the control (matching Select's panel). */
+	let ac_above = $state(false);
 
 	/* File state */
 	let file_input_element = $state<HTMLInputElement | undefined>(undefined);
@@ -243,6 +246,11 @@
 		type === 'date' || type === 'time' || type === 'datetime-local',
 	);
 	const has_autocomplete = $derived(!!(options || onfilter));
+
+	/** A unique CSS anchor name for native anchor positioning of the panel. */
+	const ac_anchor_name = $derived(
+		`--ds-input-${String(id).replace(/[^a-zA-Z0-9_-]/g, '')}`,
+	);
 
 	/** Resolved HTML input type */
 	const html_type = $derived.by(() => {
@@ -423,26 +431,68 @@
 	/*  Autocomplete                                                       */
 	/* ------------------------------------------------------------------ */
 
+	/* Mirror `ac_open` onto the native popover element, and detect whether the
+	   browser flipped it above the field so the panel expands from the edge
+	   nearest the control (matching Select's panel behaviour). */
 	$effect(() => {
-		if (!has_autocomplete || !ac_open || !wrapper_element) return;
-		panel_width = wrapper_element.offsetWidth;
-		const ro = new ResizeObserver(() => {
-			if (wrapper_element) panel_width = wrapper_element.offsetWidth;
-		});
-		ro.observe(wrapper_element);
-		return () => ro.disconnect();
+		const el = dropdown_element;
+		if (!el) return;
+		const shown = el.matches(':popover-open');
+		if (ac_open && !shown) {
+			try {
+				el.showPopover();
+				/* Measure synchronously — showPopover() has already placed the
+				   popover (incl. any flip-block fallback), so the expand origin is
+				   correct from the first frame. */
+				if (wrapper_element) {
+					const t = wrapper_element.getBoundingClientRect();
+					const d = el.getBoundingClientRect();
+					ac_above = d.top < t.top;
+				}
+			} catch {
+				/* not connected yet */
+			}
+		} else if (!ac_open && shown) {
+			try {
+				el.hidePopover();
+			} catch {
+				/* already hidden */
+			}
+		}
 	});
 
 	function openAutocomplete() {
 		if (!has_autocomplete || effectively_disabled || readonly) return;
 		ac_open = true;
-		ac_highlighted = -1;
+		// `ac_highlighted` is parked on the first selectable option by the effect
+		// below, so pressing Enter selects the top match without arrowing first.
 	}
 
 	function closeAutocomplete() {
 		ac_open = false;
 		ac_highlighted = -1;
 	}
+
+	/* Keep the first selectable option highlighted whenever the panel opens or
+	   the filtered list changes — one option is always active, so focusing the
+	   field and pressing Enter selects the top match. */
+	$effect(() => {
+		const opts = ac_options;
+		if (!ac_open) return;
+		ac_highlighted = opts.findIndex((o) => !o.disabled);
+	});
+
+	/* The option rows are <button>s (ListItem), which would otherwise land in
+	   the tab order — tabbing out of the field would dive into the panel and
+	   lose focus when it closes. Pull them out so Tab moves to the next field;
+	   they stay clickable (pointerdown is prevented, so a click never focuses
+	   them). Re-runs when the rendered rows change. */
+	$effect(() => {
+		if (!dropdown_element || ac_options.length === 0) return;
+		dropdown_element.querySelectorAll('button').forEach((btn) => {
+			btn.tabIndex = -1;
+		});
+	});
 
 	async function filterAutocomplete(query: string) {
 		if (!onfilter) return;
@@ -467,7 +517,7 @@
 	function scrollAcHighlightedIntoView() {
 		requestAnimationFrame(() => {
 			if (!dropdown_element) return;
-			const items = dropdown_element.querySelectorAll('[role="option"]');
+			const items = dropdown_element.querySelectorAll('.list-item');
 			const item = items[ac_highlighted];
 			if (item) item.scrollIntoView({ block: 'nearest' });
 		});
@@ -721,6 +771,19 @@
 				closeAutocomplete();
 				break;
 			}
+			case 'Tab': {
+				/* Don't let the open panel capture Tab focus. Hide it
+				   synchronously (so it leaves the top layer before the browser
+				   resolves Tab navigation) and let the default Tab move focus on
+				   to the next field — no preventDefault. */
+				closeAutocomplete();
+				try {
+					dropdown_element?.hidePopover();
+				} catch {
+					/* already hidden */
+				}
+				break;
+			}
 		}
 	}
 
@@ -811,6 +874,7 @@
 		class:focused
 		class:has-error={has_error}
 		bind:this={wrapper_element}
+		style:anchor-name={has_autocomplete ? ac_anchor_name : undefined}
 		ondrop={is_file ? handleFileDrop : undefined}
 		ondragover={is_file ? handleFileDragOver : undefined}>
 		<!-- Leading icon -->
@@ -1249,63 +1313,48 @@
 		</div>
 	{/if}
 
-	<!-- Autocomplete dropdown -->
+	<!-- Autocomplete dropdown — native popover, CSS anchor positioned (matches Select) -->
 	{#if has_autocomplete}
-		<Popover
-			refElement={wrapper_element}
-			bind:opened={ac_open}
-			openOnClick={false}
-			arrow={false}
-			placement="bottom"
-			closeOnOutsideClick
-			closeOnEscapeKey
-			closeOnInsideClick={false}
-			disableInitialFocus>
-			<div
-				class="dropdown"
-				bind:this={dropdown_element}
-				role="listbox"
-				id="{id}-listbox"
-				style:width={panel_width ? `${panel_width}px` : null}>
-				{#if ac_loading}
-					<div class="loading">
-						<span class="spinner" aria-hidden="true"></span>
-						Loading...
-					</div>
-				{:else if ac_options.length === 0}
-					<div class="empty">No results</div>
-				{:else}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="ac-dropdown"
+			class:above={ac_above}
+			popover="manual"
+			bind:this={dropdown_element}
+			role="listbox"
+			id="{id}-listbox"
+			style:position-anchor={ac_anchor_name}
+			onpointerdown={(e) => e.preventDefault()}>
+			{#if ac_loading}
+				<div class="ac-status">
+					<span class="ac-spinner" aria-hidden="true"></span>
+					Loading...
+				</div>
+			{:else if ac_options.length === 0}
+				<div class="ac-status">No results</div>
+			{:else}
+				<List dense style="--color-bg: transparent;">
 					{#each ac_options as opt, i (opt.value)}
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
-						<div
+						<ListItem
 							id="{id}-option-{i}"
-							class="option"
-							class:highlighted={ac_highlighted === i}
-							class:disabled={opt.disabled}
-							role="option"
-							tabindex={-1}
-							aria-selected={value === opt.value}
-							aria-disabled={opt.disabled || undefined}
-							onpointerdown={(e) => e.preventDefault()}
-							onclick={() => selectAutocompleteOption(opt)}
-							onpointerenter={() => {
-								if (!opt.disabled) ac_highlighted = i;
-							}}>
+							active={ac_highlighted === i}
+							disabled={opt.disabled}
+							onclick={() => selectAutocompleteOption(opt)}>
 							{#if option_snippet}
 								{@render option_snippet(opt)}
 							{:else}
-								<span class="option-content">
-									<span class="option-label">{@html highlightMatch(opt.label)}</span>
+								<span class="ac-option">
+									<span class="ac-option-label">{@html highlightMatch(opt.label)}</span>
 									{#if opt.description}
-										<span class="option-desc">{opt.description}</span>
+										<span class="ac-option-desc">{opt.description}</span>
 									{/if}
 								</span>
 							{/if}
-						</div>
+						</ListItem>
 					{/each}
-				{/if}
-			</div>
-		</Popover>
+				</List>
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -1355,6 +1404,8 @@
 		--_ease: var(--ease-in-out-4, cubic-bezier(0.76, 0, 0.24, 1));
 		/* The legacy label glide easing */
 		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
+		/* Snappy ease-out for the panel's expand-in animation (matches Select) */
+		--_ease-expand: cubic-bezier(0.16, 1, 0.3, 1);
 
 		position: relative;
 		width: 100%;
@@ -2079,52 +2130,87 @@
 	}
 
 	/* ================================================================== */
-	/*  AUTOCOMPLETE DROPDOWN                                              */
+	/*  AUTOCOMPLETE DROPDOWN  (native popover, CSS anchor positioned)     */
 	/* ================================================================== */
 
-	.dropdown {
-		min-width: 100%;
+	/*
+	 * The panel is a native `popover` element placed with CSS anchor
+	 * positioning relative to the field — it renders in the top layer (no
+	 * clipping, no z-index juggling, no Portal) and matches the Select
+	 * component's panel: same width as the field, the same expand-from-the-edge
+	 * animation, and the same flip-when-no-room-below behaviour. The rows
+	 * themselves are List/ListItem.
+	 */
+	.ac-dropdown {
+		position: fixed;
+		top: anchor(bottom);
+		bottom: auto;
+		left: anchor(left);
+		right: auto;
+		width: anchor-size(width);
+		margin: 0.4em 0 0 0;
+		/* Slim padding — the List/ListItem rows carry their own insets, so the
+		   panel only needs a hairline gutter around them. */
+		padding: 0.25em;
+		box-sizing: border-box;
 		max-height: 18em;
 		overflow-y: auto;
-		padding: 0.3em;
+		border: none;
+		background: var(--_panel);
+		color: var(--_text);
+		border-radius: var(--radius-4, 16px);
+		box-shadow: var(--shadow-2, 0 8px 28px -8px rgb(0 0 0 / 0.3));
 		scrollbar-width: thin;
+		/* Flip above the field when there is no room below */
+		position-try-fallbacks: flip-block;
+		/* Expand-in from the edge closest to the field — origin flips to
+		   `bottom` when the panel is placed above the control (`.above`). */
+		transform-origin: center top;
+		opacity: 1;
+		transform: scaleY(1);
+		transition:
+			opacity 200ms var(--_ease-expand),
+			transform 200ms var(--_ease-expand),
+			display 200ms allow-discrete,
+			overlay 200ms allow-discrete;
+	}
+	.ac-dropdown.above {
+		transform-origin: center bottom;
+	}
+	/* Collapsed state — drives both the open (@starting-style) and close
+	   transitions, so the panel expands/collapses toward the field. */
+	.ac-dropdown:not(:popover-open) {
+		opacity: 0;
+		transform: scaleY(0.6);
+	}
+	@starting-style {
+		.ac-dropdown:popover-open {
+			opacity: 0;
+			transform: scaleY(0.6);
+		}
 	}
 
-	.option {
-		display: flex;
-		align-items: center;
-		gap: 0.6em;
-		padding: 0.7em 0.85em;
-		border-radius: var(--radius-2, 6px);
-		cursor: pointer;
-		transition: background 120ms var(--_ease);
-		user-select: none;
-	}
-
-	.option:hover,
-	.option.highlighted {
-		background: var(--_panel-hover);
-	}
-
-	.option.disabled {
-		opacity: 0.5;
-		pointer-events: none;
-	}
-
-	.option-content {
+	/* Option content rendered inside each ListItem. ListItem renders a native
+	   <button>, whose UA `text-align: center` would otherwise centre the label
+	   once `.ac-option` fills the row — pin it back to the start. */
+	.ac-option {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
 		flex: 1;
+		text-align: left;
 	}
-
-	.option-label {
+	.ac-option-label {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-
-	.option-desc {
+	/* Emphasise the matched substring (from highlightMatch) */
+	.ac-option-label :global(strong) {
+		color: var(--_border-focus);
+		font-weight: 700;
+	}
+	.ac-option-desc {
 		font-size: 0.8em;
 		color: var(--_text-muted);
 		overflow: hidden;
@@ -2132,16 +2218,18 @@
 		white-space: nowrap;
 	}
 
-	.loading {
+	/* Loading / empty status row */
+	.ac-status {
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.5em;
 		padding: 0.85em;
 		color: var(--_text-muted);
 		font-size: 0.9em;
 	}
 
-	.spinner {
+	.ac-spinner {
 		display: inline-block;
 		width: 14px;
 		height: 14px;
@@ -2156,13 +2244,6 @@
 		to {
 			transform: rotate(360deg);
 		}
-	}
-
-	.empty {
-		padding: 0.85em;
-		text-align: center;
-		color: var(--_text-muted);
-		font-size: 0.9em;
 	}
 
 	/* ================================================================== */
