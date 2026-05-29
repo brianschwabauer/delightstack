@@ -332,14 +332,46 @@
 		return -1;
 	}
 
+	/**
+	 * Whether the closed trigger should cycle the value directly on arrow keys
+	 * (native `<select>` feel). Only single, non-searchable selects — multi and
+	 * searchable selects open the panel instead, where direct cycling makes no
+	 * sense.
+	 */
+	const arrowCyclesValue = $derived(!multiple && !searchable);
+
+	/**
+	 * Move the single value to the next/prev selectable option without opening
+	 * the panel. Clamps at the ends (no wrap), matching native selects. With no
+	 * current value, the first arrow lands on the first/last option.
+	 */
+	function cycleValue(direction: 1 | -1) {
+		const opts = flatSelectableOptions;
+		if (opts.length === 0) return;
+		const currentIdx = opts.findIndex((o) => o.value === value);
+		let nextIdx: number;
+		if (currentIdx === -1) {
+			nextIdx = direction === 1 ? 0 : opts.length - 1;
+		} else {
+			nextIdx = currentIdx + direction;
+			if (nextIdx < 0 || nextIdx >= opts.length) return;
+		}
+		value = opts[nextIdx].value;
+		onchange?.({ value });
+	}
+
 	/** Handle keyboard navigation on the trigger */
 	function onTriggerKeyDown(e: KeyboardEvent) {
 		switch (e.key) {
 			case 'ArrowDown': {
 				e.preventDefault();
 				if (!open) {
-					openDropdown();
-					highlightedIndex = getNextIndex(-1, 1);
+					if (arrowCyclesValue) {
+						cycleValue(1);
+					} else {
+						openDropdown();
+						highlightedIndex = getNextIndex(-1, 1);
+					}
 				} else {
 					highlightedIndex = getNextIndex(highlightedIndex, 1);
 					scrollHighlightedIntoView();
@@ -349,8 +381,12 @@
 			case 'ArrowUp': {
 				e.preventDefault();
 				if (!open) {
-					openDropdown();
-					highlightedIndex = getNextIndex(flatSelectableOptions.length, -1);
+					if (arrowCyclesValue) {
+						cycleValue(-1);
+					} else {
+						openDropdown();
+						highlightedIndex = getNextIndex(flatSelectableOptions.length, -1);
+					}
 				} else {
 					highlightedIndex = getNextIndex(highlightedIndex, -1);
 					scrollHighlightedIntoView();
