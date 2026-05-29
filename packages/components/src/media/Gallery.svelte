@@ -2311,98 +2311,160 @@
 		flex-direction: column;
 		max-width: 600px;
 		margin-inline: auto;
-		--line-height: 4rem;
+		/* Size-driven scale: row height, horizontal padding, body text and the
+		   square thumbnail all key off these so smaller sizes feel uniformly
+		   tighter and larger sizes uniformly roomier. */
+		--line-height: 3.5rem;
+		--list-pad: 0.6rem;
+		--list-text-size: 1rem;
+		--thumb-size: calc(var(--line-height) * 0.72);
 
 		&.radius-0 {
 			--radius: 0px;
 		}
 		&.radius-1 {
-			--radius: 4px;
+			--radius: calc(var(--line-height) * 0.1);
 		}
 		&.radius-2 {
-			--radius: 10px;
+			--radius: calc(var(--line-height) * 0.15);
 		}
 		&.radius-3 {
-			--radius: 16px;
+			--radius: calc(var(--line-height) * 0.2);
 		}
 		&.size-00 {
 			--line-height: 2.25rem;
-			> .list-item {
-				padding: 0 0.25rem;
-			}
+			--list-pad: 0.25rem;
+			--list-text-size: 0.78rem;
 		}
 		&.size-0 {
 			--line-height: 2.75rem;
-			> .list-item {
-				padding: 0 0.35rem;
-			}
+			--list-pad: 0.4rem;
+			--list-text-size: 0.88rem;
 		}
 		&.size-1 {
 			--line-height: 3.5rem;
+			--list-pad: 0.6rem;
+			--list-text-size: 1rem;
 		}
 		&.size-2 {
 			--line-height: 4.5rem;
+			--list-pad: 0.85rem;
+			--list-text-size: 1.15rem;
 		}
 		&.size-3 {
 			--line-height: 5.5rem;
+			--list-pad: 1.1rem;
+			--list-text-size: 1.3rem;
 		}
 
 		> .list-item {
 			display: flex;
 			height: var(--line-height);
 			align-items: center;
-			padding: 0 0.5rem;
-			border-bottom: solid 1px var(--color-border, var(--outline));
+			padding: 0 var(--list-pad);
 			position: relative;
 			z-index: 1;
-			&:last-child {
-				border-bottom: none;
+			overflow: hidden;
+			/* Drives the subtle 3D push of the inner row on press, matching ListItem. */
+			perspective: 100px;
+
+			/* Subtle text-tinted divider between rows, matching ListItem. */
+			&::after {
+				content: '';
+				position: absolute;
+				top: 0;
+				left: var(--list-pad);
+				right: var(--list-pad);
+				border-top: solid 1px color-mix(in oklch, transparent, var(--color-text) 6%);
+				pointer-events: none;
 			}
-			&:before {
+			&:first-child::after {
+				content: none;
+			}
+
+			/* Hover/active background overlay (text @ 6%), matching ListItem. */
+			&::before {
 				content: '';
 				position: absolute;
 				top: 2px;
-				left: 0px;
-				right: 0px;
+				left: 0;
+				right: 0;
 				bottom: 2px;
-				background-color: var(--color-surface-2, var(--bg-high));
+				background-color: var(--color-text);
 				opacity: 0;
 				border-radius: var(--radius);
 				z-index: -1;
-				transition: opacity 150ms ease;
+				transition: opacity 300ms ease;
 			}
 			@media (hover: hover) and (pointer: fine) {
 				&:hover {
-					&:before {
-						opacity: 1;
+					&::before {
+						opacity: 0.06;
+						transition: opacity 0ms ease;
+					}
+					/* Image gently zooms inside its (overflow-hidden) square. */
+					.thumbnail-img {
+						transform: scale(1.08);
+					}
+					.thumbnail-blur {
+						transform: scale(1.32);
 					}
 				}
 			}
 			.info {
 				display: flex;
 				flex: 1;
+				min-width: 0;
 				cursor: pointer;
 				align-items: center;
+				position: relative;
+				overflow: hidden;
+				border-radius: var(--radius);
+				/* Press effect, matching ListItem's translate-on-active. */
+				transition: translate 200ms ease;
+				&:active {
+					translate: 0px 2px clamp(-4px, calc(0.2em - 12px), -2px);
+				}
+				&:focus-visible {
+					outline: none;
+					&::after {
+						content: '';
+						position: absolute;
+						inset: 2px 0;
+						border: solid 1px var(--color-outline-active);
+						border-radius: var(--radius);
+						pointer-events: none;
+					}
+				}
 				.thumbnail {
-					width: var(--line-height);
-					height: var(--line-height);
+					flex-shrink: 0;
+					width: var(--thumb-size);
+					height: var(--thumb-size);
 					position: relative;
 					color: white;
 					display: flex;
 					align-items: center;
 					justify-content: center;
-					border-radius: calc(var(--radius) - 0.5rem);
+					border-radius: var(--radius);
 					overflow: hidden;
+					/* The square box behind contain-fit thumbnails so images of
+					   any aspect ratio read as consistently sized tiles. Falls back
+					   to a text-tinted fill so the square stays visible even when
+					   the surface tokens aren't defined by the host theme. */
+					background-color: var(
+						--color-surface-2,
+						color-mix(in oklch, var(--color-text, gray) 20%, transparent)
+					);
 					.thumbnail-blur,
 					.thumbnail-img,
 					.thumbnail-placeholder {
 						position: absolute;
-						inset: 2px;
-						width: calc(100% - 4px);
-						height: calc(100% - 4px);
+						inset: 0;
+						width: 100%;
+						height: 100%;
 						object-fit: contain;
-						border-radius: calc(var(--radius) - 0.35rem);
 						display: block;
+						transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
 					}
 					.thumbnail-blur {
 						z-index: 0;
@@ -2419,9 +2481,13 @@
 					.thumbnail-img {
 						z-index: 1;
 						opacity: 1;
-						transition: opacity 300ms ease;
+						transition:
+							opacity 300ms ease,
+							transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
 						&.no-blur {
-							transition: opacity 200ms ease;
+							transition:
+								opacity 200ms ease,
+								transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
 						}
 						&.fading {
 							opacity: 0;
@@ -2430,10 +2496,11 @@
 					}
 					.icon {
 						position: absolute;
-						width: 1.5rem;
-						height: 1.5rem;
-						top: calc(50% - 0.75rem);
-						left: calc(50% - 0.75rem);
+						width: clamp(1rem, calc(var(--line-height) * 0.42), 2rem);
+						height: clamp(1rem, calc(var(--line-height) * 0.42), 2rem);
+						top: 50%;
+						left: 50%;
+						translate: -50% -50%;
 						z-index: 2;
 						background-color: rgba(0, 0, 0, 0.6);
 						backdrop-filter: blur(10px);
@@ -2449,7 +2516,11 @@
 				}
 				.name {
 					flex: 1;
-					padding: 0 1rem;
+					min-width: 0;
+					padding-left: calc(var(--list-pad) + 0.5rem);
+					padding-right: var(--list-pad);
+					font-size: var(--list-text-size);
+					color: var(--color-text);
 					text-overflow: ellipsis;
 					white-space: nowrap;
 					overflow: hidden;
