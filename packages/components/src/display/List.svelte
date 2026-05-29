@@ -140,7 +140,7 @@
 		class={['list', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
-		class:disabled={disabled}
+		class:disabled
 		style:--list-pad-x={paddingX}
 		style:--list-pad-y={paddingY}
 		{@attach onFocusWithin({
@@ -173,6 +173,12 @@
 		}
 		&.comfortable {
 			--border-inset: 8px;
+		}
+		&.skeleton {
+			/* Lists fill their container. In a definite-width parent this spans the
+		 * full width (so skeleton %-width bars and rows lay out correctly); in a
+		 * shrink-to-fit parent (e.g. a popover) it collapses to content width. */
+			width: 100%;
 		}
 
 		:global(> li:first-child) {
@@ -214,10 +220,16 @@
 		animation: list-skeleton-shimmer 1.5s linear infinite;
 	}
 	@keyframes list-skeleton-shimmer {
-		0% { background-position: 200% 0; }
-		100% { background-position: -200% 0; }
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.skeleton-bar { animation: none; }
+		.skeleton-bar {
+			animation: none;
+		}
 	}
 </style>
