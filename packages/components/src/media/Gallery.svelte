@@ -2361,7 +2361,10 @@
 			display: flex;
 			height: var(--line-height);
 			align-items: center;
-			padding: 0 var(--list-pad);
+			/* No padding here: the clickable .info fills the row edge-to-edge so
+			   hover/press feedback can never appear on a non-clickable sliver.
+			   The content inset lives on .info instead. */
+			padding: 0;
 			position: relative;
 			z-index: 1;
 			overflow: hidden;
@@ -2377,40 +2380,12 @@
 				right: var(--list-pad);
 				border-top: solid 1px color-mix(in oklch, transparent, var(--color-text) 6%);
 				pointer-events: none;
+				z-index: 1;
 			}
 			&:first-child::after {
 				content: none;
 			}
 
-			/* Hover/active background overlay (text @ 6%), matching ListItem. */
-			&::before {
-				content: '';
-				position: absolute;
-				top: 2px;
-				left: 0;
-				right: 0;
-				bottom: 2px;
-				background-color: var(--color-text);
-				opacity: 0;
-				border-radius: var(--radius);
-				z-index: -1;
-				transition: opacity 300ms ease;
-			}
-			@media (hover: hover) and (pointer: fine) {
-				&:hover {
-					&::before {
-						opacity: 0.06;
-						transition: opacity 0ms ease;
-					}
-					/* Image gently zooms inside its (overflow-hidden) square. */
-					.thumbnail-img {
-						transform: scale(1.08);
-					}
-					.thumbnail-blur {
-						transform: scale(1.32);
-					}
-				}
-			}
 			.info {
 				display: flex;
 				flex: 1;
@@ -2419,9 +2394,45 @@
 				align-items: center;
 				position: relative;
 				overflow: hidden;
+				/* Fill the full row height + width so the whole visible area of the
+				   row is the click target — feedback and clickability stay in sync. */
+				align-self: stretch;
+				padding: 0 var(--list-pad);
 				border-radius: var(--radius);
 				/* Press effect, matching ListItem's translate-on-active. */
 				transition: translate 200ms ease;
+
+				/* Hover/active background overlay (text @ 6%), matching ListItem.
+				   It lives on .info (the click target), not the row, so it only
+				   ever shows where the user can actually click. */
+				&::before {
+					content: '';
+					position: absolute;
+					top: 2px;
+					left: 0;
+					right: 0;
+					bottom: 2px;
+					background-color: var(--color-text);
+					opacity: 0;
+					border-radius: var(--radius);
+					z-index: -1;
+					transition: opacity 300ms ease;
+				}
+				@media (hover: hover) and (pointer: fine) {
+					&:hover {
+						&::before {
+							opacity: 0.06;
+							transition: opacity 0ms ease;
+						}
+						/* Image gently zooms inside its (overflow-hidden) square. */
+						.thumbnail-img {
+							transform: scale(1.08);
+						}
+						.thumbnail-blur {
+							transform: scale(1.32);
+						}
+					}
+				}
 				&:active {
 					translate: 0px 2px clamp(-4px, calc(0.2em - 12px), -2px);
 				}
@@ -2525,6 +2536,12 @@
 					white-space: nowrap;
 					overflow: hidden;
 				}
+			}
+			/* Action buttons sit outside the clickable .info; give them the
+			   row inset that used to come from .list-item's own padding. */
+			> .actions {
+				flex-shrink: 0;
+				margin-right: var(--list-pad);
 			}
 		}
 	}
