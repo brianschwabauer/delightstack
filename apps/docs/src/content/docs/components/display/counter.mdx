@@ -50,14 +50,6 @@ Override the default `Intl.NumberFormat` with a custom function for compact disp
 />
 ```
 
-### Flip Animation
-
-Digits flip individually like a mechanical counter with 3D transforms.
-
-<ComponentPreview code={`<Counter value={42} animation="flip" />`}>
-	<CounterDemo client:load value={42} animation="flip" />
-</ComponentPreview>
-
 ### Locale-Aware Formatting
 
 Number separators adapt to the specified locale.
@@ -89,7 +81,6 @@ Number separators adapt to the specified locale.
 | `prefix` | `string` | - | Text before the number (rendered small + top) |
 | `suffix` | `string` | - | Text after the number (rendered small + top) |
 | `format` | `(n: number) => string` | - | Custom formatter (overrides Intl.NumberFormat) |
-| `animation` | `'count' \| 'flip'` | `'count'` | Animation style |
 | `separator` | `boolean` | `true` | Use locale thousands separator |
 | `locale` | `string` | - | BCP 47 locale for number formatting |
 | `easing` | `(t: number) => number` | quintOut | Animation easing function |

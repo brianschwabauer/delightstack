@@ -7,7 +7,6 @@
 		prefix = undefined,
 		suffix = undefined,
 		decimals = 0,
-		animation = 'count',
 		duration = 5000,
 		delay = 0,
 		locale = undefined,
@@ -24,7 +23,6 @@
 			{prefix}
 			{suffix}
 			{decimals}
-			{animation}
 			{duration}
 			{delay}
 			{locale} />

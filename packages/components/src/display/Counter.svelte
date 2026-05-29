@@ -27,9 +27,6 @@
 		/** Custom format function — takes precedence over Intl.NumberFormat */
 		format = undefined as ((value: number) => string) | undefined,
 
-		/** Animation style */
-		animation = 'count' as 'count' | 'flip',
-
 		/** Whether to show thousands separators */
 		separator = true,
 
@@ -62,11 +59,6 @@
 	let is_animating = $state(false);
 	let display_value = $state(value);
 	let raf_id = $state(0);
-
-	let flip_digits: { digit: string; is_flipping: boolean; old_digit: string }[] = $state(
-		[],
-	);
-	let flip_active = $state(false);
 
 	let prefers_reduced_motion = $state(false);
 	$effect(() => {
@@ -125,56 +117,6 @@
 		raf_id = requestAnimationFrame(step);
 	}
 
-	function animateFlip(from: number, to: number) {
-		is_animating = true;
-		flip_active = true;
-		const old_str = formatNumber(from);
-		const new_str = formatNumber(to);
-		const max_len = Math.max(old_str.length, new_str.length);
-		const old_padded = old_str.padStart(max_len);
-		const new_padded = new_str.padStart(max_len);
-
-		const initial: typeof flip_digits = [];
-		for (let i = 0; i < max_len; i++) {
-			initial.push({
-				digit: old_padded[i],
-				is_flipping: false,
-				old_digit: old_padded[i],
-			});
-		}
-		flip_digits = initial;
-
-		const per_digit_duration = Math.min(700, duration);
-		const stagger = Math.max(
-			40,
-			Math.min(120, (duration - per_digit_duration) / Math.max(1, max_len - 1)),
-		);
-
-		for (let i = max_len - 1; i >= 0; i--) {
-			const digit_delay = delay + (max_len - 1 - i) * stagger;
-			if (old_padded[i] !== new_padded[i]) {
-				const idx = i;
-				setTimeout(() => {
-					flip_digits = flip_digits.map((d, j) =>
-						j === idx
-							? { digit: new_padded[idx], is_flipping: true, old_digit: old_padded[idx] }
-							: d,
-					);
-				}, digit_delay);
-			}
-		}
-
-		const total_time =
-			delay + Math.max(0, max_len - 1) * stagger + per_digit_duration + 50;
-		setTimeout(() => {
-			display_value = to;
-			is_animating = false;
-			flip_active = false;
-			flip_digits = [];
-			oncomplete?.();
-		}, total_time);
-	}
-
 	function startAnimation() {
 		if (has_animated) return;
 		has_animated = true;
@@ -185,8 +127,7 @@
 			return;
 		}
 
-		if (animation === 'flip') animateFlip(0, value);
-		else animateCount(0, value);
+		animateCount(0, value);
 	}
 
 	$effect(() => {
@@ -201,9 +142,7 @@
 			return;
 		}
 
-		const from = prev;
-		if (animation === 'flip') animateFlip(from, current_target);
-		else animateCount(from, current_target);
+		animateCount(prev, current_target);
 	});
 
 	$effect(() => {
@@ -214,8 +153,6 @@
 
 	export function restart() {
 		if (raf_id) cancelAnimationFrame(raf_id);
-		flip_active = false;
-		flip_digits = [];
 		display_value = 0;
 		has_animated = false;
 		is_animating = false;
@@ -224,39 +161,16 @@
 </script>
 
 <span
-	class={['counter', `counter-${animation}`, className].filter(Boolean).join(' ')}
+	class={['counter', className].filter(Boolean).join(' ')}
 	class:skeleton={skeleton && !has_animated}
 	{id}
 	role="img"
 	aria-live="polite"
 	aria-label={aria_label_text}
-	style:--counter-duration="{duration}ms"
 	{@attach intersectionObserver({ onintersectonce: () => startAnimation() })}>
 	{#if prefix}<span class="counter-affix counter-prefix">{prefix}</span>{/if}
 
-	{#if animation === 'flip' && flip_active}
-		<span class="counter-digits">
-			{#each flip_digits as cell, i (i)}
-				{@const is_sep =
-					cell.digit === ',' ||
-					cell.digit === '.' ||
-					cell.digit === ' ' ||
-					cell.digit === ' '}
-				{#if is_sep}
-					<span class="counter-separator">{cell.digit}</span>
-				{:else}
-					<span class="counter-digit" class:flipping={cell.is_flipping}>
-						<span class="flip-card" aria-hidden="true">
-							<span class="flip-face flip-front">{cell.old_digit}</span>
-							<span class="flip-face flip-back">{cell.digit}</span>
-						</span>
-					</span>
-				{/if}
-			{/each}
-		</span>
-	{:else}
-		<span class="counter-value">{formatted_value}</span>
-	{/if}
+	<span class="counter-value">{formatted_value}</span>
 
 	{#if suffix}<span class="counter-affix counter-suffix">{suffix}</span>{/if}
 </span>
@@ -306,58 +220,5 @@
 
 	.counter-value {
 		display: inline;
-	}
-
-	.counter-digits {
-		display: inline-flex;
-		align-items: stretch;
-		gap: 0;
-	}
-
-	.counter-separator {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.counter-digit {
-		display: inline-block;
-		position: relative;
-		width: 0.6em;
-		height: 1em;
-		perspective: 600px;
-	}
-
-	.flip-card {
-		position: relative;
-		width: 100%;
-		height: 100%;
-		transform-style: preserve-3d;
-		transition: transform 0ms linear;
-	}
-
-	.counter-digit.flipping .flip-card {
-		transform: rotateX(180deg);
-		transition: transform var(--counter-duration, 700ms) cubic-bezier(0.22, 1, 0.36, 1);
-	}
-
-	.flip-face {
-		position: absolute;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		backface-visibility: hidden;
-	}
-
-	.flip-back {
-		transform: rotateX(180deg);
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.counter-digit.flipping .flip-card {
-			transition: none !important;
-			transform: rotateX(180deg);
-		}
 	}
 </style>
