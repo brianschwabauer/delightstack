@@ -1157,15 +1157,36 @@
 		transform: rotate(90deg);
 	}
 
-	/* ========== Spinner ========== */
+	/* ========== Spinner ==========
+	 * Combines a non-linear rotation with a dasharray sweep to mimic the
+	 * easing used by <Progress />. The rotation uses cubic-bezier for an
+	 * organic pace; the stroke offset/length animation gives the typical
+	 * "elastic chase" look found on Material-style indeterminate spinners. */
 	.spinner {
 		color: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
-		animation: tree-spin 0.8s linear infinite;
+		animation: tree-spin 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+	}
+	.spinner circle {
+		transform-origin: center;
+		animation: tree-spinner-dash 1.4s ease-in-out infinite;
 	}
 
 	@keyframes tree-spin {
+		0% { transform: rotate(0deg); }
+		100% { transform: rotate(360deg); }
+	}
+	@keyframes tree-spinner-dash {
+		0% {
+			stroke-dasharray: 1, 38;
+			stroke-dashoffset: 0;
+		}
+		50% {
+			stroke-dasharray: 22, 38;
+			stroke-dashoffset: -9;
+		}
 		100% {
-			transform: rotate(360deg);
+			stroke-dasharray: 22, 38;
+			stroke-dashoffset: -28;
 		}
 	}
 
