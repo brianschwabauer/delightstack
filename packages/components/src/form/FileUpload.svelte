@@ -1,5 +1,28 @@
 <script lang="ts">
 	import { type Snippet } from 'svelte';
+	import { ripple } from '@delightstack/utilities';
+	import Button from '../actions/Button.svelte';
+
+	function humanizeAccept(accept_str: string): string {
+		const tokens = accept_str.split(',').map((t) => t.trim().toLowerCase());
+		const labels = new Set<string>();
+		for (const tok of tokens) {
+			if (tok === 'image/*') labels.add('Images');
+			else if (tok === 'video/*') labels.add('Videos');
+			else if (tok === 'audio/*') labels.add('Audio');
+			else if (tok === 'application/pdf' || tok === '.pdf') labels.add('PDF');
+			else if (tok.startsWith('.')) labels.add(tok.slice(1).toUpperCase());
+			else if (tok.includes('/')) {
+				const sub = tok.split('/')[1];
+				if (sub && sub !== '*') labels.add(sub.toUpperCase());
+			}
+		}
+		const arr = [...labels];
+		if (arr.length === 0) return '';
+		if (arr.length === 1) return `${arr[0]} only`;
+		if (arr.length === 2) return `${arr[0]} or ${arr[1]}`;
+		return `${arr.slice(0, -1).join(', ')}, or ${arr[arr.length - 1]}`;
+	}
 
 	const propId = $props.id();
 	let {
@@ -283,6 +306,7 @@
 		<div
 			class="avatar-upload"
 			class:drag-over={is_drag_over}
+			class:has-image={!!avatar_preview_url}
 			role="button"
 			tabindex={disabled ? -1 : 0}
 			aria-label={label || 'Upload avatar'}
@@ -291,9 +315,29 @@
 			ondragleave={onDragLeave}
 			ondrop={onDrop}
 			onclick={openFilePicker}
-			onkeydown={onKeyDown}>
+			onkeydown={onKeyDown}
+			{@attach ripple({ enabled: !disabled && !skeleton })}>
 			{#if avatar_preview_url}
 				<img class="avatar-preview" src={avatar_preview_url} alt="Avatar preview" />
+			{:else}
+				<!-- Default state shows a clear "add photo" affordance so it's
+				     not just an empty circle. -->
+				<div class="avatar-placeholder" aria-hidden="true">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path
+							d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+							stroke="currentColor"
+							stroke-width="1.6"
+							fill="none" />
+						<circle
+							cx="12"
+							cy="13"
+							r="4"
+							stroke="currentColor"
+							stroke-width="1.6"
+							fill="none" />
+					</svg>
+				</div>
 			{/if}
 			<div class="avatar-overlay">
 				<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
@@ -313,34 +357,35 @@
 			</div>
 		</div>
 	{:else if variant === 'compact'}
-		<!-- Compact variant: button-style trigger -->
-		<button
-			type="button"
-			class="compact-trigger"
+		<!-- Compact variant: uses the delightstack Button so it picks up ripple,
+		     :active scaling, and consistent styling. The wrapping div carries
+		     the drag/drop listeners. -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="compact-wrapper"
 			class:drag-over={is_drag_over}
-			{disabled}
-			aria-label={label || 'Choose files'}
 			ondragenter={onDragEnter}
 			ondragover={onDragOver}
 			ondragleave={onDragLeave}
-			ondrop={onDrop}
-			onclick={openFilePicker}>
-			<svg
-				class="upload-icon"
-				viewBox="0 0 24 24"
-				width="16"
-				height="16"
-				aria-hidden="true">
-				<path
-					d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					fill="none" />
-			</svg>
-			<span>Choose file{multiple ? 's' : ''}</span>
-		</button>
+			ondrop={onDrop}>
+			<Button outline {disabled} onclick={openFilePicker}>
+				<svg
+					class="upload-icon"
+					viewBox="0 0 24 24"
+					width="16"
+					height="16"
+					aria-hidden="true">
+					<path
+						d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						fill="none" />
+				</svg>
+				<span>Choose file{multiple ? 's' : ''}</span>
+			</Button>
+		</div>
 	{:else}
 		<!-- Dropzone variant: large dashed border area -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -355,7 +400,8 @@
 			ondragleave={onDragLeave}
 			ondrop={onDrop}
 			onclick={openFilePicker}
-			onkeydown={onKeyDown}>
+			onkeydown={onKeyDown}
+			{@attach ripple({ enabled: !disabled && !skeleton })}>
 			<svg class="upload-icon" viewBox="0 0 24 24" aria-hidden="true">
 				<path
 					d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"
@@ -368,8 +414,8 @@
 			<p class="dropzone-text">
 				Drop files here or <span class="browse-link">browse</span>
 			</p>
-			{#if accept}
-				<p class="dropzone-hint">{accept}</p>
+			{#if accept && humanizeAccept(accept)}
+				<p class="dropzone-hint">{humanizeAccept(accept)}</p>
 			{/if}
 		</div>
 	{/if}
@@ -458,7 +504,6 @@
 		pointer-events: none;
 	}
 	.file-upload.skeleton .dropzone,
-	.file-upload.skeleton .compact-trigger,
 	.file-upload.skeleton .avatar-upload,
 	.file-upload.skeleton .label {
 		background: var(--c-bg-4, hsl(0 0% 90%));
@@ -468,7 +513,6 @@
 		animation: skeleton-pulse 1.5s ease-in-out infinite;
 	}
 	.file-upload.skeleton .dropzone *,
-	.file-upload.skeleton .compact-trigger *,
 	.file-upload.skeleton .avatar-upload * {
 		visibility: hidden;
 	}
@@ -492,20 +536,27 @@
 
 	/* Dropzone variant */
 	.dropzone {
+		position: relative;
 		border: 2px dashed var(--color-border, var(--c-outline, hsl(0 0% 80%)));
 		border-radius: var(--radius-md, var(--radius-3, 8px));
 		padding: 2rem;
 		text-align: center;
 		cursor: pointer;
+		overflow: hidden;
 		transition:
 			border-color 200ms,
-			background 200ms;
+			background 200ms,
+			translate 200ms ease;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 0.5em;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
+	}
+	.dropzone:active:not([aria-disabled='true']) {
+		translate: 0 1px;
+		transition: translate 100ms ease;
 	}
 
 	.dropzone:hover {
@@ -557,50 +608,18 @@
 		font-size: 0.75em;
 	}
 
-	/* Compact variant */
-	.compact-trigger {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5em;
-		padding: 0.5em 1em;
-		border: 1px solid var(--color-border, var(--c-outline, hsl(0 0% 80%)));
-		border-radius: var(--radius-sm, var(--radius-2, 4px));
-		background: var(--c-bg, white);
-		color: var(--c-text, inherit);
-		font-size: 0.875em;
-		font-family: inherit;
-		cursor: pointer;
-		transition:
-			border-color 200ms,
-			background 200ms;
-		outline: none;
+	/* Compact wrapper (drag/drop area around delightstack Button) */
+	.compact-wrapper {
+		display: inline-block;
 	}
-
-	.compact-trigger:hover:not(:disabled) {
-		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
-		transition: none;
-	}
-
-	.compact-trigger:focus-visible {
-		outline: 2px solid var(--c-outline-active, currentColor);
-		outline-offset: 2px;
-	}
-
-	.compact-trigger.drag-over {
-		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
-		background: color-mix(
+	.compact-wrapper.drag-over :global(.button) {
+		--color-bg-active: color-mix(
 			in oklch,
-			var(--color-action, var(--c-action, hsl(220 70% 55%))) 5%,
+			var(--color-action, var(--c-action, hsl(220 70% 55%))) 8%,
 			transparent
 		);
 	}
-
-	.compact-trigger:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.compact-trigger .upload-icon {
+	.compact-wrapper .upload-icon {
 		width: 1em;
 		height: 1em;
 	}
@@ -651,6 +670,19 @@
 		object-fit: cover;
 	}
 
+	.avatar-placeholder {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--c-text-2, var(--color-text-muted, hsl(0 0% 55%)));
+	}
+	.avatar-placeholder svg {
+		width: 40%;
+		height: 40%;
+	}
+
 	.avatar-overlay {
 		position: absolute;
 		inset: 0;
@@ -658,6 +690,8 @@
 		align-items: center;
 		justify-content: center;
 		background: rgb(0 0 0 / 0);
+		backdrop-filter: blur(4px);
+		border-radius: 100%;
 		color: white;
 		transition: background 200ms;
 		opacity: 0;
@@ -747,7 +781,6 @@
 
 	/* Error state */
 	.has-error .dropzone,
-	.has-error .compact-trigger,
 	.has-error .avatar-upload {
 		border-color: var(--c-error, hsl(0 70% 55%));
 	}
