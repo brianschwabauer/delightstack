@@ -396,7 +396,7 @@
 			bind:this={sheet_el}
 			role="dialog"
 			aria-modal="true"
-			style:transform="translateY({translate_y}%)">
+			style:transform="translate(-50%, {translate_y}%)">
 			{#if showHandle}
 				<div
 					class="handle"
@@ -462,13 +462,14 @@
 	.sheet {
 		position: fixed;
 		bottom: 0;
-		left: 0;
-		right: 0;
+		left: 50%;
+		transform: translate(-50%, 100%);
+		width: 100%;
+		max-width: 500px;
 		background: light-dark(var(--color-surface-1, white), var(--color-surface-1, #1a1a1a));
 		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 		box-shadow: var(--shadow-lg);
 		z-index: var(--layer-modal, 400);
-		transform: translateY(100%);
 		max-height: calc(100vh - env(safe-area-inset-top) - 1rem);
 		display: flex;
 		flex-direction: column;
