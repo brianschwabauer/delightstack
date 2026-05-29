@@ -142,6 +142,42 @@
 	function handleLoadMore() {
 		onloadmore?.();
 	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Horizontal scroll: chevron next/prev buttons                       */
+	/* ------------------------------------------------------------------ */
+	let scroll_el = $state<HTMLElement | undefined>(undefined);
+	let can_scroll_prev = $state(false);
+	let can_scroll_next = $state(false);
+
+	function updateScrollState() {
+		if (!scroll_el) return;
+		can_scroll_prev = scroll_el.scrollLeft > 4;
+		can_scroll_next = scroll_el.scrollLeft + scroll_el.clientWidth < scroll_el.scrollWidth - 4;
+	}
+
+	function scrollNext() {
+		if (!scroll_el) return;
+		scroll_el.scrollBy({ left: scroll_el.clientWidth * 0.8, behavior: 'smooth' });
+	}
+	function scrollPrev() {
+		if (!scroll_el) return;
+		scroll_el.scrollBy({ left: -scroll_el.clientWidth * 0.8, behavior: 'smooth' });
+	}
+
+	$effect(() => {
+		if (!horizontal || !scroll_el) return;
+		updateScrollState();
+		const el = scroll_el;
+		const onScroll = () => updateScrollState();
+		el.addEventListener('scroll', onScroll, { passive: true });
+		const ro = new ResizeObserver(updateScrollState);
+		ro.observe(el);
+		return () => {
+			el.removeEventListener('scroll', onScroll);
+			ro.disconnect();
+		};
+	});
 </script>
 
 {#if isItem}
@@ -209,10 +245,59 @@
 			</li>
 		{/each}
 	</ol>
+{:else if horizontal}
+	<!-- Horizontal timeline container with chevron next/prev controls -->
+	<div class={['timeline-horizontal-wrap', className].filter(Boolean).join(' ')} {id}>
+		{#if can_scroll_prev}
+			<button
+				type="button"
+				class="timeline-nav timeline-nav-prev"
+				aria-label="Scroll back"
+				onclick={scrollPrev}>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<polyline points="15 18 9 12 15 6" />
+				</svg>
+			</button>
+		{/if}
+		<ol
+			bind:this={scroll_el}
+			class="timeline horizontal"
+			class:alternate
+			class:dense
+			class:comfortable
+			role="list">
+			{@render children?.()}
+			{#if pending}
+				<li class="timeline-item timeline-pending horizontal">
+					<div class="timeline-marker">
+						<span class="marker-dot pending-dot"></span>
+					</div>
+				</li>
+			{/if}
+			{#if onloadmore}
+				<li
+					class="timeline-sentinel"
+					aria-hidden="true"
+					{@attach intersectionObserver({ onintersectonce: () => handleLoadMore() })}>
+				</li>
+			{/if}
+		</ol>
+		{#if can_scroll_next}
+			<button
+				type="button"
+				class="timeline-nav timeline-nav-next"
+				aria-label="Scroll forward"
+				onclick={scrollNext}>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<polyline points="9 18 15 12 9 6" />
+				</svg>
+			</button>
+		{/if}
+	</div>
 {:else}
 	<!-- Timeline container -->
 	<ol
-		class={['timeline', horizontal ? 'horizontal' : 'vertical', className].filter(Boolean).join(' ')}
+		class={['timeline vertical', className].filter(Boolean).join(' ')}
 		class:alternate
 		class:dense
 		class:comfortable
@@ -220,7 +305,7 @@
 		role="list">
 		{@render children?.()}
 		{#if pending}
-			<li class="timeline-item timeline-pending" class:horizontal class:vertical={!horizontal}>
+			<li class="timeline-item timeline-pending vertical">
 				<div class="timeline-marker">
 					<span class="marker-dot pending-dot"></span>
 				</div>
@@ -257,7 +342,59 @@
 			scroll-snap-type: x mandatory;
 			-webkit-overflow-scrolling: touch;
 			gap: 0;
+			/* Hide the native scrollbar — we navigate via chevron controls */
+			scrollbar-width: none;
 		}
+		&.horizontal::-webkit-scrollbar {
+			display: none;
+		}
+	}
+
+	/* ========== Horizontal Navigation ========== */
+	.timeline-horizontal-wrap {
+		position: relative;
+		width: 100%;
+	}
+	.timeline-nav {
+		position: absolute;
+		top: 0;
+		bottom: 1.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		border: none;
+		background: light-dark(
+			color-mix(in oklch, var(--color-bg, #fff) 88%, transparent),
+			color-mix(in oklch, var(--color-bg, #111) 80%, transparent)
+		);
+		backdrop-filter: blur(8px);
+		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+		cursor: pointer;
+		z-index: 2;
+		border-radius: var(--radius-3, 8px);
+		opacity: 0;
+		animation: timeline-nav-fade 200ms ease forwards;
+		transition: background 150ms ease;
+	}
+	.timeline-nav:hover {
+		background: light-dark(
+			color-mix(in oklch, var(--color-bg, #fff) 100%, transparent),
+			color-mix(in oklch, var(--color-bg, #111) 95%, transparent)
+		);
+	}
+	.timeline-nav:focus-visible {
+		outline: 2px solid var(--color-action, currentColor);
+		outline-offset: 2px;
+	}
+	.timeline-nav-prev {
+		left: 0;
+	}
+	.timeline-nav-next {
+		right: 0;
+	}
+	@keyframes timeline-nav-fade {
+		to { opacity: 1; }
 	}
 
 	/* ========== Timeline Item ========== */
@@ -600,7 +737,7 @@
 	}
 
 	.timeline-body {
-		margin-top: 0.375rem;
+		margin-top: 0.125rem;
 		font-size: 0.8125rem;
 		color: light-dark(
 			var(--color-text-muted, #6b7280),
@@ -609,12 +746,12 @@
 		line-height: 1.5;
 
 		.timeline-item.dense & {
-			margin-top: 0.25rem;
+			margin-top: 0.0625rem;
 			font-size: 0.75rem;
 		}
 
 		.timeline-item.comfortable & {
-			margin-top: 0.5rem;
+			margin-top: 0.25rem;
 			font-size: 0.875rem;
 		}
 	}
