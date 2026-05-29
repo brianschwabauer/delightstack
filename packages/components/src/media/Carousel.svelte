@@ -2119,6 +2119,7 @@
 										showToolbar={false}
 										single_page={true}
 										autoPaginate={false}
+										text_layer={false}
 										fit="page"
 										pixel_density={item._pdf_pixel_density || 1}
 										onload={(detail: { total_pages: number }) =>

@@ -23,7 +23,7 @@
 	<Gallery
 		items={demoImages}
 		display="masonry"
-		sizing="small"
+		size="0"
 		{actions}
 		action_display="hover" />
 </div>

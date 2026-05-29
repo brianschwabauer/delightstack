@@ -73,18 +73,18 @@ ${' '}let display = $state<GalleryDisplay>('masonry');
 
 ### Sizing
 
-`sizing` adjusts how dense the thumbnails are. It changes column counts for grid/masonry, row heights for `masonry-row`, and row height for `list`.
+`size` adjusts how dense the thumbnails are on the delightstack numeric scale (`'00'`–`'3'`, where `'1'` is the standard). It changes column counts for grid/masonry, row heights for `masonry-row`, and row height for `list`.
 
-<ComponentPreview code={`<Gallery {items} display="masonry" sizing="large" />`}>
+<ComponentPreview code={`<Gallery {items} display="masonry" size="2" />`}>
 	<GallerySizingDemo client:load />
 </ComponentPreview>
 
 ### Spacing and radius
 
-`spacing` controls the gap between items, and `radius` controls the corner radius. Both are tied to the same gallery-gap CSS variable so they scale together.
+`spacing` controls the gap between items, and `radius` controls the corner radius. Both use the delightstack numeric scale (`'0'`–`'3'`, where `'1'` is the standard); `radius` scales with the gallery gap so the two stay visually balanced.
 
 <ComponentPreview
-	code={`<Gallery {items} display="grid" spacing="large" radius="large" />`}>
+	code={`<Gallery {items} display="grid" spacing="2" radius="2" />`}>
 	<GallerySpacingDemo client:load />
 </ComponentPreview>
 
@@ -240,9 +240,9 @@ ${'  '}{/snippet}
 | ------------------------- | ------------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `items`                   | `GalleryItem[]`                                   | `[]`                         | Strings are treated as image URLs. See [GalleryItem](#galleryitem).                                   |
 | `display`                 | `GalleryDisplay`                                  | `'masonry'`                  | See [Display modes](#display-modes).                                                                  |
-| `sizing`                  | `'small' \| 'default' \| 'large'`                 | `'default'`                  | Thumbnail density.                                                                                    |
-| `spacing`                 | `'none' \| 'default' \| 'large'`                  | `'default'`                  | Gap between thumbnails.                                                                               |
-| `radius`                  | `'none' \| 'small' \| 'large'`                    | `'small'`                    | Corner radius of thumbnails.                                                                          |
+| `size`                    | `'00' \| '0' \| '1' \| '2' \| '3'`                | `'1'`                        | Thumbnail density (numeric scale; `'1'` standard, lower = smaller, higher = larger).                  |
+| `spacing`                 | `'0' \| '1' \| '2' \| '3'`                        | `'1'`                        | Gap between thumbnails (numeric scale; `'0'` removes the gap).                                        |
+| `radius`                  | `'0' \| '1' \| '2' \| '3'`                        | `'1'`                        | Corner radius of thumbnails (numeric scale; `'0'` is square).                                         |
 | `slide`                   | `number` _(bindable)_                             | `-1` _(or `0` for `slider`)_ | The currently displayed item index. `-1` keeps the modal closed.                                      |
 | `fit`                     | `'cover' \| 'contain'`                            | `'contain'`                  | `object-fit` for items inside the carousel.                                                           |
 | `aspect_ratio`            | `string`                                          | `undefined`                  | CSS aspect ratio for the slider/slideshow frame (e.g. `"16/9"`). Ignored when the modal is open.      |

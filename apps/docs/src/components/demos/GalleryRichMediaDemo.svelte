@@ -4,7 +4,7 @@
 </script>
 
 <div class="full-width">
-	<Gallery items={richMediaItems} display="masonry-row" sizing="small" />
+	<Gallery items={richMediaItems} display="masonry-row" size="0" />
 </div>
 
 <style>

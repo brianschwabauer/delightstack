@@ -4,7 +4,7 @@
 </script>
 
 <div class="full-width">
-	<Gallery items={demoImages} sizing="small" />
+	<Gallery items={demoImages} size="0" />
 </div>
 
 <style>

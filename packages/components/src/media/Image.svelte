@@ -203,7 +203,13 @@
 	 * onload listener.
 	 */
 	$effect(() => {
-		void src;
+		// No src yet (e.g. progressively assigned) — stay in the loading state so
+		// the placeholder/skeleton shows rather than falling through to `error`.
+		if (!src) {
+			load_state = 'loading';
+			fading = true;
+			return;
+		}
 		if (!img_el) return;
 		if (img_el.complete && img_el.naturalWidth > 0) {
 			load_state = 'loaded';
@@ -237,7 +243,7 @@
 			style:object-position={position} />
 	{/if}
 
-	{#if load_state !== 'error'}
+	{#if src && load_state !== 'error'}
 		<img
 			class="main"
 			class:fading
@@ -320,8 +326,14 @@
 		}
 	}
 
+	.skeleton {
+		z-index: 0;
+	}
+
 	/* Blur-up placeholder — always renders underneath the main image so it shows
-	   through while the main image is loading, and is covered once it paints. */
+	   through while the main image is loading, and is covered once it paints.
+	   `transform` makes it form a stacking context, so an explicit z-index is
+	   required to keep it below the (later-painted but un-transformed) main image. */
 	.placeholder {
 		display: block;
 		width: 100%;
@@ -329,6 +341,7 @@
 		filter: blur(20px);
 		transform: scale(1.1);
 		pointer-events: none;
+		z-index: 0;
 	}
 
 	/* Main image — defaults to opacity 1 so cached images paint instantly during
@@ -339,6 +352,7 @@
 		width: 100%;
 		height: 100%;
 		transition: opacity 300ms ease;
+		z-index: 1;
 	}
 
 	.main.fading {
@@ -350,9 +364,11 @@
 		display: block;
 		width: 100%;
 		height: 100%;
+		z-index: 2;
 	}
 
 	.fallback {
+		z-index: 2;
 		display: flex;
 		align-items: center;
 		justify-content: center;

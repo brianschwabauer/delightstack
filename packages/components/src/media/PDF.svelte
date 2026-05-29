@@ -70,6 +70,14 @@
 		/** Show loading skeleton */
 		skeleton = false,
 
+		/**
+		 * Render the selectable/searchable text layer over each page. Disable it
+		 * (e.g. inside a Carousel) to skip `getTextContent()` and per-glyph span
+		 * layout on every page — a meaningful render-perf win when text selection
+		 * isn't needed. Search still works (it extracts text separately).
+		 */
+		text_layer = true,
+
 		/** Element ID */
 		id = propId,
 
@@ -80,7 +88,9 @@
 		element = $bindable(undefined as HTMLElement | undefined),
 
 		/** Fired when the current page changes */
-		onpagechange = undefined as ((detail: { page: number; total_pages: number }) => void) | undefined,
+		onpagechange = undefined as
+			| ((detail: { page: number; total_pages: number }) => void)
+			| undefined,
 
 		/** Fired when the PDF finishes loading */
 		onload = undefined as ((detail: { total_pages: number }) => void) | undefined,
@@ -108,6 +118,7 @@
 		autoPaginate?: boolean;
 		pixel_density?: number;
 		skeleton?: boolean;
+		text_layer?: boolean;
 		id?: string;
 		class?: string;
 		element?: HTMLElement | undefined;
@@ -228,8 +239,10 @@
 		rendered_pages = new Set();
 
 		try {
-			const lib = await loadPdfJs() as Record<string, unknown>;
-			const getDocument = lib.getDocument as (params: Record<string, unknown>) => { promise: Promise<unknown> };
+			const lib = (await loadPdfJs()) as Record<string, unknown>;
+			const getDocument = lib.getDocument as (
+				params: Record<string, unknown>,
+			) => { promise: Promise<unknown> };
 
 			const params: Record<string, unknown> = {};
 			if (typeof source === 'string') {
@@ -239,7 +252,10 @@
 			}
 
 			const doc = await getDocument(params).promise;
-			const typedDoc = doc as { numPages: number; getPage: (n: number) => Promise<unknown> };
+			const typedDoc = doc as {
+				numPages: number;
+				getPage: (n: number) => Promise<unknown>;
+			};
 			pdf_doc = doc;
 			total_pages = typedDoc.numPages;
 
@@ -247,7 +263,12 @@
 			const infos: PageInfo[] = [];
 			for (let i = 1; i <= total_pages; i++) {
 				const pg = await typedDoc.getPage(i);
-				const typedPage = pg as { getViewport: (opts: { scale: number; rotation: number }) => { width: number; height: number } };
+				const typedPage = pg as {
+					getViewport: (opts: {
+						scale: number;
+						rotation: number;
+					}) => { width: number; height: number };
+				};
 				const vp = typedPage.getViewport({ scale: 1, rotation });
 				infos.push({ width: vp.width, height: vp.height, rendered: false });
 			}
@@ -269,12 +290,17 @@
 		}
 	}
 
-	async function extractAllText(doc: { numPages: number; getPage: (n: number) => Promise<unknown> }) {
+	async function extractAllText(doc: {
+		numPages: number;
+		getPage: (n: number) => Promise<unknown>;
+	}) {
 		const texts: string[] = [];
 		for (let i = 1; i <= doc.numPages; i++) {
 			try {
 				const pg = await doc.getPage(i);
-				const typedPage = pg as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
+				const typedPage = pg as {
+					getTextContent: () => Promise<{ items: { str?: string }[] }>;
+				};
 				const content = await typedPage.getTextContent();
 				const text = content.items.map((item) => item.str || '').join(' ');
 				texts.push(text);
@@ -311,9 +337,17 @@
 		const typedDoc = pdf_doc as { getPage: (n: number) => Promise<unknown> };
 		const pg = await typedDoc.getPage(page_num);
 		const typedPage = pg as {
-			getViewport: (opts: { scale: number; rotation: number }) => { width: number; height: number; transform: number[] };
-			render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => { promise: Promise<void> };
-			getTextContent: () => Promise<{ items: { str?: string; transform?: number[]; width?: number; height?: number }[] }>;
+			getViewport: (opts: {
+				scale: number;
+				rotation: number;
+			}) => { width: number; height: number; transform: number[] };
+			render: (opts: {
+				canvasContext: CanvasRenderingContext2D;
+				viewport: unknown;
+			}) => { promise: Promise<void> };
+			getTextContent: () => Promise<{
+				items: { str?: string; transform?: number[]; width?: number; height?: number }[];
+			}>;
 		};
 
 		// Display viewport drives the CSS size; the render viewport multiplies
@@ -357,37 +391,45 @@
 
 		// Text layer (anchored to display size so its hit targets stay aligned
 		// with the visible canvas, not the higher-resolution backing store).
-		let text_layer = container_el.querySelector('.pdf-text-layer') as HTMLDivElement | null;
+		// Skipped entirely when `text_layer` is false (e.g. inside a Carousel) —
+		// avoids getTextContent() + per-glyph span layout on every page.
+		const existing_layer = container_el.querySelector(
+			'.pdf-text-layer',
+		) as HTMLDivElement | null;
 		if (!text_layer) {
-			text_layer = document.createElement('div');
-			text_layer.classList.add('pdf-text-layer');
-			container_el.appendChild(text_layer);
-		}
-		text_layer.innerHTML = '';
-		text_layer.style.width = `${display_viewport.width}px`;
-		text_layer.style.height = `${display_viewport.height}px`;
-
-		try {
-			const content = await typedPage.getTextContent();
-			for (const item of content.items) {
-				if (!item.str) continue;
-				const span = document.createElement('span');
-				span.textContent = item.str;
-				if (item.transform) {
-					const tx = item.transform[4] * zoom;
-					const ty = display_viewport.height - item.transform[5] * zoom;
-					const font_size = Math.abs(item.transform[3]) * zoom;
-					span.style.position = 'absolute';
-					span.style.left = `${tx}px`;
-					span.style.top = `${ty - font_size}px`;
-					span.style.fontSize = `${font_size}px`;
-					span.style.fontFamily = 'sans-serif';
-					span.style.whiteSpace = 'pre';
-				}
-				text_layer.appendChild(span);
+			if (existing_layer) existing_layer.remove();
+		} else {
+			const layer_el = existing_layer ?? document.createElement('div');
+			if (!existing_layer) {
+				layer_el.classList.add('pdf-text-layer');
+				container_el.appendChild(layer_el);
 			}
-		} catch {
-			// text extraction failed, ignore
+			layer_el.innerHTML = '';
+			layer_el.style.width = `${display_viewport.width}px`;
+			layer_el.style.height = `${display_viewport.height}px`;
+
+			try {
+				const content = await typedPage.getTextContent();
+				for (const item of content.items) {
+					if (!item.str) continue;
+					const span = document.createElement('span');
+					span.textContent = item.str;
+					if (item.transform) {
+						const tx = item.transform[4] * zoom;
+						const ty = display_viewport.height - item.transform[5] * zoom;
+						const font_size = Math.abs(item.transform[3]) * zoom;
+						span.style.position = 'absolute';
+						span.style.left = `${tx}px`;
+						span.style.top = `${ty - font_size}px`;
+						span.style.fontSize = `${font_size}px`;
+						span.style.fontFamily = 'sans-serif';
+						span.style.whiteSpace = 'pre';
+					}
+					layer_el.appendChild(span);
+				}
+			} catch {
+				// text extraction failed, ignore
+			}
 		}
 
 		// Update container size — skipped in single_page mode where the slot
@@ -741,7 +783,8 @@
 	/* ------------------------------------------------------------------ */
 
 	function handleKeydown(e: KeyboardEvent) {
-		const is_mac = typeof navigator !== 'undefined' && navigator.platform?.includes('Mac');
+		const is_mac =
+			typeof navigator !== 'undefined' && navigator.platform?.includes('Mac');
 		const mod = is_mac ? e.metaKey : e.ctrlKey;
 
 		if (mod && e.key === 'f' && searchable) {
@@ -896,31 +939,43 @@
 	onkeydown={handleKeydown}
 	tabindex="0"
 	role="document"
-	aria-label="PDF viewer"
->
+	aria-label="PDF viewer">
 	{#if (skeleton || loading) && !single_page}
 		<!-- Skeleton / Loading (suppressed in single_page mode — used inside
 		     the Carousel, which prefers a blank slide over a placeholder UI
 		     while the document is being fetched). -->
 		<div class="pdf-skeleton">
-			<div class="pdf-skeleton-toolbar">
-				<div class="pdf-skeleton-block" style="width: 6rem; height: 1.5rem;"></div>
-				<div class="pdf-skeleton-block" style="width: 4rem; height: 1.5rem;"></div>
-			</div>
+			{#if showToolbar}
+				<div class="pdf-skeleton-toolbar">
+					<div class="pdf-skeleton-block" style="width: 6rem; height: 1.5rem;"></div>
+					<div class="pdf-skeleton-block" style="width: 4rem; height: 1.5rem;"></div>
+				</div>
+			{/if}
 			<div class="pdf-skeleton-page">
-				{#each { length: 8 } as _, i}
-					<div
-						class="pdf-skeleton-line"
-						style:width="{40 + ((i * 31) % 55)}%"
-						style:animation-delay="{i * 100}ms"
-					></div>
-				{/each}
+				<div class="pdf-skeleton-paper">
+					{#each { length: 13 } as _, i}
+						<div
+							class="pdf-skeleton-line"
+							style:width="{45 + ((i * 37) % 50)}%"
+							style:--shimmer-delay="{i * 90}ms">
+						</div>
+					{/each}
+				</div>
 			</div>
 		</div>
 	{:else if error_message}
 		<!-- Error state -->
 		<div class="pdf-error">
-			<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<svg
+				width="48"
+				height="48"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.5"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true">
 				<circle cx="12" cy="12" r="10" />
 				<line x1="12" y1="8" x2="12" y2="12" />
 				<line x1="12" y1="16" x2="12.01" y2="16" />
@@ -939,10 +994,19 @@
 						class="pdf-toolbar-btn"
 						onclick={() => goToPage(page - 1)}
 						disabled={page <= 1}
-						aria-label="Previous page"
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						aria-label="Previous page">
+						<svg
+							width="16"
+							height="16"
+							viewBox="0 0 16 16"
+							fill="none"
+							aria-hidden="true">
+							<path
+								d="M10 3L5 8L10 13"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round" />
 						</svg>
 					</button>
 
@@ -950,11 +1014,12 @@
 						type="text"
 						class="pdf-page-input"
 						value={page_input_value}
-						oninput={(e) => { page_input_value = (e.target as HTMLInputElement).value; }}
+						oninput={(e) => {
+							page_input_value = (e.target as HTMLInputElement).value;
+						}}
 						onblur={handlePageInput}
 						onkeydown={handlePageInputKeydown}
-						aria-label="Page number"
-					/>
+						aria-label="Page number" />
 					<span class="pdf-page-total">/ {total_pages}</span>
 
 					<button
@@ -962,10 +1027,19 @@
 						class="pdf-toolbar-btn"
 						onclick={() => goToPage(page + 1)}
 						disabled={page >= total_pages}
-						aria-label="Next page"
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						aria-label="Next page">
+						<svg
+							width="16"
+							height="16"
+							viewBox="0 0 16 16"
+							fill="none"
+							aria-hidden="true">
+							<path
+								d="M6 3L11 8L6 13"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round" />
 						</svg>
 					</button>
 				</div>
@@ -979,10 +1053,18 @@
 						class="pdf-toolbar-btn"
 						onclick={zoomOut}
 						disabled={zoom <= 0.25}
-						aria-label="Zoom out"
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path d="M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+						aria-label="Zoom out">
+						<svg
+							width="16"
+							height="16"
+							viewBox="0 0 16 16"
+							fill="none"
+							aria-hidden="true">
+							<path
+								d="M3 8H13"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round" />
 						</svg>
 					</button>
 
@@ -993,10 +1075,18 @@
 						class="pdf-toolbar-btn"
 						onclick={zoomIn}
 						disabled={zoom >= 4}
-						aria-label="Zoom in"
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+						aria-label="Zoom in">
+						<svg
+							width="16"
+							height="16"
+							viewBox="0 0 16 16"
+							fill="none"
+							aria-hidden="true">
+							<path
+								d="M8 3V13M3 8H13"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round" />
 						</svg>
 					</button>
 				</div>
@@ -1010,15 +1100,36 @@
 						class="pdf-toolbar-btn"
 						onclick={cycleFit}
 						aria-label="Toggle fit mode ({current_fit})"
-						title="Fit: {current_fit}"
-					>
+						title="Fit: {current_fit}">
 						{#if current_fit === 'width'}
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<path d="M2 4V12M14 4V12M4 8H12M4 6L2 8L4 10M12 6L14 8L12 10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
+							<svg
+								width="16"
+								height="16"
+								viewBox="0 0 16 16"
+								fill="none"
+								aria-hidden="true">
+								<path
+									d="M2 4V12M14 4V12M4 8H12M4 6L2 8L4 10M12 6L14 8L12 10"
+									stroke="currentColor"
+									stroke-width="1.25"
+									stroke-linecap="round"
+									stroke-linejoin="round" />
 							</svg>
 						{:else}
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<rect x="3" y="2" width="10" height="12" rx="1" stroke="currentColor" stroke-width="1.25" />
+							<svg
+								width="16"
+								height="16"
+								viewBox="0 0 16 16"
+								fill="none"
+								aria-hidden="true">
+								<rect
+									x="3"
+									y="2"
+									width="10"
+									height="12"
+									rx="1"
+									stroke="currentColor"
+									stroke-width="1.25" />
 							</svg>
 						{/if}
 					</button>
@@ -1032,12 +1143,20 @@
 						type="button"
 						class="pdf-toolbar-btn"
 						class:active={search_open}
-						onclick={() => search_open ? closeSearch() : openSearch()}
-						aria-label="Search"
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+						onclick={() => (search_open ? closeSearch() : openSearch())}
+						aria-label="Search">
+						<svg
+							width="16"
+							height="16"
+							viewBox="0 0 16 16"
+							fill="none"
+							aria-hidden="true">
 							<circle cx="7" cy="7" r="4" stroke="currentColor" stroke-width="1.5" />
-							<path d="M10 10L13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+							<path
+								d="M10 10L13 13"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round" />
 						</svg>
 					</button>
 				{/if}
@@ -1048,11 +1167,24 @@
 						type="button"
 						class="pdf-toolbar-btn"
 						onclick={handleDownload}
-						aria-label="Download"
-					>
-						<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-							<path d="M8 2V10M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-							<path d="M3 13H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+						aria-label="Download">
+						<svg
+							width="16"
+							height="16"
+							viewBox="0 0 16 16"
+							fill="none"
+							aria-hidden="true">
+							<path
+								d="M8 2V10M8 10L5 7M8 10L11 7"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round" />
+							<path
+								d="M3 13H13"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round" />
 						</svg>
 					</button>
 				{/if}
@@ -1065,26 +1197,58 @@
 							type="button"
 							class="pdf-toolbar-btn"
 							class:active={annotation_mode === 'highlight'}
-							onclick={() => annotation_mode = annotation_mode === 'highlight' ? null : 'highlight'}
+							onclick={() =>
+								(annotation_mode = annotation_mode === 'highlight' ? null : 'highlight')}
 							aria-label="Highlight mode"
-							title="Highlight text"
-						>
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<rect x="2" y="10" width="12" height="3" rx="0.5" fill="currentColor" opacity="0.3" />
-								<path d="M3 7H13" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+							title="Highlight text">
+							<svg
+								width="16"
+								height="16"
+								viewBox="0 0 16 16"
+								fill="none"
+								aria-hidden="true">
+								<rect
+									x="2"
+									y="10"
+									width="12"
+									height="3"
+									rx="0.5"
+									fill="currentColor"
+									opacity="0.3" />
+								<path
+									d="M3 7H13"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round" />
 							</svg>
 						</button>
 						<button
 							type="button"
 							class="pdf-toolbar-btn"
 							class:active={annotation_mode === 'note'}
-							onclick={() => annotation_mode = annotation_mode === 'note' ? null : 'note'}
+							onclick={() =>
+								(annotation_mode = annotation_mode === 'note' ? null : 'note')}
 							aria-label="Note mode"
-							title="Add note"
-						>
-							<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-								<rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.25" />
-								<path d="M5 5H11M5 8H9" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+							title="Add note">
+							<svg
+								width="16"
+								height="16"
+								viewBox="0 0 16 16"
+								fill="none"
+								aria-hidden="true">
+								<rect
+									x="2"
+									y="2"
+									width="12"
+									height="12"
+									rx="2"
+									stroke="currentColor"
+									stroke-width="1.25" />
+								<path
+									d="M5 5H11M5 8H9"
+									stroke="currentColor"
+									stroke-width="1.25"
+									stroke-linecap="round" />
 							</svg>
 						</button>
 					</div>
@@ -1103,8 +1267,7 @@
 					bind:this={search_input_el}
 					oninput={handleSearchInput}
 					onkeydown={handleSearchKeydown}
-					aria-label="Search text"
-				/>
+					aria-label="Search text" />
 				{#if search_count_text}
 					<span class="pdf-search-count">{search_count_text}</span>
 				{/if}
@@ -1113,10 +1276,14 @@
 					class="pdf-toolbar-btn"
 					onclick={searchPrev}
 					disabled={search_matches.length === 0}
-					aria-label="Previous match"
-				>
+					aria-label="Previous match">
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path d="M12 10L8 6L4 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						<path
+							d="M12 10L8 6L4 10"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					</svg>
 				</button>
 				<button
@@ -1124,20 +1291,27 @@
 					class="pdf-toolbar-btn"
 					onclick={searchNext}
 					disabled={search_matches.length === 0}
-					aria-label="Next match"
-				>
+					aria-label="Next match">
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+						<path
+							d="M4 6L8 10L12 6"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
 					</svg>
 				</button>
 				<button
 					type="button"
 					class="pdf-toolbar-btn"
 					onclick={closeSearch}
-					aria-label="Close search"
-				>
+					aria-label="Close search">
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-						<path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+						<path
+							d="M4 4L12 12M12 4L4 12"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round" />
 					</svg>
 				</button>
 			</div>
@@ -1159,8 +1333,7 @@
 					style={single_page ? `top: ${i * 100}%;` : getPageStyle(i)}
 					bind:this={page_elements[i]}
 					onmouseup={() => handlePageMouseUp(i + 1)}
-					onclick={(e) => handlePageClick(e, i + 1)}
-				>
+					onclick={(e) => handlePageClick(e, i + 1)}>
 					{#if !rendered_pages.has(i + 1) && !single_page}
 						<div class="pdf-page-placeholder">
 							<span class="pdf-page-placeholder-text">{i + 1}</span>
@@ -1183,7 +1356,10 @@
 		flex-direction: column;
 		border-radius: var(--radius-md, 0.5rem);
 		overflow: hidden;
-		background: light-dark(var(--color-surface-sunken, #f1f5f9), var(--color-surface-sunken, #0f172a));
+		background: light-dark(
+			var(--color-surface-sunken, #f1f5f9),
+			var(--color-surface-sunken, #0f172a)
+		);
 		outline: none;
 	}
 
@@ -1396,14 +1572,18 @@
 		max-width: 100%;
 		max-height: 100%;
 		object-fit: contain;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.08);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.12),
+			0 1px 2px rgb(0 0 0 / 0.08);
 	}
 
 	/* ── Page ─────────────────────────────────────────────────── */
 
 	.pdf-page {
 		position: relative;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.08);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.12),
+			0 1px 2px rgb(0 0 0 / 0.08);
 		background: white;
 		flex-shrink: 0;
 	}
@@ -1482,10 +1662,7 @@
 
 	.pdf-skeleton-block {
 		border-radius: var(--radius-sm, 0.25rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1505,23 +1682,42 @@
 		}
 	}
 
+	/* Centering backdrop behind the "paper". A subtle surface tint makes the
+	   white page read as a sheet of paper regardless of the page theme. */
+	/* Full-width backdrop behind the "paper". A subtle surface tint makes the
+	   white page read as a sheet of paper regardless of the page theme. Grid
+	   centering (rather than flex) lets the paper derive its width from its
+	   definite height + aspect-ratio instead of collapsing to its content. */
 	.pdf-skeleton-page {
 		flex: 1;
+		min-height: 0;
+		display: grid;
+		place-items: center;
+		padding: 1.5rem;
+		background: light-dark(#f1f5f9, #0f172a);
+	}
+
+	/* The page itself — a portrait US-letter sheet (8.5 × 11) in white, since
+	   most PDFs are white paper. Lines below mimic dark text. */
+	.pdf-skeleton-paper {
+		height: 100%;
+		aspect-ratio: 8.5 / 11;
+		max-width: 100%;
+		background: #ffffff;
+		border-radius: 3px;
+		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 0.75rem;
-		padding: 2rem;
+		gap: 0.85rem;
+		padding: 9% 10%;
+		overflow: hidden;
 	}
 
 	.pdf-skeleton-line {
-		height: 0.875rem;
-		border-radius: var(--radius-sm, 0.25rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		flex: none;
+		height: 0.7rem;
+		border-radius: 3px;
+		background: rgba(15, 23, 42, 0.08);
 		position: relative;
 		overflow: hidden;
 
@@ -1532,12 +1728,13 @@
 			transform: translateX(-100%);
 			background-image: linear-gradient(
 				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				rgba(15, 23, 42, 0) 0,
+				rgba(15, 23, 42, 0.1) 40%,
+				rgba(15, 23, 42, 0.18) 60%,
+				rgba(15, 23, 42, 0) 100%
 			);
-			animation: pdf-shimmer 2s infinite;
+			animation: pdf-shimmer 1.8s infinite;
+			animation-delay: var(--shimmer-delay, 0ms);
 		}
 	}
 

@@ -76,7 +76,7 @@
 		<Gallery
 			items={demoImages}
 			{display}
-			sizing={display === 'masonry' ? 'small' : 'default'}
+			size={display === 'masonry' ? '0' : '1'}
 			aspect_ratio="16/9" />
 	{/if}
 </div>

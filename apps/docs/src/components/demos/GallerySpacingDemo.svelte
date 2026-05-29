@@ -8,11 +8,11 @@
 	} from '@delightstack/components';
 	import { demoImages } from './_gallery-images';
 
-	let spacing = $state<GallerySpacing>('default');
-	let radius = $state<GalleryRadius>('small');
+	let spacing = $state<GallerySpacing>('1');
+	let radius = $state<GalleryRadius>('1');
 
-	const spacings: GallerySpacing[] = ['none', 'default', 'large'];
-	const radii: GalleryRadius[] = ['none', 'small', 'large'];
+	const spacings: GallerySpacing[] = ['0', '1', '2', '3'];
+	const radii: GalleryRadius[] = ['0', '1', '2', '3'];
 </script>
 
 <div class="full-width">
@@ -35,12 +35,7 @@
 			<span class="label">radius</span>
 			<ButtonGroup>
 				{#each radii as r (r)}
-					<Button
-						size="0"
-						dense
-						transparent
-						active={radius === r}
-						onclick={() => (radius = r)}>
+					<Button size="0" transparent active={radius === r} onclick={() => (radius = r)}>
 						{r}
 					</Button>
 				{/each}

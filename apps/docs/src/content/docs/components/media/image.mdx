@@ -6,6 +6,7 @@ description: An optimized image component with lazy loading, blur-up placeholder
 import Image from '@delightstack/components/media/Image.svelte';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ImageBlurUpDemo from '../../../../components/demos/ImageBlurUpDemo.svelte';
+import ImageSkeletonDemo from '../../../../components/demos/ImageSkeletonDemo.svelte';
 
 ## Import
 
@@ -82,10 +83,10 @@ Pass `srcset` and `sizes` for responsive image resolution switching.
 
 ### Skeleton Loading
 
-Show a shimmer animation while the image loads (alternative to blur-up placeholder).
+Show a shimmer animation while the image loads (alternative to blur-up placeholder). Press **Reload images** to re-trigger the load and watch the shimmer.
 
 <ComponentPreview code={`<Image src="/photos/product.jpg" alt="Product" skeleton aspect_ratio="1" />`}>
-	<Image client:load src="https://picsum.photos/400/400" alt="Product" skeleton aspect_ratio="1" />
+	<ImageSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props

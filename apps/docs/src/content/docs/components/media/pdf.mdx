@@ -153,6 +153,7 @@ ${'  '}onload={(d) => total_pages = d.total_pages} />
 | `height` | `string` | `'600px'` | Container height |
 | `single_page` | `boolean` | `false` | Render only the current `page`, disable internal scroll, and fit the page to the container. Designed for embedding inside Gallery/Carousel or any external page navigator. |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `text_layer` | `boolean` | `true` | Render the selectable/searchable text layer over each page. Disable it (the Carousel does this automatically) to skip text extraction and per-glyph layout for faster rendering when selection isn't needed. Search still works. |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 | `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |
