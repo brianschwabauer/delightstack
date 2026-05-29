@@ -187,7 +187,10 @@
 	// state unless the caller explicitly set `loading` / `disabled`.
 	const isFormSubmit = $derived(type === 'submit' && !!formContext);
 	const resolvedDisabled = $derived(
-		disabled || groupContext?.disabled || (isFormSubmit && formContext!.disabled) || false,
+		disabled ||
+			groupContext?.disabled ||
+			(isFormSubmit && formContext!.disabled) ||
+			false,
 	);
 	const resolvedGrouped = $derived(grouped || !!groupContext);
 
@@ -654,6 +657,7 @@
 			outline: none;
 			border: var(--color-action-outline);
 			text-align: center;
+			text-decoration: none;
 			width: fit-content;
 			border-radius: var(--radius);
 			background-color: var(--color-bg);
@@ -683,6 +687,7 @@
 				background-color: var(--color-bg-active);
 				color: var(--color-text-active);
 				border: var(--color-action-outline-active);
+				text-decoration: none;
 				transition: translate 200ms ease;
 			}
 			&:active:not(:disabled):not([aria-disabled='true']) {
@@ -768,18 +773,18 @@
 		&.dense {
 			button:not(.dropdown-trigger),
 			a {
-				line-height: 0.85em;
-				padding: 0.35em 0.75em;
-				gap: 0.25em;
+				line-height: 1em;
+				padding: 0.5em 1em;
+				gap: 0.3em;
 			}
 			&.has-dropdown-trigger {
 				> button:not(.dropdown-trigger),
 				> a {
-					padding: 0.35em 0.75em 0.35em 1em;
+					padding: 0.5em 1em 0.5em 1.1em;
 				}
 			}
 			.download-trigger {
-				padding: 0 0.25em 0 0.25em;
+				padding: 0 0.35em 0 0.35em;
 			}
 			:global(.chevron) {
 				margin: 0 -0.2em;
@@ -790,6 +795,8 @@
 			height: 4em;
 			width: 4em;
 			aspect-ratio: 1 / 1;
+			border-radius: var(--radius-round);
+			overflow: hidden;
 			&.dense {
 				button,
 				a {
@@ -805,7 +812,6 @@
 			a {
 				align-items: center;
 				justify-content: center;
-				border-radius: var(--radius-round);
 				aspect-ratio: 1 / 1;
 				padding: 0;
 				width: 100%;
