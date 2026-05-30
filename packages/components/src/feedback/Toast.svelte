@@ -39,6 +39,20 @@
 	let toasts = $state<ToastEntry[]>([]);
 	let counter = 0;
 
+	// Default auto-dismiss duration. Kept in sync with the primary <Toaster>'s
+	// `duration` prop (see the election effect below) so the prop actually works.
+	let default_duration = 4000;
+
+	// Single-instance election. Every <Toaster /> shares this one `toasts` store,
+	// so only the first-mounted instance ("primary") may render the stack and run
+	// the timers. Mounting <Toaster /> more than once (e.g. one per docs demo)
+	// then never duplicates the UI or multiplies the auto-dismiss countdown.
+	// `registered` is a plain (non-reactive) list used only to elect the next
+	// primary on unmount; `primary_token` is the reactive bit that flips renders.
+	let registered: number[] = [];
+	let primary_token = $state<number | null>(null);
+	let election_counter = 0;
+
 	function generateId(): string {
 		return `toast-${++counter}-${Date.now()}`;
 	}
@@ -53,13 +67,14 @@
 
 	function addToast(message: string, variant: Variant, options?: ToastOptions): string {
 		const id = options?.id ?? generateId();
-		const base_duration = options?.duration ?? 4000;
+		const base_duration = options?.duration ?? default_duration;
 		const effective_duration = options?.action ? base_duration + 2000 : base_duration;
 
 		const existing_index = toasts.findIndex((t) => t.id === id);
 		if (existing_index !== -1) {
 			toasts[existing_index].message = message;
-			toasts[existing_index].description = options?.description ?? toasts[existing_index].description;
+			toasts[existing_index].description =
+				options?.description ?? toasts[existing_index].description;
 			toasts[existing_index].variant = variant;
 			toasts[existing_index].options = { ...toasts[existing_index].options, ...options };
 			toasts[existing_index].duration = effective_duration;
@@ -94,6 +109,11 @@
 		if (index !== -1) {
 			toasts[index].dismissed = true;
 		}
+	}
+
+	/** Remove a toast immediately, skipping the standard exit animation. */
+	function destroyToast(id: string): void {
+		toasts = toasts.filter((t) => t.id !== id);
 	}
 
 	/** Show a toast notification. Returns the toast ID for later dismissal. */
@@ -136,7 +156,9 @@
 		try {
 			const result = await p;
 			const msg =
-				typeof messages.success === 'function' ? messages.success(result) : messages.success;
+				typeof messages.success === 'function'
+					? messages.success(result)
+					: messages.success;
 			addToast(msg, 'success', { ...options, id, persistent: false, success: true });
 			return result;
 		} catch (err) {
@@ -159,7 +181,10 @@
 </script>
 
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
 	import { portal } from '../actions/Portal.svelte';
+	import Button from '../actions/Button.svelte';
+	import Progress from './Progress.svelte';
 
 	const propId = $props.id();
 	let {
@@ -188,12 +213,35 @@
 		class: className = '',
 	} = $props();
 
+	// --- Single-instance election --------------------------------------------
+	// Register/deregister in lifecycle hooks (not an $effect) so we never read and
+	// write the same reactive value during tracking — that would self-invalidate
+	// and loop forever. Only `primary_token` is reactive, so flipping it re-renders.
+	const my_token = ++election_counter;
+	onMount(() => {
+		registered.push(my_token);
+		if (primary_token === null) primary_token = my_token;
+	});
+	onDestroy(() => {
+		const i = registered.indexOf(my_token);
+		if (i !== -1) registered.splice(i, 1);
+		if (primary_token === my_token) primary_token = registered[0] ?? null;
+	});
+	const is_primary = $derived(primary_token === my_token);
+
+	// Keep the shared default duration in sync with the primary Toaster.
+	$effect(() => {
+		if (is_primary) default_duration = duration;
+	});
+
 	let expanded = $state(false);
 	let toaster_el: HTMLDivElement | undefined = $state();
 
 	const is_top = $derived(position.startsWith('top'));
 	const is_center = $derived(position.endsWith('center'));
-	const align = $derived(position.endsWith('left') ? 'left' : position.endsWith('right') ? 'right' : 'center');
+	const align = $derived(
+		position.endsWith('left') ? 'left' : position.endsWith('right') ? 'right' : 'center',
+	);
 
 	// Active (non-dismissed) toasts, newest last. The newest is the "front".
 	const active_toasts = $derived(toasts.filter((t) => !t.dismissed));
@@ -202,13 +250,11 @@
 	const rendered = $derived.by(() => {
 		const recent = active_toasts.slice(-max_visible);
 		const recentIds = new Set(recent.map((t) => t.id));
-		// Keep dismissed toasts mounted briefly so their exit animation plays.
 		return toasts.filter((t) => recentIds.has(t.id) || t.dismissed);
 	});
 
-	// Front index within active toasts (last = front).
+	// 0 = front, 1 = one behind, etc. Dismissed toasts keep their last position.
 	function frontDistance(t: ToastEntry): number {
-		// 0 = front, 1 = one behind, etc. Dismissed toasts keep their last position.
 		const idx = active_toasts.indexOf(t);
 		if (idx === -1) return 0;
 		return active_toasts.length - 1 - idx;
@@ -216,24 +262,29 @@
 
 	// Cleanup fully dismissed toasts after their exit animation.
 	$effect(() => {
-		const dismissed = toasts.filter((t) => t.dismissed);
-		if (dismissed.length > 0) {
+		if (!is_primary) return;
+		const hasDismissed = toasts.some((t) => t.dismissed);
+		if (hasDismissed) {
 			const timeout = setTimeout(() => {
 				toasts = toasts.filter((t) => !t.dismissed);
-			}, 300);
+			}, 320);
 			return () => clearTimeout(timeout);
 		}
 	});
 
-	// Auto-dismiss countdown.
+	// Auto-dismiss countdown. Runs only on the primary instance (so multiple
+	// mounted Toasters never multiply the rate) and pauses while the stack is
+	// hovered or a toast is being dragged.
 	$effect(() => {
+		if (!is_primary) return;
 		if (active_toasts.length === 0) return;
 		let raf_id: number;
 		let last_time = performance.now();
 		function tick(now: number) {
 			const delta = now - last_time;
 			last_time = now;
-			if (!expanded) {
+			const paused = expanded || swipe_id !== null;
+			if (!paused) {
 				for (const t of toasts) {
 					if (t.dismissed || t.options.persistent || t.variant === 'loading') continue;
 					t.remaining -= delta;
@@ -248,6 +299,7 @@
 
 	// Escape dismisses the front toast.
 	$effect(() => {
+		if (!is_primary) return;
 		function onKeydown(e: KeyboardEvent) {
 			if (e.key === 'Escape') {
 				const active = active_toasts.filter((t) => t.options.dismissible !== false);
@@ -273,8 +325,8 @@
 		return { destroy: () => ro.disconnect() };
 	}
 
-	// Cumulative offset for the expanded stack: sum of heights+gap of the
-	// toasts in front of this one.
+	// Cumulative offset for the expanded stack: sum of heights+gap of the toasts
+	// in front of this one (the newer toasts between it and the anchor edge).
 	function expandedOffset(t: ToastEntry): number {
 		let offset = 0;
 		const idx = active_toasts.indexOf(t);
@@ -285,71 +337,153 @@
 		return offset;
 	}
 
+	// --- Swipe-to-dismiss (pointer based — mouse + touch, like sonner) --------
+	let swipe_id = $state<string | null>(null);
+	let swipe_delta = $state(0);
+	let swipe_settling = $state(false);
+	let swipe_settle_ms = $state(300);
+	let swipe_ease = $state('cubic-bezier(0.22, 1, 0.36, 1)');
+	let swipe_axis: 'X' | 'Y' = 'X';
+	let swipe_start = 0;
+	let last_pos = 0;
+	let last_time = 0;
+	let velocity = 0;
+	let settle_timer: ReturnType<typeof setTimeout> | undefined;
+
+	function onPointerDown(e: PointerEvent, t: ToastEntry) {
+		if (t.options.dismissible === false || swipe_settling) return;
+		// Don't start a drag from interactive children (close / action buttons).
+		if ((e.target as HTMLElement).closest('button, a')) return;
+		// Only start from the toast card itself, not its surrounding hover-halo.
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		if (
+			e.clientX < rect.left ||
+			e.clientX > rect.right ||
+			e.clientY < rect.top ||
+			e.clientY > rect.bottom
+		)
+			return;
+		// Horizontal stacks swipe left/right; centered stacks swipe up/down.
+		// Either direction dismisses (more forgiving than edge-only).
+		swipe_axis = is_center ? 'Y' : 'X';
+		swipe_id = t.id;
+		swipe_delta = 0;
+		swipe_settling = false;
+		swipe_start = swipe_axis === 'Y' ? e.clientY : e.clientX;
+		last_pos = swipe_start;
+		last_time = performance.now();
+		velocity = 0;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	function onPointerMove(e: PointerEvent) {
+		if (!swipe_id || swipe_settling) return;
+		const pos = swipe_axis === 'Y' ? e.clientY : e.clientX;
+		const now = performance.now();
+		const dt = now - last_time;
+		if (dt > 0) velocity = (pos - last_pos) / dt; // signed px/ms
+		last_pos = pos;
+		last_time = now;
+		swipe_delta = pos - swipe_start; // bidirectional, no rubber-banding
+	}
+
+	function onPointerUp(e: PointerEvent) {
+		if (!swipe_id) return;
+		const id = swipe_id;
+		try {
+			(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+		} catch {
+			/* pointer already released */
+		}
+
+		const threshold = swipe_axis === 'Y' ? 40 : width * 0.25;
+		const dismiss = Math.abs(swipe_delta) > threshold || Math.abs(velocity) > 0.45;
+
+		// A pure tap (no movement) needs no settle animation.
+		if (!dismiss && swipe_delta === 0) {
+			swipe_id = null;
+			return;
+		}
+
+		swipe_settling = true;
+		clearTimeout(settle_timer);
+
+		if (dismiss) {
+			// Throw it off-screen in the swipe direction, continuing its momentum.
+			const dir = swipe_delta !== 0 ? Math.sign(swipe_delta) : Math.sign(velocity) || 1;
+			const fly = (swipe_axis === 'Y' ? 240 : width * 1.4) * dir;
+			const speed = Math.max(Math.abs(velocity), 0.6); // px/ms
+			const remaining = Math.max(0, Math.abs(fly - swipe_delta));
+			swipe_settle_ms = Math.min(380, Math.max(140, remaining / speed));
+			swipe_ease = 'cubic-bezier(0.32, 0.72, 0, 1)';
+			swipe_delta = fly;
+			settle_timer = setTimeout(() => {
+				destroyToast(id);
+				swipe_id = null;
+				swipe_settling = false;
+			}, swipe_settle_ms);
+		} else {
+			// Cancelled — spring back into place.
+			swipe_settle_ms = 320;
+			swipe_ease = 'cubic-bezier(0.34, 1.4, 0.5, 1)';
+			swipe_delta = 0;
+			settle_timer = setTimeout(() => {
+				swipe_id = null;
+				swipe_settling = false;
+			}, swipe_settle_ms);
+		}
+	}
+
+	// Full transform for a toast: stack position + (optional) live swipe offset.
 	function toastStyle(t: ToastEntry): string {
 		const dist = frontDistance(t);
 		const dir = is_top ? 1 : -1;
+		let ty: number;
+		let scale: number;
+		let opacity: number;
 		if (expanded) {
-			const y = expandedOffset(t) * dir;
-			return `transform: translateY(${y}px) scale(1); opacity: 1; z-index: ${1000 - dist};`;
+			ty = expandedOffset(t) * dir;
+			scale = 1;
+			opacity = 1;
+		} else {
+			ty = 16 * dist * dir;
+			scale = Math.max(0.9, 1 - dist * 0.06);
+			opacity = dist >= max_visible ? 0 : 1;
 		}
-		// Collapsed: front toast at 0, others peek behind with a small offset + scale.
-		const peek = 16 * dist * dir;
-		const scale = Math.max(0.9, 1 - dist * 0.06);
-		const opacity = dist >= max_visible ? 0 : 1;
-		return `transform: translateY(${peek}px) scale(${scale}); opacity: ${opacity}; z-index: ${1000 - dist};`;
-	}
+		const z = 1000 - dist;
 
-	// Swipe-to-dismiss (pointer based — works for mouse + touch like sonner).
-	let swipe_id = $state<string | null>(null);
-	let swipe_start = $state(0);
-	let swipe_offset = $state(0);
-
-	function onPointerDown(e: PointerEvent, t: ToastEntry) {
-		if (t.options.dismissible === false) return;
-		swipe_id = t.id;
-		swipe_start = is_center ? e.clientY : e.clientX;
-		swipe_offset = 0;
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-	}
-	function onPointerMove(e: PointerEvent) {
-		if (!swipe_id) return;
-		const cur = is_center ? e.clientY : e.clientX;
-		swipe_offset = cur - swipe_start;
-		// Only allow swiping in the dismiss direction for center positions
-		if (is_center) {
-			if (is_top && swipe_offset > 0) swipe_offset = 0;
-			if (!is_top && swipe_offset < 0) swipe_offset = 0;
+		if (swipe_id === t.id) {
+			const fade_dim = swipe_axis === 'Y' ? 120 : width * 0.6;
+			opacity *= Math.max(0, 1 - Math.abs(swipe_delta) / fade_dim);
+			const sx = swipe_axis === 'X' ? swipe_delta : 0;
+			const sy = swipe_axis === 'Y' ? swipe_delta : 0;
+			const transition = swipe_settling
+				? `transform ${swipe_settle_ms}ms ${swipe_ease}, opacity ${swipe_settle_ms}ms ease`
+				: 'transform 0s, opacity 0s';
+			return `transform: translate(${sx}px, ${sy}px) translateY(${ty}px) scale(${scale}); opacity: ${opacity}; z-index: ${z}; transition: ${transition};`;
 		}
-	}
-	function onPointerUp() {
-		if (!swipe_id) return;
-		const dim = is_center ? 60 : width * 0.35;
-		if (Math.abs(swipe_offset) > dim) removeToast(swipe_id);
-		swipe_id = null;
-		swipe_offset = 0;
-	}
-	function swipeStyle(t: ToastEntry): string {
-		if (swipe_id !== t.id || swipe_offset === 0) return '';
-		const axis = is_center ? 'Y' : 'X';
-		const dim = is_center ? 120 : width * 0.6;
-		const opacity = Math.max(0, 1 - Math.abs(swipe_offset) / dim);
-		return `transform: translate${axis}(${swipe_offset}px); opacity: ${opacity}; transition: none;`;
+
+		return `transform: translateY(${ty}px) scale(${scale}); opacity: ${opacity}; z-index: ${z};`;
 	}
 </script>
 
-{#if rendered.length > 0}
+{#if is_primary && rendered.length > 0}
 	<div
 		class={['toaster', position, `align-${align}`, className].filter(Boolean).join(' ')}
 		class:expanded
+		class:is-top={is_top}
 		class:rich={richColors}
 		style:--toast-width="{width}px"
+		style:--toast-gap="{gap}px"
 		{id}
 		use:portal={'body'}
 		bind:this={toaster_el}
 		role="region"
 		aria-label="Notifications"
 		onmouseenter={() => (expanded = true)}
-		onmouseleave={() => (expanded = false)}>
+		onmouseleave={() => {
+			if (!swipe_id) expanded = false;
+		}}>
 		{#each rendered as t (t.id)}
 			<div
 				class="toast"
@@ -361,9 +495,11 @@
 				class:dismissed={t.dismissed}
 				class:front={frontDistance(t) === 0}
 				role={getRole(t)}
-				aria-live={t.variant === 'warning' || t.variant === 'error' ? 'assertive' : 'polite'}
+				aria-live={t.variant === 'warning' || t.variant === 'error'
+					? 'assertive'
+					: 'polite'}
 				use:measure={t}
-				style={`${toastStyle(t)}${swipeStyle(t)}`}
+				style={toastStyle(t)}
 				style:touch-action={is_center ? 'pan-x' : 'pan-y'}
 				onpointerdown={(e) => onPointerDown(e, t)}
 				onpointermove={onPointerMove}
@@ -372,27 +508,58 @@
 				<div class="toast-inner">
 					<span class="toast-icon">
 						{#if t.variant === 'success'}
-							<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								viewBox="0 0 24 24"
+								width="20"
+								height="20"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round">
 								<path d="M20 6L9 17l-5-5" />
 							</svg>
 						{:else if t.variant === 'error'}
-							<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								viewBox="0 0 24 24"
+								width="20"
+								height="20"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round">
 								<circle cx="12" cy="12" r="10" />
 								<line x1="15" y1="9" x2="9" y2="15" />
 								<line x1="9" y1="9" x2="15" y2="15" />
 							</svg>
 						{:else if t.variant === 'warning'}
-							<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+							<svg
+								viewBox="0 0 24 24"
+								width="20"
+								height="20"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round">
+								<path
+									d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
 								<line x1="12" y1="9" x2="12" y2="13" />
 								<line x1="12" y1="17" x2="12.01" y2="17" />
 							</svg>
 						{:else if t.variant === 'loading'}
-							<svg class="spinner-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-								<path d="M12 2a10 10 0 0110 10" />
-							</svg>
+							<Progress size="00" color="currentColor" />
 						{:else}
-							<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								viewBox="0 0 24 24"
+								width="20"
+								height="20"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round">
 								<circle cx="12" cy="12" r="10" />
 								<line x1="12" y1="16" x2="12" y2="12" />
 								<line x1="12" y1="8" x2="12.01" y2="8" />
@@ -408,23 +575,40 @@
 					</div>
 
 					{#if t.options.action}
-						<button class="toast-action" type="button" onclick={t.options.action.onclick}>
-							{t.options.action.label}
-						</button>
+						<div class="toast-action">
+							<Button
+								dense
+								size="0"
+								onclick={() => {
+									t.options.action?.onclick();
+									removeToast(t.id);
+								}}>
+								{t.options.action.label}
+							</Button>
+						</div>
 					{/if}
 				</div>
 
 				{#if t.options.dismissible !== false}
-					<button
-						class="toast-close"
-						type="button"
-						aria-label="Dismiss notification"
-						onclick={() => removeToast(t.id)}>
-						<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<line x1="18" y1="6" x2="6" y2="18" />
-							<line x1="6" y1="6" x2="18" y2="18" />
-						</svg>
-					</button>
+					<div class="toast-close">
+						<Button
+							icon
+							transparent
+							dense
+							aria-label="Dismiss notification"
+							onclick={() => removeToast(t.id)}>
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2.2"
+								stroke-linecap="round"
+								stroke-linejoin="round">
+								<line x1="18" y1="6" x2="6" y2="18" />
+								<line x1="6" y1="6" x2="18" y2="18" />
+							</svg>
+						</Button>
+					</div>
 				{/if}
 			</div>
 		{/each}
@@ -442,12 +626,32 @@
 		--toast-fg: light-dark(#18181b, #f4f4f5);
 		--toast-border: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.1));
 
-		&.bottom-right { bottom: 1rem; right: 1rem; }
-		&.bottom-left { bottom: 1rem; left: 1rem; }
-		&.bottom-center { bottom: 1rem; left: 50%; transform: translateX(-50%); }
-		&.top-right { top: 1rem; right: 1rem; }
-		&.top-left { top: 1rem; left: 1rem; }
-		&.top-center { top: 1rem; left: 50%; transform: translateX(-50%); }
+		&.bottom-right {
+			bottom: 1rem;
+			right: 1rem;
+		}
+		&.bottom-left {
+			bottom: 1rem;
+			left: 1rem;
+		}
+		&.bottom-center {
+			bottom: 1rem;
+			left: 50%;
+			transform: translateX(-50%);
+		}
+		&.top-right {
+			top: 1rem;
+			right: 1rem;
+		}
+		&.top-left {
+			top: 1rem;
+			left: 1rem;
+		}
+		&.top-center {
+			top: 1rem;
+			left: 50%;
+			transform: translateX(-50%);
+		}
 	}
 
 	/* Each toast is absolutely positioned within the toaster and offset by JS
@@ -459,18 +663,23 @@
 		pointer-events: auto;
 		width: 100%;
 		border-radius: var(--radius-3, 12px);
-		background: var(--toast-bg);
+		background-color: var(--toast-bg);
 		color: var(--toast-fg);
 		border: 1px solid var(--toast-border);
 		box-shadow:
 			0 4px 12px rgb(0 0 0 / 0.1),
 			0 2px 4px rgb(0 0 0 / 0.06);
 		cursor: default;
+		/* Stacked <-> expanded reflow: fast + strong ease-out (quintOut). */
 		transition:
-			transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
-			opacity 350ms ease,
-			box-shadow 200ms ease;
-		animation: toast-enter 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+			transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 300ms ease,
+			box-shadow 250ms ease;
+		/* `backwards` (not `both`): the enter keyframe only fills BEFORE the run,
+		 * so once it finishes it releases the transform back to the base value and
+		 * the stacked<->expanded transition can animate it. A lingering `both`
+		 * fill would keep overriding transform and make expand/collapse jump. */
+		animation: toast-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 		transform-origin: center top;
 	}
 	.toaster.bottom-right .toast,
@@ -485,6 +694,25 @@
 		top: 0;
 	}
 
+	/* While expanded, each toast carries a transparent hit-area halo extending
+	 * ~22px beyond it on every side (sits behind the card via z-index:-1 so it
+	 * never blocks the buttons). Adjacent halos overlap, so (a) moving the pointer
+	 * between fanned-out toasts keeps the stack open, and (b) you must move a
+	 * comfortable margin past the list before it collapses back to a stack. */
+	.toaster.expanded .toast::before {
+		content: '';
+		position: absolute;
+		inset: calc(-1 * var(--toast-hover-pad, 22px));
+		z-index: -1;
+	}
+
+	/* Slightly lift the stack while expanded for a sense of depth. */
+	.toaster.expanded .toast {
+		box-shadow:
+			0 8px 24px rgb(0 0 0 / 0.14),
+			0 3px 8px rgb(0 0 0 / 0.08);
+	}
+
 	.toast-inner {
 		display: flex;
 		align-items: flex-start;
@@ -497,13 +725,25 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
+		width: 20px;
+		height: 20px;
 		margin-top: 0.05rem;
 	}
-	.toast.success .toast-icon { color: var(--color-success, #16a34a); }
-	.toast.error .toast-icon { color: var(--color-error, #dc2626); }
-	.toast.warning .toast-icon { color: var(--color-warning, #d97706); }
-	.toast.info .toast-icon { color: var(--color-action, #3b82f6); }
-	.toast.loading .toast-icon { color: var(--color-action, #3b82f6); }
+	.toast.success .toast-icon {
+		color: var(--color-success, #16a34a);
+	}
+	.toast.error .toast-icon {
+		color: var(--color-error, #dc2626);
+	}
+	.toast.warning .toast-icon {
+		color: var(--color-warning, #d97706);
+	}
+	.toast.info .toast-icon {
+		color: var(--color-info, #3b82f6);
+	}
+	.toast.loading .toast-icon {
+		color: var(--color-action, #3b82f6);
+	}
 
 	.toast-content {
 		flex: 1;
@@ -528,41 +768,23 @@
 	.toast-action {
 		flex-shrink: 0;
 		align-self: center;
-		padding: 0.35rem 0.7rem;
-		font-size: 0.8125rem;
-		font-weight: 600;
-		border-radius: var(--radius-2, 6px);
-		border: none;
-		background: var(--toast-fg);
-		color: var(--toast-bg);
-		cursor: pointer;
-		white-space: nowrap;
-		transition: opacity 120ms ease, translate 150ms ease;
 	}
-	.toast-action:hover { opacity: 0.85; }
-	.toast-action:active { translate: 0 1px; }
 
 	.toast-close {
 		position: absolute;
 		top: 0;
 		left: 0;
+		font-size: 7.5px; /* scales the icon Button (4em) to 30px, host-independent */
 		transform: translate(-35%, -35%);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.25rem;
-		height: 1.25rem;
 		border-radius: 50%;
-		border: 1px solid var(--toast-border);
 		background: var(--toast-bg);
-		color: var(--toast-fg);
-		cursor: pointer;
-		padding: 0;
+		box-shadow: 0 0 0 1px var(--toast-border);
 		opacity: 0;
-		transition: opacity 150ms ease, background 120ms ease;
+		transition: opacity 150ms ease;
 	}
 	.toaster.expanded .toast .toast-close,
-	.toast.front .toast-close {
+	.toast.front .toast-close,
+	.toast:hover .toast-close {
 		opacity: 1;
 	}
 	.toaster.align-right .toast-close {
@@ -570,47 +792,92 @@
 		right: 0;
 		transform: translate(35%, -35%);
 	}
-	.toast-close:hover {
-		background: light-dark(rgb(0 0 0 / 0.06), rgb(255 255 255 / 0.12));
+
+	/* Subtle variant tint (default mode): faint wash + colored border. */
+	.toast.success {
+		--toast-accent: var(--color-success, #16a34a);
+	}
+	.toast.error {
+		--toast-accent: var(--color-error, #dc2626);
+	}
+	.toast.warning {
+		--toast-accent: var(--color-warning, #d97706);
+	}
+	.toast.info {
+		--toast-accent: var(--color-info, #3b82f6);
+	}
+	.toast.success,
+	.toast.error,
+	.toast.warning,
+	.toast.info {
+		background-color: color-mix(in oklch, var(--toast-accent) 6%, var(--toast-bg));
+		border-color: color-mix(in oklch, var(--toast-accent) 28%, var(--toast-border));
+		box-shadow:
+			0 4px 12px rgb(0 0 0 / 0.1),
+			0 2px 4px rgb(0 0 0 / 0.06),
+			inset 0 0 0 1px color-mix(in oklch, var(--toast-accent) 10%, transparent);
+	}
+	.toaster.expanded .toast.success,
+	.toaster.expanded .toast.error,
+	.toaster.expanded .toast.warning,
+	.toaster.expanded .toast.info {
+		box-shadow:
+			0 8px 24px rgb(0 0 0 / 0.14),
+			0 3px 8px rgb(0 0 0 / 0.08),
+			inset 0 0 0 1px color-mix(in oklch, var(--toast-accent) 10%, transparent);
 	}
 
-	/* Rich colors */
+	/* Rich colors — saturated variant surfaces (overrides the subtle tint). */
 	.toaster.rich .toast.success {
 		--toast-bg: light-dark(#ecfdf5, #052e1a);
 		--toast-fg: light-dark(#065f46, #6ee7b7);
 		--toast-border: light-dark(#a7f3d0, #065f46);
+		background-color: var(--toast-bg);
+		border-color: var(--toast-border);
 	}
 	.toaster.rich .toast.error {
 		--toast-bg: light-dark(#fef2f2, #2d0a0a);
 		--toast-fg: light-dark(#991b1b, #fca5a5);
 		--toast-border: light-dark(#fecaca, #7f1d1d);
+		background-color: var(--toast-bg);
+		border-color: var(--toast-border);
 	}
 	.toaster.rich .toast.warning {
 		--toast-bg: light-dark(#fffbeb, #2b1c00);
 		--toast-fg: light-dark(#92400e, #fcd34d);
 		--toast-border: light-dark(#fde68a, #78350f);
+		background-color: var(--toast-bg);
+		border-color: var(--toast-border);
 	}
 	.toaster.rich .toast.info {
 		--toast-bg: light-dark(#eff6ff, #0a1b2e);
 		--toast-fg: light-dark(#1e40af, #93c5fd);
 		--toast-border: light-dark(#bfdbfe, #1e3a8a);
+		background-color: var(--toast-bg);
+		border-color: var(--toast-border);
 	}
-	.toaster.rich .toast .toast-icon { color: currentColor; }
+	.toaster.rich .toast.success,
+	.toaster.rich .toast.error,
+	.toaster.rich .toast.warning,
+	.toaster.rich .toast.info {
+		box-shadow:
+			0 4px 12px rgb(0 0 0 / 0.1),
+			0 2px 4px rgb(0 0 0 / 0.06);
+	}
+	.toaster.rich .toast .toast-icon {
+		color: currentColor;
+	}
 
 	.toast.dismissed {
-		animation: toast-exit 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+		animation: toast-exit 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 		pointer-events: none;
 	}
 
-	.spinner-icon {
-		animation: toast-spin 0.8s linear infinite;
-	}
-	@keyframes toast-spin {
-		to { transform: rotate(360deg); }
-	}
-
 	@keyframes toast-enter {
-		from { opacity: 0; transform: translateY(var(--enter-from, 100%)) scale(0.9); }
+		from {
+			opacity: 0;
+			transform: translateY(var(--enter-from, 100%)) scale(0.9);
+		}
 	}
 	.toaster.bottom-right .toast,
 	.toaster.bottom-left .toast,
@@ -624,7 +891,10 @@
 	}
 
 	@keyframes toast-exit {
-		to { opacity: 0; transform: translateY(var(--enter-from, 100%)) scale(0.9); }
+		to {
+			opacity: 0;
+			transform: translateY(var(--enter-from, 100%)) scale(0.9);
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -636,8 +906,9 @@
 			animation: toast-exit-reduced 150ms ease both;
 		}
 		@keyframes toast-exit-reduced {
-			to { opacity: 0; }
+			to {
+				opacity: 0;
+			}
 		}
-		.spinner-icon { animation: none; }
 	}
 </style>
