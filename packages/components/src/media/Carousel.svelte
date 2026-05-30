@@ -1761,7 +1761,13 @@
 				role === 'slider' ||
 				role === 'button' ||
 				role === 'menuitem' ||
-				target.isContentEditable
+				target.isContentEditable ||
+				// The Range component (used for the video seek bar) handles track
+				// click/drag itself via pointer capture on a plain `.range-wrapper`
+				// <div> — which has no interactive tag/role above to match, so without
+				// this the carousel would swallow the gesture and seeking would break.
+				target.classList.contains('range-wrapper') ||
+				target.classList.contains('range-container')
 			) {
 				return;
 			}
