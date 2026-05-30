@@ -13,6 +13,9 @@
 
 <script lang="ts" generics="T extends Record<string, unknown>">
 	import type { Snippet } from 'svelte';
+	import { ripple } from '@delightstack/utilities';
+	import { slide } from 'svelte/transition';
+	import { quintOut } from 'svelte/easing';
 
 	const propId = $props.id();
 
@@ -103,8 +106,41 @@
 	} | null>(null);
 	let expandedRows = $state(new Set<number>());
 	let collapsedGroups = $state(new Set<string>());
-	let lastSelectedIndex = $state<number | null>(null);
+	// Anchor + hovered row tracked as VISUAL positions so shift-range follows the
+	// rows as displayed (after sorting/grouping), not their order in `data`.
+	let lastSelectedVisual = $state<number | null>(null);
 	let showExportMenu = $state(false);
+
+	// Shift-range preview state
+	let shiftHeld = $state(false);
+	let hoverIndex = $state<number | null>(null);
+
+	// ---- Reduced motion ----
+	function prefersReducedMotion(): boolean {
+		return (
+			typeof window !== 'undefined' &&
+			!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+		);
+	}
+
+	// ---- Track Shift for range preview (only while selectable) ----
+	$effect(() => {
+		if (!selectable) return;
+		function onKey(e: KeyboardEvent) {
+			if (e.key === 'Shift') shiftHeld = e.type === 'keydown';
+		}
+		function onBlur() {
+			shiftHeld = false;
+		}
+		window.addEventListener('keydown', onKey);
+		window.addEventListener('keyup', onKey);
+		window.addEventListener('blur', onBlur);
+		return () => {
+			window.removeEventListener('keydown', onKey);
+			window.removeEventListener('keyup', onKey);
+			window.removeEventListener('blur', onBlur);
+		};
+	});
 
 	// ---- Sorted data ----
 	const sortedData = $derived.by(() => {
@@ -127,25 +163,43 @@
 		});
 	});
 
+	// ---- Row index map ----
+	// Rows in sortedData are the same object references as in `data` (just
+	// reordered), so an identity lookup gives each rendered row its stable index
+	// in `data`. Selection and expansion key off this stable `data_index` so they
+	// survive re-sorting; shift-range selection keys off the visual position.
+	const rowIndexMap = $derived.by(() => {
+		const m = new Map<T, number>();
+		data.forEach((row, i) => m.set(row, i));
+		return m;
+	});
+
+	interface RenderRow {
+		row: T;
+		data_index: number;
+		visual_index: number;
+	}
+
 	// ---- Grouped data ----
 	interface Group {
 		key: string;
 		label: string;
-		rows: { row: T; original_index: number }[];
+		rows: RenderRow[];
 	}
 
 	const groupedData = $derived.by((): Group[] | null => {
 		if (!groupBy) return null;
 		const groupKey = groupBy;
-		const map = new Map<string, { row: T; original_index: number }[]>();
+		const map = new Map<string, RenderRow[]>();
 		const order: string[] = [];
 		for (let i = 0; i < sortedData.length; i++) {
-			const val = String(sortedData[i][groupKey] ?? 'Other');
+			const row = sortedData[i];
+			const val = String(row[groupKey] ?? 'Other');
 			if (!map.has(val)) {
 				map.set(val, []);
 				order.push(val);
 			}
-			map.get(val)!.push({ row: sortedData[i], original_index: i });
+			map.get(val)!.push({ row, data_index: rowIndexMap.get(row) ?? i, visual_index: i });
 		}
 		return order.map((key) => ({
 			key,
@@ -155,8 +209,12 @@
 	});
 
 	// ---- Flat rows for rendering ----
-	const flatRows = $derived.by((): { row: T; original_index: number }[] => {
-		return sortedData.map((row, i) => ({ row, original_index: i }));
+	const flatRows = $derived.by((): RenderRow[] => {
+		return sortedData.map((row, i) => ({
+			row,
+			data_index: rowIndexMap.get(row) ?? i,
+			visual_index: i,
+		}));
 	});
 
 	// ---- Total columns count ----
@@ -164,9 +222,94 @@
 		columns.length + (selectable ? 1 : 0) + (expandable ? 1 : 0),
 	);
 
+	// ---- Grid track template ----
+	// The table renders as a CSS grid (with subgrid rows) instead of a native
+	// table layout, so each <tr> is a real block box that can host a row-wide
+	// ripple, hover and press effects. The column tracks are declared here so
+	// every subgrid row stays aligned.
+	const gridTemplateColumns = $derived.by(() => {
+		const tracks: string[] = [];
+		if (selectable) tracks.push('auto');
+		if (expandable) tracks.push('auto');
+		for (const col of columns) {
+			const w = columnWidths[col.key];
+			if (w) {
+				tracks.push(`${w}px`);
+			} else if (col.width) {
+				tracks.push(col.width);
+			} else if (col.minWidth) {
+				tracks.push(`minmax(${col.minWidth}, 1fr)`);
+			} else {
+				// `min-content` (not max-content) so a full-width spanning cell — e.g.
+				// an expanded detail row with long wrapping text — can't inflate the
+				// column tracks. For the nowrap data cells min-content == max-content,
+				// so columns still size to fit their content.
+				tracks.push('minmax(min-content, 1fr)');
+			}
+		}
+		return tracks.join(' ');
+	});
+
+	// ---- Selection identity ----
+	// `selected` round-trips through the consumer's binding, which is often a
+	// `$state` array. Svelte deeply proxies state, so the objects read back out
+	// are proxies whose identity no longer `===` the raw rows in `data`. We
+	// therefore track selection by row index (matched identity-first, then by a
+	// shallow value compare so proxied rows still resolve to their data index).
+	function shallowEqual(a: unknown, b: unknown): boolean {
+		if (a === b) return true;
+		if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+			return false;
+		}
+		const ak = Object.keys(a as Record<string, unknown>);
+		const bk = Object.keys(b as Record<string, unknown>);
+		if (ak.length !== bk.length) return false;
+		for (const k of ak) {
+			if ((a as Record<string, unknown>)[k] !== (b as Record<string, unknown>)[k]) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	const selectedIndexSet = $derived.by((): Set<number> => {
+		const set = new Set<number>();
+		if (!selectable || selected.length === 0) return set;
+		for (const sel of selected) {
+			let idx = data.indexOf(sel as T);
+			if (idx === -1) idx = data.findIndex((d) => shallowEqual(d, sel));
+			if (idx !== -1) set.add(idx);
+		}
+		return set;
+	});
+
+	function isSelectedIndex(index: number): boolean {
+		return selectedIndexSet.has(index);
+	}
+
 	// ---- Select all state ----
-	const allSelected = $derived(data.length > 0 && selected.length === data.length);
-	const someSelected = $derived(selected.length > 0 && selected.length < data.length);
+	const allSelected = $derived(data.length > 0 && selectedIndexSet.size === data.length);
+	const someSelected = $derived(
+		selectedIndexSet.size > 0 && selectedIndexSet.size < data.length,
+	);
+
+	// ---- Shift-range preview ----
+	// Preview range is expressed in VISUAL positions (the rows between the anchor
+	// and the hovered row, inclusive).
+	const previewRange = $derived.by((): Set<number> | null => {
+		if (!selectable || !shiftHeld || lastSelectedVisual === null || hoverIndex === null) {
+			return null;
+		}
+		const start = Math.min(lastSelectedVisual, hoverIndex);
+		const end = Math.max(lastSelectedVisual, hoverIndex);
+		const set = new Set<number>();
+		for (let i = start; i <= end; i++) set.add(i);
+		return set;
+	});
+
+	function isPreviewingVisual(visualIndex: number): boolean {
+		return previewRange?.has(visualIndex) ?? false;
+	}
 
 	// ---- Sorting ----
 	function handleSort(columnKey: string) {
@@ -194,46 +337,71 @@
 		}
 	}
 
-	function handleSortKeydown(e: KeyboardEvent, columnKey: string) {
-		if (e.key === 'Enter' || e.key === ' ') {
-			e.preventDefault();
-			handleSort(columnKey);
-		}
+	function headerJustify(col: Column<T>): string {
+		if (col.align === 'right') return 'flex-end';
+		if (col.align === 'center') return 'center';
+		return 'flex-start';
 	}
 
 	// ---- Selection ----
-	function isSelected(row: T): boolean {
-		return selected.includes(row);
+	// `selected` is rebuilt from `data` by index on every change so it always
+	// holds real `data` rows (never stale proxies), keeping membership reliable.
+	function emitSelected(indices: Set<number>) {
+		selected = [...indices].sort((a, b) => a - b).map((i) => data[i]);
+		onselect?.({ selected });
 	}
 
 	function toggleSelectAll() {
 		if (allSelected) {
-			selected = [];
+			emitSelected(new Set());
 		} else {
-			selected = [...data];
+			emitSelected(new Set(data.map((_, i) => i)));
 		}
-		onselect?.({ selected });
 	}
 
-	function toggleSelectRow(row: T, index: number, event?: MouseEvent) {
-		if (event?.shiftKey && lastSelectedIndex !== null) {
-			const start = Math.min(lastSelectedIndex, index);
-			const end = Math.max(lastSelectedIndex, index);
-			const rangeRows = sortedData.slice(start, end + 1);
-			const newSelected = new Set(selected);
-			for (const r of rangeRows) {
-				newSelected.add(r);
-			}
-			selected = [...newSelected];
-		} else {
-			if (isSelected(row)) {
-				selected = selected.filter((r) => r !== row);
-			} else {
-				selected = [...selected, row];
-			}
+	function handleSelectAllKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			toggleSelectAll();
 		}
-		lastSelectedIndex = index;
-		onselect?.({ selected });
+	}
+
+	function toggleSelectRow(
+		dataIndex: number,
+		visualIndex: number,
+		event?: MouseEvent | KeyboardEvent,
+	) {
+		const next = new Set(selectedIndexSet);
+		if (event?.shiftKey && lastSelectedVisual !== null) {
+			// Select the visually-contiguous range, mapping each displayed row back
+			// to its stable data index.
+			const start = Math.min(lastSelectedVisual, visualIndex);
+			const end = Math.max(lastSelectedVisual, visualIndex);
+			for (let v = start; v <= end; v++) {
+				const di = rowIndexMap.get(sortedData[v]);
+				if (di !== undefined) next.add(di);
+			}
+			// Keep the anchor so the range can be re-extended with another shift-click.
+		} else {
+			if (next.has(dataIndex)) {
+				next.delete(dataIndex);
+			} else {
+				next.add(dataIndex);
+			}
+			lastSelectedVisual = visualIndex;
+		}
+		emitSelected(next);
+	}
+
+	function handleRowCheckKeydown(
+		e: KeyboardEvent,
+		dataIndex: number,
+		visualIndex: number,
+	) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			toggleSelectRow(dataIndex, visualIndex, e);
+		}
 	}
 
 	// ---- Column resizing ----
@@ -302,16 +470,26 @@
 	}
 
 	// ---- Row click ----
-	function handleRowClick(row: T, index: number, event: MouseEvent) {
-		// Don't fire row click if clicking checkbox or expand button
+	function handleRowClick(
+		row: T,
+		dataIndex: number,
+		visualIndex: number,
+		event: MouseEvent,
+	) {
 		const target = event.target as HTMLElement;
-		if (target.closest('.checkbox') || target.closest('.expand-btn'))
+		// Clicks on the checkbox or expand toggle are handled by those controls.
+		if (target.closest('.dt-check-wrap') || target.closest('.expand-btn')) return;
+
+		if (selectable) {
+			toggleSelectRow(dataIndex, visualIndex, event);
+			onrowclick?.({ row, index: dataIndex });
 			return;
+		}
 
 		if (expandable) {
-			toggleExpand(index);
+			toggleExpand(dataIndex);
 		}
-		onrowclick?.({ row, index });
+		onrowclick?.({ row, index: dataIndex });
 	}
 
 	// ---- Export ----
@@ -358,22 +536,11 @@
 		URL.revokeObjectURL(url);
 	}
 
-	// ---- Column style ----
+	// ---- Cell alignment ----
+	// Width/min-width are handled by the grid tracks (see gridTemplateColumns);
+	// the cell only needs its text alignment.
 	function getColumnStyle(col: Column<T>): string {
-		const parts: string[] = [];
-		const w = columnWidths[col.key];
-		if (w) {
-			parts.push(`width: ${w}px`);
-		} else if (col.width) {
-			parts.push(`width: ${col.width}`);
-		}
-		if (col.minWidth) {
-			parts.push(`min-width: ${col.minWidth}`);
-		}
-		if (col.align) {
-			parts.push(`text-align: ${col.align}`);
-		}
-		return parts.join('; ');
+		return col.align ? `text-align: ${col.align}` : '';
 	}
 
 	// ---- Cell value access ----
@@ -459,131 +626,103 @@
 		</div>
 	{/if}
 
-	<div class="scroll">
-		<table role="grid">
-			<thead class:sticky={stickyHeader}>
-				<tr>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="scroll" onmouseleave={() => (hoverIndex = null)}>
+		<table role="grid" style:grid-template-columns={gridTemplateColumns}>
+			<!-- The CSS `display` override (grid/subgrid) strips the implicit ARIA
+			     roles of the native table elements, so they are restored explicitly.
+			     Svelte's a11y_no_redundant_roles check can't see the CSS, hence the
+			     ignores below. -->
+			<thead>
+				<!-- svelte-ignore a11y_no_redundant_roles -->
+				<tr role="row" class:sticky={stickyHeader}>
 					{#if selectable}
-						<th class="checkbox-cell" style="width: 3rem">
-							<label class="checkbox">
-								<input
-									type="checkbox"
-									checked={allSelected}
-									indeterminate={someSelected}
-									aria-label="Select all rows"
-									onchange={toggleSelectAll} />
-								<span class="checkbox-icon">
-									{#if allSelected}
-										<svg
-											width="14"
-											height="14"
-											viewBox="0 0 14 14"
-											fill="none"
-											aria-hidden="true">
-											<path
-												d="M2.5 7.5L5.5 10.5L11.5 3.5"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round" />
-										</svg>
-									{:else if someSelected}
-										<svg
-											width="14"
-											height="14"
-											viewBox="0 0 14 14"
-											fill="none"
-											aria-hidden="true">
-											<path
-												d="M3 7h8"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round" />
-										</svg>
-									{/if}
-								</span>
-							</label>
+						<th class="checkbox-cell" role="columnheader">
+							<div
+								class="dt-check-wrap"
+								class:checked={allSelected}
+								class:indeterminate={someSelected}
+								role="checkbox"
+								tabindex="0"
+								aria-checked={someSelected ? 'mixed' : allSelected}
+								aria-label="Select all rows"
+								{@attach ripple({ centered: true, opacity: 0.15 })}
+								onclick={toggleSelectAll}
+								onkeydown={handleSelectAllKeydown}>
+								{@render checkIndicator(allSelected, someSelected, false)}
+							</div>
 						</th>
 					{/if}
 					{#if expandable}
-						<th class="expand-cell" style="width: 2.5rem"></th>
+						<th class="expand-cell" role="columnheader"></th>
 					{/if}
 					{#each columns as col (col.key)}
 						<th
 							style={getColumnStyle(col)}
+							role="columnheader"
 							aria-sort={getAriaSort(col)}
-							class:sortable={col.sortable}>
+							class:sortable={col.sortable && !col.header}>
+						{#if col.header}
 							<div class="th-content">
-								{#if col.header}
-									{@render col.header({ column: col })}
-								{:else if col.sortable}
-									<button
-										class="sort-btn"
-										type="button"
-										onclick={() => handleSort(col.key)}
-										onkeydown={(e) => handleSortKeydown(e, col.key)}>
-										<span>{col.label}</span>
-										<span
-											class="sort-icon"
-											class:sort-active={sortBy === col.key}>
-											{#if sortBy === col.key && sortDirection === 'asc'}
-												<svg
-													width="14"
-													height="14"
-													viewBox="0 0 14 14"
-													fill="none"
-													aria-hidden="true">
-													<path
-														d="M7 11V3M7 3L3.5 6.5M7 3l3.5 3.5"
-														stroke="currentColor"
-														stroke-width="1.5"
-														stroke-linecap="round"
-														stroke-linejoin="round" />
-												</svg>
-											{:else if sortBy === col.key && sortDirection === 'desc'}
-												<svg
-													width="14"
-													height="14"
-													viewBox="0 0 14 14"
-													fill="none"
-													aria-hidden="true">
-													<path
-														d="M7 3v8M7 11l3.5-3.5M7 11L3.5 7.5"
-														stroke="currentColor"
-														stroke-width="1.5"
-														stroke-linecap="round"
-														stroke-linejoin="round" />
-												</svg>
-											{:else}
-												<svg
-													width="14"
-													height="14"
-													viewBox="0 0 14 14"
-													fill="none"
-													aria-hidden="true"
-													style="opacity: 0.3">
-													<path
-														d="M7 3v8M7 3L4 6M7 3l3 3M7 11L4 8M7 11l3-3"
-														stroke="currentColor"
-														stroke-width="1.25"
-														stroke-linecap="round"
-														stroke-linejoin="round" />
-												</svg>
-											{/if}
-										</span>
-									</button>
-								{:else}
-									<span>{col.label}</span>
-								{/if}
-								{#if resizableColumns}
-									<!-- svelte-ignore a11y_no_static_element_interactions -->
-									<span
-										class="resize-handle"
-										onmousedown={(e) => startResize(e, col.key)}
-										ondblclick={(e) => autoFitColumn(e, col.key)}>
-									</span>
-								{/if}
+								{@render col.header({ column: col })}
 							</div>
+						{:else if col.sortable}
+							<button
+								class="th-button"
+								type="button"
+								style:justify-content={headerJustify(col)}
+								onclick={() => handleSort(col.key)}
+								{@attach ripple({ opacity: 0.12 })}>
+								<span class="th-label">{col.label}</span>
+								<span class="sort-icon" class:active={sortBy === col.key}>
+									{#if sortBy === col.key}
+										<span class="arrow-rot" class:desc={sortDirection === 'desc'}>
+											<svg
+												class="arrow"
+												width="17"
+												height="17"
+												viewBox="0 0 20 20"
+												fill="none"
+												aria-hidden="true">
+												<path
+													d="M10 15.5V5M5.5 9.5L10 5l4.5 4.5"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round" />
+											</svg>
+										</span>
+									{:else}
+										<svg
+											class="arrow-hint"
+											width="17"
+											height="17"
+											viewBox="0 0 20 20"
+											fill="none"
+											aria-hidden="true">
+											<path
+												d="M6.5 8L10 4.5L13.5 8M6.5 12L10 15.5L13.5 12"
+												stroke="currentColor"
+												stroke-width="1.75"
+												stroke-linecap="round"
+												stroke-linejoin="round" />
+										</svg>
+									{/if}
+								</span>
+							</button>
+						{:else}
+							<div class="th-content" style:justify-content={headerJustify(col)}>
+								<span>{col.label}</span>
+							</div>
+						{/if}
+						{#if resizableColumns}
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<span
+								class="resize-handle"
+								onmousedown={(e) => startResize(e, col.key)}
+								ondblclick={(e) => autoFitColumn(e, col.key)}>
+							</span>
+						{/if}
 						</th>
 					{/each}
 				</tr>
@@ -596,7 +735,7 @@
 								<td class="checkbox-cell">
 									<div
 										class="skeleton-bar"
-										style="width: 18px; height: 18px; border-radius: 4px;">
+										style="width: 18px; height: 18px; border-radius: 5px;">
 									</div>
 								</td>
 							{/if}
@@ -622,8 +761,9 @@
 						</tr>
 					{/each}
 				{:else if data.length === 0}
-					<tr class="empty-row">
-						<td colspan={totalColumns}>
+					<!-- svelte-ignore a11y_no_redundant_roles -->
+					<tr class="empty-row" role="row">
+						<td colspan={totalColumns} role="gridcell">
 							{#if empty}
 								{@render empty()}
 							{:else}
@@ -668,8 +808,9 @@
 					</tr>
 				{:else if groupedData}
 					{#each groupedData as group (group.key)}
-						<tr class="group-row">
-							<td colspan={totalColumns}>
+						<!-- svelte-ignore a11y_no_redundant_roles -->
+						<tr class="group-row" role="row">
+							<td colspan={totalColumns} role="gridcell">
 								<button
 									class="group-toggle"
 									type="button"
@@ -696,19 +837,19 @@
 							</td>
 						</tr>
 						{#if !collapsedGroups.has(group.key)}
-							{#each group.rows as { row, original_index } (original_index)}
-								{@render dataRow(row, original_index)}
-								{#if expandable && expandedRows.has(original_index) && expandedRow}
-									{@render expandedRowTr(row, original_index)}
+							{#each group.rows as { row, data_index, visual_index } (data_index)}
+								{@render dataRow(row, data_index, visual_index)}
+								{#if expandable && expandedRows.has(data_index) && expandedRow}
+									{@render expandedRowTr(row, data_index)}
 								{/if}
 							{/each}
 						{/if}
 					{/each}
 				{:else}
-					{#each flatRows as { row, original_index } (original_index)}
-						{@render dataRow(row, original_index)}
-						{#if expandable && expandedRows.has(original_index) && expandedRow}
-							{@render expandedRowTr(row, original_index)}
+					{#each flatRows as { row, data_index, visual_index } (data_index)}
+						{@render dataRow(row, data_index, visual_index)}
+						{#if expandable && expandedRows.has(data_index) && expandedRow}
+							{@render expandedRowTr(row, data_index)}
 						{/if}
 					{/each}
 				{/if}
@@ -717,65 +858,99 @@
 	</div>
 </div>
 
-{#snippet dataRow(row: T, index: number)}
+{#snippet checkIndicator(checked: boolean, indeterminate: boolean, preview: boolean)}
+	<svg
+		class="dt-check"
+		class:checked={checked || indeterminate}
+		class:indeterminate={indeterminate}
+		class:preview={preview}
+		viewBox="0 0 24 24"
+		width="20"
+		height="20"
+		fill="none"
+		aria-hidden="true">
+		<rect class="box" x="2" y="2" width="20" height="20" rx="5" stroke-width="2" />
+		{#if indeterminate}
+			<line
+				class="dash"
+				x1="7"
+				y1="12"
+				x2="17"
+				y2="12"
+				stroke-width="2.5"
+				stroke-linecap="round" />
+		{:else}
+			<path
+				class="check"
+				d="M6 12.5 L10 16.5 L18 8"
+				stroke-width="2.5"
+				stroke-linecap="round"
+				stroke-linejoin="round" />
+		{/if}
+	</svg>
+{/snippet}
+
+{#snippet dataRow(row: T, dataIndex: number, visualIndex: number)}
+	{@const rowClickable = selectable || !!onrowclick || expandable}
+	{@const rowSelected = selectable && isSelectedIndex(dataIndex)}
+	{@const previewing = selectable && isPreviewingVisual(visualIndex) && !rowSelected}
+	<!-- svelte-ignore a11y_no_redundant_roles a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
 	<tr
+		role="row"
 		class="row"
-		class:selected={selectable && isSelected(row)}
-		class:expanded={expandable && expandedRows.has(index)}
-		class:clickable={!!onrowclick || expandable}
-		onclick={(e) => handleRowClick(row, index, e)}>
+		class:selected={rowSelected}
+		class:preview={previewing}
+		class:clickable={rowClickable}
+		onclick={(e) => handleRowClick(row, dataIndex, visualIndex, e)}
+		onmouseenter={() => {
+			if (selectable) hoverIndex = visualIndex;
+		}}
+		{@attach ripple({ enabled: rowClickable })}>
 		{#if selectable}
-			<td class="checkbox-cell">
-				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-				<label class="checkbox" onclick={(e) => e.stopPropagation()}>
-					<input
-						type="checkbox"
-						checked={isSelected(row)}
-						aria-label="Select row {index + 1}"
-						onclick={(e) => toggleSelectRow(row, index, e as unknown as MouseEvent)} />
-					<span class="checkbox-icon">
-						{#if isSelected(row)}
-							<svg
-								width="14"
-								height="14"
-								viewBox="0 0 14 14"
-								fill="none"
-								aria-hidden="true">
-								<path
-									d="M2.5 7.5L5.5 10.5L11.5 3.5"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round" />
-							</svg>
-						{/if}
-					</span>
-				</label>
+			<td class="checkbox-cell" role="gridcell">
+				<div
+					class="dt-check-wrap"
+					class:checked={rowSelected}
+					class:preview={previewing}
+					role="checkbox"
+					tabindex="0"
+					aria-checked={rowSelected}
+					aria-label="Select row {dataIndex + 1}"
+					{@attach ripple({ centered: true, opacity: 0.15 })}
+					onpointerdown={(e) => e.stopPropagation()}
+					onclick={(e) => {
+						e.stopPropagation();
+						toggleSelectRow(dataIndex, visualIndex, e);
+					}}
+					onkeydown={(e) => handleRowCheckKeydown(e, dataIndex, visualIndex)}>
+					{@render checkIndicator(rowSelected || previewing, false, previewing)}
+				</div>
 			</td>
 		{/if}
 		{#if expandable}
-			<td class="expand-cell">
+			<td class="expand-cell" role="gridcell">
 				<button
 					class="expand-btn"
 					type="button"
-					aria-expanded={expandedRows.has(index)}
-					aria-label={expandedRows.has(index) ? 'Collapse row' : 'Expand row'}
+					aria-expanded={expandedRows.has(dataIndex)}
+					aria-label={expandedRows.has(dataIndex) ? 'Collapse row' : 'Expand row'}
+					onpointerdown={(e) => e.stopPropagation()}
 					onclick={(e) => {
 						e.stopPropagation();
-						toggleExpand(index);
+						toggleExpand(dataIndex);
 					}}>
 					<svg
 						class="expand-chevron"
-						class:expanded={expandedRows.has(index)}
-						width="14"
-						height="14"
+						class:expanded={expandedRows.has(dataIndex)}
+						width="15"
+						height="15"
 						viewBox="0 0 14 14"
 						fill="none"
 						aria-hidden="true">
 						<path
 							d="M5 3l4 4-4 4"
 							stroke="currentColor"
-							stroke-width="1.5"
+							stroke-width="1.75"
 							stroke-linecap="round"
 							stroke-linejoin="round" />
 					</svg>
@@ -783,9 +958,9 @@
 			</td>
 		{/if}
 		{#each columns as col (col.key)}
-			<td style={getColumnStyle(col)}>
+			<td style={getColumnStyle(col)} role="gridcell">
 				{#if col.cell}
-					{@render col.cell({ value: getCellValue(row, col.key), row, index })}
+					{@render col.cell({ value: getCellValue(row, col.key), row, index: dataIndex })}
 				{:else}
 					{getCellValue(row, col.key) ?? ''}
 				{/if}
@@ -795,9 +970,15 @@
 {/snippet}
 
 {#snippet expandedRowTr(row: T, index: number)}
-	<tr class="expanded-row">
-		<td colspan={totalColumns}>
-			<div class="expanded-content">
+	<!-- svelte-ignore a11y_no_redundant_roles -->
+	<tr class="expanded-row" role="row">
+		<td colspan={totalColumns} role="gridcell">
+			<div
+				class="expanded-content"
+				transition:slide={{
+					duration: prefersReducedMotion() ? 0 : 240,
+					easing: quintOut,
+				}}>
 				{#if expandedRow}
 					{@render expandedRow(row)}
 				{/if}
@@ -833,7 +1014,7 @@
 		font-family: inherit;
 		border: 1px solid
 			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		border-radius: var(--radius-3, 6px);
+		border-radius: var(--radius-3, 10px);
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		cursor: pointer;
@@ -857,7 +1038,7 @@
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
 		border: 1px solid
 			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		border-radius: var(--radius-3, 6px);
+		border-radius: var(--radius-3, 10px);
 		box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
 		z-index: 10;
 		overflow: hidden;
@@ -888,94 +1069,189 @@
 		}
 	}
 
-	/* ========== Scroll Container ========== */
+	/* ========== Scroll Container / Frame ========== */
 	.scroll {
 		overflow-x: auto;
+		border: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #3a3a3a));
+		border-radius: var(--table-radius, 14px);
+		/* Clip the rounded corners over the table + sticky header */
 	}
 
-	/* ========== Table ========== */
+	/* ========== Table (CSS grid + subgrid rows) ==========
+	   Rendering as a grid (rather than native table layout) lets every <tr> be a
+	   real block box — so a row can host a row-wide ripple/hover/press — while
+	   subgrid keeps all the cells aligned to shared column tracks. Native
+	   table/tr/td tags are kept (with explicit ARIA roles) for semantics. */
 	table {
+		display: grid;
+		/* grid-template-columns is set inline from `gridTemplateColumns` */
 		width: 100%;
-		border-collapse: collapse;
-		border-spacing: 0;
 		font-size: 0.875rem;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 	}
 
-	/* ========== Header ========== */
-	thead {
-		&.sticky {
-			position: sticky;
-			top: 0;
-			z-index: 1;
-		}
+	/* Rowgroups collapse so each <tr> is a direct grid item of the table grid. */
+	thead,
+	tbody {
+		display: contents;
 	}
 
+	tr {
+		display: grid;
+		grid-template-columns: subgrid;
+		grid-column: 1 / -1;
+		align-items: center;
+	}
+
+	/* ========== Header ========== */
 	thead tr {
 		border-bottom: 2px solid
 			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
+	}
+
+	thead tr.sticky {
+		position: sticky;
+		top: 0;
+		z-index: 2;
 	}
 
 	th {
-		padding: 0.75rem 1rem;
 		text-align: left;
 		font-weight: 600;
 		white-space: nowrap;
+		min-width: 0;
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		position: relative;
 		user-select: none;
 	}
 
-	.dense th {
-		padding: 0.375rem 0.75rem;
-		font-size: 0.75rem;
-	}
-
-	.comfortable th {
-		padding: 1rem 1.25rem;
-	}
-
-	/* ========== Sort Button ========== */
+	/* Non-interactive header content keeps the regular cell padding */
 	.th-content {
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
+		padding: 0.75rem 1rem;
 	}
 
-	.sort-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
+	.dense .th-content {
+		padding: 0.375rem 0.75rem;
+		font-size: 0.75rem;
+	}
+
+	.comfortable .th-content {
+		padding: 1rem 1.25rem;
+	}
+
+	/* ========== Sortable header: full-cell Button-like target ========== */
+	th.sortable {
 		padding: 0;
+	}
+
+	.th-button {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		width: 100%;
+		padding: 0.75rem 1rem;
 		margin: 0;
 		border: none;
 		background: none;
 		font: inherit;
 		font-weight: 600;
 		color: inherit;
+		text-align: inherit;
 		cursor: pointer;
+		position: relative;
+		overflow: hidden;
+		user-select: none;
+		transition:
+			background-color 300ms ease,
+			color 200ms ease,
+			translate 200ms ease;
 
+		/* Instant hover tint (like Button), eased away on leave */
 		&:hover {
+			background-color: light-dark(
+				rgb(from var(--color-text, #000) r g b / 0.05),
+				rgb(from var(--color-text, #fff) r g b / 0.07)
+			);
 			color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+			transition: color 200ms ease;
+		}
+
+		&:active {
+			translate: 0 1px;
 		}
 
 		&:focus-visible {
 			outline: 2px solid var(--color-action, #1976d2);
-			outline-offset: 2px;
-			border-radius: 2px;
+			outline-offset: -2px;
 		}
 	}
 
+	.dense .th-button {
+		padding: 0.375rem 0.75rem;
+		font-size: 0.75rem;
+	}
+
+	.comfortable .th-button {
+		padding: 1rem 1.25rem;
+	}
+
+	/* ========== Sort Icon ========== */
 	.sort-icon {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		flex-shrink: 0;
-		transition: opacity 150ms ease;
+		color: light-dark(var(--color-text-muted, #9ca3af), var(--color-text-muted, #9ca3af));
 	}
 
-	.sort-active {
+	.sort-icon.active {
 		color: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
+	}
+
+	/* Faint up/down hint shown on unsorted sortable columns */
+	.arrow-hint {
+		opacity: 0.35;
+		transition:
+			opacity 180ms ease,
+			translate 180ms ease;
+	}
+
+	.th-button:hover .arrow-hint {
+		opacity: 0.7;
+	}
+
+	/* Active arrow: rotates between asc/desc, pops in on first sort */
+	.arrow-rot {
+		display: inline-flex;
+		transition: transform 300ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+	}
+
+	.arrow-rot.desc {
+		transform: rotate(180deg);
+	}
+
+	.arrow {
+		animation: sort-pop 340ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+	}
+
+	@keyframes sort-pop {
+		0% {
+			transform: scale(0.4);
+			opacity: 0;
+		}
+		60% {
+			transform: scale(1.18);
+		}
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
 	}
 
 	/* ========== Resize Handle ========== */
@@ -984,9 +1260,10 @@
 		right: 0;
 		top: 0;
 		bottom: 0;
-		width: 4px;
+		width: 5px;
 		cursor: col-resize;
 		opacity: 0;
+		z-index: 3;
 		background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 		transition: opacity 150ms ease;
 	}
@@ -996,17 +1273,21 @@
 	}
 
 	/* ========== Body Rows ========== */
-	tbody {
-		perspective: 100px;
+	tbody tr.row {
+		--row-bg: transparent;
+		background-color: var(--row-bg);
+		border-bottom: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
+		transition: background-color 260ms ease;
 	}
 
-	tbody tr {
-		border-bottom: 1px solid
-			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+	tbody tr.row:last-child {
+		border-bottom: none;
 	}
 
 	td {
 		padding: 0.75rem 1rem;
+		min-width: 0;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -1021,100 +1302,174 @@
 		padding: 1rem 1.25rem;
 	}
 
-	.clickable {
+	/* Clickable rows behave like buttons: pointer, press, and a row-wide ripple.
+	   Because the row is a grid (not a table-row) box it can be position:relative
+	   + overflow:hidden, so the ripple attachment fills and clips to the row.
+	   `isolation` gives the row its own stacking context so the ripple (z-index
+	   -1) sits above the row background but below the cell content. */
+	.row.clickable {
 		cursor: pointer;
-		transition: translate 200ms ease;
+		user-select: none;
+		position: relative;
+		overflow: hidden;
+		isolation: isolate;
+		transition:
+			background-color 260ms ease,
+			translate 200ms ease;
 
 		&:active {
-			translate: 0px 4px clamp(-5px, calc(0.2em - 5px), -2px);
+			translate: 0 1px;
 		}
 	}
 
-	.row:hover {
-		background: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.03),
-			rgb(from var(--color-text, #fff) r g b / 0.04)
+	/* ---- Row background states ----
+	   Base/resting states are written with :where() so they carry zero
+	   specificity; the :hover rules below always win, giving the
+	   "instant-in, eased-out" hover behaviour even over striped/selected. */
+	:where(.striped tbody tr.row:nth-child(even)) {
+		--row-bg: light-dark(
+			rgb(from var(--color-text, #000) r g b / 0.025),
+			rgb(from var(--color-text, #fff) r g b / 0.035)
 		);
 	}
 
-	.selected {
-		background: light-dark(
-			rgb(from var(--color-action, #1976d2) r g b / 0.08),
-			rgb(from var(--color-action, #5c9ce6) r g b / 0.12)
-		) !important;
-	}
-
-	/* ========== Striped ========== */
-	.striped tbody tr.row:nth-child(even) {
-		background: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.02),
-			rgb(from var(--color-text, #fff) r g b / 0.03)
+	:where(tbody tr.row.selected) {
+		--row-bg: light-dark(
+			rgb(from var(--color-action, #1976d2) r g b / 0.1),
+			rgb(from var(--color-action, #5c9ce6) r g b / 0.16)
 		);
 	}
 
-	.striped tbody tr.row:nth-child(even):hover {
-		background: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.05),
+	/* Hover: instant tint, removed on leave so the base transition fades it out */
+	tbody tr.row:hover {
+		--row-bg: light-dark(
+			rgb(from var(--color-text, #000) r g b / 0.045),
 			rgb(from var(--color-text, #fff) r g b / 0.06)
 		);
+		transition: none;
 	}
 
-	/* ========== Checkbox Cell ========== */
+	tbody tr.row.selected:hover {
+		--row-bg: light-dark(
+			rgb(from var(--color-action, #1976d2) r g b / 0.17),
+			rgb(from var(--color-action, #5c9ce6) r g b / 0.24)
+		);
+		transition: none;
+	}
+
+	/* Shift-range preview wins over hover (placed last, equal specificity) */
+	tbody tr.row.preview {
+		--row-bg: light-dark(
+			rgb(from var(--color-action, #1976d2) r g b / 0.14),
+			rgb(from var(--color-action, #5c9ce6) r g b / 0.2)
+		);
+		transition: none;
+	}
+
+	/* ========== Checkbox (mirrors the Checkbox component) ========== */
 	.checkbox-cell {
-		width: 3rem;
 		text-align: center;
-		padding-left: 0.75rem !important;
+		padding-left: 0.5rem !important;
 		padding-right: 0.25rem !important;
 	}
 
-	.checkbox {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		cursor: pointer;
+	.dt-check-wrap {
 		position: relative;
-	}
-
-	.checkbox input[type='checkbox'] {
-		position: absolute;
-		opacity: 0;
-		width: 0;
-		height: 0;
-		pointer-events: none;
-	}
-
-	.checkbox-icon {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 18px;
-		height: 18px;
-		border: 2px solid
-			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		border-radius: 4px;
-		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		transition:
-			border-color 150ms ease,
-			background-color 150ms ease;
+		width: 38px;
+		height: 38px;
+		border-radius: 50%;
+		cursor: pointer;
 		flex-shrink: 0;
-		color: light-dark(var(--color-action-text, #fff), var(--color-action-text, #fff));
+		overflow: hidden;
+		outline: none;
+		vertical-align: middle;
+		-webkit-tap-highlight-color: transparent;
+		--hover-tint: color-mix(in srgb, var(--color-text, currentColor) 12%, transparent);
+		transition:
+			background 200ms ease,
+			transform 150ms ease;
+
+		&.checked,
+		&.preview {
+			--hover-tint: color-mix(in srgb, var(--color-action, #1976d2) 18%, transparent);
+		}
+
+		&:hover {
+			background: var(--hover-tint);
+			transition: none;
+		}
+
+		&:active {
+			transform: scale(0.9);
+			transition:
+				transform 80ms ease,
+				background 200ms ease;
+		}
+
+		&:focus-visible {
+			box-shadow: 0 0 0 2px light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a)),
+				0 0 0 4px var(--color-action, #1976d2);
+		}
 	}
 
-	.checkbox input[type='checkbox']:checked + .checkbox-icon,
-	.checkbox input[type='checkbox']:indeterminate + .checkbox-icon {
-		background: var(--color-action, #1976d2);
-		border-color: var(--color-action, #1976d2);
-	}
+	.dt-check {
+		flex-shrink: 0;
 
-	.checkbox input[type='checkbox']:focus-visible + .checkbox-icon {
-		box-shadow:
-			0 0 0 2px light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a)),
-			0 0 0 4px var(--color-action, #1976d2);
+		/* Unchecked outline: a clearly-visible, slightly thicker stroke so the
+		   empty box reads well against the row background. */
+		.box {
+			stroke: light-dark(
+				rgb(from var(--color-text, #000) r g b / 0.5),
+				rgb(from var(--color-text, #fff) r g b / 0.55)
+			);
+			stroke-width: 2.4;
+			fill: transparent;
+			transition:
+				stroke 150ms ease,
+				fill 150ms ease;
+		}
+
+		.check {
+			stroke: var(--color-action-text, #fff);
+			fill: none;
+			stroke-dasharray: 24;
+			stroke-dashoffset: 24;
+			transition: stroke-dashoffset 260ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+		}
+
+		.dash {
+			stroke: var(--color-action-text, #fff);
+		}
+
+		&.checked {
+			.box {
+				stroke: var(--color-action, #1976d2);
+				fill: var(--color-action, #1976d2);
+			}
+			.check {
+				stroke-dashoffset: 0;
+			}
+		}
+
+		/* Preview (shift-hover): tinted box, half-drawn check */
+		&.preview {
+			.box {
+				stroke: var(--color-action, #1976d2);
+				fill: rgb(from var(--color-action, #1976d2) r g b / 0.35);
+			}
+			.check {
+				stroke: light-dark(var(--color-action, #1976d2), var(--color-action-text, #fff));
+				stroke-dashoffset: 0;
+				opacity: 0.55;
+			}
+		}
 	}
 
 	/* ========== Expand Cell ========== */
 	.expand-cell {
-		width: 2.5rem;
 		text-align: center;
 		padding-left: 0.5rem !important;
 		padding-right: 0.25rem !important;
@@ -1124,8 +1479,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 24px;
-		height: 24px;
+		width: 28px;
+		height: 28px;
 		padding: 0;
 		margin: 0;
 		border: none;
@@ -1133,12 +1488,17 @@
 		background: none;
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		cursor: pointer;
+		transition: background 160ms ease;
 
 		&:hover {
 			background: light-dark(
-				rgb(from var(--color-text, #000) r g b / 0.06),
-				rgb(from var(--color-text, #fff) r g b / 0.08)
+				rgb(from var(--color-text, #000) r g b / 0.07),
+				rgb(from var(--color-text, #fff) r g b / 0.1)
 			);
+		}
+
+		&:active {
+			transform: scale(0.9);
 		}
 
 		&:focus-visible {
@@ -1148,23 +1508,27 @@
 	}
 
 	.expand-chevron {
-		transition: transform 200ms ease;
+		transition: transform 240ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
 	}
 
-	.expanded {
+	.expand-chevron.expanded {
 		transform: rotate(90deg);
 	}
 
 	/* ========== Expanded Row ========== */
 	.expanded-row {
 		background: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.015),
-			rgb(from var(--color-text, #fff) r g b / 0.02)
+			rgb(from var(--color-action, #1976d2) r g b / 0.04),
+			rgb(from var(--color-action, #5c9ce6) r g b / 0.07)
 		);
 	}
 
 	.expanded-row td {
+		grid-column: 1 / -1;
 		padding: 0;
+		white-space: normal;
+		overflow: visible;
+		text-overflow: clip;
 	}
 
 	.expanded-content {
@@ -1188,6 +1552,7 @@
 	}
 
 	.group-row td {
+		grid-column: 1 / -1;
 		padding: 0;
 	}
 
@@ -1238,7 +1603,9 @@
 
 	/* ========== Empty State ========== */
 	.empty-row td {
+		grid-column: 1 / -1;
 		padding: 0;
+		white-space: normal;
 	}
 
 	.empty {
@@ -1258,6 +1625,8 @@
 	/* ========== Skeleton ========== */
 	.skeleton-row {
 		pointer-events: none;
+		border-bottom: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
 	}
 
 	.skeleton-bar {
@@ -1297,8 +1666,15 @@
 			animation: none;
 		}
 		.expand-chevron,
-		.group-chevron {
-			transition: none;
+		.group-chevron,
+		.arrow-rot,
+		.arrow,
+		.dt-check .check,
+		.row.clickable,
+		tbody tr.row,
+		.th-button {
+			animation: none !important;
+			transition: none !important;
 		}
 	}
 </style>
