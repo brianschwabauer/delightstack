@@ -2315,12 +2315,15 @@
 		   square thumbnail all key off these so smaller sizes feel uniformly
 		   tighter and larger sizes uniformly roomier. */
 		--line-height: 3.5rem;
-		--list-pad: 0.6rem;
+		--list-pad: 9px;
 		--list-text-size: 1rem;
 		--thumb-size: calc(var(--line-height) * 0.72);
 
 		&.radius-0 {
 			--radius: 0px;
+			.info {
+				border-radius: 0px !important;
+			}
 		}
 		&.radius-1 {
 			--radius: calc(var(--line-height) * 0.1);
@@ -2333,27 +2336,27 @@
 		}
 		&.size-00 {
 			--line-height: 2.25rem;
-			--list-pad: 0.25rem;
+			--list-pad: 3px;
 			--list-text-size: 0.78rem;
 		}
 		&.size-0 {
 			--line-height: 2.75rem;
-			--list-pad: 0.4rem;
+			--list-pad: 6px;
 			--list-text-size: 0.88rem;
 		}
 		&.size-1 {
 			--line-height: 3.5rem;
-			--list-pad: 0.6rem;
+			--list-pad: 9px;
 			--list-text-size: 1rem;
 		}
 		&.size-2 {
 			--line-height: 4.5rem;
-			--list-pad: 0.85rem;
+			--list-pad: 13px;
 			--list-text-size: 1.15rem;
 		}
 		&.size-3 {
 			--line-height: 5.5rem;
-			--list-pad: 1.1rem;
+			--list-pad: 17px;
 			--list-text-size: 1.3rem;
 		}
 
@@ -2397,8 +2400,8 @@
 				/* Fill the full row height + width so the whole visible area of the
 				   row is the click target — feedback and clickability stay in sync. */
 				align-self: stretch;
-				padding: 0 var(--list-pad);
-				border-radius: var(--radius);
+				padding: 0 calc(var(--list-pad) - 2px);
+				border-radius: calc(var(--radius) + var(--list-pad));
 				/* Press effect, matching ListItem's translate-on-active. */
 				transition: translate 200ms ease;
 
