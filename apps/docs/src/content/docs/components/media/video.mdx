@@ -108,7 +108,19 @@ Bind the native `HTMLVideoElement` for programmatic control.
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Video skeleton />`}>
+Use `skeleton` while the source is still being resolved (e.g. fetched async).
+It fills the player with a placeholder background, skeleton controls, and a
+shimmer sweep. Providing a `src` automatically disables the skeleton — so the
+shimmer never sits on top of a real poster or video.
+
+<ComponentPreview code={`<script>
+${'  '}import { Video } from '@delightstack/components';
+
+${'  '}// no src yet → skeleton; set it once it resolves
+${'  '}let src = $state('');
+</script>
+
+<Video {src} skeleton={!src} />`}>
 	<VideoSkeletonDemo client:visible />
 </ComponentPreview>
 
@@ -125,7 +137,7 @@ Bind the native `HTMLVideoElement` for programmatic control.
 | `aspectRatio` | `string` | `'16/9'` | CSS aspect ratio |
 | `preload` | `'auto' \| 'metadata' \| 'none'` | `'metadata'` | Preload behavior |
 | `captions` | `Track[]` | `[]` | Caption/subtitle tracks |
-| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeleton` | `boolean` | `false` | Show loading skeleton while no `src` is known yet (providing a `src` disables it) |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 | `element` | `HTMLElement` | `undefined` | Bindable reference to the root element (`$bindable`) |

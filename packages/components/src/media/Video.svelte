@@ -81,6 +81,9 @@
 
 <script lang="ts">
 	import { ripple } from '@delightstack/utilities';
+	import { scale } from 'svelte/transition';
+	import { backOut } from 'svelte/easing';
+	import Range from '../form/Range.svelte';
 	const propId = $props.id();
 
 	let {
@@ -117,7 +120,7 @@
 		 *  shows a thumbnail preview at the cue's mapped time. */
 		thumbnails = undefined as string | undefined,
 
-		/** Show loading skeleton */
+		/** Show loading skeleton (only while no `src` is known yet) */
 		skeleton = false,
 
 		/** Element ID */
@@ -206,15 +209,20 @@
 	let has_error = $state(false);
 	let is_ready = $state(false);
 
-	// Dropdown menus
+	// Menus / popovers (all inline so they survive fullscreen)
 	let quality_open = $state(false);
 	let speed_open = $state(false);
+	let settings_open = $state(false);
 
-	// Seeking
-	let is_seeking = $state(false);
+	// Seek hover preview (independent of the Range slider)
 	let seek_hover_time = $state(0);
 	let seek_hover_x = $state(0);
 	let show_seek_tooltip = $state(false);
+	let seek_el = $state<HTMLElement | undefined>(undefined);
+
+	// Settings popover refs (for focus management)
+	let settings_btn = $state<HTMLElement | undefined>(undefined);
+	let settings_pop = $state<HTMLElement | undefined>(undefined);
 
 	// Thumbnail track parsed cues
 	interface ThumbCue {
@@ -310,6 +318,16 @@
 	let hls_current_level = $state(-1);
 
 	// --- Derived ---
+	const has_src = $derived(
+		typeof src === 'string'
+			? src.trim().length > 0
+			: Array.isArray(src) && src.length > 0,
+	);
+
+	// Skeleton stands in for a not-yet-known source. Providing a `src` turns it
+	// off, even if the caller leaves `skeleton` true.
+	const show_skeleton = $derived(skeleton && !has_src);
+
 	const sources = $derived(
 		typeof src === 'string' ? [{ src, type: inferType(src) }] : src,
 	);
@@ -348,8 +366,41 @@
 			: `${hls_levels.find((l) => l.index === hls_current_level)?.height ?? ''}p`,
 	);
 
+	// Whether a quality control should exist at all (array-based or HLS manifest).
+	const has_quality = $derived(has_quality_options || hls_levels.length > 1);
+
 	const progress_percent = $derived(duration > 0 ? (current_time / duration) * 100 : 0);
 	const buffered_percent = $derived(duration > 0 ? (buffered_end / duration) * 100 : 0);
+
+	// --- Responsive collapse ranks ---
+	// Controls collapse into the settings popover lowest-priority first. Rank 1 =
+	// first to collapse. Ranks are assigned only to controls that actually exist,
+	// so the set stays dense (1..N) as PiP / HLS-quality appear after detection.
+	// Container-query breakpoints (in CSS) key off these rank classes, which lets
+	// the hiding be pure CSS — SSR-safe and flash-free — while the "never exactly
+	// one item in the popover" guarantee holds (ranks 1 & 2 collapse together).
+	const COLLAPSE_ORDER = [
+		'pip',
+		'captions',
+		'speed',
+		'quality',
+		'fullscreen',
+		'volume',
+	] as const;
+	const present_controls = $derived<Record<string, boolean>>({
+		volume: true,
+		fullscreen: true,
+		speed: true,
+		quality: has_quality,
+		captions: captions.length > 0,
+		pip: pip_supported,
+	});
+	const ranks = $derived.by<Record<string, number>>(() => {
+		const order = COLLAPSE_ORDER.filter((k) => present_controls[k]);
+		const map: Record<string, number> = {};
+		order.forEach((k, i) => (map[k] = i + 1));
+		return map;
+	});
 
 	// --- Helpers ---
 	function formatTime(seconds: number): string {
@@ -362,12 +413,14 @@
 		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 
+	const any_menu_open = $derived(quality_open || speed_open || settings_open);
+
 	function resetInactivityTimer() {
 		show_controls = true;
 		clearTimeout(inactivity_timer);
 		if (playing) {
 			inactivity_timer = setTimeout(() => {
-				if (playing && !quality_open && !speed_open) {
+				if (playing && !any_menu_open) {
 					show_controls = false;
 				}
 			}, 2500);
@@ -377,6 +430,7 @@
 	function closeAllMenus() {
 		quality_open = false;
 		speed_open = false;
+		settings_open = false;
 	}
 
 	// --- Actions ---
@@ -478,40 +532,66 @@
 		quality_open = false;
 	}
 
-	// --- Progress bar interaction ---
-	function handleProgressPointerDown(e: PointerEvent) {
-		// Without a known duration there's no meaningful position to seek to —
-		// blocking here avoids the "click bar to restart" footgun when metadata
-		// hasn't loaded yet.
-		if (!duration || duration <= 0) return;
-		is_seeking = true;
-		updateSeekPosition(e);
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	// Frame stepping — the platform doesn't expose the true frame rate, so assume
+	// ~30fps. Stepping implies the user wants to inspect frames, so pause first.
+	const FRAME = 1 / 30;
+	function stepFrame(dir: number) {
+		if (!player) return;
+		if (!player.paused) player.pause();
+		seek((player.currentTime || current_time) + dir * FRAME);
 	}
 
-	function handleProgressPointerMove(e: PointerEvent) {
-		if (!duration || duration <= 0) return;
-		updateSeekPosition(e);
-		if (is_seeking && player) {
-			player.currentTime = seek_hover_time;
+	// Arrow up/down on the speed / quality selector adjusts the value in place
+	// (without needing to open the menu).
+	function cycleSpeed(dir: number) {
+		const i = SPEEDS.indexOf(playback_rate);
+		const next = Math.max(0, Math.min(SPEEDS.length - 1, (i === -1 ? 2 : i) + dir));
+		selectSpeed(SPEEDS[next]);
+	}
+	function cycleQuality(dir: number) {
+		if (has_quality_options) {
+			// quality_sources is sorted high→low, so "up" (higher quality) = lower index
+			const next = Math.max(
+				0,
+				Math.min(quality_sources.length - 1, active_source_index - dir),
+			);
+			selectQuality(next);
+		} else if (hls_levels.length > 1) {
+			// Ordered options: Auto, then levels high→low. Up moves toward Auto/higher.
+			const opts = [-1, ...hls_levels.map((l) => l.index)];
+			const cur = Math.max(0, opts.indexOf(hls_current_level));
+			const next = Math.max(0, Math.min(opts.length - 1, cur - dir));
+			selectHlsLevel(opts[next]);
 		}
 	}
-
-	function handleProgressPointerUp(e: PointerEvent) {
-		if (is_seeking && player && duration > 0) {
-			player.currentTime = seek_hover_time;
-		}
-		is_seeking = false;
-		try {
-			(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-		} catch {
-			// no capture to release
-		}
+	function onSelectorKeydown(kind: 'speed' | 'quality', e: KeyboardEvent) {
+		if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+		e.preventDefault();
+		const dir = e.key === 'ArrowUp' ? 1 : -1;
+		if (kind === 'speed') cycleSpeed(dir);
+		else cycleQuality(dir);
 	}
 
-	function updateSeekPosition(e: PointerEvent) {
-		const bar = e.currentTarget as HTMLElement;
-		const rect = bar.getBoundingClientRect();
+	// --- Seek bar (Range-driven) ---
+	function onSeekInput(value: number) {
+		if (!player || !(duration > 0)) return;
+		current_time = value;
+		player.currentTime = value;
+		resetInactivityTimer();
+	}
+
+	// --- Volume (Range-driven) ---
+	function onVolumeInput(value: number) {
+		setVolume(value / 100);
+		resetInactivityTimer();
+	}
+
+	// --- Seek hover preview tooltip ---
+	// Tracks the pointer over the seek area without intercepting Range's own
+	// pointer handling (events bubble up; the tooltip is pointer-events:none).
+	function updateSeekHover(e: PointerEvent) {
+		if (!seek_el || !(duration > 0)) return;
+		const rect = seek_el.getBoundingClientRect();
 		const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
 		const pct = rect.width > 0 ? x / rect.width : 0;
 		seek_hover_time = pct * duration;
@@ -519,39 +599,17 @@
 		show_seek_tooltip = true;
 	}
 
-	// --- Volume slider interaction ---
-	let is_volume_dragging = $state(false);
-
-	function handleVolumePointerDown(e: PointerEvent) {
-		is_volume_dragging = true;
-		updateVolumeFromEvent(e);
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-	}
-
-	function handleVolumePointerMove(e: PointerEvent) {
-		if (!is_volume_dragging) return;
-		updateVolumeFromEvent(e);
-	}
-
-	function handleVolumePointerUp(e: PointerEvent) {
-		is_volume_dragging = false;
-		(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-	}
-
-	function updateVolumeFromEvent(e: PointerEvent) {
-		const bar = e.currentTarget as HTMLElement;
-		const rect = bar.getBoundingClientRect();
-		const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-		setVolume(x / rect.width);
-	}
-
 	// --- Keyboard shortcuts ---
 	function handleKeydown(e: KeyboardEvent) {
 		if (!player) return;
 
-		// Ignore keyboard when typing in an input
+		// Ignore keyboard when typing in an input or operating a specific control
+		// (buttons / range sliders manage their own keys).
 		const tag = (e.target as HTMLElement)?.tagName;
-		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON')
+			return;
+		// While a menu is open let it own arrow/escape navigation.
+		if (any_menu_open && e.key !== ' ' && e.key !== 'k' && e.key !== 'K') return;
 
 		let handled = true;
 
@@ -585,6 +643,12 @@
 			case 'C':
 				if (captions.length > 0) toggleCaptions();
 				break;
+			case ',':
+				stepFrame(-1);
+				break;
+			case '.':
+				stepFrame(1);
+				break;
 			default:
 				handled = false;
 		}
@@ -595,6 +659,42 @@
 			resetInactivityTimer();
 		}
 	}
+
+	// --- Settings popover keyboard ---
+	function toggleSettings() {
+		settings_open = !settings_open;
+		quality_open = false;
+		speed_open = false;
+	}
+
+	function handleSettingsKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') {
+			e.stopPropagation();
+			settings_open = false;
+			settings_btn?.focus();
+			return;
+		}
+		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			const items = Array.from(
+				settings_pop?.querySelectorAll<HTMLElement>('[data-pop-focusable]') ?? [],
+			);
+			if (!items.length) return;
+			const idx = items.indexOf(document.activeElement as HTMLElement);
+			const next =
+				e.key === 'ArrowDown'
+					? items[(idx + 1) % items.length]
+					: items[(idx - 1 + items.length) % items.length];
+			next?.focus();
+		}
+	}
+
+	// Move focus into the popover when it opens.
+	$effect(() => {
+		if (!settings_open || !settings_pop) return;
+		const first = settings_pop.querySelector<HTMLElement>('[data-pop-focusable]');
+		first?.focus();
+	});
 
 	// --- Video event handlers ---
 	function handleVideoPlay() {
@@ -812,9 +912,9 @@
 		}
 	});
 
-	// --- Close dropdowns on outside click ---
+	// --- Close menus on outside click ---
 	$effect(() => {
-		if (!quality_open && !speed_open) return;
+		if (!any_menu_open) return;
 		function onClickOutside(e: MouseEvent) {
 			const target = e.target as HTMLElement;
 			if (!target.closest('.menu')) {
@@ -831,10 +931,31 @@
 		};
 	});
 
+	// Follow playback at ~60fps so the seek thumb glides instead of stepping on
+	// each (infrequent) `timeupdate`. The drag/seek paths set `current_time`
+	// directly, so this never fights manual scrubbing.
+	$effect(() => {
+		if (!playing || !player) return;
+		const vid = player;
+		let raf = 0;
+		let active = true;
+		function tick() {
+			if (!active) return;
+			current_time = vid.currentTime;
+			raf = requestAnimationFrame(tick);
+		}
+		raf = requestAnimationFrame(tick);
+		return () => {
+			active = false;
+			cancelAnimationFrame(raf);
+		};
+	});
+
 	// Volume icon state
 	const volume_icon = $derived(
 		is_muted || volume === 0 ? 'muted' : volume < 0.5 ? 'low' : 'high',
 	);
+	const volume_display = $derived(is_muted ? 0 : Math.round(volume * 100));
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -852,8 +973,17 @@
 	tabindex="0"
 	role="group"
 	aria-label="Video player">
-	{#if skeleton && !is_ready}
-		<div class="skeleton" aria-hidden="true"></div>
+	{#if show_skeleton}
+		<div class="skeleton" aria-hidden="true">
+			<div class="skeleton-shimmer"></div>
+			<div class="skeleton-bar">
+				<span class="sk sk-btn"></span>
+				<span class="sk sk-track"></span>
+				<span class="sk sk-pill"></span>
+				<span class="sk sk-btn"></span>
+				<span class="sk sk-btn"></span>
+			</div>
+		</div>
 	{/if}
 
 	<!-- Video element -->
@@ -877,7 +1007,9 @@
 		onprogress={handleVideoProgress}
 		onvolumechange={handleVideoVolumeChange}
 		onerror={handleVideoError}>
-		{#if is_hls_source}
+		{#if !has_src}
+			<!-- No source yet (skeleton / async) — nothing to load -->
+		{:else if is_hls_source}
 			<!-- HLS is attached programmatically (native or via hls.js) in an effect -->
 		{:else if has_quality_options}
 			<source src={active_source.src} type={active_source.type} />
@@ -896,8 +1028,8 @@
 		{/each}
 	</video>
 
-	<!-- Big play button overlay -->
-	{#if !has_started && !playing}
+	<!-- Big play button overlay (skip when autoplay+muted will start on its own) -->
+	{#if !has_started && !playing && !show_skeleton && !(autoplay && is_muted)}
 		<button
 			class="big-play"
 			type="button"
@@ -935,248 +1067,144 @@
 	{/if}
 
 	<!-- Custom controls -->
-	{#if controls}
+	{#if controls && !show_skeleton}
 		<div
 			class="controls"
 			class:visible={show_controls || !playing}
 			class:hidden={!show_controls && playing}>
-			<!-- Progress bar -->
-			<div
-				class="progress"
-				role="slider"
-				aria-label="Seek"
-				aria-valuenow={Math.floor(current_time)}
-				aria-valuemin={0}
-				aria-valuemax={Math.floor(duration)}
-				tabindex="-1"
-				onpointerdown={handleProgressPointerDown}
-				onpointermove={handleProgressPointerMove}
-				onpointerup={handleProgressPointerUp}
-				onpointerenter={() => (show_seek_tooltip = true)}
-				onpointerleave={() => {
-					show_seek_tooltip = false;
-					is_seeking = false;
-				}}>
-				<div class="progress-track">
-					<div class="progress-buffered" style:width="{buffered_percent}%"></div>
-					<div class="progress-fill" style:width="{progress_percent}%"></div>
+			<div class="control-bar">
+				<!-- Play / pause (always visible) -->
+				<button
+					class="btn"
+					type="button"
+					aria-label={playing ? 'Pause' : 'Play'}
+					onclick={togglePlay}
+					{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+					{#if playing}
+						<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+							<rect x="6" y="4" width="4" height="16" rx="1" />
+							<rect x="14" y="4" width="4" height="16" rx="1" />
+						</svg>
+					{:else}
+						<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+							<path d="M8 5v14l11-7z" />
+						</svg>
+					{/if}
+				</button>
+
+				<!-- Seek track (always visible, flexes) -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="seek"
+					bind:this={seek_el}
+					onpointermove={updateSeekHover}
+					onpointerenter={() => (show_seek_tooltip = true)}
+					onpointerleave={() => (show_seek_tooltip = false)}>
+					<span class="seek-base"></span>
+					<span class="seek-buffered" style:width="{buffered_percent}%"></span>
+					<Range
+						class="v-range seek-range"
+						aria_label="Seek"
+						value={current_time}
+						min={0}
+						max={Math.max(duration, 0.1)}
+						step={0.1}
+						oninput={(d) => onSeekInput(d.value as number)}
+						onchange={(d) => onSeekInput(d.value as number)} />
+
+					{#if show_seek_tooltip && duration > 0}
+						<div class="seek-tooltip" style:left="{seek_hover_x}px">
+							{#if active_thumb}
+								{#if active_thumb.xywh}
+									<div
+										class="seek-thumb"
+										style:width="{active_thumb.xywh[2]}px"
+										style:height="{active_thumb.xywh[3]}px"
+										style:background-image="url('{active_thumb.src}')"
+										style:background-position="-{active_thumb.xywh[0]}px -{active_thumb
+											.xywh[1]}px"
+										aria-hidden="true">
+									</div>
+								{:else}
+									<img
+										class="seek-thumb-img"
+										src={active_thumb.src}
+										alt=""
+										aria-hidden="true" />
+								{/if}
+							{/if}
+							<span class="seek-time">{formatTime(seek_hover_time)}</span>
+						</div>
+					{/if}
 				</div>
 
-				{#if show_seek_tooltip && duration > 0}
-					<div class="seek-tooltip" style:left="{seek_hover_x}px">
-						{#if active_thumb}
-							{#if active_thumb.xywh}
-								<div
-									class="seek-thumb"
-									style:width="{active_thumb.xywh[2]}px"
-									style:height="{active_thumb.xywh[3]}px"
-									style:background-image="url('{active_thumb.src}')"
-									style:background-position="-{active_thumb.xywh[0]}px -{active_thumb
-										.xywh[1]}px"
-									aria-hidden="true">
-								</div>
-							{:else}
-								<img
-									class="seek-thumb-img"
-									src={active_thumb.src}
-									alt=""
-									aria-hidden="true" />
-							{/if}
-						{/if}
-						<span class="seek-time">{formatTime(seek_hover_time)}</span>
-					</div>
-				{/if}
-			</div>
+				<!-- Time (high priority — hidden last) -->
+				<span class="time">
+					{formatTime(current_time)} / {formatTime(duration)}
+				</span>
 
-			<!-- Control bar -->
-			<div class="control-bar">
-				<!-- Left controls -->
-				<div class="controls-left">
-					<!-- Play/Pause -->
+				<!-- Volume — slider pops up *above* the button so the button never
+				     shifts on hover (which used to make it easy to mis-click). -->
+				<div class="ctl volume-group rank-{ranks.volume}">
+					<div class="volume-pop">
+						<Range
+							vertical
+							class="v-range vol-range"
+							aria_label="Volume"
+							value={volume_display}
+							min={0}
+							max={100}
+							step={1}
+							oninput={(d) => onVolumeInput(d.value as number)} />
+					</div>
 					<button
 						class="btn"
 						type="button"
-						aria-label={playing ? 'Pause' : 'Play'}
-						onclick={togglePlay}>
-						{#if playing}
-							<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<rect x="6" y="4" width="4" height="16" rx="1" />
-								<rect x="14" y="4" width="4" height="16" rx="1" />
-							</svg>
-						{:else}
-							<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<path d="M8 5v14l11-7z" />
-							</svg>
-						{/if}
+						aria-label={is_muted ? 'Unmute' : 'Mute'}
+						onclick={toggleMute}
+						{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+						{@render volumeGlyph(volume_icon)}
 					</button>
-
-					<!-- Volume -->
-					<div class="volume-group">
-						<button
-							class="btn"
-							type="button"
-							aria-label={is_muted ? 'Unmute' : 'Mute'}
-							onclick={toggleMute}>
-							{#if volume_icon === 'muted'}
-								<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-									<path d="M11 5L6 9H2v6h4l5 4V5z" />
-									<line
-										x1="23"
-										y1="9"
-										x2="17"
-										y2="15"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										fill="none" />
-									<line
-										x1="17"
-										y1="9"
-										x2="23"
-										y2="15"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										fill="none" />
-								</svg>
-							{:else if volume_icon === 'low'}
-								<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-									<path d="M11 5L6 9H2v6h4l5 4V5z" />
-									<path
-										d="M15.54 8.46a5 5 0 010 7.07"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										fill="none" />
-								</svg>
-							{:else}
-								<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-									<path d="M11 5L6 9H2v6h4l5 4V5z" />
-									<path
-										d="M15.54 8.46a5 5 0 010 7.07"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										fill="none" />
-									<path
-										d="M19.07 4.93a10 10 0 010 14.14"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										fill="none" />
-								</svg>
-							{/if}
-						</button>
-
-						<div
-							class="volume-slider"
-							role="slider"
-							aria-label="Volume"
-							aria-valuenow={Math.round(volume * 100)}
-							aria-valuemin={0}
-							aria-valuemax={100}
-							tabindex="-1"
-							onpointerdown={handleVolumePointerDown}
-							onpointermove={handleVolumePointerMove}
-							onpointerup={handleVolumePointerUp}>
-							<div class="volume-track">
-								<div class="volume-fill" style:width="{is_muted ? 0 : volume * 100}%">
-								</div>
-							</div>
-						</div>
-					</div>
-
-					<!-- Time display -->
-					<span class="time">
-						{formatTime(current_time)} / {formatTime(duration)}
-					</span>
 				</div>
 
-				<!-- Right controls -->
-				<div class="controls-right">
-					<!-- Playback speed -->
-					<div class="menu">
+				<!-- Quality selector -->
+				{#if has_quality}
+					<div class="ctl menu rank-{ranks.quality}">
 						<button
 							class="btn btn-text"
 							type="button"
-							aria-label="Playback speed"
+							aria-label="Video quality"
 							aria-haspopup="true"
-							aria-expanded={speed_open}
+							aria-expanded={quality_open}
 							onclick={() => {
-								speed_open = !speed_open;
-								quality_open = false;
-							}}>
-							{playback_rate === 1 ? '1x' : `${playback_rate}x`}
+								quality_open = !quality_open;
+								speed_open = false;
+								settings_open = false;
+							}}
+							onkeydown={(e) => onSelectorKeydown('quality', e)}
+							{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+							{has_quality_options ? active_quality_label : hls_quality_label}
 						</button>
-						{#if speed_open}
-							<div class="dropdown" role="menu">
-								{#each SPEEDS as speed}
-									<button
-										class="dropdown-item"
-										class:active={playback_rate === speed}
-										type="button"
-										role="menuitem"
-										onclick={() => selectSpeed(speed)}>
-										{speed}x
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-
-					<!-- Quality selector -->
-					{#if has_quality_options}
-						<div class="menu">
-							<button
-								class="btn btn-text"
-								type="button"
-								aria-label="Video quality"
-								aria-haspopup="true"
-								aria-expanded={quality_open}
-								onclick={() => {
-									quality_open = !quality_open;
-									speed_open = false;
-								}}>
-								{active_quality_label}
-							</button>
-							{#if quality_open}
-								<div class="dropdown" role="menu">
+						{#if quality_open}
+							<div class="dropdown" role="menu" transition:scale={{ duration: 150, start: 0.92, easing: backOut }}>
+								{#if has_quality_options}
 									{#each quality_sources as source, i}
 										<button
 											class="dropdown-item"
 											class:active={active_source_index === i}
 											type="button"
 											role="menuitem"
-											onclick={() => selectQuality(i)}>
+											onclick={() => selectQuality(i)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
 											{source.size}p
 										</button>
 									{/each}
-								</div>
-							{/if}
-						</div>
-					{:else if hls_levels.length > 1}
-						<!-- HLS adaptive quality (manifest-driven, with an Auto option) -->
-						<div class="menu">
-							<button
-								class="btn btn-text"
-								type="button"
-								aria-label="Video quality"
-								aria-haspopup="true"
-								aria-expanded={quality_open}
-								onclick={() => {
-									quality_open = !quality_open;
-									speed_open = false;
-								}}>
-								{hls_quality_label}
-							</button>
-							{#if quality_open}
-								<div class="dropdown" role="menu">
+								{:else}
 									<button
 										class="dropdown-item"
 										class:active={hls_current_level === -1}
 										type="button"
 										role="menuitem"
-										onclick={() => selectHlsLevel(-1)}>
+										onclick={() => selectHlsLevel(-1)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
 										Auto
 									</button>
 									{#each hls_levels as level}
@@ -1185,119 +1213,385 @@
 											class:active={hls_current_level === level.index}
 											type="button"
 											role="menuitem"
-											onclick={() => selectHlsLevel(level.index)}>
+											onclick={() => selectHlsLevel(level.index)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
 											{level.height}p
 										</button>
 									{/each}
-								</div>
-							{/if}
+								{/if}
+							</div>
+						{/if}
+					</div>
+				{/if}
+
+				<!-- Playback speed -->
+				<div class="ctl menu rank-{ranks.speed}">
+					<button
+						class="btn btn-text"
+						type="button"
+						aria-label="Playback speed"
+						aria-haspopup="true"
+						aria-expanded={speed_open}
+						onclick={() => {
+							speed_open = !speed_open;
+							quality_open = false;
+							settings_open = false;
+						}}
+						onkeydown={(e) => onSelectorKeydown('speed', e)}
+						{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+						{playback_rate === 1 ? '1x' : `${playback_rate}x`}
+					</button>
+					{#if speed_open}
+						<div class="dropdown" role="menu" transition:scale={{ duration: 150, start: 0.92, easing: backOut }}>
+							{#each SPEEDS as speed}
+								<button
+									class="dropdown-item"
+									class:active={playback_rate === speed}
+									type="button"
+									role="menuitem"
+									onclick={() => selectSpeed(speed)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+									{speed}x
+								</button>
+							{/each}
 						</div>
 					{/if}
-
-					<!-- Captions toggle -->
-					{#if captions.length > 0}
-						<button
-							class="btn"
-							class:active={captions_active}
-							type="button"
-							aria-label={captions_active ? 'Disable captions' : 'Enable captions'}
-							onclick={toggleCaptions}>
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true">
-								<rect x="2" y="4" width="20" height="16" rx="2" />
-								<path d="M7 12h2" />
-								<path d="M15 12h2" />
-								<path d="M7 16h10" />
-							</svg>
-						</button>
-					{/if}
-
-					<!-- PiP -->
-					{#if pip_supported}
-						<button
-							class="btn"
-							class:active={is_pip}
-							type="button"
-							aria-label={is_pip ? 'Exit picture-in-picture' : 'Picture-in-picture'}
-							onclick={togglePip}>
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true">
-								<rect x="2" y="3" width="20" height="14" rx="2" />
-								<rect x="12" y="9" width="8" height="6" rx="1" fill="currentColor" />
-							</svg>
-						</button>
-					{/if}
-
-					<!-- Fullscreen -->
-					<button
-						class="btn"
-						type="button"
-						aria-label={is_fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-						onclick={toggleFullscreen}>
-						{#if is_fullscreen}
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true">
-								<path d="M8 3v3a2 2 0 01-2 2H3" />
-								<path d="M21 8h-3a2 2 0 01-2-2V3" />
-								<path d="M3 16h3a2 2 0 012 2v3" />
-								<path d="M16 21v-3a2 2 0 012-2h3" />
-							</svg>
-						{:else}
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true">
-								<path d="M8 3H5a2 2 0 00-2 2v3" />
-								<path d="M21 8V5a2 2 0 00-2-2h-3" />
-								<path d="M3 16v3a2 2 0 002 2h3" />
-								<path d="M16 21h3a2 2 0 002-2v-3" />
-							</svg>
-						{/if}
-					</button>
 				</div>
+
+				<!-- Captions toggle -->
+				{#if captions.length > 0}
+					<button
+						class="ctl btn rank-{ranks.captions}"
+						class:active={captions_active}
+						type="button"
+						aria-pressed={captions_active}
+						aria-label={captions_active ? 'Disable captions' : 'Enable captions'}
+						onclick={toggleCaptions}
+						{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+						{@render captionsGlyph()}
+					</button>
+				{/if}
+
+				<!-- Picture-in-picture -->
+				{#if pip_supported}
+					<button
+						class="ctl btn rank-{ranks.pip}"
+						class:active={is_pip}
+						type="button"
+						aria-pressed={is_pip}
+						aria-label={is_pip ? 'Exit picture-in-picture' : 'Picture-in-picture'}
+						onclick={togglePip}
+						{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+						{@render pipGlyph()}
+					</button>
+				{/if}
+
+				<!-- Settings (gear) — appears only when ≥2 controls have collapsed -->
+				<div class="menu settings-menu">
+					<button
+						class="btn settings-btn"
+						class:open={settings_open}
+						type="button"
+						bind:this={settings_btn}
+						aria-label="Settings"
+						aria-haspopup="true"
+						aria-expanded={settings_open}
+						onclick={toggleSettings}
+						{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true">
+							<circle cx="12" cy="12" r="3" />
+							<path
+								d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+						</svg>
+					</button>
+					{#if settings_open}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div
+							class="dropdown settings-pop"
+							role="menu"
+							tabindex="-1"
+							bind:this={settings_pop}
+							onkeydown={handleSettingsKeydown}
+							transition:scale={{ duration: 160, start: 0.92, easing: backOut }}>
+							<!-- Volume row -->
+							<div class="pop-row rank-{ranks.volume}">
+								<button
+									class="pop-icon"
+									type="button"
+									data-pop-focusable
+									aria-label={is_muted ? 'Unmute' : 'Mute'}
+									onclick={toggleMute}
+									{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+									{@render volumeGlyph(volume_icon)}
+								</button>
+								<div class="pop-slider">
+									<Range
+										class="v-range vol-range"
+										aria_label="Volume"
+										value={volume_display}
+										min={0}
+										max={100}
+										step={1}
+										oninput={(d) => onVolumeInput(d.value as number)} />
+								</div>
+							</div>
+
+							<!-- Quality row -->
+							{#if has_quality}
+								<div class="pop-row pop-group rank-{ranks.quality}">
+									<span class="pop-label">Quality</span>
+									<div class="pop-options">
+										{#if has_quality_options}
+											{#each quality_sources as source, i}
+												<button
+													class="pop-opt"
+													class:active={active_source_index === i}
+													type="button"
+													data-pop-focusable
+													onclick={() => selectQuality(i)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+													{source.size}p
+												</button>
+											{/each}
+										{:else}
+											<button
+												class="pop-opt"
+												class:active={hls_current_level === -1}
+												type="button"
+												data-pop-focusable
+												onclick={() => selectHlsLevel(-1)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+												Auto
+											</button>
+											{#each hls_levels as level}
+												<button
+													class="pop-opt"
+													class:active={hls_current_level === level.index}
+													type="button"
+													data-pop-focusable
+													onclick={() => selectHlsLevel(level.index)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+													{level.height}p
+												</button>
+											{/each}
+										{/if}
+									</div>
+								</div>
+							{/if}
+
+							<!-- Speed row -->
+							<div class="pop-row pop-group rank-{ranks.speed}">
+								<span class="pop-label">Speed</span>
+								<div class="pop-options">
+									{#each SPEEDS as speed}
+										<button
+											class="pop-opt"
+											class:active={playback_rate === speed}
+											type="button"
+											data-pop-focusable
+											onclick={() => selectSpeed(speed)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+											{speed}x
+										</button>
+									{/each}
+								</div>
+							</div>
+
+							<!-- Captions row -->
+							{#if captions.length > 0}
+								<button
+									class="pop-row pop-toggle rank-{ranks.captions}"
+									class:active={captions_active}
+									type="button"
+									data-pop-focusable
+									aria-pressed={captions_active}
+									onclick={toggleCaptions}
+									{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+									{@render captionsGlyph()}
+									<span class="pop-text">Captions</span>
+									<span class="pop-state">{captions_active ? 'On' : 'Off'}</span>
+								</button>
+							{/if}
+
+							<!-- PiP row -->
+							{#if pip_supported}
+								<button
+									class="pop-row pop-toggle rank-{ranks.pip}"
+									class:active={is_pip}
+									type="button"
+									data-pop-focusable
+									aria-pressed={is_pip}
+									onclick={togglePip}
+									{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+									{@render pipGlyph()}
+									<span class="pop-text">Picture in picture</span>
+								</button>
+							{/if}
+
+							<!-- Fullscreen row -->
+							<button
+								class="pop-row pop-toggle rank-{ranks.fullscreen}"
+								type="button"
+								data-pop-focusable
+								onclick={toggleFullscreen}
+								{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+								{@render fullscreenGlyph(is_fullscreen)}
+								<span class="pop-text">
+									{is_fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+								</span>
+							</button>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Fullscreen (always far right until it collapses) -->
+				<button
+					class="ctl btn rank-{ranks.fullscreen}"
+					type="button"
+					aria-label={is_fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+					onclick={toggleFullscreen}
+					{@attach ripple({ color: '#fff', opacity: 0.18 })}>
+					{@render fullscreenGlyph(is_fullscreen)}
+				</button>
 			</div>
 		</div>
 	{/if}
 </div>
+
+{#snippet volumeGlyph(state: string)}
+	{#if state === 'muted'}
+		<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+			<path d="M11 5L6 9H2v6h4l5 4V5z" />
+			<line
+				x1="23"
+				y1="9"
+				x2="17"
+				y2="15"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				fill="none" />
+			<line
+				x1="17"
+				y1="9"
+				x2="23"
+				y2="15"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				fill="none" />
+		</svg>
+	{:else if state === 'low'}
+		<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+			<path d="M11 5L6 9H2v6h4l5 4V5z" />
+			<path
+				d="M15.54 8.46a5 5 0 010 7.07"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				fill="none" />
+		</svg>
+	{:else}
+		<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+			<path d="M11 5L6 9H2v6h4l5 4V5z" />
+			<path
+				d="M15.54 8.46a5 5 0 010 7.07"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				fill="none" />
+			<path
+				d="M19.07 4.93a10 10 0 010 14.14"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				fill="none" />
+		</svg>
+	{/if}
+{/snippet}
+
+{#snippet captionsGlyph()}
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true">
+		<rect x="2" y="4" width="20" height="16" rx="2" />
+		<path d="M7 12h2" />
+		<path d="M15 12h2" />
+		<path d="M7 16h10" />
+	</svg>
+{/snippet}
+
+{#snippet pipGlyph()}
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true">
+		<rect x="2" y="3" width="20" height="14" rx="2" />
+		<rect x="12" y="9" width="8" height="6" rx="1" fill="currentColor" />
+	</svg>
+{/snippet}
+
+{#snippet fullscreenGlyph(active: boolean)}
+	{#if active}
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true">
+			<path d="M8 3v3a2 2 0 01-2 2H3" />
+			<path d="M21 8h-3a2 2 0 01-2-2V3" />
+			<path d="M3 16h3a2 2 0 012 2v3" />
+			<path d="M16 21v-3a2 2 0 012-2h3" />
+		</svg>
+	{:else}
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true">
+			<path d="M8 3H5a2 2 0 00-2 2v3" />
+			<path d="M21 8V5a2 2 0 00-2-2h-3" />
+			<path d="M3 16v3a2 2 0 002 2h3" />
+			<path d="M16 21h3a2 2 0 002-2v-3" />
+		</svg>
+	{/if}
+{/snippet}
 
 <style>
 	.video {
 		position: relative;
 		overflow: hidden;
 		background: black;
-		border-radius: var(--radius-md, 8px);
+		border-radius: var(--radius-3, 8px);
 		width: 100%;
 		outline: none;
 		font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
 		user-select: none;
 		-webkit-user-select: none;
+		/* Establish a query container so the controls can collapse responsively
+		 * with pure CSS (SSR-safe, no hydration flash). */
+		container: dsvideo / inline-size;
 	}
 
 	.video:focus-visible {
-		outline: 2px solid var(--color-action, #2563eb);
-		outline-offset: 2px;
+		outline: 2px solid rgba(255, 255, 255, 0.8);
+		outline-offset: -2px;
 	}
 
 	.video.is-fullscreen {
@@ -1306,31 +1600,71 @@
 		height: 100%;
 	}
 
-	/* Skeleton */
+	/* ---------- Skeleton (no source known yet) ---------- */
 	.skeleton {
 		position: absolute;
 		inset: 0;
-		z-index: 1;
+		z-index: 20;
+		overflow: hidden;
+		background: var(--color-bg-3, #2a2a2a);
+	}
+
+	.skeleton-shimmer {
+		position: absolute;
+		inset: 0;
 		background: linear-gradient(
-			90deg,
-			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 25%,
-			var(--color-surface-3, rgba(128, 128, 128, 0.2)) 50%,
-			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 75%
+			100deg,
+			transparent 30%,
+			rgba(255, 255, 255, 0.08) 50%,
+			transparent 70%
 		);
 		background-size: 200% 100%;
-		animation: shimmer 1.5s ease-in-out infinite;
+		animation: shimmer 1.6s ease-in-out infinite;
 	}
 
 	@keyframes shimmer {
 		0% {
-			background-position: 200% 0;
+			background-position: 150% 0;
 		}
 		100% {
-			background-position: -200% 0;
+			background-position: -150% 0;
 		}
 	}
 
-	/* Video element */
+	.skeleton-bar {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 14px 14px 16px;
+	}
+
+	.sk {
+		display: block;
+		background: rgba(255, 255, 255, 0.14);
+		border-radius: 999px;
+	}
+	.sk-btn {
+		width: 24px;
+		height: 24px;
+		border-radius: 8px;
+		flex-shrink: 0;
+	}
+	.sk-track {
+		flex: 1;
+		height: 6px;
+	}
+	.sk-pill {
+		width: 38px;
+		height: 16px;
+		border-radius: 8px;
+		flex-shrink: 0;
+	}
+
+	/* ---------- Video element ---------- */
 	.element {
 		display: block;
 		width: 100%;
@@ -1339,9 +1673,7 @@
 		cursor: pointer;
 	}
 
-	/* Big play button — semi-transparent black with backdrop blur for an
-	 * iOS/macOS player feel, white play glyph slightly cheated left so the
-	 * triangle reads optically centered against the round button. */
+	/* ---------- Big play button ---------- */
 	.big-play {
 		position: absolute;
 		top: 50%;
@@ -1350,7 +1682,7 @@
 		z-index: 5;
 		width: 76px;
 		height: 76px;
-		border-radius: var(--radius-full, 50%);
+		border-radius: var(--radius-round, 50%);
 		background: rgba(0, 0, 0, 0.45);
 		color: white;
 		border: none;
@@ -1362,10 +1694,13 @@
 		backdrop-filter: blur(14px) saturate(160%);
 		-webkit-backdrop-filter: blur(14px) saturate(160%);
 		transition:
-			transform var(--duration-fast, 150ms) var(--ease-default, ease),
-			background var(--duration-fast, 150ms) var(--ease-default, ease),
-			opacity var(--duration-fast, 150ms) var(--ease-default, ease);
+			transform 150ms var(--ease-out-3, ease),
+			background 150ms var(--ease-out-3, ease),
+			width 200ms var(--ease-out-3, ease),
+			height 200ms var(--ease-out-3, ease),
+			opacity 150ms var(--ease-out-3, ease);
 		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.big-play:hover {
@@ -1374,19 +1709,17 @@
 	}
 
 	.big-play:active {
-		transform: translate(-50%, -50%) scale(0.96);
+		transform: translate(-50%, -50%) scale(0.9);
 	}
 
 	.big-play .big-play-icon {
-		width: 32px;
-		height: 32px;
-		/* Optical centering: the play triangle's visual mass sits to the right
-		 * of its geometric center, so nudge the icon left a few pixels. */
+		width: 46px;
+		height: 46px;
 		margin-left: -3px;
 		filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 	}
 
-	/* Error overlay */
+	/* ---------- Error overlay ---------- */
 	.error {
 		position: absolute;
 		inset: 0;
@@ -1397,8 +1730,8 @@
 		justify-content: center;
 		gap: 8px;
 		background: rgba(0, 0, 0, 0.8);
-		color: var(--color-text-muted, rgba(255, 255, 255, 0.7));
-		font-size: var(--text-sm, 0.875rem);
+		color: rgba(255, 255, 255, 0.7);
+		font-size: var(--font-size-0, 0.875rem);
 	}
 
 	.error svg {
@@ -1407,18 +1740,16 @@
 		opacity: 0.7;
 	}
 
-	/* Controls container */
+	/* ---------- Controls container ---------- */
 	.controls {
 		position: absolute;
 		bottom: 0;
 		left: 0;
 		right: 0;
 		z-index: 10;
-		display: flex;
-		flex-direction: column;
 		background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
-		padding: 32px 0 0;
-		transition: opacity var(--duration-fast, 150ms) var(--ease-default, ease);
+		padding: 40px 0 0;
+		transition: opacity 150ms var(--ease-out-3, ease);
 		opacity: 0;
 		pointer-events: none;
 	}
@@ -1433,68 +1764,174 @@
 		pointer-events: none;
 	}
 
-	/* Progress bar */
-	.progress {
-		position: relative;
-		height: 20px;
-		cursor: pointer;
+	/* ---------- Single-row control bar ---------- */
+	.control-bar {
 		display: flex;
 		align-items: center;
-		padding: 0 12px;
+		gap: 2px;
+		padding: 6px 8px 8px;
+	}
+
+	.ctl {
+		flex-shrink: 0;
+	}
+
+	/* ---------- Buttons (Button-like ripple + active) ---------- */
+	.btn {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 38px;
+		height: 38px;
+		border: none;
+		border-radius: var(--radius-2, 6px);
+		background: transparent;
+		color: rgba(255, 255, 255, 0.92);
+		cursor: pointer;
+		padding: 0;
+		overflow: hidden;
+		flex-shrink: 0;
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			background 150ms var(--ease-out-3, ease),
+			color 150ms var(--ease-out-3, ease),
+			transform 140ms var(--ease-out-3, ease);
+	}
+
+	.btn:hover {
+		background: rgba(255, 255, 255, 0.14);
+		color: #fff;
+	}
+
+	.btn:focus-visible {
+		outline: 2px solid rgba(255, 255, 255, 0.85);
+		outline-offset: -2px;
+		color: #fff;
+	}
+
+	/* Strong, Button-style press: scale down + push back. The perspective is
+	 * applied per-button (transform function, not the parent) so it recedes
+	 * toward its own center, not the bar's. */
+	.btn:active {
+		background: rgba(255, 255, 255, 0.22);
+		transform: perspective(220px) translateZ(-16px) scale(0.84);
+	}
+
+	/* Toggle/active state stays monochrome (no brand color) */
+	.btn.active {
+		color: #fff;
+		background: rgba(255, 255, 255, 0.18);
+	}
+
+	.btn svg {
+		width: 24px;
+		height: 24px;
+		pointer-events: none;
+	}
+
+	.btn-text {
+		width: auto;
+		min-width: 38px;
+		padding: 0 9px;
+		font-size: 0.9rem;
+		font-weight: 600;
+		font-family: inherit;
+		letter-spacing: 0.02em;
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Settings gear spins open */
+	.settings-btn svg {
+		transition: transform 400ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+	}
+	.settings-btn.open svg {
+		transform: rotate(90deg);
+	}
+
+	/* ---------- Seek track ---------- */
+	.seek {
+		position: relative;
+		flex: 1 1 auto;
+		min-width: 40px;
+		display: flex;
+		align-items: center;
+		height: 24px;
+		margin: 0 6px;
 		touch-action: none;
 	}
 
-	.progress-track {
-		position: relative;
-		width: 100%;
+	.seek-base,
+	.seek-buffered {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
 		height: 4px;
-		background: rgba(255, 255, 255, 0.2);
-		border-radius: 2px;
-		overflow: hidden;
-		transition: height var(--duration-fast, 150ms) var(--ease-default, ease);
+		border-radius: 999px;
+		pointer-events: none;
+		transition: height 150ms var(--ease-out-3, ease);
 	}
-
-	.progress:hover .progress-track {
+	.seek-base {
+		left: 0;
+		right: 0;
+		background: rgba(255, 255, 255, 0.26);
+	}
+	.seek-buffered {
+		left: 0;
+		background: rgba(255, 255, 255, 0.45);
+	}
+	.seek:hover .seek-base,
+	.seek:hover .seek-buffered {
 		height: 6px;
 	}
 
-	.progress-buffered {
-		position: absolute;
-		top: 0;
-		left: 0;
-		height: 100%;
-		background: rgba(255, 255, 255, 0.3);
-		border-radius: 2px;
-		pointer-events: none;
+	/* Range slider override: monochrome white + a slightly shorter handle. Uses
+	 * :global so the rule reaches the Range child component's container (scoped
+	 * selectors would not). */
+	.video :global(.v-range) {
+		--fill-color: #fff;
+		--track-bg: rgba(255, 255, 255, 0.28);
+		--handle-height: 20px;
+	}
+	.video :global(.v-range input) {
+		-webkit-tap-highlight-color: transparent;
+	}
+	/* Seek-specific: transparent inactive track so the buffered/base layers show
+	 * through; sit above them and flex to fill the row. */
+	.seek :global(.v-range) {
+		--track-bg: transparent;
+		position: relative;
+		z-index: 1;
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	/* The fill is driven at ~60fps by the rAF loop during playback, so drop the
+	 * Range's position easing here — otherwise the fill lags ~100ms behind the
+	 * (instant) native thumb. Keep only the hover height grow. */
+	.seek :global(.track-segment) {
+		transition: height 150ms var(--ease-out-3, ease);
 	}
 
-	.progress-fill {
-		position: absolute;
-		top: 0;
-		left: 0;
-		height: 100%;
-		background: var(--color-action, #2563eb);
-		border-radius: 2px;
-		pointer-events: none;
-	}
-
-	/* Seek tooltip */
+	/* ---------- Seek hover tooltip ---------- */
 	.seek-tooltip {
 		position: absolute;
-		bottom: 16px;
+		bottom: calc(100% + 6px);
 		transform: translateX(-50%);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 4px;
 		background: rgba(0, 0, 0, 0.85);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
 		color: white;
 		padding: 4px;
-		border-radius: var(--radius-sm, 4px);
-		font-size: var(--text-xs, 0.75rem);
+		border-radius: var(--radius-2, 4px);
+		font-size: var(--font-size-00, 0.75rem);
 		white-space: nowrap;
 		pointer-events: none;
 		font-variant-numeric: tabular-nums;
+		z-index: 3;
 	}
 	.seek-thumb,
 	.seek-thumb-img {
@@ -1508,172 +1945,359 @@
 		padding: 0 4px;
 	}
 
-	/* Control bar */
-	.control-bar {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 4px 8px 8px;
-		gap: 4px;
-	}
-
-	.controls-left {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-	}
-
-	.controls-right {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-	}
-
-	/* Button base — matches delightstack Button's :active scale + ripple feel. */
-	.btn {
-		position: relative;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 36px;
-		height: 36px;
-		border: none;
-		border-radius: var(--radius-sm, 4px);
-		background: transparent;
-		color: white;
-		cursor: pointer;
-		padding: 0;
-		overflow: hidden;
-		transition:
-			background var(--duration-fast, 150ms) var(--ease-default, ease),
-			translate 200ms ease;
+	/* ---------- Time ---------- */
+	.time {
+		color: rgba(255, 255, 255, 0.92);
+		font-size: 0.9rem;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		padding: 0 6px;
 		flex-shrink: 0;
 	}
 
-	.btn:hover {
-		background: rgba(255, 255, 255, 0.15);
-		transition: translate 200ms ease;
-	}
-
-	.btn:active {
-		background: rgba(255, 255, 255, 0.25);
-		translate: 0 1px;
-	}
-
-	.btn.active {
-		color: var(--color-action, #2563eb);
-	}
-
-	.btn svg {
-		width: 20px;
-		height: 20px;
-	}
-
-	/* Text-style button (speed, quality) */
-	.btn-text {
-		width: auto;
-		padding: 0 8px;
-		font-size: var(--text-xs, 0.75rem);
-		font-weight: 600;
-		font-family: inherit;
-		letter-spacing: 0.02em;
-		font-variant-numeric: tabular-nums;
-	}
-
-	/* Volume group */
+	/* ---------- Volume ---------- */
 	.volume-group {
+		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 0;
 	}
 
-	.volume-slider {
-		width: 0;
-		overflow: hidden;
-		transition: width var(--duration-fast, 150ms) var(--ease-default, ease);
-		cursor: pointer;
+	/* Vertical slider floating above the mute button, so the button never shifts
+	 * on hover (which previously made it easy to mis-click the track). */
+	.volume-pop {
+		position: absolute;
+		bottom: calc(100% + 6px);
+		left: 50%;
 		display: flex;
-		align-items: center;
-		padding: 0;
+		justify-content: center;
+		padding: 12px 12px;
+		--range-height: 92px;
+		background: rgba(20, 20, 22, 0.62);
+		backdrop-filter: blur(16px) saturate(150%);
+		-webkit-backdrop-filter: blur(16px) saturate(150%);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: var(--radius-3, 10px);
+		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+		opacity: 0;
+		pointer-events: none;
+		transform: translateX(-50%) translateY(6px) scale(0.96);
+		transform-origin: bottom center;
+		transition:
+			opacity 160ms var(--ease-out-3, ease),
+			transform 160ms var(--ease-out-3, ease);
+		z-index: 20;
 		touch-action: none;
 	}
 
-	.volume-group:hover .volume-slider {
-		width: 64px;
-		padding: 0 4px;
+	/* A vertical Range reserves its full length as layout width; pin it to the
+	 * handle thickness and left-align so the popup hugs the slider instead of
+	 * being ~92px wide. */
+	.volume-pop :global(.range-container.vertical) {
+		width: 20px;
+		align-items: flex-start;
 	}
 
-	.volume-track {
-		position: relative;
-		width: 100%;
-		height: 4px;
-		background: rgba(255, 255, 255, 0.2);
-		border-radius: 2px;
-		overflow: hidden;
-	}
-
-	.volume-fill {
+	/* Invisible bridge over the gap to the button so the hover isn't lost when
+	 * the pointer travels from the button up to the slider. */
+	.volume-pop::before {
+		content: '';
 		position: absolute;
-		top: 0;
+		top: 100%;
 		left: 0;
-		height: 100%;
-		background: white;
-		border-radius: 2px;
-		pointer-events: none;
+		right: 0;
+		height: 10px;
 	}
 
-	/* Time display */
-	.time {
-		color: rgba(255, 255, 255, 0.9);
-		font-size: var(--text-xs, 0.75rem);
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
-		padding: 0 4px;
+	.volume-group:hover .volume-pop,
+	.volume-group:focus-within .volume-pop {
+		opacity: 1;
+		pointer-events: auto;
+		transform: translateX(-50%) translateY(0) scale(1);
 	}
 
-	/* Dropdown menus */
+	/* ---------- Menus / dropdowns ---------- */
 	.menu {
 		position: relative;
+		display: flex;
+		align-items: center;
 	}
 
 	.dropdown {
 		position: absolute;
-		bottom: 100%;
+		bottom: calc(100% + 8px);
 		right: 0;
-		margin-bottom: 8px;
-		background: var(--color-surface, rgba(20, 20, 20, 0.95));
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		border: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
-		border-radius: var(--radius-md, 8px);
-		box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.4));
-		padding: 4px;
-		min-width: 80px;
+		transform-origin: bottom right;
+		background: rgba(20, 20, 22, 0.62);
+		backdrop-filter: blur(16px) saturate(150%);
+		-webkit-backdrop-filter: blur(16px) saturate(150%);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: var(--radius-3, 10px);
+		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+		padding: 5px;
+		min-width: 96px;
 		z-index: 20;
 	}
 
 	.dropdown-item {
+		position: relative;
 		display: block;
 		width: 100%;
-		padding: 6px 12px;
+		padding: 7px 14px;
 		border: none;
-		border-radius: var(--radius-sm, 4px);
+		border-radius: var(--radius-2, 6px);
 		background: transparent;
-		color: var(--color-text, rgba(255, 255, 255, 0.9));
+		color: rgba(255, 255, 255, 0.9);
 		cursor: pointer;
-		font-size: var(--text-sm, 0.875rem);
+		overflow: hidden;
+		font-size: var(--font-size-0, 0.875rem);
 		font-family: inherit;
 		text-align: left;
 		white-space: nowrap;
-		transition: background var(--duration-fast, 150ms) var(--ease-default, ease);
+		font-variant-numeric: tabular-nums;
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			background 120ms var(--ease-out-3, ease),
+			transform 120ms var(--ease-out-3, ease);
 	}
 
-	.dropdown-item:hover {
-		background: rgba(255, 255, 255, 0.1);
+	.dropdown-item:hover,
+	.dropdown-item:focus-visible {
+		background: rgba(255, 255, 255, 0.12);
+		outline: none;
+	}
+
+	.dropdown-item:active {
+		transform: scale(0.96);
 	}
 
 	.dropdown-item.active {
-		color: var(--color-action, #2563eb);
-		font-weight: 600;
+		color: #fff;
+		font-weight: 700;
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	/* ---------- Settings popover content ---------- */
+	.settings-menu {
+		/* hidden until the responsive breakpoints reveal it (≥2 collapsed) */
+		display: none;
+	}
+
+	.settings-pop {
+		min-width: 240px;
+		max-width: min(320px, 80cqw);
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 8px;
+	}
+
+	.pop-row {
+		/* shown per-control by the responsive breakpoints below */
+		display: none;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		padding: 6px 8px;
+		border: none;
+		background: transparent;
+		color: rgba(255, 255, 255, 0.92);
+		border-radius: var(--radius-2, 6px);
+		font-family: inherit;
+		font-size: var(--font-size-0, 0.875rem);
+	}
+
+	.pop-row :global(svg) {
+		width: 20px;
+		height: 20px;
+		flex-shrink: 0;
+	}
+
+	.pop-icon {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		flex-shrink: 0;
+		border: none;
+		border-radius: var(--radius-2, 6px);
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		padding: 0;
+		overflow: hidden;
+		-webkit-tap-highlight-color: transparent;
+		transition: transform 120ms var(--ease-out-3, ease);
+	}
+	.pop-icon:hover,
+	.pop-icon:focus-visible {
+		background: rgba(255, 255, 255, 0.12);
+		outline: none;
+	}
+	.pop-icon:active {
+		transform: scale(0.88);
+	}
+	.pop-slider {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		padding-right: 6px;
+	}
+
+	.pop-group {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 6px;
+	}
+	.pop-label {
+		font-size: var(--font-size-00, 0.72rem);
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: rgba(255, 255, 255, 0.55);
+	}
+	.pop-options {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+	}
+	.pop-opt {
+		position: relative;
+		flex: 0 0 auto;
+		padding: 4px 10px;
+		border: 1px solid rgba(255, 255, 255, 0.16);
+		border-radius: 999px;
+		background: transparent;
+		color: rgba(255, 255, 255, 0.85);
+		cursor: pointer;
+		overflow: hidden;
+		font-size: var(--font-size-00, 0.75rem);
+		font-family: inherit;
+		font-variant-numeric: tabular-nums;
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			background 120ms ease,
+			border-color 120ms ease,
+			transform 120ms var(--ease-out-3, ease);
+	}
+	.pop-opt:hover,
+	.pop-opt:focus-visible {
+		background: rgba(255, 255, 255, 0.12);
+		outline: none;
+	}
+	.pop-opt:active {
+		transform: scale(0.9);
+	}
+	.pop-opt.active {
+		background: #fff;
+		border-color: #fff;
+		color: #000;
+		font-weight: 700;
+	}
+
+	.pop-toggle {
+		position: relative;
+		cursor: pointer;
+		text-align: left;
+		overflow: hidden;
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			background 120ms var(--ease-out-3, ease),
+			transform 120ms var(--ease-out-3, ease);
+	}
+	.pop-toggle:hover,
+	.pop-toggle:focus-visible {
+		background: rgba(255, 255, 255, 0.12);
+		outline: none;
+	}
+	.pop-toggle:active {
+		transform: scale(0.97);
+	}
+	.pop-toggle.active {
+		color: #fff;
+		background: rgba(255, 255, 255, 0.16);
+	}
+	.pop-text {
+		flex: 1;
+	}
+	.pop-state {
+		color: rgba(255, 255, 255, 0.55);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* ====================================================================
+	 * Responsive collapse — pure CSS container queries keyed to rank class.
+	 * Ranks 1 & 2 collapse together (settings popover never holds 1 item) and
+	 * the gear appears at the same breakpoint. Time hides last.
+	 * ==================================================================== */
+	@container dsvideo (max-width: 520px) {
+		.control-bar .ctl.rank-1,
+		.control-bar .ctl.rank-2 {
+			display: none;
+		}
+		.settings-menu {
+			display: flex;
+		}
+		.settings-pop .pop-row.rank-1,
+		.settings-pop .pop-row.rank-2 {
+			display: flex;
+		}
+	}
+	@container dsvideo (max-width: 450px) {
+		.control-bar .ctl.rank-3 {
+			display: none;
+		}
+		.settings-pop .pop-row.rank-3 {
+			display: flex;
+		}
+	}
+	@container dsvideo (max-width: 390px) {
+		.control-bar .ctl.rank-4 {
+			display: none;
+		}
+		.settings-pop .pop-row.rank-4 {
+			display: flex;
+		}
+	}
+	@container dsvideo (max-width: 340px) {
+		.control-bar .ctl.rank-5 {
+			display: none;
+		}
+		.settings-pop .pop-row.rank-5 {
+			display: flex;
+		}
+	}
+	@container dsvideo (max-width: 300px) {
+		.control-bar .ctl.rank-6 {
+			display: none;
+		}
+		.settings-pop .pop-row.rank-6 {
+			display: flex;
+		}
+		/* Shrink the centre play button so it doesn't dominate a tiny player */
+		.big-play {
+			width: 48px;
+			height: 48px;
+		}
+		.big-play .big-play-icon {
+			width: 30px;
+			height: 30px;
+		}
+	}
+	@container dsvideo (max-width: 250px) {
+		.time {
+			display: none;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-shimmer {
+			animation: none;
+		}
+		.settings-btn svg,
+		.btn,
+		.big-play {
+			transition: none;
+		}
 	}
 </style>

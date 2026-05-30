@@ -57,6 +57,10 @@
 		/** Name attribute for hidden input(s) */
 		name = undefined as string | undefined,
 
+		/** Accessible label for the slider thumb(s) when no visible `label` is
+		 *  shown (e.g. an icon-only slider). Takes precedence over `label`. */
+		aria_label = undefined as string | undefined,
+
 		/** Custom class name */
 		class: class_name = '',
 
@@ -378,7 +382,7 @@
 			aria-valuenow={lower_value}
 			aria-valuemin={min}
 			aria-valuemax={range ? upper_value : max}
-			aria-label={label || 'Range value'}
+			aria-label={aria_label || label || 'Range value'}
 			oninput={onLowerInput}
 			onchange={onLowerChange}
 			onpointerenter={() => (lower_hovering = true)}
@@ -400,7 +404,11 @@
 				aria-valuenow={upper_value}
 				aria-valuemin={lower_value}
 				aria-valuemax={max}
-				aria-label={label ? `${label} upper` : 'Range upper value'}
+				aria-label={aria_label
+					? `${aria_label} upper`
+					: label
+						? `${label} upper`
+						: 'Range upper value'}
 				oninput={onUpperInput}
 				onchange={onUpperChange}
 				onpointerenter={() => (upper_hovering = true)}
