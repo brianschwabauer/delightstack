@@ -121,11 +121,11 @@
 		autoplay = false,
 
 		/**
-		 * Whether a video should start playing automatically when it becomes the
-		 * active slide in the modal/lightbox (or slider). Because the slide is
-		 * launched/changed by a user gesture — a thumbnail click, the `open()`
-		 * method, a slide change, etc. — the browser permits playback, with sound.
-		 * Only the current slide auto-plays, and only when that slide is a video.
+		 * Whether a video should start playing automatically when the modal/lightbox
+		 * is launched onto it (e.g. clicking a video thumbnail, or `open()`). Only
+		 * the slide the lightbox opens to auto-plays, and only when it's a video.
+		 * Navigating/swiping between slides does NOT auto-play. Because the launch is
+		 * a user gesture, the browser permits playback, with sound.
 		 */
 		autoplay_video = false,
 

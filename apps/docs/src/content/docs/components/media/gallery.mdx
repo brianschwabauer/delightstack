@@ -204,7 +204,7 @@ ${'  '}];
 
 ## Autoplay video in the lightbox
 
-Set `autoplay_video` to start the active slide's video the moment the lightbox opens. Because opening (or changing slides) is driven by a user gesture — a thumbnail click, the `open()` method, a swipe — the browser allows playback with sound. Only the current slide auto-plays, and only when it's a video; other slide types are left alone.
+Set `autoplay_video` to start a video the moment the lightbox is launched onto it. Because opening is driven by a user gesture — a thumbnail click or the `open()` method — the browser allows playback with sound. Only the slide the lightbox opens to auto-plays, and only when it's a video; other slide types are left alone, and navigating/swiping between slides does not auto-play.
 
 Click any thumbnail below — the modal opens and that video starts playing.
 
@@ -269,7 +269,7 @@ ${'  '}{/snippet}
 | `fit`                     | `'cover' \| 'contain'`                            | `'contain'`                  | `object-fit` for items inside the carousel.                                                           |
 | `aspect_ratio`            | `string`                                          | `undefined`                  | CSS aspect ratio for the slider/slideshow frame (e.g. `"16/9"`). Ignored when the modal is open.      |
 | `autoplay`                | `boolean`                                         | `false`                      | Auto-advance slides. Paused while scrolled off-screen.                                                |
-| `autoplay_video`          | `boolean`                                         | `false`                      | Auto-play the active slide's video when the lightbox opens (or the slide changes). Only the current slide, and only when it's a video. The opening gesture lets the browser play with sound. |
+| `autoplay_video`          | `boolean`                                         | `false`                      | Auto-play a video when the lightbox is launched onto it (not when changing slides). Only the slide opened to, and only when it's a video. The opening gesture lets the browser play with sound. |
 | `duration`                | `number`                                          | `8000`                       | Autoplay dwell time per slide (ms).                                                                   |
 | `inline`                  | `boolean`                                         | auto                         | When `true`, disables vertical/dismiss gestures. Defaults to `true` for `slider` when not fullscreen. |
 | `disable_fullscreen`      | `boolean`                                         | `false`                      | Hide the fullscreen toggle.                                                                           |
