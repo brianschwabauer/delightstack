@@ -96,6 +96,15 @@
 		/** How the items should be slowly animated. 'zoom' will slowly zoom into the center of the image */
 		animation = 'none' as 'none' | 'zoom',
 
+		/**
+		 * Whether the active slide should auto-play when it's a video. Only the
+		 * current slide auto-plays, and only when it's a video — image/pdf/embed
+		 * slides are unaffected. Triggered both when the carousel first opens and
+		 * whenever the slide changes; because both happen off a user gesture
+		 * (click/swipe/key), the browser allows playback (with sound).
+		 */
+		autoplay_video = false as boolean,
+
 		/** The css style string added to the component from the parent */
 		style = '',
 
@@ -452,6 +461,12 @@
 				],
 			});
 		}
+		// Auto-play the active slide's video as soon as the carousel opens. The
+		// open is driven by a user gesture (thumbnail click / open() / slide set),
+		// so the browser permits playback. Only the active slide, only if a video.
+		if (autoplay_video && newList[index]?.type === 'video') {
+			newList[index].shouldPlay = true;
+		}
 		list = newList;
 		containerTransform = `translate3d(calc(${offset * -100}% + 0px), 0px, 0px)`;
 		if (!opening) {
@@ -594,6 +609,25 @@
 				}
 			});
 		});
+
+		// The slide change above paused every video and cleared shouldPlay; if the
+		// newly-active slide is a video and auto-play is on, start it. The change
+		// came from a user gesture (swipe/click/key), so playback is allowed.
+		if (autoplay_video && list[index]?.type === 'video') {
+			list[index].shouldPlay = true;
+			// `shouldPlay`/`autoplay` only kicks off playback for a *freshly mounted*
+			// <video>. When the slide was pre-mounted (e.g. it loaded as the distance-1
+			// neighbour during a swipe), the element already exists, so start it
+			// directly via its bound ref.
+			const player = list[index]._player;
+			if (player?.paused) {
+				try {
+					player.play()?.catch(() => {});
+				} catch {
+					// ignore (media element not ready yet — the autoplay attr covers it)
+				}
+			}
+		}
 
 		// Reset the transform of the container
 		container.getAnimations().forEach((animation) => {

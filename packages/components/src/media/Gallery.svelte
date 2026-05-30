@@ -120,6 +120,15 @@
 		/** Whether the gallery should auto transition between slides */
 		autoplay = false,
 
+		/**
+		 * Whether a video should start playing automatically when it becomes the
+		 * active slide in the modal/lightbox (or slider). Because the slide is
+		 * launched/changed by a user gesture — a thumbnail click, the `open()`
+		 * method, a slide change, etc. — the browser permits playback, with sound.
+		 * Only the current slide auto-plays, and only when that slide is a video.
+		 */
+		autoplay_video = false,
+
 		/** The css aspect ratio the gallery should be forced into (only when not a modal) */
 		aspect_ratio = undefined as string | undefined,
 
@@ -1034,6 +1043,7 @@
 					: 'none'}
 				inline={inline ??
 					((display === 'slider' || display === 'slideshow') && !fullscreenActive)}
+				{autoplay_video}
 				dismissable={isModal}
 				disable_entry_exit_animation={display === 'slider' || display === 'slideshow'}
 				animation_target={animationTarget}

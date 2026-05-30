@@ -14,6 +14,7 @@ import GallerySlideshowDemo from '../../../../components/demos/GallerySlideshowD
 import GalleryActionsDemo from '../../../../components/demos/GalleryActionsDemo.svelte';
 import GalleryLightboxDemo from '../../../../components/demos/GalleryLightboxDemo.svelte';
 import GalleryRichMediaDemo from '../../../../components/demos/GalleryRichMediaDemo.svelte';
+import GalleryVideoAutoplayDemo from '../../../../components/demos/GalleryVideoAutoplayDemo.svelte';
 import GalleryCustomTypeDemo from '../../../../components/demos/GalleryCustomTypeDemo.svelte';
 
 `Gallery` is a full-featured media component built on top of [`Carousel`](/components/media/carousel/). You give it a list of items and pick a `display` mode — the same data renders as a packed masonry grid, a justified row layout, a uniform grid, a file-list, an inline slider, an autoplaying slideshow, or a headless lightbox that you drive from your own thumbnails.
@@ -201,6 +202,27 @@ ${'  '}];
 	<GalleryRichMediaDemo client:visible />
 </ComponentPreview>
 
+## Autoplay video in the lightbox
+
+Set `autoplay_video` to start the active slide's video the moment the lightbox opens. Because opening (or changing slides) is driven by a user gesture — a thumbnail click, the `open()` method, a swipe — the browser allows playback with sound. Only the current slide auto-plays, and only when it's a video; other slide types are left alone.
+
+Click any thumbnail below — the modal opens and that video starts playing.
+
+<ComponentPreview code={`<script lang="ts">
+${'  '}import { Gallery, type GalleryItem } from '@delightstack/components';
+
+${'  '}const items: GalleryItem[] = [
+${'    '}{ type: 'video', src: '/videos/clip-1.mp4', poster: '/videos/clip-1.jpg' },
+${'    '}{ type: 'video', src: '/videos/clip-2.mp4', poster: '/videos/clip-2.jpg' },
+${'    '}{ type: 'video', src: '/videos/clip-3.mp4', poster: '/videos/clip-3.jpg' },
+${'    '}// ...
+${'  '}];
+</script>
+
+<Gallery {items} display="grid" autoplay_video />`}>
+	<GalleryVideoAutoplayDemo client:visible />
+</ComponentPreview>
+
 ## Custom item type
 
 For media types the built-ins don't cover — a Matterport tour, a custom 3D viewer, a chart, an interactive form — set `type: 'custom'` on the item and provide the `custom` snippet. The snippet receives `{ item, active, gesture_disabled, onload, onerror }`. See [Carousel's custom type docs](/components/media/carousel/#custom-item-type) for the full snippet signature.
@@ -247,6 +269,7 @@ ${'  '}{/snippet}
 | `fit`                     | `'cover' \| 'contain'`                            | `'contain'`                  | `object-fit` for items inside the carousel.                                                           |
 | `aspect_ratio`            | `string`                                          | `undefined`                  | CSS aspect ratio for the slider/slideshow frame (e.g. `"16/9"`). Ignored when the modal is open.      |
 | `autoplay`                | `boolean`                                         | `false`                      | Auto-advance slides. Paused while scrolled off-screen.                                                |
+| `autoplay_video`          | `boolean`                                         | `false`                      | Auto-play the active slide's video when the lightbox opens (or the slide changes). Only the current slide, and only when it's a video. The opening gesture lets the browser play with sound. |
 | `duration`                | `number`                                          | `8000`                       | Autoplay dwell time per slide (ms).                                                                   |
 | `inline`                  | `boolean`                                         | auto                         | When `true`, disables vertical/dismiss gestures. Defaults to `true` for `slider` when not fullscreen. |
 | `disable_fullscreen`      | `boolean`                                         | `false`                      | Hide the fullscreen toggle.                                                                           |
