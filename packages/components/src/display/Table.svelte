@@ -537,10 +537,14 @@
 	}
 
 	// ---- Cell alignment ----
-	// Width/min-width are handled by the grid tracks (see gridTemplateColumns);
-	// the cell only needs its text alignment.
+	// Width/min-width are handled by the grid tracks (see gridTemplateColumns).
+	// Cells are flex containers, so alignment maps to justify-content (text-align
+	// is kept for any wrapping content).
 	function getColumnStyle(col: Column<T>): string {
-		return col.align ? `text-align: ${col.align}` : '';
+		if (!col.align) return '';
+		const justify =
+			col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'flex-start';
+		return `justify-content: ${justify}; text-align: ${col.align}`;
 	}
 
 	// ---- Cell value access ----
@@ -1101,7 +1105,9 @@
 		display: grid;
 		grid-template-columns: subgrid;
 		grid-column: 1 / -1;
-		align-items: center;
+		/* Cells stretch to the full row height so the vertical column dividers
+		   span the whole row; each cell then centres its own content. */
+		align-items: stretch;
 	}
 
 	/* ========== Header ========== */
@@ -1118,6 +1124,10 @@
 	}
 
 	th {
+		display: flex;
+		/* Stretch the inner button/content to fill the cell so the sort target
+		   (and column divider) cover the full header height. */
+		align-items: stretch;
 		text-align: left;
 		font-weight: 600;
 		white-space: nowrap;
@@ -1128,9 +1138,17 @@
 		user-select: none;
 	}
 
+	/* Vertical column dividers (subtle), skipped after the final column. */
+	th:not(:last-child),
+	td:not(:last-child) {
+		border-right: 1px solid
+			light-dark(var(--color-border, #e8eaed), var(--color-border, #2b2b2b));
+	}
+
 	/* Non-interactive header content keeps the regular cell padding */
 	.th-content {
 		display: flex;
+		flex: 1;
 		align-items: center;
 		gap: 0.25rem;
 		padding: 0.75rem 1rem;
@@ -1286,6 +1304,8 @@
 	}
 
 	td {
+		display: flex;
+		align-items: center;
 		padding: 0.75rem 1rem;
 		min-width: 0;
 		white-space: nowrap;
@@ -1368,6 +1388,7 @@
 
 	/* ========== Checkbox (mirrors the Checkbox component) ========== */
 	.checkbox-cell {
+		justify-content: center;
 		text-align: center;
 		padding-left: 0.5rem !important;
 		padding-right: 0.25rem !important;
@@ -1470,6 +1491,7 @@
 
 	/* ========== Expand Cell ========== */
 	.expand-cell {
+		justify-content: center;
 		text-align: center;
 		padding-left: 0.5rem !important;
 		padding-right: 0.25rem !important;
@@ -1524,6 +1546,7 @@
 	}
 
 	.expanded-row td {
+		display: block;
 		grid-column: 1 / -1;
 		padding: 0;
 		white-space: normal;
@@ -1552,6 +1575,7 @@
 	}
 
 	.group-row td {
+		display: block;
 		grid-column: 1 / -1;
 		padding: 0;
 	}
@@ -1603,6 +1627,7 @@
 
 	/* ========== Empty State ========== */
 	.empty-row td {
+		display: block;
 		grid-column: 1 / -1;
 		padding: 0;
 		white-space: normal;
