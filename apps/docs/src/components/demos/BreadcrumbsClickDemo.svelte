@@ -2,8 +2,8 @@
 	import { Breadcrumbs } from '@delightstack/components/navigation';
 
 	const items = [
-		{ label: 'Home', href: '/' },
-		{ label: 'Products', href: '/products' },
+		{ label: 'Home', href: '#' },
+		{ label: 'Products', href: '#products' },
 		{ label: 'Detail' },
 	];
 

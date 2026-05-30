@@ -1,12 +1,14 @@
 ---
 title: Breadcrumbs
-description: A navigation trail with automatic home icon, collapsible middle items, Schema.org structured data, and customizable separators.
+description: A navigation trail with automatic home icon, SSR-safe auto-collapsing, Schema.org structured data, and customizable separators.
 ---
 
 import { Breadcrumbs } from '@delightstack/components/navigation';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import BreadcrumbsSeparatorDemo from '../../../../components/demos/BreadcrumbsSeparatorDemo.svelte';
 import BreadcrumbsClickDemo from '../../../../components/demos/BreadcrumbsClickDemo.svelte';
+import BreadcrumbsAutoCollapseDemo from '../../../../components/demos/BreadcrumbsAutoCollapseDemo.svelte';
+import BreadcrumbsSkeletonDemo from '../../../../components/demos/BreadcrumbsSkeletonDemo.svelte';
 
 ## Import
 
@@ -29,14 +31,26 @@ ${'  '}];
 </script>
 
 <Breadcrumbs {items} />`}>
-	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Electronics', href: '/products/electronics' }, { label: 'Headphones' }]} />
+	<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
 </ComponentPreview>
 
 ## Examples
 
-### Collapsed Middle Items
+### Auto-Collapse to Fit
 
-When the trail is long, collapse middle items into an ellipsis dropdown.
+With no `maxItems` set, the trail auto-collapses to fit its container — the first
+item and the last two stay pinned while the middle items fold into the “…” menu,
+starting from the center. This is done in **pure CSS** with container queries, so
+it's already correct in server-rendered HTML (no layout flash, no JS measuring).
+
+<ComponentPreview code={`<!-- Just render the items — collapsing is automatic -->
+<Breadcrumbs {items} />`}>
+	<BreadcrumbsAutoCollapseDemo client:load />
+</ComponentPreview>
+
+### Collapsed Middle Items (explicit)
+
+Pass `maxItems` to force the whole middle block into the dropdown at a fixed count.
 
 <ComponentPreview code={`<script>
 ${'  '}import { Breadcrumbs } from '@delightstack/components';
@@ -51,7 +65,15 @@ ${'  '}];
 </script>
 
 <Breadcrumbs {items} maxItems={3} />`}>
-	<Breadcrumbs client:load items={[{ label: 'Category', href: '/cat' }, { label: 'Subcategory', href: '/cat/sub' }, { label: 'Brand', href: '/cat/sub/brand' }, { label: 'Model', href: '/cat/sub/brand/model' }, { label: 'Product' }]} maxItems={3} />
+	<Breadcrumbs client:load homeHref="#" items={[{ label: 'Category', href: '#cat' }, { label: 'Subcategory', href: '#sub' }, { label: 'Brand', href: '#brand' }, { label: 'Model', href: '#model' }, { label: 'Product' }]} maxItems={3} />
+</ComponentPreview>
+
+### Dense
+
+Tightens the spacing between items and separators for compact layouts like toolbars.
+
+<ComponentPreview code={`<Breadcrumbs {items} dense />`}>
+	<Breadcrumbs client:load dense homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
 </ComponentPreview>
 
 ### Without Home Icon
@@ -59,7 +81,7 @@ ${'  '}];
 Hide the automatic home breadcrumb.
 
 <ComponentPreview code={`<Breadcrumbs {items} showHome={false} />`}>
-	<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Electronics', href: '/products/electronics' }, { label: 'Headphones' }]} showHome={false} />
+	<Breadcrumbs client:load showHome={false} items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
 </ComponentPreview>
 
 ### Custom Separator
@@ -81,10 +103,10 @@ ${'  '}{/snippet}
 <Breadcrumbs {items} size="2" />  <!-- Medium -->
 <Breadcrumbs {items} size="3" />  <!-- Large -->`}>
 	<div style="display: flex; flex-direction: column; gap: 0.75rem;">
-		<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="0" />
-		<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="1" />
-		<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="2" />
-		<Breadcrumbs client:load items={[{ label: 'Products', href: '/products' }, { label: 'Headphones' }]} size="3" />
+		<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="0" />
+		<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="1" />
+		<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="2" />
+		<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="3" />
 	</div>
 </ComponentPreview>
 
@@ -116,8 +138,14 @@ ${'  '}}}
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Breadcrumbs skeleton skeletonCount={4} />`}>
-	<Breadcrumbs client:load skeleton skeletonCount={4} />
+The skeleton mirrors the real trail's box exactly (size and spacing), so swapping
+between loading and loaded states never shifts the layout. It scales with `size`,
+shows the home icon when `showHome` is set, and is automatically replaced the
+moment real `items` are provided.
+
+<ComponentPreview code={`<!-- skeleton shows only while items is empty -->
+<Breadcrumbs skeleton skeletonCount={3} items={loading ? [] : items} />`}>
+	<BreadcrumbsSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props
@@ -125,11 +153,12 @@ ${'  '}}}
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `items` | `BreadcrumbItem[]` | `[]` | The breadcrumb items to display |
-| `maxItems` | `number` | `undefined` | Max visible items before collapsing middle items into an ellipsis dropdown |
+| `maxItems` | `number` | `undefined` | Max visible items before collapsing the middle block into the ellipsis dropdown. When omitted, the trail auto-collapses to fit its container width (pure CSS, SSR-safe) |
 | `showHome` | `boolean` | `true` | Whether to show a home icon as the first breadcrumb |
 | `homeHref` | `string` | `'/'` | The href for the home breadcrumb |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size of the breadcrumbs |
-| `skeleton` | `boolean` | `false` | Show skeleton loading state |
+| `dense` | `boolean` | `false` | Condensed spacing between items and separators |
+| `skeleton` | `boolean` | `false` | Show skeleton loading state (only while `items` is empty) |
 | `skeletonCount` | `number` | `3` | Number of skeleton placeholder items |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
@@ -153,12 +182,26 @@ interface BreadcrumbItem {
 }
 ```
 
+## Auto-collapse
+
+When `maxItems` is omitted, the component estimates each item's width from its
+label length and uses CSS [container query units](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_containment/Container_queries)
+to decide what fits. Because the decision is made entirely in CSS, the correct
+collapsed state is present in the first server-rendered paint — there's no
+measure-then-reflow flash. The first item and the last two are always kept; the
+middle items fold into the “…” menu from the center outward as space shrinks.
+
+Estimates are intentionally approximate (proportional fonts vary), so leave a
+little breathing room if precise control matters — or set `maxItems` explicitly.
+
 ## Accessibility
 
 - Uses `<nav>` with `aria-label="Breadcrumb"`
 - Semantic `<ol>` list for the breadcrumb trail
 - Last item has `aria-current="page"`
 - Home icon includes screen-reader-only text (`<span class="sr-only">`)
-- Ellipsis dropdown button has `aria-label="Show hidden breadcrumbs"` and `aria-expanded`
-- Focus-visible outlines on all links and buttons
+- The ellipsis uses a native `<details>`/`<summary>` disclosure (keyboard- and
+  screen-reader-friendly, works without JS)
+- Collapsed (zero-width) copies are marked `inert` when JS is available, so only
+  the visible copy is focusable and announced
 - Automatically generates Schema.org `BreadcrumbList` JSON-LD for SEO
