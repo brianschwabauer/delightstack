@@ -223,6 +223,7 @@
 		if (primary_token === null) primary_token = my_token;
 	});
 	onDestroy(() => {
+		clearTimeout(collapse_timer);
 		const i = registered.indexOf(my_token);
 		if (i !== -1) registered.splice(i, 1);
 		if (primary_token === my_token) primary_token = registered[0] ?? null;
@@ -235,6 +236,7 @@
 	});
 
 	let expanded = $state(false);
+	let collapse_timer: ReturnType<typeof setTimeout> | undefined;
 	let toaster_el: HTMLDivElement | undefined = $state();
 
 	const is_top = $derived(position.startsWith('top'));
@@ -480,9 +482,19 @@
 		bind:this={toaster_el}
 		role="region"
 		aria-label="Notifications"
-		onmouseenter={() => (expanded = true)}
+		onmouseenter={() => {
+			clearTimeout(collapse_timer);
+			expanded = true;
+		}}
 		onmouseleave={() => {
-			if (!swipe_id) expanded = false;
+			if (swipe_id) return;
+			// Grace period before collapsing. Dismissing a toast removes the one
+			// under the cursor (it stops capturing pointer events), which fires
+			// mouseleave — without this delay the stack would snap shut between
+			// clicks, forcing a re-hover to dismiss the next one. Moving to the
+			// next toast within the window cancels the collapse.
+			clearTimeout(collapse_timer);
+			collapse_timer = setTimeout(() => (expanded = false), 500);
 		}}>
 		{#each rendered as t (t.id)}
 			<div
