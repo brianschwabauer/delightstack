@@ -149,11 +149,16 @@
 	const DRAG_THRESHOLD = 10; // how far the user must drag before we consider it a gesture
 	const DISMISS_THRESHOLD = 300; // the number of pixels the user must drag to dismiss the gallery
 	// How many slides on each side of the active slide should keep a rich renderer (PDF, panorama,
-	// video, embed) mounted. Set to 0 so only the *active* slide ever holds a heavy renderer —
-	// pdfjs, three.js, vidstack-style video buffers, and YouTube/Vimeo iframes can each be
-	// substantial, and a slide that's at distance 1 (i.e. one swipe away) is rarely visible long
-	// enough to justify the cost. Adjacent rich slides mount in ~hundreds of ms when navigated to.
+	// embed) mounted. Set to 0 so only the *active* slide ever holds one of these heavy renderers —
+	// pdfjs, three.js, and YouTube/Vimeo iframes can each be substantial, and a slide that's at
+	// distance 1 (i.e. one swipe away) is rarely visible long enough to justify the cost. Adjacent
+	// rich slides mount in ~hundreds of ms when navigated to.
 	const RICH_NEIGHBOR_DISTANCE = 0;
+	// Videos get a wider keep-mounted neighborhood than the other rich types. A paused <video> is
+	// cheap, and keeping it mounted preserves its playback position and buffered data — so swiping
+	// away from a video and back resumes where you left off instead of reloading from the start.
+	// Bounded to active ± N, so at most 2N+1 videos are ever mounted even in a gallery of many.
+	const VIDEO_NEIGHBOR_DISTANCE = 2;
 
 	interface DecodedCarouselItem {
 		/** The ID of the media item */
@@ -335,9 +340,12 @@
 		for (let i = 0; i < len; i++) {
 			const normalDist = Math.abs(i - activeIndex);
 			const dist = Math.min(normalDist, len - normalDist);
-			if (dist > RICH_NEIGHBOR_DISTANCE) continue;
 			const item = list[i];
 			if (!item) continue;
+			// Videos load within the wider VIDEO_NEIGHBOR_DISTANCE so nearby ones are
+			// ready to (stay) mounted; other rich types only load when active.
+			const maxDist = item.type === 'video' ? VIDEO_NEIGHBOR_DISTANCE : RICH_NEIGHBOR_DISTANCE;
+			if (dist > maxDist) continue;
 			if (item.type === 'pdf') needed.add('pdf');
 			else if (item.type === 'video') needed.add('video');
 			else if (item.type === 'image' && item.panorama) needed.add('panorama');
@@ -2056,8 +2064,10 @@
 		{#each list as item, i (item.key)}
 			{@const normalDistance = Math.abs(i - index)}
 			{@const distance = Math.min(normalDistance, list.length - normalDistance)}
+			{@const richNeighborDistance =
+				item.type === 'video' ? VIDEO_NEIGHBOR_DISTANCE : RICH_NEIGHBOR_DISTANCE}
 			{@const richMounted =
-				distance <= RICH_NEIGHBOR_DISTANCE ||
+				distance <= richNeighborDistance ||
 				(distance === 1 && (transitioning || dragging || swiping))}
 			{#if distance === 0 || (!opening && distance <= 5) || (item.shouldLoad && distance <= 20)}
 				<li
