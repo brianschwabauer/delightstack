@@ -10,7 +10,7 @@ import ConfettiCustomDemo from '../../../../components/demos/ConfettiCustomDemo.
 import ConfettiPresetsDemo from '../../../../components/demos/ConfettiPresetsDemo.svelte';
 import ConfettiStopDemo from '../../../../components/demos/ConfettiStopDemo.svelte';
 import ConfettiComponentPresetsDemo from '../../../../components/demos/ConfettiComponentPresetsDemo.svelte';
-import ConfettiShapesDemo from '../../../../components/demos/ConfettiShapesDemo.svelte';
+import ConfettiTargetDemo from '../../../../components/demos/ConfettiTargetDemo.svelte';
 
 ## Import
 
@@ -21,7 +21,7 @@ import { Confetti, confetti } from '@delightstack/components';
 The `confetti` function and `Confetti` component can be imported together. Types are also available:
 
 ```svelte
-import type { ConfettiOptions, ConfettiShape, CannonOptions, RainOptions } from '@delightstack/components';
+import type { ConfettiOptions, ConfettiTarget, CannonOptions, RainOptions } from '@delightstack/components';
 ```
 
 ## Basic Usage
@@ -29,6 +29,8 @@ import type { ConfettiOptions, ConfettiShape, CannonOptions, RainOptions } from 
 ### Programmatic API
 
 The simplest way to fire confetti is with the `confetti()` function. No component mounting required.
+
+`burst` and `cannon` are **local** effects -- they erupt from a point. By default that point is wherever the user last clicked, so a `confetti()` fired from a click handler looks like it bursts out of the button that was pressed, with no extra code. `fireworks`, `sides`, and `rain` are **global** effects that fill the viewport and ignore the origin. See [Targeting Local Effects](#targeting-local-effects) to anchor a burst to a specific element instead.
 
 <ComponentPreview code={`<script>
 ${'  '}import { confetti } from '@delightstack/components';
@@ -140,20 +142,23 @@ ${'  '}onend={() => celebrating = false}
   <ConfettiComponentPresetsDemo client:load />
 </ComponentPreview>
 
-### Custom Shapes and Colors
+### Targeting Local Effects
+
+Local effects (`burst`, `cannon`) erupt from the last clicked point automatically, so the first button below needs no configuration. To anchor a burst somewhere else, pass a `target` -- a DOM element, a CSS selector, or a pointer/mouse event. It takes precedence over the last click and over `origin`.
 
 <ComponentPreview code={`<script>
 ${'  '}import { confetti } from '@delightstack/components';
+
+${'  '}let box;
 </script>
 
-<button onclick={() => confetti({
-${'  '}shapes: ['star'],
-${'  '}colors: ['#ffd700', '#ffb700'],
-${'  '}particle_count: 80,
-})}>
-${'  '}Gold Stars
-</button>`}>
-  <ConfettiShapesDemo client:load />
+<!-- Auto-targets the click -->
+<button onclick={() => confetti.burst()}>Burst from me</button>
+
+<!-- Explicit target: an element ref (a selector string or event also work) -->
+<button onclick={() => confetti.burst({ target: box })}>Burst from the box</button>
+<div bind:this={box}></div>`}>
+  <ConfettiTargetDemo client:load />
 </ComponentPreview>
 
 ## Programmatic API Reference
@@ -164,19 +169,19 @@ Fire a single burst of confetti. Shorthand for `confetti.burst()`.
 
 ### `confetti.burst(options?)`
 
-Single explosion from the origin point.
+Single explosion. A **local** effect: it erupts from `target`, then `origin`, then the last clicked point, falling back to bottom-center.
 
 ### `confetti.cannon(options?): () => void`
 
-Continuous stream of particles. Returns a `stop()` function.
+Continuous stream of particles from a single point. A **local** effect that honors `target`/`origin` just like `burst`. Returns a `stop()` function.
 
 ### `confetti.fireworks(options?)`
 
-Multiple timed bursts from random positions across the viewport.
+Multiple large timed bursts from random positions across the viewport. A **global** effect; ignores `target`/`origin`.
 
 ### `confetti.sides(options?)`
 
-Simultaneous bursts from both screen edges, angled inward.
+Simultaneous bursts from both screen edges, angled inward. A **global** effect; ignores `target`/`origin`.
 
 ### `confetti.rain(options?): () => void`
 
@@ -188,7 +193,7 @@ Stop all active animations and clean up the canvas.
 
 ## Props
 
-Component props for `<Confetti />`:
+Component props for `<Confetti />`. The defaults below apply to the `burst` preset; any prop left unset falls back to the chosen preset's own default (for example, `fireworks` uses a larger `particle_count`).
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
@@ -201,9 +206,9 @@ Component props for `<Confetti />`:
 | `gravity` | `number` | `1` | Gravity multiplier |
 | `drift` | `number` | `0` | Horizontal drift |
 | `ticks` | `number` | `200` | Frames before particle fades |
-| `origin` | `{ x: number, y: number }` | `{ x: 0.5, y: 1.0 }` | Origin point (0-1 normalized) |
+| `origin` | `{ x: number, y: number }` | last click | Origin point for local effects (0-1 normalized) |
+| `target` | `ConfettiTarget` | — | Anchor a local effect to an element, selector, or event |
 | `colors` | `string[]` | Rainbow palette | Particle color palette |
-| `shapes` | `ConfettiShape[]` | `['circle', 'square', 'star']` | Particle shapes |
 | `scalar` | `number` | `1` | Particle size multiplier |
 | `z_index` | `number` | `1000` | Canvas z-index |
 | `duration` | `number` | `3000` | Duration for cannon/rain presets (ms) |
@@ -220,7 +225,8 @@ Component props for `<Confetti />`:
 ## Types
 
 ```typescript
-type ConfettiShape = 'circle' | 'square' | 'star';
+// Anchor for a local effect: an element, a CSS selector, or a pointer/mouse event
+type ConfettiTarget = Element | string | MouseEvent;
 
 interface ConfettiOptions {
   particle_count?: number;
@@ -231,8 +237,8 @@ interface ConfettiOptions {
   drift?: number;
   ticks?: number;
   origin?: { x: number; y: number };
+  target?: ConfettiTarget;
   colors?: string[];
-  shapes?: ConfettiShape[];
   scalar?: number;
   z_index?: number;
   angle?: number;
