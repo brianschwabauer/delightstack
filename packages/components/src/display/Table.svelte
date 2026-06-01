@@ -1036,6 +1036,37 @@
 		};
 	});
 
+	// Pointer Events alone can't keep a touch-drag from scrolling the page — on
+	// touch, only `preventDefault()` on a *non-passive* `touchmove` (or
+	// `touch-action: none`) blocks the native pan, and the listener has to be
+	// attached before the touch starts for the browser to keep `touchmove`
+	// cancelable. So we mount it on the wrapper for as long as the table is
+	// reorderable rather than per-gesture. Touch events stay bound to their start
+	// target, so this still receives every move of a drag that wanders off the
+	// table. It only swallows the event once a long-press has armed the drag (or
+	// the drag is already running), leaving ordinary scroll-by-drag untouched.
+	$effect(() => {
+		const el = wrapperEl;
+		if (!el || !reorderActive) return;
+		el.addEventListener('touchmove', onDragTouchMove, { passive: false });
+		el.addEventListener('contextmenu', onDragContextMenu);
+		return () => {
+			el.removeEventListener('touchmove', onDragTouchMove);
+			el.removeEventListener('contextmenu', onDragContextMenu);
+		};
+	});
+	function onDragTouchMove(e: TouchEvent) {
+		if ((drag?.armed || reorderDragging) && e.cancelable) e.preventDefault();
+	}
+	// Android fires `contextmenu` on a long-press (`-webkit-touch-callout` only
+	// covers iOS), which would interrupt the hold-to-drag. Swallow it only while a
+	// reorder gesture is live: a normal right-click never creates `drag` (it's
+	// gated to the primary button in `onRowPointerDown`), so desktop context menus
+	// elsewhere are unaffected.
+	function onDragContextMenu(e: Event) {
+		if (drag) e.preventDefault();
+	}
+
 	// ---- Geometry helpers (content space: body top = 0, scroll-independent) ----
 	function headerHeightPx(): number {
 		const head = tableEl?.querySelector('thead tr') as HTMLElement | null;
@@ -2846,12 +2877,25 @@
 	}
 
 	/* ========== Reorder (drag-to-reorder) ========== */
-	/* A draggable row hints with a grab cursor; `pan-y` keeps vertical scrolling
-	   working on touch until a long-press arms the drag (after which the move
-	   handler calls preventDefault to take over the gesture). */
+	/* A draggable row hints with a grab cursor. We deliberately leave
+	   `touch-action` at its default (`auto`) instead of an explicit `pan-y`: a
+	   declared pan axis lets the browser drive that scroll on the compositor and
+	   makes the `touchmove` non-cancelable, so an armed drag could never stop the
+	   page from scrolling. With `auto`, the non-passive `touchmove` guard (see
+	   `onDragTouchMove`) can preventDefault once a long-press arms the drag, while
+	   an un-armed drag still scrolls the list normally. */
 	.row.reorderable {
 		cursor: grab;
-		touch-action: pan-y;
+		/* Suppress the mobile long-press text-selection callout: a hold on a cell's
+		   text would otherwise pop the OS selection menu instead of arming the drag.
+		   This has to live on the row (not just `.wrapper.reordering`) because the
+		   callout fires during the hold, before the drag starts. `touch-callout`
+		   covers iOS; Android's `contextmenu` event is handled in JS (see
+		   `onDragContextMenu`). A whole-row drag already precludes drag-to-select on
+		   desktop, so nothing usable is lost there. */
+		user-select: none;
+		-webkit-user-select: none;
+		-webkit-touch-callout: none;
 	}
 
 	/* While a drag is in flight: kill text selection and show the grabbing cursor
