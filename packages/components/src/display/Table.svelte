@@ -838,7 +838,11 @@
 	function getColumnStyle(col: Column<T>): string {
 		if (!col.align) return '';
 		const justify =
-			col.align === 'right' ? 'flex-end' : col.align === 'center' ? 'center' : 'flex-start';
+			col.align === 'right'
+				? 'flex-end'
+				: col.align === 'center'
+					? 'center'
+					: 'flex-start';
 		return `justify-content: ${justify}; text-align: ${col.align}`;
 	}
 
@@ -873,9 +877,9 @@
 <div
 	bind:this={wrapperEl}
 	class={['wrapper', className].filter(Boolean).join(' ')}
-	class:dense={dense}
-	class:comfortable={comfortable}
-	class:striped={striped}
+	class:dense
+	class:comfortable
+	class:striped
 	{id}>
 	{#if exportable}
 		<div class="toolbar">
@@ -971,67 +975,67 @@
 							role="columnheader"
 							aria-sort={getAriaSort(col)}
 							class:sortable={col.sortable && !col.header}>
-						{#if col.header}
-							<div class="th-content">
-								{@render col.header({ column: col })}
-							</div>
-						{:else if col.sortable}
-							<button
-								class="th-button"
-								type="button"
-								style:justify-content={headerJustify(col)}
-								onclick={() => handleSort(col.key)}
-								{@attach ripple({ opacity: 0.12 })}>
-								<span class="th-label">{col.label}</span>
-								<span class="sort-icon" class:active={sortBy === col.key}>
-									{#if sortBy === col.key}
-										<span class="arrow-rot" class:desc={sortDirection === 'desc'}>
+							{#if col.header}
+								<div class="th-content">
+									{@render col.header({ column: col })}
+								</div>
+							{:else if col.sortable}
+								<button
+									class="th-button"
+									type="button"
+									style:justify-content={headerJustify(col)}
+									onclick={() => handleSort(col.key)}
+									{@attach ripple({ opacity: 0.12 })}>
+									<span class="th-label">{col.label}</span>
+									<span class="sort-icon" class:active={sortBy === col.key}>
+										{#if sortBy === col.key}
+											<span class="arrow-rot" class:desc={sortDirection === 'desc'}>
+												<svg
+													class="arrow"
+													width="17"
+													height="17"
+													viewBox="0 0 20 20"
+													fill="none"
+													aria-hidden="true">
+													<path
+														d="M10 15.5V5M5.5 9.5L10 5l4.5 4.5"
+														stroke="currentColor"
+														stroke-width="2"
+														stroke-linecap="round"
+														stroke-linejoin="round" />
+												</svg>
+											</span>
+										{:else}
 											<svg
-												class="arrow"
+												class="arrow-hint"
 												width="17"
 												height="17"
 												viewBox="0 0 20 20"
 												fill="none"
 												aria-hidden="true">
 												<path
-													d="M10 15.5V5M5.5 9.5L10 5l4.5 4.5"
+													d="M6.5 8L10 4.5L13.5 8M6.5 12L10 15.5L13.5 12"
 													stroke="currentColor"
-													stroke-width="2"
+													stroke-width="1.75"
 													stroke-linecap="round"
 													stroke-linejoin="round" />
 											</svg>
-										</span>
-									{:else}
-										<svg
-											class="arrow-hint"
-											width="17"
-											height="17"
-											viewBox="0 0 20 20"
-											fill="none"
-											aria-hidden="true">
-											<path
-												d="M6.5 8L10 4.5L13.5 8M6.5 12L10 15.5L13.5 12"
-												stroke="currentColor"
-												stroke-width="1.75"
-												stroke-linecap="round"
-												stroke-linejoin="round" />
-										</svg>
-									{/if}
+										{/if}
+									</span>
+								</button>
+							{:else}
+								<div class="th-content" style:justify-content={headerJustify(col)}>
+									<span>{col.label}</span>
+								</div>
+							{/if}
+							{#if resizableColumns}
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<span
+									class="resize-handle"
+									onmousedown={(e) => startResize(e, col.key)}
+									ondblclick={(e) => autoFitColumn(e, col.key)}>
 								</span>
-							</button>
-						{:else}
-							<div class="th-content" style:justify-content={headerJustify(col)}>
-								<span>{col.label}</span>
-							</div>
-						{/if}
-						{#if resizableColumns}
-							<!-- svelte-ignore a11y_no_static_element_interactions -->
-							<span
-								class="resize-handle"
-								onmousedown={(e) => startResize(e, col.key)}
-								ondblclick={(e) => autoFitColumn(e, col.key)}>
-							</span>
-						{/if}
+							{/if}
 						</th>
 					{/each}
 				</tr>
@@ -1192,8 +1196,8 @@
 	<svg
 		class="dt-check"
 		class:checked={checked || indeterminate}
-		class:indeterminate={indeterminate}
-		class:preview={preview}
+		class:indeterminate
+		class:preview
 		viewBox="0 0 24 24"
 		width="20"
 		height="20"
@@ -1489,9 +1493,11 @@
 		user-select: none;
 	}
 
-	/* Vertical column dividers (subtle), skipped after the final column. */
-	th:not(:last-child),
-	td:not(:last-child) {
+	/* Vertical header dividers (subtle), skipped after the final column. The
+	   header background is opaque, so a crisp border reads fine here. Body column
+	   dividers are drawn separately (see `td::after`) so the row tint + ripple can
+	   paint over them. */
+	th:not(:last-child) {
 		border-right: 1px solid
 			light-dark(var(--color-border, #e8eaed), var(--color-border, #2b2b2b));
 	}
@@ -1642,12 +1648,37 @@
 	}
 
 	/* ========== Body Rows ========== */
+	/* Every body row is its own stacking context so its divider / tint / ripple
+	   layers (all negative z-index) stay contained to that row. */
+	tbody tr {
+		position: relative;
+		isolation: isolate;
+	}
+
 	tbody tr.row {
-		--row-bg: transparent;
-		background-color: var(--row-bg);
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
+	}
+
+	/* The row background tint lives on a ::before layer (z-index -2) rather than
+	   the row's own background, so the column dividers (z-index -3) can sit
+	   BENEATH it — the tint, and then the ripple, paint over the lines. */
+	tbody tr.row::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -2;
+		background-color: var(--row-bg);
 		transition: background-color 260ms ease;
+		pointer-events: none;
+	}
+
+	/* Default tint at zero specificity, so the state rules below (also :where)
+	   win purely by source order; the higher-specificity :hover rules still beat
+	   them. (A plain `tbody tr.row` default would out-specify the states and
+	   silently swallow the stripe/selected tints.) */
+	:where(tbody tr.row) {
+		--row-bg: transparent;
 	}
 
 	tbody tr.row:last-child {
@@ -1662,6 +1693,25 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		/* Positioned so the divider pseudo anchors to the cell — but deliberately
+		   NOT a stacking context (no z-index), so the divider's negative z-index
+		   resolves in the row's stacking context, below the tint and ripple. */
+		position: relative;
+	}
+
+	/* Body column dividers: a low pseudo-layer (z-index -3) that sits BELOW the
+	   row background tint (-2) and the ripple (-1), so the hover wash and the
+	   ripple paint over the lines while the cell text stays on top. */
+	tbody td:not(:last-child)::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: 0;
+		width: 1px;
+		background: light-dark(var(--color-border, #e8eaed), var(--color-border, #2b2b2b));
+		z-index: -3;
+		pointer-events: none;
 	}
 
 	.dense td {
@@ -1674,35 +1724,31 @@
 	}
 
 	/* Clickable rows behave like buttons: pointer, press, and a row-wide ripple.
-	   Because the row is a grid (not a table-row) box it can be position:relative
-	   + overflow:hidden, so the ripple attachment fills and clips to the row.
-	   `isolation` gives the row its own stacking context so the ripple (z-index
-	   -1) sits above the row background but below the cell content. */
+	   Because the row is a grid (not a table-row) box it can be overflow:hidden,
+	   so the ripple attachment fills and clips to the row. The row's stacking
+	   context (set on `tbody tr` above) keeps the ripple (z-index -1) above the
+	   tint and dividers but below the cell content. */
 	.row.clickable {
 		cursor: pointer;
 		user-select: none;
-		position: relative;
 		overflow: hidden;
-		isolation: isolate;
-		transition:
-			background-color 260ms ease,
-			translate 200ms ease;
+		transition: translate 200ms ease;
 
 		&:active {
 			translate: 0 1px;
 		}
 	}
 
-	/* ---- Row background states ----
-	   Base/resting states are written with :where() so they carry zero
-	   specificity; the :hover rules below always win, giving the
-	   "instant-in, eased-out" hover behaviour even over striped/selected. */
+	/* ---- Row background states (consumed by `tr.row::before`) ----
+	   Resting states are written with :where() so they carry zero specificity and
+	   resolve by source order (default → stripe → selected → preview); the
+	   higher-specificity :hover rules below still win over all of them. */
 	/* Striping is driven by an explicit parity class keyed on the row's visual
 	   index (not :nth-child) so it stays stable while virtual scrolling swaps the
 	   mounted rows, and doesn't flip when an expanded detail row is inserted. */
 	:where(tbody tr.row.stripe) {
 		--row-bg: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.025),
+			rgb(from var(--color-text, #000) r g b / 0.03),
 			rgb(from var(--color-text, #fff) r g b / 0.035)
 		);
 	}
@@ -1714,13 +1760,13 @@
 		);
 	}
 
-	/* Hover: instant tint, removed on leave so the base transition fades it out */
+	/* Hover: a touch stronger than the stripe tint so it still reads clearly when
+	   hovering a striped row. Snapped in (see the ::before rule), eased out. */
 	tbody tr.row:hover {
 		--row-bg: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.045),
-			rgb(from var(--color-text, #fff) r g b / 0.06)
+			rgb(from var(--color-text, #000) r g b / 0.06),
+			rgb(from var(--color-text, #fff) r g b / 0.08)
 		);
-		transition: none;
 	}
 
 	tbody tr.row.selected:hover {
@@ -1728,7 +1774,6 @@
 			rgb(from var(--color-action, #1976d2) r g b / 0.17),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.24)
 		);
-		transition: none;
 	}
 
 	/* Shift-range preview wins over hover (placed last, equal specificity) */
@@ -1737,6 +1782,12 @@
 			rgb(from var(--color-action, #1976d2) r g b / 0.14),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.2)
 		);
+	}
+
+	/* Snap the tint in for hover/preview; the ::before eases it out otherwise. */
+	tbody tr.row:hover::before,
+	tbody tr.row.selected:hover::before,
+	tbody tr.row.preview::before {
 		transition: none;
 	}
 
@@ -1785,7 +1836,8 @@
 		}
 
 		&:focus-visible {
-			box-shadow: 0 0 0 2px light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a)),
+			box-shadow:
+				0 0 0 2px light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a)),
 				0 0 0 4px var(--color-action, #1976d2);
 		}
 	}
@@ -1812,7 +1864,8 @@
 			fill: none;
 			stroke-dasharray: 24;
 			stroke-dashoffset: 24;
-			transition: stroke-dashoffset 260ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+			transition: stroke-dashoffset 260ms
+				var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
 		}
 
 		.dash {
@@ -2051,6 +2104,7 @@
 		.dt-check .check,
 		.row.clickable,
 		tbody tr.row,
+		tbody tr.row::before,
 		.th-button {
 			animation: none !important;
 			transition: none !important;
