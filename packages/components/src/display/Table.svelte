@@ -55,6 +55,16 @@
 		/** Column definitions */
 		columns = [] as Column<T>[],
 
+		/** Stable per-row identity used as the keyed-`{#each}` key. Pass a field
+		 * name (`'id'`) or a function (`(row) => row.id`). When set, reordering and
+		 * re-sorting MOVE each row's existing DOM node to follow its data instead of
+		 * re-keying rows by position — so selection checkmarks (and any per-row DOM
+		 * state) ride along with the row rather than redrawing when the parent
+		 * commits a new order. Defaults to the row's position, which is fine for
+		 * static tables but makes checkmarks flash on `reorderable` commits. Strongly
+		 * recommended whenever `reorderable` and `selectable` are combined. */
+		rowKey = undefined as string | ((row: T) => string | number) | undefined,
+
 		/** Current sort column key */
 		sortBy = $bindable(undefined) as string | undefined,
 
@@ -432,6 +442,17 @@
 		data.forEach((row, i) => m.set(row, i));
 		return m;
 	});
+
+	// Keyed-each key for a rendered row. A stable `rowKey` makes Svelte move the
+	// row's DOM node when the order changes (so selection survives a reorder
+	// commit without redrawing); falling back to the data index re-keys rows by
+	// position, which is fine for tables whose order never changes underneath them.
+	function keyOf(row: T, dataIndex: number): string | number {
+		if (rowKey === undefined) return dataIndex;
+		if (typeof rowKey === 'function') return rowKey(row);
+		const v = row[rowKey];
+		return typeof v === 'string' || typeof v === 'number' ? v : String(v);
+	}
 
 	interface RenderRow {
 		row: T;
@@ -1827,7 +1848,7 @@
 							</td>
 						</tr>
 						{#if !collapsedGroups.has(group.key)}
-							{#each group.rows as { row, data_index, visual_index } (data_index)}
+							{#each group.rows as { row, data_index, visual_index } (keyOf(row, data_index))}
 								{@render dataRow(row, data_index, visual_index)}
 								{#if expandable && expandedRows.has(data_index) && expandedRow}
 									{@render expandedRowTr(row, data_index)}
@@ -1843,7 +1864,7 @@
 							style:height="{virtualWindow.top_pad}px">
 						</tr>
 					{/if}
-					{#each virtualWindow.rows as { row, data_index, visual_index } (data_index)}
+					{#each virtualWindow.rows as { row, data_index, visual_index } (keyOf(row, data_index))}
 						{@render dataRow(row, data_index, visual_index)}
 						{#if expandable && expandedRows.has(data_index) && expandedRow}
 							{@render expandedRowTr(row, data_index)}
@@ -1857,7 +1878,7 @@
 						</tr>
 					{/if}
 				{:else}
-					{#each flatRows as { row, data_index, visual_index } (data_index)}
+					{#each flatRows as { row, data_index, visual_index } (keyOf(row, data_index))}
 						{@render dataRow(row, data_index, visual_index)}
 						{#if expandable && expandedRows.has(data_index) && expandedRow}
 							{@render expandedRowTr(row, data_index)}

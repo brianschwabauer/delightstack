@@ -221,6 +221,13 @@ handed to `onreorder` only after the drop animation finishes, so assigning it to
 your data never interrupts the animation. Works with `selectable` (drag the
 whole selection at once) and `virtualScroll`.
 
+Give each row a stable [`rowKey`](#props) (a field name or `(row) => id`) when
+combining `reorderable` with `selectable`. Without it, rows are keyed by their
+position, so committing a new order makes Svelte re-key every row by index — and
+the selection checkmarks redraw (a brief flash) even though the same rows stay
+selected. With a `rowKey`, Svelte moves each row's DOM node to follow its data,
+so the checkmarks ride along untouched.
+
 <ComponentPreview code={`<script>
 ${'  '}import { Table } from '@delightstack/components';
 
@@ -238,7 +245,9 @@ ${'  '}${'  '}{ key: 'rank', label: '#', width: '56px', align: 'right' },
 ${'  '}${'  '}{ key: 'name', label: 'Name' },
 ${'  '}${'  '}{ key: 'role', label: 'Role' },
 ${'  '}]}
+${'  '}rowKey="rank"
 ${'  '}reorderable
+${'  '}selectable
 ${'  '}onreorder={(e) => (users = e.newData)}
 />`}>
   <TableReorderDemo client:load />
@@ -265,6 +274,7 @@ ${'  '}data={[]}
 |------|------|---------|-------------|
 | `data` | `T[]` | `[]` | Array of row data |
 | `columns` | `Column<T>[]` | `[]` | Column definitions |
+| `rowKey` | `string \| ((row: T) => string \| number)` | - | Stable per-row identity for the keyed `{#each}`. A field name or function. Lets Svelte move row DOM nodes (so selection survives a reorder commit without redrawing) instead of re-keying by position. Recommended for `reorderable` + `selectable` |
 | `sortBy` | `string` | - | Current sort column key (bindable) |
 | `sortDirection` | `'asc' \| 'desc'` | `'asc'` | Sort direction (bindable) |
 | `selectable` | `boolean` | `false` | Enable row selection with checkboxes |
@@ -275,6 +285,7 @@ ${'  '}data={[]}
 | `stickyHeader` | `boolean` | `true` | Sticky header on vertical scroll |
 | `resizableColumns` | `boolean` | `false` | Allow column width resizing by dragging |
 | `expandable` | `boolean` | `false` | Enable row expansion |
+| `reorderable` | `boolean` | `false` | Enable drag-to-reorder rows (see [Reorderable Rows](#reorderable-rows)) |
 | `virtualScroll` | `boolean \| VirtualScrollOptions` | `false` | Window rows for large datasets — `true` for defaults, or an options object (see [Virtual Scrolling](#virtual-scrolling)) |
 | `groupBy` | `string` | - | Column key to group rows by |
 | `exportable` | `boolean` | `false` | Enable CSV/JSON export functionality |
@@ -293,6 +304,9 @@ ${'  '}data={[]}
 | `onselect` | `{ selected: T[] }` | Selection changed |
 | `onrowclick` | `{ row: T, index: number }` | Row clicked |
 | `oncolumnresize` | `{ column: string, width: number }` | Column resized |
+| `onreorderstart` | `{ from: number[] }` | A reorder drag began (rows lifted) |
+| `ondrop` | `{ from: number[], to: number }` | Rows released — fires when the drop animation begins |
+| `onreorder` | `{ from: number[], to: number, oldData: T[], newData: T[] }` | Reorder committed — fires after the drop animation finishes; assign `newData` to your `data` |
 
 ## Types
 

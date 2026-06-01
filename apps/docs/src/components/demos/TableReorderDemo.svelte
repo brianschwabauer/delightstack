@@ -23,6 +23,7 @@
 <Table
 	data={users}
 	{columns}
+	rowKey="rank"
 	reorderable
 	selectable
 	bind:selected
