@@ -7,7 +7,7 @@
 
 <Button onclick={() => (open = true)}>Open Sheet (No Backdrop)</Button>
 
-<BottomSheet bind:open backdrop={false} blocking={false} snapPoints={[0.5, 0.9]}>
+<BottomSheet bind:open backdrop={false} blocking={false} snap_points={[0.5, 0.9]}>
 	<div style="padding: 0 1.5rem 1.5rem;">
 		<h3 style="margin: 0 0 0.75rem;">No Backdrop</h3>
 		<p style="margin: 0 0 1rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">

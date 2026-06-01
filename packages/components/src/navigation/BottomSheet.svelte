@@ -21,14 +21,14 @@
 		 * sorted ascending internally, and clamped to the content height so a
 		 * short sheet never opens taller than its content.
 		 */
-		snapPoints = [0.5, 1] as SnapPoint[],
+		snap_points = [0.5, 1] as SnapPoint[],
 
 		/**
 		 * Index of the snap point to open to. Defaults to the largest snap point
 		 * so the sheet opens up big, the way the legacy sheets did. Set to `0` to
 		 * open at the smallest/peek height instead.
 		 */
-		defaultSnap = undefined as undefined | number,
+		default_snap = undefined as undefined | number,
 
 		/** The current snap point index (`$bindable`) */
 		snap = $bindable(0) as number,
@@ -37,17 +37,17 @@
 		 * Morph progress (0-1) of the sheet between its collapsed and expanded
 		 * states. Drives the optional morphing header. By default it interpolates
 		 * across the gap between the two smallest snap points; override the range
-		 * with {@link morphRange}. Bind to it (`bind:morphPercent`) or read it from
+		 * with {@link morph_range}. Bind to it (`bind:morph_percent`) or read it from
 		 * the {@link onmorph} callback / the `--morph-percent` CSS variable.
 		 */
-		morphPercent = $bindable(0) as number,
+		morph_percent = $bindable(0) as number,
 
 		/**
-		 * The height range `[from, to]` over which {@link morphPercent} animates
+		 * The height range `[from, to]` over which {@link morph_percent} animates
 		 * from 0 to 1. Values follow the same fraction-or-pixel rule as
-		 * {@link snapPoints}. Defaults to `[snapPoints[0], snapPoints[1]]`.
+		 * {@link snap_points}. Defaults to `[snap_points[0], snap_points[1]]`.
 		 */
-		morphRange = undefined as undefined | [number, number],
+		morph_range = undefined as undefined | [number, number],
 
 		/** Whether the sheet can be dismissed by dragging down, the backdrop, or Escape */
 		dismissible = true,
@@ -64,7 +64,7 @@
 		blocking = true,
 
 		/** Maximum width of the sheet in pixels (it stays centered when wider) */
-		maxWidth = 500,
+		max_width = 500,
 
 		/** Element ID */
 		id = propId,
@@ -146,22 +146,22 @@
 	// --- Derived geometry ---
 	/** Resolve a snap value: <= 1 is a viewport fraction, > 1 is absolute pixels. */
 	const resolve = (v: number) => (v <= 1 ? v * viewport_h : v);
-	const sorted_snaps = $derived([...snapPoints].sort((a, b) => a - b));
+	const sorted_snaps = $derived([...snap_points].sort((a, b) => a - b));
 	const max_offset = $derived(Math.min(viewport_h || Infinity, container_h || Infinity));
 	const snap_heights = $derived(
 		sorted_snaps.map((v) => Math.min(resolve(v), max_offset || Infinity)),
 	);
 	const default_index = $derived(
-		defaultSnap == null
+		default_snap == null
 			? sorted_snaps.length - 1
-			: clamp(Math.round(defaultSnap), 0, sorted_snaps.length - 1),
+			: clamp(Math.round(default_snap), 0, sorted_snaps.length - 1),
 	);
 	const at_max = $derived(max_offset > 0 && offset >= max_offset - 1);
 
 	// --- Morph ---
 	const morph_range_px = $derived<[number, number]>(
-		morphRange
-			? [resolve(morphRange[0]), resolve(morphRange[1])]
+		morph_range
+			? [resolve(morph_range[0]), resolve(morph_range[1])]
 			: snap_heights.length >= 2
 				? [snap_heights[0], snap_heights[1]]
 				: [0, snap_heights[0] ?? 0],
@@ -172,7 +172,7 @@
 		return quadInOut(clamp((offset - from) / (to - from), 0, 1));
 	});
 	$effect(() => {
-		morphPercent = morph;
+		morph_percent = morph;
 		onmorph?.(morph);
 	});
 
@@ -474,7 +474,7 @@
 		style:--offset="{offset}px"
 		style:--max-offset="{max_offset || 0}px"
 		style:--morph-percent={morph}
-		style:--max-width="{maxWidth}px">
+		style:--max-width="{max_width}px">
 		<!-- Backdrop: always catches taps to dismiss; `.frosted` adds the blur + tint. -->
 		<div
 			bind:this={backdrop_el}

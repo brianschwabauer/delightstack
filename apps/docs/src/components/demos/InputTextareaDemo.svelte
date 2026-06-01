@@ -10,7 +10,7 @@
 	placeholder="Tell us about yourself..."
 	bind:value
 	rows={4}
-	autoResize
+	auto_resize
 	maxlength={500}
-	showCounter
+	show_counter
 />

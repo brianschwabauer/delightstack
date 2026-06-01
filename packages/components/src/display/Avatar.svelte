@@ -11,7 +11,7 @@
 		name = undefined as string | undefined,
 
 		/** Stable seed for the generated background color; falls back to `name` when absent */
-		colorSeed = undefined as string | undefined,
+		color_seed = undefined as string | undefined,
 
 		/** Size preset: 0=24px, 1=32px, 2=40px, 3=56px, 4=80px, 5=120px */
 		size = '1' as '0' | '1' | '2' | '3' | '4' | '5',
@@ -23,7 +23,7 @@
 		status = undefined as 'online' | 'away' | 'busy' | 'offline' | undefined,
 
 		/** Position of the status dot */
-		statusPosition = 'bottom' as 'top' | 'bottom',
+		status_position = 'bottom' as 'top' | 'bottom',
 
 		/** Badge: true for dot, number for count */
 		badge = undefined as number | boolean | undefined,
@@ -32,7 +32,7 @@
 		ring = false,
 
 		/** Custom ring color */
-		ringColor = undefined as string | undefined,
+		ring_color = undefined as string | undefined,
 
 		/** Show a skeleton shimmer placeholder */
 		skeleton = false,
@@ -81,7 +81,7 @@
 	const showInitials = $derived(!showImage && name);
 	const showIcon = $derived(!showImage && !name);
 	const initials = $derived(name ? getInitials(name) : '');
-	const colorKey = $derived(colorSeed ?? name);
+	const colorKey = $derived(color_seed ?? name);
 	const nameColor = $derived(colorKey ? getNameColor(colorKey) : undefined);
 	const isInteractive = $derived(!!onclick);
 	const badgeText = $derived(
@@ -123,7 +123,7 @@
 	role={isInteractive ? 'button' : 'img'}
 	tabindex={isInteractive ? 0 : undefined}
 	aria-label={name || 'Avatar'}
-	style:--ring-color={ringColor || null}
+	style:--ring-color={ring_color || null}
 	style:--name-color={nameColor || null}
 	{onclick}
 	onkeydown={isInteractive ? handleKeyDown : undefined}
@@ -154,8 +154,8 @@
 	{#if status}
 		<span
 			class="status {status}"
-			class:top={statusPosition === 'top'}
-			class:bottom={statusPosition === 'bottom'}
+			class:top={status_position === 'top'}
+			class:bottom={status_position === 'bottom'}
 			aria-label={statusLabel[status]}>
 		</span>
 	{/if}

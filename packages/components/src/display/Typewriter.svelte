@@ -14,16 +14,16 @@
 		loop = false,
 
 		/** Pause duration between cycling texts (ms) */
-		pauseBetween = 2000,
+		pause_between = 2000,
 
 		/** Cursor style: 'block', 'line', 'underscore', or false to hide */
 		cursor = 'line' as 'block' | 'line' | 'underscore' | false,
 
 		/** Whether the cursor blinks when idle */
-		cursorBlink = true,
+		cursor_blink = true,
 
 		/** Backspace speed in milliseconds per character */
-		deleteSpeed = 30,
+		delete_speed = 30,
 
 		/** Whether the animation is paused */
 		paused = false,
@@ -47,10 +47,10 @@
 		speed?: number;
 		delay?: number;
 		loop?: boolean;
-		pauseBetween?: number;
+		pause_between?: number;
 		cursor?: 'block' | 'line' | 'underscore' | false;
-		cursorBlink?: boolean;
-		deleteSpeed?: number;
+		cursor_blink?: boolean;
+		delete_speed?: number;
 		paused?: boolean;
 		id?: string;
 		class?: string;
@@ -148,7 +148,7 @@
 			return;
 		}
 
-		const char_delay = deleteSpeed * (0.8 + Math.random() * 0.4);
+		const char_delay = delete_speed * (0.8 + Math.random() * 0.4);
 
 		safeTimeout(() => {
 			displayed = displayed.slice(0, -1);
@@ -192,7 +192,7 @@
 						deleteText(next_common, () => {
 							runSequence(next_index);
 						});
-					}, pauseBetween);
+					}, pause_between);
 				} else {
 					// Single text: done
 					oncomplete?.();
@@ -257,7 +257,7 @@
 	class:cursor-line={cursor === 'line'}
 	class:cursor-block={cursor === 'block'}
 	class:cursor-underscore={cursor === 'underscore'}
-	class:cursor-blink={cursorBlink && !is_typing && cursor !== false}
+	class:cursor-blink={cursor_blink && !is_typing && cursor !== false}
 	class:has-cursor={cursor !== false}
 	class:is-typing={is_typing}
 	{id}

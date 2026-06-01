@@ -11,7 +11,7 @@
 			skeleton={showSkeleton}
 			height="100%"
 			src="https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf"
-			showToolbar={false} />
+			show_toolbar={false} />
 	</div>
 	<Button outline dense size="0" onclick={() => (showSkeleton = !showSkeleton)}>
 		Toggle skeleton ({showSkeleton ? 'on' : 'off'})

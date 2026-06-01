@@ -16,16 +16,16 @@
 		filename = undefined as string | undefined,
 
 		/** Whether to show line numbers */
-		showLineNumbers = true,
+		show_line_numbers = true,
 
 		/** Whether to show the copy button */
-		showCopy = true,
+		show_copy = true,
 
 		/** Starting line number */
-		startLine = 1,
+		start_line = 1,
 
 		/** Line numbers to highlight */
-		highlightLines = [] as number[],
+		highlight_lines = [] as number[],
 
 		/** Render as unified diff */
 		diff = false,
@@ -34,7 +34,7 @@
 		wrap = false,
 
 		/** Maximum height with overflow scroll */
-		maxHeight = undefined as string | undefined,
+		max_height = undefined as string | undefined,
 
 		/** Show loading skeleton */
 		skeleton = false,
@@ -48,13 +48,13 @@
 		code: string;
 		language?: string;
 		filename?: string;
-		showLineNumbers?: boolean;
-		showCopy?: boolean;
-		startLine?: number;
-		highlightLines?: number[];
+		show_line_numbers?: boolean;
+		show_copy?: boolean;
+		start_line?: number;
+		highlight_lines?: number[];
 		diff?: boolean;
 		wrap?: boolean;
-		maxHeight?: string;
+		max_height?: string;
 		skeleton?: boolean;
 		id?: string;
 		class?: string;
@@ -331,9 +331,9 @@
 
 	const tokenized_lines = $derived(lines.map((line) => tokenizeLine(line, language)));
 
-	const highlight_set = $derived(new Set(highlightLines));
+	const highlight_set = $derived(new Set(highlight_lines));
 
-	const show_header = $derived(!!filename || showCopy);
+	const show_header = $derived(!!filename || show_copy);
 
 	function getDiffClass(line: string): string {
 		if (line.startsWith('@@')) return 'diff-section';
@@ -370,7 +370,7 @@
 				{:else}
 					<span></span>
 				{/if}
-				{#if showCopy}
+				{#if show_copy}
 					<button
 						type="button"
 						class="code-copy"
@@ -416,16 +416,16 @@
 			</div>
 		{/if}
 
-		<div class="code-body" style:max-height={maxHeight}>
+		<div class="code-body" style:max-height={max_height}>
 			<pre><code>{#each tokenized_lines as tokens, i}{@const line_num =
-							startLine + i}{@const is_highlighted =
+							start_line + i}{@const is_highlighted =
 							highlight_set.has(line_num)}{@const raw_line = lines[i]}<span
 							class="code-line"
 							class:highlighted={is_highlighted}
 							class:diff-add={diff && getDiffClass(raw_line) === 'diff-add'}
 							class:diff-remove={diff && getDiffClass(raw_line) === 'diff-remove'}
 							class:diff-section={diff &&
-								getDiffClass(raw_line) === 'diff-section'}>{#if showLineNumbers}<span
+								getDiffClass(raw_line) === 'diff-section'}>{#if show_line_numbers}<span
 									class="line-number"
 									class:highlighted={is_highlighted}
 									aria-hidden="true">{line_num}</span>{/if}<span

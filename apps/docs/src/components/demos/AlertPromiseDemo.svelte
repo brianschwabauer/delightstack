@@ -21,6 +21,6 @@
 	bind:open={showAlert}
 	title="Process Data"
 	message="This may take a moment."
-	continueText="Process"
+	continue_text="Process"
 	oncontinue={handleContinue}
 />

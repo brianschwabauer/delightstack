@@ -6,8 +6,8 @@
 
 <Calendar
 	bind:value={date}
-	showTimeSlots
-	timeSlotInterval={15}
-	timeSlotMin="09:00"
-	timeSlotMax="17:00"
+	show_time_slots
+	time_slot_interval={15}
+	time_slot_min="09:00"
+	time_slot_max="17:00"
 />

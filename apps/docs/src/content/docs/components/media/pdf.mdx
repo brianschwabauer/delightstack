@@ -100,7 +100,7 @@ Enable annotation tools (highlight and note modes) in the toolbar.
 
 Hide the toolbar and download button for an embedded read-only view.
 
-<ComponentPreview code={`<PDF src="/documents/preview.pdf" showToolbar={false} height="400px" />`}>
+<ComponentPreview code={`<PDF src="/documents/preview.pdf" show_toolbar={false} height="400px" />`}>
 	<PdfMinimalDemo client:visible />
 </ComponentPreview>
 
@@ -121,7 +121,7 @@ ${' '}let total_pages = $state(0);
 ${'  '}src="/documents/preview.pdf"
 ${'  '}bind:page
 ${'  '}single_page
-${'  '}showToolbar={false}
+${'  '}show_toolbar={false}
 ${'  '}fit="page"
 ${'  '}onload={(d) => total_pages = d.total_pages} />
 
@@ -146,8 +146,8 @@ ${'  '}onload={(d) => total_pages = d.total_pages} />
 | `zoom` | `number` | `1` | Zoom level where 1 = 100% (`$bindable`) |
 | `rotation` | `number` | `0` | Rotation in degrees (0, 90, 180, 270) |
 | `fit` | `'width' \| 'height' \| 'page'` | `'width'` | Initial fit mode |
-| `showToolbar` | `boolean` | `true` | Show the toolbar |
-| `showDownload` | `boolean` | `true` | Show the download button in the toolbar |
+| `show_toolbar` | `boolean` | `true` | Show the toolbar |
+| `show_download` | `boolean` | `true` | Show the download button in the toolbar |
 | `searchable` | `boolean` | `true` | Enable text search |
 | `annotatable` | `boolean` | `false` | Enable annotation tools |
 | `height` | `string` | `'600px'` | Container height |

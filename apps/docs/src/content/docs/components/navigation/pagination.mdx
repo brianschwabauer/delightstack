@@ -27,7 +27,7 @@ ${'  '}import { Pagination } from '@delightstack/components';
 ${'  '}let page = $state(1);
 </script>
 
-<Pagination bind:page totalPages={10} />`}>
+<Pagination bind:page total_pages={10} />`}>
 	<PaginationDemo client:load />
 </ComponentPreview>
 
@@ -37,7 +37,7 @@ ${'  '}let page = $state(1);
 
 A minimal prev/next layout with "Page X of Y" text.
 
-<ComponentPreview code={`<Pagination bind:page totalPages={10} simple />`}>
+<ComponentPreview code={`<Pagination bind:page total_pages={10} simple />`}>
 	<PaginationSimpleDemo client:load />
 </ComponentPreview>
 
@@ -45,7 +45,7 @@ A minimal prev/next layout with "Page X of Y" text.
 
 An even more minimal layout with just arrows and "X / Y".
 
-<ComponentPreview code={`<Pagination bind:page totalPages={10} compact />`}>
+<ComponentPreview code={`<Pagination bind:page total_pages={10} compact />`}>
 	<PaginationCompactDemo client:load />
 </ComponentPreview>
 
@@ -57,15 +57,15 @@ Show a dropdown to change the number of items per page.
 ${'  '}import { Pagination } from '@delightstack/components';
 
 ${'  '}let page = $state(1);
-${'  '}let pageSize = $state(25);
+${'  '}let page_size = $state(25);
 </script>
 
 <Pagination
 ${'  '}bind:page
-${'  '}bind:pageSize
-${'  '}totalPages={40}
-${'  '}showPageSize
-${'  '}pageSizeOptions={[10, 25, 50, 100]}
+${'  '}bind:page_size
+${'  '}total_pages={40}
+${'  '}show_page_size
+${'  '}page_size_options={[10, 25, 50, 100]}
 ${'  '}onpagesizechange={() => {
 ${'  '}${'  '}page = 1;
 ${'  '}}}
@@ -77,7 +77,7 @@ ${'  '}}}
 
 Show "Showing X-Y of Z" alongside pagination.
 
-<ComponentPreview code={`<Pagination bind:page totalPages={20} totalItems={500} pageSize={25} showInfo />`}>
+<ComponentPreview code={`<Pagination bind:page total_pages={20} total_items={500} page_size={25} show_info />`}>
 	<PaginationInfoDemo client:load />
 </ComponentPreview>
 
@@ -85,15 +85,15 @@ Show "Showing X-Y of Z" alongside pagination.
 
 Control how many sibling and boundary pages are visible.
 
-<ComponentPreview code={`<Pagination bind:page totalPages={50} siblingCount={2} boundaryCount={2} />`}>
+<ComponentPreview code={`<Pagination bind:page total_pages={50} sibling_count={2} boundary_count={2} />`}>
 	<PaginationEllipsisDemo client:load />
 </ComponentPreview>
 
 ### Sizes
 
-<ComponentPreview code={`<Pagination bind:page totalPages={10} size="0" />  <!-- Small -->
-<Pagination bind:page totalPages={10} size="2" />  <!-- Medium -->
-<Pagination bind:page totalPages={10} size="3" />  <!-- Large -->`}>
+<ComponentPreview code={`<Pagination bind:page total_pages={10} size="0" />  <!-- Small -->
+<Pagination bind:page total_pages={10} size="2" />  <!-- Medium -->
+<Pagination bind:page total_pages={10} size="3" />  <!-- Large -->`}>
 	<PaginationSizesDemo client:load />
 </ComponentPreview>
 
@@ -108,16 +108,16 @@ Control how many sibling and boundary pages are visible.
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `page` | `number` | `1` | Current page number, 1-based (`$bindable`) |
-| `totalPages` | `number` | required | Total number of pages |
-| `totalItems` | `number` | `undefined` | Total number of items (used for info display) |
-| `pageSize` | `number` | `10` | Number of items per page (`$bindable`) |
-| `pageSizeOptions` | `number[]` | `[10, 25, 50, 100]` | Options for the page size selector |
+| `total_pages` | `number` | required | Total number of pages |
+| `total_items` | `number` | `undefined` | Total number of items (used for info display) |
+| `page_size` | `number` | `10` | Number of items per page (`$bindable`) |
+| `page_size_options` | `number[]` | `[10, 25, 50, 100]` | Options for the page size selector |
 | `simple` | `boolean` | `false` | Simple mode: prev/next with "Page X of Y" |
 | `compact` | `boolean` | `false` | Compact mode: minimal prev/next with "X / Y" |
-| `showPageSize` | `boolean` | `false` | Show a page size selector |
-| `showInfo` | `boolean` | `false` | Show item range info ("Showing X-Y of Z") |
-| `siblingCount` | `number` | `1` | Number of sibling pages to show around the current page |
-| `boundaryCount` | `number` | `1` | Number of pages to always show at the start and end |
+| `show_page_size` | `boolean` | `false` | Show a page size selector |
+| `show_info` | `boolean` | `false` | Show item range info ("Showing X-Y of Z") |
+| `sibling_count` | `number` | `1` | Number of sibling pages to show around the current page |
+| `boundary_count` | `number` | `1` | Number of pages to always show at the start and end |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size of the pagination buttons |
 | `skeleton` | `boolean` | `false` | Show skeleton placeholder |
 | `id` | `string` | auto | Element ID |
@@ -128,7 +128,7 @@ Control how many sibling and boundary pages are visible.
 | Event | Detail | Description |
 |-------|--------|-------------|
 | `onchange` | `{ page: number }` | Fires when the page changes |
-| `onpagesizechange` | `{ pageSize: number }` | Fires when the page size changes |
+| `onpagesizechange` | `{ page_size: number }` | Fires when the page size changes |
 
 ## Accessibility
 

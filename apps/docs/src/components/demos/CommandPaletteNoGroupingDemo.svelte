@@ -15,4 +15,4 @@
 
 <Button onclick={() => (open = true)}>Open Ungrouped Palette</Button>
 
-<CommandPalette bind:open {commands} groupBy="none" placeholder="Search…" />
+<CommandPalette bind:open {commands} group_by="none" placeholder="Search…" />

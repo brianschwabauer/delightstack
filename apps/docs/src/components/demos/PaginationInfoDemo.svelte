@@ -5,5 +5,5 @@
 </script>
 
 <div style="width: 100%;">
-	<Pagination bind:page totalPages={20} totalItems={500} pageSize={25} showInfo />
+	<Pagination bind:page total_pages={20} total_items={500} page_size={25} show_info />
 </div>

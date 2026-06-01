@@ -36,10 +36,10 @@
 		multiple = false,
 
 		/** Maximum file size in bytes */
-		maxSize = undefined as number | undefined,
+		max_size = undefined as number | undefined,
 
 		/** Maximum number of files allowed */
-		maxFiles = undefined as number | undefined,
+		max_files = undefined as number | undefined,
 
 		/** Whether the file upload is disabled */
 		disabled = false,
@@ -93,7 +93,7 @@
 		onerror = undefined as ((detail: { file: File; error: string }) => void) | undefined,
 
 		/** Custom snippet for rendering each file item */
-		fileItem = undefined as
+		file_item = undefined as
 			| Snippet<[{ file: File; index: number; remove: () => void }]>
 			| undefined,
 	} = $props();
@@ -178,8 +178,8 @@
 			}
 
 			// Size validation
-			if (maxSize && file.size > maxSize) {
-				onerror?.({ file, error: `File exceeds maximum size of ${formatSize(maxSize)}` });
+			if (max_size && file.size > max_size) {
+				onerror?.({ file, error: `File exceeds maximum size of ${formatSize(max_size)}` });
 				continue;
 			}
 
@@ -201,12 +201,12 @@
 		if (multiple) {
 			new_files = [...files, ...valid_files];
 			// Count validation
-			if (maxFiles && new_files.length > maxFiles) {
-				const excess = new_files.slice(maxFiles);
+			if (max_files && new_files.length > max_files) {
+				const excess = new_files.slice(max_files);
 				for (const file of excess) {
-					onerror?.({ file, error: `Maximum of ${maxFiles} files allowed` });
+					onerror?.({ file, error: `Maximum of ${max_files} files allowed` });
 				}
-				new_files = new_files.slice(0, maxFiles);
+				new_files = new_files.slice(0, max_files);
 			}
 		} else {
 			new_files = [valid_files[0]];
@@ -424,8 +424,8 @@
 	{#if !avatar && files.length > 0}
 		<div class="file-list" role="list" aria-label="Selected files">
 			{#each files as file, index (file)}
-				{#if fileItem}
-					{@render fileItem({ file, index, remove: () => removeFile(index) })}
+				{#if file_item}
+					{@render file_item({ file, index, remove: () => removeFile(index) })}
 				{:else}
 					<div class="file-item" role="listitem">
 						{#if preview && isImage(file) && preview_urls.get(file)}

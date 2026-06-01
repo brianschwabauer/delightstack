@@ -25,10 +25,10 @@
 <Table
 	{data}
 	{columns}
-	virtualScroll={{ maxHeight: 360 }}
+	virtual_scroll={{ max_height: 360 }}
 	striped
-	bind:sortBy
-	bind:sortDirection />
+	bind:sort_by={sortBy}
+	bind:sort_direction={sortDirection} />
 
 <p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--color-text-secondary);">
 	{data.length.toLocaleString()} rows — scroll the table; only the visible window renders.

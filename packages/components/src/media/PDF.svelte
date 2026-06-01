@@ -28,10 +28,10 @@
 		fit = 'width' as 'width' | 'height' | 'page',
 
 		/** Show toolbar */
-		showToolbar = true,
+		show_toolbar = true,
 
 		/** Show download button in toolbar */
-		showDownload = true,
+		show_download = true,
 
 		/** Enable text search */
 		searchable = true,
@@ -46,7 +46,7 @@
 		 * When true, only the current `page` is rendered (others hidden), the
 		 * internal scroll container is disabled, and the page is centered to
 		 * fill the container. The toolbar is typically also hidden via
-		 * `showToolbar={false}`. Used when an external orchestrator (e.g. the
+		 * `show_toolbar={false}`. Used when an external orchestrator (e.g. the
 		 * Carousel component) drives page navigation.
 		 */
 		single_page = false,
@@ -56,7 +56,7 @@
 		 * the bound `page` is shown. Defaults to true for standalone use. The
 		 * Carousel sets this false because it drives the slide translation itself.
 		 */
-		autoPaginate = true,
+		auto_paginate = true,
 
 		/**
 		 * Multiplier applied to the rendered canvas resolution without changing
@@ -109,13 +109,13 @@
 		zoom?: number;
 		rotation?: number;
 		fit?: 'width' | 'height' | 'page';
-		showToolbar?: boolean;
-		showDownload?: boolean;
+		show_toolbar?: boolean;
+		show_download?: boolean;
 		searchable?: boolean;
 		annotatable?: boolean;
 		height?: string;
 		single_page?: boolean;
-		autoPaginate?: boolean;
+		auto_paginate?: boolean;
 		pixel_density?: number;
 		skeleton?: boolean;
 		text_layer?: boolean;
@@ -933,7 +933,7 @@
 	{id}
 	class={['pdf-container', className].filter(Boolean).join(' ')}
 	class:single-page={single_page}
-	class:auto-paginate={single_page && autoPaginate}
+	class:auto-paginate={single_page && auto_paginate}
 	style:--pdf-height={height}
 	bind:this={element}
 	onkeydown={handleKeydown}
@@ -945,7 +945,7 @@
 		     the Carousel, which prefers a blank slide over a placeholder UI
 		     while the document is being fetched). -->
 		<div class="pdf-skeleton">
-			{#if showToolbar}
+			{#if show_toolbar}
 				<div class="pdf-skeleton-toolbar">
 					<div class="pdf-skeleton-block" style="width: 6rem; height: 1.5rem;"></div>
 					<div class="pdf-skeleton-block" style="width: 4rem; height: 1.5rem;"></div>
@@ -985,7 +985,7 @@
 		</div>
 	{:else}
 		<!-- Toolbar -->
-		{#if showToolbar}
+		{#if show_toolbar}
 			<div class="pdf-toolbar">
 				<!-- Page navigation -->
 				<div class="pdf-toolbar-group">
@@ -1162,7 +1162,7 @@
 				{/if}
 
 				<!-- Download button -->
-				{#if showDownload}
+				{#if show_download}
 					<button
 						type="button"
 						class="pdf-toolbar-btn"
@@ -1321,7 +1321,7 @@
 		<div
 			class="pdf-pages"
 			bind:this={pages_container}
-			style={single_page && autoPaginate
+			style={single_page && auto_paginate
 				? `transform: translateY(-${(page - 1) * 100}%); transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);`
 				: undefined}>
 			{#each page_infos as info, i}

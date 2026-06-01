@@ -84,9 +84,9 @@ ${'  '}type="textarea"
 ${'  '}label="Bio"
 ${'  '}bind:value={bio}
 ${'  '}rows={4}
-${'  '}autoResize
+${'  '}auto_resize
 ${'  '}maxlength={500}
-${'  '}showCounter
+${'  '}show_counter
 />`}>
 	<InputTextareaDemo client:load />
 </ComponentPreview>
@@ -97,8 +97,8 @@ ${'  '}showCounter
 ${'  '}type="password"
 ${'  '}label="Password"
 ${'  '}bind:value={password}
-${'  '}showToggle
-${'  '}strengthIndicator
+${'  '}show_toggle
+${'  '}strength_indicator
 />`}>
 	<InputPasswordDemo client:load />
 </ComponentPreview>
@@ -241,7 +241,7 @@ ${'  '}helper="We'll never share your email"
 | `suffix` | `string` | - | Text after input |
 | `icon` | `Component` | - | Leading icon component |
 | `clearable` | `boolean` | `false` | Show clear button |
-| `showCounter` | `boolean` | `false` | Show character count |
+| `show_counter` | `boolean` | `false` | Show character count |
 | `helper` | `string` | - | Helper text below input |
 | `dense` | `boolean` | `false` | Tighter internal spacing |
 | `comfortable` | `boolean` | `false` | More internal spacing |
@@ -266,14 +266,14 @@ ${'  '}helper="We'll never share your email"
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `rows` | `number` | `3` | Initial rows for textarea |
-| `autoResize` | `boolean` | `false` | Auto-grow textarea to fit content |
+| `auto_resize` | `boolean` | `false` | Auto-grow textarea to fit content |
 
 ### Password
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `showToggle` | `boolean` | `false` | Show password visibility toggle |
-| `strengthIndicator` | `boolean` | `false` | Show password strength meter |
+| `show_toggle` | `boolean` | `false` | Show password visibility toggle |
+| `strength_indicator` | `boolean` | `false` | Show password strength meter |
 
 ### Mask
 

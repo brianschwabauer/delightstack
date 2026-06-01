@@ -173,7 +173,7 @@
 			title: 'Delete Orders',
 			message: `Are you sure you want to delete ${tableSelected.length} selected order(s)? This action cannot be undone.`,
 			destructive: true,
-			continueText: 'Delete',
+			continue_text: 'Delete',
 		});
 		if (confirmed) {
 			tableSelected = [];
@@ -298,7 +298,7 @@
 		<!-- Header -->
 		<header class="header">
 			<div class="header-left">
-				<Breadcrumbs items={breadcrumbs} showHome={false} size="0" />
+				<Breadcrumbs items={breadcrumbs} show_home={false} size="0" />
 			</div>
 			<div class="header-right">
 				<Button icon transparent size="1" onclick={() => drawerOpen = true}>
@@ -337,10 +337,10 @@
 
 			<!-- Stats -->
 			<div class="stats-row">
-				<div class="card stat-card"><Stat value="$48,352" label="Revenue" change={12.5} changeLabel="vs last month" size="1" /></div>
-				<div class="card stat-card"><Stat value="2,847" label="Active Users" change={8.2} changeLabel="vs last month" size="1" /></div>
-				<div class="card stat-card"><Stat value="3.6%" label="Conversion" change={0.4} changeLabel="vs last month" size="1" /></div>
-				<div class="card stat-card"><Stat value="23" label="Open Tickets" change={-15.3} changeLabel="vs last month" size="1" /></div>
+				<div class="card stat-card"><Stat value="$48,352" label="Revenue" change={12.5} change_label="vs last month" size="1" /></div>
+				<div class="card stat-card"><Stat value="2,847" label="Active Users" change={8.2} change_label="vs last month" size="1" /></div>
+				<div class="card stat-card"><Stat value="3.6%" label="Conversion" change={0.4} change_label="vs last month" size="1" /></div>
+				<div class="card stat-card"><Stat value="23" label="Open Tickets" change={-15.3} change_label="vs last month" size="1" /></div>
 			</div>
 
 			<!-- Tab bar -->
@@ -364,11 +364,11 @@
 									<Button>Year</Button>
 								</ButtonGroup>
 							</div>
-							<Chart type="area" data={revenueData} height={280} curved showPoints={false} />
+							<Chart type="area" data={revenueData} height={280} curved show_points={false} />
 						</div>
 						<div class="card chart-card chart-narrow">
 							<div class="card-header"><h3>Sales by Category</h3></div>
-							<Chart type="donut" data={categoryData} height={280} innerRadius={0.55} />
+							<Chart type="donut" data={categoryData} height={280} inner_radius={0.55} />
 						</div>
 					</div>
 
@@ -424,8 +424,8 @@
 						<Table
 							data={filteredOrders}
 							{columns}
-							bind:sortBy={tableSortBy}
-							bind:sortDirection={tableSortDir}
+							bind:sort_by={tableSortBy}
+							bind:sort_direction={tableSortDir}
 							bind:selected={tableSelected}
 							selectable
 							striped
@@ -433,7 +433,7 @@
 					</div>
 					<div class="table-footer">
 						<span class="table-info">{filteredOrders.length} orders</span>
-						<Pagination bind:page={tablePage} totalPages={5} />
+						<Pagination bind:page={tablePage} total_pages={5} />
 					</div>
 				</div>
 			{:else if activeTab === 'team'}
@@ -582,7 +582,7 @@
 </div>
 
 <!-- Settings Modal -->
-<Modal bind:open={settingsOpen} title="Quick Settings" maxWidth="480px">
+<Modal bind:open={settingsOpen} title="Quick Settings" max_width="480px">
 	<div class="modal-settings">
 		<Input label="Display Name" bind:value={profileName} />
 		<Input label="Email" type="email" bind:value={profileEmail} />

@@ -4,7 +4,7 @@
 
 <Table
 	skeleton
-	skeletonCount={5}
+	skeleton_count={5}
 	columns={[
 		{ key: 'name', label: 'Name' },
 		{ key: 'email', label: 'Email' },

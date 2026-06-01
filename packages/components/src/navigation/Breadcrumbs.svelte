@@ -20,13 +20,13 @@
 		/** Max visible items before collapsing middle items into an ellipsis dropdown.
 		 *  When undefined, the component auto-collapses to fit the container width using
 		 *  pure CSS container queries (no JS measurement, works during SSR). */
-		maxItems = undefined as number | undefined,
+		max_items = undefined as number | undefined,
 
 		/** Whether to show a home icon as the first breadcrumb */
-		showHome = true,
+		show_home = true,
 
 		/** The href for the home breadcrumb */
-		homeHref = '/',
+		home_href = '/',
 
 		/** The size of the breadcrumbs */
 		size = '1' as '0' | '1' | '2' | '3',
@@ -39,7 +39,7 @@
 		skeleton = false,
 
 		/** Number of skeleton placeholder items */
-		skeletonCount = 3,
+		skeleton_count = 3,
 
 		/** The ID of the element */
 		id = propId,
@@ -60,7 +60,7 @@
 	} = $props();
 
 	const allItems = $derived<BreadcrumbItem[]>(
-		showHome ? [{ label: 'Home', href: homeHref }, ...items] : items,
+		show_home ? [{ label: 'Home', href: home_href }, ...items] : items,
 	);
 
 	// Only show the skeleton when explicitly requested AND there is no real data
@@ -100,11 +100,11 @@
 	const n = $derived(allItems.length);
 
 	// head = always-visible first item; tail = always-visible last N items.
-	const tailCount = $derived(maxItems !== undefined ? Math.max(1, maxItems - 2) : 2);
+	const tailCount = $derived(max_items !== undefined ? Math.max(1, max_items - 2) : 2);
 	const tailStart = $derived(n - tailCount);
 
 	const collapsible = $derived(
-		maxItems !== undefined ? maxItems >= 2 && n > maxItems : n >= 4,
+		max_items !== undefined ? max_items >= 2 && n > max_items : n >= 4,
 	);
 
 	type MiddleEntry = { item: BreadcrumbItem; index: number; reveal: number };
@@ -114,9 +114,9 @@
 		if (!collapsible) {
 			return { middle: [] as MiddleEntry[], ellipsisReveal: 0 };
 		}
-		const isAuto = maxItems === undefined;
+		const isAuto = max_items === undefined;
 		const ests = allItems.map((it, i) =>
-			estItem(it, i, showHome && i === 0, i === n - 1),
+			estItem(it, i, show_home && i === 0, i === n - 1),
 		);
 		const middle: MiddleEntry[] = [];
 
@@ -145,7 +145,7 @@
 			return { middle, ellipsisReveal };
 		}
 
-		// Explicit maxItems: collapse the whole middle block at once.
+		// Explicit max_items: collapse the whole middle block at once.
 		const ALWAYS = 99999;
 		for (let i = 1; i < tailStart; i++) {
 			middle.push({ item: allItems[i], index: i, reveal: ALWAYS });
@@ -269,7 +269,7 @@
 {#snippet itemButton(item: BreadcrumbItem, index: number, isLast: boolean)}
 	{#if isLast}
 		<span class="breadcrumb-label current">
-			{#if showHome && index === 0}
+			{#if show_home && index === 0}
 				{@render homeIcon()}
 				<span class="sr-only">{item.label}</span>
 			{:else}
@@ -282,7 +282,7 @@
 			dense
 			href={item.href}
 			onclick={item.href ? undefined : () => handleItemClick(item, index)}>
-			{#if showHome && index === 0}
+			{#if show_home && index === 0}
 				{@render homeIcon()}
 				<span class="sr-only">{item.label}</span>
 			{:else}
@@ -295,13 +295,13 @@
 {#if showSkeleton}
 	<nav class={navClass} aria-label="Breadcrumb" aria-hidden="true" {id}>
 		<ol class="breadcrumb-list">
-			{#if showHome}
+			{#if show_home}
 				<li class="breadcrumb-item">
 					<span class="bc-skeleton-cell">{@render homeIcon()}</span>
 				</li>
 			{/if}
-			{#each { length: skeletonCount } as _, i}
-				{#if showHome || i > 0}
+			{#each { length: skeleton_count } as _, i}
+				{#if show_home || i > 0}
 					<li class="breadcrumb-separator">{@render sep()}</li>
 				{/if}
 				<li class="breadcrumb-item">
@@ -360,7 +360,7 @@
 						dense
 						aria-label="Show hidden breadcrumbs"
 						tooltip="Show hidden breadcrumbs"
-						popoverPlacement="bottom-start">
+						popover_placement="bottom-start">
 						{#snippet children()}…{/snippet}
 						{#snippet menu({ close })}
 							<List>

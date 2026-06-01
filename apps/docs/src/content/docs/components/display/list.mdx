@@ -88,8 +88,8 @@ ${'  '}<ListItem>Another item</ListItem>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<List skeleton skeletonCount={4} />`}>
-  <List client:load skeleton skeletonCount={4} />
+<ComponentPreview code={`<List skeleton skeleton_count={4} />`}>
+  <List client:load skeleton skeleton_count={4} />
 </ComponentPreview>
 
 ## Props
@@ -102,10 +102,10 @@ ${'  '}<ListItem>Another item</ListItem>
 | `comfortable` | `boolean` | `false` | Relaxed spacing |
 | `disabled` | `boolean` | `false` | Disable all items |
 | `touched` | `boolean` | `false` | Whether the user has interacted (bindable) |
-| `paddingX` | `string` | - | Horizontal padding override (e.g. `'16px'`) |
-| `paddingY` | `string` | - | Vertical padding override (e.g. `'16px'`) |
+| `padding_x` | `string` | - | Horizontal padding override (e.g. `'16px'`) |
+| `padding_y` | `string` | - | Vertical padding override (e.g. `'16px'`) |
 | `skeleton` | `boolean` | `false` | Show loading skeleton items |
-| `skeletonCount` | `number` | `5` | Number of skeleton items to show |
+| `skeleton_count` | `number` | `5` | Number of skeleton items to show |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 | `style` | `string` | `''` | Additional inline styles |

@@ -6,7 +6,7 @@
 
 <div style="width: 100%;">
 	<FileUpload bind:files multiple label="Upload files">
-		{#snippet fileItem({ file, index, remove })}
+		{#snippet file_item({ file, index, remove })}
 			<div
 				style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--color-border, #ddd); border-radius: 0.375rem; margin-top: 0.5rem;"
 			>

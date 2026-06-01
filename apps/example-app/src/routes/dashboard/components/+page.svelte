@@ -347,7 +347,7 @@
 			</figure>
 			<figure>
 				<figcaption>auto-resize</figcaption>
-				<Input type="textarea" label="Notes" autoResize bind:value={notes} />
+				<Input type="textarea" label="Notes" auto_resize bind:value={notes} />
 			</figure>
 			<figure>
 				<figcaption>with counter</figcaption>
@@ -355,7 +355,7 @@
 					type="textarea"
 					label="Message"
 					maxlength={200}
-					showCounter
+					show_counter
 					bind:value={counted} />
 			</figure>
 		</div>
@@ -463,7 +463,7 @@
 				<Input
 					type="password"
 					label="Password"
-					showToggle
+					show_toggle
 					icon={IconLock}
 					bind:value={pwToggle} />
 			</figure>
@@ -472,8 +472,8 @@
 				<Input
 					type="password"
 					label="New password"
-					showToggle
-					strengthIndicator
+					show_toggle
+					strength_indicator
 					bind:value={pwStrength} />
 			</figure>
 		</div>

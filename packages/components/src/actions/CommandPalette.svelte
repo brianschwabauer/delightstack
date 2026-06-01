@@ -215,10 +215,10 @@
 		placeholder = 'Type a command or search...',
 
 		/** Maximum number of recent commands to show */
-		recentLimit = 5,
+		recent_limit = 5,
 
 		/** How to group results */
-		groupBy = 'category' as 'category' | 'none',
+		group_by = 'category' as 'category' | 'none',
 
 		/** Compact spacing mode */
 		dense = false,
@@ -255,7 +255,7 @@
 		return recentCommandIds
 			.map((rid) => commands.find((c) => c.id === rid))
 			.filter((c): c is CommandOption => c != null)
-			.slice(0, recentLimit);
+			.slice(0, recent_limit);
 	});
 
 	// The flat list of commands currently visible. When there's no query,
@@ -289,7 +289,7 @@
 	const grouped_commands = $derived.by((): CommandGroup[] => {
 		const cmds = visible_commands;
 		const has_recent = !query.trim() && recent_commands.length > 0;
-		if (groupBy === 'none') {
+		if (group_by === 'none') {
 			if (has_recent) {
 				const recent_ids = new Set(recent_commands.map((c) => c.id));
 				const rest = cmds.filter((c) => !recent_ids.has(c.id));
@@ -405,7 +405,7 @@
 	async function executeCommand(command: CommandOption, viaPointer = false) {
 		if (is_executing || command.disabled) return;
 
-		trackRecent(command.id, recentLimit);
+		trackRecent(command.id, recent_limit);
 		onselect?.(command);
 
 		const result = command.onselect();

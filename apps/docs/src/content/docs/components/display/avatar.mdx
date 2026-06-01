@@ -69,12 +69,12 @@ Six size presets are available, from inline mentions to hero sections.
 <Avatar name="Offline User" status="offline" />
 
 <!-- Status dot on top -->
-<Avatar name="Top Status" status="online" statusPosition="top" />`}>
+<Avatar name="Top Status" status="online" status_position="top" />`}>
 	<Avatar client:load name="Online User" status="online" />
 	<Avatar client:load name="Away User" status="away" />
 	<Avatar client:load name="Busy User" status="busy" />
 	<Avatar client:load name="Offline User" status="offline" />
-	<Avatar client:load name="Top Status" status="online" statusPosition="top" />
+	<Avatar client:load name="Top Status" status="online" status_position="top" />
 </ComponentPreview>
 
 ### Badge
@@ -96,10 +96,10 @@ Six size presets are available, from inline mentions to hero sections.
 
 <ComponentPreview code={`<Avatar name="Square" square size="3" />
 <Avatar name="Ringed" ring size="3" />
-<Avatar name="Custom Ring" ring ringColor="red" size="3" />`}>
+<Avatar name="Custom Ring" ring ring_color="red" size="3" />`}>
 	<Avatar client:load name="Square" square size="3" />
 	<Avatar client:load name="Ringed" ring size="3" />
-	<Avatar client:load name="Custom Ring" ring ringColor="red" size="3" />
+	<Avatar client:load name="Custom Ring" ring ring_color="red" size="3" />
 </ComponentPreview>
 
 ### Interactive Avatar
@@ -138,10 +138,10 @@ ${'  '}tooltip="Alice Johnson - Online"
 | `size` | `'0' \| '1' \| '2' \| '3' \| '4' \| '5'` | `'1'` | Avatar size preset |
 | `square` | `boolean` | `false` | Rounded square shape instead of circle |
 | `status` | `'online' \| 'away' \| 'busy' \| 'offline'` | - | Status indicator dot |
-| `statusPosition` | `'top' \| 'bottom'` | `'bottom'` | Status dot position |
+| `status_position` | `'top' \| 'bottom'` | `'bottom'` | Status dot position |
 | `badge` | `number \| boolean` | - | Notification badge (true for dot, number for count) |
 | `ring` | `boolean` | `false` | Show colored ring around avatar |
-| `ringColor` | `string` | - | Custom ring color |
+| `ring_color` | `string` | - | Custom ring color |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `tooltip` | `string` | `''` | Tooltip text |
 | `onclick` | `(e: MouseEvent) => void` | - | Click handler (makes avatar interactive) |

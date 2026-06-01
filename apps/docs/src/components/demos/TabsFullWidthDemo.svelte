@@ -5,7 +5,7 @@
 </script>
 
 <div style="width: 100%;">
-	<Tabs bind:value fullWidth>
+	<Tabs bind:value full_width>
 		<Tab value="a" label="First" />
 		<Tab value="b" label="Second" />
 		<Tab value="c" label="Third" />

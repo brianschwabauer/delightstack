@@ -76,7 +76,7 @@
 				/>
 			</div>
 
-			<Button onclick={createOrg} disabled={loading || !org_name.trim()} fullWidth>
+			<Button onclick={createOrg} disabled={loading || !org_name.trim()} full_width>
 				{loading ? 'Creating...' : 'Create Organization'}
 			</Button>
 		</form>

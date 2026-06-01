@@ -4,8 +4,8 @@
 	export interface AlertOptions {
 		title?: string;
 		message: string;
-		cancelText?: string;
-		continueText?: string;
+		cancel_text?: string;
+		continue_text?: string;
 		destructive?: boolean;
 		icon?: Component<Record<string, never>>;
 	}
@@ -35,8 +35,8 @@
 				open: false,
 				title: options.title || 'Confirm',
 				message: options.message,
-				cancelText: options.cancelText || 'Cancel',
-				continueText: options.continueText || 'Continue',
+				cancel_text: options.cancel_text || 'Cancel',
+				continue_text: options.continue_text || 'Continue',
 				destructive: options.destructive || false,
 				icon: options.icon,
 				oncancel: () => cleanup(false),
@@ -82,10 +82,10 @@
 		message = '',
 
 		/** Cancel button label */
-		cancelText = 'Cancel',
+		cancel_text = 'Cancel',
 
 		/** Confirm button label */
-		continueText = 'Continue',
+		continue_text = 'Continue',
 
 		/** Style confirm button with error color */
 		destructive = false,
@@ -125,9 +125,9 @@
 	bind:open
 	title=""
 	closable
-	disableCloseIcon
+	disable_close_icon
 	width="400px"
-	maxWidth="calc(100vw - 2rem)"
+	max_width="calc(100vw - 2rem)"
 	onclose={handleClose}
 	onbackdropclick={handleBackdropClick}
 	{id}
@@ -145,11 +145,11 @@
 			<p class="alert-message">{message}</p>
 		{/if}
 		<div class="alert-actions">
-			<Button accent={!destructive} error={destructive} fullWidth onclick={oncontinue}>
-				{continueText}
+			<Button accent={!destructive} error={destructive} full_width onclick={oncontinue}>
+				{continue_text}
 			</Button>
-			<Button translucent fullWidth onclick={handleCancel}>
-				{cancelText}
+			<Button translucent full_width onclick={handleCancel}>
+				{cancel_text}
 			</Button>
 		</div>
 	</div>

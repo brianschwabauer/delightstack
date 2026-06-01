@@ -112,7 +112,7 @@
 		clearable = false,
 
 		/** Show character count */
-		showCounter = false,
+		show_counter = false,
 
 		/** Helper text displayed below the input */
 		helper = undefined as string | undefined,
@@ -145,14 +145,14 @@
 		rows = 3,
 
 		/** Auto-grow textarea to fit content */
-		autoResize = false,
+		auto_resize = false,
 
 		/* ---- Password ---- */
 		/** Show password visibility toggle */
-		showToggle = false,
+		show_toggle = false,
 
 		/** Show password strength meter */
-		strengthIndicator = false,
+		strength_indicator = false,
 
 		/* ---- Mask ---- */
 		/** Input mask pattern (#=digit, A=letter, *=any) */
@@ -323,7 +323,7 @@
 
 	/** Password strength (0-4) */
 	const password_strength = $derived.by((): number => {
-		if (!strengthIndicator || type !== 'password' || typeof value !== 'string' || !value)
+		if (!strength_indicator || type !== 'password' || typeof value !== 'string' || !value)
 			return 0;
 		let score = 0;
 		if (value.length >= 8) score++;
@@ -416,13 +416,13 @@
 	/* ------------------------------------------------------------------ */
 
 	function autoResizeTextarea() {
-		if (!autoResize || !textarea_element) return;
+		if (!auto_resize || !textarea_element) return;
 		textarea_element.style.height = 'auto';
 		textarea_element.style.height = textarea_element.scrollHeight + 'px';
 	}
 
 	$effect(() => {
-		if (autoResize && textarea_element && value !== undefined) {
+		if (auto_resize && textarea_element && value !== undefined) {
 			autoResizeTextarea();
 		}
 	});
@@ -563,7 +563,7 @@
 		if (form_ctx && name) form_ctx.setValue(name, value);
 		oninput?.({ value });
 
-		if (is_textarea && autoResize) autoResizeTextarea();
+		if (is_textarea && auto_resize) autoResizeTextarea();
 
 		/* Autocomplete filtering */
 		if (has_autocomplete && typeof new_value === 'string') {
@@ -835,7 +835,7 @@
 
 	/** Counter warning state */
 	const counter_state = $derived.by((): 'normal' | 'warning' | 'error' => {
-		if (!showCounter || !maxlength) return 'normal';
+		if (!show_counter || !maxlength) return 'normal';
 		const ratio = value_length / maxlength;
 		if (ratio >= 1) return 'error';
 		if (ratio >= 0.8) return 'warning';
@@ -1035,7 +1035,7 @@
 							<Button
 								translucent
 								dense
-								fullWidth
+								full_width
 								disabled={effectively_disabled}
 								onclick={handleFileClick}>
 								<svg
@@ -1201,7 +1201,7 @@
 		{/if}
 
 		<!-- Password toggle -->
-		{#if is_password && showToggle}
+		{#if is_password && show_toggle}
 			<Button
 				icon
 				transparent
@@ -1276,7 +1276,7 @@
 	</div>
 
 	<!-- Password strength indicator -->
-	{#if is_password && strengthIndicator && typeof value === 'string' && value.length > 0}
+	{#if is_password && strength_indicator && typeof value === 'string' && value.length > 0}
 		<div class="strength-meter" aria-label="Password strength: {strength_label}">
 			<div class="strength-track">
 				{#each [1, 2, 3, 4] as segment}
@@ -1292,7 +1292,7 @@
 	{/if}
 
 	<!-- Footer row: error, helper, counter -->
-	{#if has_error || helper || (showCounter && maxlength)}
+	{#if has_error || helper || (show_counter && maxlength)}
 		<div class="input-footer">
 			{#if has_error && error_message}
 				<span class="input-error" id="{id}-error" role="alert">{error_message}</span>
@@ -1302,7 +1302,7 @@
 				<span></span>
 			{/if}
 
-			{#if showCounter && maxlength}
+			{#if show_counter && maxlength}
 				<span
 					class="input-counter"
 					class:counter-warning={counter_state === 'warning'}

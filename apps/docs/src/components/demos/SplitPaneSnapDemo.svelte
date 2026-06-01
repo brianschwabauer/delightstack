@@ -5,7 +5,7 @@
 </script>
 
 <div style="height: 250px; border: 1px solid var(--sl-color-gray-5, #e5e7eb); border-radius: 0.5rem; overflow: hidden;">
-	<SplitPane snap={[25, 50, 75]} snapThreshold={5} bind:size>
+	<SplitPane snap={[25, 50, 75]} snap_threshold={5} bind:size>
 		{#snippet first()}
 			<div style="padding: 1rem; height: 100%; background: var(--sl-color-accent-low, #eef2ff);">
 				<strong>Pane A</strong>

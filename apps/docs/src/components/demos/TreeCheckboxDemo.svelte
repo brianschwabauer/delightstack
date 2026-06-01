@@ -30,7 +30,7 @@
 	data={categories}
 	selectable
 	checkboxes
-	multiSelect
+	multi_select
 	bind:selected
 	bind:expanded
 />

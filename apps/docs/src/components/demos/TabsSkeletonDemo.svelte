@@ -3,5 +3,5 @@
 </script>
 
 <div style="width: 100%;">
-	<Tabs skeleton skeletonCount={4} />
+	<Tabs skeleton skeleton_count={4} />
 </div>

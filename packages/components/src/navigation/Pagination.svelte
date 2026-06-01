@@ -5,16 +5,16 @@
 		page = $bindable(1),
 
 		/** Total number of pages */
-		totalPages,
+		total_pages,
 
 		/** Total number of items (used for info display) */
-		totalItems = undefined as number | undefined,
+		total_items = undefined as number | undefined,
 
 		/** Number of items per page */
-		pageSize = $bindable(10),
+		page_size = $bindable(10),
 
 		/** Options for the page size selector */
-		pageSizeOptions = [10, 25, 50, 100],
+		page_size_options = [10, 25, 50, 100],
 
 		/** Simple mode: prev/next with "Page X of Y" */
 		simple = false,
@@ -23,16 +23,16 @@
 		compact = false,
 
 		/** Show a page size selector */
-		showPageSize = false,
+		show_page_size = false,
 
 		/** Show item range info ("Showing X-Y of Z") */
-		showInfo = false,
+		show_info = false,
 
 		/** Number of sibling pages to show around the current page */
-		siblingCount = 1,
+		sibling_count = 1,
 
 		/** Number of pages to always show at the start and end */
-		boundaryCount = 1,
+		boundary_count = 1,
 
 		/** Size of the pagination buttons */
 		size = '1' as '0' | '1' | '2' | '3',
@@ -50,25 +50,25 @@
 		onchange = undefined as ((detail: { page: number }) => void) | undefined,
 
 		/** Callback when the page size changes */
-		onpagesizechange = undefined as ((detail: { pageSize: number }) => void) | undefined,
+		onpagesizechange = undefined as ((detail: { page_size: number }) => void) | undefined,
 	}: {
 		page?: number;
-		totalPages: number;
-		totalItems?: number;
-		pageSize?: number;
-		pageSizeOptions?: number[];
+		total_pages: number;
+		total_items?: number;
+		page_size?: number;
+		page_size_options?: number[];
 		simple?: boolean;
 		compact?: boolean;
-		showPageSize?: boolean;
-		showInfo?: boolean;
-		siblingCount?: number;
-		boundaryCount?: number;
+		show_page_size?: boolean;
+		show_info?: boolean;
+		sibling_count?: number;
+		boundary_count?: number;
 		size?: '0' | '1' | '2' | '3';
 		skeleton?: boolean;
 		id?: string;
 		class?: string;
 		onchange?: (detail: { page: number }) => void;
-		onpagesizechange?: (detail: { pageSize: number }) => void;
+		onpagesizechange?: (detail: { page_size: number }) => void;
 	} = $props();
 
 	const SIZE_MAP: Record<
@@ -88,24 +88,24 @@
 	const sizeConfig = $derived(SIZE_MAP[size] || SIZE_MAP['1']);
 
 	const isFirstPage = $derived(page <= 1);
-	const isLastPage = $derived(page >= totalPages);
+	const isLastPage = $derived(page >= total_pages);
 
 	/**
 	 * Ellipsis algorithm: compute the list of page numbers and ellipsis markers.
 	 * Returns an array of numbers (page numbers) and strings ('...') for gaps.
 	 */
 	const pageRange = $derived.by(() => {
-		if (totalPages <= 0) return [];
+		if (total_pages <= 0) return [];
 
 		const range: (number | '...')[] = [];
 
 		// Compute boundary sets
-		const startBoundary = Math.min(boundaryCount, totalPages);
-		const endBoundaryStart = Math.max(totalPages - boundaryCount + 1, startBoundary + 1);
+		const startBoundary = Math.min(boundary_count, total_pages);
+		const endBoundaryStart = Math.max(total_pages - boundary_count + 1, startBoundary + 1);
 
 		// Compute sibling range around current page
-		const siblingStart = Math.max(page - siblingCount, 1);
-		const siblingEnd = Math.min(page + siblingCount, totalPages);
+		const siblingStart = Math.max(page - sibling_count, 1);
+		const siblingEnd = Math.min(page + sibling_count, total_pages);
 
 		// Collect all page numbers that should appear
 		const pages = new Set<number>();
@@ -116,7 +116,7 @@
 		}
 
 		// Add end boundary pages
-		for (let i = endBoundaryStart; i <= totalPages; i++) {
+		for (let i = endBoundaryStart; i <= total_pages; i++) {
 			pages.add(i);
 		}
 
@@ -139,14 +139,14 @@
 	});
 
 	const infoText = $derived.by(() => {
-		if (!showInfo || totalItems === undefined) return '';
-		const start = (page - 1) * pageSize + 1;
-		const end = Math.min(page * pageSize, totalItems);
-		return `Showing ${start}\u2013${end} of ${totalItems}`;
+		if (!show_info || total_items === undefined) return '';
+		const start = (page - 1) * page_size + 1;
+		const end = Math.min(page * page_size, total_items);
+		return `Showing ${start}\u2013${end} of ${total_items}`;
 	});
 
 	function goToPage(newPage: number) {
-		if (newPage < 1 || newPage > totalPages || newPage === page) return;
+		if (newPage < 1 || newPage > total_pages || newPage === page) return;
 		page = newPage;
 		onchange?.({ page: newPage });
 	}
@@ -162,9 +162,9 @@
 	function handlePageSizeChange(e: Event) {
 		const target = e.target as HTMLSelectElement;
 		const newSize = Number(target.value);
-		pageSize = newSize;
+		page_size = newSize;
 		page = 1;
-		onpagesizechange?.({ pageSize: newSize });
+		onpagesizechange?.({ page_size: newSize });
 		onchange?.({ page: 1 });
 	}
 </script>
@@ -180,21 +180,21 @@
 	{#if skeleton}
 		<div class="skeleton-inner"></div>
 	{:else}
-		{#if showPageSize}
+		{#if show_page_size}
 			<label class="page-size-label">
 				<span class="page-size-text">Rows</span>
 				<select
 					class="page-size-select"
-					value={String(pageSize)}
+					value={String(page_size)}
 					onchange={handlePageSizeChange}>
-					{#each pageSizeOptions as opt}
-						<option value={String(opt)} selected={opt === pageSize}>{opt}</option>
+					{#each page_size_options as opt}
+						<option value={String(opt)} selected={opt === page_size}>{opt}</option>
 					{/each}
 				</select>
 			</label>
 		{/if}
 
-		{#if showInfo && infoText}
+		{#if show_info && infoText}
 			<span class="pagination-info">{infoText}</span>
 		{/if}
 
@@ -218,7 +218,7 @@
 							fill="none" />
 					</svg>
 				</button>
-				<span class="pagination-compact-info">{page} / {totalPages}</span>
+				<span class="pagination-compact-info">{page} / {total_pages}</span>
 				<button
 					type="button"
 					class="pagination-button"
@@ -256,7 +256,7 @@
 					</svg>
 					<span>Prev</span>
 				</button>
-				<span class="pagination-simple-info">Page {page} of {totalPages}</span>
+				<span class="pagination-simple-info">Page {page} of {total_pages}</span>
 				<button
 					type="button"
 					class="pagination-button pagination-next"

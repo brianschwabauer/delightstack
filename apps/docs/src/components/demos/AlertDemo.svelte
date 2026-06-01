@@ -14,13 +14,13 @@
 	bind:open={showAlert}
 	title="Save Changes?"
 	message="Would you like to save your changes before leaving?"
-	continueText="Save"
+	continue_text="Save"
 />
 
 <Alert
 	bind:open={showDestructive}
 	title="Delete Item"
 	message="This action cannot be undone. Are you sure you want to delete this item?"
-	continueText="Delete"
+	continue_text="Delete"
 	destructive
 />

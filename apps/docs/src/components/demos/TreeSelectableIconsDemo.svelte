@@ -36,7 +36,7 @@
 	indexNodes(fileTree);
 </script>
 
-{#snippet nodeContent({ node, level })}
+{#snippet node_content({ node, level })}
 	<span style="display:flex;align-items:center;gap:0.375rem;flex:1;min-width:0;">
 		{#if node.children && node.children.length > 0}
 			<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" style="flex-shrink:0;opacity:0.7;">
@@ -54,10 +54,10 @@
 <Tree
 	data={fileTree}
 	selectable
-	multiSelect
+	multi_select
 	bind:selected
 	bind:expanded
-	{nodeContent}
+	{node_content}
 />
 
 {#if selected.length > 0}

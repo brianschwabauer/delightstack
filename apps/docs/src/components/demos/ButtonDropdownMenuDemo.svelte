@@ -3,7 +3,7 @@
 	import { List, ListItem } from '@delightstack/components/display';
 </script>
 
-<Button showChevron>
+<Button show_chevron>
 	Options
 	{#snippet menu({ close })}
 		<List>

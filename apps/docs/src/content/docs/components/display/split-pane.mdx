@@ -45,8 +45,8 @@ ${'  '}let sidebarSize = $state(25);
 
 <SplitPane
 ${'  '}bind:size={sidebarSize}
-${'  '}minSize={15}
-${'  '}maxSize={40}
+${'  '}min_size={15}
+${'  '}max_size={40}
 ${'  '}snap={[25, 33]}
 ${'  '}collapsible
 >
@@ -122,7 +122,7 @@ ${'  '}{/snippet}
 
 The divider snaps to specified percentage positions during drag.
 
-<ComponentPreview code={`<SplitPane snap={[25, 50, 75]} snapThreshold={5}>
+<ComponentPreview code={`<SplitPane snap={[25, 50, 75]} snap_threshold={5}>
 ${'  '}{#snippet first()}
 ${'  '}${'  '}<div>Pane A</div>
 ${'  '}{/snippet}
@@ -139,10 +139,10 @@ ${'  '}{/snippet}
 |------|------|---------|-------------|
 | `vertical` | `boolean` | `false` | Vertical split (top/bottom) instead of horizontal (left/right) |
 | `size` | `number` | `50` | First pane size as a percentage (bindable) |
-| `minSize` | `number` | `10` | Minimum first pane size (%) |
-| `maxSize` | `number` | `90` | Maximum first pane size (%) |
+| `min_size` | `number` | `10` | Minimum first pane size (%) |
+| `max_size` | `number` | `90` | Maximum first pane size (%) |
 | `snap` | `number[]` | `[]` | Snap points as percentages |
-| `snapThreshold` | `number` | `3` | Distance in % to trigger snap |
+| `snap_threshold` | `number` | `3` | Distance in % to trigger snap |
 | `collapsible` | `boolean` | `false` | Allow collapsing panes |
 | `collapsed` | `'first' \| 'second' \| null` | `null` | Which pane is collapsed (bindable) |
 | `id` | `string` | auto | Element ID |
@@ -166,8 +166,8 @@ The divider is focusable and supports the following keyboard controls:
 | Arrow Left / Arrow Up | Decrease first pane size by 1% |
 | Arrow Right / Arrow Down | Increase first pane size by 1% |
 | Shift + Arrow | Adjust by 5% |
-| Home | Set to `minSize` |
-| End | Set to `maxSize` |
+| Home | Set to `min_size` |
+| End | Set to `max_size` |
 | Enter | Toggle collapse of the smaller pane (when `collapsible`) |
 
 ## Accessibility

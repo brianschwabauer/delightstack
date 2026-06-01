@@ -10,9 +10,9 @@
 
 <BottomSheet
 	bind:open
-	bind:morphPercent
-	snapPoints={[0.32, 0.92]}
-	morphRange={[0.32, 0.55]}>
+	bind:morph_percent={morphPercent}
+	snap_points={[0.32, 0.92]}
+	morph_range={[0.32, 0.55]}>
 	{#snippet header(morph)}
 		<div class="morph-header">
 			<div class="spacer"></div>
@@ -26,7 +26,7 @@
 	<div style="padding: 0.5rem 1.25rem 1.5rem;">
 		<p style="margin: 0 0 1rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">
 			Drag the sheet down toward the peek height and watch the avatar shrink and the title slide
-			beside it. <code>morphPercent</code> is currently <strong>{morphPercent.toFixed(2)}</strong>.
+			beside it. <code>morph_percent</code> is currently <strong>{morphPercent.toFixed(2)}</strong>.
 			The header just reads the <code>--morph-percent</code> CSS variable to interpolate between
 			its collapsed and expanded states.
 		</p>

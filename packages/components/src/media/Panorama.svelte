@@ -116,19 +116,19 @@
 		src,
 
 		/** Starting camera orientation in degrees */
-		initialView = { pitch: 0, yaw: 0 },
+		initial_view = { pitch: 0, yaw: 0 },
 
 		/** Field of view in degrees */
 		fov = 75,
 
 		/** Gentle continuous rotation */
-		autoRotate = false,
+		auto_rotate = false,
 
 		/** Rotation speed multiplier */
-		autoRotateSpeed = 1,
+		auto_rotate_speed = 1,
 
 		/** Show zoom/fullscreen buttons */
-		showControls = true,
+		show_controls = true,
 
 		/** Whether the panorama is being rendered inside an embedded context
 		 *  (Carousel/Gallery). When true, controls are hidden, keyboard text
@@ -175,11 +175,11 @@
 		onerror = undefined as undefined | ((detail: { error: Error }) => void),
 	}: {
 		src: string;
-		initialView?: { pitch: number; yaw: number };
+		initial_view?: { pitch: number; yaw: number };
 		fov?: number;
-		autoRotate?: boolean;
-		autoRotateSpeed?: number;
-		showControls?: boolean;
+		auto_rotate?: boolean;
+		auto_rotate_speed?: number;
+		show_controls?: boolean;
 		embedded?: boolean;
 		interactive?: boolean;
 		gyroscope?: boolean;
@@ -203,8 +203,8 @@
 	let loading = $state(true);
 	let error_state = $state(false);
 
-	let current_pitch = $state(initialView.pitch);
-	let current_yaw = $state(initialView.yaw);
+	let current_pitch = $state(initial_view.pitch);
+	let current_yaw = $state(initial_view.yaw);
 	let current_fov = $state(fov);
 	let is_fullscreen = $state(false);
 
@@ -526,8 +526,8 @@
 	}
 
 	function resetView() {
-		current_pitch = initialView.pitch;
-		current_yaw = initialView.yaw;
+		current_pitch = initial_view.pitch;
+		current_yaw = initial_view.yaw;
 		current_fov = fov;
 		if (camera) {
 			camera.fov = current_fov;
@@ -609,8 +609,8 @@
 		}
 
 		// Map device orientation to panorama view
-		current_yaw = initialView.yaw + (e.alpha - gyro_initial_alpha!) * -1;
-		current_pitch = initialView.pitch + (e.beta - gyro_initial_beta!) * -1;
+		current_yaw = initial_view.yaw + (e.alpha - gyro_initial_alpha!) * -1;
+		current_pitch = initial_view.pitch + (e.beta - gyro_initial_beta!) * -1;
 		current_pitch = Math.max(-85, Math.min(85, current_pitch));
 
 		updateCameraRotation();
@@ -648,8 +648,8 @@
 		if (!is_visible || !renderer || !scene || !camera) return;
 
 		// Auto-rotate
-		if (autoRotate && !auto_rotate_paused && !is_dragging && !prefers_reduced_motion) {
-			current_yaw += 0.02 * autoRotateSpeed;
+		if (auto_rotate && !auto_rotate_paused && !is_dragging && !prefers_reduced_motion) {
+			current_yaw += 0.02 * auto_rotate_speed;
 			updateCameraRotation();
 			emitViewChange();
 		}
@@ -1034,7 +1034,7 @@
 		{/each}
 
 		<!-- Controls -->
-		{#if showControls && !embedded && loaded}
+		{#if show_controls && !embedded && loaded}
 			<div class="panorama-controls">
 				<Button translucent icon size="0" tooltip="Zoom in" onclick={zoomIn}>
 					<svg

@@ -17,7 +17,7 @@
 		change = undefined as number | undefined,
 
 		/** Description for the change (e.g., "vs last month") */
-		changeLabel = undefined as string | undefined,
+		change_label = undefined as string | undefined,
 
 		/** Override trend direction (auto-detected from change by default) */
 		trend = undefined as 'up' | 'down' | 'neutral' | undefined,
@@ -53,7 +53,7 @@
 		label?: string;
 		icon?: Component<Record<string, never>>;
 		change?: number;
-		changeLabel?: string;
+		change_label?: string;
 		trend?: 'up' | 'down' | 'neutral';
 		size?: '0' | '1' | '2' | '3';
 		horizontal?: boolean;
@@ -100,7 +100,7 @@
 		if (change === undefined) return '';
 		const direction = resolved_trend === 'up' ? 'increased' : resolved_trend === 'down' ? 'decreased' : 'unchanged';
 		const amount = Math.abs(change).toFixed(1);
-		const suffix = changeLabel ? `, ${changeLabel}` : '';
+		const suffix = change_label ? `, ${change_label}` : '';
 		return `${direction} by ${amount} percent${suffix}`;
 	});
 </script>
@@ -173,7 +173,7 @@
 						{/if}
 					</svg>
 					<span class="stat-change-text">
-						{change_text}{#if changeLabel}{' '}{changeLabel}{/if}
+						{change_text}{#if change_label}{' '}{change_label}{/if}
 					</span>
 				</div>
 			{/if}

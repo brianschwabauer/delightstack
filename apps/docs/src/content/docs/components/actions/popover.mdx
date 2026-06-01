@@ -21,11 +21,11 @@ import {Popover} from '@delightstack/components';
 
 <ComponentPreview code={`<script>
 ${'  '}${'  '}import { Button, Popover } from '@delightstack/components/actions';
-${'  '}${'  '}let refElement = $state(undefined);
+${'  '}${'  '}let ref_element = $state(undefined);
 </script>
 
-<Button bind:buttonElement={refElement}>Toggle Popover</Button>
-<Popover {refElement} openOnClick>
+<Button bind:button_element={ref_element}>Toggle Popover</Button>
+<Popover {ref_element} open_on_click>
 ${'  '}${'  '}<h2>Popover Title</h2>
 ${'  '}${'  '}<p>Positioned automatically using Floating UI.</p>
 ${'  '}${'  '}<p>Click outside to dismiss.</p>
@@ -44,7 +44,7 @@ Control the state of the popover externally
 ${'	'}import { Select, Toggle } from '@delightstack/components/form';
 ${'	'}import { Popover, type PopoverPlacement } from '@delightstack/components/actions';
 
-${'	'}let refElement = $state<HTMLElement | undefined>(undefined);
+${'	'}let ref_element = $state<HTMLElement | undefined>(undefined);
 ${' '}${' '}let opened = $state(false);
 ${' '}${' '}let placement = $state<PopoverPlacement>('bottom');
 ${' '}${' '}const placements: PopoverPlacement[] = [
@@ -70,7 +70,7 @@ ${'  '}${'  '}<Select
 ${'  '}${'  '}${'  '}options={placements.map((p) => ({ label: p, value: p }))}
 ${'  '}${'  '}${'  '}bind:value={placement} />
 </div>
-<div bind:this={refElement} class="ref-element">
+<div bind:this={ref_element} class="ref-element">
 ${'  '}${'  '}Popover position reference
 ${'  '}${'  '}<p style="margin: 0; font-size: 0.875rem; opacity: 0.8;">
 ${'  '}${'  '}${'  '}Resize the container to see the popover reposition.
@@ -78,9 +78,9 @@ ${'  '}${'  '}</p>
 </div>
 <Popover
 ${'  '}${'  '}bind:opened
-${'  '}${'  '}bind:refElement
-${'  '}${'  '}closeOnOutsideClick={false}
-${'  '}${'  '}closeOnEscapeKey={false}
+${'  '}${'  '}bind:ref_element
+${'  '}${'  '}close_on_outside_click={false}
+${'  '}${'  '}close_on_escape_key={false}
 ${'  '}${'  '}{placement}>
 ${'  '}${'  '}<h2>Popover Title</h2>
 ${'  '}${'  '}<p>Popover opened state is controlled outside the popover component.</p>
@@ -116,8 +116,8 @@ ${'  '}}
 Open on hover with a delay. The hover trapezoid allows safe diagonal mouse movement between the trigger and the popover.
 
 <ComponentPreview
-	code={`<span bind:this={refElement}>Hover over me for info</span>
-<Popover {refElement} openOnHover>
+	code={`<span bind:this={ref_element}>Hover over me for info</span>
+<Popover {ref_element} open_on_hover>
 ${'  '}${'  '}Helpful tooltip-like information appears on hover.
 </Popover>
 `}>
@@ -149,7 +149,7 @@ Open when the reference element receives focus, close on blur.
 
 <ComponentPreview code={`<input bind:this={inputRef} placeholder="Focus to see suggestions" />
 
-<Popover refElement={inputRef} openOnFocus placement="bottom-start">
+<Popover ref_element={inputRef} open_on_focus placement="bottom-start">
 ${'  '}<ul style="padding: 0.5rem;">
 ${'  '}${'  '}<li>Suggestion 1</li>
 ${'  '}${'  '}<li>Suggestion 2</li>
@@ -174,21 +174,21 @@ Control the padding with `dense` or `comfortable` props.
 
 | Prop                  | Type                    | Default        | Description                                                         |
 | --------------------- | ----------------------- | -------------- | ------------------------------------------------------------------- |
-| `refElement`          | `HTMLElement`           | `undefined`    | Element to position relative to                                     |
+| `ref_element`          | `HTMLElement`           | `undefined`    | Element to position relative to                                     |
 | `opened`              | `boolean`               | `false`        | Controls visibility (`$bindable()`)                                 |
 | `placement`           | `Placement`             | `'bottom'`     | Preferred Floating UI placement                                     |
 | `strategy`            | `'absolute' \| 'fixed'` | `'fixed'`      | CSS positioning strategy. `'fixed'` renders through a Portal.       |
 | `arrow`               | `boolean`               | `true`         | Show arrow pointer toward the trigger                               |
-| `x`                   | `number`                | `undefined`    | X coordinate for virtual positioning (used instead of `refElement`) |
-| `y`                   | `number`                | `undefined`    | Y coordinate for virtual positioning (used instead of `refElement`) |
-| `openOnHover`         | `boolean`               | `false`        | Open when the reference element is hovered                          |
-| `openOnClick`         | `boolean`               | `false`        | Open when the reference element is clicked                          |
-| `openOnFocus`         | `boolean`               | `false`        | Open when the reference element receives focus                      |
-| `closeOnOutsideClick` | `boolean`               | `true`         | Close when clicking outside the popover                             |
-| `closeOnInsideClick`  | `boolean`               | `false`        | Close when a button-like element inside is clicked                  |
-| `closeOnEscapeKey`    | `boolean`               | `true`         | Close on Escape key                                                 |
-| `disableInitialFocus` | `boolean`               | `false`        | Do not auto-focus content when opened                               |
-| `hoverDelay`          | `number`                | `100`          | Delay in ms before opening on hover                                 |
+| `x`                   | `number`                | `undefined`    | X coordinate for virtual positioning (used instead of `ref_element`) |
+| `y`                   | `number`                | `undefined`    | Y coordinate for virtual positioning (used instead of `ref_element`) |
+| `open_on_hover`         | `boolean`               | `false`        | Open when the reference element is hovered                          |
+| `open_on_click`         | `boolean`               | `false`        | Open when the reference element is clicked                          |
+| `open_on_focus`         | `boolean`               | `false`        | Open when the reference element receives focus                      |
+| `close_on_outside_click` | `boolean`               | `true`         | Close when clicking outside the popover                             |
+| `close_on_inside_click`  | `boolean`               | `false`        | Close when a button-like element inside is clicked                  |
+| `close_on_escape_key`    | `boolean`               | `true`         | Close on Escape key                                                 |
+| `disable_initial_focus` | `boolean`               | `false`        | Do not auto-focus content when opened                               |
+| `hover_delay`          | `number`                | `100`          | Delay in ms before opening on hover                                 |
 | `dense`               | `boolean`               | `false`        | Reduced padding (`0.5rem 0.75rem`)                                  |
 | `comfortable`         | `boolean`               | `false`        | Increased padding (`1.5rem 2rem`)                                   |
 | `radius`              | `string`                | `undefined`    | Border radius override via `--popover-radius`                       |
@@ -208,5 +208,5 @@ Control the padding with `dense` or `comfortable` props.
 - Focus trap via `focusTrap` from `@delightstack/utilities` keeps Tab cycling within the popover
 - Escape key closes the popover (respects nested popovers -- closes innermost first)
 - Focus returns to the trigger element on close
-- Keyboard activation on the trigger element via Enter/Space (when `openOnClick` or `openOnFocus` is used)
+- Keyboard activation on the trigger element via Enter/Space (when `open_on_click` or `open_on_focus` is used)
 - Proper `z-index` stacking with `data-popover-index` for nested popovers

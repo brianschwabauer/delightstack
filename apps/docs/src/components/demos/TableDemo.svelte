@@ -19,4 +19,4 @@
 	let sortDirection = $state('asc');
 </script>
 
-<Table {data} {columns} bind:sortBy bind:sortDirection />
+<Table {data} {columns} bind:sort_by={sortBy} bind:sort_direction={sortDirection} />

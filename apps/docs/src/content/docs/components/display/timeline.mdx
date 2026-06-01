@@ -110,8 +110,8 @@ ${'  '}</TimelineItem>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Timeline skeleton skeletonCount={4} />`}>
-  <Timeline client:load skeleton skeletonCount={4} />
+<ComponentPreview code={`<Timeline skeleton skeleton_count={4} />`}>
+  <Timeline client:load skeleton skeleton_count={4} />
 </ComponentPreview>
 
 ## Timeline Props
@@ -124,7 +124,7 @@ ${'  '}</TimelineItem>
 | `dense` | `boolean` | `false` | Compact event spacing |
 | `comfortable` | `boolean` | `false` | Relaxed event spacing |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
-| `skeletonCount` | `number` | `3` | Number of skeleton items |
+| `skeleton_count` | `number` | `3` | Number of skeleton items |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 | `children` | `Snippet` | - | TimelineItem children |

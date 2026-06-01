@@ -31,7 +31,7 @@
 		direction = 'right' as 'left' | 'right',
 
 		/** Ring color around each avatar */
-		ringColor = 'var(--color-bg)' as string,
+		ring_color = 'var(--color-bg)' as string,
 
 		/** Click overflow to reveal all */
 		expandable = false,
@@ -40,7 +40,7 @@
 		skeleton = false,
 
 		/** Number of skeleton circles */
-		skeletonCount = 4,
+		skeleton_count = 4,
 
 		/** Individual avatar clicked */
 		onclick = undefined as
@@ -111,16 +111,16 @@
 	class={['avatar-group', `direction-${direction}`, className].filter(Boolean).join(' ')}
 	style:--avatar-size="{avatar_size}px"
 	style:--overlap="{overlap_px}px"
-	style:--ring-color={ringColor}
+	style:--ring-color={ring_color}
 	style:--overflow-font={font_map[size] || '0.625rem'}
 	role="group"
 	aria-label="Avatar group">
 	{#if skeleton}
-		{#each { length: skeletonCount } as _, i}
+		{#each { length: skeleton_count } as _, i}
 			<div
 				class="avatar-wrapper"
-				style:z-index={direction === 'right' ? skeletonCount - i : i + 1}>
-				<Avatar {size} skeleton ring {ringColor} />
+				style:z-index={direction === 'right' ? skeleton_count - i : i + 1}>
+				<Avatar {size} skeleton ring {ring_color} />
 			</div>
 		{/each}
 	{:else}
@@ -151,7 +151,7 @@
 							name={avatar.name}
 							{size}
 							ring
-							{ringColor}
+							{ring_color}
 							onclick={onclick ? () => handleAvatarClick(avatar, i) : undefined} />
 					</a>
 				{:else}
@@ -160,7 +160,7 @@
 						name={avatar.name}
 						{size}
 						ring
-						{ringColor}
+						{ring_color}
 						onclick={onclick ? () => handleAvatarClick(avatar, i) : undefined} />
 				{/if}
 			</div>

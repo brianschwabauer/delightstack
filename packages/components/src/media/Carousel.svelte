@@ -2137,7 +2137,7 @@
 									{@const Panorama = renderers.panorama}
 									<Panorama
 										src={pickLargestSrc(item.src)}
-										showControls={false}
+										show_controls={false}
 										interactive={!inline}
 										onload={() => item.loaded || (list[i].loaded = true)} />
 								{:else}
@@ -2151,9 +2151,9 @@
 									<Pdf
 										src={pickLargestSrc(item.src)}
 										page={item.page + 1}
-										showToolbar={false}
+										show_toolbar={false}
 										single_page={true}
-										autoPaginate={false}
+										auto_paginate={false}
 										text_layer={false}
 										fit="page"
 										pixel_density={item._pdf_pixel_density || 1}

@@ -122,7 +122,7 @@ ${'  '}<Tab value="drafts" label="Drafts" badge="2" />
 
 Stretch tabs to fill the available width evenly.
 
-<ComponentPreview code={`<Tabs bind:value={activeTab} fullWidth>
+<ComponentPreview code={`<Tabs bind:value={activeTab} full_width>
 ${'  '}<Tab value="a" label="First" />
 ${'  '}<Tab value="b" label="Second" />
 ${'  '}<Tab value="c" label="Third" />
@@ -150,7 +150,7 @@ ${'  '}<Tab value="b" label="Coming Soon" disabled />
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Tabs skeleton skeletonCount={4} />`}>
+<ComponentPreview code={`<Tabs skeleton skeleton_count={4} />`}>
 	<TabsSkeletonDemo client:load />
 </ComponentPreview>
 
@@ -166,10 +166,10 @@ ${'  '}<Tab value="b" label="Coming Soon" disabled />
 | `segment` | `boolean` | `false` | Use segmented-control style |
 | `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Tab list orientation |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size of the tabs |
-| `fullWidth` | `boolean` | `false` | Stretch tabs to fill available width |
+| `full_width` | `boolean` | `false` | Stretch tabs to fill available width |
 | `disabled` | `boolean` | `false` | Disable all tabs |
 | `skeleton` | `boolean` | `false` | Show skeleton loading state |
-| `skeletonCount` | `number` | `3` | Number of skeleton tab placeholders |
+| `skeleton_count` | `number` | `3` | Number of skeleton tab placeholders |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 | `children` | `Snippet` | `undefined` | Tab children |

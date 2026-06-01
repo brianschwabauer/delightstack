@@ -9,7 +9,7 @@
 			title: 'Delete?',
 			message: 'This cannot be undone.',
 			destructive: true,
-			continueText: 'Delete',
+			continue_text: 'Delete',
 		});
 		result = confirmed ? 'Confirmed!' : 'Cancelled';
 		setTimeout(() => (result = ''), 2000);

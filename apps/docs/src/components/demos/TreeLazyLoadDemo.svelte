@@ -29,4 +29,4 @@
 	}
 </script>
 
-<Tree data={rootNodes} {loadChildren} />
+<Tree data={rootNodes} load_children={loadChildren} />

@@ -7,8 +7,8 @@
 <div style="height: 250px; border: 1px solid var(--sl-color-gray-5, #e5e7eb); border-radius: 0.5rem; overflow: hidden;">
 	<SplitPane
 		bind:size={sidebarSize}
-		minSize={15}
-		maxSize={40}
+		min_size={15}
+		max_size={40}
 		snap={[25, 33]}
 		collapsible
 	>

@@ -29,10 +29,10 @@
 		menu = undefined as undefined | Snippet,
 
 		/** Whether the dropdown menu should close when the user clicks a button like element inside of it */
-		popoverCloseOnInsideClick = false,
+		popover_close_on_inside_click = false,
 
 		/** The placement of the popover (used when either "menu" or "dropdown" is provided) */
-		popoverPlacement = 'bottom-end' as PopoverPlacement,
+		popover_placement = 'bottom-end' as PopoverPlacement,
 
 		/** The css style string added to the component from the parent */
 		style = '',
@@ -196,8 +196,8 @@
 				transparent
 				size="0"
 				class="action"
-				{popoverCloseOnInsideClick}
-				{popoverPlacement}
+				{popover_close_on_inside_click}
+				{popover_placement}
 				menu={resetMenu}>
 				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 					<path

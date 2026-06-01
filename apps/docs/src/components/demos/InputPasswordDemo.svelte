@@ -9,6 +9,6 @@
 	label="Password"
 	placeholder="Enter password"
 	bind:value
-	showToggle
-	strengthIndicator
+	show_toggle
+	strength_indicator
 />

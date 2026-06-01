@@ -80,13 +80,13 @@
 		dense = false,
 
 		/** Whether the button should take up the full width of its container */
-		fullWidth = false,
+		full_width = false,
 
 		/** Whether the button should take up the full height of its container */
-		fullHeight = false,
+		full_height = false,
 
 		/** Whether there should not be a ripple animation on click */
-		disableRipple = false,
+		disable_ripple = false,
 
 		/** The url to link to (turns the button into an anchor tag) */
 		href = undefined as string | undefined,
@@ -110,7 +110,7 @@
 		loading = undefined as boolean | undefined,
 
 		/** Whether a checkmark icon should appear before the button text */
-		loadingSuccess = false,
+		loading_success = false,
 
 		/**
 		 * The text to show in a badge hovering over the top right corner of the button
@@ -122,28 +122,28 @@
 		menu = undefined as undefined | Snippet<[{ close: () => void }]>,
 
 		/** Whether the button should have a chevron icon next to it (useful when used with the 'menu' optionk) */
-		showChevron = false,
+		show_chevron = false,
 
 		/** The content shown in a dropdown menu when the secondary dropdown button is clicked */
 		dropdown = undefined as undefined | Snippet<[{ close: () => void }]>,
 
 		/** The content shown when the button is in the loading state */
-		loadingContent = undefined as undefined | Snippet<[{ close: () => void }]>,
+		loading_content = undefined as undefined | Snippet<[{ close: () => void }]>,
 
 		/** Whether the dropdown menu should be disabled (and the secondary downdown button hidden) */
-		disableDropdown = false,
+		disable_dropdown = false,
 
 		/** Whether the dropdown menu should close when the user clicks a button like element inside of it */
-		popoverCloseOnInsideClick = false,
+		popover_close_on_inside_click = false,
 
 		/** The placement of the popover (used when either "menu" or "dropdown" is provided) */
-		popoverPlacement = 'bottom-end' as PopoverPlacement,
+		popover_placement = 'bottom-end' as PopoverPlacement,
 
 		/** The placement of the popover (used when either "menu" or "dropdown" is provided) */
-		popoverStrategy = 'fixed' as PopoverStrategy,
+		popover_strategy = 'fixed' as PopoverStrategy,
 
 		/** Whether the intial focus should not be set automatically when opening the popover */
-		popoverDisableInitialFocus = false,
+		popover_disable_initial_focus = false,
 
 		/** The content shown in the button element */
 		children = undefined as
@@ -154,7 +154,7 @@
 		id = propId,
 
 		/** A reference to the button element */
-		buttonElement = $bindable() as HTMLElement | undefined,
+		button_element = $bindable() as HTMLElement | undefined,
 
 		/** Specifies a custom class name for the container element */
 		class: className = '',
@@ -211,7 +211,7 @@
 		loading ?? (isFormSubmit ? formContext!.is_submitting : undefined),
 	);
 	const isLoading = $derived(externalLoading || onclickLoading);
-	const isLoadingSuccess = $derived(loadingSuccess || onclickLoadingSuccess);
+	const isLoadingSuccess = $derived(loading_success || onclickLoadingSuccess);
 
 	function loadingTransition(
 		node: HTMLElement,
@@ -257,7 +257,7 @@
 <div
 	{id}
 	class={['button', className].filter(Boolean).join(' ')}
-	class:has-dropdown-trigger={dropdown && !disableDropdown}
+	class:has-dropdown-trigger={dropdown && !disable_dropdown}
 	class:icon
 	class:pill
 	class:dense
@@ -268,8 +268,8 @@
 	class:group-v={resolvedGrouped &&
 		groupContext?.attached &&
 		groupContext?.orientation === 'vertical'}
-	class:full-width={fullWidth}
-	class:full-height={fullHeight}
+	class:full-width={full_width}
+	class:full-height={full_height}
 	class:overlay
 	class:transparent={resolvedTransparent}
 	class:translucent={resolvedTranslucent}
@@ -299,13 +299,13 @@
 		data-sveltekit-noscroll={href?.startsWith('?') ? true : null}
 		data-sveltekit-keepfocus={href?.startsWith('?') ? true : null}
 		{@attach ripple({
-			enabled: !disableRipple && !resolvedDisabled && !isLoading,
+			enabled: !disable_ripple && !resolvedDisabled && !isLoading,
 			zIndex: 1,
 		})}
 		disabled={resolvedDisabled || onclickLoading || (!mounted && !href)}
 		aria-haspopup={!!menu}
 		aria-expanded={menu ? menuActive : null}
-		bind:this={buttonElement}
+		bind:this={button_element}
 		onclick={handleClick}>
 		{#if !icon}
 			{#if isLoading || isLoadingSuccess}
@@ -318,7 +318,7 @@
 			{/if}
 		{/if}
 		{#if children}{@render children({ isLoading, isLoadingSuccess })}{/if}
-		{#if showChevron && menu}
+		{#if show_chevron && menu}
 			<svg
 				viewBox="0 0 24 24"
 				fill="currentColor"
@@ -329,7 +329,7 @@
 			</svg>
 		{/if}
 	</svelte:element>
-	{#if dropdown && !disableDropdown}
+	{#if dropdown && !disable_dropdown}
 		<button
 			class="dropdown-trigger"
 			type="button"
@@ -338,7 +338,7 @@
 			aria-label="Toggle dropdown"
 			title="Open for more actions"
 			{@attach ripple({
-				enabled: !disableRipple && !resolvedDisabled && !isLoading,
+				enabled: !disable_ripple && !resolvedDisabled && !isLoading,
 				zIndex: 1,
 			})}
 			bind:this={dropdownTrigger}>
@@ -355,27 +355,27 @@
 </div>
 {#if menu}
 	<Popover
-		refElement={buttonElement}
+		ref_element={button_element}
 		bind:opened={menuActive}
-		openOnClick
+		open_on_click
 		arrow={false}
-		strategy={popoverStrategy}
-		closeOnInsideClick={popoverCloseOnInsideClick}
-		disableInitialFocus={popoverDisableInitialFocus}
-		placement={popoverPlacement}>
+		strategy={popover_strategy}
+		close_on_inside_click={popover_close_on_inside_click}
+		disable_initial_focus={popover_disable_initial_focus}
+		placement={popover_placement}>
 		{@render menu({ close: closeMenu })}
 	</Popover>
 {/if}
-{#if dropdown && !disableDropdown}
+{#if dropdown && !disable_dropdown}
 	<Popover
-		refElement={dropdownTrigger}
+		ref_element={dropdownTrigger}
 		bind:opened={dropdownActive}
-		openOnClick
+		open_on_click
 		arrow={false}
-		strategy={popoverStrategy}
-		closeOnInsideClick={popoverCloseOnInsideClick}
-		disableInitialFocus={popoverDisableInitialFocus}
-		placement={popoverPlacement}>
+		strategy={popover_strategy}
+		close_on_inside_click={popover_close_on_inside_click}
+		disable_initial_focus={popover_disable_initial_focus}
+		placement={popover_placement}>
 		{@render dropdown({ close: closeMenu })}
 	</Popover>
 {/if}

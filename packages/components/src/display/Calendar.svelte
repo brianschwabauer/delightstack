@@ -45,22 +45,22 @@
 		events = [] as CalendarEvent[],
 
 		/** First day of week (0=Sun, 1=Mon, ...) */
-		weekStartsOn = 1 as 0 | 1 | 2 | 3 | 4 | 5 | 6,
+		week_starts_on = 1 as 0 | 1 | 2 | 3 | 4 | 5 | 6,
 
 		/** BCP 47 locale string */
 		locale = undefined as string | undefined,
 
 		/** Show time slot picker */
-		showTimeSlots = false,
+		show_time_slots = false,
 
 		/** Time slot interval in minutes */
-		timeSlotInterval = 30,
+		time_slot_interval = 30,
 
 		/** Earliest time slot */
-		timeSlotMin = '00:00',
+		time_slot_min = '00:00',
 
 		/** Latest time slot */
-		timeSlotMax = '23:59',
+		time_slot_max = '23:59',
 
 		/** Compact spacing */
 		dense = false,
@@ -159,12 +159,12 @@
 		month_year_formatter.format(new Date(view_year, view_month, 1)),
 	);
 
-	/** Day-of-week headers respecting weekStartsOn */
+	/** Day-of-week headers respecting week_starts_on */
 	const weekday_headers = $derived.by(() => {
 		const headers: string[] = [];
 		// Use a known reference: Jan 4 2026 is a Sunday (day 0)
 		for (let i = 0; i < 7; i++) {
-			const day_index = (weekStartsOn + i) % 7;
+			const day_index = (week_starts_on + i) % 7;
 			// Build a date that is the correct weekday
 			// Jan 4 2026 = Sunday. Add day_index to get desired weekday.
 			const ref = new Date(2026, 0, 4 + day_index);
@@ -194,7 +194,7 @@
 		const first_of_month = new Date(view_year, view_month, 1);
 		const first_weekday = first_of_month.getDay(); // 0=Sun
 		// How many days to go back to reach the start of the grid
-		const offset = (first_weekday - weekStartsOn + 7) % 7;
+		const offset = (first_weekday - week_starts_on + 7) % 7;
 		const grid_start = addDays(first_of_month, -offset);
 
 		const days: CalendarDay[] = [];
@@ -329,13 +329,13 @@
 	}
 
 	const time_slots = $derived.by(() => {
-		if (!showTimeSlots) return [];
-		const start = parseTime(timeSlotMin);
-		const end = parseTime(timeSlotMax);
+		if (!show_time_slots) return [];
+		const start = parseTime(time_slot_min);
+		const end = parseTime(time_slot_max);
 		const start_minutes = start.hours * 60 + start.minutes;
 		const end_minutes = end.hours * 60 + end.minutes;
 		const slots: string[] = [];
-		for (let m = start_minutes; m <= end_minutes; m += timeSlotInterval) {
+		for (let m = start_minutes; m <= end_minutes; m += time_slot_interval) {
 			const h = Math.floor(m / 60);
 			const min = m % 60;
 			slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
@@ -518,7 +518,7 @@
 				e.preventDefault();
 				{
 					const day_of_week = current.getDay();
-					const diff = (day_of_week - weekStartsOn + 7) % 7;
+					const diff = (day_of_week - week_starts_on + 7) % 7;
 					next = addDays(current, -diff);
 				}
 				break;
@@ -526,7 +526,7 @@
 				e.preventDefault();
 				{
 					const day_of_week = current.getDay();
-					const diff = (day_of_week - weekStartsOn + 7) % 7;
+					const diff = (day_of_week - week_starts_on + 7) % 7;
 					next = addDays(current, 6 - diff);
 				}
 				break;
@@ -585,7 +585,7 @@
 		class={['calendar', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
-		class:has-time-slots={showTimeSlots}
+		class:has-time-slots={show_time_slots}
 		{id}
 		data-calendar-id={id}
 		role="group"
@@ -706,7 +706,7 @@
 		</div>
 
 		<!-- Time slots panel -->
-		{#if showTimeSlots}
+		{#if show_time_slots}
 			<div class="calendar-time-slots" role="listbox" aria-label="Time slots">
 				{#each time_slots as slot}
 					<button

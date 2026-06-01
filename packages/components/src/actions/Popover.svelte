@@ -25,7 +25,7 @@
 	const propId = $props.id();
 	let {
 		/** The HTML element that the popover will be attached to */
-		refElement = $bindable() as HTMLElement | undefined,
+		ref_element = $bindable() as HTMLElement | undefined,
 
 		/** Whether the popover is currently open */
 		opened = $bindable(false) as boolean,
@@ -39,35 +39,35 @@
 		/** Whether the 'arrow' pointing to the target element should be shown */
 		arrow = true,
 
-		/** The x position (in px) where the popover's refElement/target is. This is used for context menu (right click) */
+		/** The x position (in px) where the popover's ref_element/target is. This is used for context menu (right click) */
 		x = undefined as number | undefined,
 
-		/** The y position (in px) where the popover's refElement/target is. This is used for context menu (right click) */
+		/** The y position (in px) where the popover's ref_element/target is. This is used for context menu (right click) */
 		y = undefined as number | undefined,
 
 		/** Whether the popover should open when the ref element is hover overed */
-		openOnHover = false,
+		open_on_hover = false,
 
 		/** Whether the popover should open when the ref element is clicked */
-		openOnClick = false,
+		open_on_click = false,
 
 		/** Whether the popover should open when the ref element is focused (closes on blur) */
-		openOnFocus = false,
+		open_on_focus = false,
 
 		/** Whether the popover should close when clicked outside of the popover */
-		closeOnOutsideClick = true,
+		close_on_outside_click = true,
 
 		/** Whether the popover should close when a button like element is clicked inside of the popover */
-		closeOnInsideClick = false,
+		close_on_inside_click = false,
 
 		/** Whether the popover should close when the escape key is pressed */
-		closeOnEscapeKey = true,
+		close_on_escape_key = true,
 
 		/** Whether the intial focus should not be set automatically when opening the popover */
-		disableInitialFocus = false,
+		disable_initial_focus = false,
 
-		/** The number of milliseconds that the popover wait before popping up. Only applies when 'openOnHover' is true */
-		hoverDelay = 100,
+		/** The number of milliseconds that the popover wait before popping up. Only applies when 'open_on_hover' is true */
+		hover_delay = 100,
 
 		/**
 		 * Whether the popover panel should be transparent — removes the background,
@@ -180,17 +180,17 @@
 		}
 	});
 
-	// Set anchor-name on refElement before DOM update so CSS anchor positioning resolves on first paint
+	// Set anchor-name on ref_element before DOM update so CSS anchor positioning resolves on first paint
 	$effect.pre(() => {
-		if (shown && refElement) {
-			const el = refElement;
+		if (shown && ref_element) {
+			const el = ref_element;
 			(el.style as any).anchorName = `--popover-anchor-${id}`;
 		}
 	});
 
 	// CSS anchor positioning style for real element path
 	const anchorPositionStyle = $derived.by(() => {
-		if (!refElement) return '';
+		if (!ref_element) return '';
 		const anchor = `--popover-anchor-${id}`;
 		const parts = [`position: ${strategy}`, `position-anchor: ${anchor}`, 'inset: auto'];
 		switch (placement) {
@@ -296,7 +296,7 @@
 
 	// Computed position style (anchor positioning for real elements, left/top for virtual)
 	const positionStyle = $derived.by(() => {
-		if (refElement) return anchorPositionStyle;
+		if (ref_element) return anchorPositionStyle;
 		return `position: ${strategy}; left: ${left}; top: ${top};`;
 	});
 
@@ -310,9 +310,9 @@
 
 	/** Detects actual placement after CSS anchor positioning resolves, then updates arrow/transform-origin/hit-box */
 	function detectAndUpdate() {
-		if (!popoverElement || !refElement) return;
+		if (!popoverElement || !ref_element) return;
 		const popRect = popoverElement.getBoundingClientRect();
-		const refRect = refElement.getBoundingClientRect();
+		const refRect = ref_element.getBoundingClientRect();
 
 		// Detect primary axis based on which side of the ref the popover ended up
 		const suffix = placement.includes('-') ? '-' + placement.split('-')[1] : '';
@@ -344,7 +344,7 @@
 		}
 
 		// Hit box for hover popovers
-		if (openOnHover && !untrack(() => forcedOpened)) {
+		if (open_on_hover && !untrack(() => forcedOpened)) {
 			const borderRadius = parseInt(getComputedStyle(popoverElement).borderRadius);
 			if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
 				hitBoxLengthZ = Math.min(16, refRect.height / 2) + anchorOffset;
@@ -411,9 +411,9 @@
 		if (!shown || !popoverElement) return;
 		placement; // re-run when placement changes (so the arrow location gets update dynamically)
 
-		if (refElement) {
+		if (ref_element) {
 			// Real element path: CSS anchor positioning handles layout, we just detect the result
-			const el = refElement;
+			const el = ref_element;
 			const popEl = popoverElement;
 			const onUpdate = () => untrack(() => detectAndUpdate());
 			const rafId = requestAnimationFrame(onUpdate);
@@ -439,14 +439,14 @@
 
 	// Close the popover when clicked outside (fallback for when focus-trap doesn't activate)
 	$effect(() => {
-		if (!opened || !closeOnOutsideClick) return;
+		if (!opened || !close_on_outside_click) return;
 		function onDocumentPointerDown(e: PointerEvent) {
 			if (!popoverElement || !opened) return;
 			let el = e.target as HTMLElement | null | undefined;
 			while (el) {
 				if (
 					el === popoverElement ||
-					el === refElement ||
+					el === ref_element ||
 					(el.classList.contains('portal') && el.id === 'portal_' + id)
 				) {
 					return;
@@ -493,7 +493,7 @@
 
 	/** Handles when a mouse moves (after the popoever has been opened on hover). Used to close popover when moved off */
 	function onMouseMove(e: MouseEvent) {
-		if (!refElement) return;
+		if (!ref_element) return;
 		if (untrack(() => forcedOpened)) return stopMouseMoveListener();
 		let el = e.target as HTMLElement | null | undefined;
 		let isHoveringOverPopover = false;
@@ -501,7 +501,7 @@
 			while (el) {
 				if (
 					el === popoverElement ||
-					el === refElement ||
+					el === ref_element ||
 					el.classList.contains('popover-hit-shape')
 				) {
 					isHoveringOverPopover = true;
@@ -528,7 +528,7 @@
 		while (el) {
 			if (
 				el === popoverElement ||
-				el === refElement ||
+				el === ref_element ||
 				(el.classList.contains('portal') && el.id === 'portal_' + id)
 			) {
 				isOutsideClick = false;
@@ -556,7 +556,7 @@
 		willOpen = false;
 		clearTimeout(debounceTimer);
 		if (untrack(() => forcedOpened)) return stopMouseMoveListener();
-		if (!refElement) {
+		if (!ref_element) {
 			opened = false;
 			forcedOpened = false;
 			return;
@@ -566,7 +566,7 @@
 			if (untrack(() => opened)) return;
 			if (!willOpen) return;
 			opened = true;
-		}, hoverDelay);
+		}, hover_delay);
 		portalOpened = true;
 		willOpen = true;
 		document.addEventListener('mousemove', onMouseMove);
@@ -594,7 +594,7 @@
 			let triggerEl = document.elementFromPoint(e.clientX, e.clientY);
 			let isRefElement = false;
 			while (triggerEl) {
-				if (triggerEl === refElement) {
+				if (triggerEl === ref_element) {
 					isRefElement = true;
 					break;
 				}
@@ -650,20 +650,20 @@
 
 	/** Handles when the trigger element is no longer in focus and thus should be closed (if open) */
 	function onRefElementBlur(e: FocusEvent) {
-		if (!refElement) return;
-		refElement.removeEventListener('blur', onRefElementBlur);
-		refElement.removeEventListener('keyup', onRefElementKeyUp);
+		if (!ref_element) return;
+		ref_element.removeEventListener('blur', onRefElementBlur);
+		ref_element.removeEventListener('keyup', onRefElementKeyUp);
 		if (untrack(() => forcedOpened)) return;
 		if (!untrack(() => opened)) return;
 		opened = false;
 	}
 
-	/** Handles when the trigger element is focused. If so, the panel will be opened if openOnFocus is true */
+	/** Handles when the trigger element is focused. If so, the panel will be opened if open_on_focus is true */
 	function onRefElementFocus(e: FocusEvent) {
-		if (!refElement) return;
-		refElement.addEventListener('blur', onRefElementBlur);
-		if (closeOnEscapeKey) {
-			refElement.addEventListener('keyup', onRefElementKeyUp);
+		if (!ref_element) return;
+		ref_element.addEventListener('blur', onRefElementBlur);
+		if (close_on_escape_key) {
+			ref_element.addEventListener('keyup', onRefElementKeyUp);
 		}
 		if (untrack(() => forcedOpened)) return;
 		if (untrack(() => opened)) return;
@@ -684,39 +684,39 @@
 		}
 	}
 
-	// Add event listeners when the refElement is set
+	// Add event listeners when the ref_element is set
 	$effect(() => {
-		if (!refElement || (!openOnHover && !openOnClick && !openOnFocus)) return;
+		if (!ref_element || (!open_on_hover && !open_on_click && !open_on_focus)) return;
 		stopListeners();
-		if (openOnHover) {
-			refElement.addEventListener('mouseenter', onRefElementMouseEnter);
+		if (open_on_hover) {
+			ref_element.addEventListener('mouseenter', onRefElementMouseEnter);
 		} else {
-			refElement.removeEventListener('mouseenter', onRefElementMouseEnter);
+			ref_element.removeEventListener('mouseenter', onRefElementMouseEnter);
 		}
-		if (openOnClick) {
-			refElement.addEventListener('click', onRefElementClick);
-			refElement.addEventListener('pointerup', onRefElementPointerUp);
+		if (open_on_click) {
+			ref_element.addEventListener('click', onRefElementClick);
+			ref_element.addEventListener('pointerup', onRefElementPointerUp);
 		} else {
-			refElement.removeEventListener('click', onRefElementClick);
+			ref_element.removeEventListener('click', onRefElementClick);
 		}
-		if (openOnFocus) {
-			refElement.addEventListener('focus', onRefElementFocus);
-			refElement.tabIndex = 0;
+		if (open_on_focus) {
+			ref_element.addEventListener('focus', onRefElementFocus);
+			ref_element.tabIndex = 0;
 		} else {
-			if (closeOnEscapeKey) {
-				refElement.addEventListener('keyup', onRefElementKeyUp);
+			if (close_on_escape_key) {
+				ref_element.addEventListener('keyup', onRefElementKeyUp);
 			} else {
-				refElement.removeEventListener('keyup', onRefElementKeyUp);
+				ref_element.removeEventListener('keyup', onRefElementKeyUp);
 			}
-			refElement.removeEventListener('focus', onRefElementFocus);
-			refElement.removeAttribute('tabindex');
+			ref_element.removeEventListener('focus', onRefElementFocus);
+			ref_element.removeAttribute('tabindex');
 		}
 		refListeners.push(
-			() => refElement?.removeEventListener('mouseenter', onRefElementMouseEnter),
-			() => refElement?.removeEventListener('click', onRefElementClick),
-			() => refElement?.removeEventListener('pointerup', onRefElementPointerUp),
-			() => refElement?.removeEventListener('focus', onRefElementFocus),
-			() => refElement?.removeEventListener('keyup', onRefElementKeyUp),
+			() => ref_element?.removeEventListener('mouseenter', onRefElementMouseEnter),
+			() => ref_element?.removeEventListener('click', onRefElementClick),
+			() => ref_element?.removeEventListener('pointerup', onRefElementPointerUp),
+			() => ref_element?.removeEventListener('focus', onRefElementFocus),
+			() => ref_element?.removeEventListener('keyup', onRefElementKeyUp),
 		);
 		return () => stopListeners();
 	});
@@ -750,15 +750,15 @@
 			data-popover-index={popoverIndex}
 			role="presentation"
 			{@attach focusTrap({
-				enabled: !openOnFocus,
-				initialFocus: disableInitialFocus ? false : undefined,
+				enabled: !open_on_focus,
+				initialFocus: disable_initial_focus ? false : undefined,
 				clickOutsideDeactivates: (e) => {
 					if ((e as MouseEvent).button === 2) return false; // Ignore right clicks
-					if (!closeOnOutsideClick) return false;
-					if (openOnClick) return false;
+					if (!close_on_outside_click) return false;
+					if (open_on_click) return false;
 					let el = e.target as HTMLElement | null | undefined;
 					while (el) {
-						if ((refElement && el === refElement) || el === popoverElement) return false;
+						if ((ref_element && el === ref_element) || el === popoverElement) return false;
 						el = el.parentElement;
 					}
 					return true;
@@ -774,7 +774,7 @@
 			})}
 			onkeyup={onPortalElementKeyUp}
 			onclick={(e) => {
-				if (!closeOnInsideClick) return;
+				if (!close_on_inside_click) return;
 				let element = e.target as HTMLElement;
 				let isButtonLike = false;
 				while (element) {
@@ -789,7 +789,7 @@
 			in:scale={{ start: 0.7, easing: backOut, duration: TRANSITION_IN_DURATION }}
 			out:scale={{ start: 0.7, easing: backIn, duration: TRANSITION_OUT_DURATION }}
 			onoutroend={() => {
-				if (refElement) (refElement.style as any).anchorName = '';
+				if (ref_element) (ref_element.style as any).anchorName = '';
 			}}>
 			<div class="popover-content">
 				{#if children}{@render children()}{/if}
@@ -807,7 +807,7 @@
 					style:top={arrowY}>
 				</div>
 			{/if}
-			{#if openOnHover && !forcedOpened}
+			{#if open_on_hover && !forcedOpened}
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					class="popover-hit-box"

@@ -40,4 +40,4 @@ if __name__ == "__main__":
     print(is_prime(17))`;
 </script>
 
-<Code code={longCode} language="python" maxHeight="200px" filename="math_utils.py" />
+<Code code={longCode} language="python" max_height="200px" filename="math_utils.py" />

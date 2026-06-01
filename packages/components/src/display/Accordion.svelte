@@ -50,7 +50,7 @@
 		skeleton = false,
 
 		/** Number of skeleton bars to render */
-		skeletonCount = 3,
+		skeleton_count = 3,
 
 		/** The ID of the element */
 		id = propId,
@@ -217,7 +217,7 @@
 		class={['accordion skeleton', className].filter(Boolean).join(' ')}
 		{id}
 		aria-hidden="true">
-		{#each { length: skeletonCount } as _, i}
+		{#each { length: skeleton_count } as _, i}
 			<div class="skeleton-item">
 				<div class="skeleton-bar" style:animation-delay="{i * 150}ms"></div>
 			</div>

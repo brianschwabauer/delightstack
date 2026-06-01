@@ -6,8 +6,8 @@
 	<div class="frame">
 		<Panorama
 			src="https://pannellum.org/images/cerro-toco-0.jpg"
-			autoRotate
-			autoRotateSpeed={1.5} />
+			auto_rotate
+			auto_rotate_speed={1.5} />
 	</div>
 </div>
 

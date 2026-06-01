@@ -3,5 +3,5 @@
 </script>
 
 <div style="width: 100%;">
-	<Steps skeleton skeletonCount={4} />
+	<Steps skeleton skeleton_count={4} />
 </div>

@@ -42,16 +42,16 @@ Omit the `value` prop for an indeterminate loading animation.
 Provide a `value` (0-100) to show progress.
 
 <ComponentPreview code={`<!-- Circular progress with percentage -->
-<Progress value={75} showValue />
+<Progress value={75} show_value />
 
 <!-- Linear progress bar -->
 <Progress circular={false} value={45} />
 
 <!-- Linear with label and percentage -->
-<Progress circular={false} value={45} showValue label="Uploading..." />`}>
-	<Progress client:load value={75} showValue />
+<Progress circular={false} value={45} show_value label="Uploading..." />`}>
+	<Progress client:load value={75} show_value />
 	<Progress client:load circular={false} value={45} />
-	<Progress client:load circular={false} value={45} showValue label="Uploading..." />
+	<Progress client:load circular={false} value={45} show_value label="Uploading..." />
 </ComponentPreview>
 
 ### Sizes
@@ -103,7 +103,7 @@ ${'  '}]}
 
 ### Overlay and Fullscreen
 
-Use `overlay` to cover a parent element, or `fullScreen` to cover the entire viewport.
+Use `overlay` to cover a parent element, or `full_screen` to cover the entire viewport.
 
 <ComponentPreview code={`<script>
 ${'  '}import { Progress } from '@delightstack/components';
@@ -143,10 +143,10 @@ ${'  '}{/if}
 | `size` | `'00' \| '0' \| '1' \| '2' \| '3'` | `'1'` | Size of the indicator |
 | `color` | `string` | - | Custom fill color (overrides `currentColor`) |
 | `label` | `string` | - | Text label (below spinner or beside bar) |
-| `showValue` | `boolean` | `false` | Display the current percentage |
+| `show_value` | `boolean` | `false` | Display the current percentage |
 | `striped` | `boolean` | `false` | Striped animation on fill (linear mode only) |
 | `overlay` | `boolean` | `false` | Cover parent element with backdrop |
-| `fullScreen` | `boolean` | `false` | Cover entire viewport |
+| `full_screen` | `boolean` | `false` | Cover entire viewport |
 | `success` | `boolean` | `false` | Success color variant |
 | `error` | `boolean` | `false` | Error color variant |
 | `segments` | `ProgressSegment[]` | - | Multi-segment progress (linear only) |

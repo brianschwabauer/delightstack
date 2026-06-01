@@ -104,7 +104,7 @@
 		onclose = undefined as (() => void) | undefined,
 
 		/** Custom snippet for rendering the selected value in the trigger */
-		renderValue = undefined as Snippet<[SelectOption | SelectOption[]]> | undefined,
+		render_value = undefined as Snippet<[SelectOption | SelectOption[]]> | undefined,
 
 		/** Custom snippet for rendering an option in the dropdown */
 		option: optionSnippet = undefined as Snippet<[SelectOption]> | undefined,
@@ -653,8 +653,8 @@
 		onclick={toggleDropdown}
 		onkeydown={onTriggerKeyDown}>
 		<div class="select-value">
-			{#if hasValue && renderValue}
-				{@render renderValue(selectedOptions as SelectOption | SelectOption[])}
+			{#if hasValue && render_value}
+				{@render render_value(selectedOptions as SelectOption | SelectOption[])}
 			{:else if multiple && Array.isArray(selectedOptions) && selectedOptions.length > 0}
 				{#each selectedOptions as opt (opt.value)}
 					<span

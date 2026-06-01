@@ -95,8 +95,8 @@ When `expandable` is true, clicking the overflow indicator reveals all hidden av
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<AvatarGroup skeleton skeletonCount={4} />`}>
-	<AvatarGroup client:load skeleton skeletonCount={4} />
+<ComponentPreview code={`<AvatarGroup skeleton skeleton_count={4} />`}>
+	<AvatarGroup client:load skeleton skeleton_count={4} />
 </ComponentPreview>
 
 ## Props
@@ -108,10 +108,10 @@ When `expandable` is true, clicking the overflow indicator reveals all hidden av
 | `size` | `'0' \| '1' \| '2' \| '3' \| '4' \| '5'` | `'1'` | Avatar size (passed to each Avatar) |
 | `overlap` | `number` | `0.25` | Overlap ratio (0-1) |
 | `direction` | `'left' \| 'right'` | `'right'` | Stack direction |
-| `ringColor` | `string` | `'var(--color-bg)'` | Ring/border color around each avatar |
+| `ring_color` | `string` | `'var(--color-bg)'` | Ring/border color around each avatar |
 | `expandable` | `boolean` | `false` | Click overflow to reveal all |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
-| `skeletonCount` | `number` | `4` | Number of skeleton circles to show |
+| `skeleton_count` | `number` | `4` | Number of skeleton circles to show |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 

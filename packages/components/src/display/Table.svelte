@@ -24,7 +24,7 @@
 
 	export interface VirtualScrollOptions {
 		/** Fixed row height in px. Auto-measured from the first row when omitted. */
-		rowHeight?: number;
+		row_height?: number;
 		/** Extra rows rendered above and below the viewport (default 8). */
 		overscan?: number;
 		/** Which element scrolls (default `'container'`). */
@@ -32,7 +32,7 @@
 		/** Bounds the scroll viewport height (e.g. 400 or '60vh'). Only applies to
 		 * the `'container'` scroller (defaults to 420px there); ignored for other
 		 * scrollers, whose height is owned by the chosen element. */
-		maxHeight?: string | number;
+		max_height?: string | number;
 	}
 
 	/** `true` for sensible defaults, `false` to disable, or an options object. */
@@ -63,13 +63,13 @@
 		 * commits a new order. Defaults to the row's position, which is fine for
 		 * static tables but makes checkmarks flash on `reorderable` commits. Strongly
 		 * recommended whenever `reorderable` and `selectable` are combined. */
-		rowKey = undefined as string | ((row: T) => string | number) | undefined,
+		row_key = undefined as string | ((row: T) => string | number) | undefined,
 
 		/** Current sort column key */
-		sortBy = $bindable(undefined) as string | undefined,
+		sort_by = $bindable(undefined) as string | undefined,
 
 		/** Sort direction */
-		sortDirection = $bindable('asc') as 'asc' | 'desc',
+		sort_direction = $bindable('asc') as 'asc' | 'desc',
 
 		/** Enable row selection */
 		selectable = false,
@@ -87,7 +87,7 @@
 		comfortable = false,
 
 		/** Sticky header */
-		stickyHeader = true,
+		sticky_header = true,
 
 		/** Enable column resizing — drag any column border (in the header or the
 		 * body cells) to resize; double-click a border to auto-fit. */
@@ -97,7 +97,7 @@
 		expandable = false,
 
 		/** Group rows by column key */
-		groupBy = undefined as string | undefined,
+		group_by = undefined as string | undefined,
 
 		/** Enable CSV/JSON export */
 		exportable = false,
@@ -106,15 +106,15 @@
 		skeleton = false,
 
 		/** Skeleton rows */
-		skeletonCount = 5,
+		skeleton_count = 5,
 
 		/** Virtual scrolling. `true` enables it with sensible defaults, `false`
-		 * disables it, or pass an options object — `{ rowHeight, overscan, scroller,
-		 * maxHeight }`. Windows the rows so only those near the viewport render,
+		 * disables it, or pass an options object — `{ row_height, overscan, scroller,
+		 * max_height }`. Windows the rows so only those near the viewport render,
 		 * keeping tables with thousands of rows fast. Applies to the flat
 		 * (non-grouped) data path. The `scroller` option chooses what scrolls:
 		 * the Table's own frame (default), its parent, the window, or any element. */
-		virtualScroll = false as VirtualScroll,
+		virtual_scroll = false as VirtualScroll,
 
 		/** Element ID */
 		id = propId,
@@ -126,7 +126,7 @@
 		empty = undefined as Snippet | undefined,
 
 		/** Expanded row content */
-		expandedRow = undefined as Snippet<[T]> | undefined,
+		expanded_row = undefined as Snippet<[T]> | undefined,
 
 		/** Sort changed */
 		onsort = undefined as
@@ -148,7 +148,7 @@
 		 * immediately (a plain click still selects); on touch the row must be
 		 * held briefly (long-press) before it lifts, so normal scrolling is
 		 * preserved. Works alongside `selectable` (drag the whole selection at
-		 * once) and `virtualScroll`. Disabled while `groupBy` is set. */
+		 * once) and `virtual_scroll`. Disabled while `group_by` is set. */
 		reorderable = false,
 
 		/** Reorder committed — fires AFTER the drop animation has finished, so the
@@ -324,7 +324,7 @@
 	// ---- Measure header + row height for virtual scrolling ----
 	// The window math assumes a uniform row height; measuring the rendered header
 	// and first body row keeps it accurate across density modes without the
-	// consumer having to supply `rowHeight`.
+	// consumer having to supply `row_height`.
 	$effect(() => {
 		if (!virtualActive) return;
 		// Re-measure when density changes.
@@ -335,7 +335,7 @@
 			const hh = head.getBoundingClientRect().height;
 			if (hh && hh !== measuredHeaderHeight) measuredHeaderHeight = hh;
 		}
-		if (vOpts.rowHeight == null) {
+		if (vOpts.row_height == null) {
 			const el = tableEl?.querySelector('tbody tr.row') as HTMLElement | null;
 			if (el) {
 				const h = el.getBoundingClientRect().height;
@@ -359,7 +359,7 @@
 		else if (typeof s === 'string') el = document.querySelector<HTMLElement>(s);
 		else if (s instanceof HTMLElement) el = s;
 		if (!el && typeof s === 'string' && s !== 'parent') {
-			console.warn(`[Table] virtualScroll scroller "${s}" matched no element.`);
+			console.warn(`[Table] virtual_scroll scroller "${s}" matched no element.`);
 		}
 		resolvedScroller = el;
 	});
@@ -419,9 +419,9 @@
 
 	// ---- Sorted data ----
 	const sortedData = $derived.by(() => {
-		if (!sortBy || onsort) return data;
-		const key = sortBy;
-		const dir = sortDirection === 'asc' ? 1 : -1;
+		if (!sort_by || onsort) return data;
+		const key = sort_by;
+		const dir = sort_direction === 'asc' ? 1 : -1;
 		return [...data].sort((a, b) => {
 			const aVal = a[key];
 			const bVal = b[key];
@@ -449,14 +449,14 @@
 		return m;
 	});
 
-	// Keyed-each key for a rendered row. A stable `rowKey` makes Svelte move the
+	// Keyed-each key for a rendered row. A stable `row_key` makes Svelte move the
 	// row's DOM node when the order changes (so selection survives a reorder
 	// commit without redrawing); falling back to the data index re-keys rows by
 	// position, which is fine for tables whose order never changes underneath them.
 	function keyOf(row: T, dataIndex: number): string | number {
-		if (rowKey === undefined) return dataIndex;
-		if (typeof rowKey === 'function') return rowKey(row);
-		const v = row[rowKey];
+		if (row_key === undefined) return dataIndex;
+		if (typeof row_key === 'function') return row_key(row);
+		const v = row[row_key];
 		return typeof v === 'string' || typeof v === 'number' ? v : String(v);
 	}
 
@@ -474,8 +474,8 @@
 	}
 
 	const groupedData = $derived.by((): Group[] | null => {
-		if (!groupBy) return null;
-		const groupKey = groupBy;
+		if (!group_by) return null;
+		const groupKey = group_by;
 		const map = new Map<string, RenderRow[]>();
 		const order: string[] = [];
 		for (let i = 0; i < sortedData.length; i++) {
@@ -507,24 +507,24 @@
 	// Windowing renders only the rows near the viewport (plus an overscan buffer)
 	// so tables with thousands of rows stay fast. It engages for the flat,
 	// non-grouped data path; grouped/skeleton/empty tables render normally. Heights
-	// are uniform (measured, or the `rowHeight` option); any expanded detail rows
+	// are uniform (measured, or the `row_height` option); any expanded detail rows
 	// are measured and folded into the offset math so scroll positions stay
 	// accurate. The `scroller` option chooses which element scrolls.
 
 	// Normalise the `boolean | options` prop to concrete values used below.
 	const vOpts = $derived.by(() => {
 		const o: VirtualScrollOptions =
-			virtualScroll && virtualScroll !== true ? virtualScroll : {};
+			virtual_scroll && virtual_scroll !== true ? virtual_scroll : {};
 		return {
-			rowHeight: o.rowHeight,
+			row_height: o.row_height,
 			overscan: o.overscan ?? 8,
 			scroller: o.scroller ?? 'container',
-			maxHeight: o.maxHeight,
+			max_height: o.max_height,
 		};
 	});
 
 	const virtualActive = $derived(
-		!!virtualScroll && !groupBy && !skeleton && data.length > 0,
+		!!virtual_scroll && !group_by && !skeleton && data.length > 0,
 	);
 
 	// The frame owns the scrollbar only for the default `'container'` scroller;
@@ -534,14 +534,14 @@
 
 	const densityRowEstimate = $derived(dense ? 33 : comfortable ? 57 : 45);
 	const effectiveRowHeight = $derived(
-		vOpts.rowHeight ?? measuredRowHeight ?? densityRowEstimate,
+		vOpts.row_height ?? measuredRowHeight ?? densityRowEstimate,
 	);
 
-	// maxHeight only makes sense for the container scroller; other scrollers own
+	// max_height only makes sense for the container scroller; other scrollers own
 	// their own height, so it is ignored there.
 	const resolvedMaxHeight = $derived.by((): string | undefined => {
 		if (!containerScroll) return undefined;
-		const mh = vOpts.maxHeight;
+		const mh = vOpts.max_height;
 		if (mh != null) return typeof mh === 'number' ? `${mh}px` : mh;
 		return '420px';
 	});
@@ -730,8 +730,8 @@
 		let newDirection: 'asc' | 'desc' = 'asc';
 		let newSortBy: string | undefined = columnKey;
 
-		if (sortBy === columnKey) {
-			if (sortDirection === 'asc') {
+		if (sort_by === columnKey) {
+			if (sort_direction === 'asc') {
 				newDirection = 'desc';
 			} else {
 				// Third click: clear sort
@@ -743,8 +743,8 @@
 		if (onsort) {
 			onsort({ column: newSortBy ?? columnKey, direction: newDirection });
 		} else {
-			sortBy = newSortBy;
-			sortDirection = newDirection;
+			sort_by = newSortBy;
+			sort_direction = newDirection;
 		}
 	}
 
@@ -1099,8 +1099,8 @@
 	// ---- Aria sort ----
 	function getAriaSort(col: Column<T>): 'ascending' | 'descending' | 'none' | undefined {
 		if (!col.sortable) return undefined;
-		if (sortBy !== col.key) return 'none';
-		return sortDirection === 'asc' ? 'ascending' : 'descending';
+		if (sort_by !== col.key) return 'none';
+		return sort_direction === 'asc' ? 'ascending' : 'descending';
 	}
 
 	// ---- Skeleton widths ----
@@ -1131,7 +1131,7 @@
 	// list can't interrupt the animation.
 	// ======================================================================
 
-	const reorderActive = $derived(reorderable && !groupBy && !skeleton && data.length > 0);
+	const reorderActive = $derived(reorderable && !group_by && !skeleton && data.length > 0);
 
 	// Tear down any in-flight drag if the table unmounts mid-gesture, so the
 	// document-level pointer/key listeners and timers don't leak.
@@ -1793,7 +1793,7 @@
 			     ignores below. -->
 			<thead>
 				<!-- svelte-ignore a11y_no_redundant_roles -->
-				<tr role="row" class:sticky={stickyHeader}>
+				<tr role="row" class:sticky={sticky_header}>
 					{#if selectable}
 						<th class="checkbox-cell" role="columnheader">
 							<div
@@ -1835,9 +1835,9 @@
 									onclick={() => handleSort(col.key)}
 									{@attach ripple({ opacity: 0.12 })}>
 									<span class="th-label">{col.label}</span>
-									<span class="sort-icon" class:active={sortBy === col.key}>
-										{#if sortBy === col.key}
-											<span class="arrow-rot" class:desc={sortDirection === 'desc'}>
+									<span class="sort-icon" class:active={sort_by === col.key}>
+										{#if sort_by === col.key}
+											<span class="arrow-rot" class:desc={sort_direction === 'desc'}>
 												<svg
 													class="arrow"
 													width="17"
@@ -1903,7 +1903,7 @@
 			</thead>
 			<tbody>
 				{#if skeleton}
-					{#each { length: skeletonCount } as _, ri}
+					{#each { length: skeleton_count } as _, ri}
 						<tr class="skeleton-row" aria-hidden="true">
 							{#if selectable}
 								<td class="checkbox-cell">
@@ -2013,7 +2013,7 @@
 						{#if !collapsedGroups.has(group.key)}
 							{#each group.rows as { row, data_index, visual_index } (keyOf(row, data_index))}
 								{@render dataRow(row, data_index, visual_index)}
-								{#if expandable && expandedRows.has(data_index) && expandedRow}
+								{#if expandable && expandedRows.has(data_index) && expanded_row}
 									{@render expandedRowTr(row, data_index)}
 								{/if}
 							{/each}
@@ -2029,7 +2029,7 @@
 					{/if}
 					{#each virtualWindow.rows as { row, data_index, visual_index } (keyOf(row, data_index))}
 						{@render dataRow(row, data_index, visual_index)}
-						{#if expandable && expandedRows.has(data_index) && expandedRow}
+						{#if expandable && expandedRows.has(data_index) && expanded_row}
 							{@render expandedRowTr(row, data_index)}
 						{/if}
 					{/each}
@@ -2043,7 +2043,7 @@
 				{:else}
 					{#each flatRows as { row, data_index, visual_index } (keyOf(row, data_index))}
 						{@render dataRow(row, data_index, visual_index)}
-						{#if expandable && expandedRows.has(data_index) && expandedRow}
+						{#if expandable && expandedRows.has(data_index) && expanded_row}
 							{@render expandedRowTr(row, data_index)}
 						{/if}
 					{/each}
@@ -2262,8 +2262,8 @@
 					easing: quintOut,
 				}}
 				{@attach measureExpanded(index)}>
-				{#if expandedRow}
-					{@render expandedRow(row)}
+				{#if expanded_row}
+					{@render expanded_row(row)}
 				{/if}
 			</div>
 		</td>

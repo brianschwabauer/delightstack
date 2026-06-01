@@ -8,10 +8,10 @@
 <div style="width: 100%;">
 	<Pagination
 		bind:page
-		bind:pageSize
-		totalPages={40}
-		showPageSize
-		pageSizeOptions={[10, 25, 50, 100]}
+		bind:page_size={pageSize}
+		total_pages={40}
+		show_page_size
+		page_size_options={[10, 25, 50, 100]}
 		onpagesizechange={() => {
 			page = 1;
 		}}

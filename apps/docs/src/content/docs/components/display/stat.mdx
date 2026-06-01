@@ -30,9 +30,9 @@ Positive changes show a green up-arrow, negative changes show a red down-arrow.
 ${'  '}value="$12,450"
 ${'  '}label="Revenue"
 ${'  '}change={12.5}
-${'  '}changeLabel="vs last month"
+${'  '}change_label="vs last month"
 />`}>
-  <StatDemo client:load value={12450} prefix="$" label="Revenue" change={12.5} changeLabel="vs last month" />
+  <StatDemo client:load value={12450} prefix="$" label="Revenue" change={12.5} change_label="vs last month" />
 </ComponentPreview>
 
 ### With Icon
@@ -50,7 +50,7 @@ Pass any Svelte component as the `icon` prop.
   label="Total Users"
   icon={UsersIcon}
   change={15}
-  changeLabel="this week"
+  change_label="this week"
 />
 ```
 
@@ -80,9 +80,9 @@ ${'  '}value={23}
 ${'  '}label="Open Bugs"
 ${'  '}change={-15}
 ${'  '}trend="up"
-${'  '}changeLabel="fewer than last week"
+${'  '}change_label="fewer than last week"
 />`}>
-  <StatDemo client:load value={23} label="Open Bugs" change={-15} trend="up" changeLabel="fewer than last week" />
+  <StatDemo client:load value={23} label="Open Bugs" change={-15} trend="up" change_label="fewer than last week" />
 </ComponentPreview>
 
 ### Skeleton Loading
@@ -99,7 +99,7 @@ ${'  '}changeLabel="fewer than last week"
 | `label` | `string` | - | Descriptive label |
 | `icon` | `Component` | - | Leading icon component |
 | `change` | `number` | - | Percentage change from previous period |
-| `changeLabel` | `string` | - | Description for the change (e.g., "vs last month") |
+| `change_label` | `string` | - | Description for the change (e.g., "vs last month") |
 | `trend` | `'up' \| 'down' \| 'neutral'` | auto | Override trend direction (auto-detected from `change`) |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Component size |
 | `horizontal` | `boolean` | `false` | Horizontal layout instead of vertical |

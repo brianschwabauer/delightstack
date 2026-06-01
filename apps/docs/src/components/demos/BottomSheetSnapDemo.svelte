@@ -8,7 +8,7 @@
 
 <Button onclick={() => (open = true)}>Open Multi-Snap Sheet</Button>
 
-<BottomSheet bind:open bind:snap snapPoints={[0.3, 0.6, 1]}>
+<BottomSheet bind:open bind:snap snap_points={[0.3, 0.6, 1]}>
 	<div style="padding: 0 1.5rem 1.5rem;">
 		<h3 style="margin: 0 0 0.75rem; color: var(--color-text, inherit);">Drag Me!</h3>
 		<p style="margin: 0 0 0.5rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">

@@ -32,16 +32,16 @@ import { Rating } from '@delightstack/components';
 
 Set `precision={0.5}` to allow half-star selections. The left half of each star registers a 0.5 increment.
 
-<ComponentPreview code={`<Rating value={3.5} precision={0.5} showValue />`}>
-	<Rating client:load value={3.5} precision={0.5} showValue />
+<ComponentPreview code={`<Rating value={3.5} precision={0.5} show_value />`}>
+	<Rating client:load value={3.5} precision={0.5} show_value />
 </ComponentPreview>
 
 ### Read-Only Display
 
 Use `readonly` to show a rating without interaction. Ideal for displaying average ratings.
 
-<ComponentPreview code={`<Rating value={4.3} readonly showValue />`}>
-	<Rating client:load value={4.3} readonly showValue />
+<ComponentPreview code={`<Rating value={4.3} readonly show_value />`}>
+	<Rating client:load value={4.3} readonly show_value />
 </ComponentPreview>
 
 ### Custom Colors
@@ -54,8 +54,8 @@ ${'  '}import { Rating } from '@delightstack/components';
 ${'  '}let likes = $state(2);
 </script>
 
-<Rating bind:value={likes} max={3} color="var(--c-error, hsl(0 70% 55%))" showValue />
-<Rating value={4} readonly color="hsl(140 60% 45%)" showValue />`}>
+<Rating bind:value={likes} max={3} color="var(--c-error, hsl(0 70% 55%))" show_value />
+<Rating value={4} readonly color="hsl(140 60% 45%)" show_value />`}>
 	<RatingCustomDemo client:load />
 </ComponentPreview>
 
@@ -81,7 +81,7 @@ Allow clicking the current rating again to clear it to 0.
 
 ### Custom Max
 
-<ComponentPreview code={`<Rating bind:value={rating} max={10} showValue />`}>
+<ComponentPreview code={`<Rating bind:value={rating} max={10} show_value />`}>
 	<RatingCustomMaxDemo client:load />
 </ComponentPreview>
 
@@ -96,7 +96,7 @@ Allow clicking the current rating again to clear it to 0.
 | `readonly` | `boolean` | `false` | Display only, no interaction |
 | `disabled` | `boolean` | `false` | Disable input |
 | `color` | `string` | `''` | Override filled icon color (CSS value) |
-| `showValue` | `boolean` | `false` | Show numeric value beside icons |
+| `show_value` | `boolean` | `false` | Show numeric value beside icons |
 | `clearable` | `boolean` | `false` | Allow clicking current rating to clear (set to 0) |
 | `tooltip` | `string` | `''` | Tooltip text on hover |
 | `dense` | `boolean` | `false` | Tighter spacing between icons |

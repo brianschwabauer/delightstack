@@ -60,8 +60,8 @@ Validate file type, size, and count. Errors are reported per file via the `onerr
 <ComponentPreview code={`<FileUpload
 ${'  '}bind:files
 ${'  '}accept=".pdf,.doc,.docx"
-${'  '}maxSize={10 * 1024 * 1024}
-${'  '}maxFiles={3}
+${'  '}max_size={10 * 1024 * 1024}
+${'  '}max_files={3}
 ${'  '}multiple
 ${'  '}label="Upload documents (PDF, DOC — max 3 files, 10MB each)"
 />`}>
@@ -70,7 +70,7 @@ ${'  '}label="Upload documents (PDF, DOC — max 3 files, 10MB each)"
 
 ### Custom File Item Rendering
 
-Use the `fileItem` snippet to customize how each file appears in the list. Useful for showing upload progress or custom layouts.
+Use the `file_item` snippet to customize how each file appears in the list. Useful for showing upload progress or custom layouts.
 
 <ComponentPreview code={`<script>
 ${'  '}import { FileUpload } from '@delightstack/components';
@@ -79,7 +79,7 @@ ${'  '}let files = $state([]);
 </script>
 
 <FileUpload bind:files multiple label="Upload files">
-${'  '}{#snippet fileItem({ file, index, remove })}
+${'  '}{#snippet file_item({ file, index, remove })}
 ${'  '}${'  '}<div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: 0.375rem; margin-top: 0.5rem;">
 ${'  '}${'  '}${'  '}<span style="flex: 1;">{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
 ${'  '}${'  '}${'  '}<button onclick={remove}>Remove</button>
@@ -102,8 +102,8 @@ ${'  '}{/snippet}
 | `files` | `File[]` | `[]` | Selected files, bindable |
 | `accept` | `string` | - | Accepted file types (e.g. `'image/*'`, `'.pdf,.doc'`) |
 | `multiple` | `boolean` | `false` | Allow multiple files |
-| `maxSize` | `number` | - | Max file size in bytes |
-| `maxFiles` | `number` | - | Max number of files |
+| `max_size` | `number` | - | Max file size in bytes |
+| `max_files` | `number` | - | Max number of files |
 | `disabled` | `boolean` | `false` | Disable upload |
 | `preview` | `boolean` | `true` | Show image thumbnails in file list |
 | `dropzone` | `boolean` | `true` | Large drop target variant (default) |
@@ -118,7 +118,7 @@ ${'  '}{/snippet}
 | `id` | `string` | auto | Element ID |
 | `name` | `string` | - | Form field name |
 | `class` | `string` | `''` | Additional CSS classes |
-| `fileItem` | `Snippet<[{ file, index, remove }]>` | - | Custom file list item rendering |
+| `file_item` | `Snippet<[{ file, index, remove }]>` | - | Custom file list item rendering |
 
 ## Events
 

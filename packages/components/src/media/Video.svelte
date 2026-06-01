@@ -106,7 +106,7 @@
 		controls = true,
 
 		/** CSS aspect ratio */
-		aspectRatio = '16/9',
+		aspect_ratio = '16/9',
 
 		/** Preload behavior */
 		preload = 'metadata' as 'auto' | 'metadata' | 'none',
@@ -173,7 +173,7 @@
 		muted?: boolean;
 		loop?: boolean;
 		controls?: boolean;
-		aspectRatio?: string;
+		aspect_ratio?: string;
 		preload?: 'auto' | 'metadata' | 'none';
 		captions?: Track[];
 		thumbnails?: string;
@@ -964,7 +964,7 @@
 	{id}
 	class={['video', className].filter(Boolean).join(' ')}
 	class:is-fullscreen={is_fullscreen}
-	style:aspect-ratio={is_fullscreen ? undefined : aspectRatio}
+	style:aspect-ratio={is_fullscreen ? undefined : aspect_ratio}
 	bind:this={element}
 	onmousemove={resetInactivityTimer}
 	onmouseenter={resetInactivityTimer}

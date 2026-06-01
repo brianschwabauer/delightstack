@@ -141,8 +141,8 @@ ${'  '}</AccordionItem>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Accordion skeleton skeletonCount={4} />`}>
-	<Accordion client:load skeleton skeletonCount={4} />
+<ComponentPreview code={`<Accordion skeleton skeleton_count={4} />`}>
+	<Accordion client:load skeleton skeleton_count={4} />
 </ComponentPreview>
 
 ### Nested Accordions
@@ -185,7 +185,7 @@ ${'  '}</AccordionItem>
 | `dense` | `boolean` | `false` | Compact header/content padding |
 | `comfortable` | `boolean` | `false` | Relaxed header/content padding |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
-| `skeletonCount` | `number` | `3` | Number of skeleton items to render |
+| `skeleton_count` | `number` | `3` | Number of skeleton items to render |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 | `children` | `Snippet` | - | AccordionItem children |

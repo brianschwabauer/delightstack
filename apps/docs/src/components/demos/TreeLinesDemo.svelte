@@ -32,4 +32,4 @@
 	let expanded = $state(['src', 'lib', 'routes', 'static']);
 </script>
 
-<Tree data={fileTree} showLines bind:expanded />
+<Tree data={fileTree} show_lines bind:expanded />

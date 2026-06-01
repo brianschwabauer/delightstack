@@ -204,7 +204,7 @@
 		duration = 4000,
 
 		/** Use saturated, variant-colored toast backgrounds (sonner "rich colors"). */
-		richColors = false,
+		rich_colors = false,
 
 		/** Element ID */
 		id = propId,
@@ -474,7 +474,7 @@
 		class={['toaster', position, `align-${align}`, className].filter(Boolean).join(' ')}
 		class:expanded
 		class:is-top={is_top}
-		class:rich={richColors}
+		class:rich={rich_colors}
 		style:--toast-width="{width}px"
 		style:--toast-gap="{gap}px"
 		{id}

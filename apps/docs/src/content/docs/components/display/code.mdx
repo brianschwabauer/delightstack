@@ -38,7 +38,7 @@ greet('World');\`;
 
 ### With Filename
 
-A header bar appears when `filename` or `showCopy` is set.
+A header bar appears when `filename` or `show_copy` is set.
 
 <ComponentPreview code={`<Code
 ${'  '}code={snippet}
@@ -64,7 +64,7 @@ ${'  '}return total;
 }\`;
 </script>
 
-<Code code={snippet} language="javascript" highlightLines={[3, 4]} filename="cart.js" />`}>
+<Code code={snippet} language="javascript" highlight_lines={[3, 4]} filename="cart.js" />`}>
   <CodeLineHighlightDemo client:load />
 </ComponentPreview>
 
@@ -73,9 +73,9 @@ ${'  '}return total;
 <ComponentPreview code={`<Code
 ${'  '}code="npm install @delightstack/components"
 ${'  '}language="bash"
-${'  '}showLineNumbers={false}
+${'  '}show_line_numbers={false}
 />`}>
-	<DSCode client:load code="npm install @delightstack/components" language="bash" showLineNumbers={false} />
+	<DSCode client:load code="npm install @delightstack/components" language="bash" show_line_numbers={false} />
 </ComponentPreview>
 
 ### Diff Display
@@ -107,7 +107,7 @@ Long code blocks can be constrained with a maximum height. The content scrolls v
 <ComponentPreview code={`<Code
 ${'  '}code={longCodeBlock}
 ${'  '}language="python"
-${'  '}maxHeight="200px"
+${'  '}max_height="200px"
 ${'  '}filename="math_utils.py"
 />`}>
   <CodeMaxHeightDemo client:load />
@@ -137,13 +137,13 @@ ${'  '}filename="utils.ts"
 | `code` | `string` | required | Code string to display |
 | `language` | `string` | `'plaintext'` | Language for syntax highlighting |
 | `filename` | `string` | - | Filename displayed in the header |
-| `showLineNumbers` | `boolean` | `true` | Show line numbers |
-| `showCopy` | `boolean` | `true` | Show copy-to-clipboard button |
-| `startLine` | `number` | `1` | Starting line number |
-| `highlightLines` | `number[]` | `[]` | Line numbers to highlight |
+| `show_line_numbers` | `boolean` | `true` | Show line numbers |
+| `show_copy` | `boolean` | `true` | Show copy-to-clipboard button |
+| `start_line` | `number` | `1` | Starting line number |
+| `highlight_lines` | `number[]` | `[]` | Line numbers to highlight |
 | `diff` | `boolean` | `false` | Render as unified diff |
 | `wrap` | `boolean` | `false` | Wrap long lines instead of horizontal scroll |
-| `maxHeight` | `string` | - | Max height with vertical scroll (e.g., `'400px'`) |
+| `max_height` | `string` | - | Max height with vertical scroll (e.g., `'400px'`) |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |

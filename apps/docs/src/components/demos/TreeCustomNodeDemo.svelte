@@ -35,4 +35,4 @@
 	{/if}
 {/snippet}
 
-<Tree data={fileTree} nodeContent={customNode} bind:expanded />
+<Tree data={fileTree} node_content={customNode} bind:expanded />

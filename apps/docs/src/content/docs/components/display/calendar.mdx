@@ -113,10 +113,10 @@ ${'  '}];
 ### Locale and Week Start
 
 <ComponentPreview code={`<!-- German locale, Monday start -->
-<Calendar bind:value={date} locale="de-DE" weekStartsOn={1} />
+<Calendar bind:value={date} locale="de-DE" week_starts_on={1} />
 
 <!-- US locale, Sunday start -->
-<Calendar bind:value={date} locale="en-US" weekStartsOn={0} />`}>
+<Calendar bind:value={date} locale="en-US" week_starts_on={0} />`}>
   <CalendarLocaleDemo client:load />
 </ComponentPreview>
 
@@ -124,10 +124,10 @@ ${'  '}];
 
 <ComponentPreview code={`<Calendar
 ${'  '}bind:value={date}
-${'  '}showTimeSlots
-${'  '}timeSlotInterval={15}
-${'  '}timeSlotMin="09:00"
-${'  '}timeSlotMax="17:00"
+${'  '}show_time_slots
+${'  '}time_slot_interval={15}
+${'  '}time_slot_min="09:00"
+${'  '}time_slot_max="17:00"
 ${'  '}ontimeslotselect={({ time, date }) => console.log(time, date)}
 />`}>
   <CalendarTimeSlotsDemo client:load />
@@ -151,12 +151,12 @@ ${'  '}ontimeslotselect={({ time, date }) => console.log(time, date)}
 | `disabled` | `Date[] \| ((date: Date) => boolean)` | `[]` | Disabled dates (array or predicate function) |
 | `marked` | `MarkedDate[]` | `[]` | Dates with colored dot markers |
 | `events` | `CalendarEvent[]` | `[]` | Events to display on dates |
-| `weekStartsOn` | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6` | `1` | First day of week (0=Sunday) |
+| `week_starts_on` | `0 \| 1 \| 2 \| 3 \| 4 \| 5 \| 6` | `1` | First day of week (0=Sunday) |
 | `locale` | `string` | - | BCP 47 locale string for formatting |
-| `showTimeSlots` | `boolean` | `false` | Show time slot picker alongside calendar |
-| `timeSlotInterval` | `number` | `30` | Time slot interval in minutes |
-| `timeSlotMin` | `string` | `'00:00'` | Earliest time slot |
-| `timeSlotMax` | `string` | `'23:59'` | Latest time slot |
+| `show_time_slots` | `boolean` | `false` | Show time slot picker alongside calendar |
+| `time_slot_interval` | `number` | `30` | Time slot interval in minutes |
+| `time_slot_min` | `string` | `'00:00'` | Earliest time slot |
+| `time_slot_max` | `string` | `'23:59'` | Latest time slot |
 | `dense` | `boolean` | `false` | Compact cell spacing |
 | `comfortable` | `boolean` | `false` | Relaxed cell spacing |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |

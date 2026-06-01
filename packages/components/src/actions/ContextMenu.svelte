@@ -94,8 +94,8 @@
 <Popover
 	opened={!!activeContextMenu?.actions?.length}
 	strategy="fixed"
-	closeOnEscapeKey
-	closeOnOutsideClick
+	close_on_escape_key
+	close_on_outside_click
 	arrow={false}
 	radius="var(--radius-3)"
 	x={contextMenuLocationX}

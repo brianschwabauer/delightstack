@@ -31,7 +31,7 @@ ${'  '}let open = $state(false);
 
 <Button onclick={() => open = true}>Open Bottom Sheet</Button>
 
-<BottomSheet bind:open snapPoints={[0.5, 0.92]}>
+<BottomSheet bind:open snap_points={[0.5, 0.92]}>
 ${'  '}<div style="padding: 0 1.5rem 1.5rem;">
 ${'  '}${'  '}<h3>Bottom Sheet</h3>
 ${'  '}${'  '}<p>Drag the handle to resize, flick down to dismiss, or tap the handle to toggle.</p>
@@ -56,7 +56,7 @@ ${'  '}let snap = $state(0);
 
 <Button onclick={() => open = true}>Open Multi-Snap Sheet</Button>
 
-<BottomSheet bind:open bind:snap snapPoints={[0.3, 0.6, 1]}>
+<BottomSheet bind:open bind:snap snap_points={[0.3, 0.6, 1]}>
 ${'  '}<div style="padding: 0 1.5rem 1.5rem;">
 ${'  '}${'  '}<h3>Drag Me!</h3>
 ${'  '}${'  '}<p>Three snap points at 30%, 60%, and 100%.</p>
@@ -71,24 +71,24 @@ ${'  '}</div>
 
 ### Morphing Header
 
-As the sheet moves between its collapsed and expanded states, `morphPercent` runs from `0` to `1`. The sheet also exposes it as a `--morph-percent` CSS variable on its root and passes it into the `header` and default snippets — so a header can fluidly morph between two layouts (here an avatar shrinks and the title slides up beside it).
+As the sheet moves between its collapsed and expanded states, `morph_percent` runs from `0` to `1`. The sheet also exposes it as a `--morph-percent` CSS variable on its root and passes it into the `header` and default snippets — so a header can fluidly morph between two layouts (here an avatar shrinks and the title slides up beside it).
 
-By default the morph spans the gap between the two smallest snap points; set `morphRange` to control exactly where it starts and finishes. Read the value with `bind:morphPercent`, the `onmorph` callback, the snippet parameter, or the CSS variable.
+By default the morph spans the gap between the two smallest snap points; set `morph_range` to control exactly where it starts and finishes. Read the value with `bind:morph_percent`, the `onmorph` callback, the snippet parameter, or the CSS variable.
 
 <ComponentPreview code={`<script>
 ${'  '}import { BottomSheet, Button } from '@delightstack/components';
 
 ${'  '}let open = $state(false);
-${'  '}let morphPercent = $state(0);
+${'  '}let morph_percent = $state(0);
 </script>
 
 <Button onclick={() => open = true}>Open Morphing Sheet</Button>
 
 <BottomSheet
 ${'  '}bind:open
-${'  '}bind:morphPercent
-${'  '}snapPoints={[0.32, 0.92]}
-${'  '}morphRange={[0.32, 0.55]}>
+${'  '}bind:morph_percent
+${'  '}snap_points={[0.32, 0.92]}
+${'  '}morph_range={[0.32, 0.55]}>
 ${'  '}{#snippet header(morph)}
 ${'  '}${'  '}<div class="morph-header">
 ${'  '}${'  '}${'  '}<!-- interpolate any styles with var(--morph-percent) or the morph param -->
@@ -99,7 +99,7 @@ ${'  '}${'  '}</div>
 ${'  '}{/snippet}
 
 ${'  '}<div style="padding: 0.5rem 1.5rem 1.5rem;">
-${'  '}${'  '}<p>morphPercent is {morphPercent.toFixed(2)}</p>
+${'  '}${'  '}<p>morph_percent is {morph_percent.toFixed(2)}</p>
 ${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
 ${'  '}</div>
 </BottomSheet>
@@ -133,7 +133,7 @@ ${'  '}let open = $state(false);
 
 <Button onclick={() => open = true}>Open Sheet with Header</Button>
 
-<BottomSheet bind:open snapPoints={[0.5, 0.92]}>
+<BottomSheet bind:open snap_points={[0.5, 0.92]}>
 ${'  '}{#snippet header()}
 ${'  '}${'  '}<div style="padding: 0 1rem 0.75rem; border-bottom: 1px solid var(--color-border);">
 ${'  '}${'  '}${'  '}<h3 style="margin: 0;">Filters</h3>
@@ -160,7 +160,7 @@ ${'  '}let open = $state(false);
 
 <Button onclick={() => open = true}>Open Non-Dismissible Sheet</Button>
 
-<BottomSheet bind:open dismissible={false} snapPoints={[0.4, 0.85]}>
+<BottomSheet bind:open dismissible={false} snap_points={[0.4, 0.85]}>
 ${'  '}<div style="padding: 0 1.5rem 1.5rem;">
 ${'  '}${'  '}<h3>Required Action</h3>
 ${'  '}${'  '}<p>You must complete this action before the sheet will close.</p>
@@ -174,7 +174,7 @@ ${'  '}</div>
 
 `backdrop={false}` removes the blur and tint, leaving the page behind clearly visible. The transparent backdrop still catches taps to dismiss the sheet.
 
-<ComponentPreview code={`<BottomSheet bind:open backdrop={false} blocking={false} snapPoints={[0.5, 0.9]}>
+<ComponentPreview code={`<BottomSheet bind:open backdrop={false} blocking={false} snap_points={[0.5, 0.9]}>
 ${'  '}<div style="padding: 0 1.5rem 1.5rem;">
 ${'  '}${'  '}<p>No blur or tint — the page behind stays visible.</p>
 ${'  '}</div>
@@ -187,15 +187,15 @@ ${'  '}</div>
 | Prop           | Type                       | Default            | Description                                                                                  |
 | -------------- | -------------------------- | ------------------ | -------------------------------------------------------------------------------------------- |
 | `open`         | `boolean`                  | `false`            | Controls visibility (`$bindable`)                                                            |
-| `snapPoints`   | `number[]`                 | `[0.5, 1]`         | Snap heights as viewport fractions (`<= 1`) or absolute pixels (`> 1`)                       |
-| `defaultSnap`  | `number`                   | largest snap       | Index of the snap point to open to                                                           |
+| `snap_points`   | `number[]`                 | `[0.5, 1]`         | Snap heights as viewport fractions (`<= 1`) or absolute pixels (`> 1`)                       |
+| `default_snap`  | `number`                   | largest snap       | Index of the snap point to open to                                                           |
 | `snap`         | `number`                   | `0`                | Current snap point index (`$bindable`)                                                        |
-| `morphPercent` | `number`                   | `0`                | Morph progress 0–1 between collapsed and expanded (`$bindable`)                              |
-| `morphRange`   | `[number, number]`         | first two snaps    | Height range over which `morphPercent` animates 0→1 (fractions or pixels)                    |
+| `morph_percent` | `number`                   | `0`                | Morph progress 0–1 between collapsed and expanded (`$bindable`)                              |
+| `morph_range`   | `[number, number]`         | first two snaps    | Height range over which `morph_percent` animates 0→1 (fractions or pixels)                    |
 | `dismissible`  | `boolean`                  | `true`             | Whether dragging down, the backdrop, or Escape can dismiss the sheet                         |
 | `backdrop`     | `boolean`                  | `true`             | Render the frosted (blur + tint) backdrop; when `false` it stays transparent but still taps to dismiss |
 | `blocking`     | `boolean`                  | `true`             | Lock body scroll while open                                                                  |
-| `maxWidth`     | `number`                   | `500`              | Maximum sheet width in pixels (stays centered when wider)                                    |
+| `max_width`     | `number`                   | `500`              | Maximum sheet width in pixels (stays centered when wider)                                    |
 | `id`           | `string`                   | auto               | Element ID                                                                                   |
 | `class`        | `string`                   | `''`               | Additional CSS classes                                                                       |
 | `children`     | `Snippet<[number]>`        | `undefined`        | Scrollable content; receives the current morph percent                                       |

@@ -133,7 +133,7 @@
 			     click anywhere in the fieldset body expands it. -->
 				<Button
 					transparent
-					fullWidth
+					full_width
 					class="expand-button"
 					onclick={expandIfCollapsed}
 					aria-label="Expand">

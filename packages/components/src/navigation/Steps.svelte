@@ -52,7 +52,7 @@
 		skeleton = false,
 
 		/** Number of skeleton placeholder steps */
-		skeletonCount = 4,
+		skeleton_count = 4,
 
 		/** Element ID */
 		id = propId,
@@ -302,7 +302,7 @@
 		style:--circle-size="{CIRCLE_SIZES[size] ?? 32}px"
 		style:--step-font-size={FONT_SIZES[size] ?? '0.75rem'}
 		aria-hidden="true">
-		{#each { length: skeletonCount } as _, i}
+		{#each { length: skeleton_count } as _, i}
 			<div class="step skeleton-step">
 				<div class="step-main">
 					<div class="skeleton-circle" style:animation-delay="{i * 150}ms"></div>
@@ -317,7 +317,7 @@
 						</div>
 					</div>
 				</div>
-				{#if i < skeletonCount - 1}
+				{#if i < skeleton_count - 1}
 					<div class="step-connector">
 						<div class="skeleton-connector-line"></div>
 					</div>

@@ -42,7 +42,7 @@ ${'  '}import Panorama from '@delightstack/components/panorama';
 
 Enable gentle continuous rotation. Rotation pauses when the user interacts and resumes after 3 seconds of inactivity.
 
-<ComponentPreview code={`<Panorama src="/panoramas/cityscape.jpg" autoRotate autoRotateSpeed={1.5} />`}>
+<ComponentPreview code={`<Panorama src="/panoramas/cityscape.jpg" auto_rotate auto_rotate_speed={1.5} />`}>
 	<PanoramaAutoRotateDemo client:visible />
 </ComponentPreview>
 
@@ -53,7 +53,7 @@ Start the viewer facing a specific direction.
 ```svelte
 <Panorama
   src="/panoramas/interior.jpg"
-  initialView={{ pitch: 10, yaw: 90 }}
+  initial_view={{ pitch: 10, yaw: 90 }}
   fov={60}
 />
 ```
@@ -103,11 +103,11 @@ Provide a fallback image for browsers without WebGL support.
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `src` | `string` | required | Equirectangular panorama image URL |
-| `initialView` | `{ pitch: number, yaw: number }` | `{ pitch: 0, yaw: 0 }` | Starting camera orientation in degrees |
+| `initial_view` | `{ pitch: number, yaw: number }` | `{ pitch: 0, yaw: 0 }` | Starting camera orientation in degrees |
 | `fov` | `number` | `75` | Field of view in degrees (30-120) |
-| `autoRotate` | `boolean` | `false` | Enable gentle continuous rotation |
-| `autoRotateSpeed` | `number` | `1` | Rotation speed multiplier |
-| `showControls` | `boolean` | `true` | Show zoom, fullscreen, and reset buttons |
+| `auto_rotate` | `boolean` | `false` | Enable gentle continuous rotation |
+| `auto_rotate_speed` | `number` | `1` | Rotation speed multiplier |
+| `show_controls` | `boolean` | `true` | Show zoom, fullscreen, and reset buttons |
 | `interactive` | `boolean` | `true` | Enable drag, touch, and scroll interaction |
 | `gyroscope` | `boolean` | `false` | Enable device orientation control on mobile |
 | `hotspots` | `PanoramaHotspot[]` | `[]` | Interactive markers in the panorama |

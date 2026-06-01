@@ -30,13 +30,13 @@
 		colors = undefined as string[] | undefined,
 
 		/** Show grid lines */
-		showGrid = true,
+		show_grid = true,
 
 		/** Show legend */
-		showLegend = true,
+		show_legend = true,
 
 		/** Enable tooltips */
-		showTooltip = true,
+		show_tooltip = true,
 
 		/** Animate on load */
 		animate = true,
@@ -48,10 +48,10 @@
 		curved = true,
 
 		/** Show data points */
-		showPoints = false,
+		show_points = false,
 
 		/** Inner radius for donut (0-1 ratio of outer radius) */
-		innerRadius = 0,
+		inner_radius = 0,
 
 		/** Loading skeleton */
 		skeleton = false,
@@ -66,14 +66,14 @@
 		data: ChartData;
 		height?: number;
 		colors?: string[];
-		showGrid?: boolean;
-		showLegend?: boolean;
-		showTooltip?: boolean;
+		show_grid?: boolean;
+		show_legend?: boolean;
+		show_tooltip?: boolean;
 		animate?: boolean;
 		stacked?: boolean;
 		curved?: boolean;
-		showPoints?: boolean;
-		innerRadius?: number;
+		show_points?: boolean;
+		inner_radius?: number;
 		skeleton?: boolean;
 		id?: string;
 		class?: string;
@@ -629,7 +629,7 @@
 		const cy = height / 2;
 		const outer_r = Math.min(cx, cy) - 30;
 		const inner_r =
-			type === 'donut' ? outer_r * Math.max(0, Math.min(1, innerRadius || 0.6)) : 0;
+			type === 'donut' ? outer_r * Math.max(0, Math.min(1, inner_radius || 0.6)) : 0;
 
 		const segments: PieSegment[] = [];
 		let start_angle = -Math.PI / 2;
@@ -697,7 +697,7 @@
 		dataset: string,
 		value: string,
 	) {
-		if (!showTooltip) return;
+		if (!show_tooltip) return;
 		const rect = (event.currentTarget as Element)
 			.closest('.chart')
 			?.getBoundingClientRect();
@@ -786,7 +786,7 @@
 				class="chart-svg"
 				role="img"
 				aria-label="{type} chart">
-				{#if showGrid}
+				{#if show_grid}
 					{#each y_ticks as tick}
 						<line
 							x1={PADDING_LEFT}
@@ -849,14 +849,14 @@
 				<!-- Data points -->
 				{#each line_datasets as ds}
 					{#each ds.points as pt, pi}
-						{#if showPoints || showTooltip}
+						{#if show_points || show_tooltip}
 							<circle
 								cx={pt.x}
 								cy={pt.y}
-								r={showPoints ? 4 : 8}
-								fill={showPoints ? ds.color : 'transparent'}
-								stroke={showPoints ? 'var(--color-bg, white)' : 'none'}
-								stroke-width={showPoints ? 2 : 0}
+								r={show_points ? 4 : 8}
+								fill={show_points ? ds.color : 'transparent'}
+								stroke={show_points ? 'var(--color-bg, white)' : 'none'}
+								stroke-width={show_points ? 2 : 0}
 								class="data-point"
 								onmouseenter={(e) =>
 									showTooltipAt(
@@ -880,7 +880,7 @@
 				class="chart-svg"
 				role="img"
 				aria-label="bar chart">
-				{#if showGrid}
+				{#if show_grid}
 					{#each y_ticks as tick}
 						<line
 							x1={PADDING_LEFT}
@@ -943,7 +943,7 @@
 				class="chart-svg"
 				role="img"
 				aria-label="horizontal bar chart">
-				{#if showGrid}
+				{#if show_grid}
 					{#each h_ticks as tick}
 						<line
 							x1={mapHX(tick)}
@@ -1029,7 +1029,7 @@
 		{/if}
 
 		<!-- Tooltip -->
-		{#if showTooltip && tooltip_visible}
+		{#if show_tooltip && tooltip_visible}
 			<div class="chart-tooltip" style:left="{tooltip_x}px" style:top="{tooltip_y}px">
 				{#if tooltip_dataset}
 					<span class="tooltip-dataset">{tooltip_dataset}</span>
@@ -1040,7 +1040,7 @@
 		{/if}
 
 		<!-- Legend -->
-		{#if showLegend}
+		{#if show_legend}
 			<div class="chart-legend">
 				{#if type === 'pie' || type === 'donut'}
 					{#each data.labels as label, i}

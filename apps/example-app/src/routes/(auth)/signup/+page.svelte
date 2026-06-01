@@ -57,16 +57,16 @@
 				/>
 			</div>
 
-			<Button type="submit" fullWidth>Create Account</Button>
+			<Button type="submit" full_width>Create Account</Button>
 		</Form>
 
 		<div class="divider"><span>or</span></div>
 
 		<div class="oauth-buttons">
-			<Button href="/api/auth/signin/github" fullWidth transparent>
+			<Button href="/api/auth/signin/github" full_width transparent>
 				Continue with GitHub
 			</Button>
-			<Button href="/api/auth/signin/google" fullWidth transparent>
+			<Button href="/api/auth/signin/google" full_width transparent>
 				Continue with Google
 			</Button>
 		</div>

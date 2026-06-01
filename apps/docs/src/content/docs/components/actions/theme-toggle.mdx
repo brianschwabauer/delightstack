@@ -39,35 +39,35 @@ Bind to the `theme` prop to read or control the current theme preference.
 
 Disable the system/auto option to cycle only between light and dark.
 
-<ComponentPreview code={`<ThemeToggle disableAuto />`}>
-	<ThemeToggle client:load disableAuto />
+<ComponentPreview code={`<ThemeToggle disable_auto />`}>
+	<ThemeToggle client:load disable_auto />
 </ComponentPreview>
 
 ### With a Text Label
 
-Set `showLabel` to display the current mode name ("Light" / "Dark" / "Auto") beside the icon. Pass `label` to override the text with your own.
+Set `show_label` to display the current mode name ("Light" / "Dark" / "Auto") beside the icon. Pass `label` to override the text with your own.
 
-<ComponentPreview code={`<ThemeToggle showLabel />
-<ThemeToggle showLabel label="Appearance" />`}>
-	<ThemeToggle client:load showLabel />
-	<ThemeToggle client:load showLabel label="Appearance" />
+<ComponentPreview code={`<ThemeToggle show_label />
+<ThemeToggle show_label label="Appearance" />`}>
+	<ThemeToggle client:load show_label />
+	<ThemeToggle client:load show_label label="Appearance" />
 </ComponentPreview>
 
 ### Detecting Effective Dark Mode
 
-Bind to `isDark` to get the resolved dark state (taking system preference into account when theme is `'auto'`).
+Bind to `is_dark` to get the resolved dark state (taking system preference into account when theme is `'auto'`).
 
 ```svelte
 <script>
   import { ThemeToggle } from '@delightstack/components';
 
   let theme = $state<'light' | 'dark' | 'auto'>('auto');
-  let isDark = $state(false);
+  let is_dark = $state(false);
 </script>
 
-<ThemeToggle bind:theme bind:isDark />
+<ThemeToggle bind:theme bind:is_dark />
 
-{#if isDark}
+{#if is_dark}
   <p>Dark mode is active</p>
 {:else}
   <p>Light mode is active</p>
@@ -114,11 +114,11 @@ Override the default tooltip text.
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Current theme preference (`$bindable()`) |
-| `isDark` | `boolean` | `false` | Computed resolved dark state (`$bindable()`, read-only). True when effective appearance is dark. |
+| `is_dark` | `boolean` | `false` | Computed resolved dark state (`$bindable()`, read-only). True when effective appearance is dark. |
 | `size` | `'0' \| '1' \| '2'` | `'1'` | Component size (`'0'` = 18px icon, `'1'` = 24px icon, `'2'` = 32px icon) |
-| `disableAuto` | `boolean` | `false` | Hide the auto/system option (two-state toggle only) |
-| `showLabel` | `boolean` | `false` | Show a text label beside the icon ("Light" / "Dark" / "Auto") |
-| `label` | `string` | `undefined` | Custom label text override. Falls back to the current mode name when `showLabel` is set. |
+| `disable_auto` | `boolean` | `false` | Hide the auto/system option (two-state toggle only) |
+| `show_label` | `boolean` | `false` | Show a text label beside the icon ("Light" / "Dark" / "Auto") |
+| `label` | `string` | `undefined` | Custom label text override. Falls back to the current mode name when `show_label` is set. |
 | `tooltip` | `string` | `''` | Override the default tooltip text. Defaults to the `aria-label` value. |
 | `id` | `string` | `undefined` | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
@@ -135,7 +135,7 @@ Override the default tooltip text.
 | Mode | Cycle |
 |------|-------|
 | Three-state (default) | `light` -> `dark` -> `auto` -> `light` |
-| Two-state (`disableAuto`) | `light` -> `dark` -> `light` |
+| Two-state (`disable_auto`) | `light` -> `dark` -> `light` |
 
 ## Theme Application
 
@@ -143,7 +143,7 @@ When the theme changes, the component:
 
 1. Sets `document.documentElement.style.colorScheme` to `'light'` or `'dark'` based on the effective dark state.
 2. Saves the preference to `localStorage` under the key `'delightstack:theme'`.
-3. Watches for system preference changes via `matchMedia('(prefers-color-scheme: dark)')` and updates `isDark` reactively when theme is `'auto'`.
+3. Watches for system preference changes via `matchMedia('(prefers-color-scheme: dark)')` and updates `is_dark` reactively when theme is `'auto'`.
 
 ### Anti-Flash Script
 
@@ -157,8 +157,8 @@ To prevent a flash of wrong theme on page load, add the following inline script 
         var saved = localStorage.getItem('delightstack:theme');
         var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         var theme = (saved === 'light' || saved === 'dark' || saved === 'auto') ? saved : 'auto';
-        var isDark = theme === 'dark' || (theme === 'auto' && prefersDark);
-        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+        var is_dark = theme === 'dark' || (theme === 'auto' && prefersDark);
+        document.documentElement.style.colorScheme = is_dark ? 'dark' : 'light';
       } catch(e) {}
     })();
   </script>

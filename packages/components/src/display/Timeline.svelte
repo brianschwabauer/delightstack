@@ -54,7 +54,7 @@
 		skeleton = false,
 
 		/** Skeleton items count */
-		skeletonCount = 3,
+		skeleton_count = 3,
 
 		/** Element ID */
 		id = propId,
@@ -232,7 +232,7 @@
 		class:comfortable
 		{id}
 		aria-hidden="true">
-		{#each { length: skeletonCount } as _, i}
+		{#each { length: skeleton_count } as _, i}
 			<li class="timeline-item skeleton-item" class:horizontal class:vertical={!horizontal}>
 				<div class="timeline-marker">
 					<span class="skeleton-circle" style:animation-delay="{i * 150}ms"></span>

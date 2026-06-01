@@ -62,7 +62,7 @@ ${'  '}];
 ${'  '}let expanded = $state(['src', 'components']);
 </script>
 
-<Tree {data} bind:expanded showLines />`}>
+<Tree {data} bind:expanded show_lines />`}>
   <TreeDemo client:load />
 </ComponentPreview>
 
@@ -137,7 +137,7 @@ ${'  '}let selected = $state([]);
 ${'  '}let expanded = $state(['fruits', 'vegetables']);
 </script>
 
-<Tree data={categories} checkboxes multiSelect bind:selected bind:expanded />`}>
+<Tree data={categories} checkboxes multi_select bind:selected bind:expanded />`}>
   <TreeCheckboxDemo client:load />
 </ComponentPreview>
 
@@ -194,7 +194,7 @@ Load children on demand when a node is expanded. A loading spinner replaces the 
 
 <ComponentPreview code={`<Tree
 ${'  '}data={rootNodes}
-${'  '}loadChildren={async (node) => {
+${'  '}load_children={async (node) => {
 ${'  '}${'  '}return await fetchChildren(node.id);
 ${'  '}}}
 />`}>
@@ -203,7 +203,7 @@ ${'  '}}}
 
 ### Connecting Lines
 
-<ComponentPreview code={`<Tree data={fileTree} showLines bind:expanded />`}>
+<ComponentPreview code={`<Tree data={fileTree} show_lines bind:expanded />`}>
   <TreeLinesDemo client:load />
 </ComponentPreview>
 
@@ -216,7 +216,7 @@ ${'  '}${'  '}<span class="badge">{node.data.badge}</span>
 ${'  '}{/if}
 {/snippet}
 
-<Tree data={fileTree} nodeContent={customNode} />`}>
+<Tree data={fileTree} node_content={customNode} />`}>
   <TreeCustomNodeDemo client:load />
 </ComponentPreview>
 
@@ -224,15 +224,15 @@ ${'  '}{/if}
 
 Use `dense` for compact node spacing or `comfortable` for relaxed spacing. The default sits between the two.
 
-<ComponentPreview code={`<Tree data={fileTree} dense showLines />
+<ComponentPreview code={`<Tree data={fileTree} dense show_lines />
 
-<Tree data={fileTree} comfortable showLines />`}>
+<Tree data={fileTree} comfortable show_lines />`}>
 	<TreeDensityDemo client:load />
 </ComponentPreview>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Tree skeleton skeletonCount={6} skeletonDepth={3} />`}>
+<ComponentPreview code={`<Tree skeleton skeleton_count={6} skeleton_depth={3} />`}>
 	<TreeSkeletonDemo client:load />
 </ComponentPreview>
 
@@ -244,20 +244,20 @@ Use `dense` for compact node spacing or `comfortable` for relaxed spacing. The d
 | `selected` | `string[]` | `[]` | Selected node IDs (bindable) |
 | `expanded` | `string[]` | `[]` | Expanded node IDs (bindable) |
 | `selectable` | `boolean` | `false` | Enable node selection |
-| `multiSelect` | `boolean` | `false` | Allow multiple selection |
+| `multi_select` | `boolean` | `false` | Allow multiple selection |
 | `checkboxes` | `boolean` | `false` | Show checkboxes for selection |
-| `showLines` | `boolean` | `false` | Show connecting lines between nodes |
+| `show_lines` | `boolean` | `false` | Show connecting lines between nodes |
 | `draggable` | `boolean` | `false` | Enable drag-and-drop reordering |
 | `filter` | `string` | - | Search/filter term to highlight and filter matches |
 | `dense` | `boolean` | `false` | Compact node spacing |
 | `comfortable` | `boolean` | `false` | Relaxed node spacing |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
-| `skeletonCount` | `number` | `5` | Number of skeleton nodes |
-| `skeletonDepth` | `number` | `2` | Nesting depth of skeleton nodes |
+| `skeleton_count` | `number` | `5` | Number of skeleton nodes |
+| `skeleton_depth` | `number` | `2` | Nesting depth of skeleton nodes |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
-| `loadChildren` | `(node: TreeNode) => Promise<TreeNode[]>` | - | Lazy load children on expand |
-| `nodeContent` | `Snippet<[{ node: TreeNode; level: number }]>` | - | Custom node content renderer |
+| `load_children` | `(node: TreeNode) => Promise<TreeNode[]>` | - | Lazy load children on expand |
+| `node_content` | `Snippet<[{ node: TreeNode; level: number }]>` | - | Custom node content renderer |
 
 ## Events
 

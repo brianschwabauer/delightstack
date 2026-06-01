@@ -14,16 +14,16 @@
 		theme = $bindable('auto') as 'light' | 'dark' | 'auto',
 
 		/** Whether the current effective theme is dark. */
-		isDark = $bindable(false) as boolean,
+		is_dark = $bindable(false) as boolean,
 
 		/** The size of the toggle button: '0' (small), '1' (medium), '2' (large) */
 		size = '1' as '0' | '1' | '2',
 
 		/** Whether the system/auto option should be disabled (only light/dark) */
-		disableAuto = false,
+		disable_auto = false,
 
 		/** Show a text label beside the icon ("Light" / "Dark" / "Auto"). */
-		showLabel = false,
+		show_label = false,
 
 		/** Custom text label override. Falls back to the current mode name. */
 		label = undefined as string | undefined,
@@ -51,14 +51,14 @@
 	);
 
 	$effect(() => {
-		isDark = effectiveDark;
+		is_dark = effectiveDark;
 	});
 
 	$effect(() => {
 		try {
 			const stored = localStorage.getItem(STORAGE_KEY);
 			if (stored === 'light' || stored === 'dark' || stored === 'auto') {
-				theme = disableAuto && stored === 'auto' ? 'light' : stored;
+				theme = disable_auto && stored === 'auto' ? 'light' : stored;
 			}
 		} catch {
 			// ignore
@@ -90,7 +90,7 @@
 	}
 
 	function cycleTheme() {
-		if (disableAuto) {
+		if (disable_auto) {
 			theme = theme === 'light' ? 'dark' : 'light';
 		} else {
 			if (theme === 'light') theme = 'dark';
@@ -124,11 +124,11 @@
 	class={['theme-toggle', `size-${size}`, className].filter(Boolean).join(' ')}
 	class:is-dark={effectiveDark}
 	class:is-auto={theme === 'auto'}
-	class:has-label={showLabel}
+	class:has-label={show_label}
 	aria-label={ariaLabel}
 	onclick={cycleTheme}
 	onkeydown={handleKeyDown}
-	{@attach tooltip(tooltipMessage || (showLabel ? '' : ariaLabel))}
+	{@attach tooltip(tooltipMessage || (show_label ? '' : ariaLabel))}
 	{@attach ripple({})}>
 	<span class="icon" style:width="{svgSize}px" style:height="{svgSize}px">
 		<svg
@@ -167,7 +167,7 @@
 			<circle class="star star-2" cx="4" cy="10" r="0.6" />
 		</svg>
 	</span>
-	{#if showLabel}
+	{#if show_label}
 		<span class="label">{label ?? modeLabel}</span>
 	{/if}
 	{#if theme === 'auto'}

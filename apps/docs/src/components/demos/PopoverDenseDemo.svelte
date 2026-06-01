@@ -13,7 +13,7 @@
 	<div style="display:inline-block;" bind:this={denseEl}>
 		<Button onclick={() => (denseOpen = !denseOpen)}>Dense Popover</Button>
 		<Popover
-			refElement={denseEl}
+			ref_element={denseEl}
 			bind:opened={denseOpen}
 			arrow={false}
 			placement="bottom-start"
@@ -25,7 +25,7 @@
 	<div style="display:inline-block;" bind:this={defaultEl}>
 		<Button onclick={() => (defaultOpen = !defaultOpen)}>Default</Button>
 		<Popover
-			refElement={defaultEl}
+			ref_element={defaultEl}
 			bind:opened={defaultOpen}
 			arrow={false}
 			placement="bottom-start">
@@ -40,7 +40,7 @@
 			Comfortable Popover
 		</Button>
 		<Popover
-			refElement={comfortableEl}
+			ref_element={comfortableEl}
 			bind:opened={comfortableOpen}
 			arrow={false}
 			placement="bottom-start"

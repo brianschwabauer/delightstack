@@ -70,11 +70,11 @@ ${'  '}<p>Settings content goes here.</p>
 Add content before the title or after it (before the close button).
 
 <ComponentPreview code={`<Modal bind:open title="Document">
-${'  '}{#snippet headerStart()}
+${'  '}{#snippet header_start()}
 ${'  '}${'  '}<span class="status-badge">Draft</span>
 ${'  '}{/snippet}
 
-${'  '}{#snippet headerEnd()}
+${'  '}{#snippet header_end()}
 ${'  '}${'  '}<Button transparent dense icon aria-label="Share">
 ${'  '}${'  '}${'  '}<ShareIcon />
 ${'  '}${'  '}</Button>
@@ -125,7 +125,7 @@ Animate the modal from a specific trigger element for a connected spatial experi
   Open
 </Button>
 
-<Modal bind:open={showModal} title="Hero Transition" transitionTarget={triggerEl}>
+<Modal bind:open={showModal} title="Hero Transition" transition_target={triggerEl}>
   <p>This modal animated from the button.</p>
 </Modal>
 ```
@@ -137,22 +137,22 @@ Animate the modal from a specific trigger element for a connected spatial experi
 | `open` | `boolean` | `false` | Controls visibility (`$bindable()`) |
 | `title` | `string` | `''` | Modal title text |
 | `closable` | `boolean` | `true` | Allow closing via Escape key and backdrop click |
-| `disableCloseIcon` | `boolean` | `false` | Hide the X close button |
-| `modalID` | `string` | `''` | ID used for transition target tracking |
+| `disable_close_icon` | `boolean` | `false` | Hide the X close button |
+| `modal_id` | `string` | `''` | ID used for transition target tracking |
 | `width` | `string` | `''` | Explicit CSS width (desktop) |
 | `height` | `string` | `''` | Explicit CSS height (desktop) |
-| `maxWidth` | `string` | `'calc(100vw - 2rem)'` | Maximum width |
-| `maxHeight` | `string` | `'calc(100svh - 2rem)'` | Maximum height |
-| `transitionTarget` | `HTMLElement \| Element` | `undefined` | Element to animate from when opening |
+| `max_width` | `string` | `'calc(100vw - 2rem)'` | Maximum width |
+| `max_height` | `string` | `'calc(100svh - 2rem)'` | Maximum height |
+| `transition_target` | `HTMLElement \| Element` | `undefined` | Element to animate from when opening |
 | `style` | `string` | `''` | Inline CSS styles |
 | `class` | `string` | `''` | Additional CSS classes |
 | `children` | `Snippet` | `undefined` | Main modal content |
 | `header` | `Snippet` | `undefined` | Replace entire header |
-| `headerStart` | `Snippet` | `undefined` | Content before the title |
-| `headerEnd` | `Snippet` | `undefined` | Content after the title (before close button) |
+| `header_start` | `Snippet` | `undefined` | Content before the title |
+| `header_end` | `Snippet` | `undefined` | Content after the title (before close button) |
 | `footer` | `Snippet` | `undefined` | Footer content area |
-| `footerStart` | `Snippet` | `undefined` | Left side of footer |
-| `footerEnd` | `Snippet` | `undefined` | Right side of footer |
+| `footer_start` | `Snippet` | `undefined` | Left side of footer |
+| `footer_end` | `Snippet` | `undefined` | Right side of footer |
 | `onopen` | `() => void` | `undefined` | Called when the modal opens |
 | `onclose` | `() => boolean \| undefined \| void` | `undefined` | Called when the modal closes. Return `false` to prevent closing. |
 | `onbackdropclick` | `() => void` | `undefined` | Called when the backdrop is clicked |

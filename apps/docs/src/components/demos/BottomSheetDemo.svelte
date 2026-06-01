@@ -7,7 +7,7 @@
 
 <Button onclick={() => (open = true)}>Open Bottom Sheet</Button>
 
-<BottomSheet bind:open snapPoints={[0.5, 0.92]}>
+<BottomSheet bind:open snap_points={[0.5, 0.92]}>
 	<div style="padding: 0 1.5rem 1.5rem;">
 		<h3 style="margin: 0 0 0.75rem;">Bottom Sheet</h3>
 		<p style="margin: 0 0 1rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">

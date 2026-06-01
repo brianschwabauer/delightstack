@@ -10,4 +10,4 @@
 }`;
 </script>
 
-<Code code={snippet} language="javascript" highlightLines={[3, 4]} filename="cart.js" />
+<Code code={snippet} language="javascript" highlight_lines={[3, 4]} filename="cart.js" />

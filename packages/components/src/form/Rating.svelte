@@ -25,7 +25,7 @@
 		color = '',
 
 		/** Whether to show the numeric value next to the stars */
-		showValue = false,
+		show_value = false,
 
 		/** Whether clicking the current value clears the rating */
 		clearable = false,
@@ -223,7 +223,7 @@
 		{/each}
 	</div>
 
-	{#if showValue}
+	{#if show_value}
 		<span class="value-display">{value}</span>
 	{/if}
 </div>

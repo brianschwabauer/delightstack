@@ -10,4 +10,4 @@
 	};
 </script>
 
-<Chart type="area" data={salesData} showPoints />
+<Chart type="area" data={salesData} show_points />

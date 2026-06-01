@@ -31,14 +31,14 @@ ${'  '}];
 </script>
 
 <Breadcrumbs {items} />`}>
-	<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
+	<Breadcrumbs client:load home_href="#" items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
 </ComponentPreview>
 
 ## Examples
 
 ### Auto-Collapse to Fit
 
-With no `maxItems` set, the trail auto-collapses to fit its container — the first
+With no `max_items` set, the trail auto-collapses to fit its container — the first
 item and the last two stay pinned while the middle items fold into the “…” menu,
 starting from the center. This is done in **pure CSS** with container queries, so
 it's already correct in server-rendered HTML (no layout flash, no JS measuring).
@@ -50,7 +50,7 @@ it's already correct in server-rendered HTML (no layout flash, no JS measuring).
 
 ### Collapsed Middle Items (explicit)
 
-Pass `maxItems` to force the whole middle block into the dropdown at a fixed count.
+Pass `max_items` to force the whole middle block into the dropdown at a fixed count.
 
 <ComponentPreview code={`<script>
 ${'  '}import { Breadcrumbs } from '@delightstack/components';
@@ -64,8 +64,8 @@ ${'  '}${'  '}{ label: 'Product' },
 ${'  '}];
 </script>
 
-<Breadcrumbs {items} maxItems={3} />`}>
-	<Breadcrumbs client:load homeHref="#" items={[{ label: 'Category', href: '#cat' }, { label: 'Subcategory', href: '#sub' }, { label: 'Brand', href: '#brand' }, { label: 'Model', href: '#model' }, { label: 'Product' }]} maxItems={3} />
+<Breadcrumbs {items} max_items={3} />`}>
+	<Breadcrumbs client:load home_href="#" items={[{ label: 'Category', href: '#cat' }, { label: 'Subcategory', href: '#sub' }, { label: 'Brand', href: '#brand' }, { label: 'Model', href: '#model' }, { label: 'Product' }]} max_items={3} />
 </ComponentPreview>
 
 ### Dense
@@ -73,15 +73,15 @@ ${'  '}];
 Tightens the spacing between items and separators for compact layouts like toolbars.
 
 <ComponentPreview code={`<Breadcrumbs {items} dense />`}>
-	<Breadcrumbs client:load dense homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
+	<Breadcrumbs client:load dense home_href="#" items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
 </ComponentPreview>
 
 ### Without Home Icon
 
 Hide the automatic home breadcrumb.
 
-<ComponentPreview code={`<Breadcrumbs {items} showHome={false} />`}>
-	<Breadcrumbs client:load showHome={false} items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
+<ComponentPreview code={`<Breadcrumbs {items} show_home={false} />`}>
+	<Breadcrumbs client:load show_home={false} items={[{ label: 'Products', href: '#products' }, { label: 'Electronics', href: '#electronics' }, { label: 'Headphones' }]} />
 </ComponentPreview>
 
 ### Custom Separator
@@ -103,10 +103,10 @@ ${'  '}{/snippet}
 <Breadcrumbs {items} size="2" />  <!-- Medium -->
 <Breadcrumbs {items} size="3" />  <!-- Large -->`}>
 	<div style="display: flex; flex-direction: column; gap: 0.75rem;">
-		<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="0" />
-		<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="1" />
-		<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="2" />
-		<Breadcrumbs client:load homeHref="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="3" />
+		<Breadcrumbs client:load home_href="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="0" />
+		<Breadcrumbs client:load home_href="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="1" />
+		<Breadcrumbs client:load home_href="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="2" />
+		<Breadcrumbs client:load home_href="#" items={[{ label: 'Products', href: '#products' }, { label: 'Headphones' }]} size="3" />
 	</div>
 </ComponentPreview>
 
@@ -128,7 +128,7 @@ ${'  '}let lastClicked = $state('');
 
 <Breadcrumbs
 ${'  '}{items}
-${'  '}showHome={false}
+${'  '}show_home={false}
 ${'  '}onclick={({ item, index }) => {
 ${'  '}${'  '}lastClicked = \`Clicked "\${item.label}" (index \${index})\`;
 ${'  '}}}
@@ -140,11 +140,11 @@ ${'  '}}}
 
 The skeleton mirrors the real trail's box exactly (size and spacing), so swapping
 between loading and loaded states never shifts the layout. It scales with `size`,
-shows the home icon when `showHome` is set, and is automatically replaced the
+shows the home icon when `show_home` is set, and is automatically replaced the
 moment real `items` are provided.
 
 <ComponentPreview code={`<!-- skeleton shows only while items is empty -->
-<Breadcrumbs skeleton skeletonCount={3} items={loading ? [] : items} />`}>
+<Breadcrumbs skeleton skeleton_count={3} items={loading ? [] : items} />`}>
 	<BreadcrumbsSkeletonDemo client:load />
 </ComponentPreview>
 
@@ -153,13 +153,13 @@ moment real `items` are provided.
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `items` | `BreadcrumbItem[]` | `[]` | The breadcrumb items to display |
-| `maxItems` | `number` | `undefined` | Max visible items before collapsing the middle block into the ellipsis dropdown. When omitted, the trail auto-collapses to fit its container width (pure CSS, SSR-safe) |
-| `showHome` | `boolean` | `true` | Whether to show a home icon as the first breadcrumb |
-| `homeHref` | `string` | `'/'` | The href for the home breadcrumb |
+| `max_items` | `number` | `undefined` | Max visible items before collapsing the middle block into the ellipsis dropdown. When omitted, the trail auto-collapses to fit its container width (pure CSS, SSR-safe) |
+| `show_home` | `boolean` | `true` | Whether to show a home icon as the first breadcrumb |
+| `home_href` | `string` | `'/'` | The href for the home breadcrumb |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size of the breadcrumbs |
 | `dense` | `boolean` | `false` | Condensed spacing between items and separators |
 | `skeleton` | `boolean` | `false` | Show skeleton loading state (only while `items` is empty) |
-| `skeletonCount` | `number` | `3` | Number of skeleton placeholder items |
+| `skeleton_count` | `number` | `3` | Number of skeleton placeholder items |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 | `children` | `Snippet` | `undefined` | Custom rendering snippet (replaces default rendering) |
@@ -184,7 +184,7 @@ interface BreadcrumbItem {
 
 ## Auto-collapse
 
-When `maxItems` is omitted, the component estimates each item's width from its
+When `max_items` is omitted, the component estimates each item's width from its
 label length and uses CSS [container query units](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_containment/Container_queries)
 to decide what fits. Because the decision is made entirely in CSS, the correct
 collapsed state is present in the first server-rendered paint — there's no
@@ -192,7 +192,7 @@ measure-then-reflow flash. The first item and the last two are always kept; the
 middle items fold into the “…” menu from the center outward as space shrinks.
 
 Estimates are intentionally approximate (proportional fonts vary), so leave a
-little breathing room if precise control matters — or set `maxItems` explicitly.
+little breathing room if precise control matters — or set `max_items` explicitly.
 
 ## Accessibility
 

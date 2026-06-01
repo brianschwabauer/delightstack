@@ -117,7 +117,7 @@ Use `dense` for tighter spacing in smaller interfaces.
 
 Disable grouping to show a flat list of results.
 
-<ComponentPreview code={`<CommandPalette bind:open={paletteOpen} {commands} groupBy="none" />`}>
+<ComponentPreview code={`<CommandPalette bind:open={paletteOpen} {commands} group_by="none" />`}>
   <CommandPaletteNoGroupingDemo client:load />
 </ComponentPreview>
 
@@ -169,8 +169,8 @@ const commands = [
 | `open` | `boolean` | `false` | Controls visibility (`$bindable()`) |
 | `commands` | `CommandOption[]` | `[]` | Available commands to search |
 | `placeholder` | `string` | `'Type a command or search...'` | Input placeholder text |
-| `recentLimit` | `number` | `5` | Number of recent items to show when input is empty |
-| `groupBy` | `'category' \| 'none'` | `'category'` | How to group results |
+| `recent_limit` | `number` | `5` | Number of recent items to show when input is empty |
+| `group_by` | `'category' \| 'none'` | `'category'` | How to group results |
 | `dense` | `boolean` | `false` | Compact result item spacing |
 | `onselect` | `(command: CommandOption) => void` | `undefined` | Called when any command is selected |
 | `id` | `string` | auto-generated | Element ID |
@@ -232,7 +232,7 @@ Scoring priority: exact match > starts with > word boundary match > contains > f
 
 ## Recent Commands
 
-Recently used commands are tracked in memory and shown when the input is empty. The list is sorted by recency and limited by the `recentLimit` prop.
+Recently used commands are tracked in memory and shown when the input is empty. The list is sorted by recency and limited by the `recent_limit` prop.
 
 ## Accessibility
 

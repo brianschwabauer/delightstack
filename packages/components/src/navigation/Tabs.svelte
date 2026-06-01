@@ -50,7 +50,7 @@
 		size = '1' as '0' | '1' | '2' | '3',
 
 		/** Whether tab buttons should stretch to fill the available width */
-		fullWidth = false,
+		full_width = false,
 
 		/** Whether all tabs are disabled */
 		disabled = false,
@@ -59,7 +59,7 @@
 		skeleton = false,
 
 		/** Number of skeleton tab placeholders */
-		skeletonCount = 3,
+		skeleton_count = 3,
 
 		/** Called when the active tab changes (Tabs container only) */
 		onchange = undefined as ((detail: { value: string }) => void) | undefined,
@@ -284,12 +284,12 @@
 		class:segment
 		class:vertical={orientation === 'vertical'}
 		class:horizontal={orientation === 'horizontal'}
-		class:full-width={fullWidth}
+		class:full-width={full_width}
 		class:disabled
 		style:font-size={sizeMap[size] ?? sizeMap['1']}>
 		{#if skeleton}
 			<div class="tab-list" role="tablist" aria-orientation={orientation}>
-				{#each { length: skeletonCount } as _}
+				{#each { length: skeleton_count } as _}
 					<div class="tab-skeleton"></div>
 				{/each}
 			</div>

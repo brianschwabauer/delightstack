@@ -7,7 +7,7 @@
 
 <Button onclick={() => (open = true)}>Open Sheet with Header</Button>
 
-<BottomSheet bind:open snapPoints={[0.5, 0.92]}>
+<BottomSheet bind:open snap_points={[0.5, 0.92]}>
 	{#snippet header()}
 		<div style="padding: 0 1rem 0.75rem; border-bottom: 1px solid var(--color-border, #333);">
 			<h3 style="margin: 0; color: var(--color-text, inherit);">Filters</h3>

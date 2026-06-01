@@ -64,7 +64,7 @@ ${'  '}};
 
 ### Area Chart with Data Points
 
-<ComponentPreview code={`<Chart type="area" data={salesData} showPoints />`}>
+<ComponentPreview code={`<Chart type="area" data={salesData} show_points />`}>
   <ChartAreaDemo client:load />
 </ComponentPreview>
 
@@ -88,7 +88,7 @@ ${'  '}data={{
 ${'  '}${'  '}labels: ['Desktop', 'Mobile', 'Tablet'],
 ${'  '}${'  '}datasets: [{ label: 'Traffic', data: [65, 30, 5] }],
 ${'  '}}}
-${'  '}innerRadius={0.6}
+${'  '}inner_radius={0.6}
 ${'  '}height={300}
 />`}>
   <ChartDonutDemo client:load />
@@ -131,14 +131,14 @@ ${'  '}colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']}
 | `data` | `ChartData` | required | Data to display |
 | `height` | `number` | `300` | Chart height in pixels |
 | `colors` | `string[]` | - | Custom color palette (overrides 8-color default) |
-| `showGrid` | `boolean` | `true` | Show grid lines |
-| `showLegend` | `boolean` | `true` | Show legend |
-| `showTooltip` | `boolean` | `true` | Enable interactive tooltips |
+| `show_grid` | `boolean` | `true` | Show grid lines |
+| `show_legend` | `boolean` | `true` | Show legend |
+| `show_tooltip` | `boolean` | `true` | Enable interactive tooltips |
 | `animate` | `boolean` | `true` | Animate on initial load and data changes |
 | `stacked` | `boolean` | `false` | Stack datasets (bar, area) |
 | `curved` | `boolean` | `true` | Smooth curves for line/area charts |
-| `showPoints` | `boolean` | `false` | Show data points on line/area charts |
-| `innerRadius` | `number` | `0` | Inner radius ratio for donut (0 = pie, >0 = donut) |
+| `show_points` | `boolean` | `false` | Show data points on line/area charts |
+| `inner_radius` | `number` | `0` | Inner radius ratio for donut (0 = pie, >0 = donut) |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |

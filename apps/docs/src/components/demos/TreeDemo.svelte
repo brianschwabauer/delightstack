@@ -35,4 +35,4 @@
 	let expanded = $state(['src', 'components']);
 </script>
 
-<Tree {data} bind:expanded showLines />
+<Tree {data} bind:expanded show_lines />

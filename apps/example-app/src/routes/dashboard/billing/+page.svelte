@@ -119,7 +119,7 @@
 					{:else}
 						<Button
 							onclick={() => subscribe(plan.id)}
-							fullWidth
+							full_width
 							transparent={plan.amount === 0}
 							disabled={loading_action === plan.id}
 						>

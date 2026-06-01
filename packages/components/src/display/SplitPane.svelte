@@ -10,16 +10,16 @@
 		size = $bindable(50),
 
 		/** Minimum first pane size as a percentage */
-		minSize = 10,
+		min_size = 10,
 
 		/** Maximum first pane size as a percentage */
-		maxSize = 90,
+		max_size = 90,
 
 		/** Snap points as percentages */
 		snap = [] as number[],
 
 		/** Distance in percentage to trigger snap */
-		snapThreshold = 8,
+		snap_threshold = 8,
 
 		/** Whether panes can be collapsed */
 		collapsible = false,
@@ -49,10 +49,10 @@
 	}: {
 		vertical?: boolean;
 		size?: number;
-		minSize?: number;
-		maxSize?: number;
+		min_size?: number;
+		max_size?: number;
 		snap?: number[];
-		snapThreshold?: number;
+		snap_threshold?: number;
 		collapsible?: boolean;
 		collapsed?: 'first' | 'second' | null;
 		id?: string;
@@ -78,7 +78,7 @@
 	/** The size value before a collapse, so we can restore it on expand */
 	let size_before_collapse = $state(50);
 
-	const clamped_size = $derived(Math.min(maxSize, Math.max(minSize, size)));
+	const clamped_size = $derived(Math.min(max_size, Math.max(min_size, size)));
 
 	/** The flex-basis for the first pane (includes overshoot for smooth snap/rubber band) */
 	const first_basis = $derived.by(() => {
@@ -110,12 +110,12 @@
 	/** Apply snap points and clamping to a raw percentage */
 	function applyConstraints(percent: number): number {
 		// Clamp to min/max
-		let result = Math.min(maxSize, Math.max(minSize, percent));
+		let result = Math.min(max_size, Math.max(min_size, percent));
 
 		// Apply snap points with hysteresis: once snapped, require a much larger
 		// movement to escape (2.2x threshold), making snaps feel strongly sticky
 		if (snap.length > 0) {
-			const threshold = snapped_to !== null ? snapThreshold * 2.2 : snapThreshold;
+			const threshold = snapped_to !== null ? snap_threshold * 2.2 : snap_threshold;
 			let best_snap = -1;
 			let min_dist = Infinity;
 
@@ -158,14 +158,14 @@
 			: (last_pointer_coord - rect.left) / rect.width;
 		const raw_percent = raw_pct * 100;
 
-		if (raw_percent < minSize) {
+		if (raw_percent < min_size) {
 			// Edge rubber band past min (tanh bounded)
-			const overflow_px = ((raw_percent - minSize) / 100) * dimension;
+			const overflow_px = ((raw_percent - min_size) / 100) * dimension;
 			const max_shift = 24;
 			overshoot_px = max_shift * Math.tanh(overflow_px / 80);
-		} else if (raw_percent > maxSize) {
+		} else if (raw_percent > max_size) {
 			// Edge rubber band past max (tanh bounded)
-			const overflow_px = ((raw_percent - maxSize) / 100) * dimension;
+			const overflow_px = ((raw_percent - max_size) / 100) * dimension;
 			const max_shift = 24;
 			overshoot_px = max_shift * Math.tanh(overflow_px / 80);
 		} else if (snapped_to !== null) {
@@ -174,7 +174,7 @@
 			// Uses the wider escape threshold to match hysteresis zone.
 			const snapped_pct = snapped_to / 100;
 			const pull_px = (raw_pct - snapped_pct) * dimension;
-			const escape_radius_px = (snapThreshold * 2.2 / 100) * dimension;
+			const escape_radius_px = (snap_threshold * 2.2 / 100) * dimension;
 
 			if (escape_radius_px < 1) {
 				overshoot_px = 0;
@@ -396,14 +396,14 @@
 				if (collapsed !== null) {
 					setCollapsed(null);
 				}
-				new_size = minSize;
+				new_size = min_size;
 				break;
 			case 'End':
 				e.preventDefault();
 				if (collapsed !== null) {
 					setCollapsed(null);
 				}
-				new_size = maxSize;
+				new_size = max_size;
 				break;
 			case 'Enter':
 				e.preventDefault();
@@ -481,8 +481,8 @@
 		tabindex="0"
 		aria-orientation={vertical ? 'vertical' : 'horizontal'}
 		aria-valuenow={Math.round(clamped_size)}
-		aria-valuemin={minSize}
-		aria-valuemax={maxSize}
+		aria-valuemin={min_size}
+		aria-valuemax={max_size}
 		aria-label="Resize panes"
 		onmousedown={handlePointerDown}
 		ontouchstart={handleTouchStart}

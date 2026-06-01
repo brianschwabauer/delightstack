@@ -24,7 +24,7 @@
 		{value}
 		{label}
 		{change}
-		{changeLabel}
+		change_label={changeLabel}
 		{trend}
 		{size}
 		{horizontal}

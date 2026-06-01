@@ -119,7 +119,7 @@
 					<li>Real-time collaboration</li>
 					<li>Invite family members</li>
 				</ul>
-				<Button href="/signup" fullWidth transparent>Get Started</Button>
+				<Button href="/signup" full_width transparent>Get Started</Button>
 			</div>
 			<div class="pricing-card featured">
 				<Badge>Best Value</Badge>
@@ -131,7 +131,7 @@
 					<li>Photo gallery & uploads</li>
 					<li>Priority support</li>
 				</ul>
-				<Button href="/signup" fullWidth>Start Free Trial</Button>
+				<Button href="/signup" full_width>Start Free Trial</Button>
 			</div>
 		</div>
 	</section>

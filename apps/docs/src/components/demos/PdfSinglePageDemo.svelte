@@ -12,7 +12,7 @@
 			src="https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf"
 			bind:page
 			single_page
-			showToolbar={false}
+			show_toolbar={false}
 			searchable={false}
 			fit="page"
 			height="100%"

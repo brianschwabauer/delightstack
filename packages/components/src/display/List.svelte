@@ -42,16 +42,16 @@
 		value = $bindable([]) as number[],
 
 		/** The css amount (@example '16px') to pad the list items in the X direction */
-		paddingX = undefined as string | undefined,
+		padding_x = undefined as string | undefined,
 
 		/** The css amount (@example '16px') to pad the list items in the Y direction */
-		paddingY = undefined as string | undefined,
+		padding_y = undefined as string | undefined,
 
 		/** Whether to show a skeleton loading placeholder instead of the items */
 		skeleton = false,
 
 		/** Number of skeleton rows to render when `skeleton` is true */
-		skeletonCount = 5,
+		skeleton_count = 5,
 
 		/** The css style string added to the component from the parent */
 		style = '',
@@ -125,11 +125,11 @@
 		class={['list', 'skeleton', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
-		style:--list-pad-x={paddingX}
-		style:--list-pad-y={paddingY}
+		style:--list-pad-x={padding_x}
+		style:--list-pad-y={padding_y}
 		{style}
 		aria-hidden="true">
-		{#each { length: skeletonCount } as _, i}
+		{#each { length: skeleton_count } as _, i}
 			<li class="skeleton-item">
 				<span class="skeleton-bar" style:width={`${55 + ((i * 37) % 35)}%`}></span>
 			</li>
@@ -141,8 +141,8 @@
 		class:dense
 		class:comfortable
 		class:disabled
-		style:--list-pad-x={paddingX}
-		style:--list-pad-y={paddingY}
+		style:--list-pad-x={padding_x}
+		style:--list-pad-y={padding_y}
 		{@attach onFocusWithin({
 			onfocuswithin: () => touched || (touched = true),
 		})}

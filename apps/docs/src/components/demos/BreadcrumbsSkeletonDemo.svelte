@@ -19,8 +19,8 @@
 	     shimmer shows; pass real items and it swaps in with no layout shift. -->
 	<Breadcrumbs
 		skeleton={loading}
-		skeletonCount={3}
-		homeHref="#"
+		skeleton_count={3}
+		home_href="#"
 		items={loading ? [] : items}
 	/>
 </div>

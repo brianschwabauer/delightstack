@@ -29,11 +29,11 @@
 <div class="density-grid">
 	<div class="density-col">
 		<span class="density-label">Dense</span>
-		<Tree {data} bind:expanded={denseExpanded} dense showLines />
+		<Tree {data} bind:expanded={denseExpanded} dense show_lines />
 	</div>
 	<div class="density-col">
 		<span class="density-label">Comfortable</span>
-		<Tree {data} bind:expanded={comfortableExpanded} comfortable showLines />
+		<Tree {data} bind:expanded={comfortableExpanded} comfortable show_lines />
 	</div>
 </div>
 

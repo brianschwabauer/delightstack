@@ -103,10 +103,10 @@ Set `icon` for circular icon-only buttons. Combine with any variant or badge.
 
 <ComponentPreview code={`<Button disabled>Disabled</Button>
 <Button loading>Loading</Button>
-<Button loadingSuccess>Success</Button>`}>
+<Button loading_success>Success</Button>`}>
   <Button client:load disabled>Disabled</Button>
   <Button client:load loading>Loading</Button>
-  <Button client:load loadingSuccess>Success</Button>
+  <Button client:load loading_success>Success</Button>
 </ComponentPreview>
 
 ### Promise-Aware Click Handler
@@ -149,7 +149,7 @@ ${'  '}Visit Site
 
 Pass a `menu` snippet to render a popover dropdown when the button is clicked.
 
-<ComponentPreview code={`<Button showChevron>
+<ComponentPreview code={`<Button show_chevron>
 ${'  '}Options
 ${'  '}{#snippet menu({ close })}
 ${'  '}${'  '}<button onclick={() => { edit(); close(); }}>Edit</button>
@@ -189,25 +189,25 @@ ${'  '}{/snippet}
 | `accent` | `boolean` | `false` | Accent/brand color scheme |
 | `overlay` | `boolean` | `false` | Dark overlay style with backdrop blur |
 | `dense` | `boolean` | `false` | Reduced padding for compact layouts |
-| `fullWidth` | `boolean` | `false` | Stretch to container width |
-| `fullHeight` | `boolean` | `false` | Stretch to container height |
-| `disableRipple` | `boolean` | `false` | Disable the ripple click effect |
+| `full_width` | `boolean` | `false` | Stretch to container width |
+| `full_height` | `boolean` | `false` | Stretch to container height |
+| `disable_ripple` | `boolean` | `false` | Disable the ripple click effect |
 | `href` | `string` | `undefined` | Renders as `<a>` instead of `<button>` |
 | `target` | `'_self' \| '_blank' \| '_parent' \| '_top'` | `undefined` | Link target attribute (when `href` is set) |
 | `tooltip` | `string` | `''` | Hover tooltip text |
 | `disabled` | `boolean` | `false` | Disable interaction |
 | `active` | `boolean` | `false` | Visually pressed/selected state (useful in toggle groups) |
 | `loading` | `boolean` | `undefined` | Show loading spinner manually |
-| `loadingSuccess` | `boolean` | `false` | Show checkmark success state manually |
+| `loading_success` | `boolean` | `false` | Show checkmark success state manually |
 | `badge` | `string \| boolean` | `undefined` | Badge indicator; `true` renders a dot, a string renders the text |
 | `menu` | `Snippet<[{ close: () => void }]>` | `undefined` | Popover dropdown content triggered by clicking the button |
-| `showChevron` | `boolean` | `false` | Show a chevron icon (useful with `menu`) |
+| `show_chevron` | `boolean` | `false` | Show a chevron icon (useful with `menu`) |
 | `dropdown` | `Snippet<[{ close: () => void }]>` | `undefined` | Content for a secondary dropdown trigger |
-| `disableDropdown` | `boolean` | `false` | Disable and hide the secondary dropdown trigger |
-| `popoverCloseOnInsideClick` | `boolean` | `false` | Close the popover when clicking inside it |
-| `popoverPlacement` | `Placement` | `'bottom-end'` | Floating UI placement for the popover |
-| `popoverStrategy` | `Strategy` | `'fixed'` | CSS positioning strategy for the popover |
-| `popoverDisableInitialFocus` | `boolean` | `false` | Skip auto-focusing content when the popover opens |
+| `disable_dropdown` | `boolean` | `false` | Disable and hide the secondary dropdown trigger |
+| `popover_close_on_inside_click` | `boolean` | `false` | Close the popover when clicking inside it |
+| `popover_placement` | `Placement` | `'bottom-end'` | Floating UI placement for the popover |
+| `popover_strategy` | `Strategy` | `'fixed'` | CSS positioning strategy for the popover |
+| `popover_disable_initial_focus` | `boolean` | `false` | Skip auto-focusing content when the popover opens |
 | `children` | `Snippet<[{ isLoading: boolean; isLoadingSuccess: boolean }]>` | `undefined` | Button label content (receives loading state) |
 | `id` | `string` | auto-generated | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |

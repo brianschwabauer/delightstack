@@ -7,14 +7,14 @@
 <Button onclick={() => (open = true)}>Open Document</Button>
 
 <Modal bind:open title="Document">
-	{#snippet headerStart()}
+	{#snippet header_start()}
 		<span
 			style="background: var(--color-accent); color: var(--color-accent-text); padding: 0.15em 0.5em; border-radius: var(--radius-2); font-size: 0.75em; font-weight: 600;">
 			Draft
 		</span>
 	{/snippet}
 
-	{#snippet headerEnd()}
+	{#snippet header_end()}
 		<Button transparent dense icon size="0" aria-label="Share">
 			<svg viewBox="0 0 24 24" fill="currentColor">
 				<path

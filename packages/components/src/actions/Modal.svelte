@@ -30,10 +30,10 @@
 		closable = true,
 
 		/** Whether the close icon should be hidden or not */
-		disableCloseIcon = false,
+		disable_close_icon = false,
 
 		/** The ID of the modal - used to set/unset transition targets automatically */
-		modalID = '',
+		modal_id = '',
 
 		/** The CSS string width of the modal (when on desktop) */
 		width = '',
@@ -42,13 +42,13 @@
 		height = '',
 
 		/** The CSS string maximum width of the modal */
-		maxWidth = 'calc(100vw - 2rem)',
+		max_width = 'calc(100vw - 2rem)',
 
 		/** The CSS string maximum height of the modal */
-		maxHeight = 'calc(100svh - 2rem)',
+		max_height = 'calc(100svh - 2rem)',
 
 		/** The element that the modal will be animated from  when opening */
-		transitionTarget = undefined as HTMLElement | Element | undefined,
+		transition_target = undefined as HTMLElement | Element | undefined,
 
 		/** The css style string added to the component from the parent */
 		style = '',
@@ -63,19 +63,19 @@
 		header = undefined as undefined | Snippet,
 
 		/** The snippet used to render a child at the start of the header bar. Can't be used if 'header' is supplied */
-		headerStart = undefined as undefined | Snippet,
+		header_start = undefined as undefined | Snippet,
 
 		/** The snippet used to render a child at the end of the header bar. Can't be used if 'header' is supplied */
-		headerEnd = undefined as undefined | Snippet,
+		header_end = undefined as undefined | Snippet,
 
 		/** The snippet used to render the modal footer */
 		footer = undefined as undefined | Snippet,
 
 		/** The snippet used to render the modal footer at the start. Can't be used if 'footer' is supplied */
-		footerStart = undefined as undefined | Snippet,
+		footer_start = undefined as undefined | Snippet,
 
 		/** The snippet used to render the modal footer at the end. Can't be used if 'footer' is supplied */
-		footerEnd = undefined as undefined | Snippet,
+		footer_end = undefined as undefined | Snippet,
 
 		/** The function to call when the dialog is closed. If false is returned, the modal will not be closed */
 		onclose = undefined as undefined | (() => boolean | undefined | void),
@@ -96,7 +96,7 @@
 	$effect(() => listenForLastClickedElement());
 	$effect(() => {
 		if (open === _open) return;
-		const target = transitionTarget || lastClickedElement;
+		const target = transition_target || lastClickedElement;
 		if (target && open) send(target, { key: 'modal' });
 		_open = open;
 	});
@@ -131,7 +131,7 @@
 
 	function mountModal(node: HTMLElement) {
 		if (onopen) onopen();
-		if (transitionTarget) transitionTarget = undefined;
+		if (transition_target) transition_target = undefined;
 		return {
 			destroy: () => {
 				if (_open) return;
@@ -166,11 +166,11 @@
 			id={bodyId}
 			style:width
 			style:height
-			style:max-width={maxWidth}
-			style:max-height={maxHeight}>
-			{#if (closable && !disableCloseIcon) || title || header || headerStart || headerEnd}
-				<header class:bar={title || header || headerStart || headerEnd}>
-					{#if closable && !disableCloseIcon}
+			style:max-width={max_width}
+			style:max-height={max_height}>
+			{#if (closable && !disable_close_icon) || title || header || header_start || header_end}
+				<header class:bar={title || header || header_start || header_end}>
+					{#if closable && !disable_close_icon}
 						<div class="close">
 							<Button transparent icon onclick={close} size="0"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></Button>
 						</div>
@@ -179,21 +179,21 @@
 					{#if header}
 						{@render header()}
 					{:else}
-						{#if headerStart}{@render headerStart()}{/if}
+						{#if header_start}{@render header_start()}{/if}
 						<div class="spacer"></div>
-						{#if headerEnd}{@render headerEnd()}{/if}
+						{#if header_end}{@render header_end()}{/if}
 					{/if}
 				</header>
 			{/if}
 			{#if children}{@render children()}{/if}
-			{#if footer || footerStart || footerEnd}
+			{#if footer || footer_start || footer_end}
 				<footer class="modal-footer">
 					{#if footer}
 						{@render footer()}
 					{:else}
-						{#if footerStart}{@render footerStart()}{/if}
+						{#if footer_start}{@render footer_start()}{/if}
 						<div class="spacer"></div>
-						{#if footerEnd}{@render footerEnd()}{/if}
+						{#if footer_end}{@render footer_end()}{/if}
 					{/if}
 				</footer>
 			{/if}

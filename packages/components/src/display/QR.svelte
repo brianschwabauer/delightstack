@@ -825,7 +825,7 @@
 		logo = undefined as string | undefined,
 
 		/** Logo size as a fraction of the QR code size (0 to 1) */
-		logoSize = 0.25,
+		logo_size = 0.25,
 
 		/** Use rounded module shapes */
 		rounded = false,
@@ -834,7 +834,7 @@
 		downloadable = false,
 
 		/** Filename for the downloaded PNG (without extension) */
-		downloadFilename = 'qr-code',
+		download_filename = 'qr-code',
 
 		/** Show a skeleton loading state */
 		skeleton = false,
@@ -852,10 +852,10 @@
 		background?: string;
 		margin?: number;
 		logo?: string;
-		logoSize?: number;
+		logo_size?: number;
 		rounded?: boolean;
 		downloadable?: boolean;
-		downloadFilename?: string;
+		download_filename?: string;
 		skeleton?: boolean;
 		id?: string;
 		class?: string;
@@ -871,7 +871,7 @@
 	const radius = $derived(rounded ? 0.5 : 0);
 
 	// Logo dimensions (in viewBox units)
-	const logo_modules = $derived(Math.floor(module_count * logoSize));
+	const logo_modules = $derived(Math.floor(module_count * logo_size));
 	const logo_offset = $derived(margin + Math.floor((module_count - logo_modules) / 2));
 
 	let is_downloading = $state(false);
@@ -921,7 +921,7 @@
 		const current = matrix;
 		if (is_downloading || !current) return;
 		is_downloading = true;
-		const filename = filenameOverride ?? downloadFilename;
+		const filename = filenameOverride ?? download_filename;
 
 		try {
 			// Rasterise the QR directly from the matrix instead of serialising the

@@ -7,4 +7,4 @@
 	};
 </script>
 
-<Chart type="donut" {data} innerRadius={0.6} height={300} />
+<Chart type="donut" {data} inner_radius={0.6} height={300} />

@@ -23,5 +23,5 @@
 	data={users}
 	{columns}
 	expandable
-	expandedRow={rowDetail}
+	expanded_row={rowDetail}
 />

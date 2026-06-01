@@ -43,13 +43,13 @@
 		selectable = false,
 
 		/** Allow multiple selection */
-		multiSelect = false,
+		multi_select = false,
 
 		/** Show checkboxes next to nodes */
 		checkboxes = false,
 
 		/** Show connecting lines between siblings */
-		showLines = false,
+		show_lines = false,
 
 		/** Enable drag-and-drop reordering */
 		draggable = false,
@@ -67,10 +67,10 @@
 		skeleton = false,
 
 		/** Number of skeleton nodes */
-		skeletonCount = 5,
+		skeleton_count = 5,
 
 		/** Skeleton nesting depth */
-		skeletonDepth = 2,
+		skeleton_depth = 2,
 
 		/** The ID of the element */
 		id = propId,
@@ -79,10 +79,10 @@
 		class: className = '',
 
 		/** Lazy load children for a node */
-		loadChildren = undefined as ((node: TreeNode) => Promise<TreeNode[]>) | undefined,
+		load_children = undefined as ((node: TreeNode) => Promise<TreeNode[]>) | undefined,
 
 		/** Custom node content renderer */
-		nodeContent = undefined as Snippet<[{ node: TreeNode; level: number }]> | undefined,
+		node_content = undefined as Snippet<[{ node: TreeNode; level: number }]> | undefined,
 
 		/** Called when selection changes */
 		onselect = undefined as
@@ -270,7 +270,7 @@
 	}
 
 	function hasLoadableChildren(node: TreeNode): boolean {
-		return !!loadChildren && !node.children?.length && !lazy_cache.has(node.id);
+		return !!load_children && !node.children?.length && !lazy_cache.has(node.id);
 	}
 
 	function getVisibleChildren(node: TreeNode): TreeNode[] {
@@ -288,7 +288,7 @@
 			loading_ids.add(node.id);
 			loading_ids = new Set(loading_ids);
 			try {
-				const children = await loadChildren!(node);
+				const children = await load_children!(node);
 				lazy_cache.set(node.id, children);
 				lazy_cache = new Map(lazy_cache);
 			} finally {
@@ -377,13 +377,13 @@
 			return;
 		}
 
-		if (multiSelect && e && (e.ctrlKey || e.metaKey)) {
+		if (multi_select && e && (e.ctrlKey || e.metaKey)) {
 			if (selected.includes(node.id)) {
 				selected = selected.filter((id) => id !== node.id);
 			} else {
 				selected = [...selected, node.id];
 			}
-		} else if (multiSelect && e && e.shiftKey) {
+		} else if (multi_select && e && e.shiftKey) {
 			// Range select based on visible order
 			const visible = getVisibleNodeOrder();
 			const last_selected = selected.length > 0 ? selected[selected.length - 1] : null;
@@ -769,7 +769,7 @@
 		return nodes;
 	}
 
-	const skeleton_nodes = $derived(generateSkeletonNodes(skeletonCount, skeletonDepth));
+	const skeleton_nodes = $derived(generateSkeletonNodes(skeleton_count, skeleton_depth));
 </script>
 
 {#if skeleton}
@@ -797,12 +797,12 @@
 		class={['tree', className].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
-		class:show-lines={showLines}
+		class:show-lines={show_lines}
 		class:dragging={drag_node_id !== null}
 		{id}
 		role="tree"
 		aria-activedescendant={focused_id ? `${id}-node-${focused_id}` : undefined}
-		aria-multiselectable={multiSelect || undefined}
+		aria-multiselectable={multi_select || undefined}
 		tabindex="0"
 		bind:this={tree_element}
 		onkeydown={handleTreeKeyDown}
@@ -974,8 +974,8 @@
 				{/if}
 
 				<!-- Node content -->
-				{#if nodeContent}
-					{@render nodeContent({ node, level })}
+				{#if node_content}
+					{@render node_content({ node, level })}
 				{:else}
 					<span class="node-content">
 						{#if node.icon}

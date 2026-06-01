@@ -49,7 +49,7 @@ When a `logo` is provided, the error correction level is automatically upgraded 
 <QR
   value="https://example.com"
   logo="/logo.png"
-  logoSize={0.25}
+  logo_size={0.25}
 />
 ```
 
@@ -69,7 +69,7 @@ The QR component exposes a `triggerDownload(filename?)` method so consumers can 
 ${'  '}let qr_ref = $state(undefined);
 </script>
 
-<QR bind:this={qr_ref} value="https://example.com" downloadFilename="my-share-code" />
+<QR bind:this={qr_ref} value="https://example.com" download_filename="my-share-code" />
 <Button outline onclick={() => qr_ref.triggerDownload()}>Download PNG</Button>`}>
   <QrDownloadDemo client:load />
 </ComponentPreview>
@@ -91,10 +91,10 @@ ${'  '}let qr_ref = $state(undefined);
 | `background` | `string` | `'#ffffff'` | Background (light) color |
 | `margin` | `number` | `4` | Quiet zone in modules around the QR code |
 | `logo` | `string` | - | Center logo image URL |
-| `logoSize` | `number` | `0.25` | Logo size as a fraction of QR size (0 to 1) |
+| `logo_size` | `number` | `0.25` | Logo size as a fraction of QR size (0 to 1) |
 | `rounded` | `boolean` | `false` | Round module corners |
 | `downloadable` | `boolean` | `false` | Show a download button |
-| `downloadFilename` | `string` | `'qr-code'` | Filename for the downloaded PNG (without extension) |
+| `download_filename` | `string` | `'qr-code'` | Filename for the downloaded PNG (without extension) |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |

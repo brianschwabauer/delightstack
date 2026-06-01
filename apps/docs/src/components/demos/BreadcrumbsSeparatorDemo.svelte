@@ -8,7 +8,7 @@
 	];
 </script>
 
-<Breadcrumbs {items} homeHref="#">
+<Breadcrumbs {items} home_href="#">
 	{#snippet separator()}
 		<span style="color: var(--sl-color-gray-3);">/</span>
 	{/snippet}

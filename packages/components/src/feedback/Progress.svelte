@@ -25,7 +25,7 @@
 		label = undefined as string | undefined,
 
 		/** Display the current percentage */
-		showValue = false,
+		show_value = false,
 
 		/** Striped animation on fill (linear mode only) */
 		striped = false,
@@ -34,7 +34,7 @@
 		overlay = false,
 
 		/** Cover entire viewport */
-		fullScreen = false,
+		full_screen = false,
 
 		/** Success color variant */
 		success = false,
@@ -92,7 +92,7 @@
 		class:indeterminate={isIndeterminate}
 		class:determinate={!isIndeterminate}
 		class:overlay
-		class:full-screen={fullScreen}
+		class:full-screen={full_screen}
 		class:success
 		class:error
 		class:striped={striped && !circular}
@@ -128,7 +128,7 @@
 					stroke-dashoffset={isIndeterminate ? undefined : dashOffset}
 					transform="rotate(-90 {circularConfig.diameter / 2} {circularConfig.diameter / 2})" />
 			</svg>
-			{#if showValue && !isIndeterminate && size !== '00' && size !== '0'}
+			{#if show_value && !isIndeterminate && size !== '00' && size !== '0'}
 				<span class="value-label">{Math.round(percentage)}%</span>
 			{/if}
 		{:else}
@@ -147,7 +147,7 @@
 					<div class="fill" style:width="{percentage}%"></div>
 				{/if}
 			</div>
-			{#if showValue && !isIndeterminate}
+			{#if show_value && !isIndeterminate}
 				<span class="value-label">{Math.round(percentage)}%</span>
 			{/if}
 		{/if}
@@ -157,7 +157,7 @@
 	</div>
 {/snippet}
 
-{#if fullScreen}
+{#if full_screen}
 	<Portal>
 		{@render progressContent()}
 	</Portal>

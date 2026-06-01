@@ -5,7 +5,7 @@
 <div class="full-width">
 	<PDF
 		src="https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf"
-		showToolbar={false}
+		show_toolbar={false}
 		searchable={false}
 		height="400px" />
 </div>

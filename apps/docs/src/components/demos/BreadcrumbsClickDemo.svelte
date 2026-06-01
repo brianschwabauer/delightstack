@@ -13,7 +13,7 @@
 <div>
 	<Breadcrumbs
 		{items}
-		showHome={false}
+		show_home={false}
 		onclick={({ item, index }) => {
 			lastClicked = `Clicked "${item.label}" (index ${index})`;
 		}}
