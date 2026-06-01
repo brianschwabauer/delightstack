@@ -89,8 +89,9 @@
 		/** Sticky header */
 		stickyHeader = true,
 
-		/** Column resize by drag */
-		resizableColumns = false,
+		/** Enable column resizing — drag any column border (in the header or the
+		 * body cells) to resize; double-click a border to auto-fit. */
+		resizable = false,
 
 		/** Row expansion */
 		expandable = false,
@@ -176,6 +177,11 @@
 		start_x: number;
 		start_width: number;
 	} | null>(null);
+	// Column whose border the mouse is hovering (via the boundary hit zones, in the
+	// header or any body cell). Drives the full-height boundary preview — set only
+	// while the pointer is inside a resize zone, so the accent never shows when the
+	// mouse is merely somewhere over the column.
+	let hoveredResizeKey = $state<string | null>(null);
 	let expandedRows = $state(new Set<number>());
 	let collapsedGroups = $state(new Set<string>());
 	// Anchor + hovered row tracked as VISUAL positions so shift-range follows the
@@ -810,46 +816,141 @@
 	}
 
 	// ---- Column resizing ----
-	function startResize(e: MouseEvent, columnKey: string) {
+	// Unified across mouse / touch / pen via Pointer Events + pointer capture, so
+	// the drag keeps tracking even when the pointer slides off the thin handle.
+	// The handle straddles the 1px divider with a few px of slack on each side
+	// (see `.resize-handle`), so you never have to land on the hairline itself.
+	const RESIZE_MIN_FALLBACK = 60;
+
+	function colMinWidth(columnKey: string): number {
+		const col = columns.find((c) => c.key === columnKey);
+		const n = parseInt(col?.minWidth || '', 10);
+		return Number.isFinite(n) && n > 0 ? n : RESIZE_MIN_FALLBACK;
+	}
+
+	// Current rendered width of a column, looked up BY KEY via its header cell —
+	// not by the handle's own cell, because a left-edge zone resizes the *previous*
+	// column and so must measure that column, not the cell it lives in. Falls back
+	// to the explicit override / a constant when the header isn't measurable.
+	function currentColWidth(columnKey: string): number {
+		if (columnWidths[columnKey]) return columnWidths[columnKey];
+		const th = tableEl?.querySelector<HTMLElement>(
+			`th[data-col-key="${CSS.escape(columnKey)}"]`,
+		);
+		return th ? Math.round(th.getBoundingClientRect().width) : 100;
+	}
+
+	function startResize(e: PointerEvent, columnKey: string) {
+		// Mouse: primary button only. Touch / pen: always.
+		if (e.pointerType === 'mouse' && e.button !== 0) return;
 		e.preventDefault();
 		e.stopPropagation();
-		const th = (e.target as HTMLElement).closest('th') as HTMLElement | null;
-		const startWidth = columnWidths[columnKey] || th?.offsetWidth || 100;
-		resizing = { column_key: columnKey, start_x: e.clientX, start_width: startWidth };
 
-		function onMouseMove(ev: MouseEvent) {
-			if (!resizing) return;
-			const col = columns.find((c) => c.key === resizing!.column_key);
-			const minW = parseInt(col?.minWidth || '50', 10);
-			const newWidth = Math.max(
-				minW,
-				resizing.start_width + (ev.clientX - resizing.start_x),
-			);
-			columnWidths[resizing.column_key] = newWidth;
+		const handle = e.currentTarget as HTMLElement;
+		const minW = colMinWidth(columnKey);
+		const startWidth = currentColWidth(columnKey);
+		resizing = { column_key: columnKey, start_x: e.clientX, start_width: startWidth };
+		hoveredResizeKey = null; // the active highlight takes over from the hover preview
+		// Capture so pointermove/up keep firing on the handle even off-target.
+		try {
+			handle.setPointerCapture(e.pointerId);
+		} catch {
+			/* capture is best-effort */
 		}
 
-		function onMouseUp() {
+		function onMove(ev: PointerEvent) {
+			if (!resizing) return;
+			const next = Math.max(
+				minW,
+				Math.round(resizing.start_width + (ev.clientX - resizing.start_x)),
+			);
+			columnWidths[resizing.column_key] = next;
+		}
+
+		function finish(commit: boolean) {
 			if (resizing) {
 				const finalWidth = columnWidths[resizing.column_key];
-				if (finalWidth) {
+				// Only announce a real change — a plain click on the handle (down then
+				// up, no movement) shouldn't fire a no-op resize event.
+				if (commit && finalWidth && finalWidth !== resizing.start_width) {
 					oncolumnresize?.({ column: resizing.column_key, width: finalWidth });
 				}
 			}
 			resizing = null;
-			document.removeEventListener('mousemove', onMouseMove);
-			document.removeEventListener('mouseup', onMouseUp);
+			try {
+				handle.releasePointerCapture(e.pointerId);
+			} catch {
+				/* ignore */
+			}
+			handle.removeEventListener('pointermove', onMove);
+			handle.removeEventListener('pointerup', onUp);
+			handle.removeEventListener('pointercancel', onCancel);
+			window.removeEventListener('keydown', onKey);
 		}
 
-		document.addEventListener('mousemove', onMouseMove);
-		document.addEventListener('mouseup', onMouseUp);
+		function onUp() {
+			finish(true);
+		}
+		function onCancel() {
+			finish(false);
+		}
+		// Escape mid-drag snaps the column back to where it started.
+		function onKey(ev: KeyboardEvent) {
+			if (ev.key === 'Escape' && resizing) {
+				columnWidths[resizing.column_key] = resizing.start_width;
+				finish(false);
+			}
+		}
+
+		handle.addEventListener('pointermove', onMove);
+		handle.addEventListener('pointerup', onUp);
+		handle.addEventListener('pointercancel', onCancel);
+		window.addEventListener('keydown', onKey);
 	}
 
-	function autoFitColumn(e: MouseEvent, columnKey: string) {
+	// Double-click / Enter / Home on the handle: drop the explicit width so the
+	// column returns to its content-driven (auto / flex) size.
+	function autoFitColumn(e: Event, columnKey: string) {
 		e.preventDefault();
 		e.stopPropagation();
-		// Reset to auto width
-		delete columnWidths[columnKey];
-		columnWidths = { ...columnWidths };
+		if (!(columnKey in columnWidths)) return;
+		const next = { ...columnWidths };
+		delete next[columnKey];
+		columnWidths = next;
+	}
+
+	// Keyboard resizing from a focused handle (WAI-ARIA separator pattern):
+	// arrow keys nudge, Shift = larger step, Home/Enter auto-fits.
+	function nudgeColumn(columnKey: string, delta: number) {
+		const minW = colMinWidth(columnKey);
+		const next = Math.max(minW, Math.round(currentColWidth(columnKey) + delta));
+		columnWidths[columnKey] = next;
+		oncolumnresize?.({ column: columnKey, width: next });
+	}
+
+	function handleResizeKeydown(e: KeyboardEvent, columnKey: string) {
+		const step = e.shiftKey ? 32 : 12;
+		if (e.key === 'ArrowLeft') {
+			e.preventDefault();
+			nudgeColumn(columnKey, -step);
+		} else if (e.key === 'ArrowRight') {
+			e.preventDefault();
+			nudgeColumn(columnKey, step);
+		} else if (e.key === 'Home' || e.key === 'Enter') {
+			e.preventDefault();
+			autoFitColumn(e, columnKey);
+		}
+	}
+
+	// One delegated `mouseover` on the table tracks which column boundary the mouse
+	// is over (the handles carry `data-resize-key`). Cheaper than a pair of
+	// enter/leave listeners on every cell's hit zone, and it powers the full-height
+	// hover preview that fires only inside a zone — not across the whole column.
+	function onResizeHover(e: MouseEvent) {
+		if (resizing) return;
+		const handle = (e.target as HTMLElement)?.closest?.('.resize-handle') as HTMLElement | null;
+		const key = handle?.dataset.resizeKey ?? null;
+		if (key !== hoveredResizeKey) hoveredResizeKey = key;
 	}
 
 	// ---- Row expansion ----
@@ -909,8 +1010,15 @@
 			return;
 		}
 		const target = event.target as HTMLElement;
-		// Clicks on the checkbox or expand toggle are handled by those controls.
-		if (target.closest('.dt-check-wrap') || target.closest('.expand-btn')) return;
+		// Clicks on the checkbox, expand toggle, or a column-resize border are
+		// handled by those controls — never treat them as a row click.
+		if (
+			target.closest('.dt-check-wrap') ||
+			target.closest('.expand-btn') ||
+			target.closest('.resize-handle')
+		) {
+			return;
+		}
 
 		if (selectable) {
 			toggleSelectRow(dataIndex, visualIndex, event);
@@ -1609,6 +1717,7 @@
 	class:comfortable
 	class:striped
 	class:reordering={reorderDragging || reorderDropping}
+	class:resizing-active={!!resizing}
 	{id}>
 	{#if exportable}
 		<div class="toolbar">
@@ -1666,10 +1775,17 @@
 		class:passthrough={virtualActive && !containerScroll}
 		style:max-height={resolvedMaxHeight}
 		bind:this={scrollEl}
-		onmouseleave={() => (hoverIndex = null)}>
+		onmouseleave={() => {
+			hoverIndex = null;
+			hoveredResizeKey = null;
+		}}>
+		<!-- onmouseover only drives the visual resize-border hover preview; keyboard
+		     users resize via the focusable header separators, so no focus pairing. -->
+		<!-- svelte-ignore a11y_mouse_events_have_key_events -->
 		<table
 			role="grid"
 			bind:this={tableEl}
+			onmouseover={resizable ? onResizeHover : undefined}
 			style:grid-template-columns={gridTemplateColumns}>
 			<!-- The CSS `display` override (grid/subgrid) strips the implicit ARIA
 			     roles of the native table elements, so they are restored explicitly.
@@ -1698,12 +1814,15 @@
 					{#if expandable}
 						<th class="expand-cell" role="columnheader"></th>
 					{/if}
-					{#each columns as col (col.key)}
+					{#each columns as col, ci (col.key)}
 						<th
 							style={getColumnStyle(col)}
+							data-col-key={col.key}
 							role="columnheader"
 							aria-sort={getAriaSort(col)}
-							class:sortable={col.sortable && !col.header}>
+							class:sortable={col.sortable && !col.header}
+							class:col-resizing={resizing?.column_key === col.key}
+							class:col-hover={hoveredResizeKey === col.key}>
 							{#if col.header}
 								<div class="th-content">
 									{@render col.header({ column: col })}
@@ -1757,12 +1876,25 @@
 									<span>{col.label}</span>
 								</div>
 							{/if}
-							{#if resizableColumns}
-								<!-- svelte-ignore a11y_no_static_element_interactions -->
+							{#if resizable}
+								<!-- A focusable, resizable separator (the WAI-ARIA window-splitter
+								     pattern): the tabindex + key/pointer handlers are intentional. -->
+								<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 								<span
 									class="resize-handle"
-									onmousedown={(e) => startResize(e, col.key)}
-									ondblclick={(e) => autoFitColumn(e, col.key)}>
+									class:active={resizing?.column_key === col.key}
+									class:edge={ci === columns.length - 1}
+									role="separator"
+									aria-orientation="vertical"
+									aria-label="Resize {col.label} column"
+									tabindex="0"
+									data-resize-key={col.key}
+									title="Drag to resize · double-click to auto-fit"
+									onpointerdown={(e) => startResize(e, col.key)}
+									ondblclick={(e) => autoFitColumn(e, col.key)}
+									onkeydown={(e) => handleResizeKeydown(e, col.key)}>
+									<span class="resize-line" aria-hidden="true"></span>
 								</span>
 							{/if}
 						</th>
@@ -1953,7 +2085,7 @@
 									index: data_index,
 								})}
 							{:else}
-								{getCellValue(row, col.key) ?? ''}
+								<span class="cell-text">{getCellValue(row, col.key) ?? ''}</span>
 							{/if}
 						</div>
 					{/each}
@@ -2075,12 +2207,44 @@
 				</button>
 			</td>
 		{/if}
-		{#each columns as col (col.key)}
-			<td style={getColumnStyle(col)} role="gridcell">
+		{#each columns as col, ci (col.key)}
+			<td
+				style={getColumnStyle(col)}
+				role="gridcell"
+				class:col-resizing={resizing?.column_key === col.key}
+				class:col-hover={hoveredResizeKey === col.key}>
 				{#if col.cell}
 					{@render col.cell({ value: getCellValue(row, col.key), row, index: dataIndex })}
 				{:else}
-					{getCellValue(row, col.key) ?? ''}
+					<span class="cell-text">{getCellValue(row, col.key) ?? ''}</span>
+				{/if}
+				{#if resizable}
+					{#if ci > 0}
+						<!-- Left-edge zone: resizes the PREVIOUS column, covering the RIGHT
+						     side of that border. Body cells are `overflow: hidden` for text
+						     ellipsis, so a right-edge zone alone can only reach the LEFT side
+						     of a border; pairing it with this one straddles the border from
+						     both cells without anything needing to overflow. -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<span
+							class="resize-handle body start"
+							class:active={resizing?.column_key === columns[ci - 1].key}
+							data-resize-key={columns[ci - 1].key}
+							aria-hidden="true"
+							onpointerdown={(e) => startResize(e, columns[ci - 1].key)}
+							ondblclick={(e) => autoFitColumn(e, columns[ci - 1].key)}>
+						</span>
+					{/if}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<span
+						class="resize-handle body"
+						class:active={resizing?.column_key === col.key}
+						class:edge={ci === columns.length - 1}
+						data-resize-key={col.key}
+						aria-hidden="true"
+						onpointerdown={(e) => startResize(e, col.key)}
+						ondblclick={(e) => autoFitColumn(e, col.key)}>
+					</span>
 				{/if}
 			</td>
 		{/each}
@@ -2412,22 +2576,151 @@
 		}
 	}
 
-	/* ========== Resize Handle ========== */
+	/* ========== Resize Handle ==========
+	   A generous, invisible hit zone straddling the 1px column divider — ~4px of
+	   slack on each side, so you never have to land on the hairline. The divider
+	   itself still renders at 1px; hovering or grabbing the zone springs a 2px
+	   accent line to full height as the only visible affordance. */
 	.resize-handle {
 		position: absolute;
-		right: 0;
 		top: 0;
 		bottom: 0;
-		width: 5px;
+		right: -4px;
+		width: 9px;
+		display: flex;
+		align-items: stretch;
+		justify-content: center;
 		cursor: col-resize;
-		opacity: 0;
 		z-index: 3;
-		background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
-		transition: opacity 150ms ease;
+		/* Own the gesture on touch so a drag resizes instead of scrolling. */
+		touch-action: none;
+		user-select: none;
+		-webkit-user-select: none;
+		-webkit-tap-highlight-color: transparent;
 	}
 
-	th:hover .resize-handle {
+	/* The last column's zone sits flush inside the frame (no negative offset) so it
+	   can't overhang the table edge and spawn a px of phantom horizontal scroll. */
+	.resize-handle.edge {
+		right: 0;
+		width: 8px;
+		justify-content: flex-end;
+	}
+
+	/* Body-cell zones extend the drag target down every row so you can grab a
+	   border anywhere, not just in the header. Each border is covered from BOTH
+	   cells it sits between — the right edge of the cell on its left (`.body`) and
+	   the left edge of the cell on its right (`.body.start`), both resizing the
+	   same (left) column — so the target straddles the border ~6px on each side
+	   while every zone stays fully inside its own cell. Keeping them in-cell (no
+	   negative offset) means no column can overhang the frame and spawn a phantom
+	   horizontal scrollbar. The visible feedback is the column's `td::after`
+	   divider (see `.col-hover` / `.col-resizing`), so these carry no line. */
+	.resize-handle.body {
+		right: 0;
+		width: 6px;
+	}
+
+	.resize-handle.body.start {
+		left: 0;
+		right: auto;
+		width: 6px;
+		justify-content: flex-start;
+	}
+
+	/* Header zones reach 2px past the header cell to cover the thead's 2px bottom
+	   border, so the accent line is continuous from the header down through the
+	   body instead of breaking at the header/body seam. */
+	.resize-handle:not(.body) {
+		bottom: -2px;
+	}
+
+	.resize-line {
+		width: 2px;
+		align-self: stretch;
+		border-radius: 2px;
+		background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
+		opacity: 0;
+		transform: scaleY(0.5);
+		transform-origin: center;
+		transition:
+			opacity 160ms ease,
+			transform 240ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1)),
+			box-shadow 200ms ease;
+	}
+
+	/* Reveal the header accent line only when the pointer is actually inside a
+	   resize zone (in the header OR any body cell of this column) — driven by
+	   `hoveredResizeKey`, NOT by hovering the cell at large — and on keyboard
+	   focus. It springs from a squished scaleY to full height. */
+	th.col-hover .resize-line,
+	.resize-handle:focus-visible .resize-line {
+		opacity: 0.6;
+		transform: scaleY(1);
+	}
+
+	/* Grabbing it (pointer down or while actively resizing): full-strength accent
+	   with a soft glow that reads as "live". */
+	.resize-handle:active .resize-line,
+	.resize-handle.active .resize-line {
 		opacity: 1;
+		transform: scaleY(1);
+		box-shadow:
+			0 0 0 1px rgb(from var(--color-action, #1976d2) r g b / 0.35),
+			0 0 8px rgb(from var(--color-action, #1976d2) r g b / 0.55);
+	}
+
+	.resize-handle:focus-visible {
+		outline: none;
+	}
+
+	.resize-handle:focus-visible .resize-line {
+		box-shadow: 0 0 0 2px var(--color-action, #1976d2);
+	}
+
+	/* Hover preview: the whole column boundary previews as a translucent 2px accent
+	   line, head to foot, the moment the pointer enters a resize zone. Shown via
+	   the body `td::after` dividers (and the header line above). The `:not(:last-
+	   child)` both matches the base divider's structure and out-specifies it, so
+	   the accent wins regardless of source order. */
+	tbody td.col-hover:not(:last-child)::after {
+		background: light-dark(
+			rgb(from var(--color-action, #1976d2) r g b / 0.6),
+			rgb(from var(--color-action, #5c9ce6) r g b / 0.7)
+		);
+		width: 2px;
+		z-index: 4;
+		/* Reach 1px past the cell to cover the row divider, so the line reads as one
+		   continuous stroke down the column rather than dashes between rows. */
+		bottom: -1px;
+	}
+
+	/* While a column is being resized, light up its full-height boundary so it's
+	   clear what's moving — a crisp solid accent divider plus a faint column wash.
+	   The header keeps its opaque background (a sticky, translucent header would
+	   show rows scrolling behind it), so only the body cells take the wash. */
+	tbody td.col-resizing {
+		background-color: light-dark(
+			rgb(from var(--color-action, #1976d2) r g b / 0.05),
+			rgb(from var(--color-action, #5c9ce6) r g b / 0.08)
+		);
+	}
+
+	tbody td.col-resizing:not(:last-child)::after {
+		background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
+		width: 2px;
+		/* Lift above the row tint + ripple for the duration of the drag. */
+		z-index: 4;
+		/* Bridge the row divider so the line is continuous (see `.col-hover`). */
+		bottom: -1px;
+	}
+
+	/* The last row has no divider beneath it, so its accent must NOT overshoot the
+	   cell — a 1px overshoot past the final row would add a phantom vertical
+	   scrollbar (the frame's overflow-x:auto forces overflow-y to auto). */
+	tbody tr.row:last-child td.col-hover::after,
+	tbody tr.row:last-child td.col-resizing::after {
+		bottom: 0;
 	}
 
 	/* ========== Body Rows ========== */
@@ -2473,13 +2766,27 @@
 		align-items: center;
 		padding: 0.75rem 1rem;
 		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		/* Note: text clipping/ellipsis lives on the inner `.cell-text` (a flex cell
+		   can't ellipsize its own text), which leaves the cell itself
+		   `overflow: visible` — so the column-resize accent line (`td::after`) can
+		   extend 1px past the cell to bridge the row dividers instead of being
+		   chopped at each row. */
 		/* Positioned so the divider pseudo anchors to the cell — but deliberately
 		   NOT a stacking context (no z-index), so the divider's negative z-index
 		   resolves in the row's stacking context, below the tint and ripple. */
 		position: relative;
+		/* Eases the column-resize wash in and out (see `td.col-resizing`). */
+		transition: background-color 180ms ease;
+	}
+
+	/* Single-line text cells ellipsize here, not on the `td`: a flex container
+	   can't apply `text-overflow` to its own text, so the text needs its own block
+	   with `min-width: 0` (to allow shrinking) plus the clip/ellipsis. */
+	.cell-text {
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 
 	/* Body column dividers: a low pseudo-layer (z-index -3) that sits BELOW the
@@ -2495,6 +2802,10 @@
 		background: light-dark(var(--color-border, #e8eaed), var(--color-border, #2b2b2b));
 		z-index: -3;
 		pointer-events: none;
+		/* Eases the accent into the divider when its column is being resized. */
+		transition:
+			background-color 180ms ease,
+			width 180ms ease;
 	}
 
 	.dense td {
@@ -2905,6 +3216,14 @@
 		cursor: grabbing;
 	}
 
+	/* While resizing: the col-resize cursor stays put across the whole table even
+	   as the pointer drifts off the thin handle, and nothing selects underneath. */
+	.wrapper.resizing-active {
+		cursor: col-resize;
+		user-select: none;
+		-webkit-user-select: none;
+	}
+
 	/* Disable pointer events on the body rows during a drag so the rows beneath
 	   the floating overlay don't light up with :hover (the overlay is
 	   pointer-events:none and would otherwise let hover bleed through). The drag
@@ -3088,7 +3407,8 @@
 		.th-button,
 		.row.drag-armed,
 		.wrapper.reordering .row,
-		.drag-overlay.settling {
+		.drag-overlay.settling,
+		.resize-line {
 			animation: none !important;
 			transition: none !important;
 		}

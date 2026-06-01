@@ -13,6 +13,7 @@ import TableExpandableDemo from '../../../../components/demos/TableExpandableDem
 import TableSkeletonDemo from '../../../../components/demos/TableSkeletonDemo.svelte';
 import TableVirtualDemo from '../../../../components/demos/TableVirtualDemo.svelte';
 import TableReorderDemo from '../../../../components/demos/TableReorderDemo.svelte';
+import TableResizableDemo from '../../../../components/demos/TableResizableDemo.svelte';
 
 ## Import
 
@@ -253,6 +254,45 @@ ${'  '}onreorder={(e) => (users = e.newData)}
   <TableReorderDemo client:load />
 </ComponentPreview>
 
+### Resizable Columns
+
+Set `resizable` to let users drag any column border to resize it — in the header
+**or anywhere down the body rows**. The visible divider stays a crisp 1px line,
+but the drag target is widened with a few px of slack so you grab the border
+without having to land on the hairline. Bring the pointer to a border and the
+whole column boundary previews as an accent line, head to foot; while you drag,
+it lights up fully so it's clear what's moving.
+
+It works with mouse, touch, and pen. The header border is also a focusable
+separator: **arrow keys** nudge the width (hold **Shift** for a larger step) and
+**Home** (or **Enter**) auto-fits. **Double-click** a border to reset that column
+to its content-driven width, and **Escape** mid-drag cancels. Each committed
+change fires `oncolumnresize` with the column key and new pixel width.
+
+<ComponentPreview code={`<script>
+${'  '}import { Table } from '@delightstack/components';
+
+${'  '}const products = [
+${'  '}${'  '}{ sku: 'DS-1001', name: 'Aurora Standing Desk', category: 'Furniture', price: '$649' },
+${'  '}${'  '}{ sku: 'DS-1002', name: 'Nimbus Office Chair', category: 'Furniture', price: '$329' },
+${'  '}${'  '}{ sku: 'DS-1003', name: 'Halo Desk Lamp', category: 'Lighting', price: '$89' },
+${'  '}];
+</script>
+
+<Table
+${'  '}data={products}
+${'  '}columns={[
+${'  '}${'  '}{ key: 'sku', label: 'SKU', minWidth: '90px' },
+${'  '}${'  '}{ key: 'name', label: 'Product', minWidth: '140px' },
+${'  '}${'  '}{ key: 'category', label: 'Category', minWidth: '110px' },
+${'  '}${'  '}{ key: 'price', label: 'Price', align: 'right', minWidth: '80px' },
+${'  '}]}
+${'  '}resizable
+${'  '}oncolumnresize={(e) => console.log(e.column, e.width)}
+/>`}>
+  <TableResizableDemo client:load />
+</ComponentPreview>
+
 ### Skeleton Loading
 
 <ComponentPreview code={`<Table
@@ -283,7 +323,7 @@ ${'  '}data={[]}
 | `dense` | `boolean` | `false` | Compact cell padding |
 | `comfortable` | `boolean` | `false` | Relaxed cell padding |
 | `stickyHeader` | `boolean` | `true` | Sticky header on vertical scroll |
-| `resizableColumns` | `boolean` | `false` | Allow column width resizing by dragging |
+| `resizable` | `boolean` | `false` | Allow column width resizing by dragging any column border, in the header or body cells (see [Resizable Columns](#resizable-columns)) |
 | `expandable` | `boolean` | `false` | Enable row expansion |
 | `reorderable` | `boolean` | `false` | Enable drag-to-reorder rows (see [Reorderable Rows](#reorderable-rows)) |
 | `virtualScroll` | `boolean \| VirtualScrollOptions` | `false` | Window rows for large datasets — `true` for defaults, or an options object (see [Virtual Scrolling](#virtual-scrolling)) |
