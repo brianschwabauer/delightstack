@@ -11,6 +11,7 @@ import TableCustomCellDemo from '../../../../components/demos/TableCustomCellDem
 import TableSelectableDemo from '../../../../components/demos/TableSelectableDemo.svelte';
 import TableExpandableDemo from '../../../../components/demos/TableExpandableDemo.svelte';
 import TableSkeletonDemo from '../../../../components/demos/TableSkeletonDemo.svelte';
+import TableVirtualDemo from '../../../../components/demos/TableVirtualDemo.svelte';
 
 ## Import
 
@@ -144,6 +145,43 @@ ${'  '}expandedRow={rowDetail}
   <TableExpandableDemo client:load />
 </ComponentPreview>
 
+### Virtual Scrolling
+
+Set `virtualScroll` to render only the rows near the viewport, so the table stays
+fast with thousands of rows. Pair it with `maxHeight` to bound the scroll area
+(it defaults to `420px` when omitted). Row heights are auto-measured; pass
+`rowHeight` to skip measurement, and `overscan` to tune how many extra rows render
+above and below the viewport. Sorting, selection, striping, and row clicks all
+work as usual. Virtualization applies to the flat data path — `groupBy` tables
+render normally.
+
+<ComponentPreview code={`<script>
+${'  '}import { Table } from '@delightstack/components';
+
+${'  '}// 10,000 rows — only the visible window is ever in the DOM
+${'  '}const data = Array.from({ length: 10000 }, (_, i) => ({
+${'  '}${'  '}id: i + 1,
+${'  '}${'  '}name: \`User \${i + 1}\`,
+${'  '}${'  '}email: \`user\${i + 1}@example.com\`,
+${'  '}${'  '}role: ['Admin', 'Editor', 'Viewer'][i % 3],
+${'  '}}));
+</script>
+
+<Table
+${'  '}{data}
+${'  '}columns={[
+${'  '}${'  '}{ key: 'id', label: '#', width: '80px', align: 'right' },
+${'  '}${'  '}{ key: 'name', label: 'Name', sortable: true },
+${'  '}${'  '}{ key: 'email', label: 'Email' },
+${'  '}${'  '}{ key: 'role', label: 'Role', sortable: true },
+${'  '}]}
+${'  '}virtualScroll
+${'  '}maxHeight={360}
+${'  '}striped
+/>`}>
+  <TableVirtualDemo client:load />
+</ComponentPreview>
+
 ### Skeleton Loading
 
 <ComponentPreview code={`<Table
@@ -175,6 +213,10 @@ ${'  '}data={[]}
 | `stickyHeader` | `boolean` | `true` | Sticky header on vertical scroll |
 | `resizableColumns` | `boolean` | `false` | Allow column width resizing by dragging |
 | `expandable` | `boolean` | `false` | Enable row expansion |
+| `virtualScroll` | `boolean` | `false` | Window rows so only those near the viewport render (for large datasets) |
+| `rowHeight` | `number` | auto | Fixed row height in px for virtual scrolling (auto-measured when omitted) |
+| `overscan` | `number` | `8` | Extra rows rendered above/below the viewport while virtual scrolling |
+| `maxHeight` | `string \| number` | - | Bounds the scroll viewport height (defaults to `420px` when `virtualScroll` is on) |
 | `groupBy` | `string` | - | Column key to group rows by |
 | `exportable` | `boolean` | `false` | Enable CSV/JSON export functionality |
 | `skeleton` | `boolean` | `false` | Show loading skeleton rows |

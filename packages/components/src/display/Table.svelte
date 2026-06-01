@@ -68,6 +68,20 @@
 		/** Skeleton rows */
 		skeletonCount = 5,
 
+		/** Window the rows so only those near the viewport render — keeps tables
+		 * with thousands of rows fast. Applies to the flat (non-grouped) data path. */
+		virtualScroll = false,
+
+		/** Fixed row height in px for virtual scrolling. Auto-measured when omitted. */
+		rowHeight = undefined as number | undefined,
+
+		/** Extra rows rendered above and below the viewport while virtual scrolling */
+		overscan = 8,
+
+		/** Bounds the scroll viewport height (e.g. 400 or '60vh'). Required for
+		 * virtual scroll — defaults to 420px when virtualScroll is on. */
+		maxHeight = undefined as string | number | undefined,
+
 		/** Element ID */
 		id = propId,
 
@@ -111,6 +125,16 @@
 	let lastSelectedVisual = $state<number | null>(null);
 	let showExportMenu = $state(false);
 
+	// ---- Virtual scrolling state ----
+	let scrollEl = $state<HTMLDivElement | null>(null);
+	let scrollTop = $state(0);
+	let viewportHeight = $state(0);
+	let measuredRowHeight = $state<number | null>(null);
+	let measuredHeaderHeight = $state(0);
+	// Measured heights of expanded detail blocks (keyed by data_index) so the
+	// windowing math can fold their extra height into the scroll offsets.
+	let expandedHeights = $state(new Map<number, number>());
+
 	// Shift-range preview state
 	let shiftHeld = $state(false);
 	let hoverIndex = $state<number | null>(null);
@@ -140,6 +164,29 @@
 			window.removeEventListener('keyup', onKey);
 			window.removeEventListener('blur', onBlur);
 		};
+	});
+
+	// ---- Measure header + row height for virtual scrolling ----
+	// The window math assumes a uniform row height; measuring the rendered header
+	// and first body row keeps it accurate across density modes without the
+	// consumer having to supply `rowHeight`.
+	$effect(() => {
+		if (!virtualActive) return;
+		// Re-measure when density changes.
+		void dense;
+		void comfortable;
+		const head = scrollEl?.querySelector('thead tr') as HTMLElement | null;
+		if (head) {
+			const hh = head.getBoundingClientRect().height;
+			if (hh && hh !== measuredHeaderHeight) measuredHeaderHeight = hh;
+		}
+		if (rowHeight == null) {
+			const el = scrollEl?.querySelector('tbody tr.row') as HTMLElement | null;
+			if (el) {
+				const h = el.getBoundingClientRect().height;
+				if (h && h !== measuredRowHeight) measuredRowHeight = h;
+			}
+		}
 	});
 
 	// ---- Sorted data ----
@@ -215,6 +262,106 @@
 			data_index: rowIndexMap.get(row) ?? i,
 			visual_index: i,
 		}));
+	});
+
+	// ---- Virtual scrolling ----
+	// Windowing renders only the rows near the viewport (plus an overscan buffer)
+	// so tables with thousands of rows stay fast. It engages for the flat,
+	// non-grouped data path; grouped/skeleton/empty tables render normally. Heights
+	// are uniform (measured, or the `rowHeight` prop); any expanded detail rows are
+	// measured and folded into the offset math so scroll positions stay accurate.
+	const densityRowEstimate = $derived(dense ? 33 : comfortable ? 57 : 45);
+	const effectiveRowHeight = $derived(
+		rowHeight ?? measuredRowHeight ?? densityRowEstimate,
+	);
+
+	const virtualActive = $derived(
+		virtualScroll && !groupBy && !skeleton && data.length > 0,
+	);
+
+	const resolvedMaxHeight = $derived.by((): string | undefined => {
+		if (maxHeight != null)
+			return typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight;
+		return virtualScroll ? '420px' : undefined;
+	});
+
+	// Fallback viewport height for the first render (before the scroll element is
+	// measured), so the initial window isn't empty during SSR/hydration.
+	const initialViewportEstimate = $derived.by((): number => {
+		const m = resolvedMaxHeight;
+		if (!m) return 600;
+		const n = parseFloat(m);
+		return Number.isFinite(n) ? n : 600;
+	});
+
+	// Expanded detail rows in visual order with their (measured or estimated)
+	// extra height — empty unless row expansion is in use.
+	const expandedVisual = $derived.by((): { visual_index: number; extra: number }[] => {
+		if (!expandable || expandedRows.size === 0) return [];
+		const estimate = effectiveRowHeight;
+		const out: { visual_index: number; extra: number }[] = [];
+		for (let v = 0; v < flatRows.length; v++) {
+			const di = flatRows[v].data_index;
+			if (expandedRows.has(di)) {
+				out.push({ visual_index: v, extra: expandedHeights.get(di) ?? estimate });
+			}
+		}
+		return out;
+	});
+
+	interface VirtualWindow {
+		first: number;
+		last: number;
+		top_pad: number;
+		bottom_pad: number;
+		rows: RenderRow[];
+	}
+
+	const virtualWindow = $derived.by((): VirtualWindow | null => {
+		if (!virtualActive) return null;
+		const rh = effectiveRowHeight;
+		const total = flatRows.length;
+		const vh = viewportHeight || initialViewportEstimate;
+		const exp = expandedVisual;
+		const totalExtra = exp.reduce((s, e) => s + e.extra, 0);
+
+		// Pixel offset of the top of visual row `i` within the body (base rows plus
+		// any expanded detail above it). `exp` is sorted by visual_index.
+		const topAt = (i: number): number => {
+			let extra = 0;
+			for (const e of exp) {
+				if (e.visual_index < i) extra += e.extra;
+				else break;
+			}
+			return i * rh + extra;
+		};
+
+		// Inverse of topAt: the visual row index at a given body pixel offset.
+		const indexAt = (offset: number): number => {
+			let remaining = offset;
+			let idx = 0;
+			for (const e of exp) {
+				const gap = e.visual_index - idx;
+				if (remaining < gap * rh) return idx + Math.floor(remaining / rh);
+				remaining -= gap * rh;
+				idx = e.visual_index;
+				const rowTotal = rh + e.extra;
+				if (remaining < rowTotal) return idx;
+				remaining -= rowTotal;
+				idx += 1;
+			}
+			return idx + Math.floor(remaining / rh);
+		};
+
+		// Scroll offset is measured from the top of the scroll content, which
+		// includes the (sticky) header; subtract it so offsets index into the body.
+		const scroll = Math.max(0, scrollTop - measuredHeaderHeight);
+		const first = Math.max(0, indexAt(scroll) - overscan);
+		const last = Math.min(total, indexAt(scroll + vh) + overscan + 1);
+		const contentHeight = total * rh + totalExtra;
+		const top_pad = topAt(first);
+		const bottom_pad = Math.max(0, contentHeight - topAt(last));
+		return { first, last, top_pad, bottom_pad, rows: flatRows.slice(first, last) };
 	});
 
 	// ---- Total columns count ----
@@ -458,6 +605,27 @@
 		expandedRows = next;
 	}
 
+	// Measure an expanded detail block so virtual-scroll offsets can account for
+	// its height. No-op unless virtual scrolling is active; the observer is torn
+	// down when the row collapses (node removed).
+	function measureExpanded(dataIndex: number) {
+		return (node: HTMLElement) => {
+			if (!virtualActive) return;
+			const update = () => {
+				const h = node.getBoundingClientRect().height;
+				if (h && expandedHeights.get(dataIndex) !== h) {
+					const next = new Map(expandedHeights);
+					next.set(dataIndex, h);
+					expandedHeights = next;
+				}
+			};
+			update();
+			const ro = new ResizeObserver(update);
+			ro.observe(node);
+			return () => ro.disconnect();
+		};
+	}
+
 	// ---- Group collapse ----
 	function toggleGroup(groupKey: string) {
 		const next = new Set(collapsedGroups);
@@ -631,7 +799,14 @@
 	{/if}
 
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="scroll" onmouseleave={() => (hoverIndex = null)}>
+	<div
+		class="scroll"
+		class:bounded={!!resolvedMaxHeight}
+		style:max-height={resolvedMaxHeight}
+		bind:this={scrollEl}
+		bind:clientHeight={viewportHeight}
+		onscroll={() => (scrollTop = scrollEl?.scrollTop ?? 0)}
+		onmouseleave={() => (hoverIndex = null)}>
 		<table role="grid" style:grid-template-columns={gridTemplateColumns}>
 			<!-- The CSS `display` override (grid/subgrid) strips the implicit ARIA
 			     roles of the native table elements, so they are restored explicitly.
@@ -849,6 +1024,27 @@
 							{/each}
 						{/if}
 					{/each}
+				{:else if virtualWindow}
+					{#if virtualWindow.top_pad > 0}
+						<tr
+							class="v-spacer"
+							aria-hidden="true"
+							style:height="{virtualWindow.top_pad}px">
+						</tr>
+					{/if}
+					{#each virtualWindow.rows as { row, data_index, visual_index } (data_index)}
+						{@render dataRow(row, data_index, visual_index)}
+						{#if expandable && expandedRows.has(data_index) && expandedRow}
+							{@render expandedRowTr(row, data_index)}
+						{/if}
+					{/each}
+					{#if virtualWindow.bottom_pad > 0}
+						<tr
+							class="v-spacer"
+							aria-hidden="true"
+							style:height="{virtualWindow.bottom_pad}px">
+						</tr>
+					{/if}
 				{:else}
 					{#each flatRows as { row, data_index, visual_index } (data_index)}
 						{@render dataRow(row, data_index, visual_index)}
@@ -902,6 +1098,7 @@
 	<tr
 		role="row"
 		class="row"
+		class:stripe={striped && visualIndex % 2 === 1}
 		class:selected={rowSelected}
 		class:preview={previewing}
 		class:clickable={rowClickable}
@@ -982,7 +1179,8 @@
 				transition:slide={{
 					duration: prefersReducedMotion() ? 0 : 240,
 					easing: quintOut,
-				}}>
+				}}
+				{@attach measureExpanded(index)}>
 				{#if expandedRow}
 					{@render expandedRow(row)}
 				{/if}
@@ -1080,6 +1278,22 @@
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #3a3a3a));
 		border-radius: var(--table-radius, 14px);
 		/* Clip the rounded corners over the table + sticky header */
+	}
+
+	/* When `maxHeight`/`virtualScroll` bounds the viewport, the table scrolls
+	   vertically inside this frame and the sticky header pins to its top. */
+	.scroll.bounded {
+		overflow-y: auto;
+	}
+
+	/* Virtual-scroll spacers reserve the height of the off-screen rows above and
+	   below the rendered window so the scrollbar reflects the full row count. */
+	.v-spacer {
+		display: block;
+		grid-column: 1 / -1;
+		padding: 0;
+		border: none;
+		background: none;
 	}
 
 	/* ========== Table (CSS grid + subgrid rows) ==========
@@ -1346,7 +1560,10 @@
 	   Base/resting states are written with :where() so they carry zero
 	   specificity; the :hover rules below always win, giving the
 	   "instant-in, eased-out" hover behaviour even over striped/selected. */
-	:where(.striped tbody tr.row:nth-child(even)) {
+	/* Striping is driven by an explicit parity class keyed on the row's visual
+	   index (not :nth-child) so it stays stable while virtual scrolling swaps the
+	   mounted rows, and doesn't flip when an expanded detail row is inserted. */
+	:where(tbody tr.row.stripe) {
 		--row-bg: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.025),
 			rgb(from var(--color-text, #fff) r g b / 0.035)
