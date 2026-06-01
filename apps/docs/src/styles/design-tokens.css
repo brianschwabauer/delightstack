@@ -255,3 +255,21 @@ pre, code {
 	from { transform: rotate(0deg); }
 	to { transform: rotate(359deg); }
 }
+
+/*
+ * Props / options tables: keep the first column readable.
+ *
+ * In the component docs the first column is always a single inline `code`
+ * token (the prop/option name). When the type & description columns get long,
+ * the table squeezes the name column and it wraps mid-identifier, which is
+ * hard to read. Force that column onto one line so it sizes to its content;
+ * the other columns still wrap to absorb the remaining width.
+ *
+ * The `:has(> code:only-child)` guard scopes this to "name" cells only, so
+ * tables whose first column is prose are left untouched. `width: 1%` is the
+ * shrink-to-content trick that stops the column from claiming extra space.
+ */
+.sl-markdown-content td:first-child:has(> code:only-child) {
+	white-space: nowrap;
+	width: 1%;
+}
