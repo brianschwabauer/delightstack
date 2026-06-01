@@ -41,6 +41,7 @@
 
 <script lang="ts" generics="T extends Record<string, unknown>">
 	import type { Snippet } from 'svelte';
+	import { tick } from 'svelte';
 	import { ripple } from '@delightstack/utilities';
 	import { slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
@@ -131,6 +132,31 @@
 		oncolumnresize = undefined as
 			| ((payload: { column: string; width: number }) => void)
 			| undefined,
+
+		/** Enable drag-to-reorder rows. On desktop a press-and-drag reorders
+		 * immediately (a plain click still selects); on touch the row must be
+		 * held briefly (long-press) before it lifts, so normal scrolling is
+		 * preserved. Works alongside `selectable` (drag the whole selection at
+		 * once) and `virtualScroll`. Disabled while `groupBy` is set. */
+		reorderable = false,
+
+		/** Reorder committed — fires AFTER the drop animation has finished, so the
+		 * parent can swap in the new order without interrupting the animation.
+		 * Assign `payload.newData` to your `data`. `from` is the moved rows' data
+		 * indices (in visual order); `to` is the index in the new array where the
+		 * block was inserted. */
+		onreorder = undefined as
+			| ((payload: { from: number[]; to: number; oldData: T[]; newData: T[] }) => void)
+			| undefined,
+
+		/** A reorder drag began (the row(s) lifted). */
+		onreorderstart = undefined as ((payload: { from: number[] }) => void) | undefined,
+
+		/** The row(s) were released — fires when the drop animation BEGINS, before
+		 * `onreorder` commits. Useful for haptics/analytics. */
+		ondrop = undefined as
+			| ((payload: { from: number[]; to: number }) => void)
+			| undefined,
 	} = $props();
 
 	// ---- Internal state ----
@@ -167,6 +193,90 @@
 	// Shift-range preview state
 	let shiftHeld = $state(false);
 	let hoverIndex = $state<number | null>(null);
+
+	// ---- Reorder (drag-to-reorder) state ----
+	// Reactive bits the template reads:
+	let reorderDragging = $state(false); // a row is actively being dragged
+	let reorderDropping = $state(false); // the drop/settle animation is running
+	let armedDataIndex = $state<number | null>(null); // touch long-press armed this row
+	// data_index → translateY (px) applied to non-dragged rows to open the gap
+	let rowTransforms = $state(new Map<number, number>());
+	// data_index set of the rows currently lifted out (rendered hidden as placeholders)
+	let draggedDataSet = $state(new Set<number>());
+	// The lifted row(s) cloned into the floating overlay (in visual order). When
+	// dragging many rows the overlay collapses to a single card; `overlayMore`
+	// then holds the total count for the "N" badge (0 = show every dragged row).
+	let overlayRows = $state<{ row: T; data_index: number }[]>([]);
+	let overlayMore = $state(0);
+	let overlayEl = $state<HTMLDivElement | null>(null);
+	let suppressNextClick = false; // swallow the click that follows a drag
+
+	// Above this many dragged rows the overlay collapses to one card + a badge,
+	// so the floating element stays compact (the gap still reserves every row).
+	const REORDER_COLLAPSE_AT = 4;
+
+	// Non-reactive per-gesture context (mutated at ~60fps; kept off $state to
+	// avoid reactivity churn — the template only reads the $state above).
+	interface DragContext {
+		pointer_id: number;
+		pointer_type: string;
+		start_client_x: number;
+		start_client_y: number;
+		last_client_x: number;
+		last_client_y: number;
+		grab_vi: number; // visual index of the grabbed row
+		grab_row_top: number; // grabbed row's client top at pointer-down
+		grab_within_block: number; // px from block top to the grab point
+		grab_row_offset_in_block: number; // px from block top to the grabbed row's top
+		// How the overlay tracks the finger / settles, so a collapsed (single-card)
+		// overlay lands on the grabbed row's slot rather than the whole block's top.
+		overlay_grab_offset: number; // px from overlay top to the grab point
+		overlay_top_content_offset: number; // px from block top to overlay top
+		collapsed: boolean; // overlay shows one card + a count badge
+		dragged_vis: number[]; // visual indices being dragged (ascending)
+		dragged_set: Set<number>; // same, as a Set for O(1) lookups
+		dragged_rows: T[]; // the row objects, in visual order
+		dragged_row_set: Set<T>;
+		virtual: boolean;
+		rh: number; // uniform row height used in virtual mode
+		total: number; // total row count
+		block_height: number;
+		// Non-virtual measured layout, indexed by visual index (content-space,
+		// body-top = 0). The "delta" model preserves each row's measured position
+		// and only shifts it by the dragged height removed above it plus the block
+		// height inserted above it — so interleaved expanded rows stay correct.
+		top_by_vi: number[]; // vi → measured top
+		h_by_vi: number[]; // vi → measured height
+		removed_above: number[]; // vi → total dragged height with a smaller vi
+		r_rank: number[]; // vi → rank among non-dragged rows
+		r_vis: number[]; // non-dragged visual indices, in order
+		insert_at: number; // current insertion index (R-space)
+		last_insert_at: number;
+		block_top_content: number; // content-Y where the block will land
+		// Drag direction (with hysteresis) so the insert threshold is the row's top
+		// when moving down and its bottom when moving up — symmetric 50%-overlap.
+		prev_center: number | null;
+		move_dir: 1 | -1; // 1 = down, -1 = up
+		armed: boolean;
+		hold_timer: number | null;
+		raf: number | null;
+		settling: boolean;
+		settle_timeout: number | null;
+	}
+	let drag: DragContext | null = null;
+
+	const HOLD_DELAY = 240; // ms long-press before a touch drag arms
+	const SCROLL_TOLERANCE = 10; // px of pre-arm movement that means "scrolling"
+	const DRAG_THRESHOLD = 5; // px of movement (mouse) before a drag starts
+	const EDGE_SIZE = 56; // px edge band that triggers auto-scroll
+	const MAX_SCROLL_SPEED = 18; // px per frame at the very edge
+	const SETTLE_MS = 300; // drop animation duration
+	const SETTLE_EASE = 'cubic-bezier(0.2, 0.9, 0.25, 1)';
+	const LIFT_SCALE = 1.025; // "popped above" scale while dragging (centred)
+
+	function clamp(n: number, min: number, max: number): number {
+		return n < min ? min : n > max ? max : n;
+	}
 
 	// ---- Reduced motion ----
 	function prefersReducedMotion(): boolean {
@@ -771,6 +881,12 @@
 		visualIndex: number,
 		event: MouseEvent,
 	) {
+		// Swallow the click that the browser fires at the end of a drag so it
+		// doesn't also toggle selection / fire onrowclick.
+		if (suppressNextClick) {
+			suppressNextClick = false;
+			return;
+		}
 		const target = event.target as HTMLElement;
 		// Clicks on the checkbox or expand toggle are handled by those controls.
 		if (target.closest('.dt-check-wrap') || target.closest('.expand-btn')) return;
@@ -872,6 +988,566 @@
 			showExportMenu = false;
 		}
 	}
+
+	// ======================================================================
+	// Reorder (drag-to-reorder rows)
+	// ----------------------------------------------------------------------
+	// Drag is unified across mouse + touch via Pointer Events. The grabbed
+	// row(s) are cloned into a fixed-position overlay that follows the finger
+	// (so the drag keeps working even when virtual scrolling unmounts the
+	// original row), while the originals stay in the DOM as hidden placeholders
+	// to keep the scroll height stable. The other rows shift via `transform` to
+	// open a gap at the drop target. The new order is committed to the parent
+	// only AFTER the drop animation completes, so the parent re-rendering the
+	// list can't interrupt the animation.
+	// ======================================================================
+
+	const reorderActive = $derived(reorderable && !groupBy && !skeleton && data.length > 0);
+
+	// Tear down any in-flight drag if the table unmounts mid-gesture, so the
+	// document-level pointer/key listeners and timers don't leak.
+	$effect(() => {
+		return () => {
+			if (drag?.raf) cancelAnimationFrame(drag.raf);
+			if (drag?.hold_timer) clearTimeout(drag.hold_timer);
+			if (drag?.settle_timeout) clearTimeout(drag.settle_timeout);
+			teardownDragListeners();
+		};
+	});
+
+	// ---- Geometry helpers (content space: body top = 0, scroll-independent) ----
+	function headerHeightPx(): number {
+		const head = tableEl?.querySelector('thead tr') as HTMLElement | null;
+		return head ? head.getBoundingClientRect().height : 0;
+	}
+	function bodyTopClient(): number {
+		if (!tableEl) return 0;
+		// table box top scrolls with content; the header track sits on top of it.
+		return tableEl.getBoundingClientRect().top + headerHeightPx();
+	}
+	function contentY(clientY: number): number {
+		return clientY - bodyTopClient();
+	}
+
+	// ---- Which element scrolls for edge auto-scroll ----
+	function nearestScrollable(el: HTMLElement | null): HTMLElement | null {
+		let node = el?.parentElement ?? null;
+		while (node) {
+			const s = getComputedStyle(node);
+			if (/(auto|scroll)/.test(s.overflowY) && node.scrollHeight > node.clientHeight) {
+				return node;
+			}
+			node = node.parentElement;
+		}
+		return null;
+	}
+	function reorderScrollTarget(): HTMLElement | Window {
+		if (containerScroll && scrollEl) return scrollEl;
+		if (virtualActive && resolvedScroller) return resolvedScroller;
+		return nearestScrollable(wrapperEl) ?? window;
+	}
+	function applyAutoScroll(clientY: number) {
+		const t = reorderScrollTarget();
+		let top: number, bottom: number;
+		if (t instanceof Window) {
+			top = 0;
+			bottom = window.innerHeight;
+		} else {
+			const r = t.getBoundingClientRect();
+			top = r.top;
+			bottom = r.bottom;
+		}
+		let speed = 0;
+		if (clientY < top + EDGE_SIZE) {
+			speed = -MAX_SCROLL_SPEED * clamp((top + EDGE_SIZE - clientY) / EDGE_SIZE, 0, 1);
+		} else if (clientY > bottom - EDGE_SIZE) {
+			speed = MAX_SCROLL_SPEED * clamp((clientY - (bottom - EDGE_SIZE)) / EDGE_SIZE, 0, 1);
+		}
+		if (!speed) return;
+		if (t instanceof Window) window.scrollBy(0, speed);
+		else t.scrollTop += speed;
+	}
+
+	// ---- Pointer down on a row ----
+	function onRowPointerDown(e: PointerEvent, dataIndex: number, visualIndex: number) {
+		if (!reorderActive || drag) return;
+		// Mouse: primary button only. Touch/pen: proceed.
+		if (e.pointerType === 'mouse' && e.button !== 0) return;
+		const target = e.target as HTMLElement;
+		// Let interactive controls (and the row's own checkbox/expand toggles) win.
+		if (
+			target.closest(
+				'a, button, input, select, textarea, label, [data-no-drag], .dt-check-wrap, .expand-btn, .resize-handle',
+			)
+		) {
+			return;
+		}
+
+		suppressNextClick = false;
+
+		// Drag the whole selection when grabbing a selected row in a multi-select;
+		// otherwise just the grabbed row.
+		let draggedVis: number[];
+		if (selectable && isSelectedIndex(dataIndex) && selectedIndexSet.size > 1) {
+			draggedVis = flatRows
+				.filter((f) => selectedIndexSet.has(f.data_index))
+				.map((f) => f.visual_index)
+				.sort((a, b) => a - b);
+		} else {
+			draggedVis = [visualIndex];
+		}
+
+		const grabbedRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const draggedRows = draggedVis.map((vi) => flatRows[vi].row);
+
+		drag = {
+			pointer_id: e.pointerId,
+			pointer_type: e.pointerType,
+			start_client_x: e.clientX,
+			start_client_y: e.clientY,
+			last_client_x: e.clientX,
+			last_client_y: e.clientY,
+			grab_vi: visualIndex,
+			grab_row_top: grabbedRect.top,
+			grab_within_block: 0,
+			grab_row_offset_in_block: 0,
+			overlay_grab_offset: 0,
+			overlay_top_content_offset: 0,
+			collapsed: false,
+			dragged_vis: draggedVis,
+			dragged_set: new Set(draggedVis),
+			dragged_rows: draggedRows,
+			dragged_row_set: new Set(draggedRows),
+			virtual: virtualActive,
+			rh: effectiveRowHeight,
+			total: flatRows.length,
+			block_height: 0,
+			top_by_vi: [],
+			h_by_vi: [],
+			removed_above: [],
+			r_rank: [],
+			r_vis: [],
+			insert_at: 0,
+			last_insert_at: -1,
+			block_top_content: 0,
+			prev_center: null,
+			move_dir: 1,
+			armed: false,
+			hold_timer: null,
+			raf: null,
+			settling: false,
+			settle_timeout: null,
+		};
+
+		document.addEventListener('pointermove', onDragPointerMove, { passive: false });
+		document.addEventListener('pointerup', onDragPointerUp);
+		document.addEventListener('pointercancel', onDragPointerCancel);
+		window.addEventListener('keydown', onDragKeydown);
+
+		if (e.pointerType === 'mouse') {
+			drag.armed = true; // desktop: ready to drag at once (threshold gates it)
+		} else {
+			// Touch/pen: require a held long-press so scrolling still works.
+			drag.hold_timer = window.setTimeout(() => armTouchDrag(dataIndex), HOLD_DELAY);
+		}
+	}
+
+	function armTouchDrag(dataIndex: number) {
+		if (!drag) return;
+		drag.armed = true;
+		drag.hold_timer = null;
+		armedDataIndex = dataIndex; // shows the "ready to move" lift
+		if (typeof navigator !== 'undefined') navigator.vibrate?.(12);
+	}
+
+	function onDragPointerMove(e: PointerEvent) {
+		if (!drag || e.pointerId !== drag.pointer_id) return;
+		drag.last_client_x = e.clientX;
+		drag.last_client_y = e.clientY;
+		const dist = Math.hypot(
+			e.clientX - drag.start_client_x,
+			e.clientY - drag.start_client_y,
+		);
+
+		if (!drag.armed) {
+			// Touch, pre-arm: real movement means the user is scrolling — bail and
+			// let the browser scroll (we never called preventDefault).
+			if (dist > SCROLL_TOLERANCE) cancelPendingDrag();
+			return;
+		}
+
+		if (!reorderDragging) {
+			// Mouse needs a small threshold so a plain click still selects; a held
+			// touch drag starts on the first move.
+			if (drag.pointer_type === 'mouse' && dist < DRAG_THRESHOLD) return;
+			startDrag();
+		}
+
+		if (reorderDragging) {
+			// Non-passive listener: take over the gesture so the page can't scroll.
+			e.preventDefault();
+		}
+	}
+
+	function startDrag() {
+		if (!drag) return;
+		if (drag.hold_timer) {
+			clearTimeout(drag.hold_timer);
+			drag.hold_timer = null;
+		}
+		armedDataIndex = null;
+		reorderDragging = true;
+		suppressNextClick = true;
+
+		buildDragLayout();
+
+		// Hide the originals.
+		draggedDataSet = new Set(drag.dragged_rows.map((r) => rowIndexMap.get(r) as number));
+
+		// Build the floating overlay. Many rows collapse to just the grabbed row
+		// plus a "+N" badge so the drag stays compact (the gap still reserves the
+		// full block, so the commit doesn't jump). The overlay then tracks and
+		// settles on the GRABBED row's slot, not the whole block's top.
+		const withinRow = drag.start_client_y - drag.grab_row_top;
+		if (drag.dragged_vis.length >= REORDER_COLLAPSE_AT) {
+			drag.collapsed = true;
+			const g = flatRows[drag.grab_vi];
+			overlayRows = [{ row: g.row, data_index: g.data_index }];
+			overlayMore = drag.dragged_vis.length;
+			drag.overlay_grab_offset = withinRow;
+			drag.overlay_top_content_offset = drag.grab_row_offset_in_block;
+		} else {
+			drag.collapsed = false;
+			overlayRows = drag.dragged_vis.map((vi) => ({
+				row: flatRows[vi].row,
+				data_index: flatRows[vi].data_index,
+			}));
+			overlayMore = 0;
+			drag.overlay_grab_offset = drag.grab_within_block;
+			drag.overlay_top_content_offset = 0;
+		}
+
+		updateInsertAt();
+		applyNeighborTransforms();
+		// Position the overlay once it's mounted, before the first paint.
+		tick().then(positionOverlay);
+		drag.raf = requestAnimationFrame(dragFrame);
+
+		onreorderstart?.({ from: drag.dragged_vis.map((vi) => flatRows[vi].data_index) });
+	}
+
+	// Snapshot the layout needed to compute the gap. Virtual mode is uniform
+	// (measured row height); normal mode measures every rendered row.
+	function buildDragLayout() {
+		if (!drag) return;
+		const rh = drag.rh;
+		if (drag.virtual) {
+			drag.block_height = drag.dragged_vis.length * rh;
+			// grab offset within the block (uniform heights)
+			let off = 0;
+			for (const vi of drag.dragged_vis) {
+				if (vi === drag.grab_vi) break;
+				off += rh;
+			}
+			drag.grab_row_offset_in_block = off;
+			drag.grab_within_block = off + (drag.start_client_y - drag.grab_row_top);
+			return;
+		}
+
+		const els = tableEl?.querySelectorAll('tbody tr.row') ?? [];
+		const topByVi: number[] = [];
+		const hByVi: number[] = [];
+		els.forEach((el) => {
+			const vi = Number((el as HTMLElement).dataset.rowIndex);
+			if (Number.isNaN(vi)) return;
+			const r = el.getBoundingClientRect();
+			topByVi[vi] = contentY(r.top);
+			hByVi[vi] = r.height;
+		});
+
+		// Grab offset within the (assembled) block, using measured heights.
+		let off = 0;
+		for (const vi of drag.dragged_vis) {
+			if (vi === drag.grab_vi) break;
+			off += hByVi[vi] ?? rh;
+		}
+		drag.grab_row_offset_in_block = off;
+		drag.grab_within_block = off + (drag.start_client_y - drag.grab_row_top);
+
+		// Single pass: running dragged-height-removed and non-dragged rank.
+		const removedAbove: number[] = [];
+		const rRank: number[] = [];
+		const rVis: number[] = [];
+		let removed = 0;
+		let rank = 0;
+		let blockH = 0;
+		for (let vi = 0; vi < drag.total; vi++) {
+			removedAbove[vi] = removed;
+			rRank[vi] = rank;
+			if (drag.dragged_set.has(vi)) {
+				removed += hByVi[vi] ?? rh;
+				blockH += hByVi[vi] ?? rh;
+			} else {
+				rVis.push(vi);
+				rank++;
+			}
+		}
+		drag.top_by_vi = topByVi;
+		drag.h_by_vi = hByVi;
+		drag.removed_above = removedAbove;
+		drag.r_rank = rRank;
+		drag.r_vis = rVis;
+		drag.block_height = blockH;
+	}
+
+	function draggedBefore(vi: number): number {
+		if (!drag) return 0;
+		let n = 0;
+		for (const dv of drag.dragged_vis) {
+			if (dv < vi) n++;
+			else break;
+		}
+		return n;
+	}
+
+	// Where (in non-dragged "R" space) the block should be inserted. The anchor is
+	// the GRABBED row's centre (not the raw pointer, and independent of where
+	// within the row you grabbed). The gap moves past a neighbour once that centre
+	// crosses the neighbour's *near* edge in the direction of travel — its TOP when
+	// moving down, its BOTTOM when moving up — so the trigger is a symmetric ~50%
+	// overlap in both directions. Direction is sticky (hysteresis) so the gap
+	// doesn't jump when the pointer pauses.
+	function updateInsertAt() {
+		if (!drag) return;
+		const withinRow = drag.start_client_y - drag.grab_row_top;
+		const grabbedH = drag.virtual ? drag.rh : (drag.h_by_vi[drag.grab_vi] ?? drag.rh);
+		const grabbedCenter = contentY(drag.last_client_y) - withinRow + grabbedH / 2;
+
+		const delta = grabbedCenter - (drag.prev_center ?? grabbedCenter);
+		if (delta > 0.5) drag.move_dir = 1;
+		else if (delta < -0.5) drag.move_dir = -1;
+		drag.prev_center = grabbedCenter;
+		const down = drag.move_dir === 1;
+
+		let insertAt: number;
+		if (drag.virtual) {
+			const rh = drag.rh;
+			// Down: count rows whose top is above the centre. Up: whose bottom is.
+			// (epsilon stabilises the exact-boundary case against float jitter.)
+			const rawSlot = down
+				? clamp(Math.ceil(grabbedCenter / rh - 1e-4), 0, drag.total)
+				: clamp(Math.floor(grabbedCenter / rh - 1e-4), 0, drag.total);
+			insertAt = clamp(
+				rawSlot - draggedBefore(rawSlot),
+				0,
+				drag.total - drag.dragged_vis.length,
+			);
+		} else {
+			let count = 0;
+			for (const vi of drag.r_vis) {
+				const edge = down ? drag.top_by_vi[vi] : drag.top_by_vi[vi] + drag.h_by_vi[vi];
+				if (edge < grabbedCenter) count++;
+				else break;
+			}
+			insertAt = clamp(count, 0, drag.r_vis.length);
+		}
+		drag.insert_at = insertAt;
+	}
+
+	// Shift the non-dragged rows to open the gap; also records where the block
+	// will land (block_top_content) for the drop animation.
+	function applyNeighborTransforms() {
+		if (!drag) return;
+		const insertAt = drag.insert_at;
+		const blockH = drag.block_height;
+		const m = new Map<number, number>();
+
+		if (drag.virtual) {
+			const rh = drag.rh;
+			const win = virtualWindow;
+			if (win) {
+				for (const rr of win.rows) {
+					if (drag.dragged_set.has(rr.visual_index)) continue;
+					const vi = rr.visual_index;
+					const rR = vi - draggedBefore(vi);
+					const targetTop = rR * rh + (rR >= insertAt ? blockH : 0);
+					m.set(rr.data_index, targetTop - vi * rh);
+				}
+			}
+			drag.block_top_content = insertAt * rh;
+		} else {
+			for (const vi of drag.r_vis) {
+				const inserted = drag.r_rank[vi] >= insertAt ? blockH : 0;
+				m.set(flatRows[vi].data_index, inserted - drag.removed_above[vi]);
+			}
+			// The block lands at the (closed-up) top of the row now at insertAt, or
+			// just past the last row when inserting at the very end.
+			const rv = drag.r_vis;
+			if (rv.length === 0) {
+				drag.block_top_content = 0;
+			} else if (insertAt < rv.length) {
+				const vi = rv[insertAt];
+				drag.block_top_content = drag.top_by_vi[vi] - drag.removed_above[vi];
+			} else {
+				const vi = rv[rv.length - 1];
+				drag.block_top_content =
+					drag.top_by_vi[vi] - drag.removed_above[vi] + drag.h_by_vi[vi];
+			}
+		}
+		rowTransforms = m;
+	}
+
+	function positionOverlay() {
+		if (!drag || !overlayEl || !tableEl) return;
+		const y = drag.last_client_y - drag.overlay_grab_offset;
+		const tr = tableEl.getBoundingClientRect();
+		overlayEl.style.width = `${tableEl.scrollWidth}px`;
+		// Scale is part of the same transform (not the CSS `scale` property) and the
+		// transform-origin is the card's centre, so the lift grows symmetrically
+		// instead of shifting sideways by the translate offset.
+		overlayEl.style.transform = `translate(${tr.left}px, ${y}px) scale(${LIFT_SCALE})`;
+	}
+
+	// rAF loop: auto-scroll near the edges, keep the overlay under the finger,
+	// and recompute the gap (the pointer may be stationary while auto-scrolling).
+	function dragFrame() {
+		if (!drag || !reorderDragging) return;
+		applyAutoScroll(drag.last_client_y);
+		positionOverlay();
+		updateInsertAt();
+		// Virtual: the rendered window changes as we auto-scroll, so refresh every
+		// frame. Normal: only when the target actually moves.
+		if (drag.virtual) {
+			applyNeighborTransforms();
+		} else if (drag.insert_at !== drag.last_insert_at) {
+			applyNeighborTransforms();
+			drag.last_insert_at = drag.insert_at;
+		}
+		drag.raf = requestAnimationFrame(dragFrame);
+	}
+
+	function onDragPointerUp(e: PointerEvent) {
+		if (!drag || e.pointerId !== drag.pointer_id) return;
+		if (reorderDragging) finishDrop(false);
+		else cancelPendingDrag();
+	}
+
+	function onDragPointerCancel(e: PointerEvent) {
+		if (!drag || e.pointerId !== drag.pointer_id) return;
+		if (reorderDragging) finishDrop(true); // abort: animate home, don't commit
+		else cancelPendingDrag();
+	}
+
+	function onDragKeydown(e: KeyboardEvent) {
+		if (!drag || e.key !== 'Escape') return;
+		if (reorderDragging) finishDrop(true);
+		else cancelPendingDrag();
+	}
+
+	// A press that never became a drag (a click, or a touch that turned into a
+	// scroll): tear everything down and let the normal click handler run.
+	function cancelPendingDrag() {
+		if (!drag) return;
+		if (drag.hold_timer) clearTimeout(drag.hold_timer);
+		if (drag.raf) cancelAnimationFrame(drag.raf);
+		teardownDragListeners();
+		armedDataIndex = null;
+		drag = null;
+	}
+
+	function teardownDragListeners() {
+		document.removeEventListener('pointermove', onDragPointerMove);
+		document.removeEventListener('pointerup', onDragPointerUp);
+		document.removeEventListener('pointercancel', onDragPointerCancel);
+		window.removeEventListener('keydown', onDragKeydown);
+	}
+
+	function sameSeq(a: T[], b: T[]): boolean {
+		if (a.length !== b.length) return false;
+		for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+		return true;
+	}
+
+	// Insertion index that leaves the order unchanged (block's original home).
+	function homeInsertAt(): number {
+		if (!drag) return 0;
+		const first = drag.dragged_vis[0];
+		let c = 0;
+		for (let vi = 0; vi < first; vi++) if (!drag.dragged_set.has(vi)) c++;
+		return c;
+	}
+
+	// Pointer released (or aborted): freeze the final target, animate the overlay
+	// into the gap, and only THEN commit the new order to the parent.
+	function finishDrop(abort: boolean) {
+		if (!drag || drag.settling) return;
+		if (drag.raf) {
+			cancelAnimationFrame(drag.raf);
+			drag.raf = null;
+		}
+		// No more pointer/key input drives the drag once it's settling; the drop
+		// completes via the overlay's transitionend (or the fallback timeout).
+		teardownDragListeners();
+
+		updateInsertAt();
+		if (abort) drag.insert_at = homeInsertAt();
+		applyNeighborTransforms();
+
+		const from = drag.dragged_vis.map((vi) => flatRows[vi].data_index);
+		const insertAt = drag.insert_at;
+		const oldVisual = flatRows.map((f) => f.row);
+		const dset = drag.dragged_row_set;
+		const draggedRows = drag.dragged_rows;
+		const rRows = oldVisual.filter((r) => !dset.has(r));
+		const newData = abort
+			? data
+			: [...rRows.slice(0, insertAt), ...draggedRows, ...rRows.slice(insertAt)];
+		const changed = !abort && !sameSeq(newData, oldVisual);
+
+		reorderDragging = false;
+		reorderDropping = true;
+		drag.settling = true;
+		if (!abort) ondrop?.({ from, to: insertAt });
+
+		// Animate the overlay to the gap's current on-screen position, easing the
+		// lift scale back to 1. A collapsed overlay lands on the grabbed row's slot
+		// within the block, not the top.
+		const targetY = bodyTopClient() + drag.block_top_content + drag.overlay_top_content_offset;
+		const left = tableEl ? tableEl.getBoundingClientRect().left : 0;
+		const done = () => finishSettle(changed, from, insertAt, newData);
+		if (overlayEl) {
+			overlayEl.classList.add('settling');
+			overlayEl.style.transition = `transform ${SETTLE_MS}ms ${SETTLE_EASE}, filter ${SETTLE_MS}ms ease`;
+			overlayEl.style.transform = `translate(${left}px, ${targetY}px) scale(1)`;
+			overlayEl.addEventListener('transitionend', done, { once: true });
+		}
+		// Fallback (reduced motion / no movement = no transitionend).
+		drag.settle_timeout = window.setTimeout(done, SETTLE_MS + 80);
+	}
+
+	// Drop animation finished: reset all visual state and commit in the SAME
+	// synchronous tick so Svelte flushes once — the rows re-render in their new
+	// order with no transforms, so nothing visibly jumps.
+	function finishSettle(changed: boolean, from: number[], to: number, newData: T[]) {
+		if (!drag) return;
+		if (drag.settle_timeout) clearTimeout(drag.settle_timeout);
+		teardownDragListeners();
+
+		const oldData = data;
+
+		// Reset visuals.
+		reorderDropping = false;
+		draggedDataSet = new Set();
+		rowTransforms = new Map();
+		overlayRows = [];
+		armedDataIndex = null;
+		drag = null;
+
+		if (changed) onreorder?.({ from, to, oldData, newData });
+		// Drop any straggler click and release the suppressor on the next tick, so a
+		// completed drag never toggles selection on the trailing pointerup/click.
+		setTimeout(() => (suppressNextClick = false), 0);
+	}
 </script>
 
 <div
@@ -880,6 +1556,7 @@
 	class:dense
 	class:comfortable
 	class:striped
+	class:reordering={reorderDragging || reorderDropping}
 	{id}>
 	{#if exportable}
 		<div class="toolbar">
@@ -1190,6 +1867,51 @@
 			</tbody>
 		</table>
 	</div>
+
+	<!-- Floating drag overlay: the lifted row(s), cloned, following the pointer.
+	     Position is driven imperatively (see positionOverlay/finishDrop). Lives
+	     outside `.scroll` so it isn't clipped, and is purely presentational. -->
+	{#if reorderDragging || reorderDropping}
+		<div
+			bind:this={overlayEl}
+			class="drag-overlay"
+			class:dense
+			class:comfortable
+			class:collapsed={overlayMore > 0}
+			style:grid-template-columns={gridTemplateColumns}
+			aria-hidden="true">
+			{#each overlayRows as { row, data_index } (data_index)}
+				<div class="ghost-row">
+					{#if selectable}
+						<div class="ghost-cell checkbox-cell">
+							<span class="dt-check-wrap" class:checked={isSelectedIndex(data_index)}>
+								{@render checkIndicator(isSelectedIndex(data_index), false, false)}
+							</span>
+						</div>
+					{/if}
+					{#if expandable}
+						<div class="ghost-cell expand-cell"><span class="expand-btn"></span></div>
+					{/if}
+					{#each columns as col (col.key)}
+						<div class="ghost-cell" style={getColumnStyle(col)}>
+							{#if col.cell}
+								{@render col.cell({
+									value: getCellValue(row, col.key),
+									row,
+									index: data_index,
+								})}
+							{:else}
+								{getCellValue(row, col.key) ?? ''}
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/each}
+			{#if overlayMore > 0}
+				<div class="drag-count" aria-hidden="true">{overlayMore}</div>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 {#snippet checkIndicator(checked: boolean, indeterminate: boolean, preview: boolean)}
@@ -1228,18 +1950,27 @@
 	{@const rowClickable = selectable || !!onrowclick || expandable}
 	{@const rowSelected = selectable && isSelectedIndex(dataIndex)}
 	{@const previewing = selectable && isPreviewingVisual(visualIndex) && !rowSelected}
+	{@const dragShift = rowTransforms.get(dataIndex)}
 	<!-- svelte-ignore a11y_no_redundant_roles a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
 	<tr
 		role="row"
 		class="row"
+		data-row-index={visualIndex}
 		class:stripe={striped && visualIndex % 2 === 1}
 		class:selected={rowSelected}
 		class:preview={previewing}
 		class:clickable={rowClickable}
+		class:reorderable={reorderActive}
+		class:drag-source={draggedDataSet.has(dataIndex)}
+		class:drag-armed={armedDataIndex === dataIndex}
+		style:transform={dragShift ? `translateY(${dragShift}px)` : undefined}
 		onclick={(e) => handleRowClick(row, dataIndex, visualIndex, e)}
 		onmouseenter={() => {
 			if (selectable) hoverIndex = visualIndex;
 		}}
+		onpointerdown={reorderActive
+			? (e) => onRowPointerDown(e, dataIndex, visualIndex)
+			: undefined}
 		{@attach ripple({ enabled: rowClickable })}>
 		{#if selectable}
 			<td class="checkbox-cell" role="gridcell">
@@ -2093,6 +2824,190 @@
 		}
 	}
 
+	/* ========== Reorder (drag-to-reorder) ========== */
+	/* A draggable row hints with a grab cursor; `pan-y` keeps vertical scrolling
+	   working on touch until a long-press arms the drag (after which the move
+	   handler calls preventDefault to take over the gesture). */
+	.row.reorderable {
+		cursor: grab;
+		touch-action: pan-y;
+	}
+
+	/* While a drag is in flight: kill text selection and show the grabbing cursor
+	   everywhere over the table. */
+	.wrapper.reordering {
+		user-select: none;
+		cursor: grabbing;
+	}
+
+	/* Disable pointer events on the body rows during a drag so the rows beneath
+	   the floating overlay don't light up with :hover (the overlay is
+	   pointer-events:none and would otherwise let hover bleed through). The drag
+	   itself is driven by document-level listeners, so rows don't need events. */
+	.wrapper.reordering tbody tr {
+		pointer-events: none;
+	}
+
+	.wrapper.reordering .row {
+		transition: transform 200ms cubic-bezier(0.2, 0.85, 0.3, 1);
+		will-change: transform;
+	}
+
+	/* The press nudge would fight the drag transform — suppress it mid-reorder. */
+	.wrapper.reordering .row.clickable:active {
+		translate: none;
+	}
+
+	/* The lifted originals stay in flow (so scroll height is stable) but are
+	   hidden — the floating overlay shows the moving copy. */
+	.row.drag-source {
+		visibility: hidden;
+	}
+
+	.wrapper.reordering .row.drag-source {
+		transition: none;
+	}
+
+	/* Touch "ready to move" feedback: the held row lifts before it can be moved. */
+	.row.drag-armed {
+		z-index: 5;
+		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
+		animation: dt-arm 180ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1))
+			forwards;
+	}
+
+	@keyframes dt-arm {
+		from {
+			transform: scale(1);
+			box-shadow: 0 0 0 rgb(0 0 0 / 0);
+		}
+		to {
+			transform: scale(1.015);
+			box-shadow:
+				0 10px 24px rgb(0 0 0 / 0.16),
+				0 3px 8px rgb(0 0 0 / 0.12);
+		}
+	}
+
+	/* The floating overlay (fixed-position, follows the pointer). The drop-shadow
+	   gives the "popped above the rest" lift; the translate + centred scale are
+	   applied imperatively together (NOT via the CSS `scale` property, which would
+	   scale about the static box and shift the card sideways). */
+	.drag-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		z-index: 1000;
+		display: grid;
+		pointer-events: none;
+		filter: drop-shadow(0 18px 32px rgb(0 0 0 / 0.22)) drop-shadow(0 6px 12px rgb(0 0 0 / 0.16));
+		border-radius: var(--table-radius, 14px);
+		overflow: hidden;
+		will-change: transform;
+	}
+
+	.drag-overlay.settling {
+		filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.12));
+		transition: filter 300ms ease;
+	}
+
+	/* Many-row drag: the overlay collapses to a single card with a count badge and
+	   a couple of "sheets" peeking behind it (so it reads as a stack), instead of a
+	   tall block. The gap in the list still reserves every row. */
+	.drag-overlay.collapsed {
+		overflow: visible;
+	}
+
+	.drag-overlay.collapsed .ghost-row {
+		border-radius: var(--table-radius, 14px);
+		overflow: hidden;
+	}
+
+	.drag-overlay.collapsed::before,
+	.drag-overlay.collapsed::after {
+		content: '';
+		position: absolute;
+		left: 5px;
+		right: 5px;
+		top: 0;
+		bottom: 0;
+		z-index: -1;
+		border-radius: var(--table-radius, 14px);
+		background: light-dark(var(--color-bg, #fff), var(--color-bg, #232323));
+		border: 1px solid light-dark(var(--color-border, #e5e7eb), var(--color-border, #3a3a3a));
+	}
+
+	.drag-overlay.collapsed::before {
+		transform: translateY(5px) scale(0.99);
+	}
+
+	.drag-overlay.collapsed::after {
+		left: 10px;
+		right: 10px;
+		transform: translateY(10px) scale(0.985);
+		opacity: 0.85;
+	}
+
+	.drag-count {
+		position: absolute;
+		top: 50%;
+		right: 12px;
+		transform: translateY(-50%);
+		min-width: 1.5rem;
+		height: 1.5rem;
+		padding: 0 0.45rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 999px;
+		background: var(--color-action, #1976d2);
+		color: var(--color-action-text, #fff);
+		font-size: 0.75rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		box-shadow: 0 2px 6px rgb(0 0 0 / 0.25);
+	}
+
+	.ghost-row {
+		display: grid;
+		grid-template-columns: subgrid;
+		grid-column: 1 / -1;
+		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
+		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+		font-size: 0.875rem;
+	}
+
+	.ghost-row:not(:last-child) {
+		border-bottom: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
+	}
+
+	.ghost-cell {
+		display: flex;
+		align-items: center;
+		padding: 0.75rem 1rem;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.drag-overlay.dense .ghost-cell {
+		padding: 0.375rem 0.75rem;
+		font-size: 0.8125rem;
+	}
+
+	.drag-overlay.comfortable .ghost-cell {
+		padding: 1rem 1.25rem;
+	}
+
+	.ghost-cell.checkbox-cell,
+	.ghost-cell.expand-cell {
+		justify-content: center;
+		padding-left: 0.5rem;
+		padding-right: 0.25rem;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.skeleton-bar::after {
 			animation: none;
@@ -2105,7 +3020,10 @@
 		.row.clickable,
 		tbody tr.row,
 		tbody tr.row::before,
-		.th-button {
+		.th-button,
+		.row.drag-armed,
+		.wrapper.reordering .row,
+		.drag-overlay.settling {
 			animation: none !important;
 			transition: none !important;
 		}

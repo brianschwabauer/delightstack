@@ -12,6 +12,7 @@ import TableSelectableDemo from '../../../../components/demos/TableSelectableDem
 import TableExpandableDemo from '../../../../components/demos/TableExpandableDemo.svelte';
 import TableSkeletonDemo from '../../../../components/demos/TableSkeletonDemo.svelte';
 import TableVirtualDemo from '../../../../components/demos/TableVirtualDemo.svelte';
+import TableReorderDemo from '../../../../components/demos/TableReorderDemo.svelte';
 
 ## Import
 
@@ -211,6 +212,37 @@ bounded by `maxHeight`. To virtualize against an outer scrollbar instead, set
 For `'parent'`, `'window'`, and custom scrollers the table renders inline (no
 inner scroll frame) and `maxHeight` is ignored — the chosen element owns the
 scroll height.
+
+### Reorderable Rows
+
+Set `reorderable` to let users drag rows into a new order. On desktop, press and
+drag a row; on touch, hold a row until it lifts, then drag. The new order is
+handed to `onreorder` only after the drop animation finishes, so assigning it to
+your data never interrupts the animation. Works with `selectable` (drag the
+whole selection at once) and `virtualScroll`.
+
+<ComponentPreview code={`<script>
+${'  '}import { Table } from '@delightstack/components';
+
+${'  '}let users = $state([
+${'  '}${'  '}{ rank: 1, name: 'Alice Johnson', role: 'Admin' },
+${'  '}${'  '}{ rank: 2, name: 'Bob Smith', role: 'Editor' },
+${'  '}${'  '}{ rank: 3, name: 'Carol White', role: 'Viewer' },
+${'  '}]);
+</script>
+
+<Table
+${'  '}data={users}
+${'  '}columns={[
+${'  '}${'  '}{ key: 'rank', label: '#', width: '56px', align: 'right' },
+${'  '}${'  '}{ key: 'name', label: 'Name' },
+${'  '}${'  '}{ key: 'role', label: 'Role' },
+${'  '}]}
+${'  '}reorderable
+${'  '}onreorder={(e) => (users = e.newData)}
+/>`}>
+  <TableReorderDemo client:load />
+</ComponentPreview>
 
 ### Skeleton Loading
 
