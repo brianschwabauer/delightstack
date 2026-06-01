@@ -1,14 +1,17 @@
 ---
 title: BottomSheet
-description: A mobile-optimized slide-up panel with configurable snap points, spring-physics gestures, pull-to-dismiss, and scroll-aware drag behavior.
+description: A mobile-first slide-up panel with configurable snap points, spring-physics gestures, a morphing header, pull-to-dismiss, and scroll-aware drag behavior.
 ---
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import BottomSheetDemo from '../../../../components/demos/BottomSheetDemo.svelte';
 import BottomSheetSnapDemo from '../../../../components/demos/BottomSheetSnapDemo.svelte';
+import BottomSheetMorphDemo from '../../../../components/demos/BottomSheetMorphDemo.svelte';
 import BottomSheetHeaderDemo from '../../../../components/demos/BottomSheetHeaderDemo.svelte';
 import BottomSheetNonDismissibleDemo from '../../../../components/demos/BottomSheetNonDismissibleDemo.svelte';
 import BottomSheetNoBackdropDemo from '../../../../components/demos/BottomSheetNoBackdropDemo.svelte';
+
+A bottom sheet slides up from the bottom of the screen and settles on one of several **snap points**. Drag the handle (or the content while it's at the top of its scroll) to resize it, flick it down to dismiss, or tap the handle to toggle between sizes. It opens to its largest snap point by default.
 
 ## Import
 
@@ -18,6 +21,8 @@ import { BottomSheet } from '@delightstack/components';
 
 ## Basic Usage
 
+Snap points are fractions of the viewport height (a value `<= 1`) or absolute pixels (a value `> 1`). The sheet opens to the largest one by default.
+
 <ComponentPreview code={`<script>
 ${'  '}import { BottomSheet, Button } from '@delightstack/components';
 
@@ -26,10 +31,10 @@ ${'  '}let open = $state(false);
 
 <Button onclick={() => open = true}>Open Bottom Sheet</Button>
 
-<BottomSheet bind:open snapPoints={[0.4, 0.8]}>
-${'  '}<div style="padding: 1.5rem;">
+<BottomSheet bind:open snapPoints={[0.5, 0.92]}>
+${'  '}<div style="padding: 0 1.5rem 1.5rem;">
 ${'  '}${'  '}<h3>Bottom Sheet</h3>
-${'  '}${'  '}<p>Drag the handle to resize or dismiss.</p>
+${'  '}${'  '}<p>Drag the handle to resize, flick down to dismiss, or tap the handle to toggle.</p>
 ${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
 ${'  '}</div>
 </BottomSheet>`}>
@@ -40,7 +45,7 @@ ${'  '}</div>
 
 ### Multiple Snap Points
 
-Define multiple snap heights as fractions of the viewport. The user can drag between them.
+Define any number of snap heights. The user drags between them, and you can read or set the active one with `bind:snap`.
 
 <ComponentPreview code={`<script>
 ${'  '}import { BottomSheet, Button } from '@delightstack/components';
@@ -51,24 +56,74 @@ ${'  '}let snap = $state(0);
 
 <Button onclick={() => open = true}>Open Multi-Snap Sheet</Button>
 
-<BottomSheet
-${'  '}bind:open
-${'  '}bind:snap
-${'  '}snapPoints={[0.3, 0.6, 1]}
-${'  '}defaultSnap={0}>
-${'  '}<div style="padding: 1.5rem;">
+<BottomSheet bind:open bind:snap snapPoints={[0.3, 0.6, 1]}>
+${'  '}<div style="padding: 0 1.5rem 1.5rem;">
 ${'  '}${'  '}<h3>Drag Me!</h3>
-${'  '}${'  '}<p>This sheet has three snap points at 30%, 60%, and 100%.</p>
+${'  '}${'  '}<p>Three snap points at 30%, 60%, and 100%.</p>
 ${'  '}${'  '}<p>Current snap index: {snap}</p>
-${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
+${'  '}${'  '}<Button size="0" outline onclick={() => snap = 0}>30%</Button>
+${'  '}${'  '}<Button size="0" outline onclick={() => snap = 1}>60%</Button>
+${'  '}${'  '}<Button size="0" outline onclick={() => snap = 2}>100%</Button>
 ${'  '}</div>
 </BottomSheet>`}>
 	<BottomSheetSnapDemo client:load />
 </ComponentPreview>
 
+### Morphing Header
+
+As the sheet moves between its collapsed and expanded states, `morphPercent` runs from `0` to `1`. The sheet also exposes it as a `--morph-percent` CSS variable on its root and passes it into the `header` and default snippets — so a header can fluidly morph between two layouts (here an avatar shrinks and the title slides up beside it).
+
+By default the morph spans the gap between the two smallest snap points; set `morphRange` to control exactly where it starts and finishes. Read the value with `bind:morphPercent`, the `onmorph` callback, the snippet parameter, or the CSS variable.
+
+<ComponentPreview code={`<script>
+${'  '}import { BottomSheet, Button } from '@delightstack/components';
+
+${'  '}let open = $state(false);
+${'  '}let morphPercent = $state(0);
+</script>
+
+<Button onclick={() => open = true}>Open Morphing Sheet</Button>
+
+<BottomSheet
+${'  '}bind:open
+${'  '}bind:morphPercent
+${'  '}snapPoints={[0.32, 0.92]}
+${'  '}morphRange={[0.32, 0.55]}>
+${'  '}{#snippet header(morph)}
+${'  '}${'  '}<div class="morph-header">
+${'  '}${'  '}${'  '}<!-- interpolate any styles with var(--morph-percent) or the morph param -->
+${'  '}${'  '}${'  '}<div class="avatar">🦊</div>
+${'  '}${'  '}${'  '}<div class="title">Reynard Fox</div>
+${'  '}${'  '}${'  '}<div class="hint">{Math.round(morph * 100)}%</div>
+${'  '}${'  '}</div>
+${'  '}{/snippet}
+
+${'  '}<div style="padding: 0.5rem 1.5rem 1.5rem;">
+${'  '}${'  '}<p>morphPercent is {morphPercent.toFixed(2)}</p>
+${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
+${'  '}</div>
+</BottomSheet>
+
+<style>
+${'  '}.morph-header { --m: var(--morph-percent, 0); position: relative; }
+${'  '}.avatar {
+${'  '}${'  '}position: absolute; left: 16px; top: calc(8px + 14px * var(--m));
+${'  '}${'  '}width: calc(40px + 48px * var(--m)); height: calc(40px + 48px * var(--m));
+${'  '}${'  '}border-radius: 9999px; background: linear-gradient(135deg, #f97316, #db2777);
+${'  '}}
+${'  '}.title {
+${'  '}${'  '}position: absolute; white-space: nowrap; font-weight: 600;
+${'  '}${'  '}left: calc(68px * (1 - var(--m)) + 16px * var(--m));
+${'  '}${'  '}top: calc(18px * (1 - var(--m)) + 116px * var(--m));
+${'  '}${'  '}font-size: calc(1.05rem + 0.45rem * var(--m));
+${'  '}}
+</style>`}>
+	<BottomSheetMorphDemo client:load />
+</ComponentPreview>
+
 ### With Header
 
-Add a draggable header area above the scrollable content.
+The `header` snippet renders a fixed area above the scrollable content and doubles as a drag area.
 
 <ComponentPreview code={`<script>
 ${'  '}import { BottomSheet, Button } from '@delightstack/components';
@@ -78,15 +133,15 @@ ${'  '}let open = $state(false);
 
 <Button onclick={() => open = true}>Open Sheet with Header</Button>
 
-<BottomSheet bind:open>
+<BottomSheet bind:open snapPoints={[0.5, 0.92]}>
 ${'  '}{#snippet header()}
-${'  '}${'  '}<div style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border);">
+${'  '}${'  '}<div style="padding: 0 1rem 0.75rem; border-bottom: 1px solid var(--color-border);">
 ${'  '}${'  '}${'  '}<h3 style="margin: 0;">Filters</h3>
 ${'  '}${'  '}</div>
 ${'  '}{/snippet}
 
 ${'  '}<div style="padding: 1rem;">
-${'  '}${'  '}<p>Scrollable filter content here.</p>
+${'  '}${'  '}<p>Scrollable filter content. It scrolls once the sheet is fully expanded.</p>
 ${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
 ${'  '}</div>
 </BottomSheet>`}>
@@ -95,7 +150,7 @@ ${'  '}</div>
 
 ### Non-Dismissible
 
-Prevent the sheet from being dismissed by dragging down or tapping the backdrop.
+With `dismissible={false}`, dragging down, tapping the backdrop, and pressing Escape can't close the sheet — they only snap it to the smallest size.
 
 <ComponentPreview code={`<script>
 ${'  '}import { BottomSheet, Button } from '@delightstack/components';
@@ -105,10 +160,10 @@ ${'  '}let open = $state(false);
 
 <Button onclick={() => open = true}>Open Non-Dismissible Sheet</Button>
 
-<BottomSheet bind:open dismissible={false}>
-${'  '}<div style="padding: 1.5rem;">
+<BottomSheet bind:open dismissible={false} snapPoints={[0.4, 0.85]}>
+${'  '}<div style="padding: 0 1.5rem 1.5rem;">
 ${'  '}${'  '}<h3>Required Action</h3>
-${'  '}${'  '}<p>You must complete this action. Dragging down or tapping the backdrop will not dismiss this sheet.</p>
+${'  '}${'  '}<p>You must complete this action before the sheet will close.</p>
 ${'  '}${'  '}<Button onclick={() => open = false}>Done</Button>
 ${'  '}</div>
 </BottomSheet>`}>
@@ -117,11 +172,11 @@ ${'  '}</div>
 
 ### No Backdrop
 
-Open the sheet without a backdrop overlay and without blocking body scroll.
+`backdrop={false}` removes the blur and tint, leaving the page behind clearly visible. The transparent backdrop still catches taps to dismiss the sheet.
 
-<ComponentPreview code={`<BottomSheet bind:open showBackdrop={false} blocking={false}>
-${'  '}<div style="padding: 1rem;">
-${'  '}${'  '}<p>Non-blocking sheet content.</p>
+<ComponentPreview code={`<BottomSheet bind:open backdrop={false} blocking={false} snapPoints={[0.5, 0.9]}>
+${'  '}<div style="padding: 0 1.5rem 1.5rem;">
+${'  '}${'  '}<p>No blur or tint — the page behind stays visible.</p>
 ${'  '}</div>
 </BottomSheet>`}>
 	<BottomSheetNoBackdropDemo client:load />
@@ -129,36 +184,50 @@ ${'  '}</div>
 
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `open` | `boolean` | `false` | Controls visibility (`$bindable`) |
-| `snapPoints` | `number[]` | `[0.5, 1]` | Snap points as fractions of viewport height (0-1) |
-| `defaultSnap` | `number` | `0` | Default snap point index when opening |
-| `snap` | `number` | `0` | Current snap point index (`$bindable`) |
-| `dismissible` | `boolean` | `true` | Whether the sheet can be dismissed by dragging down |
-| `showHandle` | `boolean` | `true` | Whether to show the drag handle |
-| `showBackdrop` | `boolean` | `true` | Whether to show the backdrop overlay |
-| `blocking` | `boolean` | `true` | Whether to lock body scroll when open |
-| `id` | `string` | auto | Element ID |
-| `class` | `string` | `''` | Additional CSS classes |
-| `children` | `Snippet` | `undefined` | Main scrollable content |
-| `header` | `Snippet` | `undefined` | Header content rendered below the handle |
+| Prop           | Type                       | Default            | Description                                                                                  |
+| -------------- | -------------------------- | ------------------ | -------------------------------------------------------------------------------------------- |
+| `open`         | `boolean`                  | `false`            | Controls visibility (`$bindable`)                                                            |
+| `snapPoints`   | `number[]`                 | `[0.5, 1]`         | Snap heights as viewport fractions (`<= 1`) or absolute pixels (`> 1`)                       |
+| `defaultSnap`  | `number`                   | largest snap       | Index of the snap point to open to                                                           |
+| `snap`         | `number`                   | `0`                | Current snap point index (`$bindable`)                                                        |
+| `morphPercent` | `number`                   | `0`                | Morph progress 0–1 between collapsed and expanded (`$bindable`)                              |
+| `morphRange`   | `[number, number]`         | first two snaps    | Height range over which `morphPercent` animates 0→1 (fractions or pixels)                    |
+| `dismissible`  | `boolean`                  | `true`             | Whether dragging down, the backdrop, or Escape can dismiss the sheet                         |
+| `backdrop`     | `boolean`                  | `true`             | Render the frosted (blur + tint) backdrop; when `false` it stays transparent but still taps to dismiss |
+| `blocking`     | `boolean`                  | `true`             | Lock body scroll while open                                                                  |
+| `maxWidth`     | `number`                   | `500`              | Maximum sheet width in pixels (stays centered when wider)                                    |
+| `id`           | `string`                   | auto               | Element ID                                                                                   |
+| `class`        | `string`                   | `''`               | Additional CSS classes                                                                       |
+| `children`     | `Snippet<[number]>`        | `undefined`        | Scrollable content; receives the current morph percent                                       |
+| `header`       | `Snippet<[number]>`        | `undefined`        | Fixed, draggable header above the content; receives the current morph percent                |
 
 ## Events
 
-| Event | Detail | Description |
-|-------|--------|-------------|
-| `onopen` | none | Fires when the sheet opens |
-| `onclose` | none | Fires when the sheet closes |
-| `onsnap` | `{ index: number, height: number }` | Fires when the sheet snaps to a point |
+| Event     | Detail                              | Description                              |
+| --------- | ----------------------------------- | ---------------------------------------- |
+| `onopen`  | none                                | Fires when the sheet opens               |
+| `onclose` | none                                | Fires after the sheet finishes closing   |
+| `onsnap`  | `{ index: number, height: number }` | Fires when the sheet settles on a snap   |
+| `onmorph` | `number` (0–1)                      | Fires whenever the morph percent changes |
+
+## CSS Variables
+
+The sheet sets these on its root element (handy for morphing headers and custom styling):
+
+| Variable                   | Description                                                      |
+| -------------------------- | ---------------------------------------------------------------- |
+| `--morph-percent`          | Current morph progress (0–1)                                     |
+| `--offset`                 | Pixels of the sheet revealed from the bottom                     |
+| `--max-offset`             | Maximum revealable height (the content/viewport cap)             |
+| `--bottom-sheet-backdrop`  | Backdrop tint color (default a translucent black)                |
+| `--bottom-sheet-blur`      | Backdrop blur radius (default `12px`)                            |
 
 ## Accessibility
 
-- `role="dialog"` with `aria-modal="true"` on the sheet
-- Drag handle uses `role="slider"` with `aria-label="Sheet height"` and aria-value attributes
+- `role="dialog"` with `aria-modal="true"` on the sheet panel
 - **Escape** dismisses the sheet (when `dismissible` is true)
-- Backdrop click dismisses the sheet (when `dismissible` is true)
+- Backdrop tap dismisses the sheet (when `dismissible` is true)
 - Body scroll is locked when `blocking` is true
-- Spring-physics animation with rubber banding at extremes
-- Scroll-aware drag: content scrolls at the highest snap point, transitions to sheet drag when pulling down at scroll top
-- Respects `prefers-reduced-motion`
+- Spring-physics animation with rubber banding past the top snap and velocity-based flick dismissal
+- Scroll-aware drag: the content scrolls at the top snap and seamlessly hands off to a sheet drag when pulled down from its scroll top
+- Respects `prefers-reduced-motion` (snaps instantly instead of animating)
