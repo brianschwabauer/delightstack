@@ -16,7 +16,12 @@ export { default as QR } from './QR.svelte';
 export { default as SplitPane } from './SplitPane.svelte';
 export { default as Stat } from './Stat.svelte';
 export { default as Table } from './Table.svelte';
-export type { Column as TableColumn } from './Table.svelte';
+export type {
+	Column as TableColumn,
+	VirtualScroll,
+	VirtualScrollOptions,
+	VirtualScroller,
+} from './Table.svelte';
 export { default as Timeline, TimelineItem } from './Timeline.svelte';
 export { default as Tree } from './Tree.svelte';
 export type { TreeNode, FlatTreeNode } from './Tree.svelte';

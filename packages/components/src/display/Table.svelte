@@ -9,6 +9,34 @@
 		cell?: import('svelte').Snippet<[{ value: unknown; row: T; index: number }]>;
 		header?: import('svelte').Snippet<[{ column: Column<T> }]>;
 	}
+
+	/** Which element provides the scrollbar that drives virtual scrolling.
+	 * - `'container'` (default): the Table's own scroll frame
+	 * - `'parent'`: the Table's direct parent element
+	 * - `'window'`: the page / document
+	 * - a CSS selector string or an `HTMLElement`: any scrollable ancestor */
+	export type VirtualScroller =
+		| 'container'
+		| 'parent'
+		| 'window'
+		| (string & {})
+		| HTMLElement;
+
+	export interface VirtualScrollOptions {
+		/** Fixed row height in px. Auto-measured from the first row when omitted. */
+		rowHeight?: number;
+		/** Extra rows rendered above and below the viewport (default 8). */
+		overscan?: number;
+		/** Which element scrolls (default `'container'`). */
+		scroller?: VirtualScroller;
+		/** Bounds the scroll viewport height (e.g. 400 or '60vh'). Only applies to
+		 * the `'container'` scroller (defaults to 420px there); ignored for other
+		 * scrollers, whose height is owned by the chosen element. */
+		maxHeight?: string | number;
+	}
+
+	/** `true` for sensible defaults, `false` to disable, or an options object. */
+	export type VirtualScroll = boolean | VirtualScrollOptions;
 </script>
 
 <script lang="ts" generics="T extends Record<string, unknown>">
@@ -68,19 +96,13 @@
 		/** Skeleton rows */
 		skeletonCount = 5,
 
-		/** Window the rows so only those near the viewport render — keeps tables
-		 * with thousands of rows fast. Applies to the flat (non-grouped) data path. */
-		virtualScroll = false,
-
-		/** Fixed row height in px for virtual scrolling. Auto-measured when omitted. */
-		rowHeight = undefined as number | undefined,
-
-		/** Extra rows rendered above and below the viewport while virtual scrolling */
-		overscan = 8,
-
-		/** Bounds the scroll viewport height (e.g. 400 or '60vh'). Required for
-		 * virtual scroll — defaults to 420px when virtualScroll is on. */
-		maxHeight = undefined as string | number | undefined,
+		/** Virtual scrolling. `true` enables it with sensible defaults, `false`
+		 * disables it, or pass an options object — `{ rowHeight, overscan, scroller,
+		 * maxHeight }`. Windows the rows so only those near the viewport render,
+		 * keeping tables with thousands of rows fast. Applies to the flat
+		 * (non-grouped) data path. The `scroller` option chooses what scrolls:
+		 * the Table's own frame (default), its parent, the window, or any element. */
+		virtualScroll = false as VirtualScroll,
 
 		/** Element ID */
 		id = propId,
@@ -126,9 +148,16 @@
 	let showExportMenu = $state(false);
 
 	// ---- Virtual scrolling state ----
+	let wrapperEl = $state<HTMLDivElement | null>(null);
 	let scrollEl = $state<HTMLDivElement | null>(null);
-	let scrollTop = $state(0);
-	let viewportHeight = $state(0);
+	let tableEl = $state<HTMLTableElement | null>(null);
+	let resolvedScroller = $state<HTMLElement | Window | null>(null);
+	// Body offset (px the row list has scrolled past the viewport top) and the
+	// scroller's visible height — recomputed from geometry on scroll/resize, so
+	// the same windowing math works whether the container frame, the page, or a
+	// custom ancestor is the thing scrolling.
+	let virtualOffset = $state(0);
+	let virtualViewport = $state(0);
 	let measuredRowHeight = $state<number | null>(null);
 	let measuredHeaderHeight = $state(0);
 	// Measured heights of expanded detail blocks (keyed by data_index) so the
@@ -175,19 +204,92 @@
 		// Re-measure when density changes.
 		void dense;
 		void comfortable;
-		const head = scrollEl?.querySelector('thead tr') as HTMLElement | null;
+		const head = tableEl?.querySelector('thead tr') as HTMLElement | null;
 		if (head) {
 			const hh = head.getBoundingClientRect().height;
 			if (hh && hh !== measuredHeaderHeight) measuredHeaderHeight = hh;
 		}
-		if (rowHeight == null) {
-			const el = scrollEl?.querySelector('tbody tr.row') as HTMLElement | null;
+		if (vOpts.rowHeight == null) {
+			const el = tableEl?.querySelector('tbody tr.row') as HTMLElement | null;
 			if (el) {
 				const h = el.getBoundingClientRect().height;
 				if (h && h !== measuredRowHeight) measuredRowHeight = h;
 			}
 		}
+		measureViewport();
 	});
+
+	// ---- Resolve which element scrolls ----
+	$effect(() => {
+		if (!virtualActive) {
+			resolvedScroller = null;
+			return;
+		}
+		const s = vOpts.scroller;
+		let el: HTMLElement | Window | null = null;
+		if (s === 'window') el = window;
+		else if (s === 'container') el = scrollEl;
+		else if (s === 'parent') el = wrapperEl?.parentElement ?? null;
+		else if (typeof s === 'string') el = document.querySelector<HTMLElement>(s);
+		else if (s instanceof HTMLElement) el = s;
+		if (!el && typeof s === 'string' && s !== 'parent') {
+			console.warn(`[Table] virtualScroll scroller "${s}" matched no element.`);
+		}
+		resolvedScroller = el;
+	});
+
+	// ---- Track the scroller's scroll position + viewport height ----
+	$effect(() => {
+		if (!virtualActive) return;
+		const scroller = resolvedScroller;
+		if (!scroller) return;
+		let raf = 0;
+		const onScroll = () => {
+			if (raf) return;
+			raf = requestAnimationFrame(() => {
+				raf = 0;
+				measureViewport();
+			});
+		};
+		measureViewport();
+		scroller.addEventListener('scroll', onScroll, { passive: true });
+		window.addEventListener('resize', onScroll);
+		let ro: ResizeObserver | undefined;
+		if (!(scroller instanceof Window)) {
+			ro = new ResizeObserver(onScroll);
+			ro.observe(scroller);
+		}
+		return () => {
+			scroller.removeEventListener('scroll', onScroll);
+			window.removeEventListener('resize', onScroll);
+			if (raf) cancelAnimationFrame(raf);
+			ro?.disconnect();
+		};
+	});
+
+	// Recompute how far the row list has scrolled past the viewport top, in the
+	// scrolling element's coordinate space. The list begins at
+	// `tableTop + headerHeight`; its offset below the viewport top is therefore
+	// `viewportTop - listTop`. This is geometry-based (not `scrollTop`-based), so
+	// it works the same for the container frame, the page, or any ancestor — and
+	// correctly accounts for any content sitting above the Table.
+	function measureViewport() {
+		const scroller = resolvedScroller;
+		if (!scroller || !tableEl) return;
+		let viewportTop: number;
+		let viewportH: number;
+		if (scroller instanceof Window) {
+			viewportTop = 0;
+			viewportH = window.innerHeight;
+		} else {
+			const r = scroller.getBoundingClientRect();
+			viewportTop = r.top;
+			viewportH = scroller.clientHeight;
+		}
+		const listTop = tableEl.getBoundingClientRect().top + measuredHeaderHeight;
+		virtualOffset = viewportTop - listTop;
+		virtualViewport = viewportH;
+	}
 
 	// ---- Sorted data ----
 	const sortedData = $derived.by(() => {
@@ -268,30 +370,54 @@
 	// Windowing renders only the rows near the viewport (plus an overscan buffer)
 	// so tables with thousands of rows stay fast. It engages for the flat,
 	// non-grouped data path; grouped/skeleton/empty tables render normally. Heights
-	// are uniform (measured, or the `rowHeight` prop); any expanded detail rows are
-	// measured and folded into the offset math so scroll positions stay accurate.
-	const densityRowEstimate = $derived(dense ? 33 : comfortable ? 57 : 45);
-	const effectiveRowHeight = $derived(
-		rowHeight ?? measuredRowHeight ?? densityRowEstimate,
-	);
+	// are uniform (measured, or the `rowHeight` option); any expanded detail rows
+	// are measured and folded into the offset math so scroll positions stay
+	// accurate. The `scroller` option chooses which element scrolls.
 
-	const virtualActive = $derived(
-		virtualScroll && !groupBy && !skeleton && data.length > 0,
-	);
-
-	const resolvedMaxHeight = $derived.by((): string | undefined => {
-		if (maxHeight != null)
-			return typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight;
-		return virtualScroll ? '420px' : undefined;
+	// Normalise the `boolean | options` prop to concrete values used below.
+	const vOpts = $derived.by(() => {
+		const o: VirtualScrollOptions =
+			virtualScroll && virtualScroll !== true ? virtualScroll : {};
+		return {
+			rowHeight: o.rowHeight,
+			overscan: o.overscan ?? 8,
+			scroller: o.scroller ?? 'container',
+			maxHeight: o.maxHeight,
+		};
 	});
 
-	// Fallback viewport height for the first render (before the scroll element is
+	const virtualActive = $derived(
+		!!virtualScroll && !groupBy && !skeleton && data.length > 0,
+	);
+
+	// The frame owns the scrollbar only for the default `'container'` scroller;
+	// for any other scroller an outer element drives the scroll and the frame must
+	// not establish its own scroll container (see `.scroll.passthrough`).
+	const containerScroll = $derived(virtualActive && vOpts.scroller === 'container');
+
+	const densityRowEstimate = $derived(dense ? 33 : comfortable ? 57 : 45);
+	const effectiveRowHeight = $derived(
+		vOpts.rowHeight ?? measuredRowHeight ?? densityRowEstimate,
+	);
+
+	// maxHeight only makes sense for the container scroller; other scrollers own
+	// their own height, so it is ignored there.
+	const resolvedMaxHeight = $derived.by((): string | undefined => {
+		if (!containerScroll) return undefined;
+		const mh = vOpts.maxHeight;
+		if (mh != null) return typeof mh === 'number' ? `${mh}px` : mh;
+		return '420px';
+	});
+
+	// Fallback viewport height for the first render (before the scroller is
 	// measured), so the initial window isn't empty during SSR/hydration.
 	const initialViewportEstimate = $derived.by((): number => {
 		const m = resolvedMaxHeight;
-		if (!m) return 600;
-		const n = parseFloat(m);
-		return Number.isFinite(n) ? n : 600;
+		if (m) {
+			const n = parseFloat(m);
+			if (Number.isFinite(n)) return n;
+		}
+		return 600;
 	});
 
 	// Expanded detail rows in visual order with their (measured or estimated)
@@ -320,8 +446,9 @@
 	const virtualWindow = $derived.by((): VirtualWindow | null => {
 		if (!virtualActive) return null;
 		const rh = effectiveRowHeight;
+		const overscan = vOpts.overscan;
 		const total = flatRows.length;
-		const vh = viewportHeight || initialViewportEstimate;
+		const vh = virtualViewport || initialViewportEstimate;
 		const exp = expandedVisual;
 		const totalExtra = exp.reduce((s, e) => s + e.extra, 0);
 
@@ -353,9 +480,9 @@
 			return idx + Math.floor(remaining / rh);
 		};
 
-		// Scroll offset is measured from the top of the scroll content, which
-		// includes the (sticky) header; subtract it so offsets index into the body.
-		const scroll = Math.max(0, scrollTop - measuredHeaderHeight);
+		// `virtualOffset` already measures how far the row list has scrolled past
+		// the viewport top (header excluded), in the scroller's coordinate space.
+		const scroll = Math.max(0, virtualOffset);
 		const first = Math.max(0, indexAt(scroll) - overscan);
 		const last = Math.min(total, indexAt(scroll + vh) + overscan + 1);
 		const contentHeight = total * rh + totalExtra;
@@ -744,6 +871,7 @@
 </script>
 
 <div
+	bind:this={wrapperEl}
 	class={['wrapper', className].filter(Boolean).join(' ')}
 	class:dense={dense}
 	class:comfortable={comfortable}
@@ -801,13 +929,15 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="scroll"
-		class:bounded={!!resolvedMaxHeight}
+		class:bounded={containerScroll}
+		class:passthrough={virtualActive && !containerScroll}
 		style:max-height={resolvedMaxHeight}
 		bind:this={scrollEl}
-		bind:clientHeight={viewportHeight}
-		onscroll={() => (scrollTop = scrollEl?.scrollTop ?? 0)}
 		onmouseleave={() => (hoverIndex = null)}>
-		<table role="grid" style:grid-template-columns={gridTemplateColumns}>
+		<table
+			role="grid"
+			bind:this={tableEl}
+			style:grid-template-columns={gridTemplateColumns}>
 			<!-- The CSS `display` override (grid/subgrid) strips the implicit ARIA
 			     roles of the native table elements, so they are restored explicitly.
 			     Svelte's a11y_no_redundant_roles check can't see the CSS, hence the
@@ -1280,10 +1410,17 @@
 		/* Clip the rounded corners over the table + sticky header */
 	}
 
-	/* When `maxHeight`/`virtualScroll` bounds the viewport, the table scrolls
-	   vertically inside this frame and the sticky header pins to its top. */
+	/* Container scroller: the table scrolls vertically inside this frame (bounded
+	   by `max-height`) and the sticky header pins to its top. */
 	.scroll.bounded {
 		overflow-y: auto;
+	}
+
+	/* External scroller (parent/window/custom): the frame must NOT establish its
+	   own scroll container, so the chosen element's scrollbar drives the table.
+	   `overflow: visible` on both axes keeps the frame transparent to scrolling. */
+	.scroll.passthrough {
+		overflow: visible;
 	}
 
 	/* Virtual-scroll spacers reserve the height of the off-screen rows above and

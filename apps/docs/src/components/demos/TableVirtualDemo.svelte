@@ -25,8 +25,7 @@
 <Table
 	{data}
 	{columns}
-	virtualScroll
-	maxHeight={360}
+	virtualScroll={{ maxHeight: 360 }}
 	striped
 	bind:sortBy
 	bind:sortDirection />

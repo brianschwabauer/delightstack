@@ -148,12 +148,10 @@ ${'  '}expandedRow={rowDetail}
 ### Virtual Scrolling
 
 Set `virtualScroll` to render only the rows near the viewport, so the table stays
-fast with thousands of rows. Pair it with `maxHeight` to bound the scroll area
-(it defaults to `420px` when omitted). Row heights are auto-measured; pass
-`rowHeight` to skip measurement, and `overscan` to tune how many extra rows render
-above and below the viewport. Sorting, selection, striping, and row clicks all
-work as usual. Virtualization applies to the flat data path — `groupBy` tables
-render normally.
+fast with thousands of rows. Pass `true` for sensible defaults, or an options
+object to configure it. Row heights are auto-measured; sorting, selection,
+striping, and row clicks all work as usual. Virtualization applies to the flat
+data path — `groupBy` tables render normally.
 
 <ComponentPreview code={`<script>
 ${'  '}import { Table } from '@delightstack/components';
@@ -175,12 +173,45 @@ ${'  '}${'  '}{ key: 'name', label: 'Name', sortable: true },
 ${'  '}${'  '}{ key: 'email', label: 'Email' },
 ${'  '}${'  '}{ key: 'role', label: 'Role', sortable: true },
 ${'  '}]}
-${'  '}virtualScroll
-${'  '}maxHeight={360}
+${'  '}virtualScroll={{ maxHeight: 360 }}
 ${'  '}striped
 />`}>
   <TableVirtualDemo client:load />
 </ComponentPreview>
+
+#### Options
+
+`virtualScroll` accepts `true` (defaults), `false` (off), or an options object:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `rowHeight` | `number` | auto | Fixed row height in px (auto-measured when omitted) |
+| `overscan` | `number` | `8` | Extra rows rendered above/below the viewport |
+| `scroller` | `'container' \| 'parent' \| 'window' \| string \| HTMLElement` | `'container'` | Which element scrolls |
+| `maxHeight` | `string \| number` | `420px` | Viewport height — **only** for the `'container'` scroller |
+
+#### Choosing the scroll container
+
+By default the table provides its own scroll frame (`scroller: 'container'`),
+bounded by `maxHeight`. To virtualize against an outer scrollbar instead, set
+`scroller`:
+
+```svelte
+<!-- Scroll the whole page -->
+<Table {data} {columns} virtualScroll={{ scroller: 'window' }} />
+
+<!-- Scroll the Table's parent element (give it a height + overflow) -->
+<div style="height: 70vh; overflow: auto;">
+  <Table {data} {columns} virtualScroll={{ scroller: 'parent' }} />
+</div>
+
+<!-- Scroll a specific element by selector or reference -->
+<Table {data} {columns} virtualScroll={{ scroller: '#my-scroll-area' }} />
+```
+
+For `'parent'`, `'window'`, and custom scrollers the table renders inline (no
+inner scroll frame) and `maxHeight` is ignored — the chosen element owns the
+scroll height.
 
 ### Skeleton Loading
 
@@ -213,10 +244,7 @@ ${'  '}data={[]}
 | `stickyHeader` | `boolean` | `true` | Sticky header on vertical scroll |
 | `resizableColumns` | `boolean` | `false` | Allow column width resizing by dragging |
 | `expandable` | `boolean` | `false` | Enable row expansion |
-| `virtualScroll` | `boolean` | `false` | Window rows so only those near the viewport render (for large datasets) |
-| `rowHeight` | `number` | auto | Fixed row height in px for virtual scrolling (auto-measured when omitted) |
-| `overscan` | `number` | `8` | Extra rows rendered above/below the viewport while virtual scrolling |
-| `maxHeight` | `string \| number` | - | Bounds the scroll viewport height (defaults to `420px` when `virtualScroll` is on) |
+| `virtualScroll` | `boolean \| VirtualScrollOptions` | `false` | Window rows for large datasets — `true` for defaults, or an options object (see [Virtual Scrolling](#virtual-scrolling)) |
 | `groupBy` | `string` | - | Column key to group rows by |
 | `exportable` | `boolean` | `false` | Enable CSV/JSON export functionality |
 | `skeleton` | `boolean` | `false` | Show loading skeleton rows |
@@ -249,6 +277,24 @@ interface Column<T> {
   align?: 'left' | 'center' | 'right';
   cell?: Snippet<[{ value: unknown; row: T; index: number }]>;
   header?: Snippet<[{ column: Column<T> }]>;
+}
+```
+
+The `virtualScroll` prop is `boolean | VirtualScrollOptions`:
+
+```typescript
+type VirtualScroller =
+  | 'container' // the Table's own scroll frame (default)
+  | 'parent'    // the Table's direct parent element
+  | 'window'    // the page / document
+  | string      // a CSS selector for a scrollable ancestor
+  | HTMLElement;
+
+interface VirtualScrollOptions {
+  rowHeight?: number;        // fixed row height in px (auto-measured when omitted)
+  overscan?: number;         // extra rows above/below the viewport (default 8)
+  scroller?: VirtualScroller; // which element scrolls (default 'container')
+  maxHeight?: string | number; // viewport height — only for the 'container' scroller
 }
 ```
 
