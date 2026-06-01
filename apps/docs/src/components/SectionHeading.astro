@@ -1,0 +1,43 @@
+---
+interface Props {
+	title: string;
+	subtitle?: string;
+}
+
+const { title, subtitle } = Astro.props;
+---
+
+<div class="ds-section-heading not-content">
+	<h2 set:html={title} />
+	{subtitle && <p set:html={subtitle} />}
+</div>
+
+<style>
+	.ds-section-heading {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		max-width: 44rem;
+		margin-inline: auto;
+		margin-block: clamp(3rem, 6vw, 5rem) 2rem;
+		text-align: center;
+	}
+
+	.ds-section-heading h2 {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		font-size: clamp(1.75rem, 4vw, 2.5rem);
+		font-weight: 700;
+		line-height: 1.15;
+		letter-spacing: -0.02em;
+		color: var(--sl-color-white);
+	}
+
+	.ds-section-heading p {
+		margin: 0;
+		font-size: clamp(1rem, 1.4vw, 1.125rem);
+		line-height: 1.6;
+		color: var(--sl-color-gray-3);
+	}
+</style>

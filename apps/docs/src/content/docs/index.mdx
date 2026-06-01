@@ -2,23 +2,22 @@
 title: DelightStack
 description: A polished, opinionated Svelte 5 component library focused on delightful user experiences.
 template: splash
-hero:
-  tagline: A polished, opinionated Svelte 5 component library focused on delightful user experiences. Every component is crafted with attention to detail, thoughtful micro-animations, and a cohesive visual language.
-  actions:
-    - text: Get Started
-      link: /getting-started/introduction/
-      icon: right-arrow
-    - text: Components
-      link: /components/overview/
-      icon: open-book
-      variant: minimal
+# The hero is rendered by the custom Hero override (see astro.config.mjs).
+# An (otherwise empty) hero block is required so Starlight renders the hero
+# slot instead of the default page title.
+hero: {}
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+import SectionHeading from '../../components/SectionHeading.astro';
+import CategoryCard from '../../components/CategoryCard.astro';
 
-## Why DelightStack?
+<SectionHeading
+	title="Why DelightStack?"
+	subtitle="Everything you need to ship polished, accessible interfaces — without the boilerplate."
+/>
 
-<CardGrid stagger>
+<CardGrid>
 	<Card title="55 Components" icon="puzzle">
 		A comprehensive library covering actions, display, feedback, forms, media, and navigation — everything you need to build modern web apps.
 	</Card>
@@ -39,31 +38,28 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 	</Card>
 </CardGrid>
 
-## Component Categories
+<SectionHeading
+	title="Component Categories"
+	subtitle="55 components across six categories. Pick one to start browsing — every card links straight in."
+/>
 
 <CardGrid>
-	<Card title="Actions" icon="right-caret">
+	<CategoryCard title="Actions" icon="actions" href="/components/actions/button/">
 		Buttons, modals, popovers, context menus, command palettes, and theme toggles.
-		[Browse Actions →](/components/actions/button/)
-	</Card>
-	<Card title="Display" icon="right-caret">
+	</CategoryCard>
+	<CategoryCard title="Display" icon="display" href="/components/display/accordion/">
 		Avatars, tables, calendars, charts, timelines, trees, accordions, and more.
-		[Browse Display →](/components/display/accordion/)
-	</Card>
-	<Card title="Feedback" icon="right-caret">
+	</CategoryCard>
+	<CategoryCard title="Feedback" icon="feedback" href="/components/feedback/callout/">
 		Toast notifications, progress indicators, callouts, and confetti celebrations.
-		[Browse Feedback →](/components/feedback/callout/)
-	</Card>
-	<Card title="Form" icon="right-caret">
+	</CategoryCard>
+	<CategoryCard title="Form" icon="form" href="/components/form/input/">
 		Inputs, selects, checkboxes, toggles, file uploads, ratings, and form validation.
-		[Browse Form →](/components/form/input/)
-	</Card>
-	<Card title="Media" icon="right-caret">
+	</CategoryCard>
+	<CategoryCard title="Media" icon="media" href="/components/media/carousel/">
 		Image galleries, carousels, video players, maps, 360° panoramas, and PDF viewers.
-		[Browse Media →](/components/media/carousel/)
-	</Card>
-	<Card title="Navigation" icon="right-caret">
+	</CategoryCard>
+	<CategoryCard title="Navigation" icon="navigation" href="/components/navigation/tabs/">
 		Tabs, drawers, menus, breadcrumbs, pagination, steps, and bottom sheets.
-		[Browse Navigation →](/components/navigation/tabs/)
-	</Card>
+	</CategoryCard>
 </CardGrid>

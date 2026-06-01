@@ -1,0 +1,139 @@
+---
+import { LinkButton } from '@astrojs/starlight/components';
+
+const features = ['55 components', 'Light & dark mode', 'Fully accessible', 'Zero runtime deps'];
+---
+
+<section class="ds-hero not-content">
+	<div class="glow" aria-hidden="true"></div>
+
+	<h1 id="_top" class="title">DelightStack</h1>
+
+	<p class="tagline">
+		A polished, opinionated Svelte&nbsp;5 component library focused on delightful user experiences —
+		crafted with attention to detail, thoughtful micro-animations, and a cohesive visual language.
+	</p>
+
+	<div class="actions">
+		<LinkButton href="/getting-started/introduction/" variant="primary" icon="right-arrow">
+			Get Started
+		</LinkButton>
+		<LinkButton
+			href="/components/overview/"
+			variant="secondary"
+			icon="open-book"
+			iconPlacement="start"
+		>
+			Browse Components
+		</LinkButton>
+	</div>
+
+	<ul class="features">
+		{
+			features.map((feature) => (
+				<li class="feature">
+					<svg class="feature-check" viewBox="0 0 24 24" aria-hidden="true">
+						<path d="m5 13 4 4L19 7" />
+					</svg>
+					{feature}
+				</li>
+			))
+		}
+	</ul>
+</section>
+
+<style>
+	.ds-hero {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: 1.5rem;
+		padding-block: clamp(3rem, 7vw, 6rem) clamp(2rem, 4vw, 3.5rem);
+		overflow: clip;
+	}
+
+	/* Soft brand-coloured glow behind the hero. */
+	.glow {
+		position: absolute;
+		z-index: -1;
+		inset-block-start: -20%;
+		inset-inline-start: 50%;
+		width: min(64rem, 130%);
+		aspect-ratio: 2 / 1;
+		transform: translateX(-50%);
+		background: radial-gradient(
+			50% 50% at 50% 50%,
+			color-mix(in oklch, var(--color-primary, #1a81bc) 38%, transparent),
+			transparent 70%
+		);
+		filter: blur(40px);
+		opacity: 0.55;
+		pointer-events: none;
+	}
+
+	.title {
+		margin: 0;
+		/* Extra block padding so the gradient (background-clip: text) doesn't
+		   clip glyph descenders like the "g" with this tight line-height. */
+		padding-block: 0.05em 0.12em;
+		font-size: clamp(3rem, 9vw, 5.5rem);
+		font-weight: 700;
+		line-height: 1.1;
+		letter-spacing: -0.03em;
+		background: linear-gradient(
+			180deg,
+			var(--sl-color-white),
+			color-mix(in oklch, var(--color-primary, #1a81bc) 55%, var(--sl-color-white))
+		);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+
+	.tagline {
+		margin: 0;
+		max-width: 48ch;
+		font-size: clamp(1rem, 1.6vw, 1.25rem);
+		line-height: 1.6;
+		color: var(--sl-color-gray-2);
+	}
+
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem 1rem;
+		justify-content: center;
+		margin-top: 0.25rem;
+	}
+
+	.features {
+		list-style: none;
+		margin: 0.5rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem 1.25rem;
+		justify-content: center;
+	}
+
+	.feature {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		font-size: var(--sl-text-sm);
+		color: var(--sl-color-gray-2);
+	}
+
+	.feature-check {
+		width: 1rem;
+		height: 1rem;
+		flex-shrink: 0;
+		fill: none;
+		stroke: var(--color-success, #00b7a1);
+		stroke-width: 2.5;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+</style>

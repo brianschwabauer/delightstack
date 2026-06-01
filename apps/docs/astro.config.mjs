@@ -13,6 +13,10 @@ export default defineConfig({
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/brianschwabauer' },
 			],
 			customCss: ['./src/styles/design-tokens.css'],
+			components: {
+				// Custom splash hero (the home page is the only page with a hero).
+				Hero: './src/components/Hero.astro',
+			},
 			sidebar: [
 				{
 					label: 'Getting Started',
