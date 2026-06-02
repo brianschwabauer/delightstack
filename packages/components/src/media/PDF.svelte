@@ -1417,6 +1417,8 @@
 			var(--color-surface-raised, rgb(0 0 0 / 0.06)),
 			var(--color-surface-raised, rgb(255 255 255 / 0.08))
 		);
+		/* Snap the tint in on hover; the base rule eases it back out on leave. */
+		transition: none;
 	}
 
 	.pdf-toolbar-btn:disabled {

@@ -1505,6 +1505,8 @@
 
 	.input-wrapper:hover::before {
 		border-color: var(--_border-hover);
+		/* Snap the border color in on hover; the base rule eases it back out on leave. */
+		transition: border-width var(--_duration) var(--_ease);
 	}
 	.input.has-label .input-wrapper:hover::before {
 		border-top-color: transparent;
@@ -1696,6 +1698,8 @@
 	/* --- Hover ---------------------------------------------------------- */
 	.input-wrapper:hover .input-label {
 		border-top-color: var(--_border-hover);
+		/* Snap the notch color in on hover; the base rule eases it back out on leave. */
+		transition: color var(--_duration) var(--_ease);
 	}
 	.input-wrapper:hover .input-label.floated {
 		border-top-color: transparent;
@@ -1703,6 +1707,8 @@
 	.input-wrapper:hover .input-label.floated::before,
 	.input-wrapper:hover .input-label.floated::after {
 		border-top-color: var(--_border-hover);
+		/* Snap the notch shoulders in on hover; the base rule eases them back out. */
+		transition: min-width 200ms var(--_ease-label);
 	}
 
 	/* --- Focused -------------------------------------------------------- */
@@ -2023,6 +2029,8 @@
 	.chip-remove:hover {
 		opacity: 1;
 		background: color-mix(in oklch, currentColor 22%, transparent);
+		/* Snap the tint in on hover; keep the opacity reveal eased both ways. */
+		transition: opacity var(--_duration) var(--_ease);
 	}
 
 	.chip-input {

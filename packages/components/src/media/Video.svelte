@@ -1802,6 +1802,8 @@
 	.btn:hover {
 		background: rgba(255, 255, 255, 0.14);
 		color: #fff;
+		/* Snap the tint in on hover; the base rule eases it back out on leave. */
+		transition: transform 140ms var(--ease-out-3, ease);
 	}
 
 	.btn:focus-visible {
@@ -2064,6 +2066,8 @@
 	.dropdown-item:focus-visible {
 		background: rgba(255, 255, 255, 0.12);
 		outline: none;
+		/* Snap the tint in on hover; the base rule eases it back out on leave. */
+		transition: transform 120ms var(--ease-out-3, ease);
 	}
 
 	.dropdown-item:active {
@@ -2184,6 +2188,8 @@
 	.pop-opt:focus-visible {
 		background: rgba(255, 255, 255, 0.12);
 		outline: none;
+		/* Snap the tint in on hover; the base rule eases it back out on leave. */
+		transition: transform 120ms var(--ease-out-3, ease);
 	}
 	.pop-opt:active {
 		transform: scale(0.9);
@@ -2209,6 +2215,8 @@
 	.pop-toggle:focus-visible {
 		background: rgba(255, 255, 255, 0.12);
 		outline: none;
+		/* Snap the tint in on hover; the base rule eases it back out on leave. */
+		transition: transform 120ms var(--ease-out-3, ease);
 	}
 	.pop-toggle:active {
 		transform: scale(0.97);

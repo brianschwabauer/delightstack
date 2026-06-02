@@ -202,6 +202,8 @@
 	}
 	.theme-toggle:hover {
 		background-color: rgb(from currentColor r g b / 0.08);
+		/* Snap the tint in on hover; the base rule eases it back out on leave. */
+		transition: translate 200ms ease;
 	}
 	.theme-toggle:active {
 		translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);

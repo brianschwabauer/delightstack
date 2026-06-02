@@ -1060,6 +1060,8 @@
 
 	.select-trigger:hover::before {
 		border-color: var(--_border-hover);
+		/* Snap the border color in on hover; the base rule eases it back out on leave. */
+		transition: border-width var(--_duration) var(--_ease);
 	}
 	.select.has-label .select-trigger:hover::before {
 		border-top-color: transparent;
@@ -1162,6 +1164,8 @@
 
 	.select-trigger:hover .select-label {
 		border-top-color: var(--_border-hover);
+		/* Snap the notch color in on hover; the base rule eases it back out on leave. */
+		transition: color var(--_duration) var(--_ease);
 	}
 	.select-trigger:hover .select-label.floated {
 		border-top-color: transparent;
@@ -1169,6 +1173,8 @@
 	.select-trigger:hover .select-label.floated::before,
 	.select-trigger:hover .select-label.floated::after {
 		border-top-color: var(--_border-hover);
+		/* Snap the notch shoulders in on hover; the base rule eases them back out. */
+		transition: none;
 	}
 
 	.select-trigger.open .select-label,
@@ -1286,6 +1292,8 @@
 	.select-chip-remove:hover {
 		opacity: 1;
 		background: color-mix(in oklch, currentColor 22%, transparent);
+		/* Snap the tint in on hover; keep the opacity reveal eased both ways. */
+		transition: opacity var(--_duration) var(--_ease);
 	}
 
 	/* Clear button */
@@ -1306,6 +1314,8 @@
 	.select-clear:hover {
 		opacity: 1;
 		background: var(--_panel-hover);
+		/* Snap the tint in on hover; keep the opacity reveal eased both ways. */
+		transition: opacity var(--_duration) var(--_ease);
 	}
 
 	/* Chevron */
@@ -1445,6 +1455,8 @@
 	.select-option:hover,
 	.select-option.highlighted {
 		background: var(--_panel-hover);
+		/* Snap the highlight in on hover/keyboard nav; the base rule eases it out. */
+		transition: transform 200ms ease;
 	}
 	/* The first and last rows hug the panel's rounded corners (panel radius
 	   minus its 0.3em padding) so a highlighted edge item nests cleanly. */

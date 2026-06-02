@@ -277,6 +277,8 @@
 					var(--color-border, #c4c9d0),
 					var(--color-border, #5b6577)
 				);
+				/* Snap the tint in on hover; the base rule eases it back out on leave. */
+				transition: none;
 			}
 
 			&:focus-visible {

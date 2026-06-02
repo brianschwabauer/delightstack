@@ -574,6 +574,8 @@
 
 		&:hover {
 			background: color-mix(in oklch, var(--handle-color) 70%, transparent);
+			/* Snap the tint in on hover; the base rule eases it back out on leave. */
+			transition: box-shadow 150ms ease;
 		}
 
 		&:focus-visible {

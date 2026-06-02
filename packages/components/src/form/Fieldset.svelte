@@ -283,6 +283,8 @@
 	}
 	.legend.collapsible:hover {
 		color: var(--c-action, var(--color-action, hsl(220 70% 55%)));
+		/* Snap the color in on hover; the base rule eases it back out on leave. */
+		transition: none;
 	}
 	.legend.collapsible:focus-visible {
 		outline: 2px solid var(--c-outline-active, var(--color-outline-active, currentColor));

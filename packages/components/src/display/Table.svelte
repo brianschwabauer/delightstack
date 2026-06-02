@@ -3084,6 +3084,8 @@
 				rgb(from var(--color-text, #000) r g b / 0.07),
 				rgb(from var(--color-text, #fff) r g b / 0.1)
 			);
+			/* Snap the tint in on hover; the base rule eases it back out on leave. */
+			transition: none;
 		}
 
 		&:active {

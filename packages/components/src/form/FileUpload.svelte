@@ -703,6 +703,8 @@
 	.avatar-upload:focus-visible .avatar-overlay {
 		background: rgb(0 0 0 / 0.4);
 		opacity: 1;
+		/* Snap the scrim in on hover; the base rule eases it back out on leave. */
+		transition: none;
 	}
 
 	/* File list */
