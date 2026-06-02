@@ -236,10 +236,15 @@
 			label {
 				&::before {
 					opacity: 0.06;
+					/* Snap the active highlight in instantly (so keyboard navigation —
+					   e.g. arrowing an autocomplete list — feels immediate). The base
+					   ::before rule still eases it out when the item is deselected. */
+					transition: opacity 0ms ease;
 				}
 			}
 			.text-content::before {
 				opacity: 0.06;
+				transition: opacity 0ms ease;
 			}
 		}
 		&.disabled .text-content {

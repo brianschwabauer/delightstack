@@ -21,6 +21,11 @@ export type {
 	VirtualScroll,
 	VirtualScrollOptions,
 	VirtualScroller,
+	CellOption as TableCellOption,
+	CellEditContext as TableCellEditContext,
+	CellEditorContext as TableCellEditorContext,
+	CellAutocompleteContext as TableCellAutocompleteContext,
+	CellEditorType as TableCellEditorType,
 } from './Table.svelte';
 export { default as Timeline, TimelineItem } from './Timeline.svelte';
 export { default as Tree } from './Tree.svelte';

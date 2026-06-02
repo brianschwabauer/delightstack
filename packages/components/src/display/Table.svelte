@@ -8,6 +8,91 @@
 		align?: 'left' | 'center' | 'right';
 		cell?: import('svelte').Snippet<[{ value: unknown; row: T; index: number }]>;
 		header?: import('svelte').Snippet<[{ column: Column<T> }]>;
+
+		// ---- Inline editing (only active when the Table's `editable` prop is on) ----
+		/** Per-column override of the Table's `editable`. A predicate makes editability
+		 * per-cell. Defaults to inheriting the Table's `editable` flag. */
+		editable?: boolean | ((row: T) => boolean);
+		/** Which editor control to use for this column. A Snippet is a custom editor
+		 * (it receives a `CellEditorContext`). Defaults to `'text'`. */
+		editor?: CellEditorType | import('svelte').Snippet<[CellEditorContext<T>]>;
+		/** Static autocomplete / select options, filtered client-side by the current
+		 * value. A `string[]` is shorthand for `{ value }` options. Required (or
+		 * `onautocomplete`) for the `'select'` editor. */
+		options?: CellOption[] | string[];
+		/** Dynamic autocomplete options. Called on focus (with the current value) and
+		 * on input (debounced 300ms). Return a list or a Promise of one. */
+		onautocomplete?: (
+			ctx: CellAutocompleteContext<T>,
+		) => CellOption[] | Promise<CellOption[]>;
+		/** Fires on every keystroke while editing (not a commit). */
+		oninput?: (ctx: CellEditContext<T>) => void;
+		/** Commit handler — fires on Enter or blur, only when the value changed. If it
+		 * returns a Promise the cell shows a loading spinner; on rejection the cell
+		 * keeps the value and shows an error ring so the user can retry. */
+		onedit?: (ctx: CellEditContext<T>) => void | Promise<void>;
+		/** Inline validation. Return an error message (blocks the commit and shows an
+		 * error ring) or `null`/`''` to pass. May be async. */
+		validate?: (
+			value: unknown,
+			row: T,
+			index: number,
+		) => string | null | Promise<string | null>;
+		/** Raw editor string → stored value, applied before the value is committed
+		 * (e.g. `Number(raw)`). Defaults to the raw string. */
+		parse?: (raw: string, row: T) => unknown;
+		/** Stored value → display string. Used for the resting cell text and the
+		 * editor's initial text. Defaults to `String(value ?? '')`. */
+		format?: (value: unknown, row: T) => string;
+		/** Editor placeholder text. */
+		placeholder?: string;
+	}
+
+	/** Built-in editor controls for an editable column. */
+	export type CellEditorType = 'text' | 'number' | 'select' | 'boolean' | 'date';
+
+	/** An autocomplete / select option (mirrors the Input component's options). */
+	export interface CellOption {
+		value: string;
+		label?: string;
+		description?: string;
+		disabled?: boolean;
+	}
+
+	/** Passed to `oninput` / `onedit` (and the Table-level `oncellinput` / `oncelledit`). */
+	export interface CellEditContext<T> {
+		/** The parsed value being committed (post-`parse`), or the live value for `oninput`. */
+		value: unknown;
+		/** The previous stored value. */
+		previous: unknown;
+		row: T;
+		index: number;
+		column: Column<T>;
+		/** The edited column's `key`. */
+		key: string;
+	}
+
+	/** Passed to a custom editor Snippet (`column.editor`). */
+	export interface CellEditorContext<T> {
+		value: unknown;
+		row: T;
+		index: number;
+		column: Column<T>;
+		/** Update the in-progress draft value. */
+		setValue: (value: unknown) => void;
+		/** Commit the current draft (runs `parse`/`validate`/`onedit`) and move down. */
+		commit: () => void;
+		/** Discard the draft and exit editing. */
+		cancel: () => void;
+	}
+
+	/** Passed to `column.onautocomplete`. */
+	export interface CellAutocompleteContext<T> {
+		query: string;
+		value: unknown;
+		row: T;
+		index: number;
+		column: Column<T>;
 	}
 
 	/** Which element provides the scrollbar that drives virtual scrolling.
@@ -45,6 +130,8 @@
 	import { ripple } from '@delightstack/utilities';
 	import { slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
+	import Progress from '../feedback/Progress.svelte';
+	import TableCellEditor from './TableCellEditor.svelte';
 
 	const propId = $props.id();
 
@@ -166,6 +253,23 @@
 		/** The row(s) were released — fires when the drop animation BEGINS, before
 		 * `onreorder` commits. Useful for haptics/analytics. */
 		ondrop = undefined as ((payload: { from: number[]; to: number }) => void) | undefined,
+
+		/** Enable inline cell editing. Turns on the spreadsheet-style edit UX:
+		 * focusing a cell (click or Tab) opens an inline editor, arrow keys / Tab move
+		 * between cells, and hover highlights the cell (not the whole row). Each column
+		 * opts in/out via `column.editable` and configures its editor + `onedit`
+		 * callback. The Table stays controlled: editing fires `onedit`; the parent
+		 * updates `data` (an optimistic value is shown while an async `onedit` runs). */
+		editable = false,
+
+		/** Table-wide commit handler — fires when a cell is edited and its column has no
+		 * own `onedit`. May return a Promise (→ in-cell spinner). */
+		oncelledit = undefined as
+			| ((ctx: CellEditContext<T>) => void | Promise<void>)
+			| undefined,
+
+		/** Table-wide per-keystroke handler — fallback when a column has no own `oninput`. */
+		oncellinput = undefined as ((ctx: CellEditContext<T>) => void) | undefined,
 	} = $props();
 
 	// ---- Internal state ----
@@ -186,6 +290,30 @@
 	// rows as displayed (after sorting/grouping), not their order in `data`.
 	let lastSelectedVisual = $state<number | null>(null);
 	let showExportMenu = $state(false);
+
+	// ---- Inline editing state ----
+	// The active cell + the roving (tab-entry) cell are tracked by STABLE identity
+	// (`row_id` from `keyOf`, plus column key), so they survive sort/reorder and a
+	// virtual-scroll remount. Per-cell async state is keyed by `${row_id}:${col_key}`
+	// (never row object identity — selection proxies, see `shallowEqual`).
+	interface CellRef {
+		row_id: string | number;
+		col_key: string;
+	}
+	interface CellEdit {
+		row_id: string | number;
+		col_key: string;
+		prev: unknown;
+		next: unknown;
+	}
+	let active_cell = $state<CellRef | null>(null);
+	let roving_cell = $state<CellRef | null>(null);
+	let cellOptimistic = $state(new Map<string, unknown>()); // draft shown while saving
+	let cellPending = $state(new Set<string>()); // async save in flight → spinner
+	let cellError = $state(new Map<string, string>()); // failed save → error ring + msg
+	let cellSaved = $state(new Set<string>()); // brief success flash
+	let undoStack: CellEdit[] = [];
+	let redoStack: CellEdit[] = [];
 
 	// ---- Virtual scrolling state ----
 	let wrapperEl = $state<HTMLDivElement | null>(null);
@@ -632,9 +760,16 @@
 		return { first, last, top_pad, bottom_pad, rows: flatRows.slice(first, last) };
 	});
 
+	// When a table is both reorderable and editable, every data cell is
+	// `data-no-drag` (a click edits it), so reordering needs an explicit grip handle
+	// in its own leading column.
+	const reorderGrip = $derived(
+		reorderable && editable && !group_by && !skeleton && data.length > 0,
+	);
+
 	// ---- Total columns count ----
 	const totalColumns = $derived(
-		columns.length + (selectable ? 1 : 0) + (expandable ? 1 : 0),
+		columns.length + (selectable ? 1 : 0) + (expandable ? 1 : 0) + (reorderGrip ? 1 : 0),
 	);
 
 	// ---- Grid track template ----
@@ -644,6 +779,7 @@
 	// every subgrid row stays aligned.
 	const gridTemplateColumns = $derived.by(() => {
 		const tracks: string[] = [];
+		if (reorderGrip) tracks.push('auto');
 		if (selectable) tracks.push('auto');
 		if (expandable) tracks.push('auto');
 		for (const col of columns) {
@@ -1016,12 +1152,14 @@
 			return;
 		}
 		const target = event.target as HTMLElement;
-		// Clicks on the checkbox, expand toggle, or a column-resize border are
-		// handled by those controls — never treat them as a row click.
+		// Clicks on the checkbox, expand toggle, a column-resize border, or an
+		// editable cell are handled by those controls — never treat them as a row
+		// click (so clicking a cell to edit doesn't also select/expand the row).
 		if (
 			target.closest('.dt-check-wrap') ||
 			target.closest('.expand-btn') ||
-			target.closest('.resize-handle')
+			target.closest('.resize-handle') ||
+			target.closest('.editable-cell')
 		) {
 			return;
 		}
@@ -1100,6 +1238,442 @@
 	// ---- Cell value access ----
 	function getCellValue(row: T, key: string): unknown {
 		return row[key];
+	}
+
+	// ============================================================
+	//  Inline editing
+	// ============================================================
+	const cellKey = (rowId: string | number, colKey: string) => `${rowId}:${colKey}`;
+
+	// Reactivity-safe Map/Set updates (plain Map/Set aren't deeply reactive in
+	// Svelte 5 — reassign a clone, matching `expandedRows`/`expandedHeights`).
+	function setMap<V>(m: Map<string, V>, k: string, v: V): Map<string, V> {
+		const n = new Map(m);
+		n.set(k, v);
+		return n;
+	}
+	function delMap<V>(m: Map<string, V>, k: string): Map<string, V> {
+		const n = new Map(m);
+		n.delete(k);
+		return n;
+	}
+	function addSet(s: Set<string>, k: string): Set<string> {
+		const n = new Set(s);
+		n.add(k);
+		return n;
+	}
+	function delSet(s: Set<string>, k: string): Set<string> {
+		const n = new Set(s);
+		n.delete(k);
+		return n;
+	}
+
+	function resolveEditable(col: Column<T>, row: T): boolean {
+		if (!editable) return false;
+		const e = col.editable;
+		if (e === undefined) return true;
+		if (typeof e === 'function') return e(row);
+		return e;
+	}
+	function editableColsFor(row: T): Column<T>[] {
+		if (!editable) return [];
+		return columns.filter((c) => resolveEditable(c, row));
+	}
+	function formatCell(col: Column<T>, value: unknown, row: T): string {
+		if (col.format) return col.format(value, row);
+		return value == null ? '' : String(value);
+	}
+	function editorTypeOf(col: Column<T>): string {
+		return typeof col.editor === 'string' ? col.editor : 'text';
+	}
+
+	// Ordered navigable rows for the active render mode. Group-header and expanded
+	// detail rows carry no editable cells, so flattening the data-row lists skips
+	// them automatically (we never navigate by DOM sibling order).
+	const navRows = $derived.by((): RenderRow[] => {
+		if (!editable) return [];
+		if (groupedData) {
+			const out: RenderRow[] = [];
+			for (const g of groupedData) {
+				if (collapsedGroups.has(g.key)) continue;
+				out.push(...g.rows);
+			}
+			return out;
+		}
+		return flatRows;
+	});
+
+	const activeKey = $derived(
+		active_cell ? cellKey(active_cell.row_id, active_cell.col_key) : null,
+	);
+
+	function isActiveCell(rowId: string | number, colKey: string): boolean {
+		return (
+			!!active_cell && active_cell.row_id === rowId && active_cell.col_key === colKey
+		);
+	}
+	function isRovingCell(rowId: string | number, colKey: string): boolean {
+		return (
+			!active_cell &&
+			!!roving_cell &&
+			roving_cell.row_id === rowId &&
+			roving_cell.col_key === colKey
+		);
+	}
+
+	// Keep `roving_cell` (the single tabbable entry point when idle) pointing at a
+	// real editable cell. Re-validates when the data/columns change.
+	$effect(() => {
+		if (!editable) return;
+		const valid =
+			roving_cell &&
+			navRows.some(
+				(r) =>
+					keyOf(r.row, r.data_index) === roving_cell!.row_id &&
+					editableColsFor(r.row).some((c) => c.key === roving_cell!.col_key),
+			);
+		if (valid) return;
+		const first = navRows[0];
+		const col = first && editableColsFor(first.row)[0];
+		roving_cell =
+			first && col
+				? { row_id: keyOf(first.row, first.data_index), col_key: col.key }
+				: null;
+	});
+
+	// Commit-and-scroll: when the active cell's row scrolls out of the virtual
+	// window it unmounts (the editor commits a dirty draft in its onDestroy), so
+	// drop the active state rather than leaving a stale editor reference.
+	$effect(() => {
+		if (!editable || !active_cell || !virtualActive) return;
+		const vw = virtualWindow;
+		if (!vw) return;
+		const pos = navRows.findIndex(
+			(r) => keyOf(r.row, r.data_index) === active_cell!.row_id,
+		);
+		if (pos < 0) return;
+		const vi = navRows[pos].visual_index;
+		if (vi < vw.first || vi >= vw.last) active_cell = null;
+	});
+
+	function navPosition(
+		ref: CellRef,
+	): { row: number; col: number; cols: Column<T>[] } | null {
+		const rowPos = navRows.findIndex((r) => keyOf(r.row, r.data_index) === ref.row_id);
+		if (rowPos < 0) return null;
+		const cols = editableColsFor(navRows[rowPos].row);
+		const colPos = cols.findIndex((c) => c.key === ref.col_key);
+		if (colPos < 0) return null;
+		return { row: rowPos, col: colPos, cols };
+	}
+	function isFirstNavCell(ref: CellRef): boolean {
+		const p = navPosition(ref);
+		return !!p && p.row === 0 && p.col === 0;
+	}
+	function isLastNavCell(ref: CellRef): boolean {
+		const p = navPosition(ref);
+		return !!p && p.row === navRows.length - 1 && p.col === p.cols.length - 1;
+	}
+
+	function enterEdit(rowId: string | number, colKey: string) {
+		if (!editable) return;
+		active_cell = { row_id: rowId, col_key: colKey };
+		roving_cell = { row_id: rowId, col_key: colKey };
+	}
+	// Identity-guarded: only clears when the cell that asked to exit is still active,
+	// so the blur that fires during a cell→cell navigation can't cancel the move.
+	function exitEdit(rowId: string | number, colKey: string) {
+		if (isActiveCell(rowId, colKey)) active_cell = null;
+	}
+
+	function navigate(dir: 'up' | 'down' | 'left' | 'right' | 'next' | 'prev') {
+		if (!active_cell) return;
+		const p = navPosition(active_cell);
+		if (!p) return;
+		let nr = p.row;
+		let nc = p.col;
+		switch (dir) {
+			case 'up':
+				nr = Math.max(0, p.row - 1);
+				break;
+			case 'down':
+				nr = Math.min(navRows.length - 1, p.row + 1);
+				break;
+			case 'left':
+				nc = Math.max(0, p.col - 1);
+				break;
+			case 'right':
+				nc = Math.min(p.cols.length - 1, p.col + 1);
+				break;
+			case 'next':
+				if (p.col < p.cols.length - 1) nc = p.col + 1;
+				else if (p.row < navRows.length - 1) {
+					nr = p.row + 1;
+					nc = 0;
+				}
+				break;
+			case 'prev':
+				if (p.col > 0) nc = p.col - 1;
+				else if (p.row > 0) {
+					nr = p.row - 1;
+					nc = editableColsFor(navRows[p.row - 1].row).length - 1;
+				}
+				break;
+		}
+		const targetRow = navRows[nr];
+		if (!targetRow) return;
+		const targetCols = editableColsFor(targetRow.row);
+		const targetCol = targetCols[Math.min(nc, targetCols.length - 1)];
+		if (!targetCol) return;
+		const ref = {
+			row_id: keyOf(targetRow.row, targetRow.data_index),
+			col_key: targetCol.key,
+		};
+		active_cell = ref;
+		roving_cell = ref;
+		scrollActiveIntoView(targetRow.visual_index);
+		focusActiveCell();
+	}
+
+	async function scrollActiveIntoView(visualIndex: number) {
+		if (!virtualActive) return;
+		await tick();
+		const el = tableEl?.querySelector(
+			`tbody tr.row[data-row-index="${visualIndex}"]`,
+		) as HTMLElement | null;
+		el?.scrollIntoView({ block: 'nearest' });
+	}
+
+	function findRowById(id: string | number): { row: T; index: number } | null {
+		for (let i = 0; i < data.length; i++) {
+			if (keyOf(data[i], i) === id) return { row: data[i], index: i };
+		}
+		return null;
+	}
+
+	// Per-keystroke notification (not a commit).
+	function liveInput(
+		rowId: string | number,
+		colKey: string,
+		row: T,
+		index: number,
+		col: Column<T>,
+		value: unknown,
+	) {
+		(col.oninput ?? oncellinput)?.({
+			value,
+			previous: getCellValue(row, colKey),
+			row,
+			index,
+			column: col,
+			key: colKey,
+		});
+	}
+
+	// Commit a (validated, changed) value: optimistic override + fire onedit, then
+	// track pending/saved/error so the display cell can show a spinner / ring / check.
+	function applyEdit(
+		rowId: string | number,
+		colKey: string,
+		row: T,
+		index: number,
+		col: Column<T>,
+		next: unknown,
+		previous: unknown,
+	) {
+		const key = cellKey(rowId, colKey);
+		cellError = delMap(cellError, key);
+		cellOptimistic = setMap(cellOptimistic, key, next);
+		const handler = col.onedit ?? oncelledit;
+		let result: void | Promise<void>;
+		try {
+			result = handler?.({ value: next, previous, row, index, column: col, key: colKey });
+		} catch (err) {
+			handleEditError(key, err);
+			return;
+		}
+		if (result instanceof Promise) {
+			cellPending = addSet(cellPending, key);
+			result
+				.then(() => {
+					cellPending = delSet(cellPending, key);
+					flashSaved(key);
+					clearOptimistic(key);
+				})
+				.catch((err) => {
+					cellPending = delSet(cellPending, key);
+					handleEditError(key, err);
+				});
+		} else {
+			flashSaved(key);
+			clearOptimistic(key);
+		}
+	}
+
+	async function clearOptimistic(key: string) {
+		// Let the parent's reactive `data` update flush first, so the cell never
+		// flickers old → new → old.
+		await tick();
+		cellOptimistic = delMap(cellOptimistic, key);
+	}
+	function flashSaved(key: string) {
+		cellSaved = addSet(cellSaved, key);
+		setTimeout(() => {
+			cellSaved = delSet(cellSaved, key);
+		}, 1100);
+	}
+	function handleEditError(key: string, err: unknown) {
+		const msg =
+			err instanceof Error ? err.message : typeof err === 'string' ? err : 'Save failed';
+		cellError = setMap(cellError, key, msg);
+		// Keep the optimistic value so the user's input stays visible for a retry.
+	}
+
+	// Called by the editor when a changed value is committed.
+	function commitCell(
+		rowId: string | number,
+		colKey: string,
+		row: T,
+		index: number,
+		col: Column<T>,
+		next: unknown,
+	) {
+		const previous = getCellValue(row, colKey);
+		if (Object.is(next, previous)) return;
+		undoStack.push({ row_id: rowId, col_key: colKey, prev: previous, next });
+		if (undoStack.length > 100) undoStack.shift();
+		redoStack = [];
+		applyEdit(rowId, colKey, row, index, col, next, previous);
+	}
+
+	function replayEdit(edit: CellEdit, value: unknown) {
+		const key = cellKey(edit.row_id, edit.col_key);
+		if (cellPending.has(key)) return false; // serialize per cell — skip while busy
+		const found = findRowById(edit.row_id);
+		const col = columns.find((c) => c.key === edit.col_key);
+		if (!found || !col) return false;
+		applyEdit(
+			edit.row_id,
+			edit.col_key,
+			found.row,
+			found.index,
+			col,
+			value,
+			getCellValue(found.row, edit.col_key),
+		);
+		return true;
+	}
+	function undoEdit() {
+		const edit = undoStack[undoStack.length - 1];
+		if (!edit) return;
+		if (replayEdit(edit, edit.prev)) {
+			undoStack.pop();
+			redoStack.push(edit);
+		}
+	}
+	function redoEdit() {
+		const edit = redoStack[redoStack.length - 1];
+		if (!edit) return;
+		if (replayEdit(edit, edit.next)) {
+			redoStack.pop();
+			undoStack.push(edit);
+		}
+	}
+	function tableKeydown(e: KeyboardEvent) {
+		if (!editable || !(e.ctrlKey || e.metaKey)) return;
+		const k = e.key.toLowerCase();
+		if (k === 'z' && !e.shiftKey) {
+			e.preventDefault();
+			undoEdit();
+		} else if ((k === 'z' && e.shiftKey) || k === 'y') {
+			e.preventDefault();
+			redoEdit();
+		}
+	}
+
+	// Click into a cell to edit it (and don't let the click toggle row selection /
+	// expansion — see the `handleRowClick` guard). Boolean cells are handled by their
+	// own always-present button (`toggleBooleanCell`), not here.
+	function handleCellClick(e: MouseEvent, rowId: string | number, colKey: string) {
+		if (!editable) return;
+		const target = e.target as HTMLElement;
+		if (target.closest('.resize-handle')) return;
+		e.stopPropagation();
+		if (!isActiveCell(rowId, colKey)) enterEdit(rowId, colKey);
+	}
+
+	// Boolean cells render a persistent button (never swapped for a text editor), so
+	// a single click toggles them — focusing-then-mounting an editor would remove the
+	// click's target node and the browser would swallow the click.
+	function currentCellValue(rowId: string | number, colKey: string, row: T): unknown {
+		const key = cellKey(rowId, colKey);
+		return cellOptimistic.has(key) ? cellOptimistic.get(key) : getCellValue(row, colKey);
+	}
+	function toggleBooleanCell(
+		rowId: string | number,
+		col: Column<T>,
+		row: T,
+		index: number,
+	) {
+		if (!isActiveCell(rowId, col.key)) enterEdit(rowId, col.key);
+		const cur = !!currentCellValue(rowId, col.key, row);
+		commitCell(rowId, col.key, row, index, col, !cur);
+	}
+	function booleanCellKeydown(
+		e: KeyboardEvent,
+		rowId: string | number,
+		col: Column<T>,
+		row: T,
+		index: number,
+	) {
+		if (e.isComposing) return;
+		const ref: CellRef = { row_id: rowId, col_key: col.key };
+		switch (e.key) {
+			case ' ':
+				e.preventDefault();
+				toggleBooleanCell(rowId, col, row, index);
+				break;
+			case 'Enter':
+				e.preventDefault();
+				navigate('down');
+				break;
+			case 'ArrowUp':
+				e.preventDefault();
+				navigate('up');
+				break;
+			case 'ArrowDown':
+				e.preventDefault();
+				navigate('down');
+				break;
+			case 'ArrowLeft':
+				e.preventDefault();
+				navigate('left');
+				break;
+			case 'ArrowRight':
+				e.preventDefault();
+				navigate('right');
+				break;
+			case 'Tab':
+				if ((!e.shiftKey && isLastNavCell(ref)) || (e.shiftKey && isFirstNavCell(ref)))
+					return;
+				e.preventDefault();
+				navigate(e.shiftKey ? 'prev' : 'next');
+				break;
+			case 'Escape':
+				e.preventDefault();
+				exitEdit(rowId, col.key);
+				break;
+		}
+	}
+
+	// After a keyboard move, focus the active cell's control. Text cells autofocus
+	// their editor on mount; boolean buttons need an explicit focus.
+	async function focusActiveCell() {
+		await tick();
+		const el = tableEl?.querySelector(
+			'td.cell-active .cell-input, td.cell-active .cell-checkbox',
+		) as HTMLElement | null;
+		el?.focus();
 	}
 
 	// ---- Aria sort ----
@@ -1266,7 +1840,12 @@
 			draggedVis = [visualIndex];
 		}
 
-		const grabbedRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		// Measure the row itself — the gesture may have started on the grip cell
+		// (editable + reorderable) rather than the whole <tr>.
+		const grabbedEl =
+			(e.currentTarget as HTMLElement).closest('tr.row') ??
+			(e.currentTarget as HTMLElement);
+		const grabbedRect = grabbedEl.getBoundingClientRect();
 		const draggedRows = draggedVis.map((vi) => flatRows[vi].row);
 
 		drag = {
@@ -1837,8 +2416,10 @@
 		<!-- svelte-ignore a11y_mouse_events_have_key_events -->
 		<table
 			role="grid"
+			class:editable
 			bind:this={tableEl}
 			onmouseover={resizable ? onResizeHover : undefined}
+			onkeydown={editable ? tableKeydown : undefined}
 			style:grid-template-columns={gridTemplateColumns}>
 			<!-- The CSS `display` override (grid/subgrid) strips the implicit ARIA
 			     roles of the native table elements, so they are restored explicitly.
@@ -1847,6 +2428,9 @@
 			<thead>
 				<!-- svelte-ignore a11y_no_redundant_roles -->
 				<tr role="row" class:sticky={sticky_header}>
+					{#if reorderGrip}
+						<th class="grip-cell" role="columnheader" aria-label="Reorder"></th>
+					{/if}
 					{#if selectable}
 						<th class="checkbox-cell" role="columnheader">
 							<div
@@ -2119,6 +2703,23 @@
 			aria-hidden="true">
 			{#each overlayRows as { row, data_index } (data_index)}
 				<div class="ghost-row">
+					{#if reorderGrip}
+						<div class="ghost-cell grip-cell">
+							<svg
+								class="grip-dots"
+								viewBox="0 0 10 16"
+								width="10"
+								height="16"
+								aria-hidden="true">
+								<circle cx="2.5" cy="3" r="1.2" />
+								<circle cx="7.5" cy="3" r="1.2" />
+								<circle cx="2.5" cy="8" r="1.2" />
+								<circle cx="7.5" cy="8" r="1.2" />
+								<circle cx="2.5" cy="13" r="1.2" />
+								<circle cx="7.5" cy="13" r="1.2" />
+							</svg>
+						</div>
+					{/if}
 					{#if selectable}
 						<div class="ghost-cell checkbox-cell">
 							<span class="dt-check-wrap" class:checked={isSelectedIndex(data_index)}>
@@ -2205,10 +2806,32 @@
 		onmouseenter={() => {
 			if (selectable) hoverIndex = visualIndex;
 		}}
-		onpointerdown={reorderActive
+		onpointerdown={reorderActive && !reorderGrip
 			? (e) => onRowPointerDown(e, dataIndex, visualIndex)
 			: undefined}
-		{@attach ripple({ enabled: rowClickable })}>
+		{@attach ripple({ enabled: rowClickable && !editable })}>
+		{#if reorderGrip}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<td
+				class="grip-cell"
+				role="gridcell"
+				aria-label="Drag to reorder row {dataIndex + 1}"
+				onpointerdown={(e) => onRowPointerDown(e, dataIndex, visualIndex)}>
+				<svg
+					class="grip-dots"
+					viewBox="0 0 10 16"
+					width="10"
+					height="16"
+					aria-hidden="true">
+					<circle cx="2.5" cy="3" r="1.2" />
+					<circle cx="7.5" cy="3" r="1.2" />
+					<circle cx="2.5" cy="8" r="1.2" />
+					<circle cx="7.5" cy="8" r="1.2" />
+					<circle cx="2.5" cy="13" r="1.2" />
+					<circle cx="7.5" cy="13" r="1.2" />
+				</svg>
+			</td>
+		{/if}
 		{#if selectable}
 			<td class="checkbox-cell" role="gridcell">
 				<div
@@ -2261,17 +2884,115 @@
 			</td>
 		{/if}
 		{#each columns as col, ci (col.key)}
+			{@const rowId = keyOf(row, dataIndex)}
+			{@const editableCell = resolveEditable(col, row)}
+			{@const isBoolCol = editableCell && editorTypeOf(col) === 'boolean'}
+			{@const ckey = cellKey(rowId, col.key)}
+			{@const active = isActiveCell(rowId, col.key)}
+			{@const dispVal = cellOptimistic.has(ckey)
+				? cellOptimistic.get(ckey)
+				: getCellValue(row, col.key)}
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<td
 				style={getColumnStyle(col)}
 				role="gridcell"
 				class:col-resizing={resizing?.column_key === col.key}
-				class:col-hover={hoveredResizeKey === col.key}>
-				{#if col.cell}
-					{@render col.cell({ value: getCellValue(row, col.key), row, index: dataIndex })}
+				class:col-hover={hoveredResizeKey === col.key}
+				class:editable-cell={editableCell}
+				class:cell-active={active}
+				class:cell-error={cellError.has(ckey)}
+				data-no-drag={editableCell ? '' : undefined}
+				tabindex={editableCell && !isBoolCol && !active
+					? isRovingCell(rowId, col.key)
+						? 0
+						: -1
+					: undefined}
+				onclick={editableCell && !isBoolCol
+					? (e) => handleCellClick(e, rowId, col.key)
+					: undefined}
+				onfocus={editableCell && !isBoolCol && !active
+					? () => enterEdit(rowId, col.key)
+					: undefined}>
+				{#if isBoolCol}
+					<!-- A persistent button (never swapped for an editor), so a single click
+					     toggles it. Fills the cell so a click anywhere in it counts. -->
+					<button
+						type="button"
+						class="cell-checkbox"
+						role="switch"
+						aria-checked={!!dispVal}
+						aria-label={col.label}
+						tabindex={active || isRovingCell(rowId, col.key) ? 0 : -1}
+						onclick={(e) => {
+							e.stopPropagation();
+							toggleBooleanCell(rowId, col, row, dataIndex);
+						}}
+						onkeydown={(e) => booleanCellKeydown(e, rowId, col, row, dataIndex)}
+						onfocus={() => enterEdit(rowId, col.key)}>
+						<span
+							class="cell-bool ds-checkmark"
+							class:checked={!!dispVal}
+							aria-hidden="true">
+							<svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+								<rect
+									class="box"
+									x="2"
+									y="2"
+									width="20"
+									height="20"
+									rx="3"
+									stroke-width="2" />
+								<path
+									class="check"
+									d="M6 12.5 L10 16.5 L18 8"
+									stroke-width="2.5"
+									stroke-linecap="round"
+									stroke-linejoin="round" />
+							</svg>
+						</span>
+					</button>
+				{:else if active}
+					{#key activeKey}
+						<TableCellEditor
+							column={col}
+							{row}
+							index={dataIndex}
+							value={dispVal}
+							errorMessage={cellError.get(ckey)}
+							{dense}
+							{comfortable}
+							isFirstCell={isFirstNavCell({ row_id: rowId, col_key: col.key })}
+							isLastCell={isLastNavCell({ row_id: rowId, col_key: col.key })}
+							oncommit={(d) => commitCell(rowId, col.key, row, dataIndex, col, d.value)}
+							onliveinput={(d) => liveInput(rowId, col.key, row, dataIndex, col, d.value)}
+							onnavigate={(d) => navigate(d.dir)}
+							onexit={() => exitEdit(rowId, col.key)} />
+					{/key}
+				{:else if col.cell}
+					{@render col.cell({ value: dispVal, row, index: dataIndex })}
 				{:else}
-					<span class="cell-text">{getCellValue(row, col.key) ?? ''}</span>
+					<span class="cell-text">{formatCell(col, dispVal, row)}</span>
 				{/if}
-				{#if resizable}
+				{#if editableCell && !isBoolCol && cellPending.has(ckey)}
+					<span class="cell-status pending" aria-label="Saving">
+						<Progress size="00" color="currentColor" />
+					</span>
+				{:else if editableCell && !isBoolCol && cellSaved.has(ckey)}
+					<span class="cell-status saved" aria-hidden="true">
+						<svg viewBox="0 0 18 18" width="16" height="16">
+							<path
+								d="M4 9.5l3.2 3.2L14 5.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2.75"
+								stroke-linecap="round"
+								stroke-linejoin="round" />
+						</svg>
+					</span>
+				{/if}
+				{#if resizable && !active}
 					{#if ci > 0}
 						<!-- Left-edge zone: resizes the PREVIOUS column, covering the RIGHT
 						     side of that border. Body cells are `overflow: hidden` for text
@@ -2921,15 +3642,17 @@
 	}
 
 	/* Hover: a touch stronger than the stripe tint so it still reads clearly when
-	   hovering a striped row. Snapped in (see the ::before rule), eased out. */
-	tbody tr.row:hover {
+	   hovering a striped row. Snapped in (see the ::before rule), eased out.
+	   Suppressed in `editable` tables, which tint the hovered CELL instead (the
+	   `:where()` keeps specificity identical so the resting tints still resolve). */
+	:where(table:not(.editable)) tbody tr.row:hover {
 		--row-bg: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.06),
 			rgb(from var(--color-text, #fff) r g b / 0.08)
 		);
 	}
 
-	tbody tr.row.selected:hover {
+	:where(table:not(.editable)) tbody tr.row.selected:hover {
 		--row-bg: light-dark(
 			rgb(from var(--color-action, #1976d2) r g b / 0.17),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.24)
@@ -2949,6 +3672,178 @@
 	tbody tr.row.selected:hover::before,
 	tbody tr.row.preview::before {
 		transition: none;
+	}
+
+	/* ========== Inline editing ========== */
+	/* Editable rows don't clip — so the active-cell ring, the validation tooltip,
+	   and the autocomplete popover aren't cut off by the row's overflow. */
+	.editable tbody tr.row {
+		overflow: visible;
+	}
+
+	/* Editable mode replaces the row-level press feedback with per-cell editing, so
+	   drop the clickable press scale (the ripple is disabled in markup). Row-level
+	   selection/expand still work via the checkbox / grip controls. */
+	.editable tbody tr.row.clickable {
+		cursor: default;
+	}
+	.editable tbody tr.row.clickable:active {
+		translate: none;
+		scale: 1;
+	}
+
+	/* Per-cell hover affordance (replaces the row hover in editable tables). The
+	   `td` base rule already eases `background-color` out; `:hover` drops it from
+	   the transition so the tint snaps in (see packages/components/CLAUDE.md). */
+	.editable td.editable-cell {
+		cursor: cell;
+	}
+	.editable td.editable-cell:hover {
+		background-color: light-dark(
+			rgb(from var(--color-text, #000) r g b / 0.05),
+			rgb(from var(--color-text, #fff) r g b / 0.07)
+		);
+		transition: none;
+	}
+
+	/* The active cell: a crisp focus ring and an opaque background so the editor
+	   reads cleanly over any stripe/selected tint. Kept below the sticky header
+	   (z-index 2) and the resize wash (z-index 4). */
+	.editable td.cell-active {
+		z-index: 1;
+		background-color: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
+		box-shadow: inset 0 0 0 2px var(--color-action, #1976d2);
+		/* The ring snaps in; the cell hover/wash still eases via the base td rule. */
+		transition: none;
+	}
+	/* A failed async save (or blocked validation) outlines the cell in the error
+	   colour — wins over the active ring. */
+	.editable td.cell-error,
+	.editable td.cell-active.cell-error {
+		box-shadow: inset 0 0 0 2px var(--color-error, #dc2626);
+	}
+
+	/* Save status badges on the resting cell (survive the editor unmounting). */
+	.cell-status {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		margin-left: auto;
+		padding-left: 0.1rem;
+		flex-shrink: 0;
+		width: 1.5em;
+		height: 1.5em;
+	}
+	.cell-status.pending {
+		color: var(--color-action, #1976d2);
+	}
+	.cell-status.saved {
+		color: var(--color-success, #16a34a);
+		animation: cell-saved-pop 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+	.cell-status.saved svg {
+		width: 100%;
+		height: 100%;
+		stroke-width: 2.75;
+	}
+	@keyframes cell-saved-pop {
+		from {
+			transform: scale(0.3);
+			opacity: 0;
+		}
+	}
+
+	/* Boolean cell button — fills the whole cell (it's `position: relative`), so a
+	   single click anywhere toggles. Always present (never swapped for an editor),
+	   which is what makes the first click register. */
+	.cell-checkbox {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		perspective: 120px;
+	}
+	.cell-checkbox:focus-visible {
+		outline: none;
+	}
+	/* Press feedback matching the Checkbox component: the indicator presses down and
+	   scales in snappily (80ms), then eases back. A click anywhere in the cell
+	   triggers it since the button fills the cell. */
+	.cell-checkbox .ds-checkmark {
+		transition: transform 150ms ease;
+	}
+	.cell-checkbox:active .ds-checkmark {
+		transform: translateY(3px) scale(0.9);
+		transition: transform 80ms ease;
+	}
+
+	/* Boolean indicator — matches the Checkbox component (and the editor's in-cell
+	   toggle): accent-filled box with a drawn checkmark. */
+	.cell-bool {
+		display: inline-flex;
+		flex-shrink: 0;
+		line-height: 0;
+	}
+	.cell-bool .box {
+		stroke: light-dark(
+			var(--color-text-disabled, #999),
+			var(--color-text-disabled, #777)
+		);
+		fill: transparent;
+		transition:
+			stroke 150ms ease,
+			fill 150ms ease;
+	}
+	.cell-bool .check {
+		stroke: transparent;
+		fill: none;
+		stroke-dasharray: 28;
+		stroke-dashoffset: 28;
+		transition:
+			stroke-dashoffset 250ms ease,
+			stroke 150ms ease;
+	}
+	.cell-bool.checked .box {
+		stroke: var(--color-accent, #1976d2);
+		fill: var(--color-accent, #1976d2);
+	}
+	.cell-bool.checked .check {
+		stroke: var(--color-accent-text, #fff);
+		stroke-dashoffset: 0;
+	}
+
+	/* Reorder grip column (only when reorderable + editable). */
+	.grip-cell {
+		justify-content: center;
+		align-items: center;
+		padding-left: 0.25rem !important;
+		padding-right: 0.25rem !important;
+		cursor: grab;
+		touch-action: none;
+		color: light-dark(var(--color-text-muted, #9ca3af), var(--color-text-muted, #6b7280));
+		transition: color 200ms ease;
+	}
+	.grip-cell:hover {
+		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+		transition: none;
+	}
+	.grip-cell:active {
+		cursor: grabbing;
+	}
+	.grip-dots {
+		fill: currentColor;
+		display: block;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.cell-status.saved {
+			animation: none;
+		}
 	}
 
 	/* ========== Checkbox (mirrors the Checkbox component) ========== */

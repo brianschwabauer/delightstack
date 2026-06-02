@@ -1,6 +1,6 @@
 ---
 title: Table
-description: A full-featured data table with sorting, row selection, custom cell rendering, column resizing, row grouping, expandable rows, and CSV/JSON export.
+description: A full-featured data table with sorting, row selection, inline cell editing, custom cell rendering, column resizing, row grouping, expandable rows, and CSV/JSON export.
 ---
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
@@ -14,6 +14,7 @@ import TableSkeletonDemo from '../../../../components/demos/TableSkeletonDemo.sv
 import TableVirtualDemo from '../../../../components/demos/TableVirtualDemo.svelte';
 import TableReorderDemo from '../../../../components/demos/TableReorderDemo.svelte';
 import TableResizableDemo from '../../../../components/demos/TableResizableDemo.svelte';
+import TableEditableDemo from '../../../../components/demos/TableEditableDemo.svelte';
 
 ## Import
 
@@ -293,6 +294,80 @@ ${'  '}oncolumnresize={(e) => console.log(e.column, e.width)}
   <TableResizableDemo client:load />
 </ComponentPreview>
 
+### Editable Cells
+
+Set `editable` to turn the table into a spreadsheet-style editor. Click a cell (or
+**Tab** into the grid) and it opens an inline editor immediately. Hover highlights the
+**cell** rather than the whole row, signalling that each cell is clickable.
+
+**Keyboard:** **↑ / ↓** move between rows, **Tab / Shift+Tab** move between cells
+(wrapping rows), **Enter** saves and moves down, **← / →** move the caret and jump to
+the neighbouring cell at the text edge, and **Esc** reverts. **Ctrl/⌘+Z** and
+**Ctrl/⌘+Y** undo and redo edits.
+
+Each column configures its own editor and callbacks:
+
+- **`editor`** — `'text'` (default), `'number'`, `'select'`, `'boolean'`, `'date'`, or a
+  custom editor `Snippet`.
+- **`onedit`** — fires when a cell is committed (Enter or blur) and the value changed. If
+  it returns a **Promise**, the cell shows a loading spinner while it resolves (then a
+  success check); if it rejects, the cell keeps your value and shows an error ring so you
+  can retry — just like the `Button` component.
+- **`oninput`** — fires on every keystroke (not a commit).
+- **`options` / `onautocomplete`** — show an autocomplete popover (like `Input`). `options`
+  is a static list filtered by the current value; `onautocomplete(ctx)` returns results
+  (or a Promise of them) dynamically, debounced 300ms.
+- **`validate`** — return an error message to block the commit and ring the cell.
+- **`parse` / `format`** — convert between the editor string and your stored value.
+
+The table is **controlled**: editing fires `onedit` and your handler updates `data` (an
+optimistic value is shown while an async save runs). Editing composes with `selectable`,
+`reorderable` (a drag grip appears so a cell click still edits), `virtual_scroll`,
+`sortable`, and `group_by`. Opt a column out with `editable: false`.
+
+<ComponentPreview code={`<script>
+${'  '}import { Table } from '@delightstack/components';
+
+${'  '}let people = $state([
+${'  '}${'  '}{ id: 1, name: 'Alice Johnson', age: 30, role: 'Admin', active: true },
+${'  '}${'  '}{ id: 2, name: 'Bob Smith', age: 25, role: 'Editor', active: false },
+${'  '}${'  '}{ id: 3, name: 'Carol White', age: 35, role: 'Viewer', active: true },
+${'  '}]);
+
+${'  '}const set = (row, key, value) => (row[key] = value);
+</script>
+
+<Table
+${'  '}data={people}
+${'  '}row_key="id"
+${'  '}editable
+${'  '}columns={[
+${'  '}${'  '}{
+${'  '}${'  '}${'  '}key: 'name', label: 'Name', minWidth: '180px',
+${'  '}${'  '}${'  '}options: ['Bob Smith', 'Bob Smithsonian', 'Bob Schmidt'],
+${'  '}${'  '}${'  '}// async save → in-cell spinner, then a success check
+${'  '}${'  '}${'  '}onedit: ({ row, value }) =>
+${'  '}${'  '}${'  '}${'  '}new Promise((r) => setTimeout(() => { set(row, 'name', value); r(); }, 800)),
+${'  '}${'  '}},
+${'  '}${'  '}{
+${'  '}${'  '}${'  '}key: 'age', label: 'Age', width: '90px', align: 'right', editor: 'number',
+${'  '}${'  '}${'  '}validate: (v) => (v >= 0 && v <= 120 ? null : 'Enter 0–120'),
+${'  '}${'  '}${'  '}onedit: ({ row, value }) => set(row, 'age', value),
+${'  '}${'  '}},
+${'  '}${'  '}{
+${'  '}${'  '}${'  '}key: 'role', label: 'Role', editor: 'select',
+${'  '}${'  '}${'  '}options: ['Admin', 'Editor', 'Viewer'],
+${'  '}${'  '}${'  '}onedit: ({ row, value }) => set(row, 'role', value),
+${'  '}${'  '}},
+${'  '}${'  '}{
+${'  '}${'  '}${'  '}key: 'active', label: 'Active', width: '90px', align: 'center', editor: 'boolean',
+${'  '}${'  '}${'  '}onedit: ({ row, value }) => set(row, 'active', value),
+${'  '}${'  '}},
+${'  '}]}
+/>`}>
+  <TableEditableDemo client:load />
+</ComponentPreview>
+
 ### Skeleton Loading
 
 <ComponentPreview code={`<Table
@@ -328,6 +403,7 @@ ${'  '}data={[]}
 | `reorderable` | `boolean` | `false` | Enable drag-to-reorder rows (see [Reorderable Rows](#reorderable-rows)) |
 | `virtual_scroll` | `boolean \| VirtualScrollOptions` | `false` | Window rows for large datasets — `true` for defaults, or an options object (see [Virtual Scrolling](#virtual-scrolling)) |
 | `group_by` | `string` | - | Column key to group rows by |
+| `editable` | `boolean` | `false` | Enable inline cell editing (see [Editable Cells](#editable-cells)) |
 | `exportable` | `boolean` | `false` | Enable CSV/JSON export functionality |
 | `skeleton` | `boolean` | `false` | Show loading skeleton rows |
 | `skeleton_count` | `number` | `5` | Number of skeleton rows |
@@ -347,6 +423,12 @@ ${'  '}data={[]}
 | `onreorderstart` | `{ from: number[] }` | A reorder drag began (rows lifted) |
 | `ondrop` | `{ from: number[], to: number }` | Rows released — fires when the drop animation begins |
 | `onreorder` | `{ from: number[], to: number, oldData: T[], newData: T[] }` | Reorder committed — fires after the drop animation finishes; assign `newData` to your `data` |
+| `oncelledit` | `CellEditContext<T>` | Table-wide commit handler — fires when a cell with no own `column.onedit` is edited. May return a Promise (→ in-cell spinner) |
+| `oncellinput` | `CellEditContext<T>` | Table-wide per-keystroke handler — fallback when a column has no own `column.oninput` |
+
+Most editing callbacks live on the column (`onedit`, `oninput`, `onautocomplete`,
+`validate`); `oncelledit` / `oncellinput` are table-wide fallbacks for a single shared
+handler. See [Editable Cells](#editable-cells).
 
 ## Types
 
@@ -362,6 +444,37 @@ interface Column<T> {
   align?: 'left' | 'center' | 'right';
   cell?: Snippet<[{ value: unknown; row: T; index: number }]>;
   header?: Snippet<[{ column: Column<T> }]>;
+
+  // Inline editing (active only when the Table's `editable` prop is on)
+  editable?: boolean | ((row: T) => boolean); // per-column override / per-cell predicate
+  editor?: 'text' | 'number' | 'select' | 'boolean' | 'date'
+    | Snippet<[CellEditorContext<T>]>;        // a Snippet is a custom editor
+  options?: CellOption[] | string[];          // static autocomplete / select options
+  onautocomplete?: (ctx: CellAutocompleteContext<T>)
+    => CellOption[] | Promise<CellOption[]>;  // dynamic options (debounced 300ms)
+  oninput?: (ctx: CellEditContext<T>) => void;           // per keystroke
+  onedit?: (ctx: CellEditContext<T>) => void | Promise<void>; // commit (Promise → spinner)
+  validate?: (value: unknown, row: T, index: number)
+    => string | null | Promise<string | null>; // error message blocks the commit
+  parse?: (raw: string, row: T) => unknown;   // editor string → stored value
+  format?: (value: unknown, row: T) => string; // stored value → display string
+  placeholder?: string;
+}
+
+interface CellOption {
+  value: string;
+  label?: string;
+  description?: string;
+  disabled?: boolean;
+}
+
+interface CellEditContext<T> {
+  value: unknown;    // the committed (parsed) value, or the live value for oninput
+  previous: unknown; // the prior stored value
+  row: T;
+  index: number;
+  column: Column<T>;
+  key: string;       // the edited column's key
 }
 ```
 
