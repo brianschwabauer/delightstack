@@ -232,6 +232,29 @@
 		onchange?.({ value });
 	}
 
+	/**
+	 * Out transition for a chip. A plain `out:scale` keeps the leaving chip in
+	 * the layout for the whole outro, so the surviving chips don't reflow into
+	 * the gap until it finishes — `animate:flip` then measures no movement and
+	 * they snap. Pinning the chip with `position: absolute` at its current spot
+	 * pulls it out of flow immediately, so the others reflow now and flip slides
+	 * them while this one scales + fades in place (same look as `out:scale`).
+	 */
+	function chipOut(node: HTMLElement, { duration = 150 } = {}) {
+		const { offsetLeft, offsetTop, offsetWidth, offsetHeight } = node;
+		node.style.position = 'absolute';
+		node.style.left = `${offsetLeft}px`;
+		node.style.top = `${offsetTop}px`;
+		node.style.width = `${offsetWidth}px`;
+		node.style.height = `${offsetHeight}px`;
+		node.style.pointerEvents = 'none';
+		return {
+			duration,
+			easing: quintOut,
+			css: (t: number) => `opacity: ${t}; transform: scale(${0.6 + 0.4 * t});`,
+		};
+	}
+
 	/** Clear the value entirely */
 	function clearValue(e: Event) {
 		e.stopPropagation();
@@ -660,7 +683,7 @@
 					<span
 						class="select-chip"
 						in:scale={{ duration: 200, start: 0.6, easing: backOut }}
-						out:scale={{ duration: 150, start: 0.6, easing: quintOut }}
+						out:chipOut={{ duration: 150 }}
 						animate:flip={{ duration: 150, easing: quintOut }}>
 						<span>{opt.label}</span>
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -1473,6 +1496,18 @@
 	.select-option.selected {
 		color: var(--_border-focus);
 		font-weight: 600;
+		/* A subtle tint — the same fill as :hover, at reduced opacity — so the
+		   current selection reads as highlighted at rest without competing with
+		   the full-strength hover/keyboard feedback. */
+		background: color-mix(in oklch, var(--_panel-hover) 50%, transparent);
+	}
+	/* A hovered/highlighted selected row still gets the full-strength fill, so
+	   pointing at the current selection gives the same feedback as any other
+	   row. These win over the subtle .selected tint by specificity; the
+	   snap-in/ease-out timing is still governed by the :hover rule above. */
+	.select-option.selected:hover,
+	.select-option.selected.highlighted {
+		background: var(--_panel-hover);
 	}
 	.select-option.disabled {
 		opacity: 0.5;

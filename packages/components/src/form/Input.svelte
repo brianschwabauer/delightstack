@@ -25,6 +25,9 @@
 <script lang="ts">
 	import { tooltip } from '@delightstack/utilities';
 	import { getContext, type Component, type Snippet } from 'svelte';
+	import { scale } from 'svelte/transition';
+	import { flip } from 'svelte/animate';
+	import { backOut, quintOut } from 'svelte/easing';
 	import type { FormContext } from './Form.svelte';
 	import Button from '../actions/Button.svelte';
 	import List from '../display/List.svelte';
@@ -727,6 +730,29 @@
 		onchange?.({ value });
 	}
 
+	/**
+	 * Out transition for a chip. A plain `out:scale` keeps the leaving chip in
+	 * the layout for the whole outro, so the surviving chips don't reflow into
+	 * the gap until it finishes — `animate:flip` then measures no movement and
+	 * they snap. Pinning the chip with `position: absolute` at its current spot
+	 * pulls it out of flow immediately, so the others reflow now and flip slides
+	 * them while this one scales + fades in place (same look as `out:scale`).
+	 */
+	function chipOut(node: HTMLElement, { duration = 150 } = {}) {
+		const { offsetLeft, offsetTop, offsetWidth, offsetHeight } = node;
+		node.style.position = 'absolute';
+		node.style.left = `${offsetLeft}px`;
+		node.style.top = `${offsetTop}px`;
+		node.style.width = `${offsetWidth}px`;
+		node.style.height = `${offsetHeight}px`;
+		node.style.pointerEvents = 'none';
+		return {
+			duration,
+			easing: quintOut,
+			css: (t: number) => `opacity: ${t}; transform: scale(${0.6 + 0.4 * t});`,
+		};
+	}
+
 	/* ---- Autocomplete keyboard ---- */
 	function handleKeyDown(e: KeyboardEvent) {
 		if (!has_autocomplete || !ac_open) return;
@@ -892,26 +918,25 @@
 		<!-- Multiple chips -->
 		{#if multiple && !is_file && Array.isArray(value)}
 			<div class="chips-container">
-				{#each value as chip, i (chip + '-' + i)}
-					<span class="chip">
+				{#each value as chip, i (chip)}
+					<span
+						class="chip"
+						in:scale={{ duration: 200, start: 0.6, easing: backOut }}
+						out:chipOut={{ duration: 150 }}
+						animate:flip={{ duration: 150, easing: quintOut }}>
 						<span class="chip-text">{chip}</span>
-						<Button
-							icon
-							dense
-							transparent
-							class="input-pill-btn"
-							tabindex={-1}
-							aria-label="Remove {chip}"
-							disabled={effectively_disabled}
-							onclick={() => removeChip(i)}>
-							<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<span class="chip-remove" onclick={() => removeChip(i)}>
+							<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
 								<path
 									d="M18 6L6 18M6 6l12 12"
 									stroke="currentColor"
 									stroke-width="2"
-									stroke-linecap="round" />
+									stroke-linecap="round"
+									fill="none" />
 							</svg>
-						</Button>
+						</span>
 					</span>
 				{/each}
 				<input
@@ -2008,7 +2033,8 @@
 	}
 
 	.chip-remove {
-		display: flex;
+		position: relative;
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		width: 1.3em;
@@ -2026,11 +2052,25 @@
 			background var(--_duration) var(--_ease);
 	}
 
+	/* Invisible hit area extending ~10px past the icon on every side so the
+	   button is easy to tap. The visible hover feedback stays the size of the
+	   element itself (above), not the touch target. */
+	.chip-remove::before {
+		content: '';
+		position: absolute;
+		inset: -10px;
+	}
+
 	.chip-remove:hover {
 		opacity: 1;
 		background: color-mix(in oklch, currentColor 22%, transparent);
 		/* Snap the tint in on hover; keep the opacity reveal eased both ways. */
 		transition: opacity var(--_duration) var(--_ease);
+	}
+
+	.chip-remove svg {
+		width: 0.85em;
+		height: 0.85em;
 	}
 
 	.chip-input {
