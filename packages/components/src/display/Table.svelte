@@ -41,7 +41,7 @@
 
 <script lang="ts" generics="T extends Record<string, unknown>">
 	import type { Snippet } from 'svelte';
-	import { tick } from 'svelte';
+	import { tick, flushSync } from 'svelte';
 	import { ripple } from '@delightstack/utilities';
 	import { slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
@@ -165,9 +165,7 @@
 
 		/** The row(s) were released — fires when the drop animation BEGINS, before
 		 * `onreorder` commits. Useful for haptics/analytics. */
-		ondrop = undefined as
-			| ((payload: { from: number[]; to: number }) => void)
-			| undefined,
+		ondrop = undefined as ((payload: { from: number[]; to: number }) => void) | undefined,
 	} = $props();
 
 	// ---- Internal state ----
@@ -289,6 +287,12 @@
 	const SETTLE_MS = 300; // drop animation duration
 	const SETTLE_EASE = 'cubic-bezier(0.2, 0.9, 0.25, 1)';
 	const LIFT_SCALE = 1.025; // "popped above" scale while dragging (centred)
+	const LIFT_IN_MS = 150; // ms to ease from the press into the lifted overlay
+	const LIFT_IN_EASE = 'cubic-bezier(0.2, 0.9, 0.25, 1)';
+	// The overlay starts its lift from the grabbed row's pressed scale (mouse) so
+	// the float grows out of the :active push instead of snapping in. This must
+	// match the `.row.clickable:active` scale.
+	const GRAB_PRESS_SCALE = 0.909;
 
 	function clamp(n: number, min: number, max: number): number {
 		return n < min ? min : n > max ? max : n;
@@ -948,7 +952,9 @@
 	// hover preview that fires only inside a zone — not across the whole column.
 	function onResizeHover(e: MouseEvent) {
 		if (resizing) return;
-		const handle = (e.target as HTMLElement)?.closest?.('.resize-handle') as HTMLElement | null;
+		const handle = (e.target as HTMLElement)?.closest?.(
+			'.resize-handle',
+		) as HTMLElement | null;
 		const key = handle?.dataset.resizeKey ?? null;
 		if (key !== hoveredResizeKey) hoveredResizeKey = key;
 	}
@@ -1131,7 +1137,9 @@
 	// list can't interrupt the animation.
 	// ======================================================================
 
-	const reorderActive = $derived(reorderable && !group_by && !skeleton && data.length > 0);
+	const reorderActive = $derived(
+		reorderable && !group_by && !skeleton && data.length > 0,
+	);
 
 	// Tear down any in-flight drag if the table unmounts mid-gesture, so the
 	// document-level pointer/key listeners and timers don't leak.
@@ -1221,7 +1229,8 @@
 		if (clientY < top + EDGE_SIZE) {
 			speed = -MAX_SCROLL_SPEED * clamp((top + EDGE_SIZE - clientY) / EDGE_SIZE, 0, 1);
 		} else if (clientY > bottom - EDGE_SIZE) {
-			speed = MAX_SCROLL_SPEED * clamp((clientY - (bottom - EDGE_SIZE)) / EDGE_SIZE, 0, 1);
+			speed =
+				MAX_SCROLL_SPEED * clamp((clientY - (bottom - EDGE_SIZE)) / EDGE_SIZE, 0, 1);
 		}
 		if (!speed) return;
 		if (t instanceof Window) window.scrollBy(0, speed);
@@ -1359,6 +1368,13 @@
 		reorderDragging = true;
 		suppressNextClick = true;
 
+		// Land `.reordering` in the DOM *before* we measure: it triggers the press
+		// suppressor (.wrapper.reordering .row.clickable:active), so the grabbed row
+		// is measured at its true height, not the scaled-down :active press height.
+		// Otherwise the gap opens by a too-short block and every shifted row snaps
+		// ~1px on drop, accumulating with drag distance.
+		flushSync();
+
 		buildDragLayout();
 
 		// Hide the originals.
@@ -1388,9 +1404,9 @@
 		}
 
 		updateInsertAt();
-		applyNeighborTransforms();
-		// Position the overlay once it's mounted, before the first paint.
-		tick().then(positionOverlay);
+		// applyNeighborTransforms();
+		// Position + lift the overlay once it's mounted, before the first paint.
+		tick().then(liftInOverlay);
 		drag.raf = requestAnimationFrame(dragFrame);
 
 		onreorderstart?.({ from: drag.dragged_vis.map((vi) => flatRows[vi].data_index) });
@@ -1562,10 +1578,28 @@
 		const y = drag.last_client_y - drag.overlay_grab_offset;
 		const tr = tableEl.getBoundingClientRect();
 		overlayEl.style.width = `${tableEl.scrollWidth}px`;
-		// Scale is part of the same transform (not the CSS `scale` property) and the
-		// transform-origin is the card's centre, so the lift grows symmetrically
-		// instead of shifting sideways by the translate offset.
-		overlayEl.style.transform = `translate(${tr.left}px, ${y}px) scale(${LIFT_SCALE})`;
+		// Position via `translate` and lift via `scale` as separate properties: the
+		// per-frame pointer-follow (translate) stays instant while `scale` carries
+		// its own transition (the lift-in here and the drop-settle in finishDrop).
+		// Scale is centred on the card, so the lift grows symmetrically instead of
+		// shifting sideways by the translate offset.
+		overlayEl.style.translate = `${tr.left}px ${y}px`;
+		overlayEl.style.scale = `${LIFT_SCALE}`;
+	}
+
+	// First paint of the overlay: pin it at the grabbed row's pressed scale and ease
+	// up to the lift, so the float grows out of the :active push rather than snapping
+	// to full size. Only `scale` transitions — `translate` keeps tracking the pointer
+	// with no lag because it's not in the transition list.
+	function liftInOverlay() {
+		if (!drag || !overlayEl) return;
+		const start = drag.pointer_type === 'mouse' ? GRAB_PRESS_SCALE : 1;
+		positionOverlay();
+		overlayEl.style.transition = 'none';
+		overlayEl.style.scale = `${start}`;
+		void overlayEl.offsetWidth; // commit the compressed start frame
+		overlayEl.style.transition = `scale ${LIFT_IN_MS}ms ${LIFT_IN_EASE}`;
+		overlayEl.style.scale = `${LIFT_SCALE}`;
 	}
 
 	// rAF loop: auto-scroll near the edges, keep the overlay under the finger,
@@ -1594,7 +1628,8 @@
 
 	function onDragPointerCancel(e: PointerEvent) {
 		if (!drag || e.pointerId !== drag.pointer_id) return;
-		if (reorderDragging) finishDrop(true); // abort: animate home, don't commit
+		if (reorderDragging)
+			finishDrop(true); // abort: animate home, don't commit
 		else cancelPendingDrag();
 	}
 
@@ -1672,13 +1707,15 @@
 		// Animate the overlay to the gap's current on-screen position, easing the
 		// lift scale back to 1. A collapsed overlay lands on the grabbed row's slot
 		// within the block, not the top.
-		const targetY = bodyTopClient() + drag.block_top_content + drag.overlay_top_content_offset;
+		const targetY =
+			bodyTopClient() + drag.block_top_content + drag.overlay_top_content_offset;
 		const left = tableEl ? tableEl.getBoundingClientRect().left : 0;
 		const done = () => finishSettle(changed, from, insertAt, newData);
 		if (overlayEl) {
 			overlayEl.classList.add('settling');
-			overlayEl.style.transition = `transform ${SETTLE_MS}ms ${SETTLE_EASE}, filter ${SETTLE_MS}ms ease`;
-			overlayEl.style.transform = `translate(${left}px, ${targetY}px) scale(1)`;
+			overlayEl.style.transition = `translate ${SETTLE_MS}ms ${SETTLE_EASE}, scale ${SETTLE_MS}ms ${SETTLE_EASE}, filter ${SETTLE_MS}ms ease`;
+			overlayEl.style.translate = `${left}px ${targetY}px`;
+			overlayEl.style.scale = '1';
 			overlayEl.addEventListener('transitionend', done, { once: true });
 		}
 		// Fallback (reduced motion / no movement = no transitionend).
@@ -2492,7 +2529,8 @@
 		transition:
 			background-color 300ms ease,
 			color 200ms ease,
-			translate 200ms ease;
+			translate 200ms ease,
+			scale 200ms ease;
 
 		/* Instant hover tint (like Button), eased away on leave */
 		&:hover {
@@ -2505,7 +2543,10 @@
 		}
 
 		&:active {
-			translate: 0 1px;
+			/* Centred scale + nudge == a pure-Z perspective press, kept off the
+			   `transform` channel for the same reason as .row.clickable below. */
+			translate: 0 0.95px;
+			scale: 0.952;
 		}
 
 		&:focus-visible {
@@ -2826,10 +2867,19 @@
 		cursor: pointer;
 		user-select: none;
 		overflow: hidden;
-		transition: translate 200ms ease;
+		/* The press eases on `translate`/`scale` ONLY — never `transform`. The reorder
+		   gap-shift drives each row's `transform` (style:transform), and finishSettle
+		   clears those shifts in the same tick the `.reordering` class drops; if
+		   `transform` were transitioned here, that clear would animate and the settled
+		   rows would jank. A pure-Z perspective press is exactly a centred scale +
+		   nudge, so this reads identically to perspective(100px) translateZ(). */
+		transition:
+			translate 200ms ease,
+			scale 200ms ease;
 
 		&:active {
 			translate: 0 1px;
+			scale: 0.909;
 		}
 	}
 
@@ -3237,9 +3287,10 @@
 		will-change: transform;
 	}
 
-	/* The press nudge would fight the drag transform — suppress it mid-reorder. */
+	/* The press would fight the drag transform — suppress it mid-reorder. */
 	.wrapper.reordering .row.clickable:active {
 		translate: none;
+		scale: none;
 	}
 
 	/* The lifted originals stay in flow (so scroll height is stable) but are
@@ -3274,9 +3325,9 @@
 	}
 
 	/* The floating overlay (fixed-position, follows the pointer). The drop-shadow
-	   gives the "popped above the rest" lift; the translate + centred scale are
-	   applied imperatively together (NOT via the CSS `scale` property, which would
-	   scale about the static box and shift the card sideways). */
+	   gives the "popped above the rest" lift; position (translate) and lift (scale)
+	   are applied imperatively as separate properties so the pointer-follow stays
+	   instant while `scale` carries the lift-in and drop-settle transitions. */
 	.drag-overlay {
 		position: fixed;
 		top: 0;
@@ -3284,10 +3335,11 @@
 		z-index: 1000;
 		display: grid;
 		pointer-events: none;
-		filter: drop-shadow(0 18px 32px rgb(0 0 0 / 0.22)) drop-shadow(0 6px 12px rgb(0 0 0 / 0.16));
+		filter: drop-shadow(0 18px 32px rgb(0 0 0 / 0.22))
+			drop-shadow(0 6px 12px rgb(0 0 0 / 0.16));
 		border-radius: var(--table-radius, 14px);
 		overflow: hidden;
-		will-change: transform;
+		will-change: translate, scale;
 	}
 
 	.drag-overlay.settling {
@@ -3318,7 +3370,8 @@
 		z-index: -1;
 		border-radius: var(--table-radius, 14px);
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #232323));
-		border: 1px solid light-dark(var(--color-border, #e5e7eb), var(--color-border, #3a3a3a));
+		border: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #3a3a3a));
 	}
 
 	.drag-overlay.collapsed::before {
@@ -3407,6 +3460,7 @@
 		.th-button,
 		.row.drag-armed,
 		.wrapper.reordering .row,
+		.drag-overlay,
 		.drag-overlay.settling,
 		.resize-line {
 			animation: none !important;
