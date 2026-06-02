@@ -1441,6 +1441,22 @@
 			hByVi[vi] = r.height;
 		});
 
+		// `tr.row:last-child` drops its border-bottom (a 1px overshoot would force a
+		// phantom scrollbar — see the divider rules in the stylesheet), so the final
+		// row measures ~1px shorter than every other row. The reorder treats heights as
+		// position-independent, so without this the bordered row that ENDS UP last
+		// after a drop lands 1px off — most visible dragging the top row to the very
+		// bottom. Normalise the last row back to the shared "with divider" height.
+		const lastEl = els[els.length - 1] as HTMLElement | undefined;
+		const firstEl = els[0] as HTMLElement | undefined;
+		if (lastEl && firstEl && lastEl !== firstEl) {
+			const lastVi = Number(lastEl.dataset.rowIndex);
+			const lastBorder = parseFloat(getComputedStyle(lastEl).borderBottomWidth) || 0;
+			if (!Number.isNaN(lastVi) && lastBorder === 0) {
+				hByVi[lastVi] += parseFloat(getComputedStyle(firstEl).borderBottomWidth) || 0;
+			}
+		}
+
 		// Grab offset within the (assembled) block, using measured heights.
 		let off = 0;
 		for (const vi of drag.dragged_vis) {
