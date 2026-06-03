@@ -1,6 +1,6 @@
 ---
 title: Table
-description: A full-featured data table with sorting, row selection, inline cell editing, custom cell rendering, column resizing, row grouping, expandable rows, and CSV/JSON export.
+description: A full-featured data table with sorting, pagination, row selection, inline cell editing, custom cell rendering, column resizing, row grouping, expandable rows, and CSV/JSON export.
 ---
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
@@ -15,6 +15,7 @@ import TableVirtualDemo from '../../../../components/demos/TableVirtualDemo.svel
 import TableReorderDemo from '../../../../components/demos/TableReorderDemo.svelte';
 import TableResizableDemo from '../../../../components/demos/TableResizableDemo.svelte';
 import TableEditableDemo from '../../../../components/demos/TableEditableDemo.svelte';
+import TablePaginationDemo from '../../../../components/demos/TablePaginationDemo.svelte';
 
 ## Import
 
@@ -215,6 +216,106 @@ For `'parent'`, `'window'`, and custom scrollers the table renders inline (no
 inner scroll frame) and `max_height` is ignored — the chosen element owns the
 scroll height.
 
+### Pagination
+
+Add the `pagination` flag and the Table pages your data for you — 10 rows per page
+with a numbered pager and a "Showing X–Y of Z" summary beneath the table. Sorting,
+selection, and inline editing all work across pages (selection keys off each row's
+position in the full `data`, not the visible page).
+
+That's the whole API for the common case:
+
+```svelte
+<Table {data} {columns} pagination />
+```
+
+Bind `page` and `page_size` to read or drive the current page, and pass a config
+object to tune the pager. Providing `page_size_options` adds a rows-per-page
+selector.
+
+<ComponentPreview code={`<script>
+${'  '}import { Table } from '@delightstack/components';
+
+${'  '}const roles = ['Admin', 'Editor', 'Viewer'];
+${'  '}const data = Array.from({ length: 42 }, (_, i) => ({
+${'  '}${'  '}id: i + 1,
+${'  '}${'  '}name: \`User \${i + 1}\`,
+${'  '}${'  '}email: \`user\${i + 1}@example.com\`,
+${'  '}${'  '}role: roles[i % roles.length],
+${'  '}}));
+
+${'  '}let page = $state(1);
+${'  '}let page_size = $state(10);
+</script>
+
+<Table
+${'  '}{data}
+${'  '}row_key="id"
+${'  '}bind:page
+${'  '}bind:page_size
+${'  '}pagination={{ page_size_options: [5, 10, 25] }}
+${'  '}columns={[
+${'  '}${'  '}{ key: 'name', label: 'Name', sortable: true },
+${'  '}${'  '}{ key: 'email', label: 'Email' },
+${'  '}${'  '}{ key: 'role', label: 'Role', sortable: true },
+${'  '}]}
+/>`}>
+  <TablePaginationDemo client:load />
+</ComponentPreview>
+
+#### Options
+
+`pagination` accepts `true` (defaults), `false` (off), or a config object:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `variant` | `'default' \| 'simple' \| 'compact'` | `'default'` | Pager style — a numbered pager, `Prev · Page X of Y · Next`, or `‹ X / Y ›` |
+| `position` | `'top' \| 'bottom' \| 'both'` | `'bottom'` | Where the pager sits relative to the table |
+| `align` | `'start' \| 'center' \| 'end' \| 'between'` | `'between'` | `'between'` splits the summary left / controls right; the others align the whole pager |
+| `show_info` | `boolean` | `true` | Show the "Showing X–Y of Z" summary |
+| `page_size_options` | `number[]` | - | Providing it adds a rows-per-page selector with these options |
+| `total_items` | `number` | - | Total row count for **server-side** paging (see below) |
+| `sibling_count` | `number` | `1` | Sibling pages shown either side of the current page |
+| `boundary_count` | `number` | `1` | Pages always shown at the start and end |
+| `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Pager button size |
+
+#### Server-side pagination
+
+By default the Table slices `data` itself (client-side). For large datasets you
+fetch a page at a time: set `total_items` to the full row count and feed the Table
+only the current page — it won't slice. Bind `page`/`page_size` (or use
+`onpagechange`) to fetch when they change.
+
+```svelte
+<script>
+  let page = $state(1);
+  let page_size = $state(25);
+  let total = $state(0);
+  let rows = $state([]);
+
+  $effect(() => {
+    fetchPage(page, page_size).then((res) => {
+      rows = res.items;
+      total = res.total;
+    });
+  });
+</script>
+
+<Table
+  data={rows}
+  {columns}
+  bind:page
+  bind:page_size
+  pagination={{ total_items: total, page_size_options: [25, 50, 100] }}
+/>
+```
+
+In server mode, sorting via the built-in headers only reorders the current page;
+use the [`onsort`](#events) callback to sort on the server instead.
+
+While pagination is active, `virtual_scroll` and `reorderable` are disabled (the
+page slice already bounds how many rows render).
+
 ### Reorderable Rows
 
 Set `reorderable` to let users drag rows into a new order. On desktop, press and
@@ -402,6 +503,9 @@ ${'  '}data={[]}
 | `expandable` | `boolean` | `false` | Enable row expansion |
 | `reorderable` | `boolean` | `false` | Enable drag-to-reorder rows (see [Reorderable Rows](#reorderable-rows)) |
 | `virtual_scroll` | `boolean \| VirtualScrollOptions` | `false` | Window rows for large datasets — `true` for defaults, or an options object (see [Virtual Scrolling](#virtual-scrolling)) |
+| `pagination` | `boolean \| PaginationConfig` | `false` | Page the data — `true` for defaults (10/page), or a config object (see [Pagination](#pagination)) |
+| `page` | `number` | `1` | Current page, 1-based (bindable) |
+| `page_size` | `number` | `10` | Rows per page (bindable) |
 | `group_by` | `string` | - | Column key to group rows by |
 | `editable` | `boolean` | `false` | Enable inline cell editing (see [Editable Cells](#editable-cells)) |
 | `exportable` | `boolean` | `false` | Enable CSV/JSON export functionality |
@@ -425,6 +529,7 @@ ${'  '}data={[]}
 | `onreorder` | `{ from: number[], to: number, oldData: T[], newData: T[] }` | Reorder committed — fires after the drop animation finishes; assign `newData` to your `data` |
 | `oncelledit` | `CellEditContext<T>` | Table-wide commit handler — fires when a cell with no own `column.onedit` is edited. May return a Promise (→ in-cell spinner) |
 | `oncellinput` | `CellEditContext<T>` | Table-wide per-keystroke handler — fallback when a column has no own `column.oninput` |
+| `onpagechange` | `{ page: number, page_size: number }` | Page or page size changed — use for server-side paging (fires for client-side too) |
 
 Most editing callbacks live on the column (`onedit`, `oninput`, `onautocomplete`,
 `validate`); `oncelledit` / `oncellinput` are table-wide fallbacks for a single shared
@@ -493,6 +598,22 @@ interface VirtualScrollOptions {
   overscan?: number;         // extra rows above/below the viewport (default 8)
   scroller?: VirtualScroller; // which element scrolls (default 'container')
   max_height?: string | number; // viewport height — only for the 'container' scroller
+}
+```
+
+The `pagination` prop is `boolean | PaginationConfig`:
+
+```typescript
+interface PaginationConfig {
+  variant?: 'default' | 'simple' | 'compact'; // pager style (default 'default')
+  position?: 'top' | 'bottom' | 'both';       // pager placement (default 'bottom')
+  align?: 'start' | 'center' | 'end' | 'between'; // pager alignment (default 'between')
+  show_info?: boolean;          // show the "Showing X–Y of Z" summary (default true)
+  page_size_options?: number[]; // providing it adds a rows-per-page selector
+  total_items?: number;         // total count for server-side paging (Table won't slice)
+  sibling_count?: number;       // sibling pages around the current page (default 1)
+  boundary_count?: number;      // pages always shown at each end (default 1)
+  size?: '0' | '1' | '2' | '3'; // pager button size (default '1')
 }
 ```
 

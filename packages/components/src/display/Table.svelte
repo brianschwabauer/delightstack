@@ -122,6 +122,36 @@
 
 	/** `true` for sensible defaults, `false` to disable, or an options object. */
 	export type VirtualScroll = boolean | VirtualScrollOptions;
+
+	/** Pagination appearance + behavior. `true` enables it with sensible defaults
+	 * (10 rows/page, a numbered pager with a "Showing X–Y of Z" summary beneath the
+	 * table); pass an object to tune it. */
+	export interface PaginationConfig {
+		/** Pager style: a full numbered pager (default), `'simple'`
+		 * (Prev · Page X of Y · Next), or `'compact'` (‹ X / Y ›). */
+		variant?: 'default' | 'simple' | 'compact';
+		/** Where the pager sits relative to the table (default `'bottom'`). */
+		position?: 'top' | 'bottom' | 'both';
+		/** Pager alignment. `'between'` (the default) puts the info/summary on the
+		 * left and the controls on the right; the others align the whole pager. */
+		align?: 'start' | 'center' | 'end' | 'between';
+		/** Show the "Showing X–Y of Z" summary (default `true`). */
+		show_info?: boolean;
+		/** Offer a rows-per-page selector with these options. Providing the list
+		 * turns the selector on; omit it to hide it. */
+		page_size_options?: number[];
+		/** Total row count for SERVER-side pagination. When set, the Table treats
+		 * `data` as ALREADY being the current page (it does not slice) and derives
+		 * the page count from this — bind `page`/`page_size` or use `onpagechange`
+		 * to fetch each page yourself. */
+		total_items?: number;
+		/** Sibling pages shown either side of the current page (default `1`). */
+		sibling_count?: number;
+		/** Pages always shown at the start and end (default `1`). */
+		boundary_count?: number;
+		/** Pager button size (default `'1'`). */
+		size?: '0' | '1' | '2' | '3';
+	}
 </script>
 
 <script lang="ts" generics="T extends Record<string, unknown>">
@@ -131,6 +161,7 @@
 	import { slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import Progress from '../feedback/Progress.svelte';
+	import Pagination from '../navigation/Pagination.svelte';
 	import TableCellEditor from './TableCellEditor.svelte';
 
 	const propId = $props.id();
@@ -203,6 +234,23 @@
 		 * the Table's own frame (default), its parent, the window, or any element. */
 		virtual_scroll = false as VirtualScroll,
 
+		/** Pagination. `true` turns it on with sensible defaults — 10 rows per page
+		 * and a numbered pager with a "Showing X–Y of Z" summary beneath the table.
+		 * Pass a config object to tune the look/behavior (`{ variant, position,
+		 * align, show_info, page_size_options, total_items, sibling_count,
+		 * boundary_count, size }`). By default the Table slices `data` to the current
+		 * page for you (client-side). For SERVER-side paging, set `total_items` in
+		 * the config and feed the Table only the current page, then bind `page` /
+		 * `page_size` (or use `onpagechange`) to fetch. While active, pagination
+		 * disables `virtual_scroll` and `reorderable`. */
+		pagination = false as boolean | PaginationConfig,
+
+		/** Current page, 1-based (bindable). */
+		page = $bindable(1),
+
+		/** Rows per page (bindable). */
+		page_size = $bindable(10),
+
 		/** Element ID */
 		id = propId,
 
@@ -270,6 +318,12 @@
 
 		/** Table-wide per-keystroke handler — fallback when a column has no own `oninput`. */
 		oncellinput = undefined as ((ctx: CellEditContext<T>) => void) | undefined,
+
+		/** The page or page size changed. Fires for both client- and server-side
+		 * paging — use it to fetch the next page when you manage `data` yourself. */
+		onpagechange = undefined as
+			| ((payload: { page: number; page_size: number }) => void)
+			| undefined,
 	} = $props();
 
 	// ---- Internal state ----
@@ -570,6 +624,62 @@
 		});
 	});
 
+	// ---- Pagination ----
+	// Slices the sorted rows down to the active page (client-side), or — when
+	// `total_items` is supplied — treats `data` as ALREADY being the current page
+	// (server-side) and just drives the pager. `flatRows`/`groupedData` build off
+	// `renderData` below, so each rendered row's `visual_index` is page-local while
+	// its `data_index` stays global (via `rowIndexMap`) — selection and inline
+	// editing keep working across pages. Bind `page`/`page_size` to observe/control.
+	const pgConfig = $derived.by(() => {
+		const o = pagination && pagination !== true ? pagination : {};
+		return {
+			variant: o.variant ?? 'default',
+			position: o.position ?? 'bottom',
+			align: o.align ?? 'between',
+			show_info: o.show_info ?? true,
+			page_size_options: o.page_size_options,
+			total_items: o.total_items,
+			sibling_count: o.sibling_count ?? 1,
+			boundary_count: o.boundary_count ?? 1,
+			size: o.size ?? ('1' as '0' | '1' | '2' | '3'),
+		};
+	});
+
+	const paginationActive = $derived(!!pagination && !skeleton);
+	// Server-side mode: `data` is already one page, so we never slice — we only
+	// derive the page count and drive the pager (the consumer fetches each page).
+	const serverPaginated = $derived(paginationActive && pgConfig.total_items != null);
+
+	const pgTotalItems = $derived(
+		serverPaginated ? (pgConfig.total_items ?? 0) : sortedData.length,
+	);
+	const pgTotalPages = $derived(
+		Math.max(1, Math.ceil(pgTotalItems / Math.max(1, page_size))),
+	);
+	// The pager only shows when there's something to page through.
+	const showPager = $derived(paginationActive && pgTotalItems > 0);
+
+	// Keep `page` within range as the data, page size, sort, or filters change.
+	$effect(() => {
+		if (!paginationActive) return;
+		const clamped = clamp(page, 1, pgTotalPages);
+		if (clamped !== page) page = clamped;
+	});
+
+	// Client-side page slice (server mode renders `sortedData`/`data` as-is).
+	const pagedData = $derived.by(() => {
+		if (!paginationActive || serverPaginated) return sortedData;
+		const start = (page - 1) * page_size;
+		return sortedData.slice(start, start + page_size);
+	});
+
+	// The rows actually rendered: the page slice when paginating client-side,
+	// otherwise the full sorted set.
+	const renderData = $derived(
+		paginationActive && !serverPaginated ? pagedData : sortedData,
+	);
+
 	// ---- Row index map ----
 	// Rows in sortedData are the same object references as in `data` (just
 	// reordered), so an identity lookup gives each rendered row its stable index
@@ -610,8 +720,8 @@
 		const groupKey = group_by;
 		const map = new Map<string, RenderRow[]>();
 		const order: string[] = [];
-		for (let i = 0; i < sortedData.length; i++) {
-			const row = sortedData[i];
+		for (let i = 0; i < renderData.length; i++) {
+			const row = renderData[i];
 			const val = String(row[groupKey] ?? 'Other');
 			if (!map.has(val)) {
 				map.set(val, []);
@@ -628,7 +738,7 @@
 
 	// ---- Flat rows for rendering ----
 	const flatRows = $derived.by((): RenderRow[] => {
-		return sortedData.map((row, i) => ({
+		return renderData.map((row, i) => ({
 			row,
 			data_index: rowIndexMap.get(row) ?? i,
 			visual_index: i,
@@ -656,7 +766,7 @@
 	});
 
 	const virtualActive = $derived(
-		!!virtual_scroll && !group_by && !skeleton && data.length > 0,
+		!!virtual_scroll && !group_by && !skeleton && !paginationActive && data.length > 0,
 	);
 
 	// The frame owns the scrollbar only for the default `'container'` scroller;
@@ -764,7 +874,12 @@
 	// `data-no-drag` (a click edits it), so reordering needs an explicit grip handle
 	// in its own leading column.
 	const reorderGrip = $derived(
-		reorderable && editable && !group_by && !skeleton && data.length > 0,
+		reorderable &&
+			editable &&
+			!group_by &&
+			!skeleton &&
+			!paginationActive &&
+			data.length > 0,
 	);
 
 	// ---- Total columns count ----
@@ -929,7 +1044,7 @@
 			const start = Math.min(lastSelectedVisual, visualIndex);
 			const end = Math.max(lastSelectedVisual, visualIndex);
 			for (let v = start; v <= end; v++) {
-				const di = rowIndexMap.get(sortedData[v]);
+				const di = rowIndexMap.get(renderData[v]);
 				if (di !== undefined) next.add(di);
 			}
 			// Keep the anchor so the range can be re-extended with another shift-click.
@@ -1712,7 +1827,7 @@
 	// ======================================================================
 
 	const reorderActive = $derived(
-		reorderable && !group_by && !skeleton && data.length > 0,
+		reorderable && !group_by && !skeleton && !paginationActive && data.length > 0,
 	);
 
 	// Tear down any in-flight drag if the table unmounts mid-gesture, so the
@@ -2351,6 +2466,9 @@
 	class:reordering={reorderDragging || reorderDropping}
 	class:resizing-active={!!resizing}
 	{id}>
+	{#if showPager && (pgConfig.position === 'top' || pgConfig.position === 'both')}
+		{@render pager('top')}
+	{/if}
 	{#if exportable}
 		<div class="toolbar">
 			<div class="export" onfocusout={handleExportBlur}>
@@ -2750,7 +2868,30 @@
 			{/if}
 		</div>
 	{/if}
+
+	{#if showPager && (pgConfig.position === 'bottom' || pgConfig.position === 'both')}
+		{@render pager('bottom')}
+	{/if}
 </div>
+
+{#snippet pager(placement: 'top' | 'bottom')}
+	<div class="pagination-bar align-{pgConfig.align}" class:top={placement === 'top'}>
+		<Pagination
+			bind:page
+			bind:page_size
+			total_pages={pgTotalPages}
+			total_items={pgTotalItems}
+			page_size_options={pgConfig.page_size_options ?? [10, 25, 50, 100]}
+			simple={pgConfig.variant === 'simple'}
+			compact={pgConfig.variant === 'compact'}
+			show_page_size={!!pgConfig.page_size_options}
+			show_info={pgConfig.show_info}
+			sibling_count={pgConfig.sibling_count}
+			boundary_count={pgConfig.boundary_count}
+			size={pgConfig.size}
+			onchange={(d) => onpagechange?.({ page: d.page, page_size })} />
+	</div>
+{/snippet}
 
 {#snippet checkIndicator(checked: boolean, indeterminate: boolean, preview: boolean)}
 	<svg
@@ -3049,6 +3190,40 @@
 	.wrapper {
 		width: 100%;
 		position: relative;
+	}
+
+	/* ========== Pagination ========== */
+	/* The pager sits in its own bar above and/or below the bordered table frame.
+	   `align` decides the layout: `between` (default) splits the info/summary to the
+	   left and the page controls to the right; the others align the whole pager. */
+	.pagination-bar {
+		display: flex;
+		align-items: center;
+		padding-top: 0.875rem;
+	}
+
+	.pagination-bar.top {
+		padding-top: 0;
+		padding-bottom: 0.875rem;
+	}
+
+	.pagination-bar.align-start {
+		justify-content: flex-start;
+	}
+	.pagination-bar.align-center {
+		justify-content: center;
+	}
+	.pagination-bar.align-end {
+		justify-content: flex-end;
+	}
+
+	/* `between`: stretch the pager full-width and push just the page controls to the
+	   far edge, leaving the rows-per-page selector + summary grouped on the left. */
+	.pagination-bar.align-between :global(.pagination) {
+		width: 100%;
+	}
+	.pagination-bar.align-between :global(.pagination .pagination-controls) {
+		margin-left: auto;
 	}
 
 	/* ========== Toolbar ========== */

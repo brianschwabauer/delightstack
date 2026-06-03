@@ -18,6 +18,7 @@ export { default as Stat } from './Stat.svelte';
 export { default as Table } from './Table.svelte';
 export type {
 	Column as TableColumn,
+	PaginationConfig as TablePaginationConfig,
 	VirtualScroll,
 	VirtualScrollOptions,
 	VirtualScroller,
