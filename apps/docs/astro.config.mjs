@@ -9,6 +9,22 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'DelightStack',
+			logo: {
+				// Theme-aware wordmark: gradient icon with deep-teal text in light mode
+				// and white text in dark mode. (currentColor can't cross an <img>, so
+				// the header uses pre-baked light/dark files instead.)
+				light: './src/assets/delightstack_logo_light.svg',
+				dark: './src/assets/delightstack_logo_dark.svg',
+				// The wordmark already includes "delightstack", so hide the text title.
+				replacesTitle: true,
+			},
+			favicon: '/delightstack_brandmark.svg',
+			head: [
+				{
+					tag: 'link',
+					attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+				},
+			],
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/brianschwabauer' },
 			],

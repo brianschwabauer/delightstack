@@ -1,13 +1,26 @@
 ---
 import { LinkButton } from '@astrojs/starlight/components';
+import { readFileSync } from 'node:fs';
 
 const features = ['55 components', 'Light & dark mode', 'Fully accessible', 'Zero runtime deps'];
+
+// Inline the wordmark SVG so it's part of the DOM — inlining (vs. <img>) is what
+// lets the text's `currentColor` follow the theme. The icon keeps its gradient;
+// the text colour is driven by the CSS below (white in dark, deep teal in light).
+const raw = readFileSync(
+	new URL('../assets/delightstack_logo_adaptive.svg', import.meta.url),
+	'utf8',
+);
+const logo = raw.slice(raw.indexOf('<svg')).replace(/ id="Artboard2"/g, '');
 ---
 
 <section class="ds-hero not-content">
 	<div class="glow" aria-hidden="true"></div>
 
-	<h1 id="_top" class="title">DelightStack</h1>
+	<h1 id="_top" class="title">
+		<span class="sr-only">DelightStack</span>
+		<span class="logo" aria-hidden="true" set:html={logo}></span>
+	</h1>
 
 	<p class="tagline">
 		A polished, opinionated Svelte&nbsp;5 component library focused on delightful user experiences —
@@ -75,21 +88,47 @@ const features = ['55 components', 'Light & dark mode', 'Fully accessible', 'Zer
 
 	.title {
 		margin: 0;
-		/* Extra block padding so the gradient (background-clip: text) doesn't
-		   clip glyph descenders like the "g" with this tight line-height. */
-		padding-block: 0.05em 0.12em;
-		font-size: clamp(3rem, 9vw, 5.5rem);
-		font-weight: 700;
-		line-height: 1.1;
-		letter-spacing: -0.03em;
-		background: linear-gradient(
-			180deg,
-			var(--sl-color-white),
-			color-mix(in oklch, var(--color-primary, #1a81bc) 55%, var(--sl-color-white))
-		);
-		-webkit-background-clip: text;
-		background-clip: text;
-		color: transparent;
+		display: flex;
+		justify-content: center;
+		width: 100%;
+	}
+
+	/* Accessible heading text for screen readers / SEO; the visible wordmark is
+	   the inlined SVG below it. */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* The wordmark's icon keeps its gradient; the text uses currentColor.
+	   Default (Starlight's root = dark theme) -> white text. */
+	.logo {
+		display: block;
+		width: min(34rem, 86vw);
+		color: #ffffff;
+	}
+	.logo :global(svg) {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	/* Light theme -> deep teal text (in the icon's hue, softer than pure black).
+	   Mirrors Starlight's own light-theme resolution (explicit + auto/no-JS). */
+	@media (prefers-color-scheme: light) {
+		:global(:root:not([data-theme='dark'])) .logo {
+			color: #0e4a59;
+		}
+	}
+	:global([data-theme='light']) .logo {
+		color: #0e4a59;
 	}
 
 	.tagline {
