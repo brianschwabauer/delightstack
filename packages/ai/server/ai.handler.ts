@@ -108,7 +108,9 @@ function validateCompletionOptions(body: unknown): CompletionOptions {
 		// Assistant messages may have null content (e.g. tool-call-only messages)
 		if (m.role === 'assistant') {
 			if (m.content != null && typeof m.content !== 'string') {
-				throw DelightError.badRequest('Assistant message content must be a string or null');
+				throw DelightError.badRequest(
+					'Assistant message content must be a string or null',
+				);
 			}
 		} else if (typeof m.content !== 'string') {
 			throw DelightError.badRequest('Each message must have string content');

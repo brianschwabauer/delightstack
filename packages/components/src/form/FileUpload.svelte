@@ -179,7 +179,10 @@
 
 			// Size validation
 			if (max_size && file.size > max_size) {
-				onerror?.({ file, error: `File exceeds maximum size of ${formatSize(max_size)}` });
+				onerror?.({
+					file,
+					error: `File exceeds maximum size of ${formatSize(max_size)}`,
+				});
 				continue;
 			}
 

@@ -50,8 +50,22 @@ export interface ResizedVariant {
 
 /** Default variants when none are specified */
 export const DEFAULT_VARIANT_CONFIGS: VariantConfig[] = [
-	{ name: 'default', max_dimension: 2048, format: 'avif', quality: 50, effort: 4, fit: 'inside' },
-	{ name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4, fit: 'cover' },
+	{
+		name: 'default',
+		max_dimension: 2048,
+		format: 'avif',
+		quality: 50,
+		effort: 4,
+		fit: 'inside',
+	},
+	{
+		name: 'thumbnail',
+		max_dimension: 640,
+		format: 'avif',
+		quality: 50,
+		effort: 4,
+		fit: 'cover',
+	},
 ];
 
 /** Resolve default fit per variant config if not explicitly set */
@@ -95,7 +109,8 @@ export async function resizeVariants(
 	const results: ResizedVariant[] = [];
 
 	for (const config of configs) {
-		const fit: 'inside' | 'cover' = config.fit ?? (config.max_dimension > 1024 ? 'inside' : 'cover');
+		const fit: 'inside' | 'cover' =
+			config.fit ?? (config.max_dimension > 1024 ? 'inside' : 'cover');
 		const maxDim = config.max_dimension;
 		const sharpFit: 'inside' | 'outside' = fit === 'inside' ? 'inside' : 'outside';
 		const needsResize = longEdge >= maxDim;

@@ -61,9 +61,7 @@
 	const customEditor = $derived(
 		typeof column.editor === 'function' ? column.editor : undefined,
 	);
-	const editorType = $derived(
-		typeof column.editor === 'string' ? column.editor : 'text',
-	);
+	const editorType = $derived(typeof column.editor === 'string' ? column.editor : 'text');
 	const isBoolean = $derived(editorType === 'boolean' && !customEditor);
 	const isSelect = $derived(editorType === 'select' && !customEditor);
 	const isNumber = $derived(editorType === 'number' && !customEditor);
@@ -110,7 +108,9 @@
 
 	const hasStaticOptions = $derived(!!(column.options && column.options.length));
 	const hasAutocomplete = $derived(
-		!isBoolean && !customEditor && (hasStaticOptions || !!column.onautocomplete || isSelect),
+		!isBoolean &&
+			!customEditor &&
+			(hasStaticOptions || !!column.onautocomplete || isSelect),
 	);
 
 	function normalizeOptions(opts: CellOption[] | string[] | undefined): CellOption[] {
@@ -192,7 +192,13 @@
 		if (!column.onautocomplete) return;
 		ac_loading = true;
 		try {
-			const r = await column.onautocomplete({ query, value: parseValue(query), row, index, column });
+			const r = await column.onautocomplete({
+				query,
+				value: parseValue(query),
+				row,
+				index,
+				column,
+			});
 			ac_filtered = normalizeOptions(r);
 		} finally {
 			ac_loading = false;
@@ -224,7 +230,15 @@
 	}
 	function escapeHtml(s: string): string {
 		return s.replace(/[&<>"']/g, (c) =>
-			c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;',
+			c === '&'
+				? '&amp;'
+				: c === '<'
+					? '&lt;'
+					: c === '>'
+						? '&gt;'
+						: c === '"'
+							? '&quot;'
+							: '&#39;',
 		);
 	}
 
@@ -270,11 +284,15 @@
 	}
 
 	function optionFor(text: string): CellOption | undefined {
-		const opts = column.onautocomplete ? ac_filtered : normalizeOptions(column.options as never);
+		const opts = column.onautocomplete
+			? ac_filtered
+			: normalizeOptions(column.options as never);
 		return opts.find((o) => (o.label ?? o.value) === text || o.value === text);
 	}
 
-	async function commitAndNavigate(dir: 'up' | 'down' | 'left' | 'right' | 'next' | 'prev') {
+	async function commitAndNavigate(
+		dir: 'up' | 'down' | 'left' | 'right' | 'next' | 'prev',
+	) {
 		const ok = await tryCommit();
 		if (ok) onnavigate?.({ dir });
 	}
@@ -576,7 +594,10 @@
 			style:position-anchor={anchorName}
 			onpointerdown={(e) => e.preventDefault()}>
 			{#if ac_loading}
-				<div class="ac-status"><span class="ac-spinner" aria-hidden="true"></span> Loading…</div>
+				<div class="ac-status">
+					<span class="ac-spinner" aria-hidden="true"></span>
+					Loading…
+				</div>
 			{:else if ac_options.length === 0}
 				<div class="ac-status">No results</div>
 			{:else}
@@ -587,7 +608,9 @@
 							disabled={opt.disabled}
 							onclick={() => selectOption(opt)}>
 							<span class="ac-option">
-								<span class="ac-option-label">{@html highlightMatch(opt.label ?? opt.value)}</span>
+								<span class="ac-option-label">
+									{@html highlightMatch(opt.label ?? opt.value)}
+								</span>
 								{#if opt.description}
 									<span class="ac-option-desc">{opt.description}</span>
 								{/if}
@@ -712,7 +735,10 @@
 		line-height: 0;
 	}
 	.ds-checkmark .box {
-		stroke: light-dark(var(--color-text-disabled, #999), var(--color-text-disabled, #777));
+		stroke: light-dark(
+			var(--color-text-disabled, #999),
+			var(--color-text-disabled, #777)
+		);
 		fill: transparent;
 		transition:
 			stroke 150ms ease,

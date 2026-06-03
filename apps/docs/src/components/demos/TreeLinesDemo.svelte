@@ -25,7 +25,11 @@
 				{ id: 'app', label: 'app.html' },
 			],
 		},
-		{ id: 'static', label: 'static', children: [{ id: 'favicon', label: 'favicon.png' }] },
+		{
+			id: 'static',
+			label: 'static',
+			children: [{ id: 'favicon', label: 'favicon.png' }],
+		},
 		{ id: 'package', label: 'package.json' },
 	];
 

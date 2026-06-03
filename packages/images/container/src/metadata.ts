@@ -20,10 +20,7 @@ const DEPTH_MAP: Record<string, number> = {
 };
 
 /** Convert GPS DMS (degrees, minutes, seconds) array + ref to decimal degrees */
-function convertGps(
-	dms: number[] | undefined,
-	ref: string | undefined,
-): number | null {
+function convertGps(dms: number[] | undefined, ref: string | undefined): number | null {
 	if (!dms || dms.length < 3 || !ref) return null;
 	const [degrees, minutes, seconds] = dms;
 	let decimal = degrees + minutes / 60 + seconds / 3600;
@@ -141,7 +138,10 @@ export async function extractMetadata(
 		is_animated,
 		frame_count: pages,
 		color_space: meta.space ?? 'srgb',
-		bit_depth: typeof meta.depth === 'string' ? (DEPTH_MAP[meta.depth] ?? 8) : (meta.depth ?? 8) as number,
+		bit_depth:
+			typeof meta.depth === 'string'
+				? (DEPTH_MAP[meta.depth] ?? 8)
+				: ((meta.depth ?? 8) as number),
 		channels: meta.channels ?? 3,
 		exif_orientation: orientation,
 		has_icc_profile: meta.hasProfile ?? false,

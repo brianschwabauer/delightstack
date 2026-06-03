@@ -109,12 +109,9 @@ export class RateLimiterServer extends DurableObject {
 		const refill_interval_ms = this.refill_every_seconds * 1000;
 		const refills = Math.floor((now - bucket.last_refill) / refill_interval_ms);
 		const current_count = Math.min(bucket.count + refills, this.max_tokens);
-		const ms_since_last_refill =
-			now - bucket.last_refill - refills * refill_interval_ms;
+		const ms_since_last_refill = now - bucket.last_refill - refills * refill_interval_ms;
 		const reset_in_ms =
-			current_count >= this.max_tokens
-				? 0
-				: refill_interval_ms - ms_since_last_refill;
+			current_count >= this.max_tokens ? 0 : refill_interval_ms - ms_since_last_refill;
 
 		return { remaining: current_count, limit: this.max_tokens, reset_in_ms };
 	}

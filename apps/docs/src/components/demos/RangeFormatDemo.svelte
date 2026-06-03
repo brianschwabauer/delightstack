@@ -12,8 +12,7 @@
 		max={1000}
 		show_value
 		format_value={(v) => `$${v}`}
-		label="Budget"
-	/>
+		label="Budget" />
 
 	<Range
 		bind:value={opacity}
@@ -21,6 +20,5 @@
 		max={100}
 		show_value
 		format_value={(v) => `${v}%`}
-		label="Opacity"
-	/>
+		label="Opacity" />
 </div>

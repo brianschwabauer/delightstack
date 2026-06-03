@@ -13,10 +13,7 @@ vi.mock('cloudflare:workers', () => {
 });
 
 function createLimiter(): RateLimiterServer {
-	return new RateLimiterServer(
-		{} as DurableObjectState,
-		{} as Env,
-	);
+	return new RateLimiterServer({} as DurableObjectState, {} as Env);
 }
 
 describe('RateLimiterServer', () => {

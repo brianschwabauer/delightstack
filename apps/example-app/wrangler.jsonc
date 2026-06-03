@@ -41,12 +41,8 @@
 			"browser": {
 				"binding": "BROWSER",
 			},
-			"kv_namespaces": [
-				{ "binding": "KV", "id": "dev-kv" },
-			],
-			"r2_buckets": [
-				{ "binding": "R2", "bucket_name": "foreverfamily-server-staging" },
-			],
+			"kv_namespaces": [{ "binding": "KV", "id": "dev-kv" }],
+			"r2_buckets": [{ "binding": "R2", "bucket_name": "foreverfamily-server-staging" }],
 			"services": [
 				{
 					"binding": "SELF",

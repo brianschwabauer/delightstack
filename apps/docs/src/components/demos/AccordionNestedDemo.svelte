@@ -9,10 +9,15 @@
 	<AccordionItem value="parent-1" title="Frontend Frameworks">
 		<Accordion bind:value={innerValue}>
 			<AccordionItem value="child-1" title="Svelte">
-				<p>A compiler-based framework that shifts work to build time for smaller, faster apps.</p>
+				<p>
+					A compiler-based framework that shifts work to build time for smaller, faster
+					apps.
+				</p>
 			</AccordionItem>
 			<AccordionItem value="child-2" title="React">
-				<p>A library for building user interfaces with a virtual DOM and component model.</p>
+				<p>
+					A library for building user interfaces with a virtual DOM and component model.
+				</p>
 			</AccordionItem>
 		</Accordion>
 	</AccordionItem>

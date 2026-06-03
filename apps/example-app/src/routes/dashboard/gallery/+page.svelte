@@ -216,16 +216,17 @@
 	{#if galleryItems.length === 0 && !images.loading}
 		<Callout>
 			You don't have any uploaded photos yet. Click <strong>Upload photos</strong>
-			to add some — uploaded images will show their thumbhash blur while the
-			full-resolution version loads.
+			to add some — uploaded images will show their thumbhash blur while the full-resolution
+			version loads.
 		</Callout>
 	{/if}
 
 	<div class="gallery-wrapper">
 		{#if display === 'lightbox'}
 			<p class="lightbox-hint">
-				In <code>display="lightbox"</code> the Gallery renders nothing of its own —
-				the thumbnail layout below is plain HTML from this page. Clicking a tile calls
+				In <code>display="lightbox"</code>
+				the Gallery renders nothing of its own — the thumbnail layout below is plain HTML from
+				this page. Clicking a tile calls
 				<code>gallery.open(index, event.currentTarget)</code>
 				which opens the carousel with an animation anchored to the tile.
 			</p>
@@ -347,7 +348,9 @@
 		overflow: hidden;
 		cursor: pointer;
 		position: relative;
-		transition: transform 150ms ease, box-shadow 150ms ease;
+		transition:
+			transform 150ms ease,
+			box-shadow 150ms ease;
 		box-shadow: var(--shadow-1, 0 1px 3px rgba(0, 0, 0, 0.1));
 		img {
 			width: 100%;

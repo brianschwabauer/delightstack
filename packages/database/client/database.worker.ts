@@ -496,8 +496,7 @@ export class DatabaseWorker {
 				// and only when the caller hasn't opted out.
 				if (!skip_background_refresh) {
 					const key = `${entity_type}/${id}`;
-					const stale =
-						Date.now() - (cached.updated_at ?? 0) > REFRESH_STALE_MS;
+					const stale = Date.now() - (cached.updated_at ?? 0) > REFRESH_STALE_MS;
 					if (stale && !this.#pending_refreshes.has(key)) {
 						this.#pending_refreshes.add(key);
 						this.#backgroundRefresh(entity_type, id, on_refresh)

@@ -420,9 +420,7 @@ export function normalizeEmbedSrc(src: string | undefined, eager: boolean): stri
 		if (match) {
 			const id = match[1];
 			const hash = match[2];
-			url = new URL(
-				`https://player.vimeo.com/video/${id}${hash ? `?h=${hash}` : ''}`,
-			);
+			url = new URL(`https://player.vimeo.com/video/${id}${hash ? `?h=${hash}` : ''}`);
 			url.searchParams.set('autoplay', eager ? '1' : '0');
 		}
 	} else if (host === 'iplayerhd.com') {
@@ -451,9 +449,12 @@ export function isVideoEmbed(src: string | undefined): boolean {
  *   4. Otherwise `undefined` — callers should fall back to a placeholder
  *      (the Gallery shows a type icon overlay over a styled placeholder block).
  */
-export function getItemThumbnailSrc(
-	item: { type?: CarouselItemType; src?: string; poster?: string; panorama?: boolean },
-): string | undefined {
+export function getItemThumbnailSrc(item: {
+	type?: CarouselItemType;
+	src?: string;
+	poster?: string;
+	panorama?: boolean;
+}): string | undefined {
 	if (item.poster) return item.poster;
 	const src = item.src;
 	if (!src) return undefined;
@@ -462,7 +463,10 @@ export function getItemThumbnailSrc(
 	const single = pickLargestSrc(src);
 	// Cloudinary video URL → swap the file extension for `.jpg` to get the
 	// first frame as an image with all the same transforms applied.
-	if (/^https?:\/\/res\.cloudinary\.com\//.test(single) && /\.(mp4|webm|mov|m3u8)$/i.test(single)) {
+	if (
+		/^https?:\/\/res\.cloudinary\.com\//.test(single) &&
+		/\.(mp4|webm|mov|m3u8)$/i.test(single)
+	) {
 		return single.replace(/\.(mp4|webm|mov|m3u8)$/i, '.jpg');
 	}
 	// YouTube embed → `img.youtube.com` thumbnail.

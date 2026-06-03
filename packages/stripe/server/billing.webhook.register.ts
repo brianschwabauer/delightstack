@@ -34,9 +34,7 @@ export async function ensureWebhookRegistered(
 	const webhook_url = `${app_url}${config.base_path}/webhook`;
 
 	// Check for existing webhook with this URL
-	const existing = await stripeCall(() =>
-		stripe.webhookEndpoints.list({ limit: 100 }),
-	);
+	const existing = await stripeCall(() => stripe.webhookEndpoints.list({ limit: 100 }));
 
 	const match = existing.data.find(
 		(wh) => wh.url === webhook_url && wh.status === 'enabled',

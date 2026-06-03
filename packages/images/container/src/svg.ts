@@ -4,7 +4,8 @@ import { extractColors } from './colors';
 import type { ProcessOptions, PipelineResult } from './pipeline';
 
 /** Dangerous SVG elements to remove (includes animation elements that can trigger JS) */
-const DANGEROUS_ELEMENTS = /(<script[\s>][\s\S]*?<\/script>|<foreignObject[\s>][\s\S]*?<\/foreignObject>|<iframe[\s>][\s\S]*?<\/iframe>|<embed[\s>][\s\S]*?<\/embed>|<object[\s>][\s\S]*?<\/object>|<set[\s>][\s\S]*?(?:<\/set>|\/>)|<animate[\s>][\s\S]*?(?:<\/animate>|\/>)|<animateTransform[\s>][\s\S]*?(?:<\/animateTransform>|\/>))/gi;
+const DANGEROUS_ELEMENTS =
+	/(<script[\s>][\s\S]*?<\/script>|<foreignObject[\s>][\s\S]*?<\/foreignObject>|<iframe[\s>][\s\S]*?<\/iframe>|<embed[\s>][\s\S]*?<\/embed>|<object[\s>][\s\S]*?<\/object>|<set[\s>][\s\S]*?(?:<\/set>|\/>)|<animate[\s>][\s\S]*?(?:<\/animate>|\/>)|<animateTransform[\s>][\s\S]*?(?:<\/animateTransform>|\/>))/gi;
 
 /** Event handler attributes (supports double-quoted, single-quoted, and unquoted values) */
 const EVENT_HANDLERS = /\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi;
@@ -13,10 +14,12 @@ const EVENT_HANDLERS = /\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi;
 const DANGEROUS_URLS = /(?:javascript|data\s*:\s*text\/html)\s*:/i;
 
 /** External href/xlink:href (both quote styles; keep internal #id references) */
-const EXTERNAL_HREFS = /\s+((?:xlink:)?href)\s*=\s*(?:"(https?:\/\/[^"]*)"|'(https?:\/\/[^']*)')/gi;
+const EXTERNAL_HREFS =
+	/\s+((?:xlink:)?href)\s*=\s*(?:"(https?:\/\/[^"]*)"|'(https?:\/\/[^']*)')/gi;
 
 /** <use> elements with external href (can reference malicious SVGs) */
-const EXTERNAL_USE = /<use[\s][^>]*(?:xlink:)?href\s*=\s*(?:"(?!#)[^"]*"|'(?!#)[^']*')[^>]*\/?>/gi;
+const EXTERNAL_USE =
+	/<use[\s][^>]*(?:xlink:)?href\s*=\s*(?:"(?!#)[^"]*"|'(?!#)[^']*')[^>]*\/?>/gi;
 
 /** Decode HTML/XML numeric and named entities to detect obfuscated URLs */
 function decodeEntities(str: string): string {
@@ -66,15 +69,22 @@ function extractSvgDimensions(svgString: string): { width: number; height: numbe
 	const viewBoxMatch = svgString.match(/viewBox\s*=\s*(?:"([^"]+)"|'([^']+)')/);
 	if (viewBoxMatch) {
 		const value = viewBoxMatch[1] ?? viewBoxMatch[2];
-		const parts = value.trim().split(/[\s,]+/).map(Number);
+		const parts = value
+			.trim()
+			.split(/[\s,]+/)
+			.map(Number);
 		if (parts.length >= 4 && parts[2] > 0 && parts[3] > 0) {
 			return { width: parts[2], height: parts[3] };
 		}
 	}
 
 	// Fallback: width/height attributes (supports both quote styles)
-	const widthMatch = svgString.match(/\bwidth\s*=\s*(?:"(\d+(?:\.\d+)?)(?:px)?"|'(\d+(?:\.\d+)?)(?:px)?')/);
-	const heightMatch = svgString.match(/\bheight\s*=\s*(?:"(\d+(?:\.\d+)?)(?:px)?"|'(\d+(?:\.\d+)?)(?:px)?')/);
+	const widthMatch = svgString.match(
+		/\bwidth\s*=\s*(?:"(\d+(?:\.\d+)?)(?:px)?"|'(\d+(?:\.\d+)?)(?:px)?')/,
+	);
+	const heightMatch = svgString.match(
+		/\bheight\s*=\s*(?:"(\d+(?:\.\d+)?)(?:px)?"|'(\d+(?:\.\d+)?)(?:px)?')/,
+	);
 	if (widthMatch && heightMatch) {
 		const w = widthMatch[1] ?? widthMatch[2];
 		const h = heightMatch[1] ?? heightMatch[2];
@@ -90,7 +100,10 @@ function extractSvgDimensions(svgString: string): { width: number; height: numbe
  * Sanitizes SVG, extracts metadata, generates ThumbHash.
  * Does NOT create resized variants (SVGs are resolution-independent).
  */
-export async function svgPipeline(data: ArrayBuffer, options: ProcessOptions): Promise<PipelineResult> {
+export async function svgPipeline(
+	data: ArrayBuffer,
+	options: ProcessOptions,
+): Promise<PipelineResult> {
 	const svgString = new TextDecoder().decode(data);
 	const sanitized = sanitizeSvg(svgString);
 	const dimensions = extractSvgDimensions(sanitized);
@@ -124,7 +137,10 @@ export async function svgPipeline(data: ArrayBuffer, options: ProcessOptions): P
 			file_size: data.byteLength,
 			width: dimensions.width,
 			height: dimensions.height,
-			aspect_ratio: dimensions.height > 0 ? Math.round((dimensions.width / dimensions.height) * 1000) / 1000 : 1,
+			aspect_ratio:
+				dimensions.height > 0
+					? Math.round((dimensions.width / dimensions.height) * 1000) / 1000
+					: 1,
 			has_transparency: true,
 			is_animated: false,
 			frame_count: 1,

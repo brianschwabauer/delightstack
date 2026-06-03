@@ -8,7 +8,14 @@ const PERSON = Database.table('person', (schema) => ({ name: schema.string() }))
 type Person = Database.Entity<typeof PERSON>;
 
 // Auto-id: 'id' should be present when no primary key is defined
-assertType<Person>({} as { readonly id: string; name: string; readonly created_at: number; readonly updated_at: number });
+assertType<Person>(
+	{} as {
+		readonly id: string;
+		name: string;
+		readonly created_at: number;
+		readonly updated_at: number;
+	},
+);
 
 const POST = Database.table('post', (schema) => ({
 	slug: schema.primaryKey(),
@@ -17,24 +24,36 @@ const POST = Database.table('post', (schema) => ({
 type Post = Database.Entity<typeof POST>;
 
 // Explicit PK: 'slug' should be present, no extra 'id'
-assertType<Post>({} as { readonly slug: string; title: string; readonly created_at: number; readonly updated_at: number });
+assertType<Post>(
+	{} as {
+		readonly slug: string;
+		title: string;
+		readonly created_at: number;
+		readonly updated_at: number;
+	},
+);
 
 // Derived fields should NOT appear in Entity type
 const PERSON_WITH_DERIVED = Database.table('person_derived', (schema) => ({
 	first_name: schema.string().searchable(),
 	last_name: schema.string().searchable(),
-	name: schema.string().derived((data) => `${data.first_name} ${data.last_name}`).sortable(),
+	name: schema
+		.string()
+		.derived((data) => `${data.first_name} ${data.last_name}`)
+		.sortable(),
 }));
 type PersonWithDerived = Database.Entity<typeof PERSON_WITH_DERIVED>;
 
 // Entity should have first_name, last_name, auto-id, timestamps — but NOT name
-assertType<PersonWithDerived>({} as {
-	readonly id: string;
-	first_name: string;
-	last_name: string;
-	readonly created_at: number;
-	readonly updated_at: number;
-});
+assertType<PersonWithDerived>(
+	{} as {
+		readonly id: string;
+		first_name: string;
+		last_name: string;
+		readonly created_at: number;
+		readonly updated_at: number;
+	},
+);
 
 describe('Schema: Database.table()', () => {
 	it('should create a table with basic fields', () => {
@@ -155,8 +174,14 @@ describe('Schema: Database.table()', () => {
 			name: schema.string(),
 		}));
 
-		expect(table.config.table_definition).toHaveProperty('created_at', 'INTEGER NOT NULL');
-		expect(table.config.table_definition).toHaveProperty('updated_at', 'INTEGER NOT NULL');
+		expect(table.config.table_definition).toHaveProperty(
+			'created_at',
+			'INTEGER NOT NULL',
+		);
+		expect(table.config.table_definition).toHaveProperty(
+			'updated_at',
+			'INTEGER NOT NULL',
+		);
 	});
 
 	it('should add updated_at to orama schema as a number', () => {
@@ -539,7 +564,10 @@ describe('Schema: derived() modifier', () => {
 		const table = Database.table('person_d3', (schema) => ({
 			id: schema.primaryKey(),
 			first_name: schema.string(),
-			name: schema.string().derived((data) => data.first_name).sortable(),
+			name: schema
+				.string()
+				.derived((data) => data.first_name)
+				.sortable(),
 		}));
 
 		expect(table.config.sortable_fields).toContain('name');
@@ -693,45 +721,46 @@ describe('Schema: derived() modifier', () => {
 const BOOK_WITH_FK_DERIVED = Database.table('book_fk', (schema) => ({
 	title: schema.string().searchable(),
 	author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
-	author_name: schema.string().derived(
-		['author_id'],
-		(data, refs) => refs.author_id?.name ?? 'Unknown',
-	),
+	author_name: schema
+		.string()
+		.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 }));
 type BookWithFkDerived = Database.Entity<typeof BOOK_WITH_FK_DERIVED>;
 
 // Entity should have title, author_id, auto-id, timestamps — but NOT author_name
-assertType<BookWithFkDerived>({} as {
-	readonly id: string;
-	title: string;
-	author_id: string;
-	readonly created_at: number;
-	readonly updated_at: number;
-});
+assertType<BookWithFkDerived>(
+	{} as {
+		readonly id: string;
+		title: string;
+		author_id: string;
+		readonly created_at: number;
+		readonly updated_at: number;
+	},
+);
 
 describe('Schema: FK-derived fields', () => {
 	it('should store derived_foreign_keys metadata on the field', () => {
 		const table = Database.table('book_fk1', (schema) => ({
 			title: schema.string(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
-			author_name: schema.string().derived(
-				['author_id'],
-				(data, refs) => refs.author_id?.name ?? 'Unknown',
-			),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
 		expect((table._['author_name']._ as any)['derived']).toBe(true);
-		expect((table._['author_name']._ as any)['derived_foreign_keys']).toEqual(['author_id']);
+		expect((table._['author_name']._ as any)['derived_foreign_keys']).toEqual([
+			'author_id',
+		]);
 	});
 
 	it('should automatically include FK-derived fields in searchable_fields', () => {
 		const table = Database.table('book_fk2', (schema) => ({
 			title: schema.string(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
-			author_name: schema.string().derived(
-				['author_id'],
-				(data, refs) => refs.author_id?.name ?? 'Unknown',
-			),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
 		expect(table.config.searchable_fields).toContain('author_name');
@@ -741,10 +770,9 @@ describe('Schema: FK-derived fields', () => {
 		const table = Database.table('book_fk3', (schema) => ({
 			title: schema.string(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
-			author_name: schema.string().derived(
-				['author_id'],
-				(data, refs) => refs.author_id?.name ?? 'Unknown',
-			),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
 		expect(table.config.orama.schema).toHaveProperty('author_name', 'string');
@@ -754,10 +782,9 @@ describe('Schema: FK-derived fields', () => {
 		const table = Database.table('book_fk4', (schema) => ({
 			title: schema.string(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
-			author_name: schema.string().derived(
-				['author_id'],
-				(data, refs) => refs.author_id?.name ?? 'Unknown',
-			),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
 		expect(table.config.table_definition).not.toHaveProperty('author_name');
@@ -769,10 +796,9 @@ describe('Schema: FK-derived fields', () => {
 		const table = Database.table('book_fk5', (schema) => ({
 			title: schema.string(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
-			author_name: schema.string().derived(
-				['author_id'],
-				(data, refs) => refs.author_id?.name ?? 'Unknown',
-			),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
 		expect(table.config.derived_fields).toEqual({
@@ -784,10 +810,9 @@ describe('Schema: FK-derived fields', () => {
 		const table = Database.table('book_fk6', (schema) => ({
 			title: schema.string().searchable(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
-			author_name: schema.string().derived(
-				['author_id'],
-				(data, refs) => refs.author_id?.name ?? 'Unknown',
-			),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
 		const sparse = table.toSparse({
@@ -808,10 +833,9 @@ describe('Schema: FK-derived fields', () => {
 			title: schema.string().searchable(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
 			title_upper: schema.string().derived((data) => data.title.toUpperCase()),
-			author_name: schema.string().derived(
-				['author_id'],
-				(data, refs) => refs.author_id?.name ?? 'Unknown',
-			),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
 		const sparse = table.toSparse({
@@ -830,10 +854,9 @@ describe('Schema: FK-derived fields', () => {
 		const table = Database.table('book_fk8', (schema) => ({
 			title: schema.string(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
-			author_name: schema.string().derived(
-				['author_id'],
-				(data, refs) => refs.author_id?.name ?? 'Unknown',
-			),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
 		expect(table.form.field).not.toHaveProperty('author_name');
@@ -844,10 +867,9 @@ describe('Schema: FK-derived fields', () => {
 		expect(() =>
 			Database.table('book_fk9', (schema) => ({
 				title: schema.string(),
-				author_name: schema.string().derived(
-					['title'],
-					(data, refs) => refs.title?.name ?? 'Unknown',
-				),
+				author_name: schema
+					.string()
+					.derived(['title'], (data, refs) => refs.title?.name ?? 'Unknown'),
 			})),
 		).toThrow(/not a foreign key field/);
 	});
@@ -856,25 +878,33 @@ describe('Schema: FK-derived fields', () => {
 		const table = Database.table('review_fk', (schema) => ({
 			book_id: schema.foreignKey({ type: 'string', table: 'books', column: 'id' }),
 			reviewer_id: schema.foreignKey({ type: 'string', table: 'users', column: 'id' }),
-			summary: schema.string().derived(
-				['book_id', 'reviewer_id'],
-				(data, refs) => `${refs.reviewer_id?.name} reviewed ${refs.book_id?.title}`,
-			),
+			summary: schema
+				.string()
+				.derived(
+					['book_id', 'reviewer_id'],
+					(data, refs) => `${refs.reviewer_id?.name} reviewed ${refs.book_id?.title}`,
+				),
 		}));
 
 		expect(table.config.derived_fields).toEqual({
 			summary: { foreign_keys: ['book_id', 'reviewer_id'] },
 		});
-		expect((table._['summary']._ as any)['derived_foreign_keys']).toEqual(['book_id', 'reviewer_id']);
+		expect((table._['summary']._ as any)['derived_foreign_keys']).toEqual([
+			'book_id',
+			'reviewer_id',
+		]);
 	});
 
 	it('should support number FK-derived fields', () => {
 		const table = Database.table('item_fk', (schema) => ({
-			category_id: schema.foreignKey({ type: 'string', table: 'categories', column: 'id' }),
-			category_priority: schema.number().derived(
-				['category_id'],
-				(data, refs) => refs.category_id?.priority ?? 0,
-			),
+			category_id: schema.foreignKey({
+				type: 'string',
+				table: 'categories',
+				column: 'id',
+			}),
+			category_priority: schema
+				.number()
+				.derived(['category_id'], (data, refs) => refs.category_id?.priority ?? 0),
 		}));
 
 		expect((table._['category_priority']._ as any)['derived']).toBe(true);

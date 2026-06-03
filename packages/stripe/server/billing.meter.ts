@@ -46,9 +46,7 @@ export async function reportMeterEvent(
 				},
 				timestamp: options.timestamp ?? Math.floor(Date.now() / 1000),
 			},
-			options.idempotency_key
-				? { idempotencyKey: options.idempotency_key }
-				: undefined,
+			options.idempotency_key ? { idempotencyKey: options.idempotency_key } : undefined,
 		),
 	);
 }
@@ -67,10 +65,7 @@ export async function reportMeterEvent(
  * await reportTokenUsage(customer_id, result.usage.total_tokens);
  * ```
  */
-export function createMeterReporter(
-	config: ResolvedBillingConfig,
-	meter_id: string,
-) {
+export function createMeterReporter(config: ResolvedBillingConfig, meter_id: string) {
 	return async (
 		customer_id: string,
 		value: number,

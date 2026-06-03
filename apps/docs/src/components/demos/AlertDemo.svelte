@@ -6,21 +6,19 @@
 </script>
 
 <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-	<Button onclick={() => showAlert = true}>Confirm Action</Button>
-	<Button error onclick={() => showDestructive = true}>Delete Item</Button>
+	<Button onclick={() => (showAlert = true)}>Confirm Action</Button>
+	<Button error onclick={() => (showDestructive = true)}>Delete Item</Button>
 </div>
 
 <Alert
 	bind:open={showAlert}
 	title="Save Changes?"
 	message="Would you like to save your changes before leaving?"
-	continue_text="Save"
-/>
+	continue_text="Save" />
 
 <Alert
 	bind:open={showDestructive}
 	title="Delete Item"
 	message="This action cannot be undone. Are you sure you want to delete this item?"
 	continue_text="Delete"
-	destructive
-/>
+	destructive />

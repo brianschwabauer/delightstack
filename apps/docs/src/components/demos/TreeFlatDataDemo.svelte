@@ -14,9 +14,4 @@
 	let expanded = $state(['1', '2']);
 </script>
 
-<Tree
-	data={flatData}
-	selectable
-	bind:selected
-	bind:expanded
-/>
+<Tree data={flatData} selectable bind:selected bind:expanded />

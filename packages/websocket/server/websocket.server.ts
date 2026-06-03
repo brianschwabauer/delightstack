@@ -16,7 +16,9 @@ import type {
  * Configuration for the WebsocketServer Durable Object.
  * @typeParam Meta - The session metadata shape. Defaults to `AuthSessionMeta`.
  */
-export interface WebsocketServerConfig<Meta extends Record<string, unknown> = AuthSessionMeta> {
+export interface WebsocketServerConfig<
+	Meta extends Record<string, unknown> = AuthSessionMeta,
+> {
 	/**
 	 * Handler for incoming client messages. Return a message to send back, or void.
 	 * Only called for messages that are not handled internally (ping/pong is automatic).
@@ -94,15 +96,14 @@ interface Env {
  * }
  * ```
  */
-export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionMeta> extends DurableObject<Env> {
+export class WebsocketServer<
+	Meta extends Record<string, unknown> = AuthSessionMeta,
+> extends DurableObject<Env> {
 	private sessions = new Map<WebSocket, WebsocketSessionMeta<Meta>>();
 	private config: WebsocketServerConfig<Meta>;
 
 	// In-memory token bucket rate limiter (per ws_session_id)
-	private rate_limit_buckets = new Map<
-		string,
-		{ count: number; last_refill: number }
-	>();
+	private rate_limit_buckets = new Map<string, { count: number; last_refill: number }>();
 
 	constructor(config: WebsocketServerConfig<Meta>, ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -127,7 +128,10 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 	// WebSocket lifecycle (Hibernation API callbacks)
 	// -----------------------------------------------------------------------
 
-	async webSocketMessage(ws: WebSocket, raw_message: string | ArrayBuffer): Promise<void> {
+	async webSocketMessage(
+		ws: WebSocket,
+		raw_message: string | ArrayBuffer,
+	): Promise<void> {
 		if (typeof raw_message !== 'string') {
 			return this.sendError(ws, 'Binary messages are not supported', 400);
 		}
@@ -153,7 +157,11 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 
 		// Delegate to app-provided handler (parsed is validated to have a string event field)
 		if (this.config.onMessage) {
-			const response = await this.config.onMessage(parsed as WebsocketMessage, session, this);
+			const response = await this.config.onMessage(
+				parsed as WebsocketMessage,
+				session,
+				this,
+			);
 			if (response) {
 				this.send(ws, response);
 			}

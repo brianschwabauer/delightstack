@@ -283,8 +283,7 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 					} else {
 						const code: AiErrorCode =
 							(error as { code?: AiErrorCode })?.code ?? 'STREAM_INTERRUPTED';
-						const message =
-							error instanceof Error ? error.message : 'Stream interrupted';
+						const message = error instanceof Error ? error.message : 'Stream interrupted';
 
 						ws.broadcast({
 							event: 'ai:stream:error',

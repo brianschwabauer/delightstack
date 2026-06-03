@@ -75,10 +75,7 @@ export async function syncSubscription(
 	const unique_entitlements = [...new Set(granted_entitlements)];
 
 	// Update auth entitlements if subscription is active/trialing
-	if (
-		subscription.status === 'active' ||
-		subscription.status === 'trialing'
-	) {
+	if (subscription.status === 'active' || subscription.status === 'trialing') {
 		await updateEntitlements(ctx, unique_entitlements);
 	} else {
 		await updateEntitlements(ctx, []);
@@ -91,18 +88,10 @@ export async function syncSubscription(
 		entitlements: unique_entitlements,
 		current_period_start: subscription.current_period_start * 1000,
 		current_period_end: subscription.current_period_end * 1000,
-		cancel_at: subscription.cancel_at
-			? subscription.cancel_at * 1000
-			: undefined,
-		canceled_at: subscription.canceled_at
-			? subscription.canceled_at * 1000
-			: undefined,
-		trial_start: subscription.trial_start
-			? subscription.trial_start * 1000
-			: undefined,
-		trial_end: subscription.trial_end
-			? subscription.trial_end * 1000
-			: undefined,
+		cancel_at: subscription.cancel_at ? subscription.cancel_at * 1000 : undefined,
+		canceled_at: subscription.canceled_at ? subscription.canceled_at * 1000 : undefined,
+		trial_start: subscription.trial_start ? subscription.trial_start * 1000 : undefined,
+		trial_end: subscription.trial_end ? subscription.trial_end * 1000 : undefined,
 	};
 
 	broadcastChange(ctx, state);
@@ -127,10 +116,7 @@ async function updateEntitlements(
 }
 
 /** Broadcast subscription change via WebSocket */
-function broadcastChange(
-	ctx: SyncContext,
-	state: SubscriptionState | null,
-): void {
+function broadcastChange(ctx: SyncContext, state: SubscriptionState | null): void {
 	if (!ctx.ws) return;
 
 	ctx.ws.broadcast({

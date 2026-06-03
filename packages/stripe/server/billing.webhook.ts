@@ -87,8 +87,7 @@ export async function handleWebhook(
 		case 'customer.subscription.created':
 		case 'customer.subscription.updated':
 		case 'customer.subscription.deleted': {
-			const subscription = stripe_event.data
-				.object as Stripe.Subscription;
+			const subscription = stripe_event.data.object as Stripe.Subscription;
 			const customer_id = extractCustomerId(subscription.customer);
 			const org_id = await resolveOrgIdFromCustomer(stripe, customer_id);
 
@@ -166,14 +165,10 @@ export async function handleWebhook(
 		}
 
 		case 'checkout.session.completed': {
-			const session = stripe_event.data
-				.object as Stripe.Checkout.Session;
+			const session = stripe_event.data.object as Stripe.Checkout.Session;
 			if (session.mode === 'subscription' && session.customer) {
 				const customer_id = extractCustomerId(session.customer);
-				const org_id = await resolveOrgIdFromCustomer(
-					stripe,
-					customer_id,
-				);
+				const org_id = await resolveOrgIdFromCustomer(stripe, customer_id);
 
 				await syncSubscription({
 					config,

@@ -3,14 +3,21 @@ import type { AuthOperationResult, AuthDatabaseServer } from './auth.db.server';
 
 /** The auth DO stub type — matches DurableObjectStub<AuthDatabaseServer> minus lifecycle methods. */
 type AuthStub = DurableObjectStub<
-	Omit<AuthDatabaseServer, 'alarm' | 'webSocketMessage' | 'webSocketClose' | 'webSocketError' | 'fetch' | 'Rpc'>
+	Omit<
+		AuthDatabaseServer,
+		'alarm' | 'webSocketMessage' | 'webSocketClose' | 'webSocketError' | 'fetch' | 'Rpc'
+	>
 >;
 
 /**
  * Configuration for the auth integration layer.
  * Pass to `defineAuthConfig()` to fill in defaults, or directly to `createAuthHandle()`.
  */
-export interface AuthConfig<P extends string = string, S extends string = string, E extends string = string> {
+export interface AuthConfig<
+	P extends string = string,
+	S extends string = string,
+	E extends string = string,
+> {
 	/** JWT signing secret (hex-encoded HMAC-SHA256 key) */
 	secret: string;
 
@@ -142,7 +149,10 @@ export interface AuthConfig<P extends string = string, S extends string = string
 	 * resolveOrgId: (_event, session) => Object.keys(session?.org ?? {})[0] ?? null
 	 * ```
 	 */
-	resolveOrgId?: (event: import('@sveltejs/kit').RequestEvent, session: import('../types').SessionToken<'auth'> | null) => string | null;
+	resolveOrgId?: (
+		event: import('@sveltejs/kit').RequestEvent,
+		session: import('../types').SessionToken<'auth'> | null,
+	) => string | null;
 
 	/** Base path for auth API routes @default '/api/auth' */
 	base_path?: string;
@@ -177,16 +187,36 @@ export interface AuthConfig<P extends string = string, S extends string = string
 			meta: UserSessionMeta;
 		}) => Promise<void>;
 
-		onSignOut?: (ctx: { auth: AuthStub; user_id: string; session_id: string }) => Promise<void>;
+		onSignOut?: (ctx: {
+			auth: AuthStub;
+			user_id: string;
+			session_id: string;
+		}) => Promise<void>;
 
-		onPasswordReset?: (ctx: { auth: AuthStub; user_id: string; email: string }) => Promise<void>;
-		onEmailVerified?: (ctx: { auth: AuthStub; user_id: string; email: string }) => Promise<void>;
-		onOrgJoined?: (ctx: { auth: AuthStub; user_id: string; org_id: string }) => Promise<void>;
+		onPasswordReset?: (ctx: {
+			auth: AuthStub;
+			user_id: string;
+			email: string;
+		}) => Promise<void>;
+		onEmailVerified?: (ctx: {
+			auth: AuthStub;
+			user_id: string;
+			email: string;
+		}) => Promise<void>;
+		onOrgJoined?: (ctx: {
+			auth: AuthStub;
+			user_id: string;
+			org_id: string;
+		}) => Promise<void>;
 	};
 }
 
 /** Resolved auth config with all defaults filled in */
-export interface ResolvedAuthConfig<P extends string = string, S extends string = string, E extends string = string> extends AuthConfig<P, S, E> {
+export interface ResolvedAuthConfig<
+	P extends string = string,
+	S extends string = string,
+	E extends string = string,
+> extends AuthConfig<P, S, E> {
 	entitlements: readonly E[];
 	base_path: string;
 	csrf: boolean | { allowed_origins?: string[] };
@@ -195,22 +225,32 @@ export interface ResolvedAuthConfig<P extends string = string, S extends string 
 }
 
 /** Creates an auth config with sensible defaults */
-export function defineAuthConfig<const P extends string, const S extends string, const E extends string>(config: AuthConfig<P, S, E>): ResolvedAuthConfig<P, S, E> {
+export function defineAuthConfig<
+	const P extends string,
+	const S extends string,
+	const E extends string,
+>(config: AuthConfig<P, S, E>): ResolvedAuthConfig<P, S, E> {
 	if (!/^[0-9a-fA-F]{64,}$/.test(config.secret)) {
 		throw new Error(
 			'Auth config: secret must be a hex-encoded string of at least 64 characters (32 bytes). ' +
-			'Generate one with: openssl rand -hex 32',
+				'Generate one with: openssl rand -hex 32',
 		);
 	}
 	if (config.permissions.length > 32) {
-		throw new Error(`Auth config: permissions array exceeds 32 entries (got ${config.permissions.length}). Bitwise encoding uses a 32-bit integer.`);
+		throw new Error(
+			`Auth config: permissions array exceeds 32 entries (got ${config.permissions.length}). Bitwise encoding uses a 32-bit integer.`,
+		);
 	}
 	if (config.oauth_scopes.length > 32) {
-		throw new Error(`Auth config: oauth_scopes array exceeds 32 entries (got ${config.oauth_scopes.length}). Bitwise encoding uses a 32-bit integer.`);
+		throw new Error(
+			`Auth config: oauth_scopes array exceeds 32 entries (got ${config.oauth_scopes.length}). Bitwise encoding uses a 32-bit integer.`,
+		);
 	}
 	const entitlements = config.entitlements ?? [];
 	if (entitlements.length > 32) {
-		throw new Error(`Auth config: entitlements array exceeds 32 entries (got ${entitlements.length}). Bitwise encoding uses a 32-bit integer.`);
+		throw new Error(
+			`Auth config: entitlements array exceeds 32 entries (got ${entitlements.length}). Bitwise encoding uses a 32-bit integer.`,
+		);
 	}
 	const dev = config.dev ?? false;
 	return {

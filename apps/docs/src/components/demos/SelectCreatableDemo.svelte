@@ -19,5 +19,4 @@
 	placeholder="Select or create tags..."
 	oncreate={({ value }) => {
 		tags = [...tags, { value, label: value }];
-	}}
-/>
+	}} />

@@ -23,7 +23,8 @@
 {#snippet customNode({ node, level })}
 	<span>{node.label}</span>
 	{#if node.data?.badge}
-		<span style="
+		<span
+			style="
 			margin-left: 0.5rem;
 			padding: 0.125rem 0.5rem;
 			font-size: 0.7rem;
@@ -31,7 +32,9 @@
 			background: color-mix(in oklch, var(--color-action-active) 15%, transparent);
 			color: var(--color-action-active);
 			font-weight: 500;
-		">{node.data.badge}</span>
+		">
+			{node.data.badge}
+		</span>
 	{/if}
 {/snippet}
 

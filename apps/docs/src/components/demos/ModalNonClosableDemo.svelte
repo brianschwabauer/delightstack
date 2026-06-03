@@ -8,7 +8,8 @@
 
 <Modal bind:open title="Required Step" closable={false}>
 	<p style="margin: 0; color: var(--color-text)">
-		You must complete this step before continuing. The Escape key and backdrop click are disabled.
+		You must complete this step before continuing. The Escape key and backdrop click are
+		disabled.
 	</p>
 
 	{#snippet footer()}

@@ -7,6 +7,5 @@
 		before="https://picsum.photos/id/1025/800/400"
 		after="https://picsum.photos/id/1035/800/400"
 		before_alt="Original photo"
-		after_alt="Edited photo with filters applied"
-	/>
+		after_alt="Edited photo with filters applied" />
 </div>

@@ -96,7 +96,8 @@ export const richMediaItems: GalleryItem[] = [
 		width: 1200,
 		height: 630,
 		name: 'Embedded page',
-		caption: 'An embedded web page (iframe). Any URL works — set a poster for the thumbnail.',
+		caption:
+			'An embedded web page (iframe). Any URL works — set a poster for the thumbnail.',
 		type: 'embed',
 	},
 	{

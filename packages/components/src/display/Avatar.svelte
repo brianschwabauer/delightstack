@@ -85,7 +85,13 @@
 	const nameColor = $derived(colorKey ? getNameColor(colorKey) : undefined);
 	const isInteractive = $derived(!!onclick);
 	const badgeText = $derived(
-		badge === true ? undefined : typeof badge === 'number' ? (badge > 99 ? '99+' : String(badge)) : undefined,
+		badge === true
+			? undefined
+			: typeof badge === 'number'
+				? badge > 99
+					? '99+'
+					: String(badge)
+				: undefined,
 	);
 
 	const statusLabel: Record<string, string> = {
@@ -128,17 +134,12 @@
 	{onclick}
 	onkeydown={isInteractive ? handleKeyDown : undefined}
 	{@attach tooltip(tooltipMessage)}>
-
 	{#if skeleton}
 		<div class="skeleton-inner"></div>
 	{:else if children}
 		{@render children()}
 	{:else if showImage}
-		<img
-			{src}
-			alt={name || ''}
-			onerror={handleImgError}
-			draggable="false" />
+		<img {src} alt={name || ''} onerror={handleImgError} draggable="false" />
 	{:else if showInitials}
 		<span class="initials" style:background={nameColor}>
 			{initials}
@@ -146,7 +147,8 @@
 	{:else}
 		<span class="icon">
 			<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-				<path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v1.2c0 .66.54 1.2 1.2 1.2h16.8c.66 0 1.2-.54 1.2-1.2v-1.2c0-3.2-6.4-4.8-9.6-4.8z" />
+				<path
+					d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v1.2c0 .66.54 1.2 1.2 1.2h16.8c.66 0 1.2-.54 1.2-1.2v-1.2c0-3.2-6.4-4.8-9.6-4.8z" />
 			</svg>
 		</span>
 	{/if}
@@ -161,7 +163,10 @@
 	{/if}
 
 	{#if badge !== undefined && badge !== false}
-		<span class="badge" class:dot={badge === true} aria-label={typeof badge === 'number' ? `${badge} notifications` : 'Notification'}>
+		<span
+			class="badge"
+			class:dot={badge === true}
+			aria-label={typeof badge === 'number' ? `${badge} notifications` : 'Notification'}>
 			{#if badgeText}{badgeText}{/if}
 		</span>
 	{/if}
@@ -230,7 +235,9 @@
 		&.interactive {
 			cursor: pointer;
 			outline: none;
-			transition: transform 150ms ease, box-shadow 200ms ease;
+			transition:
+				transform 150ms ease,
+				box-shadow 200ms ease;
 
 			&:hover {
 				transform: scale(1.05);
@@ -279,10 +286,7 @@
 			width: 100%;
 			height: 100%;
 			border-radius: var(--avatar-radius);
-			background: light-dark(
-				var(--color-border, #d1d5db),
-				var(--color-border, #4b5563)
-			);
+			background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 			color: light-dark(
 				var(--color-text-muted, #6b7280),
 				var(--color-text-muted, #9ca3af)
@@ -299,10 +303,7 @@
 			width: var(--avatar-status);
 			height: var(--avatar-status);
 			border-radius: var(--radius-round, 9999px);
-			border: 2px solid light-dark(
-				var(--color-bg, #fff),
-				var(--color-bg, #1f2937)
-			);
+			border: 2px solid light-dark(var(--color-bg, #fff), var(--color-bg, #1f2937));
 			z-index: 1;
 
 			&.bottom {
@@ -364,10 +365,7 @@
 			min-width: 1.5em;
 			height: 1.5em;
 			padding: 0 0.45em;
-			border: 2px solid light-dark(
-				var(--color-bg, #fff),
-				var(--color-bg, #1f2937)
-			);
+			border: 2px solid light-dark(var(--color-bg, #fff), var(--color-bg, #1f2937));
 			z-index: 1;
 			pointer-events: none;
 			white-space: nowrap;
@@ -384,11 +382,21 @@
 				translate: 25% -25%;
 			}
 		}
-		&.size-0 .badge { font-size: 0.6rem; }
-		&.size-2 .badge { font-size: 0.85rem; }
-		&.size-3 .badge { font-size: 0.95rem; }
-		&.size-4 .badge { font-size: 1.1rem; }
-		&.size-5 .badge { font-size: 1.3rem; }
+		&.size-0 .badge {
+			font-size: 0.6rem;
+		}
+		&.size-2 .badge {
+			font-size: 0.85rem;
+		}
+		&.size-3 .badge {
+			font-size: 0.95rem;
+		}
+		&.size-4 .badge {
+			font-size: 1.1rem;
+		}
+		&.size-5 .badge {
+			font-size: 1.3rem;
+		}
 
 		&.skeleton {
 			pointer-events: none;
@@ -398,10 +406,7 @@
 			width: 100%;
 			height: 100%;
 			border-radius: var(--avatar-radius);
-			background: light-dark(
-				var(--color-border, #e5e7eb),
-				var(--color-border, #374151)
-			);
+			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 			position: relative;
 			overflow: hidden;
 
@@ -426,7 +431,8 @@
 	}
 
 	@keyframes avatar-pulse {
-		0%, 100% {
+		0%,
+		100% {
 			box-shadow: 0 0 0 0 rgb(from var(--color-success, #22c55e) r g b / 0.4);
 		}
 		50% {

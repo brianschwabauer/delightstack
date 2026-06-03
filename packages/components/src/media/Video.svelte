@@ -1186,7 +1186,10 @@
 							{has_quality_options ? active_quality_label : hls_quality_label}
 						</button>
 						{#if quality_open}
-							<div class="dropdown" role="menu" transition:scale={{ duration: 150, start: 0.92, easing: backOut }}>
+							<div
+								class="dropdown"
+								role="menu"
+								transition:scale={{ duration: 150, start: 0.92, easing: backOut }}>
 								{#if has_quality_options}
 									{#each quality_sources as source, i}
 										<button
@@ -1194,7 +1197,8 @@
 											class:active={active_source_index === i}
 											type="button"
 											role="menuitem"
-											onclick={() => selectQuality(i)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+											onclick={() => selectQuality(i)}
+											{@attach ripple({ color: '#fff', opacity: 0.18 })}>
 											{source.size}p
 										</button>
 									{/each}
@@ -1204,7 +1208,8 @@
 										class:active={hls_current_level === -1}
 										type="button"
 										role="menuitem"
-										onclick={() => selectHlsLevel(-1)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+										onclick={() => selectHlsLevel(-1)}
+										{@attach ripple({ color: '#fff', opacity: 0.18 })}>
 										Auto
 									</button>
 									{#each hls_levels as level}
@@ -1213,7 +1218,8 @@
 											class:active={hls_current_level === level.index}
 											type="button"
 											role="menuitem"
-											onclick={() => selectHlsLevel(level.index)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+											onclick={() => selectHlsLevel(level.index)}
+											{@attach ripple({ color: '#fff', opacity: 0.18 })}>
 											{level.height}p
 										</button>
 									{/each}
@@ -1241,14 +1247,18 @@
 						{playback_rate === 1 ? '1x' : `${playback_rate}x`}
 					</button>
 					{#if speed_open}
-						<div class="dropdown" role="menu" transition:scale={{ duration: 150, start: 0.92, easing: backOut }}>
+						<div
+							class="dropdown"
+							role="menu"
+							transition:scale={{ duration: 150, start: 0.92, easing: backOut }}>
 							{#each SPEEDS as speed}
 								<button
 									class="dropdown-item"
 									class:active={playback_rate === speed}
 									type="button"
 									role="menuitem"
-									onclick={() => selectSpeed(speed)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+									onclick={() => selectSpeed(speed)}
+									{@attach ripple({ color: '#fff', opacity: 0.18 })}>
 									{speed}x
 								</button>
 							{/each}
@@ -1353,7 +1363,8 @@
 													class:active={active_source_index === i}
 													type="button"
 													data-pop-focusable
-													onclick={() => selectQuality(i)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+													onclick={() => selectQuality(i)}
+													{@attach ripple({ color: '#fff', opacity: 0.18 })}>
 													{source.size}p
 												</button>
 											{/each}
@@ -1363,7 +1374,8 @@
 												class:active={hls_current_level === -1}
 												type="button"
 												data-pop-focusable
-												onclick={() => selectHlsLevel(-1)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+												onclick={() => selectHlsLevel(-1)}
+												{@attach ripple({ color: '#fff', opacity: 0.18 })}>
 												Auto
 											</button>
 											{#each hls_levels as level}
@@ -1372,7 +1384,8 @@
 													class:active={hls_current_level === level.index}
 													type="button"
 													data-pop-focusable
-													onclick={() => selectHlsLevel(level.index)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+													onclick={() => selectHlsLevel(level.index)}
+													{@attach ripple({ color: '#fff', opacity: 0.18 })}>
 													{level.height}p
 												</button>
 											{/each}
@@ -1391,7 +1404,8 @@
 											class:active={playback_rate === speed}
 											type="button"
 											data-pop-focusable
-											onclick={() => selectSpeed(speed)} {@attach ripple({ color: '#fff', opacity: 0.18 })}>
+											onclick={() => selectSpeed(speed)}
+											{@attach ripple({ color: '#fff', opacity: 0.18 })}>
 											{speed}x
 										</button>
 									{/each}

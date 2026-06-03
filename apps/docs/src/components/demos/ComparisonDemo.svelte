@@ -11,6 +11,5 @@
 		label_before="Photo A"
 		label_after="Photo B"
 		snaps={[50]}
-		bind:position
-	/>
+		bind:position />
 </div>

@@ -168,7 +168,7 @@
 		<h1>Input</h1>
 		<p>
 			Every variation of the <code>Input</code>
-			 component, for visual review.
+			component, for visual review.
 		</p>
 	</header>
 
@@ -543,7 +543,7 @@
 			The <code>Select</code>
 			component — legacy notched-outline styling, native
 			<code>popover</code>
-			 dropdown positioned with CSS anchor positioning.
+			dropdown positioned with CSS anchor positioning.
 		</p>
 	</header>
 

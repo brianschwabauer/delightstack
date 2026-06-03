@@ -27,7 +27,13 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 	const defaultVariant = options.default_variant ?? 'default';
 	const placeholder = options.placeholder ?? DEFAULT_PLACEHOLDER;
 
-	return async function handle({ event, resolve }: { event: RequestEventLike; resolve: (event: RequestEventLike) => Promise<Response> }): Promise<Response> {
+	return async function handle({
+		event,
+		resolve,
+	}: {
+		event: RequestEventLike;
+		resolve: (event: RequestEventLike) => Promise<Response>;
+	}): Promise<Response> {
 		// Only intercept requests under the CDN prefix
 		if (!event.url.pathname.startsWith(cdnPrefix)) {
 			return resolve(event);
@@ -102,7 +108,9 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 
 		// Content-Disposition for original variant (download with original filename)
 		if (variant === 'original' && object.customMetadata?.['original-filename']) {
-			const encoded = encodeContentDisposition(object.customMetadata['original-filename']);
+			const encoded = encodeContentDisposition(
+				object.customMetadata['original-filename'],
+			);
 			headers.set('Content-Disposition', `inline; filename="${encoded}"`);
 		}
 

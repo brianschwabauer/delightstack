@@ -6,6 +6,5 @@
 	<Comparison
 		before="https://picsum.photos/id/1050/800/400"
 		after="https://picsum.photos/id/1051/800/400"
-		show_labels={false}
-	/>
+		show_labels={false} />
 </div>

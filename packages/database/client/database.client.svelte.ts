@@ -308,12 +308,11 @@ export class EntityState<
 			let result: Database.Entity<T>;
 			if (!this.#id) {
 				// No ID — create new entity
-				const raw = (await worker.create(
-					this.entity_type,
-					data_to_save as Record<string, unknown>,
-				).catch((error) => {
-					throw DelightError.fromWorker(error) ?? error;
-				})) as Record<string, unknown>;
+				const raw = (await worker
+					.create(this.entity_type, data_to_save as Record<string, unknown>)
+					.catch((error) => {
+						throw DelightError.fromWorker(error) ?? error;
+					})) as Record<string, unknown>;
 				result = raw as Database.Entity<T>;
 				// Update ID from server response using configured primary key
 				const pk = raw[this.#primary_key] as string | number;
@@ -323,13 +322,11 @@ export class EntityState<
 				this.#onChange?.({ type: 'create', id: pk, data: raw });
 			} else {
 				// Has ID — update existing entity
-				const raw = (await worker.update(
-					this.entity_type,
-					this.#id,
-					data_to_save as Record<string, unknown>,
-				).catch((error) => {
-					throw DelightError.fromWorker(error) ?? error;
-				})) as Record<string, unknown>;
+				const raw = (await worker
+					.update(this.entity_type, this.#id, data_to_save as Record<string, unknown>)
+					.catch((error) => {
+						throw DelightError.fromWorker(error) ?? error;
+					})) as Record<string, unknown>;
 				result = raw as Database.Entity<T>;
 				// Fire change hook
 				this.#onChange?.({ type: 'update', id: this.#id, data: raw });
@@ -386,13 +383,10 @@ export class EntityState<
 			// bypasses IDB cleanly.
 			const force_refresh = options?.force_refresh === true;
 			const prefer_main_thread = this.#prefer_fetch?.() ?? false;
-			const use_fetch_path =
-				!this.#worker || (!force_refresh && prefer_main_thread);
+			const use_fetch_path = !this.#worker || (!force_refresh && prefer_main_thread);
 
 			if (use_fetch_path) {
-				const response = await fetchFn(
-					`/api/${this.entity_type}/${this.#id}`,
-				);
+				const response = await fetchFn(`/api/${this.entity_type}/${this.#id}`);
 				if (response.ok) {
 					data = (await response.json()) as Database.Entity<T>;
 					if (this.#worker && data) {
@@ -634,7 +628,10 @@ export class EntityReader<
 
 	/** Force a re-fetch, bypassing the worker's IDB cache. */
 	async reload(): Promise<void> {
-		await this.#fetch(untrack(() => this.#id_source()), true);
+		await this.#fetch(
+			untrack(() => this.#id_source()),
+			true,
+		);
 	}
 
 	/**
@@ -666,10 +663,7 @@ export class EntityReader<
 		}
 	}
 
-	async #fetch(
-		id: string | number | undefined,
-		force_refresh: boolean,
-	): Promise<void> {
+	async #fetch(id: string | number | undefined, force_refresh: boolean): Promise<void> {
 		const prev_id = this.#current_id;
 		this.#current_id = id;
 
@@ -705,9 +699,12 @@ export class EntityReader<
 				} else if (response.ok) {
 					data = (await response.json()) as Database.Entity<T>;
 				} else {
-					const body = (await response.json().catch(() => null)) as
-						| { message?: string; status?: number; code?: string; detail?: string }
-						| null;
+					const body = (await response.json().catch(() => null)) as {
+						message?: string;
+						status?: number;
+						code?: string;
+						detail?: string;
+					} | null;
 					throw new DelightError({
 						message: body?.message ?? response.statusText,
 						status: body?.status ?? response.status,
@@ -1181,12 +1178,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 				// wasteful when we already know what changed; reconnect/page
 				// refresh still triggers full sync via init().
 				this.#worker
-					.applyExternalChange(
-						event.entity_type,
-						event.type,
-						event.id,
-						event.data,
-					)
+					.applyExternalChange(event.entity_type, event.type, event.id, event.data)
 					.then((applied) => {
 						this.#invalidateEntity(event.entity_type, event.id);
 						// `#invalidateEntity` wakes up `db.get` / `db.read`
@@ -1290,9 +1282,12 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		const response = await fetchFn(`/api/${entity_type}/${id}`);
 		if (response.status === 404) return undefined;
 		if (!response.ok) {
-			const body = (await response.json().catch(() => null)) as
-				| { message?: string; status?: number; code?: string; detail?: string }
-				| null;
+			const body = (await response.json().catch(() => null)) as {
+				message?: string;
+				status?: number;
+				code?: string;
+				detail?: string;
+			} | null;
 			throw new DelightError({
 				message: body?.message ?? response.statusText,
 				status: body?.status ?? response.status,
@@ -1385,9 +1380,12 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 					if (xhr.status >= 200 && xhr.status < 300) {
 						resolve(xhr.response as Record<string, unknown>);
 					} else {
-						const body = xhr.response as
-							| { message?: string; status?: number; code?: string; detail?: string }
-							| null;
+						const body = xhr.response as {
+							message?: string;
+							status?: number;
+							code?: string;
+							detail?: string;
+						} | null;
 						reject(
 							new DelightError({
 								message: body?.message ?? xhr.statusText,
@@ -1404,9 +1402,12 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 		const response = await fetch('/api/image', { method: 'POST', body: form });
 		if (!response.ok) {
-			const body = (await response.json().catch(() => null)) as
-				| { message?: string; status?: number; code?: string; detail?: string }
-				| null;
+			const body = (await response.json().catch(() => null)) as {
+				message?: string;
+				status?: number;
+				code?: string;
+				detail?: string;
+			} | null;
 			throw new DelightError({
 				message: body?.message ?? response.statusText,
 				status: body?.status ?? response.status,
@@ -1528,10 +1529,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 				// `db.get` / `db.read` readers for the same id re-fetch.
 				if (event.type === 'create') {
 					this.#entity_cache.delete(`${entity_type}:`);
-					this.#entity_cache.set(
-						`${entity_type}:${event.id}`,
-						instance as EntityState,
-					);
+					this.#entity_cache.set(`${entity_type}:${event.id}`, instance as EntityState);
 				} else if (event.type === 'delete') {
 					this.#entity_cache.delete(`${entity_type}:${event.id}`);
 				}

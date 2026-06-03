@@ -43,7 +43,9 @@
 		error = false,
 
 		/** Multi-segment progress (linear only) */
-		segments = undefined as Array<{ value: number; color?: string; label?: string }> | undefined,
+		segments = undefined as
+			| Array<{ value: number; color?: string; label?: string }>
+			| undefined,
 
 		/** Element ID */
 		id = propId,
@@ -101,7 +103,8 @@
 		aria-valuenow={isIndeterminate ? undefined : Math.round(percentage)}
 		aria-valuemin={isIndeterminate ? undefined : 0}
 		aria-valuemax={isIndeterminate ? undefined : 100}
-		aria-label={label || (isIndeterminate ? 'Loading' : `${Math.round(percentage)}% complete`)}
+		aria-label={label ||
+			(isIndeterminate ? 'Loading' : `${Math.round(percentage)}% complete`)}
 		style:--progress-color={color || null}>
 		{#if circular}
 			<svg
@@ -126,7 +129,8 @@
 					stroke-linecap="round"
 					stroke-dasharray={circumference}
 					stroke-dashoffset={isIndeterminate ? undefined : dashOffset}
-					transform="rotate(-90 {circularConfig.diameter / 2} {circularConfig.diameter / 2})" />
+					transform="rotate(-90 {circularConfig.diameter / 2} {circularConfig.diameter /
+						2})" />
 			</svg>
 			{#if show_value && !isIndeterminate && size !== '00' && size !== '0'}
 				<span class="value-label">{Math.round(percentage)}%</span>

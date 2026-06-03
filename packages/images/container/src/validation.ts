@@ -6,8 +6,14 @@ interface ErrorLike {
 	details: Record<string, unknown>;
 }
 
-function createValidationError(code: string, details: Record<string, unknown>): Error & ErrorLike {
-	return Object.assign(new Error(`${code}: ${JSON.stringify(details)}`), { code, details });
+function createValidationError(
+	code: string,
+	details: Record<string, unknown>,
+): Error & ErrorLike {
+	return Object.assign(new Error(`${code}: ${JSON.stringify(details)}`), {
+		code,
+		details,
+	});
 }
 
 /** Maximum file sizes per format category (bytes) */
@@ -16,7 +22,17 @@ const SIZE_LIMITS: Record<string, number> = {
 	'application/pdf': 50 * 1024 * 1024, // 50 MB
 };
 
-const RAW_PREFIXES = ['image/x-nikon', 'image/x-canon', 'image/x-sony', 'image/x-olympus', 'image/x-panasonic', 'image/x-fuji', 'image/x-pentax', 'image/x-samsung', 'image/x-adobe'];
+const RAW_PREFIXES = [
+	'image/x-nikon',
+	'image/x-canon',
+	'image/x-sony',
+	'image/x-olympus',
+	'image/x-panasonic',
+	'image/x-fuji',
+	'image/x-pentax',
+	'image/x-samsung',
+	'image/x-adobe',
+];
 const DEFAULT_SIZE_LIMIT = 50 * 1024 * 1024; // 50 MB
 const RAW_SIZE_LIMIT = 100 * 1024 * 1024; // 100 MB
 
@@ -84,7 +100,10 @@ function readGifDimensions(data: ArrayBuffer): { width: number; height: number }
 }
 
 /** Try to read dimensions cheaply from file headers */
-function quickDimensionCheck(data: ArrayBuffer, mime_type: string): { width: number; height: number } | null {
+function quickDimensionCheck(
+	data: ArrayBuffer,
+	mime_type: string,
+): { width: number; height: number } | null {
 	switch (mime_type) {
 		case 'image/jpeg':
 			return readJpegDimensions(data);
@@ -129,7 +148,11 @@ export function validateInput(data: ArrayBuffer, mimeResult: MimeResult): void {
 		}
 
 		const megapixels = (dims.width * dims.height) / 1_000_000;
-		if (megapixels > MAX_MEGAPIXELS || dims.width > MAX_SINGLE_SIDE || dims.height > MAX_SINGLE_SIDE) {
+		if (
+			megapixels > MAX_MEGAPIXELS ||
+			dims.width > MAX_SINGLE_SIDE ||
+			dims.height > MAX_SINGLE_SIDE
+		) {
 			throw createValidationError('DIMENSIONS_TOO_LARGE', {
 				max_megapixels: MAX_MEGAPIXELS,
 				actual_megapixels: Math.round(megapixels * 100) / 100,

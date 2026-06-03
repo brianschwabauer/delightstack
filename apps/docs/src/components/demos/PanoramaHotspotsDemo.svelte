@@ -21,7 +21,8 @@
 	</div>
 	<p class="hint">
 		{#if last_clicked}
-			You clicked <strong>{last_clicked}</strong>.
+			You clicked <strong>{last_clicked}</strong>
+			.
 		{:else}
 			Click a labelled hotspot.
 		{/if}

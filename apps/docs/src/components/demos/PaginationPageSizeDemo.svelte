@@ -14,8 +14,7 @@
 		page_size_options={[10, 25, 50, 100]}
 		onpagesizechange={() => {
 			page = 1;
-		}}
-	/>
+		}} />
 	<p style="margin-top: 0.75rem; font-size: 0.875rem; color: var(--sl-color-gray-3);">
 		Page {page}, showing {pageSize} per page
 	</p>

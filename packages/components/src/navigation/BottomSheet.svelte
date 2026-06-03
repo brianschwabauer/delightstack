@@ -89,7 +89,9 @@
 		onclose = undefined as undefined | (() => void),
 
 		/** Called when the sheet settles on a snap point */
-		onsnap = undefined as undefined | ((detail: { index: number; height: number }) => void),
+		onsnap = undefined as
+			| undefined
+			| ((detail: { index: number; height: number }) => void),
 
 		/** Called whenever the morph percent (0-1) changes */
 		onmorph = undefined as undefined | ((percent: number) => void),
@@ -134,7 +136,8 @@
 	const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 	const quartOut = (t: number) => 1 - Math.pow(1 - t, 4);
 	const expoOut = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
-	const quadInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+	const quadInOut = (t: number) =>
+		t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
 	function prefersReducedMotion() {
 		return (
@@ -177,7 +180,9 @@
 	});
 
 	// --- Backdrop fade: reaches full tint over the lower ~60% of travel ---
-	const fade_distance = $derived(Math.min(max_offset || Infinity, (viewport_h || 0) * 0.6) || 1);
+	const fade_distance = $derived(
+		Math.min(max_offset || Infinity, (viewport_h || 0) * 0.6) || 1,
+	);
 	const backdrop_opacity = $derived(quartOut(clamp(offset / fade_distance, 0, 1)));
 
 	// --- Viewport tracking ---
@@ -398,7 +403,8 @@
 	function onPointerUp(e: PointerEvent) {
 		if (e.pointerId !== active_pointer) return;
 		const mode = drag_mode;
-		const tapped_handle = drag_from_handle && Math.abs(start_y - e.clientY) < DRAG_THRESHOLD;
+		const tapped_handle =
+			drag_from_handle && Math.abs(start_y - e.clientY) < DRAG_THRESHOLD;
 		teardownPointer();
 
 		if (mode === 'sheet') {
@@ -594,7 +600,8 @@
 	@media (pointer: fine) {
 		.content {
 			scrollbar-width: thin;
-			scrollbar-color: color-mix(in oklch, transparent, var(--color-text, #888) 25%) transparent;
+			scrollbar-color: color-mix(in oklch, transparent, var(--color-text, #888) 25%)
+				transparent;
 		}
 	}
 	@media (pointer: coarse) {

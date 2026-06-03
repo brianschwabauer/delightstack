@@ -10,7 +10,10 @@ import type { ProcessOptions, PipelineResult } from './pipeline';
  * Renders first page to raster via Sharp's poppler support,
  * then processes through the standard static image pipeline.
  */
-export async function pdfPipeline(data: ArrayBuffer, options: ProcessOptions): Promise<PipelineResult> {
+export async function pdfPipeline(
+	data: ArrayBuffer,
+	options: ProcessOptions,
+): Promise<PipelineResult> {
 	const inputBuffer = Buffer.from(data);
 
 	// Render first page to raster (density = DPI for rasterization)

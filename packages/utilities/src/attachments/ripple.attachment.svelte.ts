@@ -81,7 +81,10 @@ function startRipple(
 	// `ariaDisabled` reflects the attribute as a string, so an explicit
 	// `aria-disabled="false"` (valid, and common on toggle/grid widgets) would
 	// otherwise read as truthy and wrongly suppress the ripple.
-	if ((target.ariaDisabled && target.ariaDisabled !== 'false') || (<HTMLButtonElement>target).disabled)
+	if (
+		(target.ariaDisabled && target.ariaDisabled !== 'false') ||
+		(<HTMLButtonElement>target).disabled
+	)
 		return;
 
 	// Create ripple

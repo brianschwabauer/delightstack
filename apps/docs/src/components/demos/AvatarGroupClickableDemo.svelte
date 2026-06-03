@@ -10,9 +10,7 @@
 	let last_click = $state('');
 </script>
 
-<AvatarGroup
-	avatars={team}
-	onclick={({ avatar }) => (last_click = avatar.name)} />
+<AvatarGroup avatars={team} onclick={({ avatar }) => (last_click = avatar.name)} />
 
 {#if last_click}
 	<p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--color-text-secondary);">

@@ -651,9 +651,7 @@ export function createDatabaseHandle<
 		by_route.set(route, { ...r, route });
 	}
 
-	const routes = [...by_route.values()].sort(
-		(a, b) => b.route.length - a.route.length,
-	);
+	const routes = [...by_route.values()].sort((a, b) => b.route.length - a.route.length);
 
 	// Resolve sync path
 	const sync_path = options.sync

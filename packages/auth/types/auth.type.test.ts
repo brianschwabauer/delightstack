@@ -14,7 +14,9 @@ describe('encodePermissions', () => {
 	it('encodes multiple permissions', () => {
 		expect(encodePermissions(permissions, ['read', 'write'])).toBe(0b0011);
 		expect(encodePermissions(permissions, ['read', 'admin'])).toBe(0b0101);
-		expect(encodePermissions(permissions, ['read', 'write', 'admin', 'owner'])).toBe(0b1111);
+		expect(encodePermissions(permissions, ['read', 'write', 'admin', 'owner'])).toBe(
+			0b1111,
+		);
 	});
 
 	it('returns 0 for empty values', () => {
@@ -40,7 +42,12 @@ describe('decodePermissions', () => {
 
 	it('decodes multiple permission bits', () => {
 		expect(decodePermissions(permissions, 0b0011)).toEqual(['read', 'write']);
-		expect(decodePermissions(permissions, 0b1111)).toEqual(['read', 'write', 'admin', 'owner']);
+		expect(decodePermissions(permissions, 0b1111)).toEqual([
+			'read',
+			'write',
+			'admin',
+			'owner',
+		]);
 	});
 
 	it('returns empty array for 0', () => {

@@ -1,16 +1,55 @@
 <script lang="ts">
-	import { Button, ButtonGroup, ThemeToggle, Modal, CommandPalette, alert } from '@delightstack/components/actions';
+	import {
+		Button,
+		ButtonGroup,
+		ThemeToggle,
+		Modal,
+		CommandPalette,
+		alert,
+	} from '@delightstack/components/actions';
 	import type { CommandOption } from '@delightstack/components/actions';
 	import {
-		Stat, Chart, Table, Avatar, AvatarGroup, Timeline, TimelineItem,
-		Accordion, AccordionItem, Calendar, Code, List, ListItem,
+		Stat,
+		Chart,
+		Table,
+		Avatar,
+		AvatarGroup,
+		Timeline,
+		TimelineItem,
+		Accordion,
+		AccordionItem,
+		Calendar,
+		Code,
+		List,
+		ListItem,
 	} from '@delightstack/components/display';
 	import type { ChartData, TableColumn } from '@delightstack/components/display';
-	import { Progress, Callout, Toaster, toast, confetti } from '@delightstack/components/feedback';
-	import { Input, Select, Toggle, Checkbox, Radio, RadioGroup, Range, Rating, Fieldset } from '@delightstack/components/form';
+	import {
+		Progress,
+		Callout,
+		Toaster,
+		toast,
+		confetti,
+	} from '@delightstack/components/feedback';
+	import {
+		Input,
+		Select,
+		Toggle,
+		Checkbox,
+		Radio,
+		RadioGroup,
+		Range,
+		Rating,
+		Fieldset,
+	} from '@delightstack/components/form';
 	import type { SelectOption } from '@delightstack/components/form';
 	import {
-		Tabs, Tab, Breadcrumbs, Pagination, Steps, Step,
+		Tabs,
+		Tab,
+		Breadcrumbs,
+		Pagination,
+		Steps,
+		Step,
 	} from '@delightstack/components/navigation';
 	import type { BreadcrumbItem } from '@delightstack/components/navigation';
 
@@ -32,12 +71,13 @@
 	// Profile form
 	let profileName = $state('Brian Schwabauer');
 	let profileEmail = $state('brian@delightstack.com');
-	let profileBio = $state('Full-stack engineer passionate about building delightful user experiences.');
+	let profileBio = $state(
+		'Full-stack engineer passionate about building delightful user experiences.',
+	);
 	let profileRole = $state('engineering');
 	let profileTheme = $state('system');
 	let fontSize = $state(16);
 	let userRating = $state(4);
-
 
 	// Settings
 	let emailNotifications = $state(true);
@@ -61,62 +101,211 @@
 	];
 
 	const commands: CommandOption[] = [
-		{ id: 'new-order', title: 'Create New Order', category: 'Actions', onselect: () => toast.success('New order created', { duration: 2000 }) },
-		{ id: 'export', title: 'Export Data', category: 'Actions', onselect: () => toast.info('Exporting data...', { duration: 2000 }) },
-		{ id: 'notifications', title: 'View Notifications', category: 'Actions', onselect: () => { drawerOpen = true; } },
-		{ id: 'overview', title: 'Go to Overview', category: 'Navigation', onselect: () => { activeTab = 'overview'; } },
-		{ id: 'orders-tab', title: 'Go to Orders', category: 'Navigation', onselect: () => { activeTab = 'orders'; } },
-		{ id: 'team', title: 'Go to Team', category: 'Navigation', onselect: () => { activeTab = 'team'; } },
-		{ id: 'settings-tab', title: 'Go to Settings', category: 'Navigation', onselect: () => { activeTab = 'settings'; } },
+		{
+			id: 'new-order',
+			title: 'Create New Order',
+			category: 'Actions',
+			onselect: () => toast.success('New order created', { duration: 2000 }),
+		},
+		{
+			id: 'export',
+			title: 'Export Data',
+			category: 'Actions',
+			onselect: () => toast.info('Exporting data...', { duration: 2000 }),
+		},
+		{
+			id: 'notifications',
+			title: 'View Notifications',
+			category: 'Actions',
+			onselect: () => {
+				drawerOpen = true;
+			},
+		},
+		{
+			id: 'overview',
+			title: 'Go to Overview',
+			category: 'Navigation',
+			onselect: () => {
+				activeTab = 'overview';
+			},
+		},
+		{
+			id: 'orders-tab',
+			title: 'Go to Orders',
+			category: 'Navigation',
+			onselect: () => {
+				activeTab = 'orders';
+			},
+		},
+		{
+			id: 'team',
+			title: 'Go to Team',
+			category: 'Navigation',
+			onselect: () => {
+				activeTab = 'team';
+			},
+		},
+		{
+			id: 'settings-tab',
+			title: 'Go to Settings',
+			category: 'Navigation',
+			onselect: () => {
+				activeTab = 'settings';
+			},
+		},
 	];
 
 	const notifications = [
-		{ title: 'New order received', message: 'Alice Chen placed order #ORD-7291 for $284.50', time: '2 min ago' },
-		{ title: 'Shipment dispatched', message: 'Order #ORD-7290 shipped via Express', time: '1 hour ago' },
-		{ title: 'User milestone', message: 'Active users surpassed 2,800', time: '3 hours ago' },
-		{ title: 'Payment processed', message: 'Invoice #INV-4521 — $1,250.00 collected', time: '5 hours ago' },
-		{ title: 'System update', message: 'v2.4.1 deployed to production', time: 'Yesterday' },
+		{
+			title: 'New order received',
+			message: 'Alice Chen placed order #ORD-7291 for $284.50',
+			time: '2 min ago',
+		},
+		{
+			title: 'Shipment dispatched',
+			message: 'Order #ORD-7290 shipped via Express',
+			time: '1 hour ago',
+		},
+		{
+			title: 'User milestone',
+			message: 'Active users surpassed 2,800',
+			time: '3 hours ago',
+		},
+		{
+			title: 'Payment processed',
+			message: 'Invoice #INV-4521 — $1,250.00 collected',
+			time: '5 hours ago',
+		},
+		{
+			title: 'System update',
+			message: 'v2.4.1 deployed to production',
+			time: 'Yesterday',
+		},
 	];
 
 	// ── Chart Data ─────────────────────────────────────────────────────
 	const revenueData: ChartData = {
 		labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
 		datasets: [
-			{ label: 'Revenue', data: [32000, 28000, 35000, 41000, 38000, 48000, 52000, 48352], color: 'var(--color-action)' },
-			{ label: 'Expenses', data: [22000, 24000, 21000, 26000, 25000, 28000, 30000, 27000], color: 'var(--color-error)' },
+			{
+				label: 'Revenue',
+				data: [32000, 28000, 35000, 41000, 38000, 48000, 52000, 48352],
+				color: 'var(--color-action)',
+			},
+			{
+				label: 'Expenses',
+				data: [22000, 24000, 21000, 26000, 25000, 28000, 30000, 27000],
+				color: 'var(--color-error)',
+			},
 		],
 	};
 
 	const categoryData: ChartData = {
 		labels: ['Electronics', 'Clothing', 'Home & Garden', 'Sports', 'Books'],
-		datasets: [
-			{ label: 'Sales', data: [35, 25, 20, 12, 8] },
-		],
+		datasets: [{ label: 'Sales', data: [35, 25, 20, 12, 8] }],
 	};
 
 	const weeklyData: ChartData = {
 		labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
 		datasets: [
-			{ label: 'This Week', data: [120, 145, 132, 168, 155, 89, 102], color: 'var(--color-action)' },
-			{ label: 'Last Week', data: [98, 110, 125, 140, 130, 95, 88], color: 'var(--color-bg-8)' },
+			{
+				label: 'This Week',
+				data: [120, 145, 132, 168, 155, 89, 102],
+				color: 'var(--color-action)',
+			},
+			{
+				label: 'Last Week',
+				data: [98, 110, 125, 140, 130, 95, 88],
+				color: 'var(--color-bg-8)',
+			},
 		],
 	};
 
 	// ── Table Data ─────────────────────────────────────────────────────
 	const orders = [
-		{ id: 'ORD-7291', customer: 'Alice Chen', email: 'alice@example.com', status: 'Completed', amount: 284.50, date: '2026-03-12' },
-		{ id: 'ORD-7290', customer: 'Marcus Johnson', email: 'marcus@example.com', status: 'Shipped', amount: 1250.00, date: '2026-03-11' },
-		{ id: 'ORD-7289', customer: 'Sarah Williams', email: 'sarah@example.com', status: 'Pending', amount: 89.99, date: '2026-03-11' },
-		{ id: 'ORD-7288', customer: 'David Park', email: 'david@example.com', status: 'Completed', amount: 432.00, date: '2026-03-10' },
-		{ id: 'ORD-7287', customer: 'Emma Rodriguez', email: 'emma@example.com', status: 'Cancelled', amount: 167.25, date: '2026-03-10' },
-		{ id: 'ORD-7286', customer: 'James Liu', email: 'james@example.com', status: 'Shipped', amount: 725.00, date: '2026-03-09' },
-		{ id: 'ORD-7285', customer: 'Olivia Brown', email: 'olivia@example.com', status: 'Completed', amount: 59.99, date: '2026-03-09' },
-		{ id: 'ORD-7284', customer: 'Liam Wilson', email: 'liam@example.com', status: 'Pending', amount: 340.00, date: '2026-03-08' },
-		{ id: 'ORD-7283', customer: 'Sofia Garcia', email: 'sofia@example.com', status: 'Completed', amount: 198.50, date: '2026-03-08' },
-		{ id: 'ORD-7282', customer: 'Noah Taylor', email: 'noah@example.com', status: 'Shipped', amount: 512.75, date: '2026-03-07' },
+		{
+			id: 'ORD-7291',
+			customer: 'Alice Chen',
+			email: 'alice@example.com',
+			status: 'Completed',
+			amount: 284.5,
+			date: '2026-03-12',
+		},
+		{
+			id: 'ORD-7290',
+			customer: 'Marcus Johnson',
+			email: 'marcus@example.com',
+			status: 'Shipped',
+			amount: 1250.0,
+			date: '2026-03-11',
+		},
+		{
+			id: 'ORD-7289',
+			customer: 'Sarah Williams',
+			email: 'sarah@example.com',
+			status: 'Pending',
+			amount: 89.99,
+			date: '2026-03-11',
+		},
+		{
+			id: 'ORD-7288',
+			customer: 'David Park',
+			email: 'david@example.com',
+			status: 'Completed',
+			amount: 432.0,
+			date: '2026-03-10',
+		},
+		{
+			id: 'ORD-7287',
+			customer: 'Emma Rodriguez',
+			email: 'emma@example.com',
+			status: 'Cancelled',
+			amount: 167.25,
+			date: '2026-03-10',
+		},
+		{
+			id: 'ORD-7286',
+			customer: 'James Liu',
+			email: 'james@example.com',
+			status: 'Shipped',
+			amount: 725.0,
+			date: '2026-03-09',
+		},
+		{
+			id: 'ORD-7285',
+			customer: 'Olivia Brown',
+			email: 'olivia@example.com',
+			status: 'Completed',
+			amount: 59.99,
+			date: '2026-03-09',
+		},
+		{
+			id: 'ORD-7284',
+			customer: 'Liam Wilson',
+			email: 'liam@example.com',
+			status: 'Pending',
+			amount: 340.0,
+			date: '2026-03-08',
+		},
+		{
+			id: 'ORD-7283',
+			customer: 'Sofia Garcia',
+			email: 'sofia@example.com',
+			status: 'Completed',
+			amount: 198.5,
+			date: '2026-03-08',
+		},
+		{
+			id: 'ORD-7282',
+			customer: 'Noah Taylor',
+			email: 'noah@example.com',
+			status: 'Shipped',
+			amount: 512.75,
+			date: '2026-03-07',
+		},
 	];
 
-	const columns: TableColumn<typeof orders[0]>[] = [
+	const columns: TableColumn<(typeof orders)[0]>[] = [
 		{ key: 'id', label: 'Order', sortable: true, width: '120px' },
 		{ key: 'customer', label: 'Customer', sortable: true },
 		{ key: 'status', label: 'Status', sortable: true, width: '120px' },
@@ -157,15 +346,23 @@
 	};
 
 	const filteredOrders = $derived(
-		orders.filter(o => {
+		orders.filter((o) => {
 			if (statusFilter && o.status !== statusFilter) return false;
-			if (orderSearch && !o.customer.toLowerCase().includes(orderSearch.toLowerCase()) && !o.id.toLowerCase().includes(orderSearch.toLowerCase())) return false;
+			if (
+				orderSearch &&
+				!o.customer.toLowerCase().includes(orderSearch.toLowerCase()) &&
+				!o.id.toLowerCase().includes(orderSearch.toLowerCase())
+			)
+				return false;
 			return true;
-		})
+		}),
 	);
 
 	function formatCurrency(n: number) {
-		return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+		return (
+			'$' +
+			n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+		);
 	}
 
 	async function handleDeleteSelected() {
@@ -182,18 +379,19 @@
 	}
 
 	async function handleSaveProfile() {
-		await new Promise(r => setTimeout(r, 800));
+		await new Promise((r) => setTimeout(r, 800));
 		confetti({ particle_count: 80, spread: 60 });
 		toast.success('Profile saved successfully');
 	}
 </script>
 
-<svelte:window onkeydown={(e) => {
-	if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-		e.preventDefault();
-		commandPaletteOpen = true;
-	}
-}} />
+<svelte:window
+	onkeydown={(e) => {
+		if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+			e.preventDefault();
+			commandPaletteOpen = true;
+		}
+	}} />
 
 {#snippet statusCell({ value }: { value: unknown })}
 	<span class="status-dot" style="--dot-color: {statusColors[value as string] ?? 'gray'}">
@@ -202,17 +400,28 @@
 {/snippet}
 
 {#snippet amountCell({ value }: { value: unknown })}
-	<span style="font-variant-numeric: tabular-nums;">{formatCurrency(value as number)}</span>
+	<span style="font-variant-numeric: tabular-nums;">
+		{formatCurrency(value as number)}
+	</span>
 {/snippet}
 
 <Toaster />
-<CommandPalette bind:open={commandPaletteOpen} {commands} placeholder="Type a command..." />
+<CommandPalette
+	bind:open={commandPaletteOpen}
+	{commands}
+	placeholder="Type a command..." />
 
 <Modal bind:open={drawerOpen}>
 	{#snippet header()}
 		<div class="drawer-header-content">
 			<h3>Notifications</h3>
-			<Button size="0" outline onclick={() => { drawerOpen = false; toast.success('All marked as read'); }}>
+			<Button
+				size="0"
+				outline
+				onclick={() => {
+					drawerOpen = false;
+					toast.success('All marked as read');
+				}}>
 				Mark all read
 			</Button>
 		</div>
@@ -234,8 +443,17 @@
 	<!-- ─── Sidebar ──────────────────────────────────────────────── -->
 	<aside class="sidebar">
 		<div class="sidebar-header">
-			<svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" />
+			<svg
+				class="logo-icon"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round">
+				<polygon points="12 2 2 7 12 12 22 7 12 2" />
+				<polyline points="2 17 12 22 22 17" />
+				<polyline points="2 12 12 17 22 12" />
 			</svg>
 			{#if !sidebarCollapsed}
 				<span class="logo-text">DelightStack</span>
@@ -243,20 +461,46 @@
 		</div>
 
 		<nav class="sidebar-nav">
-			<List type="button" dense style="background-color: transparent; border-radius: 0; --border-inset: 0;">
+			<List
+				type="button"
+				dense
+				style="background-color: transparent; border-radius: 0; --border-inset: 0;">
 				{#each navItems as item}
-					<ListItem active={activePage === item.id} onclick={() => activePage = item.id}>
-						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+					<ListItem
+						active={activePage === item.id}
+						onclick={() => (activePage = item.id)}>
+						<svg
+							class="nav-icon"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.75"
+							stroke-linecap="round"
+							stroke-linejoin="round">
 							{#if item.icon === 'grid'}
-								<rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+								<rect x="3" y="3" width="7" height="7" rx="1" />
+								<rect x="14" y="3" width="7" height="7" rx="1" />
+								<rect x="3" y="14" width="7" height="7" rx="1" />
+								<rect x="14" y="14" width="7" height="7" rx="1" />
 							{:else if item.icon === 'chart'}
-								<line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+								<line x1="18" y1="20" x2="18" y2="10" />
+								<line x1="12" y1="20" x2="12" y2="4" />
+								<line x1="6" y1="20" x2="6" y2="14" />
 							{:else if item.icon === 'users'}
-								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+								<circle cx="9" cy="7" r="4" />
+								<path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+								<path d="M16 3.13a4 4 0 0 1 0 7.75" />
 							{:else if item.icon === 'package'}
-								<line x1="16.5" y1="9.4" x2="7.5" y2="4.21" /><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+								<line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
+								<path
+									d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+								<polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+								<line x1="12" y1="22.08" x2="12" y2="12" />
 							{:else if item.icon === 'tag'}
-								<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" />
+								<path
+									d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+								<line x1="7" y1="7" x2="7.01" y2="7" />
 							{/if}
 						</svg>
 						{#if !sidebarCollapsed}
@@ -281,10 +525,18 @@
 				transparent
 				size="0"
 				class="collapse-btn"
-				onclick={() => sidebarCollapsed = !sidebarCollapsed}
-			>
-				<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style:transform={sidebarCollapsed ? 'rotate(180deg)' : ''}>
-					<polyline points="11 17 6 12 11 7" /><polyline points="18 17 13 12 18 7" />
+				onclick={() => (sidebarCollapsed = !sidebarCollapsed)}>
+				<svg
+					class="nav-icon"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.75"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					style:transform={sidebarCollapsed ? 'rotate(180deg)' : ''}>
+					<polyline points="11 17 6 12 11 7" />
+					<polyline points="18 17 13 12 18 7" />
 				</svg>
 				{#if !sidebarCollapsed}
 					<span>Collapse</span>
@@ -301,20 +553,48 @@
 				<Breadcrumbs items={breadcrumbs} show_home={false} size="0" />
 			</div>
 			<div class="header-right">
-				<Button icon transparent size="1" onclick={() => drawerOpen = true}>
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+				<Button icon transparent size="1" onclick={() => (drawerOpen = true)}>
+					<svg
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.75"
+						stroke-linecap="round"
+						stroke-linejoin="round">
+						<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+						<path d="M13.73 21a2 2 0 0 1-3.46 0" />
 					</svg>
 				</Button>
-				<Button icon transparent size="1" onclick={() => commandPaletteOpen = true}>
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" />
+				<Button icon transparent size="1" onclick={() => (commandPaletteOpen = true)}>
+					<svg
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.75"
+						stroke-linecap="round"
+						stroke-linejoin="round">
+						<path
+							d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" />
 					</svg>
 				</Button>
 				<ThemeToggle size="1" />
-				<Button icon transparent size="1" onclick={() => settingsOpen = true}>
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-						<circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+				<Button icon transparent size="1" onclick={() => (settingsOpen = true)}>
+					<svg
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.75"
+						stroke-linecap="round"
+						stroke-linejoin="round">
+						<circle cx="12" cy="12" r="3" />
+						<path
+							d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
 					</svg>
 				</Button>
 				<Avatar name="Brian Schwabauer" status="online" size="1" />
@@ -330,17 +610,51 @@
 					<p class="subtitle">Welcome back. Here's what's happening today.</p>
 				</div>
 				<div class="heading-actions">
-					<Button outline onclick={() => toast.info('Report generating...', { duration: 2000 })}>Export</Button>
-					<Button onclick={() => toast.success('New order created', { duration: 2000 })}>+ New Order</Button>
+					<Button
+						outline
+						onclick={() => toast.info('Report generating...', { duration: 2000 })}>
+						Export
+					</Button>
+					<Button onclick={() => toast.success('New order created', { duration: 2000 })}>
+						+ New Order
+					</Button>
 				</div>
 			</div>
 
 			<!-- Stats -->
 			<div class="stats-row">
-				<div class="card stat-card"><Stat value="$48,352" label="Revenue" change={12.5} change_label="vs last month" size="1" /></div>
-				<div class="card stat-card"><Stat value="2,847" label="Active Users" change={8.2} change_label="vs last month" size="1" /></div>
-				<div class="card stat-card"><Stat value="3.6%" label="Conversion" change={0.4} change_label="vs last month" size="1" /></div>
-				<div class="card stat-card"><Stat value="23" label="Open Tickets" change={-15.3} change_label="vs last month" size="1" /></div>
+				<div class="card stat-card">
+					<Stat
+						value="$48,352"
+						label="Revenue"
+						change={12.5}
+						change_label="vs last month"
+						size="1" />
+				</div>
+				<div class="card stat-card">
+					<Stat
+						value="2,847"
+						label="Active Users"
+						change={8.2}
+						change_label="vs last month"
+						size="1" />
+				</div>
+				<div class="card stat-card">
+					<Stat
+						value="3.6%"
+						label="Conversion"
+						change={0.4}
+						change_label="vs last month"
+						size="1" />
+				</div>
+				<div class="card stat-card">
+					<Stat
+						value="23"
+						label="Open Tickets"
+						change={-15.3}
+						change_label="vs last month"
+						size="1" />
+				</div>
 			</div>
 
 			<!-- Tab bar -->
@@ -364,7 +678,12 @@
 									<Button>Year</Button>
 								</ButtonGroup>
 							</div>
-							<Chart type="area" data={revenueData} height={280} curved show_points={false} />
+							<Chart
+								type="area"
+								data={revenueData}
+								height={280}
+								curved
+								show_points={false} />
 						</div>
 						<div class="card chart-card chart-narrow">
 							<div class="card-header"><h3>Sales by Category</h3></div>
@@ -380,16 +699,28 @@
 						<div class="card chart-card chart-wide">
 							<div class="card-header"><h3>Recent Activity</h3></div>
 							<Timeline dense>
-								<TimelineItem title="New order #ORD-7291" date="2026-03-12T14:30:00" status="complete">
+								<TimelineItem
+									title="New order #ORD-7291"
+									date="2026-03-12T14:30:00"
+									status="complete">
 									Alice Chen placed an order for $284.50
 								</TimelineItem>
-								<TimelineItem title="User milestone" date="2026-03-12T11:00:00" status="complete">
+								<TimelineItem
+									title="User milestone"
+									date="2026-03-12T11:00:00"
+									status="complete">
 									Active users surpassed 2,800
 								</TimelineItem>
-								<TimelineItem title="Shipment dispatched" date="2026-03-11T16:45:00" status="complete">
+								<TimelineItem
+									title="Shipment dispatched"
+									date="2026-03-11T16:45:00"
+									status="complete">
 									Order #ORD-7290 shipped via Express
 								</TimelineItem>
-								<TimelineItem title="System update" date="2026-03-11T09:00:00" status="active">
+								<TimelineItem
+									title="System update"
+									date="2026-03-11T09:00:00"
+									status="active">
 									v2.4.1 deployed to production
 								</TimelineItem>
 							</Timeline>
@@ -397,28 +728,40 @@
 					</div>
 
 					<Callout tip title="Tip" dismissible>
-						Revenue is up 12.5% this month. Consider increasing ad spend on Electronics — the top-performing category.
+						Revenue is up 12.5% this month. Consider increasing ad spend on Electronics —
+						the top-performing category.
 					</Callout>
 				</div>
 			{:else if activeTab === 'orders'}
 				<div class="tab-panel">
 					<div class="table-toolbar">
 						<div class="table-filters">
-							<Input type="search" placeholder="Search orders..." bind:value={orderSearch} dense size="0" />
+							<Input
+								type="search"
+								placeholder="Search orders..."
+								bind:value={orderSearch}
+								dense
+								size="0" />
 							<Select
 								value={statusFilter}
 								options={statusOptions}
 								placeholder="Filter status"
-								onchange={({ value }) => { statusFilter = value as string | undefined; }}
-								dense
-							/>
+								onchange={({ value }) => {
+									statusFilter = value as string | undefined;
+								}}
+								dense />
 							{#if tableSelected.length > 0}
 								<Button size="0" error onclick={handleDeleteSelected}>
 									Delete ({tableSelected.length})
 								</Button>
 							{/if}
 						</div>
-						<Button size="1" outline onclick={() => toast.info('Exporting CSV...', { duration: 2000 })}>Export CSV</Button>
+						<Button
+							size="1"
+							outline
+							onclick={() => toast.info('Exporting CSV...', { duration: 2000 })}>
+							Export CSV
+						</Button>
 					</div>
 					<div class="card">
 						<Table
@@ -428,8 +771,7 @@
 							bind:sort_direction={tableSortDir}
 							bind:selected={tableSelected}
 							selectable
-							striped
-						/>
+							striped />
 					</div>
 					<div class="table-footer">
 						<span class="table-info">{filteredOrders.length} orders</span>
@@ -442,15 +784,31 @@
 						<div class="card team-card">
 							<div class="card-header">
 								<h3>Team Members</h3>
-								<AvatarGroup avatars={teamMembers.map(m => ({ name: m.name }))} size="0" max={4} />
+								<AvatarGroup
+									avatars={teamMembers.map((m) => ({ name: m.name }))}
+									size="0"
+									max={4} />
 							</div>
 							<List type="button" dense>
 								{#each teamMembers as member, i}
-									<ListItem onclick={() => toast.info(`Viewing ${member.name}'s profile`)}>
-										<Avatar name={member.name} size="1" status={i === 0 ? 'online' : i < 3 ? 'away' : 'offline'} />
+									<ListItem
+										onclick={() => toast.info(`Viewing ${member.name}'s profile`)}>
+										<Avatar
+											name={member.name}
+											size="1"
+											status={i === 0 ? 'online' : i < 3 ? 'away' : 'offline'} />
 										<div class="member-info">
 											<span class="member-name">{member.name}</span>
-											<span class="member-role">{['Lead Engineer', 'Designer', 'PM', 'Backend Dev', 'Frontend Dev', 'QA'][i]}</span>
+											<span class="member-role">
+												{[
+													'Lead Engineer',
+													'Designer',
+													'PM',
+													'Backend Dev',
+													'Frontend Dev',
+													'QA',
+												][i]}
+											</span>
 										</div>
 									</ListItem>
 								{/each}
@@ -460,24 +818,38 @@
 							<div class="card-header"><h3>Project Progress</h3></div>
 							<div class="progress-list">
 								<div class="progress-item">
-									<div class="progress-label"><span>API Redesign</span><span>85%</span></div>
+									<div class="progress-label">
+										<span>API Redesign</span>
+										<span>85%</span>
+									</div>
 									<Progress value={85} circular={false} size="0" />
 								</div>
 								<div class="progress-item">
-									<div class="progress-label"><span>Mobile App</span><span>62%</span></div>
+									<div class="progress-label">
+										<span>Mobile App</span>
+										<span>62%</span>
+									</div>
 									<Progress value={62} circular={false} size="0" />
 								</div>
 								<div class="progress-item">
-									<div class="progress-label"><span>Dashboard v2</span><span>41%</span></div>
+									<div class="progress-label">
+										<span>Dashboard v2</span>
+										<span>41%</span>
+									</div>
 									<Progress value={41} circular={false} size="0" />
 								</div>
 								<div class="progress-item">
-									<div class="progress-label"><span>Documentation</span><span>93%</span></div>
+									<div class="progress-label">
+										<span>Documentation</span>
+										<span>93%</span>
+									</div>
 									<Progress value={93} circular={false} size="0" success />
 								</div>
 							</div>
 
-							<div class="card-header" style="margin-top: 1.5rem;"><h3>Sprint Calendar</h3></div>
+							<div class="card-header" style="margin-top: 1.5rem;">
+								<h3>Sprint Calendar</h3>
+							</div>
 							<Calendar bind:value={calendarDate} />
 						</div>
 					</div>
@@ -492,13 +864,27 @@
 								<Fieldset label="Personal Information" bordered>
 									<div class="profile-photo-row">
 										<Avatar name={profileName} size="3" />
-										<Button outline size="0" onclick={() => toast.info('Photo upload coming soon')}>Change photo</Button>
+										<Button
+											outline
+											size="0"
+											onclick={() => toast.info('Photo upload coming soon')}>
+											Change photo
+										</Button>
 									</div>
 									<Input label="Full Name" bind:value={profileName} />
 									<Input label="Email" type="email" bind:value={profileEmail} />
-									<Input label="Bio" type="textarea" bind:value={profileBio} placeholder="Tell us about yourself..." />
-									<Select label="Department" value={profileRole} options={roleOptions}
-										onchange={({ value }) => { profileRole = value as string; }} />
+									<Input
+										label="Bio"
+										type="textarea"
+										bind:value={profileBio}
+										placeholder="Tell us about yourself..." />
+									<Select
+										label="Department"
+										value={profileRole}
+										options={roleOptions}
+										onchange={({ value }) => {
+											profileRole = value as string;
+										}} />
 								</Fieldset>
 								<div class="fieldset-spacer"></div>
 								<Fieldset label="Preferences" bordered>
@@ -507,14 +893,23 @@
 										<Radio value="dark" label="Dark" />
 										<Radio value="system" label="System" />
 									</RadioGroup>
-									<Range label="Font Size" bind:value={fontSize} min={12} max={24} step={1} show_value format_value={(v) => `${v}px`} />
+									<Range
+										label="Font Size"
+										bind:value={fontSize}
+										min={12}
+										max={24}
+										step={1}
+										show_value
+										format_value={(v) => `${v}px`} />
 									<div class="rating-row">
 										<span class="rating-label">Rate your experience</span>
 										<Rating bind:value={userRating} max={5} />
 									</div>
 								</Fieldset>
 								<div class="form-actions">
-									<Button outline onclick={() => toast.info('Changes discarded')}>Cancel</Button>
+									<Button outline onclick={() => toast.info('Changes discarded')}>
+										Cancel
+									</Button>
 									<Button onclick={handleSaveProfile}>Save Profile</Button>
 								</div>
 							</div>
@@ -533,19 +928,25 @@
 								</AccordionItem>
 								<AccordionItem title="Push">
 									<div class="settings-list">
-										<Toggle bind:checked={pushNotifications} label="Desktop notifications" />
+										<Toggle
+											bind:checked={pushNotifications}
+											label="Desktop notifications" />
 										<Toggle bind:checked={smsAlerts} label="SMS alerts" />
 									</div>
 								</AccordionItem>
 								<AccordionItem title="Privacy">
 									<div class="settings-list">
-										<Checkbox bind:checked={twoFactorEnabled} label="Enable two-factor authentication" />
+										<Checkbox
+											bind:checked={twoFactorEnabled}
+											label="Enable two-factor authentication" />
 										<Checkbox checked={true} label="Share anonymous usage data" />
 									</div>
 								</AccordionItem>
 							</Accordion>
 
-							<div class="card-header" style="margin-top: 1.5rem;"><h3>Setup Progress</h3></div>
+							<div class="card-header" style="margin-top: 1.5rem;">
+								<h3>Setup Progress</h3>
+							</div>
 							<div class="quick-actions">
 								<Steps>
 									<Step label="Profile" status="complete" />
@@ -570,8 +971,7 @@
   Configure your dashboard here.
 </Modal>`}
 									language="svelte"
-									filename="App.svelte"
-								/>
+									filename="App.svelte" />
 							</div>
 						</div>
 					</div>
@@ -586,8 +986,13 @@
 	<div class="modal-settings">
 		<Input label="Display Name" bind:value={profileName} />
 		<Input label="Email" type="email" bind:value={profileEmail} />
-		<Select label="Department" value={profileRole} options={roleOptions}
-			onchange={({ value }) => { profileRole = value as string; }} />
+		<Select
+			label="Department"
+			value={profileRole}
+			options={roleOptions}
+			onchange={({ value }) => {
+				profileRole = value as string;
+			}} />
 		<Toggle bind:checked={emailNotifications} label="Email notifications" />
 		<Toggle bind:checked={pushNotifications} label="Push notifications" />
 	</div>
@@ -647,15 +1052,16 @@
 		--radius-5: 20px;
 		--radius-round: 1e5px;
 
-		--font-sans: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+		--font-sans:
+			system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
 		--font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
 		--font-size-00: 0.65rem;
 		--font-size-0: 0.815rem;
 		--font-size-1: 1rem;
 		--font-size-2: 1.1rem;
 
-		--shadow-1: 0 1px 3px rgba(0,0,0,0.06);
-		--shadow-2: 0 4px 12px rgba(0,0,0,0.08);
+		--shadow-1: 0 1px 3px rgba(0, 0, 0, 0.06);
+		--shadow-2: 0 4px 12px rgba(0, 0, 0, 0.08);
 
 		--layer-1: 1;
 		--layer-2: 2;
@@ -1096,16 +1502,32 @@
 
 	/* ─── Responsive ────────────────────────────────────────────── */
 	@media (max-width: 1200px) {
-		.stats-row { grid-template-columns: repeat(2, 1fr); }
-		.charts-row { grid-template-columns: 1fr; }
-		.team-section { grid-template-columns: 1fr; }
-		.settings-section { grid-template-columns: 1fr; }
+		.stats-row {
+			grid-template-columns: repeat(2, 1fr);
+		}
+		.charts-row {
+			grid-template-columns: 1fr;
+		}
+		.team-section {
+			grid-template-columns: 1fr;
+		}
+		.settings-section {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	@media (max-width: 768px) {
-		.dashboard { grid-template-columns: 0px 1fr; }
-		.sidebar { display: none; }
-		.stats-row { grid-template-columns: 1fr 1fr; }
-		.page-heading { flex-direction: column; }
+		.dashboard {
+			grid-template-columns: 0px 1fr;
+		}
+		.sidebar {
+			display: none;
+		}
+		.stats-row {
+			grid-template-columns: 1fr 1fr;
+		}
+		.page-heading {
+			flex-direction: column;
+		}
 	}
 </style>

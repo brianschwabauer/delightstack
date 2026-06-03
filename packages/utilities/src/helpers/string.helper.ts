@@ -97,7 +97,7 @@ export type StringFormatOptions =
 			 */
 			weekday?: Intl.DateTimeFormatOptions['weekday'];
 
-			/** 
+			/**
 			 * The representation of the month. Possible values are:
 					"numeric"	E.g., 3
 					"2-digit"	E.g., 03

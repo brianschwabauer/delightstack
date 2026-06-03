@@ -17,7 +17,8 @@
 			width: 1600,
 			height: 1000,
 			name: 'Interactive counter',
-			caption: 'Custom slide with disable_swipe so horizontal drag stays inside the widget.',
+			caption:
+				'Custom slide with disable_swipe so horizontal drag stays inside the widget.',
 			disable_swipe: true,
 		},
 		{
@@ -42,10 +43,12 @@
 		</Button>
 	</div>
 	<p class="hint">
-		The Gallery is in <code>display="lightbox"</code> mode (no thumbnails) since
-		<code>type: 'custom'</code> items don't have a thumbnail representation. Open the modal
-		using the buttons above. On the custom slide, drag the slider horizontally — the
-		carousel won't try to swipe to the next slide.
+		The Gallery is in <code>display="lightbox"</code>
+		mode (no thumbnails) since
+		<code>type: 'custom'</code>
+		items don't have a thumbnail representation. Open the modal using the buttons above. On
+		the custom slide, drag the slider horizontally — the carousel won't try to swipe to the
+		next slide.
 	</p>
 
 	<Gallery bind:this={gallery} {items} display="lightbox">
@@ -60,7 +63,8 @@
 						<button onclick={() => count++}>+</button>
 					</div>
 					<div class="custom-hint">
-						active = <code>{String(active)}</code> · gesture_disabled =
+						active = <code>{String(active)}</code>
+						· gesture_disabled =
 						<code>{String(gesture_disabled)}</code>
 					</div>
 				</div>

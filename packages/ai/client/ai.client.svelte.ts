@@ -236,9 +236,7 @@ export class ChatStream {
 							type: tc.type || existing.type,
 							function: {
 								name: tc.function?.name || existing.function.name,
-								arguments:
-									existing.function.arguments +
-									(tc.function?.arguments ?? ''),
+								arguments: existing.function.arguments + (tc.function?.arguments ?? ''),
 							},
 						};
 					} else {

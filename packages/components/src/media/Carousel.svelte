@@ -344,7 +344,8 @@
 			if (!item) continue;
 			// Videos load within the wider VIDEO_NEIGHBOR_DISTANCE so nearby ones are
 			// ready to (stay) mounted; other rich types only load when active.
-			const maxDist = item.type === 'video' ? VIDEO_NEIGHBOR_DISTANCE : RICH_NEIGHBOR_DISTANCE;
+			const maxDist =
+				item.type === 'video' ? VIDEO_NEIGHBOR_DISTANCE : RICH_NEIGHBOR_DISTANCE;
 			if (dist > maxDist) continue;
 			if (item.type === 'pdf') needed.add('pdf');
 			else if (item.type === 'video') needed.add('video');

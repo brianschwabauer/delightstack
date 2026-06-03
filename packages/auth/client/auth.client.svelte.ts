@@ -156,7 +156,8 @@ export class AuthClient<P extends string = string, E extends string = string> {
 		this.#org_state = data?.org_state ?? {};
 		this.base_path = options?.base_path ?? '/api/auth';
 		this.permissions = options?.permissions ?? (data?.permissions as readonly P[]) ?? [];
-		this.entitlements = options?.entitlements ?? (data?.entitlements as readonly E[]) ?? [];
+		this.entitlements =
+			options?.entitlements ?? (data?.entitlements as readonly E[]) ?? [];
 		this.refresh_threshold_ms = options?.refresh_threshold_ms ?? 600_000;
 		this.fetchFn = options?.fetch ?? fetch;
 		this.onRefreshFailed = options?.onRefreshFailed;

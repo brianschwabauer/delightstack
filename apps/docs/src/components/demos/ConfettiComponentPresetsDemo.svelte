@@ -9,5 +9,9 @@
 	<Button onclick={() => (celebrating = true)} disabled={celebrating}>
 		{celebrating ? 'Firing...' : 'Complete Task'}
 	</Button>
-	<Confetti active={celebrating} preset="cannon" duration={2000} onend={() => (celebrating = false)} />
+	<Confetti
+		active={celebrating}
+		preset="cannon"
+		duration={2000}
+		onend={() => (celebrating = false)} />
 </div>

@@ -25,9 +25,10 @@ function metadataToRecord(metadata: ImageMetadata): Record<string, unknown> {
 		accent_color: metadata.accent_color ?? null,
 		luminance: metadata.luminance ?? null,
 		date_taken: metadata.date_taken ?? null,
-		gps: metadata.gps_latitude != null && metadata.gps_longitude != null
-			? { lat: metadata.gps_latitude, lon: metadata.gps_longitude }
-			: null,
+		gps:
+			metadata.gps_latitude != null && metadata.gps_longitude != null
+				? { lat: metadata.gps_latitude, lon: metadata.gps_longitude }
+				: null,
 	};
 }
 
@@ -160,7 +161,7 @@ export function imageProcessing(
 					if (RESERVED_IMAGE_FIELDS.has(key as never)) {
 						throw new Error(
 							`Cannot use reserved field name '${key}' in uploadOptions.data. ` +
-							`Reserved fields are managed by the image processor.`,
+								`Reserved fields are managed by the image processor.`,
 						);
 					}
 				}
@@ -168,8 +169,7 @@ export function imageProcessing(
 
 			// Extract file_name from File object if available
 			const file_name =
-				uploadOptions?.file_name ??
-				(data instanceof File ? data.name : null);
+				uploadOptions?.file_name ?? (data instanceof File ? data.name : null);
 
 			// Store processing options for processAlarm
 			const processing = {
@@ -297,7 +297,9 @@ export function imageProcessing(
 					// serialized across DO RPC boundaries.
 					const variants_config = proc.variants ?? defaultVariants;
 					const watermark_images = await prefetchWatermarkImages(bucket, variants_config);
-					const stub = container.getByName('image-processor') as unknown as ImageProcessorContainer;
+					const stub = container.getByName(
+						'image-processor',
+					) as unknown as ImageProcessorContainer;
 					const result = await stub.process(await object.arrayBuffer(), {
 						variants: variants_config,
 						compress_original: proc.compress_original ?? defaultCompressOriginal,
@@ -410,7 +412,7 @@ export function imageProcessing(
 			// Delete all R2 objects under the image's path
 			const rawVariants = image.variants;
 			const variants = (
-				typeof rawVariants === 'string' ? JSON.parse(rawVariants) : rawVariants ?? []
+				typeof rawVariants === 'string' ? JSON.parse(rawVariants) : (rawVariants ?? [])
 			) as { name: string }[];
 			const keys = variants.map((v) => r2Key(image.base_path, image.id, v.name));
 			keys.push(r2Key(image.base_path, image.id, 'original'));

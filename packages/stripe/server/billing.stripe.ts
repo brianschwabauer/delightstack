@@ -44,13 +44,13 @@ export function formatPaymentMethod(
 	method: Stripe.PaymentMethod,
 	default_pm: string | Stripe.PaymentMethod | null | undefined,
 ): PaymentMethodInfo {
-	const default_id =
-		typeof default_pm === 'string' ? default_pm : default_pm?.id;
+	const default_id = typeof default_pm === 'string' ? default_pm : default_pm?.id;
 	const card = method.card;
 
 	let display_name: string = method.type;
 	if (card) {
-		const brand = (card.brand || 'card').charAt(0).toUpperCase() + (card.brand || 'card').slice(1);
+		const brand =
+			(card.brand || 'card').charAt(0).toUpperCase() + (card.brand || 'card').slice(1);
 		display_name = `${brand} •••• ${card.last4}`;
 	}
 
@@ -95,9 +95,7 @@ export function formatInvoice(invoice: Stripe.Invoice): InvoiceInfo {
 }
 
 /** Parse JSON body from a request, returning {} on failure */
-export async function parseBody(
-	request: Request,
-): Promise<Record<string, unknown>> {
+export async function parseBody(request: Request): Promise<Record<string, unknown>> {
 	try {
 		return (await request.json()) as Record<string, unknown>;
 	} catch {
@@ -106,9 +104,6 @@ export async function parseBody(
 }
 
 /** Get the app URL from config or request origin */
-export function getAppUrl(
-	event: { url: URL },
-	config: ResolvedBillingConfig,
-): string {
+export function getAppUrl(event: { url: URL }, config: ResolvedBillingConfig): string {
 	return config.app_url ?? event.url.origin;
 }

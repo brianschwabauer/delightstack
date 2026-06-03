@@ -26,14 +26,7 @@
 	let expanded = $state(['fruits', 'vegetables']);
 </script>
 
-<Tree
-	data={categories}
-	selectable
-	checkboxes
-	multi_select
-	bind:selected
-	bind:expanded
-/>
+<Tree data={categories} selectable checkboxes multi_select bind:selected bind:expanded />
 
 {#if selected.length > 0}
 	<p style="margin-top: 0.5rem; font-size: 0.875rem; opacity: 0.7;">

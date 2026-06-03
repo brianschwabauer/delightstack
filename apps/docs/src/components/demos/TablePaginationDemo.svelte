@@ -24,5 +24,4 @@
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'email', label: 'Email' },
 		{ key: 'role', label: 'Role', sortable: true },
-	]}
-/>
+	]} />

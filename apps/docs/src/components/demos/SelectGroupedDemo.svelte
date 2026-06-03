@@ -13,4 +13,4 @@
 	];
 </script>
 
-<Select bind:value options={options} label="Food" placeholder="Select a food..." />
+<Select bind:value {options} label="Food" placeholder="Select a food..." />

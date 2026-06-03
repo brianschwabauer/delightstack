@@ -179,9 +179,7 @@ export async function handleBillingRoute(
 	const stripe = getStripe(config);
 
 	// Handle parameterized routes (e.g., /payment-method/:id)
-	const payment_method_match = route_path.match(
-		/^\/payment-method\/(.+)$/,
-	);
+	const payment_method_match = route_path.match(/^\/payment-method\/(.+)$/);
 
 	if (payment_method_match) {
 		const pm_id = payment_method_match[1];
@@ -227,16 +225,13 @@ export async function handleBillingRoute(
 		case 'POST /subscription': {
 			const body = await parseBody(event.request);
 			const plan_id = body.plan_id as string;
-			const payment_method_id = body.payment_method_id as
-				| string
-				| undefined;
+			const payment_method_id = body.payment_method_id as string | undefined;
 			const coupon = body.coupon as string | undefined;
 
 			if (!plan_id) throw DelightError.badRequest('plan_id is required');
 
 			const plan = config.plans?.find((p) => p.id === plan_id);
-			if (!plan)
-				throw DelightError.badRequest(`Unknown plan: ${plan_id}`);
+			if (!plan) throw DelightError.badRequest(`Unknown plan: ${plan_id}`);
 
 			const customer_id = await ensureCustomer(event, config, ctx);
 
@@ -248,10 +243,7 @@ export async function handleBillingRoute(
 				}),
 			);
 			const price = prices.data[0];
-			if (!price)
-				throw DelightError.badRequest(
-					`Price not found for plan: ${plan_id}`,
-				);
+			if (!price) throw DelightError.badRequest(`Price not found for plan: ${plan_id}`);
 
 			// Check for existing active subscription
 			const subs = await stripeCall(() =>
@@ -274,9 +266,7 @@ export async function handleBillingRoute(
 							})),
 							{ price: price.id },
 						],
-						...(payment_method_id
-							? { default_payment_method: payment_method_id }
-							: {}),
+						...(payment_method_id ? { default_payment_method: payment_method_id } : {}),
 						proration_behavior: 'create_prorations',
 						...(coupon ? { coupon } : {}),
 					}),
@@ -287,12 +277,8 @@ export async function handleBillingRoute(
 					stripe.subscriptions.create({
 						customer: customer_id,
 						items: [{ price: price.id }],
-						...(payment_method_id
-							? { default_payment_method: payment_method_id }
-							: {}),
-						...(plan.trial_days
-							? { trial_period_days: plan.trial_days }
-							: {}),
+						...(payment_method_id ? { default_payment_method: payment_method_id } : {}),
+						...(plan.trial_days ? { trial_period_days: plan.trial_days } : {}),
 						...(coupon ? { coupon } : {}),
 					}),
 				);
@@ -324,8 +310,7 @@ export async function handleBillingRoute(
 
 		case 'DELETE /subscription': {
 			const customer_id = await resolveCustomerIdAsync(event, config);
-			if (!customer_id)
-				throw DelightError.badRequest('No customer found');
+			if (!customer_id) throw DelightError.badRequest('No customer found');
 
 			const subs = await stripeCall(() =>
 				stripe.subscriptions.list({
@@ -363,10 +348,7 @@ export async function handleBillingRoute(
 			const customer_id = await resolveCustomerIdAsync(event, config);
 			if (!customer_id) return jsonResponse({ invoices: [] });
 
-			const limit = parseInt(
-				event.url.searchParams.get('limit') ?? '10',
-				10,
-			);
+			const limit = parseInt(event.url.searchParams.get('limit') ?? '10', 10);
 			const invoices = await stripeCall(() =>
 				stripe.invoices.list({
 					customer: customer_id,
@@ -382,8 +364,7 @@ export async function handleBillingRoute(
 
 		case 'GET /payment-method': {
 			const customer_id = await resolveCustomerIdAsync(event, config);
-			if (!customer_id)
-				return jsonResponse({ payment_methods: [] });
+			if (!customer_id) return jsonResponse({ payment_methods: [] });
 
 			const methods = await stripeCall(() =>
 				stripe.paymentMethods.list({ customer: customer_id }),
@@ -391,13 +372,10 @@ export async function handleBillingRoute(
 			const customer = (await stripeCall(() =>
 				stripe.customers.retrieve(customer_id),
 			)) as Stripe.Customer;
-			const default_pm =
-				customer.invoice_settings?.default_payment_method;
+			const default_pm = customer.invoice_settings?.default_payment_method;
 
 			return jsonResponse({
-				payment_methods: methods.data.map((m) =>
-					formatPaymentMethod(m, default_pm),
-				),
+				payment_methods: methods.data.map((m) => formatPaymentMethod(m, default_pm)),
 			});
 		}
 
@@ -414,10 +392,7 @@ export async function handleBillingRoute(
 				}),
 			);
 
-			return jsonResponse(
-				{ client_secret: session.client_secret },
-				201,
-			);
+			return jsonResponse({ client_secret: session.client_secret }, 201);
 		}
 
 		// ── Billing Portal ─────────────────────────────────────────────
@@ -428,14 +403,12 @@ export async function handleBillingRoute(
 			}
 
 			const customer_id = await resolveCustomerIdAsync(event, config);
-			if (!customer_id)
-				throw DelightError.badRequest('No customer found');
+			if (!customer_id) throw DelightError.badRequest('No customer found');
 
 			const body = await parseBody(event.request).catch(
 				() => ({}) as Record<string, unknown>,
 			);
-			const return_url =
-				(body.return_url as string) ?? getAppUrl(event, config);
+			const return_url = (body.return_url as string) ?? getAppUrl(event, config);
 
 			const session = await stripeCall(() =>
 				stripe.billingPortal.sessions.create({
@@ -456,8 +429,7 @@ export async function handleBillingRoute(
 			if (!plan_id) throw DelightError.badRequest('plan_id is required');
 
 			const plan = config.plans?.find((p) => p.id === plan_id);
-			if (!plan)
-				throw DelightError.badRequest(`Unknown plan: ${plan_id}`);
+			if (!plan) throw DelightError.badRequest(`Unknown plan: ${plan_id}`);
 
 			const customer_id = await ensureCustomer(event, config, ctx);
 
@@ -468,10 +440,7 @@ export async function handleBillingRoute(
 				}),
 			);
 			const price = prices.data[0];
-			if (!price)
-				throw DelightError.badRequest(
-					`Price not found for plan: ${plan_id}`,
-				);
+			if (!price) throw DelightError.badRequest(`Price not found for plan: ${plan_id}`);
 
 			const return_url =
 				(body.return_url as string) ??
@@ -529,8 +498,7 @@ export async function handleBillingRoute(
 
 		case 'POST /sync': {
 			const customer_id = await resolveCustomerIdAsync(event, config);
-			if (!customer_id)
-				return jsonResponse({ subscription: null });
+			if (!customer_id) return jsonResponse({ subscription: null });
 
 			const state = await syncSubscription({
 				config,

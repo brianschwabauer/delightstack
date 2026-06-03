@@ -4,7 +4,7 @@
 
 	function handleSave() {
 		const promise = new Promise((resolve) =>
-			setTimeout(() => resolve({ filename: 'report.pdf' }), 2000)
+			setTimeout(() => resolve({ filename: 'report.pdf' }), 2000),
 		);
 		toast.promise(promise, {
 			loading: 'Saving...',

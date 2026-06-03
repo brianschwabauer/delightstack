@@ -18,18 +18,15 @@
 		<Checkbox
 			checked={notifications.includes('email')}
 			onchange={() => toggle('email')}
-			label="Email notifications"
-		/>
+			label="Email notifications" />
 		<Checkbox
 			checked={notifications.includes('sms')}
 			onchange={() => toggle('sms')}
-			label="SMS notifications"
-		/>
+			label="SMS notifications" />
 		<Checkbox
 			checked={notifications.includes('push')}
 			onchange={() => toggle('push')}
-			label="Push notifications"
-		/>
+			label="Push notifications" />
 	</div>
 	<p style="margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--sl-color-gray-3);">
 		Selected: {notifications.join(', ') || 'none'}

@@ -21,7 +21,9 @@ export { RateLimiterServer, ImageProcessorContainer };
 export class AuthDatabaseServer extends BaseAuthDatabaseServer {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env, {
-			secret: env.JWT_KEY_SECRET || 'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
+			secret:
+				env.JWT_KEY_SECRET ||
+				'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
 			issuer: 'foreverfamily',
 			permissions: ['admin', 'editor', 'viewer'],
 			oauth_scopes: [],
@@ -55,9 +57,7 @@ export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
 			ai: () => env.AI,
 			storage: ctx.storage,
 			ws: () => getWs() as unknown as WebsocketServer,
-			fields: [
-				{ entity_type: 'post', source_fields: ['title', 'content', 'tags'] },
-			],
+			fields: [{ entity_type: 'post', source_fields: ['title', 'content', 'tags'] }],
 		});
 	}
 
@@ -115,7 +115,10 @@ export default {
 		// Handle WebSocket upgrades in dev — browser connects directly to this worker.
 		// The SvelteKit dev server can't proxy WebSocket upgrades through the RPC proxy,
 		// so the WebsocketClient is configured with a direct URL in dev mode.
-		if (url.pathname === '/api/websocket' && request.headers.get('Upgrade') === 'websocket') {
+		if (
+			url.pathname === '/api/websocket' &&
+			request.headers.get('Upgrade') === 'websocket'
+		) {
 			const room = url.searchParams.get('room');
 			if (!room) {
 				return new Response('Missing room query parameter', { status: 400 });

@@ -1,17 +1,6 @@
 <script module lang="ts">
 	export interface ButtonGroupContext {
-		size:
-			| undefined
-			| '0000'
-			| '000'
-			| '00'
-			| '0'
-			| '1'
-			| '2'
-			| '3'
-			| '4'
-			| '5'
-			| '6';
+		size: undefined | '0000' | '000' | '00' | '0' | '1' | '2' | '3' | '4' | '5' | '6';
 		outline: boolean;
 		transparent: boolean;
 		translucent: boolean;

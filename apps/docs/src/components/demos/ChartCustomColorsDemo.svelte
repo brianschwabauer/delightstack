@@ -10,4 +10,7 @@
 	};
 </script>
 
-<Chart type="bar" data={salesData} colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']} />
+<Chart
+	type="bar"
+	data={salesData}
+	colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']} />

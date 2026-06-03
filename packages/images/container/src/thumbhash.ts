@@ -5,7 +5,10 @@ import { rgbaToThumbHash } from 'thumbhash';
  * Generate a ThumbHash from a Sharp instance.
  * Returns a base64-encoded string (~33 chars).
  */
-export async function generateThumbHash(input: Buffer | ArrayBuffer, is_animated = false): Promise<string> {
+export async function generateThumbHash(
+	input: Buffer | ArrayBuffer,
+	is_animated = false,
+): Promise<string> {
 	// For animated images, use first frame only
 	const sharpOptions = is_animated ? { page: 0 } : {};
 

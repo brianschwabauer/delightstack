@@ -22,10 +22,7 @@ export function setSessionCookie(
 }
 
 /** Deletes the session JWT cookie */
-export function deleteSessionCookie(
-	cookies: Cookies,
-	config: ResolvedAuthConfig,
-): void {
+export function deleteSessionCookie(cookies: Cookies, config: ResolvedAuthConfig): void {
 	cookies.delete(config.cookies.session_name, {
 		path: config.cookies.path,
 	});
@@ -52,7 +49,10 @@ export function serializeSessionCookie(config: ResolvedAuthConfig, jwt: string):
 	if (opts.path) parts.push(`Path=${opts.path}`);
 	if (opts.httpOnly) parts.push('HttpOnly');
 	if (opts.secure) parts.push('Secure');
-	if (opts.sameSite) parts.push(`SameSite=${opts.sameSite.charAt(0).toUpperCase() + opts.sameSite.slice(1)}`);
+	if (opts.sameSite)
+		parts.push(
+			`SameSite=${opts.sameSite.charAt(0).toUpperCase() + opts.sameSite.slice(1)}`,
+		);
 	return parts.join('; ');
 }
 

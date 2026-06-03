@@ -33,9 +33,7 @@ describe('decodeThumbHash', () => {
 
 		decodeThumbHash(base64);
 
-		expect(thumbHashToDataURL).toHaveBeenCalledWith(
-			expect.any(Uint8Array),
-		);
+		expect(thumbHashToDataURL).toHaveBeenCalledWith(expect.any(Uint8Array));
 		const arg = (thumbHashToDataURL as any).mock.calls.at(-1)[0];
 		expect(Array.from(arg)).toEqual([10, 20, 30]);
 	});

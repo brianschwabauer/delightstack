@@ -857,7 +857,9 @@
 				class:adj-bottom={adj_bottom.has(node.id)}
 				style:padding-left="{(level - 1) * 1.25}rem"
 				onmouseenter={() => (hovered_id = node.id)}
-				onmouseleave={() => { if (hovered_id === node.id) hovered_id = null; }}
+				onmouseleave={() => {
+					if (hovered_id === node.id) hovered_id = null;
+				}}
 				draggable={draggable && !node.disabled ? 'true' : undefined}
 				ondragstart={(e) => handleDragStart(e, node)}
 				ondragover={(e) => {
@@ -1172,8 +1174,12 @@
 	}
 
 	@keyframes tree-spin {
-		0% { transform: rotate(0deg); }
-		100% { transform: rotate(360deg); }
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
+		}
 	}
 	@keyframes tree-spinner-dash {
 		0% {

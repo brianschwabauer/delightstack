@@ -57,14 +57,11 @@ export class BillingClient {
 
 	/** Whether the user/org has an active or trialing subscription */
 	readonly subscribed = $derived(
-		this.#subscription?.status === 'active' ||
-			this.#subscription?.status === 'trialing',
+		this.#subscription?.status === 'active' || this.#subscription?.status === 'trialing',
 	);
 
 	/** Whether the subscription is in a trial period */
-	readonly trialing = $derived(
-		this.#subscription?.status === 'trialing',
-	);
+	readonly trialing = $derived(this.#subscription?.status === 'trialing');
 
 	/** Current subscription status (null if no subscription) */
 	readonly status = $derived(this.#subscription?.status ?? null);
@@ -73,9 +70,7 @@ export class BillingClient {
 	readonly plan_ids = $derived(this.#subscription?.plan_ids ?? []);
 
 	/** The entitlement names granted by the current subscription */
-	readonly active_entitlements = $derived(
-		this.#subscription?.entitlements ?? [],
-	);
+	readonly active_entitlements = $derived(this.#subscription?.entitlements ?? []);
 
 	/** Available plans for subscription */
 	get plans() {
@@ -93,14 +88,10 @@ export class BillingClient {
 	}
 
 	/** Trial end timestamp in ms (null if not trialing) */
-	readonly trial_end = $derived(
-		this.#subscription?.trial_end ?? null,
-	);
+	readonly trial_end = $derived(this.#subscription?.trial_end ?? null);
 
 	/** Current period end timestamp in ms */
-	readonly period_end = $derived(
-		this.#subscription?.current_period_end ?? null,
-	);
+	readonly period_end = $derived(this.#subscription?.current_period_end ?? null);
 
 	/** Whether subscription is scheduled for cancellation */
 	readonly canceling = $derived(!!this.#subscription?.cancel_at);
@@ -242,9 +233,7 @@ export class BillingClient {
 		},
 
 		/** List invoices */
-		listInvoices: async (options?: {
-			limit?: number;
-		}): Promise<InvoiceInfo[]> => {
+		listInvoices: async (options?: { limit?: number }): Promise<InvoiceInfo[]> => {
 			const params = new URLSearchParams();
 			if (options?.limit) params.set('limit', String(options.limit));
 			const qs = params.toString();
@@ -280,9 +269,7 @@ export class BillingClient {
 		},
 
 		/** Create a Billing Portal session */
-		createPortalSession: async (
-			return_url?: string,
-		): Promise<{ url: string }> => {
+		createPortalSession: async (return_url?: string): Promise<{ url: string }> => {
 			return this.post('/portal', { return_url });
 		},
 
@@ -331,10 +318,7 @@ export class BillingClient {
 		return this.handleResponse<T>(res);
 	}
 
-	private async patch<T>(
-		path: string,
-		body: unknown,
-	): Promise<T> {
+	private async patch<T>(path: string, body: unknown): Promise<T> {
 		const res = await this.fetchFn(`${this.base_path}${path}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },

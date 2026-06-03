@@ -66,14 +66,17 @@
 			<div class="divider"><span>or create a new one</span></div>
 		{/if}
 
-		<form onsubmit={(e) => { e.preventDefault(); createOrg(); }}>
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				createOrg();
+			}}>
 			<div class="fields">
 				<Input
 					label="Organization Name"
 					bind:value={org_name}
 					required
-					placeholder="My Family"
-				/>
+					placeholder="My Family" />
 			</div>
 
 			<Button onclick={createOrg} disabled={loading || !org_name.trim()} full_width>
@@ -127,7 +130,8 @@
 		gap: var(--size-3);
 		color: var(--color-text-disabled);
 		font-size: var(--font-size-0);
-		&::before, &::after {
+		&::before,
+		&::after {
 			content: '';
 			flex: 1;
 			height: 1px;

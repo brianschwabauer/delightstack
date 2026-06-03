@@ -5,32 +5,81 @@
 </script>
 
 <List>
-	<ListItem onclick={() => { lastAction = 'Clicked: Document A'; }}>
+	<ListItem
+		onclick={() => {
+			lastAction = 'Clicked: Document A';
+		}}>
 		Document A
 		{#snippet menu()}
 			<List>
-				<ListItem onclick={() => { lastAction = 'Edit Document A'; }}>Edit</ListItem>
-				<ListItem onclick={() => { lastAction = 'Duplicate Document A'; }}>Duplicate</ListItem>
-				<ListItem onclick={() => { lastAction = 'Delete Document A'; }}>Delete</ListItem>
+				<ListItem
+					onclick={() => {
+						lastAction = 'Edit Document A';
+					}}>
+					Edit
+				</ListItem>
+				<ListItem
+					onclick={() => {
+						lastAction = 'Duplicate Document A';
+					}}>
+					Duplicate
+				</ListItem>
+				<ListItem
+					onclick={() => {
+						lastAction = 'Delete Document A';
+					}}>
+					Delete
+				</ListItem>
 			</List>
 		{/snippet}
 	</ListItem>
-	<ListItem onclick={() => { lastAction = 'Clicked: Document B'; }}>
+	<ListItem
+		onclick={() => {
+			lastAction = 'Clicked: Document B';
+		}}>
 		Document B
 		{#snippet menu()}
 			<List>
-				<ListItem onclick={() => { lastAction = 'Edit Document B'; }}>Edit</ListItem>
-				<ListItem onclick={() => { lastAction = 'Duplicate Document B'; }}>Duplicate</ListItem>
-				<ListItem onclick={() => { lastAction = 'Delete Document B'; }}>Delete</ListItem>
+				<ListItem
+					onclick={() => {
+						lastAction = 'Edit Document B';
+					}}>
+					Edit
+				</ListItem>
+				<ListItem
+					onclick={() => {
+						lastAction = 'Duplicate Document B';
+					}}>
+					Duplicate
+				</ListItem>
+				<ListItem
+					onclick={() => {
+						lastAction = 'Delete Document B';
+					}}>
+					Delete
+				</ListItem>
 			</List>
 		{/snippet}
 	</ListItem>
-	<ListItem onclick={() => { lastAction = 'Clicked: Document C'; }}>
+	<ListItem
+		onclick={() => {
+			lastAction = 'Clicked: Document C';
+		}}>
 		Document C
 		{#snippet menu()}
 			<List>
-				<ListItem onclick={() => { lastAction = 'Edit Document C'; }}>Edit</ListItem>
-				<ListItem onclick={() => { lastAction = 'Delete Document C'; }}>Delete</ListItem>
+				<ListItem
+					onclick={() => {
+						lastAction = 'Edit Document C';
+					}}>
+					Edit
+				</ListItem>
+				<ListItem
+					onclick={() => {
+						lastAction = 'Delete Document C';
+					}}>
+					Delete
+				</ListItem>
 			</List>
 		{/snippet}
 	</ListItem>

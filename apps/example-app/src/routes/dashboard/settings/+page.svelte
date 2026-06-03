@@ -1,5 +1,16 @@
 <script lang="ts">
-	import { Button, Input, Tabs, Tab, TabContent, ThemeToggle, Modal, Callout, Accordion, AccordionItem } from '@delightstack/components';
+	import {
+		Button,
+		Input,
+		Tabs,
+		Tab,
+		TabContent,
+		ThemeToggle,
+		Modal,
+		Callout,
+		Accordion,
+		AccordionItem,
+	} from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import { toast } from '@delightstack/components';
 
@@ -79,7 +90,12 @@
 		<TabContent value="profile">
 			<section class="section">
 				<h3>Profile Information</h3>
-				<form onsubmit={(e) => { e.preventDefault(); updateProfile(); }} class="form">
+				<form
+					onsubmit={(e) => {
+						e.preventDefault();
+						updateProfile();
+					}}
+					class="form">
 					<Input label="Name" bind:value={edit_name} required />
 					<Input label="Email" value={auth.email ?? ''} disabled />
 					<small class="hint">Email cannot be changed here</small>
@@ -92,13 +108,15 @@
 
 			<section class="section">
 				<h3>Account</h3>
-				<p class="desc">Signed in as <strong>{auth.email}</strong></p>
+				<p class="desc">
+					Signed in as <strong>{auth.email}</strong>
+				</p>
 				{#if auth.org}
-					<p class="desc">Family: <strong>{auth.org.name}</strong></p>
+					<p class="desc">
+						Family: <strong>{auth.org.name}</strong>
+					</p>
 				{/if}
-				<Button onclick={() => (show_signout = true)} error transparent>
-					Sign Out
-				</Button>
+				<Button onclick={() => (show_signout = true)} error transparent>Sign Out</Button>
 			</section>
 		</TabContent>
 
@@ -108,10 +126,27 @@
 				{#if password_error}
 					<Callout error>{password_error}</Callout>
 				{/if}
-				<form onsubmit={(e) => { e.preventDefault(); changePassword(); }} class="form">
-					<Input label="Current Password" type="password" bind:value={current_password} required />
-					<Input label="New Password" type="password" bind:value={new_password} required />
-					<Input label="Confirm New Password" type="password" bind:value={confirm_password} required />
+				<form
+					onsubmit={(e) => {
+						e.preventDefault();
+						changePassword();
+					}}
+					class="form">
+					<Input
+						label="Current Password"
+						type="password"
+						bind:value={current_password}
+						required />
+					<Input
+						label="New Password"
+						type="password"
+						bind:value={new_password}
+						required />
+					<Input
+						label="Confirm New Password"
+						type="password"
+						bind:value={confirm_password}
+						required />
 					<Button onclick={changePassword} disabled={changing_password}>
 						{changing_password ? 'Changing...' : 'Change Password'}
 					</Button>

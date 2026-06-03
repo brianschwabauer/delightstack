@@ -1,4 +1,9 @@
-import type { ProcessImageOptions, ProcessImageResult, OutputVariant, VariantConfig } from './types';
+import type {
+	ProcessImageOptions,
+	ProcessImageResult,
+	OutputVariant,
+	VariantConfig,
+} from './types';
 import type { ImageProcessorContainer } from './container';
 import { createError } from './errors';
 import { generateTimestampID } from '@delightstack/utilities';
@@ -52,7 +57,10 @@ export async function processImage(
 	//    R2Bucket itself can't be serialized across the DO RPC boundary —
 	//    passing the bucket directly fails with DataCloneError. Mirrors the
 	//    Mode 1 (integration.ts) pattern.
-	const watermark_images = await prefetchWatermarkImages(options.bucket, options.variants);
+	const watermark_images = await prefetchWatermarkImages(
+		options.bucket,
+		options.variants,
+	);
 	const stub = binding.getByName('image-processor') as unknown as ImageProcessorContainer;
 	const result = await stub.process(await object.arrayBuffer(), {
 		variants: options.variants,
@@ -63,7 +71,10 @@ export async function processImage(
 
 	// 3. Determine base path from key (strip the filename portion)
 	const lastSlash = options.key.lastIndexOf('/');
-	const basePath = lastSlash >= 0 ? options.key.slice(0, lastSlash) : options.key.replace(/\.[^.]+$/, '');
+	const basePath =
+		lastSlash >= 0
+			? options.key.slice(0, lastSlash)
+			: options.key.replace(/\.[^.]+$/, '');
 
 	// 4. Write variants to R2 (parallel)
 	const outputVariants: OutputVariant[] = await Promise.all(

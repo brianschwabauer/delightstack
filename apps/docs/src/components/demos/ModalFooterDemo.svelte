@@ -7,7 +7,9 @@
 <Button onclick={() => (open = true)}>Edit Profile</Button>
 
 <Modal bind:open title="Edit Profile">
-	<p style="margin: 0; color: var(--color-text)">Update your profile information below.</p>
+	<p style="margin: 0; color: var(--color-text)">
+		Update your profile information below.
+	</p>
 
 	{#snippet footer()}
 		<Button transparent onclick={() => (open = false)}>Cancel</Button>

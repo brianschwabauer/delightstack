@@ -126,18 +126,16 @@
 		retry === true ? 3 : typeof retry === 'number' ? Math.max(0, retry) : 0,
 	);
 
-	const placeholder_src = $derived(
-		thumbhash ? decodeThumbHash(thumbhash) : placeholder,
-	);
+	const placeholder_src = $derived(thumbhash ? decodeThumbHash(thumbhash) : placeholder);
 	const has_placeholder = $derived(!!placeholder_src);
-	const show_skeleton = $derived(skeleton && load_state === 'loading' && !has_placeholder);
+	const show_skeleton = $derived(
+		skeleton && load_state === 'loading' && !has_placeholder,
+	);
 	const show_placeholder = $derived(has_placeholder && load_state !== 'error');
 	const show_fallback = $derived(load_state === 'error' && fallback !== false);
 	const fallback_is_url = $derived(typeof fallback === 'string');
 
-	const computed_sizes = $derived(
-		sizes ?? (lazy && srcset ? 'auto, 100vw' : undefined),
-	);
+	const computed_sizes = $derived(sizes ?? (lazy && srcset ? 'auto, 100vw' : undefined));
 	const computed_loading = $derived(priority ? 'eager' : lazy ? 'lazy' : 'eager');
 
 	const container_style = $derived.by(() => {

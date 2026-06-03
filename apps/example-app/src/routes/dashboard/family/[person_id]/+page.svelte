@@ -1,5 +1,15 @@
 <script lang="ts">
-	import { Button, Input, Select, Avatar, Modal, Accordion, AccordionItem, Breadcrumbs, Callout } from '@delightstack/components';
+	import {
+		Button,
+		Input,
+		Select,
+		Avatar,
+		Modal,
+		Accordion,
+		AccordionItem,
+		Breadcrumbs,
+		Callout,
+	} from '@delightstack/components';
 	import Icon from '$lib/Icon.svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -58,10 +68,11 @@
 </svelte:head>
 
 <div class="page">
-	<Breadcrumbs items={[
-		{ label: 'Family', href: '/dashboard/family' },
-		{ label: person.value.name ?? 'Loading...' },
-	]} />
+	<Breadcrumbs
+		items={[
+			{ label: 'Family', href: '/dashboard/family' },
+			{ label: person.value.name ?? 'Loading...' },
+		]} />
 
 	{#if person.loaded}
 		<div class="profile-header">
@@ -92,17 +103,30 @@
 		</div>
 
 		{#if person.error}
-			<Callout error>{(person.error as Error).message ?? 'Something went wrong.'}</Callout>
+			<Callout error>
+				{(person.error as Error).message ?? 'Something went wrong.'}
+			</Callout>
 		{/if}
 
 		{#if editing}
-			<form onsubmit={(e) => { e.preventDefault(); savePerson(); }} class="edit-form">
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					savePerson();
+				}}
+				class="edit-form">
 				<Input label="Name" bind:value={person.value.name} required />
 				<Input label="Email" type="email" bind:value={person.value.email} />
 				<Input label="Phone" type="tel" bind:value={person.value.phone} />
-				<Select label="Relationship" bind:value={person.value.relationship} options={relationship_options} />
+				<Select
+					label="Relationship"
+					bind:value={person.value.relationship}
+					options={relationship_options} />
 				<Input label="Birthday" type="date" bind:value={person.value.birthday} />
-				<Input label="Notes" bind:value={person.value.notes} placeholder="Notes about this person..." />
+				<Input
+					label="Notes"
+					bind:value={person.value.notes}
+					placeholder="Notes about this person..." />
 			</form>
 		{:else}
 			<div class="details">
@@ -147,7 +171,10 @@
 
 <!-- Delete confirmation modal -->
 <Modal bind:open={show_delete} title="Delete Person">
-	<p>Are you sure you want to remove <strong>{person.value.name}</strong> from your family?</p>
+	<p>
+		Are you sure you want to remove <strong>{person.value.name}</strong>
+		from your family?
+	</p>
 	<div class="modal-actions">
 		<Button onclick={() => (show_delete = false)} transparent>Cancel</Button>
 		<Button onclick={deletePerson} error>Delete</Button>
@@ -205,7 +232,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		small { color: var(--color-text-disabled); }
+		small {
+			color: var(--color-text-disabled);
+		}
 	}
 	.no-data {
 		color: var(--color-text-disabled);

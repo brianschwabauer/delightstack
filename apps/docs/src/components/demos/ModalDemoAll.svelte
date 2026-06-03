@@ -4,10 +4,12 @@
 	let open = $state(false);
 </script>
 
-<Button onclick={() => open = true}>Open Modal</Button>
+<Button onclick={() => (open = true)}>Open Modal</Button>
 
 <Modal bind:open title="Edit Profile">
-	<p style="margin: 0; color: var(--color-text);">Update your profile information below.</p>
+	<p style="margin: 0; color: var(--color-text);">
+		Update your profile information below.
+	</p>
 
 	{#snippet footer({ close })}
 		<Button transparent onclick={close}>Cancel</Button>

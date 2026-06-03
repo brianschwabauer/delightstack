@@ -21,8 +21,7 @@
 		checked={allChecked || someChecked}
 		indeterminate={someChecked && !allChecked}
 		onchange={handleParentToggle}
-		label="Select all permissions"
-	/>
+		label="Select all permissions" />
 	<div style="margin-left: 1.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
 		{#each items as item}
 			<Checkbox bind:checked={item.checked} label={item.label} />

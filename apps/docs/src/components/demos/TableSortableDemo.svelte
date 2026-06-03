@@ -18,5 +18,4 @@
 		{ key: 'age', label: 'Age', sortable: true, align: 'right' },
 	]}
 	bind:sort_by={sortBy}
-	bind:sort_direction={sortDirection}
-/>
+	bind:sort_direction={sortDirection} />

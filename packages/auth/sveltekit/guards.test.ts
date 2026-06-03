@@ -32,7 +32,13 @@ function makeLocals(overrides: Partial<AuthLocals> = {}): AuthLocals {
 		org_state: {},
 		setPreferences: vi.fn(),
 		setOrgState: vi.fn(),
-		auth_client_data: { jwt: null, session: null, org_id: null, preferences: {}, org_state: {} },
+		auth_client_data: {
+			jwt: null,
+			session: null,
+			org_id: null,
+			preferences: {},
+			org_state: {},
+		},
 		meta: {},
 		auth: {} as AuthLocals['auth'],
 		...overrides,
@@ -110,9 +116,7 @@ describe('createAuthGuards', () => {
 			} catch (err: unknown) {
 				const error = err as { location: string };
 				expect(error.location).toContain('/signin');
-				expect(error.location).toContain(
-					encodeURIComponent('/dashboard/settings'),
-				);
+				expect(error.location).toContain(encodeURIComponent('/dashboard/settings'));
 			}
 		});
 

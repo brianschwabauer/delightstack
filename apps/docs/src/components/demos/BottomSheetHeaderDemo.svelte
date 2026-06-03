@@ -9,15 +9,17 @@
 
 <BottomSheet bind:open snap_points={[0.5, 0.92]}>
 	{#snippet header()}
-		<div style="padding: 0 1rem 0.75rem; border-bottom: 1px solid var(--color-border, #333);">
+		<div
+			style="padding: 0 1rem 0.75rem; border-bottom: 1px solid var(--color-border, #333);">
 			<h3 style="margin: 0; color: var(--color-text, inherit);">Filters</h3>
 		</div>
 	{/snippet}
 
 	<div style="padding: 1rem;">
-		<p style="margin: 0 0 1rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">
-			The header above stays fixed and acts as a drag area, while this region scrolls once the sheet
-			is fully expanded.
+		<p
+			style="margin: 0 0 1rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">
+			The header above stays fixed and acts as a drag area, while this region scrolls once
+			the sheet is fully expanded.
 		</p>
 		{#each Array(12) as _, i}
 			<label

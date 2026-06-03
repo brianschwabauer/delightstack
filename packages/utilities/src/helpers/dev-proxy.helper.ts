@@ -84,7 +84,14 @@ export function createDevHandle(options?: DevHandleOptions) {
  */
 export async function createDevRpcHandler(
 	request: Request,
-	env: Record<string, { idFromName(n: string): unknown; idFromString(s: string): unknown; get(id: unknown): unknown }>,
+	env: Record<
+		string,
+		{
+			idFromName(n: string): unknown;
+			idFromString(s: string): unknown;
+			get(id: unknown): unknown;
+		}
+	>,
 ): Promise<Response> {
 	const url = new URL(request.url);
 
@@ -98,7 +105,14 @@ export async function createDevRpcHandler(
 }
 
 async function routeToStub(
-	env: Record<string, { idFromName(n: string): unknown; idFromString(s: string): unknown; get(id: unknown): unknown }>,
+	env: Record<
+		string,
+		{
+			idFromName(n: string): unknown;
+			idFromString(s: string): unknown;
+			get(id: unknown): unknown;
+		}
+	>,
 	binding: string,
 	id_type: string,
 	id: string,
@@ -106,14 +120,20 @@ async function routeToStub(
 ): Promise<Response> {
 	const namespace = env[binding];
 	if (!namespace) {
-		return new Response(JSON.stringify({ message: `Binding "${binding}" not found`, status: 404 }), {
-			status: 404,
-			headers: { 'content-type': 'application/json' },
-		});
+		return new Response(
+			JSON.stringify({ message: `Binding "${binding}" not found`, status: 404 }),
+			{
+				status: 404,
+				headers: { 'content-type': 'application/json' },
+			},
+		);
 	}
 
-	const do_id = id_type === 'string' ? namespace.idFromString(id) : namespace.idFromName(id);
-	const stub = namespace.get(do_id) as { fetch(input: string | Request, init?: RequestInit): Promise<Response> };
+	const do_id =
+		id_type === 'string' ? namespace.idFromString(id) : namespace.idFromName(id);
+	const stub = namespace.get(do_id) as {
+		fetch(input: string | Request, init?: RequestInit): Promise<Response>;
+	};
 
 	// Forward the RPC body to the DO's /rpc fetch handler
 	return stub.fetch('http://do/rpc', {
@@ -141,7 +161,12 @@ function createProxyNamespace(base_url: string, binding: string) {
 	};
 }
 
-function createStubProxy(base_url: string, binding: string, id_name: string, id_type: string): unknown {
+function createStubProxy(
+	base_url: string,
+	binding: string,
+	id_name: string,
+	id_type: string,
+): unknown {
 	const rpc_url = `${base_url}/__rpc/${binding}/${id_type}/${encodeURIComponent(id_name)}`;
 
 	function buildProxy(path: string[] = []): unknown {
@@ -156,7 +181,12 @@ function createStubProxy(base_url: string, binding: string, id_name: string, id_
 					});
 					if (!res.ok) {
 						const text = await res.text().catch(() => '');
-						let body: { message: string; status?: number; code?: string; detail?: string };
+						let body: {
+							message: string;
+							status?: number;
+							code?: string;
+							detail?: string;
+						};
 						try {
 							body = JSON.parse(text);
 						} catch {

@@ -62,7 +62,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /** Deserialize watermark_images from base64 strings to Map<string, ArrayBuffer> */
-function deserializeWatermarkImages(raw: Record<string, string>): Map<string, ArrayBuffer> {
+function deserializeWatermarkImages(
+	raw: Record<string, string>,
+): Map<string, ArrayBuffer> {
 	const map = new Map<string, ArrayBuffer>();
 	for (const [key, base64] of Object.entries(raw)) {
 		const binary = atob(base64);
@@ -142,9 +144,7 @@ Bun.serve({
 				const err = error as CodedError;
 				const code = err?.code ?? 'INTERNAL_ERROR';
 				const status =
-					code === 'PROCESSING_TIMEOUT' ? 504
-					: code === 'INTERNAL_ERROR' ? 500
-					: 400;
+					code === 'PROCESSING_TIMEOUT' ? 504 : code === 'INTERNAL_ERROR' ? 500 : 400;
 
 				return Response.json(
 					{ code, details: err?.details ?? err?.message ?? String(error) },

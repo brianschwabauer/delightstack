@@ -12,5 +12,4 @@
 	title="Warning"
 	message="This will overwrite existing data."
 	icon={WarningIcon}
-	destructive
-/>
+	destructive />

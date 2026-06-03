@@ -22,5 +22,4 @@
 	title="Process Data"
 	message="This may take a moment."
 	continue_text="Process"
-	oncontinue={handleContinue}
-/>
+	oncontinue={handleContinue} />

@@ -174,7 +174,7 @@
 			// Uses the wider escape threshold to match hysteresis zone.
 			const snapped_pct = snapped_to / 100;
 			const pull_px = (raw_pct - snapped_pct) * dimension;
-			const escape_radius_px = (snap_threshold * 2.2 / 100) * dimension;
+			const escape_radius_px = ((snap_threshold * 2.2) / 100) * dimension;
 
 			if (escape_radius_px < 1) {
 				overshoot_px = 0;

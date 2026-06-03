@@ -15,4 +15,8 @@
 	];
 </script>
 
-<Input label="City" options={cities} bind:value={selectedCity} placeholder="Search cities..." />
+<Input
+	label="City"
+	options={cities}
+	bind:value={selectedCity}
+	placeholder="Search cities..." />

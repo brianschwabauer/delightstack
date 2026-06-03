@@ -21,7 +21,13 @@
 		<header>
 			<h1>{post.title}</h1>
 			<div class="meta">
-				<small>Published {new Date(post.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</small>
+				<small>
+					Published {new Date(post.created_at).toLocaleDateString(undefined, {
+						month: 'long',
+						day: 'numeric',
+						year: 'numeric',
+					})}
+				</small>
 				{#if post.tags?.length}
 					<div class="tags">
 						{#each post.tags as tag}
@@ -43,8 +49,10 @@
 
 	<footer>
 		<p>
-			Shared from <a href="/">Forever Family</a> — a family management platform
-			built with <strong>Delightstack</strong>.
+			Shared from <a href="/">Forever Family</a>
+			— a family management platform built with
+			<strong>Delightstack</strong>
+			.
 		</p>
 	</footer>
 </div>
@@ -89,7 +97,9 @@
 		align-items: center;
 		gap: var(--size-3);
 		flex-wrap: wrap;
-		small { color: var(--color-text-disabled); }
+		small {
+			color: var(--color-text-disabled);
+		}
 	}
 	.tags {
 		display: flex;
@@ -111,6 +121,8 @@
 			font-size: var(--font-size-0);
 			color: var(--color-text-disabled);
 		}
-		a { color: var(--color-action); }
+		a {
+			color: var(--color-action);
+		}
 	}
 </style>

@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { Button, Input, Toggle, Modal, Progress, Callout } from '@delightstack/components';
+	import {
+		Button,
+		Input,
+		Toggle,
+		Modal,
+		Progress,
+		Callout,
+	} from '@delightstack/components';
 	import { toast } from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import Icon from '$lib/Icon.svelte';
@@ -36,7 +43,10 @@
 	}
 
 	async function savePost() {
-		const tags = edit_tags.split(',').map((t) => t.trim()).filter(Boolean);
+		const tags = edit_tags
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean);
 		await post.save({
 			title: post.value.title?.trim(),
 			content: post.value.content?.trim(),
@@ -53,12 +63,15 @@
 	}
 
 	function improveWithAi() {
-		const prompt = ai_prompt.trim() || `Improve this family story while keeping its personal tone:\n\n${post.value.content ?? ''}`;
+		const prompt =
+			ai_prompt.trim() ||
+			`Improve this family story while keeping its personal tone:\n\n${post.value.content ?? ''}`;
 		ai_stream = ai.chat({
 			messages: [
 				{
 					role: 'system',
-					content: 'You are a helpful writing assistant. Improve the given text while keeping its personal, family-oriented tone. Return only the improved text.',
+					content:
+						'You are a helpful writing assistant. Improve the given text while keeping its personal, family-oriented tone. Return only the improved text.',
 				},
 				{ role: 'user', content: prompt },
 			],
@@ -146,7 +159,9 @@
 		<article class="article">
 			<header class="article-header">
 				<div class="meta-row">
-					<time datetime={String(post.value.created_at)}>{formatDate(post.value.created_at)}</time>
+					<time datetime={String(post.value.created_at)}>
+						{formatDate(post.value.created_at)}
+					</time>
 					{#if post.value.is_public}
 						<span class="dot">•</span>
 						<span class="public-tag">
@@ -209,7 +224,10 @@
 </div>
 
 <Modal bind:open={show_delete} title="Delete story">
-	<p>Are you sure you want to delete <strong>"{post.value.title}"</strong>? This cannot be undone.</p>
+	<p>
+		Are you sure you want to delete <strong>"{post.value.title}"</strong>
+		? This cannot be undone.
+	</p>
 	<div class="modal-actions">
 		<Button onclick={() => (show_delete = false)} transparent>Cancel</Button>
 		<Button onclick={deletePost} error>Delete</Button>
@@ -233,7 +251,9 @@
 		font-size: var(--font-size-0);
 		width: fit-content;
 		transition: color 0.15s;
-		&:hover { color: var(--color-text); }
+		&:hover {
+			color: var(--color-text);
+		}
 	}
 
 	/* Article view */
@@ -255,14 +275,18 @@
 		gap: var(--size-2);
 		color: var(--color-text-disabled);
 		font-size: var(--font-size-0);
-		time { font-variant-numeric: tabular-nums; }
+		time {
+			font-variant-numeric: tabular-nums;
+		}
 	}
 	.public-tag {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--size-1);
 	}
-	.dot { opacity: 0.5; }
+	.dot {
+		opacity: 0.5;
+	}
 	.article-header h1 {
 		font-family: var(--font-serif);
 		font-size: var(--font-size-6);

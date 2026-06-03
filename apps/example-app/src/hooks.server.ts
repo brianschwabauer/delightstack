@@ -131,16 +131,18 @@ const imageUploadHandle: Handle = async ({ event, resolve }) => {
 	const caption = (formData.get('caption') as string) || null;
 	if (!file) return DelightError.badRequest('No file provided').toResponse();
 
-	const db = locals.db as {
-		uploadImage: (
-			data: ArrayBuffer,
-			options?: {
-				file_name?: string;
-				mime_type?: string;
-				data?: Record<string, unknown>;
-			},
-		) => Promise<unknown>;
-	} | undefined;
+	const db = locals.db as
+		| {
+				uploadImage: (
+					data: ArrayBuffer,
+					options?: {
+						file_name?: string;
+						mime_type?: string;
+						data?: Record<string, unknown>;
+					},
+				) => Promise<unknown>;
+		  }
+		| undefined;
 	if (!db) return DelightError.badRequest('Database not available').toResponse();
 
 	try {

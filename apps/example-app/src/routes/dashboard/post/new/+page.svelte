@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { Button, Input, Toggle, SplitPane, Progress, Callout } from '@delightstack/components';
+	import {
+		Button,
+		Input,
+		Toggle,
+		SplitPane,
+		Progress,
+		Callout,
+	} from '@delightstack/components';
 	import Badge from '$lib/Badge.svelte';
 	import Icon from '$lib/Icon.svelte';
 	import { goto } from '$app/navigation';
@@ -52,7 +59,8 @@
 			messages: [
 				{
 					role: 'system',
-					content: 'You are a helpful writing assistant for a family stories app. Help the user write warm, engaging family stories and memories. Keep responses concise and natural.',
+					content:
+						'You are a helpful writing assistant for a family stories app. Help the user write warm, engaging family stories and memories. Keep responses concise and natural.',
 				},
 				{ role: 'user', content: prompt },
 			],
@@ -100,12 +108,14 @@
 					label="Story"
 					type="textarea"
 					bind:value={content}
-					placeholder="Write your family story..."
-				/>
+					placeholder="Write your family story..." />
 
 				<div class="post-options">
 					<Toggle bind:checked={is_public} label="Share publicly" />
-					<Input label="Tags" bind:value={tags_input} placeholder="family, vacation, birthday (comma-separated)" />
+					<Input
+						label="Tags"
+						bind:value={tags_input}
+						placeholder="family, vacation, birthday (comma-separated)" />
 					{#if tags.length}
 						<div class="tag-list">
 							{#each tags as tag}
@@ -126,10 +136,7 @@
 				<p class="ai-description">Get help writing your family story.</p>
 
 				<div class="ai-input">
-					<Input
-						bind:value={ai_prompt}
-						placeholder="e.g. 'Write about our beach trip'"
-					/>
+					<Input bind:value={ai_prompt} placeholder="e.g. 'Write about our beach trip'" />
 					<Button onclick={askAi} disabled={ai_stream?.streaming} dense>
 						{ai_stream?.streaming ? 'Writing...' : 'Ask AI'}
 					</Button>
@@ -142,9 +149,7 @@
 				{#if ai_stream?.content}
 					<div class="ai-response">
 						<p>{ai_stream.content}</p>
-						<Button onclick={useAiSuggestion} dense transparent>
-							Use this text
-						</Button>
+						<Button onclick={useAiSuggestion} dense transparent>Use this text</Button>
 					</div>
 				{/if}
 
@@ -174,7 +179,9 @@
 		font-size: var(--font-size-0);
 		width: fit-content;
 		transition: color 0.15s;
-		&:hover { color: var(--color-text); }
+		&:hover {
+			color: var(--color-text);
+		}
 	}
 	header {
 		display: flex;

@@ -13,18 +13,15 @@
 		bind:checked={settings.notifications}
 		label="Push Notifications"
 		name="notifications"
-		value="enabled"
-	/>
+		value="enabled" />
 	<Toggle
 		bind:checked={settings.autoSave}
 		label="Auto-save"
 		name="autosave"
-		value="enabled"
-	/>
+		value="enabled" />
 	<Toggle
 		bind:checked={settings.sounds}
 		label="Sound Effects"
 		name="sounds"
-		value="enabled"
-	/>
+		value="enabled" />
 </div>

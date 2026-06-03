@@ -81,7 +81,9 @@
 			{#if subscription.current_period_end}
 				<div class="stat">
 					<small>Renews</small>
-					<strong>{new Date(subscription.current_period_end as number).toLocaleDateString()}</strong>
+					<strong>
+						{new Date(subscription.current_period_end as number).toLocaleDateString()}
+					</strong>
 				</div>
 			{/if}
 		</section>
@@ -98,7 +100,9 @@
 					{/if}
 					<h3>{plan.name}</h3>
 					<div class="price">
-						<span class="amount">{plan.amount === 0 ? '$0' : formatPrice(plan.amount)}</span>
+						<span class="amount">
+							{plan.amount === 0 ? '$0' : formatPrice(plan.amount)}
+						</span>
 						<span class="interval">/{plan.interval}</span>
 					</div>
 					<p>{plan.description}</p>
@@ -111,7 +115,12 @@
 						<div class="plan-actions">
 							<Badge>Current Plan</Badge>
 							{#if plan.amount > 0}
-								<Button onclick={cancelSubscription} error transparent dense disabled={loading_action === 'cancel'}>
+								<Button
+									onclick={cancelSubscription}
+									error
+									transparent
+									dense
+									disabled={loading_action === 'cancel'}>
 									Cancel
 								</Button>
 							{/if}
@@ -121,8 +130,7 @@
 							onclick={() => subscribe(plan.id)}
 							full_width
 							transparent={plan.amount === 0}
-							disabled={loading_action === plan.id}
-						>
+							disabled={loading_action === plan.id}>
 							{loading_action === plan.id
 								? 'Processing...'
 								: plan.amount === 0
@@ -145,13 +153,11 @@
 						<span>{String(invoice.number ?? 'Invoice')}</span>
 						<span>{formatPrice((invoice.total as number | undefined) ?? 0)}</span>
 						<Badge dense>{String(invoice.status ?? '')}</Badge>
-						<small
-							>{new Date(invoice.created as number).toLocaleDateString()}</small
-						>
+						<small>{new Date(invoice.created as number).toLocaleDateString()}</small>
 						{#if invoice.hosted_invoice_url}
-							<Button href={invoice.hosted_invoice_url as string} transparent dense
-								>View</Button
-							>
+							<Button href={invoice.hosted_invoice_url as string} transparent dense>
+								View
+							</Button>
 						{/if}
 					</div>
 				{/each}
@@ -217,8 +223,13 @@
 			border-color: var(--color-action);
 			box-shadow: var(--shadow-2);
 		}
-		h3 { font-size: var(--font-size-3); }
-		p { color: var(--color-text-disabled); font-size: var(--font-size-0); }
+		h3 {
+			font-size: var(--font-size-3);
+		}
+		p {
+			color: var(--color-text-disabled);
+			font-size: var(--font-size-0);
+		}
 		ul {
 			list-style: none;
 			padding: 0;
@@ -236,8 +247,13 @@
 		display: flex;
 		align-items: baseline;
 		gap: var(--size-1);
-		.amount { font-size: var(--font-size-5); font-weight: var(--font-weight-7); }
-		.interval { color: var(--color-text-disabled); }
+		.amount {
+			font-size: var(--font-size-5);
+			font-weight: var(--font-weight-7);
+		}
+		.interval {
+			color: var(--color-text-disabled);
+		}
 	}
 	.plan-actions {
 		display: flex;
@@ -262,6 +278,8 @@
 		border: 1px solid var(--color-outline);
 		border-radius: var(--radius-2);
 		font-size: var(--font-size-0);
-		small { color: var(--color-text-disabled); }
+		small {
+			color: var(--color-text-disabled);
+		}
 	}
 </style>

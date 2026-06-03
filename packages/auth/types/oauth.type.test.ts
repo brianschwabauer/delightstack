@@ -12,7 +12,9 @@ describe('encodeOauthScopes', () => {
 
 	it('encodes multiple scopes', () => {
 		expect(encodeOauthScopes(scopes, ['profile', 'email'])).toBe(0b0011);
-		expect(encodeOauthScopes(scopes, ['profile', 'email', 'calendar', 'contacts'])).toBe(0b1111);
+		expect(encodeOauthScopes(scopes, ['profile', 'email', 'calendar', 'contacts'])).toBe(
+			0b1111,
+		);
 	});
 
 	it('returns 0 for empty values', () => {
@@ -28,7 +30,12 @@ describe('decodeOauthScopes', () => {
 	it('decodes scope bits', () => {
 		expect(decodeOauthScopes(scopes, 0b0001)).toEqual(['profile']);
 		expect(decodeOauthScopes(scopes, 0b0011)).toEqual(['profile', 'email']);
-		expect(decodeOauthScopes(scopes, 0b1111)).toEqual(['profile', 'email', 'calendar', 'contacts']);
+		expect(decodeOauthScopes(scopes, 0b1111)).toEqual([
+			'profile',
+			'email',
+			'calendar',
+			'contacts',
+		]);
 	});
 
 	it('returns empty array for 0', () => {

@@ -24,9 +24,10 @@ interface GuardOptions {
  * export const load = requireEntitlement('premium', ({ locals }) => ({ org: locals.org }));
  * ```
  */
-export function createAuthGuards<const P extends string, const E extends string = never>(
-	options: { permissions: readonly P[]; entitlements?: readonly E[] },
-) {
+export function createAuthGuards<
+	const P extends string,
+	const E extends string = never,
+>(options: { permissions: readonly P[]; entitlements?: readonly E[] }) {
 	const { permissions, entitlements = [] } = options;
 	type Permission = P;
 	type Entitlement = E;

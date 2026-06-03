@@ -113,14 +113,16 @@ describe('DatabaseServer', () => {
 				executedQueries.push({ sql, args });
 
 				if (sql.includes('SELECT * FROM state WHERE id = main')) {
-					return mockCursor([{
-						id: 'main',
-						json: '{}',
-						created_at: Date.now(),
-						updated_at: Date.now(),
-						table_config: {},
-						sql_indexes: [],
-					}]);
+					return mockCursor([
+						{
+							id: 'main',
+							json: '{}',
+							created_at: Date.now(),
+							updated_at: Date.now(),
+							table_config: {},
+							sql_indexes: [],
+						},
+					]);
 				}
 
 				if (sql.includes('SELECT * FROM search_index')) {
@@ -150,12 +152,7 @@ describe('DatabaseServer', () => {
 
 		const mockEnv = { DEV: true };
 
-		dbServer = new DatabaseServer(
-			testConfig,
-			() => ({}) as any,
-			mockCtx as any,
-			mockEnv,
-		);
+		dbServer = new DatabaseServer(testConfig, () => ({}) as any, mockCtx as any, mockEnv);
 	});
 
 	// ── Initialization ──────────────────────────────────────────────────
@@ -377,7 +374,9 @@ describe('DatabaseServer', () => {
 			executedQueries.push({ sql, args });
 			if (sql.startsWith('INSERT INTO users')) {
 				// Return different users for each insert
-				const name = args.find((a: any) => typeof a === 'string' && a !== 'u1' && a !== 'u2');
+				const name = args.find(
+					(a: any) => typeof a === 'string' && a !== 'u1' && a !== 'u2',
+				);
 				if (name === 'Alice') return mockCursor([user1]);
 				return mockCursor([user2]);
 			}
@@ -515,7 +514,12 @@ describe('DatabaseServer: FK-derived fields', () => {
 				searchable_fields: ['id', 'title', 'author_name'],
 				unique_fields: [],
 				orama: {
-					schema: { id: 'string', title: 'string', author_name: 'string', updated_at: 'number' },
+					schema: {
+						id: 'string',
+						title: 'string',
+						author_name: 'string',
+						updated_at: 'number',
+					},
 					sort: { enabled: false },
 				},
 			},
@@ -537,14 +541,16 @@ describe('DatabaseServer: FK-derived fields', () => {
 				executedQueries.push({ sql, args });
 
 				if (sql.includes('SELECT * FROM state WHERE id = main')) {
-					return mockCursor([{
-						id: 'main',
-						json: '{}',
-						created_at: Date.now(),
-						updated_at: Date.now(),
-						table_config: {},
-						sql_indexes: [],
-					}]);
+					return mockCursor([
+						{
+							id: 'main',
+							json: '{}',
+							created_at: Date.now(),
+							updated_at: Date.now(),
+							table_config: {},
+							sql_indexes: [],
+						},
+					]);
 				}
 
 				if (sql.includes('SELECT * FROM search_index')) {
@@ -591,7 +597,13 @@ describe('DatabaseServer: FK-derived fields', () => {
 
 	it('should compute FK-derived fields on create', () => {
 		const mockAuthor = { id: 'a1', name: 'Alice', created_at: 100, updated_at: 100 };
-		const mockBook = { id: 'b1', title: 'Book 1', author_id: 'a1', created_at: 200, updated_at: 200 };
+		const mockBook = {
+			id: 'b1',
+			title: 'Book 1',
+			author_id: 'a1',
+			created_at: 200,
+			updated_at: 200,
+		};
 
 		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
 			executedQueries.push({ sql, args });
@@ -623,9 +635,26 @@ describe('DatabaseServer: FK-derived fields', () => {
 
 	it('should cascade reindex books when author is updated', () => {
 		const mockAuthor = { id: 'a1', name: 'New Name', created_at: 100, updated_at: 300 };
-		const mockExistingAuthor = { id: 'a1', name: 'Old Name', created_at: 100, updated_at: 100 };
-		const mockBook1 = { id: 'b1', title: 'Book 1', author_id: 'a1', created_at: 200, updated_at: 200 };
-		const mockBook2 = { id: 'b2', title: 'Book 2', author_id: 'a1', created_at: 200, updated_at: 200 };
+		const mockExistingAuthor = {
+			id: 'a1',
+			name: 'Old Name',
+			created_at: 100,
+			updated_at: 100,
+		};
+		const mockBook1 = {
+			id: 'b1',
+			title: 'Book 1',
+			author_id: 'a1',
+			created_at: 200,
+			updated_at: 200,
+		};
+		const mockBook2 = {
+			id: 'b2',
+			title: 'Book 2',
+			author_id: 'a1',
+			created_at: 200,
+			updated_at: 200,
+		};
 
 		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
 			executedQueries.push({ sql, args });
@@ -659,13 +688,20 @@ describe('DatabaseServer: FK-derived fields', () => {
 
 		// Verify cascade query was executed — books referencing author a1 were found
 		const cascadeQuery = executedQueries.find(
-			(q) => q.sql.includes('SELECT * FROM books WHERE author_id = ?') && q.args[0] === 'a1',
+			(q) =>
+				q.sql.includes('SELECT * FROM books WHERE author_id = ?') && q.args[0] === 'a1',
 		);
 		expect(cascadeQuery).toBeDefined();
 	});
 
 	it('should cascade reindex books when author is deleted', () => {
-		const mockBook1 = { id: 'b1', title: 'Book 1', author_id: 'a1', created_at: 200, updated_at: 200 };
+		const mockBook1 = {
+			id: 'b1',
+			title: 'Book 1',
+			author_id: 'a1',
+			created_at: 200,
+			updated_at: 200,
+		};
 
 		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
 			executedQueries.push({ sql, args });
@@ -683,15 +719,14 @@ describe('DatabaseServer: FK-derived fields', () => {
 			return emptyCursor();
 		});
 
-		const results = dbServer.transaction([
-			{ delete: { type: 'authors', id: 'a1' } },
-		]);
+		const results = dbServer.transaction([{ delete: { type: 'authors', id: 'a1' } }]);
 
 		expect(results).toHaveLength(1);
 
 		// Verify cascade query was executed
 		const cascadeQuery = executedQueries.find(
-			(q) => q.sql.includes('SELECT * FROM books WHERE author_id = ?') && q.args[0] === 'a1',
+			(q) =>
+				q.sql.includes('SELECT * FROM books WHERE author_id = ?') && q.args[0] === 'a1',
 		);
 		expect(cascadeQuery).toBeDefined();
 	});

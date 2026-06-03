@@ -21,8 +21,7 @@
 		skeleton={loading}
 		skeleton_count={3}
 		home_href="#"
-		items={loading ? [] : items}
-	/>
+		items={loading ? [] : items} />
 </div>
 
 <style>

@@ -13,6 +13,8 @@
 	<div style="flex: 1;">
 		<TabContent value="general"><p style="margin: 0;">General settings.</p></TabContent>
 		<TabContent value="security"><p style="margin: 0;">Security settings.</p></TabContent>
-		<TabContent value="notifications"><p style="margin: 0;">Notification settings.</p></TabContent>
+		<TabContent value="notifications">
+			<p style="margin: 0;">Notification settings.</p>
+		</TabContent>
 	</div>
 </div>

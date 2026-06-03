@@ -10,8 +10,8 @@
 		loop
 		controls={false} />
 	<p class="hint">
-		Autoplay requires <code>muted</code>; browsers block autoplay-with-sound until the user
-		interacts.
+		Autoplay requires <code>muted</code>
+		; browsers block autoplay-with-sound until the user interacts.
 	</p>
 </div>
 

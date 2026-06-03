@@ -17,5 +17,4 @@
 	label="Category"
 	placeholder="Select a category"
 	required
-	error={!category ? 'Please select a category' : ''}
-/>
+	error={!category ? 'Please select a category' : ''} />

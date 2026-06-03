@@ -12,4 +12,10 @@
 	];
 </script>
 
-<Select multiple label="Tags" placeholder="Select tags..." bind:value options={tags} clearable />
+<Select
+	multiple
+	label="Tags"
+	placeholder="Select tags..."
+	bind:value
+	options={tags}
+	clearable />

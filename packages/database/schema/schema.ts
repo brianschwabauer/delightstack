@@ -191,8 +191,10 @@ interface BooleanField extends Omit<DatabaseFieldBase, 'unique'> {
 }
 
 /** The options for a geopoint field */
-interface GeopointField
-	extends Omit<DatabaseFieldBase, 'indexable' | 'unique' | 'sortable'> {
+interface GeopointField extends Omit<
+	DatabaseFieldBase,
+	'indexable' | 'unique' | 'sortable'
+> {
 	type: 'geopoint';
 	/** Geopoints are always searchable since that is the primary point of a geopoint field */
 	searchable: true;
@@ -204,16 +206,20 @@ interface GeopointField
 }
 
 /** The options for an object field */
-interface ObjectField<Properties extends Record<string, FieldGenerator>>
-	extends Pick<DatabaseFieldBase, 'column' | 'optional' | 'readonly'> {
+interface ObjectField<Properties extends Record<string, FieldGenerator>> extends Pick<
+	DatabaseFieldBase,
+	'column' | 'optional' | 'readonly'
+> {
 	type: 'object';
 	/** A record of properties for the object */
 	properties: Properties;
 }
 
 /** The options for an array field */
-interface ArrayField<Items extends FieldGenerator>
-	extends Pick<DatabaseFieldBase, 'column' | 'optional' | 'readonly' | 'searchable'> {
+interface ArrayField<Items extends FieldGenerator> extends Pick<
+	DatabaseFieldBase,
+	'column' | 'optional' | 'readonly' | 'searchable'
+> {
 	type: 'array';
 	/** The type of items in the array */
 	items: Items;
@@ -224,8 +230,10 @@ interface ArrayField<Items extends FieldGenerator>
 }
 
 /** The options for an enum field */
-interface EnumField<Options extends string[] = string[]>
-	extends Omit<DatabaseFieldBase, 'indexable' | 'unique' | 'sortable'> {
+interface EnumField<Options extends string[] = string[]> extends Omit<
+	DatabaseFieldBase,
+	'indexable' | 'unique' | 'sortable'
+> {
 	type: 'enum';
 	/** The available string options this field can be equal to */
 	options: Options;
@@ -234,8 +242,10 @@ interface EnumField<Options extends string[] = string[]>
 }
 
 /** The options for a vector field */
-interface VectorField
-	extends Omit<DatabaseFieldBase, 'indexable' | 'unique' | 'sortable'> {
+interface VectorField extends Omit<
+	DatabaseFieldBase,
+	'indexable' | 'unique' | 'sortable'
+> {
 	type: 'vector';
 	/** Vector fields are always searchable because that it the point of a vector field */
 	searchable: true;
@@ -246,8 +256,10 @@ interface VectorField
 }
 
 /** The options for a primary key field */
-interface PrimaryKeyField<Type extends 'string' | 'number' = 'string'>
-	extends Pick<DatabaseFieldBase, 'searchable' | 'sortable' | 'readonly'> {
+interface PrimaryKeyField<Type extends 'string' | 'number' = 'string'> extends Pick<
+	DatabaseFieldBase,
+	'searchable' | 'sortable' | 'readonly'
+> {
 	type: 'primary_key';
 	/** Primary key fields are always added to the search index */
 	searchable: true;
@@ -258,8 +270,10 @@ interface PrimaryKeyField<Type extends 'string' | 'number' = 'string'>
 }
 
 /** The options for a field that references a field in a foreign table */
-interface ForeignKeyField
-	extends Pick<DatabaseFieldBase, 'searchable' | 'sortable' | 'optional' | 'readonly'> {
+interface ForeignKeyField extends Pick<
+	DatabaseFieldBase,
+	'searchable' | 'sortable' | 'optional' | 'readonly'
+> {
 	type: 'foreign_key';
 	foreign_key: {
 		/** The type of the column in the referenced table. Since this is a foreign key, it must be a string or number */
@@ -330,25 +344,29 @@ type ForeignKey<
 	};
 };
 
-type IsPrimaryKey<T> = T extends { _: infer U & { type: 'primary_key' } } ? true : false;
-type IsForeignKey<T> = T extends { _: infer U & { type: 'foreign_key' } } ? true : false;
+type IsPrimaryKey<T> = T extends { _: (infer U) & { type: 'primary_key' } }
+	? true
+	: false;
+type IsForeignKey<T> = T extends { _: (infer U) & { type: 'foreign_key' } }
+	? true
+	: false;
 
 /** Checks if any field in a table config is a primary key (produces `true` or `never`) */
 type HasPrimaryKeyField<TC extends Record<string, FieldGenerator>> = {
 	[K in keyof TC]: IsPrimaryKey<TC[K]> extends true ? true : never;
 }[keyof TC];
-type IsColumn<T> = T extends { _: infer U & { column: true } } ? true : false;
-type IsSearchable<T> = T extends { _: infer U & { searchable: true } } ? true : false;
-type IsIndexable<T> = T extends { _: infer U & { indexable: true } } ? true : false;
-type IsUnique<T> = T extends { _: infer U & { unique: true } } ? true : false;
-type IsSortable<T> = T extends { _: infer U & { sortable: true } } ? true : false;
-type IsOptional<T> = T extends { _: infer U & { optional: true } } ? true : false;
-type IsReadOnly<T> = T extends { _: infer U & { readonly: true } } ? true : false;
-type IsInteger<T> = T extends { _: infer U & { integer: true } } ? true : false;
-type IsBoolean<T> = T extends { _: infer U & { type: 'boolean' } } ? true : false;
-type IsNumber<T> = T extends { _: infer U & { type: 'number' } } ? true : false;
-type IsString<T> = T extends { _: infer U & { type: 'string' } } ? true : false;
-type IsEnum<T> = T extends { _: infer U & { type: 'enum' } } ? true : false;
+type IsColumn<T> = T extends { _: (infer U) & { column: true } } ? true : false;
+type IsSearchable<T> = T extends { _: (infer U) & { searchable: true } } ? true : false;
+type IsIndexable<T> = T extends { _: (infer U) & { indexable: true } } ? true : false;
+type IsUnique<T> = T extends { _: (infer U) & { unique: true } } ? true : false;
+type IsSortable<T> = T extends { _: (infer U) & { sortable: true } } ? true : false;
+type IsOptional<T> = T extends { _: (infer U) & { optional: true } } ? true : false;
+type IsReadOnly<T> = T extends { _: (infer U) & { readonly: true } } ? true : false;
+type IsInteger<T> = T extends { _: (infer U) & { integer: true } } ? true : false;
+type IsBoolean<T> = T extends { _: (infer U) & { type: 'boolean' } } ? true : false;
+type IsNumber<T> = T extends { _: (infer U) & { type: 'number' } } ? true : false;
+type IsString<T> = T extends { _: (infer U) & { type: 'string' } } ? true : false;
+type IsEnum<T> = T extends { _: (infer U) & { type: 'enum' } } ? true : false;
 type IsDerived<T> = T extends { _: infer U }
 	? unknown extends U
 		? false
@@ -2320,11 +2338,8 @@ export namespace Database {
 			readonly _: Record<string, FieldGenerator>;
 		},
 		Query extends SearchQuery<Table> = {},
-		Data extends Query['sparse'] extends false
-			? Entity<Table>
-			: SearchEntity<Table> = Query['sparse'] extends false
-			? Entity<Table>
-			: SearchEntity<Table>,
+		Data extends Query['sparse'] extends false ? Entity<Table> : SearchEntity<Table> =
+			Query['sparse'] extends false ? Entity<Table> : SearchEntity<Table>,
 	> = Pick<Results<Data>, 'count' | 'elapsed' | 'facets' | 'hits'> & {
 		/**
 		 * A cursor that can be used to fetch the next set of results.

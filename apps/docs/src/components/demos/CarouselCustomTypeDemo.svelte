@@ -39,19 +39,11 @@
 	<div class="frame">
 		<Carousel {items} bind:slide inline dismissable={false} fit="cover">
 			{#snippet custom({ item, active, gesture_disabled })}
-				<div
-					class="custom-slide"
-					class:active
-					style:background="hsl({hue} 70% 35%)">
+				<div class="custom-slide" class:active style:background="hsl({hue} 70% 35%)">
 					<div class="custom-card">
 						<div class="custom-label">{item.name}</div>
 						<div class="custom-hue">hsl({hue} 70% 35%)</div>
-						<input
-							type="range"
-							min="0"
-							max="360"
-							bind:value={hue}
-							aria-label="Hue" />
+						<input type="range" min="0" max="360" bind:value={hue} aria-label="Hue" />
 						<div class="custom-hint">
 							gesture_disabled = <code>{String(gesture_disabled)}</code>
 						</div>
@@ -69,10 +61,7 @@
 			‹ Prev
 		</Button>
 		<span class="pos">{slide + 1} / {items.length}</span>
-		<Button
-			size="1"
-			transparent
-			onclick={() => (slide = (slide + 1) % items.length)}>
+		<Button size="1" transparent onclick={() => (slide = (slide + 1) % items.length)}>
 			Next ›
 		</Button>
 	</div>

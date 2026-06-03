@@ -10,7 +10,10 @@ import { processImage } from '../src/process';
 // ── Mock R2 Bucket ──────────────────────────────────────────────────────────
 
 function createMockBucket(initialObjects: Record<string, ArrayBuffer> = {}) {
-	const store = new Map<string, { data: any; httpMetadata?: any; customMetadata?: any }>();
+	const store = new Map<
+		string,
+		{ data: any; httpMetadata?: any; customMetadata?: any }
+	>();
 
 	for (const [key, data] of Object.entries(initialObjects)) {
 		store.set(key, { data });
@@ -178,9 +181,7 @@ describe('Mode 2: standalone processImage()', () => {
 		// Check original variant has original-filename
 		const origObj = bucket._store.get('photos/original');
 		expect(origObj).toBeTruthy();
-		expect(origObj.customMetadata['original-filename']).toBe(
-			'landscape.jpg',
-		);
+		expect(origObj.customMetadata['original-filename']).toBe('landscape.jpg');
 	});
 
 	it('keeps original upload by default', async () => {
@@ -226,9 +227,7 @@ describe('Mode 2: standalone processImage()', () => {
 	});
 
 	it('passes options to the container', async () => {
-		const customVariants = [
-			{ name: 'large', max_dimension: 4096, format: 'webp' },
-		];
+		const customVariants = [{ name: 'large', max_dimension: 4096, format: 'webp' }];
 
 		await processImage(binding, {
 			bucket,
@@ -295,7 +294,8 @@ describe('Mode 2: standalone processImage()', () => {
 			if (!obj) return null;
 			return {
 				body: obj.data,
-				arrayBuffer: async () => obj.data instanceof ArrayBuffer ? obj.data : new ArrayBuffer(0),
+				arrayBuffer: async () =>
+					obj.data instanceof ArrayBuffer ? obj.data : new ArrayBuffer(0),
 			};
 		};
 

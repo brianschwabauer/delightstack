@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { generateJwt, decodeJwt, extractJwtRefreshToken, getSecretKey } from './jwt.server';
+import {
+	generateJwt,
+	decodeJwt,
+	extractJwtRefreshToken,
+	getSecretKey,
+} from './jwt.server';
 
 // A valid 256-bit hex secret (64 hex chars = 32 bytes)
 const SECRET = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2';
@@ -116,7 +121,9 @@ describe('generateJwt', () => {
 			org: {},
 		});
 
-		const header = JSON.parse(atob(result.jwt.split('.')[0].replace(/-/g, '+').replace(/_/g, '/')));
+		const header = JSON.parse(
+			atob(result.jwt.split('.')[0].replace(/-/g, '+').replace(/_/g, '/')),
+		);
 		expect(header.alg).toBe('HS256');
 		expect(header.typ).toBe('JWT');
 		expect(header.kid).toBeDefined();
@@ -222,7 +229,10 @@ describe('decodeJwt', () => {
 		const parts = jwt.split('.');
 		const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
 		payload.uid = 'user_hacker';
-		parts[1] = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+/g, '');
+		parts[1] = btoa(JSON.stringify(payload))
+			.replace(/\+/g, '-')
+			.replace(/\//g, '_')
+			.replace(/=+/g, '');
 		const tampered = parts.join('.');
 
 		await expect(decodeJwt(SECRET, tampered)).rejects.toThrow('Signature is invalid');

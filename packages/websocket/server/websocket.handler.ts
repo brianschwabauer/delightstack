@@ -80,7 +80,9 @@ export interface WebsocketHandleOptions {
 	) =>
 		| Omit<WebsocketSessionMeta<Record<string, unknown>>, 'ws_session_id'>
 		| undefined
-		| Promise<Omit<WebsocketSessionMeta<Record<string, unknown>>, 'ws_session_id'> | undefined>;
+		| Promise<
+				Omit<WebsocketSessionMeta<Record<string, unknown>>, 'ws_session_id'> | undefined
+		  >;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,10 +141,10 @@ export function createWebsocketHandle(options: WebsocketHandleOptions): Handle {
 			: defaultAuthorize(event);
 
 		if (!session_meta) {
-			return new Response(
-				JSON.stringify({ status: 401, message: 'Unauthorized' }),
-				{ status: 401, headers: { 'Content-Type': 'application/json' } },
-			);
+			return new Response(JSON.stringify({ status: 401, message: 'Unauthorized' }), {
+				status: 401,
+				headers: { 'Content-Type': 'application/json' },
+			});
 		}
 
 		const ws_stub = options.getWebsocket(event);
@@ -169,7 +171,9 @@ export function createWebsocketHandle(options: WebsocketHandleOptions): Handle {
 // Default authorize (uses @delightstack/auth locals)
 // ---------------------------------------------------------------------------
 
-function defaultAuthorize(event: RequestEvent): Omit<WebsocketSessionMeta<AuthSessionMeta>, 'ws_session_id'> | undefined {
+function defaultAuthorize(
+	event: RequestEvent,
+): Omit<WebsocketSessionMeta<AuthSessionMeta>, 'ws_session_id'> | undefined {
 	const locals = event.locals as WebsocketAuthLocals;
 
 	if (!locals.session || !locals.user || !locals.org_id || !locals.org) {

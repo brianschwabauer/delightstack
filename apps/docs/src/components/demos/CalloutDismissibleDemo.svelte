@@ -15,8 +15,7 @@
 {:else}
 	<button
 		onclick={reset}
-		style="padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 6px; background: transparent; cursor: pointer;"
-	>
+		style="padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 6px; background: transparent; cursor: pointer;">
 		Show callout again
 	</button>
 {/if}

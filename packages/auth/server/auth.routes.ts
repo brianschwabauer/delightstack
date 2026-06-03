@@ -139,7 +139,12 @@ const signInEmail: AuthRouteHandler = (ctx) =>
 		const is_new_user = result.type === 'signup';
 
 		if (is_new_user && ctx.config.hooks?.onSignUp) {
-			await ctx.config.hooks.onSignUp({ auth: ctx.auth, result, method: 'email', meta: ctx.meta });
+			await ctx.config.hooks.onSignUp({
+				auth: ctx.auth,
+				result,
+				method: 'email',
+				meta: ctx.meta,
+			});
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({
@@ -195,7 +200,12 @@ const signInEmailVerify: AuthRouteHandler = (ctx) =>
 
 		const is_new_user = result.type === 'signup';
 		if (is_new_user && ctx.config.hooks?.onSignUp) {
-			await ctx.config.hooks.onSignUp({ auth: ctx.auth, result, method: 'magic-link', meta: ctx.meta });
+			await ctx.config.hooks.onSignUp({
+				auth: ctx.auth,
+				result,
+				method: 'magic-link',
+				meta: ctx.meta,
+			});
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({
@@ -225,7 +235,12 @@ const signUpEmail: AuthRouteHandler = (ctx) =>
 		)) as AuthOperationResult;
 
 		if (ctx.config.hooks?.onSignUp) {
-			await ctx.config.hooks.onSignUp({ auth: ctx.auth, result, method: 'email', meta: ctx.meta });
+			await ctx.config.hooks.onSignUp({
+				auth: ctx.auth,
+				result,
+				method: 'email',
+				meta: ctx.meta,
+			});
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({
@@ -363,10 +378,20 @@ const signInOauthCallback: AuthRouteHandler = (ctx) =>
 		const is_new_user = result.type === 'signup';
 		const is_new_method = result.type === 'new-signin-method';
 		if (is_new_user && ctx.config.hooks?.onSignUp) {
-			await ctx.config.hooks.onSignUp({ auth: ctx.auth, result, method: 'oauth', meta: ctx.meta });
+			await ctx.config.hooks.onSignUp({
+				auth: ctx.auth,
+				result,
+				method: 'oauth',
+				meta: ctx.meta,
+			});
 		}
 		if (is_new_method && ctx.config.hooks?.onNewSignInMethod) {
-			await ctx.config.hooks.onNewSignInMethod({ auth: ctx.auth, result, vendor, meta: ctx.meta });
+			await ctx.config.hooks.onNewSignInMethod({
+				auth: ctx.auth,
+				result,
+				vendor,
+				meta: ctx.meta,
+			});
 		}
 		if (ctx.config.hooks?.onSignIn) {
 			await ctx.config.hooks.onSignIn({

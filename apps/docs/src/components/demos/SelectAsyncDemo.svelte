@@ -2,8 +2,16 @@
 	import { Select } from '@delightstack/components/form';
 
 	const ALL = [
-		'Alice Johnson', 'Bob Smith', 'Charlie Brown', 'Diana Prince', 'Eve Martin',
-		'Frank Lee', 'Grace Hopper', 'Henry Ford', 'Ivy Chen', 'Jack Daniels',
+		'Alice Johnson',
+		'Bob Smith',
+		'Charlie Brown',
+		'Diana Prince',
+		'Eve Martin',
+		'Frank Lee',
+		'Grace Hopper',
+		'Henry Ford',
+		'Ivy Chen',
+		'Jack Daniels',
 	];
 
 	let selected = $state('');

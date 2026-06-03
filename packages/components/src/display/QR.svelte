@@ -1075,7 +1075,6 @@
 					onerror={handleLogoError} />
 			{/if}
 		</svg>
-
 	</div>
 {/if}
 

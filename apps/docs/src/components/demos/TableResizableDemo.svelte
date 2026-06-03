@@ -2,7 +2,12 @@
 	import { Table } from '@delightstack/components/display';
 
 	const products = [
-		{ sku: 'DS-1001', name: 'Aurora Standing Desk', category: 'Furniture', price: '$649' },
+		{
+			sku: 'DS-1001',
+			name: 'Aurora Standing Desk',
+			category: 'Furniture',
+			price: '$649',
+		},
 		{ sku: 'DS-1002', name: 'Nimbus Office Chair', category: 'Furniture', price: '$329' },
 		{ sku: 'DS-1003', name: 'Halo Desk Lamp', category: 'Lighting', price: '$89' },
 		{ sku: 'DS-1004', name: 'Drift Acoustic Panel', category: 'Decor', price: '$48' },

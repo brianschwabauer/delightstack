@@ -34,15 +34,13 @@
 					type="email"
 					bind:value={form_data.email}
 					required
-					placeholder="you@example.com"
-				/>
+					placeholder="you@example.com" />
 				<Input
 					label="Password"
 					type="password"
 					bind:value={form_data.password}
 					required
-					placeholder="Your password"
-				/>
+					placeholder="Your password" />
 			</div>
 
 			<Button type="submit" full_width>Sign In</Button>
@@ -103,7 +101,8 @@
 		gap: var(--size-3);
 		color: var(--color-text-disabled);
 		font-size: var(--font-size-0);
-		&::before, &::after {
+		&::before,
+		&::after {
 			content: '';
 			flex: 1;
 			height: 1px;

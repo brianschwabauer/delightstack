@@ -20,21 +20,19 @@
 		<Checkbox
 			checked={permissions.includes('read')}
 			onchange={() => toggle('read')}
-			label="Read"
-		/>
+			label="Read" />
 		<Checkbox
 			checked={permissions.includes('write')}
 			onchange={() => toggle('write')}
-			label="Write"
-		/>
+			label="Write" />
 		<Checkbox
 			checked={permissions.includes('admin')}
 			onchange={() => toggle('admin')}
-			label="Admin"
-		/>
+			label="Admin" />
 	</div>
 	{#if permissions.length === 0}
-		<p style="margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--c-error, hsl(0 70% 55%));">
+		<p
+			style="margin: 0.5rem 0 0; font-size: 0.85rem; color: var(--c-error, hsl(0 70% 55%));">
 			Select at least one permission
 		</p>
 	{/if}

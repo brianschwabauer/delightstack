@@ -36,7 +36,14 @@
 		duration?: number;
 	}
 
-	const DEFAULT_COLORS = ['#ff577f', '#ff884b', '#ffd384', '#fff9b0', '#3ec1d3', '#7c5cbf'];
+	const DEFAULT_COLORS = [
+		'#ff577f',
+		'#ff884b',
+		'#ffd384',
+		'#fff9b0',
+		'#3ec1d3',
+		'#7c5cbf',
+	];
 
 	type ParticleShape = 'circle' | 'square';
 	const PARTICLE_SHAPES: ParticleShape[] = ['circle', 'square'];
@@ -579,7 +586,8 @@
 
 		// Schedule onend callback
 		if (onend) {
-			const estimated_duration = preset === 'cannon' || preset === 'rain' ? duration + 5000 : 5000;
+			const estimated_duration =
+				preset === 'cannon' || preset === 'rain' ? duration + 5000 : 5000;
 			setTimeout(() => {
 				onend?.();
 			}, estimated_duration);

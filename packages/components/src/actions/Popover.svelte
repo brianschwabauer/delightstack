@@ -758,7 +758,8 @@
 					if (open_on_click) return false;
 					let el = e.target as HTMLElement | null | undefined;
 					while (el) {
-						if ((ref_element && el === ref_element) || el === popoverElement) return false;
+						if ((ref_element && el === ref_element) || el === popoverElement)
+							return false;
 						el = el.parentElement;
 					}
 					return true;

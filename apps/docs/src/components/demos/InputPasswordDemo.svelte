@@ -10,5 +10,4 @@
 	placeholder="Enter password"
 	bind:value
 	show_toggle
-	strength_indicator
-/>
+	strength_indicator />

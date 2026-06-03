@@ -10,39 +10,35 @@ describe('resolveErrorCode', () => {
 		expect(resolveErrorCode({ message: 'Incorrect email or password' })).toBe(
 			'invalid_credentials',
 		);
-		expect(resolveErrorCode({ message: 'Email is already in use' })).toBe(
-			'email_taken',
-		);
-		expect(resolveErrorCode({ message: 'Password is too common' })).toBe(
-			'weak_password',
-		);
+		expect(resolveErrorCode({ message: 'Email is already in use' })).toBe('email_taken');
+		expect(resolveErrorCode({ message: 'Password is too common' })).toBe('weak_password');
 		expect(resolveErrorCode({ message: 'Password must be at least 8 characters' })).toBe(
 			'weak_password',
 		);
 	});
 
 	it('resolves rate limiting messages', () => {
-		expect(
-			resolveErrorCode({ message: 'Too many failed sign in attempts' }),
-		).toBe('rate_limited');
-		expect(
-			resolveErrorCode({ message: 'Too many failed sign up attempts' }),
-		).toBe('rate_limited');
-		expect(
-			resolveErrorCode({ message: 'Too many email availability checks' }),
-		).toBe('rate_limited');
-		expect(
-			resolveErrorCode({ message: 'Too many password reset requests' }),
-		).toBe('rate_limited');
+		expect(resolveErrorCode({ message: 'Too many failed sign in attempts' })).toBe(
+			'rate_limited',
+		);
+		expect(resolveErrorCode({ message: 'Too many failed sign up attempts' })).toBe(
+			'rate_limited',
+		);
+		expect(resolveErrorCode({ message: 'Too many email availability checks' })).toBe(
+			'rate_limited',
+		);
+		expect(resolveErrorCode({ message: 'Too many password reset requests' })).toBe(
+			'rate_limited',
+		);
 	});
 
 	it('resolves user deletion messages', () => {
-		expect(
-			resolveErrorCode({ message: 'account has been deleted' }),
-		).toBe('user_deleted');
-		expect(
-			resolveErrorCode({ message: "Can't sign-in to a deleted account" }),
-		).toBe('user_deleted');
+		expect(resolveErrorCode({ message: 'account has been deleted' })).toBe(
+			'user_deleted',
+		);
+		expect(resolveErrorCode({ message: "Can't sign-in to a deleted account" })).toBe(
+			'user_deleted',
+		);
 	});
 
 	it('resolves OAuth conflict', () => {
@@ -54,15 +50,15 @@ describe('resolveErrorCode', () => {
 	});
 
 	it('resolves token-related errors', () => {
-		expect(
-			resolveErrorCode({ message: 'Invalid or expired email sign-in link' }),
-		).toBe('invalid_token');
+		expect(resolveErrorCode({ message: 'Invalid or expired email sign-in link' })).toBe(
+			'invalid_token',
+		);
 		expect(
 			resolveErrorCode({ message: 'Invalid or expired email verification link' }),
 		).toBe('invalid_token');
-		expect(
-			resolveErrorCode({ message: 'Invalid or expired reset password link' }),
-		).toBe('invalid_token');
+		expect(resolveErrorCode({ message: 'Invalid or expired reset password link' })).toBe(
+			'invalid_token',
+		);
 	});
 
 	it('resolves invitation errors', () => {
@@ -88,9 +84,9 @@ describe('resolveErrorCode', () => {
 	});
 
 	it('resolves session not found', () => {
-		expect(
-			resolveErrorCode({ message: "Can't refresh a revoked session" }),
-		).toBe('session_not_found');
+		expect(resolveErrorCode({ message: "Can't refresh a revoked session" })).toBe(
+			'session_not_found',
+		);
 	});
 
 	it('prefers detail over message when both match', () => {

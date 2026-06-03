@@ -293,7 +293,9 @@ export function createAiGateway(options: AiGatewayOptions): AiGatewayClient {
 
 					// If aborted (cancelled), throw rather than yielding a normal completion
 					if (controller.signal.aborted) {
-						throw createAiError('STREAM_INTERRUPTED', { message: 'Stream was cancelled' });
+						throw createAiError('STREAM_INTERRUPTED', {
+							message: 'Stream was cancelled',
+						});
 					}
 
 					yield {

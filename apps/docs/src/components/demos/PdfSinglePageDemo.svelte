@@ -35,9 +35,9 @@
 		</Button>
 	</div>
 	<p class="hint">
-		<code>single_page</code> renders only the current page, disables internal scroll, and
-		fits the page to the container — designed for embedding inside Gallery/Carousel or any
-		external page navigator.
+		<code>single_page</code>
+		renders only the current page, disables internal scroll, and fits the page to the container
+		— designed for embedding inside Gallery/Carousel or any external page navigator.
 	</p>
 </div>
 

@@ -11,5 +11,4 @@
 	step={25}
 	show_ticks
 	tick_labels={['Low', 'Medium', 'High', 'Very High', 'Max']}
-	label="Difficulty"
-/>
+	label="Difficulty" />

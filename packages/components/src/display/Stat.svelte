@@ -88,9 +88,8 @@
 
 	function formatChange(val: number): string {
 		const sign = val > 0 ? '+' : '';
-		const formatted = Math.abs(val) === Math.round(Math.abs(val))
-			? val.toFixed(0)
-			: val.toFixed(1);
+		const formatted =
+			Math.abs(val) === Math.round(Math.abs(val)) ? val.toFixed(0) : val.toFixed(1);
 		return `${sign}${formatted}%`;
 	}
 
@@ -98,7 +97,12 @@
 
 	const change_aria_label = $derived.by(() => {
 		if (change === undefined) return '';
-		const direction = resolved_trend === 'up' ? 'increased' : resolved_trend === 'down' ? 'decreased' : 'unchanged';
+		const direction =
+			resolved_trend === 'up'
+				? 'increased'
+				: resolved_trend === 'down'
+					? 'decreased'
+					: 'unchanged';
 		const amount = Math.abs(change).toFixed(1);
 		const suffix = change_label ? `, ${change_label}` : '';
 		return `${direction} by ${amount} percent${suffix}`;
@@ -110,7 +114,6 @@
 	class={['stat', `size-${size}`, className].filter(Boolean).join(' ')}
 	class:horizontal
 	class:skeleton>
-
 	{#if skeleton}
 		<div class="stat-skeleton">
 			{#if Icon}
@@ -154,9 +157,7 @@
 			{/if}
 
 			{#if change !== undefined}
-				<div
-					class="stat-change {trend_color}"
-					aria-label={change_aria_label}>
+				<div class="stat-change {trend_color}" aria-label={change_aria_label}>
 					<svg
 						class="stat-change-arrow"
 						width="14"
@@ -165,11 +166,26 @@
 						fill="none"
 						aria-hidden="true">
 						{#if resolved_trend === 'up'}
-							<path d="M3 10L10 3M10 3H5M10 3V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+							<path
+								d="M3 10L10 3M10 3H5M10 3V8"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round" />
 						{:else if resolved_trend === 'down'}
-							<path d="M3 4L10 11M10 11H5M10 11V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+							<path
+								d="M3 4L10 11M10 11H5M10 11V6"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round" />
 						{:else}
-							<path d="M3 7H11M11 7L8 4M11 7L8 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+							<path
+								d="M3 7H11M11 7L8 4M11 7L8 10"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round" />
 						{/if}
 					</svg>
 					<span class="stat-change-text">
@@ -260,8 +276,12 @@
 		opacity: 0.85;
 		padding-top: 0.15em;
 	}
-	.stat-prefix { margin-right: 0.1em; }
-	.stat-suffix { margin-left: 0.1em; }
+	.stat-prefix {
+		margin-right: 0.1em;
+	}
+	.stat-suffix {
+		margin-left: 0.1em;
+	}
 
 	.stat-label {
 		font-size: var(--stat-label-font);
@@ -321,10 +341,7 @@
 		width: var(--stat-icon-size);
 		height: var(--stat-icon-size);
 		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		flex-shrink: 0;
 		position: relative;
 		overflow: hidden;
@@ -355,10 +372,7 @@
 		width: 6em;
 		height: var(--stat-value-font);
 		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -382,10 +396,7 @@
 		width: 8em;
 		height: var(--stat-label-font);
 		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -410,10 +421,7 @@
 		width: 10em;
 		height: var(--stat-label-font);
 		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		margin-top: 0.25rem;
 		position: relative;
 		overflow: hidden;

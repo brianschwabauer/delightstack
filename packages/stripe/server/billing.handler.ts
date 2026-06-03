@@ -12,9 +12,7 @@ import { handleWebhook } from './billing.webhook';
 import { syncAll } from './billing.products';
 
 /** Options for `createBillingHandle()` */
-export interface BillingHandleOptions<
-	Config extends BillingConfig = BillingConfig,
-> {
+export interface BillingHandleOptions<Config extends BillingConfig = BillingConfig> {
 	/** The billing configuration (pass result of `defineBillingConfig()` or raw config) */
 	config: Config;
 
@@ -63,9 +61,7 @@ export interface BillingHandleOptions<
 export function createBillingHandle<Config extends BillingConfig>(
 	options: BillingHandleOptions<Config>,
 ): Handle {
-	const config = defineBillingConfig(
-		options.config,
-	) as ResolvedBillingConfig;
+	const config = defineBillingConfig(options.config) as ResolvedBillingConfig;
 
 	let product_sync_started = false;
 
@@ -76,10 +72,7 @@ export function createBillingHandle<Config extends BillingConfig>(
 		if (options.sync_on_startup && !product_sync_started) {
 			product_sync_started = true;
 			syncAll(config).catch((err) => {
-				console.error(
-					'[@delightstack/stripe] Product sync failed:',
-					err,
-				);
+				console.error('[@delightstack/stripe] Product sync failed:', err);
 			});
 		}
 
@@ -108,9 +101,7 @@ export function createBillingHandle<Config extends BillingConfig>(
 		// All other routes require authentication
 		const locals = event.locals as Record<string, unknown>;
 		if (!locals.session) {
-			return DelightError.unauthorized(
-				'Authentication required',
-			).toResponse();
+			return DelightError.unauthorized('Authentication required').toResponse();
 		}
 
 		try {

@@ -20,7 +20,9 @@ function createMockR2Object(overrides: any = {}) {
 function createMockBucket(objects: Record<string, any> = {}) {
 	return {
 		get: vi.fn(async (key: string) => objects[key] ?? null),
-		head: vi.fn(async (key: string) => objects[key] ? { httpEtag: objects[key].httpEtag } : null),
+		head: vi.fn(async (key: string) =>
+			objects[key] ? { httpEtag: objects[key].httpEtag } : null,
+		),
 	};
 }
 
@@ -133,7 +135,9 @@ describe('createImageHandle', () => {
 
 			const res = await handle({ event, resolve });
 
-			expect(res.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
+			expect(res.headers.get('Cache-Control')).toBe(
+				'public, max-age=31536000, immutable',
+			);
 		});
 
 		it('sets ETag header', async () => {

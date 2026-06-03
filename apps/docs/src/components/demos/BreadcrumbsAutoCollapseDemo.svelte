@@ -11,7 +11,9 @@
 </script>
 
 <div class="auto-collapse-demo">
-	<p class="hint">Drag the right edge ↔ to resize. Items fold into the “…” menu to fit.</p>
+	<p class="hint">
+		Drag the right edge ↔ to resize. Items fold into the “…” menu to fit.
+	</p>
 	<div class="resizable">
 		<Breadcrumbs {items} home_href="#" />
 	</div>

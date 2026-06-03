@@ -18,12 +18,7 @@
 	let selectedUsers = $state([]);
 </script>
 
-<Table
-	data={users}
-	{columns}
-	selectable
-	bind:selected={selectedUsers}
-/>
+<Table data={users} {columns} selectable bind:selected={selectedUsers} />
 
 <p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--color-text-secondary);">
 	{selectedUsers.length} row{selectedUsers.length !== 1 ? 's' : ''} selected

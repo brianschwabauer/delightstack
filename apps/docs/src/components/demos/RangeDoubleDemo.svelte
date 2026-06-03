@@ -12,5 +12,4 @@
 	step={50}
 	format_value={(v) => `$${v}`}
 	show_value
-	label="Price range"
-/>
+	label="Price range" />

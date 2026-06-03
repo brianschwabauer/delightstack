@@ -12,8 +12,19 @@
 </script>
 
 <div style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 320px;">
-	<Input label="Name" skeleton={loading} bind:value={name} placeholder="Enter your name" />
-	<Button outline dense size="0" onclick={() => { loading = true; setTimeout(() => loading = false, 1800); }}>
+	<Input
+		label="Name"
+		skeleton={loading}
+		bind:value={name}
+		placeholder="Enter your name" />
+	<Button
+		outline
+		dense
+		size="0"
+		onclick={() => {
+			loading = true;
+			setTimeout(() => (loading = false), 1800);
+		}}>
 		Replay skeleton
 	</Button>
 </div>

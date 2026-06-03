@@ -14,11 +14,7 @@
 <div class="full-width">
 	<ButtonGroup>
 		{#each sizes as s (s)}
-			<Button
-				size="0"
-				transparent
-				active={size === s}
-				onclick={() => (size = s)}>
+			<Button size="0" transparent active={size === s} onclick={() => (size = s)}>
 				{s}
 			</Button>
 		{/each}

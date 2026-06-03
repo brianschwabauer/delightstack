@@ -167,8 +167,9 @@ export interface BillingConfig<E extends string = string> {
 }
 
 /** Resolved billing config with all defaults filled in */
-export interface ResolvedBillingConfig<E extends string = string>
-	extends BillingConfig<E> {
+export interface ResolvedBillingConfig<
+	E extends string = string,
+> extends BillingConfig<E> {
 	base_path: string;
 	billing_scope: 'org' | 'user';
 	portal: Required<NonNullable<BillingConfig['portal']>>;
@@ -198,9 +199,7 @@ export function defineBillingConfig<const E extends string>(
 				throw new Error(`Billing config: duplicate plan id '${plan.id}'`);
 			}
 			if (keys.has(plan.lookup_key)) {
-				throw new Error(
-					`Billing config: duplicate lookup_key '${plan.lookup_key}'`,
-				);
+				throw new Error(`Billing config: duplicate lookup_key '${plan.lookup_key}'`);
 			}
 			ids.add(plan.id);
 			keys.add(plan.lookup_key);

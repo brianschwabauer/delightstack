@@ -11,7 +11,10 @@ import { createImageHandle } from '../src/handle';
 // ── Mock R2 Bucket ──────────────────────────────────────────────────────────
 
 function createMockBucket() {
-	const store = new Map<string, { data: any; httpMetadata?: any; customMetadata?: any }>();
+	const store = new Map<
+		string,
+		{ data: any; httpMetadata?: any; customMetadata?: any }
+	>();
 
 	return {
 		_store: store,
@@ -25,14 +28,15 @@ function createMockBucket() {
 		async get(key: string) {
 			const obj = store.get(key);
 			if (!obj) return null;
-			const body = obj.data instanceof ArrayBuffer
-				? new ReadableStream({
-					start(controller) {
-						controller.enqueue(new Uint8Array(obj.data));
-						controller.close();
-					},
-				})
-				: obj.data;
+			const body =
+				obj.data instanceof ArrayBuffer
+					? new ReadableStream({
+							start(controller) {
+								controller.enqueue(new Uint8Array(obj.data));
+								controller.close();
+							},
+						})
+					: obj.data;
 			return {
 				body,
 				httpEtag: `"${key}-etag"`,
@@ -119,13 +123,13 @@ function createMockDb() {
 				if (sql.includes("'failed'")) matchStatuses.push('failed');
 
 				if (sql.includes('COUNT(*)')) {
-					const count = Array.from(records.values()).filter(
-						(r: any) => matchStatuses.includes(r.processing_status),
+					const count = Array.from(records.values()).filter((r: any) =>
+						matchStatuses.includes(r.processing_status),
 					).length;
 					return [{ count }];
 				}
-				return Array.from(records.values()).filter(
-					(r: any) => matchStatuses.includes(r.processing_status),
+				return Array.from(records.values()).filter((r: any) =>
+					matchStatuses.includes(r.processing_status),
 				);
 			}
 			return [];
@@ -279,9 +283,7 @@ describe('Mode 1: upload → alarm → processed → CDN', () => {
 
 		expect(res.status).toBe(200);
 		expect(res.headers.get('Content-Type')).toBe('image/avif');
-		expect(res.headers.get('Cache-Control')).toBe(
-			'public, max-age=31536000, immutable',
-		);
+		expect(res.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
 		expect(res.headers.get('X-Image-Width')).toBe('2048');
 		expect(res.headers.get('X-Image-Height')).toBe('1365');
 	});

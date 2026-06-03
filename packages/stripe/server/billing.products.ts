@@ -17,9 +17,7 @@ let meters_synced = false;
  * - Existing resources are updated; missing ones are created
  * - Nothing is deleted (archived plans stay in Stripe)
  */
-export async function syncProducts(
-	config: ResolvedBillingConfig,
-): Promise<void> {
+export async function syncProducts(config: ResolvedBillingConfig): Promise<void> {
 	if (products_synced || !config.plans?.length) return;
 	products_synced = true;
 
@@ -86,8 +84,7 @@ export async function syncProducts(
 			if (
 				existing_price.unit_amount !== plan.amount ||
 				existing_price.recurring?.interval !== plan.interval ||
-				(existing_price.recurring?.interval_count ?? 1) !==
-					(plan.interval_count ?? 1)
+				(existing_price.recurring?.interval_count ?? 1) !== (plan.interval_count ?? 1)
 			) {
 				await stripeCall(() =>
 					stripe.prices.create({
@@ -112,23 +109,17 @@ export async function syncProducts(
  * Syncs meter definitions to Stripe Billing Meters.
  * Idempotent — creates meters that do not exist.
  */
-export async function syncMeters(
-	config: ResolvedBillingConfig,
-): Promise<void> {
+export async function syncMeters(config: ResolvedBillingConfig): Promise<void> {
 	if (meters_synced || !config.meters?.length) return;
 	meters_synced = true;
 
 	const stripe = getStripe(config);
 
 	// List existing meters
-	const existing = await stripeCall(() =>
-		stripe.billing.meters.list({ limit: 100 }),
-	);
+	const existing = await stripeCall(() => stripe.billing.meters.list({ limit: 100 }));
 
 	for (const meter of config.meters) {
-		const found = existing.data.find(
-			(m) => m.event_name === meter.event_name,
-		);
+		const found = existing.data.find((m) => m.event_name === meter.event_name);
 		if (!found) {
 			await stripeCall(() =>
 				stripe.billing.meters.create({

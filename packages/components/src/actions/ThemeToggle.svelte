@@ -108,7 +108,9 @@
 		}
 	}
 
-	const modeLabel = $derived(theme === 'auto' ? 'Auto' : theme === 'dark' ? 'Dark' : 'Light');
+	const modeLabel = $derived(
+		theme === 'auto' ? 'Auto' : theme === 'dark' ? 'Dark' : 'Light',
+	);
 	const ariaLabel = $derived(
 		theme === 'auto'
 			? 'Theme: auto (system preference)'
@@ -271,7 +273,8 @@
 		animation-delay: 1.2s;
 	}
 	@keyframes twinkle {
-		0%, 100% {
+		0%,
+		100% {
 			opacity: 0.4;
 			transform: scale(0.85);
 		}

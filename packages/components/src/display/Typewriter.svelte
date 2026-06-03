@@ -163,9 +163,8 @@
 		is_typing = true;
 		onstart?.();
 
-		const common_prefix_len = displayed.length > 0
-			? findCommonPrefixLength(displayed, target)
-			: 0;
+		const common_prefix_len =
+			displayed.length > 0 ? findCommonPrefixLength(displayed, target) : 0;
 
 		function startTyping() {
 			typeText(target, common_prefix_len, () => {

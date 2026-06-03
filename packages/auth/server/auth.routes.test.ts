@@ -255,10 +255,7 @@ describe('matchRoute', () => {
 		});
 
 		it('matches DELETE /oauth/application/:id/secret/:secret_id', () => {
-			const result = matchRoute(
-				'DELETE',
-				'/oauth/application/app_123/secret/sec_456',
-			);
+			const result = matchRoute('DELETE', '/oauth/application/app_123/secret/sec_456');
 			expect(result).not.toBeNull();
 			expect(result!.params.id).toBe('app_123');
 			expect(result!.params.secret_id).toBe('sec_456');

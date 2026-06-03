@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { Button, AvatarGroup, ThemeToggle, List, ListItem } from '@delightstack/components';
+	import {
+		Button,
+		AvatarGroup,
+		ThemeToggle,
+		List,
+		ListItem,
+	} from '@delightstack/components';
 	import { tooltip } from '@delightstack/utilities';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -64,8 +70,7 @@
 					<AvatarGroup
 						avatars={ws.sessions.map((s) => ({ name: s.meta?.user_name ?? 'User' }))}
 						max={3}
-						size="0"
-					/>
+						size="0" />
 					<small>{ws.sessions.length} online</small>
 				</div>
 			{/if}
@@ -85,11 +90,7 @@
 	<!-- Bottom nav (mobile) -->
 	<nav class="bottom-nav mobile-only">
 		{#each nav_items.slice(0, 5) as item (item.href)}
-			<a
-				href={item.href}
-				class="bottom-nav-item"
-				class:active={isActive(item.href)}
-			>
+			<a href={item.href} class="bottom-nav-item" class:active={isActive(item.href)}>
 				<Icon name={item.icon} size={22} />
 				<small>{item.label}</small>
 			</a>

@@ -10,5 +10,4 @@
 		{ key: 'email', label: 'Email' },
 		{ key: 'status', label: 'Status' },
 	]}
-	data={[]}
-/>
+	data={[]} />

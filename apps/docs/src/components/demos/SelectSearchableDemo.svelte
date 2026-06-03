@@ -15,4 +15,9 @@
 	];
 </script>
 
-<Select searchable label="Country" placeholder="Search countries..." bind:value options={countries} />
+<Select
+	searchable
+	label="Country"
+	placeholder="Search countries..."
+	bind:value
+	options={countries} />

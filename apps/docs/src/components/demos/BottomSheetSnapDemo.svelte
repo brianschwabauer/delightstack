@@ -11,9 +11,10 @@
 <BottomSheet bind:open bind:snap snap_points={[0.3, 0.6, 1]}>
 	<div style="padding: 0 1.5rem 1.5rem;">
 		<h3 style="margin: 0 0 0.75rem; color: var(--color-text, inherit);">Drag Me!</h3>
-		<p style="margin: 0 0 0.5rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">
-			This sheet has three snap points at 30%, 60%, and 100%. Drag between them, or use the buttons
-			to jump.
+		<p
+			style="margin: 0 0 0.5rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">
+			This sheet has three snap points at 30%, 60%, and 100%. Drag between them, or use
+			the buttons to jump.
 		</p>
 		<p style="margin: 0 0 1rem; font-size: 0.85rem; color: var(--color-action, #3b82f6);">
 			Current snap index: <strong>{snap}</strong>

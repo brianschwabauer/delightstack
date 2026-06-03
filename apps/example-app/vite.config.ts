@@ -17,10 +17,7 @@ const componentsSrc = fileURLToPath(
 );
 
 export default defineConfig({
-	plugins: [
-		sveltekit(),
-		Icons({ compiler: 'svelte' }),
-	],
+	plugins: [sveltekit(), Icons({ compiler: 'svelte' })],
 	resolve: {
 		alias: {
 			'@delightstack/components': componentsSrc,

@@ -3,7 +3,16 @@ import { detectMimeType } from './mime';
 import { validateInput } from './validation';
 import { extractMetadata, type MetadataResult } from './metadata';
 import { extractColors, type ColorResult } from './colors';
-import { resizeVariants, encodeVariant, generateCompressedOriginal, resolveConfigs, type VariantConfig, type WatermarkConfig, type GeneratedVariant, type ResizedVariant } from './variants';
+import {
+	resizeVariants,
+	encodeVariant,
+	generateCompressedOriginal,
+	resolveConfigs,
+	type VariantConfig,
+	type WatermarkConfig,
+	type GeneratedVariant,
+	type ResizedVariant,
+} from './variants';
 import { generateThumbHash } from './thumbhash';
 import { svgPipeline } from './svg';
 import { pdfPipeline } from './pdf';
@@ -29,7 +38,10 @@ export interface PipelineResult {
  * Main processing pipeline entry point.
  * Called by the HTTP server with raw image bytes and options.
  */
-export async function process(data: ArrayBuffer, options: ProcessOptions): Promise<PipelineResult> {
+export async function process(
+	data: ArrayBuffer,
+	options: ProcessOptions,
+): Promise<PipelineResult> {
 	// 1. Detect MIME type
 	const mimeResult = await detectMimeType(data);
 	if (!mimeResult) {
@@ -59,7 +71,11 @@ async function generateAnimatedVariants(
 	input: Buffer,
 	metadata: MetadataResult,
 	configs: VariantConfig[],
-	options: { compress_original: boolean; keep_original: boolean; watermark_images?: Map<string, ArrayBuffer> },
+	options: {
+		compress_original: boolean;
+		keep_original: boolean;
+		watermark_images?: Map<string, ArrayBuffer>;
+	},
 ): Promise<GeneratedVariant[]> {
 	const longEdge = Math.max(metadata.width, metadata.height);
 	const results: GeneratedVariant[] = [];
@@ -95,7 +111,9 @@ async function generateAnimatedVariants(
 			);
 			// Re-encode with watermarked first frame composited
 			finalData = await sharp(resized.data, { animated: true })
-				.composite([{ input: watermarkedFrame, tile: false, blend: 'over', gravity: 'northwest' }])
+				.composite([
+					{ input: watermarkedFrame, tile: false, blend: 'over', gravity: 'northwest' },
+				])
 				.webp({ quality })
 				.toBuffer();
 		} else {
@@ -206,9 +224,13 @@ async function imagePipeline(
 
 	// Apply avatar defaults if avatar mode is active
 	const avatarActive = options.avatar === true;
-	const effectiveVariants = options.variants ?? (avatarActive ? AVATAR_DEFAULTS.variants : undefined);
-	const keep_original = options.keep_original ?? (avatarActive ? AVATAR_DEFAULTS.keep_original : true);
-	const compress_original = options.compress_original ?? (avatarActive ? AVATAR_DEFAULTS.compress_original : true);
+	const effectiveVariants =
+		options.variants ?? (avatarActive ? AVATAR_DEFAULTS.variants : undefined);
+	const keep_original =
+		options.keep_original ?? (avatarActive ? AVATAR_DEFAULTS.keep_original : true);
+	const compress_original =
+		options.compress_original ??
+		(avatarActive ? AVATAR_DEFAULTS.compress_original : true);
 
 	// Resolve variant configs
 	const resolvedConfigs = resolveConfigs(effectiveVariants);
@@ -232,7 +254,9 @@ async function imagePipeline(
 	if (is_animated) {
 		const [variants, thumbhash] = await Promise.all([
 			generateAnimatedVariants(variantBuffer, coreMetadata, resolvedConfigs, {
-				compress_original, keep_original, watermark_images: options.watermark_images,
+				compress_original,
+				keep_original,
+				watermark_images: options.watermark_images,
 			}),
 			generateThumbHash(workingBuffer, is_animated),
 		]);

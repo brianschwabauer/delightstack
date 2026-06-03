@@ -189,7 +189,8 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 	if (boost !== undefined) query.boost = boost as Record<string, number>;
 
 	const vector = parseJson(params, 'vector');
-	if (vector !== undefined) query.vector = vector as { value: number[]; property: string };
+	if (vector !== undefined)
+		query.vector = vector as { value: number[]; property: string };
 
 	// Properties: comma-separated or '*'
 	const properties = params.get('properties');

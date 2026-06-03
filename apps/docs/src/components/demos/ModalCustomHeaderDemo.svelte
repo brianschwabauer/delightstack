@@ -10,7 +10,9 @@
 	{#snippet header()}
 		<div style="display: flex; flex-direction: column; gap: 0; line-height: 1.2;">
 			<h2 style="margin: 0; font-size: 1.25rem; line-height: 1.25;">Settings</h2>
-			<span style="font-size: 0.85rem; opacity: 0.7; line-height: 1.3;">Configure your preferences</span>
+			<span style="font-size: 0.85rem; opacity: 0.7; line-height: 1.3;">
+				Configure your preferences
+			</span>
 		</div>
 	{/snippet}
 

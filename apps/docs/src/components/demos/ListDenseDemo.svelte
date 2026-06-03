@@ -5,9 +5,24 @@
 </script>
 
 <List dense>
-	<ListItem onclick={() => { lastAction = 'Edit'; }}>Edit</ListItem>
-	<ListItem onclick={() => { lastAction = 'Duplicate'; }}>Duplicate</ListItem>
-	<ListItem onclick={() => { lastAction = 'Delete'; }}>Delete</ListItem>
+	<ListItem
+		onclick={() => {
+			lastAction = 'Edit';
+		}}>
+		Edit
+	</ListItem>
+	<ListItem
+		onclick={() => {
+			lastAction = 'Duplicate';
+		}}>
+		Duplicate
+	</ListItem>
+	<ListItem
+		onclick={() => {
+			lastAction = 'Delete';
+		}}>
+		Delete
+	</ListItem>
 </List>
 
 {#if lastAction}

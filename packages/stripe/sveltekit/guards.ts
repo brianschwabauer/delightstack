@@ -39,18 +39,13 @@ export function createBillingGuards<const P extends string>(options: {
 			const locals = event.locals as Record<string, unknown>;
 			if (!locals.session) {
 				const target = guardOptions?.redirect_to ?? '/signin';
-				const return_to = encodeURIComponent(
-					event.url.pathname + event.url.search,
-				);
+				const return_to = encodeURIComponent(event.url.pathname + event.url.search);
 				throw redirect(302, `${target}?redirect=${return_to}`);
 			}
 
 			const org = locals.org as { entitlements?: number } | null;
 			if (!org || org.entitlements == null || org.entitlements === 0) {
-				throw redirect(
-					302,
-					guardOptions?.subscription_redirect ?? '/pricing',
-				);
+				throw redirect(302, guardOptions?.subscription_redirect ?? '/pricing');
 			}
 
 			return loadFn(event);
@@ -70,23 +65,14 @@ export function createBillingGuards<const P extends string>(options: {
 			const locals = event.locals as Record<string, unknown>;
 			if (!locals.session) {
 				const target = guardOptions?.redirect_to ?? '/signin';
-				const return_to = encodeURIComponent(
-					event.url.pathname + event.url.search,
-				);
+				const return_to = encodeURIComponent(event.url.pathname + event.url.search);
 				throw redirect(302, `${target}?redirect=${return_to}`);
 			}
 
-			const org_state = locals.org_state as
-				| Record<string, unknown>
-				| undefined;
-			const plan_ids = org_state?.billing_plan_ids as
-				| string[]
-				| undefined;
+			const org_state = locals.org_state as Record<string, unknown> | undefined;
+			const plan_ids = org_state?.billing_plan_ids as string[] | undefined;
 			if (!plan_ids?.includes(plan_id)) {
-				throw redirect(
-					302,
-					guardOptions?.subscription_redirect ?? '/pricing',
-				);
+				throw redirect(302, guardOptions?.subscription_redirect ?? '/pricing');
 			}
 
 			return loadFn(event);

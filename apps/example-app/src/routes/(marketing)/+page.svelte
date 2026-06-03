@@ -8,13 +8,15 @@
 	const features = [
 		{
 			title: 'Family Directory',
-			description: 'Keep track of every family member with profiles, contact info, and relationships.',
+			description:
+				'Keep track of every family member with profiles, contact info, and relationships.',
 			icon: '👨‍👩‍👧‍👦',
 			package: 'database',
 		},
 		{
 			title: 'Shared Stories',
-			description: 'Write and share family memories. Publish them publicly or keep them private.',
+			description:
+				'Write and share family memories. Publish them publicly or keep them private.',
 			icon: '📝',
 			package: 'database',
 		},
@@ -26,19 +28,22 @@
 		},
 		{
 			title: 'Photo Gallery',
-			description: 'Upload and organize family photos with automatic optimization and thumbnails.',
+			description:
+				'Upload and organize family photos with automatic optimization and thumbnails.',
 			icon: '🖼',
 			package: 'images',
 		},
 		{
 			title: 'Real-time Collaboration',
-			description: 'See who is online and collaborate in real-time with your family members.',
+			description:
+				'See who is online and collaborate in real-time with your family members.',
 			icon: '🔄',
 			package: 'websocket',
 		},
 		{
 			title: 'Secure Authentication',
-			description: 'Email, password, and OAuth sign-in with invitations for family members.',
+			description:
+				'Email, password, and OAuth sign-in with invitations for family members.',
 			icon: '🔐',
 			package: 'auth',
 		},
@@ -66,10 +71,14 @@
 	<!-- Hero -->
 	<section class="hero">
 		<Badge>Built with Delightstack</Badge>
-		<h1>Keep Your Family<br />Connected Forever</h1>
+		<h1>
+			Keep Your Family
+			<br />
+			Connected Forever
+		</h1>
 		<p class="hero-subtitle">
-			A simple platform to manage your family, share stories, upload photos,
-			and stay connected — powered by the Delightstack framework.
+			A simple platform to manage your family, share stories, upload photos, and stay
+			connected — powered by the Delightstack framework.
 		</p>
 		<div class="hero-actions">
 			<Button href="/signup">Start for Free</Button>
@@ -112,7 +121,10 @@
 		<div class="pricing-grid">
 			<div class="pricing-card">
 				<h3>Free</h3>
-				<div class="price">$0<span>/month</span></div>
+				<div class="price">
+					$0
+					<span>/month</span>
+				</div>
 				<ul>
 					<li>Unlimited family members</li>
 					<li>Create and share posts</li>
@@ -124,7 +136,10 @@
 			<div class="pricing-card featured">
 				<Badge>Best Value</Badge>
 				<h3>Family Pro</h3>
-				<div class="price">$4.99<span>/month</span></div>
+				<div class="price">
+					$4.99
+					<span>/month</span>
+				</div>
 				<ul>
 					<li>Everything in Free</li>
 					<li>AI writing assistant</li>
@@ -243,9 +258,17 @@
 		flex-direction: column;
 		gap: var(--size-2);
 		transition: box-shadow 0.15s;
-		&:hover { box-shadow: var(--shadow-2); }
-		h3 { font-size: var(--font-size-2); }
-		p { color: var(--color-text-disabled); font-size: var(--font-size-0); line-height: var(--font-lineheight-3); }
+		&:hover {
+			box-shadow: var(--shadow-2);
+		}
+		h3 {
+			font-size: var(--font-size-2);
+		}
+		p {
+			color: var(--color-text-disabled);
+			font-size: var(--font-size-0);
+			line-height: var(--font-lineheight-3);
+		}
 	}
 	.feature-icon {
 		font-size: var(--font-size-5);
@@ -257,7 +280,9 @@
 		margin: 0 auto;
 		padding: var(--size-fluid-5) var(--size-5);
 		text-align: center;
-		h2 { font-family: var(--font-serif); }
+		h2 {
+			font-family: var(--font-serif);
+		}
 	}
 	.pricing-subtitle {
 		color: var(--color-text-disabled);
@@ -280,7 +305,9 @@
 			border-color: var(--color-action);
 			box-shadow: var(--shadow-2);
 		}
-		h3 { font-size: var(--font-size-3); }
+		h3 {
+			font-size: var(--font-size-3);
+		}
 		ul {
 			list-style: none;
 			padding: 0;
@@ -289,7 +316,10 @@
 			gap: var(--size-2);
 			font-size: var(--font-size-0);
 			flex: 1;
-			li::before { content: '✓ '; color: var(--color-success); }
+			li::before {
+				content: '✓ ';
+				color: var(--color-success);
+			}
 		}
 	}
 	.price {
@@ -310,8 +340,12 @@
 		flex-direction: column;
 		align-items: center;
 		gap: var(--size-3);
-		h2 { font-family: var(--font-serif); }
-		p { color: var(--color-text-disabled); }
+		h2 {
+			font-family: var(--font-serif);
+		}
+		p {
+			color: var(--color-text-disabled);
+		}
 	}
 
 	/* Footer */
@@ -324,6 +358,8 @@
 			font-size: var(--font-size-0);
 			color: var(--color-text-disabled);
 		}
-		a { color: var(--color-action); }
+		a {
+			color: var(--color-action);
+		}
 	}
 </style>

@@ -154,7 +154,8 @@
 	function updateScrollState() {
 		if (!scroll_el) return;
 		can_scroll_prev = scroll_el.scrollLeft > 4;
-		can_scroll_next = scroll_el.scrollLeft + scroll_el.clientWidth < scroll_el.scrollWidth - 4;
+		can_scroll_next =
+			scroll_el.scrollLeft + scroll_el.clientWidth < scroll_el.scrollWidth - 4;
 	}
 
 	function scrollNext() {
@@ -227,21 +228,35 @@
 {:else if skeleton}
 	<!-- Skeleton -->
 	<ol
-		class={['timeline skeleton', horizontal ? 'horizontal' : 'vertical', className].filter(Boolean).join(' ')}
+		class={['timeline skeleton', horizontal ? 'horizontal' : 'vertical', className]
+			.filter(Boolean)
+			.join(' ')}
 		class:dense
 		class:comfortable
 		{id}
 		aria-hidden="true">
 		{#each { length: skeleton_count } as _, i}
-			<li class="timeline-item skeleton-item" class:horizontal class:vertical={!horizontal}>
+			<li
+				class="timeline-item skeleton-item"
+				class:horizontal
+				class:vertical={!horizontal}>
 				<div class="timeline-marker">
 					<span class="skeleton-circle" style:animation-delay="{i * 150}ms"></span>
 				</div>
 				<div class="timeline-connector"></div>
 				<div class="timeline-content">
-					<div class="skeleton-bar skeleton-date" style:animation-delay="{i * 150 + 50}ms"></div>
-					<div class="skeleton-bar skeleton-title-bar" style:animation-delay="{i * 150 + 100}ms"></div>
-					<div class="skeleton-bar skeleton-body-bar" style:animation-delay="{i * 150 + 150}ms"></div>
+					<div
+						class="skeleton-bar skeleton-date"
+						style:animation-delay="{i * 150 + 50}ms">
+					</div>
+					<div
+						class="skeleton-bar skeleton-title-bar"
+						style:animation-delay="{i * 150 + 100}ms">
+					</div>
+					<div
+						class="skeleton-bar skeleton-body-bar"
+						style:animation-delay="{i * 150 + 150}ms">
+					</div>
 				</div>
 			</li>
 		{/each}
@@ -256,7 +271,14 @@
 				class="timeline-nav timeline-nav-prev"
 				aria-label="Scroll back"
 				onclick={scrollPrev}>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<svg
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true">
 					<polyline points="15 18 9 12 15 6" />
 				</svg>
 			</Button>
@@ -291,7 +313,14 @@
 				class="timeline-nav timeline-nav-next"
 				aria-label="Scroll forward"
 				onclick={scrollNext}>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<svg
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true">
 					<polyline points="9 18 15 12 9 6" />
 				</svg>
 			</Button>
@@ -379,7 +408,9 @@
 		right: -0.75rem;
 	}
 	@keyframes timeline-nav-fade {
-		to { opacity: 1; }
+		to {
+			opacity: 1;
+		}
 	}
 
 	/* ========== Timeline Item ========== */
@@ -478,14 +509,12 @@
 			var(--marker-color, var(--color-action, #2563eb)),
 			var(--marker-color, var(--color-action, #3b82f6))
 		);
-		border: 2px solid light-dark(
-			var(--color-bg, #fff),
-			var(--color-bg, #1a1a1a)
-		);
-		box-shadow: 0 0 0 2px light-dark(
-			var(--marker-color, var(--color-action, #2563eb)),
-			var(--marker-color, var(--color-action, #3b82f6))
-		);
+		border: 2px solid light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
+		box-shadow: 0 0 0 2px
+			light-dark(
+				var(--marker-color, var(--color-action, #2563eb)),
+				var(--marker-color, var(--color-action, #3b82f6))
+			);
 
 		/* Complete status */
 		.timeline-item.complete & {
@@ -503,20 +532,19 @@
 		/* Pending status */
 		.timeline-item.pending & {
 			background: transparent;
-			border: 2px dashed light-dark(
-				var(--marker-color, var(--color-text-muted, #9ca3af)),
-				var(--marker-color, var(--color-text-muted, #6b7280))
-			);
+			border: 2px dashed
+				light-dark(
+					var(--marker-color, var(--color-text-muted, #9ca3af)),
+					var(--marker-color, var(--color-text-muted, #6b7280))
+				);
 			box-shadow: none;
 		}
 	}
 
 	.pending-dot {
 		background: transparent;
-		border: 2px dashed light-dark(
-			var(--color-text-muted, #9ca3af),
-			var(--color-text-muted, #6b7280)
-		);
+		border: 2px dashed
+			light-dark(var(--color-text-muted, #9ca3af), var(--color-text-muted, #6b7280));
 		box-shadow: none;
 		animation: timeline-pulse 2s ease-in-out infinite;
 	}
@@ -546,10 +574,11 @@
 
 		.timeline-item.pending & {
 			background: transparent;
-			border: 2px dashed light-dark(
-				var(--marker-color, var(--color-text-muted, #9ca3af)),
-				var(--marker-color, var(--color-text-muted, #6b7280))
-			);
+			border: 2px dashed
+				light-dark(
+					var(--marker-color, var(--color-text-muted, #9ca3af)),
+					var(--marker-color, var(--color-text-muted, #6b7280))
+				);
 			color: light-dark(
 				var(--color-text-muted, #9ca3af),
 				var(--color-text-muted, #6b7280)
@@ -592,10 +621,7 @@
 			top: 16px;
 			bottom: 0;
 			width: 2px;
-			background: light-dark(
-				var(--color-border, #e5e7eb),
-				var(--color-border, #374151)
-			);
+			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		}
 
 		.timeline-item.vertical:last-child &,
@@ -609,10 +635,7 @@
 			left: 16px;
 			right: 0;
 			height: 2px;
-			background: light-dark(
-				var(--color-border, #e5e7eb),
-				var(--color-border, #374151)
-			);
+			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		}
 
 		.timeline-item.horizontal:last-child & {
@@ -685,10 +708,7 @@
 	.timeline-date {
 		display: block;
 		font-size: 0.75rem;
-		color: light-dark(
-			var(--color-text-muted, #6b7280),
-			var(--color-text-muted, #9ca3af)
-		);
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		margin-bottom: 0.25rem;
 		line-height: 1.3;
 
@@ -706,10 +726,7 @@
 	.timeline-title {
 		font-weight: 600;
 		font-size: 0.875rem;
-		color: light-dark(
-			var(--color-text, #1a1a1a),
-			var(--color-text, #f5f5f5)
-		);
+		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		line-height: 1.4;
 
 		.timeline-item.dense & {
@@ -724,10 +741,7 @@
 	.timeline-body {
 		margin-top: 0.125rem;
 		font-size: 0.8125rem;
-		color: light-dark(
-			var(--color-text-muted, #6b7280),
-			var(--color-text-muted, #9ca3af)
-		);
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		line-height: 1.5;
 
 		.timeline-item.dense & {
@@ -769,10 +783,7 @@
 		width: 12px;
 		height: 12px;
 		border-radius: 9999px;
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -797,10 +808,7 @@
 
 	.skeleton-bar {
 		border-radius: 4px;
-		background: light-dark(
-			var(--color-border, #e5e7eb),
-			var(--color-border, #374151)
-		);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

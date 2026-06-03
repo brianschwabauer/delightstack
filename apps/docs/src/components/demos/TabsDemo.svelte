@@ -10,7 +10,9 @@
 	<Tab value="tab3" label="Pricing" />
 </Tabs>
 <TabContent value="tab1">
-	<p>Welcome to the overview panel. Get a quick summary of everything you need to know.</p>
+	<p>
+		Welcome to the overview panel. Get a quick summary of everything you need to know.
+	</p>
 </TabContent>
 <TabContent value="tab2">
 	<p>Explore the features that make this component powerful and flexible.</p>

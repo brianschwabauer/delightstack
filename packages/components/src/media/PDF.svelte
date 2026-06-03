@@ -240,9 +240,9 @@
 
 		try {
 			const lib = (await loadPdfJs()) as Record<string, unknown>;
-			const getDocument = lib.getDocument as (
-				params: Record<string, unknown>,
-			) => { promise: Promise<unknown> };
+			const getDocument = lib.getDocument as (params: Record<string, unknown>) => {
+				promise: Promise<unknown>;
+			};
 
 			const params: Record<string, unknown> = {};
 			if (typeof source === 'string') {
@@ -264,10 +264,10 @@
 			for (let i = 1; i <= total_pages; i++) {
 				const pg = await typedDoc.getPage(i);
 				const typedPage = pg as {
-					getViewport: (opts: {
-						scale: number;
-						rotation: number;
-					}) => { width: number; height: number };
+					getViewport: (opts: { scale: number; rotation: number }) => {
+						width: number;
+						height: number;
+					};
 				};
 				const vp = typedPage.getViewport({ scale: 1, rotation });
 				infos.push({ width: vp.width, height: vp.height, rendered: false });
@@ -337,14 +337,14 @@
 		const typedDoc = pdf_doc as { getPage: (n: number) => Promise<unknown> };
 		const pg = await typedDoc.getPage(page_num);
 		const typedPage = pg as {
-			getViewport: (opts: {
-				scale: number;
-				rotation: number;
-			}) => { width: number; height: number; transform: number[] };
-			render: (opts: {
-				canvasContext: CanvasRenderingContext2D;
-				viewport: unknown;
-			}) => { promise: Promise<void> };
+			getViewport: (opts: { scale: number; rotation: number }) => {
+				width: number;
+				height: number;
+				transform: number[];
+			};
+			render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: unknown }) => {
+				promise: Promise<void>;
+			};
 			getTextContent: () => Promise<{
 				items: { str?: string; transform?: number[]; width?: number; height?: number }[];
 			}>;

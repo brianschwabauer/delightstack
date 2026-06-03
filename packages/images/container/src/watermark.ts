@@ -61,7 +61,10 @@ async function prepareWatermark(
 
 	if (config.text) {
 		// Text watermark: scale font size with image dimensions
-		const fontSize = Math.max(16, Math.round(Math.min(dimensions.height, dimensions.width) * 0.03));
+		const fontSize = Math.max(
+			16,
+			Math.round(Math.min(dimensions.height, dimensions.width) * 0.03),
+		);
 		watermarkBuffer = createTextSvg(config.text, fontSize);
 	} else if (config.image && watermarkImages) {
 		// Image watermark: load from pre-fetched bytes
@@ -200,7 +203,11 @@ export async function applyWatermarkToVariant(
 	watermarkConfig: WatermarkConfig,
 	watermarkImages?: Map<string, ArrayBuffer>,
 ): Promise<Buffer> {
-	const watermarkBuffer = await prepareWatermark(watermarkConfig, dimensions, watermarkImages);
+	const watermarkBuffer = await prepareWatermark(
+		watermarkConfig,
+		dimensions,
+		watermarkImages,
+	);
 
 	const layout = watermarkConfig.layout ?? 'repeat';
 

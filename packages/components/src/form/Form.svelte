@@ -136,7 +136,9 @@
 	/*  Standard Schema validation                                         */
 	/* ------------------------------------------------------------------ */
 
-	async function validate(values: Record<string, unknown>): Promise<Record<string, string>> {
+	async function validate(
+		values: Record<string, unknown>,
+	): Promise<Record<string, string>> {
 		if (!schema) return {};
 		const result = await schema['~standard'].validate(values);
 		if (result.issues) {

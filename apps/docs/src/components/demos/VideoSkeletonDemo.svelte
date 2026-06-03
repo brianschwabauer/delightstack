@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { Video, Button } from '@delightstack/components';
 
-	const VIDEO_SRC =
-		'https://res.cloudinary.com/demo/video/upload/q_auto,w_640/dog.mp4';
+	const VIDEO_SRC = 'https://res.cloudinary.com/demo/video/upload/q_auto,w_640/dog.mp4';
 
 	// Simulate an async source: no `src` yet → skeleton shows; once the source
 	// arrives the skeleton disappears on its own (providing a src disables it).

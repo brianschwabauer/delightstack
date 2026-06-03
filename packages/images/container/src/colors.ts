@@ -21,7 +21,9 @@ function toOklchCss(color: { l: number; c: number; h: number }): string {
 }
 
 /** Convert a parsed culori color to our { l, c, h } format */
-function toOklchObj(color: ReturnType<typeof oklch>): { l: number; c: number; h: number } | null {
+function toOklchObj(
+	color: ReturnType<typeof oklch>,
+): { l: number; c: number; h: number } | null {
 	if (!color) return null;
 	return {
 		l: Math.round((color.l ?? 0) * 1000) / 1000,
@@ -78,10 +80,7 @@ async function extractAccent(input: Buffer): Promise<{
 	try {
 		const palette = await Vibrant.from(input).getPalette();
 		const swatch =
-			palette.Vibrant ??
-			palette.DarkVibrant ??
-			palette.LightVibrant ??
-			palette.Muted;
+			palette.Vibrant ?? palette.DarkVibrant ?? palette.LightVibrant ?? palette.Muted;
 
 		if (!swatch) {
 			return { accent_color: null, accent_color_css: null };

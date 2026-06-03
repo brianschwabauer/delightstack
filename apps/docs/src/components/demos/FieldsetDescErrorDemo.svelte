@@ -22,17 +22,14 @@
 		label="Permissions"
 		required
 		error={permissions.length === 0 ? 'Select at least one permission' : ''}
-		bordered
-	>
+		bordered>
 		<Checkbox
 			checked={permissions.includes('read')}
 			onchange={() => toggle('read')}
-			label="Read"
-		/>
+			label="Read" />
 		<Checkbox
 			checked={permissions.includes('write')}
 			onchange={() => toggle('write')}
-			label="Write"
-		/>
+			label="Write" />
 	</Fieldset>
 </div>

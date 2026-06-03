@@ -12,5 +12,4 @@
 	rows={4}
 	auto_resize
 	maxlength={500}
-	show_counter
-/>
+	show_counter />

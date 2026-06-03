@@ -91,8 +91,22 @@ export interface VariantConfig {
 
 /** Default variants when none are specified */
 export const DEFAULT_VARIANTS: VariantConfig[] = [
-	{ name: 'default', max_dimension: 2048, format: 'avif', quality: 50, effort: 4, fit: 'inside' },
-	{ name: 'thumbnail', max_dimension: 640, format: 'avif', quality: 50, effort: 4, fit: 'cover' },
+	{
+		name: 'default',
+		max_dimension: 2048,
+		format: 'avif',
+		quality: 50,
+		effort: 4,
+		fit: 'inside',
+	},
+	{
+		name: 'thumbnail',
+		max_dimension: 640,
+		format: 'avif',
+		quality: 50,
+		effort: 4,
+		fit: 'cover',
+	},
 ];
 
 // ── Processing options (Mode 2: standalone) ──────────────────────────────────
@@ -154,11 +168,14 @@ export const RESERVED_IMAGE_FIELDS = new Set([
 ] as const);
 
 /** Union of all reserved field names */
-export type ReservedImageField = typeof RESERVED_IMAGE_FIELDS extends Set<infer T> ? T : never;
+export type ReservedImageField =
+	typeof RESERVED_IMAGE_FIELDS extends Set<infer T> ? T : never;
 
 // ── Upload options (Mode 1: database integration) ────────────────────────────
 
-export interface UploadOptions<TData extends Record<string, unknown> = Record<string, unknown>> {
+export interface UploadOptions<
+	TData extends Record<string, unknown> = Record<string, unknown>,
+> {
 	/**
 	 * R2 path prefix for all files related to this image.
 	 * Default: 'images'. Files are stored at {prefix}/{id}/{variant_name}.

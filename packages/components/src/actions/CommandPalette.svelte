@@ -52,7 +52,10 @@
 	}
 
 	/** Check if characters of query appear in order within target (fuzzy) */
-	function fuzzyMatch(query: string, target: string): { matched: boolean; score: number; indices: number[] } {
+	function fuzzyMatch(
+		query: string,
+		target: string,
+	): { matched: boolean; score: number; indices: number[] } {
 		const lower_query = query.toLowerCase();
 		const lower_target = target.toLowerCase();
 		const indices: number[] = [];
@@ -76,7 +79,8 @@
 		const lower_field = field.toLowerCase();
 
 		// Exact match
-		if (lower_field === lower_word) return { score: 100, indices: Array.from({ length: field.length }, (_, i) => i) };
+		if (lower_field === lower_word)
+			return { score: 100, indices: Array.from({ length: field.length }, (_, i) => i) };
 
 		// Starts with
 		if (lower_field.startsWith(lower_word)) {
@@ -84,17 +88,27 @@
 		}
 
 		// Word boundary match (matches at the start of a word within the field)
-		const word_boundary_regex = new RegExp(`(?:^|[\\s\\-_])${escapeRegex(lower_word)}`, 'i');
+		const word_boundary_regex = new RegExp(
+			`(?:^|[\\s\\-_])${escapeRegex(lower_word)}`,
+			'i',
+		);
 		const boundary_match = lower_field.match(word_boundary_regex);
 		if (boundary_match) {
-			const start = boundary_match.index! + (boundary_match[0].length - lower_word.length);
-			return { score: 60, indices: Array.from({ length: word.length }, (_, i) => start + i) };
+			const start =
+				boundary_match.index! + (boundary_match[0].length - lower_word.length);
+			return {
+				score: 60,
+				indices: Array.from({ length: word.length }, (_, i) => start + i),
+			};
 		}
 
 		// Contains
 		const idx = lower_field.indexOf(lower_word);
 		if (idx !== -1) {
-			return { score: 40, indices: Array.from({ length: word.length }, (_, i) => idx + i) };
+			return {
+				score: 40,
+				indices: Array.from({ length: word.length }, (_, i) => idx + i),
+			};
 		}
 
 		// Fuzzy
@@ -123,7 +137,8 @@
 			current_highlighted = is_hit;
 			current_text += title[i];
 		}
-		if (current_text) segments.push({ text: current_text, highlighted: current_highlighted });
+		if (current_text)
+			segments.push({ text: current_text, highlighted: current_highlighted });
 		return segments;
 	}
 
@@ -324,7 +339,9 @@
 
 	// The active descendant ID
 	const active_descendant_id = $derived(
-		visible_commands[selected_index] ? `${id}-option-${visible_commands[selected_index].id}` : undefined,
+		visible_commands[selected_index]
+			? `${id}-option-${visible_commands[selected_index].id}`
+			: undefined,
 	);
 
 	// Reset selection when results change
@@ -391,7 +408,10 @@
 				break;
 			case 'Enter':
 				e.preventDefault();
-				if (visible_commands[selected_index] && !visible_commands[selected_index].disabled) {
+				if (
+					visible_commands[selected_index] &&
+					!visible_commands[selected_index].disabled
+				) {
 					executeCommand(visible_commands[selected_index]);
 				}
 				break;
@@ -459,7 +479,17 @@
 		use:portal>
 		<div class="input-wrapper">
 			<!-- Search icon -->
-			<svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<svg
+				class="search-icon"
+				xmlns="http://www.w3.org/2000/svg"
+				viewBox="0 0 24 24"
+				width="20"
+				height="20"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round">
 				<circle cx="11" cy="11" r="8" />
 				<line x1="21" y1="21" x2="16.65" y2="16.65" />
 			</svg>
@@ -474,11 +504,18 @@
 				aria-controls={listbox_id}
 				aria-activedescendant={active_descendant_id}
 				aria-autocomplete="list"
-				onkeydown={handleKeydown}
-			/>
+				onkeydown={handleKeydown} />
 			{#if is_executing}
 				<div class="spinner">
-					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 24 24"
+						width="18"
+						height="18"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2.5"
+						stroke-linecap="round">
 						<path d="M12 2a10 10 0 0 1 10 10" />
 					</svg>
 				</div>
@@ -490,12 +527,9 @@
 			id={listbox_id}
 			role="listbox"
 			aria-label="Commands"
-			class="results"
-		>
+			class="results">
 			{#if visible_commands.length === 0}
-				<div class="empty">
-					No results found
-				</div>
+				<div class="empty">No results found</div>
 			{:else}
 				{#each grouped_commands as group}
 					{#if group.label}
@@ -519,10 +553,14 @@
 							class:first-in-group={group_i === 0}
 							class:last-in-group={group_i === group.commands.length - 1}
 							class:disabled={command.disabled}
-							onpointerenter={() => { keyboard_nav = false; selected_index = flat_index; }}
-							onclick={() => { if (!command.disabled) executeCommand(command, true); }}
-							{@attach ripple({ enabled: !command.disabled, zIndex: 1 })}
-						>
+							onpointerenter={() => {
+								keyboard_nav = false;
+								selected_index = flat_index;
+							}}
+							onclick={() => {
+								if (!command.disabled) executeCommand(command, true);
+							}}
+							{@attach ripple({ enabled: !command.disabled, zIndex: 1 })}>
 							{#if command.icon}
 								<span class="item-icon">
 									<command.icon />
@@ -641,7 +679,9 @@
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.results {
@@ -724,7 +764,8 @@
 		 * center rather than the list's center (container perspective would
 		 * share one vanishing point across every row). */
 		&:active:not(.disabled) {
-			transform: perspective(100px) translate3d(0px, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
+			transform: perspective(100px)
+				translate3d(0px, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 		}
 
 		&.disabled {
@@ -769,10 +810,7 @@
 		text-overflow: ellipsis;
 
 		:global(mark) {
-			background-color: light-dark(
-				rgba(255, 200, 0, 0.35),
-				rgba(255, 200, 0, 0.25)
-			);
+			background-color: light-dark(rgba(255, 200, 0, 0.35), rgba(255, 200, 0, 0.25));
 			color: inherit;
 			border-radius: 2px;
 			padding: 0 1px;
@@ -808,10 +846,7 @@
 			font-size: 0.7rem;
 			font-weight: 500;
 			color: var(--color-text-muted);
-			background-color: light-dark(
-				rgba(0, 0, 0, 0.06),
-				rgba(255, 255, 255, 0.08)
-			);
+			background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
 			border: 1px solid var(--color-border);
 			border-radius: var(--radius-4);
 			line-height: 1;

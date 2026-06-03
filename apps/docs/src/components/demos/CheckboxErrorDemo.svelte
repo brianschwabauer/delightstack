@@ -8,5 +8,4 @@
 	bind:checked
 	label="Accept terms"
 	required
-	error={!checked ? 'You must accept the terms' : ''}
-/>
+	error={!checked ? 'You must accept the terms' : ''} />
