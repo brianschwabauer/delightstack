@@ -15,7 +15,12 @@
 		"dev": "turbo run dev --parallel --filter=./apps/site --filter=./packages/components --filter=./packages/utilities",
 		"dev:example": "turbo run dev:svelte dev:worker --filter=@delightstack/example-app",
 		"dev:docs": "turbo run dev --parallel --filter=./apps/docs --filter=./packages/components",
-		"lint": "turbo run lint"
+		"format": "oxfmt",
+		"format:check": "oxfmt --check",
+		"lint": "oxlint",
+		"lint:fix": "oxlint --fix",
+		"typecheck": "turbo run typecheck",
+		"check": "turbo run check"
 	},
 	"packageManager": "pnpm@9.11.0",
 	"devDependencies": {
@@ -25,23 +30,15 @@
 		"@types/google.maps": "^3.58.1",
 		"@types/intercom-web": "^2.8.26",
 		"@types/jest": "^29.5.14",
-		"@typescript-eslint/eslint-plugin": "^8.18.1",
-		"@typescript-eslint/parser": "^8.18.1",
+		"@typescript/native-preview": "7.0.0-dev.20260603.1",
 		"dotenv": "^10.0.0",
-		"eslint": "^9.17.0",
-		"eslint-config-prettier": "^9.1.0",
-		"eslint-plugin-svelte": "^2.46.1",
-		"lint-staged": "^14.0.1",
-		"prettier": "^3.4.2",
-		"prettier-plugin-svelte": "^3.3.2",
+		"oxfmt": "^0.53.0",
+		"oxlint": "^1.68.0",
 		"svelte": "^5.28.2",
 		"turbo": "latest",
 		"typescript": "^5.7.2",
 		"vite": "^6.0.5",
 		"vitest": "^3.0.0-beta.3",
 		"wrangler": "^4.26.0"
-	},
-	"lint-staged": {
-		"*.{ts,svelte,js,css,md}": "prettier --write --plugin-search-dir=."
 	}
 }

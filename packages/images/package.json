@@ -9,8 +9,7 @@
 	},
 	"scripts": {
 		"test": "vitest",
-		"lint": "prettier --ignore-path .gitignore --check --plugin-search-dir=. . && eslint .",
-		"format": "prettier --ignore-path .gitignore --write --plugin-search-dir=. ."
+		"typecheck": "tsgo --noEmit"
 	},
 	"dependencies": {
 		"@cloudflare/containers": "^0.1.0",

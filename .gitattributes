@@ -1,0 +1,18 @@
+# Normalize line endings to LF on checkin for all text files.
+# Pairs with oxfmt's `endOfLine: "lf"` so the one-time normalization doesn't recur.
+* text=auto eol=lf
+
+# Binary assets — never touch line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.wasm binary

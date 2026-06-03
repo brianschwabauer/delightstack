@@ -50,7 +50,7 @@
 	}
 </script>
 
-<script>
+<script lang="ts">
 	const propId = $props.id();
 	let {
 		/** The DOM Element or CSS Selector where the portal elenent should be inserted */

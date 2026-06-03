@@ -1,0 +1,17 @@
+{
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"useTabs": true,
+	"singleQuote": true,
+	"trailingComma": "all",
+	"printWidth": 90,
+	"tabWidth": 2,
+	"semi": true,
+	"bracketSpacing": true,
+	"bracketSameLine": true,
+	"arrowParens": "always",
+	"endOfLine": "lf",
+	"htmlWhitespaceSensitivity": "ignore",
+	"svelte": true,
+	"sortPackageJson": false,
+	"ignorePatterns": ["**/app.d.ts", "pnpm-lock.yaml", "**/*.md", "**/*.mdx"]
+}

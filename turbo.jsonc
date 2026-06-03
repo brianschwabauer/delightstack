@@ -7,7 +7,10 @@
 		"@delightstack/components#build": {
 			"outputs": ["dist/**"],
 		},
-		"lint": {
+		"check": {
+			"outputs": [],
+		},
+		"typecheck": {
 			"outputs": [],
 		},
 		"test": {
