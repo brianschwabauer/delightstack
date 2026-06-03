@@ -16,7 +16,7 @@ export interface FocustWithinOptions {
  * <div {@attach onFocusWithin({ onfocuswithin: (focused) => console.log('focused', focused) })}</div>
  * ```
  */
-export function onFocusWithin(options?: FocustWithinOptions): Attachment {
+export function onFocusWithin(options?: FocustWithinOptions): Attachment<HTMLElement> {
 	let isFocused = false;
 	const isChildInParent = (child: HTMLElement, parent: HTMLElement): boolean => {
 		if (child === parent) return true;
@@ -30,14 +30,14 @@ export function onFocusWithin(options?: FocustWithinOptions): Attachment {
 				isFocused = true;
 				el.classList.add('focus-within');
 				el.dispatchEvent(new CustomEvent('focuswithin', { detail: isFocused }));
-				if (options.onfocuswithin) options.onfocuswithin(isFocused);
+				options?.onfocuswithin?.(isFocused);
 			}
 		} else {
 			if (isFocused) {
 				isFocused = false;
 				el.classList.remove('focus-within');
 				el.dispatchEvent(new CustomEvent('focuswithin', { detail: isFocused }));
-				if (options.onfocuswithin) options.onfocuswithin(isFocused);
+				options?.onfocuswithin?.(isFocused);
 			}
 		}
 	};

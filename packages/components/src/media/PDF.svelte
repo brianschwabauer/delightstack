@@ -273,7 +273,7 @@
 				infos.push({ width: vp.width, height: vp.height, rendered: false });
 			}
 			page_infos = infos;
-			page_elements = new Array(total_pages).fill(null);
+			page_elements = Array.from({ length: total_pages }, () => null);
 
 			loading = false;
 			onload?.({ total_pages });
@@ -928,7 +928,8 @@
 	});
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
 	{id}
 	class={['pdf-container', className].filter(Boolean).join(' ')}
@@ -1325,7 +1326,8 @@
 				? `transform: translateY(-${(page - 1) * 100}%); transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);`
 				: undefined}>
 			{#each page_infos as info, i}
-				<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div
 					class="pdf-page"
 					class:single-page-slot={single_page}

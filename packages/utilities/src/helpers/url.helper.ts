@@ -13,7 +13,7 @@ export function parseUrl(url: string): URL | undefined {
 	try {
 		const formatted = `https://${(url || '').replace(/^https?:\/\//, '')}`;
 		return new URL(formatted);
-	} catch (error) {
+	} catch {
 		return;
 	}
 }

@@ -347,6 +347,7 @@
 	// Reset selection when results change
 	$effect(() => {
 		// Subscribe to visible_commands changes
+		// oxlint-disable-next-line no-unused-expressions
 		visible_commands;
 		selected_index = 0;
 	});

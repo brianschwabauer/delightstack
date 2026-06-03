@@ -638,7 +638,8 @@
 			</div>
 
 			<!-- Day grid -->
-			<!-- svelte-ignore a11y_no_noninteractive_element_interactions a11y_interactive_supports_focus -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+			<!-- svelte-ignore a11y_interactive_supports_focus -->
 			<div
 				class="calendar-grid"
 				role="grid"

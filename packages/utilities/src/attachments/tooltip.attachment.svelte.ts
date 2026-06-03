@@ -6,7 +6,7 @@ export function tooltip(tooltipMessage: string): Attachment<HTMLElement> {
 	return (parent: HTMLElement) => {
 		const oldDescribeBy = parent.getAttribute('aria-describedby');
 		let el: HTMLDivElement | undefined;
-		let message = (tooltipMessage || '').trim();
+		const message = (tooltipMessage || '').trim();
 		let destroyed = false;
 
 		function showTooltip() {

@@ -292,8 +292,8 @@ export function fitText(options?: Partial<FitTextOptions>): Attachment<HTMLEleme
 		}
 		update(el);
 		return () => {
-			resizeObserver.disconnect();
-			mutationObserver.disconnect();
+			resizeObserver?.disconnect();
+			mutationObserver?.disconnect();
 		};
 	};
 }

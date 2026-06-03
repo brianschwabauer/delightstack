@@ -54,7 +54,7 @@ export function generateTimestampID(): string {
 		idCounter = 0;
 		idTimestamp = now;
 	}
-	const timeStampChars = new Array(8);
+	const timeStampChars = Array.from({ length: 8 });
 	const numChars = PUSH_CHARS.length;
 	for (let i = 7; i >= 0; i--) {
 		timeStampChars[i] = PUSH_CHARS.charAt(now % numChars);

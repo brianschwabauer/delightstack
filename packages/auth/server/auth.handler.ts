@@ -278,7 +278,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 		const org_id = resolveOrgId(event, session);
 
 		// 9. Read org state cookie for current org
-		let org_state = org_id
+		const org_state = org_id
 			? await getOrgStateCookie(event.cookies, config, config.secret, org_id)
 			: {};
 		let org_state_dirty = false;

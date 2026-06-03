@@ -6,7 +6,19 @@
 	},
 	"rules": {
 		"no-empty": "warn",
-		"no-unused-vars": "warn",
+		"no-unused-vars": [
+			"warn",
+			{
+				"argsIgnorePattern": "^_",
+				"varsIgnorePattern": "^_",
+				"caughtErrorsIgnorePattern": "^_",
+				"ignoreRestSiblings": true
+			}
+		],
+		"no-unused-expressions": [
+			"warn",
+			{ "allowShortCircuit": true, "allowTernary": true }
+		],
 		"prefer-const": "warn",
 		"typescript/no-explicit-any": "off"
 	},
@@ -18,7 +30,8 @@
 			"files": ["*.svelte"],
 			"rules": {
 				"prefer-const": "off",
-				"no-unused-vars": "off"
+				"no-unused-vars": "off",
+				"no-unassigned-vars": "off"
 			}
 		}
 	],

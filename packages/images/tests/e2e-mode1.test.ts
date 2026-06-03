@@ -113,7 +113,7 @@ function createMockDb() {
 		delete(table: string, id: string) {
 			records.delete(id);
 		},
-		exec(sql: string, ...bindings: any[]) {
+		exec(sql: string, ..._bindings: any[]) {
 			if (sql.includes('processing_status')) {
 				// Match quoted status values to avoid false matches (e.g. 'processing' in 'processing_status')
 				const matchStatuses: string[] = [];

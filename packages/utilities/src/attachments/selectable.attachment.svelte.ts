@@ -37,7 +37,7 @@ export function selectable(
 ): Attachment<HTMLElement> {
 	return (el: HTMLElement) => {
 		if (!options) return;
-		let manager = SelectionManager.from(options?.container || document.body);
+		const manager = SelectionManager.from(options?.container || document.body);
 		const opts = { ...options };
 		delete opts.container;
 		delete opts.enabledOn;

@@ -190,7 +190,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		let where = ``;
 		let limit = ``;
 		let offset = ``;
-		let values: any[] = [];
+		const values: any[] = [];
 
 		// Select the appropriate columns
 		if (query?.select?.length) {

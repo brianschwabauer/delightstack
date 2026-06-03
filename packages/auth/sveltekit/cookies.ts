@@ -117,7 +117,7 @@ export async function verifyState(
 		return null;
 	}
 
-	let sig_bytes: Uint8Array;
+	let sig_bytes: Uint8Array<ArrayBuffer>;
 	try {
 		sig_bytes = base64urlDecodeBuffer(sig);
 	} catch {
@@ -273,7 +273,7 @@ function base64urlEncodeBuffer(buffer: ArrayBuffer): string {
 	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
-function base64urlDecodeBuffer(str: string): Uint8Array {
+function base64urlDecodeBuffer(str: string): Uint8Array<ArrayBuffer> {
 	const padded = str.replace(/-/g, '+').replace(/_/g, '/');
 	const binary = atob(padded);
 	const bytes = new Uint8Array(binary.length);

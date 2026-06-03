@@ -36,8 +36,8 @@ vi.mock('fast-equals', () => ({
 
 // Mock msgpack
 vi.mock('@msgpack/msgpack', () => ({
-	encode: (val: any) => new Uint8Array(),
-	decode: (val: any) => ({}),
+	encode: (_val: any) => new Uint8Array(),
+	decode: (_val: any) => ({}),
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

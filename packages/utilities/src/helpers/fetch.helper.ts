@@ -14,7 +14,7 @@ export async function retryFetch(
 	if (!response.ok && response.status !== 404) {
 		const retryDelays = Array.isArray(retries)
 			? [...retries]
-			: new Array(retries).map(() => 100);
+			: Array.from({ length: retries }, () => 100);
 		if (retryDelays.length <= 0) return response;
 		const nextDelay = retryDelays.shift();
 		const retryAfter =

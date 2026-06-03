@@ -238,7 +238,8 @@
 		{#if label || description}
 			<div class="content">
 				{#if label}
-					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions a11y_label_has_associated_control -->
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_label_has_associated_control -->
 					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<label id="{id}-label" for="{id}-input" class="label" onclick={select}>
 						{label}

@@ -288,7 +288,7 @@ describe('Mode 2: standalone processImage()', () => {
 		bucket._store.set('user/123/uploads/photo.jpg', {
 			data: new ArrayBuffer(100),
 		});
-		const getBucket = bucket.get;
+		const _getBucket = bucket.get;
 		bucket.get = async (key: string) => {
 			const obj = bucket._store.get(key);
 			if (!obj) return null;

@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import type { GeneratedVariant, VariantConfig, WatermarkConfig } from './variants';
+import type { WatermarkConfig } from './variants';
 
 /** Escape XML special characters to prevent SVG injection */
 function escapeXml(text: string): string {
@@ -93,7 +93,7 @@ async function applyRepeatLayout(
 	imageBuffer: Buffer,
 	watermarkBuffer: Buffer,
 	config: WatermarkConfig,
-	dimensions: { width: number; height: number },
+	_dimensions: { width: number; height: number },
 ): Promise<Buffer> {
 	const rotation = config.rotation ?? -30;
 	const gap = config.gap ?? 64;
@@ -150,7 +150,7 @@ async function applyCornerLayout(
 	imageBuffer: Buffer,
 	watermarkBuffer: Buffer,
 	config: WatermarkConfig,
-	dimensions: { width: number; height: number },
+	_dimensions: { width: number; height: number },
 ): Promise<Buffer> {
 	type SharpGravity = 'northwest' | 'northeast' | 'southwest' | 'southeast';
 	const gravityMap: Record<string, SharpGravity> = {

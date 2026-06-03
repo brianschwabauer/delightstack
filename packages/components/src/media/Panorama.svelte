@@ -709,6 +709,9 @@
 			return;
 		}
 
+		const three_module = three;
+		if (!three_module) return;
+
 		const container = canvas_el.parentElement;
 		if (!container) return;
 
@@ -719,14 +722,14 @@
 			: window.devicePixelRatio || 1;
 
 		// Scene
-		scene = new three.Scene();
+		scene = new three_module.Scene();
 
 		// Camera
-		camera = new three.PerspectiveCamera(current_fov, width / height, 1, 1100);
+		camera = new three_module.PerspectiveCamera(current_fov, width / height, 1, 1100);
 		camera.position.set(0, 0, 0);
 
 		// Renderer
-		renderer = new three.WebGLRenderer({
+		renderer = new three_module.WebGLRenderer({
 			canvas: canvas_el,
 			antialias: false,
 		});
@@ -734,10 +737,10 @@
 		renderer.setPixelRatio(dpr);
 
 		// Sphere geometry
-		geometry = new three.SphereGeometry(500, 60, 40);
+		geometry = new three_module.SphereGeometry(500, 60, 40);
 
 		// Load texture
-		const loader = new three.TextureLoader();
+		const loader = new three_module.TextureLoader();
 		try {
 			texture = await new Promise<ThreeTexture>((resolve, reject) => {
 				loader.load(
@@ -756,16 +759,16 @@
 			return;
 		}
 
-		texture.colorSpace = three.SRGBColorSpace;
+		texture.colorSpace = three_module.SRGBColorSpace;
 
 		// Material
-		material = new three.MeshBasicMaterial({
+		material = new three_module.MeshBasicMaterial({
 			map: texture,
-			side: three.BackSide,
+			side: three_module.BackSide,
 		});
 
 		// Mesh
-		sphere_mesh = new three.Mesh(geometry, material);
+		sphere_mesh = new three_module.Mesh(geometry, material);
 		scene.add(sphere_mesh);
 
 		// Set initial view
@@ -916,7 +919,9 @@
 	});
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	{id}
 	class={['panorama-container', className].filter(Boolean).join(' ')}

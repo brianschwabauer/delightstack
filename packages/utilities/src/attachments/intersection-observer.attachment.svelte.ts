@@ -57,11 +57,11 @@ export function intersectionObserver(
 	let previousY = 0;
 	let observer: IntersectionObserver | undefined;
 	return (el: HTMLElement) => {
-		let onintersect = options?.onintersect;
-		let onintersectonce = options?.onintersectonce;
-		let onintersectchange = options?.onintersectchange;
+		const onintersect = options?.onintersect;
+		const onintersectonce = options?.onintersectonce;
+		const onintersectchange = options?.onintersectchange;
 
-		let { root, rootMargin, threshold } = options || {};
+		const { root, rootMargin, threshold } = options || {};
 		const callback: IntersectionObserverCallback = (entries) => {
 			const y = entries[0].boundingClientRect.y ?? 0;
 			const direction = y < previousY ? 'down' : 'up';
@@ -97,6 +97,6 @@ export function intersectionObserver(
 			});
 			observer.observe(el);
 		}
-		return () => observer.disconnect();
+		return () => observer?.disconnect();
 	};
 }

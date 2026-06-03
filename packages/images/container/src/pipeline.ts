@@ -9,9 +9,7 @@ import {
 	generateCompressedOriginal,
 	resolveConfigs,
 	type VariantConfig,
-	type WatermarkConfig,
 	type GeneratedVariant,
-	type ResizedVariant,
 } from './variants';
 import { generateThumbHash } from './thumbhash';
 import { svgPipeline } from './svg';

@@ -534,6 +534,7 @@ export class DatabaseServer<
 				// Resolve dotted paths (e.g. 'ai.complete' → this.ai.complete)
 				const parts = body.method.split('.');
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				// oxlint-disable-next-line typescript/no-this-alias
 				let target: any = this;
 				for (let i = 0; i < parts.length - 1; i++) {
 					target = target?.[parts[i]];
@@ -633,7 +634,7 @@ export class DatabaseServer<
 			group.push({ index: i, id: req.id, expand: req.expand });
 		}
 
-		const results: any[] = new Array(requests.length);
+		const results: any[] = Array.from({ length: requests.length });
 
 		for (const [entity_type, group] of groups) {
 			const table = this.config[entity_type];
@@ -755,7 +756,7 @@ export class DatabaseServer<
 						if (temp[key] === null) delete temp[key];
 					}
 					expanded[field] = temp as Entity;
-				} catch (error) {
+				} catch {
 					throw new DelightError({
 						message: 'Database error occurred while fetching entity expansions',
 						status: 500,
@@ -869,16 +870,15 @@ export class DatabaseServer<
 					order: descending ? 'DESC' : 'ASC',
 				},
 				where: {
-					updated_at: {
-						// Between is inclusive on both ends, so we need to adjust it so it's exclusive
-						// When it's descending, we need to make the 'to' timestamp exclusive
-						// When it's ascending, we need to make the 'from' timestamp exclusive
-						...(to === Number.MAX_SAFE_INTEGER
+					// Between is inclusive on both ends, so we adjust it to be exclusive:
+					// when descending, the 'to' timestamp is made exclusive; when ascending,
+					// the 'from' timestamp is made exclusive.
+					updated_at:
+						to === Number.MAX_SAFE_INTEGER
 							? descending
 								? { gte: from }
 								: { gt: from }
-							: { between: descending ? [from, to - 1] : [from + 1, to] }),
-					},
+							: { between: descending ? [from, to - 1] : [from + 1, to] },
 				},
 			});
 			if (result instanceof Promise) continue; // orama search should always be sync here, this is for type safety
@@ -993,7 +993,9 @@ export class DatabaseServer<
 						sparse = previous_cursor_data.sparse ?? true;
 					}
 				}
-			} catch (error) {}
+			} catch {
+				/* intentionally empty: malformed cursor falls back to raw_query */
+			}
 		}
 		// Resolve q alias: use q as term when term is not set
 		const base_query = previous_cursor_data || raw_query;
@@ -1088,7 +1090,7 @@ export class DatabaseServer<
 							property: query.order[0].key,
 							order: (query.order[0].direction || 'ASC').toUpperCase() as 'ASC' | 'DESC',
 						}
-					: ([aId, aScore, aDoc], [bId, bScore, bDoc]) => {
+					: ([_aId, aScore, aDoc], [_bId, bScore, bDoc]) => {
 							for (const ord of query.order) {
 								const aValue = aDoc[ord.key];
 								const bValue = bDoc[ord.key];
@@ -1123,7 +1125,7 @@ export class DatabaseServer<
 				try {
 					const full_entity = this.get(entity_type, id);
 					return { ...hit, document: full_entity };
-				} catch (error) {
+				} catch {
 					return { ...hit, document: null };
 				}
 			}) as any;
@@ -1505,7 +1507,7 @@ export class DatabaseServer<
 		const stored_index_format = search_index_rows[0].index_format || 'json';
 		try {
 			stored_config = JSON.parse(search_index_rows[0].index_config || '{}');
-		} catch (e) {
+		} catch {
 			return this.rebuildIndex(entity_type);
 		}
 
@@ -1801,7 +1803,7 @@ export class DatabaseServer<
 			});
 		}
 		if (!value || typeof value !== 'object') return;
-		let temp = { ...value, ...JSON.parse((value?.json as any) || '{}') };
+		const temp = { ...value, ...JSON.parse((value?.json as any) || '{}') };
 		delete (temp as any).json;
 		for (const key in temp) {
 			if (temp[key] === null) delete temp[key];
@@ -1844,12 +1846,12 @@ export class DatabaseServer<
 				}
 				return acc;
 			}, {}),
-			json: JSON.stringify({
-				...Object.entries(input_data).reduce((acc, [key, value]) => {
+			json: JSON.stringify(
+				Object.entries(input_data).reduce((acc, [key, value]) => {
 					if (!column_names.includes(key)) (acc as any)[key] = value;
 					return acc;
 				}, {}),
-			}),
+			),
 		};
 	}
 

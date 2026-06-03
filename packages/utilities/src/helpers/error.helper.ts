@@ -104,7 +104,7 @@ export class DelightError extends Error {
 		let code: string | undefined;
 		let detail: string | undefined;
 		let errors: DelightErrorData[] = [];
-		let cause: unknown = error;
+		const cause: unknown = error;
 
 		try {
 			if (error instanceof ZodError) {

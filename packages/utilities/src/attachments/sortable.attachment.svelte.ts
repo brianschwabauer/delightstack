@@ -175,7 +175,7 @@ function animateElement(element: HTMLElement, x: number, y: number) {
 		try {
 			// animation.commitStyles();
 			animation.cancel();
-		} catch (error) {
+		} catch {
 			// ignore
 		}
 	});
@@ -199,7 +199,7 @@ function animateElement(element: HTMLElement, x: number, y: number) {
 			try {
 				// animation.commitStyles();
 				animation.cancel();
-			} catch (error) {
+			} catch {
 				// ignore
 			}
 			if (element) element.style.removeProperty('pointer-events');

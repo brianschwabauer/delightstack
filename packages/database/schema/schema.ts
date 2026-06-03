@@ -303,7 +303,6 @@ type DatabaseField =
 	| ForeignKeyField
 	| PrimaryKeyField<'string' | 'number'>;
 
-type PrimaryKey<T extends { _: any }> = T & { _: T['_'] & { type: 'primary_key' } };
 type Searchable<T extends { _: any }> = T & { _: T['_'] & { searchable: true } };
 type Indexable<T extends { _: any }> = T & { _: T['_'] & { indexable: true } };
 type Unique<T extends { _: any }> = T & { _: T['_'] & { unique: true } };
@@ -311,7 +310,6 @@ type Sortable<T extends { _: any }> = T & { _: T['_'] & { sortable: true } };
 type OptionalValue<T extends { _: any }> = T & { _: T['_'] & { optional: true } };
 type ReadOnly<T extends { _: any }> = T & { _: T['_'] & { readonly: true } };
 type DerivedValue<T extends { _: any }> = T & { _: T['_'] & { derived: true } };
-type Column<T extends { _: any }> = T & { _: T['_'] & { column: true } };
 type IntegerValue<T extends { _: any }> = T & {
 	_: T['_'] & { type: 'number'; integer: true };
 };
@@ -344,10 +342,10 @@ type ForeignKey<
 	};
 };
 
-type IsPrimaryKey<T> = T extends { _: (infer U) & { type: 'primary_key' } }
+type IsPrimaryKey<T> = T extends { _: (infer _U) & { type: 'primary_key' } }
 	? true
 	: false;
-type IsForeignKey<T> = T extends { _: (infer U) & { type: 'foreign_key' } }
+type IsForeignKey<T> = T extends { _: (infer _U) & { type: 'foreign_key' } }
 	? true
 	: false;
 
@@ -355,18 +353,17 @@ type IsForeignKey<T> = T extends { _: (infer U) & { type: 'foreign_key' } }
 type HasPrimaryKeyField<TC extends Record<string, FieldGenerator>> = {
 	[K in keyof TC]: IsPrimaryKey<TC[K]> extends true ? true : never;
 }[keyof TC];
-type IsColumn<T> = T extends { _: (infer U) & { column: true } } ? true : false;
-type IsSearchable<T> = T extends { _: (infer U) & { searchable: true } } ? true : false;
-type IsIndexable<T> = T extends { _: (infer U) & { indexable: true } } ? true : false;
-type IsUnique<T> = T extends { _: (infer U) & { unique: true } } ? true : false;
-type IsSortable<T> = T extends { _: (infer U) & { sortable: true } } ? true : false;
-type IsOptional<T> = T extends { _: (infer U) & { optional: true } } ? true : false;
-type IsReadOnly<T> = T extends { _: (infer U) & { readonly: true } } ? true : false;
-type IsInteger<T> = T extends { _: (infer U) & { integer: true } } ? true : false;
-type IsBoolean<T> = T extends { _: (infer U) & { type: 'boolean' } } ? true : false;
-type IsNumber<T> = T extends { _: (infer U) & { type: 'number' } } ? true : false;
-type IsString<T> = T extends { _: (infer U) & { type: 'string' } } ? true : false;
-type IsEnum<T> = T extends { _: (infer U) & { type: 'enum' } } ? true : false;
+type IsSearchable<T> = T extends { _: (infer _U) & { searchable: true } } ? true : false;
+type IsIndexable<T> = T extends { _: (infer _U) & { indexable: true } } ? true : false;
+type IsUnique<T> = T extends { _: (infer _U) & { unique: true } } ? true : false;
+type IsSortable<T> = T extends { _: (infer _U) & { sortable: true } } ? true : false;
+type IsOptional<T> = T extends { _: (infer _U) & { optional: true } } ? true : false;
+type IsReadOnly<T> = T extends { _: (infer _U) & { readonly: true } } ? true : false;
+type IsInteger<T> = T extends { _: (infer _U) & { integer: true } } ? true : false;
+type IsBoolean<T> = T extends { _: (infer _U) & { type: 'boolean' } } ? true : false;
+type IsNumber<T> = T extends { _: (infer _U) & { type: 'number' } } ? true : false;
+type IsString<T> = T extends { _: (infer _U) & { type: 'string' } } ? true : false;
+type IsEnum<T> = T extends { _: (infer _U) & { type: 'enum' } } ? true : false;
 type IsDerived<T> = T extends { _: infer U }
 	? unknown extends U
 		? false
@@ -815,7 +812,7 @@ type SqliteColumnConstraint<Schema extends FieldGenerator> =
 type SqliteColumnForeignKeyConstraint<Schema extends FieldGenerator> = Schema extends {
 	readonly _: {
 		foreignKey: {
-			type: infer KeyType extends 'string' | 'number';
+			type: infer _KeyType extends 'string' | 'number';
 			table: infer TableName extends string;
 			column: infer ColumnName extends string;
 			on_update?: infer OnUpdate extends SqliteForeignKeyAction | undefined;
@@ -2552,11 +2549,11 @@ export namespace Database {
 
 		let primary_key: PrimaryKeyColumn | undefined;
 		let primary_key_type: 'string' | 'number' = 'string';
-		let indexable_fields: IndexableColumn[] = [];
-		let unique_fields: UniqueColumn[] = [];
-		let searchable_fields: SearchableColumn[] = [];
-		let sortable_fields: SortableColumn[] = [];
-		let foreign_keys: ForeignKeys = {} as ForeignKeys;
+		const indexable_fields: IndexableColumn[] = [];
+		const unique_fields: UniqueColumn[] = [];
+		const searchable_fields: SearchableColumn[] = [];
+		const sortable_fields: SortableColumn[] = [];
+		const foreign_keys: ForeignKeys = {} as ForeignKeys;
 		const derived_fields: Record<string, { foreign_keys?: string[] }> = {};
 		const indexes: Table['config']['indexes'] = [];
 		const form_field = {} as FormFieldProps<TableConfig>;

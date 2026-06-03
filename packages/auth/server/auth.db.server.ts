@@ -349,7 +349,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		let token: Awaited<ReturnType<typeof decodeJwt>>;
 		try {
 			token = await decodeJwt(this.options.secret, email_signin_token);
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Invalid or expired email sign-in link',
 				status: 400,
@@ -1654,7 +1654,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				status: 400,
 			});
 		}
-		if (!email.match(/@[^\.]+\.[^\.]+/)) {
+		if (!email.match(/@[^.]+\.[^.]+/)) {
 			throw new DelightError({ message: `Invalid email domain`, status: 400 });
 		}
 
@@ -1710,7 +1710,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				typ: 'email_verification',
 				iss: this.options.issuer,
 			});
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Failed to generate email verification token',
 				status: 500,
@@ -1726,7 +1726,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				expires_at: jwt.decoded_jwt.exp * 1000,
 				json: JSON.stringify(meta || {}),
 			});
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Failed to create email verification token',
 				status: 500,
@@ -1786,7 +1786,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				uid: user_auth.user_id, // The user's ID
 				iss: this.options.issuer,
 			});
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Failed to generate email sign in token',
 				status: 500,
@@ -1802,7 +1802,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				expires_at: jwt.decoded_jwt.exp * 1000,
 				json: JSON.stringify(meta || {}),
 			});
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Failed to create email sign in token',
 				status: 500,
@@ -1823,7 +1823,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		let token: Awaited<ReturnType<typeof decodeJwt>>;
 		try {
 			token = await decodeJwt(this.options.secret, email_verification_token);
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Invalid or expired email verification link',
 				status: 400,
@@ -2022,7 +2022,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				typ: 'password_reset',
 				iss: this.options.issuer,
 			});
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Failed to generate password reset token',
 				status: 500,
@@ -2038,7 +2038,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				expires_at: jwt.decoded_jwt.exp * 1000,
 				json: JSON.stringify(meta || {}),
 			});
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Failed to create password reset token',
 				status: 500,
@@ -2086,7 +2086,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		let token: Awaited<ReturnType<typeof decodeJwt>>;
 		try {
 			token = await decodeJwt(this.options.secret, password_reset_token);
-		} catch (error) {
+		} catch {
 			throw new DelightError({
 				message: 'Invalid or expired reset password link',
 				status: 400,
@@ -2407,7 +2407,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				status: 400,
 			});
 		}
-		let max_redemptions = invitation.max_redemptions || -1;
+		const max_redemptions = invitation.max_redemptions || -1;
 		let no_redemptions_left = max_redemptions === 0;
 		if (max_redemptions > 0) {
 			const redemptions = this.sql.list('org_invitation_log', {
@@ -2452,7 +2452,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		query?: SqlEntityQuery<AuthDatabaseSchema['org_invitation']>,
 	) {
 		const filters =
-			query?.where && 'and' in query?.where
+			query?.where && 'and' in query.where
 				? query.where.and
 				: query?.where
 					? [query.where]
@@ -2507,7 +2507,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		}
 
 		// Check if the invitation has reached its maximum number of redemptions
-		let max_redemptions = invitation.max_redemptions || -1;
+		const max_redemptions = invitation.max_redemptions || -1;
 		let no_redemptions_left = max_redemptions === 0;
 		if (max_redemptions > 0) {
 			const redemptions = this.sql.list('org_invitation_log', {
@@ -2617,7 +2617,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			application.redirect_urls.forEach((href) => {
 				try {
 					new URL(href);
-				} catch (error) {
+				} catch {
 					throw new DelightError({
 						message: `Invalid redirect URL: "${href}". Must be a valid URL`,
 						status: 400,
@@ -2630,7 +2630,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		if (application.default_redirect_url) {
 			try {
 				new URL(application.default_redirect_url);
-			} catch (error) {
+			} catch {
 				throw new DelightError({
 					message: `Invalid default redirect URL: "${application.default_redirect_url}". Must be a valid URL`,
 					status: 400,
@@ -2790,7 +2790,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			try {
 				await this.verifyPasswordHash(secret, client_secret.hash);
 				return; // If the secret matches, return successfully
-			} catch (error) {
+			} catch {
 				continue; // Try the next secret if this one doesn't match
 			}
 		}
@@ -2857,7 +2857,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			updates.redirect_urls.forEach((href) => {
 				try {
 					new URL(href);
-				} catch (error) {
+				} catch {
 					throw new DelightError({
 						message: `Invalid redirect URL: "${href}". Must be a valid URL`,
 						status: 400,
@@ -2870,7 +2870,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		if (updates.default_redirect_url) {
 			try {
 				new URL(updates.default_redirect_url);
-			} catch (error) {
+			} catch {
 				throw new DelightError({
 					message: `Invalid default redirect URL: "${updates.default_redirect_url}". Must be a valid URL`,
 					status: 400,
@@ -2954,7 +2954,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		query?: SqlEntityQuery<AuthDatabaseSchema['oauth_application_user']>,
 	) {
 		const filters =
-			query?.where && 'and' in query?.where
+			query?.where && 'and' in query.where
 				? query.where.and
 				: query?.where
 					? [query.where]
@@ -3322,7 +3322,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		let existing_key;
 		try {
 			existing_key = this.sql.get('global_key', key);
-		} catch (err) {}
+		} catch {
+			/* intentionally empty: key doesn't exist yet, treat as available */
+		}
 		if (existing_key && existing_key?.org_id !== org_id) {
 			throw new DelightError({ message: `${key} is already taken`, status: 400 });
 		}
@@ -3343,7 +3345,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		let existing_key;
 		try {
 			existing_key = this.sql.get('global_key', key);
-		} catch (err) {}
+		} catch {
+			/* intentionally empty: key doesn't exist, nothing to unreserve */
+		}
 		if (existing_key && existing_key?.org_id !== org_id) {
 			throw new DelightError({
 				message: `${key} is not reserved by this organization`,

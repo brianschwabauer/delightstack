@@ -409,6 +409,7 @@
 	// Positioning effect — detects actual placement for arrow/transform-origin/hit-box
 	$effect(() => {
 		if (!shown || !popoverElement) return;
+		// oxlint-disable-next-line no-unused-expressions
 		placement; // re-run when placement changes (so the arrow location gets update dynamically)
 
 		if (ref_element) {

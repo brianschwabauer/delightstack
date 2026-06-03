@@ -591,9 +591,10 @@
 					const siblings = parent ? getVisibleChildren(parent) : tree;
 					const ids_to_expand = siblings
 						.filter(
-							(s) => (hasChildren(s) || hasLoadableChildren(s)) && !isExpanded(s.id),
+							(s: TreeNode) =>
+								(hasChildren(s) || hasLoadableChildren(s)) && !isExpanded(s.id),
 						)
-						.map((s) => s.id);
+						.map((s: TreeNode) => s.id);
 					if (ids_to_expand.length > 0) {
 						expanded = [...expanded, ...ids_to_expand];
 					}

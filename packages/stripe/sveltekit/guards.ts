@@ -22,7 +22,7 @@ interface BillingGuardOptions {
  * export const load = requirePlan('pro-monthly', ({ locals }) => ({ ... }));
  * ```
  */
-export function createBillingGuards<const P extends string>(options: {
+export function createBillingGuards<const P extends string>(_options: {
 	plans: readonly P[];
 }) {
 	type Plan = P;

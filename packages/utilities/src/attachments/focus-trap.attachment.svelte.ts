@@ -18,12 +18,12 @@ export interface FocusTrapOptions extends Options {
  * <div {@attach focusTrap({ enabled: true })}</div>
  * ```
  */
-export function focusTrap(options?: FocusTrapOptions): Attachment {
+export function focusTrap(options?: FocusTrapOptions): Attachment<HTMLElement> {
 	let trap: FocusTrap | undefined;
 	return (el: HTMLElement) => {
 		if (!trap) {
 			trap = createFocusTrap(el, options);
-			if (options.oninit) options.oninit(trap);
+			options?.oninit?.(trap);
 		}
 		const shouldEnable = options?.enabled ?? true;
 		if (shouldEnable && !trap.active) {

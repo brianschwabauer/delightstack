@@ -28,7 +28,7 @@ export interface RippleOptions {
  * ```
  */
 export function ripple(_options: Partial<RippleOptions> = {}): Attachment<HTMLElement> {
-	let options = {
+	const options = {
 		color: 'currentColor',
 		centered: false,
 		opacity: 0.1,

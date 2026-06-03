@@ -206,7 +206,7 @@ export function imageProcessing(
 				thumbhash: null,
 				variants: null,
 				_processing: JSON.stringify(processing),
-				...(uploadOptions?.data ?? {}),
+				...uploadOptions?.data,
 			} as any) as any;
 
 			// Write original to R2

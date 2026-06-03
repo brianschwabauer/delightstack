@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RateLimiterServer } from './rate-limiter.server';
-import type { RateLimiterStatus } from './rate-limiter.server';
 
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {
@@ -13,7 +12,7 @@ vi.mock('cloudflare:workers', () => {
 });
 
 function createLimiter(): RateLimiterServer {
-	return new RateLimiterServer({} as DurableObjectState, {} as Env);
+	return new RateLimiterServer({} as DurableObjectState, {});
 }
 
 describe('RateLimiterServer', () => {
