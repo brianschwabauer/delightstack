@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { ripple } from '@delightstack/utilities';
+
 	const propId = $props.id();
 	let {
 		/** Current page number (1-based) */
@@ -101,7 +103,10 @@
 
 		// Compute boundary sets
 		const startBoundary = Math.min(boundary_count, total_pages);
-		const endBoundaryStart = Math.max(total_pages - boundary_count + 1, startBoundary + 1);
+		const endBoundaryStart = Math.max(
+			total_pages - boundary_count + 1,
+			startBoundary + 1,
+		);
 
 		// Compute sibling range around current page
 		const siblingStart = Math.max(page - sibling_count, 1);
@@ -207,6 +212,7 @@
 					disabled={isFirstPage}
 					aria-disabled={isFirstPage}
 					aria-label="Go to previous page"
+					{@attach ripple({ zIndex: 1 })}
 					onclick={handlePrev}>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
 						<path
@@ -225,6 +231,7 @@
 					disabled={isLastPage}
 					aria-disabled={isLastPage}
 					aria-label="Go to next page"
+					{@attach ripple({ zIndex: 1 })}
 					onclick={handleNext}>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
 						<path
@@ -244,6 +251,7 @@
 					disabled={isFirstPage}
 					aria-disabled={isFirstPage}
 					aria-label="Go to previous page"
+					{@attach ripple({ zIndex: 1 })}
 					onclick={handlePrev}>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
 						<path
@@ -263,6 +271,7 @@
 					disabled={isLastPage}
 					aria-disabled={isLastPage}
 					aria-label="Go to next page"
+					{@attach ripple({ zIndex: 1 })}
 					onclick={handleNext}>
 					<span>Next</span>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -283,6 +292,7 @@
 					disabled={isFirstPage}
 					aria-disabled={isFirstPage}
 					aria-label="Go to previous page"
+					{@attach ripple({ zIndex: 1 })}
 					onclick={handlePrev}>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
 						<path
@@ -306,6 +316,7 @@
 							class:current={item === page}
 							aria-current={item === page ? 'page' : undefined}
 							aria-label="Go to page {item}"
+							{@attach ripple({ zIndex: 1 })}
 							onclick={() => goToPage(item)}>
 							{item}
 						</button>
@@ -318,6 +329,7 @@
 					disabled={isLastPage}
 					aria-disabled={isLastPage}
 					aria-label="Go to next page"
+					{@attach ripple({ zIndex: 1 })}
 					onclick={handleNext}>
 					<span>Next</span>
 					<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -403,20 +415,36 @@
 		font-size: inherit;
 		line-height: 1;
 		gap: 0.25em;
+		/* Positioned + clipped so the click ripple anchors to (and rounds with) the
+		   button, matching Button.svelte. */
+		position: relative;
+		overflow: hidden;
+		/* Base governs the OUT transition — the hover background eases away on leave.
+		   `:hover` below re-declares `transition` without `background`, so the tint
+		   snaps in instantly (see packages/components/CLAUDE.md). */
 		transition:
-			background 100ms ease,
-			translate 200ms ease;
+			background 300ms,
+			transform 200ms ease;
 		white-space: nowrap;
 
-		&:hover:not(:disabled) {
+		/* Hover tint matches the Table's row-hover wash so it reads clearly on any
+		   surface. Excludes `.current`: the active page button does nothing on click,
+		   so it gets no hover affordance. Snaps in (transition drops `background`),
+		   eases out via the base rule. */
+		&:hover:not(:disabled):not(.current) {
 			background: light-dark(
-				var(--color-bg-subtle, #f5f5f5),
-				var(--color-bg-subtle, #1a1a1a)
+				rgb(from var(--color-text, #000) r g b / 0.06),
+				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
-			transition: translate 200ms ease;
+			transition: transform 200ms ease;
 		}
+		/* Press: a perspective Z-push that reads as a scale-down toward the button's
+		   OWN centre. The `perspective()` lives in the button's own transform (not on
+		   a shared parent), so each button's vanishing point is its own centre rather
+		   than the container's — same feel as Button.svelte's press. */
 		&:active:not(:disabled) {
-			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
+			transform: perspective(100px)
+				translate3d(0, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 		}
 
 		&:focus-visible {
@@ -424,14 +452,12 @@
 			outline-offset: 1px;
 		}
 
+		/* The active page button is non-interactive (clicking it is a no-op), so it
+		   keeps its solid background with no hover change. It still presses + ripples
+		   for tactile feedback. */
 		&.current {
 			background: var(--color-action, #2563eb);
 			color: var(--color-action-text, white);
-
-			&:hover {
-				background: var(--color-action-active, #1d4ed8);
-				transition: none;
-			}
 		}
 
 		&:disabled {
