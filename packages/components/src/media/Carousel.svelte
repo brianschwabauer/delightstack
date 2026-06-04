@@ -109,7 +109,7 @@
 		style = '',
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/**
 		 * Snippet used to render `type: 'custom'` items. Receives the full item
@@ -2051,7 +2051,7 @@
 
 <div class="carousel" class:inline bind:this={viewport}>
 	<ul
-		class={['items', className].filter(Boolean).join(' ')}
+		class={['items', class_name].filter(Boolean).join(' ')}
 		role="group"
 		bind:this={container}
 		class:opening

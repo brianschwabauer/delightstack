@@ -46,7 +46,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 	} = $props();
 
 	const easeFn = $derived(
@@ -164,7 +164,7 @@
 </script>
 
 <span
-	class={['counter', className].filter(Boolean).join(' ')}
+	class={['counter', class_name].filter(Boolean).join(' ')}
 	class:skeleton={skeleton && !has_animated}
 	{id}
 	role="img"
@@ -188,7 +188,7 @@
 	}
 
 	.counter.skeleton {
-		background: var(--color-border, rgb(0 0 0 / 0.1));
+		background: var(--color-outline, rgb(0 0 0 / 0.1));
 		border-radius: var(--radius-2, 0.25rem);
 		color: transparent;
 		user-select: none;

@@ -92,7 +92,7 @@
 		id = propId,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** The css style string added to the component from the parent */
 		style = '',
@@ -738,7 +738,7 @@
 {#snippet popover()}
 	{#if shown}
 		<div
-			class="popover {className}"
+			class="popover {class_name}"
 			class:positioned
 			class:transparent
 			class:dense
@@ -871,7 +871,7 @@
 		--easing: var(--ease-out-back);
 		z-index: var(--layer);
 		background-color: var(--color-bg);
-		border: 1px solid var(--color-border, transparent);
+		border: 1px solid var(--color-outline, transparent);
 		border-radius: var(--popover-radius, var(--radius-5));
 		box-shadow: var(--shadow);
 		max-width: calc(100vw - 1rem);

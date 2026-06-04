@@ -43,7 +43,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 	}: {
 		code: string;
 		language?: string;
@@ -345,7 +345,7 @@
 
 {#if skeleton}
 	<div
-		class={['code skeleton', className].filter(Boolean).join(' ')}
+		class={['code skeleton', class_name].filter(Boolean).join(' ')}
 		{id}
 		aria-hidden="true">
 		<div class="skeleton-header">
@@ -362,7 +362,7 @@
 		</div>
 	</div>
 {:else}
-	<div class={['code', className].filter(Boolean).join(' ')} class:wrap {id}>
+	<div class={['code', class_name].filter(Boolean).join(' ')} class:wrap {id}>
 		{#if show_header}
 			<div class="code-header">
 				{#if filename}
@@ -699,7 +699,7 @@
 		height: 0.75rem;
 		width: 6rem;
 		border-radius: var(--radius-3, 0.5rem);
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -729,7 +729,7 @@
 	.skeleton-line {
 		height: 0.875rem;
 		border-radius: var(--radius-3, 0.5rem);
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 

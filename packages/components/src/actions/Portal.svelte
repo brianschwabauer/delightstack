@@ -1,5 +1,6 @@
 <script module lang="ts">
 	import { tick, type Snippet } from 'svelte';
+	import { DelightError } from '@delightstack/utilities';
 
 	/**
 	 * An action for moving a component to a different parent element
@@ -23,12 +24,12 @@
 					targetEl = document.querySelector(target);
 				}
 				if (targetEl === null) {
-					throw new Error(`No element found matching css selector: "${target}"`);
+					throw new DelightError(`No element found matching css selector: "${target}"`);
 				}
 			} else if (target instanceof HTMLElement) {
 				targetEl = target;
 			} else {
-				throw new TypeError(
+				throw new DelightError(
 					`Unknown portal target type: ${
 						target === null ? 'null' : typeof target
 					}. Allowed types: string (CSS selector) or HTMLElement.`,

@@ -32,7 +32,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when typing starts */
 		onstart = undefined as (() => void) | undefined,
@@ -252,7 +252,7 @@
 </script>
 
 <span
-	class={['typewriter', className].filter(Boolean).join(' ')}
+	class={['typewriter', class_name].filter(Boolean).join(' ')}
 	class:cursor-line={cursor === 'line'}
 	class:cursor-block={cursor === 'block'}
 	class:cursor-underscore={cursor === 'underscore'}

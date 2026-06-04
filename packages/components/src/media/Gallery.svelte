@@ -1121,7 +1121,7 @@
 			box-shadow 150ms ease,
 			scale 150ms ease;
 		box-shadow: var(--shadow-1);
-		background-color: var(--color-surface-2, var(--bg-high));
+		background-color: var(--color-bg-2, var(--bg-high));
 
 		.image {
 			position: absolute;
@@ -1419,7 +1419,7 @@
 			aspect-ratio: var(--aspect-ratio);
 		}
 		.bg {
-			background-color: var(--color-surface-2, var(--bg-high));
+			background-color: var(--color-bg-2, var(--bg-high));
 		}
 		&.size-0 {
 			--aspect-ratio: 1 / 1;
@@ -1508,7 +1508,7 @@
 			}
 			background-color: color-mix(
 				in oklch,
-				var(--color-surface-2, var(--bg-high)),
+				var(--color-bg-2, var(--bg-high)),
 				transparent 30%
 			);
 			backdrop-filter: blur(10px);
@@ -1675,7 +1675,7 @@
 		}
 		.controls > :global(.play) {
 			svg.progress {
-				stroke: var(--color-text-muted, var(--text-low));
+				stroke: var(--color-text-light, var(--text-low));
 				opacity: 1;
 			}
 		}
@@ -2476,7 +2476,7 @@
 					   to a text-tinted fill so the square stays visible even when
 					   the surface tokens aren't defined by the host theme. */
 					background-color: var(
-						--color-surface-2,
+						--color-bg-2,
 						color-mix(in oklch, var(--color-text, gray) 20%, transparent)
 					);
 					.thumbnail-blur,

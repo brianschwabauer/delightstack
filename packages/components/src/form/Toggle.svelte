@@ -294,7 +294,7 @@
 		}
 	}
 	.state-label {
-		color: var(--color-text-muted, inherit);
+		color: var(--color-text-light, inherit);
 		font-size: 0.875em;
 		line-height: 1.4;
 		transition: translate 200ms ease;

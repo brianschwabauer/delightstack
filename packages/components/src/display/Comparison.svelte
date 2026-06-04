@@ -38,7 +38,7 @@
 		id = propId,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when the position changes */
 		onchange = undefined as ((detail: { position: number }) => void) | undefined,
@@ -313,14 +313,14 @@
 </script>
 
 {#if skeleton}
-	<div class={['comparison', 'skeleton', className].filter(Boolean).join(' ')} {id}>
+	<div class={['comparison', 'skeleton', class_name].filter(Boolean).join(' ')} {id}>
 		<div class="skeleton-inner"></div>
 	</div>
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class={['comparison', className].filter(Boolean).join(' ')}
+		class={['comparison', class_name].filter(Boolean).join(' ')}
 		class:vertical
 		class:dragging
 		class:overflowing={needs_visible_overflow}

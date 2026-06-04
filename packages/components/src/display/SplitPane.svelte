@@ -31,7 +31,7 @@
 		id = propId,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** First pane content */
 		first = undefined as undefined | Snippet,
@@ -424,7 +424,7 @@
 </script>
 
 <div
-	class={['split-pane', className].filter(Boolean).join(' ')}
+	class={['split-pane', class_name].filter(Boolean).join(' ')}
 	class:vertical
 	class:horizontal={!vertical}
 	class:dragging
@@ -607,7 +607,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: light-dark(var(--color-border, #e0e0e0), var(--color-border, #3a3a3a));
+		background: light-dark(var(--color-outline, #e0e0e0), var(--color-outline, #3a3a3a));
 		touch-action: none;
 		outline: none;
 		z-index: 1;
@@ -658,11 +658,11 @@
 		align-items: center;
 		justify-content: center;
 		border: 1px solid
-			light-dark(var(--color-border, #e0e0e0), var(--color-border, #3a3a3a));
+			light-dark(var(--color-outline, #e0e0e0), var(--color-outline, #3a3a3a));
 		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e1e1e));
 		color: light-dark(
-			var(--color-text-secondary, #666),
-			var(--color-text-secondary, #aaa)
+			var(--color-text-light, #666),
+			var(--color-text-light, #aaa)
 		);
 		cursor: pointer;
 		padding: 0;
@@ -676,8 +676,8 @@
 		&:hover {
 			color: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 			background: light-dark(
-				var(--color-bg-hover, #f5f5f5),
-				var(--color-bg-hover, #2a2a2a)
+				var(--color-bg-active, #f5f5f5),
+				var(--color-bg-active, #2a2a2a)
 			);
 			transition: none;
 		}

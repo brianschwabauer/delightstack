@@ -720,7 +720,7 @@
 		left: 50%;
 		transform: translateX(-50%);
 		font-size: 0.75em;
-		color: var(--color-text-muted, inherit);
+		color: var(--color-text-light, inherit);
 		white-space: nowrap;
 	}
 
@@ -767,7 +767,7 @@
 	.value-display {
 		display: flex;
 		justify-content: space-between;
-		color: var(--color-text-muted, inherit);
+		color: var(--color-text-light, inherit);
 		font-size: 0.85em;
 		font-variant-numeric: tabular-nums;
 	}

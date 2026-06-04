@@ -8,6 +8,7 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { DelightError } from '@delightstack/utilities';
 
 	const propId = $props.id();
 
@@ -82,7 +83,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Bindable element reference */
 		element = $bindable(undefined as HTMLElement | undefined),
@@ -284,7 +285,7 @@
 			}
 		} catch (err) {
 			loading = false;
-			const e = err instanceof Error ? err : new Error(String(err));
+			const e = err instanceof Error ? err : new DelightError(String(err));
 			error_message = e.message;
 			onerror?.({ error: e });
 		}
@@ -932,7 +933,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
 	{id}
-	class={['pdf-container', className].filter(Boolean).join(' ')}
+	class={['pdf-container', class_name].filter(Boolean).join(' ')}
 	class:single-page={single_page}
 	class:auto-paginate={single_page && auto_paginate}
 	style:--pdf-height={height}
@@ -1358,10 +1359,7 @@
 		flex-direction: column;
 		border-radius: var(--radius-md, 0.5rem);
 		overflow: hidden;
-		background: light-dark(
-			var(--color-surface-sunken, #f1f5f9),
-			var(--color-surface-sunken, #0f172a)
-		);
+		background: light-dark(var(--color-bg-2, #f1f5f9), var(--color-bg-2, #0f172a));
 		outline: none;
 	}
 
@@ -1377,8 +1375,8 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 0.75rem;
-		background: light-dark(var(--color-surface, #ffffff), var(--color-surface, #1e293b));
-		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
+		border-bottom: 1px solid var(--color-outline, light-dark(#e2e8f0, #334155));
 		flex-shrink: 0;
 		flex-wrap: wrap;
 	}
@@ -1392,7 +1390,7 @@
 	.pdf-toolbar-separator {
 		width: 1px;
 		height: 1.5rem;
-		background: var(--color-border, light-dark(#e2e8f0, #334155));
+		background: var(--color-outline, light-dark(#e2e8f0, #334155));
 		margin-inline: 0.25rem;
 	}
 
@@ -1416,8 +1414,8 @@
 
 	.pdf-toolbar-btn:hover {
 		background: light-dark(
-			var(--color-surface-raised, rgb(0 0 0 / 0.06)),
-			var(--color-surface-raised, rgb(255 255 255 / 0.08))
+			var(--color-bg-0, rgb(0 0 0 / 0.06)),
+			var(--color-bg-0, rgb(255 255 255 / 0.08))
 		);
 		/* Snap the tint in on hover; the base rule eases it back out on leave. */
 		transition: none;
@@ -1444,10 +1442,10 @@
 		width: 3rem;
 		text-align: center;
 		padding: 0.25rem;
-		border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+		border: 1px solid var(--color-outline, light-dark(#e2e8f0, #334155));
 		border-radius: var(--radius-sm, 0.25rem);
 		font-size: var(--text-sm, 0.875rem);
-		background: light-dark(var(--color-surface, #ffffff), var(--color-surface, #1e293b));
+		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
 		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
 	}
 
@@ -1458,7 +1456,7 @@
 
 	.pdf-page-total {
 		font-size: var(--text-sm, 0.875rem);
-		color: var(--color-text-muted, light-dark(#64748b, #94a3b8));
+		color: var(--color-text-light, light-dark(#64748b, #94a3b8));
 		user-select: none;
 	}
 
@@ -1478,11 +1476,8 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 0.75rem;
-		background: light-dark(
-			var(--color-surface-raised, #f8fafc),
-			var(--color-surface-raised, #1a2332)
-		);
-		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+		background: light-dark(var(--color-bg-0, #f8fafc), var(--color-bg-0, #1a2332));
+		border-bottom: 1px solid var(--color-outline, light-dark(#e2e8f0, #334155));
 		flex-shrink: 0;
 	}
 
@@ -1490,10 +1485,10 @@
 		flex: 1;
 		min-width: 0;
 		padding: 0.25rem 0.5rem;
-		border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+		border: 1px solid var(--color-outline, light-dark(#e2e8f0, #334155));
 		border-radius: var(--radius-sm, 0.25rem);
 		font-size: var(--text-sm, 0.875rem);
-		background: light-dark(var(--color-surface, #ffffff), var(--color-surface, #1e293b));
+		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
 		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
 	}
 
@@ -1504,7 +1499,7 @@
 
 	.pdf-search-count {
 		font-size: var(--text-xs, 0.75rem);
-		color: var(--color-text-muted, light-dark(#64748b, #94a3b8));
+		color: var(--color-text-light, light-dark(#64748b, #94a3b8));
 		white-space: nowrap;
 		user-select: none;
 	}
@@ -1636,7 +1631,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.75rem;
-		color: var(--color-text-muted, light-dark(#64748b, #94a3b8));
+		color: var(--color-text-light, light-dark(#64748b, #94a3b8));
 		padding: 2rem;
 		text-align: center;
 	}
@@ -1661,12 +1656,12 @@
 		align-items: center;
 		gap: 1rem;
 		padding: 0.5rem 0.75rem;
-		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+		border-bottom: 1px solid var(--color-outline, light-dark(#e2e8f0, #334155));
 	}
 
 	.pdf-skeleton-block {
 		border-radius: var(--radius-sm, 0.25rem);
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 

@@ -68,7 +68,7 @@
 		id = propId,
 
 		/** Specifies a custom class name */
-		class: className = '',
+		class: class_name = '',
 
 		/** The child content */
 		children = undefined as undefined | Snippet,
@@ -278,7 +278,7 @@
 	<!-- Tabs Container -->
 	<div
 		{id}
-		class={['tabs', className].filter(Boolean).join(' ')}
+		class={['tabs', class_name].filter(Boolean).join(' ')}
 		class:pills
 		class:boxed
 		class:segment
@@ -310,7 +310,7 @@
 	<button
 		type="button"
 		role="tab"
-		class={['tab', className].filter(Boolean).join(' ')}
+		class={['tab', class_name].filter(Boolean).join(' ')}
 		class:active={isSelected}
 		class:disabled={isDisabled}
 		class:pills={parentContext?.pills}
@@ -337,7 +337,7 @@
 	<!-- TabContent Panel -->
 	{#if parentContext && parentContext.value === value}
 		<div
-			class={['tab-content', className].filter(Boolean).join(' ')}
+			class={['tab-content', class_name].filter(Boolean).join(' ')}
 			role="tabpanel"
 			id="tabpanel-{value}"
 			aria-labelledby={value ? `tab-${value}` : undefined}
@@ -367,14 +367,14 @@
 	.tab-list {
 		display: flex;
 		position: relative;
-		border-bottom: 1px solid var(--color-border, #e0e0e0);
+		border-bottom: 1px solid var(--color-outline, #e0e0e0);
 		gap: 0;
 		perspective: 100px;
 
 		.tabs.vertical & {
 			flex-direction: column;
 			border-bottom: none;
-			border-right: 1px solid var(--color-border, #e0e0e0);
+			border-right: 1px solid var(--color-outline, #e0e0e0);
 		}
 
 		.tabs.pills & {
@@ -387,15 +387,15 @@
 		}
 
 		.tabs.boxed & {
-			background: var(--color-surface-1, #f5f5f5);
-			border: 1px solid var(--color-border, #e0e0e0);
+			background: var(--color-bg-1, #f5f5f5);
+			border: 1px solid var(--color-outline, #e0e0e0);
 			border-radius: var(--radius-3, 0.5rem);
 			padding: 0.25rem;
 			gap: 0;
 		}
 
 		.tabs.segment & {
-			background: var(--color-surface-2, #ebebeb);
+			background: var(--color-bg-2, #ebebeb);
 			border-radius: var(--radius-3, 0.5rem);
 			padding: 0.25rem;
 			border-bottom: none;
@@ -454,7 +454,7 @@
 			bottom: 0;
 			top: 0;
 			height: auto;
-			background: var(--color-surface-0, #fff);
+			background: var(--color-bg-0, #fff);
 			border-radius: calc(var(--radius-3, 0.5rem) - 0.125rem);
 			box-shadow:
 				0 1px 3px rgb(0 0 0 / 0.08),
@@ -484,7 +484,7 @@
 		padding: 0.625em 1em;
 		font-size: inherit;
 		font-family: inherit;
-		color: var(--color-text-secondary, #666);
+		color: var(--color-text-light, #666);
 		white-space: nowrap;
 		transition:
 			color 150ms ease,
@@ -584,7 +584,7 @@
 		height: 2.25em;
 		width: 5em;
 		border-radius: var(--radius-2, 0.375rem);
-		background: var(--color-surface-2, #e0e0e0);
+		background: var(--color-bg-2, #e0e0e0);
 		animation: skeleton-pulse 1.5s ease-in-out infinite;
 	}
 

@@ -97,7 +97,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when Cancel is clicked */
 		oncancel = undefined as (() => void) | undefined,
@@ -131,7 +131,7 @@
 	onclose={handleClose}
 	onbackdropclick={handleBackdropClick}
 	{id}
-	class="alert-modal {className}">
+	class="alert-modal {class_name}">
 	<div class="alert">
 		{#if Icon}
 			<div class="alert-icon" class:destructive>
@@ -165,7 +165,7 @@
 		display: flex;
 		justify-content: center;
 		margin-bottom: 0.75rem;
-		color: var(--color-text-muted);
+		color: var(--color-text-light);
 		font-size: 2rem;
 
 		&.destructive {
@@ -182,7 +182,7 @@
 
 	.alert-message {
 		font-size: var(--text-base, 1rem);
-		color: var(--color-text-muted);
+		color: var(--color-text-light);
 		line-height: var(--leading-relaxed, 1.75);
 		margin: 0;
 	}

@@ -70,7 +70,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Scrollable content. Receives the current morph percent (0-1). */
 		children = undefined as undefined | Snippet<[number]>,
@@ -475,7 +475,7 @@
 	<div
 		use:portal={'body'}
 		{id}
-		class={['bottom-sheet', className].filter(Boolean).join(' ')}
+		class={['bottom-sheet', class_name].filter(Boolean).join(' ')}
 		class:dragging
 		style:--offset="{offset}px"
 		style:--max-offset="{max_offset || 0}px"

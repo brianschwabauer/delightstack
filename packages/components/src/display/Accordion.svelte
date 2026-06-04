@@ -56,7 +56,7 @@
 		id = propId,
 
 		/** Specifies a custom class name */
-		class: className = '',
+		class: class_name = '',
 	} = $props();
 
 	/* ------------------------------------------------------------------ */
@@ -170,7 +170,7 @@
 {#if isItem}
 	<!-- AccordionItem -->
 	<div
-		class={['accordion-item', className].filter(Boolean).join(' ')}
+		class={['accordion-item', class_name].filter(Boolean).join(' ')}
 		class:open={isOpen}
 		class:dense={isDense}
 		class:comfortable={isComfortable}
@@ -214,7 +214,7 @@
 {:else if skeleton}
 	<!-- Skeleton -->
 	<div
-		class={['accordion skeleton', className].filter(Boolean).join(' ')}
+		class={['accordion skeleton', class_name].filter(Boolean).join(' ')}
 		{id}
 		aria-hidden="true">
 		{#each { length: skeleton_count } as _, i}
@@ -226,7 +226,7 @@
 {:else}
 	<!-- Accordion container -->
 	<div
-		class={['accordion', className].filter(Boolean).join(' ')}
+		class={['accordion', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:disabled
@@ -249,7 +249,7 @@
 	/* ========== AccordionItem ========== */
 	.accordion-item {
 		border-bottom: 1px solid
-			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+			light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		perspective: 100px;
 
 		&.disabled {
@@ -336,7 +336,7 @@
 
 	.skeleton-item {
 		border-bottom: 1px solid
-			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+			light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		padding: 1rem 1.25rem;
 	}
 
@@ -344,7 +344,7 @@
 		height: 1.25rem;
 		width: 60%;
 		border-radius: 4px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 

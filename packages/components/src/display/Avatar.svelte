@@ -38,7 +38,7 @@
 		skeleton = false,
 
 		/** Tooltip message */
-		tooltip: tooltipMessage = '',
+		tooltip: tooltip_message = '',
 
 		/** Click handler — makes the avatar interactive */
 		onclick = undefined as ((e: MouseEvent) => void) | undefined,
@@ -47,7 +47,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Custom children content (replaces default avatar content) */
 		children = undefined as Snippet | undefined,
@@ -122,7 +122,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
 	{id}
-	class={['avatar', `size-${size}`, className].filter(Boolean).join(' ')}
+	class={['avatar', `size-${size}`, class_name].filter(Boolean).join(' ')}
 	class:square
 	class:ring
 	class:interactive={isInteractive}
@@ -134,7 +134,7 @@
 	style:--name-color={nameColor || null}
 	{onclick}
 	onkeydown={isInteractive ? handleKeyDown : undefined}
-	{@attach tooltip(tooltipMessage)}>
+	{@attach tooltip(tooltip_message)}>
 	{#if skeleton}
 		<div class="skeleton-inner"></div>
 	{:else if children}
@@ -287,10 +287,10 @@
 			width: 100%;
 			height: 100%;
 			border-radius: var(--avatar-radius);
-			background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+			background: light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
 			color: light-dark(
-				var(--color-text-muted, #6b7280),
-				var(--color-text-muted, #9ca3af)
+				var(--color-text-light, #6b7280),
+				var(--color-text-light, #9ca3af)
 			);
 
 			svg {
@@ -328,8 +328,8 @@
 			}
 			&.offline {
 				background-color: light-dark(
-					var(--color-text-muted, #9ca3af),
-					var(--color-text-muted, #6b7280)
+					var(--color-text-light, #9ca3af),
+					var(--color-text-light, #6b7280)
 				);
 			}
 		}
@@ -407,7 +407,7 @@
 			width: 100%;
 			height: 100%;
 			border-radius: var(--avatar-radius);
-			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+			background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 			position: relative;
 			overflow: hidden;
 

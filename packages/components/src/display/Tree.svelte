@@ -76,7 +76,7 @@
 		id = propId,
 
 		/** Specifies a custom class name */
-		class: className = '',
+		class: class_name = '',
 
 		/** Lazy load children for a node */
 		load_children = undefined as ((node: TreeNode) => Promise<TreeNode[]>) | undefined,
@@ -776,7 +776,7 @@
 {#if skeleton}
 	<!-- Skeleton loading state -->
 	<div
-		class={['tree skeleton', className].filter(Boolean).join(' ')}
+		class={['tree skeleton', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		{id}
@@ -795,7 +795,7 @@
 	<!-- Tree -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<ul
-		class={['tree', className].filter(Boolean).join(' ')}
+		class={['tree', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:show-lines={show_lines}
@@ -1136,7 +1136,7 @@
 		border: none;
 		background: none;
 		cursor: pointer;
-		color: light-dark(var(--color-text-muted, #888), var(--color-text-muted, #999));
+		color: light-dark(var(--color-text-light, #888), var(--color-text-light, #999));
 		border-radius: var(--radius-2, 4px);
 
 		&:not(.has-children) {
@@ -1214,7 +1214,7 @@
 	}
 
 	.check-box {
-		stroke: light-dark(var(--color-text-muted, #999), var(--color-text-muted, #777));
+		stroke: light-dark(var(--color-text-light, #999), var(--color-text-light, #777));
 		fill: transparent;
 		transition:
 			stroke 150ms ease,
@@ -1250,7 +1250,7 @@
 		display: flex;
 		align-items: center;
 		flex-shrink: 0;
-		color: light-dark(var(--color-text-muted, #666), var(--color-text-muted, #aaa));
+		color: light-dark(var(--color-text-light, #666), var(--color-text-light, #aaa));
 	}
 
 	.node-label {
@@ -1423,7 +1423,7 @@
 		height: 1rem;
 		flex-shrink: 0;
 		border-radius: 2px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1449,7 +1449,7 @@
 	.skeleton-bar {
 		height: 0.875rem;
 		border-radius: 4px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 

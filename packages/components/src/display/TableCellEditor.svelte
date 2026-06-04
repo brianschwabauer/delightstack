@@ -678,7 +678,7 @@
 		line-height: inherit;
 	}
 	.cell-input::placeholder {
-		color: light-dark(var(--color-text-muted, #9ca3af), var(--color-text-muted, #6b7280));
+		color: light-dark(var(--color-text-light, #9ca3af), var(--color-text-light, #6b7280));
 	}
 
 	.cell-editor.has-error .cell-input {
@@ -778,7 +778,7 @@
 		max-height: 16em;
 		overflow-y: auto;
 		border: none;
-		background: light-dark(var(--color-bg, #fff), var(--color-bg-elevated, #262626));
+		background: light-dark(var(--color-bg, #fff), var(--color-bg-0, #262626));
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		border-radius: var(--radius-4, 16px);
 		box-shadow: var(--shadow-2, 0 8px 28px -8px rgb(0 0 0 / 0.3));
@@ -825,7 +825,7 @@
 	}
 	.ac-option-desc {
 		font-size: 0.8em;
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
+		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -837,7 +837,7 @@
 		justify-content: center;
 		gap: 0.5em;
 		padding: 0.85em;
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
+		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
 		font-size: 0.9em;
 	}
 	.ac-spinner {
@@ -845,7 +845,7 @@
 		width: 14px;
 		height: 14px;
 		border: 2px solid
-			light-dark(var(--color-border, #e5e7eb), var(--color-border, #404040));
+			light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #404040));
 		border-top-color: var(--color-action, #1976d2);
 		border-radius: 50%;
 		animation: cell-ac-spin 0.6s linear infinite;

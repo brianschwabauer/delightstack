@@ -315,7 +315,7 @@
 	.description {
 		margin: 0;
 		font-size: 0.875em;
-		color: var(--color-text-muted, hsl(0 0% 45%));
+		color: var(--color-text-light, hsl(0 0% 45%));
 		line-height: 1.5;
 	}
 
@@ -341,7 +341,7 @@
 	   whole fieldset body) expands the section. */
 	.fieldset :global(.button.expand-button) {
 		width: 100%;
-		--color-text: var(--color-text-muted, hsl(0 0% 45%));
+		--color-text: var(--color-text-light, hsl(0 0% 45%));
 	}
 	.fieldset :global(.button.expand-button button) {
 		justify-content: space-between;

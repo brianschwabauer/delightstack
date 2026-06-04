@@ -46,7 +46,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Callback when the page changes */
 		onchange = undefined as ((detail: { page: number }) => void) | undefined,
@@ -176,7 +176,7 @@
 
 <nav
 	{id}
-	class={['pagination', className].filter(Boolean).join(' ')}
+	class={['pagination', class_name].filter(Boolean).join(' ')}
 	class:skeleton
 	aria-label="Pagination"
 	style:--pg-min-width={sizeConfig.min_width}
@@ -370,7 +370,7 @@
 		height: 100%;
 		position: absolute;
 		inset: 0;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		border-radius: var(--radius-md, 0.375rem);
 
 		&::after {
@@ -477,14 +477,14 @@
 		min-width: var(--pg-min-width);
 		height: var(--pg-height);
 		line-height: 1;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-light, #6b7280);
 		user-select: none;
 	}
 
 	.pagination-simple-info {
 		padding: 0 0.75em;
 		white-space: nowrap;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-light, #6b7280);
 	}
 
 	.pagination-compact-info {
@@ -495,7 +495,7 @@
 
 	.pagination-info {
 		white-space: nowrap;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-light, #6b7280);
 		font-size: 0.875em;
 	}
 
@@ -505,13 +505,13 @@
 		gap: 0.375rem;
 		white-space: nowrap;
 		font-size: 0.875em;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-light, #6b7280);
 	}
 
 	.page-size-select {
 		appearance: auto;
 		border: 1px solid
-			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+			light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
 		border-radius: var(--radius-md, 0.375rem);
 		background: light-dark(var(--color-bg, white), var(--color-bg, #0a0a0a));
 		color: inherit;

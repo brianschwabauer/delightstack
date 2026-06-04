@@ -16,8 +16,8 @@
 		/** Whether the current effective theme is dark. */
 		is_dark = $bindable(false) as boolean,
 
-		/** The size of the toggle button: '0' (small), '1' (medium), '2' (large) */
-		size = '1' as '0' | '1' | '2',
+		/** The size of the toggle button: '0' (small), '1' (medium), '2' (large), '3' (xlarge) */
+		size = '1' as '0' | '1' | '2' | '3',
 
 		/** Whether the system/auto option should be disabled (only light/dark) */
 		disable_auto = false,
@@ -29,19 +29,19 @@
 		label = undefined as string | undefined,
 
 		/** Tooltip text shown on hover */
-		tooltip: tooltipMessage = '',
+		tooltip: tooltip_message = '',
 
 		/** The ID of the element. @defaults to a random ID */
 		id = undefined as string | undefined,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when the theme changes */
 		onchange = undefined as ((theme: 'light' | 'dark' | 'auto') => void) | undefined,
 	} = $props();
 
-	const SIZE_MAP = { '0': 18, '1': 22, '2': 28 } as const;
+	const SIZE_MAP = { '0': 18, '1': 22, '2': 28, '3': 34 } as const;
 	const svgSize = $derived(SIZE_MAP[size]);
 
 	let systemPrefersDark = $state(false);
@@ -123,14 +123,14 @@
 <button
 	type="button"
 	{id}
-	class={['theme-toggle', `size-${size}`, className].filter(Boolean).join(' ')}
+	class={['theme-toggle', `size-${size}`, class_name].filter(Boolean).join(' ')}
 	class:is-dark={effectiveDark}
 	class:is-auto={theme === 'auto'}
 	class:has-label={show_label}
 	aria-label={ariaLabel}
 	onclick={cycleTheme}
 	onkeydown={handleKeyDown}
-	{@attach tooltip(tooltipMessage || (show_label ? '' : ariaLabel))}
+	{@attach tooltip(tooltip_message || (show_label ? '' : ariaLabel))}
 	{@attach ripple({})}>
 	<span class="icon" style:width="{svgSize}px" style:height="{svgSize}px">
 		<svg

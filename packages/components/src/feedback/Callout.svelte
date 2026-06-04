@@ -41,7 +41,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when the dismiss button is clicked */
 		ondismiss = undefined as (() => void) | undefined,
@@ -79,7 +79,7 @@
 	<svelte:element
 		this={banner ? 'aside' : 'div'}
 		{id}
-		class={['callout', variant, className].filter(Boolean).join(' ')}
+		class={['callout', variant, class_name].filter(Boolean).join(' ')}
 		class:banner
 		class:sticky={banner && sticky}
 		class:dense

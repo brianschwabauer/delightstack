@@ -56,7 +56,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 	} = $props();
 
 	const size_map: Record<string, number> = {
@@ -108,7 +108,7 @@
 
 <div
 	{id}
-	class={['avatar-group', `direction-${direction}`, className].filter(Boolean).join(' ')}
+	class={['avatar-group', `direction-${direction}`, class_name].filter(Boolean).join(' ')}
 	style:--avatar-size="{avatar_size}px"
 	style:--overlap="{overlap_px}px"
 	style:--ring-color={ring_color}
@@ -258,8 +258,8 @@
 		width: var(--avatar-size);
 		height: var(--avatar-size);
 		border-radius: var(--radius-round, 9999px);
-		background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
+		background: light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
+		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
 		font-size: var(--overflow-font);
 		font-weight: 600;
 		line-height: 1;
@@ -275,8 +275,8 @@
 
 			&:hover {
 				background: light-dark(
-					var(--color-border, #c4c9d0),
-					var(--color-border, #5b6577)
+					var(--color-outline, #c4c9d0),
+					var(--color-outline, #5b6577)
 				);
 				/* Snap the tint in on hover; the base rule eases it back out on leave. */
 				transition: none;

@@ -843,7 +843,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 	}: {
 		value: string;
 		size?: number;
@@ -1004,7 +1004,7 @@
 
 {#if skeleton}
 	<div
-		class={['qr', 'skeleton', className].filter(Boolean).join(' ')}
+		class={['qr', 'skeleton', class_name].filter(Boolean).join(' ')}
 		{id}
 		style:--qr-size="{size}px"
 		role="img"
@@ -1013,7 +1013,7 @@
 	</div>
 {:else if matrix}
 	<div
-		class={['qr', className].filter(Boolean).join(' ')}
+		class={['qr', class_name].filter(Boolean).join(' ')}
 		{id}
 		style:--qr-size="{size}px"
 		role="img"
@@ -1104,7 +1104,7 @@
 		width: var(--qr-size);
 		height: var(--qr-size);
 		border-radius: var(--radius-3, 8px);
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1141,7 +1141,7 @@
 		justify-content: center;
 		padding: 6px 12px;
 		border: 1px solid
-			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+			light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
 		border-radius: var(--radius-2, 6px);
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1f2937));
 		color: light-dark(var(--color-text, #374151), var(--color-text, #d1d5db));
@@ -1154,12 +1154,12 @@
 
 		&:hover:not(:disabled) {
 			background: light-dark(
-				var(--color-bg-hover, #f3f4f6),
-				var(--color-bg-hover, #374151)
+				var(--color-bg-active, #f3f4f6),
+				var(--color-bg-active, #374151)
 			);
 			border-color: light-dark(
-				var(--color-border-hover, #9ca3af),
-				var(--color-border-hover, #6b7280)
+				var(--color-outline-active, #9ca3af),
+				var(--color-outline-active, #6b7280)
 			);
 			transition: none;
 		}

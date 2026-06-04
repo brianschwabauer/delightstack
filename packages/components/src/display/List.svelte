@@ -60,7 +60,7 @@
 		id = propId,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** The child elements to display inside the element */
 		children = undefined as undefined | Snippet,
@@ -122,7 +122,7 @@
 
 {#if skeleton && !parentContext?.level}
 	<ul
-		class={['list', 'skeleton', className].filter(Boolean).join(' ')}
+		class={['list', 'skeleton', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		style:--list-pad-x={padding_x}
@@ -137,7 +137,7 @@
 	</ul>
 {:else if !parentContext?.level}
 	<ul
-		class={['list', className].filter(Boolean).join(' ')}
+		class={['list', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:disabled

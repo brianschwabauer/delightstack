@@ -45,7 +45,7 @@
 		id = propId,
 
 		/** Specifies a custom class name */
-		class: className = '',
+		class: class_name = '',
 
 		/** Custom rendering snippet */
 		children = undefined as undefined | Snippet,
@@ -232,7 +232,7 @@
 	);
 
 	const navClass = $derived(
-		['breadcrumbs', `size-${size}`, dense ? 'dense' : '', className]
+		['breadcrumbs', `size-${size}`, dense ? 'dense' : '', class_name]
 			.filter(Boolean)
 			.join(' '),
 	);
@@ -464,7 +464,7 @@
 		margin: 0;
 		padding: 0;
 		min-width: 0;
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
+		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
 	}
 	.breadcrumbs.dense .breadcrumb-list {
 		--bc-sep-pad: 0.0625rem;
@@ -566,7 +566,7 @@
 		display: block;
 		height: 1em;
 		border-radius: var(--radius-1, 0.25rem);
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 	}

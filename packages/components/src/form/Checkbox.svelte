@@ -31,7 +31,7 @@
 		required = false,
 
 		/** The tooltip message shown on hover */
-		tooltip: tooltipMessage = '',
+		tooltip: tooltip_message = '',
 
 		/** Whether the checkbox should display in a condensed view */
 		dense = false,
@@ -46,7 +46,7 @@
 		name = '',
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when the checked state changes */
 		onchange = undefined as
@@ -76,12 +76,12 @@
 </script>
 
 <div
-	class={['checkbox', className].filter(Boolean).join(' ')}
+	class={['checkbox', class_name].filter(Boolean).join(' ')}
 	class:dense
 	class:comfortable
 	class:disabled
 	class:has-error={!!error}
-	{@attach tooltip(tooltipMessage)}
+	{@attach tooltip(tooltip_message)}
 	style:--size="{px}px">
 	<!-- Hidden native input for form submission -->
 	<input

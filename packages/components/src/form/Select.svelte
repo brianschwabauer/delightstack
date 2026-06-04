@@ -65,7 +65,7 @@
 		skeleton = false,
 
 		/** Tooltip message shown on hover */
-		tooltip: tooltipMessage = undefined as string | undefined,
+		tooltip: tooltip_message = undefined as string | undefined,
 
 		/** Whether the component uses dense spacing */
 		dense = false,
@@ -80,7 +80,7 @@
 		name = undefined as string | undefined,
 
 		/** Custom class name */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when the value changes */
 		onchange = undefined as ((detail: { value: unknown }) => void) | undefined,
@@ -642,7 +642,7 @@
 </script>
 
 <div
-	class={['select', `size-${size}`, className].filter(Boolean).join(' ')}
+	class={['select', `size-${size}`, class_name].filter(Boolean).join(' ')}
 	class:dense
 	class:comfortable
 	class:disabled
@@ -656,7 +656,7 @@
 	onfocusout={(e) => {
 		if (!selectElement?.contains(e.relatedTarget as Node)) focused = false;
 	}}
-	{@attach tooltipMessage ? tooltip(tooltipMessage) : () => {}}>
+	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
 	<!-- Trigger button -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
@@ -956,7 +956,7 @@
 		   number — the roomy, legacy-style feel. */
 		--_height: calc(var(--_font) * 3.5);
 		--_radius: var(--radius-3, 10px);
-		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
+		--_border: var(--color-outline, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
 		--_border-hover: var(
 			--color-outline-active,
 			light-dark(hsl(0 0% 60%), hsl(0 0% 48%))

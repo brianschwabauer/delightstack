@@ -31,7 +31,7 @@
 		clearable = false,
 
 		/** The tooltip message shown on hover */
-		tooltip: tooltipMessage = '',
+		tooltip: tooltip_message = '',
 
 		/** Whether to display in a condensed view */
 		dense = false,
@@ -46,7 +46,7 @@
 		name = '',
 
 		/** Specifies a custom class name */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when the rating value changes */
 		onchange = undefined as ((detail: { value: number }) => void) | undefined,
@@ -133,7 +133,7 @@
 </script>
 
 <div
-	class={['rating', className].filter(Boolean).join(' ')}
+	class={['rating', class_name].filter(Boolean).join(' ')}
 	class:readonly
 	class:disabled
 	class:dense
@@ -146,7 +146,7 @@
 	tabindex={isInteractive ? 0 : -1}
 	onkeydown={onKeyDown}
 	onmouseleave={hoverEnd}
-	{@attach tooltip(tooltipMessage)}
+	{@attach tooltip(tooltip_message)}
 	{id}>
 	<!-- Hidden native input for form submission -->
 	<input type="hidden" {name} value={value.toString()} />

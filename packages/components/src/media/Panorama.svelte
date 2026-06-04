@@ -8,6 +8,7 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { DelightError } from '@delightstack/utilities';
 	import Button from '../actions/Button.svelte';
 
 	/* ── Minimal Three.js type surface ───────────────────────── */
@@ -155,7 +156,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Bindable root element reference */
 		element = $bindable(undefined as HTMLElement | undefined),
@@ -704,7 +705,7 @@
 			error_state = true;
 			loading = false;
 			onerror?.({
-				error: new Error('Failed to load Three.js. Ensure "three" is installed.'),
+				error: new DelightError('Failed to load Three.js. Ensure "three" is installed.'),
 			});
 			return;
 		}
@@ -754,7 +755,8 @@
 			error_state = true;
 			loading = false;
 			onerror?.({
-				error: err instanceof Error ? err : new Error('Failed to load panorama image'),
+				error:
+					err instanceof Error ? err : new DelightError('Failed to load panorama image'),
 			});
 			return;
 		}
@@ -902,7 +904,9 @@
 					loading = false;
 					onerror?.({
 						error:
-							err instanceof Error ? err : new Error('Failed to load panorama image'),
+							err instanceof Error
+								? err
+								: new DelightError('Failed to load panorama image'),
 					});
 				},
 			);
@@ -924,7 +928,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	{id}
-	class={['panorama-container', className].filter(Boolean).join(' ')}
+	class={['panorama-container', class_name].filter(Boolean).join(' ')}
 	class:panorama-dragging={is_dragging}
 	class:panorama-fullscreen={is_fullscreen}
 	bind:this={element}
@@ -1118,10 +1122,7 @@
 		aspect-ratio: 16 / 9;
 		border-radius: var(--radius-md, 0.5rem);
 		overflow: hidden;
-		background: light-dark(
-			var(--color-surface-raised, #f3f4f6),
-			var(--color-surface-raised, #1f2937)
-		);
+		background: light-dark(var(--color-bg-0, #f3f4f6), var(--color-bg-0, #1f2937));
 		cursor: grab;
 		outline: none;
 	}
@@ -1156,9 +1157,9 @@
 		inset: 0;
 		background: linear-gradient(
 			90deg,
-			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 25%,
-			var(--color-surface-3, rgba(128, 128, 128, 0.2)) 50%,
-			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 75%
+			var(--color-bg-2, rgba(128, 128, 128, 0.1)) 25%,
+			var(--color-bg-3, rgba(128, 128, 128, 0.2)) 50%,
+			var(--color-bg-2, rgba(128, 128, 128, 0.1)) 75%
 		);
 		background-size: 200% 100%;
 		animation: panorama-shimmer 1.5s ease-in-out infinite;
@@ -1184,7 +1185,7 @@
 		/* Opaque while loading so the empty WebGL canvas (which clears to
 		   black) doesn't show through and make the panorama look "dark"
 		   the first time it appears. */
-		background: light-dark(var(--color-surface, #fff), var(--color-surface, #111));
+		background: light-dark(var(--color-bg, #fff), var(--color-bg, #111));
 		opacity: 1;
 		transition:
 			opacity 220ms ease,
@@ -1203,7 +1204,7 @@
 	.panorama-spinner {
 		width: 32px;
 		height: 32px;
-		border: 3px solid var(--color-border, #d1d5db);
+		border: 3px solid var(--color-outline, #d1d5db);
 		border-top-color: var(--color-action, #3b82f6);
 		border-radius: 50%;
 		animation: panorama-spin 0.8s linear infinite;
@@ -1225,8 +1226,8 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.75rem;
-		background-color: var(--color-surface-2, rgba(128, 128, 128, 0.1));
-		color: var(--color-text-secondary, rgba(128, 128, 128, 0.6));
+		background-color: var(--color-bg-2, rgba(128, 128, 128, 0.1));
+		color: var(--color-text-light, rgba(128, 128, 128, 0.6));
 		font-size: 14px;
 	}
 
@@ -1307,8 +1308,8 @@
 		font-weight: 500;
 		color: var(--color-text, inherit);
 		background: light-dark(
-			color-mix(in oklch, var(--color-surface, #fff) 90%, transparent),
-			color-mix(in oklch, var(--color-surface, #1f2937) 80%, transparent)
+			color-mix(in oklch, var(--color-bg, #fff) 90%, transparent),
+			color-mix(in oklch, var(--color-bg, #1f2937) 80%, transparent)
 		);
 		backdrop-filter: blur(4px);
 		padding: 2px 8px;
@@ -1338,7 +1339,7 @@
 
 		.panorama-spinner {
 			animation: none;
-			border-top-color: var(--color-border, #d1d5db);
+			border-top-color: var(--color-outline, #d1d5db);
 			opacity: 0.5;
 		}
 

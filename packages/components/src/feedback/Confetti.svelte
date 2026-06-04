@@ -531,7 +531,7 @@
 		id = propId,
 
 		/** Additional CSS classes (unused by canvas, for component identification) */
-		class: className = '',
+		class: class_name = '',
 
 		/** Called when all particles have finished */
 		onend = undefined as (() => void) | undefined,

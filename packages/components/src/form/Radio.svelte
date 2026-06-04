@@ -40,7 +40,7 @@
 		description = '',
 
 		/** The tooltip message shown on hover */
-		tooltip: tooltipMessage = '',
+		tooltip: tooltip_message = '',
 
 		/** Whether to display in a condensed view */
 		dense = false,
@@ -55,7 +55,7 @@
 		name = '',
 
 		/** Specifies a custom class name */
-		class: className = '',
+		class: class_name = '',
 
 		/* --- RadioGroup-only props --- */
 		/** Whether the radios should lay out horizontally */
@@ -169,7 +169,7 @@
 {#if isGroup}
 	<!-- RadioGroup wrapper -->
 	<div
-		class={['radio-group', className].filter(Boolean).join(' ')}
+		class={['radio-group', class_name].filter(Boolean).join(' ')}
 		class:horizontal
 		class:dense
 		class:comfortable
@@ -192,11 +192,11 @@
 {:else}
 	<!-- Individual Radio -->
 	<div
-		class={['radio', className].filter(Boolean).join(' ')}
+		class={['radio', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:disabled={isDisabled}
-		{@attach tooltip(tooltipMessage)}
+		{@attach tooltip(tooltip_message)}
 		style:--size="{px}px">
 		<!-- Hidden native input for form submission -->
 		<input

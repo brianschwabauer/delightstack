@@ -245,7 +245,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 	} = $props();
 
 	let query = $state('');
@@ -464,7 +464,7 @@
 	</div>
 	<div
 		{id}
-		class={['palette', className].filter(Boolean).join(' ')}
+		class={['palette', class_name].filter(Boolean).join(' ')}
 		class:dense
 		role="dialog"
 		aria-modal="true"
@@ -628,7 +628,7 @@
 		background-color: var(--color-bg);
 		border-radius: var(--radius-5);
 		box-shadow: var(--shadow-3);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-outline);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -638,7 +638,7 @@
 		display: flex;
 		align-items: center;
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-outline);
 		gap: 0.75rem;
 
 		.dense & {
@@ -649,7 +649,7 @@
 
 	.search-icon {
 		flex-shrink: 0;
-		color: var(--color-text-muted);
+		color: var(--color-text-light);
 	}
 
 	input {
@@ -663,7 +663,7 @@
 		padding: 0;
 
 		&::placeholder {
-			color: var(--color-text-muted);
+			color: var(--color-text-light);
 		}
 
 		.dense & {
@@ -675,7 +675,7 @@
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
-		color: var(--color-text-muted);
+		color: var(--color-text-light);
 		animation: spin 0.8s linear infinite;
 	}
 
@@ -698,7 +698,7 @@
 	.empty {
 		padding: 2rem 1rem;
 		text-align: center;
-		color: var(--color-text-muted);
+		color: var(--color-text-light);
 		font-size: 0.875rem;
 	}
 
@@ -708,7 +708,7 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: var(--color-text-muted);
+		color: var(--color-text-light);
 
 		.dense & {
 			padding: 0.375rem 0.75rem 0.125rem;
@@ -787,7 +787,7 @@
 		justify-content: center;
 		width: 1.25rem;
 		height: 1.25rem;
-		color: var(--color-text-muted);
+		color: var(--color-text-light);
 
 		:global(svg) {
 			width: 100%;
@@ -820,7 +820,7 @@
 
 	.item-description {
 		font-size: 0.75rem;
-		color: var(--color-text-muted);
+		color: var(--color-text-light);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -846,9 +846,9 @@
 			font-family: inherit;
 			font-size: 0.7rem;
 			font-weight: 500;
-			color: var(--color-text-muted);
+			color: var(--color-text-light);
 			background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
-			border: 1px solid var(--color-border);
+			border: 1px solid var(--color-outline);
 			border-radius: var(--radius-4);
 			line-height: 1;
 		}

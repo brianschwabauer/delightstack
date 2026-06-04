@@ -1,4 +1,6 @@
 <script lang="ts" module>
+	import { DelightError } from '@delightstack/utilities';
+
 	type Position =
 		| 'top-left'
 		| 'top-center'
@@ -164,7 +166,7 @@
 		} catch (err) {
 			const msg =
 				typeof messages.error === 'function'
-					? messages.error(err instanceof Error ? err : new Error(String(err)))
+					? messages.error(err instanceof Error ? err : new DelightError(String(err)))
 					: messages.error;
 			addToast(msg, 'error', { ...options, id, persistent: false, error: true });
 			throw err;
@@ -210,7 +212,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 	} = $props();
 
 	// --- Single-instance election --------------------------------------------
@@ -471,7 +473,7 @@
 
 {#if is_primary && rendered.length > 0}
 	<div
-		class={['toaster', position, `align-${align}`, className].filter(Boolean).join(' ')}
+		class={['toaster', position, `align-${align}`, class_name].filter(Boolean).join(' ')}
 		class:expanded
 		class:is-top={is_top}
 		class:rich={rich_colors}

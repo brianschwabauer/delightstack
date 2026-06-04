@@ -127,7 +127,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Bindable reference to the root HTML element */
 		element = $bindable(undefined as HTMLElement | undefined),
@@ -962,7 +962,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
 	{id}
-	class={['video', className].filter(Boolean).join(' ')}
+	class={['video', class_name].filter(Boolean).join(' ')}
 	class:is-fullscreen={is_fullscreen}
 	style:aspect-ratio={is_fullscreen ? undefined : aspect_ratio}
 	bind:this={element}

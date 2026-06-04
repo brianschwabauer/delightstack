@@ -75,7 +75,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 
 		/** Selection changed */
 		onselect = undefined as
@@ -559,7 +559,7 @@
 
 {#if skeleton}
 	<div
-		class={['calendar skeleton', className].filter(Boolean).join(' ')}
+		class={['calendar skeleton', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		{id}
@@ -582,7 +582,7 @@
 	</div>
 {:else}
 	<div
-		class={['calendar', className].filter(Boolean).join(' ')}
+		class={['calendar', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
 		class:has-time-slots={show_time_slots}
@@ -736,7 +736,7 @@
 
 		&.has-time-slots {
 			gap: 1px;
-			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+			background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 			border-radius: var(--radius-3, 0.5rem);
 			overflow: hidden;
 		}
@@ -853,7 +853,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		padding: 0.25rem 0;
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
+		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
 	}
 
 	.dense .calendar-weekday {
@@ -936,14 +936,14 @@
 
 	/* Other month */
 	.calendar-day.other-month {
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
+		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
 		opacity: 0.4;
 	}
 
 	/* Today ring */
 	.calendar-day.today {
 		box-shadow: inset 0 0 0 1.5px
-			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+			light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
 	}
 
 	/* Selected */
@@ -1141,7 +1141,7 @@
 
 	.skeleton-bar {
 		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 

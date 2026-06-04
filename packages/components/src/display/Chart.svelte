@@ -60,7 +60,7 @@
 		id = propId,
 
 		/** Additional CSS classes */
-		class: className = '',
+		class: class_name = '',
 	}: {
 		type?: 'line' | 'area' | 'bar' | 'horizontal-bar' | 'pie' | 'donut';
 		data: ChartData;
@@ -744,7 +744,7 @@
 
 <div
 	{id}
-	class={['chart', `chart-${type}`, className].filter(Boolean).join(' ')}
+	class={['chart', `chart-${type}`, class_name].filter(Boolean).join(' ')}
 	class:skeleton
 	class:animate={animate && !has_animated}
 	class:animated={animate && has_animated}
@@ -1085,7 +1085,7 @@
 	/* ── Grid ─────────────────────────────────────────────────── */
 
 	.grid-line {
-		stroke: var(--color-border, light-dark(#e5e7eb, #374151));
+		stroke: var(--color-outline, light-dark(#e5e7eb, #374151));
 		stroke-width: 1;
 		stroke-dasharray: 4 4;
 		opacity: 0.6;
@@ -1095,7 +1095,7 @@
 
 	.axis-label {
 		font-size: 11px;
-		fill: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
+		fill: var(--color-text-light, light-dark(#6b7280, #9ca3af));
 		user-select: none;
 	}
 
@@ -1213,7 +1213,7 @@
 		position: absolute;
 		z-index: 10;
 		background: var(--color-bg, light-dark(#ffffff, #1f2937));
-		border: 1px solid var(--color-border, light-dark(#e5e7eb, #374151));
+		border: 1px solid var(--color-outline, light-dark(#e5e7eb, #374151));
 		border-radius: var(--radius-3, 0.5rem);
 		padding: 6px 10px;
 		pointer-events: none;
@@ -1232,7 +1232,7 @@
 	}
 
 	.tooltip-label {
-		color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
+		color: var(--color-text-light, light-dark(#6b7280, #9ca3af));
 	}
 
 	.tooltip-value {
@@ -1292,7 +1292,7 @@
 		align-items: center;
 		justify-content: center;
 		height: 100%;
-		color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
+		color: var(--color-text-light, light-dark(#6b7280, #9ca3af));
 		font-size: 14px;
 	}
 
@@ -1321,7 +1321,7 @@
 	.skeleton-bar {
 		flex: 1;
 		border-radius: var(--radius-3, 0.5rem) var(--radius-3, 0.5rem) 0 0;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1345,7 +1345,7 @@
 		width: min(200px, 60%);
 		aspect-ratio: 1;
 		border-radius: 50%;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
 		position: relative;
 		overflow: hidden;
 

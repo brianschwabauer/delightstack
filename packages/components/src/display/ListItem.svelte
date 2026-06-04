@@ -41,7 +41,7 @@
 		id = propId,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** The child elements to display inside the component */
 		children = undefined as undefined | Snippet,
@@ -112,7 +112,7 @@
 
 {#if context}
 	<li
-		class={['list-item', context.type, className].filter(Boolean).join(' ')}
+		class={['list-item', context.type, class_name].filter(Boolean).join(' ')}
 		class:disabled={context.disabled || disabled}
 		class:dense={context.dense}
 		class:comfortable={context.comfortable}

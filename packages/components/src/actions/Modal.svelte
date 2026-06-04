@@ -54,7 +54,7 @@
 		style = '',
 
 		/** Specifies a custom class name for the dialog */
-		class: className = '',
+		class: class_name = '',
 
 		/** The snippet used to render the modal body */
 		children = undefined as undefined | Snippet,
@@ -145,7 +145,7 @@
 
 {#if _open}
 	<div
-		class={['modal', className].filter(Boolean).join(' ')}
+		class={['modal', class_name].filter(Boolean).join(' ')}
 		{style}
 		in:receive={{ key: 'modal' }}
 		out:scale={{ duration: 100, start: 0.75 }}
@@ -357,7 +357,7 @@
 		justify-content: flex-end;
 		padding: 0.75rem 0;
 		margin-top: 1rem;
-		border-top: 1px solid var(--color-border, rgb(from var(--color-text) r g b / 0.1));
+		border-top: 1px solid var(--color-outline, rgb(from var(--color-text) r g b / 0.1));
 	}
 	.modal-fg {
 		view-transition-name: modal-fg;

@@ -344,7 +344,7 @@
 
 	const strength_color = $derived.by(() => {
 		const colors = [
-			'var(--color-border, hsl(0 0% 80%))',
+			'var(--color-outline, hsl(0 0% 80%))',
 			'var(--color-error, #d32f2f)',
 			'var(--color-warning, #f59e0b)',
 			'var(--color-success, #16a34a)',
@@ -1410,7 +1410,7 @@
 		   while staying a plain length the label maths can divide by. */
 		--_height: calc(var(--_font) * 3.5);
 		--_radius: var(--radius-3, 10px);
-		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
+		--_border: var(--color-outline, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
 		--_border-hover: var(
 			--color-outline-active,
 			light-dark(hsl(0 0% 60%), hsl(0 0% 48%))

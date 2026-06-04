@@ -79,7 +79,7 @@
 		id = undefined as string | undefined,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** A bindable reference to the root HTML element */
 		element = $bindable(undefined as HTMLElement | undefined),
@@ -224,7 +224,7 @@
 
 <div
 	{id}
-	class={['image', className].filter(Boolean).join(' ')}
+	class={['image', class_name].filter(Boolean).join(' ')}
 	style={container_style}
 	bind:this={element}>
 	{#if show_skeleton}
@@ -307,9 +307,9 @@
 	.skeleton {
 		background: linear-gradient(
 			90deg,
-			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 25%,
-			var(--color-surface-3, rgba(128, 128, 128, 0.2)) 50%,
-			var(--color-surface-2, rgba(128, 128, 128, 0.1)) 75%
+			var(--color-bg-2, rgba(128, 128, 128, 0.1)) 25%,
+			var(--color-bg-3, rgba(128, 128, 128, 0.2)) 50%,
+			var(--color-bg-2, rgba(128, 128, 128, 0.1)) 75%
 		);
 		background-size: 200% 100%;
 		animation: image-shimmer 1.5s ease-in-out infinite;
@@ -370,8 +370,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background-color: var(--color-surface-2, rgba(128, 128, 128, 0.1));
-		color: var(--color-text-secondary, rgba(128, 128, 128, 0.6));
+		background-color: var(--color-bg-2, rgba(128, 128, 128, 0.1));
+		color: var(--color-text-light, rgba(128, 128, 128, 0.6));
 	}
 
 	.fallback-icon {

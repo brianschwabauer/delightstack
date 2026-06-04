@@ -52,7 +52,7 @@
 		id = propId,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** The child elements to display inside the group */
 		children = undefined as undefined | Snippet,
@@ -88,7 +88,7 @@
 
 <div
 	{id}
-	class={['button-group', className].filter(Boolean).join(' ')}
+	class={['button-group', class_name].filter(Boolean).join(' ')}
 	class:vertical={orientation === 'vertical'}
 	class:horizontal={orientation === 'horizontal'}
 	class:attached

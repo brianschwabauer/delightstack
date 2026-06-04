@@ -98,7 +98,7 @@
 		type = 'button' as 'button' | 'submit' | 'reset',
 
 		/** The tooltip message to show on hover */
-		tooltip: tooltipMessage = '',
+		tooltip: tooltip_message = '',
 
 		/** Whether the button is disabled */
 		disabled = false,
@@ -157,7 +157,7 @@
 		button_element = $bindable() as HTMLElement | undefined,
 
 		/** Specifies a custom class name for the container element */
-		class: className = '',
+		class: class_name = '',
 
 		/** The css style string added to the component from the parent */
 		style = '',
@@ -256,7 +256,7 @@
 
 <div
 	{id}
-	class={['button', className].filter(Boolean).join(' ')}
+	class={['button', class_name].filter(Boolean).join(' ')}
 	class:has-dropdown-trigger={dropdown && !disable_dropdown}
 	class:icon
 	class:pill
@@ -282,7 +282,7 @@
 	class:loading={icon && isLoading}
 	{style}
 	style:font-size={resolvedSize === undefined ? null : `var(--font-size-${resolvedSize})`}
-	{@attach tooltip(tooltipMessage)}>
+	{@attach tooltip(tooltip_message)}>
 	{#if badge}
 		<div class="badge" class:dot={badge === true}>
 			{#if badge !== true}{badge}{/if}

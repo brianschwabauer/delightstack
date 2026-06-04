@@ -56,8 +56,8 @@
 		/** Circular avatar variant */
 		avatar = false,
 
-		/** Size preset: 0=small, 1=medium, 2=large */
-		size = '1' as '0' | '1' | '2',
+		/** Size preset: 0=small, 1=medium, 2=large, 3=xlarge */
+		size = '1' as '0' | '1' | '2' | '3',
 
 		/** Whether to show a skeleton loading state */
 		skeleton = false,
@@ -501,6 +501,9 @@
 	.file-upload.size-2 {
 		font-size: var(--font-size-2, 1rem);
 	}
+	.file-upload.size-3 {
+		font-size: var(--font-size-3, 1.125rem);
+	}
 
 	/* Skeleton */
 	.file-upload.skeleton {
@@ -590,12 +593,12 @@
 	.upload-icon {
 		width: 2em;
 		height: 2em;
-		color: var(--color-text-muted, hsl(0 0% 45%));
+		color: var(--color-text-light, hsl(0 0% 45%));
 	}
 
 	.dropzone-text {
 		margin: 0;
-		color: var(--color-text-muted, hsl(0 0% 45%));
+		color: var(--color-text-light, hsl(0 0% 45%));
 		font-size: 0.9em;
 	}
 
@@ -638,10 +641,7 @@
 		position: relative;
 		cursor: pointer;
 		border: 2px dashed var(--color-outline, hsl(0 0% 80%));
-		background: light-dark(
-			var(--color-bg-subtle, #f5f5f5),
-			var(--color-bg-subtle, #1a1a1a)
-		);
+		background: light-dark(var(--color-bg-0, #f5f5f5), var(--color-bg-0, #1a1a1a));
 		transition: border-color 200ms;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
@@ -681,7 +681,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--color-text-muted, hsl(0 0% 55%));
+		color: var(--color-text-light, hsl(0 0% 55%));
 	}
 	.avatar-placeholder svg {
 		width: 40%;
@@ -724,10 +724,7 @@
 		gap: 0.5rem;
 		padding: 0.5rem;
 		border-radius: var(--radius-sm, var(--radius-2, 4px));
-		background: light-dark(
-			var(--color-bg-subtle, #f5f5f5),
-			var(--color-bg-subtle, #1a1a1a)
-		);
+		background: light-dark(var(--color-bg-0, #f5f5f5), var(--color-bg-0, #1a1a1a));
 	}
 
 	.file-preview {
@@ -756,7 +753,7 @@
 
 	.file-size {
 		font-size: 0.75em;
-		color: var(--color-text-muted, hsl(0 0% 45%));
+		color: var(--color-text-light, hsl(0 0% 45%));
 	}
 
 	.remove-button {
@@ -766,7 +763,7 @@
 		padding: 0.25rem;
 		border: none;
 		background: none;
-		color: var(--color-text-muted, hsl(0 0% 45%));
+		color: var(--color-text-light, hsl(0 0% 45%));
 		cursor: pointer;
 		border-radius: var(--radius-sm, var(--radius-2, 4px));
 		transition:
