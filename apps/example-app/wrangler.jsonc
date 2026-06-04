@@ -40,7 +40,34 @@
 			"version_metadata": {
 				"binding": "CF_VERSION_METADATA",
 			},
-			"kv_namespaces": [{ "binding": "KV", "id": "dev-kv" }],
+			// The Durable Object classes live in the server worker
+			// (delightstack-example-server-staging); the SvelteKit worker reaches
+			// them cross-script via `script_name`, so the server must deploy first.
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "AUTH",
+						"class_name": "AuthDatabaseServer",
+						"script_name": "delightstack-example-server-staging",
+					},
+					{
+						"name": "DB",
+						"class_name": "OrgDatabaseServer",
+						"script_name": "delightstack-example-server-staging",
+					},
+					{
+						"name": "WS",
+						"class_name": "AppWebsocketServer",
+						"script_name": "delightstack-example-server-staging",
+					},
+					{
+						"name": "RATE_LIMITER",
+						"class_name": "RateLimiterServer",
+						"script_name": "delightstack-example-server-staging",
+					},
+				],
+			},
+			"kv_namespaces": [{ "binding": "KV", "id": "19098fe743e642bc825b946e11d30a7c" }],
 			"r2_buckets": [{ "binding": "R2", "bucket_name": "delightstack-example-staging" }],
 			"services": [
 				{
@@ -75,8 +102,35 @@
 			"version_metadata": {
 				"binding": "CF_VERSION_METADATA",
 			},
-			"kv_namespaces": [],
-			"r2_buckets": [],
+			// The Durable Object classes live in the server worker
+			// (delightstack-example-server); the SvelteKit worker reaches them
+			// cross-script via `script_name`, so the server must deploy first.
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "AUTH",
+						"class_name": "AuthDatabaseServer",
+						"script_name": "delightstack-example-server",
+					},
+					{
+						"name": "DB",
+						"class_name": "OrgDatabaseServer",
+						"script_name": "delightstack-example-server",
+					},
+					{
+						"name": "WS",
+						"class_name": "AppWebsocketServer",
+						"script_name": "delightstack-example-server",
+					},
+					{
+						"name": "RATE_LIMITER",
+						"class_name": "RateLimiterServer",
+						"script_name": "delightstack-example-server",
+					},
+				],
+			},
+			"kv_namespaces": [{ "binding": "KV", "id": "86eb734b0be94ef6bd522185e1ef9e42" }],
+			"r2_buckets": [{ "binding": "R2", "bucket_name": "delightstack-example" }],
 			"services": [
 				{
 					"binding": "SELF",

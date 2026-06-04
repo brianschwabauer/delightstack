@@ -1,5 +1,5 @@
 #:schema node_modules/wrangler/config-schema.json
-name = "foreverfamily-server"
+name = "delightstack-example-server"
 main = "src/index.ts"
 compatibility_date = "2025-05-08"
 account_id = "92cb4bb9b2a55d24f5688f2f61864079"
@@ -59,14 +59,14 @@ id = "86eb734b0be94ef6bd522185e1ef9e42"
 # R2 Storage Buckets
 [[r2_buckets]]
 binding = "R2"
-bucket_name = "foreverfamily"
+bucket_name = "delightstack-example"
 
 
 # -------------------------------------------------------------------------------------------------
 # -------------------------------------- STAGING ENVIRONMENT --------------------------------------
 # -------------------------------------------------------------------------------------------------
 [env.staging]
-name = "foreverfamily-server-staging"
+name = "delightstack-example-server-staging"
 
 [env.staging.ai]
 binding = "AI"
@@ -100,7 +100,7 @@ instance_type = "standard-1"
 
 [[env.staging.r2_buckets]]
 binding = "R2"
-bucket_name = "foreverfamily-server-staging"
+bucket_name = "delightstack-example-staging"
 
 [[env.staging.kv_namespaces]]
 binding = "KV"
