@@ -1,0 +1,147 @@
+---
+title: Architecture
+description: The Cloudflare Workers + Durable Objects topology the Stack runs on — DO classes, bindings, migrations, and the two-worker model.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Every Stack package's server is a **Durable Object** (DO). To use one, you re-export its DO class
+from a Worker, declare it in `wrangler.toml` (with a migration), and bind it where you need it.
+
+## The two-worker model
+
+The reference setup splits into two Workers:
+
+```
+┌─────────────────────────────┐        ┌──────────────────────────────────────┐
+│  SvelteKit app worker       │        │  Backend worker                      │
+│  (your routes + UI)         │        │  hosts the Durable Object classes:   │
+│                             │  cross │   • AuthDatabaseServer   (auth)      │
+│  binds the DO classes via   │ ─────▶ │   • OrgDatabaseServer    (database)  │
+│  `script_name` (cross-      │ script │   • AppWebsocketServer   (websocket) │
+│  script Durable Objects)    │  refs  │   • RateLimiterServer    (rate-limit)│
+│                             │        │   • ImageProcessorContainer (images) │
+└─────────────────────────────┘        └──────────────────────────────────────┘
+```
+
+The **backend worker owns the DO classes + migrations**; the app worker references them with
+`script_name`. You can also run everything in a **single worker** — just declare the classes and
+migrations in that one worker instead.
+
+<Aside type="caution">
+With the two-worker model, **deploy the backend worker first**. The app worker's DO bindings
+reference classes that must already exist.
+</Aside>
+
+## 1. Re-export the Durable Object classes
+
+In your backend Worker entry (`src/index.ts`), re-export every DO class you use:
+
+```typescript
+// Stateless DOs can be re-exported directly:
+export { RateLimiterServer } from '@delightstack/rate-limiter';
+export { ImageProcessorContainer } from '@delightstack/images/worker';
+
+// The others are subclassed to inject config (secrets, schema, hooks):
+import { AuthDatabaseServer as BaseAuth } from '@delightstack/auth/worker';
+import { DatabaseServer } from '@delightstack/database/worker';
+import { WebsocketServer } from '@delightstack/websocket/worker';
+
+export class AuthDatabaseServer extends BaseAuth {
+	/* inject auth config — see the Auth guide */
+}
+export class OrgDatabaseServer extends DatabaseServer {
+	/* inject your schema — see the Database guide */
+}
+export class AppWebsocketServer extends WebsocketServer {
+	/* inject hooks — see the Realtime guide */
+}
+```
+
+<Aside>
+Stateless DOs (`RateLimiterServer`, `ImageProcessorContainer`) can be re-exported as-is. The auth,
+database, and websocket servers are subclassed so you can inject config (secrets, schema, hooks) —
+the class name you export is what goes in `wrangler.toml`.
+</Aside>
+
+## 2. Declare classes, migrations, and bindings
+
+Durable Objects backed by SQLite must be registered with a migration the first time they're added:
+
+```toml
+# wrangler.toml (backend worker)
+name = "my-app-server"
+main = "src/index.ts"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = [
+  "AuthDatabaseServer",
+  "OrgDatabaseServer",
+  "AppWebsocketServer",
+  "RateLimiterServer",
+  "ImageProcessorContainer",
+]
+
+[[durable_objects.bindings]]
+name = "AUTH"
+class_name = "AuthDatabaseServer"
+
+[[durable_objects.bindings]]
+name = "DB"
+class_name = "OrgDatabaseServer"
+
+# …WS, RATE_LIMITER, IMAGE_PROCESSOR follow the same pattern
+
+[ai]
+binding = "AI"            # required by @delightstack/ai
+
+[[kv_namespaces]]
+binding = "KV"
+id = "<your-kv-id>"
+
+[[r2_buckets]]
+binding = "R2"            # image originals + variants
+bucket_name = "<your-bucket>"
+```
+
+## 3. Bind the DOs into your app worker
+
+If your SvelteKit app is a separate Worker, bind the classes **cross-script** with `script_name`:
+
+```jsonc
+// wrangler.jsonc (app worker)
+"durable_objects": {
+  "bindings": [
+    { "name": "AUTH", "class_name": "AuthDatabaseServer", "script_name": "my-app-server" },
+    { "name": "DB", "class_name": "OrgDatabaseServer", "script_name": "my-app-server" },
+    { "name": "WS", "class_name": "AppWebsocketServer", "script_name": "my-app-server" },
+    { "name": "RATE_LIMITER", "class_name": "RateLimiterServer", "script_name": "my-app-server" }
+  ]
+}
+```
+
+Your SvelteKit server code then reaches them through `platform.env`:
+
+```typescript
+const db = platform.env.DB.get(platform.env.DB.idFromName(org_id));
+const ws = platform.env.WS.get(platform.env.WS.idFromName(org_id));
+```
+
+## Naming Durable Object instances
+
+DO classes are types; instances are addressed by ID. The convention across the Stack is one
+instance **per tenant** (org / room / user): `idFromName(org_id)` for the database and websocket,
+`idFromName(ip_or_user)` for the rate limiter. Cloudflare guarantees a single instance per ID, which
+is what gives you the single-writer model.
+
+## Compatibility
+
+- `compatibility_date` recent enough for SQLite-backed DOs and `nodejs_compat`.
+- `compatibility_flags = ["nodejs_compat"]` on the app worker (the Stripe SDK and others use node
+  builtins).
+
+## Next steps
+
+- [Quick Start](/stack/quickstart/) — run the example app, which wires all of this together
+- Pick a package from the sidebar for its full configuration

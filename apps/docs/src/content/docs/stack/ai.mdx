@@ -1,0 +1,88 @@
+---
+title: AI
+description: Chat completions, resumable streaming, and vector embeddings via Cloudflare AI Gateway, with database + WebSocket integration.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@delightstack/ai` adds AI to SvelteKit apps on Cloudflare Workers — chat completions, resumable
+streaming, vector embeddings, and tool calling, routed through **Cloudflare AI Gateway** and
+integrated with the database and realtime layers.
+
+## Features
+
+- **Chat completions** — streaming and non-streaming via AI Gateway (Workers AI `@cf/` models,
+  OpenAI, Anthropic, or any provider behind the gateway).
+- **Resumable streaming** — chunks buffer in the DO and broadcast over WebSocket; clients resume
+  from their last offset after reconnect, with no lost tokens.
+- **Vector embeddings** — alarm-based async pipeline with change detection; embeddings generate
+  automatically on create/update.
+- **Tool calling** — OpenAI-compatible function calling with streaming delta merging.
+- **Reactive `AiClient`** — Svelte 5 runes for streaming content, usage, errors, and tool calls.
+
+## Install
+
+```bash
+pnpm add @delightstack/ai
+```
+
+| Import | Use |
+| --- | --- |
+| `@delightstack/ai/server` | `aiProcessing`, `createAiHandle`, `createAiMessageHandler` |
+| `@delightstack/ai/client` | `AiClient` — reactive Svelte 5 client |
+| `@delightstack/ai/schema` | `defineAiTable`, `defineAiConversationTable` |
+
+It builds on [`database`](/stack/database/) and [`websocket`](/stack/websocket/), and needs an
+`AI` binding (Cloudflare AI Gateway) in `wrangler.toml`.
+
+## 1. Schema with embeddings
+
+```typescript
+import { defineAiTable } from '@delightstack/ai/schema';
+
+// extends a database table with embedding + embedding_status fields
+const articleTable = defineAiTable('article', (schema) => ({
+	title: schema.string().searchable(),
+	body: schema.string(),
+}), { dimensions: 1024 });
+```
+
+## 2. Server handle
+
+```typescript
+// hooks.server.ts
+import { createAiHandle } from '@delightstack/ai/server';
+
+export const aiHandle = createAiHandle({
+	getAi: (event) => event.platform.env.AI,
+	// exposes /api/ai/complete, /api/ai/stream, /api/ai/embed, /api/ai/cancel
+});
+```
+
+`createAiMessageHandler()` wires resume/cancel messages into your WebSocket server so streams survive
+page transitions and network drops.
+
+## 3. The reactive client
+
+```svelte
+<script>
+	import { AiClient } from '@delightstack/ai/client';
+	const ai = new AiClient();
+
+	async function ask() {
+		await ai.chat({ messages: [{ role: 'user', content: 'Hello!' }] });
+	}
+</script>
+
+<button onclick={ask}>Ask</button>
+<p>{ai.content}</p>
+```
+
+`ai.chat()` streams over WebSocket (resumable); `ai.complete()` returns a full result over HTTP.
+
+<Aside>
+Dual delivery: non-streaming completions return as HTTP responses; streaming returns a `stream_id`
+then delivers chunks over WebSocket. See the
+[package README](https://github.com/brianschwabauer/delightstack/tree/main/packages/ai) for tool
+calling and the embedding pipeline.
+</Aside>

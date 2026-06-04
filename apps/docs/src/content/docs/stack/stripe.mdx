@@ -1,0 +1,87 @@
+---
+title: Billing (Stripe)
+description: Stripe billing for Cloudflare Workers and SvelteKit — products, subscriptions, metered usage, webhooks, and subscription guards.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@delightstack/stripe` is Stripe billing for SvelteKit apps on Cloudflare Workers — define your
+plans and meters in code, sync them to Stripe, handle webhooks, and gate features by subscription.
+
+## Features
+
+- **Config-driven plans & meters** — declare them once with `defineBillingConfig`; sync to Stripe.
+- **Subscriptions** — checkout, subscription state, and a webhook-driven sync into your database.
+- **Metered usage** — report usage events for usage-based pricing.
+- **Webhooks** — verified webhook handling with `handleWebhook`.
+- **Subscription guards** — gate SvelteKit routes by plan/entitlement.
+
+## Install
+
+```bash
+pnpm add @delightstack/stripe stripe
+```
+
+| Import | Use |
+| --- | --- |
+| `@delightstack/stripe/server` | `defineBillingConfig`, `createBillingHandle`, `syncSubscription`, `syncAll`, `reportMeterEvent`, `handleWebhook`, `getStripe` |
+| `@delightstack/stripe/sveltekit` | `createBillingGuards` |
+| `@delightstack/stripe/client` | reactive Svelte 5 billing client |
+
+## 1. Define your billing config
+
+```typescript
+import { defineBillingConfig } from '@delightstack/stripe/server';
+
+export const billing = defineBillingConfig({
+	secret_key: env.STRIPE_SECRET_KEY,
+	plans: [
+		{ id: 'pro', name: 'Pro', price: 2000, interval: 'month', entitlements: ['premium'] },
+	],
+	meters: [
+		{ id: 'ai-tokens', name: 'AI tokens', event_name: 'ai_tokens' },
+	],
+});
+```
+
+## 2. Sync products & handle webhooks
+
+```typescript
+// hooks.server.ts
+import { createBillingHandle } from '@delightstack/stripe/server';
+
+export const billingHandle = createBillingHandle({
+	config: billing,
+	getDb: (event) => event.platform.env.DB,
+});
+```
+
+`syncAll()` pushes your plans/meters to Stripe; `handleWebhook()` verifies incoming events and
+`syncSubscription()` reconciles them into your database.
+
+## 3. Gate routes
+
+```typescript
+// +page.server.ts
+import { createBillingGuards } from '@delightstack/stripe/sveltekit';
+
+const { requirePlan } = createBillingGuards(billing);
+
+export const load = (event) => {
+	requirePlan(event, 'pro'); // redirect / 402 if not subscribed
+};
+```
+
+## 4. Report metered usage
+
+```typescript
+import { reportMeterEvent } from '@delightstack/stripe/server';
+
+await reportMeterEvent(billing, { meter: 'ai-tokens', value: 1200, customer });
+```
+
+<Aside>
+Webhook secrets and the publishable key are set as worker secrets / vars
+(`STRIPE_SECRET_KEY`, `PUBLIC_STRIPE_PUBLISHABLE_KEY`). See the
+[package README](https://github.com/brianschwabauer/delightstack/tree/main/packages/stripe).
+</Aside>

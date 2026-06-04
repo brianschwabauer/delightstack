@@ -1,0 +1,74 @@
+---
+title: Images
+description: Cloudflare Container–based image processing — optimized variants, ThumbHash placeholders, EXIF, color extraction, and face-aware crops.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@delightstack/images` is image processing for Cloudflare Workers. Upload an image and get back
+optimized variants, rich metadata, a ThumbHash placeholder, extracted colors, and everything you
+need to display images beautifully — powered by **Sharp/libvips** running in a **Cloudflare
+Container**.
+
+## Features
+
+- **Optimized variants** — resize and encode to AVIF, WebP, JPEG, or PNG with quality/fit control.
+- **Rich metadata** — dimensions, EXIF (orientation, GPS, date), color space, ICC profile.
+- **ThumbHash placeholders** — ~33-char hash → blurred preview with transparency + aspect ratio.
+- **Color extraction** — background and accent color in OKLCH for native CSS.
+- **Face-aware crops** — MediaPipe BlazeFace for smart square avatars.
+- **Special formats** — SVG sanitization, PDF first-page render, animated GIF/WebP/APNG.
+- **CDN serving** — a SvelteKit hook with ETag/304 and immutable caching.
+
+## How it works
+
+The package has two halves: **worker-side code** (runs in your Worker / Database DO) and a **Docker
+container** (`ImageProcessorContainer`, runs in Cloudflare Containers with native libraries). The
+worker stores originals/variants in **R2**; the container does the heavy lifting and returns a
+`multipart/mixed` response of metadata + binary variants.
+
+```bash
+pnpm add @delightstack/images
+```
+
+| Import | Use |
+| --- | --- |
+| `@delightstack/images/worker` | `ImageProcessorContainer` — the Container Durable Object |
+| `@delightstack/images` | `imageProcessing`, `createImageHandle`, `defineImageTable`, `toImageProps` |
+
+Needs an `R2` bucket and the `ImageProcessorContainer` declared in `wrangler.toml`, plus the
+container `Dockerfile` (shipped in the package) — see [Architecture](/stack/architecture/).
+
+## Two modes
+
+- **Mode 1 — database-backed (async):** `imageProcessing()` stores the upload, schedules a DO alarm,
+  and returns immediately; the alarm processes and updates the record. Best for user uploads.
+- **Mode 2 — standalone (sync):** call the processor directly and get variants back in the response.
+
+## CDN hook + display
+
+```typescript
+// hooks.server.ts — serve variants from R2 with caching
+import { createImageHandle } from '@delightstack/images';
+
+export const imageHandle = createImageHandle({
+	getBucket: (event) => event.platform.env.R2,
+});
+```
+
+```svelte
+<script>
+	import { Image } from '@delightstack/components/media';
+	import { toImageProps } from '@delightstack/images';
+</script>
+
+<!-- background color → ThumbHash blur-up → full image -->
+<Image {...toImageProps(record)} alt="…" />
+```
+
+<Aside>
+`toImageProps()` feeds the [`Image`](/components/media/image/) component its background color,
+ThumbHash, and variant URLs for three-tier progressive loading. See the
+[package README](https://github.com/brianschwabauer/delightstack/tree/main/packages/images) for
+watermarks, face cropping, and container deployment.
+</Aside>

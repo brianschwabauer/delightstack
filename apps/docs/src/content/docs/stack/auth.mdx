@@ -1,0 +1,122 @@
+---
+title: Auth
+description: Full-stack authentication for SvelteKit on Cloudflare Workers — JWT sessions, Argon2id, OAuth, magic links, multi-org, and route guards.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+`@delightstack/auth` is full-stack authentication for SvelteKit apps on Cloudflare Workers —
+email/password, magic links, OAuth providers, multi-org, invitations, permissions, and even an
+OAuth 2.0 server, all backed by a single Durable Object.
+
+## Features
+
+- **Email/password** with Argon2id (WASM) hashing, password reset, and change.
+- **Magic links** — passwordless sign-in via short-lived JWTs.
+- **OAuth providers** — Google, GitHub, or any OAuth 2.0 provider; link multiple to one account.
+- **Multi-organization** — users belong to many orgs with bitwise-encoded permissions; org switching,
+  member management, and invitations built in.
+- **Reactive `AuthClient`** — Svelte 5 runes, auto-refresh, nested `.api` methods.
+- **Route guards** — `requireAuth`, `requireOrg`, `requirePermission`, `requireEntitlement`.
+- **OAuth 2.0 server** — be a provider: app registration, auth codes, access/refresh tokens.
+
+## Install
+
+```bash
+pnpm add @delightstack/auth
+```
+
+| Import | Use |
+| --- | --- |
+| `@delightstack/auth/worker` | `AuthDatabaseServer` — the Durable Object class |
+| `@delightstack/auth/server` | `defineAuthConfig`, `createAuthHandle`, server types |
+| `@delightstack/auth/sveltekit` | route guards + cookie helpers |
+| `@delightstack/auth/client` | `AuthClient` — reactive Svelte 5 client |
+
+## 1. Define your config
+
+```typescript
+// src/lib/auth.config.ts
+import { defineAuthConfig } from '@delightstack/auth/server';
+
+export const authConfig = defineAuthConfig({
+	secret: env.JWT_KEY_SECRET,
+	issuer: 'my-app',
+	permissions: ['org:read', 'org:write', 'org:admin'] as const,
+	entitlements: ['premium'] as const,
+	email: {
+		sendEmail: async ({ to, subject, html, link, type }) => {
+			// send via Resend / SES / etc.
+		},
+	},
+	hooks: {
+		onSignUp: async ({ result, method }) => {
+			/* welcome email, default resources, … */
+		},
+	},
+});
+```
+
+## 2. Register the Durable Object
+
+In your backend Worker, subclass the DO to inject the config, then declare it in `wrangler.toml`
+(see [Architecture](/stack/architecture/)):
+
+```typescript
+import { AuthDatabaseServer as BaseAuth } from '@delightstack/auth/worker';
+import { authConfig } from './auth.config';
+
+export class AuthDatabaseServer extends BaseAuth {
+	constructor(ctx, env) {
+		super(ctx, env, authConfig);
+	}
+}
+```
+
+## 3. Wire the SvelteKit handle
+
+```typescript
+// hooks.server.ts
+import { createAuthHandle } from '@delightstack/auth/server';
+import { authConfig } from '$lib/auth.config';
+
+export const handle = createAuthHandle({
+	config: authConfig,
+	getDb: (event) => event.platform.env.AUTH,
+});
+```
+
+The handle extracts and auto-refreshes the JWT, resolves the active org, populates `event.locals`,
+serves `/api/auth/*` routes, and enforces CSRF on mutations.
+
+## 4. Guard routes
+
+```typescript
+// +page.server.ts
+import { requireAuth, requirePermission } from '@delightstack/auth/sveltekit';
+
+export const load = async (event) => {
+	const auth = requireAuth(event); // redirects if signed out
+	requirePermission(event, 'org:admin'); // 403 if missing
+	return { user: auth.user };
+};
+```
+
+## 5. The reactive client
+
+```svelte
+<script>
+	import { AuthClient } from '@delightstack/auth/client';
+	const auth = new AuthClient();
+</script>
+
+{#if auth.is_authenticated}
+	<p>Hello, {auth.user?.name}</p>
+	<button onclick={() => auth.api.signOut()}>Sign out</button>
+{/if}
+```
+
+<Aside>
+The full README covers the OAuth 2.0 server, invitations, preferences cookies, and every hook —
+see the [package README](https://github.com/brianschwabauer/delightstack/tree/main/packages/auth).
+</Aside>

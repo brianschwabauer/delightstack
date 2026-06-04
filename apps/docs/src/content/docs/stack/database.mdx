@@ -1,0 +1,103 @@
+---
+title: Database
+description: Type-safe reactive SQLite on Cloudflare Durable Objects, with full-text + vector search, Zod validation, and automatic migrations.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@delightstack/database` is a type-safe data layer for Cloudflare Durable Objects with built-in
+full-text & vector search, runtime validation, automatic migrations, and a reactive Svelte 5 client.
+
+## Features
+
+- **Declarative schema** — fluent TypeScript API; field types and validators inferred at compile time.
+- **Full-text & vector search** — built-in [Orama](https://orama.com); mark fields `.searchable()`.
+- **Automatic migrations** — new columns are added when you change the schema; no migration files.
+- **Zod validation** — every `create()`/`update()` is validated at runtime.
+- **Transactions** — batch operations atomically.
+- **Incremental sync** — `sync()` returns only changes since a timestamp for client mirroring.
+- **Reactive client** — `DatabaseClient` gives reactive entity state, live search, IndexedDB
+  caching, and optimistic updates, all off-thread in a SharedWorker.
+
+## Install
+
+```bash
+pnpm add @delightstack/database
+```
+
+| Import | Use |
+| --- | --- |
+| `@delightstack/database` | `Database` — the schema builder |
+| `@delightstack/database/worker` | `DatabaseServer` — the Durable Object class |
+| `@delightstack/database/server` | `createDatabaseHandle`, `SqlServer` (raw SQL) |
+| `@delightstack/database/client` | `DatabaseClient` — reactive Svelte 5 client |
+
+## 1. Define your schema
+
+```typescript
+import { Database } from '@delightstack/database';
+
+const postsTable = Database.table('post', (schema) => ({
+	id: schema.primaryKey(),
+	title: schema.string().searchable(),
+	body: schema.string().searchable(),
+	author_id: schema.foreignKey({ type: 'string', table: 'user', column: 'id', on_delete: 'CASCADE' }),
+	tags: schema.array(schema.string()).searchable().optional(),
+	published: schema.boolean().default(false),
+	created_at: schema.string().datetime(),
+}));
+```
+
+Root-level scalars become real SQLite columns; nested objects/arrays are serialized into a JSON
+catch-all column and transparently rehydrated on read.
+
+## 2. Register the Durable Object
+
+Subclass `DatabaseServer` with your tables and register it in `wrangler.toml`
+(see [Architecture](/stack/architecture/)):
+
+```typescript
+import { DatabaseServer } from '@delightstack/database/worker';
+
+export class OrgDatabaseServer extends DatabaseServer {
+	tables = [postsTable /* … */];
+}
+```
+
+## 3. Query from the server
+
+```typescript
+const db = platform.env.DB.get(platform.env.DB.idFromName(org_id));
+
+await db.create('post', { title: 'Hello', body: '…', author_id: 'u_1' });
+const results = await db.search('post', { term: 'hello' }); // full-text
+const recent = await db.list('post', { limit: 20 });
+```
+
+For declarative CRUD routes, mount `createDatabaseHandle()` in your SvelteKit `handle`.
+
+## 4. The reactive client
+
+```svelte
+<script>
+	import { DatabaseClient } from '@delightstack/database/client';
+
+	const db = new DatabaseClient({ tables, db_name: `app:${org_id}`, fetch });
+	const posts = db.entity('post'); // reactive $state
+</script>
+
+{#each posts.list as post}
+	<article>{post.title}</article>
+{/each}
+```
+
+<Aside type="tip">
+Pair the client with [Realtime](/stack/websocket/) via `ws.databaseHooks()` so entity changes sync
+live across tabs and clients.
+</Aside>
+
+<Aside>
+Need raw SQL? `SqlServer` (from `@delightstack/database/server`) gives you full control. See the
+[package README](https://github.com/brianschwabauer/delightstack/tree/main/packages/database) for
+search tuning, transactions, and sync.
+</Aside>

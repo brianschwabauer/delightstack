@@ -1,0 +1,79 @@
+---
+title: Rate Limiter
+description: Token-bucket rate limiting for Cloudflare Workers as a Durable Object, with zero runtime dependencies.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@delightstack/rate-limiter` is a token-bucket rate limiter implemented as a Durable Object. Pick a
+key (IP, user ID, API key), and the single-instance guarantee handles concurrency for you. Zero
+runtime dependencies — it only imports `cloudflare:workers`.
+
+## Features
+
+- **Token bucket** — a bucket refills at a constant rate up to a max; requests consume tokens and are
+  rejected when empty.
+- **Per-key buckets** — one DO instance manages many independent buckets (`login`, `api`, `upload`)
+  so you can limit different actions separately.
+- **Native DO RPC** — `consume()`, `check()`, `getStatus()`, `setOptions()`, `reset()` called
+  directly, no fetch handlers.
+- **Header-ready status** — `getStatus()` returns `remaining`, `limit`, and `reset_in_ms`.
+- **In-memory only** — state isn't persisted; limits reset if the DO is evicted (ideal for rate
+  limiting — no storage latency, transient state is fine).
+
+## Install
+
+```bash
+pnpm add @delightstack/rate-limiter
+```
+
+`@delightstack/rate-limiter` exports a single entry: `RateLimiterServer`.
+
+## 1. Re-export and bind the Durable Object
+
+```typescript
+export { RateLimiterServer } from '@delightstack/rate-limiter';
+```
+
+```toml
+# wrangler.toml
+[[durable_objects.bindings]]
+name = "LIMITER"
+class_name = "RateLimiterServer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiterServer"]
+```
+
+## 2. Use it
+
+Address one instance **per identity** with `idFromName()` — an IP for per-IP limiting, a user ID for
+per-user, or a fixed string for a global limit:
+
+```typescript
+const id = env.LIMITER.idFromName(ip_address);
+const limiter = env.LIMITER.get(id);
+
+// configure the bucket for this key (once)
+await limiter.setOptions('api', { limit: 100, refill_per_second: 10 });
+
+const allowed = await limiter.consume('api', 1);
+if (!allowed) {
+	const status = await limiter.getStatus('api');
+	return new Response('Too Many Requests', {
+		status: 429,
+		headers: {
+			'X-RateLimit-Limit': String(status.limit),
+			'X-RateLimit-Remaining': String(status.remaining),
+			'Retry-After': String(Math.ceil(status.reset_in_ms / 1000)),
+		},
+	});
+}
+```
+
+<Aside>
+The same instance holds separate buckets per `key`, so one limiter can enforce different limits for
+`login`, `api`, and `upload` at once. See the
+[package README](https://github.com/brianschwabauer/delightstack/tree/main/packages/rate-limiter).
+</Aside>

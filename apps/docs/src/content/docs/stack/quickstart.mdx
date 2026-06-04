@@ -1,0 +1,83 @@
+---
+title: Quick Start
+description: Run the Delightstack example app — a full-stack SvelteKit + Cloudflare app wiring every Stack package together.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The fastest way to see the Stack in action is the **example app** — a SvelteKit app on Cloudflare
+that wires together auth, database, realtime, AI, billing, images, and rate limiting. It's the
+canonical reference for how the packages fit together.
+
+<Aside type="tip">
+Reading the example app's `hooks.server.ts`, `src/lib/clients.ts`, and the two `wrangler` configs is
+the single best way to learn the Stack.
+</Aside>
+
+## Run it locally
+
+<Steps>
+
+1. **Clone and install:**
+
+   ```bash
+   git clone https://github.com/brianschwabauer/delightstack.git
+   cd delightstack
+   pnpm install
+   ```
+
+2. **Start the example app** (runs the SvelteKit dev server and a `wrangler dev` worker with the
+   real Durable Object bindings):
+
+   ```bash
+   pnpm dev:example
+   ```
+
+   The SvelteKit app runs on `:5174` and forwards to the backend worker on `:8787`.
+
+</Steps>
+
+## How it's wired
+
+The example app uses the **two-worker model** from the [Architecture](/stack/architecture/) page:
+
+- **`apps/example-app/server`** — the backend worker. Re-exports the five Durable Object classes
+  (`AuthDatabaseServer`, `OrgDatabaseServer`, `AppWebsocketServer`, `RateLimiterServer`,
+  `ImageProcessorContainer`) and declares them with migrations + the image-processing container in
+  `wrangler.toml`.
+- **`apps/example-app`** — the SvelteKit app. Binds those DO classes cross-script and uses them from
+  `hooks.server.ts`:
+  - `createAuthHandle()` resolves the session and populates `event.locals`.
+  - `createWebsocketHandle()` upgrades realtime connections.
+  - The DB/WS/rate-limiter DOs are reached via `platform.env.*`.
+
+A typical request flow:
+
+```typescript
+// hooks.server.ts (simplified)
+import { sequence } from '@sveltejs/kit/hooks';
+import { createAuthHandle } from '@delightstack/auth/server';
+import { createWebsocketHandle } from '@delightstack/websocket/server';
+
+const auth = createAuthHandle({ config: authConfig, getDb: (e) => e.platform.env.AUTH });
+const ws = createWebsocketHandle({ getServer: (e) => e.platform.env.WS });
+
+export const handle = sequence(auth, ws, appHandle);
+```
+
+## Deploying
+
+The example app deploys to Cloudflare. Build artifacts come from `pnpm build`; deploy the **backend
+worker first**, then the app worker (its DO bindings reference the backend). See the per-package
+guides for the secrets and resources (KV, R2, AI Gateway) each one needs.
+
+<Aside type="caution">
+The Stack packages are **infrastructure, not drop-ins** — they need DO bindings, migrations, and (for
+some) KV/R2/AI Gateway. Budget time for the Cloudflare wiring; the example app shows a working setup.
+</Aside>
+
+## Next steps
+
+- [Architecture](/stack/architecture/) — the topology in detail
+- [Auth](/stack/auth/) — usually the first package to wire up
+- [Database](/stack/database/) — reactive data + search

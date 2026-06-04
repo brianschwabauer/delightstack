@@ -44,6 +44,26 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'The Stack',
+					items: [
+						{ label: 'Overview', slug: 'stack/overview' },
+						{ label: 'Architecture', slug: 'stack/architecture' },
+						{ label: 'Quick Start', slug: 'stack/quickstart' },
+						{
+							label: 'Packages',
+							items: [
+								{ label: 'Auth', slug: 'stack/auth' },
+								{ label: 'Database', slug: 'stack/database' },
+								{ label: 'Realtime', slug: 'stack/websocket' },
+								{ label: 'AI', slug: 'stack/ai' },
+								{ label: 'Billing', slug: 'stack/stripe' },
+								{ label: 'Images', slug: 'stack/images' },
+								{ label: 'Rate Limiter', slug: 'stack/rate-limiter' },
+							],
+						},
+					],
+				},
+				{
 					label: 'Guides',
 					items: [
 						{ label: 'Design Tokens', slug: 'guides/design-tokens' },

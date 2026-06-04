@@ -5,7 +5,7 @@ import { LinkButton } from '@astrojs/starlight/components';
 // readFileSync, which can't find src assets relative to the bundled output chunk.
 import logoRaw from '../assets/delightstack_logo_adaptive.svg?raw';
 
-const features = ['55 components', 'Light & dark mode', 'Fully accessible', 'Zero runtime deps'];
+const features = ['55 components', 'Edge-native backend', 'Built for Cloudflare', 'Fully typed'];
 
 // Inlining the SVG (vs. <img>) is what lets the text's `currentColor` follow the
 // theme. The icon keeps its gradient; the text colour is driven by the CSS below
@@ -22,8 +22,8 @@ const logo = logoRaw.slice(logoRaw.indexOf('<svg')).replace(/ id="Artboard2"/g, 
 	</h1>
 
 	<p class="tagline">
-		A polished, opinionated Svelte&nbsp;5 component library focused on delightful user experiences —
-		crafted with attention to detail, thoughtful micro-animations, and a cohesive visual language.
+		Svelte&nbsp;5 components and an edge-native Cloudflare backend — auth, database, realtime, AI,
+		billing, and images. Two products, one design language. Use either, or both.
 	</p>
 
 	<div class="actions">

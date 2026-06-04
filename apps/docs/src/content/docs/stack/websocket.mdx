@@ -1,0 +1,86 @@
+---
+title: Realtime (WebSocket)
+description: Room-scoped realtime for SvelteKit on Cloudflare — reactive presence, typed events, hibernation, and live database sync.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@delightstack/websocket` is a realtime layer for SvelteKit on Cloudflare Workers — room-scoped
+connections, reactive presence, typed custom events, and database sync, backed by one Durable Object
+per room with hibernation support.
+
+## Features
+
+- **Room-scoped** — one Durable Object per room/org; connections in a room share an instance for
+  broadcast and presence.
+- **Hibernation API** — the DO sleeps between messages and recovers session state on wake.
+- **SharedWorker multiplexing** — a single SharedWorker holds one WebSocket per room across all tabs.
+- **Reactive presence** — `ws.sessions` is a Svelte 5 `$state` array, always current.
+- **Typed events & metadata** — pass a custom event map and session-metadata type as generics.
+- **Auto-reconnect** — exponential backoff with jitter and client ping keep-alive.
+- **Database sync** — `ws.databaseHooks()` wires entity changes into `DatabaseClient`.
+
+## Install
+
+```bash
+pnpm add @delightstack/websocket
+```
+
+| Import | Use |
+| --- | --- |
+| `@delightstack/websocket/worker` | `WebsocketServer` — the Durable Object class |
+| `@delightstack/websocket/server` | `createWebsocketHandle` — SvelteKit upgrade handle |
+| `@delightstack/websocket/client` | `WebsocketClient` — reactive Svelte 5 client |
+
+## 1. Register the Durable Object
+
+```typescript
+import { WebsocketServer } from '@delightstack/websocket/worker';
+
+export class AppWebsocketServer extends WebsocketServer {
+	// optional: onConnect / onDisconnect / onMessage hooks
+}
+```
+
+Declare it in `wrangler.toml` (see [Architecture](/stack/architecture/)).
+
+## 2. Wire the SvelteKit handle
+
+```typescript
+// hooks.server.ts
+import { createWebsocketHandle } from '@delightstack/websocket/server';
+
+export const websocketHandle = createWebsocketHandle({
+	getServer: (event) => event.platform.env.WS,
+	// authorizes via @delightstack/auth locals by default
+});
+```
+
+The handle intercepts `/api/websocket` upgrade requests, authorizes them, and forwards to the DO for
+the connecting room.
+
+## 3. Connect from the client
+
+```svelte
+<script>
+	import { WebsocketClient } from '@delightstack/websocket/client';
+
+	const ws = new WebsocketClient();
+	await ws.connect(org_id);
+
+	ws.on('session:connected', (msg) => console.log(msg.meta?.user_name));
+</script>
+
+<p>{ws.sessions.length} online</p>
+{#each ws.sessions as session}
+	<span>{session.meta?.user_name}</span>
+{/each}
+```
+
+`ws.sessions` updates automatically from `session:list`, `session:connected`, and
+`session:disconnected` events.
+
+<Aside type="tip">
+Combine with [Database](/stack/database/): pass `ws.databaseHooks()` to your `DatabaseClient` so
+entity changes broadcast to every connected client and keep local search indexes in sync.
+</Aside>

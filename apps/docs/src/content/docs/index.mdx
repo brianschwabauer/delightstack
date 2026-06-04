@@ -1,6 +1,6 @@
 ---
 title: DelightStack
-description: A polished, opinionated Svelte 5 component library focused on delightful user experiences.
+description: Svelte 5 components and an edge-native Cloudflare backend — use either, or both.
 template: splash
 # The hero is rendered by the custom Hero override (see astro.config.mjs).
 # An (otherwise empty) hero block is required so Starlight renders the hero
@@ -8,38 +8,30 @@ template: splash
 hero: {}
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 import SectionHeading from '../../components/SectionHeading.astro';
 import CategoryCard from '../../components/CategoryCard.astro';
 
 <SectionHeading
-	title="Why DelightStack?"
-	subtitle="Everything you need to ship polished, accessible interfaces — without the boilerplate."
+	title="Two products, one design language"
+	subtitle="A polished Svelte 5 component library and an edge-native Cloudflare backend. They're built to work together — and each works perfectly on its own."
 />
 
 <CardGrid>
-	<Card title="55 Components" icon="puzzle">
-		A comprehensive library covering actions, display, feedback, forms, media, and navigation — everything you need to build modern web apps.
-	</Card>
-	<Card title="Svelte 5 Native" icon="rocket">
-		Built from the ground up with Svelte 5 runes (`$props`, `$state`, `$derived`, `$effect`), snippets, and the `{@attach}` directive.
-	</Card>
-	<Card title="Dark Mode Built-in" icon="moon">
-		Every component supports light and dark mode out of the box using CSS `light-dark()` — no JavaScript theme switching required.
-	</Card>
-	<Card title="Accessible" icon="approve-check">
-		ARIA attributes, keyboard navigation, focus management, and `prefers-reduced-motion` support are built into every component.
-	</Card>
-	<Card title="Design System Included" icon="seti:css">
-		A complete set of CSS custom properties for colors, spacing, typography, shadows, and animations — fully customizable.
-	</Card>
-	<Card title="Zero Runtime Dependencies" icon="star">
-		Components use plain CSS with modern features like `color-mix()`, container queries, and relative color syntax. No CSS-in-JS overhead.
-	</Card>
+	<LinkCard
+		title="Components →"
+		href="/getting-started/introduction/"
+		description="55 accessible, delightful Svelte 5 components — actions, display, feedback, forms, media, and navigation. Drop them into any Svelte 5 / Vite app."
+	/>
+	<LinkCard
+		title="The Stack →"
+		href="/stack/overview/"
+		description="Edge-native backend for Cloudflare Workers — auth, reactive database, realtime, AI, billing, and image processing, built on Durable Objects."
+	/>
 </CardGrid>
 
 <SectionHeading
-	title="Component Categories"
+	title="Components"
 	subtitle="55 components across six categories. Pick one to start browsing — every card links straight in."
 />
 
@@ -62,4 +54,18 @@ import CategoryCard from '../../components/CategoryCard.astro';
 	<CategoryCard title="Navigation" icon="navigation" href="/components/navigation/tabs/">
 		Tabs, drawers, menus, breadcrumbs, pagination, steps, and bottom sheets.
 	</CategoryCard>
+</CardGrid>
+
+<SectionHeading
+	title="The Stack"
+	subtitle="Edge-native backend packages for Cloudflare Workers, built on Durable Objects. Adopt one, or all of them."
+/>
+
+<CardGrid>
+	<LinkCard title="Auth" href="/stack/auth/" description="JWT sessions, Argon2id, OAuth, magic links, multi-org, and SvelteKit guards." />
+	<LinkCard title="Database" href="/stack/database/" description="Reactive SQLite on Durable Objects with full-text + vector search and live sync." />
+	<LinkCard title="Realtime" href="/stack/websocket/" description="Room-scoped WebSockets with reactive presence, typed events, and DB sync." />
+	<LinkCard title="AI" href="/stack/ai/" description="Chat completions, resumable streaming, and vector embeddings via AI Gateway." />
+	<LinkCard title="Billing" href="/stack/stripe/" description="Stripe subscriptions, metered usage, webhooks, and subscription guards." />
+	<LinkCard title="Images" href="/stack/images/" description="Variants, ThumbHash, EXIF, and face-aware crops via Cloudflare Containers." />
 </CardGrid>

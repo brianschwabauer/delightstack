@@ -1,0 +1,55 @@
+---
+title: The Stack — Overview
+description: An edge-native backend for Cloudflare Workers — auth, database, realtime, AI, billing, and images, built on Durable Objects.
+---
+
+import { Card, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+The **Delightstack Stack** is a set of backend packages for building full-stack apps on
+**Cloudflare Workers**. Each package is edge-native, built on **Durable Objects**, and designed to
+work together — but every one of them stands on its own.
+
+<Aside type="note">
+The Stack is a separate product from the [component library](/getting-started/introduction/). You
+can use the components without the backend, the backend without the components, or both together.
+</Aside>
+
+## The packages
+
+<CardGrid>
+	<LinkCard title="@delightstack/auth" href="/stack/auth/" description="JWT sessions, Argon2id password hashing, OAuth, magic links, multi-org, invitations, and SvelteKit route guards." />
+	<LinkCard title="@delightstack/database" href="/stack/database/" description="Type-safe reactive SQLite on Durable Objects, with full-text + vector search (Orama), Zod validation, and automatic migrations." />
+	<LinkCard title="@delightstack/websocket" href="/stack/websocket/" description="Room-scoped realtime with reactive presence, typed events, hibernation, and live database sync." />
+	<LinkCard title="@delightstack/ai" href="/stack/ai/" description="Chat completions, resumable streaming over WebSocket, and async vector embeddings via Cloudflare AI Gateway." />
+	<LinkCard title="@delightstack/stripe" href="/stack/stripe/" description="Stripe billing — products, subscriptions, metered usage, webhooks, and subscription guards." />
+	<LinkCard title="@delightstack/images" href="/stack/images/" description="Image processing via Cloudflare Containers — variants, ThumbHash, EXIF, color extraction, and face-aware crops." />
+	<LinkCard title="@delightstack/rate-limiter" href="/stack/rate-limiter/" description="Token-bucket rate limiting as a Durable Object, with zero runtime dependencies." />
+</CardGrid>
+
+## What they share
+
+- **Durable Objects everywhere.** Each package's server lives in a Durable Object, giving you a
+  **single-writer model** — one instance handles all writes for a given key, so there are no race
+  conditions. SQLite provides durable, transactional storage inside the DO.
+- **Edge-native.** No external database, queue, or cache to provision. Everything runs on
+  Cloudflare's network, close to your users.
+- **Reactive Svelte 5 clients.** `auth`, `database`, `websocket`, `ai`, and `stripe` ship a
+  client built on Svelte 5 runes (`$state`/`$derived`) with off-thread workers and optimistic updates.
+- **SvelteKit handles.** Most packages expose a `create*Handle()` that plugs into SvelteKit's
+  `handle` hook, wiring API routes, auth, and CSRF for you.
+- **`DelightError` for errors.** Every package throws the single `DelightError` class from
+  `@delightstack/utilities` for consistent, serializable error responses.
+
+## Not drop-in libraries — infrastructure
+
+Unlike the component library, these packages assume a specific **Cloudflare Workers + Durable
+Objects topology**: you re-export the DO classes from a Worker, declare them in `wrangler.toml`
+with migrations, and bind them into your app. The [Architecture](/stack/architecture/) page explains
+that wiring, and the [example app](https://github.com/brianschwabauer/delightstack/tree/main/apps/example-app)
+is the canonical reference for putting it all together.
+
+## Next steps
+
+- [Architecture](/stack/architecture/) — Durable Object topology, bindings, and migrations
+- [Quick Start](/stack/quickstart/) — stand up the example app end-to-end
+- Pick a package from the sidebar to go deep
