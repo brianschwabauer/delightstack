@@ -509,7 +509,7 @@
 	.file-upload.skeleton .dropzone,
 	.file-upload.skeleton .avatar-upload,
 	.file-upload.skeleton .label {
-		background: var(--c-bg-4, hsl(0 0% 90%));
+		background: var(--color-bg-4, hsl(0 0% 90%));
 		color: transparent;
 		border-color: transparent;
 		border-radius: var(--radius-2, 4px);
@@ -533,14 +533,14 @@
 	.label {
 		font-weight: 600;
 		font-size: 0.875em;
-		color: var(--c-text, inherit);
+		color: var(--color-text, inherit);
 		line-height: 1.4;
 	}
 
 	/* Dropzone variant */
 	.dropzone {
 		position: relative;
-		border: 2px dashed var(--color-border, var(--c-outline, hsl(0 0% 80%)));
+		border: 2px dashed var(--color-outline, hsl(0 0% 80%));
 		border-radius: var(--radius-md, var(--radius-3, 8px));
 		padding: 2rem;
 		text-align: center;
@@ -563,20 +563,20 @@
 	}
 
 	.dropzone:hover {
-		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		border-color: var(--color-action, hsl(220 70% 55%));
 		transition: none;
 	}
 
 	.dropzone:focus-visible {
-		outline: 2px solid var(--c-outline-active, currentColor);
+		outline: 2px solid var(--color-outline-active, currentColor);
 		outline-offset: 2px;
 	}
 
 	.dropzone.drag-over {
-		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		border-color: var(--color-action, hsl(220 70% 55%));
 		background: color-mix(
 			in oklch,
-			var(--color-action, var(--c-action, hsl(220 70% 55%))) 5%,
+			var(--color-action, hsl(220 70% 55%)) 5%,
 			transparent
 		);
 		transition: none;
@@ -590,24 +590,24 @@
 	.upload-icon {
 		width: 2em;
 		height: 2em;
-		color: var(--c-text-2, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 	}
 
 	.dropzone-text {
 		margin: 0;
-		color: var(--c-text-2, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 		font-size: 0.9em;
 	}
 
 	.browse-link {
-		color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		color: var(--color-action, hsl(220 70% 55%));
 		text-decoration: underline;
 		font-weight: 500;
 	}
 
 	.dropzone-hint {
 		margin: 0;
-		color: var(--c-text-3, hsl(0 0% 60%));
+		color: var(--color-text-disabled, hsl(0 0% 60%));
 		font-size: 0.75em;
 	}
 
@@ -618,7 +618,7 @@
 	.compact-wrapper.drag-over :global(.button) {
 		--color-bg-active: color-mix(
 			in oklch,
-			var(--color-action, var(--c-action, hsl(220 70% 55%))) 8%,
+			var(--color-action, hsl(220 70% 55%)) 8%,
 			transparent
 		);
 	}
@@ -637,7 +637,7 @@
 		overflow: hidden;
 		position: relative;
 		cursor: pointer;
-		border: 2px dashed var(--color-border, var(--c-outline, hsl(0 0% 80%)));
+		border: 2px dashed var(--color-outline, hsl(0 0% 80%));
 		background: light-dark(
 			var(--color-bg-subtle, #f5f5f5),
 			var(--color-bg-subtle, #1a1a1a)
@@ -648,17 +648,17 @@
 	}
 
 	.avatar-upload:hover {
-		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		border-color: var(--color-action, hsl(220 70% 55%));
 		transition: none;
 	}
 
 	.avatar-upload:focus-visible {
-		outline: 2px solid var(--c-outline-active, currentColor);
+		outline: 2px solid var(--color-outline-active, currentColor);
 		outline-offset: 2px;
 	}
 
 	.avatar-upload.drag-over {
-		border-color: var(--color-action, var(--c-action, hsl(220 70% 55%)));
+		border-color: var(--color-action, hsl(220 70% 55%));
 		transition: none;
 	}
 
@@ -681,7 +681,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--c-text-2, var(--color-text-muted, hsl(0 0% 55%)));
+		color: var(--color-text-muted, hsl(0 0% 55%));
 	}
 	.avatar-placeholder svg {
 		width: 40%;
@@ -748,7 +748,7 @@
 
 	.file-name {
 		font-size: 0.875em;
-		color: var(--c-text, inherit);
+		color: var(--color-text, inherit);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -756,7 +756,7 @@
 
 	.file-size {
 		font-size: 0.75em;
-		color: var(--c-text-2, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 	}
 
 	.remove-button {
@@ -766,7 +766,7 @@
 		padding: 0.25rem;
 		border: none;
 		background: none;
-		color: var(--c-text-2, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 		cursor: pointer;
 		border-radius: var(--radius-sm, var(--radius-2, 4px));
 		transition:
@@ -776,26 +776,26 @@
 	}
 
 	.remove-button:hover {
-		color: var(--c-error, hsl(0 70% 55%));
-		background: color-mix(in oklch, var(--c-error, hsl(0 70% 55%)) 10%, transparent);
+		color: var(--color-error, hsl(0 70% 55%));
+		background: color-mix(in oklch, var(--color-error, hsl(0 70% 55%)) 10%, transparent);
 		transition: none;
 	}
 
 	.remove-button:focus-visible {
-		outline: 2px solid var(--c-outline-active, currentColor);
+		outline: 2px solid var(--color-outline-active, currentColor);
 		outline-offset: 2px;
 	}
 
 	/* Error state */
 	.has-error .dropzone,
 	.has-error .avatar-upload {
-		border-color: var(--c-error, hsl(0 70% 55%));
+		border-color: var(--color-error, hsl(0 70% 55%));
 	}
 
 	.error-message {
 		margin: 0;
 		font-size: 0.8em;
-		color: var(--c-error, hsl(0 70% 55%));
+		color: var(--color-error, hsl(0 70% 55%));
 		line-height: 1.4;
 	}
 </style>

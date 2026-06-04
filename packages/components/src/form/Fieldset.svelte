@@ -198,15 +198,15 @@
 
 	/* Bordered style */
 	.fieldset.bordered {
-		border: 1px solid var(--c-outline, var(--color-outline, hsl(0 0% 80%)));
+		border: 1px solid var(--color-outline, hsl(0 0% 80%));
 	}
 
 	/* Error state */
 	.fieldset.has-error {
-		border-color: var(--c-error, var(--color-error, hsl(0 70% 55%)));
+		border-color: var(--color-error, hsl(0 70% 55%));
 	}
 	.fieldset.has-error .legend-text {
-		color: var(--c-error, var(--color-error, hsl(0 70% 55%)));
+		color: var(--color-error, hsl(0 70% 55%));
 	}
 
 	/* Disabled */
@@ -232,7 +232,7 @@
 		height: 1em;
 		width: 9em;
 		border-radius: var(--radius-2, 4px);
-		background-color: var(--c-bg-4, var(--color-bg-4, hsl(0 0% 90%)));
+		background-color: var(--color-bg-4, hsl(0 0% 90%));
 		background-image: linear-gradient(
 			100deg,
 			transparent 30%,
@@ -267,7 +267,7 @@
 		gap: 0.5em;
 		font-weight: 600;
 		font-size: 1em;
-		color: var(--c-text, var(--color-text, inherit));
+		color: var(--color-text, inherit);
 		padding: 0 0.4em;
 		line-height: 1.4;
 		border: none;
@@ -282,12 +282,12 @@
 		border-radius: var(--radius-2, 4px);
 	}
 	.legend.collapsible:hover {
-		color: var(--c-action, var(--color-action, hsl(220 70% 55%)));
+		color: var(--color-action, hsl(220 70% 55%));
 		/* Snap the color in on hover; the base rule eases it back out on leave. */
 		transition: none;
 	}
 	.legend.collapsible:focus-visible {
-		outline: 2px solid var(--c-outline-active, var(--color-outline-active, currentColor));
+		outline: 2px solid var(--color-outline-active, currentColor);
 		outline-offset: 2px;
 	}
 
@@ -297,7 +297,7 @@
 	}
 
 	.required-mark {
-		color: var(--c-error, var(--color-error, hsl(0 70% 55%)));
+		color: var(--color-error, hsl(0 70% 55%));
 		margin-left: 0.125em;
 		font-weight: 700;
 	}
@@ -315,7 +315,7 @@
 	.description {
 		margin: 0;
 		font-size: 0.875em;
-		color: var(--c-text-2, var(--color-text-muted, hsl(0 0% 45%)));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 		line-height: 1.5;
 	}
 
@@ -341,7 +341,7 @@
 	   whole fieldset body) expands the section. */
 	.fieldset :global(.button.expand-button) {
 		width: 100%;
-		--color-text: var(--c-text-2, var(--color-text-light, hsl(0 0% 45%)));
+		--color-text: var(--color-text-muted, hsl(0 0% 45%));
 	}
 	.fieldset :global(.button.expand-button button) {
 		justify-content: space-between;
@@ -356,7 +356,7 @@
 		min-height: 3.5em;
 	}
 	.fieldset :global(.button.expand-button:hover) {
-		--color-text: var(--c-action, var(--color-action, hsl(220 70% 55%)));
+		--color-text: var(--color-action, hsl(220 70% 55%));
 	}
 	.expand-chevron {
 		flex-shrink: 0;
@@ -366,7 +366,7 @@
 	.error-message {
 		margin: 0;
 		font-size: 0.8em;
-		color: var(--c-error, var(--color-error, hsl(0 70% 55%)));
+		color: var(--color-error, hsl(0 70% 55%));
 		line-height: 1.4;
 	}
 </style>

@@ -207,7 +207,7 @@
 		width: var(--track-width);
 		height: var(--track-height);
 		border-radius: var(--track-height);
-		background-color: var(--c-bg-6, hsl(0 0% 70%));
+		background-color: var(--color-bg-6, hsl(0 0% 70%));
 		transition:
 			background-color 0.2s ease,
 			translate 200ms ease;
@@ -224,12 +224,12 @@
 	}
 
 	.track:focus-visible {
-		outline: 2px solid var(--c-outline-active, currentColor);
+		outline: 2px solid var(--color-outline-active, currentColor);
 		outline-offset: 2px;
 	}
 
 	.checked .track {
-		background-color: var(--c-action, hsl(220 70% 55%));
+		background-color: var(--color-action, hsl(220 70% 55%));
 	}
 
 	/* Thumb */
@@ -239,7 +239,7 @@
 		width: var(--thumb-size);
 		height: var(--thumb-size);
 		border-radius: 50%;
-		background-color: var(--c-action-text, white);
+		background-color: var(--color-action-text, white);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -270,7 +270,7 @@
 		justify-content: center;
 		font-size: calc(var(--thumb-size) * 0.6);
 		line-height: 1;
-		color: var(--c-action, hsl(220 70% 55%));
+		color: var(--color-action, hsl(220 70% 55%));
 	}
 
 	/* Disabled */
@@ -286,7 +286,7 @@
 
 	/* Labels */
 	.label {
-		color: var(--c-text, inherit);
+		color: var(--color-text, inherit);
 		line-height: 1.4;
 		transition: translate 200ms ease;
 		&:active {
@@ -294,7 +294,7 @@
 		}
 	}
 	.state-label {
-		color: var(--c-text-2, inherit);
+		color: var(--color-text-muted, inherit);
 		font-size: 0.875em;
 		line-height: 1.4;
 		transition: translate 200ms ease;
