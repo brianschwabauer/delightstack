@@ -8,7 +8,8 @@
 		"dev:worker": "cd server && wrangler dev --config wrangler.toml --env staging --persist-to ./../.wrangler/state",
 		"build": "vite build",
 		"build:ci": "vite build --mode $VITE_MODE",
-		"deploy": "wrangler deploy .svelte-kit/cloudflare/_worker.js --name example-app --assets .svelte-kit/cloudflare --compatibility-date 2025-02-14",
+		"deploy": "wrangler deploy --env production",
+		"deploy:staging": "wrangler deploy --env staging",
 		"package": "vite package",
 		"preview": "vite preview",
 		"test": "vitest run --passWithNoTests"

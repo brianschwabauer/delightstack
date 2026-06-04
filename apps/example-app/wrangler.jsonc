@@ -3,7 +3,7 @@
 	"account_id": "92cb4bb9b2a55d24f5688f2f61864079",
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2025-05-08",
-	"compatibility_flags": ["nodejs_als"],
+	"compatibility_flags": ["nodejs_compat"],
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare",
@@ -19,7 +19,7 @@
 	},
 	"env": {
 		"staging": {
-			"name": "app-staging",
+			"name": "delightstack-example-staging",
 			"vars": {
 				"VITE_MODE": "staging",
 				"NODE_OPTIONS": "--max-old-space-size=8192",
@@ -27,12 +27,8 @@
 			"routes": [
 				{
 					"custom_domain": true,
-					"pattern": "staging.example.com",
-					"zone_id": "ZONE_ID",
-				},
-				{
-					"pattern": "staging.example.com/*",
-					"zone_id": "ZONE_ID",
+					"pattern": "staging.example.thedelight.co",
+					"zone_id": "86f43705a221a54f78c507da848063fb",
 				},
 			],
 			"ai": {
@@ -41,12 +37,15 @@
 			"browser": {
 				"binding": "BROWSER",
 			},
+			"version_metadata": {
+				"binding": "CF_VERSION_METADATA",
+			},
 			"kv_namespaces": [{ "binding": "KV", "id": "dev-kv" }],
-			"r2_buckets": [{ "binding": "R2", "bucket_name": "foreverfamily-server-staging" }],
+			"r2_buckets": [{ "binding": "R2", "bucket_name": "delightstack-example-staging" }],
 			"services": [
 				{
 					"binding": "SELF",
-					"service": "app-staging",
+					"service": "delightstack-example-staging",
 				},
 			],
 			"queues": {
@@ -55,7 +54,7 @@
 			},
 		},
 		"production": {
-			"name": "app",
+			"name": "delightstack-example",
 			"vars": {
 				"VITE_MODE": "production",
 				"NODE_OPTIONS": "--max-old-space-size=8192",
@@ -63,12 +62,8 @@
 			"routes": [
 				{
 					"custom_domain": true,
-					"pattern": "example.com",
-					"zone_id": "ZONE_ID",
-				},
-				{
-					"pattern": "example.com/*",
-					"zone_id": "ZONE_ID",
+					"pattern": "example.thedelight.co",
+					"zone_id": "86f43705a221a54f78c507da848063fb",
 				},
 			],
 			"ai": {
@@ -77,12 +72,15 @@
 			"browser": {
 				"binding": "BROWSER",
 			},
+			"version_metadata": {
+				"binding": "CF_VERSION_METADATA",
+			},
 			"kv_namespaces": [],
 			"r2_buckets": [],
 			"services": [
 				{
 					"binding": "SELF",
-					"service": "app",
+					"service": "delightstack-example",
 				},
 			],
 			"queues": {

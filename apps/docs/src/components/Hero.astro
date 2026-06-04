@@ -1,17 +1,16 @@
 ---
 import { LinkButton } from '@astrojs/starlight/components';
-import { readFileSync } from 'node:fs';
+// Inline the wordmark SVG as a raw string at build time. `?raw` is resolved by
+// Vite during the build, so it works in static/SSR generation — unlike a runtime
+// readFileSync, which can't find src assets relative to the bundled output chunk.
+import logoRaw from '../assets/delightstack_logo_adaptive.svg?raw';
 
 const features = ['55 components', 'Light & dark mode', 'Fully accessible', 'Zero runtime deps'];
 
-// Inline the wordmark SVG so it's part of the DOM — inlining (vs. <img>) is what
-// lets the text's `currentColor` follow the theme. The icon keeps its gradient;
-// the text colour is driven by the CSS below (white in dark, deep teal in light).
-const raw = readFileSync(
-	new URL('../assets/delightstack_logo_adaptive.svg', import.meta.url),
-	'utf8',
-);
-const logo = raw.slice(raw.indexOf('<svg')).replace(/ id="Artboard2"/g, '');
+// Inlining the SVG (vs. <img>) is what lets the text's `currentColor` follow the
+// theme. The icon keeps its gradient; the text colour is driven by the CSS below
+// (white in dark, deep teal in light).
+const logo = logoRaw.slice(logoRaw.indexOf('<svg')).replace(/ id="Artboard2"/g, '');
 ---
 
 <section class="ds-hero not-content">
