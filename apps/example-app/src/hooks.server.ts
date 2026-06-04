@@ -21,7 +21,7 @@ const authHandle = createAuthHandle({
 		secret:
 			env.JWT_KEY_SECRET ??
 			'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
-		issuer: 'foreverfamily',
+		issuer: 'delightstack',
 		permissions: ['admin', 'editor', 'viewer'] as const,
 		oauth_scopes: [] as const,
 		entitlements: ['ai', 'images'] as const,

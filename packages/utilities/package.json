@@ -1,7 +1,30 @@
 {
 	"name": "@delightstack/utilities",
+	"version": "0.1.0",
 	"type": "module",
 	"license": "MIT",
+	"description": "Framework-agnostic TypeScript utilities for Delightstack — the DelightError error class, reactive Svelte 5 helpers, attachments, and DOM utilities.",
+	"keywords": [
+		"utilities",
+		"error-handling",
+		"svelte",
+		"reactive",
+		"dom",
+		"typescript",
+		"delightstack"
+	],
+	"author": "Brian Schwabauer",
+	"homepage": "https://docs.thedelight.co",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/brianschwabauer/delightstack.git",
+		"directory": "packages/utilities"
+	},
+	"bugs": "https://github.com/brianschwabauer/delightstack/issues",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",

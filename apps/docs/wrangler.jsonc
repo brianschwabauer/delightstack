@@ -1,9 +1,20 @@
 {
 	"$schema": "../../node_modules/wrangler/config-schema.json",
-	"name": "my-astro-app",
+	"name": "delightstack-docs",
+	"account_id": "92cb4bb9b2a55d24f5688f2f61864079",
 	"compatibility_date": "2025-03-25",
 	"assets": {
 		"directory": "./dist",
 		"not_found_handling": "404-page", // If you have a custom `src/pages/404.astro` page
 	},
+	"observability": {
+		"enabled": true,
+	},
+	"routes": [
+		{
+			"custom_domain": true,
+			"pattern": "docs.thedelight.co",
+			"zone_id": "86f43705a221a54f78c507da848063fb",
+		},
+	],
 }

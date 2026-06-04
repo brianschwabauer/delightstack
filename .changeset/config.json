@@ -3,8 +3,21 @@
 	"changelog": "@changesets/cli/changelog",
 	"commit": false,
 	"fixed": [],
-	"linked": [],
-	"access": "restricted",
+	"linked": [
+		[
+			"@delightstack/ai",
+			"@delightstack/auth",
+			"@delightstack/components",
+			"@delightstack/database",
+			"@delightstack/images",
+			"@delightstack/rate-limiter",
+			"@delightstack/stripe",
+			"@delightstack/styles",
+			"@delightstack/utilities",
+			"@delightstack/websocket"
+		]
+	],
+	"access": "public",
 	"baseBranch": "main",
 	"updateInternalDependencies": "patch",
 	"ignore": []

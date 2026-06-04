@@ -24,7 +24,7 @@ export class AuthDatabaseServer extends BaseAuthDatabaseServer {
 			secret:
 				env.JWT_KEY_SECRET ||
 				'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
-			issuer: 'foreverfamily',
+			issuer: 'delightstack',
 			permissions: ['admin', 'editor', 'viewer'],
 			oauth_scopes: [],
 			entitlements: ['ai', 'images'],

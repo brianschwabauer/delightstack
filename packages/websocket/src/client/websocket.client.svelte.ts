@@ -83,7 +83,7 @@ type EventCallback<T = WebsocketMessage> = (message: T) => void;
  * @example
  * ```ts
  * // With @delightstack/auth (default):
- * const ws = new WebsocketClient({ dev: import.meta.env.DEV });
+ * const ws = new WebsocketClient({ dev: true });
  * await ws.connect(org_id);
  * ws.on('session:connected', (msg) => {
  *   console.log(msg.meta?.user_name); // typed as string | undefined

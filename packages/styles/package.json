@@ -1,0 +1,33 @@
+{
+	"name": "@delightstack/styles",
+	"version": "0.1.0",
+	"type": "module",
+	"license": "MIT",
+	"description": "Delightstack global CSS — OKLCH design tokens, color scales, and base styles.",
+	"keywords": [
+		"css",
+		"design-tokens",
+		"styles",
+		"theme",
+		"oklch",
+		"delightstack"
+	],
+	"author": "Brian Schwabauer",
+	"homepage": "https://docs.thedelight.co",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/brianschwabauer/delightstack.git",
+		"directory": "packages/styles"
+	},
+	"bugs": "https://github.com/brianschwabauer/delightstack/issues",
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": "./global.css",
+		"./global.css": "./global.css"
+	},
+	"files": [
+		"global.css"
+	]
+}

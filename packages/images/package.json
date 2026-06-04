@@ -1,15 +1,53 @@
 {
 	"name": "@delightstack/images",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"type": "module",
-	"private": true,
-	"exports": {
-		".": "./src/index.ts",
-		"./worker": "./src/worker.ts"
+	"license": "MIT",
+	"description": "Image processing for Cloudflare — on-the-fly variants, face-aware cropping, thumbhash placeholders, and PDF/SVG handling via Cloudflare Containers + Sharp.",
+	"keywords": [
+		"images",
+		"image-processing",
+		"sharp",
+		"thumbhash",
+		"cloudflare",
+		"containers",
+		"workers",
+		"cdn",
+		"delightstack"
+	],
+	"author": "Brian Schwabauer",
+	"homepage": "https://docs.thedelight.co",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/brianschwabauer/delightstack.git",
+		"directory": "packages/images"
 	},
+	"bugs": "https://github.com/brianschwabauer/delightstack/issues",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./worker": {
+			"types": "./dist/worker.d.ts",
+			"import": "./dist/worker.js"
+		}
+	},
+	"files": [
+		"dist",
+		"container",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*"
+	],
 	"scripts": {
-		"test": "vitest",
-		"typecheck": "tsgo --noEmit"
+		"build": "svelte-package -i src",
+		"dev": "svelte-package -w -i src",
+		"typecheck": "tsgo --noEmit",
+		"test": "vitest"
 	},
 	"dependencies": {
 		"@cloudflare/containers": "^0.1.0",
@@ -20,6 +58,9 @@
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251120.0",
+		"@sveltejs/package": "^2.4.0",
+		"svelte": "^5.36.16",
+		"tslib": "^2.8.1",
 		"typescript": "^5.8.3",
 		"vitest": "^3.2.1"
 	}

@@ -16,14 +16,14 @@ export function getWsWorker(dev = false): Promise<Remote<WebsocketWorker>> {
 		const { wrap } = await import('comlink');
 
 		if (typeof SharedWorker !== 'undefined' && !dev) {
-			const sw = new SharedWorker(new URL('./websocket.worker.ts', import.meta.url), {
+			const sw = new SharedWorker(new URL('./websocket.worker.js', import.meta.url), {
 				type: 'module',
 			});
 			raw_worker = sw;
 			return wrap<WebsocketWorker>(sw.port) as Remote<WebsocketWorker>;
 		}
 
-		const w = new Worker(new URL('./websocket.worker.ts', import.meta.url), {
+		const w = new Worker(new URL('./websocket.worker.js', import.meta.url), {
 			type: 'module',
 		});
 		raw_worker = w;

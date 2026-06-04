@@ -44,7 +44,7 @@ export function defineAiTable(
 		/** Vector dimensions. Default: 768 (matches @cf/baai/bge-base-en-v1.5) */
 		dimensions?: number;
 	},
-) {
+): Database.Table {
 	const dimensions = options?.dimensions ?? 768;
 
 	// Validate that custom fields don't shadow reserved AI fields.
@@ -86,7 +86,7 @@ export function defineAiTable(
 
 		created_at: schema.string().datetime(),
 		updated_at: schema.string().datetime(),
-	}));
+	})) as unknown as Database.Table;
 }
 
 /** Fields managed by defineAiConversationTable — cannot be overridden in custom schemas */
@@ -116,7 +116,7 @@ const RESERVED_CONVERSATION_FIELDS = new Set([
  */
 export function defineAiConversationTable(
 	customFields?: (schema: AiSchemaBuilder) => Record<string, unknown>,
-) {
+): Database.Table {
 	// Validate custom fields don't shadow reserved conversation fields
 	if (customFields) {
 		const custom = customFields(createMockSchema());
@@ -169,7 +169,7 @@ export function defineAiConversationTable(
 
 		// Custom fields come after reserved fields (validated above to not collide)
 		...(customFields ? customFields(schema) : {}),
-	}));
+	})) as unknown as Database.Table;
 }
 
 export type AiTable = ReturnType<typeof defineAiTable>;

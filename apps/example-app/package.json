@@ -11,7 +11,7 @@
 		"deploy": "wrangler deploy .svelte-kit/cloudflare/_worker.js --name example-app --assets .svelte-kit/cloudflare --compatibility-date 2025-02-14",
 		"package": "vite package",
 		"preview": "vite preview",
-		"test": "vitest"
+		"test": "vitest run --passWithNoTests"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20260401.1",

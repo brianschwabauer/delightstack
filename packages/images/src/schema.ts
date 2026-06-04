@@ -17,7 +17,7 @@ export type ImageSchemaBuilder = Parameters<TableCallback>[0];
  */
 export function defineImageTable(
 	customFields?: (schema: ImageSchemaBuilder) => Record<string, any>,
-) {
+): Database.Table {
 	return Database.table('image', (schema) => ({
 		/** Unique identifier for the image record */
 		id: schema.primaryKey(),
@@ -142,7 +142,7 @@ export function defineImageTable(
 		// created_at and updated_at are auto-managed by DatabaseServer
 
 		...(customFields ? customFields(schema) : {}),
-	}));
+	})) as unknown as Database.Table;
 }
 
 export type ImageTable = ReturnType<typeof defineImageTable>;

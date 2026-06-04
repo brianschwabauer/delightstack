@@ -14,6 +14,7 @@ node_modules
 /**/.svelte-kit
 /**/.turbo
 /**/dist
+*.tsbuildinfo
 .turbo
 /**/.wrangler
 TODO.md

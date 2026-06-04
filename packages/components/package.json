@@ -1,7 +1,29 @@
 {
 	"name": "@delightstack/components",
+	"version": "0.1.0",
 	"type": "module",
 	"license": "MIT",
+	"description": "Delightstack Svelte 5 component library — accessible actions, forms, media, navigation, feedback, and display components.",
+	"keywords": [
+		"svelte",
+		"components",
+		"ui",
+		"ui-library",
+		"svelte5",
+		"accessible",
+		"delightstack"
+	],
+	"author": "Brian Schwabauer",
+	"homepage": "https://docs.thedelight.co",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/brianschwabauer/delightstack.git",
+		"directory": "packages/components"
+	},
+	"bugs": "https://github.com/brianschwabauer/delightstack/issues",
+	"publishConfig": {
+		"access": "public"
+	},
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",

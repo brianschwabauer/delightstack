@@ -1,17 +1,53 @@
 {
 	"name": "@delightstack/rate-limiter",
+	"version": "0.1.0",
 	"type": "module",
-	"private": true,
-	"exports": {
-		".": "./src/index.ts"
+	"license": "MIT",
+	"description": "Sliding-window rate limiting for Cloudflare Durable Objects.",
+	"keywords": [
+		"rate-limit",
+		"rate-limiter",
+		"throttle",
+		"durable-objects",
+		"cloudflare",
+		"workers",
+		"delightstack"
+	],
+	"author": "Brian Schwabauer",
+	"homepage": "https://docs.thedelight.co",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/brianschwabauer/delightstack.git",
+		"directory": "packages/rate-limiter"
 	},
+	"bugs": "https://github.com/brianschwabauer/delightstack/issues",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*"
+	],
 	"scripts": {
-		"test": "vitest",
-		"typecheck": "tsgo --noEmit"
+		"build": "svelte-package -i src",
+		"dev": "svelte-package -w -i src",
+		"typecheck": "tsgo --noEmit",
+		"test": "vitest"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251120.0",
 		"@edge-runtime/vm": "^5.0.0",
+		"@sveltejs/package": "^2.4.0",
+		"svelte": "^5.36.16",
+		"tslib": "^2.8.1",
 		"typescript": "^5.8.3",
 		"vitest": "^3.2.1"
 	}

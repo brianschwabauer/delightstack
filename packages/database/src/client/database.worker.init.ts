@@ -16,14 +16,14 @@ export function getWorker(dev = false): Promise<Remote<DatabaseWorker>> {
 		const { wrap } = await import('comlink');
 
 		if (typeof SharedWorker !== 'undefined' && !dev) {
-			const sw = new SharedWorker(new URL('./database.worker.ts', import.meta.url), {
+			const sw = new SharedWorker(new URL('./database.worker.js', import.meta.url), {
 				type: 'module',
 			});
 			raw_worker = sw;
 			return wrap<DatabaseWorker>(sw.port) as Remote<DatabaseWorker>;
 		}
 
-		const w = new Worker(new URL('./database.worker.ts', import.meta.url), {
+		const w = new Worker(new URL('./database.worker.js', import.meta.url), {
 			type: 'module',
 		});
 		raw_worker = w;

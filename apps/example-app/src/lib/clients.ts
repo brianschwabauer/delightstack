@@ -44,7 +44,7 @@ export async function createClients(options: {
 
 	const db = new DatabaseClient({
 		tables,
-		db_name: `foreverfamily:${auth.org_id}`,
+		db_name: `delightstack:${auth.org_id}`,
 		fetch,
 		hooks: ws.databaseHooks(),
 		entities,
