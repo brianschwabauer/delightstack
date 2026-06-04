@@ -23,6 +23,7 @@
 	},
 	"dependencies": {
 		"@delightstack/components": "workspace:*",
+		"@delightstack/styles": "workspace:*",
 		"@delightstack/utilities": "workspace:*"
 	}
 }

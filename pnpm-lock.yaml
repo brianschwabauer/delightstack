@@ -217,6 +217,9 @@ importers:
       '@delightstack/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@delightstack/styles':
+        specifier: workspace:*
+        version: link:../../packages/styles
       '@delightstack/utilities':
         specifier: workspace:*
         version: link:../../packages/utilities

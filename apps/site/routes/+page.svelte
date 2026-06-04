@@ -1,4 +1,7 @@
 <script lang="ts">
+	import '@delightstack/styles/global.css';
+	import { Button } from '@delightstack/components';
+
 	// Marketing landing page for thedelight.co.
 	const DOCS = 'https://docs.thedelight.co';
 	const EXAMPLE = 'https://example.thedelight.co';
@@ -14,32 +17,12 @@
 	];
 
 	const packages = [
-		{
-			name: 'Auth',
-			blurb: 'JWT sessions, Argon2id, OAuth, multi-org, guards',
-			slug: 'auth',
-		},
-		{
-			name: 'Database',
-			blurb: 'Reactive SQLite on Durable Objects + search',
-			slug: 'database',
-		},
-		{
-			name: 'Realtime',
-			blurb: 'Room-scoped WebSockets with live presence',
-			slug: 'websocket',
-		},
-		{ name: 'AI', blurb: 'Chat, resumable streaming, vector embeddings', slug: 'ai' },
-		{
-			name: 'Billing',
-			blurb: 'Stripe subscriptions, metered usage, webhooks',
-			slug: 'stripe',
-		},
-		{
-			name: 'Images',
-			blurb: 'Variants, ThumbHash, EXIF, face-aware crops',
-			slug: 'images',
-		},
+		{ name: 'Auth', blurb: 'JWT sessions, Argon2id, OAuth, multi-org, guards' },
+		{ name: 'Database', blurb: 'Reactive SQLite on Durable Objects + search' },
+		{ name: 'Realtime', blurb: 'Room-scoped WebSockets with live presence' },
+		{ name: 'AI', blurb: 'Chat, resumable streaming, vector embeddings' },
+		{ name: 'Billing', blurb: 'Stripe subscriptions, metered usage, webhooks' },
+		{ name: 'Images', blurb: 'Variants, ThumbHash, EXIF, face-aware crops' },
 	];
 </script>
 
@@ -51,9 +34,11 @@
 </svelte:head>
 
 <header class="nav">
-	<a class="brand" href="/">
-		<img src="/delightstack_brandmark.svg" alt="" width="28" height="28" />
-		<span>delightstack</span>
+	<a class="brand" href="/" aria-label="Delightstack home">
+		<picture>
+			<source srcset="/delightstack_logo_dark.svg" media="(prefers-color-scheme: dark)" />
+			<img src="/delightstack_logo_light.svg" alt="Delightstack" />
+		</picture>
 	</a>
 	<nav class="nav-links">
 		<a href={DOCS}>Docs</a>
@@ -75,11 +60,11 @@
 			<strong>Svelte&nbsp;5 component library</strong>
 			, and an
 			<strong>edge-native backend</strong>
-			 for Cloudflare. Use either, or both.
+			for Cloudflare. Use either, or both.
 		</p>
 		<div class="cta">
-			<a class="btn primary" href="{DOCS}/components/overview/">Browse components →</a>
-			<a class="btn" href="{DOCS}/stack/overview/">Explore the stack →</a>
+			<Button href="{DOCS}/components/overview/" size="3">Browse components →</Button>
+			<Button href="{DOCS}/stack/overview/" size="3" outline>Explore the stack →</Button>
 		</div>
 	</section>
 
@@ -132,8 +117,8 @@
 			project — the canonical reference for building with Delightstack.
 		</p>
 		<div class="cta">
-			<a class="btn primary" href={EXAMPLE}>View the live example →</a>
-			<a class="btn" href={GITHUB}>Star on GitHub</a>
+			<Button href={EXAMPLE} size="3">View the live example →</Button>
+			<Button href={GITHUB} size="3" outline target="_blank">Star on GitHub</Button>
 		</div>
 	</section>
 </main>
@@ -145,26 +130,18 @@
 </footer>
 
 <style>
+	/* Retune the design-system accent toward the logo's teal (#00c2a8) so the
+	   Button fills, outline text, and accents match the brandmark. */
 	:global(:root) {
-		color-scheme: light dark;
-		--bg: light-dark(#ffffff, #0b0f14);
-		--bg-soft: light-dark(#f6f8f8, #11161c);
-		--text: light-dark(#0e1a1f, #e8eef0);
-		--muted: light-dark(#5a6b70, #94a6ab);
-		--border: light-dark(rgb(0 0 0 / 0.09), rgb(255 255 255 / 0.1));
-		--accent: light-dark(#0e4a59, #34c3a8);
-		--accent-ink: light-dark(#ffffff, #04110d);
+		--color-primary: #00c2a8;
+		--color-secondary: #00c2a8;
 	}
+
+	/* Use the design system's tokens (from @delightstack/styles) but a clean
+	   sans body — the global stylesheet defaults body to a display serif. */
 	:global(body) {
 		margin: 0;
-		background: var(--bg);
-		color: var(--text);
-		font-family:
-			ui-sans-serif,
-			system-ui,
-			-apple-system,
-			'Segoe UI',
-			sans-serif;
+		font-family: var(--font-sans);
 		-webkit-font-smoothing: antialiased;
 		line-height: 1.6;
 	}
@@ -181,24 +158,24 @@
 	.brand {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-weight: 650;
-		letter-spacing: -0.01em;
-		color: var(--text);
-		text-decoration: none;
+	}
+	.brand img {
+		height: 1.6rem;
+		width: auto;
+		display: block;
 	}
 	.nav-links {
 		display: flex;
 		gap: clamp(0.75rem, 3vw, 1.75rem);
 	}
 	.nav-links a {
-		color: var(--muted);
+		color: color-mix(in oklch, var(--color-text) 62%, var(--color-bg));
 		text-decoration: none;
 		font-size: 0.95rem;
 		transition: color 200ms;
 	}
 	.nav-links a:hover {
-		color: var(--text);
+		color: var(--color-text);
 	}
 
 	main {
@@ -210,7 +187,7 @@
 	.hero {
 		position: relative;
 		text-align: center;
-		padding-block: clamp(3rem, 9vw, 7rem) clamp(2.5rem, 6vw, 5rem);
+		padding-block: clamp(2.5rem, 8vw, 6rem) clamp(2.5rem, 6vw, 5rem);
 		overflow: clip;
 	}
 	.glow {
@@ -223,20 +200,22 @@
 		transform: translateX(-50%);
 		background: radial-gradient(
 			50% 50% at 50% 50%,
-			color-mix(in oklch, var(--accent) 30%, transparent),
+			color-mix(in oklch, var(--color-action) 32%, transparent),
 			transparent 70%
 		);
 		filter: blur(50px);
-		opacity: 0.5;
+		opacity: 0.55;
 	}
 	.logo {
-		width: min(30rem, 80vw);
+		display: block;
+		width: min(22rem, 68vw);
 		height: auto;
-		margin-bottom: 2rem;
+		margin: 0 auto 1.5rem;
 	}
 	.hero h1 {
-		font-size: clamp(2rem, 5.5vw, 3.5rem);
-		line-height: 1.08;
+		color: var(--color-text-max-contrast);
+		font-size: clamp(2.5rem, 7vw, 4.75rem);
+		line-height: 1.05;
 		letter-spacing: -0.03em;
 		margin: 0 auto 1rem;
 		max-width: 16ch;
@@ -245,10 +224,10 @@
 		margin: 0 auto;
 		max-width: 52ch;
 		font-size: clamp(1.05rem, 2vw, 1.3rem);
-		color: var(--muted);
+		color: color-mix(in oklch, var(--color-text) 62%, var(--color-bg));
 	}
 	.lede strong {
-		color: var(--text);
+		color: var(--color-text);
 		font-weight: 600;
 	}
 
@@ -259,31 +238,6 @@
 		justify-content: center;
 		margin-top: 2rem;
 	}
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.7rem 1.3rem;
-		border-radius: 0.7rem;
-		border: 1px solid var(--border);
-		background: var(--bg-soft);
-		color: var(--text);
-		font-weight: 550;
-		font-size: 0.98rem;
-		text-decoration: none;
-		transition:
-			transform 200ms,
-			border-color 200ms,
-			background 0ms;
-	}
-	.btn:hover {
-		transform: translateY(-2px);
-		border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
-	}
-	.btn.primary {
-		background: var(--accent);
-		color: var(--accent-ink);
-		border-color: transparent;
-	}
 
 	.products {
 		display: grid;
@@ -292,16 +246,19 @@
 		padding-block: clamp(2rem, 5vw, 4rem);
 	}
 	.product {
-		border: 1px solid var(--border);
-		border-radius: 1.25rem;
+		border: 1px solid var(--color-bg-3);
+		border-radius: var(--radius-4);
 		padding: clamp(1.5rem, 3vw, 2.25rem);
-		background: var(--bg-soft);
+		background: var(--color-bg-0);
 	}
 	.kicker {
 		font-size: 0.78rem;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		color: var(--accent);
+		color: light-dark(
+			oklch(from var(--color-action) 0.45 c h),
+			oklch(from var(--color-action) 0.82 c h)
+		);
 		font-weight: 650;
 	}
 	.product h2 {
@@ -310,7 +267,7 @@
 		margin: 0.25rem 0 0.6rem;
 	}
 	.product > p {
-		color: var(--muted);
+		color: color-mix(in oklch, var(--color-text) 62%, var(--color-bg));
 		margin: 0 0 1.5rem;
 	}
 	.grid {
@@ -326,9 +283,9 @@
 		flex-direction: column;
 		gap: 0.15rem;
 		padding: 0.7rem 0.8rem;
-		border-radius: 0.6rem;
-		background: var(--bg);
-		border: 1px solid var(--border);
+		border-radius: var(--radius-3);
+		background: var(--color-bg-2);
+		border: 1px solid var(--color-bg-3);
 	}
 	.grid-name {
 		font-weight: 600;
@@ -336,11 +293,14 @@
 	}
 	.grid-blurb {
 		font-size: 0.8rem;
-		color: var(--muted);
+		color: color-mix(in oklch, var(--color-text) 58%, var(--color-bg));
 		line-height: 1.4;
 	}
 	.link {
-		color: var(--accent);
+		color: light-dark(
+			oklch(from var(--color-action) 0.45 c h),
+			oklch(from var(--color-action) 0.82 c h)
+		);
 		font-weight: 600;
 		text-decoration: none;
 	}
@@ -351,7 +311,7 @@
 	.closer {
 		text-align: center;
 		padding-block: clamp(3rem, 7vw, 6rem);
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--color-bg-3);
 		margin-top: clamp(2rem, 5vw, 4rem);
 	}
 	.closer h2 {
@@ -360,7 +320,7 @@
 		margin: 0 0 0.5rem;
 	}
 	.closer p {
-		color: var(--muted);
+		color: color-mix(in oklch, var(--color-text) 62%, var(--color-bg));
 		max-width: 48ch;
 		margin: 0 auto;
 	}
@@ -372,20 +332,14 @@
 		justify-content: center;
 		align-items: center;
 		padding: 2.5rem 1rem 3.5rem;
-		color: var(--muted);
+		color: color-mix(in oklch, var(--color-text) 58%, var(--color-bg));
 		font-size: 0.88rem;
 	}
 	footer a {
-		color: var(--muted);
+		color: inherit;
 		text-decoration: none;
 	}
 	footer a:hover {
-		color: var(--text);
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.btn {
-			transition: none;
-		}
+		color: var(--color-text);
 	}
 </style>
