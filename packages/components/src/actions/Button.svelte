@@ -565,8 +565,12 @@
 		}
 		&.icon {
 			.badge {
-				top: -0.5em;
-				right: -0.5em;
+				/* Scale the number badge down relative to the (small) icon
+				   button and pull it in to hug the circle's top-right edge,
+				   instead of floating off the bounding-box corner. */
+				font-size: 0.8em;
+				top: -0.15em;
+				right: -0.15em;
 				&.dot {
 					top: 0;
 					right: 0;
@@ -591,9 +595,9 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.65em) 0.65em,
+					circle at calc(100% - 0.7em) 0.6em,
 					transparent calc(0.65em + 3px),
-					black calc(0.65em + 5px)
+					black calc(0.65em + 3.5px)
 				);
 			}
 		}
@@ -603,7 +607,7 @@
 				mask-image: radial-gradient(
 					circle at calc(100% - 0.375rem) 0.375rem,
 					transparent calc(0.375rem + 3px),
-					black calc(0.375rem + 5px)
+					black calc(0.375rem + 3.55px)
 				);
 			}
 		}
@@ -612,9 +616,9 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.15em) 0.15em,
-					transparent calc(0.85em + 3px),
-					black calc(0.85em + 5px)
+					circle at calc(100% - 0.55em) 0.5em,
+					transparent 0.75em,
+					black calc(0.75em + 0.5px)
 				);
 			}
 		}
@@ -624,7 +628,7 @@
 				mask-image: radial-gradient(
 					circle at calc(100% - 0.375rem) 0.375rem,
 					transparent calc(0.375rem + 3px),
-					black calc(0.375rem + 5px)
+					black calc(0.375rem + 3.5px)
 				);
 			}
 		}
@@ -633,9 +637,9 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 1.15em) 1.15em,
-					transparent calc(0.65em + 3px),
-					black calc(0.65em + 5px)
+					circle at calc(100% - 0.75em) 0.75em,
+					transparent 0.5em,
+					black calc(0.5em + 0.5px)
 				);
 			}
 		}
@@ -646,7 +650,7 @@
 				mask-image: radial-gradient(
 					circle at calc(100% - 0.75em - 0.375rem) calc(0.75em + 0.375rem),
 					transparent calc(0.375rem + 3px),
-					black calc(0.375rem + 5px)
+					black calc(0.375rem + 3.5px)
 				);
 			}
 		}
