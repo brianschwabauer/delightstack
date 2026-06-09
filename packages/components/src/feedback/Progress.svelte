@@ -129,6 +129,7 @@
 					stroke-linecap="round"
 					stroke-dasharray={circumference}
 					stroke-dashoffset={isIndeterminate ? undefined : dashOffset}
+					style:--spinner-c="{circumference}px"
 					transform="rotate(-90 {circularConfig.diameter / 2} {circularConfig.diameter /
 						2})" />
 			</svg>
@@ -185,12 +186,13 @@
 			display: block;
 		}
 		&.indeterminate .spinner {
-			animation: progress-rotate 1.4s linear infinite;
+			animation: progress-rotate 1.2s linear infinite;
 		}
 		&.indeterminate .arc {
-			animation: progress-dash 1.4s ease-in-out infinite;
-			stroke-dasharray: 1, 200;
-			stroke-dashoffset: 0;
+			/* Desynced from the rotate period so the wrap drifts around the
+			   circle instead of pulsing at a fixed spot every loop. */
+			animation: progress-dash 0.9s ease-in-out infinite;
+			transition: none;
 		}
 		circle.track {
 			stroke: var(--color-border, rgb(0 0 0 / 0.1));
@@ -307,18 +309,25 @@
 		}
 	}
 
+	/* Arc grows from a near-dot to a long arc in the first half, then holds its
+	   length and slides forward via stroke-dashoffset in the second half. The
+	   arc never collapses to a dot mid-view, so there's no pause — the only
+	   shrink is at the wrap, hidden by the (desynced) rotation. All values are
+	   derived from the actual circumference (--spinner-c) so it's correct at
+	   every size. The asymmetric grow-then-slide keeps the start/end caps
+	   moving at different rates. */
 	@keyframes progress-dash {
 		0% {
-			stroke-dasharray: 1, 200;
+			stroke-dasharray: calc(var(--spinner-c) * 0.01) calc(var(--spinner-c) * 1.6);
 			stroke-dashoffset: 0;
 		}
 		50% {
-			stroke-dasharray: 100, 200;
-			stroke-dashoffset: -15;
+			stroke-dasharray: calc(var(--spinner-c) * 0.7) calc(var(--spinner-c) * 1.6);
+			stroke-dashoffset: calc(var(--spinner-c) * -0.28);
 		}
 		100% {
-			stroke-dasharray: 1, 200;
-			stroke-dashoffset: -126;
+			stroke-dasharray: calc(var(--spinner-c) * 0.7) calc(var(--spinner-c) * 1.6);
+			stroke-dashoffset: calc(var(--spinner-c) * -0.98);
 		}
 	}
 
@@ -346,8 +355,8 @@
 		}
 		.progress.circular.indeterminate .arc {
 			animation: none;
-			stroke-dasharray: 80, 200;
-			stroke-dashoffset: -15;
+			stroke-dasharray: calc(var(--spinner-c) * 0.65) calc(var(--spinner-c) * 1.6);
+			stroke-dashoffset: 0;
 		}
 		.progress.linear .fill.indeterminate-bar {
 			animation: none;
