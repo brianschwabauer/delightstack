@@ -9,6 +9,7 @@
 		active={viewMode === 'grid'}
 		onclick={() => (viewMode = 'grid')}
 		icon
+		tooltip="Grid view"
 		aria-label="Grid view">
 		<svg viewBox="0 0 24 24" fill="currentColor">
 			<path d="M3 3h8v8H3V3zm0 10h8v8H3v-8zm10-10h8v8h-8V3zm0 10h8v8h-8v-8z" />
@@ -18,6 +19,7 @@
 		active={viewMode === 'list'}
 		onclick={() => (viewMode = 'list')}
 		icon
+		tooltip="List view"
 		aria-label="List view">
 		<svg viewBox="0 0 24 24" fill="currentColor">
 			<path

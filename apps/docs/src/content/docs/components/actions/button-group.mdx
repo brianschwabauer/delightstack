@@ -32,6 +32,12 @@ ${'  '}<Button>Discard</Button>
 
 Use the `active` prop on child Buttons to create a toggle group.
 
+Icon buttons rarely speak for themselves, so pass a `tooltip` to each one. Hover a
+button and its tooltip appears after a short delay — then slide across to the next
+button and its tooltip shows **instantly**, no waiting. The skip-delay window is
+shared by every tooltip on the page and persists briefly after you leave, so the
+buttons don't even need to touch.
+
 <ComponentPreview code={`<script>
 ${'  '}import { ButtonGroup, Button } from '@delightstack/components';
 
@@ -43,6 +49,7 @@ ${'  '}<Button
 ${'  '}${'  '}active={viewMode === 'grid'}
 ${'  '}${'  '}onclick={() => viewMode = 'grid'}
 ${'  '}${'  '}icon
+${'  '}${'  '}tooltip="Grid view"
 ${'  '}${'  '}aria-label="Grid view">
 ${'  '}${'  '}<svg viewBox="0 0 24 24" fill="currentColor">
 ${'  '}${'  '}${'  '}<path d="M3 3h8v8H3V3zm0 10h8v8H3v-8zm10-10h8v8h-8V3zm0 10h8v8h-8v-8z"/>
@@ -52,6 +59,7 @@ ${'  '}<Button
 ${'  '}${'  '}active={viewMode === 'list'}
 ${'  '}${'  '}onclick={() => viewMode = 'list'}
 ${'  '}${'  '}icon
+${'  '}${'  '}tooltip="List view"
 ${'  '}${'  '}aria-label="List view">
 ${'  '}${'  '}<svg viewBox="0 0 24 24" fill="currentColor">
 ${'  '}${'  '}${'  '}<path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
