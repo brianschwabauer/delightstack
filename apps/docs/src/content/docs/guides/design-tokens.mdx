@@ -243,14 +243,16 @@ hardcoding.
 
 ```css
 :root {
-	--control-font-0: 0.8125rem; /* 13px */
-	--control-font-1: 0.9375rem; /* 15px — default */
-	--control-font-2: 1.0625rem; /* 17px */
-	--control-font-3: 1.1875rem; /* 19px */
+	/* rem so controls scale with the root font-size; even-px fonts × 0.5-step
+	   ratios keep every size on a whole-pixel height */
+	--control-font-0: 0.875rem; /* 14px → 42px tall */
+	--control-font-1: 1rem; /* 16px → 48px tall (default) */
+	--control-font-2: 1.125rem; /* 18px → 54px tall */
+	--control-font-3: 1.25rem; /* 20px → 60px tall */
 
-	--control-height-ratio: 3.2; /* default     → 48px @ size 1 */
-	--control-height-ratio-dense: 2.4; /* dense       → 36px @ size 1 */
-	--control-height-ratio-comfortable: 4; /* comfortable → 60px @ size 1 */
+	--control-height-ratio: 3; /* default     → 48px @ size 1 */
+	--control-height-ratio-dense: 2.5; /* dense       → 40px @ size 1 */
+	--control-height-ratio-comfortable: 3.5; /* comfortable → 56px @ size 1 */
 
 	--control-pad-x: 1em; /* inline padding */
 	--control-pad-x-dense: 0.75em;
@@ -260,12 +262,12 @@ hardcoding.
 
 `Input`, `Select` and `Button` (including standalone icon buttons) snap to these heights:
 
-| `size` | dense | default | comfortable |
-| ------ | ----- | ------- | ----------- |
-| 0      | 31px  | 42px    | 52px        |
-| **1**  | 36px  | **48px**| 60px        |
-| 2      | 41px  | 54px    | 68px        |
-| 3      | 46px  | 61px    | 76px        |
+| `size` | dense | default  | comfortable |
+| ------ | ----- | -------- | ----------- |
+| 0      | 35px  | 42px     | 49px        |
+| **1**  | 40px  | **48px** | 56px        |
+| 2      | 45px  | 54px     | 63px        |
+| 3      | 50px  | 60px     | 70px        |
 
 So a row of controls at the same `size` (and density) is the same height:
 

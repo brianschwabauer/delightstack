@@ -388,7 +388,7 @@
 		   height below, a bare <Button> matches a default Input/Select height in
 		   a row. An explicit `size` (inline font-size) or an in-field font
 		   override (e.g. .input-icon-btn) wins over this. */
-		font-size: var(--control-font-1, 0.9375rem);
+		font-size: var(--control-font-1, 1rem);
 		display: inline-flex;
 		justify-content: center;
 		position: relative;
@@ -716,12 +716,12 @@
 			button:not(.dropdown-trigger),
 			a {
 				box-sizing: border-box;
-				min-height: calc(1em * var(--control-height-ratio, 3.2));
+				min-height: calc(1em * var(--control-height-ratio, 3));
 			}
 			&.dense {
 				button:not(.dropdown-trigger),
 				a {
-					min-height: calc(1em * var(--control-height-ratio-dense, 2.4));
+					min-height: calc(1em * var(--control-height-ratio-dense, 2.5));
 				}
 			}
 		}
@@ -828,14 +828,14 @@
 			   the button's font, so a sized icon button grows too. Icon buttons
 			   embedded in a field (.input-icon-btn / .input-pill-btn) pin their
 			   own size and are unaffected. */
-			height: calc(1em * var(--control-height-ratio, 3.2));
-			width: calc(1em * var(--control-height-ratio, 3.2));
+			height: calc(1em * var(--control-height-ratio, 3));
+			width: calc(1em * var(--control-height-ratio, 3));
 			aspect-ratio: 1 / 1;
 			border-radius: var(--radius-full);
 			overflow: hidden;
 			&.dense {
-				height: calc(1em * var(--control-height-ratio-dense, 2.4));
-				width: calc(1em * var(--control-height-ratio-dense, 2.4));
+				height: calc(1em * var(--control-height-ratio-dense, 2.5));
+				width: calc(1em * var(--control-height-ratio-dense, 2.5));
 				button,
 				a {
 					padding: 0;

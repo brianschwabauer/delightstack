@@ -165,7 +165,7 @@
 		--thumb-size: 12px;
 		--thumb-offset: 3px;
 		--thumb-press-grow: 2px;
-		font-size: var(--control-font-0, 0.8125rem);
+		font-size: var(--control-font-0, 0.875rem);
 	}
 	.toggle.size-1 {
 		--track-width: 44px;
@@ -173,7 +173,7 @@
 		--thumb-size: 18px;
 		--thumb-offset: 3px;
 		--thumb-press-grow: 4px;
-		font-size: var(--control-font-1, 0.9375rem);
+		font-size: var(--control-font-1, 1rem);
 	}
 	.toggle.size-2 {
 		--track-width: 52px;
@@ -181,7 +181,7 @@
 		--thumb-size: 22px;
 		--thumb-offset: 3px;
 		--thumb-press-grow: 4px;
-		font-size: var(--control-font-2, 1.0625rem);
+		font-size: var(--control-font-2, 1.125rem);
 	}
 	.toggle.size-3 {
 		--track-width: 68px;
@@ -189,7 +189,7 @@
 		--thumb-size: 28px;
 		--thumb-offset: 4px;
 		--thumb-press-grow: 6px;
-		font-size: var(--control-font-3, 1.1875rem);
+		font-size: var(--control-font-3, 1.25rem);
 	}
 
 	.toggle.dense {

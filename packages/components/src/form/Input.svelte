@@ -359,10 +359,10 @@
 		   per-size font comes from the shared --control-font-* tokens so Input,
 		   Select and Button line up at the same height for a given size. */
 		const configs: Record<string, { font: string; icon_size: number }> = {
-			'0': { font: 'var(--control-font-0, 0.8125rem)', icon_size: 15 },
-			'1': { font: 'var(--control-font-1, 0.9375rem)', icon_size: 17 },
-			'2': { font: 'var(--control-font-2, 1.0625rem)', icon_size: 19 },
-			'3': { font: 'var(--control-font-3, 1.1875rem)', icon_size: 21 },
+			'0': { font: 'var(--control-font-0, 0.875rem)', icon_size: 15 },
+			'1': { font: 'var(--control-font-1, 1rem)', icon_size: 17 },
+			'2': { font: 'var(--control-font-2, 1.125rem)', icon_size: 19 },
+			'3': { font: 'var(--control-font-3, 1.25rem)', icon_size: 21 },
 		};
 		return configs[size] ?? configs['1'];
 	});
@@ -1404,13 +1404,13 @@
 	/* ================================================================== */
 
 	.input {
-		--_font: var(--input-font, var(--control-font-1, 0.9375rem));
+		--_font: var(--input-font, var(--control-font-1, 1rem));
 		--_icon-size: var(--input-icon-size, 17px);
 		/* Height scales off --_font, so the whole control scales from one
 		   number. The ratio is the SHARED --control-height-ratio (tokens.css),
 		   so a row of controls — Input, Select, Button — lands on the same
 		   height. --_font is a length the floated-label maths can divide by. */
-		--_height: calc(var(--_font) * var(--control-height-ratio, 3.2));
+		--_height: calc(var(--_font) * var(--control-height-ratio, 3));
 		--_radius: var(--radius-lg, 10px);
 		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
 		--_border-hover: var(--color-border-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
@@ -1445,10 +1445,10 @@
 	/* Density modifiers swap the shared height ratio (see tokens.css), so a
 	   dense Input/Select/Button row also lands on a single height. */
 	.input.dense {
-		--_height: calc(var(--_font) * var(--control-height-ratio-dense, 2.4));
+		--_height: calc(var(--_font) * var(--control-height-ratio-dense, 2.5));
 	}
 	.input.comfortable {
-		--_height: calc(var(--_font) * var(--control-height-ratio-comfortable, 4));
+		--_height: calc(var(--_font) * var(--control-height-ratio-comfortable, 3.5));
 	}
 
 	/* ================================================================== */

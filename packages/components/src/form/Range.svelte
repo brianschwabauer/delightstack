@@ -461,7 +461,7 @@
 		flex-direction: column;
 		gap: 0.5em;
 		width: 100%;
-		font-size: var(--control-font-1, 0.9375rem);
+		font-size: var(--control-font-1, 1rem);
 	}
 
 	.range-container.dense {
@@ -478,7 +478,7 @@
 		--active-height: 4px;
 		--inactive-height: 4px;
 		--gap: 6px;
-		font-size: var(--control-font-0, 0.8125rem);
+		font-size: var(--control-font-0, 0.875rem);
 	}
 	.range-container.size-1 {
 		--handle-width: 8px;
@@ -486,7 +486,7 @@
 		--active-height: 6px;
 		--inactive-height: 4px;
 		--gap: 7px;
-		font-size: var(--control-font-1, 0.9375rem);
+		font-size: var(--control-font-1, 1rem);
 	}
 	.range-container.size-2 {
 		--handle-width: 10px;
@@ -494,7 +494,7 @@
 		--active-height: 7px;
 		--inactive-height: 4px;
 		--gap: 9px;
-		font-size: var(--control-font-2, 1.0625rem);
+		font-size: var(--control-font-2, 1.125rem);
 	}
 	.range-container.size-3 {
 		--handle-width: 12px;
@@ -502,7 +502,7 @@
 		--active-height: 8px;
 		--inactive-height: 5px;
 		--gap: 10px;
-		font-size: var(--control-font-3, 1.1875rem);
+		font-size: var(--control-font-3, 1.25rem);
 	}
 
 	.range-label {

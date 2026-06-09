@@ -129,10 +129,10 @@
 	/* Per-size font from the shared --control-font-* tokens so Select lines up
 	   at the same height as Input and Button for a given size. */
 	const sizeMap: Record<string, string> = {
-		'0': 'var(--control-font-0, 0.8125rem)',
-		'1': 'var(--control-font-1, 0.9375rem)',
-		'2': 'var(--control-font-2, 1.0625rem)',
-		'3': 'var(--control-font-3, 1.1875rem)',
+		'0': 'var(--control-font-0, 0.875rem)',
+		'1': 'var(--control-font-1, 1rem)',
+		'2': 'var(--control-font-2, 1.125rem)',
+		'3': 'var(--control-font-3, 1.25rem)',
 	};
 
 	/** The currently selected option(s) based on value */
@@ -953,11 +953,11 @@
 	/* ================================================================== */
 
 	.select {
-		--_font: var(--select-font, var(--control-font-1, 0.9375rem));
+		--_font: var(--select-font, var(--control-font-1, 1rem));
 		/* Height scales off the font so the whole control scales from one
 		   number. The ratio is the SHARED --control-height-ratio (tokens.css),
 		   so Input, Select and Button land on the same height. */
-		--_height: calc(var(--_font) * var(--control-height-ratio, 3.2));
+		--_height: calc(var(--_font) * var(--control-height-ratio, 3));
 		--_radius: var(--radius-lg, 10px);
 		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
 		--_border-hover: var(--color-border-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
@@ -986,10 +986,10 @@
 	}
 
 	.select.dense {
-		--_height: calc(var(--_font) * var(--control-height-ratio-dense, 2.4));
+		--_height: calc(var(--_font) * var(--control-height-ratio-dense, 2.5));
 	}
 	.select.comfortable {
-		--_height: calc(var(--_font) * var(--control-height-ratio-comfortable, 4));
+		--_height: calc(var(--_font) * var(--control-height-ratio-comfortable, 3.5));
 	}
 
 	.select.disabled {

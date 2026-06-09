@@ -285,17 +285,20 @@ html {
 	   ratio. One scale → a default row is identical height, and a dense row is
 	   identical height, without per-component hardcoding.
 
-	     size 1 (default):  36px dense · 48px default · 60px comfortable
+	     size 1 (default):  40px dense · 48px default · 56px comfortable
 	   Components must drive `--_font` from --control-font-{size} and their
 	   height from `calc(var(--_font) * var(--control-height-ratio*))`. */
-	--control-font-0: 0.8125rem; /* 13px */
-	--control-font-1: 0.9375rem; /* 15px — default */
-	--control-font-2: 1.0625rem; /* 17px */
-	--control-font-3: 1.1875rem; /* 19px */
+	/* rem (controls scale with the root font-size). The fonts are even px and
+	   the ratios are multiples of 0.5, so every size × density lands on a whole
+	   pixel height — see the heights table in the design-tokens guide. */
+	--control-font-0: 0.875rem; /* 14px → 42px tall (×3) */
+	--control-font-1: 1rem; /* 16px → 48px tall — default */
+	--control-font-2: 1.125rem; /* 18px → 54px tall */
+	--control-font-3: 1.25rem; /* 20px → 60px tall */
 
-	--control-height-ratio: 3.2; /* default     → 48px @ size 1 */
-	--control-height-ratio-dense: 2.4; /* dense       → 36px @ size 1 */
-	--control-height-ratio-comfortable: 4; /* comfortable → 60px @ size 1 */
+	--control-height-ratio: 3; /* default     → 48px @ size 1 */
+	--control-height-ratio-dense: 2.5; /* dense       → 40px @ size 1 */
+	--control-height-ratio-comfortable: 3.5; /* comfortable → 56px @ size 1 */
 
 	--control-pad-x: 1em; /* inline padding, default */
 	--control-pad-x-dense: 0.75em;
