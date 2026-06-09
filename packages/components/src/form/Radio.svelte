@@ -197,7 +197,8 @@
 		class:comfortable
 		class:disabled={isDisabled}
 		{@attach tooltip(tooltip_message)}
-		style:--size="{px}px">
+		style:--size="{px}px"
+		style:font-size={`var(--control-font-${effectiveSize})`}>
 		<!-- Hidden native input for form submission -->
 		<input
 			type="radio"

@@ -126,11 +126,13 @@
 	// from the edge nearest the control.
 	let dropdownAbove = $state(false);
 
+	/* Per-size font from the shared --control-font-* tokens so Select lines up
+	   at the same height as Input and Button for a given size. */
 	const sizeMap: Record<string, string> = {
-		'0': '0.75rem',
-		'1': '0.875rem',
-		'2': '1rem',
-		'3': '1.125rem',
+		'0': 'var(--control-font-0, 0.8125rem)',
+		'1': 'var(--control-font-1, 0.9375rem)',
+		'2': 'var(--control-font-2, 1.0625rem)',
+		'3': 'var(--control-font-3, 1.1875rem)',
 	};
 
 	/** The currently selected option(s) based on value */
@@ -951,16 +953,14 @@
 	/* ================================================================== */
 
 	.select {
-		--_font: var(--select-font, 1rem);
+		--_font: var(--select-font, var(--control-font-1, 0.9375rem));
 		/* Height scales off the font so the whole control scales from one
-		   number — the roomy, legacy-style feel. */
-		--_height: calc(var(--_font) * 3.5);
+		   number. The ratio is the SHARED --control-height-ratio (tokens.css),
+		   so Input, Select and Button land on the same height. */
+		--_height: calc(var(--_font) * var(--control-height-ratio, 3.2));
 		--_radius: var(--radius-lg, 10px);
 		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
-		--_border-hover: var(
-			--color-border-active,
-			light-dark(hsl(0 0% 60%), hsl(0 0% 48%))
-		);
+		--_border-hover: var(--color-border-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
 		--_border-focus: var(--color-action, hsl(217 75% 52%));
 		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
 		--_bg: var(--color-surface, light-dark(#fff, hsl(0 0% 9%)));
@@ -986,10 +986,10 @@
 	}
 
 	.select.dense {
-		--_height: calc(var(--_font) * 2.5);
+		--_height: calc(var(--_font) * var(--control-height-ratio-dense, 2.4));
 	}
 	.select.comfortable {
-		--_height: calc(var(--_font) * 4);
+		--_height: calc(var(--_font) * var(--control-height-ratio-comfortable, 4));
 	}
 
 	.select.disabled {
@@ -1039,11 +1039,13 @@
 		gap: 0.5em;
 		box-sizing: border-box;
 		min-height: var(--_height);
-		/* Leaves room above for the floated label to straddle the outline */
-		margin-top: 0.5em;
-		/* Vertical padding keeps wrapped chips off the rounded outline; the
+		/* No top margin: the bordered box IS the control's layout height, so a
+		   row of Input/Select/Button top-aligns. The floating label is
+		   absolutely positioned and straddles the top border out of flow — it
+		   overflows ~0.4em above the box without adding to the layout height.
+		   Vertical padding keeps wrapped chips off the rounded outline; the
 		   trigger grows past `min-height` when chips span multiple rows. */
-		padding: 0.5em 1em;
+		padding: 0.5em var(--control-pad-x, 1em);
 		border-radius: var(--_radius);
 		background: var(--_bg);
 		cursor: pointer;
@@ -1056,10 +1058,10 @@
 	}
 
 	.select.dense .select-trigger {
-		padding: 0.4em 0.75em;
+		padding: 0.4em var(--control-pad-x-dense, 0.75em);
 	}
 	.select.comfortable .select-trigger {
-		padding: 0.6em 1.25em;
+		padding: 0.6em var(--control-pad-x-comfortable, 1.25em);
 	}
 
 	/* The outline is painted by a pseudo-element so the 1px -> 2px focus
@@ -1148,6 +1150,10 @@
 		transition: border-color var(--_duration) var(--_ease);
 	}
 	.select-label::before {
+		/* End the left border run 0.3em before the text so the notch has a small
+		   gap on the left, matching the 0.3em the ::after leaves on the right.
+		   The text's own margin-left keeps it aligned with the trigger value. */
+		min-width: 0.7em;
 		border-top-left-radius: var(--_radius);
 	}
 	.select-label::after {
@@ -1161,6 +1167,10 @@
 		display: flex;
 		align-items: center;
 		max-width: 100%;
+		/* Small gap from the left notch shoulder (mirrors the ::after gap on the
+		   right); the shoulder is shortened by the same amount so the text stays
+		   aligned with the trigger value. */
+		margin-left: 0.3em;
 		font-size: var(--_font);
 		line-height: 1;
 		white-space: nowrap;
@@ -1200,10 +1210,14 @@
 		transition: none;
 	}
 
+	/* The label's own border-top stays 1px on focus/open — an open/focused label
+	   is always floated (its own border is then transparent), so thickening it
+	   here was invisible yet grew the label's content box, nudging the notch
+	   shoulders and centred text down ~1px. The focus emphasis comes from the
+	   notch shoulders (::before/::after) below, which thicken without moving. */
 	.select-trigger.open .select-label,
 	.select-trigger:focus-within .select-label {
 		border-top-color: var(--_border-focus);
-		border-top-width: 2px;
 		color: var(--_border-focus);
 	}
 	.select-trigger.open .select-label.floated,

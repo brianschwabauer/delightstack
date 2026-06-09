@@ -355,13 +355,14 @@
 
 	/** Size config */
 	const size_config = $derived.by(() => {
-		/* Heights are em-based (see CSS --_height) so the font size drives the
-		   overall scale, matching the legacy component's spacious feel. */
+		/* The font drives the whole control's scale (see CSS --_height). The
+		   per-size font comes from the shared --control-font-* tokens so Input,
+		   Select and Button line up at the same height for a given size. */
 		const configs: Record<string, { font: string; icon_size: number }> = {
-			'0': { font: '13px', icon_size: 15 },
-			'1': { font: '15px', icon_size: 17 },
-			'2': { font: '17px', icon_size: 19 },
-			'3': { font: '19px', icon_size: 21 },
+			'0': { font: 'var(--control-font-0, 0.8125rem)', icon_size: 15 },
+			'1': { font: 'var(--control-font-1, 0.9375rem)', icon_size: 17 },
+			'2': { font: 'var(--control-font-2, 1.0625rem)', icon_size: 19 },
+			'3': { font: 'var(--control-font-3, 1.1875rem)', icon_size: 21 },
 		};
 		return configs[size] ?? configs['1'];
 	});
@@ -1403,18 +1404,16 @@
 	/* ================================================================== */
 
 	.input {
-		--_font: var(--input-font, 15px);
+		--_font: var(--input-font, var(--control-font-1, 0.9375rem));
 		--_icon-size: var(--input-icon-size, 17px);
-		/* Height scales off --_font (a px value), so the whole component
-		   scales from one number — keeping the roomy, legacy-style feel
-		   while staying a plain length the label maths can divide by. */
-		--_height: calc(var(--_font) * 3.5);
+		/* Height scales off --_font, so the whole control scales from one
+		   number. The ratio is the SHARED --control-height-ratio (tokens.css),
+		   so a row of controls — Input, Select, Button — lands on the same
+		   height. --_font is a length the floated-label maths can divide by. */
+		--_height: calc(var(--_font) * var(--control-height-ratio, 3.2));
 		--_radius: var(--radius-lg, 10px);
 		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
-		--_border-hover: var(
-			--color-border-active,
-			light-dark(hsl(0 0% 60%), hsl(0 0% 48%))
-		);
+		--_border-hover: var(--color-border-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
 		--_border-focus: var(--color-action, hsl(217 75% 52%));
 		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
 		--_bg: var(--color-surface, light-dark(#fff, hsl(0 0% 9%)));
@@ -1443,12 +1442,13 @@
 		pointer-events: none;
 	}
 
-	/* Density modifiers shift the em-based height (legacy: 2.5 / 3.5 / 4em) */
+	/* Density modifiers swap the shared height ratio (see tokens.css), so a
+	   dense Input/Select/Button row also lands on a single height. */
 	.input.dense {
-		--_height: calc(var(--_font) * 2.5);
+		--_height: calc(var(--_font) * var(--control-height-ratio-dense, 2.4));
 	}
 	.input.comfortable {
-		--_height: calc(var(--_font) * 4);
+		--_height: calc(var(--_font) * var(--control-height-ratio-comfortable, 4));
 	}
 
 	/* ================================================================== */
@@ -1494,19 +1494,21 @@
 		align-items: center;
 		gap: 0.5em;
 		min-height: var(--_height);
-		/* Leaves room above for the floated label to straddle the outline */
-		margin-top: 0.5em;
-		padding: 0 1em;
+		/* No top margin: the bordered box IS the control's layout height, so a
+		   row of Input/Select/Button top-aligns. The floating label is
+		   absolutely positioned and straddles the top border out of flow — it
+		   overflows ~0.4em above the box without adding to the layout height. */
+		padding: 0 var(--control-pad-x, 1em);
 		border-radius: var(--_radius);
 		background: var(--_bg);
 		cursor: text;
 	}
 
 	.input.dense .input-wrapper {
-		padding: 0 0.75em;
+		padding: 0 var(--control-pad-x-dense, 0.75em);
 	}
 	.input.comfortable .input-wrapper {
-		padding: 0 1.25em;
+		padding: 0 var(--control-pad-x-comfortable, 1.25em);
 	}
 
 	/* The outline is painted by a pseudo-element so the 1px -> 2px focus
@@ -1659,6 +1661,10 @@
 			min-width 200ms var(--_ease-label);
 	}
 	.input-label::before {
+		/* End the left border run 0.3em before the text so the notch has a small
+		   gap on the left, matching the 0.3em the ::after leaves on the right.
+		   The text's own margin-left keeps it aligned with the field contents. */
+		min-width: 0.7em;
 		border-top-left-radius: var(--_radius);
 	}
 	.input-label::after {
@@ -1681,6 +1687,10 @@
 		align-items: center;
 		max-width: 100%;
 		padding: 0;
+		/* Small gap from the left notch shoulder (mirrors the ::after gap on the
+		   right); the shoulder is shortened by the same amount so the text stays
+		   aligned with the field contents. */
+		margin-left: 0.3em;
 		font-size: var(--_font);
 		line-height: 1;
 		white-space: nowrap;
@@ -1737,9 +1747,13 @@
 	}
 
 	/* --- Focused -------------------------------------------------------- */
+	/* The label's own border-top stays 1px on focus. A focused label is always
+	   floated (its own border is then transparent), so thickening it here was
+	   invisible yet still grew the label's content box — nudging the notch
+	   shoulders and centred text down ~1px. The focus emphasis comes from the
+	   notch shoulders (::before/::after) below, which thicken without moving. */
 	.input-wrapper.focused .input-label {
 		border-top-color: var(--_border-focus);
-		border-top-width: 2px;
 		color: var(--_border-focus);
 	}
 	.input-wrapper.focused .input-label.floated {
@@ -1824,10 +1838,17 @@
 	.input :global(.button.input-icon-btn) {
 		font-size: calc(var(--_font) * 0.5);
 		flex-shrink: 0;
+		/* Pin to the legacy 4em square (relative to the reduced font above) so
+		   the in-field buttons stay sized to the field, independent of the
+		   control-height-based default for standalone icon buttons. */
+		width: 4em;
+		height: 4em;
 	}
 	.input :global(.button.input-pill-btn) {
 		font-size: calc(var(--_font) * 0.35);
 		flex-shrink: 0;
+		width: 4em;
+		height: 4em;
 	}
 
 	/* The clear button fades in on hover/focus of the field. */

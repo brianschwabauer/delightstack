@@ -147,6 +147,7 @@
 	onkeydown={onKeyDown}
 	onmouseleave={hoverEnd}
 	{@attach tooltip(tooltip_message)}
+	style:font-size={`var(--control-font-${size})`}
 	{id}>
 	<!-- Hidden native input for form submission -->
 	<input type="hidden" {name} value={value.toString()} />

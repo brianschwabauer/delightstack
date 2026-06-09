@@ -384,6 +384,11 @@
 	.button {
 		--_radius: var(--action-radius, var(--radius-lg));
 		--easing: var(--ease-spring);
+		/* Default font for an unsized button. Combined with the shared control
+		   height below, a bare <Button> matches a default Input/Select height in
+		   a row. An explicit `size` (inline font-size) or an in-field font
+		   override (e.g. .input-icon-btn) wins over this. */
+		font-size: var(--control-font-1, 0.9375rem);
 		display: inline-flex;
 		justify-content: center;
 		position: relative;
@@ -700,6 +705,27 @@
 			}
 		}
 
+		/* Shared control height: a standalone (non-icon) button snaps to the
+		   same height as Input/Select for a given size (see --control-height-*
+		   in tokens.css), so a Button lines up in a form row. The floor is
+		   em-based, so an explicitly sized button scales up too. The
+		   dropdown-trigger is excluded — it stretches to match its sibling.
+		   Icon buttons keep their 4em square (and so do the font-scaled
+		   buttons embedded inside Input/Select). */
+		&:not(.icon) {
+			button:not(.dropdown-trigger),
+			a {
+				box-sizing: border-box;
+				min-height: calc(1em * var(--control-height-ratio, 3.2));
+			}
+			&.dense {
+				button:not(.dropdown-trigger),
+				a {
+					min-height: calc(1em * var(--control-height-ratio-dense, 2.4));
+				}
+			}
+		}
+
 		.loading-icon {
 			position: relative;
 			display: flex;
@@ -797,12 +823,19 @@
 		}
 
 		&.icon {
-			height: 4em;
-			width: 4em;
+			/* A standalone icon button is a control-height square so it lines up
+			   in a row with text controls (Input/Select/Button). It scales with
+			   the button's font, so a sized icon button grows too. Icon buttons
+			   embedded in a field (.input-icon-btn / .input-pill-btn) pin their
+			   own size and are unaffected. */
+			height: calc(1em * var(--control-height-ratio, 3.2));
+			width: calc(1em * var(--control-height-ratio, 3.2));
 			aspect-ratio: 1 / 1;
 			border-radius: var(--radius-full);
 			overflow: hidden;
 			&.dense {
+				height: calc(1em * var(--control-height-ratio-dense, 2.4));
+				width: calc(1em * var(--control-height-ratio-dense, 2.4));
 				button,
 				a {
 					padding: 0;

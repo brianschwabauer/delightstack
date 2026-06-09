@@ -230,6 +230,64 @@ Not every component uses the full range — each defines the relevant subset:
 <Button size="3">Large</Button>
 ```
 
+Form controls (`Input`, `Select`, the form `Button` heights, and the smaller controls) use a
+`'0'`–`'3'` subset that also drives a shared **height** — see [Control sizing](#control-sizing).
+
+## Control sizing
+
+Form controls share one **canonical height system** so a row of them lines up. The `size`
+prop picks a font from the `--control-font-*` scale, and the control's height is then
+`font × ratio`. The density modifiers (`dense` / `comfortable`) swap the ratio. One scale →
+a default row is the same height, and a dense row is the same height, with no per-component
+hardcoding.
+
+```css
+:root {
+	--control-font-0: 0.8125rem; /* 13px */
+	--control-font-1: 0.9375rem; /* 15px — default */
+	--control-font-2: 1.0625rem; /* 17px */
+	--control-font-3: 1.1875rem; /* 19px */
+
+	--control-height-ratio: 3.2; /* default     → 48px @ size 1 */
+	--control-height-ratio-dense: 2.4; /* dense       → 36px @ size 1 */
+	--control-height-ratio-comfortable: 4; /* comfortable → 60px @ size 1 */
+
+	--control-pad-x: 1em; /* inline padding */
+	--control-pad-x-dense: 0.75em;
+	--control-pad-x-comfortable: 1.25em;
+}
+```
+
+`Input`, `Select` and `Button` (including standalone icon buttons) snap to these heights:
+
+| `size` | dense | default | comfortable |
+| ------ | ----- | ------- | ----------- |
+| 0      | 31px  | 42px    | 52px        |
+| **1**  | 36px  | **48px**| 60px        |
+| 2      | 41px  | 54px    | 68px        |
+| 3      | 46px  | 61px    | 76px        |
+
+So a row of controls at the same `size` (and density) is the same height:
+
+```svelte
+<div style="display: flex; gap: 0.75rem; align-items: start;">
+	<Input label="Search" />
+	<Select label="Sort" {options} />
+	<Button>Go</Button>
+</div>
+```
+
+The smaller controls (`Checkbox`, `Radio`, `Toggle`, `Range`, `Rating`) read the same
+`--control-font-*` scale so `size` means the same text scale everywhere; they keep their
+natural glyph height and **center** within a control-height row (`align-items: center`).
+
+<Aside type="note">
+`Input` and `Select`'s floating label sits **outside** the component's layout box — it
+straddles the top border and overflows ~`0.4em` above it. The bordered box _is_ the control
+height, so controls top-align in a row; just leave the usual bit of vertical space above a
+labeled row (don't `overflow: hidden` a flush container).
+</Aside>
+
 ## Breakpoints
 
 Used sparingly for page-level layout (components prefer container queries):

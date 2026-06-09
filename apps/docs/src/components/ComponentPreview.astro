@@ -58,7 +58,11 @@ const normalizedCode = code.trim().replace(/\t/g, '  ');
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.75rem;
+		/* Tighter between horizontal items; roomier between wrapped/stacked rows
+		   so a column of labeled inputs breathes (their floating label straddles
+		   the top border and overflows ~0.4em above the box). */
+		column-gap: 0.75rem;
+		row-gap: 1.25rem;
 		min-height: 4rem;
 	}
 

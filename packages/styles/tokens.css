@@ -276,6 +276,31 @@ html {
 	--space-fluid-4: clamp(2rem, 4vw, 3rem);
 	--space-fluid-5: clamp(4rem, 5vw, 5rem);
 
+	/* Control sizing — the canonical height system shared by every form
+	   control (Input, Select, Button, …) so a row of controls is the same
+	   height and feels cohesive.
+
+	   The `size` prop (0–3) picks the font; the control's height is then
+	   `font × ratio`. The density modifiers (`dense` / `comfortable`) swap the
+	   ratio. One scale → a default row is identical height, and a dense row is
+	   identical height, without per-component hardcoding.
+
+	     size 1 (default):  36px dense · 48px default · 60px comfortable
+	   Components must drive `--_font` from --control-font-{size} and their
+	   height from `calc(var(--_font) * var(--control-height-ratio*))`. */
+	--control-font-0: 0.8125rem; /* 13px */
+	--control-font-1: 0.9375rem; /* 15px — default */
+	--control-font-2: 1.0625rem; /* 17px */
+	--control-font-3: 1.1875rem; /* 19px */
+
+	--control-height-ratio: 3.2; /* default     → 48px @ size 1 */
+	--control-height-ratio-dense: 2.4; /* dense       → 36px @ size 1 */
+	--control-height-ratio-comfortable: 4; /* comfortable → 60px @ size 1 */
+
+	--control-pad-x: 1em; /* inline padding, default */
+	--control-pad-x-dense: 0.75em;
+	--control-pad-x-comfortable: 1.25em;
+
 	/* Motion — durations */
 	--duration-fast: 100ms;
 	--duration-normal: 200ms;
