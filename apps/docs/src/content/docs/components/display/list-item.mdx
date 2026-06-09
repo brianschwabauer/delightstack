@@ -8,6 +8,7 @@ import ListItemActiveDemo from '../../../../components/demos/ListItemActiveDemo.
 import ListItemDisabledDemo from '../../../../components/demos/ListItemDisabledDemo.svelte';
 import ListItemNavDemo from '../../../../components/demos/ListItemNavDemo.svelte';
 import ListItemAsyncDemo from '../../../../components/demos/ListItemAsyncDemo.svelte';
+import ListItemLoadingSuccessDemo from '../../../../components/demos/ListItemLoadingSuccessDemo.svelte';
 import ListItemSlotsDemo from '../../../../components/demos/ListItemSlotsDemo.svelte';
 import ListItemSubmenuDemo from '../../../../components/demos/ListItemSubmenuDemo.svelte';
 import ListAppearanceDemo from '../../../../components/demos/ListAppearanceDemo.svelte';
@@ -55,16 +56,30 @@ ${'  '}<ListItem onclick={handleLogout}>Log Out</ListItem>
 
 ### Async Click Handling
 
-When `onclick` returns a Promise, a loading spinner is shown until it resolves.
+When `onclick` returns a Promise, the row manages its own loading feedback — no `loading` prop required:
+
+- **Instant actions don't flash.** The spinner only appears if the promise is still pending after ~100ms; anything faster is treated as instant.
+- **The spinner can't blink.** Once shown, it stays for at least ~1s, then eases out quickly.
+- **Success is confirmed automatically.** On resolve, a brief checkmark flashes; on reject, no checkmark is shown.
 
 <ComponentPreview code={`<List>
 ${'  '}<ListItem onclick={async () => {
-${'  '}${'  '}await api.saveItem();
+${'  '}${'  '}await api.saveItem(); // throws on failure -> no checkmark
 ${'  '}}}>
 ${'  '}${'  '}Save Item
 ${'  '}</ListItem>
 </List>`}>
   <ListItemAsyncDemo client:load />
+</ComponentPreview>
+
+### Manual Success Checkmark
+
+When you drive `loading` yourself (e.g. from a store), set `loading_success` to flash the same confirming checkmark as `loading` returns to `false`. Leave it off and the spinner simply disappears.
+
+<ComponentPreview code={`<List>
+${'  '}<ListItem loading={loading} loading_success>Save Item</ListItem>
+</List>`}>
+  <ListItemLoadingSuccessDemo client:load />
 </ComponentPreview>
 
 ### Content Slots
@@ -133,6 +148,8 @@ ${'  '}<ListItem>Available Action</ListItem>
 |------|------|---------|-------------|
 | `disabled` | `boolean` | `false` | Disable interaction |
 | `active` | `boolean` | `false` | Force active/selected appearance |
+| `loading` | `boolean` | `undefined` | Show the loading spinner on the action row manually. Leave unset to let a promise-returning `onclick` drive it |
+| `loading_success` | `boolean` | `false` | For the manual `loading` path: flash a success checkmark when `loading` goes `true` → `false`. The promise path shows it automatically on resolve |
 | `href` | `string` | - | Render as an anchor link |
 | `target` | `'_self' \| '_blank' \| '_parent' \| '_top'` | - | Link target attribute |
 | `menu` | `Snippet` | - | Submenu content (renders a more-options button) |
@@ -147,7 +164,7 @@ ${'  '}<ListItem>Available Action</ListItem>
 
 | Event | Detail | Description |
 |-------|--------|-------------|
-| `onclick` | `(e: MouseEvent) => void \| Promise<void>` | Click handler; returns a Promise to show a loading spinner |
+| `onclick` | `(e: MouseEvent) => void \| Promise<void>` | Click handler; return a Promise for automatic spinner + success-checkmark feedback |
 | `onchange` | `(value: boolean) => void` | Called when selection state changes (radio/checkbox modes) |
 
 ## Accessibility

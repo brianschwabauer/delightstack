@@ -2,7 +2,7 @@
 	import { ripple } from '@delightstack/utilities';
 	import { getContext, type Snippet } from 'svelte';
 	import { type ListContext } from './List.svelte';
-	import type { TransitionConfig } from 'svelte/transition';
+	import { fade, type TransitionConfig } from 'svelte/transition';
 	import { backOut, quartOut } from 'svelte/easing';
 	import type { PopoverPlacement } from './../actions/Popover.svelte';
 	import Button from './../actions/Button.svelte';
@@ -24,6 +24,21 @@
 
 		/** Whether the list item is active (like when used as a button selection list) */
 		active = false,
+
+		/**
+		 * Whether a loading spinner should appear on the action row (`button`
+		 * type). Leave undefined to let a promise-returning `onclick` drive it
+		 * automatically (see `onclick`).
+		 */
+		loading = undefined as boolean | undefined,
+
+		/**
+		 * For the manual `loading` path only: when `loading` goes true -> false and
+		 * this is true, a success checkmark briefly animates in to confirm the
+		 * action, then animates away. (The promise-aware `onclick` path shows this
+		 * checkmark automatically on resolve, so this prop isn't needed there.)
+		 */
+		loading_success = false,
 
 		/** The content to show in a dropdown menu when the button is clicked */
 		menu = undefined as undefined | Snippet,
@@ -51,8 +66,12 @@
 
 		/**
 		 * The function to call when the list item is clicked.
-		 * If a promise is returned, it will show a loading icon while the promise resolves
-		 * If the promise is not rejected, the loading icon will change to a checkmark icon
+		 * If it returns a promise, the row manages its own loading feedback:
+		 * - A spinner appears only if the promise is still pending after ~100ms
+		 *   (faster resolves are treated as instant — no spinner flash).
+		 * - Once shown, the spinner stays for at least ~1s so it can't blink away.
+		 * - On resolve, a brief success checkmark confirms the action; on reject,
+		 *   no checkmark is shown.
 		 */
 		onclick = undefined as
 			| undefined
@@ -71,9 +90,59 @@
 		checked = context.value.includes(index);
 	});
 
-	let onclickLoading = $state(false);
-	let onclickLoadingSuccess = $state(false);
+	/* Promise-aware loading timing (mirrors Button).
+	   - SHOW_DELAY: a promise that settles faster than this never gets a spinner;
+	     the action reads as "instant".
+	   - MIN_VISIBLE: once shown, the spinner stays at least this long so it can't
+	     flash on then immediately off.
+	   - SPINNER_OUT: spinner collapse duration (kept in sync with the "out"
+	     transition) so the success check can slot in right after it clears.
+	   - CHECK_HOLD: how long the success checkmark lingers before easing out. */
+	const SHOW_DELAY = 100;
+	const MIN_VISIBLE = 1000;
+	const SPINNER_OUT = 150;
+	const CHECK_HOLD = 1000;
 
+	let inFlight = $state(false); // a returned promise is running (covers the pre-spinner window)
+	let spinnerVisible = $state(false); // the spinner is actually rendered
+	let checkVisible = $state(false); // the success checkmark is rendered
+
+	let showTimer: ReturnType<typeof setTimeout> | undefined;
+	let hideTimer: ReturnType<typeof setTimeout> | undefined;
+	let checkTimer: ReturnType<typeof setTimeout> | undefined;
+	let spinnerShownAt = 0;
+
+	function clearTimers() {
+		clearTimeout(showTimer);
+		clearTimeout(hideTimer);
+		clearTimeout(checkTimer);
+		showTimer = hideTimer = checkTimer = undefined;
+	}
+	$effect(() => clearTimers); // tear down pending timers on destroy
+
+	// The external `loading` prop drives the spinner directly; a returned promise
+	// drives `inFlight`/`spinnerVisible`. "Busy" (a11y/pointer-gating) is either of
+	// those; `showSpinner` excludes the brief pre-spinner window so a sub-SHOW_DELAY
+	// promise never flashes one. The checkmark renders straight off `checkVisible`.
+	const externalLoading = $derived(loading);
+	const isLoading = $derived(!!externalLoading || inFlight);
+	const showSpinner = $derived(!!externalLoading || spinnerVisible);
+
+	// Manual loading path: when the caller drives `loading` true -> false and has
+	// opted in with `loading_success`, play the same confirming checkmark. Runs in
+	// `$effect.pre` so `checkVisible` is set in the same flush `loading` clears in,
+	// otherwise the icon slot would render one empty frame and flash closed/open.
+	let wasExternalLoading = false;
+	$effect.pre(() => {
+		const now = !!externalLoading;
+		if (wasExternalLoading && !now && loading_success && !inFlight) flashCheck();
+		wasExternalLoading = now;
+	});
+
+	// The icon slot (the common parent of the spinner and the success check)
+	// grows/collapses with this width+opacity transition. Wrapping both means the
+	// slot only opens when one first appears and only collapses once both are gone
+	// — the spinner -> check handoff happens inside a stable, already-open slot.
 	function loadingTransition(
 		node: HTMLElement,
 		params?: { direction?: 'in' | 'out' },
@@ -81,32 +150,84 @@
 		return () => {
 			const style = getComputedStyle(node);
 			const width = parseFloat(style.width);
+			const out = params?.direction === 'out';
 			return {
-				duration: params?.direction === 'out' ? 200 : 400,
-				easing: params?.direction === 'out' ? quartOut : backOut,
+				duration: out ? SPINNER_OUT : 320,
+				easing: out ? quartOut : backOut,
 				css: (t: number) => `width: ${t * width}px; opacity: ${t};`,
 			};
 		};
 	}
 
+	// The checkmark's own entrance: a spring-scaled pop that simultaneously draws
+	// its stroke on (the dash offset rides `t`). Driving the draw from the
+	// transition — rather than a CSS @keyframes — keeps it reliable regardless of
+	// scoping. prefers-reduced-motion collapses it to a plain appear.
+	function checkIn(_node: Element): TransitionConfig {
+		const reduce =
+			typeof matchMedia !== 'undefined' &&
+			matchMedia('(prefers-reduced-motion: reduce)').matches;
+		return {
+			duration: reduce ? 0 : 440,
+			easing: backOut,
+			css: (t: number) =>
+				`transform: scale(${0.3 + 0.7 * t}); opacity: ${Math.min(1, t * 2)}; --check-draw: ${24 * (1 - t)};`,
+		};
+	}
+
+	// Pop the confirming checkmark, then retire it after CHECK_HOLD. spinnerVisible
+	// is cleared in the same tick by the caller, so the slot stays open and the
+	// spinner crossfades into the check rather than the slot reopening.
+	function flashCheck() {
+		clearTimeout(checkTimer);
+		checkVisible = true;
+		checkTimer = setTimeout(() => (checkVisible = false), CHECK_HOLD);
+	}
+
 	function handleClick(e: MouseEvent) {
-		if (onclickLoading) return;
-		if (onclick) {
-			const maybePromise = onclick(e);
-			if (maybePromise instanceof Promise) {
-				onclickLoading = true;
-				maybePromise
-					.then(() => {
-						onclickLoadingSuccess = true;
-						setTimeout(() => {
-							if (onclickLoading) return;
-							onclickLoadingSuccess = false;
-						}, 1000);
-					})
-					.catch(() => (onclickLoadingSuccess = false))
-					.finally(() => (onclickLoading = false));
-			}
+		if (inFlight || externalLoading) return;
+		if (!onclick) return;
+		const maybePromise = onclick(e);
+		if (!(maybePromise instanceof Promise)) return;
+
+		// A fresh action supersedes any checkmark still lingering from the last one.
+		clearTimers();
+		checkVisible = false;
+
+		inFlight = true;
+		// Hold off on the spinner — if the promise settles within SHOW_DELAY the
+		// action was effectively instant and never needs one.
+		showTimer = setTimeout(() => {
+			showTimer = undefined;
+			spinnerVisible = true;
+			spinnerShownAt = performance.now();
+		}, SHOW_DELAY);
+
+		maybePromise.then(
+			() => settle(true),
+			() => settle(false),
+		);
+	}
+
+	function settle(success: boolean) {
+		// Settled before the spinner ever appeared -> treat as instant: no spinner,
+		// no checkmark, just release.
+		if (showTimer) {
+			clearTimeout(showTimer);
+			showTimer = undefined;
+			inFlight = false;
+			return;
 		}
+		// The spinner is up; keep it for the rest of its minimum-visible window so
+		// it doesn't blink away the instant the promise resolves.
+		const remaining = Math.max(0, MIN_VISIBLE - (performance.now() - spinnerShownAt));
+		clearTimeout(hideTimer);
+		hideTimer = setTimeout(() => {
+			spinnerVisible = false;
+			inFlight = false;
+			// On success, let the spinner collapse, then pop a brief checkmark.
+			if (success) flashCheck();
+		}, remaining);
 	}
 </script>
 
@@ -114,7 +235,7 @@
 	<li
 		class={['list-item', context.type, class_name].filter(Boolean).join(' ')}
 		class:disabled={context.disabled || disabled}
-		class:is-loading={onclickLoading}
+		class:is-loading={isLoading}
 		class:dense={context.dense}
 		class:comfortable={context.comfortable}
 		{style}
@@ -124,8 +245,7 @@
 		style:--level={context.level}
 		{@attach ripple({
 			zIndex: 1,
-			enabled:
-				!context.disabled && !disabled && context.type !== 'text' && !onclickLoading,
+			enabled: !context.disabled && !disabled && context.type !== 'text' && !isLoading,
 		})}>
 		{#if context.type === 'checkbox'}
 			<label for="checkbox-{id}">
@@ -175,14 +295,32 @@
 				<button
 					type="button"
 					disabled={context.disabled || disabled}
-					aria-busy={onclickLoading ? 'true' : null}
+					aria-busy={isLoading ? 'true' : null}
 					onclick={handleClick}>
-					{#if onclickLoading || onclickLoadingSuccess}
+					{#if showSpinner || checkVisible}
 						<div
 							class="loading-icon"
 							in:loadingTransition={{ direction: 'in' }}
 							out:loadingTransition={{ direction: 'out' }}>
-							<Progress size="00" />
+							{#if showSpinner}
+								<div class="icon-layer" out:fade={{ duration: 120 }}>
+									<Progress size="00" color="currentColor" />
+								</div>
+							{:else}
+								<div class="icon-layer check-layer" in:checkIn>
+									<svg
+										class="check"
+										viewBox="2 2 20 20"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										aria-hidden="true">
+										<path d="M5 12.5l4.5 4.5L19 7" />
+									</svg>
+								</div>
+							{/if}
 						</div>
 					{/if}
 					{#if children}{@render children()}{/if}
@@ -595,6 +733,31 @@
 			aspect-ratio: 1;
 			flex-shrink: 0;
 			flex-grow: 0;
+		}
+		/* Spinner and success check occupy the same spot so they can crossfade
+		   during the handoff without nudging the label. */
+		.icon-layer {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+		.check {
+			display: block;
+			/* The tick only spans the middle of its viewBox, so fill the slot
+			   (paired with the tightened viewBox) to size it like the spinner. The
+			   slot width is fixed and the layer is absolutely positioned, so this
+			   never shifts layout. */
+			width: 1.25em;
+			height: 1.25em;
+		}
+		.check path {
+			/* Dash length >= the tick's path length; checkIn() rides --check-draw
+			   from 24 (hidden) down to 0 (drawn). The 0 fallback keeps it drawn
+			   once the transition's inline style is gone. */
+			stroke-dasharray: 24;
+			stroke-dashoffset: var(--check-draw, 0);
 		}
 	}
 </style>
