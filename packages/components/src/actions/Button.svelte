@@ -622,7 +622,7 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.5em) 0.4em,
+					circle at calc(100% - 0.55em) 0.4em,
 					transparent calc(0.65em + 3px),
 					black calc(0.65em + 3.5px)
 				);
