@@ -533,16 +533,16 @@
 
 		.badge {
 			position: absolute;
-			top: 0;
-			right: 0;
+			top: -0.2em;
+			right: -0.2em;
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			background-color: var(--color-accent, var(--color-text));
 			color: var(--color-accent-text, var(--color-bg));
 			border-radius: var(--radius-full);
-			font-size: 0.85em;
-			line-height: 0.85em;
+			font-size: 0.8em;
+			line-height: 0.8em;
 			padding: 0.1em 0.5em;
 			min-width: 1.5em;
 			min-height: 1.5em;
@@ -553,6 +553,8 @@
 				height: 0.75rem;
 				min-width: 0.75rem;
 				min-height: 0.75rem;
+				top: -0.1em;
+				right: -0.1em;
 				padding: 0;
 			}
 		}
@@ -569,8 +571,8 @@
 				   button and pull it in to hug the circle's top-right edge,
 				   instead of floating off the bounding-box corner. */
 				font-size: 0.8em;
-				top: -0.15em;
-				right: -0.15em;
+				top: -0.25em;
+				right: -0.5em;
 				&.dot {
 					top: 0;
 					right: 0;
@@ -595,7 +597,7 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.7em) 0.6em,
+					circle at calc(100% - 0.5em) 0.4em,
 					transparent calc(0.65em + 3px),
 					black calc(0.65em + 3.5px)
 				);
@@ -605,7 +607,7 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.375rem) 0.375rem,
+					circle at calc(100% - 0.3rem) 0.3rem,
 					transparent calc(0.375rem + 3px),
 					black calc(0.375rem + 3.55px)
 				);
@@ -616,7 +618,7 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.55em) 0.5em,
+					circle at calc(100% - 0.3em) 0.4em,
 					transparent 0.75em,
 					black calc(0.75em + 0.5px)
 				);
