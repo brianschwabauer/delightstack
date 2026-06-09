@@ -71,6 +71,9 @@ importers:
       '@delightstack/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@delightstack/styles':
+        specifier: workspace:*
+        version: link:../../packages/styles
       astro:
         specifier: ^5.6.1
         version: 5.12.3(@types/node@24.1.0)(rollup@4.60.1)(sass@1.89.2)(typescript@5.8.3)
@@ -119,6 +122,9 @@ importers:
       '@delightstack/stripe':
         specifier: workspace:*
         version: link:../../packages/stripe
+      '@delightstack/styles':
+        specifier: workspace:*
+        version: link:../../packages/styles
       '@delightstack/utilities':
         specifier: workspace:*
         version: link:../../packages/utilities
