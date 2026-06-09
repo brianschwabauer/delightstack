@@ -75,6 +75,11 @@
 	}
 </script>
 
+<!-- The whole container is the click target so the hit area matches the
+     hover/press feedback (which keys off `.checkbox`). Keyboard activation
+     stays on the focusable role="checkbox" indicator below. -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class={['checkbox', class_name].filter(Boolean).join(' ')}
 	class:dense
@@ -83,7 +88,8 @@
 	class:has-error={!!error}
 	{@attach tooltip(tooltip_message)}
 	style:--size="{px}px"
-	style:font-size={`var(--control-font-${size})`}>
+	style:font-size={`var(--control-font-${size})`}
+	onclick={toggle}>
 	<!-- Hidden native input for form submission -->
 	<input
 		type="checkbox"
@@ -108,7 +114,6 @@
 		aria-disabled={disabled}
 		aria-labelledby={label ? `${id}-label` : undefined}
 		{@attach ripple({ enabled: !disabled, centered: true, opacity: 0.15 })}
-		onclick={toggle}
 		onkeydown={onKeyDown}>
 		<svg
 			class="indicator"
@@ -144,9 +149,7 @@
 	{#if label || description}
 		<div class="content">
 			{#if label}
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-				<label id="{id}-label" for={id} class="label" onclick={toggle}>{label}</label>
+				<span id="{id}-label" class="label">{label}</span>
 			{/if}
 			{#if description}
 				<span class="description">{description}</span>
@@ -165,7 +168,13 @@
 		flex-wrap: wrap;
 		align-items: flex-start;
 		gap: 0.5em;
-		cursor: default;
+		/* The whole container is clickable, so the pointer cursor and the
+		   hover/press feedback now line up with the actual hit area. Bound it
+		   to its content (indicator + label + description) so a block-level
+		   parent can't stretch the hit area across the whole row. */
+		width: fit-content;
+		cursor: pointer;
+		user-select: none;
 		position: relative;
 		perspective: 100px;
 		transition: translate 200ms ease;
