@@ -7,7 +7,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ListTextDemo from '../../../../components/demos/ListTextDemo.svelte';
 import ListRadioDemo from '../../../../components/demos/ListRadioDemo.svelte';
 import ListCheckboxDemo from '../../../../components/demos/ListCheckboxDemo.svelte';
-import ListDenseDemo from '../../../../components/demos/ListDenseDemo.svelte';
+import ListDensityDemo from '../../../../components/demos/ListDensityDemo.svelte';
 import ListAppearanceDemo from '../../../../components/demos/ListAppearanceDemo.svelte';
 import { List } from '@delightstack/components/display';
 
@@ -89,16 +89,24 @@ ${'  '}<ListItem>SMS Alerts</ListItem>
   <ListCheckboxDemo client:load />
 </ComponentPreview>
 
-### Dense Menu Actions
+### Spacing
 
-Compact spacing for action-oriented lists.
+`dense` tightens the rows (great for action menus); `comfortable` relaxes them.
+The default sits between the two and lines up with the standard control height.
 
-<ComponentPreview code={`<List dense>
+<ComponentPreview code={`<!-- compact -->
+<List dense>
 ${'  '}<ListItem onclick={() => handleEdit()}>Edit</ListItem>
 ${'  '}<ListItem onclick={() => handleDuplicate()}>Duplicate</ListItem>
 ${'  '}<ListItem onclick={() => handleDelete()}>Delete</ListItem>
-</List>`}>
-  <ListDenseDemo client:load />
+</List>
+
+<!-- default -->
+<List>…</List>
+
+<!-- relaxed -->
+<List comfortable>…</List>`}>
+  <ListDensityDemo client:load />
 </ComponentPreview>
 
 ### Text Mode (Non-Interactive)
