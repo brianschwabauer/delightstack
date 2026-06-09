@@ -46,6 +46,23 @@
 	color: var(--color-text);
 }
 
+/* Let inline overlays in demos layer above the page chrome.
+ *
+ * Starlight wraps page content in `.main-pane` with `isolation: isolate`
+ * (TwoColumnContent.astro) — a stacking context that keeps content z-indexes
+ * from interacting with the fixed right sidebar. But our component demos render
+ * real overlays *inline* in the content (the <Modal> uses `position: fixed`
+ * with a high z-index rather than portaling). Trapped inside the isolated pane,
+ * a modal's z-index can't compete past it, so it renders *behind* the sidebars
+ * and nav. Dropping the isolation lets these overlays stack against the root
+ * context — exactly how they'd behave in a real app — without portaling them
+ * (so SSR and the open/close transitions are untouched). The site chrome keeps
+ * its own positive z-index, and the TOC/nav sit beside the content rather than
+ * over it, so nothing else is affected. */
+.main-pane {
+	isolation: auto;
+}
+
 /* Render tabs at 2-space width in all code blocks */
 pre,
 code {
