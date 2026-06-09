@@ -483,6 +483,17 @@
 		}
 		&.transparent,
 		&.translucent {
+			/* Plain (non-accent/error/success) transparent + translucent buttons
+			   don't set their own --color-text, so the global --color-text-disabled
+			   — a currentColor-relative dim — resolves against the *inherited* color.
+			   Nested in a muted container (e.g. Breadcrumbs' trail) that compounds and
+			   washes the disabled label into the background. Derive it from the
+			   button's own full-contrast --color-text instead; the accent/error/success
+			   variants below override with their own disabled tokens. */
+			--color-text-disabled: light-dark(
+				oklch(from var(--color-text) calc(l + 0.2) c h),
+				oklch(from var(--color-text) calc(l - 0.2) c h)
+			);
 			&.accent {
 				--color-text: var(--color-accent);
 				--color-text-disabled: var(--color-accent-disabled);
@@ -504,6 +515,19 @@
 			a,
 			button {
 				pointer-events: none;
+				/* A loading button is "busy", not "disabled". It still carries the
+				   disabled attribute (to block clicks/keyboard activation), but it
+				   must stay fully legible — so restore the resting colors instead
+				   of the muted disabled treatment. --color-text-disabled is a
+				   currentColor-relative dim; when a transparent button inherits an
+				   already-muted color (e.g. Breadcrumbs' muted trail) that dim
+				   compounds and washes the label almost into the background. */
+				&:disabled,
+				&[aria-disabled='true'] {
+					background-color: var(--color-bg);
+					color: var(--color-text);
+					border: var(--button-border);
+				}
 			}
 		}
 		&.loading {
