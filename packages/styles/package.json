@@ -25,9 +25,11 @@
 	},
 	"exports": {
 		".": "./global.css",
-		"./global.css": "./global.css"
+		"./global.css": "./global.css",
+		"./tokens.css": "./tokens.css"
 	},
 	"files": [
-		"global.css"
+		"global.css",
+		"tokens.css"
 	]
 }

@@ -1,381 +1,4 @@
-html {
-	color-scheme: light dark;
-
-	--color-dashboard: #616969;
-	--color-primary: #005640;
-	--color-secondary: #005640;
-	--color-50: oklch(from var(--color-dashboard) 99% min(0.01, c) h);
-	--color-100: oklch(from var(--color-dashboard) 97% min(0.015, c) h);
-	--color-150: oklch(from var(--color-dashboard) 95% min(0.02, c) h);
-	--color-200: oklch(from var(--color-dashboard) 92% min(0.03, c) h);
-	--color-250: oklch(from var(--color-dashboard) 87% min(0.04, c) h);
-	--color-300: oklch(from var(--color-dashboard) 82% min(0.05, c) h);
-	--color-350: oklch(from var(--color-dashboard) 76% min(0.06, c) h);
-	--color-400: oklch(from var(--color-dashboard) 70% min(0.07, c) h);
-	--color-450: oklch(from var(--color-dashboard) 65% min(0.08, c) h);
-	--color-500: oklch(from var(--color-dashboard) 60% min(0.08, c) h);
-	--color-550: oklch(from var(--color-dashboard) 55% min(0.08, c) h);
-	--color-600: oklch(from var(--color-dashboard) 48% min(0.07, c) h);
-	--color-650: oklch(from var(--color-dashboard) 41% min(0.06, c) h);
-	--color-700: oklch(from var(--color-dashboard) 35% min(0.05, c) h);
-	--color-750: oklch(from var(--color-dashboard) 29% min(0.04, c) h);
-	--color-800: oklch(from var(--color-dashboard) 24% min(0.03, c) h);
-	--color-850: oklch(from var(--color-dashboard) 21% min(0.02, c) h);
-	--color-900: oklch(from var(--color-dashboard) 18% min(0.015, c) h);
-	--color-950: oklch(from var(--color-dashboard) 15% min(0.01, c) h);
-
-	--color-bg-max-contrast: light-dark(white, black);
-	--color-bg-00: light-dark(white, black);
-	--color-bg-0: light-dark(var(--color-50), var(--color-950));
-	--color-bg-1: light-dark(var(--color-100), var(--color-900));
-	--color-bg-2: light-dark(var(--color-150), var(--color-850));
-	--color-bg-3: light-dark(var(--color-200), var(--color-800));
-	--color-bg-4: light-dark(var(--color-250), var(--color-750));
-	--color-bg-5: light-dark(var(--color-300), var(--color-700));
-	--color-bg-6: light-dark(var(--color-350), var(--color-650));
-	--color-bg-7: light-dark(var(--color-400), var(--color-600));
-	--color-bg-8: light-dark(var(--color-450), var(--color-550));
-	--color-bg-9: light-dark(var(--color-500), var(--color-500));
-	--color-bg-10: light-dark(var(--color-550), var(--color-450));
-	--color-bg-11: light-dark(var(--color-600), var(--color-400));
-	--color-bg-12: light-dark(var(--color-650), var(--color-350));
-	--color-bg-13: light-dark(var(--color-700), var(--color-300));
-	--color-bg-14: light-dark(var(--color-750), var(--color-250));
-	--color-bg-15: light-dark(var(--color-800), var(--color-200));
-	--color-bg-16: light-dark(var(--color-850), var(--color-150));
-	--color-bg-17: light-dark(var(--color-900), var(--color-100));
-	--color-bg-18: light-dark(var(--color-950), var(--color-50));
-	--color-bg: var(--color-bg-1);
-	--color-bg-disabled: var(--color-bg-0);
-	--color-bg-active: var(--color-bg-2);
-
-	--color-text-max-contrast: light-dark(black, white);
-	--color-text-light: oklch(from var(--color-dashboard) 76% min(0.06, c) h);
-	--color-text-dark: oklch(from var(--color-dashboard) 46% min(0.06, c) h);
-	--color-text-disabled: light-dark(
-		oklch(from currentColor calc(l + 0.2) c h),
-		oklch(from currentColor calc(l - 0.2) c h)
-	);
-	--color-text-active: light-dark(
-		oklch(from currentColor calc(l - 0.3) c h),
-		oklch(from currentColor calc(l + 0.2) c h)
-	);
-	--color-text: light-dark(var(--color-text-dark), var(--color-text-light));
-
-	--color-outline: light-dark(
-		oklch(from currentColor 85% min(c, 0.1) h),
-		oklch(from currentColor 40% min(c, 0.09) h)
-	);
-	--color-outline-disabled: light-dark(
-		oklch(from currentColor 90% min(c, 0.1) h),
-		oklch(from currentColor 30% min(c, 0.09) h)
-	);
-	--color-outline-active: light-dark(
-		oklch(from currentColor 75% min(c, 0.1) h),
-		oklch(from currentColor 50% min(c, 0.09) h)
-	);
-
-	--color-action: light-dark(
-		oklch(from var(--color-primary) clamp(0.3, l, 0.5) min(0.3, c) h),
-		oklch(from var(--color-primary) clamp(0.4, l, 0.6) min(0.3, c) h)
-	);
-	--color-action-disabled: light-dark(
-		oklch(from var(--color-action) calc(l + 0.08) calc(c - 0.01) h),
-		oklch(from var(--color-action) calc(l - 0.1) calc(c - 0.02) h)
-	);
-	--color-action-active: light-dark(
-		oklch(from var(--color-action) calc(l - 0.06) calc(c + 0.02) h),
-		oklch(from var(--color-action) calc(l + 0.07) calc(c + 0.02) h)
-	);
-	--color-action-text: light-dark(
-		oklch(from var(--color-primary) 94% min(0.05, c) h),
-		oklch(from var(--color-primary) 94% min(0.05, c) h)
-	);
-	--color-action-text-disabled: light-dark(
-		oklch(from var(--color-primary) 82% min(0.09, c) h),
-		oklch(from var(--color-primary) 66% min(0.09, c) h)
-	);
-	--color-action-text-active: light-dark(
-		oklch(from var(--color-primary) 99% min(0.03, c) h),
-		oklch(from var(--color-primary) 99% min(0.03, c) h)
-	);
-
-	--color-accent: light-dark(
-		oklch(from var(--color-secondary) clamp(0.3, l, 0.5) min(0.3, c) h),
-		oklch(from var(--color-secondary) clamp(0.4, l, 0.6) min(0.3, c) h)
-	);
-	--color-accent-disabled: light-dark(
-		oklch(from var(--color-accent) calc(l + 0.08) calc(c - 0.01) h),
-		oklch(from var(--color-accent) calc(l - 0.1) calc(c - 0.02) h)
-	);
-	--color-accent-active: light-dark(
-		oklch(from var(--color-accent) calc(l - 0.06) calc(c + 0.02) h),
-		oklch(from var(--color-accent) calc(l + 0.07) calc(c + 0.02) h)
-	);
-	--color-accent-text: light-dark(
-		oklch(from var(--color-secondary) 94% min(0.05, c) h),
-		oklch(from var(--color-secondary) 94% min(0.05, c) h)
-	);
-	--color-accent-text-disabled: light-dark(
-		oklch(from var(--color-secondary) 82% min(0.09, c) h),
-		oklch(from var(--color-secondary) 66% min(0.09, c) h)
-	);
-	--color-accent-text-active: light-dark(
-		oklch(from var(--color-secondary) 99% min(0.03, c) h),
-		oklch(from var(--color-secondary) 99% min(0.03, c) h)
-	);
-
-	--color-error: light-dark(#ef6262, #b04343);
-	--color-error-disabled: light-dark(#b38383, #5e2a2a);
-	--color-error-active: light-dark(#ca3030, #f55d5d);
-	--color-error-text: light-dark(#ffe6e6, #fac0c0);
-	--color-error-text-disabled: light-dark(#ffadad, #d96868);
-	--color-error-text-active: light-dark(#ffffff, #ffffff);
-
-	--color-success: light-dark(#00b7a1, #2c8f83);
-	--color-success-disabled: light-dark(#83b3ad, #2a5e58);
-	--color-success-active: light-dark(#289487, #00b7a1);
-	--color-success-text: light-dark(#f5fefd, #b7f1eb);
-	--color-success-text-disabled: light-dark(#58e0d0, #4ec2b3);
-	--color-success-text-active: light-dark(#ffffff, #ffffff);
-
-	--color-info: light-dark(#2f6fe0, #5b8def);
-	--color-warning: light-dark(#e89c08, #e0a020);
-
-	/* Soft tinted surfaces for feedback components (Callout, Toast, Avatar,
-	   Input). Mixed over the page background so they adapt to light/dark. */
-	--color-info-bg: color-mix(in oklch, var(--color-info) 14%, var(--color-bg-0));
-	--color-success-bg: color-mix(in oklch, var(--color-success) 14%, var(--color-bg-0));
-	--color-warning-bg: color-mix(in oklch, var(--color-warning) 16%, var(--color-bg-0));
-	--color-error-bg: color-mix(in oklch, var(--color-error) 14%, var(--color-bg-0));
-
-	--layer-1: 1;
-	--layer-2: 2;
-	--layer-3: 3;
-	--layer-4: 4;
-	--layer-5: 5;
-	--layer-important: 2147483647;
-
-	--radius: 10px;
-	--radius-1: 2px;
-	--radius-2: 5px;
-	--radius-3: 10px;
-	--radius-4: 20px;
-	--radius-5: 30px;
-	--radius-6: 60px;
-	--radius-round: 1e5px;
-
-	--font-sans:
-		system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
-	--font-serif: 'Playfair Display', ui-serif, serif;
-	--font-mono:
-		Dank Mono, Operator Mono, Inconsolata, Fira Mono, ui-monospace, SF Mono, Monaco,
-		Droid Sans Mono, Source Code Pro, monospace;
-	--font-weight-1: 100;
-	--font-weight-2: 200;
-	--font-weight-3: 300;
-	--font-weight-4: 400;
-	--font-weight-5: 500;
-	--font-weight-6: 600;
-	--font-weight-7: 700;
-	--font-weight-8: 800;
-	--font-weight-9: 900;
-	--font-lineheight-00: 0.95;
-	--font-lineheight-0: 1.1;
-	--font-lineheight-1: 1.25;
-	--font-lineheight-2: 1.375;
-	--font-lineheight-3: 1.5;
-	--font-lineheight-4: 1.75;
-	--font-lineheight-5: 2;
-	--font-letterspacing-0: -0.05em;
-	--font-letterspacing-1: 0.025em;
-	--font-letterspacing-2: 0.05em;
-	--font-letterspacing-3: 0.075em;
-	--font-letterspacing-4: 0.15em;
-	--font-letterspacing-5: 0.5em;
-	--font-letterspacing-6: 0.75em;
-	--font-letterspacing-7: 1em;
-	--font-size-00: 0.65rem;
-	--font-size-0: 0.815rem;
-	--font-size-1: 1rem;
-	--font-size-2: 1.1rem;
-	--font-size-3: 1.25rem;
-	--font-size-4: 1.5rem;
-	--font-size-5: 2rem;
-	--font-size-6: 2.5rem;
-	--font-size-7: 3rem;
-	--font-size-8: 3.5rem;
-	--font-size-fluid-0: clamp(0.75rem, 2vw, 1rem);
-	--font-size-fluid-1: clamp(1rem, 4vw, 1.5rem);
-	--font-size-fluid-2: clamp(1.5rem, 6vw, 2.5rem);
-	--font-size-fluid-3: clamp(2rem, 9vw, 3.5rem);
-
-	--shadow-hls: 220 3% 15%;
-	--shadow-strength: 15%;
-	--shadow-color: light-dark(
-		hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 9%)),
-		transparent
-	);
-	--shadow-1: 0 1px 3px -1px
-		light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 19%)), transparent);
-	--shadow-2:
-		0 3px 5px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
-		0 7px 14px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent);
-	--shadow-3:
-		0 -1px 3px 0
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
-		0 1px 2px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
-		0 2px 5px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
-		0 4px 12px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
-		0 12px 15px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 7%)), transparent);
-	--shadow-4:
-		0 -2px 5px 0
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
-		0 1px 1px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
-		0 2px 2px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
-		0 5px 5px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
-		0 9px 9px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
-		0 16px 16px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 6%)), transparent);
-	--shadow-5:
-		0 -1px 2px 0
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
-		0 2px 1px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
-		0 5px 5px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
-		0 10px 10px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
-		0 20px 20px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
-		0 40px 40px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 7%)), transparent);
-	--shadow-6:
-		0 -1px 2px 0
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
-		0 3px 2px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
-		0 7px 5px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
-		0 12px 10px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
-		0 22px 18px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
-		0 41px 33px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 6%)), transparent),
-		0 100px 80px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 7%)), transparent);
-
-	--size-000: -0.5rem;
-	--size-00: -0.25rem;
-	--size-1: 0.25rem;
-	--size-2: 0.5rem;
-	--size-3: 1rem;
-	--size-4: 1.25rem;
-	--size-5: 1.5rem;
-	--size-6: 1.75rem;
-	--size-7: 2rem;
-	--size-8: 3rem;
-	--size-9: 4rem;
-	--size-10: 5rem;
-	--size-11: 7.5rem;
-	--size-12: 10rem;
-	--size-13: 15rem;
-	--size-14: 20rem;
-	--size-15: 30rem;
-	--size-fluid-1: clamp(0.5rem, 1vw, 1rem);
-	--size-fluid-2: clamp(1rem, 2vw, 1.5rem);
-	--size-fluid-3: clamp(1.5rem, 3vw, 2rem);
-	--size-fluid-4: clamp(2rem, 4vw, 3rem);
-	--size-fluid-5: clamp(4rem, 5vw, 5rem);
-	--size-fluid-6: clamp(5rem, 7vw, 7.5rem);
-	--size-fluid-7: clamp(7.5rem, 10vw, 10rem);
-	--size-fluid-8: clamp(10rem, 20vw, 15rem);
-	--size-fluid-9: clamp(15rem, 30vw, 20rem);
-	--size-fluid-10: clamp(20rem, 40vw, 30rem);
-	--size-content-1: 20ch;
-	--size-content-2: 45ch;
-	--size-content-3: 60ch;
-	--size-header-1: 20ch;
-	--size-header-2: 25ch;
-	--size-header-3: 35ch;
-	--size-xxs: 240px;
-	--size-xs: 360px;
-	--size-sm: 480px;
-	--size-md: 768px;
-	--size-lg: 1024px;
-	--size-xl: 1200px;
-	--size-xxl: 1920px;
-
-	--ease-out-1: cubic-bezier(0.61, 1, 0.88, 1);
-	--ease-out-2: cubic-bezier(0.5, 1, 0.89, 1);
-	--ease-out-3: cubic-bezier(0.33, 1, 0.68, 1);
-	--ease-out-4: cubic-bezier(0.25, 1, 0.5, 1);
-	--ease-out-5: cubic-bezier(0.22, 1, 0.36, 1);
-	--ease-out-6: cubic-bezier(0.16, 1, 0.3, 1);
-	--ease-in-1: cubic-bezier(0.12, 0, 0.39, 0);
-	--ease-in-2: cubic-bezier(0.11, 0, 0.5, 0);
-	--ease-in-3: cubic-bezier(0.32, 0, 0.67, 0);
-	--ease-in-4: cubic-bezier(0.5, 0, 0.75, 0);
-	--ease-in-5: cubic-bezier(0.64, 0, 0.78, 0);
-	--ease-in-6: cubic-bezier(0.7, 0, 0.84, 0);
-	--ease-in-out-1: cubic-bezier(0.37, 0, 0.63, 1);
-	--ease-in-out-2: cubic-bezier(0.45, 0, 0.55, 1);
-	--ease-in-out-3: cubic-bezier(0.65, 0, 0.35, 1);
-	--ease-in-out-4: cubic-bezier(0.76, 0, 0.24, 1);
-	--ease-in-out-5: cubic-bezier(0.83, 0, 0.17, 1);
-	--ease-in-out-6: cubic-bezier(0.87, 0, 0.13, 1);
-
-	--ease-in-back: cubic-bezier(0.36, 0, 0.66, -0.56);
-	--ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
-	--ease-in-out-back: cubic-bezier(0.68, -0.6, 0.32, 1.6);
-
-	--ease: var(--ease-in-out-4);
-	@supports (--ease: linear(0, 1)) {
-		--ease: linear(
-			0,
-			0.002,
-			0.01 3.6%,
-			0.02 4.9%,
-			0.034 6.4%,
-			0.074 9.1%,
-			0.128 11.4%,
-			0.194 13.4%,
-			0.271 15%,
-			0.344 16.1%,
-			0.544 18.3%,
-			0.607,
-			0.66 20.6%,
-			0.717 22.4%,
-			0.765 24.6%,
-			0.808 27.3%,
-			0.845 30.4%,
-			0.865 32.6%,
-			0.883,
-			0.9 37.7%,
-			0.916 40.6%,
-			0.942 47.2%,
-			0.963 55%,
-			0.979 64%,
-			0.991 74.4%,
-			0.998 86.4%,
-			1
-		);
-	}
-	@media (pointer: fine) {
-		scrollbar-gutter: stable;
-	}
-}
+@import './tokens.css';
 
 ::view-transition-group(*) {
 	animation-duration: 150ms;
@@ -385,11 +8,11 @@ body {
 	background-color: var(--color-bg);
 	color: var(--color-text);
 	scrollbar-color: var(--scrollthumb-color) transparent;
-	accent-color: var(--color-bg-2, var(--link));
+	accent-color: var(--color-bg-active, var(--link));
 	caret-color: currentColor;
 	font-family: var(--font-serif);
-	font-size: var(--font-size-1);
-	font-weight: var(--font-weight-4);
+	font-size: var(--text-base);
+	font-weight: var(--font-weight-normal);
 	font-optical-sizing: auto;
 	font-style: normal;
 }
@@ -403,23 +26,23 @@ h2,
 h3,
 h4,
 strong {
-	font-weight: var(--font-weight-7);
+	font-weight: var(--font-weight-bold);
 }
 
 h1 {
-	font-size: var(--font-size-5);
+	font-size: var(--text-3xl);
 	line-height: 1.25;
 }
 h2 {
-	font-size: var(--font-size-4);
+	font-size: var(--text-2xl);
 	line-height: 1.25;
 }
 h3 {
-	font-size: var(--font-size-3);
+	font-size: var(--text-xl);
 	line-height: 1.25;
 }
 h4 {
-	font-size: var(--font-size-2);
+	font-size: var(--text-lg);
 	line-height: 1.25;
 }
 small {
@@ -433,7 +56,7 @@ a {
 
 *:focus-visible {
 	outline: none;
-	box-shadow: 0 0 0 1px var(--color-outline);
+	box-shadow: 0 0 0 1px var(--color-border);
 }
 
 /* Box sizing rules */
@@ -445,7 +68,7 @@ a {
 
 /* Remove highlight color on tap */
 * {
-	-webkit-tap-1light-color: transparent;
+	-webkit-tap-highlight-color: transparent;
 }
 
 /* Remove default margin */
@@ -467,8 +90,6 @@ ul[role='list'],
 ol[role='list'] {
 	list-style: none;
 }
-
-/* Set core root defaults */
 
 /* Set core body defaults */
 body {
@@ -527,7 +148,7 @@ select {
 }
 
 /* Remove all animations, transitions and smooth scroll for people that prefer not to see them */
-@media (--motionNotOK) {
+@media (prefers-reduced-motion: reduce) {
 	html:focus-within {
 		scroll-behavior: auto;
 	}
@@ -561,7 +182,7 @@ select {
 	&:after {
 		animation: spinAround 500ms infinite linear;
 		border: 2px solid var(--color-text);
-		border-radius: var(--radius-round);
+		border-radius: var(--radius-full);
 		border-right-color: transparent;
 		border-top-color: transparent;
 		content: '';
