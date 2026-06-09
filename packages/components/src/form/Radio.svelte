@@ -191,6 +191,11 @@
 	</div>
 {:else}
 	<!-- Individual Radio -->
+	<!-- The whole container is the click target so the hit area matches the
+	     hover/press feedback (which keys off `.radio`). Keyboard activation and
+	     arrow-key navigation stay on the focusable role="radio" indicator. -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class={['radio', class_name].filter(Boolean).join(' ')}
 		class:dense
@@ -198,7 +203,8 @@
 		class:disabled={isDisabled}
 		{@attach tooltip(tooltip_message)}
 		style:--size="{px}px"
-		style:font-size={`var(--control-font-${effectiveSize})`}>
+		style:font-size={`var(--control-font-${effectiveSize})`}
+		onclick={select}>
 		<!-- Hidden native input for form submission -->
 		<input
 			type="radio"
@@ -221,7 +227,6 @@
 			aria-disabled={isDisabled}
 			aria-labelledby={label ? `${id}-label` : undefined}
 			{@attach ripple({ enabled: !isDisabled, centered: true, opacity: 0.15 })}
-			onclick={select}
 			onkeydown={onKeyDown}>
 			<svg
 				class="indicator"
@@ -239,12 +244,7 @@
 		{#if label || description}
 			<div class="content">
 				{#if label}
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<!-- svelte-ignore a11y_label_has_associated_control -->
-					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-					<label id="{id}-label" for="{id}-input" class="label" onclick={select}>
-						{label}
-					</label>
+					<span id="{id}-label" class="label">{label}</span>
 				{/if}
 				{#if description}
 					<span class="description">{description}</span>
@@ -302,7 +302,13 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 0.5em;
-		cursor: default;
+		/* The whole container is clickable, so the pointer cursor and the
+		   hover/press feedback now line up with the actual hit area. Bound it
+		   to its content so it can't stretch the hit area across the full group
+		   width (align-items: stretch in .group-items would otherwise do so). */
+		width: fit-content;
+		cursor: pointer;
+		user-select: none;
 		position: relative;
 		perspective: 100px;
 		transition: translate 200ms ease;
