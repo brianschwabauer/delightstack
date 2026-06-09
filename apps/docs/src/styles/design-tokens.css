@@ -19,10 +19,29 @@
 	--color-secondary: #1a81bc;
 }
 
+/* Drive `color-scheme` from Starlight's theme toggle.
+ *
+ * Every component theming token is a `light-dark()` value, and `light-dark()`
+ * resolves off the computed `color-scheme` — NOT off Starlight's `data-theme`
+ * attribute. Starlight flips `data-theme="light|dark"` on <html> and maps it to
+ * `color-scheme` inside `@layer starlight.reset`. But the shared tokens.css sets
+ * `html { color-scheme: light dark }` UNLAYERED, and unlayered rules beat any
+ * layered rule regardless of specificity. So without re-asserting the mapping
+ * here, `color-scheme` stays pinned to `light dark` (the OS preference) and
+ * every token ignores the toggle — the whole UI (including portaled overlays on
+ * <body>) follows the OS instead of the switch. These unlayered rules restore
+ * it: toggle → color-scheme → light-dark(). */
+:root[data-theme='light'] {
+	color-scheme: light;
+}
+:root[data-theme='dark'] {
+	color-scheme: dark;
+}
+
 /* Direct property declarations stay scoped to .preview-area to avoid
-   overriding Starlight's base typography. */
+   overriding Starlight's base typography. Note: no `color-scheme` here — the
+   preview area inherits it from <html> above, so demos follow the toggle. */
 .preview-area {
-	color-scheme: light dark;
 	font-family: var(--font-sans);
 	color: var(--color-text);
 }
