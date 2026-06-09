@@ -607,7 +607,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: light-dark(var(--color-outline, #e0e0e0), var(--color-outline, #3a3a3a));
+		background: light-dark(var(--color-border, #e0e0e0), var(--color-border, #3a3a3a));
 		touch-action: none;
 		outline: none;
 		z-index: 1;
@@ -658,17 +658,17 @@
 		align-items: center;
 		justify-content: center;
 		border: 1px solid
-			light-dark(var(--color-outline, #e0e0e0), var(--color-outline, #3a3a3a));
+			light-dark(var(--color-border, #e0e0e0), var(--color-border, #3a3a3a));
 		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e1e1e));
 		color: light-dark(
-			var(--color-text-light, #666),
-			var(--color-text-light, #aaa)
+			var(--color-text-muted, #666),
+			var(--color-text-muted, #aaa)
 		);
 		cursor: pointer;
 		padding: 0;
 		width: 20px;
 		height: 20px;
-		border-radius: var(--radius-2, 4px);
+		border-radius: var(--radius-md, 4px);
 		transition:
 			color 150ms ease,
 			background 150ms ease;

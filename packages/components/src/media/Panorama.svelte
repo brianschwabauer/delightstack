@@ -1122,7 +1122,7 @@
 		aspect-ratio: 16 / 9;
 		border-radius: var(--radius-md, 0.5rem);
 		overflow: hidden;
-		background: light-dark(var(--color-bg-0, #f3f4f6), var(--color-bg-0, #1f2937));
+		background: light-dark(var(--color-surface, #f3f4f6), var(--color-surface, #1f2937));
 		cursor: grab;
 		outline: none;
 	}
@@ -1157,9 +1157,9 @@
 		inset: 0;
 		background: linear-gradient(
 			90deg,
-			var(--color-bg-2, rgba(128, 128, 128, 0.1)) 25%,
-			var(--color-bg-3, rgba(128, 128, 128, 0.2)) 50%,
-			var(--color-bg-2, rgba(128, 128, 128, 0.1)) 75%
+			var(--color-bg-muted, rgba(128, 128, 128, 0.1)) 25%,
+			var(--color-bg-active, rgba(128, 128, 128, 0.2)) 50%,
+			var(--color-bg-muted, rgba(128, 128, 128, 0.1)) 75%
 		);
 		background-size: 200% 100%;
 		animation: panorama-shimmer 1.5s ease-in-out infinite;
@@ -1204,7 +1204,7 @@
 	.panorama-spinner {
 		width: 32px;
 		height: 32px;
-		border: 3px solid var(--color-outline, #d1d5db);
+		border: 3px solid var(--color-border, #d1d5db);
 		border-top-color: var(--color-action, #3b82f6);
 		border-radius: 50%;
 		animation: panorama-spin 0.8s linear infinite;
@@ -1226,8 +1226,8 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.75rem;
-		background-color: var(--color-bg-2, rgba(128, 128, 128, 0.1));
-		color: var(--color-text-light, rgba(128, 128, 128, 0.6));
+		background-color: var(--color-bg-muted, rgba(128, 128, 128, 0.1));
+		color: var(--color-text-muted, rgba(128, 128, 128, 0.6));
 		font-size: 14px;
 	}
 
@@ -1259,8 +1259,8 @@
 			--color-bg: rgb(0 0 0 / 0.35);
 			--color-text: rgb(255 255 255 / 0.8);
 			--color-text-active: rgb(255 255 255 / 1);
-			--color-action-outline: transparent;
-			--color-action-outline-active: transparent;
+			--button-border: transparent;
+			--button-border-active: transparent;
 		}
 	}
 
@@ -1339,7 +1339,7 @@
 
 		.panorama-spinner {
 			animation: none;
-			border-top-color: var(--color-outline, #d1d5db);
+			border-top-color: var(--color-border, #d1d5db);
 			opacity: 0.5;
 		}
 

@@ -97,7 +97,7 @@
 	close_on_escape_key
 	close_on_outside_click
 	arrow={false}
-	radius="var(--radius-3)"
+	radius="var(--radius-lg)"
 	x={contextMenuLocationX}
 	y={contextMenuLocationY}>
 	{#if !!activeContextMenu?.actions?.length}

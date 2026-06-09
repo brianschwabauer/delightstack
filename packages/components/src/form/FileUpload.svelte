@@ -493,16 +493,16 @@
 
 	/* Sizes */
 	.file-upload.size-0 {
-		font-size: var(--font-size-0, 0.75rem);
+		font-size: var(--text-sm, 0.75rem);
 	}
 	.file-upload.size-1 {
-		font-size: var(--font-size-1, 0.875rem);
+		font-size: var(--text-base, 0.875rem);
 	}
 	.file-upload.size-2 {
-		font-size: var(--font-size-2, 1rem);
+		font-size: var(--text-lg, 1rem);
 	}
 	.file-upload.size-3 {
-		font-size: var(--font-size-3, 1.125rem);
+		font-size: var(--text-xl, 1.125rem);
 	}
 
 	/* Skeleton */
@@ -512,10 +512,10 @@
 	.file-upload.skeleton .dropzone,
 	.file-upload.skeleton .avatar-upload,
 	.file-upload.skeleton .label {
-		background: var(--color-bg-4, hsl(0 0% 90%));
+		background: var(--color-bg-muted, hsl(0 0% 90%));
 		color: transparent;
 		border-color: transparent;
-		border-radius: var(--radius-2, 4px);
+		border-radius: var(--radius-md, 4px);
 		animation: skeleton-pulse 1.5s ease-in-out infinite;
 	}
 	.file-upload.skeleton .dropzone *,
@@ -543,8 +543,8 @@
 	/* Dropzone variant */
 	.dropzone {
 		position: relative;
-		border: 2px dashed var(--color-outline, hsl(0 0% 80%));
-		border-radius: var(--radius-md, var(--radius-3, 8px));
+		border: 2px dashed var(--color-border, hsl(0 0% 80%));
+		border-radius: var(--radius-md, var(--radius-lg, 8px));
 		padding: 2rem;
 		text-align: center;
 		cursor: pointer;
@@ -571,7 +571,7 @@
 	}
 
 	.dropzone:focus-visible {
-		outline: 2px solid var(--color-outline-active, currentColor);
+		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
 
@@ -593,12 +593,12 @@
 	.upload-icon {
 		width: 2em;
 		height: 2em;
-		color: var(--color-text-light, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 	}
 
 	.dropzone-text {
 		margin: 0;
-		color: var(--color-text-light, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 		font-size: 0.9em;
 	}
 
@@ -640,8 +640,8 @@
 		overflow: hidden;
 		position: relative;
 		cursor: pointer;
-		border: 2px dashed var(--color-outline, hsl(0 0% 80%));
-		background: light-dark(var(--color-bg-0, #f5f5f5), var(--color-bg-0, #1a1a1a));
+		border: 2px dashed var(--color-border, hsl(0 0% 80%));
+		background: light-dark(var(--color-bg-muted, #f5f5f5), var(--color-bg-muted, #1a1a1a));
 		transition: border-color 200ms;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
@@ -653,7 +653,7 @@
 	}
 
 	.avatar-upload:focus-visible {
-		outline: 2px solid var(--color-outline-active, currentColor);
+		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
 
@@ -681,7 +681,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--color-text-light, hsl(0 0% 55%));
+		color: var(--color-text-muted, hsl(0 0% 55%));
 	}
 	.avatar-placeholder svg {
 		width: 40%;
@@ -723,14 +723,14 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem;
-		border-radius: var(--radius-sm, var(--radius-2, 4px));
-		background: light-dark(var(--color-bg-0, #f5f5f5), var(--color-bg-0, #1a1a1a));
+		border-radius: var(--radius-sm, var(--radius-md, 4px));
+		background: light-dark(var(--color-bg-muted, #f5f5f5), var(--color-bg-muted, #1a1a1a));
 	}
 
 	.file-preview {
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: var(--radius-sm, var(--radius-2, 4px));
+		border-radius: var(--radius-sm, var(--radius-md, 4px));
 		object-fit: cover;
 		flex-shrink: 0;
 	}
@@ -753,7 +753,7 @@
 
 	.file-size {
 		font-size: 0.75em;
-		color: var(--color-text-light, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 	}
 
 	.remove-button {
@@ -763,9 +763,9 @@
 		padding: 0.25rem;
 		border: none;
 		background: none;
-		color: var(--color-text-light, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 		cursor: pointer;
-		border-radius: var(--radius-sm, var(--radius-2, 4px));
+		border-radius: var(--radius-sm, var(--radius-md, 4px));
 		transition:
 			color 150ms,
 			background 150ms;
@@ -779,7 +779,7 @@
 	}
 
 	.remove-button:focus-visible {
-		outline: 2px solid var(--color-outline-active, currentColor);
+		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
 

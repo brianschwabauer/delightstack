@@ -382,17 +382,17 @@
 
 <style>
 	.button {
-		--radius: var(--action-radius, var(--radius-3));
-		--easing: var(--ease-out-back);
+		--_radius: var(--action-radius, var(--radius-lg));
+		--easing: var(--ease-spring);
 		display: inline-flex;
 		justify-content: center;
 		position: relative;
 		width: fit-content;
-		border-radius: var(--radius);
+		border-radius: var(--_radius);
 		perspective: 100px;
 
 		&.pill {
-			--radius: var(--radius-round);
+			--_radius: var(--radius-full);
 		}
 
 		&:not(.transparent):not(.translucent) {
@@ -402,9 +402,9 @@
 			--color-text: var(--color-action-text);
 			--color-text-disabled: var(--color-action-text-disabled);
 			--color-text-active: var(--color-action-text-active);
-			--color-outline: var(--color-action-outline);
-			--color-outline-disabled: var(--color-action-outline-disabled);
-			--color-outline-active: var(--color-action-outline-active);
+			--color-border: var(--button-border);
+			--color-border-disabled: var(--button-border-disabled);
+			--color-border-active: var(--button-border-active);
 		}
 		&.accent:not(.transparent):not(.translucent) {
 			--color-bg: var(--color-accent);
@@ -438,9 +438,9 @@
 			--color-text: var(--color-action);
 			--color-text-disabled: var(--color-action-disabled);
 			--color-text-active: var(--color-action-active);
-			--color-action-outline: 1px solid currentColor;
-			--color-action-outline-disabled: 1px solid currentColor;
-			--color-action-outline-active: 1px solid currentColor;
+			--button-border: 1px solid currentColor;
+			--button-border-disabled: 1px solid currentColor;
+			--button-border-active: 1px solid currentColor;
 
 			&.accent {
 				--color-bg-active: rgb(from var(--color-accent) r g b / 0.08);
@@ -472,9 +472,9 @@
 			--color-bg: rgb(from var(--color-text) r g b / 0.06);
 			--color-bg-disabled: transparent;
 			--color-bg-active: rgb(from var(--color-text) r g b / 0.12);
-			--color-action-outline: none;
-			--color-action-outline-disabled: none;
-			--color-action-outline-active: none;
+			--button-border: none;
+			--button-border-disabled: none;
+			--button-border-active: none;
 		}
 		&.transparent,
 		&.translucent {
@@ -535,7 +535,7 @@
 			justify-content: center;
 			background-color: var(--color-accent, var(--color-text));
 			color: var(--color-accent-text, var(--color-bg));
-			border-radius: var(--radius-round);
+			border-radius: var(--radius-full);
 			font-size: 0.85em;
 			line-height: 0.85em;
 			padding: 0.1em 0.5em;
@@ -655,11 +655,11 @@
 			position: relative;
 			overflow: hidden;
 			outline: none;
-			border: var(--color-action-outline);
+			border: var(--button-border);
 			text-align: center;
 			text-decoration: none;
 			width: fit-content;
-			border-radius: var(--radius);
+			border-radius: var(--_radius);
 			background-color: var(--color-bg);
 			color: var(--color-text);
 			cursor: pointer;
@@ -686,12 +686,12 @@
 				background-color: var(--color-bg-disabled);
 				color: var(--color-text-disabled);
 				cursor: not-allowed;
-				border: var(--color-action-outline-disabled);
+				border: var(--button-border-disabled);
 			}
 			&:hover:not(:disabled):not([aria-disabled='true']) {
 				background-color: var(--color-bg-active);
 				color: var(--color-text-active);
-				border: var(--color-action-outline-active);
+				border: var(--button-border-active);
 				text-decoration: none;
 				transition: translate 200ms ease;
 			}
@@ -755,8 +755,8 @@
 		.dropdown-trigger {
 			border-top-left-radius: 0;
 			border-bottom-left-radius: 0;
-			border-top-right-radius: var(--radius);
-			border-bottom-right-radius: var(--radius);
+			border-top-right-radius: var(--_radius);
+			border-bottom-right-radius: var(--_radius);
 			display: flex;
 			align-items: center;
 			padding: 0 0.5em 0 0.5em;
@@ -800,7 +800,7 @@
 			height: 4em;
 			width: 4em;
 			aspect-ratio: 1 / 1;
-			border-radius: var(--radius-round);
+			border-radius: var(--radius-full);
 			overflow: hidden;
 			&.dense {
 				button,
@@ -916,9 +916,9 @@
 		}
 
 		&.overlay {
-			--color-action-outline: none;
-			--color-action-outline-disabled: none;
-			--color-action-outline-active: none;
+			--button-border: none;
+			--button-border-disabled: none;
+			--button-border-active: none;
 			&.active {
 				button,
 				a {

@@ -155,10 +155,10 @@
 
 <style>
 	ul {
-		--radius: var(--radius-5);
+		--radius-lg: var(--radius-2xl);
 		--color-bg: var(--color-bg-active);
 		--border-inset: 6px;
-		border-radius: var(--radius);
+		border-radius: var(--radius-lg);
 		padding: 0;
 		margin: 0;
 		background-color: var(--color-bg);
@@ -168,7 +168,7 @@
 			cursor: not-allowed;
 		}
 		&.dense {
-			--radius: var(--radius-4);
+			--radius-lg: var(--radius-xl);
 			--border-inset: 4px;
 		}
 		&.comfortable {
@@ -182,12 +182,12 @@
 		}
 
 		:global(> li:first-child) {
-			border-top-left-radius: var(--radius);
-			border-top-right-radius: var(--radius);
+			border-top-left-radius: var(--radius-lg);
+			border-top-right-radius: var(--radius-lg);
 		}
 		:global(> li:last-child) {
-			border-bottom-left-radius: var(--radius);
-			border-bottom-right-radius: var(--radius);
+			border-bottom-left-radius: var(--radius-lg);
+			border-bottom-right-radius: var(--radius-lg);
 		}
 	}
 
@@ -208,7 +208,7 @@
 	}
 	.skeleton-bar {
 		height: 0.85em;
-		border-radius: var(--radius-2, 4px);
+		border-radius: var(--radius-md, 4px);
 		background-color: color-mix(in oklch, var(--color-text, #000) 12%, transparent);
 		background-image: linear-gradient(
 			90deg,

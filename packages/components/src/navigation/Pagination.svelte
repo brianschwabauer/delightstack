@@ -80,11 +80,11 @@
 		'0': {
 			min_width: '1.5rem',
 			height: '1.5rem',
-			font_size: 'var(--font-size-0, 0.75rem)',
+			font_size: 'var(--text-sm, 0.75rem)',
 		},
-		'1': { min_width: '2rem', height: '2rem', font_size: 'var(--font-size-1, 0.875rem)' },
-		'2': { min_width: '2.5rem', height: '2.5rem', font_size: 'var(--font-size-2, 1rem)' },
-		'3': { min_width: '3rem', height: '3rem', font_size: 'var(--font-size-3, 1.125rem)' },
+		'1': { min_width: '2rem', height: '2rem', font_size: 'var(--text-base, 0.875rem)' },
+		'2': { min_width: '2.5rem', height: '2.5rem', font_size: 'var(--text-lg, 1rem)' },
+		'3': { min_width: '3rem', height: '3rem', font_size: 'var(--text-xl, 1.125rem)' },
 	};
 
 	const sizeConfig = $derived(SIZE_MAP[size] || SIZE_MAP['1']);
@@ -370,7 +370,7 @@
 		height: 100%;
 		position: absolute;
 		inset: 0;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		border-radius: var(--radius-md, 0.375rem);
 
 		&::after {
@@ -477,14 +477,14 @@
 		min-width: var(--pg-min-width);
 		height: var(--pg-height);
 		line-height: 1;
-		color: var(--color-text-light, #6b7280);
+		color: var(--color-text-muted, #6b7280);
 		user-select: none;
 	}
 
 	.pagination-simple-info {
 		padding: 0 0.75em;
 		white-space: nowrap;
-		color: var(--color-text-light, #6b7280);
+		color: var(--color-text-muted, #6b7280);
 	}
 
 	.pagination-compact-info {
@@ -495,7 +495,7 @@
 
 	.pagination-info {
 		white-space: nowrap;
-		color: var(--color-text-light, #6b7280);
+		color: var(--color-text-muted, #6b7280);
 		font-size: 0.875em;
 	}
 
@@ -505,13 +505,13 @@
 		gap: 0.375rem;
 		white-space: nowrap;
 		font-size: 0.875em;
-		color: var(--color-text-light, #6b7280);
+		color: var(--color-text-muted, #6b7280);
 	}
 
 	.page-size-select {
 		appearance: auto;
 		border: 1px solid
-			light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		border-radius: var(--radius-md, 0.375rem);
 		background: light-dark(var(--color-bg, white), var(--color-bg, #0a0a0a));
 		color: inherit;

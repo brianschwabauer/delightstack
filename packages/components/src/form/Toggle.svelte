@@ -165,7 +165,7 @@
 		--thumb-size: 12px;
 		--thumb-offset: 3px;
 		--thumb-press-grow: 2px;
-		font-size: var(--font-size-0, 0.75rem);
+		font-size: var(--text-sm, 0.75rem);
 	}
 	.toggle.size-1 {
 		--track-width: 44px;
@@ -173,7 +173,7 @@
 		--thumb-size: 18px;
 		--thumb-offset: 3px;
 		--thumb-press-grow: 4px;
-		font-size: var(--font-size-1, 0.875rem);
+		font-size: var(--text-base, 0.875rem);
 	}
 	.toggle.size-2 {
 		--track-width: 52px;
@@ -181,7 +181,7 @@
 		--thumb-size: 22px;
 		--thumb-offset: 3px;
 		--thumb-press-grow: 4px;
-		font-size: var(--font-size-2, 1rem);
+		font-size: var(--text-lg, 1rem);
 	}
 	.toggle.size-3 {
 		--track-width: 68px;
@@ -189,7 +189,7 @@
 		--thumb-size: 28px;
 		--thumb-offset: 4px;
 		--thumb-press-grow: 6px;
-		font-size: var(--font-size-3, 1.125rem);
+		font-size: var(--text-xl, 1.125rem);
 	}
 
 	.toggle.dense {
@@ -207,7 +207,7 @@
 		width: var(--track-width);
 		height: var(--track-height);
 		border-radius: var(--track-height);
-		background-color: var(--color-bg-6, hsl(0 0% 70%));
+		background-color: var(--color-bg-muted, hsl(0 0% 70%));
 		transition:
 			background-color 0.2s ease,
 			translate 200ms ease;
@@ -224,7 +224,7 @@
 	}
 
 	.track:focus-visible {
-		outline: 2px solid var(--color-outline-active, currentColor);
+		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
 
@@ -294,7 +294,7 @@
 		}
 	}
 	.state-label {
-		color: var(--color-text-light, inherit);
+		color: var(--color-text-muted, inherit);
 		font-size: 0.875em;
 		line-height: 1.4;
 		transition: translate 200ms ease;

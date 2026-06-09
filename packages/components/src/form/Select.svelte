@@ -955,29 +955,29 @@
 		/* Height scales off the font so the whole control scales from one
 		   number — the roomy, legacy-style feel. */
 		--_height: calc(var(--_font) * 3.5);
-		--_radius: var(--radius-3, 10px);
-		--_border: var(--color-outline, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
+		--_radius: var(--radius-lg, 10px);
+		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
 		--_border-hover: var(
-			--color-outline-active,
+			--color-border-active,
 			light-dark(hsl(0 0% 60%), hsl(0 0% 48%))
 		);
 		--_border-focus: var(--color-action, hsl(217 75% 52%));
 		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
-		--_bg: var(--color-bg-0, light-dark(#fff, hsl(0 0% 9%)));
-		--_panel: var(--color-bg-1, light-dark(#fff, hsl(0 0% 13%)));
+		--_bg: var(--color-surface, light-dark(#fff, hsl(0 0% 9%)));
+		--_panel: var(--color-surface, light-dark(#fff, hsl(0 0% 13%)));
 		--_panel-hover: var(--color-bg-active, light-dark(hsl(0 0% 95%), hsl(0 0% 18%)));
 		--_text: var(--color-text, inherit);
-		--_text-muted: var(--color-text-light, light-dark(hsl(0 0% 46%), hsl(0 0% 62%)));
+		--_text-muted: var(--color-text-muted, light-dark(hsl(0 0% 46%), hsl(0 0% 62%)));
 		--_chip-bg: var(--color-action, hsl(217 75% 52%));
 		--_chip-text: var(--color-action-text, #fff);
 		--_duration: 150ms;
-		--_ease: var(--ease-in-out-4, cubic-bezier(0.76, 0, 0.24, 1));
+		--_ease: var(--ease-in-out, cubic-bezier(0.76, 0, 0.24, 1));
 		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
 		/* Snappy ease-out for the dropdown's expand-in animation */
 		--_ease-expand: cubic-bezier(0.16, 1, 0.3, 1);
 		/* Back-out easing — overshoots the target so the chevron flip has a
 		   little bounce. */
-		--_ease-back: var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+		--_ease-back: var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
 		position: relative;
 		width: 100%;
@@ -1275,7 +1275,7 @@
 		align-items: center;
 		gap: 0.3em;
 		padding: 0.2em 0.3em 0.2em 0.7em;
-		border-radius: var(--radius-round, 999px);
+		border-radius: var(--radius-full, 999px);
 		background: var(--_chip-bg);
 		color: var(--_chip-text);
 		font-size: 0.82em;
@@ -1296,7 +1296,7 @@
 		width: 1.35em;
 		height: 1.35em;
 		flex-shrink: 0;
-		border-radius: var(--radius-round, 999px);
+		border-radius: var(--radius-full, 999px);
 		color: inherit;
 		cursor: pointer;
 		opacity: 0.75;
@@ -1326,7 +1326,7 @@
 		justify-content: center;
 		flex-shrink: 0;
 		padding: 0.35em;
-		border-radius: var(--radius-round, 999px);
+		border-radius: var(--radius-full, 999px);
 		color: var(--_text-muted);
 		cursor: pointer;
 		opacity: 0.7;
@@ -1401,8 +1401,8 @@
 		border: none;
 		background: var(--_panel);
 		color: var(--_text);
-		border-radius: var(--radius-4, 16px);
-		box-shadow: var(--shadow-2, 0 8px 28px -8px rgb(0 0 0 / 0.3));
+		border-radius: var(--radius-xl, 16px);
+		box-shadow: var(--shadow-md, 0 8px 28px -8px rgb(0 0 0 / 0.3));
 		scrollbar-width: thin;
 		/* Flip above the trigger when there is no room below */
 		position-try-fallbacks: flip-block;
@@ -1443,7 +1443,7 @@
 		border: 1px solid var(--_border);
 		/* A larger radius than the default so it doesn't read as sharper than
 		   the surrounding popover. */
-		border-radius: var(--radius-3, 10px);
+		border-radius: var(--radius-lg, 10px);
 		background: var(--_bg);
 		color: var(--_text);
 		font: inherit;
@@ -1465,7 +1465,7 @@
 		align-items: center;
 		gap: 0.6em;
 		padding: 0.7em 0.85em;
-		border-radius: var(--radius-2, 8px);
+		border-radius: var(--radius-md, 8px);
 		cursor: pointer;
 		/* Self-contained perspective so the pressed dip recedes toward each
 		 * option's own center, not the center of the whole list. */
@@ -1485,13 +1485,13 @@
 	   minus its 0.3em padding) so a highlighted edge item nests cleanly. */
 	.select-dropdown > .select-option:first-child,
 	.select-dropdown > .select-group-label:first-child {
-		border-top-left-radius: calc(var(--radius-4, 16px) - 0.3em);
-		border-top-right-radius: calc(var(--radius-4, 16px) - 0.3em);
+		border-top-left-radius: calc(var(--radius-xl, 16px) - 0.3em);
+		border-top-right-radius: calc(var(--radius-xl, 16px) - 0.3em);
 	}
 	.select-dropdown > .select-option:last-child,
 	.select-dropdown > .select-empty:last-child {
-		border-bottom-left-radius: calc(var(--radius-4, 16px) - 0.3em);
-		border-bottom-right-radius: calc(var(--radius-4, 16px) - 0.3em);
+		border-bottom-left-radius: calc(var(--radius-xl, 16px) - 0.3em);
+		border-bottom-right-radius: calc(var(--radius-xl, 16px) - 0.3em);
 	}
 	.select-option.selected {
 		color: var(--_border-focus);

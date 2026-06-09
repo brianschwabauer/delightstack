@@ -736,8 +736,8 @@
 
 		&.has-time-slots {
 			gap: 1px;
-			background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
-			border-radius: var(--radius-3, 0.5rem);
+			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+			border-radius: var(--radius-lg, 0.5rem);
 			overflow: hidden;
 		}
 	}
@@ -789,7 +789,7 @@
 		height: 2rem;
 		border: none;
 		background: transparent;
-		border-radius: var(--radius-2, 0.25rem);
+		border-radius: var(--radius-md, 0.25rem);
 		cursor: pointer;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		flex-shrink: 0;
@@ -853,7 +853,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		padding: 0.25rem 0;
-		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 	}
 
 	.dense .calendar-weekday {
@@ -892,7 +892,7 @@
 		aspect-ratio: 1;
 		border: none;
 		background: transparent;
-		border-radius: var(--radius-2, 0.25rem);
+		border-radius: var(--radius-md, 0.25rem);
 		cursor: pointer;
 		padding: 0;
 		font-size: 0.8125rem;
@@ -936,14 +936,14 @@
 
 	/* Other month */
 	.calendar-day.other-month {
-		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		opacity: 0.4;
 	}
 
 	/* Today ring */
 	.calendar-day.today {
 		box-shadow: inset 0 0 0 1.5px
-			light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 	}
 
 	/* Selected */
@@ -964,19 +964,19 @@
 
 	/* Range start/end */
 	.calendar-day.range-start {
-		border-radius: var(--radius-2, 0.25rem) 0 0 var(--radius-2, 0.25rem);
+		border-radius: var(--radius-md, 0.25rem) 0 0 var(--radius-md, 0.25rem);
 		background: var(--color-action, #3b82f6);
 		color: var(--color-action-text, #fff);
 	}
 
 	.calendar-day.range-end {
-		border-radius: 0 var(--radius-2, 0.25rem) var(--radius-2, 0.25rem) 0;
+		border-radius: 0 var(--radius-md, 0.25rem) var(--radius-md, 0.25rem) 0;
 		background: var(--color-action, #3b82f6);
 		color: var(--color-action-text, #fff);
 	}
 
 	.calendar-day.range-start.range-end {
-		border-radius: var(--radius-2, 0.25rem);
+		border-radius: var(--radius-md, 0.25rem);
 	}
 
 	/* In-range fill */
@@ -1072,7 +1072,7 @@
 		font-variant-numeric: tabular-nums;
 		border: none;
 		background: transparent;
-		border-radius: var(--radius-2, 0.25rem);
+		border-radius: var(--radius-md, 0.25rem);
 		cursor: pointer;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		white-space: nowrap;
@@ -1140,8 +1140,8 @@
 	}
 
 	.skeleton-bar {
-		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-md, 0.25rem);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1164,7 +1164,7 @@
 	.skeleton-nav {
 		width: 2rem;
 		height: 2rem;
-		border-radius: var(--radius-2, 0.25rem);
+		border-radius: var(--radius-md, 0.25rem);
 	}
 
 	.skeleton-title {

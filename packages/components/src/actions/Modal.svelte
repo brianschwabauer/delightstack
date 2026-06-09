@@ -241,9 +241,10 @@
 		overflow: clip;
 	}
 	.modal {
-		--layer: var(--layer-5);
-		--radius: var(--radius-5);
-		--shadow: var(--shadow-3);
+		/* panel sits one above the backdrop, which is at --layer-modal */
+		--layer: calc(var(--layer-modal) + 1);
+		--radius-lg: var(--radius-2xl);
+		--shadow-md: var(--shadow-lg);
 		display: grid;
 		position: fixed;
 		z-index: var(--layer);
@@ -263,7 +264,7 @@
 			overflow: hidden;
 			grid-template-rows: max-content;
 			grid-template-columns: max-content;
-			border-radius: var(--radius);
+			border-radius: var(--radius-lg);
 		}
 
 		header {
@@ -318,7 +319,7 @@
 				position: sticky;
 				left: 0;
 				background-color: var(--color-bg);
-				border-radius: var(--radius);
+				border-radius: var(--radius-lg);
 			}
 			.spacer {
 				flex: 1;
@@ -344,10 +345,10 @@
 			padding: 2rem 1.5rem;
 		}
 		&::-webkit-scrollbar-track-piece:start {
-			margin-top: var(--radius);
+			margin-top: var(--radius-lg);
 		}
 		&::-webkit-scrollbar-track-piece:end {
-			margin-bottom: var(--radius);
+			margin-bottom: var(--radius-lg);
 		}
 	}
 	.modal-footer {
@@ -357,7 +358,7 @@
 		justify-content: flex-end;
 		padding: 0.75rem 0;
 		margin-top: 1rem;
-		border-top: 1px solid var(--color-outline, rgb(from var(--color-text) r g b / 0.1));
+		border-top: 1px solid var(--color-border, rgb(from var(--color-text) r g b / 0.1));
 	}
 	.modal-fg {
 		view-transition-name: modal-fg;
@@ -367,13 +368,13 @@
 		height: 100%;
 		background-color: var(--color-bg);
 		z-index: -1;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-md);
 		@media (min-width: 768px) {
-			border-radius: var(--radius);
+			border-radius: var(--radius-lg);
 		}
 	}
 	.modal-bg {
-		--layer: var(--layer-4);
+		--layer: var(--layer-modal);
 		position: fixed;
 		top: 0;
 		bottom: 0;

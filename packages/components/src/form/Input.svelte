@@ -344,7 +344,7 @@
 
 	const strength_color = $derived.by(() => {
 		const colors = [
-			'var(--color-outline, hsl(0 0% 80%))',
+			'var(--color-border, hsl(0 0% 80%))',
 			'var(--color-error, #d32f2f)',
 			'var(--color-warning, #f59e0b)',
 			'var(--color-success, #16a34a)',
@@ -1409,24 +1409,24 @@
 		   scales from one number — keeping the roomy, legacy-style feel
 		   while staying a plain length the label maths can divide by. */
 		--_height: calc(var(--_font) * 3.5);
-		--_radius: var(--radius-3, 10px);
-		--_border: var(--color-outline, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
+		--_radius: var(--radius-lg, 10px);
+		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
 		--_border-hover: var(
-			--color-outline-active,
+			--color-border-active,
 			light-dark(hsl(0 0% 60%), hsl(0 0% 48%))
 		);
 		--_border-focus: var(--color-action, hsl(217 75% 52%));
 		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
-		--_bg: var(--color-bg-0, light-dark(#fff, hsl(0 0% 9%)));
-		--_panel: var(--color-bg-1, light-dark(#fff, hsl(0 0% 13%)));
+		--_bg: var(--color-surface, light-dark(#fff, hsl(0 0% 9%)));
+		--_panel: var(--color-surface, light-dark(#fff, hsl(0 0% 13%)));
 		--_panel-hover: var(--color-bg-active, light-dark(hsl(0 0% 95%), hsl(0 0% 18%)));
 		--_text: var(--color-text, inherit);
-		--_text-muted: var(--color-text-light, light-dark(hsl(0 0% 46%), hsl(0 0% 62%)));
+		--_text-muted: var(--color-text-muted, light-dark(hsl(0 0% 46%), hsl(0 0% 62%)));
 		--_chip-bg: var(--color-action, hsl(217 75% 52%));
 		--_chip-bg-hover: var(--color-action-active, hsl(217 80% 46%));
 		--_chip-text: var(--color-action-text, #fff);
 		--_duration: 150ms;
-		--_ease: var(--ease-in-out-4, cubic-bezier(0.76, 0, 0.24, 1));
+		--_ease: var(--ease-in-out, cubic-bezier(0.76, 0, 0.24, 1));
 		/* The legacy label glide easing */
 		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
 		/* Snappy ease-out for the panel's expand-in animation (matches Select) */
@@ -1881,7 +1881,7 @@
 	.color-swatch {
 		width: 100%;
 		height: 100%;
-		border-radius: var(--radius-2, 5px);
+		border-radius: var(--radius-md, 5px);
 		border: 1px solid var(--_border);
 		pointer-events: none;
 	}
@@ -1947,7 +1947,7 @@
 		gap: 0.5em;
 		max-width: 100%;
 		padding: 0.25em 0.3em;
-		border-radius: var(--radius-2, 6px);
+		border-radius: var(--radius-md, 6px);
 		background: var(--_panel-hover);
 	}
 
@@ -1959,7 +1959,7 @@
 		height: 2em;
 		flex-shrink: 0;
 		overflow: hidden;
-		border-radius: var(--radius-1, 4px);
+		border-radius: var(--radius-sm, 4px);
 		background: var(--_bg);
 		color: var(--_text-muted);
 	}
@@ -2011,7 +2011,7 @@
 		align-items: center;
 		gap: 0.35em;
 		padding: 0.2em 0.3em 0.2em 0.7em;
-		border-radius: var(--radius-round, 999px);
+		border-radius: var(--radius-full, 999px);
 		background: var(--_chip-bg);
 		color: var(--_chip-text);
 		font-size: 0.85em;
@@ -2041,7 +2041,7 @@
 		height: 1.3em;
 		padding: 0;
 		border: none;
-		border-radius: var(--radius-round, 999px);
+		border-radius: var(--radius-full, 999px);
 		background: none;
 		color: inherit;
 		cursor: pointer;
@@ -2206,8 +2206,8 @@
 		border: none;
 		background: var(--_panel);
 		color: var(--_text);
-		border-radius: var(--radius-4, 16px);
-		box-shadow: var(--shadow-2, 0 8px 28px -8px rgb(0 0 0 / 0.3));
+		border-radius: var(--radius-xl, 16px);
+		box-shadow: var(--shadow-md, 0 8px 28px -8px rgb(0 0 0 / 0.3));
 		scrollbar-width: thin;
 		/* Flip above the field when there is no room below */
 		position-try-fallbacks: flip-block;

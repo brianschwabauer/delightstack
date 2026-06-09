@@ -228,7 +228,7 @@
 		:global(> .ripple) {
 			inset: 1px var(--border-inset) 1px
 				calc(var(--border-inset) + ((var(--level) - 1) * 1rem)) !important;
-			border-radius: calc(var(--radius) - var(--border-inset)) !important;
+			border-radius: calc(var(--radius-lg) - var(--border-inset)) !important;
 		}
 		&.active {
 			a,
@@ -397,7 +397,7 @@
 	}
 	/* Keyboard focus ring, driven by the hidden native input's focus state */
 	label:has(input:focus-visible) .list-control :global(.indicator-wrapper) {
-		box-shadow: 0 0 0 2px var(--color-outline-active);
+		box-shadow: 0 0 0 2px var(--color-border-active);
 		border-radius: 50%;
 	}
 	.text-content {
@@ -422,7 +422,7 @@
 		right: var(--border-inset);
 		bottom: 1px;
 		left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
-		border-radius: calc(var(--radius) - var(--border-inset));
+		border-radius: calc(var(--radius-lg) - var(--border-inset));
 		background-color: var(--color-text);
 		transition: opacity 300ms ease;
 		z-index: 0;
@@ -492,7 +492,7 @@
 			right: var(--border-inset);
 			bottom: 1px;
 			left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
-			border-radius: calc(var(--radius) - var(--border-inset));
+			border-radius: calc(var(--radius-lg) - var(--border-inset));
 			background-color: var(--color-text);
 			transition: opacity 300ms ease;
 		}
@@ -517,8 +517,8 @@
 				right: var(--border-inset);
 				bottom: 1px;
 				left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
-				border-radius: calc(var(--radius) - var(--border-inset));
-				border: solid 1px var(--color-outline-active);
+				border-radius: calc(var(--radius-lg) - var(--border-inset));
+				border: solid 1px var(--color-border-active);
 			}
 		}
 	}

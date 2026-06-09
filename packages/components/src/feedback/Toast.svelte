@@ -676,7 +676,7 @@
 		right: 0;
 		pointer-events: auto;
 		width: 100%;
-		border-radius: var(--radius-3, 12px);
+		border-radius: var(--radius-lg, 12px);
 		background-color: var(--toast-bg);
 		color: var(--toast-fg);
 		border: 1px solid var(--toast-border);

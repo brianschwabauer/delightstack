@@ -193,7 +193,7 @@
 			stroke-dashoffset: 0;
 		}
 		circle.track {
-			stroke: var(--color-outline, rgb(0 0 0 / 0.1));
+			stroke: var(--color-border, rgb(0 0 0 / 0.1));
 		}
 		circle.arc {
 			stroke: var(--progress-color, var(--color-action, currentColor));
@@ -218,7 +218,7 @@
 		.track {
 			flex: 1;
 			border-radius: var(--radius-full, 9999px);
-			background: var(--color-outline, rgb(0 0 0 / 0.1));
+			background: var(--color-border, rgb(0 0 0 / 0.1));
 			overflow: hidden;
 			position: relative;
 			display: flex;
@@ -247,7 +247,7 @@
 
 		.label {
 			font-size: var(--text-sm, 0.875rem);
-			color: var(--color-text-light, inherit);
+			color: var(--color-text-muted, inherit);
 		}
 
 		&.striped .fill:not(.indeterminate-bar) {

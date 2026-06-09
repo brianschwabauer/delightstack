@@ -534,8 +534,8 @@
 			background: transparent;
 			border: 2px dashed
 				light-dark(
-					var(--marker-color, var(--color-text-light, #9ca3af)),
-					var(--marker-color, var(--color-text-light, #6b7280))
+					var(--marker-color, var(--color-text-muted, #9ca3af)),
+					var(--marker-color, var(--color-text-muted, #6b7280))
 				);
 			box-shadow: none;
 		}
@@ -544,7 +544,7 @@
 	.pending-dot {
 		background: transparent;
 		border: 2px dashed
-			light-dark(var(--color-text-light, #9ca3af), var(--color-text-light, #6b7280));
+			light-dark(var(--color-text-muted, #9ca3af), var(--color-text-muted, #6b7280));
 		box-shadow: none;
 		animation: timeline-pulse 2s ease-in-out infinite;
 	}
@@ -576,12 +576,12 @@
 			background: transparent;
 			border: 2px dashed
 				light-dark(
-					var(--marker-color, var(--color-text-light, #9ca3af)),
-					var(--marker-color, var(--color-text-light, #6b7280))
+					var(--marker-color, var(--color-text-muted, #9ca3af)),
+					var(--marker-color, var(--color-text-muted, #6b7280))
 				);
 			color: light-dark(
-				var(--color-text-light, #9ca3af),
-				var(--color-text-light, #6b7280)
+				var(--color-text-muted, #9ca3af),
+				var(--color-text-muted, #6b7280)
 			);
 		}
 
@@ -621,7 +621,7 @@
 			top: 16px;
 			bottom: 0;
 			width: 2px;
-			background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		}
 
 		.timeline-item.vertical:last-child &,
@@ -635,7 +635,7 @@
 			left: 16px;
 			right: 0;
 			height: 2px;
-			background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		}
 
 		.timeline-item.horizontal:last-child & {
@@ -708,7 +708,7 @@
 	.timeline-date {
 		display: block;
 		font-size: 0.75rem;
-		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		margin-bottom: 0.25rem;
 		line-height: 1.3;
 
@@ -741,7 +741,7 @@
 	.timeline-body {
 		margin-top: 0.125rem;
 		font-size: 0.8125rem;
-		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		line-height: 1.5;
 
 		.timeline-item.dense & {
@@ -783,7 +783,7 @@
 		width: 12px;
 		height: 12px;
 		border-radius: 9999px;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -808,7 +808,7 @@
 
 	.skeleton-bar {
 		border-radius: 4px;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

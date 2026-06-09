@@ -518,7 +518,7 @@
 		display: flex;
 		justify-content: center;
 		pointer-events: none;
-		z-index: var(--layer-3, 300);
+		z-index: var(--layer-drawer, 300);
 	}
 
 	.backdrop {
@@ -554,10 +554,10 @@
 		display: flex;
 		flex-direction: column;
 		background-color: var(--color-bg, light-dark(#fff, #0a0a0a));
-		border-top-left-radius: var(--radius-5, 28px);
-		border-top-right-radius: var(--radius-5, 28px);
+		border-top-left-radius: var(--radius-2xl, 28px);
+		border-top-right-radius: var(--radius-2xl, 28px);
 		box-shadow:
-			var(--shadow-4, 0 -8px 30px rgb(0 0 0 / 0.18)),
+			var(--shadow-xl, 0 -8px 30px rgb(0 0 0 / 0.18)),
 			0 0 0 1px color-mix(in oklch, transparent, var(--color-text, #888) 12%);
 		pointer-events: auto;
 		cursor: grab;
@@ -579,7 +579,7 @@
 	.handle-bar {
 		width: 36px;
 		height: 4px;
-		border-radius: var(--radius-round, 9999px);
+		border-radius: var(--radius-full, 9999px);
 		background-color: color-mix(in oklch, transparent, var(--color-text, #888) 28%);
 	}
 

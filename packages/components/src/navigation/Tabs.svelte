@@ -267,10 +267,10 @@
 	/*  Size map                                                          */
 	/* ------------------------------------------------------------------ */
 	const sizeMap: Record<string, string> = {
-		'0': 'var(--font-size-0, 0.75rem)',
-		'1': 'var(--font-size-1, 0.875rem)',
-		'2': 'var(--font-size-2, 1rem)',
-		'3': 'var(--font-size-3, 1.125rem)',
+		'0': 'var(--text-sm, 0.75rem)',
+		'1': 'var(--text-base, 0.875rem)',
+		'2': 'var(--text-lg, 1rem)',
+		'3': 'var(--text-xl, 1.125rem)',
 	};
 </script>
 
@@ -367,14 +367,14 @@
 	.tab-list {
 		display: flex;
 		position: relative;
-		border-bottom: 1px solid var(--color-outline, #e0e0e0);
+		border-bottom: 1px solid var(--color-border, #e0e0e0);
 		gap: 0;
 		perspective: 100px;
 
 		.tabs.vertical & {
 			flex-direction: column;
 			border-bottom: none;
-			border-right: 1px solid var(--color-outline, #e0e0e0);
+			border-right: 1px solid var(--color-border, #e0e0e0);
 		}
 
 		.tabs.pills & {
@@ -387,16 +387,16 @@
 		}
 
 		.tabs.boxed & {
-			background: var(--color-bg-1, #f5f5f5);
-			border: 1px solid var(--color-outline, #e0e0e0);
-			border-radius: var(--radius-3, 0.5rem);
+			background: var(--color-surface, #f5f5f5);
+			border: 1px solid var(--color-border, #e0e0e0);
+			border-radius: var(--radius-lg, 0.5rem);
 			padding: 0.25rem;
 			gap: 0;
 		}
 
 		.tabs.segment & {
-			background: var(--color-bg-2, #ebebeb);
-			border-radius: var(--radius-3, 0.5rem);
+			background: var(--color-bg-muted, #ebebeb);
+			border-radius: var(--radius-lg, 0.5rem);
 			padding: 0.25rem;
 			border-bottom: none;
 			gap: 0;
@@ -446,7 +446,7 @@
 			top: 0;
 			height: auto;
 			background: var(--color-action, #fff);
-			border-radius: calc(var(--radius-3, 0.5rem) - 0.125rem);
+			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
 			box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
 		}
 
@@ -454,8 +454,8 @@
 			bottom: 0;
 			top: 0;
 			height: auto;
-			background: var(--color-bg-0, #fff);
-			border-radius: calc(var(--radius-3, 0.5rem) - 0.125rem);
+			background: var(--color-surface, #fff);
+			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
 			box-shadow:
 				0 1px 3px rgb(0 0 0 / 0.08),
 				0 1px 2px rgb(0 0 0 / 0.06);
@@ -484,7 +484,7 @@
 		padding: 0.625em 1em;
 		font-size: inherit;
 		font-family: inherit;
-		color: var(--color-text-light, #666);
+		color: var(--color-text-muted, #666);
 		white-space: nowrap;
 		transition:
 			color 150ms ease,
@@ -503,7 +503,7 @@
 
 		&:focus-visible {
 			box-shadow: inset 0 0 0 2px var(--color-accent, #1976d2);
-			border-radius: var(--radius-2, 0.375rem);
+			border-radius: var(--radius-md, 0.375rem);
 		}
 
 		&.active {
@@ -518,7 +518,7 @@
 
 		/* ---- Pills variant ---- */
 		&.pills {
-			border-radius: var(--radius-round, 9999px);
+			border-radius: var(--radius-full, 9999px);
 			padding: 0.5em 1em;
 
 			&:hover:not(.disabled):not(.active) {
@@ -534,7 +534,7 @@
 
 		/* ---- Boxed variant ---- */
 		&.boxed {
-			border-radius: calc(var(--radius-3, 0.5rem) - 0.125rem);
+			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
 			padding: 0.5em 1em;
 
 			&.active {
@@ -544,7 +544,7 @@
 
 		/* ---- Segment variant ---- */
 		&.segment {
-			border-radius: calc(var(--radius-3, 0.5rem) - 0.125rem);
+			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
 			padding: 0.5em 1em;
 
 			&.active {
@@ -564,7 +564,7 @@
 		justify-content: center;
 		background: var(--color-accent, #1976d2);
 		color: var(--color-accent-text, #fff);
-		border-radius: var(--radius-round, 9999px);
+		border-radius: var(--radius-full, 9999px);
 		font-size: 0.75em;
 		line-height: 1;
 		padding: 0.15em 0.5em;
@@ -583,8 +583,8 @@
 	.tab-skeleton {
 		height: 2.25em;
 		width: 5em;
-		border-radius: var(--radius-2, 0.375rem);
-		background: var(--color-bg-2, #e0e0e0);
+		border-radius: var(--radius-md, 0.375rem);
+		background: var(--color-bg-muted, #e0e0e0);
 		animation: skeleton-pulse 1.5s ease-in-out infinite;
 	}
 
@@ -606,7 +606,7 @@
 		&:focus-visible {
 			outline: 2px solid var(--color-accent, #1976d2);
 			outline-offset: 2px;
-			border-radius: var(--radius-2, 0.375rem);
+			border-radius: var(--radius-md, 0.375rem);
 		}
 	}
 </style>

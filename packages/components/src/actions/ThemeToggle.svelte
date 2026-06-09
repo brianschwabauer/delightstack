@@ -191,7 +191,7 @@
 		padding: 0.5em;
 		cursor: pointer;
 		color: currentColor;
-		border-radius: var(--radius-round, 9999px);
+		border-radius: var(--radius-full, 9999px);
 		font: inherit;
 		transition:
 			background-color 250ms ease,
@@ -200,7 +200,7 @@
 	}
 	.theme-toggle.has-label {
 		padding: 0.4em 0.9em;
-		border-radius: var(--radius-3, 8px);
+		border-radius: var(--radius-lg, 8px);
 	}
 	.theme-toggle:hover {
 		background-color: rgb(from currentColor r g b / 0.08);
@@ -306,7 +306,7 @@
 		font-size: 0.62em;
 		font-weight: 800;
 		line-height: 1;
-		border-radius: var(--radius-round, 9999px);
+		border-radius: var(--radius-full, 9999px);
 		/* Fill with the foreground color and knock the letter out in the
 		 * background color. Use explicit tokens (not currentColor) since this
 		 * element overrides its own `color`, which would collapse the contrast. */

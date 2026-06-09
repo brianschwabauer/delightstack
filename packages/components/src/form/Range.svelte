@@ -455,13 +455,13 @@
 		--inactive-height: 4px;
 		--gap: 7px;
 		--fill-color: var(--color-action, hsl(220 70% 55%));
-		--track-bg: var(--color-bg-6, hsl(0 0% 80%));
+		--track-bg: var(--color-bg-muted, hsl(0 0% 80%));
 
 		display: flex;
 		flex-direction: column;
 		gap: 0.5em;
 		width: 100%;
-		font-size: var(--font-size-1, 0.875rem);
+		font-size: var(--text-base, 0.875rem);
 	}
 
 	.range-container.dense {
@@ -478,7 +478,7 @@
 		--active-height: 4px;
 		--inactive-height: 4px;
 		--gap: 6px;
-		font-size: var(--font-size-0, 0.75rem);
+		font-size: var(--text-sm, 0.75rem);
 	}
 	.range-container.size-1 {
 		--handle-width: 8px;
@@ -486,7 +486,7 @@
 		--active-height: 6px;
 		--inactive-height: 4px;
 		--gap: 7px;
-		font-size: var(--font-size-1, 0.875rem);
+		font-size: var(--text-base, 0.875rem);
 	}
 	.range-container.size-2 {
 		--handle-width: 10px;
@@ -494,7 +494,7 @@
 		--active-height: 7px;
 		--inactive-height: 4px;
 		--gap: 9px;
-		font-size: var(--font-size-2, 1rem);
+		font-size: var(--text-lg, 1rem);
 	}
 	.range-container.size-3 {
 		--handle-width: 12px;
@@ -502,7 +502,7 @@
 		--active-height: 8px;
 		--inactive-height: 5px;
 		--gap: 10px;
-		font-size: var(--font-size-3, 1.125rem);
+		font-size: var(--text-xl, 1.125rem);
 	}
 
 	.range-label {
@@ -664,11 +664,11 @@
 
 	/* Focus ring */
 	.thumb-input:focus-visible::-webkit-slider-thumb {
-		outline: 2px solid var(--color-outline-active, currentColor);
+		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
 	.thumb-input:focus-visible::-moz-range-thumb {
-		outline: 2px solid var(--color-outline-active, currentColor);
+		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
 
@@ -720,7 +720,7 @@
 		left: 50%;
 		transform: translateX(-50%);
 		font-size: 0.75em;
-		color: var(--color-text-light, inherit);
+		color: var(--color-text-muted, inherit);
 		white-space: nowrap;
 	}
 
@@ -767,7 +767,7 @@
 	.value-display {
 		display: flex;
 		justify-content: space-between;
-		color: var(--color-text-light, inherit);
+		color: var(--color-text-muted, inherit);
 		font-size: 0.85em;
 		font-variant-numeric: tabular-nums;
 	}

@@ -188,8 +188,8 @@
 	}
 
 	.counter.skeleton {
-		background: var(--color-outline, rgb(0 0 0 / 0.1));
-		border-radius: var(--radius-2, 0.25rem);
+		background: var(--color-border, rgb(0 0 0 / 0.1));
+		border-radius: var(--radius-md, 0.25rem);
 		color: transparent;
 		user-select: none;
 		animation: counter-skeleton-pulse 1.5s ease-in-out infinite;

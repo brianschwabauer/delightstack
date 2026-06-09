@@ -240,14 +240,14 @@
 	.avatar-link {
 		display: inline-flex;
 		text-decoration: none;
-		border-radius: var(--radius-round, 9999px);
+		border-radius: var(--radius-full, 9999px);
 		outline: none;
 
 		&:focus-visible {
 			box-shadow:
 				0 0 0 2px var(--color-bg, #fff),
 				0 0 0 4px var(--color-accent, currentColor);
-			border-radius: var(--radius-round, 9999px);
+			border-radius: var(--radius-full, 9999px);
 		}
 	}
 
@@ -257,9 +257,9 @@
 		justify-content: center;
 		width: var(--avatar-size);
 		height: var(--avatar-size);
-		border-radius: var(--radius-round, 9999px);
-		background: light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
-		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
+		border-radius: var(--radius-full, 9999px);
+		background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		font-size: var(--overflow-font);
 		font-weight: 600;
 		line-height: 1;
@@ -275,8 +275,8 @@
 
 			&:hover {
 				background: light-dark(
-					var(--color-outline, #c4c9d0),
-					var(--color-outline, #5b6577)
+					var(--color-border, #c4c9d0),
+					var(--color-border, #5b6577)
 				);
 				/* Snap the tint in on hover; the base rule eases it back out on leave. */
 				transition: none;

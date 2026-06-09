@@ -1114,14 +1114,14 @@
 		grid-template-rows: 1fr;
 		grid-template-columns: 1fr;
 		cursor: pointer;
-		border-radius: var(--radius);
+		border-radius: var(--radius-lg);
 		isolation: isolate;
 		overflow: hidden;
 		transition:
 			box-shadow 150ms ease,
 			scale 150ms ease;
-		box-shadow: var(--shadow-1);
-		background-color: var(--color-bg-2, var(--bg-high));
+		box-shadow: var(--shadow-sm);
+		background-color: var(--color-bg-muted, var(--bg-high));
 
 		.image {
 			position: absolute;
@@ -1182,7 +1182,7 @@
 			scale: 0.98;
 		}
 		&:hover {
-			box-shadow: var(--shadow-2);
+			box-shadow: var(--shadow-md);
 			.image {
 				opacity: 0.97;
 				transform: scale(1.018);
@@ -1225,7 +1225,7 @@
 			width: 100%;
 			color: white;
 			background-color: rgba(0, 0, 0, 0.6);
-			padding: max(0.5rem, calc(var(--radius, 0px) / 2)) max(1rem, var(--radius, 0px));
+			padding: max(0.5rem, calc(var(--radius-lg, 0px) / 2)) max(1rem, var(--radius-lg, 0px));
 			text-overflow: ellipsis;
 			overflow: hidden;
 			white-space: nowrap;
@@ -1238,8 +1238,8 @@
 		}
 		.actions {
 			position: absolute;
-			top: max(4px, min(16px, var(--radius, 0px)));
-			right: max(4px, min(16px, var(--radius, 0px)));
+			top: max(4px, min(16px, var(--radius-lg, 0px)));
+			right: max(4px, min(16px, var(--radius-lg, 0px)));
 			z-index: 2;
 			display: flex;
 			gap: 0.25rem;
@@ -1349,10 +1349,9 @@
 			/* Force a high-contrast white pill so the page numbers are
 			   readable on top of any media (dark images, videos, PDFs,
 			   panoramas) inside a modal. The inherited button colors
-			   pick this up via --color-text-high / --color-text. */
+			   pick this up via --color-text. */
 			color: #1e293b;
 			--color-text: #1e293b;
-			--color-text-high: #0f172a;
 			--color-action: #3b82f6;
 			background-color: #ffffff;
 			border-radius: 9999px;
@@ -1419,7 +1418,7 @@
 			aspect-ratio: var(--aspect-ratio);
 		}
 		.bg {
-			background-color: var(--color-bg-2, var(--bg-high));
+			background-color: var(--color-bg-muted, var(--bg-high));
 		}
 		&.size-0 {
 			--aspect-ratio: 1 / 1;
@@ -1428,7 +1427,7 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 80ch) {
-						border-radius: var(--radius-3, 0.5rem);
+						border-radius: var(--radius-lg, 0.5rem);
 					}
 				}
 			}
@@ -1436,7 +1435,7 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 80ch) {
-						border-radius: var(--radius-4, 0.75rem);
+						border-radius: var(--radius-xl, 0.75rem);
 					}
 				}
 			}
@@ -1444,7 +1443,7 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 80ch) {
-						border-radius: var(--radius-5, 1rem);
+						border-radius: var(--radius-2xl, 1rem);
 					}
 				}
 			}
@@ -1454,7 +1453,7 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 1200px) {
-						border-radius: var(--radius-4, 0.75rem);
+						border-radius: var(--radius-xl, 0.75rem);
 					}
 				}
 			}
@@ -1462,7 +1461,7 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 1200px) {
-						border-radius: var(--radius-5, 1rem);
+						border-radius: var(--radius-2xl, 1rem);
 					}
 				}
 			}
@@ -1470,7 +1469,7 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 1200px) {
-						border-radius: var(--radius-6, 1.5rem);
+						border-radius: var(--radius-3xl, 1.5rem);
 					}
 				}
 			}
@@ -1480,24 +1479,24 @@
 	.gallery.slider:not(.modal).controls-overlay {
 		&.radius-1 {
 			.controls {
-				border-top-left-radius: var(--radius-4, 0.75rem);
-				border-top-right-radius: var(--radius-4, 0.75rem);
+				border-top-left-radius: var(--radius-xl, 0.75rem);
+				border-top-right-radius: var(--radius-xl, 0.75rem);
 			}
 		}
 		&.radius-2 {
 			.controls {
-				border-top-left-radius: var(--radius-5, 1rem);
-				border-top-right-radius: var(--radius-5, 1rem);
-				border-bottom-left-radius: var(--radius-5, 1rem);
-				border-bottom-right-radius: var(--radius-5, 1rem);
+				border-top-left-radius: var(--radius-2xl, 1rem);
+				border-top-right-radius: var(--radius-2xl, 1rem);
+				border-bottom-left-radius: var(--radius-2xl, 1rem);
+				border-bottom-right-radius: var(--radius-2xl, 1rem);
 			}
 		}
 		&.radius-3 {
 			.controls {
-				border-top-left-radius: var(--radius-6, 1.5rem);
-				border-top-right-radius: var(--radius-6, 1.5rem);
-				border-bottom-left-radius: var(--radius-6, 1.5rem);
-				border-bottom-right-radius: var(--radius-6, 1.5rem);
+				border-top-left-radius: var(--radius-3xl, 1.5rem);
+				border-top-right-radius: var(--radius-3xl, 1.5rem);
+				border-bottom-left-radius: var(--radius-3xl, 1.5rem);
+				border-bottom-right-radius: var(--radius-3xl, 1.5rem);
 			}
 		}
 		.controls {
@@ -1508,7 +1507,7 @@
 			}
 			background-color: color-mix(
 				in oklch,
-				var(--color-bg-2, var(--bg-high)),
+				var(--color-bg-muted, var(--bg-high)),
 				transparent 30%
 			);
 			backdrop-filter: blur(10px);
@@ -1532,7 +1531,6 @@
 			}
 			:global(> .button) {
 				--color-text: #eeeeee;
-				--color-text-high: #ffffff;
 				--bg-high: rgba(0, 0, 0, 0.2);
 			}
 			:global(> .button:hover button) {
@@ -1552,7 +1550,6 @@
 				}
 				:global(> .button) {
 					--color-text: #eeeeee;
-					--color-text-high: #ffffff;
 					--bg-high: rgba(0, 0, 0, 0.2);
 				}
 				:global(> .button button svg) {
@@ -1675,7 +1672,7 @@
 		}
 		.controls > :global(.play) {
 			svg.progress {
-				stroke: var(--color-text-light, var(--text-low));
+				stroke: var(--color-text-muted);
 				opacity: 1;
 			}
 		}
@@ -1683,7 +1680,7 @@
 
 	.gallery.slider.modal {
 		position: fixed;
-		z-index: var(--layer-5, 1000);
+		z-index: var(--layer-modal, 1000);
 		top: 0;
 		left: 0;
 		bottom: 0;
@@ -1729,7 +1726,7 @@
 			}
 			text-align: center;
 			color: white;
-			font-size: var(--font-size-1, 1rem);
+			font-size: var(--text-base, 1rem);
 			padding: 6rem 1rem 5rem;
 			text-shadow:
 				0 1px 2px rgba(0, 0, 0, 0.5),
@@ -1794,7 +1791,7 @@
 		}
 
 		&.radius-0 {
-			--radius: 0px;
+			--radius-lg: 0px;
 		}
 
 		&.size-00 {
@@ -1803,13 +1800,13 @@
 				font-size: 0.8rem;
 			}
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.4);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.4);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.6);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.6);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.8);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.8);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -1830,13 +1827,13 @@
 				font-size: 0.9rem;
 			}
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.45);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.65);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.65);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.85);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.85);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -1854,13 +1851,13 @@
 		&.size-1 {
 			--cols: 4;
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.45);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.8);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.8);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.1);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.1);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -1878,13 +1875,13 @@
 		&.size-2 {
 			--cols: 3;
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.5);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 1);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.4);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.4);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -1902,13 +1899,13 @@
 		&.size-3 {
 			--cols: 2;
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.5);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.1);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.1);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.5);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -1972,7 +1969,7 @@
 		container: gallery-grid / inline-size;
 
 		&.radius-0 {
-			--radius: 0px;
+			--radius-lg: 0px;
 		}
 		&.size-00 {
 			grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
@@ -1980,13 +1977,13 @@
 				font-size: 0.7rem;
 			}
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.3);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.3);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.45);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.6);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.6);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2010,13 +2007,13 @@
 				font-size: 0.8rem;
 			}
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.35);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.35);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.55);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.55);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.75);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.75);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2037,13 +2034,13 @@
 		&.size-1 {
 			grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.45);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.8);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.8);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.1);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.1);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2064,13 +2061,13 @@
 		&.size-2 {
 			grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.5);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 1);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.4);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.4);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2091,13 +2088,13 @@
 		&.size-3 {
 			grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.5);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.1);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.1);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.5);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2151,19 +2148,19 @@
 		margin-inline: auto;
 
 		&.radius-0 {
-			--radius: 0px;
+			--radius-lg: 0px;
 		}
 		&.size-00 {
 			--row-height: 45px;
 			--max-row-height: 75px;
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.4);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.4);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.5);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.65);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.65);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2186,13 +2183,13 @@
 			--row-height: 70px;
 			--max-row-height: 110px;
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.45);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.45);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.55);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.55);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.75);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.75);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2215,13 +2212,13 @@
 			--row-height: 100px;
 			--max-row-height: 150px;
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.35);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.35);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.5);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.7);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.7);
 			}
 
 			&.spacing-0 {
@@ -2240,13 +2237,13 @@
 				--row-height: 200px;
 				--max-row-height: 300px;
 				&.radius-1 {
-					--radius: calc(var(--gallery-gap, 12px) * 0.45);
+					--radius-lg: calc(var(--gallery-gap, 12px) * 0.45);
 				}
 				&.radius-2 {
-					--radius: calc(var(--gallery-gap, 12px) * 0.8);
+					--radius-lg: calc(var(--gallery-gap, 12px) * 0.8);
 				}
 				&.radius-3 {
-					--radius: calc(var(--gallery-gap, 12px) * 1.1);
+					--radius-lg: calc(var(--gallery-gap, 12px) * 1.1);
 				}
 			}
 		}
@@ -2254,13 +2251,13 @@
 			--row-height: 250px;
 			--max-row-height: 350px;
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.5);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 1);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.4);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.4);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2282,13 +2279,13 @@
 			--row-height: 350px;
 			--max-row-height: 500px;
 			&.radius-1 {
-				--radius: calc(var(--gallery-gap, 12px) * 0.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 0.5);
 			}
 			&.radius-2 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.1);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.1);
 			}
 			&.radius-3 {
-				--radius: calc(var(--gallery-gap, 12px) * 1.5);
+				--radius-lg: calc(var(--gallery-gap, 12px) * 1.5);
 			}
 			&.spacing-0 {
 				--gallery-gap: 0px;
@@ -2330,19 +2327,19 @@
 		--thumb-size: calc(var(--line-height) * 0.72);
 
 		&.radius-0 {
-			--radius: 0px;
+			--radius-lg: 0px;
 			.info {
 				border-radius: 0px !important;
 			}
 		}
 		&.radius-1 {
-			--radius: calc(var(--line-height) * 0.1);
+			--radius-lg: calc(var(--line-height) * 0.1);
 		}
 		&.radius-2 {
-			--radius: calc(var(--line-height) * 0.15);
+			--radius-lg: calc(var(--line-height) * 0.15);
 		}
 		&.radius-3 {
-			--radius: calc(var(--line-height) * 0.2);
+			--radius-lg: calc(var(--line-height) * 0.2);
 		}
 		&.size-00 {
 			--line-height: 2.25rem;
@@ -2411,7 +2408,7 @@
 				   row is the click target — feedback and clickability stay in sync. */
 				align-self: stretch;
 				padding: 0 calc(var(--list-pad) - 2px);
-				border-radius: calc(var(--radius) + var(--list-pad));
+				border-radius: calc(var(--radius-lg) + var(--list-pad));
 				/* Press effect, matching ListItem's translate-on-active. */
 				transition: translate 200ms ease;
 
@@ -2427,7 +2424,7 @@
 					bottom: 2px;
 					background-color: var(--color-text);
 					opacity: 0;
-					border-radius: var(--radius);
+					border-radius: var(--radius-lg);
 					z-index: -1;
 					transition: opacity 300ms ease;
 				}
@@ -2455,8 +2452,8 @@
 						content: '';
 						position: absolute;
 						inset: 2px 0;
-						border: solid 1px var(--color-outline-active);
-						border-radius: var(--radius);
+						border: solid 1px var(--color-border-active);
+						border-radius: var(--radius-lg);
 						pointer-events: none;
 					}
 				}
@@ -2469,14 +2466,14 @@
 					display: flex;
 					align-items: center;
 					justify-content: center;
-					border-radius: var(--radius);
+					border-radius: var(--radius-lg);
 					overflow: hidden;
 					/* The square box behind contain-fit thumbnails so images of
 					   any aspect ratio read as consistently sized tiles. Falls back
 					   to a text-tinted fill so the square stays visible even when
 					   the surface tokens aren't defined by the host theme. */
 					background-color: var(
-						--color-bg-2,
+						--color-bg-muted,
 						color-mix(in oklch, var(--color-text, gray) 20%, transparent)
 					);
 					.thumbnail-blur,
@@ -2572,13 +2569,13 @@
 				display: none;
 			}
 			&.radius-1 {
-				--radius: var(--radius-2, 0.375rem);
+				--radius-lg: var(--radius-md, 0.375rem);
 			}
 			&.radius-2 {
-				--radius: var(--radius-3, 0.5rem);
+				--radius-lg: var(--radius-lg, 0.5rem);
 			}
 			&.radius-3 {
-				--radius: var(--radius-4, 0.75rem);
+				--radius-lg: var(--radius-xl, 0.75rem);
 			}
 			> .gallery-item {
 				flex-basis: 100%;
@@ -2592,13 +2589,13 @@
 			}
 			@container (min-width: 768px) {
 				&.radius-1 {
-					--radius: var(--radius-4, 0.75rem);
+					--radius-lg: var(--radius-xl, 0.75rem);
 				}
 				&.radius-2 {
-					--radius: var(--radius-5, 1rem);
+					--radius-lg: var(--radius-2xl, 1rem);
 				}
 				&.radius-3 {
-					--radius: var(--radius-6, 1.5rem);
+					--radius-lg: var(--radius-3xl, 1.5rem);
 				}
 			}
 		}
@@ -2612,13 +2609,13 @@
 				display: none;
 			}
 			&.radius-1 {
-				--radius: var(--radius-2, 0.375rem);
+				--radius-lg: var(--radius-md, 0.375rem);
 			}
 			&.radius-2 {
-				--radius: var(--radius-3, 0.5rem);
+				--radius-lg: var(--radius-lg, 0.5rem);
 			}
 			&.radius-3 {
-				--radius: var(--radius-4, 0.75rem);
+				--radius-lg: var(--radius-xl, 0.75rem);
 			}
 			> .gallery-item {
 				flex-basis: 0;
@@ -2632,13 +2629,13 @@
 			}
 			@container (min-width: 768px) {
 				&.radius-1 {
-					--radius: var(--radius-3, 0.5rem);
+					--radius-lg: var(--radius-lg, 0.5rem);
 				}
 				&.radius-2 {
-					--radius: var(--radius-4, 0.75rem);
+					--radius-lg: var(--radius-xl, 0.75rem);
 				}
 				&.radius-3 {
-					--radius: var(--radius-5, 1rem);
+					--radius-lg: var(--radius-2xl, 1rem);
 				}
 			}
 		}
@@ -2652,13 +2649,13 @@
 				display: none;
 			}
 			&.radius-1 {
-				--radius: var(--radius-1, 0.25rem);
+				--radius-lg: var(--radius-sm, 0.25rem);
 			}
 			&.radius-2 {
-				--radius: var(--radius-2, 0.375rem);
+				--radius-lg: var(--radius-md, 0.375rem);
 			}
 			&.radius-3 {
-				--radius: var(--radius-3, 0.5rem);
+				--radius-lg: var(--radius-lg, 0.5rem);
 			}
 			> .gallery-item {
 				flex-basis: 0;
@@ -2672,13 +2669,13 @@
 			}
 			@container (min-width: 768px) {
 				&.radius-1 {
-					--radius: var(--radius-2, 0.375rem);
+					--radius-lg: var(--radius-md, 0.375rem);
 				}
 				&.radius-2 {
-					--radius: var(--radius-3, 0.5rem);
+					--radius-lg: var(--radius-lg, 0.5rem);
 				}
 				&.radius-3 {
-					--radius: var(--radius-4, 0.75rem);
+					--radius-lg: var(--radius-xl, 0.75rem);
 				}
 			}
 			&.size-2 {
@@ -2700,13 +2697,13 @@
 					display: none;
 				}
 				&.radius-1 {
-					--radius: var(--radius-1, 0.25rem);
+					--radius-lg: var(--radius-sm, 0.25rem);
 				}
 				&.radius-2 {
-					--radius: var(--radius-2, 0.375rem);
+					--radius-lg: var(--radius-md, 0.375rem);
 				}
 				&.radius-3 {
-					--radius: var(--radius-3, 0.5rem);
+					--radius-lg: var(--radius-lg, 0.5rem);
 				}
 				> .gallery-item {
 					flex-basis: 0;
@@ -2720,13 +2717,13 @@
 				}
 				@container (min-width: 768px) {
 					&.radius-1 {
-						--radius: var(--radius-2, 0.375rem);
+						--radius-lg: var(--radius-md, 0.375rem);
 					}
 					&.radius-2 {
-						--radius: var(--radius-3, 0.5rem);
+						--radius-lg: var(--radius-lg, 0.5rem);
 					}
 					&.radius-3 {
-						--radius: var(--radius-4, 0.75rem);
+						--radius-lg: var(--radius-xl, 0.75rem);
 					}
 				}
 			}
@@ -2748,13 +2745,13 @@
 				display: none;
 			}
 			&.radius-1 {
-				--radius: var(--radius-1, 0.25rem);
+				--radius-lg: var(--radius-sm, 0.25rem);
 			}
 			&.radius-2 {
-				--radius: var(--radius-2, 0.375rem);
+				--radius-lg: var(--radius-md, 0.375rem);
 			}
 			&.radius-3 {
-				--radius: var(--radius-3, 0.5rem);
+				--radius-lg: var(--radius-lg, 0.5rem);
 			}
 			> .gallery-item {
 				flex-basis: 0;
@@ -2768,13 +2765,13 @@
 			}
 			@container (min-width: 768px) {
 				&.radius-1 {
-					--radius: var(--radius-2, 0.375rem);
+					--radius-lg: var(--radius-md, 0.375rem);
 				}
 				&.radius-2 {
-					--radius: var(--radius-3, 0.5rem);
+					--radius-lg: var(--radius-lg, 0.5rem);
 				}
 				&.radius-3 {
-					--radius: var(--radius-4, 0.75rem);
+					--radius-lg: var(--radius-xl, 0.75rem);
 				}
 			}
 		}

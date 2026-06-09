@@ -286,7 +286,7 @@
 	.stat-label {
 		font-size: var(--stat-label-font);
 		line-height: 1.3;
-		color: var(--color-text-light, light-dark(#6b7280, #9ca3af));
+		color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
 		white-space: nowrap;
 	}
 
@@ -306,7 +306,7 @@
 			color: var(--color-error, light-dark(#dc2626, #f87171));
 		}
 		&.neutral {
-			color: var(--color-text-light, light-dark(#6b7280, #9ca3af));
+			color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
 		}
 	}
 
@@ -340,8 +340,8 @@
 	.skeleton-icon {
 		width: var(--stat-icon-size);
 		height: var(--stat-icon-size);
-		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-md, 0.25rem);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		flex-shrink: 0;
 		position: relative;
 		overflow: hidden;
@@ -371,8 +371,8 @@
 	.skeleton-value {
 		width: 6em;
 		height: var(--stat-value-font);
-		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-md, 0.25rem);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -395,8 +395,8 @@
 	.skeleton-label {
 		width: 8em;
 		height: var(--stat-label-font);
-		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-md, 0.25rem);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -420,8 +420,8 @@
 	.skeleton-change {
 		width: 10em;
 		height: var(--stat-label-font);
-		border-radius: var(--radius-2, 0.25rem);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-md, 0.25rem);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		margin-top: 0.25rem;
 		position: relative;
 		overflow: hidden;

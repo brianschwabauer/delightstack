@@ -396,7 +396,7 @@
 		font-weight: 500;
 		font-size: var(--step-font-size);
 		border: 2px solid
-			light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		background: transparent;
 		color: light-dark(
 			var(--color-text-disabled, #9ca3af),
@@ -528,7 +528,7 @@
 			left: calc(50% + var(--circle-size) / 2 + 4px);
 			right: calc(-50% + var(--circle-size) / 2 + 4px);
 			width: calc(100% - var(--circle-size) - 8px);
-			background: light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
+			background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		}
 
 		.step.vertical & {
@@ -538,7 +538,7 @@
 			margin-left: calc(var(--circle-size) / 2 - 1px);
 			margin-top: 0.25rem;
 			margin-bottom: 0.25rem;
-			background: light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
+			background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		}
 	}
 
@@ -601,7 +601,7 @@
 		min-width: var(--circle-size);
 		min-height: var(--circle-size);
 		border-radius: 9999px;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -626,7 +626,7 @@
 
 	.skeleton-bar {
 		border-radius: 4px;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -661,7 +661,7 @@
 	}
 
 	.skeleton-connector-line {
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 
 		.steps.horizontal & {
 			width: 100%;

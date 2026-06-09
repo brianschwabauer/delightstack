@@ -249,7 +249,7 @@
 	/* ========== AccordionItem ========== */
 	.accordion-item {
 		border-bottom: 1px solid
-			light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		perspective: 100px;
 
 		&.disabled {
@@ -336,7 +336,7 @@
 
 	.skeleton-item {
 		border-bottom: 1px solid
-			light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		padding: 1rem 1.25rem;
 	}
 
@@ -344,7 +344,7 @@
 		height: 1.25rem;
 		width: 60%;
 		border-radius: 4px;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

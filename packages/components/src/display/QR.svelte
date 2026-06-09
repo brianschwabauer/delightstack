@@ -1103,8 +1103,8 @@
 	.skeleton-inner {
 		width: var(--qr-size);
 		height: var(--qr-size);
-		border-radius: var(--radius-3, 8px);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-lg, 8px);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1141,8 +1141,8 @@
 		justify-content: center;
 		padding: 6px 12px;
 		border: 1px solid
-			light-dark(var(--color-outline, #d1d5db), var(--color-outline, #4b5563));
-		border-radius: var(--radius-2, 6px);
+			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		border-radius: var(--radius-md, 6px);
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1f2937));
 		color: light-dark(var(--color-text, #374151), var(--color-text, #d1d5db));
 		cursor: pointer;
@@ -1158,8 +1158,8 @@
 				var(--color-bg-active, #374151)
 			);
 			border-color: light-dark(
-				var(--color-outline-active, #9ca3af),
-				var(--color-outline-active, #6b7280)
+				var(--color-border-active, #9ca3af),
+				var(--color-border-active, #6b7280)
 			);
 			transition: none;
 		}

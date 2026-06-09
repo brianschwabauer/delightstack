@@ -183,7 +183,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75em;
-		border-radius: var(--radius-3, 8px);
+		border-radius: var(--radius-lg, 8px);
 		position: relative;
 	}
 
@@ -198,7 +198,7 @@
 
 	/* Bordered style */
 	.fieldset.bordered {
-		border: 1px solid var(--color-outline, hsl(0 0% 80%));
+		border: 1px solid var(--color-border, hsl(0 0% 80%));
 	}
 
 	/* Error state */
@@ -231,12 +231,12 @@
 		left: 1em;
 		height: 1em;
 		width: 9em;
-		border-radius: var(--radius-2, 4px);
-		background-color: var(--color-bg-4, hsl(0 0% 90%));
+		border-radius: var(--radius-md, 4px);
+		background-color: var(--color-bg-muted, hsl(0 0% 90%));
 		background-image: linear-gradient(
 			100deg,
 			transparent 30%,
-			color-mix(in oklch, var(--color-bg-0, #fff) 70%, transparent) 50%,
+			color-mix(in oklch, var(--color-surface, #fff) 70%, transparent) 50%,
 			transparent 70%
 		);
 		background-size: 220% 100%;
@@ -279,7 +279,7 @@
 		cursor: pointer;
 		user-select: none;
 		-webkit-tap-highlight-color: transparent;
-		border-radius: var(--radius-2, 4px);
+		border-radius: var(--radius-md, 4px);
 	}
 	.legend.collapsible:hover {
 		color: var(--color-action, hsl(220 70% 55%));
@@ -287,7 +287,7 @@
 		transition: none;
 	}
 	.legend.collapsible:focus-visible {
-		outline: 2px solid var(--color-outline-active, currentColor);
+		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
 
@@ -315,7 +315,7 @@
 	.description {
 		margin: 0;
 		font-size: 0.875em;
-		color: var(--color-text-light, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 		line-height: 1.5;
 	}
 
@@ -341,7 +341,7 @@
 	   whole fieldset body) expands the section. */
 	.fieldset :global(.button.expand-button) {
 		width: 100%;
-		--color-text: var(--color-text-light, hsl(0 0% 45%));
+		--color-text: var(--color-text-muted, hsl(0 0% 45%));
 	}
 	.fieldset :global(.button.expand-button button) {
 		justify-content: space-between;

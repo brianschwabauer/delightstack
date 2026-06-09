@@ -865,15 +865,15 @@
 		pointer-events: all;
 	}
 	.popover {
-		--shadow: var(--shadow-2);
-		--color-bg: var(--color-bg-0);
-		--layer: var(--layer-5);
-		--easing: var(--ease-out-back);
+		--shadow-md: var(--shadow-md);
+		--color-bg: var(--color-surface);
+		--layer: var(--layer-popover);
+		--easing: var(--ease-spring);
 		z-index: var(--layer);
 		background-color: var(--color-bg);
-		border: 1px solid var(--color-outline, transparent);
-		border-radius: var(--popover-radius, var(--radius-5));
-		box-shadow: var(--shadow);
+		border: 1px solid var(--color-border, transparent);
+		border-radius: var(--popover-radius, var(--radius-2xl));
+		box-shadow: var(--shadow-md);
 		max-width: calc(100vw - 1rem);
 		max-height: calc(100vh - 1rem);
 		transition: none;

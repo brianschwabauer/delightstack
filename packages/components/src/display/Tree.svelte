@@ -1101,7 +1101,7 @@
 	.tree-node.focused > .node-row {
 		outline: 2px solid var(--color-action, #1976d2);
 		outline-offset: -2px;
-		border-radius: var(--radius-2, 4px);
+		border-radius: var(--radius-md, 4px);
 	}
 
 	.tree-node.disabled > .node-row {
@@ -1136,8 +1136,8 @@
 		border: none;
 		background: none;
 		cursor: pointer;
-		color: light-dark(var(--color-text-light, #888), var(--color-text-light, #999));
-		border-radius: var(--radius-2, 4px);
+		color: light-dark(var(--color-text-muted, #888), var(--color-text-muted, #999));
+		border-radius: var(--radius-md, 4px);
 
 		&:not(.has-children) {
 			visibility: hidden;
@@ -1214,7 +1214,7 @@
 	}
 
 	.check-box {
-		stroke: light-dark(var(--color-text-light, #999), var(--color-text-light, #777));
+		stroke: light-dark(var(--color-text-muted, #999), var(--color-text-muted, #777));
 		fill: transparent;
 		transition:
 			stroke 150ms ease,
@@ -1250,7 +1250,7 @@
 		display: flex;
 		align-items: center;
 		flex-shrink: 0;
-		color: light-dark(var(--color-text-light, #666), var(--color-text-light, #aaa));
+		color: light-dark(var(--color-text-muted, #666), var(--color-text-muted, #aaa));
 	}
 
 	.node-label {
@@ -1423,7 +1423,7 @@
 		height: 1rem;
 		flex-shrink: 0;
 		border-radius: 2px;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1449,7 +1449,7 @@
 	.skeleton-bar {
 		height: 0.875rem;
 		border-radius: 4px;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

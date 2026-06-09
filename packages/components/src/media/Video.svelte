@@ -1592,7 +1592,7 @@
 		position: relative;
 		overflow: hidden;
 		background: black;
-		border-radius: var(--radius-3, 8px);
+		border-radius: var(--radius-lg, 8px);
 		width: 100%;
 		outline: none;
 		font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
@@ -1620,7 +1620,7 @@
 		inset: 0;
 		z-index: 20;
 		overflow: hidden;
-		background: var(--color-bg-3, #2a2a2a);
+		background: var(--color-bg-muted, #2a2a2a);
 	}
 
 	.skeleton-shimmer {
@@ -1696,7 +1696,7 @@
 		z-index: 5;
 		width: 76px;
 		height: 76px;
-		border-radius: var(--radius-round, 50%);
+		border-radius: var(--radius-full, 50%);
 		background: rgba(0, 0, 0, 0.45);
 		color: white;
 		border: none;
@@ -1708,11 +1708,11 @@
 		backdrop-filter: blur(14px) saturate(160%);
 		-webkit-backdrop-filter: blur(14px) saturate(160%);
 		transition:
-			transform 150ms var(--ease-out-3, ease),
-			background 150ms var(--ease-out-3, ease),
-			width 200ms var(--ease-out-3, ease),
-			height 200ms var(--ease-out-3, ease),
-			opacity 150ms var(--ease-out-3, ease);
+			transform 150ms var(--ease-out, ease),
+			background 150ms var(--ease-out, ease),
+			width 200ms var(--ease-out, ease),
+			height 200ms var(--ease-out, ease),
+			opacity 150ms var(--ease-out, ease);
 		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 		-webkit-tap-highlight-color: transparent;
 	}
@@ -1745,7 +1745,7 @@
 		gap: 8px;
 		background: rgba(0, 0, 0, 0.8);
 		color: rgba(255, 255, 255, 0.7);
-		font-size: var(--font-size-0, 0.875rem);
+		font-size: var(--text-sm, 0.875rem);
 	}
 
 	.error svg {
@@ -1763,7 +1763,7 @@
 		z-index: 10;
 		background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
 		padding: 40px 0 0;
-		transition: opacity 150ms var(--ease-out-3, ease);
+		transition: opacity 150ms var(--ease-out, ease);
 		opacity: 0;
 		pointer-events: none;
 	}
@@ -1799,7 +1799,7 @@
 		width: 38px;
 		height: 38px;
 		border: none;
-		border-radius: var(--radius-2, 6px);
+		border-radius: var(--radius-md, 6px);
 		background: transparent;
 		color: rgba(255, 255, 255, 0.92);
 		cursor: pointer;
@@ -1808,16 +1808,16 @@
 		flex-shrink: 0;
 		-webkit-tap-highlight-color: transparent;
 		transition:
-			background 150ms var(--ease-out-3, ease),
-			color 150ms var(--ease-out-3, ease),
-			transform 140ms var(--ease-out-3, ease);
+			background 150ms var(--ease-out, ease),
+			color 150ms var(--ease-out, ease),
+			transform 140ms var(--ease-out, ease);
 	}
 
 	.btn:hover {
 		background: rgba(255, 255, 255, 0.14);
 		color: #fff;
 		/* Snap the tint in on hover; the base rule eases it back out on leave. */
-		transition: transform 140ms var(--ease-out-3, ease);
+		transition: transform 140ms var(--ease-out, ease);
 	}
 
 	.btn:focus-visible {
@@ -1859,7 +1859,7 @@
 
 	/* Settings gear spins open */
 	.settings-btn svg {
-		transition: transform 400ms var(--ease-out-back, cubic-bezier(0.34, 1.56, 0.64, 1));
+		transition: transform 400ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 	}
 	.settings-btn.open svg {
 		transform: rotate(90deg);
@@ -1885,7 +1885,7 @@
 		height: 4px;
 		border-radius: 999px;
 		pointer-events: none;
-		transition: height 150ms var(--ease-out-3, ease);
+		transition: height 150ms var(--ease-out, ease);
 	}
 	.seek-base {
 		left: 0;
@@ -1925,7 +1925,7 @@
 	 * Range's position easing here — otherwise the fill lags ~100ms behind the
 	 * (instant) native thumb. Keep only the hover height grow. */
 	.seek :global(.track-segment) {
-		transition: height 150ms var(--ease-out-3, ease);
+		transition: height 150ms var(--ease-out, ease);
 	}
 
 	/* ---------- Seek hover tooltip ---------- */
@@ -1942,8 +1942,8 @@
 		-webkit-backdrop-filter: blur(8px);
 		color: white;
 		padding: 4px;
-		border-radius: var(--radius-2, 4px);
-		font-size: var(--font-size-00, 0.75rem);
+		border-radius: var(--radius-md, 4px);
+		font-size: var(--text-xs, 0.75rem);
 		white-space: nowrap;
 		pointer-events: none;
 		font-variant-numeric: tabular-nums;
@@ -1992,15 +1992,15 @@
 		backdrop-filter: blur(16px) saturate(150%);
 		-webkit-backdrop-filter: blur(16px) saturate(150%);
 		border: 1px solid rgba(255, 255, 255, 0.12);
-		border-radius: var(--radius-3, 10px);
+		border-radius: var(--radius-lg, 10px);
 		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
 		opacity: 0;
 		pointer-events: none;
 		transform: translateX(-50%) translateY(6px) scale(0.96);
 		transform-origin: bottom center;
 		transition:
-			opacity 160ms var(--ease-out-3, ease),
-			transform 160ms var(--ease-out-3, ease);
+			opacity 160ms var(--ease-out, ease),
+			transform 160ms var(--ease-out, ease);
 		z-index: 20;
 		touch-action: none;
 	}
@@ -2047,7 +2047,7 @@
 		backdrop-filter: blur(16px) saturate(150%);
 		-webkit-backdrop-filter: blur(16px) saturate(150%);
 		border: 1px solid rgba(255, 255, 255, 0.12);
-		border-radius: var(--radius-3, 10px);
+		border-radius: var(--radius-lg, 10px);
 		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
 		padding: 5px;
 		min-width: 96px;
@@ -2060,20 +2060,20 @@
 		width: 100%;
 		padding: 7px 14px;
 		border: none;
-		border-radius: var(--radius-2, 6px);
+		border-radius: var(--radius-md, 6px);
 		background: transparent;
 		color: rgba(255, 255, 255, 0.9);
 		cursor: pointer;
 		overflow: hidden;
-		font-size: var(--font-size-0, 0.875rem);
+		font-size: var(--text-sm, 0.875rem);
 		font-family: inherit;
 		text-align: left;
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 		-webkit-tap-highlight-color: transparent;
 		transition:
-			background 120ms var(--ease-out-3, ease),
-			transform 120ms var(--ease-out-3, ease);
+			background 120ms var(--ease-out, ease),
+			transform 120ms var(--ease-out, ease);
 	}
 
 	.dropdown-item:hover,
@@ -2081,7 +2081,7 @@
 		background: rgba(255, 255, 255, 0.12);
 		outline: none;
 		/* Snap the tint in on hover; the base rule eases it back out on leave. */
-		transition: transform 120ms var(--ease-out-3, ease);
+		transition: transform 120ms var(--ease-out, ease);
 	}
 
 	.dropdown-item:active {
@@ -2119,9 +2119,9 @@
 		border: none;
 		background: transparent;
 		color: rgba(255, 255, 255, 0.92);
-		border-radius: var(--radius-2, 6px);
+		border-radius: var(--radius-md, 6px);
 		font-family: inherit;
-		font-size: var(--font-size-0, 0.875rem);
+		font-size: var(--text-sm, 0.875rem);
 	}
 
 	.pop-row :global(svg) {
@@ -2139,14 +2139,14 @@
 		height: 32px;
 		flex-shrink: 0;
 		border: none;
-		border-radius: var(--radius-2, 6px);
+		border-radius: var(--radius-md, 6px);
 		background: transparent;
 		color: inherit;
 		cursor: pointer;
 		padding: 0;
 		overflow: hidden;
 		-webkit-tap-highlight-color: transparent;
-		transition: transform 120ms var(--ease-out-3, ease);
+		transition: transform 120ms var(--ease-out, ease);
 	}
 	.pop-icon:hover,
 	.pop-icon:focus-visible {
@@ -2169,7 +2169,7 @@
 		gap: 6px;
 	}
 	.pop-label {
-		font-size: var(--font-size-00, 0.72rem);
+		font-size: var(--text-xs, 0.72rem);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: rgba(255, 255, 255, 0.55);
@@ -2189,21 +2189,21 @@
 		color: rgba(255, 255, 255, 0.85);
 		cursor: pointer;
 		overflow: hidden;
-		font-size: var(--font-size-00, 0.75rem);
+		font-size: var(--text-xs, 0.75rem);
 		font-family: inherit;
 		font-variant-numeric: tabular-nums;
 		-webkit-tap-highlight-color: transparent;
 		transition:
 			background 120ms ease,
 			border-color 120ms ease,
-			transform 120ms var(--ease-out-3, ease);
+			transform 120ms var(--ease-out, ease);
 	}
 	.pop-opt:hover,
 	.pop-opt:focus-visible {
 		background: rgba(255, 255, 255, 0.12);
 		outline: none;
 		/* Snap the tint in on hover; the base rule eases it back out on leave. */
-		transition: transform 120ms var(--ease-out-3, ease);
+		transition: transform 120ms var(--ease-out, ease);
 	}
 	.pop-opt:active {
 		transform: scale(0.9);
@@ -2222,15 +2222,15 @@
 		overflow: hidden;
 		-webkit-tap-highlight-color: transparent;
 		transition:
-			background 120ms var(--ease-out-3, ease),
-			transform 120ms var(--ease-out-3, ease);
+			background 120ms var(--ease-out, ease),
+			transform 120ms var(--ease-out, ease);
 	}
 	.pop-toggle:hover,
 	.pop-toggle:focus-visible {
 		background: rgba(255, 255, 255, 0.12);
 		outline: none;
 		/* Snap the tint in on hover; the base rule eases it back out on leave. */
-		transition: transform 120ms var(--ease-out-3, ease);
+		transition: transform 120ms var(--ease-out, ease);
 	}
 	.pop-toggle:active {
 		transform: scale(0.97);

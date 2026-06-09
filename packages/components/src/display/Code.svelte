@@ -440,7 +440,7 @@
 	/* ========== Container ========== */
 
 	.code {
-		border-radius: var(--radius-3, 0.5rem);
+		border-radius: var(--radius-lg, 0.5rem);
 		border: 1px solid light-dark(#e2e8f0, #334155);
 		background: light-dark(#f8fafc, #1e293b);
 		overflow: hidden;
@@ -481,7 +481,7 @@
 		height: 1.75rem;
 		padding: 0;
 		border: none;
-		border-radius: var(--radius-3, 0.5rem);
+		border-radius: var(--radius-lg, 0.5rem);
 		background: transparent;
 		color: light-dark(#64748b, #94a3b8);
 		cursor: pointer;
@@ -680,7 +680,7 @@
 
 	.code.skeleton {
 		pointer-events: none;
-		border-radius: var(--radius-3, 0.5rem);
+		border-radius: var(--radius-lg, 0.5rem);
 		border: 1px solid light-dark(#e2e8f0, #334155);
 		background: light-dark(#f8fafc, #1e293b);
 		overflow: hidden;
@@ -698,8 +698,8 @@
 	.skeleton-filename {
 		height: 0.75rem;
 		width: 6rem;
-		border-radius: var(--radius-3, 0.5rem);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-lg, 0.5rem);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -728,8 +728,8 @@
 
 	.skeleton-line {
 		height: 0.875rem;
-		border-radius: var(--radius-3, 0.5rem);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-lg, 0.5rem);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 

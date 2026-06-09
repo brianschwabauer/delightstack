@@ -380,15 +380,15 @@
 <style>
 	.comparison {
 		--handle-size: 40px;
-		--handle-color: var(--color-handle, #fff);
+		--handle-color: var(--cmp-handle, #fff);
 		--handle-shadow: 0 0 6px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.15);
-		--divider-color: var(--color-divider, #fff);
+		--divider-color: var(--cmp-divider, #fff);
 		--divider-width: var(--width-divider, 2px);
-		--label-bg: var(--color-label-bg, rgba(0, 0, 0, 0.55));
-		--label-color: var(--color-label-text, #fff);
+		--label-bg: var(--cmp-label-bg, rgba(0, 0, 0, 0.55));
+		--label-color: var(--cmp-label-text, #fff);
 		--label-padding: var(--padding-label, 4px 10px);
-		--label-radius: var(--radius-label, 4px);
-		--label-font-size: var(--font-size-label, 0.8125rem);
+		--label-radius: var(--radius-md, 4px);
+		--label-font-size: var(--text-sm, 0.8125rem);
 
 		position: relative;
 		overflow: hidden;
@@ -419,7 +419,7 @@
 	.skeleton-inner {
 		width: 100%;
 		min-height: 200px;
-		border-radius: var(--radius-4, 8px);
+		border-radius: var(--radius-xl, 8px);
 		background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
 		position: relative;
 		overflow: hidden;

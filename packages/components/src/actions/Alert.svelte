@@ -165,7 +165,7 @@
 		display: flex;
 		justify-content: center;
 		margin-bottom: 0.75rem;
-		color: var(--color-text-light);
+		color: var(--color-text-muted);
 		font-size: 2rem;
 
 		&.destructive {
@@ -182,7 +182,7 @@
 
 	.alert-message {
 		font-size: var(--text-base, 1rem);
-		color: var(--color-text-light);
+		color: var(--color-text-muted);
 		line-height: var(--leading-relaxed, 1.75);
 		margin: 0;
 	}

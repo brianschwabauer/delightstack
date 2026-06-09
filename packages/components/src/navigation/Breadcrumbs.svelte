@@ -425,18 +425,18 @@
 		box-sizing: border-box;
 		width: 100%;
 		max-width: 100%;
-		font-size: var(--font-size-1, 0.875rem);
+		font-size: var(--text-base, 0.875rem);
 		&.size-0 {
-			font-size: var(--font-size-0, 0.75rem);
+			font-size: var(--text-sm, 0.75rem);
 		}
 		&.size-1 {
-			font-size: var(--font-size-1, 0.875rem);
+			font-size: var(--text-base, 0.875rem);
 		}
 		&.size-2 {
-			font-size: var(--font-size-2, 1rem);
+			font-size: var(--text-lg, 1rem);
 		}
 		&.size-3 {
-			font-size: var(--font-size-3, 1.125rem);
+			font-size: var(--text-xl, 1.125rem);
 		}
 
 		/* The Button component is generously padded for standalone use; tighten the
@@ -464,7 +464,7 @@
 		margin: 0;
 		padding: 0;
 		min-width: 0;
-		color: light-dark(var(--color-text-light, #6b7280), var(--color-text-light, #9ca3af));
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 	}
 	.breadcrumbs.dense .breadcrumb-list {
 		--bc-sep-pad: 0.0625rem;
@@ -565,8 +565,8 @@
 	.skeleton-bar {
 		display: block;
 		height: 1em;
-		border-radius: var(--radius-1, 0.25rem);
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-sm, 0.25rem);
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 	}

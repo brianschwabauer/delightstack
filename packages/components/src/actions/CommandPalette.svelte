@@ -603,7 +603,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		z-index: var(--layer-5);
+		z-index: var(--layer-popover);
 		backdrop-filter: blur(8px);
 
 		&::after {
@@ -623,12 +623,12 @@
 		top: 20vh;
 		left: 50%;
 		transform: translateX(-50%);
-		z-index: var(--layer-5);
+		z-index: var(--layer-popover);
 		width: min(600px, 90vw);
 		background-color: var(--color-bg);
-		border-radius: var(--radius-5);
-		box-shadow: var(--shadow-3);
-		border: 1px solid var(--color-outline);
+		border-radius: var(--radius-2xl);
+		box-shadow: var(--shadow-lg);
+		border: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
@@ -638,7 +638,7 @@
 		display: flex;
 		align-items: center;
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--color-outline);
+		border-bottom: 1px solid var(--color-border);
 		gap: 0.75rem;
 
 		.dense & {
@@ -649,7 +649,7 @@
 
 	.search-icon {
 		flex-shrink: 0;
-		color: var(--color-text-light);
+		color: var(--color-text-muted);
 	}
 
 	input {
@@ -663,7 +663,7 @@
 		padding: 0;
 
 		&::placeholder {
-			color: var(--color-text-light);
+			color: var(--color-text-muted);
 		}
 
 		.dense & {
@@ -675,7 +675,7 @@
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
-		color: var(--color-text-light);
+		color: var(--color-text-muted);
 		animation: spin 0.8s linear infinite;
 	}
 
@@ -698,7 +698,7 @@
 	.empty {
 		padding: 2rem 1rem;
 		text-align: center;
-		color: var(--color-text-light);
+		color: var(--color-text-muted);
 		font-size: 0.875rem;
 	}
 
@@ -708,7 +708,7 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: var(--color-text-light);
+		color: var(--color-text-muted);
 
 		.dense & {
 			padding: 0.375rem 0.75rem 0.125rem;
@@ -753,12 +753,12 @@
 		}
 
 		&.first-in-group {
-			border-top-left-radius: var(--radius-4, 8px);
-			border-top-right-radius: var(--radius-4, 8px);
+			border-top-left-radius: var(--radius-xl, 8px);
+			border-top-right-radius: var(--radius-xl, 8px);
 		}
 		&.last-in-group {
-			border-bottom-left-radius: var(--radius-4, 8px);
-			border-bottom-right-radius: var(--radius-4, 8px);
+			border-bottom-left-radius: var(--radius-xl, 8px);
+			border-bottom-right-radius: var(--radius-xl, 8px);
 		}
 
 		/* Per-item perspective so the press recedes toward the item's own
@@ -787,7 +787,7 @@
 		justify-content: center;
 		width: 1.25rem;
 		height: 1.25rem;
-		color: var(--color-text-light);
+		color: var(--color-text-muted);
 
 		:global(svg) {
 			width: 100%;
@@ -820,7 +820,7 @@
 
 	.item-description {
 		font-size: 0.75rem;
-		color: var(--color-text-light);
+		color: var(--color-text-muted);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -846,10 +846,10 @@
 			font-family: inherit;
 			font-size: 0.7rem;
 			font-weight: 500;
-			color: var(--color-text-light);
+			color: var(--color-text-muted);
 			background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
-			border: 1px solid var(--color-outline);
-			border-radius: var(--radius-4);
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-xl);
 			line-height: 1;
 		}
 	}

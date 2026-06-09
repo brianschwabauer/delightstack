@@ -307,9 +307,9 @@
 	.skeleton {
 		background: linear-gradient(
 			90deg,
-			var(--color-bg-2, rgba(128, 128, 128, 0.1)) 25%,
-			var(--color-bg-3, rgba(128, 128, 128, 0.2)) 50%,
-			var(--color-bg-2, rgba(128, 128, 128, 0.1)) 75%
+			var(--color-bg-muted, rgba(128, 128, 128, 0.1)) 25%,
+			var(--color-bg-active, rgba(128, 128, 128, 0.2)) 50%,
+			var(--color-bg-muted, rgba(128, 128, 128, 0.1)) 75%
 		);
 		background-size: 200% 100%;
 		animation: image-shimmer 1.5s ease-in-out infinite;
@@ -370,8 +370,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background-color: var(--color-bg-2, rgba(128, 128, 128, 0.1));
-		color: var(--color-text-light, rgba(128, 128, 128, 0.6));
+		background-color: var(--color-bg-muted, rgba(128, 128, 128, 0.1));
+		color: var(--color-text-muted, rgba(128, 128, 128, 0.6));
 	}
 
 	.fallback-icon {

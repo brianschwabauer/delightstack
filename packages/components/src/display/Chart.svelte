@@ -1085,7 +1085,7 @@
 	/* ── Grid ─────────────────────────────────────────────────── */
 
 	.grid-line {
-		stroke: var(--color-outline, light-dark(#e5e7eb, #374151));
+		stroke: var(--color-border, light-dark(#e5e7eb, #374151));
 		stroke-width: 1;
 		stroke-dasharray: 4 4;
 		opacity: 0.6;
@@ -1095,7 +1095,7 @@
 
 	.axis-label {
 		font-size: 11px;
-		fill: var(--color-text-light, light-dark(#6b7280, #9ca3af));
+		fill: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
 		user-select: none;
 	}
 
@@ -1213,8 +1213,8 @@
 		position: absolute;
 		z-index: 10;
 		background: var(--color-bg, light-dark(#ffffff, #1f2937));
-		border: 1px solid var(--color-outline, light-dark(#e5e7eb, #374151));
-		border-radius: var(--radius-3, 0.5rem);
+		border: 1px solid var(--color-border, light-dark(#e5e7eb, #374151));
+		border-radius: var(--radius-lg, 0.5rem);
 		padding: 6px 10px;
 		pointer-events: none;
 		white-space: nowrap;
@@ -1232,7 +1232,7 @@
 	}
 
 	.tooltip-label {
-		color: var(--color-text-light, light-dark(#6b7280, #9ca3af));
+		color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
 	}
 
 	.tooltip-value {
@@ -1259,7 +1259,7 @@
 		border: none;
 		padding: 2px 6px;
 		cursor: pointer;
-		border-radius: var(--radius-3, 0.5rem);
+		border-radius: var(--radius-lg, 0.5rem);
 		font-size: 12px;
 		color: var(--color-text, light-dark(#111827, #f9fafb));
 		transition: opacity 0.15s ease;
@@ -1292,7 +1292,7 @@
 		align-items: center;
 		justify-content: center;
 		height: 100%;
-		color: var(--color-text-light, light-dark(#6b7280, #9ca3af));
+		color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
 		font-size: 14px;
 	}
 
@@ -1320,8 +1320,8 @@
 
 	.skeleton-bar {
 		flex: 1;
-		border-radius: var(--radius-3, 0.5rem) var(--radius-3, 0.5rem) 0 0;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		border-radius: var(--radius-lg, 0.5rem) var(--radius-lg, 0.5rem) 0 0;
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
@@ -1345,7 +1345,7 @@
 		width: min(200px, 60%);
 		aspect-ratio: 1;
 		border-radius: 50%;
-		background: light-dark(var(--color-outline, #e5e7eb), var(--color-outline, #374151));
+		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
 
