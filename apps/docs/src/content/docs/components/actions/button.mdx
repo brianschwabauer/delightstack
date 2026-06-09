@@ -7,6 +7,7 @@ import { Button } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ButtonIconDemo from '../../../../components/demos/ButtonIconDemo.svelte';
 import ButtonPromiseDemo from '../../../../components/demos/ButtonPromiseDemo.svelte';
+import ButtonLoadingSuccessDemo from '../../../../components/demos/ButtonLoadingSuccessDemo.svelte';
 import ButtonDropdownMenuDemo from '../../../../components/demos/ButtonDropdownMenuDemo.svelte';
 import ButtonSplitDropdownDemo from '../../../../components/demos/ButtonSplitDropdownDemo.svelte';
 
@@ -101,28 +102,46 @@ Set `icon` for circular icon-only buttons. Combine with any variant or badge.
 
 ### Disabled & Loading
 
+Set `loading` to show a spinner whenever you drive the busy state yourself.
+
 <ComponentPreview code={`<Button disabled>Disabled</Button>
-<Button loading>Loading</Button>
-<Button loading_success>Success</Button>`}>
+<Button loading>Loading</Button>`}>
   <Button client:load disabled>Disabled</Button>
   <Button client:load loading>Loading</Button>
-  <Button client:load loading_success>Success</Button>
 </ComponentPreview>
 
 ### Promise-Aware Click Handler
 
-When `onclick` returns a `Promise`, the button automatically shows a loading spinner until the promise settles. On success, a brief checkmark flash confirms the action.
+When `onclick` returns a `Promise`, the button manages its own loading feedback — no `loading` prop required:
+
+- **Instant actions don't flash.** The spinner only appears if the promise is still pending after ~100ms; anything faster is treated as instant.
+- **The spinner can't blink.** Once shown, it stays for at least ~1s, then eases out quickly.
+- **Success is confirmed automatically.** On resolve, a brief checkmark flashes; on reject, no checkmark is shown.
+
+Try each button below: the first shows the spinner then a checkmark, the second resolves too fast to ever show a spinner, and the third shows a spinner but no checkmark because it rejects.
 
 <ComponentPreview code={`<script>
 ${'  '}import { Button } from '@delightstack/components';
 
 ${'  '}async function handleSave(e) {
-${'  '}${'  '}await api.save(data);
+${'  '}${'  '}await api.save(data); // throws on failure -> no checkmark
 ${'  '}}
 </script>
 
 <Button onclick={handleSave}>Save</Button>`}>
 	<ButtonPromiseDemo client:load />
+</ComponentPreview>
+
+### Manual Success Checkmark
+
+When you drive `loading` yourself (e.g. from a store or form), set `loading_success` to flash the same confirming checkmark as `loading` returns to `false`. Leave it off and the spinner simply disappears.
+
+<ComponentPreview code={`<script>
+${'  '}let loading = $state(false);
+</script>
+
+<Button loading={loading} loading_success>Save</Button>`}>
+	<ButtonLoadingSuccessDemo client:load />
 </ComponentPreview>
 
 ### Badge
@@ -197,8 +216,8 @@ ${'  '}{/snippet}
 | `tooltip` | `string` | `''` | Hover tooltip text |
 | `disabled` | `boolean` | `false` | Disable interaction |
 | `active` | `boolean` | `false` | Visually pressed/selected state (useful in toggle groups) |
-| `loading` | `boolean` | `undefined` | Show loading spinner manually |
-| `loading_success` | `boolean` | `false` | Show checkmark success state manually |
+| `loading` | `boolean` | `undefined` | Show the loading spinner manually. Leave unset to let a promise-returning `onclick` drive it |
+| `loading_success` | `boolean` | `false` | For the manual `loading` path: flash a success checkmark when `loading` goes `true` → `false`. The promise path shows it automatically on resolve |
 | `badge` | `string \| boolean` | `undefined` | Badge indicator; `true` renders a dot, a string renders the text |
 | `menu` | `Snippet<[{ close: () => void }]>` | `undefined` | Popover dropdown content triggered by clicking the button |
 | `show_chevron` | `boolean` | `false` | Show a chevron icon (useful with `menu`) |
