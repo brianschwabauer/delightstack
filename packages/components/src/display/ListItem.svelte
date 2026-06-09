@@ -239,12 +239,16 @@
 					/* Snap the active highlight in instantly (so keyboard navigation —
 					   e.g. arrowing an autocomplete list — feels immediate). The base
 					   ::before rule still eases it out when the item is deselected. */
-					transition: opacity 0ms ease;
+					transition:
+						opacity 0ms ease,
+						border-radius 150ms ease;
 				}
 			}
 			.text-content::before {
 				opacity: 0.06;
-				transition: opacity 0ms ease;
+				transition:
+					opacity 0ms ease,
+					border-radius 150ms ease;
 			}
 		}
 		&.disabled .text-content {
@@ -363,12 +367,43 @@
 				&:hover:not(:disabled):not([aria-disabled='true']) {
 					&::before {
 						opacity: 0.06;
-						transition: opacity 0ms ease;
+						transition:
+							opacity 0ms ease,
+							border-radius 150ms ease;
 					}
 				}
 			}
 		}
 	}
+	/* --- Adjacent highlighted rows merge into one block --- */
+	/* When two neighbouring rows are both "highlighted" — active, or hovered
+	   while enabled and interactive — square off the corners where they meet so
+	   the pair reads as one continuous selection instead of two rounded pills.
+	   The border-radius transition on the highlight ::before animates it.
+
+	   The sibling/:has parts are wrapped in :global() because ListItem renders a
+	   single <li>; without it Svelte prunes these as "unused" (it can't see a
+	   sibling .list-item in this component's own template). The `.text` guard
+	   skips non-interactive text rows in the hover case (no highlight to merge). */
+	:global(.list-item.active:has(+ .list-item.active))
+		:is(a, button, label, .text-content)::before,
+	:global(.list-item.active:has(+ .list-item:hover:not(.disabled):not(.text)))
+		:is(a, button, label, .text-content)::before,
+	:global(.list-item:hover:not(.disabled):not(.text):has(+ .list-item.active))
+		:is(a, button, label, .text-content)::before {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+	:global(.list-item.active + .list-item.active)
+		:is(a, button, label, .text-content)::before,
+	:global(.list-item:hover:not(.disabled):not(.text) + .list-item.active)
+		:is(a, button, label, .text-content)::before,
+	:global(.list-item.active + .list-item:hover:not(.disabled):not(.text))
+		:is(a, button, label, .text-content)::before {
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
+	}
+
 	.spacer {
 		flex: 1;
 		min-width: 1.5rem;
@@ -424,7 +459,9 @@
 		left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
 		border-radius: calc(var(--radius-lg) - var(--border-inset));
 		background-color: var(--color-text);
-		transition: opacity 300ms ease;
+		transition:
+			opacity 300ms ease,
+			border-radius 150ms ease;
 		z-index: 0;
 	}
 	li.dense .text-content {
@@ -494,7 +531,9 @@
 			left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
 			border-radius: calc(var(--radius-lg) - var(--border-inset));
 			background-color: var(--color-text);
-			transition: opacity 300ms ease;
+			transition:
+				opacity 300ms ease,
+				border-radius 150ms ease;
 		}
 	}
 	a[aria-disabled='true'] {
