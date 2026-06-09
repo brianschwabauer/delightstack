@@ -30,6 +30,6 @@
 	<Button icon translucent>{@render heartIcon()}</Button>
 	<Button icon accent>{@render settingsIcon()}</Button>
 	<Button icon error>{@render heartIcon()}</Button>
-	<Button icon badge={true}>{@render bellIcon()}</Button>
+	<Button icon badge>{@render bellIcon()}</Button>
 	<Button icon badge="5" accent>{@render heartIcon()}</Button>
 </div>

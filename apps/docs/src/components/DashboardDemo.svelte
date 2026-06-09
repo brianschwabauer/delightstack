@@ -939,7 +939,7 @@
 										<Checkbox
 											bind:checked={twoFactorEnabled}
 											label="Enable two-factor authentication" />
-										<Checkbox checked={true} label="Share anonymous usage data" />
+										<Checkbox checked label="Share anonymous usage data" />
 									</div>
 								</AccordionItem>
 							</Accordion>

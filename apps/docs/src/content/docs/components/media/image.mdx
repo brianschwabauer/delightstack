@@ -61,11 +61,11 @@ Provide a tiny placeholder for a smooth blur-up transition as the full image loa
 Show a built-in broken-image icon or a custom fallback image when loading fails.
 
 <ComponentPreview code={`<!-- Built-in fallback icon -->
-<Image src="/missing.jpg" alt="Missing" fallback={true} aspect_ratio="16/9" />
+<Image src="/missing.jpg" alt="Missing" fallback aspect_ratio="16/9" />
 
 <!-- Custom fallback image -->
 <Image src="/missing.jpg" alt="Missing" fallback="/fallback.png" aspect_ratio="16/9" />`}>
-	<Image client:load src="/missing.jpg" alt="Missing" fallback={true} aspect_ratio="16/9" />
+	<Image client:load src="/missing.jpg" alt="Missing" fallback aspect_ratio="16/9" />
 </ComponentPreview>
 
 ### Responsive srcset

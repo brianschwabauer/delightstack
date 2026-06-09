@@ -94,7 +94,7 @@ Set `icon` for circular icon-only buttons. Combine with any variant or badge.
 <Button icon translucent><HeartIcon /></Button>
 <Button icon accent><SettingsIcon /></Button>
 <Button icon error><HeartIcon /></Button>
-<Button icon badge={true}><BellIcon /></Button>
+<Button icon badge><BellIcon /></Button>
 <Button icon badge="5" accent><HeartIcon /></Button>`}>
 	<ButtonIconDemo client:load />
 </ComponentPreview>
@@ -129,9 +129,9 @@ ${'  '}}
 
 Display a notification indicator. Pass `true` for a dot or a string for a count.
 
-<ComponentPreview code={`<Button badge={true}>Notifications</Button>
+<ComponentPreview code={`<Button badge>Notifications</Button>
 <Button badge="3" pill>Messages</Button>`}>
-  <Button client:load badge={true}>Notifications</Button>
+  <Button client:load badge>Notifications</Button>
   <Button client:load badge="3" pill>Messages</Button>
 </ComponentPreview>
 

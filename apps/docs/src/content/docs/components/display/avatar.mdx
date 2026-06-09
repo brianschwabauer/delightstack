@@ -80,14 +80,14 @@ Six size presets are available, from inline mentions to hero sections.
 ### Badge
 
 <ComponentPreview code={`<!-- Dot indicator -->
-<Avatar name="Dot Badge" badge={true} />
+<Avatar name="Dot Badge" badge />
 
 <!-- Numeric badge -->
 <Avatar name="Count Badge" badge={5} />
 
 <!-- Numbers above 99 display as "99+" -->
 <Avatar name="Many Notifications" badge={150} />`}>
-	<Avatar client:load name="Dot Badge" badge={true} />
+	<Avatar client:load name="Dot Badge" badge />
 	<Avatar client:load name="Count Badge" badge={5} />
 	<Avatar client:load name="Many Notifications" badge={150} />
 </ComponentPreview>

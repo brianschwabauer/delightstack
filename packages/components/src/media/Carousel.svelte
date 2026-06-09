@@ -2153,7 +2153,7 @@
 										src={pickLargestSrc(item.src)}
 										page={item.page + 1}
 										show_toolbar={false}
-										single_page={true}
+										single_page
 										auto_paginate={false}
 										text_layer={false}
 										fit="page"
