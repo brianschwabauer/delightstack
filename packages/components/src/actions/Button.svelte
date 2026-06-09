@@ -831,8 +831,14 @@
 			height: calc(1em * var(--control-height-ratio, 3));
 			width: calc(1em * var(--control-height-ratio, 3));
 			aspect-ratio: 1 / 1;
-			border-radius: var(--radius-full);
-			overflow: hidden;
+			/* Make the icon button a real circle by setting --_radius on the
+			   inner button/a (which owns the background, border, ripple AND the
+			   :active translate). Don't clip the circle from this wrapper with
+			   overflow:hidden — that fakes the shape (so the square inner radius
+			   shows through on :active and the outline border gets clipped) and
+			   crops the badge that hangs off the corner. The inner element's own
+			   overflow:hidden still clips the ripple to the circle. */
+			--_radius: var(--radius-full);
 			&.dense {
 				height: calc(1em * var(--control-height-ratio-dense, 2.5));
 				width: calc(1em * var(--control-height-ratio-dense, 2.5));
