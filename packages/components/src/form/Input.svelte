@@ -1359,7 +1359,7 @@
 			{:else if ac_options.length === 0}
 				<div class="ac-status">No results</div>
 			{:else}
-				<List dense style="--color-bg: transparent;">
+				<List dense>
 					{#each ac_options as opt, i (opt.value)}
 						<ListItem
 							id="{id}-option-{i}"

@@ -216,7 +216,7 @@
 
 <style>
 	li {
-		min-height: 3.5rem;
+		min-height: 3rem;
 		padding: 0;
 		margin: 0;
 		position: relative;
@@ -275,7 +275,7 @@
 			a,
 			button,
 			label {
-				padding-top: calc(var(--border-inset, 0px) + 1rem);
+				padding-top: calc(var(--border-inset, 0px) + 0.25rem);
 				&::before,
 				&::after {
 					top: var(--border-inset);
@@ -292,7 +292,7 @@
 			a,
 			button,
 			label {
-				padding-bottom: calc(var(--border-inset, 0px) + 1rem);
+				padding-bottom: calc(var(--border-inset, 0px) + 0.25rem);
 				&::before,
 				&::after {
 					bottom: var(--border-inset);
@@ -300,7 +300,7 @@
 			}
 		}
 		&.dense {
-			min-height: 3rem;
+			min-height: 2.5rem;
 			a,
 			button,
 			label {
@@ -325,12 +325,12 @@
 			}
 		}
 		&.comfortable {
-			min-height: 4rem;
+			min-height: 3.5rem;
 			a,
 			button,
 			label {
-				padding-top: 1.5rem;
-				padding-bottom: 1.5rem;
+				padding-top: 0.5rem;
+				padding-bottom: 0.5rem;
 				padding-left: calc(2rem + var(--list-pad-x, 0px));
 				padding-right: calc(
 					2rem + var(--list-pad-x, 0px) + ((var(--level) - 1) * 1.5rem)
@@ -340,14 +340,14 @@
 				a,
 				button,
 				label {
-					padding-top: calc(var(--border-inset, 0px) + 1.5rem);
+					padding-top: calc(var(--border-inset, 0px) + 0.5rem);
 				}
 			}
 			&:last-child {
 				a,
 				button,
 				label {
-					padding-bottom: calc(var(--border-inset, 0px) + 1.5rem);
+					padding-bottom: calc(var(--border-inset, 0px) + 0.5rem);
 				}
 			}
 		}
@@ -441,8 +441,8 @@
 		/* Match the row's full height so the active background fills it (see the
 		 * align-self note on a/button/label). */
 		align-self: stretch;
-		padding-top: 1rem;
-		padding-bottom: 1rem;
+		padding-top: 0.25rem;
+		padding-bottom: 0.25rem;
 		padding-right: calc(1.5rem + var(--list-pad-x, 0px));
 		padding-left: calc(1.5rem + var(--list-pad-x, 0px) + ((var(--level) - 1) * 1rem));
 		display: flex;
@@ -471,18 +471,18 @@
 		padding-left: calc(1rem + ((var(--level) - 1) * 1rem));
 	}
 	li:first-child .text-content {
-		padding-top: calc(var(--border-inset, 0px) + 1rem);
+		padding-top: calc(var(--border-inset, 0px) + 0.25rem);
 	}
 	li:last-child .text-content {
-		padding-bottom: calc(var(--border-inset, 0px) + 1rem);
+		padding-bottom: calc(var(--border-inset, 0px) + 0.25rem);
 	}
 
 	a,
 	button,
 	label {
 		flex: 1;
-		padding-top: 1rem;
-		padding-bottom: 1rem;
+		padding-top: 0.25rem;
+		padding-bottom: 0.25rem;
 		padding-right: calc(1.5rem + var(--list-pad-x, 0px));
 		padding-left: calc(1.5rem + var(--list-pad-x, 0px) + ((var(--level) - 1) * 1rem));
 		margin: 0;

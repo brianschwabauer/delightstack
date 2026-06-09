@@ -10,6 +10,7 @@ import ListItemNavDemo from '../../../../components/demos/ListItemNavDemo.svelte
 import ListItemAsyncDemo from '../../../../components/demos/ListItemAsyncDemo.svelte';
 import ListItemSlotsDemo from '../../../../components/demos/ListItemSlotsDemo.svelte';
 import ListItemSubmenuDemo from '../../../../components/demos/ListItemSubmenuDemo.svelte';
+import ListAppearanceDemo from '../../../../components/demos/ListAppearanceDemo.svelte';
 
 ## Import
 
@@ -26,6 +27,19 @@ import { List, ListItem } from '@delightstack/components';
 ```
 
 ## Examples
+
+### List Appearance
+
+Items sit on whatever surface the parent `List` provides. The list is transparent
+by default; the `filled` and `outline` props (on **`List`**, not `ListItem`) give it
+a surface or border — see the [List page](/components/display/list/#appearance) for details.
+
+<ComponentPreview code={`<!-- surface is controlled on the parent List -->
+<List>…</List>
+<List filled>…</List>
+<List outline>…</List>`}>
+  <ListAppearanceDemo client:load />
+</ComponentPreview>
 
 ### Navigation Links
 

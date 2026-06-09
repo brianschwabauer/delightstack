@@ -8,6 +8,7 @@ import ListTextDemo from '../../../../components/demos/ListTextDemo.svelte';
 import ListRadioDemo from '../../../../components/demos/ListRadioDemo.svelte';
 import ListCheckboxDemo from '../../../../components/demos/ListCheckboxDemo.svelte';
 import ListDenseDemo from '../../../../components/demos/ListDenseDemo.svelte';
+import ListAppearanceDemo from '../../../../components/demos/ListAppearanceDemo.svelte';
 import { List } from '@delightstack/components/display';
 
 ## Import
@@ -26,6 +27,31 @@ import { List, ListItem } from '@delightstack/components';
 ```
 
 ## Examples
+
+### Appearance
+
+The list is **transparent** by default, so it composes onto any surface (a card,
+a sidebar, a popover) without imposing its own. Add `filled` for a subtle surface
+or `outline` for a bordered card — both restore the visible rounded corners, and
+the two can be combined. The item hover/active highlights stay rounded in every mode.
+
+<ComponentPreview code={`<!-- transparent by default -->
+<List>
+${'  '}<ListItem>Profile</ListItem>
+${'  '}<ListItem>Settings</ListItem>
+${'  '}<ListItem>Sign out</ListItem>
+</List>
+
+<!-- subtle filled surface -->
+<List filled>…</List>
+
+<!-- bordered card -->
+<List outline>…</List>
+
+<!-- combine for a filled, bordered card -->
+<List filled outline>…</List>`}>
+  <ListAppearanceDemo client:load />
+</ComponentPreview>
 
 ### Radio Selection
 
@@ -100,6 +126,8 @@ ${'  '}<ListItem>Another item</ListItem>
 | `value` | `number[]` | `[]` | Selected item indices (bindable) |
 | `dense` | `boolean` | `false` | Compact spacing |
 | `comfortable` | `boolean` | `false` | Relaxed spacing |
+| `filled` | `boolean` | `false` | Render on a subtle filled surface with rounded corners |
+| `outline` | `boolean` | `false` | Render with a 1px border + rounded corners (transparent fill); combine with `filled` for a card |
 | `disabled` | `boolean` | `false` | Disable all items |
 | `touched` | `boolean` | `false` | Whether the user has interacted (bindable) |
 | `padding_x` | `string` | - | Horizontal padding override (e.g. `'16px'`) |

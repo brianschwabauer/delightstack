@@ -22,6 +22,15 @@
 		/** Whether the form should display in an expanded view (more padding) */
 		comfortable = false,
 
+		/** Whether the list sits on a subtle filled surface (the iOS "inset
+		 * grouped" look). Off by default — the list is transparent so it
+		 * composes onto any surface. Combine with `outline` for a defined card. */
+		filled = false,
+
+		/** Whether the list has a 1px outline + rounded corners (transparent
+		 * fill). Gives visible rounded corners without imposing a surface fill. */
+		outline = false,
+
 		/** Whether the buttons/checkboxes/radios should be disabled */
 		disabled = false,
 
@@ -125,6 +134,8 @@
 		class={['list', 'skeleton', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
+		class:filled
+		class:outline
 		style:--list-pad-x={padding_x}
 		style:--list-pad-y={padding_y}
 		{style}
@@ -140,6 +151,8 @@
 		class={['list', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
+		class:filled
+		class:outline
 		class:disabled
 		style:--list-pad-x={padding_x}
 		style:--list-pad-y={padding_y}
@@ -156,13 +169,21 @@
 <style>
 	ul {
 		--radius-lg: var(--radius-2xl);
-		--color-bg: var(--color-bg-active);
 		--border-inset: 6px;
 		border-radius: var(--radius-lg);
 		padding: 0;
 		margin: 0;
-		background-color: var(--color-bg);
+		/* Transparent by default so the list composes onto any surface; the
+		   rounded corners only become visible with `filled` or `outline`. The
+		   item hover/active highlights stay rounded regardless. */
+		background-color: transparent;
 		perspective: 100px;
+		&.filled {
+			background-color: var(--color-bg-active);
+		}
+		&.outline {
+			border: 1px solid var(--color-border);
+		}
 		&.disabled {
 			color: var(--color-text-disabled);
 			cursor: not-allowed;

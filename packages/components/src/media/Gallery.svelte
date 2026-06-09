@@ -704,7 +704,7 @@
 							{@render iconDownload()}
 						{/if}
 						{#snippet menu()}
-							<List>
+							<List filled>
 								{#each action?.actions || [] as subAction (subAction)}
 									<ListItem
 										onclick={(e) => {
@@ -1225,7 +1225,8 @@
 			width: 100%;
 			color: white;
 			background-color: rgba(0, 0, 0, 0.6);
-			padding: max(0.5rem, calc(var(--radius-lg, 0px) / 2)) max(1rem, var(--radius-lg, 0px));
+			padding: max(0.5rem, calc(var(--radius-lg, 0px) / 2))
+				max(1rem, var(--radius-lg, 0px));
 			text-overflow: ellipsis;
 			overflow: hidden;
 			white-space: nowrap;

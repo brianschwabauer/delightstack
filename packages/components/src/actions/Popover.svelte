@@ -893,16 +893,20 @@
 		&.comfortable .popover-content {
 			padding: 1.5rem 2rem;
 		}
-		/* When the popover hosts a top-level list, drop the inner padding and
-		 * extra background so the list's own surface takes over — otherwise
-		 * users see a "container" of bg+padding wrapping the list. The list
-		 * comes from another component, so it must be matched with :global. */
-		&:has(> .popover-content > :global(ul.list:only-child)) {
-			background-color: transparent;
-			border-color: transparent;
-		}
+		/* When the popover hosts a top-level list, drop the inner padding so its
+		 * items run edge-to-edge (a list reads as the menu, not content inside a
+		 * padded card). The list comes from another component → matched with
+		 * :global. */
 		&:has(> .popover-content > :global(ul.list:only-child)) .popover-content {
 			padding: 0;
+		}
+		/* If that list provides its OWN surface (`filled`/`outline`), also drop
+		 * the popover's background + border so the list surface takes over
+		 * (otherwise a double surface). A plain (transparent) list instead keeps
+		 * the popover's surface as its background. */
+		&:has(> .popover-content > :global(ul.list:is(.filled, .outline):only-child)) {
+			background-color: transparent;
+			border-color: transparent;
 		}
 		/* Transparent panel: hand the surface entirely to the inner content. */
 		&.transparent {

@@ -101,7 +101,7 @@
 	x={contextMenuLocationX}
 	y={contextMenuLocationY}>
 	{#if !!activeContextMenu?.actions?.length}
-		<List>
+		<List filled>
 			{#each activeContextMenu?.actions as action}
 				<ListItem
 					onclick={async (event) => {

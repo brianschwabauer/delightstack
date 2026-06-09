@@ -363,7 +363,7 @@
 						popover_placement="bottom-start">
 						{#snippet children()}…{/snippet}
 						{#snippet menu({ close })}
-							<List>
+							<List filled>
 								{#each collapsedEntries as c (c.item.href ?? c.index)}
 									<ListItem
 										href={c.item.href}

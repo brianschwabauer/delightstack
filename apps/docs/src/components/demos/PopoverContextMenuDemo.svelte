@@ -26,7 +26,7 @@
 </div>
 <Popover bind:opened x={menuX} y={menuY} strategy="fixed" arrow={false} transparent dense>
 	<div style="min-width: 160px;">
-		<List dense>
+		<List dense filled>
 			<ListItem onclick={close}>Cut</ListItem>
 			<ListItem onclick={close}>Copy</ListItem>
 			<ListItem onclick={close}>Paste</ListItem>
