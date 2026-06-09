@@ -112,27 +112,40 @@ ${'  '}{/snippet}
 
 ### Click Handler
 
-React to breadcrumb clicks without relying solely on native navigation.
+React to breadcrumb clicks without relying solely on native navigation. The
+`onclick` handler fires for crumbs that have no `href` (crumbs with an `href`
+navigate natively).
+
+**Promise-aware loading.** If your `onclick` handler returns a promise, the
+clicked crumb automatically shows a loading spinner until the promise settles,
+then clears it — the trail re-flows smoothly as the spinner appears and
+disappears. This is ideal for async work like validating a step or fetching
+data before the view updates, with no extra loading state to manage yourself.
 
 <ComponentPreview code={`<script>
 ${'  '}import { Breadcrumbs } from '@delightstack/components';
 
 ${'  '}const items = [
-${'  '}${'  '}{ label: 'Home', href: '/' },
-${'  '}${'  '}{ label: 'Products', href: '/products' },
+${'  '}${'  '}{ label: 'Home' },
+${'  '}${'  '}{ label: 'Products' },
 ${'  '}${'  '}{ label: 'Detail' },
 ${'  '}];
 
-${'  '}let lastClicked = $state('');
+${'  '}let status = $state('');
+
+${'  '}// Returning a promise drives the per-crumb loading spinner.
+${'  '}function navigate({ item, index }) {
+${'  '}${'  '}status = \`Loading "\${item.label}"…\`;
+${'  '}${'  '}return new Promise((resolve) => {
+${'  '}${'  '}${'  '}setTimeout(() => {
+${'  '}${'  '}${'  '}${'  '}status = \`Clicked "\${item.label}" (index \${index})\`;
+${'  '}${'  '}${'  '}${'  '}resolve();
+${'  '}${'  '}${'  '}}, 1200);
+${'  '}${'  '}});
+${'  '}}
 </script>
 
-<Breadcrumbs
-${'  '}{items}
-${'  '}show_home={false}
-${'  '}onclick={({ item, index }) => {
-${'  '}${'  '}lastClicked = \`Clicked "\${item.label}" (index \${index})\`;
-${'  '}}}
-/>`}>
+<Breadcrumbs {items} show_home={false} onclick={navigate} />`}>
 	<BreadcrumbsClickDemo client:load />
 </ComponentPreview>
 
@@ -169,7 +182,7 @@ moment real `items` are provided.
 
 | Event | Detail | Description |
 |-------|--------|-------------|
-| `onclick` | `{ item: BreadcrumbItem, index: number }` | Fires when a breadcrumb item is clicked |
+| `onclick` | `{ item: BreadcrumbItem, index: number }` | Fires when a breadcrumb item without an `href` is clicked. May return a promise — while it's pending, the clicked crumb shows a loading spinner |
 
 ## Types
 

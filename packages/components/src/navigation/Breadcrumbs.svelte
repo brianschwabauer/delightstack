@@ -53,9 +53,13 @@
 		/** Custom separator snippet */
 		separator = undefined as undefined | Snippet,
 
-		/** Called when a breadcrumb item is clicked */
+		/** Called when a breadcrumb item is clicked. May return a promise — while
+		 *  it is pending the clicked crumb shows a loading spinner (the trail
+		 *  re-flows smoothly), which clears automatically once the promise
+		 *  settles. Only fires for crumbs without an `href` (crumbs with an
+		 *  `href` navigate natively). */
 		onclick = undefined as
-			| ((detail: { item: BreadcrumbItem; index: number }) => void)
+			| ((detail: { item: BreadcrumbItem; index: number }) => void | Promise<void>)
 			| undefined,
 	} = $props();
 
@@ -168,7 +172,10 @@
 	const skeletonWidths = [4.5, 6, 3.5, 5, 4];
 
 	function handleItemClick(item: BreadcrumbItem, index: number) {
-		onclick?.({ item, index });
+		// Return the handler's result so a returned promise propagates to the
+		// underlying Button, which drives the per-crumb loading spinner and the
+		// smooth width transition while it's pending.
+		return onclick?.({ item, index });
 	}
 
 	let navEl: HTMLElement | undefined = $state(undefined);
