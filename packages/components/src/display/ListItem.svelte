@@ -114,6 +114,7 @@
 	<li
 		class={['list-item', context.type, class_name].filter(Boolean).join(' ')}
 		class:disabled={context.disabled || disabled}
+		class:is-loading={onclickLoading}
 		class:dense={context.dense}
 		class:comfortable={context.comfortable}
 		{style}
@@ -123,7 +124,8 @@
 		style:--level={context.level}
 		{@attach ripple({
 			zIndex: 1,
-			enabled: !context.disabled && !disabled && context.type !== 'text',
+			enabled:
+				!context.disabled && !disabled && context.type !== 'text' && !onclickLoading,
 		})}>
 		{#if context.type === 'checkbox'}
 			<label for="checkbox-{id}">
@@ -173,6 +175,7 @@
 				<button
 					type="button"
 					disabled={context.disabled || disabled}
+					aria-busy={onclickLoading ? 'true' : null}
 					onclick={handleClick}>
 					{#if onclickLoading || onclickLoadingSuccess}
 						<div
@@ -360,11 +363,17 @@
 				color: var(--color-text-disabled);
 			}
 		}
+		&.is-loading {
+			/* Busy while the onclick promise resolves — the inner button stops
+			   taking pointer events (see &[aria-busy] below), so set the row cursor
+			   here so the whole row reads as not-interactive. */
+			cursor: not-allowed;
+		}
 		&:not(.disabled) {
 			a,
 			button,
 			label {
-				&:hover:not(:disabled):not([aria-disabled='true']) {
+				&:hover:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
 					&::before {
 						opacity: 0.06;
 						transition:
@@ -387,18 +396,22 @@
 	   skips non-interactive text rows in the hover case (no highlight to merge). */
 	:global(.list-item.active:has(+ .list-item.active))
 		:is(a, button, label, .text-content)::before,
-	:global(.list-item.active:has(+ .list-item:hover:not(.disabled):not(.text)))
+	:global(
+			.list-item.active:has(+ .list-item:hover:not(.disabled):not(.text):not(.is-loading))
+		)
 		:is(a, button, label, .text-content)::before,
-	:global(.list-item:hover:not(.disabled):not(.text):has(+ .list-item.active))
+	:global(
+			.list-item:hover:not(.disabled):not(.text):not(.is-loading):has(+ .list-item.active)
+		)
 		:is(a, button, label, .text-content)::before {
 		border-bottom-left-radius: 0;
 		border-bottom-right-radius: 0;
 	}
 	:global(.list-item.active + .list-item.active)
 		:is(a, button, label, .text-content)::before,
-	:global(.list-item:hover:not(.disabled):not(.text) + .list-item.active)
+	:global(.list-item:hover:not(.disabled):not(.text):not(.is-loading) + .list-item.active)
 		:is(a, button, label, .text-content)::before,
-	:global(.list-item.active + .list-item:hover:not(.disabled):not(.text))
+	:global(.list-item.active + .list-item:hover:not(.disabled):not(.text):not(.is-loading))
 		:is(a, button, label, .text-content)::before {
 		border-top-left-radius: 0;
 		border-top-right-radius: 0;
@@ -514,8 +527,14 @@
 		box-shadow: none;
 		transition: translate 200ms ease;
 
-		&:active:not(:disabled):not([aria-disabled='true']) {
+		&:active:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
 			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
+		}
+		/* Busy while the onclick promise is in flight: block pointer interaction
+		   so a re-click can't re-press (:active) — the ripple is gated by its
+		   `enabled` flag, and hover by the :not([aria-busy]) guards above. */
+		&[aria-busy='true'] {
+			pointer-events: none;
 		}
 		&::before {
 			content: '';
