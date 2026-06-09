@@ -762,7 +762,7 @@
 			transition: transform 300ms var(--easing);
 		}
 		:global(.chevron.active) {
-			transform: rotate(-180deg);
+			transform: rotate(180deg);
 		}
 
 		&.has-dropdown-trigger {
