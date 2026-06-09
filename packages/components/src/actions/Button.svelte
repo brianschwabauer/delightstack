@@ -832,8 +832,9 @@
 			   the button's font, so a sized icon button grows too. Icon buttons
 			   embedded in a field (.input-icon-btn / .input-pill-btn) pin their
 			   own size and are unaffected. */
-			height: calc(1em * var(--control-height-ratio, 3));
-			width: calc(1em * var(--control-height-ratio, 3));
+			--_icon-size: calc(1em * var(--control-height-ratio, 3));
+			height: var(--_icon-size);
+			width: var(--_icon-size);
 			aspect-ratio: 1 / 1;
 			/* Make the icon button a real circle by setting --_radius on the
 			   inner button/a (which owns the background, border, ripple AND the
@@ -844,8 +845,7 @@
 			   overflow:hidden still clips the ripple to the circle. */
 			--_radius: var(--radius-full);
 			&.dense {
-				height: calc(1em * var(--control-height-ratio-dense, 2.5));
-				width: calc(1em * var(--control-height-ratio-dense, 2.5));
+				--_icon-size: calc(1em * var(--control-height-ratio-dense, 2.5));
 				button,
 				a {
 					padding: 0;
@@ -911,6 +911,29 @@
 					border-right: none;
 				}
 			}
+			/* Icon-only ends: the pill curve crowds a centered icon at the
+			   rounded outer end. Widen the end button and pad its rounded side
+			   so the icon keeps its size and its spacing from the flat (inner)
+			   edge while gaining a little breathing room from the curve. */
+			&.icon {
+				--_group-end-pad: 0.5em;
+				&:first-child:not(:last-child) {
+					width: calc(var(--_icon-size) + var(--_group-end-pad));
+					button,
+					a {
+						box-sizing: border-box;
+						padding-left: var(--_group-end-pad);
+					}
+				}
+				&:last-child:not(:first-child) {
+					width: calc(var(--_icon-size) + var(--_group-end-pad));
+					button,
+					a {
+						box-sizing: border-box;
+						padding-right: var(--_group-end-pad);
+					}
+				}
+			}
 			& + :global(.button) {
 				margin-left: -1px;
 			}
@@ -951,6 +974,27 @@
 				button,
 				a {
 					border-bottom: none;
+				}
+			}
+			/* Icon-only ends: same breathing room as horizontal, but the rounded
+			   ends are top/bottom here, so pad the block axis. */
+			&.icon {
+				--_group-end-pad: 0.5em;
+				&:first-child:not(:last-child) {
+					height: calc(var(--_icon-size) + var(--_group-end-pad));
+					button,
+					a {
+						box-sizing: border-box;
+						padding-top: var(--_group-end-pad);
+					}
+				}
+				&:last-child:not(:first-child) {
+					height: calc(var(--_icon-size) + var(--_group-end-pad));
+					button,
+					a {
+						box-sizing: border-box;
+						padding-bottom: var(--_group-end-pad);
+					}
 				}
 			}
 			& + :global(.button) {
