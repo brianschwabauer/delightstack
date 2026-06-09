@@ -8,6 +8,9 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import RadioErrorDemo from '../../../../components/demos/RadioErrorDemo.svelte';
 import RadioSizesDemo from '../../../../components/demos/RadioSizesDemo.svelte';
 import RadioStandaloneDemo from '../../../../components/demos/RadioStandaloneDemo.svelte';
+import RadioVerticalDemo from '../../../../components/demos/RadioVerticalDemo.svelte';
+import RadioHorizontalDemo from '../../../../components/demos/RadioHorizontalDemo.svelte';
+import RadioDescriptionsDemo from '../../../../components/demos/RadioDescriptionsDemo.svelte';
 
 ## Import
 
@@ -46,11 +49,7 @@ ${'  '}<Radio value="small" label="Small" />
 ${'  '}<Radio value="medium" label="Medium" />
 ${'  '}<Radio value="large" label="Large" />
 </RadioGroup>`}>
-	<RadioGroup client:load name="size" label="Size">
-		<Radio client:load value="small" label="Small" />
-		<Radio client:load value="medium" label="Medium" />
-		<Radio client:load value="large" label="Large" />
-	</RadioGroup>
+	<RadioVerticalDemo client:load />
 </ComponentPreview>
 
 ### Horizontal Layout
@@ -60,11 +59,7 @@ ${'  '}<Radio value="yes" label="Yes" />
 ${'  '}<Radio value="no" label="No" />
 ${'  '}<Radio value="maybe" label="Maybe" />
 </RadioGroup>`}>
-	<RadioGroup client:load horizontal name="preference" label="Preference">
-		<Radio client:load value="yes" label="Yes" />
-		<Radio client:load value="no" label="No" />
-		<Radio client:load value="maybe" label="Maybe" />
-	</RadioGroup>
+	<RadioHorizontalDemo client:load />
 </ComponentPreview>
 
 ### With Descriptions
@@ -74,11 +69,7 @@ ${'  '}<Radio value="free" label="Free" description="Basic features, forever fre
 ${'  '}<Radio value="pro" label="Pro" description="Advanced features, $10/mo" />
 ${'  '}<Radio value="enterprise" label="Enterprise" description="Custom pricing" />
 </RadioGroup>`}>
-	<RadioGroup client:load name="plan" label="Select a plan">
-		<Radio client:load value="free" label="Free" description="Basic features, forever free" />
-		<Radio client:load value="pro" label="Pro" description="Advanced features, $10/mo" />
-		<Radio client:load value="enterprise" label="Enterprise" description="Custom pricing" />
-	</RadioGroup>
+	<RadioDescriptionsDemo client:load />
 </ComponentPreview>
 
 ### With Error
