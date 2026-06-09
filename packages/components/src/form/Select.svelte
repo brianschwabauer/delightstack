@@ -1172,7 +1172,11 @@
 		   aligned with the trigger value. */
 		margin-left: 0.3em;
 		font-size: var(--_font);
-		line-height: 1;
+		/* Roomier than 1 so the line box contains descenders (g, y, p): with
+		   line-height 1 the box is exactly the font size and overflow:hidden
+		   clips them. Half-leading is symmetric, so the glyph stays centred on
+		   the border when floated — nothing shifts. */
+		line-height: 1.4;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
