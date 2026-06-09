@@ -303,6 +303,7 @@
 			zIndex: 1,
 		})}
 		disabled={resolvedDisabled || onclickLoading || (!mounted && !href)}
+		aria-busy={isLoading ? 'true' : null}
 		aria-haspopup={!!menu}
 		aria-expanded={menu ? menuActive : null}
 		bind:this={button_element}
@@ -723,14 +724,18 @@
 				cursor: not-allowed;
 				border: var(--button-border-disabled);
 			}
-			&:hover:not(:disabled):not([aria-disabled='true']) {
+			/* While loading the button is "busy" and shouldn't react to pointer
+			   interaction — gate :hover/:active on :not([aria-busy='true']) so it
+			   behaves like a disabled control (aria-busy is set whenever isLoading,
+			   covering anchors and prop/form-driven loading that aren't :disabled). */
+			&:hover:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
 				background-color: var(--color-bg-active);
 				color: var(--color-text-active);
 				border: var(--button-border-active);
 				text-decoration: none;
 				transition: translate 200ms ease;
 			}
-			&:active:not(:disabled):not([aria-disabled='true']) {
+			&:active:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
 				translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
 			}
 		}
@@ -1059,10 +1064,10 @@
 					outline: solid 2px white;
 					outline-offset: 1px;
 				}
-				&:hover:not(:disabled):not([aria-disabled='true']) {
+				&:hover:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
 					transition: none;
 				}
-				&:hover:not(:disabled):not([aria-disabled='true']),
+				&:hover:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']),
 				&:focus-visible:not(:disabled):not([aria-disabled='true']) {
 					color: rgba(255, 255, 255, 1);
 					background-color: rgba(0, 0, 0, 0.9);
