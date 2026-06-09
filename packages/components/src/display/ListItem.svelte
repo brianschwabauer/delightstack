@@ -424,11 +424,7 @@
 		display: inline-flex;
 		align-items: center;
 		flex-shrink: 0;
-		margin-right: 0.5rem;
 		pointer-events: none;
-	}
-	li.dense .list-control {
-		margin-right: 0.25rem;
 	}
 	/* Keyboard focus ring, driven by the hidden native input's focus state */
 	label:has(input:focus-visible) .list-control :global(.indicator-wrapper) {
