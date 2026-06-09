@@ -33,20 +33,18 @@ Here is a complete example of a brand-colored theme. You only need to override t
 
   /* Brand colors */
   --color-action: light-dark(#059669, #34d399);
-  --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
   --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
   --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
-  --color-action-text-hover: white;
+  --color-action-text-active: white;
 
   --color-accent: light-dark(#0891b2, #22d3ee);
-  --color-accent-hover: oklch(from var(--color-accent) calc(l - 0.05) c h);
   --color-accent-active: oklch(from var(--color-accent) calc(l - 0.1) c h);
   --color-accent-text: oklch(from var(--color-accent) 0.92 calc(c * 0.15) h);
-  --color-accent-text-hover: white;
+  --color-accent-text-active: white;
 
   /* Warmer backgrounds */
   --color-bg: light-dark(#fafaf9, #0c0a09);
-  --color-bg-subtle: light-dark(#f5f5f4, #1c1917);
+  --color-bg-muted: light-dark(#f5f5f4, #1c1917);
 
   /* Rounder corners */
   --radius-md: 0.625rem;
@@ -64,16 +62,14 @@ Here is a complete example of a brand-colored theme. You only need to override t
   color-scheme: light dark;
 
   --color-action: light-dark(#e11d48, #fb7185);
-  --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
   --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
   --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
-  --color-action-text-hover: white;
+  --color-action-text-active: white;
 
   --color-accent: light-dark(#7c3aed, #a78bfa);
-  --color-accent-hover: oklch(from var(--color-accent) calc(l - 0.05) c h);
   --color-accent-active: oklch(from var(--color-accent) calc(l - 0.1) c h);
   --color-accent-text: oklch(from var(--color-accent) 0.92 calc(c * 0.15) h);
-  --color-accent-text-hover: white;
+  --color-accent-text-active: white;
 
   /* Sharper corners for a crisp look */
   --radius-sm: 0.125rem;
@@ -98,10 +94,9 @@ If you want full control over the derived states, override them explicitly:
 ```css
 :root {
   --color-action: #7c3aed;
-  --color-action-hover: #6d28d9;     /* Custom hover */
   --color-action-active: #5b21b6;    /* Custom active */
   --color-action-text: #f5f3ff;      /* Custom text on action bg */
-  --color-action-text-hover: white;
+  --color-action-text-active: white;
 }
 ```
 
@@ -114,10 +109,9 @@ CSS custom properties cascade, so you can scope overrides to specific parts of y
 ```css
 .sidebar {
   --color-action: light-dark(#7c3aed, #a78bfa);
-  --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
   --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
   --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
-  --color-action-text-hover: white;
+  --color-action-text-active: white;
 }
 ```
 

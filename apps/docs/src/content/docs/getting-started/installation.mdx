@@ -25,60 +25,34 @@ DelightStack requires **Svelte 5** (`^5.36.0`). It works with:
    The `@delightstack/utilities` package is included automatically as a dependency — you do not need to install it separately.
    </Aside>
 
-2. **Set up the design tokens:**
+2. **Add the design tokens:**
 
-   DelightStack components use CSS custom properties (design tokens) for colors, typography, spacing, and more. Add the base tokens to your global CSS file (e.g., `src/app.css` in SvelteKit):
+   Components read all their colors, typography, spacing, and motion from CSS custom properties shipped by `@delightstack/styles`. Install it and import it once at the root of your app:
+
+   ```bash
+   pnpm add @delightstack/styles
+   ```
+
+   ```ts
+   // e.g. src/routes/+layout.svelte (SvelteKit) or your app entry
+   import '@delightstack/styles';
+   ```
+
+   This defines every token — each with light and dark values built in — plus a small set of base element styles. To re-theme, override the brand seed (which re-derives the action/accent colors and the neutral ramp) or any individual token in your own CSS:
 
    ```css
    :root {
-     color-scheme: light dark;
+     /* Re-derives the whole palette from one brand color */
+     --color-primary: #2563eb;
 
-     /* Background */
-     --color-bg: light-dark(#ffffff, #0a0a0a);
-     --color-bg-subtle: light-dark(#f5f5f5, #141414);
-     --color-bg-muted: light-dark(#e5e5e5, #262626);
-
-     /* Text */
-     --color-text: light-dark(#171717, #fafafa);
-     --color-text-muted: light-dark(#525252, #a3a3a3);
-
-     /* Borders */
-     --color-border: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.1));
-     --color-border-strong: light-dark(rgb(0 0 0 / 0.2), rgb(255 255 255 / 0.2));
-
-     /* Surfaces */
-     --color-surface-1: light-dark(#ffffff, #0a0a0a);
-     --color-surface-2: light-dark(#fafafa, #141414);
-     --color-surface-3: light-dark(#f5f5f5, #1f1f1f);
-
-     /* Action (primary interactive color) */
+     /* …or override individual semantic tokens outright */
      --color-action: light-dark(#2563eb, #3b82f6);
-     --color-action-hover: oklch(from var(--color-action) calc(l - 0.05) c h);
-     --color-action-active: oklch(from var(--color-action) calc(l - 0.1) c h);
-     --color-action-text: oklch(from var(--color-action) 0.92 calc(c * 0.15) h);
-     --color-action-text-hover: white;
-
-     /* Feedback */
-     --color-success: light-dark(#16a34a, #22c55e);
-     --color-warning: light-dark(#ca8a04, #facc15);
-     --color-error: light-dark(#dc2626, #ef4444);
-     --color-info: light-dark(#0891b2, #06b6d4);
-
-     /* Typography */
-     --font-sans: ui-sans-serif, system-ui, sans-serif,
-       'Apple Color Emoji', 'Segoe UI Emoji';
-     --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
-   }
-
-   body {
-     font-family: var(--font-sans);
-     color: var(--color-text);
-     background: var(--color-bg);
+     --radius-md: 0.5rem;
    }
    ```
 
    <Aside type="tip">
-   This is a minimal set of tokens to get started. See the [Design Tokens](/guides/design-tokens/) reference for the complete list of available custom properties.
+   Need the tokens but not the base element styles (e.g. inside an existing design system)? Import `@delightstack/styles/tokens.css` instead. See the [Design Tokens](/guides/design-tokens/) reference for the complete list.
    </Aside>
 
 3. **Start using components:**
