@@ -501,10 +501,12 @@
 		 * value even at max-width:0, which would leave a ghost gap — so the
 		 * collapsible variants drive padding-inline with the same clamp. */
 		padding-inline: var(--bc-sep-pad);
-		color: light-dark(
-			var(--color-text-disabled, #9ca3af),
-			var(--color-text-disabled, #6b7280)
-		);
+		/* Subtler than the full-contrast crumb labels, but still clearly visible.
+		 * Must NOT use --color-text-disabled here: that token is a currentColor-
+		 * relative dim meant to be applied to a full-contrast text color. The
+		 * separator inherits the already-muted list color, so the disabled token
+		 * compounds and washes the chevron into the background in both modes. */
+		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		flex-shrink: 0;
 	}
 	.breadcrumb-separator.bc-collapse {
