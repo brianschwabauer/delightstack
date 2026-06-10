@@ -1359,7 +1359,7 @@
 			{:else if ac_options.length === 0}
 				<div class="ac-status">No results</div>
 			{:else}
-				<List dense>
+				<List>
 					{#each ac_options as opt, i (opt.value)}
 						<ListItem
 							id="{id}-option-{i}"
@@ -2222,9 +2222,7 @@
 		right: auto;
 		width: anchor-size(width);
 		margin: 0.4em 0 0 0;
-		/* Slim padding — the List/ListItem rows carry their own insets, so the
-		   panel only needs a hairline gutter around them. */
-		padding: 0.25em;
+		padding: 0;
 		box-sizing: border-box;
 		max-height: 18em;
 		overflow-y: auto;
