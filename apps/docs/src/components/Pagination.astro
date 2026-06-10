@@ -1,0 +1,73 @@
+---
+/**
+ * Starlight `Pagination` override — the prev/next footer links rendered as
+ * delightstack <Button>s (outline accent) instead of Starlight's link cards.
+ */
+import { Button } from '@delightstack/components/actions';
+
+const { dir, pagination } = Astro.locals.starlightRoute;
+const { prev, next } = pagination;
+const isRtl = dir === 'rtl';
+const backArrow = isRtl ? 'M5 12h14m-6-6 6 6-6 6' : 'M19 12H5m6 6-6-6 6-6';
+const forwardArrow = isRtl ? 'M19 12H5m6 6-6-6 6-6' : 'M5 12h14m-6-6 6 6-6 6';
+---
+
+<div class="pagination-links print:hidden" dir={dir}>
+	{
+		prev && (
+			<Button
+				client:idle
+				href={prev.href}
+				accent
+				outline
+				full_width
+				rel="prev"
+				size="2"
+				aria-label={`${Astro.locals.t('page.previousLink')}: ${prev.label}`}
+			>
+				<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+					<path d={backArrow} />
+				</svg>
+				{prev.label}
+			</Button>
+		)
+	}
+	{
+		next && (
+			<Button
+				client:idle
+				href={next.href}
+				accent
+				outline
+				full_width
+				rel="next"
+				size="2"
+				aria-label={`${Astro.locals.t('page.nextLink')}: ${next.label}`}
+			>
+				{next.label}
+				<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+					<path d={forwardArrow} />
+				</svg>
+			</Button>
+		)
+	}
+</div>
+
+<style>
+	.pagination-links {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+		gap: 1rem;
+	}
+
+	.btn-icon {
+		width: 1.2em;
+		height: 1.2em;
+		flex-shrink: 0;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+</style>

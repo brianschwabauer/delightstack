@@ -32,6 +32,12 @@ export default defineConfig({
 			components: {
 				// Custom splash hero (the home page is the only page with a hero).
 				Hero: './src/components/Hero.astro',
+				// Site chrome rebuilt on delightstack components (dogfooding).
+				ThemeSelect: './src/components/ThemeSelect.astro',
+				Sidebar: './src/components/Sidebar.astro',
+				Pagination: './src/components/Pagination.astro',
+				SocialIcons: './src/components/SocialIcons.astro',
+				Search: './src/components/Search.astro',
 			},
 			sidebar: [
 				{

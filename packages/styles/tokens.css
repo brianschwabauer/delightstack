@@ -7,8 +7,11 @@ html {
 	 * reference these directly — use the semantic tokens below.
 	 * ============================================================ */
 	--color-dashboard: #616969;
-	--color-primary: #005640;
-	--color-secondary: #005640;
+	/* Brand seeds (match the logo gradient's leading stop). The secondary seed
+	 * is a muted gray that keeps the primary's hue — low chroma, same hue —
+	 * so accent controls read as "quiet" without going tonally cold. */
+	--color-primary: #10a6c4;
+	--color-secondary: oklch(from var(--color-primary) l 0.05 h);
 	--color-50: oklch(from var(--color-dashboard) 99% min(0.01, c) h);
 	--color-100: oklch(from var(--color-dashboard) 97% min(0.015, c) h);
 	--color-150: oklch(from var(--color-dashboard) 95% min(0.02, c) h);

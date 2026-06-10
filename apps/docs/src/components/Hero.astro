@@ -1,5 +1,5 @@
 ---
-import { LinkButton } from '@astrojs/starlight/components';
+import { Button } from '@delightstack/components/actions';
 // Inline the wordmark SVG as a raw string at build time. `?raw` is resolved by
 // Vite during the build, so it works in static/SSR generation — unlike a runtime
 // readFileSync, which can't find src assets relative to the bundled output chunk.
@@ -27,17 +27,20 @@ const logo = logoRaw.slice(logoRaw.indexOf('<svg')).replace(/ id="Artboard2"/g, 
 	</p>
 
 	<div class="actions">
-		<LinkButton href="/getting-started/introduction/" variant="primary" icon="right-arrow">
+		<Button href="/getting-started/introduction/" client:load>
 			Get Started
-		</LinkButton>
-		<LinkButton
-			href="/components/overview/"
-			variant="secondary"
-			icon="open-book"
-			iconPlacement="start"
-		>
+			<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M5 12h14m-6-6 6 6-6 6" />
+			</svg>
+		</Button>
+		<Button href="/components/overview/" outline client:load>
+			<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+				<path
+					d="M12 6.5C10.5 5 8.5 4.5 6 4.5c-1 0-2 .1-3 .4v13.6c1-.3 2-.4 3-.4 2.5 0 4.5.5 6 2 1.5-1.5 3.5-2 6-2 1 0 2 .1 3 .4V4.9c-1-.3-2-.4-3-.4-2.5 0-4.5.5-6 2Zm0 0v13.6"
+				/>
+			</svg>
 			Browse Components
-		</LinkButton>
+		</Button>
 	</div>
 
 	<ul class="features">
@@ -77,7 +80,7 @@ const logo = logoRaw.slice(logoRaw.indexOf('<svg')).replace(/ id="Artboard2"/g, 
 		transform: translateX(-50%);
 		background: radial-gradient(
 			50% 50% at 50% 50%,
-			color-mix(in oklch, var(--color-primary, #1a81bc) 38%, transparent),
+			color-mix(in oklch, var(--color-primary, #1f93d4) 38%, transparent),
 			transparent 70%
 		);
 		filter: blur(40px);
@@ -144,6 +147,19 @@ const logo = logoRaw.slice(logoRaw.indexOf('<svg')).replace(/ id="Artboard2"/g, 
 		gap: 0.75rem 1rem;
 		justify-content: center;
 		margin-top: 0.25rem;
+	}
+
+	/* Inline icons slotted into the delightstack Buttons. Sized in em so they
+	   track the button's font size; stroke inherits the button text color. */
+	.btn-icon {
+		width: 1.2em;
+		height: 1.2em;
+		flex-shrink: 0;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 
 	.features {

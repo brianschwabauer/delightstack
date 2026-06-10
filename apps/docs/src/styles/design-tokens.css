@@ -12,11 +12,24 @@
  */
 @import '@delightstack/styles/tokens.css';
 
-/* Docs-site brand (blue) — overrides the package's default seeds. */
+/* The docs use the package's default brand seeds (the logo's cyan-blue plus a
+ * primary-hued muted gray accent) — no seed overrides needed here.
+ *
+ * Starlight's own chrome (links, current-page highlight, focus rings, …) runs
+ * on its `--sl-color-accent-*` triple, which defaults to an unrelated indigo.
+ * Re-derive those from the shared brand seed so the site chrome, the logo, and
+ * the components all speak the same hue. Starlight defines the dark palette on
+ * `:root` and light on `:root[data-theme='light']` (see style/props.css); we
+ * mirror that. These unlayered rules beat Starlight's layered defaults. */
 :root {
-	--color-dashboard: #616969;
-	--color-primary: #1a81bc;
-	--color-secondary: #1a81bc;
+	--sl-color-accent-low: oklch(from var(--color-primary) 30% calc(c * 0.6) h);
+	--sl-color-accent: oklch(from var(--color-primary) 65% c h);
+	--sl-color-accent-high: oklch(from var(--color-primary) 85% calc(c * 0.55) h);
+}
+:root[data-theme='light'] {
+	--sl-color-accent-low: oklch(from var(--color-primary) 92% calc(c * 0.35) h);
+	--sl-color-accent: oklch(from var(--color-primary) 55% c h);
+	--sl-color-accent-high: oklch(from var(--color-primary) 35% c h);
 }
 
 /* Drive `color-scheme` from Starlight's theme toggle.

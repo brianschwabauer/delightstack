@@ -30,7 +30,7 @@
 	let datetime = $state('');
 
 	/* ---- Colour & file ---------------------------------------------- */
-	let color = $state('#005640');
+	let color = $state('#10a6c4');
 	let file = $state<File | null>(null);
 	let files = $state<File[]>([]);
 

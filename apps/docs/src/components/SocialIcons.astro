@@ -1,0 +1,30 @@
+---
+/**
+ * Starlight `SocialIcons` override — header social links rendered as
+ * delightstack icon <Button>s (transparent, with the built-in tooltip)
+ * around Starlight's own icon set.
+ */
+import config from 'virtual:starlight/user-config';
+import { Icon } from '@astrojs/starlight/components';
+import { Button } from '@delightstack/components/actions';
+
+const links = config.social || [];
+---
+
+{
+	links.map(({ label, href, icon }) => (
+		<Button
+			client:idle
+			href={href}
+			target="_blank"
+			icon
+			transparent
+			size="0"
+			rel="me"
+			tooltip={label}
+			aria-label={label}
+		>
+			<Icon name={icon} size="1.5em" />
+		</Button>
+	))
+}

@@ -1,0 +1,18 @@
+---
+/**
+ * Starlight `Sidebar` override — renders the docs nav with the delightstack
+ * <Tree> component instead of Starlight's details/summary list. The mobile
+ * menu footer is reproduced from the default implementation so the theme
+ * toggle + social links still appear inside the hamburger menu.
+ */
+import MobileMenuFooter from 'virtual:starlight/components/MobileMenuFooter';
+import SidebarTree from './SidebarTree.svelte';
+
+const { sidebar } = Astro.locals.starlightRoute;
+---
+
+<SidebarTree entries={sidebar} client:load />
+
+<div class="md:sl-hidden">
+	<MobileMenuFooter />
+</div>

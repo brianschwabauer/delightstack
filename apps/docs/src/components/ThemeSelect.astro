@@ -1,0 +1,10 @@
+---
+/**
+ * Starlight `ThemeSelect` override — replaces the built-in select dropdown
+ * with the delightstack <ThemeToggle> (cycles light → dark → auto).
+ * Registered in astro.config.mjs under `components.ThemeSelect`.
+ */
+import StarlightThemeToggle from './StarlightThemeToggle.svelte';
+---
+
+<StarlightThemeToggle client:load />
