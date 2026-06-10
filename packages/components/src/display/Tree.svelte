@@ -818,13 +818,13 @@
 				focused_id = null;
 			}
 		}}>
-		{#each tree as node (node.id)}
-			{@render treeNode(node, 1)}
+		{#each tree as node, root_index (node.id)}
+			{@render treeNode(node, 1, root_index)}
 		{/each}
 	</ul>
 {/if}
 
-{#snippet treeNode(node: TreeNode, level: number)}
+{#snippet treeNode(node: TreeNode, level: number, index: number)}
 	{#if isNodeVisible(node)}
 		{@const node_expanded = isExpanded(node.id)}
 		{@const children = getVisibleChildren(node)}
@@ -850,7 +850,8 @@
 			class:dragged={drag_node_id === node.id}
 			class:drop-before={is_drag_target && drop_position === 'before'}
 			class:drop-after={is_drag_target && drop_position === 'after'}
-			class:drop-inside={is_drag_target && drop_position === 'inside'}>
+			class:drop-inside={is_drag_target && drop_position === 'inside'}
+			style:--i={index}>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="node-row"
@@ -1003,8 +1004,8 @@
 			{#if has_kids && children.length > 0}
 				<div class="children-container" class:show={node_expanded}>
 					<ul role="group" style:--line-offset="calc({level - 1} * var(--_indent))">
-						{#each children as child (child.id)}
-							{@render treeNode(child, level + 1)}
+						{#each children as child, child_index (child.id)}
+							{@render treeNode(child, level + 1, child_index)}
 						{/each}
 					</ul>
 				</div>
@@ -1014,6 +1015,14 @@
 {/snippet}
 
 <style>
+	/* Registered so the active-path tint can ease out as an interpolated
+	   color (unsupported browsers degrade to a discrete switch) */
+	@property --_tree-rail {
+		syntax: '<color>';
+		inherits: true;
+		initial-value: transparent;
+	}
+
 	/* ========== Tree Container ========== */
 	.tree {
 		/* Per-level indentation step — override with --tree-indent */
@@ -1322,21 +1331,94 @@
 	}
 
 	/* ========== Connecting Lines ========== */
+	/* Each group's rail color lives in --_tree-rail on its ul; the pseudo
+	   elements below just borrow it via var(). Every ul sets its own value,
+	   so a tinted group never leaks into nested groups. The transition here
+	   governs the OUT fade of the active-path tint (the IN snaps, below). */
 	.tree.show-lines .children-container > :global(ul) {
 		position: relative;
-	}
-
-	.tree.show-lines .tree-node > .children-container > :global(ul)::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		bottom: 0.875rem;
-		left: calc(0.625rem + var(--line-offset, 0px));
-		width: 1.5px;
-		background: light-dark(
+		--_tree-rail: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.15),
 			rgb(from var(--color-text, #fff) r g b / 0.2)
 		);
+		transition: --_tree-rail 200ms ease;
+	}
+
+	/*
+	 * Guides are drawn per child: every node but the last carries a vertical
+	 * segment spanning its full height (subtree included), and the last
+	 * child carries an L running from its top to the vertical center of its
+	 * own row before curving toward the label — so the foot stays centered
+	 * on the text no matter how tall the row renders. clip-path reveals
+	 * each segment top-to-bottom with a per-row stagger (--i) on expand.
+	 */
+	.tree.show-lines
+		.tree-node
+		> .children-container
+		> :global(ul > .tree-node:not(:last-child))::before,
+	.tree.show-lines
+		.tree-node
+		> .children-container
+		> :global(ul > .tree-node:last-child > .node-row)::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: calc(0.625rem + var(--line-offset, 0px));
+		border-left: 1.5px solid var(--_tree-rail);
+		pointer-events: none;
+		clip-path: inset(0 0 100% 0);
+		/* governs the retract on collapse */
+		transition: clip-path 150ms ease;
+	}
+
+	.tree.show-lines
+		.tree-node
+		> .children-container
+		> :global(ul > .tree-node:not(:last-child))::before {
+		bottom: 0;
+	}
+
+	.tree.show-lines
+		.tree-node
+		> .children-container
+		> :global(ul > .tree-node:last-child > .node-row)::before {
+		height: 50%;
+		width: 0.5rem;
+		border-bottom: 1.5px solid var(--_tree-rail);
+		border-bottom-left-radius: 0.375rem;
+	}
+
+	/* Soften where a multi-row rail emerges from its parent row */
+	.tree.show-lines
+		.tree-node
+		> .children-container
+		> :global(ul > .tree-node:first-child:not(:last-child))::before {
+		mask-image: linear-gradient(to bottom, transparent, #000 0.5rem);
+	}
+
+	.tree.show-lines
+		.tree-node
+		> .children-container.show
+		> :global(ul > .tree-node:not(:last-child))::before,
+	.tree.show-lines
+		.tree-node
+		> .children-container.show
+		> :global(ul > .tree-node:last-child > .node-row)::before {
+		clip-path: inset(0 0 0 0);
+		transition: clip-path 200ms ease-out calc(min(80ms + var(--i, 0) * 40ms, 400ms));
+	}
+
+	/* Active path: tint the rail of the group containing the hovered,
+	   selected, or keyboard-focused row — snap in (transition: none here),
+	   ease out (the --_tree-rail transition on the base ul rule above) */
+	.tree.show-lines .children-container > :global(ul:has(> .tree-node > .node-row:hover)),
+	.tree.show-lines .children-container > :global(ul:has(> .tree-node.selected)),
+	.tree.show-lines .children-container > :global(ul:has(> .tree-node.focused)) {
+		--_tree-rail: light-dark(
+			rgb(from var(--color-action, #1976d2) r g b / 0.5),
+			rgb(from var(--color-action, #5c9ce6) r g b / 0.55)
+		);
+		transition: none;
 	}
 
 	/* ========== Drag-and-Drop Indicators ========== */
@@ -1344,10 +1426,12 @@
 		opacity: 0.4;
 	}
 
-	.tree-node.drop-before > .node-row::before {
+	/* Both drop indicators share ::after (they're mutually exclusive states)
+	   because ::before holds the connecting-line L on last children */
+	.tree-node.drop-before > .node-row::after,
+	.tree-node.drop-after > .node-row::after {
 		content: '';
 		position: absolute;
-		top: -1px;
 		left: 0;
 		right: 0;
 		height: 2px;
@@ -1356,16 +1440,14 @@
 		z-index: 1;
 	}
 
+	/* Drawn fully inside the row — straddling the boundary (top: -1px) lets
+	   group overflow clipping shave the bar to 1px on a group's edge rows */
+	.tree-node.drop-before > .node-row::after {
+		top: 0;
+	}
+
 	.tree-node.drop-after > .node-row::after {
-		content: '';
-		position: absolute;
-		bottom: -1px;
-		left: 0;
-		right: 0;
-		height: 2px;
-		background: var(--color-action, #1976d2);
-		border-radius: 1px;
-		z-index: 1;
+		bottom: 0;
 	}
 
 	.tree-node.drop-inside > .node-row {
@@ -1475,6 +1557,25 @@
 		}
 		.spinner {
 			animation: none;
+		}
+		.tree.show-lines
+			.tree-node
+			> .children-container
+			> :global(ul > .tree-node:not(:last-child))::before,
+		.tree.show-lines
+			.tree-node
+			> .children-container
+			> :global(ul > .tree-node:last-child > .node-row)::before,
+		.tree.show-lines
+			.tree-node
+			> .children-container.show
+			> :global(ul > .tree-node:not(:last-child))::before,
+		.tree.show-lines
+			.tree-node
+			> .children-container.show
+			> :global(ul > .tree-node:last-child > .node-row)::before {
+			clip-path: none;
+			transition: none;
 		}
 	}
 </style>
