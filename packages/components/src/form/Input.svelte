@@ -607,7 +607,7 @@
 		el?.focus();
 	}
 
-	function handleNumberIncrement(delta: number) {
+	function stepNumber(delta: number, commit = true) {
 		if (effectively_disabled || readonly) return;
 		const current = typeof value === 'number' ? value : 0;
 		const s = step ?? 1;
@@ -619,8 +619,61 @@
 		value = Number(next.toFixed(precision));
 		if (form_ctx && name) form_ctx.setValue(name, value);
 		oninput?.({ value });
-		onchange?.({ value });
+		if (commit) onchange?.({ value });
 	}
+
+	/* ---- Stepper hold-to-repeat ----
+	   Pressing a stepper steps once immediately; holding it starts auto-repeat
+	   after an initial delay, accelerating gently while held. Each tick fires
+	   `oninput`; `onchange` fires once on release (the committed value). */
+	let repeat_timer: ReturnType<typeof setTimeout> | undefined;
+	let repeat_delay = 0;
+	let repeat_pressed = false;
+
+	function numberAtLimit(delta: number): boolean {
+		if (typeof value !== 'number') return false;
+		if (delta > 0) return typeof max === 'number' && value >= max;
+		return typeof min === 'number' && value <= min;
+	}
+
+	function startNumberRepeat(e: PointerEvent, delta: number) {
+		if (effectively_disabled || readonly) return;
+		if (e.button !== 0) return;
+		/* Keep focus where it is and suppress text selection during the hold. */
+		e.preventDefault();
+		stopNumberRepeat(false);
+		repeat_pressed = true;
+		stepNumber(delta, false);
+		repeat_delay = 80;
+		repeat_timer = setTimeout(() => repeatStep(delta), 450);
+		/* The release can land anywhere (drag off the button, or the button
+		   disables itself at min/max mid-hold), so listen on window. */
+		window.addEventListener('pointerup', handleRepeatRelease);
+		window.addEventListener('pointercancel', handleRepeatRelease);
+	}
+
+	function repeatStep(delta: number) {
+		/* Stop ticking at min/max; the commit still fires on release. */
+		if (numberAtLimit(delta)) return;
+		stepNumber(delta, false);
+		repeat_delay = Math.max(40, repeat_delay * 0.92);
+		repeat_timer = setTimeout(() => repeatStep(delta), repeat_delay);
+	}
+
+	function handleRepeatRelease() {
+		stopNumberRepeat(true);
+	}
+
+	function stopNumberRepeat(commit: boolean) {
+		clearTimeout(repeat_timer);
+		repeat_timer = undefined;
+		window.removeEventListener('pointerup', handleRepeatRelease);
+		window.removeEventListener('pointercancel', handleRepeatRelease);
+		if (commit && repeat_pressed) onchange?.({ value });
+		repeat_pressed = false;
+	}
+
+	$effect(() => () => stopNumberRepeat(false));
 
 	function handlePasswordToggle() {
 		password_visible = !password_visible;
@@ -1194,7 +1247,12 @@
 							typeof min === 'number' &&
 							typeof value === 'number' &&
 							value <= min)}
-					onclick={() => handleNumberIncrement(-1)}>
+					onpointerdown={(e: PointerEvent) => startNumberRepeat(e, -1)}
+					onclick={(e: MouseEvent) => {
+						/* Pointer presses are handled by pointerdown; this catches
+						   synthesized clicks (assistive tech), which have detail 0. */
+						if (e.detail === 0) stepNumber(-1);
+					}}>
 					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
 						<path
 							d="M5 12h14"
@@ -1214,7 +1272,10 @@
 							typeof max === 'number' &&
 							typeof value === 'number' &&
 							value >= max)}
-					onclick={() => handleNumberIncrement(1)}>
+					onpointerdown={(e: PointerEvent) => startNumberRepeat(e, 1)}
+					onclick={(e: MouseEvent) => {
+						if (e.detail === 0) stepNumber(1);
+					}}>
 					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
 						<path
 							d="M12 5v14M5 12h14"
