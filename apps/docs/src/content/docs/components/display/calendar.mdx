@@ -14,6 +14,8 @@ import CalendarMarkedDemo from '../../../../components/demos/CalendarMarkedDemo.
 import CalendarEventsDemo from '../../../../components/demos/CalendarEventsDemo.svelte';
 import CalendarLocaleDemo from '../../../../components/demos/CalendarLocaleDemo.svelte';
 import CalendarTimeSlotsDemo from '../../../../components/demos/CalendarTimeSlotsDemo.svelte';
+import CalendarVariantsDemo from '../../../../components/demos/CalendarVariantsDemo.svelte';
+import CalendarDensityDemo from '../../../../components/demos/CalendarDensityDemo.svelte';
 
 ## Import
 
@@ -39,7 +41,32 @@ ${'  '}let selectedDate = $state<Date | undefined>(undefined);
   <CalendarDemo client:load />
 </ComponentPreview>
 
+The container is **transparent** by default so it drops onto any surface. Add `filled` for a subtle surface, or `outline` for a hairline border — both give it generously rounded card corners. They can be combined.
+
+<ComponentPreview code={`<!-- Transparent (default) -->
+<Calendar bind:value={date} />
+
+<!-- Subtle surface fill -->
+<Calendar bind:value={date} filled />
+
+<!-- Hairline outline -->
+<Calendar bind:value={date} outline />`}>
+  <CalendarVariantsDemo client:load />
+</ComponentPreview>
+
 ## Examples
+
+### Density
+
+Use `dense` for compact spacing or `comfortable` for a roomier layout. The corner radius scales with the density.
+
+<ComponentPreview code={`<!-- Compact -->
+<Calendar bind:value={date} outline dense />
+
+<!-- Roomy -->
+<Calendar bind:value={date} outline comfortable />`}>
+  <CalendarDensityDemo client:load />
+</ComponentPreview>
 
 ### Single Date Selection
 
@@ -124,6 +151,7 @@ ${'  '}];
 
 <ComponentPreview code={`<Calendar
 ${'  '}bind:value={date}
+${'  '}outline
 ${'  '}show_time_slots
 ${'  '}time_slot_interval={15}
 ${'  '}time_slot_min="09:00"
@@ -159,6 +187,8 @@ ${'  '}ontimeslotselect={({ time, date }) => console.log(time, date)}
 | `time_slot_max` | `string` | `'23:59'` | Latest time slot |
 | `dense` | `boolean` | `false` | Compact cell spacing |
 | `comfortable` | `boolean` | `false` | Relaxed cell spacing |
+| `filled` | `boolean` | `false` | Fill the container with a subtle surface (card look) |
+| `outline` | `boolean` | `false` | Add a 1px outline + rounded corners (transparent fill) |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |

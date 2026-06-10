@@ -68,6 +68,14 @@
 		/** Relaxed spacing */
 		comfortable = false,
 
+		/** Fill the container with a subtle surface so it reads as a card.
+		 * Transparent by default so the calendar composes onto any surface. */
+		filled = false,
+
+		/** Give the container a 1px outline + rounded corners (transparent fill).
+		 * Visible rounded card edge without imposing a surface fill. */
+		outline = false,
+
 		/** Loading skeleton */
 		skeleton = false,
 
@@ -411,7 +419,10 @@
 		}
 	}
 
+	let selected_slot = $state<string | null>(null);
+
 	function selectTimeSlot(slot: string) {
+		selected_slot = slot;
 		const selected_date = mode === 'single' && value instanceof Date ? value : today;
 		const { hours, minutes } = parseTime(slot);
 		const date_with_time = new Date(
@@ -557,48 +568,36 @@
 	}
 </script>
 
-{#if skeleton}
-	<div
-		class={['calendar skeleton', class_name].filter(Boolean).join(' ')}
-		class:dense
-		class:comfortable
-		{id}
-		aria-hidden="true">
-		<div class="calendar-skeleton-header">
-			<div class="skeleton-bar skeleton-nav"></div>
-			<div class="skeleton-bar skeleton-title"></div>
-			<div class="skeleton-bar skeleton-nav"></div>
-		</div>
-		<div class="calendar-skeleton-weekdays">
-			{#each { length: 7 } as _}
-				<div class="skeleton-bar skeleton-weekday"></div>
-			{/each}
-		</div>
-		<div class="calendar-skeleton-grid">
-			{#each { length: 35 } as _, i}
-				<div class="skeleton-bar skeleton-day" style:animation-delay="{i * 20}ms"></div>
-			{/each}
-		</div>
-	</div>
-{:else}
-	<div
-		class={['calendar', class_name].filter(Boolean).join(' ')}
-		class:dense
-		class:comfortable
-		class:has-time-slots={show_time_slots}
-		{id}
-		data-calendar-id={id}
-		role="group"
-		aria-label="Calendar">
-		<div class="calendar-main">
-			<!-- Header -->
-			<div class="calendar-header">
-				<button
-					type="button"
-					class="calendar-nav-btn"
-					aria-label="Previous month"
-					onclick={() => navigateMonth(-1)}
-					{@attach ripple({ zIndex: 1 })}>
+<!-- Skeleton and live calendar share one DOM structure so the loading state
+	 has the exact size/shape/layout of the real calendar (no content shift on
+	 swap) — only the leaf content (numbers/words) becomes a shimmer. -->
+<div
+	class={['calendar', class_name].filter(Boolean).join(' ')}
+	class:dense
+	class:comfortable
+	class:filled
+	class:outline
+	class:skeleton
+	class:has-time-slots={show_time_slots}
+	{id}
+	data-calendar-id={id}
+	role="group"
+	aria-label="Calendar"
+	aria-busy={skeleton || undefined}
+	aria-hidden={skeleton || undefined}>
+	<div class="calendar-main">
+		<!-- Header -->
+		<div class="calendar-header">
+			<button
+				type="button"
+				class="calendar-nav-btn"
+				aria-label="Previous month"
+				disabled={skeleton}
+				onclick={skeleton ? undefined : () => navigateMonth(-1)}
+				{@attach ripple({ enabled: !skeleton, zIndex: 1 })}>
+				{#if skeleton}
+					<span class="skeleton-fill skeleton-nav"></span>
+				{:else}
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M10 3L5 8L10 13"
@@ -607,16 +606,26 @@
 							stroke-linecap="round"
 							stroke-linejoin="round" />
 					</svg>
-				</button>
-				<div class="calendar-title" aria-live="polite">
-					{header_label}
-				</div>
-				<button
-					type="button"
-					class="calendar-nav-btn"
-					aria-label="Next month"
-					onclick={() => navigateMonth(1)}
-					{@attach ripple({ zIndex: 1 })}>
+				{/if}
+			</button>
+			<!-- The real label stays in the DOM (rendered transparent under the
+				 shimmer) so the skeleton keeps the live calendar's exact metrics. -->
+			<div class="calendar-title" aria-live="polite">
+				{header_label}
+				{#if skeleton}
+					<span class="skeleton-fill skeleton-title"></span>
+				{/if}
+			</div>
+			<button
+				type="button"
+				class="calendar-nav-btn"
+				aria-label="Next month"
+				disabled={skeleton}
+				onclick={skeleton ? undefined : () => navigateMonth(1)}
+				{@attach ripple({ enabled: !skeleton, zIndex: 1 })}>
+				{#if skeleton}
+					<span class="skeleton-fill skeleton-nav"></span>
+				{:else}
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M6 3L11 8L6 13"
@@ -625,105 +634,125 @@
 							stroke-linecap="round"
 							stroke-linejoin="round" />
 					</svg>
-				</button>
-			</div>
+				{/if}
+			</button>
+		</div>
 
-			<!-- Weekday headers -->
-			<div class="calendar-weekdays" role="row">
-				{#each weekday_headers as header}
-					<div class="calendar-weekday" role="columnheader" aria-label={header}>
-						{header}
-					</div>
-				{/each}
-			</div>
+		<!-- Weekday headers -->
+		<div class="calendar-weekdays" role="row">
+			{#each weekday_headers as header}
+				<div class="calendar-weekday" role="columnheader" aria-label={header}>
+					{header}
+					{#if skeleton}
+						<span class="skeleton-fill skeleton-weekday"></span>
+					{/if}
+				</div>
+			{/each}
+		</div>
 
-			<!-- Day grid -->
-			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-			<!-- svelte-ignore a11y_interactive_supports_focus -->
-			<div
-				class="calendar-grid"
-				role="grid"
-				tabindex="0"
-				aria-label="Calendar dates"
-				onkeydown={handleGridKeyDown}
-				onmouseleave={handleGridMouseLeave}>
-				{#each visible_days as day (day.key)}
-					{@const has_dots = day.markers.length > 0 || day.day_events.length > 0}
-					{@const dot_items = [
-						...day.markers
-							.slice(0, 3)
-							.map((m) => m.color || 'var(--color-action, #3b82f6)'),
-						...day.day_events
-							.slice(0, Math.max(0, 3 - day.markers.length))
-							.map((e) => e.color || 'var(--color-action, #3b82f6)'),
-					].slice(0, 3)}
-					{@const marker_labels = day.markers
-						.filter((m) => m.label)
-						.map((m) => m.label)
-						.join(', ')}
-					{@const event_labels = day.day_events.map((e) => e.title).join(', ')}
-					{@const aria_desc_parts = [marker_labels, event_labels]
-						.filter(Boolean)
-						.join('; ')}
-					<button
-						type="button"
-						class="calendar-day"
-						class:other-month={!day.is_current_month}
-						class:today={day.is_today}
-						class:selected={day.is_selected}
-						class:range-start={day.is_range_start}
-						class:range-end={day.is_range_end}
-						class:in-range={day.is_in_range}
-						class:range-hover={day.is_range_hover}
-						class:disabled={day.is_disabled}
-						role="gridcell"
-						aria-selected={day.is_selected}
-						aria-disabled={day.is_disabled}
-						aria-label={`${day.date.getDate()}${day.is_today ? ', today' : ''}${aria_desc_parts ? `, ${aria_desc_parts}` : ''}`}
-						tabindex={focused_date
+		<!-- Day grid -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<!-- svelte-ignore a11y_interactive_supports_focus -->
+		<div
+			class="calendar-grid"
+			role="grid"
+			tabindex={skeleton ? -1 : 0}
+			aria-label="Calendar dates"
+			onkeydown={skeleton ? undefined : handleGridKeyDown}
+			onmouseleave={skeleton ? undefined : handleGridMouseLeave}>
+			{#each visible_days as day, i (day.key)}
+				{@const has_dots = day.markers.length > 0 || day.day_events.length > 0}
+				{@const dot_items = [
+					...day.markers
+						.slice(0, 3)
+						.map((m) => m.color || 'var(--color-action, #3b82f6)'),
+					...day.day_events
+						.slice(0, Math.max(0, 3 - day.markers.length))
+						.map((e) => e.color || 'var(--color-action, #3b82f6)'),
+				].slice(0, 3)}
+				{@const marker_labels = day.markers
+					.filter((m) => m.label)
+					.map((m) => m.label)
+					.join(', ')}
+				{@const event_labels = day.day_events.map((e) => e.title).join(', ')}
+				{@const aria_desc_parts = [marker_labels, event_labels]
+					.filter(Boolean)
+					.join('; ')}
+				<button
+					type="button"
+					class="calendar-day"
+					class:other-month={!day.is_current_month}
+					class:today={!skeleton && day.is_today}
+					class:selected={!skeleton && day.is_selected}
+					class:range-start={!skeleton && day.is_range_start}
+					class:range-end={!skeleton && day.is_range_end}
+					class:in-range={!skeleton && day.is_in_range}
+					class:range-hover={!skeleton && day.is_range_hover}
+					class:disabled={!skeleton && day.is_disabled}
+					role="gridcell"
+					aria-selected={!skeleton && day.is_selected}
+					aria-disabled={skeleton || day.is_disabled}
+					aria-label={`${day.date.getDate()}${day.is_today ? ', today' : ''}${aria_desc_parts ? `, ${aria_desc_parts}` : ''}`}
+					tabindex={skeleton
+						? -1
+						: focused_date
 							? sameDay(day.date, focused_date)
 								? 0
 								: -1
 							: day.is_today && day.is_current_month
 								? 0
 								: -1}
-						data-date={day.key}
-						disabled={day.is_disabled}
-						onclick={() => selectDate(day.date)}
-						onfocus={() => handleDayFocus(day.date)}
-						onmouseenter={() => handleDayHover(day.date)}
-						{@attach ripple({ enabled: !day.is_disabled, zIndex: 1 })}>
-						<span class="day-number">{day.day_number}</span>
-						{#if has_dots}
-							<div class="day-dots">
-								{#each dot_items as color}
-									<span class="day-dot" style:background={color}></span>
-								{/each}
-							</div>
-						{/if}
-					</button>
-				{/each}
-			</div>
+					data-date={day.key}
+					disabled={skeleton || day.is_disabled}
+					onclick={skeleton ? undefined : () => selectDate(day.date)}
+					onfocus={skeleton ? undefined : () => handleDayFocus(day.date)}
+					onmouseenter={skeleton ? undefined : () => handleDayHover(day.date)}
+					{@attach ripple({ enabled: !skeleton && !day.is_disabled, zIndex: 1 })}>
+					<!-- Number stays in the DOM (transparent under the disc when
+						 skeleton) so cell metrics are identical across the swap. -->
+					<span class="day-number">{day.day_number}</span>
+					{#if skeleton}
+						<span class="skeleton-fill skeleton-day" style:--shimmer-delay="{i * 25}ms">
+						</span>
+					{:else if has_dots}
+						<div class="day-dots">
+							{#each dot_items as color}
+								<span class="day-dot" style:background={color}></span>
+							{/each}
+						</div>
+					{/if}
+				</button>
+			{/each}
 		</div>
+	</div>
 
-		<!-- Time slots panel -->
-		{#if show_time_slots}
-			<div class="calendar-time-slots" role="listbox" aria-label="Time slots">
+	<!-- Time slots panel -->
+	{#if show_time_slots}
+		<div class="calendar-time-slots" role="listbox" aria-label="Time slots">
+			{#if skeleton}
+				{#each { length: 8 } as _, i}
+					<div class="time-slot" aria-hidden="true">
+						<span class="skeleton-fill skeleton-slot" style:--shimmer-delay="{i * 40}ms">
+						</span>
+					</div>
+				{/each}
+			{:else}
 				{#each time_slots as slot}
 					<button
 						type="button"
 						class="time-slot"
+						class:selected={selected_slot === slot}
 						role="option"
-						aria-selected={false}
+						aria-selected={selected_slot === slot}
 						onclick={() => selectTimeSlot(slot)}
 						{@attach ripple({ zIndex: 1 })}>
 						{formatTimeSlot(slot)}
 					</button>
 				{/each}
-			</div>
-		{/if}
-	</div>
-{/if}
+			{/if}
+		</div>
+	{/if}
+</div>
 
 <style>
 	/* ========== Container ========== */
@@ -733,11 +762,30 @@
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		user-select: none;
 		-webkit-tap-highlight-color: transparent;
+		/* Generous, concentric corners (the inner padding + cell radius nests
+		   neatly inside). Transparent by default so the calendar composes onto
+		   any surface; `filled`/`outline` give it a card edge. */
+		border-radius: var(--radius-xl, 20px);
+		background: transparent;
 
+		&.dense {
+			border-radius: var(--radius-lg, 10px);
+		}
+
+		&.comfortable {
+			border-radius: var(--radius-2xl, 30px);
+		}
+
+		&.filled {
+			background: var(--color-bg-active);
+		}
+
+		&.outline {
+			border: 1px solid var(--color-border);
+		}
+
+		/* Clip the side-by-side panels + their divider to the rounded corners. */
 		&.has-time-slots {
-			gap: 1px;
-			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-			border-radius: var(--radius-lg, 0.5rem);
 			overflow: hidden;
 		}
 	}
@@ -745,7 +793,6 @@
 	.calendar-main {
 		display: flex;
 		flex-direction: column;
-		background: light-dark(var(--color-bg, #fff), var(--color-bg, #111));
 	}
 
 	/* ========== Header ========== */
@@ -1042,51 +1089,65 @@
 	.calendar-time-slots {
 		display: flex;
 		flex-direction: column;
-		background: light-dark(var(--color-bg, #fff), var(--color-bg, #111));
+		/* Hairline divider from the day grid; both panels stay transparent so the
+		   container's fill (when `filled`) shows through evenly. */
+		border-left: 1px solid var(--color-border);
 		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: thin;
 		max-height: 320px;
-		min-width: 5.5rem;
-		padding: 0.375rem;
-		gap: 1px;
+		min-width: 6rem;
+		padding: 0.5rem;
+		gap: 3px;
 	}
 
 	.dense .calendar-time-slots {
-		min-width: 4.5rem;
+		min-width: 5rem;
 		max-height: 260px;
-		padding: 0.25rem;
+		padding: 0.375rem;
+		gap: 2px;
 	}
 
 	.comfortable .calendar-time-slots {
-		min-width: 6.5rem;
+		min-width: 7rem;
 		max-height: 400px;
-		padding: 0.5rem;
+		padding: 0.625rem;
+		gap: 4px;
 	}
 
 	.time-slot {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 0.375rem 0.5rem;
+		padding: 0.5rem 0.75rem;
 		font-size: 0.8125rem;
+		font-weight: 500;
 		font-family: inherit;
 		font-variant-numeric: tabular-nums;
-		border: none;
+		border: 1px solid transparent;
 		background: transparent;
-		border-radius: var(--radius-md, 0.25rem);
+		border-radius: var(--radius-md, 5px);
 		cursor: pointer;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		white-space: nowrap;
 		position: relative;
 		overflow: hidden;
+		flex-shrink: 0;
+		/* OUT transition — ease colors back to rest on leave (per the snap-in,
+		   ease-out hover convention). */
 		transition:
-			background 100ms ease,
+			background 200ms ease,
+			border-color 200ms ease,
+			color 200ms ease,
 			transform 200ms ease;
 
-		&:hover {
+		&:hover:not(.selected) {
 			background: light-dark(
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
+			border-color: var(--color-border);
+			/* IN transition — omit the colors so they snap in; keep the press. */
 			transition: transform 200ms ease;
 		}
 		/* Per-button perspective so the press recedes toward this slot's own
@@ -1100,48 +1161,61 @@
 			outline: 2px solid var(--color-action, #3b82f6);
 			outline-offset: -2px;
 		}
+
+		/* Picked slot — solid action fill, like a selected day. */
+		&.selected {
+			background: var(--color-action, #3b82f6);
+			border-color: var(--color-action, #3b82f6);
+			color: var(--color-action-text, #fff);
+			font-weight: 600;
+
+			&:hover {
+				filter: brightness(1.08);
+			}
+		}
 	}
 
 	.dense .time-slot {
-		padding: 0.25rem 0.375rem;
+		padding: 0.375rem 0.5rem;
 		font-size: 0.75rem;
 	}
 
 	.comfortable .time-slot {
-		padding: 0.5rem 0.75rem;
+		padding: 0.625rem 0.875rem;
 		font-size: 0.875rem;
 	}
 
 	/* ========== Skeleton ========== */
+	/* The skeleton renders the *same* markup as the live calendar (same header,
+	   weekday row, 7-col grid, time-slot column) — only the leaf content swaps
+	   to a shimmer. So the placeholder element just sits inside the real layout
+	   slot it stands in for; that's what guarantees no content shift on swap. */
 	.calendar.skeleton {
 		pointer-events: none;
 	}
 
-	.calendar-skeleton-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.75rem;
-		gap: 0.5rem;
+	/* Hide the real leaf text but keep it in the box so it still drives the
+	   intrinsic width/height the live calendar will use — the shimmer overlays
+	   it absolutely. This is what eliminates the skeleton→live content shift. */
+	.calendar.skeleton .calendar-title,
+	.calendar.skeleton .calendar-weekday,
+	.calendar.skeleton .day-number {
+		color: transparent;
 	}
 
-	.calendar-skeleton-weekdays {
-		display: grid;
-		grid-template-columns: repeat(7, 1fr);
-		gap: 2px;
-		padding: 0 0.75rem;
+	.calendar.skeleton .calendar-title,
+	.calendar.skeleton .calendar-weekday {
+		position: relative;
 	}
 
-	.calendar-skeleton-grid {
-		display: grid;
-		grid-template-columns: repeat(7, 1fr);
-		gap: 2px;
-		padding: 0.375rem 0.75rem 0.75rem;
-	}
-
-	.skeleton-bar {
-		border-radius: var(--radius-md, 0.25rem);
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+	/* Shimmer placeholder primitive (reused for every skeletonized leaf). */
+	.skeleton-fill {
+		display: block;
+		border-radius: var(--radius-sm, 2px);
+		background: light-dark(
+			rgb(from var(--color-text, #000) r g b / 0.09),
+			rgb(from var(--color-text, #fff) r g b / 0.11)
+		);
 		position: relative;
 		overflow: hidden;
 
@@ -1157,29 +1231,68 @@
 				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
 				rgb(from var(--color-text, #000) r g b / 0)
 			);
-			animation: calendar-shimmer 2s infinite;
+			animation: calendar-shimmer 1.6s infinite;
+			animation-delay: var(--shimmer-delay, 0ms);
 		}
 	}
 
-	.skeleton-nav {
-		width: 2rem;
-		height: 2rem;
-		border-radius: var(--radius-md, 0.25rem);
-	}
-
-	.skeleton-title {
-		width: 8rem;
-		height: 1.25rem;
-	}
-
-	.skeleton-weekday {
-		height: 0.75rem;
-		margin: 0.25rem auto;
-		width: 70%;
-	}
-
+	/* Centered absolute overlay shared by the title/weekday/day placeholders so
+	   none of them affect the layout they sit on top of. */
+	.skeleton-title,
+	.skeleton-weekday,
 	.skeleton-day {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		translate: -50% -50%;
+	}
+
+	/* Nav-icon footprint inside the (still full-size) 2rem nav button. */
+	.skeleton-nav {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	/* Month/year title placeholder. */
+	.skeleton-title {
+		width: 7rem;
+		max-width: 70%;
+		height: 0.9em;
+	}
+
+	.dense .skeleton-title {
+		width: 5.5rem;
+	}
+
+	.comfortable .skeleton-title {
+		width: 8rem;
+	}
+
+	/* Weekday label placeholder. */
+	.skeleton-weekday {
+		width: 60%;
+		height: 0.6875rem;
+	}
+
+	.dense .skeleton-weekday {
+		height: 0.625rem;
+	}
+
+	.comfortable .skeleton-weekday {
+		height: 0.75rem;
+	}
+
+	/* Day-number — a centered disc echoing the digit. */
+	.skeleton-day {
+		width: 45%;
 		aspect-ratio: 1;
+		border-radius: 50%;
+	}
+
+	/* Time-slot label bar (its own column, no underlying text to preserve). */
+	.skeleton-slot {
+		width: 100%;
+		height: 0.9em;
 	}
 
 	@keyframes calendar-shimmer {
@@ -1189,7 +1302,7 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.skeleton-bar::after {
+		.skeleton-fill::after {
 			animation: none;
 		}
 

@@ -6,6 +6,7 @@
 
 <Calendar
 	bind:value={date}
+	outline
 	show_time_slots
 	time_slot_interval={15}
 	time_slot_min="09:00"
