@@ -302,7 +302,9 @@
 
 	.chevron {
 		flex-shrink: 0;
-		transition: transform 250ms ease-out;
+		/* Back-out spring so the rotation overshoots slightly and settles, rather
+		   than a flat ease-out. Matches the chevron flip in Button/Select/Table. */
+		transition: transform 250ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 		color: light-dark(var(--color-text-disabled, #888), var(--color-text-disabled, #888));
 	}
 
