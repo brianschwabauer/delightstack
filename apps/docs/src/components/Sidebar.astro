@@ -13,6 +13,56 @@ const { sidebar } = Astro.locals.starlightRoute;
 
 <SidebarTree entries={sidebar} client:load />
 
+{
+	/**
+	 * Pre-paint state restore — the same trick Starlight's own SidebarPersister
+	 * uses. Starlight does a full page load on every navigation, and the Tree's
+	 * SSR markup only knows the config defaults + the current page's path; the
+	 * visitor's actual expanded/scroll state lives in sessionStorage and would
+	 * otherwise only apply after hydration (a visible snap). This synchronous
+	 * script runs while the document is still parsing — after the tree's HTML
+	 * above, before first paint — and toggles the same classes Svelte renders
+	 * (`expanded` / `show` / `rotated`). SidebarTree reads the same storage key
+	 * during hydration, so Svelte reconciles onto identical state and nothing
+	 * shifts. Collapsed children are already present in the SSR HTML (CSS hides
+	 * them), which is what makes expanding pre-paint possible at all.
+	 */
+}
+<script is:inline>
+	(() => {
+		try {
+			const tree = document.querySelector('.sidebar-tree');
+			if (!tree) return;
+			const raw = sessionStorage.getItem('ds-sidebar-state');
+			if (!raw) return;
+			const state = JSON.parse(raw);
+			if (!state || state.hash !== tree.dataset.hash) return;
+			const open = new Set(state.expanded);
+			for (const li of tree.querySelectorAll('li.tree-node')) {
+				const container = li.querySelector(':scope > .children-container');
+				if (!container) continue; // leaf node — nothing to toggle
+				// Groups on the path to the current page stay open regardless of
+				// stored state (mirrors SidebarTree's union with current_ancestors).
+				const show =
+					open.has(li.dataset.nodeId) || !!li.querySelector('a[aria-current="page"]');
+				li.classList.toggle('expanded', show);
+				li.setAttribute('aria-expanded', String(show));
+				container.classList.toggle('show', show);
+				const chevron = li.querySelector(':scope > .node-row .chevron-icon');
+				if (chevron) chevron.classList.toggle('rotated', show);
+			}
+			// Scroll only restores on desktop (the mobile menu opens fresh) — the
+			// same guard Starlight's persister uses.
+			const scroller = document.getElementById('starlight__sidebar');
+			if (scroller && state.scroll > 0 && matchMedia('(min-width: 50rem)').matches) {
+				scroller.scrollTop = state.scroll;
+			}
+		} catch {
+			// Broken/absent storage — SSR defaults are already correct enough.
+		}
+	})();
+</script>
+
 <div class="md:sl-hidden">
 	<MobileMenuFooter />
 </div>

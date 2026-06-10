@@ -107,8 +107,9 @@
 
 	const info = analyze(nodes, []);
 
-	// Structure fingerprint — stored state from an older sidebar layout is discarded.
-	const hash = info.group_ids.join('\n');
+	// Structure fingerprint — stored state from an older sidebar layout is
+	// discarded. '|'-joined so it can travel in the data-hash attribute.
+	const hash = info.group_ids.join('|');
 
 	interface StoredState {
 		hash: string;
@@ -154,15 +155,14 @@
 		}
 	}
 
+	// NOTE: restoring the stored state to the DOM is NOT done here — hydration
+	// runs too late and would visibly snap the tree. A synchronous inline
+	// script in Sidebar.astro applies the stored expanded/scroll state to the
+	// SSR'd markup before first paint; because it reads the same sessionStorage
+	// this component read above, hydration lands on identical state and
+	// changes nothing. This effect only wires up saving.
 	$effect(() => {
 		const scroller = document.getElementById(SCROLLER_ID);
-
-		// Restore scroll only on desktop (mobile opens the menu fresh) — same
-		// guard Starlight's own persister uses.
-		const stored = loadStored();
-		if (scroller && stored?.scroll && window.matchMedia('(min-width: 50rem)').matches) {
-			scroller.scrollTop = stored.scroll;
-		}
 
 		const persist = () => save(scroller?.scrollTop ?? 0);
 		const onVisibility = () => {
@@ -203,7 +203,9 @@
 	{/if}
 {/snippet}
 
-<div class="sidebar-tree">
+<!-- data-hash lets the pre-paint restore script in Sidebar.astro validate that
+     the stored state still matches this sidebar structure. -->
+<div class="sidebar-tree" data-hash={hash}>
 	<Tree
 		data={nodes}
 		bind:expanded
