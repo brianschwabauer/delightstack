@@ -179,6 +179,11 @@
 		--avatar-font: 0.75rem;
 		--avatar-status: 11px;
 		--avatar-radius: var(--radius-full, 9999px);
+		/* Squircle corners only for the .square variant (a circle can't be a
+		   squircle). The defaults below keep the round circle untouched; .square
+		   opts in and doubles the radius to preserve the visual roundness. */
+		--_corner-shape: round;
+		--_corner-scale: 1;
 
 		position: relative;
 		display: inline-flex;
@@ -187,6 +192,10 @@
 		width: var(--avatar-size);
 		height: var(--avatar-size);
 		border-radius: var(--avatar-radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: var(--_corner-shape);
+			border-radius: calc(var(--avatar-radius) * var(--_corner-scale));
+		}
 		flex-shrink: 0;
 		user-select: none;
 		vertical-align: middle;
@@ -227,6 +236,8 @@
 
 		&.square {
 			--avatar-radius: var(--radius-lg, 8px);
+			--_corner-shape: squircle;
+			--_corner-scale: var(--squircle-ratio, 2);
 		}
 
 		&.ring {
@@ -265,6 +276,10 @@
 			height: 100%;
 			object-fit: cover;
 			border-radius: var(--avatar-radius);
+			@supports (corner-shape: squircle) {
+				corner-shape: var(--_corner-shape);
+				border-radius: calc(var(--avatar-radius) * var(--_corner-scale));
+			}
 		}
 
 		.initials {
@@ -274,6 +289,10 @@
 			width: 100%;
 			height: 100%;
 			border-radius: var(--avatar-radius);
+			@supports (corner-shape: squircle) {
+				corner-shape: var(--_corner-shape);
+				border-radius: calc(var(--avatar-radius) * var(--_corner-scale));
+			}
 			color: #fff;
 			font-weight: 600;
 			letter-spacing: 0.02em;
@@ -287,6 +306,10 @@
 			width: 100%;
 			height: 100%;
 			border-radius: var(--avatar-radius);
+			@supports (corner-shape: squircle) {
+				corner-shape: var(--_corner-shape);
+				border-radius: calc(var(--avatar-radius) * var(--_corner-scale));
+			}
 			background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 			color: light-dark(
 				var(--color-text-muted, #6b7280),
@@ -407,6 +430,10 @@
 			width: 100%;
 			height: 100%;
 			border-radius: var(--avatar-radius);
+			@supports (corner-shape: squircle) {
+				corner-shape: var(--_corner-shape);
+				border-radius: calc(var(--avatar-radius) * var(--_corner-scale));
+			}
 			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 			position: relative;
 			overflow: hidden;

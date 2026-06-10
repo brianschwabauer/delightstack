@@ -499,7 +499,8 @@
 		strategy={popover_strategy}
 		close_on_inside_click={popover_close_on_inside_click}
 		disable_initial_focus={popover_disable_initial_focus}
-		placement={popover_placement}>
+		placement={popover_placement}
+		radius="calc(var(--radius-lg, 10px) * 1.5)">
 		{@render menu({ close: closeMenu })}
 	</Popover>
 {/if}
@@ -512,7 +513,8 @@
 		strategy={popover_strategy}
 		close_on_inside_click={popover_close_on_inside_click}
 		disable_initial_focus={popover_disable_initial_focus}
-		placement={popover_placement}>
+		placement={popover_placement}
+		radius="calc(var(--radius-lg, 10px) * 1.5)">
 		{@render dropdown({ close: closeMenu })}
 	</Popover>
 {/if}
@@ -520,6 +522,12 @@
 <style>
 	.button {
 		--_radius: var(--action-radius, var(--radius-lg));
+		/* Squircle (superellipse) corners where supported. corner-shape can't form a
+		   pill, so .pill and the icon-circle opt back out (round + no doubling) below.
+		   corner-shape and the radius doubling are applied per surface inside @supports,
+		   so unsupported browsers keep the plain radius. */
+		--_corner-shape: squircle;
+		--_corner-scale: var(--squircle-ratio, 2);
 		--easing: var(--ease-spring);
 		/* Default font for an unsized button. Combined with the shared control
 		   height below, a bare <Button> matches a default Input/Select height in
@@ -531,10 +539,16 @@
 		position: relative;
 		width: fit-content;
 		border-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: var(--_corner-shape);
+			border-radius: calc(var(--_radius) * var(--_corner-scale));
+		}
 		perspective: 100px;
 
 		&.pill {
 			--_radius: var(--radius-full);
+			--_corner-shape: round;
+			--_corner-scale: 1;
 		}
 
 		&:not(.transparent):not(.translucent) {
@@ -832,6 +846,10 @@
 			text-decoration: none;
 			width: fit-content;
 			border-radius: var(--_radius);
+			@supports (corner-shape: squircle) {
+				corner-shape: var(--_corner-shape);
+				border-radius: calc(var(--_radius) * var(--_corner-scale));
+			}
 			background-color: var(--color-bg);
 			color: var(--color-text);
 			cursor: pointer;
@@ -981,6 +999,11 @@
 			border-bottom-left-radius: 0;
 			border-top-right-radius: var(--_radius);
 			border-bottom-right-radius: var(--_radius);
+			@supports (corner-shape: squircle) {
+				corner-shape: var(--_corner-shape);
+				border-top-right-radius: calc(var(--_radius) * var(--_corner-scale));
+				border-bottom-right-radius: calc(var(--_radius) * var(--_corner-scale));
+			}
 			display: flex;
 			align-items: center;
 			padding: 0 0.5em 0 0.5em;
@@ -1038,6 +1061,8 @@
 			   crops the badge that hangs off the corner. The inner element's own
 			   overflow:hidden still clips the ripple to the circle. */
 			--_radius: var(--radius-full);
+			--_corner-shape: round;
+			--_corner-scale: 1;
 			&.dense {
 				--_icon-size: calc(1em * var(--control-height-ratio-dense, 2.5));
 				button,

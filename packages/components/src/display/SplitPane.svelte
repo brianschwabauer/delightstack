@@ -660,15 +660,16 @@
 		border: 1px solid
 			light-dark(var(--color-border, #e0e0e0), var(--color-border, #3a3a3a));
 		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e1e1e));
-		color: light-dark(
-			var(--color-text-muted, #666),
-			var(--color-text-muted, #aaa)
-		);
+		color: light-dark(var(--color-text-muted, #666), var(--color-text-muted, #aaa));
 		cursor: pointer;
 		padding: 0;
 		width: 20px;
 		height: 20px;
 		border-radius: var(--radius-md, 4px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		}
 		transition:
 			color 150ms ease,
 			background 150ms ease;

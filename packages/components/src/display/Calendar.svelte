@@ -766,14 +766,26 @@
 		   neatly inside). Transparent by default so the calendar composes onto
 		   any surface; `filled`/`outline` give it a card edge. */
 		border-radius: var(--radius-xl, 20px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-xl, 20px) * var(--squircle-ratio, 2));
+		}
 		background: transparent;
 
 		&.dense {
 			border-radius: var(--radius-lg, 10px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+			}
 		}
 
 		&.comfortable {
 			border-radius: var(--radius-2xl, 30px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-2xl, 30px) * var(--squircle-ratio, 2));
+			}
 		}
 
 		&.filled {
@@ -837,6 +849,10 @@
 		border: none;
 		background: transparent;
 		border-radius: var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		cursor: pointer;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		flex-shrink: 0;
@@ -940,6 +956,10 @@
 		border: none;
 		background: transparent;
 		border-radius: var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		cursor: pointer;
 		padding: 0;
 		font-size: 0.8125rem;
@@ -1012,18 +1032,32 @@
 	/* Range start/end */
 	.calendar-day.range-start {
 		border-radius: var(--radius-md, 0.25rem) 0 0 var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2)) 0 0
+				calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		background: var(--color-action, #3b82f6);
 		color: var(--color-action-text, #fff);
 	}
 
 	.calendar-day.range-end {
 		border-radius: 0 var(--radius-md, 0.25rem) var(--radius-md, 0.25rem) 0;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: 0 calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2))
+				calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2)) 0;
+		}
 		background: var(--color-action, #3b82f6);
 		color: var(--color-action-text, #fff);
 	}
 
 	.calendar-day.range-start.range-end {
 		border-radius: var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 	}
 
 	/* In-range fill */
@@ -1127,6 +1161,10 @@
 		border: 1px solid transparent;
 		background: transparent;
 		border-radius: var(--radius-md, 5px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
+		}
 		cursor: pointer;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		white-space: nowrap;
@@ -1212,6 +1250,10 @@
 	.skeleton-fill {
 		display: block;
 		border-radius: var(--radius-sm, 2px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm, 2px) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.09),
 			rgb(from var(--color-text, #fff) r g b / 0.11)

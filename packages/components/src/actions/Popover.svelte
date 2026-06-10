@@ -871,7 +871,13 @@
 		z-index: var(--layer);
 		background-color: var(--color-bg);
 		border: 1px solid var(--color-border, transparent);
-		border-radius: var(--popover-radius, var(--radius-2xl));
+		border-radius: var(--popover-radius, var(--radius-xl));
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(
+				var(--popover-radius, var(--radius-xl)) * var(--squircle-ratio, 2)
+			);
+		}
 		/* Light mode: a real drop shadow lifts the panel off the page. Dark mode:
 		 * the --shadow-md token resolves to transparent (dark shadows are
 		 * invisible on dark surfaces), so the border above is what separates the
@@ -889,6 +895,9 @@
 			max-height: inherit;
 			max-width: inherit;
 			border-radius: inherit;
+			@supports (corner-shape: squircle) {
+				corner-shape: inherit;
+			}
 		}
 		&.dense .popover-content {
 			padding: 0.5rem 0.75rem;

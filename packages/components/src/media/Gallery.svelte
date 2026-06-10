@@ -1115,6 +1115,10 @@
 		grid-template-columns: 1fr;
 		cursor: pointer;
 		border-radius: var(--radius-lg);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+		}
 		isolation: isolate;
 		overflow: hidden;
 		transition:
@@ -1429,6 +1433,10 @@
 				:global(.carousel) {
 					@container (min-width: 80ch) {
 						border-radius: var(--radius-lg, 0.5rem);
+						@supports (corner-shape: squircle) {
+							corner-shape: squircle;
+							border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
+						}
 					}
 				}
 			}
@@ -1437,6 +1445,10 @@
 				:global(.carousel) {
 					@container (min-width: 80ch) {
 						border-radius: var(--radius-xl, 0.75rem);
+						@supports (corner-shape: squircle) {
+							corner-shape: squircle;
+							border-radius: calc(var(--radius-xl, 0.75rem) * var(--squircle-ratio, 2));
+						}
 					}
 				}
 			}
@@ -1445,6 +1457,10 @@
 				:global(.carousel) {
 					@container (min-width: 80ch) {
 						border-radius: var(--radius-2xl, 1rem);
+						@supports (corner-shape: squircle) {
+							corner-shape: squircle;
+							border-radius: calc(var(--radius-2xl, 1rem) * var(--squircle-ratio, 2));
+						}
 					}
 				}
 			}
@@ -1455,6 +1471,10 @@
 				:global(.carousel) {
 					@container (min-width: 1200px) {
 						border-radius: var(--radius-xl, 0.75rem);
+						@supports (corner-shape: squircle) {
+							corner-shape: squircle;
+							border-radius: calc(var(--radius-xl, 0.75rem) * var(--squircle-ratio, 2));
+						}
 					}
 				}
 			}
@@ -1463,6 +1483,10 @@
 				:global(.carousel) {
 					@container (min-width: 1200px) {
 						border-radius: var(--radius-2xl, 1rem);
+						@supports (corner-shape: squircle) {
+							corner-shape: squircle;
+							border-radius: calc(var(--radius-2xl, 1rem) * var(--squircle-ratio, 2));
+						}
 					}
 				}
 			}
@@ -1471,6 +1495,10 @@
 				:global(.carousel) {
 					@container (min-width: 1200px) {
 						border-radius: var(--radius-3xl, 1.5rem);
+						@supports (corner-shape: squircle) {
+							corner-shape: squircle;
+							border-radius: calc(var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2));
+						}
 					}
 				}
 			}
@@ -1482,6 +1510,15 @@
 			.controls {
 				border-top-left-radius: var(--radius-xl, 0.75rem);
 				border-top-right-radius: var(--radius-xl, 0.75rem);
+				@supports (corner-shape: squircle) {
+					corner-shape: squircle;
+					border-top-left-radius: calc(
+						var(--radius-xl, 0.75rem) * var(--squircle-ratio, 2)
+					);
+					border-top-right-radius: calc(
+						var(--radius-xl, 0.75rem) * var(--squircle-ratio, 2)
+					);
+				}
 			}
 		}
 		&.radius-2 {
@@ -1490,6 +1527,21 @@
 				border-top-right-radius: var(--radius-2xl, 1rem);
 				border-bottom-left-radius: var(--radius-2xl, 1rem);
 				border-bottom-right-radius: var(--radius-2xl, 1rem);
+				@supports (corner-shape: squircle) {
+					corner-shape: squircle;
+					border-top-left-radius: calc(
+						var(--radius-2xl, 1rem) * var(--squircle-ratio, 2)
+					);
+					border-top-right-radius: calc(
+						var(--radius-2xl, 1rem) * var(--squircle-ratio, 2)
+					);
+					border-bottom-left-radius: calc(
+						var(--radius-2xl, 1rem) * var(--squircle-ratio, 2)
+					);
+					border-bottom-right-radius: calc(
+						var(--radius-2xl, 1rem) * var(--squircle-ratio, 2)
+					);
+				}
 			}
 		}
 		&.radius-3 {
@@ -1498,6 +1550,21 @@
 				border-top-right-radius: var(--radius-3xl, 1.5rem);
 				border-bottom-left-radius: var(--radius-3xl, 1.5rem);
 				border-bottom-right-radius: var(--radius-3xl, 1.5rem);
+				@supports (corner-shape: squircle) {
+					corner-shape: squircle;
+					border-top-left-radius: calc(
+						var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2)
+					);
+					border-top-right-radius: calc(
+						var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2)
+					);
+					border-bottom-left-radius: calc(
+						var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2)
+					);
+					border-bottom-right-radius: calc(
+						var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2)
+					);
+				}
 			}
 		}
 		.controls {
@@ -2410,6 +2477,12 @@
 				align-self: stretch;
 				padding: 0 calc(var(--list-pad) - 2px);
 				border-radius: calc(var(--radius-lg) + var(--list-pad));
+				@supports (corner-shape: squircle) {
+					corner-shape: squircle;
+					border-radius: calc(
+						(var(--radius-lg) + var(--list-pad)) * var(--squircle-ratio, 2)
+					);
+				}
 				/* Press effect, matching ListItem's translate-on-active. */
 				transition: translate 200ms ease;
 
@@ -2426,6 +2499,10 @@
 					background-color: var(--color-text);
 					opacity: 0;
 					border-radius: var(--radius-lg);
+					@supports (corner-shape: squircle) {
+						corner-shape: squircle;
+						border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+					}
 					z-index: -1;
 					transition: opacity 300ms ease;
 				}
@@ -2455,6 +2532,10 @@
 						inset: 2px 0;
 						border: solid 1px var(--color-border-active);
 						border-radius: var(--radius-lg);
+						@supports (corner-shape: squircle) {
+							corner-shape: squircle;
+							border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+						}
 						pointer-events: none;
 					}
 				}
@@ -2468,6 +2549,10 @@
 					align-items: center;
 					justify-content: center;
 					border-radius: var(--radius-lg);
+					@supports (corner-shape: squircle) {
+						corner-shape: squircle;
+						border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+					}
 					overflow: hidden;
 					/* The square box behind contain-fit thumbnails so images of
 					   any aspect ratio read as consistently sized tiles. Falls back

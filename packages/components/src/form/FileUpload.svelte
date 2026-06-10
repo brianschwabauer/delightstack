@@ -515,7 +515,11 @@
 		background: var(--color-bg-muted, hsl(0 0% 90%));
 		color: transparent;
 		border-color: transparent;
-		border-radius: var(--radius-md, 4px);
+		border-radius: var(--radius-lg, 4px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 4px) * var(--squircle-ratio, 2));
+		}
 		animation: skeleton-pulse 1.5s ease-in-out infinite;
 	}
 	.file-upload.skeleton .dropzone *,
@@ -544,7 +548,7 @@
 	.dropzone {
 		position: relative;
 		border: 2px dashed var(--color-border, hsl(0 0% 80%));
-		border-radius: var(--radius-md, var(--radius-lg, 8px));
+		border-radius: var(--radius-lg, 8px);
 		padding: 2rem;
 		text-align: center;
 		cursor: pointer;
@@ -641,7 +645,10 @@
 		position: relative;
 		cursor: pointer;
 		border: 2px dashed var(--color-border, hsl(0 0% 80%));
-		background: light-dark(var(--color-bg-muted, #f5f5f5), var(--color-bg-muted, #1a1a1a));
+		background: light-dark(
+			var(--color-bg-muted, #f5f5f5),
+			var(--color-bg-muted, #1a1a1a)
+		);
 		transition: border-color 200ms;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
@@ -724,13 +731,28 @@
 		gap: 0.5rem;
 		padding: 0.5rem;
 		border-radius: var(--radius-sm, var(--radius-md, 4px));
-		background: light-dark(var(--color-bg-muted, #f5f5f5), var(--color-bg-muted, #1a1a1a));
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(
+				var(--radius-sm, var(--radius-md, 4px)) * var(--squircle-ratio, 2)
+			);
+		}
+		background: light-dark(
+			var(--color-bg-muted, #f5f5f5),
+			var(--color-bg-muted, #1a1a1a)
+		);
 	}
 
 	.file-preview {
 		width: 2.5rem;
 		height: 2.5rem;
 		border-radius: var(--radius-sm, var(--radius-md, 4px));
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(
+				var(--radius-sm, var(--radius-md, 4px)) * var(--squircle-ratio, 2)
+			);
+		}
 		object-fit: cover;
 		flex-shrink: 0;
 	}
@@ -766,6 +788,12 @@
 		color: var(--color-text-muted, hsl(0 0% 45%));
 		cursor: pointer;
 		border-radius: var(--radius-sm, var(--radius-md, 4px));
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(
+				var(--radius-sm, var(--radius-md, 4px)) * var(--squircle-ratio, 2)
+			);
+		}
 		transition:
 			color 150ms,
 			background 150ms;

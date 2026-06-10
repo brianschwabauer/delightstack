@@ -190,6 +190,10 @@
 	.counter.skeleton {
 		background: var(--color-border, rgb(0 0 0 / 0.1));
 		border-radius: var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		color: transparent;
 		user-select: none;
 		animation: counter-skeleton-pulse 1.5s ease-in-out infinite;

@@ -1121,6 +1121,10 @@
 		width: 100%;
 		aspect-ratio: 16 / 9;
 		border-radius: var(--radius-md, 0.5rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.5rem) * var(--squircle-ratio, 2));
+		}
 		overflow: hidden;
 		background: light-dark(var(--color-surface, #f3f4f6), var(--color-surface, #1f2937));
 		cursor: grab;
@@ -1314,6 +1318,10 @@
 		backdrop-filter: blur(4px);
 		padding: 2px 8px;
 		border-radius: var(--radius-sm, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		white-space: nowrap;
 		pointer-events: none;
 	}

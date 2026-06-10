@@ -366,11 +366,10 @@
 						transparent
 						dense
 						aria-label="Show hidden breadcrumbs"
-						tooltip="Show hidden breadcrumbs"
 						popover_placement="bottom-start">
 						{#snippet children()}…{/snippet}
 						{#snippet menu({ close })}
-							<List filled>
+							<List>
 								{#each collapsedEntries as c (c.item.href ?? c.index)}
 									<ListItem
 										href={c.item.href}
@@ -575,6 +574,10 @@
 		display: block;
 		height: 1em;
 		border-radius: var(--radius-sm, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;

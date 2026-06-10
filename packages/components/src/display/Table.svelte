@@ -3249,6 +3249,10 @@
 		border: 1px solid
 			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		border-radius: var(--radius-lg, 10px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		cursor: pointer;
@@ -3273,6 +3277,10 @@
 		border: 1px solid
 			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		border-radius: var(--radius-lg, 10px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+		}
 		box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
 		z-index: 10;
 		overflow: hidden;
@@ -3309,6 +3317,10 @@
 		border: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #3a3a3a));
 		border-radius: var(--table-radius, 14px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--table-radius, 14px) * var(--squircle-ratio, 2));
+		}
 		/* Clip the rounded corners over the table + sticky header */
 	}
 
@@ -4298,6 +4310,10 @@
 	.skeleton-bar {
 		height: 1rem;
 		border-radius: var(--radius-lg, 6px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 6px) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
@@ -4397,8 +4413,7 @@
 	.row.drag-armed {
 		z-index: 5;
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		animation: dt-arm 180ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1))
-			forwards;
+		animation: dt-arm 180ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) forwards;
 	}
 
 	@keyframes dt-arm {
@@ -4428,6 +4443,10 @@
 		filter: drop-shadow(0 18px 32px rgb(0 0 0 / 0.22))
 			drop-shadow(0 6px 12px rgb(0 0 0 / 0.16));
 		border-radius: var(--table-radius, 14px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--table-radius, 14px) * var(--squircle-ratio, 2));
+		}
 		overflow: hidden;
 		will-change: translate, scale;
 	}
@@ -4446,6 +4465,10 @@
 
 	.drag-overlay.collapsed .ghost-row {
 		border-radius: var(--table-radius, 14px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--table-radius, 14px) * var(--squircle-ratio, 2));
+		}
 		overflow: hidden;
 	}
 
@@ -4459,6 +4482,10 @@
 		bottom: 0;
 		z-index: -1;
 		border-radius: var(--table-radius, 14px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--table-radius, 14px) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #232323));
 		border: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #3a3a3a));

@@ -699,6 +699,10 @@
 		color: #fff;
 		background: var(--color-error, #dc2626);
 		border-radius: var(--radius-md, 6px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 6px) * var(--squircle-ratio, 2));
+		}
 		box-shadow: var(--shadow-md, 0 8px 28px -8px rgb(0 0 0 / 0.35));
 		pointer-events: none;
 		position-try-fallbacks: flip-block;
@@ -773,7 +777,7 @@
 		right: auto;
 		width: max(anchor-size(width), 12rem);
 		margin: 0.35em 0 0 0;
-		padding: 0.25em;
+		padding: 0;
 		box-sizing: border-box;
 		max-height: 16em;
 		overflow-y: auto;
@@ -784,7 +788,11 @@
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #404040));
 		background: light-dark(var(--color-bg, #fff), var(--color-surface, #262626));
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-		border-radius: var(--radius-xl, 16px);
+		border-radius: var(--radius-lg, 16px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 16px) * var(--squircle-ratio, 2));
+		}
 		box-shadow: var(--shadow-md, 0 8px 28px -8px rgb(0 0 0 / 0.3));
 		scrollbar-width: thin;
 		position-try-fallbacks: flip-block;

@@ -556,6 +556,11 @@
 		background-color: var(--color-bg, light-dark(#fff, #0a0a0a));
 		border-top-left-radius: var(--radius-2xl, 28px);
 		border-top-right-radius: var(--radius-2xl, 28px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-top-left-radius: calc(var(--radius-2xl, 28px) * var(--squircle-ratio, 2));
+			border-top-right-radius: calc(var(--radius-2xl, 28px) * var(--squircle-ratio, 2));
+		}
 		box-shadow:
 			var(--shadow-xl, 0 -8px 30px rgb(0 0 0 / 0.18)),
 			0 0 0 1px color-mix(in oklch, transparent, var(--color-text, #888) 12%);

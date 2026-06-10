@@ -1104,6 +1104,10 @@
 		width: var(--qr-size);
 		height: var(--qr-size);
 		border-radius: var(--radius-lg, 8px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
@@ -1143,6 +1147,10 @@
 		border: 1px solid
 			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		border-radius: var(--radius-md, 6px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 6px) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1f2937));
 		color: light-dark(var(--color-text, #374151), var(--color-text, #d1d5db));
 		cursor: pointer;

@@ -230,6 +230,9 @@
 			height: 100%;
 			background: var(--progress-color, var(--color-action, currentColor));
 			border-radius: inherit;
+			@supports (corner-shape: squircle) {
+				corner-shape: inherit;
+			}
 			transition: width var(--duration-slow, 300ms) var(--ease-out, ease-out);
 		}
 

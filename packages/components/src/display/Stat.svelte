@@ -341,6 +341,10 @@
 		width: var(--stat-icon-size);
 		height: var(--stat-icon-size);
 		border-radius: var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		flex-shrink: 0;
 		position: relative;
@@ -372,6 +376,10 @@
 		width: 6em;
 		height: var(--stat-value-font);
 		border-radius: var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
@@ -396,6 +404,10 @@
 		width: 8em;
 		height: var(--stat-label-font);
 		border-radius: var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
@@ -421,6 +433,10 @@
 		width: 10em;
 		height: var(--stat-label-font);
 		border-radius: var(--radius-md, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		margin-top: 0.25rem;
 		position: relative;

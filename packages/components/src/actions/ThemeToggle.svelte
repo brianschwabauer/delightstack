@@ -201,6 +201,10 @@
 	.theme-toggle.has-label {
 		padding: 0.4em 0.9em;
 		border-radius: var(--radius-lg, 8px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
+		}
 	}
 	.theme-toggle:hover {
 		background-color: rgb(from currentColor r g b / 0.08);

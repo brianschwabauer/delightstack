@@ -1029,6 +1029,10 @@
 		&:focus-visible {
 			box-shadow: inset 0 0 0 2px var(--color-action, #1976d2);
 			border-radius: 8px;
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(8px * var(--squircle-ratio, 2));
+			}
 		}
 	}
 
@@ -1047,6 +1051,10 @@
 		padding: 0.25rem 0.5rem 0.25rem 0;
 		cursor: pointer;
 		border-radius: 8px;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(8px * var(--squircle-ratio, 2));
+		}
 		position: relative;
 		min-height: 1.75rem;
 		transition:
@@ -1102,6 +1110,10 @@
 		outline: 2px solid var(--color-action, #1976d2);
 		outline-offset: -2px;
 		border-radius: var(--radius-md, 4px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		}
 	}
 
 	.tree-node.disabled > .node-row {
@@ -1138,6 +1150,10 @@
 		cursor: pointer;
 		color: light-dark(var(--color-text-muted, #888), var(--color-text-muted, #999));
 		border-radius: var(--radius-md, 4px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		}
 
 		&:not(.has-children) {
 			visibility: hidden;
@@ -1392,6 +1408,10 @@
 		outline: 2px solid var(--color-action, #1976d2);
 		outline-offset: -2px;
 		border-radius: 8px;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(8px * var(--squircle-ratio, 2));
+		}
 		background: light-dark(
 			rgb(from var(--color-action, #1976d2) r g b / 0.08),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.12)

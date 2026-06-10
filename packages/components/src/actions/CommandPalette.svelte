@@ -627,6 +627,10 @@
 		width: min(600px, 90vw);
 		background-color: var(--color-bg);
 		border-radius: var(--radius-2xl);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-2xl) * var(--squircle-ratio, 2));
+		}
 		box-shadow: var(--shadow-lg);
 		border: 1px solid var(--color-border);
 		display: flex;
@@ -740,6 +744,9 @@
 			inset: 0;
 			background-color: var(--color-text);
 			border-radius: inherit;
+			@supports (corner-shape: squircle) {
+				corner-shape: inherit;
+			}
 			opacity: 0;
 			transition: opacity 300ms ease;
 			pointer-events: none;
@@ -755,10 +762,22 @@
 		&.first-in-group {
 			border-top-left-radius: var(--radius-xl, 8px);
 			border-top-right-radius: var(--radius-xl, 8px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-top-left-radius: calc(var(--radius-xl, 8px) * var(--squircle-ratio, 2));
+				border-top-right-radius: calc(var(--radius-xl, 8px) * var(--squircle-ratio, 2));
+			}
 		}
 		&.last-in-group {
 			border-bottom-left-radius: var(--radius-xl, 8px);
 			border-bottom-right-radius: var(--radius-xl, 8px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-bottom-left-radius: calc(var(--radius-xl, 8px) * var(--squircle-ratio, 2));
+				border-bottom-right-radius: calc(
+					var(--radius-xl, 8px) * var(--squircle-ratio, 2)
+				);
+			}
 		}
 
 		/* Per-item perspective so the press recedes toward the item's own
@@ -850,6 +869,10 @@
 			background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
 			border: 1px solid var(--color-border);
 			border-radius: var(--radius-xl);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-xl) * var(--squircle-ratio, 2));
+			}
 			line-height: 1;
 		}
 	}

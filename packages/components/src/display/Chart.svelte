@@ -1215,6 +1215,10 @@
 		background: var(--color-bg, light-dark(#ffffff, #1f2937));
 		border: 1px solid var(--color-border, light-dark(#e5e7eb, #374151));
 		border-radius: var(--radius-lg, 0.5rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
+		}
 		padding: 6px 10px;
 		pointer-events: none;
 		white-space: nowrap;
@@ -1260,6 +1264,10 @@
 		padding: 2px 6px;
 		cursor: pointer;
 		border-radius: var(--radius-lg, 0.5rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
+		}
 		font-size: 12px;
 		color: var(--color-text, light-dark(#111827, #f9fafb));
 		transition: opacity 0.15s ease;
@@ -1321,6 +1329,11 @@
 	.skeleton-bar {
 		flex: 1;
 		border-radius: var(--radius-lg, 0.5rem) var(--radius-lg, 0.5rem) 0 0;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2))
+				calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2)) 0 0;
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;

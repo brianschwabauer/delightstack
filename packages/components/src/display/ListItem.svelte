@@ -366,10 +366,17 @@
 		display: flex;
 		align-items: center;
 		perspective: 100px;
+		--_radius: calc(var(--radius-lg) * 1.5);
 		:global(> .ripple) {
 			inset: 1px var(--border-inset) 1px
 				calc(var(--border-inset) + ((var(--level) - 1) * 1rem)) !important;
-			border-radius: calc(var(--radius-lg) - var(--border-inset)) !important;
+			border-radius: calc(var(--_radius) - var(--border-inset)) !important;
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(
+					(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
+				) !important;
+			}
 		}
 		&.active {
 			a,
@@ -441,6 +448,7 @@
 			}
 		}
 		&.dense {
+			--_radius: var(--radius-lg);
 			min-height: 2.5rem;
 			a,
 			button,
@@ -466,6 +474,7 @@
 			}
 		}
 		&.comfortable {
+			--_radius: var(--radius-xl);
 			min-height: 3.5rem;
 			a,
 			button,
@@ -604,7 +613,13 @@
 		right: var(--border-inset);
 		bottom: 1px;
 		left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
-		border-radius: calc(var(--radius-lg) - var(--border-inset));
+		border-radius: calc(var(--_radius) - var(--border-inset));
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(
+				(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
+			);
+		}
 		background-color: var(--color-text);
 		transition:
 			opacity 300ms ease,
@@ -682,7 +697,13 @@
 			right: var(--border-inset);
 			bottom: 1px;
 			left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
-			border-radius: calc(var(--radius-lg) - var(--border-inset));
+			border-radius: calc(var(--_radius) - var(--border-inset));
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(
+					(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
+				);
+			}
 			background-color: var(--color-text);
 			transition:
 				opacity 300ms ease,
@@ -709,7 +730,13 @@
 				right: var(--border-inset);
 				bottom: 1px;
 				left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
-				border-radius: calc(var(--radius-lg) - var(--border-inset));
+				border-radius: calc(var(--_radius) - var(--border-inset));
+				@supports (corner-shape: squircle) {
+					corner-shape: squircle;
+					border-radius: calc(
+						(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
+					);
+				}
 				border: solid 1px var(--color-border-active);
 			}
 		}

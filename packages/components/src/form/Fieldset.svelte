@@ -184,6 +184,10 @@
 		flex-direction: column;
 		gap: 0.75em;
 		border-radius: var(--radius-lg, 8px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
+		}
 		position: relative;
 	}
 
@@ -232,6 +236,10 @@
 		height: 1em;
 		width: 9em;
 		border-radius: var(--radius-md, 4px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		}
 		background-color: var(--color-bg-muted, hsl(0 0% 90%));
 		background-image: linear-gradient(
 			100deg,
@@ -280,6 +288,10 @@
 		user-select: none;
 		-webkit-tap-highlight-color: transparent;
 		border-radius: var(--radius-md, 4px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		}
 	}
 	.legend.collapsible:hover {
 		color: var(--color-action, hsl(220 70% 55%));

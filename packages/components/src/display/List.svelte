@@ -168,9 +168,13 @@
 
 <style>
 	ul {
-		--radius-lg: var(--radius-2xl);
+		--_radius: calc(var(--radius-lg) * 1.5);
 		--border-inset: 6px;
-		border-radius: var(--radius-lg);
+		border-radius: var(--_radius);
+		@supports (corner-shape: superellipse(var(--squircle-ratio, 2))) {
+			corner-shape: superellipse(var(--squircle-ratio, 2));
+			border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+		}
 		padding: 0;
 		margin: 0;
 		/* Transparent by default so the list composes onto any surface; the
@@ -189,11 +193,12 @@
 			cursor: not-allowed;
 		}
 		&.dense {
-			--radius-lg: var(--radius-xl);
 			--border-inset: 4px;
+			--_radius: var(--radius-lg);
 		}
 		&.comfortable {
 			--border-inset: 8px;
+			--_radius: var(--radius-xl);
 		}
 		&.skeleton {
 			/* Lists fill their container. In a definite-width parent this spans the
@@ -203,12 +208,22 @@
 		}
 
 		:global(> li:first-child) {
-			border-top-left-radius: var(--radius-lg);
-			border-top-right-radius: var(--radius-lg);
+			border-top-left-radius: var(--_radius);
+			border-top-right-radius: var(--_radius);
+			@supports (corner-shape: superellipse(var(--squircle-ratio, 2))) {
+				corner-shape: superellipse(var(--squircle-ratio, 2));
+				border-top-left-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+				border-top-right-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+			}
 		}
 		:global(> li:last-child) {
-			border-bottom-left-radius: var(--radius-lg);
-			border-bottom-right-radius: var(--radius-lg);
+			border-bottom-left-radius: var(--_radius);
+			border-bottom-right-radius: var(--_radius);
+			@supports (corner-shape: superellipse(var(--squircle-ratio, 2))) {
+				corner-shape: superellipse(var(--squircle-ratio, 2));
+				border-bottom-left-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+				border-bottom-right-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+			}
 		}
 	}
 
@@ -230,6 +245,10 @@
 	.skeleton-bar {
 		height: 0.85em;
 		border-radius: var(--radius-md, 4px);
+		@supports (corner-shape: superellipse(var(--squircle-ratio, 2))) {
+			corner-shape: superellipse(var(--squircle-ratio, 2));
+			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		}
 		background-color: color-mix(in oklch, var(--color-text, #000) 12%, transparent);
 		background-image: linear-gradient(
 			90deg,

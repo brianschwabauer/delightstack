@@ -677,6 +677,10 @@
 		pointer-events: auto;
 		width: 100%;
 		border-radius: var(--radius-lg, 12px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 12px) * var(--squircle-ratio, 2));
+		}
 		background-color: var(--toast-bg);
 		color: var(--toast-fg);
 		border: 1px solid var(--toast-border);

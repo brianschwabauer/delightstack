@@ -420,6 +420,10 @@
 		width: 100%;
 		min-height: 200px;
 		border-radius: var(--radius-xl, 8px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-xl, 8px) * var(--squircle-ratio, 2));
+		}
 		background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
 		position: relative;
 		overflow: hidden;
@@ -479,6 +483,10 @@
 		font-size: var(--label-font-size);
 		font-weight: 500;
 		border-radius: var(--label-radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--label-radius) * var(--squircle-ratio, 2));
+		}
 		pointer-events: none;
 		z-index: 2;
 		line-height: 1;

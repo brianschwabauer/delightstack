@@ -215,6 +215,10 @@
 		display: grid;
 		grid-template-rows: 0fr;
 		border-radius: var(--radius-md);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md) * var(--squircle-ratio, 2));
+		}
 		background: var(--callout-bg);
 		border-left: 4px solid var(--callout-color);
 		opacity: 0;
@@ -384,6 +388,10 @@
 	.skeleton-line {
 		height: 0.75rem;
 		border-radius: var(--radius-sm);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm) * var(--squircle-ratio, 2));
+		}
 		background-color: color-mix(in oklch, var(--callout-color) 25%, transparent);
 		background-image: linear-gradient(
 			90deg,

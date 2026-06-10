@@ -265,6 +265,10 @@
 			grid-template-rows: max-content;
 			grid-template-columns: max-content;
 			border-radius: var(--radius-lg);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+			}
 		}
 
 		header {
@@ -320,6 +324,10 @@
 				left: 0;
 				background-color: var(--color-bg);
 				border-radius: var(--radius-lg);
+				@supports (corner-shape: squircle) {
+					corner-shape: squircle;
+					border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+				}
 			}
 			.spacer {
 				flex: 1;
@@ -371,6 +379,10 @@
 		box-shadow: var(--shadow-md);
 		@media (min-width: 768px) {
 			border-radius: var(--radius-lg);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+			}
 		}
 	}
 	.modal-bg {

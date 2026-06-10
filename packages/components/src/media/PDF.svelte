@@ -1358,8 +1358,15 @@
 		display: flex;
 		flex-direction: column;
 		border-radius: var(--radius-md, 0.5rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.5rem) * var(--squircle-ratio, 2));
+		}
 		overflow: hidden;
-		background: light-dark(var(--color-bg-muted, #f1f5f9), var(--color-bg-muted, #0f172a));
+		background: light-dark(
+			var(--color-bg-muted, #f1f5f9),
+			var(--color-bg-muted, #0f172a)
+		);
 		outline: none;
 	}
 
@@ -1407,6 +1414,10 @@
 		border: none;
 		background: none;
 		border-radius: var(--radius-sm, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		cursor: pointer;
 		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
 		transition: background 150ms ease;
@@ -1444,6 +1455,10 @@
 		padding: 0.25rem;
 		border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
 		border-radius: var(--radius-sm, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		font-size: var(--text-sm, 0.875rem);
 		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
 		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
@@ -1487,6 +1502,10 @@
 		padding: 0.25rem 0.5rem;
 		border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
 		border-radius: var(--radius-sm, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		font-size: var(--text-sm, 0.875rem);
 		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
 		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
@@ -1661,6 +1680,10 @@
 
 	.pdf-skeleton-block {
 		border-radius: var(--radius-sm, 0.25rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		}
 		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;

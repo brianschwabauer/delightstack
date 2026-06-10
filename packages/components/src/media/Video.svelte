@@ -1593,6 +1593,10 @@
 		overflow: hidden;
 		background: black;
 		border-radius: var(--radius-lg, 8px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
+		}
 		width: 100%;
 		outline: none;
 		font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
@@ -1665,6 +1669,10 @@
 		width: 24px;
 		height: 24px;
 		border-radius: 8px;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(8px * var(--squircle-ratio, 2));
+		}
 		flex-shrink: 0;
 	}
 	.sk-track {
@@ -1675,6 +1683,10 @@
 		width: 38px;
 		height: 16px;
 		border-radius: 8px;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(8px * var(--squircle-ratio, 2));
+		}
 		flex-shrink: 0;
 	}
 
@@ -1800,6 +1812,10 @@
 		height: 38px;
 		border: none;
 		border-radius: var(--radius-md, 6px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 6px) * var(--squircle-ratio, 2));
+		}
 		background: transparent;
 		color: rgba(255, 255, 255, 0.92);
 		cursor: pointer;
@@ -1943,6 +1959,10 @@
 		color: white;
 		padding: 4px;
 		border-radius: var(--radius-md, 4px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		}
 		font-size: var(--text-xs, 0.75rem);
 		white-space: nowrap;
 		pointer-events: none;
@@ -1993,6 +2013,10 @@
 		-webkit-backdrop-filter: blur(16px) saturate(150%);
 		border: 1px solid rgba(255, 255, 255, 0.12);
 		border-radius: var(--radius-lg, 10px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+		}
 		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
 		opacity: 0;
 		pointer-events: none;
@@ -2048,6 +2072,10 @@
 		-webkit-backdrop-filter: blur(16px) saturate(150%);
 		border: 1px solid rgba(255, 255, 255, 0.12);
 		border-radius: var(--radius-lg, 10px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+		}
 		box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
 		padding: 5px;
 		min-width: 96px;
@@ -2061,6 +2089,10 @@
 		padding: 7px 14px;
 		border: none;
 		border-radius: var(--radius-md, 6px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 6px) * var(--squircle-ratio, 2));
+		}
 		background: transparent;
 		color: rgba(255, 255, 255, 0.9);
 		cursor: pointer;
@@ -2120,6 +2152,10 @@
 		background: transparent;
 		color: rgba(255, 255, 255, 0.92);
 		border-radius: var(--radius-md, 6px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 6px) * var(--squircle-ratio, 2));
+		}
 		font-family: inherit;
 		font-size: var(--text-sm, 0.875rem);
 	}
@@ -2140,6 +2176,10 @@
 		flex-shrink: 0;
 		border: none;
 		border-radius: var(--radius-md, 6px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 6px) * var(--squircle-ratio, 2));
+		}
 		background: transparent;
 		color: inherit;
 		cursor: pointer;
