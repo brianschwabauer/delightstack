@@ -1466,6 +1466,9 @@
 		position: absolute;
 		inset: 0;
 		border-radius: inherit;
+		@supports (corner-shape: squircle) {
+			corner-shape: inherit;
+		}
 		background: linear-gradient(
 			100deg,
 			transparent 30%,
@@ -1500,6 +1503,16 @@
 		   overflows ~0.4em above the box without adding to the layout height. */
 		padding: 0 var(--control-pad-x, 1em);
 		border-radius: var(--_radius);
+		/* Squircle + a rounder radius. The notch shoulders (.input-label ::before/::after)
+		   draw the top corners, so the radius is doubled like elsewhere but CAPPED at the
+		   label's left content offset (1em) — past that the corner would crowd the floated
+		   label. --_cr is the shared corner radius; the shoulders scale to it (height +
+		   floated width) so the squircle seam stays aligned with the side borders. */
+		@supports (corner-shape: squircle) {
+			--_cr: min(calc(var(--_radius) * var(--squircle-ratio, 2)), 1em);
+			corner-shape: squircle;
+			border-radius: var(--_cr);
+		}
 		background: var(--_bg);
 		cursor: text;
 	}
@@ -1519,10 +1532,14 @@
 		inset: 0;
 		border: 1px solid var(--_border);
 		border-radius: inherit;
+		@supports (corner-shape: squircle) {
+			corner-shape: inherit;
+		}
 		pointer-events: none;
-		transition:
-			border-color var(--_duration) var(--_ease),
-			border-width var(--_duration) var(--_ease);
+		/* Width is NOT transitioned: the top edge (notch shoulders) thickens
+		   instantly on focus, so the sides/bottom must snap too or the box
+		   visibly thickens at two different rates. */
+		transition: border-color var(--_duration) var(--_ease);
 	}
 
 	/* With a label present, the label itself paints the top edge (the notch) */
@@ -1533,7 +1550,7 @@
 	.input-wrapper:hover::before {
 		border-color: var(--_border-hover);
 		/* Snap the border color in on hover; the base rule eases it back out on leave. */
-		transition: border-width var(--_duration) var(--_ease);
+		transition: none;
 	}
 	.input.has-label .input-wrapper:hover::before {
 		border-top-color: transparent;
@@ -1635,7 +1652,15 @@
 		padding: 0;
 		box-sizing: border-box;
 		border-top: 1px solid var(--_border);
+		/* Invisible counterweight to the top border: with border-box sizing the
+		   1px top border alone would push the flex-centred resting text 0.5px
+		   below the field's true centre. */
+		border-bottom: 1px solid transparent;
 		border-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: var(--_cr);
+		}
 		color: var(--_text-muted);
 		pointer-events: none;
 		transition:
@@ -1655,6 +1680,9 @@
 		width: 0;
 		min-width: 1em;
 		height: var(--_radius);
+		@supports (corner-shape: squircle) {
+			height: var(--_cr);
+		}
 		border-top: 1px solid transparent;
 		transition:
 			border-color var(--_duration) var(--_ease),
@@ -1666,12 +1694,23 @@
 		   The text's own margin-left keeps it aligned with the field contents. */
 		min-width: 0.7em;
 		border-top-left-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-top-left-radius: var(--_cr);
+		}
 	}
 	.input-label::after {
 		flex: 1 1 auto;
 		min-width: 0.5em;
 		margin-left: 0.3em;
 		border-top-right-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-top-right-radius: var(--_cr);
+			/* Room for the bigger corner when a long label squeezes the shoulder,
+			   so the curve never gets scaled down (which would break the seam). */
+			min-width: 1em;
+		}
 	}
 
 	/* While resting, a leading icon widens the left shoulder so the label text
@@ -1703,7 +1742,8 @@
 		transition:
 			font-size 200ms var(--_ease-label),
 			transform 200ms var(--_ease-label),
-			padding 200ms var(--_ease-label);
+			padding 200ms var(--_ease-label),
+			margin-left 200ms var(--_ease-label);
 	}
 
 	/* --- Floated state ------------------------------------------------- */
@@ -1720,6 +1760,25 @@
 	.input-label.floated .input-label-text {
 		font-size: calc(var(--_font) * 0.8);
 		transform: translateY(calc(var(--_height) / -2));
+		@supports (corner-shape: squircle) {
+			/* The floated left shoulder is widened to the 1em label offset below, so
+			   drop the text's own gap to keep it landing at the same spot (the
+			   ::before min-width and this margin animate together → no horizontal shift). */
+			margin-left: 0;
+		}
+	}
+	/* Floated: widen the left shoulder to the label's 1em content offset so the
+	   (now larger, capped) squircle corner has room and its seam meets the side. */
+	@supports (corner-shape: squircle) {
+		.input-label.floated::before {
+			min-width: 1em;
+			/* Trim the trailing 0.3em of the shoulder so the line stops short of
+			   the text — the same gap the ::after's margin leaves on the right.
+			   A squircle is dead flat over its last third, so only the straight
+			   tail of the corner falls in the trimmed region; the curve itself
+			   still reads complete. */
+			mask-image: linear-gradient(to right, #000 calc(100% - 0.3em), #0000 0);
+		}
 	}
 
 	/* --- Textarea: rest the label at the top, straddle the edge on float - */
@@ -1907,6 +1966,10 @@
 		width: 100%;
 		height: 100%;
 		border-radius: var(--radius-md, 5px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
+		}
 		border: 1px solid var(--_border);
 		pointer-events: none;
 	}
@@ -1973,6 +2036,10 @@
 		max-width: 100%;
 		padding: 0.25em 0.3em;
 		border-radius: var(--radius-md, 6px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 6px) * var(--squircle-ratio, 2));
+		}
 		background: var(--_panel-hover);
 	}
 
@@ -1985,6 +2052,10 @@
 		flex-shrink: 0;
 		overflow: hidden;
 		border-radius: var(--radius-sm, 4px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-sm, 4px) * var(--squircle-ratio, 2));
+		}
 		background: var(--_bg);
 		color: var(--_text-muted);
 	}
@@ -2233,6 +2304,10 @@
 		background: var(--_panel);
 		color: var(--_text);
 		border-radius: var(--radius-xl, 16px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-xl, 16px) * var(--squircle-ratio, 2));
+		}
 		box-shadow: var(--shadow-md, 0 8px 28px -8px rgb(0 0 0 / 0.3));
 		scrollbar-width: thin;
 		/* Flip above the field when there is no room below */

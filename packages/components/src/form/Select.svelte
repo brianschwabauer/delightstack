@@ -1011,6 +1011,9 @@
 		position: absolute;
 		inset: 0;
 		border-radius: inherit;
+		@supports (corner-shape: squircle) {
+			corner-shape: inherit;
+		}
 		background: linear-gradient(
 			100deg,
 			transparent 30%,
@@ -1047,6 +1050,16 @@
 		   trigger grows past `min-height` when chips span multiple rows. */
 		padding: 0.5em var(--control-pad-x, 1em);
 		border-radius: var(--_radius);
+		/* Squircle + a rounder radius. The notch shoulders (.select-label ::before/::after)
+		   draw the top corners, so the radius is doubled like elsewhere but CAPPED at the
+		   label's left content offset (1em) — past that the corner would crowd the floated
+		   label. --_cr is the shared corner radius; the shoulders scale to it (height +
+		   floated width) so the squircle seam stays aligned with the side borders. */
+		@supports (corner-shape: squircle) {
+			--_cr: min(calc(var(--_radius) * var(--squircle-ratio, 2)), 1em);
+			corner-shape: squircle;
+			border-radius: var(--_cr);
+		}
 		background: var(--_bg);
 		cursor: pointer;
 		width: 100%;
@@ -1072,10 +1085,14 @@
 		inset: 0;
 		border: 1px solid var(--_border);
 		border-radius: inherit;
+		@supports (corner-shape: squircle) {
+			corner-shape: inherit;
+		}
 		pointer-events: none;
-		transition:
-			border-color var(--_duration) var(--_ease),
-			border-width var(--_duration) var(--_ease);
+		/* Width is NOT transitioned: the top edge (notch shoulders) thickens
+		   instantly on focus, so the sides/bottom must snap too or the box
+		   visibly thickens at two different rates. */
+		transition: border-color var(--_duration) var(--_ease);
 	}
 
 	/* With a label present, the label paints the top edge (the notch) */
@@ -1086,7 +1103,7 @@
 	.select-trigger:hover::before {
 		border-color: var(--_border-hover);
 		/* Snap the border color in on hover; the base rule eases it back out on leave. */
-		transition: border-width var(--_duration) var(--_ease);
+		transition: none;
 	}
 	.select.has-label .select-trigger:hover::before {
 		border-top-color: transparent;
@@ -1127,7 +1144,15 @@
 		padding: 0;
 		box-sizing: border-box;
 		border-top: 1px solid var(--_border);
+		/* Invisible counterweight to the top border: with border-box sizing the
+		   1px top border alone would push the flex-centred resting text 0.5px
+		   below the trigger's true centre. */
+		border-bottom: 1px solid transparent;
 		border-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: var(--_cr);
+		}
 		color: var(--_text-muted);
 		pointer-events: none;
 		transition:
@@ -1146,8 +1171,13 @@
 		width: 0;
 		min-width: 1em;
 		height: var(--_radius);
+		@supports (corner-shape: squircle) {
+			height: var(--_cr);
+		}
 		border-top: 1px solid transparent;
-		transition: border-color var(--_duration) var(--_ease);
+		transition:
+			border-color var(--_duration) var(--_ease),
+			min-width 200ms var(--_ease-label);
 	}
 	.select-label::before {
 		/* End the left border run 0.3em before the text so the notch has a small
@@ -1155,12 +1185,23 @@
 		   The text's own margin-left keeps it aligned with the trigger value. */
 		min-width: 0.7em;
 		border-top-left-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-top-left-radius: var(--_cr);
+		}
 	}
 	.select-label::after {
 		flex: 1 1 auto;
 		min-width: 0.5em;
 		margin-left: 0.3em;
 		border-top-right-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-top-right-radius: var(--_cr);
+			/* Room for the bigger corner when a long label squeezes the shoulder,
+			   so the curve never gets scaled down (which would break the seam). */
+			min-width: 1em;
+		}
 	}
 
 	.select-label-text {
@@ -1182,7 +1223,8 @@
 		text-overflow: ellipsis;
 		transition:
 			font-size 200ms var(--_ease-label),
-			transform 200ms var(--_ease-label);
+			transform 200ms var(--_ease-label),
+			margin-left 200ms var(--_ease-label);
 	}
 
 	/* Floated: hide the label's own edge, light the notch shoulders, and
@@ -1197,6 +1239,25 @@
 	.select-label.floated .select-label-text {
 		font-size: calc(var(--_font) * 0.8);
 		transform: translateY(calc(var(--_height) / -2));
+		@supports (corner-shape: squircle) {
+			/* The floated left shoulder is widened to the 1em label offset below, so
+			   drop the text's own gap to keep it landing at the same spot (the
+			   ::before min-width and this margin animate together → no horizontal shift). */
+			margin-left: 0;
+		}
+	}
+	/* Floated: widen the left shoulder to the label's 1em content offset so the
+	   (now larger, capped) squircle corner has room and its seam meets the side. */
+	@supports (corner-shape: squircle) {
+		.select-label.floated::before {
+			min-width: 1em;
+			/* Trim the trailing 0.3em of the shoulder so the line stops short of
+			   the text — the same gap the ::after's margin leaves on the right.
+			   A squircle is dead flat over its last third, so only the straight
+			   tail of the corner falls in the trimmed region; the curve itself
+			   still reads complete. */
+			mask-image: linear-gradient(to right, #000 calc(100% - 0.3em), #0000 0);
+		}
 	}
 
 	.select-trigger:hover .select-label {
@@ -1210,8 +1271,10 @@
 	.select-trigger:hover .select-label.floated::before,
 	.select-trigger:hover .select-label.floated::after {
 		border-top-color: var(--_border-hover);
-		/* Snap the notch shoulders in on hover; the base rule eases them back out. */
-		transition: none;
+		/* Snap the notch color in on hover; the base rule eases it back out.
+		   Keep min-width animating — the label floats while hovered (opening is
+		   a click), so dropping it here would snap the shoulder mid-float. */
+		transition: min-width 200ms var(--_ease-label);
 	}
 
 	/* The label's own border-top stays 1px on focus/open — an open/focused label
@@ -1423,6 +1486,10 @@
 		background: var(--_panel);
 		color: var(--_text);
 		border-radius: var(--radius-xl, 16px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-xl, 16px) * var(--squircle-ratio, 2));
+		}
 		box-shadow: var(--shadow-md, 0 8px 28px -8px rgb(0 0 0 / 0.3));
 		scrollbar-width: thin;
 		/* Flip above the trigger when there is no room below */
@@ -1465,6 +1532,10 @@
 		/* A larger radius than the default so it doesn't read as sharper than
 		   the surrounding popover. */
 		border-radius: var(--radius-lg, 10px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+		}
 		background: var(--_bg);
 		color: var(--_text);
 		font: inherit;
@@ -1487,6 +1558,10 @@
 		gap: 0.6em;
 		padding: 0.7em 0.85em;
 		border-radius: var(--radius-md, 8px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 8px) * var(--squircle-ratio, 2));
+		}
 		cursor: pointer;
 		/* Self-contained perspective so the pressed dip recedes toward each
 		 * option's own center, not the center of the whole list. */
@@ -1508,11 +1583,29 @@
 	.select-dropdown > .select-group-label:first-child {
 		border-top-left-radius: calc(var(--radius-xl, 16px) - 0.3em);
 		border-top-right-radius: calc(var(--radius-xl, 16px) - 0.3em);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-top-left-radius: calc(
+				(var(--radius-xl, 16px) - 0.3em) * var(--squircle-ratio, 2)
+			);
+			border-top-right-radius: calc(
+				(var(--radius-xl, 16px) - 0.3em) * var(--squircle-ratio, 2)
+			);
+		}
 	}
 	.select-dropdown > .select-option:last-child,
 	.select-dropdown > .select-empty:last-child {
 		border-bottom-left-radius: calc(var(--radius-xl, 16px) - 0.3em);
 		border-bottom-right-radius: calc(var(--radius-xl, 16px) - 0.3em);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-bottom-left-radius: calc(
+				(var(--radius-xl, 16px) - 0.3em) * var(--squircle-ratio, 2)
+			);
+			border-bottom-right-radius: calc(
+				(var(--radius-xl, 16px) - 0.3em) * var(--squircle-ratio, 2)
+			);
+		}
 	}
 	.select-option.selected {
 		color: var(--_border-focus);
