@@ -167,10 +167,10 @@ html {
 
 	/* Soft tinted surfaces for feedback components (Callout, Toast, Avatar,
 	   Input). Mixed over the page background so they adapt to light/dark. */
-	--color-info-bg: color-mix(in oklch, var(--color-info) 14%, var(--color-bg-0));
-	--color-success-bg: color-mix(in oklch, var(--color-success) 14%, var(--color-bg-0));
-	--color-warning-bg: color-mix(in oklch, var(--color-warning) 16%, var(--color-bg-0));
-	--color-error-bg: color-mix(in oklch, var(--color-error) 14%, var(--color-bg-0));
+	--color-info-bg: color-mix(in oklch, var(--color-info) 14%, var(--color-bg-00));
+	--color-success-bg: color-mix(in oklch, var(--color-success) 14%, var(--color-bg-00));
+	--color-warning-bg: color-mix(in oklch, var(--color-warning) 16%, var(--color-bg-00));
+	--color-error-bg: color-mix(in oklch, var(--color-error) 14%, var(--color-bg-00));
 
 	/* --- Overlay --- */
 	--color-backdrop: light-dark(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.7));
