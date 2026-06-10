@@ -865,7 +865,6 @@
 		pointer-events: all;
 	}
 	.popover {
-		--shadow-md: var(--shadow-md);
 		--color-bg: var(--color-surface);
 		--layer: var(--layer-popover);
 		--easing: var(--ease-spring);
@@ -873,6 +872,10 @@
 		background-color: var(--color-bg);
 		border: 1px solid var(--color-border, transparent);
 		border-radius: var(--popover-radius, var(--radius-2xl));
+		/* Light mode: a real drop shadow lifts the panel off the page. Dark mode:
+		 * the --shadow-md token resolves to transparent (dark shadows are
+		 * invisible on dark surfaces), so the border above is what separates the
+		 * panel from the page. */
 		box-shadow: var(--shadow-md);
 		max-width: calc(100vw - 1rem);
 		max-height: calc(100vh - 1rem);
@@ -927,6 +930,24 @@
 			width: calc(var(--arrow-size) / 2);
 			height: calc(var(--arrow-size) / 2);
 			top: calc(var(--arrow-size) / -2);
+			/* Stroke the arrow's outline so it carries the same border as the
+			 * panel — otherwise, with no shadow and a surface color near the page
+			 * color (especially in dark mode), the arrow is invisible. Three 1px
+			 * drop-shadows trace the two slanted sides + the rounded tip/shoulders
+			 * (built by the ::before/::after fillets, which the filter includes);
+			 * the base needs no stroke since it sits on the panel's own border.
+			 * Directions are in the arrow's local "points up" space — the
+			 * rotate() on .bottom/.left/.right carries them to the right edges. */
+			filter: drop-shadow(0 -1px 0 var(--color-border, transparent))
+				drop-shadow(-1px 0 0 var(--color-border, transparent))
+				drop-shadow(1px 0 0 var(--color-border, transparent));
+			/* The fillets reach below the panel edge (into the panel) to blend the
+			 * shoulders; the filter would stroke the side-edges of that hidden
+			 * extension, drawing a border line across the arrow's mouth ("floor").
+			 * Clip everything past the base (`bottom: 0` = the panel edge) so the
+			 * mouth stays open and the panel's own border draws the shoulders. The
+			 * negative insets leave the tip, slants, and stroke unclipped. */
+			clip-path: inset(-100px -100px 0 -100px);
 			&.bottom {
 				top: 100%;
 				transform: rotate(180deg);

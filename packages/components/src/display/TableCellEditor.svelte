@@ -777,7 +777,11 @@
 		box-sizing: border-box;
 		max-height: 16em;
 		overflow-y: auto;
-		border: none;
+		/* Border + shadow together: in light mode the shadow lifts the panel and
+		   the border is a faint edge; in dark mode --shadow-md is transparent, so
+		   the border is what separates the panel from the page. */
+		border: 1px solid
+			light-dark(var(--color-border, #e5e7eb), var(--color-border, #404040));
 		background: light-dark(var(--color-bg, #fff), var(--color-surface, #262626));
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		border-radius: var(--radius-xl, 16px);
