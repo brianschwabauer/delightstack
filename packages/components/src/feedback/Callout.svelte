@@ -212,15 +212,18 @@
 	.callout {
 		--callout-color: var(--color-info);
 		--callout-bg: var(--color-info-bg);
+		--_pad-y: 1rem;
+		--_pad-x: 1.25rem;
+		--_gap: 0.75rem;
+		--_accent-bar-margin: -0.25rem;
 		display: grid;
 		grid-template-rows: 0fr;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-lg);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-radius: calc(var(--radius-md) * var(--squircle-ratio, 2));
+			border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
 		}
 		background: var(--callout-bg);
-		border-left: 4px solid var(--callout-color);
 		opacity: 0;
 		transform: scale(0.98);
 		transition:
@@ -252,7 +255,6 @@
 		}
 
 		&.banner {
-			border-left: none;
 			border-radius: 0;
 			width: 100%;
 			background: var(--callout-color);
@@ -268,6 +270,11 @@
 
 			.callout-inner {
 				justify-content: center;
+
+				/* Solid banners carry their color as the background — no accent bar. */
+				&::before {
+					content: none;
+				}
 			}
 
 			.callout-icon {
@@ -290,17 +297,18 @@
 		}
 
 		&.dense {
-			.callout-inner {
-				padding: 0.5rem 0.75rem;
-				gap: 0.5rem;
-			}
+			--_pad-y: 0.5rem;
+			--_pad-x: 0.75rem;
+			--_gap: 0.5rem;
+			--_accent-bar-margin: 0;
+			--radius-lg: var(--radius-md);
 		}
 
 		&.comfortable {
-			.callout-inner {
-				padding: 1.25rem 1.75rem;
-				gap: 1rem;
-			}
+			--_pad-y: 1.25rem;
+			--_pad-x: 1.75rem;
+			--_gap: 1rem;
+			--_accent-bar-margin: -0.5rem;
 		}
 
 		&.skeleton {
@@ -320,9 +328,27 @@
 	.callout-inner {
 		display: flex;
 		align-items: flex-start;
-		gap: 0.75rem;
-		padding: 1rem 1.25rem;
+		gap: var(--_gap);
+		padding: var(--_pad-y) var(--_pad-x);
 		overflow: hidden;
+
+		/* Accent bar. A border-left used to provide this emphasis, but a flush
+		 * border fights the rounded corners (the radius curves the bar's ends
+		 * into awkward slivers). A pill-shaped bar floating inside the padding
+		 * keeps the emphasis and leaves the corners clean. The negative margin
+		 * pulls it into the left padding so the space on either side of the bar
+		 * equals the flex gap. */
+		&::before {
+			content: '';
+			align-self: stretch;
+			flex-shrink: 0;
+			width: 4px;
+			border-radius: var(--radius-full);
+			background: var(--callout-color);
+			margin-left: calc(var(--_gap) - var(--_pad-x));
+			margin-top: var(--_accent-bar-margin);
+			margin-bottom: var(--_accent-bar-margin);
+		}
 	}
 
 	/* Icon vertical alignment:
