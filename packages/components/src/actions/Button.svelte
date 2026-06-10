@@ -277,6 +277,15 @@
 	// the slot only animates open when one of them first appears and only
 	// collapses once both are gone — the spinner -> check handoff happens inside a
 	// stable, already-open slot (see `checkIn` for the check's own entrance).
+	//
+	// The slot's resting layout includes negative margins (they tuck the spinner
+	// in close to the label/edge) and the button's flex gap. Animating width
+	// alone would leave those at full strength, so at t=0 the slot's total
+	// layout contribution would be *negative* — the label gets pulled past its
+	// resting position and then snaps back the moment the node is removed. So
+	// the margins ride `t` too, with the gap folded into margin-right's final
+	// frame, making the total contribution hit exactly 0 at t=0: no snap on
+	// insert or removal.
 	function loadingTransition(
 		node: HTMLElement,
 		params?: { direction?: 'in' | 'out' },
@@ -284,11 +293,20 @@
 		return () => {
 			const style = getComputedStyle(node);
 			const width = parseFloat(style.width);
+			const marginLeft = parseFloat(style.marginLeft) || 0;
+			const marginRight = parseFloat(style.marginRight) || 0;
+			const gap = node.parentElement
+				? parseFloat(getComputedStyle(node.parentElement).columnGap) || 0
+				: 0;
 			const out = params?.direction === 'out';
 			return {
 				duration: out ? SPINNER_OUT : 320,
 				easing: out ? quartOut : backOut,
-				css: (t: number) => `width: ${t * width}px; opacity: ${t};`,
+				css: (t: number) =>
+					`width: ${t * width}px; ` +
+					`margin-left: ${t * marginLeft}px; ` +
+					`margin-right: ${t * marginRight - (1 - t) * gap}px; ` +
+					`opacity: ${t};`,
 			};
 		};
 	}

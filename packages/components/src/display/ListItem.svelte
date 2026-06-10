@@ -144,6 +144,12 @@
 	// grows/collapses with this width+opacity transition. Wrapping both means the
 	// slot only opens when one first appears and only collapses once both are gone
 	// — the spinner -> check handoff happens inside a stable, already-open slot.
+	//
+	// The margins (and any parent flex gap) ride `t` along with the width so the
+	// slot's total layout contribution hits exactly 0 at t=0 — animating width
+	// alone leaves them at full strength, which over/under-shoots the label's
+	// resting position and snaps it when the node is finally removed (see the
+	// matching note in Button.svelte).
 	function loadingTransition(
 		node: HTMLElement,
 		params?: { direction?: 'in' | 'out' },
@@ -151,11 +157,20 @@
 		return () => {
 			const style = getComputedStyle(node);
 			const width = parseFloat(style.width);
+			const marginLeft = parseFloat(style.marginLeft) || 0;
+			const marginRight = parseFloat(style.marginRight) || 0;
+			const gap = node.parentElement
+				? parseFloat(getComputedStyle(node.parentElement).columnGap) || 0
+				: 0;
 			const out = params?.direction === 'out';
 			return {
 				duration: out ? SPINNER_OUT : 320,
 				easing: out ? quartOut : backOut,
-				css: (t: number) => `width: ${t * width}px; opacity: ${t};`,
+				css: (t: number) =>
+					`width: ${t * width}px; ` +
+					`margin-left: ${t * marginLeft}px; ` +
+					`margin-right: ${t * marginRight - (1 - t) * gap}px; ` +
+					`opacity: ${t};`,
 			};
 		};
 	}
