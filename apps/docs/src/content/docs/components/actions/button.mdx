@@ -6,6 +6,7 @@ description: A versatile, polished button with ripple effects, promise-aware loa
 import { Button } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ButtonIconDemo from '../../../../components/demos/ButtonIconDemo.svelte';
+import ButtonIconLoadingDemo from '../../../../components/demos/ButtonIconLoadingDemo.svelte';
 import ButtonPromiseDemo from '../../../../components/demos/ButtonPromiseDemo.svelte';
 import ButtonLoadingSuccessDemo from '../../../../components/demos/ButtonLoadingSuccessDemo.svelte';
 import ButtonDropdownMenuDemo from '../../../../components/demos/ButtonDropdownMenuDemo.svelte';
@@ -108,6 +109,25 @@ Set `loading` to show a spinner whenever you drive the busy state yourself.
 <Button loading>Loading</Button>`}>
   <Button client:load disabled>Disabled</Button>
   <Button client:load loading>Loading</Button>
+</ComponentPreview>
+
+### Icon Button Loading
+
+Icon buttons support the same loading feedback: the spinner (and the success
+checkmark) overlays the button while the icon scales away beneath it, and
+inherits the variant's text color. Works with the `loading` prop or a
+promise-returning `onclick` — try the first button.
+
+<ComponentPreview code={`<!-- promise-aware: spinner, then a confirming checkmark -->
+<Button icon accent onclick={save}><UploadIcon /></Button>
+
+<!-- prop-driven, any variant -->
+<Button icon loading><SettingsIcon /></Button>
+<Button icon accent loading><HeartIcon /></Button>
+<Button icon error loading><HeartIcon /></Button>
+<Button icon translucent loading><SettingsIcon /></Button>
+<Button icon outline loading><SettingsIcon /></Button>`}>
+	<ButtonIconLoadingDemo client:load />
 </ComponentPreview>
 
 ### Promise-Aware Click Handler

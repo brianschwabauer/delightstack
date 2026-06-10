@@ -397,7 +397,6 @@
 	class:active
 	class:error={resolvedError}
 	class:is-loading={isLoading}
-	class:loading={icon && isLoading}
 	{style}
 	style:font-size={resolvedSize === undefined ? null : `var(--font-size-${resolvedSize})`}
 	{@attach tooltip(tooltip_message)}>
@@ -426,33 +425,24 @@
 		aria-expanded={menu ? menuActive : null}
 		bind:this={button_element}
 		onclick={handleClick}>
-		{#if !icon}
-			{#if showSpinner || checkVisible}
-				<div
-					class="loading-icon"
-					in:loadingTransition={{ direction: 'in' }}
-					out:loadingTransition={{ direction: 'out' }}>
-					{#if showSpinner}
-						<div class="icon-layer" out:fade={{ duration: 120 }}>
-							<Progress size="00" color="currentColor" />
-						</div>
-					{:else}
-						<div class="icon-layer check-layer" in:checkIn>
-							<svg
-								class="check"
-								viewBox="2 2 20 20"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="3"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true">
-								<path d="M5 12.5l4.5 4.5L19 7" />
-							</svg>
-						</div>
-					{/if}
-				</div>
-			{/if}
+		<!-- The transition divs must sit DIRECTLY inside the {#if} that toggles
+		     with the loading state: transitions are local by default, so nesting
+		     them one block deeper (e.g. an inner {#if icon}) means they never
+		     play when this block mounts/unmounts. -->
+		{#if icon && (showSpinner || checkVisible)}
+			<!-- Icon mode has no label to sit beside, so the feedback can't use
+			     the width-growing slot. Instead it overlays the square button
+			     while the icon itself scales away beneath it (see &.icon CSS). -->
+			<div class="loading-icon" transition:fade={{ duration: 150 }}>
+				{@render loadingLayers()}
+			</div>
+		{:else if !icon && (showSpinner || checkVisible)}
+			<div
+				class="loading-icon"
+				in:loadingTransition={{ direction: 'in' }}
+				out:loadingTransition={{ direction: 'out' }}>
+				{@render loadingLayers()}
+			</div>
 		{/if}
 		{#if children}{@render children({ isLoading, isLoadingSuccess })}{/if}
 		{#if show_chevron && menu}
@@ -518,6 +508,28 @@
 		{@render dropdown({ close: closeMenu })}
 	</Popover>
 {/if}
+
+{#snippet loadingLayers()}
+	{#if showSpinner}
+		<div class="icon-layer" out:fade={{ duration: 120 }}>
+			<Progress size="00" color="currentColor" />
+		</div>
+	{:else}
+		<div class="icon-layer check-layer" in:checkIn>
+			<svg
+				class="check"
+				viewBox="2 2 20 20"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="3"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true">
+				<path d="M5 12.5l4.5 4.5L19 7" />
+			</svg>
+		</div>
+	{/if}
+{/snippet}
 
 <style>
 	.button {
@@ -679,12 +691,6 @@
 					color: var(--color-text);
 					border: var(--button-border);
 				}
-			}
-		}
-		&.loading {
-			--loading-size: 3em;
-			&.dense {
-				--loading-size: 3.5em;
 			}
 		}
 		&.active {
@@ -1070,6 +1076,7 @@
 			--_corner-scale: 1;
 			&.dense {
 				--_icon-size: calc(1em * var(--control-height-ratio-dense, 2.5));
+				--_feedback-size: 60%;
 				button,
 				a {
 					padding: 0;
@@ -1091,6 +1098,41 @@
 				:global(svg) {
 					width: 50%;
 					height: 50%;
+				}
+				/* The icon eases away/back as the loading/success feedback overlay
+				   crossfades over it. */
+				:global(> svg),
+				:global(> img) {
+					transition:
+						opacity 150ms ease,
+						scale 200ms var(--ease-spring, ease);
+				}
+				.loading-icon ~ :global(svg),
+				.loading-icon ~ :global(img) {
+					opacity: 0;
+					scale: 0.5;
+				}
+			}
+			/* Loading/success feedback covers the whole square button instead of
+			   the width-growing slot used beside a label. Sized to match the icon
+			   it replaces (50%, 60% when dense). */
+			--_feedback-size: 50%;
+			.loading-icon {
+				position: absolute;
+				inset: 0;
+				width: auto;
+				margin: 0;
+				:global(.progress) {
+					width: var(--_feedback-size);
+					height: var(--_feedback-size);
+				}
+				:global(.progress svg) {
+					width: 100%;
+					height: 100%;
+				}
+				.check {
+					width: var(--_feedback-size);
+					height: var(--_feedback-size);
 				}
 			}
 		}
