@@ -784,7 +784,7 @@
 		{#each skeleton_nodes as skel, i}
 			<div
 				class="skeleton-node"
-				style:padding-left="{skel.level * 1.25}rem"
+				style:padding-left="calc({skel.level} * var(--_indent))"
 				style:animation-delay="{i * 100}ms">
 				<div class="skeleton-chevron"></div>
 				<div class="skeleton-bar" style:width="{skel.width}%"></div>
@@ -856,7 +856,7 @@
 				class="node-row"
 				class:adj-top={adj_top.has(node.id)}
 				class:adj-bottom={adj_bottom.has(node.id)}
-				style:padding-left="{(level - 1) * 1.25}rem"
+				style:padding-left="calc({level - 1} * var(--_indent))"
 				onmouseenter={() => (hovered_id = node.id)}
 				onmouseleave={() => {
 					if (hovered_id === node.id) hovered_id = null;
@@ -1002,7 +1002,7 @@
 			<!-- Children container with grid expand animation -->
 			{#if has_kids && children.length > 0}
 				<div class="children-container" class:show={node_expanded}>
-					<ul role="group">
+					<ul role="group" style:--line-offset="calc({level - 1} * var(--_indent))">
 						{#each children as child (child.id)}
 							{@render treeNode(child, level + 1)}
 						{/each}
@@ -1016,6 +1016,8 @@
 <style>
 	/* ========== Tree Container ========== */
 	.tree {
+		/* Per-level indentation step — override with --tree-indent */
+		--_indent: var(--tree-indent, 0.75rem);
 		width: 100%;
 		list-style: none;
 		margin: 0;
@@ -1335,44 +1337,6 @@
 			rgb(from var(--color-text, #000) r g b / 0.15),
 			rgb(from var(--color-text, #fff) r g b / 0.2)
 		);
-	}
-
-	/*
-	 * Compute the --line-offset for each nesting depth.
-	 * Each level adds 1.25rem of padding-left, so the vertical line
-	 * needs to sit at the center of the chevron for that parent level.
-	 */
-	.tree.show-lines > .tree-node > .children-container > :global(ul) {
-		--line-offset: 0rem;
-	}
-
-	.tree.show-lines .tree-node .tree-node > .children-container > :global(ul) {
-		--line-offset: 1.25rem;
-	}
-
-	.tree.show-lines .tree-node .tree-node .tree-node > .children-container > :global(ul) {
-		--line-offset: 2.5rem;
-	}
-
-	.tree.show-lines
-		.tree-node
-		.tree-node
-		.tree-node
-		.tree-node
-		> .children-container
-		> :global(ul) {
-		--line-offset: 3.75rem;
-	}
-
-	.tree.show-lines
-		.tree-node
-		.tree-node
-		.tree-node
-		.tree-node
-		.tree-node
-		> .children-container
-		> :global(ul) {
-		--line-offset: 5rem;
 	}
 
 	/* ========== Drag-and-Drop Indicators ========== */
