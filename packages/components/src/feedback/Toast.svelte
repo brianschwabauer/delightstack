@@ -763,6 +763,29 @@
 		color: var(--color-action, #3b82f6);
 	}
 
+	/* The success check pops in with a spring scale while its stroke draws
+	 * itself on — most visible when a promise toast's spinner flips to the
+	 * confirmation, instead of the check just blinking into place. */
+	.toast.success .toast-icon svg {
+		animation: toast-check-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+	}
+	.toast.success .toast-icon svg path {
+		/* Dash length >= the tick's path length (~23px) so `from` hides it fully */
+		stroke-dasharray: 24;
+		animation: toast-check-draw 350ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+	}
+	@keyframes toast-check-pop {
+		from {
+			transform: scale(0.3);
+			opacity: 0;
+		}
+	}
+	@keyframes toast-check-draw {
+		from {
+			stroke-dashoffset: 24;
+		}
+	}
+
 	.toast-content {
 		flex: 1;
 		min-width: 0;
@@ -919,6 +942,10 @@
 		.toast {
 			animation-duration: 1ms !important;
 			transition-duration: 1ms !important;
+		}
+		.toast.success .toast-icon svg,
+		.toast.success .toast-icon svg path {
+			animation: none;
 		}
 		.toast.dismissed {
 			animation: toast-exit-reduced 150ms ease both;
