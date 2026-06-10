@@ -32,6 +32,35 @@
 	--sl-color-accent-high: oklch(from var(--color-primary) 35% c h);
 }
 
+/* Starlight's gray ramp (--sl-color-white/gray-1..7/black) is a fixed indigo
+ * (hue 224) palette, and every background in the chrome — page, nav, sidebar,
+ * inline code, cards, search — derives from it. Against the dashboard-hued
+ * token backgrounds in the demos it reads as a clashing second gray. Remap the
+ * whole ramp onto the shared --color-* primitives so the docs chrome uses the
+ * exact token backgrounds an app gets:
+ *   - black  = page bg     → the tokens' --color-bg     (color-100 / color-900)
+ *   - gray-6 = nav/code bg → the tokens' --color-bg-muted (color-200 / color-800)
+ *   - the rest are lightness-matched to Starlight's original steps so text and
+ *     hairline contrast is preserved, just re-hued.
+ * Starlight defines dark on `:root` and light on `:root[data-theme='light']`;
+ * since this file already maps data-theme → color-scheme (below), a single
+ * unlayered light-dark() block covers both themes and beats Starlight's
+ * layered definitions. */
+:root {
+	--sl-color-white: light-dark(var(--color-850), var(--color-50));
+	--sl-color-gray-1: light-dark(var(--color-750), var(--color-150));
+	--sl-color-gray-2: light-dark(var(--color-700), var(--color-300));
+	--sl-color-gray-3: light-dark(var(--color-600), var(--color-450));
+	--sl-color-gray-4: light-dark(var(--color-450), var(--color-600));
+	--sl-color-gray-5: light-dark(var(--color-300), var(--color-700));
+	--sl-color-gray-6: light-dark(var(--color-200), var(--color-800));
+	/* gray-7 is Starlight's light-mode nav bg; keep it one step *lighter* than
+	 * the page so the navbar reads as elevated chrome (mirrors dark mode, where
+	 * nav gray-6 sits above the page black). */
+	--sl-color-gray-7: light-dark(var(--color-50), var(--color-850));
+	--sl-color-black: light-dark(var(--color-100), var(--color-900));
+}
+
 /* Drive `color-scheme` from Starlight's theme toggle.
  *
  * Every component theming token is a `light-dark()` value, and `light-dark()`
