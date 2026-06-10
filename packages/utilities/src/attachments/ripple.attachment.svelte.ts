@@ -102,7 +102,11 @@ function startRipple(
 	containerStyle.right = '0';
 	containerStyle.bottom = '0';
 	containerStyle.overflow = 'hidden';
-	containerStyle.borderRadius = getComputedStyle(target).borderRadius;
+	// Inherit instead of copying the computed border-radius: copying drops the
+	// target's corner-shape, so a squircle target got a ROUND clip whose corners
+	// cut visibly short of the real corner. Inherit also tracks the radius live.
+	containerStyle.borderRadius = 'inherit';
+	containerStyle.setProperty('corner-shape', 'inherit');
 	containerStyle.pointerEvents = 'none';
 	rippleStyle.position = 'absolute';
 	rippleStyle.color = 'inherit';
