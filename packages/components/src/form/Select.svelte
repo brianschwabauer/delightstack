@@ -966,6 +966,21 @@
 		--_bg: var(--color-surface, light-dark(#fff, hsl(0 0% 9%)));
 		--_panel: var(--color-surface, light-dark(#fff, hsl(0 0% 13%)));
 		--_panel-hover: var(--color-bg-active, light-dark(hsl(0 0% 95%), hsl(0 0% 18%)));
+		/* Row highlight — the same 6% text-color tint ListItem uses for its
+		   hover/active fill (and its hairline separators), so this panel and the
+		   Input autocomplete panel light up identically. */
+		--_option-hover: color-mix(
+			in oklch,
+			var(--color-text, light-dark(#000, #fff)) 6%,
+			transparent
+		);
+		/* The persistent selected tint — an action-color wash, so the current
+		   selection is clearly visible at rest and reads as "selected" (matching
+		   the row's accent text/checkmark) rather than as a weak gray hover. */
+		--_option-selected: color-mix(in oklch, var(--_border-focus) 10%, transparent);
+		/* A hovered/highlighted selected row deepens the same wash, so pointing
+		   at the selection never makes it LESS prominent than its resting state. */
+		--_option-selected-hover: color-mix(in oklch, var(--_border-focus) 16%, transparent);
 		--_text: var(--color-text, inherit);
 		--_text-muted: var(--color-text-muted, light-dark(hsl(0 0% 46%), hsl(0 0% 62%)));
 		--_chip-bg: var(--color-action, hsl(217 75% 52%));
@@ -1566,16 +1581,32 @@
 		/* Self-contained perspective so the pressed dip recedes toward each
 		 * option's own center, not the center of the whole list. */
 		transform-origin: center center;
+		/* Durations match ListItem: the highlight eases out over 300ms; the
+		   corner merge (below) animates over 150ms. */
 		transition:
-			background 120ms var(--_ease),
+			background 300ms ease,
+			border-radius 150ms ease,
 			transform 200ms ease;
 		user-select: none;
 	}
 	.select-option:hover,
 	.select-option.highlighted {
-		background: var(--_panel-hover);
+		background: var(--_option-hover);
 		/* Snap the highlight in on hover/keyboard nav; the base rule eases it out. */
-		transition: transform 200ms ease;
+		transition:
+			border-radius 150ms ease,
+			transform 200ms ease;
+	}
+	/* Hairline between consecutive rows, matching ListItem's separator (same
+	   6% text tint, same 1rem inset). Group labels carry their own stronger
+	   rule, so only option-to-option seams get one. */
+	.select-option + .select-option::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 1rem;
+		right: 1rem;
+		border-top: 1px solid var(--_option-hover);
 	}
 	/* The first and last rows hug the panel's rounded corners (panel radius
 	   minus its 0.3em padding) so a highlighted edge item nests cleanly. */
@@ -1610,28 +1641,41 @@
 	.select-option.selected {
 		color: var(--_border-focus);
 		font-weight: 600;
-		/* A subtle tint — the same fill as :hover, at reduced opacity — so the
-		   current selection reads as highlighted at rest without competing with
-		   the full-strength hover/keyboard feedback. */
-		background: color-mix(in oklch, var(--_panel-hover) 50%, transparent);
+		background: var(--_option-selected);
 	}
-	/* A hovered/highlighted selected row still gets the full-strength fill, so
-	   pointing at the current selection gives the same feedback as any other
-	   row. These win over the subtle .selected tint by specificity; the
+	/* A hovered/highlighted selected row deepens its action-color wash (rather
+	   than switching to the gray hover fill, which would read as a downgrade).
+	   These win over the resting .selected tint by specificity; the
 	   snap-in/ease-out timing is still governed by the :hover rule above. */
 	.select-option.selected:hover,
 	.select-option.selected.highlighted {
-		background: var(--_panel-hover);
+		background: var(--_option-selected-hover);
+	}
+	/* Adjacent lit rows merge into one block (mirrors ListItem): when a
+	   selected/highlighted row touches another, square off the corners where
+	   they meet so the pair reads as one continuous selection instead of two
+	   rounded pills. The border-radius transition above animates the merge. */
+	.select-option:is(.selected, .highlighted):not(.disabled):has(
+			+ .select-option:is(.selected, .highlighted):not(.disabled)
+		) {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
+	.select-option:is(.selected, .highlighted):not(.disabled)
+		+ .select-option:is(.selected, .highlighted):not(.disabled) {
+		border-top-left-radius: 0;
+		border-top-right-radius: 0;
 	}
 	.select-option.disabled {
 		opacity: 0.5;
 		pointer-events: none;
 	}
-	/* Pressed feedback — matches the Button component's tactile dip. The
-	 * perspective is baked into the transform so the recede is relative to
-	 * the option itself. */
+	/* Pressed feedback — the same tactile dip as ListItem (perspective 100px,
+	 * depth clamped off the font size). The perspective is baked into the
+	 * transform so the recede is relative to the option itself. */
 	.select-option:active:not(.disabled) {
-		transform: perspective(120px) translate3d(0, 1px, -6px);
+		transform: perspective(100px)
+			translate3d(0, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 	}
 
 	.select-option-content {
@@ -1696,12 +1740,15 @@
 		color: var(--_text-muted);
 	}
 
-	/* Empty / loading state */
+	/* Empty / loading state — same metrics as Input's .ac-status row */
 	.select-empty {
-		padding: 0.9em;
-		text-align: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5em;
+		padding: 0.85em;
 		color: var(--_text-muted);
-		font-size: 0.92em;
+		font-size: 0.9em;
 	}
 
 	/* Error message */
