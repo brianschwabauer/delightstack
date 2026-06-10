@@ -33,6 +33,7 @@ if (project.trailingSlash === 'never') dataAttributes['data-strip-trailing-slash
 		accent
 		outline
 		dense
+		full_width
 		size="0"
 		class="search-button"
 		aria-label={Astro.locals.t('search.label')}
@@ -181,16 +182,43 @@ if (project.trailingSlash === 'never') dataAttributes['data-strip-trailing-slash
 		display: contents;
 	}
 
-	/* Size the delightstack trigger like the built-in one (icon-only on
-	   mobile, input-ish bar on desktop). The Button owns its visual style;
-	   we only constrain the footprint. */
+	/* Size the delightstack trigger (icon-only on mobile, input-ish bar on
+	   desktop). The Button stretches via its full_width prop so the inner
+	   <button> fills the bar; the kbd hint then floats to the right edge.
+
+	   Centering: Starlight's header grid columns are asymmetric (the title
+	   column runs to the content's left edge), so centering within the search
+	   column lands visibly right of the viewport center. Instead the bar is
+	   absolutely positioned against the fixed header and centered on the
+	   viewport, with a vw-capped width so it stays clear of the title and the
+	   right icon group at narrower desktop widths.
+
+	   The !important width overrides are needed to beat the Button's own
+	   .full-width rules — Astro scopes this file's selectors with :where(),
+	   which keeps their specificity below the component's scoped styles. */
 	site-search > :global(.search-button) {
 		font-size: var(--sl-text-sm);
 	}
 	@media (min-width: 50rem) {
 		site-search > :global(.search-button) {
-			width: 100%;
-			max-width: 22rem;
+			/* fixed, not absolute: the search column is a positioned ancestor,
+			   so absolute would re-center within the (asymmetric) column. The
+			   header bar is itself position: fixed at the top, so fixed
+			   coordinates land in the same place visually. !important beats
+			   the Button's own `position: relative` (ripple/badge anchor). */
+			position: fixed !important;
+			left: 50%;
+			top: calc(var(--sl-nav-height) / 2);
+			translate: -50% -50%;
+			width: min(36rem, 40vw) !important;
+		}
+	}
+	/* Below the desktop breakpoint the label/kbd are hidden, so a stretched
+	   bar would be an empty outline pill — pin the trigger to its content. */
+	@media (max-width: 49.99rem) {
+		site-search > :global(.search-button),
+		site-search > :global(.search-button > button) {
+			width: fit-content !important;
 		}
 	}
 
