@@ -921,7 +921,8 @@
 			justify-content: center;
 			align-items: center;
 			width: 1.5em;
-			margin-left: -0.5em;
+			margin-left: -0.75em;
+			margin-right: -0.25em;
 			height: 100%;
 			flex-shrink: 0;
 			flex-grow: 0;
@@ -1040,6 +1041,10 @@
 			}
 			:global(.chevron) {
 				margin: 0 -0.2em;
+			}
+			.loading-icon {
+				margin-left: -0.5em;
+				margin-right: -0.15em;
 			}
 		}
 
