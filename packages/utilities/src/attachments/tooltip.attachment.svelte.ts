@@ -155,6 +155,13 @@ export function tooltip(tooltipMessage: string): Attachment<HTMLElement> {
 				'line-height': '1.3',
 				'overflow-wrap': 'break-word',
 			});
+			// Squircle corners where supported — the inline-style equivalent of the
+			// nested `@supports (corner-shape: squircle)` block the components use
+			// (double the radius by --squircle-ratio to keep the same visual curve).
+			if (typeof CSS !== 'undefined' && CSS.supports('corner-shape', 'squircle')) {
+				el.style.setProperty('corner-shape', 'squircle');
+				el.style.borderRadius = 'calc(10px * var(--squircle-ratio, 2))';
+			}
 			let portal = document.querySelector('#tooltips');
 			if (!portal) {
 				portal = document.createElement('div');
