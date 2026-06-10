@@ -1,11 +1,12 @@
 ---
 title: Toggle
-description: An on/off switch component for binary choices with slide animation, bounce physics, and optional thumb icon.
+description: An on/off switch component for binary choices with slide animation, bounce physics, optional thumb icon, and an optional three-state indeterminate mode.
 ---
 
 import { Toggle } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ToggleCustomIconDemo from '../../../../components/demos/ToggleCustomIconDemo.svelte';
+import ToggleIndeterminateDemo from '../../../../components/demos/ToggleIndeterminateDemo.svelte';
 import ToggleSettingsDemo from '../../../../components/demos/ToggleSettingsDemo.svelte';
 
 ## Import
@@ -44,6 +45,30 @@ Place the label before or after the toggle.
 <Toggle label="Setting" label_position="end" />`}>
 	<Toggle client:load label="Setting" label_position="start" />
 	<Toggle client:load label="Setting" label_position="end" />
+</ComponentPreview>
+
+### Indeterminate (Three-State)
+
+Set `indeterminate` to add a third, in-between state. `checked` is then
+`boolean | null` — `null` parks the thumb at a middle stop — and clicking
+cycles `false → null → true → false`. The track lengthens automatically so
+all three stops keep distinct touch targets. Useful for tri-state settings
+like allow / inherit / deny.
+
+You can also **drag the handle** straight to any stop (e.g. `null → false`
+without cycling through `true`). Each stop has a magnetic pull while
+dragging, the track rubber-bands if you pull past its ends, and the handle
+springs into place on release. Arrow keys step between stops too.
+
+<ComponentPreview code={`<script>
+${'  '}import { Toggle } from '@delightstack/components';
+
+${'  '}// In indeterminate mode, checked is boolean | null
+${'  '}let moderation = $state(null);
+</script>
+
+<Toggle indeterminate bind:checked={moderation} label="Comment moderation" />`}>
+	<ToggleIndeterminateDemo client:load />
 </ComponentPreview>
 
 ### Custom Thumb Icon
@@ -137,7 +162,8 @@ ${'  '}/>
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `checked` | `boolean` | `false` | Toggle state, bindable |
+| `checked` | `boolean` (or `boolean \| null` with `indeterminate`) | `false` | Toggle state, bindable. `null` is the in-between state, only available in indeterminate mode |
+| `indeterminate` | `boolean` | `false` | Enable the third, in-between state (`checked: null`); clicking cycles `false → null → true` |
 | `disabled` | `boolean` | `false` | Disable toggle |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Toggle size |
 | `label` | `string` | - | Label text |
@@ -157,14 +183,15 @@ ${'  '}/>
 
 | Event | Detail | Description |
 |-------|--------|-------------|
-| `onchange` | `{ checked: boolean }` | State changed |
+| `onchange` | `{ checked: boolean }` (or `boolean \| null` with `indeterminate`) | State changed |
 
 ## Accessibility
 
-- Hidden native `<input type="checkbox">` for form submission and semantics
-- `role="switch"` on the custom element
-- `aria-checked` reflects toggle state
-- Full keyboard support: Space and Enter to toggle
+- Hidden native `<input type="checkbox">` for form submission and semantics (its `indeterminate` property is set while `checked` is `null`)
+- `role="switch"` on the custom element — `role="checkbox"` in indeterminate mode, since the switch role has no mixed state
+- `aria-checked` reflects toggle state (`"mixed"` while `checked` is `null`)
+- Full keyboard support: Space and Enter to toggle (cycles all three states in indeterminate mode); Arrow Left/Right step directly between stops
+- The thumb is draggable with pointer or touch, with magnetic snap points and spring physics
 - Focus ring visible on keyboard focus (`:focus-visible`)
 - Label associated via `<label>` element
 - Thumb slides with a spring-physics bounce animation (`cubic-bezier(0.34, 1.4, 0.64, 1)`)
