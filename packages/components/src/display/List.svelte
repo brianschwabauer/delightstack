@@ -1,6 +1,6 @@
 <script module lang="ts">
 	export interface ListContext {
-		type: 'button' | 'text' | 'radio' | 'checkbox';
+		type: 'button' | 'text' | 'radio' | 'checkbox' | 'toggle';
 		value: number[];
 		dense: boolean;
 		comfortable: boolean;
@@ -44,8 +44,9 @@
 		 * `text` - A list of non-interactive text
 		 * `radio` - A list of radio buttons (only one can be selected)
 		 * `checkbox` - A list of checkboxes (multiple can be selected)
+		 * `toggle` - A list of toggle switches (multiple can be selected)
 		 */
-		type = 'button' as 'button' | 'text' | 'radio' | 'checkbox',
+		type = 'button' as 'button' | 'text' | 'radio' | 'checkbox' | 'toggle',
 
 		/** The list of indexes that have been selected (can be multiple for checkbox and only one for radio)*/
 		value = $bindable([]) as number[],

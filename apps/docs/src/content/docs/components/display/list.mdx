@@ -7,6 +7,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ListTextDemo from '../../../../components/demos/ListTextDemo.svelte';
 import ListRadioDemo from '../../../../components/demos/ListRadioDemo.svelte';
 import ListCheckboxDemo from '../../../../components/demos/ListCheckboxDemo.svelte';
+import ListToggleDemo from '../../../../components/demos/ListToggleDemo.svelte';
 import ListDensityDemo from '../../../../components/demos/ListDensityDemo.svelte';
 import ListAppearanceDemo from '../../../../components/demos/ListAppearanceDemo.svelte';
 import { List } from '@delightstack/components/display';
@@ -89,6 +90,25 @@ ${'  '}<ListItem>SMS Alerts</ListItem>
   <ListCheckboxDemo client:load />
 </ComponentPreview>
 
+### Toggle Multi-Select
+
+The same multi-select behavior as `checkbox`, rendered with toggle switches —
+a natural fit for settings lists.
+
+<ComponentPreview code={`<script>
+${'  '}import { List, ListItem } from '@delightstack/components';
+
+${'  '}let selected = $state<number[]>([]);
+</script>
+
+<List type="toggle" bind:value={selected}>
+${'  '}<ListItem>Wi-Fi</ListItem>
+${'  '}<ListItem>Bluetooth</ListItem>
+${'  '}<ListItem>Airplane Mode</ListItem>
+</List>`}>
+  <ListToggleDemo client:load />
+</ComponentPreview>
+
 ### Spacing
 
 `dense` tightens the rows (great for action menus); `comfortable` relaxes them.
@@ -130,7 +150,7 @@ ${'  '}<ListItem>Another item</ListItem>
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `type` | `'button' \| 'text' \| 'radio' \| 'checkbox'` | `'button'` | Interaction mode for items |
+| `type` | `'button' \| 'text' \| 'radio' \| 'checkbox' \| 'toggle'` | `'button'` | Interaction mode for items |
 | `value` | `number[]` | `[]` | Selected item indices (bindable) |
 | `dense` | `boolean` | `false` | Compact spacing |
 | `comfortable` | `boolean` | `false` | Relaxed spacing |
@@ -160,7 +180,7 @@ The List component exports a `ListContext` interface used for parent-child commu
 
 ```typescript
 interface ListContext {
-  type: 'button' | 'text' | 'radio' | 'checkbox';
+  type: 'button' | 'text' | 'radio' | 'checkbox' | 'toggle';
   value: number[];
   dense: boolean;
   comfortable: boolean;

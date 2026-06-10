@@ -9,6 +9,7 @@
 	import Progress from '../feedback/Progress.svelte';
 	import Checkbox from '../form/Checkbox.svelte';
 	import Radio from '../form/Radio.svelte';
+	import Toggle from '../form/Toggle.svelte';
 	import ListContextReset from './ListContextReset.svelte';
 
 	const propId = $props.id();
@@ -263,6 +264,28 @@
 				     becoming a second focusable/clickable control. -->
 				<span class="list-control" inert>
 					<Checkbox
+						{checked}
+						disabled={context.disabled || disabled}
+						size={context.dense ? '0' : '1'} />
+				</span>
+			</label>
+		{:else if context.type === 'toggle'}
+			<label for="toggle-{id}">
+				{#if children}{@render children()}{/if}
+				<div class="spacer"></div>
+				<input
+					type="checkbox"
+					id="toggle-{id}"
+					name={id}
+					disabled={context.disabled || disabled}
+					{checked}
+					onchange={() => onchange?.(checked)} />
+				<!-- Presentational only: the hidden native input above owns
+				     interaction, focus and a11y (List's change delegation treats it
+				     like a checkbox). `inert` keeps the Toggle from becoming a
+				     second focusable/clickable control. -->
+				<span class="list-control" inert>
+					<Toggle
 						{checked}
 						disabled={context.disabled || disabled}
 						size={context.dense ? '0' : '1'} />
@@ -590,6 +613,10 @@
 	label:has(input:focus-visible) .list-control :global(.indicator-wrapper) {
 		box-shadow: 0 0 0 2px var(--color-border-active);
 		border-radius: 50%;
+	}
+	/* Same ring for toggle mode, following the Toggle's pill-shaped track */
+	label:has(input:focus-visible) .list-control :global(.toggle .track) {
+		box-shadow: 0 0 0 2px var(--color-border-active);
 	}
 	.text-content {
 		position: relative;
