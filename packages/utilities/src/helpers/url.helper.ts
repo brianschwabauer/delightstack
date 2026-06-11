@@ -33,5 +33,5 @@ export function encodeWebsafeBase64(val: string): string {
  */
 export function decodeWebsafeBase64(val: string): string {
 	const formatted = typeof val === 'string' ? val : '';
-	return atob(formatted).replace(/\//g, '_').replace(/\+/g, '-');
+	return atob(formatted.replace(/_/g, '/').replace(/-/g, '+'));
 }

@@ -43,10 +43,10 @@ export function onFocusWithin(options?: FocustWithinOptions): Attachment<HTMLEle
 	};
 
 	return (el: HTMLElement) => {
-		let timer: ReturnType<typeof setTimeout> | undefined = undefined;
+		let timer: number | undefined = undefined;
 		const onFocusChange = () => {
-			clearTimeout(timer);
-			timer = setTimeout(checkFocus, 30);
+			window.clearTimeout(timer);
+			timer = window.setTimeout(checkFocus, 30);
 		};
 		checkFocus(el);
 		if (options?.enabled !== false) {
