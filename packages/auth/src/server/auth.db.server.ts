@@ -28,6 +28,18 @@ import argon2WASM from 'argon2-wasm-edge/wasm/argon2.wasm'; // <-- imports of wa
 import blake2bWASM from 'argon2-wasm-edge/wasm/blake2b.wasm';
 setWASMModules({ argon2WASM, blake2bWASM });
 
+/**
+ * Argon2id work factors for newly created password hashes (OWASP recommended profile:
+ * 19 MiB memory, 2 iterations, 1 lane). Verification reads params from each stored
+ * hash, so raising these never invalidates existing hashes.
+ */
+const ARGON2_PARAMS = {
+	parallelism: 1,
+	iterations: 2,
+	memorySize: 19456, // KiB = 19 MiB
+	hashLength: 32,
+} as const;
+
 /** Pre-computed dummy hash for constant-time auth checks (prevents timing-based email enumeration) */
 let _dummy_hash: string | undefined;
 async function getDummyHash(): Promise<string> {
@@ -37,10 +49,7 @@ async function getDummyHash(): Promise<string> {
 		_dummy_hash = await argon2id({
 			salt,
 			password: 'dummy-password-for-timing-safety',
-			parallelism: 1,
-			iterations: 256,
-			memorySize: 512,
-			hashLength: 32,
+			...ARGON2_PARAMS,
 			outputType: 'encoded',
 		});
 	}
@@ -434,6 +443,11 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		});
 
 		this.sql.transaction(() => {
+			// Re-check inside the transaction: the awaits above yield the Durable Object's
+			// input gate, so a concurrent request may have already consumed this token
+			this.sql
+				.setError(`Email sign-in link has already been used or is expired`, 400)
+				.get('user_session', user_session_id);
 			// Mark the user as verified if they haven't been verified yet
 			// They can be verified if they clicked the email link (meaning they own the email)
 			if (!user_auth.verified_at) {
@@ -648,6 +662,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	 * @returns the new session token
 	 */
 	async refreshSession(user_session_id: string, meta: UserSessionMeta) {
+		this.cleanupExpiredSessions();
 		const session = this.sql
 			.setError(`Can't refresh a revoked session`)
 			.get('user_session', user_session_id);
@@ -1872,6 +1887,18 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		});
 
 		this.sql.transaction(() => {
+			// Re-check inside the transaction: the awaits above yield the Durable Object's
+			// input gate, so a concurrent request with the same token may have already
+			// consumed it between the checks above and this point
+			this.sql
+				.setError(`Email verification link has already been used`, 400)
+				.get('user_session', user_session_id);
+			if (this.sql.get('user_auth', user_auth_id).verified_at) {
+				throw new DelightError({
+					message: `Email is already verified. You can now sign in using this email`,
+					status: 400,
+				});
+			}
 			const user_sessions = this.sql.list('user_session', {
 				where: { key: 'user_auth_id', is: '=', value: user_auth_id },
 			});
@@ -2061,10 +2088,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		return await argon2id({
 			salt,
 			password,
-			parallelism: 1,
-			iterations: 256,
-			memorySize: 512, // use 512KB memory
-			hashLength: 32, // output size = 32 bytes
+			...ARGON2_PARAMS,
 			outputType: 'encoded',
 		});
 	}
@@ -2139,6 +2163,11 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		});
 
 		this.sql.transaction(() => {
+			// Re-check inside the transaction: the awaits above yield the Durable Object's
+			// input gate, so a concurrent request may have already consumed this token
+			this.sql
+				.setError(`Reset password link has already been used`)
+				.get('user_session', user_session_id);
 			const user_sessions = this.sql.list('user_session', {
 				where: { key: 'user_auth_id', is: '=', value: user_auth_id },
 			});
@@ -3377,26 +3406,31 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		keyOrKeys: string | string[],
 		options?: { max_tokens?: number; refill_every_seconds?: number },
 	) {
-		const key = Array.isArray(keyOrKeys) ? keyOrKeys.join('') : keyOrKeys;
+		// Join with a separator so ['a','bc'] and ['ab','c'] can't collide on the same bucket
+		const key = Array.isArray(keyOrKeys) ? keyOrKeys.join(':') : keyOrKeys;
 		let bucket = this.rateLimitedKeys.get(key) ?? null;
 		const now = Date.now();
 		const max_tokens = options?.max_tokens ?? 10;
 		const refill_every_seconds = options?.refill_every_seconds ?? 10;
 		if (bucket === null) {
 			bucket = {
-				count: max_tokens - 1,
+				count: max_tokens,
 				last_refill: now,
 				max_tokens,
 				refill_every_seconds,
 			};
 		} else {
-			const refill = Math.floor(
-				(now - bucket.last_refill) / (refill_every_seconds * 1000),
-			);
-			bucket.count = Math.min(bucket.count + refill, max_tokens);
-			bucket.last_refill = now;
-			bucket.count = Math.max(0, bucket.count - 1);
+			// Only advance last_refill by whole refill intervals — advancing it on every
+			// call would let a steady stream of requests starve the refill forever
+			const interval_ms = refill_every_seconds * 1000;
+			const refills = Math.floor((now - bucket.last_refill) / interval_ms);
+			if (refills > 0) {
+				bucket.count = Math.min(bucket.count + refills, max_tokens);
+				bucket.last_refill = Math.min(bucket.last_refill + refills * interval_ms, now);
+			}
 		}
+		const allowed = bucket.count > 0;
+		if (allowed) bucket.count -= 1;
 		this.rateLimitedKeys.set(key, bucket);
 
 		// Remove all really old buckets from memory
@@ -3408,11 +3442,36 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				this.rateLimitedKeys.delete(key);
 			}
 		}
-		return !!bucket.count;
+		return allowed;
+	}
+
+	/** Timestamp of the last expired-session sweep (throttles cleanupExpiredSessions) */
+	private last_session_cleanup = 0;
+
+	/**
+	 * Deletes expired single-use token sessions (email verification, password reset,
+	 * email sign-in) and long-stale auth sessions so the table doesn't grow unbounded.
+	 * Auth sessions stay refreshable for STALE_AUTH_SESSION_DAYS past their jwt expiry —
+	 * deleting an auth row revokes its refresh grant, so they are kept well past expires_at.
+	 * Runs at most once per hour.
+	 */
+	private cleanupExpiredSessions() {
+		const now = Date.now();
+		if (now - this.last_session_cleanup < 1000 * 60 * 60) return;
+		this.last_session_cleanup = now;
+		const STALE_AUTH_SESSION_DAYS = 30;
+		const stale_auth_cutoff = now - STALE_AUTH_SESSION_DAYS * 24 * 60 * 60 * 1000;
+		this.sql.run(
+			(sql) => sql`DELETE FROM user_session
+				WHERE (type IN ('email_verification', 'password_reset', 'email_signin') AND expires_at < ${now})
+				OR (type = 'auth' AND expires_at < ${stale_auth_cutoff})`,
+		);
 	}
 
 	private initializeDB() {
 		console.log('Initializing Auth Database');
+		// Sweep expired one-time tokens & stale sessions on cold start
+		this.last_session_cleanup = 0;
 		this.sql.run((sql) => {
 			return sql`CREATE TABLE IF NOT EXISTS schema (
 				version INTEGER PRIMARY KEY AUTOINCREMENT,

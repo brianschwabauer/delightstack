@@ -24,6 +24,20 @@ export const getOauthToken = async (
 		if (token.access_token) return token as OauthToken;
 	}
 
+	// Fail clearly when the refresh token itself has expired instead of
+	// surfacing whatever error the vendor returns for a dead grant
+	if (
+		!('auth_code' in token) &&
+		token.refresh_token_expires_at &&
+		token.refresh_token_expires_at < Date.now()
+	) {
+		throw new DelightError({
+			message: 'OAuth refresh token expired. Reconnect the account.',
+			status: 401,
+			code: 'oauth/refresh_token_expired',
+		});
+	}
+
 	// Generate a new access token with the given config & refresh token
 	const response = await fetch(config.access_token_url, {
 		method: 'POST',
