@@ -108,6 +108,26 @@
 	isolation: auto;
 }
 
+/* Keep the off-canvas sidebar hidden on mobile until the menu is opened.
+ *
+ * Starlight hides the mobile sidebar with `visibility: hidden` on `.sidebar-pane`
+ * (PageFrame.astro) and reveals it via `[aria-expanded='true'] ~ .sidebar-pane`.
+ * `visibility` is inheritable but *overridable*: our custom <Tree> sidebar sets
+ * `visibility: visible` on the <ul> of every expanded group (its collapse
+ * animation), which beats the inherited `hidden` and leaks the whole sidebar on
+ * top of the page. `display: none` can't be overridden by a descendant, so gate
+ * the pane on `display` instead — mirroring Starlight's own expanded selector.
+ * `not all and (min-width: 50rem)` is the exact complement of Starlight's desktop
+ * breakpoint, so this never fights the always-visible desktop sidebar. */
+@media not all and (min-width: 50rem) {
+	.sidebar-pane {
+		display: none;
+	}
+	[aria-expanded='true'] ~ .sidebar-pane {
+		display: block;
+	}
+}
+
 /* Render tabs at 2-space width in all code blocks */
 pre,
 code {
