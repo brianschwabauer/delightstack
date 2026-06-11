@@ -65,9 +65,31 @@ export class RateLimiterServer extends DurableObject {
 		if (!bucket) return cost <= this.max_tokens;
 		const now = Date.now();
 		const refill_interval_ms = this.refill_every_seconds * 1000;
-		const refills = Math.floor((now - bucket.last_refill) / refill_interval_ms);
+		const refills = Math.max(
+			0,
+			Math.floor((now - bucket.last_refill) / refill_interval_ms),
+		);
 		const current_count = Math.min(bucket.count + refills, this.max_tokens);
 		return current_count >= cost;
+	}
+
+	/** Calls since the last sweep of fully-refilled buckets */
+	private ops_since_sweep = 0;
+
+	/**
+	 * Occasionally evicts buckets that have fully refilled — a full bucket is
+	 * indistinguishable from no bucket, so this bounds memory on long-lived
+	 * Durable Objects that see many unique keys (e.g. rotating IPs).
+	 */
+	private maybeSweep(now: number) {
+		this.ops_since_sweep += 1;
+		if (this.ops_since_sweep < 1000 && this.buckets.size < 10_000) return;
+		this.ops_since_sweep = 0;
+		const refill_interval_ms = this.refill_every_seconds * 1000;
+		for (const [key, bucket] of this.buckets) {
+			const refills = Math.floor((now - bucket.last_refill) / refill_interval_ms);
+			if (bucket.count + refills >= this.max_tokens) this.buckets.delete(key);
+		}
 	}
 
 	/**
@@ -77,6 +99,7 @@ export class RateLimiterServer extends DurableObject {
 	consume(key: string, cost: number): boolean {
 		let bucket = this.buckets.get(key);
 		const now = Date.now();
+		this.maybeSweep(now);
 
 		if (!bucket) {
 			if (cost > this.max_tokens) return false;
@@ -107,7 +130,10 @@ export class RateLimiterServer extends DurableObject {
 		}
 
 		const refill_interval_ms = this.refill_every_seconds * 1000;
-		const refills = Math.floor((now - bucket.last_refill) / refill_interval_ms);
+		const refills = Math.max(
+			0,
+			Math.floor((now - bucket.last_refill) / refill_interval_ms),
+		);
 		const current_count = Math.min(bucket.count + refills, this.max_tokens);
 		const ms_since_last_refill = now - bucket.last_refill - refills * refill_interval_ms;
 		const reset_in_ms =
