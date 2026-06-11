@@ -718,9 +718,19 @@
 			() => ref_element?.removeEventListener('click', onRefElementClick),
 			() => ref_element?.removeEventListener('pointerup', onRefElementPointerUp),
 			() => ref_element?.removeEventListener('focus', onRefElementFocus),
+			() => ref_element?.removeEventListener('blur', onRefElementBlur),
 			() => ref_element?.removeEventListener('keyup', onRefElementKeyUp),
 		);
 		return () => stopListeners();
+	});
+
+	// Remove any remaining document listeners and pending timers on unmount
+	$effect(() => {
+		return () => {
+			clearTimeout(portalOpenedTimeout);
+			clearTimeout(debounceTimer);
+			stopListeners();
+		};
 	});
 
 	$effect.pre(() => {

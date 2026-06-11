@@ -1,14 +1,22 @@
 <script lang="ts" module>
 	let lastClickedElement = undefined as HTMLElement | undefined;
-	let lastClickedListening = false;
+	let lastClickedListenerCount = 0;
 	function onDocumentClick(event: MouseEvent) {
 		lastClickedElement = event.target as HTMLElement;
 	}
+	/** Listen for the last clicked element while at least one modal is mounted. Returns a cleanup */
 	function listenForLastClickedElement() {
-		if (!document || lastClickedListening) return;
-		lastClickedListening = true;
-		document.removeEventListener('pointerdown', onDocumentClick);
-		document.addEventListener('pointerdown', onDocumentClick);
+		if (!document) return;
+		lastClickedListenerCount++;
+		if (lastClickedListenerCount === 1) {
+			document.addEventListener('pointerdown', onDocumentClick);
+		}
+		return () => {
+			lastClickedListenerCount--;
+			if (lastClickedListenerCount === 0) {
+				document.removeEventListener('pointerdown', onDocumentClick);
+			}
+		};
 	}
 </script>
 

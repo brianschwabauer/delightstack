@@ -70,6 +70,7 @@
 	let overshoot_px = $state(0);
 	let snapping = $state(false);
 	let snap_timer: ReturnType<typeof setTimeout> | undefined;
+	let animating_timer: ReturnType<typeof setTimeout> | undefined;
 	let last_pointer_coord = 0;
 	let snapped_to: number | null = null;
 	let expanded_during_drag = false;
@@ -228,7 +229,8 @@
 		}
 
 		// Remove animating flag after transition completes
-		setTimeout(() => {
+		clearTimeout(animating_timer);
+		animating_timer = setTimeout(() => {
 			animating = false;
 		}, 200);
 	}
@@ -243,6 +245,15 @@
 			setCollapsed(size <= 50 ? 'first' : 'second');
 		}
 	}
+
+	// Remove document listeners and pending timers if the component unmounts mid-drag
+	$effect(() => {
+		return () => {
+			stopDrag(false);
+			clearTimeout(snap_timer);
+			clearTimeout(animating_timer);
+		};
+	});
 
 	// ---- Pointer drag handling ----
 

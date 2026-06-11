@@ -38,6 +38,19 @@
 		recentCommandIds = [id, ...recentCommandIds.filter((r) => r !== id)].slice(0, limit);
 	}
 
+	/**
+	 * Registry of mounted palettes so only one responds to the global shortcut:
+	 * the topmost open palette, or the most recently mounted one when none are open
+	 */
+	let paletteRegistry: Array<{ isOpen: () => boolean }> = [];
+
+	function activePalette() {
+		for (let i = paletteRegistry.length - 1; i >= 0; i--) {
+			if (paletteRegistry[i].isOpen()) return paletteRegistry[i];
+		}
+		return paletteRegistry[paletteRegistry.length - 1];
+	}
+
 	/** Represents a segment of text with optional highlight */
 	interface TextSegment {
 		text: string;
@@ -364,16 +377,22 @@
 		}
 	});
 
-	// Global Ctrl/Cmd+K listener
+	// Global Ctrl/Cmd+K listener (only the active palette in the registry responds)
 	$effect(() => {
+		const registration = { isOpen: () => open };
+		paletteRegistry.push(registration);
 		function handleGlobalKeydown(e: KeyboardEvent) {
 			if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+				if (activePalette() !== registration) return;
 				e.preventDefault();
 				open = !open;
 			}
 		}
 		document.addEventListener('keydown', handleGlobalKeydown);
-		return () => document.removeEventListener('keydown', handleGlobalKeydown);
+		return () => {
+			paletteRegistry = paletteRegistry.filter((r) => r !== registration);
+			document.removeEventListener('keydown', handleGlobalKeydown);
+		};
 	});
 
 	function close() {
