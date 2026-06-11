@@ -259,7 +259,14 @@
 
 	.stars {
 		--star-active: var(--star-color, #f59e0b);
-		--star-inactive: var(--color-text-disabled, #ccc);
+		/* Empty stars use the neutral border gray (absolute lightness: light in
+		   light mode, dark in dark mode) rather than --color-text-disabled, which
+		   is a *relative* nudge of currentColor — against dark page text that
+		   resolved to a near-black fill, making empty stars look selected. */
+		--star-inactive: light-dark(
+			var(--color-border, #d4d4d8),
+			var(--color-border, #52525b)
+		);
 		display: inline-flex;
 		align-items: center;
 		gap: 2px;
