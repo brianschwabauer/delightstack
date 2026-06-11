@@ -1680,6 +1680,11 @@
 	.input-wrapper.focused::before {
 		border-color: var(--_border-focus);
 		border-width: 2px;
+		/* Snap the border in on focus (matches the hover rule above); the base
+		   rule eases it back out on blur. Without this, keyboard-focus eased the
+		   color over --_duration while the width snapped — the same two-rate
+		   mismatch the notch fix removed, just on focus instead of hover. */
+		transition: none;
 	}
 	.input.has-label .input-wrapper.focused::before {
 		border-top-color: transparent;
@@ -1953,6 +1958,9 @@
 	.input-wrapper.focused .input-label {
 		border-top-color: var(--_border-focus);
 		color: var(--_border-focus);
+		/* Snap the notch color in on focus (mirrors the hover rule); the text
+		   color still eases. The base rule eases both back out on blur. */
+		transition: color var(--_duration) var(--_ease);
 	}
 	.input-wrapper.focused .input-label.floated {
 		border-top-color: transparent;
@@ -1964,6 +1972,9 @@
 	.input-wrapper.focused .input-label.floated::before,
 	.input-wrapper.focused .input-label.floated::after {
 		border-top-color: var(--_border-focus);
+		/* Snap the shoulder color in on focus (mirrors the hover rule); keep
+		   min-width animating so the notch still opens smoothly. */
+		transition: min-width 200ms var(--_ease-label);
 	}
 
 	/* --- Error ---------------------------------------------------------- */

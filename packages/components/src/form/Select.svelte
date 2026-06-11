@@ -1165,6 +1165,11 @@
 	.select-trigger:focus-within::before {
 		border-color: var(--_border-focus);
 		border-width: 2px;
+		/* Snap the border in on focus (matches the hover rule above); the base
+		   rule eases it back out on blur. Without this, keyboard-focus eased the
+		   color over --_duration while the width snapped — the same two-rate
+		   mismatch the notch fix removed, just on focus instead of hover. */
+		transition: none;
 	}
 	.select.has-label .select-trigger.open::before,
 	.select.has-label .select-trigger:focus-within::before {
@@ -1338,6 +1343,9 @@
 	.select-trigger:focus-within .select-label {
 		border-top-color: var(--_border-focus);
 		color: var(--_border-focus);
+		/* Snap the notch color in on focus (mirrors the hover rule); the text
+		   color still eases. The base rule eases both back out on blur. */
+		transition: color var(--_duration) var(--_ease);
 	}
 	.select-trigger.open .select-label.floated,
 	.select-trigger:focus-within .select-label.floated {
@@ -1354,6 +1362,9 @@
 	.select-trigger:focus-within .select-label.floated::before,
 	.select-trigger:focus-within .select-label.floated::after {
 		border-top-color: var(--_border-focus);
+		/* Snap the shoulder color in on focus (mirrors the hover rule); keep
+		   min-width animating so the notch still opens smoothly. */
+		transition: min-width 200ms var(--_ease-label);
 	}
 
 	.select.has-error .select-label {
