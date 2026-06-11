@@ -58,6 +58,11 @@
 		/** Placeholder text */
 		placeholder = undefined as string | undefined,
 
+		/** How the label coexists with a distinct placeholder.
+		 *  'float'  — label rests in the field; on focus it floats up and the placeholder fades in
+		 *  'pinned' — label is always pinned to the top; placeholder always visible in the field */
+		label_display = 'float' as 'float' | 'pinned',
+
 		/** Whether the input is disabled */
 		disabled = false,
 
@@ -271,16 +276,38 @@
 	const always_float_type = $derived(is_color || is_file || is_datelike);
 
 	/**
-	 * A placeholder is "distinct" only when it differs from the label. A distinct
-	 * placeholder pins the label to the top so the placeholder stays visible
-	 * inside the field; otherwise the label animates and doubles as the
-	 * placeholder (the legacy behaviour).
+	 * A placeholder is "distinct" only when it differs from the label. Without
+	 * one, the label animates and doubles as the placeholder (the legacy
+	 * behaviour). With one, `label_display` decides: 'pinned' keeps the label at
+	 * the top with the placeholder always visible; 'float' (default) lets the
+	 * label rest in the field and fades the placeholder in once it floats.
 	 */
 	const has_distinct_placeholder = $derived(!!placeholder && placeholder !== label);
 
 	/**
+	 * Whether the label is permanently pinned to the top: an always-visible
+	 * prefix, a type that can't host the label as a placeholder, or a distinct
+	 * placeholder in 'pinned' mode.
+	 */
+	const label_pinned = $derived(
+		!!label &&
+			(always_float_type ||
+				!!prefix ||
+				(has_distinct_placeholder && label_display === 'pinned')),
+	);
+
+	/**
+	 * Whether the placeholder is deferred: rendered on the native control but
+	 * kept invisible (CSS) until the label floats out of its way on focus.
+	 */
+	const placeholder_deferred = $derived(
+		!!label && has_distinct_placeholder && !label_pinned,
+	);
+
+	/**
 	 * The placeholder handed to the native control. Suppressed while the label is
-	 * acting as the in-field placeholder, so the two never overlap.
+	 * acting as the in-field placeholder, so the two never overlap. A deferred
+	 * placeholder is still passed through — CSS hides it until the label floats.
 	 */
 	const native_placeholder = $derived.by(() => {
 		if (!label) return placeholder;
@@ -291,11 +318,7 @@
 	/** Whether the label should float (up position) */
 	const label_floated = $derived.by(() => {
 		if (!label) return false;
-		/* Pinned to the top: a distinct placeholder, an always-visible prefix,
-		   or a type that can't host the label as a placeholder. */
-		if (has_distinct_placeholder) return true;
-		if (always_float_type) return true;
-		if (prefix) return true;
+		if (label_pinned) return true;
 		/* Otherwise the label animates up on focus or once there's a value. */
 		if (focused) return true;
 		if (multiple && Array.isArray(value) && value.length > 0) return true;
@@ -937,6 +960,7 @@
 	class:dense
 	class:comfortable
 	class:has-label={!!label}
+	class:placeholder-deferred={placeholder_deferred}
 	class:has-prefix={!!prefix}
 	class:has-suffix={!!suffix}
 	class:has-icon={!!icon || is_search}
@@ -1687,6 +1711,20 @@
 	.input-field::placeholder {
 		color: var(--_text-muted);
 		opacity: 0.85;
+	}
+
+	/* Deferred placeholder: hidden while the label rests in the field, fading
+	   in once focus floats the label out of the way. The fade-in is delayed so
+	   the label's 200ms glide mostly clears before the placeholder appears;
+	   the fade-out is quick and immediate so the two never overlap while the
+	   label glides back down on blur. */
+	.input.placeholder-deferred :is(.input-field, .chip-input)::placeholder {
+		opacity: 0;
+		transition: opacity 80ms ease;
+	}
+	.input.placeholder-deferred.focused :is(.input-field, .chip-input)::placeholder {
+		opacity: 0.85;
+		transition: opacity 150ms ease 100ms;
 	}
 
 	/* Textarea specifics */
