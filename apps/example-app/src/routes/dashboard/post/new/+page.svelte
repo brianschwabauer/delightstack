@@ -7,7 +7,6 @@
 		Progress,
 		Callout,
 	} from '@delightstack/components';
-	import Badge from '$lib/Badge.svelte';
 	import Icon from '$lib/Icon.svelte';
 	import { goto } from '$app/navigation';
 
@@ -17,20 +16,13 @@
 	let title = $state('');
 	let content = $state('');
 	let is_public = $state(false);
-	let tags_input = $state('');
+	let tags = $state<string[]>([]);
 	let saving = $state(false);
 	let save_error = $state('');
 
 	// AI assist
 	let ai_prompt = $state('');
 	let ai_stream = $state<ReturnType<typeof ai.chat> | null>(null);
-
-	const tags = $derived(
-		tags_input
-			.split(',')
-			.map((t) => t.trim())
-			.filter(Boolean),
-	);
 
 	async function savePost() {
 		if (!title.trim() || !content.trim()) return;
@@ -114,15 +106,9 @@
 					<Toggle bind:checked={is_public} label="Share publicly" />
 					<Input
 						label="Tags"
-						bind:value={tags_input}
-						placeholder="family, vacation, birthday (comma-separated)" />
-					{#if tags.length}
-						<div class="tag-list">
-							{#each tags as tag}
-								<Badge dense>{tag}</Badge>
-							{/each}
-						</div>
-					{/if}
+						multiple
+						bind:value={tags}
+						placeholder="Add a tag and press Enter" />
 				</div>
 			</div>
 		{/snippet}
@@ -211,12 +197,6 @@
 		flex-direction: column;
 		gap: var(--size-3);
 	}
-	.tag-list {
-		display: flex;
-		gap: var(--size-1);
-		flex-wrap: wrap;
-	}
-
 	/* AI Panel */
 	.ai-panel {
 		display: flex;
