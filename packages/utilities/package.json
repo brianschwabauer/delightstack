@@ -44,7 +44,8 @@
 		"build": "svelte-package -i src",
 		"dev": "svelte-package -w -i src",
 		"check": "svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "vitest"
 	},
 	"devDependencies": {
 		"@sveltejs/kit": "^2.26.0",
@@ -53,7 +54,8 @@
 		"svelte-check": "^4.3.0",
 		"tslib": "^2.8.1",
 		"typescript": "^5.8.3",
-		"vite": "^6.3.5"
+		"vite": "^6.3.5",
+		"vitest": "^3.2.1"
 	},
 	"peerDependencies": {
 		"svelte": "^5.36.0"
