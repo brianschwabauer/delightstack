@@ -194,7 +194,7 @@
 			{
 				label: 'Expenses',
 				data: [22000, 24000, 21000, 26000, 25000, 28000, 30000, 27000],
-				color: 'var(--color-error)',
+				color: 'var(--color-bg-8)',
 			},
 		],
 	};
@@ -204,14 +204,14 @@
 		datasets: [{ label: 'Sales', data: [35, 25, 20, 12, 8] }],
 	};
 
-	// Brand-derived palette so the donut matches the rest of the dashboard
-	// instead of the chart's generic default colors.
+	// Monochrome brand ramp (largest slice darkest) so the donut reads as one
+	// designed palette instead of the chart's generic default colors.
 	const categoryColors = [
-		'var(--color-action)',
-		'var(--color-info)',
-		'var(--color-success)',
-		'var(--color-warning)',
-		'var(--color-bg-8)',
+		'oklch(from var(--color-primary) 38% c h)',
+		'oklch(from var(--color-primary) 51% c h)',
+		'oklch(from var(--color-primary) 63% c h)',
+		'oklch(from var(--color-primary) 74% calc(c * 0.85) h)',
+		'oklch(from var(--color-primary) 84% calc(c * 0.65) h)',
 	];
 
 	const weeklyData: ChartData = {
@@ -229,6 +229,40 @@
 			},
 		],
 	};
+
+	// ── Stats ──────────────────────────────────────────────────────────
+	// Icon markup is feather-style inline SVG inner content rendered via
+	// {@html}; tint drives the icon chip color per metric.
+	const stats = [
+		{
+			value: '$48,352',
+			label: 'Revenue',
+			change: 12.5,
+			tint: 'var(--color-action)',
+			icon: '<path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+		},
+		{
+			value: '2,847',
+			label: 'Active Users',
+			change: 8.2,
+			tint: 'var(--color-info)',
+			icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+		},
+		{
+			value: '3.6%',
+			label: 'Conversion',
+			change: 0.4,
+			tint: 'var(--color-success)',
+			icon: '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+		},
+		{
+			value: '23',
+			label: 'Open Tickets',
+			change: -15.3,
+			tint: 'var(--color-warning)',
+			icon: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+		},
+	];
 
 	// ── Table Data ─────────────────────────────────────────────────────
 	const orders = [
@@ -420,8 +454,21 @@
 		}
 	}} />
 
+{#snippet chartLegend(entries: { label: string; color: string }[])}
+	<div class="chart-legend">
+		{#each entries as entry}
+			<span class="key">
+				<i style:background={entry.color}></i>
+				{entry.label}
+			</span>
+		{/each}
+	</div>
+{/snippet}
+
 {#snippet statusCell({ value }: { value: unknown })}
-	<span class="status-dot" style="--dot-color: {statusColors[value as string] ?? 'gray'}">
+	<span
+		class="status-pill"
+		style="--dot-color: {statusColors[value as string] ?? 'gray'}">
 		{value}
 	</span>
 {/snippet}
@@ -624,6 +671,7 @@
 							d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
 					</svg>
 				</Button>
+				<div class="header-divider"></div>
 				<Avatar name="Brian Schwabauer" status="online" size="1" />
 			</div>
 		</header>
@@ -650,38 +698,27 @@
 
 			<!-- Stats -->
 			<div class="stats-row">
-				<div class="card stat-card">
-					<Stat
-						value="$48,352"
-						label="Revenue"
-						change={12.5}
-						change_label="vs last month"
-						size="1" />
-				</div>
-				<div class="card stat-card">
-					<Stat
-						value="2,847"
-						label="Active Users"
-						change={8.2}
-						change_label="vs last month"
-						size="1" />
-				</div>
-				<div class="card stat-card">
-					<Stat
-						value="3.6%"
-						label="Conversion"
-						change={0.4}
-						change_label="vs last month"
-						size="1" />
-				</div>
-				<div class="card stat-card">
-					<Stat
-						value="23"
-						label="Open Tickets"
-						change={-15.3}
-						change_label="vs last month"
-						size="1" />
-				</div>
+				{#each stats as stat}
+					<div class="card stat-card" style:--tint={stat.tint}>
+						<Stat
+							value={stat.value}
+							label={stat.label}
+							change={stat.change}
+							change_label="vs last month"
+							size="1" />
+						<div class="stat-icon">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.75"
+								stroke-linecap="round"
+								stroke-linejoin="round">
+								{@html stat.icon}
+							</svg>
+						</div>
+					</div>
+				{/each}
 			</div>
 
 			<!-- Tab bar -->
@@ -708,25 +745,45 @@
 							<Chart
 								type="area"
 								data={revenueData}
-								height={280}
+								height={260}
 								curved
-								show_points={false} />
+								show_points={false}
+								show_legend={false} />
+							{@render chartLegend(
+								revenueData.datasets.map((d) => ({
+									label: d.label ?? '',
+									color: d.color ?? '',
+								})),
+							)}
 						</div>
 						<div class="card chart-card chart-narrow">
 							<div class="card-header"><h3>Sales by Category</h3></div>
 							<Chart
 								type="donut"
 								data={categoryData}
-								height={280}
+								height={260}
 								inner_radius={0.55}
-								colors={categoryColors} />
+								colors={categoryColors}
+								show_legend={false} />
+							{@render chartLegend(
+								categoryData.labels.map((label, i) => ({
+									label,
+									color: categoryColors[i],
+								})),
+							)}
 						</div>
 					</div>
 
 					<div class="charts-row">
 						<div class="card chart-card chart-narrow">
 							<div class="card-header"><h3>Weekly Visitors</h3></div>
-							<Chart type="bar" data={weeklyData} height={220} />
+							<Chart type="bar" data={weeklyData} height={220} show_legend={false} />
+							{@render chartLegend(
+								weeklyData.datasets.map((d) => ({
+									label: d.label ?? '',
+									color: d.color ?? '',
+								})),
+							)}
 						</div>
 						<div class="card chart-card chart-wide">
 							<div class="card-header"><h3>Recent Activity</h3></div>
@@ -772,8 +829,7 @@
 								type="search"
 								placeholder="Search orders..."
 								bind:value={orderSearch}
-								dense
-								size="0" />
+								dense />
 							<Select
 								value={statusFilter}
 								options={statusOptions}
@@ -783,13 +839,13 @@
 								}}
 								dense />
 							{#if tableSelected.length > 0}
-								<Button size="0" error onclick={handleDeleteSelected}>
+								<Button dense error onclick={handleDeleteSelected}>
 									Delete ({tableSelected.length})
 								</Button>
 							{/if}
 						</div>
 						<Button
-							size="1"
+							dense
 							outline
 							onclick={() => toast.info('Exporting CSV...', { duration: 2000 })}>
 							Export CSV
@@ -893,48 +949,51 @@
 							<div class="card-header"><h3>Profile</h3></div>
 							<div class="settings-form">
 								<Fieldset label="Personal Information" bordered>
-									<div class="profile-photo-row">
-										<Avatar name={profileName} size="3" />
-										<Button
-											outline
-											size="0"
-											onclick={() => toast.info('Photo upload coming soon')}>
-											Change photo
-										</Button>
+									<div class="stack">
+										<div class="profile-photo-row">
+											<Avatar name={profileName} size="3" />
+											<Button
+												outline
+												dense
+												onclick={() => toast.info('Photo upload coming soon')}>
+												Change photo
+											</Button>
+										</div>
+										<Input label="Full Name" bind:value={profileName} />
+										<Input label="Email" type="email" bind:value={profileEmail} />
+										<Input
+											label="Bio"
+											type="textarea"
+											bind:value={profileBio}
+											placeholder="Tell us about yourself..." />
+										<Select
+											label="Department"
+											value={profileRole}
+											options={roleOptions}
+											onchange={({ value }) => {
+												profileRole = value as string;
+											}} />
 									</div>
-									<Input label="Full Name" bind:value={profileName} />
-									<Input label="Email" type="email" bind:value={profileEmail} />
-									<Input
-										label="Bio"
-										type="textarea"
-										bind:value={profileBio}
-										placeholder="Tell us about yourself..." />
-									<Select
-										label="Department"
-										value={profileRole}
-										options={roleOptions}
-										onchange={({ value }) => {
-											profileRole = value as string;
-										}} />
 								</Fieldset>
-								<div class="fieldset-spacer"></div>
 								<Fieldset label="Preferences" bordered>
-									<RadioGroup label="Theme" bind:value={profileTheme} horizontal>
-										<Radio value="light" label="Light" />
-										<Radio value="dark" label="Dark" />
-										<Radio value="system" label="System" />
-									</RadioGroup>
-									<Range
-										label="Font Size"
-										bind:value={fontSize}
-										min={12}
-										max={24}
-										step={1}
-										show_value
-										format_value={(v) => `${v}px`} />
-									<div class="rating-row">
-										<span class="rating-label">Rate your experience</span>
-										<Rating bind:value={userRating} max={5} />
+									<div class="stack">
+										<RadioGroup label="Theme" bind:value={profileTheme} horizontal>
+											<Radio value="light" label="Light" />
+											<Radio value="dark" label="Dark" />
+											<Radio value="system" label="System" />
+										</RadioGroup>
+										<Range
+											label="Font Size"
+											bind:value={fontSize}
+											min={12}
+											max={24}
+											step={1}
+											show_value
+											format_value={(v) => `${v}px`} />
+										<div class="rating-row">
+											<span class="rating-label">Rate your experience</span>
+											<Rating bind:value={userRating} max={5} />
+										</div>
 									</div>
 								</Fieldset>
 								<div class="form-actions">
@@ -1178,6 +1237,13 @@
 		gap: 0.5rem;
 	}
 
+	.header-divider {
+		width: 1px;
+		height: 1.5rem;
+		margin: 0 0.375rem;
+		background: var(--color-border);
+	}
+
 	.content {
 		flex: 1;
 		overflow-y: auto;
@@ -1218,7 +1284,7 @@
 	.stats-row {
 		display: grid;
 		grid-template-columns: repeat(4, 1fr);
-		gap: 1rem;
+		gap: 1.25rem;
 	}
 
 	/* ─── Cards ─────────────────────────────────────────────────── */
@@ -1231,11 +1297,54 @@
 	}
 
 	.stat-card {
-		padding: 1.25rem;
+		padding: 1.5rem;
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.stat-icon {
+		display: grid;
+		place-items: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		flex-shrink: 0;
+		border-radius: var(--radius-full);
+		background: color-mix(in oklch, var(--tint) 12%, transparent);
+		color: var(--tint);
+
+		svg {
+			width: 1.375rem;
+			height: 1.375rem;
+		}
 	}
 
 	.chart-card {
-		padding: 1.25rem;
+		padding: 1.5rem;
+	}
+
+	.chart-legend {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.375rem 1.25rem;
+		margin-top: 0.75rem;
+
+		.key {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.45rem;
+			font-size: 0.75rem;
+			color: var(--color-text-muted);
+		}
+
+		i {
+			width: 0.625rem;
+			height: 0.625rem;
+			border-radius: var(--radius-sm);
+			flex-shrink: 0;
+		}
 	}
 
 	.card-header {
@@ -1255,14 +1364,14 @@
 	.tab-panel {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 1.25rem;
 	}
 
 	/* ─── Charts ────────────────────────────────────────────────── */
 	.charts-row {
 		display: grid;
 		grid-template-columns: 3fr 2fr;
-		gap: 1rem;
+		gap: 1.25rem;
 
 		&:has(> .chart-narrow:first-child) {
 			grid-template-columns: 2fr 3fr;
@@ -1285,32 +1394,37 @@
 	}
 
 	/* ─── Status ────────────────────────────────────────────────── */
-	.status-dot {
+	.status-pill {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-size: 0.8rem;
-	}
+		font-size: 0.75rem;
+		font-weight: 500;
+		padding: 0.2rem 0.65rem;
+		border-radius: var(--radius-full);
+		background: color-mix(in oklch, var(--dot-color) 12%, transparent);
 
-	.status-dot::before {
-		content: '';
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: var(--dot-color);
-		flex-shrink: 0;
+		&::before {
+			content: '';
+			width: 6px;
+			height: 6px;
+			border-radius: 50%;
+			background: var(--dot-color);
+			flex-shrink: 0;
+		}
 	}
 
 	/* ─── Team ──────────────────────────────────────────────────── */
 	.team-section {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
+		gap: 1.25rem;
+		align-items: start;
 		margin-top: 0.5rem;
 	}
 
 	.team-card {
-		padding: 1.25rem;
+		padding: 1.5rem;
 	}
 
 	.member-info {
@@ -1353,12 +1467,25 @@
 	.settings-section {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
+		gap: 1.25rem;
+		align-items: start;
 		margin-top: 0.5rem;
 	}
 
 	.settings-card {
-		padding: 1.25rem;
+		padding: 1.5rem;
+	}
+
+	.settings-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.stack {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
 	}
 
 	.settings-list {
@@ -1372,11 +1499,6 @@
 		display: flex;
 		align-items: center;
 		gap: 1rem;
-		margin-bottom: 0.5rem;
-	}
-
-	.fieldset-spacer {
-		height: 1.5rem;
 	}
 
 	.rating-row {
