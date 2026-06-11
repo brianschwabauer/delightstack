@@ -37,6 +37,9 @@
 		/** Loading skeleton state */
 		skeleton = false,
 
+		/** Number of body placeholder lines shown while skeleton is active */
+		skeleton_lines = 2,
+
 		/** Element ID */
 		id = propId,
 
@@ -167,9 +170,19 @@
 
 			<div class="callout-content">
 				{#if skeleton}
-					<div class="skeleton-line title-skeleton"></div>
-					<div class="skeleton-line" style:--shimmer-delay="120ms"></div>
-					<div class="skeleton-line short" style:--shimmer-delay="240ms"></div>
+					<!-- Mirror the real content's shape: a title bar only when a title
+					     is coming, and one bar per expected body line — so the toggle
+					     to loaded content causes no height change. -->
+					{#if title}
+						<div class="skeleton-line title-skeleton"></div>
+					{/if}
+					{#each { length: skeleton_lines } as _, i}
+						<div
+							class="skeleton-line"
+							class:short={skeleton_lines > 1 && i === skeleton_lines - 1}
+							style:--shimmer-delay="{(i + 1) * 120}ms">
+						</div>
+					{/each}
 				{:else}
 					{#if title}
 						<div class="callout-title">{title}</div>

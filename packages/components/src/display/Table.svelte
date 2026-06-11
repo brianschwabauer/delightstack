@@ -4313,6 +4313,12 @@
 		pointer-events: none;
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
+
+		/* Real rows drop the last border (see tr.row:last-child) — mirror it so
+		   the skeleton table is exactly as tall as the loaded one. */
+		&:last-child {
+			border-bottom: none;
+		}
 	}
 
 	/* Text-line bar inside a real `td` (which supplies the real cell padding,

@@ -10,7 +10,9 @@
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
 	<div style="width: 100%;">
-		<Callout skeleton={loading}>Your changes are automatically saved.</Callout>
+		<Callout skeleton={loading} skeleton_lines={1}>
+			Your changes are automatically saved.
+		</Callout>
 	</div>
 </div>
 

@@ -17,7 +17,9 @@
 			<TimelineItem title="Shipped" date="Jan 11" status="active">
 				Package is on its way.
 			</TimelineItem>
-			<TimelineItem title="Delivered" status="pending" />
+			<TimelineItem title="Delivered" date="Jan 13" status="pending">
+				Estimated delivery date.
+			</TimelineItem>
 		</Timeline>
 	</div>
 </div>

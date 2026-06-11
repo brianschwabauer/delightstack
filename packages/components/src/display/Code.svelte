@@ -350,9 +350,14 @@
 		class={['code skeleton', class_name].filter(Boolean).join(' ')}
 		{id}
 		aria-hidden="true">
-		<div class="skeleton-header">
-			<div class="skeleton-filename"></div>
-		</div>
+		{#if show_header}
+			<div class="skeleton-header">
+				<div class="skeleton-filename"></div>
+				{#if show_copy}
+					<div class="skeleton-copy"></div>
+				{/if}
+			</div>
+		{/if}
 		<div class="skeleton-body">
 			{#each { length: 5 } as _, i}
 				<div
@@ -707,6 +712,7 @@
 	.skeleton-header {
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		padding: 0.5rem 0.75rem;
 		border-bottom: 1px solid light-dark(#e2e8f0, #334155);
 		background: light-dark(#f1f5f9, #1a2332);
@@ -714,6 +720,7 @@
 	}
 
 	.skeleton-filename,
+	.skeleton-copy,
 	.skeleton-line {
 		position: relative;
 		overflow: hidden;
@@ -737,11 +744,26 @@
 		}
 	}
 
-	/* Filename text-line at the real .code-filename size (0.8125rem). */
+	/* Filename text-line at the real .code-filename size (0.8125rem), padded
+	   out to its 1lh line box so the bar occupies the real text's height. */
 	.skeleton-filename {
 		font-size: 0.8125rem;
 		height: 0.7em;
+		margin-block: calc((1lh - 0.7em) / 2);
 		width: 6rem;
+	}
+
+	/* Stands in for the 1.75rem copy button — it's what sets the real
+	   header's content height. */
+	.skeleton-copy {
+		width: 1.75rem;
+		height: 1.75rem;
+		flex-shrink: 0;
+		border-radius: var(--radius-lg, 0.5rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
+		}
 	}
 
 	/* Matches the real code block: `code` has 0.75rem block padding, lines are
@@ -772,6 +794,7 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.skeleton-filename::after,
+		.skeleton-copy::after,
 		.skeleton-line::after {
 			animation: none;
 		}

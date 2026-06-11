@@ -269,6 +269,13 @@
 		align-items: flex-start;
 	}
 
+	/* Counter resets line-height to 1 on itself; inherit ours so the animated
+	   value occupies the same 1.15 line box as static values and the skeleton
+	   (no height jump between skeleton ↔ loaded or animated ↔ static). */
+	.stat-value > :global(.counter) {
+		line-height: inherit;
+	}
+
 	.stat-affix {
 		font-size: 0.5em;
 		line-height: 1;

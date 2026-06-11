@@ -1533,8 +1533,11 @@
 		border-radius: var(--radius-sm, 2px);
 	}
 
+	/* The bar is padded out to 1lh by its margins so the placeholder row grows
+	   with the inherited line-height exactly like the real label's line box. */
 	.skeleton-bar {
 		height: 0.7em;
+		margin-block: calc((1lh - 0.7em) / 2);
 		border-radius: var(--radius-full, 1e5px);
 	}
 

@@ -936,10 +936,7 @@
 	aria-label="360 degree panorama viewer"
 	tabindex="0"
 	onkeydown={handleKeyDown}>
-	{#if skeleton && !loaded}
-		<!-- Skeleton shimmer -->
-		<div class="panorama-skeleton"></div>
-	{:else if !has_webgl}
+	{#if !has_webgl}
 		<!-- WebGL not supported fallback -->
 		{#if fallback}
 			<img class="panorama-fallback-img" src={fallback} alt="Panorama view" />
@@ -1003,10 +1000,16 @@
 		</canvas>
 
 		<!-- Loading overlay: kept mounted so we can fade it out after the
-		     texture is in place, hiding the dark/empty WebGL canvas during load. -->
-		<div class="panorama-loading" class:is-loaded={!loading && loaded}>
-			<div class="panorama-spinner"></div>
-		</div>
+		     texture is in place, hiding the dark/empty WebGL canvas during load.
+		     With `skeleton`, a shimmer overlay stands in for the spinner — the
+		     canvas still mounts underneath so loading proceeds and dismisses it. -->
+		{#if skeleton}
+			<div class="panorama-skeleton" class:is-loaded={!loading && loaded}></div>
+		{:else}
+			<div class="panorama-loading" class:is-loaded={!loading && loaded}>
+				<div class="panorama-spinner"></div>
+			</div>
+		{/if}
 
 		<!-- Hotspots -->
 		{#each hotspots as hotspot, i}
@@ -1160,7 +1163,27 @@
 		position: absolute;
 		inset: 0;
 		overflow: hidden;
-		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+		/* Translucent skeleton tint over an opaque base — the WebGL canvas
+		   underneath clears to black and must not show through. */
+		background:
+			linear-gradient(
+				var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1)),
+				var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1))
+			),
+			light-dark(var(--color-bg, #fff), var(--color-bg, #111));
+		opacity: 1;
+		transition:
+			opacity 220ms ease,
+			visibility 0s linear 0s;
+
+		&.is-loaded {
+			opacity: 0;
+			visibility: hidden;
+			pointer-events: none;
+			transition:
+				opacity 220ms ease,
+				visibility 0s linear 220ms;
+		}
 
 		&::after {
 			content: '';
