@@ -298,6 +298,11 @@ export class DatabaseServer<
 		[TableName in keyof DatabaseConfig]?: SearchIndex;
 	} = {};
 
+	/** In-flight index rebuilds, used to prevent re-entrant/duplicate rebuilds of the same table */
+	#index_rebuild_in_flight: {
+		[TableName in keyof DatabaseConfig]?: SearchIndex;
+	} = {};
+
 	/** Reverse FK map: for each table, which other tables have FK-derived fields depending on it */
 	#reverse_fk_map: Map<string, Array<{ table: string; fk_field: string }>> = new Map();
 
@@ -323,6 +328,15 @@ export class DatabaseServer<
 	) {
 		super(ctx, env);
 
+		// NOTE on foreign key enforcement: unlike vanilla SQLite (where `PRAGMA foreign_keys`
+		// defaults to OFF), Durable Object SQLite is compiled by workerd with
+		// `SQLITE_DEFAULT_FOREIGN_KEYS=1` (see cloudflare/workerd build/BUILD.sqlite3), so
+		// foreign key constraints (e.g. ON DELETE CASCADE) are ALWAYS enforced by default.
+		// We intentionally do NOT run `PRAGMA foreign_keys = ON` here: every sql.exec() runs
+		// inside an implicit transaction, and per SQLite semantics that pragma is a no-op
+		// within a transaction (workerd only allows toggling it inside blockConcurrencyWhile).
+		// To temporarily relax enforcement within a transaction, use
+		// `PRAGMA defer_foreign_keys = true` (checks are deferred until the transaction commits).
 		this.exec(
 			(sql) => sql`
 				CREATE TABLE IF NOT EXISTS state (
@@ -455,14 +469,19 @@ export class DatabaseServer<
 				if (this.#state.sql_indexes.some((i) => i.name === index.name)) continue;
 				if (table_name !== index.table) continue;
 				const unique = index.unique ? ' UNIQUE' : '';
-				console.log(`Creating index ${index.name} on table ${table_name}`);
+				const index_name = this.sanitize(index.name);
+				if (!index_name) continue;
+				console.log(`Creating index ${index_name} on table ${table_name}`);
 				this.ctx.storage.transactionSync(() => {
 					(this.#state.sql_indexes as any).push(index);
 					const columns = index.columns
-						.map((col) => `${col.column} ${col.direction || 'ASC'}`)
+						.map(
+							(col) =>
+								`${this.sanitize(col.column)} ${col.direction === 'DESC' ? 'DESC' : 'ASC'}`,
+						)
 						.join(', ');
 					this.ctx.storage.sql.exec(
-						`CREATE INDEX IF NOT EXISTS ${index.name} ON ${table_name} (${columns})${unique};`,
+						`CREATE INDEX IF NOT EXISTS ${index_name} ON ${table_name} (${columns})${unique};`,
 					);
 					this.ctx.storage.sql.exec(
 						`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
@@ -486,7 +505,9 @@ export class DatabaseServer<
 					(this.#state.sql_indexes as any) = (this.#state.sql_indexes as any).filter(
 						(i: any) => i.name !== existing_index.name,
 					);
-					this.ctx.storage.sql.exec(`DROP INDEX IF EXISTS ${existing_index.name};`);
+					this.ctx.storage.sql.exec(
+						`DROP INDEX IF EXISTS ${this.sanitize(existing_index.name)};`,
+					);
 					this.ctx.storage.sql.exec(
 						`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
 						JSON.stringify({
@@ -1178,8 +1199,11 @@ export class DatabaseServer<
 				)
 				.toArray();
 			if (tables.length) {
+				// `PRAGMA foreign_keys` is a no-op inside a transaction (and sql.exec always runs
+				// in one), so use `defer_foreign_keys` instead. It postpones FK checks until the
+				// transaction commits (by which point all tables are gone) and resets automatically.
 				this.ctx.storage.sql.exec(
-					`PRAGMA foreign_keys = OFF; ${tables.map((v) => `DROP TABLE IF EXISTS ${v.name}`).join('; ')}; PRAGMA foreign_keys = ON;`,
+					`PRAGMA defer_foreign_keys = true; ${tables.map((v) => `DROP TABLE IF EXISTS ${v.name}`).join('; ')};`,
 				);
 			}
 		});
@@ -1579,6 +1603,14 @@ export class DatabaseServer<
 		entity_type: Type,
 		version = 1,
 	): SearchIndex {
+		// In-flight guard: if a rebuild for this entity type is already underway, reuse it
+		// instead of starting a second rebuild. getIndex()/rebuildIndex() are fully
+		// synchronous (so a promise would break the sync call sites), but a rebuild can
+		// re-enter this code path indirectly (e.g. toSparse/derived-field hooks or dependent
+		// table syncs calling back into getIndex), which would otherwise rebuild twice.
+		const in_flight = this.#index_rebuild_in_flight[entity_type];
+		if (in_flight) return in_flight;
+
 		const orama = createOrama(this.config[entity_type].config.orama);
 		const index = {
 			deleted_entity: {},
@@ -1587,37 +1619,46 @@ export class DatabaseServer<
 			config_version: version,
 			orama,
 		} satisfies SearchIndex;
+		this.#index_rebuild_in_flight[entity_type] = index;
 		this.#search_index[entity_type] = index;
 
-		// Load all entities from the database
-		const sanitized_table = this.sanitize(entity_type);
-		const table = this.config[entity_type];
-		const rows = this.ctx.storage.sql.exec(`SELECT * FROM ${sanitized_table}`);
+		try {
+			// Load all entities from the database
+			const sanitized_table = this.sanitize(entity_type);
+			const table = this.config[entity_type];
+			const rows = this.ctx.storage.sql.exec(`SELECT * FROM ${sanitized_table}`);
 
-		const entities: any[] = [];
-		for (const row of rows) {
-			const entity = this.toEntityValue(entity_type, row) as any;
-			if (entity) {
-				const sparse = table.toSparse(entity as any) as any;
-				this.computeFkDerivedFields(entity_type as string, entity, sparse);
-				entities.push(sparse);
-				if (entity.updated_at && entity.updated_at > index.last_updated_at) {
-					index.last_updated_at = entity.updated_at;
-				}
-				if (
-					entity.updated_at &&
-					(!index.first_updated_at || entity.updated_at < index.first_updated_at)
-				) {
-					index.first_updated_at = entity.updated_at;
+			const entities: any[] = [];
+			for (const row of rows) {
+				const entity = this.toEntityValue(entity_type, row) as any;
+				if (entity) {
+					const sparse = table.toSparse(entity as any) as any;
+					this.computeFkDerivedFields(entity_type as string, entity, sparse);
+					entities.push(sparse);
+					if (entity.updated_at && entity.updated_at > index.last_updated_at) {
+						index.last_updated_at = entity.updated_at;
+					}
+					if (
+						entity.updated_at &&
+						(!index.first_updated_at || entity.updated_at < index.first_updated_at)
+					) {
+						index.first_updated_at = entity.updated_at;
+					}
 				}
 			}
-		}
 
-		if (entities.length > 0) {
-			insertMultipleIntoOrama(orama, entities);
-		}
+			if (entities.length > 0) {
+				insertMultipleIntoOrama(orama, entities);
+			}
 
-		this.saveIndex(entity_type);
+			this.saveIndex(entity_type);
+		} catch (error) {
+			// Don't cache a half-built index if the rebuild failed
+			delete this.#search_index[entity_type];
+			throw error;
+		} finally {
+			delete this.#index_rebuild_in_flight[entity_type];
+		}
 		return index;
 	}
 
@@ -1803,7 +1844,19 @@ export class DatabaseServer<
 			});
 		}
 		if (!value || typeof value !== 'object') return;
-		const temp = { ...value, ...JSON.parse((value?.json as any) || '{}') };
+		let json_fields: Record<string, unknown> = {};
+		try {
+			json_fields = JSON.parse((value?.json as string) || '{}');
+		} catch (error) {
+			// A corrupt `json` column must not crash the whole request; fall back to the
+			// plain sqlite columns and surface the corruption loudly in the logs.
+			const primary_key = this.config[entity_type]?.config?.primary_key || 'rowid';
+			console.error(
+				`Failed to parse 'json' column for entity type '${entity_type}' (${primary_key}: ${String(value?.[primary_key] ?? value?.rowid ?? 'unknown')})`,
+				error,
+			);
+		}
+		const temp = { ...value, ...json_fields };
 		delete (temp as any).json;
 		for (const key in temp) {
 			if (temp[key] === null) delete temp[key];

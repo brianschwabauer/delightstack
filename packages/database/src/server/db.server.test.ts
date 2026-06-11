@@ -440,6 +440,97 @@ describe('DatabaseServer', () => {
 		const results = dbServer.exec('SELECT COUNT(*) as count FROM users');
 		expect(results).toEqual([{ count: 42 }]);
 	});
+
+	// ── JSON column parse safety ────────────────────────────────────────
+
+	it('should not crash on a corrupt json column and fall back to plain columns', () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			if (sql.includes('SELECT * FROM users WHERE id = ?')) {
+				return mockCursor([{ id: '123', name: 'Test User', json: '{not valid json' }]);
+			}
+			return emptyCursor();
+		});
+
+		const result = dbServer.get('users', '123');
+		expect(result).toEqual({ id: '123', name: 'Test User' });
+		expect(consoleError).toHaveBeenCalledWith(
+			expect.stringContaining(`'users'`),
+			expect.anything(),
+		);
+		expect(consoleError).toHaveBeenCalledWith(
+			expect.stringContaining('123'),
+			expect.anything(),
+		);
+		consoleError.mockRestore();
+	});
+
+	// ── Index rebuild re-entrancy guard ─────────────────────────────────
+
+	it('should not start a duplicate index rebuild when re-entered mid-rebuild', async () => {
+		const { create: createOrama } = await import('@orama/orama');
+		vi.mocked(createOrama).mockClear();
+
+		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
+			executedQueries.push({ sql, args });
+			if (sql.startsWith('SELECT * FROM search_index')) return emptyCursor();
+			if (sql.startsWith('SELECT * FROM users')) {
+				return mockCursor([{ id: '1', name: 'User 1', updated_at: 100 }]);
+			}
+			return emptyCursor();
+		});
+
+		// Re-enter getIndex for the same table while its rebuild is still populating
+		const toSparse = testConfig.users.toSparse as Mock;
+		toSparse.mockImplementationOnce((data: any) => {
+			(dbServer as any).getIndex('users');
+			return data;
+		});
+
+		(dbServer as any).getIndex('users');
+		expect(createOrama).toHaveBeenCalledTimes(1);
+	});
+
+	// ── Index name sanitization ─────────────────────────────────────────
+
+	it('should sanitize configured index names before interpolating into CREATE INDEX', () => {
+		const queries: string[] = [];
+		const sql = {
+			exec: vi.fn((statement: string) => {
+				queries.push(statement);
+				return emptyCursor();
+			}),
+		};
+		const ctx = {
+			id: { toString: () => 'mock-id' },
+			storage: { sql, transactionSync: vi.fn((cb: () => void) => cb()) },
+			abort: vi.fn(),
+		};
+		const config: TestConfig = {
+			users: {
+				...testConfig.users,
+				config: {
+					...testConfig.users.config,
+					indexes: [
+						{
+							name: 'Idx-Users"; DROP TABLE users;--',
+							table: 'users',
+							unique: false,
+							columns: [{ column: 'name' }],
+						},
+					],
+				},
+			} as unknown as Database.Table,
+		};
+
+		new DatabaseServer(config, () => ({}) as any, ctx as any, { DEV: true });
+
+		const createIndexQuery = queries.find((q) => q.startsWith('CREATE INDEX'));
+		expect(createIndexQuery).toBe(
+			'CREATE INDEX IF NOT EXISTS idxusersdroptableusers ON users (name ASC);',
+		);
+	});
 });
 
 // ── FK-Derived Fields Tests ─────────────────────────────────────────────────
