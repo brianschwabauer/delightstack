@@ -172,14 +172,17 @@
 		{...rest}>
 		<div
 			class="modal-body"
+			class:has-footer={!!(footer || footer_start || footer_end)}
 			id={bodyId}
 			style:width
 			style:height
 			style:max-width={max_width}
 			style:max-height={max_height}
-			{@attach scrollbar({ corner_inset: 10 })}>
+			{@attach scrollbar()}>
 			{#if (closable && !disable_close_icon) || title || header || header_start || header_end}
-				<header class:bar={title || header || header_start || header_end}>
+				<header
+					class:bar={title || header || header_start || header_end}
+					class:no-close={!closable || disable_close_icon}>
 					{#if closable && !disable_close_icon}
 						<div class="close">
 							<Button transparent icon onclick={close} size="0">
@@ -253,8 +256,11 @@
 	.modal {
 		/* panel sits one above the backdrop, which is at --layer-modal */
 		--layer: calc(var(--layer-modal) + 1);
-		--radius-lg: var(--radius-2xl);
-		--shadow-md: var(--shadow-lg);
+		/* Private tokens: the panel wants a bigger radius/shadow than the shared
+		   defaults, but redefining --radius-lg/--shadow-md here would leak into
+		   every component rendered inside the modal. */
+		--_radius: var(--radius-2xl);
+		--_shadow: var(--shadow-lg);
 		display: grid;
 		position: fixed;
 		z-index: var(--layer);
@@ -274,10 +280,10 @@
 			overflow: hidden;
 			grid-template-rows: max-content;
 			grid-template-columns: max-content;
-			border-radius: var(--radius-lg);
+			border-radius: var(--_radius);
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
-				border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+				border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 			}
 		}
 
@@ -311,6 +317,19 @@
 					bottom: unset;
 					left: unset;
 					overflow-x: hidden;
+					/* Without a close button the title sits on the edge of the bar;
+					   pad it so its distance from the panel's left edge matches its
+					   distance from the top. */
+					&.no-close {
+						padding-inline-start: 1.25rem;
+						/*padding-block-start: 0.5rem;*/
+						margin-block-start: -1rem;
+					}
+				}
+			}
+			@media (max-width: 767px) {
+				&.no-close {
+					padding-inline-start: 0.75rem;
 				}
 			}
 			&:not(.bar) {
@@ -333,10 +352,10 @@
 				position: sticky;
 				left: 0;
 				background-color: var(--color-bg);
-				border-radius: var(--radius-lg);
+				border-radius: var(--_radius);
 				@supports (corner-shape: squircle) {
 					corner-shape: squircle;
-					border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+					border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 				}
 			}
 			.spacer {
@@ -365,18 +384,53 @@
 		}
 		@media (min-width: 768px) {
 			padding: 2rem 2.5rem;
+			/* The body is the scroll container, so its own rounded clip is what
+			   actually crops the sticky header/footer. Match the panel's squircle
+			   corners — without this their square boxes bleed over the curve. */
+			border-radius: var(--_radius);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+			}
+			/* The footer carries its own bottom spacing (and must end flush with
+			   the body's content box for sticky positioning to leave it at the
+			   bottom edge — a negative margin over padding gets clamped back up,
+			   overlapping the content above). */
+			&.has-footer {
+				padding-bottom: 0;
+			}
 		}
 		/* Corner inset for the styled-native fallback (pre-JS / no overlay) */
-		--scrollbar-track-inset: calc(var(--radius-lg, 10px) / 2);
+		--scrollbar-track-inset: calc(var(--_radius, 10px) / 2);
 	}
 	.modal-footer {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 		justify-content: flex-end;
-		padding: 0.75rem 0;
-		margin-top: 1rem;
+		background-color: var(--color-bg);
 		border-top: 1px solid var(--color-border, rgb(from var(--color-text) r g b / 0.1));
+		/* Full-bleed: negative inline margins cancel the body's padding so the
+		   divider spans edge to edge, like the header bar. */
+		margin: 1rem -0.5rem 0;
+		padding: 0.75rem 1rem;
+		@media (min-width: 768px) {
+			/* The body drops its bottom padding when a footer is present (see
+			   .modal-body.has-footer), so the footer ends flush with the modal's
+			   bottom edge and sticks there while long content scrolls underneath.
+			   Actions sit closer to the edge than body content would (1rem vs the
+			   body's 2rem) — a chrome row, not content. */
+			position: sticky;
+			bottom: 0;
+			z-index: 2;
+			margin: 1.5rem -2.5rem 0;
+			/* Inline padding matches the block padding, so the action buttons sit
+			   the same distance from the bottom and side edges. */
+			padding: 1.5rem;
+		}
+		/* On mobile the footer stays in flow: the header bar is pinned to the
+		   bottom of the screen there, and the body's 4rem bottom padding keeps
+		   the footer clear of it. */
 	}
 	.modal-fg {
 		view-transition-name: modal-fg;
@@ -386,12 +440,12 @@
 		height: 100%;
 		background-color: var(--color-bg);
 		z-index: -1;
-		box-shadow: var(--shadow-md);
+		box-shadow: var(--_shadow);
 		@media (min-width: 768px) {
-			border-radius: var(--radius-lg);
+			border-radius: var(--_radius);
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
-				border-radius: calc(var(--radius-lg) * var(--squircle-ratio, 2));
+				border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 			}
 		}
 	}

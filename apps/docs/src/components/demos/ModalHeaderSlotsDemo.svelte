@@ -6,7 +6,7 @@
 
 <Button onclick={() => (open = true)}>Open Document</Button>
 
-<Modal bind:open title="Document">
+<Modal bind:open title="Q3 Product Brief">
 	{#snippet header_start()}
 		<span
 			style="background: var(--color-accent); color: var(--color-accent-text); padding: 0.15em 0.5em; border-radius: var(--radius-2); font-size: 0.75em; font-weight: 600;">
@@ -26,19 +26,22 @@
 	<div
 		style="display: flex; flex-direction: column; gap: 0.75em; max-width: 38em; color: var(--color-text);">
 		<p style="margin: 0;">
-			Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
-			incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud
-			exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+			This quarter we're focusing on the onboarding funnel. Activation rates drop sharply
+			between account creation and the first published project, and exit surveys point to
+			the same culprit: users don't understand the workspace model before they're asked to
+			make decisions about it.
 		</p>
 		<p style="margin: 0;">
-			Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
-			fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa
-			qui officia deserunt mollit anim id est laborum.
+			The proposal is a guided first-run experience: a three-step setup that creates a
+			starter project, imports existing content if any is found, and defers every advanced
+			choice (permissions, integrations, billing) until the user has something real on
+			screen. Early prototypes cut time-to-first-project from eleven minutes to under
+			four.
 		</p>
 		<p style="margin: 0;">
-			Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium
-			doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore
-			veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+			Engineering estimates six weeks including the migration of the legacy welcome tour.
+			Design review is scheduled for next Thursday — leave comments inline or use the
+			share button above to loop in your team.
 		</p>
 	</div>
 </Modal>
