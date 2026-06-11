@@ -56,6 +56,13 @@ export interface WebsocketServerConfig<
 		max_tokens?: number;
 		refill_every_seconds?: number;
 	};
+
+	/**
+	 * Maximum size (in bytes) of an incoming text message.
+	 * Oversized messages are rejected with an error before parsing.
+	 * @default 65536 (64KB)
+	 */
+	max_message_bytes?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,8 +126,19 @@ export class WebsocketServer<
 
 		// Recover sessions from hibernation
 		this.ctx.getWebSockets().forEach((ws) => {
-			const meta = ws.deserializeAttachment();
-			if (meta) this.sessions.set(ws, { ...meta });
+			try {
+				const meta = ws.deserializeAttachment();
+				if (meta) this.sessions.set(ws, { ...meta });
+			} catch {
+				// Corrupt/unreadable attachment — close the connection gracefully
+				// so the client reconnects with fresh session metadata.
+				this.sessions.delete(ws);
+				try {
+					ws.close(1011, 'Invalid session state');
+				} catch {
+					// Already closed — nothing to do
+				}
+			}
 		});
 	}
 
@@ -134,6 +152,17 @@ export class WebsocketServer<
 	): Promise<void> {
 		if (typeof raw_message !== 'string') {
 			return this.sendError(ws, 'Binary messages are not supported', 400);
+		}
+
+		// Reject oversized messages before parsing. UTF-16 string length is a
+		// lower bound on UTF-8 byte length, so this never allocates the payload.
+		const max_message_bytes = this.config.max_message_bytes ?? 65_536;
+		if (raw_message.length > max_message_bytes) {
+			return this.sendError(
+				ws,
+				`Message too large (max ${max_message_bytes} bytes)`,
+				413,
+			);
 		}
 
 		const session = this.sessions.get(ws);
@@ -219,6 +248,13 @@ export class WebsocketServer<
 			ws_session_id,
 		};
 
+		// Snapshot the existing connections BEFORE registering the new one, so
+		// the session:connected notification targets a stable list even if other
+		// connections are added/removed while messages are being sent.
+		const existing_sockets = this.ctx
+			.getWebSockets()
+			.filter((ws) => ws !== server && this.sessions.has(ws));
+
 		this.sessions.set(server, session_meta);
 		server.serializeAttachment(session_meta);
 
@@ -230,15 +266,15 @@ export class WebsocketServer<
 		} satisfies SessionListMessage);
 
 		// Notify existing connections about the new user
-		if (active.length > 1) {
-			this.broadcast(
-				{
-					event: 'session:connected',
-					...sessionFields(session_meta),
-					num_connections: active.length,
-				},
-				server, // exclude the new connection (it already got session:list)
-			);
+		if (existing_sockets.length > 0) {
+			const connected_message = {
+				event: 'session:connected',
+				...sessionFields(session_meta),
+				num_connections: active.length,
+			} satisfies WebsocketMessage;
+			for (const ws of existing_sockets) {
+				this.send(ws, connected_message);
+			}
 		}
 
 		if (this.config.onConnect) {

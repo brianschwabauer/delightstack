@@ -107,6 +107,9 @@ export class WebsocketWorker {
 	// -----------------------------------------------------------------------
 
 	#doConnect(conn: Connection): void {
+		// Clear any ping timer left over from a previous connection attempt
+		// (e.g. a socket that errored without ever firing onclose).
+		this.#stopPing(conn);
 		this.#setStatus(conn, conn.reconnect_attempts > 0 ? 'reconnecting' : 'connecting');
 
 		try {
@@ -145,7 +148,9 @@ export class WebsocketWorker {
 		};
 
 		conn.ws.onerror = () => {
-			// onclose will fire after this, which handles reconnection
+			// Stop pinging immediately — onclose normally fires after this and
+			// handles reconnection, but don't rely on it to clear the timer.
+			this.#stopPing(conn);
 		};
 	}
 
