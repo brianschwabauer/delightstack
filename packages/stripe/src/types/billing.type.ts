@@ -39,13 +39,20 @@ export interface PaymentMethodInfo {
 	is_default: boolean;
 }
 
-/** Formatted invoice info for client display */
+/**
+ * Formatted invoice info for client display.
+ * All monetary amounts are integers in the smallest currency unit
+ * (e.g. cents — 499 = $4.99), matching `PlanDefinition.amount`.
+ */
 export interface InvoiceInfo {
 	id: string;
 	number: string | null;
 	status: string | null;
+	/** Integer amount in the smallest currency unit (e.g. cents) */
 	amount_paid: number;
+	/** Integer amount in the smallest currency unit (e.g. cents) */
 	amount_due: number;
+	/** Integer amount in the smallest currency unit (e.g. cents) */
 	total: number;
 	currency: string;
 	created: number;

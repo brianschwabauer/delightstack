@@ -66,7 +66,10 @@ export function formatPaymentMethod(
 	};
 }
 
-/** Format a Stripe Invoice into a client-safe shape */
+/**
+ * Format a Stripe Invoice into a client-safe shape.
+ * All amounts are integers in the smallest currency unit (cents) — never floats.
+ */
 export function formatInvoice(invoice: Stripe.Invoice): InvoiceInfo {
 	let period_start: number | null = null;
 	let period_end: number | null = null;
@@ -81,9 +84,9 @@ export function formatInvoice(invoice: Stripe.Invoice): InvoiceInfo {
 		id: invoice.id,
 		number: invoice.number,
 		status: invoice.status,
-		amount_paid: (invoice.amount_paid ?? 0) / 100,
-		amount_due: (invoice.amount_due ?? 0) / 100,
-		total: (invoice.total ?? 0) / 100,
+		amount_paid: invoice.amount_paid ?? 0,
+		amount_due: invoice.amount_due ?? 0,
+		total: invoice.total ?? 0,
 		currency: invoice.currency,
 		created: invoice.created * 1000,
 		due_date: invoice.due_date ? invoice.due_date * 1000 : null,
@@ -106,4 +109,51 @@ export async function parseBody(request: Request): Promise<Record<string, unknow
 /** Get the app URL from config or request origin */
 export function getAppUrl(event: { url: URL }, config: ResolvedBillingConfig): string {
 	return config.app_url ?? event.url.origin;
+}
+
+/**
+ * Validates a client-provided return_url to prevent open-redirect/phishing.
+ *
+ * - `undefined`/non-string → returns `undefined` (caller falls back to a default)
+ * - Relative paths are resolved against the app URL
+ * - Absolute URLs must be http(s) and same-origin with the app URL, the
+ *   request origin, or one of `config.allowed_return_origins`
+ *
+ * @throws DelightError 400 when the URL is malformed or not an allowed origin
+ */
+export function resolveReturnUrl(
+	event: { url: URL },
+	config: ResolvedBillingConfig,
+	raw: unknown,
+): string | undefined {
+	if (typeof raw !== 'string' || !raw) return undefined;
+
+	const app_url = getAppUrl(event, config);
+	let parsed: URL;
+	try {
+		parsed = new URL(raw, app_url);
+	} catch {
+		throw DelightError.badRequest('Invalid return_url');
+	}
+
+	if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+		throw DelightError.badRequest('return_url must be an http(s) URL');
+	}
+
+	const allowed = new Set<string>([new URL(app_url).origin, event.url.origin]);
+	for (const origin of config.allowed_return_origins ?? []) {
+		try {
+			allowed.add(new URL(origin).origin);
+		} catch {
+			// Ignore malformed allowlist entries
+		}
+	}
+
+	if (!allowed.has(parsed.origin)) {
+		throw DelightError.badRequest(
+			'return_url must be same-origin or one of allowed_return_origins',
+		);
+	}
+
+	return parsed.toString();
 }

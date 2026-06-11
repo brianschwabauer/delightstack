@@ -6,9 +6,14 @@ export {
 	type MeterDefinition,
 	type AuthServerRpc,
 	type WebsocketRpc,
+	type WebhookEventStore,
 } from './billing.config';
 export { createBillingHandle, type BillingHandleOptions } from './billing.handler';
-export { syncSubscription, type SyncContext } from './billing.sync';
+export {
+	syncSubscription,
+	fetchSubscriptionState,
+	type SyncContext,
+} from './billing.sync';
 export { syncProducts, syncMeters, syncAll } from './billing.products';
 export { reportMeterEvent, createMeterReporter } from './billing.meter';
 export { getStripe, stripeCall } from './billing.stripe';

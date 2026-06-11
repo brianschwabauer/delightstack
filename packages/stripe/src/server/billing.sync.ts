@@ -14,45 +14,65 @@ export interface SyncContext {
 	user_id?: string;
 	auth?: AuthServerRpc;
 	ws?: WebsocketRpc;
+	/**
+	 * Writes updates into the org_state cookie (from `event.locals.setOrgState`).
+	 * Used to cache `billing_plan_ids` so `requirePlan()` guards work without
+	 * hitting Stripe. Unavailable in webhook contexts (no user cookie).
+	 */
+	setOrgState?: (updates: Record<string, unknown>) => void;
 }
 
-/**
- * Fetches the latest subscription state from Stripe and syncs entitlements
- * to the auth package. Returns the current subscription state.
- */
-export async function syncSubscription(
-	ctx: SyncContext,
-): Promise<SubscriptionState | null> {
-	const stripe = getStripe(ctx.config);
+/** Max pages fetched when listing a customer's subscriptions (100 per page) */
+const MAX_SUBSCRIPTION_PAGES = 10;
 
-	// Fetch subscriptions for this customer
-	const subscriptions = await stripeCall(() =>
-		stripe.subscriptions.list({
-			customer: ctx.customer_id,
-			status: 'all',
-			limit: 5,
-			expand: ['data.items.data.price.product'],
-		}),
-	);
+/** Status priority used to pick the most relevant subscription */
+const STATUS_PRIORITY: Stripe.Subscription.Status[] = [
+	'active',
+	'trialing',
+	'past_due',
+	'canceled',
+];
 
-	// Find the most relevant subscription (active > trialing > past_due > canceled)
-	const priority: Stripe.Subscription.Status[] = [
-		'active',
-		'trialing',
-		'past_due',
-		'canceled',
-	];
-	const sorted = subscriptions.data
-		.filter((s) => priority.includes(s.status))
-		.sort((a, b) => priority.indexOf(a.status) - priority.indexOf(b.status));
-	const subscription = sorted[0] ?? null;
+/** Lists ALL subscriptions for a customer (paginated, not capped at one page) */
+async function listAllSubscriptions(
+	config: ResolvedBillingConfig,
+	customer_id: string,
+): Promise<Stripe.Subscription[]> {
+	const stripe = getStripe(config);
+	const all: Stripe.Subscription[] = [];
+	let starting_after: string | undefined;
 
-	if (!subscription) {
-		// No subscription — clear entitlements
-		await updateEntitlements(ctx, []);
-		broadcastChange(ctx, null);
-		return null;
+	for (let page = 0; page < MAX_SUBSCRIPTION_PAGES; page++) {
+		const result = await stripeCall(() =>
+			stripe.subscriptions.list({
+				customer: customer_id,
+				status: 'all',
+				limit: 100,
+				...(starting_after ? { starting_after } : {}),
+				expand: ['data.items.data.price.product'],
+			}),
+		);
+		all.push(...result.data);
+		if (!result.has_more || result.data.length === 0) break;
+		starting_after = result.data[result.data.length - 1].id;
 	}
+
+	return all;
+}
+
+/** Computes the SubscriptionState for the most relevant subscription (or null) */
+function computeState(
+	config: ResolvedBillingConfig,
+	subscriptions: Stripe.Subscription[],
+): SubscriptionState | null {
+	// Find the most relevant subscription (active > trialing > past_due > canceled)
+	const sorted = subscriptions
+		.filter((s) => STATUS_PRIORITY.includes(s.status))
+		.sort(
+			(a, b) => STATUS_PRIORITY.indexOf(a.status) - STATUS_PRIORITY.indexOf(b.status),
+		);
+	const subscription = sorted[0] ?? null;
+	if (!subscription) return null;
 
 	// Extract plan IDs and entitlements from the subscription's products
 	const plan_ids: string[] = [];
@@ -64,28 +84,18 @@ export async function syncSubscription(
 		if (plan_id) {
 			plan_ids.push(plan_id);
 			// Find the matching plan definition
-			const plan_def = ctx.config.plans?.find((p) => p.id === plan_id);
+			const plan_def = config.plans?.find((p) => p.id === plan_id);
 			if (plan_def?.entitlements) {
 				granted_entitlements.push(...plan_def.entitlements);
 			}
 		}
 	}
 
-	// Deduplicate entitlements
-	const unique_entitlements = [...new Set(granted_entitlements)];
-
-	// Update auth entitlements if subscription is active/trialing
-	if (subscription.status === 'active' || subscription.status === 'trialing') {
-		await updateEntitlements(ctx, unique_entitlements);
-	} else {
-		await updateEntitlements(ctx, []);
-	}
-
-	const state: SubscriptionState = {
+	return {
 		subscription_id: subscription.id,
 		status: subscription.status,
 		plan_ids,
-		entitlements: unique_entitlements,
+		entitlements: [...new Set(granted_entitlements)],
 		current_period_start: subscription.current_period_start * 1000,
 		current_period_end: subscription.current_period_end * 1000,
 		cancel_at: subscription.cancel_at ? subscription.cancel_at * 1000 : undefined,
@@ -93,6 +103,45 @@ export async function syncSubscription(
 		trial_start: subscription.trial_start ? subscription.trial_start * 1000 : undefined,
 		trial_end: subscription.trial_end ? subscription.trial_end * 1000 : undefined,
 	};
+}
+
+/** Whether a subscription state grants its plans/entitlements */
+function isStateActive(state: SubscriptionState | null): state is SubscriptionState {
+	return state?.status === 'active' || state?.status === 'trialing';
+}
+
+/**
+ * Lightweight read of the current subscription state from Stripe.
+ * Does NOT update auth entitlements or broadcast — use for GET endpoints.
+ */
+export async function fetchSubscriptionState(
+	config: ResolvedBillingConfig,
+	customer_id: string,
+): Promise<SubscriptionState | null> {
+	const subscriptions = await listAllSubscriptions(config, customer_id);
+	return computeState(config, subscriptions);
+}
+
+/** The plan ids that should be cached in org_state for `requirePlan()` */
+export function activePlanIds(state: SubscriptionState | null): string[] {
+	return isStateActive(state) ? state.plan_ids : [];
+}
+
+/**
+ * Fetches the latest subscription state from Stripe and syncs entitlements
+ * to the auth package. Returns the current subscription state.
+ */
+export async function syncSubscription(
+	ctx: SyncContext,
+): Promise<SubscriptionState | null> {
+	const subscriptions = await listAllSubscriptions(ctx.config, ctx.customer_id);
+	const state = computeState(ctx.config, subscriptions);
+
+	// Update auth entitlements (cleared unless active/trialing)
+	await updateEntitlements(ctx, isStateActive(state) ? state.entitlements : []);
+
+	// Cache active plan ids in org_state so requirePlan() guards work
+	ctx.setOrgState?.({ billing_plan_ids: activePlanIds(state) });
 
 	broadcastChange(ctx, state);
 	return state;

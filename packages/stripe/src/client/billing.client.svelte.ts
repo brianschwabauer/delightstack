@@ -208,10 +208,21 @@ export class BillingClient {
 			return result.subscription;
 		},
 
-		/** Cancel the current subscription */
-		cancel: async (): Promise<void> => {
-			await this.del('/subscription');
-			this.#subscription = null;
+		/**
+		 * Cancel the current subscription.
+		 * Pass `{ at_period_end: true }` to keep access until the billing
+		 * period ends instead of canceling immediately.
+		 */
+		cancel: async (options?: { at_period_end?: boolean }): Promise<void> => {
+			await this.del(
+				'/subscription',
+				options?.at_period_end ? { cancel_at_period_end: true } : undefined,
+			);
+			// Refresh from the server — with at_period_end the subscription is
+			// still active, so don't assume it's gone
+			await this.api.refreshSubscription().catch(() => {
+				this.#subscription = null;
+			});
 		},
 
 		/** Refresh subscription state from the server */
@@ -311,9 +322,15 @@ export class BillingClient {
 		return this.handleResponse<T>(res);
 	}
 
-	private async del<T = void>(path: string): Promise<T> {
+	private async del<T = void>(path: string, body?: unknown): Promise<T> {
 		const res = await this.fetchFn(`${this.base_path}${path}`, {
 			method: 'DELETE',
+			...(body !== undefined
+				? {
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(body),
+					}
+				: {}),
 		});
 		return this.handleResponse<T>(res);
 	}

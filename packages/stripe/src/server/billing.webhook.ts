@@ -15,8 +15,17 @@ export interface WebhookContext {
 	getWebsocket?: (event: RequestEvent) => WebsocketRpc | undefined;
 }
 
-/** Cached webhook secret (auto-registered) */
-let cached_webhook_secret: string | null = null;
+/**
+ * In-flight/cached webhook secret registration (auto-registered).
+ * A single shared promise guards against two simultaneous cold-start webhooks
+ * both auto-registering a webhook endpoint.
+ */
+let webhook_secret_promise: Promise<string> | null = null;
+
+/** Resets the cached webhook secret (for tests) @internal */
+export function resetWebhookSecretCache(): void {
+	webhook_secret_promise = null;
+}
 
 /** Resolve the webhook signing secret, auto-registering if needed */
 async function resolveWebhookSecret(
@@ -25,12 +34,48 @@ async function resolveWebhookSecret(
 ): Promise<string> {
 	if (config.webhook_secret) return config.webhook_secret;
 
-	if (!cached_webhook_secret) {
+	if (!webhook_secret_promise) {
 		const app_url = config.app_url ?? event.url.origin;
-		cached_webhook_secret = await ensureWebhookRegistered(config, app_url);
+		webhook_secret_promise = ensureWebhookRegistered(config, app_url).catch(
+			(error: unknown) => {
+				// Allow a retry on the next request instead of caching the failure
+				webhook_secret_promise = null;
+				throw error;
+			},
+		);
 	}
 
-	return cached_webhook_secret;
+	return webhook_secret_promise;
+}
+
+// ── Webhook idempotency ────────────────────────────────────────────
+
+/** How long processed event IDs are remembered by the default store */
+const EVENT_ID_TTL_MS = 24 * 60 * 60 * 1000;
+/** Max processed event IDs kept by the default store */
+const EVENT_ID_CAP = 5000;
+
+/** Default in-memory idempotency store (per-isolate, TTL + cap) */
+const processed_event_ids = new Map<string, number>();
+
+function defaultEventStoreHas(event_id: string): boolean {
+	const now = Date.now();
+	// Prune expired entries (Map preserves insertion order — oldest first)
+	for (const [id, added_at] of processed_event_ids) {
+		if (now - added_at <= EVENT_ID_TTL_MS) break;
+		processed_event_ids.delete(id);
+	}
+	return processed_event_ids.has(event_id);
+}
+
+function defaultEventStoreAdd(event_id: string): void {
+	processed_event_ids.set(event_id, Date.now());
+	// Enforce the cap (evict oldest first)
+	while (processed_event_ids.size > EVENT_ID_CAP) {
+		const oldest = processed_event_ids.keys().next().value;
+		if (oldest === undefined) break;
+		processed_event_ids.delete(oldest);
+	}
 }
 
 /** Resolve customer_id to org_id via Stripe customer metadata */
@@ -82,6 +127,19 @@ export async function handleWebhook(
 		throw DelightError.badRequest('Invalid webhook signature');
 	}
 
+	// Idempotency — skip events that were already fully processed so Stripe
+	// retries don't double-apply side effects
+	const event_store = config.webhook_event_store;
+	const already_processed = event_store
+		? await event_store.has(stripe_event.id)
+		: defaultEventStoreHas(stripe_event.id);
+	if (already_processed) {
+		return new Response(JSON.stringify({ received: true, duplicate: true }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' },
+		});
+	}
+
 	// Dispatch event
 	switch (stripe_event.type) {
 		case 'customer.subscription.created':
@@ -99,15 +157,28 @@ export async function handleWebhook(
 				ws: org_id ? ctx.getWebsocket?.(event) : undefined,
 			});
 
-			if (config.hooks?.onSubscriptionChange && state) {
-				await config.hooks.onSubscriptionChange({
-					customer_id,
-					subscription_id: state.subscription_id,
-					status: state.status,
-					plan_id: state.plan_ids[0] ?? null,
-					entitlements: state.entitlements,
-					event,
-				});
+			if (config.hooks?.onSubscriptionChange) {
+				if (state) {
+					await config.hooks.onSubscriptionChange({
+						customer_id,
+						subscription_id: state.subscription_id,
+						status: state.status,
+						plan_id: state.plan_ids[0] ?? null,
+						entitlements: state.entitlements,
+						event,
+					});
+				} else if (stripe_event.type === 'customer.subscription.deleted') {
+					// No remaining subscription — still fire the hook so apps can
+					// react to cancellations (the most important lifecycle event)
+					await config.hooks.onSubscriptionChange({
+						customer_id,
+						subscription_id: subscription.id,
+						status: 'canceled',
+						plan_id: null,
+						entitlements: [],
+						event,
+					});
+				}
 			}
 			break;
 		}
@@ -118,11 +189,12 @@ export async function handleWebhook(
 			const org_id = await resolveOrgIdFromCustomer(stripe, customer_id);
 			const ws = org_id ? ctx.getWebsocket?.(event) : undefined;
 
+			// Amounts stay as integer cents end-to-end — no float division
 			if (ws) {
 				ws.broadcast({
 					event: 'billing:payment:succeeded',
 					invoice_id: invoice.id,
-					amount: (invoice.amount_paid ?? 0) / 100,
+					amount: invoice.amount_paid ?? 0,
 					currency: invoice.currency,
 				});
 			}
@@ -130,7 +202,7 @@ export async function handleWebhook(
 			if (config.hooks?.onPaymentSuccess) {
 				await config.hooks.onPaymentSuccess({
 					customer_id,
-					amount: (invoice.amount_paid ?? 0) / 100,
+					amount: invoice.amount_paid ?? 0,
 					currency: invoice.currency,
 					invoice_id: invoice.id,
 				});
@@ -144,11 +216,12 @@ export async function handleWebhook(
 			const org_id = await resolveOrgIdFromCustomer(stripe, customer_id);
 			const ws = org_id ? ctx.getWebsocket?.(event) : undefined;
 
+			// Amounts stay as integer cents end-to-end — no float division
 			if (ws) {
 				ws.broadcast({
 					event: 'billing:payment:failed',
 					invoice_id: invoice.id,
-					amount: (invoice.amount_due ?? 0) / 100,
+					amount: invoice.amount_due ?? 0,
 					currency: invoice.currency,
 				});
 			}
@@ -156,7 +229,7 @@ export async function handleWebhook(
 			if (config.hooks?.onPaymentFailed) {
 				await config.hooks.onPaymentFailed({
 					customer_id,
-					amount: (invoice.amount_due ?? 0) / 100,
+					amount: invoice.amount_due ?? 0,
 					currency: invoice.currency,
 					invoice_id: invoice.id,
 				});
@@ -185,6 +258,11 @@ export async function handleWebhook(
 			// Unhandled event type — no-op
 			break;
 	}
+
+	// Mark the event as processed AFTER all side effects succeeded so a
+	// failed handler is retried by Stripe (at-least-once with dedupe)
+	if (event_store) await event_store.add(stripe_event.id);
+	else defaultEventStoreAdd(stripe_event.id);
 
 	return new Response(JSON.stringify({ received: true }), {
 		status: 200,

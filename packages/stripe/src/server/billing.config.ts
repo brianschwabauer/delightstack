@@ -61,6 +61,29 @@ export interface MeterDefinition {
 /** Minimal RPC interface for the auth server (avoids hard dependency) */
 export interface AuthServerRpc {
 	updateOrg(id: string, data: { plan?: number; json?: string }): unknown;
+	/**
+	 * Optional read of the org record. When provided, the billing package
+	 * read-modify-writes the org's `json` metadata instead of overwriting it.
+	 */
+	getOrg?(
+		id: string,
+	):
+		| { json?: string | null }
+		| null
+		| undefined
+		| Promise<{ json?: string | null } | null | undefined>;
+}
+
+/**
+ * Store used to deduplicate Stripe webhook events by event ID.
+ * Provide a durable implementation (e.g. Durable Object storage) for
+ * multi-isolate deployments. Defaults to an in-memory store with a TTL/cap.
+ */
+export interface WebhookEventStore {
+	/** Returns true if the given Stripe event ID was already processed */
+	has(event_id: string): boolean | Promise<boolean>;
+	/** Marks the given Stripe event ID as processed */
+	add(event_id: string): void | Promise<void>;
 }
 
 /** Minimal RPC interface for the websocket server (avoids hard dependency) */
@@ -121,6 +144,21 @@ export interface BillingConfig<E extends string = string> {
 	app_url?: string;
 
 	/**
+	 * Additional origins that a client-provided `return_url` may point to
+	 * (for Billing Portal and Checkout). The app's own origin is always allowed.
+	 * Any other origin is rejected to prevent open-redirect/phishing.
+	 * @example ['https://app.example.com']
+	 */
+	allowed_return_origins?: string[];
+
+	/**
+	 * Store used to deduplicate Stripe webhook events (idempotency).
+	 * Defaults to an in-memory store (per-isolate, 24h TTL, capped size).
+	 * Provide a durable implementation for multi-isolate deployments.
+	 */
+	webhook_event_store?: WebhookEventStore;
+
+	/**
 	 * Billing Portal configuration.
 	 * @default { enabled: true }
 	 */
@@ -131,7 +169,7 @@ export interface BillingConfig<E extends string = string> {
 
 	/** Lifecycle hooks for billing events */
 	hooks?: {
-		/** Called after a subscription is created or updated */
+		/** Called after a subscription is created, updated, canceled, or deleted */
 		onSubscriptionChange?: (ctx: {
 			customer_id: string;
 			subscription_id: string;
@@ -141,17 +179,19 @@ export interface BillingConfig<E extends string = string> {
 			event: RequestEvent;
 		}) => void | Promise<void>;
 
-		/** Called after a payment succeeds */
+		/** Called after a payment succeeds. `amount` is an integer in the smallest currency unit (cents). */
 		onPaymentSuccess?: (ctx: {
 			customer_id: string;
+			/** Integer amount in the smallest currency unit (e.g. cents) */
 			amount: number;
 			currency: string;
 			invoice_id: string;
 		}) => void | Promise<void>;
 
-		/** Called after a payment fails */
+		/** Called after a payment fails. `amount` is an integer in the smallest currency unit (cents). */
 		onPaymentFailed?: (ctx: {
 			customer_id: string;
+			/** Integer amount in the smallest currency unit (e.g. cents) */
 			amount: number;
 			currency: string;
 			invoice_id: string;

@@ -1,5 +1,6 @@
 import type Stripe from 'stripe';
 import type { ResolvedBillingConfig } from './billing.config';
+import { DelightError } from '@delightstack/utilities';
 import { getStripe, stripeCall } from './billing.stripe';
 
 /** Webhook events the billing system needs to listen to */
@@ -45,12 +46,16 @@ export async function ensureWebhookRegistered(
 			// In dev mode, delete and recreate to get a fresh secret
 			await stripeCall(() => stripe.webhookEndpoints.del(match.id));
 		} else {
-			// In production, warn that webhook_secret should be configured
-			console.warn(
-				'[@delightstack/stripe] Webhook endpoint exists but webhook_secret is not configured. ' +
-					'Set webhook_secret in your billing config for production use.',
-			);
-			return '';
+			// In production, the secret of an existing webhook can't be read back
+			// from Stripe — fail loudly with a clear setup error instead of an
+			// opaque "Webhook secret not configured" 500 later on
+			throw new DelightError({
+				message:
+					'A Stripe webhook endpoint already exists for this app but webhook_secret is not configured. ' +
+					'Set webhook_secret in your billing config (from the Stripe dashboard) for production use.',
+				status: 500,
+				code: 'billing/webhook_secret_missing',
+			});
 		}
 	}
 

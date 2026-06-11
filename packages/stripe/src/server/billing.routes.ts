@@ -13,8 +13,9 @@ import {
 	formatInvoice,
 	parseBody,
 	getAppUrl,
+	resolveReturnUrl,
 } from './billing.stripe';
-import { syncSubscription } from './billing.sync';
+import { syncSubscription, fetchSubscriptionState, activePlanIds } from './billing.sync';
 
 export interface RouteContext {
 	getAuthServer?: (event: RequestEvent) => AuthServerRpc | undefined;
@@ -44,6 +45,16 @@ function getUserId(event: RequestEvent): string | undefined {
 	const locals = event.locals as Record<string, unknown>;
 	const user = locals.user as { id: string } | null;
 	return user?.id ?? undefined;
+}
+
+/** Get the org_state cookie writer from locals (org scope only) */
+function getSetOrgState(
+	event: RequestEvent,
+	config: ResolvedBillingConfig,
+): ((updates: Record<string, unknown>) => void) | undefined {
+	if (config.billing_scope !== 'org') return undefined;
+	const locals = event.locals as Record<string, unknown>;
+	return locals.setOrgState as ((updates: Record<string, unknown>) => void) | undefined;
 }
 
 /** Resolve customer_id from org_state or user metadata */
@@ -80,6 +91,12 @@ async function resolveCustomerIdAsync(
 
 	if (!search_value) return null;
 
+	// Guard against Stripe search query injection/breakage — ids from the auth
+	// system should never contain quotes or backslashes
+	if (/['"\\]/.test(search_value)) {
+		throw DelightError.badRequest('Invalid billing identifier');
+	}
+
 	const customers = await stripeCall(() =>
 		stripe.customers.search({
 			query: `metadata['${search_key}']:'${search_value}'`,
@@ -108,7 +125,7 @@ async function ensureCustomer(
 	const stripe = getStripe(config);
 	const locals = event.locals as Record<string, unknown>;
 	const user = locals.user as { id: string; name: string; email: string } | null;
-	const org = locals.org as { id: string; name: string } | null;
+	const org = locals.org as { id: string; name: string; json?: string | null } | null;
 	const org_id = getOrgId(event, config);
 	const user_id = getUserId(event);
 
@@ -127,14 +144,28 @@ async function ensureCustomer(
 	// Cache the customer_id
 	cacheCustomerId(event, config, customer.id);
 
-	// Store customer_id in auth org metadata
+	// Store customer_id in auth org metadata (read-modify-write — never
+	// overwrite existing org JSON metadata from other features)
 	if (org_id && ctx.getAuthServer) {
 		const auth = ctx.getAuthServer(event);
 		if (auth) {
 			try {
-				// Store in org json metadata
+				const existing_record = auth.getOrg ? await auth.getOrg(org_id) : org;
+				let existing_json: Record<string, unknown> = {};
+				if (existing_record?.json) {
+					try {
+						const parsed = JSON.parse(existing_record.json) as unknown;
+						if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+							existing_json = parsed as Record<string, unknown>;
+						}
+					} catch {
+						// Unparseable existing json — keep it from being silently
+						// destroyed by skipping the write entirely
+						throw new Error('Existing org json is not valid JSON');
+					}
+				}
 				await auth.updateOrg(org_id, {
-					json: JSON.stringify({ customer_id: customer.id }),
+					json: JSON.stringify({ ...existing_json, customer_id: customer.id }),
 				});
 			} catch {
 				// Non-critical — customer_id is also discoverable via Stripe search
@@ -184,14 +215,22 @@ export async function handleBillingRoute(
 	if (payment_method_match) {
 		const pm_id = payment_method_match[1];
 
-		if (method === 'DELETE') {
-			await stripeCall(() => stripe.paymentMethods.detach(pm_id));
-			return new Response(null, { status: 204 });
-		}
-
-		if (method === 'PATCH') {
+		if (method === 'DELETE' || method === 'PATCH') {
 			const customer_id = await resolveCustomerIdAsync(event, config);
 			if (!customer_id) throw DelightError.badRequest('No customer found');
+
+			// Verify the payment method belongs to the caller's customer before
+			// acting on it — otherwise any authed user could detach others' cards
+			const pm = await stripeCall(() => stripe.paymentMethods.retrieve(pm_id));
+			const pm_customer = typeof pm.customer === 'string' ? pm.customer : pm.customer?.id;
+			if (pm_customer !== customer_id) {
+				throw DelightError.notFound('Payment method not found');
+			}
+
+			if (method === 'DELETE') {
+				await stripeCall(() => stripe.paymentMethods.detach(pm_id));
+				return new Response(null, { status: 204 });
+			}
 
 			await stripeCall(() =>
 				stripe.customers.update(customer_id, {
@@ -211,14 +250,13 @@ export async function handleBillingRoute(
 			const customer_id = await resolveCustomerIdAsync(event, config);
 			if (!customer_id) return jsonResponse({ subscription: null });
 
-			const state = await syncSubscription({
-				config,
-				customer_id,
-				org_id: getOrgId(event, config),
-				user_id: getUserId(event),
-				auth: ctx.getAuthServer?.(event),
-				ws: ctx.getWebsocket?.(event),
-			});
+			// Lightweight read — no entitlement writes or broadcasts here.
+			// Use POST /sync for a full sync.
+			const state = await fetchSubscriptionState(config, customer_id);
+
+			// Still cache active plan ids so requirePlan() guards stay fresh
+			getSetOrgState(event, config)?.({ billing_plan_ids: activePlanIds(state) });
+
 			return jsonResponse({ subscription: state });
 		}
 
@@ -292,6 +330,7 @@ export async function handleBillingRoute(
 				user_id: getUserId(event),
 				auth: ctx.getAuthServer?.(event),
 				ws: ctx.getWebsocket?.(event),
+				setOrgState: getSetOrgState(event, config),
 			});
 
 			if (config.hooks?.onSubscriptionChange && state) {
@@ -312,32 +351,63 @@ export async function handleBillingRoute(
 			const customer_id = await resolveCustomerIdAsync(event, config);
 			if (!customer_id) throw DelightError.badRequest('No customer found');
 
+			// Optional body: { cancel_at_period_end?: boolean }
+			const body = await parseBody(event.request).catch(
+				() => ({}) as Record<string, unknown>,
+			);
+			const cancel_at_period_end = body.cancel_at_period_end === true;
+
+			// Default list excludes canceled — include trialing/past_due, not just active
 			const subs = await stripeCall(() =>
 				stripe.subscriptions.list({
 					customer: customer_id,
-					status: 'active',
-					limit: 1,
+					limit: 100,
 				}),
 			);
+			const cancellable = subs.data.find((s) =>
+				['active', 'trialing', 'past_due', 'unpaid', 'incomplete'].includes(s.status),
+			);
 
-			if (subs.data[0]) {
-				await stripeCall(() =>
-					stripe.subscriptions.cancel(subs.data[0].id, {
-						invoice_now: true,
-						prorate: true,
-					}),
-				);
+			if (cancellable) {
+				if (cancel_at_period_end) {
+					await stripeCall(() =>
+						stripe.subscriptions.update(cancellable.id, {
+							cancel_at_period_end: true,
+						}),
+					);
+				} else {
+					await stripeCall(() =>
+						stripe.subscriptions.cancel(cancellable.id, {
+							invoice_now: true,
+							prorate: true,
+						}),
+					);
+				}
 			}
 
 			// Sync to clear entitlements
-			await syncSubscription({
+			const state = await syncSubscription({
 				config,
 				customer_id,
 				org_id: getOrgId(event, config),
 				user_id: getUserId(event),
 				auth: ctx.getAuthServer?.(event),
 				ws: ctx.getWebsocket?.(event),
+				setOrgState: getSetOrgState(event, config),
 			});
+
+			// Fire the lifecycle hook for cancellations too — when nothing remains,
+			// report the canceled subscription explicitly
+			if (config.hooks?.onSubscriptionChange && cancellable) {
+				await config.hooks.onSubscriptionChange({
+					customer_id,
+					subscription_id: state?.subscription_id ?? cancellable.id,
+					status: state?.status ?? 'canceled',
+					plan_id: state?.plan_ids[0] ?? null,
+					entitlements: state?.entitlements ?? [],
+					event,
+				});
+			}
 
 			return new Response(null, { status: 204 });
 		}
@@ -408,7 +478,9 @@ export async function handleBillingRoute(
 			const body = await parseBody(event.request).catch(
 				() => ({}) as Record<string, unknown>,
 			);
-			const return_url = (body.return_url as string) ?? getAppUrl(event, config);
+			// Validate the user-provided return_url (open-redirect protection)
+			const return_url =
+				resolveReturnUrl(event, config, body.return_url) ?? getAppUrl(event, config);
 
 			const session = await stripeCall(() =>
 				stripe.billingPortal.sessions.create({
@@ -431,6 +503,12 @@ export async function handleBillingRoute(
 			const plan = config.plans?.find((p) => p.id === plan_id);
 			if (!plan) throw DelightError.badRequest(`Unknown plan: ${plan_id}`);
 
+			// Validate the user-provided return_url (open-redirect protection)
+			// before making any Stripe calls
+			const return_url =
+				resolveReturnUrl(event, config, body.return_url) ??
+				`${getAppUrl(event, config)}/billing/complete?session_id={CHECKOUT_SESSION_ID}`;
+
 			const customer_id = await ensureCustomer(event, config, ctx);
 
 			const prices = await stripeCall(() =>
@@ -441,10 +519,6 @@ export async function handleBillingRoute(
 			);
 			const price = prices.data[0];
 			if (!price) throw DelightError.badRequest(`Price not found for plan: ${plan_id}`);
-
-			const return_url =
-				(body.return_url as string) ??
-				`${getAppUrl(event, config)}/billing/complete?session_id={CHECKOUT_SESSION_ID}`;
 
 			const session = await stripeCall(() =>
 				stripe.checkout.sessions.create({
@@ -507,6 +581,7 @@ export async function handleBillingRoute(
 				user_id: getUserId(event),
 				auth: ctx.getAuthServer?.(event),
 				ws: ctx.getWebsocket?.(event),
+				setOrgState: getSetOrgState(event, config),
 			});
 			return jsonResponse({ subscription: state });
 		}
