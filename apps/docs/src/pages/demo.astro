@@ -1,5 +1,9 @@
 ---
 import DashboardDemo from '../components/DashboardDemo.svelte';
+// Design tokens + base styles come from the shared package — the single source
+// of truth every delightstack app imports. Tokens live on `html`, so portaled
+// components (Modal, CommandPalette, Toaster, Alert) keep them on <body>.
+import '@delightstack/styles/global.css';
 ---
 
 <html lang="en">
@@ -8,12 +12,14 @@ import DashboardDemo from '../components/DashboardDemo.svelte';
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Dashboard Demo – DelightStack</title>
 		<style is:global>
-			*, *::before, *::after { box-sizing: border-box; }
-			* { margin: 0; }
-			html { height: 100%; }
+			html,
 			body {
 				height: 100%;
-				font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+			}
+			/* The shared base styles default body copy to the serif display face;
+			   a dashboard reads better in the sans stack. */
+			body {
+				font-family: var(--font-sans);
 				-webkit-font-smoothing: antialiased;
 			}
 		</style>

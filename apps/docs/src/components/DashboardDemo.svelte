@@ -47,7 +47,6 @@
 		Tabs,
 		Tab,
 		Breadcrumbs,
-		Pagination,
 		Steps,
 		Step,
 	} from '@delightstack/components/navigation';
@@ -205,6 +204,16 @@
 		datasets: [{ label: 'Sales', data: [35, 25, 20, 12, 8] }],
 	};
 
+	// Brand-derived palette so the donut matches the rest of the dashboard
+	// instead of the chart's generic default colors.
+	const categoryColors = [
+		'var(--color-action)',
+		'var(--color-info)',
+		'var(--color-success)',
+		'var(--color-warning)',
+		'var(--color-bg-8)',
+	];
+
 	const weeklyData: ChartData = {
 		labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
 		datasets: [
@@ -216,7 +225,7 @@
 			{
 				label: 'Last Week',
 				data: [98, 110, 125, 140, 130, 95, 88],
-				color: 'var(--color-bg-8)',
+				color: 'var(--color-bg-5)',
 			},
 		],
 	};
@@ -308,9 +317,27 @@
 	const columns: TableColumn<(typeof orders)[0]>[] = [
 		{ key: 'id', label: 'Order', sortable: true, width: '120px' },
 		{ key: 'customer', label: 'Customer', sortable: true },
-		{ key: 'status', label: 'Status', sortable: true, width: '120px' },
-		{ key: 'amount', label: 'Amount', sortable: true, align: 'right', width: '120px' },
-		{ key: 'date', label: 'Date', sortable: true, width: '120px' },
+		{ key: 'status', label: 'Status', sortable: true, width: '130px', cell: statusCell },
+		{
+			key: 'amount',
+			label: 'Amount',
+			sortable: true,
+			align: 'right',
+			width: '120px',
+			cell: amountCell,
+		},
+		{
+			key: 'date',
+			label: 'Date',
+			sortable: true,
+			width: '130px',
+			format: (value) =>
+				new Date(`${value}T00:00:00`).toLocaleDateString('en-US', {
+					month: 'short',
+					day: 'numeric',
+					year: 'numeric',
+				}),
+		},
 	];
 
 	const statusOptions: SelectOption[] = [
@@ -340,8 +367,8 @@
 
 	const statusColors: Record<string, string> = {
 		Completed: 'var(--color-success)',
-		Shipped: 'var(--color-action)',
-		Pending: 'var(--color-bg-8)',
+		Shipped: 'var(--color-info)',
+		Pending: 'var(--color-warning)',
 		Cancelled: 'var(--color-error)',
 	};
 
@@ -687,7 +714,12 @@
 						</div>
 						<div class="card chart-card chart-narrow">
 							<div class="card-header"><h3>Sales by Category</h3></div>
-							<Chart type="donut" data={categoryData} height={280} inner_radius={0.55} />
+							<Chart
+								type="donut"
+								data={categoryData}
+								height={280}
+								inner_radius={0.55}
+								colors={categoryColors} />
 						</div>
 					</div>
 
@@ -770,12 +802,11 @@
 							bind:sort_by={tableSortBy}
 							bind:sort_direction={tableSortDir}
 							bind:selected={tableSelected}
+							bind:page={tablePage}
+							page_size={6}
+							pagination={{ variant: 'default', show_info: true }}
 							selectable
 							striped />
-					</div>
-					<div class="table-footer">
-						<span class="table-info">{filteredOrders.length} orders</span>
-						<Pagination bind:page={tablePage} total_pages={5} />
 					</div>
 				</div>
 			{:else if activeTab === 'team'}
@@ -948,11 +979,11 @@
 								<h3>Setup Progress</h3>
 							</div>
 							<div class="quick-actions">
-								<Steps>
-									<Step label="Profile" status="complete" />
-									<Step label="Billing" status="complete" />
-									<Step label="Integrations" status="active" />
-									<Step label="Launch" />
+								<Steps current={2} clickable>
+									<Step title="Profile" />
+									<Step title="Billing" />
+									<Step title="Integrations" />
+									<Step title="Launch" />
 								</Steps>
 							</div>
 							<div class="code-preview">
@@ -999,95 +1030,21 @@
 </Modal>
 
 <style>
-	/* ─── Design Tokens ─────────────────────────────────────────── */
-	.dashboard {
-		color-scheme: light dark;
-
-		--color-dashboard: #616969;
-		--color-primary: #005640;
-		--color-secondary: #005640;
-
-		--color-bg: light-dark(#f5f6f8, #0d0d0d);
-		--color-bg-card: light-dark(#ffffff, #161616);
-		--color-bg-sidebar: light-dark(#ffffff, #111111);
-		--color-bg-hover: light-dark(#f0f1f3, #1e1e1e);
-		--color-bg-active: light-dark(#e8f5f0, #0d2a20);
-		--color-text: light-dark(#1a1a1a, #e5e5e5);
-		--color-text-muted: light-dark(#6b7280, #9ca3af);
-		--color-text-active: light-dark(#005640, #00b894);
-		--color-border: light-dark(#e5e7eb, #262626);
-		--color-action: light-dark(#005640, #00b894);
-		--color-action-text: light-dark(#ffffff, #ffffff);
-		--color-error: light-dark(#ef4444, #f87171);
-		--color-success: light-dark(#10b981, #34d399);
-		--color-bg-subtle: light-dark(#f0f1f3, #1a1a1a);
-
-		--color-bg-0: light-dark(#f5f6f8, #0a0a0a);
-		--color-bg-1: light-dark(#f0f1f3, #111111);
-		--color-bg-2: light-dark(#e5e7eb, #1a1a1a);
-		--color-bg-3: light-dark(#d1d5db, #262626);
-		--color-bg-8: light-dark(#6b7280, #6b7280);
-		--color-bg-disabled: light-dark(#f0f1f3, #1a1a1a);
-		--color-outline: light-dark(#e5e7eb, #333333);
-		--color-outline-active: light-dark(#005640, #00b894);
-		--color-action-active: light-dark(#004530, #00d6a4);
-		--color-action-disabled: light-dark(#80ab9f, #1a4a3d);
-		--color-action-text-disabled: light-dark(#c0d8d0, #4a7a6d);
-		--color-text-disabled: light-dark(#9ca3af, #4b5563);
-		--color-accent: light-dark(#005640, #00b894);
-		--color-accent-text: light-dark(#ffffff, #ffffff);
-		--color-error-text: light-dark(#ffffff, #ffffff);
-		--color-success-text: light-dark(#ffffff, #ffffff);
-		--color-bg-max-contrast: light-dark(#ffffff, #000000);
-		--color-text-max-contrast: light-dark(#000000, #ffffff);
-
-		--color-text-light: light-dark(#9ca3af, #e5e5e5);
-		--color-text-dark: light-dark(#1a1a1a, #9ca3af);
-
-		--radius: 10px;
-		--radius-1: 2px;
-		--radius-2: 5px;
-		--radius-3: 10px;
-		--radius-4: 20px;
-		--radius-5: 20px;
-		--radius-round: 1e5px;
-
-		--font-sans:
-			system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
-		--font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-		--font-size-00: 0.65rem;
-		--font-size-0: 0.815rem;
-		--font-size-1: 1rem;
-		--font-size-2: 1.1rem;
-
-		--shadow-1: 0 1px 3px rgba(0, 0, 0, 0.06);
-		--shadow-2: 0 4px 12px rgba(0, 0, 0, 0.08);
-
-		--layer-1: 1;
-		--layer-2: 2;
-		--layer-3: 3;
-		--layer-4: 4;
-		--layer-5: 5;
-		--layer-important: 2147483647;
-
-		--ease: cubic-bezier(0.76, 0, 0.24, 1);
-		--ease-out-3: cubic-bezier(0.33, 1, 0.68, 1);
-		--ease-out-5: cubic-bezier(0.22, 1, 0.36, 1);
-
-		--sidebar-width: 240px;
-	}
-
 	/* ─── Layout ────────────────────────────────────────────────── */
+	/* All design tokens come from @delightstack/styles (imported in demo.astro);
+	   only layout-local variables are defined here. */
 	.dashboard {
+		--sidebar-width: 240px;
+
 		display: grid;
 		grid-template-columns: var(--sidebar-width) 1fr;
-		height: 100vh;
+		height: 100dvh;
 		background: var(--color-bg);
 		color: var(--color-text);
 		font-family: var(--font-sans);
 		font-size: 0.9rem;
 		line-height: 1.5;
-		transition: grid-template-columns 200ms var(--ease);
+		transition: grid-template-columns 200ms var(--ease-default);
 	}
 
 	.dashboard.sidebar-collapsed {
@@ -1096,7 +1053,7 @@
 
 	/* ─── Sidebar ───────────────────────────────────────────────── */
 	.sidebar {
-		background: var(--color-bg-sidebar);
+		background: var(--color-surface);
 		border-right: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
@@ -1141,7 +1098,7 @@
 		min-height: 2.5rem;
 	}
 	.sidebar-nav :global(li button) {
-		color: var(--color-text-muted);
+		color: color-mix(in oklch, var(--color-text) 75%, var(--color-text-muted));
 		gap: 0.75rem;
 		font-size: 0.875rem;
 	}
@@ -1149,7 +1106,7 @@
 		color: var(--color-text);
 	}
 	.sidebar-nav :global(li.active button) {
-		color: var(--color-text-active);
+		color: var(--color-action);
 		font-weight: 500;
 	}
 
@@ -1175,7 +1132,7 @@
 		color: var(--color-text);
 	}
 	.sidebar-footer :global(.collapse-btn svg) {
-		transition: transform 200ms var(--ease);
+		transition: transform 200ms var(--ease-default);
 	}
 
 	.storage-info {
@@ -1205,7 +1162,7 @@
 		gap: 1rem;
 		padding: 0.75rem 1.5rem;
 		border-bottom: 1px solid var(--color-border);
-		background: var(--color-bg-card);
+		background: var(--color-surface);
 		min-height: 60px;
 	}
 
@@ -1266,9 +1223,10 @@
 
 	/* ─── Cards ─────────────────────────────────────────────────── */
 	.card {
-		background: var(--color-bg-card);
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-sm);
 		overflow: hidden;
 	}
 
@@ -1303,8 +1261,12 @@
 	/* ─── Charts ────────────────────────────────────────────────── */
 	.charts-row {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 3fr 2fr;
 		gap: 1rem;
+
+		&:has(> .chart-narrow:first-child) {
+			grid-template-columns: 2fr 3fr;
+		}
 	}
 
 	/* ─── Table ─────────────────────────────────────────────────── */
@@ -1320,17 +1282,6 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-	}
-
-	.table-footer {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.table-info {
-		font-size: 0.8rem;
-		color: var(--color-text-muted);
 	}
 
 	/* ─── Status ────────────────────────────────────────────────── */
