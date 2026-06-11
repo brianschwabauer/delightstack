@@ -44,8 +44,16 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 		const id = segments[0];
 		const variant = segments[1] || defaultVariant;
 
-		// Validate id and variant — reject empty, slashes, or path traversal
-		if (!id || id.includes('..') || variant.includes('..') || variant.includes('/')) {
+		// Validate id and variant — reject empty, slashes, backslashes, or path traversal
+		if (
+			!id ||
+			id.includes('..') ||
+			id.includes('/') ||
+			id.includes('\\') ||
+			variant.includes('..') ||
+			variant.includes('/') ||
+			variant.includes('\\')
+		) {
 			return new Response(placeholder, {
 				status: 404,
 				headers: {
