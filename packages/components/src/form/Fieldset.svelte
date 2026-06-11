@@ -297,6 +297,12 @@
 		color: var(--color-text, inherit);
 		padding: 0 0.4em;
 		line-height: 1.4;
+		/* A flex fieldset drops the legend below the top border (it no longer
+		   notches the outline), so it sits entirely inside the content box. The
+		   first row's child inputs float their own labels up above their top
+		   edge — without this gap a floated child label collides with the
+		   legend's descenders. Reserve room for that rise. */
+		margin-bottom: 0.45em;
 		border: none;
 		background: none;
 		transition: color 200ms ease;
