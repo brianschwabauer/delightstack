@@ -1,6 +1,9 @@
 import { SessionToken } from '../types';
 import { DelightError, generateID } from '@delightstack/utilities';
 
+/** Tolerance for clock drift between token issuer and verifier when checking exp/iat/nbf */
+export const JWT_CLOCK_SKEW_MS = 1000 * 60;
+
 /**
  * Generates & signs a jwt with the given claims
  * To generate a new secret key, use the following code:
@@ -93,23 +96,35 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 		throw new DelightError({ message: 'Invalid auth token format', status: 400 });
 	}
 
-	// Check for a valid algorithm
-	if (!header?.alg) {
-		throw new DelightError({ message: 'Invalid auth token. No algorithm', status: 401 });
+	// Only HS256 is ever issued by generateJwt(); accepting any other algorithm
+	// (or trusting the header to pick one) opens algorithm-confusion attacks
+	if (header?.alg !== 'HS256') {
+		throw new DelightError({
+			message: 'Invalid auth token. Unsupported algorithm',
+			status: 401,
+		});
 	}
 
-	// Check the expiration & issued date of the token
+	// Check the expiration, not-before & issued date of the token
 	const expiryDate = (Number(payload?.exp) || 0) * 1000;
 	const issuedDate = (Number(payload?.iat) || 0) * 1000;
+	const notBeforeDate = (Number(payload?.nbf) || 0) * 1000;
 	const currentDate = Date.now();
 	if (
-		expiryDate <= currentDate - 1000 * 60 * 10 ||
-		issuedDate > currentDate + 1000 * 60 * 10
+		expiryDate <= currentDate - JWT_CLOCK_SKEW_MS ||
+		issuedDate > currentDate + JWT_CLOCK_SKEW_MS
 	) {
 		throw new DelightError({
 			message: 'Auth token expired',
 			status: 401,
 			detail: 'auth/expired',
+		});
+	}
+	if (notBeforeDate > currentDate + JWT_CLOCK_SKEW_MS) {
+		throw new DelightError({
+			message: 'Auth token not yet valid',
+			status: 401,
+			detail: 'auth/not_yet_valid',
 		});
 	}
 
@@ -133,18 +148,10 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 	);
 	const encoder = new TextEncoder();
 	const data = encoder.encode([parts[0], parts[1]].join('.'));
-	const alg = String(header.alg);
-	const hash = `SHA-${alg.match(/\d+/)?.[0] || 256}`;
-	let algorithm = 'RSASSA-PKCS1-v1_5';
-	if (alg.match(/^ES\d+$/)) algorithm = 'ECDSA';
-	if (alg.match(/^HS\d+$/)) algorithm = 'HMAC';
-	if (alg.match(/^PS\d+$/)) algorithm = 'RSASSA-PSS';
-	if (alg.match(/^RS\d+$/)) algorithm = 'HMAC';
-
 	// Import the key from the env variable
 	const key = await getSecretKey(secret);
 	const verified = await crypto.subtle
-		.verify({ hash, name: algorithm }, key, signatureArray, data)
+		.verify({ hash: 'SHA-256', name: 'HMAC' }, key, signatureArray, data)
 		.catch(() => {
 			throw new DelightError({ message: 'Error verifying jwt signature', status: 500 });
 		});

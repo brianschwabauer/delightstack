@@ -27,6 +27,7 @@ export type AuthErrorCode =
  */
 export const AUTH_ERROR_MAP: Record<string, AuthErrorCode> = {
 	'auth/expired': 'session_expired',
+	'auth/not_yet_valid': 'invalid_token',
 	'Incorrect email or password': 'invalid_credentials',
 	'Email is already in use': 'email_taken',
 	'Too many failed sign in attempts': 'rate_limited',

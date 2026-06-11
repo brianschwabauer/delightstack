@@ -179,7 +179,7 @@ describe('decodeJwt', () => {
 		await expect(decodeJwt(SECRET, jwt)).rejects.toThrow('Auth token expired');
 	});
 
-	it('allows tokens within 10 minute clock skew', async () => {
+	it('allows tokens within the clock skew tolerance', async () => {
 		const now = Math.floor(Date.now() / 1000);
 		const { jwt } = await generateJwt(SECRET, {
 			typ: 'auth',
@@ -191,11 +191,71 @@ describe('decodeJwt', () => {
 			verified: true,
 			org: {},
 			iat: now,
-			exp: now - 300, // expired 5 minutes ago (within 10min tolerance)
+			exp: now - 30, // expired 30 seconds ago (within 60s tolerance)
 		});
 
 		const decoded = await decodeJwt(SECRET, jwt);
 		expect(decoded.uid).toBe('user_1');
+	});
+
+	it('throws on tokens expired beyond the clock skew tolerance', async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const { jwt } = await generateJwt(SECRET, {
+			typ: 'auth',
+			iss: 'test',
+			uid: 'user_1',
+			sub: 'ua_1',
+			name: 'Test',
+			email: 'test@example.com',
+			verified: true,
+			org: {},
+			iat: now,
+			exp: now - 300, // expired 5 minutes ago
+		});
+
+		await expect(decodeJwt(SECRET, jwt)).rejects.toThrow('Auth token expired');
+	});
+
+	it('throws on tokens with a future nbf claim', async () => {
+		const now = Math.floor(Date.now() / 1000);
+		const { jwt } = await generateJwt(SECRET, {
+			typ: 'auth',
+			iss: 'test',
+			uid: 'user_1',
+			sub: 'ua_1',
+			name: 'Test',
+			email: 'test@example.com',
+			verified: true,
+			org: {},
+			iat: now,
+			exp: now + 3600,
+			nbf: now + 600, // not valid for another 10 minutes
+		});
+
+		await expect(decodeJwt(SECRET, jwt)).rejects.toThrow('Auth token not yet valid');
+	});
+
+	it('rejects any algorithm other than HS256 (no alg confusion)', async () => {
+		const { jwt } = await generateJwt(SECRET, {
+			typ: 'auth',
+			iss: 'test',
+			uid: 'user_1',
+			sub: 'ua_1',
+			name: 'Test',
+			email: 'test@example.com',
+			verified: true,
+			org: {},
+		});
+		// Re-encode the header claiming RS256 while keeping the HMAC signature
+		const [header, payload, signature] = jwt.split('.');
+		const decoded_header = JSON.parse(atob(header.replace(/_/g, '/').replace(/-/g, '+')));
+		const forged_header = btoa(JSON.stringify({ ...decoded_header, alg: 'RS256' }))
+			.replace(/\+/g, '-')
+			.replace(/\//g, '_')
+			.replace(/=+/g, '');
+		const forged = [forged_header, payload, signature].join('.');
+
+		await expect(decodeJwt(SECRET, forged)).rejects.toThrow('Unsupported algorithm');
 	});
 
 	it('throws on wrong secret (kid mismatch)', async () => {
