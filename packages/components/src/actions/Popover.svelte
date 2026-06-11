@@ -21,6 +21,7 @@
 	import { focusTrap } from '@delightstack/utilities';
 	import { tick, untrack, type Snippet } from 'svelte';
 	import Portal from './Portal.svelte';
+	import { scrollbar } from './scrollbar';
 
 	const propId = $props.id();
 	let {
@@ -793,7 +794,7 @@
 			onoutroend={() => {
 				if (ref_element) (ref_element.style as any).anchorName = '';
 			}}>
-			<div class="popover-content">
+			<div class="popover-content" {@attach scrollbar()}>
 				{#if children}{@render children()}{/if}
 			</div>
 			{#if arrow}
@@ -890,8 +891,7 @@
 		.popover-content {
 			padding: 1rem 1.25rem;
 			overflow: auto;
-			scrollbar-color: transparent transparent;
-			scrollbar-width: none;
+			overscroll-behavior: contain;
 			max-height: inherit;
 			max-width: inherit;
 			border-radius: inherit;

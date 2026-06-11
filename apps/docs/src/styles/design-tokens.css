@@ -11,6 +11,9 @@
  * add the few docs-specific rules Starlight needs.
  */
 @import '@delightstack/styles/tokens.css';
+/* Styled-native scrollbar baseline (document scrollbar, sidebar, code blocks,
+ * and any scroller the overlay attachment hasn't enhanced). */
+@import '@delightstack/styles/scrollbar.css';
 
 /* The docs use the package's default brand seeds (the logo's cyan-blue plus a
  * primary-hued muted gray accent) — no seed overrides needed here.

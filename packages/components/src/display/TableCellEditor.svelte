@@ -789,12 +789,19 @@
 		background: light-dark(var(--color-bg, #fff), var(--color-surface, #262626));
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		border-radius: var(--radius-lg, 16px);
+		/* Keep the native (baseline-styled) thumb clear of the rounded corners.
+		   scrollbar-width/scrollbar-color must NOT be set here — they disable the
+		   ::-webkit-scrollbar baseline styling in Chromium. */
+		--scrollbar-track-inset: calc(var(--radius-lg, 16px) / 2);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-lg, 16px) * var(--squircle-ratio, 2));
+			--scrollbar-track-inset: calc(
+				var(--radius-lg, 16px) * var(--squircle-ratio, 2) / 2
+			);
 		}
+		overscroll-behavior: contain;
 		box-shadow: var(--shadow-md, 0 8px 28px -8px rgb(0 0 0 / 0.3));
-		scrollbar-width: thin;
 		position-try-fallbacks: flip-block;
 		transform-origin: center top;
 		opacity: 1;

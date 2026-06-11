@@ -1,0 +1,63 @@
+/**
+ * Styled-native scrollbar baseline.
+ *
+ * This is the zero-JS foundation of the delightstack scrolling system: every
+ * scrollbar the overlay attachment (@delightstack/components `scrollbar`)
+ * hasn't enhanced — most importantly the document scrollbar — gets a thin,
+ * token-driven thumb on a transparent track.
+ *
+ * Two implementations, mutually exclusive per browser:
+ *
+ * 1. WebKit/Blink (`::-webkit-scrollbar` pseudo-elements) — full control:
+ *    pill-shaped thumb, breathing room from the edge (transparent border +
+ *    background-clip), and per-container corner insets via
+ *    `--scrollbar-track-inset` (track margin).
+ * 2. Firefox (standard `scrollbar-width`/`scrollbar-color`) — the closest
+ *    thin equivalent.
+ *
+ * The split must stay strict: in Chromium a non-`auto` `scrollbar-color`
+ * DISABLES all `::-webkit-scrollbar` styling on that element, so the standard
+ * properties are gated to browsers without webkit pseudo support.
+ *
+ * Touch devices are deliberately left alone — their native overlay indicators
+ * already auto-hide and are the user's only scroll-position feedback.
+ */
+
+@media (hover: hover) and (pointer: fine) {
+	@supports selector(::-webkit-scrollbar) {
+		::-webkit-scrollbar {
+			width: var(--scrollbar-size, 10px);
+			height: var(--scrollbar-size, 10px);
+			background: transparent;
+		}
+		::-webkit-scrollbar-track {
+			background: transparent;
+			margin: var(--scrollbar-track-inset, 0);
+		}
+		::-webkit-scrollbar-thumb {
+			background-color: var(--scrollbar-thumb-color, rgb(128 128 128 / 0.5));
+			border-radius: var(--radius-full, 1e5px);
+			/* Transparent border + padding-box clip floats the thumb off the
+			   container edge without a second element. */
+			border: var(--scrollbar-inset, 2px) solid transparent;
+			background-clip: padding-box;
+		}
+		::-webkit-scrollbar-thumb:hover,
+		::-webkit-scrollbar-thumb:active {
+			background-color: var(--scrollbar-thumb-color-active, rgb(128 128 128 / 0.8));
+		}
+		::-webkit-scrollbar-corner {
+			background: transparent;
+		}
+		::-webkit-scrollbar-button {
+			display: none;
+		}
+	}
+
+	@supports not selector(::-webkit-scrollbar) {
+		* {
+			scrollbar-width: thin;
+			scrollbar-color: var(--scrollbar-thumb-color, rgb(128 128 128 / 0.5)) transparent;
+		}
+	}
+}

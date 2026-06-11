@@ -17,6 +17,7 @@
 
 <script lang="ts">
 	import { ripple } from '@delightstack/utilities';
+	import { scrollbar } from '../actions/scrollbar';
 	const propId = $props.id();
 
 	let {
@@ -728,7 +729,11 @@
 
 	<!-- Time slots panel -->
 	{#if show_time_slots}
-		<div class="calendar-time-slots" role="listbox" aria-label="Time slots">
+		<div
+			class="calendar-time-slots"
+			role="listbox"
+			aria-label="Time slots"
+			{@attach scrollbar()}>
 			{#if skeleton}
 				{#each { length: 8 } as _, i}
 					<div class="time-slot" aria-hidden="true">
@@ -1128,7 +1133,6 @@
 		border-left: 1px solid var(--color-border);
 		overflow-y: auto;
 		overscroll-behavior: contain;
-		scrollbar-width: thin;
 		max-height: 320px;
 		min-width: 6rem;
 		padding: 0.5rem;

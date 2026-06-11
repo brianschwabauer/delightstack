@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { scrollbar } from '../actions/scrollbar';
+
 	interface Token {
 		type: string;
 		content: string;
@@ -416,7 +418,7 @@
 			</div>
 		{/if}
 
-		<div class="code-body" style:max-height={max_height}>
+		<div class="code-body" style:max-height={max_height} {@attach scrollbar()}>
 			<pre><code>{#each tokenized_lines as tokens, i}{@const line_num =
 							start_line + i}{@const is_highlighted =
 							highlight_set.has(line_num)}{@const raw_line = lines[i]}<span

@@ -158,6 +158,7 @@
 	import type { Snippet } from 'svelte';
 	import { tick, flushSync } from 'svelte';
 	import { ripple } from '@delightstack/utilities';
+	import { scrollbar } from '../actions/scrollbar';
 	import { slide } from 'svelte/transition';
 	import { quintOut } from 'svelte/easing';
 	import Progress from '../feedback/Progress.svelte';
@@ -2525,6 +2526,13 @@
 		class:passthrough={virtualActive && !containerScroll}
 		style:max-height={resolvedMaxHeight}
 		bind:this={scrollEl}
+		{@attach scrollbar({
+			// With a sticky header the scrollable region visually starts below it,
+			// so pin the track top to the header's bottom edge instead of the radius
+			track_insets: (el) => ({
+				top: el.querySelector<HTMLElement>('thead tr.sticky')?.offsetHeight,
+			}),
+		})}
 		onmouseleave={() => {
 			hoverIndex = null;
 			hoveredResizeKey = null;

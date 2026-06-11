@@ -26,10 +26,12 @@
 	"exports": {
 		".": "./global.css",
 		"./global.css": "./global.css",
-		"./tokens.css": "./tokens.css"
+		"./tokens.css": "./tokens.css",
+		"./scrollbar.css": "./scrollbar.css"
 	},
 	"files": [
 		"global.css",
-		"tokens.css"
+		"tokens.css",
+		"scrollbar.css"
 	]
 }

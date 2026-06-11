@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { type Snippet } from 'svelte';
+	import { scrollbar } from '../actions/scrollbar';
 
 	const propId = $props.id();
 	let {
@@ -438,7 +439,8 @@
 	<div
 		class="pane pane-first"
 		style:flex-basis={first_basis}
-		aria-hidden={collapsed === 'first' || undefined}>
+		aria-hidden={collapsed === 'first' || undefined}
+		{@attach scrollbar()}>
 		{#if first}
 			{@render first()}
 		{/if}
@@ -495,7 +497,8 @@
 	<div
 		class="pane pane-second"
 		style:flex-basis={second_basis}
-		aria-hidden={collapsed === 'second' || undefined}>
+		aria-hidden={collapsed === 'second' || undefined}
+		{@attach scrollbar()}>
 		{#if collapsible && collapsed === 'second'}
 			<button
 				class="expand-button"

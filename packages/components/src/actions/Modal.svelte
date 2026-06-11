@@ -18,6 +18,7 @@
 	import { type Snippet } from 'svelte';
 	import { focusTrap, generateID, ripple } from '@delightstack/utilities';
 	import Button from './Button.svelte';
+	import { scrollbar } from './scrollbar';
 
 	let {
 		/** Title text displayed as the dialog header */
@@ -167,7 +168,8 @@
 			style:width
 			style:height
 			style:max-width={max_width}
-			style:max-height={max_height}>
+			style:max-height={max_height}
+			{@attach scrollbar({ corner_inset: 10 })}>
 			{#if (closable && !disable_close_icon) || title || header || header_start || header_end}
 				<header class:bar={title || header || header_start || header_end}>
 					{#if closable && !disable_close_icon}
@@ -343,21 +345,21 @@
 		view-transition-name: modal-body;
 		overflow-y: auto;
 		overflow-x: hidden;
+		overscroll-behavior: contain;
 		pointer-events: auto;
+		/* The overlay scrollbar takes no layout space (the native gutter that
+		   scrollbar-gutter: stable both-edges used to reserve is gone), so the
+		   inline padding carries the full edge distance itself. */
 		scrollbar-gutter: stable both-edges;
 		@media (max-width: 767px) {
 			min-width: 100vw;
 			padding-bottom: 4rem;
 		}
 		@media (min-width: 768px) {
-			padding: 2rem 1.5rem;
+			padding: 2rem 2.5rem;
 		}
-		&::-webkit-scrollbar-track-piece:start {
-			margin-top: var(--radius-lg);
-		}
-		&::-webkit-scrollbar-track-piece:end {
-			margin-bottom: var(--radius-lg);
-		}
+		/* Corner inset for the styled-native fallback (pre-JS / no overlay) */
+		--scrollbar-track-inset: calc(var(--radius-lg, 10px) / 2);
 	}
 	.modal-footer {
 		display: flex;

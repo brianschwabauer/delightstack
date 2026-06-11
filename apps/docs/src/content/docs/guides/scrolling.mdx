@@ -1,0 +1,121 @@
+---
+title: Scrolling
+description: How DelightStack styles scrollbars — the token-driven native baseline, the overlay scrollbar attachment, and the touch-device policy.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Scrollbars are part of the design system. DelightStack replaces the browser's default chrome with a two-layer system so every scrollbar — from the document itself down to a dropdown menu — shares the same thin, token-driven look:
+
+1. **A styled-native baseline (pure CSS).** Every scrollbar gets a thin, pill-shaped, theme-aware thumb on a transparent track. This covers the document scrollbar and any scroller that isn't individually enhanced, and it works with JavaScript disabled.
+2. **An overlay scrollbar (the `scrollbar` attachment).** Component scroll areas (Table, Modal, Popover, Code, CommandPalette, …) upgrade to a custom overlay bar that takes **zero layout space**, fades in while you scroll or hover and back out when idle, stays clear of rounded corners, and supports thumb dragging and click-to-jump like a native bar.
+
+Native scrolling is never reimplemented — wheel, keyboard, touch, momentum, and accessibility behavior all stay with the browser. Only the visuals change.
+
+## The baseline
+
+Importing the global stylesheet applies the baseline everywhere:
+
+```ts
+import '@delightstack/styles'; // global.css, includes scrollbar.css
+```
+
+If you only want tokens plus scrollbars (the docs site does this so Starlight keeps its own base styles):
+
+```css
+@import '@delightstack/styles/tokens.css';
+@import '@delightstack/styles/scrollbar.css';
+```
+
+Under the hood the baseline uses `::-webkit-scrollbar` pseudo-elements in Chromium/Safari and falls back to the standard `scrollbar-width: thin` + `scrollbar-color` properties in Firefox.
+
+<Aside type="caution">
+	In Chromium, setting `scrollbar-width` or `scrollbar-color` on an element **disables** all
+	`::-webkit-scrollbar` styling for it — the browser switches that element to the simpler standard
+	rendering. Don't sprinkle those properties in app CSS; set the `--scrollbar-*` tokens instead.
+</Aside>
+
+### Tokens
+
+| Token                            | Default                | Role                                                       |
+| -------------------------------- | ---------------------- | ---------------------------------------------------------- |
+| `--scrollbar-size`               | `10px`                 | Full gutter thickness (track width)                        |
+| `--scrollbar-inset`              | `2px`                  | Gap between the thumb and the container edge               |
+| `--scrollbar-thumb-color`        | 35% text over transparent | Resting thumb color (adapts to light/dark automatically) |
+| `--scrollbar-thumb-color-active` | 60% text over transparent | Thumb color while hovered/dragged                        |
+| `--scrollbar-track-inset`        | `0px`                  | Per-container: keeps the native thumb out of rounded corners |
+
+### Rounded containers
+
+A scrollbar that runs into a rounded corner looks broken — the thumb pokes past the curve. For containers that keep the *native* (baseline) scrollbar, set `--scrollbar-track-inset` to the container's border radius and the track is shortened at both ends:
+
+```css
+.my-rounded-scroller {
+	border-radius: var(--radius-xl);
+	/* Half the radius is enough — the thumb hugs the edge, where the
+	   curve has already receded */
+	--scrollbar-track-inset: calc(var(--radius-xl) / 2);
+}
+```
+
+The overlay attachment below handles this automatically.
+
+## The overlay scrollbar
+
+The `scrollbar` attachment is exported from `@delightstack/components`:
+
+```svelte
+<script>
+	import { scrollbar } from '@delightstack/components';
+</script>
+
+<div class="content" {@attach scrollbar()}>
+	<!-- long content -->
+</div>
+```
+
+What it does:
+
+- Hides the element's native scrollbars and overlays a floating thumb that takes **no layout space** (no more shifting content on Windows).
+- **Autohides**: fades in on scroll or pointer movement, fades out ~1s after activity stops. The fade-in is instant and the fade-out eased, matching the design system's "snap in, ease out" motion rule.
+- **Respects rounded corners**: it reads the element's `border-radius` (inheriting the parent's radius when the scroller sits flush inside a rounded card, like a modal body) and insets the track ends by **half the radius** — enough to clear the curve at the edge the thumb hugs, without shortening the track more than necessary. No configuration needed.
+- Full pointer support: drag the thumb, click the track to jump, scroll the wheel over the bar. The thumb thickens while hovered, like a native overlay bar.
+- Handles both axes, RTL layouts, and content/container resizes (via `ResizeObserver` + `MutationObserver`).
+- Honors `prefers-reduced-motion`.
+
+### Options
+
+```ts
+scrollbar({
+	/** Fade out when idle (default true) */
+	autohide: true,
+	/** ms after the last activity before fading (default 1000) */
+	autohide_delay: 1000,
+	/** Override the automatic corner inset, in px */
+	corner_inset: 10,
+	/** Per-edge overrides (px); a function is re-evaluated on every layout.
+	    Table uses this to pin the track top to its sticky header. */
+	track_insets: (el) => ({ top: el.querySelector('thead')?.offsetHeight }),
+});
+```
+
+<Aside type="tip">
+	Scroll containers inside overlays (modals, popovers, dropdowns, palettes) should also set
+	`overscroll-behavior: contain` so reaching the end of the list doesn't start scrolling the page
+	behind it. All DelightStack overlay components ship with this.
+</Aside>
+
+### Requirements & caveats
+
+- The element's **parent** is used as the positioning context for the overlay (it's given `position: relative` if static), so apply the attachment to a scroller that lives inside its visual frame — not to an element whose parent is shared with unrelated absolutely-positioned UI.
+- Elements in the **top layer** (`popover`, anchored `position: fixed` panels) can't host a sibling overlay. Those keep the styled-native baseline — that's why Select/Input dropdown menus use `--scrollbar-track-inset` instead.
+- Chrome's find-in-page tick marks aren't shown inside enhanced scrollers (the native bar is hidden).
+- The **document scrollbar** intentionally stays native-styled: it sits at the viewport edge (no radius to avoid), macOS already overlays it, and it keeps working before JavaScript loads.
+
+## Touch devices
+
+On touch-only devices (`hover: none` / `pointer: coarse`) **both layers stand down**: the baseline media query doesn't match and the attachment is a no-op. Mobile browsers already use transient overlay indicators that auto-hide and take no space — they're also the user's only scroll-position feedback, so DelightStack leaves them alone.
+
+## Components that use the overlay
+
+Table, Modal, Popover, CommandPalette, Code, Calendar (time slots), Timeline (horizontal), SplitPane, BottomSheet, and PDF all ship with the overlay scrollbar wired in. Select, Input autocomplete, and Table cell-editor dropdowns use the corner-inset native baseline (they're anchored top-layer panels).

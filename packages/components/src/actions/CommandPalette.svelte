@@ -217,6 +217,7 @@
 	import { fade, scale } from 'svelte/transition';
 	import { focusTrap, ripple } from '@delightstack/utilities';
 	import { portal } from './Portal.svelte';
+	import { scrollbar } from './scrollbar';
 
 	const propId = $props.id();
 	let {
@@ -528,7 +529,8 @@
 			id={listbox_id}
 			role="listbox"
 			aria-label="Commands"
-			class="results">
+			class="results"
+			{@attach scrollbar()}>
 			{#if visible_commands.length === 0}
 				<div class="empty">No results found</div>
 			{:else}
@@ -692,6 +694,7 @@
 	.results {
 		max-height: 400px;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding: 0.5rem 0;
 
 		.dense & {

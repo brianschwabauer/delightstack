@@ -6,7 +6,7 @@ html {
 	 * The raw oklch ramp + per-app brand seeds. Components must NOT
 	 * reference these directly — use the semantic tokens below.
 	 * ============================================================ */
-	--color-dashboard: #616969;
+	--color-dashboard: #10a6c4;
 	/* Brand seeds (match the logo gradient's leading stop). The secondary seed
 	 * is a muted gray that keeps the primary's hue — low chroma, same hue —
 	 * so accent controls read as "quiet" without going tonally cold. */
@@ -27,10 +27,10 @@ html {
 	--color-650: oklch(from var(--color-dashboard) 41% min(0.06, c) h);
 	--color-700: oklch(from var(--color-dashboard) 35% min(0.05, c) h);
 	--color-750: oklch(from var(--color-dashboard) 29% min(0.04, c) h);
-	--color-800: oklch(from var(--color-dashboard) 24% min(0.03, c) h);
-	--color-850: oklch(from var(--color-dashboard) 21% min(0.02, c) h);
-	--color-900: oklch(from var(--color-dashboard) 18% min(0.015, c) h);
-	--color-950: oklch(from var(--color-dashboard) 15% min(0.01, c) h);
+	--color-800: oklch(from var(--color-dashboard) 24% min(0.025, c) h);
+	--color-850: oklch(from var(--color-dashboard) 21% min(0.025, c) h);
+	--color-900: oklch(from var(--color-dashboard) 18% min(0.03, c) h);
+	--color-950: oklch(from var(--color-dashboard) 15% min(0.03, c) h);
 
 	/* Internal background ramp (semantic bg/surface tokens map onto this) */
 	--color-bg-max-contrast: light-dark(white, black);
@@ -112,16 +112,16 @@ html {
 		oklch(from var(--color-action) calc(l + 0.07) calc(c + 0.02) h)
 	);
 	--color-action-text: light-dark(
-		oklch(from var(--color-primary) 94% min(0.05, c) h),
-		oklch(from var(--color-primary) 94% min(0.05, c) h)
+		oklch(from var(--color-primary) 96% min(0.05, c) h),
+		oklch(from var(--color-primary) 96% min(0.05, c) h)
 	);
 	--color-action-text-disabled: light-dark(
 		oklch(from var(--color-primary) 82% min(0.09, c) h),
 		oklch(from var(--color-primary) 66% min(0.09, c) h)
 	);
 	--color-action-text-active: light-dark(
-		oklch(from var(--color-primary) 99% min(0.03, c) h),
-		oklch(from var(--color-primary) 99% min(0.03, c) h)
+		oklch(from var(--color-primary) 100% min(0.03, c) h),
+		oklch(from var(--color-primary) 100% min(0.03, c) h)
 	);
 
 	/* --- Accent (secondary interactive) --- */
@@ -177,6 +177,12 @@ html {
 
 	/* --- Overlay --- */
 	--color-backdrop: light-dark(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.7));
+
+	/* --- Scrollbar --- */
+	/* Translucent so the thumb sits comfortably on any surface (page, card,
+	   popover) in both color schemes. */
+	--scrollbar-thumb-color: color-mix(in oklch, var(--color-text) 35%, transparent);
+	--scrollbar-thumb-color-active: color-mix(in oklch, var(--color-text) 60%, transparent);
 
 	/* ============================================================
 	 * NON-COLOR TOKENS (named scales)
@@ -306,6 +312,17 @@ html {
 	--control-pad-x: 1em; /* inline padding, default */
 	--control-pad-x-dense: 0.75em;
 	--control-pad-x-comfortable: 1.25em;
+
+	/* Scrollbar — one sizing system shared by the styled-native baseline
+	   (scrollbar.css) and the overlay scrollbar attachment in
+	   @delightstack/components. --scrollbar-size is the full gutter; the thumb
+	   floats inside it, kept off the container edge by --scrollbar-inset.
+	   Rounded scroll containers can set --scrollbar-track-inset to keep the
+	   thumb out of their corners (the overlay attachment derives this from
+	   border-radius automatically). */
+	--scrollbar-size: 10px;
+	--scrollbar-inset: 2px;
+	--scrollbar-track-inset: 0px;
 
 	/* Motion — durations */
 	--duration-fast: 100ms;

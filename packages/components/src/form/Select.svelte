@@ -1501,12 +1501,19 @@
 		background: var(--_panel);
 		color: var(--_text);
 		border-radius: var(--radius-xl, 16px);
+		/* Keep the native (baseline-styled) thumb clear of the rounded corners.
+		   scrollbar-width/scrollbar-color must NOT be set here — they disable the
+		   ::-webkit-scrollbar baseline styling in Chromium. */
+		--scrollbar-track-inset: calc(var(--radius-xl, 16px) / 2);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-xl, 16px) * var(--squircle-ratio, 2));
+			--scrollbar-track-inset: calc(
+				var(--radius-xl, 16px) * var(--squircle-ratio, 2) / 2
+			);
 		}
+		overscroll-behavior: contain;
 		box-shadow: var(--shadow-md, 0 8px 28px -8px rgb(0 0 0 / 0.3));
-		scrollbar-width: thin;
 		/* Flip above the trigger when there is no room below */
 		position-try-fallbacks: flip-block;
 		/* Expand-in from the edge closest to the trigger — origin flips to

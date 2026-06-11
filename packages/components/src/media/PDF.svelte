@@ -9,6 +9,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { DelightError } from '@delightstack/utilities';
+	import { scrollbar } from '../actions/scrollbar';
 
 	const propId = $props.id();
 
@@ -1325,7 +1326,8 @@
 			bind:this={pages_container}
 			style={single_page && auto_paginate
 				? `transform: translateY(-${(page - 1) * 100}%); transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);`
-				: undefined}>
+				: undefined}
+			{@attach scrollbar()}>
 			{#each page_infos as info, i}
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -1528,6 +1530,7 @@
 	.pdf-pages {
 		flex: 1;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding: 1rem;
 		display: flex;
 		flex-direction: column;

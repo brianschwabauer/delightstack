@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { type Snippet, tick, untrack } from 'svelte';
 	import { portal } from '../actions/Portal.svelte';
+	import { scrollbar } from '../actions/scrollbar';
 
 	/**
 	 * A snap point expressed either as a fraction of the viewport height (a value
@@ -504,7 +505,8 @@
 			<div
 				bind:this={content_el}
 				class="content"
-				style:touch-action={at_max ? 'pan-y' : 'pan-x'}>
+				style:touch-action={at_max ? 'pan-y' : 'pan-x'}
+				{@attach scrollbar()}>
 				{@render children?.(morph)}
 			</div>
 		</div>
@@ -601,23 +603,6 @@
 		overscroll-behavior: contain;
 		padding-bottom: env(safe-area-inset-bottom);
 	}
-	/* Thin, theme-aware scrollbar; hidden on touch devices. */
-	@media (pointer: fine) {
-		.content {
-			scrollbar-width: thin;
-			scrollbar-color: color-mix(in oklch, transparent, var(--color-text, #888) 25%)
-				transparent;
-		}
-	}
-	@media (pointer: coarse) {
-		.content {
-			scrollbar-width: none;
-		}
-		.content::-webkit-scrollbar {
-			display: none;
-		}
-	}
-
 	@media (prefers-reduced-motion: reduce) {
 		.backdrop {
 			transition: none;

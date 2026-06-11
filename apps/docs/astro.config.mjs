@@ -75,6 +75,7 @@ export default defineConfig({
 						{ label: 'Design Tokens', slug: 'guides/design-tokens' },
 						{ label: 'Theming', slug: 'guides/theming' },
 						{ label: 'Dark Mode', slug: 'guides/dark-mode' },
+						{ label: 'Scrolling', slug: 'guides/scrolling' },
 						{ label: 'Accessibility', slug: 'guides/accessibility' },
 						{ label: 'Working with Forms', slug: 'guides/forms' },
 					],

@@ -12,6 +12,7 @@
 
 <script lang="ts">
 	import { intersectionObserver } from '@delightstack/utilities';
+	import { scrollbar } from '../actions/scrollbar';
 	import { getContext, setContext, type Component, type Snippet } from 'svelte';
 	import Button from './../actions/Button.svelte';
 
@@ -289,7 +290,8 @@
 			class:alternate
 			class:dense
 			class:comfortable
-			role="list">
+			role="list"
+			{@attach scrollbar()}>
 			{@render children?.()}
 			{#if pending}
 				<li class="timeline-item timeline-pending horizontal">
