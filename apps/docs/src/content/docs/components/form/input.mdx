@@ -71,6 +71,36 @@ The `type` prop supports 13 input types:
 	<Input client:load type="number" label="Quantity" min={0} max={100} step={5} />
 </ComponentPreview>
 
+### Date and Time
+
+Use `date`, `time`, and `datetime-local` for temporal values. The label always stays floated since these controls render their own value UI. Constrain the range with `min`/`max`.
+
+<ComponentPreview code={`<Input type="date" label="Date" bind:value={date} />
+<Input type="time" label="Time" bind:value={time} />
+<Input type="datetime-local" label="Date & time" bind:value={when} />`}>
+	<Input client:load type="date" label="Date" value="2026-06-11" />
+	<Input client:load type="time" label="Time" value="09:30" />
+	<Input client:load type="datetime-local" label="Date & time" value="2026-06-11T09:30" />
+</ComponentPreview>
+
+### Color
+
+The `color` type pairs a live swatch with the selected hex value. Bind `value` to read the chosen colour.
+
+<ComponentPreview code={`<Input type="color" label="Brand color" bind:value={color} />`}>
+	<Input client:load type="color" label="Brand color" value="#10a6c4" />
+</ComponentPreview>
+
+### File
+
+Use `file` for uploads. Add `accept` to restrict file types and `multiple` to allow several at once. Selected files appear as a removable preview list, and image files show a thumbnail.
+
+<ComponentPreview code={`<Input type="file" label="Attachment" />
+<Input type="file" label="Photos" accept="image/*" multiple />`}>
+	<Input client:load type="file" label="Attachment" />
+	<Input client:load type="file" label="Photos" accept="image/*" multiple />
+</ComponentPreview>
+
 ### Textarea
 
 <ComponentPreview code={`<script>
