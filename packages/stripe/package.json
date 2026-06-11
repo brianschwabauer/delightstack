@@ -59,7 +59,8 @@
 		"build": "svelte-package -i src",
 		"dev": "svelte-package -w -i src",
 		"check": "svelte-check --tsconfig ./tsconfig.json",
-		"typecheck": "tsgo --noEmit"
+		"typecheck": "tsgo --noEmit",
+		"test": "vitest run"
 	},
 	"peerDependencies": {
 		"@sveltejs/kit": "^2.0.0",
