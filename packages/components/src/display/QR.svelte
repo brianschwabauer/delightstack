@@ -836,7 +836,10 @@
 		/** Filename for the downloaded PNG (without extension) */
 		download_filename = 'qr-code',
 
-		/** Show a skeleton loading state */
+		/**
+		 * Show a skeleton loading state while `value` is not yet available.
+		 * It dismisses itself as soon as the QR code can be rendered.
+		 */
 		skeleton = false,
 
 		/** Element ID */
@@ -845,7 +848,7 @@
 		/** Additional CSS classes */
 		class: class_name = '',
 	}: {
-		value: string;
+		value?: string;
 		size?: number;
 		level?: ECLevel;
 		foreground?: string;
@@ -1002,14 +1005,20 @@
 	}
 </script>
 
-{#if skeleton}
+{#if skeleton && !matrix}
 	<div
 		class={['qr', 'skeleton', class_name].filter(Boolean).join(' ')}
 		{id}
 		style:--qr-size="{size}px"
 		role="img"
 		aria-label="Loading QR code">
-		<div class="skeleton-inner"></div>
+		<div class="skeleton-inner">
+			<!-- Faint finder-pattern squares so the placeholder reads as
+			     "a QR code will appear here", not just a gray box. -->
+			<div class="skeleton-finder tl"></div>
+			<div class="skeleton-finder tr"></div>
+			<div class="skeleton-finder bl"></div>
+		</div>
 	</div>
 {:else if matrix}
 	<div
@@ -1108,30 +1117,67 @@
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
 		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 		position: relative;
 		overflow: hidden;
+
+		/* The shimmer beam sweeps above the finder squares so it reads as a
+		   sheen passing over the whole (future) code. */
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			z-index: 1;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+		}
+	}
+
+	/* QR finder patterns: outer ring (border) + center dot (::after), at the
+	   three corners where a real code has them. Sized off --qr-size so they
+	   scale with the component. */
+	.skeleton-finder {
+		position: absolute;
+		width: calc(var(--qr-size) * 0.18);
+		height: calc(var(--qr-size) * 0.18);
+		border: calc(var(--qr-size) * 0.026) solid
+			rgb(from var(--color-text, #888) r g b / 0.1);
+		border-radius: calc(var(--qr-size) * 0.02);
 
 		&::after {
 			content: '';
 			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: qr-shimmer 2s infinite;
+			inset: calc(var(--qr-size) * 0.026);
+			background: rgb(from var(--color-text, #888) r g b / 0.1);
+			border-radius: calc(var(--qr-size) * 0.01);
 		}
 	}
 
-	@keyframes qr-shimmer {
+	.skeleton-finder.tl {
+		top: calc(var(--qr-size) * 0.08);
+		left: calc(var(--qr-size) * 0.08);
+	}
+	.skeleton-finder.tr {
+		top: calc(var(--qr-size) * 0.08);
+		right: calc(var(--qr-size) * 0.08);
+	}
+	.skeleton-finder.bl {
+		bottom: calc(var(--qr-size) * 0.08);
+		left: calc(var(--qr-size) * 0.08);
+	}
+
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

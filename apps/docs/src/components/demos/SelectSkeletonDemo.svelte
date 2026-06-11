@@ -1,9 +1,16 @@
 <script>
-	import { Input } from '@delightstack/components/form';
+	import { Select } from '@delightstack/components/form';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let name = $state('Ada Lovelace');
+	let country = $state('');
+
+	const countries = [
+		{ value: 'us', label: 'United States' },
+		{ value: 'ca', label: 'Canada' },
+		{ value: 'uk', label: 'United Kingdom' },
+		{ value: 'de', label: 'Germany' },
+	];
 </script>
 
 <div class="skeleton-demo">
@@ -11,11 +18,12 @@
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
 	<div style="max-width: 320px; width: 100%;">
-		<Input
-			label="Name"
+		<Select
 			skeleton={loading}
-			bind:value={name}
-			placeholder="Enter your name" />
+			bind:value={country}
+			options={countries}
+			label="Country"
+			placeholder="Select a country" />
 	</div>
 </div>
 

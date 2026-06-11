@@ -99,7 +99,8 @@ Control how many sibling and boundary pages are visible.
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Pagination skeleton />`}>
+<ComponentPreview code={`<!-- total_pages is known, so the skeleton mirrors the same page count -->
+<Pagination skeleton={loading} bind:page total_pages={5} />`}>
 	<PaginationSkeletonDemo client:load />
 </ComponentPreview>
 

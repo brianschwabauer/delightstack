@@ -118,8 +118,8 @@ ${'  '}colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']}
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Chart type="bar" skeleton height={300} />
-<Chart type="pie" skeleton height={300} />`}>
+<ComponentPreview code={`<Chart type="bar" skeleton={loading} height={300} data={loading ? empty : data} />
+<Chart type="pie" skeleton={loading} height={300} data={loading ? empty : traffic} />`}>
   <ChartSkeletonDemo client:load />
 </ComponentPreview>
 

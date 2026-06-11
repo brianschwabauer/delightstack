@@ -505,34 +505,140 @@
 		font-size: var(--text-xl, 1.125rem);
 	}
 
-	/* Skeleton */
+	/* Skeleton — the real dropzone/avatar keeps its exact box (padding, border
+	   width, min-height, corner radius — including the avatar's circle) with
+	   its content made invisible, so swapping to the live control causes no
+	   layout shift. The well carries the canonical sweep; faint static shapes
+	   over the hidden icon/text hint at the layout inside. */
 	.file-upload.skeleton {
 		pointer-events: none;
 	}
-	.file-upload.skeleton .dropzone,
-	.file-upload.skeleton .avatar-upload,
+
+	/* Label — invisible text keeps the gutter; a pill bar stands in for it.
+	   The bar is a pseudo-element (it can't host its own ::after), so the
+	   sweep is emulated with background-position using the same geometry and
+	   timing as the global delight-skeleton-shimmer. */
 	.file-upload.skeleton .label {
-		background: var(--color-bg-muted, hsl(0 0% 90%));
-		color: transparent;
-		border-color: transparent;
-		border-radius: var(--radius-lg, 4px);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 4px) * var(--squircle-ratio, 2));
-		}
-		animation: skeleton-pulse 1.5s ease-in-out infinite;
-	}
-	.file-upload.skeleton .dropzone *,
-	.file-upload.skeleton .avatar-upload * {
+		position: relative;
 		visibility: hidden;
 	}
-	@keyframes skeleton-pulse {
-		0%,
-		100% {
-			opacity: 1;
+	.file-upload.skeleton .label::before {
+		content: '';
+		visibility: visible;
+		position: absolute;
+		top: 50%;
+		translate: 0 -50%;
+		height: 0.7em;
+		width: 7em;
+		border-radius: var(--radius-full, 1e5px);
+		background-color: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+		background-image: linear-gradient(
+			105deg,
+			transparent 37.5%,
+			var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+			transparent 62.5%
+		);
+		background-size: 200% 100%;
+		background-repeat: no-repeat;
+		background-position: 150% 0;
+		animation: file-upload-skeleton-sweep var(--skeleton-duration, 2.4s) ease-in-out
+			infinite;
+	}
+
+	/* Wells: keep the real shape, swap the dashed border for a flat fill and
+	   sweep a sheen across (both have overflow:hidden + position:relative).
+	   Staggered 120ms after the label bar. */
+	.file-upload.skeleton .dropzone,
+	.file-upload.skeleton .avatar-upload {
+		--shimmer-delay: 120ms;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+		border-color: transparent;
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
-		50% {
-			opacity: 0.5;
+	}
+
+	/* Hide the real content but keep it in the layout (currentColor strokes
+	   and text both vanish with `color: transparent`). */
+	.file-upload.skeleton
+		.dropzone
+		:is(.upload-icon, .dropzone-text, .dropzone-hint, .browse-link),
+	.file-upload.skeleton .avatar-upload .avatar-placeholder {
+		color: transparent;
+	}
+	.file-upload.skeleton .avatar-upload .avatar-overlay {
+		visibility: hidden;
+	}
+
+	/* Glyph hint: fill the icon's own box — the translucent fills stack, so it
+	   reads slightly darker than the well beneath it. */
+	.file-upload.skeleton .dropzone .upload-icon {
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+		border-radius: var(--radius-md, 4px);
+	}
+
+	/* Text/hint bars centered over the real lines they stand in for. */
+	.file-upload.skeleton .dropzone-text,
+	.file-upload.skeleton .dropzone-hint {
+		position: relative;
+	}
+	.file-upload.skeleton .dropzone-text::before,
+	.file-upload.skeleton .dropzone-hint::before {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		translate: -50% -50%;
+		height: 0.7em;
+		width: 12em;
+		border-radius: var(--radius-full, 1e5px);
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+	}
+	.file-upload.skeleton .dropzone-hint::before {
+		width: 8em;
+	}
+
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	/* background-position twin of delight-skeleton-shimmer for pseudo-element
+	   placeholders: a 200%-wide image whose centered band spans half the box,
+	   travelling the same -100% → +100% distance with the same rest beat. */
+	@keyframes file-upload-skeleton-sweep {
+		0% {
+			background-position: 150% 0;
+		}
+		55%,
+		100% {
+			background-position: -50% 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.file-upload.skeleton .label::before,
+		.file-upload.skeleton .dropzone::after,
+		.file-upload.skeleton .avatar-upload::after {
+			animation: none;
 		}
 	}
 

@@ -305,27 +305,35 @@
 
 	/* Skeleton shimmer */
 	.skeleton {
-		background: linear-gradient(
-			90deg,
-			var(--color-bg-muted, rgba(128, 128, 128, 0.1)) 25%,
-			var(--color-bg-active, rgba(128, 128, 128, 0.2)) 50%,
-			var(--color-bg-muted, rgba(128, 128, 128, 0.1)) 75%
-		);
-		background-size: 200% 100%;
-		animation: image-shimmer 1.5s ease-in-out infinite;
-	}
-
-	@keyframes image-shimmer {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
-
-	.skeleton {
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 		z-index: 0;
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+		}
+	}
+
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
+		100% {
+			transform: translateX(100%);
+		}
 	}
 
 	/* Blur-up placeholder — always renders underneath the main image so it shows

@@ -1360,6 +1360,13 @@
 				</svg>
 			</Button>
 		{/if}
+
+		<!-- Skeleton shimmer overlay — its own element so the sweep can be
+		     clipped to the field's corners without overflow:hidden on the
+		     wrapper (which would clip the floating label). -->
+		{#if skeleton}
+			<span class="skeleton-sweep" aria-hidden="true"></span>
+		{/if}
 	</div>
 
 	<!-- Password strength indicator -->
@@ -1522,29 +1529,47 @@
 	 * disabled via `effectively_disabled`; a soft sweeping shimmer signals that
 	 * the page isn't ready yet.
 	 */
-	.input.skeleton .input-wrapper::after {
-		content: '';
+	.skeleton-sweep {
 		position: absolute;
 		inset: 0;
+		z-index: 1;
 		border-radius: inherit;
 		@supports (corner-shape: squircle) {
 			corner-shape: inherit;
 		}
-		background: linear-gradient(
-			100deg,
-			transparent 30%,
-			color-mix(in oklch, var(--_text, currentColor) 9%, transparent) 50%,
-			transparent 70%
-		);
-		background-size: 220% 100%;
-		background-position: 180% 0;
-		animation: input-skeleton-sweep 1.5s ease-in-out infinite;
+		overflow: hidden;
 		pointer-events: none;
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
+		}
 	}
 
-	@keyframes input-skeleton-sweep {
-		to {
-			background-position: -180% 0;
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-sweep::after {
+			animation: none;
 		}
 	}
 

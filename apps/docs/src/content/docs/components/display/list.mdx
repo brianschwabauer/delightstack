@@ -10,7 +10,7 @@ import ListCheckboxDemo from '../../../../components/demos/ListCheckboxDemo.svel
 import ListToggleDemo from '../../../../components/demos/ListToggleDemo.svelte';
 import ListDensityDemo from '../../../../components/demos/ListDensityDemo.svelte';
 import ListAppearanceDemo from '../../../../components/demos/ListAppearanceDemo.svelte';
-import { List } from '@delightstack/components/display';
+import ListSkeletonDemo from '../../../../components/demos/ListSkeletonDemo.svelte';
 
 ## Import
 
@@ -142,8 +142,8 @@ ${'  '}<ListItem>Another item</ListItem>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<List skeleton skeleton_count={4} />`}>
-  <List client:load skeleton skeleton_count={4} />
+<ComponentPreview code={`<List skeleton={loading} skeleton_count={3}>…</List>`}>
+  <ListSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props

@@ -218,51 +218,66 @@
 		opacity: 0.6;
 	}
 
-	/* Skeleton — the legend is replaced with a shimmering placeholder bar while
-	   the child fields render their own skeleton states (so the real form shape
-	   shows through with no layout shift when it resolves). */
+	/* Skeleton — the legend keeps its real layout but its text turns
+	   transparent, and a text-height pill is painted over the label's own box.
+	   Anchoring to the real legend text means the bar is always exactly where
+	   (and as wide as) the label, at every density — no offset guesswork. The
+	   child fields render their own skeleton states, so the real form shape
+	   shows through with no layout shift when it resolves. */
 	.fieldset.skeleton {
 		pointer-events: none;
 	}
-	.fieldset.skeleton .legend,
+	.fieldset.skeleton .legend {
+		color: transparent;
+	}
 	.fieldset.skeleton .description {
 		visibility: hidden;
 	}
-	.fieldset.skeleton::before {
-		content: '';
-		position: absolute;
-		top: 0.65em;
-		left: 1em;
-		height: 1em;
-		width: 9em;
-		border-radius: var(--radius-md, 4px);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+	/* The pill is a pseudo-element (it can't host its own ::after), so the
+	   sweep is emulated with background-position using the same geometry and
+	   timing as the global delight-skeleton-shimmer. */
+	.fieldset.skeleton .legend-text {
+		position: relative;
+
+		&::before {
+			content: '';
+			position: absolute;
+			top: 50%;
+			left: 0;
+			right: 0;
+			height: 0.7em;
+			transform: translateY(-50%);
+			border-radius: var(--radius-full, 1e5px);
+			background-color: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+			background-image: linear-gradient(
+				105deg,
+				transparent 37.5%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 62.5%
+			);
+			background-size: 200% 100%;
+			background-repeat: no-repeat;
+			background-position: 150% 0;
+			animation: fieldset-skeleton-sweep var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
 		}
-		background-color: var(--color-bg-muted, hsl(0 0% 90%));
-		background-image: linear-gradient(
-			100deg,
-			transparent 30%,
-			color-mix(in oklch, var(--color-surface, #fff) 70%, transparent) 50%,
-			transparent 70%
-		);
-		background-size: 220% 100%;
-		background-repeat: no-repeat;
-		background-position: 180% 0;
-		animation: fieldset-skeleton-sweep 1.5s ease-in-out infinite;
 	}
-	.fieldset.dense.skeleton::before {
-		top: 0.4em;
-		left: 0.5em;
-	}
-	.fieldset.comfortable.skeleton::before {
-		top: 1.15em;
-		left: 1.5em;
-	}
+	/* background-position twin of delight-skeleton-shimmer: a 200%-wide image
+	   whose centered band spans half the box, travelling the same
+	   -100% → +100% distance with the same rest beat. */
 	@keyframes fieldset-skeleton-sweep {
-		to {
-			background-position: -180% 0;
+		0% {
+			background-position: 150% 0;
+		}
+		55%,
+		100% {
+			background-position: -50% 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.fieldset.skeleton .legend-text::before {
+			animation: none;
 		}
 	}
 

@@ -240,23 +240,25 @@
 			<li
 				class="timeline-item skeleton-item"
 				class:horizontal
-				class:vertical={!horizontal}>
+				class:vertical={!horizontal}
+				class:dense
+				class:comfortable>
 				<div class="timeline-marker">
-					<span class="skeleton-circle" style:animation-delay="{i * 150}ms"></span>
+					<span class="skeleton-circle" style:--shimmer-delay="{i * 120}ms"></span>
 				</div>
 				<div class="timeline-connector"></div>
 				<div class="timeline-content">
 					<div
 						class="skeleton-bar skeleton-date"
-						style:animation-delay="{i * 150 + 50}ms">
+						style:--shimmer-delay="{i * 120 + 60}ms">
 					</div>
 					<div
 						class="skeleton-bar skeleton-title-bar"
-						style:animation-delay="{i * 150 + 100}ms">
+						style:--shimmer-delay="{i * 120 + 120}ms">
 					</div>
 					<div
 						class="skeleton-bar skeleton-body-bar"
-						style:animation-delay="{i * 150 + 150}ms">
+						style:--shimmer-delay="{i * 120 + 180}ms">
 					</div>
 				</div>
 			</li>
@@ -781,72 +783,103 @@
 		transform: none !important;
 	}
 
-	.skeleton-circle {
-		width: 12px;
-		height: 12px;
-		border-radius: 9999px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+	.skeleton-circle,
+	.skeleton-bar {
 		position: relative;
 		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 
 		&::after {
 			content: '';
 			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
+			inset: 0;
 			transform: translateX(-100%);
 			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
 			);
-			animation: timeline-shimmer 2s infinite;
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
 	}
 
-	.skeleton-bar {
-		border-radius: 4px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
+	/* Same 12px footprint as the real .marker-dot. */
+	.skeleton-circle {
+		width: 12px;
+		height: 12px;
+		border-radius: var(--radius-full, 1e5px);
+	}
 
-		&::after {
-			content: '';
-			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: timeline-shimmer 2s infinite;
-		}
+	/* Flex column so the bars' line-padding margins don't collapse — each bar's
+	   margins pad it out to its real text line's 1lh (date 0.75rem/1.3,
+	   title 0.875rem/1.4, body 0.8125rem/1.5), keeping skeleton items exactly
+	   as tall as loaded ones. */
+	.skeleton-item .timeline-content {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.skeleton-item.horizontal .timeline-content {
+		align-items: center;
+	}
+
+	.skeleton-bar {
+		height: 0.7em;
+		border-radius: var(--radius-full, 1e5px);
+		max-width: 100%;
 
 		&.skeleton-date {
 			width: 5rem;
-			height: 0.625rem;
-			margin-bottom: 0.375rem;
+			font-size: 0.75rem;
+			line-height: 1.3;
+			margin-block: calc((1lh - 0.7em) / 2) calc((1lh - 0.7em) / 2 + 0.25rem);
 		}
 
 		&.skeleton-title-bar {
 			width: 8rem;
-			height: 0.875rem;
-			margin-bottom: 0.375rem;
+			font-size: 0.875rem;
+			line-height: 1.4;
+			margin-block: calc((1lh - 0.7em) / 2);
 		}
 
 		&.skeleton-body-bar {
 			width: 12rem;
-			height: 0.625rem;
+			font-size: 0.8125rem;
+			line-height: 1.5;
+			margin-block: calc((1lh - 0.7em) / 2 + 0.125rem) calc((1lh - 0.7em) / 2);
+		}
+	}
+
+	/* Size-variant text metrics mirror .timeline-date/.timeline-title/.timeline-body. */
+	.timeline-item.dense {
+		.skeleton-date {
+			font-size: 0.6875rem;
+			margin-bottom: calc((1lh - 0.7em) / 2 + 0.125rem);
+		}
+		.skeleton-title-bar {
+			font-size: 0.8125rem;
+		}
+		.skeleton-body-bar {
+			font-size: 0.75rem;
+			margin-top: calc((1lh - 0.7em) / 2 + 0.0625rem);
+		}
+	}
+
+	.timeline-item.comfortable {
+		.skeleton-date {
+			font-size: 0.8125rem;
+			margin-bottom: calc((1lh - 0.7em) / 2 + 0.375rem);
+		}
+		.skeleton-title-bar {
+			font-size: 1rem;
+		}
+		.skeleton-body-bar {
+			font-size: 0.875rem;
+			margin-top: calc((1lh - 0.7em) / 2 + 0.25rem);
 		}
 	}
 
@@ -861,7 +894,11 @@
 		}
 	}
 
-	@keyframes timeline-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

@@ -6,8 +6,10 @@
 
 	const propId = $props.id();
 	let {
-		/** The target numeric value to display */
-		value,
+		/** The target numeric value to display. May be assigned later (e.g.
+		 *  while stats load) — pair with `skeleton` to show a placeholder
+		 *  until it arrives. */
+		value = undefined as number | undefined,
 
 		/** Animation duration in milliseconds */
 		duration = 5000,
@@ -36,7 +38,9 @@
 		/** Custom easing function (receives t in 0..1, returns 0..1) */
 		easing = undefined as EasingFunction | undefined,
 
-		/** Whether to show a skeleton placeholder before the value is visible */
+		/** Show a number-shaped shimmer placeholder while `value` is not yet
+		 *  available. It dismisses itself (and the count-up starts) as soon as
+		 *  `value` arrives. Width can be tuned via `--counter-skeleton-width`. */
 		skeleton = false,
 
 		/** Callback fired when the animation completes */
@@ -57,6 +61,11 @@
 
 	let has_animated = $state(false);
 	let is_animating = $state(false);
+	let has_intersected = $state(false);
+
+	/** Placeholder shows until the value exists; the count-up is deferred so
+	 *  it doesn't run invisibly behind the shimmer. */
+	const show_skeleton = $derived(skeleton && value == null);
 	/** Start at 0 so SSR and the initial client render match (no hydration jump):
 	 *  the count then animates up from 0 once the element scrolls into view. The
 	 *  true value is always exposed via `aria-label` for assistive tech. */
@@ -89,7 +98,9 @@
 	const formatted_value = $derived(formatNumber(display_value));
 
 	const aria_label_text = $derived(
-		(prefix ?? '') + formatNumber(value) + (suffix ? ` ${suffix}` : ''),
+		value == null
+			? 'Loading'
+			: (prefix ?? '') + formatNumber(value) + (suffix ? ` ${suffix}` : ''),
 	);
 
 	function animateCount(from: number, to: number) {
@@ -121,7 +132,7 @@
 	}
 
 	function startAnimation() {
-		if (has_animated) return;
+		if (has_animated || value == null) return;
 		has_animated = true;
 
 		if (prefers_reduced_motion) {
@@ -133,19 +144,29 @@
 		animateCount(0, value);
 	}
 
+	// Kick off the count-up once the counter is both on screen and has a real
+	// value (the skeleton may still be covering it when it first intersects).
+	// The animation itself is untracked: animateCount reads AND writes raf_id
+	// (and display_value), which would otherwise re-trigger this effect
+	// forever (effect_update_depth_exceeded).
+	$effect(() => {
+		if (!has_intersected || show_skeleton) return;
+		untrack(() => startAnimation());
+	});
+
 	$effect(() => {
 		const current_target = value;
 		const animated = untrack(() => has_animated);
 		const prev = untrack(() => display_value);
 
-		if (!animated) return;
+		if (!animated || current_target == null) return;
 
 		if (prefers_reduced_motion) {
 			display_value = current_target;
 			return;
 		}
 
-		animateCount(prev, current_target);
+		untrack(() => animateCount(prev, current_target));
 	});
 
 	$effect(() => {
@@ -165,15 +186,21 @@
 
 <span
 	class={['counter', class_name].filter(Boolean).join(' ')}
-	class:skeleton={skeleton && !has_animated}
+	class:skeleton={show_skeleton}
 	{id}
 	role="img"
 	aria-live="polite"
+	aria-busy={show_skeleton || undefined}
 	aria-label={aria_label_text}
-	{@attach intersectionObserver({ onintersectonce: () => startAnimation() })}>
+	{@attach intersectionObserver({ onintersectonce: () => (has_intersected = true) })}>
 	{#if prefix}<span class="counter-affix counter-prefix">{prefix}</span>{/if}
 
-	<span class="counter-value">{formatted_value}</span>
+	{#if show_skeleton}
+		<!-- Known affixes render for real; only the unknown number is a pill. -->
+		<span class="skeleton-pill"></span>
+	{:else}
+		<span class="counter-value">{formatted_value}</span>
+	{/if}
 
 	{#if suffix}<span class="counter-affix counter-suffix">{suffix}</span>{/if}
 </span>
@@ -188,24 +215,51 @@
 	}
 
 	.counter.skeleton {
-		background: var(--color-border, rgb(0 0 0 / 0.1));
-		border-radius: var(--radius-md, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
-		}
-		color: transparent;
 		user-select: none;
-		animation: counter-skeleton-pulse 1.5s ease-in-out infinite;
 	}
 
-	@keyframes counter-skeleton-pulse {
-		0%,
-		100% {
-			opacity: 1;
+	/* A digits-sized pill standing in for the unknown number. `ch` units track
+	   the counter's own font, so a 3rem stat gets a proportionally large pill. */
+	.skeleton-pill {
+		display: inline-block;
+		width: var(--counter-skeleton-width, 4ch);
+		height: 0.8em;
+		margin-top: 0.1em;
+		border-radius: var(--radius-full, 1e5px);
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
-		50% {
-			opacity: 0.5;
+	}
+
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-pill::after {
+			animation: none;
 		}
 	}
 

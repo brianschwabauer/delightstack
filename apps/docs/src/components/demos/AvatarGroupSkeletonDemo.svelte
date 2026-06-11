@@ -1,22 +1,22 @@
 <script>
-	import { Input } from '@delightstack/components/form';
+	import { AvatarGroup } from '@delightstack/components/display';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let name = $state('Ada Lovelace');
+
+	const members = [
+		{ name: 'Alice Johnson' },
+		{ name: 'Bob Smith' },
+		{ name: 'Charlie Davis' },
+		{ name: 'Diana Evans' },
+	];
 </script>
 
 <div class="skeleton-demo">
 	<Button dense onclick={() => (loading = !loading)}>
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
-	<div style="max-width: 320px; width: 100%;">
-		<Input
-			label="Name"
-			skeleton={loading}
-			bind:value={name}
-			placeholder="Enter your name" />
-	</div>
+	<AvatarGroup skeleton={loading} skeleton_count={4} avatars={loading ? [] : members} />
 </div>
 
 <style>

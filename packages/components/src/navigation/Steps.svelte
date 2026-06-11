@@ -303,24 +303,22 @@
 		style:--step-font-size={FONT_SIZES[size] ?? '0.75rem'}
 		aria-hidden="true">
 		{#each { length: skeleton_count } as _, i}
-			<div class="step skeleton-step">
+			<!-- Reuses the real .step/.step-main/.step-label/.step-connector layout
+			     classes so every placeholder sits exactly where the real step will. -->
+			<div
+				class="step skeleton-step"
+				class:vertical={orientation === 'vertical'}
+				class:horizontal={orientation !== 'vertical'}
+				style:--shimmer-delay="{i * 120}ms">
 				<div class="step-main">
-					<div class="skeleton-circle" style:animation-delay="{i * 150}ms"></div>
+					<div class="skeleton-circle"></div>
 					<div class="step-label">
-						<div
-							class="skeleton-bar skeleton-title"
-							style:animation-delay="{i * 150 + 50}ms">
-						</div>
-						<div
-							class="skeleton-bar skeleton-desc"
-							style:animation-delay="{i * 150 + 100}ms">
-						</div>
+						<div class="skeleton-bar skeleton-title"></div>
+						<div class="skeleton-bar skeleton-desc"></div>
 					</div>
 				</div>
 				{#if i < skeleton_count - 1}
-					<div class="step-connector">
-						<div class="skeleton-connector-line"></div>
-					</div>
+					<div class="step-connector"></div>
 				{/if}
 			</div>
 		{/each}
@@ -575,109 +573,63 @@
 	}
 
 	/* ========== Skeleton ========== */
+	/* Layout comes from the shared .step/.step-main/.step-label/.step-connector
+	   rules (the placeholder markup reuses those classes), so only the shimmer
+	   shapes are defined here. The connector renders bare: its border-color
+	   background already matches an upcoming step's unfilled track. */
 	.steps.skeleton {
 		pointer-events: none;
 	}
 
-	.skeleton-step {
-		display: flex;
+	.skeleton-circle,
+	.skeleton-bar {
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 
-		.steps.horizontal & {
-			flex-direction: column;
-			align-items: center;
-			flex: 1;
-		}
-
-		.steps.vertical & {
-			flex-direction: column;
-			align-items: flex-start;
-			flex: none;
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
 	}
 
+	/* Matches .step-circle's outer box exactly (border-box, so the real 2px
+	   border is already inside --circle-size). */
 	.skeleton-circle {
 		width: var(--circle-size);
 		height: var(--circle-size);
 		min-width: var(--circle-size);
 		min-height: var(--circle-size);
 		border-radius: 9999px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
-
-		&::after {
-			content: '';
-			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: steps-shimmer 2s infinite;
-		}
 	}
 
+	/* Text pills in the label's own font scale; block margins pad each 0.7em
+	   bar out to the real 1.3 line box so the label column height matches. */
 	.skeleton-bar {
-		border-radius: 4px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
-
-		&::after {
-			content: '';
-			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: steps-shimmer 2s infinite;
-		}
+		height: 0.7em;
+		border-radius: var(--radius-full, 1e5px);
 
 		&.skeleton-title {
-			width: 4rem;
-			height: 0.75rem;
+			font-size: var(--step-font-size);
+			width: 4.5em;
+			margin-block: 0.3em;
 		}
 
 		&.skeleton-desc {
-			width: 3rem;
-			height: 0.5rem;
-			margin-top: 0.25rem;
-		}
-	}
-
-	.skeleton-connector-line {
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-
-		.steps.horizontal & {
-			width: 100%;
-			height: 2px;
-			position: absolute;
-			top: calc(var(--circle-size) / 2);
-			left: calc(50% + var(--circle-size) / 2 + 4px);
-			width: calc(100% - var(--circle-size) - 8px);
-		}
-
-		.steps.vertical & {
-			width: 2px;
-			min-height: 1.5rem;
-			margin-left: calc(var(--circle-size) / 2 - 1px);
-			margin-top: 0.25rem;
-			margin-bottom: 0.25rem;
+			font-size: calc(var(--step-font-size) * 0.85);
+			width: 4em;
+			margin-block: 0.3em;
 		}
 	}
 
@@ -717,7 +669,11 @@
 		}
 	}
 
-	@keyframes steps-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

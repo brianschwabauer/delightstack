@@ -214,6 +214,27 @@ In light mode, components use traditional drop shadows; in dark mode the shadows
 }
 ```
 
+## Skeleton
+
+Every component's `skeleton` loading mode is driven by one shared set of tokens, so all
+skeletons in an app shimmer in the same color and rhythm (and can be re-themed in one place):
+
+```css
+:root {
+	/* Placeholder fill — translucent text color so it sits on any surface */
+	--skeleton-bg: color-mix(in oklch, var(--color-text) 10%, transparent);
+	/* The brighter beam swept across each placeholder shape */
+	--skeleton-sheen: color-mix(in oklch, var(--color-text) 12%, transparent);
+	/* One shimmer cycle: the beam sweeps ~55% of the cycle, then rests */
+	--skeleton-duration: 2.4s;
+}
+```
+
+The sweep itself is the global `delight-skeleton-shimmer` keyframe (each component declares
+it, so it works even without the global stylesheet). Components with several placeholder
+shapes stagger the sweep per item, which makes the shimmer travel through the skeleton as a
+wave.
+
 ## Size System
 
 Components use a numeric `size` prop where `'1'` is the default. The prop maps to `font-size` internally (via the numbered `--font-size-*` scale), and the rest of the component scales with `em` units:

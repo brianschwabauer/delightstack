@@ -2667,11 +2667,16 @@
 			<tbody>
 				{#if skeleton}
 					{#each { length: skeleton_count } as _, ri}
-						<tr class="skeleton-row" aria-hidden="true">
+						<!-- --shimmer-delay inherits to every bar's animating ::after,
+						     staggering the shimmer into a wave down the rows. -->
+						<tr
+							class="skeleton-row"
+							aria-hidden="true"
+							style:--shimmer-delay="{ri * 120}ms">
 							{#if selectable}
 								<td class="checkbox-cell">
 									<div
-										class="skeleton-bar"
+										class="skeleton-bar skeleton-glyph"
 										style="width: 18px; height: 18px; border-radius: 5px;">
 									</div>
 								</td>
@@ -2679,19 +2684,14 @@
 							{#if expandable}
 								<td class="expand-cell">
 									<div
-										class="skeleton-bar"
+										class="skeleton-bar skeleton-glyph"
 										style="width: 18px; height: 18px; border-radius: 50%;">
 									</div>
 								</td>
 							{/if}
 							{#each columns as col, ci (col.key)}
 								<td style={col.align ? `text-align: ${col.align}` : ''}>
-									<div
-										class="skeleton-bar"
-										style="width: {getSkeletonWidth(ri, ci)}; animation-delay: {(ri *
-											columns.length +
-											ci) *
-											50}ms">
+									<div class="skeleton-bar" style="width: {getSkeletonWidth(ri, ci)}">
 									</div>
 								</td>
 							{/each}
@@ -4315,37 +4315,45 @@
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
 	}
 
+	/* Text-line bar inside a real `td` (which supplies the real cell padding,
+	   incl. dense/comfortable): the bar's margins pad it out to one full text
+	   line (1lh), so skeleton rows are exactly as tall as loaded rows. */
 	.skeleton-bar {
-		height: 1rem;
-		border-radius: var(--radius-lg, 6px);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 6px) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		height: 0.7em;
+		margin-block: calc((1lh - 0.7em) / 2);
+		border-radius: var(--radius-full, 1e5px);
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 		position: relative;
 		overflow: hidden;
 
 		&::after {
 			content: '';
 			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
+			inset: 0;
 			transform: translateX(-100%);
 			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
 			);
-			animation: shimmer 2s infinite;
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
 	}
 
-	@keyframes shimmer {
+	/* Checkbox/expand glyph placeholders size themselves inline (18px squares /
+	   discs) — no text-line margins. */
+	.skeleton-bar.skeleton-glyph {
+		margin-block: 0;
+	}
+
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

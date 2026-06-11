@@ -3,7 +3,6 @@ title: Calendar
 description: A full-featured date display and selection component with single, range, and multiple selection modes.
 ---
 
-import { Calendar } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CalendarDemo from '../../../../components/demos/CalendarDemo.svelte';
 import CalendarSingleDemo from '../../../../components/demos/CalendarSingleDemo.svelte';
@@ -16,6 +15,7 @@ import CalendarLocaleDemo from '../../../../components/demos/CalendarLocaleDemo.
 import CalendarTimeSlotsDemo from '../../../../components/demos/CalendarTimeSlotsDemo.svelte';
 import CalendarVariantsDemo from '../../../../components/demos/CalendarVariantsDemo.svelte';
 import CalendarDensityDemo from '../../../../components/demos/CalendarDensityDemo.svelte';
+import CalendarSkeletonDemo from '../../../../components/demos/CalendarSkeletonDemo.svelte';
 
 ## Import
 
@@ -163,8 +163,8 @@ ${'  '}ontimeslotselect={({ time, date }) => console.log(time, date)}
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Calendar skeleton />`}>
-	<Calendar client:load skeleton />
+<ComponentPreview code={`<Calendar skeleton={loading} bind:value={date} />`}>
+	<CalendarSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props

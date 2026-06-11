@@ -1,22 +1,19 @@
 <script>
-	import { Input } from '@delightstack/components/form';
+	import { Counter } from '@delightstack/components/display';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let name = $state('Ada Lovelace');
 </script>
 
 <div class="skeleton-demo">
 	<Button dense onclick={() => (loading = !loading)}>
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
-	<div style="max-width: 320px; width: 100%;">
-		<Input
-			label="Name"
-			skeleton={loading}
-			bind:value={name}
-			placeholder="Enter your name" />
-	</div>
+	<!-- The shimmer pill shows while `value` is still null/undefined; the
+	     count-up starts the moment the value arrives. -->
+	<span style="font-size: 2.25rem; font-weight: 700;">
+		<Counter skeleton value={loading ? undefined : 12845} />
+	</span>
 </div>
 
 <style>

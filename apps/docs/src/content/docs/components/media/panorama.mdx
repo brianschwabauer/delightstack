@@ -7,6 +7,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import PanoramaBasicDemo from '../../../../components/demos/PanoramaBasicDemo.svelte';
 import PanoramaAutoRotateDemo from '../../../../components/demos/PanoramaAutoRotateDemo.svelte';
 import PanoramaHotspotsDemo from '../../../../components/demos/PanoramaHotspotsDemo.svelte';
+import PanoramaSkeletonDemo from '../../../../components/demos/PanoramaSkeletonDemo.svelte';
 
 ## Import
 
@@ -94,9 +95,12 @@ Provide a fallback image for browsers without WebGL support.
 
 ### Skeleton Loading
 
-```svelte
-<Panorama skeleton />
-```
+The skeleton is loading-state-driven: it shows while the equirectangular texture
+is still downloading and dismisses itself the moment the panorama is ready.
+
+<ComponentPreview code={`<Panorama skeleton src={panorama_url} />`}>
+	<PanoramaSkeletonDemo client:visible />
+</ComponentPreview>
 
 ## Props
 

@@ -168,8 +168,8 @@
 			<div class="callout-content">
 				{#if skeleton}
 					<div class="skeleton-line title-skeleton"></div>
-					<div class="skeleton-line"></div>
-					<div class="skeleton-line short"></div>
+					<div class="skeleton-line" style:--shimmer-delay="120ms"></div>
+					<div class="skeleton-line short" style:--shimmer-delay="240ms"></div>
 				{:else}
 					{#if title}
 						<div class="callout-title">{title}</div>
@@ -318,9 +318,29 @@
 			 * column would collapse to 0 and nothing would render. */
 			width: min(100%, 30rem);
 
+			/* Tint the shared skeleton tokens with the variant color so the
+			 * placeholder lines read as part of the callout. */
+			--skeleton-bg: color-mix(in oklch, var(--callout-color) 25%, transparent);
+			--skeleton-sheen: color-mix(in oklch, var(--callout-color) 40%, transparent);
+
 			.callout-content {
 				min-width: 0;
 				flex: 1;
+				/* Flex items don't collapse margins, so the bars' centering
+				 * margins add up to exactly the real line boxes. */
+				display: flex;
+				flex-direction: column;
+			}
+		}
+
+		&.banner.skeleton {
+			/* Solid banners carry the variant color as background — tint the
+			 * placeholder with white like the banner's own text. */
+			--skeleton-bg: rgb(255 255 255 / 0.25);
+			--skeleton-sheen: rgb(255 255 255 / 0.35);
+
+			.skeleton-line.title-skeleton {
+				--skeleton-bg: rgb(255 255 255 / 0.4);
 			}
 		}
 	}
@@ -410,33 +430,39 @@
 		--color-text: var(--callout-color);
 	}
 
-	/* Skeleton */
+	/* Skeleton — each bar is centered inside the line box of the text it
+	 * stands in for (body: 0.9375rem × 1.5 = 1.40625rem; title: 1em × 1.4
+	 * plus its 0.25rem margin), so a title + two-line body resolves with no
+	 * layout shift. */
 	.skeleton-line {
-		height: 0.75rem;
-		border-radius: var(--radius-sm);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-sm) * var(--squircle-ratio, 2));
-		}
-		background-color: color-mix(in oklch, var(--callout-color) 25%, transparent);
-		background-image: linear-gradient(
-			90deg,
-			transparent 0,
-			color-mix(in oklch, var(--callout-color) 50%, transparent) 50%,
-			transparent 100%
-		);
-		background-size: 200% 100%;
-		animation: skeleton-shimmer 1.5s linear infinite;
-		margin-bottom: 0.45rem;
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+		border-radius: var(--radius-full, 1e5px);
+		height: 0.65625rem; /* 0.7 × body font size */
+		margin: 0.375rem 0; /* (1.40625rem - 0.65625rem) / 2 */
 
-		&:last-child {
-			margin-bottom: 0;
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
+
 		&.title-skeleton {
 			width: 35%;
-			height: 0.9rem;
-			margin-bottom: 0.6rem;
-			background-color: color-mix(in oklch, var(--callout-color) 35%, transparent);
+			height: 0.7em;
+			margin: 0.35em 0 calc(0.35em + 0.25rem);
+			--skeleton-bg: color-mix(in oklch, var(--callout-color) 35%, transparent);
 		}
 		&.short {
 			width: 55%;
@@ -458,12 +484,13 @@
 		}
 	}
 
-	@keyframes skeleton-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
 		0% {
-			background-position: 200% 0;
+			transform: translateX(-100%);
 		}
+		55%,
 		100% {
-			background-position: -200% 0;
+			transform: translateX(100%);
 		}
 	}
 
@@ -482,7 +509,7 @@
 			}
 		}
 
-		.skeleton-line {
+		.skeleton-line::after {
 			animation: none;
 		}
 	}

@@ -11,6 +11,7 @@ import CodeLineHighlightDemo from '../../../../components/demos/CodeLineHighligh
 import CodeDiffDemo from '../../../../components/demos/CodeDiffDemo.svelte';
 import CodeMaxHeightDemo from '../../../../components/demos/CodeMaxHeightDemo.svelte';
 import CodeWrapDemo from '../../../../components/demos/CodeWrapDemo.svelte';
+import CodeSkeletonDemo from '../../../../components/demos/CodeSkeletonDemo.svelte';
 
 ## Import
 
@@ -126,8 +127,8 @@ ${'  '}filename="utils.ts"
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Code skeleton />`}>
-	<DSCode client:load code="" skeleton />
+<ComponentPreview code={`<Code skeleton={loading} code={loading ? '' : snippet} language="javascript" />`}>
+	<CodeSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props

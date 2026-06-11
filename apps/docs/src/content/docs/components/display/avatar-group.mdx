@@ -8,6 +8,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import AvatarGroupExpandableDemo from '../../../../components/demos/AvatarGroupExpandableDemo.svelte';
 import AvatarGroupClickableDemo from '../../../../components/demos/AvatarGroupClickableDemo.svelte';
 import AvatarGroupOverflowClickDemo from '../../../../components/demos/AvatarGroupOverflowClickDemo.svelte';
+import AvatarGroupSkeletonDemo from '../../../../components/demos/AvatarGroupSkeletonDemo.svelte';
 
 ## Import
 
@@ -95,8 +96,8 @@ When `expandable` is true, clicking the overflow indicator reveals all hidden av
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<AvatarGroup skeleton skeleton_count={4} />`}>
-	<AvatarGroup client:load skeleton skeleton_count={4} />
+<ComponentPreview code={`<AvatarGroup skeleton={loading} skeleton_count={4} avatars={loading ? [] : members} />`}>
+	<AvatarGroupSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props

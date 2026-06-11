@@ -8,6 +8,7 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CalloutDismissibleDemo from '../../../../components/demos/CalloutDismissibleDemo.svelte';
 import CalloutCustomIconDemo from '../../../../components/demos/CalloutCustomIconDemo.svelte';
 import CalloutBannerDemo from '../../../../components/demos/CalloutBannerDemo.svelte';
+import CalloutSkeletonDemo from '../../../../components/demos/CalloutSkeletonDemo.svelte';
 
 ## Import
 
@@ -152,8 +153,8 @@ ${'  '}Scheduled maintenance tonight at 11pm UTC.
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Callout skeleton />`}>
-	<Callout client:load skeleton />
+<ComponentPreview code={`<Callout skeleton={loading}>…</Callout>`}>
+	<CalloutSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props

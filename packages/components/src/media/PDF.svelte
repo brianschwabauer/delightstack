@@ -69,8 +69,12 @@
 		 */
 		pixel_density = 1,
 
-		/** Show loading skeleton */
-		skeleton = false,
+		/**
+		 * Show a loading skeleton while the document loads (including before
+		 * `src` is available). It dismisses itself as soon as the document is
+		 * ready — set to `false` to disable the built-in loading state.
+		 */
+		skeleton = true,
 
 		/**
 		 * Render the selectable/searchable text layer over each page. Disable it
@@ -106,7 +110,7 @@
 		/** Fired when an annotation is created */
 		onannotation = undefined as ((detail: PDFAnnotation) => void) | undefined,
 	}: {
-		src: string | ArrayBuffer | Uint8Array;
+		src?: string | ArrayBuffer | Uint8Array;
 		page?: number;
 		zoom?: number;
 		rotation?: number;
@@ -738,6 +742,7 @@
 	function handleDownload() {
 		ondownload?.();
 
+		if (src == null) return;
 		if (typeof src === 'string') {
 			const a = document.createElement('a');
 			a.href = src;
@@ -863,6 +868,12 @@
 	$effect(() => {
 		void src;
 		if (typeof window === 'undefined') return;
+		if (src == null) {
+			// No document yet (e.g. progressively assigned) — stay in the
+			// loading state so the skeleton shows instead of an error.
+			loading = true;
+			return;
+		}
 		loadDocument(src);
 	});
 
@@ -943,7 +954,7 @@
 	tabindex="0"
 	role="document"
 	aria-label="PDF viewer">
-	{#if (skeleton || loading) && !single_page}
+	{#if skeleton && loading && !single_page}
 		<!-- Skeleton / Loading (suppressed in single_page mode — used inside
 		     the Carousel, which prefers a blank slide over a placeholder UI
 		     while the document is being fetched). -->
@@ -1687,7 +1698,7 @@
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
 		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 		position: relative;
 		overflow: hidden;
 
@@ -1697,13 +1708,13 @@
 			inset: 0;
 			transform: translateX(-100%);
 			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
 			);
-			animation: pdf-shimmer 2s infinite;
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
 		}
 	}
 
@@ -1751,19 +1762,25 @@
 			position: absolute;
 			inset: 0;
 			transform: translateX(-100%);
+			/* The paper is always white, so the sheen stays ink-on-paper rather
+			   than using the theme-aware skeleton tokens. */
 			background-image: linear-gradient(
-				90deg,
-				rgba(15, 23, 42, 0) 0,
-				rgba(15, 23, 42, 0.1) 40%,
-				rgba(15, 23, 42, 0.18) 60%,
-				rgba(15, 23, 42, 0) 100%
+				105deg,
+				rgba(15, 23, 42, 0) 25%,
+				rgba(15, 23, 42, 0.14) 50%,
+				rgba(15, 23, 42, 0) 75%
 			);
-			animation: pdf-shimmer 1.8s infinite;
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
 			animation-delay: var(--shimmer-delay, 0ms);
 		}
 	}
 
-	@keyframes pdf-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

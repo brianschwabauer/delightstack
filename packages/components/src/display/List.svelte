@@ -142,7 +142,7 @@
 		{style}
 		aria-hidden="true">
 		{#each { length: skeleton_count } as _, i}
-			<li class="skeleton-item">
+			<li class="skeleton-item" style:--shimmer-delay="{i * 120}ms">
 				<span class="skeleton-bar" style:width={`${55 + ((i * 37) % 35)}%`}></span>
 			</li>
 		{/each}
@@ -228,48 +228,57 @@
 		}
 	}
 
+	/* Mirrors the real ListItem row metrics (min-height + inline padding,
+	   incl. dense/comfortable) so the swap to loaded items doesn't shift. */
 	.skeleton-item {
 		list-style: none;
 		display: flex;
 		align-items: center;
-		min-height: 3.5rem;
-		padding: 0 1.5rem;
+		min-height: 3rem;
+		padding: 0 calc(1.5rem + var(--list-pad-x, 0px));
 	}
 	ul.dense .skeleton-item {
-		min-height: 3rem;
+		min-height: 2.5rem;
 		padding: 0 1rem;
 	}
 	ul.comfortable .skeleton-item {
-		min-height: 4rem;
-		padding: 0 2rem;
+		min-height: 3.5rem;
+		padding: 0 calc(2rem + var(--list-pad-x, 0px));
 	}
 	.skeleton-bar {
-		height: 0.85em;
-		border-radius: var(--radius-md, 4px);
-		@supports (corner-shape: superellipse(var(--squircle-ratio, 2))) {
-			corner-shape: superellipse(var(--squircle-ratio, 2));
-			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		height: 0.7em;
+		border-radius: var(--radius-full, 1e5px);
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
-		background-color: color-mix(in oklch, var(--color-text, #000) 12%, transparent);
-		background-image: linear-gradient(
-			90deg,
-			transparent 0,
-			color-mix(in oklch, var(--color-text, #000) 8%, transparent) 50%,
-			transparent 100%
-		);
-		background-size: 200% 100%;
-		animation: list-skeleton-shimmer 1.5s linear infinite;
 	}
-	@keyframes list-skeleton-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
 		0% {
-			background-position: 200% 0;
+			transform: translateX(-100%);
 		}
+		55%,
 		100% {
-			background-position: -200% 0;
+			transform: translateX(100%);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.skeleton-bar {
+		.skeleton-bar::after {
 			animation: none;
 		}
 	}

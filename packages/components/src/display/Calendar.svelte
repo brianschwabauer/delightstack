@@ -1258,10 +1258,7 @@
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-sm, 2px) * var(--squircle-ratio, 2));
 		}
-		background: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.09),
-			rgb(from var(--color-text, #fff) r g b / 0.11)
-		);
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 		position: relative;
 		overflow: hidden;
 
@@ -1271,14 +1268,14 @@
 			inset: 0;
 			transform: translateX(-100%);
 			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
 			);
-			animation: calendar-shimmer 1.6s infinite;
-			animation-delay: var(--shimmer-delay, 0ms);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
 	}
 
@@ -1341,7 +1338,11 @@
 		height: 0.9em;
 	}
 
-	@keyframes calendar-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

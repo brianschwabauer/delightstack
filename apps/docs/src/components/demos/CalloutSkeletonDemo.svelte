@@ -1,21 +1,16 @@
 <script>
-	import { Input } from '@delightstack/components/form';
+	import { Callout } from '@delightstack/components/feedback';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let name = $state('Ada Lovelace');
 </script>
 
 <div class="skeleton-demo">
 	<Button dense onclick={() => (loading = !loading)}>
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
-	<div style="max-width: 320px; width: 100%;">
-		<Input
-			label="Name"
-			skeleton={loading}
-			bind:value={name}
-			placeholder="Enter your name" />
+	<div style="width: 100%;">
+		<Callout skeleton={loading}>Your changes are automatically saved.</Callout>
 	</div>
 </div>
 

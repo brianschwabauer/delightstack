@@ -3,7 +3,6 @@ title: Accordion
 description: A vertically stacked set of collapsible sections built on semantic details/summary elements with smooth animations.
 ---
 
-import { Accordion, AccordionItem } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import AccordionDemo from '../../../../components/demos/AccordionDemo.svelte';
 import AccordionMultipleDemo from '../../../../components/demos/AccordionMultipleDemo.svelte';
@@ -11,6 +10,7 @@ import AccordionDenseDemo from '../../../../components/demos/AccordionDenseDemo.
 import AccordionCustomTriggerDemo from '../../../../components/demos/AccordionCustomTriggerDemo.svelte';
 import AccordionNestedDemo from '../../../../components/demos/AccordionNestedDemo.svelte';
 import AccordionAlwaysOpenDemo from '../../../../components/demos/AccordionAlwaysOpenDemo.svelte';
+import AccordionSkeletonDemo from '../../../../components/demos/AccordionSkeletonDemo.svelte';
 
 ## Import
 
@@ -141,8 +141,8 @@ ${'  '}</AccordionItem>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Accordion skeleton skeleton_count={4} />`}>
-	<Accordion client:load skeleton skeleton_count={4} />
+<ComponentPreview code={`<Accordion skeleton={loading} skeleton_count={3}>…</Accordion>`}>
+	<AccordionSkeletonDemo client:load />
 </ComponentPreview>
 
 ### Nested Accordions

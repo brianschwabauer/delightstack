@@ -1,21 +1,19 @@
 <script>
-	import { Input } from '@delightstack/components/form';
+	import { Code } from '@delightstack/components/display';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let name = $state('Ada Lovelace');
+
+	const snippet =
+		"function greet(name) {\n\tconsole.log(`Hello, ${name}!`);\n}\n\ngreet('World');";
 </script>
 
 <div class="skeleton-demo">
 	<Button dense onclick={() => (loading = !loading)}>
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
-	<div style="max-width: 320px; width: 100%;">
-		<Input
-			label="Name"
-			skeleton={loading}
-			bind:value={name}
-			placeholder="Enter your name" />
+	<div style="width: 100%;">
+		<Code skeleton={loading} code={loading ? '' : snippet} language="javascript" />
 	</div>
 </div>
 

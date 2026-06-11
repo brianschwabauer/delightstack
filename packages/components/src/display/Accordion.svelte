@@ -215,11 +215,14 @@
 	<!-- Skeleton -->
 	<div
 		class={['accordion skeleton', class_name].filter(Boolean).join(' ')}
+		class:dense
+		class:comfortable
 		{id}
 		aria-hidden="true">
 		{#each { length: skeleton_count } as _, i}
-			<div class="skeleton-item">
-				<div class="skeleton-bar" style:animation-delay="{i * 150}ms"></div>
+			<div class="skeleton-item" style:--shimmer-delay="{i * 120}ms">
+				<div class="skeleton-chevron"></div>
+				<div class="skeleton-bar" style:width="{40 + ((i * 37 + 13) % 35)}%"></div>
 			</div>
 		{/each}
 	</div>
@@ -336,46 +339,79 @@
 		pointer-events: none;
 	}
 
+	/* Mirrors .summary metrics (incl. dense/comfortable) so each placeholder
+	   row is exactly the height of the real accordion header it stands in for. */
 	.skeleton-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 1rem 1.25rem;
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		padding: 1rem 1.25rem;
 	}
 
+	.accordion.dense .skeleton-item {
+		padding: 0.5rem 0.75rem;
+		gap: 0.5rem;
+		font-size: 0.875rem;
+	}
+
+	.accordion.comfortable .skeleton-item {
+		padding: 1.25rem 1.5rem;
+		gap: 1rem;
+	}
+
+	.skeleton-chevron,
 	.skeleton-bar {
-		height: 1.25rem;
-		width: 60%;
-		border-radius: 4px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		position: relative;
 		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 
 		&::after {
 			content: '';
 			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
+			inset: 0;
 			transform: translateX(-100%);
 			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
 			);
-			animation: accordion-shimmer 2s infinite;
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
 	}
 
-	@keyframes accordion-shimmer {
+	/* The real header leads with a 16px chevron icon. */
+	.skeleton-chevron {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		border-radius: var(--radius-sm, 2px);
+	}
+
+	/* Title line — the bar's margins pad it out to one full text line (1lh)
+	   so the row matches the real header's height exactly. */
+	.skeleton-bar {
+		height: 0.7em;
+		margin-block: calc((1lh - 0.7em) / 2);
+		border-radius: var(--radius-full, 1e5px);
+	}
+
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.skeleton-chevron::after,
 		.skeleton-bar::after {
 			animation: none;
 		}

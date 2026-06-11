@@ -1624,28 +1624,37 @@
 		inset: 0;
 		z-index: 20;
 		overflow: hidden;
-		background: var(--color-bg-muted, #2a2a2a);
+		/* Always-dark player chrome (like the real controls), regardless of the
+		   page theme — the white control pills and sheen read on it in both
+		   color schemes. Override with --video-skeleton-bg. */
+		background: var(--video-skeleton-bg, oklch(0.24 0.01 260));
 	}
 
+	/* The beam sweeps above the fake control bar (z-index 1) so it reads as
+	   glare washing over the whole player surface. The player chrome is
+	   always dark, so the sheen stays white rather than theme-aware. */
 	.skeleton-shimmer {
 		position: absolute;
 		inset: 0;
+		z-index: 1;
+		transform: translateX(-100%);
 		background: linear-gradient(
-			100deg,
-			transparent 30%,
-			rgba(255, 255, 255, 0.08) 50%,
-			transparent 70%
+			105deg,
+			transparent 25%,
+			rgba(255, 255, 255, 0.1) 50%,
+			transparent 75%
 		);
-		background-size: 200% 100%;
-		animation: shimmer 1.6s ease-in-out infinite;
+		animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+			infinite;
 	}
 
-	@keyframes shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
 		0% {
-			background-position: 150% 0;
+			transform: translateX(-100%);
 		}
+		55%,
 		100% {
-			background-position: -150% 0;
+			transform: translateX(100%);
 		}
 	}
 
@@ -1662,7 +1671,7 @@
 
 	.sk {
 		display: block;
-		background: rgba(255, 255, 255, 0.14);
+		background: rgba(255, 255, 255, 0.3);
 		border-radius: 999px;
 	}
 	.sk-btn {

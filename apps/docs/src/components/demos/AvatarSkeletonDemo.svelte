@@ -1,22 +1,17 @@
 <script>
-	import { Input } from '@delightstack/components/form';
+	import { Avatar } from '@delightstack/components/display';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let name = $state('Ada Lovelace');
 </script>
 
 <div class="skeleton-demo">
 	<Button dense onclick={() => (loading = !loading)}>
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
-	<div style="max-width: 320px; width: 100%;">
-		<Input
-			label="Name"
-			skeleton={loading}
-			bind:value={name}
-			placeholder="Enter your name" />
-	</div>
+	<!-- The skeleton auto-dismisses once the avatar has something real to
+	     render (a loaded image, initials from `name`, or children). -->
+	<Avatar skeleton name={loading ? undefined : 'Ada Lovelace'} size="3" />
 </div>
 
 <style>

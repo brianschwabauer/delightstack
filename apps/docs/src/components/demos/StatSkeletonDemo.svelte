@@ -1,22 +1,21 @@
 <script>
-	import { Input } from '@delightstack/components/form';
+	import { Stat } from '@delightstack/components/display';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let name = $state('Ada Lovelace');
 </script>
 
 <div class="skeleton-demo">
 	<Button dense onclick={() => (loading = !loading)}>
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
-	<div style="max-width: 320px; width: 100%;">
-		<Input
-			label="Name"
-			skeleton={loading}
-			bind:value={name}
-			placeholder="Enter your name" />
-	</div>
+	<Stat
+		skeleton={loading}
+		value={2451}
+		label="Total Users"
+		change={12.5}
+		change_label="vs last month"
+		size="2" />
 </div>
 
 <style>

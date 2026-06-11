@@ -1,22 +1,16 @@
 <script>
-	import { Input } from '@delightstack/components/form';
+	import { Calendar } from '@delightstack/components/display';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let name = $state('Ada Lovelace');
+	let date = $state(undefined);
 </script>
 
 <div class="skeleton-demo">
 	<Button dense onclick={() => (loading = !loading)}>
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
-	<div style="max-width: 320px; width: 100%;">
-		<Input
-			label="Name"
-			skeleton={loading}
-			bind:value={name}
-			placeholder="Enter your name" />
-	</div>
+	<Calendar skeleton={loading} bind:value={date} />
 </div>
 
 <style>

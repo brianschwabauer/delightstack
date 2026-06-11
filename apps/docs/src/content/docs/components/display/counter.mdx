@@ -3,9 +3,9 @@ title: Counter
 description: An animated number display that counts up or down with IntersectionObserver-triggered animation and locale-aware formatting.
 ---
 
-import { Counter } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CounterDemo from '../../../../components/demos/CounterDemo.svelte';
+import CounterSkeletonDemo from '../../../../components/demos/CounterSkeletonDemo.svelte';
 
 ## Import
 
@@ -66,15 +66,19 @@ Number separators adapt to the specified locale.
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Counter value={0} skeleton />`}>
-	<Counter client:load value={0} skeleton />
+`value` is optional — it may arrive late (e.g. while stats load). With `skeleton`
+set, a number-shaped shimmer pill shows until `value` is available, and the
+count-up starts the moment it arrives.
+
+<ComponentPreview code={`<Counter skeleton value={loading ? undefined : 12845} />`}>
+	<CounterSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `value` | `number` | required | Target number to display |
+| `value` | `number` | - | Target number to display; may arrive late (pair with `skeleton`) |
 | `duration` | `number` | `1500` | Animation duration in milliseconds |
 | `delay` | `number` | `0` | Delay before animation starts (ms) |
 | `decimals` | `number` | `0` | Number of decimal places |
@@ -84,7 +88,7 @@ Number separators adapt to the specified locale.
 | `separator` | `boolean` | `true` | Use locale thousands separator |
 | `locale` | `string` | - | BCP 47 locale for number formatting |
 | `easing` | `(t: number) => number` | quintOut | Animation easing function |
-| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeleton` | `boolean` | `false` | Show a number-shaped shimmer pill until `value` is available; the count-up starts when it arrives. Pill width is set by `--counter-skeleton-width` (default `4ch`) |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 

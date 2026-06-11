@@ -13,6 +13,7 @@ import SelectCreatableDemo from '../../../../components/demos/SelectCreatableDem
 import SelectErrorDemo from '../../../../components/demos/SelectErrorDemo.svelte';
 import SelectCustomOptionDemo from '../../../../components/demos/SelectCustomOptionDemo.svelte';
 import SelectAsyncDemo from '../../../../components/demos/SelectAsyncDemo.svelte';
+import SelectSkeletonDemo from '../../../../components/demos/SelectSkeletonDemo.svelte';
 
 ## Import
 
@@ -212,6 +213,12 @@ ${'  '}${'  '}</div>
 ${'  '}{/snippet}
 </Select>`}>
 	<SelectCustomOptionDemo client:load />
+</ComponentPreview>
+
+### Skeleton Loading
+
+<ComponentPreview code={`<Select label="Country" skeleton={loading} options={countries} />`}>
+	<SelectSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props

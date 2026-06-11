@@ -785,7 +785,7 @@
 			<div
 				class="skeleton-node"
 				style:padding-left="calc({skel.level} * var(--_indent))"
-				style:animation-delay="{i * 100}ms">
+				style:--shimmer-delay="{i * 120}ms">
 				<div class="skeleton-chevron"></div>
 				<div class="skeleton-bar" style:width="{skel.width}%"></div>
 			</div>
@@ -1477,68 +1477,72 @@
 		pointer-events: none;
 	}
 
+	/* Mirrors .node-row metrics (incl. dense/comfortable) so each placeholder
+	   row is exactly the height of the real row it stands in for. */
 	.skeleton-node {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.3rem 0.5rem;
+		gap: 0.125rem;
+		padding: 0.25rem 0.5rem 0.25rem 0;
+		min-height: 1.75rem;
 	}
 
-	.skeleton-chevron {
-		width: 1rem;
-		height: 1rem;
-		flex-shrink: 0;
-		border-radius: 2px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+	.tree.dense .skeleton-node {
+		padding-top: 0.0625rem;
+		padding-bottom: 0.0625rem;
+		min-height: 1.375rem;
+		font-size: 0.8125rem;
+	}
+
+	.tree.comfortable .skeleton-node {
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+		min-height: 2.25rem;
+	}
+
+	.skeleton-chevron,
+	.skeleton-bar {
 		position: relative;
 		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 
 		&::after {
 			content: '';
 			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
+			inset: 0;
 			transform: translateX(-100%);
 			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
 			);
-			animation: tree-shimmer 2s infinite;
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
+	}
+
+	/* The real chevron button occupies a 1.25rem slot; the visible placeholder
+	   is the icon-sized square centered inside it. */
+	.skeleton-chevron {
+		width: 0.875rem;
+		height: 0.875rem;
+		margin: 0.1875rem;
+		flex-shrink: 0;
+		border-radius: var(--radius-sm, 2px);
 	}
 
 	.skeleton-bar {
-		height: 0.875rem;
-		border-radius: 4px;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
-
-		&::after {
-			content: '';
-			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: tree-shimmer 2s infinite;
-		}
+		height: 0.7em;
+		border-radius: var(--radius-full, 1e5px);
 	}
 
-	@keyframes tree-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

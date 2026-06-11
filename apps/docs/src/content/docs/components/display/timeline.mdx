@@ -10,7 +10,7 @@ import TimelineColorDemo from '../../../../components/demos/TimelineColorDemo.sv
 import TimelineOrderDemo from '../../../../components/demos/TimelineOrderDemo.svelte';
 import TimelineAlternateDemo from '../../../../components/demos/TimelineAlternateDemo.svelte';
 import TimelineLoadMoreDemo from '../../../../components/demos/TimelineLoadMoreDemo.svelte';
-import { Timeline } from '@delightstack/components/display';
+import TimelineSkeletonDemo from '../../../../components/demos/TimelineSkeletonDemo.svelte';
 
 ## Import
 
@@ -110,8 +110,8 @@ ${'  '}</TimelineItem>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Timeline skeleton skeleton_count={4} />`}>
-  <Timeline client:load skeleton skeleton_count={4} />
+<ComponentPreview code={`<Timeline skeleton={loading} skeleton_count={3}>…</Timeline>`}>
+  <TimelineSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Timeline Props

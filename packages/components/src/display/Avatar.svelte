@@ -34,7 +34,12 @@
 		/** Custom ring color */
 		ring_color = undefined as string | undefined,
 
-		/** Show a skeleton shimmer placeholder */
+		/**
+		 * Show a skeleton shimmer placeholder until the avatar has real
+		 * content to show: it dismisses itself once the image loads (or, for
+		 * initials avatars, as soon as `name` is available). Set `false` to
+		 * never show it.
+		 */
 		skeleton = false,
 
 		/** Tooltip message */
@@ -54,6 +59,8 @@
 	} = $props();
 
 	let imgError = $state(false);
+	let imgLoaded = $state(false);
+	let img_el = $state<HTMLImageElement | undefined>(undefined);
 
 	function getInitials(value: string): string {
 		const parts = value.trim().split(/\s+/);
@@ -80,6 +87,16 @@
 	const showImage = $derived(src && !imgError);
 	const showInitials = $derived(!showImage && name);
 	const showIcon = $derived(!showImage && !name);
+
+	/* The skeleton auto-dismisses the moment the avatar has something real to
+	   render: a loaded (or failed-over) image, initials, or custom children.
+	   While an image is in flight it keeps loading underneath the shimmer. */
+	const show_skeleton = $derived.by(() => {
+		if (!skeleton) return false;
+		if (children) return false;
+		if (src) return !imgLoaded && !imgError;
+		return !name;
+	});
 	const initials = $derived(name ? getInitials(name) : '');
 	const colorKey = $derived(color_seed ?? name);
 	const nameColor = $derived(colorKey ? getNameColor(colorKey) : undefined);
@@ -112,9 +129,21 @@
 		imgError = true;
 	}
 
-	// Reset error state when src changes
+	// Reset load/error state when src changes
 	$effect(() => {
-		if (src) imgError = false;
+		if (src) {
+			imgError = false;
+			imgLoaded = false;
+		}
+	});
+
+	// Sync with the actual <img> state — cached/SSR'd images can be complete
+	// before hydration attaches the onload listener.
+	$effect(() => {
+		void src;
+		if (!img_el || !img_el.complete) return;
+		if (img_el.naturalWidth > 0) imgLoaded = true;
+		else imgError = true;
 	});
 </script>
 
@@ -126,7 +155,7 @@
 	class:square
 	class:ring
 	class:interactive={isInteractive}
-	class:skeleton
+	class:skeleton={show_skeleton}
 	role={isInteractive ? 'button' : 'img'}
 	tabindex={isInteractive ? 0 : undefined}
 	aria-label={name || 'Avatar'}
@@ -135,17 +164,26 @@
 	{onclick}
 	onkeydown={isInteractive ? handleKeyDown : undefined}
 	{@attach tooltip(tooltip_message)}>
-	{#if skeleton}
+	{#if show_skeleton}
 		<div class="skeleton-inner"></div>
-	{:else if children}
+	{/if}
+	{#if children}
 		{@render children()}
 	{:else if showImage}
-		<img {src} alt={name || ''} onerror={handleImgError} draggable="false" />
+		<!-- Kept mounted while the skeleton overlays it so the image actually
+		     loads (the skeleton dismisses itself from its onload). -->
+		<img
+			{src}
+			alt={name || ''}
+			bind:this={img_el}
+			onload={() => (imgLoaded = true)}
+			onerror={handleImgError}
+			draggable="false" />
 	{:else if showInitials}
 		<span class="initials" style:background={nameColor}>
 			{initials}
 		</span>
-	{:else}
+	{:else if !show_skeleton}
 		<span class="icon">
 			<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 				<path
@@ -426,34 +464,34 @@
 			pointer-events: none;
 		}
 
+		/* Overlays the (still-loading) image so the photo can stream in
+		   underneath and the swap is seamless when the shimmer dismisses. */
 		.skeleton-inner {
-			width: 100%;
-			height: 100%;
+			position: absolute;
+			inset: 0;
+			z-index: 1;
 			border-radius: var(--avatar-radius);
 			@supports (corner-shape: squircle) {
 				corner-shape: var(--_corner-shape);
 				border-radius: calc(var(--avatar-radius) * var(--_corner-scale));
 			}
-			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-			position: relative;
+			background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 			overflow: hidden;
 
 			&::after {
 				content: '';
 				position: absolute;
-				top: 0;
-				right: 0;
-				bottom: 0;
-				left: 0;
+				inset: 0;
 				transform: translateX(-100%);
 				background-image: linear-gradient(
-					90deg,
-					rgb(from var(--color-text, #000) r g b / 0) 0,
-					rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-					rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-					rgb(from var(--color-text, #000) r g b / 0)
+					105deg,
+					transparent 25%,
+					var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+					transparent 75%
 				);
-				animation: avatar-shimmer 2s infinite;
+				animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+					infinite;
+				animation-delay: var(--shimmer-delay, 0s);
 			}
 		}
 	}
@@ -468,7 +506,11 @@
 		}
 	}
 
-	@keyframes avatar-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

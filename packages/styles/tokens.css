@@ -184,6 +184,15 @@ html {
 	--scrollbar-thumb-color: color-mix(in oklch, var(--color-text) 35%, transparent);
 	--scrollbar-thumb-color-active: color-mix(in oklch, var(--color-text) 60%, transparent);
 
+	/* --- Skeleton --- */
+	/* Loading-skeleton system shared by every component's `skeleton` mode.
+	   The fill is translucent text color so placeholders sit comfortably on
+	   any surface (page, card, popover) in both color schemes; the sheen is
+	   the brighter beam the shared `delight-skeleton-shimmer` keyframe sweeps
+	   across each placeholder shape. */
+	--skeleton-bg: color-mix(in oklch, var(--color-text) 10%, transparent);
+	--skeleton-sheen: color-mix(in oklch, var(--color-text) 12%, transparent);
+
 	/* ============================================================
 	 * NON-COLOR TOKENS (named scales)
 	 * ============================================================ */
@@ -329,6 +338,9 @@ html {
 	--duration-normal: 200ms;
 	--duration-slow: 300ms;
 	--duration-slower: 500ms;
+	/* One shimmer cycle for loading skeletons: the beam sweeps during the
+	   first ~55% of the cycle, then the skeleton rests until the next pass. */
+	--skeleton-duration: 2.4s;
 
 	/* Motion — easing (curves preserve the most-used shipped curves) */
 	--ease-default: cubic-bezier(0.76, 0, 0.24, 1);

@@ -232,7 +232,7 @@ Use `dense` for compact node spacing or `comfortable` for relaxed spacing. The d
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Tree skeleton skeleton_count={6} skeleton_depth={3} />`}>
+<ComponentPreview code={`<Tree skeleton={loading} skeleton_count={7} skeleton_depth={3} data={loading ? [] : data} />`}>
 	<TreeSkeletonDemo client:load />
 </ComponentPreview>
 

@@ -758,14 +758,20 @@
 		<!-- Skeleton -->
 		<div class="chart-skeleton" style:height="{height}px">
 			{#if type === 'pie' || type === 'donut'}
-				<div class="skeleton-circle"></div>
+				<!-- Same disc the real pie renders: centered, radius = min(w,h)/2 - 30.
+				     The donut keeps its hole via a radial mask at the real inner radius. -->
+				<div
+					class="skeleton-circle"
+					class:donut={type === 'donut'}
+					style:--donut-inner="{Math.max(0, Math.min(1, inner_radius || 0.6)) * 100}%">
+				</div>
 			{:else}
 				<div class="skeleton-bars">
 					{#each Array(7) as _, i}
 						<div
 							class="skeleton-bar"
 							style:height="{30 + Math.sin(i * 0.8) * 40 + 30}%"
-							style:animation-delay="{i * 0.1}s">
+							style:--shimmer-delay="{i * 120}ms">
 						</div>
 					{/each}
 				</div>
@@ -1314,16 +1320,41 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 20px;
 	}
 
+	/* Mirrors the real svg plot area (PADDING_LEFT/RIGHT/TOP/BOTTOM) so the
+	   placeholder bars rise from the same baseline, inside the same box, the
+	   real bars/lines will occupy — no shift when data arrives. */
 	.skeleton-bars {
 		display: flex;
 		align-items: flex-end;
 		gap: 8px;
 		height: 100%;
 		width: 100%;
-		padding: 20px 0;
+		padding: 20px 20px 30px 50px;
+	}
+
+	.skeleton-bar,
+	.skeleton-circle {
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
+		}
 	}
 
 	.skeleton-bar {
@@ -1334,51 +1365,36 @@
 			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2))
 				calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2)) 0 0;
 		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
-
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: chart-shimmer 2s infinite;
-		}
 	}
 
+	/* Same disc the real pie/donut draws: centered, diameter = min(w,h) - 60. */
 	.skeleton-circle {
-		width: min(200px, 60%);
+		height: calc(100% - 60px);
+		max-width: calc(100% - 60px);
 		aspect-ratio: 1;
-		border-radius: 50%;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
+		border-radius: var(--radius-full, 1e5px);
 
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+		/* Donut: punch out the real inner radius so the ring (and its shimmer)
+		   matches the loaded shape. */
+		&.donut {
+			-webkit-mask: radial-gradient(
+				closest-side,
+				transparent calc(var(--donut-inner, 60%) - 1px),
+				#000 var(--donut-inner, 60%)
 			);
-			animation: chart-shimmer 2s infinite;
+			mask: radial-gradient(
+				closest-side,
+				transparent calc(var(--donut-inner, 60%) - 1px),
+				#000 var(--donut-inner, 60%)
+			);
 		}
 	}
 
-	@keyframes chart-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

@@ -358,7 +358,7 @@
 				<div
 					class="skeleton-line"
 					style:width="{40 + ((i * 37) % 50)}%"
-					style:animation-delay="{i * 100}ms">
+					style:--shimmer-delay="{i * 120}ms">
 				</div>
 			{/each}
 		</div>
@@ -690,6 +690,10 @@
 
 	.code.skeleton {
 		pointer-events: none;
+		/* The %-width placeholder lines have no intrinsic width, so in a
+		   flex/grid parent the skeleton would collapse to the filename bar —
+		   fill the container instead (the real block's natural max). */
+		width: 100%;
 		border-radius: var(--radius-lg, 0.5rem);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
@@ -709,17 +713,12 @@
 		min-height: 2rem;
 	}
 
-	.skeleton-filename {
-		height: 0.75rem;
-		width: 6rem;
-		border-radius: var(--radius-lg, 0.5rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+	.skeleton-filename,
+	.skeleton-line {
 		position: relative;
 		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+		border-radius: var(--radius-full, 1e5px);
 
 		&::after {
 			content: '';
@@ -727,51 +726,45 @@
 			inset: 0;
 			transform: translateX(-100%);
 			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
 			);
-			animation: code-shimmer 2s infinite;
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
 	}
 
+	/* Filename text-line at the real .code-filename size (0.8125rem). */
+	.skeleton-filename {
+		font-size: 0.8125rem;
+		height: 0.7em;
+		width: 6rem;
+	}
+
+	/* Matches the real code block: `code` has 0.75rem block padding, lines are
+	   padded 1rem left and stack at 1lh (line-height 1.6 on .code). */
 	.skeleton-body {
 		padding: 0.75rem 1rem;
+		/* Flex column so the line margins don't collapse between bars. */
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
 	}
 
+	/* Each placeholder occupies exactly one code line: the 0.7em bar is padded
+	   out to 1lh by its margins, so five bars equal five real lines. */
 	.skeleton-line {
-		height: 0.875rem;
-		border-radius: var(--radius-lg, 0.5rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
-
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: code-shimmer 2s infinite;
-		}
+		height: 0.7em;
+		margin-block: calc((1lh - 0.7em) / 2);
 	}
 
-	@keyframes code-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

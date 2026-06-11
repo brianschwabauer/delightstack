@@ -117,9 +117,12 @@
 	aria-label="Avatar group">
 	{#if skeleton}
 		{#each { length: skeleton_count } as _, i}
+			<!-- --shimmer-delay inherits down to the Avatar skeleton's animating
+			     ::after, staggering the shimmer into a wave across the stack. -->
 			<div
 				class="avatar-wrapper"
-				style:z-index={direction === 'right' ? skeleton_count - i : i + 1}>
+				style:z-index={direction === 'right' ? skeleton_count - i : i + 1}
+				style:--shimmer-delay="{i * 120}ms">
 				<Avatar {size} skeleton ring {ring_color} />
 			</div>
 		{/each}

@@ -1,9 +1,8 @@
 <script>
-	import { Steps, Step } from '@delightstack/components/navigation';
+	import { Timeline, TimelineItem } from '@delightstack/components/display';
 	import { Button } from '@delightstack/components/actions';
 
 	let loading = $state(true);
-	let current = $state(1);
 </script>
 
 <div class="skeleton-demo">
@@ -11,12 +10,15 @@
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
 	<div style="width: 100%;">
-		<Steps skeleton={loading} skeleton_count={4} bind:current>
-			<Step title="Account" description="Create your account" />
-			<Step title="Profile" description="Set up your profile" />
-			<Step title="Review" description="Review details" />
-			<Step title="Complete" description="All done" />
-		</Steps>
+		<Timeline skeleton={loading} skeleton_count={3}>
+			<TimelineItem title="Order placed" date="Jan 10" status="complete">
+				Your order has been received.
+			</TimelineItem>
+			<TimelineItem title="Shipped" date="Jan 11" status="active">
+				Package is on its way.
+			</TimelineItem>
+			<TimelineItem title="Delivered" status="pending" />
+		</Timeline>
 	</div>
 </div>
 

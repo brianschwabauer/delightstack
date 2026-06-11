@@ -5,6 +5,7 @@ description: A QR code generator component that renders scannable codes as crisp
 
 import { QR } from '@delightstack/components/display';
 import QrDownloadDemo from '../../../../components/demos/QrDownloadDemo.svelte';
+import QrSkeletonDemo from '../../../../components/demos/QrSkeletonDemo.svelte';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 
 ## Import
@@ -76,15 +77,15 @@ ${'  '}let qr_ref = $state(undefined);
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<QR value="" skeleton size={200} />`}>
-  <QR client:load value="" skeleton size={200} />
+<ComponentPreview code={`<QR skeleton value={loading ? undefined : 'https://thedelight.co'} size={200} />`}>
+  <QrSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `value` | `string` | required | Data to encode (URL, text, etc.) |
+| `value` | `string` | - | Data to encode (URL, text, etc.). May be assigned later — pair with `skeleton` to show a placeholder until it arrives |
 | `size` | `number` | `200` | Size in pixels (width and height) |
 | `level` | `'L' \| 'M' \| 'Q' \| 'H'` | `'M'` | Error correction level |
 | `foreground` | `string` | `'#000000'` | Module (dark) color |
@@ -95,7 +96,7 @@ ${'  '}let qr_ref = $state(undefined);
 | `rounded` | `boolean` | `false` | Round module corners |
 | `downloadable` | `boolean` | `false` | Show a download button |
 | `download_filename` | `string` | `'qr-code'` | Filename for the downloaded PNG (without extension) |
-| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeleton` | `boolean` | `false` | Show a skeleton while `value` is not yet available; it dismisses itself as soon as the code renders |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 

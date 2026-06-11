@@ -5,6 +5,7 @@ description: A profile image component with initials fallback, status indicators
 
 import { Avatar } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
+import AvatarSkeletonDemo from '../../../../components/demos/AvatarSkeletonDemo.svelte';
 
 ## Import
 
@@ -125,8 +126,8 @@ ${'  '}tooltip="Alice Johnson - Online"
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Avatar skeleton size="3" />`}>
-	<Avatar client:load skeleton size="3" />
+<ComponentPreview code={`<Avatar skeleton name={loading ? undefined : 'Ada Lovelace'} size="3" />`}>
+	<AvatarSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props
@@ -142,7 +143,7 @@ ${'  '}tooltip="Alice Johnson - Online"
 | `badge` | `number \| boolean` | - | Notification badge (true for dot, number for count) |
 | `ring` | `boolean` | `false` | Show colored ring around avatar |
 | `ring_color` | `string` | - | Custom ring color |
-| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeleton` | `boolean` | `false` | Show a skeleton until the avatar has content — it dismisses itself once the image loads (or immediately when `name`/children can render) |
 | `tooltip` | `string` | `''` | Tooltip text |
 | `onclick` | `(e: MouseEvent) => void` | - | Click handler (makes avatar interactive) |
 | `id` | `string` | auto | Element ID |

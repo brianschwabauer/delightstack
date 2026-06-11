@@ -172,6 +172,11 @@
 		onpagesizechange?.({ page_size: newSize });
 		onchange?.({ page: 1 });
 	}
+
+	// Skeleton page placeholders mirror the real pageRange when total_pages is
+	// already known, so skeleton ↔ loaded swaps without layout shift; otherwise
+	// fall back to a typical "1 … 5 [6] 7 … 11" run (7 cells).
+	const skeletonPageCount = $derived(total_pages > 0 ? pageRange.length : 7);
 </script>
 
 <nav
@@ -179,11 +184,66 @@
 	class={['pagination', class_name].filter(Boolean).join(' ')}
 	class:skeleton
 	aria-label="Pagination"
+	aria-hidden={skeleton || undefined}
 	style:--pg-min-width={sizeConfig.min_width}
 	style:--pg-height={sizeConfig.height}
 	style:--pg-font-size={sizeConfig.font_size}>
 	{#if skeleton}
-		<div class="skeleton-inner"></div>
+		<!-- Placeholders mirror the real layout per mode (and the optional
+		     page-size / info slots) so the swap to live controls never shifts. -->
+		{@const delay_base = (show_page_size ? 1 : 0) + (show_info ? 1 : 0)}
+		{#if show_page_size}
+			<span class="page-size-label">
+				<span class="skeleton-bar" style:width="2em" style:--shimmer-delay="0ms"></span>
+				<span class="skeleton-select" style:--shimmer-delay="0ms"></span>
+			</span>
+		{/if}
+		{#if show_info}
+			<span class="pagination-info">
+				<span
+					class="skeleton-bar"
+					style:width="9em"
+					style:--shimmer-delay="{(show_page_size ? 1 : 0) * 120}ms">
+				</span>
+			</span>
+		{/if}
+		<div class="pagination-controls">
+			{#if compact}
+				<span class="skeleton-page" style:--shimmer-delay="{delay_base * 120}ms"></span>
+				<span class="pagination-compact-info">
+					<span
+						class="skeleton-bar"
+						style:width="2.5em"
+						style:--shimmer-delay="{(delay_base + 1) * 120}ms">
+					</span>
+				</span>
+				<span class="skeleton-page" style:--shimmer-delay="{(delay_base + 2) * 120}ms">
+				</span>
+			{:else if simple}
+				<span class="skeleton-nav" style:--shimmer-delay="{delay_base * 120}ms"></span>
+				<span class="pagination-simple-info">
+					<span
+						class="skeleton-bar"
+						style:width="5.5em"
+						style:--shimmer-delay="{(delay_base + 1) * 120}ms">
+					</span>
+				</span>
+				<span class="skeleton-nav" style:--shimmer-delay="{(delay_base + 2) * 120}ms">
+				</span>
+			{:else}
+				<span class="skeleton-nav" style:--shimmer-delay="{delay_base * 120}ms"></span>
+				{#each { length: skeletonPageCount } as _, i}
+					<span
+						class="skeleton-page"
+						style:--shimmer-delay="{(delay_base + 1 + i) * 120}ms">
+					</span>
+				{/each}
+				<span
+					class="skeleton-nav"
+					style:--shimmer-delay="{(delay_base + 1 + skeletonPageCount) * 120}ms">
+				</span>
+			{/if}
+		</div>
 	{:else}
 		{#if show_page_size}
 			<label class="page-size-label">
@@ -356,48 +416,71 @@
 		perspective: 100px;
 	}
 
+	/* ========== Skeleton ========== */
 	.pagination.skeleton {
 		pointer-events: none;
-		min-height: var(--pg-height);
-		min-width: 12rem;
-		border-radius: var(--radius-md, 0.375rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.375rem) * var(--squircle-ratio, 2));
-		}
-		position: relative;
-		overflow: hidden;
 	}
 
-	.skeleton-inner {
-		width: 100%;
-		height: 100%;
-		position: absolute;
-		inset: 0;
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		border-radius: var(--radius-md, 0.375rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.375rem) * var(--squircle-ratio, 2));
-		}
+	/* Every placeholder shape shares the token-driven shimmer surface. */
+	.skeleton-nav,
+	.skeleton-page,
+	.skeleton-select,
+	.skeleton-bar {
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 
 		&::after {
 			content: '';
 			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			left: 0;
+			inset: 0;
 			transform: translateX(-100%);
 			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
 			);
-			animation: pagination-shimmer 2s infinite;
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
 		}
+	}
+
+	/* Mirrors .pagination-button's box: --pg-min-width × --pg-height for page
+	   numbers (and compact icon-only prev/next); the wider prev/next variant
+	   approximates icon + label + padding. Same radius (+ squircle) as the
+	   real buttons. */
+	.skeleton-nav,
+	.skeleton-page,
+	.skeleton-select {
+		flex-shrink: 0;
+		height: var(--pg-height);
+		border-radius: var(--radius-md, 0.375rem);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 0.375rem) * var(--squircle-ratio, 2));
+		}
+	}
+
+	.skeleton-page {
+		width: var(--pg-min-width);
+	}
+
+	.skeleton-nav {
+		width: 4.25em;
+	}
+
+	.skeleton-select {
+		width: 3.25em;
+	}
+
+	/* Text placeholder: a text-height pill standing in for the info strings. */
+	.skeleton-bar {
+		display: inline-block;
+		vertical-align: middle;
+		height: 0.7em;
+		border-radius: var(--radius-full, 1e5px);
 	}
 
 	.pagination-controls {
@@ -543,14 +626,21 @@
 		}
 	}
 
-	@keyframes pagination-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.skeleton-inner::after {
+		.skeleton-nav::after,
+		.skeleton-page::after,
+		.skeleton-select::after,
+		.skeleton-bar::after {
 			animation: none;
 		}
 

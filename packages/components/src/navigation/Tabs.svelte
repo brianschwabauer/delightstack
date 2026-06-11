@@ -272,6 +272,10 @@
 		'2': 'var(--text-lg, 1rem)',
 		'3': 'var(--text-xl, 1.125rem)',
 	};
+
+	/* Pseudo-random skeleton tab widths (em) — real tab labels vary, so the
+	   placeholders should too. */
+	const skeletonWidths = [5, 6.5, 4.25, 5.75];
 </script>
 
 {#if isContainer}
@@ -288,9 +292,17 @@
 		class:disabled
 		style:font-size={sizeMap[size] ?? sizeMap['1']}>
 		{#if skeleton}
-			<div class="tab-list" role="tablist" aria-orientation={orientation}>
-				{#each { length: skeleton_count } as _}
-					<div class="tab-skeleton"></div>
+			<div
+				class="tab-list skeleton"
+				role="tablist"
+				aria-orientation={orientation}
+				aria-hidden="true">
+				{#each { length: skeleton_count } as _, i}
+					<div
+						class="tab-skeleton"
+						style:width="{skeletonWidths[i % skeletonWidths.length]}em"
+						style:--shimmer-delay="{i * 120}ms">
+					</div>
 				{/each}
 			</div>
 		{:else}
@@ -616,25 +628,85 @@
 	}
 
 	/* ========== Skeleton ========== */
+	/* The list keeps its real chrome (underline border / boxed / segment
+	   surfaces come from .tab-list), so only the bars need defining. A small
+	   gap separates the bars where real tabs touch (their padding provides the
+	   visual separation that solid bars lack). */
+	.tab-list.skeleton {
+		pointer-events: none;
+		gap: 0.375em;
+
+		.tabs.full-width & > .tab-skeleton {
+			flex: 1;
+		}
+	}
+
+	/* Each bar is a whole tab's box: the real block padding (0.625em, or 0.5em
+	   for pills/boxed/segment) around one line box (1lh), so the list height —
+	   including the indicator strip — never shifts when the real tabs arrive. */
 	.tab-skeleton {
-		height: 2.25em;
-		width: 5em;
+		height: calc(1lh + 1.25em);
+		flex-shrink: 0;
 		border-radius: var(--radius-md, 0.375rem);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-md, 0.375rem) * var(--squircle-ratio, 2));
 		}
-		background: var(--color-bg-muted, #e0e0e0);
-		animation: skeleton-pulse 1.5s ease-in-out infinite;
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
+		}
+
+		.tabs.pills &,
+		.tabs.boxed &,
+		.tabs.segment & {
+			height: calc(1lh + 1em);
+		}
+
+		.tabs.pills & {
+			border-radius: var(--radius-full, 9999px);
+		}
+
+		.tabs.boxed &,
+		.tabs.segment & {
+			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(
+					(var(--radius-lg, 0.5rem) - 0.125rem) * var(--squircle-ratio, 2)
+				);
+			}
+		}
 	}
 
-	@keyframes skeleton-pulse {
-		0%,
-		100% {
-			opacity: 0.5;
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
 		}
-		50% {
-			opacity: 0.8;
+		55%,
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.tab-skeleton::after {
+			animation: none;
 		}
 	}
 

@@ -91,9 +91,9 @@ ${'  '}<Checkbox checked={false} label="Write" />
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Fieldset skeleton label="User Profile" bordered>
-${'  '}<Input label="Name" name="name" skeleton />
-${'  '}<Input label="Email" name="email" skeleton />
+<ComponentPreview code={`<Fieldset skeleton={loading} label="User Profile" bordered>
+${'  '}<Input label="Name" name="name" skeleton={loading} bind:value={name} />
+${'  '}<Input label="Email" name="email" skeleton={loading} bind:value={email} />
 </Fieldset>`}>
 	<FieldsetSkeletonDemo client:load />
 </ComponentPreview>

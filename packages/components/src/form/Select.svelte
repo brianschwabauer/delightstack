@@ -750,6 +750,13 @@
 					fill="none" />
 			</svg>
 		</span>
+
+		<!-- Skeleton shimmer overlay — its own element so the sweep can be
+		     clipped to the trigger's corners without overflow:hidden on the
+		     trigger (which would clip the floating label). -->
+		{#if skeleton}
+			<span class="skeleton-sweep" aria-hidden="true"></span>
+		{/if}
 	</div>
 
 	<!-- Dropdown — native popover, positioned with CSS anchor positioning -->
@@ -1021,28 +1028,47 @@
 	.select.skeleton {
 		pointer-events: none;
 	}
-	.select.skeleton .select-trigger::after {
-		content: '';
+	.skeleton-sweep {
 		position: absolute;
 		inset: 0;
+		z-index: 1;
 		border-radius: inherit;
 		@supports (corner-shape: squircle) {
 			corner-shape: inherit;
 		}
-		background: linear-gradient(
-			100deg,
-			transparent 30%,
-			color-mix(in oklch, var(--_text, currentColor) 9%, transparent) 50%,
-			transparent 70%
-		);
-		background-size: 220% 100%;
-		background-position: 180% 0;
-		animation: select-skeleton-sweep 1.5s ease-in-out infinite;
+		overflow: hidden;
 		pointer-events: none;
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
+		}
 	}
-	@keyframes select-skeleton-sweep {
-		to {
-			background-position: -180% 0;
+
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton-sweep::after {
+			animation: none;
 		}
 	}
 

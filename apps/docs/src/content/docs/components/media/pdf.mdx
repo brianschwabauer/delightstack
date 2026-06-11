@@ -133,7 +133,7 @@ ${'  '}onload={(d) => total_pages = d.total_pages} />
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<PDF skeleton height="600px" />`}>
+<ComponentPreview code={`<PDF src={url_when_loaded} height="600px" />`}>
 	<PdfSkeletonDemo client:visible />
 </ComponentPreview>
 
@@ -141,7 +141,7 @@ ${'  '}onload={(d) => total_pages = d.total_pages} />
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `src` | `string \| ArrayBuffer \| Uint8Array` | required | PDF source: URL string, ArrayBuffer, or Uint8Array |
+| `src` | `string \| ArrayBuffer \| Uint8Array` | - | PDF source: URL string, ArrayBuffer, or Uint8Array. May be assigned later — the skeleton shows until it arrives |
 | `page` | `number` | `1` | Current page number, 1-based (`$bindable`) |
 | `zoom` | `number` | `1` | Zoom level where 1 = 100% (`$bindable`) |
 | `rotation` | `number` | `0` | Rotation in degrees (0, 90, 180, 270) |
@@ -152,7 +152,7 @@ ${'  '}onload={(d) => total_pages = d.total_pages} />
 | `annotatable` | `boolean` | `false` | Enable annotation tools |
 | `height` | `string` | `'600px'` | Container height |
 | `single_page` | `boolean` | `false` | Render only the current `page`, disable internal scroll, and fit the page to the container. Designed for embedding inside Gallery/Carousel or any external page navigator. |
-| `skeleton` | `boolean` | `false` | Show loading skeleton |
+| `skeleton` | `boolean` | `true` | Built-in loading state: shows a skeleton while the document loads (including before `src` is available) and dismisses itself when ready. Set `false` to disable |
 | `text_layer` | `boolean` | `true` | Render the selectable/searchable text layer over each page. Disable it (the Carousel does this automatically) to skip text extraction and per-glyph layout for faster rendering when selection isn't needed. Search still works. |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |

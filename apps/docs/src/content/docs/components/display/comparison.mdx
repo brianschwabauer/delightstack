@@ -113,7 +113,7 @@ ${'  '}snaps={[25, 50, 75]}
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Comparison skeleton />`}>
+<ComponentPreview code={`<Comparison skeleton={loading} before={before_url} after={after_url} />`}>
   <ComparisonSkeletonDemo client:load />
 </ComponentPreview>
 
@@ -140,6 +140,13 @@ ${'  '}snaps={[25, 50, 75]}
 | Event | Detail | Description |
 |-------|--------|-------------|
 | `onchange` | `{ position: number }` | Fired when the divider position changes |
+
+## CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--cmp-radius` | `var(--radius-xl, 20px)` | Corner radius of the container (set `0` to square it off) |
+| `--cmp-aspect` | `16 / 9` | Aspect ratio of the skeleton placeholder — set it to match the real images so the skeleton ↔ loaded swap doesn't shift |
 
 ## Accessibility
 

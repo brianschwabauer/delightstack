@@ -337,7 +337,33 @@
 		}
 	}
 
+	.skeleton-icon,
+	.skeleton-value,
+	.skeleton-label,
+	.skeleton-change {
+		position: relative;
+		overflow: hidden;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
+		}
+	}
+
 	.skeleton-icon {
+		--shimmer-delay: 0ms;
 		width: var(--stat-icon-size);
 		height: var(--stat-icon-size);
 		border-radius: var(--radius-md, 0.25rem);
@@ -345,121 +371,50 @@
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
 		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		flex-shrink: 0;
-		position: relative;
-		overflow: hidden;
-
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: stat-shimmer 2s infinite;
-		}
 	}
 
+	/* Mirrors .stat-body (gap 0.125rem); each bar pads itself out to the real
+	   text line's height so the loaded stat lands without a shift. */
 	.skeleton-body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.125rem;
 	}
 
+	/* Value line: real font is --stat-value-font at line-height 1.15. */
 	.skeleton-value {
+		--shimmer-delay: 120ms;
 		width: 6em;
-		height: var(--stat-value-font);
-		border-radius: var(--radius-md, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
+		height: calc(var(--stat-value-font) * 0.7);
+		margin-block: calc(var(--stat-value-font) * 0.225);
+		border-radius: var(--radius-full, 1e5px);
+	}
 
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: stat-shimmer 2s infinite;
-		}
+	/* Label / change lines: real font is --stat-label-font at line-height 1.3. */
+	.skeleton-label,
+	.skeleton-change {
+		height: calc(var(--stat-label-font) * 0.7);
+		margin-block: calc(var(--stat-label-font) * 0.3);
+		border-radius: var(--radius-full, 1e5px);
 	}
 
 	.skeleton-label {
+		--shimmer-delay: 240ms;
 		width: 8em;
-		height: var(--stat-label-font);
-		border-radius: var(--radius-md, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		position: relative;
-		overflow: hidden;
-
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: stat-shimmer 2s infinite;
-			animation-delay: 0.15s;
-		}
 	}
 
 	.skeleton-change {
+		--shimmer-delay: 360ms;
 		width: 10em;
-		height: var(--stat-label-font);
-		border-radius: var(--radius-md, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		margin-top: 0.25rem;
-		position: relative;
-		overflow: hidden;
-
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				90deg,
-				rgb(from var(--color-text, #000) r g b / 0) 0,
-				rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-				rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-				rgb(from var(--color-text, #000) r g b / 0)
-			);
-			animation: stat-shimmer 2s infinite;
-			animation-delay: 0.3s;
-		}
+		margin-top: calc(0.25rem + var(--stat-label-font) * 0.3);
 	}
 
-	@keyframes stat-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

@@ -312,11 +312,10 @@
 					<li class="breadcrumb-separator">{@render sep()}</li>
 				{/if}
 				<li class="breadcrumb-item">
-					<span class="bc-skeleton-cell">
+					<span class="bc-skeleton-cell" style:--shimmer-delay="{i * 120}ms">
 						<span
 							class="skeleton-bar"
-							style:width="{skeletonWidths[i % skeletonWidths.length]}em"
-							style:animation-delay="{i * 150}ms">
+							style:width="{skeletonWidths[i % skeletonWidths.length]}em">
 						</span>
 					</span>
 				</li>
@@ -561,43 +560,53 @@
 	 * hidden; its Button's Popover is portaled, so it isn't affected by the clip. */
 
 	/* ── Skeleton ────────────────────────────────────────────────────────────
-	 * Each cell mirrors a dense Button's box (padding 0.5em 1em, line-height 1em)
-	 * so toggling skeleton ↔ loaded never shifts the row height. The bar width is
-	 * in em, so larger `size` values yield proportionally larger shimmers. */
+	 * Each cell mirrors a dense Button's box exactly — same fixed control font
+	 * and the shared dense control-height formula (see Button's standalone
+	 * height rule) — so toggling skeleton ↔ loaded never shifts the row
+	 * height. The text-height pill bar is centered inside that slot. */
 	.bc-skeleton-cell {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.5em 0.55em;
+		justify-content: center;
+		box-sizing: border-box;
+		font-size: var(--control-font-1, 1rem);
+		padding: 0 0.55em;
+		min-height: calc(1em * var(--control-height-ratio-dense, 2.5));
 		line-height: 1em;
+	}
+	.breadcrumbs.dense .bc-skeleton-cell {
+		padding-inline: 0.4em;
 	}
 	.skeleton-bar {
 		display: block;
-		height: 1em;
-		border-radius: var(--radius-sm, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		height: 0.7em;
+		border-radius: var(--radius-full, 1e5px);
 		position: relative;
 		overflow: hidden;
-	}
-	.skeleton-bar::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		transform: translateX(-100%);
-		background-image: linear-gradient(
-			90deg,
-			rgb(from var(--color-text, #000) r g b / 0) 0,
-			rgb(from var(--color-text, #000) r g b / 0.08) 20%,
-			rgb(from var(--color-text, #000) r g b / 0.15) 60%,
-			rgb(from var(--color-text, #000) r g b / 0)
-		);
-		animation: breadcrumb-shimmer 2s infinite;
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+
+		&::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			transform: translateX(-100%);
+			background-image: linear-gradient(
+				105deg,
+				transparent 25%,
+				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+				transparent 75%
+			);
+			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+				infinite;
+			animation-delay: var(--shimmer-delay, 0s);
+		}
 	}
 
-	@keyframes breadcrumb-shimmer {
+	@keyframes -global-delight-skeleton-shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		55%,
 		100% {
 			transform: translateX(100%);
 		}

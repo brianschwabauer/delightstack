@@ -3,10 +3,10 @@ title: Stat
 description: A component for displaying key metrics with optional labels, icons, change indicators, and animated number display.
 ---
 
-import { Stat } from '@delightstack/components/display';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import StatDemo from '../../../../components/demos/StatDemo.svelte';
 import StatSizesDemo from '../../../../components/demos/StatSizesDemo.svelte';
+import StatSkeletonDemo from '../../../../components/demos/StatSkeletonDemo.svelte';
 
 ## Import
 
@@ -87,8 +87,8 @@ ${'  '}change_label="fewer than last week"
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Stat skeleton size="2" />`}>
-  <Stat client:load skeleton size="2" />
+<ComponentPreview code={`<Stat skeleton={loading} value={2451} label="Total Users" size="2" />`}>
+  <StatSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props

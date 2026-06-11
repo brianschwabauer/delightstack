@@ -313,8 +313,22 @@
 </script>
 
 {#if skeleton}
-	<div class={['comparison', 'skeleton', class_name].filter(Boolean).join(' ')} {id}>
-		<div class="skeleton-inner"></div>
+	<!-- Ghost of the real component: image well + divider/handle + label
+	     pills, so the user sees "a comparison slider will appear here". -->
+	<div
+		class={['comparison', 'skeleton', class_name].filter(Boolean).join(' ')}
+		class:vertical
+		{id}
+		aria-hidden="true">
+		<div class="skeleton-inner">
+			{#if show_labels}
+				<span class="skeleton-label label-before"></span>
+				<span class="skeleton-label label-after"></span>
+			{/if}
+			<div class="skeleton-divider">
+				<div class="skeleton-handle"></div>
+			</div>
+		</div>
 	</div>
 {:else}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -389,9 +403,16 @@
 		--label-padding: var(--padding-label, 4px 10px);
 		--label-radius: var(--radius-md, 4px);
 		--label-font-size: var(--text-sm, 0.8125rem);
+		/* Rounded media corners — override with --cmp-radius (0 to disable) */
+		--_radius: var(--cmp-radius, var(--radius-xl, 20px));
 
 		position: relative;
 		overflow: hidden;
+		border-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+		}
 		touch-action: none;
 		user-select: none;
 		-webkit-user-select: none;
@@ -416,15 +437,19 @@
 		}
 	}
 
+	/* The real component's height comes from the image, which is unknowable
+	   while loading — default to a 16/9 media well (override with
+	   --cmp-aspect to match the real images and avoid any layout shift). */
 	.skeleton-inner {
 		width: 100%;
 		min-height: 200px;
-		border-radius: var(--radius-xl, 8px);
+		aspect-ratio: var(--cmp-aspect, 16 / 9);
+		border-radius: var(--_radius);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-radius: calc(var(--radius-xl, 8px) * var(--squircle-ratio, 2));
+			border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 		}
-		background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.06));
+		background-color: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 		position: relative;
 		overflow: hidden;
 	}
@@ -433,27 +458,86 @@
 		content: '';
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(
-			90deg,
+		z-index: 1;
+		transform: translateX(-100%);
+		background-image: linear-gradient(
+			105deg,
 			transparent 25%,
-			light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.04)) 50%,
+			var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
 			transparent 75%
 		);
-		background-size: 200% 100%;
-		animation: skeleton-pulse 1.5s ease-in-out infinite;
+		animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+			infinite;
 	}
 
-	@keyframes skeleton-pulse {
+	@keyframes -global-delight-skeleton-shimmer {
 		0% {
-			background-position: 200% 0;
+			transform: translateX(-100%);
 		}
+		55%,
 		100% {
-			background-position: -200% 0;
+			transform: translateX(100%);
 		}
+	}
+
+	/* Ghost divider + handle at the resting snap position. The handle
+	   breathes gently so the placeholder feels alive even between sweeps. */
+	.skeleton-divider {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 50%;
+		width: var(--divider-width);
+		transform: translateX(-50%);
+		background: var(--divider-color);
+		opacity: 0.55;
+	}
+
+	.vertical .skeleton-divider {
+		top: 50%;
+		bottom: auto;
+		left: 0;
+		right: 0;
+		width: auto;
+		height: var(--divider-width);
+		transform: translateY(-50%);
+	}
+
+	.skeleton-handle {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		translate: -50% -50%;
+		width: var(--handle-size);
+		height: var(--handle-size);
+		border-radius: var(--radius-full, 9999px);
+		background: var(--handle-color);
+		box-shadow: var(--handle-shadow);
+		opacity: 0.75;
+		animation: comparison-handle-breathe 2.4s ease-in-out infinite;
+	}
+
+	@keyframes comparison-handle-breathe {
+		50% {
+			scale: 1.08;
+		}
+	}
+
+	/* Ghost label pills in the real labels' corners */
+	.skeleton-label {
+		position: absolute;
+		z-index: 2;
+		width: 4.5em;
+		height: calc(1em + 8px);
+		font-size: var(--label-font-size);
+		border-radius: var(--label-radius);
+		background: var(--label-bg);
+		opacity: 0.45;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.skeleton-inner::after {
+		.skeleton-inner::after,
+		.skeleton-handle {
 			animation: none;
 		}
 	}
@@ -463,6 +547,14 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+		/* The container clips to the rounded corners except while the divider
+		   overshoots (overflow: visible) — round the images too so the corners
+		   hold up during that drag. */
+		border-radius: var(--_radius);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+		}
 
 		&.before {
 			position: relative;
