@@ -215,10 +215,14 @@ ${'  '}{/snippet}
 	<SelectCustomOptionDemo client:load />
 </ComponentPreview>
 
-### Skeleton Loading
+### Filled
 
-<ComponentPreview code={`<Select label="Country" skeleton={loading} options={countries} />`}>
-	<SelectSkeletonDemo client:load />
+The trigger is transparent (outlined) by default so it sits cleanly on any surface. Set `filled` to paint a solid surface background behind it.
+
+<ComponentPreview code={`<Select label="Outlined (default)" placeholder="Transparent surface" options={countries} />
+<Select label="Filled" placeholder="Solid surface" options={countries} filled />`}>
+	<Select client:load label="Outlined (default)" placeholder="Transparent surface" options={[{ value: 'us', label: 'United States' }, { value: 'ca', label: 'Canada' }, { value: 'uk', label: 'United Kingdom' }]} />
+	<Select client:load label="Filled" placeholder="Solid surface" options={[{ value: 'us', label: 'United States' }, { value: 'ca', label: 'Canada' }, { value: 'uk', label: 'United Kingdom' }]} filled />
 </ComponentPreview>
 
 ## Props
@@ -242,6 +246,7 @@ ${'  '}{/snippet}
 | `tooltip` | `string` | - | Tooltip text on hover |
 | `dense` | `boolean` | `false` | Compact option spacing |
 | `comfortable` | `boolean` | `false` | Relaxed option spacing |
+| `filled` | `boolean` | `false` | Paint a solid surface background behind the trigger (vs the default transparent/outlined look) |
 | `id` | `string` | auto | Element ID |
 | `name` | `string` | - | Form field name |
 | `class` | `string` | `''` | Additional CSS classes |

@@ -131,6 +131,10 @@
 		/** More internal spacing */
 		comfortable = false,
 
+		/** Paint a filled surface background behind the control (vs the default
+		 *  transparent/outlined look) */
+		filled = false,
+
 		/** Element ID */
 		id = propId,
 
@@ -959,6 +963,7 @@
 	class:skeleton
 	class:dense
 	class:comfortable
+	class:filled
 	class:has-label={!!label}
 	class:placeholder-deferred={placeholder_deferred}
 	class:has-prefix={!!prefix}
@@ -1623,8 +1628,14 @@
 			corner-shape: squircle;
 			border-radius: var(--_cr);
 		}
-		background: var(--_bg);
+		/* Transparent (outlined) by default; the `filled` prop paints the surface. */
+		background: transparent;
 		cursor: text;
+	}
+
+	/* Filled variant — paint the control surface behind the field. */
+	.input.filled .input-wrapper {
+		background: var(--_bg);
 	}
 
 	.input.dense .input-wrapper {

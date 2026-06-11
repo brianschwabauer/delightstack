@@ -73,6 +73,10 @@
 		/** Whether the component uses comfortable spacing */
 		comfortable = false,
 
+		/** Paint a filled surface background behind the trigger (vs the default
+		 *  transparent/outlined look) */
+		filled = false,
+
 		/** The id of the select element */
 		id = propId,
 
@@ -647,6 +651,7 @@
 	class={['select', `size-${size}`, class_name].filter(Boolean).join(' ')}
 	class:dense
 	class:comfortable
+	class:filled
 	class:disabled
 	class:skeleton
 	class:open
@@ -1101,7 +1106,8 @@
 			corner-shape: squircle;
 			border-radius: var(--_cr);
 		}
-		background: var(--_bg);
+		/* Transparent (outlined) by default; the `filled` prop paints the surface. */
+		background: transparent;
 		cursor: pointer;
 		width: 100%;
 		font: inherit;
@@ -1109,6 +1115,11 @@
 		color: var(--_text);
 		text-align: left;
 		outline: none;
+	}
+
+	/* Filled variant — paint the trigger surface behind the control. */
+	.select.filled .select-trigger {
+		background: var(--_bg);
 	}
 
 	.select.dense .select-trigger {
