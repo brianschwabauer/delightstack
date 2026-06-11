@@ -242,7 +242,6 @@
 		{value}
 		{id}
 		{disabled}
-		class="sr-only"
 		checked={checked === true}
 		indeterminate={checked === null}
 		onclick={(e) => {
@@ -296,7 +295,8 @@
 </label>
 
 <style>
-	.sr-only {
+	/* Visually-hidden native checkbox, kept for form submission + a11y */
+	input {
 		position: absolute;
 		width: 1px;
 		height: 1px;
@@ -335,59 +335,59 @@
 		user-select: none;
 		-webkit-tap-highlight-color: transparent;
 		position: relative;
-	}
 
-	.toggle.label-start {
-		flex-direction: row-reverse;
-	}
+		&.label-start {
+			flex-direction: row-reverse;
+		}
 
-	/* Sizes */
-	.toggle.size-0 {
-		--track-width: 32px;
-		--track-height: 18px;
-		--thumb-size: 12px;
-		--thumb-offset: 3px;
-		--thumb-press-grow: 2px;
-		font-size: var(--control-font-0, 0.875rem);
-	}
-	.toggle.size-1 {
-		--track-width: 44px;
-		--track-height: 24px;
-		--thumb-size: 18px;
-		--thumb-offset: 3px;
-		--thumb-press-grow: 4px;
-		font-size: var(--control-font-1, 1rem);
-	}
-	.toggle.size-2 {
-		--track-width: 52px;
-		--track-height: 28px;
-		--thumb-size: 22px;
-		--thumb-offset: 3px;
-		--thumb-press-grow: 4px;
-		font-size: var(--control-font-2, 1.125rem);
-	}
-	.toggle.size-3 {
-		--track-width: 68px;
-		--track-height: 36px;
-		--thumb-size: 28px;
-		--thumb-offset: 4px;
-		--thumb-press-grow: 6px;
-		font-size: var(--control-font-3, 1.25rem);
-	}
+		/* Sizes */
+		&.size-0 {
+			--track-width: 32px;
+			--track-height: 18px;
+			--thumb-size: 12px;
+			--thumb-offset: 3px;
+			--thumb-press-grow: 2px;
+			font-size: var(--control-font-0, 0.875rem);
+		}
+		&.size-1 {
+			--track-width: 44px;
+			--track-height: 24px;
+			--thumb-size: 18px;
+			--thumb-offset: 3px;
+			--thumb-press-grow: 4px;
+			font-size: var(--control-font-1, 1rem);
+		}
+		&.size-2 {
+			--track-width: 52px;
+			--track-height: 28px;
+			--thumb-size: 22px;
+			--thumb-offset: 3px;
+			--thumb-press-grow: 4px;
+			font-size: var(--control-font-2, 1.125rem);
+		}
+		&.size-3 {
+			--track-width: 68px;
+			--track-height: 36px;
+			--thumb-size: 28px;
+			--thumb-offset: 4px;
+			--thumb-press-grow: 6px;
+			font-size: var(--control-font-3, 1.25rem);
+		}
 
-	.toggle.dense {
-		gap: 0.375em;
-	}
-	.toggle.comfortable {
-		gap: 1em;
-	}
+		&.dense {
+			gap: 0.375em;
+		}
+		&.comfortable {
+			gap: 1em;
+		}
 
-	/* Indeterminate mode adds a third (middle) thumb stop, so the track gets
-	   more runway — each stop keeps a distinct, comfortably-sized touch
-	   target. --thumb-travel derives from --_track-width, so the stops spread
-	   out with it automatically. */
-	.toggle.indeterminate {
-		--_track-width: calc(var(--track-width) * 1.25);
+		/* Indeterminate mode adds a third (middle) thumb stop, so the track gets
+		   more runway — each stop keeps a distinct, comfortably-sized touch
+		   target. --thumb-travel derives from --_track-width, so the stops spread
+		   out with it automatically. */
+		&.indeterminate {
+			--_track-width: calc(var(--track-width) * 1.25);
+		}
 	}
 
 	/* Track */

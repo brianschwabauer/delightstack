@@ -277,7 +277,7 @@
 				<!-- Presentational only: the hidden native input above owns
 				     interaction, focus and a11y. `inert` keeps the Checkbox from
 				     becoming a second focusable/clickable control. -->
-				<span class="list-control" inert>
+				<span class="control" inert>
 					<Checkbox
 						{checked}
 						disabled={context.disabled || disabled}
@@ -299,7 +299,7 @@
 				     interaction, focus and a11y (List's change delegation treats it
 				     like a checkbox). `inert` keeps the Toggle from becoming a
 				     second focusable/clickable control. -->
-				<span class="list-control" inert>
+				<span class="control" inert>
 					<Toggle
 						{checked}
 						disabled={context.disabled || disabled}
@@ -317,7 +317,7 @@
 					name={context.id}
 					onchange={() => onchange?.(checked)}
 					{checked} />
-				<span class="list-control" inert>
+				<span class="control" inert>
 					<Radio
 						{checked}
 						disabled={context.disabled || disabled}
@@ -618,19 +618,19 @@
 		margin: 0;
 		pointer-events: none;
 	}
-	.list-control {
+	.control {
 		display: inline-flex;
 		align-items: center;
 		flex-shrink: 0;
 		pointer-events: none;
 	}
 	/* Keyboard focus ring, driven by the hidden native input's focus state */
-	label:has(input:focus-visible) .list-control :global(.indicator-wrapper) {
+	label:has(input:focus-visible) .control :global(.indicator-wrapper) {
 		box-shadow: 0 0 0 2px var(--color-border-active);
 		border-radius: 50%;
 	}
 	/* Same ring for toggle mode, following the Toggle's pill-shaped track */
-	label:has(input:focus-visible) .list-control :global(.toggle .track) {
+	label:has(input:focus-visible) .control :global(.toggle .track) {
 		box-shadow: 0 0 0 2px var(--color-border-active);
 	}
 	.text-content {
@@ -646,39 +646,41 @@
 		display: flex;
 		align-items: center;
 		color: var(--color-text);
-	}
-	.text-content::before {
-		content: '';
-		opacity: 0;
-		position: absolute;
-		top: 1px;
-		right: var(--border-inset);
-		bottom: 1px;
-		left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
-		border-radius: calc(var(--_radius) - var(--border-inset));
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(
-				(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
-			);
+
+		&::before {
+			content: '';
+			opacity: 0;
+			position: absolute;
+			top: 1px;
+			right: var(--border-inset);
+			bottom: 1px;
+			left: calc(var(--border-inset) + ((var(--level) - 1) * 1rem));
+			border-radius: calc(var(--_radius) - var(--border-inset));
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(
+					(var(--_radius) - var(--border-inset)) * var(--squircle-ratio, 2)
+				);
+			}
+			background-color: var(--color-text);
+			transition:
+				opacity 300ms ease,
+				border-radius 150ms ease;
+			z-index: 0;
 		}
-		background-color: var(--color-text);
-		transition:
-			opacity 300ms ease,
-			border-radius 150ms ease;
-		z-index: 0;
-	}
-	li.dense .text-content {
-		padding-top: 0;
-		padding-bottom: 0;
-		padding-right: 1rem;
-		padding-left: calc(1rem + ((var(--level) - 1) * 1rem));
-	}
-	li:first-child .text-content {
-		padding-top: calc(var(--border-inset, 0px) + 0.25rem);
-	}
-	li:last-child .text-content {
-		padding-bottom: calc(var(--border-inset, 0px) + 0.25rem);
+
+		li.dense & {
+			padding-top: 0;
+			padding-bottom: 0;
+			padding-right: 1rem;
+			padding-left: calc(1rem + ((var(--level) - 1) * 1rem));
+		}
+		li:first-child & {
+			padding-top: calc(var(--border-inset, 0px) + 0.25rem);
+		}
+		li:last-child & {
+			padding-bottom: calc(var(--border-inset, 0px) + 0.25rem);
+		}
 	}
 
 	a,

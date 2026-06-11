@@ -493,7 +493,7 @@
 
 		<div bind:this={panel_el} class="panel" role="dialog" aria-modal="true">
 			<div class="handle" aria-hidden="true">
-				<div class="handle-bar"></div>
+				<div class="bar"></div>
 			</div>
 
 			{#if header}
@@ -521,6 +521,15 @@
 		justify-content: center;
 		pointer-events: none;
 		z-index: var(--layer-drawer, 300);
+
+		&.dragging {
+			.backdrop {
+				transition: none;
+			}
+			.panel {
+				cursor: grabbing;
+			}
+		}
 	}
 
 	.backdrop {
@@ -528,17 +537,13 @@
 		inset: 0;
 		z-index: 1;
 		transition: opacity 150ms ease;
-	}
-	.bottom-sheet.dragging .backdrop {
-		transition: none;
-	}
-	.backdrop.frosted {
-		background-color: var(--bottom-sheet-backdrop, rgb(0 0 0 / 0.18));
-	}
-	@supports (backdrop-filter: blur(1px)) {
-		.backdrop.frosted {
-			background-color: var(--bottom-sheet-backdrop, rgb(0 0 0 / 0.12));
-			backdrop-filter: blur(var(--bottom-sheet-blur, 12px));
+
+		&.frosted {
+			background-color: var(--bottom-sheet-backdrop, rgb(0 0 0 / 0.18));
+			@supports (backdrop-filter: blur(1px)) {
+				background-color: var(--bottom-sheet-backdrop, rgb(0 0 0 / 0.12));
+				backdrop-filter: blur(var(--bottom-sheet-blur, 12px));
+			}
 		}
 	}
 
@@ -570,9 +575,6 @@
 		cursor: grab;
 		touch-action: none;
 	}
-	.bottom-sheet.dragging .panel {
-		cursor: grabbing;
-	}
 
 	.handle {
 		position: relative;
@@ -582,12 +584,13 @@
 		height: 1.5rem;
 		flex-shrink: 0;
 		touch-action: none;
-	}
-	.handle-bar {
-		width: 36px;
-		height: 4px;
-		border-radius: var(--radius-full, 9999px);
-		background-color: color-mix(in oklch, transparent, var(--color-text, #888) 28%);
+
+		.bar {
+			width: 36px;
+			height: 4px;
+			border-radius: var(--radius-full, 9999px);
+			background-color: color-mix(in oklch, transparent, var(--color-text, #888) 28%);
+		}
 	}
 
 	.header {

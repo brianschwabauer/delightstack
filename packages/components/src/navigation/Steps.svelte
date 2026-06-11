@@ -199,11 +199,11 @@
 		style:--circle-size="{resolvedCircleSize}px"
 		style:--step-font-size={resolvedFontSize}
 		aria-current={isCurrent ? 'step' : undefined}>
-		<div class="step-main">
+		<div class="main">
 			{#if canClick}
 				<button
 					type="button"
-					class="step-circle"
+					class="circle"
 					aria-label={ariaLabel}
 					onclick={handleClick}
 					onkeydown={handleKeyDown}>
@@ -232,11 +232,11 @@
 								fill="none" />
 						</svg>
 					{:else}
-						<span class="step-number">{stepIndex + 1}</span>
+						<span class="number">{stepIndex + 1}</span>
 					{/if}
 				</button>
 			{:else}
-				<span class="step-circle" role="img" aria-label={ariaLabel}>
+				<span class="circle" role="img" aria-label={ariaLabel}>
 					{#if isError}
 						<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
 							<path
@@ -262,32 +262,32 @@
 								fill="none" />
 						</svg>
 					{:else if isCurrent}
-						<span class="step-number">{stepIndex + 1}</span>
+						<span class="number">{stepIndex + 1}</span>
 					{:else}
-						<span class="step-number">{stepIndex + 1}</span>
+						<span class="number">{stepIndex + 1}</span>
 					{/if}
 				</span>
 			{/if}
 
-			<div class="step-label">
-				<span class="step-title">{title}</span>
+			<div class="label">
+				<span class="title">{title}</span>
 				{#if description}
-					<span class="step-description">{description}</span>
+					<span class="description">{description}</span>
 				{/if}
 				{#if optional}
-					<span class="step-optional">Optional</span>
+					<span class="optional">Optional</span>
 				{/if}
 			</div>
 		</div>
 
 		{#if !isLast}
-			<div class="step-connector">
-				<div class="step-connector-fill" class:filled={connectorFilled}></div>
+			<div class="connector">
+				<div class="fill" class:filled={connectorFilled}></div>
 			</div>
 		{/if}
 
 		{#if children && isCurrent}
-			<div class="step-content">
+			<div class="content">
 				{@render children()}
 			</div>
 		{/if}
@@ -303,22 +303,22 @@
 		style:--step-font-size={FONT_SIZES[size] ?? '0.75rem'}
 		aria-hidden="true">
 		{#each { length: skeleton_count } as _, i}
-			<!-- Reuses the real .step/.step-main/.step-label/.step-connector layout
+			<!-- Reuses the real .step/.main/.label/.connector layout
 			     classes so every placeholder sits exactly where the real step will. -->
 			<div
-				class="step skeleton-step"
+				class="step"
 				class:vertical={orientation === 'vertical'}
 				class:horizontal={orientation !== 'vertical'}
 				style:--shimmer-delay="{i * 120}ms">
-				<div class="step-main">
+				<div class="main">
 					<div class="skeleton-circle"></div>
-					<div class="step-label">
+					<div class="label">
 						<div class="skeleton-bar skeleton-title"></div>
 						<div class="skeleton-bar skeleton-desc"></div>
 					</div>
 				</div>
 				{#if i < skeleton_count - 1}
-					<div class="step-connector"></div>
+					<div class="connector"></div>
 				{/if}
 			</div>
 		{/each}
@@ -366,7 +366,7 @@
 		}
 	}
 
-	.step-main {
+	.main {
 		display: flex;
 		gap: 0.625rem;
 
@@ -382,7 +382,7 @@
 	}
 
 	/* ========== Circle ========== */
-	.step-circle {
+	.circle {
 		width: var(--circle-size);
 		height: var(--circle-size);
 		min-width: var(--circle-size);
@@ -414,9 +414,29 @@
 			width: 55%;
 			height: 55%;
 		}
+
+		.step.complete & {
+			background: var(--color-success, #16a34a);
+			border-color: var(--color-success, #16a34a);
+			color: white;
+		}
+
+		.step.current & {
+			background: var(--color-action, #2563eb);
+			border-color: var(--color-action, #2563eb);
+			color: white;
+			animation: steps-pulse 2s ease-in-out infinite;
+		}
+
+		.step.error & {
+			background: var(--color-error, #dc2626);
+			border-color: var(--color-error, #dc2626);
+			color: white;
+			animation: steps-shake 400ms ease;
+		}
 	}
 
-	button.step-circle {
+	button.circle {
 		cursor: pointer;
 
 		&:hover {
@@ -430,26 +450,6 @@
 		}
 	}
 
-	.step.complete .step-circle {
-		background: var(--color-success, #16a34a);
-		border-color: var(--color-success, #16a34a);
-		color: white;
-	}
-
-	.step.current .step-circle {
-		background: var(--color-action, #2563eb);
-		border-color: var(--color-action, #2563eb);
-		color: white;
-		animation: steps-pulse 2s ease-in-out infinite;
-	}
-
-	.step.error .step-circle {
-		background: var(--color-error, #dc2626);
-		border-color: var(--color-error, #dc2626);
-		color: white;
-		animation: steps-shake 400ms ease;
-	}
-
 	/* ========== Checkmark draw-in ========== */
 	.step.complete .checkmark path {
 		stroke-dasharray: 30;
@@ -458,13 +458,13 @@
 	}
 
 	/* ========== Step Number ========== */
-	.step-number {
+	.number {
 		line-height: 1;
 		user-select: none;
 	}
 
 	/* ========== Labels ========== */
-	.step-label {
+	.label {
 		display: flex;
 		flex-direction: column;
 		gap: 0.125rem;
@@ -481,21 +481,21 @@
 		}
 	}
 
-	.step-title {
+	.title {
 		font-weight: 500;
 		font-size: var(--step-font-size);
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		line-height: 1.3;
+
+		.step.upcoming & {
+			color: light-dark(
+				var(--color-text-disabled, #9ca3af),
+				var(--color-text-disabled, #6b7280)
+			);
+		}
 	}
 
-	.step.upcoming .step-title {
-		color: light-dark(
-			var(--color-text-disabled, #9ca3af),
-			var(--color-text-disabled, #6b7280)
-		);
-	}
-
-	.step-description {
+	.description {
 		font-size: calc(var(--step-font-size) * 0.85);
 		color: light-dark(
 			var(--color-text-disabled, #9ca3af),
@@ -504,7 +504,7 @@
 		line-height: 1.3;
 	}
 
-	.step-optional {
+	.optional {
 		font-size: calc(var(--step-font-size) * 0.8);
 		font-style: italic;
 		color: light-dark(
@@ -514,7 +514,7 @@
 	}
 
 	/* ========== Connector ========== */
-	.step-connector {
+	.connector {
 		position: relative;
 		overflow: hidden;
 
@@ -540,7 +540,7 @@
 		}
 	}
 
-	.step-connector-fill {
+	.fill {
 		position: absolute;
 		inset: 0;
 		background: var(--color-success, #16a34a);
@@ -563,7 +563,7 @@
 	}
 
 	/* ========== Step Content (wizard mode) ========== */
-	.step-content {
+	.content {
 		padding: 0.75rem 0;
 		width: 100%;
 
@@ -573,7 +573,7 @@
 	}
 
 	/* ========== Skeleton ========== */
-	/* Layout comes from the shared .step/.step-main/.step-label/.step-connector
+	/* Layout comes from the shared .step/.main/.label/.connector
 	   rules (the placeholder markup reuses those classes), so only the shimmer
 	   shapes are defined here. The connector renders bare: its border-color
 	   background already matches an upcoming step's unfilled track. */
@@ -604,7 +604,7 @@
 		}
 	}
 
-	/* Matches .step-circle's outer box exactly (border-box, so the real 2px
+	/* Matches .circle's outer box exactly (border-box, so the real 2px
 	   border is already inside --circle-size). */
 	.skeleton-circle {
 		width: var(--circle-size);
@@ -680,10 +680,10 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.step.current .step-circle {
+		.step.current .circle {
 			animation: none;
 		}
-		.step.error .step-circle {
+		.step.error .circle {
 			animation: none;
 		}
 		.step.complete .checkmark path {
@@ -694,7 +694,7 @@
 		.skeleton-bar::after {
 			animation: none;
 		}
-		.step-connector-fill {
+		.fill {
 			transition: none;
 		}
 	}

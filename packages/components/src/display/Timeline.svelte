@@ -186,7 +186,7 @@
 {#if isItem}
 	<!-- TimelineItem -->
 	<li
-		class={['timeline-item', class_name].filter(Boolean).join(' ')}
+		class={['item', class_name].filter(Boolean).join(' ')}
 		class:horizontal={is_horizontal}
 		class:vertical={!is_horizontal}
 		class:alternate={is_alternate}
@@ -201,26 +201,26 @@
 		{id}
 		style:--marker-color={color || undefined}
 		{@attach intersectionObserver({ onintersectonce: () => (visible = true) })}>
-		<div class="timeline-marker">
+		<div class="marker">
 			{#if icon}
 				{@const Icon = icon}
-				<span class="marker-icon">
+				<span class="icon">
 					<Icon />
 				</span>
 			{:else}
-				<span class="marker-dot"></span>
+				<span class="dot"></span>
 			{/if}
 		</div>
-		<div class="timeline-connector"></div>
-		<div class="timeline-content">
+		<div class="connector"></div>
+		<div class="content">
 			{#if date}
-				<time class="timeline-date" datetime={iso_date}>{formatted_date}</time>
+				<time datetime={iso_date}>{formatted_date}</time>
 			{/if}
 			{#if title}
-				<div class="timeline-title">{title}</div>
+				<div class="title">{title}</div>
 			{/if}
 			{#if children}
-				<div class="timeline-body">
+				<div class="body">
 					{@render children()}
 				</div>
 			{/if}
@@ -238,16 +238,16 @@
 		aria-hidden="true">
 		{#each { length: skeleton_count } as _, i}
 			<li
-				class="timeline-item skeleton-item"
+				class="item skeleton-item"
 				class:horizontal
 				class:vertical={!horizontal}
 				class:dense
 				class:comfortable>
-				<div class="timeline-marker">
+				<div class="marker">
 					<span class="skeleton-circle" style:--shimmer-delay="{i * 120}ms"></span>
 				</div>
-				<div class="timeline-connector"></div>
-				<div class="timeline-content">
+				<div class="connector"></div>
+				<div class="content">
 					<div
 						class="skeleton-bar skeleton-date"
 						style:--shimmer-delay="{i * 120 + 60}ms">
@@ -266,7 +266,7 @@
 	</ol>
 {:else if horizontal}
 	<!-- Horizontal timeline container with chevron next/prev controls -->
-	<div class={['timeline-horizontal-wrap', class_name].filter(Boolean).join(' ')} {id}>
+	<div class={['wrap', class_name].filter(Boolean).join(' ')} {id}>
 		{#if can_scroll_prev}
 			<Button
 				icon
@@ -296,15 +296,15 @@
 			{@attach scrollbar()}>
 			{@render children?.()}
 			{#if pending}
-				<li class="timeline-item timeline-pending horizontal">
-					<div class="timeline-marker">
-						<span class="marker-dot pending-dot"></span>
+				<li class="item pending-item horizontal">
+					<div class="marker">
+						<span class="dot pending-dot"></span>
 					</div>
 				</li>
 			{/if}
 			{#if onloadmore}
 				<li
-					class="timeline-sentinel"
+					class="sentinel"
 					aria-hidden="true"
 					{@attach intersectionObserver({ onintersectonce: () => handleLoadMore() })}>
 				</li>
@@ -341,15 +341,15 @@
 		role="list">
 		{@render children?.()}
 		{#if pending}
-			<li class="timeline-item timeline-pending vertical">
-				<div class="timeline-marker">
-					<span class="marker-dot pending-dot"></span>
+			<li class="item pending-item vertical">
+				<div class="marker">
+					<span class="dot pending-dot"></span>
 				</div>
 			</li>
 		{/if}
 		{#if onloadmore}
 			<li
-				class="timeline-sentinel"
+				class="sentinel"
 				aria-hidden="true"
 				{@attach intersectionObserver({ onintersectonce: () => handleLoadMore() })}>
 			</li>
@@ -387,29 +387,30 @@
 	}
 
 	/* ========== Horizontal Navigation ========== */
-	.timeline-horizontal-wrap {
+	.wrap {
 		position: relative;
 		width: 100%;
-	}
-	/* The nav controls are <Button icon> instances (rendered by the Button
-	 * component), so target their forwarded class names with :global, scoped
-	 * inside the wrap. We only position + float them; Button owns appearance. */
-	.timeline-horizontal-wrap :global(.timeline-nav) {
-		position: absolute;
-		top: 50%;
-		transform: translateY(-50%);
-		z-index: 2;
-		box-shadow:
-			0 2px 6px rgba(0, 0, 0, 0.12),
-			0 1px 2px rgba(0, 0, 0, 0.08);
-		opacity: 0;
-		animation: timeline-nav-fade 200ms ease forwards;
-	}
-	.timeline-horizontal-wrap :global(.timeline-nav-prev) {
-		left: -0.75rem;
-	}
-	.timeline-horizontal-wrap :global(.timeline-nav-next) {
-		right: -0.75rem;
+
+		/* The nav controls are <Button icon> instances (rendered by the Button
+		 * component), so target their forwarded class names with :global, scoped
+		 * inside the wrap. We only position + float them; Button owns appearance. */
+		:global(.timeline-nav) {
+			position: absolute;
+			top: 50%;
+			transform: translateY(-50%);
+			z-index: 2;
+			box-shadow:
+				0 2px 6px rgba(0, 0, 0, 0.12),
+				0 1px 2px rgba(0, 0, 0, 0.08);
+			opacity: 0;
+			animation: timeline-nav-fade 200ms ease forwards;
+		}
+		:global(.timeline-nav-prev) {
+			left: -0.75rem;
+		}
+		:global(.timeline-nav-next) {
+			right: -0.75rem;
+		}
 	}
 	@keyframes timeline-nav-fade {
 		to {
@@ -418,7 +419,7 @@
 	}
 
 	/* ========== Timeline Item ========== */
-	.timeline-item {
+	.item {
 		position: relative;
 		display: flex;
 		opacity: 0;
@@ -483,7 +484,7 @@
 		padding-left: 50%;
 	}
 
-	.timeline-item.vertical.alternate {
+	.item.vertical.alternate {
 		&.odd {
 			flex-direction: row;
 		}
@@ -496,7 +497,7 @@
 	}
 
 	/* ========== Marker ========== */
-	.timeline-marker {
+	.marker {
 		position: relative;
 		z-index: 1;
 		flex-shrink: 0;
@@ -505,7 +506,7 @@
 		justify-content: center;
 	}
 
-	.marker-dot {
+	.dot {
 		width: 12px;
 		height: 12px;
 		border-radius: 9999px;
@@ -521,20 +522,20 @@
 			);
 
 		/* Complete status */
-		.timeline-item.complete & {
+		.item.complete & {
 			background: var(--marker-color, var(--color-success, #16a34a));
 			box-shadow: 0 0 0 2px var(--marker-color, var(--color-success, #16a34a));
 		}
 
 		/* Active status */
-		.timeline-item.active & {
+		.item.active & {
 			background: var(--marker-color, var(--color-action, #2563eb));
 			box-shadow: 0 0 0 2px var(--marker-color, var(--color-action, #2563eb));
 			animation: timeline-pulse 2s ease-in-out infinite;
 		}
 
 		/* Pending status */
-		.timeline-item.pending & {
+		.item.pending & {
 			background: transparent;
 			border: 2px dashed
 				light-dark(
@@ -553,7 +554,7 @@
 		animation: timeline-pulse 2s ease-in-out infinite;
 	}
 
-	.marker-icon {
+	.icon {
 		width: 24px;
 		height: 24px;
 		border-radius: 9999px;
@@ -567,16 +568,16 @@
 		color: white;
 		font-size: 0.75rem;
 
-		.timeline-item.complete & {
+		.item.complete & {
 			background: var(--marker-color, var(--color-success, #16a34a));
 		}
 
-		.timeline-item.active & {
+		.item.active & {
 			background: var(--marker-color, var(--color-action, #2563eb));
 			animation: timeline-pulse 2s ease-in-out infinite;
 		}
 
-		.timeline-item.pending & {
+		.item.pending & {
 			background: transparent;
 			border: 2px dashed
 				light-dark(
@@ -593,33 +594,33 @@
 			width: 14px;
 			height: 14px;
 		}
-	}
 
-	.timeline-item.dense .marker-icon {
-		width: 20px;
-		height: 20px;
-		font-size: 0.625rem;
+		.item.dense & {
+			width: 20px;
+			height: 20px;
+			font-size: 0.625rem;
 
-		& :global(svg) {
-			width: 12px;
-			height: 12px;
+			& :global(svg) {
+				width: 12px;
+				height: 12px;
+			}
 		}
-	}
 
-	.timeline-item.comfortable .marker-icon {
-		width: 32px;
-		height: 32px;
-		font-size: 0.875rem;
+		.item.comfortable & {
+			width: 32px;
+			height: 32px;
+			font-size: 0.875rem;
 
-		& :global(svg) {
-			width: 18px;
-			height: 18px;
+			& :global(svg) {
+				width: 18px;
+				height: 18px;
+			}
 		}
 	}
 
 	/* ========== Connector (line between items) ========== */
-	.timeline-connector {
-		.timeline-item.vertical & {
+	.connector {
+		.item.vertical & {
 			position: absolute;
 			left: 5px;
 			top: 16px;
@@ -628,12 +629,12 @@
 			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		}
 
-		.timeline-item.vertical:last-child &,
-		.timeline-pending & {
+		.item.vertical:last-child &,
+		.pending-item & {
 			display: none;
 		}
 
-		.timeline-item.horizontal & {
+		.item.horizontal & {
 			position: absolute;
 			top: 5px;
 			left: 16px;
@@ -642,130 +643,130 @@
 			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		}
 
-		.timeline-item.horizontal:last-child & {
+		.item.horizontal:last-child & {
 			display: none;
+		}
+
+		/* Adjustments for icon markers */
+		.item.vertical:has(.icon) & {
+			left: 11px;
+			top: 28px;
+		}
+
+		.item.vertical.dense:has(.icon) & {
+			left: 9px;
+			top: 24px;
+		}
+
+		.item.vertical.comfortable:has(.icon) & {
+			left: 15px;
+			top: 36px;
+		}
+
+		.item.horizontal:has(.icon) & {
+			top: 11px;
+			left: 28px;
+		}
+
+		.item.horizontal.dense:has(.icon) & {
+			top: 9px;
+			left: 24px;
+		}
+
+		.item.horizontal.comfortable:has(.icon) & {
+			top: 15px;
+			left: 36px;
+		}
+
+		/* Alternate mode */
+		.item.vertical.alternate & {
+			left: -1px;
+		}
+
+		.item.vertical.alternate:has(.icon) & {
+			left: 11px;
+		}
+
+		.item.vertical.alternate.even:has(.icon) & {
+			left: auto;
+			right: 11px;
+		}
+
+		.item.vertical.alternate.even & {
+			left: auto;
+			right: -1px;
 		}
 	}
 
-	/* Connector adjustments for icon markers */
-	.timeline-item.vertical:has(.marker-icon) .timeline-connector {
-		left: 11px;
-		top: 28px;
-	}
-
-	.timeline-item.vertical.dense:has(.marker-icon) .timeline-connector {
-		left: 9px;
-		top: 24px;
-	}
-
-	.timeline-item.vertical.comfortable:has(.marker-icon) .timeline-connector {
-		left: 15px;
-		top: 36px;
-	}
-
-	.timeline-item.horizontal:has(.marker-icon) .timeline-connector {
-		top: 11px;
-		left: 28px;
-	}
-
-	.timeline-item.horizontal.dense:has(.marker-icon) .timeline-connector {
-		top: 9px;
-		left: 24px;
-	}
-
-	.timeline-item.horizontal.comfortable:has(.marker-icon) .timeline-connector {
-		top: 15px;
-		left: 36px;
-	}
-
-	/* Alternate mode connector */
-	.timeline-item.vertical.alternate .timeline-connector {
-		left: -1px;
-	}
-
-	.timeline-item.vertical.alternate:has(.marker-icon) .timeline-connector {
-		left: 11px;
-	}
-
-	.timeline-item.vertical.alternate.even:has(.marker-icon) .timeline-connector {
-		left: auto;
-		right: 11px;
-	}
-
-	.timeline-item.vertical.alternate.even .timeline-connector {
-		left: auto;
-		right: -1px;
-	}
-
 	/* ========== Content ========== */
-	.timeline-content {
+	.content {
 		flex: 1;
 		min-width: 0;
 		padding-top: 0;
 
-		.timeline-item.horizontal & {
+		.item.horizontal & {
 			margin-top: 0.75rem;
 			text-align: center;
 		}
 	}
 
-	.timeline-date {
+	time {
 		display: block;
 		font-size: 0.75rem;
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		margin-bottom: 0.25rem;
 		line-height: 1.3;
 
-		.timeline-item.dense & {
+		.item.dense & {
 			font-size: 0.6875rem;
 			margin-bottom: 0.125rem;
 		}
 
-		.timeline-item.comfortable & {
+		.item.comfortable & {
 			font-size: 0.8125rem;
 			margin-bottom: 0.375rem;
 		}
 	}
 
-	.timeline-title {
+	.title {
 		font-weight: 600;
 		font-size: 0.875rem;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		line-height: 1.4;
 
-		.timeline-item.dense & {
+		.item.dense & {
 			font-size: 0.8125rem;
 		}
 
-		.timeline-item.comfortable & {
+		.item.comfortable & {
 			font-size: 1rem;
 		}
 	}
 
-	.timeline-body {
+	.body {
 		margin-top: 0.125rem;
 		font-size: 0.8125rem;
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		line-height: 1.5;
 
-		.timeline-item.dense & {
+		.item.dense & {
 			margin-top: 0.0625rem;
 			font-size: 0.75rem;
 		}
 
-		.timeline-item.comfortable & {
+		.item.comfortable & {
 			margin-top: 0.25rem;
 			font-size: 0.875rem;
 		}
 	}
 
 	/* ========== Pending Indicator ========== */
-	.timeline-pending {
+	.pending-item {
 		padding-bottom: 0;
 	}
 
 	/* ========== Load-more Sentinel ========== */
-	.timeline-sentinel {
+	.sentinel {
 		height: 1px;
 		width: 1px;
 		overflow: hidden;
@@ -806,7 +807,7 @@
 		}
 	}
 
-	/* Same 12px footprint as the real .marker-dot. */
+	/* Same 12px footprint as the real .dot. */
 	.skeleton-circle {
 		width: 12px;
 		height: 12px;
@@ -817,13 +818,13 @@
 	   margins pad it out to its real text line's 1lh (date 0.75rem/1.3,
 	   title 0.875rem/1.4, body 0.8125rem/1.5), keeping skeleton items exactly
 	   as tall as loaded ones. */
-	.skeleton-item .timeline-content {
+	.skeleton-item .content {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
 	}
 
-	.skeleton-item.horizontal .timeline-content {
+	.skeleton-item.horizontal .content {
 		align-items: center;
 	}
 
@@ -854,8 +855,8 @@
 		}
 	}
 
-	/* Size-variant text metrics mirror .timeline-date/.timeline-title/.timeline-body. */
-	.timeline-item.dense {
+	/* Size-variant text metrics mirror the real time/.title/.body. */
+	.item.dense {
 		.skeleton-date {
 			font-size: 0.6875rem;
 			margin-bottom: calc((1lh - 0.7em) / 2 + 0.125rem);
@@ -869,7 +870,7 @@
 		}
 	}
 
-	.timeline-item.comfortable {
+	.item.comfortable {
 		.skeleton-date {
 			font-size: 0.8125rem;
 			margin-bottom: calc((1lh - 0.7em) / 2 + 0.375rem);
@@ -906,14 +907,14 @@
 
 	/* ========== Reduced Motion ========== */
 	@media (prefers-reduced-motion: reduce) {
-		.timeline-item {
+		.item {
 			opacity: 1 !important;
 			transform: none !important;
 			transition: none !important;
 		}
 
-		.marker-dot,
-		.marker-icon,
+		.dot,
+		.icon,
 		.pending-dot {
 			animation: none !important;
 		}

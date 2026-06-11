@@ -1272,7 +1272,7 @@
 		// editable cell are handled by those controls — never treat them as a row
 		// click (so clicking a cell to edit doesn't also select/expand the row).
 		if (
-			target.closest('.dt-check-wrap') ||
+			target.closest('.check-wrap') ||
 			target.closest('.expand-btn') ||
 			target.closest('.resize-handle') ||
 			target.closest('.editable-cell')
@@ -1936,7 +1936,7 @@
 		// Let interactive controls (and the row's own checkbox/expand toggles) win.
 		if (
 			target.closest(
-				'a, button, input, select, textarea, label, [data-no-drag], .dt-check-wrap, .expand-btn, .resize-handle',
+				'a, button, input, select, textarea, label, [data-no-drag], .check-wrap, .expand-btn, .resize-handle',
 			)
 		) {
 			return;
@@ -2474,7 +2474,6 @@
 		<div class="toolbar">
 			<div class="export" onfocusout={handleExportBlur}>
 				<button
-					class="export-btn"
 					type="button"
 					aria-haspopup="true"
 					aria-expanded={showExportMenu}
@@ -2498,19 +2497,9 @@
 					</svg>
 				</button>
 				{#if showExportMenu}
-					<div class="export-menu" role="menu">
-						<button
-							class="export-option"
-							type="button"
-							role="menuitem"
-							onclick={exportCSV}>
-							Export CSV
-						</button>
-						<button
-							class="export-option"
-							type="button"
-							role="menuitem"
-							onclick={exportJSON}>
+					<div class="menu" role="menu">
+						<button type="button" role="menuitem" onclick={exportCSV}>Export CSV</button>
+						<button type="button" role="menuitem" onclick={exportJSON}>
 							Export JSON
 						</button>
 					</div>
@@ -2560,7 +2549,7 @@
 					{#if selectable}
 						<th class="checkbox-cell" role="columnheader">
 							<div
-								class="dt-check-wrap"
+								class="check-wrap"
 								class:checked={allSelected}
 								class:indeterminate={someSelected}
 								role="checkbox"
@@ -2597,7 +2586,7 @@
 									style:justify-content={headerJustify(col)}
 									onclick={() => handleSort(col.key)}
 									{@attach ripple({ opacity: 0.12 })}>
-									<span class="th-label">{col.label}</span>
+									<span>{col.label}</span>
 									<span class="sort-icon" class:active={sort_by === col.key}>
 										{#if sort_by === col.key}
 											<span class="arrow-rot" class:desc={sort_direction === 'desc'}>
@@ -2676,7 +2665,7 @@
 							{#if selectable}
 								<td class="checkbox-cell">
 									<div
-										class="skeleton-bar skeleton-glyph"
+										class="skeleton-bar glyph"
 										style="width: 18px; height: 18px; border-radius: 5px;">
 									</div>
 								</td>
@@ -2684,7 +2673,7 @@
 							{#if expandable}
 								<td class="expand-cell">
 									<div
-										class="skeleton-bar skeleton-glyph"
+										class="skeleton-bar glyph"
 										style="width: 18px; height: 18px; border-radius: 50%;">
 									</div>
 								</td>
@@ -2848,7 +2837,7 @@
 					{/if}
 					{#if selectable}
 						<div class="ghost-cell checkbox-cell">
-							<span class="dt-check-wrap" class:checked={isSelectedIndex(data_index)}>
+							<span class="check-wrap" class:checked={isSelectedIndex(data_index)}>
 								{@render checkIndicator(isSelectedIndex(data_index), false, false)}
 							</span>
 						</div>
@@ -2883,7 +2872,7 @@
 </div>
 
 {#snippet pager(placement: 'top' | 'bottom')}
-	<div class="pagination-bar align-{pgConfig.align}" class:top={placement === 'top'}>
+	<div class="pager align-{pgConfig.align}" class:top={placement === 'top'}>
 		<Pagination
 			bind:page
 			bind:page_size
@@ -2903,7 +2892,7 @@
 
 {#snippet checkIndicator(checked: boolean, indeterminate: boolean, preview: boolean)}
 	<svg
-		class="dt-check"
+		class="check-icon"
 		class:checked={checked || indeterminate}
 		class:indeterminate
 		class:preview
@@ -2986,7 +2975,7 @@
 		{#if selectable}
 			<td class="checkbox-cell" role="gridcell">
 				<div
-					class="dt-check-wrap"
+					class="check-wrap"
 					class:checked={rowSelected}
 					class:preview={previewing}
 					role="checkbox"
@@ -3082,10 +3071,7 @@
 						}}
 						onkeydown={(e) => booleanCellKeydown(e, rowId, col, row, dataIndex)}
 						onfocus={() => enterEdit(rowId, col.key)}>
-						<span
-							class="cell-bool ds-checkmark"
-							class:checked={!!dispVal}
-							aria-hidden="true">
+						<span class="cell-bool" class:checked={!!dispVal} aria-hidden="true">
 							<svg viewBox="0 0 24 24" width="20" height="20" fill="none">
 								<rect
 									class="box"
@@ -3206,34 +3192,34 @@
 	/* The pager sits in its own bar above and/or below the bordered table frame.
 	   `align` decides the layout: `between` (default) splits the info/summary to the
 	   left and the page controls to the right; the others align the whole pager. */
-	.pagination-bar {
+	.pager {
 		display: flex;
 		align-items: center;
 		padding-top: 0.875rem;
-	}
 
-	.pagination-bar.top {
-		padding-top: 0;
-		padding-bottom: 0.875rem;
-	}
+		&.top {
+			padding-top: 0;
+			padding-bottom: 0.875rem;
+		}
 
-	.pagination-bar.align-start {
-		justify-content: flex-start;
-	}
-	.pagination-bar.align-center {
-		justify-content: center;
-	}
-	.pagination-bar.align-end {
-		justify-content: flex-end;
-	}
+		&.align-start {
+			justify-content: flex-start;
+		}
+		&.align-center {
+			justify-content: center;
+		}
+		&.align-end {
+			justify-content: flex-end;
+		}
 
-	/* `between`: stretch the pager full-width and push just the page controls to the
-	   far edge, leaving the rows-per-page selector + summary grouped on the left. */
-	.pagination-bar.align-between :global(.pagination) {
-		width: 100%;
-	}
-	.pagination-bar.align-between :global(.pagination .pagination-controls) {
-		margin-left: auto;
+		/* `between`: stretch the pager full-width and push just the page controls to
+		   the far edge, leaving the rows-per-page selector + summary grouped left. */
+		&.align-between :global(.pagination) {
+			width: 100%;
+		}
+		&.align-between :global(.pagination .pagination-controls) {
+			margin-left: auto;
+		}
 	}
 
 	/* ========== Toolbar ========== */
@@ -3245,77 +3231,79 @@
 
 	.export {
 		position: relative;
-	}
 
-	.export-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.375rem 0.75rem;
-		font-size: 0.8125rem;
-		font-family: inherit;
-		border: 1px solid
-			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		border-radius: var(--radius-lg, 10px);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-		cursor: pointer;
-		line-height: 1;
+		/* The trigger (the only direct button child; the menu options are nested
+		   inside `.menu`). */
+		> button {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.375rem;
+			padding: 0.375rem 0.75rem;
+			font-size: 0.8125rem;
+			font-family: inherit;
+			border: 1px solid
+				light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+			border-radius: var(--radius-lg, 10px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+			}
+			background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
+			color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+			cursor: pointer;
+			line-height: 1;
 
-		&:hover {
-			background: light-dark(
-				rgb(from var(--color-text, #000) r g b / 0.04),
-				rgb(from var(--color-text, #fff) r g b / 0.08)
-			);
-			transition: none;
-		}
-	}
-
-	.export-menu {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		margin-top: 0.25rem;
-		min-width: 140px;
-		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		border: 1px solid
-			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		border-radius: var(--radius-lg, 10px);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
-		}
-		box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
-		z-index: 10;
-		overflow: hidden;
-	}
-
-	.export-option {
-		display: block;
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		font-size: 0.8125rem;
-		font-family: inherit;
-		text-align: left;
-		border: none;
-		background: none;
-		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-		cursor: pointer;
-
-		&:hover {
-			background: light-dark(
-				rgb(from var(--color-text, #000) r g b / 0.06),
-				rgb(from var(--color-text, #fff) r g b / 0.08)
-			);
+			&:hover {
+				background: light-dark(
+					rgb(from var(--color-text, #000) r g b / 0.04),
+					rgb(from var(--color-text, #fff) r g b / 0.08)
+				);
+				transition: none;
+			}
 		}
 
-		&:not(:last-child) {
-			border-bottom: 1px solid
-				light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		.menu {
+			position: absolute;
+			top: 100%;
+			right: 0;
+			margin-top: 0.25rem;
+			min-width: 140px;
+			background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
+			border: 1px solid
+				light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+			border-radius: var(--radius-lg, 10px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+			}
+			box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+			z-index: 10;
+			overflow: hidden;
+		}
+
+		.menu button {
+			display: block;
+			width: 100%;
+			padding: 0.5rem 0.75rem;
+			font-size: 0.8125rem;
+			font-family: inherit;
+			text-align: left;
+			border: none;
+			background: none;
+			color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+			cursor: pointer;
+
+			&:hover {
+				background: light-dark(
+					rgb(from var(--color-text, #000) r g b / 0.06),
+					rgb(from var(--color-text, #fff) r g b / 0.08)
+				);
+			}
+
+			&:not(:last-child) {
+				border-bottom: 1px solid
+					light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+			}
 		}
 	}
 
@@ -3971,10 +3959,10 @@
 	/* Press feedback matching the Checkbox component: the indicator presses down and
 	   scales in snappily (80ms), then eases back. A click anywhere in the cell
 	   triggers it since the button fills the cell. */
-	.cell-checkbox .ds-checkmark {
+	.cell-checkbox .cell-bool {
 		transition: transform 150ms ease;
 	}
-	.cell-checkbox:active .ds-checkmark {
+	.cell-checkbox:active .cell-bool {
 		transform: translateY(3px) scale(0.9);
 		transition: transform 80ms ease;
 	}
@@ -4051,7 +4039,7 @@
 		padding-right: 0.25rem !important;
 	}
 
-	.dt-check-wrap {
+	.check-wrap {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
@@ -4094,7 +4082,7 @@
 		}
 	}
 
-	.dt-check {
+	.check-icon {
 		flex-shrink: 0;
 
 		/* Unchecked outline: a clearly-visible, slightly thicker stroke so the
@@ -4347,12 +4335,12 @@
 				infinite;
 			animation-delay: var(--shimmer-delay, 0s);
 		}
-	}
 
-	/* Checkbox/expand glyph placeholders size themselves inline (18px squares /
-	   discs) — no text-line margins. */
-	.skeleton-bar.skeleton-glyph {
-		margin-block: 0;
+		/* Checkbox/expand glyph placeholders size themselves inline (18px squares /
+		   discs) — no text-line margins. */
+		&.glyph {
+			margin-block: 0;
+		}
 	}
 
 	@keyframes -global-delight-skeleton-shimmer {
@@ -4435,10 +4423,10 @@
 	.row.drag-armed {
 		z-index: 5;
 		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		animation: dt-arm 180ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) forwards;
+		animation: arm 180ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) forwards;
 	}
 
-	@keyframes dt-arm {
+	@keyframes arm {
 		from {
 			transform: scale(1);
 			box-shadow: 0 0 0 rgb(0 0 0 / 0);
@@ -4592,7 +4580,7 @@
 		.group-chevron,
 		.arrow-rot,
 		.arrow,
-		.dt-check .check,
+		.check-icon .check,
 		.row.clickable,
 		tbody tr.row,
 		tbody tr.row::before,

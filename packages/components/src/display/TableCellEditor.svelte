@@ -522,7 +522,7 @@
 </script>
 
 {#snippet checkmark(checked: boolean)}
-	<span class="ds-checkmark" class:checked>
+	<span class="checkmark" class:checked>
 		<svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
 			<rect class="box" x="2" y="2" width="20" height="20" rx="3" stroke-width="2" />
 			<path
@@ -537,7 +537,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="cell-editor"
+	class="editor"
 	class:has-error={!!showError}
 	class:dense
 	class:comfortable
@@ -626,7 +626,7 @@
 		<!-- Error tooltip as a top-layer popover so it can't be hidden behind the cells
 		     stacked below it. -->
 		<div
-			class="cell-editor-error"
+			class="error"
 			popover="manual"
 			role="alert"
 			style:position-anchor={anchorName}
@@ -643,7 +643,7 @@
 </div>
 
 <style>
-	.cell-editor {
+	.editor {
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -654,16 +654,22 @@
 		margin: -0.75rem -1rem;
 		padding: 0.75rem 1rem;
 		gap: 0.5rem;
-	}
-	.cell-editor.dense {
-		margin: -0.375rem -0.75rem;
-		padding: 0.375rem 0.75rem;
-	}
-	.cell-editor.comfortable {
-		margin: -1rem -1.25rem;
-		padding: 1rem 1.25rem;
+
+		&.dense {
+			margin: -0.375rem -0.75rem;
+			padding: 0.375rem 0.75rem;
+		}
+		&.comfortable {
+			margin: -1rem -1.25rem;
+			padding: 1rem 1.25rem;
+		}
+		&.has-error .cell-input {
+			color: var(--color-error, #dc2626);
+		}
 	}
 
+	/* `.cell-input` (not a bare element selector): the class doubles as the JS hook
+	   the Table uses to focus the editor after a keyboard move. */
 	.cell-input {
 		flex: 1;
 		min-width: 0;
@@ -676,18 +682,18 @@
 		font: inherit;
 		color: inherit;
 		line-height: inherit;
-	}
-	.cell-input::placeholder {
-		color: light-dark(var(--color-text-muted, #9ca3af), var(--color-text-muted, #6b7280));
-	}
 
-	.cell-editor.has-error .cell-input {
-		color: var(--color-error, #dc2626);
+		&::placeholder {
+			color: light-dark(
+				var(--color-text-muted, #9ca3af),
+				var(--color-text-muted, #6b7280)
+			);
+		}
 	}
 
 	/* Error tooltip — a top-layer popover (CSS anchor positioned) so it paints over
 	   the cells below it, never behind them. */
-	.cell-editor-error {
+	.error {
 		position: fixed;
 		top: anchor(bottom);
 		left: anchor(left);
@@ -711,7 +717,7 @@
 	/* ---- Boolean toggle: fills the whole cell so a click anywhere toggles ---- */
 	/* `position: static` lets the button's `inset: 0` resolve to the <td> (which is
 	   `position: relative`), so the toggle covers the entire cell including padding. */
-	.cell-editor.is-bool {
+	.editor.is-bool {
 		position: static;
 		margin: 0;
 		padding: 0;
@@ -726,48 +732,50 @@
 		border: none;
 		background: transparent;
 		cursor: pointer;
-	}
-	.bool-toggle:focus-visible {
-		outline: none;
+
+		&:focus-visible {
+			outline: none;
+		}
 	}
 
 	/* Checkbox visual — matches the Checkbox component (accent-filled box + drawn
 	   check), so editable boolean cells read identically to a real Checkbox. */
-	.ds-checkmark {
+	.checkmark {
 		display: inline-flex;
 		flex-shrink: 0;
 		line-height: 0;
-	}
-	.ds-checkmark .box {
-		stroke: light-dark(
-			var(--color-text-disabled, #999),
-			var(--color-text-disabled, #777)
-		);
-		fill: transparent;
-		transition:
-			stroke 150ms ease,
-			fill 150ms ease;
-	}
-	.ds-checkmark .check {
-		stroke: transparent;
-		fill: none;
-		stroke-dasharray: 28;
-		stroke-dashoffset: 28;
-		transition:
-			stroke-dashoffset 250ms ease,
-			stroke 150ms ease;
-	}
-	.ds-checkmark.checked .box {
-		stroke: var(--color-accent, #1976d2);
-		fill: var(--color-accent, #1976d2);
-	}
-	.ds-checkmark.checked .check {
-		stroke: var(--color-accent-text, #fff);
-		stroke-dashoffset: 0;
+
+		.box {
+			stroke: light-dark(
+				var(--color-text-disabled, #999),
+				var(--color-text-disabled, #777)
+			);
+			fill: transparent;
+			transition:
+				stroke 150ms ease,
+				fill 150ms ease;
+		}
+		.check {
+			stroke: transparent;
+			fill: none;
+			stroke-dasharray: 28;
+			stroke-dashoffset: 28;
+			transition:
+				stroke-dashoffset 250ms ease,
+				stroke 150ms ease;
+		}
+		&.checked .box {
+			stroke: var(--color-accent, #1976d2);
+			fill: var(--color-accent, #1976d2);
+		}
+		&.checked .check {
+			stroke: var(--color-accent-text, #fff);
+			stroke-dashoffset: 0;
+		}
 	}
 
 	/* ================================================================== */
-	/*  Autocomplete popover — mirrors Input.svelte's .ac-dropdown        */
+	/*  Autocomplete popover — mirrors Input.svelte's autocomplete dropdown        */
 	/* ================================================================== */
 	.ac-dropdown {
 		position: fixed;

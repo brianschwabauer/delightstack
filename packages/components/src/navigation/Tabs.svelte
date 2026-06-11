@@ -293,13 +293,13 @@
 		style:font-size={sizeMap[size] ?? sizeMap['1']}>
 		{#if skeleton}
 			<div
-				class="tab-list skeleton"
+				class="list skeleton"
 				role="tablist"
 				aria-orientation={orientation}
 				aria-hidden="true">
 				{#each { length: skeleton_count } as _, i}
 					<div
-						class="tab-skeleton"
+						class="skeleton-tab"
 						style:width="{skeletonWidths[i % skeletonWidths.length]}em"
 						style:--shimmer-delay="{i * 120}ms">
 					</div>
@@ -307,11 +307,11 @@
 			</div>
 		{:else}
 			<div
-				class="tab-list"
+				class="list"
 				role="tablist"
 				aria-orientation={orientation}
 				bind:this={listEl}>
-				<div class="tab-indicator" style={indicatorStyle}></div>
+				<div class="indicator" style={indicatorStyle}></div>
 				{@render children?.()}
 			</div>
 		{/if}
@@ -339,17 +339,17 @@
 		{#if children}
 			{@render children()}
 		{:else}
-			<span class="tab-label">{label}</span>
+			<span class="label">{label}</span>
 		{/if}
 		{#if badge !== undefined}
-			<span class="tab-badge">{badge}</span>
+			<span class="badge">{badge}</span>
 		{/if}
 	</button>
 {:else if isTabContent}
 	<!-- TabContent Panel -->
 	{#if parentContext && parentContext.value === value}
 		<div
-			class={['tab-content', class_name].filter(Boolean).join(' ')}
+			class={['content', class_name].filter(Boolean).join(' ')}
 			role="tabpanel"
 			id="tabpanel-{value}"
 			aria-labelledby={value ? `tab-${value}` : undefined}
@@ -376,7 +376,7 @@
 		}
 	}
 
-	.tab-list {
+	.list {
 		display: flex;
 		position: relative;
 		border-bottom: 1px solid var(--color-border, #e0e0e0);
@@ -432,7 +432,7 @@
 	}
 
 	/* ========== Sliding Indicator ========== */
-	.tab-indicator {
+	.indicator {
 		position: absolute;
 		bottom: 0;
 		left: 0;
@@ -602,11 +602,11 @@
 		}
 	}
 
-	.tab-label {
+	.label {
 		pointer-events: none;
 	}
 
-	.tab-badge {
+	.badge {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -629,14 +629,14 @@
 
 	/* ========== Skeleton ========== */
 	/* The list keeps its real chrome (underline border / boxed / segment
-	   surfaces come from .tab-list), so only the bars need defining. A small
+	   surfaces come from .list), so only the bars need defining. A small
 	   gap separates the bars where real tabs touch (their padding provides the
 	   visual separation that solid bars lack). */
-	.tab-list.skeleton {
+	.list.skeleton {
 		pointer-events: none;
 		gap: 0.375em;
 
-		.tabs.full-width & > .tab-skeleton {
+		.tabs.full-width & > .skeleton-tab {
 			flex: 1;
 		}
 	}
@@ -644,7 +644,7 @@
 	/* Each bar is a whole tab's box: the real block padding (0.625em, or 0.5em
 	   for pills/boxed/segment) around one line box (1lh), so the list height —
 	   including the indicator strip — never shifts when the real tabs arrive. */
-	.tab-skeleton {
+	.skeleton-tab {
 		height: calc(1lh + 1.25em);
 		flex-shrink: 0;
 		border-radius: var(--radius-md, 0.375rem);
@@ -705,13 +705,13 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.tab-skeleton::after {
+		.skeleton-tab::after {
 			animation: none;
 		}
 	}
 
 	/* ========== TabContent Panel ========== */
-	.tab-content {
+	.content {
 		padding: 1em 0;
 		outline: none;
 

@@ -448,7 +448,7 @@
 	bind:this={container}>
 	<!-- First pane -->
 	<div
-		class="pane pane-first"
+		class="pane first"
 		style:flex-basis={first_basis}
 		aria-hidden={collapsed === 'first' || undefined}
 		{@attach scrollbar()}>
@@ -457,7 +457,6 @@
 		{/if}
 		{#if collapsible && collapsed === 'first'}
 			<button
-				class="expand-button"
 				class:vertical
 				type="button"
 				aria-label="Expand first pane"
@@ -501,18 +500,17 @@
 		ontouchstart={handleTouchStart}
 		ondblclick={handleDblClick}
 		onkeydown={handleKeyDown}>
-		<div class="divider-handle"></div>
+		<div class="handle"></div>
 	</div>
 
 	<!-- Second pane -->
 	<div
-		class="pane pane-second"
+		class="pane second"
 		style:flex-basis={second_basis}
 		aria-hidden={collapsed === 'second' || undefined}
 		{@attach scrollbar()}>
 		{#if collapsible && collapsed === 'second'}
 			<button
-				class="expand-button"
 				class:vertical
 				type="button"
 				aria-label="Expand second pane"
@@ -576,6 +574,14 @@
 		min-width: 0;
 		min-height: 0;
 
+		/* Explicit cross-axis size so nested components with height/width: 100% resolve correctly */
+		.horizontal > & {
+			height: 100%;
+		}
+		.vertical > & {
+			width: 100%;
+		}
+
 		.snapping & {
 			transition: flex-basis 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 		}
@@ -589,7 +595,7 @@
 		}
 	}
 
-	.pane-first {
+	.first {
 		flex-shrink: 0;
 		flex-grow: 0;
 
@@ -598,21 +604,13 @@
 		}
 	}
 
-	.pane-second {
+	.second {
 		flex-shrink: 0;
 		flex-grow: 0;
 
 		.collapsed-second & {
 			overflow: hidden;
 		}
-	}
-
-	/* Explicit cross-axis size so nested components with height/width: 100% resolve correctly */
-	.horizontal > .pane {
-		height: 100%;
-	}
-	.vertical > .pane {
-		width: 100%;
 	}
 
 	.divider {
@@ -636,36 +634,38 @@
 			outline: 2px solid var(--color-action, #1976d2);
 			outline-offset: -2px;
 		}
+
+		/* Direct child selectors prevent leaking into nested SplitPane instances */
+		.horizontal > & {
+			width: 4px;
+			cursor: col-resize;
+		}
+		.vertical > & {
+			height: 4px;
+			cursor: row-resize;
+		}
+		.dragging > & {
+			background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
+		}
 	}
 
-	/* Direct child selectors prevent leaking into nested SplitPane instances */
-	.horizontal > .divider {
-		width: 4px;
-		cursor: col-resize;
-	}
-	.vertical > .divider {
-		height: 4px;
-		cursor: row-resize;
-	}
-	.dragging > .divider {
-		background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
-	}
-
-	.divider-handle {
+	.handle {
 		position: absolute;
-	}
-	.horizontal > .divider > .divider-handle {
-		width: 12px;
-		height: 100%;
-		left: -4px;
-	}
-	.vertical > .divider > .divider-handle {
-		height: 12px;
-		width: 100%;
-		top: -4px;
+
+		.horizontal > .divider > & {
+			width: 12px;
+			height: 100%;
+			left: -4px;
+		}
+		.vertical > .divider > & {
+			height: 12px;
+			width: 100%;
+			top: -4px;
+		}
 	}
 
-	.expand-button {
+	/* The expand buttons are the component's only <button>s */
+	button {
 		position: absolute;
 		z-index: 2;
 		display: flex;
@@ -709,28 +709,28 @@
 	}
 
 	/* Expand button positioning for collapsed first pane (horizontal) */
-	.collapsed-first.horizontal .pane-first .expand-button {
+	.collapsed-first.horizontal .first button {
 		top: 50%;
 		right: 0;
 		transform: translateY(-50%);
 	}
 
 	/* Expand button positioning for collapsed first pane (vertical) */
-	.collapsed-first.vertical .pane-first .expand-button {
+	.collapsed-first.vertical .first button {
 		left: 50%;
 		bottom: 0;
 		transform: translateX(-50%);
 	}
 
 	/* Expand button positioning for collapsed second pane (horizontal) */
-	.collapsed-second.horizontal .pane-second .expand-button {
+	.collapsed-second.horizontal .second button {
 		top: 50%;
 		left: 0;
 		transform: translateY(-50%);
 	}
 
 	/* Expand button positioning for collapsed second pane (vertical) */
-	.collapsed-second.vertical .pane-second .expand-button {
+	.collapsed-second.vertical .second button {
 		left: 50%;
 		top: 0;
 		transform: translateX(-50%);

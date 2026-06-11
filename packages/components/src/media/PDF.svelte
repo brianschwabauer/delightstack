@@ -958,18 +958,18 @@
 		<!-- Skeleton / Loading (suppressed in single_page mode — used inside
 		     the Carousel, which prefers a blank slide over a placeholder UI
 		     while the document is being fetched). -->
-		<div class="pdf-skeleton">
+		<div class="skeleton">
 			{#if show_toolbar}
-				<div class="pdf-skeleton-toolbar">
-					<div class="pdf-skeleton-block" style="width: 6rem; height: 1.5rem;"></div>
-					<div class="pdf-skeleton-block" style="width: 4rem; height: 1.5rem;"></div>
+				<div class="bar">
+					<div class="block" style="width: 6rem; height: 1.5rem;"></div>
+					<div class="block" style="width: 4rem; height: 1.5rem;"></div>
 				</div>
 			{/if}
-			<div class="pdf-skeleton-page">
-				<div class="pdf-skeleton-paper">
+			<div class="page">
+				<div class="paper">
 					{#each { length: 13 } as _, i}
 						<div
-							class="pdf-skeleton-line"
+							class="line"
 							style:width="{45 + ((i * 37) % 50)}%"
 							style:--shimmer-delay="{i * 90}ms">
 						</div>
@@ -979,7 +979,7 @@
 		</div>
 	{:else if error_message}
 		<!-- Error state -->
-		<div class="pdf-error">
+		<div class="error">
 			<svg
 				width="48"
 				height="48"
@@ -995,17 +995,17 @@
 				<line x1="12" y1="16" x2="12.01" y2="16" />
 			</svg>
 			<span>Failed to load PDF</span>
-			<span class="pdf-error-detail">{error_message}</span>
+			<span class="detail">{error_message}</span>
 		</div>
 	{:else}
 		<!-- Toolbar -->
 		{#if show_toolbar}
-			<div class="pdf-toolbar">
+			<div class="toolbar">
 				<!-- Page navigation -->
-				<div class="pdf-toolbar-group">
+				<div class="group">
 					<button
 						type="button"
-						class="pdf-toolbar-btn"
+						class="btn"
 						onclick={() => goToPage(page - 1)}
 						disabled={page <= 1}
 						aria-label="Previous page">
@@ -1026,7 +1026,6 @@
 
 					<input
 						type="text"
-						class="pdf-page-input"
 						value={page_input_value}
 						oninput={(e) => {
 							page_input_value = (e.target as HTMLInputElement).value;
@@ -1034,11 +1033,11 @@
 						onblur={handlePageInput}
 						onkeydown={handlePageInputKeydown}
 						aria-label="Page number" />
-					<span class="pdf-page-total">/ {total_pages}</span>
+					<span class="total">/ {total_pages}</span>
 
 					<button
 						type="button"
-						class="pdf-toolbar-btn"
+						class="btn"
 						onclick={() => goToPage(page + 1)}
 						disabled={page >= total_pages}
 						aria-label="Next page">
@@ -1058,13 +1057,13 @@
 					</button>
 				</div>
 
-				<div class="pdf-toolbar-separator"></div>
+				<div class="separator"></div>
 
 				<!-- Zoom controls -->
-				<div class="pdf-toolbar-group">
+				<div class="group">
 					<button
 						type="button"
-						class="pdf-toolbar-btn"
+						class="btn"
 						onclick={zoomOut}
 						disabled={zoom <= 0.25}
 						aria-label="Zoom out">
@@ -1082,11 +1081,11 @@
 						</svg>
 					</button>
 
-					<span class="pdf-zoom-level">{zoom_percent}%</span>
+					<span class="zoom">{zoom_percent}%</span>
 
 					<button
 						type="button"
-						class="pdf-toolbar-btn"
+						class="btn"
 						onclick={zoomIn}
 						disabled={zoom >= 4}
 						aria-label="Zoom in">
@@ -1105,13 +1104,13 @@
 					</button>
 				</div>
 
-				<div class="pdf-toolbar-separator"></div>
+				<div class="separator"></div>
 
 				<!-- Fit mode -->
-				<div class="pdf-toolbar-group">
+				<div class="group">
 					<button
 						type="button"
-						class="pdf-toolbar-btn"
+						class="btn"
 						onclick={cycleFit}
 						aria-label="Toggle fit mode ({current_fit})"
 						title="Fit: {current_fit}">
@@ -1149,13 +1148,13 @@
 					</button>
 				</div>
 
-				<div class="pdf-toolbar-spacer"></div>
+				<div class="spacer"></div>
 
 				<!-- Search button -->
 				{#if searchable}
 					<button
 						type="button"
-						class="pdf-toolbar-btn"
+						class="btn"
 						class:active={search_open}
 						onclick={() => (search_open ? closeSearch() : openSearch())}
 						aria-label="Search">
@@ -1179,7 +1178,7 @@
 				{#if show_download}
 					<button
 						type="button"
-						class="pdf-toolbar-btn"
+						class="btn"
 						onclick={handleDownload}
 						aria-label="Download">
 						<svg
@@ -1205,11 +1204,11 @@
 
 				<!-- Annotation toggle -->
 				{#if annotatable}
-					<div class="pdf-toolbar-separator"></div>
-					<div class="pdf-toolbar-group">
+					<div class="separator"></div>
+					<div class="group">
 						<button
 							type="button"
-							class="pdf-toolbar-btn"
+							class="btn"
 							class:active={annotation_mode === 'highlight'}
 							onclick={() =>
 								(annotation_mode = annotation_mode === 'highlight' ? null : 'highlight')}
@@ -1238,7 +1237,7 @@
 						</button>
 						<button
 							type="button"
-							class="pdf-toolbar-btn"
+							class="btn"
 							class:active={annotation_mode === 'note'}
 							onclick={() =>
 								(annotation_mode = annotation_mode === 'note' ? null : 'note')}
@@ -1272,10 +1271,9 @@
 
 		<!-- Search bar -->
 		{#if search_open}
-			<div class="pdf-search-bar">
+			<div class="search-bar">
 				<input
 					type="text"
-					class="pdf-search-input"
 					placeholder="Search in document..."
 					value={search_query}
 					bind:this={search_input_el}
@@ -1283,11 +1281,11 @@
 					onkeydown={handleSearchKeydown}
 					aria-label="Search text" />
 				{#if search_count_text}
-					<span class="pdf-search-count">{search_count_text}</span>
+					<span class="count">{search_count_text}</span>
 				{/if}
 				<button
 					type="button"
-					class="pdf-toolbar-btn"
+					class="btn"
 					onclick={searchPrev}
 					disabled={search_matches.length === 0}
 					aria-label="Previous match">
@@ -1302,7 +1300,7 @@
 				</button>
 				<button
 					type="button"
-					class="pdf-toolbar-btn"
+					class="btn"
 					onclick={searchNext}
 					disabled={search_matches.length === 0}
 					aria-label="Next match">
@@ -1315,11 +1313,7 @@
 							stroke-linejoin="round" />
 					</svg>
 				</button>
-				<button
-					type="button"
-					class="pdf-toolbar-btn"
-					onclick={closeSearch}
-					aria-label="Close search">
+				<button type="button" class="btn" onclick={closeSearch} aria-label="Close search">
 					<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
 						<path
 							d="M4 4L12 12M12 4L4 12"
@@ -1351,8 +1345,8 @@
 					onmouseup={() => handlePageMouseUp(i + 1)}
 					onclick={(e) => handlePageClick(e, i + 1)}>
 					{#if !rendered_pages.has(i + 1) && !single_page}
-						<div class="pdf-page-placeholder">
-							<span class="pdf-page-placeholder-text">{i + 1}</span>
+						<div class="placeholder">
+							<span>{i + 1}</span>
 						</div>
 					{/if}
 				</div>
@@ -1390,7 +1384,7 @@
 
 	/* ── Toolbar ──────────────────────────────────────────────── */
 
-	.pdf-toolbar {
+	.toolbar {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -1399,26 +1393,62 @@
 		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
 		flex-shrink: 0;
 		flex-wrap: wrap;
+
+		.group {
+			display: flex;
+			align-items: center;
+			gap: 0.25rem;
+		}
+
+		.separator {
+			width: 1px;
+			height: 1.5rem;
+			background: var(--color-border, light-dark(#e2e8f0, #334155));
+			margin-inline: 0.25rem;
+		}
+
+		.spacer {
+			flex: 1;
+		}
+
+		input {
+			width: 3rem;
+			text-align: center;
+			padding: 0.25rem;
+			border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+			border-radius: var(--radius-sm, 0.25rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+			}
+			font-size: var(--text-sm, 0.875rem);
+			background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
+			color: var(--color-text, light-dark(#1e293b, #e2e8f0));
+
+			&:focus {
+				outline: 2px solid var(--color-action, #3b82f6);
+				outline-offset: -1px;
+			}
+		}
+
+		.total {
+			font-size: var(--text-sm, 0.875rem);
+			color: var(--color-text-muted, light-dark(#64748b, #94a3b8));
+			user-select: none;
+		}
+
+		.zoom {
+			font-size: var(--text-sm, 0.875rem);
+			color: var(--color-text, light-dark(#1e293b, #e2e8f0));
+			min-width: 3rem;
+			text-align: center;
+			user-select: none;
+			font-variant-numeric: tabular-nums;
+		}
 	}
 
-	.pdf-toolbar-group {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-	}
-
-	.pdf-toolbar-separator {
-		width: 1px;
-		height: 1.5rem;
-		background: var(--color-border, light-dark(#e2e8f0, #334155));
-		margin-inline: 0.25rem;
-	}
-
-	.pdf-toolbar-spacer {
-		flex: 1;
-	}
-
-	.pdf-toolbar-btn {
+	/* Shared by the toolbar and the search bar */
+	.btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1434,72 +1464,37 @@
 		cursor: pointer;
 		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
 		transition: background 150ms ease;
-	}
 
-	.pdf-toolbar-btn:hover {
-		background: light-dark(
-			var(--color-surface, rgb(0 0 0 / 0.06)),
-			var(--color-surface, rgb(255 255 255 / 0.08))
-		);
-		/* Snap the tint in on hover; the base rule eases it back out on leave. */
-		transition: none;
-	}
-
-	.pdf-toolbar-btn:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-
-	.pdf-toolbar-btn:disabled:hover {
-		background: none;
-	}
-
-	.pdf-toolbar-btn.active {
-		background: light-dark(
-			rgb(from var(--color-action, #3b82f6) r g b / 0.12),
-			rgb(from var(--color-action, #3b82f6) r g b / 0.2)
-		);
-		color: var(--color-action, #3b82f6);
-	}
-
-	.pdf-page-input {
-		width: 3rem;
-		text-align: center;
-		padding: 0.25rem;
-		border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
-		border-radius: var(--radius-sm, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		&:hover {
+			background: light-dark(
+				var(--color-surface, rgb(0 0 0 / 0.06)),
+				var(--color-surface, rgb(255 255 255 / 0.08))
+			);
+			/* Snap the tint in on hover; the base rule eases it back out on leave. */
+			transition: none;
 		}
-		font-size: var(--text-sm, 0.875rem);
-		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
-		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
-	}
 
-	.pdf-page-input:focus {
-		outline: 2px solid var(--color-action, #3b82f6);
-		outline-offset: -1px;
-	}
+		&:disabled {
+			opacity: 0.4;
+			cursor: default;
 
-	.pdf-page-total {
-		font-size: var(--text-sm, 0.875rem);
-		color: var(--color-text-muted, light-dark(#64748b, #94a3b8));
-		user-select: none;
-	}
+			&:hover {
+				background: none;
+			}
+		}
 
-	.pdf-zoom-level {
-		font-size: var(--text-sm, 0.875rem);
-		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
-		min-width: 3rem;
-		text-align: center;
-		user-select: none;
-		font-variant-numeric: tabular-nums;
+		&.active {
+			background: light-dark(
+				rgb(from var(--color-action, #3b82f6) r g b / 0.12),
+				rgb(from var(--color-action, #3b82f6) r g b / 0.2)
+			);
+			color: var(--color-action, #3b82f6);
+		}
 	}
 
 	/* ── Search bar ───────────────────────────────────────────── */
 
-	.pdf-search-bar {
+	.search-bar {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -1507,33 +1502,33 @@
 		background: light-dark(var(--color-surface, #f8fafc), var(--color-surface, #1a2332));
 		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
 		flex-shrink: 0;
-	}
 
-	.pdf-search-input {
-		flex: 1;
-		min-width: 0;
-		padding: 0.25rem 0.5rem;
-		border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
-		border-radius: var(--radius-sm, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		input {
+			flex: 1;
+			min-width: 0;
+			padding: 0.25rem 0.5rem;
+			border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+			border-radius: var(--radius-sm, 0.25rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+			}
+			font-size: var(--text-sm, 0.875rem);
+			background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
+			color: var(--color-text, light-dark(#1e293b, #e2e8f0));
+
+			&:focus {
+				outline: 2px solid var(--color-action, #3b82f6);
+				outline-offset: -1px;
+			}
 		}
-		font-size: var(--text-sm, 0.875rem);
-		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
-		color: var(--color-text, light-dark(#1e293b, #e2e8f0));
-	}
 
-	.pdf-search-input:focus {
-		outline: 2px solid var(--color-action, #3b82f6);
-		outline-offset: -1px;
-	}
-
-	.pdf-search-count {
-		font-size: var(--text-xs, 0.75rem);
-		color: var(--color-text-muted, light-dark(#64748b, #94a3b8));
-		white-space: nowrap;
-		user-select: none;
+		.count {
+			font-size: var(--text-xs, 0.75rem);
+			color: var(--color-text-muted, light-dark(#64748b, #94a3b8));
+			white-space: nowrap;
+			user-select: none;
+		}
 	}
 
 	/* ── Pages container ──────────────────────────────────────── */
@@ -1640,24 +1635,24 @@
 		background: color-mix(in oklch, var(--color-action, #3b82f6) 40%, transparent);
 	}
 
-	.pdf-page-placeholder {
+	.pdf-page .placeholder {
 		position: absolute;
 		inset: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		background: white;
-	}
 
-	.pdf-page-placeholder-text {
-		font-size: 2rem;
-		color: light-dark(#cbd5e1, #475569);
-		user-select: none;
+		span {
+			font-size: 2rem;
+			color: light-dark(#cbd5e1, #475569);
+			user-select: none;
+		}
 	}
 
 	/* ── Error state ──────────────────────────────────────────── */
 
-	.pdf-error {
+	.error {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
@@ -1667,112 +1662,112 @@
 		color: var(--color-text-muted, light-dark(#64748b, #94a3b8));
 		padding: 2rem;
 		text-align: center;
-	}
 
-	.pdf-error-detail {
-		font-size: var(--text-sm, 0.875rem);
-		max-width: 30rem;
-		word-break: break-word;
+		.detail {
+			font-size: var(--text-sm, 0.875rem);
+			max-width: 30rem;
+			word-break: break-word;
+		}
 	}
 
 	/* ── Skeleton ─────────────────────────────────────────────── */
 
-	.pdf-skeleton {
+	.skeleton {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
 		pointer-events: none;
-	}
 
-	.pdf-skeleton-toolbar {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		padding: 0.5rem 0.75rem;
-		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
-	}
-
-	.pdf-skeleton-block {
-		border-radius: var(--radius-sm, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		.bar {
+			display: flex;
+			align-items: center;
+			gap: 1rem;
+			padding: 0.5rem 0.75rem;
+			border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
 		}
-		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
-		position: relative;
-		overflow: hidden;
 
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				105deg,
-				transparent 25%,
-				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
-				transparent 75%
-			);
-			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
-				infinite;
+		.block {
+			border-radius: var(--radius-sm, 0.25rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+			}
+			background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+			position: relative;
+			overflow: hidden;
+
+			&::after {
+				content: '';
+				position: absolute;
+				inset: 0;
+				transform: translateX(-100%);
+				background-image: linear-gradient(
+					105deg,
+					transparent 25%,
+					var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+					transparent 75%
+				);
+				animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+					infinite;
+			}
 		}
-	}
 
-	/* Centering backdrop behind the "paper". A subtle surface tint makes the
-	   white page read as a sheet of paper regardless of the page theme. */
-	/* Full-width backdrop behind the "paper". A subtle surface tint makes the
-	   white page read as a sheet of paper regardless of the page theme. Grid
-	   centering (rather than flex) lets the paper derive its width from its
-	   definite height + aspect-ratio instead of collapsing to its content. */
-	.pdf-skeleton-page {
-		flex: 1;
-		min-height: 0;
-		display: grid;
-		place-items: center;
-		padding: 1.5rem;
-		background: light-dark(#f1f5f9, #0f172a);
-	}
+		/* Centering backdrop behind the "paper". A subtle surface tint makes the
+		   white page read as a sheet of paper regardless of the page theme. */
+		/* Full-width backdrop behind the "paper". A subtle surface tint makes the
+		   white page read as a sheet of paper regardless of the page theme. Grid
+		   centering (rather than flex) lets the paper derive its width from its
+		   definite height + aspect-ratio instead of collapsing to its content. */
+		.page {
+			flex: 1;
+			min-height: 0;
+			display: grid;
+			place-items: center;
+			padding: 1.5rem;
+			background: light-dark(#f1f5f9, #0f172a);
+		}
 
-	/* The page itself — a portrait US-letter sheet (8.5 × 11) in white, since
-	   most PDFs are white paper. Lines below mimic dark text. */
-	.pdf-skeleton-paper {
-		height: 100%;
-		aspect-ratio: 8.5 / 11;
-		max-width: 100%;
-		background: #ffffff;
-		border-radius: 3px;
-		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
-		display: flex;
-		flex-direction: column;
-		gap: 0.85rem;
-		padding: 9% 10%;
-		overflow: hidden;
-	}
+		/* The page itself — a portrait US-letter sheet (8.5 × 11) in white, since
+		   most PDFs are white paper. Lines below mimic dark text. */
+		.paper {
+			height: 100%;
+			aspect-ratio: 8.5 / 11;
+			max-width: 100%;
+			background: #ffffff;
+			border-radius: 3px;
+			box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+			display: flex;
+			flex-direction: column;
+			gap: 0.85rem;
+			padding: 9% 10%;
+			overflow: hidden;
+		}
 
-	.pdf-skeleton-line {
-		flex: none;
-		height: 0.7rem;
-		border-radius: 3px;
-		background: rgba(15, 23, 42, 0.08);
-		position: relative;
-		overflow: hidden;
+		.line {
+			flex: none;
+			height: 0.7rem;
+			border-radius: 3px;
+			background: rgba(15, 23, 42, 0.08);
+			position: relative;
+			overflow: hidden;
 
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			/* The paper is always white, so the sheen stays ink-on-paper rather
-			   than using the theme-aware skeleton tokens. */
-			background-image: linear-gradient(
-				105deg,
-				rgba(15, 23, 42, 0) 25%,
-				rgba(15, 23, 42, 0.14) 50%,
-				rgba(15, 23, 42, 0) 75%
-			);
-			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
-				infinite;
-			animation-delay: var(--shimmer-delay, 0ms);
+			&::after {
+				content: '';
+				position: absolute;
+				inset: 0;
+				transform: translateX(-100%);
+				/* The paper is always white, so the sheen stays ink-on-paper rather
+				   than using the theme-aware skeleton tokens. */
+				background-image: linear-gradient(
+					105deg,
+					rgba(15, 23, 42, 0) 25%,
+					rgba(15, 23, 42, 0.14) 50%,
+					rgba(15, 23, 42, 0) 75%
+				);
+				animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+					infinite;
+				animation-delay: var(--shimmer-delay, 0ms);
+			}
 		}
 	}
 
@@ -1787,8 +1782,8 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.pdf-skeleton-block::after,
-		.pdf-skeleton-line::after {
+		.skeleton .block::after,
+		.skeleton .line::after {
 			animation: none;
 		}
 	}

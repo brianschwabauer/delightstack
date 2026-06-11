@@ -287,12 +287,11 @@
 	class:skeleton
 	class:has-error={!!error}>
 	{#if label}
-		<label class="label" id={label_id} for={id}>{label}</label>
+		<label id={label_id} for={id}>{label}</label>
 	{/if}
 
 	<input
 		type="file"
-		class="sr-only"
 		bind:this={input_element}
 		{id}
 		{name}
@@ -464,7 +463,8 @@
 </div>
 
 <style>
-	.sr-only {
+	/* Visually-hidden native file input (the visible controls proxy to it) */
+	input {
 		position: absolute;
 		width: 1px;
 		height: 1px;
@@ -482,27 +482,27 @@
 		flex-direction: column;
 		gap: 0.5em;
 		font-size: 1em;
-	}
 
-	.file-upload.dense {
-		gap: 0.25em;
-	}
-	.file-upload.comfortable {
-		gap: 0.75em;
-	}
+		&.dense {
+			gap: 0.25em;
+		}
+		&.comfortable {
+			gap: 0.75em;
+		}
 
-	/* Sizes */
-	.file-upload.size-0 {
-		font-size: var(--text-sm, 0.75rem);
-	}
-	.file-upload.size-1 {
-		font-size: var(--text-base, 0.875rem);
-	}
-	.file-upload.size-2 {
-		font-size: var(--text-lg, 1rem);
-	}
-	.file-upload.size-3 {
-		font-size: var(--text-xl, 1.125rem);
+		/* Sizes */
+		&.size-0 {
+			font-size: var(--text-sm, 0.75rem);
+		}
+		&.size-1 {
+			font-size: var(--text-base, 0.875rem);
+		}
+		&.size-2 {
+			font-size: var(--text-lg, 1rem);
+		}
+		&.size-3 {
+			font-size: var(--text-xl, 1.125rem);
+		}
 	}
 
 	/* Skeleton — the real dropzone/avatar keeps its exact box (padding, border
@@ -512,103 +512,105 @@
 	   over the hidden icon/text hint at the layout inside. */
 	.file-upload.skeleton {
 		pointer-events: none;
-	}
 
-	/* Label — invisible text keeps the gutter; a pill bar stands in for it.
-	   The bar is a pseudo-element (it can't host its own ::after), so the
-	   sweep is emulated with background-position using the same geometry and
-	   timing as the global delight-skeleton-shimmer. */
-	.file-upload.skeleton .label {
-		position: relative;
-		visibility: hidden;
-	}
-	.file-upload.skeleton .label::before {
-		content: '';
-		visibility: visible;
-		position: absolute;
-		top: 50%;
-		translate: 0 -50%;
-		height: 0.7em;
-		width: 7em;
-		border-radius: var(--radius-full, 1e5px);
-		background-color: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
-		background-image: linear-gradient(
-			105deg,
-			transparent 37.5%,
-			var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
-			transparent 62.5%
-		);
-		background-size: 200% 100%;
-		background-repeat: no-repeat;
-		background-position: 150% 0;
-		animation: file-upload-skeleton-sweep var(--skeleton-duration, 2.4s) ease-in-out
-			infinite;
-	}
+		/* Label — invisible text keeps the gutter; a pill bar stands in for it.
+		   The bar is a pseudo-element (it can't host its own ::after), so the
+		   sweep is emulated with background-position using the same geometry and
+		   timing as the global delight-skeleton-shimmer. */
+		label {
+			position: relative;
+			visibility: hidden;
 
-	/* Wells: keep the real shape, swap the dashed border for a flat fill and
-	   sweep a sheen across (both have overflow:hidden + position:relative).
-	   Staggered 120ms after the label bar. */
-	.file-upload.skeleton .dropzone,
-	.file-upload.skeleton .avatar-upload {
-		--shimmer-delay: 120ms;
-		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
-		border-color: transparent;
-
-		&::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			transform: translateX(-100%);
-			background-image: linear-gradient(
-				105deg,
-				transparent 25%,
-				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
-				transparent 75%
-			);
-			animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
-				infinite;
-			animation-delay: var(--shimmer-delay, 0s);
+			&::before {
+				content: '';
+				visibility: visible;
+				position: absolute;
+				top: 50%;
+				translate: 0 -50%;
+				height: 0.7em;
+				width: 7em;
+				border-radius: var(--radius-full, 1e5px);
+				background-color: var(
+					--skeleton-bg,
+					rgb(from var(--color-text, #888) r g b / 0.1)
+				);
+				background-image: linear-gradient(
+					105deg,
+					transparent 37.5%,
+					var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+					transparent 62.5%
+				);
+				background-size: 200% 100%;
+				background-repeat: no-repeat;
+				background-position: 150% 0;
+				animation: file-upload-skeleton-sweep var(--skeleton-duration, 2.4s) ease-in-out
+					infinite;
+			}
 		}
-	}
 
-	/* Hide the real content but keep it in the layout (currentColor strokes
-	   and text both vanish with `color: transparent`). */
-	.file-upload.skeleton
-		.dropzone
-		:is(.upload-icon, .dropzone-text, .dropzone-hint, .browse-link),
-	.file-upload.skeleton .avatar-upload .avatar-placeholder {
-		color: transparent;
-	}
-	.file-upload.skeleton .avatar-upload .avatar-overlay {
-		visibility: hidden;
-	}
+		/* Wells: keep the real shape, swap the dashed border for a flat fill and
+		   sweep a sheen across (both have overflow:hidden + position:relative).
+		   Staggered 120ms after the label bar. */
+		.dropzone,
+		.avatar-upload {
+			--shimmer-delay: 120ms;
+			background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+			border-color: transparent;
 
-	/* Glyph hint: fill the icon's own box — the translucent fills stack, so it
-	   reads slightly darker than the well beneath it. */
-	.file-upload.skeleton .dropzone .upload-icon {
-		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
-		border-radius: var(--radius-md, 4px);
-	}
+			&::after {
+				content: '';
+				position: absolute;
+				inset: 0;
+				transform: translateX(-100%);
+				background-image: linear-gradient(
+					105deg,
+					transparent 25%,
+					var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+					transparent 75%
+				);
+				animation: delight-skeleton-shimmer var(--skeleton-duration, 2.4s) ease-in-out
+					infinite;
+				animation-delay: var(--shimmer-delay, 0s);
+			}
+		}
 
-	/* Text/hint bars centered over the real lines they stand in for. */
-	.file-upload.skeleton .dropzone-text,
-	.file-upload.skeleton .dropzone-hint {
-		position: relative;
-	}
-	.file-upload.skeleton .dropzone-text::before,
-	.file-upload.skeleton .dropzone-hint::before {
-		content: '';
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		translate: -50% -50%;
-		height: 0.7em;
-		width: 12em;
-		border-radius: var(--radius-full, 1e5px);
-		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
-	}
-	.file-upload.skeleton .dropzone-hint::before {
-		width: 8em;
+		/* Hide the real content but keep it in the layout (currentColor strokes
+		   and text both vanish with `color: transparent`). */
+		.dropzone :is(.upload-icon, .dropzone-text, .dropzone-hint, .browse-link),
+		.avatar-upload .avatar-placeholder {
+			color: transparent;
+		}
+		.avatar-upload .avatar-overlay {
+			visibility: hidden;
+		}
+
+		/* Glyph hint: fill the icon's own box — the translucent fills stack, so it
+		   reads slightly darker than the well beneath it. */
+		.dropzone .upload-icon {
+			background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+			border-radius: var(--radius-md, 4px);
+		}
+
+		/* Text/hint bars centered over the real lines they stand in for. */
+		.dropzone-text,
+		.dropzone-hint {
+			position: relative;
+
+			&::before {
+				content: '';
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				translate: -50% -50%;
+				height: 0.7em;
+				width: 12em;
+				border-radius: var(--radius-full, 1e5px);
+				background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+			}
+		}
+		.dropzone-hint::before {
+			width: 8em;
+		}
 	}
 
 	@keyframes -global-delight-skeleton-shimmer {
@@ -635,7 +637,7 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.file-upload.skeleton .label::before,
+		.file-upload.skeleton label::before,
 		.file-upload.skeleton .dropzone::after,
 		.file-upload.skeleton .avatar-upload::after {
 			animation: none;
@@ -643,7 +645,7 @@
 	}
 
 	/* Label */
-	.label {
+	label {
 		font-weight: 600;
 		font-size: 0.875em;
 		color: var(--color-text, inherit);
@@ -669,30 +671,31 @@
 		gap: 0.5em;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
-	}
-	.dropzone:active:not([aria-disabled='true']) {
-		translate: 0 1px;
-		transition: translate 100ms ease;
-	}
 
-	.dropzone:hover {
-		border-color: var(--color-action, hsl(220 70% 55%));
-		transition: none;
-	}
+		&:active:not([aria-disabled='true']) {
+			translate: 0 1px;
+			transition: translate 100ms ease;
+		}
 
-	.dropzone:focus-visible {
-		outline: 2px solid var(--color-border-active, currentColor);
-		outline-offset: 2px;
-	}
+		&:hover {
+			border-color: var(--color-action, hsl(220 70% 55%));
+			transition: none;
+		}
 
-	.dropzone.drag-over {
-		border-color: var(--color-action, hsl(220 70% 55%));
-		background: color-mix(
-			in oklch,
-			var(--color-action, hsl(220 70% 55%)) 5%,
-			transparent
-		);
-		transition: none;
+		&:focus-visible {
+			outline: 2px solid var(--color-border-active, currentColor);
+			outline-offset: 2px;
+		}
+
+		&.drag-over {
+			border-color: var(--color-action, hsl(220 70% 55%));
+			background: color-mix(
+				in oklch,
+				var(--color-action, hsl(220 70% 55%)) 5%,
+				transparent
+			);
+			transition: none;
+		}
 	}
 
 	.disabled .dropzone {
@@ -758,21 +761,21 @@
 		transition: border-color 200ms;
 		outline: none;
 		-webkit-tap-highlight-color: transparent;
-	}
 
-	.avatar-upload:hover {
-		border-color: var(--color-action, hsl(220 70% 55%));
-		transition: none;
-	}
+		&:hover {
+			border-color: var(--color-action, hsl(220 70% 55%));
+			transition: none;
+		}
 
-	.avatar-upload:focus-visible {
-		outline: 2px solid var(--color-border-active, currentColor);
-		outline-offset: 2px;
-	}
+		&:focus-visible {
+			outline: 2px solid var(--color-border-active, currentColor);
+			outline-offset: 2px;
+		}
 
-	.avatar-upload.drag-over {
-		border-color: var(--color-action, hsl(220 70% 55%));
-		transition: none;
+		&.drag-over {
+			border-color: var(--color-action, hsl(220 70% 55%));
+			transition: none;
+		}
 	}
 
 	.disabled .avatar-upload {
@@ -911,7 +914,6 @@
 		background: color-mix(in oklch, var(--color-error, hsl(0 70% 55%)) 10%, transparent);
 		transition: none;
 	}
-
 	.remove-button:focus-visible {
 		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;

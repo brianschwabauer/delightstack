@@ -979,7 +979,7 @@
 	<!-- Main input wrapper -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="input-wrapper"
+		class="wrapper"
 		class:focused
 		class:has-error={has_error}
 		bind:this={wrapper_element}
@@ -988,19 +988,19 @@
 		ondragover={is_file ? handleFileDragOver : undefined}>
 		<!-- Leading icon -->
 		{#if icon}
-			<span class="input-icon" aria-hidden="true">
+			<span class="icon" aria-hidden="true">
 				{@render iconRender(icon)}
 			</span>
 		{/if}
 
 		<!-- Prefix -->
 		{#if prefix}
-			<span class="input-prefix" aria-hidden="true">{prefix}</span>
+			<span class="prefix" aria-hidden="true">{prefix}</span>
 		{/if}
 
 		<!-- Multiple chips -->
 		{#if multiple && !is_file && Array.isArray(value)}
-			<div class="chips-container">
+			<div class="chips">
 				{#each value as chip, i (chip)}
 					<span
 						class="chip"
@@ -1043,7 +1043,7 @@
 				bind:this={textarea_element}
 				{id}
 				{name}
-				class="input-field"
+				class="field"
 				placeholder={native_placeholder}
 				disabled={effectively_disabled}
 				{readonly}
@@ -1077,7 +1077,7 @@
 					type="button"
 					bind:this={input_element}
 					{id}
-					class="input-field file-trigger"
+					class="field file-trigger"
 					disabled={effectively_disabled}
 					aria-describedby={has_error
 						? `${id}-error`
@@ -1195,7 +1195,7 @@
 				{id}
 				{name}
 				type="text"
-				class="input-field"
+				class="field"
 				placeholder={native_placeholder}
 				disabled={effectively_disabled}
 				{readonly}
@@ -1215,7 +1215,7 @@
 				{id}
 				{name}
 				type={html_type}
-				class="input-field"
+				class="field"
 				class:has-autocomplete={has_autocomplete}
 				placeholder={native_placeholder}
 				disabled={effectively_disabled}
@@ -1248,8 +1248,8 @@
 
 		<!-- Floating label (notched-outline style) -->
 		{#if label}
-			<label class="input-label" class:floated={label_floated} for={id}>
-				<span class="input-label-text">
+			<label class:floated={label_floated} for={id}>
+				<span class="label-text">
 					{label}{#if required}<span class="required-mark" aria-hidden="true">
 							*
 						</span>{/if}
@@ -1259,12 +1259,12 @@
 
 		<!-- Suffix -->
 		{#if suffix}
-			<span class="input-suffix" aria-hidden="true">{suffix}</span>
+			<span class="suffix" aria-hidden="true">{suffix}</span>
 		{/if}
 
 		<!-- Number steppers -->
 		{#if is_number}
-			<div class="number-buttons">
+			<div class="steppers">
 				<Button
 					icon
 					transparent
@@ -1358,7 +1358,7 @@
 
 		<!-- Search icon -->
 		{#if is_search && !icon}
-			<span class="input-icon search-icon" aria-hidden="true">
+			<span class="icon search-icon" aria-hidden="true">
 				<svg viewBox="0 0 24 24" width="16" height="16" fill="none">
 					<circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2" />
 					<path
@@ -1416,18 +1416,18 @@
 
 	<!-- Footer row: error, helper, counter -->
 	{#if has_error || helper || (show_counter && maxlength)}
-		<div class="input-footer">
+		<div class="footer">
 			{#if has_error && error_message}
-				<span class="input-error" id="{id}-error" role="alert">{error_message}</span>
+				<span class="error" id="{id}-error" role="alert">{error_message}</span>
 			{:else if helper}
-				<span class="input-helper" id="{id}-helper">{helper}</span>
+				<span class="helper" id="{id}-helper">{helper}</span>
 			{:else}
 				<span></span>
 			{/if}
 
 			{#if show_counter && maxlength}
 				<span
-					class="input-counter"
+					class="counter"
 					class:counter-warning={counter_state === 'warning'}
 					class:counter-error={counter_state === 'error'}>
 					{value_length}/{maxlength}
@@ -1440,7 +1440,7 @@
 	{#if has_autocomplete}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="ac-dropdown"
+			class="dropdown"
 			class:above={ac_above}
 			popover="manual"
 			bind:this={dropdown_element}
@@ -1449,12 +1449,12 @@
 			style:position-anchor={ac_anchor_name}
 			onpointerdown={(e) => e.preventDefault()}>
 			{#if ac_loading}
-				<div class="ac-status">
-					<span class="ac-spinner" aria-hidden="true"></span>
+				<div class="status">
+					<span class="spinner" aria-hidden="true"></span>
 					Loading...
 				</div>
 			{:else if ac_options.length === 0}
-				<div class="ac-status">No results</div>
+				<div class="status">No results</div>
 			{:else}
 				<List>
 					{#each ac_options as opt, i (opt.value)}
@@ -1466,10 +1466,10 @@
 							{#if option_snippet}
 								{@render option_snippet(opt)}
 							{:else}
-								<span class="ac-option">
-									<span class="ac-option-label">{@html highlightMatch(opt.label)}</span>
+								<span class="option">
+									<span class="option-label">{@html highlightMatch(opt.label)}</span>
 									{#if opt.description}
-										<span class="ac-option-desc">{opt.description}</span>
+										<span class="option-desc">{opt.description}</span>
 									{/if}
 								</span>
 							{/if}
@@ -1606,7 +1606,7 @@
 	/*  WRAPPER                                                            */
 	/* ================================================================== */
 
-	.input-wrapper {
+	.wrapper {
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -1618,7 +1618,7 @@
 		   overflows ~0.4em above the box without adding to the layout height. */
 		padding: 0 var(--control-pad-x, 1em);
 		border-radius: var(--_radius);
-		/* Squircle + a rounder radius. The notch shoulders (.input-label ::before/::after)
+		/* Squircle + a rounder radius. The notch shoulders (label ::before/::after)
 		   draw the top corners, so the radius is doubled like elsewhere but CAPPED at the
 		   label's left content offset (1em) — past that the corner would crowd the floated
 		   label. --_cr is the shared corner radius; the shoulders scale to it (height +
@@ -1634,20 +1634,20 @@
 	}
 
 	/* Filled variant — paint the control surface behind the field. */
-	.input.filled .input-wrapper {
+	.input.filled .wrapper {
 		background: var(--_bg);
 	}
 
-	.input.dense .input-wrapper {
+	.input.dense .wrapper {
 		padding: 0 var(--control-pad-x-dense, 0.75em);
 	}
-	.input.comfortable .input-wrapper {
+	.input.comfortable .wrapper {
 		padding: 0 var(--control-pad-x-comfortable, 1.25em);
 	}
 
 	/* The outline is painted by a pseudo-element so the 1px -> 2px focus
 	   transition never nudges the field's contents. */
-	.input-wrapper::before {
+	.wrapper::before {
 		content: '';
 		position: absolute;
 		inset: 0;
@@ -1664,20 +1664,20 @@
 	}
 
 	/* With a label present, the label itself paints the top edge (the notch) */
-	.input.has-label .input-wrapper::before {
+	.input.has-label .wrapper::before {
 		border-top-color: transparent;
 	}
 
-	.input-wrapper:hover::before {
+	.wrapper:hover::before {
 		border-color: var(--_border-hover);
 		/* Snap the border color in on hover; the base rule eases it back out on leave. */
 		transition: none;
 	}
-	.input.has-label .input-wrapper:hover::before {
+	.input.has-label .wrapper:hover::before {
 		border-top-color: transparent;
 	}
 
-	.input-wrapper.focused::before {
+	.wrapper.focused::before {
 		border-color: var(--_border-focus);
 		border-width: 2px;
 		/* Snap the border in on focus (matches the hover rule above); the base
@@ -1686,18 +1686,18 @@
 		   mismatch the notch fix removed, just on focus instead of hover. */
 		transition: none;
 	}
-	.input.has-label .input-wrapper.focused::before {
+	.input.has-label .wrapper.focused::before {
 		border-top-color: transparent;
 	}
 
-	.input-wrapper.has-error::before {
+	.wrapper.has-error::before {
 		border-color: var(--_border-error);
 	}
-	.input.has-label .input-wrapper.has-error::before {
+	.input.has-label .wrapper.has-error::before {
 		border-top-color: transparent;
 	}
 
-	.input.is-textarea .input-wrapper {
+	.input.is-textarea .wrapper {
 		align-items: stretch;
 		min-height: auto;
 	}
@@ -1706,7 +1706,7 @@
 	/*  INPUT FIELD                                                        */
 	/* ================================================================== */
 
-	.input-field {
+	.field {
 		flex: 1;
 		min-width: 0;
 		border: none;
@@ -1724,7 +1724,7 @@
 		line-height: var(--_height);
 	}
 
-	.input-field::placeholder {
+	.field::placeholder {
 		color: var(--_text-muted);
 		opacity: 0.85;
 	}
@@ -1734,17 +1734,17 @@
 	   the label's 200ms glide mostly clears before the placeholder appears;
 	   the fade-out is quick and immediate so the two never overlap while the
 	   label glides back down on blur. */
-	.input.placeholder-deferred :is(.input-field, .chip-input)::placeholder {
+	.input.placeholder-deferred :is(.field, .chip-input)::placeholder {
 		opacity: 0;
 		transition: opacity 80ms ease;
 	}
-	.input.placeholder-deferred.focused :is(.input-field, .chip-input)::placeholder {
+	.input.placeholder-deferred.focused :is(.field, .chip-input)::placeholder {
 		opacity: 0.85;
 		transition: opacity 150ms ease 100ms;
 	}
 
 	/* Textarea specifics */
-	textarea.input-field {
+	textarea.field {
 		height: auto;
 		min-height: var(--_height);
 		line-height: 1.5;
@@ -1753,18 +1753,18 @@
 	}
 
 	/* Number: hide native spinner */
-	input[type='number'].input-field {
+	input[type='number'].field {
 		appearance: textfield;
 		-moz-appearance: textfield;
 	}
-	input[type='number'].input-field::-webkit-outer-spin-button,
-	input[type='number'].input-field::-webkit-inner-spin-button {
+	input[type='number'].field::-webkit-outer-spin-button,
+	input[type='number'].field::-webkit-inner-spin-button {
 		-webkit-appearance: none;
 		margin: 0;
 	}
 
 	/* Search: hide native clear */
-	input[type='search'].input-field::-webkit-search-cancel-button {
+	input[type='search'].field::-webkit-search-cancel-button {
 		-webkit-appearance: none;
 	}
 
@@ -1780,7 +1780,7 @@
 	 * (::before / ::after) light up instead, leaving a gap — the notch —
 	 * exactly the width of the shrunken label text.
 	 */
-	.input-label {
+	label {
 		position: absolute;
 		inset: 0 0 auto 0;
 		display: flex;
@@ -1810,8 +1810,8 @@
 
 	/* Notch shoulders — short border runs either side of the label text,
 	   pinned to the top edge regardless of where the label text sits. */
-	.input-label::before,
-	.input-label::after {
+	label::before,
+	label::after {
 		content: '';
 		display: block;
 		box-sizing: border-box;
@@ -1828,7 +1828,7 @@
 			border-color var(--_duration) var(--_ease),
 			min-width 200ms var(--_ease-label);
 	}
-	.input-label::before {
+	label::before {
 		/* End the left border run 0.3em before the text so the notch has a small
 		   gap on the left, matching the 0.3em the ::after leaves on the right.
 		   The text's own margin-left keeps it aligned with the field contents. */
@@ -1839,7 +1839,7 @@
 			border-top-left-radius: var(--_cr);
 		}
 	}
-	.input-label::after {
+	label::after {
 		flex: 1 1 auto;
 		min-width: 0.5em;
 		margin-left: 0.3em;
@@ -1857,11 +1857,11 @@
 	   (acting as the placeholder) clears the icon. Once floated, the shoulder
 	   returns to its base width so the notch always sits in the top-left
 	   corner — even with an icon or prefix. */
-	.input.has-icon .input-label:not(.floated)::before {
+	.input.has-icon label:not(.floated)::before {
 		min-width: calc(1em + var(--_icon-size) + 0.5em);
 	}
 
-	.input-label-text {
+	.label-text {
 		display: flex;
 		align-items: center;
 		max-width: 100%;
@@ -1887,17 +1887,17 @@
 	}
 
 	/* --- Floated state ------------------------------------------------- */
-	.input-label.floated {
+	label.floated {
 		border-top-color: transparent;
 	}
-	.input-label.floated::before,
-	.input-label.floated::after {
+	label.floated::before,
+	label.floated::after {
 		border-top-color: var(--_border);
 	}
 	/* Glide from the vertically-centred resting spot up onto the top edge.
 	   --_height is a plain length, so half of it lands the text exactly on
 	   the outline — and transform + font-size both animate smoothly. */
-	.input-label.floated .input-label-text {
+	label.floated .label-text {
 		font-size: calc(var(--_font) * 0.8);
 		transform: translateY(calc(var(--_height) / -2));
 		@supports (corner-shape: squircle) {
@@ -1910,7 +1910,7 @@
 	/* Floated: widen the left shoulder to the label's 1em content offset so the
 	   (now larger, capped) squircle corner has room and its seam meets the side. */
 	@supports (corner-shape: squircle) {
-		.input-label.floated::before {
+		label.floated::before {
 			min-width: 1em;
 			/* Trim the trailing 0.3em of the shoulder so the line stops short of
 			   the text — the same gap the ::after's margin leaves on the right.
@@ -1922,28 +1922,28 @@
 	}
 
 	/* --- Textarea: rest the label at the top, straddle the edge on float - */
-	.input.is-textarea .input-label {
+	.input.is-textarea label {
 		align-items: flex-start;
 	}
-	.input.is-textarea .input-label-text {
+	.input.is-textarea .label-text {
 		padding-top: 0.9em;
 	}
-	.input.is-textarea .input-label.floated .input-label-text {
+	.input.is-textarea label.floated .label-text {
 		padding-top: 0;
 		transform: translateY(-50%);
 	}
 
 	/* --- Hover ---------------------------------------------------------- */
-	.input-wrapper:hover .input-label {
+	.wrapper:hover label {
 		border-top-color: var(--_border-hover);
 		/* Snap the notch color in on hover; the base rule eases it back out on leave. */
 		transition: color var(--_duration) var(--_ease);
 	}
-	.input-wrapper:hover .input-label.floated {
+	.wrapper:hover label.floated {
 		border-top-color: transparent;
 	}
-	.input-wrapper:hover .input-label.floated::before,
-	.input-wrapper:hover .input-label.floated::after {
+	.wrapper:hover label.floated::before,
+	.wrapper:hover label.floated::after {
 		border-top-color: var(--_border-hover);
 		/* Snap the notch shoulders in on hover; the base rule eases them back out. */
 		transition: min-width 200ms var(--_ease-label);
@@ -1955,22 +1955,22 @@
 	   invisible yet still grew the label's content box — nudging the notch
 	   shoulders and centred text down ~1px. The focus emphasis comes from the
 	   notch shoulders (::before/::after) below, which thicken without moving. */
-	.input-wrapper.focused .input-label {
+	.wrapper.focused label {
 		border-top-color: var(--_border-focus);
 		color: var(--_border-focus);
 		/* Snap the notch color in on focus (mirrors the hover rule); the text
 		   color still eases. The base rule eases both back out on blur. */
 		transition: color var(--_duration) var(--_ease);
 	}
-	.input-wrapper.focused .input-label.floated {
+	.wrapper.focused label.floated {
 		border-top-color: transparent;
 	}
-	.input-wrapper.focused .input-label::before,
-	.input-wrapper.focused .input-label::after {
+	.wrapper.focused label::before,
+	.wrapper.focused label::after {
 		border-top-width: 2px;
 	}
-	.input-wrapper.focused .input-label.floated::before,
-	.input-wrapper.focused .input-label.floated::after {
+	.wrapper.focused label.floated::before,
+	.wrapper.focused label.floated::after {
 		border-top-color: var(--_border-focus);
 		/* Snap the shoulder color in on focus (mirrors the hover rule); keep
 		   min-width animating so the notch still opens smoothly. */
@@ -1978,15 +1978,15 @@
 	}
 
 	/* --- Error ---------------------------------------------------------- */
-	.input-wrapper.has-error .input-label {
+	.wrapper.has-error label {
 		border-top-color: var(--_border-error);
 		color: var(--_border-error);
 	}
-	.input-wrapper.has-error .input-label.floated {
+	.wrapper.has-error label.floated {
 		border-top-color: transparent;
 	}
-	.input-wrapper.has-error .input-label.floated::before,
-	.input-wrapper.has-error .input-label.floated::after {
+	.wrapper.has-error label.floated::before,
+	.wrapper.has-error label.floated::after {
 		border-top-color: var(--_border-error);
 	}
 
@@ -1999,7 +1999,7 @@
 	/*  ICONS & PREFIX / SUFFIX                                            */
 	/* ================================================================== */
 
-	.input-icon {
+	.icon {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -2010,10 +2010,10 @@
 		transition: color var(--_duration) var(--_ease);
 	}
 
-	.input-wrapper.focused .input-icon {
+	.wrapper.focused .icon {
 		color: var(--_border-focus);
 	}
-	.input-wrapper.has-error .input-icon {
+	.wrapper.has-error .icon {
 		color: var(--_border-error);
 	}
 
@@ -2021,8 +2021,8 @@
 		order: -1;
 	}
 
-	.input-prefix,
-	.input-suffix {
+	.prefix,
+	.suffix {
 		flex-shrink: 0;
 		color: var(--_text-muted);
 		font-size: 0.92em;
@@ -2030,7 +2030,7 @@
 		white-space: nowrap;
 	}
 
-	.input-suffix {
+	.suffix {
 		order: 1;
 	}
 
@@ -2065,8 +2065,8 @@
 		opacity: 0;
 		transition: opacity var(--_duration) var(--_ease);
 	}
-	.input-wrapper:hover :global(.button.input-clear-btn),
-	.input-wrapper.focused :global(.button.input-clear-btn) {
+	.wrapper:hover :global(.button.input-clear-btn),
+	.wrapper.focused :global(.button.input-clear-btn) {
 		opacity: 1;
 	}
 
@@ -2075,7 +2075,7 @@
 	/* ================================================================== */
 
 	/* The stepper pair sits after the suffix. */
-	.number-buttons {
+	.steppers {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
@@ -2087,7 +2087,7 @@
 
 	/* A thin divider sets the steppers off from the suffix — only needed when
 	   a suffix is present; without one the field reads cleaner divider-free. */
-	.input.has-suffix .number-buttons::before {
+	.input.has-suffix .steppers::before {
 		content: '';
 		align-self: center;
 		width: 1px;
@@ -2233,7 +2233,7 @@
 	/*  CHIPS (Multiple mode)                                              */
 	/* ================================================================== */
 
-	.chips-container {
+	.chips {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -2244,7 +2244,7 @@
 	}
 
 	/* Keep chips clear of the floated label straddling the top edge */
-	.input.has-label .chips-container {
+	.input.has-label .chips {
 		padding-top: 0.7em;
 	}
 
@@ -2370,7 +2370,7 @@
 	/*  FOOTER (error, helper, counter)                                    */
 	/* ================================================================== */
 
-	.input-footer {
+	.footer {
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
@@ -2380,13 +2380,13 @@
 		min-height: 1.2em;
 	}
 
-	.input-error {
+	.error {
 		font-size: 0.78em;
 		color: var(--_border-error);
-		animation: input-error-in 200ms var(--_ease);
+		animation: error-in 200ms var(--_ease);
 	}
 
-	@keyframes input-error-in {
+	@keyframes error-in {
 		from {
 			opacity: 0;
 			transform: translateY(-3px);
@@ -2397,12 +2397,12 @@
 		}
 	}
 
-	.input-helper {
+	.helper {
 		font-size: 0.78em;
 		color: var(--_text-muted);
 	}
 
-	.input-counter {
+	.counter {
 		font-size: 0.74em;
 		color: var(--_text-muted);
 		margin-left: auto;
@@ -2410,11 +2410,11 @@
 		transition: color var(--_duration) var(--_ease);
 	}
 
-	.input-counter.counter-warning {
+	.counter.counter-warning {
 		color: var(--color-warning, #f59e0b);
 	}
 
-	.input-counter.counter-error {
+	.counter.counter-error {
 		color: var(--_border-error);
 		font-weight: 600;
 	}
@@ -2431,7 +2431,7 @@
 	 * animation, and the same flip-when-no-room-below behaviour. The rows
 	 * themselves are List/ListItem.
 	 */
-	.ac-dropdown {
+	.dropdown {
 		position: fixed;
 		top: anchor(bottom);
 		bottom: auto;
@@ -2476,17 +2476,17 @@
 			display 200ms allow-discrete,
 			overlay 200ms allow-discrete;
 	}
-	.ac-dropdown.above {
+	.dropdown.above {
 		transform-origin: center bottom;
 	}
 	/* Collapsed state — drives both the open (@starting-style) and close
 	   transitions, so the panel expands/collapses toward the field. */
-	.ac-dropdown:not(:popover-open) {
+	.dropdown:not(:popover-open) {
 		opacity: 0;
 		transform: scaleY(0.6);
 	}
 	@starting-style {
-		.ac-dropdown:popover-open {
+		.dropdown:popover-open {
 			opacity: 0;
 			transform: scaleY(0.6);
 		}
@@ -2494,25 +2494,25 @@
 
 	/* Option content rendered inside each ListItem. ListItem renders a native
 	   <button>, whose UA `text-align: center` would otherwise centre the label
-	   once `.ac-option` fills the row — pin it back to the start. */
-	.ac-option {
+	   once `.option` fills the row — pin it back to the start. */
+	.option {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
 		flex: 1;
 		text-align: left;
 	}
-	.ac-option-label {
+	.option-label {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	/* Emphasise the matched substring (from highlightMatch) */
-	.ac-option-label :global(strong) {
+	.option-label :global(strong) {
 		color: var(--_border-focus);
 		font-weight: 700;
 	}
-	.ac-option-desc {
+	.option-desc {
 		font-size: 0.8em;
 		color: var(--_text-muted);
 		overflow: hidden;
@@ -2521,7 +2521,7 @@
 	}
 
 	/* Loading / empty status row */
-	.ac-status {
+	.status {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -2531,18 +2531,18 @@
 		font-size: 0.9em;
 	}
 
-	.ac-spinner {
+	.spinner {
 		display: inline-block;
 		width: 14px;
 		height: 14px;
 		border: 2px solid var(--_border);
 		border-top-color: var(--_border-focus);
 		border-radius: 50%;
-		animation: input-spin 0.6s linear infinite;
+		animation: spin 0.6s linear infinite;
 		flex-shrink: 0;
 	}
 
-	@keyframes input-spin {
+	@keyframes spin {
 		to {
 			transform: rotate(360deg);
 		}
@@ -2563,7 +2563,7 @@
 	/*  READONLY                                                           */
 	/* ================================================================== */
 
-	.input.readonly .input-wrapper {
+	.input.readonly .wrapper {
 		background: var(--color-bg-disabled, light-dark(hsl(0 0% 96%), hsl(0 0% 13%)));
 		cursor: default;
 	}

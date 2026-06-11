@@ -134,7 +134,7 @@
 						2})" />
 			</svg>
 			{#if show_value && !isIndeterminate && size !== '00' && size !== '0'}
-				<span class="value-label">{Math.round(percentage)}%</span>
+				<span class="value">{Math.round(percentage)}%</span>
 			{/if}
 		{:else}
 			<div class="track" style:height="{linearHeight}px">
@@ -153,7 +153,7 @@
 				{/if}
 			</div>
 			{#if show_value && !isIndeterminate}
-				<span class="value-label">{Math.round(percentage)}%</span>
+				<span class="value">{Math.round(percentage)}%</span>
 			{/if}
 		{/if}
 		{#if label}
@@ -179,130 +179,131 @@
 		gap: 0.5rem;
 		color: currentColor;
 		position: relative;
-	}
 
-	.progress.circular {
-		.spinner {
-			display: block;
-		}
-		&.indeterminate .spinner {
-			animation: progress-rotate 1.2s linear infinite;
-		}
-		&.indeterminate .arc {
-			/* Desynced from the rotate period so the wrap drifts around the
-			   circle instead of pulsing at a fixed spot every loop. */
-			animation: progress-dash 0.9s ease-in-out infinite;
-			transition: none;
-		}
-		circle.track {
-			stroke: var(--color-border, rgb(0 0 0 / 0.1));
-		}
-		circle.arc {
-			stroke: var(--progress-color, var(--color-action, currentColor));
-			transition: stroke-dashoffset var(--duration-slow, 300ms) var(--ease-out, ease-out);
-		}
-		.value-label {
-			position: absolute;
-			top: 50%;
-			left: 50%;
-			transform: translate(-50%, -50%);
-			font-size: 0.625em;
-			font-weight: 600;
-			line-height: 1;
-		}
-	}
-
-	.progress.linear {
-		width: 100%;
-		flex-direction: row;
-		gap: 0.75rem;
-
-		.track {
-			flex: 1;
-			border-radius: var(--radius-full, 9999px);
-			background: var(--color-border, rgb(0 0 0 / 0.1));
-			overflow: hidden;
-			position: relative;
-			display: flex;
-		}
-
-		.fill {
-			height: 100%;
-			background: var(--progress-color, var(--color-action, currentColor));
-			border-radius: inherit;
-			@supports (corner-shape: squircle) {
-				corner-shape: inherit;
+		&.circular {
+			.spinner {
+				display: block;
 			}
-			transition: width var(--duration-slow, 300ms) var(--ease-out, ease-out);
+			&.indeterminate .spinner {
+				animation: progress-rotate 1.2s linear infinite;
+			}
+			&.indeterminate .arc {
+				/* Desynced from the rotate period so the wrap drifts around the
+				   circle instead of pulsing at a fixed spot every loop. */
+				animation: progress-dash 0.9s ease-in-out infinite;
+				transition: none;
+			}
+			circle.track {
+				stroke: var(--color-border, rgb(0 0 0 / 0.1));
+			}
+			circle.arc {
+				stroke: var(--progress-color, var(--color-action, currentColor));
+				transition: stroke-dashoffset var(--duration-slow, 300ms)
+					var(--ease-out, ease-out);
+			}
+			.value {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				font-size: 0.625em;
+				font-weight: 600;
+				line-height: 1;
+			}
 		}
 
-		.fill.indeterminate-bar {
-			width: 40%;
+		&.linear {
+			width: 100%;
+			flex-direction: row;
+			gap: 0.75rem;
+
+			.track {
+				flex: 1;
+				border-radius: var(--radius-full, 9999px);
+				background: var(--color-border, rgb(0 0 0 / 0.1));
+				overflow: hidden;
+				position: relative;
+				display: flex;
+			}
+
+			.fill {
+				height: 100%;
+				background: var(--progress-color, var(--color-action, currentColor));
+				border-radius: inherit;
+				@supports (corner-shape: squircle) {
+					corner-shape: inherit;
+				}
+				transition: width var(--duration-slow, 300ms) var(--ease-out, ease-out);
+			}
+
+			.fill.indeterminate-bar {
+				width: 40%;
+				position: absolute;
+				animation: progress-slide 1.5s ease-in-out infinite;
+			}
+
+			.value {
+				font-size: var(--text-sm, 0.875rem);
+				font-weight: 500;
+				white-space: nowrap;
+				min-width: 3ch;
+				text-align: right;
+			}
+
+			.label {
+				font-size: var(--text-sm, 0.875rem);
+				color: var(--color-text-muted, inherit);
+			}
+
+			&.striped .fill:not(.indeterminate-bar) {
+				background-image: linear-gradient(
+					45deg,
+					rgba(255, 255, 255, 0.15) 25%,
+					transparent 25%,
+					transparent 50%,
+					rgba(255, 255, 255, 0.15) 50%,
+					rgba(255, 255, 255, 0.15) 75%,
+					transparent 75%
+				);
+				background-size: 1rem 1rem;
+				animation: progress-stripe 0.5s linear infinite;
+			}
+		}
+
+		&.overlay {
 			position: absolute;
-			animation: progress-slide 1.5s ease-in-out infinite;
+			inset: 0;
+			background: var(--color-backdrop, rgb(0 0 0 / 0.5));
+			backdrop-filter: blur(2px);
+			z-index: var(--layer-modal, 400);
+			flex-direction: column;
 		}
 
-		.value-label {
-			font-size: var(--text-sm, 0.875rem);
-			font-weight: 500;
-			white-space: nowrap;
-			min-width: 3ch;
-			text-align: right;
+		&.full-screen {
+			position: fixed;
+			inset: 0;
+			background: var(--color-backdrop, rgb(0 0 0 / 0.5));
+			backdrop-filter: blur(2px);
+			z-index: var(--layer-modal, 400);
+			flex-direction: column;
 		}
 
-		.label {
-			font-size: var(--text-sm, 0.875rem);
-			color: var(--color-text-muted, inherit);
+		&.success {
+			circle.arc {
+				stroke: var(--color-success, #16a34a);
+			}
+			.fill {
+				background: var(--color-success, #16a34a);
+			}
 		}
 
-		&.striped .fill:not(.indeterminate-bar) {
-			background-image: linear-gradient(
-				45deg,
-				rgba(255, 255, 255, 0.15) 25%,
-				transparent 25%,
-				transparent 50%,
-				rgba(255, 255, 255, 0.15) 50%,
-				rgba(255, 255, 255, 0.15) 75%,
-				transparent 75%
-			);
-			background-size: 1rem 1rem;
-			animation: progress-stripe 0.5s linear infinite;
-		}
-	}
-
-	.progress.overlay {
-		position: absolute;
-		inset: 0;
-		background: var(--color-backdrop, rgb(0 0 0 / 0.5));
-		backdrop-filter: blur(2px);
-		z-index: var(--layer-modal, 400);
-		flex-direction: column;
-	}
-
-	.progress.full-screen {
-		position: fixed;
-		inset: 0;
-		background: var(--color-backdrop, rgb(0 0 0 / 0.5));
-		backdrop-filter: blur(2px);
-		z-index: var(--layer-modal, 400);
-		flex-direction: column;
-	}
-
-	.progress.success {
-		circle.arc {
-			stroke: var(--color-success, #16a34a);
-		}
-		.fill {
-			background: var(--color-success, #16a34a);
-		}
-	}
-
-	.progress.error {
-		circle.arc {
-			stroke: var(--color-error, #dc2626);
-		}
-		.fill {
-			background: var(--color-error, #dc2626);
+		&.error {
+			circle.arc {
+				stroke: var(--color-error, #dc2626);
+			}
+			.fill {
+				background: var(--color-error, #dc2626);
+			}
 		}
 	}
 
@@ -353,20 +354,22 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.progress.circular.indeterminate .spinner {
-			animation: none;
-		}
-		.progress.circular.indeterminate .arc {
-			animation: none;
-			stroke-dasharray: calc(var(--spinner-c) * 0.65) calc(var(--spinner-c) * 1.6);
-			stroke-dashoffset: 0;
-		}
-		.progress.linear .fill.indeterminate-bar {
-			animation: none;
-			left: 0;
-		}
-		.progress.linear.striped .fill {
-			animation: none;
+		.progress {
+			&.circular.indeterminate .spinner {
+				animation: none;
+			}
+			&.circular.indeterminate .arc {
+				animation: none;
+				stroke-dasharray: calc(var(--spinner-c) * 0.65) calc(var(--spinner-c) * 1.6);
+				stroke-dashoffset: 0;
+			}
+			&.linear .fill.indeterminate-bar {
+				animation: none;
+				left: 0;
+			}
+			&.linear.striped .fill {
+				animation: none;
+			}
 		}
 	}
 </style>

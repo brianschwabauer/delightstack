@@ -90,8 +90,8 @@
 		class:skeleton
 		class:visible
 		role={alertRole ? 'alert' : 'status'}>
-		<div class="callout-inner">
-			<div class="callout-icon" aria-hidden="true">
+		<div class="inner">
+			<div class="icon" aria-hidden="true">
 				{#if icon}
 					{@render icon()}
 				{:else if variant === 'success'}
@@ -168,7 +168,7 @@
 				{/if}
 			</div>
 
-			<div class="callout-content">
+			<div class="content">
 				{#if skeleton}
 					<!-- Mirror the real content's shape: a title bar only when a title
 					     is coming, and one bar per expected body line — so the toggle
@@ -185,10 +185,10 @@
 					{/each}
 				{:else}
 					{#if title}
-						<div class="callout-title">{title}</div>
+						<div class="title">{title}</div>
 					{/if}
 					{#if children}
-						<div class="callout-body">
+						<div class="body">
 							{@render children()}
 						</div>
 					{/if}
@@ -196,13 +196,13 @@
 			</div>
 
 			{#if action && !skeleton}
-				<div class="callout-action">
+				<div class="action">
 					{@render action()}
 				</div>
 			{/if}
 
 			{#if dismissible && !skeleton}
-				<div class="callout-dismiss">
+				<div class="dismiss">
 					<Button transparent icon size="0" tooltip="Dismiss" onclick={handleDismiss}>
 						<svg
 							viewBox="0 0 24 24"
@@ -281,7 +281,7 @@
 				translate: 0 0;
 			}
 
-			.callout-inner {
+			.inner {
 				justify-content: center;
 
 				/* Solid banners carry their color as the background — no accent bar. */
@@ -290,15 +290,15 @@
 				}
 			}
 
-			.callout-icon {
+			.icon {
 				color: white;
 			}
 
-			.callout-title {
+			.title {
 				color: white;
 			}
 
-			.callout-body {
+			.body {
 				color: rgba(255, 255, 255, 0.9);
 			}
 		}
@@ -336,7 +336,7 @@
 			--skeleton-bg: color-mix(in oklch, var(--callout-color) 25%, transparent);
 			--skeleton-sheen: color-mix(in oklch, var(--callout-color) 40%, transparent);
 
-			.callout-content {
+			.content {
 				min-width: 0;
 				flex: 1;
 				/* Flex items don't collapse margins, so the bars' centering
@@ -358,7 +358,7 @@
 		}
 	}
 
-	.callout-inner {
+	.inner {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--_gap);
@@ -391,7 +391,7 @@
 	 * - With a title: center on the title text specifically.
 	 * - Long paragraphs naturally look balanced because the icon sits on the
 	 *   first line of body text. */
-	.callout-icon {
+	.icon {
 		flex-shrink: 0;
 		color: var(--callout-color);
 		display: flex;
@@ -407,39 +407,39 @@
 		}
 	}
 
-	.callout-content {
+	.content {
 		flex: 1;
 		min-width: 0;
 	}
 
-	.callout-title {
+	.title {
 		font-weight: 600;
 		color: var(--callout-color);
 		margin-bottom: 0.25rem;
 		line-height: 1.4;
 	}
 
-	.callout-body {
+	.body {
 		color: var(--color-text);
 		line-height: 1.5;
 		font-size: 0.9375rem;
 	}
 
-	.callout-action {
+	.action {
 		display: flex;
 		align-items: center;
 		flex-shrink: 0;
 		margin-left: auto;
 	}
 
-	.callout-dismiss {
+	.dismiss {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
 		color: var(--callout-color);
 	}
-	.callout-dismiss :global(.button) {
+	.dismiss :global(.button) {
 		--color-text: var(--callout-color);
 	}
 
@@ -516,7 +516,7 @@
 			}
 		}
 
-		.callout-icon {
+		.icon {
 			.visible & {
 				animation: none;
 			}

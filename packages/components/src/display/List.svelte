@@ -196,10 +196,20 @@
 		&.dense {
 			--border-inset: 4px;
 			--_radius: var(--radius-lg);
+
+			.skeleton-item {
+				min-height: 2.5rem;
+				padding: 0 1rem;
+			}
 		}
 		&.comfortable {
 			--border-inset: 8px;
 			--_radius: var(--radius-xl);
+
+			.skeleton-item {
+				min-height: 3.5rem;
+				padding: 0 calc(2rem + var(--list-pad-x, 0px));
+			}
 		}
 		&.skeleton {
 			/* Lists fill their container. In a definite-width parent this spans the
@@ -236,14 +246,6 @@
 		align-items: center;
 		min-height: 3rem;
 		padding: 0 calc(1.5rem + var(--list-pad-x, 0px));
-	}
-	ul.dense .skeleton-item {
-		min-height: 2.5rem;
-		padding: 0 1rem;
-	}
-	ul.comfortable .skeleton-item {
-		min-height: 3.5rem;
-		padding: 0 calc(2rem + var(--list-pad-x, 0px));
 	}
 	.skeleton-bar {
 		height: 0.7em;

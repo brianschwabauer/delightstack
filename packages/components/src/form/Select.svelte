@@ -669,7 +669,7 @@
 	<div
 		bind:this={triggerElement}
 		{id}
-		class="select-trigger"
+		class="trigger"
 		class:open
 		class:error={!!error}
 		class:disabled
@@ -682,20 +682,20 @@
 		style:anchor-name={anchorName}
 		onclick={toggleDropdown}
 		onkeydown={onTriggerKeyDown}>
-		<div class="select-value">
+		<div class="value">
 			{#if hasValue && render_value}
 				{@render render_value(selectedOptions as SelectOption | SelectOption[])}
 			{:else if multiple && Array.isArray(selectedOptions) && selectedOptions.length > 0}
 				{#each selectedOptions as opt (opt.value)}
 					<span
-						class="select-chip"
+						class="chip"
 						in:scale={{ duration: 200, start: 0.6, easing: backOut }}
 						out:chipOut={{ duration: 150 }}
 						animate:flip={{ duration: 150, easing: quintOut }}>
 						<span>{opt.label}</span>
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<span class="select-chip-remove" onclick={(e) => removeValue(opt.value, e)}>
+						<span class="chip-remove" onclick={(e) => removeValue(opt.value, e)}>
 							<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
 								<path
 									d="M18 6L6 18M6 6l12 12"
@@ -708,17 +708,17 @@
 					</span>
 				{/each}
 			{:else if !multiple && selectedOptions && !Array.isArray(selectedOptions)}
-				<span class="select-single-value">{selectedOptions.label}</span>
+				<span class="single-value">{selectedOptions.label}</span>
 			{:else if showPlaceholder}
-				<span class="select-placeholder">{placeholder}</span>
+				<span class="placeholder">{placeholder}</span>
 			{/if}
 		</div>
 
 		<!-- Floating notched-outline label -->
 		{#if label}
-			<label class="select-label" class:floated={labelFloated} for={id}>
-				<span class="select-label-text">
-					{label}{#if required}<span class="select-required" aria-hidden="true">
+			<label class:floated={labelFloated} for={id}>
+				<span class="label-text">
+					{label}{#if required}<span class="required-mark" aria-hidden="true">
 							*
 						</span>{/if}
 				</span>
@@ -726,13 +726,13 @@
 		{/if}
 
 		{#if loading}
-			<span class="select-spinner" aria-hidden="true"></span>
+			<span class="spinner" aria-hidden="true"></span>
 		{/if}
 
 		{#if clearable && hasValue && !disabled}
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<span class="select-clear" onclick={clearValue} aria-label="Clear selection">
+			<span class="clear" onclick={clearValue} aria-label="Clear selection">
 				<svg viewBox="0 0 24 24" width="16" height="16">
 					<path
 						d="M18 6L6 18M6 6l12 12"
@@ -744,7 +744,7 @@
 			</span>
 		{/if}
 
-		<span class="select-chevron" class:open aria-hidden="true">
+		<span class="chevron" class:open aria-hidden="true">
 			<svg viewBox="0 0 24 24" width="18" height="18">
 				<path
 					d="M6 9l6 6 6-6"
@@ -766,7 +766,7 @@
 
 	<!-- Dropdown — native popover, positioned with CSS anchor positioning -->
 	<div
-		class="select-dropdown"
+		class="dropdown"
 		class:above={dropdownAbove}
 		popover="manual"
 		bind:this={dropdownElement}
@@ -775,7 +775,7 @@
 		aria-multiselectable={multiple || undefined}
 		style:position-anchor={anchorName}>
 		{#if searchable}
-			<div class="select-search">
+			<div class="search">
 				<input
 					bind:this={searchInputElement}
 					type="text"
@@ -789,14 +789,14 @@
 		{/if}
 
 		{#if loading}
-			<div class="select-empty">Loading...</div>
+			<div class="empty">Loading...</div>
 		{:else}
 			<!-- Ungrouped options -->
 			{#each groupedOptions.ungrouped as opt, i (opt.value)}
 				{@const flatIndex = i}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div
-					class="select-option"
+					class="option"
 					class:selected={isSelected(opt.value)}
 					class:highlighted={highlightedIndex === flatIndex}
 					class:disabled={opt.disabled}
@@ -811,7 +811,7 @@
 					}}
 					{@attach ripple({ enabled: !opt.disabled, zIndex: 1 })}>
 					{#if multiple}
-						<span class="select-check" aria-hidden="true">
+						<span class="check" aria-hidden="true">
 							{#if isSelected(opt.value)}
 								<svg viewBox="0 0 24 24" width="16" height="16">
 									<path
@@ -828,15 +828,15 @@
 					{#if optionSnippet}
 						{@render optionSnippet(opt)}
 					{:else}
-						<span class="select-option-content">
-							<span class="select-option-label">{opt.label}</span>
+						<span class="option-content">
+							<span class="option-label">{opt.label}</span>
 							{#if opt.description}
-								<span class="select-option-description">{opt.description}</span>
+								<span class="option-desc">{opt.description}</span>
 							{/if}
 						</span>
 					{/if}
 					{#if !multiple && isSelected(opt.value)}
-						<span class="select-check-single" aria-hidden="true">
+						<span class="check-single" aria-hidden="true">
 							<svg viewBox="0 0 24 24" width="16" height="16">
 								<path
 									d="M5 13l4 4L19 7"
@@ -853,13 +853,13 @@
 
 			<!-- Grouped options -->
 			{#each [...groupedOptions.groups] as [groupName, groupOpts] (groupName)}
-				<div class="select-group-label">{groupName}</div>
+				<div class="group-label">{groupName}</div>
 				{#each groupOpts as opt, gi (opt.value)}
 					{@const flatIndex =
 						groupedOptions.ungrouped.length + getFlatGroupIndex(groupName, gi)}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
-						class="select-option"
+						class="option"
 						class:selected={isSelected(opt.value)}
 						class:highlighted={highlightedIndex === flatIndex}
 						class:disabled={opt.disabled}
@@ -874,7 +874,7 @@
 						}}
 						{@attach ripple({ enabled: !opt.disabled, zIndex: 1 })}>
 						{#if multiple}
-							<span class="select-check" aria-hidden="true">
+							<span class="check" aria-hidden="true">
 								{#if isSelected(opt.value)}
 									<svg viewBox="0 0 24 24" width="16" height="16">
 										<path
@@ -891,15 +891,15 @@
 						{#if optionSnippet}
 							{@render optionSnippet(opt)}
 						{:else}
-							<span class="select-option-content">
-								<span class="select-option-label">{opt.label}</span>
+							<span class="option-content">
+								<span class="option-label">{opt.label}</span>
 								{#if opt.description}
-									<span class="select-option-description">{opt.description}</span>
+									<span class="option-desc">{opt.description}</span>
 								{/if}
 							</span>
 						{/if}
 						{#if !multiple && isSelected(opt.value)}
-							<span class="select-check-single" aria-hidden="true">
+							<span class="check-single" aria-hidden="true">
 								<svg viewBox="0 0 24 24" width="16" height="16">
 									<path
 										d="M5 13l4 4L19 7"
@@ -919,7 +919,7 @@
 			{#if showCreateOption}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div
-					class="select-option select-create"
+					class="option create"
 					class:highlighted={highlightedIndex === flatSelectableOptions.length ||
 						highlightedIndex === -1}
 					role="option"
@@ -937,7 +937,7 @@
 
 			<!-- Empty state -->
 			{#if showEmpty}
-				<div class="select-empty">No options</div>
+				<div class="empty">No options</div>
 			{/if}
 		{/if}
 	</div>
@@ -956,7 +956,7 @@
 
 <!-- Error message -->
 {#if error}
-	<span class="select-error">{error}</span>
+	<span class="error-text">{error}</span>
 {/if}
 
 <style>
@@ -1081,7 +1081,7 @@
 	/*  TRIGGER                                                            */
 	/* ================================================================== */
 
-	.select-trigger {
+	.trigger {
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -1096,7 +1096,7 @@
 		   trigger grows past `min-height` when chips span multiple rows. */
 		padding: 0.5em var(--control-pad-x, 1em);
 		border-radius: var(--_radius);
-		/* Squircle + a rounder radius. The notch shoulders (.select-label ::before/::after)
+		/* Squircle + a rounder radius. The notch shoulders (label ::before/::after)
 		   draw the top corners, so the radius is doubled like elsewhere but CAPPED at the
 		   label's left content offset (1em) — past that the corner would crowd the floated
 		   label. --_cr is the shared corner radius; the shoulders scale to it (height +
@@ -1118,20 +1118,20 @@
 	}
 
 	/* Filled variant — paint the trigger surface behind the control. */
-	.select.filled .select-trigger {
+	.select.filled .trigger {
 		background: var(--_bg);
 	}
 
-	.select.dense .select-trigger {
+	.select.dense .trigger {
 		padding: 0.4em var(--control-pad-x-dense, 0.75em);
 	}
-	.select.comfortable .select-trigger {
+	.select.comfortable .trigger {
 		padding: 0.6em var(--control-pad-x-comfortable, 1.25em);
 	}
 
 	/* The outline is painted by a pseudo-element so the 1px -> 2px focus
 	   transition never nudges the trigger's contents. */
-	.select-trigger::before {
+	.trigger::before {
 		content: '';
 		position: absolute;
 		inset: 0;
@@ -1148,21 +1148,21 @@
 	}
 
 	/* With a label present, the label paints the top edge (the notch) */
-	.select.has-label .select-trigger::before {
+	.select.has-label .trigger::before {
 		border-top-color: transparent;
 	}
 
-	.select-trigger:hover::before {
+	.trigger:hover::before {
 		border-color: var(--_border-hover);
 		/* Snap the border color in on hover; the base rule eases it back out on leave. */
 		transition: none;
 	}
-	.select.has-label .select-trigger:hover::before {
+	.select.has-label .trigger:hover::before {
 		border-top-color: transparent;
 	}
 
-	.select-trigger.open::before,
-	.select-trigger:focus-within::before {
+	.trigger.open::before,
+	.trigger:focus-within::before {
 		border-color: var(--_border-focus);
 		border-width: 2px;
 		/* Snap the border in on focus (matches the hover rule above); the base
@@ -1171,19 +1171,19 @@
 		   mismatch the notch fix removed, just on focus instead of hover. */
 		transition: none;
 	}
-	.select.has-label .select-trigger.open::before,
-	.select.has-label .select-trigger:focus-within::before {
+	.select.has-label .trigger.open::before,
+	.select.has-label .trigger:focus-within::before {
 		border-top-color: transparent;
 	}
 
-	.select.has-error .select-trigger::before {
+	.select.has-error .trigger::before {
 		border-color: var(--_border-error);
 	}
-	.select.has-error .select-trigger.open::before,
-	.select.has-error .select-trigger:focus-within::before {
+	.select.has-error .trigger.open::before,
+	.select.has-error .trigger:focus-within::before {
 		border-color: var(--_border-error);
 	}
-	.select.has-error.has-label .select-trigger::before {
+	.select.has-error.has-label .trigger::before {
 		border-top-color: transparent;
 	}
 
@@ -1191,7 +1191,7 @@
 	/*  FLOATING LABEL  (notched outline, legacy-style)                    */
 	/* ================================================================== */
 
-	.select-label {
+	label {
 		position: absolute;
 		inset: 0 0 auto 0;
 		display: flex;
@@ -1218,8 +1218,8 @@
 	}
 
 	/* Notch shoulders — short border runs either side of the label text */
-	.select-label::before,
-	.select-label::after {
+	label::before,
+	label::after {
 		content: '';
 		display: block;
 		box-sizing: border-box;
@@ -1236,7 +1236,7 @@
 			border-color var(--_duration) var(--_ease),
 			min-width 200ms var(--_ease-label);
 	}
-	.select-label::before {
+	label::before {
 		/* End the left border run 0.3em before the text so the notch has a small
 		   gap on the left, matching the 0.3em the ::after leaves on the right.
 		   The text's own margin-left keeps it aligned with the trigger value. */
@@ -1247,7 +1247,7 @@
 			border-top-left-radius: var(--_cr);
 		}
 	}
-	.select-label::after {
+	label::after {
 		flex: 1 1 auto;
 		min-width: 0.5em;
 		margin-left: 0.3em;
@@ -1261,7 +1261,7 @@
 		}
 	}
 
-	.select-label-text {
+	.label-text {
 		display: flex;
 		align-items: center;
 		max-width: 100%;
@@ -1286,14 +1286,14 @@
 
 	/* Floated: hide the label's own edge, light the notch shoulders, and
 	   glide the shrunken text up onto the outline. */
-	.select-label.floated {
+	label.floated {
 		border-top-color: transparent;
 	}
-	.select-label.floated::before,
-	.select-label.floated::after {
+	label.floated::before,
+	label.floated::after {
 		border-top-color: var(--_border);
 	}
-	.select-label.floated .select-label-text {
+	label.floated .label-text {
 		font-size: calc(var(--_font) * 0.8);
 		transform: translateY(calc(var(--_height) / -2));
 		@supports (corner-shape: squircle) {
@@ -1306,7 +1306,7 @@
 	/* Floated: widen the left shoulder to the label's 1em content offset so the
 	   (now larger, capped) squircle corner has room and its seam meets the side. */
 	@supports (corner-shape: squircle) {
-		.select-label.floated::before {
+		label.floated::before {
 			min-width: 1em;
 			/* Trim the trailing 0.3em of the shoulder so the line stops short of
 			   the text — the same gap the ::after's margin leaves on the right.
@@ -1317,16 +1317,16 @@
 		}
 	}
 
-	.select-trigger:hover .select-label {
+	.trigger:hover label {
 		border-top-color: var(--_border-hover);
 		/* Snap the notch color in on hover; the base rule eases it back out on leave. */
 		transition: color var(--_duration) var(--_ease);
 	}
-	.select-trigger:hover .select-label.floated {
+	.trigger:hover label.floated {
 		border-top-color: transparent;
 	}
-	.select-trigger:hover .select-label.floated::before,
-	.select-trigger:hover .select-label.floated::after {
+	.trigger:hover label.floated::before,
+	.trigger:hover label.floated::after {
 		border-top-color: var(--_border-hover);
 		/* Snap the notch color in on hover; the base rule eases it back out.
 		   Keep min-width animating — the label floats while hovered (opening is
@@ -1339,47 +1339,47 @@
 	   here was invisible yet grew the label's content box, nudging the notch
 	   shoulders and centred text down ~1px. The focus emphasis comes from the
 	   notch shoulders (::before/::after) below, which thicken without moving. */
-	.select-trigger.open .select-label,
-	.select-trigger:focus-within .select-label {
+	.trigger.open label,
+	.trigger:focus-within label {
 		border-top-color: var(--_border-focus);
 		color: var(--_border-focus);
 		/* Snap the notch color in on focus (mirrors the hover rule); the text
 		   color still eases. The base rule eases both back out on blur. */
 		transition: color var(--_duration) var(--_ease);
 	}
-	.select-trigger.open .select-label.floated,
-	.select-trigger:focus-within .select-label.floated {
+	.trigger.open label.floated,
+	.trigger:focus-within label.floated {
 		border-top-color: transparent;
 	}
-	.select-trigger.open .select-label::before,
-	.select-trigger.open .select-label::after,
-	.select-trigger:focus-within .select-label::before,
-	.select-trigger:focus-within .select-label::after {
+	.trigger.open label::before,
+	.trigger.open label::after,
+	.trigger:focus-within label::before,
+	.trigger:focus-within label::after {
 		border-top-width: 2px;
 	}
-	.select-trigger.open .select-label.floated::before,
-	.select-trigger.open .select-label.floated::after,
-	.select-trigger:focus-within .select-label.floated::before,
-	.select-trigger:focus-within .select-label.floated::after {
+	.trigger.open label.floated::before,
+	.trigger.open label.floated::after,
+	.trigger:focus-within label.floated::before,
+	.trigger:focus-within label.floated::after {
 		border-top-color: var(--_border-focus);
 		/* Snap the shoulder color in on focus (mirrors the hover rule); keep
 		   min-width animating so the notch still opens smoothly. */
 		transition: min-width 200ms var(--_ease-label);
 	}
 
-	.select.has-error .select-label {
+	.select.has-error label {
 		border-top-color: var(--_border-error);
 		color: var(--_border-error);
 	}
-	.select.has-error .select-label.floated {
+	.select.has-error label.floated {
 		border-top-color: transparent;
 	}
-	.select.has-error .select-label.floated::before,
-	.select.has-error .select-label.floated::after {
+	.select.has-error label.floated::before,
+	.select.has-error label.floated::after {
 		border-top-color: var(--_border-error);
 	}
 
-	.select-required {
+	.required-mark {
 		color: var(--_border-error);
 		margin-left: 0.15em;
 	}
@@ -1388,7 +1388,7 @@
 	/*  VALUE / CHIPS                                                      */
 	/* ================================================================== */
 
-	.select-value {
+	.value {
 		flex: 1;
 		display: flex;
 		flex-wrap: wrap;
@@ -1401,8 +1401,8 @@
 		overflow: visible;
 	}
 
-	.select-single-value,
-	.select-placeholder {
+	.single-value,
+	.placeholder {
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
@@ -1410,11 +1410,11 @@
 		white-space: nowrap;
 	}
 
-	.select-placeholder {
+	.placeholder {
 		color: var(--_text-muted);
 	}
 
-	.select-chip {
+	.chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3em;
@@ -1426,13 +1426,13 @@
 		max-width: 100%;
 		line-height: 1.45;
 	}
-	.select-chip > span:first-child {
+	.chip > span:first-child {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.select-chip-remove {
+	.chip-remove {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
@@ -1451,12 +1451,12 @@
 	/* Invisible hit area extending ~10px past the icon on every side so the
 	   button is easy to tap. The visible hover feedback stays the size of the
 	   element itself (above), not the touch target. */
-	.select-chip-remove::before {
+	.chip-remove::before {
 		content: '';
 		position: absolute;
 		inset: -10px;
 	}
-	.select-chip-remove:hover {
+	.chip-remove:hover {
 		opacity: 1;
 		background: color-mix(in oklch, currentColor 22%, transparent);
 		/* Snap the tint in on hover; keep the opacity reveal eased both ways. */
@@ -1464,7 +1464,7 @@
 	}
 
 	/* Clear button */
-	.select-clear {
+	.clear {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1478,7 +1478,7 @@
 			opacity var(--_duration) var(--_ease),
 			background var(--_duration) var(--_ease);
 	}
-	.select-clear:hover {
+	.clear:hover {
 		opacity: 1;
 		background: var(--_panel-hover);
 		/* Snap the tint in on hover; keep the opacity reveal eased both ways. */
@@ -1486,7 +1486,7 @@
 	}
 
 	/* Chevron */
-	.select-chevron {
+	.chevron {
 		display: flex;
 		align-items: center;
 		flex-shrink: 0;
@@ -1495,26 +1495,26 @@
 			transform 300ms var(--_ease-back),
 			color var(--_duration) var(--_ease);
 	}
-	.select-chevron.open {
+	.chevron.open {
 		transform: rotate(180deg);
 	}
-	.select-trigger.open .select-chevron,
-	.select-trigger:focus-within .select-chevron {
+	.trigger.open .chevron,
+	.trigger:focus-within .chevron {
 		color: var(--_border-focus);
 	}
 
 	/* Spinner */
-	.select-spinner {
+	.spinner {
 		display: inline-block;
 		width: 1.05em;
 		height: 1.05em;
 		border: 2px solid var(--_border);
 		border-top-color: var(--_border-focus);
 		border-radius: 50%;
-		animation: select-spin 0.6s linear infinite;
+		animation: spin 0.6s linear infinite;
 		flex-shrink: 0;
 	}
-	@keyframes select-spin {
+	@keyframes spin {
 		to {
 			transform: rotate(360deg);
 		}
@@ -1530,7 +1530,7 @@
 	 * CSS anchor positioning relative to the trigger. `position-anchor` is set
 	 * inline to a per-instance anchor name.
 	 */
-	.select-dropdown {
+	.dropdown {
 		position: fixed;
 		top: anchor(bottom);
 		bottom: auto;
@@ -1575,27 +1575,27 @@
 			display 200ms allow-discrete,
 			overlay 200ms allow-discrete;
 	}
-	.select-dropdown.above {
+	.dropdown.above {
 		transform-origin: center bottom;
 	}
 	/* Collapsed state — drives both the open (@starting-style) and close
 	   transitions, so the panel expands/collapses toward the trigger. */
-	.select-dropdown:not(:popover-open) {
+	.dropdown:not(:popover-open) {
 		opacity: 0;
 		transform: scaleY(0.6);
 	}
 	@starting-style {
-		.select-dropdown:popover-open {
+		.dropdown:popover-open {
 			opacity: 0;
 			transform: scaleY(0.6);
 		}
 	}
 
 	/* Search */
-	.select-search {
+	.search {
 		padding: 0.25em 0.25em 0.4em;
 	}
-	.select-search input {
+	.search input {
 		width: 100%;
 		padding: 0.6em 0.8em;
 		border: 1px solid var(--_border);
@@ -1613,15 +1613,15 @@
 		box-shadow: none;
 		transition: border-color var(--_duration) var(--_ease);
 	}
-	.select-search input:focus {
+	.search input:focus {
 		border-color: var(--_border-focus);
 	}
-	.select-search input::placeholder {
+	.search input::placeholder {
 		color: var(--_text-muted);
 	}
 
 	/* Options */
-	.select-option {
+	.option {
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -1644,8 +1644,8 @@
 			transform 200ms ease;
 		user-select: none;
 	}
-	.select-option:hover,
-	.select-option.highlighted {
+	.option:hover,
+	.option.highlighted {
 		background: var(--_option-hover);
 		/* Snap the highlight in on hover/keyboard nav; the base rule eases it out. */
 		transition:
@@ -1655,7 +1655,7 @@
 	/* Hairline between consecutive rows, matching ListItem's separator (same
 	   6% text tint, same 1rem inset). Group labels carry their own stronger
 	   rule, so only option-to-option seams get one. */
-	.select-option + .select-option::after {
+	.option + .option::after {
 		content: '';
 		position: absolute;
 		top: 0;
@@ -1665,8 +1665,8 @@
 	}
 	/* The first and last rows hug the panel's rounded corners (panel radius
 	   minus its 0.3em padding) so a highlighted edge item nests cleanly. */
-	.select-dropdown > .select-option:first-child,
-	.select-dropdown > .select-group-label:first-child {
+	.dropdown > .option:first-child,
+	.dropdown > .group-label:first-child {
 		border-top-left-radius: calc(var(--radius-xl, 16px) - 0.3em);
 		border-top-right-radius: calc(var(--radius-xl, 16px) - 0.3em);
 		@supports (corner-shape: squircle) {
@@ -1679,8 +1679,8 @@
 			);
 		}
 	}
-	.select-dropdown > .select-option:last-child,
-	.select-dropdown > .select-empty:last-child {
+	.dropdown > .option:last-child,
+	.dropdown > .empty:last-child {
 		border-bottom-left-radius: calc(var(--radius-xl, 16px) - 0.3em);
 		border-bottom-right-radius: calc(var(--radius-xl, 16px) - 0.3em);
 		@supports (corner-shape: squircle) {
@@ -1693,7 +1693,7 @@
 			);
 		}
 	}
-	.select-option.selected {
+	.option.selected {
 		color: var(--_border-focus);
 		font-weight: 600;
 		background: var(--_option-selected);
@@ -1702,49 +1702,49 @@
 	   than switching to the gray hover fill, which would read as a downgrade).
 	   These win over the resting .selected tint by specificity; the
 	   snap-in/ease-out timing is still governed by the :hover rule above. */
-	.select-option.selected:hover,
-	.select-option.selected.highlighted {
+	.option.selected:hover,
+	.option.selected.highlighted {
 		background: var(--_option-selected-hover);
 	}
 	/* Adjacent lit rows merge into one block (mirrors ListItem): when a
 	   selected/highlighted row touches another, square off the corners where
 	   they meet so the pair reads as one continuous selection instead of two
 	   rounded pills. The border-radius transition above animates the merge. */
-	.select-option:is(.selected, .highlighted):not(.disabled):has(
-			+ .select-option:is(.selected, .highlighted):not(.disabled)
+	.option:is(.selected, .highlighted):not(.disabled):has(
+			+ .option:is(.selected, .highlighted):not(.disabled)
 		) {
 		border-bottom-left-radius: 0;
 		border-bottom-right-radius: 0;
 	}
-	.select-option:is(.selected, .highlighted):not(.disabled)
-		+ .select-option:is(.selected, .highlighted):not(.disabled) {
+	.option:is(.selected, .highlighted):not(.disabled)
+		+ .option:is(.selected, .highlighted):not(.disabled) {
 		border-top-left-radius: 0;
 		border-top-right-radius: 0;
 	}
-	.select-option.disabled {
+	.option.disabled {
 		opacity: 0.5;
 		pointer-events: none;
 	}
 	/* Pressed feedback — the same tactile dip as ListItem (perspective 100px,
 	 * depth clamped off the font size). The perspective is baked into the
 	 * transform so the recede is relative to the option itself. */
-	.select-option:active:not(.disabled) {
+	.option:active:not(.disabled) {
 		transform: perspective(100px)
 			translate3d(0, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 	}
 
-	.select-option-content {
+	.option-content {
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
 		flex: 1;
 	}
-	.select-option-label {
+	.option-label {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.select-option-description {
+	.option-desc {
 		font-size: 0.8em;
 		color: var(--_text-muted);
 		overflow: hidden;
@@ -1753,7 +1753,7 @@
 	}
 
 	/* Checkmarks */
-	.select-check {
+	.check {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1762,7 +1762,7 @@
 		flex-shrink: 0;
 		color: var(--_border-focus);
 	}
-	.select-check-single {
+	.check-single {
 		display: flex;
 		align-items: center;
 		margin-left: auto;
@@ -1771,7 +1771,7 @@
 	}
 
 	/* Group label — set off from the preceding group with space and a rule */
-	.select-group-label {
+	.group-label {
 		margin-top: 0.5em;
 		padding: 0.7em 0.85em 0.3em;
 		border-top: 1px solid color-mix(in oklch, var(--_text) 9%, transparent);
@@ -1783,20 +1783,20 @@
 		user-select: none;
 	}
 	/* No rule above the first group when nothing precedes it in the panel */
-	.select-group-label:first-child {
+	.group-label:first-child {
 		margin-top: 0;
 		border-top: none;
 		padding-top: 0.4em;
 	}
 
 	/* Create option */
-	.select-create {
+	.create {
 		font-style: italic;
 		color: var(--_text-muted);
 	}
 
-	/* Empty / loading state — same metrics as Input's .ac-status row */
-	.select-empty {
+	/* Empty / loading state — same metrics as Input's .status row */
+	.empty {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1807,7 +1807,7 @@
 	}
 
 	/* Error message */
-	.select-error {
+	.error-text {
 		display: block;
 		font-size: 0.78em;
 		color: var(--_border-error);
@@ -1816,20 +1816,20 @@
 	}
 
 	/* Icons scale with the control's font size */
-	.select-chevron svg {
+	.chevron svg {
 		width: 1.4em;
 		height: 1.4em;
 	}
-	.select-clear svg {
+	.clear svg {
 		width: 1.35em;
 		height: 1.35em;
 	}
-	.select-chip-remove svg {
+	.chip-remove svg {
 		width: 0.85em;
 		height: 0.85em;
 	}
-	.select-check svg,
-	.select-check-single svg {
+	.check svg,
+	.check-single svg {
 		width: 100%;
 		height: 100%;
 	}

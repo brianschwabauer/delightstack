@@ -193,16 +193,16 @@
 	aria-busy={show_skeleton || undefined}
 	aria-label={aria_label_text}
 	{@attach intersectionObserver({ onintersectonce: () => (has_intersected = true) })}>
-	{#if prefix}<span class="counter-affix counter-prefix">{prefix}</span>{/if}
+	{#if prefix}<span class="affix prefix">{prefix}</span>{/if}
 
 	{#if show_skeleton}
 		<!-- Known affixes render for real; only the unknown number is a pill. -->
 		<span class="skeleton-pill"></span>
 	{:else}
-		<span class="counter-value">{formatted_value}</span>
+		<span class="value">{formatted_value}</span>
 	{/if}
 
-	{#if suffix}<span class="counter-affix counter-suffix">{suffix}</span>{/if}
+	{#if suffix}<span class="affix suffix">{suffix}</span>{/if}
 </span>
 
 <style>
@@ -212,10 +212,30 @@
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 		line-height: 1;
-	}
 
-	.counter.skeleton {
-		user-select: none;
+		&.skeleton {
+			user-select: none;
+		}
+
+		.affix {
+			display: inline-block;
+			font-size: 0.5em;
+			line-height: 1;
+			font-weight: 500;
+			opacity: 0.85;
+			align-self: flex-start;
+			padding-top: 0.15em;
+		}
+		.prefix {
+			margin-right: 0.1em;
+		}
+		.suffix {
+			margin-left: 0.1em;
+		}
+
+		.value {
+			display: inline;
+		}
 	}
 
 	/* A digits-sized pill standing in for the unknown number. `ch` units track
@@ -261,25 +281,5 @@
 		.skeleton-pill::after {
 			animation: none;
 		}
-	}
-
-	.counter-affix {
-		display: inline-block;
-		font-size: 0.5em;
-		line-height: 1;
-		font-weight: 500;
-		opacity: 0.85;
-		align-self: flex-start;
-		padding-top: 0.15em;
-	}
-	.counter-prefix {
-		margin-right: 0.1em;
-	}
-	.counter-suffix {
-		margin-left: 0.1em;
-	}
-
-	.counter-value {
-		display: inline;
 	}
 </style>

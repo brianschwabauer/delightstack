@@ -268,54 +268,54 @@
 	.typewriter {
 		display: inline;
 		position: relative;
-	}
 
-	.typewriter.has-cursor > span {
-		position: relative;
-	}
+		&.has-cursor > span {
+			position: relative;
+		}
 
-	/* Line cursor — thin vertical bar */
-	.typewriter.cursor-line > span::after {
-		content: '';
-		display: inline-block;
-		vertical-align: text-bottom;
-		width: 2px;
-		height: 1.1em;
-		margin-left: 1px;
-		background-color: currentColor;
-	}
+		/* Line cursor — thin vertical bar */
+		&.cursor-line > span::after {
+			content: '';
+			display: inline-block;
+			vertical-align: text-bottom;
+			width: 2px;
+			height: 1.1em;
+			margin-left: 1px;
+			background-color: currentColor;
+		}
 
-	/* Block cursor — filled rectangle */
-	.typewriter.cursor-block > span::after {
-		content: '';
-		display: inline-block;
-		vertical-align: text-bottom;
-		width: 0.6em;
-		height: 1.1em;
-		margin-left: 1px;
-		background-color: currentColor;
-	}
+		/* Block cursor — filled rectangle */
+		&.cursor-block > span::after {
+			content: '';
+			display: inline-block;
+			vertical-align: text-bottom;
+			width: 0.6em;
+			height: 1.1em;
+			margin-left: 1px;
+			background-color: currentColor;
+		}
 
-	/* Underscore cursor — horizontal line at bottom */
-	.typewriter.cursor-underscore > span::after {
-		content: '';
-		display: inline-block;
-		vertical-align: baseline;
-		width: 0.6em;
-		height: 2px;
-		margin-left: 1px;
-		background-color: currentColor;
-	}
+		/* Underscore cursor — horizontal line at bottom */
+		&.cursor-underscore > span::after {
+			content: '';
+			display: inline-block;
+			vertical-align: baseline;
+			width: 0.6em;
+			height: 2px;
+			margin-left: 1px;
+			background-color: currentColor;
+		}
 
-	/* Blink animation — step-end for crisp on/off */
-	.typewriter.cursor-blink > span::after {
-		animation: typewriter-blink 1s step-end infinite;
-	}
+		/* Blink animation — step-end for crisp on/off */
+		&.cursor-blink > span::after {
+			animation: typewriter-blink 1s step-end infinite;
+		}
 
-	/* Stop blinking while typing */
-	.typewriter.is-typing > span::after {
-		animation: none;
-		opacity: 1;
+		/* Stop blinking while typing */
+		&.is-typing > span::after {
+			animation: none;
+			opacity: 1;
+		}
 	}
 
 	@keyframes typewriter-blink {

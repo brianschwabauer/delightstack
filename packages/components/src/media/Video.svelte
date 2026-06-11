@@ -996,7 +996,6 @@
 		muted={is_muted}
 		playsinline
 		crossorigin="anonymous"
-		class="element"
 		onclick={togglePlay}
 		onplay={handleVideoPlay}
 		onpause={handleVideoPause}
@@ -1036,11 +1035,7 @@
 			aria-label="Play video"
 			onclick={togglePlay}
 			{@attach ripple({})}>
-			<svg
-				class="big-play-icon"
-				viewBox="0 0 24 24"
-				fill="currentColor"
-				aria-hidden="true">
+			<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 				<path
 					d="M8.5 5.4a.8.8 0 0 1 1.2-.7l9 6.6a.8.8 0 0 1 0 1.3l-9 6.6a.8.8 0 0 1-1.2-.7V5.4z" />
 			</svg>
@@ -1700,7 +1695,7 @@
 	}
 
 	/* ---------- Video element ---------- */
-	.element {
+	video {
 		display: block;
 		width: 100%;
 		height: 100%;
@@ -1747,7 +1742,7 @@
 		transform: translate(-50%, -50%) scale(0.9);
 	}
 
-	.big-play .big-play-icon {
+	.big-play svg {
 		width: 46px;
 		height: 46px;
 		margin-left: -3px;
@@ -2350,7 +2345,7 @@
 			width: 48px;
 			height: 48px;
 		}
-		.big-play .big-play-icon {
+		.big-play svg {
 			width: 30px;
 			height: 30px;
 		}

@@ -120,7 +120,7 @@
 			<!-- --shimmer-delay inherits down to the Avatar skeleton's animating
 			     ::after, staggering the shimmer into a wave across the stack. -->
 			<div
-				class="avatar-wrapper"
+				class="wrapper"
 				style:z-index={direction === 'right' ? skeleton_count - i : i + 1}
 				style:--shimmer-delay="{i * 120}ms">
 				<Avatar {size} skeleton ring {ring_color} />
@@ -129,7 +129,7 @@
 	{:else}
 		{#each visible_avatars as avatar, i}
 			<div
-				class="avatar-wrapper"
+				class="wrapper"
 				class:interactive={!!onclick}
 				style:z-index={direction === 'right' ? visible_avatars.length - i : i + 1}
 				{@attach tooltip(avatar.name)}
@@ -148,7 +148,7 @@
 					easing: cubicOut,
 				}}>
 				{#if avatar.href}
-					<a href={avatar.href} class="avatar-link" aria-label={avatar.name}>
+					<a href={avatar.href} aria-label={avatar.name}>
 						<Avatar
 							src={avatar.src}
 							name={avatar.name}
@@ -173,13 +173,13 @@
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<div
-				class="avatar-wrapper overflow-wrapper"
+				class="wrapper overflow-wrapper"
 				class:interactive={expandable || !!onoverflowclick}
 				style:z-index={direction === 'right' ? 0 : visible_avatars.length + 1}
 				{@attach tooltip(`${overflow_count} more`)}>
 				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 				<div
-					class="overflow-indicator"
+					class="overflow"
 					role={expandable || onoverflowclick ? 'button' : undefined}
 					tabindex={expandable || onoverflowclick ? 0 : undefined}
 					aria-label={`${overflow_count} more avatars`}
@@ -197,9 +197,19 @@
 		display: inline-flex;
 		align-items: center;
 		flex-wrap: nowrap;
+
+		&.direction-left {
+			flex-direction: row-reverse;
+			justify-content: flex-end;
+
+			.wrapper:not(:first-child) {
+				margin-inline-start: 0;
+				margin-inline-end: calc(-1 * var(--overlap));
+			}
+		}
 	}
 
-	.avatar-wrapper {
+	.wrapper {
 		position: relative;
 		/* Animate the lift smoothly. z-index can't be transitioned, but the
 		 * `transition-delay: 200ms` on the way out keeps the avatar on top
@@ -230,17 +240,7 @@
 		}
 	}
 
-	.avatar-group.direction-left {
-		flex-direction: row-reverse;
-		justify-content: flex-end;
-
-		.avatar-wrapper:not(:first-child) {
-			margin-inline-start: 0;
-			margin-inline-end: calc(-1 * var(--overlap));
-		}
-	}
-
-	.avatar-link {
+	a {
 		display: inline-flex;
 		text-decoration: none;
 		border-radius: var(--radius-full, 9999px);
@@ -254,7 +254,7 @@
 		}
 	}
 
-	.overflow-indicator {
+	.overflow {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;

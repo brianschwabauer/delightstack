@@ -239,9 +239,7 @@
 	);
 
 	const navClass = $derived(
-		['breadcrumbs', `size-${size}`, dense ? 'dense' : '', class_name]
-			.filter(Boolean)
-			.join(' '),
+		[`size-${size}`, dense ? 'dense' : '', class_name].filter(Boolean).join(' '),
 	);
 </script>
 
@@ -275,7 +273,7 @@
 
 {#snippet itemButton(item: BreadcrumbItem, index: number, isLast: boolean)}
 	{#if isLast}
-		<span class="breadcrumb-label current">
+		<span class="label current">
 			{#if show_home && index === 0}
 				{@render homeIcon()}
 				<span class="sr-only">{item.label}</span>
@@ -293,7 +291,7 @@
 				{@render homeIcon()}
 				<span class="sr-only">{item.label}</span>
 			{:else}
-				<span class="breadcrumb-label">{item.label}</span>
+				<span class="label">{item.label}</span>
 			{/if}
 		</Button>
 	{/if}
@@ -301,18 +299,18 @@
 
 {#if showSkeleton}
 	<nav class={navClass} aria-label="Breadcrumb" aria-hidden="true" {id}>
-		<ol class="breadcrumb-list">
+		<ol>
 			{#if show_home}
-				<li class="breadcrumb-item">
-					<span class="bc-skeleton-cell">{@render homeIcon()}</span>
+				<li>
+					<span class="skeleton-cell">{@render homeIcon()}</span>
 				</li>
 			{/if}
 			{#each { length: skeleton_count } as _, i}
 				{#if show_home || i > 0}
-					<li class="breadcrumb-separator">{@render sep()}</li>
+					<li class="sep">{@render sep()}</li>
 				{/if}
-				<li class="breadcrumb-item">
-					<span class="bc-skeleton-cell" style:--shimmer-delay="{i * 120}ms">
+				<li>
+					<span class="skeleton-cell" style:--shimmer-delay="{i * 120}ms">
 						<span
 							class="skeleton-bar"
 							style:width="{skeletonWidths[i % skeletonWidths.length]}em">
@@ -331,36 +329,28 @@
 	{/if}
 {:else}
 	<nav class={navClass} aria-label="Breadcrumb" bind:this={navEl} {id}>
-		<ol class="breadcrumb-list">
+		<ol>
 			{#if !collapsible}
 				{#each allItems as item, i}
 					{@const isLast = i === n - 1}
-					{#if i > 0}<li class="breadcrumb-separator">{@render sep()}</li>{/if}
-					<li
-						class="breadcrumb-item"
-						class:current={isLast}
-						aria-current={isLast ? 'page' : undefined}>
+					{#if i > 0}<li class="sep">{@render sep()}</li>{/if}
+					<li class:current={isLast} aria-current={isLast ? 'page' : undefined}>
 						{@render itemButton(item, i, isLast)}
 					</li>
 				{/each}
 			{:else}
 				<!-- Head: always visible -->
-				<li class="breadcrumb-item">
+				<li>
 					{@render itemButton(allItems[0], 0, n === 1)}
 				</li>
 
 				<!-- Ellipsis: a real Button + Popover menu listing the collapsed items.
 				     The separator + trigger collapse to zero (pure CSS) once every
 				     middle item fits inline; the portaled Popover is unaffected. -->
-				<li
-					class="breadcrumb-separator bc-collapse-inv"
-					style:--bc-reveal="{ellipsisReveal}em">
+				<li class="sep collapse-inv" style:--bc-reveal="{ellipsisReveal}em">
 					{@render sep()}
 				</li>
-				<li
-					class="breadcrumb-item bc-ellipsis bc-collapse-inv"
-					style:--bc-reveal="{ellipsisReveal}em"
-					data-bc-inert>
+				<li class="collapse-inv" style:--bc-reveal="{ellipsisReveal}em" data-bc-inert>
 					<Button
 						transparent
 						dense
@@ -386,11 +376,11 @@
 
 				<!-- Middle items: collapse from the tail side inward as space shrinks -->
 				{#each middleEntries as m (m.item.href ?? m.index)}
-					<li class="breadcrumb-separator bc-collapse" style:--bc-reveal="{m.reveal}em">
+					<li class="sep collapse" style:--bc-reveal="{m.reveal}em">
 						{@render sep()}
 					</li>
 					<li
-						class="breadcrumb-item bc-collapse"
+						class="collapse"
 						style:--bc-reveal="{m.reveal}em"
 						data-bc-inert
 						data-bc-mid={m.index}>
@@ -400,11 +390,8 @@
 
 				<!-- Tail: always visible -->
 				{#each tailEntries as t (t.item.href ?? t.index)}
-					<li class="breadcrumb-separator">{@render sep()}</li>
-					<li
-						class="breadcrumb-item"
-						class:current={t.isLast}
-						aria-current={t.isLast ? 'page' : undefined}>
+					<li class="sep">{@render sep()}</li>
+					<li class:current={t.isLast} aria-current={t.isLast ? 'page' : undefined}>
 						{@render itemButton(t.item, t.index, t.isLast)}
 					</li>
 				{/each}
@@ -418,7 +405,7 @@
 {/if}
 
 <style>
-	.breadcrumbs {
+	nav {
 		display: block;
 		position: relative;
 		/* Establish a query container so descendants can collapse/expand using
@@ -445,21 +432,28 @@
 		}
 
 		/* The Button component is generously padded for standalone use; tighten the
-		 * horizontal padding for the dense breadcrumb trail. Scoped to .breadcrumbs
-		 * by Svelte; the inner :global() pierces the child Button without leaking. */
+		 * horizontal padding for the dense breadcrumb trail. Scoped to the nav by
+		 * Svelte; the inner :global() pierces the child Button without leaking. */
 		:global(.button.dense a),
 		:global(.button.dense button) {
 			padding-inline: 0.55em;
 		}
-	}
-	.breadcrumbs.dense {
-		:global(.button.dense a),
-		:global(.button.dense button) {
-			padding-inline: 0.4em;
+
+		&.dense {
+			:global(.button.dense a),
+			:global(.button.dense button) {
+				padding-inline: 0.4em;
+			}
+			ol {
+				--bc-sep-pad: 0.0625rem;
+			}
+			.skeleton-cell {
+				padding-inline: 0.4em;
+			}
 		}
 	}
 
-	.breadcrumb-list {
+	ol {
 		--bc-sep-pad: 0.25rem;
 		display: flex;
 		align-items: center;
@@ -471,36 +465,33 @@
 		min-width: 0;
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 	}
-	.breadcrumbs.dense .breadcrumb-list {
-		--bc-sep-pad: 0.0625rem;
-	}
 
-	.breadcrumb-item,
-	.breadcrumb-separator {
+	li {
 		box-sizing: border-box;
 		display: flex;
 		align-items: center;
 		flex: 0 0 auto;
 		min-width: 0;
+
+		&.current {
+			color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+			font-weight: 500;
+		}
 	}
 
-	.breadcrumb-item.current {
-		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-		font-weight: 500;
-	}
-
-	.breadcrumb-label {
+	.label {
 		max-width: 150px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		display: inline-block;
-	}
-	.breadcrumb-label.current {
-		padding: 0 0.5em;
+
+		&.current {
+			padding: 0 0.5em;
+		}
 	}
 
-	.breadcrumb-separator {
+	.sep {
 		/* Spacing lives in padding (not gap/margin). When a separator collapses,
 		 * the padding must collapse too — border-box keeps padding at its set
 		 * value even at max-width:0, which would leave a ghost gap — so the
@@ -513,16 +504,17 @@
 		 * compounds and washes the chevron into the background in both modes. */
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 		flex-shrink: 0;
-	}
-	.breadcrumb-separator.bc-collapse {
-		padding-inline: clamp(0px, (100cqi - var(--bc-reveal)) * 1000, var(--bc-sep-pad));
-	}
-	.breadcrumb-separator.bc-collapse-inv {
-		padding-inline: clamp(0px, (var(--bc-reveal) - 100cqi) * 1000, var(--bc-sep-pad));
-	}
 
-	.breadcrumb-separator svg {
-		display: block;
+		&.collapse {
+			padding-inline: clamp(0px, (100cqi - var(--bc-reveal)) * 1000, var(--bc-sep-pad));
+		}
+		&.collapse-inv {
+			padding-inline: clamp(0px, (var(--bc-reveal) - 100cqi) * 1000, var(--bc-sep-pad));
+		}
+
+		svg {
+			display: block;
+		}
 	}
 
 	.home-icon {
@@ -544,19 +536,19 @@
 
 	/* ── CSS-only collapse primitives ───────────────────────────────────────
 	 * `--bc-reveal` is an em length estimated from the label. An element with
-	 * `.bc-collapse` is visible when the container is at least that wide;
-	 * `.bc-collapse-inv` is the inverse (visible only while narrower). The
+	 * `.collapse` is visible when the container is at least that wide;
+	 * `.collapse-inv` is the inverse (visible only while narrower). The
 	 * `* 1000` turns the width difference into a near-instant 0 ↔ full switch. */
-	.bc-collapse {
+	.collapse {
 		overflow: clip;
 		max-width: clamp(0px, (100cqi - var(--bc-reveal)) * 1000, 100cqi);
 	}
-	.bc-collapse-inv {
+	.collapse-inv {
 		overflow: clip;
 		max-width: clamp(0px, (var(--bc-reveal) - 100cqi) * 1000, 100cqi);
 	}
 
-	/* The ellipsis cell collapses to zero (via .bc-collapse-inv) when no items are
+	/* The ellipsis cell collapses to zero (via .collapse-inv) when no items are
 	 * hidden; its Button's Popover is portaled, so it isn't affected by the clip. */
 
 	/* ── Skeleton ────────────────────────────────────────────────────────────
@@ -564,7 +556,7 @@
 	 * and the shared dense control-height formula (see Button's standalone
 	 * height rule) — so toggling skeleton ↔ loaded never shifts the row
 	 * height. The text-height pill bar is centered inside that slot. */
-	.bc-skeleton-cell {
+	.skeleton-cell {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -573,9 +565,6 @@
 		padding: 0 0.55em;
 		min-height: calc(1em * var(--control-height-ratio-dense, 2.5));
 		line-height: 1em;
-	}
-	.breadcrumbs.dense .bc-skeleton-cell {
-		padding-inline: 0.4em;
 	}
 	.skeleton-bar {
 		display: block;

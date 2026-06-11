@@ -170,7 +170,7 @@
 {#if isItem}
 	<!-- AccordionItem -->
 	<div
-		class={['accordion-item', class_name].filter(Boolean).join(' ')}
+		class={['item', class_name].filter(Boolean).join(' ')}
 		class:open={isOpen}
 		class:dense={isDense}
 		class:comfortable={isComfortable}
@@ -195,7 +195,7 @@
 					stroke-linecap="round"
 					stroke-linejoin="round" />
 			</svg>
-			<span class="trigger-content">
+			<span class="title">
 				{#if trigger}
 					{@render trigger()}
 				{:else}
@@ -205,7 +205,7 @@
 		</div>
 		<div id={contentId} role="region" aria-labelledby={triggerId}>
 			<Expand show={isOpen}>
-				<div class="panel-content">
+				<div class="panel">
 					{@render children?.()}
 				</div>
 			</Expand>
@@ -247,10 +247,25 @@
 			opacity: 0.5;
 			pointer-events: none;
 		}
+
+		&.skeleton {
+			pointer-events: none;
+		}
+
+		&.dense .skeleton-item {
+			padding: 0.5rem 0.75rem;
+			gap: 0.5rem;
+			font-size: 0.875rem;
+		}
+
+		&.comfortable .skeleton-item {
+			padding: 1.25rem 1.5rem;
+			gap: 1rem;
+		}
 	}
 
 	/* ========== AccordionItem ========== */
-	.accordion-item {
+	.item {
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		perspective: 100px;
@@ -259,48 +274,71 @@
 			opacity: 0.5;
 			pointer-events: none;
 		}
-	}
 
-	.accordion-item .summary {
-		display: flex;
-		align-items: center;
-		cursor: pointer;
-		padding: 1rem 1.25rem;
-		gap: 0.75rem;
-		user-select: none;
-		outline: none;
-		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-		-webkit-tap-highlight-color: transparent;
-		transition:
-			background-color 300ms,
-			translate 200ms ease;
+		.summary {
+			display: flex;
+			align-items: center;
+			cursor: pointer;
+			padding: 1rem 1.25rem;
+			gap: 0.75rem;
+			user-select: none;
+			outline: none;
+			color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+			-webkit-tap-highlight-color: transparent;
+			transition:
+				background-color 300ms,
+				translate 200ms ease;
 
-		&:focus-visible {
-			box-shadow: inset 0 0 0 2px var(--color-accent, #1976d2);
-			border-radius: 4px;
+			&:focus-visible {
+				box-shadow: inset 0 0 0 2px var(--color-accent, #1976d2);
+				border-radius: 4px;
+			}
+
+			&:hover {
+				background: light-dark(
+					rgb(from var(--color-text, #000) r g b / 0.04),
+					rgb(from var(--color-text, #fff) r g b / 0.06)
+				);
+				transition: translate 200ms ease;
+			}
+			&:active {
+				translate: 0px 6px clamp(-7px, calc(0.2em - 6px), -2px);
+			}
 		}
 
-		&:hover {
-			background: light-dark(
-				rgb(from var(--color-text, #000) r g b / 0.04),
-				rgb(from var(--color-text, #fff) r g b / 0.06)
-			);
-			transition: translate 200ms ease;
+		&.dense .summary {
+			padding: 0.5rem 0.75rem;
+			gap: 0.5rem;
+			font-size: 0.875rem;
 		}
-		&:active {
-			translate: 0px 6px clamp(-7px, calc(0.2em - 6px), -2px);
+
+		&.comfortable .summary {
+			padding: 1.25rem 1.5rem;
+			gap: 1rem;
 		}
-	}
 
-	.accordion-item.dense .summary {
-		padding: 0.5rem 0.75rem;
-		gap: 0.5rem;
-		font-size: 0.875rem;
-	}
+		&.open .chevron {
+			transform: rotate(90deg);
+		}
 
-	.accordion-item.comfortable .summary {
-		padding: 1.25rem 1.5rem;
-		gap: 1rem;
+		.title {
+			flex: 1;
+			font-weight: 500;
+		}
+
+		.panel {
+			padding: 0 1.25rem 1rem;
+			color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
+		}
+
+		&.dense .panel {
+			padding: 0 0.75rem 0.5rem;
+			font-size: 0.875rem;
+		}
+
+		&.comfortable .panel {
+			padding: 0 1.5rem 1.25rem;
+		}
 	}
 
 	.chevron {
@@ -311,36 +349,9 @@
 		color: light-dark(var(--color-text-disabled, #888), var(--color-text-disabled, #888));
 	}
 
-	.accordion-item.open .chevron {
-		transform: rotate(90deg);
-	}
-
-	.trigger-content {
-		flex: 1;
-		font-weight: 500;
-	}
-
-	.panel-content {
-		padding: 0 1.25rem 1rem;
-		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-	}
-
-	.accordion-item.dense .panel-content {
-		padding: 0 0.75rem 0.5rem;
-		font-size: 0.875rem;
-	}
-
-	.accordion-item.comfortable .panel-content {
-		padding: 0 1.5rem 1.25rem;
-	}
-
 	/* ========== Skeleton ========== */
-	.accordion.skeleton {
-		pointer-events: none;
-	}
-
-	/* Mirrors .summary metrics (incl. dense/comfortable) so each placeholder
-	   row is exactly the height of the real accordion header it stands in for. */
+	/* Mirrors .summary metrics (incl. dense/comfortable, nested above) so each
+	   placeholder row is exactly the height of the real accordion header. */
 	.skeleton-item {
 		display: flex;
 		align-items: center;
@@ -348,17 +359,6 @@
 		padding: 1rem 1.25rem;
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-	}
-
-	.accordion.dense .skeleton-item {
-		padding: 0.5rem 0.75rem;
-		gap: 0.5rem;
-		font-size: 0.875rem;
-	}
-
-	.accordion.comfortable .skeleton-item {
-		padding: 1.25rem 1.5rem;
-		gap: 1rem;
 	}
 
 	.skeleton-chevron,

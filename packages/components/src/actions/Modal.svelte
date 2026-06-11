@@ -171,7 +171,7 @@
 		use:mountModal
 		{...rest}>
 		<div
-			class="modal-body"
+			class="body"
 			class:has-footer={!!(footer || footer_start || footer_end)}
 			id={bodyId}
 			style:width
@@ -205,7 +205,7 @@
 			{/if}
 			{#if children}{@render children()}{/if}
 			{#if footer || footer_start || footer_end}
-				<footer class="modal-footer">
+				<footer>
 					{#if footer}
 						{@render footer()}
 					{:else}
@@ -363,7 +363,7 @@
 			}
 		}
 	}
-	.modal-body {
+	.body {
 		grid-column: 1 / 1;
 		grid-row: 1 / 1;
 		height: 100%;
@@ -403,7 +403,7 @@
 		/* Corner inset for the styled-native fallback (pre-JS / no overlay) */
 		--scrollbar-track-inset: calc(var(--_radius, 10px) / 2);
 	}
-	.modal-footer {
+	footer {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -416,7 +416,7 @@
 		padding: 0.75rem 1rem;
 		@media (min-width: 768px) {
 			/* The body drops its bottom padding when a footer is present (see
-			   .modal-body.has-footer), so the footer ends flush with the modal's
+			   .body.has-footer), so the footer ends flush with the modal's
 			   bottom edge and sticks there while long content scrolls underneath.
 			   Actions sit closer to the edge than body content would (1rem vs the
 			   body's 2rem) — a chrome row, not content. */

@@ -842,7 +842,7 @@
 			aria-disabled={node.disabled || undefined}
 			id="{id}-node-{node.id}"
 			data-node-id={node.id}
-			class="tree-node"
+			class="node"
 			class:expanded={node_expanded}
 			class:selected={is_selected}
 			class:focused={is_focused && keyboard_nav}
@@ -854,7 +854,7 @@
 			style:--i={index}>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
-				class="node-row"
+				class="row"
 				class:adj-top={adj_top.has(node.id)}
 				class:adj-bottom={adj_bottom.has(node.id)}
 				style:padding-left="calc({level - 1} * var(--_indent))"
@@ -895,7 +895,7 @@
 				onfocusin={() => focusNode(node.id)}>
 				<!-- Chevron / Expand toggle -->
 				<button
-					class="chevron-btn"
+					class="chevron"
 					class:has-children={has_kids || hasLoadableChildren(node)}
 					tabindex={-1}
 					type="button"
@@ -937,7 +937,7 @@
 				<!-- Checkbox -->
 				{#if checkboxes}
 					<button
-						class="tree-checkbox"
+						class="checkbox"
 						tabindex={-1}
 						type="button"
 						aria-hidden="true"
@@ -947,7 +947,7 @@
 						}}>
 						<svg viewBox="0 0 24 24" width="18" height="18" fill="none">
 							<rect
-								class="check-box"
+								class="box"
 								class:checked={check_state === 'checked'}
 								class:indeterminate={check_state === 'indeterminate'}
 								x="2"
@@ -958,7 +958,7 @@
 								stroke-width="2" />
 							{#if check_state === 'indeterminate'}
 								<line
-									class="check-dash"
+									class="dash"
 									x1="7"
 									y1="12"
 									x2="17"
@@ -967,7 +967,7 @@
 									stroke-linecap="round" />
 							{:else if check_state === 'checked'}
 								<path
-									class="check-mark"
+									class="mark"
 									d="M6 12.5 L10 16.5 L18 8"
 									stroke-width="2.5"
 									stroke-linecap="round"
@@ -981,13 +981,13 @@
 				{#if node_content}
 					{@render node_content({ node, level })}
 				{:else}
-					<span class="node-content">
+					<span class="content">
 						{#if node.icon}
-							<span class="node-icon">
+							<span class="icon">
 								<node.icon />
 							</span>
 						{/if}
-						<span class="node-label">
+						<span class="label">
 							{#if is_filtering}
 								{#each highlightMatch(node.label, filter_term) as part}
 									{#if part.bold}<mark>{part.text}</mark>{:else}{part.text}{/if}
@@ -1002,7 +1002,7 @@
 
 			<!-- Children container with grid expand animation -->
 			{#if has_kids && children.length > 0}
-				<div class="children-container" class:show={node_expanded}>
+				<div class="children" class:show={node_expanded}>
 					<ul role="group" style:--line-offset="calc({level - 1} * var(--_indent))">
 						{#each children as child, child_index (child.id)}
 							{@render treeNode(child, level + 1, child_index)}
@@ -1048,14 +1048,14 @@
 	}
 
 	/* ========== Tree Node ========== */
-	.tree-node {
+	.node {
 		list-style: none;
 		position: relative;
 		perspective: 100px;
 	}
 
 	/* ========== Node Row ========== */
-	.node-row {
+	.row {
 		display: flex;
 		align-items: center;
 		gap: 0.125rem;
@@ -1071,25 +1071,25 @@
 		transition:
 			background-color 100ms ease,
 			translate 200ms ease;
+
+		&:hover {
+			background: light-dark(
+				rgb(from var(--color-text, #000) r g b / 0.06),
+				rgb(from var(--color-text, #fff) r g b / 0.08)
+			);
+			transition: translate 200ms ease;
+		}
+
+		&:active {
+			translate: 0px 4px clamp(-5px, calc(0.2em - 5px), -2px);
+		}
 	}
 
-	.node-row:hover {
-		background: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.06),
-			rgb(from var(--color-text, #fff) r g b / 0.08)
-		);
-		transition: translate 200ms ease;
-	}
-
-	.node-row:active {
-		translate: 0px 4px clamp(-5px, calc(0.2em - 5px), -2px);
-	}
-
-	.tree-node.disabled > .node-row:active {
+	.node.disabled > .row:active {
 		translate: none;
 	}
 
-	.tree-node.selected > .node-row {
+	.node.selected > .row {
 		background: light-dark(
 			rgb(from var(--color-action, #1976d2) r g b / 0.1),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.15)
@@ -1097,19 +1097,19 @@
 	}
 
 	/* Flatten touching corners between visually adjacent highlighted nodes */
-	.tree-node.selected > .node-row.adj-bottom,
-	.node-row:hover.adj-bottom {
+	.node.selected > .row.adj-bottom,
+	.row:hover.adj-bottom {
 		border-bottom-left-radius: 0;
 		border-bottom-right-radius: 0;
 	}
 
-	.tree-node.selected > .node-row.adj-top,
-	.node-row:hover.adj-top {
+	.node.selected > .row.adj-top,
+	.row:hover.adj-top {
 		border-top-left-radius: 0;
 		border-top-right-radius: 0;
 	}
 
-	.tree-node.selected > .node-row:hover {
+	.node.selected > .row:hover {
 		background: light-dark(
 			rgb(from var(--color-action, #1976d2) r g b / 0.15),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.22)
@@ -1117,7 +1117,7 @@
 		transition: translate 200ms ease;
 	}
 
-	.tree-node.focused > .node-row {
+	.node.focused > .row {
 		outline: 2px solid var(--color-action, #1976d2);
 		outline-offset: -2px;
 		border-radius: var(--radius-md, 4px);
@@ -1127,27 +1127,27 @@
 		}
 	}
 
-	.tree-node.disabled > .node-row {
+	.node.disabled > .row {
 		opacity: 0.5;
 		pointer-events: none;
 	}
 
 	/* ========== Dense / Comfortable ========== */
-	.tree.dense .node-row {
+	.tree.dense .row {
 		padding-top: 0.0625rem;
 		padding-bottom: 0.0625rem;
 		min-height: 1.375rem;
 		font-size: 0.8125rem;
 	}
 
-	.tree.comfortable .node-row {
+	.tree.comfortable .row {
 		padding-top: 0.5rem;
 		padding-bottom: 0.5rem;
 		min-height: 2.25rem;
 	}
 
 	/* ========== Chevron Button ========== */
-	.chevron-btn {
+	.chevron {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1181,10 +1181,10 @@
 
 	.chevron-icon {
 		transition: transform 200ms ease;
-	}
 
-	.chevron-icon.rotated {
-		transform: rotate(90deg);
+		&.rotated {
+			transform: rotate(90deg);
+		}
 	}
 
 	/* ========== Spinner ==========
@@ -1195,10 +1195,11 @@
 	.spinner {
 		color: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 		animation: tree-spin 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-	}
-	.spinner circle {
-		transform-origin: center;
-		animation: tree-spinner-dash 1.4s ease-in-out infinite;
+
+		circle {
+			transform-origin: center;
+			animation: tree-spinner-dash 1.4s ease-in-out infinite;
+		}
 	}
 
 	@keyframes tree-spin {
@@ -1225,7 +1226,7 @@
 	}
 
 	/* ========== Checkbox ========== */
-	.tree-checkbox {
+	.checkbox {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1240,31 +1241,31 @@
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 	}
 
-	.check-box {
+	.box {
 		stroke: light-dark(var(--color-text-muted, #999), var(--color-text-muted, #777));
 		fill: transparent;
 		transition:
 			stroke 150ms ease,
 			fill 150ms ease;
+
+		&.checked,
+		&.indeterminate {
+			stroke: var(--color-action, #1976d2);
+			fill: var(--color-action, #1976d2);
+		}
 	}
 
-	.check-box.checked,
-	.check-box.indeterminate {
-		stroke: var(--color-action, #1976d2);
-		fill: var(--color-action, #1976d2);
-	}
-
-	.check-mark {
+	.mark {
 		stroke: var(--color-bg, #fff);
 		fill: none;
 	}
 
-	.check-dash {
+	.dash {
 		stroke: var(--color-bg, #fff);
 	}
 
 	/* ========== Node Content ========== */
-	.node-content {
+	.content {
 		display: flex;
 		align-items: center;
 		gap: 0.375rem;
@@ -1273,31 +1274,31 @@
 		overflow: hidden;
 	}
 
-	.node-icon {
+	.icon {
 		display: flex;
 		align-items: center;
 		flex-shrink: 0;
 		color: light-dark(var(--color-text-muted, #666), var(--color-text-muted, #aaa));
 	}
 
-	.node-label {
+	.label {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
 
-	.node-label mark {
-		background: light-dark(
-			rgb(from var(--color-action, #1976d2) r g b / 0.2),
-			rgb(from var(--color-action, #5c9ce6) r g b / 0.3)
-		);
-		color: inherit;
-		border-radius: 2px;
-		padding: 0 1px;
+		mark {
+			background: light-dark(
+				rgb(from var(--color-action, #1976d2) r g b / 0.2),
+				rgb(from var(--color-action, #5c9ce6) r g b / 0.3)
+			);
+			color: inherit;
+			border-radius: 2px;
+			padding: 0 1px;
+		}
 	}
 
 	/* ========== Children Container (Expand Animation) ========== */
-	.children-container {
+	.children {
 		display: grid;
 		grid-template-rows: min-content 0fr;
 		transition:
@@ -1318,15 +1319,15 @@
 			margin: 0;
 			padding: 0;
 		}
-	}
 
-	.children-container.show {
-		grid-template-rows: min-content 1fr;
-		opacity: 1;
+		&.show {
+			grid-template-rows: min-content 1fr;
+			opacity: 1;
 
-		> :global(ul) {
-			visibility: visible;
-			transition: visibility 0ms;
+			> :global(ul) {
+				visibility: visible;
+				transition: visibility 0ms;
+			}
 		}
 	}
 
@@ -1335,7 +1336,7 @@
 	   elements below just borrow it via var(). Every ul sets its own value,
 	   so a tinted group never leaks into nested groups. The transition here
 	   governs the OUT fade of the active-path tint (the IN snaps, below). */
-	.tree.show-lines .children-container > :global(ul) {
+	.tree.show-lines .children > :global(ul) {
 		position: relative;
 		--_tree-rail: light-dark(
 			rgb(from var(--color-text, #000) r g b / 0.15),
@@ -1352,14 +1353,8 @@
 	 * on the text no matter how tall the row renders. clip-path reveals
 	 * each segment top-to-bottom with a per-row stagger (--i) on expand.
 	 */
-	.tree.show-lines
-		.tree-node
-		> .children-container
-		> :global(ul > .tree-node:not(:last-child))::before,
-	.tree.show-lines
-		.tree-node
-		> .children-container
-		> :global(ul > .tree-node:last-child > .node-row)::before {
+	.tree.show-lines .node > .children > :global(ul > .node:not(:last-child))::before,
+	.tree.show-lines .node > .children > :global(ul > .node:last-child > .row)::before {
 		content: '';
 		position: absolute;
 		top: 0;
@@ -1371,17 +1366,11 @@
 		transition: clip-path 150ms ease;
 	}
 
-	.tree.show-lines
-		.tree-node
-		> .children-container
-		> :global(ul > .tree-node:not(:last-child))::before {
+	.tree.show-lines .node > .children > :global(ul > .node:not(:last-child))::before {
 		bottom: 0;
 	}
 
-	.tree.show-lines
-		.tree-node
-		> .children-container
-		> :global(ul > .tree-node:last-child > .node-row)::before {
+	.tree.show-lines .node > .children > :global(ul > .node:last-child > .row)::before {
 		height: 50%;
 		width: 0.5rem;
 		border-bottom: 1.5px solid var(--_tree-rail);
@@ -1390,20 +1379,17 @@
 
 	/* Soften where a multi-row rail emerges from its parent row */
 	.tree.show-lines
-		.tree-node
-		> .children-container
-		> :global(ul > .tree-node:first-child:not(:last-child))::before {
+		.node
+		> .children
+		> :global(ul > .node:first-child:not(:last-child))::before {
 		mask-image: linear-gradient(to bottom, transparent, #000 0.5rem);
 	}
 
+	.tree.show-lines .node > .children.show > :global(ul > .node:not(:last-child))::before,
 	.tree.show-lines
-		.tree-node
-		> .children-container.show
-		> :global(ul > .tree-node:not(:last-child))::before,
-	.tree.show-lines
-		.tree-node
-		> .children-container.show
-		> :global(ul > .tree-node:last-child > .node-row)::before {
+		.node
+		> .children.show
+		> :global(ul > .node:last-child > .row)::before {
 		clip-path: inset(0 0 0 0);
 		transition: clip-path 200ms ease-out calc(min(80ms + var(--i, 0) * 40ms, 400ms));
 	}
@@ -1411,9 +1397,9 @@
 	/* Active path: tint the rail of the group containing the hovered,
 	   selected, or keyboard-focused row — snap in (transition: none here),
 	   ease out (the --_tree-rail transition on the base ul rule above) */
-	.tree.show-lines .children-container > :global(ul:has(> .tree-node > .node-row:hover)),
-	.tree.show-lines .children-container > :global(ul:has(> .tree-node.selected)),
-	.tree.show-lines .children-container > :global(ul:has(> .tree-node.focused)) {
+	.tree.show-lines .children > :global(ul:has(> .node > .row:hover)),
+	.tree.show-lines .children > :global(ul:has(> .node.selected)),
+	.tree.show-lines .children > :global(ul:has(> .node.focused)) {
 		--_tree-rail: light-dark(
 			rgb(from var(--color-action, #1976d2) r g b / 0.5),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.55)
@@ -1422,14 +1408,14 @@
 	}
 
 	/* ========== Drag-and-Drop Indicators ========== */
-	.tree-node.dragged {
+	.node.dragged {
 		opacity: 0.4;
 	}
 
 	/* Both drop indicators share ::after (they're mutually exclusive states)
 	   because ::before holds the connecting-line L on last children */
-	.tree-node.drop-before > .node-row::after,
-	.tree-node.drop-after > .node-row::after {
+	.node.drop-before > .row::after,
+	.node.drop-after > .row::after {
 		content: '';
 		position: absolute;
 		left: 0;
@@ -1442,15 +1428,15 @@
 
 	/* Drawn fully inside the row — straddling the boundary (top: -1px) lets
 	   group overflow clipping shave the bar to 1px on a group's edge rows */
-	.tree-node.drop-before > .node-row::after {
+	.node.drop-before > .row::after {
 		top: 0;
 	}
 
-	.tree-node.drop-after > .node-row::after {
+	.node.drop-after > .row::after {
 		bottom: 0;
 	}
 
-	.tree-node.drop-inside > .node-row {
+	.node.drop-inside > .row {
 		outline: 2px solid var(--color-action, #1976d2);
 		outline-offset: -2px;
 		border-radius: 8px;
@@ -1468,7 +1454,7 @@
 		cursor: grabbing;
 	}
 
-	.tree.dragging .node-row {
+	.tree.dragging .row {
 		cursor: grabbing;
 	}
 
@@ -1477,7 +1463,7 @@
 		pointer-events: none;
 	}
 
-	/* Mirrors .node-row metrics (incl. dense/comfortable) so each placeholder
+	/* Mirrors .row metrics (incl. dense/comfortable) so each placeholder
 	   row is exactly the height of the real row it stands in for. */
 	.skeleton-node {
 		display: flex;
@@ -1559,28 +1545,22 @@
 		.chevron-icon {
 			transition: none;
 		}
-		.children-container {
+		.children {
 			transition: none;
 		}
 		.spinner {
 			animation: none;
 		}
+		.tree.show-lines .node > .children > :global(ul > .node:not(:last-child))::before,
+		.tree.show-lines .node > .children > :global(ul > .node:last-child > .row)::before,
 		.tree.show-lines
-			.tree-node
-			> .children-container
-			> :global(ul > .tree-node:not(:last-child))::before,
+			.node
+			> .children.show
+			> :global(ul > .node:not(:last-child))::before,
 		.tree.show-lines
-			.tree-node
-			> .children-container
-			> :global(ul > .tree-node:last-child > .node-row)::before,
-		.tree.show-lines
-			.tree-node
-			> .children-container.show
-			> :global(ul > .tree-node:not(:last-child))::before,
-		.tree.show-lines
-			.tree-node
-			> .children-container.show
-			> :global(ul > .tree-node:last-child > .node-row)::before {
+			.node
+			> .children.show
+			> :global(ul > .node:last-child > .row)::before {
 			clip-path: none;
 			transition: none;
 		}

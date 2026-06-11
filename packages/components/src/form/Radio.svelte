@@ -209,7 +209,6 @@
 		<input
 			type="radio"
 			id="{id}-input"
-			class="native-input"
 			name={effectiveName}
 			{value}
 			checked={isSelected}
@@ -343,7 +342,8 @@
 		}
 	}
 
-	.native-input {
+	/* Hidden native radio, kept for form submission */
+	input {
 		position: absolute;
 		width: 1px;
 		height: 1px;

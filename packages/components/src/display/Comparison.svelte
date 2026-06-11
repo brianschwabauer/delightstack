@@ -345,14 +345,10 @@
 		onpointermove={handlePointerMove}
 		onpointerup={handlePointerUp}
 		onpointercancel={handlePointerUp}>
-		<img
-			class="comparison-image before"
-			src={before}
-			alt={before_alt}
-			draggable="false" />
+		<img class="before" src={before} alt={before_alt} draggable="false" />
 
 		<img
-			class="comparison-image after"
+			class="after"
 			src={after}
 			alt={after_alt}
 			draggable="false"
@@ -378,11 +374,11 @@
 				aria-label="Comparison slider"
 				onkeydown={handleKeyDown}>
 				{#if vertical}
-					<svg class="handle-arrows" viewBox="0 0 24 24" aria-hidden="true">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
 						<path d="M12 4l-4 4h8zM12 20l-4-4h8z" fill="currentColor" />
 					</svg>
 				{:else}
-					<svg class="handle-arrows" viewBox="0 0 24 24" aria-hidden="true">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
 						<path d="M4 12l4-4v8zM20 12l-4-4v8z" fill="currentColor" />
 					</svg>
 				{/if}
@@ -491,16 +487,16 @@
 		transform: translateX(-50%);
 		background: var(--divider-color);
 		opacity: 0.55;
-	}
 
-	.vertical .skeleton-divider {
-		top: 50%;
-		bottom: auto;
-		left: 0;
-		right: 0;
-		width: auto;
-		height: var(--divider-width);
-		transform: translateY(-50%);
+		.vertical & {
+			top: 50%;
+			bottom: auto;
+			left: 0;
+			right: 0;
+			width: auto;
+			height: var(--divider-width);
+			transform: translateY(-50%);
+		}
 	}
 
 	.skeleton-handle {
@@ -542,7 +538,7 @@
 		}
 	}
 
-	.comparison-image {
+	img {
 		display: block;
 		width: 100%;
 		height: 100%;
@@ -564,6 +560,10 @@
 			position: absolute;
 			inset: 0;
 			transition: clip-path 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+			.dragging & {
+				transition: none;
+			}
 		}
 	}
 
@@ -590,16 +590,6 @@
 	}
 
 	.label-after {
-		bottom: 12px;
-		right: 12px;
-	}
-
-	.vertical .label-before {
-		top: 12px;
-		left: 12px;
-	}
-
-	.vertical .label-after {
 		bottom: 12px;
 		right: 12px;
 	}
@@ -640,14 +630,10 @@
 				top: calc(var(--divider-width) / -2);
 			}
 		}
-	}
 
-	.dragging .divider {
-		transition: none;
-	}
-
-	.dragging .comparison-image.after {
-		transition: none;
+		.dragging & {
+			transition: none;
+		}
 	}
 
 	.handle {
@@ -688,12 +674,12 @@
 			cursor: grabbing;
 			background: color-mix(in oklch, var(--handle-color) 80%, transparent);
 		}
-	}
 
-	.handle-arrows {
-		width: 20px;
-		height: 20px;
-		color: rgba(0, 0, 0, 0.75);
-		pointer-events: none;
+		svg {
+			width: 20px;
+			height: 20px;
+			color: rgba(0, 0, 0, 0.75);
+			pointer-events: none;
+		}
 	}
 </style>

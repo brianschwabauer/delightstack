@@ -519,8 +519,8 @@
 				onpointermove={onPointerMove}
 				onpointerup={onPointerUp}
 				onpointercancel={onPointerUp}>
-				<div class="toast-inner">
-					<span class="toast-icon">
+				<div class="inner">
+					<span class="icon">
 						{#if t.variant === 'success'}
 							<svg
 								viewBox="0 0 24 24"
@@ -581,15 +581,15 @@
 						{/if}
 					</span>
 
-					<div class="toast-content">
-						<div class="toast-title">{t.message}</div>
+					<div class="content">
+						<div class="title">{t.message}</div>
 						{#if t.description}
-							<div class="toast-description">{t.description}</div>
+							<div class="description">{t.description}</div>
 						{/if}
 					</div>
 
 					{#if t.options.action}
-						<div class="toast-action">
+						<div class="action">
 							<Button
 								dense
 								size="0"
@@ -604,7 +604,7 @@
 				</div>
 
 				{#if t.options.dismissible !== false}
-					<div class="toast-close">
+					<div class="close">
 						<Button
 							icon
 							transparent
@@ -700,28 +700,14 @@
 		animation: toast-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 		transform-origin: center top;
 	}
-	.toaster.bottom-right .toast,
-	.toaster.bottom-left .toast,
-	.toaster.bottom-center .toast {
+	.toaster:is(.bottom-right, .bottom-left, .bottom-center) .toast {
 		bottom: 0;
 		transform-origin: center bottom;
+		--enter-from: 100%;
 	}
-	.toaster.top-right .toast,
-	.toaster.top-left .toast,
-	.toaster.top-center .toast {
+	.toaster:is(.top-right, .top-left, .top-center) .toast {
 		top: 0;
-	}
-
-	/* While expanded, each toast carries a transparent hit-area halo extending
-	 * ~22px beyond it on every side (sits behind the card via z-index:-1 so it
-	 * never blocks the buttons). Adjacent halos overlap, so (a) moving the pointer
-	 * between fanned-out toasts keeps the stack open, and (b) you must move a
-	 * comfortable margin past the list before it collapses back to a stack. */
-	.toaster.expanded .toast::before {
-		content: '';
-		position: absolute;
-		inset: calc(-1 * var(--toast-hover-pad, 22px));
-		z-index: -1;
+		--enter-from: -100%;
 	}
 
 	/* Slightly lift the stack while expanded for a sense of depth. */
@@ -729,16 +715,28 @@
 		box-shadow:
 			0 8px 24px rgb(0 0 0 / 0.14),
 			0 3px 8px rgb(0 0 0 / 0.08);
+
+		/* While expanded, each toast carries a transparent hit-area halo extending
+		 * ~22px beyond it on every side (sits behind the card via z-index:-1 so it
+		 * never blocks the buttons). Adjacent halos overlap, so (a) moving the pointer
+		 * between fanned-out toasts keeps the stack open, and (b) you must move a
+		 * comfortable margin past the list before it collapses back to a stack. */
+		&::before {
+			content: '';
+			position: absolute;
+			inset: calc(-1 * var(--toast-hover-pad, 22px));
+			z-index: -1;
+		}
 	}
 
-	.toast-inner {
+	.inner {
 		display: flex;
 		align-items: flex-start;
 		gap: 0.75rem;
 		padding: 1rem 1rem;
 	}
 
-	.toast-icon {
+	.icon {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -746,33 +744,35 @@
 		width: 20px;
 		height: 20px;
 		margin-top: 0.05rem;
-	}
-	.toast.success .toast-icon {
-		color: var(--color-success, #16a34a);
-	}
-	.toast.error .toast-icon {
-		color: var(--color-error, #dc2626);
-	}
-	.toast.warning .toast-icon {
-		color: var(--color-warning, #d97706);
-	}
-	.toast.info .toast-icon {
-		color: var(--color-info, #3b82f6);
-	}
-	.toast.loading .toast-icon {
-		color: var(--color-action, #3b82f6);
-	}
 
-	/* The success check pops in with a spring scale while its stroke draws
-	 * itself on — most visible when a promise toast's spinner flips to the
-	 * confirmation, instead of the check just blinking into place. */
-	.toast.success .toast-icon svg {
-		animation: toast-check-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
-	}
-	.toast.success .toast-icon svg path {
-		/* Dash length >= the tick's path length (~23px) so `from` hides it fully */
-		stroke-dasharray: 24;
-		animation: toast-check-draw 350ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+		.toast.success & {
+			color: var(--color-success, #16a34a);
+		}
+		.toast.error & {
+			color: var(--color-error, #dc2626);
+		}
+		.toast.warning & {
+			color: var(--color-warning, #d97706);
+		}
+		.toast.info & {
+			color: var(--color-info, #3b82f6);
+		}
+		.toast.loading & {
+			color: var(--color-action, #3b82f6);
+		}
+
+		/* The success check pops in with a spring scale while its stroke draws
+		 * itself on — most visible when a promise toast's spinner flips to the
+		 * confirmation, instead of the check just blinking into place. */
+		.toast.success & svg {
+			animation: toast-check-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+
+			path {
+				/* Dash length >= the tick's path length (~23px) so `from` hides it fully */
+				stroke-dasharray: 24;
+				animation: toast-check-draw 350ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+			}
+		}
 	}
 	@keyframes toast-check-pop {
 		from {
@@ -786,32 +786,32 @@
 		}
 	}
 
-	.toast-content {
+	.content {
 		flex: 1;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0.2rem;
 	}
-	.toast-title {
+	.title {
 		font-size: 0.875rem;
 		font-weight: 600;
 		line-height: 1.4;
 		word-break: break-word;
 	}
-	.toast-description {
+	.description {
 		font-size: 0.8125rem;
 		line-height: 1.4;
 		opacity: 0.75;
 		word-break: break-word;
 	}
 
-	.toast-action {
+	.action {
 		flex-shrink: 0;
 		align-self: center;
 	}
 
-	.toast-close {
+	.close {
 		position: absolute;
 		top: 0;
 		left: 0;
@@ -822,16 +822,18 @@
 		box-shadow: 0 0 0 1px var(--toast-border);
 		opacity: 0;
 		transition: opacity 150ms ease;
-	}
-	.toaster.expanded .toast .toast-close,
-	.toast.front .toast-close,
-	.toast:hover .toast-close {
-		opacity: 1;
-	}
-	.toaster.align-right .toast-close {
-		left: auto;
-		right: 0;
-		transform: translate(35%, -35%);
+
+		.toaster.expanded .toast &,
+		.toast.front &,
+		.toast:hover & {
+			opacity: 1;
+		}
+
+		.toaster.align-right & {
+			left: auto;
+			right: 0;
+			transform: translate(35%, -35%);
+		}
 	}
 
 	/* Subtle variant tint (default mode): faint wash + colored border. */
@@ -847,10 +849,7 @@
 	.toast.info {
 		--toast-accent: var(--color-info, #3b82f6);
 	}
-	.toast.success,
-	.toast.error,
-	.toast.warning,
-	.toast.info {
+	.toast:is(.success, .error, .warning, .info) {
 		background-color: color-mix(in oklch, var(--toast-accent) 6%, var(--toast-bg));
 		border-color: color-mix(in oklch, var(--toast-accent) 28%, var(--toast-border));
 		box-shadow:
@@ -858,10 +857,7 @@
 			0 2px 4px rgb(0 0 0 / 0.06),
 			inset 0 0 0 1px color-mix(in oklch, var(--toast-accent) 10%, transparent);
 	}
-	.toaster.expanded .toast.success,
-	.toaster.expanded .toast.error,
-	.toaster.expanded .toast.warning,
-	.toaster.expanded .toast.info {
+	.toaster.expanded .toast:is(.success, .error, .warning, .info) {
 		box-shadow:
 			0 8px 24px rgb(0 0 0 / 0.14),
 			0 3px 8px rgb(0 0 0 / 0.08),
@@ -869,44 +865,37 @@
 	}
 
 	/* Rich colors — saturated variant surfaces (overrides the subtle tint). */
-	.toaster.rich .toast.success {
-		--toast-bg: light-dark(#ecfdf5, #052e1a);
-		--toast-fg: light-dark(#065f46, #6ee7b7);
-		--toast-border: light-dark(#a7f3d0, #065f46);
-		background-color: var(--toast-bg);
-		border-color: var(--toast-border);
-	}
-	.toaster.rich .toast.error {
-		--toast-bg: light-dark(#fef2f2, #2d0a0a);
-		--toast-fg: light-dark(#991b1b, #fca5a5);
-		--toast-border: light-dark(#fecaca, #7f1d1d);
-		background-color: var(--toast-bg);
-		border-color: var(--toast-border);
-	}
-	.toaster.rich .toast.warning {
-		--toast-bg: light-dark(#fffbeb, #2b1c00);
-		--toast-fg: light-dark(#92400e, #fcd34d);
-		--toast-border: light-dark(#fde68a, #78350f);
-		background-color: var(--toast-bg);
-		border-color: var(--toast-border);
-	}
-	.toaster.rich .toast.info {
-		--toast-bg: light-dark(#eff6ff, #0a1b2e);
-		--toast-fg: light-dark(#1e40af, #93c5fd);
-		--toast-border: light-dark(#bfdbfe, #1e3a8a);
-		background-color: var(--toast-bg);
-		border-color: var(--toast-border);
-	}
-	.toaster.rich .toast.success,
-	.toaster.rich .toast.error,
-	.toaster.rich .toast.warning,
-	.toaster.rich .toast.info {
-		box-shadow:
-			0 4px 12px rgb(0 0 0 / 0.1),
-			0 2px 4px rgb(0 0 0 / 0.06);
-	}
-	.toaster.rich .toast .toast-icon {
-		color: currentColor;
+	.toaster.rich .toast {
+		&.success {
+			--toast-bg: light-dark(#ecfdf5, #052e1a);
+			--toast-fg: light-dark(#065f46, #6ee7b7);
+			--toast-border: light-dark(#a7f3d0, #065f46);
+		}
+		&.error {
+			--toast-bg: light-dark(#fef2f2, #2d0a0a);
+			--toast-fg: light-dark(#991b1b, #fca5a5);
+			--toast-border: light-dark(#fecaca, #7f1d1d);
+		}
+		&.warning {
+			--toast-bg: light-dark(#fffbeb, #2b1c00);
+			--toast-fg: light-dark(#92400e, #fcd34d);
+			--toast-border: light-dark(#fde68a, #78350f);
+		}
+		&.info {
+			--toast-bg: light-dark(#eff6ff, #0a1b2e);
+			--toast-fg: light-dark(#1e40af, #93c5fd);
+			--toast-border: light-dark(#bfdbfe, #1e3a8a);
+		}
+		&:is(.success, .error, .warning, .info) {
+			background-color: var(--toast-bg);
+			border-color: var(--toast-border);
+			box-shadow:
+				0 4px 12px rgb(0 0 0 / 0.1),
+				0 2px 4px rgb(0 0 0 / 0.06);
+		}
+		.icon {
+			color: currentColor;
+		}
 	}
 
 	.toast.dismissed {
@@ -919,16 +908,6 @@
 			opacity: 0;
 			transform: translateY(var(--enter-from, 100%)) scale(0.9);
 		}
-	}
-	.toaster.bottom-right .toast,
-	.toaster.bottom-left .toast,
-	.toaster.bottom-center .toast {
-		--enter-from: 100%;
-	}
-	.toaster.top-right .toast,
-	.toaster.top-left .toast,
-	.toaster.top-center .toast {
-		--enter-from: -100%;
 	}
 
 	@keyframes toast-exit {
@@ -943,8 +922,8 @@
 			animation-duration: 1ms !important;
 			transition-duration: 1ms !important;
 		}
-		.toast.success .toast-icon svg,
-		.toast.success .toast-icon svg path {
+		.toast.success .icon svg,
+		.toast.success .icon svg path {
 			animation: none;
 		}
 		.toast.dismissed {

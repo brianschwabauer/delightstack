@@ -115,7 +115,7 @@
 	class:horizontal
 	class:skeleton>
 	{#if skeleton}
-		<div class="stat-skeleton">
+		<div class="skeleton-wrap">
 			{#if Icon}
 				<div class="skeleton-icon"></div>
 			{/if}
@@ -131,13 +131,13 @@
 		</div>
 	{:else}
 		{#if Icon}
-			<div class="stat-icon">
+			<div class="icon">
 				<Icon />
 			</div>
 		{/if}
 
-		<div class="stat-body">
-			<div class="stat-value" aria-live="polite">
+		<div class="body">
+			<div class="value" aria-live="polite">
 				{#if is_numeric && animated}
 					<Counter
 						bind:this={counter_ref}
@@ -146,20 +146,20 @@
 						{suffix}
 						{decimals} />
 				{:else}
-					{#if prefix}<span class="stat-affix stat-prefix">{prefix}</span>{/if}
+					{#if prefix}<span class="affix prefix">{prefix}</span>{/if}
 					{value}
-					{#if suffix}<span class="stat-affix stat-suffix">{suffix}</span>{/if}
+					{#if suffix}<span class="affix suffix">{suffix}</span>{/if}
 				{/if}
 			</div>
 
 			{#if label}
-				<div class="stat-label">{label}</div>
+				<div class="label">{label}</div>
 			{/if}
 
 			{#if change !== undefined}
-				<div class="stat-change {trend_color}" aria-label={change_aria_label}>
+				<div class="change {trend_color}" aria-label={change_aria_label}>
 					<svg
-						class="stat-change-arrow"
+						class="arrow"
 						width="14"
 						height="14"
 						viewBox="0 0 14 14"
@@ -188,7 +188,7 @@
 								stroke-linejoin="round" />
 						{/if}
 					</svg>
-					<span class="stat-change-text">
+					<span class="text">
 						{change_text}{#if change_label}{' '}{change_label}{/if}
 					</span>
 				</div>
@@ -234,95 +234,96 @@
 			align-items: center;
 			gap: 0.75rem;
 		}
-	}
 
-	.stat-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: var(--stat-icon-size);
-		height: var(--stat-icon-size);
-		color: var(--color-action, light-dark(#3b82f6, #60a5fa));
-		flex-shrink: 0;
+		.icon {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			width: var(--stat-icon-size);
+			height: var(--stat-icon-size);
+			color: var(--color-action, light-dark(#3b82f6, #60a5fa));
+			flex-shrink: 0;
 
-		:global(svg) {
-			width: 100%;
-			height: 100%;
+			:global(svg) {
+				width: 100%;
+				height: 100%;
+			}
 		}
-	}
 
-	.stat-body {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
-	}
-
-	.stat-value {
-		font-size: var(--stat-value-font);
-		font-weight: 600;
-		line-height: 1.15;
-		color: var(--color-text, light-dark(#111827, #f9fafb));
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
-		display: inline-flex;
-		align-items: flex-start;
-	}
-
-	/* Counter resets line-height to 1 on itself; inherit ours so the animated
-	   value occupies the same 1.15 line box as static values and the skeleton
-	   (no height jump between skeleton ↔ loaded or animated ↔ static). */
-	.stat-value > :global(.counter) {
-		line-height: inherit;
-	}
-
-	.stat-affix {
-		font-size: 0.5em;
-		line-height: 1;
-		font-weight: 500;
-		opacity: 0.85;
-		padding-top: 0.15em;
-	}
-	.stat-prefix {
-		margin-right: 0.1em;
-	}
-	.stat-suffix {
-		margin-left: 0.1em;
-	}
-
-	.stat-label {
-		font-size: var(--stat-label-font);
-		line-height: 1.3;
-		color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
-		white-space: nowrap;
-	}
-
-	.stat-change {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.2rem;
-		font-size: var(--stat-label-font);
-		line-height: 1.3;
-		margin-top: 0.25rem;
-		white-space: nowrap;
-
-		&.success {
-			color: var(--color-success, light-dark(#16a34a, #4ade80));
+		.body {
+			display: flex;
+			flex-direction: column;
+			gap: 0.125rem;
+			min-width: 0;
 		}
-		&.error {
-			color: var(--color-error, light-dark(#dc2626, #f87171));
+
+		.value {
+			font-size: var(--stat-value-font);
+			font-weight: 600;
+			line-height: 1.15;
+			color: var(--color-text, light-dark(#111827, #f9fafb));
+			font-variant-numeric: tabular-nums;
+			white-space: nowrap;
+			display: inline-flex;
+			align-items: flex-start;
+
+			/* Counter resets line-height to 1 on itself; inherit ours so the
+			   animated value occupies the same 1.15 line box as static values and
+			   the skeleton (no height jump between skeleton ↔ loaded or
+			   animated ↔ static). */
+			> :global(.counter) {
+				line-height: inherit;
+			}
 		}
-		&.neutral {
+
+		.affix {
+			font-size: 0.5em;
+			line-height: 1;
+			font-weight: 500;
+			opacity: 0.85;
+			padding-top: 0.15em;
+		}
+		.prefix {
+			margin-right: 0.1em;
+		}
+		.suffix {
+			margin-left: 0.1em;
+		}
+
+		.label {
+			font-size: var(--stat-label-font);
+			line-height: 1.3;
 			color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
+			white-space: nowrap;
 		}
-	}
 
-	.stat-change-arrow {
-		flex-shrink: 0;
-	}
+		.change {
+			display: inline-flex;
+			align-items: center;
+			gap: 0.2rem;
+			font-size: var(--stat-label-font);
+			line-height: 1.3;
+			margin-top: 0.25rem;
+			white-space: nowrap;
 
-	.stat-change-text {
-		display: inline;
+			&.success {
+				color: var(--color-success, light-dark(#16a34a, #4ade80));
+			}
+			&.error {
+				color: var(--color-error, light-dark(#dc2626, #f87171));
+			}
+			&.neutral {
+				color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
+			}
+
+			.arrow {
+				flex-shrink: 0;
+			}
+
+			.text {
+				display: inline;
+			}
+		}
 	}
 
 	/* ── Skeleton ───────────────────────────────────────────────── */
@@ -331,7 +332,7 @@
 		pointer-events: none;
 	}
 
-	.stat-skeleton {
+	.skeleton-wrap {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
@@ -381,7 +382,7 @@
 		flex-shrink: 0;
 	}
 
-	/* Mirrors .stat-body (gap 0.125rem); each bar pads itself out to the real
+	/* Mirrors .body (gap 0.125rem); each bar pads itself out to the real
 	   text line's height so the loaded stat lands without a shift. */
 	.skeleton-body {
 		display: flex;

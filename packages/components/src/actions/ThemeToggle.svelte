@@ -178,7 +178,7 @@
 </button>
 
 <style>
-	.theme-toggle {
+	button {
 		--icon-duration: 500ms;
 		--icon-easing: cubic-bezier(0.22, 1, 0.36, 1);
 
@@ -197,85 +197,128 @@
 			background-color 250ms ease,
 			translate 200ms ease;
 		-webkit-tap-highlight-color: transparent;
-	}
-	.theme-toggle.has-label {
-		padding: 0.4em 0.9em;
-		border-radius: var(--radius-lg, 8px);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
+
+		&.has-label {
+			padding: 0.4em 0.9em;
+			border-radius: var(--radius-lg, 8px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
+			}
+		}
+		&:hover {
+			background-color: rgb(from currentColor r g b / 0.08);
+			/* Snap the tint in on hover; the base rule eases it back out on leave. */
+			transition: translate 200ms ease;
+		}
+		&:active {
+			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
+		}
+		&:focus-visible {
+			outline: 2px solid currentColor;
+			outline-offset: 2px;
+		}
+
+		.icon {
+			position: relative;
+			display: inline-block;
+			flex-shrink: 0;
+
+			svg {
+				position: absolute;
+				inset: 0;
+				transition:
+					opacity var(--icon-duration) var(--icon-easing),
+					transform var(--icon-duration) var(--icon-easing);
+				transform-origin: center;
+			}
+		}
+
+		/* Light mode: sun visible, moon hidden */
+		&:not(.is-dark) {
+			.sun {
+				opacity: 1;
+				transform: scale(1) rotate(0deg);
+			}
+			.moon {
+				opacity: 0;
+				transform: scale(0.4) rotate(-90deg);
+			}
+			.rays {
+				opacity: 1;
+				transform: scale(1) rotate(0deg);
+			}
+		}
+
+		/* Dark mode: moon visible, sun hidden */
+		&.is-dark {
+			.sun {
+				opacity: 0;
+				transform: scale(0.4) rotate(90deg);
+			}
+			.moon {
+				opacity: 1;
+				transform: scale(1) rotate(0deg);
+			}
+			.rays {
+				opacity: 0;
+				transform: scale(0) rotate(45deg);
+			}
+		}
+
+		.rays {
+			transform-origin: center;
+			transition:
+				opacity var(--icon-duration) var(--icon-easing),
+				transform var(--icon-duration) var(--icon-easing);
+		}
+
+		.moon .star {
+			transform-origin: center;
+			opacity: 0.85;
+			animation: twinkle 2.4s ease-in-out infinite;
+		}
+		.moon .star-2 {
+			animation-delay: 1.2s;
+		}
+
+		.label {
+			font-size: 0.9em;
+			line-height: 1;
+		}
+
+		/* The "auto" badge sits in the lower-right corner. It's a small filled pill
+		 * (text-colored, with the letter knocked out in the background color) so it
+		 * reads clearly as an "A" and a ring separates it from the icon. The button
+		 * no longer clips its overflow, so the badge is never cut off. */
+		.auto-indicator {
+			position: absolute;
+			bottom: -0.05em;
+			right: -0.05em;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 1.15em;
+			height: 1.15em;
+			padding: 0 0.2em;
+			font-size: 0.62em;
+			font-weight: 800;
+			line-height: 1;
+			border-radius: var(--radius-full, 9999px);
+			/* Fill with the foreground color and knock the letter out in the
+			 * background color. Use explicit tokens (not currentColor) since this
+			 * element overrides its own `color`, which would collapse the contrast. */
+			background-color: var(--color-text, currentColor);
+			color: var(--color-bg, #fff);
+			box-shadow: 0 0 0 2px var(--color-bg, #fff);
+			pointer-events: none;
+		}
+		/* With a text label the mode is already spelled out, so the badge is redundant. */
+		&.has-label .auto-indicator {
+			display: none;
 		}
 	}
-	.theme-toggle:hover {
-		background-color: rgb(from currentColor r g b / 0.08);
-		/* Snap the tint in on hover; the base rule eases it back out on leave. */
-		transition: translate 200ms ease;
-	}
-	.theme-toggle:active {
-		translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
-	}
-	.theme-toggle:focus-visible {
-		outline: 2px solid currentColor;
-		outline-offset: 2px;
-	}
 
-	.icon {
-		position: relative;
-		display: inline-block;
-		flex-shrink: 0;
-	}
-	.icon svg {
-		position: absolute;
-		inset: 0;
-		transition:
-			opacity var(--icon-duration) var(--icon-easing),
-			transform var(--icon-duration) var(--icon-easing);
-		transform-origin: center;
-	}
-
-	/* Light mode: sun visible, moon hidden */
-	.theme-toggle:not(.is-dark) .sun {
-		opacity: 1;
-		transform: scale(1) rotate(0deg);
-	}
-	.theme-toggle:not(.is-dark) .moon {
-		opacity: 0;
-		transform: scale(0.4) rotate(-90deg);
-	}
-
-	/* Dark mode: moon visible, sun hidden */
-	.theme-toggle.is-dark .sun {
-		opacity: 0;
-		transform: scale(0.4) rotate(90deg);
-	}
-	.theme-toggle.is-dark .moon {
-		opacity: 1;
-		transform: scale(1) rotate(0deg);
-	}
-
-	.rays {
-		transform-origin: center;
-		transition:
-			opacity var(--icon-duration) var(--icon-easing),
-			transform var(--icon-duration) var(--icon-easing);
-	}
-	.theme-toggle:not(.is-dark) .rays {
-		opacity: 1;
-		transform: scale(1) rotate(0deg);
-	}
-	.theme-toggle.is-dark .rays {
-		opacity: 0;
-		transform: scale(0) rotate(45deg);
-	}
-
-	.moon .star {
-		transform-origin: center;
-		opacity: 0.85;
-		animation: twinkle 2.4s ease-in-out infinite;
-	}
-	.moon .star-2 {
-		animation-delay: 1.2s;
-	}
 	@keyframes twinkle {
 		0%,
 		100% {
@@ -288,49 +331,15 @@
 		}
 	}
 
-	.label {
-		font-size: 0.9em;
-		line-height: 1;
-	}
-
-	/* The "auto" badge sits in the lower-right corner. It's a small filled pill
-	 * (text-colored, with the letter knocked out in the background color) so it
-	 * reads clearly as an "A" and a ring separates it from the icon. The button
-	 * no longer clips its overflow, so the badge is never cut off. */
-	.auto-indicator {
-		position: absolute;
-		bottom: -0.05em;
-		right: -0.05em;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 1.15em;
-		height: 1.15em;
-		padding: 0 0.2em;
-		font-size: 0.62em;
-		font-weight: 800;
-		line-height: 1;
-		border-radius: var(--radius-full, 9999px);
-		/* Fill with the foreground color and knock the letter out in the
-		 * background color. Use explicit tokens (not currentColor) since this
-		 * element overrides its own `color`, which would collapse the contrast. */
-		background-color: var(--color-text, currentColor);
-		color: var(--color-bg, #fff);
-		box-shadow: 0 0 0 2px var(--color-bg, #fff);
-		pointer-events: none;
-	}
-	/* With a text label the mode is already spelled out, so the badge is redundant. */
-	.theme-toggle.has-label .auto-indicator {
-		display: none;
-	}
-
 	@media (prefers-reduced-motion: reduce) {
-		.icon svg,
-		.rays {
-			transition: none;
-		}
-		.moon .star {
-			animation: none;
+		button {
+			.icon svg,
+			.rays {
+				transition: none;
+			}
+			.moon .star {
+				animation: none;
+			}
 		}
 	}
 </style>

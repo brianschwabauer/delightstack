@@ -332,22 +332,22 @@
 </form>
 
 <style>
+	/* The `.form` class is part of the public surface (consumers target
+	   `form.form` via :global) — keep it even though the element is unique. */
 	.form {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-	}
 
-	.form.dense {
-		gap: 0.5rem;
-	}
-
-	.form.comfortable {
-		gap: 1.5rem;
-	}
-
-	.form.disabled {
-		opacity: 0.6;
-		pointer-events: none;
+		&.dense {
+			gap: 0.5rem;
+		}
+		&.comfortable {
+			gap: 1.5rem;
+		}
+		&.disabled {
+			opacity: 0.6;
+			pointer-events: none;
+		}
 	}
 </style>

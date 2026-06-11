@@ -93,7 +93,6 @@
 	<!-- Hidden native input for form submission -->
 	<input
 		type="checkbox"
-		class="native-input"
 		{id}
 		{name}
 		{value}
@@ -217,7 +216,8 @@
 		}
 	}
 
-	.native-input {
+	/* Hidden native checkbox, kept for form submission */
+	input {
 		position: absolute;
 		width: 1px;
 		height: 1px;

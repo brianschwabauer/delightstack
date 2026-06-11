@@ -804,7 +804,7 @@
 			onoutroend={() => {
 				if (ref_element) (ref_element.style as any).anchorName = '';
 			}}>
-			<div class="popover-content" {@attach scrollbar()}>
+			<div class="content" {@attach scrollbar()}>
 				{#if children}{@render children()}{/if}
 			</div>
 			{#if arrow}
@@ -898,7 +898,7 @@
 		max-height: calc(100vh - 1rem);
 		transition: none;
 		overflow: visible;
-		.popover-content {
+		.content {
 			padding: 1rem 1.25rem;
 			overflow: auto;
 			overscroll-behavior: contain;
@@ -909,24 +909,24 @@
 				corner-shape: inherit;
 			}
 		}
-		&.dense .popover-content {
+		&.dense .content {
 			padding: 0.5rem 0.75rem;
 		}
-		&.comfortable .popover-content {
+		&.comfortable .content {
 			padding: 1.5rem 2rem;
 		}
 		/* When the popover hosts a top-level list, drop the inner padding so its
 		 * items run edge-to-edge (a list reads as the menu, not content inside a
 		 * padded card). The list comes from another component → matched with
 		 * :global. */
-		&:has(> .popover-content > :global(ul.list:only-child)) .popover-content {
+		&:has(> .content > :global(ul.list:only-child)) .content {
 			padding: 0;
 		}
 		/* If that list provides its OWN surface (`filled`/`outline`), also drop
 		 * the popover's background + border so the list surface takes over
 		 * (otherwise a double surface). A plain (transparent) list instead keeps
 		 * the popover's surface as its background. */
-		&:has(> .popover-content > :global(ul.list:is(.filled, .outline):only-child)) {
+		&:has(> .content > :global(ul.list:is(.filled, .outline):only-child)) {
 			background-color: transparent;
 			border-color: transparent;
 		}
@@ -936,7 +936,7 @@
 			border-color: transparent;
 			box-shadow: none;
 		}
-		&.transparent .popover-content {
+		&.transparent .content {
 			padding: 0;
 		}
 		&.transparent .arrow {

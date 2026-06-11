@@ -756,7 +756,7 @@
 	})}>
 	{#if skeleton}
 		<!-- Skeleton -->
-		<div class="chart-skeleton" style:height="{height}px">
+		<div class="skeleton-frame" style:height="{height}px">
 			{#if type === 'pie' || type === 'donut'}
 				<!-- Same disc the real pie renders: centered, radius = min(w,h)/2 - 30.
 				     The donut keeps its hole via a radial mask at the real inner radius. -->
@@ -779,7 +779,7 @@
 		</div>
 	{:else if is_empty}
 		<!-- Empty state -->
-		<div class="chart-empty">
+		<div class="empty">
 			<span>No data available</span>
 		</div>
 	{:else if container_width > 0}
@@ -789,7 +789,6 @@
 				width={container_width}
 				{height}
 				viewBox="0 0 {container_width} {height}"
-				class="chart-svg"
 				role="img"
 				aria-label="{type} chart">
 				{#if show_grid}
@@ -808,7 +807,6 @@
 					<text
 						x={PADDING_LEFT - 8}
 						y={mapY(tick)}
-						class="axis-label axis-label-y"
 						text-anchor="end"
 						dominant-baseline="middle">
 						{formatTick(tick)}
@@ -820,7 +818,6 @@
 					<text
 						x={mapX(i, data.labels.length)}
 						y={PADDING_TOP + chart_height + 20}
-						class="axis-label axis-label-x"
 						text-anchor="middle"
 						dominant-baseline="auto">
 						{label}
@@ -830,11 +827,7 @@
 				<!-- Area fills -->
 				{#if type === 'area'}
 					{#each line_datasets as ds}
-						<path
-							d={ds.area_path}
-							fill={ds.color}
-							fill-opacity="0.15"
-							class="area-fill" />
+						<path d={ds.area_path} fill={ds.color} fill-opacity="0.15" class="area" />
 					{/each}
 				{/if}
 
@@ -847,7 +840,7 @@
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						class="chart-line"
+						class="line"
 						style:stroke-dasharray={animate ? ds.path_length : 'none'}
 						style:stroke-dashoffset={animate && !has_animated ? ds.path_length : 0} />
 				{/each}
@@ -863,7 +856,7 @@
 								fill={show_points ? ds.color : 'transparent'}
 								stroke={show_points ? 'var(--color-bg, white)' : 'none'}
 								stroke-width={show_points ? 2 : 0}
-								class="data-point"
+								class="point"
 								onmouseenter={(e) =>
 									showTooltipAt(
 										e,
@@ -883,7 +876,6 @@
 				width={container_width}
 				{height}
 				viewBox="0 0 {container_width} {height}"
-				class="chart-svg"
 				role="img"
 				aria-label="bar chart">
 				{#if show_grid}
@@ -902,7 +894,6 @@
 					<text
 						x={PADDING_LEFT - 8}
 						y={mapY(tick)}
-						class="axis-label axis-label-y"
 						text-anchor="end"
 						dominant-baseline="middle">
 						{formatTick(tick)}
@@ -915,7 +906,6 @@
 					<text
 						x={PADDING_LEFT + i * group_width + group_width / 2}
 						y={PADDING_TOP + chart_height + 20}
-						class="axis-label axis-label-x"
 						text-anchor="middle"
 						dominant-baseline="auto">
 						{label}
@@ -931,7 +921,7 @@
 						height={Math.max(0, bar.height)}
 						fill={bar.color}
 						rx="2"
-						class="chart-bar"
+						class="bar"
 						style:transform-origin="{bar.x + bar.width / 2}px {PADDING_TOP +
 							chart_height}px"
 						onmouseenter={(e) =>
@@ -946,7 +936,6 @@
 				width={container_width}
 				{height}
 				viewBox="0 0 {container_width} {height}"
-				class="chart-svg"
 				role="img"
 				aria-label="horizontal bar chart">
 				{#if show_grid}
@@ -965,7 +954,6 @@
 					<text
 						x={mapHX(tick)}
 						y={H_PADDING_TOP + h_chart_height + 20}
-						class="axis-label axis-label-x"
 						text-anchor="middle"
 						dominant-baseline="auto">
 						{formatTick(tick)}
@@ -978,7 +966,6 @@
 					<text
 						x={H_PADDING_LEFT - 8}
 						y={H_PADDING_TOP + i * group_height + group_height / 2}
-						class="axis-label axis-label-y"
 						text-anchor="end"
 						dominant-baseline="middle">
 						{label}
@@ -994,7 +981,7 @@
 						height={Math.max(0, bar.height)}
 						fill={bar.color}
 						rx="2"
-						class="chart-hbar"
+						class="hbar"
 						style:transform-origin="{H_PADDING_LEFT}px {bar.y + bar.height / 2}px"
 						onmouseenter={(e) =>
 							showTooltipAt(e, bar.label, bar.dataset_label, bar.value.toLocaleString())}
@@ -1008,17 +995,14 @@
 				width={container_width}
 				{height}
 				viewBox="0 0 {container_width} {height}"
-				class="chart-svg"
 				role="img"
 				aria-label="{type} chart">
-				<g
-					class="pie-group"
-					style:transform-origin="{container_width / 2}px {height / 2}px">
+				<g class="pie" style:transform-origin="{container_width / 2}px {height / 2}px">
 					{#each pie_segments as seg}
 						<path
 							d={seg.path}
 							fill={seg.color}
-							class="pie-segment"
+							class="segment"
 							style:transform-origin="{container_width / 2}px {height / 2}px"
 							onmouseenter={(e) =>
 								showTooltipAt(
@@ -1036,39 +1020,36 @@
 
 		<!-- Tooltip -->
 		{#if show_tooltip && tooltip_visible}
-			<div class="chart-tooltip" style:left="{tooltip_x}px" style:top="{tooltip_y}px">
+			<div class="tooltip" style:left="{tooltip_x}px" style:top="{tooltip_y}px">
 				{#if tooltip_dataset}
-					<span class="tooltip-dataset">{tooltip_dataset}</span>
+					<span class="dataset">{tooltip_dataset}</span>
 				{/if}
-				<span class="tooltip-label">{tooltip_label}</span>
-				<span class="tooltip-value">{tooltip_value}</span>
+				<span class="label">{tooltip_label}</span>
+				<span class="value">{tooltip_value}</span>
 			</div>
 		{/if}
 
 		<!-- Legend -->
 		{#if show_legend}
-			<div class="chart-legend">
+			<div class="legend">
 				{#if type === 'pie' || type === 'donut'}
 					{#each data.labels as label, i}
 						<button
-							class="legend-item"
-							class:hidden-dataset={hidden_datasets.has(i)}
+							class:hidden={hidden_datasets.has(i)}
 							type="button"
 							onclick={() => toggleDataset(i)}>
-							<span class="legend-dot" style:background-color={getColor(i)}></span>
-							<span class="legend-label">{label}</span>
+							<span class="dot" style:background-color={getColor(i)}></span>
+							<span class="label">{label}</span>
 						</button>
 					{/each}
 				{:else}
 					{#each data.datasets as ds, i}
 						<button
-							class="legend-item"
-							class:hidden-dataset={hidden_datasets.has(i)}
+							class:hidden={hidden_datasets.has(i)}
 							type="button"
 							onclick={() => toggleDataset(i)}>
-							<span class="legend-dot" style:background-color={ds.color ?? getColor(i)}>
-							</span>
-							<span class="legend-label">{ds.label}</span>
+							<span class="dot" style:background-color={ds.color ?? getColor(i)}></span>
+							<span class="label">{ds.label}</span>
 						</button>
 					{/each}
 				{/if}
@@ -1084,7 +1065,7 @@
 		overflow: hidden;
 	}
 
-	.chart-svg {
+	svg {
 		display: block;
 	}
 
@@ -1099,7 +1080,7 @@
 
 	/* ── Axis labels ──────────────────────────────────────────── */
 
-	.axis-label {
+	text {
 		font-size: 11px;
 		fill: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
 		user-select: none;
@@ -1107,50 +1088,50 @@
 
 	/* ── Line / Area ──────────────────────────────────────────── */
 
-	.chart-line {
+	.line {
 		transition: stroke-dashoffset 1s ease-out;
+
+		/* Skip animation: show immediately */
+		.chart:not(.animate):not(.animated) & {
+			stroke-dasharray: none !important;
+			stroke-dashoffset: 0 !important;
+		}
 	}
 
-	.area-fill {
+	.area {
 		opacity: 0;
 		transition: opacity 0.6s ease-out;
+
+		.chart.animated & {
+			opacity: 1;
+		}
 	}
 
-	.chart.animated .area-fill {
-		opacity: 1;
-	}
-
-	/* Skip animation: show immediately */
-	.chart:not(.animate):not(.animated) .chart-line {
-		stroke-dasharray: none !important;
-		stroke-dashoffset: 0 !important;
-	}
-
-	.data-point {
+	.point {
 		transition: r 0.15s ease;
 		cursor: pointer;
-	}
 
-	.data-point:hover {
-		r: 6;
-		fill-opacity: 1;
-		transition: none;
+		&:hover {
+			r: 6;
+			fill-opacity: 1;
+			transition: none;
+		}
 	}
 
 	/* ── Bar ──────────────────────────────────────────────────── */
 
-	.chart-bar {
+	.bar {
 		transition: opacity 0.15s ease;
-	}
 
-	.chart.animate .chart-bar {
-		animation: chart-bar-grow 0.6s ease-out both;
-	}
+		.chart.animate & {
+			animation: chart-bar-grow 0.6s ease-out both;
+		}
 
-	.chart-bar:hover {
-		opacity: 0.8;
-		cursor: pointer;
-		transition: none;
+		&:hover {
+			opacity: 0.8;
+			cursor: pointer;
+			transition: none;
+		}
 	}
 
 	@keyframes chart-bar-grow {
@@ -1164,18 +1145,18 @@
 
 	/* ── Horizontal Bar ───────────────────────────────────────── */
 
-	.chart-hbar {
+	.hbar {
 		transition: opacity 0.15s ease;
-	}
 
-	.chart.animate .chart-hbar {
-		animation: chart-hbar-grow 0.6s ease-out both;
-	}
+		.chart.animate & {
+			animation: chart-hbar-grow 0.6s ease-out both;
+		}
 
-	.chart-hbar:hover {
-		opacity: 0.8;
-		cursor: pointer;
-		transition: none;
+		&:hover {
+			opacity: 0.8;
+			cursor: pointer;
+			transition: none;
+		}
 	}
 
 	@keyframes chart-hbar-grow {
@@ -1189,16 +1170,16 @@
 
 	/* ── Pie / Donut ──────────────────────────────────────────── */
 
-	.pie-segment {
+	.segment {
 		transition: transform 0.15s ease;
 		cursor: pointer;
+
+		&:hover {
+			transform: scale(1.03);
+		}
 	}
 
-	.pie-segment:hover {
-		transform: scale(1.03);
-	}
-
-	.chart.animate .pie-group {
+	.chart.animate .pie {
 		animation: chart-pie-spin 0.8s ease-out;
 	}
 
@@ -1215,7 +1196,7 @@
 
 	/* ── Tooltip ──────────────────────────────────────────────── */
 
-	.chart-tooltip {
+	.tooltip {
 		position: absolute;
 		z-index: 10;
 		background: var(--color-bg, light-dark(#ffffff, #1f2937));
@@ -1234,74 +1215,74 @@
 		box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
 		transform: translateX(-50%);
 		font-size: 12px;
-	}
 
-	.tooltip-dataset {
-		font-weight: 600;
-		color: var(--color-text, light-dark(#111827, #f9fafb));
-	}
+		.dataset {
+			font-weight: 600;
+			color: var(--color-text, light-dark(#111827, #f9fafb));
+		}
 
-	.tooltip-label {
-		color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
-	}
+		.label {
+			color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));
+		}
 
-	.tooltip-value {
-		font-weight: 600;
-		color: var(--color-text, light-dark(#111827, #f9fafb));
-		font-variant-numeric: tabular-nums;
+		.value {
+			font-weight: 600;
+			color: var(--color-text, light-dark(#111827, #f9fafb));
+			font-variant-numeric: tabular-nums;
+		}
 	}
 
 	/* ── Legend ────────────────────────────────────────────────── */
 
-	.chart-legend {
+	.legend {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
 		padding: 8px 0 0;
 		justify-content: center;
-	}
 
-	.legend-item {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		background: none;
-		border: none;
-		padding: 2px 6px;
-		cursor: pointer;
-		border-radius: var(--radius-lg, 0.5rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
+		button {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			background: none;
+			border: none;
+			padding: 2px 6px;
+			cursor: pointer;
+			border-radius: var(--radius-lg, 0.5rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
+			}
+			font-size: 12px;
+			color: var(--color-text, light-dark(#111827, #f9fafb));
+			transition: opacity 0.15s ease;
+
+			&:hover {
+				background: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.05));
+				transition: none;
+			}
+
+			&.hidden {
+				opacity: 0.4;
+			}
 		}
-		font-size: 12px;
-		color: var(--color-text, light-dark(#111827, #f9fafb));
-		transition: opacity 0.15s ease;
 
-		&:hover {
-			background: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.05));
-			transition: none;
+		.dot {
+			width: 10px;
+			height: 10px;
+			border-radius: 50%;
+			flex-shrink: 0;
 		}
 
-		&.hidden-dataset {
-			opacity: 0.4;
+		.label {
+			white-space: nowrap;
 		}
-	}
-
-	.legend-dot {
-		width: 10px;
-		height: 10px;
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
-
-	.legend-label {
-		white-space: nowrap;
 	}
 
 	/* ── Empty state ──────────────────────────────────────────── */
 
-	.chart-empty {
+	.empty {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1316,7 +1297,7 @@
 		pointer-events: none;
 	}
 
-	.chart-skeleton {
+	.skeleton-frame {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1403,23 +1384,23 @@
 	/* ── Reduced motion ───────────────────────────────────────── */
 
 	@media (prefers-reduced-motion: reduce) {
-		.chart-line {
+		.line {
 			transition: none;
 			stroke-dasharray: none !important;
 			stroke-dashoffset: 0 !important;
 		}
 
-		.area-fill {
+		.area {
 			transition: none;
 			opacity: 1;
 		}
 
-		.chart.animate .chart-bar,
-		.chart.animate .chart-hbar {
+		.chart.animate .bar,
+		.chart.animate .hbar {
 			animation: none;
 		}
 
-		.chart.animate .pie-group {
+		.chart.animate .pie {
 			animation: none;
 		}
 

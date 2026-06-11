@@ -134,17 +134,17 @@
 	class="alert-modal {class_name}">
 	<div class="alert">
 		{#if Icon}
-			<div class="alert-icon" class:destructive>
+			<div class="icon" class:destructive>
 				<Icon />
 			</div>
 		{/if}
 		{#if title}
-			<h3 class="alert-title">{title}</h3>
+			<h3>{title}</h3>
 		{/if}
 		{#if message}
-			<p class="alert-message">{message}</p>
+			<p>{message}</p>
 		{/if}
-		<div class="alert-actions">
+		<div class="actions">
 			<Button accent={!destructive} error={destructive} full_width onclick={oncontinue}>
 				{continue_text}
 			</Button>
@@ -161,7 +161,7 @@
 		padding: 0.5rem 0;
 	}
 
-	.alert-icon {
+	.icon {
 		display: flex;
 		justify-content: center;
 		margin-bottom: 0.75rem;
@@ -173,21 +173,21 @@
 		}
 	}
 
-	.alert-title {
+	h3 {
 		font-size: var(--text-lg, 1.125rem);
 		font-weight: var(--font-weight-semibold, 600);
 		color: var(--color-text);
 		margin: 0 0 0.5rem;
 	}
 
-	.alert-message {
+	p {
 		font-size: var(--text-base, 1rem);
 		color: var(--color-text-muted);
 		line-height: var(--leading-relaxed, 1.75);
 		margin: 0;
 	}
 
-	.alert-actions {
+	.actions {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;

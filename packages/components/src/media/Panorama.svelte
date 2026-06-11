@@ -928,9 +928,9 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	{id}
-	class={['panorama-container', class_name].filter(Boolean).join(' ')}
-	class:panorama-dragging={is_dragging}
-	class:panorama-fullscreen={is_fullscreen}
+	class={['panorama', class_name].filter(Boolean).join(' ')}
+	class:dragging={is_dragging}
+	class:fullscreen={is_fullscreen}
 	bind:this={element}
 	role="application"
 	aria-label="360 degree panorama viewer"
@@ -939,9 +939,9 @@
 	{#if !has_webgl}
 		<!-- WebGL not supported fallback -->
 		{#if fallback}
-			<img class="panorama-fallback-img" src={fallback} alt="Panorama view" />
+			<img src={fallback} alt="Panorama view" />
 		{:else}
-			<div class="panorama-fallback">
+			<div class="fallback">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 24 24"
@@ -950,7 +950,6 @@
 					stroke-width="1.5"
 					stroke-linecap="round"
 					stroke-linejoin="round"
-					class="panorama-fallback-icon"
 					aria-hidden="true">
 					<circle cx="12" cy="12" r="10" />
 					<path d="M2 12h20" />
@@ -963,9 +962,9 @@
 	{:else if error_state}
 		<!-- Error state -->
 		{#if fallback}
-			<img class="panorama-fallback-img" src={fallback} alt="Panorama view" />
+			<img src={fallback} alt="Panorama view" />
 		{:else}
-			<div class="panorama-fallback">
+			<div class="fallback">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 24 24"
@@ -974,7 +973,6 @@
 					stroke-width="1.5"
 					stroke-linecap="round"
 					stroke-linejoin="round"
-					class="panorama-fallback-icon"
 					aria-hidden="true">
 					<circle cx="12" cy="12" r="10" />
 					<line x1="12" y1="8" x2="12" y2="12" />
@@ -986,7 +984,6 @@
 	{:else}
 		<!-- Three.js canvas -->
 		<canvas
-			class="panorama-canvas"
 			bind:this={canvas_el}
 			onpointerdown={handlePointerDown}
 			onpointermove={handlePointerMove}
@@ -1004,10 +1001,10 @@
 		     With `skeleton`, a shimmer overlay stands in for the spinner — the
 		     canvas still mounts underneath so loading proceeds and dismisses it. -->
 		{#if skeleton}
-			<div class="panorama-skeleton" class:is-loaded={!loading && loaded}></div>
+			<div class="skeleton" class:is-loaded={!loading && loaded}></div>
 		{:else}
-			<div class="panorama-loading" class:is-loaded={!loading && loaded}>
-				<div class="panorama-spinner"></div>
+			<div class="loading" class:is-loaded={!loading && loaded}>
+				<div class="spinner"></div>
 			</div>
 		{/if}
 
@@ -1016,14 +1013,14 @@
 			{@const pos = hotspot_positions[i]}
 			{#if pos?.visible}
 				<button
-					class="panorama-hotspot"
+					class="hotspot"
 					style:left="{pos.x}px"
 					style:top="{pos.y}px"
 					type="button"
 					title={hotspot.label}
 					aria-label={hotspot.label ?? `Hotspot ${i + 1}`}
 					onclick={() => onhotspotclick?.({ hotspot })}>
-					<span class="panorama-hotspot-marker">
+					<span class="marker">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							viewBox="0 0 24 24"
@@ -1039,7 +1036,7 @@
 						</svg>
 					</span>
 					{#if hotspot.label}
-						<span class="panorama-hotspot-label">{hotspot.label}</span>
+						<span class="label">{hotspot.label}</span>
 					{/if}
 				</button>
 			{/if}
@@ -1047,7 +1044,7 @@
 
 		<!-- Controls -->
 		{#if show_controls && !embedded && loaded}
-			<div class="panorama-controls">
+			<div class="controls">
 				<Button translucent icon size="0" tooltip="Zoom in" onclick={zoomIn}>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -1119,7 +1116,7 @@
 </div>
 
 <style>
-	.panorama-container {
+	.panorama {
 		position: relative;
 		width: 100%;
 		aspect-ratio: 16 / 9;
@@ -1132,25 +1129,25 @@
 		background: light-dark(var(--color-surface, #f3f4f6), var(--color-surface, #1f2937));
 		cursor: grab;
 		outline: none;
+
+		&:focus-visible {
+			outline: 2px solid var(--color-action, #3b82f6);
+			outline-offset: 2px;
+		}
+
+		&.dragging {
+			cursor: grabbing;
+		}
+
+		&.fullscreen {
+			border-radius: 0;
+			aspect-ratio: auto;
+			width: 100%;
+			height: 100%;
+		}
 	}
 
-	.panorama-container:focus-visible {
-		outline: 2px solid var(--color-action, #3b82f6);
-		outline-offset: 2px;
-	}
-
-	.panorama-container.panorama-dragging {
-		cursor: grabbing;
-	}
-
-	.panorama-container.panorama-fullscreen {
-		border-radius: 0;
-		aspect-ratio: auto;
-		width: 100%;
-		height: 100%;
-	}
-
-	.panorama-canvas {
+	canvas {
 		display: block;
 		width: 100%;
 		height: 100%;
@@ -1159,7 +1156,7 @@
 
 	/* ── Skeleton ─────────────────────────────────────────────── */
 
-	.panorama-skeleton {
+	.skeleton {
 		position: absolute;
 		inset: 0;
 		overflow: hidden;
@@ -1213,7 +1210,7 @@
 
 	/* ── Loading ──────────────────────────────────────────────── */
 
-	.panorama-loading {
+	.loading {
 		position: absolute;
 		inset: 0;
 		display: flex;
@@ -1227,27 +1224,27 @@
 		transition:
 			opacity 220ms ease,
 			visibility 0s linear 0s;
+
+		&.is-loaded {
+			opacity: 0;
+			visibility: hidden;
+			pointer-events: none;
+			transition:
+				opacity 220ms ease,
+				visibility 0s linear 220ms;
+		}
 	}
 
-	.panorama-loading.is-loaded {
-		opacity: 0;
-		visibility: hidden;
-		pointer-events: none;
-		transition:
-			opacity 220ms ease,
-			visibility 0s linear 220ms;
-	}
-
-	.panorama-spinner {
+	.spinner {
 		width: 32px;
 		height: 32px;
 		border: 3px solid var(--color-border, #d1d5db);
 		border-top-color: var(--color-action, #3b82f6);
 		border-radius: 50%;
-		animation: panorama-spin 0.8s linear infinite;
+		animation: spin 0.8s linear infinite;
 	}
 
-	@keyframes panorama-spin {
+	@keyframes spin {
 		to {
 			transform: rotate(360deg);
 		}
@@ -1255,7 +1252,7 @@
 
 	/* ── Fallback ─────────────────────────────────────────────── */
 
-	.panorama-fallback {
+	.fallback {
 		position: absolute;
 		inset: 0;
 		display: flex;
@@ -1266,15 +1263,15 @@
 		background-color: var(--color-bg-muted, rgba(128, 128, 128, 0.1));
 		color: var(--color-text-muted, rgba(128, 128, 128, 0.6));
 		font-size: 14px;
+
+		svg {
+			width: 3rem;
+			height: 3rem;
+			opacity: 0.5;
+		}
 	}
 
-	.panorama-fallback-icon {
-		width: 3rem;
-		height: 3rem;
-		opacity: 0.5;
-	}
-
-	.panorama-fallback-img {
+	img {
 		display: block;
 		width: 100%;
 		height: 100%;
@@ -1283,7 +1280,7 @@
 
 	/* ── Controls ─────────────────────────────────────────────── */
 
-	.panorama-controls {
+	.controls {
 		position: absolute;
 		bottom: 1rem;
 		right: 1rem;
@@ -1303,7 +1300,7 @@
 
 	/* ── Hotspots ─────────────────────────────────────────────── */
 
-	.panorama-hotspot {
+	.hotspot {
 		position: absolute;
 		transform: translate(-50%, -50%);
 		cursor: pointer;
@@ -1315,51 +1312,51 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 4px;
-	}
 
-	.panorama-hotspot:focus-visible {
-		outline: 2px solid var(--color-action, #3b82f6);
-		outline-offset: 4px;
-		border-radius: var(--radius-full, 9999px);
-	}
-
-	.panorama-hotspot-marker {
-		width: 32px;
-		height: 32px;
-		border-radius: var(--radius-full, 9999px);
-		background: var(--color-action, #3b82f6);
-		color: var(--color-action-text, #fff);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		animation: panorama-hotspot-pulse 2s infinite;
-		transition: transform 0.15s ease;
-	}
-
-	.panorama-hotspot:hover .panorama-hotspot-marker {
-		transform: scale(1.15);
-	}
-
-	.panorama-hotspot-label {
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--color-text, inherit);
-		background: light-dark(
-			color-mix(in oklch, var(--color-bg, #fff) 90%, transparent),
-			color-mix(in oklch, var(--color-bg, #1f2937) 80%, transparent)
-		);
-		backdrop-filter: blur(4px);
-		padding: 2px 8px;
-		border-radius: var(--radius-sm, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+		&:focus-visible {
+			outline: 2px solid var(--color-action, #3b82f6);
+			outline-offset: 4px;
+			border-radius: var(--radius-full, 9999px);
 		}
-		white-space: nowrap;
-		pointer-events: none;
+
+		.marker {
+			width: 32px;
+			height: 32px;
+			border-radius: var(--radius-full, 9999px);
+			background: var(--color-action, #3b82f6);
+			color: var(--color-action-text, #fff);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			animation: pulse 2s infinite;
+			transition: transform 0.15s ease;
+		}
+
+		&:hover .marker {
+			transform: scale(1.15);
+		}
+
+		.label {
+			font-size: 12px;
+			font-weight: 500;
+			color: var(--color-text, inherit);
+			background: light-dark(
+				color-mix(in oklch, var(--color-bg, #fff) 90%, transparent),
+				color-mix(in oklch, var(--color-bg, #1f2937) 80%, transparent)
+			);
+			backdrop-filter: blur(4px);
+			padding: 2px 8px;
+			border-radius: var(--radius-sm, 0.25rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-sm, 0.25rem) * var(--squircle-ratio, 2));
+			}
+			white-space: nowrap;
+			pointer-events: none;
+		}
 	}
 
-	@keyframes panorama-hotspot-pulse {
+	@keyframes pulse {
 		0%,
 		100% {
 			box-shadow: 0 0 0 0
@@ -1374,17 +1371,17 @@
 	/* ── Reduced motion ───────────────────────────────────────── */
 
 	@media (prefers-reduced-motion: reduce) {
-		.panorama-skeleton::after {
+		.skeleton::after {
 			animation: none;
 		}
 
-		.panorama-spinner {
+		.spinner {
 			animation: none;
 			border-top-color: var(--color-border, #d1d5db);
 			opacity: 0.5;
 		}
 
-		.panorama-hotspot-marker {
+		.hotspot .marker {
 			animation: none;
 		}
 	}

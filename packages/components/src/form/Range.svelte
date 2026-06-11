@@ -304,7 +304,7 @@
 	class:dragging={is_dragging}
 	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
 	{#if label}
-		<label class="range-label" for={id}>{label}</label>
+		<label for={id}>{label}</label>
 	{/if}
 
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -376,7 +376,7 @@
 			{step}
 			{disabled}
 			value={lower_value}
-			class="thumb-input lower"
+			class="lower"
 			class:dragging={lower_dragging}
 			style:--thumb-overshoot="{active_thumb === 'lower' ? overshoot_px : 0}px"
 			aria-valuenow={lower_value}
@@ -398,7 +398,7 @@
 				{step}
 				{disabled}
 				value={upper_value}
-				class="thumb-input upper"
+				class="upper"
 				class:dragging={upper_dragging}
 				style:--thumb-overshoot="{active_thumb === 'upper' ? overshoot_px : 0}px"
 				aria-valuenow={upper_value}
@@ -462,50 +462,50 @@
 		gap: 0.5em;
 		width: 100%;
 		font-size: var(--control-font-1, 1rem);
+
+		&.dense {
+			gap: 0.25em;
+		}
+		&.comfortable {
+			gap: 0.75em;
+		}
+
+		/* Sizes */
+		&.size-0 {
+			--handle-width: 6px;
+			--handle-height: 20px;
+			--active-height: 4px;
+			--inactive-height: 4px;
+			--gap: 6px;
+			font-size: var(--control-font-0, 0.875rem);
+		}
+		&.size-1 {
+			--handle-width: 8px;
+			--handle-height: 24px;
+			--active-height: 6px;
+			--inactive-height: 4px;
+			--gap: 7px;
+			font-size: var(--control-font-1, 1rem);
+		}
+		&.size-2 {
+			--handle-width: 10px;
+			--handle-height: 28px;
+			--active-height: 7px;
+			--inactive-height: 4px;
+			--gap: 9px;
+			font-size: var(--control-font-2, 1.125rem);
+		}
+		&.size-3 {
+			--handle-width: 12px;
+			--handle-height: 32px;
+			--active-height: 8px;
+			--inactive-height: 5px;
+			--gap: 10px;
+			font-size: var(--control-font-3, 1.25rem);
+		}
 	}
 
-	.range-container.dense {
-		gap: 0.25em;
-	}
-	.range-container.comfortable {
-		gap: 0.75em;
-	}
-
-	/* Sizes */
-	.range-container.size-0 {
-		--handle-width: 6px;
-		--handle-height: 20px;
-		--active-height: 4px;
-		--inactive-height: 4px;
-		--gap: 6px;
-		font-size: var(--control-font-0, 0.875rem);
-	}
-	.range-container.size-1 {
-		--handle-width: 8px;
-		--handle-height: 24px;
-		--active-height: 6px;
-		--inactive-height: 4px;
-		--gap: 7px;
-		font-size: var(--control-font-1, 1rem);
-	}
-	.range-container.size-2 {
-		--handle-width: 10px;
-		--handle-height: 28px;
-		--active-height: 7px;
-		--inactive-height: 4px;
-		--gap: 9px;
-		font-size: var(--control-font-2, 1.125rem);
-	}
-	.range-container.size-3 {
-		--handle-width: 12px;
-		--handle-height: 32px;
-		--active-height: 8px;
-		--inactive-height: 5px;
-		--gap: 10px;
-		font-size: var(--control-font-3, 1.25rem);
-	}
-
-	.range-label {
+	label {
 		color: var(--color-text, inherit);
 		font-weight: 500;
 		line-height: 1.4;
@@ -568,7 +568,7 @@
 	}
 
 	/* Native range inputs */
-	.thumb-input {
+	input {
 		position: absolute;
 		width: 100%;
 		height: var(--handle-height);
@@ -586,23 +586,23 @@
 	}
 
 	/* Disable overshoot transition during drag for instant tracking */
-	.thumb-input.dragging {
+	input.dragging {
 		transition: none;
 	}
 
-	.thumb-input::-webkit-slider-runnable-track {
+	input::-webkit-slider-runnable-track {
 		height: var(--active-height);
 		background: transparent;
 		border: none;
 	}
-	.thumb-input::-moz-range-track {
+	input::-moz-range-track {
 		height: var(--active-height);
 		background: transparent;
 		border: none;
 	}
 
 	/* M3-style vertical bar handle */
-	.thumb-input::-webkit-slider-thumb {
+	input::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
 		width: var(--handle-width);
@@ -618,7 +618,7 @@
 			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
 			box-shadow 150ms ease;
 	}
-	.thumb-input::-moz-range-thumb {
+	input::-moz-range-thumb {
 		width: var(--handle-width);
 		height: var(--handle-height);
 		border-radius: calc(var(--handle-width) / 2);
@@ -633,53 +633,53 @@
 	}
 
 	/* Handle hover: widen + grow taller + halo */
-	.thumb-input:not(:disabled)::-webkit-slider-thumb:hover {
+	input:not(:disabled)::-webkit-slider-thumb:hover {
 		transform: scale(1.5, 1.3);
 		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.12);
 	}
-	.thumb-input:not(:disabled)::-moz-range-thumb:hover {
+	input:not(:disabled)::-moz-range-thumb:hover {
 		transform: scale(1.5, 1.3);
 		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.12);
 	}
 
 	/* Handle active: widen + grow taller + larger halo + push down */
-	.thumb-input:not(:disabled):active::-webkit-slider-thumb {
+	input:not(:disabled):active::-webkit-slider-thumb {
 		transform: scale(1.5, 1.15) translateY(2px);
 		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
 	}
-	.thumb-input:not(:disabled):active::-moz-range-thumb {
+	input:not(:disabled):active::-moz-range-thumb {
 		transform: scale(1.5, 1.15) translateY(2px);
 		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
 	}
 
 	/* During custom drag: show active scale, no pseudo transition */
-	.thumb-input.dragging::-webkit-slider-thumb {
+	input.dragging::-webkit-slider-thumb {
 		transform: scale(1.5, 1.15);
 		transition: box-shadow 150ms ease;
 	}
-	.thumb-input.dragging::-moz-range-thumb {
+	input.dragging::-moz-range-thumb {
 		transform: scale(1.5, 1.15);
 		transition: box-shadow 150ms ease;
 	}
 
 	/* Focus ring */
-	.thumb-input:focus-visible::-webkit-slider-thumb {
+	input:focus-visible::-webkit-slider-thumb {
 		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
-	.thumb-input:focus-visible::-moz-range-thumb {
+	input:focus-visible::-moz-range-thumb {
 		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
 	}
 
-	.thumb-input:disabled {
+	input:disabled {
 		cursor: not-allowed;
 	}
-	.thumb-input:disabled::-webkit-slider-thumb {
+	input:disabled::-webkit-slider-thumb {
 		background: var(--color-action-disabled, hsl(0 0% 70%));
 		cursor: not-allowed;
 	}
-	.thumb-input:disabled::-moz-range-thumb {
+	input:disabled::-moz-range-thumb {
 		background: var(--color-action-disabled, hsl(0 0% 70%));
 		cursor: not-allowed;
 	}
@@ -782,37 +782,40 @@
 		height: var(--range-height, 200px);
 		align-items: center;
 		overflow: visible;
-	}
 
-	.range-container.vertical .range-wrapper {
-		/* Rotate the horizontal slider to render vertically.
-		   The wrapper's CSS "width" becomes the visual height. */
-		width: var(--range-height, 200px);
-		transform-origin: 0 0;
-		transform: rotate(-90deg) translateX(-100%);
-	}
+		.range-wrapper {
+			/* Rotate the horizontal slider to render vertically.
+			   The wrapper's CSS "width" becomes the visual height. */
+			width: var(--range-height, 200px);
+			transform-origin: 0 0;
+			transform: rotate(-90deg) translateX(-100%);
+		}
 
-	/* Vertical tooltip: reposition to the right of the handle, counter-rotate text */
-	.range-container.vertical .value-tooltip {
-		/* In rotated space, "bottom: 100%" places the tooltip to the visual-left.
-		   Switch to "top: 100%" so it appears to the visual-right instead. */
-		bottom: auto;
-		top: calc(100% + 8px);
-		transform: translateX(-50%) translateY(-4px) rotate(90deg) translateX(18px);
-	}
-	.range-container.vertical .value-tooltip.visible {
-		transform: translateX(-50%) translateY(0) rotate(90deg) translateX(10px);
-	}
-	/* Arrow points left instead of down */
-	.range-container.vertical .value-tooltip::after {
-		top: 50%;
-		left: auto;
-		right: 100%;
-		transform: translateY(-50%);
-		border-top-color: transparent;
-		border-right-color: var(--color-action-active, hsl(220 70% 50%));
-	}
-	.range-container.vertical .tick-label {
-		transform: translateX(-50%) rotate(90deg);
+		/* Vertical tooltip: reposition to the right of the handle, counter-rotate text */
+		.value-tooltip {
+			/* In rotated space, "bottom: 100%" places the tooltip to the visual-left.
+			   Switch to "top: 100%" so it appears to the visual-right instead. */
+			bottom: auto;
+			top: calc(100% + 8px);
+			transform: translateX(-50%) translateY(-4px) rotate(90deg) translateX(18px);
+
+			&.visible {
+				transform: translateX(-50%) translateY(0) rotate(90deg) translateX(10px);
+			}
+
+			/* Arrow points left instead of down */
+			&::after {
+				top: 50%;
+				left: auto;
+				right: 100%;
+				transform: translateY(-50%);
+				border-top-color: transparent;
+				border-right-color: var(--color-action-active, hsl(220 70% 50%));
+			}
+		}
+
+		.tick-label {
+			transform: translateX(-50%) rotate(90deg);
+		}
 	}
 </style>

@@ -351,7 +351,7 @@
 		{id}
 		aria-hidden="true">
 		{#if show_header}
-			<div class="skeleton-header">
+			<div class="header">
 				<div class="skeleton-filename"></div>
 				{#if show_copy}
 					<div class="skeleton-copy"></div>
@@ -371,16 +371,15 @@
 {:else}
 	<div class={['code', class_name].filter(Boolean).join(' ')} class:wrap {id}>
 		{#if show_header}
-			<div class="code-header">
+			<div class="header">
 				{#if filename}
-					<span class="code-filename">{filename}</span>
+					<span class="filename">{filename}</span>
 				{:else}
 					<span></span>
 				{/if}
 				{#if show_copy}
 					<button
 						type="button"
-						class="code-copy"
 						onclick={handleCopy}
 						aria-label={copy_state === 'copied' ? 'Copied' : 'Copy code'}>
 						{#if copy_state === 'copied'}
@@ -423,20 +422,20 @@
 			</div>
 		{/if}
 
-		<div class="code-body" style:max-height={max_height} {@attach scrollbar()}>
+		<div class="body" style:max-height={max_height} {@attach scrollbar()}>
 			<pre><code>{#each tokenized_lines as tokens, i}{@const line_num =
 							start_line + i}{@const is_highlighted =
 							highlight_set.has(line_num)}{@const raw_line = lines[i]}<span
-							class="code-line"
+							class="line"
 							class:highlighted={is_highlighted}
 							class:diff-add={diff && getDiffClass(raw_line) === 'diff-add'}
 							class:diff-remove={diff && getDiffClass(raw_line) === 'diff-remove'}
 							class:diff-section={diff &&
 								getDiffClass(raw_line) === 'diff-section'}>{#if show_line_numbers}<span
-									class="line-number"
+									class="number"
 									class:highlighted={is_highlighted}
 									aria-hidden="true">{line_num}</span>{/if}<span
-								class="line-content">{#each tokens as token}<span
+								class="content">{#each tokens as token}<span
 										class="token-{token.type}">{token.content}</span>{/each}</span>
 </span>{/each}</code></pre>
 		</div>
@@ -460,11 +459,24 @@
 			'DejaVu Sans Mono', monospace;
 		font-size: 0.875rem;
 		line-height: 1.6;
+
+		&.wrap .content {
+			white-space: pre-wrap;
+			word-break: break-all;
+		}
+
+		&.skeleton {
+			pointer-events: none;
+			/* The %-width placeholder lines have no intrinsic width, so in a
+			   flex/grid parent the skeleton would collapse to the filename bar —
+			   fill the container instead (the real block's natural max). */
+			width: 100%;
+		}
 	}
 
-	/* ========== Header ========== */
+	/* ========== Header (shared by the real block and the skeleton) ========== */
 
-	.code-header {
+	.header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -472,9 +484,47 @@
 		border-bottom: 1px solid light-dark(#e2e8f0, #334155);
 		background: light-dark(#f1f5f9, #1a2332);
 		min-height: 2rem;
+
+		/* The copy button — the component's only <button> */
+		button {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 1.75rem;
+			height: 1.75rem;
+			padding: 0;
+			border: none;
+			border-radius: var(--radius-lg, 0.5rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
+			}
+			background: transparent;
+			color: light-dark(#64748b, #94a3b8);
+			cursor: pointer;
+			flex-shrink: 0;
+			transition:
+				color 150ms ease,
+				background 150ms ease;
+
+			&:hover {
+				background: light-dark(rgb(0 0 0 / 0.06), rgb(255 255 255 / 0.08));
+				color: light-dark(#334155, #e2e8f0);
+				transition: none;
+			}
+
+			&:active {
+				background: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.12));
+			}
+
+			&:focus-visible {
+				outline: 2px solid var(--color-action, #3b82f6);
+				outline-offset: -2px;
+			}
+		}
 	}
 
-	.code-filename {
+	.filename {
 		font-size: 0.8125rem;
 		color: light-dark(#475569, #94a3b8);
 		font-weight: 500;
@@ -484,72 +534,65 @@
 		min-width: 0;
 	}
 
-	.code-copy {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		padding: 0;
-		border: none;
-		border-radius: var(--radius-lg, 0.5rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
-		}
-		background: transparent;
-		color: light-dark(#64748b, #94a3b8);
-		cursor: pointer;
-		flex-shrink: 0;
-		transition:
-			color 150ms ease,
-			background 150ms ease;
-
-		&:hover {
-			background: light-dark(rgb(0 0 0 / 0.06), rgb(255 255 255 / 0.08));
-			color: light-dark(#334155, #e2e8f0);
-			transition: none;
-		}
-
-		&:active {
-			background: light-dark(rgb(0 0 0 / 0.1), rgb(255 255 255 / 0.12));
-		}
-
-		&:focus-visible {
-			outline: 2px solid var(--color-action, #3b82f6);
-			outline-offset: -2px;
-		}
-	}
-
 	/* ========== Code Body ========== */
 
-	.code-body {
+	.body {
 		overflow: auto;
-	}
 
-	.code-body pre {
-		margin: 0;
-		padding: 0;
-	}
+		pre {
+			margin: 0;
+			padding: 0;
+		}
 
-	.code-body code {
-		display: block;
-		padding: 0.75rem 0;
+		code {
+			display: block;
+			padding: 0.75rem 0;
+		}
 	}
 
 	/* ========== Lines ========== */
 
-	.code-line {
+	.line {
 		display: flex;
 		min-height: 1.6em;
+
+		/* Lines without line numbers need left padding */
+		&:not(:has(.number)) .content {
+			padding-left: 1rem;
+		}
+
+		&.highlighted {
+			background: light-dark(
+				rgb(from var(--color-action, #3b82f6) r g b / 0.08),
+				rgb(from var(--color-action, #3b82f6) r g b / 0.12)
+			);
+		}
+
+		&.diff-add {
+			background: light-dark(
+				rgb(from var(--color-success, #22c55e) r g b / 0.1),
+				rgb(from var(--color-success, #22c55e) r g b / 0.12)
+			);
+		}
+
+		&.diff-remove {
+			background: light-dark(
+				rgb(from var(--color-error, #ef4444) r g b / 0.1),
+				rgb(from var(--color-error, #ef4444) r g b / 0.12)
+			);
+		}
+
+		&.diff-section {
+			background: light-dark(
+				rgb(from var(--color-action, #3b82f6) r g b / 0.06),
+				rgb(from var(--color-action, #3b82f6) r g b / 0.08)
+			);
+			color: light-dark(#6b7280, #9ca3af);
+			font-style: italic;
+		}
 	}
 
-	.code.wrap .line-content {
-		white-space: pre-wrap;
-		word-break: break-all;
-	}
-
-	.line-number {
+	.number {
 		display: inline-block;
 		width: 3.5rem;
 		padding-right: 1rem;
@@ -558,56 +601,17 @@
 		user-select: none;
 		flex-shrink: 0;
 		box-sizing: border-box;
+
+		&.highlighted {
+			color: var(--color-action, #3b82f6);
+		}
 	}
 
-	.line-number.highlighted {
-		color: var(--color-action, #3b82f6);
-	}
-
-	.line-content {
+	.content {
 		flex: 1;
 		min-width: 0;
 		padding-right: 1rem;
 		white-space: pre;
-	}
-
-	/* Lines without line numbers need left padding */
-	.code-line:not(:has(.line-number)) .line-content {
-		padding-left: 1rem;
-	}
-
-	/* ========== Highlight ========== */
-
-	.code-line.highlighted {
-		background: light-dark(
-			rgb(from var(--color-action, #3b82f6) r g b / 0.08),
-			rgb(from var(--color-action, #3b82f6) r g b / 0.12)
-		);
-	}
-
-	/* ========== Diff ========== */
-
-	.code-line.diff-add {
-		background: light-dark(
-			rgb(from var(--color-success, #22c55e) r g b / 0.1),
-			rgb(from var(--color-success, #22c55e) r g b / 0.12)
-		);
-	}
-
-	.code-line.diff-remove {
-		background: light-dark(
-			rgb(from var(--color-error, #ef4444) r g b / 0.1),
-			rgb(from var(--color-error, #ef4444) r g b / 0.12)
-		);
-	}
-
-	.code-line.diff-section {
-		background: light-dark(
-			rgb(from var(--color-action, #3b82f6) r g b / 0.06),
-			rgb(from var(--color-action, #3b82f6) r g b / 0.08)
-		);
-		color: light-dark(#6b7280, #9ca3af);
-		font-style: italic;
 	}
 
 	/* ========== Token Colors ========== */
@@ -693,32 +697,6 @@
 
 	/* ========== Skeleton ========== */
 
-	.code.skeleton {
-		pointer-events: none;
-		/* The %-width placeholder lines have no intrinsic width, so in a
-		   flex/grid parent the skeleton would collapse to the filename bar —
-		   fill the container instead (the real block's natural max). */
-		width: 100%;
-		border-radius: var(--radius-lg, 0.5rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
-		}
-		border: 1px solid light-dark(#e2e8f0, #334155);
-		background: light-dark(#f8fafc, #1e293b);
-		overflow: hidden;
-	}
-
-	.skeleton-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0.5rem 0.75rem;
-		border-bottom: 1px solid light-dark(#e2e8f0, #334155);
-		background: light-dark(#f1f5f9, #1a2332);
-		min-height: 2rem;
-	}
-
 	.skeleton-filename,
 	.skeleton-copy,
 	.skeleton-line {
@@ -744,7 +722,7 @@
 		}
 	}
 
-	/* Filename text-line at the real .code-filename size (0.8125rem), padded
+	/* Filename text-line at the real .filename size (0.8125rem), padded
 	   out to its 1lh line box so the bar occupies the real text's height. */
 	.skeleton-filename {
 		font-size: 0.8125rem;

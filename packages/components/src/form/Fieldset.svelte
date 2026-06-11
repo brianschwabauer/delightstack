@@ -90,7 +90,6 @@
 	{#if label}
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<legend
-			class="legend"
 			class:collapsible
 			role={collapsible ? 'button' : undefined}
 			tabindex={collapsible ? 0 : undefined}
@@ -189,77 +188,82 @@
 			border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
 		}
 		position: relative;
-	}
 
-	.fieldset.dense {
-		padding: 0.25em 0.5em 0.5em 0.5em;
-		gap: 0.5em;
-	}
-	.fieldset.comfortable {
-		padding: 1em 1.5em 1.5em 1.5em;
-		gap: 1em;
-	}
+		&.dense {
+			padding: 0.25em 0.5em 0.5em 0.5em;
+			gap: 0.5em;
+		}
+		&.comfortable {
+			padding: 1em 1.5em 1.5em 1.5em;
+			gap: 1em;
+		}
 
-	/* Bordered style */
-	.fieldset.bordered {
-		border: 1px solid var(--color-border, hsl(0 0% 80%));
-	}
+		/* Bordered style */
+		&.bordered {
+			border: 1px solid var(--color-border, hsl(0 0% 80%));
+		}
 
-	/* Error state */
-	.fieldset.has-error {
-		border-color: var(--color-error, hsl(0 70% 55%));
-	}
-	.fieldset.has-error .legend-text {
-		color: var(--color-error, hsl(0 70% 55%));
-	}
+		/* Error state */
+		&.has-error {
+			border-color: var(--color-error, hsl(0 70% 55%));
 
-	/* Disabled */
-	.fieldset.disabled {
-		opacity: 0.6;
-	}
+			.legend-text {
+				color: var(--color-error, hsl(0 70% 55%));
+			}
+		}
 
-	/* Skeleton — the legend keeps its real layout but its text turns
-	   transparent, and a text-height pill is painted over the label's own box.
-	   Anchoring to the real legend text means the bar is always exactly where
-	   (and as wide as) the label, at every density — no offset guesswork. The
-	   child fields render their own skeleton states, so the real form shape
-	   shows through with no layout shift when it resolves. */
-	.fieldset.skeleton {
-		pointer-events: none;
-	}
-	.fieldset.skeleton .legend {
-		color: transparent;
-	}
-	.fieldset.skeleton .description {
-		visibility: hidden;
-	}
-	/* The pill is a pseudo-element (it can't host its own ::after), so the
-	   sweep is emulated with background-position using the same geometry and
-	   timing as the global delight-skeleton-shimmer. */
-	.fieldset.skeleton .legend-text {
-		position: relative;
+		/* Disabled */
+		&.disabled {
+			opacity: 0.6;
+		}
 
-		&::before {
-			content: '';
-			position: absolute;
-			top: 50%;
-			left: 0;
-			right: 0;
-			height: 0.7em;
-			transform: translateY(-50%);
-			border-radius: var(--radius-full, 1e5px);
-			background-color: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
-			background-image: linear-gradient(
-				105deg,
-				transparent 37.5%,
-				var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
-				transparent 62.5%
-			);
-			background-size: 200% 100%;
-			background-repeat: no-repeat;
-			background-position: 150% 0;
-			animation: fieldset-skeleton-sweep var(--skeleton-duration, 2.4s) ease-in-out
-				infinite;
+		/* Skeleton — the legend keeps its real layout but its text turns
+		   transparent, and a text-height pill is painted over the label's own box.
+		   Anchoring to the real legend text means the bar is always exactly where
+		   (and as wide as) the label, at every density — no offset guesswork. The
+		   child fields render their own skeleton states, so the real form shape
+		   shows through with no layout shift when it resolves. */
+		&.skeleton {
+			pointer-events: none;
+
+			legend {
+				color: transparent;
+			}
+			.description {
+				visibility: hidden;
+			}
+			/* The pill is a pseudo-element (it can't host its own ::after), so the
+			   sweep is emulated with background-position using the same geometry and
+			   timing as the global delight-skeleton-shimmer. */
+			.legend-text {
+				position: relative;
+
+				&::before {
+					content: '';
+					position: absolute;
+					top: 50%;
+					left: 0;
+					right: 0;
+					height: 0.7em;
+					transform: translateY(-50%);
+					border-radius: var(--radius-full, 1e5px);
+					background-color: var(
+						--skeleton-bg,
+						rgb(from var(--color-text, #888) r g b / 0.1)
+					);
+					background-image: linear-gradient(
+						105deg,
+						transparent 37.5%,
+						var(--skeleton-sheen, rgb(from var(--color-text, #888) r g b / 0.12)) 50%,
+						transparent 62.5%
+					);
+					background-size: 200% 100%;
+					background-repeat: no-repeat;
+					background-position: 150% 0;
+					animation: fieldset-skeleton-sweep var(--skeleton-duration, 2.4s) ease-in-out
+						infinite;
+				}
+			}
 		}
 	}
 	/* background-position twin of delight-skeleton-shimmer: a 200%-wide image
@@ -284,7 +288,7 @@
 	/* Legend — native <legend> breaks the bordered outline at its position,
 	 * so a few extra pixels of horizontal padding gives the border breathing
 	 * room around the text. */
-	.legend {
+	legend {
 		display: flex;
 		align-items: center;
 		gap: 0.5em;
@@ -296,26 +300,27 @@
 		border: none;
 		background: none;
 		transition: color 200ms ease;
-	}
 
-	.legend.collapsible {
-		cursor: pointer;
-		user-select: none;
-		-webkit-tap-highlight-color: transparent;
-		border-radius: var(--radius-md, 4px);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+		&.collapsible {
+			cursor: pointer;
+			user-select: none;
+			-webkit-tap-highlight-color: transparent;
+			border-radius: var(--radius-md, 4px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-md, 4px) * var(--squircle-ratio, 2));
+			}
+
+			&:hover {
+				color: var(--color-action, hsl(220 70% 55%));
+				/* Snap the color in on hover; the base rule eases it back out on leave. */
+				transition: none;
+			}
+			&:focus-visible {
+				outline: 2px solid var(--color-border-active, currentColor);
+				outline-offset: 2px;
+			}
 		}
-	}
-	.legend.collapsible:hover {
-		color: var(--color-action, hsl(220 70% 55%));
-		/* Snap the color in on hover; the base rule eases it back out on leave. */
-		transition: none;
-	}
-	.legend.collapsible:focus-visible {
-		outline: 2px solid var(--color-border-active, currentColor);
-		outline-offset: 2px;
 	}
 
 	.legend-text {

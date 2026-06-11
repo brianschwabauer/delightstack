@@ -193,13 +193,13 @@
 		     page-size / info slots) so the swap to live controls never shifts. -->
 		{@const delay_base = (show_page_size ? 1 : 0) + (show_info ? 1 : 0)}
 		{#if show_page_size}
-			<span class="page-size-label">
+			<span class="page-size">
 				<span class="skeleton-bar" style:width="2em" style:--shimmer-delay="0ms"></span>
 				<span class="skeleton-select" style:--shimmer-delay="0ms"></span>
 			</span>
 		{/if}
 		{#if show_info}
-			<span class="pagination-info">
+			<span class="info">
 				<span
 					class="skeleton-bar"
 					style:width="9em"
@@ -210,7 +210,7 @@
 		<div class="pagination-controls">
 			{#if compact}
 				<span class="skeleton-page" style:--shimmer-delay="{delay_base * 120}ms"></span>
-				<span class="pagination-compact-info">
+				<span class="compact-info">
 					<span
 						class="skeleton-bar"
 						style:width="2.5em"
@@ -221,7 +221,7 @@
 				</span>
 			{:else if simple}
 				<span class="skeleton-nav" style:--shimmer-delay="{delay_base * 120}ms"></span>
-				<span class="pagination-simple-info">
+				<span class="simple-info">
 					<span
 						class="skeleton-bar"
 						style:width="5.5em"
@@ -246,12 +246,9 @@
 		</div>
 	{:else}
 		{#if show_page_size}
-			<label class="page-size-label">
-				<span class="page-size-text">Rows</span>
-				<select
-					class="page-size-select"
-					value={String(page_size)}
-					onchange={handlePageSizeChange}>
+			<label class="page-size">
+				<span>Rows</span>
+				<select value={String(page_size)} onchange={handlePageSizeChange}>
 					{#each page_size_options as opt}
 						<option value={String(opt)} selected={opt === page_size}>{opt}</option>
 					{/each}
@@ -260,7 +257,7 @@
 		{/if}
 
 		{#if show_info && infoText}
-			<span class="pagination-info">{infoText}</span>
+			<span class="info">{infoText}</span>
 		{/if}
 
 		<div class="pagination-controls">
@@ -268,7 +265,6 @@
 				<!-- Compact mode: < 6 / 11 > -->
 				<button
 					type="button"
-					class="pagination-button"
 					disabled={isFirstPage}
 					aria-disabled={isFirstPage}
 					aria-label="Go to previous page"
@@ -284,10 +280,9 @@
 							fill="none" />
 					</svg>
 				</button>
-				<span class="pagination-compact-info">{page} / {total_pages}</span>
+				<span class="compact-info">{page} / {total_pages}</span>
 				<button
 					type="button"
-					class="pagination-button"
 					disabled={isLastPage}
 					aria-disabled={isLastPage}
 					aria-label="Go to next page"
@@ -307,7 +302,6 @@
 				<!-- Simple mode: < Prev   Page 6 of 11   Next > -->
 				<button
 					type="button"
-					class="pagination-button pagination-prev"
 					disabled={isFirstPage}
 					aria-disabled={isFirstPage}
 					aria-label="Go to previous page"
@@ -324,10 +318,9 @@
 					</svg>
 					<span>Prev</span>
 				</button>
-				<span class="pagination-simple-info">Page {page} of {total_pages}</span>
+				<span class="simple-info">Page {page} of {total_pages}</span>
 				<button
 					type="button"
-					class="pagination-button pagination-next"
 					disabled={isLastPage}
 					aria-disabled={isLastPage}
 					aria-label="Go to next page"
@@ -348,7 +341,6 @@
 				<!-- Default mode: < Prev  1  2  ...  5  [6]  7  ...  10  11  Next > -->
 				<button
 					type="button"
-					class="pagination-button pagination-prev"
 					disabled={isFirstPage}
 					aria-disabled={isFirstPage}
 					aria-label="Go to previous page"
@@ -368,11 +360,10 @@
 
 				{#each pageRange as item}
 					{#if item === '...'}
-						<span class="pagination-ellipsis" aria-hidden="true">&hellip;</span>
+						<span class="ellipsis" aria-hidden="true">&hellip;</span>
 					{:else}
 						<button
 							type="button"
-							class="pagination-button pagination-page"
 							class:current={item === page}
 							aria-current={item === page ? 'page' : undefined}
 							aria-label="Go to page {item}"
@@ -385,7 +376,6 @@
 
 				<button
 					type="button"
-					class="pagination-button pagination-next"
 					disabled={isLastPage}
 					aria-disabled={isLastPage}
 					aria-label="Go to next page"
@@ -447,7 +437,7 @@
 		}
 	}
 
-	/* Mirrors .pagination-button's box: --pg-min-width × --pg-height for page
+	/* Mirrors the real button's box: --pg-min-width × --pg-height for page
 	   numbers (and compact icon-only prev/next); the wider prev/next variant
 	   approximates icon + label + padding. Same radius (+ squircle) as the
 	   real buttons. */
@@ -489,7 +479,7 @@
 		gap: 0.25rem;
 	}
 
-	.pagination-button {
+	button {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -565,7 +555,7 @@
 		}
 	}
 
-	.pagination-ellipsis {
+	.ellipsis {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -576,25 +566,25 @@
 		user-select: none;
 	}
 
-	.pagination-simple-info {
+	.simple-info {
 		padding: 0 0.75em;
 		white-space: nowrap;
 		color: var(--color-text-muted, #6b7280);
 	}
 
-	.pagination-compact-info {
+	.compact-info {
 		padding: 0 0.25em;
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 	}
 
-	.pagination-info {
+	.info {
 		white-space: nowrap;
 		color: var(--color-text-muted, #6b7280);
 		font-size: 0.875em;
 	}
 
-	.page-size-label {
+	.page-size {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.375rem;
@@ -603,7 +593,7 @@
 		color: var(--color-text-muted, #6b7280);
 	}
 
-	.page-size-select {
+	select {
 		appearance: auto;
 		border: 1px solid
 			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
@@ -644,7 +634,7 @@
 			animation: none;
 		}
 
-		.pagination-button {
+		button {
 			transition: none;
 		}
 	}

@@ -584,12 +584,12 @@
 							}}
 							{@attach ripple({ enabled: !command.disabled, zIndex: 1 })}>
 							{#if command.icon}
-								<span class="item-icon">
+								<span class="icon">
 									<command.icon />
 								</span>
 							{/if}
-							<div class="item-content">
-								<span class="item-title">
+							<div class="content">
+								<span class="title">
 									{#each getSegments(command) as segment}
 										{#if segment.highlighted}
 											<mark>{segment.text}</mark>
@@ -599,11 +599,11 @@
 									{/each}
 								</span>
 								{#if command.description}
-									<span class="item-description">{command.description}</span>
+									<span class="description">{command.description}</span>
 								{/if}
 							</div>
 							{#if command.shortcut && command.shortcut.length > 0}
-								<div class="item-shortcut">
+								<div class="shortcut">
 									{#each command.shortcut as key}
 										<kbd>{key}</kbd>
 									{/each}
@@ -819,83 +819,83 @@
 			padding: 0.45rem 0.7rem;
 			gap: 0.5rem;
 		}
-	}
 
-	.item-icon {
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.25rem;
-		height: 1.25rem;
-		color: var(--color-text-muted);
-
-		:global(svg) {
-			width: 100%;
-			height: 100%;
-		}
-	}
-
-	.item-content {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-	}
-
-	.item-title {
-		font-size: 0.875rem;
-		color: var(--color-text);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-
-		:global(mark) {
-			background-color: light-dark(rgba(255, 200, 0, 0.35), rgba(255, 200, 0, 0.25));
-			color: inherit;
-			border-radius: 2px;
-			padding: 0 1px;
-		}
-	}
-
-	.item-description {
-		font-size: 0.75rem;
-		color: var(--color-text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-
-		.dense & {
-			font-size: 0.7rem;
-		}
-	}
-
-	.item-shortcut {
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-
-		kbd {
-			display: inline-flex;
+		.icon {
+			flex-shrink: 0;
+			display: flex;
 			align-items: center;
 			justify-content: center;
-			min-width: 1.5em;
-			height: 1.5em;
-			padding: 0 0.35em;
-			font-family: inherit;
-			font-size: 0.7rem;
-			font-weight: 500;
+			width: 1.25rem;
+			height: 1.25rem;
 			color: var(--color-text-muted);
-			background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
-			border: 1px solid var(--color-border);
-			border-radius: var(--radius-xl);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(var(--radius-xl) * var(--squircle-ratio, 2));
+
+			:global(svg) {
+				width: 100%;
+				height: 100%;
 			}
-			line-height: 1;
+		}
+
+		.content {
+			flex: 1;
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+			gap: 0.125rem;
+		}
+
+		.title {
+			font-size: 0.875rem;
+			color: var(--color-text);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+
+			:global(mark) {
+				background-color: light-dark(rgba(255, 200, 0, 0.35), rgba(255, 200, 0, 0.25));
+				color: inherit;
+				border-radius: 2px;
+				padding: 0 1px;
+			}
+		}
+
+		.description {
+			font-size: 0.75rem;
+			color: var(--color-text-muted);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+
+			.dense & {
+				font-size: 0.7rem;
+			}
+		}
+
+		.shortcut {
+			flex-shrink: 0;
+			display: flex;
+			align-items: center;
+			gap: 0.25rem;
+
+			kbd {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				min-width: 1.5em;
+				height: 1.5em;
+				padding: 0 0.35em;
+				font-family: inherit;
+				font-size: 0.7rem;
+				font-weight: 500;
+				color: var(--color-text-muted);
+				background-color: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
+				border: 1px solid var(--color-border);
+				border-radius: var(--radius-xl);
+				@supports (corner-shape: squircle) {
+					corner-shape: squircle;
+					border-radius: calc(var(--radius-xl) * var(--squircle-ratio, 2));
+				}
+				line-height: 1;
+			}
 		}
 	}
 </style>

@@ -1060,9 +1060,6 @@
 					padding: 0.5em 1em 0.5em 1.1em;
 				}
 			}
-			.download-trigger {
-				padding: 0 0.35em 0 0.35em;
-			}
 			:global(.chevron) {
 				margin: 0 -0.2em;
 			}

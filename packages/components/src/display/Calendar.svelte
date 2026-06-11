@@ -586,12 +586,12 @@
 	aria-label="Calendar"
 	aria-busy={skeleton || undefined}
 	aria-hidden={skeleton || undefined}>
-	<div class="calendar-main">
+	<div class="main">
 		<!-- Header -->
-		<div class="calendar-header">
+		<div class="header">
 			<button
 				type="button"
-				class="calendar-nav-btn"
+				class="nav"
 				aria-label="Previous month"
 				disabled={skeleton}
 				onclick={skeleton ? undefined : () => navigateMonth(-1)}
@@ -611,7 +611,7 @@
 			</button>
 			<!-- The real label stays in the DOM (rendered transparent under the
 				 shimmer) so the skeleton keeps the live calendar's exact metrics. -->
-			<div class="calendar-title" aria-live="polite">
+			<div class="title" aria-live="polite">
 				{header_label}
 				{#if skeleton}
 					<span class="skeleton-fill skeleton-title"></span>
@@ -619,7 +619,7 @@
 			</div>
 			<button
 				type="button"
-				class="calendar-nav-btn"
+				class="nav"
 				aria-label="Next month"
 				disabled={skeleton}
 				onclick={skeleton ? undefined : () => navigateMonth(1)}
@@ -640,9 +640,9 @@
 		</div>
 
 		<!-- Weekday headers -->
-		<div class="calendar-weekdays" role="row">
+		<div class="weekdays" role="row">
 			{#each weekday_headers as header}
-				<div class="calendar-weekday" role="columnheader" aria-label={header}>
+				<div class="weekday" role="columnheader" aria-label={header}>
 					{header}
 					{#if skeleton}
 						<span class="skeleton-fill skeleton-weekday"></span>
@@ -655,7 +655,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<!-- svelte-ignore a11y_interactive_supports_focus -->
 		<div
-			class="calendar-grid"
+			class="grid"
 			role="grid"
 			tabindex={skeleton ? -1 : 0}
 			aria-label="Calendar dates"
@@ -681,7 +681,7 @@
 					.join('; ')}
 				<button
 					type="button"
-					class="calendar-day"
+					class="day"
 					class:other-month={!day.is_current_month}
 					class:today={!skeleton && day.is_today}
 					class:selected={!skeleton && day.is_selected}
@@ -711,14 +711,14 @@
 					{@attach ripple({ enabled: !skeleton && !day.is_disabled, zIndex: 1 })}>
 					<!-- Number stays in the DOM (transparent under the disc when
 						 skeleton) so cell metrics are identical across the swap. -->
-					<span class="day-number">{day.day_number}</span>
+					<span class="number">{day.day_number}</span>
 					{#if skeleton}
 						<span class="skeleton-fill skeleton-day" style:--shimmer-delay="{i * 25}ms">
 						</span>
 					{:else if has_dots}
-						<div class="day-dots">
+						<div class="dots">
 							{#each dot_items as color}
-								<span class="day-dot" style:background={color}></span>
+								<span class="dot" style:background={color}></span>
 							{/each}
 						</div>
 					{/if}
@@ -729,14 +729,10 @@
 
 	<!-- Time slots panel -->
 	{#if show_time_slots}
-		<div
-			class="calendar-time-slots"
-			role="listbox"
-			aria-label="Time slots"
-			{@attach scrollbar()}>
+		<div class="slots" role="listbox" aria-label="Time slots" {@attach scrollbar()}>
 			{#if skeleton}
 				{#each { length: 8 } as _, i}
-					<div class="time-slot" aria-hidden="true">
+					<div class="slot" aria-hidden="true">
 						<span class="skeleton-fill skeleton-slot" style:--shimmer-delay="{i * 40}ms">
 						</span>
 					</div>
@@ -745,7 +741,7 @@
 				{#each time_slots as slot}
 					<button
 						type="button"
-						class="time-slot"
+						class="slot"
 						class:selected={selected_slot === slot}
 						role="option"
 						aria-selected={selected_slot === slot}
@@ -807,45 +803,45 @@
 		}
 	}
 
-	.calendar-main {
+	.main {
 		display: flex;
 		flex-direction: column;
 	}
 
 	/* ========== Header ========== */
-	.calendar-header {
+	.header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem;
 		gap: 0.5rem;
+
+		.dense & {
+			padding: 0.375rem 0.5rem;
+		}
+
+		.comfortable & {
+			padding: 1rem 1.25rem;
+		}
 	}
 
-	.dense .calendar-header {
-		padding: 0.375rem 0.5rem;
-	}
-
-	.comfortable .calendar-header {
-		padding: 1rem 1.25rem;
-	}
-
-	.calendar-title {
+	.title {
 		flex: 1;
 		text-align: center;
 		font-weight: 600;
 		font-size: 0.9375rem;
 		white-space: nowrap;
+
+		.dense & {
+			font-size: 0.8125rem;
+		}
+
+		.comfortable & {
+			font-size: 1.0625rem;
+		}
 	}
 
-	.dense .calendar-title {
-		font-size: 0.8125rem;
-	}
-
-	.comfortable .calendar-title {
-		font-size: 1.0625rem;
-	}
-
-	.calendar-nav-btn {
+	.nav {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -886,35 +882,35 @@
 			outline: 2px solid var(--color-action, #3b82f6);
 			outline-offset: -2px;
 		}
-	}
 
-	.dense .calendar-nav-btn {
-		width: 1.5rem;
-		height: 1.5rem;
-	}
+		.dense & {
+			width: 1.5rem;
+			height: 1.5rem;
+		}
 
-	.comfortable .calendar-nav-btn {
-		width: 2.25rem;
-		height: 2.25rem;
+		.comfortable & {
+			width: 2.25rem;
+			height: 2.25rem;
+		}
 	}
 
 	/* ========== Weekday Headers ========== */
-	.calendar-weekdays {
+	.weekdays {
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
 		gap: 2px;
 		padding: 0 0.75rem;
+
+		.dense & {
+			padding: 0 0.5rem;
+		}
+
+		.comfortable & {
+			padding: 0 1.25rem;
+		}
 	}
 
-	.dense .calendar-weekdays {
-		padding: 0 0.5rem;
-	}
-
-	.comfortable .calendar-weekdays {
-		padding: 0 1.25rem;
-	}
-
-	.calendar-weekday {
+	.weekday {
 		text-align: center;
 		font-size: 0.6875rem;
 		font-weight: 500;
@@ -922,36 +918,36 @@
 		letter-spacing: 0.04em;
 		padding: 0.25rem 0;
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
-	}
 
-	.dense .calendar-weekday {
-		font-size: 0.625rem;
-		padding: 0.125rem 0;
-	}
+		.dense & {
+			font-size: 0.625rem;
+			padding: 0.125rem 0;
+		}
 
-	.comfortable .calendar-weekday {
-		font-size: 0.75rem;
-		padding: 0.375rem 0;
+		.comfortable & {
+			font-size: 0.75rem;
+			padding: 0.375rem 0;
+		}
 	}
 
 	/* ========== Day Grid ========== */
-	.calendar-grid {
+	.grid {
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
 		gap: 2px;
 		padding: 0.375rem 0.75rem 0.75rem;
-	}
 
-	.dense .calendar-grid {
-		padding: 0.25rem 0.5rem 0.5rem;
-	}
+		.dense & {
+			padding: 0.25rem 0.5rem 0.5rem;
+		}
 
-	.comfortable .calendar-grid {
-		padding: 0.5rem 1.25rem 1.25rem;
+		.comfortable & {
+			padding: 0.5rem 1.25rem 1.25rem;
+		}
 	}
 
 	/* ========== Day Cell ========== */
-	.calendar-day {
+	.day {
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -996,136 +992,139 @@
 			box-shadow: inset 0 0 0 2px var(--color-action, #3b82f6);
 			z-index: 1;
 		}
-	}
 
-	.dense .calendar-day {
-		font-size: 0.75rem;
-	}
+		.dense & {
+			font-size: 0.75rem;
+		}
 
-	.comfortable .calendar-day {
-		font-size: 0.875rem;
-	}
+		.comfortable & {
+			font-size: 0.875rem;
+		}
 
-	/* Other month */
-	.calendar-day.other-month {
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
-		opacity: 0.4;
-	}
+		/* Other month */
+		&.other-month {
+			color: light-dark(
+				var(--color-text-muted, #6b7280),
+				var(--color-text-muted, #9ca3af)
+			);
+			opacity: 0.4;
+		}
 
-	/* Today ring */
-	.calendar-day.today {
-		box-shadow: inset 0 0 0 1.5px
-			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-	}
+		/* Today ring */
+		&.today {
+			box-shadow: inset 0 0 0 1.5px
+				light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+		}
 
-	/* Selected */
-	.calendar-day.selected {
-		background: var(--color-action, #3b82f6);
-		color: var(--color-action-text, #fff);
-
-		&:hover:not(.disabled) {
+		/* Selected */
+		&.selected {
 			background: var(--color-action, #3b82f6);
-			filter: brightness(1.1);
-			transition: none;
+			color: var(--color-action-text, #fff);
+
+			&:hover:not(.disabled) {
+				background: var(--color-action, #3b82f6);
+				filter: brightness(1.1);
+				transition: none;
+			}
+
+			&.today {
+				box-shadow: none;
+			}
 		}
-	}
 
-	.calendar-day.selected.today {
-		box-shadow: none;
-	}
-
-	/* Range start/end */
-	.calendar-day.range-start {
-		border-radius: var(--radius-md, 0.25rem) 0 0 var(--radius-md, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2)) 0 0
-				calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		/* Range start/end */
+		&.range-start {
+			border-radius: var(--radius-md, 0.25rem) 0 0 var(--radius-md, 0.25rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2)) 0 0
+					calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+			}
+			background: var(--color-action, #3b82f6);
+			color: var(--color-action-text, #fff);
 		}
-		background: var(--color-action, #3b82f6);
-		color: var(--color-action-text, #fff);
-	}
 
-	.calendar-day.range-end {
-		border-radius: 0 var(--radius-md, 0.25rem) var(--radius-md, 0.25rem) 0;
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: 0 calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2))
-				calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2)) 0;
+		&.range-end {
+			border-radius: 0 var(--radius-md, 0.25rem) var(--radius-md, 0.25rem) 0;
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: 0 calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2))
+					calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2)) 0;
+			}
+			background: var(--color-action, #3b82f6);
+			color: var(--color-action-text, #fff);
 		}
-		background: var(--color-action, #3b82f6);
-		color: var(--color-action-text, #fff);
-	}
 
-	.calendar-day.range-start.range-end {
-		border-radius: var(--radius-md, 0.25rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+		&.range-start.range-end {
+			border-radius: var(--radius-md, 0.25rem);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-md, 0.25rem) * var(--squircle-ratio, 2));
+			}
 		}
-	}
 
-	/* In-range fill */
-	.calendar-day.in-range {
-		background: light-dark(
-			rgb(from var(--color-action, #3b82f6) r g b / 0.12),
-			rgb(from var(--color-action, #3b82f6) r g b / 0.2)
-		);
-		border-radius: 0;
-	}
+		/* In-range fill */
+		&.in-range {
+			background: light-dark(
+				rgb(from var(--color-action, #3b82f6) r g b / 0.12),
+				rgb(from var(--color-action, #3b82f6) r g b / 0.2)
+			);
+			border-radius: 0;
+		}
 
-	/* Range hover preview */
-	.calendar-day.range-hover {
-		background: light-dark(
-			rgb(from var(--color-action, #3b82f6) r g b / 0.08),
-			rgb(from var(--color-action, #3b82f6) r g b / 0.14)
-		);
-		border-radius: 0;
-	}
+		/* Range hover preview */
+		&.range-hover {
+			background: light-dark(
+				rgb(from var(--color-action, #3b82f6) r g b / 0.08),
+				rgb(from var(--color-action, #3b82f6) r g b / 0.14)
+			);
+			border-radius: 0;
+		}
 
-	/* Disabled */
-	.calendar-day.disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
+		/* Disabled */
+		&.disabled {
+			opacity: 0.3;
+			cursor: not-allowed;
+		}
 	}
 
 	/* ========== Day number ========== */
-	.day-number {
+	.number {
 		line-height: 1;
 	}
 
 	/* ========== Dots (markers & events) ========== */
-	.day-dots {
+	.dots {
 		display: flex;
 		gap: 2px;
 		position: absolute;
 		bottom: 3px;
 		left: 50%;
 		transform: translateX(-50%);
+
+		.dense & {
+			bottom: 1px;
+		}
+
+		.comfortable & {
+			bottom: 5px;
+		}
 	}
 
-	.dense .day-dots {
-		bottom: 1px;
-	}
-
-	.comfortable .day-dots {
-		bottom: 5px;
-	}
-
-	.day-dot {
+	.dot {
 		width: 4px;
 		height: 4px;
 		border-radius: 50%;
 		flex-shrink: 0;
-	}
 
-	.dense .day-dot {
-		width: 3px;
-		height: 3px;
+		.dense & {
+			width: 3px;
+			height: 3px;
+		}
 	}
 
 	/* ========== Time Slots ========== */
-	.calendar-time-slots {
+	.slots {
 		display: flex;
 		flex-direction: column;
 		/* Hairline divider from the day grid; both panels stay transparent so the
@@ -1137,23 +1136,23 @@
 		min-width: 6rem;
 		padding: 0.5rem;
 		gap: 3px;
+
+		.dense & {
+			min-width: 5rem;
+			max-height: 260px;
+			padding: 0.375rem;
+			gap: 2px;
+		}
+
+		.comfortable & {
+			min-width: 7rem;
+			max-height: 400px;
+			padding: 0.625rem;
+			gap: 4px;
+		}
 	}
 
-	.dense .calendar-time-slots {
-		min-width: 5rem;
-		max-height: 260px;
-		padding: 0.375rem;
-		gap: 2px;
-	}
-
-	.comfortable .calendar-time-slots {
-		min-width: 7rem;
-		max-height: 400px;
-		padding: 0.625rem;
-		gap: 4px;
-	}
-
-	.time-slot {
+	.slot {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1215,16 +1214,16 @@
 				filter: brightness(1.08);
 			}
 		}
-	}
 
-	.dense .time-slot {
-		padding: 0.375rem 0.5rem;
-		font-size: 0.75rem;
-	}
+		.dense & {
+			padding: 0.375rem 0.5rem;
+			font-size: 0.75rem;
+		}
 
-	.comfortable .time-slot {
-		padding: 0.625rem 0.875rem;
-		font-size: 0.875rem;
+		.comfortable & {
+			padding: 0.625rem 0.875rem;
+			font-size: 0.875rem;
+		}
 	}
 
 	/* ========== Skeleton ========== */
@@ -1234,20 +1233,20 @@
 	   slot it stands in for; that's what guarantees no content shift on swap. */
 	.calendar.skeleton {
 		pointer-events: none;
-	}
 
-	/* Hide the real leaf text but keep it in the box so it still drives the
-	   intrinsic width/height the live calendar will use — the shimmer overlays
-	   it absolutely. This is what eliminates the skeleton→live content shift. */
-	.calendar.skeleton .calendar-title,
-	.calendar.skeleton .calendar-weekday,
-	.calendar.skeleton .day-number {
-		color: transparent;
-	}
+		/* Hide the real leaf text but keep it in the box so it still drives the
+		   intrinsic width/height the live calendar will use — the shimmer overlays
+		   it absolutely. This is what eliminates the skeleton→live content shift. */
+		.title,
+		.weekday,
+		.number {
+			color: transparent;
+		}
 
-	.calendar.skeleton .calendar-title,
-	.calendar.skeleton .calendar-weekday {
-		position: relative;
+		.title,
+		.weekday {
+			position: relative;
+		}
 	}
 
 	/* Shimmer placeholder primitive (reused for every skeletonized leaf). */
@@ -1301,28 +1300,28 @@
 		width: 7rem;
 		max-width: 70%;
 		height: 0.9em;
-	}
 
-	.dense .skeleton-title {
-		width: 5.5rem;
-	}
+		.dense & {
+			width: 5.5rem;
+		}
 
-	.comfortable .skeleton-title {
-		width: 8rem;
+		.comfortable & {
+			width: 8rem;
+		}
 	}
 
 	/* Weekday label placeholder. */
 	.skeleton-weekday {
 		width: 60%;
 		height: 0.6875rem;
-	}
 
-	.dense .skeleton-weekday {
-		height: 0.625rem;
-	}
+		.dense & {
+			height: 0.625rem;
+		}
 
-	.comfortable .skeleton-weekday {
-		height: 0.75rem;
+		.comfortable & {
+			height: 0.75rem;
+		}
 	}
 
 	/* Day-number — a centered disc echoing the digit. */
@@ -1353,9 +1352,9 @@
 			animation: none;
 		}
 
-		.calendar-day,
-		.time-slot,
-		.calendar-nav-btn {
+		.day,
+		.slot,
+		.nav {
 			transition: none;
 		}
 	}
