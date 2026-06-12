@@ -458,6 +458,41 @@
 		}
 	});
 
+	/* Manual resize via the custom corner handle (native grip is hidden so the
+	   handle can sit on the wrapper's corner instead of the inset textarea's). */
+	let resizing = $state(false);
+	let resize_start_y = 0;
+	let resize_start_height = 0;
+
+	function handleResizeStart(event: PointerEvent) {
+		if (!textarea_element) return;
+		event.preventDefault();
+		resizing = true;
+		resize_start_y = event.clientY;
+		resize_start_height = textarea_element.offsetHeight;
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+	}
+
+	function handleResizeMove(event: PointerEvent) {
+		if (!resizing || !textarea_element) return;
+		const height = resize_start_height + event.clientY - resize_start_y;
+		textarea_element.style.height = `${height}px`;
+	}
+
+	function handleResizeEnd(event: PointerEvent) {
+		if (!resizing) return;
+		resizing = false;
+		const handle = event.currentTarget as HTMLElement;
+		if (handle.hasPointerCapture(event.pointerId)) {
+			handle.releasePointerCapture(event.pointerId);
+		}
+	}
+
+	/** Double-click snaps the textarea back to its natural (rows-based) height */
+	function handleResizeReset() {
+		if (textarea_element) textarea_element.style.height = '';
+	}
+
 	/* ------------------------------------------------------------------ */
 	/*  Autocomplete                                                       */
 	/* ------------------------------------------------------------------ */
@@ -1059,6 +1094,22 @@
 				oninput={handleInput}
 				onchange={handleChange}
 				value={(value ?? '') as string} />
+			{#if !auto_resize}
+				<!-- Custom resize handle: sits on the wrapper's corner (the native
+				     grip would be inset by the wrapper padding) and draws arcs that
+				     follow the wrapper's own corner curve. -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<span
+					class="resize-handle"
+					class:dragging={resizing}
+					aria-hidden="true"
+					onpointerdown={handleResizeStart}
+					onpointermove={handleResizeMove}
+					onpointerup={handleResizeEnd}
+					onpointercancel={handleResizeEnd}
+					ondblclick={handleResizeReset}>
+				</span>
+			{/if}
 		{:else if is_file}
 			<!-- File: hidden native input + visible preview list -->
 			<input
@@ -1743,13 +1794,99 @@
 		transition: opacity 150ms ease 100ms;
 	}
 
-	/* Textarea specifics */
+	/* Textarea specifics. Resizing is handled by the custom .resize-handle —
+	   the native grip sits at the textarea's corner, which the wrapper padding
+	   pushes ~4px in from the wrapper's actual corner. */
 	textarea.field {
 		height: auto;
 		min-height: var(--_height);
 		line-height: 1.5;
-		resize: vertical;
+		resize: none;
 		padding: 0.9em 0;
+	}
+
+	/*
+	 * The handle's grip is two concentric arcs that parallel the wrapper's
+	 * bottom-right corner: each pseudo is a box whose bottom-right radius is
+	 * the wrapper radius minus its inset, with only the right/bottom borders
+	 * painted — so the stroke follows the exact curve of the outline (squircle
+	 * included) with short straight tails, like a curved take on the classic
+	 * diagonal grip.
+	 */
+	.resize-handle {
+		--_grip: var(--_border-hover);
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		width: 20px;
+		height: 20px;
+		cursor: ns-resize;
+		touch-action: none;
+
+		&::before,
+		&::after {
+			content: '';
+			position: absolute;
+			right: var(--_inset);
+			bottom: var(--_inset);
+			border-right: 2.5px solid var(--_grip);
+			border-bottom: 2.5px solid var(--_grip);
+			border-bottom-right-radius: max(calc(var(--_radius) - var(--_inset)), 2px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-bottom-right-radius: max(calc(var(--_cr) - var(--_inset)), 2px);
+			}
+			/* OUT transitions — colors ease away, shapes ease home */
+			transition:
+				border-color 250ms ease,
+				opacity 250ms ease,
+				translate 250ms var(--_ease);
+		}
+
+		/* Outer arc — always visible */
+		&::before {
+			--_inset: 3.5px;
+			width: 13px;
+			height: 13px;
+		}
+
+		/* Inner arc — tucked into the corner at rest, fans in on hover */
+		&::after {
+			--_inset: 7.5px;
+			width: 7px;
+			height: 7px;
+			opacity: 0;
+			translate: 3px 3px;
+		}
+
+		&:hover,
+		&.dragging {
+			--_grip: var(--_text);
+
+			&::before {
+				/* color snaps in; nothing else moves on the outer arc */
+				transition: none;
+			}
+			&::after {
+				opacity: 1;
+				translate: 0 0;
+				/* color snaps in; the fan-in reveal eases in */
+				transition:
+					opacity 150ms ease,
+					translate 150ms var(--_ease);
+			}
+		}
+
+		&.dragging {
+			--_grip: var(--_border-focus);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.resize-handle::before,
+		.resize-handle::after {
+			transition: none;
+		}
 	}
 
 	/* Number: hide native spinner */
