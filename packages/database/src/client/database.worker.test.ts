@@ -385,6 +385,41 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		expect(await worker.isSynced('item')).toBe(true);
 	});
 
+	it('a sync interrupted mid-backfill survives a worker reload without losing documents', async () => {
+		const server = await createTestServer();
+		const ids: string[] = [];
+		for (let i = 0; i < 12; i++) {
+			vi.setSystemTime(T0 + i * 1000);
+			ids.push(server.create('item', { name: `item ${i}` }).id as string);
+		}
+
+		// Let two sync pages through, then drop the connection mid-backfill
+		let fetch_count = 0;
+		let failing = true;
+		vi.stubGlobal(
+			'fetch',
+			bridgeFetchToServer(server, {
+				page_limit: 3,
+				fail: () => failing && ++fetch_count > 2,
+			}),
+		);
+
+		const worker = await createWorker();
+		await worker.sync(); // network drops after 2 pages
+		expect(await worker.isSynced('item')).toBe(false);
+
+		// Simulate a page refresh: a fresh worker that only has the persisted
+		// IDB state. The persisted synced window must never claim documents
+		// that are missing from the persisted index — they'd never be
+		// refetched and would be lost permanently.
+		const reloaded = await createWorker();
+		failing = false;
+		await reloaded.sync();
+
+		expect(await searchAllIds(reloaded)).toEqual([...ids].sort());
+		expect(await reloaded.isSynced('item')).toBe(true);
+	});
+
 	it('changes that land while backfilling are picked up before reporting synced', async () => {
 		const server = await createTestServer();
 		for (let i = 0; i < 9; i++) {

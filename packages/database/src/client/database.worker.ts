@@ -261,6 +261,7 @@ export class DatabaseWorker {
 
 		let num_requests = 0;
 		let pages_without_changes = 0;
+		let next_persist_page = 1;
 		while (num_requests++ < 50) {
 			const client_types = types.filter(
 				(t) => this.#entities[t]?.search_mode === 'client' && !done.has(t),
@@ -445,9 +446,18 @@ export class DatabaseWorker {
 				}
 			}
 
-			// Always persist sync meta (cheap — timestamps for resumption)
-			// Persist search indices less frequently (expensive — full Orama serialization)
-			await this.#persistSyncState(client_types, num_requests % 5 === 0);
+			// Persist the synced-window meta and the Orama index TOGETHER — the
+			// persisted window must never get ahead of the persisted index,
+			// otherwise a refresh would reload an index that is missing documents
+			// the window claims are synced (and they would never be refetched).
+			// Serializing the index is expensive and grows with its size, so
+			// persist on a doubling page schedule (1, 2, 4, 8, ...): early saves
+			// are cheap and keep resume granularity fine, later saves are rare so
+			// total serialization work stays bounded on long backfills.
+			if (num_requests >= next_persist_page) {
+				next_persist_page = num_requests * 2;
+				await this.#persistSyncState(client_types);
+			}
 
 			// Safety valve: two consecutive pages with no changes at all means the
 			// server isn't giving us anything new — stop rather than spin. (One
@@ -463,7 +473,7 @@ export class DatabaseWorker {
 
 		// Final index persist to capture remaining pages
 		const persist_types = types.filter((t) => this.#entities[t]);
-		await this.#persistSyncState(persist_types, true);
+		await this.#persistSyncState(persist_types);
 
 		// Notify active search subscribers
 		this.#notifySubscribers(persist_types);
@@ -1076,9 +1086,14 @@ export class DatabaseWorker {
 
 	/**
 	 * Persist sync state using batched IDB writes.
-	 * Always saves sync meta (cheap). Optionally saves Orama indices (expensive).
+	 *
+	 * The sync meta (synced window) and the serialized Orama index are always
+	 * written together, in one IDB transaction. Persisting the window without
+	 * the index would let the window get ahead of the saved index — after a
+	 * refresh, documents inside the window but missing from the index would
+	 * never be refetched.
 	 */
-	async #persistSyncState(entity_types: string[], save_index = true): Promise<void> {
+	async #persistSyncState(entity_types: string[]): Promise<void> {
 		if (!this.#db) return;
 
 		const ops: {
@@ -1109,7 +1124,7 @@ export class DatabaseWorker {
 				} satisfies SyncMeta,
 			});
 
-			if (save_index && state.orama && state.search_mode === 'client') {
+			if (state.orama && state.search_mode === 'client') {
 				const saved = saveOrama(state.orama);
 				ops.push({
 					store: 'search_index',
