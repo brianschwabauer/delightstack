@@ -37,7 +37,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, id: ID, data: Data) {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z_]/g, '');
+		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 		if (!sanitizedTable) {
 			throw new DelightError({ message: 'Missing database table name', status: 400 });
 		}
@@ -49,7 +49,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			.map(([key, value]) => {
 				if (key === undefined || value === undefined) return;
 				// Peace of mind sql injection prevention (even though this should already be safe)
-				const column = key.toLowerCase().replace(/[^a-z_]/g, '');
+				const column = key.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 				if (column === 'id') return;
 				const val = this.formatData(value);
 				return [column, val];
@@ -67,7 +67,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		const result = this.exec<SqlTableRow<Schema, Table>>(query, ...bindings);
 		console.log(
 			`Ran insert query in ${performance.now() - start}ms: ${query}`,
-			bindings.join(', '),
+			`(${bindings.length} bound values)`,
 		);
 		return result.one();
 	}
@@ -91,7 +91,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, id: ID, data: Partial<Data>) {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z_]/g, '');
+		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 		if (!sanitizedTable) {
 			throw new DelightError({ message: 'Missing database table name', status: 400 });
 		}
@@ -104,7 +104,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			.map(([key, value]) => {
 				if (key === undefined || value === undefined) return;
 				// Peace of mind sql injection prevention (even though this should already be safe)
-				const column = key.toLowerCase().replace(/[^a-z_]/g, '');
+				const column = key.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 				if (column === 'id') return;
 				const val = this.formatData(value);
 				return [column, val];
@@ -120,7 +120,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		const result = this.exec<SqlTableRow<Schema, Table>>(query, ...bindings);
 		console.log(
 			`Ran update query in ${performance.now() - start}ms: ${query}`,
-			bindings.join(', '),
+			`(${bindings.length} bound values)`,
 		);
 		return result.one();
 	}
@@ -134,7 +134,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, id: ID) {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = table.toLowerCase().replace(/[^a-z_]/g, '');
+		const sanitizedTable = table.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 		if (!sanitizedTable) {
 			throw new DelightError({
 				message: 'Must provide a table to delete from',
@@ -184,7 +184,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, query?: Query) {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = table.toLowerCase().replace(/[^a-z_]/g, '');
+		const sanitizedTable = table.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 		let select = `SELECT * FROM ${sanitizedTable}`;
 		let order = ``;
 		let where = ``;
@@ -197,7 +197,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			const columns = query.select
 				.map((column) =>
 					// Peace of mind sql injection prevention
-					column.toLowerCase().replace(/[^a-z_]/g, ''),
+					column.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, ''),
 				)
 				.join(', ');
 			select = `SELECT ${columns} FROM ${sanitizedTable}`;
@@ -208,7 +208,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			order = `ORDER BY ${query.order
 				.map(({ key, direction }) => {
 					// Peace of mind sql injection prevention
-					const sanitizedColumn = key.toLowerCase().replace(/[^a-z_]/g, '');
+					const sanitizedColumn = key.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 					return `${sanitizedColumn} ${direction || 'ASC'}`;
 				})
 				.join(', ')}`;
@@ -240,7 +240,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 				}
 				// Sanitize the key (this shouldn't be necessary because 'table' should be trustworthy)
 				// We're doing this just to be safe and for peace of mind
-				const sanitizedKey = where.key.toLowerCase().replace(/[^a-z_]/g, '');
+				const sanitizedKey = where.key.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 
 				// Bitwise AND operator
 				if (where.is === '&=') {
@@ -314,7 +314,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		const result = this.exec<OutputData>(queryStr, ...values);
 		console.log(
 			`Ran query in ${performance.now() - start}ms: ${queryStr}`,
-			values.join(', '),
+			`(${values.length} bound values)`,
 		);
 		return result;
 	}
@@ -335,7 +335,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, id: ID): Data {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = table.toLowerCase().replace(/[^a-z_]/g, '');
+		const sanitizedTable = table.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
 		const result = this.exec<Data>(
 			`SELECT * FROM ${sanitizedTable} WHERE id = ? LIMIT 1`,
 			id,
@@ -381,7 +381,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 		const result = this.exec<T>(query, ...values.map(this.formatData));
 		console.log(
 			`Ran query in ${performance.now() - start}ms: ${query.replace(/\t+/g, '')}`,
-			values.join(', '),
+			`(${values.length} bound values)`,
 		);
 		return result;
 	}

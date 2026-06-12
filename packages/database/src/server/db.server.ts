@@ -403,8 +403,15 @@ export class DatabaseServer<
 			const table_definition = table_config?.config?.table_definition;
 			if (!table_definition) continue;
 
-			// Double check the table name is safe/valid (just in case)
-			if (table_config.name.match(/[^a-z_]/)) continue;
+			// Double check the table name is safe/valid. Throw loudly instead of
+			// silently skipping — a skipped table means every later query against
+			// it fails with a confusing 'no such table' error.
+			if (table_config.name.match(/[^a-z0-9_]/) || table_config.name.match(/^[0-9]/)) {
+				throw new DelightError({
+					message: `Table name '${table_config.name}' is invalid. Use lowercase letters, numbers, and underscores (must not start with a number).`,
+					status: 500,
+				});
+			}
 			const existing_table_def = this.#state?.table_config?.[table_config.name];
 			const table_name = table_config.name.toLowerCase();
 
@@ -496,8 +503,11 @@ export class DatabaseServer<
 				});
 			}
 
-			// Delete indexes that are no longer in the table config
+			// Delete indexes that are no longer in the table config.
+			// Only consider indexes belonging to THIS table — otherwise each table's
+			// pass would drop every other table's indexes.
 			for (const existing_index of this.#state.sql_indexes) {
+				if (existing_index.table !== table_name) continue;
 				if (table_config.config.indexes.some((i) => i.name === existing_index.name))
 					continue;
 				console.log(`Deleting index ${existing_index.name} on table ${table_name}`);
@@ -549,6 +559,15 @@ export class DatabaseServer<
 	/** Dev RPC fetch handler — dispatches `POST /rpc` with `{ method, args }` to public methods. */
 	async fetch(request: Request) {
 		const url = new URL(request.url);
+		// The RPC dispatcher can invoke ANY public method, including exec()
+		// (arbitrary SQL) and destroy(). It exists only for local development
+		// tooling and must never be reachable in production.
+		if (!this.env.DEV) {
+			return new Response(JSON.stringify({ message: 'Not found', status: 404 }), {
+				status: 404,
+				headers: { 'content-type': 'application/json' },
+			});
+		}
 		if (url.pathname === '/rpc' && request.method === 'POST') {
 			const body = (await request.json()) as { method?: string; args?: unknown[] };
 			if (body?.method && body?.args) {
@@ -860,6 +879,9 @@ export class DatabaseServer<
 
 		// Add the changes to the results for each entity type
 		for (const entity_type in this.config) {
+			// When the request names specific entity types, only those are returned —
+			// computing the others wastes work and the client would ignore them anyway
+			if (query?.entity && !(entity_type in query.entity)) continue;
 			const index = this.getIndex(entity_type);
 			if (!index || !this.config[entity_type]) continue;
 			const orama = index.orama;
@@ -892,8 +914,9 @@ export class DatabaseServer<
 				},
 				where: {
 					// Between is inclusive on both ends, so we adjust it to be exclusive:
-					// when descending, the 'to' timestamp is made exclusive; when ascending,
-					// the 'from' timestamp is made exclusive.
+					// when descending, the window is [from, to); when ascending, (from, to].
+					// This lets a client use the response's end_updated_at as the next
+					// request's start_updated_at without receiving duplicates.
 					updated_at:
 						to === Number.MAX_SAFE_INTEGER
 							? descending
@@ -904,41 +927,57 @@ export class DatabaseServer<
 			});
 			if (result instanceof Promise) continue; // orama search should always be sync here, this is for type safety
 
+			// Deleted entries must use the same half-open window as the orama query
+			// above, otherwise a delete exactly on the boundary is duplicated or lost.
+			const inWindow = descending
+				? (ts: number) => ts >= from && (to === Number.MAX_SAFE_INTEGER || ts < to)
+				: (ts: number) => ts > from && ts <= to;
+
+			// Merge document changes and deletions into a single timeline so the
+			// limit and the reported start/end window apply to ALL changes. Computing
+			// the window from deletions outside the page (or beyond a limit-truncated
+			// page) would make paging clients skip the changes in between.
+			type Change = { ts: number; deleted_id?: string; doc?: any };
+			const changes: Change[] = [];
+			for (const item of result.hits) {
+				if (!item.document || !item.id) continue;
+				changes.push({ ts: item.document.updated_at || 0, doc: item.document });
+			}
+			for (const [id, deleted_at] of Object.entries(index.deleted_entity)) {
+				if (!inWindow(deleted_at)) continue;
+				changes.push({ ts: deleted_at, deleted_id: id });
+			}
+			changes.sort((a, b) => (descending ? b.ts - a.ts : a.ts - b.ts));
+
+			// Trim to the limit, but never split changes that share a timestamp —
+			// the boundary is exclusive on the next page, so splitting equal
+			// timestamps across pages would permanently skip the cut-off changes.
+			const included = changes.slice(0, limit);
+			for (let i = limit; i < changes.length; i++) {
+				if (changes[i].ts !== included[included.length - 1]?.ts) break;
+				included.push(changes[i]);
+			}
+
 			const deleted = [] as (string | number)[];
 			const updated = [] as Database.SearchEntity<DatabaseConfig[typeof entity_type]>[];
 			const created = [] as Database.SearchEntity<DatabaseConfig[typeof entity_type]>[];
 			let start_updated_at = Infinity;
 			let end_updated_at = 0;
-
-			// Add the created/updated entities to the results
-			for (const item of result.hits) {
-				if (!item.document || !item.id) continue;
-				if (
-					!item.document.updated_at ||
-					item.document.created_at === item.document.updated_at
-				) {
+			for (const change of included) {
+				if (change.deleted_id !== undefined) {
+					deleted.push(change.deleted_id);
+				} else if (!change.ts || change.doc.created_at === change.doc.updated_at) {
 					created.push(
-						item.document as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
+						change.doc as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
 					);
 				} else {
 					updated.push(
-						item.document as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
+						change.doc as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
 					);
 				}
-				if (!item.document.updated_at) continue;
-				if (item.document.updated_at < start_updated_at) {
-					start_updated_at = item.document.updated_at;
-				}
-				if (item.document.updated_at > end_updated_at) {
-					end_updated_at = item.document.updated_at;
-				}
-			}
-
-			// Add the deleted entities to the results
-			for (const [id, deleted_at] of Object.entries(index.deleted_entity)) {
-				if (deleted_at > from && deleted_at <= to) deleted.push(id);
-				if (deleted_at < start_updated_at) start_updated_at = deleted_at;
-				if (deleted_at > end_updated_at) end_updated_at = deleted_at;
+				if (!change.ts) continue;
+				if (change.ts < start_updated_at) start_updated_at = change.ts;
+				if (change.ts > end_updated_at) end_updated_at = change.ts;
 			}
 
 			results.entity[entity_type] = {
@@ -1074,7 +1113,7 @@ export class DatabaseServer<
 					(where as any) = {};
 					(where as any).and = [previous_where];
 				}
-				const existing_clause_index = (query.where as any).and.findIndex(
+				const existing_clause_index = (where as any).and.findIndex(
 					(clause: any) => !!clause[key] && !clause[key]?.between,
 				);
 				const value = last_item[key] || 0;
@@ -1271,9 +1310,10 @@ export class DatabaseServer<
 		const { query, values } = parsed;
 		const start = performance.now();
 		const result = this.ctx.storage.sql.exec(query, ...values);
+		// Don't log the bound values — they may contain user data (PII, secrets)
 		console.log(
 			`Ran query in ${performance.now() - start}ms: ${query.replace(/\t+/g, '')}`,
-			values.join(', '),
+			`(${values.length} bound values)`,
 		);
 		return result.toArray();
 	}
@@ -1326,6 +1366,7 @@ export class DatabaseServer<
 					delete data_copy.updated_at;
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+					this.ensureMonotonicTimestamp(now, index);
 
 					// Parse the data to ensure it's valid (throws an error if not)
 					const input_data = table.parse({
@@ -1351,7 +1392,10 @@ export class DatabaseServer<
 					const sparse_entity = table.toSparse(output_data);
 					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
 					insertIntoOrama(index.orama, sparse_entity);
-					index.last_updated_at = now.getTime();
+					// Clear any delete tombstone for this id (the id may be reused, e.g.
+					// numeric rowids) so sync clients don't apply a stale delete to it
+					delete index.deleted_entity[String(output_data[primary_key] ?? output_data.id)];
+					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
 					this.cascadeReindexReferencing(
@@ -1387,6 +1431,7 @@ export class DatabaseServer<
 					delete data_copy.updated_at;
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+					this.ensureMonotonicTimestamp(now, index);
 					const current_data = this.get(entity_type, id); // will throw a 404 if not found
 					let input_data = structuredClone(current_data);
 					const deepMerge = (current: any, next: any) => {
@@ -1427,7 +1472,8 @@ export class DatabaseServer<
 					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
 					removeFromOrama(index.orama, id.toString());
 					insertIntoOrama(index.orama, sparse_entity);
-					index.last_updated_at = now.getTime();
+					delete index.deleted_entity[id.toString()];
+					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
 					this.cascadeReindexReferencing(
@@ -1460,13 +1506,14 @@ export class DatabaseServer<
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+					this.ensureMonotonicTimestamp(now, index);
 					this.ctx.storage.sql.exec(
 						`DELETE FROM ${sanitized_table} WHERE ${primary_key} = ?`,
 						id,
 					);
 					removeFromOrama(index.orama, id.toString());
 					index.deleted_entity[id.toString()] = now.getTime();
-					index.last_updated_at = now.getTime();
+					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
 					this.cascadeReindexReferencing(entity_type, id, indexes_to_save, now);
@@ -1672,7 +1719,12 @@ export class DatabaseServer<
 		const chunk_size = 1900 * 1000; // 1.9MB safely under 2MB limit
 		const index_config = JSON.stringify(this.config[entity_type].config.orama);
 		const deleted_json = JSON.stringify(index.deleted_entity);
-		const first_chunk_size = chunk_size - (deleted_json.length + index_config.length);
+		// Never let a huge tombstone/config map push the first chunk size to <= 0,
+		// which would make the chunking loop below spin forever on empty slices
+		const first_chunk_size = Math.max(
+			1024,
+			chunk_size - (deleted_json.length + index_config.length),
+		);
 
 		// Cleanup old chunks
 		this.ctx.storage.sql.exec(
@@ -1774,6 +1826,19 @@ export class DatabaseServer<
 	}
 
 	/**
+	 * Ensures the working timestamp of a transaction is strictly greater than the
+	 * last change recorded for the given index. `updated_at` is the sync cursor:
+	 * if a new write received a timestamp <= an already-synced change (clock skew,
+	 * or a previous multi-op transaction that advanced its timestamps past the
+	 * wall clock), clients that synced past that point would never receive it.
+	 */
+	private ensureMonotonicTimestamp(now: Date, index: SearchIndex) {
+		if (now.getTime() <= index.last_updated_at) {
+			now.setTime(index.last_updated_at + 1);
+		}
+	}
+
+	/**
 	 * Reindexes all records in other tables that reference the given entity via FK-derived fields.
 	 * Called after create/update/delete so dependent search indexes stay current.
 	 */
@@ -1809,6 +1874,25 @@ export class DatabaseServer<
 				const dep_pk = dep_table.config.primary_key || 'id';
 				const dep_id = String(dep_entity[dep_pk]);
 
+				// Skip the entity that triggered the cascade (self-referencing FKs) —
+				// it was already reindexed by the operation itself
+				if (dep.table === entity_type && dep_id === String(entity_id)) continue;
+
+				// Bump the dependent row's updated_at: its derived search fields just
+				// changed, and sync clients only receive documents whose updated_at
+				// falls inside the requested window. Without this, FK-derived changes
+				// would update the server index but never reach synced clients.
+				const ts =
+					dep_index.last_updated_at >= now.getTime()
+						? dep_index.last_updated_at + 1
+						: now.getTime();
+				this.ctx.storage.sql.exec(
+					`UPDATE ${this.sanitize(dep.table)} SET updated_at = ? WHERE ${this.sanitize(dep_pk)} = ?`,
+					ts,
+					dep_entity[dep_pk],
+				);
+				dep_entity.updated_at = ts;
+
 				// Recompute sparse (same-table derived first, then FK-derived)
 				const sparse = dep_table.toSparse(dep_entity) as any;
 				this.computeFkDerivedFields(dep.table, dep_entity, sparse);
@@ -1820,8 +1904,8 @@ export class DatabaseServer<
 					// May not exist yet
 				}
 				insertIntoOrama(dep_index.orama, sparse);
-				dep_index.last_updated_at = now.getTime();
-				if (!dep_index.first_updated_at) dep_index.first_updated_at = now.getTime();
+				dep_index.last_updated_at = Math.max(dep_index.last_updated_at, ts);
+				if (!dep_index.first_updated_at) dep_index.first_updated_at = ts;
 				indexes_to_save.add(dep.table);
 			}
 		}
@@ -1861,6 +1945,16 @@ export class DatabaseServer<
 		for (const key in temp) {
 			if (temp[key] === null) delete temp[key];
 		}
+		// Convert BOOLEAN columns back from sqlite's 0/1 to real booleans
+		const table_definition = this.config[entity_type]?.config?.table_definition as
+			| Record<string, string>
+			| undefined;
+		if (table_definition) {
+			for (const [column, definition] of Object.entries(table_definition)) {
+				if (!definition?.startsWith?.('BOOLEAN')) continue;
+				if (typeof temp[column] === 'number') (temp as any)[column] = !!temp[column];
+			}
+		}
 		return temp as Data;
 	}
 
@@ -1891,6 +1985,9 @@ export class DatabaseServer<
 						(acc as any)[key] = null;
 					} else if (value instanceof Date) {
 						(acc as any)[key] = value.toISOString();
+					} else if (typeof value === 'boolean') {
+						// Durable Object SQLite only accepts null/number/string/ArrayBuffer bindings
+						(acc as any)[key] = value ? 1 : 0;
 					} else if (typeof value === 'object') {
 						(acc as any)[key] = JSON.stringify(value);
 					} else {
