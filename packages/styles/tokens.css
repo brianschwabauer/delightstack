@@ -6,31 +6,35 @@ html {
 	 * The raw oklch ramp + per-app brand seeds. Components must NOT
 	 * reference these directly — use the semantic tokens below.
 	 * ============================================================ */
-	--color-dashboard: #10a6c4;
-	/* Brand seeds (match the logo gradient's leading stop). The secondary seed
+	/* Brand seeds (match the logo gradient's leading stop). Primary is the only
+	 * required seed — secondary and neutral derive from it. The secondary seed
 	 * is a muted gray that keeps the primary's hue — low chroma, same hue —
-	 * so accent controls read as "quiet" without going tonally cold. */
+	 * so accent controls read as "quiet" without going tonally cold. The
+	 * neutral seed tints the background/text ramp; the ramp formulas clamp
+	 * chroma, so any hue yields a usable tinted gray. Override it to decouple
+	 * the surface tint from the brand color. */
 	--color-primary: #10a6c4;
 	--color-secondary: oklch(from var(--color-primary) l 0.05 h);
-	--color-50: oklch(from var(--color-dashboard) 99% min(0.01, c) h);
-	--color-100: oklch(from var(--color-dashboard) 97% min(0.015, c) h);
-	--color-150: oklch(from var(--color-dashboard) 95% min(0.02, c) h);
-	--color-200: oklch(from var(--color-dashboard) 92% min(0.03, c) h);
-	--color-250: oklch(from var(--color-dashboard) 87% min(0.04, c) h);
-	--color-300: oklch(from var(--color-dashboard) 82% min(0.05, c) h);
-	--color-350: oklch(from var(--color-dashboard) 76% min(0.06, c) h);
-	--color-400: oklch(from var(--color-dashboard) 70% min(0.07, c) h);
-	--color-450: oklch(from var(--color-dashboard) 65% min(0.08, c) h);
-	--color-500: oklch(from var(--color-dashboard) 60% min(0.08, c) h);
-	--color-550: oklch(from var(--color-dashboard) 55% min(0.08, c) h);
-	--color-600: oklch(from var(--color-dashboard) 48% min(0.07, c) h);
-	--color-650: oklch(from var(--color-dashboard) 41% min(0.06, c) h);
-	--color-700: oklch(from var(--color-dashboard) 35% min(0.05, c) h);
-	--color-750: oklch(from var(--color-dashboard) 29% min(0.04, c) h);
-	--color-800: oklch(from var(--color-dashboard) 24% min(0.025, c) h);
-	--color-850: oklch(from var(--color-dashboard) 21% min(0.025, c) h);
-	--color-900: oklch(from var(--color-dashboard) 18% min(0.03, c) h);
-	--color-950: oklch(from var(--color-dashboard) 15% min(0.03, c) h);
+	--color-neutral: var(--color-primary);
+	--color-50: oklch(from var(--color-neutral) 99% min(0.01, c) h);
+	--color-100: oklch(from var(--color-neutral) 97% min(0.015, c) h);
+	--color-150: oklch(from var(--color-neutral) 95% min(0.02, c) h);
+	--color-200: oklch(from var(--color-neutral) 92% min(0.03, c) h);
+	--color-250: oklch(from var(--color-neutral) 87% min(0.04, c) h);
+	--color-300: oklch(from var(--color-neutral) 82% min(0.05, c) h);
+	--color-350: oklch(from var(--color-neutral) 76% min(0.06, c) h);
+	--color-400: oklch(from var(--color-neutral) 70% min(0.07, c) h);
+	--color-450: oklch(from var(--color-neutral) 65% min(0.08, c) h);
+	--color-500: oklch(from var(--color-neutral) 60% min(0.08, c) h);
+	--color-550: oklch(from var(--color-neutral) 55% min(0.08, c) h);
+	--color-600: oklch(from var(--color-neutral) 48% min(0.07, c) h);
+	--color-650: oklch(from var(--color-neutral) 41% min(0.06, c) h);
+	--color-700: oklch(from var(--color-neutral) 35% min(0.05, c) h);
+	--color-750: oklch(from var(--color-neutral) 29% min(0.04, c) h);
+	--color-800: oklch(from var(--color-neutral) 24% min(0.025, c) h);
+	--color-850: oklch(from var(--color-neutral) 21% min(0.025, c) h);
+	--color-900: oklch(from var(--color-neutral) 18% min(0.03, c) h);
+	--color-950: oklch(from var(--color-neutral) 15% min(0.03, c) h);
 
 	/* Internal background ramp (semantic bg/surface tokens map onto this) */
 	--color-bg-max-contrast: light-dark(white, black);
@@ -57,8 +61,8 @@ html {
 
 	/* Internal text endpoints (semantic text tokens map onto these) */
 	--color-text-max-contrast: light-dark(black, white);
-	--color-text-light: oklch(from var(--color-dashboard) 76% min(0.06, c) h);
-	--color-text-dark: oklch(from var(--color-dashboard) 46% min(0.06, c) h);
+	--color-text-light: oklch(from var(--color-neutral) 76% min(0.06, c) h);
+	--color-text-dark: oklch(from var(--color-neutral) 46% min(0.06, c) h);
 
 	/* ============================================================
 	 * TIER 2 — SEMANTIC TOKENS (public API)
@@ -165,12 +169,13 @@ html {
 	--color-success-text-disabled: light-dark(#58e0d0, #4ec2b3);
 	--color-success-text-active: light-dark(#ffffff, #ffffff);
 
-	--color-info: light-dark(#2f6fe0, #5b8def);
 	--color-warning: light-dark(#e89c08, #e0a020);
 
 	/* Soft tinted surfaces for feedback components (Callout, Toast, Avatar,
-	   Input). Mixed over the page background so they adapt to light/dark. */
-	--color-info-bg: color-mix(in oklch, var(--color-info) 14%, var(--color-bg-00));
+	   Input). Mixed over the page background so they adapt to light/dark.
+	   Informational surfaces use the brand action color — there is no
+	   separate "info" hue. */
+	--color-action-bg: color-mix(in oklch, var(--color-action) 14%, var(--color-bg-00));
 	--color-success-bg: color-mix(in oklch, var(--color-success) 14%, var(--color-bg-00));
 	--color-warning-bg: color-mix(in oklch, var(--color-warning) 16%, var(--color-bg-00));
 	--color-error-bg: color-mix(in oklch, var(--color-error) 14%, var(--color-bg-00));

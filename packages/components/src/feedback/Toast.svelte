@@ -764,7 +764,7 @@
 			color: var(--color-warning, #d97706);
 		}
 		.toast.info & {
-			color: var(--color-info, #3b82f6);
+			color: var(--color-action, #3b82f6);
 		}
 		.toast.loading & {
 			color: var(--color-action, #3b82f6);
@@ -856,7 +856,7 @@
 		--toast-accent: var(--color-warning, #d97706);
 	}
 	.toast.info {
-		--toast-accent: var(--color-info, #3b82f6);
+		--toast-accent: var(--color-action, #3b82f6);
 	}
 	.toast:is(.success, .error, .warning, .info) {
 		background-color: color-mix(in oklch, var(--toast-accent) 6%, var(--toast-bg));

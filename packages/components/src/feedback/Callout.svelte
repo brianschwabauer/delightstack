@@ -223,8 +223,8 @@
 
 <style>
 	.callout {
-		--callout-color: var(--color-info);
-		--callout-bg: var(--color-info-bg);
+		--callout-color: var(--color-action);
+		--callout-bg: var(--color-action-bg);
 		--_pad-y: 1rem;
 		--_pad-x: 1.25rem;
 		--_gap: 0.75rem;
