@@ -1,12 +1,18 @@
 ---
 title: Architecture
-description: The Cloudflare Workers + Durable Objects topology the Stack runs on — DO classes, bindings, migrations, and the two-worker model.
+description: The Cloudflare Workers + Durable Objects topology the backend packages run on — DO classes, bindings, migrations, and the two-worker model.
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-Every Stack package's server is a **Durable Object** (DO). To use one, you re-export its DO class
-from a Worker, declare it in `wrangler.toml` (with a migration), and bind it where you need it.
+Every [backend package](/packages/overview/)'s server is a **Durable Object** (DO). To use one, you
+re-export its DO class from a Worker, declare it in `wrangler.toml` (with a migration), and bind it
+where you need it.
+
+<Aside>
+This page only applies to the **full-stack path**. The component library needs none of this — it's
+a plain npm dependency.
+</Aside>
 
 ## The two-worker model
 
@@ -130,7 +136,7 @@ const ws = platform.env.WS.get(platform.env.WS.idFromName(org_id));
 
 ## Naming Durable Object instances
 
-DO classes are types; instances are addressed by ID. The convention across the Stack is one
+DO classes are types; instances are addressed by ID. The convention across the packages is one
 instance **per tenant** (org / room / user): `idFromName(org_id)` for the database and websocket,
 `idFromName(ip_or_user)` for the rate limiter. Cloudflare guarantees a single instance per ID, which
 is what gives you the single-writer model.
@@ -143,5 +149,5 @@ is what gives you the single-writer model.
 
 ## Next steps
 
-- [Quick Start](/stack/quickstart/) — run the example app, which wires all of this together
-- Pick a package from the sidebar for its full configuration
+- [Quick Start: Full Stack](/getting-started/quick-start-stack/) — run the example app, which wires all of this together
+- [Packages overview](/packages/overview/) — pick a package for its full configuration

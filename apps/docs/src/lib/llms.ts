@@ -84,7 +84,7 @@ function transformProse(text: string): string {
 /** All docs entries in sidebar-ish order, with stable section grouping. */
 export async function getDocsEntries(): Promise<CollectionEntry<'docs'>[]> {
 	const entries = await getCollection('docs');
-	const sectionOrder = ['', 'getting-started', 'stack', 'guides', 'components'];
+	const sectionOrder = ['', 'getting-started', 'packages', 'guides', 'components'];
 	const section = (id: string) => sectionOrder.indexOf(id.split('/')[0]);
 	return entries.sort((a, b) => {
 		const diff = section(a.id) - section(b.id);

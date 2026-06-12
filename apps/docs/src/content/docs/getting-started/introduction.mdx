@@ -1,21 +1,58 @@
 ---
 title: Introduction
-description: DelightStack is a polished, opinionated Svelte 5 component library focused on delightful user experiences.
+description: What DelightStack is — a polished Svelte 5 component library and an edge-native Cloudflare backend — and how to choose your starting point.
 ---
 
-import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
 
-DelightStack is a comprehensive **Svelte 5 component library** with 55 production-ready components across 6 categories. Every component is crafted with attention to detail, thoughtful micro-animations, and a cohesive visual language.
+DelightStack is two products that share one design language:
 
-## Design Philosophy
+1. **The component library** (`@delightstack/components`) — 55 polished, accessible **Svelte 5**
+   components with thoughtful micro-animations and a complete design-token system. It drops into
+   any Svelte 5 app and has no backend requirements.
+2. **The backend packages** — auth, reactive database, realtime, AI, billing, image processing,
+   and rate limiting for **Cloudflare Workers**, built on **Durable Objects**. They're designed to
+   work together and with the components, but each stands on its own.
+
+You can adopt either half without the other. Most people start with the components; teams building
+on Cloudflare get a full-stack toolkit.
+
+## Choose your path
+
+<CardGrid>
+	<Card title="Just the components" icon="puzzle">
+		You have a Svelte 5 app (any backend, or none) and want delightful UI.
+
+		1. [Installation](/getting-started/installation/) — add the package and design tokens
+		2. [Quick Start: Components](/getting-started/quick-start/) — build a form in minutes
+		3. [Component reference](/components/overview/) — browse all 55 components
+	</Card>
+	<Card title="The full stack" icon="cloudflare">
+		You're building a full-stack app on Cloudflare Workers and want batteries included.
+
+		1. [Quick Start: Full Stack](/getting-started/quick-start-stack/) — run the example app
+		2. [Architecture](/getting-started/architecture/) — the Durable Object topology
+		3. [Package reference](/packages/overview/) — auth, database, realtime, and more
+	</Card>
+</CardGrid>
+
+<Aside type="note">
+The backend packages are **infrastructure, not drop-in libraries** — they assume Cloudflare Workers
+with Durable Object bindings and migrations. The component library has no such requirements; it
+works in any Svelte 5 / Vite project.
+</Aside>
+
+## Design philosophy
 
 - **Details Matter** — Every pixel, every transition, every interaction is intentional.
 - **Delight Users** — Subtle animations, smooth transitions, and unexpected moments of joy.
-- **Opinionated by Default** — Components look great out of the box with sensible defaults.
-- **Modern CSS** — Plain CSS with custom properties, `light-dark()`, `color-mix()`, and container queries. No CSS-in-JS overhead.
-- **Self-Contained** — Each component is readable and maintainable in a single file.
+- **Opinionated by Default** — Everything looks and works great out of the box with sensible defaults.
+- **Modern Platform** — Plain CSS with custom properties, `light-dark()`, and container queries on
+  the frontend; SQLite-backed Durable Objects at the edge on the backend. No heavy abstractions.
+- **One Error, One Convention** — A single `DelightError` class, snake_case data, camelCase
+  callbacks, and Svelte 5 runes throughout.
 
-## Key Features
+## The component library
 
 <CardGrid>
   <Card title="Svelte 5 Native" icon="rocket">
@@ -38,29 +75,8 @@ DelightStack is a comprehensive **Svelte 5 component library** with 55 productio
   </Card>
 </CardGrid>
 
-## Component Categories
-
-### Actions
-Interactive elements that trigger behaviors: **Button**, **ButtonGroup**, **Modal**, **Alert**, **Popover**, **ContextMenu**, **Portal**, **CommandPalette**, and **ThemeToggle**.
-
-### Display
-Components for presenting information: **Accordion**, **Avatar**, **AvatarGroup**, **Calendar**, **Chart**, **Code**, **Comparison**, **Counter**, **Expand**, **List**, **ListItem**, **QR**, **SplitPane**, **Stat**, **Table**, **Timeline**, **Tree**, and **Typewriter**.
-
-### Feedback
-Components that communicate state and progress: **Callout**, **Confetti**, **Progress**, and **Toaster** (toast notifications).
-
-### Form
-Input components for user data entry: **Input**, **Checkbox**, **Fieldset**, **FileUpload**, **Form** (with Standard Schema validation), **Radio**, **Range**, **Rating**, **Select**, and **Toggle**.
-
-### Media
-Rich media components: **Carousel**, **Gallery**, **Image**, **Map**, **Panorama**, **PDF**, and **Video**.
-
-### Navigation
-Components for moving through the application: **BottomSheet**, **Breadcrumbs**, **Drawer**, **Menu**, **Pagination**, **Steps**, and **Tabs**.
-
-## How It Works
-
-All 55 components are available from a single import path:
+All 55 components — across **Actions**, **Display**, **Feedback**, **Form**, **Media**, and
+**Navigation** — import from a single entry point:
 
 ```svelte
 <script>
@@ -72,16 +88,35 @@ All 55 components are available from a single import path:
 </Button>
 ```
 
-Components use **callback props** (`onclick`, `onchange`) instead of dispatched events, support **two-way binding** via `bind:value`, and automatically handle loading states when callbacks return Promises.
+Components use **callback props** (`onclick`, `onchange`) instead of dispatched events, support
+**two-way binding** via `bind:value`, and automatically show loading states when callbacks return
+Promises. Browse the full catalog in the [component reference](/components/overview/), or see them
+all working together in the [Dashboard Demo](/demo/).
 
-<Aside type="tip">
-Ready to get started? Head to the [Installation](/getting-started/installation/) page to set up your project, or jump straight to the [Quick Start](/getting-started/quick-start/) for a hands-on example.
-</Aside>
+## The backend packages
 
-## Next Steps
+Each package's server runs inside a **Durable Object** — one instance per tenant, single-writer,
+with transactional SQLite storage. There's no external database, queue, or cache to provision;
+everything runs on Cloudflare's network, close to your users.
 
-- [Installation](/getting-started/installation/) — Add DelightStack to your project
-- [Quick Start](/getting-started/quick-start/) — Build your first form in minutes
-- [Component Overview](/components/overview/) — Browse all 55 components
-- [Design Tokens](/guides/design-tokens/) — Understand the design system
-- [Dashboard Demo](/demo/) — See all components in action in a realistic dashboard
+<CardGrid>
+	<LinkCard title="Auth" href="/packages/auth/" description="JWT sessions, Argon2id, OAuth, magic links, multi-org, invitations, and SvelteKit route guards." />
+	<LinkCard title="Database" href="/packages/database/" description="Type-safe reactive SQLite with full-text + vector search, Zod validation, and automatic migrations." />
+	<LinkCard title="Realtime" href="/packages/websocket/" description="Room-scoped WebSockets with reactive presence, typed events, and live database sync." />
+	<LinkCard title="AI" href="/packages/ai/" description="Chat completions, resumable streaming, and vector embeddings via Cloudflare AI Gateway." />
+	<LinkCard title="Billing" href="/packages/stripe/" description="Stripe subscriptions, metered usage, webhooks, and subscription guards." />
+	<LinkCard title="Images" href="/packages/images/" description="Variants, ThumbHash, EXIF, color extraction, and face-aware crops via Cloudflare Containers." />
+	<LinkCard title="Rate Limiter" href="/packages/rate-limiter/" description="Token-bucket rate limiting as a Durable Object, with zero runtime dependencies." />
+</CardGrid>
+
+Most packages ship a **reactive Svelte 5 client** (`$state`/`$derived` with optimistic updates) and
+a `create*Handle()` that plugs straight into SvelteKit's `handle` hook. The
+[Architecture](/getting-started/architecture/) page explains how the pieces are wired together.
+
+## Next steps
+
+- [Installation](/getting-started/installation/) — add the component library to your project
+- [Quick Start: Components](/getting-started/quick-start/) — build your first form in minutes
+- [Quick Start: Full Stack](/getting-started/quick-start-stack/) — run the full example app on Cloudflare
+- [Architecture](/getting-started/architecture/) — how the backend packages fit together
+- [Dashboard Demo](/demo/) — see all the components in action in a realistic dashboard

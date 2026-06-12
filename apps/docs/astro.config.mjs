@@ -46,28 +46,13 @@ export default defineConfig({
 					items: [
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Installation', slug: 'getting-started/installation' },
-						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
-						{ label: 'Dashboard Demo', link: '/demo/' },
-					],
-				},
-				{
-					label: 'The Stack',
-					items: [
-						{ label: 'Overview', slug: 'stack/overview' },
-						{ label: 'Architecture', slug: 'stack/architecture' },
-						{ label: 'Quick Start', slug: 'stack/quickstart' },
+						{ label: 'Quick Start: Components', slug: 'getting-started/quick-start' },
 						{
-							label: 'Packages',
-							items: [
-								{ label: 'Auth', slug: 'stack/auth' },
-								{ label: 'Database', slug: 'stack/database' },
-								{ label: 'Realtime', slug: 'stack/websocket' },
-								{ label: 'AI', slug: 'stack/ai' },
-								{ label: 'Billing', slug: 'stack/stripe' },
-								{ label: 'Images', slug: 'stack/images' },
-								{ label: 'Rate Limiter', slug: 'stack/rate-limiter' },
-							],
+							label: 'Quick Start: Full Stack',
+							slug: 'getting-started/quick-start-stack',
 						},
+						{ label: 'Architecture', slug: 'getting-started/architecture' },
+						{ label: 'Dashboard Demo', link: '/demo/' },
 					],
 				},
 				{
@@ -118,10 +103,36 @@ export default defineConfig({
 						},
 					],
 				},
+				{
+					label: 'Packages',
+					items: [
+						{ label: 'Overview', slug: 'packages/overview' },
+						{ label: 'Auth', slug: 'packages/auth' },
+						{ label: 'Database', slug: 'packages/database' },
+						{ label: 'Realtime', slug: 'packages/websocket' },
+						{ label: 'AI', slug: 'packages/ai' },
+						{ label: 'Billing', slug: 'packages/stripe' },
+						{ label: 'Images', slug: 'packages/images' },
+						{ label: 'Rate Limiter', slug: 'packages/rate-limiter' },
+					],
+				},
 			],
 		}),
 		svelte(),
 	],
+	// The backend docs moved from /stack/* during the 2026-06 IA restructure.
+	redirects: {
+		'/stack/overview': '/packages/overview',
+		'/stack/quickstart': '/getting-started/quick-start-stack',
+		'/stack/architecture': '/getting-started/architecture',
+		'/stack/auth': '/packages/auth',
+		'/stack/database': '/packages/database',
+		'/stack/websocket': '/packages/websocket',
+		'/stack/ai': '/packages/ai',
+		'/stack/stripe': '/packages/stripe',
+		'/stack/images': '/packages/images',
+		'/stack/rate-limiter': '/packages/rate-limiter',
+	},
 	// adapter: cloudflare({}),
 	vite: {
 		// hls.js is an optional peer dep of <Video>, pulled in via a dynamic

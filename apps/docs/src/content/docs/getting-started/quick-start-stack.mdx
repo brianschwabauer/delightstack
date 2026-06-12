@@ -1,17 +1,22 @@
 ---
-title: Quick Start
-description: Run the Delightstack example app — a full-stack SvelteKit + Cloudflare app wiring every Stack package together.
+title: 'Quick Start: Full Stack'
+description: Run the DelightStack example app — a full-stack SvelteKit + Cloudflare app wiring every backend package together.
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-The fastest way to see the Stack in action is the **example app** — a SvelteKit app on Cloudflare
-that wires together auth, database, realtime, AI, billing, images, and rate limiting. It's the
-canonical reference for how the packages fit together.
+The fastest way to see the full stack in action is the **example app** — a SvelteKit app on
+Cloudflare that wires together auth, database, realtime, AI, billing, images, and rate limiting.
+It's the canonical reference for how the packages fit together.
+
+<Aside>
+This is the quick start for the **backend packages** on Cloudflare Workers. If you just want the
+component library in an existing app, see [Quick Start: Components](/getting-started/quick-start/).
+</Aside>
 
 <Aside type="tip">
 Reading the example app's `hooks.server.ts`, `src/lib/clients.ts`, and the two `wrangler` configs is
-the single best way to learn the Stack.
+the single best way to learn how the packages fit together.
 </Aside>
 
 ## Run it locally
@@ -39,7 +44,7 @@ the single best way to learn the Stack.
 
 ## How it's wired
 
-The example app uses the **two-worker model** from the [Architecture](/stack/architecture/) page:
+The example app uses the **two-worker model** from the [Architecture](/getting-started/architecture/) page:
 
 - **`apps/example-app/server`** — the backend worker. Re-exports the five Durable Object classes
   (`AuthDatabaseServer`, `OrgDatabaseServer`, `AppWebsocketServer`, `RateLimiterServer`,
@@ -72,12 +77,14 @@ worker first**, then the app worker (its DO bindings reference the backend). See
 guides for the secrets and resources (KV, R2, AI Gateway) each one needs.
 
 <Aside type="caution">
-The Stack packages are **infrastructure, not drop-ins** — they need DO bindings, migrations, and (for
-some) KV/R2/AI Gateway. Budget time for the Cloudflare wiring; the example app shows a working setup.
+The backend packages are **infrastructure, not drop-ins** — they need DO bindings, migrations, and
+(for some) KV/R2/AI Gateway. Budget time for the Cloudflare wiring; the example app shows a working
+setup.
 </Aside>
 
 ## Next steps
 
-- [Architecture](/stack/architecture/) — the topology in detail
-- [Auth](/stack/auth/) — usually the first package to wire up
-- [Database](/stack/database/) — reactive data + search
+- [Architecture](/getting-started/architecture/) — the topology in detail
+- [Packages overview](/packages/overview/) — what each package gives you
+- [Auth](/packages/auth/) — usually the first package to wire up
+- [Database](/packages/database/) — reactive data + search

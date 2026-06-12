@@ -60,7 +60,7 @@ export const authConfig = defineAuthConfig({
 ## 2. Register the Durable Object
 
 In your backend Worker, subclass the DO to inject the config, then declare it in `wrangler.toml`
-(see [Architecture](/stack/architecture/)):
+(see [Architecture](/getting-started/architecture/)):
 
 ```typescript
 import { AuthDatabaseServer as BaseAuth } from '@delightstack/auth/worker';

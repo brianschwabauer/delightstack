@@ -24,8 +24,8 @@ import CategoryCard from '../../components/CategoryCard.astro';
 		description="55 accessible, delightful Svelte 5 components — actions, display, feedback, forms, media, and navigation. Drop them into any Svelte 5 / Vite app."
 	/>
 	<LinkCard
-		title="The Stack →"
-		href="/stack/overview/"
+		title="Backend Packages →"
+		href="/packages/overview/"
 		description="Edge-native backend for Cloudflare Workers — auth, reactive database, realtime, AI, billing, and image processing, built on Durable Objects."
 	/>
 </CardGrid>
@@ -57,15 +57,16 @@ import CategoryCard from '../../components/CategoryCard.astro';
 </CardGrid>
 
 <SectionHeading
-	title="The Stack"
+	title="Backend Packages"
 	subtitle="Edge-native backend packages for Cloudflare Workers, built on Durable Objects. Adopt one, or all of them."
 />
 
 <CardGrid>
-	<LinkCard title="Auth" href="/stack/auth/" description="JWT sessions, Argon2id, OAuth, magic links, multi-org, and SvelteKit guards." />
-	<LinkCard title="Database" href="/stack/database/" description="Reactive SQLite on Durable Objects with full-text + vector search and live sync." />
-	<LinkCard title="Realtime" href="/stack/websocket/" description="Room-scoped WebSockets with reactive presence, typed events, and DB sync." />
-	<LinkCard title="AI" href="/stack/ai/" description="Chat completions, resumable streaming, and vector embeddings via AI Gateway." />
-	<LinkCard title="Billing" href="/stack/stripe/" description="Stripe subscriptions, metered usage, webhooks, and subscription guards." />
-	<LinkCard title="Images" href="/stack/images/" description="Variants, ThumbHash, EXIF, and face-aware crops via Cloudflare Containers." />
+	<LinkCard title="Auth" href="/packages/auth/" description="JWT sessions, Argon2id, OAuth, magic links, multi-org, and SvelteKit guards." />
+	<LinkCard title="Database" href="/packages/database/" description="Reactive SQLite on Durable Objects with full-text + vector search and live sync." />
+	<LinkCard title="Realtime" href="/packages/websocket/" description="Room-scoped WebSockets with reactive presence, typed events, and DB sync." />
+	<LinkCard title="AI" href="/packages/ai/" description="Chat completions, resumable streaming, and vector embeddings via AI Gateway." />
+	<LinkCard title="Billing" href="/packages/stripe/" description="Stripe subscriptions, metered usage, webhooks, and subscription guards." />
+	<LinkCard title="Images" href="/packages/images/" description="Variants, ThumbHash, EXIF, and face-aware crops via Cloudflare Containers." />
+	<LinkCard title="Rate Limiter" href="/packages/rate-limiter/" description="Token-bucket rate limiting as a Durable Object, with zero runtime dependencies." />
 </CardGrid>

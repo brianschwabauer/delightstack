@@ -54,7 +54,7 @@ catch-all column and transparently rehydrated on read.
 ## 2. Register the Durable Object
 
 Subclass `DatabaseServer` with your tables and register it in `wrangler.toml`
-(see [Architecture](/stack/architecture/)):
+(see [Architecture](/getting-started/architecture/)):
 
 ```typescript
 import { DatabaseServer } from '@delightstack/database/worker';
@@ -111,7 +111,7 @@ submit state are all handled:
 See [Working with Forms](/guides/forms/) for the full pattern.
 
 <Aside type="tip">
-Pair the client with [Realtime](/stack/websocket/) via `ws.databaseHooks()` so entity changes sync
+Pair the client with [Realtime](/packages/websocket/) via `ws.databaseHooks()` so entity changes sync
 live across tabs and clients.
 </Aside>
 

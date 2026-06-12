@@ -4,7 +4,7 @@ import { SITE, getDocsEntries, markdownUrl } from '../lib/llms';
 
 const SECTIONS: { label: string; prefix: string }[] = [
 	{ label: 'Getting Started', prefix: 'getting-started/' },
-	{ label: 'The Stack', prefix: 'stack/' },
+	{ label: 'Packages (Cloudflare backend)', prefix: 'packages/' },
 	{ label: 'Guides', prefix: 'guides/' },
 	{ label: 'Components: Actions', prefix: 'components/actions/' },
 	{ label: 'Components: Display', prefix: 'components/display/' },

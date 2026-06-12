@@ -42,7 +42,7 @@ export class AppWebsocketServer extends WebsocketServer {
 }
 ```
 
-Declare it in `wrangler.toml` (see [Architecture](/stack/architecture/)).
+Declare it in `wrangler.toml` (see [Architecture](/getting-started/architecture/)).
 
 ## 2. Wire the SvelteKit handle
 
@@ -81,6 +81,6 @@ the connecting room.
 `session:disconnected` events.
 
 <Aside type="tip">
-Combine with [Database](/stack/database/): pass `ws.databaseHooks()` to your `DatabaseClient` so
+Combine with [Database](/packages/database/): pass `ws.databaseHooks()` to your `DatabaseClient` so
 entity changes broadcast to every connected client and keep local search indexes in sync.
 </Aside>
