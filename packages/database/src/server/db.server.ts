@@ -290,6 +290,14 @@ export class DatabaseServer<
 	DatabaseConfig extends Record<string, Database.Table>,
 	Meta = Record<string, any>,
 > extends DurableObject<Env> {
+	/**
+	 * Maximum delete tombstones kept per entity index. Tombstones are needed so
+	 * incrementally-syncing clients learn about deletions; past this cap the
+	 * oldest half is pruned and the index config version is bumped, which routes
+	 * clients holding pre-prune cursors through the full-resync path instead.
+	 */
+	static MAX_DELETE_TOMBSTONES = 10_000;
+
 	/** Persistent state of the database server (saved/loaded in sqlite) */
 	#state: DatabaseServerState<DatabaseConfig, Meta>;
 
@@ -471,15 +479,27 @@ export class DatabaseServer<
 			if (!table_config?.config?.indexes) continue;
 			const table_name = table_config.name.toLowerCase();
 
-			// Create the sqlite indexes that are defined in the table config but not yet created
+			// Create the sqlite indexes that are defined in the table config but not
+			// yet created — or whose definition (columns/direction/uniqueness)
+			// changed since they were created. Matching by name alone would
+			// silently keep a stale index when its definition is edited in place.
 			for (const index of table_config.config.indexes) {
-				if (this.#state.sql_indexes.some((i) => i.name === index.name)) continue;
 				if (table_name !== index.table) continue;
+				const existing = this.#state.sql_indexes.find((i) => i.name === index.name);
+				if (existing && deepEqual(existing, index)) continue;
 				const unique = index.unique ? ' UNIQUE' : '';
 				const index_name = this.sanitize(index.name);
 				if (!index_name) continue;
-				console.log(`Creating index ${index_name} on table ${table_name}`);
+				console.log(
+					`${existing ? 'Recreating' : 'Creating'} index ${index_name} on table ${table_name}`,
+				);
 				this.ctx.storage.transactionSync(() => {
+					if (existing) {
+						(this.#state.sql_indexes as any) = (this.#state.sql_indexes as any).filter(
+							(i: any) => i.name !== index.name,
+						);
+						this.ctx.storage.sql.exec(`DROP INDEX IF EXISTS ${index_name};`);
+					}
 					(this.#state.sql_indexes as any).push(index);
 					const columns = index.columns
 						.map(
@@ -939,8 +959,13 @@ export class DatabaseServer<
 			// page) would make paging clients skip the changes in between.
 			type Change = { ts: number; deleted_id?: string; doc?: any };
 			const changes: Change[] = [];
+			const sync_primary_key = this.config[entity_type].config.primary_key || 'id';
 			for (const item of result.hits) {
 				if (!item.document || !item.id) continue;
+				// Orama (<= 3.1.18) can return ghost hits with an empty document for
+				// previously removed docs (stale entries in its internal indexes) —
+				// never ship those to clients
+				if ((item.document as any)[sync_primary_key] === undefined) continue;
 				changes.push({ ts: item.document.updated_at || 0, doc: item.document });
 			}
 			for (const [id, deleted_at] of Object.entries(index.deleted_entity)) {
@@ -1176,7 +1201,13 @@ export class DatabaseServer<
 						},
 		}) as Results<any>;
 
-		let hits = results.hits;
+		// Drop ghost hits (empty documents Orama can return for removed docs)
+		const list_primary_key = (table.config.primary_key || 'id') as string;
+		const ghost_count = results.hits.length;
+		let hits = results.hits.filter(
+			(hit) => hit.document && (hit.document as any)[list_primary_key] !== undefined,
+		);
+		const dropped_ghosts = ghost_count - hits.length;
 		if (!sparse) {
 			// If the query is not sparse, we need to fetch the full entities from the database
 			hits = results.hits.map((hit) => {
@@ -1192,13 +1223,15 @@ export class DatabaseServer<
 		}
 
 		return {
-			count: results.count,
+			count: Math.max(0, results.count - dropped_ghosts),
 			elapsed: results.elapsed,
 			hits,
 			facets: results.facets,
 			cursor:
-				hits.length >= query.limit
-					? generateCursor(hits[hits.length - 1]?.document, hits.length)
+				// Compare against the pre-filter hit count: a page that filled the
+				// limit before ghost-filtering may still have more results after it
+				ghost_count >= query.limit
+					? generateCursor(hits[hits.length - 1]?.document, ghost_count)
 					: undefined,
 		} as Output;
 	}
@@ -1429,6 +1462,11 @@ export class DatabaseServer<
 					delete data_copy.id;
 					delete data_copy.created_at;
 					delete data_copy.updated_at;
+					// Readonly fields cannot be changed after creation — strip them like
+					// the other auto-managed fields (use a raw `exec` op to override)
+					for (const readonly_field of table.config.readonly_fields || []) {
+						delete data_copy[readonly_field];
+					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
 					this.ensureMonotonicTimestamp(now, index);
@@ -1513,6 +1551,7 @@ export class DatabaseServer<
 					);
 					removeFromOrama(index.orama, id.toString());
 					index.deleted_entity[id.toString()] = now.getTime();
+					this.pruneTombstones(index);
 					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
 					indexes_to_save.add(entity_type);
@@ -1823,6 +1862,24 @@ export class DatabaseServer<
 				delete sparse[field_name];
 			}
 		}
+	}
+
+	/**
+	 * Bounds the delete-tombstone map for an index. When it grows past
+	 * MAX_DELETE_TOMBSTONES, the oldest half is pruned and the config version is
+	 * bumped: clients whose sync cursor predates the pruned deletes can no
+	 * longer be given a complete delete list, and the version bump makes them
+	 * do a full resync (the same well-tested path used for schema changes).
+	 */
+	private pruneTombstones(index: SearchIndex) {
+		const max = (this.constructor as typeof DatabaseServer).MAX_DELETE_TOMBSTONES;
+		const entries = Object.entries(index.deleted_entity);
+		if (entries.length <= max) return;
+		entries.sort((a, b) => a[1] - b[1]);
+		index.deleted_entity = Object.fromEntries(
+			entries.slice(Math.ceil(entries.length / 2)),
+		);
+		index.config_version = (index.config_version || 1) + 1;
 	}
 
 	/**

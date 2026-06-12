@@ -166,7 +166,9 @@ const itemTable = Database.table('item', (s) => ({
 	name: s.string().searchable(),
 }));
 
-function createServer() {
+function createServer(
+	tables: Record<string, unknown> = { item: itemTable as unknown as Database.Table },
+) {
 	const sql = createFakeSqlStorage();
 	const storage = {
 		sql,
@@ -180,7 +182,7 @@ function createServer() {
 		abort: vi.fn(),
 	};
 	const db = new DatabaseServer(
-		{ item: itemTable as unknown as Database.Table },
+		tables as Record<string, Database.Table>,
 		() => undefined,
 		ctx as any,
 		{ DEV: true } as any,
@@ -410,5 +412,111 @@ describe('DatabaseServer.sync()', () => {
 		expect([...entity.created, ...entity.updated].some((d: any) => d.id === a.id)).toBe(
 			true,
 		);
+	});
+});
+
+describe('DatabaseServer: update guarantees', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(T0);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('strips readonly fields from updates', () => {
+		const readonlyTable = Database.table('doc', (s) => ({
+			id: s.primaryKey(),
+			owner_id: s.string().readonly(),
+			name: s.string().searchable(),
+		}));
+		const { db } = createServer({ doc: readonlyTable as unknown as Database.Table });
+		const created = db.create('doc', { owner_id: 'user-1', name: 'mine' } as any) as any;
+
+		vi.setSystemTime(T0 + 1000);
+		const updated = db.update('doc', created.id, {
+			owner_id: 'attacker',
+			name: 'renamed',
+		} as any) as any;
+
+		expect(updated.name).toBe('renamed');
+		expect(updated.owner_id).toBe('user-1'); // readonly field unchanged
+	});
+});
+
+describe('DatabaseServer: tombstone pruning', () => {
+	const original_max = DatabaseServer.MAX_DELETE_TOMBSTONES;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(T0);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		DatabaseServer.MAX_DELETE_TOMBSTONES = original_max;
+	});
+
+	it('prunes the oldest tombstones past the cap and bumps the config version', () => {
+		DatabaseServer.MAX_DELETE_TOMBSTONES = 4;
+		const { db } = createServer();
+		const ids: string[] = [];
+		for (let i = 0; i < 6; i++) {
+			vi.setSystemTime(T0 + i * 1000);
+			ids.push(db.create('item', { name: `item ${i}` }).id as string);
+		}
+
+		// A client fully synced before any deletes happen
+		const before = db.sync({ start_updated_at: 0 });
+		const synced_through = (before.entity.item as any).end_updated_at as number;
+		const version_before = (before.entity.item as any).config_version as number;
+
+		// Delete 5 entities — one past the cap of 4 — which forces a prune
+		for (let i = 0; i < 5; i++) {
+			vi.setSystemTime(T0 + 100_000 + i * 1000);
+			db.delete('item', ids[i]);
+		}
+
+		// The tombstone map is bounded and the version was bumped
+		const after = db.sync({
+			start_updated_at: 0,
+			entity: { item: { config_version: version_before } },
+		});
+		const entity = after.entity.item as any;
+		expect(entity.config_version).toBeGreaterThan(version_before);
+		// The stale client gets the full-resync payload (config included)
+		expect(entity.config).toBeDefined();
+
+		// A client paging from its pre-prune cursor with the NEW version would
+		// miss pruned deletes — but the version mismatch reroutes it through the
+		// full resync, after which only live documents remain
+		const resynced = db.sync({
+			entity: { item: { config_version: version_before } },
+		});
+		const docs = [
+			...(resynced.entity.item as any).created,
+			...(resynced.entity.item as any).updated,
+		];
+		expect(docs.map((d: any) => d.id).sort()).toEqual([ids[5]].sort());
+		void synced_through;
+	});
+
+	it('does not prune or bump the version while under the cap', () => {
+		DatabaseServer.MAX_DELETE_TOMBSTONES = 100;
+		const { db } = createServer();
+		const ids: string[] = [];
+		for (let i = 0; i < 3; i++) {
+			vi.setSystemTime(T0 + i * 1000);
+			ids.push(db.create('item', { name: `item ${i}` }).id as string);
+		}
+		const version_before = (db.sync({ start_updated_at: 0 }).entity.item as any)
+			.config_version as number;
+		vi.setSystemTime(T0 + 10_000);
+		db.delete('item', ids[0]);
+
+		const res = db.sync({ start_updated_at: 0 });
+		expect((res.entity.item as any).config_version).toBe(version_before);
+		expect((res.entity.item as any).deleted).toEqual([ids[0]]);
 	});
 });
