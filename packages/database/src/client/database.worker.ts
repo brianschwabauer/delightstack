@@ -17,6 +17,7 @@ import {
 	idbGet,
 	idbPut,
 	idbDelete,
+	idbDeleteByPrefix,
 	idbBatch,
 	type SyncMeta,
 	type CachedEntity,
@@ -117,17 +118,25 @@ export class DatabaseWorker {
 	#pending_notify = new Set<string>();
 	#notify_scheduled = false;
 	#pending_refreshes = new Set<string>();
+	#db_name: string | undefined;
+	#sync_in_flight: Promise<void> | null = null;
 
 	// -----------------------------------------------------------------------
 	// Lifecycle
 	// -----------------------------------------------------------------------
 
 	async init(config: WorkerInitConfig): Promise<void> {
+		// A SharedWorker is initialized by EVERY connecting tab. Re-running init
+		// for the same database would discard in-memory sync state (and any
+		// un-persisted Orama data) while another tab's sync loop is mid-flight.
+		if (this.#db && this.#db_name === config.db_name) return;
+
 		this.#tables = config.tables;
 		this.#default_threshold = config.default_threshold;
 
 		// Open IDB
 		this.#db = await openDatabase(config.db_name);
+		this.#db_name = config.db_name;
 
 		// Initialize per-entity state
 		for (const [entity_type, table] of Object.entries(config.tables)) {
@@ -190,6 +199,7 @@ export class DatabaseWorker {
 			this.#db.close();
 			this.#db = null;
 		}
+		this.#db_name = undefined;
 		this.#entities = {};
 		this.#pending_refreshes.clear();
 	}
@@ -199,84 +209,108 @@ export class DatabaseWorker {
 	// -----------------------------------------------------------------------
 
 	async sync(entity_types?: string[]): Promise<void> {
+		// Single-flight: concurrent sync calls (e.g. several tabs sharing this
+		// worker) would interleave cursor updates and corrupt pagination state.
+		if (this.#sync_in_flight) return this.#sync_in_flight;
+		this.#sync_in_flight = this.#runSync(entity_types).finally(() => {
+			this.#sync_in_flight = null;
+		});
+		return this.#sync_in_flight;
+	}
+
+	/**
+	 * Pages through the server's sync endpoint until every entity is caught up.
+	 *
+	 * Each entity tracks a synced window [start_updated_at, end_updated_at]:
+	 * - `start_updated_at === undefined` — never synced. Request with no range:
+	 *   the server returns the NEWEST page first (descending).
+	 * - `start_updated_at > 0` — backfill in progress. Request the page of
+	 *   history older than our window (`end_updated_at: state.start_updated_at`,
+	 *   descending) until we reach the server's first_updated_at.
+	 * - `start_updated_at === 0` — backfill complete. Request changes newer than
+	 *   our window (`start_updated_at: state.end_updated_at`, ascending).
+	 *
+	 * The range for each entity is sent in the per-entity body fields (which the
+	 * server treats as authoritative range overrides) — never in both the body
+	 * and URL params, which previously made the cursor echo back as a range and
+	 * re-fetched the same page forever.
+	 */
+	async #runSync(entity_types?: string[]): Promise<void> {
 		if (!this.#db) return;
 
 		const types = entity_types ?? Object.keys(this.#entities);
-		const client_types = types.filter((t) => this.#entities[t]?.search_mode === 'client');
+		if (types.length === 0) return;
 
-		if (client_types.length === 0) return;
-
-		// Build sync request body
-		const entity_request: Record<string, unknown> = {};
-		for (const entity_type of client_types) {
-			const state = this.#entities[entity_type];
-			entity_request[entity_type] = {
-				config_version: state.config_version,
-				start_updated_at: state.start_updated_at,
-				end_updated_at: state.end_updated_at,
-			};
-		}
-
-		// We need to determine the query params based on the state
-		// If start_updated_at is undefined for any entity, we're doing a full initial sync (descending)
-		// Otherwise, we request changes since end_updated_at (ascending)
-		const is_initial = client_types.some(
-			(t) => this.#entities[t].start_updated_at === undefined,
-		);
+		/** Entities that need no further pages this run */
+		const done = new Set<string>();
+		/** Entities that are confirmed fully caught up with the server */
+		const caught_up = new Set<string>();
+		/** Track cumulative inserts per entity across all sync pages */
+		const cumulative_inserts: Record<string, number> = {};
+		for (const t of types) cumulative_inserts[t] = 0;
 
 		let num_requests = 0;
-
-		// Track cumulative inserts per entity across all sync pages
-		const cumulative_inserts: Record<string, number> = {};
-		for (const t of client_types) cumulative_inserts[t] = 0;
+		let pages_without_changes = 0;
 		while (num_requests++ < 50) {
-			const params = new URLSearchParams();
+			const client_types = types.filter(
+				(t) => this.#entities[t]?.search_mode === 'client' && !done.has(t),
+			);
+			if (client_types.length === 0) break;
 
-			if (is_initial) {
-				// Descending sync — get newest first
-				const min_start = Math.min(
-					...client_types.map((t) => this.#entities[t].start_updated_at ?? Infinity),
-				);
-				if (isFinite(min_start) && min_start > 0) {
-					params.set('end', String(min_start));
-				}
-			} else {
-				// Ascending sync — get changes since last known
-				const max_end = Math.max(
-					...client_types.map((t) => this.#entities[t].end_updated_at ?? 0),
-				);
-				if (max_end > 0) {
-					params.set('start', String(max_end));
+			// Build the per-entity sync ranges for this page
+			const entity_request: Record<string, unknown> = {};
+			const descending_request = new Set<string>();
+			for (const entity_type of client_types) {
+				const state = this.#entities[entity_type];
+				if (state.start_updated_at === undefined) {
+					// Never synced — newest page first
+					entity_request[entity_type] = { config_version: state.config_version };
+					descending_request.add(entity_type);
+				} else if (state.start_updated_at > 0) {
+					// Backfilling — the page of history just older than our window
+					entity_request[entity_type] = {
+						config_version: state.config_version,
+						end_updated_at: state.start_updated_at,
+					};
+					descending_request.add(entity_type);
+				} else {
+					// Backfill complete — changes newer than our window
+					entity_request[entity_type] = {
+						config_version: state.config_version,
+						start_updated_at: state.end_updated_at ?? 0,
+					};
 				}
 			}
 
-			const query = params.toString() ? `?${params}` : '';
-			let response: Response;
+			let body: SyncResponse | undefined;
 			try {
-				response = await fetch(`/api/sync${query}`, {
+				const response = await fetch(`/api/sync`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({ entity: entity_request }),
 				});
+				if (!response.ok) return; // leave state resumable; do NOT mark synced
+				body = (await response.json().catch(() => undefined)) as SyncResponse | undefined;
 			} catch {
-				break; // Network error — stop syncing
+				return; // network error — leave state resumable; do NOT mark synced
 			}
+			if (!body) return;
 
-			if (!response.ok) break;
-
-			const body = (await response.json().catch(() => undefined)) as
-				| SyncResponse
-				| undefined;
-			if (!body) break;
-
-			let any_data = false;
+			let any_changes = false;
 
 			for (const entity_type of client_types) {
 				const state = this.#entities[entity_type];
 				const entity_result = body.entity[entity_type];
-				if (!entity_result) continue;
+				if (!entity_result) {
+					// The server doesn't know this entity type — nothing more to do,
+					// but don't mark it as successfully synced either
+					done.add(entity_type);
+					continue;
+				}
 
-				// Handle schema changes — rebuild index
+				// Handle schema changes — rebuild the index and restart this
+				// entity's sync from scratch (the old window refers to documents
+				// shaped by the old schema), and drop the cached entities
 				if (
 					entity_result.config &&
 					entity_result.config_version !== state.config_version
@@ -291,16 +325,39 @@ export class DatabaseWorker {
 							(table.orama.sort as Record<string, unknown>),
 					});
 					state.config_version = entity_result.config_version;
+					state.start_updated_at = undefined;
+					state.end_updated_at = undefined;
+					cumulative_inserts[entity_type] = 0;
+					descending_request.add(entity_type);
+					await idbDeleteByPrefix(this.#db, 'entities', `${entity_type}/`);
 				}
 
-				if (!state.orama) continue;
+				if (!state.orama) {
+					done.add(entity_type);
+					continue;
+				}
 
-				// Apply deletes
+				// Apply deletes to the index AND the entity cache — a row deleted on
+				// another device must not keep being served by get()
 				if (entity_result.deleted?.length) {
+					any_changes = true;
 					try {
-						removeMultiple(state.orama, entity_result.deleted as string[]);
+						removeMultiple(
+							state.orama,
+							entity_result.deleted.map((id) => String(id)),
+						);
 					} catch {
 						// Some IDs may not exist in the index
+					}
+					if (state.cache_enabled) {
+						await idbBatch(
+							this.#db,
+							entity_result.deleted.map((id) => ({
+								store: 'entities' as const,
+								type: 'delete' as const,
+								key: `${entity_type}/${id}`,
+							})),
+						);
 					}
 				}
 
@@ -310,7 +367,7 @@ export class DatabaseWorker {
 					...(entity_result.updated ?? []),
 				];
 				if (inserts.length > 0) {
-					any_data = true;
+					any_changes = true;
 					// Remove then re-insert to handle updates
 					const ids = inserts.map((e) =>
 						String((e as Record<string, unknown>)[state.primary_key]),
@@ -330,11 +387,14 @@ export class DatabaseWorker {
 					cumulative_inserts[entity_type] += inserts.length;
 					if (cumulative_inserts[entity_type] >= state.threshold) {
 						await this.#switchToServerMode(entity_type);
+						done.add(entity_type);
 						continue;
 					}
 				}
 
-				// Update sync timestamps
+				// Grow the synced window with the page that was just applied
+				const had_changes =
+					inserts.length > 0 || (entity_result.deleted?.length ?? 0) > 0;
 				if (entity_result.start_updated_at) {
 					state.start_updated_at = Math.min(
 						entity_result.start_updated_at,
@@ -349,59 +409,54 @@ export class DatabaseWorker {
 				}
 				state.last_synced_at = Date.now();
 
-				// Update entity sync request for next page
-				entity_request[entity_type] = {
-					config_version: state.config_version,
-					start_updated_at: state.start_updated_at,
-					end_updated_at: state.end_updated_at,
-				};
+				if (descending_request.has(entity_type)) {
+					// Backfill page: done when we've reached the oldest change the
+					// server knows about (or there was nothing left to return)
+					const reached_oldest =
+						!entity_result.first_updated_at ||
+						!had_changes ||
+						(state.start_updated_at !== undefined &&
+							state.start_updated_at <= entity_result.first_updated_at);
+					if (reached_oldest) {
+						state.start_updated_at = 0; // sentinel: full history synced
+						// Changes may have landed while we were backfilling — only fully
+						// caught up if the server's newest change is inside our window
+						if ((entity_result.last_updated_at || 0) <= (state.end_updated_at ?? 0)) {
+							done.add(entity_type);
+							caught_up.add(entity_type);
+						}
+					}
+				} else {
+					// Ascending page: done when the server has nothing newer
+					if ((entity_result.last_updated_at || 0) <= (state.end_updated_at ?? 0)) {
+						done.add(entity_type);
+						caught_up.add(entity_type);
+					}
+				}
 			}
 
 			// Always persist sync meta (cheap — timestamps for resumption)
-			// Persist search indices less frequently (expensive — full Orama serialization) (#10)
+			// Persist search indices less frequently (expensive — full Orama serialization)
 			await this.#persistSyncState(client_types, num_requests % 5 === 0);
 
-			// Check if we need more pages
-			if (is_initial) {
-				const all_caught_up = client_types.every((t) => {
-					const entity_result = body.entity[t];
-					if (!entity_result) return true;
-					return (
-						!entity_result.first_updated_at ||
-						entity_result.start_updated_at === entity_result.first_updated_at
-					);
-				});
-				if (all_caught_up) {
-					for (const t of client_types) {
-						this.#entities[t].start_updated_at = 0;
-						this.#entities[t].synced = true;
-					}
-					await this.#persistSyncState(client_types, true);
-					break;
-				}
-			} else {
-				const all_caught_up = client_types.every((t) => {
-					const entity_result = body.entity[t];
-					if (!entity_result) return true;
-					return (
-						!entity_result.end_updated_at ||
-						entity_result.end_updated_at === entity_result.last_updated_at
-					);
-				});
-				if (all_caught_up || !any_data) break;
-			}
+			// Safety valve: two consecutive pages with no changes at all means the
+			// server isn't giving us anything new — stop rather than spin. (One
+			// empty page is normal when transitioning from backfill to ascending.)
+			pages_without_changes = any_changes ? 0 : pages_without_changes + 1;
+			if (pages_without_changes >= 2) break;
 		}
 
-		// Mark all as synced
-		for (const t of client_types) {
+		// Only entities that are confirmed caught up are marked as synced
+		for (const t of caught_up) {
 			this.#entities[t].synced = true;
 		}
 
 		// Final index persist to capture remaining pages
-		await this.#persistSyncState(client_types, true);
+		const persist_types = types.filter((t) => this.#entities[t]);
+		await this.#persistSyncState(persist_types, true);
 
 		// Notify active search subscribers
-		this.#notifySubscribers(client_types);
+		this.#notifySubscribers(persist_types);
 	}
 
 	// -----------------------------------------------------------------------
@@ -908,7 +963,24 @@ export class DatabaseWorker {
 		if (!state) return undefined;
 
 		const response = await fetch(`/api/${entity_type}/${id}`);
-		if (!response.ok) return undefined;
+		if (!response.ok) {
+			// The entity no longer exists on the server — purge the stale cache
+			// entry so get() stops resurrecting it
+			if (response.status === 404) {
+				if (state.cache_enabled && this.#db) {
+					await idbDelete(this.#db, 'entities', `${entity_type}/${id}`);
+				}
+				if (state.orama && state.search_mode === 'client') {
+					try {
+						removeFromOrama(state.orama, String(id));
+					} catch {
+						/* may not exist */
+					}
+					this.#notifySubscribers([entity_type]);
+				}
+			}
+			return undefined;
+		}
 		const data = (await response.json()) as Record<string, unknown>;
 
 		if (state.cache_enabled && this.#db) {
@@ -972,8 +1044,8 @@ export class DatabaseWorker {
 						search_mode: 'server',
 						config_version: state.config_version,
 						last_synced_at: state.last_synced_at,
-						start_updated_at: state.start_updated_at ?? 0,
-						end_updated_at: state.end_updated_at ?? 0,
+						start_updated_at: state.start_updated_at,
+						end_updated_at: state.end_updated_at,
 					} satisfies SyncMeta,
 				},
 				{
@@ -1007,13 +1079,16 @@ export class DatabaseWorker {
 				store: 'sync_meta',
 				type: 'put',
 				key: entity_type,
+				// IMPORTANT: start/end are persisted as-is. Coercing a never-synced
+				// `undefined` to 0 would make the next load believe the full history
+				// was already backfilled (0 is the "backfill complete" sentinel).
 				value: {
 					entity_type,
 					search_mode: state.search_mode,
 					config_version: state.config_version,
 					last_synced_at: state.last_synced_at,
-					start_updated_at: state.start_updated_at ?? 0,
-					end_updated_at: state.end_updated_at ?? 0,
+					start_updated_at: state.start_updated_at,
+					end_updated_at: state.end_updated_at,
 				} satisfies SyncMeta,
 			});
 

@@ -16,8 +16,14 @@ export interface SyncMeta {
 	search_mode: 'client' | 'server';
 	config_version: number;
 	last_synced_at: number;
-	start_updated_at: number;
-	end_updated_at: number;
+	/**
+	 * The oldest 'updated_at' timestamp that has been synced.
+	 * `undefined` means the entity has never synced; `0` means the full history
+	 * has been backfilled. Anything in between means backfill is still in progress.
+	 */
+	start_updated_at: number | undefined;
+	/** The newest 'updated_at' timestamp that has been synced (undefined = never synced) */
+	end_updated_at: number | undefined;
 }
 
 export interface CachedEntity {
@@ -99,6 +105,21 @@ export function idbClear(db: IDBDatabase, store: IDBStoreName): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const tx = db.transaction(store, 'readwrite');
 		const request = tx.objectStore(store).clear();
+		request.onsuccess = () => resolve();
+		request.onerror = () => reject(request.error);
+	});
+}
+
+/** Delete all entries whose key starts with the given prefix (e.g. `person/`). */
+export function idbDeleteByPrefix(
+	db: IDBDatabase,
+	store: IDBStoreName,
+	prefix: string,
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(store, 'readwrite');
+		const range = IDBKeyRange.bound(prefix, prefix + '\uffff');
+		const request = tx.objectStore(store).delete(range);
 		request.onsuccess = () => resolve();
 		request.onerror = () => reject(request.error);
 	});
