@@ -131,6 +131,16 @@ export class DatabaseWorker {
 		// un-persisted Orama data) while another tab's sync loop is mid-flight.
 		if (this.#db && this.#db_name === config.db_name) return;
 
+		// Switching scope (different db_name): tear down the previous state
+		// cleanly. This applies to ALL tabs sharing the worker — a scope switch
+		// (e.g. changing orgs) is a global decision, not a per-tab one.
+		if (this.#db) {
+			this.#db.close();
+			this.#db = null;
+			this.#entities = {};
+			this.#pending_refreshes.clear();
+		}
+
 		this.#tables = config.tables;
 		this.#default_threshold = config.default_threshold;
 
@@ -824,13 +834,20 @@ export class DatabaseWorker {
 		let result = searchOrama(state.orama, orama_params);
 		if (result instanceof Promise) result = await result;
 
+		// Orama (<= 3.1.18) can return ghost hits with an empty document for
+		// previously removed docs — filter them out of user-facing results
+		const hits = result.hits.filter(
+			(h) =>
+				h.document &&
+				(h.document as Record<string, unknown>)[state.primary_key] !== undefined,
+		);
 		return {
-			hits: result.hits.map((h) => ({
+			hits: hits.map((h) => ({
 				id: String(h.id),
 				document: h.document as Record<string, unknown>,
 				score: h.score,
 			})),
-			count: result.count,
+			count: Math.max(0, result.count - (result.hits.length - hits.length)),
 			elapsed: result.elapsed,
 		};
 	}

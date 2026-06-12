@@ -33,7 +33,15 @@ export function getWorker(dev = false): Promise<Remote<DatabaseWorker>> {
 	return cached;
 }
 
-/** Terminates the worker and clears the cached instance. */
+/**
+ * Whether the current worker is a SharedWorker (shared across tabs).
+ * Returns false when no worker has been created yet.
+ */
+export function isWorkerShared(): boolean {
+	return typeof SharedWorker !== 'undefined' && raw_worker instanceof SharedWorker;
+}
+
+/** Terminates the worker (or closes this tab's port) and clears the cached instance. */
 export function resetWorker(): void {
 	if (raw_worker) {
 		if (raw_worker instanceof SharedWorker) {

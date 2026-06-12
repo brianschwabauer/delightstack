@@ -7,7 +7,7 @@ import type { Database } from '../schema/schema';
 import type { DatabaseWorker, WorkerSearchResult } from './database.worker';
 import type { SearchQueryInput } from '../search-query';
 import { DelightError } from '@delightstack/utilities';
-import { getWorker, resetWorker } from './database.worker.init';
+import { getWorker, resetWorker, isWorkerShared } from './database.worker.init';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -296,9 +296,27 @@ export class EntityState<
 		});
 	}
 
-	/** Save changes to server. Creates if no ID, updates otherwise. */
+	/**
+	 * Save changes to server. Creates if no ID, updates otherwise.
+	 * Concurrent calls are queued: each save runs after the previous one
+	 * settles (and snapshots its data at that point), so a save issued while
+	 * another is in flight is never silently dropped.
+	 */
 	async save(changes?: Partial<Database.Entity<T>>): Promise<this> {
-		if (untrack(() => this.#saving)) return this;
+		const run = this.#save_chain
+			.catch(() => {
+				// A failed previous save must not poison the queue — its caller
+				// already received the rejection
+			})
+			.then(() => this.#performSave(changes));
+		this.#save_chain = run;
+		return run;
+	}
+
+	/** Promise chain serializing save() calls */
+	#save_chain: Promise<unknown> = Promise.resolve();
+
+	async #performSave(changes?: Partial<Database.Entity<T>>): Promise<this> {
 		this.#saving = true;
 		try {
 			const data_to_save =
@@ -1590,7 +1608,12 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	// Lifecycle
 	// -----------------------------------------------------------------------
 
-	/** Change scope (e.g. user switches org). Clears cache and re-initializes. */
+	/**
+	 * Change scope (e.g. user switches org). Clears cache and re-initializes.
+	 * The worker is kept alive and re-pointed at the new scope — with a
+	 * SharedWorker this applies to every tab (a scope switch is a global
+	 * decision), and the worker handles the database transition internally.
+	 */
 	async setScope(db_name: string): Promise<void> {
 		this.#entity_cache.clear();
 		this.#entity_versions.clear();
@@ -1600,9 +1623,6 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			this.#hydrate_timer = null;
 		}
 		this.#hydrated = false;
-		if (this.#worker) await this.#worker.destroy();
-		resetWorker();
-		this.#worker = null;
 		this.#initialized = false;
 		this.#syncing = false;
 		this.#synced = false;
@@ -1610,7 +1630,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		await this.init();
 	}
 
-	/** Cleanup — terminates worker, clears subscriptions. */
+	/** Cleanup — disconnects from the worker, clears subscriptions. */
 	async destroy(): Promise<void> {
 		this.#destroyed = true;
 		if (this.#external_unsubscribe) {
@@ -1624,9 +1644,15 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			this.#hydrate_timer = null;
 		}
 		if (this.#worker) {
-			await this.#worker.destroy();
+			// A SharedWorker's state belongs to ALL connected tabs — destroying it
+			// here would brick the other tabs. Only tear down worker state for a
+			// dedicated Worker (which is terminated below anyway).
+			if (!isWorkerShared()) {
+				await this.#worker.destroy();
+			}
 			this.#worker = null;
 		}
+		// For a SharedWorker this only closes THIS tab's port
 		resetWorker();
 		this.#initialized = false;
 		this.#syncing = false;
