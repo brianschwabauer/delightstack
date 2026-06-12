@@ -403,6 +403,23 @@ function humanizeFieldName(name: string): string {
 		.join(' ');
 }
 
+/**
+ * Reads a (possibly dot-notation) field name from form data. Flat keys win
+ * ('address.city' as a literal key), then the nested path is walked — so the
+ * same form schema validates both flat Form data records and nested entity
+ * values.
+ */
+function getFormValueAtPath(data: Record<string, unknown>, name: string): unknown {
+	if (name in data) return data[name];
+	if (!name.includes('.')) return undefined;
+	let current: unknown = data;
+	for (const part of name.split('.')) {
+		if (!current || typeof current !== 'object') return undefined;
+		current = (current as Record<string, unknown>)[part];
+	}
+	return current;
+}
+
 /** Extracts the first human-readable issue message from a thrown zod error */
 function zodErrorMessage(error: unknown): string {
 	if (error && typeof error === 'object' && 'issues' in error) {
@@ -3541,7 +3558,7 @@ export namespace Database {
 					)) {
 						if (props.readonly) continue;
 						try {
-							props.parse(data[name]);
+							props.parse(getFormValueAtPath(data, name));
 						} catch (error) {
 							issues.push({ message: DelightError.from(error).message, path: [name] });
 						}

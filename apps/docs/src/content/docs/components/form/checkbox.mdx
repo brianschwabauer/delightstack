@@ -176,7 +176,7 @@ ${'  '}<p style="color: var(--c-error);">Select at least one permission</p>
 | `dense` | `boolean` | `false` | Tighter label/box spacing |
 | `comfortable` | `boolean` | `false` | More label/box spacing |
 | `id` | `string` | auto | Element ID |
-| `name` | `string` | `''` | Form field name |
+| `name` | `string` | `''` | Form field name. Inside a Form, registers the field; with no `checked` prop the checkbox becomes context-driven (reads/writes the form data — no `bind:checked` needed) |
 | `class` | `string` | `''` | Additional CSS classes |
 
 ### CheckboxGroup

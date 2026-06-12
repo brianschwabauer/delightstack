@@ -35,15 +35,17 @@ import '@delightstack/styles';
   until `save()` resolves).
 - **Two-way binding** with `bind:value` on form components, plus component-specific
   bindables like `bind:open` (Modal, BottomSheet), `bind:snap`, `bind:page`.
-- **Schema-driven forms:** when the data lives in a `Database.table()` (from
-  `@delightstack/database`), spread `table.form.field.<name>` onto the field component
-  (`<Input {...field.email} bind:value={email} />`) instead of hand-writing
-  `type`/`label`/`required`/validation. Pass `table.form.schema` to
-  `<Form schema={...}>` for whole-form validation. Boolean fields spread onto
-  `Checkbox`/`Toggle` (use `bind:checked`), enum fields onto `Select` (the spread
-  includes ready-made `options`). Inside a `Form`, each field's `parse` validator is
-  registered with the form (the form schema wins on conflict); standalone, `Input`
-  runs `parse` on blur and shows the message below the field. Full guide:
+- **Entity-backed forms:** when the data lives in a `Database.table()` (from
+  `@delightstack/database`), pass the entity to the Form and spread its field props —
+  `<Form entity={person}><Input {...person.form.field.email} /></Form>`. No
+  `bind:value`, no schema, no submit handler: values flow through the form context
+  (a field with a `name` and no `value`/`checked` prop is context-driven), each
+  field validates via its spread `parse`, and submit normalizes the draft then calls
+  `entity.save()` (`onsaved` fires on success; submit Buttons auto-disable while
+  saving). Works for create (`db.entity('person')`, no id) and edit. Boolean fields
+  spread onto `Checkbox`, enum fields onto `Select` (the spread includes ready-made
+  `options`). Standalone (no Form), `Input`/`Select` run `parse` on blur/close and
+  show the message below the field. Full guide:
   https://docs.thedelight.co/guides/forms.md
 - **Svelte 5 snippets** (`{#snippet header()}…{/snippet}`), not slots, for named
   content areas.

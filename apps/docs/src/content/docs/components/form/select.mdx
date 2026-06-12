@@ -239,7 +239,8 @@ The trigger is transparent (outlined) by default so it sits cleanly on any surfa
 | `disabled` | `boolean` | `false` | Disable select |
 | `placeholder` | `string` | `'Select...'` | Placeholder text |
 | `label` | `string` | - | Field label |
-| `error` | `string` | - | Error message |
+| `error` | `string` | - | Error message (errors from a parent Form context display automatically) |
+| `parse` | `(value: unknown) => unknown` | - | Validator that throws a user-showable error message. Standalone it runs when the dropdown closes; inside a Form it is registered with the form instead |
 | `description` | `string` | - | Description text below the trigger (hidden while an error shows) |
 | `required` | `boolean` | `false` | Mark as required |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Trigger and option size |
@@ -249,7 +250,7 @@ The trigger is transparent (outlined) by default so it sits cleanly on any surfa
 | `comfortable` | `boolean` | `false` | Relaxed option spacing |
 | `filled` | `boolean` | `false` | Paint a solid surface background behind the trigger (vs the default transparent/outlined look) |
 | `id` | `string` | auto | Element ID |
-| `name` | `string` | - | Form field name |
+| `name` | `string` | - | Form field name. Inside a Form, registers the field; with no `value` prop the select becomes context-driven (reads/writes the form data — no `bind:value` needed) |
 | `class` | `string` | `''` | Additional CSS classes |
 | `render_value` | `Snippet<[selected]>` | - | Custom rendering of selected value in trigger |
 | `option` | `Snippet<[opt]>` | - | Custom rendering of each option |

@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { ripple, tooltip } from '@delightstack/utilities';
+	import { getContext } from 'svelte';
+	import type { FormContext } from './Form.svelte';
 
 	const propId = $props.id();
 	let {
-		/** Whether the checkbox is checked */
-		checked = $bindable(false),
+		/** Whether the checkbox is checked. When omitted inside a Form (with a
+		 *  name), the checked state is driven by the form data instead. */
+		checked = $bindable(undefined as boolean | undefined),
 
 		/** Whether the checkbox is in an indeterminate state */
 		indeterminate = false,
@@ -26,6 +29,11 @@
 
 		/** An error message shown below the checkbox */
 		error = '',
+
+		/** Parses & validates the value (e.g. a database table form field's
+		 *  `parse`). Inside a Form it is registered with the form, which runs it
+		 *  on the form's validation timing. */
+		parse = undefined as ((value: unknown) => unknown) | undefined,
 
 		/** Whether the checkbox is required */
 		required = false,
@@ -58,12 +66,54 @@
 	const px = $derived(sizes[size] ?? 20);
 
 	let animation = $state<'none' | 'check' | 'uncheck'>('none');
+	let indicator_element = $state<HTMLElement | undefined>(undefined);
+
+	/* ------------------------------------------------------------------ */
+	/*  Form context integration                                           */
+	/* ------------------------------------------------------------------ */
+
+	const form_ctx = getContext<FormContext | undefined>('form');
+
+	$effect(() => {
+		if (!form_ctx || !name) return;
+		if (indicator_element) form_ctx.register(name, indicator_element, parse);
+		return () => {
+			if (name) form_ctx.unregister(name);
+		};
+	});
+
+	/**
+	 * Context-driven mode: inside a Form, with a name, and no checked prop,
+	 * the checkbox mirrors the form data (e.g. an entity's draft) —
+	 * `<Checkbox {...field.is_public} />` needs no bind:checked.
+	 */
+	const context_driven = !!(form_ctx && name && checked === undefined);
+
+	$effect(() => {
+		if (!context_driven || !form_ctx || !name) return;
+		const ctx_value = Boolean(form_ctx.getValue(name));
+		if (ctx_value !== checked) checked = ctx_value;
+	});
+
+	/** The effective checked state (an omitted checked prop means unchecked) */
+	const is_checked = $derived(checked ?? false);
+
+	/** Error from the local prop or the form context */
+	const resolved_error = $derived.by(() => {
+		if (error) return error;
+		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
+		return '';
+	});
 
 	function toggle() {
 		if (disabled) return;
-		checked = !checked;
+		checked = !is_checked;
 		animation = checked ? 'check' : 'uncheck';
 		setTimeout(() => (animation = 'none'), checked ? 350 : 50);
+		if (form_ctx && name) {
+			form_ctx.setValue(name, checked);
+			form_ctx.setTouched(name);
+		}
 		onchange?.({ checked, value });
 	}
 
@@ -85,7 +135,7 @@
 	class:dense
 	class:comfortable
 	class:disabled
-	class:has-error={!!error}
+	class:has-error={!!resolved_error}
 	{@attach tooltip(tooltip_message)}
 	style:--size="{px}px"
 	style:font-size={`var(--control-font-${size})`}
@@ -98,25 +148,26 @@
 		{value}
 		{required}
 		{disabled}
-		{checked}
+		checked={is_checked}
 		{indeterminate}
 		tabindex={-1}
 		aria-hidden="true" />
 
 	<div
+		bind:this={indicator_element}
 		class="indicator-wrapper"
-		class:checked
+		class:checked={is_checked}
 		class:indeterminate
 		role="checkbox"
 		tabindex={disabled ? -1 : 0}
-		aria-checked={indeterminate ? 'mixed' : checked}
+		aria-checked={indeterminate ? 'mixed' : is_checked}
 		aria-disabled={disabled}
 		aria-labelledby={label ? `${id}-label` : undefined}
 		{@attach ripple({ enabled: !disabled, centered: true, opacity: 0.15 })}
 		onkeydown={onKeyDown}>
 		<svg
 			class="indicator"
-			class:checked
+			class:checked={is_checked}
 			class:indeterminate
 			class:animating-check={animation === 'check'}
 			class:animating-uncheck={animation === 'uncheck'}
@@ -156,8 +207,8 @@
 		</div>
 	{/if}
 
-	{#if error}
-		<span class="error-text">{error}</span>
+	{#if resolved_error}
+		<span class="error-text">{resolved_error}</span>
 	{/if}
 </div>
 

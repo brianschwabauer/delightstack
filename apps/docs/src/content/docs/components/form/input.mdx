@@ -275,7 +275,7 @@ Inside a `<Form>`, the `parse` function is registered with the form instead, whi
 | `disabled` | `boolean` | `false` | Disable input |
 | `readonly` | `boolean` | `false` | Read-only mode |
 | `required` | `boolean` | `false` | Mark as required |
-| `name` | `string` | - | Form field name (for Form context registration) |
+| `name` | `string` | - | Form field name. Inside a Form, registers the field; with no `value` prop the input becomes context-driven (reads/writes the form data — no `bind:value` needed) |
 | `skeleton` | `boolean` | `false` | Show skeleton loading state |
 | `tooltip` | `string` | - | Tooltip text on hover |
 

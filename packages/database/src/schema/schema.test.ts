@@ -1259,4 +1259,23 @@ describe('Schema: form.schema (Standard Schema)', () => {
 		const result = table.form.schema['~standard'].validate({ name: 'Bob' }) as any;
 		expect(result.issues).toBeUndefined();
 	});
+
+	it('should resolve dot-notation paths against nested entity values', () => {
+		const nested = Database.table('form_schema_nested', (schema) => ({
+			id: schema.primaryKey(),
+			address: schema.object({
+				city: schema.string(),
+				zip: schema.string().optional(),
+			}),
+		}));
+		const validate = nested.form.schema['~standard'].validate;
+		// Nested shape (an entity's value)
+		expect((validate({ address: { city: 'Springfield' } }) as any).issues).toBeUndefined();
+		// Flat shape (a Form data record keyed by field name)
+		expect((validate({ 'address.city': 'Springfield' }) as any).issues).toBeUndefined();
+		// Missing required nested field reports the dot-notation path
+		const bad = validate({ address: {} }) as any;
+		expect(bad.issues).toHaveLength(1);
+		expect(bad.issues[0].path.join('.')).toBe('address.city');
+	});
 });

@@ -9,60 +9,26 @@
 		Callout,
 	} from '@delightstack/components';
 	import Icon from '$lib/Icon.svelte';
-	import { personTable } from '$lib/schema';
 	import { tooltip } from '@delightstack/utilities';
-
-	// Schema-derived input props (name, type, label, required, etc.)
-	const field = personTable.form.field;
 
 	const { data } = $props();
 	const { db } = $derived(data);
 
 	let show_add = $state(false);
 
-	// New person form
-	let new_name = $state('');
-	let new_email = $state('');
-	type Relationship =
-		| 'parent'
-		| 'child'
-		| 'sibling'
-		| 'spouse'
-		| 'grandparent'
-		| 'grandchild'
-		| 'aunt-uncle'
-		| 'cousin'
-		| 'friend'
-		| 'other';
-	let new_relationship = $state<Relationship | ''>('');
-	let new_birthday = $state('');
-	let saving = $state(false);
-	let error = $state('');
+	// A draft entity backs the add form: the Form edits draft.value directly
+	// and draft.save() creates the person on submit. After a successful save
+	// the client rekeys its cache, so the next db.entity('person') call hands
+	// out a fresh draft.
+	let draft = $state.raw(db.entity('person'));
+	const field = $derived(draft.form.field);
+
+	function openAdd() {
+		draft = db.entity('person');
+		show_add = true;
+	}
 
 	const people = db.search('person');
-
-	async function addPerson() {
-		if (!new_name.trim()) return;
-		error = '';
-		saving = true;
-		try {
-			await db.create('person', {
-				name: new_name.trim(),
-				email: new_email.trim() || undefined,
-				relationship: new_relationship === '' ? undefined : new_relationship,
-				birthday: new_birthday || undefined,
-			});
-			new_name = '';
-			new_email = '';
-			new_relationship = '';
-			new_birthday = '';
-			show_add = false;
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to add person';
-		} finally {
-			saving = false;
-		}
-	}
 </script>
 
 <svelte:head>
@@ -75,7 +41,7 @@
 			<h1>Family Members</h1>
 			<p>Manage your family directory</p>
 		</div>
-		<Button onclick={() => (show_add = true)}>
+		<Button onclick={openAdd}>
 			<Icon name="plus" size={16} />
 			<span>Add person</span>
 		</Button>
@@ -112,7 +78,7 @@
 					<p>No family members match "{people.query.term}".</p>
 				{:else}
 					<p>No family members yet. Add someone to get started!</p>
-					<Button onclick={() => (show_add = true)}>Add Person</Button>
+					<Button onclick={openAdd}>Add Person</Button>
 				{/if}
 			</div>
 		{/if}
@@ -121,23 +87,24 @@
 
 <!-- Add Person Modal -->
 <Modal bind:open={show_add} title="Add Family Member">
-	{#if error}
-		<Callout error>{error}</Callout>
+	{#if draft.error}
+		<Callout error>
+			{(draft.error as Error).message ?? 'Failed to add person'}
+		</Callout>
 	{/if}
 
-	<!-- The table's form schema validates every field on submit; each Input's
-	     spread props register its field-level parse with the Form as well. -->
-	<Form schema={personTable.form.schema} onsubmit={addPerson}>
-		<Input {...field.name} bind:value={new_name} />
-		<Input {...field.email} bind:value={new_email} placeholder="Optional" />
-		<Select {...field.relationship} bind:value={new_relationship} clearable />
-		<Input {...field.birthday} bind:value={new_birthday} />
+	<!-- Entity-backed form: values flow through the form context (no
+	     bind:value), each field validates via its spread parse, and submit
+	     saves the draft. The submit Button auto-wires the saving state. -->
+	<Form entity={draft} onsaved={() => (show_add = false)}>
+		<Input {...field.name} />
+		<Input {...field.email} placeholder="Optional" />
+		<Select {...field.relationship} clearable />
+		<Input {...field.birthday} />
 
 		<div class="modal-actions">
 			<Button onclick={() => (show_add = false)} transparent>Cancel</Button>
-			<Button type="submit" disabled={saving}>
-				{saving ? 'Adding...' : 'Add Person'}
-			</Button>
+			<Button type="submit">Add Person</Button>
 		</div>
 	</Form>
 </Modal>

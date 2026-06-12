@@ -96,36 +96,43 @@ The `Form` component accepts any validator that implements the [Standard Schema]
 
 All three produce identical behavior when passed to the `Form` component's `schema` prop.
 
-## Schema-Driven Forms (Database Tables)
+## Entity-Backed Forms (Database Tables)
 
-If you define your data with `Database.table()` from `@delightstack/database`, you do not need to write a validation schema or input props by hand — every table exposes ready-made form wiring:
-
-- **`table.form.field.<name>`** — props to spread onto a field component: `name`, `type`, `label`, `placeholder`, `description`, `required`, `readonly`, length/value constraints, enum `options`, array `multiple`, and a `parse` validator.
-- **`table.form.schema`** — a Standard Schema validator covering all of the table's editable fields, ready for the `Form` component's `schema` prop.
+If you define your data with `Database.table()` from `@delightstack/database`, the entire form — values, validation, submission, and saving state — wires itself up from the entity:
 
 ```svelte
 <script>
   import { Form, Input, Select, Button } from '@delightstack/components';
-  import { personTable } from '$lib/schema';
 
-  const field = personTable.form.field;
+  const { data } = $props();
+  const { db } = $derived(data);
 
-  let name = $state('');
-  let email = $state('');
-  let relationship = $state('');
-
-  async function handleSubmit({ data, is_valid }) {
-    // Only called when the table schema validates successfully
-  }
+  // Existing entity → edit form. Omit the id (db.entity('person')) → create form.
+  const person = $derived(db.entity('person', page.params.person_id));
+  const field = $derived(person.form.field);
 </script>
 
-<Form schema={personTable.form.schema} onsubmit={handleSubmit}>
-  <Input {...field.name} bind:value={name} />
-  <Input {...field.email} bind:value={email} />
-  <Select {...field.relationship} bind:value={relationship} clearable />
+<Form entity={person} onsaved={() => goto('/people')}>
+  <Input {...field.name} />
+  <Input {...field.email} />
+  <Select {...field.relationship} clearable />
   <Button type="submit">Save</Button>
 </Form>
 ```
+
+No `bind:value`, no schema, no submit handler, no saving state:
+
+- **Values** flow through the form context — each field reads and writes `person.value` directly (a field with a `name` and no explicit `value` becomes *context-driven*).
+- **Validation** runs per field via the `parse` validator included in each spread, on blur and on submit. Only the fields actually rendered are validated, so partial forms just work.
+- **Submission**: submit validates, normalizes each field through its `parse` (so `''` becomes `undefined` and schema transforms apply), then calls `person.save()` — which creates when the entity has no id and updates otherwise. `onsaved` fires on success.
+- **State**: the form derives `is_dirty` from `person.has_changes`, its submitting state from `person.saving` (submit `Button`s auto-disable and spin), and reset restores the last server values via `person.reset()`.
+
+The `entity` prop is structural — any object with `value` and `save()` works (see `FormEntity` in the [Form docs](/components/form/form/)), so you can hand it a custom store too.
+
+Every table also exposes the pieces individually when you want manual control:
+
+- **`table.form.field.<name>`** (also on `entity.form.field`) — props to spread onto a field component: `name`, `type`, `label`, `placeholder`, `description`, `required`, `readonly`, length/value constraints, enum `options`, array `multiple`, and a `parse` validator.
+- **`table.form.schema`** — a Standard Schema validator covering all of the table's editable fields, for the `Form` component's `schema` prop (it resolves dot-notation field names against nested data, so it validates both flat form records and entity values).
 
 With the table defined as:
 
@@ -138,7 +145,7 @@ export const personTable = Database.table('person', (s) => ({
 }));
 ```
 
-`field.email` spreads as `{ name: 'email', type: 'email', label: 'Email', parse }` — the input type, label, and validation all come from the one schema definition.
+`field.email` spreads as `{ name: 'email', type: 'email', label: 'Email', parse }` — the input type, label, validation, and value binding all come from the one schema definition.
 
 ### How field props are derived
 

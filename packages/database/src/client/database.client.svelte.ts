@@ -217,6 +217,22 @@ export class EntityState<
 		return this.#id;
 	}
 
+	#form: T['form'];
+
+	/**
+	 * The table's form helpers for this entity: `form.field.<name>` gives
+	 * spreadable input props (`<Input {...person.form.field.email} />`) and
+	 * `form.schema` is a Standard Schema validator. Pass the entity itself to
+	 * the components `<Form entity={person}>` and spread the field props —
+	 * values, validation, saving, and submit state are wired automatically.
+	 *
+	 * Populated when the entity is created via `DatabaseClient.entity()`;
+	 * standalone-constructed EntityStates only have it if `form` was passed.
+	 */
+	get form(): T['form'] {
+		return this.#form;
+	}
+
 	/** Timestamp (epoch ms) when entity was created */
 	get created_at(): number | undefined {
 		return (this.#value as Record<string, unknown>).created_at as number | undefined;
@@ -268,11 +284,18 @@ export class EntityState<
 				id: string | number;
 				data?: Record<string, unknown>;
 			}) => void;
+			/**
+			 * The table's form helpers (spreadable per-field input props and a
+			 * Standard Schema validator). Wired by `DatabaseClient.entity` from
+			 * the table config so a page needs only the entity to build a form.
+			 */
+			form?: T['form'];
 		},
 	) {
 		this.entity_type = entity_type;
 		this.#id = id;
 		this.#worker = options?.worker ?? null;
+		this.#form = options?.form as T['form'];
 		this.#fetch = options?.fetch;
 		this.#primary_key = options?.primary_key ?? 'id';
 		this.#prefer_fetch = options?.prefer_fetch;
@@ -1566,6 +1589,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			fetch: this.#config.fetch,
 			initial_data,
 			primary_key: table.config.primary_key,
+			form: table.form as T[K]['form'],
 			// Pre-hydration (SSR + initial client load) we want the SvelteKit
 			// fetch so SSR + hydration share a single response; after the
 			// first client navigation we want the worker's IDB cache.

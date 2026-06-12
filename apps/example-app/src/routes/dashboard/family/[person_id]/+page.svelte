@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		Button,
+		Form,
 		Input,
 		Select,
 		Avatar,
@@ -11,12 +12,8 @@
 		Callout,
 	} from '@delightstack/components';
 	import Icon from '$lib/Icon.svelte';
-	import { personTable } from '$lib/schema';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-
-	// Schema-derived input props (name, type, label, required, etc.)
-	const field = personTable.form.field;
 
 	const { data } = $props();
 	const { db } = $derived(data);
@@ -26,21 +23,12 @@
 	// returns the already-loaded instance from the cache.
 	const person = $derived(db.entity('person', person_id));
 
+	// Schema-derived input props (name, type, label, required, parse, etc.)
+	// carried by the entity itself — no separate table import needed.
+	const field = $derived(person.form.field);
+
 	let editing = $state(false);
 	let show_delete = $state(false);
-
-	async function savePerson() {
-		const v = person.value;
-		await person.save({
-			name: v.name?.trim(),
-			email: v.email?.trim() || undefined,
-			phone: v.phone?.trim() || undefined,
-			relationship: v.relationship || undefined,
-			birthday: v.birthday || undefined,
-			notes: v.notes?.trim() || undefined,
-		});
-		editing = false;
-	}
 
 	function cancelEdit() {
 		person.reset();
@@ -73,13 +61,8 @@
 					<span class="relationship">{person.value.relationship}</span>
 				{/if}
 			</div>
-			<div class="actions">
-				{#if editing}
-					<Button onclick={cancelEdit} transparent>Cancel</Button>
-					<Button onclick={savePerson} disabled={person.saving}>
-						{person.saving ? 'Saving...' : 'Save'}
-					</Button>
-				{:else}
+			{#if !editing}
+				<div class="actions">
 					<Button onclick={() => (editing = true)} transparent dense>
 						<Icon name="edit" size={14} />
 						<span>Edit</span>
@@ -88,8 +71,8 @@
 						<Icon name="trash" size={14} />
 						<span>Delete</span>
 					</Button>
-				{/if}
-			</div>
+				</div>
+			{/if}
 		</div>
 
 		{#if person.error}
@@ -99,22 +82,23 @@
 		{/if}
 
 		{#if editing}
-			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					savePerson();
-				}}
-				class="edit-form">
-				<Input {...field.name} bind:value={person.value.name} />
-				<Input {...field.email} bind:value={person.value.email} />
-				<Input {...field.phone} bind:value={person.value.phone} />
-				<Select
-					{...field.relationship}
-					bind:value={person.value.relationship}
-					clearable />
-				<Input {...field.birthday} bind:value={person.value.birthday} />
-				<Input {...field.notes} bind:value={person.value.notes} />
-			</form>
+			<!-- Entity-backed form: the Form edits person.value through the form
+			     context (no bind:value), validates each field via its spread
+			     parse, and person.save() runs on submit. -->
+			<div class="edit-form">
+				<Form entity={person} onsaved={() => (editing = false)}>
+					<Input {...field.name} />
+					<Input {...field.email} />
+					<Input {...field.phone} />
+					<Select {...field.relationship} clearable />
+					<Input {...field.birthday} />
+					<Input {...field.notes} />
+					<div class="form-actions">
+						<Button onclick={cancelEdit} transparent>Cancel</Button>
+						<Button type="submit">Save</Button>
+					</div>
+				</Form>
+			</div>
 		{:else}
 			<div class="details">
 				<Accordion value="contact" multiple>
@@ -205,10 +189,12 @@
 		gap: var(--size-2);
 	}
 	.edit-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--size-3);
 		max-width: 500px;
+	}
+	.form-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--size-2);
 	}
 	.detail-grid {
 		display: flex;

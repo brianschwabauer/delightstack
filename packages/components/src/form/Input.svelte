@@ -219,6 +219,21 @@
 		};
 	});
 
+	/**
+	 * Context-driven mode: inside a Form, with a name, and no value passed,
+	 * the input mirrors the form data (e.g. an entity's draft) instead of a
+	 * local binding — `<Input {...field.email} />` needs no bind:value.
+	 * Decided once at mount so an explicit (initially-undefined) binding
+	 * isn't hijacked after its first write.
+	 */
+	const context_driven = !!(form_ctx && name && value === undefined);
+
+	$effect(() => {
+		if (!context_driven || !form_ctx || !name) return;
+		const ctx_value = form_ctx.getValue(name);
+		if (ctx_value !== value) value = ctx_value as InputValue;
+	});
+
 	/* ------------------------------------------------------------------ */
 	/*  Standalone parse validation (outside a Form)                       */
 	/* ------------------------------------------------------------------ */

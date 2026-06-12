@@ -26,6 +26,27 @@
 			| undefined;
 	}
 
+	/**
+	 * The minimal entity shape the Form's `entity` prop accepts. `EntityState`
+	 * from `@delightstack/database` satisfies it, but any object with an
+	 * editable `value` and a `save()` works — the interface is structural, so
+	 * the components package has no dependency on the database package.
+	 */
+	export interface FormEntity {
+		/** The editable draft the form reads & writes (field names may be dot-notation paths) */
+		value: Record<string, unknown>;
+		/** Persists the draft; called on submit after validation passes */
+		save: () => Promise<unknown>;
+		/** Whether a save is in flight (drives the form's submitting state) */
+		readonly saving?: boolean;
+		/** Whether the draft differs from the persisted state (drives is_dirty) */
+		readonly has_changes?: boolean;
+		/** Restores the draft to the persisted state (used by form reset) */
+		reset?: () => void;
+		/** Last save/load error, if the entity tracks one */
+		readonly error?: unknown;
+	}
+
 	export interface FormContext {
 		/** The current form data keyed by field name */
 		data: Record<string, unknown>;
@@ -58,6 +79,12 @@
 		unregister: (name: string) => void;
 		/** Updates a field's value in the form data */
 		setValue: (name: string, value: unknown) => void;
+		/**
+		 * Reads a field's value from the form data. Resolves dot-notation
+		 * names against nested data (a literal flat key wins), so fields work
+		 * over both flat data records and nested entity values.
+		 */
+		getValue: (name: string) => unknown;
 		/** Marks a field as touched */
 		setTouched: (name: string) => void;
 		/** Runs validation for a single field */
@@ -71,8 +98,17 @@
 	const propId = $props.id();
 
 	let {
-		/** The form data object (bindable) */
+		/** The form data object (bindable). Ignored when `entity` is set. */
 		data = $bindable({}) as Record<string, unknown>,
+
+		/**
+		 * An entity to bind the form to (e.g. `db.entity('person', id)` from
+		 * `@delightstack/database`). The form edits `entity.value` directly,
+		 * derives dirty/submitting state from it, and calls `entity.save()` on
+		 * submit once validation passes. Fields spread from `entity.form.field`
+		 * need no `bind:value` — values flow through the form context.
+		 */
+		entity = undefined as FormEntity | undefined,
 
 		/** Any Standard Schema compatible validator (Zod, Valibot, ArkType, etc.) */
 		schema = undefined as StandardSchema | undefined,
@@ -117,20 +153,68 @@
 			  }) => void)
 			| undefined,
 
-		/** Called when validation fails on submit */
+		/** Called when validation fails on submit, or when an entity save rejects */
 		onerror = undefined as
-			| ((detail: { errors: Record<string, string> }) => void)
+			| ((detail: { errors: Record<string, string>; error?: unknown }) => void)
 			| undefined,
+
+		/** Called after an entity-backed form saves successfully */
+		onsaved = undefined as ((detail: { entity: FormEntity }) => void) | undefined,
 
 		/** Called when the form is reset */
 		onreset = undefined as (() => void) | undefined,
 	} = $props();
 
 	/* ------------------------------------------------------------------ */
+	/*  Data access                                                        */
+	/* ------------------------------------------------------------------ */
+
+	/** The record the form reads & writes: the entity's draft, or the data prop */
+	const form_data = $derived(entity ? entity.value : data);
+
+	/**
+	 * Reads a (possibly dot-notation) field name from the form data. A literal
+	 * flat key wins, then the nested path is walked — so the same field names
+	 * work over a flat data record or a nested entity value.
+	 */
+	function getValueAtPath(record: Record<string, unknown>, name: string): unknown {
+		if (name in record) return record[name];
+		if (!name.includes('.')) return undefined;
+		let current: unknown = record;
+		for (const part of name.split('.')) {
+			if (!current || typeof current !== 'object') return undefined;
+			current = (current as Record<string, unknown>)[part];
+		}
+		return current;
+	}
+
+	/** Writes a (possibly dot-notation) field name, creating nested objects as needed */
+	function setValueAtPath(
+		record: Record<string, unknown>,
+		name: string,
+		value: unknown,
+	): void {
+		if (!name.includes('.') || name in record) {
+			record[name] = value;
+			return;
+		}
+		const parts = name.split('.');
+		let current = record;
+		for (let i = 0; i < parts.length - 1; i++) {
+			const part = parts[i];
+			if (!current[part] || typeof current[part] !== 'object') {
+				current[part] = {};
+			}
+			current = current[part] as Record<string, unknown>;
+		}
+		current[parts[parts.length - 1]] = value;
+	}
+
+	/* ------------------------------------------------------------------ */
 	/*  Internal state                                                     */
 	/* ------------------------------------------------------------------ */
 
-	/** Snapshot of the initial data for dirty tracking and reset */
+	/** Snapshot of the initial data for dirty tracking and reset (data-prop mode only) */
 	let initial_snapshot = JSON.stringify(data);
 
 	/** Registry of field elements by name */
@@ -148,14 +232,19 @@
 	/** Whether the form is currently submitting */
 	let is_submitting = $state(false);
 
-	/** Whether the form data has changed from the initial snapshot */
-	let is_dirty = $derived(JSON.stringify(data) !== initial_snapshot);
+	/** Whether the form data has changed (entity dirty state, or snapshot diff) */
+	let is_dirty = $derived(
+		entity ? (entity.has_changes ?? false) : JSON.stringify(data) !== initial_snapshot,
+	);
 
 	/** Whether the form currently has no validation errors */
 	let is_valid = $derived(Object.keys(errors).length === 0);
 
+	/** Whether a submit is in flight (locally tracked, or the entity is saving) */
+	let effectively_submitting = $derived(is_submitting || (entity?.saving ?? false));
+
 	/** Whether the form should be effectively disabled (explicit or submitting) */
-	let effectively_disabled = $derived(disabled || is_submitting);
+	let effectively_disabled = $derived(disabled || effectively_submitting);
 
 	/* ------------------------------------------------------------------ */
 	/*  Standard Schema validation                                         */
@@ -171,7 +260,7 @@
 		// schema doesn't cover keep their field-level error.
 		for (const [name, validator] of field_validators) {
 			try {
-				validator(values[name]);
+				validator(getValueAtPath(values, name));
 			} catch (error) {
 				field_errors[name] = error instanceof Error ? error.message : 'Invalid value';
 			}
@@ -192,7 +281,7 @@
 	}
 
 	async function validateSingleField(name: string): Promise<void> {
-		const all_errors = await validate(data);
+		const all_errors = await validate(form_data);
 		if (all_errors[name]) {
 			errors[name] = all_errors[name];
 		} else {
@@ -223,13 +312,17 @@
 	}
 
 	function setValue(name: string, value: unknown) {
-		(data as Record<string, unknown>)[name] = value;
+		setValueAtPath(form_data, name, value);
 
 		if (validate_on === 'change' && touched[name]) {
 			validateSingleField(name);
 		}
 
-		onchange?.({ data, errors });
+		onchange?.({ data: form_data, errors });
+	}
+
+	function getValue(name: string): unknown {
+		return getValueAtPath(form_data, name);
 	}
 
 	function setTouched(name: string) {
@@ -261,6 +354,7 @@
 		register,
 		unregister,
 		setValue,
+		getValue,
 		setTouched,
 		validateField,
 	});
@@ -268,11 +362,11 @@
 
 	// Keep context in sync with reactive state
 	$effect(() => {
-		ctx.data = data;
+		ctx.data = form_data;
 		ctx.errors = errors;
 		ctx.touched = touched;
 		ctx.is_dirty = is_dirty;
-		ctx.is_submitting = is_submitting;
+		ctx.is_submitting = effectively_submitting;
 		ctx.is_valid = is_valid;
 		ctx.disabled = effectively_disabled;
 		ctx.validate_on = validate_on;
@@ -300,7 +394,11 @@
 	/* ------------------------------------------------------------------ */
 
 	function resetForm() {
-		data = JSON.parse(initial_snapshot);
+		if (entity) {
+			entity.reset?.();
+		} else {
+			data = JSON.parse(initial_snapshot);
+		}
 		errors = {};
 		touched = {};
 		onreset?.();
@@ -313,10 +411,10 @@
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 
-		if (is_submitting) return;
+		if (effectively_submitting) return;
 
 		// Validate all fields
-		const field_errors = await validate(data);
+		const field_errors = await validate(form_data);
 		errors = field_errors;
 
 		// Mark all registered fields as touched
@@ -329,6 +427,39 @@
 		if (!valid) {
 			onerror?.({ errors: field_errors });
 			focusFirstError(field_errors);
+			return;
+		}
+
+		// Entity-backed submission: optional onsubmit hook (e.g. to massage the
+		// draft), then save. The saved entity carries its id (create or update).
+		if (entity) {
+			// Write each field's PARSED value back into the draft first — parse()
+			// normalizes ('' becomes undefined, schema transforms apply), so the
+			// entity saves clean data instead of raw input strings.
+			for (const [field_name, validator] of field_validators) {
+				try {
+					setValueAtPath(
+						form_data,
+						field_name,
+						validator(getValueAtPath(form_data, field_name)),
+					);
+				} catch {
+					// Validation above passed; leave the raw value if a validator
+					// is non-deterministic
+				}
+			}
+			is_submitting = true;
+			try {
+				await onsubmit?.({ data: form_data, is_valid: valid });
+				await entity.save();
+				if (reset_on_submit) resetForm();
+				onsaved?.({ entity });
+			} catch (error) {
+				// The entity tracks the failure on entity.error too (when supported)
+				onerror?.({ errors: {}, error });
+			} finally {
+				is_submitting = false;
+			}
 			return;
 		}
 

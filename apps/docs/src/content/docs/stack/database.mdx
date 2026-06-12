@@ -91,16 +91,20 @@ For declarative CRUD routes, mount `createDatabaseHandle()` in your SvelteKit `h
 {/each}
 ```
 
-## 5. Schema-driven forms
+## 5. Entity-backed forms
 
-Every table also generates form wiring: spread `table.form.field.<name>` onto a field component to
-get its `name`, `type`, `label`, constraints, and a `parse` validator from the one schema
-definition, and pass `table.form.schema` (a Standard Schema) to the components `Form` for
-whole-form validation.
+Every entity carries its table's form wiring (`entity.form.field` / `entity.form.schema`). Hand the
+entity to the components `Form` and spread the field props — values, validation, saving, and
+submit state are all handled:
 
 ```svelte
-<Form schema={postTable.form.schema} onsubmit={save}>
-	<Input {...postTable.form.field.title} bind:value={title} />
+<script>
+	const post = $derived(db.entity('post', post_id)); // omit the id to create
+</script>
+
+<Form entity={post} onsaved={() => goto('/posts')}>
+	<Input {...post.form.field.title} />
+	<Button type="submit">Save</Button>
 </Form>
 ```
 

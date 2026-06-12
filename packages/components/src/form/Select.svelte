@@ -15,7 +15,8 @@
 
 <script lang="ts">
 	import { tooltip, ripple } from '@delightstack/utilities';
-	import { type Snippet } from 'svelte';
+	import { getContext, type Snippet } from 'svelte';
+	import type { FormContext } from './Form.svelte';
 	import { scale } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import { backOut, quintOut } from 'svelte/easing';
@@ -59,6 +60,12 @@
 
 		/** An error message shown below the trigger */
 		error = undefined as string | undefined,
+
+		/** Parses & validates the value (e.g. a database table form field's `parse`).
+		 *  Throws an error whose message is shown below the trigger.
+		 *  Standalone, it runs when the dropdown closes (re-running on change
+		 *  while errored); inside a Form it is registered with the form instead. */
+		parse = undefined as ((value: unknown) => unknown) | undefined,
 
 		/** Description text shown below the trigger (hidden while an error shows) */
 		description = undefined as string | undefined,
@@ -137,6 +144,70 @@
 	// Whether the dropdown was flipped above the trigger, so it can expand
 	// from the edge nearest the control.
 	let dropdownAbove = $state(false);
+
+	/* ------------------------------------------------------------------ */
+	/*  Form context integration                                           */
+	/* ------------------------------------------------------------------ */
+
+	const form_ctx = getContext<FormContext | undefined>('form');
+
+	$effect(() => {
+		if (!form_ctx || !name) return;
+		if (triggerElement) form_ctx.register(name, triggerElement, parse);
+		return () => {
+			if (name) form_ctx.unregister(name);
+		};
+	});
+
+	/**
+	 * Context-driven mode: inside a Form, with a name, and no value passed,
+	 * the select mirrors the form data (e.g. an entity's draft) instead of a
+	 * local binding — `<Select {...field.relationship} />` needs no bind:value.
+	 */
+	const context_driven = !!(form_ctx && name && value === undefined);
+
+	$effect(() => {
+		if (!context_driven || !form_ctx || !name) return;
+		const ctx_value = form_ctx.getValue(name);
+		if (ctx_value !== value) value = ctx_value;
+	});
+
+	/** Error from running `parse` standalone. Inside a Form the form runs
+	 *  `parse` instead (it was registered above), so this never sets there. */
+	let parse_error = $state<string | undefined>(undefined);
+
+	function runParse() {
+		if (!parse || form_ctx) return;
+		try {
+			parse(value);
+			parse_error = undefined;
+		} catch (e) {
+			parse_error = e instanceof Error ? e.message : 'Invalid value';
+		}
+	}
+
+	/** Re-validate on change, but only while already errored — the error
+	 *  clears the moment the value is fixed without nagging beforehand. */
+	function reparseIfErrored() {
+		if (parse_error) runParse();
+	}
+
+	/** Error from the local prop, standalone parse, or form context */
+	const resolved_error = $derived.by(() => {
+		if (error !== undefined) return error;
+		if (parse_error) return parse_error;
+		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
+		return undefined;
+	});
+
+	/** Commits a value change to the form context and local validation */
+	function commitToForm() {
+		if (form_ctx && name) {
+			form_ctx.setValue(name, value);
+		} else {
+			reparseIfErrored();
+		}
+	}
 
 	/* Per-size font from the shared --control-font-* tokens so Select lines up
 	   at the same height as Input and Button for a given size. */
@@ -234,6 +305,7 @@
 			value = opt.value;
 			closeDropdown();
 		}
+		commitToForm();
 		onchange?.({ value });
 	}
 
@@ -243,6 +315,7 @@
 		if (disabled) return;
 		if (!multiple || !Array.isArray(value)) return;
 		value = value.filter((v: unknown) => v !== optValue);
+		commitToForm();
 		onchange?.({ value });
 	}
 
@@ -274,6 +347,7 @@
 		e.stopPropagation();
 		if (disabled) return;
 		value = multiple ? [] : undefined;
+		commitToForm();
 		onchange?.({ value });
 	}
 
@@ -289,6 +363,8 @@
 	function closeDropdown() {
 		if (!open) return;
 		open = false;
+		if (form_ctx && name) form_ctx.setTouched(name);
+		runParse();
 	}
 
 	/** Toggle the dropdown */
@@ -323,6 +399,7 @@
 		} else {
 			value = optValue;
 		}
+		commitToForm();
 		onchange?.({ value });
 	}
 
@@ -394,6 +471,7 @@
 			if (nextIdx < 0 || nextIdx >= opts.length) return;
 		}
 		value = opts[nextIdx].value;
+		commitToForm();
 		onchange?.({ value });
 	}
 
@@ -493,6 +571,7 @@
 							// In multi-select type-ahead doesn't auto-select
 						} else {
 							value = match.value;
+							commitToForm();
 							onchange?.({ value });
 						}
 					}
@@ -664,7 +743,7 @@
 	class:skeleton
 	class:open
 	class:has-label={!!label}
-	class:has-error={!!error}
+	class:has-error={!!resolved_error}
 	bind:this={selectElement}
 	style:--select-font={sizeMap[size] ?? sizeMap['1']}
 	onfocusin={() => (focused = true)}
@@ -679,7 +758,7 @@
 		{id}
 		class="trigger"
 		class:open
-		class:error={!!error}
+		class:error={!!resolved_error}
 		class:disabled
 		role="combobox"
 		aria-expanded={open}
@@ -963,8 +1042,8 @@
 </div>
 
 <!-- Error message / description text -->
-{#if error}
-	<span class="error-text">{error}</span>
+{#if resolved_error}
+	<span class="error-text">{resolved_error}</span>
 {:else if description}
 	<span class="description-text">{description}</span>
 {/if}

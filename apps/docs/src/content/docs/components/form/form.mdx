@@ -172,7 +172,8 @@ A native `<button type="reset">` triggers form reset, clearing all values, error
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `data` | `object` | `{}` | Form data object, bindable |
+| `data` | `object` | `{}` | Form data object, bindable. Ignored when `entity` is set |
+| `entity` | `FormEntity` | — | An entity to bind the form to (e.g. `db.entity(...)`): values, dirty/submitting state, and `save()` on submit all derive from it |
 | `schema` | `StandardSchema` | - | Any Standard Schema compatible validator |
 | `validate_on` | `'change' \| 'blur' \| 'submit'` | `'blur'` | When to validate fields |
 | `disabled` | `boolean` | `false` | Disable all child fields |
@@ -189,12 +190,24 @@ A native `<button type="reset">` triggers form reset, clearing all values, error
 |-------|--------|-------------|
 | `onsubmit` | `{ data, is_valid }` | Form submitted. Can return a Promise for automatic loading state |
 | `onchange` | `{ data, errors }` | Form data changed |
-| `onerror` | `{ errors }` | Validation failed on submit |
+| `onerror` | `{ errors, error? }` | Validation failed on submit, or an entity save rejected |
+| `onsaved` | `{ entity }` | An entity-backed form saved successfully |
 | `onreset` | - | Form was reset |
 
 ## Types
 
 ```typescript
+interface FormEntity {
+  /** The editable draft the form reads & writes */
+  value: Record<string, unknown>;
+  /** Persists the draft; called on submit after validation passes */
+  save: () => Promise<unknown>;
+  readonly saving?: boolean;
+  readonly has_changes?: boolean;
+  reset?: () => void;
+  readonly error?: unknown;
+}
+
 interface FormContext {
   data: Record<string, unknown>;
   errors: Record<string, string>;
@@ -211,6 +224,7 @@ interface FormContext {
   ) => void;
   unregister: (name: string) => void;
   setValue: (name: string, value: unknown) => void;
+  getValue: (name: string) => unknown;
   setTouched: (name: string) => void;
   validateField: (name: string) => void;
 }
@@ -238,6 +252,8 @@ Child form controls (Input, Select, Checkbox, etc.) auto-register when they have
 6. Call `unregister(name)` on destroy
 
 This means child controls work the same whether inside a Form or standalone.
+
+**Context-driven values:** when a field has a `name` and no explicit `value` (or `checked`) prop, it reads its value from the form data via `getValue(name)` and writes through `setValue(name, value)` — no `bind:value` needed. Field names may be dot-notation paths (`address.city`), which resolve into nested data.
 
 When fields register validators, the Form runs them alongside the form-level `schema` on the same `validate_on` timing. If both produce an error for the same field, the schema's message wins; fields the schema does not cover keep their field-level error. A child `Input` never runs its `parse` prop itself while inside a Form, so the two layers cannot conflict.
 
