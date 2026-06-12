@@ -1144,6 +1144,25 @@ describe('Schema: form field props', () => {
 		expect(field.website.type).toBe('url');
 	});
 
+	it('should mark optional non-defaulted booleans as tristate', () => {
+		const booleans = Database.table('form_props_booleans', (schema) => ({
+			id: schema.primaryKey(),
+			answered: schema.boolean(),
+			maybe: schema.boolean().optional(),
+			opted_in: schema.boolean().default(true),
+		}));
+		const props = booleans.form.field as Record<string, any>;
+		expect(props.maybe.tristate).toBe(true);
+		expect(props.maybe.default_checked).toBeUndefined();
+		expect(props.opted_in.tristate).toBeUndefined();
+		expect(props.opted_in.default_checked).toBe(true);
+		expect(props.answered.tristate).toBeUndefined();
+		expect(props.answered.default_checked).toBeUndefined();
+		expect(props.answered.required).toBe(true);
+		// Defaulted booleans resolve empty input to the default
+		expect(props.opted_in.parse(undefined)).toBe(true);
+	});
+
 	it('should accept enum options as { value, label } pairs', () => {
 		const labeled = Database.table('form_props_enum_labels', (schema) => ({
 			id: schema.primaryKey(),
@@ -1204,8 +1223,11 @@ describe('Schema: form field parse()', () => {
 		}
 	});
 
-	it('should not require fields with a default', () => {
-		expect(field.is_public.parse(undefined)).toBeUndefined();
+	it('should resolve empty input on defaulted fields to the default value', () => {
+		expect(field.is_public.parse(undefined)).toBe(false);
+		expect(field.is_public.parse('')).toBe(false);
+		expect(field.is_public.parse(null)).toBe(false);
+		expect(field.is_public.parse(true)).toBe(true);
 	});
 
 	it('should validate each item and the length constraints of array fields', () => {

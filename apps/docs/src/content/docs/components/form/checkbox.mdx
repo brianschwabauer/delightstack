@@ -170,7 +170,10 @@ ${'  '}<p style="color: var(--c-error);">Select at least one permission</p>
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Checkbox size |
 | `label` | `string` | `''` | Label text |
 | `description` | `string` | `''` | Helper text below label |
-| `error` | `string` | `''` | Error message |
+| `error` | `string` | `''` | Error message (errors from a parent Form context display automatically) |
+| `parse` | `(value: unknown) => unknown` | - | Validator that throws a user-showable message; inside a Form it is registered with the form |
+| `tristate` | `boolean` | `false` | Tri-state mode (set by optional boolean form fields): a `null`/`undefined` value displays as indeterminate; clicking resolves to checked |
+| `default_checked` | `boolean` | - | Default shown when the form data has no value yet (set by defaulted boolean form fields) |
 | `required` | `boolean` | `false` | Mark as required |
 | `tooltip` | `string` | `''` | Tooltip text on hover |
 | `dense` | `boolean` | `false` | Tighter label/box spacing |

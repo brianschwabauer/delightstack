@@ -7,7 +7,7 @@
 	let {
 		/** Whether the checkbox is checked. When omitted inside a Form (with a
 		 *  name), the checked state is driven by the form data instead. */
-		checked = $bindable(undefined as boolean | undefined),
+		checked = $bindable() as boolean | undefined,
 
 		/** Whether the checkbox is in an indeterminate state */
 		indeterminate = false,
@@ -34,6 +34,18 @@
 		 *  `parse`). Inside a Form it is registered with the form, which runs it
 		 *  on the form's validation timing. */
 		parse = undefined as ((value: unknown) => unknown) | undefined,
+
+		/** Tri-state mode (set by optional non-defaulted boolean form fields):
+		 *  a null/undefined value means "unanswered" and displays as
+		 *  indeterminate. Clicking resolves to checked, matching the browser's
+		 *  native indeterminate-checkbox behavior — use Toggle for a control
+		 *  the user can cycle back to the middle state. */
+		tristate = false,
+
+		/** The field's default value (set by defaulted boolean form fields):
+		 *  shown when the form data has no value yet, so the display matches
+		 *  what saving would persist. */
+		default_checked = undefined as boolean | undefined,
 
 		/** Whether the checkbox is required */
 		required = false,
@@ -91,12 +103,25 @@
 
 	$effect(() => {
 		if (!context_driven || !form_ctx || !name) return;
-		const ctx_value = Boolean(form_ctx.getValue(name));
-		if (ctx_value !== checked) checked = ctx_value;
+		const ctx_value = form_ctx.getValue(name);
+		let next: boolean | undefined;
+		if (ctx_value === undefined || ctx_value === null) {
+			// Unanswered: tri-state fields stay undefined (indeterminate display),
+			// defaulted fields show their default, plain booleans show unchecked
+			next = tristate ? undefined : (default_checked ?? false);
+		} else {
+			next = Boolean(ctx_value);
+		}
+		if (next !== checked) checked = next;
 	});
 
 	/** The effective checked state (an omitted checked prop means unchecked) */
 	const is_checked = $derived(checked ?? false);
+
+	/** Indeterminate display: the explicit prop, or an unanswered tri-state value */
+	const show_indeterminate = $derived(
+		indeterminate || (tristate && (checked === undefined || checked === null)),
+	);
 
 	/** Error from the local prop or the form context */
 	const resolved_error = $derived.by(() => {
@@ -149,7 +174,7 @@
 		{required}
 		{disabled}
 		checked={is_checked}
-		{indeterminate}
+		indeterminate={show_indeterminate}
 		tabindex={-1}
 		aria-hidden="true" />
 
@@ -157,10 +182,10 @@
 		bind:this={indicator_element}
 		class="indicator-wrapper"
 		class:checked={is_checked}
-		class:indeterminate
+		class:indeterminate={show_indeterminate}
 		role="checkbox"
 		tabindex={disabled ? -1 : 0}
-		aria-checked={indeterminate ? 'mixed' : is_checked}
+		aria-checked={show_indeterminate ? 'mixed' : is_checked}
 		aria-disabled={disabled}
 		aria-labelledby={label ? `${id}-label` : undefined}
 		{@attach ripple({ enabled: !disabled, centered: true, opacity: 0.15 })}
@@ -168,7 +193,7 @@
 		<svg
 			class="indicator"
 			class:checked={is_checked}
-			class:indeterminate
+			class:indeterminate={show_indeterminate}
 			class:animating-check={animation === 'check'}
 			class:animating-uncheck={animation === 'uncheck'}
 			viewBox="0 0 24 24"
@@ -176,7 +201,7 @@
 			height={px}
 			fill="none">
 			<rect class="box" x="2" y="2" width="20" height="20" rx="3" stroke-width="2" />
-			{#if indeterminate}
+			{#if show_indeterminate}
 				<line
 					class="dash"
 					x1="7"

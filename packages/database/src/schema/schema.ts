@@ -716,6 +716,13 @@ type GenericFormFieldProps = BaseFormFieldProps & {
 	min?: number;
 	/** The amount the number should be increased/decreased with each 'step' */
 	step?: number;
+	/**
+	 * Whether a boolean field is tri-state (optional with no default):
+	 * null/undefined mean "unanswered" and display as indeterminate
+	 */
+	tristate?: boolean;
+	/** A defaulted boolean field's default value (shown when the draft is empty) */
+	default_checked?: boolean;
 };
 
 /**
@@ -812,7 +819,22 @@ type FormFieldProps<
 										_: BaseFormFieldProps<FieldName> & {
 											/** The type of value that the input element accepts */
 											type: 'boolean';
-										} & CommonFormFieldProps<T, InheritedOptional>;
+										} & OmitNeverProperties<{
+												/**
+												 * Whether the field is tri-state (optional with no default):
+												 * null/undefined mean "unanswered" and display as indeterminate
+												 */
+												tristate: HasDefault<T> extends true
+													? never
+													: InheritedOptional extends true
+														? true
+														: IsOptional<T> extends true
+															? true
+															: never;
+												/** The field's default value (shown when the draft is empty) */
+												default_checked: HasDefault<T> extends true ? boolean : never;
+											}> &
+											CommonFormFieldProps<T, InheritedOptional>;
 									}>
 								: /** The field is a string type so add the necessary string input props */
 									TypeString extends 'string'
@@ -3035,10 +3057,21 @@ export namespace Database {
 				const is_multiple = !!inherited.array;
 				const label: string =
 					('label' in flag_field && (flag_field as any).label) || humanizeFieldName(path);
+				const has_default =
+					'has_default' in flag_field && !!(flag_field as any).has_default;
 				const required =
 					!inherited.optional &&
 					!('optional' in flag_field && flag_field.optional) &&
-					!('has_default' in flag_field && (flag_field as any).has_default);
+					!has_default;
+
+				/** The field's .default() value, resolved from the zod schema */
+				function schemaDefault(): unknown {
+					if (!has_default || !('schema' in subfield) || !subfield.schema) {
+						return undefined;
+					}
+					const result = subfield.schema.safeParse(undefined);
+					return result.success ? result.data : undefined;
+				}
 				const readonly = inherited.readonly || flag_field.readonly;
 
 				function parseSingleValue(value: unknown): unknown {
@@ -3071,6 +3104,10 @@ export namespace Database {
 							(is_multiple && Array.isArray(value) && value.length === 0);
 						if (is_empty) {
 							if (required) throw DelightError.badRequest(`${label} is required`);
+							// Defaulted fields resolve empty input to their default, so the
+							// saved draft matches what the table would store anyway
+							const default_value = schemaDefault();
+							if (default_value !== undefined) return default_value;
 							return undefined;
 						}
 						if (is_multiple) {
@@ -3144,6 +3181,16 @@ export namespace Database {
 				}
 				if (subfield.type === 'boolean') {
 					field_props.type = 'boolean';
+					if (has_default) {
+						const default_value = schemaDefault();
+						if (typeof default_value === 'boolean') {
+							field_props.default_checked = default_value;
+						}
+					} else if (!required) {
+						// Optional with no default: tri-state — null/undefined mean
+						// "unanswered" and display as indeterminate
+						field_props.tristate = true;
+					}
 				}
 				if (subfield.type === 'enum') {
 					field_props.options = subfield.options.map((option) => ({

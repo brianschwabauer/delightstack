@@ -161,9 +161,20 @@ export const personTable = Database.table('person', (s) => ({
 | `.min()` / `.max()`             | `minlength`/`maxlength` on strings, `min`/`max` on numbers                                         |
 | `s.enum([...])`                 | `options` as `{ value, label }[]`, ready for `Select` — pass `{ value, label }` pairs to `s.enum()` for custom labels |
 | `s.array(...)`                  | `multiple` (chips mode on `Input`, multi-select on `Select`)                                       |
-| `s.boolean()`                   | `type: 'boolean'` — spread onto `Checkbox` or `Toggle` (not `Input`) and use `bind:checked`        |
+| `s.boolean()`                   | `type: 'boolean'` — spread onto `Checkbox` or `Toggle` (not `Input`)                               |
+| `s.boolean().optional()`        | `tristate: true` — `null`/`undefined` mean "unanswered" and display as indeterminate               |
+| `s.boolean().default(...)`      | `default_checked` — an empty draft displays (and saves) the default                                |
 
 Primary keys, foreign keys, and derived fields are excluded from `form.field` and `form.schema` — they are not user-editable.
+
+### Tri-state booleans
+
+An optional boolean with no default is genuinely **tri-state**: `true` / `false` / `NULL`-meaning-unanswered (optional fields are stored as `NULL` in SQLite). The form layer surfaces that:
+
+- On `Checkbox`, an unanswered value displays as **indeterminate**; clicking resolves it to checked (matching the browser's native indeterminate-checkbox behavior). The user can't click back to "unanswered".
+- On `Toggle`, the spread enables the **three-stop track** — the unanswered value is the middle stop, and the user *can* cycle or drag back to it (writing `null`). Use Toggle when "no answer" must be re-enterable.
+
+Defaulted booleans (`.default(true)`) are not tri-state: an empty draft displays the default, and submitting fills the default into the saved data — so what the user sees always matches what gets stored.
 
 <Aside type="tip">
 Every `parse` function returns the parsed value and throws an error whose `message` is safe to show to the user (e.g. `"Full name is required"`, `"Invalid email address"`) — never a raw validation dump.

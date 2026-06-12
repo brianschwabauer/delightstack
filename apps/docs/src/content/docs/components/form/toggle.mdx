@@ -162,7 +162,7 @@ ${'  '}/>
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `checked` | `boolean` (or `boolean \| null` with `indeterminate`) | `false` | Toggle state, bindable. `null` is the in-between state, only available in indeterminate mode |
+| `checked` | `boolean` (or `boolean \| null` with `indeterminate`) | - | Toggle state, bindable. `null` is the in-between state (three-state mode only). When omitted inside a Form with a `name`, the state is context-driven (reads/writes the form data — no `bind:checked` needed) |
 | `indeterminate` | `boolean` | `false` | Enable the third, in-between state (`checked: null`); clicking cycles `false → null → true` |
 | `disabled` | `boolean` | `false` | Disable toggle |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Toggle size |
@@ -170,7 +170,11 @@ ${'  '}/>
 | `label_position` | `'start' \| 'end'` | `'end'` | Label placement relative to toggle |
 | `on_label` | `string` | - | Label text when on |
 | `off_label` | `string` | - | Label text when off |
-| `name` | `string` | - | Form field name for submission |
+| `name` | `string` | - | Form field name. Inside a Form, registers the field and enables context-driven state |
+| `tristate` | `boolean` | `false` | Three-state mode for tri-state form fields (same track as `indeterminate`): `null`/`undefined` mean "unanswered" (the middle stop), and the user can cycle back to it |
+| `default_checked` | `boolean` | - | Default shown when the form data has no value yet (set by defaulted boolean form fields) |
+| `error` | `string` | - | Error message shown below the toggle (errors from a parent Form context display automatically) |
+| `parse` | `(value: unknown) => unknown` | - | Validator that throws a user-showable message; inside a Form it is registered with the form |
 | `value` | `string` | - | Form value when checked |
 | `tooltip` | `string` | - | Tooltip text on hover |
 | `dense` | `boolean` | `false` | Tighter label spacing |

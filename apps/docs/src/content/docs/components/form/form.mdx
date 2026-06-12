@@ -253,7 +253,7 @@ Child form controls (Input, Select, Checkbox, etc.) auto-register when they have
 
 This means child controls work the same whether inside a Form or standalone.
 
-**Context-driven values:** when a field has a `name` and no explicit `value` (or `checked`) prop, it reads its value from the form data via `getValue(name)` and writes through `setValue(name, value)` — no `bind:value` needed. Field names may be dot-notation paths (`address.city`), which resolve into nested data.
+**Context-driven values:** when a field (Input, Select, Checkbox, Toggle) has a `name` and no explicit `value` (or `checked`) prop, it reads its value from the form data via `getValue(name)` and writes through `setValue(name, value)` — no `bind:value` needed. Field names may be dot-notation paths (`address.city`), which resolve into nested data.
 
 When fields register validators, the Form runs them alongside the form-level `schema` on the same `validate_on` timing. If both produce an error for the same field, the schema's message wins; fields the schema does not cover keep their field-level error. A child `Input` never runs its `parse` prop itself while inside a Form, so the two layers cannot conflict.
 

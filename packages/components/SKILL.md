@@ -43,8 +43,11 @@ import '@delightstack/styles';
   field validates via its spread `parse`, and submit normalizes the draft then calls
   `entity.save()` (`onsaved` fires on success; submit Buttons auto-disable while
   saving). Works for create (`db.entity('person')`, no id) and edit. Boolean fields
-  spread onto `Checkbox`, enum fields onto `Select` (the spread includes ready-made
-  `options`). Standalone (no Form), `Input`/`Select` run `parse` on blur/close and
+  spread onto `Checkbox` or `Toggle`, enum fields onto `Select` (the spread includes
+  ready-made `options`). Optional non-defaulted booleans are tri-state: unanswered
+  (`null`) displays as indeterminate — Checkbox resolves to checked on click (native
+  behavior) while Toggle gets a three-stop track the user can cycle back to the
+  middle; defaulted booleans display (and save) their default when unanswered. Standalone (no Form), `Input`/`Select` run `parse` on blur/close and
   show the message below the field. Full guide:
   https://docs.thedelight.co/guides/forms.md
 - **Svelte 5 snippets** (`{#snippet header()}…{/snippet}`), not slots, for named
@@ -118,7 +121,7 @@ have the exact types. Do not guess prop names.
 - `Range` — Slider with two-thumb range mode, tick marks, value tooltips (docs: /components/form/range.md)
 - `Rating` — Star rating input with half-star precision, custom icons, read-only mode (docs: /components/form/rating.md)
 - `Select` — Dropdown with search, multi-select chips, groups, async loading, virtual scrolling (docs: /components/form/select.md)
-- `Toggle` — On/off switch with slide animation and optional indeterminate state (docs: /components/form/toggle.md)
+- `Toggle` — On/off switch with slide animation, three-state mode, `parse` validation (docs: /components/form/toggle.md)
 
 ### Media
 - `Gallery` — Media gallery with seven display modes plus headless lightbox (docs: /components/media/gallery.md)

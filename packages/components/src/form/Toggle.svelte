@@ -1,6 +1,7 @@
 <script lang="ts" generics="Indeterminate extends boolean = false">
 	import { tooltip } from '@delightstack/utilities';
-	import { type Snippet } from 'svelte';
+	import { getContext, type Snippet } from 'svelte';
+	import type { FormContext } from './Form.svelte';
 
 	/** `boolean` normally; widened to `boolean | null` in indeterminate mode */
 	type Checked = Indeterminate extends true ? boolean | null : boolean;
@@ -8,11 +9,12 @@
 	const propId = $props.id();
 	let {
 		/**
-		 * Whether the toggle is checked. In indeterminate mode this can also be
+		 * Whether the toggle is checked. In three-state mode this can also be
 		 * `null` — the in-between state, shown as a third stop in the middle of
-		 * the track.
+		 * the track. When omitted inside a Form (with a name), the state is
+		 * driven by the form data instead.
 		 */
-		checked = $bindable(false as Checked),
+		checked = $bindable() as Checked | undefined,
 
 		/**
 		 * Whether the toggle supports a third, in-between state. When true,
@@ -21,6 +23,25 @@
 		 * thumb stops keep distinct touch targets.
 		 */
 		indeterminate = false as Indeterminate,
+
+		/** Tri-state mode (set by optional non-defaulted boolean form fields):
+		 *  enables the same three-stop track as `indeterminate`, with
+		 *  null/undefined meaning "unanswered" (the middle stop). Unlike
+		 *  Checkbox, the user can cycle back to the middle state. */
+		tristate = false,
+
+		/** The field's default value (set by defaulted boolean form fields):
+		 *  shown when the form data has no value yet, so the display matches
+		 *  what saving would persist. */
+		default_checked = undefined as boolean | undefined,
+
+		/** An error message shown below the toggle */
+		error = undefined as string | undefined,
+
+		/** Parses & validates the value (e.g. a database table form field's
+		 *  `parse`). Inside a Form it is registered with the form, which runs
+		 *  it on the form's validation timing. */
+		parse = undefined as ((value: unknown) => unknown) | undefined,
 
 		/** Whether the toggle is disabled */
 		disabled = false,
@@ -70,23 +91,96 @@
 
 	let pressed = $state(false);
 
+	/* ------------------------------------------------------------------ */
+	/*  Form context integration                                           */
+	/* ------------------------------------------------------------------ */
+
+	const form_ctx = getContext<FormContext | undefined>('form');
+	let track_element = $state<HTMLElement | undefined>(undefined);
+
+	$effect(() => {
+		if (!form_ctx || !name) return;
+		if (track_element) form_ctx.register(name, track_element, parse);
+		return () => {
+			if (name) form_ctx.unregister(name);
+		};
+	});
+
+	/** Whether the three-stop track is active (explicit prop or tri-state field) */
+	const three_state = $derived(!!indeterminate || tristate);
+
+	/**
+	 * Context-driven mode: inside a Form, with a name, and no checked prop,
+	 * the toggle mirrors the form data (e.g. an entity's draft) —
+	 * `<Toggle {...field.is_public} />` needs no bind:checked.
+	 */
+	const context_driven = !!(form_ctx && name && checked === undefined);
+
+	$effect(() => {
+		if (!context_driven || !form_ctx || !name) return;
+		const ctx_value = form_ctx.getValue(name);
+		let next: Checked;
+		if (ctx_value === undefined || ctx_value === null) {
+			// Unanswered: three-state shows the middle stop, defaulted fields
+			// show their default, plain booleans show off
+			next = (three_state ? null : (default_checked ?? false)) as Checked;
+		} else {
+			next = Boolean(ctx_value) as Checked;
+		}
+		if (next !== checked) checked = next;
+	});
+
+	/** Error from running `parse` standalone. Inside a Form the form runs
+	 *  `parse` instead (it was registered above), so this never sets there. */
+	let parse_error = $state<string | undefined>(undefined);
+
+	function runParse() {
+		if (!parse || form_ctx) return;
+		try {
+			parse(checked);
+			parse_error = undefined;
+		} catch (e) {
+			parse_error = e instanceof Error ? e.message : 'Invalid value';
+		}
+	}
+
+	/** Error from the local prop, standalone parse, or form context */
+	const resolved_error = $derived.by(() => {
+		if (error !== undefined) return error;
+		if (parse_error) return parse_error;
+		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
+		return undefined;
+	});
+
+	/** The effective state — an omitted checked prop means the middle stop
+	 *  (three-state) or off, until the form context supplies a value. */
+	const current = $derived(
+		(checked === undefined ? (three_state && context_driven ? null : false) : checked) as Checked,
+	);
+
 	const state_label = $derived(
-		checked === true ? on_label : checked === false ? off_label : undefined,
+		current === true ? on_label : current === false ? off_label : undefined,
 	);
 
 	function setChecked(next: Checked) {
 		if (next === checked) return;
 		checked = next;
+		if (form_ctx && name) {
+			form_ctx.setValue(name, checked);
+			form_ctx.setTouched(name);
+		} else {
+			runParse();
+		}
 		onchange?.({ checked });
 	}
 
 	function toggle() {
 		if (disabled) return;
-		if (indeterminate) {
+		if (three_state) {
 			// Cycle off → middle → on → off (matching the legacy three-state toggle)
-			setChecked((checked === false ? null : checked === null ? true : false) as Checked);
+			setChecked((current === false ? null : current === null ? true : false) as Checked);
 		} else {
-			setChecked(!checked as Checked);
+			setChecked(!current as Checked);
 		}
 	}
 
@@ -98,8 +192,8 @@
 			// Arrows step between stops directly (no cycling), so a three-state
 			// toggle can go null -> false without passing through true.
 			e.preventDefault();
-			const order = (indeterminate ? [false, null, true] : [false, true]) as Checked[];
-			const next = order[order.indexOf(checked) + (e.key === 'ArrowRight' ? 1 : -1)];
+			const order = (three_state ? [false, null, true] : [false, true]) as Checked[];
+			const next = order[order.indexOf(current) + (e.key === 'ArrowRight' ? 1 : -1)];
 			if (next !== undefined) setChecked(next);
 		}
 	}
@@ -129,7 +223,7 @@
 
 	/** The thumb stops — translateX px paired with the value each represents */
 	function dragStops(): { x: number; value: Checked }[] {
-		if (indeterminate) {
+		if (three_state) {
 			return [
 				{ x: 0, value: false as Checked },
 				{ x: drag_travel / 2, value: null as Checked },
@@ -221,9 +315,10 @@
 
 <label
 	class={['toggle', `size-${size}`, class_name].filter(Boolean).join(' ')}
-	class:checked={checked === true}
-	class:mixed={checked === null}
-	class:indeterminate
+	class:checked={current === true}
+	class:mixed={current === null}
+	class:indeterminate={three_state}
+	class:has-error={!!resolved_error}
 	class:disabled
 	class:dense
 	class:comfortable
@@ -242,8 +337,8 @@
 		{value}
 		{id}
 		{disabled}
-		checked={checked === true}
-		indeterminate={checked === null}
+		checked={current === true}
+		indeterminate={current === null}
 		onclick={(e) => {
 			/* A drag just set the value directly — swallow the synthesized label
 			   click so it can't immediately cycle the value again. */
@@ -259,8 +354,8 @@
 			   above can't be relied on here — when e.g. false → null, the derived
 			   `checked === true` is false both before and after, so Svelte sees
 			   no change to flush while the browser has flipped the property. */
-			e.currentTarget.checked = checked === true;
-			e.currentTarget.indeterminate = checked === null;
+			e.currentTarget.checked = current === true;
+			e.currentTarget.indeterminate = current === null;
 		}} />
 
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -268,9 +363,10 @@
 	     can't see that statically -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<span
+		bind:this={track_element}
 		class="track"
-		role={indeterminate ? 'checkbox' : 'switch'}
-		aria-checked={checked === null ? 'mixed' : checked === true}
+		role={three_state ? 'checkbox' : 'switch'}
+		aria-checked={current === null ? 'mixed' : current === true}
 		tabindex={disabled ? -1 : 0}
 		onkeydown={onKeyDown}
 		onpointerdown={onTrackPointerDown}
@@ -291,6 +387,10 @@
 
 	{#if label && label_position === 'end'}
 		<span class="label">{label}</span>
+	{/if}
+
+	{#if resolved_error}
+		<span class="error-text">{resolved_error}</span>
 	{/if}
 </label>
 
@@ -330,6 +430,7 @@
 
 		display: inline-flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 0.625em;
 		cursor: pointer;
 		user-select: none;
@@ -531,5 +632,10 @@
 			transform: perspective(100px)
 				translate3d(0, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
 		}
+	}
+	.error-text {
+		width: 100%;
+		font-size: 0.8em;
+		color: var(--color-error, #d32f2f);
 	}
 </style>
