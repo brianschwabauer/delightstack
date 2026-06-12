@@ -279,7 +279,7 @@
 		color: var(--color-error-text);
 	}
 	.badge-note {
-		background: var(--color-info);
+		background: var(--color-action);
 		color: white;
 	}
 </style>

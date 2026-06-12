@@ -4,6 +4,7 @@ description: Complete reference of all CSS custom properties used by DelightStac
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import ThemePanel from '../../../components/ThemePanel.svelte';
 
 DelightStack uses **CSS custom properties** (design tokens) for all visual styling. Components reference these tokens internally, so customizing them changes the look of every component at once.
 
@@ -20,15 +21,22 @@ The fastest way to get the tokens is to import the package — it ships them all
 import '@delightstack/styles';
 ```
 
-To re-theme, override the brand seed (or any individual semantic token) in your own CSS:
+To re-theme, override the brand seed (or any individual semantic token) in your own CSS. `--color-primary` is the only required seed — `--color-secondary` (accent controls) and `--color-neutral` (the background/text ramp tint) derive from it automatically:
 
 ```css
 :root {
-	--color-primary: #2563eb; /* re-derives action/accent + the whole ramp */
+	--color-primary: #2563eb; /* the only required seed — re-derives everything */
+	--color-neutral: #6b7280; /* optional: decouple the surface tint from the brand */
 	--color-action: light-dark(#2563eb, #3b82f6); /* or override a token outright */
 	--radius-md: 0.5rem;
 }
 ```
+
+## Try it live
+
+Customize the seeds below and the whole docs site re-themes in place — every component demo on every page runs on the same tokens. Your choices persist in this browser (the palette button in the navbar opens the same editor), and the generated CSS is ready to paste into your own app.
+
+<ThemePanel client:load inline />
 
 ## Colors
 
@@ -80,20 +88,19 @@ Same six tokens as action, seeded from `--color-secondary`: `--color-accent`, `-
 
 ### Feedback
 
-`--color-error` and `--color-success` each carry a full state set (`-active`, `-disabled`, `-text`, `-text-active`, `-text-disabled`). `--color-warning` and `--color-info` are single colors. Each of the four also has a soft tinted background for callouts and alerts:
+`--color-error` and `--color-success` each carry a full state set (`-active`, `-disabled`, `-text`, `-text-active`, `-text-disabled`). `--color-warning` is a single color. All three are fixed hues — red, green, and amber carry meaning, so they don't derive from the brand seed. There is no separate "info" color: informational UI (info callouts, toasts) uses the brand's `--color-action`. Each feedback color also has a soft tinted background for callouts and alerts:
 
 ```css
 :root {
 	--color-error: light-dark(#ef6262, #b04343);
 	--color-success: light-dark(#00b7a1, #2c8f83);
 	--color-warning: light-dark(#e89c08, #e0a020);
-	--color-info: light-dark(#2f6fe0, #5b8def);
 
 	/* Soft backgrounds, mixed over the page background */
 	--color-error-bg: /* … */ ;
 	--color-success-bg: /* … */ ;
 	--color-warning-bg: /* … */ ;
-	--color-info-bg: /* … */ ;
+	--color-action-bg: /* … (used by info callouts/toasts) */ ;
 }
 ```
 

@@ -25,6 +25,14 @@ export default defineConfig({
 					tag: 'link',
 					attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
 				},
+				{
+					// Re-apply the visitor's saved theme overrides (written by the
+					// theme customizer) before first paint so there's no flash of
+					// the default theme. Must stay in sync with the CSS_KEY /
+					// STYLE_ID constants in src/components/theme-store.svelte.ts.
+					tag: 'script',
+					content: `try{var c=localStorage.getItem('delightstack:theme-css');if(c){var s=document.createElement('style');s.id='delightstack-theme-overrides';s.textContent=c;document.head.appendChild(s);}}catch(e){}`,
+				},
 			],
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/brianschwabauer' },
