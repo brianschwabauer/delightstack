@@ -27,18 +27,31 @@
 	}
 
 	export interface FormContext {
+		/** The current form data keyed by field name */
 		data: Record<string, unknown>;
+		/** Current validation error messages keyed by field name */
 		errors: Record<string, string>;
+		/** Which fields have been touched (blurred/edited) keyed by field name */
 		touched: Record<string, boolean>;
+		/** Whether any field has been changed from its initial value */
 		is_dirty: boolean;
+		/** Whether the form is currently submitting */
 		is_submitting: boolean;
+		/** Whether the form currently has no validation errors */
 		is_valid: boolean;
+		/** Whether the whole form is disabled */
 		disabled: boolean;
+		/** When fields run validation */
 		validate_on: 'change' | 'blur' | 'submit';
+		/** Registers a field's element with the form (for focus-on-error) */
 		register: (name: string, element: HTMLElement) => void;
+		/** Removes a field from the form when it unmounts */
 		unregister: (name: string) => void;
+		/** Updates a field's value in the form data */
 		setValue: (name: string, value: unknown) => void;
+		/** Marks a field as touched */
 		setTouched: (name: string) => void;
+		/** Runs validation for a single field */
 		validateField: (name: string) => void;
 	}
 </script>

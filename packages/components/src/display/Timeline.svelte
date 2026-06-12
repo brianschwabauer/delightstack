@@ -2,10 +2,15 @@
 	export { default as TimelineItem } from './Timeline.svelte';
 
 	export interface TimelineContext {
+		/** Whether the timeline flows horizontally instead of vertically */
 		horizontal: boolean;
+		/** Whether items alternate sides of the timeline axis */
 		alternate: boolean;
+		/** Whether the timeline uses dense (compact) spacing */
 		dense: boolean;
+		/** Whether the timeline uses comfortable (roomy) spacing */
 		comfortable: boolean;
+		/** Registers a new item with the timeline and returns its index */
 		register: () => number;
 	}
 </script>

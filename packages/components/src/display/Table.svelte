@@ -1,12 +1,20 @@
 <script lang="ts" module>
 	export interface Column<T> {
+		/** The row property to read this column's value from (also used as the column id) */
 		key: string;
+		/** The header text for this column */
 		label: string;
+		/** Whether clicking the header sorts the table by this column */
 		sortable?: boolean;
+		/** CSS width of the column (e.g. `'200px'`, `'2fr'`) */
 		width?: string;
+		/** CSS minimum width of the column */
 		minWidth?: string;
+		/** Horizontal alignment of cell content */
 		align?: 'left' | 'center' | 'right';
+		/** Custom snippet to render the cell content (instead of the plain value) */
 		cell?: import('svelte').Snippet<[{ value: unknown; row: T; index: number }]>;
+		/** Custom snippet to render the header content (instead of `label`) */
 		header?: import('svelte').Snippet<[{ column: Column<T> }]>;
 
 		// ---- Inline editing (only active when the Table's `editable` prop is on) ----
@@ -53,9 +61,13 @@
 
 	/** An autocomplete / select option (mirrors the Input component's options). */
 	export interface CellOption {
+		/** The value committed when this option is chosen */
 		value: string;
+		/** Display text for the option (defaults to `value`) */
 		label?: string;
+		/** Secondary descriptive text shown under the label */
 		description?: string;
+		/** Whether this option cannot be selected */
 		disabled?: boolean;
 	}
 
@@ -65,8 +77,11 @@
 		value: unknown;
 		/** The previous stored value. */
 		previous: unknown;
+		/** The row object being edited. */
 		row: T;
+		/** The row index within the table data. */
 		index: number;
+		/** The column definition of the edited cell. */
 		column: Column<T>;
 		/** The edited column's `key`. */
 		key: string;
@@ -74,9 +89,13 @@
 
 	/** Passed to a custom editor Snippet (`column.editor`). */
 	export interface CellEditorContext<T> {
+		/** The current draft value of the editor. */
 		value: unknown;
+		/** The row object being edited. */
 		row: T;
+		/** The row index within the table data. */
 		index: number;
+		/** The column definition of the edited cell. */
 		column: Column<T>;
 		/** Update the in-progress draft value. */
 		setValue: (value: unknown) => void;
@@ -88,10 +107,15 @@
 
 	/** Passed to `column.onautocomplete`. */
 	export interface CellAutocompleteContext<T> {
+		/** The current editor text to filter options by. */
 		query: string;
+		/** The stored cell value. */
 		value: unknown;
+		/** The row object being edited. */
 		row: T;
+		/** The row index within the table data. */
 		index: number;
+		/** The column definition of the edited cell. */
 		column: Column<T>;
 	}
 

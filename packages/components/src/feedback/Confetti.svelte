@@ -7,13 +7,21 @@
 	export type ConfettiTarget = Element | string | MouseEvent;
 
 	export interface ConfettiOptions {
+		/** How many confetti particles to launch */
 		particle_count?: number;
+		/** How wide the burst cone is, in degrees */
 		spread?: number;
+		/** Initial particle speed (pixels per tick) */
 		start_velocity?: number;
+		/** Per-tick velocity decay factor (lower = particles slow down faster) */
 		decay?: number;
+		/** Downward acceleration applied to particles each tick */
 		gravity?: number;
+		/** Horizontal drift applied to particles (negative = left, positive = right) */
 		drift?: number;
+		/** How many ticks particles live before fading out */
 		ticks?: number;
+		/** Launch point as viewport fractions (0–1 for both `x` and `y`) */
 		origin?: { x: number; y: number };
 		/**
 		 * Anchor a local effect (burst/cannon) to an element, selector, or event.
@@ -21,18 +29,25 @@
 		 * sides, rain) which manage their own positions.
 		 */
 		target?: ConfettiTarget;
+		/** The palette of particle colors to pick from */
 		colors?: string[];
+		/** Particle size multiplier (1 = default size) */
 		scalar?: number;
+		/** z-index of the confetti canvas overlay */
 		z_index?: number;
+		/** Launch angle in degrees (90 = straight up) */
 		angle?: number;
 	}
 
 	export interface CannonOptions extends ConfettiOptions {
+		/** Milliseconds between successive bursts */
 		interval?: number;
+		/** Total duration of the cannon effect in milliseconds */
 		duration?: number;
 	}
 
 	export interface RainOptions extends ConfettiOptions {
+		/** Total duration of the rain effect in milliseconds */
 		duration?: number;
 	}
 

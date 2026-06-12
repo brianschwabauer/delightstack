@@ -2,10 +2,15 @@
 	export { default as RadioGroup } from './Radio.svelte';
 
 	export interface RadioGroupContext {
+		/** The shared `name` attribute for all radios in the group */
 		name: string;
+		/** The currently selected value */
 		value: string;
+		/** Whether the whole group is disabled */
 		disabled: boolean;
+		/** The size applied to all radios in the group */
 		size: '0' | '1' | '2' | '3';
+		/** Selects the radio with the given value */
 		select: (value: string) => void;
 	}
 </script>

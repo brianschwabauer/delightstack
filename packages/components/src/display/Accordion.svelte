@@ -2,10 +2,15 @@
 	export { default as AccordionItem } from './Accordion.svelte';
 
 	export interface AccordionContext {
+		/** Returns whether the item with the given value is currently expanded */
 		isOpen: (value: string) => boolean;
+		/** Expands/collapses the item with the given value */
 		toggle: (value: string) => void;
+		/** Whether the whole accordion is disabled */
 		disabled: boolean;
+		/** Whether the accordion uses dense (compact) spacing */
 		dense: boolean;
+		/** Whether the accordion uses comfortable (roomy) spacing */
 		comfortable: boolean;
 	}
 </script>

@@ -1,7 +1,10 @@
 <script lang="ts" module>
 	export interface Hotspot {
+		/** Where the hotspot sits on the sphere, in degrees (pitch = up/down, yaw = left/right) */
 		position: { pitch: number; yaw: number };
+		/** Text shown for the hotspot */
 		label?: string;
+		/** Arbitrary user data attached to the hotspot (passed back in click callbacks) */
 		data?: Record<string, unknown>;
 	}
 </script>

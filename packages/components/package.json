@@ -85,7 +85,12 @@
 			"import": "./dist/navigation/index.js"
 		}
 	},
+	"bin": {
+		"delightstack-agents": "./bin/agents.js"
+	},
 	"files": [
+		"bin",
+		"SKILL.md",
 		"dist",
 		"!dist/**/*.test.*",
 		"!dist/**/*.spec.*",

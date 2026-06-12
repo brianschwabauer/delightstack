@@ -1,6 +1,8 @@
 <script lang="ts" module>
 	export interface BreadcrumbItem {
+		/** Display text for the breadcrumb */
 		label: string;
+		/** Link target — omit for the current (non-clickable) crumb */
 		href?: string;
 	}
 </script>

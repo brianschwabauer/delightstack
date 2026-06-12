@@ -1,16 +1,25 @@
 <script lang="ts" module>
 	export interface CalendarEvent {
+		/** Unique identifier for the event */
 		id: string;
+		/** The event title shown on the calendar */
 		title: string;
+		/** When the event starts */
 		start: Date;
+		/** When the event ends (omit for instantaneous/single-slot events) */
 		end?: Date;
+		/** Custom color for the event chip */
 		color?: string;
+		/** Whether the event spans the whole day (rendered in the all-day row) */
 		allDay?: boolean;
 	}
 
 	export interface MarkedDate {
+		/** The date to mark with an indicator dot */
 		date: Date;
+		/** Custom color for the indicator dot */
 		color?: string;
+		/** Accessible label / tooltip text describing the mark */
 		label?: string;
 	}
 </script>

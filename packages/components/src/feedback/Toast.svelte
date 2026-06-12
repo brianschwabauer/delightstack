@@ -12,14 +12,23 @@
 	export interface ToastOptions {
 		/** Optional secondary line shown beneath the title. */
 		description?: string;
+		/** Auto-dismiss delay in milliseconds (overrides the Toaster default) */
 		duration?: number;
+		/** Whether the toast shows a close button */
 		dismissible?: boolean;
+		/** Style the toast as a success message */
 		success?: boolean;
+		/** Style the toast as a warning message */
 		warning?: boolean;
+		/** Style the toast as an error message */
 		error?: boolean;
+		/** Style the toast as an informational message */
 		info?: boolean;
+		/** An action button shown in the toast */
 		action?: { label: string; onclick: () => void };
+		/** Whether the toast stays until manually dismissed (no auto-dismiss) */
 		persistent?: boolean;
+		/** Custom toast id — reusing an id updates the existing toast in place */
 		id?: string;
 	}
 

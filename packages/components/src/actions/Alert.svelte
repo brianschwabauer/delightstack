@@ -2,11 +2,17 @@
 	import type { Component } from 'svelte';
 
 	export interface AlertOptions {
+		/** The title text shown at the top of the dialog */
 		title?: string;
+		/** The main message text of the dialog */
 		message: string;
+		/** Label for the cancel button */
 		cancel_text?: string;
+		/** Label for the confirm button */
 		continue_text?: string;
+		/** Whether the confirm action is destructive (styles the confirm button as an error/danger action) */
 		destructive?: boolean;
+		/** Icon component shown alongside the message */
 		icon?: Component<Record<string, never>>;
 	}
 

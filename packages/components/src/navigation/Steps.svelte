@@ -2,13 +2,21 @@
 	export { default as Step } from './Steps.svelte';
 
 	export interface StepsContext {
+		/** Index of the currently active step */
 		current: number;
+		/** The layout direction of the steps */
 		orientation: 'horizontal' | 'vertical';
+		/** Whether steps can be clicked to navigate */
 		clickable: boolean;
+		/** Whether steps must be completed in order (only visited/adjacent steps are clickable) */
 		linear: boolean;
+		/** The size applied to all steps */
 		size: string;
+		/** Total number of registered steps */
 		totalSteps: number;
+		/** Registers a new step and returns its index */
 		register: () => number;
+		/** Navigates to the step at the given index */
 		navigate: (index: number) => void;
 	}
 </script>

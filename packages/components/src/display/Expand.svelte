@@ -2,8 +2,13 @@
 	import { type Snippet } from 'svelte';
 
 	let {
+		/** Whether the content is expanded (visible). Bindable */
 		show = $bindable(false),
+
+		/** Additional inline styles applied to the expanding container */
 		style = '',
+
+		/** The content to expand/collapse */
 		children = undefined as undefined | Snippet,
 	} = $props();
 </script>

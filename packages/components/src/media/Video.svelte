@@ -1,15 +1,23 @@
 <script lang="ts" module>
 	export interface Source {
+		/** URL of the video source */
 		src: string;
+		/** MIME type of the source (e.g. `'video/mp4'`, `'application/x-mpegURL'`) */
 		type: string;
+		/** Vertical resolution of this source (e.g. 720, 1080) — used for the quality menu */
 		size?: number;
 	}
 
 	export interface Track {
+		/** The kind of text track */
 		kind: 'captions' | 'subtitles';
+		/** URL of the WebVTT track file */
 		src: string;
+		/** Language code of the track (e.g. `'en'`) */
 		srclang: string;
+		/** Display name of the track in the captions menu */
 		label: string;
+		/** Whether this track is enabled by default */
 		default?: boolean;
 	}
 

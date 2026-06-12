@@ -1,25 +1,37 @@
 <script lang="ts" module>
 	export interface TreeNode {
+		/** Unique identifier for the node */
 		id: string;
+		/** Display text for the node */
 		label: string;
+		/** Icon component shown before the label */
 		icon?: import('svelte').Component;
+		/** Child nodes (presence makes this a branch node) */
 		children?: TreeNode[];
+		/** Whether this node is disabled (cannot be selected or expanded) */
 		disabled?: boolean;
 		/** Whether this node can be selected. When undefined, inherits from the tree's selectable prop. Set to false to make clicking expand/collapse instead. */
 		selectable?: boolean;
 		/** Whether this node can accept children via drag-and-drop (defaults to true if node has children array) */
 		allowChildren?: boolean;
+		/** Arbitrary user data attached to the node (passed back in selection/drop callbacks) */
 		data?: unknown;
 	}
 
 	export interface FlatTreeNode {
+		/** Unique identifier for the node */
 		id: string;
+		/** The `id` of the parent node, or `null` for root-level nodes */
 		parentId: string | null;
+		/** Display text for the node */
 		label: string;
+		/** Icon component shown before the label */
 		icon?: import('svelte').Component;
+		/** Whether this node is disabled (cannot be selected or expanded) */
 		disabled?: boolean;
 		/** Whether this node can be selected. When undefined, inherits from the tree's selectable prop. */
 		selectable?: boolean;
+		/** Arbitrary user data attached to the node (passed back in selection/drop callbacks) */
 		data?: unknown;
 	}
 </script>

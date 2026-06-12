@@ -1,12 +1,17 @@
 <script lang="ts" module>
 	export interface ChartData {
+		/** Labels for each data point along the x-axis (or each slice for pie/donut) */
 		labels: string[];
+		/** One or more series of values to plot */
 		datasets: Dataset[];
 	}
 
 	export interface Dataset {
+		/** Name of this series (shown in the legend) */
 		label: string;
+		/** The values for this series, one per label */
 		data: number[];
+		/** Custom color for this series (auto-assigned if omitted) */
 		color?: string;
 	}
 </script>

@@ -3,15 +3,25 @@
 	export { default as TabContent } from './Tabs.svelte';
 
 	export interface TabsContext {
+		/** The value of the currently selected tab */
 		value: string;
+		/** Whether tabs are styled as pills */
 		pills: boolean;
+		/** Whether tabs are styled as boxed tabs */
 		boxed: boolean;
+		/** Whether tabs are styled as a segmented control */
 		segment: boolean;
+		/** The font size applied to all tabs */
 		size: string;
+		/** The layout direction of the tab list */
 		orientation: 'horizontal' | 'vertical';
+		/** Whether all tabs are disabled */
 		disabled: boolean;
+		/** Selects the tab with the given value */
 		select: (value: string) => void;
+		/** Registers a tab's element under its value (for the active indicator) */
 		register: (value: string, el: HTMLElement) => void;
+		/** Removes a tab when it unmounts */
 		unregister: (value: string) => void;
 	}
 </script>
@@ -306,11 +316,7 @@
 				{/each}
 			</div>
 		{:else}
-			<div
-				class="list"
-				role="tablist"
-				aria-orientation={orientation}
-				bind:this={listEl}>
+			<div class="list" role="tablist" aria-orientation={orientation} bind:this={listEl}>
 				<div class="indicator" style={indicatorStyle}></div>
 				{@render children?.()}
 			</div>

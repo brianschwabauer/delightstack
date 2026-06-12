@@ -6,6 +6,7 @@ import svelte from '@astrojs/svelte';
 
 // https://astro.build/config
 export default defineConfig({
+	site: 'https://docs.thedelight.co',
 	integrations: [
 		starlight({
 			title: 'DelightStack',
@@ -78,6 +79,7 @@ export default defineConfig({
 						{ label: 'Scrolling', slug: 'guides/scrolling' },
 						{ label: 'Accessibility', slug: 'guides/accessibility' },
 						{ label: 'Working with Forms', slug: 'guides/forms' },
+						{ label: 'AI Agents', slug: 'guides/ai-agents' },
 					],
 				},
 				{

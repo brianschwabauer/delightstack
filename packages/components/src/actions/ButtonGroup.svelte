@@ -1,14 +1,24 @@
 <script module lang="ts">
 	export interface ButtonGroupContext {
+		/** The font size applied to all buttons in the group */
 		size: undefined | '0000' | '000' | '00' | '0' | '1' | '2' | '3' | '4' | '5' | '6';
+		/** Whether all buttons in the group use the outline style */
 		outline: boolean;
+		/** Whether all buttons in the group have a transparent background */
 		transparent: boolean;
+		/** Whether all buttons in the group have a semi-transparent background */
 		translucent: boolean;
+		/** Whether all buttons in the group use the accent/primary color */
 		accent: boolean;
+		/** Whether all buttons in the group are styled as an error (danger) */
 		error: boolean;
+		/** Whether all buttons in the group are styled as success */
 		success: boolean;
+		/** Whether all buttons in the group are disabled */
 		disabled: boolean;
+		/** The layout direction of the group */
 		orientation: 'horizontal' | 'vertical';
+		/** Whether the buttons are visually attached (merged borders, no gap) */
 		attached: boolean;
 	}
 </script>

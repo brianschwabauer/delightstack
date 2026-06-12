@@ -15,9 +15,13 @@
 		| 'file';
 
 	export interface InputOption {
+		/** The value inserted into the input when this option is chosen */
 		value: string;
+		/** Display text for the option */
 		label: string;
+		/** Whether this option cannot be selected */
 		disabled?: boolean;
+		/** Secondary descriptive text shown under the label */
 		description?: string;
 	}
 </script>

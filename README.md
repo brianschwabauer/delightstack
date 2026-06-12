@@ -35,6 +35,19 @@ pnpm add @delightstack/components @delightstack/utilities
 All packages are published as ESM and target `moduleResolution: "bundler"` (SvelteKit, Vite, and
 Wrangler all use this). Svelte 5 is an optional peer dependency for packages with reactive clients.
 
+## AI coding agents
+
+DelightStack is agent-friendly: every docs page is plain markdown at `<page-url>.md`, the whole
+site is indexed at [docs.thedelight.co/llms.txt](https://docs.thedelight.co/llms.txt), and the
+component library ships a ready-made agent skill. Set up Claude Code / Cursor / Codex in one
+command from your project root:
+
+```bash
+pnpm exec delightstack-agents
+```
+
+See the [AI Agents guide](https://docs.thedelight.co/guides/ai-agents/) for details.
+
 ## Error handling
 
 Every package uses `DelightError` from `@delightstack/utilities` as the single operational error

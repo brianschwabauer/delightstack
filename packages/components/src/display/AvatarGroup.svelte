@@ -1,7 +1,10 @@
 <script lang="ts" module>
 	export interface AvatarData {
+		/** Image URL for the avatar (falls back to initials from `name` if omitted) */
 		src?: string;
+		/** The person's name — used for initials, tooltip, and alt text */
 		name: string;
+		/** Optional link — makes the avatar clickable */
 		href?: string;
 	}
 </script>

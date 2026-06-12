@@ -16,17 +16,32 @@
 	import ListItem from './ListItem.svelte';
 
 	let {
+		/** The column definition for the cell being edited (editor kind, options, validation, etc.) */
 		column,
+
+		/** The row object the cell belongs to */
 		row,
+
+		/** The row index within the table data */
 		index,
+
+		/** The current cell value to seed the editor with */
 		value,
+
 		/** Save-error message from the Table (a rejected async `onedit`), shown inline. */
 		errorMessage = undefined,
+
+		/** Whether the table is in dense (compact) spacing mode */
 		dense = false,
+
+		/** Whether the table is in comfortable (roomy) spacing mode */
 		comfortable = false,
+
 		/** Whether this cell is the first / last navigable cell — lets Tab fall out of
 		 * the grid at the edges instead of trapping focus. */
 		isFirstCell = false,
+
+		/** Whether this cell is the last navigable cell (see `isFirstCell`) */
 		isLastCell = false,
 		/** Value changed and passed validation — the Table runs `onedit`. */
 		oncommit = undefined,

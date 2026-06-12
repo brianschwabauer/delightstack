@@ -1,9 +1,14 @@
 <script lang="ts" module>
 	export interface SelectOption {
+		/** The value committed when this option is chosen */
 		value: unknown;
+		/** Display text for the option */
 		label: string;
+		/** Whether this option cannot be selected */
 		disabled?: boolean;
+		/** Secondary descriptive text shown under the label */
 		description?: string;
+		/** Group heading this option is listed under */
 		group?: string;
 	}
 </script>

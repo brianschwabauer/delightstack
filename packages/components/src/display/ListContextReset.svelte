@@ -2,7 +2,10 @@
 	import { setContext, type Snippet } from 'svelte';
 	import { type ListContext } from './List.svelte';
 
-	let { children = undefined as undefined | Snippet } = $props();
+	let {
+		/** Content rendered inside the reset boundary — any List within starts at nesting level 1 */
+		children = undefined as undefined | Snippet,
+	} = $props();
 
 	// Reset the list nesting context so that a List rendered inside `children`
 	// (e.g. inside a ListItem `menu` popover) starts at level 1 instead of

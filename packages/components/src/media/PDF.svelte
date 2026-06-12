@@ -1,7 +1,10 @@
 <script lang="ts" module>
 	export interface PDFAnnotation {
+		/** The kind of annotation */
 		type: 'highlight' | 'note';
+		/** The 1-based page number the annotation belongs to */
 		page: number;
+		/** Arbitrary annotation payload (position, text, etc.) */
 		data: unknown;
 	}
 </script>

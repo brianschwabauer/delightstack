@@ -1,0 +1,79 @@
+---
+title: AI Agents
+description: Set up Claude Code, Cursor, and other AI coding agents to use DelightStack components correctly — markdown docs, llms.txt, and a ready-made agent skill.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+DelightStack is built to be agent-friendly. Every docs page is available as plain
+markdown, the whole site is indexed in `llms.txt`, and the component library ships a
+ready-made skill so prompts like *"use the DelightStack bottom sheet for this
+filter panel"* just work.
+
+## One-command setup
+
+From your project root (with `@delightstack/components` installed):
+
+```bash
+pnpm exec delightstack-agents
+```
+
+This does two things, both idempotent:
+
+1. Installs the DelightStack skill at `.claude/skills/delightstack/SKILL.md` — Claude
+   Code picks it up automatically whenever UI work comes up.
+2. Appends a short section to your `AGENTS.md` (creating it if needed) pointing
+   agents at the skill and the markdown docs. Most coding agents — Cursor, Codex,
+   Copilot, and others — read `AGENTS.md`.
+
+The skill contains a one-line index of every component, the library's conventions
+(snake_case props, camelCase callbacks, promise-aware loading states, theming via
+design tokens), and instructions for fetching any component's full API on demand.
+
+<Aside type="tip">
+Prefer to look before you run it? `pnpm exec delightstack-agents --print` writes the
+skill to stdout, and it is published at
+[docs.thedelight.co/skill.md](https://docs.thedelight.co/skill.md). The same file also ships inside the
+package at `node_modules/@delightstack/components/SKILL.md`, so agents can read it
+offline.
+</Aside>
+
+## Markdown docs for every page
+
+Append `.md` to any docs page URL to get a plain-markdown version with all code
+examples and the full Props / Events / CSS Variables / Accessibility tables:
+
+```text
+https://docs.thedelight.co/components/navigation/bottom-sheet.md
+https://docs.thedelight.co/guides/theming.md
+https://docs.thedelight.co/stack/auth.md
+```
+
+Two aggregate files cover discovery and bulk context:
+
+- [`/llms.txt`](https://docs.thedelight.co/llms.txt) — a compact index of every page
+  with one-line descriptions, following the [llms.txt convention](https://llmstxt.org)
+- [`/llms-full.txt`](https://docs.thedelight.co/llms-full.txt) — the entire
+  documentation concatenated into a single markdown file
+
+## Types are documentation too
+
+The published package ships the full component sources alongside the type
+declarations: every prop carries JSDoc in the `.svelte` files under
+`node_modules/@delightstack/components/dist/`, and the `.d.ts` files next to them
+have the exact prop types. Agents (and your editor) get accurate names, types, and
+descriptions with no guessing — even fully offline.
+
+## Manual setup
+
+If you'd rather not run the command, add something like this to your `AGENTS.md` or
+`CLAUDE.md`:
+
+```markdown
+## UI components: DelightStack
+
+This project uses DelightStack (`@delightstack/components`) for UI. Before building
+or changing UI, read `node_modules/@delightstack/components/SKILL.md` — it has the
+component index and conventions. Full docs as markdown:
+https://docs.thedelight.co/llms.txt (append `.md` to any docs page URL).
+```

@@ -1,11 +1,18 @@
 <script module lang="ts">
 	export interface ListContext {
+		/** How items in the list behave (plain text, buttons, or selection controls) */
 		type: 'button' | 'text' | 'radio' | 'checkbox' | 'toggle';
+		/** Indices of the currently selected items */
 		value: number[];
+		/** Whether the list uses dense (compact) spacing */
 		dense: boolean;
+		/** Whether the list uses comfortable (roomy) spacing */
 		comfortable: boolean;
+		/** Whether the whole list is disabled */
 		disabled: boolean;
+		/** The nesting depth of this list (drives indentation of nested lists) */
 		level: number;
+		/** Unique ID of the list element */
 		id: string;
 	}
 </script>
