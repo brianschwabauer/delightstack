@@ -778,6 +778,54 @@ describe('Schema: FK-derived fields', () => {
 		expect(table.config.orama.schema).toHaveProperty('author_name', 'string');
 	});
 
+	it('should auto-create an index on FK columns used by derived fields', () => {
+		// Cascade reindex queries `WHERE author_id = ?` on every write to the
+		// referenced table — without an index that is a full-table scan
+		const table = Database.table('book_fk_idx', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
+		}));
+
+		expect(table.config.indexes).toContainEqual({
+			name: 'idx_book_fk_idx_author_id',
+			table: 'book_fk_idx',
+			columns: [{ column: 'author_id', direction: 'ASC' }],
+			unique: false,
+		});
+	});
+
+	it('should create only one index when multiple derived fields share an FK dependency', () => {
+		const table = Database.table('book_fk_idx2', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+			author_name: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
+			author_email: schema
+				.string()
+				.derived(['author_id'], (data, refs) => refs.author_id?.email ?? ''),
+		}));
+
+		const author_indexes = table.config.indexes.filter(
+			(index) => index.columns[0]?.column === 'author_id',
+		);
+		expect(author_indexes).toHaveLength(1);
+	});
+
+	it('should NOT auto-index FK columns that no derived field depends on', () => {
+		const table = Database.table('book_fk_idx3', (schema) => ({
+			title: schema.string(),
+			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
+		}));
+
+		expect(
+			table.config.indexes.some((index) => index.columns[0]?.column === 'author_id'),
+		).toBe(false);
+	});
+
 	it('should NOT include FK-derived fields in table_definition', () => {
 		const table = Database.table('book_fk4', (schema) => ({
 			title: schema.string(),

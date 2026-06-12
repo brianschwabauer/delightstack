@@ -2933,6 +2933,28 @@ export namespace Database {
 			recursivelyBuildFormFieldProps(field, fieldName);
 		}
 
+		// Auto-index FK columns that derived fields depend on. Every write to a
+		// referenced entity triggers a cascade reindex that runs
+		// `WHERE <fk_column> = ?` against this table — without an index that is
+		// a full-table scan on every such write.
+		const derived_fk_columns = new Set<string>();
+		for (const meta of Object.values(derived_fields)) {
+			for (const fk of meta.foreign_keys ?? []) derived_fk_columns.add(fk);
+		}
+		for (const fk_column of derived_fk_columns) {
+			if (!(fk_column in (foreign_keys as object))) continue;
+			// Skip when an index already has this column in the leading position,
+			// or the column is UNIQUE (SQLite creates an implicit index for those)
+			if (indexes.some((index) => index.columns[0]?.column === fk_column)) continue;
+			if (unique_fields.includes(fk_column as UniqueColumn)) continue;
+			indexes.push({
+				name: `idx_${tableName}_${fk_column}`,
+				table: tableName,
+				columns: [{ column: fk_column, direction: 'ASC' }],
+				unique: false,
+			});
+		}
+
 		// Add auto-managed timestamp columns to the SQLite table definition
 		(table_definition as any)['created_at'] = 'INTEGER NOT NULL';
 		(table_definition as any)['updated_at'] = 'INTEGER NOT NULL';
