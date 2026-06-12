@@ -760,6 +760,9 @@ const DEFAULT_SEARCH_QUERY = {
 	order: [{ key: 'updated_at', direction: 'DESC' as const }],
 };
 
+/** Quiet window for coalescing rapid query changes (e.g. typing) into one push */
+const QUERY_DEBOUNCE_MS = 150;
+
 export type SearchQueryInit<T extends Database.AnyTable = Database.Table> =
 	| Partial<Database.SearchQuery<T>>
 	| (() => Partial<Database.SearchQuery<T>>);
@@ -777,6 +780,8 @@ export class DatabaseSearch<
 	#effect_cleanup: (() => void) | null = null;
 	#reactive_query: (() => Partial<Database.SearchQuery<T>>) | null = null;
 	#defaults: Database.SearchQuery<T>;
+	#push_timer: ReturnType<typeof setTimeout> | null = null;
+	#last_push_at = 0;
 
 	#results = $state<SearchHit<T>[]>([]);
 	#docs = $derived<Database.SearchEntity<T>[]>(this.#results.map((h) => h.document));
@@ -937,7 +942,7 @@ export class DatabaseSearch<
 					first = false;
 					return;
 				}
-				this.#pushQuery();
+				this.#schedulePushQuery();
 			});
 		});
 
@@ -946,6 +951,10 @@ export class DatabaseSearch<
 
 	/** Tear down subscription and effects. Called by createSubscriber cleanup. */
 	#stop(): void {
+		if (this.#push_timer !== null) {
+			clearTimeout(this.#push_timer);
+			this.#push_timer = null;
+		}
 		if (this.#effect_cleanup) {
 			this.#effect_cleanup();
 			this.#effect_cleanup = null;
@@ -966,6 +975,28 @@ export class DatabaseSearch<
 		for (const [k, v] of Object.entries(q)) {
 			if (!deepEqual(state[k], v)) state[k] = v;
 		}
+	}
+
+	/**
+	 * Leading-edge debounce around #pushQuery: the first change after a quiet
+	 * period pushes immediately (no added latency for a lone change), while
+	 * rapid follow-ups (e.g. typing) coalesce into one trailing push. The
+	 * trailing push snapshots #query_state at fire time, so it always sends
+	 * the latest query.
+	 */
+	#schedulePushQuery(): void {
+		const now = Date.now();
+		if (this.#push_timer === null && now - this.#last_push_at >= QUERY_DEBOUNCE_MS) {
+			this.#last_push_at = now;
+			void this.#pushQuery();
+			return;
+		}
+		if (this.#push_timer !== null) clearTimeout(this.#push_timer);
+		this.#push_timer = setTimeout(() => {
+			this.#push_timer = null;
+			this.#last_push_at = Date.now();
+			void this.#pushQuery();
+		}, QUERY_DEBOUNCE_MS);
 	}
 
 	async #pushQuery(): Promise<void> {
@@ -1042,9 +1073,12 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/**
 	 * Cached comlink proxies (one per `type:id`) passed to `worker.get` for
 	 * background-refresh notifications. Caching avoids spinning up a fresh
-	 * MessageChannel for every `$derived` re-run.
+	 * MessageChannel for every `$derived` re-run. Bounded (LRU) — each proxy
+	 * holds comlink transfer state, so an unbounded map would grow for the
+	 * lifetime of the session as the user browses entities.
 	 */
 	#refresh_proxies = new Map<string, (data: Record<string, unknown>) => void>();
+	static readonly #REFRESH_PROXY_LIMIT = 500;
 
 	/**
 	 * Cached `EntityState` instances keyed by `type:id`. Scoped to the
@@ -1693,7 +1727,16 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	#refreshProxyFor(entity_type: string, id: string | number) {
 		const key = `${entity_type}:${id}`;
 		const cached = this.#refresh_proxies.get(key);
-		if (cached) return cached;
+		if (cached) {
+			// Re-insert to mark as recently used (Map preserves insertion order)
+			this.#refresh_proxies.delete(key);
+			this.#refresh_proxies.set(key, cached);
+			return cached;
+		}
+		if (this.#refresh_proxies.size >= DatabaseClient.#REFRESH_PROXY_LIMIT) {
+			const oldest = this.#refresh_proxies.keys().next().value;
+			if (oldest !== undefined) this.#refresh_proxies.delete(oldest);
+		}
 		const p = proxy(() => {
 			this.#invalidateEntity(entity_type, id);
 		});
