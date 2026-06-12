@@ -151,7 +151,7 @@
 			<p>{message}</p>
 		{/if}
 		<div class="actions">
-			<Button accent={!destructive} error={destructive} full_width onclick={oncontinue}>
+			<Button error={destructive} full_width onclick={oncontinue}>
 				{continue_text}
 			</Button>
 			<Button translucent full_width onclick={handleCancel}>

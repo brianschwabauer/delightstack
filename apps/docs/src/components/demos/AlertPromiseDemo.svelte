@@ -13,7 +13,7 @@
 </script>
 
 <div style="display: flex; align-items: center; gap: 0.75rem;">
-	<Button accent onclick={() => (showAlert = true)}>Process Data</Button>
+	<Button onclick={() => (showAlert = true)}>Process Data</Button>
 	{#if status}<span style="color: var(--color-text-muted);">{status}</span>{/if}
 </div>
 
