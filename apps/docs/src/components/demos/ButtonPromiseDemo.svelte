@@ -21,7 +21,7 @@
 </script>
 
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: start;">
-	<Button accent onclick={save}>Save (1.5s)</Button>
+	<Button onclick={save}>Save (1.5s)</Button>
 	<Button outline onclick={quick}>Instant (60ms)</Button>
 	<Button outline error onclick={failing}>Fails (no check)</Button>
 </div>

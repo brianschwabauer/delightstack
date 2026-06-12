@@ -621,30 +621,66 @@
 			--color-bg: transparent;
 			--color-bg-disabled: transparent;
 			--color-bg-active: rgb(from var(--color-action) r g b / 0.08);
-			--color-text: var(--color-action);
-			--color-text-disabled: var(--color-action-disabled);
-			--color-text-active: var(--color-action-active);
 			--button-border: 1px solid currentColor;
 			--button-border-disabled: 1px solid currentColor;
 			--button-border-active: 1px solid currentColor;
+			--color-text: light-dark(
+				oklch(from var(--color-action) min(l, 0.5) c h),
+				oklch(from var(--color-action) max(l, 0.65) c h)
+			);
+			--color-text-disabled: light-dark(
+				oklch(from var(--color-action) min(l + 0.1, 0.6) calc(c - 0.05) h),
+				oklch(from var(--color-action) max(l - 0.1, 0.55) calc(c - 0.05) h)
+			);
+			--color-text-active: light-dark(
+				oklch(from var(--color-action) min(l - 0.2, 0.3) c h),
+				oklch(from var(--color-action) max(l + 0.1, 0.75) c h)
+			);
 
 			&.accent {
 				--color-bg-active: rgb(from var(--color-accent) r g b / 0.08);
-				--color-text: var(--color-accent);
-				--color-text-disabled: var(--color-accent-disabled);
-				--color-text-active: var(--color-accent-active);
+				--color-text: light-dark(
+					oklch(from var(--color-accent) min(l, 0.5) c h),
+					oklch(from var(--color-accent) max(l, 0.65) c h)
+				);
+				--color-text-disabled: light-dark(
+					oklch(from var(--color-accent) min(l + 0.1, 0.6) calc(c - 0.05) h),
+					oklch(from var(--color-accent) max(l - 0.1, 0.55) calc(c - 0.05) h)
+				);
+				--color-text-active: light-dark(
+					oklch(from var(--color-accent) min(l - 0.1, 0.4) c h),
+					oklch(from var(--color-accent) max(l + 0.1, 0.75) c h)
+				);
 			}
 			&.error {
 				--color-bg-active: rgb(from var(--color-error) r g b / 0.08);
-				--color-text: var(--color-error);
-				--color-text-disabled: var(--color-error-disabled);
-				--color-text-active: var(--color-error-active);
+				--color-text: light-dark(
+					oklch(from var(--color-error) min(l, 0.55) c h),
+					oklch(from var(--color-error) max(l, 0.65) c h)
+				);
+				--color-text-disabled: light-dark(
+					oklch(from var(--color-error) min(l + 0.1, 0.65) calc(c - 0.05) h),
+					oklch(from var(--color-error) max(l - 0.1, 0.55) calc(c - 0.05) h)
+				);
+				--color-text-active: light-dark(
+					oklch(from var(--color-error) min(l - 0.1, 0.45) c h),
+					oklch(from var(--color-error) max(l + 0.1, 0.75) c h)
+				);
 			}
 			&.success {
 				--color-bg-active: rgb(from var(--color-success) r g b / 0.08);
-				--color-text: var(--color-success);
-				--color-text-disabled: var(--color-success-disabled);
-				--color-text-active: var(--color-success-active);
+				--color-text: light-dark(
+					oklch(from var(--color-success) min(l, 0.5) c h),
+					oklch(from var(--color-success) max(l, 0.65) c h)
+				);
+				--color-text-disabled: light-dark(
+					oklch(from var(--color-success) min(l + 0.1, 0.6) calc(c - 0.05) h),
+					oklch(from var(--color-success) max(l - 0.1, 0.55) calc(c - 0.05) h)
+				);
+				--color-text-active: light-dark(
+					oklch(from var(--color-success) min(l - 0.1, 0.4) c h),
+					oklch(from var(--color-success) max(l + 0.1, 0.75) c h)
+				);
 			}
 		}
 
@@ -655,9 +691,9 @@
 		}
 		&.translucent {
 			backdrop-filter: blur(10px);
-			--color-bg: rgb(from var(--color-text) r g b / 0.06);
-			--color-bg-disabled: transparent;
-			--color-bg-active: rgb(from var(--color-text) r g b / 0.12);
+			--color-bg: rgb(from var(--color-text) r g b / 0.09);
+			--color-bg-disabled: rgb(from var(--color-text) r g b / 0.04);
+			--color-bg-active: rgb(from var(--color-text) r g b / 0.15);
 			--button-border: none;
 			--button-border-disabled: none;
 			--button-border-active: none;
@@ -671,24 +707,59 @@
 			   washes the disabled label into the background. Derive it from the
 			   button's own full-contrast --color-text instead; the accent/error/success
 			   variants below override with their own disabled tokens. */
+			--color-text: light-dark(
+				oklch(from var(--color-action) min(l, 0.5) c h),
+				oklch(from var(--color-action) max(l, 0.65) c h)
+			);
 			--color-text-disabled: light-dark(
-				oklch(from var(--color-text) calc(l + 0.2) c h),
-				oklch(from var(--color-text) calc(l - 0.2) c h)
+				oklch(from var(--color-action) min(l + 0.1, 0.6) calc(c - 0.05) h),
+				oklch(from var(--color-action) max(l - 0.1, 0.55) calc(c - 0.05) h)
+			);
+			--color-text-active: light-dark(
+				oklch(from var(--color-action) min(l - 0.2, 0.3) c h),
+				oklch(from var(--color-action) max(l + 0.1, 0.75) c h)
 			);
 			&.accent {
-				--color-text: var(--color-accent);
-				--color-text-disabled: var(--color-accent-disabled);
-				--color-text-active: var(--color-accent-active);
+				--color-text: light-dark(
+					oklch(from var(--color-accent) min(l, 0.5) c h),
+					oklch(from var(--color-accent) max(l, 0.65) c h)
+				);
+				--color-text-disabled: light-dark(
+					oklch(from var(--color-accent) min(l + 0.1, 0.6) calc(c - 0.05) h),
+					oklch(from var(--color-accent) max(l - 0.1, 0.55) calc(c - 0.05) h)
+				);
+				--color-text-active: light-dark(
+					oklch(from var(--color-accent) min(l - 0.1, 0.4) c h),
+					oklch(from var(--color-accent) max(l + 0.1, 0.76) c h)
+				);
 			}
 			&.error {
-				--color-text: var(--color-error);
-				--color-text-disabled: var(--color-error-disabled);
-				--color-text-active: var(--color-error-active);
+				--color-text: light-dark(
+					oklch(from var(--color-error) min(l, 0.55) c h),
+					oklch(from var(--color-error) max(l, 0.65) c h)
+				);
+				--color-text-disabled: light-dark(
+					oklch(from var(--color-error) min(l + 0.1, 0.65) calc(c - 0.05) h),
+					oklch(from var(--color-error) max(l - 0.1, 0.55) calc(c - 0.05) h)
+				);
+				--color-text-active: light-dark(
+					oklch(from var(--color-error) min(l - 0.1, 0.45) c h),
+					oklch(from var(--color-error) max(l + 0.1, 0.75) c h)
+				);
 			}
 			&.success {
-				--color-text: var(--color-success);
-				--color-text-disabled: var(--color-success-disabled);
-				--color-text-active: var(--color-success-active);
+				--color-text: light-dark(
+					oklch(from var(--color-success) min(l, 0.5) c h),
+					oklch(from var(--color-success) max(l, 0.65) c h)
+				);
+				--color-text-disabled: light-dark(
+					oklch(from var(--color-success) min(l + 0.1, 0.6) calc(c - 0.05) h),
+					oklch(from var(--color-success) max(l - 0.1, 0.55) calc(c - 0.05) h)
+				);
+				--color-text-active: light-dark(
+					oklch(from var(--color-success) min(l - 0.1, 0.4) c h),
+					oklch(from var(--color-success) max(l + 0.1, 0.75) c h)
+				);
 			}
 		}
 		&.is-loading {
@@ -737,8 +808,8 @@
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			background-color: var(--color-accent, var(--color-text));
-			color: var(--color-accent-text, var(--color-bg));
+			background-color: var(--color-bg, var(--color-action));
+			color: var(--color-text, var(--color-action-text));
 			border-radius: var(--radius-full);
 			font-size: 0.8em;
 			line-height: 0.8em;
@@ -760,8 +831,26 @@
 		&.transparent,
 		&.translucent {
 			.badge {
-				background-color: var(--color-accent);
-				color: var(--color-accent-text);
+				background-color: var(--color-action);
+				color: var(--color-action-text);
+			}
+			&.accent {
+				.badge {
+					background-color: var(--color-accent);
+					color: var(--color-accent-text);
+				}
+			}
+			&.error {
+				.badge {
+					background-color: var(--color-error);
+					color: var(--color-error-text);
+				}
+			}
+			&.success {
+				.badge {
+					background-color: var(--color-success);
+					color: var(--color-success-text);
+				}
 			}
 		}
 		&.icon {
@@ -796,7 +885,7 @@
 			button,
 			a {
 				mask-image: radial-gradient(
-					circle at calc(100% - 0.55em) 0.4em,
+					circle at calc(100% - 0.5em) 0.4em,
 					transparent calc(0.65em + 3px),
 					black calc(0.65em + 3.5px)
 				);
