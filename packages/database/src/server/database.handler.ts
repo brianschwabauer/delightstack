@@ -231,10 +231,21 @@ export interface DatabaseHandleOptions<
 
 	/**
 	 * Enable the sync endpoint for client-side search index synchronization.
-	 * Set to `true` to expose `POST /api/sync`, or pass `{ path: '/custom/sync' }`.
+	 * Set to `true` to expose `POST /api/sync`, or pass an object to customize
+	 * the path and/or add a `beforeSync` hook (e.g. for per-user authorization).
 	 * Requires the database RPC to implement `sync()`.
+	 *
+	 * Note: the sync endpoint returns the sparse search data of ALL entities.
+	 * When `requireAuth` is true (the default), it requires a session; use
+	 * `beforeSync` for anything more granular.
 	 */
-	sync?: boolean | { path: string };
+	sync?:
+		| boolean
+		| {
+				path?: string;
+				/** Called before serving a sync request. Throw to reject. */
+				beforeSync?: (event: RequestEvent) => void | Promise<void>;
+		  };
 }
 
 /**
@@ -353,7 +364,12 @@ function matchRoute(
 			const rest = pathname.slice(route.length + 1);
 			// Only match single-segment IDs (no nested sub-paths)
 			if (rest && !rest.includes('/')) {
-				return { config, id: decodeURIComponent(rest) };
+				try {
+					return { config, id: decodeURIComponent(rest) };
+				} catch {
+					// Malformed percent-encoding — not a route we can serve
+					return undefined;
+				}
 			}
 		}
 	}
@@ -430,16 +446,19 @@ async function handleCreate(
 	// Parse through the table's Zod schema for validation
 	let data: Record<string, unknown>;
 	try {
+		// The primary key may have a custom name (e.g. `slug`) — use the
+		// configured name for both the temp value and the strip below
+		const primary_key = route.table.config.primary_key || 'id';
 		const parsed = route.table.parse({
 			...raw_body,
 			// Provide temp values for auto-managed fields so parse() succeeds
-			id: route.table.config.primary_key_type === 'string' ? '_temp_' : 0,
+			[primary_key]: route.table.config.primary_key_type === 'string' ? '_temp_' : 0,
 			created_at: Date.now(),
 			updated_at: Date.now(),
 		});
 		// Strip auto-managed fields — the DB will set them
 		const {
-			id: _id,
+			[primary_key]: _id,
 			created_at: _ca,
 			updated_at: _ua,
 			...rest
@@ -572,15 +591,15 @@ async function handleSync(db: DatabaseRpc, event: RequestEvent): Promise<Respons
 		}
 	}
 
-	// Also merge URL params (start, end, limit)
-	const start = event.url.searchParams.get('start');
-	if (start) query.start_updated_at = query.start_updated_at ?? parseInt(start, 10);
+	// Also merge URL params (start, end, limit) — ignore non-numeric values
+	const start = parseInt(event.url.searchParams.get('start') || '', 10);
+	if (Number.isFinite(start)) query.start_updated_at = query.start_updated_at ?? start;
 
-	const end = event.url.searchParams.get('end');
-	if (end) query.end_updated_at = query.end_updated_at ?? parseInt(end, 10);
+	const end = parseInt(event.url.searchParams.get('end') || '', 10);
+	if (Number.isFinite(end)) query.end_updated_at = query.end_updated_at ?? end;
 
-	const limit = event.url.searchParams.get('limit');
-	if (limit) query.limit = query.limit ?? parseInt(limit, 10);
+	const limit = parseInt(event.url.searchParams.get('limit') || '', 10);
+	if (Number.isFinite(limit)) query.limit = query.limit ?? limit;
 
 	const data = await db.sync(query);
 	return jsonResponse(data);
@@ -641,7 +660,12 @@ export function createDatabaseHandle<
 			})
 		: [];
 
-	const explicit = options.routes ?? [];
+	// Explicit routes get the same auth guard as auto-generated ones —
+	// `requireAuth` (default true) must protect writes regardless of how the
+	// route was declared.
+	const explicit = (options.routes ?? []).map((r) =>
+		require_auth ? { ...r, hooks: withAuthGuards(r.hooks ?? {}) } : r,
+	);
 
 	// Later routes override earlier ones (so users can shadow an auto
 	// route by providing the same path in `routes`).
@@ -653,12 +677,14 @@ export function createDatabaseHandle<
 
 	const routes = [...by_route.values()].sort((a, b) => b.route.length - a.route.length);
 
-	// Resolve sync path
+	// Resolve sync path + hook
 	const sync_path = options.sync
 		? typeof options.sync === 'object'
-			? options.sync.path
+			? (options.sync.path ?? '/api/sync')
 			: '/api/sync'
 		: null;
+	const before_sync =
+		typeof options.sync === 'object' ? options.sync.beforeSync : undefined;
 
 	return async ({ event, resolve }) => {
 		const pathname = event.url.pathname;
@@ -671,6 +697,16 @@ export function createDatabaseHandle<
 				return errorResponse(new DelightError('Database not available'));
 			}
 			try {
+				// The sync endpoint exposes the sparse search data of every entity —
+				// it must not be publicly dumpable by default
+				if (require_auth && !(event.locals as { session?: unknown }).session) {
+					throw new DelightError({
+						message: 'Unauthorized',
+						status: 401,
+						code: 'unauthorized',
+					});
+				}
+				if (before_sync) await before_sync(event);
 				return await handleSync(db, event);
 			} catch (error) {
 				return errorResponse(error);
