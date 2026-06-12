@@ -1714,12 +1714,15 @@ export class DatabaseServer<
 			const table = this.config[entity_type];
 			const rows = this.ctx.storage.sql.exec(`SELECT * FROM ${sanitized_table}`);
 
+			// Rows don't change mid-rebuild (the DO is single-threaded and this is
+			// fully synchronous), so referenced rows can be memoized across entities
+			const ref_cache = new Map<string, Record<string, any> | undefined>();
 			const entities: any[] = [];
 			for (const row of rows) {
 				const entity = this.toEntityValue(entity_type, row) as any;
 				if (entity) {
 					const sparse = table.toSparse(entity as any) as any;
-					this.computeFkDerivedFields(entity_type as string, entity, sparse);
+					this.computeFkDerivedFields(entity_type as string, entity, sparse, ref_cache);
 					entities.push(sparse);
 					if (entity.updated_at && entity.updated_at > index.last_updated_at) {
 						index.last_updated_at = entity.updated_at;
@@ -1797,11 +1800,18 @@ export class DatabaseServer<
 	/**
 	 * Computes FK-derived field values for a sparse entity object.
 	 * Fetches referenced entities from SQLite and calls derived functions with refs.
+	 *
+	 * `ref_cache` memoizes referenced rows across calls within one bulk
+	 * operation (index rebuild, cascade reindex) — many entities typically
+	 * point at the same few referenced rows, and re-running the row →
+	 * entity conversion (JSON.parse of the overflow column) per entity is
+	 * the dominant repeated cost.
 	 */
 	private computeFkDerivedFields(
 		entity_type: string,
 		entity_data: Record<string, any>,
 		sparse: Record<string, any>,
+		ref_cache?: Map<string, Record<string, any> | undefined>,
 	): void {
 		const table = this.config[entity_type as keyof DatabaseConfig] as any;
 		const derived = table?.config?.derived_fields as
@@ -1831,6 +1841,11 @@ export class DatabaseServer<
 				refs[fk_field] = undefined;
 				continue;
 			}
+			const cache_key = `${fk_meta.table}.${fk_meta.column}:${fk_value}`;
+			if (ref_cache?.has(cache_key)) {
+				refs[fk_field] = ref_cache.get(cache_key);
+				continue;
+			}
 			try {
 				const result = this.ctx.storage.sql.exec(
 					`SELECT * FROM ${this.sanitize(fk_meta.table)} WHERE ${this.sanitize(fk_meta.column)} = ? LIMIT 1`,
@@ -1843,6 +1858,7 @@ export class DatabaseServer<
 			} catch {
 				refs[fk_field] = undefined;
 			}
+			ref_cache?.set(cache_key, refs[fk_field]);
 		}
 
 		// Compute each FK-derived field
@@ -1908,6 +1924,11 @@ export class DatabaseServer<
 		const dependents = this.#reverse_fk_map.get(entity_type);
 		if (!dependents?.length) return;
 
+		// Every dependent row references the same triggering entity (and usually
+		// the same handful of other rows) — memoize them instead of re-fetching
+		// and re-parsing per dependent row
+		const ref_cache = new Map<string, Record<string, any> | undefined>();
+
 		for (const dep of dependents) {
 			const dep_table = this.config[dep.table as keyof DatabaseConfig] as any;
 			const dep_index = this.getIndex(dep.table as keyof DatabaseConfig & string);
@@ -1952,7 +1973,7 @@ export class DatabaseServer<
 
 				// Recompute sparse (same-table derived first, then FK-derived)
 				const sparse = dep_table.toSparse(dep_entity) as any;
-				this.computeFkDerivedFields(dep.table, dep_entity, sparse);
+				this.computeFkDerivedFields(dep.table, dep_entity, sparse, ref_cache);
 
 				// Update Orama
 				try {
