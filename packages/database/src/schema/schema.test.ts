@@ -911,3 +911,66 @@ describe('Schema: FK-derived fields', () => {
 		expect(table.config.orama.schema).toHaveProperty('category_priority', 'number');
 	});
 });
+
+// ── Regression tests: storage + validation fixes ────────────────────────────
+
+describe('non-scalar field storage', () => {
+	it('stores object/array/vector/geopoint fields in the json column (no sqlite columns)', () => {
+		const table = Database.table('storage_test', (schema) => ({
+			name: schema.string(),
+			address: schema.object({ city: schema.string() }),
+			tags: schema.array(schema.string()),
+			embedding: schema.vector(3),
+			location: schema.geopoint(),
+		}));
+		expect(table.config.table_definition).toHaveProperty('name');
+		expect(table.config.table_definition).not.toHaveProperty('address');
+		expect(table.config.table_definition).not.toHaveProperty('tags');
+		expect(table.config.table_definition).not.toHaveProperty('embedding');
+		expect(table.config.table_definition).not.toHaveProperty('location');
+	});
+});
+
+describe('array validation', () => {
+	it('enforces length constraints declared on the array itself', () => {
+		const table = Database.table('array_len', (schema) => ({
+			tags: schema.array(schema.string()).min(2).max(3),
+		}));
+		const base = { id: 'a', created_at: 1, updated_at: 1 };
+		expect(() => table.parse({ ...base, tags: ['one'] })).toThrow(/between 2 and 3/);
+		expect(() => table.parse({ ...base, tags: ['1', '2', '3', '4'] })).toThrow(
+			/at most 3|between 2 and 3/,
+		);
+		expect(() => table.parse({ ...base, tags: ['one', 'two'] })).not.toThrow();
+	});
+
+	it('does not misread item-level numeric bounds as array length constraints', () => {
+		const table = Database.table('array_items', (schema) => ({
+			nums: schema.array(schema.number().min(5).max(10)),
+		}));
+		const base = { id: 'a', created_at: 1, updated_at: 1 };
+		// 2 items, each within [5, 10] — valid even though 2 < 5
+		expect(() => table.parse({ ...base, nums: [7, 8] })).not.toThrow();
+		// item out of range must still fail
+		expect(() => table.parse({ ...base, nums: [3] })).toThrow();
+	});
+});
+
+describe('searchable arrays', () => {
+	it('includes searchable array fields in searchable_fields and toSparse output', () => {
+		const table = Database.table('searchable_array', (schema) => ({
+			title: schema.string().searchable(),
+			tags: schema.array(schema.string()).searchable(),
+		}));
+		expect(table.config.searchable_fields).toContain('tags');
+		expect(table.config.orama.schema).toHaveProperty('tags', 'string[]');
+		const sparse = table.toSparse({
+			id: 'a',
+			title: 'hello',
+			tags: ['x', 'y'],
+			created_at: 1,
+			updated_at: 1,
+		} as any);
+		expect((sparse as any).tags).toEqual(['x', 'y']);
+	});
+});

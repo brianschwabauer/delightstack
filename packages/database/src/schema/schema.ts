@@ -2740,7 +2740,17 @@ export namespace Database {
 					on_delete: field.foreign_key.on_delete,
 				};
 			}
-			(table_definition as any)[fieldName] = sqliteColumnDef;
+			// Non-scalar fields (objects, arrays, vectors, geopoints) are stored in
+			// the internal `json` overflow column. Giving them their own TEXT column
+			// would store a JSON string that never round-trips back into an object.
+			const stored_in_json_column =
+				field.type === 'object' ||
+				field.type === 'array' ||
+				field.type === 'vector' ||
+				field.type === 'geopoint';
+			if (!stored_in_json_column) {
+				(table_definition as any)[fieldName] = sqliteColumnDef;
+			}
 
 			// Build the orama schema
 			function recursivelyBuildOramaSchema(
@@ -2769,18 +2779,24 @@ export namespace Database {
 				}
 
 				if (subfield.type === 'array') {
-					if (!subfield.searchable || !('items' in subfield)) return;
+					if ((!subfield.searchable && !force_searchable) || !('items' in subfield))
+						return;
 					const itemType = subfield.items._;
+					let arrayType: SearchableType | undefined;
 					if (itemType.type === 'string') {
-						return 'string[]';
+						arrayType = 'string[]';
 					} else if (itemType.type === 'number') {
-						return 'number[]';
+						arrayType = 'number[]';
 					} else if (itemType.type === 'boolean') {
-						return 'boolean[]';
+						arrayType = 'boolean[]';
 					} else if (itemType.type === 'enum') {
-						return 'enum[]';
+						arrayType = 'enum[]';
 					}
-					return;
+					if (!arrayType) return;
+					// The field must be listed in searchable_fields or toSparse() will
+					// never copy it into the indexed document
+					if (path) searchable_fields.push(path as SearchableColumn);
+					return arrayType;
 				}
 
 				if (!subfield.searchable && !force_searchable) return;
@@ -3013,31 +3029,32 @@ export namespace Database {
 						}
 						if (!field.items || !field.items._) return value;
 						const itemField = field.items._ as DatabaseField;
+						// Length constraints belong to the ARRAY field itself — the item
+						// field's min/max constrain each item's value and are enforced by
+						// recursivelyParseField below
 						let message = '';
 						if (
-							'min' in itemField &&
-							typeof itemField.min === 'number' &&
-							'max' in itemField &&
-							typeof itemField.max === 'number'
+							'min' in field &&
+							typeof field.min === 'number' &&
+							'max' in field &&
+							typeof field.max === 'number'
 						) {
-							message = `Field '${label}' must have between ${itemField.min} and ${itemField.max} items.`;
+							message = `Field '${label}' must have between ${field.min} and ${field.max} items.`;
 						}
-						if ('min' in itemField && typeof itemField.min === 'number') {
-							if (value.length < itemField.min) {
+						if ('min' in field && typeof field.min === 'number') {
+							if (value.length < field.min) {
 								issues.push({
 									message:
-										message ||
-										`Field '${label}' must have at least ${itemField.min} items.`,
+										message || `Field '${label}' must have at least ${field.min} items.`,
 									path,
 								});
 							}
 						}
-						if ('max' in itemField && typeof itemField.max === 'number') {
-							if (value.length > itemField.max) {
+						if ('max' in field && typeof field.max === 'number') {
+							if (value.length > field.max) {
 								issues.push({
 									message:
-										message ||
-										`Field '${label}' must have at most ${itemField.max} items.`,
+										message || `Field '${label}' must have at most ${field.max} items.`,
 									path,
 								});
 							}
