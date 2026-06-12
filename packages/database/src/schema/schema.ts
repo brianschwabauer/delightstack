@@ -2431,6 +2431,7 @@ export namespace Database {
 			indexes?: unknown;
 			indexable_fields?: readonly string[];
 			unique_fields?: readonly string[];
+			readonly_fields?: readonly string[];
 			searchable_fields?: readonly string[];
 			sortable_fields?: readonly string[];
 			foreign_keys?: Record<string, unknown>;
@@ -2491,6 +2492,8 @@ export namespace Database {
 				indexable_fields: IndexableColumn[];
 				/** The list of fields that must be unique */
 				unique_fields: UniqueColumn[];
+				/** The list of fields that cannot be changed after creation (enforced on update) */
+				readonly_fields: string[];
 				/** The list of fields that can be searched via orama */
 				searchable_fields: SearchableColumn[];
 				/** The list of fields that can be used for sorting results (via orama) */
@@ -2551,6 +2554,7 @@ export namespace Database {
 		let primary_key_type: 'string' | 'number' = 'string';
 		const indexable_fields: IndexableColumn[] = [];
 		const unique_fields: UniqueColumn[] = [];
+		const readonly_fields: string[] = [];
 		const searchable_fields: SearchableColumn[] = [];
 		const sortable_fields: SortableColumn[] = [];
 		const foreign_keys: ForeignKeys = {} as ForeignKeys;
@@ -2712,6 +2716,9 @@ export namespace Database {
 				sqliteColumnDef += ' UNIQUE';
 			} else if (!field.optional) {
 				sqliteColumnDef += ' NOT NULL';
+			}
+			if ('readonly' in field && field.readonly) {
+				readonly_fields.push(fieldName);
 			}
 			if (field.type === 'foreign_key') {
 				// Do a sanity check for invalid table names (in the off chance someone puts a bad table name here)
@@ -2984,6 +2991,17 @@ export namespace Database {
 						label = (field as any).placeholder;
 					}
 					if (value === undefined || value === null) {
+						// Apply .default()/.prefault() declared on the field's zod schema —
+						// zod fills them in for `undefined` input (an explicit null is an
+						// intentional clear and does NOT receive the default)
+						if (value === undefined && 'schema' in field && (field as any).schema) {
+							try {
+								const result = (field as any).schema.safeParse(undefined);
+								if (result?.success && result.data !== undefined) return result.data;
+							} catch {
+								// fall through to the required-field check
+							}
+						}
 						if (!('optional' in field && field.optional)) {
 							issues.push({
 								message: `Field '${label}' is required but was not provided.`,
@@ -3287,6 +3305,7 @@ export namespace Database {
 				searchable_fields,
 				sortable_fields,
 				unique_fields,
+				readonly_fields,
 				foreign_keys,
 				derived_fields,
 				table_definition,

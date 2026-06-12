@@ -974,3 +974,51 @@ describe('searchable arrays', () => {
 		expect((sparse as any).tags).toEqual(['x', 'y']);
 	});
 });
+
+describe('field defaults', () => {
+	it('applies .default() when the field is omitted', () => {
+		const table = Database.table('with_default', (schema) => ({
+			status: schema.string().default('active'),
+			count: schema.number().default(0),
+		}));
+		const parsed = table.parse({ id: 'a', created_at: 1, updated_at: 1 }) as any;
+		expect(parsed.status).toBe('active');
+		expect(parsed.count).toBe(0);
+	});
+
+	it('applies .default() on optional fields and keeps provided values', () => {
+		const table = Database.table('with_optional_default', (schema) => ({
+			status: schema.string().optional().default('active'),
+		}));
+		expect((table.parse({ id: 'a', created_at: 1, updated_at: 1 }) as any).status).toBe(
+			'active',
+		);
+		expect(
+			(table.parse({ id: 'a', status: 'archived', created_at: 1, updated_at: 1 }) as any)
+				.status,
+		).toBe('archived');
+	});
+
+	it('does not apply a default for an explicit null on an optional field', () => {
+		const table = Database.table('null_no_default', (schema) => ({
+			status: schema.string().optional().default('active'),
+		}));
+		const parsed = table.parse({
+			id: 'a',
+			status: null,
+			created_at: 1,
+			updated_at: 1,
+		}) as any;
+		expect(parsed.status).toBeUndefined();
+	});
+});
+
+describe('readonly fields', () => {
+	it('collects readonly fields into config.readonly_fields', () => {
+		const table = Database.table('with_readonly', (schema) => ({
+			owner_id: schema.string().readonly(),
+			name: schema.string(),
+		}));
+		expect(table.config.readonly_fields).toEqual(['owner_id']);
+	});
+});
