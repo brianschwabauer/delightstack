@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		Button,
+		Form,
 		Input,
 		Select,
 		Avatar,
@@ -8,7 +9,11 @@
 		Callout,
 	} from '@delightstack/components';
 	import Icon from '$lib/Icon.svelte';
+	import { personTable } from '$lib/schema';
 	import { tooltip } from '@delightstack/utilities';
+
+	// Schema-derived input props (name, type, label, required, etc.)
+	const field = personTable.form.field;
 
 	const { data } = $props();
 	const { db } = $derived(data);
@@ -35,20 +40,6 @@
 	let error = $state('');
 
 	const people = db.search('person');
-
-	const relationship_options = [
-		{ value: '', label: 'Select...' },
-		{ value: 'parent', label: 'Parent' },
-		{ value: 'child', label: 'Child' },
-		{ value: 'sibling', label: 'Sibling' },
-		{ value: 'spouse', label: 'Spouse' },
-		{ value: 'grandparent', label: 'Grandparent' },
-		{ value: 'grandchild', label: 'Grandchild' },
-		{ value: 'aunt-uncle', label: 'Aunt/Uncle' },
-		{ value: 'cousin', label: 'Cousin' },
-		{ value: 'friend', label: 'Friend' },
-		{ value: 'other', label: 'Other' },
-	];
 
 	async function addPerson() {
 		if (!new_name.trim()) return;
@@ -134,27 +125,21 @@
 		<Callout error>{error}</Callout>
 	{/if}
 
-	<form
-		onsubmit={(e) => {
-			e.preventDefault();
-			addPerson();
-		}}
-		class="add-form">
-		<Input label="Name" bind:value={new_name} required placeholder="Full name" />
-		<Input label="Email" type="email" bind:value={new_email} placeholder="Optional" />
-		<Select
-			label="Relationship"
-			bind:value={new_relationship}
-			options={relationship_options} />
-		<Input label="Birthday" type="date" bind:value={new_birthday} />
+	<!-- The table's form schema validates every field on submit; each Input's
+	     spread props register its field-level parse with the Form as well. -->
+	<Form schema={personTable.form.schema} onsubmit={addPerson}>
+		<Input {...field.name} bind:value={new_name} />
+		<Input {...field.email} bind:value={new_email} placeholder="Optional" />
+		<Select {...field.relationship} bind:value={new_relationship} clearable />
+		<Input {...field.birthday} bind:value={new_birthday} />
 
 		<div class="modal-actions">
 			<Button onclick={() => (show_add = false)} transparent>Cancel</Button>
-			<Button onclick={addPerson} disabled={saving || !new_name.trim()}>
+			<Button type="submit" disabled={saving}>
 				{saving ? 'Adding...' : 'Add Person'}
 			</Button>
 		</div>
-	</form>
+	</Form>
 </Modal>
 
 <style>
@@ -217,11 +202,6 @@
 		p {
 			color: var(--color-text-disabled);
 		}
-	}
-	.add-form {
-		display: flex;
-		flex-direction: column;
-		gap: var(--size-3);
 	}
 	.modal-actions {
 		display: flex;

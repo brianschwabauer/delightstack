@@ -3,6 +3,7 @@ title: Form
 description: A form container with Standard Schema validation, promise-aware submission, auto-focus on errors, and context-based state management for child form controls.
 ---
 
+import { Aside } from '@astrojs/starlight/components';
 import { Form } from '@delightstack/components/form';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import FormDemo from '../../../../components/demos/FormDemo.svelte';
@@ -203,7 +204,11 @@ interface FormContext {
   is_valid: boolean;
   disabled: boolean;
   validate_on: 'change' | 'blur' | 'submit';
-  register: (name: string, element: HTMLElement) => void;
+  register: (
+    name: string,
+    element: HTMLElement,
+    validator?: (value: unknown) => unknown,
+  ) => void;
   unregister: (name: string) => void;
   setValue: (name: string, value: unknown) => void;
   setTouched: (name: string) => void;
@@ -225,7 +230,7 @@ interface StandardSchema<Input = unknown, Output = Input> {
 
 Child form controls (Input, Select, Checkbox, etc.) auto-register when they have a `name` prop and are inside a `<Form>`. The Form provides a `FormContext` via `setContext`, and child controls:
 
-1. Call `register(name, element)` on mount
+1. Call `register(name, element, validator?)` on mount — a field may pass a field-level validator (like the `parse` function from a database table's `form.field` props)
 2. Read `errors[name]` to display field-level errors
 3. Read `touched[name]` to know when to show errors
 4. Call `setValue(name, value)` when value changes
@@ -233,6 +238,12 @@ Child form controls (Input, Select, Checkbox, etc.) auto-register when they have
 6. Call `unregister(name)` on destroy
 
 This means child controls work the same whether inside a Form or standalone.
+
+When fields register validators, the Form runs them alongside the form-level `schema` on the same `validate_on` timing. If both produce an error for the same field, the schema's message wins; fields the schema does not cover keep their field-level error. A child `Input` never runs its `parse` prop itself while inside a Form, so the two layers cannot conflict.
+
+<Aside type="tip">
+Database tables from `@delightstack/database` expose a ready-made Standard Schema at `table.form.schema`, plus spreadable per-field props (including `parse`) at `table.form.field`. See the [Working with Forms guide](/guides/forms/) for the full pattern.
+</Aside>
 
 ## Accessibility
 

@@ -91,6 +91,21 @@ For declarative CRUD routes, mount `createDatabaseHandle()` in your SvelteKit `h
 {/each}
 ```
 
+## 5. Schema-driven forms
+
+Every table also generates form wiring: spread `table.form.field.<name>` onto a field component to
+get its `name`, `type`, `label`, constraints, and a `parse` validator from the one schema
+definition, and pass `table.form.schema` (a Standard Schema) to the components `Form` for
+whole-form validation.
+
+```svelte
+<Form schema={postTable.form.schema} onsubmit={save}>
+	<Input {...postTable.form.field.title} bind:value={title} />
+</Form>
+```
+
+See [Working with Forms](/guides/forms/) for the full pattern.
+
 <Aside type="tip">
 Pair the client with [Realtime](/stack/websocket/) via `ws.databaseHooks()` so entity changes sync
 live across tabs and clients.

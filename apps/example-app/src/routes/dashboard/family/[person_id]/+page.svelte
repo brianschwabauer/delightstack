@@ -11,8 +11,12 @@
 		Callout,
 	} from '@delightstack/components';
 	import Icon from '$lib/Icon.svelte';
+	import { personTable } from '$lib/schema';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+
+	// Schema-derived input props (name, type, label, required, etc.)
+	const field = personTable.form.field;
 
 	const { data } = $props();
 	const { db } = $derived(data);
@@ -24,20 +28,6 @@
 
 	let editing = $state(false);
 	let show_delete = $state(false);
-
-	const relationship_options = [
-		{ value: '', label: 'Select...' },
-		{ value: 'parent', label: 'Parent' },
-		{ value: 'child', label: 'Child' },
-		{ value: 'sibling', label: 'Sibling' },
-		{ value: 'spouse', label: 'Spouse' },
-		{ value: 'grandparent', label: 'Grandparent' },
-		{ value: 'grandchild', label: 'Grandchild' },
-		{ value: 'aunt-uncle', label: 'Aunt/Uncle' },
-		{ value: 'cousin', label: 'Cousin' },
-		{ value: 'friend', label: 'Friend' },
-		{ value: 'other', label: 'Other' },
-	];
 
 	async function savePerson() {
 		const v = person.value;
@@ -115,18 +105,15 @@
 					savePerson();
 				}}
 				class="edit-form">
-				<Input label="Name" bind:value={person.value.name} required />
-				<Input label="Email" type="email" bind:value={person.value.email} />
-				<Input label="Phone" type="tel" bind:value={person.value.phone} />
+				<Input {...field.name} bind:value={person.value.name} />
+				<Input {...field.email} bind:value={person.value.email} />
+				<Input {...field.phone} bind:value={person.value.phone} />
 				<Select
-					label="Relationship"
+					{...field.relationship}
 					bind:value={person.value.relationship}
-					options={relationship_options} />
-				<Input label="Birthday" type="date" bind:value={person.value.birthday} />
-				<Input
-					label="Notes"
-					bind:value={person.value.notes}
-					placeholder="Notes about this person..." />
+					clearable />
+				<Input {...field.birthday} bind:value={person.value.birthday} />
+				<Input {...field.notes} bind:value={person.value.notes} />
 			</form>
 		{:else}
 			<div class="details">

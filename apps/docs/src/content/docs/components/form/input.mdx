@@ -232,9 +232,9 @@ Inputs are transparent (outlined) by default so they sit cleanly on any surface.
 ${'  '}label="Email"
 ${'  '}type="email"
 ${'  '}error="Please enter a valid email address"
-${'  '}helper="We'll never share your email"
+${'  '}description="We'll never share your email"
 />`}>
-	<Input client:load label="Email" type="email" error="Please enter a valid email address" helper="We'll never share your email" />
+	<Input client:load label="Email" type="email" error="Please enter a valid email address" description="We'll never share your email" />
 </ComponentPreview>
 
 ### Skeleton Loading
@@ -242,6 +242,25 @@ ${'  '}helper="We'll never share your email"
 <ComponentPreview code={`<Input label="Name" skeleton={loading} bind:value={name} />`}>
   <InputSkeletonDemo client:load />
 </ComponentPreview>
+
+### Field Validation
+
+Pass a `parse` function to validate the value — standalone, it runs when the input is blurred, and the thrown error's message shows below the field. While errored, the input re-validates on every keystroke so the message clears the moment the value is fixed.
+
+Database tables expose a ready-made `parse` (plus `name`, `type`, `label`, and constraint props) for every field, so a single spread wires it all up:
+
+```svelte
+<script>
+  import { Input } from '@delightstack/components';
+  import { personTable } from '$lib/schema';
+
+  let email = $state('');
+</script>
+
+<Input {...personTable.form.field.email} bind:value={email} />
+```
+
+Inside a `<Form>`, the `parse` function is registered with the form instead, which runs it alongside the form-level schema (the schema wins when both error). See the [Working with Forms guide](/guides/forms/).
 
 ## Props
 
@@ -265,6 +284,7 @@ ${'  '}helper="We'll never share your email"
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `error` | `string \| boolean` | - | Error message or boolean error state |
+| `parse` | `(value: unknown) => unknown` | - | Validator that throws a user-showable error message. Standalone it runs on blur (re-running on change while errored); inside a Form it is registered with the form instead |
 | `pattern` | `string` | - | Regex pattern |
 | `minlength` | `number` | - | Minimum length |
 | `maxlength` | `number` | - | Maximum length |
@@ -282,7 +302,7 @@ ${'  '}helper="We'll never share your email"
 | `icon` | `Component` | - | Leading icon component |
 | `clearable` | `boolean` | `false` | Show clear button |
 | `show_counter` | `boolean` | `false` | Show character count |
-| `helper` | `string` | - | Helper text below input |
+| `description` | `string` | - | Description text below input |
 | `dense` | `boolean` | `false` | Tighter internal spacing |
 | `comfortable` | `boolean` | `false` | More internal spacing |
 | `filled` | `boolean` | `false` | Paint a solid surface background behind the control (vs the default transparent/outlined look) |

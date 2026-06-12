@@ -259,7 +259,7 @@
 			</figure>
 			<figure>
 				<figcaption>helper text</figcaption>
-				<Input label="Username" helper="Letters, numbers and dashes only." />
+				<Input label="Username" description="Letters, numbers and dashes only." />
 			</figure>
 			<figure>
 				<figcaption>error</figcaption>

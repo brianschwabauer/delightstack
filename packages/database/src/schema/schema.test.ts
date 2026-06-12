@@ -1070,3 +1070,193 @@ describe('readonly fields', () => {
 		expect(table.config.readonly_fields).toEqual(['owner_id']);
 	});
 });
+
+describe('Schema: form field props', () => {
+	const table = Database.table('form_props_person', (schema) => ({
+		id: schema.primaryKey(),
+		name: schema.string().min(1).max(100).label('Full name').placeholder('Jane Doe'),
+		email: schema.string().email().optional(),
+		bio: schema.string().textarea().optional(),
+		website: schema.string().url().description('Include the https://').optional(),
+		relationship: schema.enum(['parent', 'aunt-uncle']).optional(),
+		is_public: schema.boolean().default(false),
+		tags: schema.array(schema.string()).optional(),
+		scores: schema.array(schema.number()).min(1).max(3),
+		address: schema.object({ city: schema.string(), zip: schema.string().optional() }).optional(),
+	}));
+	const field = table.form.field as Record<string, any>;
+
+	it('should use the field name (without []) as the key and name for array fields', () => {
+		expect(field).toHaveProperty('tags');
+		expect(field).not.toHaveProperty('tags[]');
+		expect(field.tags.name).toBe('tags');
+	});
+
+	it('should mark array fields as multiple', () => {
+		expect(field.tags.multiple).toBe(true);
+		expect(field.scores.multiple).toBe(true);
+		expect(field.name.multiple).toBeUndefined();
+	});
+
+	it('should derive required for arrays from the array field itself', () => {
+		expect(field.tags.required).toBe(false); // .optional() array
+		expect(field.scores.required).toBe(true);
+	});
+
+	it('should mark fields with a .default() as not required', () => {
+		expect(field.is_public.required).toBe(false);
+	});
+
+	it('should not require fields nested inside an optional object', () => {
+		expect(field['address.city'].required).toBe(false);
+		expect(field['address.zip'].required).toBe(false);
+	});
+
+	it('should emit type textarea for .textarea() without a format', () => {
+		expect(field.bio.type).toBe('textarea');
+	});
+
+	it('should auto-derive a label from the field name when .label() is not used', () => {
+		expect(field.email.label).toBe('Email');
+		expect(field.is_public.label).toBe('Is Public');
+		expect(field['address.city'].label).toBe('City');
+	});
+
+	it('should use the explicit label and placeholder when provided', () => {
+		expect(field.name.label).toBe('Full name');
+		expect(field.name.placeholder).toBe('Jane Doe');
+	});
+
+	it('should emit description text from .description()', () => {
+		expect(field.website.description).toBe('Include the https://');
+		expect(field.email.description).toBeUndefined();
+	});
+
+	it('should emit enum options as { value, label } pairs', () => {
+		expect(field.relationship.options).toEqual([
+			{ value: 'parent', label: 'Parent' },
+			{ value: 'aunt-uncle', label: 'Aunt Uncle' },
+		]);
+	});
+
+	it('should map string formats to input types', () => {
+		expect(field.email.type).toBe('email');
+		expect(field.website.type).toBe('url');
+	});
+
+	it('should accept enum options as { value, label } pairs', () => {
+		const labeled = Database.table('form_props_enum_labels', (schema) => ({
+			id: schema.primaryKey(),
+			relationship: schema.enum([
+				{ value: 'aunt-uncle', label: 'Aunt/Uncle' },
+				{ value: 'parent', label: 'Parent' },
+			]),
+		}));
+		const labeled_field = labeled.form.field as Record<string, any>;
+		expect(labeled_field.relationship.options).toEqual([
+			{ value: 'aunt-uncle', label: 'Aunt/Uncle' },
+			{ value: 'parent', label: 'Parent' },
+		]);
+		// Validation still works against the values
+		expect(labeled_field.relationship.parse('parent')).toBe('parent');
+		expect(() => labeled_field.relationship.parse('nope')).toThrowError();
+		// Entity type/value union still derives from the values
+		assertType<'aunt-uncle' | 'parent'>(
+			(undefined as unknown) as Database.Entity<typeof labeled>['relationship'],
+		);
+	});
+});
+
+describe('Schema: form field parse()', () => {
+	const table = Database.table('form_parse_person', (schema) => ({
+		id: schema.primaryKey(),
+		name: schema.string().min(1).label('Full name'),
+		email: schema.string().email().optional(),
+		scores: schema.array(schema.number()).min(1).max(3),
+		is_public: schema.boolean().default(false),
+	}));
+	const field = table.form.field as Record<string, any>;
+
+	it('should return the parsed value', () => {
+		expect(field.name.parse('Alice')).toBe('Alice');
+		expect(field.email.parse('a@b.co')).toBe('a@b.co');
+	});
+
+	it('should treat empty values on optional fields as undefined', () => {
+		expect(field.email.parse('')).toBeUndefined();
+		expect(field.email.parse(null)).toBeUndefined();
+		expect(field.email.parse(undefined)).toBeUndefined();
+	});
+
+	it('should throw a friendly required message for empty required fields', () => {
+		expect(() => field.name.parse('')).toThrowError('Full name is required');
+		expect(() => field.name.parse(undefined)).toThrowError('Full name is required');
+	});
+
+	it('should throw a friendly message (not a JSON dump) for invalid values', () => {
+		try {
+			field.email.parse('not-an-email');
+			expect.unreachable();
+		} catch (error) {
+			const message = (error as Error).message;
+			expect(message).not.toContain('{');
+			expect(message.toLowerCase()).toContain('email');
+		}
+	});
+
+	it('should not require fields with a default', () => {
+		expect(field.is_public.parse(undefined)).toBeUndefined();
+	});
+
+	it('should validate each item and the length constraints of array fields', () => {
+		expect(field.scores.parse([1, 2])).toEqual([1, 2]);
+		expect(() => field.scores.parse([])).toThrowError('Scores is required');
+		expect(() => field.scores.parse([1, 2, 3, 4])).toThrowError(
+			'Scores must have at most 3 items',
+		);
+		expect(() => field.scores.parse(['nope'])).toThrowError();
+	});
+});
+
+describe('Schema: form.schema (Standard Schema)', () => {
+	const table = Database.table('form_schema_person', (schema) => ({
+		id: schema.primaryKey(),
+		name: schema.string().min(1),
+		email: schema.string().email().optional(),
+		locked: schema.string().readonly().optional(),
+	}));
+
+	it('should expose a standard schema v1 interface', () => {
+		expect(table.form.schema['~standard'].version).toBe(1);
+		expect(table.form.schema['~standard'].vendor).toBe('delightstack');
+	});
+
+	it('should return the value when the data is valid', () => {
+		const result = table.form.schema['~standard'].validate({ name: 'Bob' }) as any;
+		expect(result.issues).toBeUndefined();
+		expect(result.value).toEqual({ name: 'Bob' });
+	});
+
+	it('should produce one issue per invalid field with the field name as the path', () => {
+		const result = table.form.schema['~standard'].validate({
+			email: 'nope',
+		}) as any;
+		expect(result.issues).toHaveLength(2);
+		const paths = result.issues.map((issue: any) => issue.path.join('.'));
+		expect(paths).toContain('name');
+		expect(paths).toContain('email');
+	});
+
+	it('should not validate readonly fields', () => {
+		const result = table.form.schema['~standard'].validate({
+			name: 'Bob',
+			locked: 123,
+		}) as any;
+		expect(result.issues).toBeUndefined();
+	});
+
+	it('should not validate the primary key', () => {
+		const result = table.form.schema['~standard'].validate({ name: 'Bob' }) as any;
+		expect(result.issues).toBeUndefined();
+	});
+});

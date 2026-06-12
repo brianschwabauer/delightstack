@@ -89,6 +89,14 @@
 		/** Error message or boolean error state */
 		error = undefined as string | boolean | undefined,
 
+		/** Parses & validates the value (e.g. a database table form field's `parse`).
+		 *  Throws an error whose message is shown below the input.
+		 *  Standalone, it runs when the input is blurred (and re-runs on every
+		 *  change while the input is errored, so the error clears immediately).
+		 *  Inside a Form, it is registered with the form instead — the form runs
+		 *  it alongside the form-level schema, so the two never conflict. */
+		parse = undefined as ((value: unknown) => unknown) | undefined,
+
 		/** Regex pattern for validation */
 		pattern = undefined as string | undefined,
 
@@ -126,8 +134,8 @@
 		/** Show character count */
 		show_counter = false,
 
-		/** Helper text displayed below the input */
-		helper = undefined as string | undefined,
+		/** Description text displayed below the input */
+		description = undefined as string | undefined,
 
 		/** Tighter internal spacing */
 		dense = false,
@@ -205,15 +213,40 @@
 	$effect(() => {
 		if (!form_ctx || !name) return;
 		const el = input_element ?? textarea_element ?? file_input_element;
-		if (el) form_ctx.register(name, el);
+		if (el) form_ctx.register(name, el, parse);
 		return () => {
 			if (name) form_ctx.unregister(name);
 		};
 	});
 
-	/** Error from form context or local prop */
+	/* ------------------------------------------------------------------ */
+	/*  Standalone parse validation (outside a Form)                       */
+	/* ------------------------------------------------------------------ */
+
+	/** Error from running `parse` standalone. Inside a Form the form runs
+	 *  `parse` instead (it was registered above), so this never sets there. */
+	let parse_error = $state<string | undefined>(undefined);
+
+	function runParse() {
+		if (!parse || form_ctx) return;
+		try {
+			parse(value);
+			parse_error = undefined;
+		} catch (e) {
+			parse_error = e instanceof Error ? e.message : 'Invalid value';
+		}
+	}
+
+	/** Re-validate as the user types, but only while already errored — the
+	 *  error clears the moment the value is fixed without nagging beforehand. */
+	function reparseIfErrored() {
+		if (parse_error) runParse();
+	}
+
+	/** Error from local prop, standalone parse, or form context */
 	const resolved_error = $derived.by(() => {
 		if (error !== undefined) return error;
+		if (parse_error) return parse_error;
 		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
 		return undefined;
 	});
@@ -606,6 +639,7 @@
 	function handleBlur() {
 		focused = false;
 		if (form_ctx && name) form_ctx.setTouched(name);
+		runParse();
 		/* Delay close so click on option registers */
 		setTimeout(() => {
 			if (!focused) closeAutocomplete();
@@ -631,6 +665,7 @@
 		value = new_value;
 
 		if (form_ctx && name) form_ctx.setValue(name, value);
+		reparseIfErrored();
 		oninput?.({ value });
 
 		if (is_textarea && auto_resize) autoResizeTextarea();
@@ -666,6 +701,7 @@
 			value = '';
 		}
 		if (form_ctx && name) form_ctx.setValue(name, value);
+		reparseIfErrored();
 		oninput?.({ value });
 		onchange?.({ value });
 
@@ -835,6 +871,7 @@
 		if (!chips.includes(trimmed)) {
 			value = [...chips, trimmed];
 			if (form_ctx && name) form_ctx.setValue(name, value);
+			reparseIfErrored();
 			oninput?.({ value });
 			onchange?.({ value });
 		}
@@ -846,6 +883,7 @@
 		const chips = value as string[];
 		value = chips.filter((_, i) => i !== index);
 		if (form_ctx && name) form_ctx.setValue(name, value);
+		reparseIfErrored();
 		oninput?.({ value });
 		onchange?.({ value });
 	}
@@ -1092,7 +1130,11 @@
 				{minlength}
 				aria-invalid={has_error || undefined}
 				aria-required={required || undefined}
-				aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+				aria-describedby={has_error
+					? `${id}-error`
+					: description
+						? `${id}-description`
+						: undefined}
 				onfocus={handleFocus}
 				onblur={handleBlur}
 				oninput={handleInput}
@@ -1136,8 +1178,8 @@
 					disabled={effectively_disabled}
 					aria-describedby={has_error
 						? `${id}-error`
-						: helper
-							? `${id}-helper`
+						: description
+							? `${id}-description`
 							: undefined}
 					onfocus={handleFocus}
 					onblur={handleBlur}
@@ -1258,7 +1300,11 @@
 				value={value ?? ''}
 				aria-invalid={has_error || undefined}
 				aria-required={required || undefined}
-				aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+				aria-describedby={has_error
+					? `${id}-error`
+					: description
+						? `${id}-description`
+						: undefined}
 				onfocus={handleFocus}
 				onblur={handleBlur}
 				oninput={handleInput}
@@ -1292,7 +1338,11 @@
 					: undefined}
 				aria-invalid={has_error || undefined}
 				aria-required={required || undefined}
-				aria-describedby={has_error ? `${id}-error` : helper ? `${id}-helper` : undefined}
+				aria-describedby={has_error
+					? `${id}-error`
+					: description
+						? `${id}-description`
+						: undefined}
 				value={is_number ? (value ?? '') : (value ?? '')}
 				onfocus={handleFocus}
 				onblur={handleBlur}
@@ -1469,13 +1519,13 @@
 		</div>
 	{/if}
 
-	<!-- Footer row: error, helper, counter -->
-	{#if has_error || helper || (show_counter && maxlength)}
+	<!-- Footer row: error, description, counter -->
+	{#if has_error || description || (show_counter && maxlength)}
 		<div class="footer">
 			{#if has_error && error_message}
 				<span class="error" id="{id}-error" role="alert">{error_message}</span>
-			{:else if helper}
-				<span class="helper" id="{id}-helper">{helper}</span>
+			{:else if description}
+				<span class="description" id="{id}-description">{description}</span>
 			{:else}
 				<span></span>
 			{/if}
@@ -1536,10 +1586,8 @@
 	{/if}
 </div>
 
-<!-- Hidden native input for form submission (non-textarea, non-file types) -->
-{#if name && !is_textarea && !is_file && !multiple}
-	<input type="hidden" {name} value={value ?? ''} />
-{/if}
+<!-- Hidden native inputs for chips-mode form submission (the visible chip
+     input has no name; single-value types submit via the named control itself) -->
 {#if name && multiple && !is_file && Array.isArray(value)}
 	{#each value as v (v)}
 		<input type="hidden" {name} value={v} />
@@ -2508,7 +2556,7 @@
 	}
 
 	/* ================================================================== */
-	/*  FOOTER (error, helper, counter)                                    */
+	/*  FOOTER (error, description, counter)                               */
 	/* ================================================================== */
 
 	.footer {
@@ -2538,7 +2586,7 @@
 		}
 	}
 
-	.helper {
+	.description {
 		font-size: 0.78em;
 		color: var(--_text-muted);
 	}

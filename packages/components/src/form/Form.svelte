@@ -43,8 +43,17 @@
 		disabled: boolean;
 		/** When fields run validation */
 		validate_on: 'change' | 'blur' | 'submit';
-		/** Registers a field's element with the form (for focus-on-error) */
-		register: (name: string, element: HTMLElement) => void;
+		/**
+		 * Registers a field's element with the form (for focus-on-error).
+		 * A field may also register a validator (like the `parse` function from a
+		 * database table's form props) — the form runs it alongside the form-level
+		 * schema. When both produce an error for the same field, the schema wins.
+		 */
+		register: (
+			name: string,
+			element: HTMLElement,
+			validator?: (value: unknown) => unknown,
+		) => void;
 		/** Removes a field from the form when it unmounts */
 		unregister: (name: string) => void;
 		/** Updates a field's value in the form data */
@@ -127,6 +136,9 @@
 	/** Registry of field elements by name */
 	let field_elements = new Map<string, HTMLElement>();
 
+	/** Registry of field-level validators by name (e.g. table form props' parse) */
+	let field_validators = new Map<string, (value: unknown) => unknown>();
+
 	/** Validation errors keyed by field name */
 	let errors = $state<Record<string, string>>({});
 
@@ -152,19 +164,31 @@
 	async function validate(
 		values: Record<string, unknown>,
 	): Promise<Record<string, string>> {
-		if (!schema) return {};
-		const result = await schema['~standard'].validate(values);
-		if (result.issues) {
-			const field_errors: Record<string, string> = {};
-			for (const issue of result.issues) {
-				const path = issue.path
-					?.map((p) => (typeof p === 'object' && p !== null && 'key' in p ? p.key : p))
-					.join('.');
-				if (path) field_errors[path] = issue.message;
+		const field_errors: Record<string, string> = {};
+
+		// Field-level validators run first; the form-level schema overwrites any
+		// error for the same field below, so the two never conflict — fields the
+		// schema doesn't cover keep their field-level error.
+		for (const [name, validator] of field_validators) {
+			try {
+				validator(values[name]);
+			} catch (error) {
+				field_errors[name] = error instanceof Error ? error.message : 'Invalid value';
 			}
-			return field_errors;
 		}
-		return {};
+
+		if (schema) {
+			const result = await schema['~standard'].validate(values);
+			if (result.issues) {
+				for (const issue of result.issues) {
+					const path = issue.path
+						?.map((p) => (typeof p === 'object' && p !== null && 'key' in p ? p.key : p))
+						.join('.');
+					if (path) field_errors[path] = issue.message;
+				}
+			}
+		}
+		return field_errors;
 	}
 
 	async function validateSingleField(name: string): Promise<void> {
@@ -182,12 +206,18 @@
 	/*  Context methods                                                    */
 	/* ------------------------------------------------------------------ */
 
-	function register(name: string, element: HTMLElement) {
+	function register(
+		name: string,
+		element: HTMLElement,
+		validator?: (value: unknown) => unknown,
+	) {
 		field_elements.set(name, element);
+		if (validator) field_validators.set(name, validator);
 	}
 
 	function unregister(name: string) {
 		field_elements.delete(name);
+		field_validators.delete(name);
 		delete errors[name];
 		delete touched[name];
 	}

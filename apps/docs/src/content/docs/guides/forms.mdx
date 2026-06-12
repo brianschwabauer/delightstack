@@ -96,6 +96,102 @@ The `Form` component accepts any validator that implements the [Standard Schema]
 
 All three produce identical behavior when passed to the `Form` component's `schema` prop.
 
+## Schema-Driven Forms (Database Tables)
+
+If you define your data with `Database.table()` from `@delightstack/database`, you do not need to write a validation schema or input props by hand — every table exposes ready-made form wiring:
+
+- **`table.form.field.<name>`** — props to spread onto a field component: `name`, `type`, `label`, `placeholder`, `description`, `required`, `readonly`, length/value constraints, enum `options`, array `multiple`, and a `parse` validator.
+- **`table.form.schema`** — a Standard Schema validator covering all of the table's editable fields, ready for the `Form` component's `schema` prop.
+
+```svelte
+<script>
+  import { Form, Input, Select, Button } from '@delightstack/components';
+  import { personTable } from '$lib/schema';
+
+  const field = personTable.form.field;
+
+  let name = $state('');
+  let email = $state('');
+  let relationship = $state('');
+
+  async function handleSubmit({ data, is_valid }) {
+    // Only called when the table schema validates successfully
+  }
+</script>
+
+<Form schema={personTable.form.schema} onsubmit={handleSubmit}>
+  <Input {...field.name} bind:value={name} />
+  <Input {...field.email} bind:value={email} />
+  <Select {...field.relationship} bind:value={relationship} clearable />
+  <Button type="submit">Save</Button>
+</Form>
+```
+
+With the table defined as:
+
+```typescript
+export const personTable = Database.table('person', (s) => ({
+  id: s.primaryKey(),
+  name: s.string().min(1).max(100).label('Full name'),
+  email: s.string().email().optional(),
+  relationship: s.enum(['parent', 'child', 'friend']).optional(),
+}));
+```
+
+`field.email` spreads as `{ name: 'email', type: 'email', label: 'Email', parse }` — the input type, label, and validation all come from the one schema definition.
+
+### How field props are derived
+
+| Schema builder                  | Effect on the spread props                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `s.string().email()`            | `type="email"` (likewise `.url()`, `.date()`, `.datetime()`, `.time()`, `.color()`, `.password()`, `.phone()`) |
+| `s.string().textarea()`         | `type="textarea"`                                                                                  |
+| `.label('...')`                 | `label` — auto-derived from the field name when omitted (`first_name` → "First name")             |
+| `.placeholder('...')`           | `placeholder`                                                                                      |
+| `.description('...')`           | `description` text below the input                                                                 |
+| `.optional()` / `.default(...)` | the field is not `required` (fields inside an optional object are also not required)               |
+| `.readonly()`                   | `readonly`                                                                                         |
+| `.min()` / `.max()`             | `minlength`/`maxlength` on strings, `min`/`max` on numbers                                         |
+| `s.enum([...])`                 | `options` as `{ value, label }[]`, ready for `Select` — pass `{ value, label }` pairs to `s.enum()` for custom labels |
+| `s.array(...)`                  | `multiple` (chips mode on `Input`, multi-select on `Select`)                                       |
+| `s.boolean()`                   | `type: 'boolean'` — spread onto `Checkbox` or `Toggle` (not `Input`) and use `bind:checked`        |
+
+Primary keys, foreign keys, and derived fields are excluded from `form.field` and `form.schema` — they are not user-editable.
+
+<Aside type="tip">
+Every `parse` function returns the parsed value and throws an error whose `message` is safe to show to the user (e.g. `"Full name is required"`, `"Invalid email address"`) — never a raw validation dump.
+</Aside>
+
+## Field Validation Without a Form
+
+Sometimes a whole `Form` is more than you need — a single setting input, an inline rename field. The `Input` component accepts a `parse` prop (the same function included in every `table.form.field` spread):
+
+```svelte
+<script>
+  import { Input } from '@delightstack/components';
+  import { personTable } from '$lib/schema';
+</script>
+
+<Input {...personTable.form.field.email} bind:value={email} />
+```
+
+Standalone, the input runs `parse` when it loses focus and shows the thrown error's message below the field. While the field is errored it re-validates on every keystroke, so the message clears the moment the value is fixed — without nagging the user before they finish typing.
+
+## How Form and Field Validation Work Together
+
+Validation can live in two places, and they are designed not to conflict:
+
+1. **Form-level schema** — the `Form` component's `schema` prop validates the whole `data` object.
+2. **Field-level `parse`** — validates a single field's value.
+
+Inside a `Form`, an `Input` never runs `parse` itself. It registers the function with the form, and the form runs all field validators together with the form schema on its `validate_on` timing. The merge rule is simple:
+
+- If **both** produce an error for the same field, the **form schema's message wins**.
+- Fields the form schema does not cover keep their field-level error.
+- One error per field is ever shown.
+
+When the form schema is `table.form.schema`, the two layers are literally the same validation functions, so they always agree.
+
 ## Validation Modes
 
 The `validate_on` prop controls when fields are validated:
@@ -158,7 +254,7 @@ And these methods:
 | `setValue(name, value)`   | Update a field's value         |
 | `setTouched(name)`       | Mark a field as touched        |
 | `validateField(name)`    | Validate a single field        |
-| `register(name, el)`     | Register a field element       |
+| `register(name, el, validator?)` | Register a field element and optional field-level validator |
 | `unregister(name)`       | Unregister a field             |
 
 ## Form Props

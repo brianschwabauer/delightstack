@@ -35,6 +35,16 @@ import '@delightstack/styles';
   until `save()` resolves).
 - **Two-way binding** with `bind:value` on form components, plus component-specific
   bindables like `bind:open` (Modal, BottomSheet), `bind:snap`, `bind:page`.
+- **Schema-driven forms:** when the data lives in a `Database.table()` (from
+  `@delightstack/database`), spread `table.form.field.<name>` onto the field component
+  (`<Input {...field.email} bind:value={email} />`) instead of hand-writing
+  `type`/`label`/`required`/validation. Pass `table.form.schema` to
+  `<Form schema={...}>` for whole-form validation. Boolean fields spread onto
+  `Checkbox`/`Toggle` (use `bind:checked`), enum fields onto `Select` (the spread
+  includes ready-made `options`). Inside a `Form`, each field's `parse` validator is
+  registered with the form (the form schema wins on conflict); standalone, `Input`
+  runs `parse` on blur and shows the message below the field. Full guide:
+  https://docs.thedelight.co/guides/forms.md
 - **Svelte 5 snippets** (`{#snippet header()}…{/snippet}`), not slots, for named
   content areas.
 - **Theming:** components read CSS custom properties from `@delightstack/styles`.
@@ -100,8 +110,8 @@ have the exact types. Do not guess prop names.
 - `Checkbox` — Styled checkbox with animated checkmark and indeterminate state (docs: /components/form/checkbox.md)
 - `Fieldset` — Semantic form-field grouping with optional border, grid layout, collapsible sections (docs: /components/form/fieldset.md)
 - `FileUpload` — Drag-and-drop file upload with previews; dropzone, compact, avatar variants (docs: /components/form/file-upload.md)
-- `Form` — Form container with Standard Schema validation, promise-aware submit, error auto-focus (docs: /components/form/form.md)
-- `Input` — 13 input types with floating labels, autocomplete, chips, masking, password strength (docs: /components/form/input.md)
+- `Form` — Form container with Standard Schema validation, field-level validators, promise-aware submit, error auto-focus (docs: /components/form/form.md)
+- `Input` — 13 input types with floating labels, autocomplete, chips, masking, password strength, `parse` validation (docs: /components/form/input.md)
 - `Radio` / `RadioGroup` — Styled radio buttons, standalone or grouped (docs: /components/form/radio.md)
 - `Range` — Slider with two-thumb range mode, tick marks, value tooltips (docs: /components/form/range.md)
 - `Rating` — Star rating input with half-star precision, custom icons, read-only mode (docs: /components/form/rating.md)

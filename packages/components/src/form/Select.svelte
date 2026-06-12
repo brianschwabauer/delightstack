@@ -60,6 +60,9 @@
 		/** An error message shown below the trigger */
 		error = undefined as string | undefined,
 
+		/** Description text shown below the trigger (hidden while an error shows) */
+		description = undefined as string | undefined,
+
 		/** Whether the field is required */
 		required = false,
 
@@ -959,9 +962,11 @@
 	{/if}
 </div>
 
-<!-- Error message -->
+<!-- Error message / description text -->
 {#if error}
 	<span class="error-text">{error}</span>
+{:else if description}
+	<span class="description-text">{description}</span>
 {/if}
 
 <style>
@@ -1816,6 +1821,14 @@
 		display: block;
 		font-size: 0.78em;
 		color: var(--_border-error);
+		margin-top: 0.35em;
+		padding: 0 0.5em;
+	}
+
+	.description-text {
+		display: block;
+		font-size: 0.78em;
+		color: var(--_text-muted, light-dark(hsl(0 0% 46%), hsl(0 0% 62%)));
 		margin-top: 0.35em;
 		padding: 0 0.5em;
 	}

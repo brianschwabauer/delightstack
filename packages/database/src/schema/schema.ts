@@ -10,6 +10,7 @@ import {
 	TypedDocument,
 	SearchParams,
 } from '@orama/orama';
+import { DelightError } from '@delightstack/utilities';
 import { z } from 'zod';
 
 /**
@@ -237,6 +238,8 @@ interface EnumField<Options extends string[] = string[]> extends Omit<
 	type: 'enum';
 	/** The available string options this field can be equal to */
 	options: Options;
+	/** Human-readable labels for options defined as { value, label } pairs */
+	option_labels?: Record<string, string>;
 	/** The zod schema used to validate/parse the enum field */
 	schema: z.ZodEnum;
 }
@@ -323,6 +326,10 @@ type Label<T extends { _: any }, LabelText extends string> = T & {
 type Placeholder<T extends { _: any }, PlaceholderText extends string> = T & {
 	_: T['_'] & { placeholder: PlaceholderText };
 };
+type Description<T extends { _: any }, DescriptionText extends string> = T & {
+	_: T['_'] & { description: DescriptionText };
+};
+type DefaultedValue<T extends { _: any }> = T & { _: T['_'] & { has_default: true } };
 type ForeignKey<
 	T extends { readonly _: any },
 	KeyType extends 'string' | 'number',
@@ -358,6 +365,7 @@ type IsIndexable<T> = T extends { _: (infer _U) & { indexable: true } } ? true :
 type IsUnique<T> = T extends { _: (infer _U) & { unique: true } } ? true : false;
 type IsSortable<T> = T extends { _: (infer _U) & { sortable: true } } ? true : false;
 type IsOptional<T> = T extends { _: (infer _U) & { optional: true } } ? true : false;
+type HasDefault<T> = T extends { _: (infer _U) & { has_default: true } } ? true : false;
 type IsReadOnly<T> = T extends { _: (infer _U) & { readonly: true } } ? true : false;
 type IsInteger<T> = T extends { _: (infer _U) & { integer: true } } ? true : false;
 type IsBoolean<T> = T extends { _: (infer _U) & { type: 'boolean' } } ? true : false;
@@ -375,6 +383,37 @@ type IsDerived<T> = T extends { _: infer U }
 type OmitNeverProperties<T> = {
 	[K in keyof T as T[K] extends never ? never : K]: T[K];
 };
+
+/**
+ * Converts a field name into a human-readable Title Case label
+ * ('first_name' → 'First Name'). Labels are titles, so every word is
+ * capitalized — if a humanized string is ever needed for sentence-style text
+ * (like a placeholder or description), only capitalize the first word.
+ */
+function humanizeFieldName(name: string): string {
+	const last = name.split('.').pop() ?? name;
+	const words = last
+		.replace(/[_-]+/g, ' ')
+		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+		.trim();
+	if (!words) return name;
+	return words
+		.split(' ')
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+		.join(' ');
+}
+
+/** Extracts the first human-readable issue message from a thrown zod error */
+function zodErrorMessage(error: unknown): string {
+	if (error && typeof error === 'object' && 'issues' in error) {
+		const issues = (error as { issues: unknown }).issues;
+		if (Array.isArray(issues) && issues[0]?.message) {
+			return String(issues[0].message);
+		}
+	}
+	if (error instanceof Error && error.message) return error.message;
+	return 'Invalid value';
+}
 
 type NeverIfEmptyObject<T extends object> = keyof T extends never ? never : T;
 
@@ -518,11 +557,68 @@ interface BaseFormFieldProps<FieldName extends string = string> {
 	/** The name of the field (used when inside a <form> element) */
 	name: FieldName;
 	/**
-	 * A function that is called on every change
-	 * If it throws and error, the error can contain a "message" field that will be shown to the user
+	 * Parses & validates a single value for this field and returns the parsed value.
+	 * Throws an error whose `message` is safe to show to the user.
+	 * Input components run this automatically when these props are spread onto them.
 	 */
-	parse: (value: any) => void;
+	parse: (value: unknown) => unknown;
 }
+
+/**
+ * A minimal Standard Schema (v1) interface.
+ * Any consumer that accepts a Standard Schema (like the components Form's `schema` prop) can use it.
+ */
+interface FormStandardSchema<Output = Record<string, unknown>> {
+	readonly '~standard': {
+		readonly version: 1;
+		readonly vendor: string;
+		readonly validate: (value: unknown) =>
+			| { value: Output; issues?: undefined }
+			| {
+					issues: ReadonlyArray<{
+						message: string;
+						path?: ReadonlyArray<PropertyKey> | undefined;
+					}>;
+			  };
+	};
+}
+
+/** The form props shared by every field type (derived from the field's schema flags) */
+type CommonFormFieldProps<
+	T,
+	InheritedOptional extends boolean = false,
+> = OmitNeverProperties<{
+	/**
+	 * Whether the field is required. Optional fields, fields with a .default(),
+	 * and fields nested inside an optional object are not required
+	 */
+	required: InheritedOptional extends true
+		? never
+		: IsOptional<T> extends true
+			? never
+			: HasDefault<T> extends true
+				? never
+				: true;
+	/** Whether the field is read-only (shows the current value, but disables editing) */
+	readonly: IsReadOnly<T> extends true ? true : never;
+	/**
+	 * A human-readable label for the field (usually shown above an input).
+	 * Auto-derived from the field name when not set via .label()
+	 */
+	label: T extends { _: { label: infer LabelText extends string } } ? LabelText : string;
+	/** A placeholder string for the field (usually a lighter color text in the Input box) */
+	placeholder: T extends {
+		_: { placeholder: infer PlaceholderText extends string };
+	}
+		? PlaceholderText
+		: never;
+	/** Description text shown below the input */
+	description: T extends {
+		_: { description: infer DescriptionText extends string };
+	}
+		? DescriptionText
+		: never;
+}>;
 
 type FormFieldPathValue<T, P extends string> = P extends `${infer Key}.${infer Rest}`
 	? Key extends keyof T
@@ -576,22 +672,27 @@ type GenericFormFieldProps = BaseFormFieldProps & {
 	 * The field must be defined as an array() type to use this option.
 	 */
 	multiple?: boolean;
-	/** A human-readable label for the field (usually shown above an input) */
-	label?: string;
+	/**
+	 * A human-readable label for the field (usually shown above an input).
+	 * Auto-derived from the field name when not set via .label()
+	 */
+	label: string;
 	/** Whether the field is required */
 	required?: boolean;
 	/** Whether the field is read-only (shows the current value, but disables editing) */
 	readonly?: boolean;
 	/** A placeholder string for the field (usually a lighter color text in the Input box) */
 	placeholder?: string;
+	/** Description text shown below the input */
+	description?: string;
 	/** The maximum number of characters the input string can be. 'type' must be one of the string options */
 	maxlength?: number;
 	/** The minimum number of characters the input string can be. 'type' must be one of the string options */
 	minlength?: number;
 	/** The regular expression the input must match (handled by the native browser input). 'type' must be one of the string options */
 	pattern?: string;
-	/** The available options for the enum field */
-	options?: string[];
+	/** The available options for the enum field (ready to pass to a Select component) */
+	options?: { value: string; label: string }[];
 	/** The maximum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
 	max?: number;
 	/** The minimum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
@@ -604,7 +705,11 @@ type GenericFormFieldProps = BaseFormFieldProps & {
  * Defines the props that can be added to input components for a form field.
  * This makes it easy to spread the props onto an input element.
  */
-type FormFieldProps<T, FieldName extends string | undefined = undefined> =
+type FormFieldProps<
+	T,
+	FieldName extends string | undefined = undefined,
+	InheritedOptional extends boolean = false,
+> =
 	/** Check if FieldName is a string - meaning this is a child field */
 	FieldName extends string
 		? T extends {
@@ -614,7 +719,11 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 				TypeString extends 'object'
 				? T extends { _: { properties: infer ObjectType } }
 					? {
-							[Key in keyof ObjectType & string]: FormFieldProps<ObjectType[Key], Key>;
+							[Key in keyof ObjectType & string]: FormFieldProps<
+								ObjectType[Key],
+								Key,
+								IsOptional<T> extends true ? true : InheritedOptional
+							>;
 						}
 					: never
 				: /** The field is an array type so add the necessary array input props */
@@ -624,144 +733,83 @@ type FormFieldProps<T, FieldName extends string | undefined = undefined> =
 								_: { type: infer ItemTypeString extends DatabaseFieldType };
 							}
 							? ItemTypeString extends 'string' | 'number' | 'enum'
-								? FormFieldProps<ArrayType, FieldName> &
-										OmitNeverProperties<{
-											_: {
+								? FormFieldProps<ArrayType, FieldName> extends {
+										_: infer ItemProps;
+									}
+									? Flatten<{
+											/**
+											 * The item field provides the value props (type, minlength, options, ...);
+											 * required/readonly/label/placeholder/description come from the ARRAY field itself
+											 */
+											_: Omit<
+												ItemProps,
+												| 'multiple'
+												| 'required'
+												| 'readonly'
+												| 'label'
+												| 'placeholder'
+												| 'description'
+											> & {
 												/**
 												 * Whether the field allows multiple values to be selected.
 												 * The field must be defined as an array() type to use this option.
 												 */
 												multiple: true;
-												/** A human-readable label for the field (usually shown above an input) */
-												label: T extends { _: { label: infer LabelText extends string } }
-													? LabelText
-													: never;
-												/** Whether the field is required */
-												required: IsOptional<T> extends true ? never : true;
-												/** Whether the field is read-only (shows the current value, but disables editing) */
-												readonly: IsReadOnly<T> extends true ? true : never;
-												/** A placeholder string for the field (usually a lighter color text in the Input box) */
-												placeholder: T extends {
-													_: { placeholder: infer PlaceholderText extends string };
-												}
-													? PlaceholderText
-													: never;
-											};
+											} & CommonFormFieldProps<T, InheritedOptional>;
 										}>
+									: never
 								: never
 							: never
 						: never
 					: /** The field is an enum type so add the necessary enum input props */
 						TypeString extends 'enum'
 						? Flatten<{
-								_: BaseFormFieldProps<FieldName> &
-									OmitNeverProperties<{
-										/** The type of value that the input element accepts */
-										type: 'text';
-										/** The available options for the enum field */
-										options: T extends {
-											_: { options: infer EnumOptions extends string[] };
-										}
-											? EnumOptions
-											: string[];
-										/** Whether the field is required */
-										required: IsOptional<T> extends true ? never : true;
-										/** Whether the field is read-only (shows the current value, but disables editing) */
-										readonly: IsReadOnly<T> extends true ? true : never;
-										/** A human-readable label for the field (usually shown above an input) */
-										label: T extends { _: { label: infer LabelText extends string } }
-											? LabelText
-											: never;
-										/** A placeholder string for the field (usually a lighter color text in the Input box) */
-										placeholder: T extends {
-											_: { placeholder: infer PlaceholderText extends string };
-										}
-											? PlaceholderText
-											: never;
-									}>;
+								_: BaseFormFieldProps<FieldName> & {
+									/** The type of value that the input element accepts */
+									type: 'text';
+									/** The available options for the enum field (ready to pass to a Select component) */
+									options: T extends {
+										_: { options: infer EnumOptions extends string[] };
+									}
+										? { value: EnumOptions[number]; label: string }[]
+										: { value: string; label: string }[];
+								} & CommonFormFieldProps<T, InheritedOptional>;
 							}>
 						: /** The field is a number type so add the necessary number input props */
 							TypeString extends 'number'
 							? Flatten<{
-									_: BaseFormFieldProps<FieldName> &
-										OmitNeverProperties<{
-											/** The type of value that the input element accepts */
-											type: 'number';
-											/** The maximum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
-											max?: number;
-											/** The minimum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
-											min?: number;
-											/** The amount the number should be increased/decreased with each 'step' */
-											step?: number;
-											/** Whether the field is required */
-											required: IsOptional<T> extends true ? never : true;
-											/** Whether the field is read-only (shows the current value, but disables editing) */
-											readonly: IsReadOnly<T> extends true ? true : never;
-											/** A human-readable label for the field (usually shown above an input) */
-											label: T extends { _: { label: infer LabelText extends string } }
-												? LabelText
-												: never;
-											/** A placeholder string for the field (usually a lighter color text in the Input box) */
-											placeholder: T extends {
-												_: { placeholder: infer PlaceholderText extends string };
-											}
-												? PlaceholderText
-												: never;
-										}>;
+									_: BaseFormFieldProps<FieldName> & {
+										/** The type of value that the input element accepts */
+										type: 'number';
+										/** The maximum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
+										max?: number;
+										/** The minimum value the input can be. Only valid for certain inputs - like numbers, dates, etc */
+										min?: number;
+										/** The amount the number should be increased/decreased with each 'step' */
+										step?: number;
+									} & CommonFormFieldProps<T, InheritedOptional>;
 								}>
 							: /** The field is a boolean type so add the necessary boolean input props */
 								TypeString extends 'boolean'
 								? Flatten<{
-										_: BaseFormFieldProps<FieldName> &
-											OmitNeverProperties<{
-												/** The type of value that the input element accepts */
-												type: 'boolean';
-												/** Whether the field is required */
-												required: IsOptional<T> extends true ? never : true;
-												/** Whether the field is read-only (shows the current value, but disables editing) */
-												readonly: IsReadOnly<T> extends true ? true : never;
-												/** A human-readable label for the field (usually shown above an input) */
-												label: T extends { _: { label: infer LabelText extends string } }
-													? LabelText
-													: never;
-												/** A placeholder string for the field (usually a lighter color text in the Input box) */
-												placeholder: T extends {
-													_: { placeholder: infer PlaceholderText extends string };
-												}
-													? PlaceholderText
-													: never;
-											}>;
+										_: BaseFormFieldProps<FieldName> & {
+											/** The type of value that the input element accepts */
+											type: 'boolean';
+										} & CommonFormFieldProps<T, InheritedOptional>;
 									}>
 								: /** The field is a string type so add the necessary string input props */
 									TypeString extends 'string'
 									? Flatten<{
-											_: BaseFormFieldProps<FieldName> &
-												OmitNeverProperties<{
-													/** The type of value that the input element accepts */
-													type: StringFieldInputType<T['_']>;
-													/** The maximum number of characters the input string can be. */
-													maxlength?: number;
-													/** The minimum number of characters the input string can be. */
-													minlength?: number;
-													/** The regular expression the input must match (handled by the native browser input) */
-													pattern?: string;
-													/** Whether the field is required */
-													required: IsOptional<T> extends true ? never : true;
-													/** Whether the field is read-only (shows the current value, but disables editing) */
-													readonly: IsReadOnly<T> extends true ? true : never;
-													/** A human-readable label for the field (usually shown above an input) */
-													label: T extends {
-														_: { label: infer LabelText extends string };
-													}
-														? LabelText
-														: never;
-													/** A placeholder string for the field (usually a lighter color text in the Input box) */
-													placeholder: T extends {
-														_: { placeholder: infer PlaceholderText extends string };
-													}
-														? PlaceholderText
-														: never;
-												}>;
+											_: BaseFormFieldProps<FieldName> & {
+												/** The type of value that the input element accepts */
+												type: StringFieldInputType<T['_']>;
+												/** The maximum number of characters the input string can be. */
+												maxlength?: number;
+												/** The minimum number of characters the input string can be. */
+												minlength?: number;
+												/** The regular expression the input must match (handled by the native browser input) */
+												pattern?: string;
+											} & CommonFormFieldProps<T, InheritedOptional>;
 										}>
 									: never
 			: never
@@ -926,11 +974,12 @@ class StringFieldGenerator {
 	}
 
 	/** Calls the zod.string().default() method with the given options */
-	default(def: z.util.NoUndefined<string>): Omit<this, 'default'>;
-	default(def: () => z.util.NoUndefined<string>): Omit<this, 'default'>;
-	default(def: any): Omit<this, 'default'> {
+	default(def: z.util.NoUndefined<string>): Omit<DefaultedValue<this>, 'default'>;
+	default(def: () => z.util.NoUndefined<string>): Omit<DefaultedValue<this>, 'default'>;
+	default(def: any): Omit<DefaultedValue<this>, 'default'> {
 		this._.schema = this._.schema.default(def) as any;
-		return this as Omit<this, 'default'>;
+		(this as DefaultedValue<this>)._.has_default = true;
+		return this as Omit<DefaultedValue<this>, 'default'>;
 	}
 
 	/** Validates that the string is a valid email address (matches gmail's regex) */
@@ -970,6 +1019,16 @@ class StringFieldGenerator {
 		this._.format = 'ipv6';
 		this._.schema = z.ipv6(...options);
 		return this as Omit<FormattedString<this, 'ipv6'>, StringFieldFormat>;
+	}
+
+	/** Adds description text for the field (usually shown below the input) */
+	description<DescriptionText extends string>(
+		text: DescriptionText,
+	): Omit<Description<this, DescriptionText>, 'description'> {
+		if (text) {
+			(this as Description<this, DescriptionText>)._.description = text;
+		}
+		return this as Omit<Description<this, DescriptionText>, 'description'>;
 	}
 
 	/** Adds a human-readable label for the field (usually shown above input elements) */
@@ -1058,11 +1117,12 @@ class StringFieldGenerator {
 	}
 
 	/** Calls the zod.string().prefault() method with the given options */
-	prefault(def: z.util.NoUndefined<string>): Omit<this, 'prefault'>;
-	prefault(def: () => z.util.NoUndefined<string>): Omit<this, 'prefault'>;
-	prefault(def: any): Omit<this, 'prefault'> {
+	prefault(def: z.util.NoUndefined<string>): Omit<DefaultedValue<this>, 'prefault'>;
+	prefault(def: () => z.util.NoUndefined<string>): Omit<DefaultedValue<this>, 'prefault'>;
+	prefault(def: any): Omit<DefaultedValue<this>, 'prefault'> {
 		this._.schema = this._.schema.prefault(def) as any;
-		return this as Omit<this, 'prefault'>;
+		(this as DefaultedValue<this>)._.has_default = true;
+		return this as Omit<DefaultedValue<this>, 'prefault'>;
 	}
 
 	/**
@@ -1262,11 +1322,12 @@ class NumberFieldGenerator {
 	}
 
 	/** Calls the zod.number().default() method with the given options */
-	default(def: z.util.NoUndefined<number>): Omit<this, 'default'>;
-	default(def: () => z.util.NoUndefined<number>): Omit<this, 'default'>;
-	default(def: any): Omit<this, 'default'> {
+	default(def: z.util.NoUndefined<number>): Omit<DefaultedValue<this>, 'default'>;
+	default(def: () => z.util.NoUndefined<number>): Omit<DefaultedValue<this>, 'default'>;
+	default(def: any): Omit<DefaultedValue<this>, 'default'> {
 		this._.schema = this._.schema.default(def) as any;
-		return this as Omit<this, 'default'>;
+		(this as DefaultedValue<this>)._.has_default = true;
+		return this as Omit<DefaultedValue<this>, 'default'>;
 	}
 
 	/** Calls the zod.number().gt() method which ensures the number is greater than the given value */
@@ -1318,6 +1379,16 @@ class NumberFieldGenerator {
 		this._.schema = this._.schema.negative(...options);
 		this._.max = Math.min(this._.max ?? Infinity, 0 - Number.EPSILON);
 		return this as Omit<this, 'negative'>;
+	}
+
+	/** Adds description text for the field (usually shown below the input) */
+	description<DescriptionText extends string>(
+		text: DescriptionText,
+	): Omit<Description<this, DescriptionText>, 'description'> {
+		if (text) {
+			(this as Description<this, DescriptionText>)._.description = text;
+		}
+		return this as Omit<Description<this, DescriptionText>, 'description'>;
 	}
 
 	/** Adds a human-readable label for the field (usually shown above input elements) */
@@ -1373,11 +1444,12 @@ class NumberFieldGenerator {
 	}
 
 	/** Calls the zod.number().prefault() method with the given options */
-	prefault(def: z.util.NoUndefined<number>): Omit<this, 'prefault'>;
-	prefault(def: () => z.util.NoUndefined<number>): Omit<this, 'prefault'>;
-	prefault(def: any): Omit<this, 'prefault'> {
+	prefault(def: z.util.NoUndefined<number>): Omit<DefaultedValue<this>, 'prefault'>;
+	prefault(def: () => z.util.NoUndefined<number>): Omit<DefaultedValue<this>, 'prefault'>;
+	prefault(def: any): Omit<DefaultedValue<this>, 'prefault'> {
 		this._.schema = this._.schema.prefault(def) as any;
-		return this as Omit<this, 'prefault'>;
+		(this as DefaultedValue<this>)._.has_default = true;
+		return this as Omit<DefaultedValue<this>, 'prefault'>;
 	}
 
 	/**
@@ -1460,11 +1532,22 @@ class BooleanFieldGenerator {
 	}
 
 	/** Calls the zod.boolean().default() method with the given options */
-	default(def: z.util.NoUndefined<boolean>): Omit<this, 'default'>;
-	default(def: () => z.util.NoUndefined<boolean>): Omit<this, 'default'>;
-	default(def: any): Omit<this, 'default'> {
+	default(def: z.util.NoUndefined<boolean>): Omit<DefaultedValue<this>, 'default'>;
+	default(def: () => z.util.NoUndefined<boolean>): Omit<DefaultedValue<this>, 'default'>;
+	default(def: any): Omit<DefaultedValue<this>, 'default'> {
 		this._.schema = this._.schema.default(def) as any;
-		return this as Omit<this, 'default'>;
+		(this as DefaultedValue<this>)._.has_default = true;
+		return this as Omit<DefaultedValue<this>, 'default'>;
+	}
+
+	/** Adds description text for the field (usually shown below the input) */
+	description<DescriptionText extends string>(
+		text: DescriptionText,
+	): Omit<Description<this, DescriptionText>, 'description'> {
+		if (text) {
+			(this as Description<this, DescriptionText>)._.description = text;
+		}
+		return this as Omit<Description<this, DescriptionText>, 'description'>;
 	}
 
 	/** Adds a human-readable label for the field (usually shown above input elements) */
@@ -1499,11 +1582,14 @@ class BooleanFieldGenerator {
 	}
 
 	/** Calls the zod.boolean().prefault() method with the given options */
-	prefault(def: z.util.NoUndefined<boolean>): Omit<this, 'prefault'>;
-	prefault(def: () => z.util.NoUndefined<boolean>): Omit<this, 'prefault'>;
-	prefault(def: any): Omit<this, 'prefault'> {
+	prefault(def: z.util.NoUndefined<boolean>): Omit<DefaultedValue<this>, 'prefault'>;
+	prefault(
+		def: () => z.util.NoUndefined<boolean>,
+	): Omit<DefaultedValue<this>, 'prefault'>;
+	prefault(def: any): Omit<DefaultedValue<this>, 'prefault'> {
 		this._.schema = this._.schema.prefault(def) as any;
-		return this as Omit<this, 'prefault'>;
+		(this as DefaultedValue<this>)._.has_default = true;
+		return this as Omit<DefaultedValue<this>, 'prefault'>;
 	}
 
 	/**
@@ -1564,15 +1650,25 @@ class BooleanFieldGenerator {
 class EnumFieldGenerator<Options extends string[]> {
 	readonly _: EnumField<Options>;
 
-	constructor(options: Options) {
+	constructor(options: Options | { value: string; label: string }[]) {
 		if (!options.length) {
 			throw new Error('schema.enum() requires at least one option');
 		}
+		let values: Options;
+		let option_labels: Record<string, string> | undefined;
+		if (typeof options[0] === 'object') {
+			const pairs = options as { value: string; label: string }[];
+			values = pairs.map((pair) => pair.value) as Options;
+			option_labels = Object.fromEntries(pairs.map((pair) => [pair.value, pair.label]));
+		} else {
+			values = options as Options;
+		}
 		this._ = {
 			type: 'enum',
-			options,
-			schema: z.enum(options),
+			options: values,
+			schema: z.enum(values),
 		};
+		if (option_labels) this._.option_labels = option_labels;
 	}
 
 	/** Whether the field can be fuzzy searched and indexed by orama. */
@@ -1582,11 +1678,22 @@ class EnumFieldGenerator<Options extends string[]> {
 	}
 
 	/** Calls the zod.enum().default() method with the given options */
-	default(def: Options[number]): Omit<this, 'default'>;
-	default(def: () => Options[number]): Omit<this, 'default'>;
-	default(def: any): Omit<this, 'default'> {
+	default(def: Options[number]): Omit<DefaultedValue<this>, 'default'>;
+	default(def: () => Options[number]): Omit<DefaultedValue<this>, 'default'>;
+	default(def: any): Omit<DefaultedValue<this>, 'default'> {
 		this._.schema = this._.schema.default(def) as any;
-		return this as Omit<this, 'default'>;
+		(this as DefaultedValue<this>)._.has_default = true;
+		return this as Omit<DefaultedValue<this>, 'default'>;
+	}
+
+	/** Adds description text for the field (usually shown below the input) */
+	description<DescriptionText extends string>(
+		text: DescriptionText,
+	): Omit<Description<this, DescriptionText>, 'description'> {
+		if (text) {
+			(this as Description<this, DescriptionText>)._.description = text;
+		}
+		return this as Omit<Description<this, DescriptionText>, 'description'>;
 	}
 
 	/** Adds a human-readable label for the field (usually shown above input elements) */
@@ -1963,6 +2070,16 @@ class ArrayFieldGenerator<Items extends FieldGenerator> {
 		return this as Omit<this, 'max'>;
 	}
 
+	/** Adds description text for the field (usually shown below the input) */
+	description<DescriptionText extends string>(
+		text: DescriptionText,
+	): Omit<Description<this, DescriptionText>, 'description'> {
+		if (text) {
+			(this as Description<this, DescriptionText>)._.description = text;
+		}
+		return this as Omit<Description<this, DescriptionText>, 'description'>;
+	}
+
 	/** Adds a human-readable label for the field (usually shown above input elements) */
 	label<LabelText extends string>(
 		text: LabelText,
@@ -2125,9 +2242,17 @@ class DatabaseGenerator {
 		return new VectorFieldGenerator(vectorSize);
 	}
 
-	/** Defines a list of strings that this field can take */
-	enum<const Values extends string[]>(values: Values): EnumFieldGenerator<Values> {
-		return new EnumFieldGenerator<Values>(values);
+	/**
+	 * Defines a list of strings that this field can take.
+	 * Options may be plain strings or { value, label } pairs — the labels are
+	 * used for the form Select options (otherwise labels are auto-derived).
+	 */
+	enum<const Values extends string[]>(values: Values): EnumFieldGenerator<Values>;
+	enum<const Pairs extends { value: string; label: string }[]>(
+		values: Pairs,
+	): EnumFieldGenerator<{ -readonly [K in keyof Pairs]: Pairs[K]['value'] }>;
+	enum(values: any): any {
+		return new EnumFieldGenerator(values);
 	}
 
 	/** Defines a geopoint type which can be used for location based searching */
@@ -2480,6 +2605,12 @@ export namespace Database {
 			form: {
 				/** The form properties for each field that can be spread onto an html element for that field */
 				field: FormFieldProps<TableConfig>;
+				/**
+				 * A Standard Schema (v1) validator over the table's form fields.
+				 * Pass it to a Form component's `schema` prop to validate the whole form at once.
+				 * The validated data is keyed by the same (dot-notation) names used in form.field.
+				 */
+				schema: FormStandardSchema;
 			};
 
 			/** The table's config used to setup sqlite and orama */
@@ -2834,7 +2965,15 @@ export namespace Database {
 			}
 
 			// Build the form field properties
-			function recursivelyBuildFormFieldProps(subfield: DatabaseField, path: string) {
+			function recursivelyBuildFormFieldProps(
+				subfield: DatabaseField,
+				path: string,
+				inherited: {
+					optional?: boolean;
+					readonly?: boolean;
+					array?: ArrayField<any>;
+				} = {},
+			) {
 				if (subfield.type === 'object') {
 					for (const [childFieldName, childFieldDef] of Object.entries(
 						subfield.properties,
@@ -2844,6 +2983,10 @@ export namespace Database {
 						recursivelyBuildFormFieldProps(
 							childField,
 							[path, childFieldName].filter(Boolean).join('.'),
+							{
+								optional: inherited.optional || !!subfield.optional,
+								readonly: inherited.readonly || !!subfield.readonly,
+							},
 						);
 					}
 					return;
@@ -2851,7 +2994,11 @@ export namespace Database {
 				if (subfield.type === 'array') {
 					if (subfield.items && subfield.items._) {
 						const itemField = subfield.items._ as DatabaseField;
-						recursivelyBuildFormFieldProps(itemField, `${path}[]`);
+						recursivelyBuildFormFieldProps(itemField, path, {
+							optional: inherited.optional,
+							readonly: inherited.readonly,
+							array: subfield,
+						});
 					}
 					return;
 				}
@@ -2863,21 +3010,77 @@ export namespace Database {
 				) {
 					return;
 				}
+
+				// For array items, the field-level flags (required/readonly/label/placeholder/
+				// helper) come from the ARRAY field itself - the item field only provides the
+				// value-level props (type, minlength, options, ...)
+				const flag_field: DatabaseField = inherited.array ?? subfield;
+				const is_multiple = !!inherited.array;
+				const label: string =
+					('label' in flag_field && (flag_field as any).label) || humanizeFieldName(path);
+				const required =
+					!inherited.optional &&
+					!('optional' in flag_field && flag_field.optional) &&
+					!('has_default' in flag_field && (flag_field as any).has_default);
+				const readonly = inherited.readonly || flag_field.readonly;
+
+				function parseSingleValue(value: unknown): unknown {
+					if ('schema' in subfield && subfield.schema) {
+						try {
+							return subfield.schema.parse(value);
+						} catch (error) {
+							throw DelightError.badRequest(zodErrorMessage(error));
+						}
+					}
+					return value;
+				}
+
 				const field_props: GenericFormFieldProps = {
 					name: path,
 					type: 'text',
-					readonly: subfield.readonly,
-					required: !subfield.optional,
-					label: 'label' in subfield ? (subfield as any).label : undefined,
+					readonly,
+					required,
+					label,
 					placeholder:
-						'placeholder' in subfield ? (subfield as any).placeholder : undefined,
+						'placeholder' in flag_field ? (flag_field as any).placeholder : undefined,
+					description:
+						'description' in flag_field ? (flag_field as any).description : undefined,
 					parse: (value) => {
-						if ('schema' in subfield && subfield.schema) {
-							return subfield.schema.parse(value);
+						// Treat empty input ('', null, undefined, empty array) as "not provided"
+						const is_empty =
+							value === undefined ||
+							value === null ||
+							value === '' ||
+							(is_multiple && Array.isArray(value) && value.length === 0);
+						if (is_empty) {
+							if (required) throw DelightError.badRequest(`${label} is required`);
+							return undefined;
 						}
-						return value;
+						if (is_multiple) {
+							const array_field = inherited.array!;
+							const values = Array.isArray(value) ? value : [value];
+							if (
+								typeof array_field.min === 'number' &&
+								values.length < array_field.min
+							) {
+								throw DelightError.badRequest(
+									`${label} must have at least ${array_field.min} item${array_field.min === 1 ? '' : 's'}`,
+								);
+							}
+							if (
+								typeof array_field.max === 'number' &&
+								values.length > array_field.max
+							) {
+								throw DelightError.badRequest(
+									`${label} must have at most ${array_field.max} item${array_field.max === 1 ? '' : 's'}`,
+								);
+							}
+							return values.map(parseSingleValue);
+						}
+						return parseSingleValue(value);
 					},
 				};
+				if (is_multiple) field_props.multiple = true;
 				if (subfield.type === 'string') {
 					if ('minlength' in subfield && typeof subfield.minlength === 'number') {
 						field_props.minlength = subfield.minlength;
@@ -2888,10 +3091,10 @@ export namespace Database {
 					if ('pattern' in subfield && typeof subfield.pattern === 'string') {
 						field_props.pattern = subfield.pattern;
 					}
-					if ('format' in subfield && typeof subfield.format === 'string') {
-						if (subfield.textarea) {
-							field_props.type = 'textarea';
-						} else if (subfield.format === 'email') {
+					if ('textarea' in subfield && subfield.textarea) {
+						field_props.type = 'textarea';
+					} else if ('format' in subfield && typeof subfield.format === 'string') {
+						if (subfield.format === 'email') {
 							field_props.type = 'email';
 						} else if (subfield.format === 'url') {
 							field_props.type = 'url';
@@ -2926,7 +3129,10 @@ export namespace Database {
 					field_props.type = 'boolean';
 				}
 				if (subfield.type === 'enum') {
-					field_props.options = subfield.options;
+					field_props.options = subfield.options.map((option) => ({
+						value: option,
+						label: subfield.option_labels?.[option] ?? humanizeFieldName(option),
+					}));
 				}
 				(form_field as any)[path] = field_props;
 			}
@@ -3210,7 +3416,7 @@ export namespace Database {
 							return field.schema.parse(value);
 						} catch (err) {
 							issues.push({
-								message: `Field '${label}' is invalid: ${(err as any)?.message || 'Unknown error'}`,
+								message: `Field '${label}' is invalid: ${zodErrorMessage(err)}`,
 								path,
 							});
 							return;
@@ -3315,6 +3521,37 @@ export namespace Database {
 			return root as SearchEntity;
 		}
 
+		/**
+		 * A Standard Schema (v1) validator over the table's form fields.
+		 * Validates form data keyed by the same (dot-notation) field names as form.field,
+		 * producing one human-readable issue per invalid field.
+		 */
+		const form_schema: FormStandardSchema = {
+			'~standard': {
+				version: 1,
+				vendor: 'delightstack',
+				validate: (value: unknown) => {
+					const data = (value && typeof value === 'object' ? value : {}) as Record<
+						string,
+						unknown
+					>;
+					const issues: { message: string; path: string[] }[] = [];
+					for (const [name, props] of Object.entries(
+						form_field as Record<string, GenericFormFieldProps>,
+					)) {
+						if (props.readonly) continue;
+						try {
+							props.parse(data[name]);
+						} catch (error) {
+							issues.push({ message: DelightError.from(error).message, path: [name] });
+						}
+					}
+					if (issues.length) return { issues };
+					return { value: data };
+				},
+			},
+		};
+
 		return {
 			_: table_config,
 			name: tableName,
@@ -3344,6 +3581,7 @@ export namespace Database {
 			},
 			form: {
 				field: form_field,
+				schema: form_schema,
 			},
 		} as Table;
 	}
