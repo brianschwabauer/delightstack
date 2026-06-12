@@ -704,7 +704,7 @@
 							{@render iconDownload()}
 						{/if}
 						{#snippet menu()}
-							<List filled>
+							<List>
 								{#each action?.actions || [] as subAction (subAction)}
 									<ListItem
 										onclick={(e) => {
