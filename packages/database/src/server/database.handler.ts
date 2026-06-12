@@ -1,6 +1,7 @@
 import type { Handle, RequestEvent } from '@sveltejs/kit';
 import type { Database } from '../schema/schema';
 import { DelightError } from '@delightstack/utilities';
+import { decodeSearchQuery } from '../search-query';
 
 // ---------------------------------------------------------------------------
 // Type helpers
@@ -262,67 +263,6 @@ interface DatabaseRpc {
 }
 
 // ---------------------------------------------------------------------------
-// Query decoder
-// ---------------------------------------------------------------------------
-
-/** Decodes URL search params into a search query object for `db.list()` */
-function decodeListQuery(search_params: URLSearchParams): Record<string, unknown> {
-	const query: Record<string, unknown> = {};
-
-	const limit = search_params.get('limit');
-	if (limit) query.limit = parseInt(limit, 10) || undefined;
-
-	const offset = search_params.get('offset');
-	if (offset) query.offset = parseInt(offset, 10) || undefined;
-
-	const cursor = search_params.get('cursor');
-	if (cursor) query.cursor = cursor;
-
-	const term = search_params.get('term') || search_params.get('q');
-	if (term) query.term = term;
-
-	const sparse = search_params.get('sparse');
-	if (sparse === 'false') query.sparse = false;
-	else if (sparse === 'true') query.sparse = true;
-
-	const order = search_params.get('order');
-	if (order) {
-		query.order = order.split(',').map((segment) => {
-			const [key, direction] = segment.split(':');
-			return { key, direction: direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC' };
-		});
-	}
-
-	const where = search_params.get('where');
-	if (where) {
-		try {
-			query.where = JSON.parse(where);
-		} catch {
-			// ignore invalid JSON
-		}
-	}
-
-	// Pass through any additional params that may be Orama-specific
-	const known_keys = new Set([
-		'limit',
-		'offset',
-		'cursor',
-		'term',
-		'q',
-		'sparse',
-		'order',
-		'where',
-	]);
-	for (const [key, value] of search_params.entries()) {
-		if (!known_keys.has(key) && !(key in query)) {
-			query[key] = value;
-		}
-	}
-
-	return query;
-}
-
-// ---------------------------------------------------------------------------
 // Response helpers
 // ---------------------------------------------------------------------------
 
@@ -420,7 +360,10 @@ async function handleList(
 	route: DatabaseRouteConfig,
 	event: RequestEvent,
 ): Promise<Response> {
-	let query = decodeListQuery(event.url.searchParams);
+	// decodeSearchQuery is the symmetric counterpart of the client's
+	// encodeSearchQuery — it JSON/number-parses structured Orama params instead
+	// of passing raw strings through
+	let query = decodeSearchQuery(event.url.searchParams) as Record<string, unknown>;
 
 	if (route.hooks?.beforeList) {
 		const result = await route.hooks.beforeList({ query, event });

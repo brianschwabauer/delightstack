@@ -198,11 +198,11 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 		query.properties = properties === '*' ? '*' : properties.split(',').filter(Boolean);
 	}
 
-	// Order: pipe-separated key:direction pairs
+	// Order: key:direction pairs separated by '|' (canonical) or ',' (hand-written URLs)
 	const order = params.get('order');
 	if (order !== null) {
 		query.order = order
-			.split('|')
+			.split(/[|,]/)
 			.filter(Boolean)
 			.map((segment) => {
 				const [key, direction] = segment.split(':');
