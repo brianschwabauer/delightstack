@@ -822,20 +822,30 @@
 
 	function handleVideoTimeUpdate() {
 		if (!player) return;
-		// While the user is scrubbing — or a pre-metadata seek is still queued —
-		// the element's currentTime lags the user's intent; reflecting it back
-		// into `current_time` would yank the thumb around. Hold the optimistic
-		// value until release / until the queued seek is applied.
-		if (!is_scrubbing && !pending_seek) {
-			current_time = player.currentTime;
-		}
 		// `loadedmetadata` is supposed to be the canonical place to read
 		// duration, but some browser/codec combos fire `timeupdate` first
 		// (or never fire `loadedmetadata` at all for already-cached files).
 		// Mirror duration here too so the progress bar can't get stuck at 0.
+		// Resolve this BEFORE touching `current_time` so the thumb is only ever
+		// driven against a real `seek_max`.
 		if (duration === 0 && isFinite(player.duration) && player.duration > 0) {
 			duration = player.duration;
 			applyPendingSeek();
+		}
+		// While the user is scrubbing — or a pre-metadata seek is still queued —
+		// the element's currentTime lags the user's intent; reflecting it back
+		// into `current_time` would yank the thumb around. Hold the optimistic
+		// value until release / until the queued seek is applied.
+		//
+		// Also hold while `duration` is still 0 (first play, metadata not yet
+		// resolved): the seek bar runs on the pre-metadata 0..1 scale, so an
+		// advancing currentTime (e.g. 0.2s) is divided by max=1 and spikes the
+		// thumb to ~20% — then snaps back once the real duration lands, an
+		// animated jump the track's `width`/`left` transition makes visible.
+		// Don't let playback drive the thumb until the scale is real; this makes
+		// first play look identical to subsequent plays.
+		if (!is_scrubbing && !pending_seek && duration > 0) {
+			current_time = player.currentTime;
 		}
 		ontimeupdate?.({ currentTime: player.currentTime, duration: player.duration });
 	}
@@ -1052,7 +1062,10 @@
 		let active = true;
 		function tick() {
 			if (!active) return;
-			if (!pending_seek) current_time = vid.currentTime;
+			// Mirror the timeupdate guard: never drive the thumb until the seek
+			// scale is real (duration > 0), or the pre-metadata 0..1 scale spikes
+			// the thumb on first play. Also yield to a queued pre-metadata seek.
+			if (!pending_seek && duration > 0) current_time = vid.currentTime;
 			raf = requestAnimationFrame(tick);
 		}
 		raf = requestAnimationFrame(tick);
