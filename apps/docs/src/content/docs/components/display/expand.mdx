@@ -8,7 +8,6 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import ExpandBasicDemo from '../../../../components/demos/ExpandBasicDemo.svelte';
 import ExpandButtonDemo from '../../../../components/demos/ExpandButtonDemo.svelte';
 import ExpandConditionalDemo from '../../../../components/demos/ExpandConditionalDemo.svelte';
-import ExpandAccordionDemo from '../../../../components/demos/ExpandAccordionDemo.svelte';
 import ExpandCustomStyleDemo from '../../../../components/demos/ExpandCustomStyleDemo.svelte';
 
 ## Import
@@ -20,14 +19,14 @@ import { Expand } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<script>
-${'  '}import { Expand } from '@delightstack/components';
+${'  '}import { Expand, Button } from '@delightstack/components';
 
 ${'  '}let showDetails = $state(false);
 </script>
 
-<button onclick={() => showDetails = !showDetails}>
+<Button onclick={() => showDetails = !showDetails}>
 ${'  '}{showDetails ? 'Hide' : 'Show'} Details
-</button>
+</Button>
 
 <Expand bind:show={showDetails}>
 ${'  '}<div>
@@ -63,51 +62,22 @@ ${'  '}</div>
 ### Conditional Sections
 
 <ComponentPreview code={`<script>
-${'  '}import { Expand } from '@delightstack/components';
+${'  '}import { Expand, Checkbox, Input } from '@delightstack/components';
 
 ${'  '}let showAdvanced = $state(false);
+${'  '}let cache_ttl = $state(3600);
+${'  '}let max_retries = $state(3);
 </script>
 
-<label>
-${'  '}<input type="checkbox" bind:checked={showAdvanced} />
-${'  '}Show advanced options
-</label>
+<Checkbox bind:checked={showAdvanced} label="Show advanced options" />
 
 <Expand show={showAdvanced}>
 ${'  '}<div style="padding: 1rem 0;">
-${'  '}${'  '}<p>Advanced configuration fields go here.</p>
+${'  '}${'  '}<Input type="number" label="Cache TTL (seconds)" bind:value={cache_ttl} />
+${'  '}${'  '}<Input type="number" label="Max retries" bind:value={max_retries} />
 ${'  '}</div>
 </Expand>`}>
   <ExpandConditionalDemo client:load />
-</ComponentPreview>
-
-### Used by Accordion
-
-The Expand component is used internally by the Accordion component for its expand/collapse behavior.
-
-<ComponentPreview code={`<script>
-${'  '}import { Expand } from '@delightstack/components';
-
-${'  '}const sections = [
-${'  '}${'  '}{ id: 'about', title: 'About', content: 'We are a team dedicated to building great developer tools.' },
-${'  '}${'  '}{ id: 'features', title: 'Features', content: 'Smooth animations, accessible by default, and easy to customize.' },
-${'  '}${'  '}{ id: 'pricing', title: 'Pricing', content: 'Free for open-source projects. Contact us for enterprise plans.' },
-${'  '}];
-
-${'  '}let active = $state('about');
-</script>
-
-{#each sections as section}
-${'  '}<div class="accordion-item">
-${'  '}${'  '}<button onclick={() => active = active === section.id ? '' : section.id}>
-${'  '}${'  '}${'  '}{section.title}
-${'  '}${'  '}</button>
-${'  '}${'  '}<Expand show={active === section.id}>
-${'  '}${'  '}${'  '}<div>{section.content}</div>
-${'  '}${'  '}</Expand>
-${'  '}</div>
-{/each}`}>
-  <ExpandAccordionDemo client:load />
 </ComponentPreview>
 
 ### Always Expanded
@@ -129,14 +99,14 @@ ${'  '}</div>
 ### With Custom Inline Style
 
 <ComponentPreview code={`<script>
-${'  '}import { Expand } from '@delightstack/components';
+${'  '}import { Expand, Button } from '@delightstack/components';
 
 ${'  '}let visible = $state(false);
 </script>
 
-<button onclick={() => visible = !visible}>
+<Button onclick={() => visible = !visible}>
 ${'  '}{visible ? 'Hide' : 'Show'} Styled Content
-</button>
+</Button>
 
 <Expand show={visible} style="border-top: 2px solid #6366f1; margin-top: 0.75rem;">
 ${'  '}<div style="padding: 1rem; background: #f5f3ff; border-radius: 0 0 8px 8px;">
