@@ -1,13 +1,16 @@
 <script>
-	import { Tabs, Tab } from '@delightstack/components/navigation';
+	import { Tabs } from '@delightstack/components/navigation';
 
-	let value = $state('a');
+	let tab = $state(0);
 </script>
 
 <div style="width: 100%;">
-	<Tabs bind:value full_width>
-		<Tab value="a" label="First" />
-		<Tab value="b" label="Second" />
-		<Tab value="c" label="Third" />
+	<Tabs
+		bind:tab
+		full_width
+		tabs={[{ label: 'First' }, { label: 'Second' }, { label: 'Third' }]}>
+		{#snippet children({ tab })}
+			<p style="margin: 0;">The {['first', 'second', 'third'][tab]} panel.</p>
+		{/snippet}
 	</Tabs>
 </div>

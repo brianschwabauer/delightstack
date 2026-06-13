@@ -3,8 +3,6 @@
 		Button,
 		Input,
 		Tabs,
-		Tab,
-		TabContent,
 		ThemeToggle,
 		Modal,
 		Callout,
@@ -17,7 +15,7 @@
 	const { data } = $props();
 	const { auth } = $derived(data);
 
-	let active_tab = $state('profile');
+	let active_tab = $state(0);
 
 	// Profile editing
 	let edit_name = $state(auth.name ?? '');
@@ -82,105 +80,104 @@
 		<p>Manage your profile, security, and preferences</p>
 	</header>
 
-	<Tabs bind:value={active_tab}>
-		<Tab value="profile">Profile</Tab>
-		<Tab value="security">Security</Tab>
-		<Tab value="preferences">Preferences</Tab>
+	{#snippet profilePanel()}
+		<section class="section">
+			<h3>Profile Information</h3>
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					updateProfile();
+				}}
+				class="form">
+				<Input label="Name" bind:value={edit_name} required />
+				<Input label="Email" value={auth.email ?? ''} disabled />
+				<small class="hint">Email cannot be changed here</small>
 
-		<TabContent value="profile">
-			<section class="section">
-				<h3>Profile Information</h3>
-				<form
-					onsubmit={(e) => {
-						e.preventDefault();
-						updateProfile();
-					}}
-					class="form">
-					<Input label="Name" bind:value={edit_name} required />
-					<Input label="Email" value={auth.email ?? ''} disabled />
-					<small class="hint">Email cannot be changed here</small>
+				<Button onclick={updateProfile} disabled={saving_profile}>
+					{saving_profile ? 'Saving...' : 'Save Changes'}
+				</Button>
+			</form>
+		</section>
 
-					<Button onclick={updateProfile} disabled={saving_profile}>
-						{saving_profile ? 'Saving...' : 'Save Changes'}
-					</Button>
-				</form>
-			</section>
-
-			<section class="section">
-				<h3>Account</h3>
+		<section class="section">
+			<h3>Account</h3>
+			<p class="desc">
+				Signed in as <strong>{auth.email}</strong>
+			</p>
+			{#if auth.org}
 				<p class="desc">
-					Signed in as <strong>{auth.email}</strong>
+					Family: <strong>{auth.org.name}</strong>
 				</p>
-				{#if auth.org}
-					<p class="desc">
-						Family: <strong>{auth.org.name}</strong>
-					</p>
-				{/if}
-				<Button onclick={() => (show_signout = true)} error transparent>Sign Out</Button>
-			</section>
-		</TabContent>
+			{/if}
+			<Button onclick={() => (show_signout = true)} error transparent>Sign Out</Button>
+		</section>
+	{/snippet}
 
-		<TabContent value="security">
-			<section class="section">
-				<h3>Change Password</h3>
-				{#if password_error}
-					<Callout error>{password_error}</Callout>
-				{/if}
-				<form
-					onsubmit={(e) => {
-						e.preventDefault();
-						changePassword();
-					}}
-					class="form">
-					<Input
-						label="Current Password"
-						type="password"
-						bind:value={current_password}
-						required />
-					<Input
-						label="New Password"
-						type="password"
-						bind:value={new_password}
-						required />
-					<Input
-						label="Confirm New Password"
-						type="password"
-						bind:value={confirm_password}
-						required />
-					<Button onclick={changePassword} disabled={changing_password}>
-						{changing_password ? 'Changing...' : 'Change Password'}
-					</Button>
-				</form>
-			</section>
+	{#snippet securityPanel()}
+		<section class="section">
+			<h3>Change Password</h3>
+			{#if password_error}
+				<Callout error>{password_error}</Callout>
+			{/if}
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					changePassword();
+				}}
+				class="form">
+				<Input
+					label="Current Password"
+					type="password"
+					bind:value={current_password}
+					required />
+				<Input label="New Password" type="password" bind:value={new_password} required />
+				<Input
+					label="Confirm New Password"
+					type="password"
+					bind:value={confirm_password}
+					required />
+				<Button onclick={changePassword} disabled={changing_password}>
+					{changing_password ? 'Changing...' : 'Change Password'}
+				</Button>
+			</form>
+		</section>
 
-			<section class="section">
-				<Accordion>
-					<AccordionItem title="Sign-in Methods">
-						<p class="desc">Manage how you sign in to your account.</p>
-						<div class="method-list">
-							<div class="method">
-								<span>Email & Password</span>
-								<Badge>Active</Badge>
-							</div>
+		<section class="section">
+			<Accordion>
+				<AccordionItem title="Sign-in Methods">
+					<p class="desc">Manage how you sign in to your account.</p>
+					<div class="method-list">
+						<div class="method">
+							<span>Email & Password</span>
+							<Badge>Active</Badge>
 						</div>
-					</AccordionItem>
-				</Accordion>
-			</section>
-		</TabContent>
-
-		<TabContent value="preferences">
-			<section class="section">
-				<h3>Appearance</h3>
-				<div class="pref-row">
-					<div>
-						<strong>Theme</strong>
-						<p class="desc">Toggle between light and dark mode</p>
 					</div>
-					<ThemeToggle />
+				</AccordionItem>
+			</Accordion>
+		</section>
+	{/snippet}
+
+	{#snippet preferencesPanel()}
+		<section class="section">
+			<h3>Appearance</h3>
+			<div class="pref-row">
+				<div>
+					<strong>Theme</strong>
+					<p class="desc">Toggle between light and dark mode</p>
 				</div>
-			</section>
-		</TabContent>
-	</Tabs>
+				<ThemeToggle />
+			</div>
+		</section>
+	{/snippet}
+
+	<Tabs
+		bind:tab={active_tab}
+		transition="slide"
+		tabs={[
+			{ label: 'Profile', content: profilePanel },
+			{ label: 'Security', content: securityPanel },
+			{ label: 'Preferences', content: preferencesPanel },
+		]} />
 </div>
 
 <Modal bind:open={show_signout} title="Sign Out">

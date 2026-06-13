@@ -1,393 +1,376 @@
 <script lang="ts" module>
-	export { default as Tab } from './Tabs.svelte';
-	export { default as TabContent } from './Tabs.svelte';
+	import type { Snippet } from 'svelte';
 
-	export interface TabsContext {
-		/** The value of the currently selected tab */
-		value: string;
-		/** Whether tabs are styled as pills */
-		pills: boolean;
-		/** Whether tabs are styled as boxed tabs */
-		boxed: boolean;
-		/** Whether tabs are styled as a segmented control */
-		segment: boolean;
-		/** The font size applied to all tabs */
-		size: string;
-		/** The layout direction of the tab list */
-		orientation: 'horizontal' | 'vertical';
-		/** Whether all tabs are disabled */
-		disabled: boolean;
-		/** Selects the tab with the given value */
-		select: (value: string) => void;
-		/** Registers a tab's element under its value (for the active indicator) */
-		register: (value: string, el: HTMLElement) => void;
-		/** Removes a tab when it unmounts */
-		unregister: (value: string) => void;
+	/** A single tab descriptor in the `tabs` array. */
+	export interface TabItem {
+		/** The label text shown in the tab button. */
+		label: string;
+		/** An optional badge (count or short string) shown after the label. */
+		badge?: string | number;
+		/** Whether this individual tab is disabled. */
+		disabled?: boolean;
+		/** The panel content for this tab. When omitted, the component's
+		    children are used as the panel instead (gate them yourself with the
+		    bound `tab` index). */
+		content?: Snippet;
 	}
+
+	/** How the panel content animates when the active tab changes. */
+	export type TabsTransition = 'none' | 'fade' | 'slide';
 </script>
 
 <script lang="ts">
-	import { getContext, setContext, onMount, type Snippet } from 'svelte';
+	import { untrack } from 'svelte';
+	import { ripple } from '@delightstack/utilities';
 
 	const propId = $props.id();
 
 	let {
-		/* --- Shared --- */
-		/** The tab value (bindable for Tabs container; required string for Tab/TabContent) */
-		value = $bindable(''),
+		/** The index of the active tab (bindable). */
+		tab = $bindable(0),
 
-		/* --- Tab item props --- */
-		/** The label text for a Tab item */
-		label = '',
+		/** The tabs to render, in order. The array index is the tab's value. */
+		tabs = [] as TabItem[],
 
-		/** A badge displayed next to the Tab label */
-		badge = undefined as string | number | undefined,
-
-		/* --- Tabs container props --- */
-		/** Whether to use pill-shaped tab buttons */
+		/** Use pill-shaped tab buttons. */
 		pills = false,
 
-		/** Whether to use a boxed tab style */
+		/** Use a boxed (segmented-control) tab style. */
 		boxed = false,
 
-		/** Whether to use a segmented-control tab style */
-		segment = false,
-
-		/** The orientation of the tab list */
+		/** The orientation of the tab list. */
 		orientation = 'horizontal' as 'horizontal' | 'vertical',
 
-		/** The size of the tabs. 0=small, 1=default, 2=medium, 3=large */
+		/** The size of the tabs. 0=small, 1=default, 2=medium, 3=large. */
 		size = '1' as '0' | '1' | '2' | '3',
 
-		/** Whether tab buttons should stretch to fill the available width */
+		/** Stretch tab buttons to fill the available width. */
 		full_width = false,
 
-		/** Whether all tabs are disabled */
+		/** Disable every tab. */
 		disabled = false,
 
-		/** Whether to show a skeleton loading state */
+		/** How the panel content animates between tabs. */
+		transition = 'none' as TabsTransition,
+
+		/** Show a skeleton loading state in place of the tab list. */
 		skeleton = false,
 
-		/** Number of skeleton tab placeholders */
+		/** Number of skeleton tab placeholders. */
 		skeleton_count = 3,
 
-		/** Called when the active tab changes (Tabs container only) */
-		onchange = undefined as ((detail: { value: string }) => void) | undefined,
+		/** Called when the active tab changes. */
+		onchange = undefined as ((detail: { tab: number }) => void) | undefined,
 
-		/** The ID of the element */
+		/** The ID of the element. */
 		id = propId,
 
-		/** Specifies a custom class name */
+		/** Additional class name(s). */
 		class: class_name = '',
 
-		/** The child content */
-		children = undefined as undefined | Snippet,
+		/** Panel content used when a tab has no `content` snippet. Receives the
+		    active tab index and a `select` helper. */
+		children = undefined as
+			| undefined
+			| Snippet<[{ tab: number; select: (i: number) => void }]>,
 	} = $props();
 
 	/* ------------------------------------------------------------------ */
-	/*  Detect role: Tabs container, Tab item, or TabContent              */
+	/*  Active tab + selection                                            */
 	/* ------------------------------------------------------------------ */
-	const parentContext = getContext<TabsContext | undefined>('tabs');
+	function select(i: number) {
+		const item = tabs[i];
+		if (disabled || !item || item.disabled || i === tab) return;
+		tab = i;
+		onchange?.({ tab: i });
+	}
 
-	// Role detection:
-	// - No parent context → Tabs container
-	// - Has parent context + (label or badge) → Tab item
-	// - Has parent context + no label/badge → TabContent
-	const isContainer = !parentContext;
-	const isTab = $derived(!!parentContext && (!!label || badge !== undefined));
-	const isTabContent = $derived(!!parentContext && !label && badge === undefined);
+	/** Track navigation direction (for the slide transition). */
+	let prevTab = tab;
+	let direction = $state(1);
+	$effect(() => {
+		const next = tab;
+		untrack(() => {
+			if (next !== prevTab) {
+				direction = next > prevTab ? 1 : -1;
+				prevTab = next;
+			}
+		});
+	});
+
+	const activeContent = $derived(tabs[tab]?.content);
 
 	/* ------------------------------------------------------------------ */
-	/*  Tabs container logic                                              */
+	/*  Sliding indicator                                                 */
 	/* ------------------------------------------------------------------ */
-	let tabElementsMap = new Map<string, HTMLElement>();
-	let tabRegistrationCount = $state(0);
-	let indicatorStyle = $state('');
 	let listEl = $state<HTMLElement | undefined>(undefined);
-	let mounted = $state(false);
+	let tabEls = $state<HTMLElement[]>([]);
+	let indicatorStyle = $state('opacity: 0;');
 
-	if (isContainer) {
-		const ctx = $state<TabsContext>({
-			value,
-			pills,
-			boxed,
-			segment,
-			size,
-			orientation,
-			disabled,
-			select(val: string) {
-				value = val;
-				onchange?.({ value: val });
-			},
-			register(val: string, el: HTMLElement) {
-				tabElementsMap.set(val, el);
-				tabRegistrationCount++;
-			},
-			unregister(val: string) {
-				tabElementsMap.delete(val);
-				tabRegistrationCount++;
-			},
-		});
-		setContext<TabsContext>('tabs', ctx);
-
-		// Keep context in sync
-		$effect(() => {
-			ctx.value = value;
-			ctx.pills = pills;
-			ctx.boxed = boxed;
-			ctx.segment = segment;
-			ctx.size = size;
-			ctx.orientation = orientation;
-			ctx.disabled = disabled;
-		});
-
-		onMount(() => {
-			mounted = true;
-		});
-
-		// Update the sliding indicator when value or tab registrations change
-		$effect(() => {
-			// Track reactive dependencies
-			const _val = value;
-			const _count = tabRegistrationCount;
-			const _pills = pills;
-			const _boxed = boxed;
-			const _segment = segment;
-			const _orientation = orientation;
-
-			if (!mounted || !listEl) {
-				indicatorStyle = 'opacity: 0;';
-				return;
-			}
-
-			// Use requestAnimationFrame to ensure DOM is settled after registration
-			requestAnimationFrame(() => {
-				const activeEl = tabElementsMap.get(_val);
-				if (!activeEl || !listEl) {
-					indicatorStyle = 'opacity: 0;';
-					return;
-				}
-
-				const isVertical = _orientation === 'vertical';
-
-				if (isVertical) {
-					const top = activeEl.offsetTop;
-					const height = activeEl.offsetHeight;
-					if (_segment || _boxed) {
-						indicatorStyle = `transform: translateY(${top}px); height: ${height}px; width: 100%; opacity: 1;`;
-					} else {
-						indicatorStyle = `transform: translateY(${top}px); height: ${height}px; opacity: 1;`;
-					}
-				} else {
-					const left = activeEl.offsetLeft;
-					const width = activeEl.offsetWidth;
-					if (_segment || _boxed) {
-						indicatorStyle = `transform: translateX(${left}px); width: ${width}px; height: 100%; opacity: 1;`;
-					} else {
-						indicatorStyle = `transform: translateX(${left}px); width: ${width}px; opacity: 1;`;
-					}
-				}
-			});
-		});
-	}
-
-	/* ------------------------------------------------------------------ */
-	/*  Tab item logic                                                    */
-	/* ------------------------------------------------------------------ */
-	let tabEl = $state<HTMLElement | undefined>(undefined);
-
-	const isSelected = $derived(parentContext ? parentContext.value === value : false);
-	const isDisabled = $derived(
-		parentContext ? parentContext.disabled || disabled : disabled,
-	);
-
-	if (!isContainer) {
-		onMount(() => {
-			if (parentContext && tabEl && value) {
-				parentContext.register(value, tabEl);
-			}
-			return () => {
-				if (parentContext && value) {
-					parentContext.unregister(value);
-				}
-			};
-		});
-	}
-
-	function selectTab() {
-		if (isDisabled || !parentContext) return;
-		parentContext.select(value);
-	}
-
-	function onTabKeyDown(e: KeyboardEvent) {
-		if (e.key === 'Enter' || e.key === ' ') {
-			e.preventDefault();
-			selectTab();
+	function measure() {
+		const el = tabEls[tab];
+		if (!listEl || !el) {
+			indicatorStyle = 'opacity: 0;';
 			return;
 		}
+		if (boxed) {
+			// The thumb sits exactly on the active tab's box, so the list's padding
+			// shows as an equal gutter on all four sides (no top/left mismatch).
+			indicatorStyle =
+				`transform: translate(${el.offsetLeft}px, ${el.offsetTop}px);` +
+				` width: ${el.offsetWidth}px; height: ${el.offsetHeight}px; opacity: 1;`;
+		} else if (orientation === 'vertical') {
+			indicatorStyle = `transform: translateY(${el.offsetTop}px); height: ${el.offsetHeight}px; opacity: 1;`;
+		} else {
+			indicatorStyle = `transform: translateX(${el.offsetLeft}px); width: ${el.offsetWidth}px; opacity: 1;`;
+		}
+	}
 
-		const isVertical = parentContext?.orientation === 'vertical';
-		const nextKey = isVertical ? 'ArrowDown' : 'ArrowRight';
-		const prevKey = isVertical ? 'ArrowUp' : 'ArrowLeft';
+	// Re-measure whenever anything that affects geometry changes. Effects run
+	// after the DOM updates, so offsets are already settled — no rAF needed.
+	$effect(() => {
+		// Touch every geometry input so the effect re-runs when any of them change
+		// (measure() reads tab/orientation/variant, but not these layout inputs).
+		const _deps = [tabs.length, pills, full_width, size, skeleton];
+		void _deps;
+		if (!skeleton) measure();
+	});
 
-		if (e.key === nextKey) {
+	// Late layout shifts (font load, container resize, full-width reflow) don't
+	// touch any of the tracked state above, so observe the list directly.
+	$effect(() => {
+		if (!listEl || skeleton) return;
+		const ro = new ResizeObserver(() => measure());
+		ro.observe(listEl);
+		for (const el of tabEls) if (el) ro.observe(el);
+		return () => ro.disconnect();
+	});
+
+	/* ------------------------------------------------------------------ */
+	/*  Keyboard navigation (roving focus, auto-activation)               */
+	/* ------------------------------------------------------------------ */
+	function enabledStep(from: number, step: number): number {
+		const n = tabs.length;
+		for (let i = 1; i <= n; i++) {
+			const idx = (from + step * i + n * i) % n;
+			if (!tabs[idx]?.disabled) return idx;
+		}
+		return from;
+	}
+
+	function firstEnabled(): number {
+		const i = tabs.findIndex((t) => !t?.disabled);
+		return i === -1 ? 0 : i;
+	}
+
+	function lastEnabled(): number {
+		for (let i = tabs.length - 1; i >= 0; i--) if (!tabs[i]?.disabled) return i;
+		return tabs.length - 1;
+	}
+
+	function focusIndex(i: number) {
+		const el = tabEls[i];
+		if (el) el.focus();
+		select(i);
+	}
+
+	function onKeyDown(e: KeyboardEvent, i: number) {
+		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
-			focusSibling(e.currentTarget as HTMLElement, 1);
-		} else if (e.key === prevKey) {
+			select(i);
+			return;
+		}
+		const vertical = orientation === 'vertical';
+		const next = vertical ? 'ArrowDown' : 'ArrowRight';
+		const prev = vertical ? 'ArrowUp' : 'ArrowLeft';
+		if (e.key === next) {
 			e.preventDefault();
-			focusSibling(e.currentTarget as HTMLElement, -1);
+			focusIndex(enabledStep(i, 1));
+		} else if (e.key === prev) {
+			e.preventDefault();
+			focusIndex(enabledStep(i, -1));
 		} else if (e.key === 'Home') {
 			e.preventDefault();
-			focusSibling(e.currentTarget as HTMLElement, 0, 'first');
+			focusIndex(firstEnabled());
 		} else if (e.key === 'End') {
 			e.preventDefault();
-			focusSibling(e.currentTarget as HTMLElement, 0, 'last');
-		}
-	}
-
-	function focusSibling(
-		current: HTMLElement,
-		direction: number,
-		target?: 'first' | 'last',
-	) {
-		const list = current.closest('[role="tablist"]');
-		if (!list) return;
-		const tabs = Array.from(
-			list.querySelectorAll<HTMLElement>('[role="tab"]:not([aria-disabled="true"])'),
-		);
-		if (tabs.length === 0) return;
-
-		let next: HTMLElement | undefined;
-		if (target === 'first') {
-			next = tabs[0];
-		} else if (target === 'last') {
-			next = tabs[tabs.length - 1];
-		} else {
-			const idx = tabs.indexOf(current);
-			if (idx === -1) return;
-			next = tabs[(idx + direction + tabs.length) % tabs.length];
-		}
-		if (next) {
-			next.focus();
-			next.click();
+			focusIndex(lastEnabled());
 		}
 	}
 
 	/* ------------------------------------------------------------------ */
-	/*  Size map                                                          */
+	/*  Transitions                                                       */
+	/* ------------------------------------------------------------------ */
+	let reduce_motion = $state(false);
+	$effect(() => {
+		const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+		reduce_motion = mq.matches;
+		const on = () => (reduce_motion = mq.matches);
+		mq.addEventListener('change', on);
+		return () => mq.removeEventListener('change', on);
+	});
+
+	const effTransition = $derived<TabsTransition>(reduce_motion ? 'none' : transition);
+
+	const DURATION = 300;
+	const EASE = (t: number) => 1 - Math.pow(1 - t, 3); // cubic-out
+	/** Slide travel distance (rem). Bold enough to read as a real slide. */
+	const SLIDE = 4.5;
+
+	function panelIn(_node: HTMLElement) {
+		if (effTransition === 'fade') {
+			return { duration: DURATION, easing: EASE, css: (t: number) => `opacity: ${t}` };
+		}
+		// slide: incoming panel flies in from the direction of travel
+		const d = direction;
+		return {
+			duration: DURATION,
+			easing: EASE,
+			css: (t: number) =>
+				`opacity: ${t}; transform: translateX(${(1 - t) * d * SLIDE}rem)`,
+		};
+	}
+
+	function panelOut(_node: HTMLElement) {
+		if (effTransition === 'fade') {
+			return { duration: DURATION, easing: EASE, css: (t: number) => `opacity: ${t}` };
+		}
+		// slide: outgoing panel exits opposite the direction of travel
+		const d = direction;
+		return {
+			duration: DURATION,
+			easing: EASE,
+			css: (t: number) =>
+				`opacity: ${t}; transform: translateX(${(1 - t) * -d * SLIDE}rem)`,
+		};
+	}
+
 	/* ------------------------------------------------------------------ */
 	const sizeMap: Record<string, string> = {
-		'0': 'var(--text-sm, 0.75rem)',
-		'1': 'var(--text-base, 0.875rem)',
-		'2': 'var(--text-lg, 1rem)',
-		'3': 'var(--text-xl, 1.125rem)',
+		'0': 'var(--text-sm, 0.815rem)',
+		'1': 'var(--text-base, 1rem)',
+		'2': 'var(--text-lg, 1.1rem)',
+		'3': 'var(--text-xl, 1.25rem)',
 	};
 
-	/* Pseudo-random skeleton tab widths (em) — real tab labels vary, so the
-	   placeholders should too. */
+	// Pseudo-random skeleton tab widths (em) — real labels vary, so should these.
 	const skeletonWidths = [5, 6.5, 4.25, 5.75];
+
+	const hasPanel = $derived(!!activeContent || !!children);
+	const panelId = `tabpanel-${id}`;
 </script>
 
-{#if isContainer}
-	<!-- Tabs Container -->
-	<div
-		{id}
-		class={['tabs', class_name].filter(Boolean).join(' ')}
-		class:pills
-		class:boxed
-		class:segment
-		class:vertical={orientation === 'vertical'}
-		class:horizontal={orientation === 'horizontal'}
-		class:full-width={full_width}
-		class:disabled
-		style:font-size={sizeMap[size] ?? sizeMap['1']}>
-		{#if skeleton}
-			<div
-				class="list skeleton"
-				role="tablist"
-				aria-orientation={orientation}
-				aria-hidden="true">
-				{#each { length: skeleton_count } as _, i}
-					<div
-						class="skeleton-tab"
-						style:width="{skeletonWidths[i % skeletonWidths.length]}em"
-						style:--shimmer-delay="{i * 120}ms">
-					</div>
-				{/each}
-			</div>
-		{:else}
-			<div class="list" role="tablist" aria-orientation={orientation} bind:this={listEl}>
-				<div class="indicator" style={indicatorStyle}></div>
-				{@render children?.()}
-			</div>
-		{/if}
-	</div>
-{:else if isTab}
-	<!-- Tab Item -->
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<button
-		type="button"
-		role="tab"
-		class={['tab', class_name].filter(Boolean).join(' ')}
-		class:active={isSelected}
-		class:disabled={isDisabled}
-		class:pills={parentContext?.pills}
-		class:boxed={parentContext?.boxed}
-		class:segment={parentContext?.segment}
-		aria-selected={isSelected}
-		aria-disabled={isDisabled || undefined}
-		aria-controls={value ? `tabpanel-${value}` : undefined}
-		id={value ? `tab-${value}` : undefined}
-		tabindex={isSelected ? 0 : -1}
-		bind:this={tabEl}
-		onclick={selectTab}
-		onkeydown={onTabKeyDown}>
-		{#if children}
-			{@render children()}
-		{:else}
-			<span class="label">{label}</span>
-		{/if}
-		{#if badge !== undefined}
-			<span class="badge">{badge}</span>
-		{/if}
-	</button>
-{:else if isTabContent}
-	<!-- TabContent Panel -->
-	{#if parentContext && parentContext.value === value}
-		<div
-			class={['content', class_name].filter(Boolean).join(' ')}
-			role="tabpanel"
-			id="tabpanel-{value}"
-			aria-labelledby={value ? `tab-${value}` : undefined}
-			tabindex={0}>
-			{@render children?.()}
+<div
+	{id}
+	class={['tabs', class_name].filter(Boolean).join(' ')}
+	class:pills
+	class:boxed
+	class:vertical={orientation === 'vertical'}
+	class:full-width={full_width}
+	class:disabled
+	style:font-size={sizeMap[size] ?? sizeMap['1']}>
+	{#if skeleton}
+		<div class="list skeleton" role="tablist" aria-hidden="true">
+			{#each { length: skeleton_count } as _, i}
+				<div
+					class="skeleton-tab"
+					style:width="{skeletonWidths[i % skeletonWidths.length]}em"
+					style:--shimmer-delay="{i * 120}ms">
+				</div>
+			{/each}
 		</div>
+	{:else}
+		<div class="list" role="tablist" aria-orientation={orientation} bind:this={listEl}>
+			<div class="indicator" style={indicatorStyle}></div>
+			{#each tabs as t, i (i)}
+				{@const isDisabled = disabled || !!t.disabled}
+				<button
+					type="button"
+					role="tab"
+					class="tab"
+					class:active={tab === i}
+					class:disabled={isDisabled}
+					aria-selected={tab === i}
+					aria-disabled={isDisabled || undefined}
+					aria-controls={hasPanel ? panelId : undefined}
+					id="tab-{id}-{i}"
+					tabindex={tab === i ? 0 : -1}
+					bind:this={tabEls[i]}
+					onclick={() => select(i)}
+					onkeydown={(e) => onKeyDown(e, i)}
+					{@attach ripple({ enabled: !isDisabled, zIndex: 0 })}>
+					<span class="label">{t.label}</span>
+					{#if t.badge !== undefined}
+						<span class="badge">{t.badge}</span>
+					{/if}
+				</button>
+			{/each}
+		</div>
+
+		{#if hasPanel}
+			<div class="panels" class:animated={effTransition !== 'none'}>
+				{#if effTransition === 'none'}
+					<div
+						class="panel"
+						role="tabpanel"
+						id={panelId}
+						aria-labelledby="tab-{id}-{tab}"
+						tabindex="0">
+						{#if activeContent}
+							{@render activeContent()}
+						{:else if children}
+							{@render children({ tab, select })}
+						{/if}
+					</div>
+				{:else}
+					{#key tab}
+						<div
+							class="panel"
+							role="tabpanel"
+							id={panelId}
+							aria-labelledby="tab-{id}-{tab}"
+							tabindex="0"
+							in:panelIn
+							out:panelOut>
+							{#if activeContent}
+								{@render activeContent()}
+							{:else if children}
+								{@render children({ tab, select })}
+							{/if}
+						</div>
+					{/key}
+				{/if}
+			</div>
+		{/if}
 	{/if}
-{/if}
+</div>
 
 <style>
-	/* ========== Tabs Container ========== */
+	/* ========== Container ========== */
 	.tabs {
 		display: flex;
 		flex-direction: column;
 		width: 100%;
+		min-width: 0;
 
 		&.vertical {
 			flex-direction: row;
+			align-items: flex-start;
 		}
 
 		&.disabled {
-			opacity: 0.5;
+			opacity: 0.6;
 			pointer-events: none;
 		}
 	}
 
+	/* ========== Tab list ========== */
 	.list {
 		display: flex;
 		position: relative;
-		border-bottom: 1px solid var(--color-border, #e0e0e0);
 		gap: 0;
-		perspective: 100px;
+		flex-shrink: 0;
+		border-bottom: 1px solid var(--color-border, #e0e0e0);
 
 		.tabs.vertical & {
 			flex-direction: column;
@@ -397,7 +380,7 @@
 
 		.tabs.pills & {
 			border-bottom: none;
-			gap: 0.25rem;
+			gap: 0.3rem;
 		}
 
 		.tabs.pills.vertical & {
@@ -405,59 +388,46 @@
 		}
 
 		.tabs.boxed & {
-			background: var(--color-surface, #f5f5f5);
+			background: var(--color-bg-muted, #f1f1f1);
 			border: 1px solid var(--color-border, #e0e0e0);
-			border-radius: var(--radius-lg, 0.5rem);
+			border-radius: var(--radius-lg, 10px);
+			padding: 0.3rem;
+			gap: 0;
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
-				border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
+				border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
 			}
-			padding: 0.25rem;
-			gap: 0;
-		}
-
-		.tabs.segment & {
-			background: var(--color-bg-muted, #ebebeb);
-			border-radius: var(--radius-lg, 0.5rem);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
-			}
-			padding: 0.25rem;
-			border-bottom: none;
-			gap: 0;
 		}
 
 		.tabs.full-width & {
 			width: 100%;
-
-			:global(> .tab) {
-				flex: 1;
-			}
+		}
+		.tabs.full-width & > .tab {
+			flex: 1;
 		}
 	}
 
-	/* ========== Sliding Indicator ========== */
+	/* ========== Sliding indicator ========== */
 	.indicator {
 		position: absolute;
-		bottom: 0;
+		bottom: -1px;
 		left: 0;
 		height: 2px;
-		background: var(--color-accent, #1976d2);
-		border-radius: 1px;
-		transition:
-			transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
-			width 200ms cubic-bezier(0.4, 0, 0.2, 1),
-			height 200ms cubic-bezier(0.4, 0, 0.2, 1),
-			opacity 150ms ease;
+		background: var(--color-action, #1976d2);
+		border-radius: var(--radius-full, 1e5px);
 		pointer-events: none;
 		z-index: 1;
 		opacity: 0;
+		transition:
+			transform 260ms var(--ease-spring, cubic-bezier(0.34, 1.4, 0.64, 1)),
+			width 260ms var(--ease-spring, cubic-bezier(0.34, 1.4, 0.64, 1)),
+			height 260ms var(--ease-spring, cubic-bezier(0.34, 1.4, 0.64, 1)),
+			opacity 150ms ease;
 
 		.tabs.vertical & {
 			bottom: auto;
 			left: auto;
-			right: 0;
+			right: -1px;
 			top: 0;
 			width: 2px;
 			height: auto;
@@ -467,48 +437,28 @@
 			display: none;
 		}
 
+		/* Boxed: the indicator becomes the active "thumb" — an elevated surface
+		   that glides between options. measure() gives it the active tab's exact
+		   box (translate x/y + width/height), so the list padding reads as an
+		   equal gutter on every side. */
 		.tabs.boxed & {
-			bottom: 0;
 			top: 0;
-			height: auto;
-			background: var(--color-action, #fff);
-			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(
-					(var(--radius-lg, 0.5rem) - 0.125rem) * var(--squircle-ratio, 2)
-				);
-			}
-			box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
-		}
-
-		.tabs.segment & {
-			bottom: 0;
-			top: 0;
+			bottom: auto;
+			left: 0;
 			height: auto;
 			background: var(--color-surface, #fff);
-			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
+			border-radius: calc(var(--radius-lg, 10px) - 0.2rem);
+			box-shadow:
+				0 1px 2px rgb(0 0 0 / 0.06),
+				0 2px 6px rgb(0 0 0 / 0.08);
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
-				border-radius: calc(
-					(var(--radius-lg, 0.5rem) - 0.125rem) * var(--squircle-ratio, 2)
-				);
+				border-radius: calc((var(--radius-lg, 10px) - 0.2rem) * var(--squircle-ratio, 2));
 			}
-			box-shadow:
-				0 1px 3px rgb(0 0 0 / 0.08),
-				0 1px 2px rgb(0 0 0 / 0.06);
-		}
-
-		.tabs.vertical.boxed &,
-		.tabs.vertical.segment & {
-			left: 0;
-			right: 0;
-			top: 0;
-			width: auto;
 		}
 	}
 
-	/* ========== Tab Item ========== */
+	/* ========== Tab button ========== */
 	.tab {
 		display: inline-flex;
 		align-items: center;
@@ -516,151 +466,191 @@
 		gap: 0.5em;
 		position: relative;
 		z-index: 2;
+		flex-shrink: 0;
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		padding: 0.625em 1em;
+		padding: 0.7em 1.05em;
+		margin: 0;
 		font-size: inherit;
 		font-family: inherit;
+		font-weight: 500;
+		line-height: 1.2;
 		color: var(--color-text-muted, #666);
 		white-space: nowrap;
-		transition:
-			color 150ms ease,
-			background-color 150ms ease,
-			translate 200ms ease;
 		outline: none;
+		border-radius: var(--radius-md, 5px);
 		-webkit-tap-highlight-color: transparent;
-
-		&:hover:not(.disabled) {
-			color: var(--color-text, #333);
-			transition: translate 200ms ease;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
 		}
+		/* OUT transition: colours/background snap in on hover, ease back out;
+		   the press scale always eases (both directions) so it feels physical. */
+		transition:
+			color 220ms ease,
+			background-color 220ms ease,
+			scale 160ms ease;
+
+		&:hover:not(.disabled):not(.active) {
+			color: var(--color-text, #222);
+			background: rgb(from var(--color-text, #333) r g b / 0.06);
+			/* snap the colour/background in; keep the scale easing */
+			transition: scale 160ms ease;
+		}
+
 		&:active:not(.disabled) {
-			translate: 0px 3px 0px;
+			scale: 0.9;
 		}
 
 		&:focus-visible {
-			box-shadow: inset 0 0 0 2px var(--color-accent, #1976d2);
-			border-radius: var(--radius-md, 0.375rem);
+			box-shadow: inset 0 0 0 2px var(--color-action, #1976d2);
+			border-radius: var(--radius-md, 5px);
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
-				border-radius: calc(var(--radius-md, 0.375rem) * var(--squircle-ratio, 2));
+				border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
 			}
 		}
 
 		&.active {
-			color: var(--color-accent, #1976d2);
-			font-weight: 600;
+			color: var(--color-action, #1976d2);
 		}
 
 		&.disabled {
-			opacity: 0.5;
+			opacity: 0.45;
 			cursor: not-allowed;
 		}
 
-		/* ---- Pills variant ---- */
-		&.pills {
-			border-radius: var(--radius-full, 9999px);
-			padding: 0.5em 1em;
-
-			&:hover:not(.disabled):not(.active) {
-				background: rgb(from var(--color-text, #333) r g b / 0.06);
-				transition: none;
-			}
+		/* ---- Pills (variant class lives on the container) ---- */
+		.tabs.pills & {
+			border-radius: var(--radius-full, 1e5px);
+			padding: 0.5em 1.1em;
 
 			&.active {
-				background: var(--color-accent, #1976d2);
-				color: var(--color-accent-text, #fff);
+				background: var(--color-action, #1976d2);
+				color: var(--color-action-text, #fff);
 			}
 		}
 
-		/* ---- Boxed variant ---- */
-		&.boxed {
-			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
+		/* ---- Boxed (text rides above the gliding thumb) ---- */
+		.tabs.boxed & {
+			border-radius: calc(var(--radius-lg, 10px) - 0.2rem);
+			padding: 0.5em 1.1em;
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
-				border-radius: calc(
-					(var(--radius-lg, 0.5rem) - 0.125rem) * var(--squircle-ratio, 2)
-				);
+				border-radius: calc((var(--radius-lg, 10px) - 0.2rem) * var(--squircle-ratio, 2));
 			}
-			padding: 0.5em 1em;
-
 			&.active {
-				color: var(--color-text, #333);
-			}
-		}
-
-		/* ---- Segment variant ---- */
-		&.segment {
-			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(
-					(var(--radius-lg, 0.5rem) - 0.125rem) * var(--squircle-ratio, 2)
-				);
-			}
-			padding: 0.5em 1em;
-
-			&.active {
-				color: var(--color-text, #333);
-				font-weight: 600;
+				color: var(--color-text-active, var(--color-text, #222));
 			}
 		}
 	}
 
 	.label {
+		position: relative;
+		z-index: 1;
 		pointer-events: none;
 	}
 
+	/* ========== Badge ========== */
 	.badge {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		background: var(--color-accent, #1976d2);
-		color: var(--color-accent-text, #fff);
-		border-radius: var(--radius-full, 9999px);
-		font-size: 0.75em;
-		line-height: 1;
-		padding: 0.15em 0.5em;
-		min-width: 1.35em;
-		min-height: 1.35em;
+		background: var(--color-action, #1976d2);
+		color: var(--color-action-text, #fff);
+		border-radius: var(--radius-full, 1e5px);
+		font-size: 0.72em;
 		font-weight: 600;
+		line-height: 1;
+		padding: 0.2em 0.45em;
+		min-width: 1.5em;
+		min-height: 1.35em;
+		position: relative;
+		z-index: 1;
 		pointer-events: none;
+		transition:
+			background-color 220ms ease,
+			color 220ms ease;
+	}
 
-		.tab.pills.active & {
-			background: var(--color-accent-text, #fff);
-			color: var(--color-accent, #1976d2);
+	/* Inactive tabs get a quieter, tinted badge; the active one inverts inside
+	   pills so it stays legible on the filled background. */
+	.tab:not(.active) .badge {
+		background: rgb(from var(--color-text, #333) r g b / 0.1);
+		color: var(--color-text-muted, #666);
+	}
+	.tabs.pills .tab.active .badge {
+		background: var(--color-action-text, #fff);
+		color: var(--color-action, #1976d2);
+	}
+
+	/* ========== Panels ========== */
+	.panels {
+		min-width: 0;
+
+		.tabs.vertical & {
+			flex: 1;
+			padding-left: 1.25em;
+		}
+	}
+
+	/* When animated, stack incoming/outgoing panels in one grid cell so they
+	   crossfade/slide over each other without a layout jump. */
+	.panels.animated {
+		display: grid;
+		overflow: hidden;
+	}
+	.panels.animated > .panel {
+		grid-area: 1 / 1;
+	}
+
+	.panel {
+		padding: 1.1em 0;
+		outline: none;
+
+		.tabs.vertical & {
+			padding-top: 0;
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--color-action, #1976d2);
+			outline-offset: 2px;
+			border-radius: var(--radius-md, 5px);
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
+			}
 		}
 	}
 
 	/* ========== Skeleton ========== */
-	/* The list keeps its real chrome (underline border / boxed / segment
-	   surfaces come from .list), so only the bars need defining. A small
-	   gap separates the bars where real tabs touch (their padding provides the
-	   visual separation that solid bars lack). */
 	.list.skeleton {
 		pointer-events: none;
-		gap: 0.375em;
+		gap: 0.4em;
+		border-bottom-color: var(--color-border, #e0e0e0);
 
 		.tabs.full-width & > .skeleton-tab {
 			flex: 1;
 		}
 	}
 
-	/* Each bar is a whole tab's box: the real block padding (0.625em, or 0.5em
-	   for pills/boxed/segment) around one line box (1lh), so the list height —
-	   including the indicator strip — never shifts when the real tabs arrive. */
 	.skeleton-tab {
-		height: calc(1lh + 1.25em);
+		/* Match a real tab's box exactly so toggling skeleton ↔ loaded never
+		   shifts the row: line-height 1.2 (same as .tab) makes 1lh resolve to the
+		   real line box instead of inheriting the page's larger line-height, and
+		   1.4em is the default tab's block padding (0.7em × 2). */
+		line-height: 1.2;
+		height: calc(1lh + 1.4em);
 		flex-shrink: 0;
-		border-radius: var(--radius-md, 0.375rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.375rem) * var(--squircle-ratio, 2));
-		}
+		border-radius: var(--radius-md, 5px);
 		position: relative;
 		overflow: hidden;
 		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
+		}
 
 		&::after {
 			content: '';
@@ -679,24 +669,11 @@
 		}
 
 		.tabs.pills &,
-		.tabs.boxed &,
-		.tabs.segment & {
+		.tabs.boxed & {
 			height: calc(1lh + 1em);
 		}
-
 		.tabs.pills & {
-			border-radius: var(--radius-full, 9999px);
-		}
-
-		.tabs.boxed &,
-		.tabs.segment & {
-			border-radius: calc(var(--radius-lg, 0.5rem) - 0.125rem);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(
-					(var(--radius-lg, 0.5rem) - 0.125rem) * var(--squircle-ratio, 2)
-				);
-			}
+			border-radius: var(--radius-full, 1e5px);
 		}
 	}
 
@@ -714,21 +691,8 @@
 		.skeleton-tab::after {
 			animation: none;
 		}
-	}
-
-	/* ========== TabContent Panel ========== */
-	.content {
-		padding: 1em 0;
-		outline: none;
-
-		&:focus-visible {
-			outline: 2px solid var(--color-accent, #1976d2);
-			outline-offset: 2px;
-			border-radius: var(--radius-md, 0.375rem);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(var(--radius-md, 0.375rem) * var(--squircle-ratio, 2));
-			}
+		.indicator {
+			transition: opacity 150ms ease;
 		}
 	}
 </style>

@@ -1,11 +1,18 @@
 <script>
-	import { Tabs, Tab } from '@delightstack/components/navigation';
+	import { Tabs } from '@delightstack/components/navigation';
 
-	let value = $state('tab1');
+	let tab = $state(0);
 </script>
 
-<Tabs bind:value boxed>
-	<Tab value="tab1" label="Tab 1" />
-	<Tab value="tab2" label="Tab 2" />
-	<Tab value="tab3" label="Tab 3" />
-</Tabs>
+<div style="width: 100%;">
+	<Tabs
+		bind:tab
+		boxed
+		tabs={[{ label: 'Details' }, { label: 'Activity' }, { label: 'Settings' }]}>
+		{#snippet children({ tab })}
+			<p style="margin: 0;">
+				{['The details panel.', 'A log of recent activity.', 'Tweak your settings.'][tab]}
+			</p>
+		{/snippet}
+	</Tabs>
+</div>

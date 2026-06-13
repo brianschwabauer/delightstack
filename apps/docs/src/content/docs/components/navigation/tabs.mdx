@@ -1,13 +1,13 @@
 ---
 title: Tabs
-description: A tabbed navigation component with sliding indicator animation, multiple visual variants (pills, boxed, segmented), horizontal and vertical orientations.
+description: A tabbed navigation component with a spring-loaded sliding indicator, visual variants (underline, pills, boxed/segmented), horizontal and vertical orientations, ripple feedback, and optional fade/slide content transitions.
 ---
 
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import TabsDemo from '../../../../components/demos/TabsDemo.svelte';
 import TabsPillDemo from '../../../../components/demos/TabsPillDemo.svelte';
 import TabsBoxedDemo from '../../../../components/demos/TabsBoxedDemo.svelte';
-import TabsSegmentedDemo from '../../../../components/demos/TabsSegmentedDemo.svelte';
+import TabsTransitionDemo from '../../../../components/demos/TabsTransitionDemo.svelte';
 import TabsVerticalDemo from '../../../../components/demos/TabsVerticalDemo.svelte';
 import TabsBadgesDemo from '../../../../components/demos/TabsBadgesDemo.svelte';
 import TabsFullWidthDemo from '../../../../components/demos/TabsFullWidthDemo.svelte';
@@ -16,216 +16,223 @@ import TabsSkeletonDemo from '../../../../components/demos/TabsSkeletonDemo.svel
 
 ## Import
 
-Tabs uses a compound component pattern. The `Tab` and `TabContent` sub-components are re-exported from the same module.
+`Tabs` is a single component. The tab buttons are declared as data via the `tabs`
+prop, and the active tab is tracked by its **index** with `bind:tab`.
 
 ```svelte
-import { Tabs, Tab, TabContent } from '@delightstack/components';
-import type { TabsContext } from '@delightstack/components';
+import { Tabs } from '@delightstack/components';
+import type { TabItem } from '@delightstack/components';
 ```
 
 ## Basic Usage
 
-<ComponentPreview code={`<script>
-${'  '}import { Tabs, Tab, TabContent } from '@delightstack/components';
+Each entry in `tabs` describes one tab button. Give it a `content` snippet to render
+that tab's panel — label and content stay together in one place, and only the active
+panel is rendered.
 
-${'  '}let activeTab = $state('overview');
+<ComponentPreview code={`<script>
+${'  '}import { Tabs } from '@delightstack/components';
+
+${'  '}let tab = $state(0);
 </script>
 
-<Tabs bind:value={activeTab}>
-${'  '}<Tab value="overview" label="Overview" />
-${'  '}<Tab value="features" label="Features" />
-${'  '}<Tab value="pricing" label="Pricing" />
-</Tabs>
+{#snippet overview()}
+${'  '}<p>Welcome to the overview panel.</p>
+{/snippet}
+{#snippet features()}
+${'  '}<p>Explore the features.</p>
+{/snippet}
+{#snippet pricing()}
+${'  '}<p>View our pricing plans.</p>
+{/snippet}
 
-<TabContent value="overview">
-${'  '}<p>Overview content goes here.</p>
-</TabContent>
-<TabContent value="features">
-${'  '}<p>Features content goes here.</p>
-</TabContent>
-<TabContent value="pricing">
-${'  '}<p>Pricing content goes here.</p>
-</TabContent>`}>
+<Tabs bind:tab tabs={[
+${'  '}{ label: 'Overview', content: overview },
+${'  '}{ label: 'Features', content: features },
+${'  '}{ label: 'Pricing', content: pricing },
+]} />`}>
 	<TabsDemo client:load />
 </ComponentPreview>
+
+### Inline content
+
+If you'd rather not write a `content` snippet per tab, omit it and pass children
+instead. The children render in the panel area and receive the active `tab` index,
+so you can gate them however you like:
+
+```svelte
+<Tabs bind:tab tabs={[{ label: 'Inbox' }, { label: 'Sent' }]}>
+  {#if tab === 0}
+    <p>Your inbox.</p>
+  {:else if tab === 1}
+    <p>Your sent mail.</p>
+  {/if}
+</Tabs>
+```
+
+The children snippet also receives `{ tab, select }`, so
+`{#snippet children({ tab, select })}` works too if you want the current index or a
+programmatic `select(i)` helper.
 
 ## Examples
 
 ### Pill Variant
 
-Rounded pill-shaped tab buttons.
+Rounded pill-shaped tab buttons. The active pill fills with the action color.
 
-<ComponentPreview code={`<Tabs bind:value={activeTab} pills>
-${'  '}<Tab value="all" label="All" />
-${'  '}<Tab value="active" label="Active" badge="3" />
-${'  '}<Tab value="archived" label="Archived" />
-</Tabs>`}>
+<ComponentPreview code={`<Tabs bind:tab pills tabs={[
+${'  '}{ label: 'All' },
+${'  '}{ label: 'Active', badge: '3' },
+${'  '}{ label: 'Archived' },
+]} />`}>
 	<TabsPillDemo client:load />
 </ComponentPreview>
 
 ### Boxed Variant
 
-Tabs enclosed in a bordered container.
+An enclosed, segmented-control style group where the active tab rides on an elevated
+surface that glides between options.
 
-<ComponentPreview code={`<Tabs bind:value={activeTab} boxed>
-${'  '}<Tab value="tab1" label="Tab 1" />
-${'  '}<Tab value="tab2" label="Tab 2" />
-${'  '}<Tab value="tab3" label="Tab 3" />
-</Tabs>`}>
+<ComponentPreview code={`<Tabs bind:tab boxed tabs={[
+${'  '}{ label: 'Details' },
+${'  '}{ label: 'Activity' },
+${'  '}{ label: 'Settings' },
+]} />`}>
 	<TabsBoxedDemo client:load />
 </ComponentPreview>
 
-### Segmented Control
+### Content Transitions
 
-A segmented-control style, useful for toggling between a small set of options.
+Set `transition` to animate the panel as the active tab changes. `slide` moves the
+content in the direction you navigated; `fade` cross-dissolves; `none` (the default)
+swaps instantly. All transitions respect `prefers-reduced-motion`.
 
-<ComponentPreview code={`<Tabs bind:value={activeTab} segment>
-${'  '}<Tab value="day" label="Day" />
-${'  '}<Tab value="week" label="Week" />
-${'  '}<Tab value="month" label="Month" />
-</Tabs>`}>
-	<TabsSegmentedDemo client:load />
+<ComponentPreview code={`<Tabs bind:tab transition="slide" tabs={[
+${'  '}{ label: 'Mercury', content: mercury },
+${'  '}{ label: 'Venus', content: venus },
+${'  '}{ label: 'Earth', content: earth },
+]} />`}>
+	<TabsTransitionDemo client:load />
 </ComponentPreview>
 
 ### Vertical Orientation
 
-Stack tabs vertically for sidebar-style navigation.
+Stack tabs for sidebar-style navigation. The list and the active panel sit side by
+side automatically — no wrapper layout needed.
 
-<ComponentPreview code={`<div style="display: flex; gap: 1rem;">
-${'  '}<Tabs bind:value={activeTab} orientation="vertical">
-${'  '}${'  '}<Tab value="general" label="General" />
-${'  '}${'  '}<Tab value="security" label="Security" />
-${'  '}${'  '}<Tab value="notifications" label="Notifications" />
-${'  '}</Tabs>
-${'  '}<div style="flex: 1;">
-${'  '}${'  '}<TabContent value="general"><p>General settings.</p></TabContent>
-${'  '}${'  '}<TabContent value="security"><p>Security settings.</p></TabContent>
-${'  '}${'  '}<TabContent value="notifications"><p>Notification settings.</p></TabContent>
-${'  '}</div>
-</div>`}>
+<ComponentPreview code={`<Tabs bind:tab orientation="vertical" tabs={[
+${'  '}{ label: 'General', content: general },
+${'  '}{ label: 'Security', content: security },
+${'  '}{ label: 'Notifications', content: notifications },
+]} />`}>
 	<TabsVerticalDemo client:load />
 </ComponentPreview>
 
 ### With Badges
 
-Display badges next to tab labels.
+Give a tab a `badge` (a count or short string). Inactive badges are tinted; the
+active one inverts so it stays legible.
 
-<ComponentPreview code={`<Tabs bind:value={activeTab}>
-${'  '}<Tab value="inbox" label="Inbox" badge={12} />
-${'  '}<Tab value="sent" label="Sent" />
-${'  '}<Tab value="drafts" label="Drafts" badge="2" />
-</Tabs>`}>
+<ComponentPreview code={`<Tabs bind:tab tabs={[
+${'  '}{ label: 'Inbox', badge: 12 },
+${'  '}{ label: 'Sent' },
+${'  '}{ label: 'Drafts', badge: '2' },
+]} />`}>
 	<TabsBadgesDemo client:load />
 </ComponentPreview>
 
 ### Full Width
 
-Stretch tabs to fill the available width evenly.
+Stretch tab buttons to fill the available width evenly.
 
-<ComponentPreview code={`<Tabs bind:value={activeTab} full_width>
-${'  '}<Tab value="a" label="First" />
-${'  '}<Tab value="b" label="Second" />
-${'  '}<Tab value="c" label="Third" />
-</Tabs>`}>
+<ComponentPreview code={`<Tabs bind:tab full_width tabs={[
+${'  '}{ label: 'First' },
+${'  '}{ label: 'Second' },
+${'  '}{ label: 'Third' },
+]} />`}>
 	<TabsFullWidthDemo client:load />
 </ComponentPreview>
 
 ### Disabled
 
-Disable all tabs or individual tabs.
+Disable an individual tab with `disabled: true` on its entry, or disable the whole
+group with the container's `disabled` prop. Disabled tabs are skipped during keyboard
+navigation.
 
-<ComponentPreview code={`<!-- All tabs disabled -->
-<Tabs bind:value={activeTab} disabled>
-${'  '}<Tab value="a" label="Tab A" />
-${'  '}<Tab value="b" label="Tab B" />
-</Tabs>
-
-<!-- Individual tab disabled -->
-<Tabs bind:value={activeTab}>
-${'  '}<Tab value="a" label="Available" />
-${'  '}<Tab value="b" label="Coming Soon" disabled />
-</Tabs>`}>
+<ComponentPreview code={`<Tabs bind:tab tabs={[
+${'  '}{ label: 'Available' },
+${'  '}{ label: 'Coming Soon', disabled: true },
+${'  '}{ label: 'Beta' },
+]} />`}>
 	<TabsDisabledDemo client:load />
 </ComponentPreview>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Tabs skeleton={loading} skeleton_count={3}>…</Tabs>`}>
+Show shimmering placeholders while the real tabs load. The placeholders match the
+final list's height so nothing shifts when content arrives.
+
+<ComponentPreview code={`<Tabs skeleton={loading} skeleton_count={3} bind:tab tabs={tabs} />`}>
 	<TabsSkeletonDemo client:load />
 </ComponentPreview>
 
 ## Props
 
-### Tabs (Container)
-
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `value` | `string` | `''` | The currently selected tab value (`$bindable`) |
+| `tab` | `number` | `0` | Index of the active tab (`$bindable`) |
+| `tabs` | `TabItem[]` | `[]` | The tab buttons to render, in order. The array index is the tab's value. |
+| `transition` | `'none' \| 'fade' \| 'slide'` | `'none'` | How the panel animates between tabs |
 | `pills` | `boolean` | `false` | Use pill-shaped tab buttons |
-| `boxed` | `boolean` | `false` | Use boxed tab style |
-| `segment` | `boolean` | `false` | Use segmented-control style |
+| `boxed` | `boolean` | `false` | Use boxed / segmented-control tab style |
 | `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Tab list orientation |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Size of the tabs |
 | `full_width` | `boolean` | `false` | Stretch tabs to fill available width |
 | `disabled` | `boolean` | `false` | Disable all tabs |
 | `skeleton` | `boolean` | `false` | Show skeleton loading state |
 | `skeleton_count` | `number` | `3` | Number of skeleton tab placeholders |
+| `onchange` | `(detail: { tab: number }) => void` | `undefined` | Called when the active tab changes |
 | `id` | `string` | auto | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
-| `children` | `Snippet` | `undefined` | Tab children |
+| `children` | `Snippet<[{ tab, select }]>` | `undefined` | Panel content used when a tab has no `content` snippet |
 
-### Tab (Item)
+### TabItem
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `value` | `string` | `''` | The unique value for this tab |
-| `label` | `string` | `''` | The label text for this tab |
-| `badge` | `string \| number` | `undefined` | Badge displayed next to the label |
-| `disabled` | `boolean` | `false` | Whether this individual tab is disabled |
+Each entry in the `tabs` array:
 
-### TabContent
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `value` | `string` | `''` | The tab value this content panel belongs to |
-| `children` | `Snippet` | `undefined` | Panel content (rendered only when the matching tab is active) |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `label` | `string` | — | The tab button's label text |
+| `badge` | `string \| number` | `undefined` | A badge shown after the label |
+| `disabled` | `boolean` | `false` | Disable this individual tab |
+| `content` | `Snippet` | `undefined` | This tab's panel content |
 
 ## Events
 
-### Tabs (Container)
-
 | Event | Detail | Description |
 |-------|--------|-------------|
-| `onchange` | `{ value: string }` | Fires when the active tab changes |
+| `onchange` | `{ tab: number }` | Fires when the active tab index changes |
 
 ## Types
 
-### TabsContext
-
 ```typescript
-interface TabsContext {
-  value: string;
-  pills: boolean;
-  boxed: boolean;
-  segment: boolean;
-  size: string;
-  orientation: 'horizontal' | 'vertical';
-  disabled: boolean;
-  select: (value: string) => void;
-  register: (value: string, el: HTMLElement) => void;
-  unregister: (value: string) => void;
+interface TabItem {
+  label: string;
+  badge?: string | number;
+  disabled?: boolean;
+  content?: Snippet;
 }
+
+type TabsTransition = 'none' | 'fade' | 'slide';
 ```
 
 ## Accessibility
 
-- Tab list uses `role="tablist"` with `aria-orientation`
-- Each tab button uses `role="tab"` with `aria-selected` and `aria-controls`
-- Tab content panels use `role="tabpanel"` with `aria-labelledby`
-- **Arrow Left / Right** (or **Up / Down** for vertical) navigates between tabs
-- **Home** / **End** jumps to the first / last tab
+- The tab list uses `role="tablist"` with `aria-orientation`
+- Each button uses `role="tab"` with `aria-selected` and `aria-controls`
+- The panel uses `role="tabpanel"` with `aria-labelledby` pointing at the active tab
+- **Arrow Left / Right** (or **Up / Down** when vertical) moves between tabs
+- **Home** / **End** jumps to the first / last enabled tab
 - **Enter / Space** activates the focused tab
-- Disabled tabs are excluded from keyboard navigation (`aria-disabled`, `tabindex="-1"`)
-- Sliding indicator animation highlights the active tab
-- Focus-visible outlines on tab buttons
-- Respects `prefers-reduced-motion` for indicator transitions
+- Roving `tabindex` keeps the tab list a single tab stop; disabled tabs are skipped
+- The sliding indicator and content transitions respect `prefers-reduced-motion`

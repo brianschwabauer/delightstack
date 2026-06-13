@@ -43,17 +43,12 @@
 		Fieldset,
 	} from '@delightstack/components/form';
 	import type { SelectOption } from '@delightstack/components/form';
-	import {
-		Tabs,
-		Tab,
-		Breadcrumbs,
-		Steps,
-		Step,
-	} from '@delightstack/components/navigation';
+	import { Tabs, Breadcrumbs, Steps, Step } from '@delightstack/components/navigation';
 	import type { BreadcrumbItem } from '@delightstack/components/navigation';
 
 	// ── State ──────────────────────────────────────────────────────────
-	let activeTab = $state('overview');
+	const TAB = { overview: 0, orders: 1, team: 2, settings: 3 };
+	let activeTab = $state(TAB.overview);
 	let sidebarCollapsed = $state(false);
 	let activePage = $state('dashboard');
 	let tablePage = $state(1);
@@ -125,7 +120,7 @@
 			title: 'Go to Overview',
 			category: 'Navigation',
 			onselect: () => {
-				activeTab = 'overview';
+				activeTab = TAB.overview;
 			},
 		},
 		{
@@ -133,7 +128,7 @@
 			title: 'Go to Orders',
 			category: 'Navigation',
 			onselect: () => {
-				activeTab = 'orders';
+				activeTab = TAB.orders;
 			},
 		},
 		{
@@ -141,7 +136,7 @@
 			title: 'Go to Team',
 			category: 'Navigation',
 			onselect: () => {
-				activeTab = 'team';
+				activeTab = TAB.team;
 			},
 		},
 		{
@@ -149,7 +144,7 @@
 			title: 'Go to Settings',
 			category: 'Navigation',
 			onselect: () => {
-				activeTab = 'settings';
+				activeTab = TAB.settings;
 			},
 		},
 	];
@@ -722,15 +717,18 @@
 			</div>
 
 			<!-- Tab bar -->
-			<Tabs bind:value={activeTab} size="1">
-				<Tab value="overview" label="Overview" />
-				<Tab value="orders" label="Orders" />
-				<Tab value="team" label="Team" />
-				<Tab value="settings" label="Settings" />
-			</Tabs>
+			<Tabs
+				bind:tab={activeTab}
+				size="1"
+				tabs={[
+					{ label: 'Overview' },
+					{ label: 'Orders' },
+					{ label: 'Team' },
+					{ label: 'Settings' },
+				]} />
 
 			<!-- Tab content -->
-			{#if activeTab === 'overview'}
+			{#if activeTab === TAB.overview}
 				<div class="tab-panel">
 					<div class="charts-row">
 						<div class="card chart-card chart-wide">
@@ -821,7 +819,7 @@
 						the top-performing category.
 					</Callout>
 				</div>
-			{:else if activeTab === 'orders'}
+			{:else if activeTab === TAB.orders}
 				<div class="tab-panel">
 					<div class="table-toolbar">
 						<div class="table-filters">
@@ -865,7 +863,7 @@
 							striped />
 					</div>
 				</div>
-			{:else if activeTab === 'team'}
+			{:else if activeTab === TAB.team}
 				<div class="tab-panel">
 					<div class="team-section">
 						<div class="card team-card">
@@ -941,7 +939,7 @@
 						</div>
 					</div>
 				</div>
-			{:else if activeTab === 'settings'}
+			{:else if activeTab === TAB.settings}
 				<div class="tab-panel">
 					<div class="settings-section">
 						<!-- Profile card -->

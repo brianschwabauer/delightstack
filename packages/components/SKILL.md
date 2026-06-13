@@ -136,7 +136,7 @@ have the exact types. Do not guess prop names.
 - `Breadcrumbs` — Navigation trail with auto home icon and SSR-safe collapsing (docs: /components/navigation/breadcrumbs.md)
 - `Pagination` — Page navigation with ellipsis algorithm and page size selector (docs: /components/navigation/pagination.md)
 - `Steps` / `Step` — Multi-step progress indicator with animated wizard mode, error states, and horizontal overflow paging (docs: /components/navigation/steps.md)
-- `Tabs` / `Tab` / `TabContent` — Tabbed navigation with sliding indicator; pills, boxed, segmented variants (docs: /components/navigation/tabs.md)
+- `Tabs` — Data-driven tabbed navigation (`tabs={[{ label, badge, disabled, content }]}` + `bind:tab` index); spring sliding indicator; underline / pills / boxed (segmented) variants; vertical orientation; ripple feedback; fade/slide content transitions (docs: /components/navigation/tabs.md)
 
 ## Beyond components
 

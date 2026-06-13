@@ -1,11 +1,22 @@
 <script>
-	import { Tabs, Tab } from '@delightstack/components/navigation';
+	import { Tabs } from '@delightstack/components/navigation';
 
-	let value = $state('all');
+	let tab = $state(0);
 </script>
 
-<Tabs bind:value pills>
-	<Tab value="all" label="All" />
-	<Tab value="active" label="Active" badge="3" />
-	<Tab value="archived" label="Archived" />
-</Tabs>
+<div style="width: 100%;">
+	<Tabs
+		bind:tab
+		pills
+		tabs={[{ label: 'All' }, { label: 'Active', badge: '3' }, { label: 'Archived' }]}>
+		{#snippet children({ tab })}
+			<p style="margin: 0;">
+				{[
+					'Everything in one place.',
+					'Three items still in progress.',
+					'Tucked away for later.',
+				][tab]}
+			</p>
+		{/snippet}
+	</Tabs>
+</div>
