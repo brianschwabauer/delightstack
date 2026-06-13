@@ -1656,8 +1656,8 @@
 				}
 				.actions {
 					position: absolute;
-					top: 4rem;
-					right: 0.5rem;
+					top: 4.75rem;
+					right: 0.875rem;
 					left: unset;
 					bottom: unset;
 					display: flex;
@@ -1668,8 +1668,8 @@
 				.pagination {
 					position: absolute;
 					font-size: 1.5rem;
-					top: 0.5rem;
-					right: 3.75rem;
+					top: 0.875rem;
+					right: 4.25rem;
 					height: 3rem;
 					margin: 0;
 					display: flex;
@@ -1684,9 +1684,14 @@
 					z-index: 2;
 				}
 				:global(.close) {
-					right: 0.5rem;
-					top: 0.5rem;
+					right: 0.875rem;
+					top: 0.875rem;
 					z-index: 2;
+					/* Nudge the dismiss control up a touch. The icon button sizes
+					   off its own font-size (× --control-height-ratio), so bumping
+					   the font scales the pill AND the icon together, keeping the
+					   translucent-white-pill language intact. */
+					font-size: 1.15rem;
 				}
 				:global(.prev),
 				:global(.next) {
