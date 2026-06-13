@@ -135,7 +135,7 @@ have the exact types. Do not guess prop names.
 - `BottomSheet` — Mobile slide-up panel with snap points, spring gestures, pull-to-dismiss (docs: /components/navigation/bottom-sheet.md)
 - `Breadcrumbs` — Navigation trail with auto home icon and SSR-safe collapsing (docs: /components/navigation/breadcrumbs.md)
 - `Pagination` — Page navigation with ellipsis algorithm and page size selector (docs: /components/navigation/pagination.md)
-- `Steps` / `Step` — Multi-step progress indicator with wizard mode and error states (docs: /components/navigation/steps.md)
+- `Steps` / `Step` — Multi-step progress indicator with animated wizard mode, error states, and horizontal overflow paging (docs: /components/navigation/steps.md)
 - `Tabs` / `Tab` / `TabContent` — Tabbed navigation with sliding indicator; pills, boxed, segmented variants (docs: /components/navigation/tabs.md)
 
 ## Beyond components

@@ -10,6 +10,7 @@ import StepsNonLinearDemo from '../../../../components/demos/StepsNonLinearDemo.
 import StepsVerticalDemo from '../../../../components/demos/StepsVerticalDemo.svelte';
 import StepsErrorDemo from '../../../../components/demos/StepsErrorDemo.svelte';
 import StepsWizardDemo from '../../../../components/demos/StepsWizardDemo.svelte';
+import StepsOverflowDemo from '../../../../components/demos/StepsOverflowDemo.svelte';
 import StepsSkeletonDemo from '../../../../components/demos/StepsSkeletonDemo.svelte';
 
 ## Import
@@ -129,20 +130,20 @@ Render content for each step, shown when that step is active.
 
 <ComponentPreview code={`<script>
 ${'  '}import { Steps, Step } from '@delightstack/components';
-${'  '}import { Button } from '@delightstack/components';
+${'  '}import { Button, Input } from '@delightstack/components';
 
 ${'  '}let current = $state(0);
 </script>
 
 <Steps bind:current orientation="vertical">
 ${'  '}<Step title="Personal Info">
-${'  '}${'  '}<input placeholder="Full Name" />
-${'  '}${'  '}<input placeholder="Email" />
+${'  '}${'  '}<Input label="Full Name" />
+${'  '}${'  '}<Input label="Email" type="email" />
 ${'  '}${'  '}<Button onclick={() => current++}>Next</Button>
 ${'  '}</Step>
 ${'  '}<Step title="Address">
-${'  '}${'  '}<input placeholder="Street" />
-${'  '}${'  '}<input placeholder="City" />
+${'  '}${'  '}<Input label="Street" />
+${'  '}${'  '}<Input label="City" />
 ${'  '}${'  '}<Button outline onclick={() => current--}>Back</Button>
 ${'  '}${'  '}<Button onclick={() => current++}>Next</Button>
 ${'  '}</Step>
@@ -152,6 +153,32 @@ ${'  '}${'  '}<Button outline onclick={() => current--}>Back</Button>
 ${'  '}</Step>
 </Steps>`}>
 	<StepsWizardDemo client:load />
+</ComponentPreview>
+
+### Overflow
+
+When horizontal steps can't fit their container, the row becomes a snap-scrollable strip with edge fades hinting at the clipped steps. On devices with a fine pointer, chevron buttons appear at the edges to page through (no clunky horizontal scrollbar); on touch devices the strip swipes. The current step automatically scrolls into view when it changes, and nothing changes when the steps fit.
+
+<ComponentPreview code={`<script>
+${'  '}import { Steps, Step } from '@delightstack/components';
+
+${'  '}let current = $state(2);
+</script>
+
+<!-- Constrained container: the steps overflow into a scroll strip -->
+<div style="max-width: 28rem;">
+${'  '}<Steps bind:current clickable>
+${'  '}${'  '}<Step title="Account" description="Sign up" />
+${'  '}${'  '}<Step title="Profile" description="About you" />
+${'  '}${'  '}<Step title="Team" description="Invite members" />
+${'  '}${'  '}<Step title="Billing" description="Payment details" />
+${'  '}${'  '}<Step title="Plan" description="Pick a tier" />
+${'  '}${'  '}<Step title="Integrations" description="Connect tools" />
+${'  '}${'  '}<Step title="Review" description="Check settings" />
+${'  '}${'  '}<Step title="Launch" description="Go live" />
+${'  '}</Steps>
+</div>`}>
+	<StepsOverflowDemo client:load />
 </ComponentPreview>
 
 ### Skeleton Loading

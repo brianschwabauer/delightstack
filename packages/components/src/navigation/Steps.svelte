@@ -22,7 +22,10 @@
 </script>
 
 <script lang="ts">
+	import { ripple } from '@delightstack/utilities';
 	import { getContext, setContext, type Snippet } from 'svelte';
+	import Button from '../actions/Button.svelte';
+	import Expand from '../display/Expand.svelte';
 
 	const propId = $props.id();
 
@@ -195,6 +198,65 @@
 	);
 
 	const resolvedOrientation = $derived(isItem ? parentContext.orientation : orientation);
+
+	/* ------------------------------------------------------------------ */
+	/*  Horizontal overflow (container only)                               */
+	/*                                                                     */
+	/*  When the row can't fit, it becomes a snap-scrollable strip with    */
+	/*  edge fade masks. Chevron pagers render only while overflowing and  */
+	/*  are shown only for fine pointers (CSS); touch users swipe.         */
+	/* ------------------------------------------------------------------ */
+	let scroll_el = $state<HTMLElement | undefined>(undefined);
+	let overflowing = $state(false);
+	let canScrollPrev = $state(false);
+	let canScrollNext = $state(false);
+
+	function updateScrollState() {
+		if (!scroll_el) return;
+		overflowing = scroll_el.scrollWidth > scroll_el.clientWidth + 1;
+		canScrollPrev = scroll_el.scrollLeft > 4;
+		canScrollNext =
+			scroll_el.scrollLeft + scroll_el.clientWidth < scroll_el.scrollWidth - 4;
+	}
+
+	function scrollNext() {
+		scroll_el?.scrollBy({ left: scroll_el.clientWidth * 0.8, behavior: 'smooth' });
+	}
+	function scrollPrev() {
+		scroll_el?.scrollBy({ left: -scroll_el.clientWidth * 0.8, behavior: 'smooth' });
+	}
+
+	$effect(() => {
+		if (isItem || orientation === 'vertical' || !scroll_el) return;
+		const el = scroll_el;
+		updateScrollState();
+		const onScroll = () => updateScrollState();
+		el.addEventListener('scroll', onScroll, { passive: true });
+		const ro = new ResizeObserver(updateScrollState);
+		ro.observe(el);
+		// Content width changes (steps mounting, labels reflowing) don't resize
+		// the scroller's own box, so watch the steps too.
+		for (const child of Array.from(el.children)) ro.observe(child);
+		return () => {
+			el.removeEventListener('scroll', onScroll);
+			ro.disconnect();
+		};
+	});
+
+	// Keep the active step in view: when `current` changes while overflowing,
+	// center it in the strip (instantly on first sync so the initial paint
+	// doesn't animate).
+	let scrollSynced = false;
+	$effect(() => {
+		if (isItem || !scroll_el) return;
+		void current;
+		if (!overflowing) return;
+		const target = scroll_el.querySelector<HTMLElement>('[aria-current="step"]');
+		if (!target) return;
+		const left = target.offsetLeft + target.offsetWidth / 2 - scroll_el.clientWidth / 2;
+		scroll_el.scrollTo({ left, behavior: scrollSynced ? 'smooth' : 'instant' });
+		scrollSynced = true;
+	});
 </script>
 
 {#if isItem}
@@ -213,6 +275,7 @@
 					type="button"
 					class="circle"
 					aria-label={ariaLabel}
+					{@attach ripple({ zIndex: 1 })}
 					onclick={handleClick}
 					onkeydown={handleKeyDown}>
 					{#if isError}
@@ -269,8 +332,6 @@
 								stroke-linejoin="round"
 								fill="none" />
 						</svg>
-					{:else if isCurrent}
-						<span class="number">{stepIndex + 1}</span>
 					{:else}
 						<span class="number">{stepIndex + 1}</span>
 					{/if}
@@ -294,10 +355,15 @@
 			</div>
 		{/if}
 
-		{#if children && isCurrent}
-			<div class="content">
-				{@render children()}
-			</div>
+		{#if children}
+			<!-- Expand animates the content open/closed so the surrounding steps
+			     reflow smoothly when the active step changes. Hidden content stays
+			     mounted but inert (Expand handles that). -->
+			<Expand show={isCurrent} style="width: 100%">
+				<div class="content">
+					{@render children()}
+				</div>
+			</Expand>
 		{/if}
 	</div>
 {:else if skeleton}
@@ -334,18 +400,105 @@
 {:else}
 	<!-- Steps container -->
 	<div
-		class={['steps', class_name].filter(Boolean).join(' ')}
+		class="wrap"
 		class:vertical={orientation === 'vertical'}
 		class:horizontal={orientation !== 'vertical'}
-		{id}
-		role="group"
-		aria-label="Progress">
-		{@render children?.()}
+		style:--circle-size="{CIRCLE_SIZES[size] ?? 32}px">
+		{#if orientation !== 'vertical' && overflowing}
+			<Button
+				icon
+				size="00"
+				class="steps-nav steps-nav-prev"
+				aria-label="Scroll to previous steps"
+				disabled={!canScrollPrev}
+				disable_ripple={!canScrollPrev}
+				onclick={scrollPrev}>
+				<svg
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true">
+					<polyline points="15 18 9 12 15 6" />
+				</svg>
+			</Button>
+		{/if}
+		<div
+			bind:this={scroll_el}
+			class={['steps', class_name].filter(Boolean).join(' ')}
+			class:vertical={orientation === 'vertical'}
+			class:horizontal={orientation !== 'vertical'}
+			{id}
+			role="group"
+			aria-label="Progress"
+			style:--fade-l={canScrollPrev ? '3rem' : '0px'}
+			style:--fade-r={canScrollNext ? '3rem' : '0px'}>
+			{@render children?.()}
+		</div>
+		{#if orientation !== 'vertical' && overflowing}
+			<Button
+				icon
+				size="00"
+				class="steps-nav steps-nav-next"
+				aria-label="Scroll to next steps"
+				disabled={!canScrollNext}
+				disable_ripple={!canScrollNext}
+				onclick={scrollNext}>
+				<svg
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true">
+					<polyline points="9 18 15 12 9 6" />
+				</svg>
+			</Button>
+		{/if}
 	</div>
 {/if}
 
 <style>
 	/* ========== Steps Container ========== */
+	.wrap {
+		position: relative;
+		width: 100%;
+
+		/* Vertical (and SSR'd) layouts need no overflow chrome — the wrapper
+		   disappears from layout entirely. */
+		&.vertical {
+			display: contents;
+		}
+
+		/* Chevron pagers: <Button icon> instances positioned over the strip's
+		   faded edges, vertically centered on the circle row. Touch devices
+		   swipe instead, so they only display for fine pointers. */
+		:global(.steps-nav) {
+			display: none;
+			position: absolute;
+			top: calc(var(--circle-size, 32px) / 2);
+			translate: 0 -50%;
+			z-index: 2;
+			box-shadow:
+				0 2px 6px rgba(0, 0, 0, 0.12),
+				0 1px 2px rgba(0, 0, 0, 0.08);
+		}
+		:global(.steps-nav-prev) {
+			left: -0.25rem;
+		}
+		:global(.steps-nav-next) {
+			right: -0.25rem;
+		}
+		@media (hover: hover) and (pointer: fine) {
+			:global(.steps-nav) {
+				display: inline-flex;
+			}
+		}
+	}
+
 	.steps {
 		display: flex;
 		align-items: flex-start;
@@ -353,6 +506,33 @@
 
 		&.vertical {
 			flex-direction: column;
+		}
+
+		&.horizontal {
+			position: relative;
+			overflow-x: auto;
+			overscroll-behavior-x: contain;
+			scroll-snap-type: x proximity;
+			-webkit-overflow-scrolling: touch;
+			/* Hide the native scrollbar — overflow is paged via the chevrons on
+			   desktop and swiped on touch (same pattern as Timeline). */
+			scrollbar-width: none;
+			/* Breathing room for the current-step halo / focus ring that the
+			   scroll clip would otherwise crop; the negative margin cancels it
+			   so nothing shifts when the steps fit. */
+			padding-block: 0.5rem;
+			margin-block: -0.5rem;
+			/* Edge fades hint at clipped content; 0px fades are a no-op mask. */
+			mask-image: linear-gradient(
+				to right,
+				transparent 0,
+				black var(--fade-l, 0px),
+				black calc(100% - var(--fade-r, 0px)),
+				transparent 100%
+			);
+		}
+		&.horizontal::-webkit-scrollbar {
+			display: none;
 		}
 	}
 
@@ -365,18 +545,36 @@
 			flex-direction: column;
 			align-items: center;
 			flex: 1;
+			/* The readability floor: steps refuse to crush below this, which is
+			   what tips a crowded row into the scrollable overflow strip. */
+			min-width: var(--step-min-width, 7rem);
+			scroll-snap-align: center;
 		}
 
 		&.vertical {
 			flex-direction: column;
 			align-items: flex-start;
 			flex: none;
+
+			/* Inter-step spacing (the connector is absolutely positioned so it
+			   can run continuously past expanded step content). */
+			&:not(:last-child) {
+				padding-bottom: 2rem;
+			}
 		}
 	}
 
 	.main {
 		display: flex;
 		gap: 0.625rem;
+		/* Press feedback for clickable steps: the indicator + label wrapper
+		   squeezes toward its OWN center (not the row's), like Button's press. */
+		transform-origin: center;
+		transition: scale 150ms ease;
+
+		&:has(button.circle:active) {
+			scale: 0.95;
+		}
 
 		.step.horizontal & {
 			flex-direction: column;
@@ -429,11 +627,15 @@
 			color: white;
 		}
 
+		/* "You are here" is neutral on purpose: a surface-filled circle with a
+		   strong text-colored ring and a soft breathing halo. It reads clearly
+		   without adding a hue that clashes with the success/error states. */
 		.step.current & {
-			background: var(--color-action, #2563eb);
-			border-color: var(--color-action, #2563eb);
-			color: white;
-			animation: steps-pulse 2s ease-in-out infinite;
+			background: var(--color-surface, light-dark(#ffffff, #111111));
+			border-color: var(--color-text, light-dark(#1a1a1a, #f5f5f5));
+			color: var(--color-text, light-dark(#1a1a1a, #f5f5f5));
+			font-weight: 600;
+			animation: steps-pulse 2.4s ease-in-out infinite;
 		}
 
 		.step.error & {
@@ -447,9 +649,25 @@
 	button.circle {
 		cursor: pointer;
 
+		/* Hover colors snap IN instantly (the :hover rule owns the in-transition
+		   and omits color properties) and ease OUT via the base .circle
+		   transition — the library's "instant in, slow out" pattern. */
 		&:hover {
-			opacity: 0.8;
 			transition: none;
+		}
+		.step.complete &:hover {
+			background: var(--color-success-active, #128b7e);
+			border-color: var(--color-success-active, #128b7e);
+		}
+		.step.error &:hover {
+			background: var(--color-error-active, light-dark(#ca3030, #f55d5d));
+			border-color: var(--color-error-active, light-dark(#ca3030, #f55d5d));
+		}
+		.step.upcoming &:hover,
+		.step.current &:hover {
+			background: rgb(from var(--color-text, #888888) r g b / 0.08);
+			border-color: var(--color-text, light-dark(#1a1a1a, #f5f5f5));
+			color: var(--color-text, light-dark(#1a1a1a, #f5f5f5));
 		}
 
 		&:focus-visible {
@@ -501,6 +719,11 @@
 				var(--color-text-disabled, #6b7280)
 			);
 		}
+
+		/* Bolder label reinforces the neutral "current" indicator. */
+		.step.current & {
+			font-weight: 600;
+		}
 	}
 
 	.description {
@@ -537,13 +760,16 @@
 			background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		}
 
+		/* Absolutely positioned so the line spans the step's FULL height —
+		   including expanded wizard content — keeping it visually continuous
+		   from this circle down to the next one. (The step's padding-bottom
+		   provides the minimum run between collapsed steps.) */
 		.step.vertical & {
+			position: absolute;
+			top: calc(var(--circle-size) + 0.25rem);
+			bottom: 0.25rem;
+			left: calc(var(--circle-size) / 2 - 1px);
 			width: 2px;
-			min-height: 1.5rem;
-			flex: 1;
-			margin-left: calc(var(--circle-size) / 2 - 1px);
-			margin-top: 0.25rem;
-			margin-bottom: 0.25rem;
 			background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
 		}
 	}
@@ -642,13 +868,15 @@
 	}
 
 	/* ========== Animations ========== */
+	/* Neutral breathing halo for the current step — derived from the text
+	   color so it stays hue-free in both light and dark mode. */
 	@keyframes steps-pulse {
 		0%,
 		100% {
-			box-shadow: 0 0 0 0 rgb(from var(--color-action, #2563eb) r g b / 0.4);
+			box-shadow: 0 0 0 3px rgb(from var(--color-text, #888888) r g b / 0.18);
 		}
 		50% {
-			box-shadow: 0 0 0 6px rgb(from var(--color-action, #2563eb) r g b / 0);
+			box-shadow: 0 0 0 7px rgb(from var(--color-text, #888888) r g b / 0.05);
 		}
 	}
 
@@ -690,6 +918,14 @@
 	@media (prefers-reduced-motion: reduce) {
 		.step.current .circle {
 			animation: none;
+			/* Keep a static halo so "current" stays identifiable without motion. */
+			box-shadow: 0 0 0 3px rgb(from var(--color-text, #888888) r g b / 0.18);
+		}
+		.main {
+			transition: none;
+		}
+		.main:has(button.circle:active) {
+			scale: none;
 		}
 		.step.error .circle {
 			animation: none;
