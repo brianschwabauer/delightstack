@@ -740,9 +740,17 @@
 
 	.inner {
 		display: flex;
-		align-items: flex-start;
+		/* Center so a taller sibling (the action Button) doesn't leave the
+		 * single-line title pinned to the top of the row. */
+		align-items: center;
 		gap: 0.75rem;
 		padding: 1rem 1rem;
+
+		/* Multi-line toasts (title + description) keep the existing pattern:
+		 * top-align so the icon sits on the title's first line. */
+		&:has(.description) {
+			align-items: flex-start;
+		}
 	}
 
 	.icon {
@@ -752,7 +760,11 @@
 		flex-shrink: 0;
 		width: 20px;
 		height: 20px;
-		margin-top: 0.05rem;
+
+		/* Optical nudge onto the first text line — only when top-aligned. */
+		.inner:has(.description) & {
+			margin-top: 0.05rem;
+		}
 
 		.toast.success & {
 			color: var(--color-success, #16a34a);
