@@ -616,6 +616,7 @@
 					<div class="close">
 						<Button
 							icon
+							size="0"
 							transparent
 							dense
 							aria-label="Dismiss notification"
@@ -836,13 +837,20 @@
 		position: absolute;
 		top: 0;
 		left: 0;
-		font-size: 7.5px; /* scales the icon Button (4em) to 30px, host-independent */
+		font-size: 7px; /* scales the icon Button (4em) to 28px, host-independent */
 		transform: translate(-35%, -35%);
 		border-radius: 50%;
 		background: var(--toast-bg);
 		box-shadow: 0 0 0 1px var(--toast-border);
 		opacity: 0;
 		transition: opacity 150ms ease;
+
+		/* Trim the × glyph a touch smaller than the dense default (60%) so the
+		   button box stays a comfortable tap target without an oversized icon. */
+		:global(svg) {
+			width: 52%;
+			height: 52%;
+		}
 
 		.toaster.expanded .toast &,
 		.toast.front &,
