@@ -13,6 +13,7 @@
 		| 'right-start'
 		| 'right-end';
 	export type PopoverStrategy = 'fixed' | 'absolute';
+	type Corner = 'tl' | 'tr' | 'br' | 'bl';
 </script>
 
 <script lang="ts">
@@ -100,7 +101,10 @@
 	} = $props();
 
 	const ARROW_SIZE = 20;
-	const ARROW_PADDING = 38;
+	/** Half the arrow's visible base (element + fillet shoulders) plus breathing room */
+	const ARROW_HALF_BASE = ARROW_SIZE / 2 + 4;
+	/** Minimum gap kept between the popover and the viewport edges when shifting */
+	const VIEWPORT_MARGIN = 8;
 	const OFFSET = 4;
 	const OFFSET_WITH_ARROW = 12;
 	const TRANSITION_IN_DURATION = 200;
@@ -123,6 +127,10 @@
 	let forcedOpened = $state(false);
 	let positioned = $state(false);
 	let popoverIndex = $state(0);
+	let shiftX = $state(0); // px the popover is nudged along x so the arrow can point at the target
+	let shiftY = $state(0); // px the popover is nudged along y so the arrow can point at the target
+	let cornerRadii = $state<Partial<Record<Corner, string>>>({}); // per-corner radius overrides (corner flattening)
+	let baseRadiusCache: Partial<Record<Corner, number>> = {};
 
 	const anchorOffset = $derived(arrow ? OFFSET_WITH_ARROW : OFFSET);
 
@@ -175,6 +183,11 @@
 	let shown = $state(false);
 	$effect(() => {
 		if (opened) {
+			// Reset arrow/corner state from a previous open before measuring anew
+			baseRadiusCache = {};
+			cornerRadii = {};
+			shiftX = 0;
+			shiftY = 0;
 			tick().then(() => (shown = true));
 		} else {
 			shown = false;
@@ -301,6 +314,103 @@
 		return `position: ${strategy}; left: ${left}; top: ${top};`;
 	});
 
+	const CORNER_PROPS: Record<Corner, string> = {
+		tl: 'border-top-left-radius',
+		tr: 'border-top-right-radius',
+		br: 'border-bottom-right-radius',
+		bl: 'border-bottom-left-radius',
+	};
+
+	/**
+	 * Reads the popover's rendered corner radius in px (this includes the
+	 * squircle doubling when `corner-shape: squircle` is supported). Cached per
+	 * open: once a corner is flattened (or mid radius-transition) its computed
+	 * value no longer reflects the base radius the clamp math needs.
+	 */
+	function readCornerRadius(corner: Corner): number {
+		const cached = baseRadiusCache[corner];
+		if (cached !== undefined) return cached;
+		if (!popoverElement) return 0;
+		const value = parseFloat(
+			getComputedStyle(popoverElement).getPropertyValue(CORNER_PROPS[corner]),
+		);
+		const radius = Number.isFinite(value) ? value : 0;
+		baseRadiusCache[corner] = radius;
+		return radius;
+	}
+
+	/** The two popover corners on the edge the arrow sits on (start = top/left side first) */
+	function edgeCornersFor(p: string): [Corner, Corner] {
+		if (p.startsWith('bottom')) return ['tl', 'tr']; // arrow on the popover's top edge
+		if (p.startsWith('top')) return ['bl', 'br']; // arrow on the bottom edge
+		if (p.startsWith('right')) return ['tl', 'bl']; // arrow on the left edge
+		return ['tr', 'br']; // placement 'left*' → arrow on the right edge
+	}
+
+	/**
+	 * Resolves where the arrow may sit along a popover edge without its base
+	 * invading the rounded corners. Preference order:
+	 * 1. Leave the arrow at `ideal` (pointing at the target) when it already
+	 *    sits on the straight segment of the edge.
+	 * 2. Otherwise shift the whole popover along the edge (bounded by the
+	 *    viewport) so the arrow clears the corner AND still points at the target.
+	 * 3. If the viewport blocks shifting far enough, shave the invaded corner's
+	 *    radius down exactly as much as needed so the arrow blends into a
+	 *    flatter corner instead of overlapping the curve.
+	 *
+	 * Returns the arrow center in final (shifted) popover coordinates, the
+	 * popover shift, and per-corner radius overrides (undefined = keep base).
+	 */
+	function resolveArrowAlongEdge(
+		ideal: number, // ideal arrow center relative to the unshifted popover start edge
+		length: number, // popover size along the edge
+		startRadius: number,
+		endRadius: number,
+		shiftMin: number, // most negative popover shift the viewport allows
+		shiftMax: number, // most positive popover shift the viewport allows
+	): {
+		arrow: number;
+		shift: number;
+		start_radius: number | undefined;
+		end_radius: number | undefined;
+	} {
+		const minStart = startRadius + ARROW_HALF_BASE;
+		const minEnd = length - endRadius - ARROW_HALF_BASE;
+		let arrow = ideal;
+		let shift = 0;
+		let start_radius: number | undefined;
+		let end_radius: number | undefined;
+		if (ideal < minStart) {
+			shift = Math.max(ideal - minStart, Math.min(shiftMin, 0));
+			arrow = ideal - shift;
+			if (arrow < minStart) {
+				start_radius = Math.max(0, arrow - ARROW_HALF_BASE);
+				arrow = Math.max(ARROW_HALF_BASE, arrow);
+			}
+		} else if (ideal > minEnd) {
+			shift = Math.min(ideal - minEnd, Math.max(shiftMax, 0));
+			arrow = ideal - shift;
+			if (arrow > minEnd) {
+				end_radius = Math.max(0, length - arrow - ARROW_HALF_BASE);
+				arrow = Math.min(length - ARROW_HALF_BASE, arrow);
+			}
+		}
+		return { arrow, shift, start_radius, end_radius };
+	}
+
+	/** Builds the per-corner radius override map from a resolveArrowAlongEdge result */
+	function cornerOverrides(
+		start: Corner,
+		end: Corner,
+		startRadius: number | undefined,
+		endRadius: number | undefined,
+	): Partial<Record<Corner, string>> {
+		const overrides: Partial<Record<Corner, string>> = {};
+		if (startRadius !== undefined) overrides[start] = `${startRadius}px`;
+		if (endRadius !== undefined) overrides[end] = `${endRadius}px`;
+		return overrides;
+	}
+
 	function getTransformOrigin(p: string): string {
 		if (p.startsWith('top')) return 'bottom center';
 		if (p.startsWith('bottom')) return 'top center';
@@ -331,22 +441,68 @@
 
 		transformOrigin = getTransformOrigin(realPlacement);
 
-		// Arrow positioning
-		if (arrow) {
+		const [edgeStart, edgeEnd] = edgeCornersFor(realPlacement);
+
+		// Arrow positioning — keep the arrow base on the straight segment of the
+		// edge (clear of the rounded corners): point at the target → shift the
+		// popover so the arrow can point while clearing the corner → flatten the
+		// invaded corner when the viewport blocks shifting.
+		if (arrow && !transparent) {
+			const startRadius = readCornerRadius(edgeStart);
+			const endRadius = readCornerRadius(edgeEnd);
 			if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
-				const anchorCenterX = refRect.left + refRect.width / 2;
-				arrowX = `${Math.max(ARROW_PADDING, Math.min(anchorCenterX - popRect.left, popRect.width - ARROW_PADDING))}px`;
+				// Subtract the current shift so the math always works from the
+				// popover's unshifted (CSS anchor) position and stays stable.
+				const baseLeft = popRect.left - shiftX;
+				const resolved = resolveArrowAlongEdge(
+					refRect.left + refRect.width / 2 - baseLeft,
+					popRect.width,
+					startRadius,
+					endRadius,
+					VIEWPORT_MARGIN - baseLeft,
+					window.innerWidth - VIEWPORT_MARGIN - popRect.width - baseLeft,
+				);
+				shiftX = resolved.shift;
+				shiftY = 0;
+				// The arrow element is ARROW_SIZE / 2 wide; offset so its visual
+				// center (the tip) sits at the resolved coordinate.
+				arrowX = `${resolved.arrow - ARROW_SIZE / 4}px`;
 				arrowY = '';
+				cornerRadii = cornerOverrides(
+					edgeStart,
+					edgeEnd,
+					resolved.start_radius,
+					resolved.end_radius,
+				);
 			} else {
-				const anchorCenterY = refRect.top + refRect.height / 2;
-				arrowY = `${Math.max(ARROW_PADDING, Math.min(anchorCenterY - popRect.top, popRect.height - ARROW_PADDING))}px`;
+				const baseTop = popRect.top - shiftY;
+				const resolved = resolveArrowAlongEdge(
+					refRect.top + refRect.height / 2 - baseTop,
+					popRect.height,
+					startRadius,
+					endRadius,
+					VIEWPORT_MARGIN - baseTop,
+					window.innerHeight - VIEWPORT_MARGIN - popRect.height - baseTop,
+				);
+				shiftY = resolved.shift;
+				shiftX = 0;
+				arrowY = `${resolved.arrow - ARROW_SIZE / 4}px`;
 				arrowX = '';
+				cornerRadii = cornerOverrides(
+					edgeStart,
+					edgeEnd,
+					resolved.start_radius,
+					resolved.end_radius,
+				);
 			}
 		}
 
 		// Hit box for hover popovers
 		if (open_on_hover && !untrack(() => forcedOpened)) {
-			const borderRadius = parseInt(getComputedStyle(popoverElement).borderRadius);
+			const borderRadius = Math.max(
+				readCornerRadius(edgeStart),
+				readCornerRadius(edgeEnd),
+			);
 			if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
 				hitBoxLengthZ = Math.min(16, refRect.height / 2) + anchorOffset;
 				hitBoxLength = popoverElement.clientWidth;
@@ -387,24 +543,65 @@
 		}
 
 		// Clamp to viewport
-		calcX = Math.max(8, Math.min(calcX, vw - popRect.width - 8));
-		calcY = Math.max(8, Math.min(calcY, vh - popRect.height - 8));
+		calcX = Math.max(
+			VIEWPORT_MARGIN,
+			Math.min(calcX, vw - popRect.width - VIEWPORT_MARGIN),
+		);
+		calcY = Math.max(
+			VIEWPORT_MARGIN,
+			Math.min(calcY, vh - popRect.height - VIEWPORT_MARGIN),
+		);
+
+		realPlacement = calcPlacement;
+		transformOrigin = getTransformOrigin(calcPlacement);
+
+		// Arrow positioning — same clamp → shift → corner-flatten cascade as the
+		// real-element path, except the shift is folded straight into the
+		// popover's position (this path is one-shot, no translate needed).
+		if (arrow && !transparent) {
+			const [edgeStart, edgeEnd] = edgeCornersFor(realPlacement);
+			if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
+				const resolved = resolveArrowAlongEdge(
+					x - calcX,
+					popRect.width,
+					readCornerRadius(edgeStart),
+					readCornerRadius(edgeEnd),
+					VIEWPORT_MARGIN - calcX,
+					vw - VIEWPORT_MARGIN - popRect.width - calcX,
+				);
+				calcX += resolved.shift;
+				arrowX = `${resolved.arrow - ARROW_SIZE / 4}px`;
+				arrowY = '';
+				cornerRadii = cornerOverrides(
+					edgeStart,
+					edgeEnd,
+					resolved.start_radius,
+					resolved.end_radius,
+				);
+			} else {
+				const resolved = resolveArrowAlongEdge(
+					y - calcY,
+					popRect.height,
+					readCornerRadius(edgeStart),
+					readCornerRadius(edgeEnd),
+					VIEWPORT_MARGIN - calcY,
+					vh - VIEWPORT_MARGIN - popRect.height - calcY,
+				);
+				calcY += resolved.shift;
+				arrowY = `${resolved.arrow - ARROW_SIZE / 4}px`;
+				arrowX = '';
+				cornerRadii = cornerOverrides(
+					edgeStart,
+					edgeEnd,
+					resolved.start_radius,
+					resolved.end_radius,
+				);
+			}
+		}
 
 		left = `${calcX}px`;
 		top = `${calcY}px`;
-		realPlacement = calcPlacement;
-		transformOrigin = getTransformOrigin(calcPlacement);
 		positioned = true;
-
-		if (arrow) {
-			if (realPlacement.startsWith('top') || realPlacement.startsWith('bottom')) {
-				arrowX = `${Math.max(ARROW_PADDING, Math.min(x - calcX, popRect.width - ARROW_PADDING))}px`;
-				arrowY = '';
-			} else {
-				arrowY = `${Math.max(ARROW_PADDING, Math.min(y - calcY, popRect.height - ARROW_PADDING))}px`;
-				arrowX = '';
-			}
-		}
 	}
 
 	// Positioning effect — detects actual placement for arrow/transform-origin/hit-box
@@ -419,6 +616,9 @@
 			const popEl = popoverElement;
 			const onUpdate = () => untrack(() => detectAndUpdate());
 			const rafId = requestAnimationFrame(onUpdate);
+			// Re-measure once the intro scale transition settles — rects read while
+			// the popover is still scaling are smaller than the final layout box.
+			const settleTimeout = setTimeout(onUpdate, TRANSITION_IN_DURATION + 50);
 
 			window.addEventListener('scroll', onUpdate, true);
 			window.addEventListener('resize', onUpdate);
@@ -429,6 +629,7 @@
 
 			return () => {
 				cancelAnimationFrame(rafId);
+				clearTimeout(settleTimeout);
 				window.removeEventListener('scroll', onUpdate, true);
 				window.removeEventListener('resize', onUpdate);
 				resizeObserver.disconnect();
@@ -758,6 +959,11 @@
 			style="{style}; {positionStyle}"
 			style:--popover-radius={radius}
 			style:transform-origin={transformOrigin}
+			style:translate={shiftX || shiftY ? `${shiftX}px ${shiftY}px` : undefined}
+			style:border-top-left-radius={cornerRadii.tl}
+			style:border-top-right-radius={cornerRadii.tr}
+			style:border-bottom-right-radius={cornerRadii.br}
+			style:border-bottom-left-radius={cornerRadii.bl}
 			{id}
 			data-popover-index={popoverIndex}
 			role="presentation"
@@ -896,7 +1102,9 @@
 		box-shadow: var(--shadow-md);
 		max-width: calc(100vw - 1rem);
 		max-height: calc(100vh - 1rem);
-		transition: none;
+		/* Smooth the dynamic corner flattening (arrow-near-corner fallback) so a
+		 * radius change while open never pops. Everything else stays untransitioned. */
+		transition: border-radius 150ms ease;
 		overflow: visible;
 		.content {
 			padding: 1rem 1.25rem;
