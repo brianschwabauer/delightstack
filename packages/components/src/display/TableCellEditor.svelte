@@ -43,6 +43,11 @@
 
 		/** Whether this cell is the last navigable cell (see `isFirstCell`) */
 		isLastCell = false,
+		/** Whether an autocomplete/select editor should open its menu on mount.
+		 * The Table passes `false` when the cell was entered by a keyboard ADVANCE
+		 * (committing the previous cell), so the menu doesn't cascade open down the
+		 * column; typing or Alt+ArrowDown still opens it. */
+		autoOpenMenu = true,
 		/** Value changed and passed validation — the Table runs `onedit`. */
 		oncommit = undefined,
 		/** Move the active cell. The Table has already let us commit. */
@@ -61,6 +66,7 @@
 		comfortable?: boolean;
 		isFirstCell?: boolean;
 		isLastCell?: boolean;
+		autoOpenMenu?: boolean;
 		oncommit?: (detail: { value: unknown }) => void;
 		onnavigate?: (detail: {
 			dir: 'up' | 'down' | 'left' | 'right' | 'next' | 'prev';
@@ -312,14 +318,25 @@
 		if (ok) onnavigate?.({ dir });
 	}
 
-	function selectOption(opt: CellOption) {
+	// `via` distinguishes how the option was chosen. Keyboard (Enter on the
+	// highlight) keeps the spreadsheet flow: commit and advance to the cell below.
+	// Pointer (click/tap) commits and CLOSES the edit — no advance, and definitely
+	// no next-cell menu popping open under the cursor.
+	function selectOption(opt: CellOption, via: 'keyboard' | 'pointer' = 'keyboard') {
 		if (opt.disabled) return;
 		selectedOption = opt;
 		draft = opt.label ?? opt.value;
 		localError = null;
 		closeAutocomplete();
 		committed = false;
-		void commitAndNavigate('down');
+		if (via === 'pointer') {
+			void (async () => {
+				const ok = await tryCommit();
+				if (ok) onexit?.();
+			})();
+		} else {
+			void commitAndNavigate('down');
+		}
 	}
 
 	function toggleBoolean() {
@@ -361,6 +378,14 @@
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.isComposing || e.keyCode === 229) return; // IME composition
 		const k = e.key;
+
+		// Alt+ArrowDown opens a closed panel (the standard combobox affordance) —
+		// needed when the cell was entered via a keyboard advance (no auto-open).
+		if (hasAutocomplete && !ac_open && k === 'ArrowDown' && e.altKey) {
+			e.preventDefault();
+			openAutocomplete();
+			return;
+		}
 
 		// Autocomplete navigation takes priority while the panel is open.
 		if (ac_open && ac_options.length) {
@@ -510,7 +535,7 @@
 				} catch {
 					/* noop */
 				}
-				if (hasAutocomplete) openAutocomplete();
+				if (hasAutocomplete && autoOpenMenu) openAutocomplete();
 			}
 		})();
 	});
@@ -621,7 +646,7 @@
 						<ListItem
 							active={ac_highlighted === i}
 							disabled={opt.disabled}
-							onclick={() => selectOption(opt)}>
+							onclick={() => selectOption(opt, 'pointer')}>
 							<span class="ac-option">
 								<span class="ac-option-label">
 									{@html highlightMatch(opt.label ?? opt.value)}

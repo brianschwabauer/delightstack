@@ -1515,8 +1515,17 @@
 		return !!p && p.row === navRows.length - 1 && p.col === p.cols.length - 1;
 	}
 
+	// Whether the next-mounted editor should auto-open its autocomplete panel.
+	// Entering a cell DELIBERATELY (click / Tab-focus) opens the menu — that's
+	// what the user asked for. Arriving via a keyboard ADVANCE (Enter/Tab/arrow
+	// commit moving to the next cell) only moves focus; the menu stays closed
+	// until the user types (or presses Alt+ArrowDown), so committing a select
+	// doesn't cascade an unexpected open menu down the column.
+	let autoOpenEditorMenu = $state(true);
+
 	function enterEdit(rowId: string | number, colKey: string) {
 		if (!editable) return;
+		autoOpenEditorMenu = true;
 		active_cell = { row_id: rowId, col_key: colKey };
 		roving_cell = { row_id: rowId, col_key: colKey };
 	}
@@ -1569,6 +1578,7 @@
 			row_id: keyOf(targetRow.row, targetRow.data_index),
 			col_key: targetCol.key,
 		};
+		autoOpenEditorMenu = false; // keyboard advance: focus moves, the menu stays closed
 		active_cell = ref;
 		roving_cell = ref;
 		scrollActiveIntoView(targetRow.visual_index);
@@ -3126,6 +3136,7 @@
 							{comfortable}
 							isFirstCell={isFirstNavCell({ row_id: rowId, col_key: col.key })}
 							isLastCell={isLastNavCell({ row_id: rowId, col_key: col.key })}
+							autoOpenMenu={autoOpenEditorMenu}
 							oncommit={(d) => commitCell(rowId, col.key, row, dataIndex, col, d.value)}
 							onliveinput={(d) => liveInput(rowId, col.key, row, dataIndex, col, d.value)}
 							onnavigate={(d) => navigate(d.dir)}
@@ -3396,10 +3407,17 @@
 	}
 
 	/* ========== Header ========== */
+	/* A recessed band (one+ step below the page bg, which the body rows sit on)
+	   so the header reads as a distinct strip in both light and dark mode —
+	   clearly deeper than the body's subtle stripe/hover tints. Opaque, because
+	   the sticky header scrolls over the rows. */
 	thead tr {
 		border-bottom: 2px solid
 			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
+		background: light-dark(
+			var(--color-bg-muted, #eef0f3),
+			var(--color-bg-muted, #262626)
+		);
 	}
 
 	thead tr.sticky {
@@ -3417,8 +3435,13 @@
 		font-weight: 600;
 		white-space: nowrap;
 		min-width: 0;
-		background: light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
+		background: light-dark(
+			var(--color-bg-muted, #eef0f3),
+			var(--color-bg-muted, #262626)
+		);
+		/* Full-strength text (not muted): the header labels are wayfinding, they
+		   must read at a glance. */
+		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		position: relative;
 		user-select: none;
 	}
@@ -3516,23 +3539,26 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		color: light-dark(var(--color-text-muted, #9ca3af), var(--color-text-muted, #9ca3af));
+		/* Full-strength text so the affordance is legible; the inactive hint
+		   stays lighter than the active arrow via its own opacity below. */
+		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 	}
 
 	.sort-icon.active {
 		color: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 	}
 
-	/* Faint up/down hint shown on unsorted sortable columns */
+	/* Up/down hint shown on unsorted sortable columns — lighter than the active
+	   arrow, but clearly legible at rest. */
 	.arrow-hint {
-		opacity: 0.35;
+		opacity: 0.55;
 		transition:
 			opacity 180ms ease,
 			translate 180ms ease;
 	}
 
 	.th-button:hover .arrow-hint {
-		opacity: 0.7;
+		opacity: 0.9;
 	}
 
 	/* Active arrow: rotates between asc/desc, pops in on first sort */
