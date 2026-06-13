@@ -217,6 +217,23 @@
 	let has_error = $state(false);
 	let is_ready = $state(false);
 
+	// True while the user is actively dragging the seek Range. Suppresses
+	// timeupdate / rAF writes to `current_time` so the thumb tracks the pointer
+	// instead of fighting the (async) seeks echoing back from the element.
+	let is_scrubbing = $state(false);
+
+	// Seek requested before the media had metadata (duration unknown /
+	// readyState < HAVE_METADATA — setting currentTime then is ignored).
+	// `fraction` targets a 0..1 position of the eventual duration (seek bar);
+	// `time` targets an absolute second (keyboard / frame step). Applied once
+	// metadata (and therefore duration) arrives.
+	let pending_seek = $state<{ kind: 'fraction' | 'time'; value: number } | undefined>(
+		undefined,
+	);
+
+	// One-shot guard so a pre-metadata scrub triggers at most one load() kick.
+	let metadata_requested = false;
+
 	// Menus / popovers (all inline so they survive fullscreen)
 	let quality_open = $state(false);
 	let speed_open = $state(false);
@@ -380,6 +397,12 @@
 	const progress_percent = $derived(duration > 0 ? (current_time / duration) * 100 : 0);
 	const buffered_percent = $derived(duration > 0 ? (buffered_end / duration) * 100 : 0);
 
+	// Seek Range scale. Before metadata the duration is unknown, so the bar
+	// runs 0..1 and values are *fractions* of the eventual duration — positions
+	// stay meaningful and a queued seek can be resolved once metadata lands.
+	const seek_max = $derived(duration > 0 ? duration : 1);
+	const seek_step = $derived(duration > 0 ? 0.1 : 0.001);
+
 	// --- Responsive collapse ranks ---
 	// Controls collapse into the settings popover lowest-priority first. Rank 1 =
 	// first to collapse. Ranks are assigned only to controls that actually exist,
@@ -453,7 +476,50 @@
 
 	function seek(time: number) {
 		if (!player) return;
-		player.currentTime = Math.max(0, Math.min(time, duration));
+		if (duration > 0 && player.readyState >= HTMLMediaElement.HAVE_METADATA) {
+			const t = Math.max(0, Math.min(time, duration));
+			player.currentTime = t;
+			current_time = t;
+		} else {
+			// Metadata not loaded yet — queue the target and make sure metadata
+			// is on its way. UI updates optimistically; playback stays paused.
+			const t = Math.max(0, time);
+			current_time = t;
+			pending_seek = { kind: 'time', value: t };
+			ensureMetadata();
+		}
+	}
+
+	/** Kick off a metadata load when the media hasn't fetched any yet (e.g.
+	 *  `preload="none"`), so a pre-play seek can actually resolve. */
+	function ensureMetadata() {
+		if (!player || metadata_requested) return;
+		if (player.readyState >= HTMLMediaElement.HAVE_METADATA) return;
+		metadata_requested = true;
+		if (player.preload === 'none') player.preload = 'metadata';
+		// HLS attaches/loads through its own effect — never call load() on it.
+		// Only restart the resource selection when nothing is being fetched.
+		if (
+			!is_hls_source &&
+			(player.networkState === HTMLMediaElement.NETWORK_EMPTY ||
+				player.networkState === HTMLMediaElement.NETWORK_IDLE)
+		) {
+			player.load();
+		}
+	}
+
+	/** Apply a queued pre-metadata seek once the duration is known. Stays
+	 *  paused — like standard players, seeking while paused shows the new
+	 *  frame without starting playback. */
+	function applyPendingSeek() {
+		if (!pending_seek || !player || !(duration > 0)) return;
+		const target =
+			pending_seek.kind === 'fraction'
+				? pending_seek.value * duration
+				: Math.min(pending_seek.value, duration);
+		pending_seek = undefined;
+		player.currentTime = target;
+		current_time = target;
 	}
 
 	function setVolume(v: number) {
@@ -581,11 +647,38 @@
 	}
 
 	// --- Seek bar (Range-driven) ---
+	// Range only emits oninput/onchange for USER interaction (programmatic
+	// `value` prop updates never echo back), so writing player.currentTime here
+	// cannot create a feedback loop with timeupdate.
 	function onSeekInput(value: number) {
-		if (!player || !(duration > 0)) return;
-		current_time = value;
-		player.currentTime = value;
 		resetInactivityTimer();
+		if (!player) return;
+		is_scrubbing = true;
+		// Optimistic UI — the thumb stays where the user put it, even when the
+		// actual seek is queued or the element is still completing a prior seek.
+		current_time = value;
+		if (duration > 0 && player.readyState >= HTMLMediaElement.HAVE_METADATA) {
+			pending_seek = undefined;
+			player.currentTime = value;
+		} else if (duration > 0) {
+			// Duration known but media not seekable yet (e.g. mid source swap).
+			pending_seek = { kind: 'time', value };
+			ensureMetadata();
+		} else {
+			// No metadata: the bar runs 0..1, so the value *is* the fraction.
+			pending_seek = {
+				kind: 'fraction',
+				value: Math.max(0, Math.min(1, value / seek_max)),
+			};
+			ensureMetadata();
+		}
+	}
+
+	// Drag released (or click/keyboard committed) — perform the final seek and
+	// hand `current_time` back to playback-driven updates.
+	function onSeekCommit(value: number) {
+		onSeekInput(value);
+		is_scrubbing = false;
 	}
 
 	// --- Volume (Range-driven) ---
@@ -729,13 +822,20 @@
 
 	function handleVideoTimeUpdate() {
 		if (!player) return;
-		current_time = player.currentTime;
+		// While the user is scrubbing — or a pre-metadata seek is still queued —
+		// the element's currentTime lags the user's intent; reflecting it back
+		// into `current_time` would yank the thumb around. Hold the optimistic
+		// value until release / until the queued seek is applied.
+		if (!is_scrubbing && !pending_seek) {
+			current_time = player.currentTime;
+		}
 		// `loadedmetadata` is supposed to be the canonical place to read
 		// duration, but some browser/codec combos fire `timeupdate` first
 		// (or never fire `loadedmetadata` at all for already-cached files).
 		// Mirror duration here too so the progress bar can't get stuck at 0.
 		if (duration === 0 && isFinite(player.duration) && player.duration > 0) {
 			duration = player.duration;
+			applyPendingSeek();
 		}
 		ontimeupdate?.({ currentTime: player.currentTime, duration: player.duration });
 	}
@@ -744,6 +844,7 @@
 		if (!player) return;
 		if (isFinite(player.duration) && player.duration > 0) {
 			duration = player.duration;
+			applyPendingSeek();
 		}
 	}
 
@@ -753,6 +854,8 @@
 			duration = player.duration;
 		}
 		is_ready = true;
+		metadata_requested = false;
+		applyPendingSeek();
 		pip_supported =
 			'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
 		onready?.({ player });
@@ -940,16 +1043,16 @@
 	});
 
 	// Follow playback at ~60fps so the seek thumb glides instead of stepping on
-	// each (infrequent) `timeupdate`. The drag/seek paths set `current_time`
-	// directly, so this never fights manual scrubbing.
+	// each (infrequent) `timeupdate`. Pauses while the user scrubs (or a queued
+	// pre-metadata seek is pending) so it never fights the optimistic thumb.
 	$effect(() => {
-		if (!playing || !player) return;
+		if (!playing || !player || is_scrubbing) return;
 		const vid = player;
 		let raf = 0;
 		let active = true;
 		function tick() {
 			if (!active) return;
-			current_time = vid.currentTime;
+			if (!pending_seek) current_time = vid.currentTime;
 			raf = requestAnimationFrame(tick);
 		}
 		raf = requestAnimationFrame(tick);
@@ -1110,10 +1213,10 @@
 						aria_label="Seek"
 						value={current_time}
 						min={0}
-						max={Math.max(duration, 0.1)}
-						step={0.1}
+						max={seek_max}
+						step={seek_step}
 						oninput={(d) => onSeekInput(d.value as number)}
-						onchange={(d) => onSeekInput(d.value as number)} />
+						onchange={(d) => onSeekCommit(d.value as number)} />
 
 					{#if show_seek_tooltip && duration > 0}
 						<div class="seek-tooltip" style:left="{seek_hover_x}px">
