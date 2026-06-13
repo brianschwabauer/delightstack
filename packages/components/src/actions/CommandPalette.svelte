@@ -647,10 +647,10 @@
 		z-index: var(--layer-popover);
 		width: min(600px, 90vw);
 		background-color: var(--color-bg);
-		border-radius: var(--radius-2xl);
+		border-radius: var(--radius-xl);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-radius: calc(var(--radius-2xl) * var(--squircle-ratio, 2));
+			border-radius: calc(var(--radius-xl) * var(--squircle-ratio, 2));
 		}
 		box-shadow: var(--shadow-lg);
 		border: 1px solid var(--color-border);
