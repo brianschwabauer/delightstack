@@ -685,7 +685,11 @@
 	{/if}
 {/snippet}
 
-{#snippet galleryItemAction(index: number, style: 'overlay' | 'transparent' = 'overlay')}
+{#snippet galleryItemAction(
+	index: number,
+	style: 'overlay' | 'transparent' = 'overlay',
+	button_size: '00' | '0' | '1' = '00',
+)}
 	{@const itemActions = actions?.[index]}
 	{#if itemActions?.length}
 		<div class="actions" class:hover-only={action_display === 'hover'}>
@@ -696,7 +700,7 @@
 						overlay={style === 'overlay'}
 						transparent={style === 'transparent'}
 						dense
-						size="00"
+						size={button_size}
 						tooltip={action.tooltip || action.name}>
 						{#if action.icon}
 							<action.icon></action.icon>
@@ -733,7 +737,7 @@
 						overlay={style === 'overlay'}
 						transparent={style === 'transparent'}
 						dense
-						size="00"
+						size={button_size}
 						tooltip={action.tooltip || action.name}
 						href={action.href}
 						target={action.target}
@@ -902,12 +906,12 @@
 			</Button>
 		</nav>
 		{#if isModal}
-			<Button icon transparent dense size="0" class="close" onclick={() => close()}>
+			<Button icon transparent dense size="1" class="close" onclick={() => close()}>
 				<span class="visuallyhidden">Close</span>
 				{@render iconClose()}
 			</Button>
 			{#if actions?.length}
-				{@render galleryItemAction(slide, 'transparent')}
+				{@render galleryItemAction(slide, 'transparent', '1')}
 			{/if}
 		{:else}
 			{#if disable_fullscreen === false}
@@ -965,7 +969,7 @@
 				icon
 				transparent
 				dense
-				size="0"
+				size={isModal ? '1' : '0'}
 				class="prev"
 				onclick={() => prev()}
 				tooltip="Previous Item">
@@ -976,7 +980,7 @@
 				icon
 				transparent
 				dense
-				size="0"
+				size={isModal ? '1' : '0'}
 				class="next"
 				onclick={() => next()}
 				tooltip="Next Item">
@@ -1597,12 +1601,22 @@
 				bottom: 3.5rem;
 				z-index: 2;
 			}
-			:global(> .button) {
-				--color-text: #eeeeee;
-				--bg-high: rgba(0, 0, 0, 0.2);
+			/* The lightbox backdrop is always dark regardless of light/dark mode,
+			   so don't let the transparent Button variant's light-dark() tokens
+			   leak in (its light-mode --color-text-active is near-black). Pin a
+			   fixed dark-surface palette: white icons on a translucent white pill
+			   that gets *brighter* on hover, never darker. */
+			:global(> .button),
+			.actions :global(> .button) {
+				--color-text: rgb(255 255 255 / 0.92);
+				--color-text-active: #ffffff;
+				--color-text-disabled: rgb(255 255 255 / 0.4);
+				--color-bg: rgb(255 255 255 / 0.12);
+				--color-bg-active: rgb(255 255 255 / 0.28);
 			}
-			:global(> .button:hover button) {
-				backdrop-filter: blur(3px);
+			:global(> .button button),
+			.actions :global(> .button button) {
+				backdrop-filter: blur(8px);
 			}
 			.pagination {
 				margin: 0 0.5rem;
@@ -1613,13 +1627,6 @@
 				left: 5rem;
 				z-index: 2;
 				display: flex;
-				:global(> .button:hover button) {
-					backdrop-filter: blur(3px);
-				}
-				:global(> .button) {
-					--color-text: #eeeeee;
-					--bg-high: rgba(0, 0, 0, 0.2);
-				}
 				:global(> .button button svg) {
 					filter: drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.95))
 						drop-shadow(0px 0px 3px rgba(0, 0, 0, 0.25))
@@ -1692,6 +1699,15 @@
 					box-shadow: none;
 					cursor: pointer;
 					z-index: 2;
+					/* These stretch into full-height edge strips on desktop — hit
+					   areas, not pills. Keep them invisible at rest (no white slab,
+					   no blur) and brighten with only a soft white wash on hover. */
+					--color-bg: transparent;
+					--color-bg-active: rgb(255 255 255 / 0.08);
+				}
+				:global(.prev button),
+				:global(.next button) {
+					backdrop-filter: none;
 				}
 				:global(.prev button svg),
 				:global(.next button svg) {
