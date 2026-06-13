@@ -364,6 +364,58 @@
 		return selectable;
 	}
 
+	/* Per-node check animation flags, mirroring Checkbox.svelte's
+	   'check'/'uncheck' animation states (350ms elastic draw / 50ms retract) */
+	let check_anim = $state(new Map<string, 'check' | 'uncheck'>());
+	const check_anim_timeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
+	function getAncestorIds(node: TreeNode): string[] {
+		const ids: string[] = [];
+		let parent = parent_map.get(node.id) ?? null;
+		while (parent) {
+			ids.push(parent.id);
+			parent = parent_map.get(parent.id) ?? null;
+		}
+		return ids;
+	}
+
+	/** Flag every affected node whose check state actually changed so its
+	 *  checkbox runs the same check/uncheck animation as Checkbox.svelte. */
+	function runCheckAnimations(
+		ids: string[],
+		before: Map<string, 'checked' | 'unchecked' | 'indeterminate'>,
+	) {
+		const next = new Map(check_anim);
+		let changed = false;
+		for (const anim_id of ids) {
+			const n = node_map.get(anim_id);
+			if (!n) continue;
+			const prev = before.get(anim_id);
+			const now = getCheckState(n);
+			if (prev === now) continue;
+			let anim: 'check' | 'uncheck' | null = null;
+			if (now === 'checked') anim = 'check';
+			else if (prev === 'checked' && now === 'unchecked') anim = 'uncheck';
+			if (!anim) continue;
+			next.set(anim_id, anim);
+			changed = true;
+			const pending = check_anim_timeouts.get(anim_id);
+			if (pending) clearTimeout(pending);
+			check_anim_timeouts.set(
+				anim_id,
+				setTimeout(
+					() => {
+						check_anim.delete(anim_id);
+						check_anim = new Map(check_anim);
+						check_anim_timeouts.delete(anim_id);
+					},
+					anim === 'check' ? 350 : 50,
+				),
+			);
+		}
+		if (changed) check_anim = next;
+	}
+
 	function selectNode(node: TreeNode, e?: MouseEvent | KeyboardEvent) {
 		if (!isNodeSelectable(node) || node.disabled) return;
 
@@ -371,6 +423,14 @@
 			const state = getCheckState(node);
 			const descendant_ids = getAllDescendantIds(node);
 			const all_ids = [node.id, ...descendant_ids];
+
+			// Capture before-states so changed nodes can animate afterwards
+			const affected_ids = [...all_ids, ...getAncestorIds(node)];
+			const before = new Map(
+				affected_ids
+					.filter((aid) => node_map.has(aid))
+					.map((aid) => [aid, getCheckState(node_map.get(aid)!)] as const),
+			);
 
 			if (state === 'checked') {
 				// Uncheck this node and all descendants
@@ -384,6 +444,8 @@
 
 			// Walk up: sync parent check states
 			syncParentCheckState(node);
+
+			runCheckAnimations(affected_ids, before);
 
 			onselect?.({ node, selected });
 			return;
@@ -957,11 +1019,18 @@
 							e.stopPropagation();
 							selectNode(node);
 						}}>
-						<svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+						<svg
+							class="indicator"
+							class:checked={check_state === 'checked'}
+							class:indeterminate={check_state === 'indeterminate'}
+							class:animating-check={check_anim.get(node.id) === 'check'}
+							class:animating-uncheck={check_anim.get(node.id) === 'uncheck'}
+							viewBox="0 0 24 24"
+							width="18"
+							height="18"
+							fill="none">
 							<rect
 								class="box"
-								class:checked={check_state === 'checked'}
-								class:indeterminate={check_state === 'indeterminate'}
 								x="2"
 								y="2"
 								width="20"
@@ -977,7 +1046,7 @@
 									y2="12"
 									stroke-width="2.5"
 									stroke-linecap="round" />
-							{:else if check_state === 'checked'}
+							{:else}
 								<path
 									class="mark"
 									d="M6 12.5 L10 16.5 L18 8"
@@ -1253,27 +1322,90 @@
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 	}
 
-	.box {
-		stroke: light-dark(var(--color-text-muted, #999), var(--color-text-muted, #777));
-		fill: transparent;
-		transition:
-			stroke 150ms ease,
-			fill 150ms ease;
+	/* Same animation technique as form/Checkbox.svelte: the check path is
+	   always rendered and drawn via stroke-dashoffset; the animating-* classes
+	   add the elastic draw + box pulse on check and the fast retract on uncheck. */
+	.indicator {
+		flex-shrink: 0;
 
-		&.checked,
+		.box {
+			stroke: light-dark(var(--color-text-muted, #999), var(--color-text-muted, #777));
+			fill: transparent;
+			transition:
+				stroke 150ms ease,
+				fill 150ms ease;
+		}
+
+		.mark {
+			stroke: transparent;
+			fill: none;
+			stroke-dasharray: 28;
+			stroke-dashoffset: 28;
+			transition:
+				stroke-dashoffset 250ms ease,
+				stroke 150ms ease;
+		}
+
+		.dash {
+			stroke: transparent;
+			transition: stroke 150ms ease;
+		}
+
+		&.checked {
+			.box {
+				stroke: var(--color-action, #1976d2);
+				fill: var(--color-action, #1976d2);
+			}
+			.mark {
+				stroke: var(--color-bg, #fff);
+				stroke-dashoffset: 0;
+			}
+		}
+
 		&.indeterminate {
-			stroke: var(--color-action, #1976d2);
-			fill: var(--color-action, #1976d2);
+			.box {
+				stroke: var(--color-action, #1976d2);
+				fill: var(--color-action, #1976d2);
+			}
+			.dash {
+				stroke: var(--color-bg, #fff);
+			}
+		}
+
+		/* Check-in: elastic checkmark draw with overshoot + scale pulse */
+		&.animating-check {
+			animation: box-pulse 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+			.mark {
+				stroke-dashoffset: 0;
+				transition: stroke-dashoffset 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			}
+		}
+
+		/* Uncheck: visible stroke retraction, box holds fill then fades */
+		&.animating-uncheck {
+			.mark {
+				stroke: var(--color-bg, #fff);
+				stroke-dashoffset: 28;
+				transition: stroke-dashoffset 50ms cubic-bezier(0.4, 0, 0.2, 1);
+			}
+			.box {
+				stroke: var(--color-action, #1976d2);
+				fill: var(--color-action, #1976d2);
+			}
 		}
 	}
 
-	.mark {
-		stroke: var(--color-bg, #fff);
-		fill: none;
-	}
-
-	.dash {
-		stroke: var(--color-bg, #fff);
+	@keyframes box-pulse {
+		0% {
+			transform: scale(1);
+		}
+		40% {
+			transform: scale(1.1);
+		}
+		100% {
+			transform: scale(1);
+		}
 	}
 
 	/* ========== Node Content ========== */
@@ -1556,6 +1688,12 @@
 		}
 		.chevron-icon {
 			transition: none;
+		}
+		.indicator {
+			animation: none;
+			.mark {
+				transition: none;
+			}
 		}
 		.children {
 			transition: none;
