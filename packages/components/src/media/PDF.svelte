@@ -1392,7 +1392,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 0.75rem;
-		background: light-dark(var(--color-bg, #ffffff), var(--color-bg, #1e293b));
+		background: light-dark(var(--color-surface, #f8fafc), var(--color-surface, #1a2332));
 		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
 		flex-shrink: 0;
 		flex-wrap: wrap;
