@@ -161,6 +161,19 @@
 			: clamp(Math.round(default_snap), 0, sorted_snaps.length - 1),
 	);
 	const at_max = $derived(max_offset > 0 && offset >= max_offset - 1);
+	/**
+	 * Lowest offset the sheet may be dragged to. Dismissible sheets can travel
+	 * all the way down to 0; non-dismissible sheets are clamped at their lowest
+	 * snap point so a downward drag can never pull them below rest.
+	 */
+	const min_offset = $derived(dismissible ? 0 : (snap_heights[0] ?? 0));
+	/** Whether the sheet has somewhere to expand upward beyond its lowest snap. */
+	const can_expand = $derived(
+		snap_heights.length > 1 &&
+			snap_heights[snap_heights.length - 1] - snap_heights[0] > 1,
+	);
+	/** The drag handle is only an affordance when dragging can do something. */
+	const show_handle = $derived(dismissible || can_expand);
 
 	// --- Morph ---
 	const morph_range_px = $derived<[number, number]>(
@@ -397,7 +410,9 @@
 
 		let next = start_offset + total;
 		if (next > max_offset) next = max_offset + (next - max_offset) * RUBBER;
-		if (next < 0) next = 0;
+		// Hard floor: non-dismissible sheets never travel below their lowest
+		// snap point (no drag-then-snap-back); dismissible ones stop at 0.
+		if (next < min_offset) next = min_offset;
 		offset = next;
 	}
 
@@ -492,9 +507,11 @@
 		</div>
 
 		<div bind:this={panel_el} class="panel" role="dialog" aria-modal="true">
-			<div class="handle" aria-hidden="true">
-				<div class="bar"></div>
-			</div>
+			{#if show_handle}
+				<div class="handle" aria-hidden="true">
+					<div class="bar"></div>
+				</div>
+			{/if}
 
 			{#if header}
 				<div class="header">
@@ -574,6 +591,9 @@
 		pointer-events: auto;
 		cursor: grab;
 		touch-action: none;
+		&:not(:has(> .handle)) {
+			padding-top: 1.5rem;
+		}
 	}
 
 	.handle {

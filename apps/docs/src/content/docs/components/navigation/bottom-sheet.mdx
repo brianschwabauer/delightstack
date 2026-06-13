@@ -150,7 +150,7 @@ ${'  '}</div>
 
 ### Non-Dismissible
 
-With `dismissible={false}`, dragging down, tapping the backdrop, and pressing Escape can't close the sheet — they only snap it to the smallest size.
+With `dismissible={false}`, tapping the backdrop and pressing Escape can't close the sheet, and dragging is clamped at the smallest snap point — the sheet never travels below it. With multiple snap points you can still drag up to expand (and back down to the smallest size); with a single snap point the drag handle is hidden entirely.
 
 <ComponentPreview code={`<script>
 ${'  '}import { BottomSheet, Button } from '@delightstack/components';
