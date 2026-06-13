@@ -451,8 +451,8 @@
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
 		}
-		border: 1px solid light-dark(#e2e8f0, #334155);
-		background: light-dark(#f8fafc, #1e293b);
+		border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+		background: var(--color-bg-muted, light-dark(#f8fafc, #1e293b));
 		overflow: hidden;
 		font-family:
 			ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas,
@@ -481,8 +481,8 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.5rem 0.75rem;
-		border-bottom: 1px solid light-dark(#e2e8f0, #334155);
-		background: light-dark(#f1f5f9, #1a2332);
+		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
+		background: var(--color-bg-4, light-dark(#f1f5f9, #1a2332));
 		min-height: 2rem;
 
 		/* The copy button — the component's only <button> */
