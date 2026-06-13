@@ -155,7 +155,11 @@
 	/** The effective state — an omitted checked prop means the middle stop
 	 *  (three-state) or off, until the form context supplies a value. */
 	const current = $derived(
-		(checked === undefined ? (three_state && context_driven ? null : false) : checked) as Checked,
+		(checked === undefined
+			? three_state && context_driven
+				? null
+				: false
+			: checked) as Checked,
 	);
 
 	const state_label = $derived(
@@ -624,7 +628,7 @@
 		}
 	}
 	.state-label {
-		color: var(--color-text-muted, inherit);
+		color: var(--color-text, inherit);
 		font-size: 0.875em;
 		line-height: 1.4;
 		transition: transform 200ms ease;
