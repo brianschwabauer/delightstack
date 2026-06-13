@@ -270,22 +270,29 @@
 			}
 		}
 
-		&.overlay {
+		/* Wash the covered content out so it reads as temporarily inert: a
+		   translucent scrim in the surface color (light scrim in light mode,
+		   dark in dark mode) plus desaturation, rather than a dark modal
+		   backdrop that would emphasize the content instead of muting it. */
+		&.overlay,
+		&.full-screen {
 			position: absolute;
 			inset: 0;
-			background: var(--color-backdrop, rgb(0 0 0 / 0.5));
-			backdrop-filter: blur(2px);
+			background: var(
+				--progress-overlay-bg,
+				color-mix(
+					in oklab,
+					var(--color-bg, light-dark(white, rgb(20 20 20))) 70%,
+					transparent
+				)
+			);
+			backdrop-filter: blur(1.5px) saturate(0.3);
 			z-index: var(--layer-modal, 400);
 			flex-direction: column;
 		}
 
 		&.full-screen {
 			position: fixed;
-			inset: 0;
-			background: var(--color-backdrop, rgb(0 0 0 / 0.5));
-			backdrop-filter: blur(2px);
-			z-index: var(--layer-modal, 400);
-			flex-direction: column;
 		}
 
 		&.success {
