@@ -213,10 +213,12 @@
 
 	function updateScrollState() {
 		if (!scroll_el) return;
-		overflowing = scroll_el.scrollWidth > scroll_el.clientWidth + 1;
-		canScrollPrev = scroll_el.scrollLeft > 4;
-		canScrollNext =
-			scroll_el.scrollLeft + scroll_el.clientWidth < scroll_el.scrollWidth - 4;
+		// Small thresholds absorb sub-pixel scroll positions (fractional
+		// scrollLeft / device-pixel rounding) so the end states latch cleanly.
+		const { scrollLeft, clientWidth, scrollWidth } = scroll_el;
+		overflowing = scrollWidth > clientWidth + 1;
+		canScrollPrev = scrollLeft > 2;
+		canScrollNext = scrollLeft + clientWidth < scrollWidth - 2;
 	}
 
 	function scrollNext() {
@@ -407,6 +409,7 @@
 		{#if orientation !== 'vertical' && overflowing}
 			<Button
 				icon
+				translucent
 				size="00"
 				class="steps-nav steps-nav-prev"
 				aria-label="Scroll to previous steps"
@@ -440,6 +443,7 @@
 		{#if orientation !== 'vertical' && overflowing}
 			<Button
 				icon
+				translucent
 				size="00"
 				class="steps-nav steps-nav-next"
 				aria-label="Scroll to next steps"
@@ -474,23 +478,39 @@
 		}
 
 		/* Chevron pagers: <Button icon> instances positioned over the strip's
-		   faded edges, vertically centered on the circle row. Touch devices
-		   swipe instead, so they only display for fine pointers. */
+		   faded edges, vertically centered on the STEP CIRCLE (not the whole
+		   step, which is taller because of the label below). The scroll strip
+		   adds 0.5rem of top padding (halo breathing room), so the circle's
+		   center sits at 0.5rem + half the circle — match that exactly.
+		   Touch devices swipe instead, so they only display for fine pointers. */
 		:global(.steps-nav) {
 			display: none;
 			position: absolute;
-			top: calc(var(--circle-size, 32px) / 2);
+			top: calc(0.5rem + var(--circle-size, 32px) / 2);
 			translate: 0 -50%;
 			z-index: 2;
+			/* Fade out when there's nothing more to scroll in that direction —
+			   a clear "you're at the end" cue, not just a dead button. */
+			transition:
+				opacity 200ms ease,
+				visibility 200ms ease;
 			box-shadow:
 				0 2px 6px rgba(0, 0, 0, 0.12),
 				0 1px 2px rgba(0, 0, 0, 0.08);
+
+			/* Button puts `disabled` on its inner <button>, so reach it via :has().
+			   Muting opacity + dropping the shadow reads as "nothing more this
+			   way" — distinct from an active, liftable pager. */
+			&:has(button:disabled) {
+				opacity: 0.32;
+				box-shadow: none;
+			}
 		}
 		:global(.steps-nav-prev) {
-			left: -0.25rem;
+			left: -0.75rem;
 		}
 		:global(.steps-nav-next) {
-			right: -0.25rem;
+			right: -0.75rem;
 		}
 		@media (hover: hover) and (pointer: fine) {
 			:global(.steps-nav) {
