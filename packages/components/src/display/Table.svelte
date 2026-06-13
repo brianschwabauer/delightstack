@@ -4089,6 +4089,13 @@
 		padding-right: 0.25rem !important;
 	}
 
+	/* The header `th` uses `align-items: stretch` (so sortable column buttons fill
+	   the cell height). For the select-all checkbox cell that would top-stretch the
+	   round check-wrap; center it like the body checkbox cells instead. */
+	th.checkbox-cell {
+		align-items: center;
+	}
+
 	.check-wrap {
 		position: relative;
 		display: inline-flex;
