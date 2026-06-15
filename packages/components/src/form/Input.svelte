@@ -800,6 +800,23 @@
 		input_element?.focus();
 	}
 
+	/**
+	 * Open the native date/time picker from our own icon button. The native
+	 * ::-webkit-calendar-picker-indicator is hidden (its fixed black glyph
+	 * ignores the design tokens), so this restores click-to-open behind a
+	 * token-tinted icon that matches the field's other icons. Falls back to
+	 * focusing the field where showPicker() isn't available.
+	 */
+	function openDatePicker() {
+		if (effectively_disabled || readonly) return;
+		const el = input_element as HTMLInputElement | undefined;
+		try {
+			el?.showPicker?.();
+		} catch {
+			el?.focus();
+		}
+	}
+
 	function handleFileClick() {
 		file_input_element?.click();
 	}
@@ -1513,6 +1530,49 @@
 			</Button>
 		{/if}
 
+		<!-- Date / time / datetime-local picker icon: replaces the native black
+		     ::-webkit-calendar-picker-indicator with a token-tinted icon (a clock
+		     for time, a calendar otherwise) that matches the field's other icons.
+		     Clicking it reopens the native picker via showPicker(). -->
+		{#if is_datelike}
+			<Button
+				icon
+				transparent
+				class="input-icon-btn"
+				tabindex={-1}
+				aria-label="Open picker"
+				disabled={effectively_disabled || readonly}
+				onclick={openDatePicker}>
+				{#if type === 'time'}
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
+						<path
+							d="M12 7.5V12l3 2"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round" />
+					</svg>
+				{:else}
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<rect
+							x="3"
+							y="4.5"
+							width="18"
+							height="16"
+							rx="2"
+							stroke="currentColor"
+							stroke-width="2" />
+						<path
+							d="M3 9.5h18M8 3v3M16 3v3"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round" />
+					</svg>
+				{/if}
+			</Button>
+		{/if}
+
 		<!-- Skeleton shimmer overlay — its own element so the sweep can be
 		     clipped to the field's corners without overflow:hidden on the
 		     wrapper (which would clip the floating label). -->
@@ -1973,6 +2033,27 @@
 	/* Search: hide native clear */
 	input[type='search'].field::-webkit-search-cancel-button {
 		-webkit-appearance: none;
+	}
+
+	/* Date / time / datetime-local: hide the native picker affordances. The
+	   ::-webkit-calendar-picker-indicator is a fixed black glyph that ignores
+	   the design tokens, so we render our own token-tinted icon (see the
+	   template) and reopen the picker via showPicker(). The inner spinner and
+	   clear button are dropped too — the field carries its own clear button and
+	   stays keyboard-editable. */
+	input[type='date'].field::-webkit-calendar-picker-indicator,
+	input[type='time'].field::-webkit-calendar-picker-indicator,
+	input[type='datetime-local'].field::-webkit-calendar-picker-indicator {
+		display: none;
+	}
+	input[type='date'].field::-webkit-inner-spin-button,
+	input[type='time'].field::-webkit-inner-spin-button,
+	input[type='datetime-local'].field::-webkit-inner-spin-button,
+	input[type='date'].field::-webkit-clear-button,
+	input[type='time'].field::-webkit-clear-button,
+	input[type='datetime-local'].field::-webkit-clear-button {
+		-webkit-appearance: none;
+		display: none;
 	}
 
 	/* ================================================================== */
