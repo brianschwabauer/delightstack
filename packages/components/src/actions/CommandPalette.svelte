@@ -252,6 +252,9 @@
 		/** Compact spacing mode */
 		dense = false,
 
+		/** Roomy spacing mode */
+		comfortable = false,
+
 		/** Called when any command is selected */
 		onselect = undefined as ((command: CommandOption) => void) | undefined,
 
@@ -486,6 +489,7 @@
 		{id}
 		class={['palette', class_name].filter(Boolean).join(' ')}
 		class:dense
+		class:comfortable
 		role="dialog"
 		aria-modal="true"
 		aria-label="Command palette"
@@ -662,6 +666,9 @@
 		&.dense {
 			--_radius: calc(var(--radius-lg) * 1.5);
 		}
+		&.comfortable {
+			--_radius: var(--radius-xl);
+		}
 	}
 
 	.input-wrapper {
@@ -674,6 +681,11 @@
 		.dense & {
 			padding: 0.5rem 0.75rem;
 			gap: 0.5rem;
+		}
+
+		.comfortable & {
+			padding: 1rem 1.25rem;
+			gap: 1rem;
 		}
 	}
 
@@ -698,6 +710,10 @@
 
 		.dense & {
 			font-size: 0.875rem;
+		}
+
+		.comfortable & {
+			font-size: 1.0625rem;
 		}
 	}
 
@@ -724,6 +740,10 @@
 		.dense & {
 			padding: 0.25rem 0;
 		}
+
+		.comfortable & {
+			padding: 0.75rem 0;
+		}
 	}
 
 	.empty {
@@ -744,6 +764,11 @@
 		.dense & {
 			padding: 0.375rem 0.75rem 0.125rem;
 			font-size: 0.65rem;
+		}
+
+		.comfortable & {
+			padding: 0.625rem 1.25rem 0.375rem;
+			font-size: 0.72rem;
 		}
 	}
 
@@ -824,6 +849,11 @@
 			gap: 0.5rem;
 		}
 
+		.comfortable & {
+			padding: 0.85rem 1.1rem;
+			gap: 0.85rem;
+		}
+
 		.icon {
 			flex-shrink: 0;
 			display: flex;
@@ -871,6 +901,10 @@
 
 			.dense & {
 				font-size: 0.7rem;
+			}
+
+			.comfortable & {
+				font-size: 0.78rem;
 			}
 		}
 

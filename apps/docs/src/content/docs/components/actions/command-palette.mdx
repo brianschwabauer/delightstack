@@ -7,6 +7,7 @@ import { CommandPalette } from '@delightstack/components/actions';
 import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import CommandPaletteDemo from '../../../../components/demos/CommandPaletteDemo.svelte';
 import CommandPaletteDenseDemo from '../../../../components/demos/CommandPaletteDenseDemo.svelte';
+import CommandPaletteComfortableDemo from '../../../../components/demos/CommandPaletteComfortableDemo.svelte';
 import CommandPaletteNoGroupingDemo from '../../../../components/demos/CommandPaletteNoGroupingDemo.svelte';
 
 ## Import
@@ -113,6 +114,15 @@ Use `dense` for tighter spacing in smaller interfaces.
   <CommandPaletteDenseDemo client:load />
 </ComponentPreview>
 
+### Roomy / Comfortable Mode
+
+Use `comfortable` for more generous spacing and larger tap targets — handy on
+touch interfaces or when the palette is the primary surface.
+
+<ComponentPreview code={`<CommandPalette bind:open={paletteOpen} {commands} comfortable />`}>
+  <CommandPaletteComfortableDemo client:load />
+</ComponentPreview>
+
 ### Without Category Grouping
 
 Disable grouping to show a flat list of results.
@@ -172,6 +182,7 @@ const commands = [
 | `recent_limit` | `number` | `5` | Number of recent items to show when input is empty |
 | `group_by` | `'category' \| 'none'` | `'category'` | How to group results |
 | `dense` | `boolean` | `false` | Compact result item spacing |
+| `comfortable` | `boolean` | `false` | Roomy result item spacing |
 | `onselect` | `(command: CommandOption) => void` | `undefined` | Called when any command is selected |
 | `id` | `string` | auto-generated | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |

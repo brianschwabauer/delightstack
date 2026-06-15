@@ -76,13 +76,21 @@ The `size` prop controls font size, which drives padding and dimensions via `em`
   <Button client:load size="3">Extra Large</Button>
 </ComponentPreview>
 
-### Pill & Dense
+### Pill, Dense & Comfortable
 
-<ComponentPreview code={`<Button pill>Pill Button</Button>
-<Button dense>Dense</Button>
+`dense` and `comfortable` adjust the height and padding using the shared control
+sizing tokens, so a Button lines up with `dense`/`comfortable` Input and Select
+fields in the same form row.
+
+<ComponentPreview code={`<Button dense>Dense</Button>
+<Button>Default</Button>
+<Button comfortable>Comfortable</Button>
+<Button pill>Pill Button</Button>
 <Button pill dense>Pill Dense</Button>`}>
-  <Button client:load pill>Pill Button</Button>
   <Button client:load dense>Dense</Button>
+  <Button client:load>Default</Button>
+  <Button client:load comfortable>Comfortable</Button>
+  <Button client:load pill>Pill Button</Button>
   <Button client:load pill dense>Pill Dense</Button>
 </ComponentPreview>
 
@@ -227,7 +235,8 @@ ${'  '}{/snippet}
 | `success` | `boolean` | `false` | Green/success color scheme |
 | `accent` | `boolean` | `false` | Accent/brand color scheme |
 | `overlay` | `boolean` | `false` | Dark overlay style with backdrop blur |
-| `dense` | `boolean` | `false` | Reduced padding for compact layouts |
+| `dense` | `boolean` | `false` | Reduced padding/height for compact layouts |
+| `comfortable` | `boolean` | `false` | Increased padding/height for roomy layouts |
 | `full_width` | `boolean` | `false` | Stretch to container width |
 | `full_height` | `boolean` | `false` | Stretch to container height |
 | `disable_ripple` | `boolean` | `false` | Disable the ripple click effect |

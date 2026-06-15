@@ -79,6 +79,9 @@
 		/** Whether the button should be smaller (with less padding) */
 		dense = false,
 
+		/** Whether the button should be larger (with more padding) */
+		comfortable = false,
+
 		/** Whether the button should take up the full width of its container */
 		full_width = false,
 
@@ -397,6 +400,7 @@
 	class:icon
 	class:pill
 	class:dense
+	class:comfortable
 	class:grouped={resolvedGrouped}
 	class:group-h={resolvedGrouped &&
 		groupContext?.attached &&
@@ -1026,6 +1030,12 @@
 					min-height: calc(1em * var(--control-height-ratio-dense, 2.5));
 				}
 			}
+			&.comfortable {
+				button:not(.dropdown-trigger),
+				a {
+					min-height: calc(1em * var(--control-height-ratio-comfortable, 3.5));
+				}
+			}
 		}
 
 		.loading-icon {
@@ -1158,6 +1168,20 @@
 			}
 		}
 
+		&.comfortable {
+			button:not(.dropdown-trigger),
+			a {
+				padding: 1em 2em;
+				gap: 0.65em;
+			}
+			&.has-dropdown-trigger {
+				> button:not(.dropdown-trigger),
+				> a {
+					padding: 1em 2em 1em 1.5em;
+				}
+			}
+		}
+
 		&.icon {
 			/* A standalone icon button is a control-height square so it lines up
 			   in a row with text controls (Input/Select/Button). It scales with
@@ -1190,6 +1214,9 @@
 						height: 60%;
 					}
 				}
+			}
+			&.comfortable {
+				--_icon-size: calc(1em * var(--control-height-ratio-comfortable, 3.5));
 			}
 			button,
 			a {
