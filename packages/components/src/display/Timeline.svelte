@@ -10,13 +10,17 @@
 		dense: boolean;
 		/** Whether the timeline uses comfortable (roomy) spacing */
 		comfortable: boolean;
+		/** Whether continuous motion (the active pulse) is allowed */
+		animate: boolean;
+		/** Whether items should play their entrance reveal as they scroll in */
+		reveal: boolean;
 		/** Registers a new item with the timeline and returns its index */
 		register: () => number;
 	}
 </script>
 
 <script lang="ts">
-	import { intersectionObserver } from '@delightstack/utilities';
+	import { intersectionObserver, ripple } from '@delightstack/utilities';
 	import { scrollbar } from '../actions/scrollbar';
 	import { getContext, setContext, type Component, type Snippet } from 'svelte';
 	import Button from './../actions/Button.svelte';
@@ -40,6 +44,15 @@
 		/** Event status */
 		status = undefined as 'complete' | 'active' | 'pending' | undefined,
 
+		/** Makes the item clickable — turns it into a link. Mirrors `<Button>`. */
+		href = undefined as string | undefined,
+
+		/** Link target (only used with `href`). */
+		target = undefined as '_self' | '_blank' | '_parent' | '_top' | undefined,
+
+		/** Called when the item is clicked. Makes the item interactive (like `href`). */
+		onclick = undefined as undefined | ((event: MouseEvent | KeyboardEvent) => void),
+
 		/* --- Timeline container props --- */
 		/** Horizontal layout */
 		horizontal = false,
@@ -55,6 +68,9 @@
 
 		/** Relaxed spacing */
 		comfortable = false,
+
+		/** Play the entrance + pulse animations. On by default. */
+		animate = true,
 
 		/** Loading skeleton */
 		skeleton = false,
@@ -87,11 +103,18 @@
 	let item_counter = 0;
 
 	if (!isItem) {
+		// Once a skeleton has been shown, the real content takes its place — the
+		// space was already occupied, so re-animating it in reads as a jump. Latch
+		// this and suppress the entrance reveal for everything that loads after.
+		let had_skeleton = $state(skeleton);
+
 		const ctx = $state<TimelineContext>({
 			horizontal,
 			alternate,
 			dense,
 			comfortable,
+			animate,
+			reveal: animate && !skeleton,
 			register() {
 				return item_counter++;
 			},
@@ -99,10 +122,13 @@
 		setContext<TimelineContext>('timeline', ctx);
 
 		$effect(() => {
+			if (skeleton) had_skeleton = true;
 			ctx.horizontal = horizontal;
 			ctx.alternate = alternate;
 			ctx.dense = dense;
 			ctx.comfortable = comfortable;
+			ctx.animate = animate;
+			ctx.reveal = animate && !had_skeleton;
 		});
 	}
 
@@ -116,6 +142,19 @@
 	const is_dense = $derived(isItem ? parentContext.dense : dense);
 	const is_comfortable = $derived(isItem ? parentContext.comfortable : comfortable);
 	const is_even = $derived(item_index % 2 === 0);
+	const do_reveal = $derived(isItem ? parentContext.reveal : false);
+	const do_motion = $derived(isItem ? parentContext.animate : false);
+
+	/** An item is interactive when it has somewhere to go or something to do. */
+	const interactive = $derived(isItem && (!!onclick || !!href));
+
+	function handleKey(event: KeyboardEvent) {
+		if (!onclick) return;
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			onclick(event);
+		}
+	}
 
 	/* ------------------------------------------------------------------ */
 	/*  Scroll-reveal for items                                            */
@@ -199,6 +238,9 @@
 		class:odd={is_alternate && is_even}
 		class:dense={is_dense}
 		class:comfortable={is_comfortable}
+		class:reveal={do_reveal}
+		class:motion={do_motion}
+		class:interactive
 		class:visible
 		class:complete={status === 'complete'}
 		class:active={status === 'active'}
@@ -207,17 +249,38 @@
 		style:--marker-color={color || undefined}
 		{@attach intersectionObserver({ onintersectonce: () => (visible = true) })}>
 		<div class="marker">
-			{#if icon}
-				{@const Icon = icon}
-				<span class="icon">
+			<span class="node">
+				{#if icon}
+					{@const Icon = icon}
 					<Icon />
-				</span>
-			{:else}
-				<span class="dot"></span>
-			{/if}
+				{:else if status === 'complete'}
+					<svg
+						class="check"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="3.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true">
+						<polyline points="20 6 9 17 4 12" />
+					</svg>
+				{/if}
+			</span>
 		</div>
 		<div class="connector"></div>
-		<div class="content">
+		<svelte:element
+			this={href ? 'a' : 'div'}
+			class="content"
+			class:interactive
+			href={href || undefined}
+			target={href ? target : undefined}
+			rel={href && target === '_blank' ? 'noreferrer' : undefined}
+			role={interactive && !href ? 'button' : undefined}
+			tabindex={interactive && !href ? 0 : undefined}
+			onclick={interactive ? onclick : undefined}
+			onkeydown={interactive && !href ? handleKey : undefined}
+			{@attach ripple({ enabled: interactive, zIndex: 0 })}>
 			{#if date}
 				<time datetime={iso_date}>{formatted_date}</time>
 			{/if}
@@ -229,7 +292,7 @@
 					{@render children()}
 				</div>
 			{/if}
-		</div>
+		</svelte:element>
 	</li>
 {:else if skeleton}
 	<!-- Skeleton -->
@@ -301,9 +364,9 @@
 			{@attach scrollbar()}>
 			{@render children?.()}
 			{#if pending}
-				<li class="item pending-item horizontal">
+				<li class="item pending-item horizontal" class:motion={animate}>
 					<div class="marker">
-						<span class="dot pending-dot"></span>
+						<span class="node pending-node"></span>
 					</div>
 				</li>
 			{/if}
@@ -346,9 +409,9 @@
 		role="list">
 		{@render children?.()}
 		{#if pending}
-			<li class="item pending-item vertical">
+			<li class="item pending-item vertical" class:motion={animate}>
 				<div class="marker">
-					<span class="dot pending-dot"></span>
+					<span class="node pending-node"></span>
 				</div>
 			</li>
 		{/if}
@@ -363,7 +426,25 @@
 {/if}
 
 <style>
-	/* ========== Timeline Container ========== */
+	/* ============================================================
+	 * Timeline
+	 *
+	 * Geometry is driven by a small set of custom properties set on
+	 * each .item (and swapped by the dense/comfortable density flags),
+	 * so the marker, rail and content stay in lockstep without any
+	 * per-shape offset hacks:
+	 *
+	 *   --node   marker diameter        --gap   marker → content gap
+	 *   --rail   rail thickness         --run   space below an item (= rail length)
+	 *   --node-gap  breathing room between the node and the rail
+	 *
+	 * The rail is a real progress line: each item's connector is the
+	 * segment that descends to the NEXT node, coloured by THIS item's
+	 * status — completed segments read solid, the active segment fades
+	 * into the muted "not yet" stretch ahead.
+	 * ============================================================ */
+
+	/* ========== Container ========== */
 	.timeline {
 		list-style: none;
 		padding: 0;
@@ -380,10 +461,12 @@
 			display: flex;
 			flex-direction: row;
 			overflow-x: auto;
-			scroll-snap-type: x mandatory;
+			scroll-snap-type: x proximity;
 			-webkit-overflow-scrolling: touch;
 			gap: 0;
-			/* Hide the native scrollbar — we navigate via chevron controls */
+			/* overflow-x clips the y-axis too, so leave room for the active node's
+			   glow + pulse ring (which reach beyond the marker). */
+			padding-block: 1.4rem;
 			scrollbar-width: none;
 		}
 		&.horizontal::-webkit-scrollbar {
@@ -403,12 +486,11 @@
 			position: absolute;
 			top: 50%;
 			transform: translateY(-50%);
-			z-index: 2;
-			box-shadow:
-				0 2px 6px rgba(0, 0, 0, 0.12),
-				0 1px 2px rgba(0, 0, 0, 0.08);
+			z-index: 3;
+			background: var(--color-surface, #fff);
+			box-shadow: var(--shadow-md, 0 3px 10px rgb(0 0 0 / 0.12));
 			opacity: 0;
-			animation: timeline-nav-fade 200ms ease forwards;
+			animation: timeline-nav-fade 200ms var(--ease-out, ease) forwards;
 		}
 		:global(.timeline-nav-prev) {
 			left: -0.75rem;
@@ -423,349 +505,377 @@
 		}
 	}
 
-	/* ========== Timeline Item ========== */
+	/* ========== Item: geometry ========== */
 	.item {
+		/* geometry */
+		--node: 18px;
+		--rail: 2px;
+		--gap: 1rem;
+		--run: 1.9rem;
+		--node-gap: 4px;
+		--fs-date: 0.72rem;
+		--fs-title: 0.9rem;
+		--fs-body: 0.83rem;
+
+		/* the marker / rail accent — `color` prop wins, else the status hue */
+		--accent: var(--marker-color, var(--color-action, #2563eb));
+		--node-fg: var(--color-action-text, #fff);
+		/* rail segment colour (overridden per status below) */
+		--rail-color: var(--color-border, #e5e7eb);
+
 		position: relative;
 		display: flex;
-		opacity: 0;
-		transform: translateY(20px);
-		transition:
-			opacity 500ms ease,
-			transform 500ms ease;
 
-		&.visible {
-			opacity: 1;
-			transform: translateY(0);
+		&.dense {
+			--node: 14px;
+			--gap: 0.7rem;
+			--run: 1.1rem;
+			--node-gap: 3px;
+			--fs-date: 0.68rem;
+			--fs-title: 0.83rem;
+			--fs-body: 0.78rem;
+		}
+
+		&.comfortable {
+			--node: 24px;
+			--rail: 2.5px;
+			--gap: 1.25rem;
+			--run: 2.6rem;
+			--node-gap: 5px;
+			--fs-date: 0.78rem;
+			--fs-title: 1rem;
+			--fs-body: 0.9rem;
 		}
 
 		/* Vertical layout */
 		&.vertical {
 			flex-direction: row;
-			padding-bottom: 1.5rem;
-			gap: 1rem;
-			padding-left: 0;
-
-			&.dense {
-				padding-bottom: 0.75rem;
-				gap: 0.625rem;
-			}
-
-			&.comfortable {
-				padding-bottom: 2.25rem;
-				gap: 1.25rem;
-			}
+			align-items: flex-start;
+			gap: var(--gap);
+			padding-bottom: var(--run);
 		}
 
-		/* Horizontal layout */
+		/* Horizontal layout. Equal-width columns (min-width drives the spacing)
+		   with the node centred, so adjacent nodes sit one item-width apart and
+		   the rail can span cleanly from one to the next. No right padding — that
+		   would shift the centred node off the item's true centre. */
 		&.horizontal {
 			flex-direction: column;
 			align-items: center;
-			min-width: 140px;
-			padding-right: 1rem;
+			min-width: 9rem;
 			scroll-snap-align: start;
 
-			opacity: 0;
-			transform: translateX(20px);
-
-			&.visible {
-				opacity: 1;
-				transform: translateX(0);
-			}
-
 			&.dense {
-				min-width: 104px;
-				padding-right: 0.625rem;
+				min-width: 6.5rem;
 			}
-
 			&.comfortable {
-				min-width: 200px;
-				padding-right: 1.75rem;
+				min-width: 12.5rem;
 			}
 		}
 	}
 
-	/* ========== Alternate Mode (vertical) ========== */
-	.timeline.vertical.alternate {
-		padding-left: 50%;
+	/* status → accent hue + rail-segment colour */
+	.item.complete {
+		--accent: var(--marker-color, var(--color-success, #16a34a));
+		--node-fg: var(--color-success-text, #fff);
+		--rail-color: var(--marker-color, var(--color-success, #16a34a));
+	}
+	.item.active {
+		--accent: var(--marker-color, var(--color-action, #2563eb));
+	}
+	.item.pending {
+		--accent: var(--marker-color, var(--color-text-muted, #9ca3af));
 	}
 
+	/* ========== Entrance reveal (only with the `reveal` class) ==========
+	   Each node springs in while its rail draws toward the next one. Gated on
+	   `.reveal` so a timeline with `animate={false}` — or one revealed after a
+	   skeleton — simply appears, fully formed. */
+	.item.reveal {
+		opacity: 0;
+		transform: translateY(14px);
+		transition:
+			opacity 520ms var(--ease-out, ease),
+			transform 520ms var(--ease-out, ease);
+	}
+	.item.reveal.visible {
+		opacity: 1;
+		transform: none;
+	}
+	.item.reveal.horizontal {
+		transform: translateX(18px);
+	}
+	.item.reveal.horizontal.visible {
+		transform: none;
+	}
+
+	/* ========== Alternate Mode (vertical) ==========
+	   Each item is a half-width column whose node lands exactly on the central
+	   axis, so the rail stays a single straight line with events fanning out
+	   left/right. */
 	.item.vertical.alternate {
-		&.odd {
-			flex-direction: row;
-		}
-
-		&.even {
-			flex-direction: row-reverse;
-			text-align: right;
-			margin-left: calc(-100% + 12px);
-		}
+		width: calc(50% + var(--node) / 2);
 	}
 
-	/* ========== Marker ========== */
+	.item.vertical.alternate.odd {
+		margin-left: calc(50% - var(--node) / 2);
+		flex-direction: row;
+	}
+
+	.item.vertical.alternate.even {
+		flex-direction: row-reverse;
+		text-align: right;
+	}
+
+	/* ========== Marker / node ========== */
 	.marker {
 		position: relative;
 		z-index: 1;
 		flex-shrink: 0;
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: center;
 	}
-
-	.dot {
-		width: 12px;
-		height: 12px;
-		border-radius: 9999px;
-		background: light-dark(
-			var(--marker-color, var(--color-action, #2563eb)),
-			var(--marker-color, var(--color-action, #3b82f6))
-		);
-		border: 2px solid light-dark(var(--color-bg, #fff), var(--color-bg, #1a1a1a));
-		box-shadow: 0 0 0 2px
-			light-dark(
-				var(--marker-color, var(--color-action, #2563eb)),
-				var(--marker-color, var(--color-action, #3b82f6))
-			);
-
-		/* Complete status */
-		.item.complete & {
-			background: var(--marker-color, var(--color-success, #16a34a));
-			box-shadow: 0 0 0 2px var(--marker-color, var(--color-success, #16a34a));
-		}
-
-		/* Active status */
-		.item.active & {
-			background: var(--marker-color, var(--color-action, #2563eb));
-			box-shadow: 0 0 0 2px var(--marker-color, var(--color-action, #2563eb));
-			animation: timeline-pulse 2s ease-in-out infinite;
-		}
-
-		/* Pending status */
-		.item.pending & {
-			background: transparent;
-			border: 2px dashed
-				light-dark(
-					var(--marker-color, var(--color-text-muted, #9ca3af)),
-					var(--marker-color, var(--color-text-muted, #6b7280))
-				);
-			box-shadow: none;
-		}
-	}
-
-	.pending-dot {
-		background: transparent;
-		border: 2px dashed
-			light-dark(var(--color-text-muted, #9ca3af), var(--color-text-muted, #6b7280));
-		box-shadow: none;
-		animation: timeline-pulse 2s ease-in-out infinite;
-	}
-
-	.icon {
-		width: 24px;
-		height: 24px;
-		border-radius: 9999px;
-		display: flex;
+	.item.horizontal .marker {
 		align-items: center;
-		justify-content: center;
-		background: light-dark(
-			var(--marker-color, var(--color-action, #2563eb)),
-			var(--marker-color, var(--color-action, #3b82f6))
-		);
-		color: white;
-		font-size: 0.75rem;
-
-		.item.complete & {
-			background: var(--marker-color, var(--color-success, #16a34a));
-		}
-
-		.item.active & {
-			background: var(--marker-color, var(--color-action, #2563eb));
-			animation: timeline-pulse 2s ease-in-out infinite;
-		}
-
-		.item.pending & {
-			background: transparent;
-			border: 2px dashed
-				light-dark(
-					var(--marker-color, var(--color-text-muted, #9ca3af)),
-					var(--marker-color, var(--color-text-muted, #6b7280))
-				);
-			color: light-dark(
-				var(--color-text-muted, #9ca3af),
-				var(--color-text-muted, #6b7280)
-			);
-		}
-
-		& :global(svg) {
-			width: 14px;
-			height: 14px;
-		}
-
-		.item.dense & {
-			width: 20px;
-			height: 20px;
-			font-size: 0.625rem;
-
-			& :global(svg) {
-				width: 12px;
-				height: 12px;
-			}
-		}
-
-		.item.comfortable & {
-			width: 32px;
-			height: 32px;
-			font-size: 0.875rem;
-
-			& :global(svg) {
-				width: 18px;
-				height: 18px;
-			}
-		}
 	}
 
-	/* ========== Connector (line between items) ========== */
+	.node {
+		position: relative;
+		width: var(--node);
+		height: var(--node);
+		border-radius: var(--radius-full, 1e5px);
+		display: grid;
+		place-items: center;
+		color: var(--node-fg);
+		background: var(--accent);
+		/* soft halo so a filled marker reads as lit, not flat */
+		box-shadow: 0 0 0 4px rgb(from var(--accent) r g b / 0.12);
+		/* reveal: spring-pop; hover: gentle grow. Colour/shadow snap in (see below). */
+		scale: var(--node-scale, 1);
+		transition:
+			scale 360ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)),
+			background-color 240ms ease,
+			box-shadow 240ms ease;
+	}
+	/* start collapsed only while a reveal is pending */
+	.item.reveal .node {
+		--node-scale: 0;
+	}
+	.item.reveal.visible .node {
+		--node-scale: 1;
+	}
+
+	.node :global(svg) {
+		width: 62%;
+		height: 62%;
+	}
+	.check {
+		width: 64%;
+		height: 64%;
+	}
+
+	/* Active — the "you are here" node: a steady glow plus an expanding ping. */
+	.item.active .node {
+		box-shadow:
+			0 0 0 4px rgb(from var(--accent) r g b / 0.18),
+			0 0 14px 1px rgb(from var(--accent) r g b / 0.45);
+	}
+	.item.active.motion .node::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		background: var(--accent);
+		z-index: -1;
+		animation: timeline-ping 2.4s var(--ease-out, ease-out) infinite;
+	}
+
+	/* Pending — a clean hollow ring with a faint fill. */
+	.item.pending .node,
+	.pending-node {
+		background: rgb(from var(--accent) r g b / 0.1);
+		box-shadow: inset 0 0 0 var(--rail) var(--accent);
+		color: var(--accent);
+	}
+	.pending-node {
+		--accent: var(--marker-color, var(--color-text-muted, #9ca3af));
+		width: var(--node, 18px);
+		height: var(--node, 18px);
+		border-radius: var(--radius-full, 1e5px);
+	}
+	.pending-item.motion .pending-node {
+		animation: timeline-breathe 2.4s ease-in-out infinite;
+	}
+
+	/* ========== Connector (the progress rail) ========== */
 	.connector {
-		.item.vertical & {
-			position: absolute;
-			left: 5px;
-			top: 16px;
-			bottom: 0;
-			width: 2px;
-			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		}
+		position: absolute;
+		border-radius: var(--radius-full, 1e5px);
+		background: var(--rail-color);
+		z-index: 0;
+	}
 
-		.item.vertical:last-child &,
-		.pending-item & {
-			display: none;
-		}
+	.item.vertical > .connector {
+		left: calc(var(--node) / 2 - var(--rail) / 2);
+		top: calc(var(--node) + var(--node-gap));
+		bottom: var(--node-gap);
+		width: var(--rail);
+	}
 
-		.item.horizontal & {
-			position: absolute;
-			top: 5px;
-			left: 16px;
-			right: 0;
-			height: 2px;
-			background: light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		}
+	/* The node is centred (50%); the next item's node sits one full item-width
+	   away, so the segment runs from this node's right edge to the next node's
+	   left edge (minus the breathing gap at each end). */
+	.item.horizontal > .connector {
+		top: calc(var(--node) / 2 - var(--rail) / 2);
+		left: calc(50% + var(--node) / 2 + var(--node-gap));
+		width: calc(100% - var(--node) - 2 * var(--node-gap));
+		height: var(--rail);
+	}
 
-		.item.horizontal:last-child & {
-			display: none;
-		}
+	/* draw-in: the rail grows toward the next node after this one pops */
+	.item.reveal.vertical > .connector {
+		transform: scaleY(0);
+		transform-origin: top center;
+		transition: transform 560ms var(--ease-out, ease) 120ms;
+	}
+	.item.reveal.vertical.visible > .connector {
+		transform: scaleY(1);
+	}
+	.item.reveal.horizontal > .connector {
+		transform: scaleX(0);
+		transform-origin: left center;
+		transition: transform 560ms var(--ease-out, ease) 120ms;
+	}
+	.item.reveal.horizontal.visible > .connector {
+		transform: scaleX(1);
+	}
 
-		/* Adjustments for icon markers */
-		.item.vertical:has(.icon) & {
-			left: 11px;
-			top: 28px;
-		}
+	/* The active segment fades from "done" into the muted road ahead. */
+	.item.active.vertical > .connector {
+		background: linear-gradient(to bottom, var(--accent), var(--color-border, #e5e7eb));
+	}
+	.item.active.horizontal > .connector {
+		background: linear-gradient(to right, var(--accent), var(--color-border, #e5e7eb));
+	}
 
-		.item.vertical.dense:has(.icon) & {
-			left: 9px;
-			top: 24px;
-		}
+	/* Hide the trailing connector — the last node has nowhere to go. The
+	   pending-item carries the `.item` class, so an item followed by the
+	   pending node still draws its rail; only the genuine last node drops it. */
+	.item:not(:has(~ .item)) > .connector {
+		display: none;
+	}
 
-		.item.vertical.comfortable:has(.icon) & {
-			left: 15px;
-			top: 36px;
-		}
-
-		.item.horizontal:has(.icon) & {
-			top: 11px;
-			left: 28px;
-		}
-
-		.item.horizontal.dense:has(.icon) & {
-			top: 9px;
-			left: 24px;
-		}
-
-		.item.horizontal.comfortable:has(.icon) & {
-			top: 15px;
-			left: 36px;
-		}
-
-		/* Alternate mode */
-		.item.vertical.alternate & {
-			left: -1px;
-		}
-
-		.item.vertical.alternate:has(.icon) & {
-			left: 11px;
-		}
-
-		.item.vertical.alternate.even:has(.icon) & {
-			left: auto;
-			right: 11px;
-		}
-
-		.item.vertical.alternate.even & {
-			left: auto;
-			right: -1px;
-		}
+	/* Alternate mode: the rail hugs the central axis on both sides. */
+	.item.vertical.alternate.even > .connector {
+		left: auto;
+		right: calc(var(--node) / 2 - var(--rail) / 2);
 	}
 
 	/* ========== Content ========== */
 	.content {
 		flex: 1;
 		min-width: 0;
-		padding-top: 0;
+		/* nudge the first text line so it sits centred against the node */
+		padding-top: calc(var(--node) / 2 - 0.5em);
 
 		.item.horizontal & {
-			margin-top: 0.75rem;
+			margin-top: 0.85rem;
+			padding-top: 0;
 			text-align: center;
 		}
 	}
 
+	/* Interactive items behave like a Button row: pointer cursor, a snap-in
+	   hover tint that eases out, ripple, and a press scale. Non-interactive
+	   items get none of this. */
+	.content.interactive {
+		display: block;
+		color: inherit;
+		text-decoration: none;
+		cursor: pointer;
+		position: relative;
+		overflow: hidden;
+		outline: none;
+		-webkit-tap-highlight-color: transparent;
+		/* breathing room for the hover tint / ripple, cancelled by the matching
+		   negative margin so the text keeps its place */
+		padding: calc(var(--node) / 2 - 0.5em + 0.3rem) 0.6rem 0.4rem;
+		margin: -0.3rem -0.6rem -0.4rem;
+		border-radius: var(--radius-md, 5px);
+		/* OUT transition (snap in on hover — see :hover below) */
+		transition:
+			background-color 240ms ease,
+			scale 180ms ease;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
+		}
+	}
+	.item.horizontal .content.interactive {
+		padding: 0.4rem 0.7rem;
+		margin: 0.85rem -0.7rem 0;
+	}
+	/* keep the date/title/body above the ripple layer */
+	.content.interactive > * {
+		position: relative;
+		z-index: 1;
+	}
+	.content.interactive:focus-visible {
+		box-shadow: 0 0 0 2px var(--color-action, #2563eb);
+	}
+	.content.interactive:hover {
+		background: rgb(from var(--color-text, #333) r g b / 0.06);
+		/* snap the tint in; keep the press scale eased */
+		transition: scale 180ms ease;
+	}
+	.content.interactive:active {
+		scale: 0.985;
+	}
+
+	/* Hovering an interactive row leans its marker in and deepens its title. */
+	.item.interactive:has(> .content:hover) .node {
+		--node-scale: 1.1;
+		box-shadow: 0 0 0 6px rgb(from var(--accent) r g b / 0.18);
+		transition: scale 320ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+	}
+	.item.active.interactive:has(> .content:hover) .node {
+		box-shadow:
+			0 0 0 6px rgb(from var(--accent) r g b / 0.22),
+			0 0 16px 1px rgb(from var(--accent) r g b / 0.5);
+	}
+	.content.interactive:hover .title {
+		color: var(--color-text-active, var(--color-text, #1a1a1a));
+		transition: none;
+	}
+
 	time {
 		display: block;
-		font-size: 0.75rem;
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
-		margin-bottom: 0.25rem;
-		line-height: 1.3;
-
-		.item.dense & {
-			font-size: 0.6875rem;
-			margin-bottom: 0.125rem;
-		}
-
-		.item.comfortable & {
-			font-size: 0.8125rem;
-			margin-bottom: 0.375rem;
-		}
+		font-size: var(--fs-date);
+		font-weight: var(--font-weight-semibold, 600);
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--color-text-muted, #6b7280);
+		margin-bottom: 0.3em;
+		line-height: 1.2;
 	}
 
 	.title {
-		font-weight: 600;
-		font-size: 0.875rem;
-		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
-		line-height: 1.4;
-
-		.item.dense & {
-			font-size: 0.8125rem;
-		}
-
-		.item.comfortable & {
-			font-size: 1rem;
-		}
+		font-weight: var(--font-weight-semibold, 600);
+		font-size: var(--fs-title);
+		color: var(--color-text, #1a1a1a);
+		line-height: 1.35;
+		transition: color 240ms ease;
 	}
 
 	.body {
-		margin-top: 0.125rem;
-		font-size: 0.8125rem;
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
-		line-height: 1.5;
-
-		.item.dense & {
-			margin-top: 0.0625rem;
-			font-size: 0.75rem;
-		}
-
-		.item.comfortable & {
-			margin-top: 0.25rem;
-			font-size: 0.875rem;
-		}
+		margin-top: 0.25em;
+		font-size: var(--fs-body);
+		color: var(--color-text-muted, #6b7280);
+		line-height: 1.55;
 	}
 
-	/* ========== Pending Indicator ========== */
+	/* ========== Pending Indicator (trailing) ========== */
 	.pending-item {
 		padding-bottom: 0;
 	}
@@ -784,9 +894,8 @@
 		pointer-events: none;
 	}
 
-	.skeleton-item {
-		opacity: 1 !important;
-		transform: none !important;
+	.skeleton-item > .connector {
+		background: var(--skeleton-bg, rgb(from var(--color-text, #888) r g b / 0.1));
 	}
 
 	.skeleton-circle,
@@ -812,17 +921,16 @@
 		}
 	}
 
-	/* Same 12px footprint as the real .dot. */
+	/* Same footprint as the real .node. */
 	.skeleton-circle {
-		width: 12px;
-		height: 12px;
+		width: var(--node, 18px);
+		height: var(--node, 18px);
 		border-radius: var(--radius-full, 1e5px);
 	}
 
 	/* Flex column so the bars' line-padding margins don't collapse — each bar's
-	   margins pad it out to its real text line's 1lh (date 0.75rem/1.3,
-	   title 0.875rem/1.4, body 0.8125rem/1.5), keeping skeleton items exactly
-	   as tall as loaded ones. */
+	   margins pad it out to its real text line's 1lh, keeping skeleton items
+	   exactly as tall as loaded ones. */
 	.skeleton-item .content {
 		display: flex;
 		flex-direction: column;
@@ -840,63 +948,46 @@
 
 		&.skeleton-date {
 			width: 5rem;
-			font-size: 0.75rem;
-			line-height: 1.3;
-			margin-block: calc((1lh - 0.7em) / 2) calc((1lh - 0.7em) / 2 + 0.25rem);
+			font-size: var(--fs-date);
+			line-height: 1.2;
+			margin-block: calc((1lh - 0.7em) / 2) calc((1lh - 0.7em) / 2 + 0.3em);
 		}
 
 		&.skeleton-title-bar {
 			width: 8rem;
-			font-size: 0.875rem;
-			line-height: 1.4;
+			font-size: var(--fs-title);
+			line-height: 1.35;
 			margin-block: calc((1lh - 0.7em) / 2);
 		}
 
 		&.skeleton-body-bar {
 			width: 12rem;
-			font-size: 0.8125rem;
-			line-height: 1.5;
-			margin-block: calc((1lh - 0.7em) / 2 + 0.125rem) calc((1lh - 0.7em) / 2);
-		}
-	}
-
-	/* Size-variant text metrics mirror the real time/.title/.body. */
-	.item.dense {
-		.skeleton-date {
-			font-size: 0.6875rem;
-			margin-bottom: calc((1lh - 0.7em) / 2 + 0.125rem);
-		}
-		.skeleton-title-bar {
-			font-size: 0.8125rem;
-		}
-		.skeleton-body-bar {
-			font-size: 0.75rem;
-			margin-top: calc((1lh - 0.7em) / 2 + 0.0625rem);
-		}
-	}
-
-	.item.comfortable {
-		.skeleton-date {
-			font-size: 0.8125rem;
-			margin-bottom: calc((1lh - 0.7em) / 2 + 0.375rem);
-		}
-		.skeleton-title-bar {
-			font-size: 1rem;
-		}
-		.skeleton-body-bar {
-			font-size: 0.875rem;
-			margin-top: calc((1lh - 0.7em) / 2 + 0.25rem);
+			font-size: var(--fs-body);
+			line-height: 1.55;
+			margin-block: calc((1lh - 0.7em) / 2 + 0.25em) calc((1lh - 0.7em) / 2);
 		}
 	}
 
 	/* ========== Animations ========== */
-	@keyframes timeline-pulse {
+	@keyframes timeline-ping {
+		0% {
+			transform: scale(1);
+			opacity: 0.55;
+		}
+		70%,
+		100% {
+			transform: scale(2.6);
+			opacity: 0;
+		}
+	}
+
+	@keyframes timeline-breathe {
 		0%,
 		100% {
-			box-shadow: 0 0 0 0 rgb(from var(--color-action, #2563eb) r g b / 0.4);
+			opacity: 0.55;
 		}
 		50% {
-			box-shadow: 0 0 0 6px rgb(from var(--color-action, #2563eb) r g b / 0);
+			opacity: 1;
 		}
 	}
 
@@ -912,16 +1003,25 @@
 
 	/* ========== Reduced Motion ========== */
 	@media (prefers-reduced-motion: reduce) {
-		.item {
+		.item.reveal {
 			opacity: 1 !important;
 			transform: none !important;
 			transition: none !important;
 		}
 
-		.dot,
-		.icon,
-		.pending-dot {
+		.node {
+			scale: 1 !important;
+			transition: none !important;
+		}
+
+		.item.active .node::before,
+		.pending-node {
 			animation: none !important;
+		}
+
+		.item.reveal > .connector {
+			transform: none !important;
+			transition: none !important;
 		}
 
 		.skeleton-circle::after,

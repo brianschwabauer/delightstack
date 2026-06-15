@@ -11,6 +11,7 @@ import TimelineOrderDemo from '../../../../components/demos/TimelineOrderDemo.sv
 import TimelineAlternateDemo from '../../../../components/demos/TimelineAlternateDemo.svelte';
 import TimelineLoadMoreDemo from '../../../../components/demos/TimelineLoadMoreDemo.svelte';
 import TimelineSkeletonDemo from '../../../../components/demos/TimelineSkeletonDemo.svelte';
+import TimelineInteractiveDemo from '../../../../components/demos/TimelineInteractiveDemo.svelte';
 
 ## Import
 
@@ -98,6 +99,23 @@ ${'  '}{/each}
   <TimelineLoadMoreDemo client:load />
 </ComponentPreview>
 
+### Interactive Items
+
+Give an item an `onclick` and/or `href` to make it clickable (mirroring `<Button>`). Interactive items get a pointer cursor, a hover tint, a ripple, and a press effect; items without either stay static.
+
+<ComponentPreview code={`<Timeline>
+${'  '}<TimelineItem
+${'  '}${'  '}status="complete"
+${'  '}${'  '}date="Jan 10"
+${'  '}${'  '}title="Order Confirmed"
+${'  '}${'  '}onclick={() => (selected = 'Order Confirmed')}>
+${'  '}${'  '}Tap to view the confirmation.
+${'  '}</TimelineItem>
+${'  '}<TimelineItem status="active" date="Jan 12" title="Out for Delivery" href="/orders/123" />
+</Timeline>`}>
+  <TimelineInteractiveDemo client:load />
+</ComponentPreview>
+
 ### Custom Marker Color
 
 <ComponentPreview code={`<Timeline>
@@ -123,6 +141,7 @@ ${'  '}</TimelineItem>
 | `pending` | `boolean` | `false` | Show a pending/loading indicator at the end |
 | `dense` | `boolean` | `false` | Compact event spacing |
 | `comfortable` | `boolean` | `false` | Relaxed event spacing |
+| `animate` | `boolean` | `true` | Play the entrance reveal + active pulse. Set `false` for a fully static timeline. (The reveal is also skipped automatically when content replaces a skeleton.) |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `skeleton_count` | `number` | `3` | Number of skeleton items |
 | `id` | `string` | auto | Element ID |
@@ -144,6 +163,9 @@ ${'  '}</TimelineItem>
 | `icon` | `Component` | - | Marker icon component |
 | `color` | `string` | - | Marker color override (CSS color value) |
 | `status` | `'complete' \| 'active' \| 'pending'` | - | Event status for marker styling |
+| `href` | `string` | - | Makes the item a link (renders an `<a>`). Enables hover/ripple/press effects |
+| `onclick` | `(event) => void` | - | Click handler. Makes the item interactive (hover/ripple/press effects) |
+| `target` | `'_self' \| '_blank' \| '_parent' \| '_top'` | - | Link target (used with `href`) |
 | `children` | `Snippet` | - | Event body content |
 
 ## Types
@@ -156,6 +178,8 @@ interface TimelineContext {
   alternate: boolean;
   dense: boolean;
   comfortable: boolean;
+  animate: boolean;
+  reveal: boolean;
   register: () => number;
 }
 ```
@@ -164,7 +188,7 @@ interface TimelineContext {
 
 - Timeline renders as an ordered list (`<ol>`) with `role="list"` for semantic structure
 - Dates use `<time>` elements with `datetime` attributes
-- Status is communicated visually through marker styling (filled, pulsing, dashed)
+- Status is communicated visually through marker styling (a checked node for complete, a glowing/pulsing node for active, a hollow ring for pending)
 - Scroll-reveal animations respect `prefers-reduced-motion` -- items appear without animation when reduced motion is preferred
 - The load-more sentinel and skeleton items use `aria-hidden="true"`
 - Horizontal mode supports native touch/swipe scrolling with CSS snap points
