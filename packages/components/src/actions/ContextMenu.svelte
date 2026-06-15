@@ -92,7 +92,15 @@
 	}} />
 
 <Popover
-	opened={!!activeContextMenu?.actions?.length}
+	bind:opened={
+		() => !!activeContextMenu?.actions?.length,
+		(open) => {
+			// The Popover closes itself on outside click / escape / scroll. Funnel
+			// that back into clearing the active menu so it fully dismisses (a
+			// one-way `opened` prop would leave the menu state stale and re-open it).
+			if (!open) activeContextMenu = undefined;
+		}
+	}
 	strategy="fixed"
 	close_on_escape_key
 	close_on_outside_click
