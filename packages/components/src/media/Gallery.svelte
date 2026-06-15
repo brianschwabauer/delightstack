@@ -1112,6 +1112,21 @@
 		height: 1em;
 	}
 
+	.gallery {
+		/* Galleries are the largest surface and reach --radius-3xl at their
+		   biggest size by design, so they clamp each radius tier to that ceiling
+		   rather than the smaller shared --radius-cap: an over-rounded radius
+		   token can't blob a gallery, while the shipped looks (incl. the 3xl
+		   tier) are never clipped. Private (--_cap) so the raised ceiling doesn't
+		   leak to nested components. Both radius systems funnel through these:
+		   the slider .bg/.carousel/.controls use them directly, and the grid/
+		   masonry size remaps assign them to --radius-lg. */
+		--_cap: var(--radius-3xl, 60px);
+		--_rxl: min(var(--radius-xl, 0.75rem), var(--_cap));
+		--_r2xl: min(var(--radius-2xl, 1rem), var(--_cap));
+		--_r3xl: min(var(--radius-3xl, 1.5rem), var(--_cap));
+	}
+
 	.gallery-item {
 		position: relative;
 		display: grid;
@@ -1448,10 +1463,10 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 80ch) {
-						border-radius: var(--radius-xl, 0.75rem);
+						border-radius: var(--_rxl);
 						@supports (corner-shape: squircle) {
 							corner-shape: squircle;
-							border-radius: calc(var(--radius-xl, 0.75rem) * var(--squircle-ratio, 2));
+							border-radius: calc(var(--_rxl) * var(--squircle-ratio, 2));
 						}
 					}
 				}
@@ -1460,10 +1475,10 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 80ch) {
-						border-radius: var(--radius-2xl, 1rem);
+						border-radius: var(--_r2xl);
 						@supports (corner-shape: squircle) {
 							corner-shape: squircle;
-							border-radius: calc(var(--radius-2xl, 1rem) * var(--squircle-ratio, 2));
+							border-radius: calc(var(--_r2xl) * var(--squircle-ratio, 2));
 						}
 					}
 				}
@@ -1474,10 +1489,10 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 1200px) {
-						border-radius: var(--radius-xl, 0.75rem);
+						border-radius: var(--_rxl);
 						@supports (corner-shape: squircle) {
 							corner-shape: squircle;
-							border-radius: calc(var(--radius-xl, 0.75rem) * var(--squircle-ratio, 2));
+							border-radius: calc(var(--_rxl) * var(--squircle-ratio, 2));
 						}
 					}
 				}
@@ -1486,10 +1501,10 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 1200px) {
-						border-radius: var(--radius-2xl, 1rem);
+						border-radius: var(--_r2xl);
 						@supports (corner-shape: squircle) {
 							corner-shape: squircle;
-							border-radius: calc(var(--radius-2xl, 1rem) * var(--squircle-ratio, 2));
+							border-radius: calc(var(--_r2xl) * var(--squircle-ratio, 2));
 						}
 					}
 				}
@@ -1498,10 +1513,10 @@
 				.bg,
 				:global(.carousel) {
 					@container (min-width: 1200px) {
-						border-radius: var(--radius-3xl, 1.5rem);
+						border-radius: var(--_r3xl);
 						@supports (corner-shape: squircle) {
 							corner-shape: squircle;
-							border-radius: calc(var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2));
+							border-radius: calc(var(--_r3xl) * var(--squircle-ratio, 2));
 						}
 					}
 				}
@@ -1512,62 +1527,42 @@
 	.gallery.slider:not(.modal).controls-overlay {
 		&.radius-1 {
 			.controls {
-				border-top-left-radius: var(--radius-xl, 0.75rem);
-				border-top-right-radius: var(--radius-xl, 0.75rem);
+				border-top-left-radius: var(--_rxl);
+				border-top-right-radius: var(--_rxl);
 				@supports (corner-shape: squircle) {
 					corner-shape: squircle;
-					border-top-left-radius: calc(
-						var(--radius-xl, 0.75rem) * var(--squircle-ratio, 2)
-					);
-					border-top-right-radius: calc(
-						var(--radius-xl, 0.75rem) * var(--squircle-ratio, 2)
-					);
+					border-top-left-radius: calc(var(--_rxl) * var(--squircle-ratio, 2));
+					border-top-right-radius: calc(var(--_rxl) * var(--squircle-ratio, 2));
 				}
 			}
 		}
 		&.radius-2 {
 			.controls {
-				border-top-left-radius: var(--radius-2xl, 1rem);
-				border-top-right-radius: var(--radius-2xl, 1rem);
-				border-bottom-left-radius: var(--radius-2xl, 1rem);
-				border-bottom-right-radius: var(--radius-2xl, 1rem);
+				border-top-left-radius: var(--_r2xl);
+				border-top-right-radius: var(--_r2xl);
+				border-bottom-left-radius: var(--_r2xl);
+				border-bottom-right-radius: var(--_r2xl);
 				@supports (corner-shape: squircle) {
 					corner-shape: squircle;
-					border-top-left-radius: calc(
-						var(--radius-2xl, 1rem) * var(--squircle-ratio, 2)
-					);
-					border-top-right-radius: calc(
-						var(--radius-2xl, 1rem) * var(--squircle-ratio, 2)
-					);
-					border-bottom-left-radius: calc(
-						var(--radius-2xl, 1rem) * var(--squircle-ratio, 2)
-					);
-					border-bottom-right-radius: calc(
-						var(--radius-2xl, 1rem) * var(--squircle-ratio, 2)
-					);
+					border-top-left-radius: calc(var(--_r2xl) * var(--squircle-ratio, 2));
+					border-top-right-radius: calc(var(--_r2xl) * var(--squircle-ratio, 2));
+					border-bottom-left-radius: calc(var(--_r2xl) * var(--squircle-ratio, 2));
+					border-bottom-right-radius: calc(var(--_r2xl) * var(--squircle-ratio, 2));
 				}
 			}
 		}
 		&.radius-3 {
 			.controls {
-				border-top-left-radius: var(--radius-3xl, 1.5rem);
-				border-top-right-radius: var(--radius-3xl, 1.5rem);
-				border-bottom-left-radius: var(--radius-3xl, 1.5rem);
-				border-bottom-right-radius: var(--radius-3xl, 1.5rem);
+				border-top-left-radius: var(--_r3xl);
+				border-top-right-radius: var(--_r3xl);
+				border-bottom-left-radius: var(--_r3xl);
+				border-bottom-right-radius: var(--_r3xl);
 				@supports (corner-shape: squircle) {
 					corner-shape: squircle;
-					border-top-left-radius: calc(
-						var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2)
-					);
-					border-top-right-radius: calc(
-						var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2)
-					);
-					border-bottom-left-radius: calc(
-						var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2)
-					);
-					border-bottom-right-radius: calc(
-						var(--radius-3xl, 1.5rem) * var(--squircle-ratio, 2)
-					);
+					border-top-left-radius: calc(var(--_r3xl) * var(--squircle-ratio, 2));
+					border-top-right-radius: calc(var(--_r3xl) * var(--squircle-ratio, 2));
+					border-bottom-left-radius: calc(var(--_r3xl) * var(--squircle-ratio, 2));
+					border-bottom-right-radius: calc(var(--_r3xl) * var(--squircle-ratio, 2));
 				}
 			}
 		}
@@ -2682,7 +2677,7 @@
 				--radius-lg: var(--radius-lg, 0.5rem);
 			}
 			&.radius-3 {
-				--radius-lg: var(--radius-xl, 0.75rem);
+				--radius-lg: var(--_rxl);
 			}
 			> .gallery-item {
 				flex-basis: 100%;
@@ -2696,13 +2691,13 @@
 			}
 			@container (min-width: 768px) {
 				&.radius-1 {
-					--radius-lg: var(--radius-xl, 0.75rem);
+					--radius-lg: var(--_rxl);
 				}
 				&.radius-2 {
-					--radius-lg: var(--radius-2xl, 1rem);
+					--radius-lg: var(--_r2xl);
 				}
 				&.radius-3 {
-					--radius-lg: var(--radius-3xl, 1.5rem);
+					--radius-lg: var(--_r3xl);
 				}
 			}
 		}
@@ -2722,7 +2717,7 @@
 				--radius-lg: var(--radius-lg, 0.5rem);
 			}
 			&.radius-3 {
-				--radius-lg: var(--radius-xl, 0.75rem);
+				--radius-lg: var(--_rxl);
 			}
 			> .gallery-item {
 				flex-basis: 0;
@@ -2739,10 +2734,10 @@
 					--radius-lg: var(--radius-lg, 0.5rem);
 				}
 				&.radius-2 {
-					--radius-lg: var(--radius-xl, 0.75rem);
+					--radius-lg: var(--_rxl);
 				}
 				&.radius-3 {
-					--radius-lg: var(--radius-2xl, 1rem);
+					--radius-lg: var(--_r2xl);
 				}
 			}
 		}
@@ -2782,7 +2777,7 @@
 					--radius-lg: var(--radius-lg, 0.5rem);
 				}
 				&.radius-3 {
-					--radius-lg: var(--radius-xl, 0.75rem);
+					--radius-lg: var(--_rxl);
 				}
 			}
 			&.size-2 {
@@ -2830,7 +2825,7 @@
 						--radius-lg: var(--radius-lg, 0.5rem);
 					}
 					&.radius-3 {
-						--radius-lg: var(--radius-xl, 0.75rem);
+						--radius-lg: var(--_rxl);
 					}
 				}
 			}
@@ -2878,7 +2873,7 @@
 					--radius-lg: var(--radius-lg, 0.5rem);
 				}
 				&.radius-3 {
-					--radius-lg: var(--radius-xl, 0.75rem);
+					--radius-lg: var(--_rxl);
 				}
 			}
 		}

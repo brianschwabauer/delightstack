@@ -258,8 +258,10 @@
 		--layer: calc(var(--layer-modal) + 1);
 		/* Private tokens: the panel wants a bigger radius/shadow than the shared
 		   defaults, but redefining --radius-lg/--shadow-md here would leak into
-		   every component rendered inside the modal. */
-		--_radius: var(--radius-2xl);
+		   every component rendered inside the modal. The radius is clamped so an
+		   over-rounded --radius-2xl can't turn this large panel into a blob — see
+		   --radius-cap. Every panel surface (.body/.modal-fg/.close) inherits it. */
+		--_radius: min(var(--radius-2xl), var(--radius-cap, 40px));
 		--_shadow: var(--shadow-lg);
 		display: grid;
 		position: fixed;

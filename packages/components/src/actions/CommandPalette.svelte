@@ -640,7 +640,8 @@
 	}
 
 	.palette {
-		--_radius: var(--radius-xl);
+		/* Clamp so an over-rounded --radius-xl can't blob this large panel — see --radius-cap. */
+		--_radius: min(var(--radius-xl), var(--radius-cap, 40px));
 		position: fixed;
 		top: 20vh;
 		left: 50%;

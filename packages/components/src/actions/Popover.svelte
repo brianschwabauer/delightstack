@@ -1085,15 +1085,17 @@
 		--color-bg: var(--color-surface);
 		--layer: var(--layer-popover);
 		--easing: var(--ease-spring);
+		/* Clamp the radius so an over-rounded --popover-radius (or --radius-xl)
+		   can't turn the panel into a blob — see --radius-cap. The corner
+		   flattening reads the computed corner radius, so it picks this up too. */
+		--_radius: min(var(--popover-radius, var(--radius-xl)), var(--radius-cap, 40px));
 		z-index: var(--layer);
 		background-color: var(--color-bg);
 		border: 1px solid var(--color-border, transparent);
-		border-radius: var(--popover-radius, var(--radius-xl));
+		border-radius: var(--_radius);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-radius: calc(
-				var(--popover-radius, var(--radius-xl)) * var(--squircle-ratio, 2)
-			);
+			border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 		}
 		/* Light mode: a real drop shadow lifts the panel off the page. Dark mode:
 		 * the --shadow-md token resolves to transparent (dark shadows are

@@ -399,8 +399,9 @@
 		--label-padding: var(--padding-label, 4px 10px);
 		--label-radius: var(--radius-md, 4px);
 		--label-font-size: var(--text-sm, 0.8125rem);
-		/* Rounded media corners — override with --cmp-radius (0 to disable) */
-		--_radius: var(--cmp-radius, var(--radius-xl, 20px));
+		/* Rounded media corners — override with --cmp-radius (0 to disable). Clamped
+		   so an over-rounded radius can't blob this large surface — see --radius-cap. */
+		--_radius: min(var(--cmp-radius, var(--radius-xl, 20px)), var(--radius-cap, 40px));
 
 		position: relative;
 		overflow: hidden;

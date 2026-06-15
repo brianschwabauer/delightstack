@@ -775,27 +775,23 @@
 		/* Generous, concentric corners (the inner padding + cell radius nests
 		   neatly inside). Transparent by default so the calendar composes onto
 		   any surface; `filled`/`outline` give it a card edge. */
-		border-radius: var(--radius-xl, 20px);
+		/* Clamp so an over-rounded radius token can't blob the calendar — see
+		   --radius-cap. Variants just reassign --_radius; the base border-radius
+		   + squircle block below pick it up. */
+		--_radius: min(var(--radius-xl, 20px), var(--radius-cap, 40px));
+		border-radius: var(--_radius);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-radius: calc(var(--radius-xl, 20px) * var(--squircle-ratio, 2));
+			border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 		}
 		background: transparent;
 
 		&.dense {
-			border-radius: var(--radius-lg, 10px);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
-			}
+			--_radius: min(var(--radius-lg, 10px), var(--radius-cap, 40px));
 		}
 
 		&.comfortable {
-			border-radius: var(--radius-2xl, 30px);
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(var(--radius-2xl, 30px) * var(--squircle-ratio, 2));
-			}
+			--_radius: min(var(--radius-2xl, 30px), var(--radius-cap, 40px));
 		}
 
 		&.filled {

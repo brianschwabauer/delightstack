@@ -222,6 +222,12 @@ html {
 	--radius-2xl: 30px;
 	--radius-3xl: 60px;
 	--radius-full: 1e5px;
+	/* Ceiling for large surfaces (Popover, Modal, …). A radius that reads as a
+	   gentle round on a Button looks like a blob on a big panel, so those
+	   components clamp their radius to this via min(). It only ever bites when a
+	   radius token/prop is pushed past it — default looks are untouched. Override
+	   globally to relax/tighten the ceiling everywhere at once. */
+	--radius-cap: 40px;
 
 	/* Typography — families */
 	--font-sans:

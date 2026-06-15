@@ -578,12 +578,14 @@
 		display: flex;
 		flex-direction: column;
 		background-color: var(--color-bg, light-dark(#fff, #0a0a0a));
-		border-top-left-radius: var(--radius-2xl, 28px);
-		border-top-right-radius: var(--radius-2xl, 28px);
+		/* Clamp so an over-rounded --radius-2xl can't blob this large sheet — see --radius-cap. */
+		--_radius: min(var(--radius-2xl, 28px), var(--radius-cap, 40px));
+		border-top-left-radius: var(--_radius);
+		border-top-right-radius: var(--_radius);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-top-left-radius: calc(var(--radius-2xl, 28px) * var(--squircle-ratio, 2));
-			border-top-right-radius: calc(var(--radius-2xl, 28px) * var(--squircle-ratio, 2));
+			border-top-left-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
+			border-top-right-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 		}
 		box-shadow:
 			var(--shadow-xl, 0 -8px 30px rgb(0 0 0 / 0.18)),
