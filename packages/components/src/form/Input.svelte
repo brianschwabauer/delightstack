@@ -2653,16 +2653,16 @@
 		border: 1px solid var(--_border);
 		background: var(--_panel);
 		color: var(--_text);
-		border-radius: var(--radius-xl, 16px);
+		border-radius: calc(var(--radius-lg, 10px) * 1.5);
 		/* Keep the native (baseline-styled) thumb clear of the rounded corners.
 		   scrollbar-width/scrollbar-color must NOT be set here — they disable the
 		   ::-webkit-scrollbar baseline styling in Chromium. */
 		--scrollbar-track-inset: calc(var(--radius-xl, 16px) / 2);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-radius: calc(var(--radius-xl, 16px) * var(--squircle-ratio, 2));
+			border-radius: calc(var(--radius-lg, 10px) * 1.5 * var(--squircle-ratio, 2));
 			--scrollbar-track-inset: calc(
-				var(--radius-xl, 16px) * var(--squircle-ratio, 2) / 2
+				var(--radius-lg, 10px) * 1.5 * var(--squircle-ratio, 2) / 2
 			);
 		}
 		overscroll-behavior: contain;
