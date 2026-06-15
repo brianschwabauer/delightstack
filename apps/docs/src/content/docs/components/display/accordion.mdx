@@ -7,6 +7,8 @@ import ComponentPreview from '../../../../components/ComponentPreview.astro';
 import AccordionDemo from '../../../../components/demos/AccordionDemo.svelte';
 import AccordionMultipleDemo from '../../../../components/demos/AccordionMultipleDemo.svelte';
 import AccordionDenseDemo from '../../../../components/demos/AccordionDenseDemo.svelte';
+import AccordionVariantsDemo from '../../../../components/demos/AccordionVariantsDemo.svelte';
+import AccordionSeparatedDemo from '../../../../components/demos/AccordionSeparatedDemo.svelte';
 import AccordionCustomTriggerDemo from '../../../../components/demos/AccordionCustomTriggerDemo.svelte';
 import AccordionNestedDemo from '../../../../components/demos/AccordionNestedDemo.svelte';
 import AccordionAlwaysOpenDemo from '../../../../components/demos/AccordionAlwaysOpenDemo.svelte';
@@ -43,6 +45,42 @@ ${'  '}</AccordionItem>
 </ComponentPreview>
 
 ## Examples
+
+### Variants
+
+By default an accordion is borderless — just a subtle hairline between items (and none after the
+last one), with items sitting flush against each other. Add `filled` to join the items into one
+tinted surface, or `outline` to wrap the whole set in a single bordered, rounded frame. Corners
+follow the library's squircle treatment.
+
+`filled` and `outline` are independent, so you can combine them for a framed set of filled items.
+
+<ComponentPreview code={`<!-- Default: hairline separators only -->
+<Accordion value="a">…</Accordion>
+
+<!-- Filled: items join into one tinted surface -->
+<Accordion filled value="a">…</Accordion>
+
+<!-- Outline: a single bordered, rounded frame -->
+<Accordion outline value="a">…</Accordion>`}>
+  <AccordionVariantsDemo client:load />
+</ComponentPreview>
+
+### Separated Panels
+
+By default items stay connected. Add `separated` and the open item animates _apart_ from the list,
+gaining a gap above and below so the active section reads as emphasised. With `filled` or `outline`
+this is especially nice: the single surface starts connected and **splits into rounded pieces** as
+an item opens — the item above rounds its bottom corners, the active item rounds all four, and the
+item below rounds its top corners. Closing the item glides everything back into one piece.
+
+<ComponentPreview code={`<!-- Outline frame that splits apart on open -->
+<Accordion outline separated value="b">…</Accordion>
+
+<!-- Filled surface that splits apart on open -->
+<Accordion filled separated value="b">…</Accordion>`}>
+  <AccordionSeparatedDemo client:load />
+</ComponentPreview>
 
 ### Multiple Panels Open
 
@@ -184,6 +222,9 @@ ${'  '}</AccordionItem>
 | `disabled` | `boolean` | `false` | Disable all items |
 | `dense` | `boolean` | `false` | Compact header/content padding |
 | `comfortable` | `boolean` | `false` | Relaxed header/content padding |
+| `filled` | `boolean` | `false` | Join items into one subtly tinted, rounded surface |
+| `outline` | `boolean` | `false` | Wrap the whole set in a single bordered, rounded (squircle) frame |
+| `separated` | `boolean` | `false` | Animate the open item apart from the list; with `filled`/`outline` the surface splits into rounded pieces |
 | `skeleton` | `boolean` | `false` | Show loading skeleton |
 | `skeleton_count` | `number` | `3` | Number of skeleton items to render |
 | `id` | `string` | auto | Element ID |

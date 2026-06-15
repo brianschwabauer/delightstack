@@ -87,7 +87,7 @@ have the exact types. Do not guess prop names.
 - `ThemeToggle` — Light/dark/auto theme switcher with animated sun-moon morph (docs: /components/actions/theme-toggle.md)
 
 ### Display
-- `Accordion` / `AccordionItem` — Stacked collapsible sections on semantic details/summary (docs: /components/display/accordion.md)
+- `Accordion` / `AccordionItem` — Stacked collapsible sections; default/`filled`/`outline` variants, optional `separated` mode where the open item splits the surface into rounded pieces (docs: /components/display/accordion.md)
 - `Avatar` — Profile image with initials fallback, status indicators, deterministic colors (docs: /components/display/avatar.md)
 - `AvatarGroup` — Stacked overlapping avatars with overflow indicator (docs: /components/display/avatar-group.md)
 - `Calendar` — Date display/selection with single, range, and multiple modes (docs: /components/display/calendar.md)

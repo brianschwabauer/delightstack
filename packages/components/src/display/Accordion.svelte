@@ -12,6 +12,12 @@
 		dense: boolean;
 		/** Whether the accordion uses comfortable (roomy) spacing */
 		comfortable: boolean;
+		/** Whether items are rendered as subtly filled surfaces */
+		filled: boolean;
+		/** Whether the whole accordion is wrapped in a bordered, rounded outline */
+		outline: boolean;
+		/** Whether the open item splits away from the list with a separating gap */
+		separated: boolean;
 	}
 </script>
 
@@ -50,6 +56,15 @@
 
 		/** Whether to display in an expanded view */
 		comfortable = false,
+
+		/** Render each item as a subtly filled surface */
+		filled = false,
+
+		/** Wrap the whole accordion in a bordered, rounded outline */
+		outline = false,
+
+		/** Animate the open item apart from the list (rounds the split edges) */
+		separated = false,
 
 		/** Show skeleton shimmer placeholders */
 		skeleton = false,
@@ -104,6 +119,9 @@
 		disabled,
 		dense,
 		comfortable,
+		filled,
+		outline,
+		separated,
 	});
 
 	// Only set context when this is a container (not an item).
@@ -116,6 +134,9 @@
 		ctx.disabled = disabled;
 		ctx.dense = dense;
 		ctx.comfortable = comfortable;
+		ctx.filled = filled;
+		ctx.outline = outline;
+		ctx.separated = separated;
 	});
 
 	/* ------------------------------------------------------------------ */
@@ -128,6 +149,9 @@
 	const isDisabled = $derived(accordion ? accordion.disabled || disabled : disabled);
 	const isDense = $derived(accordion ? accordion.dense : dense);
 	const isComfortable = $derived(accordion ? accordion.comfortable : comfortable);
+	const isFilled = $derived(accordion ? accordion.filled : filled);
+	const isOutline = $derived(accordion ? accordion.outline : outline);
+	const isSeparated = $derived(accordion ? accordion.separated : separated);
 
 	const contentId = $derived(`${id}-content`);
 	const triggerId = $derived(`${id}-trigger`);
@@ -179,6 +203,9 @@
 		class:open={isOpen}
 		class:dense={isDense}
 		class:comfortable={isComfortable}
+		class:filled={isFilled}
+		class:outline={isOutline}
+		class:separated={isSeparated}
 		class:disabled={isDisabled}
 		{id}>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -237,6 +264,9 @@
 		class={['accordion', class_name].filter(Boolean).join(' ')}
 		class:dense
 		class:comfortable
+		class:filled
+		class:outline
+		class:separated
 		class:disabled
 		{id}>
 		{@render children?.()}
@@ -247,6 +277,10 @@
 	/* ========== Accordion Container ========== */
 	.accordion {
 		width: 100%;
+		/* Flex column keeps the open-item margins additive (block-flow would
+		   collapse adjacent margins), so the separation gap animates cleanly. */
+		display: flex;
+		flex-direction: column;
 
 		&.disabled {
 			opacity: 0.5;
@@ -256,6 +290,9 @@
 		&.skeleton {
 			pointer-events: none;
 		}
+
+		/* The outline frame and filled surfaces are drawn per-item (see .item)
+		   so the single frame can split into rounded pieces in separated mode. */
 
 		&.dense .skeleton-item {
 			padding: 0.5rem 0.75rem;
@@ -271,9 +308,24 @@
 
 	/* ========== AccordionItem ========== */
 	.item {
+		/* Subtle hairline separator between items (default & outline variants). */
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		perspective: 100px;
+		/* Open items glide apart; surfaces tint and corners round as the frame
+		   splits into pieces (separated mode). */
+		transition:
+			margin 320ms cubic-bezier(0.23, 1, 0.32, 1),
+			border-radius 320ms cubic-bezier(0.23, 1, 0.32, 1),
+			background-color 300ms,
+			border-color 300ms;
+
+		/* The last item never draws a separator — the container edge (outline) or
+		   nothing (plain/filled) closes the list. Kept as a transparent 1px so
+		   every row stays the same height. */
+		&:last-child {
+			border-bottom-color: transparent;
+		}
 
 		&.disabled {
 			opacity: 0.5;
@@ -343,6 +395,112 @@
 
 		&.comfortable .panel {
 			padding: 0 1.5rem 1.25rem;
+		}
+
+		/* ================================================================ */
+		/*  Rounded-surface variants (filled & outline)                     */
+		/*  Both share one corner radius and keep their group's outer       */
+		/*  corners rounded; per-item fills/borders let the single frame    */
+		/*  split into rounded pieces when an item opens (separated mode).  */
+		/* ================================================================ */
+		&.filled,
+		&.outline {
+			--_cr: var(--radius-lg, 10px);
+			overflow: clip;
+
+			@supports (corner-shape: squircle) {
+				corner-shape: squircle;
+				--_cr: calc(var(--radius-lg, 10px) * var(--squircle-ratio, 2));
+			}
+
+			/* The group keeps rounded outer corners even while fully connected. */
+			&:first-child {
+				border-start-start-radius: var(--_cr);
+				border-start-end-radius: var(--_cr);
+			}
+			&:last-child {
+				border-end-start-radius: var(--_cr);
+				border-end-end-radius: var(--_cr);
+			}
+		}
+
+		/* --- Filled — subtly tinted surfaces, hairline-separated.
+		   Every item shares one fill; the open item is not tinted darker. --- */
+		&.filled {
+			background: light-dark(
+				rgb(from var(--color-text, #000) r g b / 0.04),
+				rgb(from var(--color-text, #fff) r g b / 0.05)
+			);
+		}
+
+		/* --- Outline — per-item borders that merge into one frame --- */
+		&.outline {
+			border-inline: 1px solid
+				light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		}
+		/* Only the first item draws the frame's top edge while connected. */
+		&.outline:first-child {
+			border-top: 1px solid
+				light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		}
+		/* The frame's bottom edge (overrides the transparent last-child separator). */
+		&.outline:last-child {
+			border-bottom-color: light-dark(
+				var(--color-border, #e5e7eb),
+				var(--color-border, #374151)
+			);
+		}
+
+		/* ================================================================ */
+		/*  Separated mode — the open item splits away from the list        */
+		/* ================================================================ */
+		&.separated.open {
+			margin-block: 0.625rem;
+		}
+		/* Never push the group's own outer edge — only gap toward a neighbour. */
+		&.separated.open:first-child {
+			margin-top: 0;
+		}
+		&.separated.open:last-child {
+			margin-bottom: 0;
+		}
+
+		/* The active item becomes its own fully-rounded piece. */
+		&.filled.separated.open,
+		&.outline.separated.open {
+			border-radius: var(--_cr);
+		}
+		/* Outline active closes its (now exposed) top edge. */
+		&.outline.separated.open {
+			border-top: 1px solid
+				light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
+		}
+		/* Filled active drops the hairline that would cross its rounded bottom. */
+		&.filled.separated.open {
+			border-bottom-color: transparent;
+		}
+
+		/* The item just ABOVE the active one rounds its bottom. */
+		&.filled.separated:has(+ :global(.item.open)),
+		&.outline.separated:has(+ :global(.item.open)) {
+			border-end-start-radius: var(--_cr);
+			border-end-end-radius: var(--_cr);
+		}
+		/* Filled: drop its hairline too — the rounded edge is the boundary. */
+		&.filled.separated:has(+ :global(.item.open)) {
+			border-bottom-color: transparent;
+		}
+
+		/* The item just BELOW the active one rounds its top. */
+		&.filled.separated.open + :global(.item),
+		&.outline.separated.open + :global(.item) {
+			border-start-start-radius: var(--_cr);
+			border-start-end-radius: var(--_cr);
+		}
+		/* Outline: that lower piece needs a top edge to close it. */
+		&.outline.separated.open + :global(.item) {
+			border-top: 1px solid
+				light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
 		}
 	}
 
@@ -420,7 +578,8 @@
 		.skeleton-bar::after {
 			animation: none;
 		}
-		.chevron {
+		.chevron,
+		.item {
 			transition: none;
 		}
 	}
