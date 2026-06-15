@@ -24,12 +24,16 @@
 	style="padding: 2rem; border: 1px dashed var(--color-border, rgba(255,255,255,0.15)); border-radius: var(--radius-3, 8px); color: var(--color-text); text-align: center; user-select: none; cursor: context-menu;">
 	Right-click anywhere in this area
 </div>
-<Popover bind:opened x={menuX} y={menuY} strategy="fixed" arrow={false} dense>
-	<div style="min-width: 140px;">
-		<List>
-			<ListItem onclick={close}>Cut</ListItem>
-			<ListItem onclick={close}>Copy</ListItem>
-			<ListItem onclick={close}>Paste</ListItem>
-		</List>
-	</div>
+<Popover
+	bind:opened
+	x={menuX}
+	y={menuY}
+	strategy="fixed"
+	arrow={false}
+	radius="calc(var(--radius-lg, 10px) * 1.5)">
+	<List style="min-width: 140px;">
+		<ListItem onclick={close}>Cut</ListItem>
+		<ListItem onclick={close}>Copy</ListItem>
+		<ListItem onclick={close}>Paste</ListItem>
+	</List>
 </Popover>
