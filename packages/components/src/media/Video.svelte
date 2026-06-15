@@ -2067,9 +2067,17 @@
 	}
 	/* The fill is driven at ~60fps by the rAF loop during playback, so drop the
 	 * Range's position easing here — otherwise the fill lags ~100ms behind the
-	 * (instant) native thumb. Keep only the hover height grow. */
+	 * pointer/playback position. Keep only the hover height grow. */
 	.seek :global(.track-segment) {
 		transition: height 150ms var(--ease-out, ease);
+	}
+	/* Same for the handle: it follows the raw current time at ~60fps, so drop its
+	 * position easing so it stays pinned to the fill edge instead of lagging it.
+	 * Keep the hover grow + halo. */
+	.seek :global(.handle) {
+		transition:
+			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			box-shadow 150ms ease;
 	}
 
 	/* ---------- Seek hover tooltip ---------- */

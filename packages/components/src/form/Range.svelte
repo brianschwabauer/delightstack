@@ -377,8 +377,6 @@
 			{disabled}
 			value={lower_value}
 			class="lower"
-			class:dragging={lower_dragging}
-			style:--thumb-overshoot="{active_thumb === 'lower' ? overshoot_px : 0}px"
 			aria-valuenow={lower_value}
 			aria-valuemin={min}
 			aria-valuemax={range ? upper_value : max}
@@ -399,8 +397,6 @@
 				{disabled}
 				value={upper_value}
 				class="upper"
-				class:dragging={upper_dragging}
-				style:--thumb-overshoot="{active_thumb === 'upper' ? overshoot_px : 0}px"
 				aria-valuenow={upper_value}
 				aria-valuemin={lower_value}
 				aria-valuemax={max}
@@ -415,6 +411,27 @@
 				onpointerleave={() => (upper_hovering = false)}
 				ongotpointercapture={(e) => onThumbCaptureStart('upper', e)}
 				onlostpointercapture={() => onThumbCaptureEnd('upper')} />
+		{/if}
+
+		<!-- Visual handle(s). Positioned from the raw value (like the track fill)
+		     so they glide smoothly on programmatic value changes and never
+		     step-snap the way a native range thumb does. The native input above
+		     stays transparent but interactive (drag / keyboard / focus). -->
+		<div
+			class="handle lower"
+			class:hovering={lower_hovering}
+			class:dragging={lower_dragging}
+			style:left="calc({lower_pct}% + var(--handle-width) * {lower_thumb_offset}
+			+ {lower_visual_offset}px)">
+		</div>
+		{#if range}
+			<div
+				class="handle upper"
+				class:hovering={upper_hovering}
+				class:dragging={upper_dragging}
+				style:left="calc({upper_pct}% + var(--handle-width) * {upper_thumb_offset}
+				+ {upper_visual_offset}px)">
+			</div>
 		{/if}
 
 		{#if show_ticks && tick_count <= 50}
@@ -567,7 +584,9 @@
 		height: calc(var(--inactive-height) + 2px);
 	}
 
-	/* Native range inputs */
+	/* Native range inputs. Kept transparent and interactive for drag, keyboard
+	   and focus — the visible handle is the `.handle` element below, positioned
+	   from the raw value so it never step-snaps. */
 	input {
 		position: absolute;
 		width: 100%;
@@ -580,14 +599,6 @@
 		pointer-events: none;
 		outline: none;
 		z-index: 2;
-		/* Overshoot applied to the input element (not pseudo) to avoid native clipping */
-		transform: translateX(var(--thumb-overshoot, 0px));
-		transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
-	}
-
-	/* Disable overshoot transition during drag for instant tracking */
-	input.dragging {
-		transition: none;
 	}
 
 	input::-webkit-slider-runnable-track {
@@ -601,87 +612,87 @@
 		border: none;
 	}
 
-	/* M3-style vertical bar handle */
+	/* Invisible interaction thumb — the visible bar is `.handle`. Kept sized so
+	   the drag/keyboard hit target and the focus ring match the handle. */
 	input::-webkit-slider-thumb {
 		-webkit-appearance: none;
 		appearance: none;
 		width: var(--handle-width);
 		height: var(--handle-height);
-		border-radius: calc(var(--handle-width) / 2);
-		background: var(--fill-color);
+		background: transparent;
 		border: none;
-		box-shadow: none;
 		cursor: pointer;
 		pointer-events: auto;
 		margin-top: calc((var(--active-height) - var(--handle-height)) / 2);
-		transition:
-			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
-			box-shadow 150ms ease;
 	}
 	input::-moz-range-thumb {
 		width: var(--handle-width);
 		height: var(--handle-height);
-		border-radius: calc(var(--handle-width) / 2);
-		background: var(--fill-color);
+		background: transparent;
 		border: none;
-		box-shadow: none;
 		cursor: pointer;
 		pointer-events: auto;
-		transition:
-			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
-			box-shadow 150ms ease;
 	}
 
-	/* Handle hover: widen + grow taller + halo */
-	input:not(:disabled)::-webkit-slider-thumb:hover {
-		transform: scale(1.5, 1.3);
-		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.12);
-	}
-	input:not(:disabled)::-moz-range-thumb:hover {
-		transform: scale(1.5, 1.3);
-		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.12);
-	}
-
-	/* Handle active: widen + grow taller + larger halo + push down */
-	input:not(:disabled):active::-webkit-slider-thumb {
-		transform: scale(1.5, 1.15) translateY(2px);
-		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
-	}
-	input:not(:disabled):active::-moz-range-thumb {
-		transform: scale(1.5, 1.15) translateY(2px);
-		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
-	}
-
-	/* During custom drag: show active scale, no pseudo transition */
-	input.dragging::-webkit-slider-thumb {
-		transform: scale(1.5, 1.15);
-		transition: box-shadow 150ms ease;
-	}
-	input.dragging::-moz-range-thumb {
-		transform: scale(1.5, 1.15);
-		transition: box-shadow 150ms ease;
-	}
-
-	/* Focus ring */
+	/* Focus ring — drawn on the (transparent) thumb so it traces the handle box */
 	input:focus-visible::-webkit-slider-thumb {
 		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
+		border-radius: calc(var(--handle-width) / 2);
 	}
 	input:focus-visible::-moz-range-thumb {
 		outline: 2px solid var(--color-border-active, currentColor);
 		outline-offset: 2px;
+		border-radius: calc(var(--handle-width) / 2);
 	}
 
 	input:disabled {
 		cursor: not-allowed;
 	}
 	input:disabled::-webkit-slider-thumb {
-		background: var(--color-action-disabled, hsl(0 0% 70%));
 		cursor: not-allowed;
 	}
 	input:disabled::-moz-range-thumb {
-		background: var(--color-action-disabled, hsl(0 0% 70%));
 		cursor: not-allowed;
+	}
+
+	/* M3-style vertical bar handle (the visible thumb). */
+	.handle {
+		position: absolute;
+		top: 50%;
+		width: var(--handle-width);
+		height: var(--handle-height);
+		border-radius: calc(var(--handle-width) / 2);
+		background: var(--fill-color);
+		transform: translate(-50%, -50%);
+		pointer-events: none;
+		z-index: 2;
+		/* Glide to the new position on programmatic value changes (matches the
+		   track segments). The transform/box-shadow ease the hover grow + halo. */
+		transition:
+			left 100ms ease,
+			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			box-shadow 150ms ease;
+	}
+
+	/* Handle hover: widen + grow taller + halo */
+	.range-container:not(.disabled) .handle.hovering {
+		transform: translate(-50%, -50%) scale(1.5, 1.3);
+		box-shadow: 0 0 0 8px rgb(from var(--fill-color) r g b / 0.12);
+	}
+
+	/* During drag: bigger scale + larger halo, and instant position tracking
+	   (no `left`/`transform` easing) so it stays pinned under the pointer. */
+	.range-container:not(.disabled) .handle.dragging {
+		transform: translate(-50%, -50%) scale(1.5, 1.15);
+		box-shadow: 0 0 0 12px rgb(from var(--fill-color) r g b / 0.18);
+	}
+	.handle.dragging {
+		transition: box-shadow 150ms ease;
+	}
+
+	.disabled .handle {
+		background: var(--color-action-disabled, hsl(0 0% 70%));
 	}
 
 	.disabled {
