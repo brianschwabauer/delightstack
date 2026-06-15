@@ -34,7 +34,7 @@
 </script>
 
 <Form bind:data {schema} onsubmit={handleSubmit} validate_on="blur">
-	<div style="display: flex; flex-direction: column; gap: 1rem; max-width: 360px;">
+	<div style="display: flex; flex-direction: column; gap: 1.25rem; max-width: 360px;">
 		<Input name="email" label="Email" type="email" />
 		<Input name="password" label="Password" type="password" />
 		<Toggle name="remember" label="Remember me" />

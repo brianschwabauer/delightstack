@@ -314,7 +314,10 @@
 	function setValue(name: string, value: unknown) {
 		setValueAtPath(form_data, name, value);
 
-		if (validate_on === 'change' && touched[name]) {
+		// In 'change' mode, validate on every edit — including the first
+		// keystroke, before the field has been blurred. Error display keys off
+		// errors[name] (not touched), so this surfaces feedback live as you type.
+		if (validate_on === 'change') {
 			validateSingleField(name);
 		}
 
