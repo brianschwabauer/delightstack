@@ -23,7 +23,10 @@
 	import { intersectionObserver, ripple } from '@delightstack/utilities';
 	import { scrollbar } from '../actions/scrollbar';
 	import { getContext, setContext, type Component, type Snippet } from 'svelte';
+	import { fade, type TransitionConfig } from 'svelte/transition';
+	import { backOut } from 'svelte/easing';
 	import Button from './../actions/Button.svelte';
+	import Progress from '../feedback/Progress.svelte';
 
 	const propId = $props.id();
 
@@ -50,8 +53,14 @@
 		/** Link target (only used with `href`). */
 		target = undefined as '_self' | '_blank' | '_parent' | '_top' | undefined,
 
-		/** Called when the item is clicked. Makes the item interactive (like `href`). */
-		onclick = undefined as undefined | ((event: MouseEvent | KeyboardEvent) => void),
+		/** Called when the item is clicked. Makes the item interactive (like
+		    `href`). Return a promise to drive a loading spinner in the marker:
+		    a spinner appears if the work outlasts ~100ms, then a brief success
+		    check confirms a resolve (mirrors `<Button>`). */
+		onclick = undefined as
+			| undefined
+			| ((event: MouseEvent | KeyboardEvent) => void)
+			| ((event: MouseEvent | KeyboardEvent) => Promise<void>),
 
 		/* --- Timeline container props --- */
 		/** Horizontal layout */
@@ -148,12 +157,98 @@
 	/** An item is interactive when it has somewhere to go or something to do. */
 	const interactive = $derived(isItem && (!!onclick || !!href));
 
+	/* ------------------------------------------------------------------ */
+	/*  Promise-aware onclick (mirrors <Button>)                           */
+	/*  A returned promise drives a spinner in the marker: it appears only */
+	/*  if the work outlasts SHOW_DELAY (sub-100ms work reads as instant), */
+	/*  stays at least MIN_VISIBLE so it can't blink, then a success check  */
+	/*  confirms a resolve.                                                 */
+	/* ------------------------------------------------------------------ */
+	const SHOW_DELAY = 100;
+	const MIN_VISIBLE = 1000;
+	const CHECK_HOLD = 1000;
+
+	let in_flight = $state(false); // a returned promise is running
+	let spinner_visible = $state(false); // the spinner is actually rendered
+	let check_visible = $state(false); // the success checkmark is rendered
+	let show_timer: ReturnType<typeof setTimeout> | undefined;
+	let hide_timer: ReturnType<typeof setTimeout> | undefined;
+	let check_timer: ReturnType<typeof setTimeout> | undefined;
+	let spinner_shown_at = 0;
+
+	function clearTimers() {
+		clearTimeout(show_timer);
+		clearTimeout(hide_timer);
+		clearTimeout(check_timer);
+		show_timer = hide_timer = check_timer = undefined;
+	}
+	$effect(() => clearTimers); // tear down pending timers on destroy
+
+	function flashCheck() {
+		clearTimeout(check_timer);
+		check_visible = true;
+		check_timer = setTimeout(() => (check_visible = false), CHECK_HOLD);
+	}
+
+	function settle(success: boolean) {
+		// Settled before the spinner appeared → treat as instant, no spinner.
+		if (show_timer) {
+			clearTimeout(show_timer);
+			show_timer = undefined;
+			in_flight = false;
+			return;
+		}
+		// Keep the spinner for the rest of its minimum-visible window so it
+		// doesn't blink away the instant the promise resolves.
+		const remaining = Math.max(0, MIN_VISIBLE - (performance.now() - spinner_shown_at));
+		clearTimeout(hide_timer);
+		hide_timer = setTimeout(() => {
+			spinner_visible = false;
+			in_flight = false;
+			if (success) flashCheck();
+		}, remaining);
+	}
+
+	function handleActivate(event: MouseEvent | KeyboardEvent) {
+		if (in_flight) return;
+		const result = onclick?.(event);
+		if (!(result instanceof Promise)) return;
+
+		clearTimers();
+		check_visible = false;
+		in_flight = true;
+		// Hold off on the spinner — work that settles within SHOW_DELAY was
+		// effectively instant and never needs one.
+		show_timer = setTimeout(() => {
+			show_timer = undefined;
+			spinner_visible = true;
+			spinner_shown_at = performance.now();
+		}, SHOW_DELAY);
+
+		result.then(
+			() => settle(true),
+			() => settle(false),
+		);
+	}
+
 	function handleKey(event: KeyboardEvent) {
-		if (!onclick) return;
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
-			onclick(event);
+			handleActivate(event);
 		}
+	}
+
+	// The success check draws its stroke on as it spring-pops in.
+	function checkIn(_node: Element): TransitionConfig {
+		const reduce =
+			typeof matchMedia !== 'undefined' &&
+			matchMedia('(prefers-reduced-motion: reduce)').matches;
+		return {
+			duration: reduce ? 0 : 440,
+			easing: backOut,
+			css: (t: number) =>
+				`transform: scale(${0.3 + 0.7 * t}); opacity: ${Math.min(1, t * 2)}; --check-draw: ${24 * (1 - t)};`,
+		};
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -260,25 +355,53 @@
 			rel={href && target === '_blank' ? 'noreferrer' : undefined}
 			role={interactive && !href ? 'button' : undefined}
 			tabindex={interactive && !href ? 0 : undefined}
-			onclick={interactive ? onclick : undefined}
+			aria-busy={in_flight ? 'true' : undefined}
+			onclick={interactive ? handleActivate : undefined}
 			onkeydown={interactive && !href ? handleKey : undefined}>
 			<div class="marker">
-				<span class="node">
+				<span class="node" class:busy={spinner_visible || check_visible}>
+					{#if spinner_visible || check_visible}
+						<!-- Promise-aware feedback: a spinner while the work runs, then a
+						     brief success check, both sitting in the step's circle. -->
+						<span class="feedback" transition:fade={{ duration: 150 }}>
+							{#if spinner_visible}
+								<span class="layer" out:fade={{ duration: 120 }}>
+									<Progress size="00" color="currentColor" />
+								</span>
+							{:else}
+								<span class="layer" in:checkIn>
+									<svg
+										class="check"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										aria-hidden="true">
+										<polyline points="20 6 9 17 4 12" />
+									</svg>
+								</span>
+							{/if}
+						</span>
+					{/if}
 					{#if icon}
 						{@const Icon = icon}
-						<Icon />
+						<span class="glyph"><Icon /></span>
 					{:else if status === 'complete'}
-						<svg
-							class="check"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="3.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							aria-hidden="true">
-							<polyline points="20 6 9 17 4 12" />
-						</svg>
+						<span class="glyph">
+							<svg
+								class="check"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="3.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true">
+								<polyline points="20 6 9 17 4 12" />
+							</svg>
+						</span>
 					{/if}
 				</span>
 			</div>
@@ -698,13 +821,59 @@
 		--node-scale: 1;
 	}
 
-	.node :global(svg) {
-		width: 62%;
-		height: 62%;
+	/* Resting glyph (a custom icon, or the complete-status check). The wrapper is
+	   sized to the node and its svg fills it — so it works whatever the icon
+	   component renders, and stays separate from the `.feedback` layers. */
+	.node > .glyph {
+		display: grid;
+		place-items: center;
+		width: 63%;
+		height: 63%;
 	}
-	.check {
+	.node > .glyph :global(svg) {
+		width: 100%;
+		height: 100%;
+	}
+	/* The resting glyph fades away while the promise feedback occupies the node. */
+	.node.busy > .glyph {
+		opacity: 0;
+	}
+
+	/* ========== Promise-aware feedback (spinner → success check) ========== */
+	.feedback {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		z-index: 1;
+	}
+	.feedback .layer {
+		grid-area: 1 / 1; /* stack the spinner and the check in one cell */
+		display: grid;
+		place-items: center;
+	}
+	/* Fit the (fixed 16px) spinner to the node and give it a faint same-colour
+	   track so it reads as one ring inside the marker. */
+	.feedback :global(.progress) {
+		scale: calc(var(--node) / 20);
+	}
+	.feedback :global(circle.track) {
+		stroke: rgb(from currentColor r g b / 0.25);
+	}
+	.feedback :global(circle.arc) {
+		stroke: currentColor;
+	}
+	.feedback .check {
 		width: 64%;
 		height: 64%;
+	}
+	.feedback .check polyline {
+		stroke-dasharray: 24;
+		stroke-dashoffset: var(--check-draw, 0);
+	}
+	/* Hold the active ping while the step is working — the spinner is the focus. */
+	.item.active.motion .node.busy::before {
+		animation: none;
 	}
 
 	/* Active — the "you are here" node: a steady glow plus an expanding ping. */

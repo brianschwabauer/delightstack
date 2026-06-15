@@ -12,6 +12,7 @@ import TimelineAlternateDemo from '../../../../components/demos/TimelineAlternat
 import TimelineLoadMoreDemo from '../../../../components/demos/TimelineLoadMoreDemo.svelte';
 import TimelineSkeletonDemo from '../../../../components/demos/TimelineSkeletonDemo.svelte';
 import TimelineInteractiveDemo from '../../../../components/demos/TimelineInteractiveDemo.svelte';
+import TimelineAsyncDemo from '../../../../components/demos/TimelineAsyncDemo.svelte';
 
 ## Import
 
@@ -116,6 +117,30 @@ ${'  '}<TimelineItem status="active" date="Jan 12" title="Out for Delivery" href
   <TimelineInteractiveDemo client:load />
 </ComponentPreview>
 
+### Async Actions
+
+Return a promise from `onclick` and the step's marker drives its own loading feedback (just like `<Button>`): a spinner appears in the circle if the work outlasts ~100ms, stays visible long enough not to blink, then a brief success check confirms a resolve. Re-clicks are ignored while it's in flight.
+
+<ComponentPreview code={`<script>
+${'  '}async function deploy() {
+${'  '}${'  '}await new Promise((resolve) => setTimeout(resolve, 1500));
+${'  '}}
+</script>
+
+<Timeline>
+${'  '}<TimelineItem status="complete" date="9:00 AM" title="Build started">
+${'  '}${'  '}Compiled successfully.
+${'  '}</TimelineItem>
+${'  '}<TimelineItem status="complete" date="9:02 AM" title="Tests passed">
+${'  '}${'  '}All checks green.
+${'  '}</TimelineItem>
+${'  '}<TimelineItem status="active" date="9:05 AM" title="Deploy" onclick={deploy}>
+${'  '}${'  '}Click to deploy — the marker shows a spinner while it runs, then a check.
+${'  '}</TimelineItem>
+</Timeline>`}>
+  <TimelineAsyncDemo client:load />
+</ComponentPreview>
+
 ### Custom Marker Color
 
 <ComponentPreview code={`<Timeline>
@@ -164,7 +189,7 @@ ${'  '}</TimelineItem>
 | `color` | `string` | - | Marker color override (CSS color value) |
 | `status` | `'complete' \| 'active' \| 'pending'` | - | Event status for marker styling |
 | `href` | `string` | - | Makes the item a link (renders an `<a>`). Enables hover/ripple/press effects |
-| `onclick` | `(event) => void` | - | Click handler. Makes the item interactive (hover/ripple/press effects) |
+| `onclick` | `(event) => void \| Promise<void>` | - | Click handler. Makes the item interactive (hover/ripple/press effects). Return a promise to show a loading spinner in the marker, then a success check on resolve |
 | `target` | `'_self' \| '_blank' \| '_parent' \| '_top'` | - | Link target (used with `href`) |
 | `children` | `Snippet` | - | Event body content |
 
