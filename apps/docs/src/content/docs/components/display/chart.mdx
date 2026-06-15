@@ -116,6 +116,26 @@ ${'  '}colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']}
   <ChartCustomColorsDemo client:load />
 </ComponentPreview>
 
+### Theming
+
+By default the series colors come from the theme's categorical chart palette
+(`--chart-1` … `--chart-8` in `@delightstack/components/styles`), so a chart
+dropped into a delightstack dashboard matches the active theme — including
+light/dark — with no configuration. The palette is a tonal "brand family"
+derived from your `--color-primary` seed (hues stay in an analogous band while
+lightness varies), so rebranding the app recolors the charts automatically.
+
+To recolor a single series globally, override the token in your own CSS:
+
+```css
+:root {
+  --chart-1: #6366f1;
+  --chart-2: oklch(0.7 0.15 30);
+}
+```
+
+For a one-off chart, prefer the `colors` prop or a per-series `color`.
+
 ### Skeleton Loading
 
 <ComponentPreview code={`<Chart type="bar" skeleton={loading} height={300} data={loading ? empty : data} />
@@ -130,7 +150,7 @@ ${'  '}colors={['#6366f1', '#ec4899', '#14b8a6', '#f97316']}
 | `type` | `'line' \| 'area' \| 'bar' \| 'horizontal-bar' \| 'pie' \| 'donut'` | `'line'` | Chart type |
 | `data` | `ChartData` | required | Data to display |
 | `height` | `number` | `300` | Chart height in pixels |
-| `colors` | `string[]` | - | Custom color palette (overrides 8-color default) |
+| `colors` | `string[]` | theme | Custom color palette (overrides the theme `--chart-*` default) |
 | `show_grid` | `boolean` | `true` | Show grid lines |
 | `show_legend` | `boolean` | `true` | Show legend |
 | `show_tooltip` | `boolean` | `true` | Enable interactive tooltips |

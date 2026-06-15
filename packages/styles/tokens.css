@@ -198,6 +198,53 @@ html {
 	--skeleton-bg: color-mix(in oklch, var(--color-text) 10%, transparent);
 	--skeleton-sheen: color-mix(in oklch, var(--color-text) 12%, transparent);
 
+	/* --- Data visualization (charts) ---
+	   Categorical series palette for the Chart component, derived from the brand
+	   seed so a chart dropped into a delightstack dashboard matches the active
+	   theme — recolor the app by changing --color-primary and the charts follow.
+	   Rather than spinning the full color wheel, the hues stay in a cohesive cool
+	   band around the brand hue (greens → teals → the brand → blues) while
+	   lightness + chroma vary alongside, so the set reads as one tonal "brand
+	   family" yet stays legible series-to-series. Separation rides mainly on
+	   lightness — the strongest perceptual channel — so series stay distinct on
+	   thin lines / small slices and for colorblind readers. Series 1 sits on the
+	   brand hue; 1–6 are the distinct core (the common dashboard case), while 7
+	   (darkest) and 8 (palest) extend the family for denser charts. Dark mode
+	   lifts lightness so series pop on dark surfaces. Override any --chart-N to
+	   recolor one series, or pass the `colors` prop / per-series `color`. */
+	--chart-1: light-dark(
+		oklch(from var(--color-primary) 0.6 0.11 h),
+		oklch(from var(--color-primary) 0.7 0.1 h)
+	);
+	--chart-2: light-dark(
+		oklch(from var(--color-primary) 0.72 0.14 calc(h - 67)),
+		oklch(from var(--color-primary) 0.8 0.13 calc(h - 67))
+	);
+	--chart-3: light-dark(
+		oklch(from var(--color-primary) 0.5 0.13 calc(h + 38)),
+		oklch(from var(--color-primary) 0.62 0.13 calc(h + 38))
+	);
+	--chart-4: light-dark(
+		oklch(from var(--color-primary) 0.8 0.08 calc(h - 29)),
+		oklch(from var(--color-primary) 0.84 0.08 calc(h - 29))
+	);
+	--chart-5: light-dark(
+		oklch(from var(--color-primary) 0.63 0.13 calc(h + 53)),
+		oklch(from var(--color-primary) 0.72 0.13 calc(h + 53))
+	);
+	--chart-6: light-dark(
+		oklch(from var(--color-primary) 0.58 0.14 calc(h - 78)),
+		oklch(from var(--color-primary) 0.68 0.14 calc(h - 78))
+	);
+	--chart-7: light-dark(
+		oklch(from var(--color-primary) 0.44 0.1 calc(h + 18)),
+		oklch(from var(--color-primary) 0.56 0.11 calc(h + 18))
+	);
+	--chart-8: light-dark(
+		oklch(from var(--color-primary) 0.86 0.05 calc(h - 12)),
+		oklch(from var(--color-primary) 0.88 0.05 calc(h - 12))
+	);
+
 	/* ============================================================
 	 * NON-COLOR TOKENS (named scales)
 	 * ============================================================ */

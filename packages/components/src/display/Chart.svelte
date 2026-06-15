@@ -84,15 +84,20 @@
 		class?: string;
 	} = $props();
 
+	// Defaults pull from the theme's categorical chart palette (tokens.css), so a
+	// chart dropped into a delightstack dashboard matches the active theme out of
+	// the box. The hex fallbacks only apply when the styles package isn't loaded.
+	// Override per chart with the `colors` prop, per series with `Dataset.color`,
+	// or globally by setting --chart-N in CSS.
 	const DEFAULT_COLORS = [
-		'#3b82f6',
-		'#ef4444',
-		'#10b981',
-		'#f59e0b',
-		'#8b5cf6',
-		'#ec4899',
-		'#06b6d4',
-		'#84cc16',
+		'var(--chart-1, #3b82f6)',
+		'var(--chart-2, #ef4444)',
+		'var(--chart-3, #10b981)',
+		'var(--chart-4, #f59e0b)',
+		'var(--chart-5, #8b5cf6)',
+		'var(--chart-6, #ec4899)',
+		'var(--chart-7, #06b6d4)',
+		'var(--chart-8, #84cc16)',
 	];
 
 	let container_width = $state(0);
@@ -832,7 +837,11 @@
 				<!-- Area fills -->
 				{#if type === 'area'}
 					{#each line_datasets as ds}
-						<path d={ds.area_path} fill={ds.color} fill-opacity="0.15" class="area" />
+						<path
+							d={ds.area_path}
+							style:fill={ds.color}
+							fill-opacity="0.15"
+							class="area" />
 					{/each}
 				{/if}
 
@@ -841,7 +850,7 @@
 					<path
 						d={ds.line_path}
 						fill="none"
-						stroke={ds.color}
+						style:stroke={ds.color}
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
@@ -858,8 +867,8 @@
 								cx={pt.x}
 								cy={pt.y}
 								r={show_points ? 4 : 8}
-								fill={show_points ? ds.color : 'transparent'}
-								stroke={show_points ? 'var(--color-bg, white)' : 'none'}
+								style:fill={show_points ? ds.color : 'transparent'}
+								style:stroke={show_points ? 'var(--color-bg, white)' : 'none'}
 								stroke-width={show_points ? 2 : 0}
 								class="point"
 								onmouseenter={(e) =>
@@ -924,7 +933,7 @@
 						y={bar.y}
 						width={Math.max(0, bar.width)}
 						height={Math.max(0, bar.height)}
-						fill={bar.color}
+						style:fill={bar.color}
 						rx="2"
 						class="bar"
 						style:transform-origin="{bar.x + bar.width / 2}px {PADDING_TOP +
@@ -984,7 +993,7 @@
 						y={bar.y}
 						width={Math.max(0, bar.width)}
 						height={Math.max(0, bar.height)}
-						fill={bar.color}
+						style:fill={bar.color}
 						rx="2"
 						class="hbar"
 						style:transform-origin="{H_PADDING_LEFT}px {bar.y + bar.height / 2}px"
@@ -1006,7 +1015,7 @@
 					{#each pie_segments as seg}
 						<path
 							d={seg.path}
-							fill={seg.color}
+							style:fill={seg.color}
 							class="segment"
 							style:transform-origin="{container_width / 2}px {height / 2}px"
 							onmouseenter={(e) =>
