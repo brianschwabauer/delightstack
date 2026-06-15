@@ -248,30 +248,12 @@
 		{id}
 		style:--marker-color={color || undefined}
 		{@attach intersectionObserver({ onintersectonce: () => (visible = true) })}>
-		<div class="marker">
-			<span class="node">
-				{#if icon}
-					{@const Icon = icon}
-					<Icon />
-				{:else if status === 'complete'}
-					<svg
-						class="check"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="3.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						aria-hidden="true">
-						<polyline points="20 6 9 17 4 12" />
-					</svg>
-				{/if}
-			</span>
-		</div>
-		<div class="connector"></div>
+		<!-- The marker + content together form one clickable surface (`.lead`),
+		     so the step circle is part of the touch target — not just the text.
+		     The connector lives outside it (it's the rail, not the button). -->
 		<svelte:element
 			this={href ? 'a' : 'div'}
-			class="content"
+			class="lead"
 			class:interactive
 			href={href || undefined}
 			target={href ? target : undefined}
@@ -279,20 +261,49 @@
 			role={interactive && !href ? 'button' : undefined}
 			tabindex={interactive && !href ? 0 : undefined}
 			onclick={interactive ? onclick : undefined}
-			onkeydown={interactive && !href ? handleKey : undefined}
-			{@attach ripple({ enabled: interactive, zIndex: 0 })}>
-			{#if date}
-				<time datetime={iso_date}>{formatted_date}</time>
-			{/if}
-			{#if title}
-				<div class="title">{title}</div>
-			{/if}
-			{#if children}
-				<div class="body">
-					{@render children()}
-				</div>
-			{/if}
+			onkeydown={interactive && !href ? handleKey : undefined}>
+			<div class="marker">
+				<span class="node">
+					{#if icon}
+						{@const Icon = icon}
+						<Icon />
+					{:else if status === 'complete'}
+						<svg
+							class="check"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="3.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true">
+							<polyline points="20 6 9 17 4 12" />
+						</svg>
+					{/if}
+				</span>
+			</div>
+			<div class="content">
+				<!-- The ripple + hover tint share one rounded panel that hugs the text,
+				     so the press reads as intentional (not the whole arbitrary row).
+				     The panel sits over the text but the click still bubbles to the
+				     `.lead`, so the marker stays part of the touch target. -->
+				{#if interactive}
+					<span class="surface" aria-hidden="true" {@attach ripple({ zIndex: 0 })}></span>
+				{/if}
+				{#if date}
+					<time datetime={iso_date}>{formatted_date}</time>
+				{/if}
+				{#if title}
+					<div class="title">{title}</div>
+				{/if}
+				{#if children}
+					<div class="body">
+						{@render children()}
+					</div>
+				{/if}
+			</div>
 		</svelte:element>
+		<div class="connector"></div>
 	</li>
 {:else if skeleton}
 	<!-- Skeleton -->
@@ -311,24 +322,26 @@
 				class:vertical={!horizontal}
 				class:dense
 				class:comfortable>
-				<div class="marker">
-					<span class="skeleton-circle" style:--shimmer-delay="{i * 120}ms"></span>
+				<div class="lead">
+					<div class="marker">
+						<span class="skeleton-circle" style:--shimmer-delay="{i * 120}ms"></span>
+					</div>
+					<div class="content">
+						<div
+							class="skeleton-bar skeleton-date"
+							style:--shimmer-delay="{i * 120 + 60}ms">
+						</div>
+						<div
+							class="skeleton-bar skeleton-title-bar"
+							style:--shimmer-delay="{i * 120 + 120}ms">
+						</div>
+						<div
+							class="skeleton-bar skeleton-body-bar"
+							style:--shimmer-delay="{i * 120 + 180}ms">
+						</div>
+					</div>
 				</div>
 				<div class="connector"></div>
-				<div class="content">
-					<div
-						class="skeleton-bar skeleton-date"
-						style:--shimmer-delay="{i * 120 + 60}ms">
-					</div>
-					<div
-						class="skeleton-bar skeleton-title-bar"
-						style:--shimmer-delay="{i * 120 + 120}ms">
-					</div>
-					<div
-						class="skeleton-bar skeleton-body-bar"
-						style:--shimmer-delay="{i * 120 + 180}ms">
-					</div>
-				</div>
 			</li>
 		{/each}
 	</ol>
@@ -365,8 +378,10 @@
 			{@render children?.()}
 			{#if pending}
 				<li class="item pending-item horizontal" class:motion={animate}>
-					<div class="marker">
-						<span class="node pending-node"></span>
+					<div class="lead">
+						<div class="marker">
+							<span class="node pending-node"></span>
+						</div>
 					</div>
 				</li>
 			{/if}
@@ -410,8 +425,10 @@
 		{@render children?.()}
 		{#if pending}
 			<li class="item pending-item vertical" class:motion={animate}>
-				<div class="marker">
-					<span class="node pending-node"></span>
+				<div class="lead">
+					<div class="marker">
+						<span class="node pending-node"></span>
+					</div>
 				</div>
 			</li>
 		{/if}
@@ -524,7 +541,7 @@
 		--rail-color: var(--color-border, #e5e7eb);
 
 		position: relative;
-		display: flex;
+		display: block;
 
 		&.dense {
 			--node: 14px;
@@ -547,21 +564,15 @@
 			--fs-body: 0.9rem;
 		}
 
-		/* Vertical layout */
+		/* Vertical layout — the rail trails below each item. */
 		&.vertical {
-			flex-direction: row;
-			align-items: flex-start;
-			gap: var(--gap);
 			padding-bottom: var(--run);
 		}
 
 		/* Horizontal layout. Equal-width columns (min-width drives the spacing)
 		   with the node centred, so adjacent nodes sit one item-width apart and
-		   the rail can span cleanly from one to the next. No right padding — that
-		   would shift the centred node off the item's true centre. */
+		   the rail can span cleanly from one to the next. */
 		&.horizontal {
-			flex-direction: column;
-			align-items: center;
 			min-width: 9rem;
 			scroll-snap-align: start;
 
@@ -571,6 +582,26 @@
 			&.comfortable {
 				min-width: 12.5rem;
 			}
+		}
+	}
+
+	/* ========== Lead: the marker + content row (one clickable surface) ========== */
+	.lead {
+		display: flex;
+		width: 100%;
+		box-sizing: border-box;
+		color: inherit;
+		text-decoration: none;
+
+		.item.vertical & {
+			flex-direction: row;
+			align-items: flex-start;
+			gap: var(--gap);
+		}
+
+		.item.horizontal & {
+			flex-direction: column;
+			align-items: center;
 		}
 	}
 
@@ -619,12 +650,13 @@
 
 	.item.vertical.alternate.odd {
 		margin-left: calc(50% - var(--node) / 2);
-		flex-direction: row;
 	}
 
 	.item.vertical.alternate.even {
-		flex-direction: row-reverse;
 		text-align: right;
+	}
+	.item.vertical.alternate.even .lead {
+		flex-direction: row-reverse;
 	}
 
 	/* ========== Marker / node ========== */
@@ -772,10 +804,55 @@
 		right: calc(var(--node) / 2 - var(--rail) / 2);
 	}
 
+	/* ========== Interactive lead (clickable step) ==========
+	   The whole marker + content surface is the touch target (mirrors Button:
+	   pointer cursor, ripple, press scale, snap-in / ease-out hover). The hover
+	   tint is painted only behind the text, by a pseudo-element, so an item
+	   gaining an onclick/href never changes its layout. */
+	.lead.interactive {
+		position: relative;
+		cursor: pointer;
+		outline: none;
+		-webkit-tap-highlight-color: transparent;
+		transition: scale 180ms ease;
+	}
+	.lead.interactive:active {
+		scale: 0.985;
+	}
+	.lead.interactive:focus-visible {
+		outline: 2px solid var(--color-action, #2563eb);
+		outline-offset: 3px;
+		border-radius: var(--radius-md, 5px);
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
+		}
+	}
+
+	/* Hovering the step leans its marker in and deepens its title. */
+	.lead.interactive:hover .node {
+		--node-scale: 1.1;
+		box-shadow: 0 0 0 6px rgb(from var(--accent) r g b / 0.18);
+		transition: scale 320ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+	}
+	.item.active .lead.interactive:hover .node {
+		box-shadow:
+			0 0 0 6px rgb(from var(--accent) r g b / 0.22),
+			0 0 16px 1px rgb(from var(--accent) r g b / 0.5);
+	}
+	.lead.interactive:hover .title {
+		color: var(--color-text-active, var(--color-text, #1a1a1a));
+		transition: none;
+	}
+
 	/* ========== Content ========== */
 	.content {
 		flex: 1;
 		min-width: 0;
+		position: relative;
+		/* own stacking context so the tint (::before, z-index -1) tucks behind the
+		   text without escaping behind the whole item */
+		isolation: isolate;
 		/* nudge the first text line so it sits centred against the node */
 		padding-top: calc(var(--node) / 2 - 0.5em);
 
@@ -785,68 +862,48 @@
 			text-align: center;
 		}
 	}
-
-	/* Interactive items behave like a Button row: pointer cursor, a snap-in
-	   hover tint that eases out, ripple, and a press scale. Non-interactive
-	   items get none of this. */
-	.content.interactive {
-		display: block;
-		color: inherit;
-		text-decoration: none;
-		cursor: pointer;
-		position: relative;
-		overflow: hidden;
-		outline: none;
-		-webkit-tap-highlight-color: transparent;
-		/* breathing room for the hover tint / ripple, cancelled by the matching
-		   negative margin so the text keeps its place */
-		padding: calc(var(--node) / 2 - 0.5em + 0.3rem) 0.6rem 0.4rem;
-		margin: -0.3rem -0.6rem -0.4rem;
+	/* The hover tint — a rounded panel behind the text only. Absolutely
+	   positioned, so it adds no layout (interactive and plain items match). */
+	.content::before {
+		content: '';
+		position: absolute;
+		inset: -0.3rem -0.6rem;
+		z-index: -1;
 		border-radius: var(--radius-md, 5px);
-		/* OUT transition (snap in on hover — see :hover below) */
-		transition:
-			background-color 240ms ease,
-			scale 180ms ease;
+		background: transparent;
+		transition: background-color 240ms ease;
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
 		}
 	}
-	.item.horizontal .content.interactive {
-		padding: 0.4rem 0.7rem;
-		margin: 0.85rem -0.7rem 0;
+	.item.horizontal .content::before {
+		inset: -0.3rem -0.7rem;
 	}
-	/* keep the date/title/body above the ripple layer */
-	.content.interactive > * {
-		position: relative;
-		z-index: 1;
-	}
-	.content.interactive:focus-visible {
-		box-shadow: 0 0 0 2px var(--color-action, #2563eb);
-	}
-	.content.interactive:hover {
+	.lead.interactive:hover .content::before {
 		background: rgb(from var(--color-text, #333) r g b / 0.06);
-		/* snap the tint in; keep the press scale eased */
-		transition: scale 180ms ease;
-	}
-	.content.interactive:active {
-		scale: 0.985;
+		transition: none;
 	}
 
-	/* Hovering an interactive row leans its marker in and deepens its title. */
-	.item.interactive:has(> .content:hover) .node {
-		--node-scale: 1.1;
-		box-shadow: 0 0 0 6px rgb(from var(--accent) r g b / 0.18);
-		transition: scale 320ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
+	/* The ripple panel — the same rounded footprint as the tint, sitting on top
+	   so it catches the press and clips the ripple to a clean, intentional shape
+	   (not the whole arbitrary marker+content row). Transparent, so the tint
+	   behind the text stays the resting look. Clicks still bubble to `.lead`, so
+	   the marker remains part of the touch target. */
+	.surface {
+		position: absolute;
+		inset: -0.3rem -0.6rem;
+		z-index: 2;
+		border-radius: var(--radius-md, 5px);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius-md, 5px) * var(--squircle-ratio, 2));
+		}
 	}
-	.item.active.interactive:has(> .content:hover) .node {
-		box-shadow:
-			0 0 0 6px rgb(from var(--accent) r g b / 0.22),
-			0 0 16px 1px rgb(from var(--accent) r g b / 0.5);
-	}
-	.content.interactive:hover .title {
-		color: var(--color-text-active, var(--color-text, #1a1a1a));
-		transition: none;
+	.item.horizontal .surface {
+		inset: -0.3rem -0.7rem;
 	}
 
 	time {
