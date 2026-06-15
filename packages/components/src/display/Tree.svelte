@@ -562,6 +562,11 @@
 
 	let focused_id = $state<string | null>(null);
 	let keyboard_nav = $state(false);
+	/* True while the current focus was driven by a pointer press. Chromium
+	   matches :focus-visible on a modifier-held click (ctrl/shift), which would
+	   otherwise flash the container focus ring during multi-select — gate the
+	   ring on this so it only shows for keyboard (Tab) focus. */
+	let pointer_focus = $state(false);
 	let tree_element: HTMLElement | undefined = $state(undefined);
 
 	function focusNode(node_id: string) {
@@ -578,7 +583,15 @@
 	/* ------------------------------------------------------------------ */
 
 	function handleTreeKeyDown(e: KeyboardEvent) {
+		// A lone modifier press (holding Ctrl/Shift before a multi-select click)
+		// isn't keyboard navigation — leave the modality untouched, or the
+		// focus-visible ring would flash between pressing the modifier and the
+		// click landing.
+		if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') {
+			return;
+		}
 		keyboard_nav = true;
+		pointer_focus = false;
 		const visible = getVisibleNodeOrder();
 		if (visible.length === 0) return;
 
@@ -874,6 +887,7 @@
 		class:comfortable
 		class:show-lines={show_lines}
 		class:dragging={drag_node_id !== null}
+		class:pointer-focus={pointer_focus}
 		{id}
 		role="tree"
 		aria-activedescendant={focused_id ? `${id}-node-${focused_id}` : undefined}
@@ -881,6 +895,10 @@
 		tabindex="0"
 		bind:this={tree_element}
 		onkeydown={handleTreeKeyDown}
+		onpointerdown={() => {
+			keyboard_nav = false;
+			pointer_focus = true;
+		}}
 		onfocusin={() => {
 			if (!focused_id) {
 				const visible = getVisibleNodeOrder();
@@ -890,6 +908,7 @@
 		onfocusout={(e) => {
 			if (!tree_element?.contains(e.relatedTarget as Node)) {
 				focused_id = null;
+				pointer_focus = false;
 			}
 		}}>
 		{#each tree as node, root_index (node.id)}
@@ -1118,7 +1137,10 @@
 		-webkit-user-select: none;
 		user-select: none;
 
-		&:focus-visible {
+		/* Only surface the ring for keyboard (Tab) focus — :not(.pointer-focus)
+		   suppresses Chromium's modifier-held-click :focus-visible match so
+		   ctrl/shift multi-select clicks don't flash the container outline. */
+		&:focus-visible:not(.pointer-focus) {
 			box-shadow: inset 0 0 0 2px var(--color-action, #1976d2);
 			border-radius: 8px;
 			@supports (corner-shape: squircle) {
