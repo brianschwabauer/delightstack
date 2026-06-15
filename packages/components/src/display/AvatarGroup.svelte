@@ -134,7 +134,7 @@
 			<div
 				class="wrapper"
 				class:interactive={!!onclick}
-				style:z-index={direction === 'right' ? visible_avatars.length - i : i + 1}
+				style:z-index={direction === 'right' ? avatars.length - i : i + 1}
 				{@attach tooltip(avatar.name)}
 				in:scale|local={{
 					start: 0.3,
