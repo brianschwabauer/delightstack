@@ -640,6 +640,7 @@
 	}
 
 	.palette {
+		--_radius: var(--radius-xl);
 		position: fixed;
 		top: 20vh;
 		left: 50%;
@@ -647,16 +648,19 @@
 		z-index: var(--layer-popover);
 		width: min(600px, 90vw);
 		background-color: var(--color-bg);
-		border-radius: var(--radius-xl);
+		border-radius: var(--_radius);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-radius: calc(var(--radius-xl) * var(--squircle-ratio, 2));
+			border-radius: calc(var(--_radius) * var(--squircle-ratio, 2));
 		}
 		box-shadow: var(--shadow-lg);
 		border: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+		&.dense {
+			--_radius: calc(var(--radius-lg) * 1.5);
+		}
 	}
 
 	.input-wrapper {
@@ -743,6 +747,7 @@
 	}
 
 	.item {
+		--_radius: var(--radius-lg);
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -782,23 +787,21 @@
 		}
 
 		&.first-in-group {
-			border-top-left-radius: var(--radius-xl, 8px);
-			border-top-right-radius: var(--radius-xl, 8px);
+			border-top-left-radius: var(--_radius, 8px);
+			border-top-right-radius: var(--_radius, 8px);
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
-				border-top-left-radius: calc(var(--radius-xl, 8px) * var(--squircle-ratio, 2));
-				border-top-right-radius: calc(var(--radius-xl, 8px) * var(--squircle-ratio, 2));
+				border-top-left-radius: calc(var(--_radius, 8px) * var(--squircle-ratio, 2));
+				border-top-right-radius: calc(var(--_radius, 8px) * var(--squircle-ratio, 2));
 			}
 		}
 		&.last-in-group {
-			border-bottom-left-radius: var(--radius-xl, 8px);
-			border-bottom-right-radius: var(--radius-xl, 8px);
+			border-bottom-left-radius: var(--_radius, 8px);
+			border-bottom-right-radius: var(--_radius, 8px);
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
-				border-bottom-left-radius: calc(var(--radius-xl, 8px) * var(--squircle-ratio, 2));
-				border-bottom-right-radius: calc(
-					var(--radius-xl, 8px) * var(--squircle-ratio, 2)
-				);
+				border-bottom-left-radius: calc(var(--_radius, 8px) * var(--squircle-ratio, 2));
+				border-bottom-right-radius: calc(var(--_radius, 8px) * var(--squircle-ratio, 2));
 			}
 		}
 
