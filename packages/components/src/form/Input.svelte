@@ -377,7 +377,10 @@
 		if (label_pinned) return true;
 		/* Otherwise the label animates up on focus or once there's a value. */
 		if (focused) return true;
-		if (multiple && Array.isArray(value) && value.length > 0) return true;
+		/* In chips mode `value` is an array; an empty array is "no content", so
+		   float only once there's at least one chip (don't fall through to the
+		   scalar check below, where `[] !== ''` would wrongly count as content). */
+		if (multiple) return Array.isArray(value) && value.length > 0;
 		if (value !== undefined && value !== null && value !== '') return true;
 		return false;
 	});
