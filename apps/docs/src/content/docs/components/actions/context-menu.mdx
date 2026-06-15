@@ -9,6 +9,8 @@ import ContextMenuDemo from '../../../../components/demos/ContextMenuDemo.svelte
 import ContextMenuIconsDemo from '../../../../components/demos/ContextMenuIconsDemo.svelte';
 import ContextMenuLinksDemo from '../../../../components/demos/ContextMenuLinksDemo.svelte';
 import ContextMenuActiveDemo from '../../../../components/demos/ContextMenuActiveDemo.svelte';
+import ContextMenuCustomDemo from '../../../../components/demos/ContextMenuCustomDemo.svelte';
+import ContextMenuPromiseDemo from '../../../../components/demos/ContextMenuPromiseDemo.svelte';
 
 ## Import
 
@@ -66,17 +68,20 @@ ${'  '}Right-click in this area
 
 ### With Icons
 
+Pass a Svelte component to an action's `icon` property to render it before the label.
+
 <ComponentPreview code={`<script>
 ${'  '}import { contextMenu, ContextMenu } from '@delightstack/components';
+${'  '}import { EditIcon, CopyIcon, DeleteIcon } from './icons';
 
 ${'  '}let lastAction = $state('');
 </script>
 
 <div {@attach contextMenu({
 ${'  '}actions: [
-${'  '}${'  '}{ label: 'Edit', onclick: () => lastAction = 'Edit clicked' },
-${'  '}${'  '}{ label: 'Copy', onclick: () => lastAction = 'Copy clicked' },
-${'  '}${'  '}{ label: 'Delete', onclick: () => lastAction = 'Delete clicked' },
+${'  '}${'  '}{ label: 'Edit', icon: EditIcon, onclick: () => lastAction = 'Edit clicked' },
+${'  '}${'  '}{ label: 'Copy', icon: CopyIcon, onclick: () => lastAction = 'Copy clicked' },
+${'  '}${'  '}{ label: 'Delete', icon: DeleteIcon, onclick: () => lastAction = 'Delete clicked' },
 ${'  '}]
 })}>
 ${'  '}Right-click for file options
@@ -131,45 +136,72 @@ ${'  '}Right-click to change view (current: {viewMode})
 
 ### Custom Rendered Items
 
-Use the `snippet` property to render custom content for an action item.
+Set an action's `snippet` property to render custom content instead of a plain `label`. Each action renders its own snippet, so you can compose icons, secondary text, shortcut hints, or any markup you like.
 
-```svelte
-<script>
-  import { contextMenu } from '@delightstack/components';
+<ComponentPreview code={`<script>
+${'  '}import { contextMenu, ContextMenu } from '@delightstack/components';
+
+${'  '}let lastAction = $state('');
 </script>
 
 <div {@attach contextMenu({
-  actions: [
-    {
-      snippet: (ctx) => {
-        // Custom rendering via snippet
-      },
-      onclick: () => doSomething()
-    }
-  ]
+${'  '}actions: [
+${'  '}${'  '}{ snippet: emailItem, onclick: () => lastAction = 'Shared via email' },
+${'  '}${'  '}{ snippet: linkItem, onclick: () => lastAction = 'Link copied' },
+${'  '}${'  '}{ snippet: embedItem, onclick: () => lastAction = 'Embed code copied' },
+${'  '}]
 })}>
-  Right-click for custom items
+${'  '}Right-click to share
 </div>
-```
+
+{#snippet row(emoji, title, hint)}
+${'  '}<span class="row">
+${'  '}${'  '}<span>{emoji}</span>
+${'  '}${'  '}<span class="title">{title}</span>
+${'  '}${'  '}<span class="hint">{hint}</span>
+${'  '}</span>
+{/snippet}
+
+{#snippet emailItem()}{@render row('✉️', 'Email', '⌘E')}{/snippet}
+{#snippet linkItem()}{@render row('🔗', 'Copy link', '⌘C')}{/snippet}
+{#snippet embedItem()}{@render row('🧩', 'Embed', '⌘B')}{/snippet}
+
+<ContextMenu />`}>
+	<ContextMenuCustomDemo client:load />
+</ComponentPreview>
 
 ### Promise-Aware Actions
 
-When an action's `onclick` returns a Promise, the menu stays open with loading feedback until the promise resolves.
+When an action's `onclick` returns a Promise, the clicked item shows a loading spinner while it is pending (after a short delay, so fast actions never flash one), and the menu stays open until the promise resolves.
 
-```svelte
+<ComponentPreview code={`<script>
+${'  '}import { contextMenu, ContextMenu } from '@delightstack/components';
+
+${'  '}let status = $state('');
+
+${'  '}function syncToCloud() {
+${'  '}${'  '}status = 'Syncing…';
+${'  '}${'  '}return new Promise((resolve) => {
+${'  '}${'  '}${'  '}setTimeout(() => {
+${'  '}${'  '}${'  '}${'  '}status = 'Synced to cloud';
+${'  '}${'  '}${'  '}${'  '}resolve();
+${'  '}${'  '}${'  '}}, 1500);
+${'  '}${'  '}});
+${'  '}}
+</script>
+
 <div {@attach contextMenu({
-  actions: [
-    {
-      label: 'Sync to Cloud',
-      onclick: async () => {
-        await api.syncFile(fileId);
-      }
-    }
-  ]
+${'  '}actions: [
+${'  '}${'  '}{ label: 'Sync to cloud', onclick: syncToCloud },
+${'  '}${'  '}{ label: 'Rename', onclick: () => status = 'Renamed' },
+${'  '}]
 })}>
-  Right-click to sync
+${'  '}Right-click and choose "Sync to cloud"
 </div>
-```
+
+<ContextMenu />`}>
+	<ContextMenuPromiseDemo client:load />
+</ComponentPreview>
 
 ## API
 

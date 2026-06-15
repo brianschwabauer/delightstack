@@ -1,5 +1,8 @@
 <script>
 	import { ContextMenu, contextMenu } from '@delightstack/components/actions';
+	import EditIcon from './ContextMenuEditIcon.svelte';
+	import CopyIcon from './ContextMenuCopyIcon.svelte';
+	import DeleteIcon from './ContextMenuDeleteIcon.svelte';
 
 	let lastAction = $state('');
 </script>
@@ -7,9 +10,13 @@
 <div
 	{@attach contextMenu({
 		actions: [
-			{ label: 'Edit', onclick: () => (lastAction = 'Edit clicked') },
-			{ label: 'Copy', onclick: () => (lastAction = 'Copy clicked') },
-			{ label: 'Delete', onclick: () => (lastAction = 'Delete clicked') },
+			{ label: 'Edit', icon: EditIcon, onclick: () => (lastAction = 'Edit clicked') },
+			{ label: 'Copy', icon: CopyIcon, onclick: () => (lastAction = 'Copy clicked') },
+			{
+				label: 'Delete',
+				icon: DeleteIcon,
+				onclick: () => (lastAction = 'Delete clicked'),
+			},
 		],
 	})}
 	style="
