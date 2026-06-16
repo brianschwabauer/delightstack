@@ -3,6 +3,10 @@
 import { DatabaseServer } from '@delightstack/database/worker';
 import { AuthDatabaseServer as BaseAuthDatabaseServer } from '@delightstack/auth/worker';
 import { WebsocketServer } from '@delightstack/websocket/worker';
+import {
+	createPresenceServer,
+	PRESENCE_EPHEMERAL_EVENTS,
+} from '@delightstack/presence/server';
 import { RateLimiterServer } from '@delightstack/rate-limiter';
 import { ImageProcessorContainer } from '@delightstack/images/worker';
 import type { UploadOptions, ImageRecord } from '@delightstack/images';
@@ -96,11 +100,22 @@ export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
 
 /**
  * WebSocket server — one instance per room (org).
- * Handles presence tracking and AI stream resume/cancel.
+ * Relays presence (live cursors, roster, reactions, field presence) via
+ * `@delightstack/presence/server`, and handles AI stream resume/cancel.
  */
 export class AppWebsocketServer extends WebsocketServer {
 	constructor(ctx: DurableObjectState, env: Env) {
-		super({}, ctx, env);
+		const presence = createPresenceServer();
+		super(
+			{
+				onMessage: presence.onMessage,
+				onDisconnect: presence.onDisconnect,
+				// Cursor updates are high-frequency — give presence its own bucket.
+				rate_limit: { ephemeral_events: PRESENCE_EPHEMERAL_EVENTS },
+			},
+			ctx,
+			env,
+		);
 	}
 }
 

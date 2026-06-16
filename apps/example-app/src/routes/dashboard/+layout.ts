@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
+import { createDelightPresence } from '@delightstack/presence/adapters';
 import { createClients } from '$lib/clients';
 import type { LayoutLoad } from './$types';
 
@@ -18,5 +19,8 @@ export const load: LayoutLoad = async ({ parent, fetch }) => {
 		entities: { image: { search_mode: 'server' } },
 	});
 
-	return { auth, ...clients };
+	// Presence rides on the same websocket connection + auth identity.
+	const presence = createDelightPresence({ ws: clients.ws, auth });
+
+	return { auth, ...clients, presence };
 };

@@ -1,0 +1,182 @@
+---
+title: Presence
+description: Real-time presence for Svelte 5 — online roster, live cursors, cursor chat, reactions, and field presence, on a swappable transport and identity.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import ComponentPreview from '../../../components/ComponentPreview.astro';
+import PresenceDemo from '../../../components/demos/PresenceDemo.svelte';
+
+`@delightstack/presence` adds a real-time **presence** layer for Svelte 5 — an online roster, live
+cursors, cursor chat, reactions, and field/cell presence. It builds on `@delightstack/websocket`
+and `@delightstack/auth`, but both are **optional**: the core depends only on two small interfaces,
+so any transport or identity provider can be dropped in.
+
+<ComponentPreview
+	code={`<script>
+${'  '}import { createDelightPresence } from '@delightstack/presence/adapters';
+${'  '}import { setPresence, trackCursor, fieldPresence } from '@delightstack/presence';
+${'  '}import { PresenceAvatars, Cursors, Reactions } from '@delightstack/presence/components';
+
+${'  '}let { data } = $props(); // { ws, auth } from your load fn
+${'  '}const presence = createDelightPresence({ ws: data.ws, auth: data.auth });
+${'  '}setPresence(presence);
+${'  '}$effect(() => { presence.start(); return () => presence.destroy(); });
+</script>
+
+<header><PresenceAvatars /></header>
+
+<main data-presence-stage {@attach trackCursor({ chat: true })}>
+${'  '}<Cursors />
+${'  '}<Reactions bar={['👍', '🎉', '❤️']} />
+${'  '}<input name="email" {@attach fieldPresence('user.email')} />
+</main>`}>
+	<PresenceDemo client:only="svelte" />
+</ComponentPreview>
+
+<Aside type="tip">
+The demo above is real — open this page in a second browser tab and your cursor appears in both. The
+two extra cursors are simulated peers so the demo isn't lonely.
+</Aside>
+
+## Features
+
+- **Online facepile** — a deduplicated roster of online members (merged across each user's tabs)
+  with status dots, idle dimming, overflow, and hovercards.
+- **Live cursors** — pointer positions normalized across viewport sizes and spring-smoothed; shown
+  only for peers on the same page.
+- **Cursor chat** — Figma-style ephemeral messages that ride along your cursor (press `/`).
+- **Reactions** — fire-and-forget emoji that float up for everyone on the page.
+- **Field presence** — a colored ring + name badge showing who's editing which field or cell.
+- **Swappable transport & identity** — the core never imports websocket or auth; the default
+  adapters are optional peers.
+
+## Install
+
+```bash
+pnpm add @delightstack/presence
+```
+
+| Import | Use |
+| --- | --- |
+| `@delightstack/presence` | `PresenceClient`, `setPresence`/`getPresence`, `trackCursor`, `fieldPresence` |
+| `@delightstack/presence/adapters` | `createDelightPresence`, `websocketTransport`, `authIdentity` |
+| `@delightstack/presence/components` | `PresenceAvatars`, `Cursors`, `Reactions`, `FieldPresence` |
+| `@delightstack/presence/server` | `createPresenceServer`, `PRESENCE_EPHEMERAL_EVENTS` |
+
+## 1. Add presence to the WebSocket server
+
+Compose the presence module into your Durable Object so `presence:*` messages are relayed, new
+joiners get an instant snapshot, and cursor traffic uses a generous rate bucket.
+
+```typescript
+import { WebsocketServer } from '@delightstack/websocket/worker';
+import { createPresenceServer, PRESENCE_EPHEMERAL_EVENTS } from '@delightstack/presence/server';
+
+export class AppWebsocketServer extends WebsocketServer {
+	constructor(ctx: DurableObjectState, env: Env) {
+		const presence = createPresenceServer();
+		super(
+			{
+				onMessage: presence.onMessage,
+				onDisconnect: presence.onDisconnect,
+				rate_limit: { ephemeral_events: PRESENCE_EPHEMERAL_EVENTS },
+			},
+			ctx,
+			env,
+		);
+	}
+}
+```
+
+## 2. Create the client and provide context
+
+```typescript
+// +layout.ts — alongside your websocket/auth clients
+import { createDelightPresence } from '@delightstack/presence/adapters';
+
+const presence = createDelightPresence({ ws, auth });
+return { auth, ws, presence };
+```
+
+```svelte
+<!-- +layout.svelte -->
+<script>
+	import { setPresence } from '@delightstack/presence';
+	import { Cursors, Reactions } from '@delightstack/presence/components';
+
+	let { data, children } = $props();
+	setPresence(data.presence);
+	$effect(() => {
+		data.presence.start();
+		return () => data.presence.destroy();
+	});
+	// Scope presence to the route so only same-page peers show cursors:
+	$effect(() => data.presence.setPage(page.url.pathname));
+</script>
+
+{@render children()}
+<Cursors />
+<Reactions />
+```
+
+## 3. Drop in the pieces
+
+```svelte
+<!-- Online roster -->
+<PresenceAvatars scope="org" />
+
+<!-- Live cursors + cursor chat: mark a stage and track the pointer -->
+<main data-presence-stage="canvas" {@attach trackCursor({ chat: true })}>...</main>
+
+<!-- Field presence: anchor is a stable id shared across clients -->
+<input name="email" {@attach fieldPresence('user.email')} />
+```
+
+<Aside type="note">
+Cursor coordinates are stored relative to the nearest `data-presence-stage` element (or the document
+root), so they map to the same logical point across different viewport sizes.
+</Aside>
+
+## Swappable transport & identity
+
+The core depends on two interfaces, so a different stack works by implementing them and constructing
+`PresenceClient` directly:
+
+```typescript
+import { PresenceClient } from '@delightstack/presence';
+import type { PresenceTransport, PresenceIdentity } from '@delightstack/presence';
+
+const transport: PresenceTransport = {
+	get connected() { return socket.isConnected; },
+	get sessions() { return socket.members.map((m) => ({ id: m.id })); },
+	send: (msg) => socket.publish('presence', msg),
+	on: (handler) => socket.subscribe('presence', handler),
+};
+
+const identity: PresenceIdentity = {
+	get user() { return me ? { id: me.id, name: me.name, image: me.avatar } : null; },
+	get orgId() { return me?.orgId ?? null; },
+};
+
+const presence = new PresenceClient({ transport, identity });
+```
+
+Your transport must relay every `presence:*` message room-wide. With `@delightstack/websocket`, that's
+exactly what `createPresenceServer` does.
+
+## How it works
+
+- **Awareness model.** Each tab owns a small ephemeral state object; changes broadcast with a
+  monotonic clock and merge last-writer-wins. State is never persisted — it clears on disconnect
+  (graceful `presence:remove`, or a TTL backstop).
+- **Per-tab keys.** A SharedWorker shares one connection across a browser's tabs, so presence is
+  keyed by a per-tab id; cursors filter out your own user by default.
+- **Joins.** A newcomer sends `presence:request`; the server replies with a snapshot to just that
+  client.
+- **Rate.** Cursor updates are throttled client-side and use the server's generous ephemeral bucket.
+
+<Aside type="caution">
+Presence is browser-only and SSR-safe (components render nothing on the server). Cursors and reaction
+layers are `aria-hidden`, and motion respects `prefers-reduced-motion`.
+</Aside>

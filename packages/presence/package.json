@@ -1,0 +1,124 @@
+{
+	"name": "@delightstack/presence",
+	"version": "0.1.0",
+	"type": "module",
+	"license": "MIT",
+	"description": "Real-time presence for Svelte 5 — online roster, live cursors, cursor chat, reactions, and field presence, layered on a swappable transport/identity.",
+	"keywords": [
+		"presence",
+		"realtime",
+		"cursors",
+		"awareness",
+		"multiplayer",
+		"collaboration",
+		"svelte",
+		"svelte5",
+		"delightstack"
+	],
+	"author": "Brian Schwabauer",
+	"homepage": "https://docs.thedelight.co",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/brianschwabauer/delightstack.git",
+		"directory": "packages/presence"
+	},
+	"bugs": "https://github.com/brianschwabauer/delightstack/issues",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"import": "./dist/index.js"
+		},
+		"./types": {
+			"types": "./dist/types/index.d.ts",
+			"import": "./dist/types/index.js"
+		},
+		"./core": {
+			"types": "./dist/core/index.d.ts",
+			"svelte": "./dist/core/index.js",
+			"import": "./dist/core/index.js"
+		},
+		"./adapters": {
+			"types": "./dist/adapters/index.d.ts",
+			"import": "./dist/adapters/index.js"
+		},
+		"./client": {
+			"types": "./dist/client/index.d.ts",
+			"svelte": "./dist/client/index.js",
+			"import": "./dist/client/index.js"
+		},
+		"./components": {
+			"types": "./dist/components/index.d.ts",
+			"svelte": "./dist/components/index.js",
+			"import": "./dist/components/index.js"
+		},
+		"./components/Cursors.svelte": {
+			"svelte": "./dist/components/Cursors.svelte",
+			"import": "./dist/components/Cursors.svelte"
+		},
+		"./components/PresenceAvatars.svelte": {
+			"svelte": "./dist/components/PresenceAvatars.svelte",
+			"import": "./dist/components/PresenceAvatars.svelte"
+		},
+		"./components/Reactions.svelte": {
+			"svelte": "./dist/components/Reactions.svelte",
+			"import": "./dist/components/Reactions.svelte"
+		},
+		"./server": {
+			"types": "./dist/server/index.d.ts",
+			"import": "./dist/server/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*",
+		"src",
+		"!src/**/*.test.*",
+		"!src/**/*.spec.*"
+	],
+	"scripts": {
+		"build": "svelte-package -i src",
+		"dev": "svelte-package -w -i src",
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
+		"typecheck": "tsgo --noEmit",
+		"test": "vitest"
+	},
+	"peerDependencies": {
+		"svelte": "^5.36.0",
+		"@delightstack/auth": "workspace:*",
+		"@delightstack/websocket": "workspace:*"
+	},
+	"peerDependenciesMeta": {
+		"svelte": {
+			"optional": true
+		},
+		"@delightstack/auth": {
+			"optional": true
+		},
+		"@delightstack/websocket": {
+			"optional": true
+		}
+	},
+	"dependencies": {
+		"@delightstack/utilities": "workspace:*"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20251120.0",
+		"@delightstack/auth": "workspace:*",
+		"@delightstack/websocket": "workspace:*",
+		"@sveltejs/kit": "^2.26.0",
+		"@sveltejs/package": "^2.4.0",
+		"svelte": "^5.36.16",
+		"svelte-check": "^4.3.0",
+		"tslib": "^2.8.1",
+		"typescript": "^5.8.3",
+		"vite": "^6.3.5",
+		"vitest": "^3.2.1"
+	}
+}

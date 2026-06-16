@@ -33,6 +33,7 @@
 		"@delightstack/components": "workspace:*",
 		"@delightstack/database": "workspace:*",
 		"@delightstack/images": "workspace:*",
+		"@delightstack/presence": "workspace:*",
 		"@delightstack/rate-limiter": "workspace:*",
 		"@delightstack/stripe": "workspace:*",
 		"@delightstack/styles": "workspace:*",

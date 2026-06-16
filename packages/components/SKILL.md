@@ -141,5 +141,9 @@ have the exact types. Do not guess prop names.
 ## Beyond components
 
 DelightStack also ships a Cloudflare-native backend stack (`@delightstack/auth`,
-`database`, `websocket`, `ai`, `stripe`, `images`, `rate-limiter`). Overview:
+`database`, `websocket`, `presence`, `ai`, `stripe`, `images`, `rate-limiter`). Overview:
 https://docs.thedelight.co/stack/overview.md
+
+`@delightstack/presence` adds real-time presence (live cursors, online roster, cursor
+chat, reactions, field presence) on a swappable transport/identity. Docs:
+https://docs.thedelight.co/packages/presence.md

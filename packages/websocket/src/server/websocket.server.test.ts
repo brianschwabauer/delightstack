@@ -464,6 +464,59 @@ describe('WebsocketServer', () => {
 		});
 	});
 
+	describe('ephemeral rate limiting', () => {
+		it('routes ephemeral events to a separate, more generous bucket', async () => {
+			vi.useFakeTimers();
+			const onMessage = vi.fn();
+			const socket = makeSocket(session_a);
+			const { server } = createServer(
+				{
+					onMessage,
+					rate_limit: {
+						max_tokens: 1,
+						refill_every_seconds: 10,
+						ephemeral_events: ['presence:'],
+						ephemeral_max_tokens: 5,
+						ephemeral_refill_every_seconds: 1,
+					},
+				},
+				[socket],
+			);
+
+			// Standard bucket holds only 1 token — the 2nd standard message is rejected.
+			const std = JSON.stringify({ event: 'chat' });
+			await server.webSocketMessage(socket as unknown as WebSocket, std);
+			await server.webSocketMessage(socket as unknown as WebSocket, std);
+			expect(onMessage).toHaveBeenCalledTimes(1);
+			expect(sentMessages(socket).at(-1)).toMatchObject({ event: 'error', status: 429 });
+
+			// presence:* events draw from the generous ephemeral bucket (5 tokens).
+			const eph = JSON.stringify({ event: 'presence:update' });
+			for (let i = 0; i < 5; i++) {
+				await server.webSocketMessage(socket as unknown as WebSocket, eph);
+			}
+			expect(onMessage).toHaveBeenCalledTimes(6); // 1 standard + 5 ephemeral
+
+			// 6th ephemeral exhausts its own bucket.
+			await server.webSocketMessage(socket as unknown as WebSocket, eph);
+			expect(onMessage).toHaveBeenCalledTimes(6);
+			expect(sentMessages(socket).at(-1)).toMatchObject({ event: 'error', status: 429 });
+		});
+
+		it('leaves behavior unchanged when ephemeral_events is omitted', async () => {
+			const onMessage = vi.fn();
+			const socket = makeSocket(session_a);
+			const { server } = createServer({ onMessage }, [socket]);
+
+			await server.webSocketMessage(
+				socket as unknown as WebSocket,
+				JSON.stringify({ event: 'presence:update' }),
+			);
+
+			expect(onMessage).toHaveBeenCalledTimes(1);
+		});
+	});
+
 	describe('message validation', () => {
 		it('rejects binary messages with a 400 error', async () => {
 			const socket = makeSocket(session_a);

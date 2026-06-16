@@ -55,6 +55,18 @@ export interface WebsocketServerConfig<
 	rate_limit?: {
 		max_tokens?: number;
 		refill_every_seconds?: number;
+		/**
+		 * Event names — or prefixes ending in `':'` — that bypass the standard
+		 * bucket and use a separate, more generous "ephemeral" bucket. Intended
+		 * for high-frequency, low-stakes traffic such as presence cursor updates
+		 * (e.g. `['presence:']`). When omitted, all events share the standard
+		 * bucket and behavior is unchanged.
+		 */
+		ephemeral_events?: string[];
+		/** Max tokens for the ephemeral bucket. @default 60 */
+		ephemeral_max_tokens?: number;
+		/** Refill interval (seconds) for the ephemeral bucket. @default 1 */
+		ephemeral_refill_every_seconds?: number;
 	};
 
 	/**
@@ -112,6 +124,9 @@ export class WebsocketServer<
 	// In-memory token bucket rate limiter (per ws_session_id)
 	private rate_limit_buckets = new Map<string, { count: number; last_refill: number }>();
 
+	// Separate, more generous bucket for high-frequency ephemeral events
+	private ephemeral_buckets = new Map<string, { count: number; last_refill: number }>();
+
 	constructor(config: WebsocketServerConfig<Meta>, ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		this.config = config;
@@ -168,11 +183,6 @@ export class WebsocketServer<
 		const session = this.sessions.get(ws);
 		if (!session) return;
 
-		// Rate limit incoming messages
-		if (!this.consumeRateToken(session.ws_session_id)) {
-			return this.sendError(ws, 'Too many messages. Please slow down.', 429);
-		}
-
 		let parsed: Record<string, unknown>;
 		try {
 			parsed = JSON.parse(raw_message);
@@ -182,6 +192,16 @@ export class WebsocketServer<
 
 		if (!parsed?.event || typeof parsed.event !== 'string') {
 			return this.sendError(ws, 'Message missing event field', 400);
+		}
+
+		// Rate limit incoming messages. High-frequency, low-stakes events (e.g.
+		// presence cursor updates) use a separate, more generous bucket so they
+		// neither starve nor get starved by regular traffic.
+		const allowed = this.isEphemeralEvent(parsed.event)
+			? this.consumeEphemeralToken(session.ws_session_id)
+			: this.consumeRateToken(session.ws_session_id);
+		if (!allowed) {
+			return this.sendError(ws, 'Too many messages. Please slow down.', 429);
 		}
 
 		// Delegate to app-provided handler (parsed is validated to have a string event field)
@@ -378,6 +398,7 @@ export class WebsocketServer<
 		this.sessions.delete(ws);
 		if (session) {
 			this.rate_limit_buckets.delete(session.ws_session_id);
+			this.ephemeral_buckets.delete(session.ws_session_id);
 			this.broadcast({
 				event: 'session:disconnected',
 				...sessionFields(session),
@@ -397,16 +418,48 @@ export class WebsocketServer<
 		}
 	}
 
-	/**
-	 * Token bucket rate limiter. Returns true if the request is allowed.
-	 * Cleans up stale buckets to prevent memory leaks.
-	 */
-	private consumeRateToken(key: string): boolean {
-		const now = Date.now();
-		const max_tokens = this.config.rate_limit?.max_tokens ?? 30;
-		const refill_every_seconds = this.config.rate_limit?.refill_every_seconds ?? 10;
+	/** Whether an event uses the separate, more generous ephemeral rate bucket. */
+	private isEphemeralEvent(event: string): boolean {
+		const events = this.config.rate_limit?.ephemeral_events;
+		if (!events || events.length === 0) return false;
+		return events.some(
+			(entry) => event === entry || (entry.endsWith(':') && event.startsWith(entry)),
+		);
+	}
 
-		let bucket = this.rate_limit_buckets.get(key);
+	/** Standard token bucket. Returns true if the request is allowed. */
+	private consumeRateToken(key: string): boolean {
+		return this.consumeBucket(
+			this.rate_limit_buckets,
+			key,
+			this.config.rate_limit?.max_tokens ?? 30,
+			this.config.rate_limit?.refill_every_seconds ?? 10,
+		);
+	}
+
+	/** Generous token bucket for high-frequency ephemeral events. */
+	private consumeEphemeralToken(key: string): boolean {
+		return this.consumeBucket(
+			this.ephemeral_buckets,
+			key,
+			this.config.rate_limit?.ephemeral_max_tokens ?? 60,
+			this.config.rate_limit?.ephemeral_refill_every_seconds ?? 1,
+		);
+	}
+
+	/**
+	 * Token bucket rate limiter against a given bucket map. Returns true if the
+	 * request is allowed. Cleans up stale buckets to prevent memory leaks.
+	 */
+	private consumeBucket(
+		buckets: Map<string, { count: number; last_refill: number }>,
+		key: string,
+		max_tokens: number,
+		refill_every_seconds: number,
+	): boolean {
+		const now = Date.now();
+
+		let bucket = buckets.get(key);
 		if (!bucket) {
 			bucket = { count: max_tokens, last_refill: now };
 		} else {
@@ -421,13 +474,13 @@ export class WebsocketServer<
 
 		// Consume one token
 		bucket.count--;
-		this.rate_limit_buckets.set(key, bucket);
+		buckets.set(key, bucket);
 
 		// Clean up stale buckets (older than 10 minutes)
-		if (this.rate_limit_buckets.size > 100) {
-			for (const [k, b] of this.rate_limit_buckets.entries()) {
+		if (buckets.size > 100) {
+			for (const [k, b] of buckets.entries()) {
 				if (b.last_refill < now - 600_000) {
-					this.rate_limit_buckets.delete(k);
+					buckets.delete(k);
 				}
 			}
 		}

@@ -118,6 +118,7 @@ export default defineConfig({
 						{ label: 'Auth', slug: 'packages/auth' },
 						{ label: 'Database', slug: 'packages/database' },
 						{ label: 'Realtime', slug: 'packages/websocket' },
+						{ label: 'Presence', slug: 'packages/presence' },
 						{ label: 'AI', slug: 'packages/ai' },
 						{ label: 'Billing', slug: 'packages/stripe' },
 						{ label: 'Images', slug: 'packages/images' },
@@ -143,6 +144,14 @@ export default defineConfig({
 	},
 	// adapter: cloudflare({}),
 	vite: {
+		// Force a single Svelte instance across the app and every workspace
+		// component library (@delightstack/components, /presence, …). Without this,
+		// a long-running dev server can re-optimize into two Svelte copies after a
+		// dependency is added, and every island then fails to hydrate with
+		// `lifecycle_outside_component` / `effect_orphan` errors.
+		resolve: {
+			dedupe: ['svelte'],
+		},
 		// hls.js is an optional peer dep of <Video>, pulled in via a dynamic
 		// import only for HLS sources. Pre-bundle it so Vite resolves it instead
 		// of stubbing it as an "absent" optional peer dependency in dev.

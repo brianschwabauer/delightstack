@@ -7,14 +7,21 @@
 		ListItem,
 	} from '@delightstack/components';
 	import { tooltip } from '@delightstack/utilities';
+	import { setPresence, trackCursor } from '@delightstack/presence';
+	import { Cursors, Reactions } from '@delightstack/presence/components';
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import Icon from '$lib/Icon.svelte';
 
 	const { data, children } = $props();
-	const { auth, ws } = $derived(data);
+	const { auth, ws, presence } = $derived(data);
 
 	const current_path = $derived(page.url.pathname);
+
+	// Make presence available to every dashboard route. The client is a stable
+	// per-load singleton, so capture it once (untrack avoids a reactivity warning).
+	setPresence(untrack(() => presence));
 
 	// Connect WebSocket when dashboard mounts (db is initialized in +layout.ts).
 	$effect(() => {
@@ -24,11 +31,21 @@
 		}
 	});
 
+	// Start presence alongside the connection; scope it to the current route.
+	$effect(() => {
+		presence.start();
+		return () => presence.destroy();
+	});
+	$effect(() => {
+		presence.setPage(current_path);
+	});
+
 	const nav_items = [
 		{ href: '/dashboard', label: 'Home', icon: 'home' },
 		{ href: '/dashboard/family', label: 'Family', icon: 'family' },
 		{ href: '/dashboard/gallery', label: 'Gallery', icon: 'gallery' },
 		{ href: '/dashboard/members', label: 'Members', icon: 'members' },
+		{ href: '/dashboard/presence', label: 'Presence', icon: 'eye' },
 		{ href: '/dashboard/billing', label: 'Billing', icon: 'billing' },
 		{ href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
 	] as const;
@@ -82,8 +99,11 @@
 		</div>
 	</nav>
 
-	<!-- Main content -->
-	<main class="content">
+	<!-- Main content (presence stage — cursors are tracked within it) -->
+	<main
+		class="content"
+		data-presence-stage="dashboard"
+		{@attach trackCursor({ chat: true })}>
 		{@render children()}
 	</main>
 
@@ -96,6 +116,10 @@
 			</a>
 		{/each}
 	</nav>
+
+	<!-- Live presence overlays — render only for peers on the same route -->
+	<Cursors />
+	<Reactions />
 </div>
 
 <style>
