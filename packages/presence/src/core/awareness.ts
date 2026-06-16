@@ -87,12 +87,19 @@ export function moreActive(a: PresenceStatus, b: PresenceStatus): PresenceStatus
 /**
  * Collapse per-tab peers (plus optionally the local user) into a deduplicated
  * roster keyed by user id — the data behind the presence facepile.
+ *
+ * `sessions` is the transport's Layer-0 "who's connected" set, already mapped to
+ * users. It is a liveness fallback: a connected user with no rich presence state
+ * yet (just joined, before their first `presence:update`) still appears online.
+ * Users already known from peer state are left untouched — peers carry richer
+ * data (status, page, tab count), so a session adds nothing for them.
  */
 export function dedupeUsers(opts: {
 	peers: Iterable<PeerPresence>;
 	self?: { user: PresenceUser; state: PresenceState } | null;
 	self_page?: string;
 	include_self?: boolean;
+	sessions?: Iterable<PresenceUser>;
 }): OnlineUser[] {
 	const roster = new Map<string, OnlineUser>();
 
@@ -114,6 +121,22 @@ export function dedupeUsers(opts: {
 
 	if (opts.include_self && opts.self) add(opts.self.user, opts.self.state, true);
 	for (const peer of opts.peers) add(peer.user, peer.state, false);
+
+	// Layer-0 fallback: surface connected users we have no peer state for. We
+	// don't know their page, so `here` is false and they're counted as one
+	// connection.
+	if (opts.sessions) {
+		for (const session_user of opts.sessions) {
+			if (!session_user.id || roster.has(session_user.id)) continue;
+			roster.set(session_user.id, {
+				...session_user,
+				status: 'active',
+				count: 1,
+				here: false,
+				is_self: false,
+			});
+		}
+	}
 
 	return [...roster.values()];
 }

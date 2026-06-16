@@ -3,6 +3,7 @@ import { SvelteMap } from 'svelte/reactivity';
 import type {
 	PresenceTransport,
 	PresenceIdentity,
+	PresenceSession,
 	PresenceState,
 	PresenceUser,
 	PeerPresence,
@@ -33,8 +34,18 @@ export interface PresenceClientOptions {
 	 * @default () => location.pathname
 	 */
 	page?: () => string;
-	/** Prune peers not seen for this long (ms). @default 30000 */
+	/**
+	 * Prune peers not seen for this long (ms). Acts as a backstop for ungraceful
+	 * disconnects; clients heartbeat well within it. Must comfortably exceed
+	 * `heartbeat_ms` (and a hidden tab's clamped timer) or live peers flicker.
+	 * @default 60000
+	 */
 	ttl_ms?: number;
+	/**
+	 * Re-announce local presence on this interval (ms) so peers keep us in their
+	 * roster between cursor/focus/status changes. @default ttl_ms / 3 (min 5000)
+	 */
+	heartbeat_ms?: number;
 	/** Throttle interval for cursor network sends (ms). @default 45 (~22/s) */
 	cursor_throttle_ms?: number;
 	/** Mark the local user idle after this long without activity (ms). @default 60000 */
@@ -43,11 +54,21 @@ export interface PresenceClientOptions {
 	color?: (user: { id: string; name: string }) => string;
 	/** Include the local user in the `users` roster. @default true */
 	include_self?: boolean;
+	/**
+	 * Map a transport (Layer-0) session to the user it represents, so connected
+	 * users appear in the roster even before their first `presence:update`. The
+	 * default adapters supply one that reads `user_id`/`user_name` from session
+	 * metadata; return `null` for anonymous/unidentifiable sessions.
+	 */
+	sessionUser?: (
+		session: PresenceSession,
+	) => { id: string; name: string; image?: string } | null;
 }
 
-const DEFAULT_TTL = 30_000;
+const DEFAULT_TTL = 60_000;
 const DEFAULT_CURSOR_THROTTLE = 45;
 const DEFAULT_IDLE_AFTER = 60_000;
+const MIN_HEARTBEAT = 5_000;
 
 /**
  * Reactive presence client for Svelte 5. Owns the local user's ephemeral
@@ -73,10 +94,14 @@ export class PresenceClient {
 	#identity: PresenceIdentity;
 	#page_fn: (() => string) | undefined;
 	#ttl_ms: number;
+	#heartbeat_ms: number;
 	#cursor_throttle_ms: number;
 	#idle_after_ms: number;
 	#color_fn: (user: { id: string; name: string }) => string;
 	#include_self: boolean;
+	#session_user_fn:
+		| ((session: PresenceSession) => { id: string; name: string; image?: string } | null)
+		| undefined;
 
 	#peers = new SvelteMap<string, PeerPresence>();
 	#self_state = $state<PresenceState>({ status: 'active' });
@@ -89,6 +114,7 @@ export class PresenceClient {
 	#unsub: (() => void) | undefined;
 	#effect_cleanup: (() => void) | undefined;
 	#prune_timer: ReturnType<typeof setInterval> | undefined;
+	#heartbeat_timer: ReturnType<typeof setInterval> | undefined;
 	#idle_timer: ReturnType<typeof setTimeout> | undefined;
 	#pending_send: ReturnType<typeof setTimeout> | undefined;
 	#last_sent = 0;
@@ -109,9 +135,12 @@ export class PresenceClient {
 		this.#identity = options.identity;
 		this.#page_fn = options.page;
 		this.#ttl_ms = options.ttl_ms ?? DEFAULT_TTL;
+		this.#heartbeat_ms =
+			options.heartbeat_ms ?? Math.max(MIN_HEARTBEAT, Math.floor(this.#ttl_ms / 3));
 		this.#cursor_throttle_ms = options.cursor_throttle_ms ?? DEFAULT_CURSOR_THROTTLE;
 		this.#idle_after_ms = options.idle_after_ms ?? DEFAULT_IDLE_AFTER;
 		this.#color_fn = options.color ?? userColor;
+		this.#session_user_fn = options.sessionUser;
 		this.#include_self = options.include_self ?? true;
 	}
 
@@ -164,7 +193,31 @@ export class PresenceClient {
 			self: this.self ? { user: this.self.user, state: this.#self_state } : null,
 			self_page: this.#page,
 			include_self: this.#include_self,
+			sessions: this.#sessionUsers(),
 		});
+	}
+
+	/**
+	 * Map the transport's Layer-0 sessions to users (via the `sessionUser`
+	 * option), excluding the local user — they're already represented by `self`
+	 * and peer state.
+	 */
+	#sessionUsers(): PresenceUser[] {
+		const map = this.#session_user_fn;
+		if (!map) return [];
+		const self_id = this.#self_user?.id;
+		const out: PresenceUser[] = [];
+		for (const session of this.#transport.sessions) {
+			const u = map(session);
+			if (!u || u.id === self_id) continue;
+			out.push({
+				id: u.id,
+				name: u.name,
+				image: u.image,
+				color: this.#color_fn({ id: u.id, name: u.name }),
+			});
+		}
+		return out;
 	}
 
 	// -----------------------------------------------------------------------
@@ -179,17 +232,24 @@ export class PresenceClient {
 
 		this.#unsub = this.#transport.on((message) => this.#onMessage(message));
 
-		// Re-announce whenever the local identity changes (sign-in, org switch).
-		// The first run is skipped — the explicit announce below covers startup.
+		// React to local identity changes: re-announce on sign-in / org switch /
+		// profile change, withdraw presence on sign-out. The first run is skipped —
+		// the explicit announce below covers startup.
 		let first = true;
+		let had_user = false;
 		this.#effect_cleanup = $effect.root(() => {
 			$effect(() => {
 				const user = this.#self_user;
 				if (first) {
 					first = false;
+					had_user = !!user;
 					return;
 				}
-				if (user && this.#started) this.#scheduleUpdate(true);
+				if (this.#started) {
+					if (user) this.#scheduleUpdate(true);
+					else if (had_user) this.#leave(); // signed out: don't linger until TTL
+				}
+				had_user = !!user;
 			});
 		});
 
@@ -200,6 +260,13 @@ export class PresenceClient {
 			Math.min(this.#ttl_ms, 10_000),
 		);
 
+		// Heartbeat: re-announce periodically so peers keep us in their roster even
+		// when we're not moving the cursor or changing state. Without this, a quiet
+		// but connected user is TTL-pruned and flickers in and out everywhere.
+		this.#heartbeat_timer = setInterval(() => {
+			if (this.#started && this.#self_user) this.#scheduleUpdate(true);
+		}, this.#heartbeat_ms);
+
 		// Announce ourselves and ask the room/server for the current snapshot.
 		this.#scheduleUpdate(true);
 		this.#transport.send({ event: 'presence:request', presence_id: this.presence_id });
@@ -207,7 +274,10 @@ export class PresenceClient {
 		if (typeof window !== 'undefined') {
 			window.addEventListener('pointermove', this.#activity, { passive: true });
 			window.addEventListener('keydown', this.#activity);
+			// `pagehide` fires on bfcache/mobile navigations where `beforeunload`
+			// doesn't; both withdraw our presence promptly on the way out.
 			window.addEventListener('beforeunload', this.#leave);
+			window.addEventListener('pagehide', this.#leave);
 		}
 		if (typeof document !== 'undefined') {
 			document.addEventListener('visibilitychange', this.#visibility);
@@ -223,18 +293,21 @@ export class PresenceClient {
 		this.#effect_cleanup?.();
 		this.#effect_cleanup = undefined;
 		if (this.#prune_timer) clearInterval(this.#prune_timer);
+		if (this.#heartbeat_timer) clearInterval(this.#heartbeat_timer);
 		if (this.#idle_timer) clearTimeout(this.#idle_timer);
 		if (this.#pending_send) clearTimeout(this.#pending_send);
 		if (typeof window !== 'undefined') {
 			window.removeEventListener('pointermove', this.#activity);
 			window.removeEventListener('keydown', this.#activity);
 			window.removeEventListener('beforeunload', this.#leave);
+			window.removeEventListener('pagehide', this.#leave);
 		}
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('visibilitychange', this.#visibility);
 		}
 		this.#peers.clear();
 		this.#reaction_listeners.clear();
+		this.#change_listeners.clear();
 		this.#started = false;
 	}
 

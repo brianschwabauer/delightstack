@@ -138,4 +138,32 @@ describe('dedupeUsers', () => {
 		const roster = dedupeUsers({ peers });
 		expect(roster[0].image).toBe('https://img/alice.png');
 	});
+
+	it('surfaces Layer-0 sessions that have no peer state yet', () => {
+		const roster = dedupeUsers({
+			peers: [],
+			sessions: [user('zoe'), user('max')],
+			self_page: '/a',
+		});
+		expect(roster.map((u) => u.id).sort()).toEqual(['max', 'zoe']);
+		const zoe = roster.find((u) => u.id === 'zoe')!;
+		expect(zoe.count).toBe(1);
+		expect(zoe.here).toBe(false); // sessions carry no page
+		expect(zoe.is_self).toBe(false);
+	});
+
+	it('does not let a session double-count a user already known from peers', () => {
+		const peers: PeerPresence[] = [
+			{ ...update('p1', 'alice', 1, { page: '/a' }) },
+			{ ...update('p2', 'alice', 1, { page: '/a' }) },
+		];
+		const roster = dedupeUsers({
+			peers,
+			sessions: [user('alice')], // same user, also seen as a connection
+			self_page: '/a',
+		});
+		const alice = roster.find((u) => u.id === 'alice')!;
+		expect(alice.count).toBe(2); // peer-based count, not inflated to 3
+		expect(alice.here).toBe(true); // peer state preserved
+	});
 });

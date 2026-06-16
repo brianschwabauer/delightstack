@@ -78,12 +78,21 @@ export function readStageGeometry(el: HTMLElement): StageGeometry {
 	};
 }
 
-/** Find the stage an event target belongs to (nearest marked ancestor, else root). */
+/**
+ * Find the stage an event target belongs to (nearest marked ancestor, else root).
+ *
+ * `id` is the `data-presence-stage` value — which is `''` for a bare attribute
+ * (`<main data-presence-stage>`). It is left `undefined` only when there is no
+ * marked ancestor (the document-root fallback). Keeping the empty-string id
+ * distinct from `undefined` is what lets normalize/denormalize agree on the same
+ * element for a bare stage; collapsing them would normalize against the marked
+ * element but denormalize against the document root.
+ */
 export function findStage(target: EventTarget | null): { el: HTMLElement; id?: string } {
 	let node = target instanceof Element ? target : null;
 	while (node) {
 		if (node instanceof HTMLElement && node.hasAttribute(STAGE_ATTR)) {
-			return { el: node, id: node.getAttribute(STAGE_ATTR) || undefined };
+			return { el: node, id: node.getAttribute(STAGE_ATTR) ?? '' };
 		}
 		node = node.parentElement;
 	}
@@ -93,7 +102,17 @@ export function findStage(target: EventTarget | null): { el: HTMLElement; id?: s
 /** Resolve a stage element by its id (the `data-presence-stage` value). */
 export function getStageById(id?: string): HTMLElement | null {
 	if (typeof document === 'undefined') return null;
-	if (!id) return document.documentElement;
+	// No id at all → the document root (the unmarked-page fallback).
+	if (id === undefined) return document.documentElement;
+	// Bare `data-presence-stage` (empty value) → the single unnamed stage. Prefer
+	// the explicitly-empty match, then any marked element, then the root.
+	if (id === '') {
+		return (
+			document.querySelector<HTMLElement>(`[${STAGE_ATTR}=""]`) ??
+			document.querySelector<HTMLElement>(`[${STAGE_ATTR}]`) ??
+			document.documentElement
+		);
+	}
 	const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id;
 	return (
 		document.querySelector<HTMLElement>(`[${STAGE_ATTR}="${escaped}"]`) ??
@@ -109,7 +128,9 @@ export function normalizeCursor(
 ): Cursor {
 	const { el, id } = findStage(target);
 	const point = normalize(client_x, client_y, readStageGeometry(el));
-	return id ? { ...point, stage: id } : point;
+	// `id` is `''` for a bare stage — include it so denormalize resolves the same
+	// element. Only the document-root fallback (`id === undefined`) omits `stage`.
+	return id !== undefined ? { ...point, stage: id } : point;
 }
 
 /** Map a normalized cursor back to a client-space point, or `null` if its stage is gone. */

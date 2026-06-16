@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { normalize, denormalize, type StageGeometry } from './coordinates';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+	normalize,
+	denormalize,
+	findStage,
+	getStageById,
+	normalizeCursor,
+	STAGE_ATTR,
+	type StageGeometry,
+} from './coordinates';
 
 const geo = (over: Partial<StageGeometry> = {}): StageGeometry => ({
 	left: 0,
@@ -55,5 +63,69 @@ describe('normalize <-> denormalize round-trip', () => {
 		const onReceiver = denormalize(n, receiver);
 		// same content point, receiver scrolled down 200 → 200px higher on screen
 		expect(onReceiver.y).toBeCloseTo(200, 6);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Stage resolution (DOM). The invariant that matters: the element a cursor is
+// normalized against (findStage) must equal the element it is denormalized
+// against (getStageById of the emitted `stage`). happy-dom has no layout, so we
+// assert element identity / `stage` propagation, not pixel geometry.
+// ---------------------------------------------------------------------------
+
+describe('stage resolution', () => {
+	afterEach(() => {
+		document.body.innerHTML = '';
+	});
+
+	const withChild = (configure: (stage: HTMLElement) => void) => {
+		const stage = document.createElement('main');
+		configure(stage);
+		const child = document.createElement('input');
+		stage.appendChild(child);
+		document.body.appendChild(stage);
+		return { stage, child };
+	};
+
+	it('treats a bare `data-presence-stage` as a real (unnamed) stage', () => {
+		// Regression: a bare attribute used to drop the stage id, so the cursor
+		// normalized against <main> but denormalized against documentElement.
+		const { stage, child } = withChild((s) => s.setAttribute(STAGE_ATTR, ''));
+
+		expect(findStage(child)).toEqual({ el: stage, id: '' });
+
+		const cursor = normalizeCursor(0, 0, child);
+		expect(cursor.stage).toBe(''); // id is carried, not dropped
+
+		// Both ends resolve the SAME element — the heart of the fix.
+		expect(getStageById(cursor.stage)).toBe(stage);
+		expect(getStageById('')).toBe(stage);
+		expect(getStageById('')).not.toBe(document.documentElement);
+	});
+
+	it('resolves a named stage by its attribute value', () => {
+		const { stage, child } = withChild((s) => s.setAttribute(STAGE_ATTR, 'board'));
+
+		expect(findStage(child).id).toBe('board');
+		const cursor = normalizeCursor(0, 0, child);
+		expect(cursor.stage).toBe('board');
+		expect(getStageById('board')).toBe(stage);
+		// Round-trip element agreement.
+		expect(findStage(child).el).toBe(getStageById(cursor.stage));
+	});
+
+	it('falls back to the document root when there is no marked ancestor', () => {
+		const orphan = document.createElement('div');
+		document.body.appendChild(orphan);
+
+		expect(findStage(orphan)).toEqual({ el: document.documentElement });
+		const cursor = normalizeCursor(0, 0, orphan);
+		expect(cursor.stage).toBeUndefined(); // no stage marker → omit it
+		expect(getStageById(cursor.stage)).toBe(document.documentElement);
+	});
+
+	it('escapes special characters in a named stage id', () => {
+		const { stage } = withChild((s) => s.setAttribute(STAGE_ATTR, 'a.b#c'));
+		expect(getStageById('a.b#c')).toBe(stage);
 	});
 });
