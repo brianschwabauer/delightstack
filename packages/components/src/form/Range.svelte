@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { tooltip } from '@delightstack/utilities';
+	import { getContext } from 'svelte';
+	import type { FormContext } from './Form.svelte';
 
 	const propId = $props.id();
 	let {
@@ -57,6 +59,14 @@
 		/** Name attribute for hidden input(s) */
 		name = undefined as string | undefined,
 
+		/** Error message shown below the slider */
+		error = '',
+
+		/** Parses & validates the value (e.g. a database table form field's
+		 *  `parse`). Inside a Form it is registered with the form, which runs it
+		 *  on the form's validation timing. */
+		parse = undefined as ((value: unknown) => unknown) | undefined,
+
 		/** Accessible label for the slider thumb(s) when no visible `label` is
 		 *  shown (e.g. an icon-only slider). Takes precedence over `label`. */
 		aria_label = undefined as string | undefined,
@@ -82,6 +92,59 @@
 	let drag_wrapper: HTMLElement | null = null;
 	let active_thumb = $state<'lower' | 'upper' | null>(null);
 	let overshoot_px = $state(0);
+
+	/* ------------------------------------------------------------------ */
+	/*  Form context integration                                           */
+	/* ------------------------------------------------------------------ */
+
+	const form_ctx = getContext<FormContext | undefined>('form');
+	let lower_input = $state<HTMLInputElement | undefined>(undefined);
+
+	/** Inside a Form with a name, the slider value flows through the form data */
+	const context_driven = !!(form_ctx && name);
+
+	/** Disabled merges the parent form's disabled/submitting state */
+	const effectively_disabled = $derived(disabled || (form_ctx?.disabled ?? false));
+
+	/** Error from the local prop or the parent form context */
+	const resolved_error = $derived.by(() => {
+		if (error) return error;
+		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
+		return '';
+	});
+
+	// Register with a parent Form (focus-on-error target + field validator).
+	$effect(() => {
+		if (!form_ctx || !name) return;
+		if (lower_input) form_ctx.register(name, lower_input, parse);
+		return () => form_ctx.unregister(name);
+	});
+
+	// Pull the value from the form data. Declared before the push effect so it
+	// runs first on mount — the form's value wins over the prop default.
+	$effect(() => {
+		if (!context_driven || !form_ctx || !name) return;
+		const ctx_value = form_ctx.getValue(name);
+		if (range) {
+			if (
+				Array.isArray(ctx_value) &&
+				(!Array.isArray(value) || ctx_value[0] !== value[0] || ctx_value[1] !== value[1])
+			) {
+				value = [Number(ctx_value[0]), Number(ctx_value[1])];
+			}
+		} else if (ctx_value != null) {
+			const next = Number(ctx_value);
+			if (!Number.isNaN(next) && next !== value) value = next;
+		}
+	});
+
+	// Push the current value into the form data. Called synchronously from the
+	// value-change handlers (not a $effect) so the form data is fresh before the
+	// pull effect above re-runs — otherwise it would read the stale value and
+	// clobber the change.
+	function pushValue() {
+		if (context_driven && form_ctx && name) form_ctx.setValue(name, emitValue());
+	}
 
 	const lower_value = $derived(
 		range && Array.isArray(value) ? value[0] : (value as number),
@@ -121,6 +184,7 @@
 		} else {
 			value = v;
 		}
+		pushValue();
 		oninput?.({ value: emitValue() });
 		// Recompute overshoot now that value has snapped, so the DOM update
 		// includes an overshoot consistent with the new thumb position
@@ -131,15 +195,18 @@
 		const input = e.currentTarget as HTMLInputElement;
 		const v = Number(input.value);
 		value = [Math.min(v, lower_value), v] as [number, number];
+		pushValue();
 		oninput?.({ value: emitValue() });
 		if (is_dragging) updateOvershoot();
 	}
 
 	function onLowerChange() {
+		if (form_ctx && name) form_ctx.setTouched(name);
 		onchange?.({ value: emitValue() });
 	}
 
 	function onUpperChange() {
+		if (form_ctx && name) form_ctx.setTouched(name);
 		onchange?.({ value: emitValue() });
 	}
 
@@ -168,12 +235,13 @@
 		} else {
 			value = v;
 		}
+		pushValue();
 	}
 
 	// --- Track click-and-drag (custom pointer capture on wrapper) ---
 
 	function onTrackPointerDown(e: PointerEvent) {
-		if (disabled) return;
+		if (effectively_disabled) return;
 		if (e.target instanceof HTMLInputElement) return;
 		e.preventDefault();
 
@@ -214,6 +282,7 @@
 		active_thumb = null;
 		overshoot_px = 0;
 		drag_wrapper = null;
+		if (form_ctx && name) form_ctx.setTouched(name);
 		onchange?.({ value: emitValue() });
 	}
 
@@ -296,10 +365,11 @@
 
 <div
 	class={['range-container', `size-${size}`, class_name].filter(Boolean).join(' ')}
-	class:disabled
+	class:disabled={effectively_disabled}
 	class:dense
 	class:comfortable
 	class:vertical
+	class:has-error={!!resolved_error}
 	class:has-tick-labels={show_ticks && !!tick_labels?.length}
 	class:dragging={is_dragging}
 	{@attach tooltip_message ? tooltip(tooltip_message) : () => {}}>
@@ -369,12 +439,13 @@
 
 		<input
 			type="range"
+			bind:this={lower_input}
 			{id}
 			{name}
 			{min}
 			{max}
 			{step}
-			{disabled}
+			disabled={effectively_disabled}
 			value={lower_value}
 			class="lower"
 			aria-valuenow={lower_value}
@@ -394,7 +465,7 @@
 				{min}
 				{max}
 				{step}
-				{disabled}
+				disabled={effectively_disabled}
 				value={upper_value}
 				class="upper"
 				aria-valuenow={upper_value}
@@ -462,6 +533,10 @@
 			{/if}
 		</div>
 	{/if}
+
+	{#if resolved_error}
+		<span class="error-text">{resolved_error}</span>
+	{/if}
 </div>
 
 <style>
@@ -485,6 +560,11 @@
 		}
 		&.comfortable {
 			gap: 0.75em;
+		}
+
+		.error-text {
+			font-size: 0.8em;
+			color: var(--color-error, #d32f2f);
 		}
 
 		/* Sizes */

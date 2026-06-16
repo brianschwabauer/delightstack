@@ -18,6 +18,7 @@
 <script lang="ts">
 	import { ripple, tooltip } from '@delightstack/utilities';
 	import { getContext, setContext, type Snippet } from 'svelte';
+	import type { FormContext } from './Form.svelte';
 
 	const propId = $props.id();
 
@@ -72,6 +73,11 @@
 		/** Whether the field is required (RadioGroup only) */
 		required = false,
 
+		/** Parses & validates the value (e.g. a database table form field's
+		 *  `parse`). Inside a Form it is registered with the form, which runs it
+		 *  on the form's validation timing. RadioGroup only. */
+		parse = undefined as ((value: unknown) => unknown) | undefined,
+
 		/** Child snippet (RadioGroup renders children; Radio does not) */
 		children = undefined as undefined | Snippet,
 
@@ -87,6 +93,23 @@
 
 	const sizes: Record<string, number> = { '0': 16, '1': 20, '2': 24, '3': 28 };
 
+	/* ------------------------------------------------------------------ */
+	/*  Form context integration (RadioGroup only)                         */
+	/* ------------------------------------------------------------------ */
+
+	const form_ctx = getContext<FormContext | undefined>('form');
+	let group_element = $state<HTMLElement | undefined>(undefined);
+
+	/** Disabled merges the parent form's disabled/submitting state */
+	const effectively_disabled = $derived(disabled || (form_ctx?.disabled ?? false));
+
+	/** Group error from the local prop or the parent form context */
+	const resolved_error = $derived.by(() => {
+		if (error) return error;
+		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
+		return '';
+	});
+
 	// Group context
 	if (isGroup) {
 		const ctx = $state<RadioGroupContext>({
@@ -96,6 +119,10 @@
 			size,
 			select(val: string) {
 				value = val;
+				if (form_ctx && name) {
+					form_ctx.setValue(name, val);
+					form_ctx.setTouched(name);
+				}
 				onchange?.({ value: val });
 			},
 		});
@@ -105,8 +132,24 @@
 		$effect(() => {
 			ctx.name = name || id;
 			ctx.value = value;
-			ctx.disabled = disabled;
+			ctx.disabled = effectively_disabled;
 			ctx.size = size;
+		});
+
+		// Register the group with a parent Form (focus-on-error + field validator)
+		$effect(() => {
+			if (!form_ctx || !name) return;
+			if (group_element) form_ctx.register(name, group_element, parse);
+			return () => form_ctx.unregister(name);
+		});
+
+		// Context-driven: drive the selected value from the form data when the
+		// group lives inside a Form and has a name — no bind:value needed.
+		$effect(() => {
+			if (!form_ctx || !name) return;
+			const ctx_value = form_ctx.getValue(name);
+			const next = ctx_value == null ? '' : String(ctx_value);
+			if (next !== value) value = next;
 		});
 	}
 
@@ -174,12 +217,13 @@
 {#if isGroup}
 	<!-- RadioGroup wrapper -->
 	<div
+		bind:this={group_element}
 		class={['radio-group', class_name].filter(Boolean).join(' ')}
 		class:horizontal
 		class:dense
 		class:comfortable
-		class:disabled
-		class:has-error={!!error}
+		class:disabled={effectively_disabled}
+		class:has-error={!!resolved_error}
 		role="radiogroup"
 		aria-labelledby={label ? `${id}-group-label` : undefined}
 		aria-required={required || undefined}
@@ -190,8 +234,8 @@
 		<div class="group-items" class:horizontal>
 			{@render children?.()}
 		</div>
-		{#if error}
-			<span class="error-text">{error}</span>
+		{#if resolved_error}
+			<span class="error-text">{resolved_error}</span>
 		{/if}
 	</div>
 {:else}

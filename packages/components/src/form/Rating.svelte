@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { tooltip } from '@delightstack/utilities';
+	import { getContext } from 'svelte';
+	import type { FormContext } from './Form.svelte';
 
 	const propId = $props.id();
 	let {
@@ -45,6 +47,14 @@
 		/** The name attribute for the hidden input */
 		name = '',
 
+		/** Error message shown below the stars */
+		error = '',
+
+		/** Parses & validates the value (e.g. a database table form field's
+		 *  `parse`). Inside a Form it is registered with the form, which runs it
+		 *  on the form's validation timing. */
+		parse = undefined as ((value: unknown) => unknown) | undefined,
+
 		/** Specifies a custom class name */
 		class: class_name = '',
 
@@ -58,12 +68,54 @@
 	const sizes: Record<string, number> = { '0': 16, '1': 24, '2': 32, '3': 40 };
 	const px = $derived(sizes[size] ?? 24);
 
+	/* ------------------------------------------------------------------ */
+	/*  Form context integration                                           */
+	/* ------------------------------------------------------------------ */
+
+	const form_ctx = getContext<FormContext | undefined>('form');
+	let root_element = $state<HTMLElement | undefined>(undefined);
+
+	/** Disabled merges the parent form's disabled/submitting state */
+	const effectively_disabled = $derived(disabled || (form_ctx?.disabled ?? false));
+
+	/** Error from the local prop or the parent form context */
+	const resolved_error = $derived.by(() => {
+		if (error) return error;
+		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
+		return '';
+	});
+
+	// Register with a parent Form (focus-on-error target + field validator).
+	$effect(() => {
+		if (!form_ctx || !name) return;
+		if (root_element) form_ctx.register(name, root_element, parse);
+		return () => form_ctx.unregister(name);
+	});
+
+	// Context-driven: drive the rating value from the form data when inside a
+	// Form with a name — no bind:value needed.
+	$effect(() => {
+		if (!form_ctx || !name) return;
+		const ctx_value = form_ctx.getValue(name);
+		const next = ctx_value == null ? 0 : Number(ctx_value);
+		if (!Number.isNaN(next) && next !== value) value = next;
+	});
+
+	/** Writes the value into the form data, marks touched, and emits onchange */
+	function emitChange() {
+		if (form_ctx && name) {
+			form_ctx.setValue(name, value);
+			form_ctx.setTouched(name);
+		}
+		onchange?.({ value: value });
+	}
+
 	let hoverValue = $state(0);
 	let isHovering = $state(false);
 	let bounceStar = $state(-1);
 
 	const displayValue = $derived(isHovering ? hoverValue : value);
-	const isInteractive = $derived(!readonly && !disabled);
+	const isInteractive = $derived(!readonly && !effectively_disabled);
 
 	// Star path (5-pointed star)
 	const starPath =
@@ -85,7 +137,7 @@
 		}
 		bounceStar = newValue;
 		setTimeout(() => (bounceStar = -1), 300);
-		onchange?.({ value });
+		emitChange();
 	}
 
 	function hoverStar(newValue: number) {
@@ -107,20 +159,20 @@
 			e.preventDefault();
 			const next = Math.min(max, value + step);
 			value = next;
-			onchange?.({ value });
+			emitChange();
 		} else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
 			e.preventDefault();
 			const next = Math.max(0, value - step);
 			value = next;
-			onchange?.({ value });
+			emitChange();
 		} else if (e.key === 'Home') {
 			e.preventDefault();
 			value = 0;
-			onchange?.({ value });
+			emitChange();
 		} else if (e.key === 'End') {
 			e.preventDefault();
 			value = max;
-			onchange?.({ value });
+			emitChange();
 		}
 	}
 
@@ -132,104 +184,123 @@
 	}
 </script>
 
-<div
-	class={['rating', class_name].filter(Boolean).join(' ')}
-	class:readonly
-	class:disabled
-	class:dense
-	class:comfortable
-	role="slider"
-	aria-valuenow={value}
-	aria-valuemin={0}
-	aria-valuemax={max}
-	aria-label="Rating"
-	tabindex={isInteractive ? 0 : -1}
-	onkeydown={onKeyDown}
-	onmouseleave={hoverEnd}
-	{@attach tooltip(tooltip_message)}
-	style:font-size={`var(--control-font-${size})`}
-	{id}>
-	<!-- Hidden native input for form submission -->
-	<input type="hidden" {name} value={value.toString()} />
+<div class="rating-field" class:has-error={!!resolved_error}>
+	<div
+		bind:this={root_element}
+		class={['rating', class_name].filter(Boolean).join(' ')}
+		class:readonly
+		class:disabled={effectively_disabled}
+		class:dense
+		class:comfortable
+		role="slider"
+		aria-valuenow={value}
+		aria-valuemin={0}
+		aria-valuemax={max}
+		aria-label="Rating"
+		tabindex={isInteractive ? 0 : -1}
+		onkeydown={onKeyDown}
+		onmouseleave={hoverEnd}
+		{@attach tooltip(tooltip_message)}
+		style:font-size={`var(--control-font-${size})`}
+		{id}>
+		<!-- Hidden native input for form submission -->
+		<input type="hidden" {name} value={value.toString()} />
 
-	<div class="stars" style:--star-color={color || null}>
-		{#each { length: max } as _, i}
-			{@const fill = getStarFill(i)}
-			{@const vals = starValues(i)}
-			{@const isBouncing = bounceStar === vals.full || bounceStar === vals.half}
-			<div
-				class="star-wrapper"
-				class:bouncing={isBouncing}
-				style:width="{px}px"
-				style:height="{px}px">
-				{#if precision === 0.5 && isInteractive}
-					<!-- Left half (0.5) -->
-					<button
-						type="button"
-						class="star-half left"
-						tabindex={-1}
-						{disabled}
-						aria-hidden="true"
-						onclick={() => selectValue(vals.half)}
-						onmouseenter={() => hoverStar(vals.half)}>
-						<svg
-							viewBox="0 0 24 24"
-							width={px}
-							height={px}
+		<div class="stars" style:--star-color={color || null}>
+			{#each { length: max } as _, i}
+				{@const fill = getStarFill(i)}
+				{@const vals = starValues(i)}
+				{@const isBouncing = bounceStar === vals.full || bounceStar === vals.half}
+				<div
+					class="star-wrapper"
+					class:bouncing={isBouncing}
+					style:width="{px}px"
+					style:height="{px}px">
+					{#if precision === 0.5 && isInteractive}
+						<!-- Left half (0.5) -->
+						<button
+							type="button"
+							class="star-half left"
+							tabindex={-1}
+							disabled={effectively_disabled}
 							aria-hidden="true"
-							style="clip-path: inset(0 50% 0 0)">
-							<path
-								d={starPath}
-								class="star-path"
-								class:filled={fill === 'full' || fill === 'half'} />
-						</svg>
-					</button>
-					<!-- Right half (1.0) -->
-					<button
-						type="button"
-						class="star-half right"
-						tabindex={-1}
-						{disabled}
-						aria-hidden="true"
-						onclick={() => selectValue(vals.full)}
-						onmouseenter={() => hoverStar(vals.full)}>
-						<svg
-							viewBox="0 0 24 24"
-							width={px}
-							height={px}
+							onclick={() => selectValue(vals.half)}
+							onmouseenter={() => hoverStar(vals.half)}>
+							<svg
+								viewBox="0 0 24 24"
+								width={px}
+								height={px}
+								aria-hidden="true"
+								style="clip-path: inset(0 50% 0 0)">
+								<path
+									d={starPath}
+									class="star-path"
+									class:filled={fill === 'full' || fill === 'half'} />
+							</svg>
+						</button>
+						<!-- Right half (1.0) -->
+						<button
+							type="button"
+							class="star-half right"
+							tabindex={-1}
+							disabled={effectively_disabled}
 							aria-hidden="true"
-							style="clip-path: inset(0 0 0 50%)">
-							<path d={starPath} class="star-path" class:filled={fill === 'full'} />
-						</svg>
-					</button>
-				{:else}
-					<!-- Full star button -->
-					<button
-						type="button"
-						class="star-full"
-						tabindex={-1}
-						disabled={disabled || readonly}
-						aria-hidden="true"
-						onclick={() => selectValue(vals.full)}
-						onmouseenter={() => hoverStar(vals.full)}>
-						<svg viewBox="0 0 24 24" width={px} height={px} aria-hidden="true">
-							<path
-								d={starPath}
-								class="star-path"
-								class:filled={fill === 'full' || fill === 'half'} />
-						</svg>
-					</button>
-				{/if}
-			</div>
-		{/each}
+							onclick={() => selectValue(vals.full)}
+							onmouseenter={() => hoverStar(vals.full)}>
+							<svg
+								viewBox="0 0 24 24"
+								width={px}
+								height={px}
+								aria-hidden="true"
+								style="clip-path: inset(0 0 0 50%)">
+								<path d={starPath} class="star-path" class:filled={fill === 'full'} />
+							</svg>
+						</button>
+					{:else}
+						<!-- Full star button -->
+						<button
+							type="button"
+							class="star-full"
+							tabindex={-1}
+							disabled={effectively_disabled || readonly}
+							aria-hidden="true"
+							onclick={() => selectValue(vals.full)}
+							onmouseenter={() => hoverStar(vals.full)}>
+							<svg viewBox="0 0 24 24" width={px} height={px} aria-hidden="true">
+								<path
+									d={starPath}
+									class="star-path"
+									class:filled={fill === 'full' || fill === 'half'} />
+							</svg>
+						</button>
+					{/if}
+				</div>
+			{/each}
+		</div>
+
+		{#if show_value}
+			<span class="value-display">{value}</span>
+		{/if}
 	</div>
 
-	{#if show_value}
-		<span class="value-display">{value}</span>
+	{#if resolved_error}
+		<span class="error-text">{resolved_error}</span>
 	{/if}
 </div>
 
 <style>
+	.rating-field {
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.25em;
+
+		.error-text {
+			font-size: 0.8em;
+			color: var(--color-error, #d32f2f);
+		}
+	}
+
 	.rating {
 		display: inline-flex;
 		align-items: center;
