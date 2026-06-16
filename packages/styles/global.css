@@ -1,151 +1,187 @@
+/* Design tokens and the styled-native scrollbar baseline are plain stylesheets.
+   They're imported UNLAYERED so they're trivial to override with normal
+   specificity from anywhere in a consuming app (e.g. `:root { --color-primary }`). */
 @import './tokens.css';
 @import './scrollbar.css';
 
-::view-transition-group(*) {
-	animation-duration: 150ms;
-}
+/* Everything this stylesheet sets on real elements lives under @layer delight.*,
+   so a consuming app's own (unlayered) rules always win — no specificity battles,
+   no `!important`, no source-order luck. Order is reset → base → utilities
+   (a later layer beats an earlier one).
 
-body {
-	background-color: var(--color-bg);
-	color: var(--color-text);
-	accent-color: var(--color-bg-active, var(--link));
-	caret-color: currentColor;
-	font-family: var(--font-serif);
-	font-size: var(--text-base);
-	font-weight: var(--font-weight-normal);
-	font-optical-sizing: auto;
-	font-style: normal;
-}
-::selection {
-	background-color: var(--color-action);
-	color: var(--color-action-text);
-}
+   Deliberately left UNLAYERED, below: the `prefers-reduced-motion` reset and the
+   `!important` mobile utilities. Those are meant to be hard to override by design,
+   so they sit outside the layer system rather than inside the lowest layer. */
+@layer delight.reset, delight.base, delight.utilities;
 
-h1,
-h2,
-h3,
-h4,
-strong {
-	font-weight: var(--font-weight-bold);
-}
+@layer delight.reset {
+	/* Box sizing rules */
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+	}
 
-h1 {
-	font-size: var(--text-3xl);
-	line-height: 1.25;
-}
-h2 {
-	font-size: var(--text-2xl);
-	line-height: 1.25;
-}
-h3 {
-	font-size: var(--text-xl);
-	line-height: 1.25;
-}
-h4 {
-	font-size: var(--text-lg);
-	line-height: 1.25;
-}
-small {
-	font-size: 0.75em;
-	color: var(--color-text-disabled);
-}
-a {
-	text-decoration: none;
-	color: var(--color-text);
-}
+	/* Remove highlight color on tap */
+	* {
+		-webkit-tap-highlight-color: transparent;
+	}
 
-*:focus-visible {
-	outline: none;
-	box-shadow: 0 0 0 1px var(--color-border);
-}
+	/* Remove default margin */
+	body,
+	h1,
+	h2,
+	h3,
+	h4,
+	p,
+	figure,
+	blockquote,
+	dl,
+	dd {
+		margin: 0;
+	}
 
-/* Box sizing rules */
-*,
-*::before,
-*::after {
-	box-sizing: border-box;
-}
+	/* Remove list styles on ul, ol elements with a list role, which suggests default styling will be removed */
+	ul[role='list'],
+	ol[role='list'] {
+		list-style: none;
+	}
 
-/* Remove highlight color on tap */
-* {
-	-webkit-tap-highlight-color: transparent;
-}
+	/* A elements that don't have a class get default styles */
+	a:not([class]) {
+		text-decoration-skip-ink: auto;
+	}
 
-/* Remove default margin */
-body,
-h1,
-h2,
-h3,
-h4,
-p,
-figure,
-blockquote,
-dl,
-dd {
-	margin: 0;
-}
+	button,
+	.button {
+		border: none;
+		outline: none;
+		background: none;
+		margin: 0;
+	}
+	fieldset {
+		border: none;
+		margin: 0;
+		padding: 0;
+	}
 
-/* Remove list styles on ul, ol elements with a list role, which suggests default styling will be removed */
-ul[role='list'],
-ol[role='list'] {
-	list-style: none;
-}
+	/* Make images easier to work with */
+	img,
+	picture {
+		max-width: 100%;
+		display: block;
+	}
 
-/* Set core body defaults */
-body {
-	min-height: 100vh;
-	text-rendering: optimizeSpeed;
-	line-height: 1.5;
-}
+	/* Inherit fonts for inputs and buttons */
+	input,
+	button,
+	textarea,
+	select {
+		font: inherit;
+	}
 
-/* A elements that don't have a class get default styles */
-a:not([class]) {
-	text-decoration-skip-ink: auto;
-}
-
-button,
-.button {
-	border: none;
-	outline: none;
-	background: none;
-	margin: 0;
-}
-fieldset {
-	border: none;
-	margin: 0;
-	padding: 0;
-}
-
-/* Make images easier to work with */
-img,
-picture {
-	max-width: 100%;
-	display: block;
-}
-
-/* Inherit fonts for inputs and buttons */
-input,
-button,
-textarea,
-select {
-	font: inherit;
-}
-
-/** Prevent issues with flexbox (like input elements not shrinking) **/
-* {
-	min-width: 0;
-}
-
-.mobile-only {
-	@media (min-width: 768px) {
-		display: none !important;
+	/** Prevent issues with flexbox (like input elements not shrinking) **/
+	* {
+		min-width: 0;
 	}
 }
-.mobile-hidden {
-	@media (max-width: 767px) {
-		display: none !important;
+
+@layer delight.base {
+	::view-transition-group(*) {
+		animation-duration: 150ms;
+	}
+
+	body {
+		background-color: var(--color-bg);
+		color: var(--color-text);
+		accent-color: var(--color-bg-active, var(--link));
+		caret-color: currentColor;
+		font-family: var(--font-serif);
+		font-size: var(--text-base);
+		font-weight: var(--font-weight-normal);
+		font-optical-sizing: auto;
+		font-style: normal;
+		min-height: 100vh;
+		text-rendering: optimizeSpeed;
+		line-height: 1.5;
+	}
+	::selection {
+		background-color: var(--color-action);
+		color: var(--color-action-text);
+	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	strong {
+		font-weight: var(--font-weight-bold);
+	}
+
+	h1 {
+		font-size: var(--text-3xl);
+		line-height: 1.25;
+	}
+	h2 {
+		font-size: var(--text-2xl);
+		line-height: 1.25;
+	}
+	h3 {
+		font-size: var(--text-xl);
+		line-height: 1.25;
+	}
+	h4 {
+		font-size: var(--text-lg);
+		line-height: 1.25;
+	}
+	small {
+		font-size: 0.75em;
+		color: var(--color-text-disabled);
+	}
+	a {
+		text-decoration: none;
+		color: var(--color-text);
+	}
+
+	*:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 1px var(--color-border);
 	}
 }
+
+@layer delight.utilities {
+	*.loading {
+		position: relative;
+		pointer-events: none;
+		> * {
+			opacity: 0.5 !important;
+		}
+		&:after {
+			animation: spinAround 500ms infinite linear;
+			border: 2px solid var(--color-text);
+			border-radius: var(--radius-full);
+			border-right-color: transparent;
+			border-top-color: transparent;
+			content: '';
+			display: block;
+			height: 1em;
+			position: relative;
+			width: 1em;
+			position: absolute;
+			top: calc(50% - var(--loading-size, 5rem) / 2);
+			left: calc(50% - var(--loading-size, 5rem) / 2);
+			width: var(--loading-size, 5rem);
+			height: var(--loading-size, 5rem);
+			border-width: 0.2rem;
+			border-color: var(--loading-bg, var(--color-text));
+			border-right-color: transparent;
+			border-top-color: transparent;
+			z-index: 3;
+		}
+	}
+}
+
+/* --- Unlayered: meant to be hard to override --------------------------------- */
 
 /* Remove all animations, transitions and smooth scroll for people that prefer not to see them */
 @media (prefers-reduced-motion: reduce) {
@@ -163,6 +199,17 @@ select {
 	}
 }
 
+.mobile-only {
+	@media (min-width: 768px) {
+		display: none !important;
+	}
+}
+.mobile-hidden {
+	@media (max-width: 767px) {
+		display: none !important;
+	}
+}
+
 @keyframes spinAround {
 	from {
 		transform: rotate(0deg);
@@ -170,35 +217,5 @@ select {
 
 	to {
 		transform: rotate(359deg);
-	}
-}
-
-*.loading {
-	position: relative;
-	pointer-events: none;
-	> * {
-		opacity: 0.5 !important;
-	}
-	&:after {
-		animation: spinAround 500ms infinite linear;
-		border: 2px solid var(--color-text);
-		border-radius: var(--radius-full);
-		border-right-color: transparent;
-		border-top-color: transparent;
-		content: '';
-		display: block;
-		height: 1em;
-		position: relative;
-		width: 1em;
-		position: absolute;
-		top: calc(50% - var(--loading-size, 5rem) / 2);
-		left: calc(50% - var(--loading-size, 5rem) / 2);
-		width: var(--loading-size, 5rem);
-		height: var(--loading-size, 5rem);
-		border-width: 0.2rem;
-		border-color: var(--loading-bg, var(--color-text));
-		border-right-color: transparent;
-		border-top-color: transparent;
-		z-index: 3;
 	}
 }

@@ -29,8 +29,12 @@ any Svelte 5 / Vite app. The backend packages target **Cloudflare Workers + Dura
 ## Install
 
 ```bash
-pnpm add @delightstack/components @delightstack/utilities
+pnpm add @delightstack/components @delightstack/styles @delightstack/utilities
 ```
+
+`@delightstack/components` reads all of its colors, typography, spacing, and motion from the CSS
+custom properties shipped by `@delightstack/styles` — install it alongside the components and import
+it once at the root of your app (`import '@delightstack/styles';`).
 
 All packages are published as ESM and target `moduleResolution: "bundler"` (SvelteKit, Vite, and
 Wrangler all use this). Svelte 5 is an optional peer dependency for packages with reactive clients.

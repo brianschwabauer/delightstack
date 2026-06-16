@@ -470,3 +470,20 @@ html {
 		scrollbar-gutter: stable;
 	}
 }
+
+/* Light / dark mode.
+ *
+ * Every theming token above is a `light-dark()` value, so the active scheme is
+ * driven entirely by the `color-scheme` property — NOT a class or a `.dark`
+ * selector. By default `html { color-scheme: light dark }` (above) follows the
+ * OS preference. To force a scheme regardless of the OS, set `data-theme` on
+ * <html> (or on any subtree — `color-scheme` inherits, so a `data-theme` on a
+ * section themes just that section). Toggle the attribute from JS for a manual
+ * switch. These rules are intentionally unlayered so an app can still override
+ * `color-scheme` directly. */
+[data-theme='light'] {
+	color-scheme: light;
+}
+[data-theme='dark'] {
+	color-scheme: dark;
+}
