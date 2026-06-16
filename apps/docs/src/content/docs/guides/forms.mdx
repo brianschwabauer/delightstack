@@ -4,6 +4,8 @@ description: How to build validated forms with the Form component using Standard
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import ComponentPreview from '../../../components/ComponentPreview.astro';
+import FormKitchenSinkDemo from '../../../components/demos/FormKitchenSinkDemo.svelte';
 
 DelightStack provides a `Form` component that handles validation, error display, and submission state management. It integrates with **Standard Schema** — a universal interface supported by Zod, Valibot, ArkType, and other validation libraries.
 
@@ -299,104 +301,115 @@ And these methods:
 
 Here is a registration form with multiple field types, validation, and user feedback:
 
-```svelte
-<script>
-  import {
-    Form,
-    Input,
-    Select,
-    Checkbox,
-    Toggle,
-    Rating,
-    Fieldset,
-    Button,
-    Toaster,
-    toast,
-  } from '@delightstack/components';
-  import { z } from 'zod';
+<ComponentPreview code={`<script>
+${'  '}import {
+${'  '}${'  '}Form, Input, Select, Checkbox, Toggle, Rating, Range, Radio, RadioGroup,
+${'  '}${'  '}Fieldset, Button, Toaster, toast,
+${'  '}} from '@delightstack/components';
+${'  '}import { z } from 'zod';
 
-  const schema = z.object({
-    first_name: z.string().min(1, 'First name is required'),
-    last_name: z.string().min(1, 'Last name is required'),
-    email: z.string().email('Please enter a valid email address'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    role: z.string().min(1, 'Please select a role'),
-    experience: z.number().min(1, 'Please rate your experience'),
-    terms: z.literal(true, {
-      errorMap: () => ({ message: 'You must accept the terms' }),
-    }),
-  });
+${'  '}const schema = z.object({
+${'  '}${'  '}first_name: z.string().min(1, 'First name is required'),
+${'  '}${'  '}last_name: z.string().min(1, 'Last name is required'),
+${'  '}${'  '}email: z.string().email('Please enter a valid email address'),
+${'  '}${'  '}password: z.string().min(8, 'Password must be at least 8 characters'),
+${'  '}${'  '}bio: z.string().optional(),
+${'  '}${'  '}role: z.string().min(1, 'Please select a role'),
+${'  '}${'  '}interests: z.array(z.string()).default([]),
+${'  '}${'  '}skill: z.number().min(1, 'Please rate your skill level'),
+${'  '}${'  '}experience_years: z.number().default(0),
+${'  '}${'  '}plan: z.string().min(1, 'Please choose a plan'),
+${'  '}${'  '}newsletter: z.boolean().default(false),
+${'  '}${'  '}terms: z.boolean().refine((v) => v, 'You must accept the terms'),
+${'  '}});
 
-  let data = $state({
-    first_name: '',
-    last_name: '',
-    email: '',
-    password: '',
-    role: '',
-    experience: 0,
-    newsletter: false,
-    terms: false,
-  });
+${'  '}// The schema is the single source of truth for the data shape.
+${'  '}let data: z.infer<typeof schema> = $state({
+${'  '}${'  '}first_name: '',
+${'  '}${'  '}last_name: '',
+${'  '}${'  '}email: '',
+${'  '}${'  '}password: '',
+${'  '}${'  '}bio: '',
+${'  '}${'  '}role: '',
+${'  '}${'  '}interests: [],
+${'  '}${'  '}skill: 0,
+${'  '}${'  '}experience_years: 0,
+${'  '}${'  '}plan: '',
+${'  '}${'  '}newsletter: false,
+${'  '}${'  '}terms: false,
+${'  '}});
 
-  const role_options = [
-    { value: 'developer', label: 'Developer' },
-    { value: 'designer', label: 'Designer' },
-    { value: 'manager', label: 'Product Manager' },
-    { value: 'other', label: 'Other' },
-  ];
+${'  '}const role_options = [
+${'  '}${'  '}{ value: 'developer', label: 'Developer' },
+${'  '}${'  '}{ value: 'designer', label: 'Designer' },
+${'  '}${'  '}{ value: 'manager', label: 'Product Manager' },
+${'  '}${'  '}{ value: 'other', label: 'Other' },
+${'  '}];
 
-  async function handleSubmit({ data, is_valid }) {
-    if (!is_valid) return;
+${'  '}const interest_options = [
+${'  '}${'  '}{ value: 'frontend', label: 'Frontend' },
+${'  '}${'  '}{ value: 'backend', label: 'Backend' },
+${'  '}${'  '}{ value: 'design', label: 'Design' },
+${'  '}${'  '}{ value: 'devops', label: 'DevOps' },
+${'  '}];
 
-    await fetch('/api/user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
+${'  '}async function handleSubmit({ data }) {
+${'  '}${'  '}await fetch('/api/user', {
+${'  '}${'  '}${'  '}method: 'POST',
+${'  '}${'  '}${'  '}headers: { 'Content-Type': 'application/json' },
+${'  '}${'  '}${'  '}body: JSON.stringify(data),
+${'  '}${'  '}});
+${'  '}${'  '}toast.success('Account created successfully!');
+${'  '}}
 
-    toast.success('Account created successfully!');
-  }
-
-  function handleError({ errors }) {
-    toast.error('Please fix the errors above.');
-  }
+${'  '}function handleError() {
+${'  '}${'  '}toast.error('Please fix the errors above.');
+${'  '}}
 </script>
 
 <Toaster />
 
 <Form
-  {schema}
-  bind:data
-  validate_on="blur"
-  reset_on_submit
-  onsubmit={handleSubmit}
-  onerror={handleError}
+${'  '}bind:data
+${'  '}{schema}
+${'  '}validate_on="blur"
+${'  '}reset_on_submit
+${'  '}onsubmit={handleSubmit}
+${'  '}onerror={handleError}
 >
-  <Fieldset label="Personal Information">
-    <Input name="first_name" label="First Name" />
-    <Input name="last_name" label="Last Name" />
-    <Input name="email" label="Email" type="email" />
-    <Input name="password" label="Password" type="password" />
-  </Fieldset>
+${'  '}<Fieldset label="Personal Information" bordered>
+${'  '}${'  '}<Input name="first_name" label="First name" />
+${'  '}${'  '}<Input name="last_name" label="Last name" />
+${'  '}${'  '}<Input name="email" label="Email" type="email" />
+${'  '}${'  '}<Input name="password" label="Password" type="password" description="At least 8 characters" />
+${'  '}${'  '}<Input name="bio" label="Bio" type="textarea" placeholder="Tell us a little about yourself…" />
+${'  '}</Fieldset>
 
-  <Fieldset label="Profile">
-    <Select
-      name="role"
-      label="Role"
-      placeholder="Select your role"
-      options={role_options}
-    />
-    <Rating name="experience" label="Experience Level" />
-  </Fieldset>
+${'  '}<Fieldset label="Profile" bordered>
+${'  '}${'  '}<Select name="role" label="Role" placeholder="Select your role" options={role_options} />
+${'  '}${'  '}<Select name="interests" label="Interests" multiple clearable placeholder="Pick any that apply" options={interest_options} />
+${'  '}${'  '}<!-- Rating has no label prop, so wrap it -->
+${'  '}${'  '}<label>Skill level <Rating name="skill" /></label>
+${'  '}${'  '}<Range name="experience_years" label="Years of experience" min={0} max={40} show_value />
+${'  '}</Fieldset>
 
-  <Fieldset label="Preferences">
-    <Toggle name="newsletter" label="Subscribe to newsletter" />
-    <Checkbox name="terms" label="I agree to the terms and conditions" />
-  </Fieldset>
+${'  '}<Fieldset label="Preferences" bordered>
+${'  '}${'  '}<RadioGroup name="plan" label="Plan">
+${'  '}${'  '}${'  '}<Radio value="free" label="Free" />
+${'  '}${'  '}${'  '}<Radio value="pro" label="Pro" />
+${'  '}${'  '}${'  '}<Radio value="enterprise" label="Enterprise" />
+${'  '}${'  '}</RadioGroup>
+${'  '}${'  '}<Toggle name="newsletter" label="Subscribe to the newsletter" />
+${'  '}${'  '}<Checkbox name="terms" label="I agree to the terms and conditions" />
+${'  '}</Fieldset>
 
-  <Button type="submit">Create Account</Button>
-</Form>
-```
+${'  '}<div style="display: flex; gap: 1rem;">
+${'  '}${'  '}<Button type="reset" ghost>Reset</Button>
+${'  '}${'  '}<Button type="submit">Create Account</Button>
+${'  '}</div>
+</Form>`}>
+  <FormKitchenSinkDemo client:load />
+</ComponentPreview>
 
 <Aside type="tip">
 The `reset_on_submit` prop resets the form data back to its initial values after a successful submission. The `onsubmit` callback supports returning a Promise — the form automatically sets `is_submitting` to `true` while it resolves, disabling the submit button.
