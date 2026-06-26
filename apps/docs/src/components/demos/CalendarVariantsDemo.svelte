@@ -38,6 +38,6 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		color: var(--color-text-light, hsl(0 0% 45%));
+		color: var(--color-text-muted, hsl(0 0% 45%));
 	}
 </style>

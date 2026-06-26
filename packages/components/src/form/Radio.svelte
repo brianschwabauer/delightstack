@@ -424,7 +424,7 @@
 
 		/* Accent-tinted hover when selected */
 		&.selected {
-			--hover-tint: color-mix(in srgb, var(--color-accent, #1976d2) 16%, transparent);
+			--hover-tint: color-mix(in srgb, var(--color-action, #1976d2) 16%, transparent);
 		}
 
 		&:focus-visible {
@@ -452,10 +452,10 @@
 
 		&.selected {
 			.ring {
-				stroke: var(--color-accent, #1976d2);
+				stroke: var(--color-action, #1976d2);
 			}
 			.dot {
-				fill: var(--color-accent, #1976d2);
+				fill: var(--color-action, #1976d2);
 				transform: scale(1);
 			}
 		}

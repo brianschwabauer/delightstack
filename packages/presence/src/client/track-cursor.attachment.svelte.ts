@@ -78,7 +78,7 @@ export function trackCursor(options: TrackCursorOptions = {}): Attachment<HTMLEl
 			input.maxLength = 120;
 			input.setAttribute('aria-label', 'Cursor chat message');
 			input.autocomplete = 'off';
-			const color = presence.user?.color ?? 'var(--color-accent, #6366f1)';
+			const color = presence.user?.color ?? 'var(--color-action, #6366f1)';
 			Object.assign(input.style, {
 				position: 'fixed',
 				left: `${x + 16}px`,

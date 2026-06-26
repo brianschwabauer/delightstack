@@ -106,7 +106,7 @@
 		font-weight: 600;
 		line-height: 1;
 		color: #fff;
-		background: var(--color, var(--color-accent, #64748b));
+		background: var(--color, var(--color-action, #64748b));
 		box-shadow: 0 0 0 2px var(--color-bg, #fff);
 		user-select: none;
 		transition: opacity 0.2s ease;

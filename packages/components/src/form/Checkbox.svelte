@@ -326,7 +326,7 @@
 		/* Accent-tinted hover when checked or indeterminate */
 		&.checked,
 		&.indeterminate {
-			--hover-tint: color-mix(in srgb, var(--color-accent, #1976d2) 16%, transparent);
+			--hover-tint: color-mix(in srgb, var(--color-action, #1976d2) 16%, transparent);
 		}
 
 		&:focus-visible {
@@ -363,22 +363,22 @@
 
 		&.checked {
 			.box {
-				stroke: var(--color-accent, #1976d2);
-				fill: var(--color-accent, #1976d2);
+				stroke: var(--color-action, #1976d2);
+				fill: var(--color-action, #1976d2);
 			}
 			.check {
-				stroke: var(--color-accent-text, #fff);
+				stroke: var(--color-action-text, #fff);
 				stroke-dashoffset: 0;
 			}
 		}
 
 		&.indeterminate {
 			.box {
-				stroke: var(--color-accent, #1976d2);
-				fill: var(--color-accent, #1976d2);
+				stroke: var(--color-action, #1976d2);
+				fill: var(--color-action, #1976d2);
 			}
 			.dash {
-				stroke: var(--color-accent-text, #fff);
+				stroke: var(--color-action-text, #fff);
 			}
 		}
 
@@ -395,13 +395,13 @@
 		/* Uncheck: visible stroke retraction, box holds fill then fades */
 		&.animating-uncheck {
 			.check {
-				stroke: var(--color-accent-text, #fff);
+				stroke: var(--color-action-text, #fff);
 				stroke-dashoffset: 28;
 				transition: stroke-dashoffset 50ms cubic-bezier(0.4, 0, 0.2, 1);
 			}
 			.box {
-				stroke: var(--color-accent, #1976d2);
-				fill: var(--color-accent, #1976d2);
+				stroke: var(--color-action, #1976d2);
+				fill: var(--color-action, #1976d2);
 			}
 		}
 	}

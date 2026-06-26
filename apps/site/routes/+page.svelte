@@ -213,7 +213,7 @@
 		margin: 0 auto 1.5rem;
 	}
 	.hero h1 {
-		color: var(--color-text-max-contrast);
+		color: light-dark(black, white);
 		font-size: clamp(2.5rem, 7vw, 4.75rem);
 		line-height: 1.05;
 		letter-spacing: -0.03em;

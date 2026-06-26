@@ -9,7 +9,7 @@
 <Modal bind:open title="Q3 Product Brief">
 	{#snippet header_start()}
 		<span
-			style="background: var(--color-accent); color: var(--color-accent-text); padding: 0.15em 0.5em; border-radius: var(--radius-2); font-size: 0.75em; font-weight: 600;">
+			style="background: var(--color-action); color: var(--color-action-text); padding: 0.15em 0.5em; border-radius: var(--radius-2); font-size: 0.75em; font-weight: 600;">
 			Draft
 		</span>
 	{/snippet}

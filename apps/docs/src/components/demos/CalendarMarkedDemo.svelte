@@ -4,7 +4,7 @@
 	let date = $state(undefined);
 
 	const marked = [
-		{ date: new Date(2026, 2, 15), color: 'var(--color-accent)', label: 'Meeting' },
+		{ date: new Date(2026, 2, 15), color: 'var(--color-action)', label: 'Meeting' },
 		{ date: new Date(2026, 2, 20), color: 'var(--color-error)', label: 'Deadline' },
 	];
 </script>

@@ -263,8 +263,8 @@
 			--callout-bg: var(--color-error-bg);
 		}
 		&.tip {
-			--callout-color: var(--color-accent);
-			--callout-bg: color-mix(in oklch, var(--color-accent) 10%, transparent);
+			--callout-color: var(--color-action);
+			--callout-bg: color-mix(in oklch, var(--color-action) 10%, transparent);
 		}
 
 		&.banner {

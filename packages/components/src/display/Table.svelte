@@ -4044,11 +4044,11 @@
 			stroke 150ms ease;
 	}
 	.cell-bool.checked .box {
-		stroke: var(--color-accent, #1976d2);
-		fill: var(--color-accent, #1976d2);
+		stroke: var(--color-action, #1976d2);
+		fill: var(--color-action, #1976d2);
 	}
 	.cell-bool.checked .check {
-		stroke: var(--color-accent-text, #fff);
+		stroke: var(--color-action-text, #fff);
 		stroke-dashoffset: 0;
 	}
 

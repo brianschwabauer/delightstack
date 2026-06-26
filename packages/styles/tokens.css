@@ -15,29 +15,31 @@ html {
 	 * the surface tint from the brand color. */
 	--color-primary: #10a6c4;
 	--color-secondary: oklch(from var(--color-primary) l 0.05 h);
-	--color-neutral: var(--color-primary);
-	--color-50: oklch(from var(--color-neutral) 99% min(0.01, c) h);
-	--color-100: oklch(from var(--color-neutral) 97% min(0.015, c) h);
-	--color-150: oklch(from var(--color-neutral) 95% min(0.02, c) h);
-	--color-200: oklch(from var(--color-neutral) 92% min(0.03, c) h);
-	--color-250: oklch(from var(--color-neutral) 87% min(0.04, c) h);
-	--color-300: oklch(from var(--color-neutral) 82% min(0.05, c) h);
-	--color-350: oklch(from var(--color-neutral) 76% min(0.06, c) h);
-	--color-400: oklch(from var(--color-neutral) 70% min(0.07, c) h);
-	--color-450: oklch(from var(--color-neutral) 65% min(0.08, c) h);
-	--color-500: oklch(from var(--color-neutral) 60% min(0.08, c) h);
-	--color-550: oklch(from var(--color-neutral) 55% min(0.08, c) h);
-	--color-600: oklch(from var(--color-neutral) 48% min(0.07, c) h);
-	--color-650: oklch(from var(--color-neutral) 41% min(0.06, c) h);
-	--color-700: oklch(from var(--color-neutral) 35% min(0.05, c) h);
-	--color-750: oklch(from var(--color-neutral) 29% min(0.04, c) h);
-	--color-800: oklch(from var(--color-neutral) 24% min(0.025, c) h);
-	--color-850: oklch(from var(--color-neutral) 21% min(0.025, c) h);
-	--color-900: oklch(from var(--color-neutral) 18% min(0.03, c) h);
-	--color-950: oklch(from var(--color-neutral) 15% min(0.03, c) h);
+	--color-neutral: oklch(from var(--color-primary) l min(0.02, c) h);
+
+	--color-0: white;
+	--color-50: oklch(from var(--color-neutral) 99% calc(c - 0.012) h);
+	--color-100: oklch(from var(--color-neutral) 97% calc(c - 0.01) h);
+	--color-150: oklch(from var(--color-neutral) 95% calc(c - 0.008) h);
+	--color-200: oklch(from var(--color-neutral) 92% calc(c - 0.006) h);
+	--color-250: oklch(from var(--color-neutral) 87% calc(c - 0.004) h);
+	--color-300: oklch(from var(--color-neutral) 82% calc(c - 0.002) h);
+	--color-350: oklch(from var(--color-neutral) 76% c h);
+	--color-400: oklch(from var(--color-neutral) 70% c h);
+	--color-450: oklch(from var(--color-neutral) 65% c h);
+	--color-500: oklch(from var(--color-neutral) 60% c h);
+	--color-550: oklch(from var(--color-neutral) 55% c h);
+	--color-600: oklch(from var(--color-neutral) 48% c h);
+	--color-650: oklch(from var(--color-neutral) 41% c h);
+	--color-700: oklch(from var(--color-neutral) 35% c h);
+	--color-750: oklch(from var(--color-neutral) 29% c h);
+	--color-800: oklch(from var(--color-neutral) 24% calc(c + 0.002) h);
+	--color-850: oklch(from var(--color-neutral) 21% calc(c + 0.006) h);
+	--color-900: oklch(from var(--color-neutral) 18% calc(c + 0.01) h);
+	--color-950: oklch(from var(--color-neutral) 15% calc(c + 0.014) h);
+	--color-1000: black;
 
 	/* Internal background ramp (semantic bg/surface tokens map onto this) */
-	--color-bg-max-contrast: light-dark(white, black);
 	--color-bg-00: light-dark(white, black);
 	--color-bg-0: light-dark(var(--color-50), var(--color-950));
 	--color-bg-1: light-dark(var(--color-100), var(--color-900));
@@ -59,11 +61,6 @@ html {
 	--color-bg-17: light-dark(var(--color-900), var(--color-100));
 	--color-bg-18: light-dark(var(--color-950), var(--color-50));
 
-	/* Internal text endpoints (semantic text tokens map onto these) */
-	--color-text-max-contrast: light-dark(black, white);
-	--color-text-light: oklch(from var(--color-neutral) 76% min(0.06, c) h);
-	--color-text-dark: oklch(from var(--color-neutral) 46% min(0.06, c) h);
-
 	/* ============================================================
 	 * TIER 2 — SEMANTIC TOKENS (public API)
 	 * This is what components and consumers reference.
@@ -74,11 +71,20 @@ html {
 	--color-bg-muted: var(--color-bg-3); /* recessed: wells, code blocks, tracks */
 	--color-bg-active: var(--color-bg-2); /* hover / selected surface */
 	--color-bg-disabled: var(--color-bg-0);
-	--color-surface: var(--color-bg-00); /* elevated: cards, popovers, modals */
+	--color-surface: light-dark(
+		var(--color-bg-00),
+		var(--color-bg-3)
+	); /* elevated: cards, popovers, modals */
 
 	/* --- Text --- */
-	--color-text: light-dark(var(--color-text-dark), var(--color-text-light));
-	--color-text-muted: light-dark(var(--color-text-light), var(--color-text-dark));
+	--color-text: light-dark(
+		oklch(from var(--color-neutral) 42% min(0.06, c) h),
+		oklch(from var(--color-neutral) 82% min(0.06, c) h)
+	);
+	--color-text-muted: light-dark(
+		oklch(from var(--color-neutral) 55% min(0.06, c) h),
+		oklch(from var(--color-neutral) 70% min(0.06, c) h)
+	);
 	--color-text-disabled: light-dark(
 		oklch(from currentColor calc(l + 0.2) c h),
 		oklch(from currentColor calc(l - 0.2) c h)
@@ -90,16 +96,16 @@ html {
 
 	/* --- Border --- */
 	--color-border: light-dark(
-		oklch(from currentColor 85% min(c, 0.1) h),
-		oklch(from currentColor 40% min(c, 0.09) h)
+		oklch(from currentColor 80% min(c, 0.1) h),
+		oklch(from currentColor 50% min(c, 0.09) h)
 	);
 	--color-border-disabled: light-dark(
-		oklch(from currentColor 90% min(c, 0.1) h),
-		oklch(from currentColor 30% min(c, 0.09) h)
+		oklch(from currentColor 85% min(c, 0.06) h),
+		oklch(from currentColor 40% min(c, 0.05) h)
 	);
 	--color-border-active: light-dark(
-		oklch(from currentColor 75% min(c, 0.1) h),
-		oklch(from currentColor 50% min(c, 0.09) h)
+		oklch(from currentColor 65% min(c, 0.13) h),
+		oklch(from currentColor 60% min(c, 0.12) h)
 	);
 
 	/* --- Action (primary interactive) --- */
@@ -155,19 +161,39 @@ html {
 	);
 
 	/* --- Feedback --- */
-	--color-error: light-dark(#ef6262, #b04343);
-	--color-error-disabled: light-dark(#b38383, #5e2a2a);
-	--color-error-active: light-dark(#ca3030, #f55d5d);
-	--color-error-text: light-dark(#ffe6e6, #fac0c0);
-	--color-error-text-disabled: light-dark(#ffadad, #d96868);
-	--color-error-text-active: light-dark(#ffffff, #ffffff);
+	--color-error: light-dark(#de463f, #ef6262);
+	--color-error-disabled: light-dark(
+		oklch(from var(--color-error) calc(l + 0.05) calc(c - 0.03) h),
+		oklch(from var(--color-error) calc(l - 0.05) calc(c - 0.03) h)
+	);
+	--color-error-active: oklch(from var(--color-error) calc(l - 0.05) calc(c + 0.01) h);
+	--color-error-text: light-dark(
+		oklch(from var(--color-error) 96% 0.1 h),
+		oklch(from var(--color-error) 100% 0.15 h)
+	);
+	--color-error-text-disabled: light-dark(
+		oklch(from var(--color-error) 92% 0.05 h),
+		oklch(from var(--color-error) 92% 0.05 h)
+	);
+	--color-error-text-active: white;
 
-	--color-success: light-dark(#00b7a1, #2c8f83);
-	--color-success-disabled: light-dark(#83b3ad, #2a5e58);
-	--color-success-active: light-dark(#289487, #00b7a1);
-	--color-success-text: light-dark(#f5fefd, #b7f1eb);
-	--color-success-text-disabled: light-dark(#58e0d0, #4ec2b3);
-	--color-success-text-active: light-dark(#ffffff, #ffffff);
+	--color-success: light-dark(#009d88, #00b7a1);
+	--color-success-disabled: light-dark(
+		oklch(from var(--color-success) calc(l + 0.05) calc(c - 0.03) h),
+		oklch(from var(--color-success) calc(l - 0.05) calc(c - 0.03) h)
+	);
+	--color-success-active: oklch(
+		from var(--color-success) calc(l - 0.05) calc(c + 0.01) h
+	);
+	--color-success-text: light-dark(
+		oklch(from var(--color-success) 96% 0.1 h),
+		oklch(from var(--color-success) 100% 0.15 h)
+	);
+	--color-success-text-disabled: light-dark(
+		oklch(from var(--color-success) 92% 0.05 h),
+		oklch(from var(--color-success) 92% 0.05 h)
+	);
+	--color-success-text-active: white;
 
 	--color-warning: light-dark(#e89c08, #e0a020);
 
@@ -415,56 +441,112 @@ html {
 
 	/* Shadows. In light mode, traditional drop shadows; in dark mode they
 	   fade to transparent (dark shadows are invisible on dark surfaces). */
-	--shadow-hls: 220 3% 15%;
+	--shadow-color: oklch(from var(--color-neutral) 0.05 0.15 h);
 	--shadow-strength: 15%;
-	--shadow-color: light-dark(
-		hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 9%)),
-		transparent
-	);
 	--shadow-sm: 0 1px 3px -1px
-		light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 19%)), transparent);
+		light-dark(
+			oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 19%)),
+			transparent
+		);
 	--shadow-md:
 		0 3px 5px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 3%)),
+				transparent
+			),
 		0 7px 14px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent);
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 5%)),
+				transparent
+			);
 	--shadow-lg:
 		0 -1px 3px 0
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 2%)),
+				transparent
+			),
 		0 1px 2px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 2%)),
+				transparent
+			),
 		0 2px 5px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 4%)),
+				transparent
+			),
 		0 4px 12px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 5%)),
+				transparent
+			),
 		0 12px 15px -5px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 7%)), transparent);
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 7%)),
+				transparent
+			);
 	--shadow-xl:
 		0 -2px 5px 0
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 2%)),
+				transparent
+			),
 		0 1px 1px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 3%)),
+				transparent
+			),
 		0 2px 2px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 3%)),
+				transparent
+			),
 		0 5px 5px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 4%)),
+				transparent
+			),
 		0 9px 9px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 5%)),
+				transparent
+			),
 		0 16px 16px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 6%)), transparent);
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 6%)),
+				transparent
+			);
 	--shadow-2xl:
 		0 -1px 2px 0
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 2%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 2%)),
+				transparent
+			),
 		0 2px 1px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 3%)),
+				transparent
+			),
 		0 5px 5px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 3%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 3%)),
+				transparent
+			),
 		0 10px 10px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 4%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 4%)),
+				transparent
+			),
 		0 20px 20px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 5%)), transparent),
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 5%)),
+				transparent
+			),
 		0 40px 40px -2px
-			light-dark(hsl(var(--shadow-hls) / calc(var(--shadow-strength) + 7%)), transparent);
+			light-dark(
+				oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength, 15%) + 7%)),
+				transparent
+			);
 
 	@media (pointer: fine) {
 		scrollbar-gutter: stable;
