@@ -86,7 +86,7 @@
 		"dev": "svelte-package -w -i src",
 		"check": "svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
-		"typecheck": "tsgo --noEmit",
+		"typecheck": "svelte-check --tsconfig ./tsconfig.json",
 		"test": "vitest"
 	},
 	"peerDependencies": {
