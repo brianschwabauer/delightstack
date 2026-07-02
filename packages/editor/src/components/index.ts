@@ -5,4 +5,5 @@ export { default as SlashMenu } from './SlashMenu.svelte';
 export { default as CommandMenu } from './CommandMenu.svelte';
 export { default as BlockGutter } from './BlockGutter.svelte';
 export { default as LinkEditor } from './LinkEditor.svelte';
+export { default as MobileBar } from './MobileBar.svelte';
 export { portal } from './portal.js';

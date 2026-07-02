@@ -16,6 +16,17 @@ import type { BlockRenderer, JSONContent, UploadedImage } from '../types/index.j
 const WIDE_WIDTH = 'var(--editor-wide-width, min(1100px, calc(100vw - 2rem)))';
 const FULL_WIDTH = 'var(--editor-full-width, 100vw)';
 
+/**
+ * Responsive `sizes` derived from the width mode, so the browser picks the
+ * right srcset variant for what the image will actually occupy.
+ */
+function sizesFor(attrs: Record<string, unknown>, column_px: number): string {
+	if (attrs.width_mode === 'full') return '100vw';
+	if (attrs.width_mode === 'wide') return '(max-width: 1100px) 100vw, 1100px';
+	const pct = typeof attrs.width_pct === 'number' ? attrs.width_pct : 100;
+	return `(max-width: 768px) 100vw, ${Math.round((column_px * pct) / 100)}px`;
+}
+
 /** data-width-mode + inline width styles shared by all breakout blocks. */
 function widthAttrs(attrs: Record<string, unknown>, extra_style = ''): string {
 	const mode = attrs.width_mode;
@@ -47,11 +58,18 @@ export const imageRenderer: BlockRenderer = (node, ctx) => {
 	const width = widthAttrs(attrs);
 	const size =
 		attrs.width && attrs.height ? ` width="${attrs.width}" height="${attrs.height}"` : '';
-	const srcset = attrs.srcset ? ` srcset="${ctx.esc(attrs.srcset)}"` : '';
+	const srcset = attrs.srcset
+		? ` srcset="${ctx.esc(attrs.srcset)}" sizes="${ctx.esc(sizesFor(attrs, ctx.column_px))}"`
+		: '';
+	// Crop: fixed aspect + cover with the authored focus point
+	const cropped = typeof attrs.crop_aspect === 'number';
+	const crop_style = cropped
+		? ` style="aspect-ratio:${attrs.crop_aspect};object-fit:cover;object-position:${Number(attrs.focal_x ?? 50)}% ${Number(attrs.focal_y ?? 50)}%;width:100%;height:auto"`
+		: '';
 	const caption = attrs.caption
 		? `<figcaption>${ctx.esc(attrs.caption)}</figcaption>`
 		: '';
-	return `<figure class="${ctx.class_prefix}-image"${width}><img src="${ctx.esc(src)}"${srcset} alt="${ctx.esc(attrs.alt ?? '')}"${size} loading="lazy">${caption}</figure>`;
+	return `<figure class="${ctx.class_prefix}-image"${width}><img src="${ctx.esc(src)}"${srcset} alt="${ctx.esc(attrs.alt ?? '')}"${size}${crop_style} loading="lazy">${caption}</figure>`;
 };
 
 export const videoRenderer: BlockRenderer = (node, ctx) => {

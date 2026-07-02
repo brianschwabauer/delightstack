@@ -26,6 +26,11 @@ export interface RenderOptions {
 	link_attrs?: (href: string) => Record<string, string | undefined>;
 	/** CSS class prefix for wrapper elements. Default 'ds-doc' */
 	class_prefix?: string;
+	/**
+	 * Text column width in px, used to compute responsive `sizes` for images
+	 * with srcsets (should match the host's --editor-measure). Default 736
+	 */
+	column_px?: number;
 }
 
 export function renderHTML(doc: JSONContent, options: RenderOptions = {}): string {
@@ -79,6 +84,7 @@ function createContext(options: RenderOptions): ContextWithLinks {
 
 	const context: ContextWithLinks = {
 		class_prefix,
+		column_px: options.column_px ?? 736,
 		esc,
 		image_url:
 			options.image_url ?? ((id, variant = 'default') => `/cdn/image/${id}/${variant}`),

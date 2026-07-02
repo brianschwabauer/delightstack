@@ -141,6 +141,28 @@ describe('renderHTML', () => {
 		expect(pct).not.toContain('data-width-mode');
 	});
 
+	it('renders cropped images with cover + focal point and sizes from width mode', () => {
+		const html = renderHTML(
+			doc({
+				type: 'image',
+				attrs: {
+					src: 'x.jpg',
+					srcset: 'x-400.jpg 400w, x-800.jpg 800w',
+					alt: '',
+					width: 800,
+					height: 600,
+					crop_aspect: 2.5,
+					focal_x: 30,
+					focal_y: 70,
+				},
+			}),
+		);
+		expect(html).toContain('aspect-ratio:2.5');
+		expect(html).toContain('object-fit:cover');
+		expect(html).toContain('object-position:30% 70%');
+		expect(html).toContain('sizes="(max-width: 768px) 100vw, 736px"');
+	});
+
 	it('renders gallery captions as figcaptions unless hidden', () => {
 		const items = [{ id: 'a', src: 'a.jpg', caption: 'A caption' }];
 		const shown = renderHTML(doc({ type: 'gallery', attrs: { items } }));

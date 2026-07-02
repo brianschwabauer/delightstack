@@ -116,6 +116,21 @@ export interface ResizeOptions<Attrs> {
 	breakout?: boolean;
 }
 
+export interface CropOptions<Attrs = Record<string, unknown>> {
+	/** Attr storing the cropped aspect ratio (width/height); null = uncropped */
+	aspect_attr: keyof Attrs & string;
+	/**
+	 * Natural aspect ratio (width/height) of the media. Cropping only
+	 * shortens: the committed aspect is always >= this. Return null while
+	 * unknown (e.g. mid-upload) to disable the handle.
+	 */
+	natural: (attrs: Attrs) => number | null;
+	/** Attr patch applied when the crop is cleared (e.g. reset focal point) */
+	reset?: Partial<Attrs>;
+	/** Minimum cropped height in px. Default 80 */
+	min_height?: number;
+}
+
 export interface InteractiveOptions<Attrs = Record<string, unknown>> {
 	/** Selection ring + NodeSelection on click. Default true */
 	selectable?: boolean;
@@ -124,6 +139,8 @@ export interface InteractiveOptions<Attrs = Record<string, unknown>> {
 	/** Shows a delete affordance. Default true */
 	deletable?: boolean;
 	resize?: ResizeOptions<Attrs>;
+	/** Bottom handle that crops the media's height (aspect-ratio + cover) */
+	crop?: CropOptions<Attrs>;
 }
 
 /** Declarative settings rendered by SettingsPopover with form components. */
@@ -203,6 +220,8 @@ export interface RenderContext {
 	esc: (value: unknown) => string;
 	image_url: (id: string, variant?: string) => string;
 	class_prefix: string;
+	/** Text column width in px, used for responsive `sizes`. Default 736 */
+	column_px: number;
 }
 
 export type BlockRenderer = (node: JSONContent, ctx: RenderContext) => string;

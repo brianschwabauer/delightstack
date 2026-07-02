@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { TextSelection } from 'prosemirror-state';
 	import { Button } from '@delightstack/components';
 	import type { Editor } from '../core/editor.svelte.js';
 	import { svelteNodeViews } from '../core/node-view/svelte-node-view.svelte.js';
@@ -6,6 +7,7 @@
 	import SlashMenu from './SlashMenu.svelte';
 	import FloatingMenu from './FloatingMenu.svelte';
 	import BlockGutter from './BlockGutter.svelte';
+	import MobileBar from './MobileBar.svelte';
 
 	interface Props {
 		editor: Editor;
@@ -17,6 +19,8 @@
 		floating_menu?: boolean;
 		/** Show the gutter plus button. Default true */
 		plus_button?: boolean;
+		/** Fixed bottom formatting bar on small viewports. Default true */
+		mobile_toolbar?: boolean;
 		class?: string;
 		id?: string;
 	}
@@ -27,6 +31,7 @@
 		slash_menu = true,
 		floating_menu = true,
 		plus_button = true,
+		mobile_toolbar = true,
 		class: class_name = '',
 		id = undefined,
 	}: Props = $props();
@@ -78,6 +83,30 @@
 		};
 	});
 
+	// Clicking the empty runway below the last block (hosts often give the
+	// editor extra min-height) lands the caret at the end of the document —
+	// appending a fresh paragraph when the doc ends in an atom (image,
+	// divider) so there's always somewhere to type.
+	function clickBelowContent(event: MouseEvent) {
+		if (readonly || !mounted) return;
+		const view = editor.view;
+		if (!view) return;
+		// Only bare-container clicks: clicks on content already place the caret
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		if (target !== container && !target.classList.contains('content')) return;
+		if (event.clientY <= view.dom.getBoundingClientRect().bottom) return;
+		const doc = editor.state.doc;
+		let tr = editor.state.tr;
+		const last = doc.lastChild;
+		if (!last || !last.isTextblock || last.type.spec.code) {
+			tr = tr.insert(doc.content.size, editor.schema.nodes.paragraph.create());
+		}
+		tr = tr.setSelection(TextSelection.near(tr.doc.resolve(tr.doc.content.size), -1));
+		editor.dispatch(tr.scrollIntoView());
+		editor.focus();
+	}
+
 	// Quick-start chips shown under the placeholder while the doc is empty
 	const QUICK_STARTERS = ['heading_2', 'bullet_list', 'image', 'gallery'] as const;
 	const quick_chips = $derived.by(() => {
@@ -88,7 +117,14 @@
 	});
 </script>
 
-<div class="editor {class_name}" class:readonly {id} bind:this={container}>
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	class="editor {class_name}"
+	class:readonly
+	{id}
+	onclick={clickBelowContent}
+	bind:this={container}>
 	{#if !mounted}
 		<div class="content ssr">{@html ssr_html}</div>
 	{/if}
@@ -124,6 +160,9 @@
 		{/if}
 		{#if plus_button && container}
 			<BlockGutter {editor} {container} />
+		{/if}
+		{#if mobile_toolbar}
+			<MobileBar {editor} />
 		{/if}
 	{/if}
 </div>
