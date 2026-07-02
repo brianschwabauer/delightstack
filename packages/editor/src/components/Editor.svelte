@@ -83,6 +83,7 @@
 					outline
 					size="0"
 					onpointerdown={(event: PointerEvent) => {
+						if (event.button !== 0) return;
 						event.preventDefault();
 						editor.focus();
 						command.run(editor);
@@ -126,7 +127,7 @@
 		padding-block: 0.25rem 0.5rem;
 		color: var(--color-text-muted);
 		opacity: 0;
-		animation: ds-editor-chips-in 300ms ease 500ms forwards;
+		animation: ds-editor-chips-in 240ms var(--ease-out, ease) 200ms forwards;
 	}
 
 	.chip-icon {
@@ -143,8 +144,12 @@
 	}
 
 	@keyframes -global-ds-editor-chips-in {
+		from {
+			translate: 0 4px;
+		}
 		to {
 			opacity: 1;
+			translate: 0 0;
 		}
 	}
 
@@ -320,9 +325,10 @@
 					border: 1.5px solid var(--color-border, currentColor);
 					border-radius: calc(var(--radius, 8px) / 2);
 					cursor: pointer;
+					/* Governs UNchecking — settle back gently */
 					transition:
-						background-color 300ms ease,
-						border-color 300ms ease;
+						background-color var(--duration-normal, 200ms) var(--ease-out, ease),
+						border-color var(--duration-normal, 200ms) var(--ease-out, ease);
 				}
 			}
 
@@ -334,7 +340,15 @@
 					background-size: 80%;
 					background-position: center;
 					background-repeat: no-repeat;
+					/* Checking snaps in — the reward is instant */
 					transition: none;
+				}
+
+				/* One-shot spring pop added by the todo plugin at toggle time
+				   (a class, not state, so loads/undo never replay it) */
+				&.ds-todo-pop::before {
+					animation: ds-editor-check-pop 300ms
+						var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 				}
 
 				> p {
@@ -366,18 +380,29 @@
 					color-mix(in oklab, currentColor 35%, transparent)
 				);
 				pointer-events: none;
+				/* Symmetric fade: appearing instantly while disappearing eased
+				   reads as two different systems */
+				transition: opacity var(--duration-normal, 200ms) var(--ease-out, ease) 100ms;
 			}
 
 			.is-focused-empty::before {
 				opacity: 0;
-				transition: opacity 300ms ease 150ms;
 			}
 		}
 
-		.ProseMirror-selectednode {
-			outline: 2px solid var(--action, var(--color-primary));
+		/* Every block carries a transparent outline so selection can EASE both
+		   ways: the selected rule below only changes the color */
+		.ProseMirror > * {
+			outline: 2px solid transparent;
 			outline-offset: 2px;
+			transition: outline-color var(--duration-normal, 200ms) var(--ease-out, ease);
+		}
+
+		.ProseMirror-selectednode {
+			outline-color: var(--action, var(--color-primary));
 			border-radius: calc(var(--radius, 8px) / 2);
+			/* Snap in (instant acknowledgement), ease out via the base rule */
+			transition: outline-color 80ms var(--ease-out, ease);
 		}
 
 		.ds-dropcursor {
@@ -385,6 +410,17 @@
 			border-radius: 1px;
 			box-shadow: 0 0 6px
 				color-mix(in oklab, var(--action, var(--color-primary)) 60%, transparent);
+			animation: ds-editor-drop-pulse 900ms var(--ease-in-out, ease-in-out) infinite
+				alternate;
+		}
+
+		/* Selection tint matches the action color instead of UA default blue */
+		.ProseMirror ::selection {
+			background: color-mix(
+				in oklab,
+				var(--action, var(--color-primary)) 25%,
+				transparent
+			);
 		}
 
 		.ProseMirror-gapcursor {
@@ -419,6 +455,38 @@
 	@keyframes -global-ds-editor-blink {
 		to {
 			visibility: hidden;
+		}
+	}
+
+	@keyframes -global-ds-editor-drop-pulse {
+		from {
+			opacity: 1;
+		}
+		to {
+			opacity: 0.6;
+		}
+	}
+
+	/* Editor-owned animations respect reduced motion (the floating surfaces
+	   gate theirs in JS — see motion.ts) */
+	@media (prefers-reduced-motion: reduce) {
+		.editor :global(*),
+		.editor :global(*::before),
+		.editor :global(*::after) {
+			animation-duration: 0.01ms !important;
+			transition-duration: 0.01ms !important;
+		}
+	}
+
+	@keyframes -global-ds-editor-check-pop {
+		0% {
+			scale: 0.8;
+		}
+		55% {
+			scale: 1.12;
+		}
+		100% {
+			scale: 1;
 		}
 	}
 </style>

@@ -316,10 +316,14 @@
 		position: relative;
 		border-radius: var(--radius, 8px);
 		margin-inline: auto;
+		/* Transparent at rest so selection eases out; snap-in below */
+		outline: 2px solid transparent;
+		outline-offset: 2px;
+		transition: outline-color var(--duration-normal, 200ms) var(--ease-out, ease);
 
 		&.selected {
-			outline: 2px solid var(--action, var(--color-primary));
-			outline-offset: 2px;
+			outline-color: var(--action, var(--color-primary));
+			transition: outline-color 80ms var(--ease-out, ease);
 		}
 
 		&:hover .chrome,
@@ -331,7 +335,8 @@
 
 		&:hover .grip,
 		&.selected .grip,
-		&.resizing .grip {
+		&.resizing .grip,
+		&:focus-within .grip {
 			opacity: 1;
 		}
 
@@ -351,11 +356,11 @@
 		border: 1px solid
 			var(--color-border, color-mix(in oklab, currentColor 15%, transparent));
 		border-radius: var(--radius, 8px);
-		box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+		box-shadow: var(--shadow-md, 0 2px 8px rgb(0 0 0 / 10%));
 		color: var(--color-text-muted);
 		opacity: 0;
 		pointer-events: none;
-		transition: opacity 150ms ease;
+		transition: opacity var(--duration-fast, 150ms) var(--ease-out, ease);
 		z-index: 3;
 	}
 
@@ -382,8 +387,8 @@
 		cursor: ew-resize;
 		opacity: 0;
 		transition:
-			opacity 150ms ease,
-			background-color 300ms ease;
+			opacity var(--duration-fast, 150ms) var(--ease-out, ease),
+			background-color var(--duration-fast, 150ms) var(--ease-out, ease);
 		touch-action: none;
 		z-index: 2;
 
@@ -398,7 +403,14 @@
 		&:hover,
 		&:active {
 			background: var(--action, var(--color-primary));
-			transition: opacity 150ms ease;
+			transition: opacity var(--duration-fast, 150ms) var(--ease-out, ease);
+		}
+
+		/* A focused grip must be visible even though it rests at opacity 0 */
+		&:focus-visible {
+			opacity: 1;
+			outline: 2px solid var(--action, var(--color-primary));
+			outline-offset: 2px;
 		}
 	}
 
@@ -414,13 +426,15 @@
 		background: var(--action, var(--color-primary));
 		color: white;
 		pointer-events: none;
-		animation: ds-editor-badge-in 150ms ease;
+		animation: ds-editor-badge-in 180ms
+			var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 		z-index: 4;
 	}
 
 	@keyframes -global-ds-editor-badge-in {
 		from {
 			opacity: 0;
+			scale: 0.8;
 			translate: -50% 4px;
 		}
 	}
