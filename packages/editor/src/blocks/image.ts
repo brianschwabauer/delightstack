@@ -18,6 +18,11 @@ export interface ImageAttrs extends Record<string, unknown> {
 	width_pct: number | null;
 	/** Breakout tier: in-column, wide (--editor-wide-width), or full-bleed */
 	width_mode: 'normal' | 'wide' | 'full';
+	/** Cropped aspect ratio (w/h, >= natural — cropping only shortens) */
+	crop_aspect: number | null;
+	/** Cover focus point (%) used while cropped */
+	focal_x: number;
+	focal_y: number;
 	uploading: boolean;
 	upload_id: string | null;
 	blob_url: string | null;
@@ -44,6 +49,9 @@ export const imageBlock = defineBlock<ImageAttrs>({
 			background_color: { default: null },
 			width_pct: { default: null },
 			width_mode: { default: 'normal' },
+			crop_aspect: { default: null },
+			focal_x: { default: 50 },
+			focal_y: { default: 50 },
 			uploading: { default: false },
 			upload_id: { default: null },
 			blob_url: { default: null },
@@ -80,7 +88,27 @@ export const imageBlock = defineBlock<ImageAttrs>({
 	component: ImageBlock,
 	interactive: {
 		resize: { attr: 'width_pct', unit: 'percent', min: 120, breakout: true },
+		crop: {
+			aspect_attr: 'crop_aspect',
+			natural: (attrs) =>
+				attrs.aspect_ratio ??
+				(attrs.width && attrs.height ? attrs.width / attrs.height : null),
+			reset: { focal_x: 50, focal_y: 50 },
+		},
 	},
+	chrome: [
+		{
+			name: 'reposition',
+			label: 'Reposition',
+			icon: icons.focus,
+			// Only meaningful while cropped — uncropped images show everything
+			when: (ctx) => ctx.attrs.crop_aspect != null && !ctx.attrs.uploading,
+			is_active: (ctx) => Boolean(ctx.ui.repositioning),
+			run: (ctx) => {
+				(ctx.ui.reposition as (() => void) | undefined)?.();
+			},
+		},
+	],
 	upload_kind: 'image',
 	settings: [
 		{ attr: 'alt', label: 'Alt text', control: 'text' },

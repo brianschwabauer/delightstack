@@ -95,6 +95,9 @@ export const icons = {
 	),
 	width_full: icon('<rect x="2.5" y="8" width="19" height="8" rx="1"/>'),
 	play: icon('<path d="M8 5.5v13l11-6.5z"/>'),
+	focus: icon(
+		'<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22"/>',
+	),
 	arrow_down: icon('<path d="M12 5v14M19 12l-7 7-7-7"/>'),
 	drag: icon(
 		'<circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/>',

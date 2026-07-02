@@ -15,6 +15,10 @@
 		thumbhash: string | null;
 		background_color: string | null;
 		width_pct: number | null;
+		width_mode: 'normal' | 'wide' | 'full';
+		crop_aspect: number | null;
+		focal_x: number;
+		focal_y: number;
 		uploading: boolean;
 		upload_id: string | null;
 		blob_url: string | null;
@@ -29,6 +33,7 @@
 		editor,
 		update_attrs,
 		delete_node,
+		ui,
 	}: BlockProps<ImageAttrs> = $props();
 
 	const upload = $derived(
@@ -41,6 +46,97 @@
 		attrs.aspect_ratio ??
 			(attrs.width && attrs.height ? attrs.width / attrs.height : undefined),
 	);
+
+	// ---- crop + focal point ----
+	const cropped = $derived(attrs.crop_aspect != null && !attrs.uploading);
+	const effective_ratio = $derived(cropped ? attrs.crop_aspect : aspect_ratio);
+	/** Live focal preview while repositioning (committed on Done) */
+	let focal_live = $state<{ x: number; y: number } | null>(null);
+	const focal = $derived.by(() => {
+		const x = focal_live?.x ?? attrs.focal_x ?? 50;
+		const y = focal_live?.y ?? attrs.focal_y ?? 50;
+		return `${Math.round(x)}% ${Math.round(y)}%`;
+	});
+
+	// Reposition mode: drag the image to choose what the crop keeps.
+	// Registered on the shared ui state so the chrome "Reposition" action
+	// (defined in the block spec) can toggle it.
+	let repositioning = $state(false);
+	let reposition_el = $state<HTMLElement | null>(null);
+	let pan_last: { x: number; y: number } | null = null;
+
+	$effect(() => {
+		ui.reposition = () => {
+			repositioning = !repositioning;
+			if (!repositioning) focal_live = null;
+		};
+		return () => {
+			delete ui.reposition;
+		};
+	});
+
+	$effect(() => {
+		ui.repositioning = repositioning;
+	});
+
+	// Leaving the block exits reposition mode without committing
+	$effect(() => {
+		if (!selected && repositioning) {
+			repositioning = false;
+			focal_live = null;
+		}
+	});
+
+	function panStart(event: PointerEvent) {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		event.stopPropagation();
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		pan_last = { x: event.clientX, y: event.clientY };
+	}
+
+	function panMove(event: PointerEvent) {
+		if (!pan_last || !reposition_el || !attrs.width || !attrs.height) return;
+		const box = reposition_el.getBoundingClientRect();
+		// Cover scale: how far the image overflows the cropped box decides
+		// how much a pixel of drag moves the focus (sign-flipped — dragging
+		// the image right reveals more of the left)
+		const scale = Math.max(box.width / attrs.width, box.height / attrs.height);
+		const overflow_x = attrs.width * scale - box.width;
+		const overflow_y = attrs.height * scale - box.height;
+		const dx = event.clientX - pan_last.x;
+		const dy = event.clientY - pan_last.y;
+		pan_last = { x: event.clientX, y: event.clientY };
+		const current = focal_live ?? {
+			x: attrs.focal_x ?? 50,
+			y: attrs.focal_y ?? 50,
+		};
+		focal_live = {
+			x:
+				overflow_x > 1
+					? Math.max(0, Math.min(100, current.x - (dx / overflow_x) * 100))
+					: current.x,
+			y:
+				overflow_y > 1
+					? Math.max(0, Math.min(100, current.y - (dy / overflow_y) * 100))
+					: current.y,
+		};
+	}
+
+	function panEnd() {
+		pan_last = null;
+	}
+
+	function commitReposition() {
+		if (focal_live) {
+			update_attrs({
+				focal_x: Math.round(focal_live.x * 10) / 10,
+				focal_y: Math.round(focal_live.y * 10) / 10,
+			});
+		}
+		repositioning = false;
+		focal_live = null;
+	}
 
 	// Inline caption editing (Medium-style): the field appears when the block
 	// is selected or already has a caption. Committed on blur/Enter so typing
@@ -96,7 +192,16 @@
 	);
 </script>
 
-<figure class="image" style:aspect-ratio={attrs.caption ? undefined : aspect_ratio}>
+<svelte:window
+	onkeydown={(event) => {
+		if (event.key === 'Escape' && repositioning) {
+			event.preventDefault();
+			repositioning = false;
+			focal_live = null;
+		}
+	}} />
+
+<figure class="image" style:aspect-ratio={attrs.caption ? undefined : effective_ratio}>
 	{#if attrs.upload_error}
 		<div class="error" contenteditable="false">
 			<span>Upload failed{upload?.error ? `: ${upload.error}` : ''}</span>
@@ -116,6 +221,9 @@
 				alt={attrs.alt}
 				width={attrs.width || undefined}
 				height={attrs.height || undefined}
+				class:cover={cropped}
+				style:aspect-ratio={cropped ? attrs.crop_aspect : undefined}
+				style:object-position={cropped ? focal : undefined}
 				style:background-color={attrs.background_color || undefined}
 				style:background-image={thumb_bg}
 				draggable="false"
@@ -137,11 +245,34 @@
 			width={attrs.width || undefined}
 			height={attrs.height || undefined}
 			class:uploading
+			class:cover={cropped}
+			style:aspect-ratio={cropped ? attrs.crop_aspect : undefined}
+			style:object-position={cropped ? focal : undefined}
 			style:background-color={attrs.background_color || undefined}
 			style:background-image={thumb_bg}
 			draggable="false"
 			data-resize-anchor
 			{@attach trackLoad} />
+		{#if repositioning && cropped}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="reposition"
+				contenteditable="false"
+				bind:this={reposition_el}
+				onpointerdown={panStart}
+				onpointermove={panMove}
+				onpointerup={panEnd}
+				onpointercancel={panEnd}>
+				<span class="hint">Drag to choose the focus point</span>
+				<span class="readout">{focal}</span>
+				<div class="reposition-actions">
+					<Button dense size="0" onclick={() => (focal_live = { x: 50, y: 50 })}>
+						Center
+					</Button>
+					<Button dense size="0" accent onclick={commitReposition}>Done</Button>
+				</div>
+			</div>
+		{/if}
 		{#if uploading}
 			<div class="progress" contenteditable="false" aria-label="Uploading">
 				<span class="ring" style:--sweep="{Math.round(progress * 360)}deg"></span>
@@ -193,6 +324,51 @@
 		img.uploading {
 			filter: blur(1px) brightness(0.85);
 		}
+
+		img.cover {
+			block-size: auto;
+			object-fit: cover;
+		}
+	}
+
+	.reposition {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		align-content: center;
+		gap: 0.5rem;
+		cursor: move;
+		border-radius: var(--radius, 8px);
+		/* Vignette: the edges dim so the focus point reads as a spotlight */
+		box-shadow: inset 0 0 0 2px var(--action, var(--color-primary));
+		background: radial-gradient(
+			ellipse at center,
+			transparent 40%,
+			rgb(0 0 0 / 45%) 100%
+		);
+		color: white;
+		user-select: none;
+		touch-action: none;
+	}
+
+	.hint {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		text-shadow: 0 1px 3px rgb(0 0 0 / 60%);
+		pointer-events: none;
+	}
+
+	.readout {
+		font-size: 0.6875rem;
+		font-variant-numeric: tabular-nums;
+		text-shadow: 0 1px 3px rgb(0 0 0 / 60%);
+		pointer-events: none;
+	}
+
+	.reposition-actions {
+		display: flex;
+		gap: 0.375rem;
 	}
 
 	.zoom {

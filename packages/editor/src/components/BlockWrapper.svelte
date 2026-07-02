@@ -257,6 +257,69 @@
 		drag = { ...drag, engaged, width };
 	}
 
+	// ---- bottom crop handle (shortens media height; cover + focal point) ----
+
+	const crop = $derived(interactive.crop);
+	const croppable = $derived.by(() => {
+		if (!crop || !props.editable) return false;
+		return crop.natural(props.attrs) !== null;
+	});
+	const CROP_EPSILON = 0.005;
+
+	interface CropDrag {
+		start_y: number;
+		start_height: number;
+		width: number;
+		natural: number;
+		height: number;
+	}
+	let crop_drag = $state<CropDrag | null>(null);
+
+	function startCrop(event: PointerEvent) {
+		if (!crop || !wrapper_el) return;
+		const natural = crop.natural(props.attrs);
+		if (!natural) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const width = wrapper_el.clientWidth;
+		const start_height = grip_area?.height ?? wrapper_el.clientHeight;
+		crop_drag = {
+			start_y: event.clientY,
+			start_height,
+			width,
+			natural,
+			height: start_height,
+		};
+		(event.target as HTMLElement).setPointerCapture(event.pointerId);
+	}
+
+	function moveCrop(event: PointerEvent) {
+		if (!crop_drag || !crop) return;
+		const min = crop.min_height ?? 80;
+		const natural_height = crop_drag.width / crop_drag.natural;
+		crop_drag.height = Math.max(
+			min,
+			Math.min(
+				crop_drag.start_height + (event.clientY - crop_drag.start_y),
+				natural_height,
+			),
+		);
+	}
+
+	function endCrop() {
+		if (!crop_drag || !crop) return;
+		const aspect = crop_drag.width / crop_drag.height;
+		const natural = crop_drag.natural;
+		crop_drag = null;
+		// Releasing at (or within a hair of) the natural height clears the
+		// crop entirely — and resets the focal point with it
+		if (Math.abs(aspect - natural) / natural <= CROP_EPSILON || aspect <= natural) {
+			props.update_attrs({ [crop.aspect_attr]: null, ...(crop.reset ?? {}) });
+		} else {
+			props.update_attrs({ [crop.aspect_attr]: Math.round(aspect * 10000) / 10000 });
+		}
+	}
+
 	function endResize() {
 		if (!drag || !resize) return;
 		const final = drag.engaged ? drag.engaged.value : drag.width;
@@ -304,9 +367,11 @@
 	class:resizing={Boolean(drag)}
 	class:breakout
 	class:snapping
+	class:crop-dragging={Boolean(crop_drag)}
 	data-width-mode={breakout && !drag ? width_mode : undefined}
 	role="presentation"
 	style:width={drag ? `${drag.width}px` : committed_width}
+	style:--crop-aspect={crop_drag ? crop_drag.width / crop_drag.height : undefined}
 	onpointerdown={select}
 	bind:this={wrapper_el}>
 	<Component
@@ -396,27 +461,44 @@
 		</div>
 	{/if}
 
-	{#if resizable}
+	{#if resizable || croppable}
 		<div
 			class="grips"
 			contenteditable="false"
 			style:inset-block-start={grip_area ? `${grip_area.top}px` : undefined}
-			style:block-size={grip_area ? `${grip_area.height}px` : undefined}>
-			{#each [-1, 1] as side (side)}
-				<button
-					type="button"
-					class="grip"
-					class:start={side === -1}
-					class:end={side === 1}
-					aria-label="Resize"
-					onpointerdown={(event) => startResize(event, side as 1 | -1)}
-					onpointermove={moveResize}
-					onpointerup={endResize}
-					onpointercancel={endResize}>
-				</button>
-			{/each}
+			style:block-size={crop_drag
+				? `${crop_drag.height}px`
+				: grip_area
+					? `${grip_area.height}px`
+					: undefined}>
+			{#if resizable}
+				{#each [-1, 1] as side (side)}
+					<button
+						type="button"
+						class="grip"
+						class:start={side === -1}
+						class:end={side === 1}
+						aria-label="Resize"
+						onpointerdown={(event) => startResize(event, side as 1 | -1)}
+						onpointermove={moveResize}
+						onpointerup={endResize}
+						onpointercancel={endResize}>
+					</button>
+				{/each}
+			{/if}
 			{#if drag?.engaged?.label}
 				<span class="snap-badge">{drag.engaged.label}</span>
+			{/if}
+			{#if croppable}
+				<button
+					type="button"
+					class="grip crop-grip"
+					aria-label="Crop height"
+					onpointerdown={startCrop}
+					onpointermove={moveCrop}
+					onpointerup={endCrop}
+					onpointercancel={endCrop}>
+				</button>
 			{/if}
 		</div>
 	{/if}
@@ -459,8 +541,17 @@
 			opacity: 1;
 		}
 
-		&.resizing {
+		&.resizing,
+		&.crop-dragging {
 			user-select: none;
+		}
+
+		/* Live crop preview: the media element (marked data-resize-anchor)
+		   tracks the dragged aspect and covers its shrinking box */
+		&.crop-dragging :global([data-resize-anchor]) {
+			aspect-ratio: var(--crop-aspect);
+			block-size: auto;
+			object-fit: cover;
 		}
 
 		/* Breakout tiers center on the column's own midline (margin-left 50%
@@ -564,6 +655,18 @@
 			opacity: 1;
 			outline: 2px solid var(--action, var(--color-primary));
 			outline-offset: 2px;
+		}
+
+		/* Bottom crop handle: horizontal pill centered on the media's
+		   bottom edge */
+		&.crop-grip {
+			inset-block: auto;
+			inset-block-end: -3px;
+			inset-inline: 0;
+			margin-inline: auto;
+			inline-size: min(50%, 4rem);
+			block-size: 6px;
+			cursor: ns-resize;
 		}
 	}
 
