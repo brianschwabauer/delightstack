@@ -1,11 +1,14 @@
 <script lang="ts">
-	import { TextSelection } from 'prosemirror-state';
+	import { untrack } from 'svelte';
+	import { TextSelection, type SelectionBookmark } from 'prosemirror-state';
 	import { DOMSerializer } from 'prosemirror-model';
 	import { Button } from '@delightstack/components';
 	import type { Editor } from '../core/editor.svelte.js';
 	import type { EditorCommand } from '../types/index.js';
+	import { moveBlock } from '../core/commands.js';
 	import { icons } from '../core/icons.js';
 	import { portal } from './portal.js';
+	import { surfaceIn, surfaceOut } from './motion.js';
 	import CommandMenu from './CommandMenu.svelte';
 
 	interface Props {
@@ -34,7 +37,8 @@
 		'code_block',
 	]);
 
-	const GUTTER_WIDTH = 56; // 3.5rem strip left of the content
+	/** Width of the hover strip left of the content, in rem (see .gutter) */
+	const GUTTER_WIDTH_REM = 3.5;
 
 	let hovered = $state<HoveredBlock | null>(null);
 	let hovered_empty = $state(false);
@@ -66,6 +70,24 @@
 	function blockActions(block: HoveredBlock): EditorCommand[] {
 		return [
 			{
+				name: '_move_up',
+				label: 'Move up',
+				description: 'Swap with the block above',
+				icon: icons.arrow_up,
+				keyboard: 'Alt-ArrowUp',
+				group: 'Actions',
+				run: () => runMove(block, -1),
+			},
+			{
+				name: '_move_down',
+				label: 'Move down',
+				description: 'Swap with the block below',
+				icon: icons.arrow_down,
+				keyboard: 'Alt-ArrowDown',
+				group: 'Actions',
+				run: () => runMove(block, 1),
+			},
+			{
 				name: '_duplicate',
 				label: 'Duplicate',
 				description: 'Insert a copy below',
@@ -82,6 +104,13 @@
 				run: () => editor.deleteNode(block.pos),
 			},
 		];
+	}
+
+	function runMove(block: HoveredBlock, direction: -1 | 1): boolean {
+		const node = editor.state.doc.nodeAt(block.pos);
+		if (!node) return false;
+		editor.selectNode(block.pos);
+		return Boolean(moveBlock(direction)(editor.state, (tr) => editor.dispatch(tr)));
 	}
 
 	function duplicateBlock(pos: number): boolean {
@@ -103,33 +132,91 @@
 			hovered = null;
 			return;
 		}
-		const onMove = (event: PointerEvent) => {
-			if (menu_open) return;
+		// The hit zone must match the CSS strip (3.5rem) at any root font size
+		const gutter_px =
+			GUTTER_WIDTH_REM *
+			(parseFloat(getComputedStyle(document.documentElement).fontSize) || 16);
+		// rAF-throttled: the handler forces layout (getBoundingClientRect +
+		// posAtCoords), so it must not run at raw pointer frequency
+		let frame = 0;
+		const measure = () => {
+			frame = 0;
+			const event = last_point;
+			if (!event || menu_open) return;
 			const rect = container.getBoundingClientRect();
 			if (
-				event.clientX < rect.left - GUTTER_WIDTH ||
+				event.clientX < rect.left - gutter_px ||
 				event.clientX > rect.right ||
 				event.clientY < rect.top ||
 				event.clientY > rect.bottom
 			) {
 				hovered = null;
+				hovered_empty = false;
 				return;
 			}
 			const block = editor.blockAt({ x: event.clientX, y: event.clientY });
+			// Same block, same geometry → keep the existing object so nothing
+			// downstream re-derives
+			if (
+				block &&
+				hovered &&
+				block.pos === hovered.pos &&
+				block.rect.top === hovered.rect.top &&
+				block.rect.height === hovered.rect.height
+			) {
+				return;
+			}
 			hovered = block;
 			if (block) {
 				const node = editor.state.doc.nodeAt(block.pos);
 				hovered_empty = node?.type.name === 'paragraph' && node.content.size === 0;
+			} else {
+				hovered_empty = false;
 			}
 		};
+		const onMove = (event: PointerEvent) => {
+			last_point = { clientX: event.clientX, clientY: event.clientY };
+			if (!frame) frame = requestAnimationFrame(measure);
+		};
 		window.addEventListener('pointermove', onMove, { passive: true });
-		return () => window.removeEventListener('pointermove', onMove);
+		return () => {
+			window.removeEventListener('pointermove', onMove);
+			if (frame) cancelAnimationFrame(frame);
+		};
 	});
 
-	// Hide the gutter while typing (it reappears on pointer movement)
+	/** Last pointer location, for re-anchoring without pointer movement */
+	let last_point: { clientX: number; clientY: number } | null = null;
+
+	// Re-anchor the visible handle when a doc change reflows the page under a
+	// stationary pointer (image finished loading, collaborator edit above)
 	$effect(() => {
 		void editor.doc;
-		if (!menu_open) hovered = null;
+		untrack(() => {
+			if (menu_open || !hovered || !last_point) return;
+			const block = editor.blockAt({ x: last_point.clientX, y: last_point.clientY });
+			hovered = block;
+			if (!block) hovered_empty = false;
+		});
+	});
+
+	// Hide the gutter while typing (it reappears on pointer movement). Keyed
+	// off real keystrokes in the editor — doc changes alone also arrive from
+	// collaborators and background upload progress, and the handle blinking
+	// away under a stationary pointer reads as random flicker.
+	$effect(() => {
+		const onKeydown = (event: KeyboardEvent) => {
+			if (menu_open) return;
+			if (
+				event.key.length === 1 ||
+				['Backspace', 'Delete', 'Enter'].includes(event.key)
+			) {
+				hovered = null;
+				hovered_empty = false;
+			}
+		};
+		container.addEventListener('keydown', onKeydown);
+		return () => container.removeEventListener('keydown', onKeydown);
 	});
 
 	const gutter_style = $derived.by(() => {
@@ -189,10 +276,16 @@
 	 * ProseMirror's own (depth-aware) drop logic perform the move — the
 	 * custom code is only hover tracking + this handoff.
 	 */
+	let drag_prior_selection: SelectionBookmark | null = null;
+
 	function startDrag(event: DragEvent) {
 		const block = hovered ?? menu_block;
 		const view = editor.view;
 		if (!block || !view || !event.dataTransfer) return;
+		// ProseMirror's move-on-drop deletes the current selection, so the
+		// dragged node must be selected — but remember what the user had so a
+		// cancelled drag can put it back.
+		drag_prior_selection = editor.state.selection.getBookmark();
 		editor.selectNode(block.pos);
 		const slice = editor.state.selection.content();
 		const serializer = DOMSerializer.fromSchema(editor.schema);
@@ -206,9 +299,38 @@
 		);
 		const dom = view.nodeDOM(block.pos);
 		if (dom instanceof HTMLElement) {
-			event.dataTransfer.setDragImage(dom, 16, 16);
+			const rect = dom.getBoundingClientRect();
+			// Anchor the ghost where the block actually sits relative to the
+			// pointer so it doesn't jump under the cursor at drag start.
+			event.dataTransfer.setDragImage(
+				dom,
+				Math.max(0, event.clientX - rect.left),
+				Math.max(0, event.clientY - rect.top),
+			);
 		}
 		view.dragging = { slice, move: true };
+	}
+
+	/**
+	 * ProseMirror only clears `view.dragging` from its own dragend handler on
+	 * `view.dom` — our drag source lives outside it, so a cancelled drag would
+	 * leave a stale `move: true` behind and the next unrelated drop would
+	 * delete the previously dragged block. Clean up here, and put the user's
+	 * selection back when nothing was dropped.
+	 */
+	function endDrag(event: DragEvent) {
+		hovered = null;
+		const view = editor.view;
+		if (view) view.dragging = null;
+		if (event.dataTransfer?.dropEffect === 'none' && drag_prior_selection) {
+			try {
+				const selection = drag_prior_selection.resolve(editor.state.doc);
+				editor.dispatch(editor.state.tr.setSelection(selection));
+			} catch {
+				// The document changed under the bookmark; leave selection as is
+			}
+		}
+		drag_prior_selection = null;
 	}
 
 	const menu_position = $derived.by(() => {
@@ -224,6 +346,17 @@
 </script>
 
 <svelte:window
+	onscrollcapture={(event) => {
+		// The menu is fixed-position from a snapshot rect — scrolling would
+		// strand it over unrelated content, so close it (scrolls inside the
+		// menu's own list are fine)
+		if (!menu_open) return;
+		if (event.target instanceof Node && menu_el?.contains(event.target)) return;
+		closeMenu();
+	}}
+	onresize={() => {
+		if (menu_open) closeMenu();
+	}}
 	onpointerdown={(event) => {
 		if (!menu_open) return;
 		const target = event.target as Node;
@@ -252,7 +385,7 @@
 	}} />
 
 {#if (hovered || menu_block) && editor.editable && gutter_style}
-	<div class="gutter" style={gutter_style} bind:this={gutter_el}>
+	<div class="gutter" style={gutter_style} out:surfaceOut bind:this={gutter_el}>
 		<div class="affordance">
 			{#if menu_open === 'insert' || (!menu_open && hovered_empty)}
 				<Button
@@ -263,6 +396,7 @@
 					aria-label="Add block"
 					tooltip="Add block"
 					onpointerdown={(event: PointerEvent) => {
+						if (event.button !== 0) return;
 						event.preventDefault();
 						if (menu_open) closeMenu();
 						else openMenu('insert');
@@ -280,7 +414,7 @@
 					tooltip="Click for actions, drag to move"
 					draggable="true"
 					ondragstart={startDrag}
-					ondragend={() => (hovered = null)}
+					ondragend={endDrag}
 					onclick={() => {
 						if (menu_open) closeMenu();
 						else openMenu('actions');
@@ -295,6 +429,8 @@
 {#if menu_open && menu_position}
 	<div
 		class="menu-wrap"
+		in:surfaceIn
+		out:surfaceOut
 		style:left="{menu_position.left}px"
 		style:top="{menu_position.top}px"
 		bind:this={menu_el}

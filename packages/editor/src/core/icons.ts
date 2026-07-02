@@ -86,6 +86,8 @@ export const icons = {
 		'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
 	),
 	plus: icon('<path d="M5 12h14M12 5v14"/>'),
+	arrow_up: icon('<path d="M12 19V5M5 12l7-7 7 7"/>'),
+	arrow_down: icon('<path d="M12 5v14M19 12l-7 7-7-7"/>'),
 	drag: icon(
 		'<circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/>',
 	),

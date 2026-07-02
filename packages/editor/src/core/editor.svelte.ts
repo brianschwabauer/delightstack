@@ -30,7 +30,7 @@ import { blockIds } from './plugins/block-id.js';
 import { todoClicks } from './plugins/todo.js';
 import { uploads } from './plugins/upload.svelte.js';
 import { paste, type PasteOptions } from './plugins/paste.js';
-import { animateBlockMoves, captureBlockRects } from './plugins/drop.js';
+import { animateBlockMoves, captureBlockRects, dragAutoScroll } from './plugins/drop.js';
 import { renderText } from '../render/index.js';
 import { inputRules, type InputRule } from 'prosemirror-inputrules';
 import { CommandRegistry } from './registry.svelte.js';
@@ -630,6 +630,7 @@ export class Editor {
 
 		plugins.push(
 			dropCursor({ class: 'ds-dropcursor', width: 2 }),
+			dragAutoScroll(),
 			gapCursor(),
 			placeholder(this.#options.placeholder),
 			blockIds(),
