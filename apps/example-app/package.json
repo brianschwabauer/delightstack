@@ -32,6 +32,7 @@
 		"@delightstack/auth": "workspace:*",
 		"@delightstack/components": "workspace:*",
 		"@delightstack/database": "workspace:*",
+		"@delightstack/editor": "workspace:*",
 		"@delightstack/images": "workspace:*",
 		"@delightstack/presence": "workspace:*",
 		"@delightstack/rate-limiter": "workspace:*",
