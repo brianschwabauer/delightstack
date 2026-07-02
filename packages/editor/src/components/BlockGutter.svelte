@@ -227,7 +227,10 @@
 	onpointerdown={(event) => {
 		if (!menu_open) return;
 		const target = event.target as Node;
-		if (menu_el?.contains(target) || gutter_el?.contains(target)) return;
+		// A detached target was ours too: opening the menu can re-render the
+		// gutter and destroy the clicked button before this listener runs.
+		if (menu_el?.contains(target) || gutter_el?.contains(target) || !target.isConnected)
+			return;
 		closeMenu();
 	}}
 	onkeydown={(event) => {
@@ -251,7 +254,7 @@
 {#if (hovered || menu_block) && editor.editable && gutter_style}
 	<div class="gutter" style={gutter_style} bind:this={gutter_el}>
 		<div class="affordance">
-			{#if hovered_empty && !menu_block}
+			{#if menu_open === 'insert' || (!menu_open && hovered_empty)}
 				<Button
 					icon
 					transparent
