@@ -58,7 +58,8 @@ export function parseMarkdown(text: string): JSONContent[] {
 		if (heading) {
 			blocks.push({
 				type: 'heading',
-				attrs: { level: heading[1].length },
+				// `#` maps to document level 2 — h1 is reserved for the page title
+				attrs: { level: Math.min(heading[1].length + 1, 6) },
 				content: parseInline(heading[2]),
 			});
 			index++;

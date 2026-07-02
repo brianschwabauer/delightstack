@@ -40,8 +40,12 @@ export function buildKeymaps(schema: Schema, options: KeymapOptions = {}): Plugi
 
 	const blocks: Record<string, Command> = {};
 	if (schema.nodes.heading) {
-		for (const level of [1, 2, 3, 4, 5, 6]) {
-			blocks[`Mod-Alt-${level}`] = toggleBlockType(schema.nodes.heading, { level });
+		// User-facing heading numbers start at 1; document levels start at 2
+		// (h1 is reserved for the page title)
+		for (const ui_level of [1, 2, 3, 4, 5]) {
+			blocks[`Mod-Alt-${ui_level}`] = toggleBlockType(schema.nodes.heading, {
+				level: ui_level + 1,
+			});
 		}
 	}
 	if (schema.nodes.paragraph)

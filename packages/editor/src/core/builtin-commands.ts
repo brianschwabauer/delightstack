@@ -13,21 +13,22 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 	const commands: EditorCommand[] = [];
 
 	// ---- marks (floating menu + toolbar) ----
-	const marks: [string, string, string, string][] = [
-		['bold', 'Bold', 'Mod-b', icons.bold],
-		['italic', 'Italic', 'Mod-i', icons.italic],
-		['underline', 'Underline', 'Mod-u', icons.underline],
-		['strike', 'Strikethrough', 'Mod-Shift-x', icons.strike],
-		['code', 'Code', 'Mod-e', icons.code],
+	// Strikethrough stays out of the (simplified) toolbar — floating menu only
+	const marks: [string, string, string, string, boolean][] = [
+		['bold', 'Bold', 'Mod-b', icons.bold, true],
+		['italic', 'Italic', 'Mod-i', icons.italic, true],
+		['underline', 'Underline', 'Mod-u', icons.underline, true],
+		['strike', 'Strikethrough', 'Mod-Shift-x', icons.strike, false],
+		['code', 'Code', 'Mod-e', icons.code, true],
 	];
-	for (const [name, label, keyboard, icon] of marks) {
+	for (const [name, label, keyboard, icon, in_toolbar] of marks) {
 		if (!schema.marks[name]) continue;
 		commands.push({
 			name,
 			label,
 			icon,
 			keyboard,
-			surfaces: ['floating', 'toolbar'],
+			surfaces: in_toolbar ? ['floating', 'toolbar'] : ['floating'],
 			is_active: (editor) => name in editor.active_marks,
 			run: (editor) => editor.toggleMark(name),
 		});
@@ -43,27 +44,31 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 			keywords: ['paragraph', 'plain'],
 			group: 'Basic',
 			keyboard: 'Mod-Alt-0',
-			surfaces: ['slash', 'plus', 'toolbar'],
+			surfaces: ['slash', 'plus', 'turn_into'],
 			is_active: (editor) => editor.active_block?.name === 'paragraph',
 			run: (editor) => editor.setBlock('paragraph'),
 		});
 	}
 	if (schema.nodes.heading) {
+		// User-facing numbering starts at 1 ("big heading"); the document
+		// levels start at 2 (h1 is reserved for the page title) — that
+		// mapping is an implementation detail users never see.
 		const headings: [number, string][] = [
-			[2, 'Section heading'],
-			[3, 'Subsection heading'],
-			[4, 'Small heading'],
+			[2, 'Big section heading'],
+			[3, 'Medium section heading'],
+			[4, 'Small section heading'],
 		];
 		for (const [level, description] of headings) {
+			const ui_level = level - 1;
 			commands.push({
 				name: `heading_${level}`,
-				label: `Heading ${level}`,
+				label: `Heading ${ui_level}`,
 				description,
-				icon: icons[`heading_${Math.min(level, 4)}` as 'heading_2'],
-				keywords: [`h${level}`, 'title', 'heading'],
+				icon: icons[`heading_${Math.min(ui_level, 4)}` as 'heading_1'],
+				keywords: [`h${ui_level}`, `h${level}`, 'title', 'heading'],
 				group: 'Basic',
-				keyboard: `Mod-Alt-${level}`,
-				surfaces: ['slash', 'plus', 'toolbar'],
+				keyboard: `Mod-Alt-${ui_level}`,
+				surfaces: ['slash', 'plus', 'toolbar', 'turn_into'],
 				is_active: (editor) => {
 					const block = editor.active_block;
 					return block?.name === 'heading' && block.attrs.level === level;
@@ -80,7 +85,7 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 			icon: icons.bullet_list,
 			keywords: ['ul', 'unordered', 'list'],
 			group: 'Basic',
-			surfaces: ['slash', 'plus', 'toolbar'],
+			surfaces: ['slash', 'plus', 'turn_into'],
 			is_active: inList('bullet_list'),
 			run: (editor) => runToggleList(editor, 'bullet_list', 'list_item'),
 		});
@@ -93,7 +98,7 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 			icon: icons.ordered_list,
 			keywords: ['ol', 'ordered', 'numbered', 'list'],
 			group: 'Basic',
-			surfaces: ['slash', 'plus', 'toolbar'],
+			surfaces: ['slash', 'plus', 'turn_into'],
 			is_active: inList('ordered_list'),
 			run: (editor) => runToggleList(editor, 'ordered_list', 'list_item'),
 		});
@@ -106,7 +111,7 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 			icon: icons.todo_list,
 			keywords: ['todo', 'task', 'checkbox', 'checklist'],
 			group: 'Basic',
-			surfaces: ['slash', 'plus', 'toolbar'],
+			surfaces: ['slash', 'plus', 'turn_into'],
 			is_active: inList('todo_list'),
 			run: (editor) => runToggleList(editor, 'todo_list', 'todo_item'),
 		});
@@ -119,7 +124,7 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 			icon: icons.blockquote,
 			keywords: ['quote', 'blockquote', 'citation'],
 			group: 'Basic',
-			surfaces: ['slash', 'plus', 'toolbar'],
+			surfaces: ['slash', 'plus', 'turn_into'],
 			is_active: (editor) => {
 				const { state } = editor;
 				const { $from: from } = state.selection;
@@ -139,7 +144,7 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 			icon: icons.code_block,
 			keywords: ['code', 'codeblock', 'snippet', 'pre'],
 			group: 'Basic',
-			surfaces: ['slash', 'plus', 'toolbar'],
+			surfaces: ['slash', 'plus', 'turn_into'],
 			is_active: (editor) => editor.active_block?.name === 'code_block',
 			run: (editor) => editor.setBlock('code_block'),
 		});

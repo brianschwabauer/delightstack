@@ -13,7 +13,7 @@ export interface JSONContent {
 }
 
 /** Where a registered command surfaces in the UI. */
-export type Surface = 'slash' | 'plus' | 'toolbar' | 'floating';
+export type Surface = 'slash' | 'plus' | 'toolbar' | 'floating' | 'turn_into';
 
 /**
  * A command definition. One definition powers the slash menu, plus menu,
@@ -51,6 +51,8 @@ export interface EditorCommand {
 export interface EditorLike {
 	readonly schema: Schema;
 	readonly state: EditorState;
+	/** The document as JSON — reading it is reactive (re-runs on doc changes) */
+	readonly doc: JSONContent;
 	readonly active_marks: Record<string, Record<string, unknown> | true>;
 	readonly active_block: {
 		name: string;
@@ -181,6 +183,12 @@ export interface BlockSpec<
 > extends BlockSchemaSpec {
 	/** Svelte node view. Omit to render statically via the schema's toDOM. */
 	component?: Component<BlockProps<Attrs>>;
+	/**
+	 * Tag for the node view's wrapper element (default `div`, or `span` for
+	 * inline nodes). Set when the node must render as a specific element,
+	 * e.g. `li` for list items.
+	 */
+	wrapper_tag?: string;
 	/** Interactive chrome (ring/drag/resize/settings/delete). Default: enabled when `component` is set. */
 	interactive?: InteractiveOptions<Attrs> | false;
 	/** Declarative settings fields, or a custom settings component */
@@ -227,6 +235,8 @@ export interface UploadedImage {
 	srcset?: string;
 	variants?: unknown[];
 	alt?: string;
+	/** Editable caption shown in gallery lightboxes and under images */
+	caption?: string;
 }
 
 /**

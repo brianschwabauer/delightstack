@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '@delightstack/components';
+	import { Button, Gallery } from '@delightstack/components';
 	import type { BlockProps } from '../../types/index.js';
 
 	type ImageAttrs = {
@@ -21,7 +21,14 @@
 		block_id: string | null;
 	};
 
-	let { attrs, editor, delete_node }: BlockProps<ImageAttrs> = $props();
+	let {
+		attrs,
+		editable,
+		selected,
+		editor,
+		update_attrs,
+		delete_node,
+	}: BlockProps<ImageAttrs> = $props();
 
 	const upload = $derived(
 		attrs.upload_id
@@ -33,9 +40,44 @@
 		attrs.aspect_ratio ??
 			(attrs.width && attrs.height ? attrs.width / attrs.height : undefined),
 	);
+
+	// Inline caption editing (Medium-style): the field appears when the block
+	// is selected or already has a caption. Committed on blur/Enter so typing
+	// doesn't create an undo step per keystroke.
+	const show_caption_editor = $derived(
+		editable && !attrs.uploading && (selected || Boolean(attrs.caption)),
+	);
+
+	function commitCaption(event: Event) {
+		const value = (event.currentTarget as HTMLInputElement).value.trim();
+		if (value !== attrs.caption) update_attrs({ caption: value });
+	}
+
+	// Read-only: clicking the image opens the Gallery lightbox (headless mode)
+	// with a zoom animation from the image itself.
+	let lightbox = $state<{ open: (index: number, from?: HTMLElement) => void } | null>(
+		null,
+	);
+	let img_el = $state<HTMLElement | undefined>(undefined);
+
+	const lightbox_items = $derived(
+		!editable && attrs.src
+			? [
+					{
+						id: attrs.image_id ?? attrs.src,
+						src: attrs.srcset || attrs.src,
+						width: attrs.width ?? undefined,
+						height: attrs.height ?? undefined,
+						alt: attrs.alt,
+						caption: attrs.caption || undefined,
+						thumbhash: attrs.thumbhash ?? undefined,
+					},
+				]
+			: [],
+	);
 </script>
 
-<figure class="image" style:aspect-ratio={aspect_ratio}>
+<figure class="image" style:aspect-ratio={attrs.caption ? undefined : aspect_ratio}>
 	{#if attrs.upload_error}
 		<div class="error" contenteditable="false">
 			<span>Upload failed{upload?.error ? `: ${upload.error}` : ''}</span>
@@ -53,6 +95,24 @@
 		<div class="progress" contenteditable="false" aria-label="Uploading">
 			<span class="ring" style:--sweep="{Math.round(progress * 360)}deg"></span>
 		</div>
+	{:else if attrs.src && !editable}
+		<button
+			type="button"
+			class="zoom"
+			aria-label={attrs.alt ? `View image: ${attrs.alt}` : 'View image'}
+			onclick={() => lightbox?.open(0, img_el)}>
+			<img
+				src={attrs.src}
+				srcset={attrs.srcset || undefined}
+				alt={attrs.alt}
+				width={attrs.width || undefined}
+				height={attrs.height || undefined}
+				style:background-color={attrs.background_color || undefined}
+				draggable="false"
+				data-resize-anchor
+				bind:this={img_el} />
+		</button>
+		<Gallery display="lightbox" items={lightbox_items} bind:this={lightbox} />
 	{:else if attrs.src}
 		<img
 			src={attrs.src}
@@ -64,7 +124,25 @@
 			draggable="false"
 			data-resize-anchor />
 	{/if}
-	{#if attrs.caption && !attrs.uploading}
+	{#if show_caption_editor}
+		<figcaption contenteditable="false">
+			<input
+				class="caption-input"
+				type="text"
+				placeholder="Add a caption…"
+				value={attrs.caption}
+				onchange={commitCaption}
+				onkeydown={(event) => {
+					if (event.key === 'Enter') {
+						event.preventDefault();
+						commitCaption(event);
+						(event.currentTarget as HTMLInputElement).blur();
+						editor.focus();
+					}
+					event.stopPropagation();
+				}} />
+		</figcaption>
+	{:else if attrs.caption && !attrs.uploading}
 		<figcaption>{attrs.caption}</figcaption>
 	{/if}
 </figure>
@@ -89,6 +167,15 @@
 		img.uploading {
 			filter: blur(1px) brightness(0.85);
 		}
+	}
+
+	.zoom {
+		display: block;
+		inline-size: 100%;
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: zoom-in;
 	}
 
 	.progress {
@@ -130,9 +217,28 @@
 	}
 
 	figcaption {
-		margin-block-start: 0.375rem;
+		margin-block-start: 0.5em;
 		font-size: 0.8125rem;
+		line-height: 1.5;
 		color: var(--color-text-muted);
 		text-align: center;
+	}
+
+	.caption-input {
+		inline-size: 100%;
+		border: none;
+		background: none;
+		font: inherit;
+		color: inherit;
+		text-align: center;
+		outline: none;
+		padding: 0;
+
+		&::placeholder {
+			color: var(
+				--color-text-disabled,
+				color-mix(in oklab, currentColor 40%, transparent)
+			);
+		}
 	}
 </style>

@@ -23,37 +23,107 @@
 		rect: DOMRect;
 	}
 
+	/** Block types the "Turn into" section applies to */
+	const CONVERTIBLE = new Set([
+		'paragraph',
+		'heading',
+		'bullet_list',
+		'ordered_list',
+		'todo_list',
+		'blockquote',
+		'code_block',
+	]);
+
+	const GUTTER_WIDTH = 56; // 3.5rem strip left of the content
+
 	let hovered = $state<HoveredBlock | null>(null);
-	let menu_open = $state(false);
+	let hovered_empty = $state(false);
+	let menu_open = $state<false | 'insert' | 'actions'>(false);
 	let menu_block = $state<HoveredBlock | null>(null);
 	let selected = $state(0);
 	let gutter_el = $state<HTMLElement | null>(null);
 	let menu_el = $state<HTMLElement | null>(null);
 
-	const items = $derived(
-		menu_open
-			? editor.commands
-					.forSurface('plus')
-					.filter((command) => !command.is_enabled || command.is_enabled(editor))
-			: [],
-	);
+	const enabled = (command: EditorCommand) =>
+		!command.is_enabled || command.is_enabled(editor);
 
+	const items = $derived.by(() => {
+		if (menu_open === 'insert') {
+			return editor.commands.forSurface('plus').filter(enabled);
+		}
+		if (menu_open === 'actions' && menu_block) {
+			const turn_into = CONVERTIBLE.has(menu_block.name)
+				? editor.commands
+						.forSurface('turn_into')
+						.filter(enabled)
+						.map((command) => ({ ...command, group: 'Turn into' }))
+				: [];
+			return [...turn_into, ...blockActions(menu_block)];
+		}
+		return [];
+	});
+
+	function blockActions(block: HoveredBlock): EditorCommand[] {
+		return [
+			{
+				name: '_duplicate',
+				label: 'Duplicate',
+				description: 'Insert a copy below',
+				icon: icons.duplicate,
+				group: 'Actions',
+				run: () => duplicateBlock(block.pos),
+			},
+			{
+				name: '_delete',
+				label: 'Delete',
+				description: 'Remove this block',
+				icon: icons.trash,
+				group: 'Actions',
+				run: () => editor.deleteNode(block.pos),
+			},
+		];
+	}
+
+	function duplicateBlock(pos: number): boolean {
+		const node = editor.state.doc.nodeAt(pos);
+		if (!node) return false;
+		// The copied block_id is deduped by the block-id plugin
+		const tr = editor.state.tr
+			.insert(pos + node.nodeSize, node.copy(node.content))
+			.scrollIntoView();
+		editor.dispatch(tr);
+		return true;
+	}
+
+	// Window-level tracking: the affordance appears as soon as the pointer is
+	// anywhere on the block's row — including the gutter strip itself, before
+	// ever touching the block's content. No "hover the text first" dance.
 	$effect(() => {
+		if (!editor.editable) {
+			hovered = null;
+			return;
+		}
 		const onMove = (event: PointerEvent) => {
-			if (menu_open || !editor.editable) return;
-			if (gutter_el?.contains(event.target as Node)) return;
+			if (menu_open) return;
+			const rect = container.getBoundingClientRect();
+			if (
+				event.clientX < rect.left - GUTTER_WIDTH ||
+				event.clientX > rect.right ||
+				event.clientY < rect.top ||
+				event.clientY > rect.bottom
+			) {
+				hovered = null;
+				return;
+			}
 			const block = editor.blockAt({ x: event.clientX, y: event.clientY });
-			hovered = block && refreshRect(block);
+			hovered = block;
+			if (block) {
+				const node = editor.state.doc.nodeAt(block.pos);
+				hovered_empty = node?.type.name === 'paragraph' && node.content.size === 0;
+			}
 		};
-		const onLeave = () => {
-			if (!menu_open) hovered = null;
-		};
-		container.addEventListener('pointermove', onMove);
-		container.addEventListener('pointerleave', onLeave);
-		return () => {
-			container.removeEventListener('pointermove', onMove);
-			container.removeEventListener('pointerleave', onLeave);
-		};
+		window.addEventListener('pointermove', onMove, { passive: true });
+		return () => window.removeEventListener('pointermove', onMove);
 	});
 
 	// Hide the gutter while typing (it reappears on pointer movement)
@@ -62,25 +132,20 @@
 		if (!menu_open) hovered = null;
 	});
 
-	function refreshRect(block: HoveredBlock): HoveredBlock {
-		return block;
-	}
-
 	const gutter_style = $derived.by(() => {
 		const block = menu_block ?? hovered;
 		if (!block) return null;
 		const container_rect = container.getBoundingClientRect();
 		const top = block.rect.top - container_rect.top;
 		// The strip covers the whole block height so the pointer can travel
-		// from the text to the buttons without ever leaving the container
-		// (leaving would clear the hover and unmount the buttons mid-flight).
+		// from the text to the button without a dead zone
 		return `top: ${top}px; block-size: ${Math.max(block.rect.height, 24)}px;`;
 	});
 
-	function openMenu() {
+	function openMenu(mode: 'insert' | 'actions') {
 		menu_block = hovered;
-		menu_open = true;
-		selected = 0;
+		menu_open = mode;
+		selected = mode === 'insert' ? 0 : -1;
 	}
 
 	function closeMenu() {
@@ -90,13 +155,18 @@
 
 	function pick(command: EditorCommand) {
 		const block = menu_block;
+		const mode = menu_open;
 		closeMenu();
 		if (!block) return;
+		if (command.name === '_duplicate' || command.name === '_delete') {
+			command.run(editor);
+			return;
+		}
 		const node = editor.state.doc.nodeAt(block.pos);
 		if (!node) return;
 		const is_empty_paragraph = node.type.name === 'paragraph' && node.content.size === 0;
-		if (is_empty_paragraph) {
-			// Convert the empty paragraph in place
+		if (mode === 'actions' || is_empty_paragraph) {
+			// Convert in place: select inside the block, then run
 			editor.dispatch(
 				editor.state.tr.setSelection(
 					TextSelection.near(editor.state.doc.resolve(block.pos + 1)),
@@ -180,34 +250,41 @@
 
 {#if (hovered || menu_block) && editor.editable && gutter_style}
 	<div class="gutter" style={gutter_style} bind:this={gutter_el}>
-		<div class="actions">
-			<Button
-				icon
-				transparent
-				size="0"
-				dense
-				aria-label="Add block"
-				tooltip="Add block"
-				onpointerdown={(event: PointerEvent) => {
-					event.preventDefault();
-					if (menu_open) closeMenu();
-					else openMenu();
-				}}>
-				{@html icons.plus}
-			</Button>
-			<Button
-				icon
-				transparent
-				size="0"
-				dense
-				class="handle"
-				aria-label="Drag to move block"
-				tooltip="Drag to move"
-				draggable="true"
-				ondragstart={startDrag}
-				ondragend={() => (hovered = null)}>
-				{@html icons.drag}
-			</Button>
+		<div class="affordance">
+			{#if hovered_empty && !menu_block}
+				<Button
+					icon
+					transparent
+					size="0"
+					dense
+					aria-label="Add block"
+					tooltip="Add block"
+					onpointerdown={(event: PointerEvent) => {
+						event.preventDefault();
+						if (menu_open) closeMenu();
+						else openMenu('insert');
+					}}>
+					{@html icons.plus}
+				</Button>
+			{:else}
+				<Button
+					icon
+					transparent
+					size="0"
+					dense
+					class="handle"
+					aria-label="Block actions (drag to move)"
+					tooltip="Click for actions, drag to move"
+					draggable="true"
+					ondragstart={startDrag}
+					ondragend={() => (hovered = null)}
+					onclick={() => {
+						if (menu_open) closeMenu();
+						else openMenu('actions');
+					}}>
+					{@html icons.drag}
+				</Button>
+			{/if}
 		</div>
 	</div>
 {/if}
@@ -229,8 +306,8 @@
 
 <style>
 	.gutter {
-		/* A full-height, full-width hover strip touching the content edge —
-		   the buttons stay mounted anywhere along the path to them */
+		/* A full-height hover strip touching the content edge — the button
+		   stays mounted anywhere along the path to it */
 		position: absolute;
 		inset-inline-start: -3.5rem;
 		inline-size: 3.5rem;
@@ -240,11 +317,11 @@
 		z-index: 5;
 	}
 
-	.actions {
+	.affordance {
 		display: flex;
 		align-items: center;
-		block-size: 1.6em;
-		padding-inline-end: 0.25rem;
+		block-size: 1.7em;
+		padding-inline-end: 0.375rem;
 		color: var(--color-text-muted, color-mix(in oklab, currentColor 55%, transparent));
 		opacity: 0;
 		animation: ds-editor-gutter-in 150ms ease forwards;

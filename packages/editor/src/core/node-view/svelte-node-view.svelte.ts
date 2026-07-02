@@ -5,6 +5,7 @@ import type { BlockSpec } from '../../types/index.js';
 import type { Editor } from '../editor.svelte.js';
 import { BlockViewProps } from './block-props.svelte.js';
 import BlockWrapper from '../../components/BlockWrapper.svelte';
+import TodoItemView from '../../components/blocks/TodoItemView.svelte';
 
 /**
  * Builds the ProseMirror `nodeViews` map from the editor's block specs.
@@ -16,6 +17,20 @@ export function svelteNodeViews(editor: Editor): Record<string, NodeViewConstruc
 	for (const [name, spec] of editor.blocks) {
 		if (!spec.component) continue;
 		views[name] = (node, view, getPos) =>
+			new SvelteNodeView(spec, editor, node, view, getPos);
+	}
+	// Base-schema todo items render the design system's Checkbox (animations
+	// and all) instead of a CSS-drawn box. Registered here — not a BlockSpec —
+	// because todo_item is part of the base schema, not a registered block.
+	if (editor.schema.nodes.todo_item && !views.todo_item) {
+		const spec = {
+			name: 'todo_item',
+			schema: {},
+			component: TodoItemView,
+			interactive: false,
+			wrapper_tag: 'li',
+		} as unknown as BlockSpec;
+		views.todo_item = (node, view, getPos) =>
 			new SvelteNodeView(spec, editor, node, view, getPos);
 	}
 	return views;
@@ -51,7 +66,9 @@ class SvelteNodeView implements NodeView {
 	) {
 		this.#spec = spec;
 		this.#node = node;
-		this.dom = document.createElement(node.isInline ? 'span' : 'div');
+		this.dom = document.createElement(
+			spec.wrapper_tag ?? (node.isInline ? 'span' : 'div'),
+		);
 		this.dom.classList.add('ds-block');
 		this.dom.dataset.block = spec.name;
 

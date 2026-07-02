@@ -82,7 +82,7 @@
 	.editor {
 		position: relative;
 		color: var(--color-text);
-		line-height: 1.6;
+		line-height: var(--editor-line-height, 1.7);
 	}
 
 	.ssr {
@@ -96,9 +96,49 @@
 			word-wrap: break-word;
 			padding-block: var(--space-1, 0.5rem);
 
-			> * + * {
-				margin-block-start: 0.625em;
+			/* ---- vertical rhythm (Medium-style: generous, deliberate) ---- */
+
+			> * {
+				margin-block: 0;
 			}
+
+			> * + * {
+				margin-block-start: 0.875em;
+			}
+
+			/* Headings open a new section: lots of air above… */
+			> h1:not(:first-child),
+			> h2:not(:first-child),
+			> h3:not(:first-child),
+			> h4:not(:first-child),
+			> h5:not(:first-child),
+			> h6:not(:first-child) {
+				margin-block-start: 1.9em;
+			}
+
+			/* …and hug the content they introduce (placed after the rhythm
+			   rule so it wins the tie) */
+			> h1 + *,
+			> h2 + *,
+			> h3 + *,
+			> h4 + *,
+			> h5 + *,
+			> h6 + * {
+				margin-block-start: 0.5em;
+			}
+
+			/* Media and rich blocks get breathing room on both sides */
+			> .ds-block:not(:first-child),
+			> .ds-block + * {
+				margin-block-start: 1.5em;
+			}
+
+			> hr:not(:first-child),
+			> hr + * {
+				margin-block-start: 2.25em;
+			}
+
+			/* ---- headings ---- */
 
 			h1,
 			h2,
@@ -106,13 +146,10 @@
 			h4,
 			h5,
 			h6 {
-				line-height: 1.25;
+				line-height: 1.3;
 				font-weight: 650;
+				letter-spacing: -0.015em;
 				text-wrap: balance;
-
-				&:not(:first-child) {
-					margin-block-start: 1.25em;
-				}
 			}
 
 			h1 {
@@ -125,22 +162,28 @@
 				font-size: 1.25em;
 			}
 			h4 {
-				font-size: 1.125em;
+				font-size: 1.0625em;
 			}
 
 			blockquote {
 				margin-inline: 0;
-				padding-inline-start: 1em;
-				border-inline-start: 3px solid var(--color-border, currentColor);
+				padding-inline-start: 1.25em;
+				border-inline-start: 3px solid
+					color-mix(in oklab, var(--color-text, currentColor) 25%, transparent);
 				color: var(--color-text-muted, inherit);
+
+				> * + * {
+					margin-block-start: 0.5em;
+				}
 			}
 
 			pre {
 				background: var(--color-bg-muted);
 				border-radius: var(--radius, 8px);
-				padding: 0.75em 1em;
+				padding: 1em 1.25em;
 				overflow-x: auto;
 				font-size: 0.875em;
+				line-height: 1.6;
 				tab-size: 2;
 
 				@supports (corner-shape: squircle) {
@@ -160,22 +203,37 @@
 				font-size: 0.875em;
 			}
 
+			/* ---- lists ---- */
+
 			ul,
 			ol {
-				padding-inline-start: 1.5em;
+				padding-inline-start: 1.625em;
+			}
+
+			li::marker {
+				color: var(
+					--color-text-muted,
+					color-mix(in oklab, currentColor 55%, transparent)
+				);
 			}
 
 			li p {
 				margin: 0;
 			}
 
-			li + li {
-				margin-block-start: 0.25em;
+			li + li,
+			li > ul,
+			li > ol {
+				margin-block-start: 0.375em;
 			}
 
 			ul[data-todo-list] {
 				list-style: none;
-				padding-inline-start: 0.25em;
+				padding-inline-start: 0;
+
+				li + li {
+					margin-block-start: 0.5em;
+				}
 			}
 
 			li[data-todo] {
@@ -218,8 +276,9 @@
 
 			hr {
 				border: none;
-				border-block-start: 2px solid var(--color-border, currentColor);
-				margin-block: 1.5em;
+				border-block-start: 2px solid
+					var(--color-border, color-mix(in oklab, currentColor 15%, transparent));
+				inline-size: 100%;
 			}
 
 			a {

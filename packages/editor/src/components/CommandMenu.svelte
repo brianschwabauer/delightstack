@@ -16,8 +16,10 @@
 
 	interface Props {
 		items: EditorCommand[];
-		/** Index into `items` of the highlighted entry */
+		/** Index into `items` of the highlighted entry (-1 for none) */
 		selected?: number;
+		/** Render without the popover chrome (when hosted inside another surface) */
+		flat?: boolean;
 		onpick: (command: EditorCommand) => void;
 		onhover?: (index: number) => void;
 		empty_message?: string;
@@ -26,6 +28,7 @@
 	let {
 		items,
 		selected = 0,
+		flat = false,
 		onpick,
 		onhover = undefined,
 		empty_message = 'No matching commands',
@@ -46,12 +49,13 @@
 
 	$effect(() => {
 		// Keep the highlighted item in view during keyboard navigation
+		if (selected < 0) return;
 		const el = list?.querySelector(`[data-index="${selected}"]`);
 		el?.scrollIntoView({ block: 'nearest' });
 	});
 </script>
 
-<div class="menu" role="listbox" bind:this={list}>
+<div class="menu" class:flat role="listbox" bind:this={list}>
 	{#if items.length === 0}
 		<div class="empty">{empty_message}</div>
 	{/if}
@@ -116,6 +120,15 @@
 				calc(var(--radius-lg, 12px) * var(--squircle-ratio, 2)),
 				calc(var(--radius-cap, 40px) * var(--squircle-ratio, 2))
 			);
+		}
+
+		&.flat {
+			background: none;
+			border: none;
+			box-shadow: none;
+			border-radius: 0;
+			max-height: none;
+			padding: 0.25rem;
 		}
 	}
 

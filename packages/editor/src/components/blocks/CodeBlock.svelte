@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Select } from '@delightstack/components';
+	import { Button, Code, Select } from '@delightstack/components';
 	import type { BlockProps } from '../../types/index.js';
 
 	type CodeAttrs = { language: string; block_id: string | null };
@@ -35,6 +35,16 @@
 
 	let copied = $state(false);
 
+	// Read-only mode renders the design system's Code component (syntax
+	// highlighting, its own copy button) instead of the editable plain block.
+	const code_text = $derived.by(() => {
+		if (editable) return '';
+		void editor.doc;
+		const position = pos();
+		if (position === undefined) return '';
+		return editor.state.doc.nodeAt(position)?.textContent ?? '';
+	});
+
 	async function copy() {
 		const position = pos();
 		if (position === undefined) return;
@@ -46,9 +56,9 @@
 	}
 </script>
 
-<figure class="code-block">
-	<figcaption contenteditable="false">
-		{#if editable}
+{#if editable}
+	<figure class="code-block">
+		<figcaption contenteditable="false">
 			<Select
 				dense
 				size="0"
@@ -57,15 +67,20 @@
 				value={attrs.language}
 				options={language_options}
 				onchange={({ value }) => update_attrs({ language: String(value ?? '') })} />
-		{:else}
-			<span class="language">{attrs.language || 'plain text'}</span>
-		{/if}
-		<Button dense transparent size="0" onclick={copy} tooltip="Copy code">
-			{copied ? 'Copied' : 'Copy'}
-		</Button>
-	</figcaption>
-	<pre><code {@attach content}></code></pre>
-</figure>
+			<Button dense transparent size="0" onclick={copy} tooltip="Copy code">
+				{copied ? 'Copied' : 'Copy'}
+			</Button>
+		</figcaption>
+		<pre><code {@attach content}></code></pre>
+	</figure>
+{:else}
+	<div class="readonly" contenteditable="false">
+		<Code
+			code={code_text}
+			language={attrs.language || 'plaintext'}
+			show_line_numbers={false} />
+	</div>
+{/if}
 
 <style>
 	.code-block {
@@ -95,13 +110,6 @@
 			inline-size: 9rem;
 			font-family: var(--font-mono, ui-monospace, monospace);
 		}
-	}
-
-	.language {
-		font-size: 0.75rem;
-		font-family: var(--font-mono, ui-monospace, monospace);
-		color: var(--color-text-muted);
-		padding: 0.25rem;
 	}
 
 	pre {

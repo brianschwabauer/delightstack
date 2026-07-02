@@ -7,7 +7,7 @@ import { defaultBlockTextRenderers, galleryRenderer } from '../render/blocks.js'
 export interface GalleryAttrs extends Record<string, unknown> {
 	/** One data shape: UploadResult['image'] objects straight from the uploader */
 	items: UploadedImage[];
-	display: 'grid' | 'masonry' | 'masonry-row' | 'slider' | 'slideshow';
+	display: 'grid' | 'masonry' | 'masonry-row' | 'slider' | 'slideshow' | 'list';
 	size: '00' | '0' | '1' | '2' | '3';
 	spacing: '0' | '1' | '2' | '3';
 	radius: '0' | '1' | '2' | '3';
@@ -47,12 +47,14 @@ export const galleryBlock = defineBlock<GalleryAttrs>({
 		{
 			attr: 'display',
 			label: 'Layout',
-			control: 'segmented',
+			control: 'select',
 			options: [
-				{ value: 'grid', label: 'grid' },
-				{ value: 'masonry', label: 'masonry' },
-				{ value: 'masonry-row', label: 'rows' },
-				{ value: 'slider', label: 'slider' },
+				{ value: 'grid', label: 'Grid' },
+				{ value: 'masonry', label: 'Masonry' },
+				{ value: 'masonry-row', label: 'Rows' },
+				{ value: 'slider', label: 'Slider' },
+				{ value: 'slideshow', label: 'Slideshow' },
+				{ value: 'list', label: 'List' },
 			],
 		},
 		{

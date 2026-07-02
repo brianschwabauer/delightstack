@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Video } from '@delightstack/components';
 	import type { BlockProps } from '../../types/index.js';
 	import MediaUploadFrame from './MediaUploadFrame.svelte';
 
@@ -22,25 +23,24 @@
 		upload_error={attrs.upload_error}
 		file_name={attrs.name}
 		{delete_node}>
-		<!-- svelte-ignore a11y_media_has_caption -->
-		<video src={attrs.src} controls preload="metadata"></video>
+		<div class="player" contenteditable="false">
+			<Video src={attrs.src} preload="metadata" />
+		</div>
 	</MediaUploadFrame>
 </figure>
 
 <style>
 	.video {
 		margin: 0;
+	}
 
-		video {
-			display: block;
-			inline-size: 100%;
-			border-radius: var(--radius, 8px);
-			background: black;
+	.player {
+		border-radius: var(--radius, 8px);
+		overflow: hidden;
 
-			@supports (corner-shape: squircle) {
-				corner-shape: squircle;
-				border-radius: calc(var(--radius, 8px) * var(--squircle-ratio, 2));
-			}
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(var(--radius, 8px) * var(--squircle-ratio, 2));
 		}
 	}
 </style>

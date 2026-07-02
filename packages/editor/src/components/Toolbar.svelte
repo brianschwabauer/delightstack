@@ -2,12 +2,16 @@
 	import type { Snippet } from 'svelte';
 	import { Button } from '@delightstack/components';
 	import type { Editor } from '../core/editor.svelte.js';
+	import type { EditorCommand } from '../types/index.js';
 	import { icons } from '../core/icons.js';
+	import CommandMenu from './CommandMenu.svelte';
 
 	interface Props {
 		editor: Editor;
 		/** Include undo/redo buttons. Default true */
 		show_history?: boolean;
+		/** Include the add-block (+) menu. Default true */
+		show_add_block?: boolean;
 		/** Custom content replaces the default button row */
 		children?: Snippet;
 		class?: string;
@@ -16,19 +20,34 @@
 	let {
 		editor,
 		show_history = true,
+		show_add_block = true,
 		children = undefined,
 		class: class_name = '',
 	}: Props = $props();
 
+	// The simplified toolbar: 90% of the time users are doing plain text
+	// manipulation, so it's marks + headings only. Every block type (lists,
+	// quotes, code, media, …) lives behind the single + menu instead of an
+	// ever-growing button row.
 	const commands = $derived(editor.commands.forSurface('toolbar'));
-
-	// Group toolbar commands: marks first, then block types
 	const mark_commands = $derived(
 		commands.filter((command) => command.surfaces?.includes('floating')),
 	);
-	const block_commands = $derived(
+	const heading_commands = $derived(
 		commands.filter((command) => !command.surfaces?.includes('floating')),
 	);
+
+	const add_commands = $derived(
+		editor.commands
+			.forSurface('plus')
+			.filter((command) => !command.is_enabled || command.is_enabled(editor)),
+	);
+
+	function insert(command: EditorCommand, close: () => void) {
+		close();
+		editor.focus();
+		command.run(editor);
+	}
 </script>
 
 <div class="toolbar {class_name}" role="toolbar" aria-label="Editor toolbar">
@@ -69,16 +88,40 @@
 		{#each mark_commands as command (command.name)}
 			{@render action(command)}
 		{/each}
-		{#if mark_commands.length && block_commands.length}
+		{#if mark_commands.length && heading_commands.length}
 			<span class="divider"></span>
 		{/if}
-		{#each block_commands as command (command.name)}
+		{#each heading_commands as command (command.name)}
 			{@render action(command)}
 		{/each}
+		{#if show_add_block && add_commands.length}
+			<span class="divider"></span>
+			<Button
+				icon
+				transparent
+				dense
+				size="0"
+				aria-label="Add block"
+				tooltip="Add block"
+				popover_placement="bottom-start"
+				menu={add_menu as never}>
+				{@html icons.plus}
+			</Button>
+		{/if}
 	{/if}
 </div>
 
-{#snippet action(command: import('../types/index.js').EditorCommand)}
+{#snippet add_menu({ close }: { close: () => void })}
+	<div class="add-menu">
+		<CommandMenu
+			items={add_commands}
+			selected={-1}
+			flat
+			onpick={(command) => insert(command, close)} />
+	</div>
+{/snippet}
+
+{#snippet action(command: EditorCommand)}
 	<Button
 		icon
 		transparent
@@ -135,5 +178,10 @@
 		block-size: 1.25rem;
 		background: var(--color-border, color-mix(in oklab, currentColor 15%, transparent));
 		margin-inline: 4px;
+	}
+
+	.add-menu {
+		max-block-size: min(24rem, 60vh);
+		overflow-y: auto;
 	}
 </style>

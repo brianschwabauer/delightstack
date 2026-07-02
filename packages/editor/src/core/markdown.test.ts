@@ -21,7 +21,9 @@ describe('parseMarkdown', () => {
 			'paragraph',
 			'horizontal_rule',
 		]);
-		expect(blocks[0].attrs?.level).toBe(2);
+		// `##` maps to document level 3: markdown hashes are user-facing
+		// heading numbers, and document levels start at 2 (h1 = page title)
+		expect(blocks[0].attrs?.level).toBe(3);
 	});
 
 	it('parses lists including todos and ordered starts', () => {

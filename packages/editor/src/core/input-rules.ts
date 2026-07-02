@@ -16,9 +16,11 @@ export function buildInputRules(schema: Schema): Plugin {
 	const rules: InputRule[] = [];
 
 	if (schema.nodes.heading) {
+		// `#` produces the biggest user-facing heading (document level 2 —
+		// level 1 / h1 is reserved for the page title)
 		rules.push(
-			textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading, (match) => ({
-				level: match[1].length,
+			textblockTypeInputRule(/^(#{1,5})\s$/, schema.nodes.heading, (match) => ({
+				level: match[1].length + 1,
 			})),
 		);
 	}
