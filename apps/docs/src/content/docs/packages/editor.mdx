@@ -1,0 +1,206 @@
+---
+title: Editor
+description: A delightful rich text / block editor for Svelte 5 built on ProseMirror — slash commands, drag & drop blocks, magnetic resize, optimistic uploads, and an extensible block system.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import ComponentPreview from '../../../components/ComponentPreview.astro';
+import EditorKitchenSinkDemo from '../../../components/demos/EditorKitchenSinkDemo.svelte';
+
+`@delightstack/editor` is a rich text / block editor for Svelte 5, built on raw ProseMirror. It
+ships the writing basics done right (marks, headings, lists, todos, quotes, code, links, dividers),
+Notion-style block UX (slash commands, floating selection menu, gutter plus button, drag-handle
+reordering with FLIP animations), optimistic media uploads with progress, and a one-object API for
+registering custom blocks — plus a zero-dependency server renderer for public pages.
+
+## Live demo
+
+Every built-in node, mark, and block in one document. Type `/` for commands, select text for the
+floating menu, hover a block for the plus button and drag handle, drop an image to upload
+(simulated), resize the image with its side grips, click the callout's gear for settings, and paste
+markdown or a YouTube URL. Uploads here are served from local blob URLs — a real app wires the
+same `Uploader` interface to [`images`](/packages/images/).
+
+<ComponentPreview
+	code={`
+<script lang="ts">
+${'  '}import { Editor as EditorClass, defaultBlocks } from '@delightstack/editor';
+${'  '}import { Editor, Toolbar } from '@delightstack/editor/components';
+
+${'  '}const editor = new EditorClass({
+${'    '}blocks: defaultBlocks(),
+${'    '}uploader,           // app-provided (see Uploads below)
+${'    '}content: saved_doc, // ProseMirror JSON or null
+${'  '});
+</script>
+
+<Toolbar {editor} />
+<Editor {editor} />
+`}
+>
+	<EditorKitchenSinkDemo client:only="svelte" />
+</ComponentPreview>
+
+## Features
+
+- **Runes-reactive `Editor` class** — `editor.doc`, `selection`, `active_marks`, `active_block`,
+  `can_undo`, `is_empty`, `focused`, and `uploads` all usable directly in templates.
+- **Menus from one definition** — an `EditorCommand` registered once appears consistently in the
+  `/` slash menu, gutter plus menu, toolbar, and floating selection menu.
+- **Markdown everywhere** — `# `, `- `, `[] `, `> `, ` ``` `, `**bold**` while typing; plain-text
+  markdown pastes become rich content; Word/Google Docs pastes are scrubbed to clean semantics.
+- **Optimistic uploads** — placeholder nodes with blob previews and progress; deletion aborts;
+  failures show retryable error states; `getJSON()` never leaks blob URLs.
+- **Magnetic snap resize** — configurable snap points with gravity easing and hysteresis, labeled
+  ghost badges while dragging.
+- **Block system** — `defineBlock()` registers schema + Svelte node view + interactive chrome +
+  settings popover + menu entries in one object.
+- **Server renderer** — `@delightstack/editor/render` has zero dependencies (no svelte, no
+  prosemirror) and runs in Cloudflare Workers.
+- **Collab-ready seams** — isomorphic schema + `schemaHash`, injectable history, wrappable dispatch,
+  stable `block_id` attrs, and an `EditorTransport` interface for the upcoming
+  prosemirror-collab + Durable Object phase.
+
+## Install
+
+```bash
+pnpm add @delightstack/editor
+```
+
+| Import | Use |
+| --- | --- |
+| `@delightstack/editor` | `Editor` class, `defineBlock`, `defaultBlocks`, types |
+| `@delightstack/editor/components` | `<Editor>`, `<Toolbar>`, menus |
+| `@delightstack/editor/render` | `renderHTML`, `renderText` — server/Worker-safe |
+| `@delightstack/editor/schema` | `buildSchema`, `schemaHash` — isomorphic (collab) |
+
+`@delightstack/components` is a peer dependency — the editor chrome is built from the design
+system (`Button`, `Select`, `Input`, `Range`, `Toggle`), and the callout/gallery blocks render the
+real `<Callout>` and `<Gallery>` components. Editing a callout in the editor is editing the same
+component your page renders.
+
+## Basic usage
+
+```svelte
+<script lang="ts">
+	import { Editor as EditorClass, defaultBlocks } from '@delightstack/editor';
+	import { Editor, Toolbar } from '@delightstack/editor/components';
+
+	const editor = new EditorClass({
+		blocks: defaultBlocks(),
+		placeholder: 'Write something…',
+		content: data.saved_doc, // ProseMirror JSON or null
+	});
+</script>
+
+<Toolbar {editor} />
+<Editor {editor} />
+
+<button disabled={!editor.can_undo} onclick={() => editor.undo()}>Undo</button>
+<button onclick={() => save(editor.getJSON())}>Save</button>
+```
+
+`<Editor>` includes the slash menu, floating menu, and gutter controls by default; disable any of
+them with `slash_menu={false}` / `floating_menu={false}` / `plus_button={false}`. Pass `readonly`
+for display mode (same component, chrome hidden) — or better, use `renderHTML` and skip the editor
+bundle entirely on public pages.
+
+## Uploads
+
+Provide an `Uploader` and the image/gallery/video/audio/file blocks light up (drop, paste, and
+slash-command entry points):
+
+```typescript
+import { imageURL, toImageProps } from '@delightstack/images';
+import type { Uploader } from '@delightstack/editor';
+
+const uploader: Uploader = {
+	async upload(file, { kind, signal, on_progress }) {
+		const record = await myImagesApi.upload(file, { signal, on_progress });
+		return {
+			image: {
+				id: record.id,
+				width: record.width,
+				height: record.height,
+				src: imageURL(record.id),
+				srcset: toImageProps(record).srcset,
+				thumbhash: record.thumbhash,
+			},
+		};
+	},
+};
+
+new EditorClass({ blocks: defaultBlocks(), uploader });
+```
+
+The editor inserts a real placeholder node immediately (blob preview + progress ring), so the
+document stays consistent through edits, moves, and undo while the upload runs. On completion the
+node's attrs are swapped in place without polluting undo history.
+
+## Custom blocks
+
+```typescript
+import { defineBlock } from '@delightstack/editor';
+import StatBlock from './StatBlock.svelte';
+
+const stat = defineBlock<{ value: number; label: string }>({
+	name: 'stat',
+	schema: {
+		group: 'block',
+		atom: true,
+		attrs: { value: { default: 0 }, label: { default: '' } },
+		toDOM: (node) => ['div', { 'data-block': 'stat', 'data-value': node.attrs.value }],
+		parseDOM: [{ tag: 'div[data-block="stat"]' }],
+	},
+	component: StatBlock,
+	settings: [
+		{ attr: 'value', label: 'Value', control: 'text' },
+		{ attr: 'label', label: 'Label', control: 'text' },
+	],
+	commands: [
+		{ name: 'stat', label: 'Stat', group: 'Embeds', run: (e) => e.insertBlock('stat') },
+	],
+	render: (node, ctx) =>
+		`<div class="stat">${ctx.esc(node.attrs?.value)} ${ctx.esc(node.attrs?.label)}</div>`,
+});
+```
+
+The node view component receives `BlockProps`: reactive `attrs`, `selected`, `editable`, plus
+`update_attrs(patch)` (dispatches a transaction), `delete_node()`, `open_settings()`, and the
+`content` attachment marking the editable hole for non-atom blocks
+(`<div {@attach content}>`). Props in, transactions out — no DOM back-channels.
+
+Add `interactive: { resize: { attr: 'width_pct' } }` for magnetic-snap resizing, or
+`interactive: false` to opt out of all chrome.
+
+<Aside type="tip">
+	Planning to use collaborative editing later? Define custom block **schemas** with
+	`defineBlockSchema()` in a file shared with your Worker and compose the UI half client-side —
+	`buildSchema()` and `schemaHash()` from `@delightstack/editor/schema` are worker-safe.
+</Aside>
+
+## Server rendering
+
+```typescript
+import { renderHTML, renderText } from '@delightstack/editor/render';
+
+// +page.server.ts — no editor code ships to the browser
+export const load = async () => {
+	const doc = await getDocument();
+	return { html: renderHTML(doc, { image_url: (id) => imageURL(id) }) };
+};
+
+// Search indexing / AI context
+const plaintext = renderText(doc);
+```
+
+Custom blocks render through the same `render` function declared in their spec — pass them with
+`renderHTML(doc, { blocks: { stat: statRenderer } })`.
+
+## Roadmap
+
+Designed and planned, landing in phases: collaborative editing (prosemirror-collab with a Durable
+Object authority over [`websocket`](/packages/websocket/)), live cursors via
+[`presence`](/packages/presence/), comments anchored through the step log
+([`database`](/packages/database/)), version history / time travel, AI writing suggestions via
+[`ai`](/packages/ai/), `@` mentions, and layout/column blocks.

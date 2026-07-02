@@ -119,6 +119,7 @@ export default defineConfig({
 						{ label: 'Database', slug: 'packages/database' },
 						{ label: 'Realtime', slug: 'packages/websocket' },
 						{ label: 'Presence', slug: 'packages/presence' },
+						{ label: 'Editor', slug: 'packages/editor' },
 						{ label: 'AI', slug: 'packages/ai' },
 						{ label: 'Billing', slug: 'packages/stripe' },
 						{ label: 'Images', slug: 'packages/images' },
