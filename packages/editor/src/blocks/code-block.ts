@@ -1,6 +1,7 @@
 import { defineBlock } from '../core/block-spec.js';
 import CodeBlock from '../components/blocks/CodeBlock.svelte';
 import { baseNodes } from '../schema/index.js';
+import { codeHighlight } from '../core/plugins/code-highlight.js';
 import { codeBlockRenderer } from '../render/blocks.js';
 
 export interface CodeBlockAttrs extends Record<string, unknown> {
@@ -20,5 +21,8 @@ export const codeBlock = defineBlock<CodeBlockAttrs>({
 	// The code text is editable content; block chrome would fight with the
 	// language picker header, so the component owns its whole UI.
 	interactive: { selectable: false, deletable: false },
+	// Live token decorations while editing (same tokenizer as the read-only
+	// Code component, so toggling editability doesn't restyle)
+	plugins: () => [codeHighlight()],
 	render: codeBlockRenderer,
 });

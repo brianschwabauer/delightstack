@@ -7,6 +7,7 @@ export { default as Chart } from './Chart.svelte';
 export type { ChartData, Dataset as ChartDataset } from './Chart.svelte';
 export type { CalendarEvent, MarkedDate } from './Calendar.svelte';
 export { default as Code } from './Code.svelte';
+export { tokenizeLine, type Token as CodeToken } from './code-tokens.js';
 export { default as Comparison } from './Comparison.svelte';
 export { default as Counter } from './Counter.svelte';
 export { default as Expand } from './Expand.svelte';

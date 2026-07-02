@@ -128,4 +128,64 @@
 			white-space: pre;
 		}
 	}
+
+	/* Token colors for the live-highlight decorations — mirrors the design
+	   system's Code.svelte token theme so editable and read-only match */
+	.code-block :global {
+		.token-keyword {
+			color: light-dark(#7c3aed, #a78bfa);
+		}
+		.token-string {
+			color: light-dark(#059669, #34d399);
+		}
+		.token-comment {
+			color: light-dark(#6b7280, #9ca3af);
+			font-style: italic;
+		}
+		.token-function {
+			color: light-dark(#2563eb, #60a5fa);
+		}
+		.token-number {
+			color: light-dark(#d97706, #fbbf24);
+		}
+		.token-operator {
+			color: light-dark(#6b7280, #cbd5e1);
+		}
+		.token-tag {
+			color: light-dark(#dc2626, #f87171);
+		}
+		.token-attribute {
+			color: light-dark(#d97706, #fbbf24);
+		}
+		.token-property {
+			color: light-dark(#2563eb, #60a5fa);
+		}
+		.token-value {
+			color: light-dark(#059669, #34d399);
+		}
+		.token-variable {
+			color: light-dark(#d97706, #fbbf24);
+		}
+		.token-decorator {
+			color: light-dark(#d97706, #fbbf24);
+			font-style: italic;
+		}
+		.token-heading {
+			color: light-dark(#7c3aed, #a78bfa);
+			font-weight: 700;
+		}
+		.token-bold {
+			font-weight: 700;
+		}
+		.token-italic {
+			font-style: italic;
+		}
+		.token-code {
+			color: light-dark(#059669, #34d399);
+		}
+		.token-link {
+			color: light-dark(#2563eb, #60a5fa);
+			text-decoration: underline;
+		}
+	}
 </style>
