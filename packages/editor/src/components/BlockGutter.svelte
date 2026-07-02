@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { TextSelection, type SelectionBookmark } from 'prosemirror-state';
+	import {
+		NodeSelection,
+		TextSelection,
+		type SelectionBookmark,
+	} from 'prosemirror-state';
+	import { dropPoint } from 'prosemirror-transform';
 	import { DOMSerializer } from 'prosemirror-model';
+	import { setDropIndicator } from '../core/plugins/drop-indicator.js';
+	import { findScroller } from '../core/plugins/drop.js';
 	import { Button } from '@delightstack/components';
 	import type { Editor } from '../core/editor.svelte.js';
 	import type { EditorCommand } from '../types/index.js';
@@ -188,6 +195,28 @@
 	/** Last pointer location, for re-anchoring without pointer movement */
 	let last_point: { clientX: number; clientY: number } | null = null;
 
+	// Touch/pen have no hover stream, so the handle appears for the block
+	// under a tap instead (native HTML5 drag also doesn't start from touch —
+	// the handle runs its own pointer-event drag below)
+	$effect(() => {
+		if (!editor.editable) return;
+		const onDown = (event: PointerEvent) => {
+			if (event.pointerType === 'mouse' || menu_open || touch_drag) return;
+			if (gutter_el?.contains(event.target as Node)) return;
+			last_point = { clientX: event.clientX, clientY: event.clientY };
+			const block = editor.blockAt({ x: event.clientX, y: event.clientY });
+			hovered = block;
+			if (block) {
+				const node = editor.state.doc.nodeAt(block.pos);
+				hovered_empty = node?.type.name === 'paragraph' && node.content.size === 0;
+			} else {
+				hovered_empty = false;
+			}
+		};
+		window.addEventListener('pointerdown', onDown, { passive: true });
+		return () => window.removeEventListener('pointerdown', onDown);
+	});
+
 	// Re-anchor the visible handle when a doc change reflows the page under a
 	// stationary pointer (image finished loading, collaborator edit above)
 	$effect(() => {
@@ -333,6 +362,123 @@
 		drag_prior_selection = null;
 	}
 
+	// ---- touch/pen reorder ----
+	// Native HTML5 drag-and-drop never starts from a touch drag, so the
+	// handle runs its own pointer-event drag: capture, track the drop point
+	// (same dropPoint logic ProseMirror uses), drive the shared drop
+	// indicator, and commit a move transaction on release.
+
+	interface TouchDrag {
+		pos: number;
+		size: number;
+		start_y: number;
+		moved: boolean;
+		target: number | null;
+	}
+	let touch_drag = $state<TouchDrag | null>(null);
+	let touch_scroll = 0;
+	let touch_scroll_frame = 0;
+	/** A completed touch drag must not ALSO count as a tap that opens the menu */
+	let suppress_click = false;
+
+	function touchScrollTick() {
+		touch_scroll_frame = 0;
+		if (!touch_scroll || !touch_drag) return;
+		const view = editor.view;
+		const scroller = view ? findScroller(view.dom) : null;
+		if (scroller) scroller.scrollTop += touch_scroll;
+		else window.scrollBy(0, touch_scroll);
+		touch_scroll_frame = requestAnimationFrame(touchScrollTick);
+	}
+
+	function startTouchDrag(event: PointerEvent) {
+		if (event.pointerType === 'mouse') return;
+		const block = hovered ?? menu_block;
+		const view = editor.view;
+		if (!block || !view) return;
+		const node = editor.state.doc.nodeAt(block.pos);
+		if (!node) return;
+		// No preventDefault: on touch it would suppress the compat click that
+		// opens the actions menu on a plain tap. touch-action: none already
+		// stops the page from scrolling instead of dragging.
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		editor.selectNode(block.pos);
+		touch_drag = {
+			pos: block.pos,
+			size: node.nodeSize,
+			start_y: event.clientY,
+			moved: false,
+			target: null,
+		};
+	}
+
+	function moveTouchDrag(event: PointerEvent) {
+		if (!touch_drag) return;
+		const view = editor.view;
+		if (!view) return;
+		// A slop zone so a wobbly tap doesn't become a drag
+		if (!touch_drag.moved && Math.abs(event.clientY - touch_drag.start_y) < 8) return;
+		touch_drag.moved = true;
+		const bounds = view.dom.getBoundingClientRect();
+		const x = Math.max(bounds.left + 1, Math.min(event.clientX, bounds.right - 1));
+		const found = view.posAtCoords({ left: x, top: event.clientY });
+		let target: number | null = null;
+		if (found) {
+			try {
+				const selection = NodeSelection.create(editor.state.doc, touch_drag.pos);
+				target = dropPoint(editor.state.doc, found.pos, selection.content()) ?? found.pos;
+			} catch {
+				target = found.pos;
+			}
+			// Dropping onto/into itself is a no-op
+			if (target >= touch_drag.pos && target <= touch_drag.pos + touch_drag.size) {
+				target = null;
+			}
+		}
+		touch_drag.target = target;
+		setDropIndicator(view, target);
+		// Edge auto-scroll: pointermove stops while the finger holds still, so
+		// a rAF loop keeps scrolling until the finger leaves the edge zone
+		const EDGE = 56;
+		const MAX_STEP = 16;
+		const viewport_h = window.innerHeight;
+		if (event.clientY < EDGE) {
+			touch_scroll = -Math.ceil(((EDGE - event.clientY) / EDGE) * MAX_STEP);
+		} else if (event.clientY > viewport_h - EDGE) {
+			touch_scroll = Math.ceil(((event.clientY - (viewport_h - EDGE)) / EDGE) * MAX_STEP);
+		} else {
+			touch_scroll = 0;
+		}
+		if (touch_scroll && !touch_scroll_frame) {
+			touch_scroll_frame = requestAnimationFrame(touchScrollTick);
+		}
+	}
+
+	function endTouchDrag(cancelled = false) {
+		if (!touch_drag) return;
+		const view = editor.view;
+		const { pos, size, target, moved } = touch_drag;
+		suppress_click = moved;
+		touch_drag = null;
+		touch_scroll = 0;
+		if (touch_scroll_frame) cancelAnimationFrame(touch_scroll_frame);
+		touch_scroll_frame = 0;
+		if (view) setDropIndicator(view, null);
+		if (cancelled || target === null || !view) return;
+		const node = editor.state.doc.nodeAt(pos);
+		if (!node) return;
+		try {
+			let tr = editor.state.tr.delete(pos, pos + size);
+			const mapped = tr.mapping.map(target, -1);
+			tr = tr.insert(mapped, node);
+			tr = tr.setSelection(NodeSelection.create(tr.doc, mapped));
+			tr.setMeta('uiEvent', 'drop');
+			editor.dispatch(tr.scrollIntoView());
+		} catch {
+			// Target context rejected the node — leave the document untouched
+		}
+	}
+
 	const menu_position = $derived.by(() => {
 		if (!menu_open || !menu_block) return null;
 		const height = menu_el?.offsetHeight ?? 304;
@@ -415,7 +561,15 @@
 					draggable="true"
 					ondragstart={startDrag}
 					ondragend={endDrag}
+					onpointerdown={startTouchDrag}
+					onpointermove={moveTouchDrag}
+					onpointerup={() => endTouchDrag()}
+					onpointercancel={() => endTouchDrag(true)}
 					onclick={() => {
+						if (suppress_click) {
+							suppress_click = false;
+							return;
+						}
 						if (menu_open) closeMenu();
 						else openMenu('actions');
 					}}>
@@ -467,6 +621,9 @@
 
 		:global(.handle button) {
 			cursor: grab;
+			/* The handle owns touch gestures — a touch drag must reorder, not
+			   scroll the page */
+			touch-action: none;
 
 			&:active {
 				cursor: grabbing;

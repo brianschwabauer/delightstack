@@ -16,6 +16,20 @@ interface BlockRect {
 	top: number;
 }
 
+/** Nearest scrollable ancestor (used by drag + touch-reorder auto-scroll). */
+export function findScroller(start: Element): Element | null {
+	for (let el: Element | null = start; el; el = el.parentElement) {
+		const { overflowY } = getComputedStyle(el);
+		if (
+			(overflowY === 'auto' || overflowY === 'scroll') &&
+			el.scrollHeight > el.clientHeight
+		) {
+			return el;
+		}
+	}
+	return null;
+}
+
 /**
  * Auto-scroll while dragging near the top/bottom edge of the scrollable
  * ancestor (or viewport). Browsers are inconsistent here — Safari often
@@ -27,19 +41,6 @@ export function dragAutoScroll(): Plugin {
 	let frame = 0;
 	let velocity = 0;
 	let scroller: Element | null = null;
-
-	function findScroller(start: Element): Element | null {
-		for (let el: Element | null = start; el; el = el.parentElement) {
-			const { overflowY } = getComputedStyle(el);
-			if (
-				(overflowY === 'auto' || overflowY === 'scroll') &&
-				el.scrollHeight > el.clientHeight
-			) {
-				return el;
-			}
-		}
-		return null;
-	}
 
 	function stop() {
 		velocity = 0;

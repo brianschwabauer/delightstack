@@ -10,7 +10,7 @@ import {
 } from 'prosemirror-state';
 import { DecorationSet, EditorView, type NodeViewConstructor } from 'prosemirror-view';
 import { history, redo, redoDepth, undo, undoDepth } from 'prosemirror-history';
-import { dropCursor } from 'prosemirror-dropcursor';
+import { dropIndicator } from './plugins/drop-indicator.js';
 import { gapCursor } from 'prosemirror-gapcursor';
 import { untrack } from 'svelte';
 import { DelightError } from '@delightstack/utilities';
@@ -504,8 +504,10 @@ export class Editor {
 	}
 
 	/**
-	 * Resolves viewport coordinates to the top-level block underneath them
-	 * (used by the gutter plus button / drag handle).
+	 * Resolves viewport coordinates to the draggable block underneath them
+	 * (used by the gutter plus button / drag handle). Inside a list this is
+	 * the individual list/todo item's row — users expect to grab one bullet,
+	 * not the entire list.
 	 */
 	blockAt(coords: { x: number; y: number }): {
 		pos: number;
@@ -533,6 +535,14 @@ export class Editor {
 			pos = raw;
 		} else {
 			pos = resolved.before(1);
+			// Deepest list/todo item wins over the whole list
+			for (let depth = resolved.depth; depth > 1; depth--) {
+				const name = resolved.node(depth).type.name;
+				if (name === 'list_item' || name === 'todo_item') {
+					pos = resolved.before(depth);
+					break;
+				}
+			}
 		}
 		const node = doc.nodeAt(pos);
 		if (!node) return null;
@@ -629,7 +639,7 @@ export class Editor {
 		}
 
 		plugins.push(
-			dropCursor({ class: 'ds-dropcursor', width: 2 }),
+			dropIndicator({ class: 'ds-dropcursor', width: 2 }),
 			dragAutoScroll(),
 			gapCursor(),
 			placeholder(this.#options.placeholder),

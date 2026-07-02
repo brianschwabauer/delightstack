@@ -325,23 +325,24 @@ export function moveBlock(direction: -1 | 1): Command {
 	return (state, dispatch) => {
 		const { selection } = state;
 		const { $from } = selection;
-		// Inside a list, move the immediate item among its siblings — users
-		// expect the bullet under the cursor to move, not the entire list
 		let block_start: number | null = null;
-		for (let depth = $from.depth; depth > 0; depth--) {
-			const name = $from.node(depth).type.name;
-			if (name === 'list_item' || name === 'todo_item') {
-				block_start = $from.before(depth);
-				break;
+		if (selection instanceof NodeSelection) {
+			// Move exactly the selected node among its siblings (covers the
+			// gutter's Move actions on nested list items too)
+			block_start = selection.from;
+		} else {
+			// Inside a list, move the immediate item — users expect the bullet
+			// under the cursor to move, not the entire list
+			for (let depth = $from.depth; depth > 0; depth--) {
+				const name = $from.node(depth).type.name;
+				if (name === 'list_item' || name === 'todo_item') {
+					block_start = $from.before(depth);
+					break;
+				}
 			}
-		}
-		if (block_start === null) {
-			block_start =
-				selection instanceof NodeSelection && $from.depth === 0
-					? selection.from
-					: $from.depth > 0
-						? $from.before(1)
-						: null;
+			if (block_start === null) {
+				block_start = $from.depth > 0 ? $from.before(1) : null;
+			}
 		}
 		if (block_start === null) return false;
 		const $block = state.doc.resolve(block_start);
