@@ -64,7 +64,12 @@ export function buildInputRules(schema: Schema): Plugin {
 	}
 
 	if (schema.marks.bold) {
-		rules.push(markInputRule(/(?:\*\*|__)([^*_]+)(?:\*\*|__)$/, schema.marks.bold));
+		// Separate rules per delimiter: `**snake_case**` must bold (underscores
+		// allowed inside `**`), and mismatched pairs like `**text__` must not
+		rules.push(
+			markInputRule(/\*\*([^*]+)\*\*$/, schema.marks.bold),
+			markInputRule(/(?<![\w_])__([^_]+)__$/, schema.marks.bold),
+		);
 	}
 	if (schema.marks.italic) {
 		rules.push(

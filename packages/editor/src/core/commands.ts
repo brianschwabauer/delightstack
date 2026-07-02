@@ -5,6 +5,7 @@ import {
 	lift,
 	liftEmptyBlock,
 	selectNodeBackward,
+	selectNodeForward,
 	setBlockType,
 	toggleMark,
 	wrapIn,
@@ -16,7 +17,13 @@ import {
 	wrapInList,
 } from 'prosemirror-schema-list';
 import { NodeSelection, TextSelection, type Command } from 'prosemirror-state';
-import type { Attrs, NodeType, Schema } from 'prosemirror-model';
+import type {
+	Attrs,
+	Node as PMNode,
+	NodeType,
+	ResolvedPos,
+	Schema,
+} from 'prosemirror-model';
 
 /**
  * Schema-aware ProseMirror commands used by the keymap, input rules, and the
@@ -159,6 +166,59 @@ function isWrapper(node: { type: NodeType }): boolean {
 	return content.includes('block') && !content.includes('item');
 }
 
+/** A leaf/atom block (image, hr, embed) — deleting one should take two steps */
+function isLeafBlock(node: PMNode): boolean {
+	return node.isBlock && (node.isAtom || node.type.isLeaf) && !node.isText;
+}
+
+function findCutBefore($pos: ResolvedPos): ResolvedPos | null {
+	for (let depth = $pos.depth - 1; depth >= 0; depth--) {
+		if ($pos.index(depth) > 0) return $pos.doc.resolve($pos.before(depth + 1));
+		if ($pos.node(depth).type.spec.isolating) break;
+	}
+	return null;
+}
+
+function findCutAfter($pos: ResolvedPos): ResolvedPos | null {
+	for (let depth = $pos.depth - 1; depth >= 0; depth--) {
+		const parent = $pos.node(depth);
+		if ($pos.index(depth) + 1 < parent.childCount)
+			return $pos.doc.resolve($pos.after(depth + 1));
+		if (parent.type.spec.isolating) break;
+	}
+	return null;
+}
+
+/**
+ * Backspace at the start of a non-empty textblock preceded by a leaf block
+ * (image, divider, embed): SELECT the leaf instead of letting `joinBackward`
+ * delete it instantly. The second press deletes — nothing vanishes without a
+ * visible warning. Empty textblocks are left to `joinBackward`, which
+ * correctly removes the empty line rather than touching the leaf.
+ */
+export const selectLeafBackward: Command = (state, dispatch, view) => {
+	const { $from, empty } = state.selection;
+	if (!empty || $from.parentOffset > 0 || !$from.parent.isTextblock) return false;
+	if ($from.parent.content.size === 0) return false;
+	const cut = findCutBefore($from);
+	const before = cut?.nodeBefore;
+	if (!before || !isLeafBlock(before) || before.type.spec.selectable === false)
+		return false;
+	return selectNodeBackward(state, dispatch, view);
+};
+
+/** Forward-delete mirror of {@link selectLeafBackward}. */
+export const selectLeafForward: Command = (state, dispatch, view) => {
+	const { $from, empty } = state.selection;
+	if (!empty || !$from.parent.isTextblock) return false;
+	if ($from.parentOffset < $from.parent.content.size) return false;
+	if ($from.parent.content.size === 0) return false;
+	const cut = findCutAfter($from);
+	const after = cut?.nodeAfter;
+	if (!after || !isLeafBlock(after) || after.type.spec.selectable === false) return false;
+	return selectNodeForward(state, dispatch, view);
+};
+
 /** A block that Backspace can merge a following paragraph into (its last textblock) */
 function isJoinTarget(node: {
 	isTextblock: boolean;
@@ -184,19 +244,41 @@ export function backspaceCommand(schema: Schema): Command {
 	const listLifts: Command[] = [];
 	if (schema.nodes.list_item) listLifts.push(liftListItem(schema.nodes.list_item));
 	if (schema.nodes.todo_item) listLifts.push(liftListItem(schema.nodes.todo_item));
-	const fallback = chainCommands(joinBackward, liftEmptyBlock, selectNodeBackward);
+	const fallback = chainCommands(
+		selectLeafBackward,
+		joinBackward,
+		liftEmptyBlock,
+		selectNodeBackward,
+	);
 	return (state, dispatch, view) => {
 		// Only take over at the start of a textblock with an empty selection
 		const { $from, empty } = state.selection;
 		if (!empty || $from.parentOffset > 0) return false;
+		// Gap cursor (e.g. before a leading image) — depth 0, no textblock
+		// parent; the steps below would throw on `$from.before(1)`
+		if ($from.depth === 0 || !$from.parent.isTextblock) {
+			return fallback(state, dispatch, view);
+		}
 		const parent = $from.parent;
-		// 1. Convert heading/code/etc. back to a paragraph in place
-		if (
-			parent.isTextblock &&
-			parent.type !== schema.nodes.paragraph &&
-			setBlockType(schema.nodes.paragraph)(state, dispatch, view)
-		) {
-			return true;
+		// 1. Convert heading/code/etc. back to a paragraph in place. A
+		//    multi-line code block splits into one paragraph per line — a
+		//    single wholesale paragraph would mangle 40 lines of code into one.
+		if (parent.isTextblock && parent.type !== schema.nodes.paragraph) {
+			if (parent.type.spec.code && parent.textContent.includes('\n')) {
+				if (dispatch) {
+					const paragraphs = parent.textContent
+						.split('\n')
+						.map((line) =>
+							schema.nodes.paragraph.create(null, line ? schema.text(line) : undefined),
+						);
+					const start = $from.before();
+					let tr = state.tr.replaceWith(start, start + parent.nodeSize, paragraphs);
+					tr = tr.setSelection(TextSelection.create(tr.doc, start + 1));
+					dispatch(tr.scrollIntoView());
+				}
+				return true;
+			}
+			if (setBlockType(schema.nodes.paragraph)(state, dispatch, view)) return true;
 		}
 		// 2. Lift list items out of their list
 		for (const command of listLifts) {
@@ -242,12 +324,25 @@ export function backspaceCommand(schema: Schema): Command {
 export function moveBlock(direction: -1 | 1): Command {
 	return (state, dispatch) => {
 		const { selection } = state;
-		const block_start =
-			selection instanceof NodeSelection && selection.$from.depth === 0
-				? selection.from
-				: selection.$from.depth > 0
-					? selection.$from.before(1)
-					: null;
+		const { $from } = selection;
+		// Inside a list, move the immediate item among its siblings — users
+		// expect the bullet under the cursor to move, not the entire list
+		let block_start: number | null = null;
+		for (let depth = $from.depth; depth > 0; depth--) {
+			const name = $from.node(depth).type.name;
+			if (name === 'list_item' || name === 'todo_item') {
+				block_start = $from.before(depth);
+				break;
+			}
+		}
+		if (block_start === null) {
+			block_start =
+				selection instanceof NodeSelection && $from.depth === 0
+					? selection.from
+					: $from.depth > 0
+						? $from.before(1)
+						: null;
+		}
 		if (block_start === null) return false;
 		const $block = state.doc.resolve(block_start);
 		const node = $block.nodeAfter;

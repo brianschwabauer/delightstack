@@ -34,6 +34,10 @@ export function paste(editor: Editor, options: PasteOptions = {}): Plugin {
 			handlePaste(view, event, slice) {
 				const clipboard = event.clipboardData;
 				if (!clipboard) return false;
+				// Inside a code block everything pastes as plain text — no
+				// linkifying, no markdown parsing (a pasted shell script must
+				// not become headings and bullet lists)
+				if (view.state.selection.$from.parent.type.spec.code) return false;
 				const text = clipboard.getData('text/plain').trim();
 				const hasHTML = clipboard.types.includes('text/html');
 
@@ -41,8 +45,10 @@ export function paste(editor: Editor, options: PasteOptions = {}): Plugin {
 				if (text && URL_PATTERN.test(text) && !/\s/.test(text)) {
 					const { selection, schema } = view.state;
 					const link = schema.marks.link;
+					const parent = selection.$from.parent;
+					const links_allowed = link && parent.type.allowsMarkType(link);
 					// Over a text selection → make it a link
-					if (!selection.empty && selection instanceof TextSelection && link) {
+					if (!selection.empty && selection instanceof TextSelection && links_allowed) {
 						view.dispatch(
 							view.state.tr
 								.removeMark(selection.from, selection.to, link)
@@ -50,25 +56,30 @@ export function paste(editor: Editor, options: PasteOptions = {}): Plugin {
 						);
 						return true;
 					}
-					// On an empty paragraph → embed (if a block claims the URL)
-					if (selection.empty && selection.$from.parent.content.size === 0) {
-						const url = parseURL(text);
-						if (url) {
-							for (const block of editor.blocks.values()) {
-								const attrs = block.paste?.match_url?.(url);
-								if (attrs && schema.nodes[block.name]) {
-									editor.insertBlock(block.name, attrs);
-									return true;
+					if (selection.empty && parent.isTextblock) {
+						// On an empty paragraph → embed (if a block claims the URL)
+						if (parent.type === schema.nodes.paragraph && parent.content.size === 0) {
+							const url = parseURL(text);
+							if (url) {
+								for (const block of editor.blocks.values()) {
+									const attrs = block.paste?.match_url?.(url);
+									if (attrs && schema.nodes[block.name]) {
+										editor.insertBlock(block.name, attrs);
+										return true;
+									}
 								}
 							}
 						}
-						// Fall back to a linkified paste
-						if (link) {
+						// Otherwise paste the URL as a ready-made link
+						if (links_allowed) {
 							view.dispatch(
-								view.state.tr.replaceSelectionWith(
-									schema.text(text, [link.create({ href: text })]),
-									false,
-								),
+								view.state.tr
+									.replaceSelectionWith(
+										schema.text(text, [link.create({ href: text })]),
+										false,
+									)
+									// Typing after the pasted link stays plain text
+									.removeStoredMark(link),
 							);
 							return true;
 						}

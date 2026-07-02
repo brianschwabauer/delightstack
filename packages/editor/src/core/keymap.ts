@@ -7,6 +7,7 @@ import {
 	toggleMark,
 } from 'prosemirror-commands';
 import { redo, undo } from 'prosemirror-history';
+import { undoInputRule } from 'prosemirror-inputrules';
 import { sinkListItem } from 'prosemirror-schema-list';
 import type { Command, Plugin } from 'prosemirror-state';
 import type { Schema } from 'prosemirror-model';
@@ -14,9 +15,21 @@ import {
 	backspaceCommand,
 	liftListItem,
 	moveBlock,
+	selectLeafForward,
 	splitListItemCommand,
 	toggleBlockType,
+	toggleTodoChecked,
 } from './commands.js';
+
+/** Insert literal text when the cursor is inside a code block */
+function insertInCode(text: string): Command {
+	return (state, dispatch) => {
+		const { $from } = state.selection;
+		if (!$from.parent.type.spec.code) return false;
+		dispatch?.(state.tr.insertText(text).scrollIntoView());
+		return true;
+	};
+}
 
 export interface KeymapOptions {
 	/** Include undo/redo bindings (omit when the history plugin is disabled) */
@@ -53,24 +66,44 @@ export function buildKeymaps(schema: Schema, options: KeymapOptions = {}): Plugi
 	blocks['Alt-ArrowUp'] = moveBlock(-1);
 	blocks['Alt-ArrowDown'] = moveBlock(1);
 	blocks['Escape'] = selectParentNode;
-	if (schema.nodes.hard_break) {
+	// Exit hatches are bound whether or not hard_break exists — without them
+	// there is no way out of a code block at the end of the document
+	{
 		const br = schema.nodes.hard_break;
-		const insertBreak: Command = (state, dispatch) => {
-			dispatch?.(state.tr.replaceSelectionWith(br.create()).scrollIntoView());
-			return true;
-		};
-		blocks['Shift-Enter'] = chainCommands(exitCode, insertBreak);
-		blocks['Mod-Enter'] = chainCommands(exitCode, insertBreak);
+		const breaks: Command[] = br
+			? [
+					(state, dispatch) => {
+						dispatch?.(state.tr.replaceSelectionWith(br.create()).scrollIntoView());
+						return true;
+					},
+				]
+			: [];
+		// Shift-Enter inside code inserts a newline (muscle memory from every
+		// other editor); Mod-Enter stays the explicit exit hatch
+		blocks['Shift-Enter'] = chainCommands(insertInCode('\n'), exitCode, ...breaks);
+		blocks['Mod-Enter'] = chainCommands(toggleTodoChecked(), exitCode, ...breaks);
 	}
+	// A caret at the end of a block before an image/divider/embed: forward
+	// delete selects the leaf first, the second press deletes it
+	blocks['Delete'] = selectLeafForward;
 
 	const lists: Record<string, Command> = {};
 	const items = [schema.nodes.list_item, schema.nodes.todo_item].filter(Boolean);
 	if (items.length) {
 		lists['Enter'] = chainCommands(...items.map((item) => splitListItemCommand(item)));
-		lists['Tab'] = chainCommands(...items.map((item) => sinkListItem(item)));
+		// Tab indents list items; inside a code block it inserts a tab
+		// character instead of blurring the editor
+		lists['Tab'] = chainCommands(
+			insertInCode('\t'),
+			...items.map((item) => sinkListItem(item)),
+		);
 		lists['Shift-Tab'] = chainCommands(...items.map((item) => liftListItem(item)));
+	} else {
+		lists['Tab'] = insertInCode('\t');
 	}
-	lists['Backspace'] = backspaceCommand(schema);
+	// Backspace right after an autoformat (e.g. `- ` became a bullet) reverts
+	// the autoformat instead of acting on the new structure
+	lists['Backspace'] = chainCommands(undoInputRule, backspaceCommand(schema));
 
 	const history: Record<string, Command> = {};
 	if (options.history !== false) {
