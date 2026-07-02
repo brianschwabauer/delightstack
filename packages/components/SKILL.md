@@ -92,7 +92,7 @@ have the exact types. Do not guess prop names.
 - `AvatarGroup` — Stacked overlapping avatars with overflow indicator (docs: /components/display/avatar-group.md)
 - `Calendar` — Date display/selection with single, range, and multiple modes (docs: /components/display/calendar.md)
 - `Chart` — Data visualization: line, area, bar, horizontal bar, pie, donut (docs: /components/display/chart.md)
-- `Code` — Syntax-highlighted code block with line numbers, copy, diff display (docs: /components/display/code.md)
+- `Code` — Syntax-highlighted code block with line numbers, copy, diff display; its line tokenizer is exported as `tokenizeLine`/`CodeToken` from `@delightstack/components/display` for external highlighters (docs: /components/display/code.md)
 - `Comparison` — Before/after image slider using CSS clip-path reveal (docs: /components/display/comparison.md)
 - `Counter` — Animated count-up/down number with scroll-into-view trigger (docs: /components/display/counter.md)
 - `Expand` — Animated expand/collapse container (docs: /components/display/expand.md)

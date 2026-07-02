@@ -7,6 +7,7 @@
 		src: string;
 		name: string;
 		aspect_ratio: number | null;
+		width_mode: 'normal' | 'wide' | 'full';
 		uploading: boolean;
 		upload_id: string | null;
 		blob_url: string | null;

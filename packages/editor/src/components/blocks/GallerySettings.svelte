@@ -123,6 +123,39 @@
 	</div>
 
 	<div class="field">
+		<span class="label">Captions</span>
+		<ButtonGroup size="0">
+			<Button
+				size="0"
+				translucent
+				active={attrs.captions === 'none'}
+				accent={attrs.captions === 'none'}
+				tooltip="Never show captions"
+				onclick={() => update_attrs({ captions: 'none' })}>
+				Hidden
+			</Button>
+			<Button
+				size="0"
+				translucent
+				active={attrs.captions !== 'none' && attrs.captions !== 'always'}
+				accent={attrs.captions !== 'none' && attrs.captions !== 'always'}
+				tooltip="Show captions when hovering a thumbnail (and in the lightbox)"
+				onclick={() => update_attrs({ captions: 'hover' })}>
+				On hover
+			</Button>
+			<Button
+				size="0"
+				translucent
+				active={attrs.captions === 'always'}
+				accent={attrs.captions === 'always'}
+				tooltip="Always show captions over thumbnails (and in the lightbox)"
+				onclick={() => update_attrs({ captions: 'always' })}>
+				Always
+			</Button>
+		</ButtonGroup>
+	</div>
+
+	<div class="field">
 		<span class="label">Thumbnail size</span>
 		<Range
 			min={0}

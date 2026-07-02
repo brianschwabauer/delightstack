@@ -78,6 +78,9 @@ export interface EditorLike {
 }
 
 /** A snap point for block resizing (all units are pixels of rendered width). */
+/** Breakout width tier for blocks that can escape the text column. */
+export type WidthMode = 'normal' | 'wide' | 'full';
+
 export interface SnapPoint {
 	value: number;
 	/** Shown as a ghost badge while the drag is engaged, e.g. 'wide' */
@@ -86,6 +89,8 @@ export interface SnapPoint {
 	engage_radius?: number;
 	/** Distance required to escape once engaged. Default 100 */
 	escape_radius?: number;
+	/** Width mode this snap commits to (breakout blocks only). Default 'normal' */
+	mode?: WidthMode;
 }
 
 export interface ResizeOptions<Attrs> {
@@ -99,6 +104,16 @@ export interface ResizeOptions<Attrs> {
 	/** Bounds in px of rendered width. Default min 120 */
 	min?: number;
 	max?: number;
+	/**
+	 * Allow dragging past the text column into the page: adds snap points at
+	 * the wide (`--editor-wide-width`, default `min(1100px, 100vw - 2rem)`)
+	 * and full (`--editor-full-width`, default `100vw`) breakout widths, and
+	 * commits the tier to the block's `width_mode` attr (which the block's
+	 * schema must declare). Hosts with off-center or clipped layouts can
+	 * override the two CSS custom properties (e.g. to `100%`) and the
+	 * centering math degrades gracefully. Default false
+	 */
+	breakout?: boolean;
 }
 
 export interface InteractiveOptions<Attrs = Record<string, unknown>> {

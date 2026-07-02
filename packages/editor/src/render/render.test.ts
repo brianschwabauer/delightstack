@@ -117,6 +117,42 @@ describe('renderHTML', () => {
 		expect(html).toContain('src="https://cdn.example/img9/lg"');
 	});
 
+	it('renders breakout width modes and normal-width percentages', () => {
+		const wide = renderHTML(
+			doc({ type: 'image', attrs: { src: 'x.jpg', alt: '', width_mode: 'wide' } }),
+		);
+		expect(wide).toContain('data-width-mode="wide"');
+		expect(wide).toContain('--editor-wide-width');
+		expect(wide).toContain('margin-left:50%');
+
+		const full = renderHTML(
+			doc({ type: 'video', attrs: { src: 'v.mp4', width_mode: 'full' } }),
+		);
+		expect(full).toContain('data-width-mode="full"');
+		expect(full).toContain('--editor-full-width');
+
+		const pct = renderHTML(
+			doc({
+				type: 'image',
+				attrs: { src: 'x.jpg', alt: '', width_mode: 'normal', width_pct: 50 },
+			}),
+		);
+		expect(pct).toContain('width:50%');
+		expect(pct).not.toContain('data-width-mode');
+	});
+
+	it('renders gallery captions as figcaptions unless hidden', () => {
+		const items = [{ id: 'a', src: 'a.jpg', caption: 'A caption' }];
+		const shown = renderHTML(doc({ type: 'gallery', attrs: { items } }));
+		expect(shown).toContain('<figcaption>A caption</figcaption>');
+		expect(shown).toContain('data-captions="hover"');
+
+		const hidden = renderHTML(
+			doc({ type: 'gallery', attrs: { items, captions: 'none' } }),
+		);
+		expect(hidden).not.toContain('figcaption');
+	});
+
 	it('supports custom block renderer overrides', () => {
 		const html = renderHTML(doc({ type: 'widget', attrs: { kind: 'chart' } }), {
 			blocks: {

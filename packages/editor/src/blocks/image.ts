@@ -14,8 +14,10 @@ export interface ImageAttrs extends Record<string, unknown> {
 	aspect_ratio: number | null;
 	thumbhash: string | null;
 	background_color: string | null;
-	/** Rendered width as a percentage of the editor column */
+	/** Rendered width as a percentage of the editor column (normal mode) */
 	width_pct: number | null;
+	/** Breakout tier: in-column, wide (--editor-wide-width), or full-bleed */
+	width_mode: 'normal' | 'wide' | 'full';
 	uploading: boolean;
 	upload_id: string | null;
 	blob_url: string | null;
@@ -41,6 +43,7 @@ export const imageBlock = defineBlock<ImageAttrs>({
 			thumbhash: { default: null },
 			background_color: { default: null },
 			width_pct: { default: null },
+			width_mode: { default: 'normal' },
 			uploading: { default: false },
 			upload_id: { default: null },
 			blob_url: { default: null },
@@ -76,7 +79,7 @@ export const imageBlock = defineBlock<ImageAttrs>({
 	},
 	component: ImageBlock,
 	interactive: {
-		resize: { attr: 'width_pct', unit: 'percent', min: 120 },
+		resize: { attr: 'width_pct', unit: 'percent', min: 120, breakout: true },
 	},
 	upload_kind: 'image',
 	settings: [

@@ -87,6 +87,13 @@ export const icons = {
 	),
 	plus: icon('<path d="M5 12h14M12 5v14"/>'),
 	arrow_up: icon('<path d="M12 19V5M5 12l7-7 7 7"/>'),
+	width_text: icon(
+		'<path d="M3 4v16M21 4v16"/><rect x="8" y="8" width="8" height="8" rx="1"/>',
+	),
+	width_wide: icon(
+		'<path d="M3 4v16M21 4v16"/><rect x="6" y="8" width="12" height="8" rx="1"/>',
+	),
+	width_full: icon('<rect x="2.5" y="8" width="19" height="8" rx="1"/>'),
 	play: icon('<path d="M8 5.5v13l11-6.5z"/>'),
 	arrow_down: icon('<path d="M12 5v14M19 12l-7 7-7-7"/>'),
 	drag: icon(

@@ -13,6 +13,13 @@ export interface GalleryAttrs extends Record<string, unknown> {
 	spacing: '0' | '1' | '2' | '3';
 	radius: '0' | '1' | '2' | '3';
 	fit: 'contain' | 'cover';
+	/** Where item captions show: over thumbnails on hover/always, or not at
+	 * all. Any value but 'none' also shows captions in the lightbox. */
+	captions: 'none' | 'hover' | 'always';
+	/** Rendered width as a percentage of the editor column (normal mode) */
+	width_pct: number | null;
+	/** Breakout tier: in-column, wide (--editor-wide-width), or full-bleed */
+	width_mode: 'normal' | 'wide' | 'full';
 	block_id: string | null;
 }
 
@@ -29,6 +36,9 @@ export const galleryBlock = defineBlock<GalleryAttrs>({
 			spacing: { default: '1' },
 			radius: { default: '1' },
 			fit: { default: 'contain' },
+			captions: { default: 'hover' },
+			width_pct: { default: null },
+			width_mode: { default: 'normal' },
 			block_id: { default: null },
 		},
 		parseDOM: [
@@ -46,6 +56,9 @@ export const galleryBlock = defineBlock<GalleryAttrs>({
 		toDOM: (node) => ['div', { 'data-gallery': JSON.stringify(node.attrs.items ?? []) }],
 	},
 	component: GalleryBlock,
+	interactive: {
+		resize: { attr: 'width_pct', unit: 'percent', min: 240, breakout: true },
+	},
 	settings: GallerySettings,
 	chrome: [
 		{

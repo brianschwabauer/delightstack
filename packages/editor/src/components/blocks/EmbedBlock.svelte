@@ -6,6 +6,8 @@
 		src: string;
 		title: string;
 		aspect_ratio: number;
+		width_pct: number | null;
+		width_mode: 'normal' | 'wide' | 'full';
 		block_id: string | null;
 	};
 

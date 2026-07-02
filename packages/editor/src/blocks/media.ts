@@ -37,6 +37,7 @@ export interface MediaAttrs extends Record<string, unknown> {
 
 export interface VideoAttrs extends MediaAttrs {
 	aspect_ratio: number | null;
+	width_mode: 'normal' | 'wide' | 'full';
 }
 
 export const videoBlock = defineBlock<VideoAttrs>({
@@ -47,7 +48,11 @@ export const videoBlock = defineBlock<VideoAttrs>({
 		draggable: true,
 		// aspect_ratio (probed at upload) reserves the player's space before
 		// metadata loads — no layout jump on page load or upload completion
-		attrs: { ...mediaAttrs(), aspect_ratio: { default: null } },
+		attrs: {
+			...mediaAttrs(),
+			aspect_ratio: { default: null },
+			width_mode: { default: 'normal' },
+		},
 		parseDOM: [
 			{
 				tag: 'video[src]',
@@ -57,7 +62,7 @@ export const videoBlock = defineBlock<VideoAttrs>({
 		toDOM: (node) => ['video', { src: node.attrs.src || undefined, controls: 'true' }],
 	},
 	component: VideoBlock,
-	interactive: { resize: { attr: 'width_pct', unit: 'percent' } },
+	interactive: { resize: { attr: 'width_pct', unit: 'percent', breakout: true } },
 	upload_kind: 'video',
 	commands: [
 		{

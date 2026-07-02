@@ -7,6 +7,10 @@ export interface EmbedAttrs extends Record<string, unknown> {
 	src: string;
 	title: string;
 	aspect_ratio: number;
+	/** Rendered width as a percentage of the editor column (normal mode) */
+	width_pct: number | null;
+	/** Breakout tier: in-column, wide (--editor-wide-width), or full-bleed */
+	width_mode: 'normal' | 'wide' | 'full';
 	block_id: string | null;
 }
 
@@ -68,6 +72,8 @@ export const embedBlock = defineBlock<EmbedAttrs>({
 			src: { default: '' },
 			title: { default: '' },
 			aspect_ratio: { default: 16 / 9 },
+			width_pct: { default: null },
+			width_mode: { default: 'normal' },
 			block_id: { default: null },
 		},
 		parseDOM: [
@@ -85,6 +91,9 @@ export const embedBlock = defineBlock<EmbedAttrs>({
 		],
 	},
 	component: EmbedBlock,
+	interactive: {
+		resize: { attr: 'width_pct', unit: 'percent', min: 240, breakout: true },
+	},
 	settings: [
 		{ attr: 'src', label: 'URL', control: 'text' },
 		{ attr: 'title', label: 'Title', control: 'text' },

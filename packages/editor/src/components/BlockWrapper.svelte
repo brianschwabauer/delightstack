@@ -72,6 +72,44 @@
 
 	const resize = $derived(interactive.resize);
 	const resizable = $derived(Boolean(resize) && props.editable);
+	const breakout = $derived(Boolean(resize?.breakout));
+	const width_mode = $derived.by((): 'normal' | 'wide' | 'full' => {
+		if (!breakout) return 'normal';
+		const mode = props.attrs.width_mode;
+		return mode === 'wide' || mode === 'full' ? mode : 'normal';
+	});
+
+	const WIDTH_MODES = [
+		{ value: 'normal', label: 'Text width', icon: icons.width_text },
+		{ value: 'wide', label: 'Wide', icon: icons.width_wide },
+		{ value: 'full', label: 'Full width', icon: icons.width_full },
+	] as const;
+
+	function setWidthMode(mode: 'normal' | 'wide' | 'full') {
+		if (!resize) return;
+		props.update_attrs(
+			mode === 'normal'
+				? { width_mode: mode, [resize.attr]: null }
+				: { width_mode: mode },
+		);
+	}
+
+	/**
+	 * Resolve the wide/full breakout widths by measuring a probe element —
+	 * the CSS tokens can hold arbitrary min()/calc() expressions the host
+	 * overrides, so they can't be parsed, only rendered.
+	 */
+	function measureBreakoutWidths(host: HTMLElement): { wide: number; full: number } {
+		const probe = document.createElement('div');
+		probe.style.cssText = 'position: absolute; visibility: hidden; pointer-events: none;';
+		host.appendChild(probe);
+		probe.style.width = 'var(--editor-wide-width, min(1100px, calc(100vw - 2rem)))';
+		const wide = probe.offsetWidth;
+		probe.style.width = 'var(--editor-full-width, 100vw)';
+		const full = probe.offsetWidth;
+		probe.remove();
+		return { wide, full };
+	}
 
 	// The grips center on the media itself (image/video/iframe), not the whole
 	// wrapper — a caption below the media would otherwise pull them off-center.
@@ -109,28 +147,49 @@
 		start_x: number;
 		start_width: number;
 		container_width: number;
+		wide_width: number;
+		full_width: number;
 		snaps: Required<SnapPoint>[];
 		engaged: Required<SnapPoint> | null;
 		width: number;
 	}
 
 	let drag = $state<DragState | null>(null);
+	/** Spring-settles the width from the drag px to the committed value */
+	let snapping = $state(false);
+	let snapping_timeout: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => () => clearTimeout(snapping_timeout));
 
 	/** Committed width as a CSS value (when not dragging) */
 	const committed_width = $derived.by(() => {
 		if (!resize) return undefined;
+		// Breakout tiers size themselves from the data-width-mode CSS
+		if (width_mode !== 'normal') return undefined;
 		const value = props.attrs[resize.attr];
 		if (typeof value !== 'number') return undefined;
 		return (resize.unit ?? 'percent') === 'percent' ? `${value}%` : `${value}px`;
 	});
 
-	function defaultSnaps(container_width: number): Required<SnapPoint>[] {
-		return [
+	function defaultSnaps(
+		container_width: number,
+		wide_width: number,
+		full_width: number,
+	): Required<SnapPoint>[] {
+		const snaps: SnapPoint[] = [
 			{ value: container_width / 3, label: '⅓' },
 			{ value: container_width / 2, label: '½' },
 			{ value: (container_width * 2) / 3, label: '⅔' },
-			{ value: container_width, label: 'full' },
-		].map(normalizeSnap);
+			{ value: container_width, label: breakout ? 'text' : 'full' },
+		];
+		if (breakout) {
+			if (wide_width > container_width + 40) {
+				snaps.push({ value: wide_width, label: 'wide', mode: 'wide' });
+			}
+			if (full_width > Math.max(wide_width, container_width) + 40) {
+				snaps.push({ value: full_width, label: 'full', mode: 'full' });
+			}
+		}
+		return snaps.map(normalizeSnap);
 	}
 
 	function normalizeSnap(snap: SnapPoint): Required<SnapPoint> {
@@ -139,6 +198,7 @@
 			label: snap.label ?? '',
 			engage_radius: snap.engage_radius ?? 60,
 			escape_radius: snap.escape_radius ?? 100,
+			mode: snap.mode ?? 'normal',
 		};
 	}
 
@@ -148,14 +208,21 @@
 		event.stopPropagation();
 		const container_width =
 			wrapper_el.parentElement?.clientWidth ?? wrapper_el.clientWidth;
+		const { wide, full } = breakout
+			? measureBreakoutWidths(wrapper_el)
+			: { wide: container_width, full: container_width };
 		const snaps = resize.snap_points
 			? resize.snap_points({ container_width, editor: props.editor }).map(normalizeSnap)
-			: defaultSnaps(container_width);
+			: defaultSnaps(container_width, wide, full);
+		clearTimeout(snapping_timeout);
+		snapping = false;
 		drag = {
 			side,
 			start_x: event.clientX,
 			start_width: wrapper_el.clientWidth,
 			container_width,
+			wide_width: wide,
+			full_width: full,
 			snaps,
 			engaged: null,
 			width: wrapper_el.clientWidth,
@@ -168,7 +235,10 @@
 		// Both grips resize symmetrically around the center (2x horizontal delta)
 		const delta = (event.clientX - drag.start_x) * drag.side * 2;
 		const min = resize.min ?? 120;
-		const max = Math.min(resize.max ?? Infinity, drag.container_width);
+		const limit = breakout
+			? Math.max(drag.full_width, drag.container_width)
+			: drag.container_width;
+		const max = Math.min(resize.max ?? Infinity, limit);
 		const raw = Math.max(min, Math.min(drag.start_width + delta, max));
 
 		// Hysteresis: stay engaged until the pointer escapes; engage the
@@ -191,14 +261,40 @@
 		if (!drag || !resize) return;
 		const final = drag.engaged ? drag.engaged.value : drag.width;
 		const unit = resize.unit ?? 'percent';
+
+		// Which tier does this width land in? Snaps carry their mode; a free
+		// release past the column picks the nearest tier by midpoints.
+		let mode: 'normal' | 'wide' | 'full' = 'normal';
+		if (breakout) {
+			if (drag.engaged) {
+				mode = drag.engaged.mode;
+			} else if (final > drag.container_width) {
+				const wide_mid = (drag.container_width + drag.wide_width) / 2;
+				const full_mid = (drag.wide_width + drag.full_width) / 2;
+				mode = final <= wide_mid ? 'normal' : final <= full_mid ? 'wide' : 'full';
+			}
+		}
+
 		const value =
 			unit === 'percent'
-				? Math.round((final / drag.container_width) * 1000) / 10
+				? Math.min(Math.round((final / drag.container_width) * 1000) / 10, 100)
 				: Math.round(final);
 		drag = null;
-		props.update_attrs({
-			[resize.attr]: unit === 'percent' ? Math.min(value, 100) : value,
-		});
+
+		// Let the width spring from the drag px to the committed value
+		snapping = true;
+		clearTimeout(snapping_timeout);
+		snapping_timeout = setTimeout(() => (snapping = false), 360);
+
+		if (breakout) {
+			props.update_attrs(
+				mode === 'normal'
+					? { width_mode: 'normal', [resize.attr]: value }
+					: { width_mode: mode },
+			);
+		} else {
+			props.update_attrs({ [resize.attr]: value });
+		}
 	}
 </script>
 
@@ -206,6 +302,9 @@
 	class="wrapper"
 	class:selected={props.selected}
 	class:resizing={Boolean(drag)}
+	class:breakout
+	class:snapping
+	data-width-mode={breakout && !drag ? width_mode : undefined}
 	role="presentation"
 	style:width={drag ? `${drag.width}px` : committed_width}
 	onpointerdown={select}
@@ -224,6 +323,26 @@
 
 	{#if show_chrome}
 		<div class="chrome" contenteditable="false" bind:this={chrome_el}>
+			{#if resizable && breakout}
+				{#each WIDTH_MODES as entry (entry.value)}
+					<Button
+						icon
+						transparent
+						size="0"
+						dense
+						active={width_mode === entry.value}
+						aria-label={entry.label}
+						tooltip={entry.label}
+						onpointerdown={(event: PointerEvent) => {
+							if (event.button !== 0) return;
+							event.preventDefault();
+							event.stopPropagation();
+							setWidthMode(entry.value);
+						}}>
+						{@html entry.icon}
+					</Button>
+				{/each}
+			{/if}
 			{#each chrome_actions as action (action.name)}
 				<Button
 					icon
@@ -342,6 +461,40 @@
 
 		&.resizing {
 			user-select: none;
+		}
+
+		/* Breakout tiers center on the column's own midline (margin-left 50%
+		   + self-translate). On a viewport-centered page that reaches the
+		   screen edges; hosts override --editor-wide-width /
+		   --editor-full-width (e.g. to 100%) and the same math degrades to
+		   plain in-column centering. */
+		&[data-width-mode='wide'] {
+			width: var(--editor-wide-width, min(1100px, calc(100vw - 2rem)));
+			max-width: var(--editor-wide-width, calc(100vw - 2rem));
+			margin-left: 50%;
+			translate: -50% 0;
+		}
+
+		&[data-width-mode='full'] {
+			width: var(--editor-full-width, 100vw);
+			max-width: var(--editor-full-width, 100vw);
+			margin-left: 50%;
+			translate: -50% 0;
+		}
+
+		/* During a breakout drag the inline px width takes over; keep the
+		   same centering so widths inside and beyond the column are one
+		   continuous motion */
+		&.breakout.resizing {
+			margin-left: 50%;
+			translate: -50% 0;
+			max-width: none;
+		}
+
+		/* Release: the width springs from the drag px to the committed
+		   value with a slight overshoot */
+		&.snapping {
+			transition: width 280ms cubic-bezier(0.34, 1.2, 0.64, 1);
 		}
 	}
 

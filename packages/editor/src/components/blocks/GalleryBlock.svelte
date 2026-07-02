@@ -11,6 +11,9 @@
 		spacing: '0' | '1' | '2' | '3';
 		radius: '0' | '1' | '2' | '3';
 		fit: 'contain' | 'cover';
+		captions: 'none' | 'hover' | 'always';
+		width_pct: number | null;
+		width_mode: 'normal' | 'wide' | 'full';
 		block_id: string | null;
 	};
 
@@ -60,6 +63,9 @@
 			width: image.width,
 			height: image.height,
 			alt: image.alt ?? '',
+			// `name` drives the Gallery's thumbnail overlay (meta_display);
+			// `caption` drives the lightbox/carousel overlay
+			name: image.caption || undefined,
 			caption: image.caption || undefined,
 			thumbhash: image.thumbhash ?? undefined,
 		})),
@@ -210,7 +216,7 @@
 	}
 </script>
 
-<div class="gallery">
+<div class="gallery" data-resize-anchor>
 	{#if attrs.items.length && !managing}
 		<Gallery
 			items={gallery_items}
@@ -218,7 +224,9 @@
 			size={attrs.size}
 			spacing={attrs.spacing}
 			radius={attrs.radius}
-			fit={attrs.fit} />
+			fit={attrs.fit}
+			meta_display={attrs.captions ?? 'hover'}
+			meta_display_fullscreen={attrs.captions === 'none' ? 'none' : 'always'} />
 	{/if}
 
 	{#if pending.length}
