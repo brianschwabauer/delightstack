@@ -84,7 +84,10 @@ beforeEach(() => {
 		id: 'cus_1',
 		metadata: { org_id: 'org_1' },
 	});
-	stripe_mock.subscriptions.list.mockResolvedValue({ data: [], has_more: false });
+	stripe_mock.subscriptions.list.mockResolvedValue({
+		data: [],
+		has_more: false,
+	});
 });
 
 describe('webhook signature handling', () => {
@@ -207,7 +210,10 @@ describe('subscription deletion', () => {
 		});
 		signEvent(stripe_event);
 		// No remaining subscriptions → syncSubscription returns null
-		stripe_mock.subscriptions.list.mockResolvedValue({ data: [], has_more: false });
+		stripe_mock.subscriptions.list.mockResolvedValue({
+			data: [],
+			has_more: false,
+		});
 
 		const response = await handleWebhook(makeRequestEvent(), config, {});
 
@@ -334,5 +340,70 @@ describe('webhook secret auto-registration', () => {
 			code: 'billing/webhook_secret_missing',
 		});
 		expect(stripe_mock.webhookEndpoints.create).not.toHaveBeenCalled();
+	});
+});
+
+describe('one-time purchases (checkout.session.completed, mode payment)', () => {
+	it('fires onOneTimePurchase with the plan resolved from session metadata', async () => {
+		const onOneTimePurchase = vi.fn();
+		const config = makeConfig({
+			plans: [
+				{
+					id: 'lifetime',
+					name: 'Lifetime',
+					lookup_key: 'lifetime_once',
+					amount: 10000,
+				},
+			],
+			hooks: { onOneTimePurchase },
+		});
+		const stripe_event = makeStripeEvent('checkout.session.completed', {
+			id: 'cs_1',
+			mode: 'payment',
+			customer: 'cus_1',
+			metadata: { plan_id: 'lifetime' },
+			amount_total: 10000,
+			currency: 'usd',
+		});
+		signEvent(stripe_event);
+
+		await handleWebhook(makeRequestEvent(), config, {});
+
+		expect(onOneTimePurchase).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customer_id: 'cus_1',
+				org_id: 'org_1',
+				plan_id: 'lifetime',
+				amount: 10000,
+				currency: 'usd',
+				checkout_session_id: 'cs_1',
+			}),
+		);
+	});
+
+	it('ignores payment sessions with unknown or missing plan metadata', async () => {
+		const onOneTimePurchase = vi.fn();
+		const config = makeConfig({
+			plans: [
+				{
+					id: 'lifetime',
+					name: 'Lifetime',
+					lookup_key: 'lifetime_once',
+					amount: 10000,
+				},
+			],
+			hooks: { onOneTimePurchase },
+		});
+		const stripe_event = makeStripeEvent('checkout.session.completed', {
+			id: 'cs_2',
+			mode: 'payment',
+			customer: 'cus_1',
+			metadata: {},
+		});
+		signEvent(stripe_event);
+
+		await handleWebhook(makeRequestEvent(), config, {});
+
+		expect(onOneTimePurchase).not.toHaveBeenCalled();
 	});
 });

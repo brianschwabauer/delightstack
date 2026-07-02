@@ -19,8 +19,11 @@ export interface PlanDefinition {
 	amount: number;
 	/** Currency code (lowercase) @default 'usd' */
 	currency?: string;
-	/** Billing interval */
-	interval: 'month' | 'year' | 'week' | 'day';
+	/**
+	 * Billing interval. Omit for a ONE-TIME plan (single payment, `mode: 'payment'`
+	 * checkout) — grant its effects via the `onOneTimePurchase` hook.
+	 */
+	interval?: 'month' | 'year' | 'week' | 'day';
 	/** Number of intervals between billings @default 1 */
 	interval_count?: number;
 
@@ -176,6 +179,24 @@ export interface BillingConfig<E extends string = string> {
 			status: string;
 			plan_id: string | null;
 			entitlements: string[];
+			event: RequestEvent;
+		}) => void | Promise<void>;
+
+		/**
+		 * Called when a one-time plan's checkout completes (`mode: 'payment'`).
+		 * The package cannot know what a purchase grants (a credit, a timed pass,
+		 * a permanent entitlement) — apply it here. `amount` is an integer in the
+		 * smallest currency unit (cents).
+		 */
+		onOneTimePurchase?: (ctx: {
+			customer_id: string;
+			/** Resolved from the customer's metadata; null when billing is user-scoped or unknown */
+			org_id: string | null;
+			plan_id: string;
+			/** Integer amount in the smallest currency unit (e.g. cents) */
+			amount: number;
+			currency: string;
+			checkout_session_id: string;
 			event: RequestEvent;
 		}) => void | Promise<void>;
 

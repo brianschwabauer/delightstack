@@ -250,6 +250,25 @@ export async function handleWebhook(
 					auth: org_id ? ctx.getAuthServer?.(event) : undefined,
 					ws: org_id ? ctx.getWebsocket?.(event) : undefined,
 				});
+			} else if (session.mode === 'payment' && session.customer) {
+				// One-time plan purchase — the checkout route stamped plan_id metadata.
+				// The package can't know what the purchase grants; the app applies it
+				// in the onOneTimePurchase hook (credit, timed pass, entitlement, ...).
+				const plan_id = session.metadata?.plan_id;
+				const plan = plan_id ? config.plans?.find((p) => p.id === plan_id) : undefined;
+				if (plan && config.hooks?.onOneTimePurchase) {
+					const customer_id = extractCustomerId(session.customer);
+					const org_id = await resolveOrgIdFromCustomer(stripe, customer_id);
+					await config.hooks.onOneTimePurchase({
+						customer_id,
+						org_id: org_id ?? null,
+						plan_id: plan.id,
+						amount: session.amount_total ?? plan.amount,
+						currency: session.currency ?? plan.currency ?? 'usd',
+						checkout_session_id: session.id,
+						event,
+					});
+				}
 			}
 			break;
 		}

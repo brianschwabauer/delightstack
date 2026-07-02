@@ -61,6 +61,11 @@ export async function syncProducts(config: ResolvedBillingConfig): Promise<void>
 			stripe.prices.list({ lookup_keys: [plan.lookup_key], limit: 1 }),
 		);
 
+		// One-time plans (no interval) create a non-recurring price
+		const recurring = plan.interval
+			? { interval: plan.interval, interval_count: plan.interval_count ?? 1 }
+			: undefined;
+
 		if (!prices.data.length) {
 			// Create price with lookup_key
 			await stripeCall(() =>
@@ -68,10 +73,7 @@ export async function syncProducts(config: ResolvedBillingConfig): Promise<void>
 					product: product!.id,
 					unit_amount: plan.amount,
 					currency: plan.currency ?? 'usd',
-					recurring: {
-						interval: plan.interval,
-						interval_count: plan.interval_count ?? 1,
-					},
+					...(recurring ? { recurring } : {}),
 					lookup_key: plan.lookup_key,
 					transfer_lookup_key: true,
 					metadata: { plan_id: plan.id },
@@ -83,18 +85,16 @@ export async function syncProducts(config: ResolvedBillingConfig): Promise<void>
 			const existing_price = prices.data[0];
 			if (
 				existing_price.unit_amount !== plan.amount ||
-				existing_price.recurring?.interval !== plan.interval ||
-				(existing_price.recurring?.interval_count ?? 1) !== (plan.interval_count ?? 1)
+				(existing_price.recurring?.interval ?? undefined) !== plan.interval ||
+				(plan.interval &&
+					(existing_price.recurring?.interval_count ?? 1) !== (plan.interval_count ?? 1))
 			) {
 				await stripeCall(() =>
 					stripe.prices.create({
 						product: product!.id,
 						unit_amount: plan.amount,
 						currency: plan.currency ?? 'usd',
-						recurring: {
-							interval: plan.interval,
-							interval_count: plan.interval_count ?? 1,
-						},
+						...(recurring ? { recurring } : {}),
 						lookup_key: plan.lookup_key,
 						transfer_lookup_key: true,
 						metadata: { plan_id: plan.id },

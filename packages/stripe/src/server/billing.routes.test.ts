@@ -296,7 +296,9 @@ describe('GET /subscription (lightweight read)', () => {
 				{
 					id: 'sub_1',
 					status: 'active',
-					items: { data: [{ price: { product: { metadata: { plan_id: 'pro' } } } }] },
+					items: {
+						data: [{ price: { product: { metadata: { plan_id: 'pro' } } } }],
+					},
 					current_period_start: 1000,
 					current_period_end: 2000,
 					cancel_at: null,
@@ -333,7 +335,9 @@ describe('DELETE /subscription', () => {
 		return {
 			id: 'sub_trial',
 			status: 'trialing',
-			items: { data: [{ price: { product: { metadata: { plan_id: 'pro' } } } }] },
+			items: {
+				data: [{ price: { product: { metadata: { plan_id: 'pro' } } } }],
+			},
 			current_period_start: 1000,
 			current_period_end: 2000,
 			cancel_at: null,
@@ -357,7 +361,11 @@ describe('DELETE /subscription', () => {
 		});
 		stripe_mock.subscriptions.cancel.mockResolvedValue({ id: 'sub_trial' });
 
-		const event = makeEvent({ method: 'DELETE', path: '/subscription', locals });
+		const event = makeEvent({
+			method: 'DELETE',
+			path: '/subscription',
+			locals,
+		});
 		const response = await handleBillingRoute(
 			event,
 			config_with_hook,
@@ -429,5 +437,77 @@ describe('customer search hardening', () => {
 			handleBillingRoute(event, config, '/subscription', 'GET', {}),
 		).rejects.toThrow(DelightError);
 		expect(stripe_mock.customers.search).not.toHaveBeenCalled();
+	});
+});
+
+describe('one-time plans (no interval)', () => {
+	const one_time_config = defineBillingConfig({
+		secret_key: 'sk_test_routes',
+		publishable_key: 'pk_test_routes',
+		app_url: 'https://app.test',
+		plans: [
+			{
+				id: 'pro',
+				name: 'Pro',
+				lookup_key: 'pro_monthly',
+				amount: 999,
+				interval: 'month',
+			},
+			{
+				id: 'lifetime',
+				name: 'Lifetime',
+				lookup_key: 'lifetime_once',
+				amount: 10000,
+			},
+		],
+	});
+
+	beforeEach(() => {
+		stripe_mock.prices.list.mockResolvedValue({ data: [{ id: 'price_1' }] });
+		stripe_mock.checkout.sessions.create.mockResolvedValue({
+			client_secret: 'cs_test',
+		});
+	});
+
+	it('creates a payment-mode checkout session for an interval-less plan', async () => {
+		const event = makeEvent({
+			method: 'POST',
+			path: '/checkout',
+			body: { plan_id: 'lifetime' },
+			locals: baseLocals(),
+		});
+
+		await handleBillingRoute(event, one_time_config, '/checkout', 'POST', {});
+
+		expect(stripe_mock.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				mode: 'payment',
+				metadata: { plan_id: 'lifetime' },
+				invoice_creation: { enabled: true },
+			}),
+		);
+	});
+
+	it('keeps subscription mode (and plan_id metadata) for recurring plans', async () => {
+		const event = makeEvent({
+			method: 'POST',
+			path: '/checkout',
+			body: { plan_id: 'pro' },
+			locals: baseLocals(),
+		});
+
+		await handleBillingRoute(event, one_time_config, '/checkout', 'POST', {});
+
+		expect(stripe_mock.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				mode: 'subscription',
+				metadata: { plan_id: 'pro' },
+			}),
+		);
+		const args = stripe_mock.checkout.sessions.create.mock.calls[0]![0] as Record<
+			string,
+			unknown
+		>;
+		expect(args.invoice_creation).toBeUndefined();
 	});
 });

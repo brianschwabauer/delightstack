@@ -124,8 +124,16 @@ async function ensureCustomer(
 
 	const stripe = getStripe(config);
 	const locals = event.locals as Record<string, unknown>;
-	const user = locals.user as { id: string; name: string; email: string } | null;
-	const org = locals.org as { id: string; name: string; json?: string | null } | null;
+	const user = locals.user as {
+		id: string;
+		name: string;
+		email: string;
+	} | null;
+	const org = locals.org as {
+		id: string;
+		name: string;
+		json?: string | null;
+	} | null;
 	const org_id = getOrgId(event, config);
 	const user_id = getUserId(event);
 
@@ -458,7 +466,10 @@ export async function handleBillingRoute(
 					customer: customer_id,
 					currency: 'usd',
 					ui_mode: 'embedded',
-					return_url: `${getAppUrl(event, config)}/billing/complete?session_id={CHECKOUT_SESSION_ID}`,
+					return_url: `${getAppUrl(
+						event,
+						config,
+					)}/billing/complete?session_id={CHECKOUT_SESSION_ID}`,
 				}),
 			);
 
@@ -520,20 +531,26 @@ export async function handleBillingRoute(
 			const price = prices.data[0];
 			if (!price) throw DelightError.badRequest(`Price not found for plan: ${plan_id}`);
 
+			// Plans without an interval are one-time purchases (`mode: 'payment'`).
+			// plan_id metadata lets the webhook resolve the plan for onOneTimePurchase.
+			const one_time = !plan.interval;
 			const session = await stripeCall(() =>
 				stripe.checkout.sessions.create({
-					mode: 'subscription',
+					mode: one_time ? 'payment' : 'subscription',
 					customer: customer_id,
 					line_items: [{ price: price.id, quantity: 1 }],
 					ui_mode: 'embedded',
 					return_url,
-					...(plan.trial_days
-						? {
-								subscription_data: {
-									trial_period_days: plan.trial_days,
-								},
-							}
-						: {}),
+					metadata: { plan_id: plan.id },
+					...(one_time
+						? { invoice_creation: { enabled: true } }
+						: plan.trial_days
+							? {
+									subscription_data: {
+										trial_period_days: plan.trial_days,
+									},
+								}
+							: {}),
 				}),
 			);
 

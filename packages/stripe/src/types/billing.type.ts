@@ -21,7 +21,8 @@ export interface PlanInfo {
 	description?: string;
 	amount: number;
 	currency: string;
-	interval: 'month' | 'year' | 'week' | 'day';
+	/** Absent for one-time plans */
+	interval?: 'month' | 'year' | 'week' | 'day';
 	interval_count: number;
 	entitlements: string[];
 	trial_days?: number;
