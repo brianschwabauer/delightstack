@@ -9,16 +9,16 @@ import EditorKitchenSinkDemo from '../../../components/demos/EditorKitchenSinkDe
 
 `@delightstack/editor` is a rich text / block editor for Svelte 5, built on raw ProseMirror. It
 ships the writing basics done right (marks, headings, lists, todos, quotes, code, links, dividers),
-Notion-style block UX (slash commands, floating selection menu, gutter plus button, drag-handle
-reordering with FLIP animations), optimistic media uploads with progress, and a one-object API for
+Notion-style block UX (slash commands, floating selection menu, a gutter handle for dragging and
+block actions, FLIP reorder animations), optimistic media uploads with progress, and a one-object API for
 registering custom blocks — plus a zero-dependency server renderer for public pages.
 
 ## Live demo
 
 Every built-in node, mark, and block in one document. Type `/` for commands, select text for the
-floating menu, hover a block for the plus button and drag handle, drop an image to upload
-(simulated), resize the image with its side grips, click the callout's gear for settings, and paste
-markdown or a YouTube URL. Uploads here are served from local blob URLs — a real app wires the
+floating menu, hover a block for its drag handle (click it for block actions — turn into, duplicate,
+delete), drop an image to upload (simulated), resize the image with its side grips, click the
+callout's gear for settings, and paste markdown or a YouTube URL. Uploads here are served from local blob URLs — a real app wires the
 same `Uploader` interface to [`images`](/packages/images/).
 
 <ComponentPreview

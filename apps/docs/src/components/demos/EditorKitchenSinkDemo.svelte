@@ -77,7 +77,7 @@
 						text('Type '),
 						text('/', { type: 'code' }),
 						text(
-							' anywhere for the command menu, hover a block for the + and drag handles, and click this callout to find the settings gear (top right).',
+							' anywhere for the command menu, hover a block for the drag handle (click it for actions), and click this callout to find the settings gear (top right).',
 						),
 					),
 				],
@@ -246,9 +246,8 @@
 
 	<p class="hints">
 		<kbd>/</kbd>
-		commands · select text → floating menu · hover a block →
-		<kbd>+</kbd>
-		and drag handle · drop an image to upload · paste markdown or a YouTube URL
+		commands · select text → floating menu · hover a block → drag handle (click it for actions)
+		· drop an image to upload · paste markdown or a YouTube URL
 	</p>
 </div>
 
