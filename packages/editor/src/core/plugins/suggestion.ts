@@ -65,13 +65,20 @@ export function suggestion(options: SuggestionOptions): Plugin<SuggestionState> 
 				if (tr.getMeta(key) === 'dismiss') {
 					return { active: null, dismissed: value.active?.from ?? null };
 				}
+				// A dismissed trigger position must follow the text it refers
+				// to as the document changes around it, or an escaped menu pops
+				// back open (and unrelated triggers get wrongly suppressed).
+				let dismissed = value.dismissed;
+				if (dismissed !== null && tr.docChanged) {
+					const mapped = tr.mapping.mapResult(dismissed);
+					dismissed = mapped.deleted ? null : mapped.pos;
+				}
 				// Only typing can OPEN the menu — moving the caret into existing
 				// text that happens to contain the trigger char must not
 				// resurrect it. An already-open menu still re-evaluates on
 				// selection moves (so clicking away closes it).
-				if (!value.active && !tr.docChanged) return value;
+				if (!value.active && !tr.docChanged) return { active: null, dismissed };
 				const match = findMatch(newState);
-				let dismissed = value.dismissed;
 				if (dismissed !== null) {
 					if (match && match.from === dismissed) return { active: null, dismissed };
 					dismissed = null;
@@ -105,6 +112,7 @@ export function suggestion(options: SuggestionOptions): Plugin<SuggestionState> 
 						query: active.query,
 						range: { from: active.from, to: active.to },
 						rect: coordsToRect(view, active.from),
+						dismiss: () => view.dispatch(view.state.tr.setMeta(key, 'dismiss')),
 					};
 					if (wasActive) handler.update(ctx);
 					else handler.open(ctx);

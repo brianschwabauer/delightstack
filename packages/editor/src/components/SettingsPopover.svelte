@@ -11,6 +11,7 @@
 	import type { BlockSpec, SettingsField, SettingsProps } from '../types/index.js';
 	import type { BlockViewProps } from '../core/node-view/block-props.svelte.js';
 	import { portal } from './portal.js';
+	import { surfaceIn, surfaceOut } from './motion.js';
 
 	interface Props {
 		props: BlockViewProps;
@@ -22,6 +23,33 @@
 	let { props, settings, anchor, onclose }: Props = $props();
 
 	let panel = $state<HTMLElement | null>(null);
+	let panel_width = $state(0);
+	let panel_height = $state(0);
+
+	// Focus the first field on open; hand focus back where it was on close
+	$effect(() => {
+		const previous = document.activeElement;
+		const target = panel?.querySelector<HTMLElement>(
+			'input, select, textarea, button, [tabindex]',
+		);
+		target?.focus();
+		return () => {
+			if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+		};
+	});
+
+	/**
+	 * True when the event happened inside the panel OR inside a popup the
+	 * panel spawned (Select options render in the design system's portal
+	 * layer, which is not a DOM descendant of the panel).
+	 */
+	function withinPanel(event: Event): boolean {
+		const target = event.target;
+		if (!(target instanceof Node)) return false;
+		if (panel?.contains(target)) return true;
+		if (!target.isConnected) return true; // re-render detached it mid-dispatch
+		return target instanceof Element && Boolean(target.closest('.portals, .portal'));
+	}
 
 	const fields = $derived(Array.isArray(settings) ? settings : null);
 	const CustomSettings = $derived(
@@ -33,8 +61,8 @@
 	);
 
 	const position = $derived.by(() => {
-		const width = panel?.offsetWidth ?? 260;
-		const height = panel?.offsetHeight ?? 200;
+		const width = panel_width || 260;
+		const height = panel_height || 200;
 		const viewport_w = typeof window === 'undefined' ? 1200 : window.innerWidth;
 		const viewport_h = typeof window === 'undefined' ? 800 : window.innerHeight;
 		if (!anchor)
@@ -51,25 +79,45 @@
 </script>
 
 <svelte:window
-	onpointerdown={(event) => {
-		if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+	onpointerdowncapture={(event) => {
+		if (withinPanel(event)) return;
+		// Swallow the dismissing click: closing the panel and moving the
+		// caret / pressing whatever was underneath in one gesture erodes
+		// trust in where the click will land
+		event.preventDefault();
+		event.stopPropagation();
 		onclose();
 	}}
 	onkeydown={(event) => {
-		if (event.key === 'Escape') {
+		if (event.key === 'Escape' && !event.defaultPrevented) {
+			// An open child popup (Select options) handles its own Escape and
+			// preventDefaults it — only the innermost layer closes
 			event.preventDefault();
 			onclose();
 		}
-	}} />
+	}}
+	onscrollcapture={(event) => {
+		// The panel is fixed-position from a snapshot rect; scrolling the
+		// page would strand it. Scrolls inside the panel or its popups are
+		// fine.
+		if (!withinPanel(event)) onclose();
+	}}
+	onresize={() => onclose()} />
 
 <div
 	class="settings"
+	in:surfaceIn={{ y: anchor && position.top < anchor.top ? 4 : -4 }}
+	out:surfaceOut
 	role="dialog"
+	aria-modal="true"
 	aria-label="Block settings"
 	contenteditable="false"
 	style:left="{position.left}px"
 	style:top="{position.top}px"
+	style:visibility={panel_height ? null : 'hidden'}
 	bind:this={panel}
+	bind:offsetWidth={panel_width}
+	bind:offsetHeight={panel_height}
 	use:portal>
 	{#if CustomSettings}
 		<CustomSettings
@@ -159,9 +207,11 @@
 		border: 1px solid
 			var(--color-border, color-mix(in oklab, currentColor 15%, transparent));
 		border-radius: min(var(--radius-lg, 12px), var(--radius-cap, 40px));
-		box-shadow:
+		box-shadow: var(
+			--shadow-lg,
 			0 4px 12px rgb(0 0 0 / 8%),
-			0 12px 32px rgb(0 0 0 / 12%);
+			0 12px 32px rgb(0 0 0 / 12%)
+		);
 
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;

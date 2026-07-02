@@ -61,6 +61,7 @@
 				tooltip="Undo"
 				disabled={!editor.can_undo}
 				onpointerdown={(event: PointerEvent) => {
+					if (event.button !== 0) return;
 					event.preventDefault();
 					editor.undo();
 				}}>
@@ -75,6 +76,7 @@
 				tooltip="Redo"
 				disabled={!editor.can_redo}
 				onpointerdown={(event: PointerEvent) => {
+					if (event.button !== 0) return;
 					event.preventDefault();
 					editor.redo();
 				}}>
@@ -129,6 +131,7 @@
 		tooltip={command.label}
 		disabled={command.is_enabled ? !command.is_enabled(editor) : false}
 		onpointerdown={(event: PointerEvent) => {
+			if (event.button !== 0) return;
 			event.preventDefault();
 			command.run(editor);
 		}}>

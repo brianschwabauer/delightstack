@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { Button } from '@delightstack/components';
 	import type { Editor } from '../core/editor.svelte.js';
 	import { icons } from '../core/icons.js';
@@ -15,12 +16,10 @@
 		return link && link !== true && typeof link.href === 'string' ? link.href : '';
 	});
 
-	let href = $state('');
+	// Seeded once on open — a reactive copy would clobber what the user is
+	// typing whenever an unrelated transaction recomputes the active marks
+	let href = $state(untrack(() => existing));
 	let input = $state<HTMLInputElement | null>(null);
-
-	$effect(() => {
-		href = existing;
-	});
 
 	$effect(() => {
 		input?.focus();
@@ -37,6 +36,9 @@
 					.removeMark(from, to, link)
 					.addMark(from, to, link.create({ href: value })),
 			);
+		} else if (existing) {
+			// Clearing the field and submitting on an existing link unlinks it
+			return remove();
 		}
 		editor.focus();
 		onclose();
@@ -97,6 +99,7 @@
 			aria-label="Remove link"
 			tooltip="Remove link"
 			onpointerdown={(event: PointerEvent) => {
+				if (event.button !== 0) return;
 				event.preventDefault();
 				remove();
 			}}>
@@ -122,6 +125,12 @@
 		font: inherit;
 		font-size: 0.875rem;
 		outline: none;
+		border-radius: calc(var(--radius, 8px) / 2);
+
+		/* outline: none needs a replacement for keyboard focus */
+		&:focus-visible {
+			box-shadow: inset 0 -2px 0 var(--action, var(--color-primary));
+		}
 
 		&::placeholder {
 			color: var(

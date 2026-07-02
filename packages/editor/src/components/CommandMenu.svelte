@@ -53,9 +53,29 @@
 		const el = list?.querySelector(`[data-index="${selected}"]`);
 		el?.scrollIntoView({ block: 'nearest' });
 	});
+
+	// Roving focus for hosts without their own keyboard wiring (the toolbar
+	// "+" menu). The slash menu drives `selected` from the editor instead —
+	// focus never enters the list there, so this stays inert.
+	function onListKeydown(event: KeyboardEvent) {
+		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+		const items_els = Array.from(list?.querySelectorAll<HTMLElement>('.item') ?? []);
+		if (!items_els.length) return;
+		const current = items_els.indexOf(document.activeElement as HTMLElement);
+		const step = event.key === 'ArrowDown' ? 1 : -1;
+		const next = (current + step + items_els.length) % items_els.length;
+		items_els[next].focus();
+		event.preventDefault();
+	}
 </script>
 
-<div class="menu" class:flat role="listbox" bind:this={list}>
+<div
+	class="menu"
+	class:flat
+	role="listbox"
+	tabindex="-1"
+	bind:this={list}
+	onkeydown={onListKeydown}>
 	{#if items.length === 0}
 		<div class="empty">{empty_message}</div>
 	{/if}
@@ -74,8 +94,15 @@
 				onpointerenter={() => onhover?.(index)}
 				onpointerdown={(event) => {
 					// pointerdown (not click) so the editor keeps focus/selection
+					if (event.button !== 0) return;
 					event.preventDefault();
 					onpick(command);
+				}}
+				onclick={(event) => {
+					// Keyboard activation (Enter/Space on a focused item) comes
+					// through as a click with detail 0 — pointer picks already
+					// ran on pointerdown
+					if (event.detail === 0) onpick(command);
 				}}>
 				{#if typeof command.icon === 'string'}
 					<span class="icon">{@html command.icon}</span>
@@ -109,9 +136,11 @@
 		border: 1px solid
 			var(--color-border, color-mix(in oklab, currentColor 15%, transparent));
 		border-radius: min(var(--radius-lg, 12px), var(--radius-cap, 40px));
-		box-shadow:
+		box-shadow: var(
+			--shadow-lg,
 			0 4px 12px rgb(0 0 0 / 8%),
-			0 12px 32px rgb(0 0 0 / 12%);
+			0 12px 32px rgb(0 0 0 / 12%)
+		);
 		padding: 0.375rem;
 
 		@supports (corner-shape: squircle) {
@@ -165,7 +194,9 @@
 		font: inherit;
 		text-align: start;
 		cursor: pointer;
-		transition: background-color 300ms ease;
+		/* Short trail: 300ms left a smear of stale highlights while arrowing
+		   quickly through the list */
+		transition: background-color 120ms var(--ease-out, ease);
 
 		&:hover,
 		&.selected {
@@ -174,6 +205,11 @@
 				color-mix(in oklab, currentColor 8%, transparent)
 			);
 			transition: none;
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--action, var(--color-primary));
+			outline-offset: -2px;
 		}
 	}
 

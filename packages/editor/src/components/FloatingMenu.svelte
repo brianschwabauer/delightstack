@@ -3,6 +3,7 @@
 	import type { Editor } from '../core/editor.svelte.js';
 	import { icons } from '../core/icons.js';
 	import { portal } from './portal.js';
+	import { surfaceIn, surfaceOut } from './motion.js';
 	import LinkEditor from './LinkEditor.svelte';
 
 	interface Props {
@@ -14,6 +15,11 @@
 	let pointer_down = $state(false);
 	let menu_el = $state<HTMLElement | null>(null);
 	let link_open = $state(false);
+	// Reactive dimensions (Svelte backs these with a ResizeObserver): the
+	// menu re-clamps when its content changes size, e.g. when the link
+	// editor swaps in and the panel grows
+	let menu_width = $state(0);
+	let menu_height = $state(0);
 
 	const all_commands = $derived(editor.commands.forSurface('floating'));
 	// Marks first, then block turn-into toggles (headings/quote) after a divider
@@ -27,6 +33,26 @@
 			editor.editable &&
 			!pointer_down,
 	);
+
+	// Settle debounce: extending a selection with shift+arrow would otherwise
+	// materialize the toolbar instantly and twitch it on every keystroke.
+	// It appears 180ms after the selection stops changing. Formatting
+	// commands don't move the range, so the open toolbar never blinks.
+	let settled = $state(false);
+	let last_range = { from: -1, to: -1 };
+	$effect(() => {
+		const { from, to } = editor.selection;
+		if (!visible) {
+			settled = false;
+			last_range = { from: -1, to: -1 };
+			return;
+		}
+		if (from === last_range.from && to === last_range.to) return;
+		last_range = { from, to };
+		settled = false;
+		const timer = setTimeout(() => (settled = true), 180);
+		return () => clearTimeout(timer);
+	});
 
 	// Bumped by any scroll (capture catches nested scrollers) so the anchor
 	// re-measures and the menu follows the selection instead of stranding at
@@ -58,11 +84,15 @@
 
 	const position = $derived.by(() => {
 		if (!anchor) return null;
-		const width = menu_el?.offsetWidth ?? 320;
-		const height = menu_el?.offsetHeight ?? 44;
+		const width = menu_width || 320;
+		const height = menu_height || 44;
 		const viewport_w = typeof window === 'undefined' ? 1200 : window.innerWidth;
+		const viewport_h = typeof window === 'undefined' ? 800 : window.innerHeight;
 		let top = anchor.top - height - 8;
 		if (top < 8) top = anchor.bottom + 8;
+		// A selection at the very bottom with no room above either: keep the
+		// toolbar on-screen rather than below the fold
+		top = Math.min(top, viewport_h - height - 8);
 		const center = (anchor.left + anchor.right) / 2;
 		const left = Math.max(8, Math.min(center - width / 2, viewport_w - width - 8));
 		return { left, top };
@@ -92,7 +122,10 @@
 <svelte:window
 	onpointerdown={onWindowPointer(true)}
 	onpointerup={onWindowPointer(false)}
-	onscrollcapture={() => (scroll_tick = scroll_tick + 1)} />
+	onpointercancel={() => (pointer_down = false)}
+	onblur={() => (pointer_down = false)}
+	onscrollcapture={() => (scroll_tick = scroll_tick + 1)}
+	onresize={() => (scroll_tick = scroll_tick + 1)} />
 
 {#snippet action(command: import('../types/index.js').EditorCommand)}
 	<Button
@@ -104,6 +137,7 @@
 		aria-label={command.label}
 		tooltip={command.label}
 		onpointerdown={(event: PointerEvent) => {
+			if (event.button !== 0) return;
 			event.preventDefault();
 			command.run(editor);
 		}}>
@@ -113,14 +147,19 @@
 	</Button>
 {/snippet}
 
-{#if visible && position}
+{#if visible && settled && position}
 	<div
 		class="floating"
+		in:surfaceIn={{ y: anchor && position.top < anchor.top ? 4 : -4 }}
+		out:surfaceOut
 		role="toolbar"
 		aria-label="Text formatting"
 		style:left="{position.left}px"
 		style:top="{position.top}px"
+		style:visibility={menu_height ? null : 'hidden'}
 		bind:this={menu_el}
+		bind:offsetWidth={menu_width}
+		bind:offsetHeight={menu_height}
 		use:portal>
 		{#if link_open}
 			<LinkEditor {editor} onclose={() => (link_open = false)} />
@@ -145,6 +184,7 @@
 					aria-label="Link"
 					tooltip="Link"
 					onpointerdown={(event: PointerEvent) => {
+						if (event.button !== 0) return;
 						event.preventDefault();
 						link_open = true;
 					}}>
@@ -168,9 +208,11 @@
 		border: 1px solid
 			var(--color-border, color-mix(in oklab, currentColor 15%, transparent));
 		border-radius: min(var(--radius-lg, 12px), var(--radius-cap, 40px));
-		box-shadow:
+		box-shadow: var(
+			--shadow-lg,
 			0 4px 12px rgb(0 0 0 / 8%),
-			0 12px 32px rgb(0 0 0 / 12%);
+			0 12px 32px rgb(0 0 0 / 12%)
+		);
 
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;

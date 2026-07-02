@@ -338,4 +338,10 @@ export interface SuggestionContext {
 	range: { from: number; to: number };
 	/** Viewport rect of the trigger position, for menu placement */
 	rect: DOMRect | null;
+	/**
+	 * Dismiss the suggestion (same as Escape): the menu closes and won't
+	 * reopen until this trigger is deleted. Lets handlers auto-close on
+	 * hopeless queries.
+	 */
+	dismiss: () => void;
 }
