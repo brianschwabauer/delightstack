@@ -10,10 +10,12 @@
 		size: '00' | '0' | '1' | '2' | '3';
 		spacing: '0' | '1' | '2' | '3';
 		radius: '0' | '1' | '2' | '3';
+		fit: 'contain' | 'cover';
 		block_id: string | null;
 	};
 
-	let { attrs, editable, editor, update_attrs }: BlockProps<GalleryAttrs> = $props();
+	let { attrs, editable, selected, editor, update_attrs, ui }: BlockProps<GalleryAttrs> =
+		$props();
 
 	interface PendingUpload {
 		id: string;
@@ -23,7 +25,21 @@
 
 	let pending = $state<PendingUpload[]>([]);
 	let input = $state<HTMLInputElement | null>(null);
-	let managing = $state(false);
+
+	// Manage mode lives in the shared node-view UI state so the chrome
+	// actions (hover bubble) can toggle it; leaving the block exits it.
+	const managing = $derived(Boolean(ui.managing) && editable);
+
+	$effect(() => {
+		ui.add_images = () => input?.click();
+		return () => {
+			delete ui.add_images;
+		};
+	});
+
+	$effect(() => {
+		if (!selected && ui.managing) ui.managing = false;
+	});
 
 	// One data shape: attrs.items are UploadResult['image'] objects, mapped to
 	// Gallery items here (no parallel snapshot format to keep in sync).
@@ -49,24 +65,34 @@
 
 	const view_items = $derived(live_items ?? attrs.items);
 
+	// Slot geometry snapshotted at drag start (relative to the list, so it
+	// survives scrolling). Live rects lie while rows are mid-FLIP-animation —
+	// measuring them made the target index flip-flop and rows reorder on
+	// their own. All pointer math runs against this static grid instead.
+	let slot_centers: number[] = [];
+
 	function startReorder(event: PointerEvent, index: number) {
 		event.preventDefault();
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		if (!rows_el) return;
+		const list_top = rows_el.getBoundingClientRect().top;
+		slot_centers = Array.from(rows_el.querySelectorAll('[data-row]')).map((row) => {
+			const rect = row.getBoundingClientRect();
+			return rect.top - list_top + rect.height / 2;
+		});
 		live_items = [...attrs.items];
 		drag_index = index;
 	}
 
 	function moveReorder(event: PointerEvent) {
-		if (drag_index === null || !live_items || !rows_el) return;
-		const rows = Array.from(rows_el.querySelectorAll('[data-row]')) as HTMLElement[];
-		let target = drag_index;
-		for (let index = 0; index < rows.length; index++) {
-			const rect = rows[index].getBoundingClientRect();
-			const middle = rect.top + rect.height / 2;
-			if (index < drag_index && event.clientY < middle) {
-				target = Math.min(target, index);
-			} else if (index > drag_index && event.clientY > middle) {
-				target = Math.max(target, index);
+		if (drag_index === null || !live_items || !rows_el || !slot_centers.length) return;
+		const y = event.clientY - rows_el.getBoundingClientRect().top;
+		// Nearest static slot center wins — a pure function of the pointer, so
+		// the target can never oscillate mid-animation.
+		let target = 0;
+		for (let index = 1; index < slot_centers.length; index++) {
+			if (Math.abs(y - slot_centers[index]) < Math.abs(y - slot_centers[target])) {
+				target = index;
 			}
 		}
 		if (target !== drag_index) {
@@ -95,7 +121,7 @@
 	function removeItem(id: string) {
 		const items = attrs.items.filter((item) => item.id !== id);
 		update_attrs({ items });
-		if (!items.length) managing = false;
+		if (!items.length) ui.managing = false;
 	}
 
 	async function addFiles(files: FileList | null) {
@@ -129,13 +155,14 @@
 </script>
 
 <div class="gallery">
-	{#if attrs.items.length}
+	{#if attrs.items.length && !managing}
 		<Gallery
 			items={gallery_items}
 			display={attrs.display}
 			size={attrs.size}
 			spacing={attrs.spacing}
-			radius={attrs.radius} />
+			radius={attrs.radius}
+			fit={attrs.fit} />
 	{/if}
 
 	{#if pending.length}
@@ -151,7 +178,7 @@
 		</div>
 	{/if}
 
-	{#if editable && managing && attrs.items.length}
+	{#if managing && attrs.items.length}
 		<div class="manage" contenteditable="false" bind:this={rows_el}>
 			{#each view_items as item, index (item.id)}
 				<div
@@ -200,37 +227,29 @@
 	{/if}
 
 	{#if editable && editor.uploader}
-		<div class="actions" contenteditable="false">
-			<Button dense outline size="0" onclick={() => input?.click()}>
-				<span class="icon">{@html icons.plus}</span>
-				Add images
-			</Button>
-			{#if attrs.items.length}
-				<Button
-					dense
-					outline
-					size="0"
-					active={managing}
-					onclick={() => (managing = !managing)}>
-					<span class="icon">{@html icons.settings}</span>
-					{managing ? 'Done' : 'Manage'}
-				</Button>
-			{/if}
-			<input
-				type="file"
-				accept="image/*"
-				multiple
-				hidden
-				bind:this={input}
-				onchange={(event) => {
-					addFiles(event.currentTarget.files);
-					event.currentTarget.value = '';
-				}} />
-		</div>
+		<input
+			type="file"
+			accept="image/*"
+			multiple
+			hidden
+			bind:this={input}
+			onchange={(event) => {
+				addFiles(event.currentTarget.files);
+				event.currentTarget.value = '';
+			}} />
 	{/if}
 
-	{#if !attrs.items.length && !pending.length && !editable}
-		<div class="empty">Empty gallery</div>
+	{#if !attrs.items.length && !pending.length}
+		<div class="empty" contenteditable="false">
+			{#if editable && editor.uploader}
+				<Button dense outline size="0" onclick={() => input?.click()}>
+					<span class="icon">{@html icons.plus}</span>
+					Add images
+				</Button>
+			{:else}
+				Empty gallery
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -359,12 +378,6 @@
 				color-mix(in oklab, currentColor 40%, transparent)
 			);
 		}
-	}
-
-	.actions {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
 	}
 
 	.icon {

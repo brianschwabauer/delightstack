@@ -2,6 +2,7 @@ import { defineBlock } from '../core/block-spec.js';
 import { icons } from '../core/icons.js';
 import type { UploadedImage } from '../types/index.js';
 import GalleryBlock from '../components/blocks/GalleryBlock.svelte';
+import GallerySettings from '../components/blocks/GallerySettings.svelte';
 import { defaultBlockTextRenderers, galleryRenderer } from '../render/blocks.js';
 
 export interface GalleryAttrs extends Record<string, unknown> {
@@ -11,6 +12,7 @@ export interface GalleryAttrs extends Record<string, unknown> {
 	size: '00' | '0' | '1' | '2' | '3';
 	spacing: '0' | '1' | '2' | '3';
 	radius: '0' | '1' | '2' | '3';
+	fit: 'contain' | 'cover';
 	block_id: string | null;
 }
 
@@ -26,6 +28,7 @@ export const galleryBlock = defineBlock<GalleryAttrs>({
 			size: { default: '1' },
 			spacing: { default: '1' },
 			radius: { default: '1' },
+			fit: { default: 'contain' },
 			block_id: { default: null },
 		},
 		parseDOM: [
@@ -43,37 +46,31 @@ export const galleryBlock = defineBlock<GalleryAttrs>({
 		toDOM: (node) => ['div', { 'data-gallery': JSON.stringify(node.attrs.items ?? []) }],
 	},
 	component: GalleryBlock,
-	settings: [
+	settings: GallerySettings,
+	chrome: [
 		{
-			attr: 'display',
-			label: 'Layout',
-			control: 'select',
-			options: [
-				{ value: 'grid', label: 'Grid' },
-				{ value: 'masonry', label: 'Masonry' },
-				{ value: 'masonry-row', label: 'Rows' },
-				{ value: 'slider', label: 'Slider' },
-				{ value: 'slideshow', label: 'Slideshow' },
-				{ value: 'list', label: 'List' },
-			],
+			name: 'add_images',
+			label: 'Add images',
+			icon: icons.image,
+			when: (ctx) => Boolean(ctx.editor.uploader),
+			// The component registers the picker (it owns the file input);
+			// running synchronously keeps the browser's user-activation for
+			// opening the file dialog
+			run: (ctx) => (ctx.ui.add_images as (() => void) | undefined)?.(),
 		},
 		{
-			attr: 'size',
-			label: 'Size',
-			control: 'segmented',
-			options: ['0', '1', '2', '3'].map((value) => ({ value, label: value })),
-		},
-		{
-			attr: 'spacing',
-			label: 'Spacing',
-			control: 'segmented',
-			options: ['0', '1', '2', '3'].map((value) => ({ value, label: value })),
-		},
-		{
-			attr: 'radius',
-			label: 'Corners',
-			control: 'segmented',
-			options: ['0', '1', '2', '3'].map((value) => ({ value, label: value })),
+			name: 'manage',
+			label: 'Manage images',
+			icon: icons.arrange,
+			when: (ctx) => (ctx.attrs.items?.length ?? 0) > 0,
+			is_active: (ctx) => Boolean(ctx.ui.managing),
+			run: (ctx) => {
+				// Select the node so leaving it (clicking another block)
+				// automatically exits manage mode
+				const pos = ctx.pos();
+				if (pos !== undefined && !ctx.ui.managing) ctx.editor.selectNode(pos);
+				ctx.ui.managing = !ctx.ui.managing;
+			},
 		},
 	],
 	commands: [

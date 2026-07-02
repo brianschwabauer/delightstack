@@ -65,6 +65,11 @@ export function suggestion(options: SuggestionOptions): Plugin<SuggestionState> 
 				if (tr.getMeta(key) === 'dismiss') {
 					return { active: null, dismissed: value.active?.from ?? null };
 				}
+				// Only typing can OPEN the menu — moving the caret into existing
+				// text that happens to contain the trigger char must not
+				// resurrect it. An already-open menu still re-evaluates on
+				// selection moves (so clicking away closes it).
+				if (!value.active && !tr.docChanged) return value;
 				const match = findMatch(newState);
 				let dismissed = value.dismissed;
 				if (dismissed !== null) {

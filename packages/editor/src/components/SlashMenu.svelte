@@ -67,7 +67,20 @@
 		},
 	};
 
-	$effect(() => editor.suggest('/', () => handler));
+	$effect(() =>
+		editor.suggest('/', () => handler, {
+			// Slash commands come from an empty line only: the trigger must be
+			// the first character of its block and nothing may follow the
+			// caret. Mid-sentence slashes are just text.
+			allow: (state, trigger_pos) => {
+				const trigger = state.doc.resolve(trigger_pos);
+				return (
+					trigger.parentOffset === 0 &&
+					trigger.parent.content.size === state.selection.$from.parentOffset
+				);
+			},
+		}),
+	);
 
 	function pick(command: EditorCommand) {
 		const target = range;

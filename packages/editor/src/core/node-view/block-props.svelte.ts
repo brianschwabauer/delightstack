@@ -12,6 +12,8 @@ export class BlockViewProps<
 	attrs = $state<Attrs>({} as Attrs);
 	selected = $state(false);
 	settings_open = $state(false);
+	/** Per-node-view UI state shared between the component and chrome actions */
+	ui = $state<Record<string, unknown>>({});
 
 	readonly editor: Editor;
 	readonly pos: () => number | undefined;

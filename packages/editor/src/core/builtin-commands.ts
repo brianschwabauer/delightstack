@@ -1,6 +1,6 @@
 import type { Schema } from 'prosemirror-model';
 import type { EditorState } from 'prosemirror-state';
-import type { EditorCommand, EditorLike } from '../types/index.js';
+import type { EditorCommand, EditorLike, Surface } from '../types/index.js';
 import { toggleList, wrapIn } from './commands.js';
 import { icons } from './icons.js';
 
@@ -60,6 +60,12 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 		];
 		for (const [level, description] of headings) {
 			const ui_level = level - 1;
+			// The two big headings also appear in the selection bubble
+			// (Medium-style quick turn-into)
+			const surfaces: Surface[] =
+				ui_level <= 2
+					? ['slash', 'plus', 'toolbar', 'turn_into', 'floating']
+					: ['slash', 'plus', 'toolbar', 'turn_into'];
 			commands.push({
 				name: `heading_${level}`,
 				label: `Heading ${ui_level}`,
@@ -68,7 +74,7 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 				keywords: [`h${ui_level}`, `h${level}`, 'title', 'heading'],
 				group: 'Basic',
 				keyboard: `Mod-Alt-${ui_level}`,
-				surfaces: ['slash', 'plus', 'toolbar', 'turn_into'],
+				surfaces,
 				is_active: (editor) => {
 					const block = editor.active_block;
 					return block?.name === 'heading' && block.attrs.level === level;
@@ -124,7 +130,7 @@ export function builtinCommands(schema: Schema): EditorCommand[] {
 			icon: icons.blockquote,
 			keywords: ['quote', 'blockquote', 'citation'],
 			group: 'Basic',
-			surfaces: ['slash', 'plus', 'turn_into'],
+			surfaces: ['slash', 'plus', 'turn_into', 'floating'],
 			is_active: (editor) => {
 				const { state } = editor;
 				const { $from: from } = state.selection;

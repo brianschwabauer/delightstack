@@ -30,12 +30,9 @@
 	// quotes, code, media, …) lives behind the single + menu instead of an
 	// ever-growing button row.
 	const commands = $derived(editor.commands.forSurface('toolbar'));
-	const mark_commands = $derived(
-		commands.filter((command) => command.surfaces?.includes('floating')),
-	);
-	const heading_commands = $derived(
-		commands.filter((command) => !command.surfaces?.includes('floating')),
-	);
+	// Marks are ungrouped; block-type commands (headings) carry a group
+	const mark_commands = $derived(commands.filter((command) => !command.group));
+	const heading_commands = $derived(commands.filter((command) => command.group));
 
 	const add_commands = $derived(
 		editor.commands

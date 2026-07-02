@@ -15,7 +15,10 @@
 	let menu_el = $state<HTMLElement | null>(null);
 	let link_open = $state(false);
 
-	const commands = $derived(editor.commands.forSurface('floating'));
+	const all_commands = $derived(editor.commands.forSurface('floating'));
+	// Marks first, then block turn-into toggles (headings/quote) after a divider
+	const commands = $derived(all_commands.filter((command) => !command.group));
+	const block_commands = $derived(all_commands.filter((command) => command.group));
 
 	const visible = $derived(
 		!editor.selection.empty &&
@@ -25,8 +28,14 @@
 			!pointer_down,
 	);
 
+	// Bumped by any scroll (capture catches nested scrollers) so the anchor
+	// re-measures and the menu follows the selection instead of stranding at
+	// stale viewport coordinates.
+	let scroll_tick = $state(0);
+
 	// Selection viewport anchor (recomputed when the selection changes)
 	const anchor = $derived.by(() => {
+		void scroll_tick;
 		if (!visible) return null;
 		const view = editor.view;
 		if (!view) return null;
@@ -65,8 +74,15 @@
 
 	function onWindowPointer(down: boolean) {
 		return (event: PointerEvent) => {
-			// Ignore pointer interactions inside the menu itself
-			if (menu_el && event.target instanceof Node && menu_el.contains(event.target))
+			// Ignore pointer interactions inside the menu itself. A target that
+			// is no longer connected was inside it too: clicking a menu button
+			// can swap the menu contents (link editor) before this window-level
+			// listener runs, detaching the button mid-dispatch.
+			if (
+				menu_el &&
+				event.target instanceof Node &&
+				(menu_el.contains(event.target) || !event.target.isConnected)
+			)
 				return;
 			pointer_down = down;
 		};
@@ -75,7 +91,27 @@
 
 <svelte:window
 	onpointerdown={onWindowPointer(true)}
-	onpointerup={onWindowPointer(false)} />
+	onpointerup={onWindowPointer(false)}
+	onscrollcapture={() => (scroll_tick = scroll_tick + 1)} />
+
+{#snippet action(command: import('../types/index.js').EditorCommand)}
+	<Button
+		icon
+		transparent
+		dense
+		size="0"
+		active={command.is_active?.(editor) ?? false}
+		aria-label={command.label}
+		tooltip={command.label}
+		onpointerdown={(event: PointerEvent) => {
+			event.preventDefault();
+			command.run(editor);
+		}}>
+		{#if typeof command.icon === 'string'}
+			{@html command.icon}
+		{/if}
+	</Button>
+{/snippet}
 
 {#if visible && position}
 	<div
@@ -90,23 +126,14 @@
 			<LinkEditor {editor} onclose={() => (link_open = false)} />
 		{:else}
 			{#each commands as command (command.name)}
-				<Button
-					icon
-					transparent
-					dense
-					size="0"
-					active={command.is_active?.(editor) ?? false}
-					aria-label={command.label}
-					tooltip={command.label}
-					onpointerdown={(event: PointerEvent) => {
-						event.preventDefault();
-						command.run(editor);
-					}}>
-					{#if typeof command.icon === 'string'}
-						{@html command.icon}
-					{/if}
-				</Button>
+				{@render action(command)}
 			{/each}
+			{#if block_commands.length}
+				<span class="divider"></span>
+				{#each block_commands as command (command.name)}
+					{@render action(command)}
+				{/each}
+			{/if}
 			{#if editor.schema.marks.link}
 				<span class="divider"></span>
 				<Button

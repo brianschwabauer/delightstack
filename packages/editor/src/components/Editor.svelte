@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Button } from '@delightstack/components';
 	import type { Editor } from '../core/editor.svelte.js';
 	import { svelteNodeViews } from '../core/node-view/svelte-node-view.svelte.js';
 	import { renderHTML } from '../render/index.js';
@@ -58,6 +59,15 @@
 			mounted = false;
 		};
 	}
+
+	// Quick-start chips shown under the placeholder while the doc is empty
+	const QUICK_STARTERS = ['heading_2', 'bullet_list', 'image', 'gallery'] as const;
+	const quick_chips = $derived.by(() => {
+		if (!mounted || readonly || !editor.is_empty || !editor.editable) return [];
+		return QUICK_STARTERS.map((name) => editor.commands.get(name)).filter(
+			(command) => command && (!command.is_enabled || command.is_enabled(editor)),
+		) as NonNullable<ReturnType<typeof editor.commands.get>>[];
+	});
 </script>
 
 <div class="editor {class_name}" class:readonly {id} bind:this={container}>
@@ -65,6 +75,26 @@
 		<div class="content ssr">{@html ssr_html}</div>
 	{/if}
 	<div class="content" {@attach attach}></div>
+	{#if quick_chips.length}
+		<div class="quick-chips" contenteditable="false">
+			{#each quick_chips as command (command.name)}
+				<Button
+					dense
+					outline
+					size="0"
+					onpointerdown={(event: PointerEvent) => {
+						event.preventDefault();
+						editor.focus();
+						command.run(editor);
+					}}>
+					<span class="chip-icon">
+						{#if typeof command.icon === 'string'}{@html command.icon}{/if}
+					</span>
+					{command.label}
+				</Button>
+			{/each}
+		</div>
+	{/if}
 	{#if !readonly}
 		{#if slash_menu}
 			<SlashMenu {editor} />
@@ -89,12 +119,52 @@
 		padding-block: var(--space-1, 0.5rem);
 	}
 
+	.quick-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+		padding-block: 0.25rem 0.5rem;
+		color: var(--color-text-muted);
+		opacity: 0;
+		animation: ds-editor-chips-in 300ms ease 500ms forwards;
+	}
+
+	.chip-icon {
+		display: inline-grid;
+		place-items: center;
+		inline-size: 1em;
+		block-size: 1em;
+		margin-inline-end: 0.375rem;
+
+		:global(svg) {
+			inline-size: 100%;
+			block-size: 100%;
+		}
+	}
+
+	@keyframes -global-ds-editor-chips-in {
+		to {
+			opacity: 1;
+		}
+	}
+
 	.editor :global {
 		.ProseMirror {
 			outline: none;
 			white-space: pre-wrap;
 			word-wrap: break-word;
 			padding-block: var(--space-1, 0.5rem);
+
+			/* Node views are regular Svelte component markup — the formatter's
+			   whitespace between their elements must not render as blank lines
+			   under pre-wrap. Only the editable content holes keep it. */
+			.ds-block {
+				white-space: normal;
+			}
+
+			[data-editor-content] {
+				white-space: pre-wrap;
+			}
 
 			/* ---- vertical rhythm (Medium-style: generous, deliberate) ---- */
 

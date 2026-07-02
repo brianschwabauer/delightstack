@@ -72,6 +72,7 @@ export interface EditorLike {
 	insertBlock(name: string, attrs?: Record<string, unknown>, pos?: number): boolean;
 	updateNodeAttrs(pos: number, patch: Record<string, unknown>): void;
 	deleteNode(pos: number): void;
+	selectNode(pos: number): void;
 	focus(position?: 'start' | 'end' | number): void;
 	uploadFiles(files: File[] | FileList, pos?: number): void;
 }
@@ -142,6 +143,37 @@ export interface BlockProps<Attrs = Record<string, unknown>> {
 	 * `<div {@attach content}>`
 	 */
 	content: (el: HTMLElement) => void;
+	/**
+	 * Reactive per-node-view UI state shared with the block's chrome actions
+	 * (never persisted in the document). A component can store view modes
+	 * here (`ui.managing`) or register handlers for chrome actions to call
+	 * (`ui.add_images = () => …`).
+	 */
+	ui: Record<string, unknown>;
+}
+
+/** Context passed to a block's chrome actions (hover-bubble buttons). */
+export type BlockActionContext<Attrs = Record<string, unknown>> = Pick<
+	BlockProps<Attrs>,
+	'attrs' | 'editor' | 'pos' | 'update_attrs' | 'ui'
+>;
+
+/**
+ * An extra icon button in the block's hover chrome (next to the settings
+ * gear and delete button). `run` executes on pointerdown so the editor
+ * never loses focus.
+ */
+export interface BlockChromeAction<Attrs = Record<string, unknown>> {
+	name: string;
+	/** Tooltip / accessible label */
+	label: string;
+	/** Inline SVG string */
+	icon: string;
+	/** Hide the action when this returns false (e.g. no uploader configured) */
+	when?: (ctx: BlockActionContext<Attrs>) => boolean;
+	/** Render the button in its active state (toggles like a manage mode) */
+	is_active?: (ctx: BlockActionContext<Attrs>) => boolean;
+	run: (ctx: BlockActionContext<Attrs>) => void;
 }
 
 export type SettingsProps<Attrs = Record<string, unknown>> = Pick<
@@ -193,6 +225,8 @@ export interface BlockSpec<
 	interactive?: InteractiveOptions<Attrs> | false;
 	/** Declarative settings fields, or a custom settings component */
 	settings?: SettingsField<Attrs>[] | Component<SettingsProps<Attrs>>;
+	/** Extra icon buttons in the block's hover chrome (before settings/delete) */
+	chrome?: BlockChromeAction<Attrs>[];
 	/** Slash/plus/toolbar entries contributed by this block */
 	commands?: EditorCommand[];
 	keymap?: Record<string, PMCommand>;

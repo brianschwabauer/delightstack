@@ -153,30 +153,127 @@ export function splitListItemCommand(itemType: NodeType): Command {
 	return splitListItem(itemType, { checked: false });
 }
 
-/** Backspace at the very start of a block: lift/join sensibly. */
+/** Wrapper containers a lone block can be unwrapped from, one line at a time */
+function isWrapper(node: { type: NodeType }): boolean {
+	const content = node.type.spec.content ?? '';
+	return content.includes('block') && !content.includes('item');
+}
+
+/** A block that Backspace can merge a following paragraph into (its last textblock) */
+function isJoinTarget(node: {
+	isTextblock: boolean;
+	isAtom: boolean;
+	isBlock: boolean;
+	childCount: number;
+}): boolean {
+	return node.isBlock && !node.isTextblock && !node.isAtom && node.childCount > 0;
+}
+
+/**
+ * Backspace at the very start of a block. The goal is Notion-like
+ * predictability — repeated presses always make progress, never oscillate:
+ * 1. a non-paragraph textblock (heading/code) becomes a paragraph first
+ * 2. a list item lifts out of its list
+ * 3. the first line of a quote/callout unwraps out of the container
+ * 4. a paragraph after a quote/callout/list merges INTO the container's
+ *    last line (empty paragraphs simply disappear) — instead of ProseMirror's
+ *    default "pull the whole paragraph in as a new line", which alternates
+ *    with liftEmptyBlock forever
+ */
 export function backspaceCommand(schema: Schema): Command {
-	const commands: Command[] = [];
-	if (schema.nodes.list_item) commands.push(liftListItem(schema.nodes.list_item));
-	if (schema.nodes.todo_item) commands.push(liftListItem(schema.nodes.todo_item));
-	const liftOrJoin = chainCommands(liftEmptyBlock, joinBackward, selectNodeBackward);
+	const listLifts: Command[] = [];
+	if (schema.nodes.list_item) listLifts.push(liftListItem(schema.nodes.list_item));
+	if (schema.nodes.todo_item) listLifts.push(liftListItem(schema.nodes.todo_item));
+	const fallback = chainCommands(joinBackward, liftEmptyBlock, selectNodeBackward);
 	return (state, dispatch, view) => {
 		// Only take over at the start of a textblock with an empty selection
 		const { $from, empty } = state.selection;
 		if (!empty || $from.parentOffset > 0) return false;
-		// Backspace at the start of a heading/quote/code converts to paragraph first
 		const parent = $from.parent;
+		// 1. Convert heading/code/etc. back to a paragraph in place
 		if (
-			parent.type !== schema.nodes.paragraph &&
 			parent.isTextblock &&
-			$from.depth === 1 &&
+			parent.type !== schema.nodes.paragraph &&
 			setBlockType(schema.nodes.paragraph)(state, dispatch, view)
 		) {
 			return true;
 		}
-		for (const command of commands) {
+		// 2. Lift list items out of their list
+		for (const command of listLifts) {
 			if ($from.depth > 1 && command(state, dispatch, view)) return true;
 		}
-		return liftOrJoin(state, dispatch, view);
+		if ($from.depth > 1) {
+			// 3. First line of a quote/callout → unwrap it from the container
+			const container = $from.node($from.depth - 1);
+			if (isWrapper(container) && $from.index($from.depth - 1) === 0) {
+				if (lift(state, dispatch, view)) return true;
+			}
+			// Inside containers, join lines before lifting empties — lifting a
+			// mid-container empty paragraph would split the container
+			return fallback(state, dispatch, view);
+		}
+		// 4. Top-level paragraph following a container: merge into its last line
+		const block_start = $from.before(1);
+		const prev = state.doc.resolve(block_start).nodeBefore;
+		if (parent.type === schema.nodes.paragraph && prev && isJoinTarget(prev)) {
+			const target = TextSelection.near(state.doc.resolve(block_start), -1);
+			if (target.$head.parent.isTextblock && target.$head.pos < block_start) {
+				if (dispatch) {
+					const join_pos = target.$head.pos;
+					let tr = state.tr;
+					if (parent.content.size) tr = tr.insert(join_pos, parent.content);
+					const mapped = tr.mapping.map(block_start);
+					tr = tr.delete(mapped, mapped + parent.nodeSize);
+					tr = tr.setSelection(TextSelection.create(tr.doc, join_pos));
+					dispatch(tr.scrollIntoView());
+				}
+				return true;
+			}
+		}
+		return fallback(state, dispatch, view);
+	};
+}
+
+/**
+ * Moves the selection's top-level block up or down one sibling. Dispatched
+ * with the `drop` uiEvent meta so the view runs the same FLIP animation as
+ * drag-and-drop reordering.
+ */
+export function moveBlock(direction: -1 | 1): Command {
+	return (state, dispatch) => {
+		const { selection } = state;
+		const block_start =
+			selection instanceof NodeSelection && selection.$from.depth === 0
+				? selection.from
+				: selection.$from.depth > 0
+					? selection.$from.before(1)
+					: null;
+		if (block_start === null) return false;
+		const $block = state.doc.resolve(block_start);
+		const node = $block.nodeAfter;
+		if (!node) return false;
+		// Where the block starts after deletion + re-insertion (sibling swap)
+		let insert_pos: number;
+		if (direction === -1) {
+			const prev = $block.nodeBefore;
+			if (!prev) return false;
+			insert_pos = block_start - prev.nodeSize;
+		} else {
+			const next = state.doc.resolve(block_start + node.nodeSize).nodeAfter;
+			if (!next) return false;
+			insert_pos = block_start + next.nodeSize;
+		}
+		if (!dispatch) return true;
+		const offset = selection.from - block_start;
+		let tr = state.tr.delete(block_start, block_start + node.nodeSize);
+		tr = tr.insert(insert_pos, node);
+		tr =
+			selection instanceof NodeSelection
+				? tr.setSelection(NodeSelection.create(tr.doc, insert_pos))
+				: tr.setSelection(TextSelection.create(tr.doc, insert_pos + offset));
+		tr.setMeta('uiEvent', 'drop');
+		dispatch(tr.scrollIntoView());
+		return true;
 	};
 }
 

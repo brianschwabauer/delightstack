@@ -3,8 +3,6 @@ import {
 	baseKeymap,
 	chainCommands,
 	exitCode,
-	joinDown,
-	joinUp,
 	selectParentNode,
 	toggleMark,
 } from 'prosemirror-commands';
@@ -15,6 +13,7 @@ import type { Schema } from 'prosemirror-model';
 import {
 	backspaceCommand,
 	liftListItem,
+	moveBlock,
 	splitListItemCommand,
 	toggleBlockType,
 } from './commands.js';
@@ -50,8 +49,9 @@ export function buildKeymaps(schema: Schema, options: KeymapOptions = {}): Plugi
 	}
 	if (schema.nodes.paragraph)
 		blocks['Mod-Alt-0'] = toggleBlockType(schema.nodes.paragraph);
-	blocks['Alt-ArrowUp'] = joinUp;
-	blocks['Alt-ArrowDown'] = joinDown;
+	// Move the current block among its siblings (with the drop FLIP animation)
+	blocks['Alt-ArrowUp'] = moveBlock(-1);
+	blocks['Alt-ArrowDown'] = moveBlock(1);
 	blocks['Escape'] = selectParentNode;
 	if (schema.nodes.hard_break) {
 		const br = schema.nodes.hard_break;

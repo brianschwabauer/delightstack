@@ -19,7 +19,21 @@
 
 	const deletable = $derived(interactive.deletable !== false && props.editable);
 	const has_settings = $derived(Boolean(spec.settings) && props.editable);
-	const show_chrome = $derived(props.editable && (deletable || has_settings));
+
+	// Context handed to the block's chrome actions (hover-bubble buttons)
+	const action_ctx = $derived({
+		attrs: props.attrs,
+		editor: props.editor,
+		pos: props.pos,
+		update_attrs: props.update_attrs,
+		ui: props.ui,
+	});
+	const chrome_actions = $derived(
+		(spec.chrome ?? []).filter((action) => !action.when || action.when(action_ctx)),
+	);
+	const show_chrome = $derived(
+		props.editable && (deletable || has_settings || chrome_actions.length > 0),
+	);
 
 	const Component = $derived(spec.component!);
 
@@ -205,10 +219,28 @@
 		update_attrs={props.update_attrs}
 		delete_node={props.delete_node}
 		open_settings={openSettings}
-		content={props.content} />
+		content={props.content}
+		ui={props.ui} />
 
 	{#if show_chrome}
 		<div class="chrome" contenteditable="false" bind:this={chrome_el}>
+			{#each chrome_actions as action (action.name)}
+				<Button
+					icon
+					transparent
+					size="0"
+					dense
+					active={action.is_active?.(action_ctx) ?? false}
+					aria-label={action.label}
+					tooltip={action.label}
+					onpointerdown={(event: PointerEvent) => {
+						event.preventDefault();
+						event.stopPropagation();
+						action.run(action_ctx);
+					}}>
+					{@html action.icon}
+				</Button>
+			{/each}
 			{#if has_settings}
 				<Button
 					icon
