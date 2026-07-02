@@ -60,6 +60,24 @@
 		};
 	}
 
+	// Screen-reader announcements for spatial operations that are otherwise
+	// silent (block moves via drag, keyboard, or the gutter menu)
+	let announcement = $state('');
+	let announce_timeout: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		const off = editor.on('transaction', (_editor, tr) => {
+			if (!tr?.docChanged || tr.getMeta('uiEvent') !== 'drop') return;
+			// Clear first so repeating the same message still announces
+			announcement = '';
+			clearTimeout(announce_timeout);
+			announce_timeout = setTimeout(() => (announcement = 'Block moved'), 30);
+		});
+		return () => {
+			off();
+			clearTimeout(announce_timeout);
+		};
+	});
+
 	// Quick-start chips shown under the placeholder while the doc is empty
 	const QUICK_STARTERS = ['heading_2', 'bullet_list', 'image', 'gallery'] as const;
 	const quick_chips = $derived.by(() => {
@@ -96,6 +114,7 @@
 			{/each}
 		</div>
 	{/if}
+	<div class="sr-announce" role="status" aria-live="polite">{announcement}</div>
 	{#if !readonly}
 		{#if slash_menu}
 			<SlashMenu {editor} />
@@ -118,6 +137,15 @@
 
 	.ssr {
 		padding-block: var(--space-1, 0.5rem);
+	}
+
+	.sr-announce {
+		position: absolute;
+		inline-size: 1px;
+		block-size: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 
 	.quick-chips {
@@ -406,12 +434,17 @@
 		}
 
 		.ds-dropcursor {
-			background: var(--action, var(--color-primary)) !important;
+			background: var(--action, var(--color-primary));
 			border-radius: 1px;
 			box-shadow: 0 0 6px
 				color-mix(in oklab, var(--action, var(--color-primary)) 60%, transparent);
-			animation: ds-editor-drop-pulse 900ms var(--ease-in-out, ease-in-out) infinite
-				alternate;
+
+			/* Gated on visibility so the pulse's opacity never fights the
+			   indicator's own inline fade-out */
+			&[data-visible='true'] {
+				animation: ds-editor-drop-pulse 900ms var(--ease-in-out, ease-in-out) infinite
+					alternate;
+			}
 		}
 
 		/* Selection tint matches the action color instead of UA default blue */

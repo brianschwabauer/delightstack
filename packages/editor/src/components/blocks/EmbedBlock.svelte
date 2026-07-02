@@ -23,10 +23,26 @@
 			return null;
 		}
 	});
+
+	const provider = $derived.by(() => {
+		if (!safe_src) return '';
+		try {
+			return new URL(safe_src).hostname.replace(/^www\./, '');
+		} catch {
+			return '';
+		}
+	});
+
+	// Read-only pages render a lightweight facade and only mount the iframe
+	// on click — a post with five YouTube embeds must not boot five players
+	// on page load. Editable mode keeps the live iframe (behind the shield)
+	// so authors see what they embedded.
+	let activated = $state(false);
+	const show_iframe = $derived(Boolean(safe_src) && (editable || activated));
 </script>
 
 <figure class="embed" style:aspect-ratio={attrs.aspect_ratio || 16 / 9}>
-	{#if safe_src}
+	{#if show_iframe}
 		<iframe
 			src={safe_src}
 			title={attrs.title || 'Embedded content'}
@@ -39,6 +55,18 @@
 			<!-- Shield so clicks select the block instead of focusing the iframe -->
 			<div class="shield" contenteditable="false"></div>
 		{/if}
+	{:else if safe_src}
+		<button
+			type="button"
+			class="facade"
+			onclick={() => (activated = true)}
+			aria-label="Load embedded content{attrs.title ? `: ${attrs.title}` : ''}">
+			<span class="play">{@html icons.play}</span>
+			<span class="facade-title">{attrs.title || 'Embedded content'}</span>
+			{#if provider}
+				<span class="hint">{provider}</span>
+			{/if}
+		</button>
 	{:else}
 		<div class="placeholder" contenteditable="false">
 			<span class="icon">{@html icons.embed}</span>
@@ -77,6 +105,62 @@
 			block-size: 100%;
 			border: none;
 		}
+	}
+
+	.facade {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		border: none;
+		background: none;
+		font: inherit;
+		color: var(--color-text-muted);
+		cursor: pointer;
+
+		&:hover .play,
+		&:focus-visible .play {
+			scale: 1.08;
+			background: var(--action, var(--color-primary));
+			color: white;
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--action, var(--color-primary));
+			outline-offset: -2px;
+		}
+	}
+
+	.play {
+		display: grid;
+		place-items: center;
+		inline-size: 3.5rem;
+		block-size: 3.5rem;
+		border-radius: 50%;
+		background: var(--color-surface, Canvas);
+		box-shadow: var(--shadow-md, 0 2px 8px rgb(0 0 0 / 15%));
+		color: var(--color-text);
+		transition:
+			scale var(--duration-normal, 200ms) var(--ease-spring, ease),
+			background-color var(--duration-fast, 100ms) var(--ease-out, ease),
+			color var(--duration-fast, 100ms) var(--ease-out, ease);
+
+		:global(svg) {
+			inline-size: 1.5rem;
+			block-size: 1.5rem;
+		}
+	}
+
+	.facade-title {
+		font-size: 0.875rem;
+		color: var(--color-text);
+		max-inline-size: 80%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.shield {
