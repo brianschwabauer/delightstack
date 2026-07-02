@@ -34,6 +34,8 @@
 	}));
 
 	let copied = $state(false);
+	let copied_timeout: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => () => clearTimeout(copied_timeout));
 
 	// Read-only mode renders the design system's Code component (syntax
 	// highlighting, its own copy button) instead of the editable plain block.
@@ -52,7 +54,8 @@
 		if (!node) return;
 		await navigator.clipboard.writeText(node.textContent);
 		copied = true;
-		setTimeout(() => (copied = false), 1500);
+		clearTimeout(copied_timeout);
+		copied_timeout = setTimeout(() => (copied = false), 1500);
 	}
 </script>
 

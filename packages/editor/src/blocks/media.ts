@@ -35,13 +35,19 @@ export interface MediaAttrs extends Record<string, unknown> {
 	block_id: string | null;
 }
 
-export const videoBlock = defineBlock<MediaAttrs>({
+export interface VideoAttrs extends MediaAttrs {
+	aspect_ratio: number | null;
+}
+
+export const videoBlock = defineBlock<VideoAttrs>({
 	name: 'video',
 	schema: {
 		group: 'block',
 		atom: true,
 		draggable: true,
-		attrs: mediaAttrs(),
+		// aspect_ratio (probed at upload) reserves the player's space before
+		// metadata loads — no layout jump on page load or upload completion
+		attrs: { ...mediaAttrs(), aspect_ratio: { default: null } },
 		parseDOM: [
 			{
 				tag: 'video[src]',

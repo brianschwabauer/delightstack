@@ -35,6 +35,9 @@ interface ActiveUpload {
  */
 export function uploads(editor: Editor): Plugin {
 	const active = new Map<string, ActiveUpload>();
+	// Final attrs of finished uploads, kept so undo→redo across a completed
+	// upload can restore the real content instead of a dead placeholder
+	const completed = new Map<string, Record<string, unknown>>();
 
 	function detectKind(file: File): UploadKind {
 		for (const block of editor.blocks.values()) {
@@ -95,19 +98,11 @@ export function uploads(editor: Editor): Plugin {
 		kind: UploadKind,
 		upload_id: string,
 		blob_url: string,
+		controller: AbortController,
 	) {
 		const uploader = editor.uploader as Uploader;
-		const controller = new AbortController();
-		active.set(upload_id, { upload_id, kind, controller, blob_url });
-		editor.uploads.push({
-			upload_id,
-			kind,
-			file_name: file.name,
-			progress: 0,
-			error: null,
-		});
 
-		// Probe image dimensions for layout stability while uploading
+		// Probe media dimensions for layout stability while uploading
 		if (kind === 'image') {
 			probeImage(blob_url).then((size) => {
 				if (!size || !active.has(upload_id)) return;
@@ -116,6 +111,11 @@ export function uploads(editor: Editor): Plugin {
 					height: size.height,
 					aspect_ratio: size.width / size.height,
 				});
+			});
+		} else if (kind === 'video') {
+			probeVideo(blob_url).then((size) => {
+				if (!size || !active.has(upload_id)) return;
+				patchNode(upload_id, { aspect_ratio: size.width / size.height });
 			});
 		}
 
@@ -126,7 +126,9 @@ export function uploads(editor: Editor): Plugin {
 				on_progress: (fraction) => setProgress(upload_id, fraction),
 			});
 			if (!active.has(upload_id)) return; // node was deleted mid-upload
-			patchNode(upload_id, completedAttrs(kind, file, result));
+			const attrs = completedAttrs(kind, file, result);
+			completed.set(upload_id, attrs);
+			patchNode(upload_id, attrs);
 			finish(upload_id);
 		} catch (error) {
 			if (controller.signal.aborted || !active.has(upload_id)) {
@@ -140,9 +142,21 @@ export function uploads(editor: Editor): Plugin {
 		}
 	}
 
+	/**
+	 * Snaps a raw drop position to the nearest top-level block boundary so a
+	 * file dropped onto the middle of a sentence doesn't split the sentence.
+	 */
+	function blockBoundary(pos: number): number {
+		const resolved = editor.state.doc.resolve(pos);
+		if (resolved.depth === 0) return pos;
+		const before = resolved.before(1);
+		const after = resolved.after(1);
+		return pos - before < after - pos ? before : after;
+	}
+
 	function uploadFiles(files: File[], pos?: number): void {
 		if (!editor.uploader) return;
-		let insertAt = pos;
+		let insertAt = pos === undefined ? undefined : blockBoundary(pos);
 		for (const file of files) {
 			const kind = detectKind(file);
 			const type = nodeTypeFor(kind);
@@ -163,15 +177,33 @@ export function uploads(editor: Editor): Plugin {
 					([key]) => type.spec.attrs && key in type.spec.attrs,
 				),
 			);
+			// Register BEFORE inserting: the placeholder must never be visible
+			// while unknown to the watcher, or the orphan sweep in
+			// appendTransaction would flag it as interrupted
+			const controller = new AbortController();
+			active.set(upload_id, { upload_id, kind, controller, blob_url });
+			editor.uploads.push({
+				upload_id,
+				kind,
+				file_name: file.name,
+				progress: 0,
+				error: null,
+			});
 			if (!editor.insertBlock(type.name, declared, insertAt)) {
+				active.delete(upload_id);
+				editor.uploads = editor.uploads.filter(
+					(upload) => upload.upload_id !== upload_id,
+				);
 				URL.revokeObjectURL(blob_url);
 				continue;
 			}
 			if (insertAt !== undefined) {
+				// Inserted at a block boundary, so the node sits exactly there;
+				// advance past it for the next file
 				const node = editor.state.doc.nodeAt(insertAt);
 				insertAt += node?.nodeSize ?? 0;
 			}
-			void start(file, kind, upload_id, blob_url);
+			void start(file, kind, upload_id, blob_url, controller);
 		}
 	}
 
@@ -197,12 +229,20 @@ export function uploads(editor: Editor): Plugin {
 			},
 		},
 		appendTransaction(transactions, oldState, newState) {
-			// Abort uploads whose placeholder node was deleted
-			if (!active.size || !transactions.some((tr) => tr.docChanged)) return null;
+			if (!transactions.some((tr) => tr.docChanged)) return null;
 			const present = new Set<string>();
-			newState.doc.descendants((node) => {
-				if (typeof node.attrs.upload_id === 'string') present.add(node.attrs.upload_id);
+			// Placeholders with no live upload behind them (undo→redo across an
+			// in-flight or finished upload re-inserts the placeholder version)
+			const orphans: { pos: number; node: PMNode }[] = [];
+			newState.doc.descendants((node, pos) => {
+				if (typeof node.attrs.upload_id !== 'string') return true;
+				present.add(node.attrs.upload_id);
+				if (node.attrs.uploading && !active.has(node.attrs.upload_id)) {
+					orphans.push({ pos, node });
+				}
+				return true;
 			});
+			// Abort uploads whose placeholder node was deleted
 			for (const [upload_id, entry] of active) {
 				if (present.has(upload_id)) continue;
 				entry.controller.abort();
@@ -212,7 +252,22 @@ export function uploads(editor: Editor): Plugin {
 					(upload) => upload.upload_id !== upload_id,
 				);
 			}
-			return null;
+			if (!orphans.length) return null;
+			// Restore finished uploads to their real attrs; anything else has
+			// no request behind it anymore — surface an error instead of a
+			// forever-stuck progress state
+			const tr = newState.tr.setMeta('addToHistory', false);
+			for (const { pos, node } of orphans) {
+				const upload_id = node.attrs.upload_id as string;
+				const patch = completed.get(upload_id) ?? {
+					uploading: false,
+					upload_id: null,
+					blob_url: null,
+					upload_error: 'Upload interrupted — remove and try again',
+				};
+				tr.setNodeMarkup(pos, null, { ...node.attrs, ...patch });
+			}
+			return tr;
 		},
 	});
 }
@@ -252,6 +307,22 @@ function completedAttrs(
 function filesFrom(data: DataTransfer | null): File[] {
 	if (!data) return [];
 	return Array.from(data.files ?? []);
+}
+
+function probeVideo(url: string): Promise<{ width: number; height: number } | null> {
+	return new Promise((resolve) => {
+		const video = document.createElement('video');
+		video.preload = 'metadata';
+		video.onloadedmetadata = () => {
+			const { videoWidth, videoHeight } = video;
+			video.src = '';
+			resolve(
+				videoWidth && videoHeight ? { width: videoWidth, height: videoHeight } : null,
+			);
+		};
+		video.onerror = () => resolve(null);
+		video.src = url;
+	});
 }
 
 function probeImage(url: string): Promise<{ width: number; height: number } | null> {

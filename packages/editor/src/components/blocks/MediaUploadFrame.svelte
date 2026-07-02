@@ -36,7 +36,9 @@
 {:else if uploading}
 	<div class="uploading" contenteditable="false">
 		<span class="name">{file_name || 'Uploading…'}</span>
-		<span class="bar"><span class="fill" style:width="{percent}%"></span></span>
+		<span class="bar">
+			<span class="fill" style:scale="{Math.max(0.005, upload?.progress ?? 0)} 1"></span>
+		</span>
 		<span class="percent">{percent}%</span>
 	</div>
 {:else}
@@ -73,9 +75,13 @@
 	.fill {
 		display: block;
 		block-size: 100%;
+		inline-size: 100%;
 		border-radius: inherit;
 		background: var(--action, var(--color-primary));
-		transition: width 200ms ease;
+		/* scale, not width: progress must never trigger layout */
+		scale: 0.005 1;
+		transform-origin: left center;
+		transition: scale 200ms ease;
 	}
 
 	.percent {

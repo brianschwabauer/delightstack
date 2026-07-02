@@ -15,7 +15,7 @@
 		block_id: string | null;
 	};
 
-	let { attrs, editor, delete_node }: BlockProps<FileAttrs> = $props();
+	let { attrs, editable, editor, delete_node }: BlockProps<FileAttrs> = $props();
 
 	function formatSize(bytes: number | null): string {
 		if (!bytes) return '';
@@ -37,7 +37,16 @@
 		upload_error={attrs.upload_error}
 		file_name={attrs.name}
 		{delete_node}>
-		<a href={attrs.src} download={attrs.name} contenteditable="false">
+		<a
+			href={attrs.src}
+			download={attrs.name}
+			contenteditable="false"
+			onclick={(event) => {
+				// In edit mode clicking selects the block — it must not
+				// trigger a download (ProseMirror sees the click, but the
+				// anchor's default action still fires without this)
+				if (editable) event.preventDefault();
+			}}>
 			<span class="icon">{@html icons.file}</span>
 			<span class="meta">
 				<span class="name">{attrs.name}</span>

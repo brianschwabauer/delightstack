@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button, Gallery } from '@delightstack/components';
+	import { decodeThumbHash } from '@delightstack/components/media';
 	import type { BlockProps } from '../../types/index.js';
 
 	type ImageAttrs = {
@@ -53,6 +54,24 @@
 		if (value !== attrs.caption) update_attrs({ caption: value });
 	}
 
+	// Blurred thumbhash placeholder behind the image until it paints — the
+	// hash is stored in the attrs, so the wait shows a soft preview instead
+	// of a flat color
+	let loaded = $state(false);
+	function trackLoad(img: HTMLImageElement) {
+		void attrs.src; // re-run when the source swaps
+		loaded = img.complete;
+		if (img.complete) return;
+		const done = () => (loaded = true);
+		img.addEventListener('load', done, { once: true });
+		return () => img.removeEventListener('load', done);
+	}
+	const thumb_bg = $derived(
+		!loaded && attrs.thumbhash && !attrs.uploading
+			? `url(${decodeThumbHash(attrs.thumbhash)})`
+			: undefined,
+	);
+
 	// Read-only: clicking the image opens the Gallery lightbox (headless mode)
 	// with a zoom animation from the image itself.
 	let lightbox = $state<{ open: (index: number, from?: HTMLElement) => void } | null>(
@@ -85,16 +104,6 @@
 				Remove
 			</Button>
 		</div>
-	{:else if attrs.uploading && attrs.blob_url}
-		<img
-			src={attrs.blob_url}
-			alt={attrs.alt}
-			class="uploading"
-			draggable="false"
-			data-resize-anchor />
-		<div class="progress" contenteditable="false" aria-label="Uploading">
-			<span class="ring" style:--sweep="{Math.round(progress * 360)}deg"></span>
-		</div>
 	{:else if attrs.src && !editable}
 		<button
 			type="button"
@@ -108,21 +117,36 @@
 				width={attrs.width || undefined}
 				height={attrs.height || undefined}
 				style:background-color={attrs.background_color || undefined}
+				style:background-image={thumb_bg}
 				draggable="false"
 				data-resize-anchor
-				bind:this={img_el} />
+				bind:this={img_el}
+				{@attach trackLoad} />
 		</button>
 		<Gallery display="lightbox" items={lightbox_items} bind:this={lightbox} />
-	{:else if attrs.src}
+	{:else if attrs.src || attrs.blob_url}
+		<!-- One element for both the blob preview and the uploaded src:
+		     swapping src in place keeps the previous bitmap on screen until
+		     the new one decodes, so the placeholder→final transition never
+		     flashes empty. -->
+		{@const uploading = attrs.uploading && Boolean(attrs.blob_url)}
 		<img
-			src={attrs.src}
-			srcset={attrs.srcset || undefined}
+			src={uploading ? attrs.blob_url : attrs.src}
+			srcset={uploading ? undefined : attrs.srcset || undefined}
 			alt={attrs.alt}
 			width={attrs.width || undefined}
 			height={attrs.height || undefined}
+			class:uploading
 			style:background-color={attrs.background_color || undefined}
+			style:background-image={thumb_bg}
 			draggable="false"
-			data-resize-anchor />
+			data-resize-anchor
+			{@attach trackLoad} />
+		{#if uploading}
+			<div class="progress" contenteditable="false" aria-label="Uploading">
+				<span class="ring" style:--sweep="{Math.round(progress * 360)}deg"></span>
+			</div>
+		{/if}
 	{/if}
 	{#if show_caption_editor}
 		<figcaption contenteditable="false">
@@ -157,6 +181,8 @@
 			inline-size: 100%;
 			block-size: auto;
 			border-radius: var(--radius, 8px);
+			background-size: cover;
+			background-position: center;
 
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
@@ -176,6 +202,12 @@
 		border: none;
 		background: none;
 		cursor: zoom-in;
+		border-radius: var(--radius, 8px);
+
+		&:focus-visible {
+			outline: 2px solid var(--action, var(--color-primary));
+			outline-offset: 2px;
+		}
 	}
 
 	.progress {
@@ -184,6 +216,14 @@
 		display: grid;
 		place-items: center;
 		pointer-events: none;
+	}
+
+	/* Without registration a custom property isn't interpolable and the
+	   ring's `transition: --sweep` silently does nothing */
+	@property --sweep {
+		syntax: '<angle>';
+		inherits: false;
+		initial-value: 0deg;
 	}
 
 	.ring {
@@ -233,6 +273,11 @@
 		text-align: center;
 		outline: none;
 		padding: 0;
+
+		/* outline: none needs a replacement for keyboard focus */
+		&:focus-visible {
+			box-shadow: 0 2px 0 var(--action, var(--color-primary));
+		}
 
 		&::placeholder {
 			color: var(

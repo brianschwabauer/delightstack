@@ -11,8 +11,12 @@
 
 	// The Callout's own chrome (icon) must not accept the caret — only the
 	// content hole is editable. The component doesn't expose contenteditable
-	// on its internals, so mark everything outside the hole after mount.
+	// on its internals, so mark everything outside the hole after mount —
+	// and again whenever a variant change re-renders the icon.
 	function shieldChrome(el: HTMLElement) {
+		// Attachments are effects: reading the variant re-runs this whenever
+		// a settings change swaps the icon in
+		void attrs.variant;
 		el.querySelectorAll('.icon, .title').forEach((chrome) => {
 			chrome.setAttribute('contenteditable', 'false');
 		});

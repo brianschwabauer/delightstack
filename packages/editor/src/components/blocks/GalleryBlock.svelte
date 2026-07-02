@@ -21,6 +21,10 @@
 		id: string;
 		name: string;
 		progress: number;
+		error: string | null;
+		/** Retained so a failed upload can be retried without re-picking */
+		file: File;
+		controller: AbortController;
 	}
 
 	let pending = $state<PendingUpload[]>([]);
@@ -29,6 +33,12 @@
 	// Manage mode lives in the shared node-view UI state so the chrome
 	// actions (hover bubble) can toggle it; leaving the block exits it.
 	const managing = $derived(Boolean(ui.managing) && editable);
+
+	const flip_duration =
+		typeof matchMedia === 'function' &&
+		matchMedia('(prefers-reduced-motion: reduce)').matches
+			? 0
+			: 200;
 
 	$effect(() => {
 		ui.add_images = () => input?.click();
@@ -112,6 +122,20 @@
 		if (list) update_attrs({ items: list });
 	}
 
+	function keyboardReorder(event: KeyboardEvent, index: number) {
+		const direction = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+		if (!direction) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const target = index + direction;
+		if (target < 0 || target >= attrs.items.length) return;
+		const list = [...attrs.items];
+		const [moved] = list.splice(index, 1);
+		list.splice(target, 0, moved);
+		// The handle element survives the keyed flip, so focus follows the row
+		update_attrs({ items: list });
+	}
+
 	function setCaption(id: string, caption: string) {
 		update_attrs({
 			items: attrs.items.map((item) => (item.id === id ? { ...item, caption } : item)),
@@ -124,33 +148,65 @@
 		if (!items.length) ui.managing = false;
 	}
 
-	async function addFiles(files: FileList | null) {
+	function addFiles(files: FileList | null) {
 		if (!files?.length || !editor.uploader) return;
-		await Promise.all(
-			Array.from(files).map(async (file) => {
-				const entry: PendingUpload = {
-					id: `${file.name}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
-					name: file.name,
-					progress: 0,
-				};
-				pending.push(entry);
-				try {
-					const result = await editor.uploader!.upload(file, {
-						kind: 'image',
-						signal: new AbortController().signal,
-						on_progress: (fraction) => {
-							const current = pending.find((item) => item.id === entry.id);
-							if (current) current.progress = fraction;
-						},
-					});
-					if (result.image) {
-						update_attrs({ items: [...attrs.items, result.image] });
-					}
-				} finally {
-					pending = pending.filter((item) => item.id !== entry.id);
-				}
-			}),
-		);
+		for (const file of Array.from(files)) {
+			const entry: PendingUpload = {
+				id: `${file.name}-${crypto.getRandomValues(new Uint32Array(1))[0]}`,
+				name: file.name,
+				progress: 0,
+				error: null,
+				file,
+				controller: new AbortController(),
+			};
+			pending.push(entry);
+			void runUpload(entry);
+		}
+	}
+
+	function appendItem(image: UploadedImage) {
+		// A reorder drag renders (and later commits) `live_items` — append to
+		// the live copy too or the drag's commit would drop the new image
+		if (live_items) live_items = [...live_items, image];
+		update_attrs({ items: [...attrs.items, image] });
+	}
+
+	async function runUpload(entry: PendingUpload) {
+		try {
+			const result = await editor.uploader!.upload(entry.file, {
+				kind: 'image',
+				signal: entry.controller.signal,
+				on_progress: (fraction) => {
+					const current = pending.find((item) => item.id === entry.id);
+					if (current) current.progress = fraction;
+				},
+			});
+			if (result.image) appendItem(result.image);
+			pending = pending.filter((item) => item.id !== entry.id);
+		} catch (error) {
+			if (entry.controller.signal.aborted) {
+				pending = pending.filter((item) => item.id !== entry.id);
+				return;
+			}
+			// Keep the row with an error + retry — a failed upload must never
+			// silently vanish
+			const current = pending.find((item) => item.id === entry.id);
+			if (current) {
+				current.error = error instanceof Error ? error.message : 'Upload failed';
+			}
+		}
+	}
+
+	function retryUpload(entry: PendingUpload) {
+		entry.error = null;
+		entry.progress = 0;
+		entry.controller = new AbortController();
+		void runUpload(entry);
+	}
+
+	function dismissUpload(entry: PendingUpload) {
+		entry.controller.abort();
+		pending = pending.filter((item) => item.id !== entry.id);
 	}
 </script>
 
@@ -168,11 +224,21 @@
 	{#if pending.length}
 		<div class="pending" contenteditable="false">
 			{#each pending as entry (entry.id)}
-				<div class="upload">
+				<div class="upload" class:failed={entry.error}>
 					<span class="name">{entry.name}</span>
-					<span class="bar">
-						<span class="fill" style:width="{Math.round(entry.progress * 100)}%"></span>
-					</span>
+					{#if entry.error}
+						<span class="error-text">{entry.error}</span>
+						<Button dense transparent size="0" onclick={() => retryUpload(entry)}>
+							Retry
+						</Button>
+						<Button dense transparent error size="0" onclick={() => dismissUpload(entry)}>
+							Remove
+						</Button>
+					{:else}
+						<span class="bar">
+							<span class="fill" style:scale="{Math.max(0.005, entry.progress)} 1"></span>
+						</span>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -185,11 +251,12 @@
 					class="row"
 					class:dragging={drag_index === index}
 					data-row
-					animate:flip={{ duration: 200 }}>
+					animate:flip={{ duration: flip_duration }}>
 					<button
 						type="button"
 						class="handle"
-						aria-label="Drag to reorder"
+						aria-label="Reorder (drag, or arrow keys when focused)"
+						onkeydown={(event) => keyboardReorder(event, index)}
 						onpointerdown={(event) => startReorder(event, index)}
 						onpointermove={moveReorder}
 						onpointerup={endReorder}
@@ -295,9 +362,27 @@
 	.fill {
 		display: block;
 		block-size: 100%;
+		inline-size: 100%;
 		border-radius: inherit;
 		background: var(--action, var(--color-primary));
-		transition: width 200ms ease;
+		/* scale, not width: progress must never trigger layout */
+		scale: 0.005 1;
+		transform-origin: left center;
+		transition: scale 200ms ease;
+	}
+
+	.failed {
+		background: color-mix(in oklab, var(--color-error, #ef4444) 8%, transparent);
+	}
+
+	.error-text {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--color-error, #ef4444);
+		font-size: 0.75rem;
 	}
 
 	.manage {
@@ -323,7 +408,7 @@
 				--color-bg-active,
 				color-mix(in oklab, currentColor 6%, transparent)
 			);
-			box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+			box-shadow: var(--shadow-md, 0 2px 8px rgb(0 0 0 / 10%));
 			position: relative;
 			z-index: 1;
 		}
@@ -371,6 +456,12 @@
 		color: inherit;
 		outline: none;
 		padding: 0.25rem;
+		border-radius: calc(var(--radius, 8px) / 2);
+
+		/* outline: none needs a replacement for keyboard focus */
+		&:focus-visible {
+			box-shadow: inset 0 -2px 0 var(--action, var(--color-primary));
+		}
 
 		&::placeholder {
 			color: var(
