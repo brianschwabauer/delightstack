@@ -31,8 +31,20 @@
 	const chrome_actions = $derived(
 		(spec.chrome ?? []).filter((action) => !action.when || action.when(action_ctx)),
 	);
+	// An active chrome mode (ui.chrome_mode set by the block) swaps the whole
+	// toolbar for the mode's actions + an exit button
+	const active_mode = $derived(
+		(spec.chrome_modes ?? []).find((mode) => mode.name === props.ui.chrome_mode) ?? null,
+	);
+	const mode_actions = $derived(
+		(active_mode?.actions ?? []).filter(
+			(action) => !action.when || action.when(action_ctx),
+		),
+	);
+	const mode_status = $derived(active_mode?.status?.(action_ctx) ?? null);
 	const show_chrome = $derived(
-		props.editable && (deletable || has_settings || chrome_actions.length > 0),
+		props.editable &&
+			(deletable || has_settings || chrome_actions.length > 0 || Boolean(active_mode)),
 	);
 
 	const Component = $derived(spec.component!);
@@ -387,76 +399,121 @@
 		ui={props.ui} />
 
 	{#if show_chrome}
-		<div class="chrome" contenteditable="false" bind:this={chrome_el}>
-			{#if resizable && breakout}
-				{#each WIDTH_MODES as entry (entry.value)}
+		<div
+			class="chrome"
+			class:mode-active={Boolean(active_mode)}
+			contenteditable="false"
+			bind:this={chrome_el}>
+			{#if active_mode}
+				{#if active_mode.hint}
+					<span class="mode-hint">{active_mode.hint}</span>
+				{/if}
+				{#each mode_actions as action (action.name)}
 					<Button
 						icon
 						transparent
 						size="0"
 						dense
-						active={width_mode === entry.value}
-						aria-label={entry.label}
-						tooltip={entry.label}
+						active={action.is_active?.(action_ctx) ?? false}
+						aria-label={action.label}
+						tooltip={action.label}
 						onpointerdown={(event: PointerEvent) => {
-							if (event.button !== 0) return;
 							event.preventDefault();
 							event.stopPropagation();
-							setWidthMode(entry.value);
+							action.run(action_ctx);
 						}}>
-						{@html entry.icon}
+						{@html action.icon}
 					</Button>
 				{/each}
-			{/if}
-			{#each chrome_actions as action (action.name)}
+				{#if mode_status}
+					<span class="mode-status">{mode_status}</span>
+				{/if}
+				<span class="mode-divider"></span>
 				<Button
 					icon
 					transparent
 					size="0"
 					dense
-					active={action.is_active?.(action_ctx) ?? false}
-					aria-label={action.label}
-					tooltip={action.label}
+					aria-label="Done"
+					tooltip="Done"
 					onpointerdown={(event: PointerEvent) => {
 						event.preventDefault();
 						event.stopPropagation();
-						action.run(action_ctx);
+						active_mode?.exit(action_ctx);
 					}}>
-					{@html action.icon}
+					{@html icons.check}
 				</Button>
-			{/each}
-			{#if has_settings}
-				<Button
-					icon
-					transparent
-					size="0"
-					dense
-					aria-label="Block settings"
-					tooltip="Settings"
-					onpointerdown={(event: PointerEvent) => {
-						event.preventDefault();
-						event.stopPropagation();
-						if (props.settings_open) props.settings_open = false;
-						else openSettings();
-					}}>
-					{@html icons.settings}
-				</Button>
-			{/if}
-			{#if deletable}
-				<Button
-					icon
-					transparent
-					size="0"
-					dense
-					aria-label="Delete block"
-					tooltip="Delete"
-					onpointerdown={(event: PointerEvent) => {
-						event.preventDefault();
-						event.stopPropagation();
-						props.delete_node();
-					}}>
-					{@html icons.trash}
-				</Button>
+			{:else}
+				{#if resizable && breakout}
+					{#each WIDTH_MODES as entry (entry.value)}
+						<Button
+							icon
+							transparent
+							size="0"
+							dense
+							active={width_mode === entry.value}
+							aria-label={entry.label}
+							tooltip={entry.label}
+							onpointerdown={(event: PointerEvent) => {
+								if (event.button !== 0) return;
+								event.preventDefault();
+								event.stopPropagation();
+								setWidthMode(entry.value);
+							}}>
+							{@html entry.icon}
+						</Button>
+					{/each}
+				{/if}
+				{#each chrome_actions as action (action.name)}
+					<Button
+						icon
+						transparent
+						size="0"
+						dense
+						active={action.is_active?.(action_ctx) ?? false}
+						aria-label={action.label}
+						tooltip={action.label}
+						onpointerdown={(event: PointerEvent) => {
+							event.preventDefault();
+							event.stopPropagation();
+							action.run(action_ctx);
+						}}>
+						{@html action.icon}
+					</Button>
+				{/each}
+				{#if has_settings}
+					<Button
+						icon
+						transparent
+						size="0"
+						dense
+						aria-label="Block settings"
+						tooltip="Settings"
+						onpointerdown={(event: PointerEvent) => {
+							event.preventDefault();
+							event.stopPropagation();
+							if (props.settings_open) props.settings_open = false;
+							else openSettings();
+						}}>
+						{@html icons.settings}
+					</Button>
+				{/if}
+				{#if deletable}
+					<Button
+						icon
+						transparent
+						size="0"
+						dense
+						aria-label="Delete block"
+						tooltip="Delete"
+						onpointerdown={(event: PointerEvent) => {
+							event.preventDefault();
+							event.stopPropagation();
+							props.delete_node();
+						}}>
+						{@html icons.trash}
+					</Button>
+				{/if}
 			{/if}
 		</div>
 	{/if}
@@ -532,6 +589,8 @@
 		&:focus-within .chrome {
 			opacity: 1;
 			pointer-events: auto;
+			/* Snap in (the base rule still eases the fade out) */
+			transition: none;
 		}
 
 		&:hover .grip,
@@ -594,6 +653,7 @@
 		inset-block-start: 0.375rem;
 		inset-inline-end: 0.375rem;
 		display: flex;
+		align-items: center;
 		gap: 2px;
 		padding: 2px;
 		background: var(--color-surface, Canvas);
@@ -606,6 +666,34 @@
 		pointer-events: none;
 		transition: opacity var(--duration-fast, 150ms) var(--ease-out, ease);
 		z-index: 3;
+
+		/* An active mode owns the toolbar: always visible, not hover-gated */
+		&.mode-active {
+			opacity: 1;
+			pointer-events: auto;
+		}
+	}
+
+	.mode-hint {
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+		padding-inline: 0.5rem 0.25rem;
+		white-space: nowrap;
+	}
+
+	.mode-status {
+		font-size: 0.6875rem;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-muted);
+		padding-inline: 0.25rem;
+		white-space: nowrap;
+	}
+
+	.mode-divider {
+		inline-size: 1px;
+		align-self: stretch;
+		margin-block: 0.25rem;
+		background: var(--color-border, color-mix(in oklab, currentColor 15%, transparent));
 	}
 
 	.grips {

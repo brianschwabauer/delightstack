@@ -86,6 +86,24 @@ export const galleryBlock = defineBlock<GalleryAttrs>({
 			},
 		},
 	],
+	chrome_modes: [
+		{
+			name: 'manage',
+			hint: 'Drag rows to reorder',
+			actions: [
+				{
+					name: 'add_images',
+					label: 'Add images',
+					icon: icons.image,
+					when: (ctx) => Boolean(ctx.editor.uploader),
+					run: (ctx) => (ctx.ui.add_images as (() => void) | undefined)?.(),
+				},
+			],
+			exit: (ctx) => {
+				ctx.ui.managing = false;
+			},
+		},
+	],
 	commands: [
 		{
 			name: 'gallery',

@@ -54,6 +54,11 @@
 		if (!selected && ui.managing) ui.managing = false;
 	});
 
+	// While managing, the block toolbar swaps to the manage-mode actions
+	$effect(() => {
+		ui.chrome_mode = managing ? 'manage' : undefined;
+	});
+
 	// One data shape: attrs.items are UploadResult['image'] objects, mapped to
 	// Gallery items here (no parallel snapshot format to keep in sync).
 	const gallery_items = $derived(

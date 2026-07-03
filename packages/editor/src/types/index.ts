@@ -208,6 +208,26 @@ export interface BlockChromeAction<Attrs = Record<string, unknown>> {
 	run: (ctx: BlockActionContext<Attrs>) => void;
 }
 
+/**
+ * A mode the block's hover toolbar can switch into (focal-point editing,
+ * image management, …). While a block sets `ui.chrome_mode` to a mode's
+ * name, the toolbar swaps its normal buttons (settings/delete/width) for the
+ * mode's own actions plus an automatic exit button — so the mode needs no
+ * overlay UI on top of the block itself.
+ */
+export interface BlockChromeMode<Attrs = Record<string, unknown>> {
+	/** Matches the block's `ui.chrome_mode` value while the mode is active */
+	name: string;
+	/** Short helper text shown at the start of the toolbar */
+	hint?: string;
+	/** Live readout (e.g. the focal x/y) rendered after the actions */
+	status?: (ctx: BlockActionContext<Attrs>) => string | null;
+	/** Toolbar buttons available while the mode is active */
+	actions?: BlockChromeAction<Attrs>[];
+	/** Leave the mode (wired to the toolbar's exit button) */
+	exit: (ctx: BlockActionContext<Attrs>) => void;
+}
+
 export type SettingsProps<Attrs = Record<string, unknown>> = Pick<
 	BlockProps<Attrs>,
 	'attrs' | 'editor' | 'update_attrs'
@@ -261,6 +281,8 @@ export interface BlockSpec<
 	settings?: SettingsField<Attrs>[] | Component<SettingsProps<Attrs>>;
 	/** Extra icon buttons in the block's hover chrome (before settings/delete) */
 	chrome?: BlockChromeAction<Attrs>[];
+	/** Toolbar modes the block can switch into via `ui.chrome_mode` */
+	chrome_modes?: BlockChromeMode<Attrs>[];
 	/** Slash/plus/toolbar entries contributed by this block */
 	commands?: EditorCommand[];
 	keymap?: Record<string, PMCommand>;

@@ -105,8 +105,39 @@ export const imageBlock = defineBlock<ImageAttrs>({
 			when: (ctx) => ctx.attrs.crop_aspect != null && !ctx.attrs.uploading,
 			is_active: (ctx) => Boolean(ctx.ui.repositioning),
 			run: (ctx) => {
+				// Select the node so leaving it (clicking another block) exits
+				// the mode automatically
+				const pos = ctx.pos();
+				if (pos !== undefined && !ctx.ui.repositioning) ctx.editor.selectNode(pos);
 				(ctx.ui.reposition as (() => void) | undefined)?.();
 			},
+		},
+	],
+	chrome_modes: [
+		{
+			name: 'reposition',
+			hint: 'Drag the image to set its focus',
+			// Live value published by the component (attrs lag mid-drag)
+			status: (ctx) =>
+				typeof ctx.ui.focal_label === 'string' ? ctx.ui.focal_label : null,
+			actions: [
+				{
+					name: 'center',
+					label: 'Center focus',
+					icon: icons.center,
+					when: (ctx) => ctx.attrs.focal_x !== 50 || ctx.attrs.focal_y !== 50,
+					run: (ctx) => ctx.update_attrs({ focal_x: 50, focal_y: 50 }),
+				},
+				{
+					name: 'clear_crop',
+					label: 'Remove crop',
+					icon: icons.crop_off,
+					// Clearing the crop also exits the mode (the component watches
+					// `cropped` and drops out on its own)
+					run: (ctx) => ctx.update_attrs({ crop_aspect: null, focal_x: 50, focal_y: 50 }),
+				},
+			],
+			exit: (ctx) => (ctx.ui.reposition as (() => void) | undefined)?.(),
 		},
 	],
 	upload_kind: 'image',

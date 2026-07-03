@@ -50,7 +50,7 @@
 	// ---- crop + focal point ----
 	const cropped = $derived(attrs.crop_aspect != null && !attrs.uploading);
 	const effective_ratio = $derived(cropped ? attrs.crop_aspect : aspect_ratio);
-	/** Live focal preview while repositioning (committed on Done) */
+	/** Live focal preview while dragging (committed on pointer release) */
 	let focal_live = $state<{ x: number; y: number } | null>(null);
 	const focal = $derived.by(() => {
 		const x = focal_live?.x ?? attrs.focal_x ?? 50;
@@ -59,8 +59,9 @@
 	});
 
 	// Reposition mode: drag the image to choose what the crop keeps.
-	// Registered on the shared ui state so the chrome "Reposition" action
-	// (defined in the block spec) can toggle it.
+	// Registered on the shared ui state so the chrome "Reposition" action and
+	// the mode toolbar (both defined in the block spec) can drive it. While
+	// active, `ui.chrome_mode` swaps the block toolbar for the mode's actions.
 	let repositioning = $state(false);
 	let reposition_el = $state<HTMLElement | null>(null);
 	let pan_last: { x: number; y: number } | null = null;
@@ -77,11 +78,17 @@
 
 	$effect(() => {
 		ui.repositioning = repositioning;
+		ui.chrome_mode = repositioning ? 'reposition' : undefined;
 	});
 
-	// Leaving the block exits reposition mode without committing
+	// Live x/y readout for the mode toolbar (attrs alone would lag the drag)
 	$effect(() => {
-		if (!selected && repositioning) {
+		ui.focal_label = focal;
+	});
+
+	// Leaving the block (or clearing the crop) exits reposition mode
+	$effect(() => {
+		if ((!selected || !cropped) && repositioning) {
 			repositioning = false;
 			focal_live = null;
 		}
@@ -123,18 +130,15 @@
 		};
 	}
 
+	// Each drag commits on release — the mode has no explicit "save", so
+	// exiting (toolbar, Escape, or clicking another block) never loses work
 	function panEnd() {
 		pan_last = null;
-	}
-
-	function commitReposition() {
-		if (focal_live) {
-			update_attrs({
-				focal_x: Math.round(focal_live.x * 10) / 10,
-				focal_y: Math.round(focal_live.y * 10) / 10,
-			});
-		}
-		repositioning = false;
+		if (!focal_live) return;
+		update_attrs({
+			focal_x: Math.round(focal_live.x * 10) / 10,
+			focal_y: Math.round(focal_live.y * 10) / 10,
+		});
 		focal_live = null;
 	}
 
@@ -254,6 +258,7 @@
 			data-resize-anchor
 			{@attach trackLoad} />
 		{#if repositioning && cropped}
+			<!-- Bare drag surface — all controls live in the block's mode toolbar -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="reposition"
@@ -263,14 +268,6 @@
 				onpointermove={panMove}
 				onpointerup={panEnd}
 				onpointercancel={panEnd}>
-				<span class="hint">Drag to choose the focus point</span>
-				<span class="readout">{focal}</span>
-				<div class="reposition-actions">
-					<Button dense size="0" onclick={() => (focal_live = { x: 50, y: 50 })}>
-						Center
-					</Button>
-					<Button dense size="0" accent onclick={commitReposition}>Done</Button>
-				</div>
 			</div>
 		{/if}
 		{#if uploading}
@@ -334,10 +331,6 @@
 	.reposition {
 		position: absolute;
 		inset: 0;
-		display: grid;
-		place-items: center;
-		align-content: center;
-		gap: 0.5rem;
 		cursor: move;
 		border-radius: var(--radius, 8px);
 		/* Vignette: the edges dim so the focus point reads as a spotlight */
@@ -347,28 +340,8 @@
 			transparent 40%,
 			rgb(0 0 0 / 45%) 100%
 		);
-		color: white;
 		user-select: none;
 		touch-action: none;
-	}
-
-	.hint {
-		font-size: 0.8125rem;
-		font-weight: 500;
-		text-shadow: 0 1px 3px rgb(0 0 0 / 60%);
-		pointer-events: none;
-	}
-
-	.readout {
-		font-size: 0.6875rem;
-		font-variant-numeric: tabular-nums;
-		text-shadow: 0 1px 3px rgb(0 0 0 / 60%);
-		pointer-events: none;
-	}
-
-	.reposition-actions {
-		display: flex;
-		gap: 0.375rem;
 	}
 
 	.zoom {
