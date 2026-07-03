@@ -106,7 +106,9 @@
 
 <div
 	class="settings"
-	in:surfaceIn={{ y: anchor && position.top < anchor.top ? 4 : -4 }}
+	in:surfaceIn={{
+		origin: anchor && position.top < anchor.top ? 'bottom right' : 'top right',
+	}}
 	out:surfaceOut
 	role="dialog"
 	aria-modal="true"

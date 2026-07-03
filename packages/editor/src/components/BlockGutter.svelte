@@ -583,7 +583,7 @@
 {#if menu_open && menu_position}
 	<div
 		class="menu-wrap"
-		in:surfaceIn
+		in:surfaceIn={{ origin: 'top left' }}
 		out:surfaceOut
 		style:left="{menu_position.left}px"
 		style:top="{menu_position.top}px"

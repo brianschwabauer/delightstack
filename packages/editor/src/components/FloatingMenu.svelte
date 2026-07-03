@@ -3,7 +3,8 @@
 	import type { Editor } from '../core/editor.svelte.js';
 	import { icons } from '../core/icons.js';
 	import { portal } from './portal.js';
-	import { surfaceIn, surfaceOut } from './motion.js';
+	import { surfaceOut } from './motion.js';
+	import { findScroller } from '../core/plugins/drop.js';
 	import LinkEditor from './LinkEditor.svelte';
 
 	interface Props {
@@ -34,26 +35,6 @@
 			!pointer_down,
 	);
 
-	// Settle debounce: extending a selection with shift+arrow would otherwise
-	// materialize the toolbar instantly and twitch it on every keystroke.
-	// It appears 180ms after the selection stops changing. Formatting
-	// commands don't move the range, so the open toolbar never blinks.
-	let settled = $state(false);
-	let last_range = { from: -1, to: -1 };
-	$effect(() => {
-		const { from, to } = editor.selection;
-		if (!visible) {
-			settled = false;
-			last_range = { from: -1, to: -1 };
-			return;
-		}
-		if (from === last_range.from && to === last_range.to) return;
-		last_range = { from, to };
-		settled = false;
-		const timer = setTimeout(() => (settled = true), 180);
-		return () => clearTimeout(timer);
-	});
-
 	// Bumped by any scroll (capture catches nested scrollers) so the anchor
 	// re-measures and the menu follows the selection instead of stranding at
 	// stale viewport coordinates.
@@ -82,19 +63,45 @@
 		}
 	});
 
+	// The menu is confined to the editor's scroll container (when there is
+	// one): scrolling a selection out of view takes the toolbar with it
+	// instead of stranding it over unrelated page chrome.
+	const bounds = $derived.by(() => {
+		void scroll_tick;
+		const viewport_w = typeof window === 'undefined' ? 1200 : window.innerWidth;
+		const viewport_h = typeof window === 'undefined' ? 800 : window.innerHeight;
+		let top = 8;
+		let bottom = viewport_h - 8;
+		let left = 8;
+		let right = viewport_w - 8;
+		const view = editor.view;
+		const scroller = view ? findScroller(view.dom) : null;
+		if (scroller) {
+			const rect = scroller.getBoundingClientRect();
+			top = Math.max(top, rect.top);
+			bottom = Math.min(bottom, rect.bottom);
+			left = Math.max(left, rect.left);
+			right = Math.min(right, rect.right);
+		}
+		return { top, bottom, left, right };
+	});
+
 	const position = $derived.by(() => {
 		if (!anchor) return null;
 		const width = menu_width || 320;
 		const height = menu_height || 44;
-		const viewport_w = typeof window === 'undefined' ? 1200 : window.innerWidth;
-		const viewport_h = typeof window === 'undefined' ? 800 : window.innerHeight;
+		// The selection scrolled out of the container — hide entirely
+		if (anchor.bottom < bounds.top || anchor.top > bounds.bottom) return null;
 		let top = anchor.top - height - 8;
-		if (top < 8) top = anchor.bottom + 8;
+		if (top < bounds.top) top = anchor.bottom + 8;
 		// A selection at the very bottom with no room above either: keep the
-		// toolbar on-screen rather than below the fold
-		top = Math.min(top, viewport_h - height - 8);
+		// toolbar inside the container rather than below its fold
+		top = Math.max(bounds.top, Math.min(top, bounds.bottom - height));
 		const center = (anchor.left + anchor.right) / 2;
-		const left = Math.max(8, Math.min(center - width / 2, viewport_w - width - 8));
+		const left = Math.max(
+			bounds.left,
+			Math.min(center - width / 2, bounds.right - width),
+		);
 		return { left, top };
 	});
 
@@ -147,10 +154,11 @@
 	</Button>
 {/snippet}
 
-{#if visible && settled && position}
+{#if visible && position}
+	<!-- No entrance animation: the toolbar materializes and tracks the
+	     selection instantly (shift+arrow growth just slides it along) -->
 	<div
 		class="floating"
-		in:surfaceIn={{ y: anchor && position.top < anchor.top ? 4 : -4 }}
 		out:surfaceOut
 		role="toolbar"
 		aria-label="Text formatting"

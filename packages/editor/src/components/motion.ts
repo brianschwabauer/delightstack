@@ -1,10 +1,13 @@
-import { cubicIn, cubicOut } from 'svelte/easing';
+import { backOut, cubicIn } from 'svelte/easing';
 import type { TransitionConfig } from 'svelte/transition';
 
 /**
- * Shared enter/exit transitions for the editor's floating surfaces (slash
- * menu, floating toolbar, gutter menu, settings popover) so they all move
- * with one voice: scale + rise in on `--ease-out`, quick fade out.
+ * Shared enter/exit transitions for the editor's menu surfaces (slash menu,
+ * gutter menu). Entrances use the same back-out scale as the design system's
+ * Popover so all opening panels move with one voice; exits are a quick fade.
+ * The always-on toolbars (floating selection menu, block chrome) don't
+ * animate in at all — they appear instantly so they feel like part of the
+ * pointer, not a separate surface.
  * Durations collapse to 0 under `prefers-reduced-motion`.
  */
 
@@ -16,19 +19,20 @@ export function prefersReducedMotion(): boolean {
 }
 
 /**
- * Entrance: fade + scale(0.96→1) + a 4px drift from the anchor side.
- * Pass `y: 4` when the surface opens above its anchor (it drifts up into
- * place), `-4` (default) when it opens below.
+ * Entrance matching Popover: fade + back-out scale from 0.7, growing out of
+ * the anchor side. Pass the `origin` nearest the anchor, e.g. `top left`
+ * when the menu opens below-right of the caret (default `top center`).
  */
 export function surfaceIn(
 	_node: Element,
-	{ y = -4 }: { y?: number } = {},
+	{ origin = 'top center' }: { origin?: string } = {},
 ): TransitionConfig {
 	if (prefersReducedMotion()) return { duration: 0 };
 	return {
-		duration: 140,
-		easing: cubicOut,
-		css: (t, u) => `opacity: ${t}; translate: 0 ${u * y}px; scale: ${0.96 + t * 0.04};`,
+		duration: 200,
+		easing: backOut,
+		css: (t) =>
+			`transform-origin: ${origin}; opacity: ${Math.min(1, t)}; scale: ${0.7 + t * 0.3};`,
 	};
 }
 

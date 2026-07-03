@@ -158,7 +158,7 @@
 {#if open && position}
 	<div
 		class="slash-menu"
-		in:surfaceIn={{ y: position.bottom !== undefined ? 4 : -4 }}
+		in:surfaceIn={{ origin: position.bottom !== undefined ? 'bottom left' : 'top left' }}
 		out:surfaceOut
 		style:left="{position.left}px"
 		style:top={position.top !== undefined ? `${position.top}px` : null}
