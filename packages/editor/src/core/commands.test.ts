@@ -4,6 +4,10 @@ import { Node as PMNode } from 'prosemirror-model';
 import { buildSchema } from '../schema/index.js';
 import {
 	backspaceCommand,
+	deleteLine,
+	duplicateBlock,
+	insertLine,
+	jumpCaret,
 	moveBlock,
 	selectLeafBackward,
 	selectLeafForward,
@@ -212,6 +216,126 @@ describe('moveBlock', () => {
 		const doc = docFrom([paragraph('only'), paragraph('two')]);
 		const { handled } = apply(stateAt(doc, 1), moveBlock(-1));
 		expect(handled).toBe(false);
+	});
+
+	it('duplicateBlock(1) copies the line below and moves the caret into the copy', () => {
+		const doc = docFrom([paragraph('one'), paragraph('two')]);
+		// caret in "one" at offset 2
+		const { handled, state } = apply(stateAt(doc, 3), duplicateBlock(1));
+		expect(handled).toBe(true);
+		expect(state.doc.childCount).toBe(3);
+		expect(state.doc.child(0).textContent).toBe('one');
+		expect(state.doc.child(1).textContent).toBe('one');
+		expect(state.doc.child(2).textContent).toBe('two');
+		// Caret is in the copy (second block), same offset
+		expect(state.selection.from).toBe(8);
+	});
+
+	it('duplicateBlock(-1) copies above and keeps the caret at the same visual spot', () => {
+		const doc = docFrom([paragraph('one')]);
+		const { handled, state } = apply(stateAt(doc, 3), duplicateBlock(-1));
+		expect(handled).toBe(true);
+		expect(state.doc.childCount).toBe(2);
+		expect(state.doc.child(0).textContent).toBe('one');
+		expect(state.doc.child(1).textContent).toBe('one');
+		// Caret stays in the first (new) copy
+		expect(state.selection.from).toBe(3);
+	});
+
+	it('duplicateBlock copies a single list item, not the whole list', () => {
+		const doc = docFrom([
+			{
+				type: 'bullet_list',
+				content: [{ type: 'list_item', content: [paragraph('item')] }],
+			},
+		]);
+		const { handled, state } = apply(stateAt(doc, 3), duplicateBlock(1));
+		expect(handled).toBe(true);
+		expect(state.doc.childCount).toBe(1);
+		expect(state.doc.child(0).childCount).toBe(2);
+	});
+
+	it('insertLine(1) opens an empty paragraph below from mid-line', () => {
+		const doc = docFrom([paragraph('one'), paragraph('two')]);
+		const { handled, state } = apply(stateAt(doc, 2), insertLine(1));
+		expect(handled).toBe(true);
+		expect(state.doc.childCount).toBe(3);
+		expect(state.doc.child(0).textContent).toBe('one');
+		expect(state.doc.child(1).textContent).toBe('');
+		// Caret sits in the new empty line
+		expect(state.selection.$from.parent.content.size).toBe(0);
+	});
+
+	it('insertLine(-1) opens an empty paragraph above and moves the caret there', () => {
+		const doc = docFrom([paragraph('one')]);
+		const { handled, state } = apply(stateAt(doc, 2), insertLine(-1));
+		expect(handled).toBe(true);
+		expect(state.doc.child(0).textContent).toBe('');
+		expect(state.doc.child(1).textContent).toBe('one');
+		expect(state.selection.from).toBe(1);
+	});
+
+	it('insertLine adds a sibling list item inside a list', () => {
+		const doc = docFrom([
+			{
+				type: 'bullet_list',
+				content: [{ type: 'list_item', content: [paragraph('item')] }],
+			},
+		]);
+		const { handled, state } = apply(stateAt(doc, 3), insertLine(1));
+		expect(handled).toBe(true);
+		const list = state.doc.child(0);
+		expect(list.childCount).toBe(2);
+		expect(list.child(1).type.name).toBe('list_item');
+		expect(list.child(1).textContent).toBe('');
+	});
+
+	it('deleteLine removes the current block and lands on the next', () => {
+		const doc = docFrom([paragraph('one'), paragraph('two')]);
+		const { handled, state } = apply(stateAt(doc, 2), deleteLine());
+		expect(handled).toBe(true);
+		expect(state.doc.childCount).toBe(1);
+		expect(state.doc.child(0).textContent).toBe('two');
+		expect(state.selection.$from.parent.textContent).toBe('two');
+	});
+
+	it('deleteLine on the only block leaves an empty paragraph to type in', () => {
+		const doc = docFrom([paragraph('only')]);
+		const { handled, state } = apply(stateAt(doc, 2), deleteLine());
+		expect(handled).toBe(true);
+		expect(state.doc.childCount).toBe(1);
+		expect(state.doc.child(0).textContent).toBe('');
+	});
+
+	it('deleteLine removes a lone list item together with its emptied list', () => {
+		const doc = docFrom([
+			{
+				type: 'bullet_list',
+				content: [{ type: 'list_item', content: [paragraph('item')] }],
+			},
+			paragraph('after'),
+		]);
+		const { handled, state } = apply(stateAt(doc, 3), deleteLine());
+		expect(handled).toBe(true);
+		expect(state.doc.childCount).toBe(1);
+		expect(state.doc.child(0).textContent).toBe('after');
+	});
+
+	it('jumpCaret moves n textblocks and clamps to the document ends', () => {
+		const doc = docFrom([
+			paragraph('one'),
+			paragraph('two'),
+			paragraph('three'),
+			paragraph('four'),
+		]);
+		const down = apply(stateAt(doc, 1), jumpCaret(1, 2));
+		expect(down.handled).toBe(true);
+		expect(down.state.selection.$from.parent.textContent).toBe('three');
+		// Past the end → document end
+		const past = apply(stateAt(doc, 1), jumpCaret(1, 10));
+		expect(past.state.selection.$from.parent.textContent).toBe('four');
+		const up = apply(past.state, jumpCaret(-1, 10));
+		expect(up.state.selection.$from.parent.textContent).toBe('one');
 	});
 
 	it('moves a single list item among its siblings, not the whole list', () => {

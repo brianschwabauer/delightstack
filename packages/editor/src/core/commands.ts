@@ -16,7 +16,8 @@ import {
 	splitListItem,
 	wrapInList,
 } from 'prosemirror-schema-list';
-import { NodeSelection, TextSelection, type Command } from 'prosemirror-state';
+import { NodeSelection, Selection, TextSelection, type Command } from 'prosemirror-state';
+import { findScroller } from './plugins/drop.js';
 import type {
 	Attrs,
 	Node as PMNode,
@@ -27,9 +28,9 @@ import type {
 
 /**
  * Schema-aware ProseMirror commands used by the keymap, input rules, and the
- * built-in EditorCommand registry entries. All pure `Command` functions —
- * no view or Svelte dependencies, so they're unit-testable with
- * `EditorState.apply` alone.
+ * built-in EditorCommand registry entries. Pure `Command` functions with no
+ * Svelte dependencies, unit-testable with `EditorState.apply` alone (only
+ * `pageJump` needs the view, for coordinate math).
  */
 
 /** Sets the selected blocks to `type`, or back to paragraph if already active. */
@@ -317,6 +318,23 @@ export function backspaceCommand(schema: Schema): Command {
 }
 
 /**
+ * Start of the block the vertical line commands (move/duplicate/delete) act
+ * on: the selected node itself, the immediate list/todo item under the
+ * cursor (users expect the bullet under the cursor, not the entire list),
+ * or the top-level block.
+ */
+function currentBlockStart(state: Parameters<Command>[0]): number | null {
+	const { selection } = state;
+	if (selection instanceof NodeSelection) return selection.from;
+	const { $from } = selection;
+	for (let depth = $from.depth; depth > 0; depth--) {
+		const name = $from.node(depth).type.name;
+		if (name === 'list_item' || name === 'todo_item') return $from.before(depth);
+	}
+	return $from.depth > 0 ? $from.before(1) : null;
+}
+
+/**
  * Moves the selection's top-level block up or down one sibling. Dispatched
  * with the `drop` uiEvent meta so the view runs the same FLIP animation as
  * drag-and-drop reordering.
@@ -324,26 +342,7 @@ export function backspaceCommand(schema: Schema): Command {
 export function moveBlock(direction: -1 | 1): Command {
 	return (state, dispatch) => {
 		const { selection } = state;
-		const { $from } = selection;
-		let block_start: number | null = null;
-		if (selection instanceof NodeSelection) {
-			// Move exactly the selected node among its siblings (covers the
-			// gutter's Move actions on nested list items too)
-			block_start = selection.from;
-		} else {
-			// Inside a list, move the immediate item — users expect the bullet
-			// under the cursor to move, not the entire list
-			for (let depth = $from.depth; depth > 0; depth--) {
-				const name = $from.node(depth).type.name;
-				if (name === 'list_item' || name === 'todo_item') {
-					block_start = $from.before(depth);
-					break;
-				}
-			}
-			if (block_start === null) {
-				block_start = $from.depth > 0 ? $from.before(1) : null;
-			}
-		}
+		const block_start = currentBlockStart(state);
 		if (block_start === null) return false;
 		const $block = state.doc.resolve(block_start);
 		const node = $block.nodeAfter;
@@ -369,6 +368,172 @@ export function moveBlock(direction: -1 | 1): Command {
 				: tr.setSelection(TextSelection.create(tr.doc, insert_pos + offset));
 		tr.setMeta('uiEvent', 'drop');
 		dispatch(tr.scrollIntoView());
+		return true;
+	};
+}
+
+/**
+ * Duplicates the current line/block (same granularity as {@link moveBlock})
+ * above (`-1`) or below (`1`). The caret lands in the copy, so duplicating
+ * up keeps it at the same visual spot and duplicating down rides along with
+ * the new line. The copied block_id is deduped by the block-id plugin.
+ */
+export function duplicateBlock(direction: -1 | 1): Command {
+	return (state, dispatch) => {
+		const { selection } = state;
+		const block_start = currentBlockStart(state);
+		if (block_start === null) return false;
+		const node = state.doc.resolve(block_start).nodeAfter;
+		if (!node) return false;
+		if (!dispatch) return true;
+		const insert_pos = direction === -1 ? block_start : block_start + node.nodeSize;
+		const offset = selection.from - block_start;
+		let tr = state.tr.insert(insert_pos, node.copy(node.content));
+		tr =
+			selection instanceof NodeSelection
+				? tr.setSelection(NodeSelection.create(tr.doc, insert_pos))
+				: tr.setSelection(TextSelection.create(tr.doc, insert_pos + offset));
+		dispatch(tr.scrollIntoView());
+		return true;
+	};
+}
+
+/**
+ * Opens an empty line above (`-1`) or below (`1`) the current one — from any
+ * column, without splitting it — and moves the caret there. Inside a list
+ * the new line is a sibling item; elsewhere it's a paragraph after the
+ * top-level block (which also serves as the exit hatch below a code block).
+ */
+export function insertLine(direction: -1 | 1): Command {
+	return (state, dispatch) => {
+		const { selection } = state;
+		const paragraph = state.schema.nodes.paragraph;
+		if (!paragraph) return false;
+		let pos: number;
+		let item_type: NodeType | null = null;
+		if (selection instanceof NodeSelection || selection.$from.depth === 0) {
+			pos = direction === -1 ? selection.from : selection.to;
+		} else {
+			const { $from } = selection;
+			let depth = 1;
+			for (let d = $from.depth; d > 0; d--) {
+				const name = $from.node(d).type.name;
+				if (name === 'list_item' || name === 'todo_item') {
+					depth = d;
+					item_type = $from.node(d).type;
+					break;
+				}
+			}
+			pos = direction === -1 ? $from.before(depth) : $from.after(depth);
+		}
+		const node = item_type ? item_type.createAndFill() : paragraph.create();
+		if (!node) return false;
+		if (!dispatch) return true;
+		let tr = state.tr.insert(pos, node);
+		tr = tr.setSelection(TextSelection.near(tr.doc.resolve(pos + 1)));
+		dispatch(tr.scrollIntoView());
+		return true;
+	};
+}
+
+/**
+ * Deletes the current line/block (same granularity as {@link moveBlock}).
+ * `deleteRange` grows the range as needed so an emptied container (a list
+ * whose only item was deleted) goes with it.
+ */
+export function deleteLine(): Command {
+	return (state, dispatch) => {
+		const { selection } = state;
+		let from: number;
+		let to: number;
+		if (selection instanceof NodeSelection) {
+			from = selection.from;
+			to = selection.to;
+		} else {
+			const block_start = currentBlockStart(state);
+			if (block_start === null) return false;
+			const node = state.doc.resolve(block_start).nodeAfter;
+			if (!node) return false;
+			from = block_start;
+			to = block_start + node.nodeSize;
+		}
+		if (!dispatch) return true;
+		let tr = state.tr.deleteRange(from, to);
+		// Deleting the only block leaves an empty doc — keep a line to type in
+		if (tr.doc.childCount === 0) {
+			tr = tr.insert(0, state.schema.nodes.paragraph.create());
+		}
+		tr = tr.setSelection(
+			TextSelection.near(tr.doc.resolve(Math.min(from, tr.doc.content.size))),
+		);
+		dispatch(tr.scrollIntoView());
+		return true;
+	};
+}
+
+/**
+ * Moves the caret `lines` textblocks up or down (a fast vertical jump —
+ * multi-line paragraphs count as one). Past either end it lands at the
+ * document start/end.
+ */
+export function jumpCaret(direction: -1 | 1, lines: number): Command {
+	return (state, dispatch) => {
+		const { $head } = state.selection;
+		const blocks: number[] = [];
+		state.doc.descendants((node, pos) => {
+			if (node.isTextblock) {
+				blocks.push(pos + 1);
+				return false;
+			}
+			return true;
+		});
+		if (!blocks.length) return false;
+		let index = 0;
+		for (let i = 0; i < blocks.length; i++) {
+			if (blocks[i] <= $head.pos) index = i;
+			else break;
+		}
+		const target = index + direction * lines;
+		if (!dispatch) return true;
+		let selection: Selection;
+		if (target < 0) selection = Selection.atStart(state.doc);
+		else if (target >= blocks.length) selection = Selection.atEnd(state.doc);
+		else selection = TextSelection.near(state.doc.resolve(blocks[target]));
+		dispatch(state.tr.setSelection(selection).scrollIntoView());
+		return true;
+	};
+}
+
+/**
+ * PageUp/PageDown caret movement: jumps roughly one viewport (of the
+ * editor's scroll container, or the window) and keeps the horizontal
+ * position. Needs the view for coordinate math — a no-op headless.
+ */
+export function pageJump(direction: -1 | 1): Command {
+	return (state, dispatch, view) => {
+		if (!view || typeof window === 'undefined') return false;
+		let coords: { left: number; top: number };
+		try {
+			coords = view.coordsAtPos(state.selection.head);
+		} catch {
+			return false;
+		}
+		const scroller = findScroller(view.dom);
+		const page = (scroller?.clientHeight ?? window.innerHeight) * 0.8;
+		const doc_rect = view.dom.getBoundingClientRect();
+		const target_y = coords.top + direction * page;
+		if (!dispatch) return true;
+		let selection: Selection;
+		if (target_y < doc_rect.top) {
+			selection = Selection.atStart(state.doc);
+		} else if (target_y > doc_rect.bottom) {
+			selection = Selection.atEnd(state.doc);
+		} else {
+			const found = view.posAtCoords({ left: coords.left, top: target_y });
+			if (!found) return false;
+			selection = TextSelection.near(state.doc.resolve(found.pos), direction);
+		}
+		dispatch(state.tr.setSelection(selection).scrollIntoView());
 		return true;
 	};
 }

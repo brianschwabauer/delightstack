@@ -13,8 +13,13 @@ import type { Command, Plugin } from 'prosemirror-state';
 import type { Schema } from 'prosemirror-model';
 import {
 	backspaceCommand,
+	deleteLine,
+	duplicateBlock,
+	insertLine,
+	jumpCaret,
 	liftListItem,
 	moveBlock,
+	pageJump,
 	selectLeafForward,
 	splitListItemCommand,
 	toggleBlockType,
@@ -65,6 +70,19 @@ export function buildKeymaps(schema: Schema, options: KeymapOptions = {}): Plugi
 	// Move the current block among its siblings (with the drop FLIP animation)
 	blocks['Alt-ArrowUp'] = moveBlock(-1);
 	blocks['Alt-ArrowDown'] = moveBlock(1);
+	// Duplicate the current line/block above/below (VS Code muscle memory)
+	blocks['Shift-Alt-ArrowUp'] = duplicateBlock(-1);
+	blocks['Shift-Alt-ArrowDown'] = duplicateBlock(1);
+	// Open a line above without splitting the current one
+	blocks['Mod-Shift-Enter'] = insertLine(-1);
+	// Delete the current line/block
+	blocks['Shift-Delete'] = deleteLine();
+	// Fast vertical caret jumps: 10 lines, or a viewport for Page keys.
+	// Ctrl explicitly (not Mod) — Cmd-Arrow is doc start/end on macOS.
+	blocks['Ctrl-ArrowUp'] = jumpCaret(-1, 10);
+	blocks['Ctrl-ArrowDown'] = jumpCaret(1, 10);
+	blocks['PageUp'] = pageJump(-1);
+	blocks['PageDown'] = pageJump(1);
 	blocks['Escape'] = selectParentNode;
 	// Exit hatches are bound whether or not hard_break exists — without them
 	// there is no way out of a code block at the end of the document
@@ -79,9 +97,11 @@ export function buildKeymaps(schema: Schema, options: KeymapOptions = {}): Plugi
 				]
 			: [];
 		// Shift-Enter inside code inserts a newline (muscle memory from every
-		// other editor); Mod-Enter stays the explicit exit hatch
+		// other editor)
 		blocks['Shift-Enter'] = chainCommands(insertInCode('\n'), exitCode, ...breaks);
-		blocks['Mod-Enter'] = chainCommands(toggleTodoChecked(), exitCode, ...breaks);
+		// Mod-Enter: toggle the todo under the cursor, else open a line below
+		// (which doubles as the exit hatch after a code block)
+		blocks['Mod-Enter'] = chainCommands(toggleTodoChecked(), insertLine(1));
 	}
 	// A caret at the end of a block before an image/divider/embed: forward
 	// delete selects the leaf first, the second press deletes it

@@ -7,6 +7,10 @@
 			.replace(/Mod/g, IS_MAC ? '⌘' : 'Ctrl')
 			.replace(/Alt/g, IS_MAC ? '⌥' : 'Alt')
 			.replace(/Shift/g, IS_MAC ? '⇧' : 'Shift')
+			.replace(/ArrowUp/g, '↑')
+			.replace(/ArrowDown/g, '↓')
+			.replace(/ArrowLeft/g, '←')
+			.replace(/ArrowRight/g, '→')
 			.replaceAll('-', IS_MAC ? '' : '+');
 	}
 </script>
