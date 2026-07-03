@@ -794,8 +794,15 @@
 						</span>
 					</span>
 				{/each}
-			{:else if !multiple && selectedOptions && !Array.isArray(selectedOptions)}
+			{:else if !multiple && hasValue && selectedOptions && !Array.isArray(selectedOptions)}
 				<span class="single-value">{selectedOptions.label}</span>
+			{:else if !multiple && !hasValue && selectedOptions && !Array.isArray(selectedOptions) && labelFloated}
+				<!-- An "empty" option (value '', null, undefined) is selected: the
+				     field reads as empty at rest (the resting label covers it), but
+				     while the label is floated (focus/open/distinct placeholder) the
+				     chosen option's own label shows placeholder-styled — so picking
+				     "None" gives visible feedback instead of looking like a no-op. -->
+				<span class="placeholder">{selectedOptions.label}</span>
 			{:else if showPlaceholder}
 				<span class="placeholder">{placeholder}</span>
 			{/if}
