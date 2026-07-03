@@ -40,10 +40,40 @@
 			.filter((command) => !command.is_enabled || command.is_enabled(editor)),
 	);
 
+	// Fuzzy search over the + menu (same scorer as the slash menu)
+	let add_query = $state('');
+	let add_selected = $state(0);
+	const add_results = $derived(
+		editor.commands
+			.search(add_query, 'plus')
+			.filter((command) => !command.is_enabled || command.is_enabled(editor)),
+	);
+
 	function insert(command: EditorCommand, close: () => void) {
 		close();
 		editor.focus();
 		command.run(editor);
+	}
+
+	function onAddSearchKeydown(event: KeyboardEvent, close: () => void) {
+		switch (event.key) {
+			case 'ArrowDown':
+				event.preventDefault();
+				add_selected = add_results.length ? (add_selected + 1) % add_results.length : 0;
+				break;
+			case 'ArrowUp':
+				event.preventDefault();
+				add_selected = add_results.length
+					? (add_selected - 1 + add_results.length) % add_results.length
+					: 0;
+				break;
+			case 'Enter': {
+				event.preventDefault();
+				const command = add_results[add_selected];
+				if (command) insert(command, close);
+				break;
+			}
+		}
 	}
 </script>
 
@@ -111,12 +141,29 @@
 </div>
 
 {#snippet add_menu({ close }: { close: () => void })}
+	<div class="add-search">
+		<input
+			type="text"
+			placeholder="Search blocks…"
+			aria-label="Search blocks"
+			bind:value={add_query}
+			oninput={() => (add_selected = 0)}
+			onkeydown={(event) => onAddSearchKeydown(event, close)}
+			{@attach (el: HTMLInputElement) => {
+				// Fresh query + focus every time the popover opens
+				add_query = '';
+				add_selected = 0;
+				el.focus();
+			}} />
+	</div>
 	<div class="add-menu">
 		<CommandMenu
-			items={add_commands}
-			selected={-1}
+			items={add_results}
+			selected={add_selected}
 			flat
-			onpick={(command) => insert(command, close)} />
+			onhover={(index) => (add_selected = index)}
+			onpick={(command) => insert(command, close)}
+			empty_message="No matching blocks" />
 	</div>
 {/snippet}
 
@@ -183,5 +230,36 @@
 	.add-menu {
 		max-block-size: min(24rem, 60vh);
 		overflow-y: auto;
+	}
+
+	.add-search {
+		padding: 0.375rem 0.375rem 0;
+
+		input {
+			inline-size: 100%;
+			font: inherit;
+			font-size: 0.875rem;
+			color: inherit;
+			background: var(
+				--color-bg-muted,
+				color-mix(in oklab, currentColor 6%, transparent)
+			);
+			border: 1px solid
+				var(--color-border, color-mix(in oklab, currentColor 15%, transparent));
+			border-radius: var(--radius, 8px);
+			padding: 0.375rem 0.625rem;
+			outline: none;
+
+			&:focus-visible {
+				border-color: var(--action, var(--color-primary));
+			}
+
+			&::placeholder {
+				color: var(
+					--color-text-disabled,
+					color-mix(in oklab, currentColor 40%, transparent)
+				);
+			}
+		}
 	}
 </style>
