@@ -142,7 +142,12 @@ have the exact types. Do not guess prop names.
 
 DelightStack also ships a Cloudflare-native backend stack (`@delightstack/auth`,
 `database`, `websocket`, `presence`, `ai`, `stripe`, `images`, `rate-limiter`). Overview:
-https://docs.thedelight.co/stack/overview.md
+https://docs.thedelight.co/packages/overview.md
+
+`@delightstack/editor` is a Svelte 5 rich-text / block editor built on ProseMirror — slash
+commands, drag-and-drop blocks, magnetic resize, optimistic uploads, an extensible block system,
+and a zero-dependency server renderer for public pages. It reuses the components' `tokenizeLine`
+for live code-block highlighting. Docs: https://docs.thedelight.co/packages/editor.md
 
 `@delightstack/presence` adds real-time presence (live cursors, online roster, cursor
 chat, reactions, field presence) on a swappable transport/identity. Docs:

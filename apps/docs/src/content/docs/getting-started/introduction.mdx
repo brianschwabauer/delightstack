@@ -14,6 +14,10 @@ DelightStack is two products that share one design language:
    and rate limiting for **Cloudflare Workers**, built on **Durable Objects**. They're designed to
    work together and with the components, but each stands on its own.
 
+Alongside the components, **`@delightstack/editor`** is a standalone [ProseMirror block
+editor](/packages/editor/) for Svelte 5 — slash commands, drag-and-drop blocks, optimistic uploads,
+and a zero-dependency server renderer — for apps that need rich-text or block content.
+
 You can adopt either half without the other. Most people start with the components; teams building
 on Cloudflare get a full-stack toolkit.
 
@@ -117,6 +121,7 @@ a `create*Handle()` that plugs straight into SvelteKit's `handle` hook. The
 
 - [Installation](/getting-started/installation/) — add the component library to your project
 - [Quick Start: Components](/getting-started/quick-start/) — build your first form in minutes
+- [Editor](/packages/editor/) — the standalone Svelte 5 block editor package
 - [Quick Start: Full Stack](/getting-started/quick-start-stack/) — run the full example app on Cloudflare
 - [Architecture](/getting-started/architecture/) — how the backend packages fit together
 - [Dashboard Demo](/demo/) — see all the components in action in a realistic dashboard

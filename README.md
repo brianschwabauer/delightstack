@@ -1,8 +1,8 @@
 # Delightstack
 
-**A full-stack toolkit for building delightful apps on Cloudflare.** Svelte 5 components,
-edge-native auth, a reactive Durable-Object database, real-time websockets, image processing,
-billing, and AI — designed to work together, usable on their own.
+**A full-stack toolkit for building delightful apps on Cloudflare.** Svelte 5 components, a
+block editor, edge-native auth, a reactive Durable-Object database, real-time websockets, image
+processing, billing, and AI — designed to work together, usable on their own.
 
 🌐 [thedelight.co](https://thedelight.co) · 📚 [docs.thedelight.co](https://docs.thedelight.co) ·
 🧪 [example.thedelight.co](https://example.thedelight.co)
@@ -14,6 +14,7 @@ billing, and AI — designed to work together, usable on their own.
 | [`@delightstack/components`](packages/components) | Svelte 5 component library — actions, forms, media, navigation, feedback, display |
 | [`@delightstack/utilities`](packages/utilities) | Shared utilities + the `DelightError` error class |
 | [`@delightstack/styles`](packages/styles) | OKLCH design tokens and base CSS |
+| [`@delightstack/editor`](packages/editor) | Rich-text / block editor for Svelte 5 (ProseMirror) — slash commands, drag & drop blocks, optimistic uploads, zero-dependency server renderer |
 | [`@delightstack/auth`](packages/auth) | JWT sessions, Argon2id, OAuth, SvelteKit guards (Durable Objects) |
 | [`@delightstack/database`](packages/database) | Reactive SQLite over Durable Objects with full-text search |
 | [`@delightstack/websocket`](packages/websocket) | Real-time presence & messaging (Durable Objects) |
@@ -22,8 +23,8 @@ billing, and AI — designed to work together, usable on their own.
 | [`@delightstack/ai`](packages/ai) | Embeddings, AI Gateway, and a reactive streaming client |
 | [`@delightstack/stripe`](packages/stripe) | Stripe billing, metered usage, webhooks |
 
-The frontend packages (`components`, `utilities`, `styles`) are framework-agnostic-ish and work in
-any Svelte 5 / Vite app. The backend packages target **Cloudflare Workers + Durable Objects**; the
+The frontend packages (`components`, `editor`, `utilities`, `styles`) are framework-agnostic-ish and
+work in any Svelte 5 / Vite app. The backend packages target **Cloudflare Workers + Durable Objects**; the
 [`example-app`](apps/example-app) is the canonical reference for wiring them together.
 
 ## Install
