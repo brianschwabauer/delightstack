@@ -2362,15 +2362,26 @@
 	/*  NUMBER STEPPERS                                                    */
 	/* ================================================================== */
 
-	/* The stepper pair sits after the suffix. */
+	/* The stepper pair sits after the suffix. The buttons keep their full-size
+	   (4em, ~field-height) touch targets but pull together and into the field's
+	   end padding with negative margins, so the pair's visual footprint stays
+	   compact. */
 	.steppers {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
-		gap: 0.1em;
+		gap: 0;
 		flex-shrink: 0;
 		order: 2;
-		margin-right: -0.35em;
+		margin-right: -0.45em;
+	}
+	.steppers :global(.button.input-icon-btn) {
+		margin-inline: -0.5em;
+	}
+	/* The leading edge backs off only slightly — a strong pull there would
+	   drag the hit target over the field's text/clear button. */
+	.steppers :global(.button.input-icon-btn:first-child) {
+		margin-inline-start: -0.2em;
 	}
 
 	/* A thin divider sets the steppers off from the suffix — only needed when
@@ -2380,7 +2391,9 @@
 		align-self: center;
 		width: 1px;
 		height: 1.5em;
-		margin-right: 0.35em;
+		/* Clears the first stepper's negative leading margin (-0.2em at half
+		   font = 0.1em here) plus the original 0.35em breathing room */
+		margin-right: 0.45em;
 		background: var(--_border);
 	}
 
