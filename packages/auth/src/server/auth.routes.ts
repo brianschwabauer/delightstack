@@ -6,6 +6,7 @@ import type { RequestEvent } from '@sveltejs/kit';
 import type { UserSessionMeta } from '../types';
 import { resolveErrorCode } from '../types/error.type';
 import {
+	decodePermissions,
 	EmailPasswordSignIn,
 	EmailCodeSignIn,
 	EmailSignUp,
@@ -130,6 +131,54 @@ function requireOrg(locals: AuthLocals) {
 	requireAuth(locals);
 	if (!locals.org_id) {
 		throw new DelightError({ message: 'Organization is required', status: 400 });
+	}
+}
+
+/** Requires that the caller is a member of the given org (per their session token). Throws 403 if not. */
+function requireOrgMember(ctx: AuthRouteContext, org_id: string) {
+	requireAuth(ctx.locals);
+	if (!ctx.locals.session!.org[org_id]) {
+		throw new DelightError({
+			message: 'You do not have access to this organization',
+			status: 403,
+		});
+	}
+}
+
+/** Whether the caller's session grants the org admin permission for the given org */
+function isOrgAdmin(ctx: AuthRouteContext, org_id: string): boolean {
+	const encoded = ctx.locals.session?.org[org_id]?.p ?? 0;
+	const names = decodePermissions(ctx.config.permissions, encoded);
+	return names.includes(ctx.config.org_admin_permission);
+}
+
+/** Requires that the caller is the owner of the given org. Throws 403 if not. Returns the org. */
+async function requireOrgOwner(ctx: AuthRouteContext, org_id: string) {
+	requireAuth(ctx.locals);
+	const org = (await ctx.auth.getOrg(org_id)) as { owner_id: string };
+	if (org.owner_id !== ctx.locals.session!.uid) {
+		throw new DelightError({
+			message: 'Only the organization owner can do this',
+			status: 403,
+		});
+	}
+	return org;
+}
+
+/**
+ * Requires that the caller is an admin of the given org (has `org_admin_permission`)
+ * or its owner. Throws 403 if neither.
+ */
+async function requireOrgAdmin(ctx: AuthRouteContext, org_id: string) {
+	requireOrgMember(ctx, org_id);
+	if (isOrgAdmin(ctx, org_id)) return;
+	// The owner may not carry the admin permission bit — check ownership as a fallback
+	const org = (await ctx.auth.getOrg(org_id)) as { owner_id: string };
+	if (org.owner_id !== ctx.locals.session!.uid) {
+		throw new DelightError({
+			message: 'You must be an organization admin to do this',
+			status: 403,
+		});
 	}
 }
 
@@ -1030,38 +1079,54 @@ const orgUpdate: AuthRouteHandler = (ctx) =>
 			z.object({ name: z.string().optional(), owner_id: z.string().optional() }),
 			await ctx.event.request.json(),
 		);
+		const org = (await ctx.auth.getOrg(id)) as { owner_id: string };
+		const is_transfer = body.owner_id !== undefined && body.owner_id !== org.owner_id;
+		if (is_transfer) {
+			// Only the current owner can transfer ownership
+			if (org.owner_id !== ctx.locals.session!.uid) {
+				throw new DelightError({
+					message: 'Only the organization owner can transfer ownership',
+					status: 403,
+				});
+			}
+		} else if (org.owner_id !== ctx.locals.session!.uid && !isOrgAdmin(ctx, id)) {
+			throw new DelightError({
+				message: 'You must be an organization admin to do this',
+				status: 403,
+			});
+		}
 		await ctx.auth.updateOrg(id, body);
 		return noContent();
 	});
 
 const orgDelete: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
-		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
 		if (!id)
 			throw new DelightError({ message: 'Organization ID is required', status: 400 });
+		await requireOrgOwner(ctx, id);
 		await ctx.auth.markOrgDeleted(id);
 		return noContent();
 	});
 
 const orgListUsers: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
-		requireAuth(ctx.locals);
 		const id = ctx.event.params.id;
 		if (!id)
 			throw new DelightError({ message: 'Organization ID is required', status: 400 });
+		requireOrgMember(ctx, id);
 		const result = await ctx.auth.listOrgUsers(id);
 		return json(result);
 	});
 
 const orgUpdateUserPermission: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
-		requireAuth(ctx.locals);
 		const org_id = ctx.event.params.id;
 		const user_id = ctx.event.params.user_id;
 		if (!org_id)
 			throw new DelightError({ message: 'Organization ID is required', status: 400 });
 		if (!user_id) throw new DelightError({ message: 'User ID is required', status: 400 });
+		await requireOrgAdmin(ctx, org_id);
 		const body = parseSchema(
 			z.object({ permission: z.union([z.number(), z.array(z.string())]) }),
 			await ctx.event.request.json(),
@@ -1072,12 +1137,17 @@ const orgUpdateUserPermission: AuthRouteHandler = (ctx) =>
 
 const orgRemoveUser: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
-		requireAuth(ctx.locals);
 		const org_id = ctx.event.params.id;
 		const user_id = ctx.event.params.user_id;
 		if (!org_id)
 			throw new DelightError({ message: 'Organization ID is required', status: 400 });
 		if (!user_id) throw new DelightError({ message: 'User ID is required', status: 400 });
+		// Members can always remove themselves (leave the org); removing others needs admin
+		if (user_id === ctx.locals.session?.uid) {
+			requireOrgMember(ctx, org_id);
+		} else {
+			await requireOrgAdmin(ctx, org_id);
+		}
 		await ctx.auth.updateUserPermission(user_id, org_id, 0);
 		return noContent();
 	});

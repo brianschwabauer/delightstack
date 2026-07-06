@@ -201,6 +201,7 @@ export const load = ({ data }) => ({
 | `email.sendEmail`           | `(options) => Promise<void>`                        | —                                  | Email sending function                                                   |
 | `email.link`                | `boolean`                                           | `true`                             | Include a magic link in sign-in / verification emails                    |
 | `email.code`                | `boolean`                                           | `false`                            | Include a one-time code in sign-in / verification emails                 |
+| `org_admin_permission`      | `string`                                            | `'org:admin'`                      | Permission that marks a user as org admin for the org API routes        |
 | `hooks`                     | `{ onSignIn, onSignUp, onSignOut, ... }`            | —                                  | Lifecycle hooks                                                          |
 
 ## API Routes
@@ -283,16 +284,33 @@ verified method can't be removed).
 
 ### Organizations
 
-| Method   | Path                     | Description                              |
-| -------- | ------------------------ | ---------------------------------------- |
-| `POST`   | `/org`                   | Create a new organization                |
-| `POST`   | `/org/switch`            | Switch to a different organization       |
-| `PATCH`  | `/org/:id`               | Update an organization                   |
-| `DELETE` | `/org/:id`               | Delete an organization                   |
-| `GET`    | `/org/:id/user`          | List organization users                  |
-| `PATCH`  | `/org/:id/user/:user_id` | Update a user's permissions              |
-| `DELETE` | `/org/:id/user/:user_id` | Remove a user from the org               |
-| `PATCH`  | `/org/:id/state`         | Update per-org state (cookie-only cache) |
+| Method   | Path                     | Description                              | Who can call it                    |
+| -------- | ------------------------ | ---------------------------------------- | ---------------------------------- |
+| `POST`   | `/org`                   | Create a new organization                | Any signed-in user                 |
+| `POST`   | `/org/switch`            | Switch to a different organization       | Org members                        |
+| `PATCH`  | `/org/:id`               | Update an organization                   | Admins; owner only for `owner_id`  |
+| `DELETE` | `/org/:id`               | Delete an organization                   | Owner only                         |
+| `GET`    | `/org/:id/user`          | List organization users                  | Org members                        |
+| `PATCH`  | `/org/:id/user/:user_id` | Update a user's permissions              | Admins                             |
+| `DELETE` | `/org/:id/user/:user_id` | Remove a user from the org               | Admins (members can remove selves) |
+| `PATCH`  | `/org/:id/state`         | Update per-org state (cookie-only cache) | Org members                        |
+
+"Admins" means users whose permission bitmask includes `org_admin_permission` (default `'org:admin'`) — the org owner always qualifies, even without the permission bit.
+
+#### Transferring org ownership
+
+Each org has a single owner (`owner_id` on the org row). Only the current owner can transfer ownership:
+
+```typescript
+// Client
+await auth.transferOrgOwnership(org_id, new_owner_user_id);
+// (equivalent to: await auth.updateOrg(org_id, { owner_id: new_owner_user_id }))
+
+// Server (Durable Object stub, e.g. inside a hook or server route)
+await locals.auth.updateOrg(org_id, { owner_id: new_owner_user_id });
+```
+
+On transfer, the new owner is granted the org admin permission — and added to the org if they weren't already a member. The previous owner keeps their existing membership and permissions; demote or remove them afterwards with `updateOrgUserPermission()` / `removeOrgUser()` if desired. Note that server-side `updateOrg` calls on the Durable Object stub bypass route authorization — the route-level owner check only applies to the HTTP API.
 
 ### Invitations
 
@@ -412,8 +430,9 @@ await auth.user.removeSignInMethod(method_id);
 // Organization
 await auth.createOrg({ name: 'My Org' });
 await auth.switchOrg(org_id);
-await auth.updateOrg(org_id, { name: 'Renamed' });
-await auth.deleteOrg(org_id);
+await auth.updateOrg(org_id, { name: 'Renamed' }); // admins (or the owner)
+await auth.transferOrgOwnership(org_id, new_owner_user_id); // current owner only
+await auth.deleteOrg(org_id); // current owner only
 const users = await auth.listOrgUsers(org_id);
 await auth.updateOrgUserPermission(org_id, user_id, encoded_permission);
 await auth.removeOrgUser(org_id, user_id);

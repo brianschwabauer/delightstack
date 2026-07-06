@@ -631,12 +631,26 @@ export class AuthClient<P extends string = string, E extends string = string> {
 		return result;
 	};
 
-	/** Update organization metadata (name, owner, etc). */
+	/**
+	 * Update organization metadata (name, owner, etc).
+	 * Renaming requires org admin permission (or ownership); changing `owner_id`
+	 * requires being the current owner.
+	 */
 	updateOrg = async (
 		org_id: string,
 		data: { name?: string; owner_id?: string },
 	): Promise<void> => {
 		return this.patch(`/org/${org_id}`, data);
+	};
+
+	/**
+	 * Transfer ownership of an organization to another user. Only the current owner can
+	 * do this. The new owner is granted the org admin permission (and added to the org
+	 * if they weren't a member); the previous owner keeps their existing permissions —
+	 * demote or remove them afterwards with `updateOrgUserPermission()` if desired.
+	 */
+	transferOrgOwnership = async (org_id: string, new_owner_id: string): Promise<void> => {
+		return this.updateOrg(org_id, { owner_id: new_owner_id });
 	};
 
 	/** Delete an organization. */

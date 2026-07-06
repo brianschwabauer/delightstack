@@ -12,7 +12,7 @@ OAuth 2.0 server, all backed by a single Durable Object.
 ## Features
 
 - **Email/password** with Argon2id (WASM) hashing, password reset, and change.
-- **Magic links** — passwordless sign-in via short-lived JWTs.
+- **Magic links & email codes** — passwordless sign-in via short-lived JWT links and/or typed one-time codes.
 - **Passkeys (WebAuthn)** — phishing-resistant, usernameless sign-in with Touch ID, Face ID, or
   security keys; zero config needed alongside other sign-in methods.
 - **OAuth providers** — Google, GitHub, or any OAuth 2.0 provider; link multiple to one account.
@@ -127,6 +127,29 @@ export const load = requirePermission('org:admin', ({ locals }) => {
 	<button onclick={() => auth.signOut()}>Sign out</button>
 {/if}
 ```
+
+## Organizations & ownership
+
+Users can belong to many orgs. Each org has exactly one **owner** (the user in the org row's
+`owner_id`) plus members whose abilities come from their bitwise-encoded permissions. The org
+API routes are authorization-aware: renaming an org or managing members requires the admin
+permission (`org_admin_permission`, default `'org:admin'` — the owner always qualifies), while
+deleting an org or transferring ownership requires being the current owner.
+
+```typescript
+// Transfer ownership — only the current owner can do this
+await auth.transferOrgOwnership(org_id, new_owner_user_id);
+
+// Other org management (see the README for the full list)
+await auth.updateOrg(org_id, { name: 'Renamed' }); // admins or the owner
+await auth.updateOrgUserPermission(org_id, user_id, permission); // admins
+await auth.removeOrgUser(org_id, user_id); // admins; members may remove themselves
+await auth.deleteOrg(org_id); // owner only
+```
+
+On transfer, the new owner is granted the admin permission (and org membership if needed).
+The previous owner keeps their existing permissions — demote or remove them afterwards if
+that's what your app wants.
 
 <Aside>
 The full README covers the OAuth 2.0 server, invitations, preferences cookies, and every hook —

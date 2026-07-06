@@ -1,5 +1,76 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { matchRoute } from './auth.routes';
+
+type RouteCtx = Parameters<NonNullable<ReturnType<typeof matchRoute>>['handler']>[0];
+
+/** The bit positions of PERMISSIONS below: read=1, write=2, admin=4, owner=8 */
+const PERMISSIONS = ['org:read', 'org:write', 'org:admin', 'org:owner'] as const;
+
+interface FakeCtxOptions {
+	/** The caller's uid. Pass null for an unauthenticated request */
+	uid?: string | null;
+	/** The caller's org memberships: org_id -> permission bitmask */
+	orgs?: Record<string, number>;
+	/** Request body for handlers that read JSON */
+	body?: unknown;
+	/** Route params (normally merged from the matched route pattern) */
+	params?: Record<string, string>;
+	/** Stubbed AuthServer methods the handler calls */
+	auth?: Record<string, unknown>;
+}
+
+function makeCtx(options: FakeCtxOptions = {}): RouteCtx {
+	const uid = options.uid === null ? null : (options.uid ?? 'user_1');
+	const org: Record<string, { p: number; n: string }> = {};
+	for (const [id, p] of Object.entries(options.orgs ?? {})) {
+		org[id] = { p, n: 'Org' };
+	}
+	const session = uid
+		? {
+				typ: 'auth',
+				iss: 'test',
+				uid,
+				sub: 'ua_1',
+				jti: 'us_1',
+				name: 'Test',
+				email: 'test@example.com',
+				verified: true,
+				org,
+				iat: 0,
+				exp: 9999999999,
+			}
+		: null;
+	return {
+		event: {
+			request: { json: async () => options.body ?? {} },
+			url: new URL('https://app.example.com/api/auth'),
+			params: options.params ?? {},
+		},
+		config: {
+			permissions: PERMISSIONS,
+			org_admin_permission: 'org:admin',
+			base_path: '/api/auth',
+			secret: 'x'.repeat(64),
+			issuer: 'test',
+		},
+		auth: options.auth ?? {},
+		locals: {
+			session,
+			user: session ? { id: uid, name: 'Test', email: 'test@example.com' } : null,
+		},
+		meta: {},
+	} as unknown as RouteCtx;
+}
+
+async function callRoute(method: string, path: string, options: FakeCtxOptions = {}) {
+	const match = matchRoute(method, path);
+	if (!match) throw new Error(`No route for ${method} ${path}`);
+	const ctx = makeCtx({ ...options, params: { ...match.params, ...options.params } });
+	const response = await match.handler(ctx);
+	const body =
+		response.status === 204 ? null : ((await response.json()) as Record<string, unknown>);
+	return { response, body };
+}
 
 describe('matchRoute', () => {
 	describe('static routes', () => {
@@ -352,6 +423,167 @@ describe('matchRoute', () => {
 			const result = matchRoute('POST', '/signin/passkey');
 			expect(result).not.toBeNull();
 			expect(result!.params.vendor).toBeUndefined();
+		});
+	});
+
+	describe('org route authorization', () => {
+		const ADMIN = 0b0111; // org:read + org:write + org:admin
+		const MEMBER = 0b0011; // org:read + org:write
+
+		function orgAuth(owner_id = 'owner_1') {
+			return {
+				getOrg: vi.fn(async () => ({ id: 'org_1', owner_id })),
+				updateOrg: vi.fn(async () => ({})),
+				markOrgDeleted: vi.fn(async () => {}),
+				listOrgUsers: vi.fn(async () => ({ list: [], count: 0, hasMore: false })),
+				updateUserPermission: vi.fn(async () => {}),
+			};
+		}
+
+		it('rejects unauthenticated org updates', async () => {
+			const { response } = await callRoute('PATCH', '/org/org_1', {
+				uid: null,
+				body: { name: 'New' },
+			});
+			expect(response.status).toBe(401);
+		});
+
+		it('lets an org admin rename the org', async () => {
+			const auth = orgAuth();
+			const { response } = await callRoute('PATCH', '/org/org_1', {
+				orgs: { org_1: ADMIN },
+				body: { name: 'New Name' },
+				auth,
+			});
+			expect(response.status).toBe(204);
+			expect(auth.updateOrg).toHaveBeenCalledWith('org_1', { name: 'New Name' });
+		});
+
+		it('rejects a rename from a non-admin member', async () => {
+			const auth = orgAuth();
+			const { response, body } = await callRoute('PATCH', '/org/org_1', {
+				orgs: { org_1: MEMBER },
+				body: { name: 'New Name' },
+				auth,
+			});
+			expect(response.status).toBe(403);
+			expect(body!.code).toBe('permission_denied');
+			expect(auth.updateOrg).not.toHaveBeenCalled();
+		});
+
+		it('lets the owner rename without the admin permission bit', async () => {
+			const auth = orgAuth('user_1');
+			const { response } = await callRoute('PATCH', '/org/org_1', {
+				uid: 'user_1',
+				orgs: { org_1: MEMBER },
+				body: { name: 'New Name' },
+				auth,
+			});
+			expect(response.status).toBe(204);
+		});
+
+		it('rejects an ownership transfer from an admin who is not the owner', async () => {
+			const auth = orgAuth('owner_1');
+			const { response, body } = await callRoute('PATCH', '/org/org_1', {
+				uid: 'user_1',
+				orgs: { org_1: ADMIN },
+				body: { owner_id: 'user_1' },
+				auth,
+			});
+			expect(response.status).toBe(403);
+			expect(body!.code).toBe('permission_denied');
+			expect(auth.updateOrg).not.toHaveBeenCalled();
+		});
+
+		it('lets the current owner transfer ownership', async () => {
+			const auth = orgAuth('user_1');
+			const { response } = await callRoute('PATCH', '/org/org_1', {
+				uid: 'user_1',
+				orgs: { org_1: ADMIN },
+				body: { owner_id: 'user_2' },
+				auth,
+			});
+			expect(response.status).toBe(204);
+			expect(auth.updateOrg).toHaveBeenCalledWith('org_1', { owner_id: 'user_2' });
+		});
+
+		it('treats a no-op owner_id (already the owner) as a normal update', async () => {
+			const auth = orgAuth('owner_1');
+			const { response } = await callRoute('PATCH', '/org/org_1', {
+				uid: 'user_1',
+				orgs: { org_1: ADMIN },
+				body: { owner_id: 'owner_1', name: 'New Name' },
+				auth,
+			});
+			expect(response.status).toBe(204);
+		});
+
+		it('only lets the owner delete the org', async () => {
+			const auth = orgAuth('owner_1');
+			const denied = await callRoute('DELETE', '/org/org_1', {
+				uid: 'user_1',
+				orgs: { org_1: ADMIN },
+				auth,
+			});
+			expect(denied.response.status).toBe(403);
+			expect(auth.markOrgDeleted).not.toHaveBeenCalled();
+
+			const allowed = await callRoute('DELETE', '/org/org_1', {
+				uid: 'owner_1',
+				orgs: { org_1: ADMIN },
+				auth,
+			});
+			expect(allowed.response.status).toBe(204);
+			expect(auth.markOrgDeleted).toHaveBeenCalledWith('org_1');
+		});
+
+		it('only lets members list org users', async () => {
+			const auth = orgAuth();
+			const denied = await callRoute('GET', '/org/org_1/user', { orgs: {}, auth });
+			expect(denied.response.status).toBe(403);
+
+			const allowed = await callRoute('GET', '/org/org_1/user', {
+				orgs: { org_1: MEMBER },
+				auth,
+			});
+			expect(allowed.response.status).toBe(200);
+		});
+
+		it('requires admin to change another user permission', async () => {
+			const auth = orgAuth();
+			const denied = await callRoute('PATCH', '/org/org_1/user/user_2', {
+				orgs: { org_1: MEMBER },
+				body: { permission: 1 },
+				auth,
+			});
+			expect(denied.response.status).toBe(403);
+			expect(auth.updateUserPermission).not.toHaveBeenCalled();
+
+			const allowed = await callRoute('PATCH', '/org/org_1/user/user_2', {
+				orgs: { org_1: ADMIN },
+				body: { permission: 1 },
+				auth,
+			});
+			expect(allowed.response.status).toBe(204);
+			expect(auth.updateUserPermission).toHaveBeenCalledWith('user_2', 'org_1', 1);
+		});
+
+		it('lets a member remove themselves but not others', async () => {
+			const auth = orgAuth();
+			const leave = await callRoute('DELETE', '/org/org_1/user/user_1', {
+				uid: 'user_1',
+				orgs: { org_1: MEMBER },
+				auth,
+			});
+			expect(leave.response.status).toBe(204);
+			expect(auth.updateUserPermission).toHaveBeenCalledWith('user_1', 'org_1', 0);
+
+			const denied = await callRoute('DELETE', '/org/org_1/user/user_2', {
+				uid: 'user_1',
+				orgs: { org_1: MEMBER },
+				auth,
+			});
+			expect(denied.response.status).toBe(403);
 		});
 	});
 

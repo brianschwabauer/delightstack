@@ -47,6 +47,15 @@ export interface AuthConfig<
 	entitlements?: readonly E[];
 
 	/**
+	 * The permission (an entry in `permissions`) that marks a user as an admin of an
+	 * organization. Admins can manage org members and update org metadata via the org
+	 * API routes. The org owner can always do these regardless of this permission.
+	 * Should match the `orgAdminPermission` option passed to the Durable Object.
+	 * @default 'org:admin'
+	 */
+	org_admin_permission?: P[number] | (string & {});
+
+	/**
 	 * Whether the app is running in dev mode.
 	 * Used for: cookie secure default, DO proxy detection.
 	 * Pass `dev` from '$app/environment'.
@@ -257,6 +266,7 @@ export interface ResolvedAuthConfig<
 	E extends string = string,
 > extends AuthConfig<P, S, E> {
 	entitlements: readonly E[];
+	org_admin_permission: string;
 	base_path: string;
 	csrf: boolean | { allowed_origins?: string[] };
 	cookies: Required<NonNullable<AuthConfig['cookies']>>;
@@ -295,6 +305,7 @@ export function defineAuthConfig<
 	return {
 		...config,
 		entitlements,
+		org_admin_permission: config.org_admin_permission ?? 'org:admin',
 		base_path: config.base_path ?? '/api/auth',
 		csrf: config.csrf ?? true,
 		cookies: {
