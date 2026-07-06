@@ -180,6 +180,17 @@ export const EmailLinkSignIn = z.object({
 });
 export type EmailLinkSignIn = z.infer<typeof EmailLinkSignIn>;
 
+/** The data needed on signin via a one-time code sent to the user's email */
+export const EmailCodeSignIn = z.object({
+	/** The email of the account */
+	email: z.email().toLowerCase(),
+	/** The one-time code from the sign-in email. Checked case-insensitively */
+	code: z.string().trim().toLowerCase().min(1).max(32),
+	/** The ID of the invitation the user was sent (to join an organization) */
+	invitation_id: z.string().optional(),
+});
+export type EmailCodeSignIn = z.infer<typeof EmailCodeSignIn>;
+
 /** The data needed on signup */
 export const EmailSignUp = z.object({
 	/** The name of the person signing up */

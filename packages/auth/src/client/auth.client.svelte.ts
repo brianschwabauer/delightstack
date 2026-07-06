@@ -314,6 +314,31 @@ export class AuthClient<P extends string = string, E extends string = string> {
 		emailMagicLink: async (data: { email: string }): Promise<void> => {
 			await this.post<void>('/signin/email/magic', data);
 		},
+		/**
+		 * Sign in with the one-time code from a sign-in email (checked case-insensitively).
+		 * Request the email first with `signIn.emailMagicLink()` — depending on the server's
+		 * `email.link` / `email.code` config it contains a link, a code, or both.
+		 */
+		emailCode: async (data: {
+			email: string;
+			code: string;
+			invitation_id?: string;
+		}): Promise<{
+			jwt: string;
+			decoded_jwt: SessionToken<'auth'>;
+			org_id?: string;
+		}> => {
+			const result = await this.post<{
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+				org_id?: string;
+			}>('/signin/email/code', data);
+			this.#jwt = result.jwt;
+			this.#session = result.decoded_jwt;
+			if (result.org_id) this.#org_id = result.org_id;
+			this.startAutoRefresh();
+			return result;
+		},
 		oauth: (vendor: string, options?: { redirect_to?: string }) => {
 			const params = new URLSearchParams();
 			if (options?.redirect_to) params.set('redirect', options.redirect_to);
@@ -509,6 +534,22 @@ export class AuthClient<P extends string = string, E extends string = string> {
 	readonly emailVerification = {
 		request: async (): Promise<void> => {
 			await this.post<void>('/email/verify', undefined);
+		},
+		/**
+		 * Verify the signed-in user's email with the one-time code from the verification
+		 * email (checked case-insensitively). Returns a fresh session with `verified: true`.
+		 */
+		confirmWithCode: async (
+			code: string,
+		): Promise<{ jwt: string; decoded_jwt: SessionToken<'auth'> }> => {
+			const result = await this.post<{
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+			}>('/email/verify/code', { code });
+			this.#jwt = result.jwt;
+			this.#session = result.decoded_jwt;
+			this.startAutoRefresh();
+			return result;
 		},
 		checkAvailability: async (email: string): Promise<{ available: boolean }> => {
 			const params = new URLSearchParams({ email });

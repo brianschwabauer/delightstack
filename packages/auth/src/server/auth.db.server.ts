@@ -19,6 +19,7 @@ import {
 	EmailPasswordSignIn,
 	EmailSignUp,
 	EmailLinkSignIn,
+	EmailCodeSignIn,
 	Passkey,
 	PasskeyRelyingParty,
 	PasskeyRegistrationResponse,
@@ -68,6 +69,46 @@ async function getDummyHash(): Promise<string> {
 		});
 	}
 	return _dummy_hash;
+}
+
+/**
+ * Characters allowed in emailed one-time codes: lowercase consonants + digits, no symbols.
+ * Vowels are excluded so codes can't spell words, and ambiguous characters (0/o, 1/l/i)
+ * are excluded so codes are easy to read from an email. 28^6 ≈ 482M combinations, which
+ * is plenty against the EMAIL_CODE_MAX_ATTEMPTS guess cap.
+ */
+const EMAIL_CODE_ALPHABET = 'bcdfghjkmnpqrstvwxyz23456789';
+const EMAIL_CODE_LENGTH = 6;
+/** How many guesses are allowed against a single emailed code before it is invalidated */
+const EMAIL_CODE_MAX_ATTEMPTS = 5;
+
+/** Generates a random one-time code for email sign-in / verification (e.g. 'k3v9qx') */
+function generateEmailCode(): string {
+	// Rejection sampling: bytes >= the largest multiple of the alphabet size would bias
+	// the code toward the start of the alphabet, so they are skipped
+	const byte_limit = 256 - (256 % EMAIL_CODE_ALPHABET.length);
+	const chars: string[] = [];
+	while (chars.length < EMAIL_CODE_LENGTH) {
+		const bytes = new Uint8Array(EMAIL_CODE_LENGTH * 2);
+		crypto.getRandomValues(bytes);
+		for (const byte of bytes) {
+			if (byte >= byte_limit) continue;
+			chars.push(EMAIL_CODE_ALPHABET[byte % EMAIL_CODE_ALPHABET.length]);
+			if (chars.length === EMAIL_CODE_LENGTH) break;
+		}
+	}
+	return chars.join('');
+}
+
+/** Hashes an emailed one-time code (case-insensitive), salted with the session id so identical codes don't share a hash */
+async function hashEmailCode(user_session_id: string, code: string): Promise<string> {
+	const digest = await crypto.subtle.digest(
+		'SHA-256',
+		new TextEncoder().encode(`${user_session_id}:${code.trim().toLowerCase()}`),
+	);
+	return Array.from(new Uint8Array(digest))
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
 }
 
 export interface AuthOperationResult<Type = SessionToken['typ']> {
@@ -382,13 +423,110 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			throw new DelightError({ message: 'Invalid email sign-in link', status: 400 });
 		}
 
+		return this.completeEmailSignIn(
+			{
+				user_session_id: token.jti,
+				user_auth_id: token.sub,
+				user_id: token.uid,
+				invitation_id,
+				used_error: `Email sign-in link has already been used or is expired`,
+			},
+			meta,
+		);
+	}
+
+	/**
+	 * Signs in the user with a one-time code sent to their email.
+	 * Call 'createEmailSignInToken' with `{ code: true }` to generate the code, then email it to the user.
+	 * Codes are checked case-insensitively; only the most recently issued code for an email is
+	 * valid, and a code is invalidated after too many wrong guesses.
+	 */
+	async signInWithEmailCode(unsafe_data: EmailCodeSignIn, meta: UserSessionMeta) {
+		const { email, code, invitation_id } = parseSchema(EmailCodeSignIn, unsafe_data);
+
+		// Limit the number of guesses that can be made from one address
+		const is_allowed = this.rateLimit([meta.ip_address || '', 'email_code_signin'], {
+			max_tokens: 5,
+			refill_every_seconds: 10,
+		});
+		if (!is_allowed) {
+			throw new DelightError({
+				message: 'Too many failed sign in attempts. Please try again later',
+				status: 429,
+			});
+		}
+
+		// A single error for every failure mode so responses don't leak which emails exist
+		const invalidCode = () =>
+			new DelightError({ message: 'Incorrect or expired sign-in code', status: 401 });
+
+		// Find the email sign-in method for this email
+		const [user_auth] = this.sql.list('user_auth', {
+			limit: 1,
+			where: {
+				and: [
+					{ key: 'email', is: '=', value: email },
+					{ key: 'oauth_token_id', is: '=', value: null },
+				],
+			},
+		});
+		if (!user_auth) throw invalidCode();
+
+		// Only the most recently issued code is valid — older pending codes are ignored
+		const pending = this.sql
+			.list('user_session', {
+				where: {
+					and: [
+						{ key: 'user_auth_id', is: '=', value: user_auth.id },
+						{ key: 'type', is: '=', value: 'email_signin' },
+					],
+				},
+			})
+			.filter((s) => s.code_hash && (s.expires_at ?? 0) > Date.now())
+			.sort((a, b) => b.created_at - a.created_at)[0];
+		if (!pending) throw invalidCode();
+
+		// Burn an attempt before comparing so every guess counts, even if the request is
+		// interrupted. The counter is persistent, so guessing can't be reset by DO eviction
+		// or spread across IP addresses. Past the limit even the correct code is rejected
+		const attempts = (pending.code_attempts ?? 0) + 1;
+		this.sql.update('user_session', pending.id, { code_attempts: attempts });
+		if (attempts > EMAIL_CODE_MAX_ATTEMPTS) throw invalidCode();
+
+		const code_hash = await hashEmailCode(pending.id, code);
+		if (code_hash !== pending.code_hash) throw invalidCode();
+
+		return this.completeEmailSignIn(
+			{
+				user_session_id: pending.id,
+				user_auth_id: user_auth.id,
+				user_id: user_auth.user_id,
+				invitation_id,
+				used_error: `Sign-in code has already been used or is expired`,
+			},
+			meta,
+		);
+	}
+
+	/**
+	 * Shared completion for email link & code sign-ins: consumes the pending 'email_signin'
+	 * session, marks the email verified (the user proved they own it), and trades it for a
+	 * regular auth session.
+	 */
+	private async completeEmailSignIn(
+		params: {
+			user_session_id: string;
+			user_auth_id: string;
+			user_id: string;
+			invitation_id?: string;
+			used_error: string;
+		},
+		meta: UserSessionMeta,
+	) {
+		const { user_session_id, user_auth_id, user_id, invitation_id, used_error } = params;
+
 		// Check if the token has already been used (deleted from database)
-		const user_session_id = token.jti;
-		const user_auth_id = token.sub;
-		const user_id = token.uid;
-		this.sql
-			.setError(`Email sign-in link has already been used or is expired`, 400)
-			.get('user_session', user_session_id);
+		this.sql.setError(used_error, 400).get('user_session', user_session_id);
 
 		const user = this.sql
 			.setError(`Couldn't find user with given id`)
@@ -459,9 +597,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		this.sql.transaction(() => {
 			// Re-check inside the transaction: the awaits above yield the Durable Object's
 			// input gate, so a concurrent request may have already consumed this token
-			this.sql
-				.setError(`Email sign-in link has already been used or is expired`, 400)
-				.get('user_session', user_session_id);
+			this.sql.setError(used_error, 400).get('user_session', user_session_id);
 			// Mark the user as verified if they haven't been verified yet
 			// They can be verified if they clicked the email link (meaning they own the email)
 			if (!user_auth.verified_at) {
@@ -2214,7 +2350,11 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	}
 
 	/** Creates an email verification JWT that can be sent to the user's email */
-	async createEmailVerificationToken(user_session_id: string, meta: UserSessionMeta) {
+	async createEmailVerificationToken(
+		user_session_id: string,
+		meta: UserSessionMeta,
+		options?: { code?: boolean },
+	) {
 		if (!user_session_id) {
 			throw new DelightError({ message: 'User session ID is required', status: 400 });
 		}
@@ -2245,6 +2385,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			});
 		}
 
+		// Optionally generate a one-time code the user can type instead of clicking the link
+		const code = options?.code ? generateEmailCode() : undefined;
+		const code_hash = code ? await hashEmailCode(jwt.decoded_jwt.jti, code) : undefined;
+
 		try {
 			this.sql.insert('user_session', jwt.decoded_jwt.jti, {
 				type: 'email_verification',
@@ -2253,6 +2397,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				jwt: jwt.jwt,
 				expires_at: jwt.decoded_jwt.exp * 1000,
 				json: JSON.stringify(meta || {}),
+				code_hash,
+				code_attempts: code ? 0 : undefined,
 			});
 		} catch {
 			throw new DelightError({
@@ -2267,20 +2413,36 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			jwt: jwt.jwt,
 			decoded_jwt: jwt.decoded_jwt,
 			type: 'other',
-		} satisfies AuthOperationResult;
+			code,
+		} satisfies AuthOperationResult & { code?: string };
 	}
 
 	/**
 	 * Creates an email sign in token that can be used to sign in the user via a "magic" email link
 	 * This token is valid for 1 hour and can be used to sign in the user without a password
-	 * The token will be traded for a session token when the user clicks the link in the email
+	 * The token will be traded for a session token when the user clicks the link in the email.
+	 * Pass `{ code: true }` to also generate a one-time code (returned as `code`) that can be
+	 * traded for a session via 'signInWithEmailCode'.
 	 */
 	async createEmailSignInToken(
 		email: string,
 		meta: UserSessionMeta,
-	): Promise<AuthOperationResult<'email_signin'>> {
+		options?: { code?: boolean },
+	): Promise<AuthOperationResult<'email_signin'> & { code?: string }> {
 		if (!email) {
 			throw new DelightError({ message: 'Email is required', status: 400 });
+		}
+
+		// Limit how often sign-in emails can be requested from one address
+		const is_allowed = this.rateLimit([meta.ip_address || '', 'create_email_signin'], {
+			max_tokens: 5,
+			refill_every_seconds: 30,
+		});
+		if (!is_allowed) {
+			throw new DelightError({
+				message: 'Too many sign-in email requests. Please try again later',
+				status: 429,
+			});
 		}
 
 		// Get the user's auth details
@@ -2321,6 +2483,10 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			});
 		}
 
+		// Optionally generate a one-time code the user can type instead of clicking the link
+		const code = options?.code ? generateEmailCode() : undefined;
+		const code_hash = code ? await hashEmailCode(jwt.decoded_jwt.jti, code) : undefined;
+
 		try {
 			this.sql.insert('user_session', jwt.decoded_jwt.jti, {
 				type: 'email_signin',
@@ -2329,6 +2495,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				user_auth_id: user_auth.id,
 				expires_at: jwt.decoded_jwt.exp * 1000,
 				json: JSON.stringify(meta || {}),
+				code_hash,
+				code_attempts: code ? 0 : undefined,
 			});
 		} catch {
 			throw new DelightError({
@@ -2343,7 +2511,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			jwt: jwt.jwt,
 			decoded_jwt: jwt.decoded_jwt,
 			type: 'other',
-		} satisfies AuthOperationResult;
+			code,
+		} satisfies AuthOperationResult & { code?: string };
 	}
 
 	/** Marks the user's email verified based on the provided email verification token */
@@ -2361,13 +2530,108 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			throw new DelightError({ message: 'Invalid email verification link', status: 400 });
 		}
 
+		return this.completeEmailVerification(
+			{
+				user_session_id: token.jti,
+				user_auth_id: token.sub,
+				user_id: token.uid,
+				used_error: `Email verification link has already been used`,
+			},
+			meta,
+		);
+	}
+
+	/**
+	 * Marks the user's email verified with a one-time code sent to their email.
+	 * Call 'createEmailVerificationToken' with `{ code: true }` to generate the code, then
+	 * email it to the user. Codes are checked case-insensitively; only the most recently
+	 * issued code is valid, and a code is invalidated after too many wrong guesses.
+	 * @param auth_session_id - The id (jti) of the signed-in user's current auth session
+	 */
+	async verifyEmailWithCode(
+		auth_session_id: string,
+		raw_code: string,
+		meta: UserSessionMeta,
+	) {
+		const code = (raw_code || '').trim().toLowerCase();
+
+		// Limit the number of guesses that can be made from one address
+		const is_allowed = this.rateLimit([meta.ip_address || '', 'email_code_verify'], {
+			max_tokens: 5,
+			refill_every_seconds: 10,
+		});
+		if (!is_allowed) {
+			throw new DelightError({
+				message: 'Too many failed sign in attempts. Please try again later',
+				status: 429,
+			});
+		}
+
+		const invalidCode = () =>
+			new DelightError({
+				message: 'Incorrect or expired verification code',
+				status: 400,
+			});
+		if (!code) throw invalidCode();
+
+		// Resolve the sign-in method being verified from the caller's auth session
+		const auth_session = this.sql
+			.setError(`User session not found`)
+			.get('user_session', auth_session_id);
+
+		// Only the most recently issued code is valid — older pending codes are ignored
+		const pending = this.sql
+			.list('user_session', {
+				where: {
+					and: [
+						{ key: 'user_auth_id', is: '=', value: auth_session.user_auth_id },
+						{ key: 'type', is: '=', value: 'email_verification' },
+					],
+				},
+			})
+			.filter((s) => s.code_hash && (s.expires_at ?? 0) > Date.now())
+			.sort((a, b) => b.created_at - a.created_at)[0];
+		if (!pending) throw invalidCode();
+
+		// Burn an attempt before comparing so every guess counts, even if the request is
+		// interrupted. The counter is persistent, so guessing can't be reset by DO eviction
+		// or spread across IP addresses. Past the limit even the correct code is rejected
+		const attempts = (pending.code_attempts ?? 0) + 1;
+		this.sql.update('user_session', pending.id, { code_attempts: attempts });
+		if (attempts > EMAIL_CODE_MAX_ATTEMPTS) throw invalidCode();
+
+		const code_hash = await hashEmailCode(pending.id, code);
+		if (code_hash !== pending.code_hash) throw invalidCode();
+
+		return this.completeEmailVerification(
+			{
+				user_session_id: pending.id,
+				user_auth_id: pending.user_auth_id,
+				user_id: pending.user_id,
+				used_error: `Verification code has already been used`,
+			},
+			meta,
+		);
+	}
+
+	/**
+	 * Shared completion for email verification via link & code: consumes the pending
+	 * 'email_verification' session, marks the sign-in method verified, revokes the user's
+	 * existing sessions, and returns a fresh auth session.
+	 */
+	private async completeEmailVerification(
+		params: {
+			user_session_id: string;
+			user_auth_id: string;
+			user_id: string;
+			used_error: string;
+		},
+		meta: UserSessionMeta,
+	) {
+		const { user_session_id, user_auth_id, user_id, used_error } = params;
+
 		// Check if the token has already been used (deleted from database)
-		const user_session_id = token.jti;
-		const user_auth_id = token.sub;
-		const user_id = token.uid;
-		this.sql
-			.setError(`Email verification link has already been used`, 400)
-			.get('user_session', user_session_id);
+		this.sql.setError(used_error, 400).get('user_session', user_session_id);
 
 		const user = this.sql
 			.setError(`Couldn't find user with given id`)
@@ -2403,9 +2667,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			// Re-check inside the transaction: the awaits above yield the Durable Object's
 			// input gate, so a concurrent request with the same token may have already
 			// consumed it between the checks above and this point
-			this.sql
-				.setError(`Email verification link has already been used`, 400)
-				.get('user_session', user_session_id);
+			this.sql.setError(used_error, 400).get('user_session', user_session_id);
 			if (this.sql.get('user_auth', user_auth_id).verified_at) {
 				throw new DelightError({
 					message: `Email is already verified. You can now sign in using this email`,

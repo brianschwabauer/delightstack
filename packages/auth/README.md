@@ -1,11 +1,12 @@
 # @delightstack/auth
 
-Full-stack authentication for SvelteKit apps on Cloudflare Workers. Email/password, magic links, passkeys (WebAuthn), OAuth providers, multi-org, invitations, permissions, preferences, and an OAuth 2.0 server — all backed by a single Durable Object.
+Full-stack authentication for SvelteKit apps on Cloudflare Workers. Email/password, magic links, email codes, passkeys (WebAuthn), OAuth providers, multi-org, invitations, permissions, preferences, and an OAuth 2.0 server — all backed by a single Durable Object.
 
 ## Features
 
 - **Email/password auth** — Sign up, sign in, password reset, and password change with Argon2id hashing
 - **Magic links** — Passwordless email sign-in via short-lived JWT links
+- **Email codes** — Passwordless sign-in and email verification with a 6-character one-time code (case-insensitive; no vowels or ambiguous characters like 0/o and 1/l, so codes read cleanly and never spell words), for when the email lands on a different device than the app. Enable links, codes, or both — brute-force protected by per-IP rate limits and a persistent 5-guess cap per code
 - **Passkeys (WebAuthn)** — Phishing-resistant, usernameless sign-in with Touch ID, Face ID, or security keys. Works with zero config alongside other sign-in methods
 - **OAuth providers** — Sign in with Google, GitHub, or any OAuth 2.0 provider. Link multiple providers to one account
 - **Multi-organization** — Users belong to multiple orgs with bitwise-encoded role permissions. Org switching, user management, and invitations built in
@@ -76,9 +77,12 @@ export const authConfig = defineAuthConfig({
 		org_state_prefix: 'my-app-org-',
 	},
 	email: {
-		sendEmail: async ({ to, subject, html, text, link, type }) => {
+		sendEmail: async ({ to, subject, html, text, link, code, type }) => {
 			// Send via your email provider (Resend, SES, etc.)
 		},
+		// What sign-in / verification emails contain (enable either or both):
+		link: true, // a clickable magic link (default)
+		code: false, // a 6-character one-time code the user types in
 	},
 	hooks: {
 		onSignUp: async ({ result, method }) => {
@@ -195,6 +199,8 @@ export const load = ({ data }) => ({
 | `passkeys.rp_name`          | `string`                                            | `issuer`                           | App name shown in the browser's passkey prompt                           |
 | `passkeys.origins`          | `string[]`                                          | `[request origin]`                 | Origins allowed to complete WebAuthn ceremonies                          |
 | `email.sendEmail`           | `(options) => Promise<void>`                        | —                                  | Email sending function                                                   |
+| `email.link`                | `boolean`                                           | `true`                             | Include a magic link in sign-in / verification emails                    |
+| `email.code`                | `boolean`                                           | `false`                            | Include a one-time code in sign-in / verification emails                 |
 | `hooks`                     | `{ onSignIn, onSignUp, onSignOut, ... }`            | —                                  | Lifecycle hooks                                                          |
 
 ## API Routes
@@ -206,7 +212,8 @@ All routes are served under `base_path` (default `/api/auth`). The Handle interc
 | Method | Path                       | Description                                    |
 | ------ | -------------------------- | ---------------------------------------------- |
 | `POST` | `/signin/email`            | Sign in with email and password                |
-| `POST` | `/signin/email/magic`      | Request a magic link email                     |
+| `POST` | `/signin/email/magic`      | Request a sign-in email (link and/or code)     |
+| `POST` | `/signin/email/code`       | Sign in with an emailed one-time code          |
 | `GET`  | `/signin/email/verify`     | Verify a magic link token                      |
 | `POST` | `/signup/email`            | Create a new account with email                |
 | `GET`  | `/signin/:vendor`          | Initiate OAuth sign-in (redirects to provider) |
@@ -254,6 +261,7 @@ verified method can't be removed).
 | Method | Path                    | Description                    |
 | ------ | ----------------------- | ------------------------------ |
 | `POST` | `/email/verify`         | Request email verification     |
+| `POST` | `/email/verify/code`    | Verify email with emailed code |
 | `GET`  | `/email/verify/confirm` | Verify email with token        |
 | `GET`  | `/email/check`          | Check if an email is available |
 
@@ -354,7 +362,8 @@ API methods live directly on the client (grouped into `signIn`, `signUp`, `passw
 ```typescript
 // Sign in
 const result = await auth.signIn.email({ email, password });
-await auth.signIn.emailMagicLink({ email });
+await auth.signIn.emailMagicLink({ email }); // sends a link and/or code (per server config)
+const result = await auth.signIn.emailCode({ email, code }); // code is case-insensitive
 auth.signIn.oauth('google', { redirect_to: '/dashboard' });
 
 // Passkeys (WebAuthn) — sign in with the browser's passkey prompt
@@ -390,6 +399,7 @@ const strength = await auth.password.checkStrength(password);
 
 // Email verification & availability
 await auth.emailVerification.request();
+await auth.emailVerification.confirmWithCode(code); // when email.code is enabled
 const available = await auth.emailVerification.checkAvailability(email);
 
 // User
@@ -601,7 +611,7 @@ Hooks fire after successful auth operations:
 defineAuthConfig({
 	hooks: {
 		onSignIn: async ({ result, method, is_new_user, meta }) => {
-			// method: 'email' | 'magic-link' | 'oauth' | 'passkey'
+			// method: 'email' | 'magic-link' | 'email-code' | 'oauth' | 'passkey'
 			// result: { user_id, jwt, decoded_jwt, ... }
 			// meta: { ip_address, city, country, user_agent, ... }
 		},

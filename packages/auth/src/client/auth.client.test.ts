@@ -409,6 +409,56 @@ describe('AuthClient', () => {
 		});
 	});
 
+	describe('signIn.emailCode', () => {
+		it('posts the email + code and stores the returned session', async () => {
+			const session = makeSession();
+			const fetch = vi
+				.fn()
+				.mockResolvedValue(
+					new Response(
+						JSON.stringify({ jwt: 'new-jwt', decoded_jwt: session, org_id: 'org_1' }),
+						{ status: 200, headers: { 'Content-Type': 'application/json' } },
+					),
+				);
+			const client = new AuthClient(undefined, { fetch });
+			const result = await client.signIn.emailCode({
+				email: 'test@example.com',
+				code: 'a3k9qx',
+			});
+
+			expect(fetch).toHaveBeenCalledOnce();
+			expect(fetch.mock.calls[0][0]).toContain('/signin/email/code');
+			expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+				email: 'test@example.com',
+				code: 'a3k9qx',
+			});
+			expect(result.jwt).toBe('new-jwt');
+			expect(client.jwt).toBe('new-jwt');
+			expect(client.session).toEqual(session);
+		});
+	});
+
+	describe('emailVerification.confirmWithCode', () => {
+		it('posts the code and stores the refreshed session', async () => {
+			const session = makeSession({ verified: true });
+			const fetch = vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ jwt: 'verified-jwt', decoded_jwt: session }), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' },
+				}),
+			);
+			const client = new AuthClient(makeData(), { fetch });
+			const result = await client.emailVerification.confirmWithCode('a3k9qx');
+
+			expect(fetch).toHaveBeenCalledOnce();
+			expect(fetch.mock.calls[0][0]).toContain('/email/verify/code');
+			expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ code: 'a3k9qx' });
+			expect(result.jwt).toBe('verified-jwt');
+			expect(client.jwt).toBe('verified-jwt');
+			expect(client.session).toEqual(session);
+		});
+	});
+
 	describe('destroy', () => {
 		it('can be called without error', () => {
 			const client = new AuthClient(makeData());

@@ -19,6 +19,12 @@ describe('matchRoute', () => {
 			expect(result).not.toBeNull();
 		});
 
+		it('matches POST /signin/email/code', () => {
+			const result = matchRoute('POST', '/signin/email/code');
+			expect(result).not.toBeNull();
+			expect(result!.params).toEqual({});
+		});
+
 		it('matches POST /signup/email', () => {
 			const result = matchRoute('POST', '/signup/email');
 			expect(result).not.toBeNull();
@@ -77,6 +83,12 @@ describe('matchRoute', () => {
 		it('matches GET /email/verify/confirm', () => {
 			const result = matchRoute('GET', '/email/verify/confirm');
 			expect(result).not.toBeNull();
+		});
+
+		it('matches POST /email/verify/code', () => {
+			const result = matchRoute('POST', '/email/verify/code');
+			expect(result).not.toBeNull();
+			expect(result!.params).toEqual({});
 		});
 
 		it('matches GET /email/check', () => {

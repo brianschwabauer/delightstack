@@ -7,6 +7,7 @@ import type { UserSessionMeta } from '../types';
 import { resolveErrorCode } from '../types/error.type';
 import {
 	EmailPasswordSignIn,
+	EmailCodeSignIn,
 	EmailSignUp,
 	UpdateUser,
 	PasskeyRegistrationResponse,
@@ -132,6 +133,31 @@ function requireOrg(locals: AuthLocals) {
 	}
 }
 
+/**
+ * Builds the default html/text email bodies for an email containing an action link
+ * and/or a one-time code (depending on the `email.link` / `email.code` config flags).
+ */
+function emailBodies(
+	action: string,
+	link: string | undefined,
+	code: string | undefined,
+): { html: string; text: string } {
+	const code_intro = link ? 'Or enter this code' : `Enter this code to ${action}`;
+	const html = [
+		link && `<a href="${link}">Click here to ${action}</a>`,
+		code && `<p>${code_intro}: <strong>${code}</strong></p>`,
+	]
+		.filter(Boolean)
+		.join('');
+	const text = [
+		link && `${action[0].toUpperCase()}${action.slice(1)} by visiting: ${link}`,
+		code && `${code_intro}: ${code}`,
+	]
+		.filter(Boolean)
+		.join('\n');
+	return { html, text };
+}
+
 // ============================================
 // Authentication Routes
 // ============================================
@@ -176,22 +202,53 @@ const signInEmailMagic: AuthRouteHandler = (ctx) =>
 			z.object({ email: z.email() }),
 			await ctx.event.request.json(),
 		);
-		const result = await ctx.auth.createEmailSignInToken(body.email, ctx.meta);
+		const send_link = ctx.config.email?.link !== false;
+		const send_code = ctx.config.email?.code === true;
+		const result = await ctx.auth.createEmailSignInToken(body.email, ctx.meta, {
+			code: send_code,
+		});
 
 		if (ctx.config.email?.sendEmail) {
 			const base_url = ctx.config.email.base_url || ctx.event.url.origin;
-			const link = `${base_url}${ctx.config.base_path}/signin/email/verify?token=${result.jwt}`;
+			const link = send_link
+				? `${base_url}${ctx.config.base_path}/signin/email/verify?token=${result.jwt}`
+				: undefined;
 			await ctx.config.email.sendEmail({
 				to: body.email,
 				link,
+				code: result.code,
 				subject: 'Sign in to your account',
-				html: `<a href="${link}">Click here to sign in</a>`,
-				text: `Sign in by visiting: ${link}`,
+				...emailBodies('sign in', link, result.code),
 				type: 'magic-link',
 			});
 		}
 
 		return noContent();
+	});
+
+const signInEmailCode: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		const body = parseSchema(EmailCodeSignIn, await ctx.event.request.json());
+		const result = (await ctx.auth.signInWithEmailCode(
+			body,
+			ctx.meta,
+		)) as AuthOperationResult;
+
+		if (ctx.config.hooks?.onSignIn) {
+			await ctx.config.hooks.onSignIn({
+				auth: ctx.auth,
+				result,
+				method: 'email-code',
+				is_new_user: false,
+				meta: ctx.meta,
+			});
+		}
+
+		return json({
+			jwt: result.jwt,
+			decoded_jwt: result.decoded_jwt,
+			org_id: result.org_id,
+		});
 	});
 
 const signInEmailVerify: AuthRouteHandler = (ctx) =>
@@ -260,18 +317,23 @@ const signUpEmail: AuthRouteHandler = (ctx) =>
 		}
 
 		if (ctx.config.email?.sendEmail) {
+			const send_link = ctx.config.email.link !== false;
+			const send_code = ctx.config.email.code === true;
 			const verificationResult = await ctx.auth.createEmailVerificationToken(
 				result.user_session_id,
 				ctx.meta,
+				{ code: send_code },
 			);
 			const base_url = ctx.config.email.base_url || ctx.event.url.origin;
-			const link = `${base_url}${ctx.config.base_path}/email/verify/confirm?token=${verificationResult.jwt}`;
+			const link = send_link
+				? `${base_url}${ctx.config.base_path}/email/verify/confirm?token=${verificationResult.jwt}`
+				: undefined;
 			await ctx.config.email.sendEmail({
 				to: body.email,
 				link,
+				code: verificationResult.code,
 				subject: 'Verify your email',
-				html: `<a href="${link}">Click here to verify your email</a>`,
-				text: `Verify your email by visiting: ${link}`,
+				...emailBodies('verify your email', link, verificationResult.code),
 				type: 'verification',
 			});
 		}
@@ -685,25 +747,54 @@ const passwordCheck: AuthRouteHandler = (ctx) =>
 const emailVerify: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireAuth(ctx.locals);
+		const send_link = ctx.config.email?.link !== false;
+		const send_code = ctx.config.email?.code === true;
 		const result = await ctx.auth.createEmailVerificationToken(
 			ctx.locals.session!.jti,
 			ctx.meta,
+			{ code: send_code },
 		);
 
 		if (ctx.config.email?.sendEmail) {
 			const base_url = ctx.config.email.base_url || ctx.event.url.origin;
-			const link = `${base_url}${ctx.config.base_path}/email/verify/confirm?token=${result.jwt}`;
+			const link = send_link
+				? `${base_url}${ctx.config.base_path}/email/verify/confirm?token=${result.jwt}`
+				: undefined;
 			await ctx.config.email.sendEmail({
 				to: ctx.locals.user!.email,
 				link,
+				code: result.code,
 				subject: 'Verify your email',
-				html: `<a href="${link}">Click here to verify your email</a>`,
-				text: `Verify your email by visiting: ${link}`,
+				...emailBodies('verify your email', link, result.code),
 				type: 'verification',
 			});
 		}
 
 		return noContent();
+	});
+
+const emailVerifyCode: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const body = parseSchema(
+			z.object({ code: z.string().trim().min(1).max(32) }),
+			await ctx.event.request.json(),
+		);
+		const result = await ctx.auth.verifyEmailWithCode(
+			ctx.locals.session!.jti,
+			body.code,
+			ctx.meta,
+		);
+
+		if (ctx.config.hooks?.onEmailVerified) {
+			await ctx.config.hooks.onEmailVerified({
+				auth: ctx.auth,
+				user_id: result.user_id,
+				email: result.decoded_jwt.email,
+			});
+		}
+
+		return json({ jwt: result.jwt, decoded_jwt: result.decoded_jwt });
 	});
 
 const emailVerifyConfirm: AuthRouteHandler = (ctx) =>
@@ -1417,6 +1508,7 @@ const ROUTES: RouteDefinition[] = [
 	// Authentication
 	defineRoute('POST', '/signin/email', signInEmail),
 	defineRoute('POST', '/signin/email/magic', signInEmailMagic),
+	defineRoute('POST', '/signin/email/code', signInEmailCode),
 	defineRoute('GET', '/signin/email/verify', signInEmailVerify),
 	defineRoute('POST', '/signin/passkey/options', signInPasskeyOptions),
 	defineRoute('POST', '/signin/passkey', signInPasskey),
@@ -1447,6 +1539,7 @@ const ROUTES: RouteDefinition[] = [
 
 	// Email
 	defineRoute('POST', '/email/verify', emailVerify),
+	defineRoute('POST', '/email/verify/code', emailVerifyCode),
 	defineRoute('GET', '/email/verify/confirm', emailVerifyConfirm),
 	defineRoute('GET', '/email/check', emailCheck),
 

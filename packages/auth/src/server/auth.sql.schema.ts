@@ -63,6 +63,10 @@ export type AuthDatabaseSchema = {
 		created_at: number;
 		/** The epoch timestamp (in ms) when the user's auth was last updated (e.g. when the user signed in or the token was refreshed) */
 		updated_at: number;
+		/** Salted SHA-256 hash of the one-time email code ('email_signin' / 'email_verification' sessions only) */
+		code_hash?: string;
+		/** How many guesses have been made against code_hash — the code stops working after too many */
+		code_attempts?: number;
 	};
 	/**
 	 * A passkey (WebAuthn credential) registered to a user account.
@@ -592,5 +596,11 @@ export const AUTH_DATABASE_UPGRADES = [
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
 		);
+	`,
+	(sql: SqlTaggedTemplate) => sql`
+		-- One-time email codes for sign-in and email verification. The code is stored as a
+		-- salted hash on the pending session row and invalidated after too many wrong guesses
+		ALTER TABLE user_session ADD COLUMN code_hash TEXT;
+		ALTER TABLE user_session ADD COLUMN code_attempts INTEGER;
 	`,
 ];

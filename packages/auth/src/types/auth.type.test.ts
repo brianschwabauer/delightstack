@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodePermissions, decodePermissions } from './auth.type';
+import { encodePermissions, decodePermissions, EmailCodeSignIn } from './auth.type';
 
 const permissions = ['read', 'write', 'admin', 'owner'] as const;
 
@@ -64,5 +64,35 @@ describe('decodePermissions', () => {
 		const encoded = encodePermissions(permissions, [...values]);
 		const decoded = decodePermissions(permissions, encoded);
 		expect(decoded).toEqual(['read', 'admin']);
+	});
+});
+
+describe('EmailCodeSignIn', () => {
+	it('lowercases the email and code (case-insensitive checking)', () => {
+		const parsed = EmailCodeSignIn.parse({
+			email: 'User@Example.COM',
+			code: ' A3K9QX ',
+		});
+		expect(parsed.email).toBe('user@example.com');
+		expect(parsed.code).toBe('a3k9qx');
+	});
+
+	it('keeps the optional invitation_id', () => {
+		const parsed = EmailCodeSignIn.parse({
+			email: 'user@example.com',
+			code: 'a3k9qx',
+			invitation_id: 'inv_1',
+		});
+		expect(parsed.invitation_id).toBe('inv_1');
+	});
+
+	it('rejects an empty code', () => {
+		expect(() =>
+			EmailCodeSignIn.parse({ email: 'user@example.com', code: '' }),
+		).toThrow();
+	});
+
+	it('rejects an invalid email', () => {
+		expect(() => EmailCodeSignIn.parse({ email: 'nope', code: 'a3k9qx' })).toThrow();
 	});
 });

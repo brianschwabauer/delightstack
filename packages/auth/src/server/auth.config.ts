@@ -116,23 +116,40 @@ export interface AuthConfig<
 	/**
 	 * Email sending configuration for magic links, verification, and password reset.
 	 * The `sendEmail` function receives default `subject`, `html`, and `text` along with the
-	 * action `link`. Use the defaults as-is or build custom email content using the `link`.
+	 * action `link` and/or one-time `code`. Use the defaults as-is or build custom email
+	 * content using `link` / `code`.
+	 *
+	 * The `link` and `code` flags control what sign-in and verification emails contain —
+	 * enable either or both. Password reset emails always contain a link.
 	 */
 	email?: {
 		sendEmail: (options: {
 			to: string;
-			/** The action URL the user should visit (e.g. verification link, password reset link) */
-			link: string;
+			/** The action URL the user should visit. Omitted when `link` is disabled (sign-in / verification emails only) */
+			link?: string;
+			/** The one-time code the user can type instead of clicking the link. Present when `code` is enabled */
+			code?: string;
 			/** Default subject line — use as-is or replace with your own */
 			subject: string;
-			/** Default HTML body — use as-is or replace with your own using `link` */
+			/** Default HTML body — use as-is or replace with your own using `link` / `code` */
 			html: string;
-			/** Default plain text body — use as-is or replace with your own using `link` */
+			/** Default plain text body — use as-is or replace with your own using `link` / `code` */
 			text: string;
 			type: 'magic-link' | 'verification' | 'password-reset' | 'new-signin-method';
 		}) => Promise<void>;
 		/** Base URL for email links @default derived from request origin */
 		base_url?: string;
+		/** Include a clickable link in sign-in and verification emails @default true */
+		link?: boolean;
+		/**
+		 * Include a one-time code in sign-in and verification emails — 6 lowercase
+		 * characters, checked case-insensitively. Vowels and ambiguous characters
+		 * (0/o, 1/l/i) are excluded so codes are easy to read and never spell words.
+		 * Redeem via `POST /signin/email/code` and
+		 * `POST /email/verify/code` (client: `auth.signIn.emailCode()` / `auth.email.verifyCode()`).
+		 * @default false
+		 */
+		code?: boolean;
 	};
 
 	/**
@@ -190,7 +207,7 @@ export interface AuthConfig<
 		onSignIn?: (ctx: {
 			auth: AuthStub;
 			result: AuthOperationResult;
-			method: 'email' | 'magic-link' | 'oauth' | 'passkey';
+			method: 'email' | 'magic-link' | 'email-code' | 'oauth' | 'passkey';
 			is_new_user: boolean;
 			meta: UserSessionMeta;
 		}) => Promise<void>;
@@ -198,7 +215,7 @@ export interface AuthConfig<
 		onSignUp?: (ctx: {
 			auth: AuthStub;
 			result: AuthOperationResult;
-			method: 'email' | 'magic-link' | 'oauth';
+			method: 'email' | 'magic-link' | 'email-code' | 'oauth';
 			meta: UserSessionMeta;
 		}) => Promise<void>;
 

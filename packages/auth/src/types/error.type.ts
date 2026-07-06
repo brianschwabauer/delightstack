@@ -8,6 +8,7 @@ export type AuthErrorCode =
 	| 'session_expired'
 	| 'session_not_found'
 	| 'invalid_token'
+	| 'invalid_code'
 	| 'token_expired'
 	| 'email_not_found'
 	| 'method_not_found'
@@ -47,6 +48,9 @@ export const AUTH_ERROR_MAP: Record<string, AuthErrorCode> = {
 	'You cannot revoke the last verified sign in method': 'last_method',
 	"Can't refresh a revoked session": 'session_not_found',
 	'Invalid or expired email sign-in link': 'invalid_token',
+	'Incorrect or expired sign-in code': 'invalid_code',
+	'Incorrect or expired verification code': 'invalid_code',
+	'Too many sign-in email requests': 'rate_limited',
 	'Invalid or expired email verification link': 'invalid_token',
 	'Invalid or expired reset password link': 'invalid_token',
 	'Cannot remove the only admin from the organization': 'permission_denied',
