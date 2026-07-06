@@ -1,5 +1,17 @@
 # @delightstack/components
 
+## 1.0.0
+
+### Major Changes
+
+- 8420739: First stable release (1.0.0). Also surfaces `@delightstack/editor` in the agent-facing `SKILL.md` (adds an editor callout under "Beyond components") and fixes a stale `/stack/overview.md` docs link left over from the 2026-06 docs restructure.
+
+### Patch Changes
+
+- Updated dependencies [8420739]
+  - @delightstack/styles@1.0.0
+  - @delightstack/utilities@1.0.0
+
 ## 0.2.0
 
 ### Minor Changes
