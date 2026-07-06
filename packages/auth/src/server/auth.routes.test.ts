@@ -297,6 +297,52 @@ describe('matchRoute', () => {
 		});
 	});
 
+	describe('passkey routes', () => {
+		it('matches POST /signin/passkey/options', () => {
+			const result = matchRoute('POST', '/signin/passkey/options');
+			expect(result).not.toBeNull();
+			expect(result!.params).toEqual({});
+		});
+
+		it('matches POST /signin/passkey', () => {
+			const result = matchRoute('POST', '/signin/passkey');
+			expect(result).not.toBeNull();
+			expect(result!.params).toEqual({});
+		});
+
+		it('matches POST /passkey/options', () => {
+			const result = matchRoute('POST', '/passkey/options');
+			expect(result).not.toBeNull();
+		});
+
+		it('matches POST /passkey', () => {
+			expect(matchRoute('POST', '/passkey')).not.toBeNull();
+		});
+
+		it('matches GET /passkey', () => {
+			expect(matchRoute('GET', '/passkey')).not.toBeNull();
+		});
+
+		it('matches PATCH /passkey/:id with a base64url credential id', () => {
+			const result = matchRoute('PATCH', '/passkey/Y3JlZGVudGlhbC1pZA');
+			expect(result).not.toBeNull();
+			expect(result!.params).toEqual({ id: 'Y3JlZGVudGlhbC1pZA' });
+		});
+
+		it('matches DELETE /passkey/:id', () => {
+			const result = matchRoute('DELETE', '/passkey/cred_123-abc');
+			expect(result).not.toBeNull();
+			expect(result!.params).toEqual({ id: 'cred_123-abc' });
+		});
+
+		it('does not let GET /signin/:vendor swallow POST passkey sign-in', () => {
+			// POST /signin/passkey must match the passkey route, not error on :vendor
+			const result = matchRoute('POST', '/signin/passkey');
+			expect(result).not.toBeNull();
+			expect(result!.params.vendor).toBeUndefined();
+		});
+	});
+
 	describe('route priority', () => {
 		it('prefers /signin/email/verify over /signin/:vendor with email', () => {
 			const result = matchRoute('GET', '/signin/email/verify');

@@ -13,10 +13,12 @@ OAuth 2.0 server, all backed by a single Durable Object.
 
 - **Email/password** with Argon2id (WASM) hashing, password reset, and change.
 - **Magic links** — passwordless sign-in via short-lived JWTs.
+- **Passkeys (WebAuthn)** — phishing-resistant, usernameless sign-in with Touch ID, Face ID, or
+  security keys; zero config needed alongside other sign-in methods.
 - **OAuth providers** — Google, GitHub, or any OAuth 2.0 provider; link multiple to one account.
 - **Multi-organization** — users belong to many orgs with bitwise-encoded permissions; org switching,
   member management, and invitations built in.
-- **Reactive `AuthClient`** — Svelte 5 runes, auto-refresh, nested `.api` methods.
+- **Reactive `AuthClient`** — Svelte 5 runes, auto-refresh, typed API methods.
 - **Route guards** — `requireAuth`, `requireOrg`, `requirePermission`, `requireEntitlement`.
 - **OAuth 2.0 server** — be a provider: app registration, auth codes, access/refresh tokens.
 
@@ -82,7 +84,10 @@ import { authConfig } from '$lib/auth.config';
 
 export const handle = createAuthHandle({
 	config: authConfig,
-	getDb: (event) => event.platform.env.AUTH,
+	getAuthServer: (event) => {
+		const namespace = event.platform.env.AUTH;
+		return namespace.get(namespace.idFromName('main'));
+	},
 });
 ```
 
@@ -92,27 +97,34 @@ serves `/api/auth/*` routes, and enforces CSRF on mutations.
 ## 4. Guard routes
 
 ```typescript
-// +page.server.ts
-import { requireAuth, requirePermission } from '@delightstack/auth/sveltekit';
+// src/lib/auth.guards.ts
+import { createAuthGuards } from '@delightstack/auth/sveltekit';
 
-export const load = async (event) => {
-	const auth = requireAuth(event); // redirects if signed out
-	requirePermission(event, 'org:admin'); // 403 if missing
-	return { user: auth.user };
-};
+export const { requireAuth, requireOrg, requirePermission, requireEntitlement } =
+	createAuthGuards({
+		permissions: ['org:read', 'org:write', 'org:admin', 'org:owner'] as const,
+	});
+
+// +page.server.ts
+import { requirePermission } from '$lib/auth.guards';
+
+export const load = requirePermission('org:admin', ({ locals }) => {
+	return { user: locals.user }; // redirects if signed out, /403 if missing permission
+});
 ```
 
 ## 5. The reactive client
 
 ```svelte
 <script>
-	import { AuthClient } from '@delightstack/auth/client';
-	const auth = new AuthClient();
+	// Hydrated in +layout.ts with `new AuthClient(data.auth)` from locals.auth_client_data
+	const { data } = $props();
+	const auth = data.auth;
 </script>
 
-{#if auth.is_authenticated}
-	<p>Hello, {auth.user?.name}</p>
-	<button onclick={() => auth.api.signOut()}>Sign out</button>
+{#if auth.signed_in}
+	<p>Hello, {auth.name}</p>
+	<button onclick={() => auth.signOut()}>Sign out</button>
 {/if}
 ```
 

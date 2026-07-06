@@ -65,6 +65,53 @@ export type AuthDatabaseSchema = {
 		updated_at: number;
 	};
 	/**
+	 * A passkey (WebAuthn credential) registered to a user account.
+	 * Each passkey is backed by a `user_auth` row so it counts as a sign-in method
+	 * (and inherits the sign-in method safety rules like "can't remove the last verified method").
+	 */
+	user_passkey: {
+		/** The WebAuthn credential ID (base64url) */
+		id: string;
+		user_id: string;
+		/** The user_auth sign-in method that this passkey backs */
+		user_auth_id: string;
+		/** The credential's COSE public key (base64url) */
+		public_key: string;
+		/** The signature counter reported by the authenticator (0 for most passkey providers) */
+		counter: number;
+		/** 'singleDevice' (device-bound) or 'multiDevice' (synced passkey) */
+		device_type?: string;
+		/** 1 if the credential is backed up (e.g. iCloud Keychain / Google Password Manager) */
+		backed_up?: number;
+		/** JSON array of transports the authenticator supports (e.g. ["internal","hybrid"]) */
+		transports?: string;
+		/** A user-provided label for the passkey (e.g. "MacBook Touch ID") */
+		name?: string;
+		/** The AAGUID identifying the authenticator model/provider */
+		aaguid?: string;
+		/** The epoch timestamp (in ms) when the passkey was last used to sign in */
+		last_used_at?: number;
+		created_at: number;
+		updated_at: number;
+	};
+	/**
+	 * Single-use WebAuthn challenges for passkey registration & authentication ceremonies.
+	 * A challenge is created when options are generated and deleted when the ceremony is
+	 * verified (or when it expires), preventing replay attacks.
+	 */
+	webauthn_challenge: {
+		/** The challenge value (base64url) */
+		id: string;
+		/** The type of ceremony this challenge is for */
+		type: 'registration' | 'authentication';
+		/** The user this challenge was issued for (registration only) */
+		user_id?: string;
+		/** The epoch timestamp (in ms) when the challenge expires */
+		expires_at: number;
+		created_at: number;
+		updated_at: number;
+	};
+	/**
 	 * A table of oauth tokens used to access vendor APIs or to authenticate users using oauth.
 	 * When a user signs in with oauth, an oauth token is created and this token is referenced in the user_auth table.
 	 * An Oauth Token can also be added here if the user connects a vendor account to their profile (without using it to sign in).
@@ -516,5 +563,34 @@ export const AUTH_DATABASE_UPGRADES = [
 	(sql: SqlTaggedTemplate) => sql`
 		ALTER TABLE oauth_application_auth_code ADD COLUMN state TEXT;
 		ALTER TABLE oauth_application_auth_code ADD COLUMN redirect_uri TEXT;
+	`,
+	(sql: SqlTaggedTemplate) => sql`
+		-- Passkeys (WebAuthn credentials) registered to user accounts.
+		-- Each passkey is backed by a user_auth row so it counts as a sign-in method
+		CREATE TABLE IF NOT EXISTS user_passkey (
+			id TEXT PRIMARY KEY, -- The WebAuthn credential ID (base64url)
+			user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+			user_auth_id TEXT NOT NULL REFERENCES user_auth(id) ON DELETE CASCADE,
+			public_key TEXT NOT NULL, -- The credential's COSE public key (base64url)
+			counter INTEGER NOT NULL, -- The signature counter reported by the authenticator
+			device_type TEXT, -- 'singleDevice' (device-bound) or 'multiDevice' (synced passkey)
+			backed_up INTEGER, -- 1 if the credential is backed up (e.g. iCloud Keychain)
+			transports TEXT, -- JSON array of transports (e.g. ["internal","hybrid"])
+			name TEXT, -- A user-provided label for the passkey (e.g. "MacBook Touch ID")
+			aaguid TEXT, -- The AAGUID identifying the authenticator model/provider
+			last_used_at INTEGER, -- The epoch timestamp (in ms) when the passkey was last used to sign in
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
+
+		-- Single-use WebAuthn challenges for passkey registration & authentication ceremonies
+		CREATE TABLE IF NOT EXISTS webauthn_challenge (
+			id TEXT PRIMARY KEY, -- The challenge value (base64url)
+			type TEXT NOT NULL, -- 'registration' | 'authentication'
+			user_id TEXT, -- The user this challenge was issued for (registration only)
+			expires_at INTEGER NOT NULL, -- The epoch timestamp (in ms) when the challenge expires
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
 	`,
 ];

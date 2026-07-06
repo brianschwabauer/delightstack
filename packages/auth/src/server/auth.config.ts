@@ -92,6 +92,28 @@ export interface AuthConfig<
 	};
 
 	/**
+	 * Passkey (WebAuthn) configuration. Passkeys work with zero config — the relying
+	 * party ID and origin are derived from the request URL. Set these explicitly when
+	 * the app is served from multiple origins (e.g. a subdomain + apex domain).
+	 */
+	passkeys?: {
+		/**
+		 * The relying party ID — the domain passkeys are bound to (e.g. 'example.com').
+		 * Passkeys registered under this ID work on it and all of its subdomains.
+		 * @default the request hostname
+		 */
+		rp_id?: string;
+		/** The human-readable app name shown in the browser's passkey prompt @default issuer */
+		rp_name?: string;
+		/**
+		 * The web origins allowed to complete WebAuthn ceremonies (e.g. 'https://example.com').
+		 * Must be set if the app is served from origins other than the request origin.
+		 * @default [request origin]
+		 */
+		origins?: string[];
+	};
+
+	/**
 	 * Email sending configuration for magic links, verification, and password reset.
 	 * The `sendEmail` function receives default `subject`, `html`, and `text` along with the
 	 * action `link`. Use the defaults as-is or build custom email content using the `link`.
@@ -168,7 +190,7 @@ export interface AuthConfig<
 		onSignIn?: (ctx: {
 			auth: AuthStub;
 			result: AuthOperationResult;
-			method: 'email' | 'magic-link' | 'oauth';
+			method: 'email' | 'magic-link' | 'oauth' | 'passkey';
 			is_new_user: boolean;
 			meta: UserSessionMeta;
 		}) => Promise<void>;

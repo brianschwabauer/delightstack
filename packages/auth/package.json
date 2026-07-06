@@ -3,12 +3,14 @@
 	"version": "0.1.0",
 	"type": "module",
 	"license": "MIT",
-	"description": "Edge-native authentication for Cloudflare Workers — JWT sessions, Argon2id password hashing, OAuth, and SvelteKit guards, backed by Durable Objects.",
+	"description": "Edge-native authentication for Cloudflare Workers — JWT sessions, Argon2id password hashing, OAuth, passkeys (WebAuthn), and SvelteKit guards, backed by Durable Objects.",
 	"keywords": [
 		"auth",
 		"authentication",
 		"jwt",
 		"oauth",
+		"passkey",
+		"webauthn",
 		"argon2",
 		"cloudflare",
 		"workers",
@@ -82,11 +84,14 @@
 	"dependencies": {
 		"@delightstack/database": "workspace:*",
 		"@delightstack/utilities": "workspace:*",
+		"@simplewebauthn/browser": "^13.3.0",
+		"@simplewebauthn/server": "^13.3.2",
 		"argon2-wasm-edge": "^1.0.23",
 		"zod": "^4.1.12"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251120.0",
+		"@edge-runtime/vm": "^5.0.0",
 		"@sveltejs/kit": "^2.20.7",
 		"@sveltejs/package": "^2.4.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
@@ -94,7 +99,6 @@
 		"svelte-check": "^4.3.0",
 		"tslib": "^2.8.1",
 		"typescript": "^5.8.3",
-		"@edge-runtime/vm": "^5.0.0",
 		"vitest": "^3.2.1"
 	}
 }

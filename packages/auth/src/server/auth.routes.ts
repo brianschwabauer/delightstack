@@ -5,7 +5,14 @@ import type { AuthLocals, AuthServer } from './auth.handler';
 import type { RequestEvent } from '@sveltejs/kit';
 import type { UserSessionMeta } from '../types';
 import { resolveErrorCode } from '../types/error.type';
-import { EmailPasswordSignIn, EmailSignUp, UpdateUser } from '../types';
+import {
+	EmailPasswordSignIn,
+	EmailSignUp,
+	UpdateUser,
+	PasskeyRegistrationResponse,
+	PasskeyAuthenticationResponse,
+	type PasskeyRelyingParty,
+} from '../types';
 import { getOauthToken } from './oauth.helper';
 import type { AuthOperationResult } from './auth.db.server';
 import type { OauthToken } from '../types';
@@ -404,6 +411,121 @@ const signInOauthCallback: AuthRouteHandler = (ctx) =>
 		}
 
 		return redirect(state.redirect || '/');
+	});
+
+/**
+ * Resolves the WebAuthn relying party info from the auth config, falling back to
+ * values derived from the request URL (so passkeys work with zero configuration).
+ */
+function resolvePasskeyRp(ctx: AuthRouteContext): PasskeyRelyingParty {
+	const passkeys = ctx.config.passkeys;
+	return {
+		rp_id: passkeys?.rp_id || ctx.event.url.hostname,
+		rp_name: passkeys?.rp_name || ctx.config.issuer,
+		origins: passkeys?.origins?.length ? passkeys.origins : [ctx.event.url.origin],
+	};
+}
+
+const signInPasskeyOptions: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		const options = await ctx.auth.createPasskeyAuthenticationOptions(
+			resolvePasskeyRp(ctx),
+			ctx.meta,
+		);
+		return json(options);
+	});
+
+const signInPasskey: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		const body = parseSchema(
+			z.object({
+				response: PasskeyAuthenticationResponse,
+				invitation_id: z.string().optional(),
+			}),
+			await ctx.event.request.json(),
+		);
+		const result = (await ctx.auth.signInWithPasskey(
+			body.response,
+			{ invitation_id: body.invitation_id },
+			resolvePasskeyRp(ctx),
+			ctx.meta,
+		)) as AuthOperationResult;
+
+		if (ctx.config.hooks?.onSignIn) {
+			await ctx.config.hooks.onSignIn({
+				auth: ctx.auth,
+				result,
+				method: 'passkey',
+				is_new_user: false,
+				meta: ctx.meta,
+			});
+		}
+
+		return json({
+			jwt: result.jwt,
+			decoded_jwt: result.decoded_jwt,
+			org_id: result.org_id,
+		});
+	});
+
+const passkeyRegisterOptions: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const options = await ctx.auth.createPasskeyRegistrationOptions(
+			ctx.locals.session!.uid,
+			resolvePasskeyRp(ctx),
+			ctx.meta,
+		);
+		return json(options);
+	});
+
+const passkeyRegisterVerify: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const body = parseSchema(
+			z.object({
+				response: PasskeyRegistrationResponse,
+				name: z.string().trim().max(100).optional(),
+			}),
+			await ctx.event.request.json(),
+		);
+		const passkey = await ctx.auth.verifyPasskeyRegistration(
+			ctx.locals.session!.uid,
+			body.response,
+			resolvePasskeyRp(ctx),
+			{ name: body.name },
+			ctx.meta,
+		);
+		return json(passkey, 201);
+	});
+
+const passkeyList: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const result = await ctx.auth.listPasskeys(ctx.locals.session!.uid);
+		return json(result);
+	});
+
+const passkeyUpdate: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const id = ctx.event.params.id;
+		if (!id) throw new DelightError({ message: 'Passkey ID is required', status: 400 });
+		const body = parseSchema(
+			z.object({ name: z.string().trim().max(100).optional() }),
+			await ctx.event.request.json(),
+		);
+		const passkey = await ctx.auth.updatePasskey(ctx.locals.session!.uid, id, body);
+		return json(passkey);
+	});
+
+const passkeyDelete: AuthRouteHandler = (ctx) =>
+	handleRoute(ctx, async () => {
+		requireAuth(ctx.locals);
+		const id = ctx.event.params.id;
+		if (!id) throw new DelightError({ message: 'Passkey ID is required', status: 400 });
+		await ctx.auth.deletePasskey(ctx.locals.session!.uid, id);
+		return noContent();
 	});
 
 const signOut: AuthRouteHandler = (ctx) =>
@@ -1296,11 +1418,20 @@ const ROUTES: RouteDefinition[] = [
 	defineRoute('POST', '/signin/email', signInEmail),
 	defineRoute('POST', '/signin/email/magic', signInEmailMagic),
 	defineRoute('GET', '/signin/email/verify', signInEmailVerify),
+	defineRoute('POST', '/signin/passkey/options', signInPasskeyOptions),
+	defineRoute('POST', '/signin/passkey', signInPasskey),
 	defineRoute('POST', '/signup/email', signUpEmail),
 	defineRoute('GET', '/signin/:vendor/callback', signInOauthCallback),
 	defineRoute('GET', '/signin/:vendor', signInOauth),
 	defineRoute('POST', '/signout', signOut),
 	defineRoute('GET', '/signout', signOutRedirect),
+
+	// Passkeys (WebAuthn)
+	defineRoute('POST', '/passkey/options', passkeyRegisterOptions),
+	defineRoute('POST', '/passkey', passkeyRegisterVerify),
+	defineRoute('GET', '/passkey', passkeyList),
+	defineRoute('PATCH', '/passkey/:id', passkeyUpdate),
+	defineRoute('DELETE', '/passkey/:id', passkeyDelete),
 
 	// Session
 	defineRoute('GET', '/session', sessionGet),

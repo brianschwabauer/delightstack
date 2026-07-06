@@ -19,7 +19,21 @@ import {
 	EmailPasswordSignIn,
 	EmailSignUp,
 	EmailLinkSignIn,
+	Passkey,
+	PasskeyRelyingParty,
+	PasskeyRegistrationResponse,
+	PasskeyAuthenticationResponse,
 } from './../types';
+import {
+	generateRegistrationOptions,
+	verifyRegistrationResponse,
+	generateAuthenticationOptions,
+	verifyAuthenticationResponse,
+	type RegistrationResponseJSON,
+	type AuthenticationResponseJSON,
+	type AuthenticatorTransportFuture,
+} from '@simplewebauthn/server';
+import { isoBase64URL } from '@simplewebauthn/server/helpers';
 
 import { argon2id, setWASMModules, argon2Verify } from 'argon2-wasm-edge';
 // @ts-expect-error
@@ -1024,11 +1038,12 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const oauth_token = user_auth.oauth_token_id
 			? this.sql.get('oauth_token', user_auth.oauth_token_id)
 			: undefined;
+		const passkey = oauth_token ? undefined : this.getPasskeyByAuthId(user_auth.id);
 		return {
 			id: user_auth.id,
 			email: user_auth.email,
-			vendor: oauth_token?.vendor,
-			vendor_id: oauth_token?.vendor_id,
+			vendor: oauth_token?.vendor || (passkey ? 'passkey' : undefined),
+			vendor_id: oauth_token?.vendor_id || passkey?.id,
 			created_at: user_auth.created_at,
 			updated_at: user_auth.updated_at,
 			refreshed_at: undefined,
@@ -1057,6 +1072,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			const oauth_token = user_auth.oauth_token_id
 				? this.sql.get('oauth_token', user_auth.oauth_token_id)
 				: undefined;
+			const passkey = oauth_token ? undefined : this.getPasskeyByAuthId(user_auth.id);
 			const [latest_session] = this.sql.list('user_session', {
 				limit: 1,
 				select: ['updated_at'],
@@ -1071,8 +1087,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			return {
 				id: user_auth.id,
 				email: user_auth.email,
-				vendor: oauth_token?.vendor,
-				vendor_id: oauth_token?.vendor_id,
+				vendor: oauth_token?.vendor || (passkey ? 'passkey' : undefined),
+				vendor_id: oauth_token?.vendor_id || passkey?.id,
 				created_at: user_auth.created_at,
 				updated_at: user_auth.updated_at,
 				refreshed_at: latest_session?.updated_at,
@@ -1134,14 +1150,18 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		if (user_auth.oauth_token_id) {
 			oauth_token = this.sql.get('oauth_token', user_auth.oauth_token_id);
 		}
+		const [passkey] = this.sql.list('user_passkey', {
+			limit: 1,
+			where: { key: 'user_auth_id', is: '=', value: user_auth_id },
+		});
 		this.sql.transaction(() => {
 			if (user_auth.verified_at) {
 				// Save the verified user auth in a deleted table in case their account is compromised and we need to prove who owned the account before
 				this.sql.insert('user_auth_deleted', user_auth.id, {
 					email: user_auth.email,
 					user_id,
-					vendor: oauth_token?.vendor,
-					vendor_id: oauth_token?.vendor_id,
+					vendor: oauth_token?.vendor || (passkey ? 'passkey' : undefined),
+					vendor_id: oauth_token?.vendor_id || passkey?.id,
 					password_hash: user_auth.password_hash,
 					created_at: user_auth.created_at,
 					updated_at: user_auth.updated_at,
@@ -1150,6 +1170,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			}
 			if (user_auth.oauth_token_id) {
 				this.sql.delete('oauth_token', user_auth.oauth_token_id);
+			}
+			if (passkey) {
+				this.sql.delete('user_passkey', passkey.id);
 			}
 			this.sql.delete('user_auth', user_auth_id);
 		});
@@ -1238,6 +1261,496 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			jwt: new_session.jwt,
 			type: 'password-change',
 		} satisfies AuthOperationResult<'auth'>;
+	}
+
+	/**
+	 * Creates WebAuthn registration options for adding a passkey to an existing account.
+	 * The returned options should be passed to `navigator.credentials.create()` in the browser
+	 * (e.g. via `@simplewebauthn/browser`'s `startRegistration()`), and the browser's response
+	 * passed to `verifyPasskeyRegistration()`. The challenge is stored server-side (single-use).
+	 */
+	async createPasskeyRegistrationOptions(
+		user_id: string,
+		rp: PasskeyRelyingParty,
+		meta: UserSessionMeta,
+	) {
+		const is_allowed = this.rateLimit([meta.ip_address || '', 'passkey_options'], {
+			max_tokens: 10,
+			refill_every_seconds: 10,
+		});
+		if (!is_allowed) {
+			throw new DelightError({
+				message: 'Too many passkey requests. Please try again later',
+				status: 429,
+			});
+		}
+		const user = this.sql.setError(`Could not find user`).get('user', user_id);
+		if (user.deleted_at) {
+			throw new DelightError({
+				message: 'This account has been deleted. Please contact support for help.',
+				status: 401,
+			});
+		}
+		const email = this.getPrimaryEmail(user_id);
+		const existing = this.sql.list('user_passkey', {
+			limit: 100,
+			where: { key: 'user_id', is: '=', value: user_id },
+		});
+		const options = await generateRegistrationOptions({
+			rpName: rp.rp_name,
+			rpID: rp.rp_id,
+			userID: new TextEncoder().encode(user_id),
+			userName: email || user.name,
+			userDisplayName: user.name,
+			attestationType: 'none',
+			excludeCredentials: existing.map((passkey) => ({
+				id: passkey.id,
+				transports: this.parsePasskeyTransports(passkey.transports),
+			})),
+			authenticatorSelection: {
+				residentKey: 'required',
+				userVerification: 'preferred',
+			},
+		});
+		this.saveWebauthnChallenge(options.challenge, 'registration', user_id);
+		return options;
+	}
+
+	/**
+	 * Verifies a WebAuthn registration response and adds the passkey as a new sign-in
+	 * method for the user. Must be called with the response from the browser's
+	 * `navigator.credentials.create()` (started with `createPasskeyRegistrationOptions()`).
+	 */
+	async verifyPasskeyRegistration(
+		user_id: string,
+		unsafe_response: PasskeyRegistrationResponse,
+		rp: PasskeyRelyingParty,
+		data: { name?: string },
+		meta: UserSessionMeta,
+	) {
+		const response = parseSchema(PasskeyRegistrationResponse, unsafe_response);
+		const user = this.sql.setError(`Could not find user`).get('user', user_id);
+		if (user.deleted_at) {
+			throw new DelightError({
+				message: 'This account has been deleted. Please contact support for help.',
+				status: 401,
+			});
+		}
+
+		// Consume the single-use challenge BEFORE the async verification so a concurrent
+		// request can't replay it while the input gate is open during the await
+		const challenge = this.extractWebauthnChallenge(response.response.clientDataJSON);
+		this.consumeWebauthnChallenge(challenge, 'registration', user_id);
+
+		let verification: Awaited<ReturnType<typeof verifyRegistrationResponse>>;
+		try {
+			verification = await verifyRegistrationResponse({
+				response: response as RegistrationResponseJSON,
+				expectedChallenge: challenge,
+				expectedOrigin: rp.origins,
+				expectedRPID: rp.rp_id,
+				requireUserVerification: false,
+			});
+		} catch (error) {
+			throw new DelightError({
+				message: `Passkey could not be verified: ${DelightError.from(error).message}`,
+				status: 400,
+			});
+		}
+		if (!verification.verified || !verification.registrationInfo) {
+			throw new DelightError({ message: 'Passkey could not be verified', status: 400 });
+		}
+		const { credential, credentialDeviceType, credentialBackedUp, aaguid } =
+			verification.registrationInfo;
+
+		// Reject credentials that are already registered (to this or another account)
+		const [existing] = this.sql.list('user_passkey', {
+			limit: 1,
+			select: ['id'],
+			where: { key: 'id', is: '=', value: credential.id },
+		});
+		if (existing) {
+			throw new DelightError({
+				message: 'This passkey is already registered',
+				status: 400,
+			});
+		}
+
+		// The passkey inherits the account's email. It counts as verified if the user
+		// already has a verified sign-in method (the passkey was added from an
+		// authenticated session, so it's as trustworthy as the method used to sign in)
+		const email = this.getPrimaryEmail(user_id) || '';
+		const [verified_auth] = this.sql.list('user_auth', {
+			limit: 1,
+			select: ['id'],
+			where: {
+				and: [
+					{ key: 'user_id', is: '=', value: user_id },
+					{ key: 'verified_at', is: '!=', value: null },
+				],
+			},
+		});
+
+		const user_auth_id = generateID();
+		let passkey: AuthDatabaseSchema['user_passkey'] | undefined;
+		this.sql.transaction(() => {
+			this.sql.insert('user_auth', user_auth_id, {
+				user_id,
+				email,
+				verified_at: verified_auth ? Date.now() : undefined,
+			});
+			passkey = this.sql.insert('user_passkey', credential.id, {
+				user_id,
+				user_auth_id,
+				public_key: isoBase64URL.fromBuffer(credential.publicKey),
+				counter: credential.counter,
+				device_type: credentialDeviceType,
+				backed_up: credentialBackedUp ? 1 : 0,
+				transports: JSON.stringify(credential.transports || []),
+				name: data.name,
+				aaguid,
+			});
+		});
+		return this.convertPasskeyFromDB(passkey!);
+	}
+
+	/**
+	 * Creates WebAuthn authentication options for signing in with a passkey.
+	 * Uses discoverable credentials (empty allowCredentials) so the user doesn't need to
+	 * enter an email first. Pass the returned options to `navigator.credentials.get()` in
+	 * the browser and the response to `signInWithPasskey()`.
+	 */
+	async createPasskeyAuthenticationOptions(
+		rp: PasskeyRelyingParty,
+		meta: UserSessionMeta,
+	) {
+		const is_allowed = this.rateLimit([meta.ip_address || '', 'passkey_options'], {
+			max_tokens: 10,
+			refill_every_seconds: 10,
+		});
+		if (!is_allowed) {
+			throw new DelightError({
+				message: 'Too many passkey requests. Please try again later',
+				status: 429,
+			});
+		}
+		const options = await generateAuthenticationOptions({
+			rpID: rp.rp_id,
+			userVerification: 'preferred',
+			allowCredentials: [],
+		});
+		this.saveWebauthnChallenge(options.challenge, 'authentication');
+		return options;
+	}
+
+	/**
+	 * Verifies a WebAuthn authentication response and signs the user in.
+	 * Must be called with the response from the browser's `navigator.credentials.get()`
+	 * (started with `createPasskeyAuthenticationOptions()`).
+	 */
+	async signInWithPasskey(
+		unsafe_response: PasskeyAuthenticationResponse,
+		data: { invitation_id?: string },
+		rp: PasskeyRelyingParty,
+		meta: UserSessionMeta,
+	) {
+		const response = parseSchema(PasskeyAuthenticationResponse, unsafe_response);
+		const is_allowed = this.rateLimit([meta.ip_address || '', 'passkey_signin'], {
+			max_tokens: 5,
+			refill_every_seconds: 10,
+		});
+		if (!is_allowed) {
+			throw new DelightError({
+				message: 'Too many failed sign in attempts. Please try again later',
+				status: 429,
+			});
+		}
+
+		// Consume the single-use challenge BEFORE the async verification so a concurrent
+		// request can't replay it while the input gate is open during the await
+		const challenge = this.extractWebauthnChallenge(response.response.clientDataJSON);
+		this.consumeWebauthnChallenge(challenge, 'authentication');
+
+		const [passkey] = this.sql.list('user_passkey', {
+			limit: 1,
+			where: { key: 'id', is: '=', value: response.id },
+		});
+		if (!passkey) {
+			throw new DelightError({ message: 'Passkey not recognized', status: 401 });
+		}
+		const user = this.sql
+			.setError(`Couldn't find user with given id`)
+			.get('user', passkey.user_id);
+		if (user.deleted_at) {
+			throw new DelightError({
+				message: 'This account has been deleted. Please contact support for help.',
+				status: 401,
+			});
+		}
+		const user_auth = this.sql
+			.setError(`Could not find passkey sign in method`)
+			.get('user_auth', passkey.user_auth_id);
+
+		// If the authenticator reports which user it belongs to, make sure it matches
+		if (response.response.userHandle) {
+			const user_handle = isoBase64URL.toUTF8String(response.response.userHandle);
+			if (user_handle !== passkey.user_id) {
+				throw new DelightError({ message: 'Passkey not recognized', status: 401 });
+			}
+		}
+
+		let verification: Awaited<ReturnType<typeof verifyAuthenticationResponse>>;
+		try {
+			verification = await verifyAuthenticationResponse({
+				response: response as AuthenticationResponseJSON,
+				expectedChallenge: challenge,
+				expectedOrigin: rp.origins,
+				expectedRPID: rp.rp_id,
+				requireUserVerification: false,
+				credential: {
+					id: passkey.id,
+					publicKey: isoBase64URL.toBuffer(passkey.public_key),
+					counter: passkey.counter,
+					transports: this.parsePasskeyTransports(passkey.transports),
+				},
+			});
+		} catch (error) {
+			throw new DelightError({
+				message: `Passkey could not be verified: ${DelightError.from(error).message}`,
+				status: 401,
+			});
+		}
+		if (!verification.verified) {
+			throw new DelightError({ message: 'Passkey could not be verified', status: 401 });
+		}
+
+		// Check if the user was invited to an existing organization
+		let org_id: string | undefined;
+		let permission: number | undefined;
+		if (data.invitation_id) {
+			const invitation = this.sql
+				.setError(`Could not find invitation`)
+				.get('org_invitation', data.invitation_id);
+			permission = invitation.permission;
+			org_id = invitation.org_id;
+		}
+		if (org_id && permission) {
+			const [existing_permission] = this.sql.list('org_user', {
+				limit: 1,
+				where: {
+					and: [
+						{ key: 'org_id', is: '=', value: org_id },
+						{ key: 'user_id', is: '=', value: passkey.user_id },
+					],
+				},
+			});
+			if (existing_permission) {
+				const existing_permissions = decodePermissions(
+					this.options.permissions,
+					existing_permission.permission,
+				);
+				const new_permissions = decodePermissions(this.options.permissions, permission);
+				const all_permissions = encodePermissions(
+					this.options.permissions,
+					Array.from(new Set([...existing_permissions, ...new_permissions])),
+				);
+				this.sql.update('org_user', existing_permission.id, {
+					permission: all_permissions,
+				});
+			} else {
+				this.sql.insert('org_user', null, {
+					org_id,
+					user_id: passkey.user_id,
+					permission,
+				});
+			}
+		}
+
+		const user_session_id = generateID();
+		const { jwt, decoded_jwt } = await this.createSessionToken({
+			user_auth_id: passkey.user_auth_id,
+			user_id: passkey.user_id,
+			user_session_id,
+			email: user_auth.email,
+			verified: !!user_auth.verified_at,
+		});
+		this.sql.transaction(() => {
+			this.sql.update('user_passkey', passkey.id, {
+				counter: verification.authenticationInfo.newCounter,
+				last_used_at: Date.now(),
+			});
+			this.sql.insert('user_session', user_session_id, {
+				type: 'auth',
+				jwt,
+				user_id: passkey.user_id,
+				user_auth_id: passkey.user_auth_id,
+				expires_at: decoded_jwt.exp * 1000,
+				json: JSON.stringify(meta),
+			});
+		});
+		return {
+			jwt,
+			decoded_jwt,
+			user_id: passkey.user_id,
+			user_auth_id: passkey.user_auth_id,
+			user_session_id,
+			org_id,
+			type: 'signin',
+		} satisfies AuthOperationResult;
+	}
+
+	/** Lists the passkeys registered to the user with the given id */
+	listPasskeys(user_id: string) {
+		const passkeys = this.sql.list('user_passkey', {
+			limit: 100,
+			order: [{ key: 'created_at', direction: 'ASC' }],
+			where: { key: 'user_id', is: '=', value: user_id },
+		});
+		const list = passkeys.map((passkey) => this.convertPasskeyFromDB(passkey));
+		return { list, count: list.length, hasMore: false };
+	}
+
+	/** Updates the user-facing label of a passkey. The passkey must belong to the given user */
+	updatePasskey(user_id: string, passkey_id: string, data: { name?: string }) {
+		const passkey = this.getOwnedPasskey(user_id, passkey_id);
+		const updated = this.sql.update('user_passkey', passkey.id, { name: data.name });
+		return this.convertPasskeyFromDB(updated);
+	}
+
+	/**
+	 * Removes a passkey (and its backing sign-in method) from the user's account.
+	 * Applies the same safety rules as revoking any other sign-in method
+	 * (e.g. can't remove the last verified method).
+	 */
+	deletePasskey(user_id: string, passkey_id: string) {
+		const passkey = this.getOwnedPasskey(user_id, passkey_id);
+		this.revokeSignInMethod(passkey.user_auth_id);
+	}
+
+	/** Returns the passkey with the given id, throwing if it doesn't belong to the user */
+	private getOwnedPasskey(user_id: string, passkey_id: string) {
+		const [passkey] = this.sql.list('user_passkey', {
+			limit: 1,
+			where: {
+				and: [
+					{ key: 'id', is: '=', value: passkey_id },
+					{ key: 'user_id', is: '=', value: user_id },
+				],
+			},
+		});
+		if (!passkey) {
+			throw new DelightError({ message: 'Could not find passkey', status: 404 });
+		}
+		return passkey;
+	}
+
+	/** Returns the passkey backing the given user_auth id (if any) */
+	private getPasskeyByAuthId(user_auth_id: string) {
+		const [passkey] = this.sql.list('user_passkey', {
+			limit: 1,
+			select: ['id', 'user_auth_id'],
+			where: { key: 'user_auth_id', is: '=', value: user_auth_id },
+		});
+		return passkey;
+	}
+
+	/** Returns the user's primary email (preferring verified sign-in methods) */
+	private getPrimaryEmail(user_id: string): string | undefined {
+		const auths = this.sql.list('user_auth', {
+			limit: 100,
+			select: ['email', 'verified_at', 'created_at'],
+			order: [{ key: 'created_at', direction: 'ASC' }],
+			where: { key: 'user_id', is: '=', value: user_id },
+		});
+		return (auths.find((auth) => auth.verified_at) || auths[0])?.email;
+	}
+
+	/** How long a WebAuthn challenge stays valid before the ceremony must be restarted */
+	private static readonly WEBAUTHN_CHALLENGE_TTL_MS = 1000 * 60 * 5;
+
+	/** Stores a single-use WebAuthn challenge (and sweeps expired ones) */
+	private saveWebauthnChallenge(
+		challenge: string,
+		type: 'registration' | 'authentication',
+		user_id?: string,
+	) {
+		const now = Date.now();
+		this.sql.run((sql) => sql`DELETE FROM webauthn_challenge WHERE expires_at < ${now}`);
+		this.sql.insert('webauthn_challenge', challenge, {
+			type,
+			user_id,
+			expires_at: now + AuthDatabaseServer.WEBAUTHN_CHALLENGE_TTL_MS,
+		});
+	}
+
+	/**
+	 * Validates & deletes a stored WebAuthn challenge (single-use).
+	 * Throws if the challenge wasn't issued by this server, is expired, or was
+	 * issued for a different ceremony type/user.
+	 */
+	private consumeWebauthnChallenge(
+		challenge: string,
+		type: 'registration' | 'authentication',
+		user_id?: string,
+	) {
+		const [stored] = this.sql.list('webauthn_challenge', {
+			limit: 1,
+			where: { key: 'id', is: '=', value: challenge },
+		});
+		const valid =
+			stored &&
+			stored.type === type &&
+			stored.expires_at > Date.now() &&
+			(!user_id || stored.user_id === user_id);
+		if (stored) this.sql.delete('webauthn_challenge', stored.id);
+		if (!valid) {
+			throw new DelightError({
+				message: 'Invalid or expired passkey challenge. Please try again',
+				status: 400,
+			});
+		}
+	}
+
+	/** Extracts the challenge from a WebAuthn response's clientDataJSON (base64url) */
+	private extractWebauthnChallenge(client_data_json: string): string {
+		try {
+			const client_data = JSON.parse(isoBase64URL.toUTF8String(client_data_json)) as {
+				challenge?: string;
+			};
+			if (typeof client_data.challenge === 'string' && client_data.challenge) {
+				return client_data.challenge;
+			}
+		} catch {
+			// fall through to the error below
+		}
+		throw new DelightError({ message: 'Invalid passkey response', status: 400 });
+	}
+
+	/** Parses the JSON transports column into the typed array simplewebauthn expects */
+	private parsePasskeyTransports(
+		transports: string | undefined,
+	): AuthenticatorTransportFuture[] | undefined {
+		if (!transports) return undefined;
+		try {
+			const parsed = JSON.parse(transports);
+			return Array.isArray(parsed) ? parsed : undefined;
+		} catch {
+			return undefined;
+		}
+	}
+
+	private convertPasskeyFromDB(passkey: AuthDatabaseSchema['user_passkey']): Passkey {
+		return {
+			id: passkey.id,
+			user_auth_id: passkey.user_auth_id,
+			name: passkey.name || undefined,
+			device_type: passkey.device_type as Passkey['device_type'],
+			backed_up: !!passkey.backed_up,
+			transports: this.parsePasskeyTransports(passkey.transports),
+			last_used_at: passkey.last_used_at || undefined,
+			created_at: passkey.created_at,
+			updated_at: passkey.updated_at,
+		};
 	}
 
 	/** Updates an existing oauth permission to allow (or disallow users) */
@@ -3466,6 +3979,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				WHERE (type IN ('email_verification', 'password_reset', 'email_signin') AND expires_at < ${now})
 				OR (type = 'auth' AND expires_at < ${stale_auth_cutoff})`,
 		);
+		this.sql.run((sql) => sql`DELETE FROM webauthn_challenge WHERE expires_at < ${now}`);
 	}
 
 	private initializeDB() {

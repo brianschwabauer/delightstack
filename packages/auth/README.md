@@ -1,15 +1,16 @@
 # @delightstack/auth
 
-Full-stack authentication for SvelteKit apps on Cloudflare Workers. Email/password, magic links, OAuth providers, multi-org, invitations, permissions, preferences, and an OAuth 2.0 server — all backed by a single Durable Object.
+Full-stack authentication for SvelteKit apps on Cloudflare Workers. Email/password, magic links, passkeys (WebAuthn), OAuth providers, multi-org, invitations, permissions, preferences, and an OAuth 2.0 server — all backed by a single Durable Object.
 
 ## Features
 
 - **Email/password auth** — Sign up, sign in, password reset, and password change with Argon2id hashing
 - **Magic links** — Passwordless email sign-in via short-lived JWT links
+- **Passkeys (WebAuthn)** — Phishing-resistant, usernameless sign-in with Touch ID, Face ID, or security keys. Works with zero config alongside other sign-in methods
 - **OAuth providers** — Sign in with Google, GitHub, or any OAuth 2.0 provider. Link multiple providers to one account
 - **Multi-organization** — Users belong to multiple orgs with bitwise-encoded role permissions. Org switching, user management, and invitations built in
 - **Invitation system** — Email or link-based invitations with configurable permissions, expiry, and max redemptions
-- **Reactive client** — Svelte 5 `AuthClient` class with `$state`/`$derived` runes, auto-refresh, and nested `.api` methods
+- **Reactive client** — Svelte 5 `AuthClient` class with `$state`/`$derived` runes, auto-refresh, and typed API methods
 - **Route guards** — `requireAuth`, `requireOrg`, `requirePermission`, and `requireEntitlement` guards for SvelteKit server loads
 - **Three-cookie architecture** — Session JWT, cross-device preferences (persists across signouts, synced to DB), and per-org state (cache-only)
 - **OAuth 2.0 server** — Be an OAuth provider: application registration, authorization codes, access/refresh tokens, secret rotation
@@ -91,7 +92,9 @@ export const authConfig = defineAuthConfig({
 
 ```typescript
 // src/lib/server/auth.do.ts
-import { AuthDatabaseServer } from '@delightstack/auth/server';
+// The Durable Object class must be imported from '/worker' — it depends on
+// cloudflare:workers and .wasm modules that only resolve inside the Workers runtime
+import { AuthDatabaseServer } from '@delightstack/auth/worker';
 
 export class AuthDO extends AuthDatabaseServer {
 	constructor(ctx: DurableObjectState, env: Env) {
@@ -157,7 +160,7 @@ export const load = ({ data }) => ({
 
 {#if auth.signed_in}
 	<p>Hello, {auth.name}</p>
-	<button onclick={() => auth.api.signOut()}>Sign out</button>
+	<button onclick={() => auth.signOut()}>Sign out</button>
 {:else}
 	<a href="/signin">Sign in</a>
 {/if}
@@ -188,6 +191,9 @@ export const load = ({ data }) => ({
 | `session.refresh_threshold` | `number`                                            | `600`                              | Auto-refresh threshold in seconds                                        |
 | `resolveOrgId`              | `(event, session) => string \| null`                | URL params > query > header > auto | Custom org_id resolver                                                   |
 | `oauth`                     | `Record<vendor, { client_id, client_secret, ... }>` | —                                  | OAuth provider credentials                                               |
+| `passkeys.rp_id`            | `string`                                            | request hostname                   | WebAuthn relying party ID (the domain passkeys are bound to)             |
+| `passkeys.rp_name`          | `string`                                            | `issuer`                           | App name shown in the browser's passkey prompt                           |
+| `passkeys.origins`          | `string[]`                                          | `[request origin]`                 | Origins allowed to complete WebAuthn ceremonies                          |
 | `email.sendEmail`           | `(options) => Promise<void>`                        | —                                  | Email sending function                                                   |
 | `hooks`                     | `{ onSignIn, onSignUp, onSignOut, ... }`            | —                                  | Lifecycle hooks                                                          |
 
@@ -207,6 +213,23 @@ All routes are served under `base_path` (default `/api/auth`). The Handle interc
 | `GET`  | `/signin/:vendor/callback` | OAuth sign-in callback                         |
 | `POST` | `/signout`                 | Sign out (returns 204)                         |
 | `GET`  | `/signout`                 | Sign out and redirect to `/`                   |
+
+### Passkeys (WebAuthn)
+
+| Method   | Path                      | Description                                             |
+| -------- | ------------------------- | ------------------------------------------------------- |
+| `POST`   | `/signin/passkey/options` | Get authentication options (challenge) for signing in   |
+| `POST`   | `/signin/passkey`         | Verify a passkey assertion and sign in                  |
+| `POST`   | `/passkey/options`        | Get registration options (challenge) — authenticated    |
+| `POST`   | `/passkey`                | Verify registration and add the passkey — authenticated |
+| `GET`    | `/passkey`                | List the user's passkeys                                |
+| `PATCH`  | `/passkey/:id`            | Rename a passkey                                        |
+| `DELETE` | `/passkey/:id`            | Remove a passkey (revokes its sign-in method)           |
+
+Challenges are stored server-side, single-use, and expire after 5 minutes. Sign-in uses
+discoverable credentials, so no email is needed first. Each passkey is backed by a
+`user_auth` row and follows the same safety rules as other sign-in methods (e.g. the last
+verified method can't be removed).
 
 ### Sessions
 
@@ -326,62 +349,76 @@ All properties are reactive via `$state`/`$derived` runes:
 
 ### API Methods
 
-All API methods are nested under `.api` and throw `AuthClientError` on failure:
+API methods live directly on the client (grouped into `signIn`, `signUp`, `password`, `emailVerification`, `user`, `invitation`, `oauth`, and `passkey` namespaces, with session and org methods at the top level). All of them throw `AuthClientError` on failure:
 
 ```typescript
 // Sign in
-const result = await auth.api.signIn.email({ email, password });
-const result = await auth.api.signIn.emailMagicLink({ email });
-auth.api.signIn.oauth('google', { redirect_to: '/dashboard' });
+const result = await auth.signIn.email({ email, password });
+await auth.signIn.emailMagicLink({ email });
+auth.signIn.oauth('google', { redirect_to: '/dashboard' });
+
+// Passkeys (WebAuthn) — sign in with the browser's passkey prompt
+const result = await auth.signIn.passkey();
+// Or with conditional UI (autofill on an <input autocomplete="username webauthn"> field)
+const result = await auth.signIn.passkey({ autofill: true });
+
+// Passkey management (requires an authenticated session)
+if (auth.passkey.isSupported()) {
+	await auth.passkey.register('MacBook Touch ID'); // prompts the browser's passkey UI
+}
+const passkeys = await auth.passkey.list();
+await auth.passkey.rename(passkey_id, 'Work laptop');
+await auth.passkey.remove(passkey_id);
 
 // Sign up
-const result = await auth.api.signUp.email({ name, email, password, org_name });
+const result = await auth.signUp.email({ name, email, password, org_name });
 
 // Sign out
-await auth.api.signOut();
+await auth.signOut();
 
 // Sessions
-const session = await auth.api.session.get();
-const refreshed = await auth.api.session.refresh();
-const sessions = await auth.api.session.list();
-await auth.api.session.revoke(session_id);
+const session = await auth.fetchSession();
+const refreshed = await auth.refreshSession();
+const sessions = await auth.listSessions();
+await auth.revokeSession(session_id);
 
 // Password
-await auth.api.password.reset(email);
-await auth.api.password.confirmReset(token, new_password);
-await auth.api.password.change(new_password);
-const strength = await auth.api.password.checkStrength(password);
+await auth.password.reset(email);
+await auth.password.confirmReset(token, new_password);
+await auth.password.change(new_password);
+const strength = await auth.password.checkStrength(password);
 
-// Email
-await auth.api.email.requestVerification();
-const available = await auth.api.email.checkAvailability(email);
+// Email verification & availability
+await auth.emailVerification.request();
+const available = await auth.emailVerification.checkAvailability(email);
 
 // User
-const user = await auth.api.user.get();
-await auth.api.user.update({ name: 'New Name' });
-await auth.api.user.delete();
-const methods = await auth.api.user.listSignInMethods();
-await auth.api.user.removeSignInMethod(method_id);
+const user = await auth.user.get();
+await auth.user.update({ name: 'New Name' });
+await auth.user.delete();
+const methods = await auth.user.listSignInMethods();
+await auth.user.removeSignInMethod(method_id);
 
 // Organization
-await auth.api.org.create({ name: 'My Org' });
-await auth.api.org.switch(org_id);
-await auth.api.org.update(org_id, { name: 'Renamed' });
-await auth.api.org.delete(org_id);
-const users = await auth.api.org.listUsers(org_id);
-await auth.api.org.updateUserPermission(org_id, user_id, encoded_permission);
-await auth.api.org.removeUser(org_id, user_id);
+await auth.createOrg({ name: 'My Org' });
+await auth.switchOrg(org_id);
+await auth.updateOrg(org_id, { name: 'Renamed' });
+await auth.deleteOrg(org_id);
+const users = await auth.listOrgUsers(org_id);
+await auth.updateOrgUserPermission(org_id, user_id, encoded_permission);
+await auth.removeOrgUser(org_id, user_id);
 
 // Invitations
-const invites = await auth.api.invitation.list();
-await auth.api.invitation.create({ email: 'new@user.com', permission: 0b1111 });
-await auth.api.invitation.accept(invite_id);
-await auth.api.invitation.delete(invite_id);
+const invites = await auth.invitation.list();
+const invite = await auth.invitation.get(invite_id);
+await auth.invitation.create({ email: 'new@user.com', permission: 0b1111 });
+await auth.invitation.accept(invite_id);
+await auth.invitation.delete(invite_id);
 
 // OAuth accounts
-auth.api.oauth.connect('google', { capabilities: ['profile', 'email'] });
-const accounts = await auth.api.oauth.listAccounts();
-await auth.api.oauth.disconnectAccount(account_id);
+auth.oauth.connect('google', { capabilities: ['profile', 'email'] });
+const accounts = await auth.oauth.listAccounts();
+await auth.oauth.disconnectAccount(account_id);
 ```
 
 ### Permission Checking
@@ -416,8 +453,8 @@ On the server (SSR), these methods update local state only. Use `locals.setPrefe
 ### SSR Hydration
 
 ```typescript
-// Server: serialize to JSON (includes permissions)
-const data = auth.toJSON(); // { jwt, session, org_id, preferences, org_state, permissions }
+// Server: serialize to JSON (includes permissions + entitlements)
+const data = auth.toJSON(); // { jwt, session, org_id, preferences, org_state, permissions, entitlements }
 
 // Client: hydrate from server data (permissions included automatically)
 const auth = new AuthClient(data);
@@ -564,7 +601,7 @@ Hooks fire after successful auth operations:
 defineAuthConfig({
 	hooks: {
 		onSignIn: async ({ result, method, is_new_user, meta }) => {
-			// method: 'email' | 'magic-link' | 'oauth'
+			// method: 'email' | 'magic-link' | 'oauth' | 'passkey'
 			// result: { user_id, jwt, decoded_jwt, ... }
 			// meta: { ip_address, city, country, user_agent, ... }
 		},
@@ -623,7 +660,7 @@ The `createAuthHandle()`, `AuthClient`, route guards, and cookie helpers are Sve
 ```typescript
 import { Hono } from 'hono';
 import { setCookie, getCookie } from 'hono/cookie';
-import { AuthDatabaseServer } from '@delightstack/auth/server';
+import { AuthDatabaseServer } from '@delightstack/auth/worker';
 import { generateJwt, decodeJwt } from '@delightstack/auth/server';
 
 // Re-export the DO for wrangler
@@ -694,7 +731,7 @@ export default app;
 ### Plain Cloudflare Worker
 
 ```typescript
-import { AuthDatabaseServer } from '@delightstack/auth/server';
+import { AuthDatabaseServer } from '@delightstack/auth/worker';
 import { decodeJwt } from '@delightstack/auth/server';
 
 export { AuthDatabaseServer };
@@ -748,9 +785,18 @@ const auth = env.AUTH.get(env.AUTH.idFromName('main'));
 // Authentication
 await auth.signUpWithEmail({ name, email, password, org_name }, meta);
 await auth.signInWithEmail({ email, password }, meta);
-await auth.signInWithOauth(oauthToken, meta);
+await auth.signInWithOauth(oauth_token, { invitation_id, connect_user_id }, meta);
 await auth.refreshSession(session_id, meta);
 await auth.revokeSessionToken(jwt);
+
+// Passkeys (WebAuthn) — rp is { rp_id, rp_name, origins }
+await auth.createPasskeyRegistrationOptions(user_id, rp, meta);
+await auth.verifyPasskeyRegistration(user_id, response, rp, { name }, meta);
+await auth.createPasskeyAuthenticationOptions(rp, meta);
+await auth.signInWithPasskey(response, { invitation_id }, rp, meta);
+auth.listPasskeys(user_id);
+auth.updatePasskey(user_id, passkey_id, { name });
+auth.deletePasskey(user_id, passkey_id);
 
 // Users
 auth.getUser(user_id);
@@ -789,25 +835,29 @@ auth.setUserPreferences(user_id, { theme: 'dark' });
 
 ### `@delightstack/auth/server`
 
-| Export                      | Description                                       |
-| --------------------------- | ------------------------------------------------- |
-| `AuthDatabaseServer`        | Durable Object class for auth database operations |
-| `AuthDatabaseServerOptions` | Configuration for the Durable Object              |
-| `AuthOperationResult`       | Result type from auth operations                  |
-| `AuthConfig`                | Configuration interface                           |
-| `ResolvedAuthConfig`        | Config with defaults filled in                    |
-| `defineAuthConfig()`        | Fill config defaults                              |
-| `createAuthHandle()`        | Create SvelteKit Handle function                  |
-| `AuthHandleOptions`         | Options for `createAuthHandle`                    |
-| `AuthServer`                | Type alias for DO stub interface                  |
-| `AuthLocals`                | Auth properties on `event.locals`                 |
-| `generateJwt()`             | Generate and sign a JWT                           |
-| `decodeJwt()`               | Verify and decode a JWT                           |
-| `extractJwtRefreshToken()`  | Extract JTI from a JWT for refresh                |
-| `getSecretKey()`            | Import hex secret as CryptoKey                    |
-| `getOauthToken()`           | Exchange auth code for OAuth token                |
-| `getOauthUserInfo()`        | Fetch user info from OAuth provider               |
-| `matchRoute()`              | Match request to auth route handler               |
+| Export                      | Description                                                     |
+| --------------------------- | --------------------------------------------------------------- |
+| `AuthDatabaseServer` (type) | Type-only re-export of the Durable Object (class is in /worker) |
+| `AuthDatabaseServerOptions` | Configuration for the Durable Object                            |
+| `AuthConfig`                | Configuration interface                                         |
+| `ResolvedAuthConfig`        | Config with defaults filled in                                  |
+| `defineAuthConfig()`        | Fill config defaults                                            |
+| `createAuthHandle()`        | Create SvelteKit Handle function                                |
+| `AuthHandleOptions`         | Options for `createAuthHandle`                                  |
+| `AuthServer`                | Type alias for DO stub interface                                |
+| `AuthLocals`                | Auth properties on `event.locals`                               |
+| `generateJwt()`             | Generate and sign a JWT                                         |
+| `decodeJwt()`               | Verify and decode a JWT                                         |
+| `extractJwtRefreshToken()`  | Extract JTI from a JWT for refresh                              |
+| `getSecretKey()`            | Import hex secret as CryptoKey                                  |
+| `getOauthToken()`           | Exchange auth code for OAuth token                              |
+
+### `@delightstack/auth/worker`
+
+| Export                      | Description                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| `AuthDatabaseServer`        | Durable Object class — import here (depends on the Cloudflare runtime + WASM) |
+| `AuthDatabaseServerOptions` | Configuration for the Durable Object                                          |
 
 ### `@delightstack/auth/client`
 
@@ -825,6 +875,8 @@ auth.setUserPreferences(user_id, { theme: 'dark' });
 | `getSessionCookie()`     | Get session JWT from cookies                                        |
 | `setSessionCookie()`     | Set session JWT cookie                                              |
 | `deleteSessionCookie()`  | Delete session cookie                                               |
+| `serializeSessionCookie()` | Serialize session cookie to a `Set-Cookie` header value           |
+| `serializeDeleteSessionCookie()` | Serialize a session cookie deletion header value            |
 | `signState()`            | Sign state object into JWT cookie                                   |
 | `verifyState()`          | Verify and parse JWT cookie                                         |
 | `getPreferencesCookie()` | Get user preferences from JWT cookie                                |
@@ -832,6 +884,7 @@ auth.setUserPreferences(user_id, { theme: 'dark' });
 | `getOrgStateCookie()`    | Get org state from JWT cookie                                       |
 | `setOrgStateCookie()`    | Set org state JWT cookie                                            |
 | `deleteOrgStateCookie()` | Delete org state cookie                                             |
+| `deletePreferencesCookie()` | Delete preferences cookie                                        |
 
 ### `@delightstack/auth/types`
 
@@ -852,6 +905,10 @@ auth.setUserPreferences(user_id, { theme: 'dark' });
 | `UserSessionMeta`              | Request metadata (IP, geo, user agent)       |
 | `UserSession`                  | Session record schema                        |
 | `UserSignInMethod`             | Sign-in method record schema                 |
+| `Passkey`                      | Registered passkey record schema             |
+| `PasskeyRegistrationResponse`  | Browser WebAuthn registration response schema |
+| `PasskeyAuthenticationResponse` | Browser WebAuthn authentication response schema |
+| `PasskeyRelyingParty`          | Relying party info (rp_id, rp_name, origins) |
 | `AuthErrorCode`                | Typed error code union                       |
 | `resolveErrorCode()`           | Resolve error code from error detail/message |
 | `OauthConfig`                  | OAuth provider configuration schema          |
@@ -863,38 +920,36 @@ auth.setUserPreferences(user_id, { theme: 'dark' });
 ## Project Structure
 
 ```
-packages/auth/
+packages/auth/src/
 ├── index.ts                       # Root entry — re-exports server + types
 │
-├── types/
+├── types/                         # (each module has a matching *.test.ts)
 │   ├── index.ts                   # Type barrel exports
 │   ├── auth.type.ts               # User, session, permission types + encode/decode
 │   ├── oauth.type.ts              # OAuth account, token, application types + encode/decode
+│   ├── passkey.type.ts            # Passkey (WebAuthn) record + ceremony response types
 │   ├── error.type.ts              # Auth error codes and resolver
-│   ├── error.type.test.ts         # Error code tests
 │   └── meta.type.ts               # Shared metadata fields (id, created_at, updated_at)
 │
 ├── server/
 │   ├── index.ts                   # Server barrel exports
 │   ├── auth.config.ts             # AuthConfig interface + defineAuthConfig()
 │   ├── auth.handler.ts            # createAuthHandle() — SvelteKit Handle
-│   ├── auth.routes.ts             # All 47 route handlers + matchRoute()
-│   ├── auth.routes.test.ts        # Route matching tests
+│   ├── auth.routes.ts             # All route handlers + matchRoute()
 │   ├── auth.db.server.ts          # AuthDatabaseServer Durable Object
 │   ├── auth.sql.schema.ts         # SQLite schema + migrations
 │   ├── jwt.server.ts              # JWT generation + verification (Web Crypto)
 │   └── oauth.helper.ts            # OAuth token exchange helpers
 │
+├── worker/
+│   └── index.ts                   # Worker entry — exports the AuthDatabaseServer class
+│
 ├── client/
 │   ├── index.ts                   # Client barrel exports
 │   └── auth.client.svelte.ts      # AuthClient reactive class
 │
-├── sveltekit/
-│   ├── index.ts                   # SvelteKit utilities barrel exports
-│   ├── cookies.ts                 # Cookie helpers (session, preferences, org state)
-│   ├── cookies.test.ts            # Cookie tests
-│   ├── guards.ts                  # createAuthGuards() factory
-│   └── guards.test.ts             # Guard tests
-│
-└── vite.config.ts                 # Vitest configuration
+└── sveltekit/
+    ├── index.ts                   # SvelteKit utilities barrel exports
+    ├── cookies.ts                 # Cookie helpers (session, preferences, org state)
+    └── guards.ts                  # createAuthGuards() factory
 ```

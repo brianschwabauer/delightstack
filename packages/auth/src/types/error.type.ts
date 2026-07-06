@@ -18,6 +18,9 @@ export type AuthErrorCode =
 	| 'invitation_not_found'
 	| 'user_deleted'
 	| 'oauth_account_conflict'
+	| 'passkey_failed'
+	| 'passkey_taken'
+	| 'passkey_not_found'
 	| 'csrf_failed'
 	| 'unknown';
 
@@ -47,6 +50,13 @@ export const AUTH_ERROR_MAP: Record<string, AuthErrorCode> = {
 	'Invalid or expired email verification link': 'invalid_token',
 	'Invalid or expired reset password link': 'invalid_token',
 	'Cannot remove the only admin from the organization': 'permission_denied',
+	'Too many passkey requests': 'rate_limited',
+	'Passkey could not be verified': 'passkey_failed',
+	'Passkey not recognized': 'passkey_failed',
+	'Invalid passkey response': 'passkey_failed',
+	'Invalid or expired passkey challenge': 'passkey_failed',
+	'This passkey is already registered': 'passkey_taken',
+	'Could not find passkey': 'passkey_not_found',
 };
 
 /** Resolves an AuthErrorCode from a DelightError's detail or message string */

@@ -1,5 +1,19 @@
-import type { SessionToken, UserSession, UserSignInMethod, OauthAccount } from '../types';
+import type {
+	SessionToken,
+	UserSession,
+	UserSignInMethod,
+	OauthAccount,
+	Passkey,
+} from '../types';
 import { resolveErrorCode, type AuthErrorCode } from '../types/error.type';
+import {
+	startRegistration,
+	startAuthentication,
+	browserSupportsWebAuthn,
+	browserSupportsWebAuthnAutofill,
+	type PublicKeyCredentialCreationOptionsJSON,
+	type PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/browser';
 
 /** Error shape thrown by AuthClient API methods */
 export interface AuthClientError {
@@ -25,7 +39,8 @@ export interface AuthClientData {
 /**
  * A single reactive class combining auth state AND API methods.
  * Uses Svelte 5 `$state()` / `$derived()` runes.
- * State properties are at the top level; all API operations are nested under `.api`.
+ * State properties and API methods live at the top level (grouped into namespaces
+ * like `signIn`, `password`, `user`, and `passkey`).
  * API methods throw `AuthClientError` on failure and return data directly on success.
  *
  * @example
@@ -37,8 +52,8 @@ export interface AuthClientData {
  * // In components:
  * auth.signed_in  // reactive boolean
  * auth.name       // reactive string
- * await auth.api.signIn.email({ email, password })
- * await auth.api.signOut()
+ * await auth.signIn.email({ email, password })
+ * await auth.signOut()
  * ```
  */
 export class AuthClient<P extends string = string, E extends string = string> {
@@ -303,6 +318,74 @@ export class AuthClient<P extends string = string, E extends string = string> {
 			const params = new URLSearchParams();
 			if (options?.redirect_to) params.set('redirect', options.redirect_to);
 			window.location.href = `${this.base_path}/signin/${vendor}?${params}`;
+		},
+		/**
+		 * Sign in with a passkey. Fetches a challenge from the server, prompts the browser's
+		 * passkey UI, and verifies the result — no email or password needed.
+		 *
+		 * Pass `autofill: true` to enable conditional UI instead of an immediate prompt:
+		 * the promise stays pending until the user picks a passkey from the autofill
+		 * suggestions of an `<input autocomplete="username webauthn">` field.
+		 */
+		passkey: async (options?: {
+			invitation_id?: string;
+			autofill?: boolean;
+		}): Promise<{
+			jwt: string;
+			decoded_jwt: SessionToken<'auth'>;
+			org_id?: string;
+		}> => {
+			const optionsJSON = await this.post<PublicKeyCredentialRequestOptionsJSON>(
+				'/signin/passkey/options',
+				undefined,
+			);
+			const response = await startAuthentication({
+				optionsJSON,
+				useBrowserAutofill: options?.autofill,
+			});
+			const result = await this.post<{
+				jwt: string;
+				decoded_jwt: SessionToken<'auth'>;
+				org_id?: string;
+			}>('/signin/passkey', { response, invitation_id: options?.invitation_id });
+			this.#jwt = result.jwt;
+			this.#session = result.decoded_jwt;
+			if (result.org_id) this.#org_id = result.org_id;
+			this.startAutoRefresh();
+			return result;
+		},
+	} as const;
+
+	/** Passkey (WebAuthn) management for the signed-in user */
+	readonly passkey = {
+		/** Whether this browser supports passkeys */
+		isSupported: (): boolean => browserSupportsWebAuthn(),
+		/** Whether this browser supports passkey autofill (conditional UI) */
+		isAutofillSupported: (): Promise<boolean> => browserSupportsWebAuthnAutofill(),
+		/**
+		 * Register a new passkey for the signed-in user. Fetches a challenge from the
+		 * server, prompts the browser's passkey creation UI, and verifies the result.
+		 * @param name - Optional label for the passkey (e.g. "MacBook Touch ID")
+		 */
+		register: async (name?: string): Promise<Passkey> => {
+			const optionsJSON = await this.post<PublicKeyCredentialCreationOptionsJSON>(
+				'/passkey/options',
+				undefined,
+			);
+			const response = await startRegistration({ optionsJSON });
+			return this.post<Passkey>('/passkey', { response, name });
+		},
+		/** List the passkeys registered to the signed-in user */
+		list: async (): Promise<{ list: Passkey[]; count: number; hasMore: boolean }> => {
+			return this.get('/passkey');
+		},
+		/** Rename a passkey */
+		rename: async (id: string, name: string): Promise<Passkey> => {
+			return this.patch(`/passkey/${encodeURIComponent(id)}`, { name });
+		},
+		/** Remove a passkey from the account (its sign-in method is revoked too) */
+		remove: async (id: string): Promise<void> => {
+			return this.delete(`/passkey/${encodeURIComponent(id)}`);
 		},
 	} as const;
 
