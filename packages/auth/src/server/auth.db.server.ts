@@ -603,8 +603,22 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			if (!user_auth.verified_at) {
 				this.sql.update('user_auth', user_auth_id, { verified_at: Date.now() });
 			}
-			// Delete the old session token to prevent reuse
-			this.sql.delete('user_session', user_session_id);
+			// Delete every outstanding sign-in code/link for this method, not just the one
+			// redeemed. Otherwise a superseded code would resurrect as the "newest" valid
+			// code once the newer one is consumed (signInWithEmailCode picks by created_at).
+			// Active `auth` sessions on other devices are a different type and untouched.
+			this.sql
+				.list('user_session', {
+					where: {
+						and: [
+							{ key: 'user_auth_id', is: '=', value: user_auth_id },
+							{ key: 'type', is: '=', value: 'email_signin' },
+						],
+					},
+				})
+				.forEach((session) => {
+					this.sql.delete('user_session', session.id);
+				});
 			this.sql.insert('user_session', new_session_id, {
 				type: 'auth',
 				jwt: new_session.jwt,
