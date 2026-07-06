@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/rate-limiter",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"type": "module",
 	"license": "MIT",
 	"description": "Sliding-window rate limiting for Cloudflare Durable Objects.",
