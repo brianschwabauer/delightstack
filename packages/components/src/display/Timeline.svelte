@@ -22,7 +22,7 @@
 <script lang="ts">
 	import { intersectionObserver, ripple } from '@delightstack/utilities';
 	import { scrollbar } from '../actions/scrollbar';
-	import { getContext, setContext, type Component, type Snippet } from 'svelte';
+	import { getContext, setContext, untrack, type Component, type Snippet } from 'svelte';
 	import { fade, type TransitionConfig } from 'svelte/transition';
 	import { backOut } from 'svelte/easing';
 	import Button from './../actions/Button.svelte';
@@ -115,29 +115,39 @@
 		// Once a skeleton has been shown, the real content takes its place — the
 		// space was already occupied, so re-animating it in reads as a jump. Latch
 		// this and suppress the entrance reveal for everything that loads after.
-		let had_skeleton = $state(skeleton);
+		// Seeded once from the initial prop on purpose (the effect below latches
+		// it to true if a skeleton ever shows).
+		let had_skeleton = $state(untrack(() => skeleton));
 
-		const ctx = $state<TimelineContext>({
-			horizontal,
-			alternate,
-			dense,
-			comfortable,
-			animate,
-			reveal: animate && !skeleton,
+		// Getters keep the context live — items re-read the current prop values
+		// whenever the container updates them (no snapshot + sync effect needed).
+		const ctx: TimelineContext = {
+			get horizontal() {
+				return horizontal;
+			},
+			get alternate() {
+				return alternate;
+			},
+			get dense() {
+				return dense;
+			},
+			get comfortable() {
+				return comfortable;
+			},
+			get animate() {
+				return animate;
+			},
+			get reveal() {
+				return animate && !had_skeleton;
+			},
 			register() {
 				return item_counter++;
 			},
-		});
+		};
 		setContext<TimelineContext>('timeline', ctx);
 
 		$effect(() => {
 			if (skeleton) had_skeleton = true;
-			ctx.horizontal = horizontal;
-			ctx.alternate = alternate;
-			ctx.dense = dense;
-			ctx.comfortable = comfortable;
-			ctx.animate = animate;
-			ctx.reveal = animate && !had_skeleton;
 		});
 	}
 
@@ -279,9 +289,27 @@
 
 	/* ------------------------------------------------------------------ */
 	/*  Load-more sentinel                                                 */
+	/*                                                                     */
+	/*  The intersection attachment's `onintersectonce` latches inside its */
+	/*  factory closure, so a single sentinel element would only ever fire */
+	/*  once. Re-keying the sentinel per completed load recreates the      */
+	/*  element (and a fresh observer), re-arming it for the next batch —  */
+	/*  and if the new batch didn't push it out of view, the fresh         */
+	/*  observer fires immediately and keeps loading. The in-flight guard  */
+	/*  keeps overlapping intersections from double-invoking `onloadmore`. */
 	/* ------------------------------------------------------------------ */
-	function handleLoadMore() {
-		onloadmore?.();
+	let load_in_flight = false;
+	let load_generation = $state(0);
+
+	async function handleLoadMore() {
+		if (load_in_flight || !onloadmore) return;
+		load_in_flight = true;
+		try {
+			await onloadmore();
+		} finally {
+			load_in_flight = false;
+			load_generation += 1;
+		}
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -509,11 +537,13 @@
 				</li>
 			{/if}
 			{#if onloadmore}
-				<li
-					class="sentinel"
-					aria-hidden="true"
-					{@attach intersectionObserver({ onintersectonce: () => handleLoadMore() })}>
-				</li>
+				{#key load_generation}
+					<li
+						class="sentinel"
+						aria-hidden="true"
+						{@attach intersectionObserver({ onintersectonce: () => handleLoadMore() })}>
+					</li>
+				{/key}
 			{/if}
 		</ol>
 		{#if can_scroll_next}
@@ -556,11 +586,13 @@
 			</li>
 		{/if}
 		{#if onloadmore}
-			<li
-				class="sentinel"
-				aria-hidden="true"
-				{@attach intersectionObserver({ onintersectonce: () => handleLoadMore() })}>
-			</li>
+			{#key load_generation}
+				<li
+					class="sentinel"
+					aria-hidden="true"
+					{@attach intersectionObserver({ onintersectonce: () => handleLoadMore() })}>
+				</li>
+			{/key}
 		{/if}
 	</ol>
 {/if}

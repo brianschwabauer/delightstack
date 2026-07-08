@@ -276,7 +276,7 @@
 	let input_el = $state<HTMLInputElement | undefined>(undefined);
 	let listbox_el = $state<HTMLElement | undefined>(undefined);
 
-	const listbox_id = `${id}-listbox`;
+	const listbox_id = $derived(`${id}-listbox`);
 
 	// Compute search results
 	const search_results = $derived(searchCommands(commands, query));

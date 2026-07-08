@@ -257,7 +257,7 @@
 	const skeletonWidths = [5, 6.5, 4.25, 5.75];
 
 	const hasPanel = $derived(!!activeContent || !!children);
-	const panelId = `tabpanel-${id}`;
+	const panelId = $derived(`tabpanel-${id}`);
 </script>
 
 <div

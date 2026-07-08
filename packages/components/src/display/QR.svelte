@@ -801,6 +801,8 @@
 </script>
 
 <script lang="ts">
+	import { untrack } from 'svelte';
+
 	const propId = $props.id();
 	let {
 		/** The data to encode (URL, text, etc.) */
@@ -878,7 +880,9 @@
 	const logo_offset = $derived(margin + Math.floor((module_count - logo_modules) / 2));
 
 	let is_downloading = $state(false);
-	let logo_loaded = $state(!logo);
+	// Seeded once from the initial prop — the effect below resets it whenever
+	// `logo` changes.
+	let logo_loaded = $state(untrack(() => !logo));
 	let logo_error = $state(false);
 
 	$effect(() => {

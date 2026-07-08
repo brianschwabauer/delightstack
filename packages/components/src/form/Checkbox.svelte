@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ripple, tooltip } from '@delightstack/utilities';
-	import { getContext } from 'svelte';
+	import { getContext, untrack } from 'svelte';
 	import type { FormContext } from './Form.svelte';
 
 	const propId = $props.id();
@@ -99,7 +99,7 @@
 	 * the checkbox mirrors the form data (e.g. an entity's draft) —
 	 * `<Checkbox {...field.is_public} />` needs no bind:checked.
 	 */
-	const context_driven = !!(form_ctx && name && checked === undefined);
+	const context_driven = untrack(() => !!(form_ctx && name && checked === undefined));
 
 	$effect(() => {
 		if (!context_driven || !form_ctx || !name) return;

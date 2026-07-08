@@ -63,7 +63,9 @@
 	let img_el = $state<HTMLImageElement | undefined>(undefined);
 
 	function getInitials(value: string): string {
-		const parts = value.trim().split(/\s+/);
+		// A whitespace-only name splits to [''] — guard so we don't read [0] of ''
+		const parts = value.trim().split(/\s+/).filter(Boolean);
+		if (parts.length === 0) return '';
 		if (parts.length === 1) return parts[0][0].toUpperCase();
 		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 	}

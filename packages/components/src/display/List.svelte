@@ -97,26 +97,32 @@
 		if (touched) ontouch?.();
 	});
 
-	const context = $state({
-		type,
-		value,
-		dense,
-		comfortable,
-		disabled,
-		id,
-		...parentContext,
-		level: (parentContext?.level || 0) + 1,
-	});
+	// Getters keep the context live — a parent list's context (when nested)
+	// wins, otherwise the current prop values flow through reactively.
+	const context: ListContext = {
+		get type() {
+			return parentContext?.type ?? type;
+		},
+		get value() {
+			return parentContext?.value ?? value;
+		},
+		get dense() {
+			return parentContext?.dense ?? dense;
+		},
+		get comfortable() {
+			return parentContext?.comfortable ?? comfortable;
+		},
+		get disabled() {
+			return parentContext?.disabled ?? disabled;
+		},
+		get id() {
+			return parentContext?.id ?? id;
+		},
+		get level() {
+			return (parentContext?.level || 0) + 1;
+		},
+	};
 	setContext<ListContext>('list', context);
-	$effect(() => {
-		context.type = parentContext?.type ?? type;
-		context.value = parentContext?.value ?? value;
-		context.dense = parentContext?.dense ?? dense;
-		context.comfortable = parentContext?.comfortable ?? comfortable;
-		context.disabled = parentContext?.disabled ?? disabled;
-		context.id = parentContext?.id ?? id;
-		context.level = (parentContext?.level || 0) + 1;
-	});
 
 	function handleChangeEvent(e: Event) {
 		const target = e.target as HTMLInputElement;

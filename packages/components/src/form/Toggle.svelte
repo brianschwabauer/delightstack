@@ -1,6 +1,6 @@
 <script lang="ts" generics="Indeterminate extends boolean = false">
 	import { tooltip } from '@delightstack/utilities';
-	import { getContext, type Snippet } from 'svelte';
+	import { getContext, untrack, type Snippet } from 'svelte';
 	import type { FormContext } from './Form.svelte';
 
 	/** `boolean` normally; widened to `boolean | null` in indeterminate mode */
@@ -114,7 +114,7 @@
 	 * the toggle mirrors the form data (e.g. an entity's draft) —
 	 * `<Toggle {...field.is_public} />` needs no bind:checked.
 	 */
-	const context_driven = !!(form_ctx && name && checked === undefined);
+	const context_driven = untrack(() => !!(form_ctx && name && checked === undefined));
 
 	$effect(() => {
 		if (!context_driven || !form_ctx || !name) return;

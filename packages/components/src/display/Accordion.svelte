@@ -22,7 +22,7 @@
 </script>
 
 <script lang="ts">
-	import { getContext, setContext, type Snippet } from 'svelte';
+	import { getContext, setContext, untrack, type Snippet } from 'svelte';
 	import Expand from './Expand.svelte';
 
 	const propId = $props.id();
@@ -87,7 +87,9 @@
 	/* ------------------------------------------------------------------ */
 	/*  Accordion container behaviour (context is set for containers)     */
 	/* ------------------------------------------------------------------ */
-	const ctx = $state<AccordionContext>({
+	// Getters keep the flag fields live — items re-read the current prop values
+	// whenever the container updates them (no snapshot + sync effect needed).
+	const ctx: AccordionContext = {
 		isOpen(val: string) {
 			if (Array.isArray(value)) return value.includes(val);
 			return value === val;
@@ -116,28 +118,32 @@
 				}
 			}
 		},
-		disabled,
-		dense,
-		comfortable,
-		filled,
-		outline,
-		separated,
-	});
+		get disabled() {
+			return disabled;
+		},
+		get dense() {
+			return dense;
+		},
+		get comfortable() {
+			return comfortable;
+		},
+		get filled() {
+			return filled;
+		},
+		get outline() {
+			return outline;
+		},
+		get separated() {
+			return separated;
+		},
+	};
 
 	// Only set context when this is a container (not an item).
 	// Both setContext and getContext run unconditionally at the top level.
-	if (!title && !trigger) {
+	// Container-vs-item is decided once at init (untracked on purpose).
+	if (untrack(() => !title && !trigger)) {
 		setContext<AccordionContext>('accordion', ctx);
 	}
-
-	$effect(() => {
-		ctx.disabled = disabled;
-		ctx.dense = dense;
-		ctx.comfortable = comfortable;
-		ctx.filled = filled;
-		ctx.outline = outline;
-		ctx.separated = separated;
-	});
 
 	/* ------------------------------------------------------------------ */
 	/*  AccordionItem behaviour                                           */

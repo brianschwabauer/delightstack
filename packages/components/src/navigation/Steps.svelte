@@ -1,6 +1,12 @@
 <script lang="ts" module>
 	export { default as Step } from './Steps.svelte';
 
+	/** Identity handle a step registers with its container. `el` is filled in
+	 *  after mount so the container can keep indices in document order. */
+	export interface StepHandle {
+		el: HTMLElement | undefined;
+	}
+
 	export interface StepsContext {
 		/** Index of the currently active step */
 		current: number;
@@ -14,8 +20,12 @@
 		size: string;
 		/** Total number of registered steps */
 		totalSteps: number;
-		/** Registers a new step and returns its index */
-		register: () => number;
+		/** Registers a new step; returns an unregister function to call on unmount */
+		register: (step: StepHandle) => () => void;
+		/** Current index of a registered step (reactive) */
+		indexOf: (step: StepHandle) => number;
+		/** Re-sorts registered steps into document order (call once a step's `el` is known) */
+		reorder: () => void;
 		/** Navigates to the step at the given index */
 		navigate: (index: number) => void;
 	}
@@ -23,7 +33,7 @@
 
 <script lang="ts">
 	import { ripple } from '@delightstack/utilities';
-	import { getContext, setContext, type Snippet } from 'svelte';
+	import { getContext, setContext, untrack, type Snippet } from 'svelte';
 	import Button from '../actions/Button.svelte';
 	import Expand from '../display/Expand.svelte';
 
@@ -90,20 +100,56 @@
 	/* ------------------------------------------------------------------ */
 	/*  Steps container behaviour                                         */
 	/* ------------------------------------------------------------------ */
-	let stepCounter = 0;
+	// Registered steps, kept in document order. `$state.raw` (with immutable
+	// updates) preserves handle identity so `indexOf(handle)` matches — a deep
+	// $state proxy would break the identity check.
+	let step_handles = $state.raw<StepHandle[]>([]);
 
 	if (!isItem) {
-		const ctx = $state<StepsContext>({
-			current,
-			orientation,
-			clickable,
-			linear,
-			size,
-			totalSteps: 0,
-			register() {
-				const index = stepCounter++;
-				ctx.totalSteps = stepCounter;
-				return index;
+		// Getters keep the context live — steps re-read the current prop values
+		// whenever the container updates them (no snapshot + sync effect needed).
+		const ctx: StepsContext = {
+			get current() {
+				return current;
+			},
+			get orientation() {
+				return orientation;
+			},
+			get clickable() {
+				return clickable;
+			},
+			get linear() {
+				return linear;
+			},
+			get size() {
+				return size;
+			},
+			get totalSteps() {
+				return step_handles.length;
+			},
+			register(step: StepHandle) {
+				// Synchronous registration during init keeps SSR / first-paint
+				// indices correct (init order is document order on initial mount).
+				step_handles = [...step_handles, step];
+				return () => {
+					step_handles = step_handles.filter((s) => s !== step);
+				};
+			},
+			indexOf(step: StepHandle) {
+				return step_handles.indexOf(step);
+			},
+			reorder() {
+				// A step mounted into the middle of an existing list registers at
+				// the end; once elements are known, restore document order.
+				const sorted = [...step_handles].sort((a, b) => {
+					if (!a.el || !b.el || a.el === b.el) return 0;
+					return a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING
+						? -1
+						: 1;
+				});
+				if (sorted.some((s, i) => s !== step_handles[i])) {
+					step_handles = sorted;
+				}
 			},
 			navigate(index: number) {
 				if (!ctx.clickable) return;
@@ -112,16 +158,8 @@
 				current = index;
 				onchange?.({ step: index });
 			},
-		});
+		};
 		setContext<StepsContext>('steps', ctx);
-
-		$effect(() => {
-			ctx.current = current;
-			ctx.orientation = orientation;
-			ctx.clickable = clickable;
-			ctx.linear = linear;
-			ctx.size = size;
-		});
 
 		$effect(() => {
 			if (current >= ctx.totalSteps && ctx.totalSteps > 0) {
@@ -133,7 +171,29 @@
 	/* ------------------------------------------------------------------ */
 	/*  Step item behaviour                                                */
 	/* ------------------------------------------------------------------ */
-	const stepIndex = isItem ? parentContext.register() : -1;
+	let step_el = $state<HTMLElement | undefined>(undefined);
+	const step_handle: StepHandle | undefined = isItem ? { el: undefined } : undefined;
+	const unregister =
+		isItem && step_handle ? parentContext.register(step_handle) : undefined;
+
+	$effect(() => {
+		// Unregister on unmount so remaining steps re-index and totalSteps shrinks.
+		return () => unregister?.();
+	});
+
+	$effect(() => {
+		// Once mounted, hand the element to the container and restore document
+		// order — a step inserted mid-list registers at the end otherwise.
+		if (!isItem || !step_handle || !step_el) return;
+		step_handle.el = step_el;
+		// untrack: reorder reads the registry; this effect should only re-run
+		// when this step's own element changes, not on every (un)registration.
+		untrack(() => parentContext.reorder());
+	});
+
+	const stepIndex = $derived(
+		isItem && step_handle ? parentContext.indexOf(step_handle) : -1,
+	);
 
 	const isComplete = $derived(isItem && !error && stepIndex < parentContext.current);
 	const isCurrent = $derived(isItem && stepIndex === parentContext.current);
@@ -264,6 +324,7 @@
 {#if isItem}
 	<!-- Step item -->
 	<div
+		bind:this={step_el}
 		class={['step', stepState, class_name].filter(Boolean).join(' ')}
 		class:vertical={resolvedOrientation === 'vertical'}
 		class:horizontal={resolvedOrientation !== 'vertical'}

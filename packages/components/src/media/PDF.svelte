@@ -189,8 +189,9 @@
 	// already-running pdfjs render, making the page momentarily transparent.
 	const rendering_pages = new Map<number, Promise<void>>();
 
-	// Track the current fit mode for cycling
-	let current_fit = $state(fit);
+	// Track the current fit mode for cycling — seeded once from the prop on
+	// purpose; the fit-cycle control owns it afterwards.
+	let current_fit = $state(untrack(() => fit));
 
 	// Prevent scroll observer feedback loop
 	let programmatic_scroll = false;
@@ -752,7 +753,10 @@
 			a.download = src.split('/').pop() || 'document.pdf';
 			a.click();
 		} else {
-			const blob = new Blob([src], { type: 'application/pdf' });
+			// Copy into a fresh Uint8Array so the BlobPart is backed by a plain
+			// ArrayBuffer (a SharedArrayBuffer-backed view isn't a valid BlobPart)
+			const bytes = src instanceof Uint8Array ? new Uint8Array(src) : src;
+			const blob = new Blob([bytes], { type: 'application/pdf' });
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;

@@ -28,7 +28,7 @@
 
 <script lang="ts">
 	import { tooltip } from '@delightstack/utilities';
-	import { getContext, type Component, type Snippet } from 'svelte';
+	import { getContext, untrack, type Component, type Snippet } from 'svelte';
 	import { scale } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import { backOut, quintOut } from 'svelte/easing';
@@ -226,7 +226,7 @@
 	 * Decided once at mount so an explicit (initially-undefined) binding
 	 * isn't hijacked after its first write.
 	 */
-	const context_driven = !!(form_ctx && name && value === undefined);
+	const context_driven = untrack(() => !!(form_ctx && name && value === undefined));
 
 	$effect(() => {
 		if (!context_driven || !form_ctx || !name) return;
@@ -1727,6 +1727,7 @@
 			popover="manual"
 			bind:this={dropdown_element}
 			role="listbox"
+			tabindex="-1"
 			id="{id}-listbox"
 			style:position-anchor={ac_anchor_name}
 			onpointerdown={(e) => e.preventDefault()}>

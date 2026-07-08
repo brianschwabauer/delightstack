@@ -68,32 +68,41 @@
 		children = undefined as undefined | Snippet,
 	} = $props();
 
-	const context = $state<ButtonGroupContext>({
-		size,
-		outline,
-		transparent,
-		translucent,
-		accent,
-		error,
-		success,
-		disabled,
-		orientation,
-		attached,
-	});
+	// Getters keep the context live — children re-read the current prop values
+	// whenever the parent updates them (no snapshot + sync effect needed).
+	const context: ButtonGroupContext = {
+		get size() {
+			return size;
+		},
+		get outline() {
+			return outline;
+		},
+		get transparent() {
+			return transparent;
+		},
+		get translucent() {
+			return translucent;
+		},
+		get accent() {
+			return accent;
+		},
+		get error() {
+			return error;
+		},
+		get success() {
+			return success;
+		},
+		get disabled() {
+			return disabled;
+		},
+		get orientation() {
+			return orientation;
+		},
+		get attached() {
+			return attached;
+		},
+	};
 	setContext<ButtonGroupContext>('button-group', context);
-
-	$effect(() => {
-		context.size = size;
-		context.outline = outline;
-		context.transparent = transparent;
-		context.translucent = translucent;
-		context.accent = accent;
-		context.error = error;
-		context.success = success;
-		context.disabled = disabled;
-		context.orientation = orientation;
-		context.attached = attached;
-	});
 </script>
 
 <div

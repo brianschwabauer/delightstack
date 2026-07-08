@@ -207,9 +207,11 @@
 	let loading = $state(true);
 	let error_state = $state(false);
 
-	let current_pitch = $state(initial_view.pitch);
-	let current_yaw = $state(initial_view.yaw);
-	let current_fov = $state(fov);
+	// Seeded once from the initial props on purpose — user interaction
+	// (drag/zoom) owns these afterwards.
+	let current_pitch = $state(untrack(() => initial_view.pitch));
+	let current_yaw = $state(untrack(() => initial_view.yaw));
+	let current_fov = $state(untrack(() => fov));
 	let is_fullscreen = $state(false);
 
 	// Hotspot screen positions: [x, y, visible]

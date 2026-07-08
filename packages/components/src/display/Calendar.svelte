@@ -352,8 +352,13 @@
 		const end = parseTime(time_slot_max);
 		const start_minutes = start.hours * 60 + start.minutes;
 		const end_minutes = end.hours * 60 + end.minutes;
+		// A zero/negative/NaN interval would loop forever and freeze the tab
+		const interval =
+			Number.isFinite(time_slot_interval) && time_slot_interval >= 1
+				? time_slot_interval
+				: 30;
 		const slots: string[] = [];
-		for (let m = start_minutes; m <= end_minutes; m += time_slot_interval) {
+		for (let m = start_minutes; m <= end_minutes; m += interval) {
 			const h = Math.floor(m / 60);
 			const min = m % 60;
 			slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);

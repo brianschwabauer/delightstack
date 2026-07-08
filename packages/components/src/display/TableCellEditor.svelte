@@ -11,7 +11,7 @@
 	 * arrow/Enter/Escape keys, 300ms debounce for async results, and a loading row.
 	 */
 	import type { Column, CellOption, CellEditorContext } from './Table.svelte';
-	import { onMount, onDestroy, tick } from 'svelte';
+	import { onMount, onDestroy, tick, untrack } from 'svelte';
 	import List from './List.svelte';
 	import ListItem from './ListItem.svelte';
 
@@ -105,9 +105,11 @@
 
 	// `column` is fixed for this editor's life (it remounts per cell via {#key}), so
 	// the initial editor kind is a plain (non-reactive) read.
-	const startsBoolean = typeof column.editor === 'string' && column.editor === 'boolean';
-	const initialText = formatValue(value);
-	const initialBool = !!value;
+	const startsBoolean = untrack(
+		() => typeof column.editor === 'string' && column.editor === 'boolean',
+	);
+	const initialText = untrack(() => formatValue(value));
+	const initialBool = untrack(() => !!value);
 
 	// ---- Local state ----
 	let draft = $state<string | boolean>(startsBoolean ? initialBool : initialText);
@@ -630,6 +632,7 @@
 			popover="manual"
 			bind:this={dropdownEl}
 			role="listbox"
+			tabindex="-1"
 			id="{uid}-cell-listbox"
 			style:position-anchor={anchorName}
 			onpointerdown={(e) => e.preventDefault()}>

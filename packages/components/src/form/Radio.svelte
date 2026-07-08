@@ -112,11 +112,21 @@
 
 	// Group context
 	if (isGroup) {
-		const ctx = $state<RadioGroupContext>({
-			name: name || id,
-			value,
-			disabled,
-			size,
+		// Getters keep the context live — radios re-read the current prop values
+		// whenever the group updates them (no snapshot + sync effect needed).
+		const ctx: RadioGroupContext = {
+			get name() {
+				return name || id;
+			},
+			get value() {
+				return value;
+			},
+			get disabled() {
+				return effectively_disabled;
+			},
+			get size() {
+				return size;
+			},
 			select(val: string) {
 				value = val;
 				if (form_ctx && name) {
@@ -125,16 +135,8 @@
 				}
 				onchange?.({ value: val });
 			},
-		});
+		};
 		setContext<RadioGroupContext>('radio-group', ctx);
-
-		// Keep context in sync with props
-		$effect(() => {
-			ctx.name = name || id;
-			ctx.value = value;
-			ctx.disabled = effectively_disabled;
-			ctx.size = size;
-		});
 
 		// Register the group with a parent Form (focus-on-error + field validator)
 		$effect(() => {

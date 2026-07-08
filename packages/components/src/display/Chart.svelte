@@ -108,6 +108,9 @@
 	let tooltip_dataset = $state('');
 	let tooltip_value = $state('');
 	let hidden_datasets = $state(new Set<number>());
+	// Pie/donut legends toggle individual slices (label indices), not datasets —
+	// tracked separately so slice visibility never swaps which dataset renders.
+	let hidden_slices = $state(new Set<number>());
 	let has_animated = $state(false);
 
 	$effect(() => {
@@ -632,7 +635,13 @@
 		if (!ds) return [];
 
 		const values = ds.data.slice(0, data.labels.length);
-		const total = values.reduce((s, v) => s + Math.max(0, v), 0);
+		// Normalize over the visible slices only, so hiding a slice redistributes
+		// its share among the remaining segments.
+		let total = 0;
+		for (let i = 0; i < values.length; i++) {
+			if (hidden_slices.has(i)) continue;
+			total += Math.max(0, values[i]);
+		}
 		if (total === 0) return [];
 
 		const cx = container_width / 2;
@@ -645,6 +654,7 @@
 		let start_angle = -Math.PI / 2;
 
 		for (let i = 0; i < values.length; i++) {
+			if (hidden_slices.has(i)) continue;
 			const val = Math.max(0, values[i]);
 			if (val === 0) continue;
 
@@ -738,6 +748,20 @@
 			}
 		}
 		hidden_datasets = next;
+	}
+
+	function toggleSlice(index: number) {
+		const next = new Set(hidden_slices);
+		if (next.has(index)) {
+			next.delete(index);
+		} else {
+			// Don't hide if it's the last visible slice
+			const total_visible = data.labels.length - next.size;
+			if (total_visible > 1) {
+				next.add(index);
+			}
+		}
+		hidden_slices = next;
 	}
 
 	/* ── Tick formatting ──────────────────────────────────────── */
@@ -1049,9 +1073,9 @@
 				{#if type === 'pie' || type === 'donut'}
 					{#each data.labels as label, i}
 						<button
-							class:hidden={hidden_datasets.has(i)}
+							class:hidden={hidden_slices.has(i)}
 							type="button"
-							onclick={() => toggleDataset(i)}>
+							onclick={() => toggleSlice(i)}>
 							<span class="dot" style:background-color={getColor(i)}></span>
 							<span class="label">{label}</span>
 						</button>

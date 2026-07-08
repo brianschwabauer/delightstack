@@ -54,8 +54,8 @@
 		children = undefined as Snippet | undefined,
 	} = $props();
 
-	const description_id = `${id}-desc`;
-	const error_id = `${id}-error`;
+	const description_id = $derived(`${id}-desc`);
+	const error_id = $derived(`${id}-error`);
 
 	function toggleCollapsed() {
 		if (!collapsible) return;

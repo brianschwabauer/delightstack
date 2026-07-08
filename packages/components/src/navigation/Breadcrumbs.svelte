@@ -237,7 +237,10 @@
 				name: item.label,
 				...(item.href ? { item: item.href } : {}),
 			})),
-		}),
+			// This string is injected via {@html} inside a script tag; an
+			// unescaped closing script tag in a label would break out and
+			// inject live markup
+		}).replace(/</g, '\\u003c'),
 	);
 
 	const navClass = $derived(

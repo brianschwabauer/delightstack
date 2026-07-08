@@ -113,7 +113,9 @@
 	let popoverElement = $state<HTMLElement | undefined>(undefined);
 	let arrowElement = $state<HTMLElement | undefined>(undefined);
 	let left = $state('0px');
-	let top = $state(strategy === 'fixed' ? '-1000px' : '0px');
+	// Initial off-screen park depends only on the mount-time strategy; the
+	// positioning code assigns `top` on every reposition afterwards.
+	let top = $state(untrack(() => (strategy === 'fixed' ? '-1000px' : '0px')));
 	let hitBoxLength = $state(0); // the total length of the hit box
 	let hitBoxLengthA = $state(0); // the length of the long side of the trapezoid
 	let hitBoxLengthB = $state(0); // the length of the short side of the trapezoid
@@ -123,7 +125,9 @@
 	let transformOrigin = $state(`top center`);
 	let arrowX = $state('');
 	let arrowY = $state('');
-	let realPlacement = $state(placement);
+	// Seeded from the prop once; the positioning code recomputes it (flipping
+	// when the preferred placement doesn't fit) on every reposition.
+	let realPlacement = $state(untrack(() => placement));
 	let forcedOpened = $state(false);
 	let positioned = $state(false);
 	let popoverIndex = $state(0);

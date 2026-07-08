@@ -125,10 +125,14 @@
 		},
 	});
 
+	// Set when close() already notified onclose, so the unmount notification
+	// (which covers the parent flipping `open` externally) doesn't fire it twice
+	let notified_close = false;
 	function close() {
 		if (closable && _open) {
 			const accepted = onclose?.() ?? true;
 			if (accepted) {
+				notified_close = true;
 				_open = false;
 				open = false;
 			}
@@ -144,7 +148,8 @@
 		return {
 			destroy: () => {
 				if (_open) return;
-				if (onclose) onclose();
+				if (onclose && !notified_close) onclose();
+				notified_close = false;
 			},
 		};
 	}

@@ -273,8 +273,8 @@
 		validateAndAddFiles(Array.from(e.dataTransfer.files));
 	}
 
-	const error_id = `${id}-error`;
-	const label_id = `${id}-label`;
+	const error_id = $derived(`${id}-error`);
+	const label_id = $derived(`${id}-label`);
 </script>
 
 <div

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tooltip } from '@delightstack/utilities';
-	import { getContext } from 'svelte';
+	import { getContext, untrack } from 'svelte';
 	import type { FormContext } from './Form.svelte';
 
 	const propId = $props.id();
@@ -101,7 +101,7 @@
 	let lower_input = $state<HTMLInputElement | undefined>(undefined);
 
 	/** Inside a Form with a name, the slider value flows through the form data */
-	const context_driven = !!(form_ctx && name);
+	const context_driven = untrack(() => !!(form_ctx && name));
 
 	/** Disabled merges the parent form's disabled/submitting state */
 	const effectively_disabled = $derived(disabled || (form_ctx?.disabled ?? false));

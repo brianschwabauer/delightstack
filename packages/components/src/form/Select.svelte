@@ -15,7 +15,7 @@
 
 <script lang="ts">
 	import { tooltip, ripple } from '@delightstack/utilities';
-	import { getContext, type Snippet } from 'svelte';
+	import { getContext, untrack, type Snippet } from 'svelte';
 	import type { FormContext } from './Form.svelte';
 	import { scale } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
@@ -164,7 +164,7 @@
 	 * the select mirrors the form data (e.g. an entity's draft) instead of a
 	 * local binding — `<Select {...field.relationship} />` needs no bind:value.
 	 */
-	const context_driven = !!(form_ctx && name && value === undefined);
+	const context_driven = untrack(() => !!(form_ctx && name && value === undefined));
 
 	$effect(() => {
 		if (!context_driven || !form_ctx || !name) return;
