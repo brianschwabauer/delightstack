@@ -105,29 +105,6 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 		});
 	}
 
-	// Check the expiration, not-before & issued date of the token
-	const expiryDate = (Number(payload?.exp) || 0) * 1000;
-	const issuedDate = (Number(payload?.iat) || 0) * 1000;
-	const notBeforeDate = (Number(payload?.nbf) || 0) * 1000;
-	const currentDate = Date.now();
-	if (
-		expiryDate <= currentDate - JWT_CLOCK_SKEW_MS ||
-		issuedDate > currentDate + JWT_CLOCK_SKEW_MS
-	) {
-		throw new DelightError({
-			message: 'Auth token expired',
-			status: 401,
-			detail: 'auth/expired',
-		});
-	}
-	if (notBeforeDate > currentDate + JWT_CLOCK_SKEW_MS) {
-		throw new DelightError({
-			message: 'Auth token not yet valid',
-			status: 401,
-			detail: 'auth/not_yet_valid',
-		});
-	}
-
 	// Check if the key id matches the key in the env variable
 	const key_id = Array.from(
 		new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(secret))),
@@ -159,6 +136,32 @@ export async function decodeJwt<Type = SessionToken['typ']>(
 		throw new DelightError({
 			message: 'Invalid auth token. Signature is invalid',
 			status: 401,
+		});
+	}
+
+	// Check the expiration, not-before & issued date of the token. This MUST come
+	// after signature verification: the `auth/expired` error triggers the session
+	// refresh path, which trusts the token's `jti` — an unverified token must
+	// never be able to reach it
+	const expiryDate = (Number(payload?.exp) || 0) * 1000;
+	const issuedDate = (Number(payload?.iat) || 0) * 1000;
+	const notBeforeDate = (Number(payload?.nbf) || 0) * 1000;
+	const currentDate = Date.now();
+	if (
+		expiryDate <= currentDate - JWT_CLOCK_SKEW_MS ||
+		issuedDate > currentDate + JWT_CLOCK_SKEW_MS
+	) {
+		throw new DelightError({
+			message: 'Auth token expired',
+			status: 401,
+			detail: 'auth/expired',
+		});
+	}
+	if (notBeforeDate > currentDate + JWT_CLOCK_SKEW_MS) {
+		throw new DelightError({
+			message: 'Auth token not yet valid',
+			status: 401,
+			detail: 'auth/not_yet_valid',
 		});
 	}
 

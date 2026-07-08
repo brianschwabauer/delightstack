@@ -1364,7 +1364,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			});
 		}
 
-		this.checkPasswordStrength(password);
+		await this.checkPasswordStrength(password);
 		const password_hash = await this.hashPassword(password);
 		const changed_password = password_hash !== user_auth.password_hash;
 
@@ -1476,7 +1476,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		unsafe_response: PasskeyRegistrationResponse,
 		rp: PasskeyRelyingParty,
 		data: { name?: string },
-		meta: UserSessionMeta,
+		_meta: UserSessionMeta,
 	) {
 		const response = parseSchema(PasskeyRegistrationResponse, unsafe_response);
 		const user = this.sql.setError(`Could not find user`).get('user', user_id);
@@ -2927,7 +2927,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		}
 
 		// Throw an error if the password is not strong enough
-		this.checkPasswordStrength(password);
+		await this.checkPasswordStrength(password);
 
 		// Hash the new password and create a new session for the user
 		const hash = await this.hashPassword(password);
@@ -3955,11 +3955,17 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		};
 	}
 
-	/** Creates or updates an oauth application access token based on the given auth_code or refresh_token */
+	/**
+	 * Creates or updates an oauth application access token based on the given auth_code or refresh_token.
+	 * IMPORTANT - The caller must have already authenticated the client (`verifyOauthApplicationSecret()`);
+	 * `client_id` is only used to bind the grant to the authenticated application.
+	 */
 	async createOauthApplicationToken({
+		client_id,
 		auth_code,
 		refresh_token,
 	}: {
+		client_id: string;
 		auth_code?: string;
 		refresh_token?: string;
 	}) {
@@ -3983,6 +3989,14 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			const oauth_application_auth_code = this.sql
 				.setError(`OAuth application authorization code not found`)
 				.get('oauth_application_auth_code', auth_code);
+
+			// Ensure the auth code was issued to the authenticated application
+			if (oauth_application_auth_code.oauth_application_id !== client_id) {
+				throw new DelightError({
+					message: 'Authorization code was not issued to this application',
+					status: 403,
+				});
+			}
 
 			// Ensure the auth code has not expired
 			if (oauth_application_auth_code.expires_at < Date.now()) {
@@ -4041,6 +4055,14 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 				message:
 					'Refresh token not found for this application. It may have been revoked or expired.',
 				status: 404,
+			});
+		}
+
+		// Ensure the refresh token was issued to the authenticated application
+		if (token.oauth_application_id !== client_id) {
+			throw new DelightError({
+				message: 'Refresh token was not issued to this application',
+				status: 403,
 			});
 		}
 

@@ -1533,7 +1533,11 @@ const oauthTokenExchange: AuthRouteHandler = (ctx) =>
 			}),
 			await ctx.event.request.json(),
 		);
+		// Authenticate the client before redeeming the grant — an intercepted auth
+		// code or refresh token must be useless without the client's secret
+		await ctx.auth.verifyOauthApplicationSecret(body.client_id, body.client_secret);
 		const result = await ctx.auth.createOauthApplicationToken({
+			client_id: body.client_id,
 			auth_code: body.code,
 			refresh_token: body.refresh_token,
 		});
