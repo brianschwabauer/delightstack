@@ -20,7 +20,7 @@
 				body: JSON.stringify({ plan_id }),
 			});
 			if (res.ok) {
-				const body = await res.json();
+				const body = (await res.json()) as { url?: string };
 				if (body.url) {
 					window.location.href = body.url;
 				} else {

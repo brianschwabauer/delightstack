@@ -4,10 +4,14 @@ import type { AiServer } from './ai.server';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-/** Minimal SvelteKit Handle type (avoids hard dependency on @sveltejs/kit) */
-type Handle = (input: {
-	event: RequestEventLike;
-	resolve: (event: RequestEventLike) => Promise<Response> | Response;
+/**
+ * Minimal SvelteKit Handle type (avoids hard dependency on @sveltejs/kit).
+ * Generic over the event so SvelteKit's `Handle`/`resolve` stay assignable
+ * under contravariance.
+ */
+type Handle = <Event extends RequestEventLike>(input: {
+	event: Event;
+	resolve: (event: Event) => Promise<Response> | Response;
 }) => Promise<Response> | Response;
 
 /** Options for createAiHandle() */

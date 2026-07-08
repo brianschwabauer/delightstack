@@ -223,8 +223,5 @@
 		&.active {
 			color: var(--color-action);
 		}
-		span {
-			font-size: var(--font-size-3);
-		}
 	}
 </style>

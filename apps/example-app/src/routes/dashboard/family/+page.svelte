@@ -19,7 +19,9 @@
 	// A draft entity backs the add form: the Form edits draft.value directly
 	// and draft.save() creates the person on submit. After a successful save
 	// the client rekeys its cache, so the next db.entity('person') call hands
-	// out a fresh draft.
+	// out a fresh draft. Reading `db` once here is intentional — `openAdd()`
+	// re-reads it for every subsequent draft.
+	// svelte-ignore state_referenced_locally
 	let draft = $state.raw(db.entity('person'));
 	const field = $derived(draft.form.field);
 
@@ -28,6 +30,9 @@
 		show_add = true;
 	}
 
+	// The db client is stable for the life of the page — capturing it once to
+	// create the live search query is intentional.
+	// svelte-ignore state_referenced_locally
 	const people = db.search('person');
 </script>
 

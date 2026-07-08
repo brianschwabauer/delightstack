@@ -33,12 +33,15 @@ export function createDevHandle(options?: DevHandleOptions) {
 	const url = options?.url ?? 'http://localhost:8787';
 	const binding_names = options?.bindings ?? ['AUTH', 'DB', 'WS', 'RATE_LIMITER'];
 
-	return async ({
+	// Generic over the event so the returned function is assignable to
+	// SvelteKit's `Handle` type (a concrete `resolve: (event: unknown) => …`
+	// parameter would reject Kit's `resolve` under strict contravariance).
+	return async <Event extends { platform?: unknown }>({
 		event,
 		resolve,
 	}: {
-		event: { platform?: Record<string, unknown> };
-		resolve: (event: unknown) => Promise<Response>;
+		event: Event;
+		resolve: (event: Event) => Promise<Response> | Response;
 	}) => {
 		// Ensure event.platform exists
 		if (!event.platform) {

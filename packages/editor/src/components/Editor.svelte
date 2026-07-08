@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { TextSelection } from 'prosemirror-state';
 	import { Button } from '@delightstack/components';
-	import type { Editor } from '../core/editor.svelte.js';
+	// Aliased so the generated .d.ts doesn't declare `Editor` twice (the
+	// component itself is emitted as `Editor`, which would shadow the value
+	// export into a type-only declaration for consumers).
+	import type { Editor as EditorInstance } from '../core/editor.svelte.js';
 	import { svelteNodeViews } from '../core/node-view/svelte-node-view.svelte.js';
 	import { renderHTML } from '../render/index.js';
 	import SlashMenu from './SlashMenu.svelte';
@@ -10,7 +13,7 @@
 	import MobileBar from './MobileBar.svelte';
 
 	interface Props {
-		editor: Editor;
+		editor: EditorInstance;
 		/** Forces read-only display mode (menus and chrome hidden) */
 		readonly?: boolean;
 		/** Show the '/' command menu. Default true */

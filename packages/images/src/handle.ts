@@ -27,12 +27,15 @@ export function createImageHandle(options: CreateImageHandleOptions) {
 	const defaultVariant = options.default_variant ?? 'default';
 	const placeholder = options.placeholder ?? DEFAULT_PLACEHOLDER;
 
-	return async function handle({
+	// Generic over the event so the returned function is assignable to
+	// SvelteKit's `Handle` type (a concrete `resolve: (event: RequestEventLike)
+	// => …` parameter would reject Kit's `resolve` under contravariance).
+	return async function handle<Event extends RequestEventLike>({
 		event,
 		resolve,
 	}: {
-		event: RequestEventLike;
-		resolve: (event: RequestEventLike) => Promise<Response>;
+		event: Event;
+		resolve: (event: Event) => Promise<Response> | Response;
 	}): Promise<Response> {
 		// Only intercept requests under the CDN prefix
 		if (!event.url.pathname.startsWith(cdnPrefix)) {

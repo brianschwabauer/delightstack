@@ -8,9 +8,9 @@ const packageJson = JSON.parse(packageJsonFile);
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-	preprocess: vitePreprocess({
-		script: true,
-	}),
+	// No `script: true` — Svelte 5 compiles TS scripts natively, and esbuild
+	// script preprocessing strips comments (including `svelte-ignore` ones).
+	preprocess: vitePreprocess(),
 	compilerOptions: {
 		experimental: {
 			async: true,

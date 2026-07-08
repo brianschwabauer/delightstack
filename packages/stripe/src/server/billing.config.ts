@@ -32,7 +32,7 @@ export interface PlanDefinition {
 	 * Maps to the auth package's entitlements array.
 	 * @example ['premium', 'video-uploads']
 	 */
-	entitlements?: string[];
+	entitlements?: readonly string[];
 
 	/** Trial period in days @default undefined (no trial) */
 	trial_days?: number;

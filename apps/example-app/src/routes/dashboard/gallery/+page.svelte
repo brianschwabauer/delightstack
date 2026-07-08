@@ -30,9 +30,9 @@
 
 	// Live controls so the user can flip through every mode/sizing combo
 	let display = $state<GalleryDisplay>('masonry');
-	let sizing = $state<GallerySize>('default');
-	let spacing = $state<GallerySpacing>('default');
-	let radius = $state<GalleryRadius>('small');
+	let size = $state<GallerySize>('1');
+	let spacing = $state<GallerySpacing>('1');
+	let radius = $state<GalleryRadius>('1');
 	let meta_display = $state<'none' | 'always' | 'hover'>('hover');
 	let meta_display_fullscreen = $state<'none' | 'always'>('always');
 	let action_display = $state<'none' | 'always' | 'hover'>('hover');
@@ -40,6 +40,9 @@
 	let autoplay = $state(false);
 	let aspect_ratio = $state<'16/9' | '4/3' | '1/1' | 'auto'>('16/9');
 
+	// The db client is stable for the life of the page — capturing it once to
+	// create the live search query is intentional.
+	// svelte-ignore state_referenced_locally
 	const images = db.search('image', { sparse: false });
 
 	// Map the db image records into the Gallery's generic item shape via the
@@ -47,9 +50,11 @@
 	// combined srcset string directly, so we prefer it over the single src.
 	const galleryItems = $derived<GalleryItem[]>(
 		images.docs.map((image, index) => {
-			const props = toImageProps(image);
+			// Search docs type their primary key as `DocumentID | undefined`
+			// (string | number); the image helpers and Gallery items want strings.
+			const props = toImageProps({ ...image, id: String(image.id ?? '') });
 			return {
-				id: image.id,
+				id: image.id == null ? undefined : String(image.id),
 				src: props.srcset || props.src,
 				thumbhash: props.thumbhash,
 				alt: props.alt,
@@ -131,12 +136,12 @@
 		</div>
 		<div class="control">
 			<Select
-				label="Sizing"
-				bind:value={sizing}
+				label="Size"
+				bind:value={size}
 				options={[
-					{ value: 'small', label: 'Small' },
-					{ value: 'default', label: 'Default' },
-					{ value: 'large', label: 'Large' },
+					{ value: '0', label: 'Small' },
+					{ value: '1', label: 'Default' },
+					{ value: '2', label: 'Large' },
 				]} />
 		</div>
 		<div class="control">
@@ -144,9 +149,9 @@
 				label="Spacing"
 				bind:value={spacing}
 				options={[
-					{ value: 'none', label: 'None' },
-					{ value: 'default', label: 'Default' },
-					{ value: 'large', label: 'Large' },
+					{ value: '0', label: 'None' },
+					{ value: '1', label: 'Default' },
+					{ value: '2', label: 'Large' },
 				]} />
 		</div>
 		<div class="control">
@@ -154,9 +159,9 @@
 				label="Radius"
 				bind:value={radius}
 				options={[
-					{ value: 'none', label: 'None' },
-					{ value: 'small', label: 'Small' },
-					{ value: 'large', label: 'Large' },
+					{ value: '0', label: 'None' },
+					{ value: '1', label: 'Small' },
+					{ value: '2', label: 'Large' },
 				]} />
 		</div>
 		<div class="control">
@@ -248,7 +253,7 @@
 			bind:slide={lightbox_slide}
 			items={galleryItems}
 			{display}
-			{sizing}
+			{size}
 			{spacing}
 			{radius}
 			{meta_display}

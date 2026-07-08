@@ -23,6 +23,20 @@
 		"check": "turbo run check"
 	},
 	"packageManager": "pnpm@9.11.0",
+	"pnpm": {
+		"packageExtensions": {
+			"unplugin-icons": {
+				"peerDependencies": {
+					"vite": ">=6"
+				},
+				"peerDependenciesMeta": {
+					"vite": {
+						"optional": true
+					}
+				}
+			}
+		}
+	},
 	"devDependencies": {
 		"@changesets/cli": "^2.29.5",
 		"@cloudflare/workers-types": "^4.20250724.0",

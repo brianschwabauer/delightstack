@@ -17,7 +17,9 @@
 
 	let active_tab = $state(0);
 
-	// Profile editing
+	// Profile editing — seeding the edit buffer from the current name once is
+	// intentional (later auth updates must not clobber in-progress edits).
+	// svelte-ignore state_referenced_locally
 	let edit_name = $state(auth.name ?? '');
 	let saving_profile = $state(false);
 

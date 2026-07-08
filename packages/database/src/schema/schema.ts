@@ -154,17 +154,15 @@ type StringFieldInputType<StringField extends any> = StringField extends {
 }
 	? 'textarea'
 	: StringField extends { type: 'string'; format: infer Format extends StringFieldFormat }
-		? Format extends
-				| 'color'
-				| 'datetime'
-				| 'email'
-				| 'password'
-				| 'phone'
-				| 'url'
-				| 'date'
-				| 'time'
+		? Format extends 'color' | 'email' | 'password' | 'url' | 'date' | 'time'
 			? Format
-			: 'text'
+			: // Match the runtime mapping: these formats translate to different
+				// native input types.
+				Format extends 'phone'
+				? 'tel'
+				: Format extends 'datetime'
+					? 'datetime-local'
+					: 'text'
 		: StringField extends { type: 'string' }
 			? 'text'
 			: never;
@@ -916,8 +914,15 @@ type SqliteColumnForeignKeyConstraint<Schema extends FieldGenerator> = Schema ex
 			: `REFERENCES ${TableName}(${ColumnName})`
 	: never;
 
-type SqliteColumnDefinition<Schema extends FieldGenerator> =
-	`${SqliteColumnType<Schema>}${SqliteColumnConstraint<Schema> extends never ? '' : ` ${SqliteColumnConstraint<Schema>}`}${SqliteColumnForeignKeyConstraint<Schema> extends never ? '' : ` ${SqliteColumnForeignKeyConstraint<Schema>}`}`;
+// The broad `FieldGenerator` type has `_: any`, which makes every `Is*`
+// predicate above resolve to `true`. Without the `any` guard the widened
+// `Table` type (used as a generic constraint) would compute an impossible
+// column union like `BOOLEAN PRIMARY KEY REFERENCES …` that no concrete
+// table's literal definitions (e.g. plain `"TEXT"`) can satisfy. Detect the
+// `any` case and fall back to `string` so concrete tables stay assignable.
+type SqliteColumnDefinition<Schema extends FieldGenerator> = 0 extends 1 & Schema['_']
+	? string
+	: `${SqliteColumnType<Schema>}${SqliteColumnConstraint<Schema> extends never ? '' : ` ${SqliteColumnConstraint<Schema>}`}${SqliteColumnForeignKeyConstraint<Schema> extends never ? '' : ` ${SqliteColumnForeignKeyConstraint<Schema>}`}`;
 
 type SqliteTableDefinition<Schema extends Record<string, FieldGenerator>> = Flatten<
 	OmitNeverProperties<{

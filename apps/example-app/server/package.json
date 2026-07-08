@@ -4,7 +4,8 @@
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
-		"dev": "wrangler dev --config wrangler.toml --env staging --persist-to ./../.wrangler/state"
+		"dev": "wrangler dev --config wrangler.toml --env staging --persist-to ./../.wrangler/state",
+		"typecheck": "tsgo --noEmit"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251120.0",

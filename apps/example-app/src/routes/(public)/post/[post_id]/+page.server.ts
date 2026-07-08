@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { DelightError } from '@delightstack/utilities';
+import { postTable } from '$lib/schema';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -10,8 +11,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	}
 
 	try {
-		const post = await locals.db.get('post', post_id);
-		if (!post || !post.is_public) {
+		const record = await locals.db.get('post', post_id);
+		if (!record) {
+			throw error(404, 'Post not found');
+		}
+		// The DO RPC returns an untyped record — parse it into the typed entity.
+		const post = postTable.parse(record);
+		if (!post.is_public) {
 			throw error(404, 'Post not found');
 		}
 		return { post };

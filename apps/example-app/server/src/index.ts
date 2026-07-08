@@ -164,7 +164,7 @@ export default {
 			const org_id = request.headers.get('X-Org-Id');
 			const session_uid = request.headers.get('X-Session-Uid');
 			if (!org_id || !session_uid) {
-				return DelightError.unauthorized().toResponse();
+				return DelightError.unauthorized('Missing org or session context').toResponse();
 			}
 
 			const form = await request.formData();
@@ -208,14 +208,17 @@ export default {
 };
 
 interface Env {
+	// Index signature so this env satisfies the WebsocketServer env constraint.
+	[key: string]: unknown;
 	AUTH: DurableObjectNamespace;
-	DB: DurableObjectNamespace;
-	WS: DurableObjectNamespace;
+	DB: DurableObjectNamespace<OrgDatabaseServer>;
+	WS: DurableObjectNamespace<AppWebsocketServer>;
 	RATE_LIMITER: DurableObjectNamespace;
 	IMAGE_PROCESSOR: DurableObjectNamespace;
 	AI: Ai;
 	KV: KVNamespace;
 	R2: R2Bucket;
 	JWT_KEY_SECRET?: string;
-	DEV?: boolean;
+	/** Set via wrangler vars in dev; undefined (falsy) in production. */
+	DEV: boolean;
 }

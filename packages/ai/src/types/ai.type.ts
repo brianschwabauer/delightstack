@@ -214,7 +214,9 @@ export type ReservedAiField = typeof RESERVED_AI_FIELDS extends Set<infer T> ? T
 export interface RequestEventLike {
 	url: URL;
 	request: Request;
-	locals: Record<string, unknown>;
-	platform?: Record<string, unknown>;
-	[key: string]: unknown;
+	// Loose member types (and no index signature) so SvelteKit's `RequestEvent`
+	// — whose `App.Locals`/`App.Platform` are plain interfaces — stays
+	// assignable; apps narrow with a type assertion.
+	locals: { session?: unknown };
+	platform?: unknown;
 }

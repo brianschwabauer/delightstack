@@ -7,6 +7,9 @@
 	const { data } = $props();
 	const { db } = $derived(data);
 
+	// The db client is stable for the life of the page — capturing it once to
+	// create the live search query is intentional.
+	// svelte-ignore state_referenced_locally
 	const posts = db.search('post', { limit: 50 });
 
 	function formatDate(timestamp: string | number) {

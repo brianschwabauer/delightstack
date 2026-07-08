@@ -11,6 +11,7 @@ import { createAiHandle } from '@delightstack/ai/server';
 import { createImageHandle } from '@delightstack/images';
 import { DelightError, createDevHandle } from '@delightstack/utilities';
 import { env } from '$env/dynamic/private';
+import { env as public_env } from '$env/dynamic/public';
 import { building, dev } from '$app/environment';
 
 // ---------------------------------------------------------------------------
@@ -52,7 +53,11 @@ const websocketHandle = createWebsocketHandle({
 // 3. Image CDN — serves processed images from R2
 // ---------------------------------------------------------------------------
 const imageHandle = createImageHandle({
-	bucket: (event) => (event.platform as App.Platform)?.env?.R2,
+	bucket: (event) => {
+		const bucket = (event.platform as App.Platform | undefined)?.env?.R2;
+		if (!bucket) throw DelightError.notFound('Image storage is not available');
+		return bucket;
+	},
 });
 
 // ---------------------------------------------------------------------------
@@ -89,7 +94,9 @@ const imageUploadHandle: Handle = async ({ event, resolve }) => {
 		return resolve(event);
 	}
 
-	if (!event.locals.session) return DelightError.unauthorized().toResponse();
+	if (!event.locals.session) {
+		return DelightError.unauthorized('Sign in to upload images').toResponse();
+	}
 
 	const locals = event.locals as AuthLocals & App.Locals;
 	if (!locals.org_id) return DelightError.badRequest('No organization').toResponse();
@@ -131,18 +138,7 @@ const imageUploadHandle: Handle = async ({ event, resolve }) => {
 	const caption = (formData.get('caption') as string) || null;
 	if (!file) return DelightError.badRequest('No file provided').toResponse();
 
-	const db = locals.db as
-		| {
-				uploadImage: (
-					data: ArrayBuffer,
-					options?: {
-						file_name?: string;
-						mime_type?: string;
-						data?: Record<string, unknown>;
-					},
-				) => Promise<unknown>;
-		  }
-		| undefined;
+	const db = locals.db;
 	if (!db) return DelightError.badRequest('Database not available').toResponse();
 
 	try {
@@ -165,30 +161,36 @@ const imageUploadHandle: Handle = async ({ event, resolve }) => {
 // 5. Billing — Stripe subscription routes at /api/billing/*
 //    Disabled when STRIPE_SECRET_KEY / PUBLIC_STRIPE_PUBLISHABLE_KEY are not set.
 // ---------------------------------------------------------------------------
-const has_stripe =
-	env.STRIPE_SECRET_KEY?.startsWith('sk_') &&
-	env.PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith('pk_');
+const stripe_secret_key = env.STRIPE_SECRET_KEY?.startsWith('sk_')
+	? env.STRIPE_SECRET_KEY
+	: undefined;
+// PUBLIC_-prefixed variables are only exposed through the public dynamic env.
+const stripe_publishable_key = public_env.PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith('pk_')
+	? public_env.PUBLIC_STRIPE_PUBLISHABLE_KEY
+	: undefined;
+const has_stripe = !!(stripe_secret_key && stripe_publishable_key);
 
-const billingHandle: Handle = has_stripe
-	? createBillingHandle({
-			config: {
-				secret_key: env.STRIPE_SECRET_KEY,
-				publishable_key: env.PUBLIC_STRIPE_PUBLISHABLE_KEY,
-				billing_scope: 'org',
-				plans: plans.map(({ features, ...p }) => p),
-				entitlements: billingEntitlements,
-				dev,
-			},
-			getAuthServer: (event) => {
-				const auth = (event.platform as App.Platform | undefined)?.env?.AUTH;
-				if (!auth) return undefined;
-				return auth.get(auth.idFromName('main')) as unknown as {
-					updateOrg(id: string, data: { plan?: number; json?: string }): unknown;
-				};
-			},
-			building,
-		})
-	: ({ event, resolve }) => resolve(event);
+const billingHandle: Handle =
+	stripe_secret_key && stripe_publishable_key
+		? createBillingHandle({
+				config: {
+					secret_key: stripe_secret_key,
+					publishable_key: stripe_publishable_key,
+					billing_scope: 'org',
+					plans: plans.map(({ features, ...p }) => p),
+					entitlements: billingEntitlements,
+					dev,
+				},
+				getAuthServer: (event) => {
+					const auth = (event.platform as App.Platform | undefined)?.env?.AUTH;
+					if (!auth) return undefined;
+					return auth.get(auth.idFromName('main')) as unknown as {
+						updateOrg(id: string, data: { plan?: number; json?: string }): unknown;
+					};
+				},
+				building,
+			})
+		: ({ event, resolve }) => resolve(event);
 
 if (!has_stripe && dev) {
 	console.warn(
@@ -200,7 +202,8 @@ if (!has_stripe && dev) {
 // 6. AI — completion, streaming, and embedding endpoints at /api/ai/*
 // ---------------------------------------------------------------------------
 const aiHandle = createAiHandle({
-	getAi: (event) => (event.locals.db as unknown as { ai: unknown })?.ai,
+	// The ai handle's minimal event type erases `locals`, so restore its type.
+	getAi: (event) => (event.locals as unknown as App.Locals).db?.ai,
 	authorize: (event) => !!event.locals.session,
 });
 
@@ -227,7 +230,9 @@ const appHandle: Handle = async ({ event, resolve }) => {
 				const db_binding = locals.org?.db
 					? penv.DB.idFromString(locals.org.db)
 					: penv.DB.idFromName(org_id);
-				_cached_db = penv.DB.get(db_binding);
+				// DO stubs are structurally opaque; assert the OrgDatabaseServer
+				// RPC surface (declared as App.OrgDatabase) once at this boundary.
+				_cached_db = penv.DB.get(db_binding) as unknown as App.OrgDatabase;
 			}
 			return _cached_db;
 		},

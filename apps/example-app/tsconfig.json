@@ -8,9 +8,7 @@
 		"resolveJsonModule": true,
 		"skipLibCheck": true,
 		"sourceMap": true,
-		"strict": true,
-		"typeRoots": ["node_modules/@types"],
-		"types": ["svelte"]
+		"strict": true
 	},
 	"include": [
 		"./.svelte-kit/ambient.d.ts",
@@ -24,6 +22,7 @@
 	],
 	"exclude": [
 		"node_modules/**",
+		"server/**",
 		"**/node_modules/*",
 		"./**/svelte.config.js",
 		"./adapter/**/*.*",

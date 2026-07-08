@@ -456,8 +456,11 @@ export interface ImageRecord {
 export interface RequestEventLike {
 	url: URL;
 	request: Request;
-	platform?: Record<string, unknown>;
-	[key: string]: unknown;
+	// `unknown` (not `Record<string, unknown>`) so SvelteKit's `RequestEvent`
+	// stays assignable and apps can narrow it to their own `App.Platform`
+	// interface with a plain type assertion. No index signature for the same
+	// reason — interfaces like `RequestEvent` don't satisfy one.
+	platform?: unknown;
 }
 
 // ── CDN hook options ─────────────────────────────────────────────────────────
