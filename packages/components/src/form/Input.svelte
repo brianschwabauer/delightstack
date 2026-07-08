@@ -378,9 +378,12 @@
 		/* Otherwise the label animates up on focus or once there's a value. */
 		if (focused) return true;
 		/* In chips mode `value` is an array; an empty array is "no content", so
-		   float only once there's at least one chip (don't fall through to the
-		   scalar check below, where `[] !== ''` would wrongly count as content). */
-		if (multiple) return Array.isArray(value) && value.length > 0;
+		   float only with at least one chip or an uncommitted draft (don't fall
+		   through to the scalar check below, where `[] !== ''` would wrongly
+		   count as content). */
+		if (multiple) {
+			return (Array.isArray(value) && value.length > 0) || chip_input_value !== '';
+		}
 		if (value !== undefined && value !== null && value !== '') return true;
 		return false;
 	});
@@ -391,19 +394,47 @@
 		typeof resolved_error === 'string' ? resolved_error : '',
 	);
 
-	/** Display string for value length */
+	/** Display string for value length (the chip draft in multiple mode,
+	 *  since maxlength constrains the text being typed, not the array) */
 	const value_length = $derived.by(() => {
+		if (multiple && !is_file) return chip_input_value.length;
 		if (typeof value === 'string') return value.length;
 		return 0;
 	});
 
+	/** The chips currently in the value (multiple mode), normalised to an
+	 *  array so an undefined/uninitialised value still renders chips mode. */
+	const chip_list = $derived.by((): string[] => {
+		if (!multiple || is_file) return [];
+		return Array.isArray(value) ? (value as string[]) : [];
+	});
+
+	/** The text driving autocomplete filtering/highlighting — the chip draft
+	 *  in multiple mode, the (stringified) value otherwise. */
+	const ac_query = $derived.by((): string => {
+		if (multiple && !is_file) return chip_input_value;
+		if (typeof value === 'string') return value;
+		if (typeof value === 'number') return String(value);
+		return '';
+	});
+
 	/** Visible autocomplete options */
 	const ac_options = $derived.by((): InputOption[] => {
-		if (onfilter) return ac_filtered;
-		if (!options) return [];
-		const q = typeof value === 'string' ? value.toLowerCase().trim() : '';
-		if (!q) return options;
-		return options.filter((o) => o.label.toLowerCase().includes(q));
+		let opts: InputOption[];
+		if (onfilter) {
+			opts = ac_filtered;
+		} else if (options) {
+			const q = ac_query.toLowerCase().trim();
+			opts = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+		} else {
+			return [];
+		}
+		/* Chips mode: hide options that are already chips (chips store labels),
+		   so the panel only ever offers additions. */
+		if (multiple && !is_file) {
+			return opts.filter((o) => !chip_list.includes(o.label));
+		}
+		return opts;
 	});
 
 	/** Password strength (0-4) */
@@ -627,10 +658,34 @@
 
 	function selectAutocompleteOption(opt: InputOption) {
 		if (opt.disabled) return;
+		if (multiple && !is_file) {
+			/* Chips mode: the picked option becomes a chip. The panel stays open
+			   (focus never leaves the field) with the draft cleared, so several
+			   options can be picked in a row. */
+			chip_input_value = '';
+			if (onfilter) {
+				clearTimeout(ac_debounce_timer);
+				filterAutocomplete('');
+			}
+			if (!chip_list.includes(opt.label)) {
+				value = [...chip_list, opt.label];
+				if (form_ctx && name) form_ctx.setValue(name, value);
+				reparseIfErrored();
+				oninput?.({ value });
+				onchange?.({ value });
+			}
+			return;
+		}
 		// Show the label in the input rather than the value — the value is
 		// for the form payload, but the human-readable label is what the user
 		// just clicked, so the displayed text should match.
-		value = opt.label;
+		if (is_number) {
+			const n = Number(opt.value);
+			value = Number.isFinite(n) ? n : null;
+		} else {
+			value = opt.label;
+		}
+		if (form_ctx && name) form_ctx.setValue(name, value);
 		closeAutocomplete();
 		onchange?.({ value: opt.value });
 	}
@@ -688,12 +743,14 @@
 
 		if (is_textarea && auto_resize) autoResizeTextarea();
 
-		/* Autocomplete filtering */
-		if (has_autocomplete && typeof new_value === 'string') {
+		/* Autocomplete filtering — filter on the raw text so number inputs
+		   (whose value is coerced above) still drive the panel. */
+		if (has_autocomplete) {
 			openAutocomplete();
 			if (onfilter) {
+				const query = target.value;
 				clearTimeout(ac_debounce_timer);
-				ac_debounce_timer = setTimeout(() => filterAutocomplete(new_value), 300);
+				ac_debounce_timer = setTimeout(() => filterAutocomplete(query), 300);
 			}
 		}
 	}
@@ -710,6 +767,7 @@
 	function handleClear() {
 		if (multiple) {
 			value = [];
+			chip_input_value = '';
 		} else if (is_number) {
 			value = null;
 		} else if (is_file) {
@@ -884,27 +942,59 @@
 	}
 
 	/* ---- Chips / Multiple ---- */
+	function handleChipInput(e: Event) {
+		const target = e.target as HTMLInputElement;
+		let text = target.value;
+		if (mask) {
+			text = applyMask(text.replace(/[^a-zA-Z0-9]/g, ''));
+			target.value = text;
+		}
+		chip_input_value = text;
+
+		/* The draft text drives the autocomplete panel, same as a plain field. */
+		if (has_autocomplete) {
+			openAutocomplete();
+			if (onfilter) {
+				clearTimeout(ac_debounce_timer);
+				ac_debounce_timer = setTimeout(() => filterAutocomplete(text), 300);
+			}
+		}
+	}
+
 	function handleChipKeyDown(e: KeyboardEvent) {
+		/* With the autocomplete panel open, navigation keys go to the panel and
+		   Enter picks the highlighted suggestion; text matching no suggestion
+		   falls back to a raw chip. */
+		if (has_autocomplete && ac_open) {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				const opt = ac_options[ac_highlighted];
+				if (ac_highlighted >= 0 && opt) {
+					selectAutocompleteOption(opt);
+				} else {
+					addChip();
+				}
+				return;
+			}
+			if (['ArrowDown', 'ArrowUp', 'Escape', 'Tab'].includes(e.key)) {
+				handleKeyDown(e);
+				return;
+			}
+		}
 		if (e.key === 'Enter' || e.key === ',') {
 			e.preventDefault();
 			addChip();
-		} else if (
-			e.key === 'Backspace' &&
-			chip_input_value === '' &&
-			Array.isArray(value) &&
-			value.length > 0
-		) {
-			removeChip(value.length - 1);
+		} else if (e.key === 'Backspace' && chip_input_value === '' && chip_list.length > 0) {
+			removeChip(chip_list.length - 1);
 		}
 	}
 
 	function addChip() {
+		if (effectively_disabled || readonly) return;
 		const trimmed = chip_input_value.trim();
 		if (!trimmed) return;
-		if (!Array.isArray(value)) value = [];
-		const chips = value as string[];
-		if (!chips.includes(trimmed)) {
-			value = [...chips, trimmed];
+		if (!chip_list.includes(trimmed)) {
+			value = [...chip_list, trimmed];
 			if (form_ctx && name) form_ctx.setValue(name, value);
 			reparseIfErrored();
 			oninput?.({ value });
@@ -914,9 +1004,8 @@
 	}
 
 	function removeChip(index: number) {
-		if (!Array.isArray(value)) return;
-		const chips = value as string[];
-		value = chips.filter((_, i) => i !== index);
+		if (effectively_disabled || readonly) return;
+		value = chip_list.filter((_, i) => i !== index);
 		if (form_ctx && name) form_ctx.setValue(name, value);
 		reparseIfErrored();
 		oninput?.({ value });
@@ -1042,7 +1131,7 @@
 
 	/** Highlight matching text in autocomplete option */
 	function highlightMatch(text: string): string {
-		const q = typeof value === 'string' ? value.trim() : '';
+		const q = ac_query.trim();
 		if (!q) return text;
 		const idx = text.toLowerCase().indexOf(q.toLowerCase());
 		if (idx === -1) return text;
@@ -1110,10 +1199,10 @@
 			<span class="prefix" aria-hidden="true">{prefix}</span>
 		{/if}
 
-		<!-- Multiple chips -->
-		{#if multiple && !is_file && Array.isArray(value)}
+		<!-- Multiple chips (color keeps its own control; file has its own list) -->
+		{#if multiple && !is_file && !is_color}
 			<div class="chips">
-				{#each value as chip, i (chip)}
+				{#each chip_list as chip, i (chip)}
 					<span
 						class="chip"
 						in:scale={{ duration: 200, start: 0.6, easing: backOut }}
@@ -1138,14 +1227,24 @@
 					type="text"
 					class="chip-input"
 					bind:this={input_element}
-					bind:value={chip_input_value}
 					{id}
 					placeholder={native_placeholder}
 					disabled={effectively_disabled}
 					{readonly}
+					{maxlength}
+					value={chip_input_value}
+					autocomplete={has_autocomplete ? 'off' : undefined}
+					role={has_autocomplete ? 'combobox' : undefined}
+					aria-expanded={has_autocomplete ? ac_open : undefined}
+					aria-autocomplete={has_autocomplete ? 'list' : undefined}
+					aria-controls={has_autocomplete ? `${id}-listbox` : undefined}
+					aria-activedescendant={has_autocomplete && ac_highlighted >= 0
+						? `${id}-option-${ac_highlighted}`
+						: undefined}
 					aria-label={label || placeholder || 'Add tag'}
 					onfocus={handleFocus}
 					onblur={handleBlur}
+					oninput={handleChipInput}
 					onkeydown={handleChipKeyDown} />
 			</div>
 		{:else if is_textarea}
@@ -1666,8 +1765,8 @@
 
 <!-- Hidden native inputs for chips-mode form submission (the visible chip
      input has no name; single-value types submit via the named control itself) -->
-{#if name && multiple && !is_file && Array.isArray(value)}
-	{#each value as v (v)}
+{#if name && multiple && !is_file}
+	{#each chip_list as v (v)}
 		<input type="hidden" {name} value={v} />
 	{/each}
 {/if}
