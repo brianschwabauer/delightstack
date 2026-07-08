@@ -136,6 +136,58 @@ describe('upload plugin', () => {
 		el.remove();
 	});
 
+	it('keeps every placeholder when multiple files are inserted at the selection', async () => {
+		// Multiple resolvable uploads at once (deferredUploader holds only one)
+		const resolvers: ((result: UploadResult) => void)[] = [];
+		const uploader: Uploader = {
+			upload(_file, ctx) {
+				return new Promise((resolve, reject) => {
+					resolvers.push(resolve);
+					ctx.signal.addEventListener('abort', () => reject(new Error('aborted')));
+				});
+			},
+		};
+		const { editor, el } = mountEditor(uploader);
+
+		// No explicit pos (paste / multi-select file picker): the second insert
+		// must not replace the first placeholder via the node selection
+		editor.uploadFiles([imageFile('a.png'), imageFile('b.png')]);
+		await tick();
+
+		const placeholders = editor
+			.getJSON({ strip_uploading: false })
+			.content?.filter((node) => node.type === 'image');
+		expect(placeholders).toHaveLength(2);
+		expect(editor.uploads).toHaveLength(2);
+
+		resolvers[0]({ image: { id: 'img_a', width: 1, height: 1, src: 'https://cdn/a' } });
+		resolvers[1]({ image: { id: 'img_b', width: 1, height: 1, src: 'https://cdn/b' } });
+		await tick();
+
+		const images = editor.getJSON().content?.filter((node) => node.type === 'image');
+		expect(images?.map((node) => node.attrs?.src)).toEqual([
+			'https://cdn/a',
+			'https://cdn/b',
+		]);
+		expect(editor.uploads).toHaveLength(0);
+
+		editor.destroy();
+		el.remove();
+	});
+
+	it('getJSON never emits an empty doc while a lone placeholder is in flight', () => {
+		const editor = new Editor({ blocks: defaultBlocks(), uploader: deferredUploader() });
+		editor.setContent({
+			type: 'doc',
+			content: [{ type: 'image', attrs: { uploading: true, upload_id: 'u1' } }],
+		});
+		const json = editor.getJSON();
+		// Stripping the placeholder must not leave `content: []` (doc: block+)
+		expect(json.content).toEqual([{ type: 'paragraph' }]);
+		expect(() => editor.setContent(json)).not.toThrow();
+		editor.destroy();
+	});
+
 	it('routes non-image files to the file block', async () => {
 		const uploader = deferredUploader();
 		const { editor, el } = mountEditor(uploader);

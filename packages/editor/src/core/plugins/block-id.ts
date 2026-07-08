@@ -20,24 +20,53 @@ export function createBlockId(): string {
 export function blockIds(): Plugin {
 	return new Plugin({
 		key: blockIdKey,
-		appendTransaction(transactions, _oldState, newState) {
+		appendTransaction(transactions, oldState, newState) {
 			if (!transactions.some((tr) => tr.docChanged)) return null;
-			const seen = new Set<string>();
-			let tr = newState.tr;
-			let changed = false;
+			// Pass 1: collect every occurrence per id, plus missing/empty ids
+			const occurrences = new Map<string, number[]>();
+			const reassign: number[] = [];
 			newState.doc.descendants((node, pos) => {
 				if (!('block_id' in node.attrs)) return;
 				const id = node.attrs.block_id;
-				if (typeof id === 'string' && id && !seen.has(id)) {
-					seen.add(id);
-					return;
+				if (typeof id === 'string' && id) {
+					const list = occurrences.get(id);
+					if (list) list.push(pos);
+					else occurrences.set(id, [pos]);
+				} else {
+					reassign.push(pos);
 				}
-				const block_id = createBlockId();
-				seen.add(block_id);
-				tr = tr.setNodeMarkup(pos, null, { ...node.attrs, block_id });
-				changed = true;
 			});
-			if (!changed) return null;
+			// Pass 2: for duplicated ids the PRE-EXISTING node keeps its id —
+			// map its old position forward so duplicating/pasting ABOVE doesn't
+			// let the copy steal the original's identity (presence focus,
+			// comment anchors)
+			for (const [id, positions] of occurrences) {
+				if (positions.length < 2) continue;
+				let keep = positions[0];
+				let old_pos = -1;
+				oldState.doc.descendants((node, pos) => {
+					if (old_pos >= 0) return false;
+					if (node.attrs.block_id === id) old_pos = pos;
+					return old_pos < 0;
+				});
+				if (old_pos >= 0) {
+					let mapped = old_pos;
+					for (const step of transactions) mapped = step.mapping.map(mapped, 1);
+					keep = positions.reduce((best, pos) =>
+						Math.abs(pos - mapped) < Math.abs(best - mapped) ? pos : best,
+					);
+				}
+				for (const pos of positions) {
+					if (pos !== keep) reassign.push(pos);
+				}
+			}
+			if (!reassign.length) return null;
+			let tr = newState.tr;
+			for (const pos of reassign) {
+				const node = newState.doc.nodeAt(pos);
+				if (!node) continue;
+				tr = tr.setNodeMarkup(pos, null, { ...node.attrs, block_id: createBlockId() });
+			}
 			// Id assignment is bookkeeping, not an edit
 			return tr.setMeta('addToHistory', false);
 		},

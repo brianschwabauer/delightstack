@@ -50,6 +50,16 @@
 		};
 	});
 
+	// Upload state is component-local; if the node view is destroyed (block
+	// deleted, or recreated by a move) the old props' pos() goes undefined and
+	// a completing upload would silently vanish — abort in-flight requests so
+	// behavior is consistent instead of losing images invisibly.
+	$effect(() => {
+		return () => {
+			for (const entry of pending) entry.controller.abort();
+		};
+	});
+
 	$effect(() => {
 		if (!selected && ui.managing) ui.managing = false;
 	});

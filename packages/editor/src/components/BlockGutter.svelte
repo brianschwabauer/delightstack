@@ -74,6 +74,27 @@
 		return [];
 	});
 
+	/**
+	 * Re-resolves a block's position at action time. Doc edits while the menu
+	 * is open (collaborator edits, upload progress) shift positions, so the
+	 * pos captured at hover time can point at the wrong node — the stable
+	 * block_id assigned by the block-id plugin is the fresh handle.
+	 */
+	function resolveBlockPos(block: HoveredBlock): number | null {
+		const node = editor.state.doc.nodeAt(block.pos);
+		if (node && (!block.block_id || node.attrs.block_id === block.block_id)) {
+			return block.pos;
+		}
+		if (!block.block_id) return null;
+		let found: number | null = null;
+		editor.state.doc.descendants((candidate, pos) => {
+			if (found !== null) return false;
+			if (candidate.attrs.block_id === block.block_id) found = pos;
+			return found === null;
+		});
+		return found;
+	}
+
 	function blockActions(block: HoveredBlock): EditorCommand[] {
 		return [
 			{
@@ -101,7 +122,7 @@
 				icon: icons.duplicate,
 				keyboard: 'Shift-Alt-ArrowDown',
 				group: 'Actions',
-				run: () => duplicateBlock(block.pos),
+				run: () => duplicateBlock(block),
 			},
 			{
 				name: '_delete',
@@ -110,19 +131,26 @@
 				icon: icons.trash,
 				keyboard: 'Shift-Delete',
 				group: 'Actions',
-				run: () => editor.deleteNode(block.pos),
+				run: () => {
+					const pos = resolveBlockPos(block);
+					if (pos === null) return false;
+					editor.deleteNode(pos);
+					return true;
+				},
 			},
 		];
 	}
 
 	function runMove(block: HoveredBlock, direction: -1 | 1): boolean {
-		const node = editor.state.doc.nodeAt(block.pos);
-		if (!node) return false;
-		editor.selectNode(block.pos);
+		const pos = resolveBlockPos(block);
+		if (pos === null) return false;
+		editor.selectNode(pos);
 		return Boolean(moveBlock(direction)(editor.state, (tr) => editor.dispatch(tr)));
 	}
 
-	function duplicateBlock(pos: number): boolean {
+	function duplicateBlock(block: HoveredBlock): boolean {
+		const pos = resolveBlockPos(block);
+		if (pos === null) return false;
 		const node = editor.state.doc.nodeAt(pos);
 		if (!node) return false;
 		// The copied block_id is deduped by the block-id plugin
@@ -151,7 +179,10 @@
 		const measure = () => {
 			frame = 0;
 			const event = last_point;
-			if (!event || menu_open) return;
+			// While a touch drag is running, `hovered` must not change: the drag
+			// handle that owns the pointer capture lives inside the hovered
+			// gutter, and unmounting it mid-drag strands the whole drag state
+			if (!event || menu_open || touch_drag) return;
 			const rect = container.getBoundingClientRect();
 			if (
 				event.clientX < rect.left - gutter_px ||
@@ -224,7 +255,7 @@
 	$effect(() => {
 		void editor.doc;
 		untrack(() => {
-			if (menu_open || !hovered || !last_point) return;
+			if (menu_open || touch_drag || !hovered || !last_point) return;
 			const block = editor.blockAt({ x: last_point.clientX, y: last_point.clientY });
 			hovered = block;
 			if (!block) hovered_empty = false;
@@ -237,7 +268,7 @@
 	// away under a stationary pointer reads as random flicker.
 	$effect(() => {
 		const onKeydown = (event: KeyboardEvent) => {
-			if (menu_open) return;
+			if (menu_open || touch_drag) return;
 			if (
 				event.key.length === 1 ||
 				['Backspace', 'Delete', 'Enter'].includes(event.key)
@@ -280,19 +311,21 @@
 			command.run(editor);
 			return;
 		}
-		const node = editor.state.doc.nodeAt(block.pos);
+		const pos = resolveBlockPos(block);
+		if (pos === null) return;
+		const node = editor.state.doc.nodeAt(pos);
 		if (!node) return;
 		const is_empty_paragraph = node.type.name === 'paragraph' && node.content.size === 0;
 		if (mode === 'actions' || is_empty_paragraph) {
 			// Convert in place: select inside the block, then run
 			editor.dispatch(
 				editor.state.tr.setSelection(
-					TextSelection.near(editor.state.doc.resolve(block.pos + 1)),
+					TextSelection.near(editor.state.doc.resolve(pos + 1)),
 				),
 			);
 		} else {
 			// Insert a fresh paragraph below the block and run the command there
-			const after = block.pos + node.nodeSize;
+			const after = pos + node.nodeSize;
 			const paragraph = editor.schema.nodes.paragraph.create();
 			let tr = editor.state.tr.insert(after, paragraph);
 			tr = tr.setSelection(TextSelection.near(tr.doc.resolve(after + 1)));
@@ -382,6 +415,22 @@
 	let touch_scroll_frame = 0;
 	/** A completed touch drag must not ALSO count as a tap that opens the menu */
 	let suppress_click = false;
+
+	// If the gutter is destroyed mid-touch-drag (editor unmount, editable
+	// flip), nothing else cancels the auto-scroll rAF loop or clears the
+	// shared drop indicator — clean up here.
+	$effect(() => {
+		return () => {
+			if (touch_scroll_frame) cancelAnimationFrame(touch_scroll_frame);
+			touch_scroll_frame = 0;
+			touch_scroll = 0;
+			if (touch_drag) {
+				touch_drag = null;
+				const view = editor.view;
+				if (view) setDropIndicator(view, null);
+			}
+		};
+	});
 
 	function touchScrollTick() {
 		touch_scroll_frame = 0;

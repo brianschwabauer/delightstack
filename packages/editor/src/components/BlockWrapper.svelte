@@ -326,7 +326,7 @@
 		// Releasing at (or within a hair of) the natural height clears the
 		// crop entirely — and resets the focal point with it
 		if (Math.abs(aspect - natural) / natural <= CROP_EPSILON || aspect <= natural) {
-			props.update_attrs({ [crop.aspect_attr]: null, ...(crop.reset ?? {}) });
+			props.update_attrs({ [crop.aspect_attr]: null, ...crop.reset });
 		} else {
 			props.update_attrs({ [crop.aspect_attr]: Math.round(aspect * 10000) / 10000 });
 		}

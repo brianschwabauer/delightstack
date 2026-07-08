@@ -202,6 +202,13 @@ export function uploads(editor: Editor): Plugin {
 				// advance past it for the next file
 				const node = editor.state.doc.nodeAt(insertAt);
 				insertAt += node?.nodeSize ?? 0;
+			} else {
+				// Inserted at the selection, which insertNode leaves ON the fresh
+				// placeholder — inserting the next file there would REPLACE it
+				// (aborting its upload). Switch to explicit positions after the
+				// placeholder for the remaining files.
+				const found = findByUploadId(upload_id);
+				if (found) insertAt = found.pos + found.node.nodeSize;
 			}
 			void start(file, kind, upload_id, blob_url, controller);
 		}

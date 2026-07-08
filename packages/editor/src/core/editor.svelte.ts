@@ -291,7 +291,13 @@ export class Editor {
 	getJSON(opts: { strip_uploading?: boolean } = {}): JSONContent {
 		const json = this.#pmState.doc.toJSON() as JSONContent;
 		if (opts.strip_uploading === false) return json;
-		return stripUploading(json) ?? { type: 'doc', content: [{ type: 'paragraph' }] };
+		const stripped = stripUploading(json);
+		// Stripping a lone in-flight placeholder can leave `content: []`, which
+		// violates the schema (`doc: block+`) — fall back to an empty paragraph
+		if (!stripped || !stripped.content?.length) {
+			return { type: 'doc', content: [{ type: 'paragraph' }] };
+		}
+		return stripped;
 	}
 
 	/** Plaintext extraction (search indexing, AI context) */

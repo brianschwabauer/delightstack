@@ -53,7 +53,6 @@ class SvelteNodeView implements NodeView {
 	contentDOM: HTMLElement | undefined;
 
 	#spec: BlockSpec;
-	#node: PMNode;
 	#props: BlockViewProps;
 	#instance: Record<string, unknown>;
 
@@ -65,7 +64,6 @@ class SvelteNodeView implements NodeView {
 		getPos: () => number | undefined,
 	) {
 		this.#spec = spec;
-		this.#node = node;
 		this.dom = document.createElement(
 			spec.wrapper_tag ?? (node.isInline ? 'span' : 'div'),
 		);
@@ -104,7 +102,6 @@ class SvelteNodeView implements NodeView {
 
 	update(node: PMNode): boolean {
 		if (node.type.name !== this.#spec.name) return false;
-		this.#node = node;
 		this.#props.syncAttrs(node.attrs);
 		return true;
 	}
