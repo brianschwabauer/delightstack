@@ -377,7 +377,26 @@ describe('one-time purchases (checkout.session.completed, mode payment)', () => 
 				amount: 10000,
 				currency: 'usd',
 				checkout_session_id: 'cs_1',
+				event_id: stripe_event.id,
 			}),
+		);
+	});
+
+	it('passes the webhook event id to payment hooks for app-side idempotency', async () => {
+		const onPaymentSuccess = vi.fn();
+		const config = makeConfig({ hooks: { onPaymentSuccess } });
+		const stripe_event = makeStripeEvent('invoice.paid', {
+			id: 'in_evt',
+			customer: 'cus_1',
+			amount_paid: 500,
+			currency: 'usd',
+		});
+		signEvent(stripe_event);
+
+		await handleWebhook(makeRequestEvent(), config, {});
+
+		expect(onPaymentSuccess).toHaveBeenCalledWith(
+			expect.objectContaining({ invoice_id: 'in_evt', event_id: stripe_event.id }),
 		);
 	});
 
@@ -405,5 +424,74 @@ describe('one-time purchases (checkout.session.completed, mode payment)', () => 
 		await handleWebhook(makeRequestEvent(), config, {});
 
 		expect(onOneTimePurchase).not.toHaveBeenCalled();
+	});
+});
+
+describe('default-store warning', () => {
+	it('warns once when grant hooks run against the in-memory default store', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const onPaymentSuccess = vi.fn();
+			const config = makeConfig({ hooks: { onPaymentSuccess } });
+			signEvent(
+				makeStripeEvent('invoice.paid', {
+					id: 'in_warn',
+					customer: 'cus_1',
+					amount_paid: 100,
+					currency: 'usd',
+				}),
+			);
+
+			await handleWebhook(makeRequestEvent(), config, {});
+			await handleWebhook(makeRequestEvent(), config, {});
+
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(String(warn.mock.calls[0][0])).toContain('webhook_event_store');
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it('does not warn with a durable store, or without grant hooks', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			// Durable store provided
+			const seen = new Set<string>();
+			const store: WebhookEventStore = {
+				has: (id) => seen.has(id),
+				add: (id) => {
+					seen.add(id);
+				},
+			};
+			const config = makeConfig({
+				hooks: { onPaymentSuccess: vi.fn() },
+				webhook_event_store: store,
+			});
+			signEvent(
+				makeStripeEvent('invoice.paid', {
+					id: 'in_warn2',
+					customer: 'cus_1',
+					amount_paid: 100,
+					currency: 'usd',
+				}),
+			);
+			await handleWebhook(makeRequestEvent(), config, {});
+
+			// No grant-shaped hooks configured
+			const config2 = makeConfig();
+			signEvent(
+				makeStripeEvent('invoice.paid', {
+					id: 'in_warn3',
+					customer: 'cus_1',
+					amount_paid: 100,
+					currency: 'usd',
+				}),
+			);
+			await handleWebhook(makeRequestEvent(), config2, {});
+
+			expect(warn).not.toHaveBeenCalled();
+		} finally {
+			warn.mockRestore();
+		}
 	});
 });

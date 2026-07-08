@@ -141,12 +141,24 @@ async function ensureCustomer(
 	if (org_id) metadata.org_id = org_id;
 	if (user_id) metadata.user_id = user_id;
 
+	// Idempotency key: concurrent first requests (double-submit, parallel
+	// routes) and Stripe's eventually-consistent customer search (~1 min lag)
+	// would otherwise each create a customer for the same org/user. With the
+	// key, Stripe returns the SAME customer to every create within 24h.
+	const idempotency_scope = config.billing_scope === 'org' ? org_id : user_id;
 	const customer = await stripeCall(() =>
-		stripe.customers.create({
-			email: user?.email,
-			name: config.billing_scope === 'org' ? org?.name : user?.name,
-			metadata,
-		}),
+		stripe.customers.create(
+			{
+				email: user?.email,
+				name: config.billing_scope === 'org' ? org?.name : user?.name,
+				metadata,
+			},
+			idempotency_scope
+				? {
+						idempotencyKey: `delight-customer-${config.billing_scope}-${idempotency_scope}`,
+					}
+				: undefined,
+		),
 	);
 
 	// Cache the customer_id

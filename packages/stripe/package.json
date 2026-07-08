@@ -40,6 +40,10 @@
 			"types": "./dist/server/index.d.ts",
 			"import": "./dist/server/index.js"
 		},
+		"./worker": {
+			"types": "./dist/worker/index.d.ts",
+			"import": "./dist/worker/index.js"
+		},
 		"./client": {
 			"types": "./dist/client/index.d.ts",
 			"svelte": "./dist/client/index.js",

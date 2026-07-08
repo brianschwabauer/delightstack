@@ -8,6 +8,10 @@ export {
 	type WebsocketRpc,
 	type WebhookEventStore,
 } from './billing.config';
+export {
+	durableObjectEventStore,
+	type StripeEventStoreNamespace,
+} from './billing.event-store';
 export { createBillingHandle, type BillingHandleOptions } from './billing.handler';
 export {
 	syncSubscription,

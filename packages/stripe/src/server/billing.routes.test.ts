@@ -284,6 +284,32 @@ describe('ensureCustomer org JSON merge', () => {
 	});
 });
 
+describe('ensureCustomer idempotency', () => {
+	it('creates the customer with a stable idempotency key so concurrent first requests cannot duplicate', async () => {
+		const locals = baseLocals({ org_state: {} }); // no cached customer
+		stripe_mock.customers.search.mockResolvedValue({ data: [] });
+		stripe_mock.customers.create.mockResolvedValue({ id: 'cus_new' });
+		stripe_mock.checkout.sessions.create.mockResolvedValue({
+			client_secret: 'cs_test',
+		});
+
+		const event = makeEvent({
+			method: 'POST',
+			path: '/payment-method',
+			body: {},
+			locals,
+		});
+		await handleBillingRoute(event, config, '/payment-method', 'POST', {});
+
+		expect(stripe_mock.customers.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				metadata: expect.objectContaining({ org_id: 'org_1' }),
+			}),
+			{ idempotencyKey: 'delight-customer-org-org_1' },
+		);
+	});
+});
+
 describe('GET /subscription (lightweight read)', () => {
 	it('does not write entitlements or broadcast, but caches billing_plan_ids', async () => {
 		const setOrgState = vi.fn();

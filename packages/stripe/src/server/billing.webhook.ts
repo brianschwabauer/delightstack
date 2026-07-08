@@ -25,6 +25,7 @@ let webhook_secret_promise: Promise<string> | null = null;
 /** Resets the cached webhook secret (for tests) @internal */
 export function resetWebhookSecretCache(): void {
 	webhook_secret_promise = null;
+	warned_default_store = false;
 }
 
 /** Resolve the webhook signing secret, auto-registering if needed */
@@ -76,6 +77,33 @@ function defaultEventStoreAdd(event_id: string): void {
 		if (oldest === undefined) break;
 		processed_event_ids.delete(oldest);
 	}
+}
+
+let warned_default_store = false;
+/**
+ * The default event store is per-isolate: on multi-isolate deployments
+ * (Cloudflare Workers) a Stripe retry can land on an isolate that never saw
+ * the original delivery and re-run grant-shaped hooks. Warn once so the gap
+ * is visible instead of silently double-granting.
+ */
+function warnIfDefaultStoreIsRisky(config: ResolvedBillingConfig): void {
+	if (warned_default_store || config.webhook_event_store) return;
+	const hooks = config.hooks;
+	const has_grant_hooks = !!(
+		hooks?.onOneTimePurchase ||
+		hooks?.onPaymentSuccess ||
+		hooks?.onPaymentFailed
+	);
+	if (!has_grant_hooks) return;
+	warned_default_store = true;
+	console.warn(
+		'[@delightstack/stripe] Webhook deduplication is using the default in-memory ' +
+			'store, which is per-isolate — a Stripe retry can re-fire ' +
+			'onOneTimePurchase/onPaymentSuccess/onPaymentFailed on another isolate. ' +
+			'Key those side effects by ctx.event_id, and/or pass a durable ' +
+			'`webhook_event_store` (see durableObjectEventStore + the StripeEventStore ' +
+			'Durable Object exported from @delightstack/stripe/worker).',
+	);
 }
 
 /** Resolve customer_id to org_id via Stripe customer metadata */
@@ -130,6 +158,7 @@ export async function handleWebhook(
 	// Idempotency — skip events that were already fully processed so Stripe
 	// retries don't double-apply side effects
 	const event_store = config.webhook_event_store;
+	warnIfDefaultStoreIsRisky(config);
 	const already_processed = event_store
 		? await event_store.has(stripe_event.id)
 		: defaultEventStoreHas(stripe_event.id);
@@ -165,6 +194,7 @@ export async function handleWebhook(
 						status: state.status,
 						plan_id: state.plan_ids[0] ?? null,
 						entitlements: state.entitlements,
+						event_id: stripe_event.id,
 						event,
 					});
 				} else if (stripe_event.type === 'customer.subscription.deleted') {
@@ -176,6 +206,7 @@ export async function handleWebhook(
 						status: 'canceled',
 						plan_id: null,
 						entitlements: [],
+						event_id: stripe_event.id,
 						event,
 					});
 				}
@@ -205,6 +236,7 @@ export async function handleWebhook(
 					amount: invoice.amount_paid ?? 0,
 					currency: invoice.currency,
 					invoice_id: invoice.id,
+					event_id: stripe_event.id,
 				});
 			}
 			break;
@@ -232,6 +264,7 @@ export async function handleWebhook(
 					amount: invoice.amount_due ?? 0,
 					currency: invoice.currency,
 					invoice_id: invoice.id,
+					event_id: stripe_event.id,
 				});
 			}
 			break;
@@ -266,6 +299,7 @@ export async function handleWebhook(
 						amount: session.amount_total ?? plan.amount,
 						currency: session.currency ?? plan.currency ?? 'usd',
 						checkout_session_id: session.id,
+						event_id: stripe_event.id,
 						event,
 					});
 				}

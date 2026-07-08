@@ -79,8 +79,17 @@ export interface AuthServerRpc {
 
 /**
  * Store used to deduplicate Stripe webhook events by event ID.
- * Provide a durable implementation (e.g. Durable Object storage) for
- * multi-isolate deployments. Defaults to an in-memory store with a TTL/cap.
+ *
+ * Defaults to an in-memory store (TTL/cap) which is **per-isolate**: on
+ * Cloudflare Workers a Stripe retry routed to a different isolate will not
+ * see the event as processed and will re-run the handler. Subscription sync
+ * is idempotent, but grant-shaped hooks (`onOneTimePurchase`,
+ * `onPaymentSuccess`, ...) can double-fire. For production either:
+ *
+ * - key those hooks' side effects by `ctx.event_id` (always do this), and/or
+ * - provide a durable store: export the `StripeEventStore` Durable Object
+ *   from `@delightstack/stripe/worker` in your Worker, bind it, and pass
+ *   `webhook_event_store: durableObjectEventStore(env.STRIPE_EVENTS)`.
  */
 export interface WebhookEventStore {
 	/** Returns true if the given Stripe event ID was already processed */
@@ -179,6 +188,13 @@ export interface BillingConfig<E extends string = string> {
 			status: string;
 			plan_id: string | null;
 			entitlements: string[];
+			/**
+			 * The Stripe webhook event id, when triggered by a webhook (absent for
+			 * changes applied directly through billing routes). Webhooks are
+			 * delivered at-least-once — use this as an idempotency key for any
+			 * non-idempotent side effect.
+			 */
+			event_id?: string;
 			event: RequestEvent;
 		}) => void | Promise<void>;
 
@@ -187,6 +203,10 @@ export interface BillingConfig<E extends string = string> {
 		 * The package cannot know what a purchase grants (a credit, a timed pass,
 		 * a permanent entitlement) — apply it here. `amount` is an integer in the
 		 * smallest currency unit (cents).
+		 *
+		 * IMPORTANT: Stripe delivers webhooks at-least-once. Key the grant by
+		 * `event_id` (or `checkout_session_id`) so a redelivered event cannot
+		 * apply it twice — e.g. an insert with a unique constraint on the id.
 		 */
 		onOneTimePurchase?: (ctx: {
 			customer_id: string;
@@ -197,25 +217,39 @@ export interface BillingConfig<E extends string = string> {
 			amount: number;
 			currency: string;
 			checkout_session_id: string;
+			/** The Stripe webhook event id — use as an idempotency key for the grant */
+			event_id: string;
 			event: RequestEvent;
 		}) => void | Promise<void>;
 
-		/** Called after a payment succeeds. `amount` is an integer in the smallest currency unit (cents). */
+		/**
+		 * Called after a payment succeeds. `amount` is an integer in the smallest
+		 * currency unit (cents). Delivered at-least-once — key any non-idempotent
+		 * side effect by `event_id` (or `invoice_id`).
+		 */
 		onPaymentSuccess?: (ctx: {
 			customer_id: string;
 			/** Integer amount in the smallest currency unit (e.g. cents) */
 			amount: number;
 			currency: string;
 			invoice_id: string;
+			/** The Stripe webhook event id — use as an idempotency key */
+			event_id: string;
 		}) => void | Promise<void>;
 
-		/** Called after a payment fails. `amount` is an integer in the smallest currency unit (cents). */
+		/**
+		 * Called after a payment fails. `amount` is an integer in the smallest
+		 * currency unit (cents). Delivered at-least-once — key any non-idempotent
+		 * side effect by `event_id` (or `invoice_id`).
+		 */
 		onPaymentFailed?: (ctx: {
 			customer_id: string;
 			/** Integer amount in the smallest currency unit (e.g. cents) */
 			amount: number;
 			currency: string;
 			invoice_id: string;
+			/** The Stripe webhook event id — use as an idempotency key */
+			event_id: string;
 		}) => void | Promise<void>;
 
 		/** Called when a customer is created in Stripe */
