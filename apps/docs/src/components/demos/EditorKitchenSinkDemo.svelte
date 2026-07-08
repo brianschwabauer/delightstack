@@ -156,6 +156,7 @@
 				attrs: { language: 'svelte' },
 				content: [
 					text(
+						// oxlint-disable-next-line no-useless-escape -- an unescaped closing script tag would terminate this component's script block
 						'<script>\n\tconst editor = new Editor({ blocks: defaultBlocks(), uploader });\n<\/script>\n\n<Toolbar {editor} />\n<Editor {editor} />',
 					),
 				],

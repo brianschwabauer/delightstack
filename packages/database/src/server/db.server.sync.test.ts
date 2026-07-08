@@ -98,7 +98,7 @@ function createFakeSqlStorage() {
 			const [, table_name] = match;
 			const prefix = String(args[0]).replace(/%$/, '');
 			const table = getTable(table_name);
-			for (const key of [...table.keys()]) {
+			for (const key of table.keys()) {
 				if (String(key).startsWith(prefix)) table.delete(key);
 			}
 			return makeCursor([]);
@@ -108,7 +108,7 @@ function createFakeSqlStorage() {
 		if ((match = sql.match(/^DELETE FROM (\w+) WHERE (\w+) = \?/))) {
 			const [, table_name, pk] = match;
 			const table = getTable(table_name);
-			for (const [key, row] of [...table.entries()]) {
+			for (const [key, row] of table.entries()) {
 				if (row[pk] === args[0]) table.delete(key);
 			}
 			return makeCursor([]);
@@ -325,7 +325,7 @@ describe('DatabaseServer.sync()', () => {
 		// the not-yet-returned creates.
 		const { created, deleted } = pageThroughSync(db, 2);
 		const created_ids = created.map((d: any) => d.id).sort();
-		expect(created_ids).toEqual([...ids.slice(1)].sort());
+		expect(created_ids).toEqual(ids.slice(1).sort());
 		expect(deleted).toEqual([ids[0]]);
 	});
 

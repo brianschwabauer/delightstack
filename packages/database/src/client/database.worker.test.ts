@@ -42,7 +42,7 @@ vi.mock('./database.idb', () => ({
 		idbStore(store).delete(key);
 	}),
 	idbDeleteByPrefix: vi.fn(async (_db: unknown, store: string, prefix: string) => {
-		for (const key of [...idbStore(store).keys()]) {
+		for (const key of idbStore(store).keys()) {
 			if (key.startsWith(prefix)) idbStore(store).delete(key);
 		}
 	}),
@@ -131,7 +131,7 @@ function createFakeSqlStorage() {
 			const [, table_name] = match;
 			const prefix = String(args[0]).replace(/%$/, '');
 			const table = getTable(table_name);
-			for (const key of [...table.keys()]) {
+			for (const key of table.keys()) {
 				if (String(key).startsWith(prefix)) table.delete(key);
 			}
 			return makeCursor([]);
@@ -139,7 +139,7 @@ function createFakeSqlStorage() {
 		if ((match = sql.match(/^DELETE FROM (\w+) WHERE (\w+) = \?/))) {
 			const [, table_name, pk] = match;
 			const table = getTable(table_name);
-			for (const [key, row] of [...table.entries()]) {
+			for (const [key, row] of table.entries()) {
 				if (row[pk] === args[0]) table.delete(key);
 			}
 			return makeCursor([]);

@@ -43,8 +43,8 @@
 	"scripts": {
 		"build": "svelte-package -i src",
 		"dev": "svelte-package -w -i src",
-		"check": "svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
+		"check": "tsgo --noEmit",
+		"check:watch": "tsgo --noEmit --watch",
 		"test": "vitest"
 	},
 	"devDependencies": {

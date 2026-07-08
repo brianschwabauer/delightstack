@@ -142,7 +142,9 @@ if (project.trailingSlash === 'never') dataAttributes['data-strip-trailing-slash
 			let translations = {};
 			try {
 				translations = JSON.parse(this.dataset.translations || '{}');
-			} catch {}
+			} catch {
+				// Malformed translations attribute — fall back to English defaults
+			}
 
 			const shouldStrip = this.dataset.stripTrailingSlash !== undefined;
 			const stripTrailingSlash = (path: string) => path.replace(/(.)\/(#.*)?$/, '$1$2');

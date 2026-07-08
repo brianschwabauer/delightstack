@@ -17,7 +17,7 @@ function svelteRunesModules(): Plugin {
 		async transform(code, id) {
 			const file = id.split('?')[0];
 			if (!/\.svelte\.(ts|js)$/.test(file)) return null;
-			const js = /\.ts$/.test(file)
+			const js = file.endsWith('.ts')
 				? (await transformWithEsbuild(code, file, { loader: 'ts' })).code
 				: code;
 			const compiled = compileModule(js, {
