@@ -1,5 +1,12 @@
 # @delightstack/editor
 
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [7334e7a]
+  - @delightstack/components@1.0.1
+
 ## 1.0.0
 
 ### Major Changes
