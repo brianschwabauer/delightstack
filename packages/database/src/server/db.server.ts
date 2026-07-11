@@ -1757,7 +1757,7 @@ export class DatabaseServer<
 		if (!index) return;
 		const raw_data = saveOrama(index.orama);
 		const index_format: 'msgpack' | 'json' = 'msgpack';
-		const binary = encodeMsgPack(raw_data);
+		const binary = encodeMsgPack(raw_data, { maxDepth: 4096 });
 		const chunk_size = 1900 * 1000; // 1.9MB safely under 2MB limit
 		const index_config = JSON.stringify(this.config[entity_type].config.orama);
 		const deleted_json = JSON.stringify(index.deleted_entity);
