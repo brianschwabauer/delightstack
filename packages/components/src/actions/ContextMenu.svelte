@@ -71,6 +71,14 @@
 </script>
 
 <script lang="ts">
+	/** The menu the popover renders — retained after activeContextMenu clears so the
+	 * items don't unmount while the popover panel is still playing its close animation */
+	let renderedMenu = $state<(ContextMenuOptions & { el: HTMLElement }) | undefined>(
+		undefined,
+	);
+	$effect(() => {
+		if (activeContextMenu?.actions?.length) renderedMenu = activeContextMenu;
+	});
 </script>
 
 <svelte:window
@@ -108,9 +116,9 @@
 	radius="var(--radius-lg)"
 	x={contextMenuLocationX}
 	y={contextMenuLocationY}>
-	{#if !!activeContextMenu?.actions?.length}
+	{#if renderedMenu?.actions?.length}
 		<List>
-			{#each activeContextMenu?.actions as action}
+			{#each renderedMenu.actions as action}
 				<ListItem
 					onclick={async (event) => {
 						if (action.onclick) await action.onclick(event as PointerEvent);
@@ -121,7 +129,7 @@
 					target={action.target}
 					disabled={action.disabled}>
 					{#if action.snippet}
-						{@render action.snippet(activeContextMenu)}
+						{@render action.snippet(renderedMenu)}
 					{:else}
 						{#if action.icon}
 							<span

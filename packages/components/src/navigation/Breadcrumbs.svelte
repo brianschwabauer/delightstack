@@ -85,7 +85,7 @@
 	const CHAR_EM = 0.52; // approx width of one character
 	const LABEL_MAX_EM = 11; // cap (mirrors the label's max-width truncation)
 	const BTN_PAD_EM = 1.1; // breadcrumb button horizontal padding (0.55em per side)
-	const CUR_PAD_EM = 1; // current (last) item uses lighter padding
+	const CUR_PAD_EM = 1.1; // current (last) item matches the button padding
 	const SEP_EM = 1.4; // separator glyph + its padding
 	const HOME_EM = 1; // home icon glyph
 	const ELLIPSIS_EM = SEP_EM + 1.5; // leading sep + "…" trigger
@@ -436,6 +436,14 @@
 			font-size: var(--text-xl, 1.125rem);
 		}
 
+		/* The Button component pins its font to --control-font-1 for standalone use,
+		 * ignoring the nav's size-N font — but the current (non-button) crumb inherits
+		 * the nav font, so the two drift apart at every size but the default. Make the
+		 * crumb Buttons inherit the nav font so all crumbs match. */
+		:global(.button) {
+			font-size: inherit;
+		}
+
 		/* The Button component is generously padded for standalone use; tighten the
 		 * horizontal padding for the dense breadcrumb trail. Scoped to the nav by
 		 * Svelte; the inner :global() pierces the child Button without leaking. */
@@ -453,6 +461,9 @@
 				--bc-sep-pad: 0.0625rem;
 			}
 			.skeleton-cell {
+				padding-inline: 0.4em;
+			}
+			.label.current {
 				padding-inline: 0.4em;
 			}
 		}
@@ -492,7 +503,8 @@
 		display: inline-block;
 
 		&.current {
-			padding: 0 0.5em;
+			/* same inline padding as the sibling crumb Buttons (0.4em when dense) */
+			padding: 0 0.55em;
 		}
 	}
 
@@ -557,16 +569,17 @@
 	 * hidden; its Button's Popover is portaled, so it isn't affected by the clip. */
 
 	/* ── Skeleton ────────────────────────────────────────────────────────────
-	 * Each cell mirrors a dense Button's box exactly — same fixed control font
-	 * and the shared dense control-height formula (see Button's standalone
-	 * height rule) — so toggling skeleton ↔ loaded never shifts the row
-	 * height. The text-height pill bar is centered inside that slot. */
+	 * Each cell mirrors a dense Button's box exactly — same inherited nav font
+	 * (the crumb Buttons inherit it too, see above) and the shared dense
+	 * control-height formula (see Button's standalone height rule) — so
+	 * toggling skeleton ↔ loaded never shifts the row height. The text-height
+	 * pill bar is centered inside that slot. */
 	.skeleton-cell {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		box-sizing: border-box;
-		font-size: var(--control-font-1, 1rem);
+		font-size: inherit;
 		padding: 0 0.55em;
 		min-height: calc(1em * var(--control-height-ratio-dense, 2.5));
 		line-height: 1em;
