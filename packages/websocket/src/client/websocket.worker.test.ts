@@ -141,6 +141,35 @@ describe('WebsocketWorker', () => {
 			expect(channel().close).toHaveBeenCalled();
 		});
 
+		it('tells a tab joining an already-open connection that it is connected', async () => {
+			// A tab that attaches to a live socket sees no transition, so without an
+			// explicit announcement it never learns the status and reports itself offline
+			// forever — reloading cannot help, because the socket it joins never drops.
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS);
+			lastSocket().open();
+			expect(statusEvents()).toEqual(['connecting', 'connected']);
+
+			await worker.connect(OPTIONS); // second tab
+
+			expect(FakeWebSocket.instances).toHaveLength(1); // still one socket
+			expect(statusEvents()).toEqual(['connecting', 'connected', 'connected']);
+		});
+
+		it('announces the true status to a tab that joins mid-reconnect', async () => {
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS);
+			lastSocket().open();
+			lastSocket().onclose?.(); // drops → schedules a reconnect
+			const before = statusEvents().length;
+
+			await worker.connect(OPTIONS); // second tab joins while reconnecting
+
+			// A fresh announcement, not just the one the reconnect itself already sent.
+			expect(statusEvents()).toHaveLength(before + 1);
+			expect(statusEvents().at(-1)).toBe('reconnecting');
+		});
+
 		it('getStatus returns disconnected for unknown channels', async () => {
 			const worker = new WebsocketWorker();
 			expect(await worker.getStatus('nope')).toBe('disconnected');

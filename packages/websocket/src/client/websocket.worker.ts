@@ -55,6 +55,14 @@ export class WebsocketWorker {
 		const existing = this.#connections.get(options.channel_name);
 		if (existing) {
 			existing.tab_count++;
+			// Announce the status this connection is ALREADY in. `#setStatus` only fires on
+			// socket transitions, so a tab joining an already-open socket would otherwise
+			// never hear one: its client stays at the initial 'disconnected' and reports
+			// itself offline while events flow past it. Reloading can't fix it either — the
+			// socket it joins never drops, so there is no transition to hear. Re-announcing
+			// is safe: the client only dispatches ws:connected / ws:disconnected when the
+			// status actually changes.
+			this.#announceStatus(existing);
 			return;
 		}
 
@@ -216,8 +224,16 @@ export class WebsocketWorker {
 
 	#setStatus(conn: Connection, status: WorkerStatus): void {
 		conn.status = status;
-		// Broadcast status changes so tabs can update their reactive state
-		conn.channel.postMessage({ event: '__ws_status', status });
+		this.#announceStatus(conn);
+	}
+
+	/**
+	 * Broadcast a connection's current status to every tab on its channel, so their
+	 * reactive state can follow it. Separate from #setStatus because a tab joining an
+	 * existing connection needs to be told the status without anything having changed.
+	 */
+	#announceStatus(conn: Connection): void {
+		conn.channel.postMessage({ event: '__ws_status', status: conn.status });
 	}
 }
 
