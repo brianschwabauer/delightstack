@@ -472,10 +472,19 @@ export class DatabaseServer<
 			for (const [column, def] of Object.entries(full_definition)) {
 				if (existing_table_def[column as keyof typeof existing_table_def]) continue;
 				console.log(`Adding column ${column} to table ${table_name}`);
+				// SQLite refuses to ADD a NOT NULL column to a table with rows unless
+				// the column carries a DEFAULT. Backfill with the type's zero value —
+				// entity reads go through parse(), which applies the schema's real
+				// default anyway; this only satisfies SQLite for existing rows.
+				let alter_def = String(def);
+				if (/NOT NULL/i.test(alter_def) && !/DEFAULT/i.test(alter_def)) {
+					const zero = /INTEGER|REAL|NUMERIC/i.test(alter_def) ? '0' : "''";
+					alter_def = `${alter_def} DEFAULT ${zero}`;
+				}
 				this.ctx.storage.transactionSync(() => {
 					(this.#state.table_config as any)[table_name][column] = def;
 					this.ctx.storage.sql.exec(
-						`ALTER TABLE ${table_name} ADD COLUMN ${column} ${def};`,
+						`ALTER TABLE ${table_name} ADD COLUMN ${column} ${alter_def};`,
 					);
 					this.ctx.storage.sql.exec(
 						`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
