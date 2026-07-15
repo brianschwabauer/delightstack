@@ -72,6 +72,15 @@ export type DatabaseServerTransaction<
 			};
 	  };
 
+/** A websocket entity-change notification held back until its batch commits. */
+interface DeferredBroadcast {
+	action: 'created' | 'updated' | 'deleted';
+	entity_type: string;
+	id: string | number;
+	data?: unknown;
+	sparse?: Record<string, unknown>;
+}
+
 export type DatabaseServerTransactionResult<
 	DatabaseConfig extends Record<string, Database.Table>,
 > =
@@ -1604,35 +1613,88 @@ export class DatabaseServer<
 				}
 			}
 
-			// Save all modified indexes
-			indexes_to_save.forEach((entity_type) => this.saveIndex(entity_type));
+			// Save all modified indexes — or, inside a batch(), defer the (expensive,
+			// full-index) serialization to the batch's single outer commit.
+			if (this.#deferred_index_saves) {
+				indexes_to_save.forEach((t) => this.#deferred_index_saves!.add(t));
+			} else {
+				indexes_to_save.forEach((entity_type) => this.saveIndex(entity_type));
+			}
 		});
 
-		// Broadcast entity changes via WebSocket (fire-and-forget, after transaction commits)
+		// Broadcast entity changes via WebSocket (fire-and-forget, after the
+		// transaction commits). Inside a batch() the outer transaction can still
+		// roll back, so broadcasts are deferred until the batch commits — a
+		// broadcast for a rolled-back create would plant a doc on clients that no
+		// tombstone ever removes.
+		const broadcasts: DeferredBroadcast[] = [];
+		for (let i = 0; i < operations.length; i++) {
+			const result = results[i];
+			if (!result || !('entity' in result)) continue;
+			const op = operations[i];
+			const action = 'create' in op ? 'created' : 'update' in op ? 'updated' : 'deleted';
+			broadcasts.push({
+				action,
+				entity_type: result.entity.type,
+				id: result.entity.id,
+				data: result.entity.data,
+				sparse: result.entity.sparse,
+			});
+		}
+		if (this.#deferred_broadcasts) {
+			this.#deferred_broadcasts.push(...broadcasts);
+		} else {
+			this.#flushBroadcasts(broadcasts);
+		}
+
+		return results;
+	}
+
+	#deferred_index_saves: Set<string> | null = null;
+	#deferred_broadcasts: DeferredBroadcast[] | null = null;
+
+	#flushBroadcasts(broadcasts: DeferredBroadcast[]): void {
+		if (!broadcasts.length) return;
 		try {
 			const ws_do = this.ws();
 			if (ws_do?.entityChanged) {
-				for (let i = 0; i < operations.length; i++) {
-					const result = results[i];
-					if (!result || !('entity' in result)) continue;
-					const op = operations[i];
-					const action =
-						'create' in op ? 'created' : 'update' in op ? 'updated' : 'deleted';
-					ws_do.entityChanged(
-						action,
-						result.entity.type,
-						result.entity.id,
-						result.entity.data,
-						undefined,
-						result.entity.sparse,
-					);
+				for (const b of broadcasts) {
+					ws_do.entityChanged(b.action, b.entity_type, b.id, b.data, undefined, b.sparse);
 				}
 			}
 		} catch {
 			// WebSocket broadcast failure must never block database operations
 		}
+	}
 
-		return results;
+	/**
+	 * Run several imperative writes (create/update/delete/transaction) as ONE
+	 * durable unit: every touched entity's search index serializes once at the
+	 * end instead of once per write (index serialization is a full-index msgpack
+	 * encode — per-write saves make an N-write ingest O(N²)), and the whole
+	 * batch commits atomically (the callback runs inside an outer
+	 * `transactionSync`, so a throw rolls back SQL AND index together).
+	 * Websocket broadcasts flush only after the batch commits.
+	 *
+	 * The callback MUST be synchronous — an await inside would let other DO
+	 * events interleave into the open transaction.
+	 */
+	batch<T>(fn: () => T): T {
+		if (this.#deferred_index_saves) return fn(); // nested batch — join the outer one
+		this.#deferred_index_saves = new Set();
+		this.#deferred_broadcasts = [];
+		try {
+			const result = this.ctx.storage.transactionSync(() => {
+				const value = fn();
+				this.#deferred_index_saves!.forEach((t) => this.saveIndex(t as never));
+				return value;
+			});
+			this.#flushBroadcasts(this.#deferred_broadcasts);
+			return result;
+		} finally {
+			this.#deferred_index_saves = null;
+			this.#deferred_broadcasts = null;
+		}
 	}
 
 	/** Loads & returns the orama search instance of the given entity type */
