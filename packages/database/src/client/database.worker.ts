@@ -592,21 +592,15 @@ export class DatabaseWorker {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
 
-		// Store pre-update version for rollback
+		// Store pre-update version for rollback. getByID, NOT a `{eq}` where —
+		// Orama's {eq} operator only matches enum fields, so filtering a plain
+		// string primary key with it silently returns nothing (the optimistic
+		// update never fired).
 		let prev_doc: Record<string, unknown> | undefined;
 		if (state.orama && state.search_mode === 'client') {
-			try {
-				const result = searchOrama(state.orama, {
-					where: { [state.primary_key]: { eq: String(id) } },
-					limit: 1,
-				});
-				const hits = result instanceof Promise ? (await result).hits : result.hits;
-				if (hits[0]?.document) {
-					prev_doc = hits[0].document as Record<string, unknown>;
-				}
-			} catch {
-				// ignore
-			}
+			prev_doc = getOramaByID(state.orama, String(id)) as
+				| Record<string, unknown>
+				| undefined;
 
 			// Optimistic update
 			if (prev_doc) {
@@ -666,21 +660,12 @@ export class DatabaseWorker {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
 
-		// Store for rollback
+		// Store for rollback (getByID — see update() for why not a {eq} where)
 		let prev_doc: Record<string, unknown> | undefined;
 		if (state.orama && state.search_mode === 'client') {
-			try {
-				const result = searchOrama(state.orama, {
-					where: { [state.primary_key]: { eq: String(id) } },
-					limit: 1,
-				});
-				const hits = result instanceof Promise ? (await result).hits : result.hits;
-				if (hits[0]?.document) {
-					prev_doc = hits[0].document as Record<string, unknown>;
-				}
-			} catch {
-				// ignore
-			}
+			prev_doc = getOramaByID(state.orama, String(id)) as
+				| Record<string, unknown>
+				| undefined;
 
 			// Optimistic delete
 			try {
