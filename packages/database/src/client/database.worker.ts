@@ -9,6 +9,7 @@ import {
 	save as saveOrama,
 	load as loadOrama,
 	count as countOrama,
+	getByID as getOramaByID,
 	type AnyOrama,
 	type AnySchema,
 	type RawData,
@@ -795,6 +796,30 @@ export class DatabaseWorker {
 
 		this.#notifySubscribers([entity_type]);
 		return entity;
+	}
+
+	/**
+	 * Optimistically patch a document in the LOCAL index only — no server
+	 * write, no IDB entity-cache change. Live search subscribers re-run
+	 * immediately, so the UI reflects the change within a frame. The caller
+	 * owns making the authoritative server write through some other channel
+	 * (whose websocket echo/sync then replaces this overlay with real data).
+	 * Returns false when the entity isn't in a patchable client index.
+	 */
+	async applyLocalPatch(
+		entity_type: string,
+		id: string | number,
+		patch: Record<string, unknown>,
+	): Promise<boolean> {
+		const state = this.#entities[entity_type];
+		if (!state?.orama || state.search_mode !== 'client') return false;
+		const current = getOramaByID(state.orama, String(id)) as
+			| Record<string, unknown>
+			| undefined;
+		if (!current) return false;
+		const applied = this.#applyIndexDoc(entity_type, { ...current, ...patch });
+		this.#notifySubscribers([entity_type]);
+		return applied;
 	}
 
 	// -----------------------------------------------------------------------

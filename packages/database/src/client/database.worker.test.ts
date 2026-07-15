@@ -420,6 +420,30 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		expect(await reloaded.isSynced('item')).toBe(true);
 	});
 
+	it('applyLocalPatch overlays the index without any network', async () => {
+		const server = await createTestServer();
+		vi.setSystemTime(T0);
+		const a = server.create('item', { name: 'original name' });
+		const fetch_mock = bridgeFetchToServer(server);
+		vi.stubGlobal('fetch', fetch_mock);
+
+		const worker = await createWorker();
+		await worker.sync();
+		const fetches_after_sync = fetch_mock.mock.calls.length;
+
+		const applied = await worker.applyLocalPatch('item', a.id as string, {
+			name: 'patched locally',
+		});
+		expect(applied).toBe(true);
+		expect(fetch_mock.mock.calls.length).toBe(fetches_after_sync); // zero network
+
+		const hit = await worker.search('item', { term: 'patched', limit: 10 });
+		expect(hit.hits.some((h: any) => h.id === String(a.id))).toBe(true);
+
+		// Unknown id → false, no crash.
+		expect(await worker.applyLocalPatch('item', 'nope', { name: 'x' })).toBe(false);
+	});
+
 	it('changes that land while backfilling are picked up before reporting synced', async () => {
 		const server = await createTestServer();
 		for (let i = 0; i < 9; i++) {

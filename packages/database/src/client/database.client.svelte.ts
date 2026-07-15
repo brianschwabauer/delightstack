@@ -1381,6 +1381,30 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		return (await response.json()) as Database.Entity<T[K]>;
 	}
 
+	/**
+	 * Optimistically patch a document in the LOCAL search index only — no
+	 * server write. Live search subscriptions re-run immediately, so list UIs
+	 * reflect the change within a frame. Use when the authoritative write goes
+	 * through a custom endpoint (whose websocket echo then replaces this
+	 * overlay with the real row) — calling `update()` as well would double the
+	 * server writes and can race the endpoint's own state reads.
+	 * No-op (returns false) when the entity runs in server search mode.
+	 */
+	async applyLocalPatch<K extends keyof T & string>(
+		entity_type: K,
+		id: string | number,
+		patch: Partial<Database.Entity<T[K]>>,
+	): Promise<boolean> {
+		if (!this.#worker) return false;
+		const applied = await this.#worker.applyLocalPatch(
+			entity_type,
+			id,
+			patch as Record<string, unknown>,
+		);
+		if (applied) this.#invalidateEntity(entity_type, id);
+		return applied;
+	}
+
 	/** Update an entity. Optimistically updates local index. */
 	async update<K extends keyof T & string>(
 		entity_type: K,
