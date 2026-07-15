@@ -84,6 +84,12 @@ export type DatabaseServerTransactionResult<
 				data?: any | undefined;
 				/** The ID of the entity involved in the operation */
 				id: string | number;
+				/**
+				 * The sparse (search-index) projection that was inserted into Orama
+				 * (undefined for deletes). Broadcast to websocket clients so their
+				 * local index receives exactly what the server indexed.
+				 */
+				sparse?: Record<string, unknown>;
 			};
 	  }
 	| {
@@ -328,6 +334,7 @@ export class DatabaseServer<
 						id: string | number,
 						data?: unknown,
 						user_id?: string,
+						sparse?: unknown,
 					): void;
 			  }
 			| undefined, // lazily returns the WebSocket Durable Object that is used for broadcasting events
@@ -925,12 +932,17 @@ export class DatabaseServer<
 				(query?.entity?.[entity_type]?.start_updated_at ?? query?.start_updated_at) ===
 					undefined;
 
-			// Get the list of changes from the orama index between the from/to timestamps
-			const result = searchOrama(orama, {
-				limit,
+			// Get the list of changes from the orama index between the from/to
+			// timestamps. Fetch limit+1 (and grow if needed) so the trim below can
+			// see whether the doc at the cut boundary shares its timestamp with
+			// docs past the cut — Orama applies the limit itself, so asking for
+			// exactly `limit` would truncate an equal-timestamp run before the
+			// "never split equal timestamps" logic ever saw it.
+			const search_params = (fetch_limit: number) => ({
+				limit: fetch_limit,
 				sortBy: {
 					property: 'updated_at',
-					order: descending ? 'DESC' : 'ASC',
+					order: (descending ? 'DESC' : 'ASC') as 'DESC' | 'ASC',
 				},
 				where: {
 					// Between is inclusive on both ends, so we adjust it to be exclusive:
@@ -942,9 +954,15 @@ export class DatabaseServer<
 							? descending
 								? { gte: from }
 								: { gt: from }
-							: { between: descending ? [from, to - 1] : [from + 1, to] },
+							: {
+									between: (descending
+										? [from, to - 1]
+										: [from + 1, to]) as [number, number],
+								},
 				},
 			});
+			let fetch_limit = limit + 1;
+			let result = searchOrama(orama, search_params(fetch_limit));
 			if (result instanceof Promise) continue; // orama search should always be sync here, this is for type safety
 
 			// Deleted entries must use the same half-open window as the orama query
@@ -958,29 +976,45 @@ export class DatabaseServer<
 			// the window from deletions outside the page (or beyond a limit-truncated
 			// page) would make paging clients skip the changes in between.
 			type Change = { ts: number; deleted_id?: string; doc?: any };
-			const changes: Change[] = [];
 			const sync_primary_key = this.config[entity_type].config.primary_key || 'id';
-			for (const item of result.hits) {
-				if (!item.document || !item.id) continue;
-				// Orama (<= 3.1.18) can return ghost hits with an empty document for
-				// previously removed docs (stale entries in its internal indexes) —
-				// never ship those to clients
-				if ((item.document as any)[sync_primary_key] === undefined) continue;
-				changes.push({ ts: item.document.updated_at || 0, doc: item.document });
-			}
-			for (const [id, deleted_at] of Object.entries(index.deleted_entity)) {
-				if (!inWindow(deleted_at)) continue;
-				changes.push({ ts: deleted_at, deleted_id: id });
-			}
-			changes.sort((a, b) => (descending ? b.ts - a.ts : a.ts - b.ts));
+			let included: Change[];
+			for (;;) {
+				const changes: Change[] = [];
+				for (const item of result.hits) {
+					if (!item.document || !item.id) continue;
+					// Orama (<= 3.1.18) can return ghost hits with an empty document for
+					// previously removed docs (stale entries in its internal indexes) —
+					// never ship those to clients
+					if ((item.document as any)[sync_primary_key] === undefined) continue;
+					changes.push({ ts: item.document.updated_at || 0, doc: item.document });
+				}
+				for (const [id, deleted_at] of Object.entries(index.deleted_entity)) {
+					if (!inWindow(deleted_at)) continue;
+					changes.push({ ts: deleted_at, deleted_id: id });
+				}
+				changes.sort((a, b) => (descending ? b.ts - a.ts : a.ts - b.ts));
 
-			// Trim to the limit, but never split changes that share a timestamp —
-			// the boundary is exclusive on the next page, so splitting equal
-			// timestamps across pages would permanently skip the cut-off changes.
-			const included = changes.slice(0, limit);
-			for (let i = limit; i < changes.length; i++) {
-				if (changes[i].ts !== included[included.length - 1]?.ts) break;
-				included.push(changes[i]);
+				// Trim to the limit, but never split changes that share a timestamp —
+				// the boundary is exclusive on the next page, so splitting equal
+				// timestamps across pages would permanently skip the cut-off changes.
+				included = changes.slice(0, limit);
+				for (let i = limit; i < changes.length; i++) {
+					if (changes[i].ts !== included[included.length - 1]?.ts) break;
+					included.push(changes[i]);
+				}
+
+				// If the equal-timestamp extension consumed every fetched change AND
+				// the doc fetch was full, more docs sharing the boundary timestamp may
+				// exist beyond the fetch — grow it and re-trim (legacy data only:
+				// writes get strictly-monotonic timestamps, so this loop is normally
+				// a single pass).
+				if (included.length < changes.length || result.hits.length < fetch_limit) {
+					break;
+				}
+				fetch_limit *= 2;
+				const grown = searchOrama(orama, search_params(fetch_limit));
+				if (grown instanceof Promise) break;
+				result = grown;
 			}
 
 			const deleted = [] as (string | number)[];
@@ -1442,6 +1476,7 @@ export class DatabaseServer<
 							type: entity_type,
 							data: output_data,
 							id: output_data[primary_key] || output_data.id,
+							sparse: sparse_entity as Record<string, unknown>,
 						},
 					});
 					now.setMilliseconds(now.getMilliseconds() + 1); // Ensure unique timestamps
@@ -1526,6 +1561,7 @@ export class DatabaseServer<
 							type: entity_type,
 							data: output_data,
 							id: output_data[primary_key] || output_data.id || id,
+							sparse: sparse_entity as Record<string, unknown>,
 						},
 					});
 					now.setMilliseconds(now.getMilliseconds() + 1); // Ensure unique timestamps
@@ -1587,6 +1623,8 @@ export class DatabaseServer<
 						result.entity.type,
 						result.entity.id,
 						result.entity.data,
+						undefined,
+						result.entity.sparse,
 					);
 				}
 			}

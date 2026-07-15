@@ -73,6 +73,8 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 				entity_type: string;
 				id: string | number;
 				data?: Record<string, unknown>;
+				/** The server's sparse search-index projection (preferred for indexing) */
+				sparse?: Record<string, unknown>;
 			}) => void,
 		) => (() => void) | void;
 		/**
@@ -1253,7 +1255,13 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 				// wasteful when we already know what changed; reconnect/page
 				// refresh still triggers full sync via init().
 				this.#worker
-					.applyExternalChange(event.entity_type, event.type, event.id, event.data)
+					.applyExternalChange(
+						event.entity_type,
+						event.type,
+						event.id,
+						event.data,
+						event.sparse,
+					)
 					.then((applied) => {
 						this.#invalidateEntity(event.entity_type, event.id);
 						// `#invalidateEntity` wakes up `db.get` / `db.read`

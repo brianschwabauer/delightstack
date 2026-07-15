@@ -318,6 +318,7 @@ export class WebsocketServer<
 		id: string | number,
 		data?: unknown,
 		user_id?: string,
+		sparse?: unknown,
 	): void {
 		this.broadcast({
 			event: `entity:${action}` as EntityChangedMessage['event'],
@@ -325,6 +326,7 @@ export class WebsocketServer<
 			id,
 			data: data as Record<string, unknown> | undefined,
 			user_id,
+			sparse: sparse as Record<string, unknown> | undefined,
 		});
 	}
 

@@ -7,10 +7,18 @@ export interface EntityChangedMessage {
 	event: 'entity:created' | 'entity:updated' | 'entity:deleted';
 	entity_type: string;
 	id: string | number;
-	/** Sparse entity data for create/update; undefined for delete */
+	/** Full entity data for create/update; undefined for delete */
 	data?: Record<string, unknown>;
 	/** The user who triggered the change (if known) */
 	user_id?: string;
+	/**
+	 * The sparse (search-index) projection of the entity, exactly as the
+	 * server indexed it. Clients maintaining a local search index must insert
+	 * THIS document — inserting the full `data` into an index built for the
+	 * sparse schema fails validation (arrays/objects/nulls) and, after the
+	 * remove-before-insert, silently drops the document from the index.
+	 */
+	sparse?: Record<string, unknown>;
 }
 
 /** Broadcast when a user connects to the WebSocket */
@@ -161,4 +169,6 @@ export interface EntityChangeEvent {
 	entity_type: string;
 	id: string | number;
 	data?: Record<string, unknown>;
+	/** The server's sparse search-index projection of the entity (see EntityChangedMessage.sparse) */
+	sparse?: Record<string, unknown>;
 }

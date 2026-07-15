@@ -264,6 +264,7 @@ export class WebsocketClient<
 					entity_type: entity_msg.entity_type,
 					id: entity_msg.id,
 					data: entity_msg.data,
+					sparse: entity_msg.sparse,
 				};
 				for (const cb of this.#entity_change_listeners) {
 					try {

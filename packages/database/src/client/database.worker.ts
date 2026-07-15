@@ -8,6 +8,7 @@ import {
 	search as searchOrama,
 	save as saveOrama,
 	load as loadOrama,
+	count as countOrama,
 	type AnyOrama,
 	type AnySchema,
 	type RawData,
@@ -255,9 +256,6 @@ export class DatabaseWorker {
 		const done = new Set<string>();
 		/** Entities that are confirmed fully caught up with the server */
 		const caught_up = new Set<string>();
-		/** Track cumulative inserts per entity across all sync pages */
-		const cumulative_inserts: Record<string, number> = {};
-		for (const t of types) cumulative_inserts[t] = 0;
 
 		let num_requests = 0;
 		let pages_without_changes = 0;
@@ -338,7 +336,6 @@ export class DatabaseWorker {
 					state.config_version = entity_result.config_version;
 					state.start_updated_at = undefined;
 					state.end_updated_at = undefined;
-					cumulative_inserts[entity_type] = 0;
 					descending_request.add(entity_type);
 					await idbDeleteByPrefix(this.#db, 'entities', `${entity_type}/`);
 				}
@@ -372,31 +369,40 @@ export class DatabaseWorker {
 					}
 				}
 
-				// Apply inserts (created + updated treated the same for indexing)
+				// Apply inserts (created + updated treated the same for indexing).
+				// Fast path: batch remove + insert of the projected docs. If ANY doc
+				// fails validation, insertMultiple throws at that doc and silently
+				// drops the rest of the page — while the synced window still
+				// advances, permanently losing those documents. So on failure, fall
+				// back to per-doc application where one bad doc costs only itself.
 				const inserts = [
 					...(entity_result.created ?? []),
 					...(entity_result.updated ?? []),
-				];
+				] as Record<string, unknown>[];
 				if (inserts.length > 0) {
 					any_changes = true;
-					// Remove then re-insert to handle updates
-					const ids = inserts.map((e) =>
-						String((e as Record<string, unknown>)[state.primary_key]),
+					const projected = inserts.map((e) =>
+						this.#projectToIndex(entity_type, e),
 					);
+					const ids = projected.map((e) => String(e[state.primary_key]));
 					try {
 						removeMultiple(state.orama, ids);
+						insertMultiple(state.orama, projected);
 					} catch {
-						// Some IDs may not exist
-					}
-					try {
-						insertMultiple(state.orama, inserts as Record<string, unknown>[]);
-					} catch {
-						// Schema mismatch or corrupt data
+						// Partial batch failure — re-apply doc-by-doc (idempotent:
+						// each doc is removed then reinserted) so only genuinely
+						// corrupt docs are lost, loudly.
+						for (const doc of inserts) {
+							this.#applyIndexDoc(entity_type, doc);
+						}
 					}
 
-					// Check cumulative threshold across all pages
-					cumulative_inserts[entity_type] += inserts.length;
-					if (cumulative_inserts[entity_type] >= state.threshold) {
+					// The index only makes sense client-side up to a size; past the
+					// threshold, switch to server search. Use the ACTUAL index size —
+					// counting cumulative inserts would also count re-synced updates
+					// (a live backfill bumps the same docs over and over) and switch
+					// modes long before the index is actually big.
+					if (countOrama(state.orama) >= state.threshold) {
 						await this.#switchToServerMode(entity_type);
 						done.add(entity_type);
 						continue;
@@ -509,19 +515,10 @@ export class DatabaseWorker {
 		}
 		const server_entity = (await response.json()) as Record<string, unknown>;
 
-		// Remove then insert to handle sync race
+		// Remove then insert to handle sync race (projected: the full entity's
+		// arrays/objects/nulls fail the sparse index's schema validation)
 		if (state.orama && state.search_mode === 'client') {
-			const id = String(server_entity[state.primary_key]);
-			try {
-				removeFromOrama(state.orama, id);
-			} catch {
-				// ignore — may not exist
-			}
-			try {
-				insertIntoOrama(state.orama, server_entity);
-			} catch {
-				// ignore
-			}
+			this.#applyIndexDoc(entity_type, server_entity);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -613,16 +610,7 @@ export class DatabaseWorker {
 			// Optimistic update
 			if (prev_doc) {
 				const optimistic = { ...prev_doc, ...data, updated_at: Date.now() };
-				try {
-					removeFromOrama(state.orama, String(id));
-				} catch {
-					// ignore
-				}
-				try {
-					insertIntoOrama(state.orama, optimistic);
-				} catch {
-					// ignore
-				}
+				this.#applyIndexDoc(entity_type, optimistic);
 				this.#notifySubscribers([entity_type]);
 			}
 		}
@@ -654,18 +642,9 @@ export class DatabaseWorker {
 			throw error;
 		}
 
-		// Replace optimistic with server data
+		// Replace optimistic with server data (projected to the index schema)
 		if (state.orama && state.search_mode === 'client') {
-			try {
-				removeFromOrama(state.orama, String(id));
-			} catch {
-				// ignore
-			}
-			try {
-				insertIntoOrama(state.orama, server_entity);
-			} catch {
-				// ignore
-			}
+			this.#applyIndexDoc(entity_type, server_entity);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -754,6 +733,7 @@ export class DatabaseWorker {
 		event_type: 'create' | 'update' | 'delete',
 		id: string | number,
 		data?: Record<string, unknown>,
+		sparse?: Record<string, unknown>,
 	): Promise<Record<string, unknown> | undefined> {
 		const state = this.#entities[entity_type];
 		if (!state) return undefined;
@@ -775,14 +755,14 @@ export class DatabaseWorker {
 
 		// create / update — need the entity data
 		let entity = data;
-		if (!entity) {
+		if (!entity && !sparse) {
 			// Fall back to a single-entity fetch rather than a full-type sync
 			entity = await this.#fetchAndCache(entity_type, id);
 			// #fetchAndCache already updates Orama + IDB + notifies
 			return entity;
 		}
 
-		if (state.cache_enabled && this.#db) {
+		if (entity && state.cache_enabled && this.#db) {
 			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
 				entity_type,
 				id,
@@ -792,15 +772,24 @@ export class DatabaseWorker {
 		}
 
 		if (state.orama && state.search_mode === 'client') {
-			try {
-				removeFromOrama(state.orama, String(id));
-			} catch {
-				// ignore — may not exist
-			}
-			try {
-				insertIntoOrama(state.orama, entity);
-			} catch {
-				// ignore
+			// Index the server's sparse projection when the event carries it —
+			// that is exactly the document a sync page would deliver. The full
+			// entity is only a fallback (projected to the schema) for servers
+			// that don't send `sparse` yet.
+			const index_doc = sparse ?? entity!;
+			const applied = this.#applyIndexDoc(entity_type, index_doc);
+			if (!applied) {
+				// The old version was removed but the new one couldn't be
+				// indexed. Roll the synced window back to just before this
+				// change and resync, otherwise the document is silently gone
+				// from local search until a full rebuild.
+				const changed_at =
+					typeof index_doc.updated_at === 'number' ? index_doc.updated_at : undefined;
+				if (changed_at && state.end_updated_at && state.end_updated_at >= changed_at) {
+					state.end_updated_at = changed_at - 1;
+				}
+				state.synced = false;
+				this.sync([entity_type]).catch(() => {});
 			}
 		}
 
@@ -934,16 +923,7 @@ export class DatabaseWorker {
 	): void {
 		const state = this.#entities[entity_type];
 		if (!prev_doc || !state?.orama || state.search_mode !== 'client') return;
-		try {
-			removeFromOrama(state.orama, String(id));
-		} catch {
-			// may not exist
-		}
-		try {
-			insertIntoOrama(state.orama, prev_doc);
-		} catch {
-			// ignore
-		}
+		this.#applyIndexDoc(entity_type, prev_doc);
 		this.#notifySubscribers([entity_type]);
 	}
 
@@ -1019,18 +999,10 @@ export class DatabaseWorker {
 			} satisfies CachedEntity);
 		}
 
-		// Update Orama search index if in client search mode
+		// Update Orama search index if in client search mode (projected: full
+		// entities don't fit the sparse index schema)
 		if (state.orama && state.search_mode === 'client') {
-			try {
-				removeFromOrama(state.orama, String(id));
-			} catch {
-				/* may not exist */
-			}
-			try {
-				insertIntoOrama(state.orama, data);
-			} catch {
-				/* ignore */
-			}
+			this.#applyIndexDoc(entity_type, data);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -1050,6 +1022,105 @@ export class DatabaseWorker {
 			} catch {
 				// ignore
 			}
+		}
+	}
+
+	/**
+	 * Project a document to what the entity's Orama index can safely accept:
+	 * keep the primary key + timestamps + schema fields whose runtime type
+	 * matches the schema, drop everything else (nulls, arrays of objects, full-
+	 * entity fields the sparse schema doesn't know). Orama tolerates missing
+	 * fields but THROWS on mismatched ones — and a throw after the
+	 * remove-before-insert silently drops the document from the index, which is
+	 * how a mailbox lost ~30% of its threads during a live backfill.
+	 */
+	#projectToIndex(
+		entity_type: string,
+		doc: Record<string, unknown>,
+	): Record<string, unknown> {
+		const state = this.#entities[entity_type];
+		const schema = this.#tables[entity_type]?.orama?.schema as
+			| Record<string, unknown>
+			| undefined;
+		const projected: Record<string, unknown> = {};
+		const pk = state?.primary_key ?? 'id';
+		if (doc[pk] !== undefined) projected[pk] = String(doc[pk]);
+		for (const ts_field of ['created_at', 'updated_at']) {
+			if (typeof doc[ts_field] === 'number') projected[ts_field] = doc[ts_field];
+		}
+		if (!schema) return projected;
+
+		const matches = (type: unknown, value: unknown): boolean => {
+			if (value === null || value === undefined) return false;
+			switch (type) {
+				case 'string':
+				case 'enum':
+					return typeof value === 'string' || typeof value === 'number';
+				case 'number':
+					return typeof value === 'number' && Number.isFinite(value);
+				case 'boolean':
+					return typeof value === 'boolean';
+				case 'string[]':
+				case 'enum[]':
+					return (
+						Array.isArray(value) &&
+						value.every((v) => typeof v === 'string' || typeof v === 'number')
+					);
+				case 'number[]':
+					return Array.isArray(value) && value.every((v) => typeof v === 'number');
+				case 'boolean[]':
+					return Array.isArray(value) && value.every((v) => typeof v === 'boolean');
+				default:
+					return false;
+			}
+		};
+
+		for (const [field, type] of Object.entries(schema)) {
+			if (field === pk || field in projected) continue;
+			const value = doc[field];
+			if (typeof type === 'object' && type !== null) {
+				// Nested schema object — recurse shallowly
+				if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+					const nested: Record<string, unknown> = {};
+					for (const [nf, nt] of Object.entries(type as Record<string, unknown>)) {
+						const nv = (value as Record<string, unknown>)[nf];
+						if (matches(nt, nv)) nested[nf] = nv;
+					}
+					projected[field] = nested;
+				}
+				continue;
+			}
+			if (matches(type, value)) projected[field] = value;
+		}
+		return projected;
+	}
+
+	/**
+	 * Remove + re-insert a single document in the entity's index. Never throws;
+	 * returns false when the document could not be (re)inserted. The caller
+	 * decides whether a failure needs a window rollback (external changes) or
+	 * just a loud log (sync pages, where refetching the same corrupt doc
+	 * forever would wedge the sync).
+	 */
+	#applyIndexDoc(entity_type: string, doc: Record<string, unknown>): boolean {
+		const state = this.#entities[entity_type];
+		if (!state?.orama) return false;
+		const id = String(doc[state.primary_key] ?? '');
+		if (!id) return false;
+		try {
+			removeFromOrama(state.orama, id);
+		} catch {
+			// not in the index — expected for creates
+		}
+		try {
+			insertIntoOrama(state.orama, this.#projectToIndex(entity_type, doc));
+			return true;
+		} catch (error) {
+			console.error(
+				`[database] failed to index ${entity_type}/${id} — document dropped from local search`,
+				error,
+			);
+			return false;
 		}
 	}
 
