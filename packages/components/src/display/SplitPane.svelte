@@ -82,18 +82,24 @@
 
 	const clamped_size = $derived(Math.min(max_size, Math.max(min_size, size)));
 
+	/** The divider's fixed cross size (see .divider width/height below). The
+	 * panes' percentage bases must leave room for it — with grow/shrink locked
+	 * to 0, bases summing to a full 100% push the second pane past the
+	 * container's overflow:hidden edge and clip its content. */
+	const DIVIDER_PX = 4;
+
 	/** The flex-basis for the first pane (includes overshoot for smooth snap/rubber band) */
 	const first_basis = $derived.by(() => {
 		if (collapsed === 'first') return '0%';
-		if (collapsed === 'second') return '100%';
-		return `calc(${clamped_size}% + ${overshoot_px}px)`;
+		if (collapsed === 'second') return `calc(100% - ${DIVIDER_PX}px)`;
+		return `calc(${clamped_size}% + ${overshoot_px}px - ${DIVIDER_PX / 2}px)`;
 	});
 
 	/** The flex-basis for the second pane (includes overshoot for smooth snap/rubber band) */
 	const second_basis = $derived.by(() => {
-		if (collapsed === 'first') return '100%';
+		if (collapsed === 'first') return `calc(100% - ${DIVIDER_PX}px)`;
 		if (collapsed === 'second') return '0%';
-		return `calc(${100 - clamped_size}% - ${overshoot_px}px)`;
+		return `calc(${100 - clamped_size}% - ${overshoot_px}px - ${DIVIDER_PX / 2}px)`;
 	});
 
 	/** Convert a pointer position to a percentage of the container */
