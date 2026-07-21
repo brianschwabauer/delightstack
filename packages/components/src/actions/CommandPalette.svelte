@@ -698,6 +698,9 @@
 		flex: 1;
 		border: none;
 		outline: none;
+		/* The global *:focus-visible ring reads as a stray box inside the
+		 * already-framed palette; the input-wrapper's border is the focus cue. */
+		box-shadow: none;
 		background: transparent;
 		color: var(--color-text);
 		font-size: 1rem;
