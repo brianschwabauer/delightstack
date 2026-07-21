@@ -572,6 +572,9 @@
 		justify-content: center;
 		position: relative;
 		width: fit-content;
+		/* A squeezed flex parent must shrink the button's padding-box, never
+		   fold its label onto two lines. */
+		white-space: nowrap;
 		border-radius: var(--_radius);
 		@supports (corner-shape: squircle) {
 			corner-shape: var(--_corner-shape);
