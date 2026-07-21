@@ -286,6 +286,20 @@ html {
 	--layer-tooltip: 700;
 	--layer-max: 2147483647;
 
+	/* Press depth — total width (in px) an element gives up while :active.
+	   Large pressables (table rows, list items, options…) convert this into an
+	   x-scale factor with `1 - tan(atan2(var(--press-shrink), 100cqi))`
+	   (tan∘atan2 is how CSS divides two lengths), so a full-page row's edges
+	   pull in by the same number of pixels as a small button's instead of by a
+	   fixed percentage of its own width. 12px ≈ the edge travel of a pressed
+	   Button. */
+	--press-shrink: 20px;
+	/* Vertical press ratio for those same large pressables. Heights are
+	   similar across rows/options/headers, so a fixed ratio IS consistent
+	   vertically — and it's the vertical squash that makes a press read as a
+	   press. 0.92 matches Button's press ratio (perspective 100px, z≈-8.8). */
+	--press-scale-y: 0.85;
+
 	/* Border radius */
 	--radius-none: 0;
 	--radius-sm: 2px;

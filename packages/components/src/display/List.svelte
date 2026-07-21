@@ -195,7 +195,6 @@
 		   rounded corners only become visible with `filled` or `outline`. The
 		   item hover/active highlights stay rounded regardless. */
 		background-color: transparent;
-		perspective: 100px;
 		&.filled {
 			background-color: var(--color-bg-active);
 		}

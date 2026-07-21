@@ -403,7 +403,6 @@
 		list-style: none;
 		display: flex;
 		align-items: center;
-		perspective: 100px;
 		--_radius: calc(var(--radius-lg) * 1.5);
 		:global(> .ripple) {
 			inset: 1px var(--border-inset) 1px
@@ -695,12 +694,12 @@
 		border: none;
 		/* Establish a containing block at rest so the ::before background is
 		 * always positioned against this element. The :active press applies a
-		 * translateZ, and a transformed element becomes the containing block for
-		 * its absolutely-positioned descendants — without this, the ::before's
-		 * containing block would switch from the <li> to here only while pressed,
-		 * snapping its size on mousedown/up. Being relative up front keeps it
-		 * stable, so the press just smoothly scales the background with the
-		 * content via the list's `perspective`. */
+		 * translate + scale, and a transformed element becomes the containing
+		 * block for its absolutely-positioned descendants — without this, the
+		 * ::before's containing block would switch from the <li> to here only
+		 * while pressed, snapping its size on mousedown/up. Being relative up
+		 * front keeps it stable, so the press just smoothly scales the
+		 * background with the content. */
 		position: relative;
 		display: flex;
 		align-items: center;
@@ -722,10 +721,21 @@
 		background-color: transparent;
 		text-decoration: none;
 		box-shadow: none;
-		transition: translate 200ms ease;
+		transition:
+			translate 200ms ease,
+			scale 200ms ease;
 
 		&:active:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
-			translate: 0px 1px clamp(-10px, calc(0.2em - 12px), -2px);
+			translate: 0px 2px;
+			/* Two-axis press — x gives up --press-shrink of width regardless of
+			   how wide the row is (tan∘atan2 divides the two lengths; 100cqi is
+			   the nearest ancestor container's width, falling back to the small
+			   viewport, which only ever makes it gentler); y squashes by Button's
+			   press ratio — the vertical squash is what makes the press read as a
+			   press. Plain fallback first for engines without trig/cqi. */
+			scale: 0.98 var(--press-scale-y, 0.85);
+			scale: clamp(0.9, 1 - tan(atan2(var(--press-shrink, 20px), 100cqi)), 1)
+				var(--press-scale-y, 0.85);
 		}
 		/* Busy while the onclick promise is in flight: block pointer interaction
 		   so a re-click can't re-press (:active) — the ripple is gated by its

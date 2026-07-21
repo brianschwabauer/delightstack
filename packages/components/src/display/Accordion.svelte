@@ -22,6 +22,7 @@
 </script>
 
 <script lang="ts">
+	import { ripple } from '@delightstack/utilities';
 	import { getContext, setContext, untrack, type Snippet } from 'svelte';
 	import Expand from './Expand.svelte';
 
@@ -224,7 +225,8 @@
 			aria-controls={contentId}
 			aria-disabled={isDisabled}
 			onclick={handleToggle}
-			onkeydown={handleKeyDown}>
+			onkeydown={handleKeyDown}
+			{@attach ripple({ zIndex: 1, enabled: !isDisabled })}>
 			<svg class="chevron" width="16" height="16" viewBox="0 0 16 16" fill="none">
 				<path
 					d="M6 3L11 8L6 13"
@@ -283,6 +285,12 @@
 	/* ========== Accordion Container ========== */
 	.accordion {
 		width: 100%;
+		/* NO container-type here, even though the summary press would love an
+		   exact 100cqi: inline-size containment zeroes the accordion's intrinsic
+		   width, which collapses it inside shrink-wrapping parents (grid auto
+		   columns, fit-content wrappers — e.g. the docs variants demo). The
+		   press formula falls back to the nearest ancestor container/viewport,
+		   which only ever errs gentler. */
 		/* Flex column keeps the open-item margins additive (block-flow would
 		   collapse adjacent margins), so the separation gap animates cleanly. */
 		display: flex;
@@ -317,7 +325,6 @@
 		/* Subtle hairline separator between items (default & outline variants). */
 		border-bottom: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #374151));
-		perspective: 100px;
 		/* Open items glide apart; surfaces tint and corners round as the frame
 		   splits into pieces (separated mode). */
 		transition:
@@ -341,6 +348,11 @@
 		.summary {
 			display: flex;
 			align-items: center;
+			/* Anchor for the injected .ripple container (absolute, inset 0). Also
+			   keeps the containing block stable across the :active translate/scale
+			   press (a transformed element becomes one anyway — same reasoning as
+			   ListItem). */
+			position: relative;
 			cursor: pointer;
 			padding: 1rem 1.25rem;
 			gap: 0.75rem;
@@ -350,7 +362,8 @@
 			-webkit-tap-highlight-color: transparent;
 			transition:
 				background-color 300ms,
-				translate 200ms ease;
+				translate 200ms ease,
+				scale 200ms ease;
 
 			&:focus-visible {
 				box-shadow: inset 0 0 0 2px var(--color-accent, #1976d2);
@@ -362,10 +375,20 @@
 					rgb(from var(--color-text, #000) r g b / 0.04),
 					rgb(from var(--color-text, #fff) r g b / 0.06)
 				);
-				transition: translate 200ms ease;
+				transition:
+					translate 200ms ease,
+					scale 200ms ease;
 			}
 			&:active {
-				translate: 0px 6px clamp(-7px, calc(0.2em - 6px), -2px);
+				translate: 0px 2px;
+				/* Two-axis press: x gives up --press-shrink of width regardless
+				   of header width (tan∘atan2 divides the two lengths; 100cqi is
+				   the .accordion container); y squashes by Button's press ratio,
+				   which is what makes the press read as a press. Plain fallback
+				   first for engines without trig/cqi. */
+				scale: 0.98 var(--press-scale-y, 0.85);
+				scale: clamp(0.9, 1 - tan(atan2(var(--press-shrink, 20px), 100cqi)), 1)
+					var(--press-scale-y, 0.85);
 			}
 		}
 

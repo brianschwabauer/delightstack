@@ -497,12 +497,21 @@
 	const LIFT_IN_MS = 150; // ms to ease from the press into the lifted overlay
 	const LIFT_IN_EASE = 'cubic-bezier(0.2, 0.9, 0.25, 1)';
 	// The overlay starts its lift from the grabbed row's pressed scale (mouse) so
-	// the float grows out of the :active push instead of snapping in. This must
-	// match the `.row.clickable:active` scale.
-	const GRAB_PRESS_SCALE = 0.909;
+	// the float grows out of the :active push instead of snapping in. The pressed
+	// scale is width-dependent — `.row.clickable:active` shrinks the row by a fixed
+	// pixel amount (--press-shrink), not a fixed ratio — so it is recomputed from
+	// the scroller width at grab time. Keep these in sync with that CSS formula.
+	const PRESS_SHRINK_PX = 20; // matches --press-shrink
+	const MIN_PRESS_SCALE = 0.9; // matches the CSS clamp() floor
+	const PRESS_SCALE_Y = 0.85; // matches --press-scale-y
 
 	function clamp(n: number, min: number, max: number): number {
 		return n < min ? min : n > max ? max : n;
+	}
+
+	// Mirrors the CSS press: scale = 1 - shrink/width, floored like the clamp().
+	function pressScaleFor(width: number): number {
+		return width > 0 ? clamp(1 - PRESS_SHRINK_PX / width, MIN_PRESS_SCALE, 1) : 1;
 	}
 
 	// ---- Reduced motion ----
@@ -2338,7 +2347,12 @@
 	// with no lag because it's not in the transition list.
 	function liftInOverlay() {
 		if (!drag || !overlayEl) return;
-		const start = drag.pointer_type === 'mouse' ? GRAB_PRESS_SCALE : 1;
+		// Two-value scale mirrors the row's :active press (x fixed-pixel, y ratio);
+		// it interpolates cleanly to the single-value LIFT_SCALE.
+		const start =
+			drag.pointer_type === 'mouse'
+				? `${pressScaleFor(scrollEl?.clientWidth ?? 0)} ${PRESS_SCALE_Y}`
+				: '1';
 		positionOverlay();
 		overlayEl.style.transition = 'none';
 		overlayEl.style.scale = `${start}`;
@@ -3344,6 +3358,12 @@
 
 	/* ========== Scroll Container / Frame ========== */
 	.scroll {
+		/* Inline-size container so the row press can compute a fixed-pixel scale
+		   from 100cqi (see .row.clickable:active). Safe here: this is a block
+		   child of the 100%-width wrapper (no intrinsic sizing to lose), and the
+		   drag overlay + overlay-scrollbar tracks mount in .wrapper, outside this
+		   containment root, so the layout containment can't re-root them. */
+		container-type: inline-size;
 		overflow-x: auto;
 		border: 1px solid
 			light-dark(var(--color-border, #e5e7eb), var(--color-border, #3a3a3a));
@@ -3850,8 +3870,16 @@
 			scale 200ms ease;
 
 		&:active {
-			translate: 0 1px;
-			scale: 0.909;
+			translate: 0 2px;
+			/* Two-axis press: x gives up --press-shrink of width no matter how
+			   wide the row is (tan∘atan2 divides the two lengths; 100cqi is the
+			   .scroll container's width) so a full-page row's edges never pull in
+			   hugely; y squashes by Button's press ratio, which is what makes the
+			   press *read* as a press. Plain-number fallback first for engines
+			   without trig/cqi. Keep in sync with pressScaleFor() in the script. */
+			scale: 0.99 var(--press-scale-y, 0.85);
+			scale: clamp(0.9, 1 - tan(atan2(var(--press-shrink, 20px), 100cqi)), 1)
+				var(--press-scale-y, 0.85);
 		}
 	}
 

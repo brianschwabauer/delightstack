@@ -1128,6 +1128,10 @@
 		/* Per-level indentation step — override with --tree-indent */
 		--_indent: var(--tree-indent, 0.75rem);
 		width: 100%;
+		/* Inline-size container so the row press can compute a fixed-pixel scale
+		   from 100cqi (see .row:active). Safe: width is explicitly 100%, so the
+		   intrinsic sizing that containment disables is never used. */
+		container-type: inline-size;
 		list-style: none;
 		margin: 0;
 		padding: 0;
@@ -1154,7 +1158,6 @@
 	.node {
 		list-style: none;
 		position: relative;
-		perspective: 100px;
 	}
 
 	/* ========== Node Row ========== */
@@ -1173,23 +1176,35 @@
 		min-height: 1.75rem;
 		transition:
 			background-color 100ms ease,
-			translate 200ms ease;
+			translate 200ms ease,
+			scale 200ms ease;
 
 		&:hover {
 			background: light-dark(
 				rgb(from var(--color-text, #000) r g b / 0.06),
 				rgb(from var(--color-text, #fff) r g b / 0.08)
 			);
-			transition: translate 200ms ease;
+			transition:
+				translate 200ms ease,
+				scale 200ms ease;
 		}
 
 		&:active {
-			translate: 0px 4px clamp(-5px, calc(0.2em - 5px), -2px);
+			translate: 0px 2px;
+			/* Two-axis press: x gives up --press-shrink of width regardless of
+			   row width (tan∘atan2 divides the two lengths; 100cqi is the .tree
+			   container); y squashes by Button's press ratio, which is what makes
+			   the press read as a press. Plain fallback first for engines without
+			   trig/cqi. */
+			scale: 0.98 var(--press-scale-y, 0.85);
+			scale: clamp(0.9, 1 - tan(atan2(var(--press-shrink, 20px), 100cqi)), 1)
+				var(--press-scale-y, 0.85);
 		}
 	}
 
 	.node.disabled > .row:active {
 		translate: none;
+		scale: none;
 	}
 
 	.node.selected > .row {

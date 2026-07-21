@@ -1627,6 +1627,10 @@
 	 * inline to a per-instance anchor name.
 	 */
 	.dropdown {
+		/* Inline-size container so the option press can compute a fixed-pixel
+		   scale from 100cqi (see .option:active). Safe: width comes from
+		   anchor-size(), so no intrinsic sizing is lost to the containment. */
+		container-type: inline-size;
 		position: fixed;
 		top: anchor(bottom);
 		bottom: auto;
@@ -1729,15 +1733,13 @@
 			border-radius: calc(var(--radius-md, 8px) * var(--squircle-ratio, 2));
 		}
 		cursor: pointer;
-		/* Self-contained perspective so the pressed dip recedes toward each
-		 * option's own center, not the center of the whole list. */
-		transform-origin: center center;
 		/* Durations match ListItem: the highlight eases out over 300ms; the
 		   corner merge (below) animates over 150ms. */
 		transition:
 			background 300ms ease,
 			border-radius 150ms ease,
-			transform 200ms ease;
+			translate 200ms ease,
+			scale 200ms ease;
 		user-select: none;
 	}
 	.option:hover,
@@ -1746,7 +1748,8 @@
 		/* Snap the highlight in on hover/keyboard nav; the base rule eases it out. */
 		transition:
 			border-radius 150ms ease,
-			transform 200ms ease;
+			translate 200ms ease,
+			scale 200ms ease;
 	}
 	/* Hairline between consecutive rows, matching ListItem's separator (same
 	   6% text tint, same 1rem inset). Group labels carry their own stronger
@@ -1821,12 +1824,18 @@
 		opacity: 0.5;
 		pointer-events: none;
 	}
-	/* Pressed feedback — the same tactile dip as ListItem (perspective 100px,
-	 * depth clamped off the font size). The perspective is baked into the
-	 * transform so the recede is relative to the option itself. */
+	/* Pressed feedback — the same two-axis dip as ListItem: x gives up
+	 * --press-shrink of width regardless of option width (tan∘atan2 divides
+	 * the two lengths; 100cqi is the .dropdown container); y squashes by
+	 * Button's press ratio, which is what makes the press read as a press.
+	 * `scale` recedes toward the option's own center, which is what the old
+	 * baked-in perspective bought us. Plain fallback first for engines
+	 * without trig/cqi. */
 	.option:active:not(.disabled) {
-		transform: perspective(100px)
-			translate3d(0, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
+		translate: 0 2px;
+		scale: 0.98 var(--press-scale-y, 0.85);
+		scale: clamp(0.9, 1 - tan(atan2(var(--press-shrink, 20px), 100cqi)), 1)
+			var(--press-scale-y, 0.85);
 	}
 
 	.option-content {

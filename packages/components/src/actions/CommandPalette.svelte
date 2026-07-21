@@ -732,6 +732,10 @@
 	}
 
 	.results {
+		/* Inline-size container so the item press can compute a fixed-pixel
+		   scale from 100cqi (see .item:active). Safe: this is a block child of
+		   the fixed-width .palette panel, so no intrinsic sizing is lost. */
+		container-type: inline-size;
 		max-height: 400px;
 		overflow-y: auto;
 		overscroll-behavior: contain;
@@ -786,7 +790,9 @@
 		 * connected block — the same idea as List/ListItem. */
 		border-radius: 0;
 		overflow: hidden;
-		transition: transform 200ms ease;
+		transition:
+			translate 200ms ease,
+			scale 200ms ease;
 
 		/* Hover/selection highlight. The base overlay fades (300ms); on hover it
 		 * appears instantly and fades away on leave — matching ListItem. The
@@ -831,12 +837,17 @@
 			}
 		}
 
-		/* Per-item perspective so the press recedes toward the item's own
-		 * center rather than the list's center (container perspective would
-		 * share one vanishing point across every row). */
 		&:active:not(.disabled) {
-			transform: perspective(100px)
-				translate3d(0px, 1px, clamp(-10px, calc(0.2em - 12px), -2px));
+			translate: 0px 2px;
+			/* Two-axis press: x gives up --press-shrink of width regardless of
+			   item width (tan∘atan2 divides the two lengths; 100cqi is the
+			   .results container); y squashes by Button's press ratio, which is
+			   what makes the press read as a press. `scale` recedes toward the
+			   item's own center, which is what the old per-item perspective
+			   bought us. Plain fallback first for engines without trig/cqi. */
+			scale: 0.98 var(--press-scale-y, 0.85);
+			scale: clamp(0.9, 1 - tan(atan2(var(--press-shrink, 20px), 100cqi)), 1)
+				var(--press-scale-y, 0.85);
 		}
 
 		&.disabled {
