@@ -467,6 +467,12 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
+		// Escape must work even with zero results (e.g. a query nothing matches)
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			close();
+			return;
+		}
 		const count = visible_commands.length;
 		if (!count) return;
 
@@ -491,10 +497,6 @@
 				) {
 					executeCommand(visible_commands[selected_index]);
 				}
-				break;
-			case 'Escape':
-				e.preventDefault();
-				close();
 				break;
 		}
 	}
