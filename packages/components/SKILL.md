@@ -1,6 +1,6 @@
 ---
 name: delightstack
-description: Use DelightStack (@delightstack/components) when building UI in this project — a Svelte 5 component library with 50+ accessible, themeable components. Consult this skill when adding, styling, or wiring up any UI component, form, dialog, media viewer, or navigation element.
+description: Use DelightStack (@delightstack/components) when building UI in Svelte projects that use (or should use) delightstack — a Svelte 5 component library with 50+ accessible, themeable components. Consult this skill when adding, styling, or wiring up any UI component, form, dialog, media viewer, or navigation element in such a project. Not for non-Svelte projects.
 ---
 
 # DelightStack components
