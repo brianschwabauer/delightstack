@@ -27,6 +27,15 @@
 		/** Whether the command is disabled */
 		disabled?: boolean;
 
+		/**
+		 * Marks a command supplied by an external/async source (e.g. a server
+		 * search fed by `onquery`) that is already filtered against the query.
+		 * Dynamic commands bypass the fuzzy filter: while a query is present
+		 * they are always shown, in the order given, after the scored static
+		 * matches. Title highlighting still applies where the query matches.
+		 */
+		dynamic?: boolean;
+
 		/** Called when the command is selected */
 		onselect: () => void | Promise<void>;
 	}
@@ -162,8 +171,26 @@
 
 		const words = trimmed.split(/\s+/).filter(Boolean);
 		const results: ScoredCommand[] = [];
+		const dynamic_results: ScoredCommand[] = [];
 
 		for (const command of commands) {
+			// Dynamic commands are pre-filtered by their source; include them
+			// as-is, highlighting only confident (non-fuzzy) title matches.
+			if (command.dynamic) {
+				const title_indices = new Set<number>();
+				for (const word of words) {
+					const title_result = scoreField(word, command.title);
+					if (title_result.score >= 40) {
+						for (const idx of title_result.indices) title_indices.add(idx);
+					}
+				}
+				dynamic_results.push({
+					command,
+					score: 0,
+					title_segments: buildSegments(command.title, title_indices),
+				});
+				continue;
+			}
 			let total_score = 0;
 			let all_words_matched = true;
 			const title_indices = new Set<number>();
@@ -221,7 +248,7 @@
 		}
 
 		results.sort((a, b) => b.score - a.score);
-		return results;
+		return [...results, ...dynamic_results];
 	}
 </script>
 
@@ -236,6 +263,14 @@
 	let {
 		/** Controls visibility of the command palette */
 		open = $bindable(false) as boolean,
+
+		/**
+		 * The search query. Bindable so a parent can prefill it (e.g. from a
+		 * deep-link URL param) or mirror it elsewhere. Reset to '' when the
+		 * palette closes, not when it opens, so a prefill set alongside
+		 * `open = true` survives.
+		 */
+		query = $bindable('') as string,
 
 		/** Available commands */
 		commands = [] as CommandOption[],
@@ -258,6 +293,17 @@
 		/** Called when any command is selected */
 		onselect = undefined as ((command: CommandOption) => void) | undefined,
 
+		/**
+		 * Called whenever the search query changes (including the reset to ''
+		 * when the palette opens). Lets the parent feed `dynamic` commands from
+		 * an async source; debouncing is the parent's responsibility.
+		 */
+		onquery = undefined as ((query: string) => void) | undefined,
+
+		/** Whether an external source (see `onquery`) is still searching —
+		 *  shows "Searching…" instead of "No results found" while empty */
+		loading = false,
+
 		/** Element ID */
 		id = propId,
 
@@ -265,7 +311,6 @@
 		class: class_name = '',
 	} = $props();
 
-	let query = $state('');
 	let selected_index = $state(0);
 	// Tracks whether the highlighted row comes from keyboard navigation. When
 	// true the cursor row shows a persistent highlight; pointer movement turns
@@ -280,6 +325,10 @@
 
 	// Compute search results
 	const search_results = $derived(searchCommands(commands, query));
+
+	$effect(() => {
+		onquery?.(query);
+	});
 
 	// Compute recent commands (when query is empty)
 	const recent_commands = $derived.by(() => {
@@ -369,14 +418,18 @@
 		selected_index = 0;
 	});
 
-	// Focus input when opened
+	// Focus input when opened; reset the query when closed (close() covers the
+	// internal paths — this also catches the parent flipping `open` externally)
 	$effect(() => {
 		if (open) {
-			query = '';
 			selected_index = 0;
 			keyboard_nav = true;
 			is_executing = false;
 			tick().then(() => input_el?.focus());
+		} else {
+			// Unconditional write (no read): reading query here would make the
+			// effect re-run on every keystroke.
+			query = '';
 		}
 	});
 
@@ -555,7 +608,7 @@
 			class="results"
 			{@attach scrollbar()}>
 			{#if visible_commands.length === 0}
-				<div class="empty">No results found</div>
+				<div class="empty">{loading ? 'Searching…' : 'No results found'}</div>
 			{:else}
 				{#each grouped_commands as group}
 					{#if group.label}
