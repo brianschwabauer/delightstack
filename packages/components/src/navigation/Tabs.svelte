@@ -301,7 +301,7 @@
 					{@attach ripple({ enabled: !isDisabled, zIndex: 0 })}>
 					<span class="label">{t.label}</span>
 					{#if t.badge !== undefined}
-						<span class="badge">{t.badge}</span>
+						<span class="badge"><span class="badge-content">{t.badge}</span></span>
 					{/if}
 				</button>
 			{/each}
@@ -572,6 +572,18 @@
 		transition:
 			background-color 220ms ease,
 			color 220ms ease;
+	}
+
+	/* Optically center the count. The badge flex-centers its content's LINE box,
+	   but a digit's ink sits off-center inside a line-height:1 box (the font's
+	   ascent+descent overflow it asymmetrically), so the number reads a hair low.
+	   Trimming the inner box to the cap-height/baseline edges makes it hug the
+	   glyph, so the flex centering lands on the ink itself. Progressive
+	   enhancement — browsers without text-box keep the untrimmed rendering. */
+	.badge-content {
+		display: inline-block;
+		text-box-trim: trim-both;
+		text-box-edge: cap alphabetic;
 	}
 
 	/* Inactive tabs get a quieter, tinted badge; the active one inverts inside
