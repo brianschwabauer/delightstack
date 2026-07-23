@@ -198,11 +198,21 @@
 		}
 	});
 
-	// Set anchor-name on ref_element before DOM update so CSS anchor positioning resolves on first paint
+	// Set anchor-name on ref_element before DOM update so CSS anchor positioning
+	// resolves on first paint. Exactly one element may carry this popover's
+	// anchor name at a time: with duplicates (e.g. after re-anchoring to a new
+	// ref_element, or closing and reopening during the outro) the browser
+	// resolves the anchor to the last duplicate in DOM order — the popover
+	// visibly attaches to the wrong element. anchored_el tracks the current
+	// holder so the previous one is always released first.
+	let anchored_el: HTMLElement | null = null;
 	$effect.pre(() => {
 		if (shown && ref_element) {
-			const el = ref_element;
-			(el.style as any).anchorName = `--popover-anchor-${id}`;
+			if (anchored_el && anchored_el !== ref_element) {
+				(anchored_el.style as any).anchorName = '';
+			}
+			anchored_el = ref_element;
+			(ref_element.style as any).anchorName = `--popover-anchor-${id}`;
 		}
 	});
 
@@ -1012,7 +1022,13 @@
 			in:scale={{ start: 0.7, easing: backOut, duration: TRANSITION_IN_DURATION }}
 			out:scale={{ start: 0.7, easing: backIn, duration: TRANSITION_OUT_DURATION }}
 			onoutroend={() => {
-				if (ref_element) (ref_element.style as any).anchorName = '';
+				// The anchor must survive the outro (it still positions the leaving
+				// panel), but only release it if the popover didn't reopen meanwhile
+				// — clearing the live anchor would detach the new panel.
+				if (!shown && anchored_el) {
+					(anchored_el.style as any).anchorName = '';
+					anchored_el = null;
+				}
 			}}>
 			<div class="content" {@attach scrollbar()}>
 				{#if children}{@render children()}{/if}
