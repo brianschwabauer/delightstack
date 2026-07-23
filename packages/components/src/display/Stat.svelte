@@ -241,7 +241,7 @@
 			justify-content: center;
 			width: var(--stat-icon-size);
 			height: var(--stat-icon-size);
-			color: var(--color-action, light-dark(#3b82f6, #60a5fa));
+			color: var(--color-action-fg, var(--color-action, light-dark(#3b82f6, #60a5fa)));
 			flex-shrink: 0;
 
 			:global(svg) {

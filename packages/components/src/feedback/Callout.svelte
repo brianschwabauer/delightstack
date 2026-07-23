@@ -225,6 +225,16 @@
 	.callout {
 		--callout-color: var(--color-action);
 		--callout-bg: var(--color-action-bg);
+		/* Legible foreground for the icon, title and dismiss control — the accent
+		   color used as text/icons on the faint tinted surface. Derived from
+		   --callout-color so it tracks the variant; lifted into a readable band
+		   (like --color-action-fg) so the default/tip (action-derived) variants
+		   stay legible when the brand seed is dark. --callout-color still drives
+		   the banner background and skeleton tints. */
+		--callout-fg: light-dark(
+			oklch(from var(--callout-color) min(l, 0.5) c h),
+			oklch(from var(--callout-color) max(l, 0.65) c h)
+		);
 		--_pad-y: 1rem;
 		--_pad-x: 1.25rem;
 		--_gap: 0.75rem;
@@ -377,7 +387,7 @@
 			flex-shrink: 0;
 			width: 4px;
 			border-radius: var(--radius-full);
-			background: var(--callout-color);
+			background: var(--callout-fg);
 			margin-left: calc(var(--_gap) - var(--_pad-x));
 			margin-top: var(--_accent-bar-margin);
 			margin-bottom: var(--_accent-bar-margin);
@@ -393,7 +403,7 @@
 	 *   first line of body text. */
 	.icon {
 		flex-shrink: 0;
-		color: var(--callout-color);
+		color: var(--callout-fg);
 		display: flex;
 		align-items: center;
 		/* The icon is 20px and the body line-height ≈ 1.5em * 0.9375rem ≈ 22.5px,
@@ -414,7 +424,7 @@
 
 	.title {
 		font-weight: 600;
-		color: var(--callout-color);
+		color: var(--callout-fg);
 		margin-bottom: 0.25rem;
 		line-height: 1.4;
 	}
@@ -437,10 +447,10 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		color: var(--callout-color);
+		color: var(--callout-fg);
 	}
 	.dismiss :global(.button) {
-		--color-text: var(--callout-color);
+		--color-text: var(--callout-fg);
 	}
 
 	/* Skeleton — each bar is centered inside the line box of the text it

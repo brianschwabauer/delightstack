@@ -133,6 +133,20 @@ html {
 		oklch(from var(--color-primary) 100% min(0.03, c) h),
 		oklch(from var(--color-primary) 100% min(0.03, c) h)
 	);
+	/* Foreground variant — action used as TEXT or an ICON on a neutral surface
+	   (page/card), NOT as the paired background under --color-action-text.
+	   --color-action is a *surface* color: its lightness is clamped to a mid
+	   band (dark 0.4–0.6, light 0.3–0.5), which reads fine as a fill under light
+	   text but can fall below the 4.5:1 text-contrast floor against the page
+	   background when the brand seed is dark. This lifts lightness into a legible
+	   band — the same move the outline Button already applies to its own text —
+	   so action text/icons stay readable regardless of how dark --color-primary
+	   is. Use for text/icons; keep --color-action for backgrounds, borders, and
+	   focus rings. */
+	--color-action-fg: light-dark(
+		oklch(from var(--color-action) min(l, 0.5) c h),
+		oklch(from var(--color-action) max(l, 0.65) c h)
+	);
 
 	/* --- Accent (secondary interactive) --- */
 	--color-accent: light-dark(
@@ -158,6 +172,11 @@ html {
 	--color-accent-text-active: light-dark(
 		oklch(from var(--color-secondary) 99% min(0.03, c) h),
 		oklch(from var(--color-secondary) 99% min(0.03, c) h)
+	);
+	/* Foreground variant of accent — see --color-action-fg. */
+	--color-accent-fg: light-dark(
+		oklch(from var(--color-accent) min(l, 0.5) c h),
+		oklch(from var(--color-accent) max(l, 0.65) c h)
 	);
 
 	/* --- Feedback --- */

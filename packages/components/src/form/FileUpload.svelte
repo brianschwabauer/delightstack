@@ -716,7 +716,7 @@
 	}
 
 	.browse-link {
-		color: var(--color-action, hsl(220 70% 55%));
+		color: var(--color-action-fg, var(--color-action, hsl(220 70% 55%)));
 		text-decoration: underline;
 		font-weight: 500;
 	}

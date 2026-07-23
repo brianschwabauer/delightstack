@@ -777,10 +777,10 @@
 			color: var(--color-warning, #d97706);
 		}
 		.toast.info & {
-			color: var(--color-action, #3b82f6);
+			color: var(--color-action-fg, var(--color-action, #3b82f6));
 		}
 		.toast.loading & {
-			color: var(--color-action, #3b82f6);
+			color: var(--color-action-fg, var(--color-action, #3b82f6));
 		}
 
 		/* The success check pops in with a spring scale while its stroke draws

@@ -1495,7 +1495,7 @@
 				rgb(from var(--color-action, #3b82f6) r g b / 0.12),
 				rgb(from var(--color-action, #3b82f6) r g b / 0.2)
 			);
-			color: var(--color-action, #3b82f6);
+			color: var(--color-action-fg, var(--color-action, #3b82f6));
 		}
 	}
 

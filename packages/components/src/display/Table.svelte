@@ -3998,7 +3998,7 @@
 		height: 1.5em;
 	}
 	.cell-status.pending {
-		color: var(--color-action, #1976d2);
+		color: var(--color-action-fg, var(--color-action, #1976d2));
 	}
 	.cell-status.saved {
 		color: var(--color-success, #16a34a);

@@ -318,7 +318,7 @@
 			}
 
 			&:hover {
-				color: var(--color-action, hsl(220 70% 55%));
+				color: var(--color-action-fg, var(--color-action, hsl(220 70% 55%)));
 				/* Snap the color in on hover; the base rule eases it back out on leave. */
 				transition: none;
 			}

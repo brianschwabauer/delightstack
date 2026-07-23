@@ -413,7 +413,7 @@
 		bottom: -1px;
 		left: 0;
 		height: 2px;
-		background: var(--color-action, #1976d2);
+		background: var(--color-action-fg, var(--color-action, #1976d2));
 		border-radius: var(--radius-full, 1e5px);
 		pointer-events: none;
 		z-index: 1;
@@ -513,7 +513,7 @@
 		}
 
 		&.active {
-			color: var(--color-action, #1976d2);
+			color: var(--color-action-fg, var(--color-action, #1976d2));
 		}
 
 		&.disabled {

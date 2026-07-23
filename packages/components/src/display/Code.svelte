@@ -359,7 +359,7 @@
 		box-sizing: border-box;
 
 		&.highlighted {
-			color: var(--color-action, #3b82f6);
+			color: var(--color-action-fg, var(--color-action, #3b82f6));
 		}
 	}
 
