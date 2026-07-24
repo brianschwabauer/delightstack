@@ -1,5 +1,20 @@
 # @delightstack/auth
 
+## 1.0.1
+
+### Patch Changes
+
+- 2d631f4: Security fixes: `decodeJwt` now verifies the key id and signature **before** checking expiry, so a forged token can no longer reach the session-refresh path (which trusts the token's `jti`) by claiming to be expired. The OAuth token exchange (`POST /oauth/token`) now authenticates the client — `client_secret` is verified and the auth code / refresh token must have been issued to the requesting `client_id`. Password reset and password change now properly `await` `checkPasswordStrength`, so weak or breached passwords are rejected again instead of the check being silently detached.
+- 1faece7: Fix OAuth sign-in, which could never succeed: the callback exchanged the auth code for a token but never resolved _whose_ account it was, so `signInWithOauth` always threw `Oauth account does not have an email` (and `vendor_id` was always an empty string, which would have collided every account onto one row).
+
+  `getOauthToken()` now resolves the account on the initial code exchange — reading the OpenID Connect `id_token` the vendor returns alongside the access token (Google, Microsoft, Apple, …), and falling back to a new optional `user_info_url` on the provider config for vendors that don't issue one (e.g. GitHub). The resolver is also exported as `getOauthAccount()`. Emails the vendor explicitly marks unverified are discarded rather than trusted, and `signInWithOauth` now rejects a token with no `vendor_id` instead of storing a blank one.
+
+- Updated dependencies [4652846]
+- Updated dependencies [16f9b7f]
+- Updated dependencies [0c92f48]
+  - @delightstack/database@1.0.1
+  - @delightstack/utilities@1.0.1
+
 ## 1.0.0
 
 ### Major Changes

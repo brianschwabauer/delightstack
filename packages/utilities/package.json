@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/utilities",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"type": "module",
 	"license": "MIT",
 	"description": "Framework-agnostic TypeScript utilities for Delightstack — the DelightError error class, reactive Svelte 5 helpers, attachments, and DOM utilities.",

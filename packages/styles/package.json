@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/styles",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"type": "module",
 	"license": "MIT",
 	"description": "Delightstack global CSS — OKLCH design tokens, color scales, and base styles.",
