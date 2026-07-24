@@ -8,6 +8,7 @@ export const videoItems: GalleryItem[] = [
 		width: 640,
 		height: 360,
 		name: 'Video of dog',
+		caption: 'A jack russell inspects the lens, unimpressed',
 	},
 	{
 		id: 'video-bunny',
@@ -16,5 +17,6 @@ export const videoItems: GalleryItem[] = [
 		width: 640,
 		height: 360,
 		name: 'Big Buck Bunny',
+		caption: 'Big Buck Bunny — an adaptive HLS stream, captioned over the controls',
 	},
 ];

@@ -4,7 +4,11 @@
 </script>
 
 <div class="full-width">
-	<Gallery items={videoItems} display="grid" autoplay_video />
+	<Gallery
+		items={videoItems}
+		display="grid"
+		autoplay_video
+		meta_display_fullscreen="always" />
 </div>
 
 <style>

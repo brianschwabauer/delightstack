@@ -246,6 +246,13 @@
 			}),
 	);
 
+	/**
+	 * Video slides draw their caption inside the player chrome (see the
+	 * Carousel's `caption_display`), so the bottom-pinned overlay below sits
+	 * those out rather than covering the controls with a second scrim.
+	 */
+	const captionInPlayer = $derived(list[slide]?.type === 'video');
+
 	const sliderActive = $derived(
 		display === 'slider' || display === 'slideshow' || slide >= 0,
 	);
@@ -1036,6 +1043,9 @@
 				bind:slide
 				bind:page
 				bind:num_pages
+				caption_display={meta_display_fullscreen === 'always' && isModal
+					? 'always'
+					: 'none'}
 				animation={(display === 'slider' || display === 'slideshow') &&
 				autoplayTransitionTimer &&
 				list.length > 1
@@ -1058,7 +1068,7 @@
 					if (fullscreenActive) return closeFullscreen();
 					slide = -1;
 				}} />
-			{#if meta_display_fullscreen === 'always' && isModal && (list[slide]?.caption || list[slide]?.name)}
+			{#if meta_display_fullscreen === 'always' && isModal && !captionInPlayer && (list[slide]?.caption || list[slide]?.name)}
 				<div class="fullscreen-name" style:opacity={1 - dismissing}>
 					{list[slide]?.caption || list[slide]?.name}
 				</div>

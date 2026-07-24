@@ -105,6 +105,14 @@
 		 */
 		autoplay_video = false as boolean,
 
+		/**
+		 * Whether a video slide should show its item's caption. The caption is
+		 * handed to the player, which draws it as part of its own chrome — above
+		 * the control bar, under the same scrim, fading in and out with the
+		 * controls. Captions for other item types are the caller's business.
+		 */
+		caption_display = 'none' as 'none' | 'always',
+
 		/** The css style string added to the component from the parent */
 		style = '',
 
@@ -2177,6 +2185,9 @@
 											(item.thumbhash ? decodeThumbHash(item.thumbhash) : undefined)}
 										autoplay={i === index && !!item.shouldPlay}
 										bind:player={item._player}
+										title={caption_display === 'always'
+											? item.caption || item.name
+											: undefined}
 										onready={() => item.loaded || (list[i].loaded = true)} />
 								{:else}
 									<div class="rich-loading" aria-label="Loading video">

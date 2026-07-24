@@ -143,6 +143,14 @@
 		/** Bindable reference to the video element */
 		player = $bindable(undefined as HTMLVideoElement | undefined),
 
+		/**
+		 * A short title/caption for the clip, shown as part of the player chrome
+		 * — directly above the control bar, under the same scrim, appearing and
+		 * fading with the controls. Distinct from `captions`, which are the
+		 * WebVTT subtitle tracks burned over the picture.
+		 */
+		title = undefined as string | undefined,
+
 		/** Playback started */
 		onplay = undefined as (() => void) | undefined,
 
@@ -190,6 +198,7 @@
 		class?: string;
 		element?: HTMLElement | undefined;
 		player?: HTMLVideoElement | undefined;
+		title?: string;
 		onplay?: () => void;
 		onpause?: () => void;
 		onended?: () => void;
@@ -203,7 +212,6 @@
 	} = $props();
 
 	// --- State ---
-	let playing = $state(false);
 	let current_time = $state(0);
 	let duration = $state(0);
 	let buffered_end = $state(0);
@@ -213,6 +221,7 @@
 	let is_pip = $state(false);
 	let captions_active = $state(false);
 	let show_controls = $state(true);
+	let playing = $state(false);
 	let has_started = $state(false);
 	let has_error = $state(false);
 	let is_ready = $state(false);
@@ -1191,6 +1200,12 @@
 			class="controls"
 			class:visible={show_controls || !playing}
 			class:hidden={!show_controls && playing}>
+			{#if title}
+				<!-- Part of the chrome, not an overlay on top of it: the scrim
+				     below runs behind the title and the bar as one ramp, so there's
+				     no seam where two gradients meet. -->
+				<div class="title">{title}</div>
+			{/if}
 			<div class="control-bar">
 				<!-- Play / pause (always visible) -->
 				<button
@@ -1916,6 +1931,34 @@
 	.controls.hidden {
 		opacity: 0;
 		pointer-events: none;
+	}
+
+	/* ---------- Title / caption ---------- */
+	.title {
+		padding: 0 12px 4px;
+		text-align: center;
+		color: rgba(255, 255, 255, 0.92);
+		font-size: var(--text-md, 1rem);
+		line-height: 1.4;
+		text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		/* Text only — never intercept a click meant for the picture. */
+		pointer-events: none;
+	}
+
+	/* Give the scrim a longer runway when it also has to carry the title, and
+	   bring the mid-stop up so the text lands on a dark enough band to read
+	   over a bright frame — while the top edge still starts fully transparent,
+	   so there's no visible band across the picture. */
+	.controls:has(.title) {
+		padding-top: 72px;
+		background: linear-gradient(
+			transparent,
+			rgba(0, 0, 0, 0.45) 55%,
+			rgba(0, 0, 0, 0.78)
+		);
 	}
 
 	/* ---------- Single-row control bar ---------- */
