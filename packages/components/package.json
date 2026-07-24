@@ -119,7 +119,7 @@
 		"thumbhash": "^0.1.1"
 	},
 	"peerDependencies": {
-		"@delightstack/styles": "workspace:*",
+		"@delightstack/styles": "workspace:^",
 		"svelte": "^5.36.0",
 		"hls.js": ">=1.4.0",
 		"pdfjs-dist": ">=4.0.0",

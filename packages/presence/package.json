@@ -90,8 +90,8 @@
 		"test": "vitest"
 	},
 	"peerDependencies": {
-		"@delightstack/auth": "workspace:*",
-		"@delightstack/websocket": "workspace:*",
+		"@delightstack/auth": "workspace:^",
+		"@delightstack/websocket": "workspace:^",
 		"svelte": "^5.36.0"
 	},
 	"peerDependenciesMeta": {
@@ -110,8 +110,8 @@
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251120.0",
-		"@delightstack/auth": "workspace:*",
-		"@delightstack/websocket": "workspace:*",
+		"@delightstack/auth": "workspace:^",
+		"@delightstack/websocket": "workspace:^",
 		"@sveltejs/kit": "^2.26.0",
 		"@sveltejs/package": "^2.4.0",
 		"happy-dom": "^20.10.4",
