@@ -101,6 +101,14 @@ export const getOauthToken = async (
 		? refreshExpiresIn + Date.now()
 		: refreshExpiresAt;
 
+	// Resolve who the token belongs to. The vendor only tells us this on the initial
+	// exchange (or via the user info endpoint), so fall back to whatever the caller
+	// already knew about the account.
+	const account = await getOauthAccount(config, {
+		access_token: String(body.access_token || ''),
+		payload: body,
+	});
+
 	return {
 		access_token: String(body.access_token || ''),
 		refresh_token: body.refresh_token as string | undefined,
@@ -108,10 +116,98 @@ export const getOauthToken = async (
 		refresh_token_expires_at: refreshExpires,
 		capabilities: 'capabilities' in token ? token.capabilities : [],
 		vendor: token.vendor,
-		vendor_id: 'vendor_id' in token ? token.vendor_id : '',
+		vendor_id: account.vendor_id || ('vendor_id' in token ? token.vendor_id : ''),
 		payload: body,
-		account_email: 'account_email' in token ? token.account_email : undefined,
-		account_image: 'account_image' in token ? token.account_image : undefined,
-		account_name: 'account_name' in token ? token.account_name : undefined,
+		account_email:
+			account.account_email ??
+			('account_email' in token ? token.account_email : undefined),
+		account_image:
+			account.account_image ??
+			('account_image' in token ? token.account_image : undefined),
+		account_name:
+			account.account_name ?? ('account_name' in token ? token.account_name : undefined),
 	};
 };
+
+/** The identity of the vendor account an oauth token was issued for */
+export interface OauthAccountIdentity {
+	/** The vendor's ID for the account (the OpenID `sub` claim, or the user info `id`) */
+	vendor_id: string;
+	/** The email address on the account. Only set when the vendor says it's verified */
+	account_email?: string;
+	/** The display name on the account */
+	account_name?: string;
+	/** The url of the account's profile image */
+	account_image?: string;
+}
+
+/**
+ * Resolves the vendor account an access token was issued for.
+ *
+ * Prefers the OpenID Connect `id_token` returned alongside the access token (Google,
+ * Microsoft, Apple, …) and falls back to the vendor's `user_info_url` when configured.
+ * Returns empty values when the vendor provides neither — callers decide whether an
+ * unidentified account is an error (signing in) or fine (connecting an API-only token).
+ */
+export const getOauthAccount = async (
+	config: Pick<OauthConfig, 'user_info_url'>,
+	token: { access_token: string; payload?: Record<string, unknown> },
+): Promise<OauthAccountIdentity> => {
+	// The id_token comes straight from the vendor's token endpoint over TLS, so its
+	// claims are trustworthy without re-verifying the signature
+	const id_token = token.payload?.id_token;
+	const claims = typeof id_token === 'string' ? decodeJwtClaims(id_token) : undefined;
+	if (claims?.sub) return accountFromClaims(claims);
+
+	if (!config.user_info_url || !token.access_token) return { vendor_id: '' };
+
+	const response = await fetch(config.user_info_url, {
+		headers: {
+			Authorization: `Bearer ${token.access_token}`,
+			Accept: 'application/json',
+		},
+	});
+	if (!response.ok) {
+		const body = await response.text();
+		console.error(`Error fetching oauth user info: ${response.status}`, body);
+		throw new DelightError({
+			message: `Couldn't fetch the account information from the vendor`,
+			status: response.status || 500,
+			code: 'oauth/user_info_failed',
+		});
+	}
+	const info = (await response.json()) as Record<string, unknown>;
+	return accountFromClaims(info);
+};
+
+/** Maps OpenID Connect style claims (from an id_token or a user info endpoint) to an account */
+function accountFromClaims(claims: Record<string, unknown>): OauthAccountIdentity {
+	const email = typeof claims.email === 'string' ? claims.email : undefined;
+	// Vendors send `email_verified` as a boolean or as the string 'true'. Only an
+	// explicit "not verified" is disqualifying — plenty of vendors omit the claim
+	const verified = claims.email_verified ?? claims.verified_email;
+	const email_verified = `${verified ?? true}` !== 'false';
+	const id = claims.sub ?? claims.id;
+	const image = claims.picture ?? claims.avatar_url ?? claims.image;
+	return {
+		vendor_id: id === undefined || id === null ? '' : String(id),
+		account_email: email_verified ? email : undefined,
+		account_name: typeof claims.name === 'string' ? claims.name : undefined,
+		account_image: typeof image === 'string' ? image : undefined,
+	};
+}
+
+/** Decodes the claims of a JWT without verifying its signature */
+function decodeJwtClaims(jwt: string): Record<string, unknown> | undefined {
+	const payload = jwt.split('.')[1];
+	if (!payload) return undefined;
+	try {
+		const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+		// The claims are utf-8 — atob gives latin1, so re-decode names with accents
+		const bytes = Uint8Array.from(json, (char) => char.charCodeAt(0));
+		return JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+	} catch (error) {
+		console.error('Failed to decode the oauth id_token', error);
+		return undefined;
+	}
+}

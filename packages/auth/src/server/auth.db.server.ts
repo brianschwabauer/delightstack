@@ -901,8 +901,16 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const email = oauth_token.account_email?.trim()?.toLowerCase();
 		if (!email) {
 			throw new DelightError({
-				message: `Oauth account does not have an email`,
+				message: `Oauth account does not have a verified email`,
 				status: 400,
+				code: 'oauth/no_account_email',
+			});
+		}
+		if (!oauth_token.vendor_id) {
+			throw new DelightError({
+				message: `Oauth account does not have a vendor id`,
+				status: 400,
+				code: 'oauth/no_vendor_id',
 			});
 		}
 		let type: AuthOperationResult['type'] | undefined;

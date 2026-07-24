@@ -475,6 +475,7 @@ const signInOauthCallback: AuthRouteHandler = (ctx) =>
 				client_secret: oauth_config.client_secret,
 				access_token_url: oauth_config.access_token_url,
 				authorization_url: oauth_config.authorization_url,
+				user_info_url: oauth_config.user_info_url,
 				environment: 'production',
 			},
 			{
@@ -1332,6 +1333,7 @@ const oauthConnectCallback: AuthRouteHandler = (ctx) =>
 				client_secret: oauth_config.client_secret,
 				access_token_url: oauth_config.access_token_url,
 				authorization_url: oauth_config.authorization_url,
+				user_info_url: oauth_config.user_info_url,
 				environment: 'production',
 			},
 			{

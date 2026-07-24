@@ -55,6 +55,12 @@ export const OauthConfig = z
 		webhook_secret: z.string().optional(),
 		/** The base url (without '/' at the end) of the vendor's api */
 		api_url: z.string().optional(),
+		/**
+		 * The URL of the vendor's OpenID/user info endpoint. Called with the access token
+		 * to resolve the account's id, email, name & image. Only needed for vendors that
+		 * don't return an OpenID Connect `id_token` from the access token endpoint.
+		 */
+		user_info_url: z.string().optional(),
 	})
 	.catchall(z.string().optional());
 

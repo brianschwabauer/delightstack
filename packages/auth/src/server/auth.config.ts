@@ -97,6 +97,13 @@ export interface AuthConfig<
 			authorization_url: string;
 			access_token_url: string;
 			scopes?: string[];
+			/**
+			 * The vendor's user info endpoint, used to resolve the account's id, email,
+			 * name & image. Only needed for vendors that don't return an OpenID Connect
+			 * `id_token` alongside the access token.
+			 * @example user_info_url: 'https://api.github.com/user'
+			 */
+			user_info_url?: string;
 		};
 	};
 
