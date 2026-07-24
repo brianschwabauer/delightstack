@@ -615,3 +615,85 @@ describe('matchRoute', () => {
 		});
 	});
 });
+
+describe('GET /signin/:vendor/callback', () => {
+	/** Builds an unsigned JWT with the given claims (only the payload segment is ever read) */
+	function makeIdToken(claims: Record<string, unknown>) {
+		const encode = (value: unknown) =>
+			btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
+				.replace(/\+/g, '-')
+				.replace(/\//g, '_')
+				.replace(/=+$/, '');
+		return `${encode({ alg: 'RS256' })}.${encode(claims)}.signature`;
+	}
+
+	async function callCallback() {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				Response.json({
+					access_token: 'access',
+					expires_in: 3600,
+					id_token: makeIdToken({
+						sub: '1234567890',
+						email: 'brian@example.com',
+						email_verified: true,
+						name: 'Brian',
+					}),
+				}),
+			),
+		);
+
+		const match = matchRoute('GET', '/signin/google/callback')!;
+		const applySession = vi.fn(async () => {});
+		const signInWithOauth = vi.fn(async () => ({
+			type: 'signin',
+			jwt: 'session.jwt.value',
+			decoded_jwt: { uid: 'user_1' },
+			user_id: 'user_1',
+		}));
+		const ctx = {
+			event: {
+				url: new URL('https://app.example.com/api/auth/signin/google/callback?code=abc'),
+				params: { vendor: 'google' },
+				request: { json: async () => ({}) },
+			},
+			config: {
+				base_path: '/api/auth',
+				secret: 'x'.repeat(64),
+				oauth: {
+					google: {
+						client_id: 'id',
+						client_secret: 'secret',
+						authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth',
+						access_token_url: 'https://oauth2.googleapis.com/token',
+					},
+				},
+			},
+			auth: { signInWithOauth },
+			locals: { session: null, user: null },
+			meta: {},
+			applySession,
+		} as unknown as RouteCtx;
+
+		const response = await match.handler(ctx);
+		vi.unstubAllGlobals();
+		return { response, applySession, signInWithOauth };
+	}
+
+	it('signs in with the account resolved from the id_token', async () => {
+		const { signInWithOauth } = await callCallback();
+		expect(signInWithOauth).toHaveBeenCalledOnce();
+		const [token] = signInWithOauth.mock.calls[0] as unknown as [Record<string, unknown>];
+		expect(token.vendor_id).toBe('1234567890');
+		expect(token.account_email).toBe('brian@example.com');
+	});
+
+	it('starts the session before redirecting', async () => {
+		const { response, applySession } = await callCallback();
+		expect(response.status).toBe(302);
+		expect(response.headers.get('Location')).toBe('/');
+		// Without this the browser lands back on the app with no session cookie
+		expect(applySession).toHaveBeenCalledWith('session.jwt.value', { uid: 'user_1' });
+	});
+});

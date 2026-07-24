@@ -385,12 +385,40 @@ export function createAuthHandle<Config extends AuthConfig>(
 				// Merge route params into event.params
 				Object.assign(event.params, match.params);
 
+				/**
+				 * Starts the session a route just created: sets the session cookie and restores
+				 * the user's saved preferences. Routes that redirect (the OAuth callback) call
+				 * this themselves, since there's no JSON body for the check below to read.
+				 */
+				const applySession = async (
+					session_jwt: string,
+					decoded_jwt?: { uid?: string },
+				) => {
+					setSessionCookie(event.cookies, config, session_jwt);
+
+					// Restore preferences from DB on sign-in (DB wins on conflict for cross-device sync)
+					if (!decoded_jwt?.uid) return;
+					try {
+						const db_prefs = (await getAuth().getUserPreferences(
+							decoded_jwt.uid,
+						)) as Record<string, unknown>;
+						if (Object.keys(db_prefs).length > 0) {
+							preferences = { ...preferences, ...db_prefs };
+							preferences_dirty = true;
+							// preferences_persist stays false — no need to write back what we just read
+						}
+					} catch {
+						/* ignore DB errors */
+					}
+				};
+
 				const response = await match.handler({
 					event,
 					config,
 					auth: getAuth(),
 					locals,
 					meta,
+					applySession,
 				});
 
 				// After route: update session cookie from response JWT
@@ -403,24 +431,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 						const cloned = response.clone();
 						const data = (await cloned.json()) as Record<string, unknown>;
 						if (data.jwt && typeof data.jwt === 'string') {
-							setSessionCookie(event.cookies, config, data.jwt);
-
-							// Restore preferences from DB on sign-in (DB wins on conflict for cross-device sync)
-							const decoded = data.decoded_jwt as { uid?: string } | undefined;
-							if (decoded?.uid) {
-								try {
-									const db_prefs = (await getAuth().getUserPreferences(
-										decoded.uid,
-									)) as Record<string, unknown>;
-									if (Object.keys(db_prefs).length > 0) {
-										preferences = { ...preferences, ...db_prefs };
-										preferences_dirty = true;
-										// preferences_persist stays false — no need to write back what we just read
-									}
-								} catch {
-									/* ignore DB errors */
-								}
-							}
+							await applySession(data.jwt, data.decoded_jwt as { uid?: string });
 						}
 					} catch {
 						// ignore parse errors

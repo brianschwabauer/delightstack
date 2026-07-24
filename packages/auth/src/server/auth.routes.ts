@@ -74,6 +74,12 @@ interface AuthRouteContext {
 	auth: AuthServer;
 	locals: AuthLocals;
 	meta: UserSessionMeta;
+	/**
+	 * Starts a session the route just created — sets the session cookie and restores the
+	 * user's saved preferences. Routes that return JSON don't need this (the handler reads
+	 * the `jwt` off the response body); routes that redirect must call it themselves.
+	 */
+	applySession: (jwt: string, decoded_jwt?: { uid?: string }) => Promise<void>;
 }
 
 type AuthRouteHandler = (ctx: AuthRouteContext) => Promise<Response>;
@@ -521,6 +527,10 @@ const signInOauthCallback: AuthRouteHandler = (ctx) =>
 				meta: ctx.meta,
 			});
 		}
+
+		// This route redirects rather than returning the JWT as JSON, so it has to start
+		// the session itself — otherwise the browser lands back on the app signed out
+		if (result.jwt) await ctx.applySession(result.jwt, result.decoded_jwt);
 
 		return redirect(state.redirect || '/');
 	});
