@@ -118,6 +118,17 @@ function noContent(): Response {
 	return new Response(null, { status: 204 });
 }
 
+/**
+ * Narrows a caller-supplied `?redirect=` to a same-site path. Anything that could send
+ * the browser to another origin after signing in — an absolute URL, a protocol-relative
+ * `//host`, or a backslash the browser normalizes into one — falls back to '/'.
+ */
+export function safeRedirect(path: string | null | undefined): string {
+	if (!path || !path.startsWith('/')) return '/';
+	if (path.startsWith('//') || path.startsWith('/\\')) return '/';
+	return path;
+}
+
 function redirect(url: string): Response {
 	return new Response(null, {
 		status: 302,
@@ -336,7 +347,7 @@ const signInEmailVerify: AuthRouteHandler = (ctx) =>
 			});
 		}
 
-		const redirect_to = ctx.event.url.searchParams.get('redirect') || '/';
+		const redirect_to = safeRedirect(ctx.event.url.searchParams.get('redirect'));
 		// The handler will set the cookie from the result
 		return json({
 			jwt: result.jwt,
@@ -409,7 +420,7 @@ const signInOauth: AuthRouteHandler = (ctx) =>
 				status: 400,
 			});
 
-		const redirect_to = ctx.event.url.searchParams.get('redirect') || '/';
+		const redirect_to = safeRedirect(ctx.event.url.searchParams.get('redirect'));
 		const invitation_id = ctx.event.url.searchParams.get('invitation_id') || undefined;
 		const signup_name = ctx.event.url.searchParams.get('name') || undefined;
 		const signup_org_name = ctx.event.url.searchParams.get('org_name') || undefined;
@@ -532,7 +543,7 @@ const signInOauthCallback: AuthRouteHandler = (ctx) =>
 		// the session itself — otherwise the browser lands back on the app signed out
 		if (result.jwt) await ctx.applySession(result.jwt, result.decoded_jwt);
 
-		return redirect(state.redirect || '/');
+		return redirect(safeRedirect(state.redirect));
 	});
 
 /**
@@ -872,7 +883,7 @@ const emailVerifyConfirm: AuthRouteHandler = (ctx) =>
 			});
 		}
 
-		const redirect_to = ctx.event.url.searchParams.get('redirect') || '/';
+		const redirect_to = safeRedirect(ctx.event.url.searchParams.get('redirect'));
 		return json({
 			jwt: result.jwt,
 			decoded_jwt: result.decoded_jwt,
@@ -1279,7 +1290,7 @@ const oauthConnect: AuthRouteHandler = (ctx) =>
 				status: 400,
 			});
 
-		const redirect_to = ctx.event.url.searchParams.get('redirect') || '/';
+		const redirect_to = safeRedirect(ctx.event.url.searchParams.get('redirect'));
 		const capabilities = ctx.event.url.searchParams.get('capabilities')?.split(',') || [];
 
 		const state = await signOauthState(
@@ -1358,7 +1369,7 @@ const oauthConnectCallback: AuthRouteHandler = (ctx) =>
 			ctx.locals.session!.uid,
 		);
 
-		return redirect(state.redirect || '/');
+		return redirect(safeRedirect(state.redirect));
 	});
 
 const oauthListAccounts: AuthRouteHandler = (ctx) =>

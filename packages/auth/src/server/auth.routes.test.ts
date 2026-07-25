@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { matchRoute } from './auth.routes';
+import { matchRoute, safeRedirect } from './auth.routes';
 
 type RouteCtx = Parameters<NonNullable<ReturnType<typeof matchRoute>>['handler']>[0];
 
@@ -613,6 +613,29 @@ describe('matchRoute', () => {
 			expect(result).not.toBeNull();
 			expect(result!.params.vendor).toBeUndefined();
 		});
+	});
+});
+
+describe('safeRedirect', () => {
+	it('keeps same-site paths', () => {
+		expect(safeRedirect('/dashboard')).toBe('/dashboard');
+		expect(safeRedirect('/dashboard/people?tab=1#top')).toBe(
+			'/dashboard/people?tab=1#top',
+		);
+	});
+
+	it('rejects anything that could leave the site', () => {
+		// A protocol-relative URL is the classic post-signin open redirect
+		expect(safeRedirect('//evil.example.com')).toBe('/');
+		expect(safeRedirect('/\\evil.example.com')).toBe('/');
+		expect(safeRedirect('https://evil.example.com')).toBe('/');
+		expect(safeRedirect('javascript:alert(1)')).toBe('/');
+	});
+
+	it('falls back to the root for empty values', () => {
+		expect(safeRedirect(null)).toBe('/');
+		expect(safeRedirect(undefined)).toBe('/');
+		expect(safeRedirect('')).toBe('/');
 	});
 });
 
