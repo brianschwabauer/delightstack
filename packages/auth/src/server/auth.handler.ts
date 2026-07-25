@@ -14,8 +14,10 @@ import {
 	serializeDeleteSessionCookie,
 	getPreferencesCookie,
 	setPreferencesCookie,
+	serializePreferencesCookie,
 	getOrgStateCookie,
 	setOrgStateCookie,
+	serializeOrgStateCookie,
 	deleteOrgStateCookie,
 } from '../sveltekit/cookies';
 import { defineAuthConfig } from './auth.config';
@@ -448,6 +450,10 @@ export function createAuthHandle<Config extends AuthConfig>(
 					if (session) {
 						for (const oid of Object.keys(session.org || {})) {
 							deleteOrgStateCookie(event.cookies, config, oid);
+							response.headers.append(
+								'Set-Cookie',
+								await serializeOrgStateCookie(config, config.secret, oid, {}),
+							);
 						}
 					}
 					// Preferences cookie is intentionally kept — it persists across signouts
@@ -458,9 +464,17 @@ export function createAuthHandle<Config extends AuthConfig>(
 					org_state_dirty = false;
 				}
 
-				// Flush dirty cookies before returning auth route response
+				// Flush dirty cookies before returning auth route response.
+				// SvelteKit only adds event.cookies to responses that go through
+				// resolve(), and auth routes return their own Response — so every
+				// cookie written here also needs its Set-Cookie header appended by
+				// hand, or the write is silently lost.
 				if (preferences_dirty) {
 					await setPreferencesCookie(event.cookies, config, config.secret, preferences);
+					response.headers.append(
+						'Set-Cookie',
+						await serializePreferencesCookie(config, config.secret, preferences),
+					);
 					preferences_dirty = false;
 				}
 				if (preferences_persist && session) {
@@ -479,11 +493,12 @@ export function createAuthHandle<Config extends AuthConfig>(
 						org_id,
 						org_state,
 					);
+					response.headers.append(
+						'Set-Cookie',
+						await serializeOrgStateCookie(config, config.secret, org_id, org_state),
+					);
 				}
 
-				// SvelteKit only adds event.cookies to responses that go through resolve().
-				// Since we return our own Response for auth routes, we must add the
-				// session cookie header manually.
 				const final_jwt = getSessionCookie(event.cookies, config);
 				if (final_jwt) {
 					response.headers.append(

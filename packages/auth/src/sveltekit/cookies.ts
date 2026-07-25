@@ -44,8 +44,22 @@ function sessionCookieOptions(config: ResolvedAuthConfig) {
  * cookie pipeline which only adds cookies to responses that go through resolve()).
  */
 export function serializeSessionCookie(config: ResolvedAuthConfig, jwt: string): string {
+	return serializeCookie(config, config.cookies.session_name, jwt);
+}
+
+/** Serializes a Set-Cookie header that deletes the session cookie. */
+export function serializeDeleteSessionCookie(config: ResolvedAuthConfig): string {
+	return serializeDeleteCookie(config, config.cookies.session_name);
+}
+
+/** Serializes a Set-Cookie header for one of the auth cookies, using the configured options */
+function serializeCookie(
+	config: ResolvedAuthConfig,
+	name: string,
+	value: string,
+): string {
 	const opts = sessionCookieOptions(config);
-	const parts = [`${config.cookies.session_name}=${encodeURIComponent(jwt)}`];
+	const parts = [`${name}=${encodeURIComponent(value)}`];
 	if (opts.path) parts.push(`Path=${opts.path}`);
 	if (opts.httpOnly) parts.push('HttpOnly');
 	if (opts.secure) parts.push('Secure');
@@ -56,9 +70,36 @@ export function serializeSessionCookie(config: ResolvedAuthConfig, jwt: string):
 	return parts.join('; ');
 }
 
-/** Serializes a Set-Cookie header that deletes the session cookie. */
-export function serializeDeleteSessionCookie(config: ResolvedAuthConfig): string {
-	return `${config.cookies.session_name}=; Path=${config.cookies.path}; Max-Age=0`;
+/** Serializes a Set-Cookie header that deletes the named cookie */
+function serializeDeleteCookie(config: ResolvedAuthConfig, name: string): string {
+	return `${name}=; Path=${config.cookies.path}; Max-Age=0`;
+}
+
+/**
+ * Serializes a Set-Cookie header for the signed preferences cookie (deleting it when
+ * there's nothing left to store). Same reason as `serializeSessionCookie`: auth routes
+ * return their own Response, which never passes through SvelteKit's cookie pipeline.
+ */
+export async function serializePreferencesCookie(
+	config: ResolvedAuthConfig,
+	secret: string,
+	data: Record<string, unknown>,
+): Promise<string> {
+	const name = config.cookies.preferences_name;
+	if (Object.keys(data).length === 0) return serializeDeleteCookie(config, name);
+	return serializeCookie(config, name, await signState(data, secret));
+}
+
+/** Serializes a Set-Cookie header for an org's signed state cookie */
+export async function serializeOrgStateCookie(
+	config: ResolvedAuthConfig,
+	secret: string,
+	org_id: string,
+	data: Record<string, unknown>,
+): Promise<string> {
+	const name = orgStateCookieName(config, org_id);
+	if (Object.keys(data).length === 0) return serializeDeleteCookie(config, name);
+	return serializeCookie(config, name, await signState(data, secret));
 }
 
 // ── Signed state cookie primitives (JWT format) ──────────────

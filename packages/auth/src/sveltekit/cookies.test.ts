@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { signState, verifyState } from './cookies';
+import {
+	signState,
+	verifyState,
+	serializeSessionCookie,
+	serializeDeleteSessionCookie,
+	serializePreferencesCookie,
+	serializeOrgStateCookie,
+} from './cookies';
 
 // A valid hex-encoded HMAC-SHA256 secret (64 hex chars = 32 bytes)
 const SECRET = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
@@ -169,5 +176,54 @@ describe('signState / verifyState (JWT format)', () => {
 		const signed = await signState(data, SECRET);
 		const result = await verifyState(signed, SECRET);
 		expect(result).toEqual(data);
+	});
+});
+
+describe('serializing cookies for hand-built responses', () => {
+	/** Mirrors the resolved config shape the serializers read */
+	const CONFIG = {
+		cookies: {
+			session_name: 'app-session',
+			preferences_name: 'app-pref',
+			org_state_prefix: 'app-org-',
+			path: '/',
+			http_only: true,
+			secure: true,
+			same_site: 'lax',
+		},
+	} as unknown as Parameters<typeof serializeSessionCookie>[0];
+
+	it('serializes the session cookie with the configured options', () => {
+		const header = serializeSessionCookie(CONFIG, 'jwt.value.here');
+		expect(header).toBe('app-session=jwt.value.here; Path=/; HttpOnly; Secure; SameSite=Lax');
+	});
+
+	it('serializes the preferences cookie so auth routes can persist it', async () => {
+		// Auth routes return their own Response, which skips SvelteKit's cookie
+		// pipeline — without a header here the preference write is silently lost
+		const header = await serializePreferencesCookie(CONFIG, SECRET, { theme: 'dark' });
+		expect(header.startsWith('app-pref=')).toBe(true);
+		expect(header).toContain('Path=/');
+		expect(header).toContain('HttpOnly');
+
+		const value = decodeURIComponent(header.slice('app-pref='.length).split(';')[0]);
+		expect(await verifyState(value, SECRET)).toEqual({ theme: 'dark' });
+	});
+
+	it('serializes an org state cookie under the org-specific name', async () => {
+		const header = await serializeOrgStateCookie(CONFIG, SECRET, 'org_1', { last_tab: 2 });
+		expect(header.startsWith('app-org-org_1=')).toBe(true);
+		const value = decodeURIComponent(header.slice('app-org-org_1='.length).split(';')[0]);
+		expect(await verifyState(value, SECRET)).toEqual({ last_tab: 2 });
+	});
+
+	it('serializes a deletion when there is nothing left to store', async () => {
+		expect(await serializePreferencesCookie(CONFIG, SECRET, {})).toBe(
+			'app-pref=; Path=/; Max-Age=0',
+		);
+		expect(await serializeOrgStateCookie(CONFIG, SECRET, 'org_1', {})).toBe(
+			'app-org-org_1=; Path=/; Max-Age=0',
+		);
+		expect(serializeDeleteSessionCookie(CONFIG)).toBe('app-session=; Path=/; Max-Age=0');
 	});
 });
