@@ -39,18 +39,51 @@
 		return isHlsUrl(url) ? 'application/vnd.apple.mpegurl' : 'video/mp4';
 	}
 
-	// Memoized once per browser — Safari/iOS play HLS through the media element
-	// directly, so hls.js is never needed there. `undefined` until first checked.
+	/** Whether the media element itself claims it can play an HLS playlist. */
+	function claimsHls(): boolean {
+		if (typeof document === 'undefined') return false; // SSR — re-checked on client
+		const probe = document.createElement('video');
+		return (
+			probe.canPlayType('application/vnd.apple.mpegurl') !== '' ||
+			probe.canPlayType('application/x-mpegurl') !== ''
+		);
+	}
+
+	/**
+	 * Whether Media Source Extensions are available, i.e. whether hls.js can
+	 * drive the stream itself.
+	 *
+	 * Deliberately *not* counting iOS 17's `ManagedMediaSource`: iPhones play
+	 * HLS natively and well, and keeping them on that path is what spares them
+	 * the hls.js download entirely.
+	 */
+	function supportsMse(): boolean {
+		return typeof window !== 'undefined' && 'MediaSource' in window;
+	}
+
+	// Memoized once per browser. `undefined` until first checked.
 	let nativeHlsSupport: boolean | undefined;
 
-	/** Whether the platform can play HLS natively (Safari, iOS). */
+	/**
+	 * Whether to hand the playlist straight to the media element rather than
+	 * attaching hls.js.
+	 *
+	 * `canPlayType` on its own is no longer a usable signal. Chrome 150 answers
+	 * `'maybe'` to both HLS MIME types (it used to answer `''`) while remaining
+	 * completely unable to play a playlist, so trusting it alone hands the
+	 * stream to an element that stalls at `readyState 0` and never fires an
+	 * `error` event — a silent, unrecoverable dead end.
+	 *
+	 * So require the claim *and* the absence of MSE. That combination only
+	 * holds on Apple's media stack, which is the one platform that genuinely
+	 * plays HLS through the element. Everywhere MSE exists — including desktop
+	 * Safari — hls.js is both available and the more trustworthy path, which is
+	 * also the order hls.js's own docs prescribe.
+	 */
 	function supportsNativeHls(): boolean {
 		if (nativeHlsSupport !== undefined) return nativeHlsSupport;
 		if (typeof document === 'undefined') return false; // SSR — re-checked on client
-		const probe = document.createElement('video');
-		nativeHlsSupport =
-			probe.canPlayType('application/vnd.apple.mpegurl') !== '' ||
-			probe.canPlayType('application/x-mpegurl') !== '';
+		nativeHlsSupport = claimsHls() && !supportsMse();
 		return nativeHlsSupport;
 	}
 
@@ -935,7 +968,7 @@
 	// --- HLS attachment ---
 	// HLS playlists are never rendered as a <source> child (the browser can't
 	// load them, and it would error on non-Safari). Instead we wire the stream
-	// up here, client-side only: natively on Safari/iOS, otherwise via a
+	// up here, client-side only: natively on Apple's stack, otherwise via a
 	// lazily-imported hls.js. Either way the platform feeds our custom controls,
 	// so the native `controls` attribute is never set.
 	$effect(() => {
@@ -943,10 +976,14 @@
 		if (!vid || !is_hls_source) return;
 		const url = active_source.src;
 
-		// Native HLS — hand the URL straight to the media element.
+		/** Hand the URL straight to the media element. */
+		function attachNative() {
+			vid!.src = url;
+			vid!.load();
+		}
+
 		if (supportsNativeHls()) {
-			vid.src = url;
-			vid.load();
+			attachNative();
 			return () => {
 				vid.removeAttribute('src');
 				vid.load();
@@ -964,8 +1001,11 @@
 				const Hls = mod.default;
 				if (cancelled || player !== vid) return;
 				if (!Hls.isSupported()) {
-					// No native HLS and no Media Source Extensions — nothing we can do.
-					has_error = true;
+					// hls.js declined this platform after all — MSE is present but
+					// unusable to it. The element itself is the only thing left to
+					// try, and only worth trying if it claims HLS at all.
+					if (claimsHls()) attachNative();
+					else has_error = true;
 					return;
 				}
 				instance = new Hls();
