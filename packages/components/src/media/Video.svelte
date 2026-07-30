@@ -384,6 +384,17 @@
 	// User-selected level: -1 = automatic (adaptive bitrate).
 	let hls_current_level = $state(-1);
 
+	// --- Lazy HLS attach gate ---
+	// Wiring an HLS stream up costs real network (the hls.js chunk, the
+	// manifest, the first segments), so the attach effect is gated on `preload`:
+	// `none` waits for play intent, `metadata`/`auto` wait until the player
+	// nears the viewport, and `autoplay` attaches immediately.
+	let hls_wanted = $state(false); // play intent (or a pre-play seek) arrived
+	let hls_near_viewport = $state(false); // IO fired — or IO unavailable (fail open)
+	// Imperative bookkeeping — only read at attach/play time, never rendered.
+	let hls_attached = false; // media element currently wired to the stream
+	let play_when_attached = false; // kick playback as soon as attach completes
+
 	// --- Derived ---
 	const has_src = $derived(
 		typeof src === 'string'
@@ -425,6 +436,12 @@
 	// (handled by hls.js / the platform), not from the `Source[]` `size` field.
 	const is_hls_source = $derived(
 		!!active_source && (isHlsType(active_source.type) || isHlsUrl(active_source.src)),
+	);
+
+	// Whether the deferred HLS stream is allowed to attach yet (see the
+	// "Lazy HLS attach gate" state above).
+	const hls_attach_allowed = $derived(
+		autoplay || hls_wanted || (preload !== 'none' && hls_near_viewport),
 	);
 
 	const hls_quality_label = $derived(
@@ -510,6 +527,14 @@
 	function togglePlay() {
 		if (!player) return;
 		if (player.paused) {
+			// A deferred HLS stream has no media wired up yet — record the
+			// intent (which lifts the attach gate) and let the attach effect
+			// kick playback once the stream lands, so one click is enough.
+			if (is_hls_source && !hls_attached) {
+				play_when_attached = true;
+				hls_wanted = true;
+				return;
+			}
 			player.play();
 		} else {
 			player.pause();
@@ -540,11 +565,15 @@
 		metadata_requested = true;
 		if (player.preload === 'none') player.preload = 'metadata';
 		// HLS attaches/loads through its own effect — never call load() on it.
+		// A pre-play seek still needs metadata though, so lift the attach gate.
+		if (is_hls_source) {
+			hls_wanted = true;
+			return;
+		}
 		// Only restart the resource selection when nothing is being fetched.
 		if (
-			!is_hls_source &&
-			(player.networkState === HTMLMediaElement.NETWORK_EMPTY ||
-				player.networkState === HTMLMediaElement.NETWORK_IDLE)
+			player.networkState === HTMLMediaElement.NETWORK_EMPTY ||
+			player.networkState === HTMLMediaElement.NETWORK_IDLE
 		) {
 			player.load();
 		}
@@ -965,6 +994,31 @@
 		};
 	});
 
+	// --- HLS near-viewport gate ---
+	// With `preload="metadata"`/`"auto"` the stream attaches only once the
+	// player approaches the viewport (150% margin ≈ a screen and a half out).
+	// One-shot: observe until the first hit, then disconnect. No
+	// IntersectionObserver on this platform → fail open and attach right away.
+	$effect(() => {
+		if (!is_hls_source || preload === 'none' || hls_near_viewport) return;
+		const target = element ?? player;
+		if (!target) return;
+		if (typeof IntersectionObserver === 'undefined') {
+			hls_near_viewport = true;
+			return;
+		}
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((e) => e.isIntersecting)) return;
+				hls_near_viewport = true;
+				io.disconnect();
+			},
+			{ rootMargin: '150% 0px' },
+		);
+		io.observe(target);
+		return () => io.disconnect();
+	});
+
 	// --- HLS attachment ---
 	// HLS playlists are never rendered as a <source> child (the browser can't
 	// load them, and it would error on non-Safari). Instead we wire the stream
@@ -974,17 +1028,26 @@
 	$effect(() => {
 		const vid = player;
 		if (!vid || !is_hls_source) return;
+		// Deferred until `preload` allows it — play intent, proximity, or
+		// autoplay flips the gate and re-runs this effect.
+		if (!hls_attach_allowed) return;
 		const url = active_source.src;
 
 		/** Hand the URL straight to the media element. */
 		function attachNative() {
 			vid!.src = url;
 			vid!.load();
+			hls_attached = true;
+			if (play_when_attached) {
+				play_when_attached = false;
+				vid!.play().catch(() => {});
+			}
 		}
 
 		if (supportsNativeHls()) {
 			attachNative();
 			return () => {
+				hls_attached = false;
 				vid.removeAttribute('src');
 				vid.load();
 			};
@@ -1018,8 +1081,12 @@
 						.sort((a, b) => b.height - a.height);
 					hls_current_level = -1;
 					// The `autoplay` attribute can be missed when media is attached
-					// after load, so kick playback off explicitly when requested.
-					if (autoplay) vid.play().catch(() => {});
+					// after load, so kick playback off explicitly when requested —
+					// likewise for a play intent that arrived before attach.
+					if (autoplay || play_when_attached) {
+						play_when_attached = false;
+						vid.play().catch(() => {});
+					}
 				});
 
 				instance.on(Hls.Events.ERROR, (_e, data) => {
@@ -1036,6 +1103,7 @@
 
 				instance.loadSource(url);
 				instance.attachMedia(vid);
+				hls_attached = true;
 			} catch {
 				has_error = true;
 			}
@@ -1043,6 +1111,7 @@
 
 		return () => {
 			cancelled = true;
+			hls_attached = false;
 			if (instance) {
 				try {
 					instance.destroy();
