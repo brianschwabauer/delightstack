@@ -1,5 +1,12 @@
 # @delightstack/auth
 
+## 1.0.3
+
+### Patch Changes
+
+- 58e3108: Fix preference and org-state writes being silently dropped on auth routes. `PATCH /preference` and `PATCH /org/:id/state` answered `200` with the merged data, but the cookie never reached the browser: SvelteKit only attaches `event.cookies` to responses that go through `resolve()`, and auth routes return their own `Response` — only the session cookie was being serialized by hand. So `auth.setPreferences()` looked like it worked and then read back empty on the next request, taking anything built on it (first-run hints, dark mode, cached org data) with it. Both cookies (and the org-state deletions on sign-out) are now serialized onto the response alongside the session cookie.
+- 12b9dfd: Close an open redirect in the sign-in routes. The `?redirect=` parameter was passed through to the browser's `Location` untouched, so `/api/auth/signin/google?redirect=//evil.example.com` sent users to another origin the moment they finished signing in — on the app's own domain, with a real session, which is exactly the shape a phishing link wants. The parameter is now narrowed to a same-site path (absolute URLs, protocol-relative `//host`, and `/\host` all fall back to `/`) both when the state is signed and again when the callback consumes it.
+
 ## 1.0.2
 
 ### Patch Changes

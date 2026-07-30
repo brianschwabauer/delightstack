@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/components",
-	"version": "1.1.1",
+	"version": "1.2.0",
 	"type": "module",
 	"license": "MIT",
 	"description": "Delightstack Svelte 5 component library — accessible actions, forms, media, navigation, feedback, and display components.",

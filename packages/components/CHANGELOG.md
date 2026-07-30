@@ -1,5 +1,17 @@
 # @delightstack/components
 
+## 1.2.0
+
+### Minor Changes
+
+- e1076ea: Video: HLS sources now honor `preload`. Previously an HLS video attached its stream on mount — downloading the hls.js chunk, the manifest, and the first segments even with `preload="none"` and even far off-screen. Attachment is now gated: `preload="none"` defers all network activity until playback is actually requested (the play intent attaches the stream and starts playback in one click); `preload="metadata"`/`"auto"` attach once the player nears the viewport (IntersectionObserver, 150% margin, fail-open where IO is unavailable); `autoplay` still attaches immediately. Pre-play seeks on a deferred stream lift the gate so metadata can resolve, and changing `src` after attach still re-attaches as before.
+
+### Patch Changes
+
+- c7cddf1: Fix `Video` silently failing to play HLS in Chrome 150+. The player decided whether to use the browser's own HLS support by asking `canPlayType('application/vnd.apple.mpegurl')` and treating any non-empty answer as yes. Chrome 150 changed its answer from `''` to `'maybe'` while remaining unable to play a playlist, so every Chrome user got the playlist handed straight to the media element, which stalls at `readyState 0` and never fires an `error` — no playback, no error state, just a poster that does nothing when pressed. This affected `Gallery` and `Carousel` video slides too, since they render `Video`.
+
+  Native playback now additionally requires the absence of Media Source Extensions, a combination that only holds on Apple's media stack. Everywhere MSE exists — including desktop Safari — hls.js drives the stream, which is the order hls.js's own docs prescribe. iPhones still take the native path and still never download hls.js. If hls.js declines the platform after loading, the element is tried as a last resort rather than going straight to an error.
+
 ## 1.1.1
 
 ### Patch Changes
