@@ -115,6 +115,18 @@ export interface CarouselItem {
 	poster?: string;
 
 	/**
+	 * URL of a short, silent video used as the item's *animated* poster. When
+	 * set, Gallery thumbnails render a muted looping `<video>` instead of the
+	 * `poster` image — useful for animated-image content (GIF/animated AVIF)
+	 * that has a video twin, since video rides the hardware decoder while
+	 * animated images are decoded in software frame by frame. The video loads
+	 * lazily, plays only while near the viewport, and never autoplays under
+	 * `prefers-reduced-motion` (a still first frame shows instead). `poster`
+	 * (when also set) is used as the `<video poster>` while it loads.
+	 */
+	poster_video?: string;
+
+	/**
 	 * Mark this item as above-the-fold for faster initial paint. When true,
 	 * the image uses `loading="eager"` + `fetchpriority="high"` so the browser
 	 * prioritises it. Defaults to lazy loading.

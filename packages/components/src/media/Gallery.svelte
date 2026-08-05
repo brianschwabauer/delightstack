@@ -102,6 +102,21 @@
 		/** The size of the spacing between thumbnails in the gallery (`'0'`–`'3'`, default `'1'`) */
 		spacing = '1' as GallerySpacing,
 
+		/**
+		 * Whether the grid/masonry/masonry-row layouts keep their outside gap —
+		 * the padding around the gallery that matches the interior `spacing` gap.
+		 * `true` always pads, `false` never pads. The default (`undefined`) is
+		 * "auto": the gap is kept when the gallery is full-bleed (spanning the
+		 * whole viewport width, where edge-to-edge tiles would touch the screen
+		 * edges) and dropped when the gallery sits inside a narrower container
+		 * (where the padding reads as the gallery not filling its container).
+		 * Auto is resolved in pure CSS (it compares the gallery's containing
+		 * block against `100vw`), so it tracks resizes for free — but that means
+		 * a gallery stretched wider than its parent (negative-margin bleed)
+		 * reads as contained; pass an explicit value there.
+		 */
+		outside_gap = undefined as boolean | undefined,
+
 		/** The border radius of the gallery items (`'0'`–`'3'`, default `'1'`) */
 		radius = '1' as GalleryRadius,
 
@@ -657,7 +672,46 @@
 			aria-hidden="true"
 			draggable="false" />
 	{/if}
-	{#if thumbSrc}
+	{#if item.poster_video}
+		<!--
+			Animated poster: a muted looping <video> in place of the thumbnail <img>.
+			It loads nothing until it nears the viewport (preload="none" + the
+			observer below), plays only while near, and under prefers-reduced-motion
+			never plays — only the first frame is fetched as a still.
+		-->
+		<video
+			class="thumbnail-video"
+			class:fading={fadingKeys.has(key)}
+			class:no-blur={!item.thumbhash}
+			src={item.poster_video}
+			poster={thumbSrc}
+			muted
+			loop
+			playsinline
+			preload="none"
+			draggable="false"
+			aria-label={item.alt ?? item.name ?? undefined}
+			onloadeddata={() => fadingKeys.delete(key)}
+			onerror={() => fadingKeys.delete(key)}
+			{@attach (el: HTMLVideoElement) => {
+				el.muted = true;
+				// < HAVE_CURRENT_DATA: no frame to show yet, fade in when one arrives.
+				if (el.readyState < 2 && !el.poster) fadingKeys.add(key);
+			}}
+			{@attach intersectionObserver({
+				rootMargin: '25%',
+				onintersectchange: ({ isIntersecting, target }) => {
+					const el = target as HTMLVideoElement;
+					if (!isIntersecting) return el.pause();
+					const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+					// Lift preload off "none" so pause/resume logic outside this
+					// component (or the browser itself) is free to fetch frames.
+					if (el.preload === 'none') el.preload = reduced ? 'metadata' : 'auto';
+					if (!reduced) el.play().catch(() => {});
+				},
+			})}>
+		</video>
+	{:else if thumbSrc}
 		{@const responsive = isImage && isResponsiveSrcset(item.src)}
 		<!--
 			Match the Carousel's image attributes for single-URL sources so the
@@ -808,6 +862,8 @@
 {#if display === 'grid' || display === 'masonry' || display === 'masonry-row'}
 	<div
 		class="gallery display-{display} size-{size} spacing-{spacing} radius-{radius}"
+		class:outside-gap-on={outside_gap === true}
+		class:outside-gap-off={outside_gap === false}
 		role="group"
 		{style}>
 		{#each list as item, i (i)}
@@ -1135,6 +1191,26 @@
 		--_rxl: min(var(--radius-xl, 0.75rem), var(--_cap));
 		--_r2xl: min(var(--radius-2xl, 1rem), var(--_cap));
 		--_r3xl: min(var(--radius-3xl, 1.5rem), var(--_cap));
+
+		/* The outside gap: the padding around grid/masonry/masonry-row layouts
+		   that matches the interior gap. The default is "auto" — a pure-CSS step
+		   function that keeps the gap only when the gallery is full-bleed. The
+		   percentage resolves (at the padding site) against the containing
+		   block, so `100% - 100vw` is ~0 for a full-bleed parent and steeply
+		   negative inside a narrower container; the 32px slack absorbs a classic
+		   desktop scrollbar (100vw includes it, the parent doesn't), and the
+		   ×999 turns the difference into a hard on/off clamped to [0, gap]. */
+		--gallery-outside-gap: clamp(
+			0px,
+			(100% - 100vw + 32px) * 999,
+			var(--gallery-gap, 12px)
+		);
+		&.outside-gap-on {
+			--gallery-outside-gap: var(--gallery-gap, 12px);
+		}
+		&.outside-gap-off {
+			--gallery-outside-gap: 0px;
+		}
 	}
 
 	.gallery-item {
@@ -1166,6 +1242,7 @@
 		}
 		.thumbnail-blur,
 		.thumbnail-img,
+		.thumbnail-video,
 		.thumbnail-placeholder {
 			position: absolute;
 			inset: 0;
@@ -1189,7 +1266,8 @@
 				light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1))
 			);
 		}
-		.thumbnail-img {
+		.thumbnail-img,
+		.thumbnail-video {
 			z-index: 1;
 			opacity: 1;
 			transform: scale(1);
@@ -1856,7 +1934,7 @@
 		display: grid;
 		grid-auto-flow: dense;
 		gap: var(--gallery-gap, 12px);
-		padding: 0 var(--gallery-gap, 12px) var(--gallery-gap, 12px);
+		padding: 0 var(--gallery-outside-gap) var(--gallery-outside-gap);
 		max-width: 2160px;
 		grid-auto-rows: 1fr;
 		--cols: 4;
@@ -2057,7 +2135,7 @@
 		display: grid;
 		grid-auto-flow: dense;
 		gap: var(--gallery-gap, 12px);
-		padding: 0 var(--gallery-gap, 12px) var(--gallery-gap, 12px);
+		padding: 0 var(--gallery-outside-gap) var(--gallery-outside-gap);
 		max-width: 2160px;
 		grid-auto-rows: 1fr;
 		container: gallery-grid / inline-size;
@@ -2237,7 +2315,7 @@
 		flex-wrap: wrap;
 		justify-content: center;
 		gap: var(--gallery-gap, 12px);
-		padding: 0 var(--gallery-gap, 12px) var(--gallery-gap, 12px);
+		padding: 0 var(--gallery-outside-gap) var(--gallery-outside-gap);
 		max-width: 2160px;
 		margin-inline: auto;
 
@@ -2539,7 +2617,8 @@
 							transition: opacity 0ms ease;
 						}
 						/* Image gently zooms inside its (overflow-hidden) square. */
-						.thumbnail-img {
+						.thumbnail-img,
+						.thumbnail-video {
 							transform: scale(1.08);
 						}
 						.thumbnail-blur {
