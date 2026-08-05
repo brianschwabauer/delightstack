@@ -1271,17 +1271,19 @@
 
 	<!-- Big play button overlay (skip when autoplay+muted will start on its own) -->
 	{#if !has_started && !playing && !show_skeleton && !(autoplay && is_muted)}
-		<button
-			class="big-play"
-			type="button"
-			aria-label="Play video"
-			onclick={togglePlay}
-			{@attach ripple({})}>
-			<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-				<path
-					d="M8.5 5.4a.8.8 0 0 1 1.2-.7l9 6.6a.8.8 0 0 1 0 1.3l-9 6.6a.8.8 0 0 1-1.2-.7V5.4z" />
-			</svg>
-		</button>
+		<div class="play-layer" class:with-title={!!title && controls}>
+			<button
+				class="big-play"
+				type="button"
+				aria-label="Play video"
+				onclick={togglePlay}
+				{@attach ripple({})}>
+				<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+					<path
+						d="M8.5 5.4a.8.8 0 0 1 1.2-.7l9 6.6a.8.8 0 0 1 0 1.3l-9 6.6a.8.8 0 0 1-1.2-.7V5.4z" />
+				</svg>
+			</button>
+		</div>
 	{/if}
 
 	<!-- Error overlay -->
@@ -1952,12 +1954,23 @@
 	}
 
 	/* ---------- Big play button ---------- */
+	/* The root container is inline-size only, but keeping the button clear of
+	   the title chrome on short players needs *height* queries — so the button
+	   sits in its own full-bleed layer with `size` containment (absolutely
+	   positioned, so both dimensions are definite). */
+	.play-layer {
+		position: absolute;
+		inset: 0;
+		z-index: 5;
+		pointer-events: none;
+		container: dsvideo-play / size;
+	}
 	.big-play {
 		position: absolute;
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
-		z-index: 5;
+		pointer-events: auto;
 		width: 76px;
 		height: 76px;
 		border-radius: var(--radius-full, 50%);
@@ -2637,6 +2650,32 @@
 	@container dsvideo (max-width: 250px) {
 		.time {
 			display: none;
+		}
+	}
+
+	/* When the chrome carries a title, the resting controls (title + bar) own
+	   the bottom ~78px of a paused player. On a short player the centred button
+	   would sink into that band — recentre it in the picture above the chrome
+	   and step it down a size. Tall players with a title are untouched. */
+	@container dsvideo-play (max-height: 260px) {
+		.with-title .big-play {
+			top: calc((100% - 78px) / 2);
+			width: 56px;
+			height: 56px;
+		}
+		.with-title .big-play svg {
+			width: 34px;
+			height: 34px;
+		}
+	}
+	@container dsvideo-play (max-height: 180px) {
+		.with-title .big-play {
+			width: 44px;
+			height: 44px;
+		}
+		.with-title .big-play svg {
+			width: 28px;
+			height: 28px;
 		}
 	}
 
