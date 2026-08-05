@@ -382,13 +382,16 @@ export function isSwipeable(item: CarouselItem | undefined | null) {
 	return true;
 }
 
-/** Returns whether the given item can be pinched/zoomed */
+/** Returns whether the given item can be pinched/zoomed. Custom items ARE
+ *  scalable by default — the zoom matrix is applied to the slide's content
+ *  element generically, so a custom renderer (a looping video, a canvas)
+ *  gets the same pinch/double-tap/wheel mechanics as an image; a custom
+ *  item that handles its own zoom opts out with `disable_zoom`. */
 export function isScalable(item: CarouselItem | undefined | null) {
 	if (!item) return false;
 	if (item.disable_zoom) return false;
 	if (item.type === 'embed' || item.type === 'video') return false;
 	if (item.type === 'image' && item.panorama) return false;
-	if (item.type === 'custom') return false;
 	return true;
 }
 

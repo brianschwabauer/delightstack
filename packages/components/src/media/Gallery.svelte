@@ -781,7 +781,7 @@
 		<div class="image">
 			{@render itemThumbnail(item, '100vw')}
 		</div>
-		{#if item.type !== 'image' || item.panorama}
+		{#if item.type === 'video' || item.type === 'pdf' || item.type === 'embed' || item.panorama}
 			<div class="icon">
 				{#if item.type === 'video'}
 					{@render iconPlay()}
@@ -837,7 +837,7 @@
 					{@attach contextMenu({ actions: flattenActions(actions?.[index]) })}>
 					<div class="thumbnail">
 						{@render itemThumbnail(item, '64px')}
-						{#if item.type !== 'image' || item.panorama}
+						{#if item.type === 'video' || item.type === 'pdf' || item.type === 'embed' || item.panorama}
 							<div class="icon">
 								{#if item.type === 'video'}
 									{@render iconPlay()}
