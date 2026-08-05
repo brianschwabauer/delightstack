@@ -63,6 +63,15 @@ export interface AuthConfig<
 	 */
 	dev?: boolean;
 
+	/**
+	 * Whether a session JWT may be supplied via the `?auth=` query parameter.
+	 * Off by default: URLs end up in Referer headers, browser history, and
+	 * server logs, so a query-string token source silently leaks sessions.
+	 * Enable only for flows that genuinely can't send a cookie or header.
+	 * @default false
+	 */
+	allow_query_token?: boolean;
+
 	/** Cookie configuration */
 	cookies?: {
 		/** Session cookie name @default 'auth-session' */

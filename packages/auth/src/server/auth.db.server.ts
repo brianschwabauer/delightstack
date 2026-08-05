@@ -2263,8 +2263,11 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			return;
 		}
 
-		// Remove the user from the organization if they are not currently an admin
-		if (!current_permissions.includes('org:write')) {
+		// Remove the user from the organization if they are not currently an
+		// admin. (This must use the configured admin permission — a hardcoded
+		// name silently disabled the only-admin protection for every app with
+		// its own permission set.)
+		if (!current_permissions.includes(this.orgAdminPermission)) {
 			this.sql.delete('org_user', current_org_user.id);
 			return;
 		}
@@ -2279,7 +2282,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 					{
 						key: 'permission',
 						is: '&=',
-						value: encodePermissions(this.options.permissions, ['org:write']),
+						value: encodePermissions(this.options.permissions, [this.orgAdminPermission]),
 					},
 				],
 			},
@@ -3033,6 +3036,11 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			});
 			orgPermissions = orgs.reduce(
 				(acc, org_user) => {
+					// A permission-0 row is not a membership (updateUserPermission
+					// deletes rows on removal, but rows written by older versions
+					// or external tooling may linger) — never encode it into the
+					// session token, where downstream membership checks trust it.
+					if (!org_user.permission) return acc;
 					const org = this.sql.get('org', org_user.org_id);
 					if (org.deleted_at) return acc;
 					acc[org_user.org_id] = {

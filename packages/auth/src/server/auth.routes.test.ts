@@ -17,6 +17,8 @@ interface FakeCtxOptions {
 	params?: Record<string, string>;
 	/** Stubbed AuthServer methods the handler calls */
 	auth?: Record<string, unknown>;
+	/** The active org (locals.org_id). Defaults to the first entry of `orgs`. */
+	org_id?: string;
 }
 
 function makeCtx(options: FakeCtxOptions = {}): RouteCtx {
@@ -57,6 +59,7 @@ function makeCtx(options: FakeCtxOptions = {}): RouteCtx {
 		locals: {
 			session,
 			user: session ? { id: uid, name: 'Test', email: 'test@example.com' } : null,
+			org_id: options.org_id ?? Object.keys(options.orgs ?? {})[0] ?? null,
 		},
 		meta: {},
 	} as unknown as RouteCtx;
@@ -584,6 +587,117 @@ describe('matchRoute', () => {
 				auth,
 			});
 			expect(denied.response.status).toBe(403);
+		});
+	});
+
+	describe('invitation route authorization', () => {
+		const ADMIN = 0b0111; // org:read + org:write + org:admin
+		const MEMBER = 0b0011; // org:read + org:write
+
+		function invitationAuth(invitation_org = 'org_1', owner_id = 'owner_1') {
+			return {
+				getOrg: vi.fn(async () => ({ id: 'org_1', owner_id })),
+				getInvitation: vi.fn(async () => ({ id: 'inv_1', org_id: invitation_org })),
+				createInvitation: vi.fn(async () => ({ id: 'inv_1' })),
+				updateInvitation: vi.fn(async () => ({ id: 'inv_1' })),
+				deleteInvitation: vi.fn(async () => {}),
+			};
+		}
+
+		it('rejects unauthenticated invitation creation', async () => {
+			const { response } = await callRoute('POST', '/invitation', {
+				uid: null,
+				body: { permission: ADMIN },
+			});
+			expect(response.status).toBe(401);
+		});
+
+		it('rejects invitation creation from a non-admin member', async () => {
+			const auth = invitationAuth();
+			const { response } = await callRoute('POST', '/invitation', {
+				orgs: { org_1: MEMBER },
+				body: { permission: ADMIN },
+				auth,
+			});
+			expect(response.status).toBe(403);
+			expect(auth.createInvitation).not.toHaveBeenCalled();
+		});
+
+		it('lets an org admin create an invitation for their active org', async () => {
+			const auth = invitationAuth();
+			const { response } = await callRoute('POST', '/invitation', {
+				orgs: { org_1: ADMIN },
+				body: { permission: MEMBER },
+				auth,
+			});
+			expect(response.status).toBe(201);
+			expect(auth.createInvitation).toHaveBeenCalledWith(
+				expect.objectContaining({ org_id: 'org_1', user_id: 'user_1' }),
+			);
+		});
+
+		it('lets the owner create an invitation without the admin bit', async () => {
+			const auth = invitationAuth('org_1', 'user_1');
+			const { response } = await callRoute('POST', '/invitation', {
+				uid: 'user_1',
+				orgs: { org_1: MEMBER },
+				body: { permission: MEMBER },
+				auth,
+			});
+			expect(response.status).toBe(201);
+		});
+
+		it('rejects an update from a non-admin member', async () => {
+			const auth = invitationAuth();
+			const { response } = await callRoute('PATCH', '/invitation/inv_1', {
+				orgs: { org_1: MEMBER },
+				body: { permission: ADMIN },
+				auth,
+			});
+			expect(response.status).toBe(403);
+			expect(auth.updateInvitation).not.toHaveBeenCalled();
+		});
+
+		it("rejects an update to another org's invitation", async () => {
+			const auth = invitationAuth('org_2');
+			const { response } = await callRoute('PATCH', '/invitation/inv_1', {
+				orgs: { org_1: ADMIN },
+				body: { permission: ADMIN },
+				auth,
+			});
+			expect(response.status).toBe(403);
+			expect(auth.updateInvitation).not.toHaveBeenCalled();
+		});
+
+		it('lets an admin update an invitation in their org', async () => {
+			const auth = invitationAuth();
+			const { response } = await callRoute('PATCH', '/invitation/inv_1', {
+				orgs: { org_1: ADMIN },
+				body: { max_redemptions: 5 },
+				auth,
+			});
+			expect(response.status).toBe(200);
+			expect(auth.updateInvitation).toHaveBeenCalledWith('inv_1', { max_redemptions: 5 });
+		});
+
+		it("rejects deleting another org's invitation", async () => {
+			const auth = invitationAuth('org_2');
+			const { response } = await callRoute('DELETE', '/invitation/inv_1', {
+				orgs: { org_1: ADMIN },
+				auth,
+			});
+			expect(response.status).toBe(403);
+			expect(auth.deleteInvitation).not.toHaveBeenCalled();
+		});
+
+		it('lets an admin delete an invitation in their org', async () => {
+			const auth = invitationAuth();
+			const { response } = await callRoute('DELETE', '/invitation/inv_1', {
+				orgs: { org_1: ADMIN },
+				auth,
+			});
+			expect(response.status).toBe(204);
+			expect(auth.deleteInvitation).toHaveBeenCalledWith('inv_1');
 		});
 	});
 

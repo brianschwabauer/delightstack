@@ -187,9 +187,12 @@ async function requireOrgOwner(ctx: AuthRouteContext, org_id: string) {
  * or its owner. Throws 403 if neither.
  */
 async function requireOrgAdmin(ctx: AuthRouteContext, org_id: string) {
-	requireOrgMember(ctx, org_id);
-	if (isOrgAdmin(ctx, org_id)) return;
-	// The owner may not carry the admin permission bit — check ownership as a fallback
+	requireAuth(ctx.locals);
+	// Membership + admin permission from the session token is the fast path.
+	if (ctx.locals.session!.org[org_id] && isOrgAdmin(ctx, org_id)) return;
+	// The owner may not carry the admin permission bit (or, right after
+	// createOrg with a misconfigured org_admin_permission, any bits at all) —
+	// ownership always grants admin.
 	const org = (await ctx.auth.getOrg(org_id)) as { owner_id: string };
 	if (org.owner_id !== ctx.locals.session!.uid) {
 		throw new DelightError({
@@ -1197,6 +1200,9 @@ const invitationGet: AuthRouteHandler = (ctx) =>
 const invitationCreate: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireOrg(ctx.locals);
+		// Only admins may invite — otherwise any member could mint an
+		// admin-level invitation and escalate through a second account.
+		await requireOrgAdmin(ctx, ctx.locals.org_id!);
 		const body = parseSchema(
 			z.object({
 				email: z.email().optional(),
@@ -1217,12 +1223,29 @@ const invitationCreate: AuthRouteHandler = (ctx) =>
 		return json(invitation, 201);
 	});
 
+/**
+ * Invitation ids are caller-supplied, and updateInvitation/deleteInvitation
+ * are unscoped primary-key operations — without this check any signed-in
+ * user could escalate or destroy another org's invitations.
+ */
+async function requireInvitationInOrg(ctx: AuthRouteContext, id: string) {
+	const invitation = (await ctx.auth.getInvitation(id)) as { org_id?: string } | null;
+	if (!invitation || invitation.org_id !== ctx.locals.org_id) {
+		throw new DelightError({
+			message: 'Invitation does not belong to this organization',
+			status: 403,
+		});
+	}
+}
+
 const invitationUpdate: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireOrg(ctx.locals);
+		await requireOrgAdmin(ctx, ctx.locals.org_id!);
 		const id = ctx.event.params.id;
 		if (!id)
 			throw new DelightError({ message: 'Invitation ID is required', status: 400 });
+		await requireInvitationInOrg(ctx, id);
 		const body = parseSchema(
 			z.object({
 				permission: z.number().optional(),
@@ -1237,9 +1260,11 @@ const invitationUpdate: AuthRouteHandler = (ctx) =>
 const invitationDelete: AuthRouteHandler = (ctx) =>
 	handleRoute(ctx, async () => {
 		requireOrg(ctx.locals);
+		await requireOrgAdmin(ctx, ctx.locals.org_id!);
 		const id = ctx.event.params.id;
 		if (!id)
 			throw new DelightError({ message: 'Invitation ID is required', status: 400 });
+		await requireInvitationInOrg(ctx, id);
 		await ctx.auth.deleteInvitation(id);
 		return noContent();
 	});

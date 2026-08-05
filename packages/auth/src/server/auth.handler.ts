@@ -180,14 +180,18 @@ function defaultResolveOrgId(
 	let org_id: string | null =
 		params.org_id || url.searchParams.get('org') || request.headers.get('Org-ID') || null;
 
+	// Tokens with no permission bits are not memberships (defensive — newer
+	// servers never issue them, but older tokens may still be in flight).
+	const orgs = session?.org || {};
+	const member_org_ids = Object.keys(orgs).filter((id) => (orgs[id]?.p ?? 0) > 0);
+
 	// Auto-select if user has exactly one org
-	if (!org_id && session) {
-		const org_ids = Object.keys(session.org || {});
-		if (org_ids.length === 1) org_id = org_ids[0];
+	if (!org_id && session && member_org_ids.length === 1) {
+		org_id = member_org_ids[0];
 	}
 
 	// Verify user has access to this org
-	if (org_id && session && !(org_id in (session.org || {}))) {
+	if (org_id && session && !member_org_ids.includes(org_id)) {
 		org_id = null;
 	}
 
@@ -224,10 +228,12 @@ export function createAuthHandle<Config extends AuthConfig>(
 		};
 
 		// 4. Extract JWT from: cookie > Authorization header > ?auth= query param
+		// (query param is opt-in: URLs leak into Referer headers, browser
+		// history, and server logs, so it must never be a default token source)
 		let jwt: string | undefined =
 			getSessionCookie(event.cookies, config) ||
 			event.request.headers.get('Authorization')?.match(/Bearer\s+([^\s;]+)/)?.[1] ||
-			event.url.searchParams.get('auth') ||
+			(config.allow_query_token ? event.url.searchParams.get('auth') : null) ||
 			undefined;
 
 		// 5. Decode JWT and refresh if expired
