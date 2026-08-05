@@ -233,6 +233,36 @@
 		return item.id || item.src || '';
 	}
 
+	/**
+	 * Attachment that fades a thumbnail in once its media settles. The load/error
+	 * listeners live here rather than as `onload`/`onerror` attributes so they are
+	 * torn down with the element: a thumbnail that is still in flight when the
+	 * gallery unmounts (navigating away from a page, an item leaving the list)
+	 * still fires its media event on the now-detached node, and an attribute
+	 * handler would run after the item's `{@const key}` derived was destroyed —
+	 * reading a destroyed derived (`derived_inert`) and writing state outside of
+	 * Svelte's batch (`invariant_violation: Batch has scheduled roots`).
+	 */
+	function fadeInWhenSettled(key: string, loadEvent: 'load' | 'loadeddata') {
+		return (el: HTMLImageElement | HTMLVideoElement) => {
+			const settled =
+				el instanceof HTMLVideoElement
+					? // < HAVE_CURRENT_DATA: no frame to show yet, fade in when one arrives.
+						el.readyState >= 2 || !!el.poster
+					: el.complete && el.naturalWidth > 0;
+			if (settled) return;
+			fadingKeys.add(key);
+			const settle = () => fadingKeys.delete(key);
+			el.addEventListener(loadEvent, settle, { once: true });
+			el.addEventListener('error', settle, { once: true });
+			return () => {
+				el.removeEventListener(loadEvent, settle);
+				el.removeEventListener('error', settle);
+				fadingKeys.delete(key);
+			};
+		};
+	}
+
 	/** The instance of the focus trap class - used to programmatically deactivate the focus trap */
 	let focusTrapInstance: FocusTrapInstance | undefined;
 
@@ -691,13 +721,10 @@
 			preload="none"
 			draggable="false"
 			aria-label={item.alt ?? item.name ?? undefined}
-			onloadeddata={() => fadingKeys.delete(key)}
-			onerror={() => fadingKeys.delete(key)}
 			{@attach (el: HTMLVideoElement) => {
 				el.muted = true;
-				// < HAVE_CURRENT_DATA: no frame to show yet, fade in when one arrives.
-				if (el.readyState < 2 && !el.poster) fadingKeys.add(key);
 			}}
+			{@attach fadeInWhenSettled(key, 'loadeddata')}
 			{@attach intersectionObserver({
 				rootMargin: '25%',
 				onintersectchange: ({ isIntersecting, target }) => {
@@ -731,13 +758,7 @@
 			loading={eager ? 'eager' : 'lazy'}
 			fetchpriority={eager ? 'high' : undefined}
 			draggable="false"
-			onload={() => fadingKeys.delete(key)}
-			onerror={() => fadingKeys.delete(key)}
-			{@attach (el: HTMLImageElement) => {
-				if (!el.complete || el.naturalWidth === 0) {
-					fadingKeys.add(key);
-				}
-			}} />
+			{@attach fadeInWhenSettled(key, 'load')} />
 	{:else}
 		<!-- No thumbnail available — render a styled placeholder so the type-icon
 		     overlay has a background and the layout slot still has its expected
