@@ -134,6 +134,15 @@
 		/** Poster image URL */
 		poster = undefined as string | undefined,
 
+		/** Defer the poster until the player nears the viewport (~1.5 viewports
+		 *  out, the same margin the HLS attach gate uses). A bare `poster`
+		 *  attribute is fetched by the browser's preload scanner the moment the
+		 *  HTML is parsed, so every below-fold player's poster lands in the
+		 *  initial page load. Set `lazy={false}` for above-the-fold players
+		 *  whose poster must paint with the first render (it is then also
+		 *  present in server-rendered HTML). */
+		lazy = true,
+
 		/** Auto-play (requires muted for most browsers) */
 		autoplay = false,
 
@@ -218,6 +227,7 @@
 	}: {
 		src: string | Source[];
 		poster?: string;
+		lazy?: boolean;
 		autoplay?: boolean;
 		muted?: boolean;
 		loop?: boolean;
@@ -390,7 +400,7 @@
 	// `none` waits for play intent, `metadata`/`auto` wait until the player
 	// nears the viewport, and `autoplay` attaches immediately.
 	let hls_wanted = $state(false); // play intent (or a pre-play seek) arrived
-	let hls_near_viewport = $state(false); // IO fired — or IO unavailable (fail open)
+	let near_viewport = $state(false); // IO fired — or IO unavailable (fail open)
 	// Imperative bookkeeping — only read at attach/play time, never rendered.
 	let hls_attached = false; // media element currently wired to the stream
 	let play_when_attached = false; // kick playback as soon as attach completes
@@ -441,7 +451,14 @@
 	// Whether the deferred HLS stream is allowed to attach yet (see the
 	// "Lazy HLS attach gate" state above).
 	const hls_attach_allowed = $derived(
-		autoplay || hls_wanted || (preload !== 'none' && hls_near_viewport),
+		autoplay || hls_wanted || (preload !== 'none' && near_viewport),
+	);
+	// The poster rides the same gate: absent until the player nears the
+	// viewport, so it never joins the initial page load. Play intent or
+	// autoplay also reveal it — a playing video may still flash its poster
+	// between load() and first frame.
+	const effective_poster = $derived(
+		!lazy || near_viewport || autoplay || hls_wanted ? poster : undefined,
 	);
 
 	const hls_quality_label = $derived(
@@ -994,23 +1011,28 @@
 		};
 	});
 
-	// --- HLS near-viewport gate ---
-	// With `preload="metadata"`/`"auto"` the stream attaches only once the
-	// player approaches the viewport (150% margin ≈ a screen and a half out).
-	// One-shot: observe until the first hit, then disconnect. No
-	// IntersectionObserver on this platform → fail open and attach right away.
+	// --- Near-viewport gate ---
+	// Two consumers share it: HLS attachment (with `preload="metadata"`/
+	// `"auto"` the stream attaches only once the player approaches the
+	// viewport — 150% margin ≈ a screen and a half out) and the lazy poster
+	// (revealed at the same distance). One-shot: observe until the first hit,
+	// then disconnect. No IntersectionObserver on this platform → fail open
+	// and attach right away.
+	const wants_near_viewport = $derived(
+		(is_hls_source && preload !== 'none') || (lazy && poster !== undefined),
+	);
 	$effect(() => {
-		if (!is_hls_source || preload === 'none' || hls_near_viewport) return;
+		if (!wants_near_viewport || near_viewport) return;
 		const target = element ?? player;
 		if (!target) return;
 		if (typeof IntersectionObserver === 'undefined') {
-			hls_near_viewport = true;
+			near_viewport = true;
 			return;
 		}
 		const io = new IntersectionObserver(
 			(entries) => {
 				if (!entries.some((e) => e.isIntersecting)) return;
-				hls_near_viewport = true;
+				near_viewport = true;
 				io.disconnect();
 			},
 			{ rootMargin: '150% 0px' },
@@ -1231,7 +1253,7 @@
 	<!-- Video element -->
 	<video
 		bind:this={player}
-		{poster}
+		poster={effective_poster}
 		{autoplay}
 		{loop}
 		{preload}
