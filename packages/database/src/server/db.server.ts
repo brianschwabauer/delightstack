@@ -14,6 +14,7 @@ import {
 import { encode as encodeMsgPack, decode as decodeMsgPack } from '@msgpack/msgpack';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
+import { normalizeWhere } from '../search-query';
 import { generateTimestampID, DelightError } from '@delightstack/utilities';
 
 interface Env {
@@ -1145,6 +1146,13 @@ export class DatabaseServer<
 		const query = {
 			order: [{ key: 'updated_at', direction: 'DESC' }],
 			...base_query,
+			// Accept plain-value where shorthands (`{folder: 'inbox'}`) on enum and
+			// number properties — Orama requires operation objects there and its
+			// throw otherwise surfaced as a 500.
+			where: normalizeWhere(
+				base_query.where as Record<string, unknown> | undefined,
+				table.config.orama.schema as Record<string, unknown>,
+			) as never,
 			term: resolved_term,
 			q: undefined,
 			cursor: undefined,
@@ -1214,48 +1222,61 @@ export class DatabaseServer<
 				.replace(/\//g, '_');
 		};
 
-		const results = searchOrama<AnyOrama>(index.orama, {
-			...query,
-			properties: (query.properties as any) || '*',
-			limit: query.limit,
-			term: query.term,
-			mode: (query.term && query.vector
-				? 'hybrid'
-				: query.vector
-					? 'vector'
-					: 'fulltext') as any,
-			includeVectors: false,
-			sortBy:
-				query.order.length === 1
-					? {
-							property: query.order[0].key,
-							order: (query.order[0].direction || 'ASC').toUpperCase() as 'ASC' | 'DESC',
-						}
-					: ([_aId, aScore, aDoc], [_bId, bScore, bDoc]) => {
-							for (const ord of query.order) {
-								const aValue = aDoc[ord.key];
-								const bValue = bDoc[ord.key];
-								if (typeof aValue === 'string' && typeof bValue === 'string') {
-									const comparison = aValue.localeCompare(bValue, undefined, {
-										numeric: true,
-										ignorePunctuation: true,
-									});
-									if (comparison !== 0) {
-										return (ord.direction || 'ASC').toUpperCase() === 'ASC'
-											? comparison
-											: -comparison;
+		let results: Results<any>;
+		try {
+			results = searchOrama<AnyOrama>(index.orama, {
+				...query,
+				properties: (query.properties as any) || '*',
+				limit: query.limit,
+				term: query.term,
+				mode: (query.term && query.vector
+					? 'hybrid'
+					: query.vector
+						? 'vector'
+						: 'fulltext') as any,
+				includeVectors: false,
+				sortBy:
+					query.order.length === 1
+						? {
+								property: query.order[0].key,
+								order: (query.order[0].direction || 'ASC').toUpperCase() as
+									| 'ASC'
+									| 'DESC',
+							}
+						: ([_aId, aScore, aDoc], [_bId, bScore, bDoc]) => {
+								for (const ord of query.order) {
+									const aValue = aDoc[ord.key];
+									const bValue = bDoc[ord.key];
+									if (typeof aValue === 'string' && typeof bValue === 'string') {
+										const comparison = aValue.localeCompare(bValue, undefined, {
+											numeric: true,
+											ignorePunctuation: true,
+										});
+										if (comparison !== 0) {
+											return (ord.direction || 'ASC').toUpperCase() === 'ASC'
+												? comparison
+												: -comparison;
+										}
+									}
+									if (aValue < bValue) {
+										return (ord.direction || 'ASC').toUpperCase() === 'ASC' ? -1 : 1;
+									}
+									if (aValue > bValue) {
+										return (ord.direction || 'ASC').toUpperCase() === 'ASC' ? 1 : -1;
 									}
 								}
-								if (aValue < bValue) {
-									return (ord.direction || 'ASC').toUpperCase() === 'ASC' ? -1 : 1;
-								}
-								if (aValue > bValue) {
-									return (ord.direction || 'ASC').toUpperCase() === 'ASC' ? 1 : -1;
-								}
-							}
-							return bScore - aScore;
-						},
-		}) as Results<any>;
+								return bScore - aScore;
+							},
+			}) as Results<any>;
+		} catch (err) {
+			// A malformed filter is the caller's mistake, not a server fault —
+			// surface Orama's filter validation as a 400 instead of a 500.
+			const code = (err as { code?: string }).code;
+			if (code === 'UNKNOWN_FILTER_PROPERTY' || code === 'INVALID_FILTER_OPERATION') {
+				throw new DelightError({ message: (err as Error).message, status: 400 });
+			}
+			throw err;
+		}
 
 		// Drop ghost hits (empty documents Orama can return for removed docs)
 		const list_primary_key = (table.config.primary_key || 'id') as string;

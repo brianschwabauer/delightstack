@@ -217,3 +217,54 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 
 	return query;
 }
+
+/**
+ * Normalize where-clause shorthands to the operation objects Orama requires.
+ *
+ * Orama's filter grammar is inconsistent across property types: `string`
+ * (Radix) and `boolean` accept plain values, but `enum` (Flat) and `number`
+ * (AVL) require an operation object — a bare `where: { folder: 'inbox' }` on
+ * an enum throws INVALID_FILTER_OPERATION (Object.keys('inbox') reads the
+ * string's indices as "operations"), which surfaced to API callers as a 500.
+ *
+ * Callers may still pass explicit operators; only primitives and arrays on
+ * enum/number properties are rewritten. `and`/`or`/`not` composites are
+ * normalized recursively. Unknown properties are left untouched — Orama's
+ * UNKNOWN_FILTER_PROPERTY handles those.
+ */
+export function normalizeWhere(
+	where: Record<string, unknown> | undefined,
+	schema: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+	if (!where || typeof where !== 'object' || !schema) return where;
+	const out: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(where)) {
+		if (key === 'and' || key === 'or') {
+			out[key] = Array.isArray(value)
+				? value.map((v) => normalizeWhere(v as Record<string, unknown>, schema))
+				: value;
+			continue;
+		}
+		if (key === 'not') {
+			out[key] = normalizeWhere(value as Record<string, unknown>, schema);
+			continue;
+		}
+		const type = schema[key];
+		if (type === 'enum') {
+			if (typeof value === 'string' || typeof value === 'number') {
+				out[key] = { eq: value };
+				continue;
+			}
+			if (Array.isArray(value)) {
+				out[key] = { in: value };
+				continue;
+			}
+		}
+		if (type === 'number' && typeof value === 'number') {
+			out[key] = { eq: value };
+			continue;
+		}
+		out[key] = value;
+	}
+	return out;
+}

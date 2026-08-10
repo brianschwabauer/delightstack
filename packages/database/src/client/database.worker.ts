@@ -26,7 +26,11 @@ import {
 	type CachedSearchIndex,
 } from './database.idb';
 import { DelightError } from '@delightstack/utilities';
-import { type SearchQueryInput, encodeSearchQuery } from '../search-query';
+import {
+	type SearchQueryInput,
+	encodeSearchQuery,
+	normalizeWhere,
+} from '../search-query';
 
 /** Inline sync response type to avoid importing server module in worker context. */
 interface SyncEntityResult {
@@ -382,9 +386,7 @@ export class DatabaseWorker {
 				] as Record<string, unknown>[];
 				if (inserts.length > 0) {
 					any_changes = true;
-					const projected = inserts.map((e) =>
-						this.#projectToIndex(entity_type, e),
-					);
+					const projected = inserts.map((e) => this.#projectToIndex(entity_type, e));
 					const ids = projected.map((e) => String(e[state.primary_key]));
 					try {
 						removeMultiple(state.orama, ids);
@@ -824,6 +826,13 @@ export class DatabaseWorker {
 
 		// Client-side Orama search — convert SearchQueryInput to Orama-native params
 		const orama_params: Record<string, unknown> = { ...query };
+		// Plain-value where shorthands on enum/number properties (same rule the
+		// server applies) — Orama throws on them, which broke client-mode queries
+		// that work fine against the server.
+		orama_params.where = normalizeWhere(
+			orama_params.where as Record<string, unknown> | undefined,
+			this.#tables[entity_type]?.orama?.schema as Record<string, unknown> | undefined,
+		);
 		// Resolve q alias
 		if (!orama_params.term && orama_params.q) orama_params.term = orama_params.q;
 		delete orama_params.q;
