@@ -511,7 +511,10 @@ export class DatabaseServer<
 			for (const index of table_config.config.indexes) {
 				if (table_name !== index.table) continue;
 				const existing = this.#state.sql_indexes.find((i) => i.name === index.name);
-				if (existing && deepEqual(existing, index)) continue;
+				// Same serializable-projection rule as the orama config check below:
+				// `existing` already survived a JSON round trip, so an undefined member
+				// on the live definition would otherwise read as a changed index.
+				if (existing && deepEqual(existing, JSON.parse(JSON.stringify(index)))) continue;
 				const unique = index.unique ? ' UNIQUE' : '';
 				const index_name = this.sanitize(index.name);
 				if (!index_name) continue;
@@ -973,9 +976,10 @@ export class DatabaseServer<
 								? { gte: from }
 								: { gt: from }
 							: {
-									between: (descending
-										? [from, to - 1]
-										: [from + 1, to]) as [number, number],
+									between: (descending ? [from, to - 1] : [from + 1, to]) as [
+										number,
+										number,
+									],
 								},
 				},
 			});
@@ -1730,8 +1734,15 @@ export class DatabaseServer<
 			return this.rebuildIndex(entity_type);
 		}
 
-		// Check if the config has changed. If so, we need to increment the version and rebuild the index
-		if (!deepEqual(stored_config, current_config)) {
+		// Check if the config has changed. If so, we need to increment the version and rebuild the index.
+		// Compare the SERIALIZABLE projection of the current config: the live object
+		// carries function members (e.g. components.getDocumentIndexId, injected by
+		// Database.table for every table) that JSON.stringify silently dropped when
+		// the config was persisted. Comparing the raw object against the stored JSON
+		// therefore failed on EVERY DO cold start, bumping the version each wake —
+		// and every version bump makes every client discard its local index and
+		// re-download the entire dataset, forever.
+		if (!deepEqual(stored_config, JSON.parse(JSON.stringify(current_config)))) {
 			return this.rebuildIndex(entity_type, stored_index_version + 1);
 		}
 
