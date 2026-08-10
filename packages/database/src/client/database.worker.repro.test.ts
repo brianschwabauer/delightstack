@@ -130,9 +130,7 @@ function createFakeSqlStorage() {
 			const [, table_name] = match;
 			const prefix = String(args[0]).replace(/%$/, '');
 			return makeCursor(
-				[...getTable(table_name).values()].filter((r) =>
-					String(r.id).startsWith(prefix),
-				),
+				[...getTable(table_name).values()].filter((r) => String(r.id).startsWith(prefix)),
 			);
 		}
 		if ((match = sql.match(/^DELETE FROM (\w+) WHERE id LIKE \?/))) {
@@ -303,7 +301,9 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 			limit: 100,
 		} as any);
 		expect(inbox.count).toBe(8);
-	});
+		// ~700ms locally, but 2-vCPU CI runners have run it anywhere from 2s to
+		// past vitest's 5s default — which blocked two releases on pure noise.
+	}, 20_000);
 
 	it('one invalid document in a sync page loses only itself, never the page tail', async () => {
 		const { server } = await createTestServer();
@@ -451,7 +451,8 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		const result = await worker.search('thread', { limit: 1000 });
 		expect(result.count).toBe(190);
 		expect(await worker.isSynced('thread')).toBe(true);
-	});
+		// Same CI headroom as the multi-page backfill above (2s+ on slow runners).
+	}, 20_000);
 
 	it('legacy equal-timestamp runs are never split across sync pages', async () => {
 		// Bypass create() (which makes timestamps strictly monotonic) and seed
