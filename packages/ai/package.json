@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/ai",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"type": "module",
 	"license": "MIT",
 	"description": "AI helpers for Cloudflare Workers — embeddings, AI Gateway, and a reactive streaming client built on the Delightstack database and websocket layers.",
