@@ -1,5 +1,15 @@
 # @delightstack/example-server
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [2562f06]
+  - @delightstack/database@1.1.0
+  - @delightstack/ai@1.0.5
+  - @delightstack/auth@1.1.4
+  - @delightstack/images@1.0.5
+
 ## 0.0.8
 
 ### Patch Changes

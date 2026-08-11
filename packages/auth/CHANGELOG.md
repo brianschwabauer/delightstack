@@ -1,5 +1,12 @@
 # @delightstack/auth
 
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [2562f06]
+  - @delightstack/database@1.1.0
+
 ## 1.1.3
 
 ### Patch Changes
