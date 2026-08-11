@@ -297,6 +297,32 @@ describe('Schema: toSparse()', () => {
 		expect((sparse as any).address).not.toHaveProperty('name');
 	});
 
+	it('omits missing/null searchable fields instead of materializing them', () => {
+		// An explicit `field: undefined` key survives the msgpack index save as
+		// `null` (msgpack has no undefined), and Orama's remove() crashes on a
+		// null array property (`value.length`) — so a doc reloaded after a DO
+		// restart could never be updated or deleted again (2026-08-11 incident:
+		// every trash/archive of an affected thread 500'd).
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string().searchable(),
+			tags: schema.array(schema.string()).searchable().optional(),
+			note: schema.string().searchable().optional(),
+		}));
+
+		const sparse = table.toSparse({
+			id: '1',
+			name: 'Widget',
+			tags: null,
+			created_at: 100,
+			updated_at: 200,
+		} as any);
+
+		expect(sparse).toHaveProperty('name', 'Widget');
+		expect(Object.keys(sparse)).not.toContain('tags');
+		expect(Object.keys(sparse)).not.toContain('note');
+	});
+
 	it('should convert ISO string timestamps to epoch numbers', () => {
 		const table = Database.table('items', (schema) => ({
 			id: schema.primaryKey(),
@@ -1082,7 +1108,9 @@ describe('Schema: form field props', () => {
 		is_public: schema.boolean().default(false),
 		tags: schema.array(schema.string()).optional(),
 		scores: schema.array(schema.number()).min(1).max(3),
-		address: schema.object({ city: schema.string(), zip: schema.string().optional() }).optional(),
+		address: schema
+			.object({ city: schema.string(), zip: schema.string().optional() })
+			.optional(),
 	}));
 	const field = table.form.field as Record<string, any>;
 
@@ -1181,7 +1209,7 @@ describe('Schema: form field props', () => {
 		expect(() => labeled_field.relationship.parse('nope')).toThrowError();
 		// Entity type/value union still derives from the values
 		assertType<'aunt-uncle' | 'parent'>(
-			(undefined as unknown) as Database.Entity<typeof labeled>['relationship'],
+			undefined as unknown as Database.Entity<typeof labeled>['relationship'],
 		);
 	});
 });
@@ -1292,7 +1320,9 @@ describe('Schema: form.schema (Standard Schema)', () => {
 		}));
 		const validate = nested.form.schema['~standard'].validate;
 		// Nested shape (an entity's value)
-		expect((validate({ address: { city: 'Springfield' } }) as any).issues).toBeUndefined();
+		expect(
+			(validate({ address: { city: 'Springfield' } }) as any).issues,
+		).toBeUndefined();
 		// Flat shape (a Form data record keyed by field name)
 		expect((validate({ 'address.city': 'Springfield' }) as any).issues).toBeUndefined();
 		// Missing required nested field reports the dot-notation path

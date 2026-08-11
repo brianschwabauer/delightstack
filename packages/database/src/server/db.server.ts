@@ -1809,6 +1809,22 @@ export class DatabaseServer<
 		const orama = createOrama(current_config);
 		try {
 			loadOrama(orama, search_index_config);
+			// Persisted docs from older saves carry `null` where toSparse used to
+			// write explicit `undefined` keys (msgpack has no undefined). Orama's
+			// remove() crashes on null array properties (`value.length`), which made
+			// every update/delete of an affected doc throw after a restart. Strip
+			// null values so those docs behave like the sparse docs written today.
+			const docs = (
+				orama as { data?: { docs?: { docs?: Record<string, Record<string, unknown>> } } }
+			).data?.docs?.docs;
+			if (docs) {
+				for (const doc of Object.values(docs)) {
+					if (!doc) continue;
+					for (const key of Object.keys(doc)) {
+						if (doc[key] === null) delete doc[key];
+					}
+				}
+			}
 		} catch (error) {
 			console.error('Error loading orama index:', error);
 			return this.rebuildIndex(entity_type);

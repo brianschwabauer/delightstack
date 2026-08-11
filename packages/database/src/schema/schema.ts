@@ -3546,7 +3546,13 @@ export namespace Database {
 					if (current === undefined || current === null) break;
 					const field = field_path[i];
 					if (i === field_path.length - 1) {
-						sparse_data[field] = (current as any)[field] ?? undefined;
+						// Only materialize the key when a real value exists. An explicit
+						// `field: undefined` survives the msgpack index save as `null`
+						// (msgpack has no undefined), and Orama's remove() crashes on a
+						// null array property (`value.length`) — so a doc reloaded after
+						// a DO restart could never be updated or deleted again.
+						const value = (current as any)[field];
+						if (value !== undefined && value !== null) sparse_data[field] = value;
 					} else {
 						if (!(field in sparse_data)) {
 							sparse_data[field] = {};
