@@ -73,9 +73,7 @@ function createFakeSqlStorage() {
 			const [, table_name] = match;
 			const prefix = String(args[0]).replace(/%$/, '');
 			return makeCursor(
-				[...getTable(table_name).values()].filter((r) =>
-					String(r.id).startsWith(prefix),
-				),
+				[...getTable(table_name).values()].filter((r) => String(r.id).startsWith(prefix)),
 			);
 		}
 		if ((match = sql.match(/^DELETE FROM (\w+) WHERE id LIKE \?/))) {
@@ -90,6 +88,17 @@ function createFakeSqlStorage() {
 		}
 		if ((match = sql.match(/^SELECT \* FROM (\w+)$/))) {
 			return makeCursor([...getTable(match[1]).values()]);
+		}
+		// Composite (entity_type, doc_id) primary key — upsert, not append.
+		if ((match = sql.match(/^INSERT OR REPLACE INTO (\w+) \(([^)]+)\) VALUES/))) {
+			const [, table_name, raw_columns] = match;
+			const columns = raw_columns.split(',').map((c) => c.trim());
+			const row: Record<string, any> = {};
+			columns.forEach((col, i) => {
+				row[col] = args[i] === undefined ? null : args[i];
+			});
+			getTable(table_name).set(`${row.entity_type}|${row.doc_id}`, row);
+			return makeCursor([{ ...row }]);
 		}
 		if ((match = sql.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/))) {
 			const [, table_name, raw_columns] = match;
@@ -165,17 +174,19 @@ describe('DatabaseServer.batch()', () => {
 		vi.useRealTimers();
 	});
 
-	it('serializes each touched index once for the whole batch', () => {
+	it('journals its writes instead of serializing the index', () => {
 		const { db, sql } = createServer();
-		db.create('item', { name: 'warmup' }); // creates the table + first save
+		db.create('item', { name: 'warmup' }); // creates the table + its first snapshot
 		const before = sql.indexSaves();
 
 		db.batch(() => {
 			for (let i = 0; i < 25; i++) db.create('item', { name: `item ${i}` });
 		});
 
-		// 25 creates → exactly ONE index save (was 25).
-		expect(sql.indexSaves() - before).toBe(1);
+		// 25 creates → ZERO full-index serializations (was 25, then 1 once batch()
+		// deferred them; journaling removes the last one from the write path).
+		expect(sql.indexSaves() - before).toBe(0);
+		expect(sql.tables.get('search_journal')?.size).toBe(26);
 		// All rows searchable.
 		const res = db.list('item', { limit: 100 });
 		expect((res as { count: number }).count).toBe(26);

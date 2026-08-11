@@ -297,6 +297,26 @@ interface SearchIndexTableSchema {
 	last_updated_at: number;
 }
 
+/**
+ * One row of the search-index write-ahead journal. Entity writes append here
+ * (cheap, O(1) per doc) instead of re-serializing the whole Orama index, and a
+ * cold start replays them on top of the last snapshot. The table is keyed by
+ * (entity_type, doc_id) so repeated writes to the same doc collapse to a single
+ * last-write-wins row.
+ */
+interface SearchJournalTableSchema {
+	/** The table the journaled document belongs to */
+	entity_type: string;
+	/** The orama document id (the entity's primary key, stringified) */
+	doc_id: string;
+	/** Whether the doc was written or removed */
+	op: 'upsert' | 'delete';
+	/** msgpack of the sparse (index-projection) doc — NULL for deletes */
+	sparse_doc: ArrayBuffer | null;
+	/** Write timestamp in ms; for deletes this is the tombstone time */
+	at: number;
+}
+
 type DeepPartial<T> = {
 	[P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
@@ -314,6 +334,14 @@ export class DatabaseServer<
 	 */
 	static MAX_DELETE_TOMBSTONES = 10_000;
 
+	/**
+	 * Journal rows an entity index may accumulate before a snapshot (compaction)
+	 * is scheduled. Snapshotting is a full-index msgpack encode — seconds of
+	 * blocked CPU on a large index — so it must happen once per N writes, not per
+	 * write. Raising this trades a longer cold-start replay for fewer snapshots.
+	 */
+	static MAX_SEARCH_JOURNAL_ROWS = 500;
+
 	/** Persistent state of the database server (saved/loaded in sqlite) */
 	#state: DatabaseServerState<DatabaseConfig, Meta>;
 
@@ -326,6 +354,17 @@ export class DatabaseServer<
 	#index_rebuild_in_flight: {
 		[TableName in keyof DatabaseConfig]?: SearchIndex;
 	} = {};
+
+	/**
+	 * Journal rows written per entity index since its last snapshot. This is an
+	 * UPPER bound, not a count: repeated writes to the same doc collapse onto one
+	 * journal row but still increment here, so we may compact slightly early —
+	 * which is the safe direction, and avoids a COUNT(*) on every write.
+	 */
+	#journal_rows: Record<string, number> = {};
+
+	/** Entity types with a compaction already scheduled (never schedule two) */
+	#compactions_in_flight: Set<string> = new Set();
 
 	/** Reverse FK map: for each table, which other tables have FK-derived fields depending on it */
 	#reverse_fk_map: Map<string, Array<{ table: string; fk_field: string }>> = new Map();
@@ -379,6 +418,14 @@ export class DatabaseServer<
 					deleted_entity TEXT NOT NULL,
 					first_updated_at INTEGER NOT NULL,
 					last_updated_at INTEGER NOT NULL
+				);
+				CREATE TABLE IF NOT EXISTS search_journal (
+					entity_type TEXT NOT NULL,
+					doc_id TEXT NOT NULL,
+					op TEXT NOT NULL,
+					sparse_doc BLOB,
+					at INTEGER NOT NULL,
+					PRIMARY KEY (entity_type, doc_id)
 				);
 			`,
 		);
@@ -1448,8 +1495,11 @@ export class DatabaseServer<
 		const results: DatabaseServerTransactionResult<DatabaseConfig>[] = [];
 		const now = new Date();
 
-		const indexes_to_save: Set<string> = new Set();
-		this.ctx.storage.transactionSync(() => {
+		// Inside a batch() the outer call owns the set (and the rollback handling
+		// and post-commit compaction check) — every nested write accumulates into it.
+		const in_batch = !!this.#deferred_compactions;
+		const touched_indexes: Set<string> = this.#deferred_compactions ?? new Set();
+		const runOperations = () => {
 			for (const op of operations) {
 				if ('exec' in op) {
 					const { statement, bindings } = op.exec;
@@ -1507,11 +1557,17 @@ export class DatabaseServer<
 					delete index.deleted_entity[String(output_data[primary_key] ?? output_data.id)];
 					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
-					indexes_to_save.add(entity_type);
+					touched_indexes.add(entity_type);
+					this.journalUpsert(
+						entity_type,
+						String(output_data[primary_key] ?? output_data.id),
+						sparse_entity,
+						now.getTime(),
+					);
 					this.cascadeReindexReferencing(
 						entity_type,
 						output_data[primary_key] || output_data.id,
-						indexes_to_save,
+						touched_indexes,
 						now,
 					);
 					results.push({
@@ -1591,11 +1647,12 @@ export class DatabaseServer<
 					delete index.deleted_entity[id.toString()];
 					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
-					indexes_to_save.add(entity_type);
+					touched_indexes.add(entity_type);
+					this.journalUpsert(entity_type, id.toString(), sparse_entity, now.getTime());
 					this.cascadeReindexReferencing(
 						entity_type,
 						output_data[primary_key] || output_data.id || id,
-						indexes_to_save,
+						touched_indexes,
 						now,
 					);
 
@@ -1630,11 +1687,15 @@ export class DatabaseServer<
 					);
 					removeFromOrama(index.orama, id.toString());
 					index.deleted_entity[id.toString()] = now.getTime();
-					this.pruneTombstones(index);
 					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
 					if (!index.first_updated_at) index.first_updated_at = now.getTime();
-					indexes_to_save.add(entity_type);
-					this.cascadeReindexReferencing(entity_type, id, indexes_to_save, now);
+					touched_indexes.add(entity_type);
+					this.journalDelete(entity_type, id.toString(), now.getTime());
+					// A prune rewrites the tombstone map and bumps the config version, and
+					// neither lives in the journal — only a snapshot can persist them, so
+					// force one rather than waiting for the row threshold.
+					if (this.pruneTombstones(index)) this.#journal_rows[entity_type] = Infinity;
+					this.cascadeReindexReferencing(entity_type, id, touched_indexes, now);
 					results.push({
 						entity: {
 							type: entity_type,
@@ -1646,15 +1707,22 @@ export class DatabaseServer<
 					continue;
 				}
 			}
+		};
 
-			// Save all modified indexes — or, inside a batch(), defer the (expensive,
-			// full-index) serialization to the batch's single outer commit.
-			if (this.#deferred_index_saves) {
-				indexes_to_save.forEach((t) => this.#deferred_index_saves!.add(t));
-			} else {
-				indexes_to_save.forEach((entity_type) => this.saveIndex(entity_type));
-			}
-		});
+		// Index persistence is journaled per doc inside the same transaction as the
+		// entity rows (see journalUpsert/journalDelete) — the full-index snapshot
+		// only happens later, off the write path, in compactJournal().
+		try {
+			this.ctx.storage.transactionSync(runOperations);
+		} catch (error) {
+			// Inside a batch the outer call owns rollback handling (its transaction
+			// may still roll back writes this one committed).
+			if (!in_batch) this.invalidateIndexes(touched_indexes);
+			throw error;
+		}
+		if (!in_batch) {
+			touched_indexes.forEach((entity_type) => this.maybeCompactJournal(entity_type));
+		}
 
 		// Broadcast entity changes via WebSocket (fire-and-forget, after the
 		// transaction commits). Inside a batch() the outer transaction can still
@@ -1684,7 +1752,13 @@ export class DatabaseServer<
 		return results;
 	}
 
-	#deferred_index_saves: Set<string> | null = null;
+	/**
+	 * Entity types written during the currently open batch(). Non-null only
+	 * inside a batch, so it doubles as the nested-batch marker. Index writes are
+	 * journaled inline (cheap), so this exists purely to know which indexes to
+	 * invalidate on rollback and to compaction-check once the batch commits.
+	 */
+	#deferred_compactions: Set<string> | null = null;
 	#deferred_broadcasts: DeferredBroadcast[] | null = null;
 
 	#flushBroadcasts(broadcasts: DeferredBroadcast[]): void {
@@ -1703,30 +1777,31 @@ export class DatabaseServer<
 
 	/**
 	 * Run several imperative writes (create/update/delete/transaction) as ONE
-	 * durable unit: every touched entity's search index serializes once at the
-	 * end instead of once per write (index serialization is a full-index msgpack
-	 * encode — per-write saves make an N-write ingest O(N²)), and the whole
-	 * batch commits atomically (the callback runs inside an outer
-	 * `transactionSync`, so a throw rolls back SQL AND index together).
-	 * Websocket broadcasts flush only after the batch commits.
+	 * durable unit: the whole batch commits atomically (the callback runs inside
+	 * an outer `transactionSync`, so a throw rolls back SQL AND the index
+	 * journal together) and websocket broadcasts flush only after it commits.
 	 *
 	 * The callback MUST be synchronous — an await inside would let other DO
 	 * events interleave into the open transaction.
 	 */
 	batch<T>(fn: () => T): T {
-		if (this.#deferred_index_saves) return fn(); // nested batch — join the outer one
-		this.#deferred_index_saves = new Set();
+		if (this.#deferred_compactions) return fn(); // nested batch — join the outer one
+		const touched_indexes = new Set<string>();
+		this.#deferred_compactions = touched_indexes;
 		this.#deferred_broadcasts = [];
 		try {
-			const result = this.ctx.storage.transactionSync(() => {
-				const value = fn();
-				this.#deferred_index_saves!.forEach((t) => this.saveIndex(t as never));
-				return value;
-			});
+			let result: T;
+			try {
+				result = this.ctx.storage.transactionSync(fn);
+			} catch (error) {
+				this.invalidateIndexes(touched_indexes);
+				throw error;
+			}
 			this.#flushBroadcasts(this.#deferred_broadcasts);
+			touched_indexes.forEach((entity_type) => this.maybeCompactJournal(entity_type));
 			return result;
 		} finally {
-			this.#deferred_index_saves = null;
+			this.#deferred_compactions = null;
 			this.#deferred_broadcasts = null;
 		}
 	}
@@ -1830,7 +1905,7 @@ export class DatabaseServer<
 			return this.rebuildIndex(entity_type);
 		}
 
-		this.#search_index[entity_type] = {
+		const index: SearchIndex = {
 			deleted_entity: JSON.parse(search_index_rows[0].deleted_entity || '{}'),
 			last_updated_at: search_index_rows[0].last_updated_at || 0,
 			first_updated_at: search_index_rows[0].first_updated_at || 0,
@@ -1838,7 +1913,60 @@ export class DatabaseServer<
 			orama,
 		};
 
+		// The snapshot above is only as fresh as the last compaction; every write
+		// since then lives in the journal. Replaying it is what makes per-write
+		// snapshots unnecessary.
+		try {
+			this.replayJournal(entity_type, index);
+		} catch (error) {
+			console.error('Error replaying search journal:', error);
+			return this.rebuildIndex(entity_type);
+		}
+
+		this.#search_index[entity_type] = index;
 		return this.#search_index[entity_type];
+	}
+
+	/**
+	 * Applies every journal row for the entity type on top of a just-loaded
+	 * snapshot. Rows are keyed by doc id (one row per doc, last write wins), so
+	 * the replay order between docs is irrelevant.
+	 */
+	private replayJournal(entity_type: string, index: SearchIndex) {
+		const rows = this.ctx.storage.sql
+			.exec(`SELECT * FROM search_journal WHERE entity_type = ?`, entity_type)
+			.toArray() as unknown as SearchJournalTableSchema[];
+		this.#journal_rows[entity_type] = rows.length;
+		if (!rows.length) return;
+
+		for (const row of rows) {
+			const doc_id = String(row.doc_id);
+			const at = Number(row.at) || 0;
+			if (row.op === 'delete') {
+				try {
+					removeFromOrama(index.orama, doc_id);
+				} catch {
+					// The snapshot may predate the doc entirely — the tombstone is what matters
+				}
+				index.deleted_entity[doc_id] = at;
+			} else {
+				const sparse = this.decodeSparseDoc(row.sparse_doc);
+				if (!sparse) continue;
+				try {
+					removeFromOrama(index.orama, doc_id);
+				} catch {
+					// New doc since the snapshot — nothing to replace
+				}
+				insertIntoOrama(index.orama, sparse);
+				// The doc exists again, so any tombstone the snapshot carried for this
+				// id (reused numeric rowids, delete-then-recreate) is stale
+				delete index.deleted_entity[doc_id];
+			}
+			if (at > index.last_updated_at) index.last_updated_at = at;
+			if (at && (!index.first_updated_at || at < index.first_updated_at)) {
+				index.first_updated_at = at;
+			}
+		}
 	}
 
 	/** Rebuilds the index from scratch for the given entity type */
@@ -1898,6 +2026,9 @@ export class DatabaseServer<
 			}
 
 			this.saveIndex(entity_type);
+			// The fresh snapshot was built from the entity tables themselves, so it
+			// already includes (and therefore supersedes) every journaled write
+			this.clearJournal(entity_type);
 		} catch (error) {
 			// Don't cache a half-built index if the rebuild failed
 			delete this.#search_index[entity_type];
@@ -1951,6 +2082,139 @@ export class DatabaseServer<
 			);
 			saved_bytes += chunk.length;
 			i++;
+		}
+	}
+
+	/**
+	 * Records a written document in the search journal. Callers must already have
+	 * applied the same sparse doc to the in-memory orama index and must be inside
+	 * the transaction that wrote the entity row, so the row and its journal entry
+	 * commit (or roll back) together.
+	 */
+	private journalUpsert(
+		entity_type: string,
+		doc_id: string,
+		sparse_doc: unknown,
+		at: number,
+	) {
+		// `ignoreUndefined` drops absent keys instead of encoding them as null:
+		// msgpack has no undefined, and a null array property makes orama's
+		// remove() throw (`value.length`) on every later update of the doc.
+		// encode() returns a view into a reused buffer — slice() to own the bytes.
+		const encoded = encodeMsgPack(sparse_doc, {
+			maxDepth: 4096,
+			ignoreUndefined: true,
+		}).slice();
+		this.journalWrite(entity_type, doc_id, 'upsert', encoded, at);
+	}
+
+	/** Records a deleted document (a tombstone) in the search journal */
+	private journalDelete(entity_type: string, doc_id: string, at: number) {
+		this.journalWrite(entity_type, doc_id, 'delete', null, at);
+	}
+
+	private journalWrite(
+		entity_type: string,
+		doc_id: string,
+		op: SearchJournalTableSchema['op'],
+		sparse_doc: Uint8Array | null,
+		at: number,
+	) {
+		// OR REPLACE gives per-doc last-write-wins against the (entity_type, doc_id)
+		// primary key, so a hot doc costs one row no matter how often it is written
+		this.ctx.storage.sql.exec(
+			`INSERT OR REPLACE INTO search_journal (entity_type, doc_id, op, sparse_doc, at) VALUES (?, ?, ?, ?, ?)`,
+			entity_type,
+			doc_id,
+			op,
+			sparse_doc,
+			at,
+		);
+		this.#journal_rows[entity_type] = (this.#journal_rows[entity_type] || 0) + 1;
+	}
+
+	/** Decodes a journaled sparse doc, or undefined if the row carries no usable doc */
+	private decodeSparseDoc(
+		sparse_doc: ArrayBuffer | null,
+	): Record<string, unknown> | undefined {
+		if (!sparse_doc) return;
+		const decoded = decodeMsgPack(new Uint8Array(sparse_doc));
+		if (!decoded || typeof decoded !== 'object') return;
+		const doc = decoded as Record<string, unknown>;
+		// Same guard the snapshot load applies: nulls that a round-trip may have
+		// introduced would crash orama's remove() on the next write to this doc
+		for (const key of Object.keys(doc)) {
+			if (doc[key] === null) delete doc[key];
+		}
+		return doc;
+	}
+
+	/** Removes every journal row for an entity type (its snapshot now covers them) */
+	private clearJournal(entity_type: string) {
+		this.ctx.storage.sql.exec(
+			`DELETE FROM search_journal WHERE entity_type = ?`,
+			entity_type,
+		);
+		this.#journal_rows[entity_type] = 0;
+	}
+
+	/**
+	 * Drops cached in-memory indexes after a rolled-back write. `transactionSync`
+	 * undoes the SQL (entity rows AND journal rows) but not the orama mutations
+	 * already applied in memory — keeping those would serve phantom documents and,
+	 * worse, bake them into the next snapshot. Reloading from disk is the only
+	 * cheap way back to a state that matches the committed data.
+	 */
+	private invalidateIndexes(entity_types: Iterable<string>) {
+		for (const entity_type of entity_types) {
+			delete this.#search_index[entity_type as keyof DatabaseConfig];
+			delete this.#journal_rows[entity_type];
+		}
+	}
+
+	/**
+	 * Schedules a snapshot if the entity's journal has grown past the threshold.
+	 * Compaction MUST run off the write path: it is the multi-second full-index
+	 * encode this whole journal exists to keep out of request handling.
+	 */
+	private maybeCompactJournal(entity_type: string) {
+		if (
+			(this.#journal_rows[entity_type] || 0) <=
+			(this.constructor as typeof DatabaseServer).MAX_SEARCH_JOURNAL_ROWS
+		) {
+			return;
+		}
+		if (this.#compactions_in_flight.has(entity_type)) return;
+		this.#compactions_in_flight.add(entity_type);
+		// A macrotask, not a microtask: microtasks can still run inside a caller's
+		// synchronous chain, and this must never land in an open transaction.
+		try {
+			setTimeout(() => this.compactJournal(entity_type), 0);
+		} catch {
+			this.#compactions_in_flight.delete(entity_type);
+		}
+	}
+
+	/** Snapshots an entity index and discards the journal rows it now covers */
+	private compactJournal(entity_type: string) {
+		try {
+			// Only the loaded index can be snapshotted — dropping the journal without
+			// one would silently discard every write since the last compaction
+			if (!this.#search_index[entity_type as keyof DatabaseConfig]) return;
+			this.ctx.storage.transactionSync(() => {
+				this.saveIndex(entity_type as keyof DatabaseConfig & string);
+				// Deleting ALL rows for the entity type is race-free rather than sloppy:
+				// the DO is single-threaded and transactionSync runs synchronously, so no
+				// write can interleave between the snapshot and this delete — every row
+				// present here is already inside the snapshot.
+				this.clearJournal(entity_type);
+			});
+		} catch (error) {
+			// A failed compaction is not fatal: the journal simply stays and replay
+			// still reconstructs the index. Keep serving requests.
+			console.error(`Error compacting search journal for '${entity_type}':`, error);
+		} finally {
+			this.#compactions_in_flight.delete(entity_type);
 		}
 	}
 
@@ -2043,16 +2307,20 @@ export class DatabaseServer<
 	 * bumped: clients whose sync cursor predates the pruned deletes can no
 	 * longer be given a complete delete list, and the version bump makes them
 	 * do a full resync (the same well-tested path used for schema changes).
+	 *
+	 * Returns whether a prune actually happened, so the caller can force a
+	 * snapshot (the journal cannot carry a tombstone map or a version bump).
 	 */
-	private pruneTombstones(index: SearchIndex) {
+	private pruneTombstones(index: SearchIndex): boolean {
 		const max = (this.constructor as typeof DatabaseServer).MAX_DELETE_TOMBSTONES;
 		const entries = Object.entries(index.deleted_entity);
-		if (entries.length <= max) return;
+		if (entries.length <= max) return false;
 		entries.sort((a, b) => a[1] - b[1]);
 		index.deleted_entity = Object.fromEntries(
 			entries.slice(Math.ceil(entries.length / 2)),
 		);
 		index.config_version = (index.config_version || 1) + 1;
+		return true;
 	}
 
 	/**
@@ -2075,7 +2343,7 @@ export class DatabaseServer<
 	private cascadeReindexReferencing(
 		entity_type: string,
 		entity_id: string | number,
-		indexes_to_save: Set<string>,
+		touched_indexes: Set<string>,
 		now: Date,
 	): void {
 		const dependents = this.#reverse_fk_map.get(entity_type);
@@ -2141,7 +2409,10 @@ export class DatabaseServer<
 				insertIntoOrama(dep_index.orama, sparse);
 				dep_index.last_updated_at = Math.max(dep_index.last_updated_at, ts);
 				if (!dep_index.first_updated_at) dep_index.first_updated_at = ts;
-				indexes_to_save.add(dep.table);
+				touched_indexes.add(dep.table);
+				// Cascaded reindexes are real index writes — without journaling them,
+				// a cold start would serve the pre-cascade derived fields
+				this.journalUpsert(dep.table, dep_id, sparse, ts);
 			}
 		}
 	}

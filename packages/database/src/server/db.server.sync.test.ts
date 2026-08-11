@@ -119,6 +119,19 @@ function createFakeSqlStorage() {
 			return makeCursor([...getTable(match[1]).values()]);
 		}
 
+		// INSERT OR REPLACE INTO search_journal (cols) VALUES (?, ...)
+		// Composite (entity_type, doc_id) primary key — upsert, not append.
+		if ((match = sql.match(/^INSERT OR REPLACE INTO (\w+) \(([^)]+)\) VALUES/))) {
+			const [, table_name, raw_columns] = match;
+			const columns = raw_columns.split(',').map((c) => c.trim());
+			const row: Record<string, any> = {};
+			columns.forEach((col, i) => {
+				row[col] = args[i] === undefined ? null : args[i];
+			});
+			getTable(table_name).set(`${row.entity_type}|${row.doc_id}`, row);
+			return makeCursor([{ ...row }]);
+		}
+
 		// INSERT INTO <t> (cols) VALUES (?, ...) [RETURNING *]
 		if ((match = sql.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/))) {
 			const [, table_name, raw_columns] = match;
