@@ -305,6 +305,53 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		// past vitest's 5s default — which blocked two releases on pure noise.
 	}, 20_000);
 
+	it('a single sync page larger than 1000 docs loses nothing (2026-08-10 incident)', async () => {
+		// Prod shape: a fresh client (config_version 0) gets the ENTIRE dataset in
+		// one schema_changed page — 2500+ docs, newest first. The incident: orama's
+		// removeMultiple only processes its first 1000-id batch synchronously and
+		// runs the rest on fire-and-forget setTimeout chains, so the worker's
+		// remove-before-insert had those deferred batches fire AFTER the insert and
+		// delete every doc past #1000 — while sync_meta claimed a complete window.
+		// A mailbox rendered 6 inbox threads out of 52 and never refetched the rest.
+		//
+		// REAL timers are load-bearing: under fake timers the deferred removal
+		// batches never fire and the unfixed code false-passes.
+		vi.useRealTimers();
+		const { server } = await createTestServer();
+		// One transaction: per-doc create() re-serializes the whole index each
+		// time, which makes seeding 2600 docs takes minutes in the fake harness.
+		server.transaction(
+			Array.from({ length: 2600 }, (_, i) => ({
+				create: {
+					type: 'thread',
+					data: {
+						subject: `thread ${i}`,
+						// Sparse old folder: the first 50 created (oldest updated_at) are
+						// inbox — exactly the docs a newest-first page cap silently drops.
+						folder: i < 50 ? 'inbox' : i % 3 === 0 ? 'sent' : 'archive',
+						last_message_at: T0 - i * 1000,
+					},
+				},
+			})),
+		);
+		vi.stubGlobal('fetch', bridgeFetchToServer(server)); // no page_limit: one giant page
+
+		const worker = await createWorker();
+		await worker.sync();
+		// Drain macrotasks so any deferred removal batches actually run before
+		// the assertions (in the live app they fire within milliseconds).
+		for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
+
+		expect(await worker.isSynced('thread')).toBe(true);
+		const result = await worker.search('thread', { limit: 5000 });
+		expect(result.count).toBe(2600);
+		const inbox = await worker.search('thread', {
+			where: { folder: { eq: 'inbox' } },
+			limit: 100,
+		} as any);
+		expect(inbox.count).toBe(50);
+	}, 20_000);
+
 	it('one invalid document in a sync page loses only itself, never the page tail', async () => {
 		const { server } = await createTestServer();
 		const ids: string[] = [];

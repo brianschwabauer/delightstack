@@ -355,10 +355,11 @@ export class DatabaseWorker {
 				if (entity_result.deleted?.length) {
 					any_changes = true;
 					try {
-						removeMultiple(
-							state.orama,
-							entity_result.deleted.map((id) => String(id)),
-						);
+						// batchSize MUST cover every id: orama's removeMultiple only
+						// processes its first batch (default 1000) synchronously and
+						// runs the rest on fire-and-forget setTimeout chains.
+						const delete_ids = entity_result.deleted.map((id) => String(id));
+						removeMultiple(state.orama, delete_ids, delete_ids.length);
 					} catch {
 						// Some IDs may not exist in the index
 					}
@@ -389,7 +390,13 @@ export class DatabaseWorker {
 					const projected = inserts.map((e) => this.#projectToIndex(entity_type, e));
 					const ids = projected.map((e) => String(e[state.primary_key]));
 					try {
-						removeMultiple(state.orama, ids);
+						// batchSize = ids.length: orama's removeMultiple only processes
+						// its FIRST batch (default 1000) before returning — the rest run
+						// on fire-and-forget setTimeout chains. With >1000 ids those
+						// deferred batches fired AFTER insertMultiple below and deleted
+						// every just-inserted doc past #1000: a 2500-thread mailbox
+						// synced down to exactly its newest 1000 threads (2026-08-10).
+						removeMultiple(state.orama, ids, ids.length);
 						insertMultiple(state.orama, projected);
 					} catch {
 						// Partial batch failure — re-apply doc-by-doc (idempotent:
