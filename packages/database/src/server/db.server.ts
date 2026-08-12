@@ -413,6 +413,9 @@ export class DatabaseServer<
 	/** Native-engine table configs, keyed by entity type */
 	#native_tables: Map<string, ServerSearchTable> = new Map();
 
+	/** Vector-typed schema paths per entity type — the sync strip list (§7.0) */
+	#vector_paths: Map<string, string[]> = new Map();
+
 	/**
 	 * Entity types whose native rebuild is currently running. Same re-entrancy
 	 * guard as `#index_rebuild_in_flight`: the rebuild recomputes FK-derived
@@ -1027,6 +1030,25 @@ export class DatabaseServer<
 	}
 
 	/**
+	 * The sparse document as the sync protocol ships it: vector fields removed.
+	 *
+	 * One place, both engines (§7.0). The server keeps indexing the full sparse
+	 * doc — this strip is the *wire* contract, and it is client-observable: an
+	 * app that used to read `entity.embedding` off a synced entity no longer can.
+	 */
+	private toSyncDocument(
+		entity_type: string,
+		doc: Record<string, unknown>,
+	): Record<string, unknown> {
+		let paths = this.#vector_paths.get(entity_type);
+		if (!paths) {
+			paths = vectorFieldPaths(this.config[entity_type]?.config?.orama?.schema);
+			this.#vector_paths.set(entity_type, paths);
+		}
+		return stripVectorFields(doc, paths);
+	}
+
+	/**
 	 * The synced/indexed sparse projection of one raw entity row.
 	 *
 	 * `toSparse` over the parsed entity, with the persisted `$derived` values
@@ -1497,14 +1519,19 @@ export class DatabaseServer<
 			for (const change of included) {
 				if (change.deleted_id !== undefined) {
 					deleted.push(change.deleted_id);
-				} else if (!change.ts || change.doc.created_at === change.doc.updated_at) {
-					created.push(
-						change.doc as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
-					);
 				} else {
-					updated.push(
-						change.doc as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
-					);
+					// The same §7.0 strip the native path applies — the wire contract is
+					// engine-independent, so a client indexes what it is sent either way.
+					const doc = this.toSyncDocument(entity_type, change.doc);
+					if (!change.ts || doc.created_at === doc.updated_at) {
+						created.push(
+							doc as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
+						);
+					} else {
+						updated.push(
+							doc as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
+						);
+					}
 				}
 				if (!change.ts) continue;
 				if (change.ts < start_updated_at) start_updated_at = change.ts;
@@ -1952,7 +1979,10 @@ export class DatabaseServer<
 			if (change.deleted_id !== undefined) {
 				deleted.push(change.deleted_id);
 			} else {
-				const doc = this.nativeSparseFromRow(entity_type, change.row!);
+				const doc = this.toSyncDocument(
+					entity_type,
+					this.nativeSparseFromRow(entity_type, change.row!),
+				);
 				if (!change.ts || doc.created_at === doc.updated_at) created.push(doc);
 				else updated.push(doc);
 			}
@@ -2423,7 +2453,12 @@ export class DatabaseServer<
 			const ws_do = this.ws();
 			if (ws_do?.entityChanged) {
 				for (const b of broadcasts) {
-					ws_do.entityChanged(b.action, b.entity_type, b.id, b.data, undefined, b.sparse);
+					// The broadcast `sparse` document is a sync page of one: clients
+					// index it verbatim, so it carries the same §7.0 vector strip.
+					const sparse = b.sparse
+						? this.toSyncDocument(b.entity_type, b.sparse)
+						: b.sparse;
+					ws_do.entityChanged(b.action, b.entity_type, b.id, b.data, undefined, sparse);
 				}
 			}
 		} catch {
@@ -3245,6 +3280,61 @@ function readJsonDerived(row: Record<string, unknown>): unknown {
 	} catch {
 		return undefined;
 	}
+}
+
+/**
+ * Every vector-typed path in a (possibly nested) Orama schema, dot-joined.
+ *
+ * `vector[768]` is the only declared type whose values never leave the server
+ * (§4.9), so this is the closed list the sync strip below works from.
+ */
+function vectorFieldPaths(schema: unknown, prefix = ''): string[] {
+	if (!schema || typeof schema !== 'object') return [];
+	const paths: string[] = [];
+	for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+		const path = prefix ? `${prefix}.${key}` : key;
+		if (typeof value === 'string') {
+			if (value.startsWith('vector[')) paths.push(path);
+			continue;
+		}
+		paths.push(...vectorFieldPaths(value, path));
+	}
+	return paths;
+}
+
+/**
+ * A sparse document with its vector fields removed (§7.0's one carve-out).
+ *
+ * The server indexes the full sparse doc; sync ships — and the client indexes —
+ * *sparse doc minus vector fields*, because vector search is server-only and an
+ * embedding is by far the heaviest thing in a document. Returns the input
+ * untouched when the table declares no vectors, so the common table pays one
+ * array-length check; otherwise it returns a **copy**, since the Orama path
+ * hands us a live index document that must not be mutated.
+ */
+function stripVectorFields(
+	doc: Record<string, unknown>,
+	vector_paths: readonly string[],
+): Record<string, unknown> {
+	if (vector_paths.length === 0) return doc;
+	const stripped: Record<string, unknown> = { ...doc };
+	for (const path of vector_paths) {
+		const segments = path.split('.');
+		let container: Record<string, unknown> | undefined = stripped;
+		for (let index = 0; index < segments.length - 1 && container; index++) {
+			const next: unknown = container[segments[index]];
+			if (!next || typeof next !== 'object' || Array.isArray(next)) {
+				container = undefined;
+				break;
+			}
+			// Copy on the way down — a nested object is shared with the caller's doc.
+			const copy: Record<string, unknown> = { ...(next as Record<string, unknown>) };
+			container[segments[index]] = copy;
+			container = copy;
+		}
+		if (container) delete container[segments[segments.length - 1]];
+	}
+	return stripped;
 }
 
 /** Normalize a persisted `$derived` sub-object (JSON text or already parsed). */

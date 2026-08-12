@@ -660,7 +660,7 @@ Spread these directly onto HTML input elements or use them to drive form compone
 
 ## Client (Svelte 5)
 
-The client package provides a reactive, type-safe API client for the browser. It uses the same table definitions as the server — single source of truth — and gives you local search via Orama, IndexedDB caching, optimistic updates, and automatic fallback to server-side search when entity counts exceed a threshold.
+The client package provides a reactive, type-safe API client for the browser. It uses the same table definitions as the server — single source of truth — and gives you local full-text search over an IndexedDB index, IndexedDB entity caching, optimistic updates, and automatic routing to server-side search whenever the local index does not cover the whole table.
 
 > **Svelte 5 required.** The client uses Svelte 5 runes (`$state`, `$derived`, `$effect`) and is not compatible with other frameworks. The server and schema packages have no framework dependency.
 
@@ -680,7 +680,7 @@ The client package provides a reactive, type-safe API client for the browser. It
 │  SharedWorker (prod) / Worker (dev)                       │
 │  ┌────────────────────────────────────────────────────┐   │
 │  │  DatabaseWorker                                    │   │
-│  │  ├─ Orama search indices (per entity, in-memory)   │   │
+│  │  ├─ IndexedDB search index (postings, per entity) │   │
 │  │  ├─ IndexedDB cache (entities + sync metadata)     │   │
 │  │  ├─ CRUD → fetch + index update                    │   │
 │  │  └─ sync() → /api/sync → update indices + IDB      │   │
@@ -697,7 +697,7 @@ The client package provides a reactive, type-safe API client for the browser. It
               └─────────────────────┘
 ```
 
-All heavy work (Orama indexing, IndexedDB reads/writes, fetch calls) runs in a Web Worker. In production, a SharedWorker is used so multiple tabs share a single index. In dev mode, a regular Worker is used for HMR compatibility.
+All heavy work (indexing, IndexedDB reads/writes, fetch calls) runs in a Web Worker. In production, a SharedWorker is used so multiple tabs share a single writer. In dev mode, a regular Worker is used for HMR compatibility — several tabs then share one IndexedDB, which the write path is built for (every index write is a single transaction).
 
 ### Setup
 
@@ -715,7 +715,7 @@ const db = new DatabaseClient({
 	// Per-entity overrides (all optional)
 	entities: {
 		comment: { search_mode: 'server' }, // never try client-side search
-		person: { threshold: 10_000 }, // custom threshold (default 5000)
+		person: { search_mode: 'client' }, // search locally even mid-backfill
 		post: { cache: false }, // disable IDB cache for this entity
 	},
 
@@ -864,7 +864,7 @@ export const load: PageLoad = async ({ params, parent }) => {
 
 **How `load()` picks its read path.** The client carries a `hydrated` flag that decides between two paths inside `EntityState.load()`:
 
-- **Pre-hydration (SSR + initial hydration / full refresh):** fetches on the main thread using the `fetch` you passed to `DatabaseClient`. On the server this is SvelteKit's scoped fetch, which records the response so the client's hydration re-run finds it in the fetch cache — one network request covers both renders. After the response lands on the client, it's pushed into the worker's IDB + Orama index via `applyExternalChange`, so subsequent navigations can read it back from cache.
+- **Pre-hydration (SSR + initial hydration / full refresh):** fetches on the main thread using the `fetch` you passed to `DatabaseClient`. On the server this is SvelteKit's scoped fetch, which records the response so the client's hydration re-run finds it in the fetch cache — one network request covers both renders. After the response lands on the client, it's pushed into the worker's IDB cache + search index via `applyExternalChange`, so subsequent navigations can read it back from cache.
 - **Post-hydration (client-side navigation):** delegates to `worker.get`, which serves from the IDB cache (live-updated by websockets and by applied local mutations) — zero network for nav-heavy flows. `force_refresh: true` still bypasses IDB and hits the server.
 
 The flag flips automatically — `init()` schedules a short macrotask (50ms) that fires after the browser finishes its initial hydration work but long before the user can interact with the page, so no wiring is required in your layouts. If you ever need to switch paths manually (for example, if a sub-route should always read from IDB right away), call `db.markHydrated()` — it cancels the pending timer and flips immediately.
@@ -944,7 +944,7 @@ Caching and version invalidation live on `DatabaseClient` — `new EntityState(.
 
 ### DatabaseSearch (reactive search)
 
-`DatabaseSearch` provides live search results that auto-update when the underlying Orama index changes (e.g. after a create/update/delete). When the entity count exceeds the threshold, it automatically switches to server-side search.
+`DatabaseSearch` provides live search results that auto-update when the underlying index changes (e.g. after a create/update/delete). Queries are routed to the server whenever the local index does not cover the whole table (see [Search modes](#search-modes)).
 
 > **Sparse results.** Search documents only contain fields declared `searchable` in your Orama schema (typed as `Database.SearchEntity<T>`, *not* `Database.Entity<T>`). Both client and server search default to sparse — Orama client-side only has the sparse fields, and the server path defaults to `sparse: true` for efficient sync payloads. When you need the full entity, call `db.get('type', hit.id)` or `db.read('type', () => hit.id)` — those always return the full `Database.Entity<T>`.
 
@@ -1018,19 +1018,25 @@ await db.destroy();
 
 ### Search modes
 
-Each entity type operates in one of two search modes:
+Where a search is answered is decided **per query**, in this order:
 
-- **`client`** (default) — Entities are synced to an in-memory Orama index in the worker. Searches are instant and offline-capable. When the cumulative entity count during sync exceeds the threshold (default 5000), the entity automatically switches to server mode.
-- **`server`** — Searches hit the server API. No local index is maintained. Use this for large or infrequently-searched entity types.
+1. **Any query carrying `vector`** (including hybrid) goes to the server. Embeddings never reach the client.
+2. **Otherwise, coverage decides.** Entities are indexed into IndexedDB as they sync. Once an entity type's synced window covers the whole table, its searches are answered locally — instant and offline-capable. Until the backfill completes, they go to the server, which has the full corpus and therefore the correct relevance statistics.
 
-You can force the mode per entity in the config:
+Identical results are guaranteed only when the two corpora match: a partial local window is a different corpus, and the server's answer is the authoritative one.
+
+You can force the decision per entity:
 
 ```typescript
 entities: {
-  comment: { search_mode: 'server' },  // always server
-  person: { threshold: 10_000 },        // switch at 10k instead of 5k
+  comment: { search_mode: 'server' },  // never search or sync locally
+  person: { search_mode: 'client' },   // search locally even mid-backfill
 }
 ```
+
+`search_mode: 'client'` is an explicit choice to accept partial-corpus answers while the window fills.
+
+> **Deprecated:** `default_threshold` and `entities[type].threshold` force the server once the local document count reaches them. They existed to defend a memory ceiling that the IndexedDB index removed, are unset by default, and will be removed in the next major.
 
 ### Error handling
 

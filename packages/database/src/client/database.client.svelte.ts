@@ -22,9 +22,23 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	/** Per-entity overrides (all optional) */
 	entities?: {
 		[K in keyof T]?: {
-			/** Force search mode — 'server' skips client-side Orama entirely */
+			/**
+			 * Force where searches are answered.
+			 *
+			 * By default routing is coverage-based: local search is used once the
+			 * entity's synced window covers the whole table, and the server answers
+			 * until then (it has the full corpus and the correct global statistics).
+			 * `'server'` opts out of local search and local syncing entirely;
+			 * `'client'` opts in unconditionally, including while the window is
+			 * still filling — results are then a partial-corpus answer by design.
+			 */
 			search_mode?: 'client' | 'server';
-			/** Custom threshold for auto client→server switch (default: 5000) */
+			/**
+			 * @deprecated Document-count ceiling above which this entity's searches
+			 * are routed to the server. The client index is IndexedDB-backed now, so
+			 * there is no memory ceiling to defend — leave it unset. Removed in the
+			 * next major.
+			 */
 			threshold?: number;
 			/** Disable IDB cache for this entity */
 			cache?: boolean;
@@ -34,7 +48,12 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	/** IndexedDB database name — scope per org/context */
 	db_name: string;
 
-	/** Default threshold for auto client→server switch (default: 5000) */
+	/**
+	 * @deprecated Default document-count ceiling above which searches are routed
+	 * to the server. Unset by default now: the client index is IndexedDB-backed
+	 * (no memory ceiling) and routing is coverage-based. Set it only as a
+	 * temporary override valve — removed in the next major.
+	 */
 	default_threshold?: number;
 
 	/** Whether the app is in dev mode (uses regular Worker instead of SharedWorker) */
@@ -1167,10 +1186,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	}
 
 	constructor(config: DatabaseClientConfig<T>) {
-		this.#config = {
-			default_threshold: 5000,
-			...config,
-		};
+		this.#config = { ...config };
 	}
 
 	/** Initialize the client — loads IDB cache, syncs with server, builds indices. */
@@ -1186,6 +1202,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			{
 				orama: { schema: Record<string, unknown>; sort: unknown };
 				primary_key: string;
+				primary_key_type?: 'string' | 'number';
 			}
 		> = {};
 		for (const [name, table] of Object.entries(this.#config.tables)) {
@@ -1195,6 +1212,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 					sort: table.config.orama.sort,
 				},
 				primary_key: table.config.primary_key,
+				primary_key_type: table.config.primary_key_type,
 			};
 		}
 
@@ -1214,7 +1232,9 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			tables,
 			entities,
 			db_name: this.#config.db_name,
-			default_threshold: this.#config.default_threshold ?? 5000,
+			// Passed through as-is: `undefined` means "no count valve", which is the
+			// default now that routing is coverage-based.
+			default_threshold: this.#config.default_threshold,
 		});
 
 		// Clear stale EntityState cache so new instances get the active worker

@@ -4,10 +4,16 @@
  * Stores:
  *   - entities   : cached entity data   (key = `{entity_type}/{id}`)
  *   - sync_meta  : per-entity sync state (key = entity_type)
- *   - search_index : serialised Orama indices (key = entity_type)
+ *
+ * The search index itself is NOT here: it lives in the four postings stores of
+ * `search/client/idb_store.ts`, in this same database, so an index write and the
+ * sync cursor that accounts for it commit in one transaction. The worker opens
+ * the database through `openSearchDatabase` (which creates the stores below as
+ * `extra_stores`); the helpers here operate on whichever connection it hands
+ * them. The legacy `search_index` blob store is dropped on that upgrade.
  */
 
-const STORES = ['entities', 'sync_meta', 'search_index'] as const;
+const STORES = ['entities', 'sync_meta'] as const;
 
 export type IDBStoreName = (typeof STORES)[number];
 
@@ -30,13 +36,6 @@ export interface CachedEntity {
 	entity_type: string;
 	id: string | number;
 	data: Record<string, unknown>;
-	updated_at: number;
-}
-
-export interface CachedSearchIndex {
-	entity_type: string;
-	index: unknown;
-	config_version: number;
 	updated_at: number;
 }
 

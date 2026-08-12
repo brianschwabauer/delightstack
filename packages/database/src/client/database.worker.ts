@@ -1,21 +1,5 @@
 import { expose } from 'comlink';
 import {
-	create as createOrama,
-	insertMultiple,
-	removeMultiple,
-	insert as insertIntoOrama,
-	remove as removeFromOrama,
-	search as searchOrama,
-	save as saveOrama,
-	load as loadOrama,
-	count as countOrama,
-	getByID as getOramaByID,
-	type AnyOrama,
-	type AnySchema,
-	type RawData,
-} from '@orama/orama';
-import {
-	openDatabase,
 	idbGet,
 	idbPut,
 	idbDelete,
@@ -23,15 +7,28 @@ import {
 	idbBatch,
 	type SyncMeta,
 	type CachedEntity,
-	type CachedSearchIndex,
 } from './database.idb';
 import { DelightError } from '@delightstack/utilities';
-import { toOramaSearchParams, toOramaWhere } from '../search/orama-compat';
+import { IdbSearchEngine, requiresServer } from '../search/client/engine';
 import {
-	type SearchQueryInput,
-	encodeSearchQuery,
-	normalizeWhere,
-} from '../search-query';
+	defineClientType,
+	docIndexName,
+	IdbSearchStore,
+	openSearchDatabase,
+	DOCS_STORE,
+	SEARCH_STORE_NAMES,
+	type ClientSearchType,
+	type DocIndexPath,
+	type DocWrite,
+	type ExtraStoreOp,
+} from '../search/client/idb_store';
+import type {
+	SearchableType,
+	SearchQuery,
+	SearchQueryResults,
+} from '../search/core/types';
+import type { WhereSchema } from '../search/core/where';
+import { type SearchQueryInput, encodeSearchQuery } from '../search-query';
 
 /** Inline sync response type to avoid importing server module in worker context. */
 interface SyncEntityResult {
@@ -59,12 +56,13 @@ interface SyncResponse {
 // ---------------------------------------------------------------------------
 
 export interface WorkerInitConfig {
-	/** Serializable Orama configs extracted from table definitions */
+	/** Serializable search configs extracted from table definitions */
 	tables: Record<
 		string,
 		{
 			orama: { schema: Record<string, unknown>; sort: unknown };
 			primary_key: string;
+			primary_key_type?: 'string' | 'number';
 		}
 	>;
 	/** Per-entity overrides */
@@ -78,8 +76,16 @@ export interface WorkerInitConfig {
 	>;
 	/** IndexedDB database name */
 	db_name: string;
-	/** Default entity count threshold for auto client->server switch */
-	default_threshold: number;
+	/**
+	 * @deprecated Document-count ceiling above which searches are routed to the
+	 * server. The client index is IndexedDB-backed now, so there is no memory
+	 * ceiling to defend and routing is coverage-based (§7.6): a complete synced
+	 * window searches locally, an incomplete one goes to the server. Set this
+	 * only as a temporary override valve — it is removed in the next major.
+	 */
+	default_threshold?: number;
+	/** Injectable IDB factory (tests). Defaults to the worker's `indexedDB`. */
+	idb_factory?: IDBFactory;
 }
 
 export interface WorkerSearchResult {
@@ -89,16 +95,23 @@ export interface WorkerSearchResult {
 }
 
 interface EntitySyncState {
-	orama: AnyOrama | null;
+	/** `'server'` only when the app forced it — never an automatic downgrade. */
 	search_mode: 'client' | 'server';
 	config_version: number;
 	last_synced_at: number;
 	start_updated_at: number | undefined;
 	end_updated_at: number | undefined;
 	synced: boolean;
-	threshold: number;
+	/** @deprecated The override valve; `undefined` disables count-based routing. */
+	threshold: number | undefined;
 	cache_enabled: boolean;
 	primary_key: string;
+	/** The flattened `dot.path → type` schema the client search engine works from. */
+	schema: WhereSchema;
+	/** The `docs` indexes this type's schema asks for. */
+	index_paths: DocIndexPath[];
+	/** The registered search config (primary key, text fields). */
+	client_type: ClientSearchType;
 }
 
 type SearchSubscriber = {
@@ -111,6 +124,142 @@ type SearchSubscriber = {
 /** Cache entries fresher than this are not background-refreshed (ms) */
 const REFRESH_STALE_MS = 30_000;
 
+/** The legacy Orama blob store, dropped on the first search-store upgrade. */
+const LEGACY_SEARCH_INDEX_STORE = 'search_index';
+
+/** The worker-owned stores that live in the same database as the search stores. */
+const WORKER_STORES = [{ name: 'entities' }, { name: 'sync_meta' }] as const;
+
+// ---------------------------------------------------------------------------
+// Schema helpers
+// ---------------------------------------------------------------------------
+
+/** Every declared type the flattener recognizes as a leaf. */
+function isSearchableType(value: unknown): value is SearchableType {
+	if (typeof value !== 'string') return false;
+	return (
+		value === 'string' ||
+		value === 'number' ||
+		value === 'boolean' ||
+		value === 'enum' ||
+		value === 'geopoint' ||
+		value === 'string[]' ||
+		value === 'number[]' ||
+		value === 'boolean[]' ||
+		value === 'enum[]' ||
+		value.startsWith('vector[')
+	);
+}
+
+/**
+ * Flatten the nested table schema into the engine's `dot.path → type` map.
+ *
+ * The same derivation `search/server/table_config.ts` does for the server
+ * driver, duplicated here rather than imported so the worker bundle never pulls
+ * in the server engine. `{ address: { city: 'string' } }` becomes
+ * `{ 'address.city': 'string' }` — and `toSparse` builds genuinely nested
+ * objects for exactly those paths, which is what makes the `docs` index
+ * keyPath `sparse_doc.address.city` resolve. Derived fields are top-level field
+ * names, so they are ordinary top-level keys in the synced document.
+ */
+function flattenSearchSchema(schema: unknown, prefix = ''): WhereSchema {
+	const flat: WhereSchema = {};
+	if (!schema || typeof schema !== 'object') return flat;
+	for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+		const path = prefix ? `${prefix}.${key}` : key;
+		if (isSearchableType(value)) {
+			flat[path] = value;
+			continue;
+		}
+		Object.assign(flat, flattenSearchSchema(value, path));
+	}
+	return flat;
+}
+
+/** Whether a declared type's values can be IDB index keys at all. */
+function isIndexableType(type: SearchableType): boolean {
+	return (
+		type === 'string' ||
+		type === 'string[]' ||
+		type === 'number' ||
+		type === 'number[]' ||
+		type === 'enum' ||
+		type === 'enum[]'
+	);
+}
+
+/** Whether a declared type holds a list of values (a `multiEntry` index). */
+function isArrayType(type: SearchableType): boolean {
+	return type === 'string[]' || type === 'number[]' || type === 'enum[]';
+}
+
+/**
+ * The `docs` indexes a schema deserves: every string/number/enum path, with
+ * `multiEntry` on the array ones. Booleans get none (not valid IDB keys), and
+ * neither do geopoints or vectors. An index is only ever a candidate-range
+ * optimization — `core/where` decides membership either way — so a missing one
+ * costs a scan, never a wrong answer.
+ */
+function indexPathsFor(schema: WhereSchema): DocIndexPath[] {
+	return Object.keys(schema)
+		.filter((path) => isIndexableType(schema[path]))
+		.sort()
+		.map((path) => ({ path, multi_entry: isArrayType(schema[path]) }));
+}
+
+/** Read a `dot.path` off a document. */
+function readPath(doc: Record<string, unknown>, path: string): unknown {
+	let current: unknown = doc;
+	for (const segment of path.split('.')) {
+		if (!current || typeof current !== 'object' || Array.isArray(current))
+			return undefined;
+		current = (current as Record<string, unknown>)[segment];
+	}
+	return current;
+}
+
+/** Write a `dot.path` into a document, creating the intermediate objects. */
+function writePath(doc: Record<string, unknown>, path: string, value: unknown): void {
+	const segments = path.split('.');
+	let container = doc;
+	for (let index = 0; index < segments.length - 1; index++) {
+		const next = container[segments[index]];
+		if (!next || typeof next !== 'object' || Array.isArray(next)) {
+			const created: Record<string, unknown> = {};
+			container[segments[index]] = created;
+			container = created;
+		} else {
+			container = next as Record<string, unknown>;
+		}
+	}
+	container[segments[segments.length - 1]] = value;
+}
+
+/**
+ * The local stand-in for the server's `toSparse` — the *optimistic* projection.
+ *
+ * Synced documents are indexed verbatim (§7.0: the wire is the projection). A
+ * document that originates in this tab — a create/update response, a websocket
+ * event carrying the full entity, a local patch — has no sparse form yet, so it
+ * is reshaped the same way `toSparse` does: keep exactly the declared searchable
+ * paths, drop null/undefined, keep every value **as it is** (no type guarding —
+ * a mistyped value can only mis-tokenize, never throw). FK-derived fields cannot
+ * be computed here and simply arrive with the server echo, which overwrites this
+ * document wholesale.
+ */
+function toSparseLike(
+	schema: WhereSchema,
+	entity: Record<string, unknown>,
+): Record<string, unknown> {
+	const sparse: Record<string, unknown> = {};
+	for (const path of Object.keys(schema)) {
+		const value = readPath(entity, path);
+		if (value === null || value === undefined) continue;
+		writePath(sparse, path, value);
+	}
+	return sparse;
+}
+
 // ---------------------------------------------------------------------------
 // Worker
 // ---------------------------------------------------------------------------
@@ -121,12 +270,20 @@ export class DatabaseWorker {
 	#tables: WorkerInitConfig['tables'] = {};
 	#search_subscribers: SearchSubscriber[] = [];
 	#subscriber_counter = 0;
-	#default_threshold = 5000;
+	/** @deprecated The count-based override valve (§7.6); `undefined` disables it. */
+	#default_threshold: number | undefined;
 	#pending_notify = new Set<string>();
 	#notify_scheduled = false;
 	#pending_refreshes = new Set<string>();
 	#db_name: string | undefined;
 	#sync_in_flight: Promise<void> | null = null;
+	/** The IndexedDB postings store — the whole client search index (§7.6). */
+	#store: IdbSearchStore | null = null;
+	/** Entity types the app explicitly marked client-side (§7.6 rule 2). */
+	#forced_client = new Set<string>();
+	/** The async driver over {@link #store}. */
+	#engine: IdbSearchEngine | null = null;
+	#idb_factory: IDBFactory | undefined;
 
 	// -----------------------------------------------------------------------
 	// Lifecycle
@@ -135,7 +292,7 @@ export class DatabaseWorker {
 	async init(config: WorkerInitConfig): Promise<void> {
 		// A SharedWorker is initialized by EVERY connecting tab. Re-running init
 		// for the same database would discard in-memory sync state (and any
-		// un-persisted Orama data) while another tab's sync loop is mid-flight.
+		// un-persisted cursor state) while another tab's sync loop is mid-flight.
 		if (this.#db && this.#db_name === config.db_name) return;
 
 		// Switching scope (different db_name): tear down the previous state
@@ -144,16 +301,33 @@ export class DatabaseWorker {
 		if (this.#db) {
 			this.#db.close();
 			this.#db = null;
+			this.#store = null;
+			this.#engine = null;
 			this.#entities = {};
 			this.#pending_refreshes.clear();
 		}
 
 		this.#tables = config.tables;
 		this.#default_threshold = config.default_threshold;
-
-		// Open IDB
-		this.#db = await openDatabase(config.db_name);
+		this.#forced_client = new Set(
+			Object.entries(config.entities ?? {})
+				.filter(([, overrides]) => overrides?.search_mode === 'client')
+				.map(([entity_type]) => entity_type),
+		);
+		this.#idb_factory = config.idb_factory;
 		this.#db_name = config.db_name;
+
+		// The search stores live in the SAME database as `entities`/`sync_meta`,
+		// so an index write and the sync cursor that accounts for it can commit in
+		// one transaction (§7.6). Opening it needs the persisted `config_version`s
+		// (they decide the IDB version), and those live inside it — so open at
+		// whatever version exists, read the metas, then upgrade if needed.
+		this.#db = await openSearchDatabase({
+			name: config.db_name,
+			extra_stores: WORKER_STORES,
+			factory: this.#idb_factory,
+		});
+		this.#attachVersionChange(this.#db);
 
 		// Initialize per-entity state
 		for (const [entity_type, table] of Object.entries(config.tables)) {
@@ -163,39 +337,9 @@ export class DatabaseWorker {
 			// Load persisted sync meta
 			const meta = await idbGet<SyncMeta>(this.#db, 'sync_meta', entity_type);
 
-			const search_mode: 'client' | 'server' =
-				forced_mode ?? meta?.search_mode ?? 'client';
-
-			// Create Orama index (unless server-only mode)
-			let orama: AnyOrama | null = null;
-			if (search_mode === 'client') {
-				orama = createOrama({
-					schema: table.orama.schema as AnySchema,
-					sort: table.orama.sort as Record<string, unknown>,
-				});
-
-				// Try to load cached index from IDB
-				const cached = await idbGet<CachedSearchIndex>(
-					this.#db,
-					'search_index',
-					entity_type,
-				);
-				if (cached?.index && cached.config_version === (meta?.config_version ?? 0)) {
-					try {
-						loadOrama(orama, cached.index as RawData);
-					} catch {
-						// Corrupted cache — start fresh
-						orama = createOrama({
-							schema: table.orama.schema as AnySchema,
-							sort: table.orama.sort as Record<string, unknown>,
-						});
-					}
-				}
-			}
-
+			const schema = flattenSearchSchema(table.orama.schema);
 			this.#entities[entity_type] = {
-				orama,
-				search_mode,
+				search_mode: forced_mode ?? meta?.search_mode ?? 'client',
 				config_version: meta?.config_version ?? 0,
 				last_synced_at: meta?.last_synced_at ?? 0,
 				start_updated_at: meta?.start_updated_at,
@@ -204,14 +348,116 @@ export class DatabaseWorker {
 				threshold: overrides?.threshold ?? this.#default_threshold,
 				cache_enabled: overrides?.cache !== false,
 				primary_key: table.primary_key,
+				schema,
+				index_paths: indexPathsFor(schema),
+				client_type: defineClientType({
+					entity_type,
+					schema,
+					primary_key: table.primary_key,
+					primary_key_type: table.primary_key_type,
+				}),
 			};
 		}
+
+		await this.#reconcileSearchDatabase();
 
 		// Sync is NOT awaited here — the main thread controls sync lifecycle
 	}
 
+	/**
+	 * Bring the database up to the version the current `config_version`s and
+	 * index declarations ask for, and (re)build the store + driver over it.
+	 *
+	 * The version is `1 + Σ config_version` (§7.6: derived from `config_version`,
+	 * so a schema change re-creates the indexes through the machinery that already
+	 * handles config bumps). Two things can still ask for an upgrade at an
+	 * unchanged sum — a database created before this design (no search stores, a
+	 * leftover `search_index` blob store) and a code deploy that changes a table's
+	 * indexable paths — so the declared indexes are compared against the live ones
+	 * and an upgrade is forced on any mismatch.
+	 */
+	async #reconcileSearchDatabase(): Promise<void> {
+		if (!this.#db || !this.#db_name) return;
+		const index_paths = this.#allIndexPaths();
+		let wanted = 1;
+		for (const state of Object.values(this.#entities)) wanted += state.config_version;
+
+		if (wanted > this.#db.version || this.#indexesDiffer(this.#db, index_paths)) {
+			const version = Math.max(wanted, this.#db.version + 1);
+			this.#db.close();
+			this.#db = await openSearchDatabase({
+				name: this.#db_name,
+				version,
+				index_paths,
+				extra_stores: WORKER_STORES,
+				delete_stores: [LEGACY_SEARCH_INDEX_STORE],
+				factory: this.#idb_factory,
+			});
+			this.#attachVersionChange(this.#db);
+		}
+
+		this.#store = new IdbSearchStore(this.#db, { index_paths });
+		for (const state of Object.values(this.#entities)) {
+			this.#store.register(state.client_type);
+		}
+		this.#engine = new IdbSearchEngine(this.#store);
+	}
+
+	/** Every declared `docs` index across every entity type, de-duplicated. */
+	#allIndexPaths(): DocIndexPath[] {
+		const paths = new Map<string, DocIndexPath>();
+		for (const state of Object.values(this.#entities)) {
+			for (const declaration of state.index_paths) {
+				const existing = paths.get(declaration.path);
+				// Two types declaring the same path with different arity is a schema
+				// conflict IDB cannot express (one index, one keyPath). `multiEntry`
+				// wins: it indexes scalars too, so the range scan stays a superset.
+				if (!existing || (declaration.multi_entry && !existing.multi_entry)) {
+					paths.set(declaration.path, declaration);
+				}
+			}
+		}
+		return [...paths.values()].sort((a, b) => (a.path < b.path ? -1 : 1));
+	}
+
+	/** Whether the live `docs` indexes are not exactly the declared ones. */
+	#indexesDiffer(db: IDBDatabase, index_paths: readonly DocIndexPath[]): boolean {
+		for (const name of SEARCH_STORE_NAMES) {
+			if (!db.objectStoreNames.contains(name)) return true;
+		}
+		for (const store of WORKER_STORES) {
+			if (!db.objectStoreNames.contains(store.name)) return true;
+		}
+		if (db.objectStoreNames.contains(LEGACY_SEARCH_INDEX_STORE)) return true;
+		const txn = db.transaction(DOCS_STORE, 'readonly');
+		const live = new Set(Array.from(txn.objectStore(DOCS_STORE).indexNames));
+		txn.abort();
+		if (live.size !== index_paths.length) return true;
+		return index_paths.some((declaration) => !live.has(docIndexName(declaration.path)));
+	}
+
+	/**
+	 * Release the connection when another tab needs to upgrade.
+	 *
+	 * Production is a SharedWorker (one connection), but the per-tab `Worker`
+	 * fallback gives every tab its own connection to one database — without this,
+	 * the tab that upgrades gets `onblocked` (a 503) forever.
+	 */
+	#attachVersionChange(db: IDBDatabase): void {
+		db.onversionchange = () => {
+			db.close();
+			if (this.#db === db) {
+				this.#db = null;
+				this.#store = null;
+				this.#engine = null;
+			}
+		};
+	}
+
 	async destroy(): Promise<void> {
 		this.#search_subscribers = [];
+		this.#store = null;
+		this.#engine = null;
 		if (this.#db) {
 			this.#db.close();
 			this.#db = null;
@@ -265,7 +511,6 @@ export class DatabaseWorker {
 
 		let num_requests = 0;
 		let pages_without_changes = 0;
-		let next_persist_page = 1;
 		while (num_requests++ < 50) {
 			const client_types = types.filter(
 				(t) => this.#entities[t]?.search_mode === 'client' && !done.has(t),
@@ -323,119 +568,105 @@ export class DatabaseWorker {
 					continue;
 				}
 
-				// Handle schema changes — rebuild the index and restart this
+				// Handle schema changes — wipe the local index and restart this
 				// entity's sync from scratch (the old window refers to documents
 				// shaped by the old schema), and drop the cached entities
 				if (
 					entity_result.config &&
 					entity_result.config_version !== state.config_version
 				) {
-					const table = this.#tables[entity_type];
-					state.orama = createOrama({
-						schema:
-							(entity_result.config.schema as AnySchema) ??
-							(table.orama.schema as AnySchema),
-						sort:
-							(entity_result.config.sort as Record<string, unknown>) ??
-							(table.orama.sort as Record<string, unknown>),
-					});
-					state.config_version = entity_result.config_version;
-					state.start_updated_at = undefined;
-					state.end_updated_at = undefined;
+					await this.#applyConfigBump(
+						entity_type,
+						entity_result.config,
+						entity_result.config_version,
+					);
 					descending_request.add(entity_type);
-					await idbDeleteByPrefix(this.#db, 'entities', `${entity_type}/`);
 				}
 
-				if (!state.orama) {
+				if (!this.#store) {
 					done.add(entity_type);
 					continue;
 				}
 
-				// Apply deletes to the index AND the entity cache — a row deleted on
-				// another device must not keep being served by get()
-				if (entity_result.deleted?.length) {
-					any_changes = true;
-					try {
-						// batchSize MUST cover every id: orama's removeMultiple only
-						// processes its first batch (default 1000) synchronously and
-						// runs the rest on fire-and-forget setTimeout chains.
-						const delete_ids = entity_result.deleted.map((id) => String(id));
-						removeMultiple(state.orama, delete_ids, delete_ids.length);
-					} catch {
-						// Some IDs may not exist in the index
-					}
+				// One transaction per entity per page: the documents this page
+				// delivers, the entity-cache rows a delete invalidates, and the sync
+				// cursor that accounts for all of it commit or abort together. That
+				// is the §7.6 invariant — the synced window can never outrun the
+				// persisted index — and it now holds per page rather than on a
+				// doubling save schedule, because there is no snapshot to serialize.
+				const writes: DocWrite[] = [];
+				const extra_ops: ExtraStoreOp[] = [];
+				for (const id of entity_result.deleted ?? []) {
+					writes.push({ entity_type, doc_id: String(id), sparse_doc: null });
+					// A row deleted on another device must not keep being served by get()
 					if (state.cache_enabled) {
-						await idbBatch(
-							this.#db,
-							entity_result.deleted.map((id) => ({
-								store: 'entities' as const,
-								type: 'delete' as const,
-								key: `${entity_type}/${id}`,
-							})),
-						);
+						extra_ops.push({
+							store: 'entities',
+							action: 'delete',
+							key: `${entity_type}/${id}`,
+						});
 					}
 				}
-
-				// Apply inserts (created + updated treated the same for indexing).
-				// Fast path: batch remove + insert of the projected docs. If ANY doc
-				// fails validation, insertMultiple throws at that doc and silently
-				// drops the rest of the page — while the synced window still
-				// advances, permanently losing those documents. So on failure, fall
-				// back to per-doc application where one bad doc costs only itself.
+				// Created and updated are the same operation for the index. The wire's
+				// document is indexed VERBATIM (§7.0) — no client-side re-projection,
+				// no type guarding, nothing that can throw and drop a page's tail.
 				const inserts = [
 					...(entity_result.created ?? []),
 					...(entity_result.updated ?? []),
 				] as Record<string, unknown>[];
-				if (inserts.length > 0) {
-					any_changes = true;
-					const projected = inserts.map((e) => this.#projectToIndex(entity_type, e));
-					const ids = projected.map((e) => String(e[state.primary_key]));
-					try {
-						// batchSize = ids.length: orama's removeMultiple only processes
-						// its FIRST batch (default 1000) before returning — the rest run
-						// on fire-and-forget setTimeout chains. With >1000 ids those
-						// deferred batches fired AFTER insertMultiple below and deleted
-						// every just-inserted doc past #1000: a 2500-thread mailbox
-						// synced down to exactly its newest 1000 threads (2026-08-10).
-						removeMultiple(state.orama, ids, ids.length);
-						insertMultiple(state.orama, projected);
-					} catch {
-						// Partial batch failure — re-apply doc-by-doc (idempotent:
-						// each doc is removed then reinserted) so only genuinely
-						// corrupt docs are lost, loudly.
-						for (const doc of inserts) {
-							this.#applyIndexDoc(entity_type, doc);
-						}
-					}
-
-					// The index only makes sense client-side up to a size; past the
-					// threshold, switch to server search. Use the ACTUAL index size —
-					// counting cumulative inserts would also count re-synced updates
-					// (a live backfill bumps the same docs over and over) and switch
-					// modes long before the index is actually big.
-					if (countOrama(state.orama) >= state.threshold) {
-						await this.#switchToServerMode(entity_type);
-						done.add(entity_type);
+				for (const doc of inserts) {
+					const doc_id = doc[state.primary_key];
+					if (doc_id === undefined || doc_id === null) {
+						console.error(
+							`[database] sync page for ${entity_type} contained a document with no ${state.primary_key} — skipped`,
+						);
 						continue;
 					}
+					writes.push({ entity_type, doc_id: String(doc_id), sparse_doc: doc });
 				}
 
-				// Grow the synced window with the page that was just applied
 				const had_changes =
 					inserts.length > 0 || (entity_result.deleted?.length ?? 0) > 0;
-				if (entity_result.start_updated_at) {
-					state.start_updated_at = Math.min(
-						entity_result.start_updated_at,
-						state.start_updated_at ?? Infinity,
+				if (had_changes) any_changes = true;
+
+				// The window this page grows to — computed, not yet adopted. It is
+				// only true once the transaction below commits.
+				const next_start = entity_result.start_updated_at
+					? Math.min(entity_result.start_updated_at, state.start_updated_at ?? Infinity)
+					: state.start_updated_at;
+				const next_end = entity_result.end_updated_at
+					? Math.max(entity_result.end_updated_at, state.end_updated_at ?? 0)
+					: state.end_updated_at;
+				const next_synced_at = Date.now();
+				extra_ops.push({
+					store: 'sync_meta',
+					action: 'put',
+					key: entity_type,
+					value: {
+						entity_type,
+						search_mode: state.search_mode,
+						config_version: state.config_version,
+						last_synced_at: next_synced_at,
+						start_updated_at: next_start,
+						end_updated_at: next_end,
+					} satisfies SyncMeta,
+				});
+
+				try {
+					await this.#store.applyWrites(writes, { extra_ops });
+				} catch (error) {
+					// The page did not land. The in-memory window is still the persisted
+					// one, so the next run re-requests exactly this page.
+					console.error(
+						`[database] failed to apply a sync page for ${entity_type}`,
+						error,
 					);
+					return;
 				}
-				if (entity_result.end_updated_at) {
-					state.end_updated_at = Math.max(
-						entity_result.end_updated_at,
-						state.end_updated_at ?? 0,
-					);
-				}
-				state.last_synced_at = Date.now();
+
+				state.start_updated_at = next_start;
+				state.end_updated_at = next_end;
+				state.last_synced_at = next_synced_at;
 
 				if (descending_request.has(entity_type)) {
 					// Backfill page: done when we've reached the oldest change the
@@ -463,18 +694,8 @@ export class DatabaseWorker {
 				}
 			}
 
-			// Persist the synced-window meta and the Orama index TOGETHER — the
-			// persisted window must never get ahead of the persisted index,
-			// otherwise a refresh would reload an index that is missing documents
-			// the window claims are synced (and they would never be refetched).
-			// Serializing the index is expensive and grows with its size, so
-			// persist on a doubling page schedule (1, 2, 4, 8, ...): early saves
-			// are cheap and keep resume granularity fine, later saves are rare so
-			// total serialization work stays bounded on long backfills.
-			if (num_requests >= next_persist_page) {
-				next_persist_page = num_requests * 2;
-				await this.#persistSyncState(client_types);
-			}
+			// (No index snapshot to persist here any more: each page above already
+			// committed its documents and its cursor in one transaction.)
 
 			// Safety valve: two consecutive pages with no changes at all means the
 			// server isn't giving us anything new — stop rather than spin. (One
@@ -488,7 +709,8 @@ export class DatabaseWorker {
 			this.#entities[t].synced = true;
 		}
 
-		// Final index persist to capture remaining pages
+		// Final cursor persist: the in-memory window can be one step ahead of the
+		// last committed page (the backfill-complete sentinel above), never behind.
 		const persist_types = types.filter((t) => this.#entities[t]);
 		await this.#persistSyncState(persist_types);
 
@@ -526,10 +748,10 @@ export class DatabaseWorker {
 		}
 		const server_entity = (await response.json()) as Record<string, unknown>;
 
-		// Remove then insert to handle sync race (projected: the full entity's
-		// arrays/objects/nulls fail the sparse index's schema validation)
-		if (state.orama && state.search_mode === 'client') {
-			this.#applyIndexDoc(entity_type, server_entity);
+		// Index the new row optimistically (the sync echo replaces this document
+		// with the server's own sparse projection).
+		if (state.search_mode === 'client') {
+			await this.#indexEntity(entity_type, server_entity);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -602,20 +824,16 @@ export class DatabaseWorker {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
 
-		// Store pre-update version for rollback. getByID, NOT a `{eq}` where —
-		// Orama's {eq} operator only matches enum fields, so filtering a plain
-		// string primary key with it silently returns nothing (the optimistic
-		// update never fired).
+		// Store the pre-update document for rollback — the indexed sparse doc,
+		// read straight out of the `docs` store by primary key.
 		let prev_doc: Record<string, unknown> | undefined;
-		if (state.orama && state.search_mode === 'client') {
-			prev_doc = getOramaByID(state.orama, String(id)) as
-				| Record<string, unknown>
-				| undefined;
+		if (state.search_mode === 'client') {
+			prev_doc = await this.#indexedDocument(entity_type, id);
 
 			// Optimistic update
 			if (prev_doc) {
 				const optimistic = { ...prev_doc, ...data, updated_at: Date.now() };
-				this.#applyIndexDoc(entity_type, optimistic);
+				await this.#indexEntity(entity_type, optimistic);
 				this.#notifySubscribers([entity_type]);
 			}
 		}
@@ -633,7 +851,7 @@ export class DatabaseWorker {
 					string,
 					unknown
 				>;
-				this.#rollbackOrama(entity_type, id, prev_doc);
+				await this.#rollbackIndex(entity_type, id, prev_doc);
 				throw DelightError.transferable({
 					message: (error_body.message as string) || `Update ${entity_type}/${id} failed`,
 					status: response.status,
@@ -643,13 +861,13 @@ export class DatabaseWorker {
 			server_entity = (await response.json()) as Record<string, unknown>;
 		} catch (error) {
 			if (DelightError.is(error)) throw error;
-			this.#rollbackOrama(entity_type, id, prev_doc);
+			await this.#rollbackIndex(entity_type, id, prev_doc);
 			throw error;
 		}
 
-		// Replace optimistic with server data (projected to the index schema)
-		if (state.orama && state.search_mode === 'client') {
-			this.#applyIndexDoc(entity_type, server_entity);
+		// Replace the optimistic overlay with the server's own data
+		if (state.search_mode === 'client') {
+			await this.#indexEntity(entity_type, server_entity);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -670,19 +888,11 @@ export class DatabaseWorker {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
 
-		// Store for rollback (getByID — see update() for why not a {eq} where)
+		// Store for rollback, then remove optimistically
 		let prev_doc: Record<string, unknown> | undefined;
-		if (state.orama && state.search_mode === 'client') {
-			prev_doc = getOramaByID(state.orama, String(id)) as
-				| Record<string, unknown>
-				| undefined;
-
-			// Optimistic delete
-			try {
-				removeFromOrama(state.orama, String(id));
-			} catch {
-				// ignore
-			}
+		if (state.search_mode === 'client') {
+			prev_doc = await this.#indexedDocument(entity_type, id);
+			await this.#removeFromIndex(entity_type, id);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -696,7 +906,7 @@ export class DatabaseWorker {
 					string,
 					unknown
 				>;
-				this.#rollbackOrama(entity_type, id, prev_doc);
+				await this.#rollbackIndex(entity_type, id, prev_doc);
 				throw DelightError.transferable({
 					message: (error_body.message as string) || `Delete ${entity_type}/${id} failed`,
 					status: response.status,
@@ -705,7 +915,7 @@ export class DatabaseWorker {
 			}
 		} catch (error) {
 			if (DelightError.is(error)) throw error;
-			this.#rollbackOrama(entity_type, id, prev_doc);
+			await this.#rollbackIndex(entity_type, id, prev_doc);
 			throw error;
 		}
 
@@ -717,7 +927,7 @@ export class DatabaseWorker {
 
 	/**
 	 * Apply a change that originated outside this tab (e.g. a websocket
-	 * event). Upserts/removes the single entity in Orama + IDB and notifies
+	 * event). Upserts/removes the single entity in the index + IDB and notifies
 	 * search subscribers — much cheaper than a full `sync([entity_type])`.
 	 *
 	 * If `data` is omitted for a create/update event, fetches just that
@@ -735,12 +945,8 @@ export class DatabaseWorker {
 		if (!state) return undefined;
 
 		if (event_type === 'delete') {
-			if (state.orama && state.search_mode === 'client') {
-				try {
-					removeFromOrama(state.orama, String(id));
-				} catch {
-					// ignore — may not be in index
-				}
+			if (state.search_mode === 'client') {
+				await this.#removeFromIndex(entity_type, id);
 			}
 			if (state.cache_enabled && this.#db) {
 				await idbDelete(this.#db, 'entities', `${entity_type}/${id}`);
@@ -754,7 +960,7 @@ export class DatabaseWorker {
 		if (!entity && !sparse) {
 			// Fall back to a single-entity fetch rather than a full-type sync
 			entity = await this.#fetchAndCache(entity_type, id);
-			// #fetchAndCache already updates Orama + IDB + notifies
+			// #fetchAndCache already updates the index + IDB + notifies
 			return entity;
 		}
 
@@ -767,17 +973,20 @@ export class DatabaseWorker {
 			} satisfies CachedEntity);
 		}
 
-		if (state.orama && state.search_mode === 'client') {
+		if (state.search_mode === 'client') {
 			// Index the server's sparse projection when the event carries it —
-			// that is exactly the document a sync page would deliver. The full
-			// entity is only a fallback (projected to the schema) for servers
-			// that don't send `sparse` yet.
+			// that is exactly the document a sync page would deliver, so it is
+			// indexed verbatim. The full entity is the fallback for servers that
+			// don't send `sparse` yet, and is reshaped like `toSparse` would.
 			const index_doc = sparse ?? entity!;
-			const applied = this.#applyIndexDoc(entity_type, index_doc);
+			const applied = sparse
+				? await this.#indexDocuments(entity_type, [
+						{ entity_type, doc_id: String(id), sparse_doc: sparse },
+					])
+				: await this.#indexEntity(entity_type, index_doc);
 			if (!applied) {
-				// The old version was removed but the new one couldn't be
-				// indexed. Roll the synced window back to just before this
-				// change and resync, otherwise the document is silently gone
+				// The document could not be written. Roll the synced window back to
+				// just before this change and resync, otherwise it is silently gone
 				// from local search until a full rebuild.
 				const changed_at =
 					typeof index_doc.updated_at === 'number' ? index_doc.updated_at : undefined;
@@ -807,12 +1016,10 @@ export class DatabaseWorker {
 		patch: Record<string, unknown>,
 	): Promise<boolean> {
 		const state = this.#entities[entity_type];
-		if (!state?.orama || state.search_mode !== 'client') return false;
-		const current = getOramaByID(state.orama, String(id)) as
-			| Record<string, unknown>
-			| undefined;
+		if (!state || state.search_mode !== 'client') return false;
+		const current = await this.#indexedDocument(entity_type, id);
 		if (!current) return false;
-		const applied = this.#applyIndexDoc(entity_type, { ...current, ...patch });
+		const applied = await this.#indexEntity(entity_type, { ...current, ...patch });
 		this.#notifySubscribers([entity_type]);
 		return applied;
 	}
@@ -821,6 +1028,14 @@ export class DatabaseWorker {
 	// Search
 	// -----------------------------------------------------------------------
 
+	/**
+	 * Search one entity type, locally or on the server (§7.6 routing policy).
+	 *
+	 * The client answer and the server answer are identical **only when the
+	 * corpora match**. A partial window is a different corpus — different
+	 * membership, different global BM25 statistics — so a query is only answered
+	 * locally when the local index is known to hold the whole table.
+	 */
 	async search(
 		entity_type: string,
 		query: SearchQueryInput,
@@ -828,57 +1043,65 @@ export class DatabaseWorker {
 		const state = this.#entities[entity_type];
 		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
 
-		if (state.search_mode === 'server' || !state.orama) {
+		if (!(await this.#routesToClient(state, query))) {
 			return this.#serverSearch(entity_type, query);
 		}
 
-		// Client-side Orama search — convert SearchQueryInput to Orama-native params.
-		// TEMPORARY: `toOramaSearchParams` translates the owned query vocabulary
-		// (fields/distinct_on/vector.field/contains_all/contains_any/not_in) back to
-		// Orama's spellings until the native engine replaces this call site (plan
-		// phase 4).
-		const orama_params = toOramaSearchParams({ ...query } as Record<string, unknown>);
-		// Plain-value where shorthands on enum/number properties (same rule the
-		// server applies) — Orama throws on them, which broke client-mode queries
-		// that work fine against the server.
-		orama_params.where = toOramaWhere(
-			normalizeWhere(
-				query.where as Record<string, unknown> | undefined,
-				this.#tables[entity_type]?.orama?.schema as Record<string, unknown> | undefined,
-			),
-		);
-		// Convert order[] → Orama's sortBy
-		if (Array.isArray(orama_params.order) && orama_params.order.length > 0) {
-			const orders = orama_params.order as { field: string; direction?: string }[];
-			orama_params.sortBy = {
-				property: orders[0].field,
-				order: (orders[0].direction || 'ASC').toUpperCase(),
-			};
-			delete orama_params.order;
+		let results: SearchQueryResults<Record<string, unknown>>;
+		try {
+			results = await this.#engine!.list(entity_type, query as SearchQuery);
+		} catch (error) {
+			// A malformed query fails the same way on both drivers (`core/*` throws
+			// the same `DelightError`); make it survive the Comlink boundary rather
+			// than arriving as a bare `Error` with no status.
+			if (DelightError.is(error)) {
+				throw DelightError.transferable({
+					message: error.message,
+					status: error.status,
+					code: error.code,
+					detail: error.detail,
+				});
+			}
+			throw error;
 		}
-		// Remove fields Orama doesn't understand
-		delete orama_params.sparse;
-		delete orama_params.cursor;
-
-		let result = searchOrama(state.orama, orama_params);
-		if (result instanceof Promise) result = await result;
-
-		// Orama (<= 3.1.18) can return ghost hits with an empty document for
-		// previously removed docs — filter them out of user-facing results
-		const hits = result.hits.filter(
-			(h) =>
-				h.document &&
-				(h.document as Record<string, unknown>)[state.primary_key] !== undefined,
-		);
 		return {
-			hits: hits.map((h) => ({
-				id: String(h.id),
-				document: h.document as Record<string, unknown>,
-				score: h.score,
+			hits: results.hits.map((hit) => ({
+				id: String(hit.id),
+				document: hit.document,
+				score: hit.score,
 			})),
-			count: Math.max(0, result.count - (result.hits.length - hits.length)),
-			elapsed: result.elapsed,
+			count: results.count,
+			elapsed: results.elapsed,
 		};
+	}
+
+	/**
+	 * The routing decision, in the plan's order.
+	 *
+	 * 1. **Vector (and hybrid) queries always go to the server.** No embeddings
+	 *    exist on the client at all (§4.9, and the §7.0 sync strip).
+	 * 2. **Coverage.** The local index is authoritative only when the synced
+	 *    window covers the whole table: `start_updated_at === 0` is the
+	 *    backfill-complete sentinel. `search_mode: 'server'` opts a type out
+	 *    entirely; `search_mode: 'client'` opts it in regardless of coverage
+	 *    (the app is asserting local-first semantics).
+	 * 3. **The deprecated count valve.** A configured `threshold` still forces
+	 *    the server once the local document count reaches it. Removed next major.
+	 */
+	async #routesToClient(
+		state: EntitySyncState,
+		query: SearchQueryInput,
+	): Promise<boolean> {
+		if (!this.#engine || !this.#store) return false;
+		if (requiresServer(query as SearchQuery)) return false;
+		if (state.search_mode === 'server') return false;
+		const forced_client = this.#forced_client.has(state.client_type.entity_type);
+		if (!forced_client && state.start_updated_at !== 0) return false;
+		if (state.threshold !== undefined) {
+			const count = await this.#store.countDocs(state.client_type.entity_type);
+			if (count >= state.threshold) return false;
+		}
+		return true;
 	}
 
 	/** One-shot list that always hits the server */
@@ -931,9 +1154,17 @@ export class DatabaseWorker {
 		);
 	}
 
-	/** Get the current search mode for an entity type. */
+	/**
+	 * Where a plain (non-vector) query for this entity type would be answered.
+	 *
+	 * A live routing decision, not a stored mode: an entity type whose window is
+	 * still filling reports `'server'` and flips to `'client'` when the backfill
+	 * completes.
+	 */
 	async getSearchMode(entity_type: string): Promise<'client' | 'server'> {
-		return this.#entities[entity_type]?.search_mode ?? 'server';
+		const state = this.#entities[entity_type];
+		if (!state) return 'server';
+		return (await this.#routesToClient(state, {})) ? 'client' : 'server';
 	}
 
 	/** Whether the entity type has completed its initial sync. */
@@ -945,15 +1176,17 @@ export class DatabaseWorker {
 	// Private helpers
 	// -----------------------------------------------------------------------
 
-	/** Rollback an Orama index change by removing the current entry and re-inserting the previous doc. */
-	#rollbackOrama(
+	/** Undo an optimistic index change by rewriting the previous document. */
+	async #rollbackIndex(
 		entity_type: string,
 		id: string | number,
 		prev_doc: Record<string, unknown> | undefined,
-	): void {
+	): Promise<void> {
 		const state = this.#entities[entity_type];
-		if (!prev_doc || !state?.orama || state.search_mode !== 'client') return;
-		this.#applyIndexDoc(entity_type, prev_doc);
+		if (!prev_doc || !state || state.search_mode !== 'client') return;
+		await this.#indexDocuments(entity_type, [
+			{ entity_type, doc_id: String(id), sparse_doc: prev_doc },
+		]);
 		this.#notifySubscribers([entity_type]);
 	}
 
@@ -1007,12 +1240,8 @@ export class DatabaseWorker {
 				if (state.cache_enabled && this.#db) {
 					await idbDelete(this.#db, 'entities', `${entity_type}/${id}`);
 				}
-				if (state.orama && state.search_mode === 'client') {
-					try {
-						removeFromOrama(state.orama, String(id));
-					} catch {
-						/* may not exist */
-					}
+				if (state.search_mode === 'client') {
+					await this.#removeFromIndex(entity_type, id);
 					this.#notifySubscribers([entity_type]);
 				}
 			}
@@ -1029,10 +1258,10 @@ export class DatabaseWorker {
 			} satisfies CachedEntity);
 		}
 
-		// Update Orama search index if in client search mode (projected: full
-		// entities don't fit the sparse index schema)
-		if (state.orama && state.search_mode === 'client') {
-			this.#applyIndexDoc(entity_type, data);
+		// Refresh the local index too (reshaped like `toSparse` — a full entity
+		// carries fields the index has no business tokenizing)
+		if (state.search_mode === 'client') {
+			await this.#indexEntity(entity_type, data);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -1056,152 +1285,151 @@ export class DatabaseWorker {
 	}
 
 	/**
-	 * Project a document to what the entity's Orama index can safely accept:
-	 * keep the primary key + timestamps + schema fields whose runtime type
-	 * matches the schema, drop everything else (nulls, arrays of objects, full-
-	 * entity fields the sparse schema doesn't know). Orama tolerates missing
-	 * fields but THROWS on mismatched ones — and a throw after the
-	 * remove-before-insert silently drops the document from the index, which is
-	 * how a mailbox lost ~30% of its threads during a live backfill.
+	 * Write one document into the index, reshaped like `toSparse` would.
+	 *
+	 * For documents that came off the wire use {@link #indexDocuments} instead —
+	 * those are already the server's projection and are indexed verbatim (§7.0).
 	 */
-	#projectToIndex(
+	async #indexEntity(
 		entity_type: string,
-		doc: Record<string, unknown>,
-	): Record<string, unknown> {
+		entity: Record<string, unknown>,
+	): Promise<boolean> {
 		const state = this.#entities[entity_type];
-		const schema = this.#tables[entity_type]?.orama?.schema as
-			| Record<string, unknown>
-			| undefined;
-		const projected: Record<string, unknown> = {};
-		const pk = state?.primary_key ?? 'id';
-		if (doc[pk] !== undefined) projected[pk] = String(doc[pk]);
-		for (const ts_field of ['created_at', 'updated_at']) {
-			if (typeof doc[ts_field] === 'number') projected[ts_field] = doc[ts_field];
-		}
-		if (!schema) return projected;
+		if (!state) return false;
+		const id = entity[state.primary_key];
+		if (id === undefined || id === null || id === '') return false;
+		return this.#indexDocuments(entity_type, [
+			{
+				entity_type,
+				doc_id: String(id),
+				sparse_doc: toSparseLike(state.schema, entity),
+			},
+		]);
+	}
 
-		const matches = (type: unknown, value: unknown): boolean => {
-			if (value === null || value === undefined) return false;
-			switch (type) {
-				case 'string':
-				case 'enum':
-					return typeof value === 'string' || typeof value === 'number';
-				case 'number':
-					return typeof value === 'number' && Number.isFinite(value);
-				case 'boolean':
-					return typeof value === 'boolean';
-				case 'string[]':
-				case 'enum[]':
-					return (
-						Array.isArray(value) &&
-						value.every((v) => typeof v === 'string' || typeof v === 'number')
-					);
-				case 'number[]':
-					return Array.isArray(value) && value.every((v) => typeof v === 'number');
-				case 'boolean[]':
-					return Array.isArray(value) && value.every((v) => typeof v === 'boolean');
-				default:
-					return false;
-			}
-		};
-
-		for (const [field, type] of Object.entries(schema)) {
-			if (field === pk || field in projected) continue;
-			const value = doc[field];
-			if (typeof type === 'object' && type !== null) {
-				// Nested schema object — recurse shallowly
-				if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-					const nested: Record<string, unknown> = {};
-					for (const [nf, nt] of Object.entries(type as Record<string, unknown>)) {
-						const nv = (value as Record<string, unknown>)[nf];
-						if (matches(nt, nv)) nested[nf] = nv;
-					}
-					projected[field] = nested;
-				}
-				continue;
-			}
-			if (matches(type, value)) projected[field] = value;
-		}
-		return projected;
+	/** Remove one document from the index. */
+	async #removeFromIndex(entity_type: string, id: string | number): Promise<boolean> {
+		return this.#indexDocuments(entity_type, [
+			{ entity_type, doc_id: String(id), sparse_doc: null },
+		]);
 	}
 
 	/**
-	 * Remove + re-insert a single document in the entity's index. Never throws;
-	 * returns false when the document could not be (re)inserted. The caller
-	 * decides whether a failure needs a window rollback (external changes) or
-	 * just a loud log (sync pages, where refetching the same corrupt doc
-	 * forever would wedge the sync).
+	 * Apply document writes in one transaction. Never throws; returns false when
+	 * the batch could not be written, which the caller turns into a resync (an
+	 * external change) or a logged loss (a local optimistic write).
 	 */
-	#applyIndexDoc(entity_type: string, doc: Record<string, unknown>): boolean {
-		const state = this.#entities[entity_type];
-		if (!state?.orama) return false;
-		const id = String(doc[state.primary_key] ?? '');
-		if (!id) return false;
+	async #indexDocuments(entity_type: string, writes: DocWrite[]): Promise<boolean> {
+		if (!this.#store) return false;
 		try {
-			removeFromOrama(state.orama, id);
-		} catch {
-			// not in the index — expected for creates
-		}
-		try {
-			insertIntoOrama(state.orama, this.#projectToIndex(entity_type, doc));
+			await this.#store.applyWrites(writes);
 			return true;
 		} catch (error) {
 			console.error(
-				`[database] failed to index ${entity_type}/${id} — document dropped from local search`,
+				`[database] failed to index ${writes.length} ${entity_type} document(s)`,
 				error,
 			);
 			return false;
 		}
 	}
 
-	async #switchToServerMode(entity_type: string): Promise<void> {
-		const state = this.#entities[entity_type];
-		if (!state) return;
+	/** The indexed sparse document for one primary key, if it is indexed. */
+	async #indexedDocument(
+		entity_type: string,
+		id: string | number,
+	): Promise<Record<string, unknown> | undefined> {
+		if (!this.#store) return undefined;
+		const rows = await this.#store.getDocs(entity_type, [String(id)]);
+		return rows.get(String(id))?.sparse_doc;
+	}
 
-		state.search_mode = 'server';
-		state.orama = null;
+	/**
+	 * A server-side schema change: drop everything local for the type and resync.
+	 *
+	 * The persisted window described documents shaped by the old schema, so it is
+	 * reset to "never synced" and the backfill starts over. The `docs` indexes are
+	 * re-derived too, which is a *database* change — hence the version bump and
+	 * reopen (§7.6), the machinery this path already owned when it recreated the
+	 * Orama index it replaced.
+	 */
+	async #applyConfigBump(
+		entity_type: string,
+		config: { schema: Record<string, unknown>; sort: unknown },
+		config_version: number,
+	): Promise<void> {
+		const state = this.#entities[entity_type];
+		if (!state || !this.#db) return;
+
+		// Purge the local index for this type BEFORE the reopen — the old
+		// documents were tokenized against the old schema.
+		await this.#purgeEntityIndex(entity_type);
+		await idbDeleteByPrefix(this.#db, 'entities', `${entity_type}/`);
+
+		const table = this.#tables[entity_type];
+		const schema = flattenSearchSchema(config.schema ?? table?.orama?.schema);
+		state.schema = schema;
+		state.index_paths = indexPathsFor(schema);
+		state.client_type = defineClientType({
+			entity_type,
+			schema,
+			primary_key: state.primary_key,
+			primary_key_type: table?.primary_key_type,
+		});
+		state.config_version = config_version;
+		state.start_updated_at = undefined;
+		state.end_updated_at = undefined;
+		state.synced = false;
+
+		// Reopen at the version the new `config_version` asks for, reconciling the
+		// `docs` indexes, and drop the dictionary cache built from the old tokens.
+		await this.#reconcileSearchDatabase();
+		this.#store?.clearDictionaryCache();
 
 		if (this.#db) {
-			await idbBatch(this.#db, [
-				{
-					store: 'sync_meta',
-					type: 'put',
-					key: entity_type,
-					value: {
-						entity_type,
-						search_mode: 'server',
-						config_version: state.config_version,
-						last_synced_at: state.last_synced_at,
-						start_updated_at: state.start_updated_at,
-						end_updated_at: state.end_updated_at,
-					} satisfies SyncMeta,
-				},
-				{
-					store: 'search_index',
-					type: 'delete',
-					key: entity_type,
-				},
-			]);
+			await idbPut(this.#db, 'sync_meta', entity_type, {
+				entity_type,
+				search_mode: state.search_mode,
+				config_version: state.config_version,
+				last_synced_at: state.last_synced_at,
+				start_updated_at: undefined,
+				end_updated_at: undefined,
+			} satisfies SyncMeta);
+		}
+	}
+
+	/** Delete every indexed document of one entity type. */
+	async #purgeEntityIndex(entity_type: string): Promise<void> {
+		if (!this.#store) return;
+		const docs = await this.#store.getAllDocs(entity_type);
+		if (docs.length === 0) return;
+		const batch = 500;
+		for (let index = 0; index < docs.length; index += batch) {
+			await this.#store.applyWrites(
+				docs.slice(index, index + batch).map((row) => ({
+					entity_type,
+					doc_id: row.doc_id,
+					sparse_doc: null,
+				})),
+			);
 		}
 	}
 
 	/**
-	 * Persist sync state using batched IDB writes.
+	 * Persist the synced-window meta.
 	 *
-	 * The sync meta (synced window) and the serialized Orama index are always
-	 * written together, in one IDB transaction. Persisting the window without
-	 * the index would let the window get ahead of the saved index — after a
-	 * refresh, documents inside the window but missing from the index would
-	 * never be refetched.
+	 * The index itself needs no persisting — every document write already went
+	 * through a transaction that carried its cursor with it (see `#runSync`), so
+	 * this only records the in-memory refinements the page loop makes after a
+	 * commit (the backfill-complete sentinel, the search mode).
 	 */
 	async #persistSyncState(entity_types: string[]): Promise<void> {
 		if (!this.#db) return;
 
 		const ops: {
-			store: 'sync_meta' | 'search_index';
+			store: 'sync_meta';
 			type: 'put';
 			key: string;
-			value: SyncMeta | CachedSearchIndex;
+			value: SyncMeta;
 		}[] = [];
 
 		for (const entity_type of entity_types) {
@@ -1224,21 +1452,6 @@ export class DatabaseWorker {
 					end_updated_at: state.end_updated_at,
 				} satisfies SyncMeta,
 			});
-
-			if (state.orama && state.search_mode === 'client') {
-				const saved = saveOrama(state.orama);
-				ops.push({
-					store: 'search_index',
-					type: 'put',
-					key: entity_type,
-					value: {
-						entity_type,
-						index: saved,
-						config_version: state.config_version,
-						updated_at: Date.now(),
-					} satisfies CachedSearchIndex,
-				});
-			}
 		}
 
 		await idbBatch(this.#db, ops);

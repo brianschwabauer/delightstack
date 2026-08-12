@@ -1,10 +1,14 @@
+// @vitest-environment node
+import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Database } from '../schema/schema';
 
 // These tests run the REAL client sync protocol against a REAL DatabaseServer
-// (real Orama, real schema) — fetch is bridged straight to the server instance
-// and IndexedDB is replaced with an in-memory Map. This verifies the actual
-// client/server pagination contract end to end.
+// (real schema, real search engine) — fetch is bridged straight to the server
+// instance and IndexedDB is `fake-indexeddb`, the same in-process IDB the
+// client driver's own tests use. Nothing about the storage layer is mocked, so
+// the client/server pagination contract AND the index/cursor atomicity it
+// depends on are both exercised end to end.
 
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {
@@ -18,53 +22,77 @@ vi.mock('cloudflare:workers', () => {
 
 vi.mock('comlink', () => ({ expose: vi.fn() }));
 
-// ── In-memory IndexedDB replacement ─────────────────────────────────────────
+// ── Reading the worker's IndexedDB from the outside ─────────────────────────
 
-const idb_stores = new Map<string, Map<string, unknown>>();
-function idbStore(store: string) {
-	let map = idb_stores.get(store);
-	if (!map) {
-		map = new Map();
-		idb_stores.set(store, map);
-	}
-	return map;
+/** Unique database names, so no two tests can ever share state. */
+let database_counter = 0;
+let db_name = 'worker-test-0';
+
+function openRaw(): Promise<IDBDatabase> {
+	return new Promise((resolve, reject) => {
+		const request = indexedDB.open(db_name);
+		request.onsuccess = () => resolve(request.result);
+		request.onerror = () => reject(request.error);
+	});
 }
 
-vi.mock('./database.idb', () => ({
-	openDatabase: vi.fn(async () => ({ close: vi.fn() })),
-	idbGet: vi.fn(async (_db: unknown, store: string, key: string) =>
-		idbStore(store).get(key),
-	),
-	idbPut: vi.fn(async (_db: unknown, store: string, key: string, value: unknown) => {
-		idbStore(store).set(key, value);
-	}),
-	idbDelete: vi.fn(async (_db: unknown, store: string, key: string) => {
-		idbStore(store).delete(key);
-	}),
-	idbDeleteByPrefix: vi.fn(async (_db: unknown, store: string, prefix: string) => {
-		for (const key of idbStore(store).keys()) {
-			if (key.startsWith(prefix)) idbStore(store).delete(key);
-		}
-	}),
-	idbClear: vi.fn(async (_db: unknown, store: string) => {
-		idbStore(store).clear();
-	}),
-	idbGetAllKeys: vi.fn(async (_db: unknown, store: string) => [
-		...idbStore(store).keys(),
-	]),
-	idbBatch: vi.fn(
-		async (
-			_db: unknown,
-			ops: { store: string; type: 'put' | 'delete'; key: string; value?: unknown }[],
-		) => {
-			for (const op of ops) {
-				if (op.type === 'put') idbStore(op.store).set(op.key, op.value);
-				else idbStore(op.store).delete(op.key);
-			}
-		},
-	),
-	deleteDatabase: vi.fn(async () => {}),
-}));
+/** Every `[key, value]` of one out-of-line-keyed store, as a Map. */
+async function readStore(store: string): Promise<Map<string, unknown>> {
+	const db = await openRaw();
+	if (!db.objectStoreNames.contains(store)) {
+		db.close();
+		return new Map();
+	}
+	const txn = db.transaction(store, 'readonly');
+	const object_store = txn.objectStore(store);
+	const entries = await new Promise<Map<string, unknown>>((resolve, reject) => {
+		const keys_request = object_store.getAllKeys();
+		const values_request = object_store.getAll();
+		txn.oncomplete = () => {
+			const map = new Map<string, unknown>();
+			(keys_request.result as IDBValidKey[]).forEach((key, index) => {
+				map.set(String(key), values_request.result[index]);
+			});
+			resolve(map);
+		};
+		txn.onerror = () => reject(txn.error);
+	});
+	db.close();
+	return entries;
+}
+
+/** The `String(primary key)`s currently in the client index, sorted. */
+async function indexedIds(entity_type: string): Promise<string[]> {
+	const db = await openRaw();
+	if (!db.objectStoreNames.contains('docs')) {
+		db.close();
+		return [];
+	}
+	const txn = db.transaction('docs', 'readonly');
+	const request = txn.objectStore('docs').getAllKeys();
+	const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+		txn.oncomplete = () => resolve(request.result as IDBValidKey[]);
+		txn.onerror = () => reject(txn.error);
+	});
+	db.close();
+	return keys
+		.map((key) => key as [string, string])
+		.filter(([type]) => type === entity_type)
+		.map(([, doc_id]) => doc_id)
+		.sort();
+}
+
+/** Seed a row into the entity cache the way a previous `get()` would have. */
+async function writeEntityCache(key: string, value: unknown): Promise<void> {
+	const db = await openRaw();
+	const txn = db.transaction('entities', 'readwrite');
+	txn.objectStore('entities').put(value, key);
+	await new Promise<void>((resolve, reject) => {
+		txn.oncomplete = () => resolve();
+		txn.onerror = () => reject(txn.error);
+	});
+	db.close();
+}
 
 // ── In-memory SQL fake for the server (same as db.server.sync.test.ts) ──────
 
@@ -254,8 +282,7 @@ async function createWorker() {
 				primary_key: 'id',
 			},
 		},
-		db_name: 'test-db',
-		default_threshold: 5000,
+		db_name,
 	});
 	return worker;
 }
@@ -269,9 +296,12 @@ const T0 = 1_750_000_000_000;
 
 describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 	beforeEach(() => {
-		vi.useFakeTimers();
+		// Only `Date` is faked: `fake-indexeddb` drives its transactions on real
+		// timers, and faking those would stall every IDB request forever.
+		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(T0);
-		idb_stores.clear();
+		database_counter += 1;
+		db_name = `worker-test-${database_counter}`;
 	});
 
 	afterEach(() => {
@@ -352,7 +382,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		await worker.sync();
 
 		// Simulate the row being in the entity cache (e.g. from a previous get())
-		idbStore('entities').set(`item/${a.id}`, {
+		await writeEntityCache(`item/${a.id}`, {
 			entity_type: 'item',
 			id: a.id,
 			data: a,
@@ -363,7 +393,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		server.delete('item', a.id as string);
 		await worker.sync();
 
-		expect(idbStore('entities').has(`item/${a.id}`)).toBe(false);
+		expect((await readStore('entities')).has(`item/${a.id}`)).toBe(false);
 		expect(await searchAllIds(worker)).toEqual([]);
 	});
 
@@ -381,10 +411,13 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		const worker = await createWorker();
 		await worker.sync(); // network failure
 		expect(await worker.isSynced('item')).toBe(false);
-		expect(await searchAllIds(worker)).toEqual([]);
+		// Read the index directly rather than through search(): with an incomplete
+		// window, a search is routed to the server by design (§7.6), and the point
+		// here is that the failed sync left NOTHING indexed locally.
+		expect(await indexedIds('item')).toEqual([]);
 
 		// The persisted cursor must NOT claim the entity was synced
-		const meta = idbStore('sync_meta').get('item') as
+		const meta = (await readStore('sync_meta')).get('item') as
 			| { start_updated_at?: number }
 			| undefined;
 		expect(meta?.start_updated_at ?? undefined).toBeUndefined();

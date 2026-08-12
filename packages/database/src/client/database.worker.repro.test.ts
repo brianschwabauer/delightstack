@@ -1,3 +1,5 @@
+// @vitest-environment node
+import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Database } from '../schema/schema';
 
@@ -28,51 +30,9 @@ vi.mock('cloudflare:workers', () => {
 
 vi.mock('comlink', () => ({ expose: vi.fn() }));
 
-const idb_stores = new Map<string, Map<string, unknown>>();
-function idbStore(store: string) {
-	let map = idb_stores.get(store);
-	if (!map) {
-		map = new Map();
-		idb_stores.set(store, map);
-	}
-	return map;
-}
-
-vi.mock('./database.idb', () => ({
-	openDatabase: vi.fn(async () => ({ close: vi.fn() })),
-	idbGet: vi.fn(async (_db: unknown, store: string, key: string) =>
-		idbStore(store).get(key),
-	),
-	idbPut: vi.fn(async (_db: unknown, store: string, key: string, value: unknown) => {
-		idbStore(store).set(key, value);
-	}),
-	idbDelete: vi.fn(async (_db: unknown, store: string, key: string) => {
-		idbStore(store).delete(key);
-	}),
-	idbDeleteByPrefix: vi.fn(async (_db: unknown, store: string, prefix: string) => {
-		for (const key of idbStore(store).keys()) {
-			if (key.startsWith(prefix)) idbStore(store).delete(key);
-		}
-	}),
-	idbClear: vi.fn(async (_db: unknown, store: string) => {
-		idbStore(store).clear();
-	}),
-	idbGetAllKeys: vi.fn(async (_db: unknown, store: string) => [
-		...idbStore(store).keys(),
-	]),
-	idbBatch: vi.fn(
-		async (
-			_db: unknown,
-			ops: { store: string; type: 'put' | 'delete'; key: string; value?: unknown }[],
-		) => {
-			for (const op of ops) {
-				if (op.type === 'put') idbStore(op.store).set(op.key, op.value);
-				else idbStore(op.store).delete(op.key);
-			}
-		},
-	),
-	deleteDatabase: vi.fn(async () => {}),
-}));
+/** Unique database names, so no two tests can ever share state. */
+let database_counter = 0;
+let db_name = 'worker-repro-0';
 
 function makeCursor<T extends Record<string, any>>(rows: T[]) {
 	let index = 0;
@@ -263,7 +223,7 @@ async function createWorker(threshold = 50_000) {
 				primary_key: 'id',
 			},
 		},
-		db_name: 'test-db',
+		db_name,
 		default_threshold: threshold,
 	});
 	return worker;
@@ -273,9 +233,12 @@ const T0 = 1_750_000_000_000;
 
 describe('sync durability regressions (2026-07-14 incident)', () => {
 	beforeEach(() => {
-		vi.useFakeTimers();
+		// Only `Date` is faked: `fake-indexeddb` drives its transactions on real
+		// timers, and faking those would stall every IDB request forever.
+		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(T0);
-		idb_stores.clear();
+		database_counter += 1;
+		db_name = `worker-repro-${database_counter}`;
 	});
 
 	afterEach(() => {
@@ -378,7 +341,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		}
 
 		// Corrupt one doc mid-page the way legacy/bad data would arrive: a null
-		// searchable string fails Orama's schema validation on insert.
+		// searchable string, which Orama rejected on insert.
 		vi.stubGlobal(
 			'fetch',
 			bridgeFetchToServer(server, {
@@ -397,8 +360,9 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		await worker.sync();
 
 		// Before the fix, insertMultiple threw at doc 10 and the remaining ~40
-		// docs of the page were silently dropped while the window advanced.
-		// Now the corrupt doc still indexes (projection drops the null field).
+		// docs of the page were silently dropped while the window advanced. The
+		// native driver has no validation step to throw at all: a null field is
+		// simply an absent field, and the page is one transaction either way.
 		const result = await worker.search('thread', { limit: 1000 });
 		expect(result.count).toBe(60);
 	});
@@ -423,9 +387,10 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		expect((await worker.search('thread', { limit: 100 })).count).toBe(20);
 
 		// Simulate the ws flood during a backfill: FULL entities (objects,
-		// arrays, nulls — shapes the sparse index schema rejects) arrive for
+		// arrays, nulls — shapes the sparse index schema rejected) arrive for
 		// already-indexed docs. Before the fix this removed each doc and then
-		// silently failed the re-insert — the doc vanished until a rebuild.
+		// silently failed the re-insert — the doc vanished until a rebuild. Now
+		// the full entity is reshaped like `toSparse` and simply overwrites it.
 		for (const id of ids) {
 			await worker.applyExternalChange('thread', 'update', id, {
 				id,

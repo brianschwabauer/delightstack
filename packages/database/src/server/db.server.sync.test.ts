@@ -533,3 +533,42 @@ describe('DatabaseServer: tombstone pruning', () => {
 		expect((res.entity.item as any).deleted).toEqual([ids[0]]);
 	});
 });
+
+describe('DatabaseServer.sync(): vector strip (plan §7.0)', () => {
+	const embeddedTable = Database.table('item', (s) => ({
+		id: s.primaryKey(),
+		name: s.string().searchable(),
+		embedding: s.vector(3),
+	}));
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(T0);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('ships the sparse document without its vector fields', () => {
+		const { db } = createServer({
+			item: embeddedTable as unknown as Database.Table,
+		});
+		db.create('item', { name: 'embedded item', embedding: [0.1, 0.2, 0.3] });
+
+		const entity = db.sync({ start_updated_at: 0 }).entity.item as any;
+		const docs = [...entity.created, ...entity.updated];
+		expect(docs).toHaveLength(1);
+		// The searchable fields still travel; the embedding does not — vector
+		// search is server-only, so the client has no use for it and it is by far
+		// the heaviest field on the wire.
+		expect(docs[0].name).toBe('embedded item');
+		expect('embedding' in docs[0]).toBe(false);
+
+		// And the server's own index still has it: a vector query still works.
+		const results = db.list('item', {
+			vector: { value: [0.1, 0.2, 0.3], field: 'embedding' as never },
+		} as never) as { count: number };
+		expect(results.count).toBe(1);
+	});
+});
