@@ -14,7 +14,9 @@ Replace Orama in `@delightstack/database` with a purpose-built, isomorphic searc
 - **Server storage interface stays synchronous** (DO SQLite is synchronous by design); **client storage interface is async** (IDB requires it). The two drivers are allowed to deviate structurally; consistency comes from shared pure modules + golden tests, not from a single awaited-everywhere core.
 - The client gets a real **IDB postings backend** (not just an in-memory Map index), removing the memory ceiling that forces the current 5000-doc auto-switch to server mode.
 
-> **Caveat for implementers:** line numbers below were captured 2026-08-11 while another agent was concurrently landing a "serialize less often" journal change in `db.server.ts`. Treat them as anchors, not gospel — re-locate by symbol name. The journal machinery itself is interim and is *deleted* by this plan (Phase 3).
+> **Caveat for implementers:** line numbers below were captured 2026-08-11 while another agent was concurrently landing a "serialize less often" journal change in `db.server.ts`. Treat them as anchors, not gospel — re-locate by symbol name. Full paths: `db.server.ts` = `packages/database/src/server/db.server.ts`, `database.worker.ts` = `packages/database/src/client/database.worker.ts`. The journal machinery itself is interim and is *deleted* by this plan (Phase 3).
+
+> **DO SQLite compatibility (verified 2026-08-11 against Cloudflare docs + the workerd authorizer source, SQLite 3.47.0):** everything this plan uses is supported — `WITHOUT ROWID`, VIRTUAL generated columns added via `ALTER TABLE`, indexes on them, `DROP COLUMN`, `json_extract` + table-valued `json_each`, `PRAGMA table_info`, `RETURNING`, upsert. Transactions must go through `ctx.storage.transactionSync()` (raw `BEGIN` is blocked in `sql.exec`) — which is already how `db.server.ts` works. Hard limits that shape this design: **100 columns per table** (§7.4 budget check), **100 bound parameters per query / 100KB per statement** (§7.2 batching), 2MB max row/blob (nothing here approaches it), no `PRAGMA user_version` (irrelevant — migration diffing uses `PRAGMA table_info`).
 
 ---
 
@@ -278,8 +280,8 @@ CREATE TABLE IF NOT EXISTS search_vectors (
 On entity upsert (inside the existing write transaction, after the entity row):
 
 1. Compute the sparse doc (§7.0) and tokenize each searchable text field (`core/tokenizer.ts`), producing `{ field → Map<token, tf> }` and `{ field → length }`.
-2. Read the doc's old `lengths` row; for each previously-indexed field, delete this doc's postings (`DELETE FROM search_postings WHERE entity_type=? AND field=? AND doc_id=?` — needs a scan within the field unless we also read old tokens; **simplest correct approach:** store the old token set per doc. Rather than a second table, recompute old tokens by tokenizing the *previous* sparse doc, which the write path already has in hand for `updated_at`/diff purposes; where it doesn't, fall back to `DELETE ... WHERE entity_type=? AND doc_id=?` via a `(entity_type, doc_id)` secondary index on `search_postings`). Decrement `df` per removed token (delete `search_tokens` rows reaching 0), decrement field stats.
-3. Insert new postings, upsert `df` (+1 per newly-present token/doc pair), upsert `lengths`, bump field stats.
+2. Remove the doc's old postings **and capture which tokens were removed** — `df`/field-stat decrements are impossible without the old token set, so the delete must never be blind. Update branch: the previous entity is already in hand (`current_data`, `db.server.ts` update branch ~`:1607`) but the previous *sparse doc* is not — compute it explicitly via `table.toSparse(current_data)` and tokenize it to get the old token set (cheap; same code path as step 1). Create branch: no previous state exists, skip this step. Fallback (previous doc unavailable, e.g. repair paths): `DELETE FROM search_postings WHERE entity_type=? AND doc_id=? RETURNING field, token` via the `(entity_type, doc_id)` secondary index — `RETURNING` is supported in DO SQLite and yields exactly the token set needed for the decrements. Then decrement `df` per removed token (delete `search_tokens` rows reaching 0) and decrement field stats.
+3. Insert new postings, upsert `df` (+1 per newly-present token/doc pair), upsert `lengths`, bump field stats. **Batching:** DO SQLite caps bound parameters at 100 per query and statements at 100KB — batch multi-row `INSERT`s at ≤20 rows per statement (5 columns each).
 4. Vector fields: replace `search_vectors` rows.
 
 Delete path: step 2 + drop `search_docs`/`search_vectors` rows. Rollback safety is free — it's all one SQLite transaction with the entity write. Cost per write: tens of small indexed row operations; benchmark target < 5ms for a typical doc (§8.3).
@@ -292,32 +294,39 @@ CREATE INDEX IF NOT EXISTS search_postings_by_doc ON search_postings (entity_typ
 
 ### 7.3 Server term-dictionary cache
 
-Per (entity_type, field), lazily load the token list from `search_tokens` into a sorted in-memory array on first search touching that field; invalidate incrementally on write (insert/remove in sorted position) — this keeps prefix expansion (binary search + range walk) and fuzzy scans (§4.3) purely in-memory while postings stay on disk. Dictionaries are the *small* part of an index; if one ever exceeds a sanity bound (say 200k tokens), fall back to SQL `BETWEEN prefix AND prefix||x'F7BFBFBF'` range queries. Cache lives on the `SearchIndex`-equivalent struct; dropped when the DO evicts — rebuilt lazily, no correctness impact.
+Per (entity_type, field), lazily load the token list from `search_tokens` into a sorted in-memory array on first search touching that field; invalidate incrementally on write (insert/remove in sorted position) — this keeps prefix expansion (binary search + range walk) and fuzzy scans (§4.3) purely in-memory while postings stay on disk. Dictionaries are the *small* part of an index; if one ever exceeds a sanity bound (say 200k tokens), fall back to SQL range queries `token >= ? AND token < ?` with the upper bound computed in JS by incrementing the prefix's last code point (do **not** concatenate a blob sentinel like `prefix||x'F7BFBFBF'` — TEXT‖BLOB yields a BLOB in SQLite, and all TEXT sorts before all BLOB, so that range is silently wrong). Cache lives on the `SearchIndex`-equivalent struct; dropped when the DO evicts — rebuilt lazily, no correctness impact.
 
 ### 7.4 SQL filter/sort compilation (child keys included)
 
 Entities already live in SQLite. `where` + `order` + pagination compile to SQL over the entity table; the postings tables are touched only when a `term`/`vector` is present. Since both the client `DatabaseSearch` default and server `list` default are `term: '', order: updated_at DESC`, **the dominant query becomes a single indexed SQL query** — this alone removes most observed latency.
 
-**Child-key paths → VIRTUAL generated columns.** For every declared filterable/sortable path (the closed set from the schema — `sortable_fields` + searchable scalars):
+**Where values actually live (important — there is no `data` column):** entity tables store every top-level *scalar* field as a real SQLite column; non-scalars (objects, arrays, vectors, geopoints) go into the internal overflow column named **`json`** (`schema.ts:2925-2935`, `db.server.ts:490`). The compiler therefore has a three-way split:
+
+1. Top-level scalar → real column exists; compile directly against it, no generated column.
+2. Child path into an object (e.g. `address.city`) → the object lives in `json`; VIRTUAL generated column over `json_extract(json, ...)`.
+3. Array field → lives in `json`; `json_each` predicate (below), no generated column in v1.
+
+**Child-key paths → VIRTUAL generated columns.** For every declared filterable/sortable child path (the closed set from the schema — `sortable_fields` + searchable scalars):
 
 ```sql
 ALTER TABLE "<entity_table>" ADD COLUMN "sv$address__city" TEXT
-	GENERATED ALWAYS AS (json_extract(data, '$.address.city')) VIRTUAL;
+	GENERATED ALWAYS AS (json_extract(json, '$.address.city')) VIRTUAL;
 CREATE INDEX IF NOT EXISTS "idx_<entity>_address__city" ON "<entity_table>" ("sv$address__city");
 ```
 
 Rationale (from design discussion, keep these):
 - `ALTER TABLE ADD COLUMN` works for VIRTUAL generated columns (NOT for STORED) → adding a sortable field later is cheap DDL, no table rewrite.
 - An index on a VIRTUAL column materializes the computed values *in the index* → query perf equals a real column, zero row-write amplification.
-- Naming: `sv$` prefix + path with `.` → `__` avoids identifier-quoting hazards and collisions with real columns. Top-level fields that are already real columns need no generated column — compile directly against them.
-- Migration when the declared path set changes: diff `PRAGMA table_info` against the schema at DO bootstrap, `ADD COLUMN` + `CREATE INDEX` for new paths, `DROP INDEX`/`DROP COLUMN` for removed ones.
+- Naming: `sv$` prefix + path with `.` → `__` avoids identifier-quoting hazards and collisions with real columns.
+- Migration when the declared path set changes: diff `PRAGMA table_info` against the schema at DO bootstrap (allowed in DO SQLite), `ADD COLUMN` + `CREATE INDEX` for new paths, `DROP INDEX` **then** `DROP COLUMN` for removed ones (an indexed column can't be dropped).
+- **Column budget:** DO SQLite caps tables at **100 columns** (vs stock SQLite's 2000). Real field columns + `json` + `sv$` generated columns all share that budget. At DO bootstrap, count declared columns + generated columns and throw a descriptive `DelightError` if the total would exceed 100 — fail loudly at migration time, not with an opaque SQLite error mid-DDL.
 
 **Compiler rules (`server/sql_where.ts`):**
 - Boolean paths: compare against `0/1` (json_extract convention).
 - `not`: emit `(col IS NULL OR NOT (...))` per the frozen null rule (§5).
 - Order: `ORDER BY (col IS NULL), col ASC|DESC, pk ASC` (nulls-last, PK tie-break).
 - String comparisons: BINARY collation (default) = code-point order = the core comparator. Do not set any collation.
-- Array-field predicates (`containsAll`/`in`/`eq`-on-array): `EXISTS (SELECT 1 FROM json_each(json_extract(data,'$.path')) WHERE json_each.value = ?)` composed per element. No index in v1; add a `search_values(entity_type, field, doc_id, value)` side table later only if a hot array filter demands it (note the IDB `multiEntry` symmetry, §7.6).
+- Array-field predicates (`containsAll`/`in`/`eq`-on-array): `EXISTS (SELECT 1 FROM json_each(json_extract(json,'$.path')) WHERE json_each.value = ?)` composed per element (`json_each` is on the DO SQLite function allowlist). No index in v1; add a `search_values(entity_type, field, doc_id, value)` side table later only if a hot array filter demands it (note the IDB `multiEntry` symmetry, §7.6).
 
 ### 7.5 Server search pipeline (`server/engine.ts`, synchronous)
 
@@ -327,7 +336,7 @@ list(entity_type, query):
 	if no term and no vector:
 		SQL: SELECT ids (or full rows) WHERE <compiled> ORDER BY <compiled> LIMIT/OFFSET  → done
 	else:
-		candidate_ids = where ? SQL id-set : null
+		candidate_ids = where ? SQL id-set : null   -- convert to String(pk) at this boundary; postings doc_ids are always String(pk)
 		text: for each query token (sorted): expand via dictionary cache (prefix ∪ tolerance);
 		      fetch postings per matched token; accumulate BM25 into Map<doc_id, score>
 		      (skip docs ∉ candidate_ids when the SQL set is smaller; otherwise filter after)
@@ -394,7 +403,7 @@ A test-only harness that runs the same corpus + query battery through real Orama
 
 ### 8.2 Golden vectors (permanent, both drivers)
 
-A single JSON fixture set (`search/__tests__/golden/`) of `{ corpus, query, expected_ids_in_order, expected_counts, expected_facets }`, generated once from the memory reference implementation and hand-audited. The **same fixtures** run against: core+memory store (vitest), server driver over real DO SQLite (existing `db.server.*.test.ts` infra / miniflare), client driver over real IDB (fake-indexeddb in vitest + at least one real-browser pass). Byte-identical output required. Mandatory edge coverage: astral-plane string ordering, null vs absent, empty string/array, boolean coercion through `json_extract`, `not` with missing fields, equal-score PK tie-breaks, equal `updated_at` ordering, tolerance boundary lengths, email tokenization.
+A single JSON fixture set (`search/__tests__/golden/`) of `{ corpus, query, expected_ids_in_order, expected_counts, expected_facets }`, generated once from the memory reference implementation and hand-audited. The **same fixtures** run against: core+memory store (vitest), server driver over real DO SQLite (existing `db.server.*.test.ts` infra / miniflare), client driver over real IDB (fake-indexeddb in vitest + at least one real-browser pass). Byte-identical output required. Mandatory edge coverage: astral-plane string ordering, null vs absent, empty string/array, boolean coercion through `json_extract`, `not` with missing fields, equal-score PK tie-breaks, equal `updated_at` ordering, tolerance boundary lengths, email tokenization. At least one corpus must use an **integer primary key** (`primary_key_type: 'number'`) — postings store `doc_id` as `String(pk)` while tie-breaks compare as the declared PK type, so integer-PK ordering (`2 < 10`, not `'10' < '2'`) must be exercised end-to-end.
 
 ### 8.3 Performance benchmarks (regression-gated)
 
@@ -432,6 +441,7 @@ Remove `@orama/orama` from package.json; legacy `search_index`/`search_journal` 
 | Fuzzy/threshold behavior underdocumented in Orama | `[verify-vs-orama]` markers force reading Orama source / empirical tests before freezing |
 | IDB transaction auto-commit corrupting index/sync atomicity | Pure-compute-then-single-transaction write structure (§7.6 checklist); invariant test that sync_meta and postings commit together |
 | Generated-column migration on live DOs | VIRTUAL columns = cheap DDL; diff-based bootstrap migration; `rebuildSearchTables` as universal repair |
+| DO SQLite 100-column cap: wide schema + many `sv$` columns overflows the table | Bootstrap budget check throws a descriptive `DelightError` before any DDL (§7.4); escape valve: trim declared sortable/filterable paths |
 | Concurrent journal work (in flight now) conflicts | Journal is additive to the orama path only; Phase 3 deletes it wholesale — coordinate timing, don't rebase around it |
 | BM25 stats divergence on partial client windows | Not fixable by design — coverage-based mode policy + explicit documentation (§7.6) |
 
