@@ -361,7 +361,7 @@ async function handleList(
 	event: RequestEvent,
 ): Promise<Response> {
 	// decodeSearchQuery is the symmetric counterpart of the client's
-	// encodeSearchQuery — it JSON/number-parses structured Orama params instead
+	// encodeSearchQuery — it JSON/number-parses structured search params instead
 	// of passing raw strings through
 	let query = decodeSearchQuery(event.url.searchParams) as Record<string, unknown>;
 

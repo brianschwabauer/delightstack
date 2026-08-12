@@ -1,15 +1,13 @@
-import type { FacetDefinition } from '@orama/orama';
+import type { FacetDefinition } from './search/core/types';
 
 /**
  * Non-generic search query type for the encode/decode layer.
  * Structurally compatible with `Database.SearchQuery<Table>` but uses loose types
- * for Orama-specific fields that would otherwise require the Table generic.
+ * for fields that would otherwise require the Table generic.
  *
  * Use `Database.SearchQuery<Table>` when you have the table type available for full autocomplete.
  */
 export interface SearchQueryInput {
-	/** Alias for `term`. If both are provided, `term` takes precedence. */
-	q?: string;
 	/** The search term */
 	term?: string;
 	/** Maximum number of results to return */
@@ -20,20 +18,33 @@ export interface SearchQueryInput {
 	where?: Record<string, unknown>;
 	/** Facet configuration */
 	facets?: Record<string, FacetDefinition>;
-	/** Boost configuration for specific properties */
+	/** Boost configuration for specific fields */
 	boost?: Record<string, number>;
-	/** Return distinct results based on this property */
-	distinctOn?: string;
+	/** Return distinct results based on this field */
+	distinct_on?: string;
 	/** Whether to match the term exactly */
 	exact?: boolean;
-	/** Which properties to search in. Use `'*'` for all. */
-	properties?: string[] | '*';
-	/** Minimum relevance threshold (0-1) */
+	/** Which fields to search in. Use `'*'` for all. */
+	fields?: string[] | '*';
+	/**
+	 * Controls how multi-token terms are combined.
+	 *
+	 * `0` returns only documents matching *every* token; `1` (the default)
+	 * returns every document matching *any* token; a fractional value returns
+	 * all-token matches plus that top fraction (by score) of the partial
+	 * matches.
+	 */
 	threshold?: number;
 	/** Maximum levenshtein distance tolerance */
 	tolerance?: number;
-	/** Vector search configuration */
-	vector?: { value: number[]; property: string };
+	/**
+	 * Vector search configuration (server-only).
+	 *
+	 * `similarity` is the inclusive minimum cosine similarity a document must
+	 * reach; it rides inside the same `vector` JSON URL param.
+	 * @default similarity 0.8
+	 */
+	vector?: { value: number[]; field: string; similarity?: number };
 	/**
 	 * Whether only sparse searchable fields should be returned.
 	 * @default true
@@ -42,7 +53,7 @@ export interface SearchQueryInput {
 	/** Cursor for pagination (from a previous query result) */
 	cursor?: string;
 	/** Sort order. Multiple orderings determine sorting precedence. */
-	order?: { key: string; direction?: 'ASC' | 'DESC' }[];
+	order?: { field: string; direction?: 'ASC' | 'DESC' }[];
 }
 
 /** Parse a boolean from a URL search param value with tolerance for multiple formats. */
@@ -90,9 +101,8 @@ export function encodeSearchQuery(query: SearchQueryInput): URLSearchParams {
 
 	// String scalars
 	if (query.term !== undefined) params.set('term', query.term);
-	if (query.q !== undefined) params.set('q', query.q);
 	if (query.cursor !== undefined) params.set('cursor', query.cursor);
-	if (query.distinctOn !== undefined) params.set('distinct_on', query.distinctOn);
+	if (query.distinct_on !== undefined) params.set('distinct_on', query.distinct_on);
 
 	// Numeric scalars
 	if (query.limit !== undefined) params.set('limit', String(query.limit));
@@ -110,19 +120,19 @@ export function encodeSearchQuery(query: SearchQueryInput): URLSearchParams {
 	if (query.boost !== undefined) params.set('boost', JSON.stringify(query.boost));
 	if (query.vector !== undefined) params.set('vector', JSON.stringify(query.vector));
 
-	// Properties: comma-separated or '*'
-	if (query.properties !== undefined) {
+	// Fields: comma-separated or '*'
+	if (query.fields !== undefined) {
 		params.set(
-			'properties',
-			Array.isArray(query.properties) ? query.properties.join(',') : query.properties,
+			'fields',
+			Array.isArray(query.fields) ? query.fields.join(',') : query.fields,
 		);
 	}
 
-	// Order: pipe-separated key:direction pairs
+	// Order: pipe-separated field:direction pairs
 	if (query.order?.length) {
 		params.set(
 			'order',
-			query.order.map((o) => `${o.key}:${o.direction ?? 'ASC'}`).join('|'),
+			query.order.map((o) => `${o.field}:${o.direction ?? 'ASC'}`).join('|'),
 		);
 	}
 
@@ -131,7 +141,10 @@ export function encodeSearchQuery(query: SearchQueryInput): URLSearchParams {
 
 /**
  * Decode URL search params into a search query.
- * `q` is treated as an alias for `term` — if both are present, `term` takes precedence.
+ *
+ * Only the canonical key spellings are read (decided 2026-08-12): there are no
+ * legacy read aliases, so `q`, `distinctOn`, `properties` and `vector.property`
+ * from pre-rename URLs are ignored.
  *
  * @example
  * ```ts
@@ -142,21 +155,15 @@ export function encodeSearchQuery(query: SearchQueryInput): URLSearchParams {
 export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 	const query: SearchQueryInput = {};
 
-	// Term: 'term' takes precedence over 'q'
-	const term = params.get('term');
-	const q = params.get('q');
-	if (term !== null) {
-		query.term = term;
-	} else if (q !== null) {
-		query.term = q;
-	}
-
 	// String scalars
+	const term = params.get('term');
+	if (term !== null) query.term = term;
+
 	const cursor = params.get('cursor');
 	if (cursor !== null) query.cursor = cursor;
 
 	const distinct_on = params.get('distinct_on');
-	if (distinct_on !== null) query.distinctOn = distinct_on;
+	if (distinct_on !== null) query.distinct_on = distinct_on;
 
 	// Numeric scalars
 	const limit = parseNumber(params, 'limit');
@@ -188,26 +195,28 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 	const boost = parseJson(params, 'boost');
 	if (boost !== undefined) query.boost = boost as Record<string, number>;
 
+	// Vector: `{ value, field, similarity? }` — `similarity` rides along for free
 	const vector = parseJson(params, 'vector');
-	if (vector !== undefined)
-		query.vector = vector as { value: number[]; property: string };
-
-	// Properties: comma-separated or '*'
-	const properties = params.get('properties');
-	if (properties !== null) {
-		query.properties = properties === '*' ? '*' : properties.split(',').filter(Boolean);
+	if (vector !== undefined) {
+		query.vector = vector as { value: number[]; field: string; similarity?: number };
 	}
 
-	// Order: key:direction pairs separated by '|' (canonical) or ',' (hand-written URLs)
+	// Fields: comma-separated or '*'
+	const fields = params.get('fields');
+	if (fields !== null) {
+		query.fields = fields === '*' ? '*' : fields.split(',').filter(Boolean);
+	}
+
+	// Order: field:direction pairs separated by '|' (canonical) or ',' (hand-written URLs)
 	const order = params.get('order');
 	if (order !== null) {
 		query.order = order
 			.split(/[|,]/)
 			.filter(Boolean)
 			.map((segment) => {
-				const [key, direction] = segment.split(':');
+				const [field, direction] = segment.split(':');
 				return {
-					key,
+					field,
 					direction: (direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC') as
 						| 'ASC'
 						| 'DESC',
@@ -231,6 +240,10 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
  * enum/number properties are rewritten. `and`/`or`/`not` composites are
  * normalized recursively. Unknown properties are left untouched — Orama's
  * UNKNOWN_FILTER_PROPERTY handles those.
+ *
+ * Operator spellings are the canonical ones only (`contains_all`,
+ * `contains_any`, `not_in`); the pre-rename spellings are not accepted
+ * (decided 2026-08-12 — no legacy read aliases).
  */
 export function normalizeWhere(
 	where: Record<string, unknown> | undefined,

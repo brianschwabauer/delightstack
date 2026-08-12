@@ -319,20 +319,22 @@ db.list('user', {
   // Full-text search
   term: 'alice',
 
-  // Vector search
-  vector: { value: [0.1, 0.2, ...], property: 'embeddings' },
-  mode: 'vector',  // 'fulltext' | 'vector' | 'hybrid'
+  // Vector search — the search mode is derived: `vector` alone runs a vector
+  // search, `term` + `vector` runs a hybrid search, `term` alone runs full text
+  // `similarity` is the inclusive minimum cosine similarity (default 0.8)
+  vector: { value: [0.1, 0.2, ...], field: 'embeddings', similarity: 0.8 },
 
-  // Filters (Orama WHERE syntax)
+  // Filters
   where: {
-    role: 'admin',                    // Exact match
-    age: { gte: 18, lt: 65 },        // Range
-    tags: { containsAll: ['a', 'b'] } // Array contains
+    role: 'admin',                     // Exact match
+    age: { gte: 18, lt: 65 },          // Range
+    tags: { contains_all: ['a', 'b'] }, // Array contains every value
+    labels: { contains_any: ['x', 'y'] } // Array contains at least one value
   },
 
   // Sorting
   order: [
-    { key: 'created_at', direction: 'DESC' },
+    { field: 'created_at', direction: 'DESC' },
   ],
 
   // Pagination
@@ -341,7 +343,7 @@ db.list('user', {
 
   // Response shape
   sparse: false,  // true = only searchable fields, false = full entities from SQLite
-  properties: ['id', 'name', 'email'],  // Subset of fields to return
+  fields: ['name', 'email'],  // Which searchable fields the term matches against
 });
 ```
 
@@ -590,7 +592,6 @@ const personRoute = defineRoute({
 | `offset` | `?offset=40`                      | Skip N results                                           |
 | `cursor` | `?cursor=abc123`                  | Cursor-based pagination token                            |
 | `term`   | `?term=alice`                     | Full-text search term                                    |
-| `q`      | `?q=alice`                        | Alias for `term`                                         |
 | `order`  | `?order=name:ASC,created_at:DESC` | Comma-separated `field:direction` pairs                  |
 | `where`  | `?where={"role":"admin"}`         | JSON-encoded Orama WHERE clause                          |
 | `sparse` | `?sparse=false`                   | `false` for full entities, `true` for search fields only |

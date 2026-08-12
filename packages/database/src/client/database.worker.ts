@@ -26,6 +26,7 @@ import {
 	type CachedSearchIndex,
 } from './database.idb';
 import { DelightError } from '@delightstack/utilities';
+import { toOramaSearchParams, toOramaWhere } from '../search/orama-compat';
 import {
 	type SearchQueryInput,
 	encodeSearchQuery,
@@ -831,23 +832,26 @@ export class DatabaseWorker {
 			return this.#serverSearch(entity_type, query);
 		}
 
-		// Client-side Orama search — convert SearchQueryInput to Orama-native params
-		const orama_params: Record<string, unknown> = { ...query };
+		// Client-side Orama search — convert SearchQueryInput to Orama-native params.
+		// TEMPORARY: `toOramaSearchParams` translates the owned query vocabulary
+		// (fields/distinct_on/vector.field/contains_all/contains_any/not_in) back to
+		// Orama's spellings until the native engine replaces this call site (plan
+		// phase 4).
+		const orama_params = toOramaSearchParams({ ...query } as Record<string, unknown>);
 		// Plain-value where shorthands on enum/number properties (same rule the
 		// server applies) — Orama throws on them, which broke client-mode queries
 		// that work fine against the server.
-		orama_params.where = normalizeWhere(
-			orama_params.where as Record<string, unknown> | undefined,
-			this.#tables[entity_type]?.orama?.schema as Record<string, unknown> | undefined,
+		orama_params.where = toOramaWhere(
+			normalizeWhere(
+				query.where as Record<string, unknown> | undefined,
+				this.#tables[entity_type]?.orama?.schema as Record<string, unknown> | undefined,
+			),
 		);
-		// Resolve q alias
-		if (!orama_params.term && orama_params.q) orama_params.term = orama_params.q;
-		delete orama_params.q;
 		// Convert order[] → Orama's sortBy
 		if (Array.isArray(orama_params.order) && orama_params.order.length > 0) {
-			const orders = orama_params.order as { key: string; direction?: string }[];
+			const orders = orama_params.order as { field: string; direction?: string }[];
 			orama_params.sortBy = {
-				property: orders[0].key,
+				property: orders[0].field,
 				order: (orders[0].direction || 'ASC').toUpperCase(),
 			};
 			delete orama_params.order;

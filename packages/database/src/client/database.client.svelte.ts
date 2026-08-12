@@ -782,7 +782,7 @@ export class EntityReader<
 const DEFAULT_SEARCH_QUERY = {
 	term: '',
 	limit: 100,
-	order: [{ key: 'updated_at', direction: 'DESC' as const }],
+	order: [{ field: 'updated_at', direction: 'DESC' as const }],
 };
 
 /** Quiet window for coalescing rapid query changes (e.g. typing) into one push */

@@ -1,15 +1,11 @@
-import {
-	AnyOrama,
-	AnySchema,
-	Orama,
-	Results,
+import type {
+	AnySearchSchema,
+	IndexedDocument,
+	IndexSorterConfig,
 	SearchableType,
-	SearchParamsFullText,
-	SearchParamsVector,
-	SorterConfig,
-	TypedDocument,
-	SearchParams,
-} from '@orama/orama';
+	SearchQuery as CoreSearchQuery,
+	SearchQueryResults as CoreSearchQueryResults,
+} from '../search/core/types';
 import { DelightError } from '@delightstack/utilities';
 import { z } from 'zod';
 
@@ -2371,7 +2367,7 @@ export namespace Database {
 		/** The schema used to initialize the orama library */
 		schema: SearchSchema<Table>;
 		/** The configuration for sorting search results */
-		sort: SorterConfig;
+		sort: IndexSorterConfig;
 		/** Custom orama components (e.g., getDocumentIndexId for custom primary key fields) */
 		components: {
 			getDocumentIndexId: (doc: Record<string, any>) => string;
@@ -2383,11 +2379,11 @@ export namespace Database {
 		Table extends {
 			readonly _: Record<string, FieldGenerator>;
 		},
-		OramaSchemaConfig extends AnySchema = SearchSchema<Table>,
+		IndexSchemaConfig extends AnySearchSchema = SearchSchema<Table>,
 		PrimaryKeyColumn extends keyof Table['_'] = {
 			[Key in keyof Table['_']]: IsPrimaryKey<Table['_'][Key]> extends true ? Key : never;
 		}[keyof Table['_']],
-	> = Partial<TypedDocument<Orama<OramaSchemaConfig>>> & {
+	> = Partial<IndexedDocument<IndexSchemaConfig>> & {
 		[Key in PrimaryKeyColumn]: string;
 	} & (true extends HasPrimaryKeyField<Table['_']> ? {} : { id: string }) & {
 			created_at: number;
@@ -2454,45 +2450,14 @@ export namespace Database {
 
 	/**
 	 * The type used to define the search query parameters for a database table
-	 * This is the direct input of the `search` method in Orama.
+	 * This is the direct input of the `list`/`search` methods.
 	 */
 	export type SearchQuery<
 		Table extends {
 			readonly _: Record<string, FieldGenerator>;
 		},
-		OramaSchemaConfig extends AnySchema = SearchSchema<Table>,
-		OramaSchema extends AnyOrama = Orama<OramaSchemaConfig>,
-	> = Pick<SearchParams<OramaSchema>, 'facets' | 'limit' | 'term' | 'where' | 'offset'> &
-		Pick<
-			SearchParamsFullText<OramaSchema>,
-			'boost' | 'distinctOn' | 'exact' | 'properties' | 'threshold' | 'tolerance'
-		> &
-		Pick<SearchParamsVector<OramaSchema>, 'vector'> & {
-			/** Alias for `term`. If both are provided, `term` takes precedence. */
-			q?: string;
-
-			/**
-			 * Whether only the sparse 'searchable' fields should be returned.
-			 * If this is false, all fields from sqlite will be returned (including those stored in the 'json' column).
-			 * If this is true, only fields indexed by orama will be returned.
-			 * @default true
-			 */
-			sparse?: boolean;
-
-			/**
-			 * A cursor to continue fetching results from a previous query.
-			 * If this is provided, all other query parameters (term, where, limit, order, etc.) will be ignored.
-			 */
-			cursor?: string;
-
-			/** How the results should be ordered. Multiple orderings can be specified to determine the sorting precedence */
-			order?: {
-				/** The key (field) to sort by */
-				key: string;
-				/** The direction to sort by (ascending or descending) @default ASC */
-				direction?: 'ASC' | 'DESC';
-			}[];
-		};
+		IndexSchemaConfig extends AnySearchSchema = SearchSchema<Table>,
+	> = CoreSearchQuery<IndexSchemaConfig>;
 
 	/**
 	 * The type returned by the search query for a database table
@@ -2506,7 +2471,7 @@ export namespace Database {
 		Query extends SearchQuery<Table> = {},
 		Data extends Query['sparse'] extends false ? Entity<Table> : SearchEntity<Table> =
 			Query['sparse'] extends false ? Entity<Table> : SearchEntity<Table>,
-	> = Pick<Results<Data>, 'count' | 'elapsed' | 'facets' | 'hits'> & {
+	> = Pick<CoreSearchQueryResults<Data>, 'count' | 'elapsed' | 'facets' | 'hits'> & {
 		/**
 		 * A cursor that can be used to fetch the next set of results.
 		 * If this is null/undefined, there are no more results to fetch.
@@ -2939,7 +2904,7 @@ export namespace Database {
 				subfield: DatabaseField,
 				path: string = '',
 				force_searchable: boolean = false,
-			): AnySchema | SearchableType | undefined {
+			): AnySearchSchema | SearchableType | undefined {
 				if (subfield.type === 'object') {
 					const child = Object.entries(subfield.properties).reduce(
 						(acc, [childFieldName, childFieldDef]) => {
@@ -2954,7 +2919,7 @@ export namespace Database {
 							acc[childFieldName] = childSchema;
 							return acc;
 						},
-						{} as Record<string, AnySchema | SearchableType>,
+						{} as Record<string, AnySearchSchema | SearchableType>,
 					);
 					if (Object.keys(child).length === 0) return undefined;
 					return child;

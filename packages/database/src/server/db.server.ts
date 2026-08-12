@@ -15,6 +15,7 @@ import { encode as encodeMsgPack, decode as decodeMsgPack } from '@msgpack/msgpa
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
 import { normalizeWhere } from '../search-query';
+import { toOramaSearchParams } from '../search/orama-compat';
 import { generateTimestampID, DelightError } from '@delightstack/utilities';
 
 interface Env {
@@ -1186,12 +1187,10 @@ export class DatabaseServer<
 				/* intentionally empty: malformed cursor falls back to raw_query */
 			}
 		}
-		// Resolve q alias: use q as term when term is not set
 		const base_query = previous_cursor_data || raw_query;
-		const resolved_term = base_query.term ?? base_query.q;
 
 		const query = {
-			order: [{ key: 'updated_at', direction: 'DESC' }],
+			order: [{ field: 'updated_at', direction: 'DESC' }],
 			...base_query,
 			// Accept plain-value where shorthands (`{folder: 'inbox'}`) on enum and
 			// number properties — Orama requires operation objects there and its
@@ -1200,8 +1199,7 @@ export class DatabaseServer<
 				base_query.where as Record<string, unknown> | undefined,
 				table.config.orama.schema as Record<string, unknown>,
 			) as never,
-			term: resolved_term,
-			q: undefined,
+			term: base_query.term,
 			cursor: undefined,
 			sparse,
 			limit: Math.max(
@@ -1209,10 +1207,13 @@ export class DatabaseServer<
 				Math.min(base_query.limit || (sparse ? 100 : 10), sparse ? 5000 : 100),
 			),
 		} satisfies Database.SearchQuery<Table>;
-		query.order.forEach(({ key }) => {
-			if (!table.config.sortable_fields.includes(key)) {
+		// A cursor minted before `q` left the typed API can still carry it — drop it
+		// so it never round-trips back into a freshly generated cursor.
+		delete (query as { q?: string }).q;
+		query.order.forEach(({ field }) => {
+			if (!table.config.sortable_fields.includes(field)) {
 				throw new DelightError({
-					message: `Invalid order key ${key}. Must be one of ${table.config.sortable_fields.join(', ')}.`,
+					message: `Invalid order field ${field}. Must be one of ${table.config.sortable_fields.join(', ')}.`,
 					status: 400,
 				});
 			}
@@ -1226,15 +1227,15 @@ export class DatabaseServer<
 				query.offset !== undefined ||
 				!query.order?.length ||
 				query.order.some(
-					({ key }) =>
+					({ field }) =>
 						// Using 'where' clauses for pagination is not supported for non-scalar types
-						(table.config.orama.schema[key] !== 'number' &&
-							(table.config.orama.schema[key] as any) !== 'number[]') ||
-						// Check to make sure the keys aren't using the 'dot' notation for nested fields
-						!!key.match(/[^a-z0-9_]/gi) ||
-						// Check to make sure the last item has a value for the order key
-						last_item[key] === undefined ||
-						last_item[key] === null,
+						(table.config.orama.schema[field] !== 'number' &&
+							(table.config.orama.schema[field] as any) !== 'number[]') ||
+						// Check to make sure the fields aren't using the 'dot' notation for nested fields
+						!!field.match(/[^a-z0-9_]/gi) ||
+						// Check to make sure the last item has a value for the order field
+						last_item[field] === undefined ||
+						last_item[field] === null,
 				);
 			if (use_offset) {
 				return btoa(JSON.stringify({ ...query, cursor: undefined, offset }))
@@ -1243,22 +1244,22 @@ export class DatabaseServer<
 			}
 			// Use where clauses to create the cursor for pagination instead of offsets
 			// because offsets are less efficient for large datasets
-			query.order.forEach(({ key, direction }) => {
+			query.order.forEach(({ field, direction }) => {
 				if (!('and' in where)) {
 					const previous_where = structuredClone(where);
 					(where as any) = {};
 					(where as any).and = [previous_where];
 				}
 				const existing_clause_index = (where as any).and.findIndex(
-					(clause: any) => !!clause[key] && !clause[key]?.between,
+					(clause: any) => !!clause[field] && !clause[field]?.between,
 				);
-				const value = last_item[key] || 0;
+				const value = last_item[field] || 0;
 				if (existing_clause_index === -1) {
 					(where as any).and.push({
-						[key]: direction === 'ASC' ? { gt: value } : { lt: value },
+						[field]: direction === 'ASC' ? { gt: value } : { lt: value },
 					});
 				} else {
-					(where as any).and[existing_clause_index][key] =
+					(where as any).and[existing_clause_index][field] =
 						direction === 'ASC' ? { gt: value } : { lt: value };
 				}
 			});
@@ -1271,9 +1272,12 @@ export class DatabaseServer<
 
 		let results: Results<any>;
 		try {
+			// TEMPORARY: translate the owned query vocabulary back to Orama's until
+			// the native engine replaces this call site (plan phases 3-4).
+			const orama_query = toOramaSearchParams(query as Record<string, unknown>);
 			results = searchOrama<AnyOrama>(index.orama, {
-				...query,
-				properties: (query.properties as any) || '*',
+				...orama_query,
+				properties: (orama_query.properties as any) || '*',
 				limit: query.limit,
 				term: query.term,
 				mode: (query.term && query.vector
@@ -1285,15 +1289,15 @@ export class DatabaseServer<
 				sortBy:
 					query.order.length === 1
 						? {
-								property: query.order[0].key,
+								property: query.order[0].field,
 								order: (query.order[0].direction || 'ASC').toUpperCase() as
 									| 'ASC'
 									| 'DESC',
 							}
 						: ([_aId, aScore, aDoc], [_bId, bScore, bDoc]) => {
 								for (const ord of query.order) {
-									const aValue = aDoc[ord.key];
-									const bValue = bDoc[ord.key];
+									const aValue = aDoc[ord.field];
+									const bValue = bDoc[ord.field];
 									if (typeof aValue === 'string' && typeof bValue === 'string') {
 										const comparison = aValue.localeCompare(bValue, undefined, {
 											numeric: true,
