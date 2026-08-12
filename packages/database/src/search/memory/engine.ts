@@ -31,7 +31,8 @@ import { DelightError } from '@delightstack/utilities';
 import { bm25Score } from '../core/bm25';
 import { compareForOrder, comparePrimaryKeys, compareStrings } from '../core/compare';
 import { computeFacets } from '../core/facets';
-import { isWithinTolerance } from '../core/levenshtein';
+import { TokenHits } from '../core/token_hits';
+import { ToleranceMatcher } from '../core/levenshtein';
 import { tokenize } from '../core/tokenizer';
 import type { FacetDefinition, SearchQuery, SearchQueryResults } from '../core/types';
 import { evaluateWhere, getFieldValue, normalizeWhere } from '../core/where';
@@ -100,7 +101,7 @@ export class MemorySearchEngine {
 		const distinct_tokens = [...new Set(term_tokens)].sort(compareStrings);
 		const has_term = distinct_tokens.length > 0;
 		const text_scores = new Map<string, number>();
-		const token_hits = new Map<string, Set<string>>();
+		const token_hits = new TokenHits(distinct_tokens.length);
 		if (has_term) {
 			this.#accumulateText(
 				query,
@@ -225,7 +226,7 @@ export class MemorySearchEngine {
 		distinct_tokens: readonly string[],
 		matched_ids: ReadonlySet<string>,
 		text_scores: Map<string, number>,
-		token_hits: Map<string, Set<string>>,
+		token_hits: TokenHits,
 	): void {
 		const store = this.store;
 		const boosts = query.boost as Record<string, number> | undefined;
@@ -237,7 +238,8 @@ export class MemorySearchEngine {
 			const average_field_length = stats.total_len / stats.doc_count;
 			const boost = boosts?.[field] ?? 1;
 			const dictionary = store.getDictionary(field);
-			for (const token of distinct_tokens) {
+			for (let token_index = 0; token_index < distinct_tokens.length; token_index++) {
+				const token = distinct_tokens[token_index];
 				for (const candidate of expandToken(dictionary, token, exact, tolerance)) {
 					const doc_frequency = store.getDocFrequency(field, candidate);
 					for (const [doc_id, tf] of store.getPostings(field, candidate)) {
@@ -252,12 +254,7 @@ export class MemorySearchEngine {
 							doc_frequency,
 						});
 						text_scores.set(doc_id, (text_scores.get(doc_id) ?? 0) + boost * score);
-						let hits = token_hits.get(doc_id);
-						if (!hits) {
-							hits = new Set();
-							token_hits.set(doc_id, hits);
-						}
-						hits.add(token);
+						token_hits.add(doc_id, token_index);
 					}
 				}
 			}
@@ -368,10 +365,17 @@ export function expandToken(
 ): string[] {
 	if (exact) return dictionary.includes(token) ? [token] : [];
 	const matches: string[] = [];
+	// One matcher for the whole scan: `ToleranceMatcher` is `isWithinTolerance`
+	// with the per-candidate allocations hoisted out (see `core/levenshtein.ts`).
+	const matcher = tolerance > 0 ? new ToleranceMatcher(token, tolerance) : undefined;
+	// The inline first-unit check keeps `startsWith` — an uninlineable call — off
+	// the overwhelming majority of a dictionary scan.
+	const first_unit = token.length > 0 ? token.charCodeAt(0) : -1;
 	for (const candidate of dictionary) {
 		if (
-			candidate.startsWith(token) ||
-			(tolerance > 0 && isWithinTolerance(token, candidate, tolerance))
+			((first_unit < 0 || candidate.charCodeAt(0) === first_unit) &&
+				candidate.startsWith(token)) ||
+			matcher?.matches(candidate) === true
 		) {
 			matches.push(candidate);
 		}
@@ -389,15 +393,17 @@ export function expandToken(
  */
 function applyThreshold(
 	text_scores: ReadonlyMap<string, number>,
-	token_hits: ReadonlyMap<string, Set<string>>,
+	token_hits: TokenHits,
 	token_count: number,
 	threshold: number | undefined,
 	store: MemorySearchStore,
 ): Set<string> {
-	const union = [...token_hits.keys()].sort(compareStrings);
-	const all_match = new Set(
-		union.filter((id) => (token_hits.get(id)?.size ?? 0) >= token_count),
-	);
+	// NOT sorted: every branch below turns `union` into a `Set` or re-sorts it
+	// with a *total* comparator (score, then primary key), so the walk order is
+	// unobservable — and sorting tens of thousands of matched ids to then throw
+	// the order away was pure cost. The caller sorts the ids it keeps.
+	const union = token_hits.ids();
+	const all_match = new Set(union.filter((id) => token_hits.size(id) >= token_count));
 	const value = threshold ?? 1;
 	if (value >= 1) return new Set(union);
 	if (value <= 0) return all_match;

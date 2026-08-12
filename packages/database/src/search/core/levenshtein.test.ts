@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundedLevenshtein, isWithinTolerance } from './levenshtein';
+import { boundedLevenshtein, isWithinTolerance, ToleranceMatcher } from './levenshtein';
 
 /** Unbounded reference implementation, used to cross-check the bounded one. */
 function referenceDistance(a: string, b: string): number {
@@ -92,5 +92,63 @@ describe('isWithinTolerance', () => {
 		expect(isWithinTolerance('hello', 'hallo', 1)).toBe(true);
 		expect(isWithinTolerance('hello', 'hallu', 1)).toBe(false);
 		expect(isWithinTolerance('hello', 'hallu', 2)).toBe(true);
+	});
+});
+
+describe('ToleranceMatcher', () => {
+	/**
+	 * The matcher is the dictionary-scan form of `isWithinTolerance`, and the
+	 * *only* thing that makes it safe is that it answers identically for every
+	 * input — a divergence would silently change which index tokens a fuzzy query
+	 * expands to, and therefore BM25 scores, membership and counts.
+	 *
+	 * The alphabet is deliberately nasty: it shares characters (so the signature
+	 * prefilter cannot trivially reject), repeats them (so distinct-character
+	 * sets differ from the strings), and includes an astral-plane character
+	 * (`U+1F600`, two UTF-16 units but one edit) plus a lone combining mark.
+	 */
+	const ALPHABET = [...'abcz', '\u{1f600}', '́', '9', ''];
+
+	function* words(depth: number, prefix = ''): Generator<string> {
+		yield prefix;
+		if (depth === 0) return;
+		for (const character of ALPHABET) {
+			yield* words(depth - 1, prefix + character);
+		}
+	}
+
+	it('answers identically to isWithinTolerance for every generated pair', () => {
+		const vocabulary = [...new Set(words(3))];
+		expect(vocabulary.length).toBeGreaterThan(300);
+		let checked = 0;
+		let agreed_true = 0;
+		for (const tolerance of [0, 1, 2, 3]) {
+			for (const query of vocabulary) {
+				const matcher = new ToleranceMatcher(query, tolerance);
+				for (const candidate of vocabulary) {
+					const expected = isWithinTolerance(query, candidate, tolerance);
+					const actual = matcher.matches(candidate);
+					if (actual !== expected) {
+						throw new Error(
+							`ToleranceMatcher disagreed for ${JSON.stringify(query)} vs ${JSON.stringify(candidate)} at tolerance ${tolerance}: ${actual} !== ${expected}`,
+						);
+					}
+					checked++;
+					if (expected) agreed_true++;
+				}
+			}
+		}
+		expect(checked).toBeGreaterThan(500_000);
+		// A guard against a vacuous pass: the prefilters must not be rejecting
+		// everything, or agreement would be meaningless.
+		expect(agreed_true).toBeGreaterThan(1000);
+	});
+
+	it('reuses its buffers across candidates of growing length', () => {
+		const matcher = new ToleranceMatcher('abc', 2);
+		for (const length of [1, 4, 16, 64, 300, 8]) {
+			const candidate = 'x'.repeat(length);
+			expect(matcher.matches(candidate)).toBe(isWithinTolerance('abc', candidate, 2));
+		}
 	});
 });

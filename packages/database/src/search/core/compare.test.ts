@@ -40,6 +40,46 @@ describe('compareStrings', () => {
 		expect(compareStrings(`${EMOJI}a`, EMOJI)).toBe(1);
 	});
 
+	it('agrees with a pure code-point reference over generated surrogate soup', () => {
+		/** The definition, spelled out one code point at a time. */
+		const reference = (a: string, b: string): number => {
+			const points_a = Array.from(a, (c) => c.codePointAt(0) as number);
+			const points_b = Array.from(b, (c) => c.codePointAt(0) as number);
+			const shared = Math.min(points_a.length, points_b.length);
+			for (let index = 0; index < shared; index++) {
+				if (points_a[index] !== points_b[index]) {
+					return points_a[index] < points_b[index] ? -1 : 1;
+				}
+			}
+			if (points_a.length === points_b.length) return 0;
+			return points_a.length < points_b.length ? -1 : 1;
+		};
+		// Deliberately includes LONE surrogates: they are legal in a JS string and
+		// they are precisely where a code-unit scan could disagree.
+		const alphabet = ['a', 'z', REPLACEMENT, EMOJI, '\u{10FFFF}', '\ud800', '\udc00', ''];
+		const words: string[] = [];
+		for (const one of alphabet) {
+			words.push(one);
+			for (const two of alphabet) {
+				words.push(one + two);
+				for (const three of alphabet) words.push(one + two + three);
+			}
+		}
+		const vocabulary = [...new Set(words)];
+		expect(vocabulary.length).toBeGreaterThan(200);
+		for (const a of vocabulary) {
+			for (const b of vocabulary) {
+				const expected = reference(a, b);
+				const actual = compareStrings(a, b);
+				if (actual !== expected) {
+					throw new Error(
+						`compareStrings(${JSON.stringify(a)}, ${JSON.stringify(b)}) = ${actual}, reference = ${expected}`,
+					);
+				}
+			}
+		}
+	});
+
 	it('is antisymmetric and transitive over a sample', () => {
 		const values = ['', 'a', 'ab', 'b', 'Z', REPLACEMENT, EMOJI, '0', '9'];
 		for (const a of values) {

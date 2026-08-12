@@ -523,9 +523,9 @@ type OramaType<T> = T extends {
 			: never
 		: TypeString extends 'array'
 			? T extends {
-					_: { items: { type: infer ArrayType extends DatabaseFieldType } };
+					_: { items: { _: { type: infer ArrayType extends DatabaseFieldType } } };
 				}
-				? IsSearchable<ArrayType> extends true
+				? IsSearchable<T> extends true
 					? ArrayType extends 'string'
 						? `string[]`
 						: ArrayType extends 'number'
@@ -2083,11 +2083,14 @@ class ArrayFieldGenerator<Items extends FieldGenerator> {
 	}
 
 	/**
-	 * Marks the field as searchable in orama.
-	 * Only simple arrays like string[], number[], and boolean[] can be made searchable.
+	 * Marks the field as searchable in the search index.
+	 * Only simple arrays like string[], number[], boolean[], and enum[] can be
+	 * made searchable. An enum[] field is indexed as a list of exact tokens —
+	 * it is filterable (`contains_all` / `contains_any`) and facetable, but it
+	 * never participates in full-text term matching.
 	 */
 	searchable(): Omit<Searchable<this>, 'searchable'> {
-		const searchableTypes = ['string', 'number', 'boolean'];
+		const searchableTypes = ['string', 'number', 'boolean', 'enum'];
 		if (this._.items._.type && searchableTypes.includes(this._.items._.type)) {
 			this._.searchable = true;
 		}
@@ -2534,6 +2537,16 @@ export namespace Database {
 		unique: boolean;
 	}>;
 
+	/** Table-level options that are not field declarations. */
+	export interface TableOptions {
+		/**
+		 * Which search driver indexes and queries this table.
+		 *
+		 * @default 'orama'
+		 */
+		search_engine?: 'native' | 'orama';
+	}
+
 	/** The type returned by the `table` function */
 	export type Table = ReturnType<typeof table>;
 
@@ -2558,6 +2571,7 @@ export namespace Database {
 		parse(data: unknown): Record<string, unknown>;
 		toSparse(data: Record<string, unknown>): Record<string, unknown>;
 		config: {
+			search_engine?: 'native' | 'orama';
 			primary_key: string;
 			primary_key_type?: 'string' | 'number';
 			orama: { schema: unknown; sort: unknown };
@@ -2624,6 +2638,20 @@ export namespace Database {
 
 			/** The table's config used to setup sqlite and orama */
 			config: {
+				/**
+				 * Which search driver indexes and queries this table.
+				 *
+				 * `'orama'` (the default) keeps the in-memory Orama index, its msgpack
+				 * snapshot/journal and the Orama-backed sync paging. `'native'` opts the
+				 * table into the SQLite search tables (`search_postings` and friends),
+				 * the in-transaction write path and the SQL-paged sync — see
+				 * `plans/database/Native Search Engine Plan.md` §9 Phase 3.
+				 *
+				 * Switching a table to `'native'` rebuilds its search rows from the
+				 * entity table on the next Durable Object wake and bumps its
+				 * `config_version`, so clients resync once.
+				 */
+				search_engine: 'native' | 'orama';
 				/** The primary key for the table */
 				primary_key: PrimaryKeyColumn;
 				/** The type of the primary key ('string' for TEXT, 'number' for INTEGER) */
@@ -2681,7 +2709,9 @@ export namespace Database {
 	>(
 		rawTableName: TableName,
 		callback: (tableSchema: DatabaseGenerator) => TableConfig,
+		options?: TableOptions,
 	): Table {
+		const search_engine: 'native' | 'orama' = options?.search_engine ?? 'orama';
 		const tableName = z
 			.string()
 			.regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, {
@@ -3598,6 +3628,7 @@ export namespace Database {
 			parse,
 			toSparse,
 			config: {
+				search_engine,
 				primary_key,
 				primary_key_type,
 				indexable_fields,

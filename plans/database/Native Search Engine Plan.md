@@ -316,9 +316,16 @@ CREATE TABLE IF NOT EXISTS search_postings (
 	token       TEXT NOT NULL,
 	doc_id      TEXT NOT NULL,   -- String(primary key), as getDocumentIndexId does today
 	tf          INTEGER NOT NULL,
+	len         INTEGER NOT NULL,   -- token count of THIS doc's field, denormalized from search_docs
 	PRIMARY KEY (entity_type, field, token, doc_id)
 ) WITHOUT ROWID;
--- PK is the covering index for the only read pattern: (type, field, token[, prefix-range]) → (doc_id, tf)
+-- PK is the covering index for the only read pattern: (type, field, token[, prefix-range]) → (doc_id, tf, len)
+-- `len` is BM25's length normalization, carried on the posting row so the term
+-- path never joins back to search_docs. Reading it from search_docs made the
+-- scoring loop cost O(corpus) rather than O(postings touched) — 12ms of a 30ms
+-- search at 10k docs, and linear from there (Phase 3 perf pass, §8.3). Cost:
+-- one extra INTEGER per posting, and a field whose length changed rewrites all
+-- of that field's posting rows, not just the ones whose `tf` moved.
 
 CREATE TABLE IF NOT EXISTS search_tokens (
 	entity_type TEXT NOT NULL,
@@ -332,9 +339,13 @@ CREATE TABLE IF NOT EXISTS search_tokens (
 CREATE TABLE IF NOT EXISTS search_docs (
 	entity_type TEXT NOT NULL,
 	doc_id      TEXT NOT NULL,
-	lengths     TEXT NOT NULL,             -- JSON { field_path: token_count } for BM25 norms
+	lengths     TEXT NOT NULL,             -- JSON { field_path: token_count }
 	PRIMARY KEY (entity_type, doc_id)
 ) WITHOUT ROWID;
+-- NOT on the search hot path since `search_postings.len` exists. It stays because
+-- the write path needs it: the DELETE…RETURNING repair branch recovers a
+-- document's field-stat deltas from it (`field, token` alone cannot), and
+-- rebuild verification compares against it.
 
 CREATE TABLE IF NOT EXISTS search_field_stats (
 	entity_type TEXT NOT NULL,
@@ -352,7 +363,20 @@ CREATE TABLE IF NOT EXISTS search_vectors (
 	                                       -- v1.5 adds: qvec BLOB (1-bit sign-quantized, dims/8 bytes) for the Hamming prefilter
 	PRIMARY KEY (entity_type, field, doc_id)
 ) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS search_vectors_by_doc ON search_vectors (entity_type, doc_id);
+-- (added during Phase 3 implementation) the delete path needs (entity_type, doc_id)
+-- just like search_postings does; without it, dropping one document's vectors is a
+-- full scan of the table.
 ```
+
+**`INDEXED BY` is required on the by-doc deletes, not optional.** These tables are
+`WITHOUT ROWID` and are never `ANALYZE`d, so SQLite's planner has no statistics and
+routinely prefers the primary-key index (a full scan for a `doc_id`-only predicate)
+over the secondary index. `DELETE FROM search_vectors INDEXED BY search_vectors_by_doc
+WHERE entity_type = ? AND doc_id = ?` (and the equivalent on `search_postings`) forces
+the right plan. `INDEXED BY` is a hard assertion: if the named index is ever dropped
+the statement fails loudly rather than silently degrading, which is the behavior we
+want here.
 
 ```sql
 CREATE TABLE IF NOT EXISTS search_tombstones (
@@ -413,6 +437,8 @@ The fan-out is unbounded (`SELECT * FROM dep WHERE fk = ?`, no LIMIT) — true t
 
 Per (entity_type, field), lazily load the token list from `search_tokens` into a sorted in-memory array on first search touching that field; invalidate incrementally on write (insert/remove in sorted position) — this keeps prefix expansion (binary search + range walk) and fuzzy scans (§4.3) purely in-memory while postings stay on disk. Dictionaries are the *small* part of an index; if one ever exceeds a sanity bound (say 200k tokens), fall back to SQL range queries `token >= ? AND token < ?` with the upper bound computed in JS by incrementing the prefix's last code point — skipping the surrogate block: U+D7FF increments to U+E000, never U+D800 (a lone surrogate gets mangled at the JS→UTF-8 boundary, and U+D7FF is a Hangul letter, so it *is* reachable in real tokens). Do **not** concatenate a blob sentinel like `prefix||x'F7BFBFBF'` instead — TEXT‖BLOB yields a BLOB in SQLite, and all TEXT sorts before all BLOB, so that range is silently wrong. Cache lives on the `SearchIndex`-equivalent struct; dropped when the DO evicts — rebuilt lazily, no correctness impact.
 
+Each cached dictionary carries two **parallel arrays** alongside the sorted tokens, maintained by the same sorted insert/remove: each token's code-point length, and a 32-bit character-set signature (one bit per distinct character, hashed onto 32 buckets). A tolerance scan tests both before touching the string, and both are *necessary* conditions for `distance <= k`, never heuristics — an edit moves the length by at most one and adds/removes at most one distinct character, and hashing characters together only makes the signature test more permissive. On a high-cardinality field (primary keys, slugs) this keeps the Levenshtein DP off effectively the whole dictionary: fuzzy expansion of two tokens over a 100k-token dictionary went from 35ms to 2ms (§8.3).
+
 ### 7.4 SQL filter/sort compilation (child keys included)
 
 Entities already live in SQLite. `where` + `order` + pagination compile to SQL over the entity table; the postings tables are touched only when a `term`/`vector` is present. Since both the client `DatabaseSearch` default and server `list` default are `term: '', order: updated_at DESC`, **the dominant query becomes a single indexed SQL query** — this alone removes most observed latency.
@@ -436,7 +462,8 @@ Rationale (from design discussion, keep these):
 - `ALTER TABLE ADD COLUMN` works for VIRTUAL generated columns (NOT for STORED) → adding a sortable field later is cheap DDL, no table rewrite.
 - An index on a VIRTUAL column materializes the computed values *in the index* → query perf equals a real column, zero row-write amplification.
 - Naming: `sv$` prefix + path with `.` → `__` avoids identifier-quoting hazards and collisions with real columns.
-- Migration when the declared path set changes: diff `PRAGMA table_info` against the schema at DO bootstrap (allowed in DO SQLite), `ADD COLUMN` + `CREATE INDEX` for new paths, `DROP INDEX` **then** `DROP COLUMN` for removed ones (an indexed column can't be dropped).
+- Migration when the declared path set changes: diff **`PRAGMA table_xinfo`** against the schema at DO bootstrap (allowed in DO SQLite), `ADD COLUMN` + `CREATE INDEX` for new paths, `DROP INDEX` **then** `DROP COLUMN` for removed ones (an indexed column can't be dropped). *Correction from Phase 3:* it must be `table_xinfo`, **not** `table_info` — `table_info` omits VIRTUAL generated columns entirely, so diffing against it re-`ADD COLUMN`s every existing generated column on every boot and fails.
+- **Generated columns are declared with NO type name** (correction from Phase 3; the DDL sketch above shows `TEXT`). A declared `TEXT` gives the column TEXT affinity, and SQLite applies a column's affinity to the *other* operand of a comparison — so `sv$x = 5` would convert `5` to `'5'` and match a stored `'5'`, the opposite of the frozen DSL's strict typed equality. Omitting the type name leaves BLOB/"any" affinity, which compares by storage class exactly like `core/compare`. The same hazard exists on *real* columns the schema declares `TEXT` (notably `enum`): there the fix is per-predicate — an operand that is not a string degrades to a polarity-correct literal and `core/where` decides (`text_affinity_fields` in `sql_where.ts`).
 - **Column budget:** DO SQLite caps tables at **100 columns** (vs stock SQLite's 2000). Real field columns + `json` + `sv$` generated columns all share that budget. At DO bootstrap, count declared columns + generated columns (child paths, persisted-derived paths, and the lat/lon pair per geopoint field — §5.1) and throw a descriptive `DelightError` if the total would exceed 100 — fail loudly at migration time, not with an opaque SQLite error mid-DDL.
 
 **`updated_at` gets an index — it's the dominant path.** `updated_at` is reserved/auto-managed (the schema rejects user fields with that name), so no user-declared index can exist on it, and today nothing needs one (Orama sorts in memory). After this plan, the default query (`order: updated_at DESC`) *and* the rewritten sync paging (§7.5) both hit the entity table directly — create `CREATE INDEX IF NOT EXISTS "idx_<entity>_updated_at" ON "<entity_table>" (updated_at, <pk>)` per entity table at bootstrap. Without it, the dominant query is a full scan + sort and the <5ms filter+sort target (§8.3) is unreachable at 100k rows.
@@ -464,13 +491,19 @@ list(entity_type, query):
 	else:
 		candidate_ids = where ? SQL id-set : null   -- convert to String(pk) at this boundary; postings doc_ids are always String(pk)
 		text: for each query token (sorted): expand via dictionary cache (prefix ∪ tolerance);
-		      fetch postings per matched token; accumulate BM25 into Map<doc_id, score>
+		      fetch postings per matched token — each row carries (doc_id, tf, len), so
+		      scoring reads nothing else; accumulate BM25 into Map<doc_id, score>
 		      (skip docs ∉ candidate_ids when the SQL set is smaller; otherwise filter after)
 		vector: brute-force dot product over unit vectors in search_vectors (∩ candidates); qvec prefilter when enabled (§4.9)
 		hybrid: fuse (core/fusion)
 		apply threshold (§4.5) · order (core/compare — by order[] if given, else score) ·
 		distinct_on · facets (core/facets, pre-limit) · cursor/limit/offset · hydrate docs
+		  ^ when order[] is empty and there is no distinct_on and no facets, hydrate
+		    ONLY the page: score ordering needs a score and a primary key, and doc_id
+		    IS String(primary key), so nothing before the slice needs a document
 ```
+
+**Deferred hydration (the `order[]`-free page).** Score-ordered paging reads back `limit` documents, not the whole matched set — the difference between 12k `SELECT *` rows and 20 at a 100k corpus. It is exact, not an approximation: the full matched set is still scored, so `count` and `threshold` are unchanged, and the sort key is literally the same comparator. The one behavior it cannot reproduce for free is the fully-hydrated path's silent drop of a matched id whose *entity row* is missing, which also removes it from `count`; this path sees that only for ids it reads. The two agree exactly whenever the search index and the entity table agree, which is a write-path invariant rather than a hope — postings are written in the same transaction as the entity row (§7.2), and the memory reference engine has no notion of the two disagreeing at all. If one does appear, the page path drops it from the page and from `count` by pulling the next entry forward, rather than returning a hit with no document. Queries with `order[]`, `distinct_on` or `facets` keep the fully-hydrated path, because each of those reads fields off every matched document.
 
 Ghost-document filtering, null-array stripping, and the Orama error remap all cease to exist. `getIndex`/`rebuildIndex`/`saveIndex`/journal functions are deleted; a `rebuildSearchTables(entity_type)` full-scan (entity table → write path per row, batched transactions) replaces `rebuildIndex` as the migration/repair path.
 
@@ -542,6 +575,31 @@ A single JSON fixture set (`search/__tests__/golden/`) of `{ corpus, query, expe
 ### 8.3 Performance benchmarks (regression-gated)
 
 Targets on a dev machine (document actuals; the point is trend, not the absolute number): server single-doc index write < 5ms at 100k-doc corpus; FK-derived cascade < 1ms per dependent row measured at 100 dependents (§7.2b); server text search (2 tokens, tolerance 1) < 30ms at 100k docs; filter+sort-only < 5ms at 100k docs; client search < 50ms at 20k-doc window (Chrome); DO cold-start added search cost = 0 (assert no search table reads on boot). Compare against Orama baselines captured before the switch, including the 10s serialize being eliminated.
+
+#### Measured — server driver, Phase 3 term-search performance pass
+
+`packages/database/src/search/server/engine.bench.test.ts`, opt-in via `DELIGHT_SEARCH_BENCH=1`. **Dev-box caveat, and it is not a small one:** this is `node:sqlite` in-process on one developer's Linux machine, not Durable Object storage. Read the numbers as a relative floor and the before/after ratio as the real result — a DO adds its own per-statement overhead, and any absolute figure here will be optimistic. Both columns were measured on the same machine, the same harness and the same corpus; "before" is the Phase 3 driver as it stood at the start of the pass, reconstructed in place to measure it.
+
+The corpus is Zipf-ish over a 4k-word vocabulary plus a 100k-token primary-key dictionary (`id` is a declared `string` field, so it is searchable), and the term query is the worst case the target is written for: two tokens each one edit away from a HEAD term, so the whole dictionary is expanded and the longest posting lists in the corpus are walked (12,124 of 100,000 documents match).
+
+| ms, mean of a warm loop | 10k before | 10k after | 100k before | 100k after |
+|---|---|---|---|---|
+| **text search, 2 tokens, tolerance 1** | 64.06 | **3.52** | 714.69 | **29.35** |
+| text search, same query, cold | 88.31 | 24.08 | 824.67 | 123.43 |
+| text search, same query + `order[]` | 57.76 | 10.50 | 721.99 | 104.75 |
+| text search, 2 tokens, prefix | 69.80 | 12.14 | 1053.95 | 120.34 |
+| single write, previous doc supplied | 0.36 | 0.22 | 0.35 | 0.21 |
+| single write, RETURNING fallback | 0.58 | 0.45 | 0.62 | 0.45 |
+| bulk index, per document | 0.90 | 0.52 | 1.23 | 0.81 |
+| filter + sort fast path | 5.74 | 5.09 | 60.36 | 61.91 |
+| filter + sort, child key | 8.89 | 7.73 | 92.65 | 93.87 |
+
+**Where the target lands.** The 30ms/100k text-search target is met (29.35ms) for the query it is written about, with no cost to the write path — writes got *faster*, because a posting row that carries its own length removes a `search_docs` read from the write path's verification too. What is left at 100k is roughly 9ms of SQLite materializing 12.5k posting rows, ~2ms of dictionary expansion, and ~15ms of BM25 accumulation and score ordering over the matched set; all three are proportional to the *matched set*, which is the honest floor for an exact `count` plus exact BM25.
+
+**Two numbers still miss, both pre-existing and neither caused by this pass.**
+
+- `order[]`-qualified term search (104.75ms) and prefix search over four head terms (120.34ms) are above 30ms at 100k. Neither is the §8.3 target query. `order[]` forces every matched document to be read back so its ordering field can be compared, so it cannot use deferred hydration by construction; prefix search over `dat`/`tok` expands to four head terms and walks a much larger posting set. Both improved ~7-9x anyway.
+- **filter+sort-only is 62ms at 100k against a 5ms target**, and it was 60ms before this pass — the term path never touched it. The benchmark indexes `status` and `(updated_at, id)` separately, and `WHERE status = ? ORDER BY updated_at DESC LIMIT 20` then makes SQLite choose one: it filters on `status`, materializes ~33k rows and sorts them. The fix is an index-planning one (a composite `(status, updated_at)`), which belongs to §7.4 and the schema's index declarations, not to the engine. Flagged here so it is not mistaken for a regression.
 
 ---
 

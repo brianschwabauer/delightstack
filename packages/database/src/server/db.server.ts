@@ -16,6 +16,23 @@ import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
 import { normalizeWhere } from '../search-query';
 import { toOramaSearchParams } from '../search/orama-compat';
+import type { SearchQuery, SearchQueryResults } from '../search/core/types';
+import {
+	SqliteSearchEngine,
+	whereContext,
+	type ServerDocument,
+	type ServerSearchTable,
+} from '../search/server/engine';
+import {
+	planGeneratedColumnMigration,
+	planGeneratedColumns,
+	quoteIdentifier,
+} from '../search/server/sql_where';
+import {
+	buildServerSearchTable,
+	isNativeSearchTable,
+	type SearchTableSource,
+} from '../search/server/table_config';
 import { generateTimestampID, DelightError } from '@delightstack/utilities';
 
 interface Env {
@@ -255,6 +272,22 @@ type DatabaseServerState<
 	 * When the config changes, the index will be updated to match the new config
 	 */
 	sql_indexes: Database.SqlIndexes;
+	/**
+	 * Per-entity-type state of the native (SQLite) search driver.
+	 *
+	 * Presence of an entry means the entity type's search tables have been built
+	 * at least once; `schema_signature` is the serialized search schema they were
+	 * built from, so a schema change re-triggers the rebuild + config bump. Absent
+	 * entirely for tables on the default `'orama'` engine.
+	 */
+	native_search?: {
+		[TableName in keyof Database]?: {
+			/** The search schema the tables were last rebuilt from */
+			schema_signature: string;
+			/** Whether the legacy `search_index` metadata was migrated across */
+			migrated: boolean;
+		};
+	};
 };
 
 interface SearchIndex {
@@ -369,6 +402,23 @@ export class DatabaseServer<
 
 	/** Reverse FK map: for each table, which other tables have FK-derived fields depending on it */
 	#reverse_fk_map: Map<string, Array<{ table: string; fk_field: string }>> = new Map();
+
+	/**
+	 * The native (SQLite) search driver, created only when at least one table
+	 * declares `search_engine: 'native'`. Tables on the default `'orama'` engine
+	 * never touch it and keep the in-memory index, journal and snapshot path.
+	 */
+	#search_engine: SqliteSearchEngine | undefined;
+
+	/** Native-engine table configs, keyed by entity type */
+	#native_tables: Map<string, ServerSearchTable> = new Map();
+
+	/**
+	 * Entity types whose native rebuild is currently running. Same re-entrancy
+	 * guard as `#index_rebuild_in_flight`: the rebuild recomputes FK-derived
+	 * fields, which can call back into this class.
+	 */
+	#native_rebuild_in_flight: Set<string> = new Set();
 
 	public get id() {
 		return this.ctx.id.toString();
@@ -651,6 +701,349 @@ export class DatabaseServer<
 				}
 			}
 		}
+
+		this.bootstrapNativeSearch();
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Native search driver (plan §7, phase 3)                                */
+	/* ---------------------------------------------------------------------- */
+
+	/** Whether the entity type is indexed by the native SQLite driver. */
+	private isNativeSearch(entity_type: string): boolean {
+		return this.#native_tables.has(entity_type);
+	}
+
+	/** The native engine. Only call it behind {@link isNativeSearch}. */
+	private get search(): SqliteSearchEngine {
+		if (!this.#search_engine) {
+			throw new DelightError({
+				message: 'The native search engine is not initialized for this database.',
+				status: 500,
+				code: 'native_search_unavailable',
+			});
+		}
+		return this.#search_engine;
+	}
+
+	/** The native driver's view of one entity table. */
+	private nativeTable(entity_type: string): ServerSearchTable {
+		const table = this.#native_tables.get(entity_type);
+		if (!table) {
+			throw new DelightError({
+				message: `Entity type ${entity_type} is not on the native search engine.`,
+				status: 500,
+				code: 'native_search_unavailable',
+			});
+		}
+		return table;
+	}
+
+	/**
+	 * Create the search tables, migrate generated columns and (on the first wake
+	 * after a table opts in) rebuild its search rows from the entity table.
+	 *
+	 * Everything here is idempotent and runs on every Durable Object wake; the
+	 * expensive part — the rebuild — is gated on a persisted schema signature, so
+	 * it happens once per schema, not once per wake.
+	 */
+	private bootstrapNativeSearch(): void {
+		const native_types: string[] = [];
+		for (const [entity_type, table_config] of Object.entries(this.config)) {
+			if (!isNativeSearchTable(table_config as unknown as SearchTableSource)) continue;
+			if (!table_config?.config?.table_definition) continue;
+			native_types.push(entity_type);
+		}
+		if (native_types.length === 0) return;
+
+		this.#search_engine = new SqliteSearchEngine(this.ctx.storage.sql, {
+			now: () => Date.now(),
+		});
+		this.#search_engine.bootstrap();
+
+		for (const entity_type of native_types) {
+			const source = this.config[entity_type] as unknown as SearchTableSource;
+			const table = buildServerSearchTable(entity_type, source);
+			this.#native_tables.set(entity_type, table);
+			this.#search_engine.register(table);
+			this.migrateGeneratedColumns(table);
+			this.createUpdatedAtIndex(table);
+			this.migrateSearchMetadata(entity_type);
+
+			const signature = JSON.stringify({
+				schema: table.schema,
+				primary_key: table.primary_key,
+				derived: [...(table.derived_fields ?? [])].sort(),
+			});
+			const built = this.#state.native_search?.[entity_type];
+			if (built?.schema_signature === signature) continue;
+			this.rebuildSearchTables(entity_type);
+			this.setNativeSearchState(entity_type, {
+				schema_signature: signature,
+				migrated: true,
+			});
+		}
+	}
+
+	/**
+	 * Add/drop the VIRTUAL generated columns the declared child, geopoint and
+	 * derived paths need, diffing against `PRAGMA table_xinfo` (NOT `table_info`,
+	 * which hides VIRTUAL columns — see `sql_where.ts`). The 100-column budget is
+	 * checked before any DDL runs, so an over-wide schema fails with a
+	 * descriptive `DelightError` instead of an opaque SQLite error mid-migration.
+	 */
+	private migrateGeneratedColumns(table: ServerSearchTable): void {
+		const existing_columns = this.ctx.storage.sql
+			.exec(`PRAGMA table_xinfo(${quoteIdentifier(table.table_name)});`)
+			.toArray()
+			.map((row) => String((row as { name?: unknown }).name ?? ''))
+			.filter(Boolean);
+		if (existing_columns.length === 0) return;
+		const migration = planGeneratedColumnMigration({
+			table_name: table.table_name,
+			desired: planGeneratedColumns(whereContext(table)),
+			existing_columns,
+			json_column: table.json_column,
+		});
+		if (migration.statements.length === 0) return;
+		this.ctx.storage.transactionSync(() => {
+			for (const statement of migration.statements) {
+				this.ctx.storage.sql.exec(statement);
+			}
+		});
+	}
+
+	/**
+	 * `(updated_at, <pk>)` per native entity table — the index behind both the
+	 * default `order: updated_at DESC` query and the rewritten sync paging (§7.4).
+	 * `updated_at` is reserved/auto-managed, so no user-declared index can cover it.
+	 */
+	private createUpdatedAtIndex(table: ServerSearchTable): void {
+		this.ctx.storage.sql.exec(
+			`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${table.table_name}_updated_at`)} ON ${quoteIdentifier(table.table_name)} ("updated_at", ${quoteIdentifier(table.primary_key)});`,
+		);
+	}
+
+	/**
+	 * One-time, idempotent move of the per-index metadata off the legacy
+	 * `search_index` row: `deleted_entity` → `search_tombstones`, and
+	 * `config_version`/`first_updated_at`/`last_updated_at` → `search_state`.
+	 *
+	 * The legacy rows are left in place (Phase 5 drops the tables) so a table can
+	 * still be flipped back to `'orama'` within this release.
+	 */
+	private migrateSearchMetadata(entity_type: string): void {
+		if (this.#state.native_search?.[entity_type]?.migrated) return;
+		const rows = this.ctx.storage.sql
+			.exec(`SELECT * FROM search_index WHERE id = ?`, `${entity_type}.0`)
+			.toArray() as unknown as SearchIndexTableSchema[];
+		const legacy = rows[0];
+		this.ctx.storage.transactionSync(() => {
+			const store = this.search.store;
+			const first = Number(legacy?.first_updated_at) || 0;
+			const last = Number(legacy?.last_updated_at) || 0;
+			store.ensureState(entity_type, first || last || 0);
+			if (legacy) {
+				this.ctx.storage.sql.exec(
+					`UPDATE search_state SET config_version = ?, first_updated_at = ?, last_updated_at = ? WHERE entity_type = ?;`,
+					Number(legacy.index_version) || 1,
+					first,
+					last,
+					entity_type,
+				);
+				let deleted: Record<string, number> = {};
+				try {
+					deleted = JSON.parse(legacy.deleted_entity || '{}') as Record<string, number>;
+				} catch {
+					/* a corrupt tombstone map migrates as empty — the config bump resyncs clients */
+				}
+				for (const [doc_id, deleted_at] of Object.entries(deleted)) {
+					store.writeTombstone(entity_type, doc_id, Number(deleted_at) || 0);
+				}
+			}
+		});
+		this.setNativeSearchState(entity_type, {
+			schema_signature: this.#state.native_search?.[entity_type]?.schema_signature ?? '',
+			migrated: true,
+		});
+	}
+
+	/** Persist one entity type's native-search bookkeeping into the `state` row. */
+	private setNativeSearchState(
+		entity_type: string,
+		value: { schema_signature: string; migrated: boolean },
+	): void {
+		const native_search = { ...this.#state.native_search } as Record<
+			string,
+			{ schema_signature: string; migrated: boolean }
+		>;
+		native_search[entity_type] = value;
+		(this.#state as { native_search?: unknown }).native_search = native_search;
+		this.ctx.storage.sql.exec(
+			`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
+			JSON.stringify({
+				...this.#state,
+				created_at: undefined,
+				updated_at: undefined,
+			}),
+			Date.now(),
+			'main',
+		);
+	}
+
+	/**
+	 * Clear and rebuild an entity type's native search rows from the entity table.
+	 *
+	 * The replacement for `rebuildIndex` on native tables, and the universal
+	 * repair path. It deliberately does NOT use `SqliteSearchEngine.rebuildBatch`:
+	 * that helper reads documents straight out of the row (assuming `$derived` is
+	 * already persisted), whereas a table switching over from Orama has never
+	 * written a `$derived` sub-object. This loop re-derives and *backfills* it, so
+	 * one pass both populates the postings and makes the rows self-describing for
+	 * every later query.
+	 *
+	 * Batched across transactions (paged by primary key) so a large table never
+	 * holds one enormous write open.
+	 */
+	private rebuildSearchTables(entity_type: string): void {
+		if (this.#native_rebuild_in_flight.has(entity_type)) return;
+		this.#native_rebuild_in_flight.add(entity_type);
+		const table = this.nativeTable(entity_type);
+		const source = this.config[entity_type];
+		const primary_key = quoteIdentifier(table.primary_key);
+		const table_name = quoteIdentifier(table.table_name);
+		const BATCH_SIZE = 200;
+		try {
+			this.ctx.storage.transactionSync(() => {
+				this.search.clearSearchTables(entity_type);
+			});
+			// Referenced rows repeat heavily across a rebuild — memoize them exactly
+			// as rebuildIndex() does.
+			const ref_cache = new Map<string, Record<string, any> | undefined>();
+			let after: string | number | undefined;
+			let first_updated_at = 0;
+			let last_updated_at = 0;
+			for (;;) {
+				const rows =
+					after === undefined
+						? this.ctx.storage.sql
+								.exec(
+									`SELECT * FROM ${table_name} ORDER BY ${primary_key} ASC LIMIT ${BATCH_SIZE};`,
+								)
+								.toArray()
+						: this.ctx.storage.sql
+								.exec(
+									`SELECT * FROM ${table_name} WHERE ${primary_key} > ? ORDER BY ${primary_key} ASC LIMIT ${BATCH_SIZE};`,
+									after,
+								)
+								.toArray();
+				if (rows.length === 0) break;
+				this.ctx.storage.transactionSync(() => {
+					for (const row of rows) {
+						const entity = this.toEntityValue(entity_type, row) as any;
+						if (!entity) continue;
+						const key = entity[table.primary_key];
+						after = key as string | number;
+						const sparse = source.toSparse(entity) as Record<string, unknown>;
+						this.computeFkDerivedFields(entity_type, entity, sparse, ref_cache);
+						this.persistDerivedFields(entity_type, key, sparse);
+						this.search.indexDocument(entity_type, String(key), sparse);
+						const updated_at = Number(entity.updated_at) || 0;
+						if (updated_at > last_updated_at) last_updated_at = updated_at;
+						if (updated_at && (!first_updated_at || updated_at < first_updated_at)) {
+							first_updated_at = updated_at;
+						}
+					}
+				});
+				if (rows.length < BATCH_SIZE) break;
+			}
+			this.ctx.storage.transactionSync(() => {
+				const store = this.search.store;
+				store.ensureState(entity_type, first_updated_at);
+				const state = store.getState(entity_type);
+				this.ctx.storage.sql.exec(
+					`UPDATE search_state SET first_updated_at = ?, last_updated_at = ? WHERE entity_type = ?;`,
+					first_updated_at ||
+						(state?.first_updated_at && state.first_updated_at !== 0
+							? state.first_updated_at
+							: 0),
+					Math.max(last_updated_at, state?.last_updated_at ?? 0),
+					entity_type,
+				);
+				// The corpus was just rebuilt from a different engine's projection —
+				// every client must discard its local index and resync (§9 Phase 3).
+				store.bumpConfigVersion(entity_type);
+			});
+		} finally {
+			this.#native_rebuild_in_flight.delete(entity_type);
+			this.search.store.clearDictionaryCache();
+		}
+	}
+
+	/**
+	 * Write the row's derived (same-table and FK-derived) values into the reserved
+	 * `$derived` sub-object of its `json` column (§7.0).
+	 *
+	 * Derived fields have no SQLite column of their own, so this persistence is
+	 * what makes them filterable/sortable (via generated columns over
+	 * `json_extract(json, '$."$derived".field')`), shippable by sync with no
+	 * recomputation, and recoverable by a rebuild. Callers must already be inside
+	 * the entity write transaction.
+	 */
+	private persistDerivedFields(
+		entity_type: string,
+		id: string | number,
+		sparse: Record<string, unknown>,
+	): void {
+		const table = this.nativeTable(entity_type);
+		const fields = table.derived_fields;
+		if (!fields || fields.size === 0) return;
+		const derived: Record<string, unknown> = {};
+		for (const field of fields) {
+			const value = sparse[field];
+			if (value !== undefined && value !== null) derived[field] = value;
+		}
+		this.ctx.storage.sql.exec(
+			`UPDATE ${quoteIdentifier(table.table_name)} SET "json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?)) WHERE ${quoteIdentifier(table.primary_key)} = ?;`,
+			JSON.stringify(derived),
+			id,
+		);
+	}
+
+	/** The `$derived` sub-object currently persisted for a row, as stored. */
+	private readPersistedDerived(
+		entity_type: string,
+		id: string | number,
+	): Record<string, unknown> {
+		const table = this.nativeTable(entity_type);
+		if (!table.derived_fields || table.derived_fields.size === 0) return {};
+		const rows = this.ctx.storage.sql
+			.exec(
+				`SELECT json_extract("json", '$."$derived"') AS derived FROM ${quoteIdentifier(table.table_name)} WHERE ${quoteIdentifier(table.primary_key)} = ? LIMIT 1;`,
+				id,
+			)
+			.toArray();
+		return parseDerivedBlob(rows[0]?.derived);
+	}
+
+	/**
+	 * The synced/indexed sparse projection of one raw entity row.
+	 *
+	 * `toSparse` over the parsed entity, with the persisted `$derived` values
+	 * merged back on top — byte-identical to what the write path indexed, with
+	 * zero recomputation (§7.5).
+	 */
+	private nativeSparseFromRow(
+		entity_type: string,
+		row: Record<string, unknown>,
+	): Record<string, unknown> {
+		const entity = this.toEntityValue(entity_type, row as any) as any;
+		const sparse = this.config[entity_type].toSparse(entity) as Record<string, unknown>;
+		const derived = parseDerivedBlob(readJsonDerived(row));
+		for (const [field, value] of Object.entries(derived)) {
+			if (value !== undefined && value !== null) sparse[field] = value;
+		}
+		return sparse;
 	}
 
 	/** Dev RPC fetch handler — dispatches `POST /rpc` with `{ method, args }` to public methods. */
@@ -979,8 +1372,16 @@ export class DatabaseServer<
 			// When the request names specific entity types, only those are returned —
 			// computing the others wastes work and the client would ignore them anyway
 			if (query?.entity && !(entity_type in query.entity)) continue;
+			if (!this.config[entity_type]) continue;
+			if (this.isNativeSearch(entity_type)) {
+				results.entity[entity_type] = this.nativeSyncEntity(
+					entity_type,
+					query,
+				) as (typeof results.entity)[typeof entity_type];
+				continue;
+			}
 			const index = this.getIndex(entity_type);
-			if (!index || !this.config[entity_type]) continue;
+			if (!index) continue;
 			const orama = index.orama;
 			const requested_limit = query?.entity?.[entity_type]?.limit || query?.limit || 0;
 			const limit = Math.min(5000, requested_limit > 0 ? requested_limit : 5000);
@@ -1162,9 +1563,10 @@ export class DatabaseServer<
 		Query extends Database.SearchQuery<Table>,
 		Output extends Database.SearchQueryResults<Table, Query>,
 	>(entity_type: Type, raw_query: Query): Output {
-		const index = this.getIndex(entity_type);
+		const native = this.isNativeSearch(entity_type);
+		const index = native ? undefined : this.getIndex(entity_type);
 		const table = this.config[entity_type];
-		if (!index || !table) {
+		if ((!index && !native) || !table) {
 			throw new DelightError({
 				message: `Entity type ${entity_type} does not have a search index`,
 				status: 400,
@@ -1270,12 +1672,19 @@ export class DatabaseServer<
 				.replace(/\//g, '_');
 		};
 
+		// The native driver answers the whole query from SQL + the postings tables.
+		// Everything above (cursor decode, limit clamps, sortable validation, cursor
+		// minting) is shared verbatim, so the public contract is engine-independent.
+		if (native) {
+			return this.nativeList(entity_type, query, sparse, generateCursor) as Output;
+		}
+
 		let results: Results<any>;
 		try {
 			// TEMPORARY: translate the owned query vocabulary back to Orama's until
 			// the native engine replaces this call site (plan phases 3-4).
 			const orama_query = toOramaSearchParams(query as Record<string, unknown>);
-			results = searchOrama<AnyOrama>(index.orama, {
+			results = searchOrama<AnyOrama>(index!.orama, {
 				...orama_query,
 				properties: (orama_query.properties as any) || '*',
 				limit: query.limit,
@@ -1362,6 +1771,207 @@ export class DatabaseServer<
 					? generateCursor(hits[hits.length - 1]?.document, ghost_count)
 					: undefined,
 		} as Output;
+	}
+
+	/**
+	 * `list()` for native tables (§7.5).
+	 *
+	 * The query object it receives has already been through the shared front half
+	 * of `list()` — cursor decode, `where` normalization, limit clamps and
+	 * sortable-field validation — and the cursor it returns is minted by the same
+	 * `generateCursor` closure, so cursors are interchangeable between engines and
+	 * paging behaves identically.
+	 */
+	private nativeList(
+		entity_type: string,
+		query: Database.SearchQuery<Database.AnyTable> & { limit: number; sparse: boolean },
+		sparse: boolean,
+		generateCursor: (last_item: unknown, offset?: number) => string | undefined,
+	): unknown {
+		const table = this.config[entity_type];
+		const engine_query: SearchQuery = {
+			...(query as SearchQuery),
+			sparse: undefined,
+			cursor: undefined,
+		};
+		delete engine_query.sparse;
+		delete engine_query.cursor;
+		const results: SearchQueryResults<ServerDocument> = this.search.list(
+			entity_type,
+			engine_query,
+		);
+
+		const derived_fields = this.nativeTable(entity_type).derived_fields;
+		let hits: { id: string; score: number; document: unknown }[];
+		if (sparse) {
+			// `engine.list` hydrates from the entity row, so a hit's document carries
+			// every column plus the whole `json` payload. The sparse contract is the
+			// indexed projection, so project it back down — `toSparse` over the
+			// document, with the (already hoisted) derived values re-attached, which
+			// is exactly what the write path indexed and what sync ships.
+			hits = results.hits.map((hit) => {
+				const document = table.toSparse(hit.document as never) as Record<string, unknown>;
+				for (const field of derived_fields ?? []) {
+					const value = (hit.document as Record<string, unknown>)[field];
+					if (value !== undefined && value !== null) document[field] = value;
+				}
+				return { id: hit.id, score: hit.score, document };
+			});
+		} else {
+			hits = results.hits.map((hit) => {
+				try {
+					return {
+						id: hit.id,
+						score: hit.score,
+						document: this.get(entity_type, hit.id),
+					};
+				} catch {
+					return { id: hit.id, score: hit.score, document: null };
+				}
+			});
+		}
+
+		return {
+			count: results.count,
+			elapsed: results.elapsed,
+			hits,
+			facets: results.facets,
+			cursor:
+				hits.length >= query.limit
+					? generateCursor(hits[hits.length - 1]?.document, hits.length)
+					: undefined,
+		};
+	}
+
+	/**
+	 * `sync()` for one native entity type (§7.5, "sync pagination divorce").
+	 *
+	 * Paging is a direct, index-driven SQL walk of the entity table over
+	 * `(updated_at, <pk>)` instead of a search-engine query — the change that
+	 * removes the >1000-doc deferred-removal data-loss class. Every documented
+	 * semantic is preserved bit for bit: half-open windows ([from, to) descending,
+	 * (from, to] ascending), the "never split equal timestamps" trim with
+	 * grow-and-retry, deletions merged into the same timeline (from
+	 * `search_tombstones` rather than `index.deleted_entity`), and window bounds /
+	 * `config_version` read from `search_state`.
+	 */
+	private nativeSyncEntity(
+		entity_type: string,
+		query: DatabaseSyncRequest<DatabaseConfig> | undefined,
+	) {
+		const table = this.config[entity_type];
+		const native_table = this.nativeTable(entity_type);
+		const state = this.search.store.getState(entity_type) ?? {
+			config_version: 1,
+			first_updated_at: 0,
+			last_updated_at: 0,
+		};
+		const entity_query = query?.entity?.[entity_type];
+		const requested_limit = entity_query?.limit || query?.limit || 0;
+		const limit = Math.min(5000, requested_limit > 0 ? requested_limit : 5000);
+		const schema_changed =
+			entity_query?.config_version !== undefined &&
+			entity_query.config_version !== state.config_version;
+		const from = schema_changed
+			? 0
+			: (entity_query?.start_updated_at ?? query?.start_updated_at ?? 0);
+		const to = schema_changed
+			? Number.MAX_SAFE_INTEGER
+			: (entity_query?.end_updated_at ??
+				query?.end_updated_at ??
+				Number.MAX_SAFE_INTEGER);
+		const descending =
+			schema_changed ||
+			(entity_query?.start_updated_at ?? query?.start_updated_at) === undefined;
+
+		const table_name = quoteIdentifier(native_table.table_name);
+		const primary_key = quoteIdentifier(native_table.primary_key);
+		const direction = descending ? 'DESC' : 'ASC';
+		// The half-open windows, verbatim: descending covers [from, to), ascending
+		// covers (from, to], so a client can feed a response's end_updated_at back
+		// as the next request's start without duplicating or losing the boundary.
+		const bounds = descending
+			? to === Number.MAX_SAFE_INTEGER
+				? { sql: `"updated_at" >= ?`, params: [from] }
+				: { sql: `"updated_at" >= ? AND "updated_at" < ?`, params: [from, to] }
+			: to === Number.MAX_SAFE_INTEGER
+				? { sql: `"updated_at" > ?`, params: [from] }
+				: { sql: `"updated_at" > ? AND "updated_at" <= ?`, params: [from, to] };
+		const fetchDocs = (fetch_limit: number) =>
+			this.ctx.storage.sql
+				.exec(
+					`SELECT * FROM ${table_name} WHERE ${bounds.sql} ORDER BY "updated_at" ${direction}, ${primary_key} ${direction} LIMIT ${Math.max(1, Math.trunc(fetch_limit))};`,
+					...bounds.params,
+				)
+				.toArray();
+
+		const inWindow = descending
+			? (ts: number) => ts >= from && (to === Number.MAX_SAFE_INTEGER || ts < to)
+			: (ts: number) => ts > from && ts <= to;
+		const tombstones = this.ctx.storage.sql
+			.exec(
+				`SELECT doc_id, deleted_at FROM search_tombstones INDEXED BY search_tombstones_by_time WHERE entity_type = ?;`,
+				entity_type,
+			)
+			.toArray()
+			.filter((row) => inWindow(Number(row.deleted_at) || 0));
+
+		type Change = { ts: number; deleted_id?: string; row?: Record<string, unknown> };
+		let fetch_limit = limit + 1;
+		let rows = fetchDocs(fetch_limit);
+		let included: Change[];
+		for (;;) {
+			const changes: Change[] = [];
+			for (const row of rows) {
+				changes.push({ ts: Number(row.updated_at) || 0, row });
+			}
+			for (const row of tombstones) {
+				changes.push({ ts: Number(row.deleted_at) || 0, deleted_id: String(row.doc_id) });
+			}
+			changes.sort((a, b) => (descending ? b.ts - a.ts : a.ts - b.ts));
+
+			// Trim to the limit, but never split changes that share a timestamp —
+			// the boundary is exclusive on the next page, so splitting equal
+			// timestamps across pages would permanently skip the cut-off changes.
+			included = changes.slice(0, limit);
+			for (let i = limit; i < changes.length; i++) {
+				if (changes[i].ts !== included[included.length - 1]?.ts) break;
+				included.push(changes[i]);
+			}
+			if (included.length < changes.length || rows.length < fetch_limit) break;
+			fetch_limit *= 2;
+			rows = fetchDocs(fetch_limit);
+		}
+
+		const deleted: (string | number)[] = [];
+		const updated: Record<string, unknown>[] = [];
+		const created: Record<string, unknown>[] = [];
+		let start_updated_at = Infinity;
+		let end_updated_at = 0;
+		for (const change of included) {
+			if (change.deleted_id !== undefined) {
+				deleted.push(change.deleted_id);
+			} else {
+				const doc = this.nativeSparseFromRow(entity_type, change.row!);
+				if (!change.ts || doc.created_at === doc.updated_at) created.push(doc);
+				else updated.push(doc);
+			}
+			if (!change.ts) continue;
+			if (change.ts < start_updated_at) start_updated_at = change.ts;
+			if (change.ts > end_updated_at) end_updated_at = change.ts;
+		}
+
+		return {
+			deleted,
+			created,
+			updated,
+			config_version: state.config_version || 1,
+			first_updated_at: state.first_updated_at || 0,
+			last_updated_at: state.last_updated_at || 0,
+			start_updated_at: start_updated_at === Infinity ? 0 : start_updated_at,
+			end_updated_at,
+			config: schema_changed ? table.config.orama : undefined,
+		};
 	}
 
 	/** Returns the latest org data */
@@ -1517,8 +2127,9 @@ export class DatabaseServer<
 				if ('create' in op) {
 					const { type: entity_type, data: unsafe_data } = op.create;
 					const table = this.config[entity_type];
-					const index = this.getIndex(entity_type);
-					if (!table || !index) {
+					const native = this.isNativeSearch(entity_type);
+					const index = native ? undefined : this.getIndex(entity_type);
+					if (!table || (!index && !native)) {
 						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
 							status: 400,
@@ -1530,7 +2141,7 @@ export class DatabaseServer<
 					delete data_copy.updated_at;
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-					this.ensureMonotonicTimestamp(now, index);
+					this.ensureMonotonicTimestamp(now, index, entity_type);
 
 					// Parse the data to ensure it's valid (throws an error if not)
 					const input_data = table.parse({
@@ -1555,19 +2166,31 @@ export class DatabaseServer<
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
 					const sparse_entity = table.toSparse(output_data);
 					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
-					insertIntoOrama(index.orama, sparse_entity);
-					// Clear any delete tombstone for this id (the id may be reused, e.g.
-					// numeric rowids) so sync clients don't apply a stale delete to it
-					delete index.deleted_entity[String(output_data[primary_key] ?? output_data.id)];
-					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
-					if (!index.first_updated_at) index.first_updated_at = now.getTime();
+					const created_id = output_data[primary_key] ?? output_data.id;
+					if (native) {
+						// Derived values first: `indexDocument` and every later read of the
+						// row expect them to be in `$derived` already.
+						this.persistDerivedFields(entity_type, created_id, sparse_entity as any);
+						this.search.indexDocument(
+							entity_type,
+							String(created_id),
+							sparse_entity as Record<string, unknown>,
+						);
+					} else {
+						insertIntoOrama(index!.orama, sparse_entity);
+						// Clear any delete tombstone for this id (the id may be reused, e.g.
+						// numeric rowids) so sync clients don't apply a stale delete to it
+						delete index!.deleted_entity[String(created_id)];
+						index!.last_updated_at = Math.max(index!.last_updated_at, now.getTime());
+						if (!index!.first_updated_at) index!.first_updated_at = now.getTime();
+						this.journalUpsert(
+							entity_type,
+							String(created_id),
+							sparse_entity,
+							now.getTime(),
+						);
+					}
 					touched_indexes.add(entity_type);
-					this.journalUpsert(
-						entity_type,
-						String(output_data[primary_key] ?? output_data.id),
-						sparse_entity,
-						now.getTime(),
-					);
 					this.cascadeReindexReferencing(
 						entity_type,
 						output_data[primary_key] || output_data.id,
@@ -1589,8 +2212,9 @@ export class DatabaseServer<
 				if ('update' in op) {
 					const { type: entity_type, id, data: unsafe_data } = op.update;
 					const table = this.config[entity_type];
-					const index = this.getIndex(entity_type);
-					if (!table || !index) {
+					const native = this.isNativeSearch(entity_type);
+					const index = native ? undefined : this.getIndex(entity_type);
+					if (!table || (!index && !native)) {
 						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
 							status: 400,
@@ -1607,8 +2231,18 @@ export class DatabaseServer<
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-					this.ensureMonotonicTimestamp(now, index);
+					this.ensureMonotonicTimestamp(now, index, entity_type);
 					const current_data = this.get(entity_type, id); // will throw a 404 if not found
+					// The previously-indexed sparse doc, for the store's `df`/field-stat
+					// decrements (§7.2 step 2). Derived values come from what was actually
+					// persisted, never a recomputation: a cascade may have changed the
+					// referenced rows since, and a wrong "previous" corrupts the statistics.
+					const previous_sparse = native
+						? {
+								...(table.toSparse(current_data as any) as Record<string, unknown>),
+								...this.readPersistedDerived(entity_type, id),
+							}
+						: undefined;
 					let input_data = structuredClone(current_data);
 					const deepMerge = (current: any, next: any) => {
 						if (next === undefined) return current;
@@ -1646,13 +2280,23 @@ export class DatabaseServer<
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
 					const sparse_entity = table.toSparse(output_data);
 					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
-					removeFromOrama(index.orama, id.toString());
-					insertIntoOrama(index.orama, sparse_entity);
-					delete index.deleted_entity[id.toString()];
-					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
-					if (!index.first_updated_at) index.first_updated_at = now.getTime();
+					if (native) {
+						this.persistDerivedFields(entity_type, id, sparse_entity as any);
+						this.search.indexDocument(
+							entity_type,
+							id.toString(),
+							sparse_entity as Record<string, unknown>,
+							previous_sparse,
+						);
+					} else {
+						removeFromOrama(index!.orama, id.toString());
+						insertIntoOrama(index!.orama, sparse_entity);
+						delete index!.deleted_entity[id.toString()];
+						index!.last_updated_at = Math.max(index!.last_updated_at, now.getTime());
+						if (!index!.first_updated_at) index!.first_updated_at = now.getTime();
+						this.journalUpsert(entity_type, id.toString(), sparse_entity, now.getTime());
+					}
 					touched_indexes.add(entity_type);
-					this.journalUpsert(entity_type, id.toString(), sparse_entity, now.getTime());
 					this.cascadeReindexReferencing(
 						entity_type,
 						output_data[primary_key] || output_data.id || id,
@@ -1675,8 +2319,9 @@ export class DatabaseServer<
 				if ('delete' in op) {
 					const { type: entity_type, id } = op.delete;
 					const table = this.config[entity_type];
-					const index = this.getIndex(entity_type);
-					if (!table || !index) {
+					const native = this.isNativeSearch(entity_type);
+					const index = native ? undefined : this.getIndex(entity_type);
+					if (!table || (!index && !native)) {
 						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
 							status: 400,
@@ -1684,21 +2329,28 @@ export class DatabaseServer<
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-					this.ensureMonotonicTimestamp(now, index);
+					this.ensureMonotonicTimestamp(now, index, entity_type);
 					this.ctx.storage.sql.exec(
 						`DELETE FROM ${sanitized_table} WHERE ${primary_key} = ?`,
 						id,
 					);
-					removeFromOrama(index.orama, id.toString());
-					index.deleted_entity[id.toString()] = now.getTime();
-					index.last_updated_at = Math.max(index.last_updated_at, now.getTime());
-					if (!index.first_updated_at) index.first_updated_at = now.getTime();
+					if (native) {
+						// `removeDocument` writes the tombstone that feeds the sync deletion
+						// timeline — the native equivalent of `index.deleted_entity`.
+						this.search.removeDocument(entity_type, id.toString(), now.getTime());
+						this.search.store.pruneTombstones(entity_type);
+					} else {
+						removeFromOrama(index!.orama, id.toString());
+						index!.deleted_entity[id.toString()] = now.getTime();
+						index!.last_updated_at = Math.max(index!.last_updated_at, now.getTime());
+						if (!index!.first_updated_at) index!.first_updated_at = now.getTime();
+						this.journalDelete(entity_type, id.toString(), now.getTime());
+						// A prune rewrites the tombstone map and bumps the config version, and
+						// neither lives in the journal — only a snapshot can persist them, so
+						// force one rather than waiting for the row threshold.
+						if (this.pruneTombstones(index!)) this.#journal_rows[entity_type] = Infinity;
+					}
 					touched_indexes.add(entity_type);
-					this.journalDelete(entity_type, id.toString(), now.getTime());
-					// A prune rewrites the tombstone map and bumps the config version, and
-					// neither lives in the journal — only a snapshot can persist them, so
-					// force one rather than waiting for the row threshold.
-					if (this.pruneTombstones(index)) this.#journal_rows[entity_type] = Infinity;
 					this.cascadeReindexReferencing(entity_type, id, touched_indexes, now);
 					results.push({
 						entity: {
@@ -2170,10 +2822,19 @@ export class DatabaseServer<
 	 * cheap way back to a state that matches the committed data.
 	 */
 	private invalidateIndexes(entity_types: Iterable<string>) {
+		let native_touched = false;
 		for (const entity_type of entity_types) {
+			if (this.isNativeSearch(entity_type)) {
+				native_touched = true;
+				continue;
+			}
 			delete this.#search_index[entity_type as keyof DatabaseConfig];
 			delete this.#journal_rows[entity_type];
 		}
+		// The native driver's rows roll back with the transaction, but its term
+		// dictionaries are an in-memory cache that the rolled-back writes already
+		// mutated in place — drop them so the next search reloads from SQLite.
+		if (native_touched) this.#search_engine?.store.clearDictionaryCache();
 	}
 
 	/**
@@ -2182,6 +2843,8 @@ export class DatabaseServer<
 	 * encode this whole journal exists to keep out of request handling.
 	 */
 	private maybeCompactJournal(entity_type: string) {
+		// Native tables have no snapshot and no journal — their index IS the SQL.
+		if (this.isNativeSearch(entity_type)) return;
 		if (
 			(this.#journal_rows[entity_type] || 0) <=
 			(this.constructor as typeof DatabaseServer).MAX_SEARCH_JOURNAL_ROWS
@@ -2334,10 +2997,21 @@ export class DatabaseServer<
 	 * or a previous multi-op transaction that advanced its timestamps past the
 	 * wall clock), clients that synced past that point would never receive it.
 	 */
-	private ensureMonotonicTimestamp(now: Date, index: SearchIndex) {
-		if (now.getTime() <= index.last_updated_at) {
-			now.setTime(index.last_updated_at + 1);
+	private ensureMonotonicTimestamp(
+		now: Date,
+		index: SearchIndex | undefined,
+		entity_type?: string,
+	) {
+		if (index) {
+			if (now.getTime() <= index.last_updated_at) {
+				now.setTime(index.last_updated_at + 1);
+			}
+			return;
 		}
+		// Native tables keep the same invariant in `search_state.last_updated_at`,
+		// read AND advanced inside the entity write transaction (§7.5).
+		if (!entity_type) return;
+		now.setTime(this.search.store.allocateTimestamp(entity_type, now.getTime()));
 	}
 
 	/**
@@ -2360,8 +3034,11 @@ export class DatabaseServer<
 
 		for (const dep of dependents) {
 			const dep_table = this.config[dep.table as keyof DatabaseConfig] as any;
-			const dep_index = this.getIndex(dep.table as keyof DatabaseConfig & string);
-			if (!dep_table || !dep_index) continue;
+			const dep_native = this.isNativeSearch(dep.table);
+			const dep_index = dep_native
+				? undefined
+				: this.getIndex(dep.table as keyof DatabaseConfig & string);
+			if (!dep_table || (!dep_index && !dep_native)) continue;
 
 			// Find all records in dep.table where dep.fk_field = entity_id
 			const rows = this.ctx.storage.sql
@@ -2389,9 +3066,19 @@ export class DatabaseServer<
 				// changed, and sync clients only receive documents whose updated_at
 				// falls inside the requested window. Without this, FK-derived changes
 				// would update the server index but never reach synced clients.
-				const ts =
-					dep_index.last_updated_at >= now.getTime()
-						? dep_index.last_updated_at + 1
+				const previous_sparse = dep_native
+					? {
+							...(dep_table.toSparse(dep_entity) as Record<string, unknown>),
+							...parseDerivedBlob(readJsonDerived(row as Record<string, unknown>)),
+						}
+					: undefined;
+				const ts = dep_native
+					? // The native monotonic allocator IS `search_state.last_updated_at`,
+						// advanced in this same transaction — identical semantics to the
+						// in-memory `dep_index.last_updated_at` bump below.
+						this.search.store.allocateTimestamp(dep.table, now.getTime())
+					: dep_index!.last_updated_at >= now.getTime()
+						? dep_index!.last_updated_at + 1
 						: now.getTime();
 				this.ctx.storage.sql.exec(
 					`UPDATE ${this.sanitize(dep.table)} SET updated_at = ? WHERE ${this.sanitize(dep_pk)} = ?`,
@@ -2404,19 +3091,26 @@ export class DatabaseServer<
 				const sparse = dep_table.toSparse(dep_entity) as any;
 				this.computeFkDerivedFields(dep.table, dep_entity, sparse, ref_cache);
 
-				// Update Orama
-				try {
-					removeFromOrama(dep_index.orama, dep_id);
-				} catch {
-					// May not exist yet
+				if (dep_native) {
+					// The postings update is the §7.2 write path with the row's previously
+					// persisted `$derived` as the "previous" doc, all in this transaction.
+					this.persistDerivedFields(dep.table, dep_entity[dep_pk], sparse);
+					this.search.indexDocument(dep.table, dep_id, sparse, previous_sparse);
+				} else {
+					// Update Orama
+					try {
+						removeFromOrama(dep_index!.orama, dep_id);
+					} catch {
+						// May not exist yet
+					}
+					insertIntoOrama(dep_index!.orama, sparse);
+					dep_index!.last_updated_at = Math.max(dep_index!.last_updated_at, ts);
+					if (!dep_index!.first_updated_at) dep_index!.first_updated_at = ts;
+					// Cascaded reindexes are real index writes — without journaling them,
+					// a cold start would serve the pre-cascade derived fields
+					this.journalUpsert(dep.table, dep_id, sparse, ts);
 				}
-				insertIntoOrama(dep_index.orama, sparse);
-				dep_index.last_updated_at = Math.max(dep_index.last_updated_at, ts);
-				if (!dep_index.first_updated_at) dep_index.first_updated_at = ts;
 				touched_indexes.add(dep.table);
-				// Cascaded reindexes are real index writes — without journaling them,
-				// a cold start would serve the pre-cascade derived fields
-				this.journalUpsert(dep.table, dep_id, sparse, ts);
 			}
 		}
 	}
@@ -2452,6 +3146,10 @@ export class DatabaseServer<
 		}
 		const temp = { ...value, ...json_fields };
 		delete (temp as any).json;
+		// `$derived` is the native engine's reserved sub-object of the `json`
+		// column (§7.0): FK/same-table derived search values with no column of
+		// their own. It is index/sync machinery, never app-visible entity data.
+		delete (temp as any).$derived;
 		for (const key in temp) {
 			if (temp[key] === null) delete temp[key];
 		}
@@ -2530,4 +3228,36 @@ export class DatabaseServer<
 			.replace(/[^a-z0-9_]/g, '')
 			.replace(/^[0-9]+/, '');
 	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Native-search module helpers                                               */
+/* -------------------------------------------------------------------------- */
+
+/** The raw `$derived` value of a row's `json` column, if it has one. */
+function readJsonDerived(row: Record<string, unknown>): unknown {
+	const raw = row.json;
+	if (typeof raw !== 'string' || raw.length === 0) return undefined;
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+		return (parsed as Record<string, unknown>).$derived;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Normalize a persisted `$derived` sub-object (JSON text or already parsed). */
+function parseDerivedBlob(value: unknown): Record<string, unknown> {
+	if (value === null || value === undefined) return {};
+	let parsed: unknown = value;
+	if (typeof value === 'string') {
+		try {
+			parsed = JSON.parse(value);
+		} catch {
+			return {};
+		}
+	}
+	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+	return parsed as Record<string, unknown>;
 }

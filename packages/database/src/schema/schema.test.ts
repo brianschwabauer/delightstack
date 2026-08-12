@@ -1047,6 +1047,63 @@ describe('searchable arrays', () => {
 		} as any);
 		expect((sparse as any).tags).toEqual(['x', 'y']);
 	});
+
+	it('declares an enum item array as `enum[]` in the index schema', () => {
+		const table = Database.table('searchable_enum_array', (schema) => ({
+			title: schema.string().searchable(),
+			label_ids: schema.array(schema.enum(['l_red', 'l_green'])).searchable(),
+		}));
+		expect(table.config.searchable_fields).toContain('label_ids');
+		expect(table.config.orama.schema).toHaveProperty('label_ids', 'enum[]');
+		// Arrays live in the internal `json` overflow column, never their own column
+		expect(table.config.table_definition).not.toHaveProperty('label_ids');
+		const sparse = table.toSparse({
+			id: 'a',
+			title: 'hello',
+			label_ids: ['l_red', 'l_green'],
+			created_at: 1,
+			updated_at: 1,
+		} as any);
+		expect((sparse as any).label_ids).toEqual(['l_red', 'l_green']);
+	});
+
+	it('keeps an enum array out of the index schema when not marked searchable', () => {
+		const table = Database.table('unsearchable_enum_array', (schema) => ({
+			title: schema.string().searchable(),
+			label_ids: schema.array(schema.enum(['l_red', 'l_green'])),
+		}));
+		expect(table.config.searchable_fields).not.toContain('label_ids');
+		expect(table.config.orama.schema).not.toHaveProperty('label_ids');
+	});
+
+	it('ignores .searchable() on an array of an unsupported item type', () => {
+		const table = Database.table('searchable_object_array', (schema) => ({
+			rows: schema.array(schema.object({ city: schema.string() })).searchable(),
+		}));
+		expect(table.config.searchable_fields).not.toContain('rows');
+		expect(table.config.orama.schema).not.toHaveProperty('rows');
+	});
+
+	it('parses and validates enum array items against the declared options', () => {
+		const table = Database.table('enum_array_parse', (schema) => ({
+			label_ids: schema.array(schema.enum(['l_red', 'l_green'])),
+		}));
+		const parsed = table.parse({
+			id: 'a',
+			label_ids: ['l_red'],
+			created_at: 1,
+			updated_at: 1,
+		} as any) as any;
+		expect(parsed.label_ids).toEqual(['l_red']);
+		expect(() =>
+			table.parse({
+				id: 'a',
+				label_ids: ['nope'],
+				created_at: 1,
+				updated_at: 1,
+			} as any),
+		).toThrow();
+	});
 });
 
 describe('field defaults', () => {

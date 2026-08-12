@@ -56,6 +56,36 @@ export function compareStrings(a: string, b: string): number {
 	if (a === b) return 0;
 	const shared = Math.min(a.length, b.length);
 	let index = 0;
+	// Code UNIT scan, which is what a JIT can make fast. It is not a shortcut
+	// that trades accuracy for speed: a code unit that is not a HIGH surrogate is
+	// a whole code point on its own, and for those two classes unit order and
+	// code-point order are the same order. The moment a high surrogate appears on
+	// either side — where a pair sorts below U+E000 by unit but above it by code
+	// point — the comparison hands off to the code-point walk.
+	//
+	// The handoff has to trigger on *equal* high surrogates too, not only on a
+	// difference: JS strings may hold LONE surrogates, so `"a\ud800�"` and
+	// `"a𐀀"` share the unit `\ud800` while the second pairs it into
+	// U+10000 and the first does not. Comparing the following units would then be
+	// comparing a code point against half of one. And the walk restarts from the
+	// beginning, so it never has to reason about whether `index` landed inside a
+	// surrogate pair.
+	while (index < shared) {
+		const unit_a = a.charCodeAt(index);
+		const unit_b = b.charCodeAt(index);
+		if ((unit_a & 0xfc00) === 0xd800 || (unit_b & 0xfc00) === 0xd800) {
+			return compareByCodePoint(a, b, shared);
+		}
+		if (unit_a !== unit_b) return unit_a < unit_b ? -1 : 1;
+		index++;
+	}
+	if (a.length === b.length) return 0;
+	return a.length < b.length ? -1 : 1;
+}
+
+/** {@link compareStrings}'s definition, walked one code point at a time. */
+function compareByCodePoint(a: string, b: string, shared: number): number {
+	let index = 0;
 	while (index < shared) {
 		const code_a = a.codePointAt(index) as number;
 		const code_b = b.codePointAt(index) as number;
