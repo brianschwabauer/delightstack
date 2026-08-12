@@ -10,7 +10,8 @@ Replace Orama in `@delightstack/database` with a purpose-built, isomorphic searc
 - Server index storage is DO-SQLite-native rows; client index storage is IndexedDB. The storage layouts may differ; the *semantics* may not.
 - Filtering/sorting moves to SQL (server) / IDB indexes (client), including **child-key paths** (`address.city`) — this capability is kept.
 - Fuzzy (tolerance) search parity with Orama is required.
-- Vector search parity with Orama is required (brute-force similarity; callers supply raw vectors — no embedding generation, same as today).
+- **Vector and hybrid search are server-only** (decided 2026-08-11): a vector query needs a query embedding, the embedding needs a model call, and the model call goes through the server anyway — client-side vector search never saves a round trip. Isomorphism applies to traditional search (term/filter/sort/facets) only. Callers still supply raw vectors on write and query — no embedding generation, same as today.
+- No Cloudflare Vectorize — vector search stays in-DO (Vectorize is eventually consistent and outside the entity write transaction; explicitly rejected).
 - **Server storage interface stays synchronous** (DO SQLite is synchronous by design); **client storage interface is async** (IDB requires it). The two drivers are allowed to deviate structurally; consistency comes from shared pure modules + golden tests, not from a single awaited-everywhere core.
 - The client gets a real **IDB postings backend** (not just an in-memory Map index), removing the memory ceiling that forces the current 5000-doc auto-switch to server mode.
 
@@ -30,7 +31,7 @@ Orama is an in-memory index with no incremental persistence. The server serializ
 
 1. **No incremental persistence, ever.** Orama cannot update storage per-document. Any Orama-based design carries snapshot + journal + replay + compaction complexity forever, and the snapshot cost grows with corpus size without bound.
 2. **Memory ceiling.** The whole index must live in DO memory (128MB isolate limit). The client has the same problem, capped today by a 5000-doc auto-switch to server search.
-3. **Client/server divergence today.** The two sides index *different projections* (server: `table.toSparse()` + FK-derived fields; client: its own runtime-type-checking `#projectToIndex` that silently drops vector/geopoint and mismatched fields). Same query can already give different results — the opposite of the isomorphic goal.
+3. **Client/server divergence today.** The two sides index *different projections* (server: `table.toSparse()` + FK-derived fields; client: its own runtime-type-checking `#projectToIndex` that silently drops vector/geopoint and mismatched fields). Same query can already give different results — the opposite of the isomorphic goal. (The vector-dropping part becomes *spec* under this plan — vectors are server-only, §4.9 — but the rest of the divergence is the bug.)
 4. **A workaround zoo.** A meaningful fraction of `db.server.ts`/`database.worker.ts` exists to work around Orama bugs (inventory in §9 of this doc's Appendix A). All of it deletes with this plan.
 5. **Deep type leakage.** `SearchQuery`, `SearchQueryResults`, `SearchSchema`, etc. are defined in terms of Orama's types and re-exported from the root barrel. Any engine change requires owning those types anyway — so own them.
 
@@ -51,9 +52,9 @@ Far less code on the server, but it cannot run on the client. FTS5's tokenizer a
 **Goals**
 
 1. Zero query-API changes for consumers (`SearchQuery` shape, `where` DSL, `order[]`, facets, cursor, URL encoding all preserved).
-2. Deterministic parity: same corpus + same query ⇒ byte-identical result *order and membership* on client and server.
+2. Deterministic parity: same corpus + same query ⇒ byte-identical result *order and membership* on client and server — **for traditional search** (term/filter/sort/facets). Vector and hybrid queries are server-only and exempt.
 3. O(changed-doc) write cost on both sides; zero cold-start index work on the server.
-4. Feature parity: prefix search, tolerance (fuzzy), `exact`, `boost`, `properties`, `threshold`, `distinctOn`, facets, vector + hybrid mode, child-key filter/sort, array-field filters (`in`/`nin`/`containsAll`).
+4. Feature parity: prefix search, tolerance (fuzzy), `exact`, `boost`, `properties`, `threshold`, `distinctOn`, facets, vector + hybrid mode (server-only), child-key filter/sort, array-field filters (`in`/`nin`/`containsAll`).
 5. Performance: index-write overhead per entity write in the low milliseconds; text search over 100k+ docs in low tens of milliseconds on the server.
 
 **Non-goals**
@@ -61,7 +62,8 @@ Far less code on the server, but it cannot run on the client. FTS5's tokenizer a
 - Score-*value* parity with Orama. Nothing consumes raw scores; only membership, order, and counts must match Orama closely enough to not surprise consumers (validated by the differential harness, §8.1).
 - Embedding generation. Callers supply `number[]` vectors on write and query, exactly as today.
 - Stemming, stopwords, language packs. Today's setup uses none (no Orama plugins exist in the repo); we replicate the default pipeline only. The tokenizer module should leave room for these later.
-- ANN vector indexes (IVF/HNSW). Brute-force is what Orama does and is fine at DO scale; revisit if a table exceeds ~100k vectors.
+- Client-side vector/hybrid search. Server-only by decision (see locked decisions) — the client never stores or scores vectors.
+- ANN vector indexes. Brute-force (over normalized vectors, §4.9) is fine at DO scale, and the quantized prefilter (§4.9) extends its runway well past 100k vectors by fixing the real bottleneck (blob I/O, not dot products). If a table ever genuinely outgrows that: **IVF in-DO** is the designated escape hatch — centroid id behaves like a token, cluster membership is a postings row, so it reuses this plan's storage shape and stays inside the entity transaction. **HNSW is rejected** (graph index over SQLite rows: heavy code, painful incremental deletes, structure-dependent results). **Cloudflare Vectorize is rejected** (eventually consistent, outside the write transaction, can't run the `where` DSL).
 
 **Important honesty about goal 2:** determinism guarantees identical results *given identical corpora*. When the client's synced window doesn't cover the query, results legitimately differ (membership *and* BM25 stats). The per-query client/server choice is therefore a **coverage decision**, not a correctness gamble. See §7.6.
 
@@ -78,12 +80,12 @@ packages/database/src/search/
 │   ├── compare.ts             # THE comparator: code-point strings, typed values, tie-break (§4.6)
 │   ├── where.ts               # where-DSL normalization + JS predicate evaluation (§5)
 │   ├── facets.ts              # facet counting over a matched set (§4.8)
-│   ├── fusion.ts              # hybrid text+vector score fusion (§4.9)
-│   ├── vector.ts              # cosine similarity over Float32Array (§4.9)
 │   └── types.ts               # engine-neutral SearchQuery/Results/Where types (§6)
 ├── server/
 │   ├── sqlite_store.ts        # postings/tokens/docs/vectors tables + dictionary cache (§7.1–7.3)
 │   ├── sql_where.ts           # where/order → SQL compiler over generated columns (§7.4)
+│   ├── vector.ts              # dot product over unit Float32Arrays + quantized prefilter (§4.9) — pure, but server-only (vectors never reach the client)
+│   ├── fusion.ts              # hybrid text+vector score fusion (§4.9) — pure, server-only
 │   └── engine.ts              # SYNC driver: full search pipeline (§7.5)
 └── client/
     ├── idb_store.ts           # IDB object stores + dictionary cache (§7.6)
@@ -166,11 +168,15 @@ Orama semantics **[verify-vs-orama, then freeze]**: with multiple query tokens, 
 
 Same shapes as Orama's `FacetDefinition` (already leaked into `SearchQueryInput`): string facets → value counts (with `limit`/`order` options), number facets → configured ranges, boolean facets → true/false counts. Counted over the **full matched set** (after `where`, before `limit`/`offset`). Facet value ordering: count descending, then value ascending via core comparator.
 
-### 4.9 Vector and hybrid
+### 4.9 Vector and hybrid — **server-only**
 
-- `vector: { value: number[], property: 'embedding_field' }` → mode `vector`: score = cosine similarity, brute-force over all docs having that field. Result ordering: similarity desc, PK asc. A `similarity` threshold defaults to Orama's `0.8` **[verify-vs-orama — confirm the default and whether the current API exposes it; preserve whatever the wire accepts today]**.
-- `term` + `vector` → mode `hybrid`: run both, min-max normalize each score set to [0,1] over its own candidates, combine `0.5 * text + 0.5 * vector` **[verify-vs-orama — replicate Orama's actual fusion weights/normalization from source, then freeze ours]**.
-- Vectors are stored as `Float32Array` (client passes them from sync; server reads BLOBs). Compute in float64 accumulators, deterministic iteration order. **This plan makes vector fields work on the client too** (today `#projectToIndex` silently drops them) — the unified sparse doc (§7.0) carries them.
+Vector and hybrid queries never run on the client (locked decision): the query embedding requires a model call, which requires the server, so client-side vector scoring can never save a round trip. Any query carrying `vector` routes to the server unconditionally (§7.6 routing rule). This deviates from Orama deliberately; the differential harness exempts vector/hybrid from client-side parity.
+
+- **Unit-normalize at write, score by dot product.** Vectors are L2-normalized once, at index time; queries are normalized once, at query time; the score is then a plain dot product (identical ranking to cosine at roughly half the per-doc cost, and no divide in the hot loop). Zero vectors (norm 0) are rejected at write with `DelightError.badRequest` — cosine is undefined for them and Orama's behavior there was never meaningful.
+- `vector: { value: number[], property: 'embedding_field' }` → mode `vector`: brute-force dot product over all docs having that field. Result ordering: similarity desc, PK asc. A `similarity` threshold defaults to Orama's `0.8` **[verify-vs-orama — confirm the default and whether the current API exposes it; preserve whatever the wire accepts today]**. (Thresholds are unaffected by normalization — unit-vector dot product *is* cosine similarity.)
+- `term` + `vector` → mode `hybrid`: run both, min-max normalize each score set to [0,1] over its own candidates, combine `0.5 * text + 0.5 * vector` **[verify-vs-orama — replicate Orama's actual fusion weights/normalization from source, then freeze ours]**. Hybrid is server-only by construction (fusion needs both score sets in one place).
+- Vectors are stored as unit `Float32Array` BLOBs (§7.1). Compute in float64 accumulators, deterministic iteration order (sorted doc-id).
+- **Quantized prefilter (planned v1.5, behind a flag).** The real scaling bottleneck is blob I/O, not arithmetic: at 768 dims, 100k float32 vectors ≈ 300MB of reads per brute-force query. Fix: store a 1-bit sign-quantized copy per vector (`qvec` BLOB, dims/8 bytes — ~32× smaller); query by Hamming distance (XOR + popcount) over `qvec`, take a deterministic top-C candidate set (C = max(4×limit, 200), ties broken by doc-id asc), then rescore only those C against the full float32 vectors. Deterministic and exact-given-the-algorithm (results can differ slightly from pure brute force; scores are exempt from parity anyway). Ship v1 without it; add when a table's vector count makes brute-force latency visible.
 
 ### 4.10 Error mapping
 
@@ -225,6 +231,8 @@ Today the server indexes `table.toSparse(entity)` + `computeFkDerivedFields`, wh
 
 Rule: the server computes the sparse doc once per write; that exact object is (a) what the server indexes, (b) what the sync protocol ships, (c) what the client indexes **verbatim**. Delete `#projectToIndex`; the client trusts the wire. (Client-originated optimistic writes index their local `toSparse` result and are corrected when the server echo arrives — same as entity state today.)
 
+**One carve-out: vector fields are stripped from the synced projection.** Vector search is server-only (§4.9), so the client never needs embeddings — and they're by far the heaviest fields in a sparse doc (a 768-dim vector ≈ the size of dozens of text fields). The server indexes the full sparse doc; sync ships and the client indexes *sparse doc minus vector fields*. "Verbatim" means verbatim-after-this-strip, applied server-side in one place so the client still never re-projects.
+
 ### 7.1 Server tables (DDL)
 
 All tables `WITHOUT ROWID`, created alongside the existing bootstrap DDL (`db.server.ts:412-428` area). Everything written **in the same SQLite transaction as the entity row** — this is the entire point.
@@ -268,7 +276,8 @@ CREATE TABLE IF NOT EXISTS search_vectors (
 	entity_type TEXT NOT NULL,
 	field       TEXT NOT NULL,
 	doc_id      TEXT NOT NULL,
-	vec         BLOB NOT NULL,             -- Float32Array bytes, little-endian
+	vec         BLOB NOT NULL,             -- unit-normalized Float32Array bytes, little-endian (§4.9)
+	                                       -- v1.5 adds: qvec BLOB (1-bit sign-quantized, dims/8 bytes) for the Hamming prefilter
 	PRIMARY KEY (entity_type, field, doc_id)
 ) WITHOUT ROWID;
 ```
@@ -282,7 +291,7 @@ On entity upsert (inside the existing write transaction, after the entity row):
 1. Compute the sparse doc (§7.0) and tokenize each searchable text field (`core/tokenizer.ts`), producing `{ field → Map<token, tf> }` and `{ field → length }`.
 2. Remove the doc's old postings **and capture which tokens were removed** — `df`/field-stat decrements are impossible without the old token set, so the delete must never be blind. Update branch: the previous entity is already in hand (`current_data`, `db.server.ts` update branch ~`:1607`) but the previous *sparse doc* is not — compute it explicitly via `table.toSparse(current_data)` and tokenize it to get the old token set (cheap; same code path as step 1). Create branch: no previous state exists, skip this step. Fallback (previous doc unavailable, e.g. repair paths): `DELETE FROM search_postings WHERE entity_type=? AND doc_id=? RETURNING field, token` via the `(entity_type, doc_id)` secondary index — `RETURNING` is supported in DO SQLite and yields exactly the token set needed for the decrements. Then decrement `df` per removed token (delete `search_tokens` rows reaching 0) and decrement field stats.
 3. Insert new postings, upsert `df` (+1 per newly-present token/doc pair), upsert `lengths`, bump field stats. **Batching:** DO SQLite caps bound parameters at 100 per query and statements at 100KB — batch multi-row `INSERT`s at ≤20 rows per statement (5 columns each).
-4. Vector fields: replace `search_vectors` rows.
+4. Vector fields: L2-normalize (reject zero vectors with `DelightError.badRequest`, §4.9), replace `search_vectors` rows.
 
 Delete path: step 2 + drop `search_docs`/`search_vectors` rows. Rollback safety is free — it's all one SQLite transaction with the entity write. Cost per write: tens of small indexed row operations; benchmark target < 5ms for a typical doc (§8.3).
 
@@ -340,7 +349,7 @@ list(entity_type, query):
 		text: for each query token (sorted): expand via dictionary cache (prefix ∪ tolerance);
 		      fetch postings per matched token; accumulate BM25 into Map<doc_id, score>
 		      (skip docs ∉ candidate_ids when the SQL set is smaller; otherwise filter after)
-		vector: brute-force cosine over search_vectors rows (∩ candidates)
+		vector: brute-force dot product over unit vectors in search_vectors (∩ candidates); qvec prefilter when enabled (§4.9)
 		hybrid: fuse (core/fusion)
 		apply threshold (§4.5) · order (core/compare — by order[] if given, else score) ·
 		distinctOn · facets (core/facets, pre-limit) · cursor/limit/offset · hydrate docs
@@ -360,7 +369,7 @@ Object stores (in the existing client DB alongside `sync_meta`; the `search_inde
 |---|---|---|---|
 | `postings` | `[entity_type, field, token, doc_id]` | `tf` | prefix scan = `IDBKeyRange.bound([t,f,prefix], [t,f,prefix+'￿'])` — IDB stores are sorted B-trees, same range-scan as SQLite |
 | `tokens` | `[entity_type, field, token]` | `df` | dictionary; loaded per (type,field) into a sorted in-memory array on first use, incrementally maintained (mirror of §7.3) |
-| `docs` | `[entity_type, doc_id]` | `{ sparse_doc, lengths }` | the verbatim server sparse doc (§7.0) — also serves filter/sort |
+| `docs` | `[entity_type, doc_id]` | `{ sparse_doc, lengths }` | the server sparse doc, vector fields already stripped server-side (§7.0) — also serves filter/sort. No vector store exists on the client (§4.9) |
 | `field_stats` | `[entity_type, field]` | `{ doc_count, total_len }` | |
 
 **Filter/sort on the client:** declare IDB indexes on the `docs` store for each sortable/filterable path (`keyPath: 'sparse_doc.address.city'`), with `multiEntry: true` for array fields (native array-containment — the exact analogue of the SQL side table). Index definitions happen in `onupgradeneeded`; derive the IDB version from the existing `config_version` so a schema change triggers index re-creation + full local rebuild through the machinery that already exists for config bumps.
@@ -384,7 +393,7 @@ interface AsyncSearchStore {
 }
 ```
 
-**Client/server choice policy:** the 5000-doc auto-switch (`database.worker.ts:415`, `#switchToServerMode`) loses its original justification (memory). Replace count-based switching with a **coverage-based** rule: client search is used when the entity type's synced window is complete (full-table sync) or the query is explicitly marked client-side; otherwise route to the server, which has the full corpus and correct global BM25 stats. Keep the existing threshold config as an override valve for one release, then remove. Document loudly: *identical results are guaranteed only when the corpora match; window ⊂ corpus ⇒ the server answer is the authoritative one.*
+**Client/server choice policy:** the 5000-doc auto-switch (`database.worker.ts:415`, `#switchToServerMode`) loses its original justification (memory). Two rules, in order: **(1) any query carrying `vector` — including hybrid — routes to the server unconditionally** (vectors don't exist on the client, §4.9); (2) otherwise, replace count-based switching with a **coverage-based** rule: client search is used when the entity type's synced window is complete (full-table sync) or the query is explicitly marked client-side; otherwise route to the server, which has the full corpus and correct global BM25 stats. Keep the existing threshold config as an override valve for one release, then remove. Document loudly: *identical results are guaranteed only when the corpora match; window ⊂ corpus ⇒ the server answer is the authoritative one.*
 
 **Worker deletions:** orama imports, `#projectToIndex`, the `removeMultiple` batch-size workaround, the `insertMultiple` fallback, ghost filtering, `saveOrama`/`loadOrama` and the doubling persist schedule (index persistence is now continuous and transactional).
 
@@ -397,13 +406,13 @@ interface AsyncSearchStore {
 A test-only harness that runs the same corpus + query battery through real Orama 3.1.18 and the new core (memory-backed store):
 
 - Corpora: seeded deterministic generators — realistic strings (names, emails, sentences with shared vocabulary), numbers, booleans, enums, arrays, nested objects, vectors; sizes 10 / 1k / 20k docs; plus a dump of a real dev corpus if available.
-- Query battery: every operator × type × edge case; term queries hitting prefix/tolerance/threshold/boost/properties/exact combinations; facets; distinctOn; vector + hybrid.
+- Query battery: every operator × type × edge case; term queries hitting prefix/tolerance/threshold/boost/properties/exact combinations; facets; distinctOn; vector + hybrid (server/memory reference only — vector deviations from Orama are deliberate per §4.9: dot product over unit vectors, zero-vector rejection; the harness checks rank-order agreement, not parity).
 - Assertions: **exact** membership/count/facet parity for filter-only queries; **rank-order** parity (Kendall-tau ≥ threshold + identical top-10 membership) for scored text queries (score values exempt); every `[verify-vs-orama]` marker in §4–5 resolved and the spec updated to record what Orama actually does and what we chose.
 - Known Orama bugs are excluded from parity (ghost docs, null arrays, deferred removals) — the harness runs Orama with the same guards production code uses today.
 
 ### 8.2 Golden vectors (permanent, both drivers)
 
-A single JSON fixture set (`search/__tests__/golden/`) of `{ corpus, query, expected_ids_in_order, expected_counts, expected_facets }`, generated once from the memory reference implementation and hand-audited. The **same fixtures** run against: core+memory store (vitest), server driver over real DO SQLite (existing `db.server.*.test.ts` infra / miniflare), client driver over real IDB (fake-indexeddb in vitest + at least one real-browser pass). Byte-identical output required. Mandatory edge coverage: astral-plane string ordering, null vs absent, empty string/array, boolean coercion through `json_extract`, `not` with missing fields, equal-score PK tie-breaks, equal `updated_at` ordering, tolerance boundary lengths, email tokenization. At least one corpus must use an **integer primary key** (`primary_key_type: 'number'`) — postings store `doc_id` as `String(pk)` while tie-breaks compare as the declared PK type, so integer-PK ordering (`2 < 10`, not `'10' < '2'`) must be exercised end-to-end.
+A single JSON fixture set (`search/__tests__/golden/`) of `{ corpus, query, expected_ids_in_order, expected_counts, expected_facets }`, generated once from the memory reference implementation and hand-audited. The **same fixtures** run against: core+memory store (vitest), server driver over real DO SQLite (existing `db.server.*.test.ts` infra / miniflare), client driver over real IDB (fake-indexeddb in vitest + at least one real-browser pass). Byte-identical output required. Exception: vector/hybrid fixtures run against the memory reference and server driver only (no client vector path exists, §4.9); a routing test asserts the worker sends any `vector` query to the server. Mandatory edge coverage: astral-plane string ordering, null vs absent, empty string/array, boolean coercion through `json_extract`, `not` with missing fields, equal-score PK tie-breaks, equal `updated_at` ordering, tolerance boundary lengths, email tokenization. At least one corpus must use an **integer primary key** (`primary_key_type: 'number'`) — postings store `doc_id` as `String(pk)` while tie-breaks compare as the declared PK type, so integer-PK ordering (`2 < 10`, not `'10' < '2'`) must be exercised end-to-end.
 
 ### 8.3 Performance benchmarks (regression-gated)
 
@@ -425,7 +434,10 @@ Own the public types (§6). Acceptance: no orama imports outside `db.server.ts` 
 Tables (§7.1), write path in-transaction (§7.2), dictionary cache (§7.3), SQL compiler + generated-column migration (§7.4), sync-pagination divorce (§7.5). Gated by per-table flag `search_engine: 'native' | 'orama'` (default `'orama'`) in table config; on first native wake, `rebuildSearchTables` populates from the entity scan (reuse the in-flight-rebuild re-entrancy guard pattern). Bump `config_version` on switch so clients resync cleanly. Keep the orama path compiling for one release as fallback; then delete `getIndex`/`saveIndex`/journal/`search_index`/`search_journal` and Appendix-A workarounds ①–⑧.
 
 **Phase 4 — Client driver**
-Unified sparse projection (§7.0) — requires Phase 3 server shipping sparse docs verbatim; IDB stores + async driver (§7.6); config_version-driven IDB upgrade + full local rebuild on switch; coverage-based mode policy. Delete worker orama code and Appendix-A ⑨–⑫. Real-browser golden pass required.
+Unified sparse projection with vector strip (§7.0) — requires Phase 3 server shipping sparse docs verbatim-minus-vectors; IDB stores + async driver (§7.6); config_version-driven IDB upgrade + full local rebuild on switch; routing policy (vector→server unconditional, then coverage-based). No client vector/fusion code — that whole subsystem is server-only (§4.9). Delete worker orama code and Appendix-A ⑨–⑫. Real-browser golden pass required.
+
+**Phase v1.5 (optional, any time after Phase 3) — Quantized vector prefilter**
+`qvec` column + Hamming prefilter + rescore per §4.9, behind a per-table flag. Trigger: a table's vector count makes brute-force latency visible in the §8.3 benchmarks. Not a blocker for anything else. (If a table someday outgrows even this: IVF in-DO per §2 non-goals — centroids as tokens, cluster postings rows. HNSW and Vectorize stay rejected.)
 
 **Phase 5 — Excision**
 Remove `@orama/orama` from package.json; legacy `search_index`/`search_journal` table drop migration; README/SKILL.md/agent-docs updates; delete obsolete memory entries (orama-ghost-documents, the null-array-props note) and add a native-search memory. Changeset: minor (API-identical), with a migration note that server search tables rebuild automatically on first wake per table.
