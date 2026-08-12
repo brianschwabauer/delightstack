@@ -418,7 +418,7 @@ export class EntityState<
 	 * - **Worker + pre-hydration (initial page load / refresh):** fetches
 	 *   on the main thread (hits SvelteKit's hydration cache, so no new
 	 *   network request), then pushes the result into the worker's IDB +
-	 *   Orama index via `applyExternalChange`. Subsequent reads hit IDB.
+	 *   search index via `applyExternalChange`. Subsequent reads hit IDB.
 	 * - **Worker + post-hydration (client-side navigation):** delegates to
 	 *   `worker.get` which serves from IDB, falling back to the server
 	 *   behind the scenes — fastest path for nav-heavy flows.
@@ -452,7 +452,7 @@ export class EntityState<
 				if (response.ok) {
 					data = (await response.json()) as Database.Entity<T>;
 					if (this.#worker && data) {
-						// Seed worker IDB + Orama so client-side nav reads
+						// Seed the worker's IDB + search index so client-side nav reads
 						// back from cache.
 						await this.#worker.applyExternalChange(
 							this.entity_type,
@@ -1200,17 +1200,14 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		const tables: Record<
 			string,
 			{
-				orama: { schema: Record<string, unknown>; sort: unknown };
+				index_schema: Record<string, unknown>;
 				primary_key: string;
 				primary_key_type?: 'string' | 'number';
 			}
 		> = {};
 		for (const [name, table] of Object.entries(this.#config.tables)) {
 			tables[name] = {
-				orama: {
-					schema: table.config.orama.schema as Record<string, unknown>,
-					sort: table.config.orama.sort,
-				},
+				index_schema: table.config.index_schema as Record<string, unknown>,
 				primary_key: table.config.primary_key,
 				primary_key_type: table.config.primary_key_type,
 			};
@@ -1270,7 +1267,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		if (this.#config.hooks?.onSubscribe) {
 			this.#external_unsubscribe = this.#config.hooks.onSubscribe((event) => {
 				if (!this.#worker) return;
-				// Apply the single change in place — Orama + IDB + subscribers
+				// Apply the single change in place — search index + IDB + subscribers
 				// update for just this entity. A full `sync([entity_type])` is
 				// wasteful when we already know what changed; reconnect/page
 				// refresh still triggers full sync via init().

@@ -32,7 +32,7 @@ import { type SearchQueryInput, encodeSearchQuery } from '../search-query';
 
 /** Inline sync response type to avoid importing server module in worker context. */
 interface SyncEntityResult {
-	config?: { schema: Record<string, unknown>; sort: unknown };
+	config?: Record<string, unknown>;
 	config_version: number;
 	deleted: (string | number)[];
 	created: Record<string, unknown>[];
@@ -60,7 +60,7 @@ export interface WorkerInitConfig {
 	tables: Record<
 		string,
 		{
-			orama: { schema: Record<string, unknown>; sort: unknown };
+			index_schema: Record<string, unknown>;
 			primary_key: string;
 			primary_key_type?: 'string' | 'number';
 		}
@@ -124,7 +124,7 @@ type SearchSubscriber = {
 /** Cache entries fresher than this are not background-refreshed (ms) */
 const REFRESH_STALE_MS = 30_000;
 
-/** The legacy Orama blob store, dropped on the first search-store upgrade. */
+/** The legacy index blob store, dropped on the first search-store upgrade. */
 const LEGACY_SEARCH_INDEX_STORE = 'search_index';
 
 /** The worker-owned stores that live in the same database as the search stores. */
@@ -337,7 +337,7 @@ export class DatabaseWorker {
 			// Load persisted sync meta
 			const meta = await idbGet<SyncMeta>(this.#db, 'sync_meta', entity_type);
 
-			const schema = flattenSearchSchema(table.orama.schema);
+			const schema = flattenSearchSchema(table.index_schema);
 			this.#entities[entity_type] = {
 				search_mode: forced_mode ?? meta?.search_mode ?? 'client',
 				config_version: meta?.config_version ?? 0,
@@ -1349,12 +1349,11 @@ export class DatabaseWorker {
 	 * The persisted window described documents shaped by the old schema, so it is
 	 * reset to "never synced" and the backfill starts over. The `docs` indexes are
 	 * re-derived too, which is a *database* change — hence the version bump and
-	 * reopen (§7.6), the machinery this path already owned when it recreated the
-	 * Orama index it replaced.
+	 * reopen (§7.6).
 	 */
 	async #applyConfigBump(
 		entity_type: string,
-		config: { schema: Record<string, unknown>; sort: unknown },
+		config: Record<string, unknown>,
 		config_version: number,
 	): Promise<void> {
 		const state = this.#entities[entity_type];
@@ -1366,7 +1365,7 @@ export class DatabaseWorker {
 		await idbDeleteByPrefix(this.#db, 'entities', `${entity_type}/`);
 
 		const table = this.#tables[entity_type];
-		const schema = flattenSearchSchema(config.schema ?? table?.orama?.schema);
+		const schema = flattenSearchSchema(config ?? table?.index_schema);
 		state.schema = schema;
 		state.index_paths = indexPathsFor(schema);
 		state.client_type = defineClientType({

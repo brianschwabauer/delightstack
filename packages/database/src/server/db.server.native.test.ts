@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
- * The native search driver, exercised through a **real `DatabaseServer` over
- * real SQLite** (plan §9 Phase 3).
+ * The search driver, exercised through a **real `DatabaseServer` over real
+ * SQLite** (plan §9 Phases 3 and 5).
  *
  * Every other `db.server.*.test.ts` suite hands the server a
  * `{ exec: vi.fn() }` that pattern-matches SQL strings. That is fine for
@@ -22,7 +22,9 @@
  *   rewritten) inside one transaction
  * - sync window paging: ascending/descending half-open boundaries, equal
  *   timestamps, deletions from `search_tombstones`, monotonic timestamps
- * - the default `'orama'` engine still working alongside a native table
+ * - the first wake after upgrading from the pre-1.2 in-memory engine: metadata
+ *   migrated off `search_index`, rows rebuilt, legacy tables dropped
+ * - a warm boot doing zero search work
  */
 
 import { readFileSync } from 'node:fs';
@@ -73,7 +75,6 @@ const noteTable = Database.table(
 			.string()
 			.derived(['author_id'], (_data, refs) => (refs.author_id?.name ?? '') as string),
 	}),
-	{ search_engine: 'native' },
 );
 
 /** An `enum[]` field declared through the schema builder (plan §4.1). */
@@ -87,10 +88,9 @@ const labelledTable = Database.table(
 			.searchable()
 			.optional(),
 	}),
-	{ search_engine: 'native' },
 );
 
-/** Stays on the default engine — the orama path must keep working untouched. */
+/** A second, plainer table — every table is indexed, none opts in. */
 const legacyTable = Database.table('legacy', (s) => ({
 	id: s.primaryKey(),
 	name: s.string().sortable(),
@@ -191,12 +191,55 @@ describe('native search driver — bootstrap', () => {
 		expect(columns).not.toContain('sv$title');
 	});
 
-	it('leaves the default (orama) table alone', () => {
+	it('adds no generated columns to a table that declares no child paths', () => {
 		const columns = fixture.state.db
 			.prepare(`PRAGMA table_xinfo(legacy)`)
 			.all()
 			.map((row) => (row as { name: string }).name);
 		expect(columns.some((name) => name.startsWith('sv$'))).toBe(false);
+	});
+
+	it('creates no legacy search_index / search_journal tables', () => {
+		const tables = fixture.state.db
+			.prepare(
+				`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('search_index', 'search_journal')`,
+			)
+			.all();
+		expect(tables).toEqual([]);
+	});
+
+	it('does no search work at all on a warm boot (§8.3: cold-start cost 0)', () => {
+		const { db, state } = fixture;
+		db.create('note', {
+			title: 'Warm boot',
+			body: 'nothing should be reindexed',
+			status: 'draft',
+			priority: 1,
+		} as never);
+
+		// Second wake over the same database: the schema signature is persisted, so
+		// the bootstrap may create tables (IF NOT EXISTS) and read state, but it
+		// must never read or write a single search row.
+		state.log.length = 0;
+		new DatabaseServer(CONFIG as never, () => undefined, state.ctx as never, {
+			DEV: true,
+		} as never);
+		const touched = state.log.filter((entry) =>
+			/search_postings|search_tokens|search_docs|search_field_stats|search_vectors|search_tombstones/.test(
+				entry.sql,
+			),
+		);
+		const writes = touched.filter((entry) =>
+			/^\s*(INSERT|UPDATE|DELETE)/i.test(entry.sql),
+		);
+		const reads = touched.filter((entry) => /^\s*SELECT/i.test(entry.sql));
+		expect(writes).toEqual([]);
+		expect(reads).toEqual([]);
+		// ...and the corpus is untouched, so no client is forced to resync.
+		const version = state.db
+			.prepare(`SELECT config_version FROM search_state WHERE entity_type = 'note'`)
+			.get() as { config_version: number };
+		expect(version.config_version).toBe(1);
 	});
 });
 
@@ -348,7 +391,7 @@ describe('native search driver — write path', () => {
 		expect(dumpSearchRows(state, 'note')).toEqual(incremental);
 	});
 
-	it('keeps the default orama table working alongside a native one', () => {
+	it('indexes every configured table, not just the interesting one', () => {
 		const { db } = fixture;
 		db.create('legacy', { name: 'still here' } as never);
 		const results = db.list('legacy', { term: 'still' } as never) as unknown as {
@@ -357,9 +400,7 @@ describe('native search driver — write path', () => {
 		};
 		expect(results.count).toBe(1);
 		expect(results.hits[0].document.name).toBe('still here');
-		// ...and it never grew any native search rows.
-		const rows = dumpSearchRows(fixture.state, 'legacy');
-		expect(rows.docs).toEqual([]);
+		expect(dumpSearchRows(fixture.state, 'legacy').docs).toHaveLength(1);
 	});
 });
 
@@ -438,7 +479,7 @@ describe('native search driver — list()', () => {
 		expect([...seen].sort()).toEqual([...ids].sort());
 	});
 
-	it('rejects an unsortable order field with a 400, like the orama path', () => {
+	it('rejects an unsortable order field with a 400', () => {
 		expect(() =>
 			fixture.db.list('note', { order: [{ field: 'body' }] } as never),
 		).toThrowError(expect.objectContaining({ status: 400 }));
@@ -512,7 +553,7 @@ describe('native search driver — enum[] fields', () => {
 	}
 
 	it('declares the field as `enum[]` in the flattened search schema', () => {
-		expect(flattenSearchSchema(labelledTable.config.orama.schema)).toMatchObject({
+		expect(flattenSearchSchema(labelledTable.config.index_schema)).toMatchObject({
 			label_ids: 'enum[]',
 		});
 	});
@@ -589,6 +630,203 @@ describe('native search driver — enum[] fields', () => {
 			'labelled',
 		);
 		expect(dumpSearchRows(state, 'labelled')).toEqual(incremental);
+	});
+});
+
+/* -------------------------------------------------------------------------- */
+/* Upgrade from the pre-1.2 in-memory engine (plan §9 Phase 5)                */
+/* -------------------------------------------------------------------------- */
+
+describe('search driver — first wake after upgrading from the in-memory engine', () => {
+	let fixture: Fixture;
+
+	/**
+	 * A Durable Object exactly as the in-memory engine left it: entity rows, the
+	 * `search_index` metadata row (tombstones + window bounds + config version),
+	 * a `search_journal`, and no search tables and no persisted schema signature.
+	 */
+	function seedLegacyDurableObject(): Fixture {
+		const state = createDurableObjectState();
+		state.db.exec(`
+			CREATE TABLE state (
+				id TEXT PRIMARY KEY,
+				json TEXT NOT NULL,
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			);
+			CREATE TABLE search_index (
+				id TEXT PRIMARY KEY,
+				index_data BLOB NOT NULL,
+				index_config TEXT NOT NULL,
+				index_version INTEGER NOT NULL,
+				index_format TEXT NOT NULL,
+				deleted_entity TEXT NOT NULL,
+				first_updated_at INTEGER NOT NULL,
+				last_updated_at INTEGER NOT NULL
+			);
+			CREATE TABLE search_journal (
+				entity_type TEXT NOT NULL,
+				doc_id TEXT NOT NULL,
+				op TEXT NOT NULL,
+				sparse_doc BLOB,
+				at INTEGER NOT NULL,
+				PRIMARY KEY (entity_type, doc_id)
+			);
+			CREATE TABLE author (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, json TEXT);
+			CREATE TABLE note (id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL, priority INTEGER NOT NULL, pinned INTEGER, author_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, json TEXT);
+			CREATE TABLE legacy (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, json TEXT);
+		`);
+		// `table_config` is what makes the constructor treat the tables as existing.
+		const table_config = Object.fromEntries(
+			Object.entries(CONFIG).map(([name, table]) => [
+				name,
+				{ ...table.config.table_definition, json: 'TEXT' },
+			]),
+		);
+		state.db
+			.prepare(`INSERT INTO state (id, json, created_at, updated_at) VALUES (?, ?, ?, ?)`)
+			.run('main', JSON.stringify({ meta: {}, sql_indexes: [], table_config }), T0, T0);
+		state.db
+			.prepare(
+				`INSERT INTO author (id, name, created_at, updated_at, json) VALUES (?, ?, ?, ?, ?)`,
+			)
+			.run('a1', 'Ada', T0, T0, '{}');
+		for (let index = 0; index < 3; index++) {
+			state.db
+				.prepare(
+					`INSERT INTO note (id, title, body, status, priority, author_id, created_at, updated_at, json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				)
+				.run(
+					`n${index}`,
+					`Note ${index}`,
+					`body about carbon ${index}`,
+					'published',
+					index,
+					'a1',
+					T0 + index * 1000,
+					T0 + index * 1000,
+					'{}',
+				);
+		}
+		state.db
+			.prepare(
+				`INSERT INTO search_index (id, index_data, index_config, index_version, index_format, deleted_entity, first_updated_at, last_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			)
+			.run(
+				'note.0',
+				new Uint8Array([1, 2, 3]),
+				'{}',
+				7,
+				'msgpack',
+				JSON.stringify({ gone_1: T0 + 500, gone_2: T0 + 900 }),
+				T0,
+				T0 + 2000,
+			);
+		state.db
+			.prepare(
+				`INSERT INTO search_journal (entity_type, doc_id, op, sparse_doc, at) VALUES (?, ?, ?, ?, ?)`,
+			)
+			.run('note', 'n0', 'upsert', null, T0);
+
+		const db = new DatabaseServer(
+			CONFIG as never,
+			() => undefined,
+			state.ctx as never,
+			{ DEV: true } as never,
+		) as DatabaseServer<Record<string, Database.Table>>;
+		return { db, state };
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(T0 + 10_000);
+		fixture = seedLegacyDurableObject();
+	});
+	afterEach(() => {
+		fixture.state.close();
+		vi.useRealTimers();
+	});
+
+	it('rebuilds every table’s search rows from its entity rows', () => {
+		const { db, state } = fixture;
+		expect(
+			(db.list('note', { term: 'carbon' } as never) as unknown as { count: number }).count,
+		).toBe(3);
+		// The rebuild backfills `$derived` too, so FK-derived values are searchable
+		// even though the in-memory engine never persisted them.
+		const rows = state.db
+			.prepare(`SELECT json_extract(json, '$."$derived".author_name') AS name FROM note`)
+			.all() as { name: string }[];
+		expect(rows.map((row) => row.name)).toEqual(['Ada', 'Ada', 'Ada']);
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(3);
+	});
+
+	it('migrates the legacy tombstones into search_tombstones', () => {
+		const tombstones = fixture.state.db
+			.prepare(
+				`SELECT doc_id, deleted_at FROM search_tombstones WHERE entity_type = 'note' ORDER BY doc_id`,
+			)
+			.all() as { doc_id: string; deleted_at: number }[];
+		expect(tombstones).toEqual([
+			{ doc_id: 'gone_1', deleted_at: T0 + 500 },
+			{ doc_id: 'gone_2', deleted_at: T0 + 900 },
+		]);
+		// ...and they still reach a syncing client on the deletion timeline.
+		const entity = fixture.db.sync({ start_updated_at: 0 }).entity.note as {
+			deleted: string[];
+		};
+		expect(entity.deleted.sort()).toEqual(['gone_1', 'gone_2']);
+	});
+
+	it('migrates the window bounds and bumps config_version past the legacy one', () => {
+		const state = fixture.state.db
+			.prepare(
+				`SELECT config_version, first_updated_at, last_updated_at FROM search_state WHERE entity_type = 'note'`,
+			)
+			.get() as {
+			config_version: number;
+			first_updated_at: number;
+			last_updated_at: number;
+		};
+		// The corpus was rebuilt from a different projection, so every client must
+		// resync — which is exactly what a version past the legacy 7 forces.
+		expect(state.config_version).toBeGreaterThan(7);
+		expect(state.first_updated_at).toBe(T0);
+		expect(state.last_updated_at).toBe(T0 + 2000);
+	});
+
+	it('drops search_index and search_journal once the migration has succeeded', () => {
+		const tables = fixture.state.db
+			.prepare(
+				`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('search_index', 'search_journal')`,
+			)
+			.all();
+		expect(tables).toEqual([]);
+	});
+
+	it('is idempotent: the next wake migrates nothing, drops nothing and rebuilds nothing', () => {
+		const { state } = fixture;
+		const before = dumpSearchRows(state, 'note');
+		const version_before = (
+			state.db
+				.prepare(`SELECT config_version FROM search_state WHERE entity_type = 'note'`)
+				.get() as { config_version: number }
+		).config_version;
+
+		state.log.length = 0;
+		new DatabaseServer(CONFIG as never, () => undefined, state.ctx as never, {
+			DEV: true,
+		} as never);
+
+		expect(dumpSearchRows(state, 'note')).toEqual(before);
+		expect(
+			(
+				state.db
+					.prepare(`SELECT config_version FROM search_state WHERE entity_type = 'note'`)
+					.get() as { config_version: number }
+			).config_version,
+		).toBe(version_before);
+		expect(state.log.some((entry) => /DROP TABLE/i.test(entry.sql))).toBe(false);
 	});
 });
 
@@ -805,8 +1043,8 @@ const articleTable = Database.table(
 		location: s.geopoint().optional(),
 		embedding: s.vector(8).optional(),
 	}),
-	{ search_engine: 'native' },
 );
+;
 
 describe('native search driver — golden fixtures through list()', () => {
 	const suite = JSON.parse(
@@ -815,7 +1053,7 @@ describe('native search driver — golden fixtures through list()', () => {
 			'utf8',
 		),
 	) as unknown as { vectors: GoldenVectorShape[] };
-	const search_schema = flattenSearchSchema(articleTable.config.orama.schema);
+	const search_schema = flattenSearchSchema(articleTable.config.index_schema);
 	const sortable = new Set(articleTable.config.sortable_fields as string[]);
 
 	/** Every field path a query names, so unsupported ones can be filtered out. */

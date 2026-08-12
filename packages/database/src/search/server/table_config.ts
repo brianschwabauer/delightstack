@@ -1,9 +1,9 @@
 /**
  * The bridge from a `Database.table()` config to a {@link ServerSearchTable}.
  *
- * `schema.ts` describes a table twice: a *nested* Orama schema (objects keep
- * their shape) and a flat list of dot-path `searchable_fields`. The native
- * driver wants one flat `path → type` map plus the SQL placement facts
+ * `schema.ts` describes a table twice: a *nested* search schema (objects keep
+ * their shape) and a flat list of dot-path `searchable_fields`. The driver
+ * wants one flat `path → type` map plus the SQL placement facts
  * (`sql_where.ts`'s four-way split), so this module derives both from the table
  * config — nothing here is stored, it is recomputed on every Durable Object
  * wake and is a pure function of the schema.
@@ -32,18 +32,12 @@ export interface SearchTableSource {
 	/** The field shape — read only to find `derived()` fields. */
 	readonly _?: Record<string, { readonly _?: { derived?: boolean } }>;
 	config: {
-		search_engine?: 'native' | 'orama';
 		primary_key: string;
 		primary_key_type?: 'string' | 'number';
 		table_definition?: Record<string, unknown>;
 		derived_fields?: Record<string, { foreign_keys?: string[] }>;
-		orama: { schema: unknown };
+		index_schema: unknown;
 	};
-}
-
-/** Whether a table opted into the native SQLite search driver. */
-export function isNativeSearchTable(table: SearchTableSource | undefined): boolean {
-	return table?.config?.search_engine === 'native';
 }
 
 /** Every declared type the flattener recognizes as a leaf. */
@@ -64,7 +58,7 @@ function isSearchableType(value: unknown): value is SearchableType {
 }
 
 /**
- * Flatten the nested Orama schema into the driver's `dot.path → type` map.
+ * Flatten the nested search schema into the driver's `dot.path → type` map.
  *
  * Object fields contribute only their leaves — `{ address: { city: 'string' } }`
  * becomes `{ 'address.city': 'string' }` — which is exactly the closed path set
@@ -96,7 +90,7 @@ export function buildServerSearchTable(
 	entity_type: string,
 	table: SearchTableSource,
 ): ServerSearchTable {
-	const schema = flattenSearchSchema(table.config.orama.schema);
+	const schema = flattenSearchSchema(table.config.index_schema);
 	const table_definition = table.config.table_definition ?? {};
 	const columns = new Set(Object.keys(table_definition));
 	// EVERY `derived()` field, not just the FK-dependent ones `config.derived_fields`

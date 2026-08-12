@@ -1,7 +1,6 @@
 import type {
 	AnySearchSchema,
 	IndexedDocument,
-	IndexSorterConfig,
 	SearchableType,
 	SearchQuery as CoreSearchQuery,
 	SearchQueryResults as CoreSearchQueryResults,
@@ -33,7 +32,7 @@ interface DatabaseFieldBase {
 	/** The type of the field */
 	type: DatabaseFieldType;
 
-	/** Whether the field can be fuzzy searched and indexed by orama. If 'primary' is true, this is ignored */
+	/** Whether the field can be fuzzy searched and indexed by the search engine. If 'primary' is true, this is ignored */
 	searchable?: boolean;
 
 	/** Whether the field should be indexed by sqlite. If 'primary' is true, this is ignored */
@@ -44,7 +43,7 @@ interface DatabaseFieldBase {
 
 	/**
 	 * Whether the field can be used for sorting results.
-	 * If this is true, 'searchable' will also automatically be set to true so that sorting can be done via orama
+	 * If this is true, 'searchable' will also automatically be set to true so that sorting can be done by the search engine
 	 */
 	sortable?: boolean;
 
@@ -509,15 +508,15 @@ type FieldType<T> = T extends {
 											: never
 	: never;
 
-/** Determines the Orama formatted type of a database field for search indexing */
-type OramaType<T> = T extends {
+/** Determines the search-index type of a database field */
+type IndexFieldType<T> = T extends {
 	readonly _: { type: infer TypeString extends DatabaseFieldType };
 }
 	? TypeString extends 'object'
 		? T extends { _: { properties: infer ObjectType } }
 			? NeverIfEmptyObject<
 					Flatten<
-						OmitNeverProperties<{ [Key in keyof ObjectType]: OramaType<ObjectType[Key]> }>
+						OmitNeverProperties<{ [Key in keyof ObjectType]: IndexFieldType<ObjectType[Key]> }>
 					>
 				>
 			: never
@@ -943,7 +942,7 @@ class StringFieldGenerator {
 		};
 	}
 
-	/** Whether the field can be fuzzy searched and indexed by orama. If 'primary' is true, this is ignored */
+	/** Whether the field can be fuzzy searched and indexed by the search engine. If 'primary' is true, this is ignored */
 	searchable(): Omit<Searchable<this>, 'searchable'> {
 		this._.searchable = true;
 		return this as Omit<Searchable<this>, 'searchable'>;
@@ -1274,7 +1273,7 @@ class StringFieldGenerator {
 	/**
 	 * Marks this field as derived (computed from other fields).
 	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
-	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 * but computed in toSparse() for search indexing and included in SearchEntity.
 	 * Can optionally depend on foreign key fields for cross-table derived values.
 	 */
 	derived(
@@ -1326,7 +1325,7 @@ class NumberFieldGenerator {
 		};
 	}
 
-	/** Whether the field can be fuzzy searched and indexed by orama. */
+	/** Whether the field can be fuzzy searched and indexed by the search engine. */
 	searchable(): Omit<Searchable<this>, 'searchable'> {
 		this._.searchable = true;
 		return this as Omit<Searchable<this>, 'searchable'>;
@@ -1505,7 +1504,7 @@ class NumberFieldGenerator {
 	/**
 	 * Marks this field as derived (computed from other fields).
 	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
-	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 * but computed in toSparse() for search indexing and included in SearchEntity.
 	 * Can optionally depend on foreign key fields for cross-table derived values.
 	 */
 	derived(
@@ -1558,7 +1557,7 @@ class BooleanFieldGenerator {
 		};
 	}
 
-	/** Whether the field can be fuzzy searched and indexed by orama. */
+	/** Whether the field can be fuzzy searched and indexed by the search engine. */
 	searchable(): Omit<Searchable<this>, 'searchable'> {
 		this._.searchable = true;
 		return this as Omit<Searchable<this>, 'searchable'>;
@@ -1645,7 +1644,7 @@ class BooleanFieldGenerator {
 	/**
 	 * Marks this field as derived (computed from other fields).
 	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
-	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 * but computed in toSparse() for search indexing and included in SearchEntity.
 	 * Can optionally depend on foreign key fields for cross-table derived values.
 	 */
 	derived(
@@ -1711,7 +1710,7 @@ class EnumFieldGenerator<Options extends string[]> {
 		if (option_labels) this._.option_labels = option_labels;
 	}
 
-	/** Whether the field can be fuzzy searched and indexed by orama. */
+	/** Whether the field can be fuzzy searched and indexed by the search engine. */
 	searchable(): Omit<Searchable<this>, 'searchable'> {
 		this._.searchable = true;
 		return this as Omit<Searchable<this>, 'searchable'>;
@@ -1780,7 +1779,7 @@ class EnumFieldGenerator<Options extends string[]> {
 	/**
 	 * Marks this field as derived (computed from other fields).
 	 * Derived fields are search-only: NOT stored in SQLite or included in Entity,
-	 * but computed in toSparse() for Orama indexing and included in SearchEntity.
+	 * but computed in toSparse() for search indexing and included in SearchEntity.
 	 * Can optionally depend on foreign key fields for cross-table derived values.
 	 */
 	derived(
@@ -1954,7 +1953,7 @@ class ForeignKeyFieldGenerator {
 		};
 	}
 
-	/** Whether the field can be fuzzy searched and indexed by orama. */
+	/** Whether the field can be fuzzy searched and indexed by the search engine. */
 	searchable(): Omit<Searchable<this>, 'searchable'> {
 		this._.searchable = true;
 		return this as Omit<Searchable<this>, 'searchable'>;
@@ -2279,7 +2278,7 @@ class DatabaseGenerator {
 	/**
 	 * Defines a vector entry for a field within a database table.
 	 * A vector is an array of numbers with a fixed size (the size given by vectorSize).
-	 * Vectors are used for vector search in orama.
+	 * Vectors are used for vector search.
 	 */
 	vector(vectorSize: number): VectorFieldGenerator {
 		return new VectorFieldGenerator(vectorSize);
@@ -2346,36 +2345,20 @@ export namespace Database {
 			}
 	>;
 
-	/** Infers the type of the schema used to initialize the search library Orama */
+	/** Infers the type of the schema the search engine indexes this table with */
 	export type SearchSchema<
 		Table extends {
 			readonly _: Record<string, FieldGenerator>;
 		},
 	> = Flatten<
 		OmitNeverProperties<{
-			[Key in keyof Table['_']]: OramaType<Table['_'][Key]>;
+			[Key in keyof Table['_']]: IndexFieldType<Table['_'][Key]>;
 		}> & {
-			/** Timestamps are stored as epoch numbers in the Orama search index */
+			/** Timestamps are stored as epoch numbers in the search index */
 			created_at: 'number';
 			updated_at: 'number';
 		}
 	>;
-
-	/** The type used to initialize the orama library using orama({...}) */
-	export type SearchConfig<
-		Table extends {
-			readonly _: Record<string, FieldGenerator>;
-		},
-	> = {
-		/** The schema used to initialize the orama library */
-		schema: SearchSchema<Table>;
-		/** The configuration for sorting search results */
-		sort: IndexSorterConfig;
-		/** Custom orama components (e.g., getDocumentIndexId for custom primary key fields) */
-		components: {
-			getDocumentIndexId: (doc: Record<string, any>) => string;
-		};
-	};
 
 	/** Infers the shape of the documents returned by the search library */
 	export type SearchEntity<
@@ -2537,16 +2520,6 @@ export namespace Database {
 		unique: boolean;
 	}>;
 
-	/** Table-level options that are not field declarations. */
-	export interface TableOptions {
-		/**
-		 * Which search driver indexes and queries this table.
-		 *
-		 * @default 'orama'
-		 */
-		search_engine?: 'native' | 'orama';
-	}
-
 	/** The type returned by the `table` function */
 	export type Table = ReturnType<typeof table>;
 
@@ -2561,7 +2534,7 @@ export namespace Database {
 	 * base `FieldGenerator` union — erasing every per-field type.
 	 *
 	 * `AnyTable` keeps only what callers actually read (`_` for Entity
-	 * inference and `config.primary_key` / `config.orama` for init),
+	 * inference and `config.primary_key` / `config.index_schema` for init),
 	 * letting TypeScript preserve narrow types through generic inference.
 	 * Use this as the constraint wherever you'd write `Table`.
 	 */
@@ -2571,10 +2544,9 @@ export namespace Database {
 		parse(data: unknown): Record<string, unknown>;
 		toSparse(data: Record<string, unknown>): Record<string, unknown>;
 		config: {
-			search_engine?: 'native' | 'orama';
 			primary_key: string;
 			primary_key_type?: 'string' | 'number';
-			orama: { schema: unknown; sort: unknown };
+			index_schema: unknown;
 			table_definition?: Record<string, unknown>;
 			indexes?: unknown;
 			indexable_fields?: readonly string[];
@@ -2594,7 +2566,7 @@ export namespace Database {
 		TableConfig extends Record<string, FieldGenerator>,
 		Entity extends Database.Entity<{ readonly _: TableConfig }>,
 		SearchEntity extends Database.SearchEntity<{ readonly _: TableConfig }>,
-		OramaConfig extends Database.SearchConfig<{ readonly _: TableConfig }>,
+		IndexSchema extends Database.SearchSchema<{ readonly _: TableConfig }>,
 		ForeignKeys extends Flatten<
 			OmitNeverProperties<{
 				[Key in keyof TableConfig & string]: IsForeignKey<TableConfig[Key]> extends true
@@ -2621,7 +2593,7 @@ export namespace Database {
 			 */
 			parse(data: any): Entity;
 
-			/** Converts the given entity data to a sparse search entity used by the orama search index */
+			/** Converts the given entity data to a sparse search entity used by the search index */
 			toSparse(data: Entity): SearchEntity;
 
 			/** The form properties for the table used when editing a table record in an html form */
@@ -2636,22 +2608,8 @@ export namespace Database {
 				schema: FormStandardSchema;
 			};
 
-			/** The table's config used to setup sqlite and orama */
+			/** The table's config used to setup sqlite and the search index */
 			config: {
-				/**
-				 * Which search driver indexes and queries this table.
-				 *
-				 * `'orama'` (the default) keeps the in-memory Orama index, its msgpack
-				 * snapshot/journal and the Orama-backed sync paging. `'native'` opts the
-				 * table into the SQLite search tables (`search_postings` and friends),
-				 * the in-transaction write path and the SQL-paged sync — see
-				 * `plans/database/Native Search Engine Plan.md` §9 Phase 3.
-				 *
-				 * Switching a table to `'native'` rebuilds its search rows from the
-				 * entity table on the next Durable Object wake and bumps its
-				 * `config_version`, so clients resync once.
-				 */
-				search_engine: 'native' | 'orama';
 				/** The primary key for the table */
 				primary_key: PrimaryKeyColumn;
 				/** The type of the primary key ('string' for TEXT, 'number' for INTEGER) */
@@ -2662,17 +2620,18 @@ export namespace Database {
 				unique_fields: UniqueColumn[];
 				/** The list of fields that cannot be changed after creation (enforced on update) */
 				readonly_fields: string[];
-				/** The list of fields that can be searched via orama */
+				/** The list of fields that can be searched */
 				searchable_fields: SearchableColumn[];
-				/** The list of fields that can be used for sorting results (via orama) */
+				/** The list of fields that can be used for sorting results */
 				sortable_fields: SortableColumn[];
 				/** A record of fields that are foreign keys and reference a different table */
 				foreign_keys: ForeignKeys;
 				/**
-				 * The orama-specific configuration for the table. Sets up an index to fuzzy search the searchable fields.
-				 * If no searchable fields are defined, this will be an empty object.
+				 * The search schema for the table — every indexed field path mapped to
+				 * its declared search type. If no searchable fields are defined, this
+				 * will be an empty object.
 				 */
-				orama: OramaConfig;
+				index_schema: IndexSchema;
 				/**
 				 * The SQLite table schema definition for the generated table.
 				 * Fields of type 'object' or 'array' are omitted since they are stored in the 'json' column.
@@ -2709,9 +2668,7 @@ export namespace Database {
 	>(
 		rawTableName: TableName,
 		callback: (tableSchema: DatabaseGenerator) => TableConfig,
-		options?: TableOptions,
 	): Table {
-		const search_engine: 'native' | 'orama' = options?.search_engine ?? 'orama';
 		const tableName = z
 			.string()
 			.regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, {
@@ -2732,11 +2689,7 @@ export namespace Database {
 		const indexes: Table['config']['indexes'] = [];
 		const form_field = {} as FormFieldProps<TableConfig>;
 		const table_definition = {} as SqliteTableDefinition<TableConfig>;
-		const orama_schema = {} as OramaConfig['schema'];
-		const orama_sort: OramaConfig['sort'] = {
-			enabled: false,
-			unsortableProperties: [],
-		};
+		const index_schema = {} as IndexSchema;
 
 		const generator = new DatabaseGenerator();
 		const table_config = callback(generator);
@@ -2794,34 +2747,28 @@ export namespace Database {
 					field.primary_key.type === 'string'
 						? 'TEXT PRIMARY KEY'
 						: 'INTEGER PRIMARY KEY AUTOINCREMENT';
-				(orama_schema as any)[fieldName] =
+				(index_schema as any)[fieldName] =
 					field.primary_key.type === 'number' ? 'number' : 'string';
 				searchable_fields.push(fieldName as SearchableColumn);
 				if ('sortable' in field && field.sortable) {
 					sortable_fields.push(fieldName as SortableColumn);
-					orama_sort.enabled = true;
-				} else {
-					orama_sort.unsortableProperties!.push(fieldName);
 				}
 				continue;
 			}
 
-			// Derived fields: search-only, skip SQLite column/indexes/form but build orama schema
+			// Derived fields: search-only, skip SQLite column/indexes/form but build the search schema
 			// derived() always marks the field as searchable
 			if ('derived' in field && (field as any).derived) {
 				searchable_fields.push(fieldName as SearchableColumn);
 				if ('sortable' in field && field.sortable) {
 					sortable_fields.push(fieldName as SortableColumn);
-					orama_sort.enabled = true;
-				} else {
-					orama_sort.unsortableProperties!.push(fieldName);
 				}
-				let orama_type: string | undefined;
-				if (field.type === 'string') orama_type = 'string';
-				else if (field.type === 'number') orama_type = 'number';
-				else if (field.type === 'boolean') orama_type = 'boolean';
-				else if (field.type === 'enum') orama_type = 'enum';
-				if (orama_type) (orama_schema as any)[fieldName] = orama_type;
+				let derived_type: string | undefined;
+				if (field.type === 'string') derived_type = 'string';
+				else if (field.type === 'number') derived_type = 'number';
+				else if (field.type === 'boolean') derived_type = 'boolean';
+				else if (field.type === 'enum') derived_type = 'enum';
+				if (derived_type) (index_schema as any)[fieldName] = derived_type;
 				// Store FK dependency metadata for cross-table derived fields
 				const fk_deps = (field as any).derived_foreign_keys;
 				if (Array.isArray(fk_deps) && fk_deps.length > 0) {
@@ -2929,8 +2876,8 @@ export namespace Database {
 				(table_definition as any)[fieldName] = sqliteColumnDef;
 			}
 
-			// Build the orama schema
-			function recursivelyBuildOramaSchema(
+			// Build the search schema
+			function recursivelyBuildSearchSchema(
 				subfield: DatabaseField,
 				path: string = '',
 				force_searchable: boolean = false,
@@ -2940,7 +2887,7 @@ export namespace Database {
 						(acc, [childFieldName, childFieldDef]) => {
 							const childField = (childFieldDef as any)?.['_'] as DatabaseField;
 							if (!childField) return acc;
-							const childSchema = recursivelyBuildOramaSchema(
+							const childSchema = recursivelyBuildSearchSchema(
 								childField,
 								[path, childFieldName].filter(Boolean).join('.'),
 								force_searchable || ('searchable' in childField && childField.searchable),
@@ -2980,9 +2927,6 @@ export namespace Database {
 				if (path) searchable_fields.push(path as SearchableColumn);
 				if ('sortable' in subfield && subfield.sortable) {
 					sortable_fields.push(path as SortableColumn);
-					orama_sort.enabled = true;
-				} else {
-					orama_sort.unsortableProperties!.push(path);
 				}
 				if (subfield.type === 'boolean') return 'boolean';
 				if (subfield.type === 'number') return 'number';
@@ -2998,9 +2942,9 @@ export namespace Database {
 				}
 				return;
 			}
-			const built_schema = recursivelyBuildOramaSchema(field, fieldName);
+			const built_schema = recursivelyBuildSearchSchema(field, fieldName);
 			if (built_schema) {
-				(orama_schema as any)[fieldName] = built_schema;
+				(index_schema as any)[fieldName] = built_schema;
 			}
 
 			// Build the form field properties
@@ -3229,10 +3173,9 @@ export namespace Database {
 		(table_definition as any)['created_at'] = 'INTEGER NOT NULL';
 		(table_definition as any)['updated_at'] = 'INTEGER NOT NULL';
 
-		// Add timestamps to the Orama search schema as sortable numbers (epoch ms)
-		(orama_schema as any)['updated_at'] = 'number';
-		(orama_schema as any)['created_at'] = 'number';
-		orama_sort.enabled = true;
+		// Add timestamps to the search schema as sortable numbers (epoch ms)
+		(index_schema as any)['updated_at'] = 'number';
+		(index_schema as any)['created_at'] = 'number';
 		// updated_at should be sortable (needed for sync/change detection)
 		sortable_fields.push('updated_at' as SortableColumn);
 
@@ -3374,7 +3317,7 @@ export namespace Database {
 						);
 					}
 
-					// Parse/validate geopoint fields (used in orama for location based searching)
+					// Parse/validate geopoint fields (used for location based searching)
 					if (field.type === 'geopoint') {
 						const lat = Number(value?.lat);
 						const lon = Number(value?.lon);
@@ -3418,7 +3361,7 @@ export namespace Database {
 						return value;
 					}
 
-					// Parse/validate vector fields (used for vector search in orama)
+					// Parse/validate vector fields (used for vector search)
 					if (field.type === 'vector') {
 						if (!Array.isArray(value) || value.length !== field.dimensions) {
 							issues.push({
@@ -3524,7 +3467,7 @@ export namespace Database {
 		}
 
 		/**
-		 * Converts the given entity data to a sparse search entity used by the orama search index.
+		 * Converts the given entity data to a sparse search entity used by the search index.
 		 * This only includes the fields defined as 'searchable' in the table schema.
 		 */
 		function toSparse(data: Entity): SearchEntity {
@@ -3541,11 +3484,9 @@ export namespace Database {
 					if (current === undefined || current === null) break;
 					const field = field_path[i];
 					if (i === field_path.length - 1) {
-						// Only materialize the key when a real value exists. An explicit
-						// `field: undefined` survives the msgpack index save as `null`
-						// (msgpack has no undefined), and Orama's remove() crashes on a
-						// null array property (`value.length`) — so a doc reloaded after
-						// a DO restart could never be updated or deleted again.
+						// Only materialize the key when a real value exists: an explicit
+						// `field: undefined` is absence, not a value, and the index must
+						// not carry a key for it.
 						const value = (current as any)[field];
 						if (value !== undefined && value !== null) sparse_data[field] = value;
 					} else {
@@ -3583,7 +3524,7 @@ export namespace Database {
 				}
 			}
 
-			// Always include timestamps for Orama sorting/filtering, coercing to epoch if needed
+			// Always include timestamps for sorting/filtering, coercing to epoch if needed
 			const entity = data as any;
 			if (entity.updated_at !== undefined) root.updated_at = toEpoch(entity.updated_at);
 			if (entity.created_at !== undefined) root.created_at = toEpoch(entity.created_at);
@@ -3628,7 +3569,6 @@ export namespace Database {
 			parse,
 			toSparse,
 			config: {
-				search_engine,
 				primary_key,
 				primary_key_type,
 				indexable_fields,
@@ -3640,15 +3580,7 @@ export namespace Database {
 				derived_fields,
 				table_definition,
 				indexes,
-				orama: {
-					schema: orama_schema,
-					sort: orama_sort,
-					components: {
-						getDocumentIndexId: (doc: Record<string, any>): string => {
-							return String(doc[primary_key]);
-						},
-					},
-				},
+				index_schema,
 			},
 			form: {
 				field: form_field,

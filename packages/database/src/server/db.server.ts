@@ -1,21 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { prepareSql, SqlQueryFn } from './sql.helper';
-import {
-	AnyOrama,
-	create as createOrama,
-	remove as removeFromOrama,
-	insertMultiple as insertMultipleIntoOrama,
-	insert as insertIntoOrama,
-	load as loadOrama,
-	search as searchOrama,
-	Results,
-	save as saveOrama,
-} from '@orama/orama';
-import { encode as encodeMsgPack, decode as decodeMsgPack } from '@msgpack/msgpack';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
 import { normalizeWhere } from '../search-query';
-import { toOramaSearchParams } from '../search/orama-compat';
 import type { SearchQuery, SearchQueryResults } from '../search/core/types';
 import {
 	SqliteSearchEngine,
@@ -29,9 +16,8 @@ import {
 	quoteIdentifier,
 } from '../search/server/sql_where';
 import {
-	buildServerSearchTable,
-	isNativeSearchTable,
-	type SearchTableSource,
+buildServerSearchTable,
+type SearchTableSource,
 } from '../search/server/table_config';
 import { generateTimestampID, DelightError } from '@delightstack/utilities';
 
@@ -113,9 +99,9 @@ export type DatabaseServerTransactionResult<
 				/** The ID of the entity involved in the operation */
 				id: string | number;
 				/**
-				 * The sparse (search-index) projection that was inserted into Orama
-				 * (undefined for deletes). Broadcast to websocket clients so their
-				 * local index receives exactly what the server indexed.
+* The sparse (search-index) projection that was indexed (undefined for
+* deletes). Broadcast to websocket clients so their local index
+* receives exactly what the server indexed.
 				 */
 				sparse?: Record<string, unknown>;
 			};
@@ -153,7 +139,7 @@ export type DatabaseSyncRequest<DatabaseConfig extends Record<string, any>> = {
 	entity?: {
 		[Type in keyof DatabaseConfig & string]?: {
 			/**
-			 * A version number of the config/schema of the orama library that the client currently is using.
+* A version number of the search config/schema that the client currently is using.
 			 * If the server version is different, the server will return the new config/schema
 			 * and the client will will reindex the data using the new schema.
 			 */
@@ -211,10 +197,10 @@ export type DatabaseSyncResponse<DatabaseConfig extends Record<string, any>> = {
 	entity: {
 		[Type in keyof DatabaseConfig & string]?: {
 			/**
-			 * The schema/config used to setup the Orama library for searching. This is included only when the Orama schema changes.
-			 * When this changes, the client will completely reindex the data using the new schema.
-			 */
-			config?: Database.Table['config']['orama'];
+* The search schema. This is included only when the schema changes.
+* When this changes, the client will completely reindex the data using the new schema.
+*/
+config?: Database.Table['config']['index_schema'];
 			/** The version number of the config/schema for the search data. If this changes, the full list needs to be synced */
 			config_version: number;
 			/** The list of IDs of entities that have been deleted */
@@ -273,82 +259,38 @@ type DatabaseServerState<
 	 */
 	sql_indexes: Database.SqlIndexes;
 	/**
-	 * Per-entity-type state of the native (SQLite) search driver.
-	 *
-	 * Presence of an entry means the entity type's search tables have been built
-	 * at least once; `schema_signature` is the serialized search schema they were
-	 * built from, so a schema change re-triggers the rebuild + config bump. Absent
-	 * entirely for tables on the default `'orama'` engine.
-	 */
+* Per-entity-type state of the SQLite search driver.
+*
+* Presence of an entry means the entity type's search tables have been built
+* at least once; `schema_signature` is the serialized search schema they were
+* built from, so a schema change re-triggers the rebuild + config bump.
+*/
 	native_search?: {
 		[TableName in keyof Database]?: {
 			/** The search schema the tables were last rebuilt from */
 			schema_signature: string;
-			/** Whether the legacy `search_index` metadata was migrated across */
+/** Whether the legacy `search_index` metadata has been migrated across */
 			migrated: boolean;
 		};
 	};
 };
 
-interface SearchIndex {
-	/** A record of deleted entity ids with their deletion epoch timestamps in ms */
-	deleted_entity: Record<string, number>;
-	/**
-	 * The last epoch timestamp in ms when an event occurred to the index (an entity was created/updated/deleted).
-	 * This is useful to know so we don't have to check if anything has changed after this timestamp.
-	 */
-	last_updated_at: number;
-	/**
-	 * The first epoch timestamp in ms of the first change (an entity was created).
-	 * This is used to know when the first event occurred for sync purposes.
-	 */
-	first_updated_at: number;
-	/**
-	 * The version number of the search config/schema used to create the index.
-	 * This number automatically increments every time the config/schema changes.
-	 */
-	config_version: number;
-	/** The orama search index for the table. This is preloaded with all documents */
-	orama: AnyOrama;
-}
-
-interface SearchIndexTableSchema {
-	/** The ID of the orama index (typically the table name), with a numeric suffix */
+/**
+ * One row of the legacy `search_index` table, read once by the migration that
+ * moves its metadata into `search_state` / `search_tombstones` before the table
+ * is dropped. Nothing writes this shape any more.
+ */
+interface LegacySearchIndexRow {
+	/** The id of the legacy index row (`<entity_type>.<chunk>`) */
 	id: string;
-	/** The BLOB data of the orama index (may be split across multiple rows if too large) */
-	index_data?: ArrayBuffer;
-	/** The JSON string of the orama config used to create the index */
-	index_config: string;
-	/** The version number of the index config/schema (incremented every time the config changes) */
+	/** The version number of the index config/schema */
 	index_version: number;
-	/** The format of the stored index data (msgpack or json) */
-	index_format: 'msgpack' | 'json';
-	/** The JSON string of a record of deleted entity ids with their deletion epoch timestamps in ms */
+	/** A JSON record of deleted entity ids → deletion epoch timestamps in ms */
 	deleted_entity: string;
 	/** The epoch timestamp in ms of the first change (an entity was created) */
 	first_updated_at: number;
-	/** The epoch timestamp in ms of the last change (an entity was created/updated/deleted) */
+	/** The epoch timestamp in ms of the last change */
 	last_updated_at: number;
-}
-
-/**
- * One row of the search-index write-ahead journal. Entity writes append here
- * (cheap, O(1) per doc) instead of re-serializing the whole Orama index, and a
- * cold start replays them on top of the last snapshot. The table is keyed by
- * (entity_type, doc_id) so repeated writes to the same doc collapse to a single
- * last-write-wins row.
- */
-interface SearchJournalTableSchema {
-	/** The table the journaled document belongs to */
-	entity_type: string;
-	/** The orama document id (the entity's primary key, stringified) */
-	doc_id: string;
-	/** Whether the doc was written or removed */
-	op: 'upsert' | 'delete';
-	/** msgpack of the sparse (index-projection) doc — NULL for deletes */
-	sparse_doc: ArrayBuffer | null;
-	/** Write timestamp in ms; for deletes this is the tombstone time */
-	at: number;
 }
 
 type DeepPartial<T> = {
@@ -360,68 +302,27 @@ export class DatabaseServer<
 	DatabaseConfig extends Record<string, Database.Table>,
 	Meta = Record<string, any>,
 > extends DurableObject<Env> {
-	/**
-	 * Maximum delete tombstones kept per entity index. Tombstones are needed so
-	 * incrementally-syncing clients learn about deletions; past this cap the
-	 * oldest half is pruned and the index config version is bumped, which routes
-	 * clients holding pre-prune cursors through the full-resync path instead.
-	 */
-	static MAX_DELETE_TOMBSTONES = 10_000;
-
-	/**
-	 * Journal rows an entity index may accumulate before a snapshot (compaction)
-	 * is scheduled. Snapshotting is a full-index msgpack encode — seconds of
-	 * blocked CPU on a large index — so it must happen once per N writes, not per
-	 * write. Raising this trades a longer cold-start replay for fewer snapshots.
-	 */
-	static MAX_SEARCH_JOURNAL_ROWS = 500;
-
-	/** Persistent state of the database server (saved/loaded in sqlite) */
+/** Persistent state of the database server (saved/loaded in sqlite) */
 	#state: DatabaseServerState<DatabaseConfig, Meta>;
 
-	/** A record of search indexes for each table */
-	#search_index: {
-		[TableName in keyof DatabaseConfig]?: SearchIndex;
-	} = {};
-
-	/** In-flight index rebuilds, used to prevent re-entrant/duplicate rebuilds of the same table */
-	#index_rebuild_in_flight: {
-		[TableName in keyof DatabaseConfig]?: SearchIndex;
-	} = {};
-
-	/**
-	 * Journal rows written per entity index since its last snapshot. This is an
-	 * UPPER bound, not a count: repeated writes to the same doc collapse onto one
-	 * journal row but still increment here, so we may compact slightly early —
-	 * which is the safe direction, and avoids a COUNT(*) on every write.
-	 */
-	#journal_rows: Record<string, number> = {};
-
-	/** Entity types with a compaction already scheduled (never schedule two) */
-	#compactions_in_flight: Set<string> = new Set();
-
-	/** Reverse FK map: for each table, which other tables have FK-derived fields depending on it */
+/** Reverse FK map: for each table, which other tables have FK-derived fields depending on it */
 	#reverse_fk_map: Map<string, Array<{ table: string; fk_field: string }>> = new Map();
 
-	/**
-	 * The native (SQLite) search driver, created only when at least one table
-	 * declares `search_engine: 'native'`. Tables on the default `'orama'` engine
-	 * never touch it and keep the in-memory index, journal and snapshot path.
-	 */
-	#search_engine: SqliteSearchEngine | undefined;
+/** The SQLite search driver — the only search engine. */
+#search_engine: SqliteSearchEngine | undefined;
 
-	/** Native-engine table configs, keyed by entity type */
-	#native_tables: Map<string, ServerSearchTable> = new Map();
+/** Search-table configs, keyed by entity type */
+	#search_tables: Map<string, ServerSearchTable> = new Map();
 
 	/** Vector-typed schema paths per entity type — the sync strip list (§7.0) */
 	#vector_paths: Map<string, string[]> = new Map();
 
-	/**
-	 * Entity types whose native rebuild is currently running. Same re-entrancy
-	 * guard as `#index_rebuild_in_flight`: the rebuild recomputes FK-derived
-	 * fields, which can call back into this class.
-	 */
-	#native_rebuild_in_flight: Set<string> = new Set();
+/**
+* Entity types whose search rebuild is currently running: a rebuild recomputes
+* FK-derived fields, which can call back into this class, so it must never
+* re-enter itself.
+*/
+	#rebuild_in_flight: Set<string> = new Set();
 
 	public get id() {
 		return this.ctx.id.toString();
@@ -463,25 +364,7 @@ export class DatabaseServer<
 					created_at INTEGER NOT NULL,
 					updated_at INTEGER NOT NUll
 				);
-				CREATE TABLE IF NOT EXISTS search_index (
-					id TEXT PRIMARY KEY,
-					index_data BLOB NOT NULL,
-					index_config TEXT NOT NULL,
-					index_version INTEGER NOT NULL,
-					index_format TEXT NOT NULL,
-					deleted_entity TEXT NOT NULL,
-					first_updated_at INTEGER NOT NULL,
-					last_updated_at INTEGER NOT NULL
-				);
-				CREATE TABLE IF NOT EXISTS search_journal (
-					entity_type TEXT NOT NULL,
-					doc_id TEXT NOT NULL,
-					op TEXT NOT NULL,
-					sparse_doc BLOB,
-					at INTEGER NOT NULL,
-					PRIMARY KEY (entity_type, doc_id)
-				);
-			`,
+`,
 		);
 
 		const result = this.ctx.storage.sql.exec(
@@ -613,9 +496,9 @@ export class DatabaseServer<
 			for (const index of table_config.config.indexes) {
 				if (table_name !== index.table) continue;
 				const existing = this.#state.sql_indexes.find((i) => i.name === index.name);
-				// Same serializable-projection rule as the orama config check below:
-				// `existing` already survived a JSON round trip, so an undefined member
-				// on the live definition would otherwise read as a changed index.
+// Compare the serializable projection: `existing` already survived a
+// JSON round trip, so an undefined member on the live definition would
+// otherwise read as a changed index.
 				if (existing && deepEqual(existing, JSON.parse(JSON.stringify(index)))) continue;
 				const unique = index.unique ? ' UNIQUE' : '';
 				const index_name = this.sanitize(index.name);
@@ -705,38 +588,38 @@ export class DatabaseServer<
 			}
 		}
 
-		this.bootstrapNativeSearch();
+		this.bootstrapSearch();
 	}
 
 	/* ---------------------------------------------------------------------- */
-	/* Native search driver (plan §7, phase 3)                                */
+	/* Search driver (plan §7)                                                */
 	/* ---------------------------------------------------------------------- */
 
-	/** Whether the entity type is indexed by the native SQLite driver. */
-	private isNativeSearch(entity_type: string): boolean {
-		return this.#native_tables.has(entity_type);
+	/** Whether the entity type has a search index (every table with a SQL table does). */
+	private isSearchIndexed(entity_type: string): boolean {
+		return this.#search_tables.has(entity_type);
 	}
 
-	/** The native engine. Only call it behind {@link isNativeSearch}. */
+	/** The search engine. */
 	private get search(): SqliteSearchEngine {
 		if (!this.#search_engine) {
 			throw new DelightError({
-				message: 'The native search engine is not initialized for this database.',
+				message: 'The search engine is not initialized for this database.',
 				status: 500,
-				code: 'native_search_unavailable',
+				code: 'search_unavailable',
 			});
 		}
 		return this.#search_engine;
 	}
 
-	/** The native driver's view of one entity table. */
-	private nativeTable(entity_type: string): ServerSearchTable {
-		const table = this.#native_tables.get(entity_type);
+	/** The driver's view of one entity table. */
+	private searchTable(entity_type: string): ServerSearchTable {
+		const table = this.#search_tables.get(entity_type);
 		if (!table) {
 			throw new DelightError({
-				message: `Entity type ${entity_type} is not on the native search engine.`,
+				message: `Entity type ${entity_type} does not have a search index.`,
 				status: 500,
-				code: 'native_search_unavailable',
+				code: 'search_unavailable',
 			});
 		}
 		return table;
@@ -744,34 +627,46 @@ export class DatabaseServer<
 
 	/**
 	 * Create the search tables, migrate generated columns and (on the first wake
-	 * after a table opts in) rebuild its search rows from the entity table.
+	 * after an upgrade or a schema change) rebuild every table's search rows from
+	 * its entity rows.
 	 *
 	 * Everything here is idempotent and runs on every Durable Object wake; the
 	 * expensive part — the rebuild — is gated on a persisted schema signature, so
-	 * it happens once per schema, not once per wake.
+	 * it happens once per schema, not once per wake. A Durable Object that has
+	 * never run this code (i.e. one upgrading from the in-memory engine) has no
+	 * signature for any table, so every table migrates its metadata, rebuilds and
+	 * bumps its `config_version` exactly once, and the legacy tables are dropped
+	 * at the end of that same wake.
 	 */
-	private bootstrapNativeSearch(): void {
-		const native_types: string[] = [];
+	private bootstrapSearch(): void {
+		const indexed_types: string[] = [];
 		for (const [entity_type, table_config] of Object.entries(this.config)) {
-			if (!isNativeSearchTable(table_config as unknown as SearchTableSource)) continue;
 			if (!table_config?.config?.table_definition) continue;
-			native_types.push(entity_type);
+			indexed_types.push(entity_type);
 		}
-		if (native_types.length === 0) return;
+		if (indexed_types.length === 0) return;
 
 		this.#search_engine = new SqliteSearchEngine(this.ctx.storage.sql, {
 			now: () => Date.now(),
 		});
 		this.#search_engine.bootstrap();
 
-		for (const entity_type of native_types) {
+		// Read once, before anything is migrated: the drop at the end must be
+		// decided by what this wake *found*, not by what it left behind.
+		const legacy_present = this.legacySearchTablesExist();
+
+		for (const entity_type of indexed_types) {
 			const source = this.config[entity_type] as unknown as SearchTableSource;
 			const table = buildServerSearchTable(entity_type, source);
-			this.#native_tables.set(entity_type, table);
+			this.#search_tables.set(entity_type, table);
 			this.#search_engine.register(table);
 			this.migrateGeneratedColumns(table);
 			this.createUpdatedAtIndex(table);
-			this.migrateSearchMetadata(entity_type);
+			// Read before the migration creates one: a type with no state row and no
+			// legacy row has never been synced by anyone, so the rebuild below has no
+			// client to invalidate and must not bump `config_version`.
+			const had_state = this.#search_engine.store.getState(entity_type) !== undefined;
+			this.migrateSearchMetadata(entity_type, legacy_present);
 
 			const signature = JSON.stringify({
 				schema: table.schema,
@@ -780,12 +675,51 @@ export class DatabaseServer<
 			});
 			const built = this.#state.native_search?.[entity_type];
 			if (built?.schema_signature === signature) continue;
-			this.rebuildSearchTables(entity_type);
-			this.setNativeSearchState(entity_type, {
+			this.rebuildSearchTables(entity_type, had_state || legacy_present);
+			this.setSearchTableState(entity_type, {
 				schema_signature: signature,
 				migrated: true,
 			});
 		}
+
+		if (legacy_present) this.dropLegacySearchTables(indexed_types);
+	}
+
+	/** Whether this Durable Object still carries the pre-native search tables. */
+	private legacySearchTablesExist(): boolean {
+		return (
+			this.ctx.storage.sql
+				.exec(
+					`SELECT name FROM sqlite_schema WHERE type = 'table' AND name IN ('search_index', 'search_journal');`,
+				)
+				.toArray().length > 0
+		);
+	}
+
+	/**
+	 * Drop `search_index` and `search_journal` — but only once every configured
+	 * table has both migrated its metadata off them and rebuilt its search rows.
+	 *
+	 * Ordering is the whole safety argument. The legacy rows are the *only* copy
+	 * of the tombstone map and the sync window bounds, so they may not be dropped
+	 * before `migrateSearchMetadata` has committed that data into `search_state` /
+	 * `search_tombstones`, and the search tables must already be populated (a
+	 * rebuild reads entity rows only, so it never needs the legacy tables — but a
+	 * half-bootstrapped wake must be able to try again). A throw anywhere in the
+	 * bootstrap loop therefore skips this entirely and the next wake retries with
+	 * the legacy tables still in place; the persisted `migrated` flags make that
+	 * retry cheap. Once dropped, `legacySearchTablesExist()` is false forever and
+	 * this is never reached again.
+	 */
+	private dropLegacySearchTables(indexed_types: readonly string[]): void {
+		for (const entity_type of indexed_types) {
+			const state = this.#state.native_search?.[entity_type];
+			if (!state?.migrated || !state.schema_signature) return;
+		}
+		this.ctx.storage.transactionSync(() => {
+			this.ctx.storage.sql.exec(`DROP TABLE IF EXISTS search_index;`);
+			this.ctx.storage.sql.exec(`DROP TABLE IF EXISTS search_journal;`);
+		});
 	}
 
 	/**
@@ -817,7 +751,7 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * `(updated_at, <pk>)` per native entity table — the index behind both the
+	 * `(updated_at, <pk>)` per entity table — the index behind both the
 	 * default `order: updated_at DESC` query and the rewritten sync paging (§7.4).
 	 * `updated_at` is reserved/auto-managed, so no user-declared index can cover it.
 	 */
@@ -832,14 +766,19 @@ export class DatabaseServer<
 	 * `search_index` row: `deleted_entity` → `search_tombstones`, and
 	 * `config_version`/`first_updated_at`/`last_updated_at` → `search_state`.
 	 *
-	 * The legacy rows are left in place (Phase 5 drops the tables) so a table can
-	 * still be flipped back to `'orama'` within this release.
+	 * Runs before the rebuild (which bumps `config_version` on top of the
+	 * migrated one) and before the legacy tables are dropped. A Durable Object
+	 * created after the native engine landed has no legacy row — and, once the
+	 * tables are dropped, no legacy *table* — so it only ensures a `search_state`
+	 * row exists.
 	 */
-	private migrateSearchMetadata(entity_type: string): void {
+	private migrateSearchMetadata(entity_type: string, legacy_present: boolean): void {
 		if (this.#state.native_search?.[entity_type]?.migrated) return;
-		const rows = this.ctx.storage.sql
-			.exec(`SELECT * FROM search_index WHERE id = ?`, `${entity_type}.0`)
-			.toArray() as unknown as SearchIndexTableSchema[];
+		const rows = legacy_present
+			? (this.ctx.storage.sql
+					.exec(`SELECT * FROM search_index WHERE id = ?`, `${entity_type}.0`)
+					.toArray() as unknown as LegacySearchIndexRow[])
+			: [];
 		const legacy = rows[0];
 		this.ctx.storage.transactionSync(() => {
 			const store = this.search.store;
@@ -865,14 +804,14 @@ export class DatabaseServer<
 				}
 			}
 		});
-		this.setNativeSearchState(entity_type, {
+		this.setSearchTableState(entity_type, {
 			schema_signature: this.#state.native_search?.[entity_type]?.schema_signature ?? '',
 			migrated: true,
 		});
 	}
 
-	/** Persist one entity type's native-search bookkeeping into the `state` row. */
-	private setNativeSearchState(
+	/** Persist one entity type's search bookkeeping into the `state` row. */
+	private setSearchTableState(
 		entity_type: string,
 		value: { schema_signature: string; migrated: boolean },
 	): void {
@@ -895,23 +834,23 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * Clear and rebuild an entity type's native search rows from the entity table.
+	 * Clear and rebuild an entity type's search rows from the entity table.
 	 *
-	 * The replacement for `rebuildIndex` on native tables, and the universal
-	 * repair path. It deliberately does NOT use `SqliteSearchEngine.rebuildBatch`:
-	 * that helper reads documents straight out of the row (assuming `$derived` is
-	 * already persisted), whereas a table switching over from Orama has never
-	 * written a `$derived` sub-object. This loop re-derives and *backfills* it, so
-	 * one pass both populates the postings and makes the rows self-describing for
-	 * every later query.
+	 * The universal repair path, and what a Durable Object runs on its first wake
+	 * after upgrading from the in-memory engine. It deliberately does NOT use
+	 * `SqliteSearchEngine.rebuildBatch`: that helper reads documents straight out
+	 * of the row (assuming `$derived` is already persisted), whereas a table that
+	 * predates the SQLite engine has never written a `$derived` sub-object. This
+	 * loop re-derives and *backfills* it, so one pass both populates the postings
+	 * and makes the rows self-describing for every later query.
 	 *
 	 * Batched across transactions (paged by primary key) so a large table never
 	 * holds one enormous write open.
 	 */
-	private rebuildSearchTables(entity_type: string): void {
-		if (this.#native_rebuild_in_flight.has(entity_type)) return;
-		this.#native_rebuild_in_flight.add(entity_type);
-		const table = this.nativeTable(entity_type);
+	private rebuildSearchTables(entity_type: string, bump_config_version = true): void {
+		if (this.#rebuild_in_flight.has(entity_type)) return;
+		this.#rebuild_in_flight.add(entity_type);
+		const table = this.searchTable(entity_type);
 		const source = this.config[entity_type];
 		const primary_key = quoteIdentifier(table.primary_key);
 		const table_name = quoteIdentifier(table.table_name);
@@ -920,8 +859,7 @@ export class DatabaseServer<
 			this.ctx.storage.transactionSync(() => {
 				this.search.clearSearchTables(entity_type);
 			});
-			// Referenced rows repeat heavily across a rebuild — memoize them exactly
-			// as rebuildIndex() does.
+			// Referenced rows repeat heavily across a rebuild — memoize them.
 			const ref_cache = new Map<string, Record<string, any> | undefined>();
 			let after: string | number | undefined;
 			let first_updated_at = 0;
@@ -973,12 +911,14 @@ export class DatabaseServer<
 					Math.max(last_updated_at, state?.last_updated_at ?? 0),
 					entity_type,
 				);
-				// The corpus was just rebuilt from a different engine's projection —
-				// every client must discard its local index and resync (§9 Phase 3).
-				store.bumpConfigVersion(entity_type);
+				// The corpus was just rebuilt from scratch — every client that already
+				// holds a copy must discard it and resync (§9 Phase 3). A first-ever
+				// bootstrap has no such client, and bumping there would hand every new
+				// deployment a gratuitous version 2.
+				if (bump_config_version) store.bumpConfigVersion(entity_type);
 			});
 		} finally {
-			this.#native_rebuild_in_flight.delete(entity_type);
+			this.#rebuild_in_flight.delete(entity_type);
 			this.search.store.clearDictionaryCache();
 		}
 	}
@@ -998,7 +938,7 @@ export class DatabaseServer<
 		id: string | number,
 		sparse: Record<string, unknown>,
 	): void {
-		const table = this.nativeTable(entity_type);
+		const table = this.searchTable(entity_type);
 		const fields = table.derived_fields;
 		if (!fields || fields.size === 0) return;
 		const derived: Record<string, unknown> = {};
@@ -1018,7 +958,7 @@ export class DatabaseServer<
 		entity_type: string,
 		id: string | number,
 	): Record<string, unknown> {
-		const table = this.nativeTable(entity_type);
+		const table = this.searchTable(entity_type);
 		if (!table.derived_fields || table.derived_fields.size === 0) return {};
 		const rows = this.ctx.storage.sql
 			.exec(
@@ -1042,7 +982,7 @@ export class DatabaseServer<
 	): Record<string, unknown> {
 		let paths = this.#vector_paths.get(entity_type);
 		if (!paths) {
-			paths = vectorFieldPaths(this.config[entity_type]?.config?.orama?.schema);
+			paths = vectorFieldPaths(this.config[entity_type]?.config?.index_schema);
 			this.#vector_paths.set(entity_type, paths);
 		}
 		return stripVectorFields(doc, paths);
@@ -1055,7 +995,7 @@ export class DatabaseServer<
 	 * merged back on top — byte-identical to what the write path indexed, with
 	 * zero recomputation (§7.5).
 	 */
-	private nativeSparseFromRow(
+	private sparseFromRow(
 		entity_type: string,
 		row: Record<string, unknown>,
 	): Record<string, unknown> {
@@ -1395,160 +1335,11 @@ export class DatabaseServer<
 			// computing the others wastes work and the client would ignore them anyway
 			if (query?.entity && !(entity_type in query.entity)) continue;
 			if (!this.config[entity_type]) continue;
-			if (this.isNativeSearch(entity_type)) {
-				results.entity[entity_type] = this.nativeSyncEntity(
-					entity_type,
-					query,
-				) as (typeof results.entity)[typeof entity_type];
-				continue;
-			}
-			const index = this.getIndex(entity_type);
-			if (!index) continue;
-			const orama = index.orama;
-			const requested_limit = query?.entity?.[entity_type]?.limit || query?.limit || 0;
-			const limit = Math.min(5000, requested_limit > 0 ? requested_limit : 5000);
-			const schema_changed =
-				query?.entity?.[entity_type]?.config_version !== undefined &&
-				query?.entity?.[entity_type]?.config_version !== index.config_version;
-			const from = schema_changed
-				? 0
-				: (query?.entity?.[entity_type]?.start_updated_at ??
-					query?.start_updated_at ??
-					0);
-			const to = schema_changed
-				? Number.MAX_SAFE_INTEGER
-				: (query?.entity?.[entity_type]?.end_updated_at ??
-					query?.end_updated_at ??
-					Number.MAX_SAFE_INTEGER);
-			const descending =
-				schema_changed ||
-				(query?.entity?.[entity_type]?.start_updated_at ?? query?.start_updated_at) ===
-					undefined;
-
-			// Get the list of changes from the orama index between the from/to
-			// timestamps. Fetch limit+1 (and grow if needed) so the trim below can
-			// see whether the doc at the cut boundary shares its timestamp with
-			// docs past the cut — Orama applies the limit itself, so asking for
-			// exactly `limit` would truncate an equal-timestamp run before the
-			// "never split equal timestamps" logic ever saw it.
-			const search_params = (fetch_limit: number) => ({
-				limit: fetch_limit,
-				sortBy: {
-					property: 'updated_at',
-					order: (descending ? 'DESC' : 'ASC') as 'DESC' | 'ASC',
-				},
-				where: {
-					// Between is inclusive on both ends, so we adjust it to be exclusive:
-					// when descending, the window is [from, to); when ascending, (from, to].
-					// This lets a client use the response's end_updated_at as the next
-					// request's start_updated_at without receiving duplicates.
-					updated_at:
-						to === Number.MAX_SAFE_INTEGER
-							? descending
-								? { gte: from }
-								: { gt: from }
-							: {
-									between: (descending ? [from, to - 1] : [from + 1, to]) as [
-										number,
-										number,
-									],
-								},
-				},
-			});
-			let fetch_limit = limit + 1;
-			let result = searchOrama(orama, search_params(fetch_limit));
-			if (result instanceof Promise) continue; // orama search should always be sync here, this is for type safety
-
-			// Deleted entries must use the same half-open window as the orama query
-			// above, otherwise a delete exactly on the boundary is duplicated or lost.
-			const inWindow = descending
-				? (ts: number) => ts >= from && (to === Number.MAX_SAFE_INTEGER || ts < to)
-				: (ts: number) => ts > from && ts <= to;
-
-			// Merge document changes and deletions into a single timeline so the
-			// limit and the reported start/end window apply to ALL changes. Computing
-			// the window from deletions outside the page (or beyond a limit-truncated
-			// page) would make paging clients skip the changes in between.
-			type Change = { ts: number; deleted_id?: string; doc?: any };
-			const sync_primary_key = this.config[entity_type].config.primary_key || 'id';
-			let included: Change[];
-			for (;;) {
-				const changes: Change[] = [];
-				for (const item of result.hits) {
-					if (!item.document || !item.id) continue;
-					// Orama (<= 3.1.18) can return ghost hits with an empty document for
-					// previously removed docs (stale entries in its internal indexes) —
-					// never ship those to clients
-					if ((item.document as any)[sync_primary_key] === undefined) continue;
-					changes.push({ ts: item.document.updated_at || 0, doc: item.document });
-				}
-				for (const [id, deleted_at] of Object.entries(index.deleted_entity)) {
-					if (!inWindow(deleted_at)) continue;
-					changes.push({ ts: deleted_at, deleted_id: id });
-				}
-				changes.sort((a, b) => (descending ? b.ts - a.ts : a.ts - b.ts));
-
-				// Trim to the limit, but never split changes that share a timestamp —
-				// the boundary is exclusive on the next page, so splitting equal
-				// timestamps across pages would permanently skip the cut-off changes.
-				included = changes.slice(0, limit);
-				for (let i = limit; i < changes.length; i++) {
-					if (changes[i].ts !== included[included.length - 1]?.ts) break;
-					included.push(changes[i]);
-				}
-
-				// If the equal-timestamp extension consumed every fetched change AND
-				// the doc fetch was full, more docs sharing the boundary timestamp may
-				// exist beyond the fetch — grow it and re-trim (legacy data only:
-				// writes get strictly-monotonic timestamps, so this loop is normally
-				// a single pass).
-				if (included.length < changes.length || result.hits.length < fetch_limit) {
-					break;
-				}
-				fetch_limit *= 2;
-				const grown = searchOrama(orama, search_params(fetch_limit));
-				if (grown instanceof Promise) break;
-				result = grown;
-			}
-
-			const deleted = [] as (string | number)[];
-			const updated = [] as Database.SearchEntity<DatabaseConfig[typeof entity_type]>[];
-			const created = [] as Database.SearchEntity<DatabaseConfig[typeof entity_type]>[];
-			let start_updated_at = Infinity;
-			let end_updated_at = 0;
-			for (const change of included) {
-				if (change.deleted_id !== undefined) {
-					deleted.push(change.deleted_id);
-				} else {
-					// The same §7.0 strip the native path applies — the wire contract is
-					// engine-independent, so a client indexes what it is sent either way.
-					const doc = this.toSyncDocument(entity_type, change.doc);
-					if (!change.ts || doc.created_at === doc.updated_at) {
-						created.push(
-							doc as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
-						);
-					} else {
-						updated.push(
-							doc as Database.SearchEntity<DatabaseConfig[typeof entity_type]>,
-						);
-					}
-				}
-				if (!change.ts) continue;
-				if (change.ts < start_updated_at) start_updated_at = change.ts;
-				if (change.ts > end_updated_at) end_updated_at = change.ts;
-			}
-
-			results.entity[entity_type] = {
-				deleted,
-				created,
-				updated,
-				config_version: index.config_version || 1,
-				first_updated_at: index.first_updated_at || 0,
-				last_updated_at: index.last_updated_at || 0,
-				start_updated_at: start_updated_at === Infinity ? 0 : start_updated_at,
-				end_updated_at,
-				config: schema_changed ? this.config[entity_type].config.orama : undefined,
-			};
+			if (!this.isSearchIndexed(entity_type)) continue;
+			results.entity[entity_type] = this.syncEntity(
+				entity_type,
+				query,
+			) as (typeof results.entity)[typeof entity_type];
 		}
 		results.first_updated_at = Math.min(
 			Infinity,
@@ -1581,7 +1372,7 @@ export class DatabaseServer<
 
 	/**
 	 * Lists the entities of the given type that match the given query
-	 * If the 'sparse' field in the query is true, it will use the sparse search index with '.searchable()' fields (from orama)
+	 * If the 'sparse' field in the query is true, it will use the sparse search index with '.searchable()' fields
 	 * If the 'sparse' field in the query is false, it will use the full values from the database
 	 */
 	list<
@@ -1590,10 +1381,8 @@ export class DatabaseServer<
 		Query extends Database.SearchQuery<Table>,
 		Output extends Database.SearchQueryResults<Table, Query>,
 	>(entity_type: Type, raw_query: Query): Output {
-		const native = this.isNativeSearch(entity_type);
-		const index = native ? undefined : this.getIndex(entity_type);
 		const table = this.config[entity_type];
-		if ((!index && !native) || !table) {
+		if (!table || !this.isSearchIndexed(entity_type)) {
 			throw new DelightError({
 				message: `Entity type ${entity_type} does not have a search index`,
 				status: 400,
@@ -1622,11 +1411,10 @@ export class DatabaseServer<
 			order: [{ field: 'updated_at', direction: 'DESC' }],
 			...base_query,
 			// Accept plain-value where shorthands (`{folder: 'inbox'}`) on enum and
-			// number properties — Orama requires operation objects there and its
-			// throw otherwise surfaced as a 500.
+			// number fields, normalizing them into operation objects.
 			where: normalizeWhere(
 				base_query.where as Record<string, unknown> | undefined,
-				table.config.orama.schema as Record<string, unknown>,
+				table.config.index_schema as Record<string, unknown>,
 			) as never,
 			term: base_query.term,
 			cursor: undefined,
@@ -1658,8 +1446,9 @@ export class DatabaseServer<
 				query.order.some(
 					({ field }) =>
 						// Using 'where' clauses for pagination is not supported for non-scalar types
-						(table.config.orama.schema[field] !== 'number' &&
-							(table.config.orama.schema[field] as any) !== 'number[]') ||
+						((table.config.index_schema as Record<string, unknown>)[field] !== 'number' &&
+							(table.config.index_schema as Record<string, unknown>)[field] !==
+								'number[]') ||
 						// Check to make sure the fields aren't using the 'dot' notation for nested fields
 						!!field.match(/[^a-z0-9_]/gi) ||
 						// Check to make sure the last item has a value for the order field
@@ -1699,117 +1488,22 @@ export class DatabaseServer<
 				.replace(/\//g, '_');
 		};
 
-		// The native driver answers the whole query from SQL + the postings tables.
+		// The driver answers the whole query from SQL + the postings tables.
 		// Everything above (cursor decode, limit clamps, sortable validation, cursor
-		// minting) is shared verbatim, so the public contract is engine-independent.
-		if (native) {
-			return this.nativeList(entity_type, query, sparse, generateCursor) as Output;
-		}
-
-		let results: Results<any>;
-		try {
-			// TEMPORARY: translate the owned query vocabulary back to Orama's until
-			// the native engine replaces this call site (plan phases 3-4).
-			const orama_query = toOramaSearchParams(query as Record<string, unknown>);
-			results = searchOrama<AnyOrama>(index!.orama, {
-				...orama_query,
-				properties: (orama_query.properties as any) || '*',
-				limit: query.limit,
-				term: query.term,
-				mode: (query.term && query.vector
-					? 'hybrid'
-					: query.vector
-						? 'vector'
-						: 'fulltext') as any,
-				includeVectors: false,
-				sortBy:
-					query.order.length === 1
-						? {
-								property: query.order[0].field,
-								order: (query.order[0].direction || 'ASC').toUpperCase() as
-									| 'ASC'
-									| 'DESC',
-							}
-						: ([_aId, aScore, aDoc], [_bId, bScore, bDoc]) => {
-								for (const ord of query.order) {
-									const aValue = aDoc[ord.field];
-									const bValue = bDoc[ord.field];
-									if (typeof aValue === 'string' && typeof bValue === 'string') {
-										const comparison = aValue.localeCompare(bValue, undefined, {
-											numeric: true,
-											ignorePunctuation: true,
-										});
-										if (comparison !== 0) {
-											return (ord.direction || 'ASC').toUpperCase() === 'ASC'
-												? comparison
-												: -comparison;
-										}
-									}
-									if (aValue < bValue) {
-										return (ord.direction || 'ASC').toUpperCase() === 'ASC' ? -1 : 1;
-									}
-									if (aValue > bValue) {
-										return (ord.direction || 'ASC').toUpperCase() === 'ASC' ? 1 : -1;
-									}
-								}
-								return bScore - aScore;
-							},
-			}) as Results<any>;
-		} catch (err) {
-			// A malformed filter is the caller's mistake, not a server fault —
-			// surface Orama's filter validation as a 400 instead of a 500.
-			const code = (err as { code?: string }).code;
-			if (code === 'UNKNOWN_FILTER_PROPERTY' || code === 'INVALID_FILTER_OPERATION') {
-				throw new DelightError({ message: (err as Error).message, status: 400 });
-			}
-			throw err;
-		}
-
-		// Drop ghost hits (empty documents Orama can return for removed docs)
-		const list_primary_key = (table.config.primary_key || 'id') as string;
-		const ghost_count = results.hits.length;
-		let hits = results.hits.filter(
-			(hit) => hit.document && (hit.document as any)[list_primary_key] !== undefined,
-		);
-		const dropped_ghosts = ghost_count - hits.length;
-		if (!sparse) {
-			// If the query is not sparse, we need to fetch the full entities from the database
-			hits = results.hits.map((hit) => {
-				const primary_key = (table.config.primary_key || 'id') as keyof Table;
-				const id = (hit.document[primary_key] as any) || hit.id;
-				try {
-					const full_entity = this.get(entity_type, id);
-					return { ...hit, document: full_entity };
-				} catch {
-					return { ...hit, document: null };
-				}
-			}) as any;
-		}
-
-		return {
-			count: Math.max(0, results.count - dropped_ghosts),
-			elapsed: results.elapsed,
-			hits,
-			facets: results.facets,
-			cursor:
-				// Compare against the pre-filter hit count: a page that filled the
-				// limit before ghost-filtering may still have more results after it
-				ghost_count >= query.limit
-					? generateCursor(hits[hits.length - 1]?.document, ghost_count)
-					: undefined,
-		} as Output;
+		// minting) is shared, so the public contract is storage-independent.
+		return this.listFromSearchTables(entity_type, query, sparse, generateCursor) as Output;
 	}
 
 	/**
-	 * `list()` for native tables (§7.5).
+	 * The query half of `list()` (§7.5).	/**
+	 * The query half of `list()` (§7.5).
 	 *
 	 * The query object it receives has already been through the shared front half
 	 * of `list()` — cursor decode, `where` normalization, limit clamps and
 	 * sortable-field validation — and the cursor it returns is minted by the same
-	 * `generateCursor` closure, so cursors are interchangeable between engines and
-	 * paging behaves identically.
+	 * `generateCursor` closure.
 	 */
-	private nativeList(
+	private listFromSearchTables(
 		entity_type: string,
 		query: Database.SearchQuery<Database.AnyTable> & { limit: number; sparse: boolean },
 		sparse: boolean,
@@ -1828,7 +1522,7 @@ export class DatabaseServer<
 			engine_query,
 		);
 
-		const derived_fields = this.nativeTable(entity_type).derived_fields;
+		const derived_fields = this.searchTable(entity_type).derived_fields;
 		let hits: { id: string; score: number; document: unknown }[];
 		if (sparse) {
 			// `engine.list` hydrates from the entity row, so a hit's document carries
@@ -1871,23 +1565,22 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * `sync()` for one native entity type (§7.5, "sync pagination divorce").
+	 * `sync()` for one entity type (§7.5, "sync pagination divorce").
 	 *
 	 * Paging is a direct, index-driven SQL walk of the entity table over
-	 * `(updated_at, <pk>)` instead of a search-engine query — the change that
-	 * removes the >1000-doc deferred-removal data-loss class. Every documented
-	 * semantic is preserved bit for bit: half-open windows ([from, to) descending,
-	 * (from, to] ascending), the "never split equal timestamps" trim with
-	 * grow-and-retry, deletions merged into the same timeline (from
-	 * `search_tombstones` rather than `index.deleted_entity`), and window bounds /
-	 * `config_version` read from `search_state`.
+	 * `(updated_at, <pk>)` rather than a search-engine query — the change that
+	 * removed the >1000-doc deferred-removal data-loss class. Half-open windows
+	 * ([from, to) descending, (from, to] ascending), the "never split equal
+	 * timestamps" trim with grow-and-retry, deletions merged into the same
+	 * timeline (from `search_tombstones`), and window bounds / `config_version`
+	 * read from `search_state`.
 	 */
-	private nativeSyncEntity(
+	private syncEntity(
 		entity_type: string,
 		query: DatabaseSyncRequest<DatabaseConfig> | undefined,
 	) {
 		const table = this.config[entity_type];
-		const native_table = this.nativeTable(entity_type);
+		const search_table = this.searchTable(entity_type);
 		const state = this.search.store.getState(entity_type) ?? {
 			config_version: 1,
 			first_updated_at: 0,
@@ -1911,8 +1604,8 @@ export class DatabaseServer<
 			schema_changed ||
 			(entity_query?.start_updated_at ?? query?.start_updated_at) === undefined;
 
-		const table_name = quoteIdentifier(native_table.table_name);
-		const primary_key = quoteIdentifier(native_table.primary_key);
+		const table_name = quoteIdentifier(search_table.table_name);
+		const primary_key = quoteIdentifier(search_table.primary_key);
 		const direction = descending ? 'DESC' : 'ASC';
 		// The half-open windows, verbatim: descending covers [from, to), ascending
 		// covers (from, to], so a client can feed a response's end_updated_at back
@@ -1981,7 +1674,7 @@ export class DatabaseServer<
 			} else {
 				const doc = this.toSyncDocument(
 					entity_type,
-					this.nativeSparseFromRow(entity_type, change.row!),
+					this.sparseFromRow(entity_type, change.row!),
 				);
 				if (!change.ts || doc.created_at === doc.updated_at) created.push(doc);
 				else updated.push(doc);
@@ -2000,7 +1693,7 @@ export class DatabaseServer<
 			last_updated_at: state.last_updated_at || 0,
 			start_updated_at: start_updated_at === Infinity ? 0 : start_updated_at,
 			end_updated_at,
-			config: schema_changed ? table.config.orama : undefined,
+			config: schema_changed ? table.config.index_schema : undefined,
 		};
 	}
 
@@ -2141,8 +1834,8 @@ export class DatabaseServer<
 
 		// Inside a batch() the outer call owns the set (and the rollback handling
 		// and post-commit compaction check) — every nested write accumulates into it.
-		const in_batch = !!this.#deferred_compactions;
-		const touched_indexes: Set<string> = this.#deferred_compactions ?? new Set();
+		const in_batch = !!this.#deferred_touched_types;
+		const touched_indexes: Set<string> = this.#deferred_touched_types ?? new Set();
 		const runOperations = () => {
 			for (const op of operations) {
 				if ('exec' in op) {
@@ -2157,9 +1850,7 @@ export class DatabaseServer<
 				if ('create' in op) {
 					const { type: entity_type, data: unsafe_data } = op.create;
 					const table = this.config[entity_type];
-					const native = this.isNativeSearch(entity_type);
-					const index = native ? undefined : this.getIndex(entity_type);
-					if (!table || (!index && !native)) {
+					if (!table || !this.isSearchIndexed(entity_type)) {
 						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
 							status: 400,
@@ -2171,7 +1862,7 @@ export class DatabaseServer<
 					delete data_copy.updated_at;
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-					this.ensureMonotonicTimestamp(now, index, entity_type);
+					this.ensureMonotonicTimestamp(now, entity_type);
 
 					// Parse the data to ensure it's valid (throws an error if not)
 					const input_data = table.parse({
@@ -2197,29 +1888,14 @@ export class DatabaseServer<
 					const sparse_entity = table.toSparse(output_data);
 					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
 					const created_id = output_data[primary_key] ?? output_data.id;
-					if (native) {
-						// Derived values first: `indexDocument` and every later read of the
-						// row expect them to be in `$derived` already.
-						this.persistDerivedFields(entity_type, created_id, sparse_entity as any);
-						this.search.indexDocument(
-							entity_type,
-							String(created_id),
-							sparse_entity as Record<string, unknown>,
-						);
-					} else {
-						insertIntoOrama(index!.orama, sparse_entity);
-						// Clear any delete tombstone for this id (the id may be reused, e.g.
-						// numeric rowids) so sync clients don't apply a stale delete to it
-						delete index!.deleted_entity[String(created_id)];
-						index!.last_updated_at = Math.max(index!.last_updated_at, now.getTime());
-						if (!index!.first_updated_at) index!.first_updated_at = now.getTime();
-						this.journalUpsert(
-							entity_type,
-							String(created_id),
-							sparse_entity,
-							now.getTime(),
-						);
-					}
+					// Derived values first: `indexDocument` and every later read of the
+					// row expect them to be in `$derived` already.
+					this.persistDerivedFields(entity_type, created_id, sparse_entity as any);
+					this.search.indexDocument(
+						entity_type,
+						String(created_id),
+						sparse_entity as Record<string, unknown>,
+					);
 					touched_indexes.add(entity_type);
 					this.cascadeReindexReferencing(
 						entity_type,
@@ -2242,9 +1918,7 @@ export class DatabaseServer<
 				if ('update' in op) {
 					const { type: entity_type, id, data: unsafe_data } = op.update;
 					const table = this.config[entity_type];
-					const native = this.isNativeSearch(entity_type);
-					const index = native ? undefined : this.getIndex(entity_type);
-					if (!table || (!index && !native)) {
+					if (!table || !this.isSearchIndexed(entity_type)) {
 						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
 							status: 400,
@@ -2261,18 +1935,16 @@ export class DatabaseServer<
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-					this.ensureMonotonicTimestamp(now, index, entity_type);
+					this.ensureMonotonicTimestamp(now, entity_type);
 					const current_data = this.get(entity_type, id); // will throw a 404 if not found
 					// The previously-indexed sparse doc, for the store's `df`/field-stat
 					// decrements (§7.2 step 2). Derived values come from what was actually
 					// persisted, never a recomputation: a cascade may have changed the
 					// referenced rows since, and a wrong "previous" corrupts the statistics.
-					const previous_sparse = native
-						? {
-								...(table.toSparse(current_data as any) as Record<string, unknown>),
-								...this.readPersistedDerived(entity_type, id),
-							}
-						: undefined;
+					const previous_sparse = {
+						...(table.toSparse(current_data as any) as Record<string, unknown>),
+						...this.readPersistedDerived(entity_type, id),
+					};
 					let input_data = structuredClone(current_data);
 					const deepMerge = (current: any, next: any) => {
 						if (next === undefined) return current;
@@ -2310,22 +1982,13 @@ export class DatabaseServer<
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
 					const sparse_entity = table.toSparse(output_data);
 					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
-					if (native) {
-						this.persistDerivedFields(entity_type, id, sparse_entity as any);
-						this.search.indexDocument(
-							entity_type,
-							id.toString(),
-							sparse_entity as Record<string, unknown>,
-							previous_sparse,
-						);
-					} else {
-						removeFromOrama(index!.orama, id.toString());
-						insertIntoOrama(index!.orama, sparse_entity);
-						delete index!.deleted_entity[id.toString()];
-						index!.last_updated_at = Math.max(index!.last_updated_at, now.getTime());
-						if (!index!.first_updated_at) index!.first_updated_at = now.getTime();
-						this.journalUpsert(entity_type, id.toString(), sparse_entity, now.getTime());
-					}
+					this.persistDerivedFields(entity_type, id, sparse_entity as any);
+					this.search.indexDocument(
+						entity_type,
+						id.toString(),
+						sparse_entity as Record<string, unknown>,
+						previous_sparse,
+					);
 					touched_indexes.add(entity_type);
 					this.cascadeReindexReferencing(
 						entity_type,
@@ -2349,9 +2012,7 @@ export class DatabaseServer<
 				if ('delete' in op) {
 					const { type: entity_type, id } = op.delete;
 					const table = this.config[entity_type];
-					const native = this.isNativeSearch(entity_type);
-					const index = native ? undefined : this.getIndex(entity_type);
-					if (!table || (!index && !native)) {
+					if (!table || !this.isSearchIndexed(entity_type)) {
 						throw new DelightError({
 							message: `Entity type ${entity_type} is not valid`,
 							status: 400,
@@ -2359,27 +2020,15 @@ export class DatabaseServer<
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-					this.ensureMonotonicTimestamp(now, index, entity_type);
+					this.ensureMonotonicTimestamp(now, entity_type);
 					this.ctx.storage.sql.exec(
 						`DELETE FROM ${sanitized_table} WHERE ${primary_key} = ?`,
 						id,
 					);
-					if (native) {
-						// `removeDocument` writes the tombstone that feeds the sync deletion
-						// timeline — the native equivalent of `index.deleted_entity`.
-						this.search.removeDocument(entity_type, id.toString(), now.getTime());
-						this.search.store.pruneTombstones(entity_type);
-					} else {
-						removeFromOrama(index!.orama, id.toString());
-						index!.deleted_entity[id.toString()] = now.getTime();
-						index!.last_updated_at = Math.max(index!.last_updated_at, now.getTime());
-						if (!index!.first_updated_at) index!.first_updated_at = now.getTime();
-						this.journalDelete(entity_type, id.toString(), now.getTime());
-						// A prune rewrites the tombstone map and bumps the config version, and
-						// neither lives in the journal — only a snapshot can persist them, so
-						// force one rather than waiting for the row threshold.
-						if (this.pruneTombstones(index!)) this.#journal_rows[entity_type] = Infinity;
-					}
+					// `removeDocument` writes the tombstone that feeds the sync deletion
+					// timeline.
+					this.search.removeDocument(entity_type, id.toString(), now.getTime());
+					this.search.store.pruneTombstones(entity_type);
 					touched_indexes.add(entity_type);
 					this.cascadeReindexReferencing(entity_type, id, touched_indexes, now);
 					results.push({
@@ -2395,19 +2044,15 @@ export class DatabaseServer<
 			}
 		};
 
-		// Index persistence is journaled per doc inside the same transaction as the
-		// entity rows (see journalUpsert/journalDelete) — the full-index snapshot
-		// only happens later, off the write path, in compactJournal().
+		// The search rows are written inside the same transaction as the entity
+		// rows (§7.2), so persistence needs nothing after the commit.
 		try {
 			this.ctx.storage.transactionSync(runOperations);
 		} catch (error) {
 			// Inside a batch the outer call owns rollback handling (its transaction
 			// may still roll back writes this one committed).
-			if (!in_batch) this.invalidateIndexes(touched_indexes);
+			if (!in_batch) this.dropStaleDictionaryCache(touched_indexes);
 			throw error;
-		}
-		if (!in_batch) {
-			touched_indexes.forEach((entity_type) => this.maybeCompactJournal(entity_type));
 		}
 
 		// Broadcast entity changes via WebSocket (fire-and-forget, after the
@@ -2440,11 +2085,11 @@ export class DatabaseServer<
 
 	/**
 	 * Entity types written during the currently open batch(). Non-null only
-	 * inside a batch, so it doubles as the nested-batch marker. Index writes are
-	 * journaled inline (cheap), so this exists purely to know which indexes to
-	 * invalidate on rollback and to compaction-check once the batch commits.
+	 * inside a batch, so it doubles as the nested-batch marker. Search rows are
+	 * written inline, so this exists purely to know whose cached term dictionaries
+	 * a rollback invalidates.
 	 */
-	#deferred_compactions: Set<string> | null = null;
+	#deferred_touched_types: Set<string> | null = null;
 	#deferred_broadcasts: DeferredBroadcast[] | null = null;
 
 	#flushBroadcasts(broadcasts: DeferredBroadcast[]): void {
@@ -2469,454 +2114,47 @@ export class DatabaseServer<
 	/**
 	 * Run several imperative writes (create/update/delete/transaction) as ONE
 	 * durable unit: the whole batch commits atomically (the callback runs inside
-	 * an outer `transactionSync`, so a throw rolls back SQL AND the index
-	 * journal together) and websocket broadcasts flush only after it commits.
+	 * an outer `transactionSync`, so a throw rolls back the entity rows AND their
+	 * search rows together) and websocket broadcasts flush only after it commits.
 	 *
 	 * The callback MUST be synchronous — an await inside would let other DO
 	 * events interleave into the open transaction.
 	 */
 	batch<T>(fn: () => T): T {
-		if (this.#deferred_compactions) return fn(); // nested batch — join the outer one
+		if (this.#deferred_touched_types) return fn(); // nested batch — join the outer one
 		const touched_indexes = new Set<string>();
-		this.#deferred_compactions = touched_indexes;
+		this.#deferred_touched_types = touched_indexes;
 		this.#deferred_broadcasts = [];
 		try {
 			let result: T;
 			try {
 				result = this.ctx.storage.transactionSync(fn);
 			} catch (error) {
-				this.invalidateIndexes(touched_indexes);
+				this.dropStaleDictionaryCache(touched_indexes);
 				throw error;
 			}
 			this.#flushBroadcasts(this.#deferred_broadcasts);
-			touched_indexes.forEach((entity_type) => this.maybeCompactJournal(entity_type));
 			return result;
 		} finally {
-			this.#deferred_compactions = null;
+			this.#deferred_touched_types = null;
 			this.#deferred_broadcasts = null;
 		}
 	}
 
-	/** Loads & returns the orama search instance of the given entity type */
-	private getIndex<Type extends keyof DatabaseConfig & string>(
-		entity_type: Type,
-	): SearchIndex | undefined {
-		if (this.#search_index[entity_type]) return this.#search_index[entity_type];
-		if (!this.config?.[entity_type]) return;
-
-		const search_index_rows = this.ctx.storage.sql
-			.exec(`SELECT * FROM search_index WHERE id LIKE ?`, `${entity_type}.%`)
-			.toArray() as unknown as SearchIndexTableSchema[];
-
-		// If no index found, or if we need to rebuild it
-		if (!search_index_rows.length) return this.rebuildIndex(entity_type);
-
-		let stored_config;
-		const current_config = this.config[entity_type].config.orama;
-		const stored_index_version = search_index_rows[0].index_version || 1;
-		const stored_index_format = search_index_rows[0].index_format || 'json';
-		try {
-			stored_config = JSON.parse(search_index_rows[0].index_config || '{}');
-		} catch {
-			return this.rebuildIndex(entity_type);
-		}
-
-		// Check if the config has changed. If so, we need to increment the version and rebuild the index.
-		// Compare the SERIALIZABLE projection of the current config: the live object
-		// carries function members (e.g. components.getDocumentIndexId, injected by
-		// Database.table for every table) that JSON.stringify silently dropped when
-		// the config was persisted. Comparing the raw object against the stored JSON
-		// therefore failed on EVERY DO cold start, bumping the version each wake —
-		// and every version bump makes every client discard its local index and
-		// re-download the entire dataset, forever.
-		if (!deepEqual(stored_config, JSON.parse(JSON.stringify(current_config)))) {
-			return this.rebuildIndex(entity_type, stored_index_version + 1);
-		}
-
-		// Load the index data
-		let search_index_config: any = undefined;
-		if (stored_index_format === 'json') {
-			const decoder = new TextDecoder();
-			try {
-				// Combine the chunks
-				const chunks: string[] = [];
-				for (const row of search_index_rows) {
-					if (!row?.index_data) continue;
-					chunks.push(decoder.decode(new Uint8Array(row.index_data)));
-				}
-				search_index_config = JSON.parse(chunks.join(''));
-			} catch (e) {
-				console.error('Error loading json index chunks:', e);
-				return this.rebuildIndex(entity_type);
-			}
-		}
-		if (stored_index_format === 'msgpack') {
-			try {
-				// Combine the chunks
-				const size = search_index_rows.reduce((acc, row) => {
-					if (!row?.index_data) return acc;
-					return acc + row.index_data.byteLength;
-				}, 0);
-				const combined = new Uint8Array(size);
-				let offset = 0;
-				for (const row of search_index_rows) {
-					if (!row?.index_data) continue;
-					combined.set(new Uint8Array(row.index_data), offset);
-					offset += row.index_data.byteLength;
-					delete row.index_data; // free up memory
-				}
-				search_index_config = decodeMsgPack(combined);
-			} catch (e) {
-				console.error('Error loading msgpack index chunks:', e);
-				return this.rebuildIndex(entity_type);
-			}
-		}
-
-		const orama = createOrama(current_config);
-		try {
-			loadOrama(orama, search_index_config);
-			// Persisted docs from older saves carry `null` where toSparse used to
-			// write explicit `undefined` keys (msgpack has no undefined). Orama's
-			// remove() crashes on null array properties (`value.length`), which made
-			// every update/delete of an affected doc throw after a restart. Strip
-			// null values so those docs behave like the sparse docs written today.
-			const docs = (
-				orama as { data?: { docs?: { docs?: Record<string, Record<string, unknown>> } } }
-			).data?.docs?.docs;
-			if (docs) {
-				for (const doc of Object.values(docs)) {
-					if (!doc) continue;
-					for (const key of Object.keys(doc)) {
-						if (doc[key] === null) delete doc[key];
-					}
-				}
-			}
-		} catch (error) {
-			console.error('Error loading orama index:', error);
-			return this.rebuildIndex(entity_type);
-		}
-
-		const index: SearchIndex = {
-			deleted_entity: JSON.parse(search_index_rows[0].deleted_entity || '{}'),
-			last_updated_at: search_index_rows[0].last_updated_at || 0,
-			first_updated_at: search_index_rows[0].first_updated_at || 0,
-			config_version: search_index_rows[0].index_version || 1,
-			orama,
-		};
-
-		// The snapshot above is only as fresh as the last compaction; every write
-		// since then lives in the journal. Replaying it is what makes per-write
-		// snapshots unnecessary.
-		try {
-			this.replayJournal(entity_type, index);
-		} catch (error) {
-			console.error('Error replaying search journal:', error);
-			return this.rebuildIndex(entity_type);
-		}
-
-		this.#search_index[entity_type] = index;
-		return this.#search_index[entity_type];
-	}
-
 	/**
-	 * Applies every journal row for the entity type on top of a just-loaded
-	 * snapshot. Rows are keyed by doc id (one row per doc, last write wins), so
-	 * the replay order between docs is irrelevant.
+	 * Drops the cached term dictionaries of entity types written by a rolled-back
+	 * transaction.
+	 *
+	 * The search rows themselves roll back with the entity rows — they are
+	 * written in the same SQLite transaction (§7.2). The dictionaries are an
+	 * in-memory read cache that the rolled-back writes already mutated in place,
+	 * so they must be dropped for the next search to reload from SQLite.
 	 */
-	private replayJournal(entity_type: string, index: SearchIndex) {
-		const rows = this.ctx.storage.sql
-			.exec(`SELECT * FROM search_journal WHERE entity_type = ?`, entity_type)
-			.toArray() as unknown as SearchJournalTableSchema[];
-		this.#journal_rows[entity_type] = rows.length;
-		if (!rows.length) return;
-
-		for (const row of rows) {
-			const doc_id = String(row.doc_id);
-			const at = Number(row.at) || 0;
-			if (row.op === 'delete') {
-				try {
-					removeFromOrama(index.orama, doc_id);
-				} catch {
-					// The snapshot may predate the doc entirely — the tombstone is what matters
-				}
-				index.deleted_entity[doc_id] = at;
-			} else {
-				const sparse = this.decodeSparseDoc(row.sparse_doc);
-				if (!sparse) continue;
-				try {
-					removeFromOrama(index.orama, doc_id);
-				} catch {
-					// New doc since the snapshot — nothing to replace
-				}
-				insertIntoOrama(index.orama, sparse);
-				// The doc exists again, so any tombstone the snapshot carried for this
-				// id (reused numeric rowids, delete-then-recreate) is stale
-				delete index.deleted_entity[doc_id];
-			}
-			if (at > index.last_updated_at) index.last_updated_at = at;
-			if (at && (!index.first_updated_at || at < index.first_updated_at)) {
-				index.first_updated_at = at;
-			}
-		}
-	}
-
-	/** Rebuilds the index from scratch for the given entity type */
-	private rebuildIndex<Type extends keyof DatabaseConfig & string>(
-		entity_type: Type,
-		version = 1,
-	): SearchIndex {
-		// In-flight guard: if a rebuild for this entity type is already underway, reuse it
-		// instead of starting a second rebuild. getIndex()/rebuildIndex() are fully
-		// synchronous (so a promise would break the sync call sites), but a rebuild can
-		// re-enter this code path indirectly (e.g. toSparse/derived-field hooks or dependent
-		// table syncs calling back into getIndex), which would otherwise rebuild twice.
-		const in_flight = this.#index_rebuild_in_flight[entity_type];
-		if (in_flight) return in_flight;
-
-		const orama = createOrama(this.config[entity_type].config.orama);
-		const index = {
-			deleted_entity: {},
-			last_updated_at: 0,
-			first_updated_at: 0,
-			config_version: version,
-			orama,
-		} satisfies SearchIndex;
-		this.#index_rebuild_in_flight[entity_type] = index;
-		this.#search_index[entity_type] = index;
-
-		try {
-			// Load all entities from the database
-			const sanitized_table = this.sanitize(entity_type);
-			const table = this.config[entity_type];
-			const rows = this.ctx.storage.sql.exec(`SELECT * FROM ${sanitized_table}`);
-
-			// Rows don't change mid-rebuild (the DO is single-threaded and this is
-			// fully synchronous), so referenced rows can be memoized across entities
-			const ref_cache = new Map<string, Record<string, any> | undefined>();
-			const entities: any[] = [];
-			for (const row of rows) {
-				const entity = this.toEntityValue(entity_type, row) as any;
-				if (entity) {
-					const sparse = table.toSparse(entity as any) as any;
-					this.computeFkDerivedFields(entity_type as string, entity, sparse, ref_cache);
-					entities.push(sparse);
-					if (entity.updated_at && entity.updated_at > index.last_updated_at) {
-						index.last_updated_at = entity.updated_at;
-					}
-					if (
-						entity.updated_at &&
-						(!index.first_updated_at || entity.updated_at < index.first_updated_at)
-					) {
-						index.first_updated_at = entity.updated_at;
-					}
-				}
-			}
-
-			if (entities.length > 0) {
-				insertMultipleIntoOrama(orama, entities);
-			}
-
-			this.saveIndex(entity_type);
-			// The fresh snapshot was built from the entity tables themselves, so it
-			// already includes (and therefore supersedes) every journaled write
-			this.clearJournal(entity_type);
-		} catch (error) {
-			// Don't cache a half-built index if the rebuild failed
-			delete this.#search_index[entity_type];
-			throw error;
-		} finally {
-			delete this.#index_rebuild_in_flight[entity_type];
-		}
-		return index;
-	}
-
-	/** Saves the current state of the index of the given entity type to the database */
-	private saveIndex<Type extends keyof DatabaseConfig & string>(entity_type: Type) {
-		const index = this.#search_index[entity_type];
-		if (!index) return;
-		const raw_data = saveOrama(index.orama);
-		const index_format: 'msgpack' | 'json' = 'msgpack';
-		const binary = encodeMsgPack(raw_data, { maxDepth: 4096 });
-		const chunk_size = 1900 * 1000; // 1.9MB safely under 2MB limit
-		const index_config = JSON.stringify(this.config[entity_type].config.orama);
-		const deleted_json = JSON.stringify(index.deleted_entity);
-		// Never let a huge tombstone/config map push the first chunk size to <= 0,
-		// which would make the chunking loop below spin forever on empty slices
-		const first_chunk_size = Math.max(
-			1024,
-			chunk_size - (deleted_json.length + index_config.length),
-		);
-
-		// Cleanup old chunks
-		this.ctx.storage.sql.exec(
-			`DELETE FROM search_index WHERE id LIKE ?`,
-			`${entity_type}.%`,
-		);
-
-		let i = 0;
-		let saved_bytes = 0;
-		while (saved_bytes < binary.length) {
-			const chunk = binary.slice(
-				saved_bytes,
-				saved_bytes + (i === 0 ? first_chunk_size : chunk_size),
-			);
-			this.ctx.storage.sql.exec(
-				`INSERT INTO search_index (id, index_data, index_config, index_version, index_format, deleted_entity, first_updated_at, last_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-				`${entity_type}.${i}`,
-				chunk,
-				i === 0 ? index_config : '{}',
-				index.config_version || 1,
-				index_format,
-				i === 0 ? deleted_json : '{}',
-				index.first_updated_at || 0,
-				index.last_updated_at || 0,
-			);
-			saved_bytes += chunk.length;
-			i++;
-		}
-	}
-
-	/**
-	 * Records a written document in the search journal. Callers must already have
-	 * applied the same sparse doc to the in-memory orama index and must be inside
-	 * the transaction that wrote the entity row, so the row and its journal entry
-	 * commit (or roll back) together.
-	 */
-	private journalUpsert(
-		entity_type: string,
-		doc_id: string,
-		sparse_doc: unknown,
-		at: number,
-	) {
-		// `ignoreUndefined` drops absent keys instead of encoding them as null:
-		// msgpack has no undefined, and a null array property makes orama's
-		// remove() throw (`value.length`) on every later update of the doc.
-		// encode() returns a view into a reused buffer — slice() to own the bytes.
-		const encoded = encodeMsgPack(sparse_doc, {
-			maxDepth: 4096,
-			ignoreUndefined: true,
-		}).slice();
-		this.journalWrite(entity_type, doc_id, 'upsert', encoded, at);
-	}
-
-	/** Records a deleted document (a tombstone) in the search journal */
-	private journalDelete(entity_type: string, doc_id: string, at: number) {
-		this.journalWrite(entity_type, doc_id, 'delete', null, at);
-	}
-
-	private journalWrite(
-		entity_type: string,
-		doc_id: string,
-		op: SearchJournalTableSchema['op'],
-		sparse_doc: Uint8Array | null,
-		at: number,
-	) {
-		// OR REPLACE gives per-doc last-write-wins against the (entity_type, doc_id)
-		// primary key, so a hot doc costs one row no matter how often it is written
-		this.ctx.storage.sql.exec(
-			`INSERT OR REPLACE INTO search_journal (entity_type, doc_id, op, sparse_doc, at) VALUES (?, ?, ?, ?, ?)`,
-			entity_type,
-			doc_id,
-			op,
-			sparse_doc,
-			at,
-		);
-		this.#journal_rows[entity_type] = (this.#journal_rows[entity_type] || 0) + 1;
-	}
-
-	/** Decodes a journaled sparse doc, or undefined if the row carries no usable doc */
-	private decodeSparseDoc(
-		sparse_doc: ArrayBuffer | null,
-	): Record<string, unknown> | undefined {
-		if (!sparse_doc) return;
-		const decoded = decodeMsgPack(new Uint8Array(sparse_doc));
-		if (!decoded || typeof decoded !== 'object') return;
-		const doc = decoded as Record<string, unknown>;
-		// Same guard the snapshot load applies: nulls that a round-trip may have
-		// introduced would crash orama's remove() on the next write to this doc
-		for (const key of Object.keys(doc)) {
-			if (doc[key] === null) delete doc[key];
-		}
-		return doc;
-	}
-
-	/** Removes every journal row for an entity type (its snapshot now covers them) */
-	private clearJournal(entity_type: string) {
-		this.ctx.storage.sql.exec(
-			`DELETE FROM search_journal WHERE entity_type = ?`,
-			entity_type,
-		);
-		this.#journal_rows[entity_type] = 0;
-	}
-
-	/**
-	 * Drops cached in-memory indexes after a rolled-back write. `transactionSync`
-	 * undoes the SQL (entity rows AND journal rows) but not the orama mutations
-	 * already applied in memory — keeping those would serve phantom documents and,
-	 * worse, bake them into the next snapshot. Reloading from disk is the only
-	 * cheap way back to a state that matches the committed data.
-	 */
-	private invalidateIndexes(entity_types: Iterable<string>) {
-		let native_touched = false;
+	private dropStaleDictionaryCache(entity_types: Iterable<string>) {
 		for (const entity_type of entity_types) {
-			if (this.isNativeSearch(entity_type)) {
-				native_touched = true;
-				continue;
-			}
-			delete this.#search_index[entity_type as keyof DatabaseConfig];
-			delete this.#journal_rows[entity_type];
-		}
-		// The native driver's rows roll back with the transaction, but its term
-		// dictionaries are an in-memory cache that the rolled-back writes already
-		// mutated in place — drop them so the next search reloads from SQLite.
-		if (native_touched) this.#search_engine?.store.clearDictionaryCache();
-	}
-
-	/**
-	 * Schedules a snapshot if the entity's journal has grown past the threshold.
-	 * Compaction MUST run off the write path: it is the multi-second full-index
-	 * encode this whole journal exists to keep out of request handling.
-	 */
-	private maybeCompactJournal(entity_type: string) {
-		// Native tables have no snapshot and no journal — their index IS the SQL.
-		if (this.isNativeSearch(entity_type)) return;
-		if (
-			(this.#journal_rows[entity_type] || 0) <=
-			(this.constructor as typeof DatabaseServer).MAX_SEARCH_JOURNAL_ROWS
-		) {
+			if (!this.isSearchIndexed(entity_type)) continue;
+			this.#search_engine?.store.clearDictionaryCache();
 			return;
-		}
-		if (this.#compactions_in_flight.has(entity_type)) return;
-		this.#compactions_in_flight.add(entity_type);
-		// A macrotask, not a microtask: microtasks can still run inside a caller's
-		// synchronous chain, and this must never land in an open transaction.
-		try {
-			setTimeout(() => this.compactJournal(entity_type), 0);
-		} catch {
-			this.#compactions_in_flight.delete(entity_type);
-		}
-	}
-
-	/** Snapshots an entity index and discards the journal rows it now covers */
-	private compactJournal(entity_type: string) {
-		try {
-			// Only the loaded index can be snapshotted — dropping the journal without
-			// one would silently discard every write since the last compaction
-			if (!this.#search_index[entity_type as keyof DatabaseConfig]) return;
-			this.ctx.storage.transactionSync(() => {
-				this.saveIndex(entity_type as keyof DatabaseConfig & string);
-				// Deleting ALL rows for the entity type is race-free rather than sloppy:
-				// the DO is single-threaded and transactionSync runs synchronously, so no
-				// write can interleave between the snapshot and this delete — every row
-				// present here is already inside the snapshot.
-				this.clearJournal(entity_type);
-			});
-		} catch (error) {
-			// A failed compaction is not fatal: the journal simply stays and replay
-			// still reconstructs the index. Keep serving requests.
-			console.error(`Error compacting search journal for '${entity_type}':`, error);
-		} finally {
-			this.#compactions_in_flight.delete(entity_type);
 		}
 	}
 
@@ -3004,48 +2242,16 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * Bounds the delete-tombstone map for an index. When it grows past
-	 * MAX_DELETE_TOMBSTONES, the oldest half is pruned and the config version is
-	 * bumped: clients whose sync cursor predates the pruned deletes can no
-	 * longer be given a complete delete list, and the version bump makes them
-	 * do a full resync (the same well-tested path used for schema changes).
-	 *
-	 * Returns whether a prune actually happened, so the caller can force a
-	 * snapshot (the journal cannot carry a tombstone map or a version bump).
-	 */
-	private pruneTombstones(index: SearchIndex): boolean {
-		const max = (this.constructor as typeof DatabaseServer).MAX_DELETE_TOMBSTONES;
-		const entries = Object.entries(index.deleted_entity);
-		if (entries.length <= max) return false;
-		entries.sort((a, b) => a[1] - b[1]);
-		index.deleted_entity = Object.fromEntries(
-			entries.slice(Math.ceil(entries.length / 2)),
-		);
-		index.config_version = (index.config_version || 1) + 1;
-		return true;
-	}
-
-	/**
 	 * Ensures the working timestamp of a transaction is strictly greater than the
-	 * last change recorded for the given index. `updated_at` is the sync cursor:
+	 * last change recorded for the entity type. `updated_at` is the sync cursor:
 	 * if a new write received a timestamp <= an already-synced change (clock skew,
 	 * or a previous multi-op transaction that advanced its timestamps past the
 	 * wall clock), clients that synced past that point would never receive it.
+	 *
+	 * The invariant lives in `search_state.last_updated_at`, read AND advanced
+	 * inside the entity write transaction (§7.5).
 	 */
-	private ensureMonotonicTimestamp(
-		now: Date,
-		index: SearchIndex | undefined,
-		entity_type?: string,
-	) {
-		if (index) {
-			if (now.getTime() <= index.last_updated_at) {
-				now.setTime(index.last_updated_at + 1);
-			}
-			return;
-		}
-		// Native tables keep the same invariant in `search_state.last_updated_at`,
-		// read AND advanced inside the entity write transaction (§7.5).
-		if (!entity_type) return;
+	private ensureMonotonicTimestamp(now: Date, entity_type: string) {
 		now.setTime(this.search.store.allocateTimestamp(entity_type, now.getTime()));
 	}
 
@@ -3069,11 +2275,7 @@ export class DatabaseServer<
 
 		for (const dep of dependents) {
 			const dep_table = this.config[dep.table as keyof DatabaseConfig] as any;
-			const dep_native = this.isNativeSearch(dep.table);
-			const dep_index = dep_native
-				? undefined
-				: this.getIndex(dep.table as keyof DatabaseConfig & string);
-			if (!dep_table || (!dep_index && !dep_native)) continue;
+			if (!dep_table || !this.isSearchIndexed(dep.table)) continue;
 
 			// Find all records in dep.table where dep.fk_field = entity_id
 			const rows = this.ctx.storage.sql
@@ -3101,20 +2303,13 @@ export class DatabaseServer<
 				// changed, and sync clients only receive documents whose updated_at
 				// falls inside the requested window. Without this, FK-derived changes
 				// would update the server index but never reach synced clients.
-				const previous_sparse = dep_native
-					? {
-							...(dep_table.toSparse(dep_entity) as Record<string, unknown>),
-							...parseDerivedBlob(readJsonDerived(row as Record<string, unknown>)),
-						}
-					: undefined;
-				const ts = dep_native
-					? // The native monotonic allocator IS `search_state.last_updated_at`,
-						// advanced in this same transaction — identical semantics to the
-						// in-memory `dep_index.last_updated_at` bump below.
-						this.search.store.allocateTimestamp(dep.table, now.getTime())
-					: dep_index!.last_updated_at >= now.getTime()
-						? dep_index!.last_updated_at + 1
-						: now.getTime();
+				const previous_sparse = {
+					...(dep_table.toSparse(dep_entity) as Record<string, unknown>),
+					...parseDerivedBlob(readJsonDerived(row as Record<string, unknown>)),
+				};
+				// The monotonic allocator IS `search_state.last_updated_at`, advanced in
+				// this same transaction.
+				const ts = this.search.store.allocateTimestamp(dep.table, now.getTime());
 				this.ctx.storage.sql.exec(
 					`UPDATE ${this.sanitize(dep.table)} SET updated_at = ? WHERE ${this.sanitize(dep_pk)} = ?`,
 					ts,
@@ -3126,25 +2321,10 @@ export class DatabaseServer<
 				const sparse = dep_table.toSparse(dep_entity) as any;
 				this.computeFkDerivedFields(dep.table, dep_entity, sparse, ref_cache);
 
-				if (dep_native) {
-					// The postings update is the §7.2 write path with the row's previously
-					// persisted `$derived` as the "previous" doc, all in this transaction.
-					this.persistDerivedFields(dep.table, dep_entity[dep_pk], sparse);
-					this.search.indexDocument(dep.table, dep_id, sparse, previous_sparse);
-				} else {
-					// Update Orama
-					try {
-						removeFromOrama(dep_index!.orama, dep_id);
-					} catch {
-						// May not exist yet
-					}
-					insertIntoOrama(dep_index!.orama, sparse);
-					dep_index!.last_updated_at = Math.max(dep_index!.last_updated_at, ts);
-					if (!dep_index!.first_updated_at) dep_index!.first_updated_at = ts;
-					// Cascaded reindexes are real index writes — without journaling them,
-					// a cold start would serve the pre-cascade derived fields
-					this.journalUpsert(dep.table, dep_id, sparse, ts);
-				}
+				// The postings update is the §7.2 write path with the row's previously
+				// persisted `$derived` as the "previous" doc, all in this transaction.
+				this.persistDerivedFields(dep.table, dep_entity[dep_pk], sparse);
+				this.search.indexDocument(dep.table, dep_id, sparse, previous_sparse);
 				touched_indexes.add(dep.table);
 			}
 		}
@@ -3181,7 +2361,7 @@ export class DatabaseServer<
 		}
 		const temp = { ...value, ...json_fields };
 		delete (temp as any).json;
-		// `$derived` is the native engine's reserved sub-object of the `json`
+		// `$derived` is the search engine's reserved sub-object of the `json`
 		// column (§7.0): FK/same-table derived search values with no column of
 		// their own. It is index/sync machinery, never app-visible entity data.
 		delete (temp as any).$derived;
@@ -3283,7 +2463,7 @@ function readJsonDerived(row: Record<string, unknown>): unknown {
 }
 
 /**
- * Every vector-typed path in a (possibly nested) Orama schema, dot-joined.
+ * Every vector-typed path in a (possibly nested) search schema, dot-joined.
  *
  * `vector[768]` is the only declared type whose values never leave the server
  * (§4.9), so this is the closed list the sync strip below works from.
@@ -3309,8 +2489,8 @@ function vectorFieldPaths(schema: unknown, prefix = ''): string[] {
  * *sparse doc minus vector fields*, because vector search is server-only and an
  * embedding is by far the heaviest thing in a document. Returns the input
  * untouched when the table declares no vectors, so the common table pays one
- * array-length check; otherwise it returns a **copy**, since the Orama path
- * hands us a live index document that must not be mutated.
+ * array-length check; otherwise it returns a **copy**, since callers may hand
+ * us a document that must not be mutated.
  */
 function stripVectorFields(
 	doc: Record<string, unknown>,

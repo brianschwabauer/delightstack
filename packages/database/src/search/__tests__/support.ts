@@ -23,7 +23,6 @@ import {
 	type Corpus,
 	type CorpusPresetName,
 	type CorpusSizeName,
-	type FixtureDocument,
 	type FixtureSchema,
 } from './fixtures/corpus';
 
@@ -63,31 +62,6 @@ export function flattenSchema(schema: FixtureSchema, prefix = ''): WhereSchema {
 		else Object.assign(flat, flattenSchema(value, path));
 	}
 	return flat;
-}
-
-/**
- * Projects a corpus document the way `table.toSparse()` does before indexing:
- * a key whose value is `null` or `undefined` is **omitted entirely**, at every
- * depth (`schema.ts:toSparse`, and the two null-stripping guards in
- * `db.server.ts` that exist because Orama's `remove()` crashes on a null array
- * property).
- *
- * The engine treats null and absent identically (plan §5's null rule), so the
- * memory reference is fed the raw corpus; this projection exists so the Orama
- * side of the differential harness sees exactly what production would give it.
- */
-export function toSparseDocument(doc: FixtureDocument): FixtureDocument {
-	const sparse: FixtureDocument = {};
-	for (const key of Object.keys(doc)) {
-		const value = doc[key];
-		if (value === null || value === undefined) continue;
-		if (typeof value === 'object' && !Array.isArray(value)) {
-			sparse[key] = toSparseDocument(value as FixtureDocument);
-		} else {
-			sparse[key] = value;
-		}
-	}
-	return sparse;
 }
 
 /* -------------------------------------------------------------------------- */

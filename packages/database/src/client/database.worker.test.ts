@@ -2,6 +2,7 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Database } from '../schema/schema';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
 
 // These tests run the REAL client sync protocol against a REAL DatabaseServer
 // (real schema, real search engine) — fetch is bridged straight to the server
@@ -94,151 +95,27 @@ async function writeEntityCache(key: string, value: unknown): Promise<void> {
 	db.close();
 }
 
-// ── In-memory SQL fake for the server (same as db.server.sync.test.ts) ──────
-
-function makeCursor<T extends Record<string, any>>(rows: T[]) {
-	let index = 0;
-	return {
-		next: () => {
-			if (index < rows.length) return { done: false, value: rows[index++] };
-			return { done: true, value: undefined };
-		},
-		toArray: () => rows,
-		one: () => {
-			if (rows.length !== 1)
-				throw new Error(`Expected exactly one row, got ${rows.length}`);
-			return rows[0];
-		},
-		[Symbol.iterator]: function* () {
-			yield* rows;
-		},
-	};
-}
-
-function createFakeSqlStorage() {
-	const tables = new Map<string, Map<string | number, Record<string, any>>>();
-	const getTable = (name: string) => {
-		let table = tables.get(name);
-		if (!table) {
-			table = new Map();
-			tables.set(name, table);
-		}
-		return table;
-	};
-
-	const exec = (sql: string, ...args: any[]) => {
-		if (/^\s*CREATE\s|^\s*ALTER\s|^\s*DROP\s|^\s*PRAGMA\s/i.test(sql))
-			return makeCursor([]);
-		let match: RegExpMatchArray | null;
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) = \? LIMIT 1/))) {
-			const [, table_name, pk] = match;
-			const rows = [...getTable(table_name).values()].filter((r) => r[pk] === args[0]);
-			return makeCursor(rows.slice(0, 1));
-		}
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) IN \(/))) {
-			const [, table_name, pk] = match;
-			const wanted = new Set(args);
-			return makeCursor(
-				[...getTable(table_name).values()].filter((r) => wanted.has(r[pk])),
-			);
-		}
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) = \?$/))) {
-			const [, table_name, col] = match;
-			return makeCursor(
-				[...getTable(table_name).values()].filter((r) => r[col] === args[0]),
-			);
-		}
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE id LIKE \?/))) {
-			const [, table_name] = match;
-			const prefix = String(args[0]).replace(/%$/, '');
-			return makeCursor(
-				[...getTable(table_name).values()].filter((r) => String(r.id).startsWith(prefix)),
-			);
-		}
-		if ((match = sql.match(/^DELETE FROM (\w+) WHERE id LIKE \?/))) {
-			const [, table_name] = match;
-			const prefix = String(args[0]).replace(/%$/, '');
-			const table = getTable(table_name);
-			for (const key of table.keys()) {
-				if (String(key).startsWith(prefix)) table.delete(key);
-			}
-			return makeCursor([]);
-		}
-		if ((match = sql.match(/^DELETE FROM (\w+) WHERE (\w+) = \?/))) {
-			const [, table_name, pk] = match;
-			const table = getTable(table_name);
-			for (const [key, row] of table.entries()) {
-				if (row[pk] === args[0]) table.delete(key);
-			}
-			return makeCursor([]);
-		}
-		if ((match = sql.match(/^SELECT \* FROM (\w+)$/))) {
-			return makeCursor([...getTable(match[1]).values()]);
-		}
-		// Composite (entity_type, doc_id) primary key — upsert, not append.
-		if ((match = sql.match(/^INSERT OR REPLACE INTO (\w+) \(([^)]+)\) VALUES/))) {
-			const [, table_name, raw_columns] = match;
-			const columns = raw_columns.split(',').map((c) => c.trim());
-			const row: Record<string, any> = {};
-			columns.forEach((col, i) => {
-				row[col] = args[i] === undefined ? null : args[i];
-			});
-			getTable(table_name).set(`${row.entity_type}|${row.doc_id}`, row);
-			return makeCursor([{ ...row }]);
-		}
-		if ((match = sql.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/))) {
-			const [, table_name, raw_columns] = match;
-			const columns = raw_columns.split(',').map((c) => c.trim());
-			const row: Record<string, any> = {};
-			columns.forEach((col, i) => {
-				row[col] = args[i] === undefined ? null : args[i];
-			});
-			const table = getTable(table_name);
-			if (row.id == null && columns.includes('id')) row.id = table.size + 1;
-			table.set(row.id ?? `${table.size + 1}`, row);
-			return makeCursor([{ ...row }]);
-		}
-		if ((match = sql.match(/^UPDATE (\w+) SET (.+?) WHERE (\w+) = \?/))) {
-			const [, table_name, set_clause, pk] = match;
-			const columns = set_clause.split(',').map((c) => c.trim().split(' ')[0]);
-			const pk_value = args[args.length - 1];
-			const updated: Record<string, any>[] = [];
-			for (const row of getTable(table_name).values()) {
-				if (row[pk] !== pk_value) continue;
-				columns.forEach((col, i) => {
-					row[col] = args[i] === undefined ? null : args[i];
-				});
-				updated.push({ ...row });
-			}
-			return makeCursor(updated);
-		}
-		throw new Error(`Fake SQL storage does not understand: ${sql}`);
-	};
-
-	return { exec: vi.fn(exec) };
-}
 
 const itemTable = Database.table('item', (s) => ({
 	id: s.primaryKey(),
 	name: s.string().searchable(),
 }));
 
+/** Every server built by a test, closed after it. */
+const open_states: ReturnType<typeof createDurableObjectState>[] = [];
+
+afterEach(() => {
+	while (open_states.length) open_states.pop()?.close();
+});
+
 async function createTestServer() {
 	const { DatabaseServer } = await import('../server/db.server');
-	const ctx = {
-		id: { toString: () => 'test-id' },
-		storage: {
-			sql: createFakeSqlStorage(),
-			transactionSync: (cb: () => unknown) => cb(),
-			deleteAlarm: vi.fn(),
-			deleteAll: vi.fn(),
-		},
-		abort: vi.fn(),
-	};
+	const state = createDurableObjectState();
+	open_states.push(state);
 	return new DatabaseServer(
 		{ item: itemTable as unknown as Database.Table },
 		() => undefined,
-		ctx as any,
+		state.ctx as any,
 		{
 			DEV: true,
 		} as any,
@@ -278,7 +155,7 @@ async function createWorker() {
 	await worker.init({
 		tables: {
 			item: {
-				orama: itemTable.config.orama as any,
+				index_schema: itemTable.config.index_schema as never,
 				primary_key: 'id',
 			},
 		},

@@ -2,6 +2,7 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Database } from '../schema/schema';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
 
 // Regression tests for the 2026-07-14 "empty inbox" incident: after a large
 // live backfill, a client index silently lost ~30% of its thread docs while
@@ -34,127 +35,6 @@ vi.mock('comlink', () => ({ expose: vi.fn() }));
 let database_counter = 0;
 let db_name = 'worker-repro-0';
 
-function makeCursor<T extends Record<string, any>>(rows: T[]) {
-	let index = 0;
-	return {
-		next: () => {
-			if (index < rows.length) return { done: false, value: rows[index++] };
-			return { done: true, value: undefined };
-		},
-		toArray: () => rows,
-		one: () => {
-			if (rows.length !== 1)
-				throw new Error(`Expected exactly one row, got ${rows.length}`);
-			return rows[0];
-		},
-		[Symbol.iterator]: function* () {
-			yield* rows;
-		},
-	};
-}
-
-function createFakeSqlStorage() {
-	const tables = new Map<string, Map<string | number, Record<string, any>>>();
-	const getTable = (name: string) => {
-		let table = tables.get(name);
-		if (!table) {
-			table = new Map();
-			tables.set(name, table);
-		}
-		return table;
-	};
-
-	const exec = (sql: string, ...args: any[]) => {
-		if (/^\s*CREATE\s|^\s*ALTER\s|^\s*DROP\s|^\s*PRAGMA\s/i.test(sql))
-			return makeCursor([]);
-		let match: RegExpMatchArray | null;
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) = \? LIMIT 1/))) {
-			const [, table_name, pk] = match;
-			const rows = [...getTable(table_name).values()].filter((r) => r[pk] === args[0]);
-			return makeCursor(rows.slice(0, 1));
-		}
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) IN \(/))) {
-			const [, table_name, pk] = match;
-			const wanted = new Set(args);
-			return makeCursor(
-				[...getTable(table_name).values()].filter((r) => wanted.has(r[pk])),
-			);
-		}
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) = \?$/))) {
-			const [, table_name, col] = match;
-			return makeCursor(
-				[...getTable(table_name).values()].filter((r) => r[col] === args[0]),
-			);
-		}
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE id LIKE \?/))) {
-			const [, table_name] = match;
-			const prefix = String(args[0]).replace(/%$/, '');
-			return makeCursor(
-				[...getTable(table_name).values()].filter((r) => String(r.id).startsWith(prefix)),
-			);
-		}
-		if ((match = sql.match(/^DELETE FROM (\w+) WHERE id LIKE \?/))) {
-			const [, table_name] = match;
-			const prefix = String(args[0]).replace(/%$/, '');
-			const table = getTable(table_name);
-			for (const key of table.keys()) {
-				if (String(key).startsWith(prefix)) table.delete(key);
-			}
-			return makeCursor([]);
-		}
-		if ((match = sql.match(/^SELECT \* FROM (\w+)$/))) {
-			return makeCursor([...getTable(match[1]).values()]);
-		}
-		// Composite (entity_type, doc_id) primary key — upsert, not append.
-		if ((match = sql.match(/^INSERT OR REPLACE INTO (\w+) \(([^)]+)\) VALUES/))) {
-			const [, table_name, raw_columns] = match;
-			const columns = raw_columns.split(',').map((c) => c.trim());
-			const row: Record<string, any> = {};
-			columns.forEach((col, i) => {
-				row[col] = args[i] === undefined ? null : args[i];
-			});
-			getTable(table_name).set(`${row.entity_type}|${row.doc_id}`, row);
-			return makeCursor([{ ...row }]);
-		}
-		if ((match = sql.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/))) {
-			const [, table_name, raw_columns] = match;
-			const columns = raw_columns.split(',').map((c) => c.trim());
-			const row: Record<string, any> = {};
-			columns.forEach((col, i) => {
-				row[col] = args[i] === undefined ? null : args[i];
-			});
-			const table = getTable(table_name);
-			if (row.id == null && columns.includes('id')) row.id = table.size + 1;
-			table.set(row.id ?? `${table.size + 1}`, row);
-			return makeCursor([{ ...row }]);
-		}
-		if ((match = sql.match(/^UPDATE (\w+) SET (.+?) WHERE (\w+) = \?/))) {
-			const [, table_name, set_clause, pk] = match;
-			const columns = set_clause.split(',').map((c) => c.trim().split(' ')[0]);
-			const pk_value = args[args.length - 1];
-			const updated: Record<string, any>[] = [];
-			for (const row of getTable(table_name).values()) {
-				if (row[pk] !== pk_value) continue;
-				columns.forEach((col, i) => {
-					row[col] = args[i] === undefined ? null : args[i];
-				});
-				updated.push({ ...row });
-			}
-			return makeCursor(updated);
-		}
-		if ((match = sql.match(/^DELETE FROM (\w+) WHERE (\w+) = \?/))) {
-			const [, table_name, pk] = match;
-			const table = getTable(table_name);
-			for (const [key, row] of table.entries()) {
-				if (row[pk] === args[0]) table.delete(key);
-			}
-			return makeCursor([]);
-		}
-		throw new Error(`Fake SQL storage does not understand: ${sql}`);
-	};
-
-	return { exec: vi.fn(exec), tables };
-}
 
 // Mirrors the mail app's thread table shape: enum folder + numeric sort field.
 const threadTable = Database.table('thread', (s) => ({
@@ -164,26 +44,24 @@ const threadTable = Database.table('thread', (s) => ({
 	last_message_at: s.number().searchable(),
 }));
 
+/** Every server built by a test, closed after it. */
+const open_states: ReturnType<typeof createDurableObjectState>[] = [];
+
+afterEach(() => {
+	while (open_states.length) open_states.pop()?.close();
+});
+
 async function createTestServer() {
 	const { DatabaseServer } = await import('../server/db.server');
-	const sql = createFakeSqlStorage();
-	const ctx = {
-		id: { toString: () => 'test-id' },
-		storage: {
-			sql,
-			transactionSync: (cb: () => unknown) => cb(),
-			deleteAlarm: vi.fn(),
-			deleteAll: vi.fn(),
-		},
-		abort: vi.fn(),
-	};
+	const state = createDurableObjectState();
+	open_states.push(state);
 	const server = new DatabaseServer(
 		{ thread: threadTable as unknown as Database.Table },
 		() => undefined,
-		ctx as any,
+		state.ctx as any,
 		{ DEV: true } as any,
 	);
-	return { server, sql, ctx };
+	return { server, state };
 }
 
 function bridgeFetchToServer(
@@ -219,7 +97,7 @@ async function createWorker(threshold = 50_000) {
 	await worker.init({
 		tables: {
 			thread: {
-				orama: threadTable.config.orama as any,
+				index_schema: threadTable.config.index_schema as never,
 				primary_key: 'id',
 			},
 		},
@@ -281,9 +159,9 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 
 	it('a single sync page larger than 1000 docs loses nothing (2026-08-10 incident)', async () => {
 		// Prod shape: a fresh client (config_version 0) gets the ENTIRE dataset in
-		// one schema_changed page — 2500+ docs, newest first. The incident: orama's
-		// removeMultiple only processes its first 1000-id batch synchronously and
-		// runs the rest on fire-and-forget setTimeout chains, so the worker's
+		// one schema_changed page — 2500+ docs, newest first. The 2026-08-10
+		// incident: the previous engine's bulk remove processed only its first
+		// 1000-id batch synchronously and deferred the rest, so the worker's
 		// remove-before-insert had those deferred batches fire AFTER the insert and
 		// delete every doc past #1000 — while sync_meta claimed a complete window.
 		// A mailbox rendered 6 inbox threads out of 52 and never refetched the rest.
@@ -341,7 +219,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		}
 
 		// Corrupt one doc mid-page the way legacy/bad data would arrive: a null
-		// searchable string, which Orama rejected on insert.
+		// searchable string, which the legacy engine rejected on insert.
 		vi.stubGlobal(
 			'fetch',
 			bridgeFetchToServer(server, {
@@ -480,44 +358,45 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 	it('legacy equal-timestamp runs are never split across sync pages', async () => {
 		// Bypass create() (which makes timestamps strictly monotonic) and seed
 		// raw rows sharing one updated_at — data written before monotonic
-		// timestamps existed. The index rebuilds from the raw table.
-		const { server, sql } = await createTestServer();
+		// timestamps existed. A second server over the same database rebuilds its
+		// search rows from those raw rows on its first wake.
+		const { server, state } = await createTestServer();
 		vi.setSystemTime(T0);
 		server.create('thread', {
 			subject: 'seed',
 			folder: 'inbox',
 			last_message_at: T0,
 		});
-		// Raw rows: 12 docs all at T0 + 50_000
-		const table = sql.tables.get('thread')!;
 		for (let i = 0; i < 12; i++) {
-			table.set(`legacy_${i}`, {
-				id: `legacy_${i}`,
-				subject: `legacy ${i}`,
-				folder: 'archive',
-				last_message_at: T0,
-				created_at: T0 + 50_000,
-				updated_at: T0 + 50_000,
-				json: '{}',
-			});
+			state.db
+				.prepare(
+					`INSERT INTO thread (id, subject, folder, last_message_at, created_at, updated_at, json) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				)
+				.run(
+					`legacy_${i}`,
+					`legacy ${i}`,
+					'archive',
+					T0,
+					T0 + 50_000,
+					T0 + 50_000,
+					'{}',
+				);
 		}
-		// Drop the persisted index so a fresh server rebuilds from the raw table
-		sql.tables.delete('search_index');
-		const { DatabaseServer } = await import('../server/db.server');
-		const ctx2 = {
-			id: { toString: () => 'test-id-2' },
-			storage: {
-				sql,
-				transactionSync: (cb: () => unknown) => cb(),
-				deleteAlarm: vi.fn(),
-				deleteAll: vi.fn(),
-			},
-			abort: vi.fn(),
+		// Force the next boot to rebuild: clear the persisted schema signature.
+		const row = state.db.prepare(`SELECT json FROM state WHERE id = 'main'`).get() as {
+			json: string;
 		};
+		const persisted = JSON.parse(row.json) as { native_search?: unknown };
+		delete persisted.native_search;
+		state.db
+			.prepare(`UPDATE state SET json = ? WHERE id = 'main'`)
+			.run(JSON.stringify(persisted));
+
+		const { DatabaseServer } = await import('../server/db.server');
 		const server2 = new DatabaseServer(
 			{ thread: threadTable as unknown as Database.Table },
 			() => undefined,
-			ctx2 as any,
+			state.ctx as any,
 			{ DEV: true } as any,
 		);
 
@@ -525,8 +404,8 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		const worker = await createWorker();
 		await worker.sync();
 
-		// Before the fix, the server cut the equal-timestamp run at the page
-		// limit (Orama pre-truncated the fetch), the next page's exclusive
+		// Before the fix, the server cut the equal-timestamp run at the page limit
+		// (the search engine pre-truncated the fetch), the next page's exclusive
 		// boundary skipped the rest of the run, and those docs were permanently lost.
 		const result = await worker.search('thread', { limit: 100 });
 		expect(result.count).toBe(13); // 1 seed + 12 legacy

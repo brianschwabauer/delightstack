@@ -4,7 +4,7 @@
 
 Let `enum[]` fields be declared searchable through the schema builder.
 
-`schema.array(schema.enum([...])).searchable()` was silently a no-op: `ArrayFieldGenerator.searchable()` accepted only `string`/`number`/`boolean` item types, so an enum array never reached the index schema — even though the index-schema builder, both engines (Orama and the native SQLite driver), the `where` DSL (`contains_all` / `contains_any`) and facets have always understood the `'enum[]'` type. Marking one searchable now emits `'enum[]'` in `config.orama.schema` and adds the path to `config.searchable_fields`, on either engine. Like every other array, the values still live in the row's internal `json` column — no SQLite column is added.
+`schema.array(schema.enum([...])).searchable()` was silently a no-op: `ArrayFieldGenerator.searchable()` accepted only `string`/`number`/`boolean` item types, so an enum array never reached the index schema — even though the index-schema builder, the engine, the `where` DSL (`contains_all` / `contains_any`) and facets have always understood the `'enum[]'` type. Marking one searchable now emits `'enum[]'` in `config.index_schema` and adds the path to `config.searchable_fields`. Like every other array, the values still live in the row's internal `json` column — no SQLite column is added.
 
 An `enum[]` field is indexed as a list of exact tokens: it is filterable and facetable, but it never participates in full-text term matching (a term query cannot match a label value).
 

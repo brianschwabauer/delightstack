@@ -5,7 +5,7 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
 ## Features
 
 - **Declarative schema** — Define tables with a fluent TypeScript API. Field types, constraints, and validators are inferred at compile time.
-- **Full-text & vector search** — Built-in [Orama](https://orama.com) integration. Mark fields as `.searchable()` and query them with fuzzy text, vector embeddings, or hybrid search.
+- **Full-text & vector search** — A built-in search engine with no third-party dependency: BM25 ranking, typo tolerance, prefix search, facets, geo and vector/hybrid queries. Mark fields as `.searchable()` and query them. The index lives in SQLite rows written inside the same transaction as the entity row, so there is no snapshot to serialize and no cold-start rebuild.
 - **Automatic migrations** — New columns are added automatically when you update your schema. No migration files to manage.
 - **Zod validation** — Every `create()` and `update()` call validates data against the schema at runtime. String formats (`.email()`, `.url()`, `.datetime()`), number ranges (`.min()`, `.max()`), and custom constraints are enforced.
 - **Transactions** — Batch multiple create/update/delete/exec operations into a single atomic transaction.
@@ -22,8 +22,8 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
   │               Cloudflare Durable Object             │
   │                                                     │
   │  ┌────────────┐   ┌──────────┐   ┌───────────────┐  │
-  │  │   Schema   │──>│  SQLite  │   │  Orama Index  │  │
-  │  │ Definition │   │ (storage)│   │  (in-memory)  │  │
+  │  │   Schema   │──>│  SQLite  │   │  Search Tables│  │
+  │  │ Definition │   │ (storage)│   │   (SQLite)    │  │
   │  └────────────┘   └──────────┘   └───────────────┘  │
   │        │               ▲ ▲               ▲          │
   │        │               │ │               │          │
@@ -41,7 +41,9 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
   └─────────────────────────────────────────────────────┘
 ```
 
-**Schema → SQLite + Orama:** Each table definition produces both a SQLite table (for persistent storage) and an Orama in-memory index (for search). The `DatabaseServer` keeps them in sync automatically.
+**Schema → SQLite + search tables:** Each table definition produces a SQLite table (for persistent storage) and a set of shared search tables (`search_postings`, `search_tokens`, `search_docs`, `search_field_stats`, `search_vectors`, plus `search_state`/`search_tombstones` for sync). The `DatabaseServer` writes both inside one transaction, so a rolled-back write can never leave a stale index behind.
+
+**Upgrading from 1.1 or earlier.** Those versions kept an in-memory index serialized into a `search_index` blob. On the first Durable Object wake after upgrading, each table's search rows are rebuilt from its entity rows, its sync metadata (deletion tombstones and window bounds) is migrated into `search_tombstones`/`search_state`, its `config_version` is bumped (so every client resyncs once), and the legacy `search_index`/`search_journal` tables are dropped. This is automatic and idempotent; a large table costs one full scan, once.
 
 **Single-writer model:** Durable Objects guarantee a single instance handles all writes, eliminating race conditions. SQLite transactions provide atomicity within that instance.
 
@@ -166,7 +168,7 @@ schema
 	.optional() // Nullable (stored as NULL)
 	.readonly() // Immutable after creation
 	.default('foo') // Default value (or a function: () => value)
-	.searchable() // Indexed in Orama for full-text search
+	.searchable() // Indexed for full-text search
 	.sortable() // Sortable in search results (implies searchable)
 	.indexable() // SQLite B-tree index for fast WHERE queries
 	.unique() // UNIQUE constraint in SQLite
@@ -408,7 +410,7 @@ const changes = db.sync({
 // changes.entity.user.created  → new entities (sparse)
 // changes.entity.user.updated  → changed entities (sparse)
 // changes.entity.user.deleted  → deleted entity IDs
-// changes.entity.user.config   → new Orama schema (if version changed)
+// changes.entity.user.config   → new search schema (if version changed)
 ```
 
 ### Metadata
@@ -593,7 +595,7 @@ const personRoute = defineRoute({
 | `cursor` | `?cursor=abc123`                  | Cursor-based pagination token                            |
 | `term`   | `?term=alice`                     | Full-text search term                                    |
 | `order`  | `?order=name:ASC,created_at:DESC` | Comma-separated `field:direction` pairs                  |
-| `where`  | `?where={"role":"admin"}`         | JSON-encoded Orama WHERE clause                          |
+| `where`  | `?where={"role":"admin"}`         | JSON-encoded WHERE clause                                |
 | `sparse` | `?sparse=false`                   | `false` for full entities, `true` for search fields only |
 
 ### Modifying Data in Hooks
@@ -946,7 +948,7 @@ Caching and version invalidation live on `DatabaseClient` — `new EntityState(.
 
 `DatabaseSearch` provides live search results that auto-update when the underlying index changes (e.g. after a create/update/delete). Queries are routed to the server whenever the local index does not cover the whole table (see [Search modes](#search-modes)).
 
-> **Sparse results.** Search documents only contain fields declared `searchable` in your Orama schema (typed as `Database.SearchEntity<T>`, *not* `Database.Entity<T>`). Both client and server search default to sparse — Orama client-side only has the sparse fields, and the server path defaults to `sparse: true` for efficient sync payloads. When you need the full entity, call `db.get('type', hit.id)` or `db.read('type', () => hit.id)` — those always return the full `Database.Entity<T>`.
+> **Sparse results.** Search documents only contain fields declared `searchable` in your search schema (typed as `Database.SearchEntity<T>`, *not* `Database.Entity<T>`). Both client and server search default to sparse — the client index only holds the sparse fields, and the server path defaults to `sparse: true` for efficient sync payloads. When you need the full entity, call `db.get('type', hit.id)` or `db.read('type', () => hit.id)` — those always return the full `Database.Entity<T>`.
 
 ```typescript
 const search = db.search('person', { term: 'alice', limit: 20 });
@@ -1070,8 +1072,8 @@ If you're using a non-Svelte frontend, you can still use the server package and 
 
 ## Design Decisions
 
-**Why SQLite + Orama (not just SQLite)?**
-SQLite is great for structured queries but lacks fuzzy full-text search, vector search, and faceting. Orama runs in-memory and provides sub-millisecond search with typo tolerance. The two complement each other: SQLite for persistence and complex queries, Orama for search UX.
+**Why a hand-written search engine (not SQLite FTS5, not a library)?**
+FTS5 cannot run in the browser, so a client and a server query would rank differently — and the whole point is that a caller can choose either per query. An in-memory library (this package used Orama through 1.1) has no incremental persistence: the entire index has to be serialized after writes, which grew to 10+ seconds per save on a production corpus, and it has to be held in the Durable Object's memory. The engine here shares one pure core (tokenizer, BM25, filter/sort semantics) between a SQLite postings backend on the server and an IndexedDB one on the client, so the same query over the same documents gives byte-identical results, index writes are O(changed document), and cold start costs nothing.
 
 **Why a `json` catch-all column?**
 SQLite doesn't support nested objects or arrays natively. Rather than flattening deeply nested schemas into dozens of columns, object/array fields are serialized into a single `json` TEXT column. Root-level scalars still get their own columns for indexing and WHERE clauses.
@@ -1113,7 +1115,7 @@ Offset-based pagination (`OFFSET 100 LIMIT 10`) degrades on large tables because
 | `DatabaseClient`       | Main client class — CRUD, search, entity state, sync, lifecycle        |
 | `EntityReader`         | Lightweight reactive single-entity reader (for `db.read`)              |
 | `EntityState`          | Reactive per-entity wrapper with auto-load, save, and change tracking  |
-| `DatabaseSearch`       | Reactive search with live results from Orama or server fallback        |
+| `DatabaseSearch`       | Reactive search with live results from the local index or the server   |
 | ~~`DatabaseError`~~    | **Removed.** Use `DelightError` from `@delightstack/utilities` instead |
 | `DatabaseClientConfig` | Type for `DatabaseClient` constructor config                           |
 | `SearchHit`            | Type for a single search result hit                                    |
@@ -1138,7 +1140,7 @@ packages/database/
   client/
     index.ts                  # Client entry — re-exports client classes (Svelte 5)
     database.client.svelte.ts # DatabaseClient, EntityState, DatabaseSearch
-    database.worker.ts        # Web Worker — Orama indices, IDB cache, fetch, sync
+    database.worker.ts        # Web Worker — IDB search index, entity cache, fetch, sync
     database.worker.init.ts   # SharedWorker/Worker singleton factory
     database.idb.ts           # IndexedDB helper utilities
     database.error.ts         # DatabaseError for comlink worker-to-main transfer

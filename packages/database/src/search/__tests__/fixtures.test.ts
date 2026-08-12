@@ -28,7 +28,6 @@ import {
 	BATTERY_TAGS,
 	SEARCH_BATTERY,
 	batteryCasesForCorpus,
-	batteryCasesWithOramaParity,
 	type BatteryCase,
 } from './fixtures/battery';
 import { GOLDEN_FORMAT_VERSION } from './fixtures/golden_format';
@@ -463,17 +462,6 @@ describe('query battery', () => {
 			if (battery_case.tags.includes('vector') || battery_case.tags.includes('hybrid')) {
 				expect(battery_case.tags, battery_case.name).toContain('server-only');
 			}
-		}
-	});
-
-	it('excludes known-broken and deliberately deviating cases from Orama parity', () => {
-		const parity = batteryCasesWithOramaParity();
-		expect(parity.length).toBeGreaterThan(60);
-		expect(parity.length).toBeLessThan(SEARCH_BATTERY.length);
-		for (const battery_case of parity) {
-			expect(battery_case.tags, battery_case.name).not.toContain('orama-bug');
-			expect(battery_case.tags, battery_case.name).not.toContain('deviation');
-			expect(battery_case.tags, battery_case.name).not.toContain('server-only');
 		}
 	});
 

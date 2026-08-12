@@ -11,7 +11,7 @@ full-text & vector search, runtime validation, automatic migrations, and a react
 ## Features
 
 - **Declarative schema** — fluent TypeScript API; field types and validators inferred at compile time.
-- **Full-text & vector search** — built-in [Orama](https://orama.com); mark fields `.searchable()`.
+- **Full-text & vector search** — a built-in engine (BM25, typo tolerance, facets, geo, vector/hybrid) indexed into SQLite rows; mark fields `.searchable()`.
 - **Automatic migrations** — new columns are added when you change the schema; no migration files.
 - **Zod validation** — every `create()`/`update()` is validated at runtime.
 - **Transactions** — batch operations atomically.

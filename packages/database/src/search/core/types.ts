@@ -1,10 +1,5 @@
 /**
- * Engine-neutral search types.
- *
- * These are owned by `@delightstack/database` — they are *not* re-exported Orama
- * types. They are currently structurally identical to the Orama shapes they
- * replaced (so the remaining Orama call sites keep type-checking through a thin
- * translation shim), but the package is now free to evolve them independently.
+ * Engine-neutral search types, owned by `@delightstack/database`.
  *
  * See `plans/database/Native Search Engine Plan.md` §6.
  */
@@ -69,9 +64,9 @@ export type SearchValueType<Value> = Value extends 'string'
 											? {
 													[Key in keyof Value]: SearchValueType<Value[Key]>;
 												} & {
-													// Index signature preserved from the previous
-													// (Orama-derived) shape so consumers can still
-													// read arbitrary keys off an indexed document.
+													// Index signature preserved so consumers can
+													// still read arbitrary keys off an indexed
+													// document.
 													[otherKeys: PropertyKey]: any;
 												}
 											: never;
@@ -361,12 +356,3 @@ export interface SearchQueryResults<Document> {
 	facets?: FacetResult;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Index configuration                                                        */
-/* -------------------------------------------------------------------------- */
-
-/** Sorting configuration for a search index */
-export interface IndexSorterConfig {
-	enabled?: boolean;
-	unsortableProperties?: string[];
-}

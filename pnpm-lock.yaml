@@ -419,12 +419,6 @@ importers:
       '@delightstack/utilities':
         specifier: workspace:*
         version: link:../utilities
-      '@msgpack/msgpack':
-        specifier: ^3.1.3
-        version: 3.1.3
-      '@orama/orama':
-        specifier: ^3.1.16
-        version: 3.1.16
       comlink:
         specifier: ^4.4.2
         version: 4.4.2
@@ -1741,10 +1735,6 @@ packages:
 
   '@mdx-js/mdx@3.1.0':
     resolution: {integrity: sha512-/QxEhPAvGwbQmy1Px8F899L5Uc2KZ6JtXwlCgJmjSTBedwOZkByYcBG4GceIGPXRDsmfxhHazuS+hlOShRLeDw==}
-
-  '@msgpack/msgpack@3.1.3':
-    resolution: {integrity: sha512-47XIizs9XZXvuJgoaJUIE2lFoID8ugvc0jzSHP+Ptfk8nTbnR8g788wv48N03Kx0UkAv559HWRQ3yzOgzlRNUA==}
-    engines: {node: '>= 18'}
 
   '@napi-rs/canvas-android-arm64@0.1.100':
     resolution: {integrity: sha512-hjhCKhntPv9+t4ckHymdx0phYNcVW+GKQR6Lzw2zE+pOVjOplSmtx9nNNknTjbEDLcuLZqA1y8ufKg1XfgftzQ==}
@@ -5889,8 +5879,6 @@ snapshots:
     transitivePeerDependencies:
       - acorn
       - supports-color
-
-  '@msgpack/msgpack@3.1.3': {}
 
   '@napi-rs/canvas-android-arm64@0.1.100':
     optional: true

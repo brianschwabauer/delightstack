@@ -1,824 +1,349 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Mock } from 'vitest';
-import { DatabaseServer } from './db.server';
-import type { Database } from '../schema/schema';
+// @vitest-environment node
+/**
+ * `DatabaseServer`'s entity API — get/create/update/delete/transaction/exec —
+ * over **real SQLite**.
+ *
+ * This suite used to hand the server a `{ exec: vi.fn() }` that pattern-matched
+ * SQL strings and replayed canned rows, with `@orama/orama` and `@msgpack/msgpack`
+ * mocked on top. With the search index living in SQL, that shape could no longer
+ * tell the truth about anything: the write path now writes postings in the same
+ * transaction as the entity row, so a fake that never executes a statement is a
+ * fake of the entire feature. It therefore drives the production class against
+ * `node:sqlite` through the `DurableObjectState` façade in
+ * `search/__tests__/sqlite_harness.ts` — the same harness the native integration
+ * suite uses — and asserts through the public API.
+ */
 
-// Mock cloudflare:workers
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DatabaseServer } from './db.server';
+import { Database } from '../schema/schema';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {
 		constructor(
-			public ctx: any,
-			public env: any,
+			public ctx: unknown,
+			public env: unknown,
 		) {}
 	}
 	return { DurableObject };
 });
 
-// Mock @orama/orama
-vi.mock('@orama/orama', async () => {
-	const actual = await vi.importActual('@orama/orama');
-	return {
-		...actual,
-		create: vi.fn(() => ({})),
-		insert: vi.fn(),
-		insertMultiple: vi.fn(),
-		remove: vi.fn(),
-		search: vi.fn(() => ({ hits: [], count: 0, elapsed: 0 })),
-		save: vi.fn(() => ({ data: new Uint8Array() })),
-		load: vi.fn(),
-	};
-});
-
-// Mock fast-equals
-vi.mock('fast-equals', () => ({
-	deepEqual: (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b),
+const userTable = Database.table('users', (s) => ({
+	id: s.primaryKey(),
+	name: s.string().searchable(),
+	email: s.string().searchable().optional(),
+	profile: s
+		.object({
+			nickname: s.string().optional(),
+		})
+		.optional(),
 }));
 
-// Mock msgpack
-vi.mock('@msgpack/msgpack', () => ({
-	encode: (_val: any) => new Uint8Array(),
-	decode: (_val: any) => ({}),
-}));
+const CONFIG = { users: userTable } as unknown as Record<string, Database.Table>;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-type TestConfig = Record<string, Database.Table>;
-
-const testConfig: TestConfig = {
-	users: {
-		name: 'users',
-		_: {} as any,
-		config: {
-			primary_key: 'id',
-			primary_key_type: 'string',
-			table_definition: {
-				id: 'TEXT PRIMARY KEY',
-				name: 'TEXT',
-				email: 'TEXT',
-			},
-			indexes: [],
-			foreign_keys: {},
-			sortable_fields: ['updated_at', 'name'],
-			searchable_fields: ['id', 'name', 'email'],
-			unique_fields: [],
-			orama: {
-				schema: {
-					id: 'string',
-					name: 'string',
-					email: 'string',
-					updated_at: 'number',
-				},
-				sort: { enabled: false },
-			},
-		},
-		parse: vi.fn((data: any) => data),
-		toSparse: vi.fn((data: any) => data),
-	} as unknown as Database.Table,
-};
-
-/** Creates a mock SqlStorageCursor that mimics Cloudflare's cursor API */
-function mockCursor<T extends Record<string, any>>(rows: T[]) {
-	let index = 0;
-	return {
-		next: () => {
-			if (index < rows.length) {
-				return { done: false, value: rows[index++] };
-			}
-			return { done: true, value: undefined };
-		},
-		toArray: () => rows,
-		one: () => rows[0],
-		[Symbol.iterator]: function* () {
-			yield* rows;
-		},
-	};
+interface Fixture {
+	db: DatabaseServer<Record<string, Database.Table>>;
+	state: ReturnType<typeof createDurableObjectState>;
 }
 
-function emptyCursor() {
-	return mockCursor([]);
+function createServer(config: Record<string, Database.Table> = CONFIG): Fixture {
+	const state = createDurableObjectState();
+	const db = new DatabaseServer(
+		config as never,
+		() => undefined,
+		state.ctx as never,
+		{ DEV: true } as never,
+	) as DatabaseServer<Record<string, Database.Table>>;
+	return { db, state };
 }
 
-// ── Test Suite ───────────────────────────────────────────────────────────────
-
-describe('DatabaseServer', () => {
-	let dbServer: DatabaseServer<TestConfig>;
-	let mockSql: { exec: Mock };
-	let executedQueries: { sql: string; args: any[] }[];
-
+describe('DatabaseServer: entity API', () => {
+	let fixture: Fixture;
 	beforeEach(() => {
-		executedQueries = [];
-
-		mockSql = {
-			exec: vi.fn((sql: string, ...args: any[]) => {
-				executedQueries.push({ sql, args });
-
-				if (sql.includes('SELECT * FROM state WHERE id = main')) {
-					return mockCursor([
-						{
-							id: 'main',
-							json: '{}',
-							created_at: Date.now(),
-							updated_at: Date.now(),
-							table_config: {},
-							sql_indexes: [],
-						},
-					]);
-				}
-
-				if (sql.includes('SELECT * FROM search_index')) {
-					return emptyCursor();
-				}
-
-				return emptyCursor();
-			}),
-		};
-
-		const mockStorage = {
-			sql: mockSql,
-			transactionSync: vi.fn((cb: () => void) => cb()),
-			getAlarm: vi.fn(),
-			setAlarm: vi.fn(),
-			deleteAlarm: vi.fn(),
-			deleteAll: vi.fn(),
-			getBookmarkForTime: vi.fn(),
-			onNextSessionRestoreBookmark: vi.fn(),
-		};
-
-		const mockCtx = {
-			id: { toString: () => 'mock-id' },
-			storage: mockStorage,
-			abort: vi.fn(),
-		};
-
-		const mockEnv = { DEV: true };
-
-		dbServer = new DatabaseServer(testConfig, () => ({}) as any, mockCtx as any, mockEnv);
+		fixture = createServer();
 	});
+	afterEach(() => fixture.state.close());
 
-	// ── Initialization ──────────────────────────────────────────────────
-
-	it('should initialize and create tables', () => {
-		const createTableQuery = executedQueries.find((q) =>
-			q.sql.includes('CREATE TABLE IF NOT EXISTS users'),
+	it('creates the entity table from the config', () => {
+		const columns = fixture.state.db
+			.prepare(`PRAGMA table_info(users)`)
+			.all()
+			.map((row) => (row as { name: string }).name);
+		expect(columns).toEqual(
+			expect.arrayContaining(['id', 'name', 'email', 'json', 'created_at', 'updated_at']),
 		);
-		expect(createTableQuery).toBeDefined();
-		expect(createTableQuery!.sql).toContain('id TEXT PRIMARY KEY');
-		expect(createTableQuery!.sql).toContain('name TEXT');
 	});
 
-	// ── Single get ──────────────────────────────────────────────────────
-
-	it('should fetch an entity', () => {
-		const mockUser = { id: '123', name: 'Test User' };
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.includes('SELECT * FROM users WHERE id = ?')) {
-				return mockCursor([{ ...mockUser }]);
-			}
-			return emptyCursor();
+	it('fetches an entity', () => {
+		const created = fixture.db.create('users', { name: 'Test User' } as never) as unknown as { id: string };
+		expect(fixture.db.get('users', created.id)).toMatchObject({
+			id: created.id,
+			name: 'Test User',
 		});
+	});
 
-		const result = dbServer.get('users', '123');
-		expect(result).toEqual(mockUser);
+	it('throws 404 for a missing entity', () => {
+		expect(() => fixture.db.get('users', 'nonexistent')).toThrow(
+			expect.objectContaining({ status: 404 }),
+		);
+	});
+
+	it('throws 400 for an invalid entity type', () => {
+		expect(() => fixture.db.get('nonexistent_type' as never, '123')).toThrow(
+			expect.objectContaining({ status: 400 }),
+		);
+	});
+
+	it('batch-gets in request order with a single IN query', () => {
+		const alice = fixture.db.create('users', { name: 'Alice' } as never) as unknown as { id: string };
+		const bob = fixture.db.create('users', { name: 'Bob' } as never) as unknown as { id: string };
+		fixture.state.log.length = 0;
+
+		const results = fixture.db.get([
+			{ entity_type: 'users', id: bob.id },
+			{ entity_type: 'users', id: alice.id },
+		]) as unknown as { id: string }[];
+
+		expect(results.map((row) => row.id)).toEqual([bob.id, alice.id]);
 		expect(
-			executedQueries.some(
-				(q) => q.sql.includes('SELECT * FROM users WHERE id = ?') && q.args[0] === '123',
-			),
-		).toBe(true);
+			fixture.state.log.filter((entry) => entry.sql.includes('WHERE id IN')),
+		).toHaveLength(1);
 	});
 
-	it('should throw 404 for missing entity', () => {
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			return emptyCursor();
-		});
-
-		expect(() => dbServer.get('users', 'nonexistent')).toThrow();
-		try {
-			dbServer.get('users', 'nonexistent');
-		} catch (err: any) {
-			expect(err.status).toBe(404);
-		}
+	it('returns an empty array for an empty batch', () => {
+		expect(fixture.db.get([])).toEqual([]);
 	});
 
-	it('should throw 400 for invalid entity type', () => {
-		expect(() => (dbServer as any).get('nonexistent_type', '123')).toThrow();
-		try {
-			(dbServer as any).get('nonexistent_type', '123');
-		} catch (err: any) {
-			expect(err.status).toBe(400);
-		}
-	});
-
-	// ── Batch get ───────────────────────────────────────────────────────
-
-	it('should batch get multiple entities', () => {
-		const user1 = { id: '1', name: 'Alice' };
-		const user2 = { id: '2', name: 'Bob' };
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.includes('WHERE id IN')) {
-				return mockCursor([user1, user2]);
-			}
-			return emptyCursor();
-		});
-
-		const results = dbServer.get([
-			{ entity_type: 'users', id: '1' },
-			{ entity_type: 'users', id: '2' },
-		]);
-
-		expect(results).toHaveLength(2);
-		expect(results[0]).toEqual(user1);
-		expect(results[1]).toEqual(user2);
-
-		// Should use a single IN query, not N individual queries
-		const inQuery = executedQueries.find((q) => q.sql.includes('WHERE id IN'));
-		expect(inQuery).toBeDefined();
-	});
-
-	it('should return empty array for empty batch', () => {
-		const results = dbServer.get([]);
-		expect(results).toEqual([]);
-	});
-
-	it('should preserve order in batch get results', () => {
-		const user1 = { id: '1', name: 'Alice' };
-		const user2 = { id: '2', name: 'Bob' };
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.includes('WHERE id IN')) {
-				// Return in reverse order from DB
-				return mockCursor([user2, user1]);
-			}
-			return emptyCursor();
-		});
-
-		const results = dbServer.get([
-			{ entity_type: 'users', id: '1' },
-			{ entity_type: 'users', id: '2' },
-		]);
-
-		// Results should be in request order, not DB order
-		expect(results[0]).toEqual(user1);
-		expect(results[1]).toEqual(user2);
-	});
-
-	it('should throw 404 if any batch entity is missing', () => {
-		const user1 = { id: '1', name: 'Alice' };
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.includes('WHERE id IN')) {
-				return mockCursor([user1]); // Only one of two requested
-			}
-			return emptyCursor();
-		});
-
+	it('throws 404 if any batch entity is missing', () => {
+		const alice = fixture.db.create('users', { name: 'Alice' } as never) as unknown as { id: string };
 		expect(() =>
-			dbServer.get([
-				{ entity_type: 'users', id: '1' },
+			fixture.db.get([
+				{ entity_type: 'users', id: alice.id },
 				{ entity_type: 'users', id: 'missing' },
 			]),
-		).toThrow();
+		).toThrow(expect.objectContaining({ status: 404 }));
 	});
 
-	// ── Create ──────────────────────────────────────────────────────────
-
-	it('should create an entity', () => {
-		const newUser = { name: 'New User', email: 'test@example.com' };
-		const createdUser = {
-			...newUser,
-			id: 'generated-id',
-			created_at: 'now',
-			updated_at: 'now',
-		};
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.startsWith('INSERT INTO users')) {
-				return mockCursor([createdUser]);
-			}
-			return emptyCursor();
-		});
-
-		const result = dbServer.create('users', newUser as any);
-
-		expect(result).toEqual(createdUser);
-		const insertQuery = executedQueries.find((q) =>
-			q.sql.startsWith('INSERT INTO users'),
-		);
-		expect(insertQuery).toBeDefined();
-		expect(insertQuery!.sql).toContain('name, email');
+	it('creates an entity with generated id and timestamps', () => {
+		const created = fixture.db.create('users', {
+			name: 'New User',
+			email: 'test@example.com',
+		} as never) as unknown as Record<string, unknown>;
+		expect(created.id).toEqual(expect.any(String));
+		expect(created.created_at).toEqual(expect.any(Number));
+		expect(created.updated_at).toEqual(created.created_at);
+		expect(created.email).toBe('test@example.com');
 	});
 
-	// ── Update ──────────────────────────────────────────────────────────
-
-	it('should update an entity', () => {
-		const existingUser = {
-			id: '123',
+	it('deep-merges an update and bumps updated_at', () => {
+		const created = fixture.db.create('users', {
 			name: 'Old Name',
-			created_at: 'then',
-			updated_at: 'then',
-		};
-		const updateData = { name: 'New Name' };
-		const updatedUser = { ...existingUser, ...updateData, updated_at: 'now' };
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.includes('SELECT * FROM users WHERE id = ?')) {
-				return mockCursor([existingUser]);
-			}
-			if (sql.startsWith('UPDATE users')) {
-				return mockCursor([updatedUser]);
-			}
-			return emptyCursor();
-		});
-
-		const result = dbServer.update('users', '123', updateData);
-
-		expect(result).toEqual(updatedUser);
-		const updateQuery = executedQueries.find((q) => q.sql.startsWith('UPDATE users'));
-		expect(updateQuery).toBeDefined();
-		expect(updateQuery!.sql).toContain('name = ?');
-		expect(updateQuery!.args).toContain('New Name');
+			profile: { nickname: 'old' },
+		} as never) as unknown as { id: string; updated_at: number };
+		const updated = fixture.db.update('users', created.id, {
+			name: 'New Name',
+		} as never) as unknown as Record<string, unknown>;
+		expect(updated.name).toBe('New Name');
+		expect(updated.profile).toEqual({ nickname: 'old' });
+		expect(Number(updated.updated_at)).toBeGreaterThan(created.updated_at);
 	});
 
-	// ── Delete ──────────────────────────────────────────────────────────
-
-	it('should delete an entity', () => {
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			return emptyCursor();
-		});
-
-		dbServer.delete('users', '123');
-
-		const deleteQuery = executedQueries.find((q) =>
-			q.sql.startsWith('DELETE FROM users'),
+	it('deletes an entity', () => {
+		const created = fixture.db.create('users', { name: 'Doomed' } as never) as unknown as { id: string };
+		fixture.db.delete('users', created.id);
+		expect(() => fixture.db.get('users', created.id)).toThrow(
+			expect.objectContaining({ status: 404 }),
 		);
-		expect(deleteQuery).toBeDefined();
-		expect(deleteQuery!.args).toContain('123');
 	});
 
-	// ── Transaction ─────────────────────────────────────────────────────
-
-	it('should execute a transaction with multiple operations', () => {
-		const user1 = { id: 'u1', name: 'Alice', created_at: 'now', updated_at: 'now' };
-		const user2 = { id: 'u2', name: 'Bob', created_at: 'now', updated_at: 'now' };
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.startsWith('INSERT INTO users')) {
-				// Return different users for each insert
-				const name = args.find(
-					(a: any) => typeof a === 'string' && a !== 'u1' && a !== 'u2',
-				);
-				if (name === 'Alice') return mockCursor([user1]);
-				return mockCursor([user2]);
-			}
-			return emptyCursor();
-		});
-
-		const results = dbServer.transaction([
+	it('executes a transaction with multiple operations', () => {
+		const results = fixture.db.transaction([
 			{ create: { type: 'users', data: { name: 'Alice' } } },
 			{ create: { type: 'users', data: { name: 'Bob' } } },
 		]);
-
 		expect(results).toHaveLength(2);
-		results.forEach((result) => {
-			expect('entity' in result).toBe(true);
-		});
+		expect(results.every((result) => 'entity' in result)).toBe(true);
+		expect(fixture.db.list('users', {} as never).count).toBe(2);
 	});
 
-	it('should reject transactions over 5000 operations', () => {
+	it('rolls the whole transaction back when one operation throws', () => {
+		fixture.db.create('users', { name: 'Alice' } as never);
+		expect(() =>
+			fixture.db.transaction([
+				{ create: { type: 'users', data: { name: 'Bob' } } },
+				{ update: { type: 'users', id: 'does-not-exist', data: { name: 'x' } } },
+			]),
+		).toThrow();
+		expect(fixture.db.list('users', {} as never).count).toBe(1);
+	});
+
+	it('rejects transactions over 5000 operations', () => {
 		const ops = Array.from({ length: 5001 }, () => ({
 			create: { type: 'users' as const, data: { name: 'x' } },
 		}));
-
-		expect(() => dbServer.transaction(ops)).toThrow();
+		expect(() => fixture.db.transaction(ops)).toThrow();
 	});
 
-	it('should return empty array for empty transaction', () => {
-		const results = dbServer.transaction([]);
-		expect(results).toEqual([]);
+	it('returns an empty array for an empty transaction', () => {
+		expect(fixture.db.transaction([])).toEqual([]);
 	});
 
-	// ── List ────────────────────────────────────────────────────────────
-
-	it('should list entities with default query', () => {
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.startsWith('SELECT * FROM search_index')) {
-				return emptyCursor();
-			}
-			if (sql.startsWith('SELECT * FROM users')) {
-				const item = { id: '1', name: 'User 1', updated_at: 100 };
-				return mockCursor([item]);
-			}
-			return emptyCursor();
-		});
-
-		const result = dbServer.list('users', {} as any);
-		expect(result).toBeDefined();
+	it('lists entities with the default query', () => {
+		fixture.db.create('users', { name: 'User 1' } as never);
+		fixture.db.create('users', { name: 'User 2' } as never);
+		const result = fixture.db.list('users', {} as never);
+		expect(result.count).toBe(2);
+		expect(result.hits).toHaveLength(2);
 	});
 
-	// ── exec ────────────────────────────────────────────────────────────
-
-	it('should execute raw SQL with string overload', () => {
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql === 'SELECT COUNT(*) as count FROM users') {
-				return mockCursor([{ count: 42 }]);
-			}
-			return emptyCursor();
-		});
-
-		const results = dbServer.exec('SELECT COUNT(*) as count FROM users');
-		expect(results).toEqual([{ count: 42 }]);
+	it('executes raw SQL with the string overload', () => {
+		fixture.db.create('users', { name: 'Alice' } as never);
+		expect(fixture.db.exec('SELECT COUNT(*) as count FROM users')).toEqual([
+			{ count: 1 },
+		]);
 	});
 
-	// ── JSON column parse safety ────────────────────────────────────────
-
-	it('should not crash on a corrupt json column and fall back to plain columns', () => {
+	it('does not crash on a corrupt json column and falls back to plain columns', () => {
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.includes('SELECT * FROM users WHERE id = ?')) {
-				return mockCursor([{ id: '123', name: 'Test User', json: '{not valid json' }]);
-			}
-			return emptyCursor();
-		});
+		const created = fixture.db.create('users', { name: 'Test User' } as never) as unknown as { id: string };
+		fixture.state.db
+			.prepare(`UPDATE users SET json = ? WHERE id = ?`)
+			.run('{not valid json', created.id);
 
-		const result = dbServer.get('users', '123');
-		expect(result).toEqual({ id: '123', name: 'Test User' });
+		expect(fixture.db.get('users', created.id)).toMatchObject({ name: 'Test User' });
 		expect(consoleError).toHaveBeenCalledWith(
 			expect.stringContaining(`'users'`),
 			expect.anything(),
 		);
 		expect(consoleError).toHaveBeenCalledWith(
-			expect.stringContaining('123'),
+			expect.stringContaining(created.id),
 			expect.anything(),
 		);
 		consoleError.mockRestore();
 	});
 
-	// ── Index rebuild re-entrancy guard ─────────────────────────────────
-
-	it('should not start a duplicate index rebuild when re-entered mid-rebuild', async () => {
-		const { create: createOrama } = await import('@orama/orama');
-		vi.mocked(createOrama).mockClear();
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			if (sql.startsWith('SELECT * FROM search_index')) return emptyCursor();
-			if (sql.startsWith('SELECT * FROM users')) {
-				return mockCursor([{ id: '1', name: 'User 1', updated_at: 100 }]);
-			}
-			return emptyCursor();
-		});
-
-		// Re-enter getIndex for the same table while its rebuild is still populating
-		const toSparse = testConfig.users.toSparse as Mock;
-		toSparse.mockImplementationOnce((data: any) => {
-			(dbServer as any).getIndex('users');
-			return data;
-		});
-
-		(dbServer as any).getIndex('users');
-		expect(createOrama).toHaveBeenCalledTimes(1);
-	});
-
-	// ── Index name sanitization ─────────────────────────────────────────
-
-	it('should sanitize configured index names before interpolating into CREATE INDEX', () => {
-		const queries: string[] = [];
-		const sql = {
-			exec: vi.fn((statement: string) => {
-				queries.push(statement);
-				return emptyCursor();
-			}),
-		};
-		const ctx = {
-			id: { toString: () => 'mock-id' },
-			storage: { sql, transactionSync: vi.fn((cb: () => void) => cb()) },
-			abort: vi.fn(),
-		};
-		const config: TestConfig = {
+	it('sanitizes configured index names before interpolating into CREATE INDEX', () => {
+		const state = createDurableObjectState();
+		const config = {
 			users: {
-				...testConfig.users,
+				...userTable,
 				config: {
-					...testConfig.users.config,
+					...userTable.config,
 					indexes: [
 						{
 							name: 'Idx-Users"; DROP TABLE users;--',
 							table: 'users',
 							unique: false,
-							columns: [{ column: 'name' }],
+							columns: [{ column: 'name', direction: 'ASC' as const }],
 						},
 					],
 				},
-			} as unknown as Database.Table,
-		};
+			},
+		} as unknown as Record<string, Database.Table>;
+		new DatabaseServer(
+			config as never,
+			() => undefined,
+			state.ctx as never,
+			{
+				DEV: true,
+			} as never,
+		);
 
-		new DatabaseServer(config, () => ({}) as any, ctx as any, { DEV: true });
-
-		const createIndexQuery = queries.find((q) => q.startsWith('CREATE INDEX'));
-		expect(createIndexQuery).toBe(
+		const create_index = state.log.find((entry) => entry.sql.startsWith('CREATE INDEX'));
+		expect(create_index?.sql).toBe(
 			'CREATE INDEX IF NOT EXISTS idxusersdroptableusers ON users (name ASC);',
 		);
+		expect(
+			state.db
+				.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'`)
+				.all(),
+		).toHaveLength(1);
+		state.close();
 	});
 });
 
-// ── FK-Derived Fields Tests ─────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/* FK-derived fields                                                          */
+/* -------------------------------------------------------------------------- */
+
+const authorTable = Database.table('authors', (s) => ({
+	id: s.primaryKey(),
+	name: s.string().searchable(),
+}));
+
+const bookTable = Database.table('books', (s) => ({
+	id: s.primaryKey(),
+	title: s.string().searchable(),
+	author_id: s.foreignKey({ type: 'string', table: 'authors', column: 'id' }).optional(),
+	author_name: s
+		.string()
+		.derived(
+			['author_id'],
+			(_data, refs) => (refs.author_id?.name ?? 'Unknown') as string,
+		),
+}));
+
+const FK_CONFIG = {
+	authors: authorTable,
+	books: bookTable,
+} as unknown as Record<string, Database.Table>;
 
 describe('DatabaseServer: FK-derived fields', () => {
-	let dbServer: DatabaseServer<Record<string, Database.Table>>;
-	let mockSql: { exec: Mock };
-	let executedQueries: { sql: string; args: any[] }[];
-
-	// Derived function for computing author_name from FK ref
-	const authorNameFn = (data: any, refs: any) => refs.author_id?.name ?? 'Unknown';
-
-	const fkTestConfig: Record<string, Database.Table> = {
-		authors: {
-			name: 'authors',
-			_: {} as any,
-			config: {
-				primary_key: 'id',
-				primary_key_type: 'string',
-				table_definition: {
-					id: 'TEXT PRIMARY KEY',
-					name: 'TEXT',
-				},
-				indexes: [],
-				foreign_keys: {},
-				derived_fields: {},
-				sortable_fields: ['updated_at'],
-				searchable_fields: ['id', 'name'],
-				unique_fields: [],
-				orama: {
-					schema: { id: 'string', name: 'string', updated_at: 'number' },
-					sort: { enabled: false },
-				},
-			},
-			parse: vi.fn((data: any) => data),
-			toSparse: vi.fn((data: any) => ({
-				id: data.id,
-				name: data.name,
-				updated_at: data.updated_at,
-				created_at: data.created_at,
-			})),
-		} as unknown as Database.Table,
-		books: {
-			name: 'books',
-			_: {
-				author_name: {
-					_: {
-						type: 'string',
-						derived: true,
-						derived_fn: authorNameFn,
-						derived_foreign_keys: ['author_id'],
-						searchable: true,
-					},
-				},
-			} as any,
-			config: {
-				primary_key: 'id',
-				primary_key_type: 'string',
-				table_definition: {
-					id: 'TEXT PRIMARY KEY',
-					title: 'TEXT',
-					author_id: 'TEXT REFERENCES authors(id)',
-				},
-				indexes: [],
-				foreign_keys: {
-					author_id: { type: 'string', table: 'authors', column: 'id' },
-				},
-				derived_fields: {
-					author_name: { foreign_keys: ['author_id'] },
-				},
-				sortable_fields: ['updated_at'],
-				searchable_fields: ['id', 'title', 'author_name'],
-				unique_fields: [],
-				orama: {
-					schema: {
-						id: 'string',
-						title: 'string',
-						author_name: 'string',
-						updated_at: 'number',
-					},
-					sort: { enabled: false },
-				},
-			},
-			parse: vi.fn((data: any) => data),
-			toSparse: vi.fn((data: any) => ({
-				id: data.id,
-				title: data.title,
-				updated_at: data.updated_at,
-				created_at: data.created_at,
-			})),
-		} as unknown as Database.Table,
-	};
-
+	let fixture: Fixture;
 	beforeEach(() => {
-		executedQueries = [];
-
-		mockSql = {
-			exec: vi.fn((sql: string, ...args: any[]) => {
-				executedQueries.push({ sql, args });
-
-				if (sql.includes('SELECT * FROM state WHERE id = main')) {
-					return mockCursor([
-						{
-							id: 'main',
-							json: '{}',
-							created_at: Date.now(),
-							updated_at: Date.now(),
-							table_config: {},
-							sql_indexes: [],
-						},
-					]);
-				}
-
-				if (sql.includes('SELECT * FROM search_index')) {
-					return emptyCursor();
-				}
-
-				return emptyCursor();
-			}),
-		};
-
-		const mockStorage = {
-			sql: mockSql,
-			transactionSync: vi.fn((cb: () => void) => cb()),
-			getAlarm: vi.fn(),
-			setAlarm: vi.fn(),
-			deleteAlarm: vi.fn(),
-			deleteAll: vi.fn(),
-			getBookmarkForTime: vi.fn(),
-			onNextSessionRestoreBookmark: vi.fn(),
-		};
-
-		const mockCtx = {
-			id: { toString: () => 'mock-id' },
-			storage: mockStorage,
-			abort: vi.fn(),
-		};
-
-		const mockEnv = { DEV: true };
-
-		dbServer = new DatabaseServer(
-			fkTestConfig,
-			() => ({}) as any,
-			mockCtx as any,
-			mockEnv,
-		);
+		fixture = createServer(FK_CONFIG);
 	});
+	afterEach(() => fixture.state.close());
 
-	it('should build reverse FK map from config', () => {
-		// The reverse FK map should know that updating 'authors' may affect 'books'
-		// We can't directly access #reverse_fk_map, but we can test the behavior
-		// by verifying cascade reindexing occurs on author update
-		expect(dbServer).toBeDefined();
-	});
+	/** The `author_name` a book's search index and sync payload currently carry. */
+	function indexedAuthorName(id: string): unknown {
+		const hits = fixture.db.list('books', { limit: 100 } as never).hits as {
+			id: string;
+			document: Record<string, unknown>;
+		}[];
+		return hits.find((hit) => hit.id === id)?.document.author_name;
+	}
 
-	it('should compute FK-derived fields on create', () => {
-		const mockAuthor = { id: 'a1', name: 'Alice', created_at: 100, updated_at: 100 };
-		const mockBook = {
-			id: 'b1',
+	it('computes FK-derived fields on create', () => {
+		const author = fixture.db.create('authors', { name: 'Alice' } as never) as unknown as { id: string };
+		const book = fixture.db.create('books', {
 			title: 'Book 1',
-			author_id: 'a1',
-			created_at: 200,
-			updated_at: 200,
-		};
-
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			// When creating the book, the system will fetch the referenced author
-			if (sql.includes('SELECT * FROM authors WHERE id = ?') && args[0] === 'a1') {
-				return mockCursor([mockAuthor]);
-			}
-			if (sql.startsWith('INSERT INTO books')) {
-				return mockCursor([mockBook]);
-			}
-			if (sql.includes('SELECT * FROM search_index')) {
-				return emptyCursor();
-			}
-			return emptyCursor();
-		});
-
-		const results = dbServer.transaction([
-			{ create: { type: 'books', data: { title: 'Book 1', author_id: 'a1' } } },
-		]);
-
-		expect(results).toHaveLength(1);
-
-		// Verify the author was fetched for FK-derived computation
-		const authorFetch = executedQueries.find(
-			(q) => q.sql.includes('SELECT * FROM authors WHERE id = ?') && q.args[0] === 'a1',
-		);
-		expect(authorFetch).toBeDefined();
+			author_id: author.id,
+		} as never) as unknown as { id: string };
+		expect(indexedAuthorName(book.id)).toBe('Alice');
 	});
 
-	it('should cascade reindex books when author is updated', () => {
-		const mockAuthor = { id: 'a1', name: 'New Name', created_at: 100, updated_at: 300 };
-		const mockExistingAuthor = {
-			id: 'a1',
-			name: 'Old Name',
-			created_at: 100,
-			updated_at: 100,
-		};
-		const mockBook1 = {
-			id: 'b1',
+	it('cascades to dependent books when the author is updated', () => {
+		const author = fixture.db.create('authors', { name: 'Old Name' } as never) as unknown as { id: string };
+		const first = fixture.db.create('books', {
 			title: 'Book 1',
-			author_id: 'a1',
-			created_at: 200,
-			updated_at: 200,
-		};
-		const mockBook2 = {
-			id: 'b2',
+			author_id: author.id,
+		} as never) as unknown as { id: string; updated_at: number };
+		const second = fixture.db.create('books', {
 			title: 'Book 2',
-			author_id: 'a1',
-			created_at: 200,
-			updated_at: 200,
-		};
+			author_id: author.id,
+		} as never) as unknown as { id: string };
 
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			// GET existing author for update
-			if (sql.includes('SELECT * FROM authors WHERE id = ?') && args[0] === 'a1') {
-				return mockCursor([mockExistingAuthor]);
-			}
-			// UPDATE author
-			if (sql.startsWith('UPDATE authors')) {
-				return mockCursor([mockAuthor]);
-			}
-			// CASCADE: find books referencing this author
-			if (sql.includes('SELECT * FROM books WHERE author_id = ?') && args[0] === 'a1') {
-				return mockCursor([mockBook1, mockBook2]);
-			}
-			// CASCADE: fetch author for each book's FK-derived recomputation
-			if (sql.includes('SELECT * FROM authors WHERE id = ? LIMIT 1')) {
-				return mockCursor([mockAuthor]);
-			}
-			if (sql.includes('SELECT * FROM search_index')) {
-				return emptyCursor();
-			}
-			return emptyCursor();
-		});
+		fixture.db.update('authors', author.id, { name: 'New Name' } as never);
 
-		const results = dbServer.transaction([
-			{ update: { type: 'authors', id: 'a1', data: { name: 'New Name' } } },
-		]);
-
-		expect(results).toHaveLength(1);
-
-		// Verify cascade query was executed — books referencing author a1 were found
-		const cascadeQuery = executedQueries.find(
-			(q) =>
-				q.sql.includes('SELECT * FROM books WHERE author_id = ?') && q.args[0] === 'a1',
-		);
-		expect(cascadeQuery).toBeDefined();
+		expect(indexedAuthorName(first.id)).toBe('New Name');
+		expect(indexedAuthorName(second.id)).toBe('New Name');
+		// The dependent rows must move in the sync timeline or clients never see it.
+		expect(
+			Number((fixture.db.get('books', first.id) as unknown as { updated_at: number }).updated_at),
+		).toBeGreaterThan(first.updated_at);
 	});
 
-	it('should cascade reindex books when author is deleted', () => {
-		const mockBook1 = {
-			id: 'b1',
+	it('cascades to dependent books when the author is deleted', () => {
+		const author = fixture.db.create('authors', { name: 'Alice' } as never) as unknown as { id: string };
+		const book = fixture.db.create('books', {
 			title: 'Book 1',
-			author_id: 'a1',
-			created_at: 200,
-			updated_at: 200,
-		};
+			author_id: author.id,
+		} as never) as unknown as { id: string };
+		expect(indexedAuthorName(book.id)).toBe('Alice');
 
-		mockSql.exec.mockImplementation((sql: string, ...args: any[]) => {
-			executedQueries.push({ sql, args });
-			// CASCADE: find books referencing this author
-			if (sql.includes('SELECT * FROM books WHERE author_id = ?') && args[0] === 'a1') {
-				return mockCursor([mockBook1]);
-			}
-			// CASCADE: fetch author for FK-derived recomputation (author is now deleted)
-			if (sql.includes('SELECT * FROM authors WHERE id = ? LIMIT 1')) {
-				return emptyCursor(); // Author no longer exists
-			}
-			if (sql.includes('SELECT * FROM search_index')) {
-				return emptyCursor();
-			}
-			return emptyCursor();
-		});
-
-		const results = dbServer.transaction([{ delete: { type: 'authors', id: 'a1' } }]);
-
-		expect(results).toHaveLength(1);
-
-		// Verify cascade query was executed
-		const cascadeQuery = executedQueries.find(
-			(q) =>
-				q.sql.includes('SELECT * FROM books WHERE author_id = ?') && q.args[0] === 'a1',
-		);
-		expect(cascadeQuery).toBeDefined();
+		fixture.db.delete('authors', author.id);
+		expect(indexedAuthorName(book.id)).toBe('Unknown');
 	});
 });

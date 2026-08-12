@@ -3,14 +3,14 @@
 	"version": "1.1.0",
 	"type": "module",
 	"license": "MIT",
-	"description": "Reactive SQLite for Cloudflare Durable Objects — typed schema, client/worker sync over Comlink, and full-text search via Orama.",
+	"description": "Reactive SQLite for Cloudflare Durable Objects — typed schema, client/worker sync over Comlink, and a built-in full-text search engine.",
 	"keywords": [
 		"database",
 		"sqlite",
 		"durable-objects",
 		"cloudflare",
 		"workers",
-		"orama",
+		"search",
 		"reactive",
 		"sync",
 		"delightstack"
@@ -53,7 +53,8 @@
 	"files": [
 		"dist",
 		"!dist/**/*.test.*",
-		"!dist/**/*.spec.*"
+		"!dist/**/*.spec.*",
+		"!dist/**/__tests__"
 	],
 	"scripts": {
 		"build": "svelte-package -i src",
@@ -72,8 +73,6 @@
 	},
 	"dependencies": {
 		"@delightstack/utilities": "workspace:*",
-		"@msgpack/msgpack": "^3.1.3",
-		"@orama/orama": "^3.1.16",
 		"comlink": "^4.4.2",
 		"fast-equals": "^6.0.0",
 		"zod": "^4.1.12"

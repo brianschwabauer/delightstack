@@ -228,18 +228,16 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 }
 
 /**
- * Normalize where-clause shorthands to the operation objects Orama requires.
+ * Normalize where-clause shorthands into operation objects.
  *
- * Orama's filter grammar is inconsistent across property types: `string`
- * (Radix) and `boolean` accept plain values, but `enum` (Flat) and `number`
- * (AVL) require an operation object — a bare `where: { folder: 'inbox' }` on
- * an enum throws INVALID_FILTER_OPERATION (Object.keys('inbox') reads the
- * string's indices as "operations"), which surfaced to API callers as a 500.
+ * A bare `where: { folder: 'inbox' }` on an enum or number field is accepted
+ * and rewritten to `{ folder: { eq: 'inbox' } }`, so callers never have to know
+ * which field types take a plain value.
  *
  * Callers may still pass explicit operators; only primitives and arrays on
- * enum/number properties are rewritten. `and`/`or`/`not` composites are
- * normalized recursively. Unknown properties are left untouched — Orama's
- * UNKNOWN_FILTER_PROPERTY handles those.
+ * enum/number fields are rewritten. `and`/`or`/`not` composites are normalized
+ * recursively. Unknown fields are left untouched — the engine's own field
+ * validation reports those.
  *
  * Operator spellings are the canonical ones only (`contains_all`,
  * `contains_any`, `not_in`); the pre-rename spellings are not accepted

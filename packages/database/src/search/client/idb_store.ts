@@ -274,7 +274,7 @@ export interface OpenSearchDatabaseOptions {
 	extra_stores?: readonly ExtraStoreDefinition[];
 	/**
 	 * Stores to drop if present — the migration seam for stores this design
-	 * replaced (the legacy `search_index` Orama blob store). Only applied when a
+	 * replaced (the legacy `search_index` blob store). Only applied when a
 	 * version upgrade actually runs.
 	 */
 	delete_stores?: readonly string[];

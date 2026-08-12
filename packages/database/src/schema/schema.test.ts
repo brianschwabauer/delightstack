@@ -114,38 +114,6 @@ describe('Schema: Database.table()', () => {
 		expect(table.config.searchable_fields).not.toContain('address.zip');
 	});
 
-	it('should set getDocumentIndexId using the primary key field', () => {
-		const table = Database.table('items', (schema) => ({
-			id: schema.primaryKey(),
-			name: schema.string(),
-		}));
-
-		const getId = table.config.orama.components.getDocumentIndexId;
-		expect(getId({ id: 'abc', name: 'test' })).toBe('abc');
-	});
-
-	it('should set getDocumentIndexId for a custom primary key name', () => {
-		const table = Database.table('items', (schema) => ({
-			slug: schema.primaryKey(),
-			name: schema.string(),
-		}));
-
-		expect(table.config.primary_key).toBe('slug');
-		const getId = table.config.orama.components.getDocumentIndexId;
-		expect(getId({ slug: 'my-item', name: 'test' })).toBe('my-item');
-	});
-
-	it('should convert numeric primary keys to string in getDocumentIndexId', () => {
-		const table = Database.table('items', (schema) => ({
-			item_id: schema.primaryKey({ type: 'number' }),
-			name: schema.string(),
-		}));
-
-		expect(table.config.primary_key).toBe('item_id');
-		const getId = table.config.orama.components.getDocumentIndexId;
-		expect(getId({ item_id: 42, name: 'test' })).toBe('42');
-	});
-
 	it('should auto-inject id primary key when none is defined', () => {
 		const table = Database.table('people', (schema) => ({
 			name: schema.string(),
@@ -184,14 +152,14 @@ describe('Schema: Database.table()', () => {
 		);
 	});
 
-	it('should add updated_at to orama schema as a number', () => {
+	it('should add updated_at to the search schema as a number', () => {
 		const table = Database.table('items', (schema) => ({
 			id: schema.primaryKey(),
 			name: schema.string(),
 		}));
 
-		expect(table.config.orama.schema).toHaveProperty('updated_at', 'number');
-		expect(table.config.orama.schema).toHaveProperty('created_at', 'number');
+		expect(table.config.index_schema).toHaveProperty('updated_at', 'number');
+		expect(table.config.index_schema).toHaveProperty('created_at', 'number');
 	});
 
 	it('should make updated_at sortable for sync/change detection', () => {
@@ -201,7 +169,6 @@ describe('Schema: Database.table()', () => {
 		}));
 
 		expect(table.config.sortable_fields).toContain('updated_at');
-		expect(table.config.orama.sort.enabled).toBe(true);
 	});
 
 	it('should throw if created_at is used as a field name', () => {
@@ -298,11 +265,9 @@ describe('Schema: toSparse()', () => {
 	});
 
 	it('omits missing/null searchable fields instead of materializing them', () => {
-		// An explicit `field: undefined` key survives the msgpack index save as
-		// `null` (msgpack has no undefined), and Orama's remove() crashes on a
-		// null array property (`value.length`) — so a doc reloaded after a DO
-		// restart could never be updated or deleted again (2026-08-11 incident:
-		// every trash/archive of an affected thread 500'd).
+		// An explicit `field: undefined` is absence, not a value: materializing the
+		// key would make the indexed document claim an empty array/string where the
+		// entity has nothing at all.
 		const table = Database.table('items', (schema) => ({
 			id: schema.primaryKey(),
 			name: schema.string().searchable(),
@@ -599,14 +564,14 @@ describe('Schema: derived() modifier', () => {
 		expect(table.config.sortable_fields).toContain('name');
 	});
 
-	it('should include derived fields in orama schema', () => {
+	it('should include derived fields in the search schema', () => {
 		const table = Database.table('person_d4', (schema) => ({
 			id: schema.primaryKey(),
 			first_name: schema.string(),
 			name: schema.string().derived((data) => data.first_name),
 		}));
 
-		expect(table.config.orama.schema).toHaveProperty('name', 'string');
+		expect(table.config.index_schema).toHaveProperty('name', 'string');
 	});
 
 	it('should NOT include derived fields in parse output', () => {
@@ -792,7 +757,7 @@ describe('Schema: FK-derived fields', () => {
 		expect(table.config.searchable_fields).toContain('author_name');
 	});
 
-	it('should include FK-derived fields in orama schema', () => {
+	it('should include FK-derived fields in the search schema', () => {
 		const table = Database.table('book_fk3', (schema) => ({
 			title: schema.string(),
 			author_id: schema.foreignKey({ type: 'string', table: 'authors', column: 'id' }),
@@ -801,7 +766,7 @@ describe('Schema: FK-derived fields', () => {
 				.derived(['author_id'], (data, refs) => refs.author_id?.name ?? 'Unknown'),
 		}));
 
-		expect(table.config.orama.schema).toHaveProperty('author_name', 'string');
+		expect(table.config.index_schema).toHaveProperty('author_name', 'string');
 	});
 
 	it('should auto-create an index on FK columns used by derived fields', () => {
@@ -982,7 +947,7 @@ describe('Schema: FK-derived fields', () => {
 		}));
 
 		expect((table._['category_priority']._ as any)['derived']).toBe(true);
-		expect(table.config.orama.schema).toHaveProperty('category_priority', 'number');
+		expect(table.config.index_schema).toHaveProperty('category_priority', 'number');
 	});
 });
 
@@ -1037,7 +1002,7 @@ describe('searchable arrays', () => {
 			tags: schema.array(schema.string()).searchable(),
 		}));
 		expect(table.config.searchable_fields).toContain('tags');
-		expect(table.config.orama.schema).toHaveProperty('tags', 'string[]');
+		expect(table.config.index_schema).toHaveProperty('tags', 'string[]');
 		const sparse = table.toSparse({
 			id: 'a',
 			title: 'hello',
@@ -1054,7 +1019,7 @@ describe('searchable arrays', () => {
 			label_ids: schema.array(schema.enum(['l_red', 'l_green'])).searchable(),
 		}));
 		expect(table.config.searchable_fields).toContain('label_ids');
-		expect(table.config.orama.schema).toHaveProperty('label_ids', 'enum[]');
+		expect(table.config.index_schema).toHaveProperty('label_ids', 'enum[]');
 		// Arrays live in the internal `json` overflow column, never their own column
 		expect(table.config.table_definition).not.toHaveProperty('label_ids');
 		const sparse = table.toSparse({
@@ -1073,7 +1038,7 @@ describe('searchable arrays', () => {
 			label_ids: schema.array(schema.enum(['l_red', 'l_green'])),
 		}));
 		expect(table.config.searchable_fields).not.toContain('label_ids');
-		expect(table.config.orama.schema).not.toHaveProperty('label_ids');
+		expect(table.config.index_schema).not.toHaveProperty('label_ids');
 	});
 
 	it('ignores .searchable() on an array of an unsupported item type', () => {
@@ -1081,7 +1046,7 @@ describe('searchable arrays', () => {
 			rows: schema.array(schema.object({ city: schema.string() })).searchable(),
 		}));
 		expect(table.config.searchable_fields).not.toContain('rows');
-		expect(table.config.orama.schema).not.toHaveProperty('rows');
+		expect(table.config.index_schema).not.toHaveProperty('rows');
 	});
 
 	it('parses and validates enum array items against the declared options', () => {

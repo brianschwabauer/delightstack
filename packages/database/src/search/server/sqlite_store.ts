@@ -1198,8 +1198,14 @@ export class SqliteSearchStore {
 			return proposed;
 		}
 		const allocated = Math.max(proposed, existing.last_updated_at + 1);
+		// `first_updated_at = 0` means "no change has ever been recorded" (a state
+		// row created by a rebuild of an empty table, or migrated from an index
+		// that had never been written). Taking MIN against it would pin the lower
+		// window bound at 0 forever, and a descending-backfilling client reads that
+		// as "you have reached the beginning" after its very first page.
 		this.sql.exec(
-			`UPDATE search_state SET last_updated_at = ?, first_updated_at = MIN(first_updated_at, ?) WHERE entity_type = ?;`,
+			`UPDATE search_state SET last_updated_at = ?, first_updated_at = CASE WHEN first_updated_at = 0 THEN ? ELSE MIN(first_updated_at, ?) END WHERE entity_type = ?;`,
+			allocated,
 			allocated,
 			allocated,
 			entity_type,

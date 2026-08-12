@@ -1824,23 +1824,3 @@ export function batteryCasesByTag(tag: BatteryTag): BatteryCase[] {
 export function batteryCasesForCorpus(preset: CorpusPresetName): BatteryCase[] {
 	return SEARCH_BATTERY.filter((battery_case) => battery_case.corpus === preset);
 }
-
-/**
- * Cases whose results may be compared against Orama.
- *
- * Excludes everything the Orama verification report proved is broken or that we
- * deliberately changed, plus the server-only vector/hybrid paths and the cases
- * that must throw.
- */
-export function batteryCasesWithOramaParity(): BatteryCase[] {
-	const excluded: BatteryTag[] = [
-		'deviation',
-		'orama-bug',
-		'orama-throws',
-		'error',
-		'server-only',
-	];
-	return SEARCH_BATTERY.filter(
-		(battery_case) => !battery_case.tags.some((tag) => excluded.includes(tag)),
-	);
-}

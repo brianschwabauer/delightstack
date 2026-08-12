@@ -1,10 +1,13 @@
+// @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DatabaseServer, DatabaseSyncResponse } from './db.server';
 import { Database } from '../schema/schema';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
 
-// Mock cloudflare:workers (the only module not available in the test runtime).
-// Everything else (orama, msgpack, schema) is REAL so these tests exercise the
-// actual sync/index logic rather than mocks.
+// The documented sync-protocol semantics — half-open windows, equal-timestamp
+// runs, deletions on the same timeline, monotonic timestamps, config_version
+// resync — driven through the public API against real SQLite (the same harness
+// as `db.server.native.test.ts`). Only `cloudflare:workers` is mocked.
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {
 		constructor(
@@ -15,163 +18,6 @@ vi.mock('cloudflare:workers', () => {
 	return { DurableObject };
 });
 
-// ── In-memory SQL fake ───────────────────────────────────────────────────────
-// Implements just the SQL statement shapes that DatabaseServer issues, backed
-// by plain Maps. This lets create/update/delete/sync run end-to-end against
-// the real Orama index.
-
-function makeCursor<T extends Record<string, any>>(rows: T[]) {
-	let index = 0;
-	return {
-		next: () => {
-			if (index < rows.length) return { done: false, value: rows[index++] };
-			return { done: true, value: undefined };
-		},
-		toArray: () => rows,
-		one: () => {
-			if (rows.length !== 1)
-				throw new Error(`Expected exactly one row, got ${rows.length}`);
-			return rows[0];
-		},
-		[Symbol.iterator]: function* () {
-			yield* rows;
-		},
-	};
-}
-
-function createFakeSqlStorage() {
-	// table name -> primary key -> row
-	const tables = new Map<string, Map<string | number, Record<string, any>>>();
-	const getTable = (name: string) => {
-		let table = tables.get(name);
-		if (!table) {
-			table = new Map();
-			tables.set(name, table);
-		}
-		return table;
-	};
-
-	const exec = (sql: string, ...args: any[]) => {
-		const statements = sql.includes(';\n') || sql.match(/;\s*CREATE/i) ? sql : sql;
-		void statements;
-
-		// CREATE TABLE / CREATE INDEX / ALTER TABLE → no-op
-		if (/^\s*CREATE\s|^\s*ALTER\s|^\s*DROP\s|^\s*PRAGMA\s/i.test(sql))
-			return makeCursor([]);
-
-		let match: RegExpMatchArray | null;
-
-		// SELECT * FROM <t> WHERE <pk> = ? LIMIT 1
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) = \? LIMIT 1/))) {
-			const [, table_name, pk] = match;
-			const rows = [...getTable(table_name).values()].filter((r) => r[pk] === args[0]);
-			return makeCursor(rows.slice(0, 1));
-		}
-
-		// SELECT * FROM <t> WHERE <pk> IN (?, ...)
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) IN \(/))) {
-			const [, table_name, pk] = match;
-			const wanted = new Set(args);
-			const rows = [...getTable(table_name).values()].filter((r) => wanted.has(r[pk]));
-			return makeCursor(rows);
-		}
-
-		// SELECT * FROM <t> WHERE <col> = ?  (FK lookups / cascade queries)
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE (\w+) = \?$/))) {
-			const [, table_name, col] = match;
-			const rows = [...getTable(table_name).values()].filter((r) => r[col] === args[0]);
-			return makeCursor(rows);
-		}
-
-		// SELECT * FROM <t> WHERE id LIKE ?  (search_index chunks)
-		if ((match = sql.match(/^SELECT \* FROM (\w+) WHERE id LIKE \?/))) {
-			const [, table_name] = match;
-			const prefix = String(args[0]).replace(/%$/, '');
-			const rows = [...getTable(table_name).values()].filter((r) =>
-				String(r.id).startsWith(prefix),
-			);
-			return makeCursor(rows);
-		}
-
-		// DELETE FROM <t> WHERE id LIKE ?
-		if ((match = sql.match(/^DELETE FROM (\w+) WHERE id LIKE \?/))) {
-			const [, table_name] = match;
-			const prefix = String(args[0]).replace(/%$/, '');
-			const table = getTable(table_name);
-			for (const key of table.keys()) {
-				if (String(key).startsWith(prefix)) table.delete(key);
-			}
-			return makeCursor([]);
-		}
-
-		// DELETE FROM <t> WHERE <pk> = ?
-		if ((match = sql.match(/^DELETE FROM (\w+) WHERE (\w+) = \?/))) {
-			const [, table_name, pk] = match;
-			const table = getTable(table_name);
-			for (const [key, row] of table.entries()) {
-				if (row[pk] === args[0]) table.delete(key);
-			}
-			return makeCursor([]);
-		}
-
-		// SELECT * FROM <t>  (full scan, index rebuild)
-		if ((match = sql.match(/^SELECT \* FROM (\w+)$/))) {
-			return makeCursor([...getTable(match[1]).values()]);
-		}
-
-		// INSERT OR REPLACE INTO search_journal (cols) VALUES (?, ...)
-		// Composite (entity_type, doc_id) primary key — upsert, not append.
-		if ((match = sql.match(/^INSERT OR REPLACE INTO (\w+) \(([^)]+)\) VALUES/))) {
-			const [, table_name, raw_columns] = match;
-			const columns = raw_columns.split(',').map((c) => c.trim());
-			const row: Record<string, any> = {};
-			columns.forEach((col, i) => {
-				row[col] = args[i] === undefined ? null : args[i];
-			});
-			getTable(table_name).set(`${row.entity_type}|${row.doc_id}`, row);
-			return makeCursor([{ ...row }]);
-		}
-
-		// INSERT INTO <t> (cols) VALUES (?, ...) [RETURNING *]
-		if ((match = sql.match(/^INSERT INTO (\w+) \(([^)]+)\) VALUES/))) {
-			const [, table_name, raw_columns] = match;
-			const columns = raw_columns.split(',').map((c) => c.trim());
-			const row: Record<string, any> = {};
-			columns.forEach((col, i) => {
-				row[col] = args[i] === undefined ? null : args[i];
-			});
-			// emulate INTEGER PRIMARY KEY auto-increment when id is null
-			const table = getTable(table_name);
-			if (row.id == null && columns.includes('id')) {
-				row.id = table.size + 1;
-			}
-			table.set(row.id ?? `${table.size + 1}`, row);
-			return makeCursor([{ ...row }]);
-		}
-
-		// UPDATE <t> SET a = ?, b = ? WHERE <pk> = ? [RETURNING *]
-		if ((match = sql.match(/^UPDATE (\w+) SET (.+?) WHERE (\w+) = \?/))) {
-			const [, table_name, set_clause, pk] = match;
-			const columns = set_clause.split(',').map((c) => c.trim().split(' ')[0]);
-			const pk_value = args[args.length - 1];
-			const table = getTable(table_name);
-			const updated: Record<string, any>[] = [];
-			for (const row of table.values()) {
-				if (row[pk] !== pk_value) continue;
-				columns.forEach((col, i) => {
-					row[col] = args[i] === undefined ? null : args[i];
-				});
-				updated.push({ ...row });
-			}
-			return makeCursor(updated);
-		}
-
-		throw new Error(`Fake SQL storage does not understand: ${sql}`);
-	};
-
-	return { exec: vi.fn(exec), tables };
-}
-
 // ── Server factory ───────────────────────────────────────────────────────────
 
 const itemTable = Database.table('item', (s) => ({
@@ -179,29 +25,26 @@ const itemTable = Database.table('item', (s) => ({
 	name: s.string().searchable(),
 }));
 
+/** Every server built by a test, closed after it. */
+const open_states: ReturnType<typeof createDurableObjectState>[] = [];
+
 function createServer(
 	tables: Record<string, unknown> = { item: itemTable as unknown as Database.Table },
 ) {
-	const sql = createFakeSqlStorage();
-	const storage = {
-		sql,
-		transactionSync: (cb: () => unknown) => cb(),
-		deleteAlarm: vi.fn(),
-		deleteAll: vi.fn(),
-	};
-	const ctx = {
-		id: { toString: () => 'test-id' },
-		storage,
-		abort: vi.fn(),
-	};
+	const state = createDurableObjectState();
+	open_states.push(state);
 	const db = new DatabaseServer(
 		tables as Record<string, Database.Table>,
 		() => undefined,
-		ctx as any,
+		state.ctx as any,
 		{ DEV: true } as any,
 	);
-	return { db, sql };
+	return { db, state };
 }
+
+afterEach(() => {
+	while (open_states.length) open_states.pop()?.close();
+});
 
 type SyncEntity = NonNullable<
 	DatabaseSyncResponse<{ item: typeof itemTable }>['entity']['item']
@@ -455,82 +298,6 @@ describe('DatabaseServer: update guarantees', () => {
 
 		expect(updated.name).toBe('renamed');
 		expect(updated.owner_id).toBe('user-1'); // readonly field unchanged
-	});
-});
-
-describe('DatabaseServer: tombstone pruning', () => {
-	const original_max = DatabaseServer.MAX_DELETE_TOMBSTONES;
-
-	beforeEach(() => {
-		vi.useFakeTimers();
-		vi.setSystemTime(T0);
-	});
-
-	afterEach(() => {
-		vi.useRealTimers();
-		DatabaseServer.MAX_DELETE_TOMBSTONES = original_max;
-	});
-
-	it('prunes the oldest tombstones past the cap and bumps the config version', () => {
-		DatabaseServer.MAX_DELETE_TOMBSTONES = 4;
-		const { db } = createServer();
-		const ids: string[] = [];
-		for (let i = 0; i < 6; i++) {
-			vi.setSystemTime(T0 + i * 1000);
-			ids.push(db.create('item', { name: `item ${i}` }).id as string);
-		}
-
-		// A client fully synced before any deletes happen
-		const before = db.sync({ start_updated_at: 0 });
-		const synced_through = (before.entity.item as any).end_updated_at as number;
-		const version_before = (before.entity.item as any).config_version as number;
-
-		// Delete 5 entities — one past the cap of 4 — which forces a prune
-		for (let i = 0; i < 5; i++) {
-			vi.setSystemTime(T0 + 100_000 + i * 1000);
-			db.delete('item', ids[i]);
-		}
-
-		// The tombstone map is bounded and the version was bumped
-		const after = db.sync({
-			start_updated_at: 0,
-			entity: { item: { config_version: version_before } },
-		});
-		const entity = after.entity.item as any;
-		expect(entity.config_version).toBeGreaterThan(version_before);
-		// The stale client gets the full-resync payload (config included)
-		expect(entity.config).toBeDefined();
-
-		// A client paging from its pre-prune cursor with the NEW version would
-		// miss pruned deletes — but the version mismatch reroutes it through the
-		// full resync, after which only live documents remain
-		const resynced = db.sync({
-			entity: { item: { config_version: version_before } },
-		});
-		const docs = [
-			...(resynced.entity.item as any).created,
-			...(resynced.entity.item as any).updated,
-		];
-		expect(docs.map((d: any) => d.id).sort()).toEqual([ids[5]].sort());
-		void synced_through;
-	});
-
-	it('does not prune or bump the version while under the cap', () => {
-		DatabaseServer.MAX_DELETE_TOMBSTONES = 100;
-		const { db } = createServer();
-		const ids: string[] = [];
-		for (let i = 0; i < 3; i++) {
-			vi.setSystemTime(T0 + i * 1000);
-			ids.push(db.create('item', { name: `item ${i}` }).id as string);
-		}
-		const version_before = (db.sync({ start_updated_at: 0 }).entity.item as any)
-			.config_version as number;
-		vi.setSystemTime(T0 + 10_000);
-		db.delete('item', ids[0]);
-
-		const res = db.sync({ start_updated_at: 0 });
-		expect((res.entity.item as any).config_version).toBe(version_before);
-		expect((res.entity.item as any).deleted).toEqual([ids[0]]);
 	});
 });
 
