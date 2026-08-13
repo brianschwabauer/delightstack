@@ -28,6 +28,11 @@ export function websocketTransport(ws: PresenceWebsocketClient): PresenceTranspo
 			}));
 		},
 		send(message: PresenceMessage) {
+			// Presence is lossy by design (heartbeat + snapshot recover state), so
+			// a message while disconnected is dropped, not thrown: `ws.send`
+			// rejects before the connect handshake completes, and PresenceClient
+			// re-announces on the connected edge anyway.
+			if (!ws.connected) return;
 			// PresenceMessage members have no index signature, so widen via unknown
 			// to satisfy the CustomMessage branch of the WebsocketMessage union.
 			void ws.send(message as unknown as WebsocketMessage);

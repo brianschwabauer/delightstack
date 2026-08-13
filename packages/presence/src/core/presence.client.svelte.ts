@@ -113,6 +113,7 @@ export class PresenceClient {
 	#change_listeners = new Set<() => void>();
 	#unsub: (() => void) | undefined;
 	#effect_cleanup: (() => void) | undefined;
+	#connect_effect_cleanup: (() => void) | undefined;
 	#prune_timer: ReturnType<typeof setInterval> | undefined;
 	#heartbeat_timer: ReturnType<typeof setInterval> | undefined;
 	#idle_timer: ReturnType<typeof setTimeout> | undefined;
@@ -268,8 +269,27 @@ export class PresenceClient {
 		}, this.#heartbeat_ms);
 
 		// Announce ourselves and ask the room/server for the current snapshot.
-		this.#scheduleUpdate(true);
-		this.#transport.send({ event: 'presence:request', presence_id: this.presence_id });
+		// Immediately when the transport is already connected; otherwise on its
+		// connected edge — start() usually runs while the socket is still
+		// handshaking, and an announce sent before the connect is dropped by the
+		// adapter. The edge watcher also re-announces after every reconnect, so a
+		// network blip can't leave us invisible until the next heartbeat.
+		const announce = () => {
+			this.#scheduleUpdate(true);
+			this.#transport.send({
+				event: 'presence:request',
+				presence_id: this.presence_id,
+			});
+		};
+		let was_connected = this.#transport.connected;
+		if (was_connected) announce();
+		this.#connect_effect_cleanup = $effect.root(() => {
+			$effect(() => {
+				const connected = this.#transport.connected;
+				if (connected && !was_connected && this.#started) announce();
+				was_connected = connected;
+			});
+		});
 
 		if (typeof window !== 'undefined') {
 			window.addEventListener('pointermove', this.#activity, { passive: true });
@@ -292,6 +312,8 @@ export class PresenceClient {
 		this.#unsub = undefined;
 		this.#effect_cleanup?.();
 		this.#effect_cleanup = undefined;
+		this.#connect_effect_cleanup?.();
+		this.#connect_effect_cleanup = undefined;
 		if (this.#prune_timer) clearInterval(this.#prune_timer);
 		if (this.#heartbeat_timer) clearInterval(this.#heartbeat_timer);
 		if (this.#idle_timer) clearTimeout(this.#idle_timer);
