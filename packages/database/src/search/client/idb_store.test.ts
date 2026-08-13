@@ -11,7 +11,7 @@
  * candidates for a positive string/number predicate.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DelightError } from '@delightstack/utilities';
 import {
 	codeUnitUpperBound,
@@ -391,6 +391,27 @@ describe('the term dictionary cache', () => {
 		expect(maintained?.signatures).toEqual(reloaded?.signatures);
 	});
 
+	it('memoizes the oversized-dictionary tolerance range read within one query', async () => {
+		const cached = await loaded([makeDoc('a', { title: 'alpha beta gamma' })]);
+		const uncached = new IdbSearchStore(cached.db, { max_cached_tokens: 0 });
+		uncached.register(defineClientType({ entity_type: 'article', schema: SCHEMA }));
+		const memo = new Map<string, string[]>();
+		const transactions = vi.spyOn(cached.db, 'transaction');
+		const first = await uncached.expandToken('article', 'title', 'alpba', false, 1, memo);
+		const reads_after_first = transactions.mock.calls.length;
+		expect(reads_after_first).toBeGreaterThan(0);
+		// Every further tolerance token of the same query costs zero IDB reads.
+		const second = await uncached.expandToken('article', 'title', 'gamm', false, 1, memo);
+		expect(transactions.mock.calls.length).toBe(reads_after_first);
+		transactions.mockRestore();
+		expect(first).toEqual(['alpha']);
+		expect(second).toEqual(['gamma']);
+		// Without the memo the same call agrees exactly — the memo is a pure cache.
+		expect(await uncached.expandToken('article', 'title', 'gamm', false, 1)).toEqual([
+			'gamma',
+		]);
+	});
+
 	it('is skipped past the cap, and the range fallback agrees with it', async () => {
 		const cached = await loaded([
 			makeDoc('a', { title: 'alpha alphabet beta' }),
@@ -464,7 +485,14 @@ describe('prefix key ranges', () => {
 		);
 		const tokens = keys.map((key) => String((key as IDBValidKey[])[2])).sort();
 		expect(tokens).toEqual(
-			['z\u{10FFFF}', 'z\u{10FFFF}tail', 'z\u{1f600}', 'z\uFFFF', 'z\uFFFFmore', 'zz'].sort(),
+			[
+				'z\u{10FFFF}',
+				'z\u{10FFFF}tail',
+				'z\u{1f600}',
+				'z\uFFFF',
+				'z\uFFFFmore',
+				'zz',
+			].sort(),
 		);
 		// The naive `prefix + '\uFFFF'` upper bound drops every astral token, and
 		// even `prefix + '\u{10FFFF}'` drops the ones with anything after it.
@@ -602,5 +630,86 @@ describe('database upgrades', () => {
 		];
 		expect(names).toEqual([docIndexName('status'), docIndexName('tags')]);
 		second.close();
+	});
+
+	it('rebuilds a same-named index whose physical shape drifted', async () => {
+		// A path declared scalar in one build and array in the next keeps its
+		// index NAME — the shape (keyPath arity + multiEntry) is what changes. A
+		// name-only reconciler would keep the stale scalar index, and every
+		// contains_any probe against it would return zero rows: silent exclusion.
+		const name = 'search-upgrade-shape-fixture';
+		const scalar = await openSearchDatabase({
+			name,
+			version: 1,
+			index_paths: [{ path: 'tags' }],
+		});
+		const scalar_store = new IdbSearchStore(scalar, { index_paths: [{ path: 'tags' }] });
+		scalar_store.register(defineClientType({ entity_type: 'article', schema: SCHEMA }));
+		await scalar_store.applyWrites([
+			{
+				entity_type: 'article',
+				doc_id: 'a',
+				sparse_doc: makeDoc('a', { tags: ['alpha'] }),
+			},
+		]);
+		expect(
+			scalar
+				.transaction(DOCS_STORE, 'readonly')
+				.objectStore(DOCS_STORE)
+				.index(docIndexName('tags')).multiEntry,
+		).toBe(false);
+		scalar.close();
+
+		const declaration = { path: 'tags', multi_entry: true };
+		const reopened = await openSearchDatabase({
+			name,
+			version: 2,
+			index_paths: [declaration],
+		});
+		const index = reopened
+			.transaction(DOCS_STORE, 'readonly')
+			.objectStore(DOCS_STORE)
+			.index(docIndexName('tags'));
+		expect(index.multiEntry).toBe(true);
+		expect(index.keyPath).toBe('sparse_doc.tags');
+
+		// The rebuilt index answers a contains_any probe for the pre-existing doc
+		// (createIndex re-populates from the stored records).
+		const rebuilt_store = new IdbSearchStore(reopened, { index_paths: [declaration] });
+		rebuilt_store.register(defineClientType({ entity_type: 'article', schema: SCHEMA }));
+		const probe = collectProbes(
+			normalizeWhere({ tags: { contains_any: ['alpha'] } }, SCHEMA),
+			rebuilt_store.indexed_paths,
+		)[0];
+		expect(probe.multi_entry).toBe(true);
+		expect(await rebuilt_store.getProbeDocIds('article', probe)).toEqual(['a']);
+		reopened.close();
+	});
+
+	it('waits out a transient blocked upgrade instead of failing immediately', async () => {
+		const name = 'search-blocked-transient-fixture';
+		const held = await openSearchDatabase({ name, version: 1 });
+		// The usual production pattern: the other connection closes shortly after
+		// its versionchange event, and the upgrade then proceeds.
+		held.onversionchange = () => setTimeout(() => held.close(), 20);
+		const upgraded = await openSearchDatabase({
+			name,
+			version: 2,
+			blocked_timeout_ms: 2000,
+		});
+		expect(upgraded.version).toBe(2);
+		upgraded.close();
+	});
+
+	it('rejects a permanently blocked upgrade with a 503 after the timeout', async () => {
+		const name = 'search-blocked-permanent-fixture';
+		const held = await openSearchDatabase({ name, version: 1 });
+		held.onversionchange = () => {
+			// A connection that never closes — the permanently blocked case.
+		};
+		await expect(
+			openSearchDatabase({ name, version: 2, blocked_timeout_ms: 50 }),
+		).rejects.toMatchObject({ status: 503, code: 'search_db_blocked' });
+		held.close();
 	});
 });

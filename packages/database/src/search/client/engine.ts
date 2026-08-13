@@ -133,6 +133,23 @@ export class IdbSearchEngine {
 		const distinct_tokens = [...new Set(term_tokens)].sort(compareStrings);
 		const has_term = distinct_tokens.length > 0;
 
+		// The browse fast path: no term, no filter, a single-field order with a
+		// limit — the default subscription query — walks the order field's index
+		// with a cursor and stops at `offset + limit` rows instead of
+		// materializing and sorting the whole corpus. Falls through to the
+		// ordinary pipeline whenever the index cannot answer exactly.
+		if (
+			!has_term &&
+			!where_node &&
+			query.facets === undefined &&
+			query.distinct_on === undefined &&
+			(query.order?.length ?? 0) === 1 &&
+			query.limit !== undefined
+		) {
+			const paged = await this.#pageByIndex(config, query, started);
+			if (paged) return paged;
+		}
+
 		// With no term, every matched document is read anyway (it is the result),
 		// so the filter runs over documents. With a term, the filter only has to
 		// produce the candidate id set — the postings carry everything scoring
@@ -212,6 +229,51 @@ export class IdbSearchEngine {
 	}
 
 	/**
+	 * The index-cursor page for a no-term, no-filter, single-order query.
+	 *
+	 * Returns `null` when the order field's index cannot answer *exactly* —
+	 * non-numeric declared type, no scalar index, or any document whose value at
+	 * the path is missing or mistyped (the store checks coverage by count). The
+	 * store hands back a prefix of the value order with the boundary tie group
+	 * complete, and {@link applyOrder} re-sorts it with the full comparator —
+	 * primary-key tie-break included — so the page is byte-identical to the
+	 * scan path's (the golden vectors are the referee).
+	 */
+	async #pageByIndex(
+		config: ClientSearchType,
+		query: SearchQuery,
+		started: number,
+	): Promise<SearchQueryResults<ClientDocument> | null> {
+		const instruction = (
+			query.order as { field: string; direction?: 'ASC' | 'DESC' }[]
+		)[0];
+		// Numbers only: within a numeric slice IDB's key order IS
+		// `compareForOrder`'s numeric order. String order would diverge (code
+		// unit vs code point), so strings take the scan path.
+		if (config.schema[instruction.field] !== 'number') return null;
+		const offset = query.offset ?? 0;
+		const limit = Math.max(0, query.limit as number);
+		const page = await this.store.readOrderedByNumericIndex(
+			config.entity_type,
+			instruction.field,
+			(instruction.direction ?? 'ASC') === 'DESC',
+			offset + limit,
+		);
+		if (!page) return null;
+		const results = page.rows.map(toScored(config));
+		applyOrder(config, results, query, false);
+		return {
+			count: page.total,
+			hits: results.slice(offset, offset + limit).map((entry) => ({
+				id: entry.doc_id,
+				score: entry.score,
+				document: entry.document,
+			})),
+			elapsed: elapsedSince(started, this.#now),
+		};
+	}
+
+	/**
 	 * The `where`-matched documents, ascending by doc id.
 	 *
 	 * Candidate extraction is an optimization and nothing more: an index probe
@@ -284,6 +346,8 @@ export class IdbSearchEngine {
 		const boosts = query.boost as Record<string, number> | undefined;
 		const exact = query.exact === true;
 		const tolerance = exact ? 0 : (query.tolerance ?? 0);
+		/** Per-query cache for the oversized-dictionary full-range fallback. */
+		const expansion_memo = new Map<string, string[]>();
 		for (const field of search_fields) {
 			const stats = await this.store.getFieldStats(entity_type, field);
 			if (stats.doc_count === 0) continue;
@@ -291,14 +355,29 @@ export class IdbSearchEngine {
 			const boost = boosts?.[field] ?? 1;
 			const dictionary = await this.store.getTokenDictionary(entity_type, field);
 			// A field whose dictionary is too large to cache expands through range
-			// scans instead — same candidates, same order (§7.3's mirror).
-			const expansions = dictionary
-				? distinct_tokens.map((token) => expandToken(dictionary, token, exact, tolerance))
-				: await Promise.all(
-						distinct_tokens.map((token) =>
-							this.store.expandToken(entity_type, field, token, exact, tolerance),
+			// scans instead — same candidates, same order (§7.3's mirror). The
+			// expansions run sequentially so the per-query memo turns N identical
+			// full-range tolerance reads into one.
+			let expansions: string[][];
+			if (dictionary) {
+				expansions = distinct_tokens.map((token) =>
+					expandToken(dictionary, token, exact, tolerance),
+				);
+			} else {
+				expansions = [];
+				for (const token of distinct_tokens) {
+					expansions.push(
+						await this.store.expandToken(
+							entity_type,
+							field,
+							token,
+							exact,
+							tolerance,
+							expansion_memo,
 						),
 					);
+				}
+			}
 			const wanted = [...new Set(expansions.flat())].sort(compareStrings);
 			const terms = await this.store.getTerms(entity_type, field, wanted);
 			for (let token_index = 0; token_index < distinct_tokens.length; token_index++) {
@@ -372,7 +451,10 @@ export class IdbSearchEngine {
 		const hits: SearchQueryResults<ClientDocument>['hits'] = [];
 		let cursor = 0;
 		let missing = 0;
-		while (cursor < entries.length && hits.length + missing < wanted) {
+		// `hits.length < wanted`, not `hits.length + missing < wanted`: a missing
+		// document must widen the window (pull the next entry forward), so the
+		// loop keeps going until enough REAL hits exist or entries run out.
+		while (cursor < entries.length && hits.length < wanted) {
 			const window = entries.slice(cursor, wanted + missing);
 			cursor += window.length;
 			const hydrated =

@@ -559,9 +559,12 @@ export class EntityState<
 
 	#getWorker(): Remote<DatabaseWorker> {
 		if (!this.#worker) {
-			throw new Error(
-				'Worker not available. Call `await db.init()` first or provide fetch option for SSR.',
-			);
+			throw new DelightError({
+				message:
+					'Worker not available. Call `await db.init()` first or provide fetch option for SSR.',
+				status: 503,
+				code: 'worker_unavailable',
+			});
 		}
 		return this.#worker;
 	}
@@ -842,6 +845,15 @@ export class DatabaseSearch<
 	#defaults: Database.SearchQuery<T>;
 	#push_timer: ReturnType<typeof setTimeout> | null = null;
 	#last_push_at = 0;
+	/**
+	 * Monotonic query sequence. Every push (subscription update or manual
+	 * refresh) claims the next token; the worker echoes it back with the
+	 * result, and any result older than the newest one already applied is
+	 * discarded — a slow query can never overwrite a newer one's results.
+	 */
+	#push_token = 0;
+	/** The token of the newest result applied to `#results`. */
+	#delivered_token = 0;
 
 	#results = $state<SearchHit<T>[]>([]);
 	#docs = $derived<Database.SearchEntity<T>[]>(this.#results.map((h) => h.document));
@@ -948,6 +960,7 @@ export class DatabaseSearch<
 	 * auto-update. Useful for forced re-fetch or when subscription is down.
 	 */
 	async refresh(): Promise<void> {
+		const token = ++this.#push_token;
 		try {
 			if (!this.#loaded) this.#loading = true;
 			else this.#searching = true;
@@ -955,12 +968,19 @@ export class DatabaseSearch<
 				this.entity_type,
 				$state.snapshot(this.#query_state) as SearchQueryInput,
 			);
+			// A newer push already delivered — this result is stale, drop it.
+			if (this.#destroyed || token < this.#delivered_token) return;
+			this.#delivered_token = token;
 			this.#results = result.hits as SearchHit<T>[];
 			this.#count = result.count;
 			this.#error = null;
 			this.#loaded = true;
 		} catch (e) {
-			this.#error = e;
+			// Keep the last-known-good results; surface the failure only when no
+			// newer result has landed in the meantime.
+			if (!this.#destroyed && token >= this.#delivered_token) {
+				this.#error = DelightError.fromWorker(e) ?? e;
+			}
 		} finally {
 			this.#loading = false;
 			this.#searching = false;
@@ -1062,11 +1082,13 @@ export class DatabaseSearch<
 	async #pushQuery(): Promise<void> {
 		if (this.#destroyed) return;
 		if (this.#subscriber_id) {
+			const token = ++this.#push_token;
 			this.#searching = true;
 			try {
 				await this.#worker.updateSubscription(
 					this.#subscriber_id,
 					$state.snapshot(this.#query_state) as SearchQueryInput,
+					token,
 				);
 			} catch {
 				await this.refresh();
@@ -1092,6 +1114,20 @@ export class DatabaseSearch<
 					$state.snapshot(this.#query_state) as SearchQueryInput,
 					proxy((result: WorkerSearchResult) => {
 						if (this.#destroyed) return;
+						// Sequence guard: the worker echoes the token of the query each
+						// result answered. A slow push that arrives after a newer one has
+						// delivered is stale — drop it rather than regress the list.
+						const token = result.token ?? this.#delivered_token;
+						if (token < this.#delivered_token) return;
+						this.#delivered_token = token;
+						if (result.error) {
+							// Keep the last-known-good results on screen; surface the
+							// failure through the error state instead of blanking the list.
+							this.#error = new DelightError(result.error);
+							this.#loading = false;
+							this.#searching = false;
+							return;
+						}
 						this.#results = result.hits as SearchHit<T>[];
 						this.#count = result.count;
 						this.#loading = false;
@@ -1099,6 +1135,7 @@ export class DatabaseSearch<
 						this.#loaded = true;
 						this.#error = null;
 					}),
+					this.#push_token,
 				);
 			} catch (e) {
 				this.#error = e;

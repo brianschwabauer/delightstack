@@ -33,7 +33,6 @@ vi.mock('comlink', () => ({ expose: vi.fn() }));
 
 // ── The server side (same in-memory SQL fake the other worker tests use) ────
 
-
 const noteTable = Database.table('note', (s) => ({
 	id: s.primaryKey(),
 	title: s.string().searchable(),
@@ -166,7 +165,9 @@ async function createWorker(
 	const { DatabaseWorker } = await import('./database.worker');
 	const worker = new DatabaseWorker();
 	await worker.init({
-		tables: { note: { index_schema: table.config.index_schema as never, primary_key: 'id' } },
+		tables: {
+			note: { index_schema: table.config.index_schema as never, primary_key: 'id' },
+		},
 		db_name,
 		...init,
 	});
@@ -487,7 +488,9 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		// Bump the server's config_version, which makes the next sync page a
 		// `schema_changed` page carrying the config.
 		const bumped_version = (
-			server as unknown as { search: { store: { bumpConfigVersion(type: string): number } } }
+			server as unknown as {
+				search: { store: { bumpConfigVersion(type: string): number } };
+			}
 		).search.store.bumpConfigVersion('note');
 
 		await worker.sync();
@@ -593,5 +596,318 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 				JSON.stringify(query),
 			).toEqual(expected.hits.map((hit) => hit.document));
 		}
+	});
+
+	// ── Index shape drift (field arity change without a config bump) ─────────
+
+	it('a field arity change without a config bump rebuilds the docs index', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('{}', { status: 404 })),
+		);
+		(globalThis as any).self = { addEventListener: vi.fn() };
+		const { DatabaseWorker } = await import('./database.worker');
+
+		// Build 1 declares `tags` as a scalar string…
+		const w1 = new DatabaseWorker();
+		await w1.init({
+			tables: {
+				note: {
+					index_schema: { id: 'string', title: 'string', tags: 'string' } as never,
+					primary_key: 'id',
+				},
+			},
+			db_name,
+			entities: { note: { search_mode: 'client' } },
+		});
+		await w1.applyExternalChange('note', 'update', 'a', undefined, {
+			id: 'a',
+			title: 'first',
+			tags: 'alpha',
+			updated_at: T0,
+		});
+		const scalar_version = await databaseVersion();
+		await w1.destroy();
+
+		// …build 2 re-declares it as `string[]`. Same index NAME, different
+		// physical shape (bare multiEntry vs compound scalar) — the shape check
+		// must force a version bump and rebuild, or the stale scalar index
+		// answers every contains_any probe with zero rows: silent exclusion.
+		const w2 = new DatabaseWorker();
+		await w2.init({
+			tables: {
+				note: {
+					index_schema: { id: 'string', title: 'string', tags: 'string[]' } as never,
+					primary_key: 'id',
+				},
+			},
+			db_name,
+			entities: { note: { search_mode: 'client' } },
+		});
+		expect(await databaseVersion()).toBeGreaterThan(scalar_version);
+		await w2.applyExternalChange('note', 'update', 'a', undefined, {
+			id: 'a',
+			title: 'first',
+			tags: ['alpha'],
+			updated_at: T0 + 1000,
+		});
+		const result = await w2.search('note', {
+			where: { tags: { contains_any: ['alpha'] } },
+		} as never);
+		expect(result.count).toBe(1);
+		expect(result.hits[0]?.id).toBe('a');
+		await w2.destroy();
+	});
+
+	// ── IDB unavailable → server-only mode ───────────────────────────────────
+
+	it('continues in server-only mode when IndexedDB is unavailable', async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 3);
+		let listed = 0;
+		vi.stubGlobal('fetch', bridgeFetch(server, { on_list: () => listed++ }));
+		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		// A factory whose open throws — private browsing / storage blocked.
+		const broken_factory = {
+			open: () => {
+				throw new Error('storage disabled');
+			},
+		} as unknown as IDBFactory;
+
+		// init must NOT throw, and every later call must answer, not die with
+		// 'Unknown entity type'.
+		const worker = await createWorker({ idb_factory: broken_factory });
+		expect(errors).toHaveBeenCalled();
+		errors.mockRestore();
+
+		expect(await worker.getSearchMode('note')).toBe('server');
+		const result = await worker.search('note', { term: 'note' });
+		expect(listed).toBe(1);
+		expect(result.count).toBe(0); // the stubbed server answer
+		await worker.sync(); // a no-op, not a crash
+		expect(await worker.isSynced('note')).toBe(false);
+		const listed_result = await worker.list('note', {});
+		expect(listed_result.hits).toEqual([]);
+	});
+
+	// ── Subscription result ordering (sequence tokens) ───────────────────────
+
+	it('echoes the query token so stale results can be discarded', async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 2);
+		// Server-mode (never synced): every query goes through fetch, whose
+		// latency this stub controls per term — the deterministic interleaving.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (input: string | URL) => {
+				const url = new URL(String(input), 'http://localhost');
+				if (url.pathname === '/api/sync') {
+					return new Response(JSON.stringify({ entity: {} }), { status: 200 });
+				}
+				const term = url.searchParams.get('term') ?? '';
+				await new Promise((resolve) => setTimeout(resolve, term === 'slow' ? 60 : 0));
+				return new Response(
+					JSON.stringify({ hits: [], count: term === 'slow' ? 1 : 2 }),
+					{ status: 200 },
+				);
+			}),
+		);
+
+		const worker = await createWorker();
+		type Result = import('./database.worker').WorkerSearchResult;
+		const calls: Result[] = [];
+		const id = await worker.subscribe(
+			'note',
+			{ term: '' } as never,
+			(result) => calls.push(result),
+			0,
+		);
+		expect(calls[0]?.token).toBe(0);
+
+		// Push A (slow, token 1) then B (fast, token 2) — A's result arrives
+		// LAST but still carries token 1, which is what lets the client discard
+		// it instead of overwriting B's newer results.
+		await Promise.all([
+			worker.updateSubscription(id, { term: 'slow' } as never, 1),
+			worker.updateSubscription(id, { term: 'fast' } as never, 2),
+		]);
+		const tokens = calls.map((entry) => entry.token);
+		expect(tokens).toContain(1);
+		expect(tokens).toContain(2);
+		expect(calls[calls.length - 1]?.token).toBe(1); // out-of-order arrival
+		expect(calls.find((entry) => entry.token === 2)?.count).toBe(2);
+		expect(calls.find((entry) => entry.token === 1)?.count).toBe(1);
+	});
+
+	// ── Server search errors surface instead of blanking ─────────────────────
+
+	it('propagates a server search failure to the subscription callback', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (input: string | URL) => {
+				const url = String(input);
+				if (url.startsWith('/api/sync')) {
+					return new Response(JSON.stringify({ entity: {} }), { status: 200 });
+				}
+				return new Response(JSON.stringify({ message: 'boom' }), { status: 500 });
+			}),
+		);
+		const worker = await createWorker();
+
+		type Result = import('./database.worker').WorkerSearchResult;
+		const calls: Result[] = [];
+		await worker.subscribe('note', { term: 'x' } as never, (result) =>
+			calls.push(result),
+		);
+		expect(calls).toHaveLength(1);
+		expect(calls[0].error).toMatchObject({ status: 500, message: 'boom' });
+
+		// One-shot paths reject with the status intact (transferable envelope).
+		const { DelightError } = await import('@delightstack/utilities');
+		const failure = await worker.list('note', {}).catch((error: Error) => error);
+		expect(DelightError.fromWorker(failure)?.status).toBe(500);
+	});
+
+	// ── Cross-worker invalidation (dedicated-Worker fallback) ────────────────
+
+	it('invalidates peer workers over the same database via BroadcastChannel', async () => {
+		const { server } = await createTestServer();
+		vi.stubGlobal('fetch', bridgeFetch(server));
+		(globalThis as any).self = { addEventListener: vi.fn() };
+		const { DatabaseWorker } = await import('./database.worker');
+		const tables = {
+			note: { index_schema: noteTable.config.index_schema as never, primary_key: 'id' },
+		};
+		const entities = { note: { search_mode: 'client' as const } };
+
+		const a = new DatabaseWorker();
+		await a.init({ tables, db_name, entities });
+		const b = new DatabaseWorker();
+		await b.init({ tables, db_name, entities });
+
+		await a.applyExternalChange('note', 'update', 'n1', undefined, {
+			id: 'n1',
+			title: 'zulu first',
+			updated_at: T0,
+		});
+		// Warm B's in-memory dictionary cache off the current index state.
+		await vi.waitFor(async () => {
+			expect((await b.search('note', { term: 'zulu' })).count).toBe(1);
+		});
+
+		const counts: number[] = [];
+		await b.subscribe('note', { term: 'yankee' } as never, (result) =>
+			counts.push(result.count),
+		);
+		expect(counts).toEqual([0]);
+
+		// A indexes a document with a NEW token. Without the broadcast, B's
+		// cached dictionary never learns 'yankee' and its subscription never
+		// re-runs — the cross-tab staleness this channel exists to fix.
+		await a.applyExternalChange('note', 'update', 'n2', undefined, {
+			id: 'n2',
+			title: 'yankee second',
+			updated_at: T0 + 1000,
+		});
+		await vi.waitFor(async () => {
+			expect(counts[counts.length - 1]).toBe(1);
+			expect((await b.search('note', { term: 'yankee' })).count).toBe(1);
+		});
+
+		await a.destroy();
+		await b.destroy();
+	});
+
+	// ── versionchange recovery ───────────────────────────────────────────────
+
+	it('reopens the database after a versionchange instead of degrading permanently', async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 3);
+		let listed = 0;
+		vi.stubGlobal('fetch', bridgeFetch(server, { on_list: () => listed++ }));
+
+		const worker = await createWorker();
+		await worker.sync();
+		expect((await worker.search('note', { term: 'note', limit: 10 })).count).toBe(3);
+
+		// Another tab upgrades the database: this worker's connection gets
+		// `versionchange`, closes, and used to stay dead for the session.
+		const current = await databaseVersion();
+		await new Promise<void>((resolve, reject) => {
+			const request = indexedDB.open(db_name, current + 1);
+			request.onsuccess = () => {
+				request.result.close();
+				resolve();
+			};
+			request.onerror = () => reject(request.error);
+		});
+
+		// The next search lazily reopens and still answers locally.
+		const result = await worker.search('note', { term: 'note', limit: 10 });
+		expect(result.count).toBe(3);
+		expect(listed).toBe(0);
+	});
+
+	// ── Failed local index write after a server-confirmed update ─────────────
+
+	it('resyncs when a server-confirmed update cannot be written locally', async () => {
+		const { server } = await createTestServer();
+		const ids = seed(server as any, 2);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (input: string | URL, init?: RequestInit) => {
+				const url = String(input);
+				if (url.startsWith('/api/sync')) {
+					return new Response(
+						JSON.stringify(server.sync(init?.body ? JSON.parse(String(init.body)) : {})),
+						{ status: 200 },
+					);
+				}
+				const patch = url.match(/^\/api\/note\/([^/?]+)$/);
+				if (patch && init?.method === 'PATCH') {
+					const updated = server.update(
+						'note',
+						patch[1],
+						JSON.parse(String(init.body)) as never,
+					);
+					return new Response(JSON.stringify(updated), { status: 200 });
+				}
+				return new Response('{}', { status: 404 });
+			}),
+		);
+
+		const worker = await createWorker();
+		await worker.sync();
+
+		// The optimistic write AND the server-echo write both fail; the sync the
+		// recovery triggers then runs against the healthy store.
+		const { IdbSearchStore } = await import('../search/client/idb_store');
+		const original = IdbSearchStore.prototype.applyWrites;
+		let fails = 2;
+		const apply = vi
+			.spyOn(IdbSearchStore.prototype, 'applyWrites')
+			.mockImplementation(async function (
+				this: InstanceType<typeof IdbSearchStore>,
+				...args: Parameters<typeof original>
+			) {
+				if (fails-- > 0) throw new Error('disk full');
+				return original.apply(this, args);
+			});
+		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		vi.setSystemTime(T0 + 60_000);
+		await worker.update('note', ids[0], { title: 'rewritten title' });
+		expect(fails).toBeLessThanOrEqual(0);
+
+		// Without the recovery, the confirmed row would stay missing from local
+		// search until the next app-driven sync. The recovery resync repairs it.
+		await vi.waitFor(async () => {
+			expect((await worker.search('note', { term: 'rewritten', limit: 10 })).count).toBe(
+				1,
+			);
+		});
+		apply.mockRestore();
+		errors.mockRestore();
 	});
 });

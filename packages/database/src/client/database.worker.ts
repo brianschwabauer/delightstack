@@ -13,6 +13,7 @@ import { IdbSearchEngine, requiresServer } from '../search/client/engine';
 import {
 	defineClientType,
 	docIndexName,
+	docIndexShapeMatches,
 	IdbSearchStore,
 	openSearchDatabase,
 	DOCS_STORE,
@@ -92,6 +93,19 @@ export interface WorkerSearchResult {
 	hits: { id: string; document: Record<string, unknown>; score: number }[];
 	count: number;
 	elapsed?: unknown;
+	/**
+	 * The client-issued query sequence token this result answers (echoed from
+	 * `subscribe`/`updateSubscription`). The client discards a result whose
+	 * token is older than the newest one it has already applied, so a slow
+	 * query can never overwrite a newer one's results.
+	 */
+	token?: number;
+	/**
+	 * Set when the query failed. `hits`/`count` are then placeholders — the
+	 * client keeps its last-known-good results displayed and surfaces this
+	 * through its error state instead of blanking the list.
+	 */
+	error?: { message: string; status: number; code?: string; detail?: string };
 }
 
 interface EntitySyncState {
@@ -118,6 +132,8 @@ type SearchSubscriber = {
 	id: string;
 	entity_type: string;
 	query: SearchQueryInput;
+	/** The sequence token of the query currently stored (echoed in results). */
+	query_token: number;
 	callback: (result: WorkerSearchResult) => void;
 };
 
@@ -260,6 +276,28 @@ function toSparseLike(
 	return sparse;
 }
 
+/** The 400 an unknown entity type earns, encoded to survive Comlink. */
+function unknownEntityType(entity_type: string): DelightError {
+	return DelightError.transferable({
+		message: `Unknown entity type: ${entity_type}`,
+		status: 400,
+		code: 'unknown_entity_type',
+	});
+}
+
+/** A structured-cloneable error payload for a subscription callback. */
+function searchErrorPayload(error: unknown): NonNullable<WorkerSearchResult['error']> {
+	// A transferable error carries a JSON envelope as its message; decode it so
+	// the payload's message is the human one, not the envelope.
+	const decoded = DelightError.fromWorker(error) ?? DelightError.from(error);
+	return {
+		message: decoded.message,
+		status: decoded.status,
+		...(decoded.code ? { code: decoded.code } : {}),
+		...(decoded.detail ? { detail: decoded.detail } : {}),
+	};
+}
+
 // ---------------------------------------------------------------------------
 // Worker
 // ---------------------------------------------------------------------------
@@ -284,6 +322,20 @@ export class DatabaseWorker {
 	/** The async driver over {@link #store}. */
 	#engine: IdbSearchEngine | null = null;
 	#idb_factory: IDBFactory | undefined;
+	/**
+	 * IndexedDB could not be opened at all (private browsing, storage blocked).
+	 * The worker then runs in server-only mode: reads via server search,
+	 * writes via the server, no local index or cache.
+	 */
+	#idb_unavailable = false;
+	/** Single-flight guard for the lazy post-`versionchange` reopen. */
+	#reopen_promise: Promise<void> | null = null;
+	/** When the last lazy reopen failed — throttles retry loops. */
+	#reopen_failed_at = 0;
+	/** Cross-worker invalidation channel (dedicated-Worker fallback, §7.6). */
+	#channel: BroadcastChannel | null = null;
+	/** Identifies this worker instance on {@link #channel}. */
+	readonly #instance_id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 	// -----------------------------------------------------------------------
 	// Lifecycle
@@ -293,7 +345,9 @@ export class DatabaseWorker {
 		// A SharedWorker is initialized by EVERY connecting tab. Re-running init
 		// for the same database would discard in-memory sync state (and any
 		// un-persisted cursor state) while another tab's sync loop is mid-flight.
-		if (this.#db && this.#db_name === config.db_name) return;
+		// A server-only worker (IDB unavailable) is initialized too — retrying
+		// the open on every connecting tab buys nothing.
+		if ((this.#db || this.#idb_unavailable) && this.#db_name === config.db_name) return;
 
 		// Switching scope (different db_name): tear down the previous state
 		// cleanly. This applies to ALL tabs sharing the worker — a scope switch
@@ -306,6 +360,7 @@ export class DatabaseWorker {
 			this.#entities = {};
 			this.#pending_refreshes.clear();
 		}
+		this.#idb_unavailable = false;
 
 		this.#tables = config.tables;
 		this.#default_threshold = config.default_threshold;
@@ -322,12 +377,28 @@ export class DatabaseWorker {
 		// one transaction (§7.6). Opening it needs the persisted `config_version`s
 		// (they decide the IDB version), and those live inside it — so open at
 		// whatever version exists, read the metas, then upgrade if needed.
-		this.#db = await openSearchDatabase({
-			name: config.db_name,
-			extra_stores: WORKER_STORES,
-			factory: this.#idb_factory,
-		});
-		this.#attachVersionChange(this.#db);
+		//
+		// When IndexedDB itself is unavailable (private browsing, storage
+		// blocked, a permanently blocked upgrade) the worker must still come up:
+		// every entity is registered regardless, `#routesToClient` answers false
+		// with no engine, so reads go to server search and writes to the server —
+		// degraded, never dead.
+		try {
+			this.#db = await openSearchDatabase({
+				name: config.db_name,
+				extra_stores: WORKER_STORES,
+				factory: this.#idb_factory,
+			});
+			this.#attachVersionChange(this.#db);
+		} catch (error) {
+			this.#idb_unavailable = true;
+			console.error(
+				'[database] IndexedDB is unavailable — continuing in server-only mode (no local search index or entity cache)',
+				error,
+			);
+		}
+
+		this.#openChannel(config.db_name);
 
 		// Initialize per-entity state
 		for (const [entity_type, table] of Object.entries(config.tables)) {
@@ -335,7 +406,11 @@ export class DatabaseWorker {
 			const forced_mode = overrides?.search_mode;
 
 			// Load persisted sync meta
-			const meta = await idbGet<SyncMeta>(this.#db, 'sync_meta', entity_type);
+			const meta = this.#db
+				? await idbGet<SyncMeta>(this.#db, 'sync_meta', entity_type).catch(
+						() => undefined,
+					)
+				: undefined;
 
 			const schema = flattenSearchSchema(table.index_schema);
 			this.#entities[entity_type] = {
@@ -385,14 +460,28 @@ export class DatabaseWorker {
 		if (wanted > this.#db.version || this.#indexesDiffer(this.#db, index_paths)) {
 			const version = Math.max(wanted, this.#db.version + 1);
 			this.#db.close();
-			this.#db = await openSearchDatabase({
-				name: this.#db_name,
-				version,
-				index_paths,
-				extra_stores: WORKER_STORES,
-				delete_stores: [LEGACY_SEARCH_INDEX_STORE],
-				factory: this.#idb_factory,
-			});
+			try {
+				this.#db = await openSearchDatabase({
+					name: this.#db_name,
+					version,
+					index_paths,
+					extra_stores: WORKER_STORES,
+					delete_stores: [LEGACY_SEARCH_INDEX_STORE],
+					factory: this.#idb_factory,
+				});
+			} catch (error) {
+				// The upgrade could not run (another connection blocking past the
+				// timeout, storage revoked mid-session). Fall back to server-only
+				// mode rather than killing init — a later use retries the reopen.
+				this.#db = null;
+				this.#store = null;
+				this.#engine = null;
+				console.error(
+					'[database] failed to upgrade the search database — continuing in server-only mode',
+					error,
+				);
+				return;
+			}
 			this.#attachVersionChange(this.#db);
 		}
 
@@ -420,7 +509,15 @@ export class DatabaseWorker {
 		return [...paths.values()].sort((a, b) => (a.path < b.path ? -1 : 1));
 	}
 
-	/** Whether the live `docs` indexes are not exactly the declared ones. */
+	/**
+	 * Whether the live `docs` indexes are not exactly the declared ones —
+	 * by name AND by physical shape. A path whose declared arity flips
+	 * (`'string'` → `'string[]'`, or the "multiEntry wins" merge changing its
+	 * pick) keeps its index name but needs a different keyPath/multiEntry
+	 * shape; a stale index of the wrong shape returns zero rows from every
+	 * probe, silently excluding documents. Shape drift therefore forces the
+	 * same version bump a name change does.
+	 */
 	#indexesDiffer(db: IDBDatabase, index_paths: readonly DocIndexPath[]): boolean {
 		for (const name of SEARCH_STORE_NAMES) {
 			if (!db.objectStoreNames.contains(name)) return true;
@@ -430,10 +527,19 @@ export class DatabaseWorker {
 		}
 		if (db.objectStoreNames.contains(LEGACY_SEARCH_INDEX_STORE)) return true;
 		const txn = db.transaction(DOCS_STORE, 'readonly');
-		const live = new Set(Array.from(txn.objectStore(DOCS_STORE).indexNames));
-		txn.abort();
-		if (live.size !== index_paths.length) return true;
-		return index_paths.some((declaration) => !live.has(docIndexName(declaration.path)));
+		try {
+			const docs = txn.objectStore(DOCS_STORE);
+			const live = new Set(Array.from(docs.indexNames));
+			if (live.size !== index_paths.length) return true;
+			for (const declaration of index_paths) {
+				const name = docIndexName(declaration.path);
+				if (!live.has(name)) return true;
+				if (!docIndexShapeMatches(docs.index(name), declaration)) return true;
+			}
+			return false;
+		} finally {
+			txn.abort();
+		}
 	}
 
 	/**
@@ -454,6 +560,108 @@ export class DatabaseWorker {
 		};
 	}
 
+	/**
+	 * Lazily reopen the database after `versionchange` released it (item: a
+	 * closed connection must degrade one call, not the whole session). Single-
+	 * flighted, and failure is throttled so a broken environment does not retry
+	 * on every call. No-op when the store is live or IDB was never available.
+	 */
+	async #ensureStore(): Promise<void> {
+		if (this.#engine || !this.#db_name || this.#idb_unavailable) return;
+		if (Date.now() - this.#reopen_failed_at < 5_000) return;
+		this.#reopen_promise ??= (async () => {
+			const db = await openSearchDatabase({
+				name: this.#db_name as string,
+				extra_stores: WORKER_STORES,
+				factory: this.#idb_factory,
+			});
+			this.#db = db;
+			this.#attachVersionChange(db);
+			await this.#reconcileSearchDatabase();
+		})();
+		try {
+			await this.#reopen_promise;
+			this.#reopen_failed_at = 0;
+		} catch (error) {
+			this.#reopen_failed_at = Date.now();
+			this.#db = null;
+			this.#store = null;
+			this.#engine = null;
+			console.error('[database] failed to reopen the search database', error);
+		} finally {
+			this.#reopen_promise = null;
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Cross-worker invalidation (dedicated-Worker fallback)
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Under the per-tab `Worker` fallback (no SharedWorker — Chrome Android),
+	 * every tab runs its own worker over ONE shared IndexedDB. Without a
+	 * channel, tab B's in-memory dictionary cache never learns tab A's tokens,
+	 * its subscriptions never re-run for A's writes, and both tabs run sync
+	 * loops. A `BroadcastChannel` named after the database carries commit
+	 * invalidations; harmless under a SharedWorker (one instance, no peers).
+	 */
+	#openChannel(db_name: string): void {
+		if (typeof BroadcastChannel === 'undefined') return;
+		this.#channel?.close();
+		const channel = new BroadcastChannel(`delight-db-${db_name}`);
+		// Node exposes `unref` — never keep a process alive for this channel.
+		(channel as unknown as { unref?: () => void }).unref?.();
+		channel.onmessage = (event: MessageEvent) => {
+			const data = event.data as {
+				type?: string;
+				source?: string;
+				entity_types?: string[];
+			} | null;
+			if (!data || data.type !== 'invalidate' || data.source === this.#instance_id)
+				return;
+			void this.#applyRemoteInvalidation(data.entity_types ?? []).catch(() => {});
+		};
+		this.#channel = channel;
+	}
+
+	/** Tell peer workers over the same database that these types changed. */
+	#broadcastInvalidation(entity_types: readonly string[]): void {
+		if (!this.#channel || entity_types.length === 0) return;
+		try {
+			this.#channel.postMessage({
+				type: 'invalidate',
+				source: this.#instance_id,
+				entity_types: [...entity_types],
+			});
+		} catch {
+			// A closed channel (tear-down race) — nothing to invalidate anymore.
+		}
+	}
+
+	/** A peer worker committed writes: refresh caches and re-run subscribers. */
+	async #applyRemoteInvalidation(entity_types: string[]): Promise<void> {
+		const known = entity_types.filter((entity_type) => this.#entities[entity_type]);
+		if (known.length === 0) return;
+		// Cheap full drop: the peer's writes may have added/removed dictionary
+		// tokens this instance cached in memory. The next query reloads from IDB.
+		this.#store?.clearDictionaryCache();
+		// Adopt the peer's persisted sync window when it is newer than ours, so
+		// routing (start_updated_at === 0) reflects the sync the peer ran.
+		if (this.#db) {
+			for (const entity_type of known) {
+				const meta = await idbGet<SyncMeta>(this.#db, 'sync_meta', entity_type).catch(
+					() => undefined,
+				);
+				const state = this.#entities[entity_type];
+				if (!meta || !state || meta.last_synced_at <= state.last_synced_at) continue;
+				state.start_updated_at = meta.start_updated_at;
+				state.end_updated_at = meta.end_updated_at;
+				state.last_synced_at = meta.last_synced_at;
+			}
+		}
+		this.#notifySubscribers(known);
+	}
+
 	async destroy(): Promise<void> {
 		this.#search_subscribers = [];
 		this.#store = null;
@@ -462,6 +670,8 @@ export class DatabaseWorker {
 			this.#db.close();
 			this.#db = null;
 		}
+		this.#channel?.close();
+		this.#channel = null;
 		this.#db_name = undefined;
 		this.#entities = {};
 		this.#pending_refreshes.clear();
@@ -475,10 +685,34 @@ export class DatabaseWorker {
 		// Single-flight: concurrent sync calls (e.g. several tabs sharing this
 		// worker) would interleave cursor updates and corrupt pagination state.
 		if (this.#sync_in_flight) return this.#sync_in_flight;
-		this.#sync_in_flight = this.#runSync(entity_types).finally(() => {
+		this.#sync_in_flight = this.#syncSingleFlight(entity_types).finally(() => {
 			this.#sync_in_flight = null;
 		});
 		return this.#sync_in_flight;
+	}
+
+	/**
+	 * Cross-TAB single flight, on top of the in-instance one above: under the
+	 * dedicated-Worker fallback every tab has its own worker over one shared
+	 * database, and two concurrent sync loops would interleave cursor writes.
+	 * Web Locks arbitrates; when another tab already holds the lock this run is
+	 * skipped — that tab's commit broadcast invalidates us when it lands.
+	 * Harmless under a SharedWorker (one instance, the lock is always free).
+	 */
+	async #syncSingleFlight(entity_types?: string[]): Promise<void> {
+		const locks =
+			typeof navigator !== 'undefined'
+				? (navigator as { locks?: LockManager }).locks
+				: undefined;
+		if (!locks || !this.#db_name) return this.#runSync(entity_types);
+		await locks.request(
+			`delight-db-sync-${this.#db_name}`,
+			{ ifAvailable: true },
+			async (lock) => {
+				if (!lock) return;
+				await this.#runSync(entity_types);
+			},
+		);
 	}
 
 	/**
@@ -499,6 +733,9 @@ export class DatabaseWorker {
 	 * re-fetched the same page forever.
 	 */
 	async #runSync(entity_types?: string[]): Promise<void> {
+		// A `versionchange` may have released the connection — try to reopen
+		// before giving up on the run.
+		await this.#ensureStore();
 		if (!this.#db) return;
 
 		const types = entity_types ?? Object.keys(this.#entities);
@@ -508,6 +745,8 @@ export class DatabaseWorker {
 		const done = new Set<string>();
 		/** Entities that are confirmed fully caught up with the server */
 		const caught_up = new Set<string>();
+		/** Entities whose local index this run changed — broadcast to peers. */
+		const changed = new Set<string>();
 
 		let num_requests = 0;
 		let pages_without_changes = 0;
@@ -581,6 +820,7 @@ export class DatabaseWorker {
 						entity_result.config_version,
 					);
 					descending_request.add(entity_type);
+					changed.add(entity_type);
 				}
 
 				if (!this.#store) {
@@ -627,7 +867,10 @@ export class DatabaseWorker {
 
 				const had_changes =
 					inserts.length > 0 || (entity_result.deleted?.length ?? 0) > 0;
-				if (had_changes) any_changes = true;
+				if (had_changes) {
+					any_changes = true;
+					changed.add(entity_type);
+				}
 
 				// The window this page grows to — computed, not yet adopted. It is
 				// only true once the transaction below commits.
@@ -714,6 +957,10 @@ export class DatabaseWorker {
 		const persist_types = types.filter((t) => this.#entities[t]);
 		await this.#persistSyncState(persist_types);
 
+		// Peer workers over the same database (dedicated-Worker fallback) must
+		// drop their dictionary caches and re-run their subscribers too.
+		this.#broadcastInvalidation([...changed]);
+
 		// Notify active search subscribers
 		this.#notifySubscribers(persist_types);
 	}
@@ -728,7 +975,7 @@ export class DatabaseWorker {
 		data: Record<string, unknown>,
 	): Promise<Record<string, unknown>> {
 		const state = this.#entities[entity_type];
-		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
+		if (!state) throw unknownEntityType(entity_type);
 
 		const response = await fetch(`/api/${entity_type}`, {
 			method: 'POST',
@@ -749,9 +996,13 @@ export class DatabaseWorker {
 		const server_entity = (await response.json()) as Record<string, unknown>;
 
 		// Index the new row optimistically (the sync echo replaces this document
-		// with the server's own sparse projection).
+		// with the server's own sparse projection). The server has already
+		// confirmed the row, so a failed local write must trigger the same
+		// window-rollback + resync recovery an external change uses — otherwise
+		// the row is invisible to local search until the next app-driven sync.
 		if (state.search_mode === 'client') {
-			await this.#indexEntity(entity_type, server_entity);
+			const applied = await this.#indexEntity(entity_type, server_entity);
+			if (!applied) this.#recoverDroppedIndexWrite(entity_type, server_entity);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -787,7 +1038,7 @@ export class DatabaseWorker {
 		skip_background_refresh?: boolean,
 	): Promise<Record<string, unknown> | undefined> {
 		const state = this.#entities[entity_type];
-		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
+		if (!state) throw unknownEntityType(entity_type);
 
 		// Try IDB cache first (unless force_refresh)
 		if (!force_refresh && state.cache_enabled && this.#db) {
@@ -822,7 +1073,7 @@ export class DatabaseWorker {
 		data: Record<string, unknown>,
 	): Promise<Record<string, unknown>> {
 		const state = this.#entities[entity_type];
-		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
+		if (!state) throw unknownEntityType(entity_type);
 
 		// Store the pre-update document for rollback — the indexed sparse doc,
 		// read straight out of the `docs` store by primary key.
@@ -865,9 +1116,12 @@ export class DatabaseWorker {
 			throw error;
 		}
 
-		// Replace the optimistic overlay with the server's own data
+		// Replace the optimistic overlay with the server's own data. A failed
+		// local write here leaves the STALE optimistic document in local search —
+		// recover the same way applyExternalChange does.
 		if (state.search_mode === 'client') {
-			await this.#indexEntity(entity_type, server_entity);
+			const applied = await this.#indexEntity(entity_type, server_entity);
+			if (!applied) this.#recoverDroppedIndexWrite(entity_type, server_entity);
 			this.#notifySubscribers([entity_type]);
 		}
 
@@ -886,7 +1140,7 @@ export class DatabaseWorker {
 
 	async delete(entity_type: string, id: string | number): Promise<void> {
 		const state = this.#entities[entity_type];
-		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
+		if (!state) throw unknownEntityType(entity_type);
 
 		// Store for rollback, then remove optimistically
 		let prev_doc: Record<string, unknown> | undefined;
@@ -984,18 +1238,7 @@ export class DatabaseWorker {
 						{ entity_type, doc_id: String(id), sparse_doc: sparse },
 					])
 				: await this.#indexEntity(entity_type, index_doc);
-			if (!applied) {
-				// The document could not be written. Roll the synced window back to
-				// just before this change and resync, otherwise it is silently gone
-				// from local search until a full rebuild.
-				const changed_at =
-					typeof index_doc.updated_at === 'number' ? index_doc.updated_at : undefined;
-				if (changed_at && state.end_updated_at && state.end_updated_at >= changed_at) {
-					state.end_updated_at = changed_at - 1;
-				}
-				state.synced = false;
-				this.sync([entity_type]).catch(() => {});
-			}
+			if (!applied) this.#recoverDroppedIndexWrite(entity_type, index_doc);
 		}
 
 		this.#notifySubscribers([entity_type]);
@@ -1041,15 +1284,22 @@ export class DatabaseWorker {
 		query: SearchQueryInput,
 	): Promise<WorkerSearchResult> {
 		const state = this.#entities[entity_type];
-		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
+		if (!state) throw unknownEntityType(entity_type);
 
+		// A `versionchange` may have released the database — reopen before
+		// routing so one upgrade in another tab degrades one call at most.
+		await this.#ensureStore();
 		if (!(await this.#routesToClient(state, query))) {
 			return this.#serverSearch(entity_type, query);
 		}
+		// Capture ONCE: `#engine` can be nulled by a `versionchange` between the
+		// routing check and the call (the TOCTOU `this.#engine!` used to hide).
+		const engine = this.#engine;
+		if (!engine) return this.#serverSearch(entity_type, query);
 
 		let results: SearchQueryResults<Record<string, unknown>>;
 		try {
-			results = await this.#engine!.list(entity_type, query as SearchQuery);
+			results = await engine.list(entity_type, query as SearchQuery);
 		} catch (error) {
 			// A malformed query fails the same way on both drivers (`core/*` throws
 			// the same `DelightError`); make it survive the Comlink boundary rather
@@ -1107,20 +1357,39 @@ export class DatabaseWorker {
 	/** One-shot list that always hits the server */
 	async list(entity_type: string, query: SearchQueryInput): Promise<WorkerSearchResult> {
 		const state = this.#entities[entity_type];
-		if (!state) throw new Error(`Unknown entity type: ${entity_type}`);
-		return this.#serverSearch(entity_type, query, true);
+		if (!state) throw unknownEntityType(entity_type);
+		return this.#serverSearch(entity_type, query);
 	}
 
-	/** Subscribe to search results that auto-update when the index changes. */
+	/**
+	 * Subscribe to search results that auto-update when the index changes.
+	 *
+	 * `token` is the client's query sequence number; every result delivered to
+	 * `callback` echoes the token of the query it answered, so the client can
+	 * discard a slow result that a newer push has already overtaken. A failed
+	 * search is delivered as `{ error }` rather than silently as empty results.
+	 */
 	async subscribe(
 		entity_type: string,
 		query: SearchQueryInput,
 		callback: (result: WorkerSearchResult) => void,
+		token = 0,
 	): Promise<string> {
 		const id = `sub_${++this.#subscriber_counter}`;
-		this.#search_subscribers.push({ id, entity_type, query, callback });
+		this.#search_subscribers.push({
+			id,
+			entity_type,
+			query,
+			query_token: token,
+			callback,
+		});
 
-		const result = await this.search(entity_type, query);
+		let result: WorkerSearchResult;
+		try {
+			result = { ...(await this.search(entity_type, query)), token };
+		} catch (error) {
+			result = { hits: [], count: 0, token, error: searchErrorPayload(error) };
+		}
 		try {
 			callback(result);
 		} catch {
@@ -1134,12 +1403,20 @@ export class DatabaseWorker {
 	async updateSubscription(
 		subscriber_id: string,
 		query: SearchQueryInput,
+		token?: number,
 	): Promise<void> {
 		const sub = this.#search_subscribers.find((s) => s.id === subscriber_id);
 		if (!sub) return;
 		sub.query = query;
+		if (token !== undefined) sub.query_token = token;
+		const echo = sub.query_token;
 
-		const result = await this.search(sub.entity_type, query);
+		let result: WorkerSearchResult;
+		try {
+			result = { ...(await this.search(sub.entity_type, query)), token: echo };
+		} catch (error) {
+			result = { hits: [], count: 0, token: echo, error: searchErrorPayload(error) };
+		}
 		try {
 			sub.callback(result);
 		} catch {
@@ -1190,28 +1467,29 @@ export class DatabaseWorker {
 		this.#notifySubscribers([entity_type]);
 	}
 
-	/** Server-side search. Throws on error when throw_on_error is true. */
+	/**
+	 * Server-side search. Always throws on an error response — masking one as
+	 * `{ hits: [], count: 0 }` used to blank live result lists silently. The
+	 * subscription paths catch and deliver the error to their callback; one-shot
+	 * callers let it cross the Comlink boundary with its status intact.
+	 */
 	async #serverSearch(
 		entity_type: string,
 		query: SearchQueryInput,
-		throw_on_error = false,
 	): Promise<WorkerSearchResult> {
 		const params = encodeSearchQuery({ sparse: true, ...query });
 		const qs = params.toString();
 		const response = await fetch(`/api/${entity_type}${qs ? '?' : ''}${qs}`);
 		if (!response.ok) {
-			if (throw_on_error) {
-				const error_body = (await response.json().catch(() => ({}))) as Record<
-					string,
-					unknown
-				>;
-				throw DelightError.transferable({
-					message: (error_body.message as string) || `List ${entity_type} failed`,
-					status: response.status,
-					detail: error_body.detail as string | undefined,
-				});
-			}
-			return { hits: [], count: 0 };
+			const error_body = (await response.json().catch(() => ({}))) as Record<
+				string,
+				unknown
+			>;
+			throw DelightError.transferable({
+				message: (error_body.message as string) || `List ${entity_type} failed`,
+				status: response.status,
+				detail: error_body.detail as string | undefined,
+			});
 		}
 
 		const body = (await response.json()) as {
@@ -1320,9 +1598,11 @@ export class DatabaseWorker {
 	 * external change) or a logged loss (a local optimistic write).
 	 */
 	async #indexDocuments(entity_type: string, writes: DocWrite[]): Promise<boolean> {
+		await this.#ensureStore();
 		if (!this.#store) return false;
 		try {
 			await this.#store.applyWrites(writes);
+			this.#broadcastInvalidation([entity_type]);
 			return true;
 		} catch (error) {
 			console.error(
@@ -1331,6 +1611,24 @@ export class DatabaseWorker {
 			);
 			return false;
 		}
+	}
+
+	/**
+	 * A server-confirmed change could not be written to the local index. Roll
+	 * the synced window back to just before the change and resync, otherwise
+	 * the row stays stale/absent in local search until a full rebuild — the
+	 * same recovery {@link applyExternalChange} has always used. Skipped in
+	 * server-only mode (no store means no local index to be stale).
+	 */
+	#recoverDroppedIndexWrite(entity_type: string, doc: Record<string, unknown>): void {
+		const state = this.#entities[entity_type];
+		if (!state || !this.#store) return;
+		const changed_at = typeof doc.updated_at === 'number' ? doc.updated_at : undefined;
+		if (changed_at && state.end_updated_at && state.end_updated_at >= changed_at) {
+			state.end_updated_at = changed_at - 1;
+		}
+		state.synced = false;
+		this.sync([entity_type]).catch(() => {});
 	}
 
 	/** The indexed sparse document for one primary key, if it is indexed. */
@@ -1467,16 +1765,31 @@ export class DatabaseWorker {
 			this.#pending_notify.clear();
 			for (const sub of this.#search_subscribers) {
 				if (!types.has(sub.entity_type)) continue;
+				// Capture the token BEFORE the async search: the result answers the
+				// query stored right now, and the client uses the echoed token to
+				// discard it if a newer push lands first.
+				const token = sub.query_token;
 				this.search(sub.entity_type, sub.query).then(
 					(result) => {
 						try {
-							sub.callback(result);
+							sub.callback({ ...result, token });
 						} catch {
 							// ignore
 						}
 					},
-					() => {
-						// ignore search errors in notification
+					(error) => {
+						// Surface the failure instead of leaving the subscriber silently
+						// frozen; the client keeps its last-known-good results.
+						try {
+							sub.callback({
+								hits: [],
+								count: 0,
+								token,
+								error: searchErrorPayload(error),
+							});
+						} catch {
+							// ignore
+						}
 					},
 				);
 			}

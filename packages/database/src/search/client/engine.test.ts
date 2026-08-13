@@ -16,8 +16,9 @@
  *    and identified by `requiresServer` before it is ever sent.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DelightError } from '@delightstack/utilities';
+import { DOCS_STORE, transactionDone, type DocWrite } from './idb_store';
 import { generateCorpus } from '../__tests__/fixtures/corpus';
 import { batteryCasesForCorpus, type BatteryCase } from '../__tests__/fixtures/battery';
 import { buildMemoryEngine, toEngineQuery } from '../__tests__/support';
@@ -167,6 +168,146 @@ describe('index-driven candidates vs a full scan', () => {
 				.hits.map((hit) => hit.id),
 		);
 		expect(result.count).toBeGreaterThan(0);
+	});
+});
+
+describe('the index-cursor browse fast path', () => {
+	const BROWSE_SCHEMA: WhereSchema = {
+		id: 'string',
+		title: 'string',
+		updated_at: 'number',
+	};
+
+	/** 1000 documents with heavy `updated_at` ties (97 distinct values). */
+	function browseDocs(): Record<string, unknown>[] {
+		return Array.from({ length: 1000 }, (_, index) => ({
+			id: `doc-${String(index).padStart(4, '0')}`,
+			title: `note ${index}`,
+			updated_at: 1_000 + ((index * 37) % 97),
+		}));
+	}
+
+	async function loadedDriver(
+		docs: Record<string, unknown>[],
+		options: { without_indexes?: boolean } = {},
+	) {
+		const driver = await openTestDriver('article', BROWSE_SCHEMA, options);
+		const writes: DocWrite[] = docs.map((doc) => ({
+			entity_type: 'article',
+			doc_id: String(doc.id),
+			sparse_doc: doc,
+		}));
+		for (let index = 0; index < writes.length; index += 200) {
+			await driver.store.applyWrites(writes.slice(index, index + 200));
+		}
+		return driver;
+	}
+
+	it(
+		'answers the default browse query without materializing the corpus, identically',
+		{ timeout: 120_000 },
+		async () => {
+			const docs = browseDocs();
+			const indexed = await loadedDriver(docs);
+			const scanned = await loadedDriver(docs, { without_indexes: true });
+			const query: SearchQuery = {
+				term: '',
+				limit: 100,
+				order: [{ field: 'updated_at', direction: 'DESC' }],
+			};
+
+			const scans = vi.spyOn(indexed.store, 'getAllDocs');
+			const fast = await indexed.engine.list('article', query);
+			expect(scans).not.toHaveBeenCalled();
+
+			// The scan driver has no `docs` indexes, so it takes the previous
+			// getAllDocs → sort path: the reference the cursor path must equal
+			// byte for byte, tie-breaks (primary key ascending) included.
+			const slow = await scanned.engine.list('article', query);
+			expect(fast.count).toBe(slow.count);
+			expect(fast.hits).toEqual(slow.hits);
+
+			// Paging and both directions agree too.
+			for (const variant of [
+				{ ...query, offset: 37, limit: 10 },
+				{ ...query, order: [{ field: 'updated_at', direction: 'ASC' as const }] },
+				{ ...query, limit: 0 },
+				{ ...query, offset: 990, limit: 100 },
+			]) {
+				const left = await indexed.engine.list('article', variant);
+				const right = await scanned.engine.list('article', variant);
+				expect(left.count, JSON.stringify(variant)).toBe(right.count);
+				expect(left.hits, JSON.stringify(variant)).toEqual(right.hits);
+			}
+			expect(scans).not.toHaveBeenCalled();
+			scans.mockRestore();
+		},
+	);
+
+	it('falls back to the scan when a document lacks the order field', async () => {
+		const docs = [
+			{ id: 'a', title: 'one', updated_at: 3 },
+			{ id: 'b', title: 'two' }, // invisible to the by$updated_at index
+			{ id: 'c', title: 'three', updated_at: 1 },
+		];
+		const indexed = await loadedDriver(docs);
+		const scanned = await loadedDriver(docs, { without_indexes: true });
+		const query: SearchQuery = {
+			term: '',
+			limit: 10,
+			order: [{ field: 'updated_at', direction: 'DESC' }],
+		};
+		const scans = vi.spyOn(indexed.store, 'getAllDocs');
+		const fast = await indexed.engine.list('article', query);
+		// Coverage check failed (2 index entries vs 3 documents) → the honest scan.
+		expect(scans).toHaveBeenCalled();
+		scans.mockRestore();
+		const slow = await scanned.engine.list('article', query);
+		expect(fast.hits).toEqual(slow.hits);
+		expect(fast.hits.map((hit) => hit.id)).toEqual(['a', 'c', 'b']); // missing sorts last
+		expect(fast.count).toBe(3);
+	});
+});
+
+describe('score paging over a missing document', () => {
+	it('pulls the next scored entry forward instead of shorting the page', async () => {
+		const schema: WhereSchema = { id: 'string', title: 'string' };
+		const driver = await openTestDriver('article', schema);
+		await driver.store.applyWrites([
+			{
+				entity_type: 'article',
+				doc_id: 'a',
+				sparse_doc: { id: 'a', title: 'alpha' },
+			},
+			{
+				entity_type: 'article',
+				doc_id: 'b',
+				sparse_doc: { id: 'b', title: 'alpha alpha other words here' },
+			},
+			{
+				entity_type: 'article',
+				doc_id: 'c',
+				sparse_doc: { id: 'c', title: 'alpha words' },
+			},
+		]);
+		// Which id scores highest is BM25's business — learn the order first.
+		const full = await driver.engine.list('article', { term: 'alpha', limit: 3 });
+		expect(full.hits).toHaveLength(3);
+		const top = full.hits[0].id;
+
+		// Corrupt the store the way the pull-forward path guards against: the
+		// top-scored document row is gone but its postings remain.
+		const txn = driver.db.transaction(DOCS_STORE, 'readwrite');
+		txn.objectStore(DOCS_STORE).delete(['article', top]);
+		await transactionDone(txn);
+
+		// The deferrable page (no order/facets/distinct) must pull the third
+		// entry forward: two real hits, and a count that excludes the ghost.
+		const paged = await driver.engine.list('article', { term: 'alpha', limit: 2 });
+		expect(paged.hits.map((hit) => hit.id)).toEqual(
+			full.hits.slice(1).map((hit) => hit.id),
+		);
+		expect(paged.count).toBe(2);
 	});
 });
 

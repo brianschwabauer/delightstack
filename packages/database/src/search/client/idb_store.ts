@@ -280,11 +280,50 @@ export interface OpenSearchDatabaseOptions {
 	delete_stores?: readonly string[];
 	/** Injectable factory (tests pass `fake-indexeddb`). */
 	factory?: IDBFactory;
+	/**
+	 * How long a blocked upgrade waits for the other connections to close
+	 * before giving up (ms). A `versionchange` event usually makes the blocking
+	 * tab release its connection within a frame; a tab that never does (an old
+	 * build, a frozen background tab) would otherwise leave the open pending
+	 * forever. On timeout the open rejects with a 503 the caller can turn into
+	 * a server-only fallback rather than a dead client.
+	 * @default 3000
+	 */
+	blocked_timeout_ms?: number;
 }
 
 /** The index name for a declared path. */
 export function docIndexName(path: string): string {
 	return `${DOC_INDEX_PREFIX}${path}`;
+}
+
+/**
+ * Whether a live `docs` index has the physical shape its declaration asks for.
+ *
+ * Names alone are not enough: a path whose declared arity flips
+ * (`'string'` → `'string[]'`, or the "multiEntry wins" merge changing its
+ * mind) keeps the same index name but needs a different keyPath shape — a bare
+ * `multiEntry` index for arrays, a compound `[entity_type, value]` index for
+ * scalars. A stale index of the wrong shape returns zero rows from every
+ * probe, which silently *excludes* documents (§7.6: a probe must always be a
+ * superset). Comparing the shape here is what lets the upgrade machinery
+ * detect the drift and rebuild the index.
+ */
+export function docIndexShapeMatches(
+	index: IDBIndex,
+	declaration: DocIndexPath,
+): boolean {
+	const value_path = `sparse_doc.${declaration.path}`;
+	if (declaration.multi_entry) {
+		return index.multiEntry === true && index.keyPath === value_path;
+	}
+	return (
+		index.multiEntry !== true &&
+		Array.isArray(index.keyPath) &&
+		index.keyPath.length === 2 &&
+		index.keyPath[0] === 'entity_type' &&
+		index.keyPath[1] === value_path
+	);
 }
 
 /**
@@ -349,7 +388,15 @@ export function openSearchDatabase(
 				if (!wanted.has(name)) docs.deleteIndex(name);
 			}
 			for (const [name, declaration] of wanted) {
-				if (docs.indexNames.contains(name)) continue;
+				if (docs.indexNames.contains(name)) {
+					// A same-named index whose physical shape drifted (a scalar path
+					// re-declared as an array, or vice versa) would silently return zero
+					// rows from every probe — delete and recreate it. `createIndex`
+					// re-populates from the existing records, so no data rebuild is
+					// needed beyond this.
+					if (docIndexShapeMatches(docs.index(name), declaration)) continue;
+					docs.deleteIndex(name);
+				}
 				const value_path = `sparse_doc.${declaration.path}`;
 				if (declaration.multi_entry) {
 					docs.createIndex(name, value_path, { multiEntry: true });
@@ -358,17 +405,46 @@ export function openSearchDatabase(
 				}
 			}
 		};
-		open_request.onsuccess = () => resolve(open_request.result);
-		open_request.onerror = () =>
+		// `blocked` is not terminal: the other connections get a `versionchange`
+		// event and normally close within a frame, after which the upgrade
+		// proceeds and `onsuccess` still fires. Only reject when the block
+		// out-lives a generous timeout (a connection that will never close), so
+		// the caller can fall back to server-only mode instead of dying on a
+		// transient handoff.
+		let blocked_timer: ReturnType<typeof setTimeout> | undefined;
+		let timed_out = false;
+		const clearBlockedTimer = (): void => {
+			if (blocked_timer !== undefined) clearTimeout(blocked_timer);
+			blocked_timer = undefined;
+		};
+		open_request.onsuccess = () => {
+			clearBlockedTimer();
+			if (timed_out) {
+				// The caller already gave up on this open — do not leak a connection
+				// that would in turn block the next upgrade.
+				open_request.result.close();
+				return;
+			}
+			resolve(open_request.result);
+		};
+		open_request.onerror = () => {
+			clearBlockedTimer();
 			reject(open_request.error ?? new Error('Failed to open the search database.'));
-		open_request.onblocked = () =>
-			reject(
-				new DelightError({
-					message: 'The search database upgrade is blocked by another connection.',
-					status: 503,
-					code: 'search_db_blocked',
-				}),
-			);
+		};
+		open_request.onblocked = () => {
+			if (blocked_timer !== undefined) return;
+			blocked_timer = setTimeout(() => {
+				blocked_timer = undefined;
+				timed_out = true;
+				reject(
+					new DelightError({
+						message: 'The search database upgrade is blocked by another connection.',
+						status: 503,
+						code: 'search_db_blocked',
+					}),
+				);
+			}, options.blocked_timeout_ms ?? 3000);
+		};
 	});
 }
 
@@ -1271,6 +1347,12 @@ export class IdbSearchStore {
 	 *
 	 * Output — and output *order* — is identical to the cached path's, because
 	 * BM25 accumulation order is part of the determinism contract.
+	 *
+	 * `range_memo` is a caller-owned per-query cache: a tolerance expansion has
+	 * to read the field's whole token range, and without the memo N query tokens
+	 * would cost N identical full-range reads. Keyed by field; the caller passes
+	 * a fresh map per query execution and awaits expansions sequentially so the
+	 * first read populates it for the rest.
 	 */
 	async expandToken(
 		entity_type: string,
@@ -1278,22 +1360,34 @@ export class IdbSearchStore {
 		token: string,
 		exact: boolean,
 		tolerance: number,
+		range_memo?: Map<string, string[]>,
 	): Promise<string[]> {
-		const txn = this.db.transaction(TOKENS_STORE, 'readonly');
-		const store = txn.objectStore(TOKENS_STORE);
 		if (exact) {
+			const txn = this.db.transaction(TOKENS_STORE, 'readonly');
 			const row = await request<TokenRow | undefined>(
-				store.get([entity_type, field, token]) as IDBRequest<TokenRow | undefined>,
+				txn.objectStore(TOKENS_STORE).get([entity_type, field, token]) as IDBRequest<
+					TokenRow | undefined
+				>,
 			);
 			return row ? [token] : [];
 		}
-		const range =
-			tolerance > 0
-				? tokenRange(entity_type, field)
-				: tokenPrefixRange(entity_type, field, token);
-		const keys = await request<IDBValidKey[]>(store.getAllKeys(range));
-		const tokens = keys.map((entry) => String((entry as IDBValidKey[])[2]));
-		tokens.sort(compareStrings);
+		let tokens: string[];
+		const memo_key = `${entity_type}${KEY_SEPARATOR}${field}`;
+		if (tolerance > 0 && range_memo?.has(memo_key)) {
+			tokens = range_memo.get(memo_key) as string[];
+		} else {
+			const txn = this.db.transaction(TOKENS_STORE, 'readonly');
+			const range =
+				tolerance > 0
+					? tokenRange(entity_type, field)
+					: tokenPrefixRange(entity_type, field, token);
+			const keys = await request<IDBValidKey[]>(
+				txn.objectStore(TOKENS_STORE).getAllKeys(range),
+			);
+			tokens = keys.map((entry) => String((entry as IDBValidKey[])[2]));
+			tokens.sort(compareStrings);
+			if (tolerance > 0) range_memo?.set(memo_key, tokens);
+		}
 		if (tolerance <= 0) return tokens.filter((candidate) => candidate.startsWith(token));
 		const matcher = new ToleranceMatcher(token, tolerance);
 		return tokens.filter(
@@ -1417,6 +1511,72 @@ export class IdbSearchStore {
 				DocRow[]
 			>,
 		);
+	}
+
+	/**
+	 * The first `wanted` documents of an entity type, ordered by a numeric
+	 * `docs` index — the browse-page fast path (no term, no filter, one order
+	 * field). Returns `null` whenever the index cannot answer *exactly*:
+	 *
+	 * - the path has no declared scalar index (`multiEntry` indexes carry no
+	 *   entity prefix and duplicate array members);
+	 * - any document's value at the path is missing or non-numeric — the index
+	 *   cannot see missing values at all, and IDB's cross-type key order is not
+	 *   `core/compare`'s, so either would silently drop or misplace documents.
+	 *
+	 * Within the numbers-only slice IDB's order IS the numeric order
+	 * `compareForOrder` uses. Ties are returned as a *complete* group: iteration
+	 * continues past `wanted` until the order value changes, so the caller can
+	 * re-sort the returned rows with the full comparator (primary-key tie-break
+	 * included) and get exactly the global first-`wanted` prefix.
+	 */
+	async readOrderedByNumericIndex(
+		entity_type: string,
+		path: string,
+		descending: boolean,
+		wanted: number,
+	): Promise<{ rows: DocRow[]; total: number } | null> {
+		const declaration = this.indexed_paths.get(path);
+		if (!declaration || declaration.multi_entry) return null;
+		const txn = this.db.transaction(DOCS_STORE, 'readonly');
+		const docs = txn.objectStore(DOCS_STORE);
+		const name = docIndexName(path);
+		if (!docs.indexNames.contains(name)) return null;
+		const index = docs.index(name);
+		// Numbers-only slice of the compound index: every non-number value type
+		// sorts above `Infinity` in IDB key order, so the range excludes them —
+		// along with documents missing the path, which the index cannot see.
+		const numeric_range = IDBKeyRange.bound(
+			[entity_type, Number.NEGATIVE_INFINITY],
+			[entity_type, Number.POSITIVE_INFINITY],
+		);
+		const [total, covered] = await Promise.all([
+			request<number>(docs.count(entityRange(entity_type))),
+			request<number>(index.count(numeric_range)),
+		]);
+		if (covered !== total) return null;
+		const rows: DocRow[] = [];
+		if (wanted > 0 && total > 0) {
+			await new Promise<void>((resolve, reject) => {
+				let boundary: number | undefined;
+				const cursor_request = index.openCursor(
+					numeric_range,
+					descending ? 'prev' : 'next',
+				);
+				cursor_request.onsuccess = () => {
+					const cursor = cursor_request.result;
+					if (!cursor) return resolve();
+					const value = (cursor.key as [string, number])[1];
+					if (rows.length >= wanted && value !== boundary) return resolve();
+					rows.push(cursor.value as DocRow);
+					if (rows.length === wanted) boundary = value;
+					cursor.continue();
+				};
+				cursor_request.onerror = () =>
+					reject(cursor_request.error ?? new Error('IndexedDB cursor failed.'));
+			});
+		}
+		return { rows, total };
 	}
 
 	/** How many documents of an entity type are indexed. */
