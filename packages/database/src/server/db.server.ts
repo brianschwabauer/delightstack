@@ -1414,16 +1414,64 @@ export class DatabaseServer<
 		// term search would silently override BM25/boost ranking with updated_at.
 		const has_relevance =
 			!!(base_query.term as string | undefined)?.trim() || !!base_query.vector;
+		// DoS clamps: `tolerance` drives a Levenshtein scan over the token
+		// dictionary and `offset` forces the engine to materialize/skip that many
+		// entries — both are attacker-reachable numbers, so both get hard ceilings.
+		const raw_tolerance = (base_query as { tolerance?: unknown }).tolerance;
+		const tolerance =
+			typeof raw_tolerance === 'number' && Number.isFinite(raw_tolerance)
+				? Math.min(3, Math.max(0, Math.trunc(raw_tolerance)))
+				: undefined;
+		const raw_offset = (base_query as { offset?: unknown }).offset;
+		const offset =
+			typeof raw_offset === 'number' && Number.isFinite(raw_offset)
+				? Math.min(100_000, Math.max(0, Math.trunc(raw_offset)))
+				: undefined;
+		// Accept plain-value where shorthands (`{folder: 'inbox'}`) on enum and
+		// number fields, normalizing them into operation objects.
+		let where = normalizeWhere(
+			base_query.where as Record<string, unknown> | undefined,
+			table.config.index_schema as Record<string, unknown>,
+		);
+		// SECURITY: a cursor is unsigned, attacker-forgeable base64 — it must
+		// never be able to *widen* the caller's query. A route-level `beforeList`
+		// hook injects row-level restrictions into `raw_query.where` (the
+		// documented auth pattern), so whenever both a cursor and a caller `where`
+		// are present the caller's restriction is ANDed back in. Re-ANDing a
+		// clause the cursor already carries is an idempotent restriction, so
+		// legitimate keyset cursors (which wrap the original where in an `and`
+		// list) paginate identically — and the flatten/dedupe below keeps a
+		// well-formed cursor's `where` from growing page over page.
+		if (previous_cursor_data && raw_query.where) {
+			const caller_where = normalizeWhere(
+				raw_query.where as Record<string, unknown>,
+				table.config.index_schema as Record<string, unknown>,
+			) as Record<string, unknown>;
+			const cursor_where = where as Record<string, unknown> | undefined;
+			if (!cursor_where || Object.keys(cursor_where).length === 0) {
+				where = caller_where;
+			} else if (
+				Object.keys(cursor_where).length === 1 &&
+				Array.isArray(cursor_where.and)
+			) {
+				// The keyset-cursor shape: `{and: [original_where, keyset...]}`.
+				// Append the caller's restriction unless an identical clause is
+				// already in the list (the normal page-2+ case).
+				const caller_json = JSON.stringify(caller_where);
+				if (!cursor_where.and.some((clause) => JSON.stringify(clause) === caller_json)) {
+					where = { and: [...cursor_where.and, caller_where] };
+				}
+			} else if (JSON.stringify(cursor_where) !== JSON.stringify(caller_where)) {
+				where = { and: [cursor_where, caller_where] };
+			}
+		}
 		const query = {
 			order: has_relevance ? [] : [{ field: 'updated_at', direction: 'DESC' }],
 			...base_query,
-			// Accept plain-value where shorthands (`{folder: 'inbox'}`) on enum and
-			// number fields, normalizing them into operation objects.
-			where: normalizeWhere(
-				base_query.where as Record<string, unknown> | undefined,
-				table.config.index_schema as Record<string, unknown>,
-			) as never,
+			where: where as never,
 			term: base_query.term,
+			tolerance,
+			offset,
 			cursor: undefined,
 			sparse,
 			limit: Math.max(
@@ -1914,12 +1962,15 @@ export class DatabaseServer<
 					// Derived values first: `indexDocument` and every later read of the
 					// row expect them to be in `$derived` already.
 					this.persistDerivedFields(entity_type, created_id, sparse_entity as any);
+					// Marked touched BEFORE the index write: if `indexDocument` throws
+					// mid-way, the transaction rolls back but the in-memory dictionary
+					// cache was already mutated — the rollback handler must still drop it.
+					touched_indexes.add(entity_type);
 					this.search.indexDocument(
 						entity_type,
 						String(created_id),
 						sparse_entity as Record<string, unknown>,
 					);
-					touched_indexes.add(entity_type);
 					this.cascadeReindexReferencing(
 						entity_type,
 						output_data[primary_key] || output_data.id,
@@ -2006,13 +2057,14 @@ export class DatabaseServer<
 					const sparse_entity = table.toSparse(output_data);
 					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
 					this.persistDerivedFields(entity_type, id, sparse_entity as any);
+					// Before the index write — see the create branch.
+					touched_indexes.add(entity_type);
 					this.search.indexDocument(
 						entity_type,
 						id.toString(),
 						sparse_entity as Record<string, unknown>,
 						previous_sparse,
 					);
-					touched_indexes.add(entity_type);
 					this.cascadeReindexReferencing(
 						entity_type,
 						output_data[primary_key] || output_data.id || id,
@@ -2049,10 +2101,10 @@ export class DatabaseServer<
 						id,
 					);
 					// `removeDocument` writes the tombstone that feeds the sync deletion
-					// timeline.
+					// timeline. Marked touched first — see the create branch.
+					touched_indexes.add(entity_type);
 					this.search.removeDocument(entity_type, id.toString(), now.getTime());
 					this.search.store.pruneTombstones(entity_type);
-					touched_indexes.add(entity_type);
 					this.cascadeReindexReferencing(entity_type, id, touched_indexes, now);
 					results.push({
 						entity: {
@@ -2347,8 +2399,10 @@ export class DatabaseServer<
 				// The postings update is the §7.2 write path with the row's previously
 				// persisted `$derived` as the "previous" doc, all in this transaction.
 				this.persistDerivedFields(dep.table, dep_entity[dep_pk], sparse);
-				this.search.indexDocument(dep.table, dep_id, sparse, previous_sparse);
+				// Before the index write — a mid-call throw must still invalidate the
+				// dictionary cache on rollback.
 				touched_indexes.add(dep.table);
+				this.search.indexDocument(dep.table, dep_id, sparse, previous_sparse);
 			}
 		}
 	}

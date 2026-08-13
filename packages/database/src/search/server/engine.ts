@@ -151,6 +151,16 @@ export interface RebuildBatchResult {
 /* Engine                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/** DoS clamp: query terms score at most this many tokens (index side untouched). */
+export const MAX_QUERY_TOKENS = 32;
+
+/**
+ * When a `where` admits at most this many candidate ids, vectors are fetched
+ * with chunked `doc_id IN (...)` reads instead of scanning every stored vector
+ * for the field.
+ */
+const VECTOR_PUSHDOWN_MAX_CANDIDATES = 5000;
+
 /** The synchronous DO-SQLite search driver. */
 export class SqliteSearchEngine {
 	readonly sql: SearchSqlStorage;
@@ -286,7 +296,13 @@ export class SqliteSearchEngine {
 		const ctx = whereContext(table);
 		const compiled = compileWhere(where_node, ctx);
 
-		const term_tokens = typeof query.term === 'string' ? tokenize(query.term) : [];
+		// DoS clamp: only the first MAX_QUERY_TOKENS tokens of the *query* term are
+		// used. Index-side tokenization is untouched — this caps the number of
+		// dictionary expansions and posting reads a single query can force.
+		const term_tokens =
+			typeof query.term === 'string'
+				? tokenize(query.term).slice(0, MAX_QUERY_TOKENS)
+				: [];
 		const distinct_tokens = [...new Set(term_tokens)].sort(compareStrings);
 		const has_term = distinct_tokens.length > 0;
 		const has_vector = query.vector !== undefined;
@@ -561,8 +577,14 @@ export class SqliteSearchEngine {
 		let cursor = 0;
 		let missing = 0;
 		// Widen the window only when a document really is unreadable, so the
-		// invariant's cost is one hydration of exactly the page.
-		while (cursor < entries.length && hits.length + missing < wanted) {
+		// invariant's cost is one hydration of exactly the page. The loop runs
+		// until the page is full (`hits.length < wanted`) or the matched set is
+		// exhausted — `missing` widens each slice so a recovery pass reads exactly
+		// the entries pulled forward. Note `count` only subtracts misses inside
+		// the scanned windows: entries past the page are never hydrated, so a
+		// divergence out there is not observable (nor subtracted) — acceptable,
+		// since index/table divergence is not a reachable state on the write path.
+		while (cursor < entries.length && hits.length < wanted) {
 			const window = entries.slice(cursor, wanted + missing);
 			cursor += window.length;
 			const hydrated =
@@ -610,11 +632,7 @@ export class SqliteSearchEngine {
 			if (stats.doc_count === 0) continue;
 			const average_field_length = stats.total_len / stats.doc_count;
 			const boost = boosts?.[field] ?? 1;
-			for (
-				let token_index = 0;
-				token_index < distinct_tokens.length;
-				token_index++
-			) {
+			for (let token_index = 0; token_index < distinct_tokens.length; token_index++) {
 				const token = distinct_tokens[token_index];
 				const candidates = this.store.expandToken(
 					entity_type,
@@ -623,16 +641,27 @@ export class SqliteSearchEngine {
 					exact,
 					tolerance,
 				);
+				// One chunked statement pair per expansion instead of two statements
+				// per candidate token. `candidates` is already sorted ascending, and
+				// the accumulation below still walks it in that exact order, so the
+				// float summation sequence — and therefore every score — is unchanged.
+				const doc_frequencies = this.store.getDocFrequencies(
+					entity_type,
+					field,
+					candidates,
+				);
+				const postings_by_token = this.store.getPostingsForTokens(
+					entity_type,
+					field,
+					candidates,
+				);
 				for (const candidate of candidates) {
-					const doc_frequency = this.store.getDocFrequency(entity_type, field, candidate);
+					const doc_frequency = doc_frequencies.get(candidate) ?? 0;
 					// `field_length` rides along on the posting row (§7.1), so nothing
 					// here is proportional to the corpus — only to the postings the
 					// query actually touches.
-					for (const [doc_id, tf, field_length] of this.store.getPostings(
-						entity_type,
-						field,
-						candidate,
-					)) {
+					for (const [doc_id, tf, field_length] of postings_by_token.get(candidate) ??
+						[]) {
 						if (candidate_ids && !candidate_ids.has(doc_id)) continue;
 						const score = bm25Score({
 							tf,
@@ -669,10 +698,35 @@ export class SqliteSearchEngine {
 				code: 'invalid_vector_field',
 			});
 		}
+		// DoS clamp: reject a wrong-dimension query vector against the schema's
+		// declared dimension BEFORE normalizing it or touching any stored vector —
+		// a 1M-element value must cost O(1), not a normalize pass plus a stored
+		// read. The message matches `dotProduct`'s exactly (goldens pin it), which
+		// is truthful because write-time indexing normalizes against the same
+		// declared schema.
+		const declared_dimension = Number((type as string).slice('vector['.length, -1));
+		if (
+			Number.isInteger(declared_dimension) &&
+			declared_dimension > 0 &&
+			vector_query.value.length !== declared_dimension
+		) {
+			throw DelightError.badRequest(
+				`Vector dimension mismatch: query has ${vector_query.value.length}, index has ${declared_dimension}.`,
+				{ code: 'invalid_vector' },
+			);
+		}
 		const query_vector = normalizeVector(vector_query.value);
 		const minimum = vector_query.similarity ?? DEFAULT_SIMILARITY;
 		const scores = new Map<string, number>();
-		for (const [doc_id, vector] of this.store.getVectors(table.entity_type, field)) {
+		// Pushdown: with a small enough `where`-admitted candidate set, read only
+		// those documents' vectors (chunked `IN (...)`) instead of every stored
+		// vector for the field. Membership and scores are identical either way —
+		// the candidate check below still applies.
+		const vectors =
+			candidate_ids && candidate_ids.size <= VECTOR_PUSHDOWN_MAX_CANDIDATES
+				? this.store.getVectors(table.entity_type, field, [...candidate_ids])
+				: this.store.getVectors(table.entity_type, field);
+		for (const [doc_id, vector] of vectors) {
 			if (candidate_ids && !candidate_ids.has(doc_id)) continue;
 			const similarity = dotProduct(query_vector, vector);
 			if (similarity >= minimum) scores.set(doc_id, similarity);
@@ -728,6 +782,12 @@ export function whereContext(table: ServerSearchTable): SqlWhereContext {
 		primary_key: table.primary_key,
 		inexact_fields: table.inexact_fields,
 		text_affinity_fields: table.text_affinity_fields,
+		// The reserved auto-managed columns are declared NOT NULL in every entity
+		// table `db.server.ts` creates (and a primary key can never be NULL).
+		// `compileOrder` uses this to omit its `(col IS NULL)` nulls-last prefix,
+		// which SQLite does not fold away and which forces a full scan + temp
+		// b-tree instead of the `(updated_at, pk)` index on the default order.
+		non_null_fields: new Set([table.primary_key, 'created_at', 'updated_at']),
 	};
 }
 

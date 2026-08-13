@@ -133,6 +133,14 @@ export interface SqlWhereContext {
 	 * string operands stay fully pushed down and indexed.
 	 */
 	text_affinity_fields?: ReadonlySet<string>;
+	/**
+	 * Real columns declared `NOT NULL` (reserved auto-managed columns plus the
+	 * primary key). `compileOrder` omits its `(col IS NULL)` nulls-last prefix
+	 * for these: the prefix is semantically inert on a column that cannot be
+	 * NULL, but SQLite does not fold it away — it defeats the covering index
+	 * (full scan + temp b-tree on the default `updated_at` order).
+	 */
+	non_null_fields?: ReadonlySet<string>;
 }
 
 /** Resolve where a declared path lives. */
@@ -833,10 +841,12 @@ export function compileOrder(
 			break;
 		}
 		const reference = `${quoteIdentifier(ctx.table_name)}.${quoteIdentifier(placement.column)}`;
-		parts.push(
-			`(${reference} IS NULL)`,
-			`${reference} ${instruction.direction === 'DESC' ? 'DESC' : 'ASC'}`,
-		);
+		// The nulls-last prefix is only needed when the column can actually be
+		// NULL — on a NOT NULL column it is pure cost (see `non_null_fields`).
+		if (placement.kind !== 'column' || !ctx.non_null_fields?.has(field)) {
+			parts.push(`(${reference} IS NULL)`);
+		}
+		parts.push(`${reference} ${instruction.direction === 'DESC' ? 'DESC' : 'ASC'}`);
 	}
 	parts.push(
 		`${quoteIdentifier(ctx.table_name)}.${quoteIdentifier(ctx.primary_key)} ASC`,

@@ -254,4 +254,93 @@ describe('query planning', () => {
 			expect(entry.params.length).toBeLessThanOrEqual(100);
 		}
 	});
+
+	it('batches df and posting reads per token expansion, preserving scores', () => {
+		const { sql, engine } = load();
+		const baseline = engine.list('article', { term: 'data', tolerance: 1 });
+		const statements = statementsFor(sql, () => {
+			engine.list('article', { term: 'data', tolerance: 1 });
+		});
+		// Chunked `IN (...)` reads: no per-candidate statement proliferation.
+		for (const entry of statements) {
+			if (
+				entry.sql.includes('FROM search_postings') ||
+				(entry.sql.includes('FROM search_tokens') && entry.sql.includes('df'))
+			) {
+				expect(entry.sql).toContain('IN (');
+				expect(entry.params.length).toBeLessThanOrEqual(100);
+			}
+		}
+		expect(engine.list('article', { term: 'data', tolerance: 1 })).toEqual(baseline);
+	});
+});
+
+describe('query hardening', () => {
+	it('scores at most the first 32 tokens of the query term', () => {
+		const { engine } = load();
+		const junk = Array.from({ length: 40 }, (_, i) => `zz${i}`);
+		// The only matching token is past the cap — it must be ignored.
+		const past_cap = engine.list('article', { term: `${junk.join(' ')} data` });
+		expect(past_cap.count).toBe(0);
+		// Inside the cap it still matches.
+		const in_cap = engine.list('article', {
+			term: `data ${junk.slice(0, 20).join(' ')}`,
+		});
+		expect(in_cap.count).toBe(3);
+	});
+
+	it('rejects a wrong-dimension query vector before touching stored vectors', () => {
+		const { sql, engine } = load();
+		sql.log.length = 0;
+		const huge = new Array<number>(1_000_000).fill(1);
+		expect(() =>
+			engine.list('article', { vector: { value: huge, field: 'embedding' } }),
+		).toThrowError(
+			expect.objectContaining({
+				status: 400,
+				message: 'Vector dimension mismatch: query has 1000000, index has 3.',
+			}),
+		);
+		// Rejected before any per-document work: no vector rows were read.
+		expect(sql.log.some((entry) => entry.sql.includes('FROM search_vectors'))).toBe(
+			false,
+		);
+	});
+
+	it('pushes candidate ids down into the vector read and matches the full scan', () => {
+		const { sql, engine } = load();
+		const full = engine.list('article', {
+			vector: { value: [1, 0, 0], field: 'embedding', similarity: -1 },
+		});
+		sql.log.length = 0;
+		const filtered = engine.list('article', {
+			where: { status: { in: ['published', 'draft'] } },
+			vector: { value: [1, 0, 0], field: 'embedding', similarity: -1 },
+		});
+		// The where admits every document, so membership and scores must be
+		// identical to the unfiltered scan.
+		expect(filtered.hits.map((hit) => [hit.id, hit.score])).toEqual(
+			full.hits.map((hit) => [hit.id, hit.score]),
+		);
+		// ...but the vector read was scoped to the candidate ids.
+		const vector_reads = sql.log.filter((entry) =>
+			entry.sql.includes('FROM search_vectors WHERE'),
+		);
+		expect(vector_reads.length).toBeGreaterThan(0);
+		expect(vector_reads.every((entry) => entry.sql.includes('doc_id IN ('))).toBe(true);
+	});
+
+	it('pulls the next entry forward when an entity row is missing (#pageByScore)', () => {
+		const { sql, engine } = load();
+		// Simulate index/table divergence: delete the entity row underneath the
+		// postings (a state the write path cannot produce, which is exactly why
+		// the read path must recover from it).
+		sql.exec(`DELETE FROM articles WHERE id = ?;`, 'b');
+		// All three documents match "dat*" and the query is deferrable (no order,
+		// no facets, no distinct_on) — the #pageByScore path.
+		const page = engine.list('article', { term: 'data', limit: 2 });
+		expect(page.hits).toHaveLength(2);
+		expect(page.hits.map((hit) => hit.id).sort()).toEqual(['a', 'c']);
+		expect(page.count).toBe(2);
+	});
 });

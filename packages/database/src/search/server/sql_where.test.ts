@@ -299,6 +299,59 @@ describe('order compilation', () => {
 			supported: true,
 		});
 	});
+
+	it('omits the nulls-last prefix for declared NOT NULL columns', () => {
+		const ctx: SqlWhereContext = {
+			...CTX,
+			schema: { ...SCHEMA, updated_at: 'number' },
+			columns: new Set([...CTX.columns, 'updated_at']),
+			non_null_fields: new Set(['id', 'updated_at']),
+		};
+		// The reserved auto-managed column: no `(col IS NULL)` prefix, so SQLite
+		// can drive the default order off the (updated_at, pk) index.
+		expect(compileOrder([{ field: 'updated_at', direction: 'DESC' }], ctx)).toEqual({
+			sql: '"articles"."updated_at" DESC, "articles"."id" ASC',
+			supported: true,
+		});
+		// A nullable column keeps its nulls-last prefix.
+		expect(compileOrder([{ field: 'rating', direction: 'DESC' }], ctx).sql).toContain(
+			'("articles"."rating" IS NULL)',
+		);
+	});
+
+	it('keeps the default updated_at order on the (updated_at, pk) index', () => {
+		// EXPLAIN QUERY PLAN over real SQLite: the `(col IS NULL)` prefix is NOT
+		// folded away even on a NOT NULL column — it forces a full scan plus a
+		// temp b-tree. The NOT NULL special case above is what restores index use.
+		const sql = new NodeSqlStorage();
+		sql.exec(
+			'CREATE TABLE notes (id TEXT PRIMARY KEY, updated_at INTEGER NOT NULL, json TEXT);',
+		);
+		sql.exec('CREATE INDEX idx_notes_updated_at ON notes (updated_at, id);');
+		const ctx: SqlWhereContext = {
+			table_name: 'notes',
+			schema: { id: 'string', updated_at: 'number' },
+			columns: new Set(['id', 'updated_at']),
+			primary_key: 'id',
+			non_null_fields: new Set(['id', 'updated_at']),
+		};
+		const order = compileOrder([{ field: 'updated_at', direction: 'DESC' }], ctx);
+		const plan = sql
+			.exec(`EXPLAIN QUERY PLAN SELECT * FROM notes ORDER BY ${order.sql} LIMIT 100;`)
+			.toArray()
+			.map((row) => String(row.detail))
+			.join(' | ');
+		expect(plan).toContain('USING INDEX idx_notes_updated_at');
+		// The old shape, for contrast: prefix present → no index.
+		const legacy = sql
+			.exec(
+				`EXPLAIN QUERY PLAN SELECT * FROM notes ORDER BY ("notes"."updated_at" IS NULL), "notes"."updated_at" DESC, "notes"."id" ASC LIMIT 100;`,
+			)
+			.toArray()
+			.map((row) => String(row.detail))
+			.join(' | ');
+		expect(legacy).not.toContain('USING INDEX');
+	});
 });
 
 /* -------------------------------------------------------------------------- */

@@ -269,6 +269,19 @@ function placeholderList(count: number): string {
 	return Array.from({ length: count }, () => '?').join(', ');
 }
 
+/** A field name must be a plain dot-separated identifier path (like `sql_where.ts`). */
+const SAFE_FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
+/** Reject a field name that could not have come from a declared schema. */
+function assertFieldNameIsSafe(field: string): void {
+	if (!SAFE_FIELD_NAME.test(field)) {
+		throw DelightError.badRequest(
+			`Field name "${field}" is not a valid identifier path.`,
+			{ code: 'invalid_search_field' },
+		);
+	}
+}
+
 /**
  * The exclusive upper bound of a prefix range, for the >200k-token SQL
  * fallback (§7.3).
@@ -869,6 +882,82 @@ export class SqliteSearchStore {
 		return postings;
 	}
 
+	/**
+	 * `df` for a batch of tokens in one field, via chunked `IN (...)` lists.
+	 *
+	 * Tokens absent from the map have `df = 0`. One statement per ≤90 tokens
+	 * instead of one per token — the batched form of {@link getDocFrequency}.
+	 */
+	getDocFrequencies(
+		entity_type: string,
+		field: string,
+		tokens: readonly string[],
+	): Map<string, number> {
+		const frequencies = new Map<string, number>();
+		for (const batch of chunk(tokens, MAX_IN_VALUES)) {
+			if (batch.length === 0) continue;
+			const rows = this.sql
+				.exec(
+					`SELECT token, df FROM search_tokens WHERE entity_type = ? AND field = ? AND token IN (${placeholderList(batch.length)});`,
+					entity_type,
+					field,
+					...batch,
+				)
+				.toArray();
+			for (const row of rows) frequencies.set(String(row.token), readNumber(row.df));
+		}
+		return frequencies;
+	}
+
+	/**
+	 * Postings for a batch of tokens in one field, grouped by token.
+	 *
+	 * The batched form of {@link getPostings}: each token's posting list is
+	 * `[doc_id, tf, len][]` ascending by doc id (verified, then sorted only when
+	 * SQL returned them out of order — same policy as the singular read).
+	 * Tokens with no postings are absent from the map.
+	 */
+	getPostingsForTokens(
+		entity_type: string,
+		field: string,
+		tokens: readonly string[],
+	): Map<string, [string, number, number][]> {
+		const by_token = new Map<string, [string, number, number][]>();
+		for (const batch of chunk(tokens, MAX_IN_VALUES)) {
+			if (batch.length === 0) continue;
+			const rows = this.sql
+				.exec(
+					`SELECT token, doc_id, tf, len FROM search_postings WHERE entity_type = ? AND field = ? AND token IN (${placeholderList(batch.length)});`,
+					entity_type,
+					field,
+					...batch,
+				)
+				.toArray();
+			for (const row of rows) {
+				const token = String(row.token);
+				const raw = row.doc_id;
+				const doc_id = typeof raw === 'string' ? raw : String(raw);
+				let postings = by_token.get(token);
+				if (!postings) {
+					postings = [];
+					by_token.set(token, postings);
+				}
+				postings.push([doc_id, readNumber(row.tf), readNumber(row.len)]);
+			}
+		}
+		for (const postings of by_token.values()) {
+			let ordered = true;
+			for (let index = 1; index < postings.length; index++) {
+				if (compareStrings(postings[index - 1][0], postings[index][0]) > 0) {
+					ordered = false;
+					break;
+				}
+			}
+			if (!ordered) postings.sort((a, b) => compareStrings(a[0], b[0]));
+		}
+		return by_token;
+	}
+
 	/** Per-field token counts for a batch of documents. */
 	getDocLengths(
 		entity_type: string,
@@ -908,6 +997,10 @@ export class SqliteSearchStore {
 		field: string,
 		doc_ids?: readonly string[],
 	): Map<string, number> {
+		// The field name is interpolated into the statement text (a bound JSON
+		// path would work too, but statement shapes are cached per text) — so it
+		// must be a plain identifier path, same rule as `sql_where.ts`.
+		assertFieldNameIsSafe(field);
 		const path = `$."${field.replaceAll('"', '""')}"`;
 		const lengths = new Map<string, number>();
 		const collect = (rows: Record<string, unknown>[]): void => {
@@ -939,15 +1032,45 @@ export class SqliteSearchStore {
 		return lengths;
 	}
 
-	/** Every stored vector for a field, ascending by doc id. */
-	getVectors(entity_type: string, field: string): [string, Float32Array][] {
-		const rows = this.sql
-			.exec(
-				`SELECT doc_id, vec FROM search_vectors WHERE entity_type = ? AND field = ?;`,
-				entity_type,
-				field,
-			)
-			.toArray();
+	/**
+	 * Stored vectors for a field, ascending by doc id.
+	 *
+	 * Pass `doc_ids` to read only those documents' vectors via chunked
+	 * `IN (...)` lists (the candidate-pushdown path); omit it to scan the whole
+	 * field. Membership in the result is identical either way for any doc id
+	 * present in `doc_ids`.
+	 */
+	getVectors(
+		entity_type: string,
+		field: string,
+		doc_ids?: readonly string[],
+	): [string, Float32Array][] {
+		const rows: Record<string, unknown>[] = [];
+		if (doc_ids === undefined) {
+			rows.push(
+				...this.sql
+					.exec(
+						`SELECT doc_id, vec FROM search_vectors WHERE entity_type = ? AND field = ?;`,
+						entity_type,
+						field,
+					)
+					.toArray(),
+			);
+		} else {
+			for (const batch of chunk(doc_ids, MAX_IN_VALUES)) {
+				if (batch.length === 0) continue;
+				rows.push(
+					...this.sql
+						.exec(
+							`SELECT doc_id, vec FROM search_vectors WHERE entity_type = ? AND field = ? AND doc_id IN (${placeholderList(batch.length)});`,
+							entity_type,
+							field,
+							...batch,
+						)
+						.toArray(),
+				);
+			}
+		}
 		const vectors: [string, Float32Array][] = rows.map((row) => [
 			String(row.doc_id),
 			blobToVector(row.vec),

@@ -33,6 +33,7 @@ import { DatabaseServer } from './db.server';
 import { Database } from '../schema/schema';
 import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
 import { generateCorpus } from '../search/__tests__/fixtures/corpus';
+import { SqliteSearchEngine } from '../search/server/engine';
 import { flattenSearchSchema } from '../search/server/table_config';
 
 vi.mock('cloudflare:workers', () => {
@@ -515,6 +516,154 @@ describe('native search driver — list()', () => {
 			where: { status: { eq: 5 } },
 		} as never) as unknown as { count: number };
 		expect(as_number.count).toBe(0);
+	});
+});
+
+describe('native search driver — list() hardening', () => {
+	let fixture: Fixture;
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(T0);
+		fixture = createServer();
+	});
+	afterEach(() => {
+		vi.restoreAllMocks();
+		fixture.state.close();
+		vi.useRealTimers();
+	});
+
+	function seedMany(count: number) {
+		const ids: string[] = [];
+		for (let i = 0; i < count; i++) {
+			vi.setSystemTime(T0 + i * 1000);
+			const note = fixture.db.create('note', {
+				title: `note ${i}`,
+				body: i % 2 === 0 ? 'even body' : 'odd body',
+				status: i % 3 === 0 ? 'published' : 'draft',
+				priority: i,
+			} as never) as unknown as { id: string };
+			ids.push(note.id);
+		}
+		return ids;
+	}
+
+	/** Forge an unsigned cursor exactly like an attacker would. */
+	function forgeCursor(payload: Record<string, unknown>): string {
+		return Buffer.from(JSON.stringify(payload))
+			.toString('base64')
+			.replace(/\+/g, '-')
+			.replace(/\//g, '_');
+	}
+
+	type ListResult = {
+		count: number;
+		hits: { document: { id: string; status: string } }[];
+		cursor?: string;
+	};
+
+	it('never lets a forged cursor widen a caller-supplied where restriction', () => {
+		seedMany(9);
+		const restriction = { status: { eq: 'published' } };
+		// The attack from the review: an unsigned cursor with an empty `where`
+		// would previously replace the entire query, discarding the row-level
+		// restriction a beforeList hook injected.
+		const wide_open = fixture.db.list('note', {
+			where: restriction,
+			cursor: forgeCursor({ where: {}, limit: 100, sparse: true }),
+		} as never) as unknown as ListResult;
+		expect(wide_open.hits.length).toBeGreaterThan(0);
+		expect(wide_open.hits.every((hit) => hit.document.status === 'published')).toBe(true);
+		expect(wide_open.count).toBe(3);
+
+		// A cursor carrying a *different* where cannot escape either — the two are
+		// intersected, never replaced.
+		const cross = fixture.db.list('note', {
+			where: restriction,
+			cursor: forgeCursor({ where: { status: { eq: 'draft' } }, sparse: true }),
+		} as never) as unknown as ListResult;
+		expect(cross.count).toBe(0);
+		expect(cross.hits).toEqual([]);
+	});
+
+	it('keeps normal cursor pagination working under a where restriction', () => {
+		seedMany(20);
+		const seen: string[] = [];
+		let cursor: string | undefined;
+		const cursor_and_lengths: number[] = [];
+		for (let guard = 0; guard < 20; guard++) {
+			const page = fixture.db.list('note', {
+				where: { status: { eq: 'published' } },
+				limit: 3,
+				cursor,
+			} as never) as unknown as ListResult;
+			expect(page.hits.every((hit) => hit.document.status === 'published')).toBe(true);
+			seen.push(...page.hits.map((hit) => hit.document.id));
+			cursor = page.cursor;
+			if (!cursor) break;
+			const decoded = JSON.parse(
+				Buffer.from(cursor.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(),
+			) as { where: { and?: unknown[] } };
+			cursor_and_lengths.push(decoded.where.and?.length ?? 0);
+		}
+		// Every restricted row exactly once (i % 3 === 0 → 7 of 20).
+		expect(new Set(seen).size).toBe(seen.length);
+		expect(seen).toHaveLength(7);
+		// The re-ANDed restriction dedupes against the cursor's own where, so the
+		// minted cursor does not grow page over page.
+		expect(new Set(cursor_and_lengths).size).toBe(1);
+	});
+
+	it('clamps tolerance and offset before they reach the engine', () => {
+		seedMany(3);
+		const spy = vi.spyOn(SqliteSearchEngine.prototype, 'list');
+		const engineQuery = (raw: Record<string, unknown>) => {
+			fixture.db.list('note', raw as never);
+			return spy.mock.calls.at(-1)![1] as { tolerance?: number; offset?: number };
+		};
+		expect(engineQuery({ term: 'even', tolerance: 99 }).tolerance).toBe(3);
+		expect(engineQuery({ term: 'even', tolerance: -4 }).tolerance).toBe(0);
+		expect(engineQuery({ term: 'even', tolerance: 1.9 }).tolerance).toBe(1);
+		expect(engineQuery({ term: 'even', tolerance: 'nope' }).tolerance).toBeUndefined();
+		expect(engineQuery({ offset: 10 ** 12 }).offset).toBe(100_000);
+		expect(engineQuery({ offset: -5 }).offset).toBe(0);
+		expect(engineQuery({ offset: 5.9 }).offset).toBe(5);
+		expect(engineQuery({ offset: 'nope' }).offset).toBeUndefined();
+		expect(engineQuery({ offset: Number.NaN }).offset).toBeUndefined();
+	});
+
+	it('drops the dictionary cache when the index write itself throws mid-call', () => {
+		const { db } = fixture;
+		const note = db.create('note', {
+			title: 'stranding',
+			body: 'unicorn parade',
+			status: 'draft',
+			priority: 1,
+		} as never) as unknown as { id: string };
+		// Warm the cache so the rolled-back write mutates a live dictionary.
+		expect(
+			(db.list('note', { term: 'unicorn' } as never) as unknown as { count: number })
+				.count,
+		).toBe(1);
+		const original = SqliteSearchEngine.prototype.indexDocument;
+		vi.spyOn(SqliteSearchEngine.prototype, 'indexDocument').mockImplementation(function (
+			this: SqliteSearchEngine,
+			...args
+		) {
+			// The real write happens (postings gone, cached dictionary mutated in
+			// place) and THEN the call throws — the mid-call failure mode.
+			original.apply(this, args as Parameters<typeof original>);
+			throw new Error('mid-index boom');
+		});
+		expect(() =>
+			db.update('note', note.id, { body: 'replaced entirely' } as never),
+		).toThrow('mid-index boom');
+		vi.restoreAllMocks();
+		// The transaction rolled back and the stale cache was dropped — the term
+		// must still resolve through a freshly loaded dictionary.
+		expect(
+			(db.list('note', { term: 'unicorn' } as never) as unknown as { count: number })
+				.count,
+		).toBe(1);
 	});
 });
 

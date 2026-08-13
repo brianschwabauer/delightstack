@@ -178,6 +178,40 @@ describe('write path — diffing', () => {
 		expect(store.getFieldLengths('article', 'body').get('z')).toBe(0);
 	});
 
+	it('rejects a hostile field name before it can reach the SQL text', () => {
+		const { store } = newStore();
+		store.indexDocument(CONFIG, 'a', DOC_A);
+		for (const hostile of ["a'b", 'a"b', "body') --", 'body;DROP TABLE search_docs']) {
+			expect(() => store.getFieldLengths('article', hostile)).toThrowError(
+				expect.objectContaining({ status: 400 }),
+			);
+		}
+		// Dotted identifier paths (legal schema paths) still pass.
+		expect(store.getFieldLengths('article', 'body').size).toBe(1);
+		expect(() => store.getFieldLengths('article', 'address.city')).not.toThrow();
+	});
+
+	it('reads df and postings identically through the batched token reads', () => {
+		const { store } = newStore();
+		store.indexDocument(CONFIG, 'a', DOC_A);
+		store.indexDocument(CONFIG, 'b', DOC_B);
+		store.indexDocument(CONFIG, 'c', DOC_C);
+		const tokens = ['data', 'database', 'beta', 'nope', 'token'];
+		const frequencies = store.getDocFrequencies('article', 'title', tokens);
+		const postings = store.getPostingsForTokens('article', 'title', tokens);
+		for (const token of tokens) {
+			expect(frequencies.get(token) ?? 0).toBe(
+				store.getDocFrequency('article', 'title', token),
+			);
+			expect(postings.get(token) ?? []).toEqual(
+				store.getPostings('article', 'title', token),
+			);
+		}
+		// Absent tokens are absent, not empty entries.
+		expect(frequencies.has('nope')).toBe(false);
+		expect(postings.has('nope')).toBe(false);
+	});
+
 	it('counts a present-but-empty field as a zero-length document', () => {
 		const { store } = newStore();
 		store.indexDocument(CONFIG, 'c', DOC_C);
@@ -216,6 +250,31 @@ describe('write path — vectors', () => {
 		store.indexDocument(CONFIG, 'a', { id: 'a', embedding: [1, 0, 0] });
 		store.removeDocument(CONFIG, 'a', 5);
 		expect(store.getVectors('article', 'embedding')).toEqual([]);
+	});
+
+	it('returns identical vectors through the scoped doc_id read', () => {
+		const { sql, store } = newStore();
+		const ids: string[] = [];
+		for (let index = 0; index < 200; index++) {
+			const id = `v${String(index).padStart(3, '0')}`;
+			ids.push(id);
+			store.indexDocument(CONFIG, id, { id, embedding: [index + 1, 1, 0] });
+		}
+		const full = store.getVectors('article', 'embedding');
+		sql.log.length = 0;
+		const scoped = store.getVectors('article', 'embedding', ids);
+		expect(scoped.map(([id, vec]) => [id, [...vec]])).toEqual(
+			full.map(([id, vec]) => [id, [...vec]]),
+		);
+		// Chunked at the IN-list cap: 200 ids → 3 statements, ≤ 100 params each.
+		const reads = sql.log.filter((entry) => entry.sql.includes('doc_id IN ('));
+		expect(reads).toHaveLength(3);
+		for (const entry of reads) {
+			expect(entry.params.length).toBeLessThanOrEqual(100);
+		}
+		// A subset read returns exactly that subset, still ascending.
+		const subset = store.getVectors('article', 'embedding', ['v005', 'v001']);
+		expect(subset.map(([id]) => id)).toEqual(['v001', 'v005']);
 	});
 });
 
