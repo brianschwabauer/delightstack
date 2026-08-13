@@ -30,6 +30,10 @@ export class AuthDatabaseServer extends BaseAuthDatabaseServer {
 				'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
 			issuer: 'delightstack',
 			permissions: ['admin', 'editor', 'viewer'],
+			// Must be one of `permissions` — the default ('org:admin') is not in
+			// this list, which silently encoded org creators' membership to 0
+			// permission bits (org invisible to its own owner).
+			orgAdminPermission: 'admin',
 			oauth_scopes: [],
 			entitlements: ['ai', 'images'],
 		});

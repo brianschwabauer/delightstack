@@ -68,8 +68,12 @@ bucket_name = "delightstack-example"
 [env.staging]
 name = "delightstack-example-server-staging"
 
-[env.staging.ai]
-binding = "AI"
+# TEMPORARILY DISABLED (2026-08-12): the AI binding forces wrangler's remote
+# proxy session, which fails while the local wrangler OAuth token is expired
+# and kills the whole dev server. Restore this block (and `wrangler login`)
+# before deploying staging or using AI features in dev.
+# [env.staging.ai]
+# binding = "AI"
 
 # Durable Objects
 [[env.staging.durable_objects.bindings]]

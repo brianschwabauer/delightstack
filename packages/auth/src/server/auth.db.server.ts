@@ -192,7 +192,22 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	private sql = new SqlServer<AuthDatabaseSchema>(this.ctx.storage);
 
 	private get orgAdminPermission() {
-		return this.options.orgAdminPermission || 'org:admin';
+		const permission = this.options.orgAdminPermission || 'org:admin';
+		// A permission missing from the configured list silently encodes to 0
+		// bits, so every org creator would be written as a member with NO
+		// permissions — the claim builder then drops the membership from the
+		// session token and the org effectively doesn't exist for its owner.
+		// Fail loudly instead.
+		if (!this.options.permissions.includes(permission)) {
+			throw new DelightError({
+				status: 500,
+				message:
+					`orgAdminPermission '${permission}' is not in the configured permissions list ` +
+					`[${this.options.permissions.join(', ')}]. Add it to the list or set ` +
+					`orgAdminPermission to one of the listed permissions.`,
+			});
+		}
+		return permission;
 	}
 	private get oauthProfileScope() {
 		return this.options.oauthProfileScope || 'profile';

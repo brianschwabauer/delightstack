@@ -24,6 +24,8 @@ const authHandle = createAuthHandle({
 			'dev-secret-change-me-in-production-min-64-chars-long-0123456789abcdef',
 		issuer: 'delightstack',
 		permissions: ['admin', 'editor', 'viewer'] as const,
+		// Must match the DO's orgAdminPermission (server/src/index.ts).
+		org_admin_permission: 'admin',
 		oauth_scopes: [] as const,
 		entitlements: ['ai', 'images'] as const,
 		dev,
@@ -245,7 +247,10 @@ const appHandle: Handle = async ({ event, resolve }) => {
 // Compose all handles
 // ---------------------------------------------------------------------------
 export const handle = sequence(
-	...(dev ? [createDevHandle()] : []),
+	// override: the DO classes live in the separate server worker, so
+	// platformProxy's cross-session stubs exist but throw on RPC — replace
+	// them with the fetch bridge to localhost:8787 (see dev-proxy.helper.ts).
+	...(dev ? [createDevHandle({ override: true })] : []),
 	authHandle,
 	appHandle,
 	websocketHandle,

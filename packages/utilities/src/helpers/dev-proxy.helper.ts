@@ -9,6 +9,18 @@ interface DevHandleOptions {
 	url?: string;
 	/** DO binding names to proxy @default ['AUTH', 'DB', 'WS', 'RATE_LIMITER'] */
 	bindings?: string[];
+	/**
+	 * Replace the listed bindings even when `getPlatformProxy()` already
+	 * provides them. Required when the DO classes live in a SEPARATE worker
+	 * (cross-script `script_name` bindings): newer wrangler exposes those
+	 * through the dev registry as stubs that support `fetch()` but throw
+	 * "Durable Object RPC is not yet supported between multiple dev sessions"
+	 * on any RPC method call. Leave false (the default) when the DOs live in
+	 * the same worker config — there platformProxy's stubs have working RPC
+	 * and must not be replaced.
+	 * @default false
+	 */
+	override?: boolean;
 }
 
 /**
@@ -32,6 +44,7 @@ interface DevHandleOptions {
 export function createDevHandle(options?: DevHandleOptions) {
 	const url = options?.url ?? 'http://localhost:8787';
 	const binding_names = options?.bindings ?? ['AUTH', 'DB', 'WS', 'RATE_LIMITER'];
+	const override = options?.override ?? false;
 
 	// Generic over the event so the returned function is assignable to
 	// SvelteKit's `Handle` type (a concrete `resolve: (event: unknown) => …`
@@ -55,9 +68,11 @@ export function createDevHandle(options?: DevHandleOptions) {
 		if (!platform.env) platform.env = {};
 		const env = platform.env as Record<string, unknown>;
 
-		// Patch missing DO bindings with proxy namespaces
+		// Patch DO bindings with proxy namespaces. Without `override`, only
+		// missing bindings are filled; with it, present-but-RPC-broken
+		// cross-session stubs are replaced too.
 		for (const name of binding_names) {
-			if (!env[name]) {
+			if (override || !env[name]) {
 				env[name] = createProxyNamespace(url, name);
 			}
 		}

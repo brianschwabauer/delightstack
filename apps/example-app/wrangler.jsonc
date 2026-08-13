@@ -31,12 +31,18 @@
 					"zone_id": "86f43705a221a54f78c507da848063fb",
 				},
 			],
-			"ai": {
-				"binding": "AI",
-			},
-			"browser": {
-				"binding": "BROWSER",
-			},
+			// TEMPORARILY DISABLED (2026-08-12): the AI/BROWSER bindings make the
+			// SvelteKit adapter's platformProxy start a wrangler remote session,
+			// which force-opens an OAuth login and crashes `vite dev` while the
+			// local wrangler token is broken. Restore both blocks (and run
+			// `wrangler login`) before deploying staging or using AI/browser
+			// features in dev.
+			// "ai": {
+			// 	"binding": "AI",
+			// },
+			// "browser": {
+			// 	"binding": "BROWSER",
+			// },
 			"version_metadata": {
 				"binding": "CF_VERSION_METADATA",
 			},
