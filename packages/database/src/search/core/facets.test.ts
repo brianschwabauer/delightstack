@@ -147,3 +147,35 @@ describe('facet errors and edges', () => {
 		expect(Object.keys(facets ?? {})).toEqual(['folder', 'tags']);
 	});
 });
+
+describe('prototype-inherited facet fields (review fix 2)', () => {
+	it('rejects Object.prototype keys as facet fields', () => {
+		for (const field of ['toString', 'constructor', 'valueOf']) {
+			let thrown: unknown;
+			try {
+				computeFacets(DOCS, { [field]: {} }, SCHEMA);
+			} catch (error) {
+				thrown = error;
+			}
+			expect(thrown).toBeInstanceOf(DelightError);
+			expect((thrown as DelightError).status).toBe(400);
+			expect((thrown as DelightError).code).toBe('unknown_facet_field');
+		}
+	});
+});
+
+describe('scalars in array-typed fields (review fix 7)', () => {
+	it('treats a scalar in a declared array field as absent instead of crashing', () => {
+		const result = computeFacets([{ tags: 'red' }], { tags: {} }, SCHEMA);
+		expect(result).toEqual({ tags: { count: 0, values: {} } });
+	});
+
+	it('still counts real arrays alongside dirty scalar rows', () => {
+		const result = computeFacets(
+			[{ tags: 'red' }, { tags: ['red', 'blue'] }],
+			{ tags: {} },
+			SCHEMA,
+		);
+		expect(result?.tags.values).toEqual({ red: 1, blue: 1 });
+	});
+});

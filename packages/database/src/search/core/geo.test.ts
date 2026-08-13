@@ -8,6 +8,7 @@ import {
 	haversineDistance,
 	isGeoPoint,
 	isPointInPolygon,
+	validateGeoOperand,
 } from './geo';
 import type { GeoPoint } from './types';
 
@@ -248,5 +249,73 @@ describe('isGeoPoint', () => {
 		expect(isGeoPoint({ lat: '0', lon: 0 })).toBe(false);
 		expect(isGeoPoint({ lat: Infinity, lon: 0 })).toBe(false);
 		expect(isGeoPoint(null)).toBe(false);
+	});
+});
+
+describe('near-antipodal haversine (review fix 5)', () => {
+	// Verified failing input before the clamp: floating point pushed the
+	// haversine `a` term a hair above 1, making sqrt(1 - a) NaN.
+	const FROM: GeoPoint = { lat: -82.31885239262206, lon: -105.16193095868574 };
+	const TO: GeoPoint = { lat: 82.3188528370152, lon: 74.83806938094523 };
+
+	it('returns a finite distance for near-antipodal points', () => {
+		const distance = haversineDistance(FROM, TO);
+		expect(Number.isFinite(distance)).toBe(true);
+		// Half the earth's circumference, near enough.
+		expect(distance).toBeGreaterThan(20_000_000);
+		expect(distance).toBeLessThanOrEqual(Math.PI * EARTH_RADIUS_METERS);
+	});
+
+	it('keeps radius filters working across the antipode', () => {
+		const operation = {
+			radius: { coordinates: FROM, value: 30_000, unit: 'km', inside: true },
+		} as const;
+		expect(evaluateGeoOperation(TO, operation)).toBe(true);
+		expect(
+			evaluateGeoOperation(TO, {
+				radius: { coordinates: FROM, value: 30_000, unit: 'km', inside: false },
+			}),
+		).toBe(false);
+	});
+});
+
+describe('validateGeoOperand (review fix 6)', () => {
+	it('rejects malformed radius operands', () => {
+		expect(() => validateGeoOperand('radius', {})).toThrow(DelightError);
+		expect(() => validateGeoOperand('radius', null)).toThrow(DelightError);
+		expect(() =>
+			validateGeoOperand('radius', { coordinates: { lat: 0 }, value: 1 }),
+		).toThrow(DelightError);
+		expect(() =>
+			validateGeoOperand('radius', { coordinates: { lat: 0, lon: 0 }, value: '1' }),
+		).toThrow(DelightError);
+	});
+
+	it('rejects an unknown unit', () => {
+		expect(() =>
+			validateGeoOperand('radius', {
+				coordinates: { lat: 0, lon: 0 },
+				value: 1,
+				unit: 'parsec',
+			}),
+		).toThrow(DelightError);
+	});
+
+	it('rejects malformed polygon operands', () => {
+		expect(() => validateGeoOperand('polygon', {})).toThrow(DelightError);
+		expect(() => validateGeoOperand('polygon', { coordinates: [{ lat: 0 }] })).toThrow(
+			DelightError,
+		);
+	});
+
+	it('accepts well-formed operands', () => {
+		expect(() =>
+			validateGeoOperand('radius', {
+				coordinates: { lat: 0, lon: 0 },
+				value: 1,
+				unit: 'km',
+			}),
+		).not.toThrow();
+		expect(() => validateGeoOperand('polygon', { coordinates: BOX })).not.toThrow();
 	});
 });

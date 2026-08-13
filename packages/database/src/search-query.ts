@@ -1,3 +1,4 @@
+import { DelightError } from '@delightstack/utilities';
 import type { FacetDefinition } from './search/core/types';
 
 /**
@@ -246,21 +247,32 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 export function normalizeWhere(
 	where: Record<string, unknown> | undefined,
 	schema: Record<string, unknown> | undefined,
+	depth: number = 0,
 ): Record<string, unknown> | undefined {
 	if (!where || typeof where !== 'object' || !schema) return where;
+	// Same and/or/not nesting cap as `search/core/where.ts` — a DoS guard for
+	// URL-supplied `where` JSON.
+	if (depth > 10) {
+		throw DelightError.badRequest(
+			'The `where` filter nests deeper than 10 levels of and/or/not.',
+			{ code: 'invalid_filter_operation' },
+		);
+	}
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(where)) {
 		if (key === 'and' || key === 'or') {
 			out[key] = Array.isArray(value)
-				? value.map((v) => normalizeWhere(v as Record<string, unknown>, schema))
+				? value.map((v) =>
+						normalizeWhere(v as Record<string, unknown>, schema, depth + 1),
+					)
 				: value;
 			continue;
 		}
 		if (key === 'not') {
-			out[key] = normalizeWhere(value as Record<string, unknown>, schema);
+			out[key] = normalizeWhere(value as Record<string, unknown>, schema, depth + 1);
 			continue;
 		}
-		const type = schema[key];
+		const type = Object.hasOwn(schema, key) ? schema[key] : undefined;
 		if (type === 'enum') {
 			if (typeof value === 'string' || typeof value === 'number') {
 				out[key] = { eq: value };

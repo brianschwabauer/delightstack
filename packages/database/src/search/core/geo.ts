@@ -72,7 +72,12 @@ export function haversineDistance(from: GeoPoint, to: GeoPoint): number {
 			Math.cos(lat_to) *
 			Math.sin(delta_lon / 2) *
 			Math.sin(delta_lon / 2);
-	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+	// Near-antipodal pairs can accumulate to `a` a hair above 1, making
+	// `sqrt(1 - a)` NaN and the distance NaN — which fails BOTH `inside: true`
+	// and `inside: false`. Clamp to 1; for every `a <= 1` the clamp returns `a`
+	// bit-identically, so in-range distances are untouched.
+	const a_clamped = Math.min(1, a);
+	const c = 2 * Math.atan2(Math.sqrt(a_clamped), Math.sqrt(1 - a_clamped));
 	return EARTH_RADIUS_METERS * c;
 }
 
@@ -114,6 +119,45 @@ export function isGeoPoint(value: unknown): value is GeoPoint {
 		Number.isFinite(point.lat) &&
 		Number.isFinite(point.lon)
 	);
+}
+
+/**
+ * Validate a raw `radius`/`polygon` operand shape at normalize time.
+ *
+ * Called once per query from `where.ts`'s operator validation — NOT per
+ * document, where the `isGeoPoint(value)` bail in {@link evaluateGeoOperation}
+ * would let a malformed operand over an empty or absent-field corpus return an
+ * empty result instead of throwing.
+ *
+ * @throws DelightError 400 on a malformed operand or unknown distance unit.
+ */
+export function validateGeoOperand(
+	operator: 'radius' | 'polygon',
+	operand: unknown,
+): void {
+	const shape = (
+		operand && typeof operand === 'object' && !Array.isArray(operand) ? operand : {}
+	) as {
+		coordinates?: unknown;
+		value?: unknown;
+		unit?: unknown;
+	};
+	if (operator === 'radius') {
+		if (!isGeoPoint(shape.coordinates) || typeof shape.value !== 'number') {
+			throw DelightError.badRequest(
+				'A radius filter needs `coordinates` and a numeric `value`.',
+				{ code: 'invalid_geo_filter' },
+			);
+		}
+		// Throws `invalid_distance_unit` on an unknown unit.
+		convertDistanceToMeters(shape.value, (shape.unit as string | undefined) ?? 'm');
+		return;
+	}
+	if (!Array.isArray(shape.coordinates) || !shape.coordinates.every(isGeoPoint)) {
+		throw DelightError.badRequest('A polygon filter needs `{lat, lon}` coordinates.', {
+			code: 'invalid_geo_filter',
+		});
+	}
 }
 
 /**

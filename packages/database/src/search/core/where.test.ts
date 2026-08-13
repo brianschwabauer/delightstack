@@ -315,3 +315,172 @@ describe('error surface (never a silent empty result)', () => {
 		expectBadRequest({ and: { folder: 'inbox' } });
 	});
 });
+
+describe('NaN field values (review fix 1)', () => {
+	it('treats a NaN scalar as absent for every operator', () => {
+		expect(matchesWhere({ count: NaN }, { count: { gt: 5 } }, SCHEMA)).toBe(false);
+		expect(matchesWhere({ count: NaN }, { count: { lt: 5 } }, SCHEMA)).toBe(false);
+		expect(matchesWhere({ count: NaN }, { count: { gte: 5 } }, SCHEMA)).toBe(false);
+		expect(matchesWhere({ count: NaN }, { count: { lte: 5 } }, SCHEMA)).toBe(false);
+		expect(matchesWhere({ count: NaN }, { count: { between: [0, 10] } }, SCHEMA)).toBe(
+			false,
+		);
+		expect(matchesWhere({ count: NaN }, { count: { eq: NaN } }, SCHEMA)).toBe(false);
+	});
+
+	it('lets a NaN field pass `not`, like null and missing do', () => {
+		expect(matchesWhere({ count: NaN }, { not: { count: { gt: 5 } } }, SCHEMA)).toBe(true);
+	});
+
+	it('skips NaN elements inside array fields instead of comparing them', () => {
+		expect(matchesWhere({ scores: [NaN] }, { scores: { gt: 5 } }, SCHEMA)).toBe(false);
+		expect(matchesWhere({ scores: [NaN] }, { scores: { between: [0, 10] } }, SCHEMA)).toBe(
+			false,
+		);
+		expect(matchesWhere({ scores: [NaN, 7] }, { scores: { gt: 5 } }, SCHEMA)).toBe(true);
+	});
+});
+
+describe('prototype-inherited schema keys (review fix 2)', () => {
+	function expectUnknownField(where: Record<string, unknown>): void {
+		let thrown: unknown;
+		try {
+			normalizeWhere(where, SCHEMA);
+		} catch (error) {
+			thrown = error;
+		}
+		expect(thrown).toBeInstanceOf(DelightError);
+		expect((thrown as DelightError).status).toBe(400);
+		expect((thrown as DelightError).code).toBe('unknown_filter_field');
+	}
+
+	it('rejects Object.prototype keys as filter fields', () => {
+		expectUnknownField({ toString: { eq: 'x' } });
+		expectUnknownField({ constructor: { eq: 'x' } });
+		expectUnknownField({ valueOf: 1 });
+		expectUnknownField({ hasOwnProperty: 'x' });
+	});
+});
+
+describe('junk inside and/or/not (review fix 3)', () => {
+	function expectBadRequest(where: Record<string, unknown>): void {
+		let thrown: unknown;
+		try {
+			normalizeWhere(where, SCHEMA);
+		} catch (error) {
+			thrown = error;
+		}
+		expect(thrown).toBeInstanceOf(DelightError);
+		expect((thrown as DelightError).status).toBe(400);
+	}
+
+	it('rejects non-object children of and/or', () => {
+		expectBadRequest({ or: [null] });
+		expectBadRequest({ or: [5] });
+		expectBadRequest({ or: ['x'] });
+		expectBadRequest({ or: [undefined] });
+		expectBadRequest({ and: [null] });
+		expectBadRequest({ and: [[{ count: 1 }]] });
+	});
+
+	it('rejects a non-object operand of not', () => {
+		expectBadRequest({ not: 5 });
+		expectBadRequest({ not: null });
+		expectBadRequest({ not: 'x' });
+		expectBadRequest({ not: [{ count: 1 }] });
+	});
+
+	it('still accepts valid composites', () => {
+		expect(matchesWhere(FULL, { or: [{ count: 5 }, { count: 6 }] }, SCHEMA)).toBe(true);
+		expect(matchesWhere(FULL, { not: { count: 6 } }, SCHEMA)).toBe(true);
+		expect(matchesWhere(FULL, { and: [] }, SCHEMA)).toBe(false);
+		expect(matchesWhere(FULL, { or: [] }, SCHEMA)).toBe(false);
+	});
+});
+
+describe('where nesting depth cap (review fix 4)', () => {
+	function nest(levels: number): Record<string, unknown> {
+		let where: Record<string, unknown> = { count: { gt: 1 } };
+		for (let i = 0; i < levels; i++) where = { not: where };
+		return where;
+	}
+
+	it('accepts 10 levels of composite nesting', () => {
+		expect(() => normalizeWhere(nest(10), SCHEMA)).not.toThrow();
+	});
+
+	it('rejects nesting deeper than 10 levels with a 400', () => {
+		let thrown: unknown;
+		try {
+			normalizeWhere(nest(11), SCHEMA);
+		} catch (error) {
+			thrown = error;
+		}
+		expect(thrown).toBeInstanceOf(DelightError);
+		expect((thrown as DelightError).status).toBe(400);
+	});
+
+	it('caps and/or nesting the same way', () => {
+		let where: Record<string, unknown> = { count: { gt: 1 } };
+		for (let i = 0; i < 11; i++) where = { or: [where] };
+		expect(() => normalizeWhere(where, SCHEMA)).toThrow(DelightError);
+	});
+});
+
+describe('geo operand validation at normalize time (review fix 6)', () => {
+	function expectGeoError(where: Record<string, unknown>): void {
+		let thrown: unknown;
+		try {
+			normalizeWhere(where, SCHEMA);
+		} catch (error) {
+			thrown = error;
+		}
+		expect(thrown).toBeInstanceOf(DelightError);
+		expect((thrown as DelightError).status).toBe(400);
+	}
+
+	it('rejects a malformed radius operand without needing a matching document', () => {
+		expectGeoError({ place: { radius: {} } });
+		expectGeoError({ place: { radius: { coordinates: { lat: 0 }, value: 1 } } });
+		expectGeoError({ place: { radius: { coordinates: { lat: 0, lon: 0 } } } });
+		expectGeoError({ place: { radius: 5 } });
+	});
+
+	it('rejects an unknown distance unit at normalize time', () => {
+		expectGeoError({
+			place: { radius: { coordinates: { lat: 0, lon: 0 }, value: 1, unit: 'furlong' } },
+		});
+	});
+
+	it('rejects a malformed polygon operand without needing a matching document', () => {
+		expectGeoError({ place: { polygon: {} } });
+		expectGeoError({ place: { polygon: { coordinates: [{ lat: 0 }] } } });
+		expectGeoError({ place: { polygon: { coordinates: 'nope' } } });
+	});
+
+	it('throws even when evaluated against docs missing the field', () => {
+		expect(() => matchesWhere(EMPTY, { place: { radius: {} } }, SCHEMA)).toThrow(
+			DelightError,
+		);
+	});
+});
+
+describe('scalars in array-typed fields (review fix 7)', () => {
+	it('treats a scalar in a declared array field as absent — no char iteration', () => {
+		expect(matchesWhere({ tags: 'abc' }, { tags: { contains_all: ['a'] } }, SCHEMA)).toBe(
+			false,
+		);
+		expect(matchesWhere({ tags: 'abc' }, { tags: { contains_any: ['a'] } }, SCHEMA)).toBe(
+			false,
+		);
+		expect(matchesWhere({ tags: 'red' }, { tags: { eq: 'red' } }, SCHEMA)).toBe(false);
+		expect(matchesWhere({ tags: 'red' }, { tags: { in: ['red'] } }, SCHEMA)).toBe(false);
+		expect(matchesWhere({ scores: 5 }, { scores: { gt: 1 } }, SCHEMA)).toBe(false);
+	});
+
+	it('lets scalar-in-array-field docs pass `not`, like absent values do', () => {
+		expect(
+			matchesWhere({ tags: 'abc' }, { not: { tags: { contains_all: ['a'] } } }, SCHEMA),
+		).toBe(true);
+	});
+});

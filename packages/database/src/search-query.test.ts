@@ -162,3 +162,19 @@ describe('decodeSearchQuery', () => {
 		expect(decodeSearchQuery(encodeSearchQuery(original))).toEqual(original);
 	});
 });
+
+describe('normalizeWhere depth cap (review fix 4)', () => {
+	const schema = { folder: 'enum' };
+
+	it('accepts 10 levels of composite nesting', () => {
+		let where: Record<string, unknown> = { folder: 'inbox' };
+		for (let i = 0; i < 10; i++) where = { not: where };
+		expect(() => normalizeWhere(where, schema)).not.toThrow();
+	});
+
+	it('rejects nesting deeper than 10 levels', () => {
+		let where: Record<string, unknown> = { folder: 'inbox' };
+		for (let i = 0; i < 11; i++) where = { or: [where] };
+		expect(() => normalizeWhere(where, schema)).toThrow();
+	});
+});

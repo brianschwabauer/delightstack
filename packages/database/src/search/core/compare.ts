@@ -116,6 +116,16 @@ export function compareValues(a: unknown, b: unknown): number {
 	if (type_a === 'number') {
 		const num_a = a as number;
 		const num_b = b as number;
+		// NaN compares symmetrically and sorts LAST (like `null` and like
+		// `comparePrimaryKeys`), keeping the comparator total. The ORDER path
+		// never gets here with NaN — `compareForOrder` screens it via `isNullish`
+		// — so this only shapes filter-path comparisons over dirty data.
+		const nan_a = Number.isNaN(num_a);
+		const nan_b = Number.isNaN(num_b);
+		if (nan_a || nan_b) {
+			if (nan_a && nan_b) return 0;
+			return nan_a ? 1 : -1;
+		}
 		if (num_a === num_b) return 0;
 		return num_a < num_b ? -1 : 1;
 	}

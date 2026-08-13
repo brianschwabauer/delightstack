@@ -191,3 +191,20 @@ describe('comparePrimaryKeys', () => {
 		]);
 	});
 });
+
+describe('NaN in compareValues (review fix 1)', () => {
+	it('compares NaN symmetrically, sorting it last like null', () => {
+		expect(compareValues(NaN, 5)).toBe(1);
+		expect(compareValues(5, NaN)).toBe(-1);
+		expect(compareValues(NaN, NaN)).toBe(0);
+	});
+
+	it('leaves the ORDER path unchanged — compareForOrder screens NaN as nullish', () => {
+		expect(isNullish(NaN)).toBe(true);
+		expect(compareForOrder(NaN, 5)).toBe(1);
+		expect(compareForOrder(5, NaN)).toBe(-1);
+		expect(compareForOrder(NaN, 5, 'DESC')).toBe(1);
+		expect(compareForOrder(5, NaN, 'DESC')).toBe(-1);
+		expect(compareForOrder(NaN, NaN)).toBe(0);
+	});
+});

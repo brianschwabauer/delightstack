@@ -39,7 +39,8 @@ export function computeFacets(
 	const result: FacetResult = {};
 	for (const field of Object.keys(facets).sort()) {
 		const definition = facets[field];
-		const type = schema[field];
+		// `hasOwn`, so prototype keys (`toString`, `constructor`) stay unknown.
+		const type = Object.hasOwn(schema, field) ? schema[field] : undefined;
 		if (type === undefined) {
 			throw DelightError.badRequest(`Unknown facet field "${field}".`, {
 				code: 'unknown_facet_field',
@@ -80,11 +81,12 @@ function valuesOf(
 ): readonly unknown[] {
 	const value = getFieldValue(doc, field);
 	if (value === null || value === undefined) return [];
-	if (is_array || Array.isArray(value)) {
-		return (value as unknown[]).filter(
-			(element) => element !== null && element !== undefined,
-		);
+	if (Array.isArray(value)) {
+		return value.filter((element) => element !== null && element !== undefined);
 	}
+	// A scalar in a declared array field is dirty data — treat it as absent
+	// (matching `where`'s leaf rule) instead of crashing on `.filter`.
+	if (is_array) return [];
 	return [value];
 }
 

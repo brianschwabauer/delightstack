@@ -26,8 +26,8 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { compareValues } from './compare';
-import { evaluateGeoOperation } from './geo';
+import { compareValues, isNullish } from './compare';
+import { evaluateGeoOperation, validateGeoOperand } from './geo';
 import type { GeoOperation, SearchableType } from './types';
 
 /** A flat map of dot-path → declared field type. The set of legal paths. */
@@ -57,6 +57,17 @@ const ARRAY_ONLY_OPERATORS = new Set(['contains_all', 'contains_any']);
 
 /** Operators only valid on `geopoint` fields. */
 const GEO_OPERATORS = new Set(['radius', 'polygon']);
+
+/**
+ * Maximum nesting depth of `and`/`or`/`not` composites. A DoS guard for
+ * URL-supplied `where` JSON — a legitimate filter never approaches this.
+ */
+const MAX_WHERE_DEPTH = 10;
+
+/** Whether a composite child is a usable condition object (plain, not an array). */
+function isPlainConditionObject(value: unknown): boolean {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 /** A single normalized field predicate. */
 export interface NormalizedLeaf {
@@ -135,8 +146,15 @@ function isScalarOperand(operand: unknown): boolean {
 export function normalizeWhere(
 	where: Record<string, unknown> | undefined | null,
 	schema: WhereSchema,
+	depth: number = 0,
 ): NormalizedWhere | undefined {
 	if (!where || typeof where !== 'object') return undefined;
+	if (depth > MAX_WHERE_DEPTH) {
+		throw DelightError.badRequest(
+			`The \`where\` filter nests deeper than ${MAX_WHERE_DEPTH} levels of and/or/not.`,
+			{ code: 'invalid_filter_operation' },
+		);
+	}
 	const node: NormalizedWhere = { leaves: [] };
 
 	for (const key of Object.keys(where).sort()) {
@@ -150,22 +168,36 @@ export function normalizeWhere(
 					},
 				);
 			}
-			const branches = value.map(
-				(branch) =>
-					normalizeWhere(branch as Record<string, unknown>, schema) ?? { leaves: [] },
-			);
+			const branches = value.map((branch) => {
+				if (!isPlainConditionObject(branch)) {
+					throw DelightError.badRequest(
+						`Every condition inside \`${key}\` must be an object.`,
+						{ code: 'invalid_filter_operation' },
+					);
+				}
+				return (
+					normalizeWhere(branch as Record<string, unknown>, schema, depth + 1) ?? {
+						leaves: [],
+					}
+				);
+			});
 			if (key === 'and') node.and = branches;
 			else node.or = branches;
 			continue;
 		}
 		if (key === 'not') {
-			node.not = normalizeWhere(value as Record<string, unknown>, schema) ?? {
+			if (!isPlainConditionObject(value)) {
+				throw DelightError.badRequest('The `not` filter needs a condition object.', {
+					code: 'invalid_filter_operation',
+				});
+			}
+			node.not = normalizeWhere(value as Record<string, unknown>, schema, depth + 1) ?? {
 				leaves: [],
 			};
 			continue;
 		}
 
-		const type = schema[key];
+		const type = Object.hasOwn(schema, key) ? schema[key] : undefined;
 		if (type === undefined) {
 			throw DelightError.badRequest(`Unknown filter field "${key}".`, {
 				code: 'unknown_filter_field',
@@ -254,6 +286,12 @@ function validateOperators(
 				);
 			}
 		}
+		// Geo operand shapes are validated here, once per query — never per
+		// document, where an empty corpus would silently swallow a malformed
+		// operand instead of throwing.
+		if (GEO_OPERATORS.has(key)) {
+			validateGeoOperand(key as 'radius' | 'polygon', operators[key]);
+		}
 	}
 	return keys.map((key) => [key, operators[key]] as [string, unknown]);
 }
@@ -277,8 +315,11 @@ function compareMatches(
 	predicate: (comparison: number) => boolean,
 ): boolean {
 	if (Array.isArray(value)) {
-		for (const element of value)
+		for (const element of value) {
+			// NaN/null elements are absent values, not comparable ones.
+			if (isNullish(element)) continue;
 			if (predicate(compareValues(element, operand))) return true;
+		}
 		return false;
 	}
 	return predicate(compareValues(value, operand));
@@ -318,6 +359,7 @@ function evaluateOperator(value: unknown, operator: string, operand: unknown): b
 			const [min, max] = operand as [unknown, unknown];
 			if (Array.isArray(value)) {
 				for (const element of value) {
+					if (isNullish(element)) continue;
 					if (compareValues(element, min) >= 0 && compareValues(element, max) <= 0)
 						return true;
 				}
@@ -338,7 +380,11 @@ function evaluateOperator(value: unknown, operator: string, operand: unknown): b
 function evaluateLeaf(doc: Record<string, unknown>, leaf: NormalizedLeaf): boolean {
 	const value = getFieldValue(doc, leaf.field);
 	// The frozen null rule: every leaf is false on a missing or null field.
-	if (value === null || value === undefined) return false;
+	// `isNullish` extends it to NaN — an unorderable number is an absent one.
+	if (isNullish(value)) return false;
+	// A scalar in a declared array field is dirty data, not a one-element array:
+	// treat it as absent so `contains_*` never iterates a string's characters.
+	if (isArrayFieldType(leaf.type) && !Array.isArray(value)) return false;
 	for (const [operator, operand] of leaf.operators) {
 		if (!evaluateOperator(value, operator, operand)) return false;
 	}
