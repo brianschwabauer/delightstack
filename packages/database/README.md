@@ -329,9 +329,10 @@ db.list('user', {
     labels: { contains_any: ['x', 'y'] } // Array contains at least one value
   },
 
-  // Sorting
+  // Sorting — only `updated_at` and fields marked `.sortable()` in the table's
+  // search config are valid here
   order: [
-    { field: 'created_at', direction: 'DESC' },
+    { field: 'updated_at', direction: 'DESC' },
   ],
 
   // Pagination
@@ -589,7 +590,7 @@ const personRoute = defineRoute({
 | `offset` | `?offset=40`                      | Skip N results                                           |
 | `cursor` | `?cursor=abc123`                  | Cursor-based pagination token                            |
 | `term`   | `?term=alice`                     | Full-text search term                                    |
-| `order`  | `?order=name:ASC,created_at:DESC` | Comma-separated `field:direction` pairs                  |
+| `order`  | `?order=name:ASC,updated_at:DESC` | Comma-separated `field:direction` pairs (`updated_at` or `.sortable()` fields) |
 | `where`  | `?where={"role":"admin"}`         | JSON-encoded WHERE clause                                |
 | `sparse` | `?sparse=false`                   | `false` for full entities, `true` for search fields only |
 
