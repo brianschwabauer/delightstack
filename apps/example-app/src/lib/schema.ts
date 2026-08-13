@@ -1,5 +1,6 @@
 import { Database } from '@delightstack/database';
 import { defineImageTable } from '@delightstack/images';
+import { organizationTable, placeTable } from './search-lab/tables';
 
 export const personTable = Database.table('person', (s) => ({
 	id: s.primaryKey(),
@@ -43,4 +44,12 @@ export const imageTable = defineImageTable((s) => ({
 	caption: s.string().optional(),
 }));
 
-export const tables = { person: personTable, post: postTable, image: imageTable };
+export { organizationTable, placeTable };
+
+export const tables = {
+	person: personTable,
+	post: postTable,
+	image: imageTable,
+	organization: organizationTable,
+	place: placeTable,
+};

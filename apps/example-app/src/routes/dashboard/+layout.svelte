@@ -45,6 +45,7 @@
 		{ href: '/dashboard/family', label: 'Family', icon: 'family' },
 		{ href: '/dashboard/gallery', label: 'Gallery', icon: 'gallery' },
 		{ href: '/dashboard/members', label: 'Members', icon: 'members' },
+		{ href: '/dashboard/search-lab', label: 'Search Lab', icon: 'flask' },
 		{ href: '/dashboard/presence', label: 'Presence', icon: 'eye' },
 		{ href: '/dashboard/billing', label: 'Billing', icon: 'billing' },
 		{ href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
@@ -102,6 +103,7 @@
 	<!-- Main content (presence stage — cursors are tracked within it) -->
 	<main
 		class="content"
+		class:wide={current_path.startsWith('/dashboard/search-lab')}
 		data-presence-stage="dashboard"
 		{@attach trackCursor({ chat: true })}>
 		{@render children()}
@@ -194,6 +196,12 @@
 		max-width: 960px;
 		width: 100%;
 		margin: 0 auto;
+
+		/* The Search Lab runs a controls column beside results and a map; 960px
+		   pinches both. Every other route keeps the reading measure. */
+		&.wide {
+			max-width: 1400px;
+		}
 		@media (max-width: 767px) {
 			padding: var(--size-3);
 			padding-bottom: calc(var(--size-9) + var(--size-3));

@@ -25,6 +25,7 @@ declare global {
 			update(entity_type: string, id: string | number, data: unknown): Promise<unknown>;
 			delete(entity_type: string, id: string | number): Promise<void>;
 			sync(query?: unknown): Promise<unknown>;
+			transaction(operations: unknown[]): Promise<unknown>;
 			uploadImage(
 				data: ArrayBuffer,
 				options?: {

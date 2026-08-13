@@ -16,7 +16,8 @@
 		| 'calendar'
 		| 'sparkles'
 		| 'eye'
-		| 'check';
+		| 'check'
+		| 'flask';
 
 	interface Props {
 		name: IconName;
@@ -96,5 +97,9 @@
 		<circle cx="12" cy="12" r="3" />
 	{:else if name === 'check'}
 		<path d="M5 13l4 4L19 7" />
+	{:else if name === 'flask'}
+		<path d="M9 3h6" />
+		<path d="M10 3v6.5L4.6 18a2 2 0 0 0 1.7 3h11.4a2 2 0 0 0 1.7-3L14 9.5V3" />
+		<path d="M7 15h10" />
 	{/if}
 </svg>
