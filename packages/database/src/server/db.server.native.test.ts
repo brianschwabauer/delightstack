@@ -54,41 +54,35 @@ const authorTable = Database.table('author', (s) => ({
 	name: s.string().sortable(),
 }));
 
-const noteTable = Database.table(
-	'note',
-	(s) => ({
-		id: s.primaryKey(),
-		title: s.string().sortable(),
-		body: s.string().searchable(),
-		status: s.enum(['draft', 'published', '5']).searchable(),
-		priority: s.number().sortable(),
-		pinned: s.boolean().searchable().optional(),
-		tags: s.array(s.string()).searchable().optional(),
-		meta: s
-			.object({
-				city: s.string().sortable().optional(),
-			})
-			.optional(),
-		author_id: s.foreignKey({ type: 'string', table: 'author', column: 'id' }).optional(),
-		/** FK-derived: lives only in the row's `$derived` sub-object. */
-		author_name: s
-			.string()
-			.derived(['author_id'], (_data, refs) => (refs.author_id?.name ?? '') as string),
-	}),
-);
+const noteTable = Database.table('note', (s) => ({
+	id: s.primaryKey(),
+	title: s.string().sortable(),
+	body: s.string().searchable(),
+	status: s.enum(['draft', 'published', '5']).searchable(),
+	priority: s.number().sortable(),
+	pinned: s.boolean().searchable().optional(),
+	tags: s.array(s.string()).searchable().optional(),
+	meta: s
+		.object({
+			city: s.string().sortable().optional(),
+		})
+		.optional(),
+	author_id: s.foreignKey({ type: 'string', table: 'author', column: 'id' }).optional(),
+	/** FK-derived: lives only in the row's `$derived` sub-object. */
+	author_name: s
+		.string()
+		.derived(['author_id'], (_data, refs) => (refs.author_id?.name ?? '') as string),
+}));
 
 /** An `enum[]` field declared through the schema builder (plan §4.1). */
-const labelledTable = Database.table(
-	'labelled',
-	(s) => ({
-		id: s.primaryKey(),
-		title: s.string().searchable(),
-		label_ids: s
-			.array(s.enum(['l_red', 'l_green', 'l_blue', 'l_yellow']))
-			.searchable()
-			.optional(),
-	}),
-);
+const labelledTable = Database.table('labelled', (s) => ({
+	id: s.primaryKey(),
+	title: s.string().searchable(),
+	label_ids: s
+		.array(s.enum(['l_red', 'l_green', 'l_blue', 'l_yellow']))
+		.searchable()
+		.optional(),
+}));
 
 /** A second, plainer table — every table is indexed, none opts in. */
 const legacyTable = Database.table('legacy', (s) => ({
@@ -221,9 +215,14 @@ describe('native search driver — bootstrap', () => {
 		// the bootstrap may create tables (IF NOT EXISTS) and read state, but it
 		// must never read or write a single search row.
 		state.log.length = 0;
-		new DatabaseServer(CONFIG as never, () => undefined, state.ctx as never, {
-			DEV: true,
-		} as never);
+		new DatabaseServer(
+			CONFIG as never,
+			() => undefined,
+			state.ctx as never,
+			{
+				DEV: true,
+			} as never,
+		);
 		const touched = state.log.filter((entry) =>
 			/search_postings|search_tokens|search_docs|search_field_stats|search_vectors|search_tombstones/.test(
 				entry.sql,
@@ -750,7 +749,8 @@ describe('search driver — first wake after upgrading from the in-memory engine
 	it('rebuilds every table’s search rows from its entity rows', () => {
 		const { db, state } = fixture;
 		expect(
-			(db.list('note', { term: 'carbon' } as never) as unknown as { count: number }).count,
+			(db.list('note', { term: 'carbon' } as never) as unknown as { count: number })
+				.count,
 		).toBe(3);
 		// The rebuild backfills `$derived` too, so FK-derived values are searchable
 		// even though the in-memory engine never persisted them.
@@ -814,9 +814,14 @@ describe('search driver — first wake after upgrading from the in-memory engine
 		).config_version;
 
 		state.log.length = 0;
-		new DatabaseServer(CONFIG as never, () => undefined, state.ctx as never, {
-			DEV: true,
-		} as never);
+		new DatabaseServer(
+			CONFIG as never,
+			() => undefined,
+			state.ctx as never,
+			{
+				DEV: true,
+			} as never,
+		);
 
 		expect(dumpSearchRows(state, 'note')).toEqual(before);
 		expect(
@@ -996,6 +1001,141 @@ describe('native search driver — sync()', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Search-lab regressions (2026-08-13)                                        */
+/* -------------------------------------------------------------------------- */
+
+/** Two searchable text fields plus a vector, for the boost / strip tests. */
+const placeTable = Database.table('lab_place', (s) => ({
+	id: s.primaryKey(),
+	name: s.string().sortable(),
+	body: s.string().searchable(),
+	rating: s.number().sortable().optional(),
+	embedding: s.vector(4),
+}));
+
+describe('native search driver — search-lab regressions', () => {
+	let fixture: Fixture;
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(T0);
+		fixture = createServer({ lab_place: placeTable } as never);
+	});
+	afterEach(() => {
+		fixture.state.close();
+		vi.useRealTimers();
+	});
+
+	function seedPlaces(count: number) {
+		const ids: string[] = [];
+		for (let i = 0; i < count; i++) {
+			vi.setSystemTime(T0 + i * 1000);
+			const row = fixture.db.create('lab_place', {
+				name: `place ${String(i).padStart(2, '0')}`,
+				body: 'filler body',
+				rating: i % 5,
+				embedding: [1, 0, 0, 0],
+			} as never) as unknown as { id: string };
+			ids.push(row.id);
+		}
+		return ids;
+	}
+
+	it('advances the offset cursor cumulatively when the order needs offsets', () => {
+		// A string order field forces the offset cursor (where-based cursors are
+		// number-only). The bug: every minted cursor carried offset = page size,
+		// so page 3 replayed page 2 forever.
+		const ids = seedPlaces(11);
+		const seen: string[] = [];
+		let cursor: string | undefined;
+		for (let guard = 0; guard < 20; guard++) {
+			const page = fixture.db.list('lab_place', {
+				limit: 4,
+				...(cursor
+					? { cursor }
+					: {
+							order: [
+								{ field: 'rating', direction: 'DESC' },
+								{ field: 'name', direction: 'ASC' },
+							],
+						}),
+			} as never) as unknown as {
+				hits: { document: { id: string } }[];
+				cursor?: string;
+			};
+			seen.push(...page.hits.map((hit) => hit.document.id));
+			cursor = page.cursor;
+			if (!cursor || page.hits.length === 0) break;
+		}
+		expect(new Set(seen).size).toBe(seen.length);
+		expect([...seen].sort()).toEqual([...ids].sort());
+	});
+
+	it('ranks a term query by score, not the recency default, so boosts matter', () => {
+		// Older doc matches the term in its (boosted) body; newer doc does not
+		// match at all in text but exists. With the old updated_at-DESC default
+		// injected into term queries, recency — not BM25 — ordered the hits.
+		vi.setSystemTime(T0);
+		const weak = fixture.db.create('lab_place', {
+			name: 'a',
+			body: 'coffee mentioned once amid many other unrelated words here',
+			embedding: [1, 0, 0, 0],
+		} as never) as unknown as { id: string };
+		vi.setSystemTime(T0 + 60_000);
+		const strong = fixture.db.create('lab_place', {
+			name: 'b',
+			body: 'coffee coffee coffee',
+			embedding: [1, 0, 0, 0],
+		} as never) as unknown as { id: string };
+		vi.setSystemTime(T0 + 120_000);
+		// Newest by far, but reverse the score order the other way with boost 0.
+		fixture.db.create('lab_place', {
+			name: 'c',
+			body: 'nothing relevant at all',
+			embedding: [1, 0, 0, 0],
+		} as never);
+
+		const by_score = fixture.db.list('lab_place', {
+			term: 'coffee',
+		} as never) as unknown as { hits: { id: string; score: number }[] };
+		expect(by_score.hits.map((hit) => hit.id)).toEqual([strong.id, weak.id]);
+		expect(by_score.hits[0].score).toBeGreaterThan(by_score.hits[1].score);
+
+		// boost 0 zeroes the field's contribution: both hits tie at score 0 and
+		// fall back to the primary-key tiebreak (creation order here).
+		const boosted_off = fixture.db.list('lab_place', {
+			term: 'coffee',
+			boost: { body: 0 },
+		} as never) as unknown as { hits: { id: string; score: number }[] };
+		expect(boosted_off.hits.map((hit) => hit.id)).toEqual([weak.id, strong.id]);
+		expect(boosted_off.hits.every((hit) => hit.score === 0)).toBe(true);
+
+		// An explicit order still beats score ranking.
+		const explicit = fixture.db.list('lab_place', {
+			term: 'coffee',
+			order: [{ field: 'updated_at', direction: 'DESC' }],
+		} as never) as unknown as { hits: { id: string }[] };
+		expect(explicit.hits.map((hit) => hit.id)).toEqual([strong.id, weak.id]);
+	});
+
+	it('strips vector fields from sparse list responses, like sync does', () => {
+		seedPlaces(2);
+		const sparse = fixture.db.list('lab_place', { limit: 2 } as never) as unknown as {
+			hits: { document: Record<string, unknown> }[];
+		};
+		for (const hit of sparse.hits) {
+			expect(hit.document.embedding).toBeUndefined();
+			expect(hit.document.name).toBeDefined();
+		}
+		// Hydrated (sparse: false) responses still carry the stored entity as-is.
+		const full = fixture.db.list('lab_place', {
+			limit: 1,
+			sparse: false,
+		} as never) as unknown as { hits: { document: Record<string, unknown> }[] };
+		expect(Array.isArray(full.hits[0].document.embedding)).toBe(true);
+	});
+});
+
+/* -------------------------------------------------------------------------- */
 /* Golden replay through the public list() API                                */
 /* -------------------------------------------------------------------------- */
 
@@ -1010,41 +1150,37 @@ interface GoldenVectorShape {
 }
 
 /** The `article` corpus preset, expressed with the real schema builder. */
-const articleTable = Database.table(
-	'article',
-	(s) => ({
-		id: s.primaryKey().sortable(),
-		title: s.string().sortable().optional(),
-		body: s.string().searchable().optional(),
-		summary: s.string().searchable().optional(),
-		author_name: s.string().sortable().optional(),
-		author_email: s.string().searchable().optional(),
-		slug: s.string().sortable().optional(),
-		code: s.string().sortable().optional(),
-		status: s.enum(['draft', 'published', 'archived', 'review']).searchable().optional(),
-		tier: s.enum(['free', 'pro', 'enterprise']).searchable().optional(),
-		tags: s.array(s.string()).searchable().optional(),
-		label_ids: s
-			.array(s.enum(['l_red', 'l_green', 'l_blue', 'l_yellow']))
-			.searchable()
-			.optional(),
-		view_count: s.number().sortable().optional(),
-		rating: s.number().sortable().optional(),
-		scores: s.array(s.number()).searchable().optional(),
-		is_published: s.boolean().sortable().optional(),
-		flags: s.array(s.boolean()).searchable().optional(),
-		address: s
-			.object({
-				city: s.string().sortable().optional(),
-				country: s.enum(['ch', 'de', 'fr', 'it', 'us']).searchable().optional(),
-				postal_code: s.string().sortable().optional(),
-			})
-			.optional(),
-		location: s.geopoint().optional(),
-		embedding: s.vector(8).optional(),
-	}),
-);
-;
+const articleTable = Database.table('article', (s) => ({
+	id: s.primaryKey().sortable(),
+	title: s.string().sortable().optional(),
+	body: s.string().searchable().optional(),
+	summary: s.string().searchable().optional(),
+	author_name: s.string().sortable().optional(),
+	author_email: s.string().searchable().optional(),
+	slug: s.string().sortable().optional(),
+	code: s.string().sortable().optional(),
+	status: s.enum(['draft', 'published', 'archived', 'review']).searchable().optional(),
+	tier: s.enum(['free', 'pro', 'enterprise']).searchable().optional(),
+	tags: s.array(s.string()).searchable().optional(),
+	label_ids: s
+		.array(s.enum(['l_red', 'l_green', 'l_blue', 'l_yellow']))
+		.searchable()
+		.optional(),
+	view_count: s.number().sortable().optional(),
+	rating: s.number().sortable().optional(),
+	scores: s.array(s.number()).searchable().optional(),
+	is_published: s.boolean().sortable().optional(),
+	flags: s.array(s.boolean()).searchable().optional(),
+	address: s
+		.object({
+			city: s.string().sortable().optional(),
+			country: s.enum(['ch', 'de', 'fr', 'it', 'us']).searchable().optional(),
+			postal_code: s.string().sortable().optional(),
+		})
+		.optional(),
+	location: s.geopoint().optional(),
+	embedding: s.vector(8).optional(),
+}));
 
 describe('native search driver — golden fixtures through list()', () => {
 	const suite = JSON.parse(

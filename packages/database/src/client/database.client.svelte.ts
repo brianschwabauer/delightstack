@@ -804,6 +804,22 @@ const DEFAULT_SEARCH_QUERY = {
 	order: [{ field: 'updated_at', direction: 'DESC' as const }],
 };
 
+/**
+ * Merge a query over the defaults. Relevance queries (a term or a vector) with
+ * no explicit `order` drop the recency default so the engine's empty-order
+ * path ranks by score — otherwise `updated_at DESC` would silently override
+ * BM25/boost ranking.
+ */
+function mergeQueryDefaults<T extends Database.AnyTable>(
+	defaults: Database.SearchQuery<T>,
+	q: Partial<Database.SearchQuery<T>>,
+): Database.SearchQuery<T> {
+	const merged = { ...defaults, ...q };
+	const has_relevance = !!(merged.term as string | undefined)?.trim() || !!merged.vector;
+	if (has_relevance && q.order === undefined) merged.order = [];
+	return merged;
+}
+
 /** Quiet window for coalescing rapid query changes (e.g. typing) into one push */
 const QUERY_DEBOUNCE_MS = 150;
 
@@ -895,7 +911,7 @@ export class DatabaseSearch<
 	}
 
 	set query(q: Partial<Database.SearchQuery<T>>) {
-		this.#applyQuery({ ...this.#defaults, ...q });
+		this.#applyQuery(mergeQueryDefaults(this.#defaults, q));
 	}
 
 	constructor(
@@ -914,7 +930,7 @@ export class DatabaseSearch<
 		} else if (query) {
 			initial = query;
 		}
-		this.#applyQuery({ ...this.#defaults, ...initial });
+		this.#applyQuery(mergeQueryDefaults(this.#defaults, initial));
 
 		// createSubscriber drives the subscription lifecycle: the first reactive
 		// read (from a template or effect) starts the effect root and worker
@@ -973,7 +989,7 @@ export class DatabaseSearch<
 				$effect(() => {
 					const q = this.#reactive_query!();
 					untrack(() => {
-						this.#applyQuery({ ...this.#defaults, ...q });
+						this.#applyQuery(mergeQueryDefaults(this.#defaults, q));
 					});
 				});
 			}

@@ -16,8 +16,8 @@ import {
 	quoteIdentifier,
 } from '../search/server/sql_where';
 import {
-buildServerSearchTable,
-type SearchTableSource,
+	buildServerSearchTable,
+	type SearchTableSource,
 } from '../search/server/table_config';
 import { generateTimestampID, DelightError } from '@delightstack/utilities';
 
@@ -99,9 +99,9 @@ export type DatabaseServerTransactionResult<
 				/** The ID of the entity involved in the operation */
 				id: string | number;
 				/**
-* The sparse (search-index) projection that was indexed (undefined for
-* deletes). Broadcast to websocket clients so their local index
-* receives exactly what the server indexed.
+				 * The sparse (search-index) projection that was indexed (undefined for
+				 * deletes). Broadcast to websocket clients so their local index
+				 * receives exactly what the server indexed.
 				 */
 				sparse?: Record<string, unknown>;
 			};
@@ -139,7 +139,7 @@ export type DatabaseSyncRequest<DatabaseConfig extends Record<string, any>> = {
 	entity?: {
 		[Type in keyof DatabaseConfig & string]?: {
 			/**
-* A version number of the search config/schema that the client currently is using.
+			 * A version number of the search config/schema that the client currently is using.
 			 * If the server version is different, the server will return the new config/schema
 			 * and the client will will reindex the data using the new schema.
 			 */
@@ -197,10 +197,10 @@ export type DatabaseSyncResponse<DatabaseConfig extends Record<string, any>> = {
 	entity: {
 		[Type in keyof DatabaseConfig & string]?: {
 			/**
-* The search schema. This is included only when the schema changes.
-* When this changes, the client will completely reindex the data using the new schema.
-*/
-config?: Database.Table['config']['index_schema'];
+			 * The search schema. This is included only when the schema changes.
+			 * When this changes, the client will completely reindex the data using the new schema.
+			 */
+			config?: Database.Table['config']['index_schema'];
 			/** The version number of the config/schema for the search data. If this changes, the full list needs to be synced */
 			config_version: number;
 			/** The list of IDs of entities that have been deleted */
@@ -259,17 +259,17 @@ type DatabaseServerState<
 	 */
 	sql_indexes: Database.SqlIndexes;
 	/**
-* Per-entity-type state of the SQLite search driver.
-*
-* Presence of an entry means the entity type's search tables have been built
-* at least once; `schema_signature` is the serialized search schema they were
-* built from, so a schema change re-triggers the rebuild + config bump.
-*/
+	 * Per-entity-type state of the SQLite search driver.
+	 *
+	 * Presence of an entry means the entity type's search tables have been built
+	 * at least once; `schema_signature` is the serialized search schema they were
+	 * built from, so a schema change re-triggers the rebuild + config bump.
+	 */
 	native_search?: {
 		[TableName in keyof Database]?: {
 			/** The search schema the tables were last rebuilt from */
 			schema_signature: string;
-/** Whether the legacy `search_index` metadata has been migrated across */
+			/** Whether the legacy `search_index` metadata has been migrated across */
 			migrated: boolean;
 		};
 	};
@@ -302,26 +302,26 @@ export class DatabaseServer<
 	DatabaseConfig extends Record<string, Database.Table>,
 	Meta = Record<string, any>,
 > extends DurableObject<Env> {
-/** Persistent state of the database server (saved/loaded in sqlite) */
+	/** Persistent state of the database server (saved/loaded in sqlite) */
 	#state: DatabaseServerState<DatabaseConfig, Meta>;
 
-/** Reverse FK map: for each table, which other tables have FK-derived fields depending on it */
+	/** Reverse FK map: for each table, which other tables have FK-derived fields depending on it */
 	#reverse_fk_map: Map<string, Array<{ table: string; fk_field: string }>> = new Map();
 
-/** The SQLite search driver — the only search engine. */
-#search_engine: SqliteSearchEngine | undefined;
+	/** The SQLite search driver — the only search engine. */
+	#search_engine: SqliteSearchEngine | undefined;
 
-/** Search-table configs, keyed by entity type */
+	/** Search-table configs, keyed by entity type */
 	#search_tables: Map<string, ServerSearchTable> = new Map();
 
 	/** Vector-typed schema paths per entity type — the sync strip list (§7.0) */
 	#vector_paths: Map<string, string[]> = new Map();
 
-/**
-* Entity types whose search rebuild is currently running: a rebuild recomputes
-* FK-derived fields, which can call back into this class, so it must never
-* re-enter itself.
-*/
+	/**
+	 * Entity types whose search rebuild is currently running: a rebuild recomputes
+	 * FK-derived fields, which can call back into this class, so it must never
+	 * re-enter itself.
+	 */
 	#rebuild_in_flight: Set<string> = new Set();
 
 	public get id() {
@@ -496,9 +496,9 @@ export class DatabaseServer<
 			for (const index of table_config.config.indexes) {
 				if (table_name !== index.table) continue;
 				const existing = this.#state.sql_indexes.find((i) => i.name === index.name);
-// Compare the serializable projection: `existing` already survived a
-// JSON round trip, so an undefined member on the live definition would
-// otherwise read as a changed index.
+				// Compare the serializable projection: `existing` already survived a
+				// JSON round trip, so an undefined member on the live definition would
+				// otherwise read as a changed index.
 				if (existing && deepEqual(existing, JSON.parse(JSON.stringify(index)))) continue;
 				const unique = index.unique ? ' UNIQUE' : '';
 				const index_name = this.sanitize(index.name);
@@ -970,7 +970,8 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * The sparse document as the sync protocol ships it: vector fields removed.
+	 * The sparse document as the wire ships it (sync AND sparse `list()`
+	 * responses): vector fields removed.
 	 *
 	 * One place, both engines (§7.0). The server keeps indexing the full sparse
 	 * doc — this strip is the *wire* contract, and it is client-observable: an
@@ -1407,8 +1408,14 @@ export class DatabaseServer<
 		}
 		const base_query = previous_cursor_data || raw_query;
 
+		// Relevance queries (a search term or a vector) rank by score when no
+		// explicit order is given — an empty order[] is the engine's score path.
+		// Only plain browse queries get the recency default; injecting it into a
+		// term search would silently override BM25/boost ranking with updated_at.
+		const has_relevance =
+			!!(base_query.term as string | undefined)?.trim() || !!base_query.vector;
 		const query = {
-			order: [{ field: 'updated_at', direction: 'DESC' }],
+			order: has_relevance ? [] : [{ field: 'updated_at', direction: 'DESC' }],
 			...base_query,
 			// Accept plain-value where shorthands (`{folder: 'inbox'}`) on enum and
 			// number fields, normalizing them into operation objects.
@@ -1491,7 +1498,12 @@ export class DatabaseServer<
 		// The driver answers the whole query from SQL + the postings tables.
 		// Everything above (cursor decode, limit clamps, sortable validation, cursor
 		// minting) is shared, so the public contract is storage-independent.
-		return this.listFromSearchTables(entity_type, query, sparse, generateCursor) as Output;
+		return this.listFromSearchTables(
+			entity_type,
+			query,
+			sparse,
+			generateCursor,
+		) as Output;
 	}
 
 	/**
@@ -1529,14 +1541,20 @@ export class DatabaseServer<
 			// every column plus the whole `json` payload. The sparse contract is the
 			// indexed projection, so project it back down — `toSparse` over the
 			// document, with the (already hoisted) derived values re-attached, which
-			// is exactly what the write path indexed and what sync ships.
+			// is exactly what the write path indexed and what sync ships — minus
+			// vector fields, which never leave the server (§4.9): the same wire
+			// strip sync applies, since an embedding is dead weight in a response.
 			hits = results.hits.map((hit) => {
 				const document = table.toSparse(hit.document as never) as Record<string, unknown>;
 				for (const field of derived_fields ?? []) {
 					const value = (hit.document as Record<string, unknown>)[field];
 					if (value !== undefined && value !== null) document[field] = value;
 				}
-				return { id: hit.id, score: hit.score, document };
+				return {
+					id: hit.id,
+					score: hit.score,
+					document: this.toSyncDocument(entity_type, document),
+				};
 			});
 		} else {
 			hits = results.hits.map((hit) => {
@@ -1559,7 +1577,12 @@ export class DatabaseServer<
 			facets: results.facets,
 			cursor:
 				hits.length >= query.limit
-					? generateCursor(hits[hits.length - 1]?.document, hits.length)
+					? generateCursor(
+							hits[hits.length - 1]?.document,
+							// Cumulative: a cursor-decoded query already carries the offset
+							// that produced this page, so the next page starts after both.
+							((query as { offset?: number }).offset ?? 0) + hits.length,
+						)
 					: undefined,
 		};
 	}

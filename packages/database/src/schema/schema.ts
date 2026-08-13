@@ -516,7 +516,9 @@ type IndexFieldType<T> = T extends {
 		? T extends { _: { properties: infer ObjectType } }
 			? NeverIfEmptyObject<
 					Flatten<
-						OmitNeverProperties<{ [Key in keyof ObjectType]: IndexFieldType<ObjectType[Key]> }>
+						OmitNeverProperties<{
+							[Key in keyof ObjectType]: IndexFieldType<ObjectType[Key]>;
+						}>
 					>
 				>
 			: never
@@ -2566,7 +2568,17 @@ export namespace Database {
 		TableConfig extends Record<string, FieldGenerator>,
 		Entity extends Database.Entity<{ readonly _: TableConfig }>,
 		SearchEntity extends Database.SearchEntity<{ readonly _: TableConfig }>,
-		IndexSchema extends Database.SearchSchema<{ readonly _: TableConfig }>,
+		/**
+		 * Constrained to `AnySearchSchema` rather than
+		 * `SearchSchema<{ _: TableConfig }>` so that `Database.Table` — which is
+		 * `ReturnType<typeof table>`, i.e. every generic instantiated at its
+		 * *constraint* — keeps a schema shape that nested objects satisfy. The
+		 * tighter constraint collapsed to a flat `Record<string, SearchableType>`
+		 * once `TableConfig` widened, so a table with a searchable child object
+		 * (`address: { city, country }`) failed to satisfy `Database.Table`.
+		 * Concrete calls still infer the precise nested schema.
+		 */
+		IndexSchema extends AnySearchSchema,
 		ForeignKeys extends Flatten<
 			OmitNeverProperties<{
 				[Key in keyof TableConfig & string]: IsForeignKey<TableConfig[Key]> extends true

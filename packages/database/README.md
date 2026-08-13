@@ -222,15 +222,10 @@ schema
 	.int() // Must be integer (INTEGER column)
 	.positive() // > 0
 	.negative() // < 0
-	.nonnegative() // >= 0
 	.min(0) // >= value
 	.max(100) // <= value
 	.gt(0) // > value (exclusive)
-	.lt(100) // < value (exclusive)
-	.multipleOf(5) // Must be divisible by value
-	.step(0.01) // Step size for input controls
-	.safe() // Within safe integer range
-	.finite(); // Must be finite
+	.lt(100); // < value (exclusive)
 ```
 
 ### Foreign Keys
