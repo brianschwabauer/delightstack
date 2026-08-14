@@ -591,6 +591,64 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		expect(await readAll('docs')).toEqual([]);
 	});
 
+	// ── Subscriber dedupe + server-search cache ──────────────────────────────
+
+	it('coalesces identical subscriber queries and caches server results', async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 2);
+		let listed = 0;
+		vi.stubGlobal('fetch', bridgeFetch(server, { on_list: () => listed++ }));
+
+		const worker = await createWorker({
+			entities: { note: { search_mode: 'server' } },
+		});
+		const results_a: unknown[] = [];
+		const results_b: unknown[] = [];
+		// The same query with different key order — one fetch serves both: the
+		// first subscribe populates the cache, the second reads it.
+		await worker.subscribe('note', { term: 'note', limit: 10 }, (r) => results_a.push(r));
+		await worker.subscribe('note', { limit: 10, term: 'note' } as never, (r) =>
+			results_b.push(r),
+		);
+		expect(listed).toBe(1);
+		expect(results_a).toHaveLength(1);
+		expect(results_b).toHaveLength(1);
+
+		// A known change bumps the cache generation and notifies: the two
+		// subscribers coalesce into ONE re-query, answered by the network.
+		await worker.applyExternalChange('note', 'update', 'x', {
+			id: 'x',
+			title: 'pushed',
+			body: 'alpha',
+			folder: 'inbox',
+			rank: 9,
+		});
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		expect(listed).toBe(2);
+		expect(results_a).toHaveLength(2);
+		expect(results_b).toHaveLength(2);
+	});
+
+	it('one-shot list bypasses the cache but still populates it', async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 2);
+		let listed = 0;
+		vi.stubGlobal('fetch', bridgeFetch(server, { on_list: () => listed++ }));
+
+		const worker = await createWorker({
+			entities: { note: { search_mode: 'server' } },
+		});
+		// One-shot calls always hit the network — "refresh" must mean the network.
+		await worker.list('note', { term: 'note' });
+		await worker.list('note', { term: 'note' });
+		expect(listed).toBe(2);
+
+		// But they write through: a subscription arriving inside the TTL with the
+		// same query is answered from the cache.
+		await worker.subscribe('note', { term: 'note' }, () => {});
+		expect(listed).toBe(2);
+	});
+
 	// ── config_version bump ──────────────────────────────────────────────────
 
 	it('a config bump reopens the database, rebuilds the index and resyncs', async () => {

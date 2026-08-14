@@ -1733,13 +1733,15 @@ export class DatabaseServer<
 		// The half-open windows, verbatim: descending covers [from, to), ascending
 		// covers (from, to], so a client can feed a response's end_updated_at back
 		// as the next request's start without duplicating or losing the boundary.
-		const bounds = descending
-			? to === Number.MAX_SAFE_INTEGER
-				? { sql: `"updated_at" >= ?`, params: [from] }
-				: { sql: `"updated_at" >= ? AND "updated_at" < ?`, params: [from, to] }
-			: to === Number.MAX_SAFE_INTEGER
-				? { sql: `"updated_at" > ?`, params: [from] }
-				: { sql: `"updated_at" > ? AND "updated_at" <= ?`, params: [from, to] };
+		const windowBounds = (column: string) =>
+			descending
+				? to === Number.MAX_SAFE_INTEGER
+					? { sql: `"${column}" >= ?`, params: [from] }
+					: { sql: `"${column}" >= ? AND "${column}" < ?`, params: [from, to] }
+				: to === Number.MAX_SAFE_INTEGER
+					? { sql: `"${column}" > ?`, params: [from] }
+					: { sql: `"${column}" > ? AND "${column}" <= ?`, params: [from, to] };
+		const bounds = windowBounds('updated_at');
 		const fetchDocs = (fetch_limit: number) =>
 			this.ctx.storage.sql
 				.exec(
@@ -1748,16 +1750,19 @@ export class DatabaseServer<
 				)
 				.toArray();
 
-		const inWindow = descending
-			? (ts: number) => ts >= from && (to === Number.MAX_SAFE_INTEGER || ts < to)
-			: (ts: number) => ts > from && ts <= to;
+		// The same window on the deletion timeline, bounded IN SQL: the
+		// `(entity_type, deleted_at)` index serves exactly the rows in range.
+		// Fetching every tombstone (up to TOMBSTONE_CAP) and filtering here
+		// used to bill up to 10k row reads per sync page on delete-heavy
+		// tables — Cloudflare charges DO SQLite per row scanned.
+		const tombstone_bounds = windowBounds('deleted_at');
 		const tombstones = this.ctx.storage.sql
 			.exec(
-				`SELECT doc_id, deleted_at FROM search_tombstones INDEXED BY search_tombstones_by_time WHERE entity_type = ?;`,
+				`SELECT doc_id, deleted_at FROM search_tombstones INDEXED BY search_tombstones_by_time WHERE entity_type = ? AND ${tombstone_bounds.sql};`,
 				entity_type,
+				...tombstone_bounds.params,
 			)
-			.toArray()
-			.filter((row) => inWindow(Number(row.deleted_at) || 0));
+			.toArray();
 
 		type Change = { ts: number; deleted_id?: string; row?: Record<string, unknown> };
 		let fetch_limit = limit + 1;

@@ -164,6 +164,18 @@ const REFRESH_STALE_MS = 30_000;
  */
 const DEFAULT_MAX_SYNCED_DOCS = 50_000;
 
+/**
+ * How long a server-search result may answer an identical subscription query
+ * again. Deliberately short: it exists to absorb rapid query oscillation
+ * (typing, then backspacing to a term already answered) — and it only guards
+ * against changes this worker never heard about, because any known change
+ * bumps the entity's cache generation and invalidates everything at once.
+ */
+const SERVER_SEARCH_CACHE_TTL_MS = 10_000;
+
+/** Max cached server-search results (LRU). */
+const SERVER_SEARCH_CACHE_MAX = 50;
+
 /** The legacy index blob store, dropped on the first search-store upgrade. */
 const LEGACY_SEARCH_INDEX_STORE = 'search_index';
 
@@ -245,6 +257,25 @@ function indexPathsFor(schema: WhereSchema): DocIndexPath[] {
 		.filter((path) => isIndexableType(schema[path]))
 		.sort()
 		.map((path) => ({ path, multi_entry: isArrayType(schema[path]) }));
+}
+
+/**
+ * JSON.stringify with object keys sorted at every depth, so two structurally
+ * equal queries produce one string regardless of property insertion order.
+ * Used to coalesce identical subscriber queries into a single execution.
+ */
+function stableStringify(value: unknown): string {
+	if (Array.isArray(value)) {
+		return `[${value.map(stableStringify).join(',')}]`;
+	}
+	if (value && typeof value === 'object') {
+		const entries = Object.entries(value as Record<string, unknown>)
+			.filter(([, v]) => v !== undefined)
+			.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+			.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`);
+		return `{${entries.join(',')}}`;
+	}
+	return JSON.stringify(value) ?? 'null';
 }
 
 /** Read a `dot.path` off a document. */
@@ -354,6 +385,17 @@ export class DatabaseWorker {
 	#reopen_promise: Promise<void> | null = null;
 	/** When the last lazy reopen failed — throttles retry loops. */
 	#reopen_failed_at = 0;
+	/**
+	 * Server-search result cache: `entity_type?query-string` → result. Read
+	 * only by subscription paths (never one-shot `list` or a manual refresh),
+	 * TTL-bounded, and generation-busted per entity on every known change.
+	 */
+	#server_search_cache = new Map<
+		string,
+		{ result: WorkerSearchResult; at: number; generation: number }
+	>();
+	/** Per-entity cache generation; bumped whenever the entity's data changes. */
+	#server_search_generation = new Map<string, number>();
 	/** Cross-worker invalidation channel (dedicated-Worker fallback, §7.6). */
 	#channel: BroadcastChannel | null = null;
 	/** Identifies this worker instance on {@link #channel}. */
@@ -381,6 +423,8 @@ export class DatabaseWorker {
 			this.#engine = null;
 			this.#entities = {};
 			this.#pending_refreshes.clear();
+			this.#server_search_cache.clear();
+			this.#server_search_generation.clear();
 		}
 		this.#idb_unavailable = false;
 
@@ -1354,8 +1398,17 @@ export class DatabaseWorker {
 	 * membership, different global BM25 statistics — so a query is only answered
 	 * locally when the local index is known to hold the whole table.
 	 * `query.source` forces the decision per query.
+	 *
+	 * `allow_cached` is internal, passed only by the subscription paths: a
+	 * server-routed result may then answer from the short-TTL cache. One-shot
+	 * calls and manual refreshes never set it — "refresh" must mean the
+	 * network.
 	 */
-	async list(entity_type: string, query: SearchQueryInput): Promise<WorkerSearchResult> {
+	async list(
+		entity_type: string,
+		query: SearchQueryInput,
+		allow_cached = false,
+	): Promise<WorkerSearchResult> {
 		const state = this.#entities[entity_type];
 		if (!state) throw unknownEntityType(entity_type);
 
@@ -1363,12 +1416,12 @@ export class DatabaseWorker {
 		// routing so one upgrade in another tab degrades one call at most.
 		await this.#ensureStore();
 		if (!this.#routesToClient(state, query)) {
-			return this.#serverSearch(entity_type, query);
+			return this.#serverSearch(entity_type, query, allow_cached);
 		}
 		// Capture ONCE: `#engine` can be nulled by a `versionchange` between the
 		// routing check and the call (the TOCTOU `this.#engine!` used to hide).
 		const engine = this.#engine;
-		if (!engine) return this.#serverSearch(entity_type, query);
+		if (!engine) return this.#serverSearch(entity_type, query, allow_cached);
 
 		let results: SearchQueryResults<Record<string, unknown>>;
 		try {
@@ -1474,7 +1527,7 @@ export class DatabaseWorker {
 
 		let result: WorkerSearchResult;
 		try {
-			result = { ...(await this.list(entity_type, query)), token };
+			result = { ...(await this.list(entity_type, query, true)), token };
 		} catch (error) {
 			result = { hits: [], count: 0, token, error: searchErrorPayload(error) };
 		}
@@ -1501,7 +1554,7 @@ export class DatabaseWorker {
 
 		let result: WorkerSearchResult;
 		try {
-			result = { ...(await this.list(sub.entity_type, query)), token: echo };
+			result = { ...(await this.list(sub.entity_type, query, true)), token: echo };
 		} catch (error) {
 			result = { hits: [], count: 0, token: echo, error: searchErrorPayload(error) };
 		}
@@ -1573,9 +1626,25 @@ export class DatabaseWorker {
 	async #serverSearch(
 		entity_type: string,
 		query: SearchQueryInput,
+		allow_cached = false,
 	): Promise<WorkerSearchResult> {
 		const params = encodeSearchQuery({ sparse: true, ...query });
 		const qs = params.toString();
+		const cache_key = `${entity_type}?${qs}`;
+		const generation = this.#server_search_generation.get(entity_type) ?? 0;
+		if (allow_cached) {
+			const cached = this.#server_search_cache.get(cache_key);
+			if (
+				cached &&
+				cached.generation === generation &&
+				Date.now() - cached.at < SERVER_SEARCH_CACHE_TTL_MS
+			) {
+				// Re-insert to mark as recently used (Map preserves insertion order).
+				this.#server_search_cache.delete(cache_key);
+				this.#server_search_cache.set(cache_key, cached);
+				return cached.result;
+			}
+		}
 		const response = await fetch(`/api/${entity_type}${qs ? '?' : ''}${qs}`);
 		if (!response.ok) {
 			const error_body = (await response.json().catch(() => ({}))) as Record<
@@ -1593,10 +1662,23 @@ export class DatabaseWorker {
 			hits?: { id: string; document: Record<string, unknown>; score: number }[];
 			count?: number;
 		};
-		return {
+		const result: WorkerSearchResult = {
 			hits: body.hits ?? [],
 			count: body.count ?? 0,
 		};
+		// Store under the generation read BEFORE the fetch: if a change landed
+		// while the request was in flight, the bumped generation makes this
+		// entry unservable rather than a stale hit.
+		this.#server_search_cache.set(cache_key, {
+			result,
+			at: Date.now(),
+			generation,
+		});
+		if (this.#server_search_cache.size > SERVER_SEARCH_CACHE_MAX) {
+			const oldest = this.#server_search_cache.keys().next().value;
+			if (oldest !== undefined) this.#server_search_cache.delete(oldest);
+		}
+		return result;
 	}
 
 	/** Fetch from server and cache in IDB. */
@@ -1854,6 +1936,15 @@ export class DatabaseWorker {
 
 	/** Microtask-batched subscriber notification */
 	#notifySubscribers(entity_types: string[]): void {
+		// Every caller is a data change (CRUD, a sync page, an external push):
+		// bump the cache generation FIRST, synchronously, so the re-queries this
+		// notification triggers can never be answered by a pre-change entry.
+		for (const t of entity_types) {
+			this.#server_search_generation.set(
+				t,
+				(this.#server_search_generation.get(t) ?? 0) + 1,
+			);
+		}
 		for (const t of entity_types) this.#pending_notify.add(t);
 		if (this.#notify_scheduled) return;
 		this.#notify_scheduled = true;
@@ -1861,33 +1952,50 @@ export class DatabaseWorker {
 			this.#notify_scheduled = false;
 			const types = new Set(this.#pending_notify);
 			this.#pending_notify.clear();
+			// Coalesce identical queries: N components watching the same list is
+			// common, and running the query N times costs N IDB executions — or N
+			// server round trips for a server-routed entity. One execution per
+			// distinct (entity_type, query) fans out to every subscriber with its
+			// own echoed token.
+			const groups = new Map<string, SearchSubscriber[]>();
 			for (const sub of this.#search_subscribers) {
 				if (!types.has(sub.entity_type)) continue;
-				// Capture the token BEFORE the async search: the result answers the
-				// query stored right now, and the client uses the echoed token to
-				// discard it if a newer push lands first.
-				const token = sub.query_token;
-				this.list(sub.entity_type, sub.query).then(
+				const key = `${sub.entity_type}\u0000${stableStringify(sub.query)}`;
+				const group = groups.get(key);
+				if (group) group.push(sub);
+				else groups.set(key, [sub]);
+			}
+			for (const subs of groups.values()) {
+				// Capture the tokens BEFORE the async search: each result answers
+				// the query stored right now, and the client uses the echoed token
+				// to discard it if a newer push lands first.
+				const tokens = subs.map((sub) => sub.query_token);
+				this.list(subs[0].entity_type, subs[0].query, true).then(
 					(result) => {
-						try {
-							sub.callback({ ...result, token });
-						} catch {
-							// ignore
-						}
+						subs.forEach((sub, index) => {
+							try {
+								sub.callback({ ...result, token: tokens[index] });
+							} catch {
+								// ignore
+							}
+						});
 					},
 					(error) => {
-						// Surface the failure instead of leaving the subscriber silently
+						// Surface the failure instead of leaving the subscribers silently
 						// frozen; the client keeps its last-known-good results.
-						try {
-							sub.callback({
-								hits: [],
-								count: 0,
-								token,
-								error: searchErrorPayload(error),
-							});
-						} catch {
-							// ignore
-						}
+						const payload = searchErrorPayload(error);
+						subs.forEach((sub, index) => {
+							try {
+								sub.callback({
+									hits: [],
+									count: 0,
+									token: tokens[index],
+									error: payload,
+								});
+							} catch {
+								// ignore
+							}
+						});
 					},
 				);
 			}
