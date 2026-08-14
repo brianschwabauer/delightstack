@@ -1,4 +1,4 @@
-import { SqlTaggedTemplate } from '@delightstack/database';
+import { SqlTaggedTemplate } from '@delightstack/utilities';
 
 /** A database schema for the auth server (durable object sqlite) */
 export type AuthDatabaseSchema = {

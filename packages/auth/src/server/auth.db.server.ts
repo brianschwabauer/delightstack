@@ -187,7 +187,17 @@ export interface AuthDatabaseServerOptions {
 	oauthProfileScope?: string;
 }
 
-/** A Durable Object for handling database requests */
+/**
+ * A Durable Object for handling auth database requests.
+ *
+ * Deliberately NOT built on `@delightstack/database`'s `DatabaseServer`: that
+ * package is an app-data layer (entity schemas, search indexing, client sync)
+ * while auth is a fixed relational schema with security-sensitive queries —
+ * it needs none of the entity machinery and benefits from hand-controlled DDL
+ * (`AUTH_DATABASE_UPGRADES`) where every migration is explicit and auditable.
+ * The only shared piece is the `prepareSql` tagged template from
+ * `@delightstack/utilities`.
+ */
 export class AuthDatabaseServer extends DurableObject<Env> {
 	private sql = new SqlServer<AuthDatabaseSchema>(this.ctx.storage);
 

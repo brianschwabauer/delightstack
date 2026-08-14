@@ -1,6 +1,9 @@
-import { prepareSql, type SqlQueryFn } from '@delightstack/database';
-import { DelightError, generateTimestampID } from '@delightstack/utilities';
-
+import {
+	DelightError,
+	generateTimestampID,
+	prepareSql,
+	type SqlQueryFn,
+} from '@delightstack/utilities';
 
 /** A schema object representing the tables, columns, and rows of a database */
 export type SqlDatabaseSchema = {
@@ -117,7 +120,10 @@ export type SqlEntityQueryResultData<
  * from the typed schema so they should already be safe — this is peace of mind.
  */
 function sanitizeIdentifier(name: string): string {
-	return (name || '').toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+	return (name || '')
+		.toLowerCase()
+		.replace(/[^a-z0-9_]/g, '')
+		.replace(/^[0-9]+/, '');
 }
 
 /** A helper class for reading/writing rows in a Durable Object SQLite database using SQL commands */
