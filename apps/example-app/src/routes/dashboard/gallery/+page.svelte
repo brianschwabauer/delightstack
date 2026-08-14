@@ -43,13 +43,13 @@
 	// The db client is stable for the life of the page — capturing it once to
 	// create the live search query is intentional.
 	// svelte-ignore state_referenced_locally
-	const images = db.watch('image', { sparse: false });
+	const images = db.list('image', { sparse: false });
 
 	// Map the db image records into the Gallery's generic item shape via the
 	// `@delightstack/images` helper. The Gallery's `src` field accepts the
 	// combined srcset string directly, so we prefer it over the single src.
 	const galleryItems = $derived<GalleryItem[]>(
-		images.docs.map((image, index) => {
+		images.items.map((image, index) => {
 			// Search docs type their primary key as `DocumentID | undefined`
 			// (string | number); the image helpers and Gallery items want strings.
 			const props = toImageProps({ ...image, id: String(image.id ?? '') });

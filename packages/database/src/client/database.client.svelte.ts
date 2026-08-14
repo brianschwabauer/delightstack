@@ -14,7 +14,7 @@ import { getWorker, resetWorker, isWorkerShared } from './database.worker.init';
 // Types
 // ---------------------------------------------------------------------------
 
-type TableMap = Record<string, Database.AnyTable>;
+type TableMap = Record<string, Database.Table>;
 
 export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	/** Same table definitions used on the server — single source of truth */
@@ -118,41 +118,73 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	};
 }
 
-type EntityInput<T extends Database.AnyTable> = Omit<
+type EntityInput<T extends Database.Table> = Omit<
 	Database.Entity<T>,
 	'id' | 'created_at' | 'updated_at'
 >;
 
-export interface SearchHit<T extends Database.AnyTable = Database.Table> {
+export interface SearchHit<T extends Database.Table = Database.Table> {
 	id: string;
 	document: Database.SearchEntity<T>;
 	score: number;
 }
 
-export interface SearchResult<T extends Database.AnyTable = Database.Table> {
+export interface SearchResult<T extends Database.Table = Database.Table> {
 	hits: SearchHit<T>[];
 	/** Convenience — just the sparse documents, in hit order. */
-	docs: Database.SearchEntity<T>[];
+	items: Database.SearchEntity<T>[];
 	count: number;
-	elapsed?: unknown;
+	/** Which side answered — the live routing decision for this result. */
+	mode: 'client' | 'server';
 }
 
 /**
- * Lifecycle of a {@link DatabaseWatch}:
- * - `'loading'` — no results have arrived yet.
- * - `'refreshing'` — a re-query is in flight; the previous results stay visible.
- * - `'ready'` — the shown results answer the current query.
- * - `'error'` — the last query failed; `error` holds it, and any previous
- *   results stay visible (last-known-good).
+ * Lifecycle of a reactive handle ({@link EntityHandle}, {@link ListHandle},
+ * {@link EntityState}):
+ * - `'loading'` — no data has arrived yet.
+ * - `'refreshing'` — a re-query is in flight; the previous data stays visible.
+ * - `'ready'` — the shown data answers the current query.
+ * - `'error'` — the last operation failed; `error` holds it, and any previous
+ *   data stays visible (last-known-good).
  */
-export type WatchStatus = 'loading' | 'refreshing' | 'ready' | 'error';
+export type HandleStatus = 'loading' | 'refreshing' | 'ready' | 'error';
+
+/**
+ * Lifecycle of a {@link DatabaseClient}:
+ * - `'idle'` — not initialized (SSR, or before `init()` / after `destroy()`).
+ * - `'initializing'` — `init()` is in flight.
+ * - `'ready'` — the client is usable. Note the background initial sync may
+ *   still be running — that's the orthogonal `syncing`/`synced` pair.
+ * - `'signed_out'` — `signOut()` wiped local data; the client is inert until
+ *   the next `init()`.
+ */
+export type DatabaseStatus = 'idle' | 'initializing' | 'ready' | 'signed_out';
+
+/** Parse a failed API response into a DelightError. */
+async function errorFromResponse(
+	response: Response,
+	fallback_message?: string,
+): Promise<DelightError> {
+	const body = (await response.json().catch(() => null)) as {
+		message?: string;
+		status?: number;
+		code?: string;
+		detail?: string;
+	} | null;
+	return new DelightError({
+		message: body?.message ?? fallback_message ?? response.statusText,
+		status: body?.status ?? response.status,
+		code: body?.code,
+		detail: body?.detail,
+	});
+}
 
 // ---------------------------------------------------------------------------
 // EntityState — reactive per-entity wrapper
 // ---------------------------------------------------------------------------
 
 export class EntityState<
-	T extends Database.AnyTable = Database.Table,
+	T extends Database.Table = Database.Table,
 	EntityType extends string = string,
 > {
 	readonly entity_type: EntityType;
@@ -180,6 +212,12 @@ export class EntityState<
 		id: string | number;
 		data?: Record<string, unknown>;
 	}) => void;
+	/**
+	 * Wired by `DatabaseClient.entity` to the client's sign-out freeze. While
+	 * it returns `true`, no in-flight load or background refresh may touch
+	 * reactive state — the displayed values must stay exactly as they are.
+	 */
+	#frozen?: () => boolean;
 	#subscriber: () => void;
 
 	#value = $state({} as Database.Entity<T>);
@@ -196,6 +234,8 @@ export class EntityState<
 
 	/** Reusable comlink proxy for background refresh callback */
 	#refresh_proxy = proxy((fresh: Record<string, unknown>) => {
+		// A refresh landing after a sign-out freeze must not repaint anything.
+		if (this.#frozen?.()) return;
 		// Read `has_changes` before mutating `#server_value`, otherwise the
 		// derived would compare the stale `#value` against the incoming
 		// server row and incorrectly conclude there are unsaved edits.
@@ -251,6 +291,14 @@ export class EntityState<
 	 */
 	get error(): unknown {
 		return this.#error;
+	}
+
+	/** Where the entity is in its lifecycle — see {@link HandleStatus}. */
+	get status(): HandleStatus {
+		this.#subscriber();
+		if (this.#error) return 'error';
+		if (this.#loading || this.#saving) return this.#loaded ? 'refreshing' : 'loading';
+		return this.#loaded ? 'ready' : 'loading';
 	}
 
 	/** Entity ID */
@@ -320,6 +368,11 @@ export class EntityState<
 			 * `hooks.isLive` (websocket connection state).
 			 */
 			skip_background_refresh?: () => boolean;
+			/**
+			 * Invoked before applying any async result. `true` (sign-out
+			 * freeze) drops the result so displayed values never change.
+			 */
+			frozen?: () => boolean;
 			onChange?: (event: {
 				type: 'create' | 'update' | 'delete';
 				id: string | number;
@@ -341,6 +394,7 @@ export class EntityState<
 		this.#primary_key = options?.primary_key ?? 'id';
 		this.#prefer_fetch = options?.prefer_fetch;
 		this.#skip_background_refresh = options?.skip_background_refresh;
+		this.#frozen = options?.frozen;
 		this.#onChange = options?.onChange;
 		this.#value = (options?.initial_data ?? {}) as Database.Entity<T>;
 
@@ -449,9 +503,10 @@ export class EntityState<
 	async load(options?: {
 		force_refresh?: boolean;
 		fetch?: typeof globalThis.fetch;
-	}): Promise<void> {
-		if (this.#loading) return;
-		if (!this.#id) return;
+	}): Promise<Database.Entity<T> | undefined> {
+		if (this.#loading || !this.#id || this.#frozen?.()) {
+			return (this.#server_value ?? undefined) as Database.Entity<T> | undefined;
+		}
 		this.#loading = true;
 		try {
 			let data: Database.Entity<T> | undefined;
@@ -493,6 +548,11 @@ export class EntityState<
 				)) as Database.Entity<T> | undefined;
 			}
 
+			// A sign-out freeze landed while the request was in flight — the
+			// result (and even the loading→ready transition) must not repaint.
+			if (this.#frozen?.()) {
+				return (this.#server_value ?? undefined) as Database.Entity<T> | undefined;
+			}
 			if (data) {
 				// Read has_changes BEFORE updating server_value
 				const had_changes = untrack(() => this.#has_changes);
@@ -505,10 +565,11 @@ export class EntityState<
 			}
 			this.#error = null;
 		} catch (error) {
-			this.#error = error;
+			if (!this.#frozen?.()) this.#error = error;
 		} finally {
-			this.#loading = false;
+			if (!this.#frozen?.()) this.#loading = false;
 		}
+		return (this.#server_value ?? undefined) as Database.Entity<T> | undefined;
 	}
 
 	/** Delete this entity from the server. */
@@ -588,41 +649,18 @@ export class EntityState<
 		}
 		return this.#worker;
 	}
-
-	/**
-	 * Thin alias for `new EntityState(...)`. Kept for backwards compatibility
-	 * with standalone usage; prefer `db.entity(...)` via `DatabaseClient`,
-	 * which adds caching, version invalidation, and lifecycle management.
-	 */
-	static from<T extends Database.AnyTable, EntityType extends string = string>(
-		entity_type: EntityType,
-		id: string | number | undefined,
-		options?: {
-			worker?: Remote<DatabaseWorker> | null;
-			fetch?: typeof globalThis.fetch;
-			initial_data?: Partial<Database.Entity<T>>;
-			primary_key?: string;
-			onChange?: (event: {
-				type: 'create' | 'update' | 'delete';
-				id: string | number;
-				data?: Record<string, unknown>;
-			}) => void;
-		},
-	): EntityState<T, EntityType> {
-		return new EntityState(entity_type, id, options) as EntityState<T, EntityType>;
-	}
 }
 
 // ---------------------------------------------------------------------------
-// EntityReader — lightweight reactive reader for read-mostly pages
+// EntityHandle — reactive read handle for a single entity
 // ---------------------------------------------------------------------------
 
 /**
- * Dependencies EntityReader needs from the owning DatabaseClient. Passed in
- * so the reader stays decoupled from client internals while still reusing
- * the version-invalidation and comlink plumbing.
+ * Dependencies EntityHandle needs from the owning DatabaseClient. Passed in
+ * so the handle stays decoupled from client internals while reusing the
+ * version-invalidation and comlink plumbing.
  */
-interface EntityReaderDeps {
+interface EntityHandleDeps {
 	getWorker: () => Remote<DatabaseWorker> | null;
 	fetch?: typeof globalThis.fetch;
 	trackVersion: (entity_type: string, id: string | number) => void;
@@ -630,43 +668,52 @@ interface EntityReaderDeps {
 		entity_type: string,
 		id: string | number,
 	) => (data: Record<string, unknown>) => void;
-	/**
-	 * Invoked on the worker read path to skip the safety-net stale
-	 * refresh. Wired to the app's `hooks.isLive`.
-	 */
+	/** Skip the worker's safety-net stale refresh (wired to `hooks.isLive`). */
 	skipBackgroundRefresh?: () => boolean;
+	/**
+	 * The client's sign-out freeze. While `true`, the handle starts no fetch
+	 * and applies no late-arriving result — displayed values stay put.
+	 */
+	isFrozen?: () => boolean;
+	/** Called when the last reactive listener stops reading — drops the cache entry. */
+	release: () => void;
 }
 
 /**
- * Reactive single-entity reader. Construct synchronously, read the live
- * `value`/`loading`/`error` fields in templates. Re-fetches automatically
- * when:
+ * The reactive read handle returned by `db.get(type, id)` — cached per
+ * `type:id`, so every call site shares one instance.
  *
- *   - the id source returns a different id
- *   - a mutation (via `db.create`/`db.update`/`db.delete`) hits the id
- *   - the worker reports a background refresh or an external websocket
- *     event touches this entity
+ * Two ways to consume it:
  *
- * Cleanup is automatic — the underlying subscription tears down when the
- * last reactive listener stops reading (e.g. on component unmount).
+ * - **Reactive:** read `.value` in a template or `$derived` — the first read
+ *   starts a live subscription (auto-load, updates on mutations, websocket
+ *   pushes and background refreshes; tears down when the last listener stops
+ *   reading). `value` is `undefined` until loaded / when not found.
+ * - **Awaited:** `await db.get(type, id).load()` resolves with the entity
+ *   (or `undefined` when not found). Called inside `$derived`, `load()`
+ *   registers a reactive dependency first, so
+ *   `$derived(await db.get(type, id).load())` re-runs on changes and always
+ *   yields a non-stale value. Called from a `+page.ts` load with the client's
+ *   configured SvelteKit `fetch`, it SSRs and hydrates from one request.
+ *
+ * The resolved/`value` object is a snapshot — it is replaced (never mutated)
+ * on updates.
  */
-export class EntityReader<
-	T extends Database.AnyTable = Database.Table,
+export class EntityHandle<
+	T extends Database.Table = Database.Table,
 	EntityType extends string = string,
 > {
 	readonly entity_type: EntityType;
-	#id_source: () => string | number | undefined;
-	#deps: EntityReaderDeps;
-
-	#value = $state.raw<Database.Entity<T> | undefined>(undefined);
-	#loading = $state(true);
-	#loaded = $state(false);
-	#error = $state.raw<unknown>(null);
-	#current_id: string | number | undefined;
-
+	readonly id: string | number;
+	#deps: EntityHandleDeps;
 	#subscriber: () => void;
 	#effect_cleanup: (() => void) | null = null;
-	#destroyed = false;
+
+	#value = $state.raw<Database.Entity<T> | undefined>(undefined);
+	#status = $state<HandleStatus>('loading');
+	#error = $state.raw<unknown>(null);
+	/** Monotonic fetch sequence — a stale fetch must never overwrite a newer one. */
+	#fetch_token = 0;
 
 	/** The current entity data, or `undefined` until loaded / if not found. */
 	get value(): Database.Entity<T> | undefined {
@@ -674,16 +721,10 @@ export class EntityReader<
 		return this.#value;
 	}
 
-	/** True while the initial load (or a fresh id) is in flight. */
-	get loading(): boolean {
+	/** Where the handle is in its lifecycle — see {@link HandleStatus}. */
+	get status(): HandleStatus {
 		this.#subscriber();
-		return this.#loading;
-	}
-
-	/** True once the first fetch has resolved (even with no record). */
-	get loaded(): boolean {
-		this.#subscriber();
-		return this.#loaded;
+		return this.#status;
 	}
 
 	/** Last error from a fetch; cleared on the next successful load. */
@@ -691,52 +732,49 @@ export class EntityReader<
 		return this.#error;
 	}
 
-	/** The id currently being tracked (resolved from the id source). */
-	get id(): string | number | undefined {
-		return this.#current_id;
-	}
-
-	constructor(
-		entity_type: EntityType,
-		id_source: () => string | number | undefined,
-		deps: EntityReaderDeps,
-	) {
+	constructor(entity_type: EntityType, id: string | number, deps: EntityHandleDeps) {
 		this.entity_type = entity_type;
-		this.#id_source = id_source;
+		this.id = id;
 		this.#deps = deps;
 		this.#subscriber = createSubscriber(() => {
-			if (this.#destroyed) return;
 			this.#start();
 			return () => this.#stop();
 		});
 	}
 
-	/** Force a re-fetch, bypassing the worker's IDB cache. */
-	async reload(): Promise<void> {
-		await this.#fetch(
-			untrack(() => this.#id_source()),
-			true,
-		);
+	/**
+	 * Fetch the entity and resolve with it (`undefined` when not found).
+	 *
+	 * Reactive when called inside `$derived`/`$effect`/a template: the version
+	 * dependency is registered synchronously before the fetch, so mutations and
+	 * external changes re-run the enclosing scope. Outside reactive contexts
+	 * (a `+page.ts` load, an event handler) it is a plain one-shot read.
+	 */
+	async load(options?: {
+		force_refresh?: boolean;
+	}): Promise<Database.Entity<T> | undefined> {
+		// Synchronous reactive read — must happen before any await.
+		this.#deps.trackVersion(this.entity_type, this.id);
+		return this.#fetch(options?.force_refresh === true, true);
 	}
 
-	/**
-	 * Force full cleanup. Not normally needed — the reader auto-cleans when
-	 * the last reactive listener stops reading.
-	 */
-	destroy(): void {
-		this.#destroyed = true;
-		this.#stop();
+	/** Force a re-fetch, bypassing the worker's IDB cache. */
+	async refresh(): Promise<Database.Entity<T> | undefined> {
+		return this.#fetch(true, true);
 	}
 
 	#start(): void {
 		if (this.#effect_cleanup) return;
 		this.#effect_cleanup = $effect.root(() => {
 			$effect(() => {
-				// Reactive reads: id source + entity version. Either changing
-				// re-runs this effect and triggers a fresh fetch.
-				const id = this.#id_source();
-				if (id !== undefined) this.#deps.trackVersion(this.entity_type, id);
-				untrack(() => this.#fetch(id, false));
+				// Reactive read: the entity version. Any mutation or external
+				// change bumps it and re-runs this effect → fresh fetch.
+				this.#deps.trackVersion(this.entity_type, this.id);
+				untrack(() => {
+					this.#fetch(false, false).catch(() => {
+						// surfaced through `error`/`status`
+					});
+				});
 			});
 		});
 	}
@@ -746,78 +784,62 @@ export class EntityReader<
 			this.#effect_cleanup();
 			this.#effect_cleanup = null;
 		}
+		this.#deps.release();
 	}
 
-	async #fetch(id: string | number | undefined, force_refresh: boolean): Promise<void> {
-		const prev_id = this.#current_id;
-		this.#current_id = id;
-
-		if (id === undefined) {
-			this.#value = undefined;
-			this.#loading = false;
-			this.#loaded = true;
-			this.#error = null;
-			return;
-		}
-
-		// Flip `loading` true on the first fetch and on any id transition;
-		// stay quiet for same-id refetches (mutations, background refresh)
-		// so the UI doesn't flicker.
-		if (!this.#loaded || prev_id !== id) this.#loading = true;
-
-		const worker = this.#deps.getWorker();
+	async #fetch(
+		force_refresh: boolean,
+		rethrow: boolean,
+	): Promise<Database.Entity<T> | undefined> {
+		// Sign-out freeze: no new fetch may start (the client is inert).
+		if (this.#deps.isFrozen?.()) return this.#value;
+		const token = ++this.#fetch_token;
 		try {
 			let data: Database.Entity<T> | undefined;
+			const worker = this.#deps.getWorker();
 			if (worker) {
 				const skip_bg_refresh = this.#deps.skipBackgroundRefresh?.() ?? false;
 				data = (await worker.get(
 					this.entity_type,
-					id,
+					this.id,
 					force_refresh,
-					this.#deps.refreshProxy(this.entity_type, id),
+					this.#deps.refreshProxy(this.entity_type, this.id),
 					skip_bg_refresh,
 				)) as Database.Entity<T> | undefined;
 			} else if (this.#deps.fetch) {
-				const response = await this.#deps.fetch(`/api/${this.entity_type}/${id}`);
+				// SSR / pre-init: the configured fetch carries the request's auth
+				// context, and SvelteKit records the response for hydration reuse.
+				const response = await this.#deps.fetch(`/api/${this.entity_type}/${this.id}`);
 				if (response.status === 404) {
 					data = undefined;
 				} else if (response.ok) {
 					data = (await response.json()) as Database.Entity<T>;
 				} else {
-					const body = (await response.json().catch(() => null)) as {
-						message?: string;
-						status?: number;
-						code?: string;
-						detail?: string;
-					} | null;
-					throw new DelightError({
-						message: body?.message ?? response.statusText,
-						status: body?.status ?? response.status,
-						code: body?.code,
-						detail: body?.detail,
-					});
+					throw await errorFromResponse(response);
 				}
 			}
 
-			// Ignore stale fetches: id changed (or reader destroyed) mid-flight.
-			if (this.#destroyed || this.#current_id !== id) return;
-
+			// A newer fetch settled first — keep its result. Same guard for a
+			// sign-out freeze: a late result must not repaint the frozen handle.
+			if (token !== this.#fetch_token || this.#deps.isFrozen?.()) return this.#value;
 			this.#value = data;
-			this.#loaded = true;
+			this.#status = 'ready';
 			this.#error = null;
+			return data;
 		} catch (error) {
-			if (this.#destroyed || this.#current_id !== id) return;
-			this.#error = error;
-		} finally {
-			if (!this.#destroyed && this.#current_id === id) {
-				this.#loading = false;
+			const wrapped = DelightError.fromWorker(error) ?? error;
+			if (token === this.#fetch_token && !this.#deps.isFrozen?.()) {
+				this.#error = wrapped;
+				this.#status = 'error';
 			}
+			if (rethrow) throw wrapped;
+			return this.#value;
 		}
 	}
 }
 
 // ---------------------------------------------------------------------------
-// DatabaseWatch — reactive list wrapper
+// ListHandle — reactive list/search handle
 // ---------------------------------------------------------------------------
 
 /** Baseline defaults applied to every watch. Callers override selectively. */
@@ -833,7 +855,7 @@ const DEFAULT_SEARCH_QUERY = {
  * path ranks by score — otherwise `updated_at DESC` would silently override
  * BM25/boost ranking.
  */
-function mergeQueryDefaults<T extends Database.AnyTable>(
+function mergeQueryDefaults<T extends Database.Table>(
 	defaults: Database.SearchQuery<T>,
 	q: Partial<Database.SearchQuery<T>>,
 ): Database.SearchQuery<T> {
@@ -846,25 +868,53 @@ function mergeQueryDefaults<T extends Database.AnyTable>(
 /** Quiet window for coalescing rapid query changes (e.g. typing) into one push */
 const QUERY_DEBOUNCE_MS = 150;
 
-export type WatchQueryInit<T extends Database.AnyTable = Database.Table> =
+export type ListQueryInit<T extends Database.Table = Database.Table> =
 	| Partial<Database.SearchQuery<T>>
 	| (() => Partial<Database.SearchQuery<T>>);
 
 /**
- * Compile-time guard applied to `db.watch`/`db.list` query arguments: rejects
+ * Dependencies ListHandle needs from the owning DatabaseClient.
+ */
+interface ListHandleDeps {
+	getWorker: () => Remote<DatabaseWorker> | null;
+	fetch?: typeof globalThis.fetch;
+	/**
+	 * The client's sign-out freeze. While `true`, the handle runs no query and
+	 * applies no late-arriving result — the displayed hits stay put.
+	 */
+	isFrozen?: () => boolean;
+	/** Called when the last reactive listener stops reading — drops the cache entry. */
+	release: () => void;
+}
+
+/**
+ * Compile-time guard applied to `db.list` query arguments: rejects
  * `source: 'client'` combined with `vector` (vector search is server-only).
- * Unwraps the function form of {@link WatchQueryInit}.
+ * Unwraps the function form of {@link ListQueryInit}.
  */
 type ValidQueryInit<Q> = Q extends () => infer R
 	? ValidSearchQuery<R>
 	: ValidSearchQuery<Q>;
 
-export class DatabaseWatch<
-	T extends Database.AnyTable = Database.Table,
+/**
+ * The reactive list/search handle returned by `db.list(type, query)`.
+ *
+ * Read `hits`/`items`/`count` in a template or `$derived` — the first read
+ * starts a live worker subscription that re-runs the query whenever the index
+ * changes, and tears down when the last listener stops reading. `query` is a
+ * live reactive object (`posts.query.term = 'x'` re-queries automatically),
+ * or pass a function to drive the query from other reactive state.
+ *
+ * For a one-shot list, `await db.list(type, query).load()` resolves with a
+ * {@link SearchResult} and never starts a subscription — including on SSR,
+ * where it answers via the configured `fetch`.
+ */
+export class ListHandle<
+	T extends Database.Table = Database.Table,
 	EntityType extends string = string,
 > {
 	readonly entity_type: EntityType;
-	#worker: Remote<DatabaseWorker>;
+	#deps: ListHandleDeps;
 	#subscriber_id: string | null = null;
 	#init_promise: Promise<void> | null = null;
 	#subscriber: () => void;
@@ -881,27 +931,27 @@ export class DatabaseWatch<
 	 * discarded — a slow query can never overwrite a newer one's results.
 	 */
 	#push_token = 0;
-	/** The token of the newest result applied to `#results`. */
+	/** The token of the newest result applied to `#hits`. */
 	#delivered_token = 0;
 
-	#results = $state<SearchHit<T>[]>([]);
-	#docs = $derived<Database.SearchEntity<T>[]>(this.#results.map((h) => h.document));
+	#hits = $state<SearchHit<T>[]>([]);
+	#items = $derived<Database.SearchEntity<T>[]>(this.#hits.map((h) => h.document));
 	#count = $state(0);
-	#status = $state<WatchStatus>('loading');
+	#status = $state<HandleStatus>('loading');
 	#error = $state<unknown>(null);
 	#mode = $state<'client' | 'server'>('client');
 	#query_state = $state<Database.SearchQuery<T>>({});
 
-	/** Reactive array of search hits */
-	get results(): SearchHit<T>[] {
+	/** Reactive array of scored search hits ({ id, score, document }) */
+	get hits(): SearchHit<T>[] {
 		this.#subscriber();
-		return this.#results;
+		return this.#hits;
 	}
 
-	/** Convenience accessor for just the documents */
-	get docs(): Database.SearchEntity<T>[] {
+	/** Convenience accessor for just the documents, in hit order */
+	get items(): Database.SearchEntity<T>[] {
 		this.#subscriber();
-		return this.#docs;
+		return this.#items;
 	}
 
 	/** Total matching count */
@@ -910,8 +960,14 @@ export class DatabaseWatch<
 		return this.#count;
 	}
 
-	/** Where the watch is in its lifecycle — see {@link WatchStatus}. */
-	get status(): WatchStatus {
+	/** Whether the server has rows beyond the current window (see `loadMore`). */
+	get has_more(): boolean {
+		this.#subscriber();
+		return this.#hits.length < this.#count;
+	}
+
+	/** Where the handle is in its lifecycle — see {@link HandleStatus}. */
+	get status(): HandleStatus {
 		this.#subscriber();
 		return this.#status;
 	}
@@ -921,8 +977,9 @@ export class DatabaseWatch<
 		return this.#error;
 	}
 
-	/** Current search mode */
+	/** Which side answered the current results — updated with every result. */
 	get mode(): 'client' | 'server' {
+		this.#subscriber();
 		return this.#mode;
 	}
 
@@ -941,13 +998,9 @@ export class DatabaseWatch<
 		this.#applyQuery(mergeQueryDefaults(this.#defaults, q));
 	}
 
-	constructor(
-		entity_type: EntityType,
-		worker: Remote<DatabaseWorker>,
-		query?: WatchQueryInit<T>,
-	) {
+	constructor(entity_type: EntityType, deps: ListHandleDeps, query?: ListQueryInit<T>) {
 		this.entity_type = entity_type;
-		this.#worker = worker;
+		this.#deps = deps;
 		this.#defaults = { ...DEFAULT_SEARCH_QUERY } as Database.SearchQuery<T>;
 
 		let initial: Partial<Database.SearchQuery<T>> = {};
@@ -975,28 +1028,99 @@ export class DatabaseWatch<
 	 * auto-update. Useful for forced re-fetch or when subscription is down.
 	 */
 	async refresh(): Promise<void> {
+		await this.#runQuery();
+	}
+
+	/**
+	 * Run the current query once and resolve with the results — the one-shot
+	 * form of the handle. Never starts a subscription, and works on SSR (the
+	 * query is answered via the configured `fetch`). Rejects on failure.
+	 */
+	async load(): Promise<SearchResult<T>> {
+		const result = await this.#runQuery(true);
+		return {
+			hits: result.hits as SearchHit<T>[],
+			items: (result.hits as SearchHit<T>[]).map((h) => h.document),
+			count: result.count,
+			mode: result.mode,
+		};
+	}
+
+	/**
+	 * Grow the result window by `count` more rows (default 100). The live
+	 * subscription keeps the whole window updated, so paging is a growing
+	 * window rather than detached pages. `has_more` reports whether the server
+	 * has rows beyond the current window.
+	 */
+	loadMore(count = 100): void {
+		const current = untrack(() => this.#query_state.limit) ?? DEFAULT_SEARCH_QUERY.limit;
+		this.#query_state.limit = current + count;
+	}
+
+	/** Run the query once (worker or SSR fetch) and apply the result. */
+	async #runQuery(rethrow = false): Promise<WorkerSearchResult> {
+		// Sign-out freeze: run nothing, touch nothing — not even `status`.
+		if (this.#deps.isFrozen?.()) {
+			return { hits: [], count: 0, mode: untrack(() => this.#mode) };
+		}
 		const token = ++this.#push_token;
 		try {
 			if (this.#status !== 'loading') this.#status = 'refreshing';
-			const result = await this.#worker.list(
-				this.entity_type,
-				$state.snapshot(this.#query_state) as SearchQueryInput,
-			);
-			// A newer push already delivered — this result is stale, drop it.
-			if (this.#destroyed || token < this.#delivered_token) return;
-			this.#delivered_token = token;
-			this.#results = result.hits as SearchHit<T>[];
-			this.#count = result.count;
-			this.#error = null;
-			this.#status = 'ready';
+			const query = untrack(() => $state.snapshot(this.#query_state) as SearchQueryInput);
+			const worker = this.#deps.getWorker();
+			let result: WorkerSearchResult;
+			if (worker) {
+				result = await worker.list(this.entity_type, query);
+			} else {
+				result = await this.#listViaFetch(query);
+			}
+			// A newer push already delivered — this result is stale for the live
+			// state, but still the answer to THIS call. A sign-out freeze that
+			// landed mid-flight drops the result the same way.
+			if (
+				!this.#destroyed &&
+				!this.#deps.isFrozen?.() &&
+				token >= this.#delivered_token
+			) {
+				this.#delivered_token = token;
+				this.#hits = result.hits as SearchHit<T>[];
+				this.#count = result.count;
+				this.#mode = result.mode;
+				this.#error = null;
+				this.#status = 'ready';
+			}
+			return result;
 		} catch (e) {
+			const wrapped = DelightError.fromWorker(e) ?? e;
 			// Keep the last-known-good results; surface the failure only when no
-			// newer result has landed in the meantime.
-			if (!this.#destroyed && token >= this.#delivered_token) {
-				this.#error = DelightError.fromWorker(e) ?? e;
+			// newer result has landed in the meantime (and never once frozen).
+			if (
+				!this.#destroyed &&
+				!this.#deps.isFrozen?.() &&
+				token >= this.#delivered_token
+			) {
+				this.#error = wrapped;
 				this.#status = 'error';
 			}
+			if (rethrow) throw wrapped;
+			return { hits: [], count: 0, mode: this.#mode };
 		}
+	}
+
+	/** SSR / pre-init query path via the auto-generated list endpoint. */
+	async #listViaFetch(query: SearchQueryInput): Promise<WorkerSearchResult> {
+		const fetcher = this.#deps.fetch ?? globalThis.fetch;
+		const params = encodeSearchQuery({ sparse: true, ...query });
+		const qs = params.toString();
+		const response = await fetcher(`/api/${this.entity_type}${qs ? '?' : ''}${qs}`);
+		if (!response.ok) {
+			throw await errorFromResponse(response, `List ${this.entity_type} failed`);
+		}
+		const body = (await response.json()) as {
+			hits?: { id: string; document: Record<string, unknown>; score: number }[];
+			count?: number;
+		};
+		return { hits: body.hits ?? [], count: body.count ?? 0, mode: 'server' };
 	}
 
 	/**
@@ -1052,10 +1176,14 @@ export class DatabaseWatch<
 			this.#effect_cleanup = null;
 		}
 		if (this.#subscriber_id) {
-			this.#worker.unsubscribe(this.#subscriber_id).catch(() => {});
+			this.#deps
+				.getWorker()
+				?.unsubscribe(this.#subscriber_id)
+				.catch(() => {});
 			this.#subscriber_id = null;
 		}
 		this.#init_promise = null;
+		this.#deps.release();
 	}
 
 	/** Replace #query_state contents in place so reactive bindings stay stable. */
@@ -1092,14 +1220,15 @@ export class DatabaseWatch<
 	}
 
 	async #pushQuery(): Promise<void> {
-		if (this.#destroyed) return;
-		if (this.#subscriber_id) {
+		if (this.#destroyed || this.#deps.isFrozen?.()) return;
+		const worker = this.#deps.getWorker();
+		if (this.#subscriber_id && worker) {
 			const token = ++this.#push_token;
 			if (this.#status !== 'loading') this.#status = 'refreshing';
 			try {
 				// The subscription callback delivers the result (and the 'ready' /
 				// 'error' status) before this await resolves.
-				await this.#worker.updateSubscription(
+				await worker.updateSubscription(
 					this.#subscriber_id,
 					$state.snapshot(this.#query_state) as SearchQueryInput,
 					token,
@@ -1113,22 +1242,26 @@ export class DatabaseWatch<
 	}
 
 	async #initSubscription(): Promise<void> {
-		if (this.#destroyed) return;
+		if (this.#destroyed || this.#deps.isFrozen?.()) return;
 		if (this.#init_promise) return;
+
+		const worker = this.#deps.getWorker();
+		if (!worker) {
+			// SSR / pre-init: no live subscription exists — answer the current
+			// query once so reactive readers still get data.
+			void this.#runQuery();
+			return;
+		}
 
 		this.#init_promise = (async () => {
 			try {
-				const mode = await this.#worker.getSearchMode(
-					this.entity_type,
-					$state.snapshot(this.#query_state) as SearchQueryInput,
-				);
-				this.#mode = mode;
-
-				this.#subscriber_id = await this.#worker.subscribe(
+				this.#subscriber_id = await worker.subscribe(
 					this.entity_type,
 					$state.snapshot(this.#query_state) as SearchQueryInput,
 					proxy((result: WorkerSearchResult) => {
-						if (this.#destroyed) return;
+						// Destroyed or frozen (sign-out): a late-arriving push must
+						// not touch the displayed results.
+						if (this.#destroyed || this.#deps.isFrozen?.()) return;
 						// Sequence guard: the worker echoes the token of the query each
 						// result answered. A slow push that arrives after a newer one has
 						// delivered is stale — drop it rather than regress the list.
@@ -1142,8 +1275,9 @@ export class DatabaseWatch<
 							this.#status = 'error';
 							return;
 						}
-						this.#results = result.hits as SearchHit<T>[];
+						this.#hits = result.hits as SearchHit<T>[];
 						this.#count = result.count;
+						this.#mode = result.mode;
 						this.#error = null;
 						this.#status = 'ready';
 					}),
@@ -1167,8 +1301,16 @@ export class DatabaseWatch<
 export class DatabaseClient<T extends TableMap = TableMap> {
 	#config: DatabaseClientConfig<T>;
 	#worker: Remote<DatabaseWorker> | null = null;
-	#initialized = $state(false);
+	#status = $state<DatabaseStatus>('idle');
 	#destroyed = false;
+	/**
+	 * Sign-out freeze (deliberately NOT reactive — flipping it must never
+	 * itself cause a repaint). While set, `#invalidateEntity` is a no-op,
+	 * refresh proxies do nothing, and every handle drops late-arriving
+	 * results — displayed values stay exactly as they are until the app
+	 * navigates away. Cleared by the next `init()` (fresh sign-in).
+	 */
+	#frozen = false;
 	#external_unsubscribe: (() => void) | void = undefined;
 
 	/**
@@ -1197,6 +1339,21 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 */
 	#entity_cache = new Map<string, EntityState>();
 
+	/**
+	 * Cached `EntityHandle` instances keyed by `type:id` — `db.get` in a load
+	 * function and in a component must land on the same handle for the SSR →
+	 * hydration handoff to be a single request. Entries drop themselves when
+	 * their last reactive listener stops reading.
+	 */
+	#get_cache = new Map<string, EntityHandle>();
+
+	/**
+	 * Cached `ListHandle` instances keyed by `type?<canonical query>` (static
+	 * object queries only — function-form queries are per-call). Entries drop
+	 * themselves when their last reactive listener stops reading.
+	 */
+	#list_cache = new Map<string, ListHandle>();
+
 	/** Whether the initial sync is in progress */
 	#syncing = $state(false);
 
@@ -1213,8 +1370,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 * `init()` schedules a short timer to flip this automatically after the
 	 * browser has finished the initial hydration task — the timer fires
 	 * after the first `+page.ts` load has read the flag but well before the
-	 * user can interact with the page. `markHydrated()` is still public as
-	 * a manual override.
+	 * user can interact with the page.
 	 */
 	#hydrated = $state(false);
 	#hydrate_timer: ReturnType<typeof setTimeout> | null = null;
@@ -1227,27 +1383,9 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		return this.#synced;
 	}
 
-	get initialized() {
-		return this.#initialized;
-	}
-
-	get hydrated(): boolean {
-		return this.#hydrated;
-	}
-
-	/**
-	 * Mark the client as hydrated, flipping `EntityState.load()` over to
-	 * the worker/IDB path. `init()` already schedules this automatically via
-	 * a short timer after boot, so manual calls are rarely needed — useful
-	 * as an override (e.g. if a route hard-depends on IDB-cached reads
-	 * happening right away).
-	 */
-	markHydrated(): void {
-		if (this.#hydrate_timer) {
-			clearTimeout(this.#hydrate_timer);
-			this.#hydrate_timer = null;
-		}
-		this.#hydrated = true;
+	/** Where the client is in its lifecycle — see {@link DatabaseStatus}. */
+	get status(): DatabaseStatus {
+		return this.#status;
 	}
 
 	constructor(config: DatabaseClientConfig<T>) {
@@ -1259,6 +1397,10 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		if (typeof window === 'undefined') return; // SSR guard
 
 		this.#destroyed = false;
+		// A fresh init un-freezes: after signOut(), a new sign-in calls init()
+		// and the client must come back to life normally.
+		this.#frozen = false;
+		this.#status = 'initializing';
 		this.#worker = await getWorker(this.#config.dev);
 
 		// Extract serializable config from table definitions
@@ -1301,10 +1443,12 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			max_synced_docs: this.#config.max_synced_docs,
 		});
 
-		// Clear stale EntityState cache so new instances get the active worker
+		// Clear stale caches so new instances get the active worker
 		this.#entity_cache.clear();
+		this.#get_cache.clear();
+		this.#list_cache.clear();
 
-		this.#initialized = true;
+		this.#status = 'ready';
 
 		// Flip the hydration flag on the next macrotask. This runs after the
 		// current SvelteKit boot task drains — in particular after the
@@ -1333,7 +1477,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		// Wire up external subscription hook (e.g. websocket)
 		if (this.#config.hooks?.onSubscribe) {
 			this.#external_unsubscribe = this.#config.hooks.onSubscribe((event) => {
-				if (!this.#worker) return;
+				if (!this.#worker || this.#frozen) return;
 				// Apply the single change in place — search index + IDB + subscribers
 				// update for just this entity. A full `sync([entity_type])` is
 				// wasteful when we already know what changed; reconnect/page
@@ -1347,8 +1491,10 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 						event.sparse,
 					)
 					.then((applied) => {
+						// A sign-out freeze mid-flight: nothing may repaint.
+						if (this.#frozen) return;
 						this.#invalidateEntity(event.entity_type, event.id);
-						// `#invalidateEntity` wakes up `db.get` / `db.read`
+						// `#invalidateEntity` wakes up `db.get`
 						// readers via `#entity_versions`, but `db.entity()`
 						// wrappers own their own reactive state — push the
 						// fresh row into any cached instance so detail pages
@@ -1398,71 +1544,52 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	}
 
 	/**
-	 * Get a single entity by ID.
+	 * The reactive read handle for a single entity — cached per `type:id`, so
+	 * every call site (load functions, components, repeated `$derived` runs)
+	 * shares one instance.
 	 *
-	 * **Client:** returns from IDB cache with background refresh via the
-	 * web worker.
+	 * **Reading:** `db.get('post', id).value` in a template/`$derived` is live —
+	 * it auto-loads on first read and updates on mutations, websocket pushes
+	 * and background refreshes. For a non-undefined awaited form use
+	 * `$derived(await db.get('post', id).load())`.
 	 *
-	 * **SSR:** falls back to the auto-generated `/api/${entity}/${id}` HTTP
-	 * endpoint using the `fetch` passed to the `DatabaseClient` config.
-	 * Provide it once at construction time (typically from your SvelteKit
-	 * load event) and every `db.get` call works on both server and client:
+	 * **SSR:** call `.load()` in a `+page.ts` load; with the SvelteKit `fetch`
+	 * passed to the client config, the response is serialized into the page
+	 * payload and replayed during hydration — one request total:
 	 *
 	 * ```ts
-	 * // +layout.ts
-	 * export const load: LayoutLoad = async ({ fetch }) => {
-	 *   const db = new DatabaseClient({ tables, db_name, fetch });
-	 *   await db.init();
-	 *   return { db };
-	 * };
-	 *
 	 * // +page.ts
 	 * export const load: PageLoad = async ({ params, parent }) => {
 	 *   const { db } = await parent();
-	 *   const post = await db.get('post', params.post_id);
+	 *   const post = await db.get('post', params.post_id).load();
 	 *   return { post };
 	 * };
 	 * ```
+	 *
+	 * For editing (drafts, save/reset, dirty-tracking) use {@link entity}.
 	 */
-	async get<K extends keyof T & string>(
+	get<K extends keyof T & string>(
 		entity_type: K,
 		id: string | number,
-	): Promise<Database.Entity<T[K]> | undefined> {
-		// Register a reactive dependency on this entity's version. When any
-		// mutation (via db.update/delete/create) or worker-side refresh bumps
-		// the version, enclosing $derived/$effect re-runs and a fresh get
-		// promise is produced — no manual invalidate wiring required.
-		this.#trackEntity(entity_type, id);
-
-		if (this.#worker) {
-			return (await this.#worker.get(
-				entity_type,
-				id,
-				false,
-				this.#refreshProxyFor(entity_type, id),
-			)) as Database.Entity<T[K]> | undefined;
-		}
-		// No worker: SSR or pre-init. Use the configured fetch to preserve
-		// the original request's auth context.
-		const fetchFn = this.#config.fetch;
-		if (!fetchFn) return undefined;
-		const response = await fetchFn(`/api/${entity_type}/${id}`);
-		if (response.status === 404) return undefined;
-		if (!response.ok) {
-			const body = (await response.json().catch(() => null)) as {
-				message?: string;
-				status?: number;
-				code?: string;
-				detail?: string;
-			} | null;
-			throw new DelightError({
-				message: body?.message ?? response.statusText,
-				status: body?.status ?? response.status,
-				code: body?.code,
-				detail: body?.detail,
-			});
-		}
-		return (await response.json()) as Database.Entity<T[K]>;
+	): EntityHandle<T[K], K> {
+		const key = `${entity_type}:${id}`;
+		const cached = this.#get_cache.get(key);
+		if (cached) return cached as EntityHandle<T[K], K>;
+		const handle = new EntityHandle<T[K], K>(entity_type, id, {
+			getWorker: () => this.#worker,
+			fetch: this.#config.fetch,
+			trackVersion: (t, i) => this.#trackEntity(t, i),
+			refreshProxy: (t, i) => this.#refreshProxyFor(t, i),
+			skipBackgroundRefresh: () => this.#config.hooks?.isLive?.() ?? false,
+			isFrozen: () => this.#frozen,
+			release: () => {
+				if (this.#get_cache.get(key) === (handle as EntityHandle)) {
+					this.#get_cache.delete(key);
+				}
+			},
+		});
+		this.#get_cache.set(key, handle as EntityHandle);
+		return handle;
 	}
 
 	/**
@@ -1610,51 +1737,6 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	}
 
 	// -----------------------------------------------------------------------
-	// Reactive read primitives
-	// -----------------------------------------------------------------------
-
-	/**
-	 * Lightweight reactive reader for a single entity. Use this on read-mostly
-	 * pages where you just need the current data; for edit forms use
-	 * `db.entity(...)` instead (it adds dirty-tracking, save/reset, etc.).
-	 *
-	 * The id can be a static value or a getter that depends on other reactive
-	 * state — when the id changes, the reader re-fetches automatically:
-	 *
-	 * ```svelte
-	 * <script>
-	 *   const person = db.read('person', () => page.params.person_id);
-	 * </script>
-	 *
-	 * {#if person.loading && !person.value}
-	 *   Loading…
-	 * {:else if person.error}
-	 *   <Alert>{person.error.message}</Alert>
-	 * {:else if person.value}
-	 *   <h1>{person.value.name}</h1>
-	 * {/if}
-	 * ```
-	 *
-	 * Mutations via `db.create`/`db.update`/`db.delete` and websocket-pushed
-	 * external changes automatically refresh the reader — no manual
-	 * invalidation required.
-	 */
-	read<K extends keyof T & string>(
-		entity_type: K,
-		id: string | number | (() => string | number | undefined),
-	): EntityReader<T[K], K> {
-		const id_source =
-			typeof id === 'function' ? (id as () => string | number | undefined) : () => id;
-		return new EntityReader(entity_type, id_source, {
-			getWorker: () => this.#worker,
-			fetch: this.#config.fetch,
-			trackVersion: (t, i) => this.#trackEntity(t, i),
-			refreshProxy: (t, i) => this.#refreshProxyFor(t, i),
-			skipBackgroundRefresh: () => this.#config.hooks?.isLive?.() ?? false,
-		});
-	}
-
-	// -----------------------------------------------------------------------
 	// Entity state (reactive singleton wrapper)
 	// -----------------------------------------------------------------------
 
@@ -1714,6 +1796,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			// briefly dropped within the grace window) the worker skips its
 			// safety-net stale refresh — IDB is authoritative.
 			skip_background_refresh: () => this.#config.hooks?.isLive?.() ?? false,
+			frozen: () => this.#frozen,
 			onChange: (event) => {
 				// Keep the instance cache in sync with the entity's lifecycle:
 				// on create, rekey from `type:` to `type:${new_id}`; on delete,
@@ -1741,88 +1824,119 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Create a reactive list that auto-updates when the index changes — the
-	 * live counterpart of {@link list}, the way `db.read` is to `db.get`.
+	 * The reactive list/search handle for an entity type — the one list API.
 	 *
-	 * The returned watch has a live reactive `query` object with sensible
-	 * defaults (order by `updated_at` DESC, limit 100). Mutate fields on it
-	 * (`posts.query.term = 'x'`) or bind to them directly
-	 * (`<Input bind:value={posts.query.term} />`).
+	 * **Live:** read `hits`/`items`/`count` in a template and the handle
+	 * subscribes, re-running the query whenever the local index changes (and
+	 * tearing down when nothing reads it anymore). `query` is live and has
+	 * sensible defaults (order by `updated_at` DESC, limit 100): mutate fields
+	 * (`posts.query.term = 'x'`), bind to them
+	 * (`<Input bind:value={posts.query.term} />`), or pass a function to drive
+	 * the query from other reactive state. `loadMore()` grows the window.
 	 *
-	 * Pass an object to override defaults, or a function to drive the query
-	 * from other reactive state (the function's reactive reads are tracked).
+	 * **One-shot:** `await db.list('post', { term }).load()` resolves with a
+	 * {@link SearchResult} without starting a subscription — including on SSR,
+	 * where the query is answered via the configured `fetch`.
 	 *
-	 * Subscriptions clean up automatically when no reactive context is reading
-	 * the watch anymore (e.g. on component unmount).
+	 * Queries are routed like every read: answered locally once the entity's
+	 * synced window covers the whole table, by the server until then. Force a
+	 * side per query with `source: 'client' | 'server'`; the handle's `mode`
+	 * reports which side answered the current results.
+	 *
+	 * Handles for identical static queries are cached and shared; a function
+	 * query gets its own handle per call.
 	 */
-	watch<K extends keyof T & string, Q extends WatchQueryInit<T[K]>>(
+	list<K extends keyof T & string, Q extends ListQueryInit<T[K]>>(
 		entity_type: K,
 		query?: Q & ValidQueryInit<Q>,
-	): DatabaseWatch<T[K], K> {
-		const worker = this.#getWorker();
-		return new DatabaseWatch(entity_type, worker, query as WatchQueryInit<T[K]>);
-	}
-
-	/**
-	 * One-shot list/search. Routed like every query: answered locally once the
-	 * entity's synced window covers the whole table, by the server until then.
-	 * Force a side per query with `source: 'client' | 'server'`.
-	 *
-	 * On SSR (no worker), falls back to the auto-generated `/api/${entity}`
-	 * HTTP endpoint via the configured `fetch`.
-	 */
-	async list<K extends keyof T & string, Q extends Database.SearchQuery<T[K]>>(
-		entity_type: K,
-		query?: Q & ValidSearchQuery<Q>,
-	): Promise<SearchResult<T[K]>> {
-		const q = (query ?? {}) as SearchQueryInput;
-		let result: WorkerSearchResult | undefined;
-		if (this.#worker) {
-			try {
-				result = await this.#worker.list(entity_type, q);
-			} catch (error) {
-				throw DelightError.fromWorker(error) ?? error;
-			}
-		} else {
-			result = await this.#listViaFetch(entity_type, q);
+	): ListHandle<T[K], K> {
+		const deps = (release: () => void) => ({
+			getWorker: () => this.#worker,
+			fetch: this.#config.fetch,
+			isFrozen: () => this.#frozen,
+			release,
+		});
+		// Function-form queries are reactive per call site — never shared.
+		if (typeof query === 'function') {
+			return new ListHandle(
+				entity_type,
+				deps(() => {}),
+				query as ListQueryInit<T[K]>,
+			);
 		}
-		const hits = (result?.hits ?? []) as SearchHit<T[K]>[];
-		return {
-			hits,
-			docs: hits.map((h) => h.document),
-			count: result?.count ?? 0,
-			elapsed: result?.elapsed,
-		};
-	}
-
-	/**
-	 * SSR / pre-init fallback for {@link list}: the worker doesn't exist, so
-	 * call the auto-generated list endpoint directly with the configured
-	 * `fetch` (which carries the request's cookies and shares SvelteKit's
-	 * fetch cache with hydration).
-	 */
-	async #listViaFetch(
-		entity_type: string,
-		query: SearchQueryInput,
-	): Promise<WorkerSearchResult> {
-		const fetcher = this.#config.fetch ?? globalThis.fetch;
-		const params = encodeSearchQuery({ sparse: true, ...query });
-		const qs = params.toString();
-		const response = await fetcher(`/api/${entity_type}${qs ? '?' : ''}${qs}`);
-		if (!response.ok) {
-			const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-			throw new DelightError({
-				message: (body.message as string) || `List ${entity_type} failed`,
-				status: response.status,
-				detail: body.detail as string | undefined,
-			});
-		}
-		return (await response.json()) as WorkerSearchResult;
+		const key = `${entity_type}?${encodeSearchQuery((query ?? {}) as SearchQueryInput).toString()}`;
+		const cached = this.#list_cache.get(key);
+		if (cached) return cached as ListHandle<T[K], K>;
+		const handle = new ListHandle<T[K], K>(
+			entity_type,
+			deps(() => {
+				if (this.#list_cache.get(key) === (handle as ListHandle)) {
+					this.#list_cache.delete(key);
+				}
+			}),
+			query as ListQueryInit<T[K]>,
+		);
+		this.#list_cache.set(key, handle as ListHandle);
+		return handle;
 	}
 
 	// -----------------------------------------------------------------------
 	// Lifecycle
 	// -----------------------------------------------------------------------
+
+	/**
+	 * Sign-out data wipe: freeze first, then delete everything persisted.
+	 *
+	 * Wipes all locally persisted data (the IndexedDB entity cache, sync
+	 * metadata, and the search-index postings stores — one database per
+	 * `db_name`) so nothing searchable remains on disk after sign-out.
+	 *
+	 * **No UI flashes.** The app navigates away after this resolves;
+	 * navigation is the app's job, not this library's. Between the call and
+	 * that navigation nothing repaints: the client freezes synchronously
+	 * before any async work, so no list handle receives empty results, no
+	 * entity handle flips to `undefined`, and no subscriber notification
+	 * fires — displayed values stay exactly as they are.
+	 *
+	 * Under a SharedWorker the wipe applies to every tab of the origin by
+	 * design (sign-out is account-level); dedicated-Worker peers are told over
+	 * the broadcast channel and drop their state just as silently. With no
+	 * worker (SSR / pre-init) there is nothing persisted — this just freezes,
+	 * clears the in-memory caches, and resolves.
+	 *
+	 * The client is inert afterwards; a later `init()` (fresh sign-in)
+	 * un-freezes and works normally.
+	 */
+	async signOut(): Promise<void> {
+		// 1. Freeze — synchronously, before any await. From this line on no
+		//    version bump, refresh proxy, or late-arriving result can repaint.
+		this.#frozen = true;
+		if (this.#external_unsubscribe) {
+			this.#external_unsubscribe();
+			this.#external_unsubscribe = undefined;
+		}
+		if (this.#hydrate_timer) {
+			clearTimeout(this.#hydrate_timer);
+			this.#hydrate_timer = null;
+		}
+
+		// 2. Silence the worker, then wipe the IndexedDB database.
+		if (this.#worker) {
+			await this.#worker.wipe();
+		}
+
+		// 3. Clear the client caches. The frozen guards keep this quiet: any
+		//    effect the version-map clear wakes hits a frozen no-op fetch.
+		this.#entity_cache.clear();
+		this.#get_cache.clear();
+		this.#list_cache.clear();
+		this.#refresh_proxies.clear();
+		this.#entity_versions.clear();
+		this.#status = 'signed_out';
+		this.#syncing = false;
+		this.#synced = false;
+		this.#hydrated = false;
+	}
 
 	/**
 	 * Change scope (e.g. user switches org). Clears cache and re-initializes.
@@ -1832,6 +1946,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 */
 	async setScope(db_name: string): Promise<void> {
 		this.#entity_cache.clear();
+		this.#get_cache.clear();
+		this.#list_cache.clear();
 		this.#entity_versions.clear();
 		this.#refresh_proxies.clear();
 		if (this.#hydrate_timer) {
@@ -1839,7 +1955,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			this.#hydrate_timer = null;
 		}
 		this.#hydrated = false;
-		this.#initialized = false;
+		this.#status = 'idle';
 		this.#syncing = false;
 		this.#synced = false;
 		this.#config.db_name = db_name;
@@ -1853,6 +1969,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			this.#external_unsubscribe();
 		}
 		this.#entity_cache.clear();
+		this.#get_cache.clear();
+		this.#list_cache.clear();
 		this.#entity_versions.clear();
 		this.#refresh_proxies.clear();
 		if (this.#hydrate_timer) {
@@ -1870,7 +1988,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		}
 		// For a SharedWorker this only closes THIS tab's port
 		resetWorker();
-		this.#initialized = false;
+		this.#status = 'idle';
 		this.#syncing = false;
 		this.#synced = false;
 	}
@@ -1897,6 +2015,9 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 	/** Bump the version for `entity_type:id`, re-running reactive readers. */
 	#invalidateEntity(entity_type: string, id: string | number): void {
+		// Frozen (sign-out): version bumps would wake reactive readers and
+		// repaint — the whole point of the freeze is that nothing does.
+		if (this.#frozen) return;
 		const key = `${entity_type}:${id}`;
 		this.#entity_versions.set(key, (this.#entity_versions.get(key) ?? 0) + 1);
 	}

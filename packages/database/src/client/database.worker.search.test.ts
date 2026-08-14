@@ -48,7 +48,7 @@ afterEach(() => {
 	while (open_states.length) open_states.pop()?.close();
 });
 
-async function createTestServer(table: Database.AnyTable = noteTable) {
+async function createTestServer(table: Database.Table = noteTable) {
 	const { DatabaseServer } = await import('../server/db.server');
 	const state = createDurableObjectState();
 	open_states.push(state);
@@ -70,7 +70,14 @@ function bridgeFetch(
 		const url = String(input);
 		if (url.startsWith('/api/sync')) {
 			const body = init?.body ? JSON.parse(String(init.body)) : {};
-			if (options.page_limit) body.limit = options.page_limit;
+			// The sync protocol carries ranges/limits per entity — no top-level limit.
+			if (options.page_limit) {
+				for (const entity of Object.values(
+					(body.entity ?? {}) as Record<string, { limit?: number }>,
+				)) {
+					entity.limit = options.page_limit;
+				}
+			}
 			return new Response(JSON.stringify(server.sync(body)), {
 				status: 200,
 				headers: { 'content-type': 'application/json' },
@@ -159,7 +166,7 @@ interface PostingRecord {
 
 async function createWorker(
 	init: Partial<import('./database.worker').WorkerInitConfig> = {},
-	table: Database.AnyTable = noteTable,
+	table: Database.Table = noteTable,
 ) {
 	(globalThis as any).self = { addEventListener: vi.fn() };
 	const { DatabaseWorker } = await import('./database.worker');
@@ -275,12 +282,13 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		);
 		expect(meta?.start_updated_at).toBeUndefined();
 		expect(meta?.end_updated_at).toBeUndefined();
-		expect(await worker.isSynced('note')).toBe(false);
+		// An incomplete window keeps routing queries to the server.
+		expect((await worker.list('note', { limit: 1 })).mode).toBe('server');
 
 		// With the store healthy again the same worker catches up completely.
 		await worker.sync();
 		expect((await readAll<DocRecord>('docs')).length).toBe(4);
-		expect(await worker.isSynced('note')).toBe(true);
+		expect((await worker.list('note', { limit: 1 })).mode).toBe('client');
 	});
 
 	it('deletions synced from the server remove the document and its postings', async () => {
@@ -385,13 +393,14 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 
 		const worker = await createWorker();
 		await worker.sync();
-		expect(await worker.getSearchMode('note')).toBe('client');
+		expect((await worker.list('note', { limit: 1 })).mode).toBe('client');
 
 		const result = await worker.list('note', {
 			term: 'note',
 			vector: { value: [0.1, 0.2], field: 'embedding' },
 		});
 		expect(listed).toBe(1);
+		expect(result.mode).toBe('server');
 		expect(result.count).toBe(0); // the stubbed server answer, not the local index
 	});
 
@@ -406,13 +415,13 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 
 		const worker = await createWorker();
 		// Nothing synced yet: the local corpus is empty, the server has everything.
-		expect(await worker.getSearchMode('note')).toBe('server');
-		await worker.list('note', { term: 'note' });
+		const remote = await worker.list('note', { term: 'note' });
+		expect(remote.mode).toBe('server');
 		expect(listed).toBe(1);
 
 		await worker.sync();
-		expect(await worker.getSearchMode('note')).toBe('client');
 		const local = await worker.list('note', { term: 'note', limit: 10 });
+		expect(local.mode).toBe('client');
 		expect(listed).toBe(1); // no further network
 		expect(local.count).toBe(6);
 	});
@@ -424,8 +433,8 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		vi.stubGlobal('fetch', bridgeFetch(server, { on_list: () => listed++ }));
 
 		const worker = await createWorker({ entities: { note: { search_mode: 'client' } } });
-		expect(await worker.getSearchMode('note')).toBe('client');
 		const result = await worker.list('note', { term: 'note' });
+		expect(result.mode).toBe('client');
 		expect(listed).toBe(0);
 		expect(result.count).toBe(0); // a partial-corpus answer, by the app's choice
 	});
@@ -439,9 +448,9 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		const worker = await createWorker({ entities: { note: { search_mode: 'server' } } });
 		await worker.sync();
 		expect(await readAll('docs')).toEqual([]);
-		await worker.list('note', { term: 'note' });
+		const result = await worker.list('note', { term: 'note' });
+		expect(result.mode).toBe('server');
 		expect(listed).toBe(1);
-		expect(await worker.getSearchMode('note')).toBe('server');
 	});
 
 	it('query.source overrides routing per query', async () => {
@@ -454,17 +463,19 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		// Nothing synced: coverage routes to the server, but `source: 'client'`
 		// forces the (empty) local index — a partial-corpus answer by choice.
 		const empty = await worker.list('note', { term: 'note', source: 'client' });
+		expect(empty.mode).toBe('client');
 		expect(listed).toBe(0);
 		expect(empty.count).toBe(0);
 
 		await worker.sync();
 		// Coverage now says client; `source: 'server'` still forces the server.
-		expect(await worker.getSearchMode('note')).toBe('client');
-		await worker.list('note', { term: 'note', source: 'server' });
+		const forced = await worker.list('note', { term: 'note', source: 'server' });
+		expect(forced.mode).toBe('server');
 		expect(listed).toBe(1);
 
 		// And the explicit spellings of the default change nothing.
 		const auto = await worker.list('note', { term: 'note', source: 'auto' });
+		expect(auto.mode).toBe('client');
 		expect(listed).toBe(1);
 		expect(auto.count).toBe(6);
 	});
@@ -507,10 +518,9 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 
 		// Nothing mirrored, nothing indexed; queries answer from the server.
 		expect(await readAll('docs')).toEqual([]);
-		expect(await worker.getSearchMode('note')).toBe('server');
-		await worker.list('note', { term: 'note' });
+		const routed = await worker.list('note', { term: 'note' });
+		expect(routed.mode).toBe('server');
 		expect(listed).toBe(1);
-		expect(await worker.isSynced('note')).toBe(false);
 
 		// The count survives the deferral so a reload knows before its first probe.
 		const meta = await readKeyed<{ server_total?: number }>('sync_meta', 'note');
@@ -531,7 +541,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		for (const id of ids.slice(0, 3)) (server as any).delete('note', id);
 		await worker.sync();
 		expect((await readAll('docs')).length).toBe(3);
-		expect(await worker.getSearchMode('note')).toBe('client');
+		expect((await worker.list('note', { limit: 1 })).mode).toBe('client');
 	});
 
 	it('resumes the backfill when the ceiling is raised', async () => {
@@ -547,7 +557,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		const raised = await createWorker({ max_synced_docs: 100 });
 		await raised.sync();
 		expect((await readAll('docs')).length).toBe(6);
-		expect(await raised.getSearchMode('note')).toBe('client');
+		expect((await raised.list('note', { limit: 1 })).mode).toBe('client');
 	});
 
 	it('a fully-mirrored table keeps syncing incrementally past the ceiling', async () => {
@@ -565,7 +575,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		seed(server as any, 8);
 		await worker.sync();
 		expect((await readAll('docs')).length).toBe(14);
-		expect(await worker.getSearchMode('note')).toBe('client');
+		expect((await worker.list('note', { limit: 1 })).mode).toBe('client');
 	});
 
 	it("search_mode: 'client' is exempt from the global ceiling but not its own", async () => {
@@ -866,13 +876,13 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		expect(errors).toHaveBeenCalled();
 		errors.mockRestore();
 
-		expect(await worker.getSearchMode('note')).toBe('server');
 		const result = await worker.list('note', { term: 'note' });
+		expect(result.mode).toBe('server');
 		expect(listed).toBe(1);
 		expect(result.count).toBe(0); // the stubbed server answer
 		await worker.sync(); // a no-op, not a crash
-		expect(await worker.isSynced('note')).toBe(false);
 		const listed_result = await worker.list('note', {});
+		expect(listed_result.mode).toBe('server'); // never synced — still server-routed
 		expect(listed_result.hits).toEqual([]);
 	});
 

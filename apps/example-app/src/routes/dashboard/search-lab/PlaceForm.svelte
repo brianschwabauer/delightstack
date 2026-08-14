@@ -93,6 +93,7 @@
 		let cancelled = false;
 		loading = true;
 		db.get('place', id)
+			.load()
 			.then((entity) => {
 				if (cancelled) return;
 				const record = entity as unknown as Partial<PlaceDraft>;

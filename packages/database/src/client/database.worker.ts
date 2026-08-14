@@ -5,6 +5,7 @@ import {
 	idbDelete,
 	idbDeleteByPrefix,
 	idbBatch,
+	deleteDatabase,
 	type SyncMeta,
 	type CachedEntity,
 } from './database.idb';
@@ -98,10 +99,22 @@ export interface WorkerInitConfig {
 	idb_factory?: IDBFactory;
 }
 
+/** A transferable DelightError parsed from a failed API response body. */
+async function transferableFromResponse(response: Response, fallback_message: string) {
+	const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+	return DelightError.transferable({
+		message: (body.message as string) || fallback_message,
+		status: response.status,
+		code: body.code as string | undefined,
+		detail: body.detail as string | undefined,
+	});
+}
+
 export interface WorkerSearchResult {
 	hits: { id: string; document: Record<string, unknown>; score: number }[];
 	count: number;
-	elapsed?: unknown;
+	/** Which side answered this result — the live routing decision, per result. */
+	mode: 'client' | 'server';
 	/**
 	 * The client-issued query sequence token this result answers (echoed from
 	 * `subscribe`/`updateSubscription`). The client discards a result whose
@@ -396,6 +409,13 @@ export class DatabaseWorker {
 	>();
 	/** Per-entity cache generation; bumped whenever the entity's data changes. */
 	#server_search_generation = new Map<string, number>();
+	/**
+	 * Sign-out wipe in progress / completed. While set, subscriber
+	 * notifications are suppressed, in-flight sync loops bail at their next
+	 * checkpoint, and the lazy reopen never resurrects the deleted database.
+	 * Cleared by the next `init()` (fresh sign-in).
+	 */
+	#wiped = false;
 	/** Cross-worker invalidation channel (dedicated-Worker fallback, §7.6). */
 	#channel: BroadcastChannel | null = null;
 	/** Identifies this worker instance on {@link #channel}. */
@@ -406,6 +426,10 @@ export class DatabaseWorker {
 	// -----------------------------------------------------------------------
 
 	async init(config: WorkerInitConfig): Promise<void> {
+		// A fresh init un-wipes: after a sign-out wipe, the next sign-in
+		// re-initializes and the worker must come back to life normally.
+		this.#wiped = false;
+
 		// A SharedWorker is initialized by EVERY connecting tab. Re-running init
 		// for the same database would discard in-memory sync state (and any
 		// un-persisted cursor state) while another tab's sync loop is mid-flight.
@@ -656,7 +680,7 @@ export class DatabaseWorker {
 	 * on every call. No-op when the store is live or IDB was never available.
 	 */
 	async #ensureStore(): Promise<void> {
-		if (this.#engine || !this.#db_name || this.#idb_unavailable) return;
+		if (this.#wiped || this.#engine || !this.#db_name || this.#idb_unavailable) return;
 		if (Date.now() - this.#reopen_failed_at < 5_000) return;
 		this.#reopen_promise ??= (async () => {
 			const db = await openSearchDatabase({
@@ -706,8 +730,15 @@ export class DatabaseWorker {
 				source?: string;
 				entity_types?: string[];
 			} | null;
-			if (!data || data.type !== 'invalidate' || data.source === this.#instance_id)
+			if (!data || data.source === this.#instance_id) return;
+			// A peer wiped the database (sign-out). Drop everything silently —
+			// this tab is signing out too, so its subscribers must NOT be
+			// notified (no UI flash between the wipe and the app's navigation).
+			if (data.type === 'wiped') {
+				this.#applyRemoteWipe();
 				return;
+			}
+			if (data.type !== 'invalidate') return;
 			void this.#applyRemoteInvalidation(data.entity_types ?? []).catch(() => {});
 		};
 		this.#channel = channel;
@@ -715,7 +746,7 @@ export class DatabaseWorker {
 
 	/** Tell peer workers over the same database that these types changed. */
 	#broadcastInvalidation(entity_types: readonly string[]): void {
-		if (!this.#channel || entity_types.length === 0) return;
+		if (this.#wiped || !this.#channel || entity_types.length === 0) return;
 		try {
 			this.#channel.postMessage({
 				type: 'invalidate',
@@ -751,6 +782,86 @@ export class DatabaseWorker {
 		this.#notifySubscribers(known);
 	}
 
+	/**
+	 * Sign-out data wipe: silence first, then delete everything persisted.
+	 *
+	 * Order matters for the no-flash guarantee:
+	 * 1. Clear `#search_subscribers` and set `#wiped` synchronously — from this
+	 *    line on, no subscriber notification can fire (`#notifySubscribers` is a
+	 *    no-op) and no new sync can start.
+	 * 2. Wait for an in-flight sync to observe the flag and stop — its loop
+	 *    bails at the next await boundary instead of writing into (or notifying
+	 *    about) a database that is about to disappear.
+	 * 3. Close this worker's IDB connection, tell peer workers (dedicated-Worker
+	 *    fallback) to silently drop theirs, then `deleteDatabase`. Peers that
+	 *    have not processed the broadcast yet are released by the
+	 *    `versionchange` event the deletion fires (their `#attachVersionChange`
+	 *    handler closes on it), so the deletion cannot block forever.
+	 *
+	 * The worker stays alive but inert; the next `init()` (fresh sign-in)
+	 * clears the wiped flag and rebuilds from scratch. Under a SharedWorker
+	 * this wipes for every tab of the origin by design — sign-out is
+	 * account-level.
+	 */
+	async wipe(): Promise<void> {
+		// 1. Silence — synchronously, before any await.
+		this.#wiped = true;
+		this.#search_subscribers = [];
+		this.#pending_notify.clear();
+		this.#pending_refreshes.clear();
+		this.#server_search_cache.clear();
+		this.#server_search_generation.clear();
+
+		// 2. Let an in-flight sync run into the wiped flag and stop. This also
+		//    honors the single-flight lock: no sync loop survives this await.
+		if (this.#sync_in_flight) await this.#sync_in_flight.catch(() => {});
+
+		// 3. Tell peers to silently drop, close our connection, delete the db.
+		if (this.#channel) {
+			try {
+				this.#channel.postMessage({ type: 'wiped', source: this.#instance_id });
+			} catch {
+				// A closed channel (tear-down race) — no peers to tell.
+			}
+		}
+		if (this.#db) {
+			this.#db.close();
+			this.#db = null;
+		}
+		this.#store = null;
+		this.#engine = null;
+		this.#entities = {};
+		this.#reopen_promise = null;
+		this.#reopen_failed_at = 0;
+
+		if (this.#db_name && !this.#idb_unavailable) {
+			await deleteDatabase(this.#db_name, this.#idb_factory);
+		}
+	}
+
+	/**
+	 * A peer worker wiped the shared database (sign-out in another tab). Drop
+	 * every in-memory trace WITHOUT notifying subscribers — this tab is signing
+	 * out too, and its displayed UI must stay frozen until the app navigates.
+	 */
+	#applyRemoteWipe(): void {
+		this.#wiped = true;
+		this.#search_subscribers = [];
+		this.#pending_notify.clear();
+		this.#pending_refreshes.clear();
+		this.#server_search_cache.clear();
+		this.#server_search_generation.clear();
+		if (this.#db) {
+			this.#db.close();
+			this.#db = null;
+		}
+		this.#store = null;
+		this.#engine = null;
+		this.#entities = {};
+		this.#reopen_promise = null;
+		this.#reopen_failed_at = 0;
+	}
+
 	async destroy(): Promise<void> {
 		this.#search_subscribers = [];
 		this.#store = null;
@@ -771,6 +882,7 @@ export class DatabaseWorker {
 	// -----------------------------------------------------------------------
 
 	async sync(entity_types?: string[]): Promise<void> {
+		if (this.#wiped) return;
 		// Single-flight: concurrent sync calls (e.g. several tabs sharing this
 		// worker) would interleave cursor updates and corrupt pagination state.
 		if (this.#sync_in_flight) return this.#sync_in_flight;
@@ -896,6 +1008,9 @@ export class DatabaseWorker {
 				return; // network error — leave state resumable; do NOT mark synced
 			}
 			if (!body) return;
+			// A wipe landed while the request was in flight — nothing this page
+			// carries may be written or notified about.
+			if (this.#wiped) return;
 
 			let any_changes = false;
 
@@ -1002,17 +1117,16 @@ export class DatabaseWorker {
 					store: 'sync_meta',
 					action: 'put',
 					key: entity_type,
-					value: {
-						entity_type,
-						search_mode: state.search_mode,
-						config_version: state.config_version,
+					value: this.#syncMetaFor(entity_type, state, {
 						last_synced_at: next_synced_at,
 						start_updated_at: next_start,
 						end_updated_at: next_end,
-						server_total: state.server_total,
-					} satisfies SyncMeta,
+					}),
 				});
 
+				// Re-check at every await boundary: a wipe mid-page must stop the
+				// loop before the next write or notification.
+				if (this.#wiped) return;
 				try {
 					await this.#store.applyWrites(writes, { extra_ops });
 				} catch (error) {
@@ -1065,6 +1179,8 @@ export class DatabaseWorker {
 			if (pages_without_changes >= 2) break;
 		}
 
+		if (this.#wiped) return;
+
 		// Only entities that are confirmed caught up are marked as synced
 		for (const t of caught_up) {
 			this.#entities[t].synced = true;
@@ -1101,15 +1217,7 @@ export class DatabaseWorker {
 			body: JSON.stringify(data),
 		});
 		if (!response.ok) {
-			const error_body = (await response.json().catch(() => ({}))) as Record<
-				string,
-				unknown
-			>;
-			throw DelightError.transferable({
-				message: (error_body.message as string) || `Create ${entity_type} failed`,
-				status: response.status,
-				detail: error_body.detail as string | undefined,
-			});
+			throw await transferableFromResponse(response, `Create ${entity_type} failed`);
 		}
 		const server_entity = (await response.json()) as Record<string, unknown>;
 
@@ -1216,16 +1324,11 @@ export class DatabaseWorker {
 				body: JSON.stringify(data),
 			});
 			if (!response.ok) {
-				const error_body = (await response.json().catch(() => ({}))) as Record<
-					string,
-					unknown
-				>;
 				await this.#rollbackIndex(entity_type, id, prev_doc);
-				throw DelightError.transferable({
-					message: (error_body.message as string) || `Update ${entity_type}/${id} failed`,
-					status: response.status,
-					detail: error_body.detail as string | undefined,
-				});
+				throw await transferableFromResponse(
+					response,
+					`Update ${entity_type}/${id} failed`,
+				);
 			}
 			server_entity = (await response.json()) as Record<string, unknown>;
 		} catch (error) {
@@ -1274,16 +1377,11 @@ export class DatabaseWorker {
 				method: 'DELETE',
 			});
 			if (!response.ok) {
-				const error_body = (await response.json().catch(() => ({}))) as Record<
-					string,
-					unknown
-				>;
 				await this.#rollbackIndex(entity_type, id, prev_doc);
-				throw DelightError.transferable({
-					message: (error_body.message as string) || `Delete ${entity_type}/${id} failed`,
-					status: response.status,
-					detail: error_body.detail as string | undefined,
-				});
+				throw await transferableFromResponse(
+					response,
+					`Delete ${entity_type}/${id} failed`,
+				);
 			}
 		} catch (error) {
 			if (DelightError.is(error)) throw error;
@@ -1447,7 +1545,7 @@ export class DatabaseWorker {
 				score: hit.score,
 			})),
 			count: results.count,
-			elapsed: results.elapsed,
+			mode: 'client',
 		};
 	}
 
@@ -1494,6 +1592,21 @@ export class DatabaseWorker {
 				code: 'invalid_search_source',
 			});
 		}
+		// `sparse: false` asks for FULL entities, which only the server has —
+		// the local index stores sparse documents. Combining it with an explicit
+		// `source: 'client'` is a caller error (also a type error at the public
+		// API via `ValidSearchQuery`), same treatment as `vector`.
+		if ((query as { sparse?: boolean }).sparse === false) {
+			if (source === 'client') {
+				throw DelightError.transferable({
+					message:
+						"source: 'client' cannot be combined with `sparse: false` — full entities only exist on the server",
+					status: 400,
+					code: 'invalid_search_source',
+				});
+			}
+			return false;
+		}
 		if (!this.#engine || !this.#store) return false;
 		if (source === 'server') return false;
 		if (source === 'client') return true;
@@ -1517,6 +1630,9 @@ export class DatabaseWorker {
 		token = 0,
 	): Promise<string> {
 		const id = `sub_${++this.#subscriber_counter}`;
+		// A subscribe that lands after a sign-out wipe (an in-flight Comlink
+		// message) must neither register nor call back — the tab is signing out.
+		if (this.#wiped) return id;
 		this.#search_subscribers.push({
 			id,
 			entity_type,
@@ -1529,7 +1645,13 @@ export class DatabaseWorker {
 		try {
 			result = { ...(await this.list(entity_type, query, true)), token };
 		} catch (error) {
-			result = { hits: [], count: 0, token, error: searchErrorPayload(error) };
+			result = {
+				hits: [],
+				count: 0,
+				mode: 'server',
+				token,
+				error: searchErrorPayload(error),
+			};
 		}
 		try {
 			callback(result);
@@ -1556,7 +1678,13 @@ export class DatabaseWorker {
 		try {
 			result = { ...(await this.list(sub.entity_type, query, true)), token: echo };
 		} catch (error) {
-			result = { hits: [], count: 0, token: echo, error: searchErrorPayload(error) };
+			result = {
+				hits: [],
+				count: 0,
+				mode: 'server',
+				token: echo,
+				error: searchErrorPayload(error),
+			};
 		}
 		try {
 			sub.callback(result);
@@ -1570,33 +1698,6 @@ export class DatabaseWorker {
 		this.#search_subscribers = this.#search_subscribers.filter(
 			(s) => s.id !== subscriber_id,
 		);
-	}
-
-	/**
-	 * Where a plain (non-vector) query for this entity type would be answered.
-	 *
-	 * A live routing decision, not a stored mode: an entity type whose window is
-	 * still filling reports `'server'` and flips to `'client'` when the backfill
-	 * completes.
-	 */
-	async getSearchMode(
-		entity_type: string,
-		query?: SearchQueryInput,
-	): Promise<'client' | 'server'> {
-		const state = this.#entities[entity_type];
-		if (!state) return 'server';
-		try {
-			return this.#routesToClient(state, query ?? {}) ? 'client' : 'server';
-		} catch {
-			// An invalid `source` combination — the query itself will throw with
-			// the real error; the reported mode is then moot.
-			return 'server';
-		}
-	}
-
-	/** Whether the entity type has completed its initial sync. */
-	async isSynced(entity_type: string): Promise<boolean> {
-		return this.#entities[entity_type]?.synced ?? false;
 	}
 
 	// -----------------------------------------------------------------------
@@ -1647,15 +1748,7 @@ export class DatabaseWorker {
 		}
 		const response = await fetch(`/api/${entity_type}${qs ? '?' : ''}${qs}`);
 		if (!response.ok) {
-			const error_body = (await response.json().catch(() => ({}))) as Record<
-				string,
-				unknown
-			>;
-			throw DelightError.transferable({
-				message: (error_body.message as string) || `List ${entity_type} failed`,
-				status: response.status,
-				detail: error_body.detail as string | undefined,
-			});
+			throw await transferableFromResponse(response, `List ${entity_type} failed`);
 		}
 
 		const body = (await response.json()) as {
@@ -1665,6 +1758,7 @@ export class DatabaseWorker {
 		const result: WorkerSearchResult = {
 			hits: body.hits ?? [],
 			count: body.count ?? 0,
+			mode: 'server',
 		};
 		// Store under the generation read BEFORE the fetch: if a change landed
 		// while the request was in flight, the bumped generation makes this
@@ -1732,7 +1826,9 @@ export class DatabaseWorker {
 		on_refresh?: (data: Record<string, unknown>) => void,
 	): Promise<void> {
 		const fresh = await this.#fetchAndCache(entity_type, id);
-		if (fresh && on_refresh) {
+		// A refresh that resolves after a sign-out wipe must not reach the
+		// client — its handles are frozen and nothing may repaint.
+		if (fresh && on_refresh && !this.#wiped) {
 			try {
 				on_refresh(fresh);
 			} catch {
@@ -1862,14 +1958,12 @@ export class DatabaseWorker {
 		this.#store?.clearDictionaryCache();
 
 		if (this.#db) {
-			await idbPut(this.#db, 'sync_meta', entity_type, {
+			await idbPut(
+				this.#db,
+				'sync_meta',
 				entity_type,
-				search_mode: state.search_mode,
-				config_version: state.config_version,
-				last_synced_at: state.last_synced_at,
-				start_updated_at: undefined,
-				end_updated_at: undefined,
-			} satisfies SyncMeta);
+				this.#syncMetaFor(entity_type, state),
+			);
 		}
 	}
 
@@ -1888,6 +1982,31 @@ export class DatabaseWorker {
 				})),
 			);
 		}
+	}
+
+	/**
+	 * The persisted `sync_meta` row for one entity type, from its in-memory
+	 * state (with optional not-yet-adopted overrides for mid-page persists).
+	 *
+	 * IMPORTANT: start/end are persisted as-is. Coercing a never-synced
+	 * `undefined` to 0 would make the next load believe the full history was
+	 * already backfilled (0 is the "backfill complete" sentinel).
+	 */
+	#syncMetaFor(
+		entity_type: string,
+		state: EntitySyncState,
+		overrides?: Partial<SyncMeta>,
+	): SyncMeta {
+		return {
+			entity_type,
+			search_mode: state.search_mode,
+			config_version: state.config_version,
+			last_synced_at: state.last_synced_at,
+			start_updated_at: state.start_updated_at,
+			end_updated_at: state.end_updated_at,
+			server_total: state.server_total,
+			...overrides,
+		};
 	}
 
 	/**
@@ -1916,18 +2035,7 @@ export class DatabaseWorker {
 				store: 'sync_meta',
 				type: 'put',
 				key: entity_type,
-				// IMPORTANT: start/end are persisted as-is. Coercing a never-synced
-				// `undefined` to 0 would make the next load believe the full history
-				// was already backfilled (0 is the "backfill complete" sentinel).
-				value: {
-					entity_type,
-					search_mode: state.search_mode,
-					config_version: state.config_version,
-					last_synced_at: state.last_synced_at,
-					start_updated_at: state.start_updated_at,
-					end_updated_at: state.end_updated_at,
-					server_total: state.server_total,
-				} satisfies SyncMeta,
+				value: this.#syncMetaFor(entity_type, state),
 			});
 		}
 
@@ -1936,6 +2044,9 @@ export class DatabaseWorker {
 
 	/** Microtask-batched subscriber notification */
 	#notifySubscribers(entity_types: string[]): void {
+		// A wiped worker must stay silent: nothing may repaint between a
+		// sign-out and the app's navigation away.
+		if (this.#wiped) return;
 		// Every caller is a data change (CRUD, a sync page, an external push):
 		// bump the cache generation FIRST, synchronously, so the re-queries this
 		// notification triggers can never be answered by a pre-change entry.
@@ -1989,6 +2100,7 @@ export class DatabaseWorker {
 								sub.callback({
 									hits: [],
 									count: 0,
+									mode: 'server',
 									token: tokens[index],
 									error: payload,
 								});

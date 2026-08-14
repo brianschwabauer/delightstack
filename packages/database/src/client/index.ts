@@ -1,13 +1,14 @@
 export {
 	DatabaseClient,
 	EntityState,
-	EntityReader,
-	DatabaseWatch,
+	EntityHandle,
+	ListHandle,
 	type DatabaseClientConfig,
 	type SearchHit,
 	type SearchResult,
-	type WatchQueryInit,
-	type WatchStatus,
+	type ListQueryInit,
+	type HandleStatus,
+	type DatabaseStatus,
 } from './database.client.svelte';
 
 export { type WorkerSearchResult } from './database.worker';

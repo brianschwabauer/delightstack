@@ -45,23 +45,6 @@ export interface CachedEntity {
 	updated_at: number;
 }
 
-/** Opens (or creates) an IndexedDB database with the given name. */
-export function openDatabase(db_name: string): Promise<IDBDatabase> {
-	return new Promise((resolve, reject) => {
-		const request = indexedDB.open(db_name, 1);
-		request.onupgradeneeded = () => {
-			const db = request.result;
-			for (const store of STORES) {
-				if (!db.objectStoreNames.contains(store)) {
-					db.createObjectStore(store);
-				}
-			}
-		};
-		request.onsuccess = () => resolve(request.result);
-		request.onerror = () => reject(request.error);
-	});
-}
-
 /** Generic get from an object store. */
 export function idbGet<T>(
 	db: IDBDatabase,
@@ -105,16 +88,6 @@ export function idbDelete(
 	});
 }
 
-/** Clear all entries from an object store. */
-export function idbClear(db: IDBDatabase, store: IDBStoreName): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const tx = db.transaction(store, 'readwrite');
-		const request = tx.objectStore(store).clear();
-		request.onsuccess = () => resolve();
-		request.onerror = () => reject(request.error);
-	});
-}
-
 /** Delete all entries whose key starts with the given prefix (e.g. `person/`). */
 export function idbDeleteByPrefix(
 	db: IDBDatabase,
@@ -126,16 +99,6 @@ export function idbDeleteByPrefix(
 		const range = IDBKeyRange.bound(prefix, prefix + '\uffff');
 		const request = tx.objectStore(store).delete(range);
 		request.onsuccess = () => resolve();
-		request.onerror = () => reject(request.error);
-	});
-}
-
-/** Get all keys from an object store. */
-export function idbGetAllKeys(db: IDBDatabase, store: IDBStoreName): Promise<string[]> {
-	return new Promise((resolve, reject) => {
-		const tx = db.transaction(store, 'readonly');
-		const request = tx.objectStore(store).getAllKeys();
-		request.onsuccess = () => resolve(request.result as string[]);
 		request.onerror = () => reject(request.error);
 	});
 }
@@ -170,10 +133,18 @@ export function idbBatch(
 	});
 }
 
-/** Delete an entire IndexedDB database by name. */
-export function deleteDatabase(db_name: string): Promise<void> {
+/**
+ * Delete an entire IndexedDB database by name.
+ *
+ * `deleteDatabase` blocks while other connections are open — callers must
+ * close their own connection first, and peer connections are released through
+ * the `versionchange` event the deletion fires on them (the worker's
+ * `#attachVersionChange` handler closes on it). `onblocked` is therefore not
+ * terminal here: the promise keeps waiting for the peers to let go.
+ */
+export function deleteDatabase(db_name: string, factory?: IDBFactory): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const request = indexedDB.deleteDatabase(db_name);
+		const request = (factory ?? indexedDB).deleteDatabase(db_name);
 		request.onsuccess = () => resolve();
 		request.onerror = () => reject(request.error);
 	});

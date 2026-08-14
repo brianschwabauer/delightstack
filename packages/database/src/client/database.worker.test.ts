@@ -95,7 +95,6 @@ async function writeEntityCache(key: string, value: unknown): Promise<void> {
 	db.close();
 }
 
-
 const itemTable = Database.table('item', (s) => ({
 	id: s.primaryKey(),
 	name: s.string().searchable(),
@@ -138,7 +137,14 @@ function bridgeFetchToServer(
 			return new Response(JSON.stringify({ message: 'not found' }), { status: 404 });
 		}
 		const body = init?.body ? JSON.parse(String(init.body)) : {};
-		if (options.page_limit) body.limit = options.page_limit;
+		// The sync protocol carries ranges/limits per entity — no top-level limit.
+		if (options.page_limit) {
+			for (const entity of Object.values(
+				(body.entity ?? {}) as Record<string, { limit?: number }>,
+			)) {
+				entity.limit = options.page_limit;
+			}
+		}
 		const result = server.sync(body);
 		return new Response(JSON.stringify(result), {
 			status: 200,
@@ -199,7 +205,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		await worker.sync();
 
 		expect(await searchAllIds(worker)).toEqual([...ids].sort());
-		expect(await worker.isSynced('item')).toBe(true);
+		expect((await worker.list('item', { limit: 1 })).mode).toBe('client');
 	});
 
 	it('pages through a large dataset without losing or duplicating documents', async () => {
@@ -217,7 +223,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 
 		expect(fetch_mock.mock.calls.length).toBeGreaterThan(1); // actually paginated
 		expect(await searchAllIds(worker)).toEqual([...ids].sort());
-		expect(await worker.isSynced('item')).toBe(true);
+		expect((await worker.list('item', { limit: 1 })).mode).toBe('client');
 	});
 
 	it('incremental sync picks up creates, updates, and deletes since the last run', async () => {
@@ -287,7 +293,9 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 
 		const worker = await createWorker();
 		await worker.sync(); // network failure
-		expect(await worker.isSynced('item')).toBe(false);
+		// With an incomplete window a query routes to the server (§7.6) — which is
+		// still down here, so a one-shot list rejects instead of answering locally.
+		await expect(worker.list('item', { limit: 1 })).rejects.toThrow();
 		// Read the index directly rather than through search(): with an incomplete
 		// window, a search is routed to the server by design (§7.6), and the point
 		// here is that the failed sync left NOTHING indexed locally.
@@ -303,7 +311,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		should_fail = false;
 		await worker.sync();
 		expect(await searchAllIds(worker)).toEqual([...ids].sort());
-		expect(await worker.isSynced('item')).toBe(true);
+		expect((await worker.list('item', { limit: 1 })).mode).toBe('client');
 	});
 
 	it('a sync interrupted mid-backfill survives a worker reload without losing documents', async () => {
@@ -327,7 +335,12 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 
 		const worker = await createWorker();
 		await worker.sync(); // network drops after 2 pages
-		expect(await worker.isSynced('item')).toBe(false);
+		// The persisted cursor must not claim a complete window (`0` is the
+		// backfill-complete sentinel).
+		const mid_meta = (await readStore('sync_meta')).get('item') as
+			| { start_updated_at?: number }
+			| undefined;
+		expect(mid_meta?.start_updated_at ?? -1).not.toBe(0);
 
 		// Simulate a page refresh: a fresh worker that only has the persisted
 		// IDB state. The persisted synced window must never claim documents
@@ -338,7 +351,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		await reloaded.sync();
 
 		expect(await searchAllIds(reloaded)).toEqual([...ids].sort());
-		expect(await reloaded.isSynced('item')).toBe(true);
+		expect((await reloaded.list('item', { limit: 1 })).mode).toBe('client');
 	});
 
 	it('applyLocalPatch overlays the index without any network', async () => {
@@ -393,6 +406,6 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 
 		const result = await worker.list('item', { limit: 100 });
 		expect(result.count).toBe(10); // 9 originals + the late arrival
-		expect(await worker.isSynced('item')).toBe(true);
+		expect(result.mode).toBe('client'); // backfill reported complete
 	});
 });

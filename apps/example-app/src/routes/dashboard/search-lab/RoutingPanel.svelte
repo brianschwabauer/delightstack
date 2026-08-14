@@ -30,9 +30,9 @@ const clients = await createClients({
 
 	// The routed path: the coverage policy decides where this is answered, and
 	// `search.mode` reports the decision per query.
-	const search = $derived(db.watch('place', () => ({ term, limit: 20 })));
+	const search = $derived(db.list('place', () => ({ term, limit: 20 })));
 	const organizations = $derived(
-		db.watch('organization', () => ({
+		db.list('organization', () => ({
 			limit: 20,
 			order: [{ field: 'name', direction: 'ASC' as const }],
 		})),
@@ -46,7 +46,7 @@ const clients = await createClients({
 	});
 
 	const client_hits = $derived(
-		search.results.map(
+		search.hits.map(
 			(hit): LabHit => ({
 				id: hit.id,
 				score: hit.score,
@@ -82,7 +82,7 @@ const clients = await createClients({
 	}
 
 	async function deleteFirstHit() {
-		const first = search.results[0];
+		const first = search.hits[0];
 		if (!first) return;
 		const name = String(
 			(first.document as unknown as Record<string, unknown>).name ?? first.id,
@@ -99,7 +99,7 @@ const clients = await createClients({
 
 <Panel
 	title="Routing &amp; live updates"
-	blurb="db.watch() coverage routing · search_mode · derived-field cascade · tombstones">
+	blurb="db.list() coverage routing · search_mode · derived-field cascade · tombstones">
 	{#snippet controls()}
 		<Input
 			type="search"
@@ -139,7 +139,7 @@ const clients = await createClients({
 	<section class="compare">
 		<div>
 			<h4>
-				Client — <code>db.watch()</code>
+				Client — <code>db.list()</code>
 				<span>{search.count.toLocaleString()} matches · {search.mode}</span>
 			</h4>
 			<ResultList
@@ -183,7 +183,7 @@ const clients = await createClients({
 		</p>
 
 		<ul>
-			{#each organizations.results as organization (organization.id)}
+			{#each organizations.hits as organization (organization.id)}
 				{@const name = String(organization.document.name ?? '')}
 				<li>
 					{#if renaming === organization.id}
@@ -208,7 +208,7 @@ const clients = await createClients({
 			outline
 			error
 			onclick={deleteFirstHit}
-			disabled={search.results.length === 0}
+			disabled={search.hits.length === 0}
 			tooltip="Deletes the top client-side hit and re-runs both panes">
 			Delete the top match
 		</Button>

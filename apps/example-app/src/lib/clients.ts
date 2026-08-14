@@ -29,7 +29,7 @@ export async function createClients(options: {
 	auth: AuthClient;
 	fetch: typeof globalThis.fetch;
 	dev?: boolean;
-	/** Per-entity database overrides (search_mode, threshold, cache). */
+	/** Per-entity database overrides (search_mode, cache, max_synced_docs). */
 	entities?: DatabaseClientConfig<typeof tables>['entities'];
 }): Promise<{ ws: WebsocketClient; db: DatabaseClient<typeof tables>; ai: AiClient }> {
 	const { auth, fetch, dev, entities } = options;

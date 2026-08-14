@@ -38,16 +38,16 @@
 	let editing_place = $state(false);
 
 	const organizations = $derived(
-		db.watch('organization', () => ({
+		db.list('organization', () => ({
 			limit: 50,
 			order: [{ field: 'name', direction: 'ASC' as const }],
 		})),
 	);
 
-	const places = $derived(db.watch('place', () => ({ term: place_query, limit: 12 })));
+	const places = $derived(db.list('place', () => ({ term: place_query, limit: 12 })));
 
 	const organization_options = $derived(
-		organizations.results.map((hit) => ({
+		organizations.hits.map((hit) => ({
 			value: hit.id,
 			label: String(hit.document.name ?? hit.id),
 		})),
@@ -150,7 +150,7 @@
 		</header>
 
 		<ul>
-			{#each organizations.results as organization (organization.id)}
+			{#each organizations.hits as organization (organization.id)}
 				<li class:selected={organization_id === organization.id}>
 					<button
 						type="button"
@@ -221,7 +221,7 @@
 			bind:value={() => place_query, (next) => (place_query = String(next ?? ''))} />
 
 		<ul>
-			{#each places.results as place (place.id)}
+			{#each places.hits as place (place.id)}
 				<li class:selected={selected_place_id === place.id}>
 					<button
 						type="button"

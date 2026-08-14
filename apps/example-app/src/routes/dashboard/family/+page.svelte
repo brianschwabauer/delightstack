@@ -33,7 +33,7 @@
 	// The db client is stable for the life of the page — capturing it once to
 	// create the live search query is intentional.
 	// svelte-ignore state_referenced_locally
-	const people = db.watch('person');
+	const people = db.list('person');
 </script>
 
 <svelte:head>
@@ -60,7 +60,7 @@
 	</div>
 
 	<div class="people-grid">
-		{#each people.docs as person (person.id)}
+		{#each people.items as person (person.id)}
 			<a href="/dashboard/family/{person.id}" class="person-card">
 				<Avatar name={person.name} size="3" />
 				<div class="person-info">
@@ -77,7 +77,7 @@
 			</a>
 		{/each}
 
-		{#if people.docs.length === 0 && people.status !== 'loading'}
+		{#if people.items.length === 0 && people.status !== 'loading'}
 			<div class="empty">
 				{#if people.query.term}
 					<p>No family members match "{people.query.term}".</p>

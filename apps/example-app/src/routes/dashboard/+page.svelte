@@ -10,7 +10,7 @@
 	// The db client is stable for the life of the page — capturing it once to
 	// create the live search query is intentional.
 	// svelte-ignore state_referenced_locally
-	const posts = db.watch('post', { limit: 50 });
+	const posts = db.list('post', { limit: 50 });
 
 	function formatDate(timestamp: string | number) {
 		return new Date(timestamp).toLocaleDateString(undefined, {
@@ -42,7 +42,7 @@
 	</div>
 
 	<div class="posts-grid">
-		{#each posts.docs as post (post.id)}
+		{#each posts.items as post (post.id)}
 			<a href="/dashboard/post/{post.id}" class="post-card">
 				<div class="post-header">
 					<h3>{post.title}</h3>
@@ -68,7 +68,7 @@
 			</a>
 		{/each}
 
-		{#if posts.docs.length === 0 && posts.status !== 'loading'}
+		{#if posts.items.length === 0 && posts.status !== 'loading'}
 			<div class="empty">
 				{#if posts.query.term}
 					<p>No posts match "{posts.query.term}".</p>

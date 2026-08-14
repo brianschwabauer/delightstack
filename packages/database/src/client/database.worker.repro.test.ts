@@ -78,7 +78,14 @@ function bridgeFetchToServer(
 			return new Response(JSON.stringify({ message: 'not found' }), { status: 404 });
 		}
 		const body = init?.body ? JSON.parse(String(init.body)) : {};
-		if (options.page_limit) body.limit = options.page_limit;
+		// The sync protocol carries ranges/limits per entity — no top-level limit.
+		if (options.page_limit) {
+			for (const entity of Object.values(
+				(body.entity ?? {}) as Record<string, { limit?: number }>,
+			)) {
+				entity.limit = options.page_limit;
+			}
+		}
 		options.on_page?.(++pages);
 		const result = server.sync(body);
 		options.corrupt?.(result);
@@ -142,7 +149,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 
 		const result = await worker.list('thread', { limit: 1000 });
 		expect(result.count).toBe(300);
-		expect(await worker.isSynced('thread')).toBe(true);
+		expect(result.mode).toBe('client'); // backfill reported complete
 
 		// The sparse folder must survive — the incident dropped the (small,
 		// older) inbox entirely while big folders filled the index.
@@ -192,8 +199,8 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		// the assertions (in the live app they fire within milliseconds).
 		for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
 
-		expect(await worker.isSynced('thread')).toBe(true);
 		const result = await worker.list('thread', { limit: 5000 });
+		expect(result.mode).toBe('client'); // backfill reported complete
 		expect(result.count).toBe(2600);
 		const inbox = await worker.list('thread', {
 			where: { folder: { eq: 'inbox' } },
@@ -342,14 +349,18 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 
 		const worker = await createWorker();
 		await worker.sync();
-		for (let i = 0; i < 10 && !(await worker.isSynced('thread')); i++) {
+		// The live injections stop after 8 pages; a bounded number of catch-up
+		// syncs drains the tail. `mode: 'client'` on the answered list is the
+		// whole assertion: the valve must never flip this entity to server
+		// routing (a server-routed list would hit the unstubbed REST route).
+		let result = await worker.list('thread', { limit: 1000 }).catch(() => undefined);
+		for (let i = 0; i < 10 && result?.mode !== 'client'; i++) {
 			await worker.sync();
+			result = await worker.list('thread', { limit: 1000 }).catch(() => undefined);
 		}
 
-		expect(await worker.getSearchMode('thread')).toBe('client');
-		const result = await worker.list('thread', { limit: 1000 });
-		expect(result.count).toBe(190);
-		expect(await worker.isSynced('thread')).toBe(true);
+		expect(result?.mode).toBe('client');
+		expect(result?.count).toBe(190);
 		// Same CI headroom as the multi-page backfill above (2s+ on slow runners).
 	}, 20_000);
 
@@ -399,6 +410,6 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		// boundary skipped the rest of the run, and those docs were permanently lost.
 		const result = await worker.list('thread', { limit: 100 });
 		expect(result.count).toBe(13); // 1 seed + 12 legacy
-		expect(await worker.isSynced('thread')).toBe(true);
+		expect(result.mode).toBe('client'); // backfill reported complete
 	});
 });
