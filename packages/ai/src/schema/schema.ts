@@ -84,8 +84,7 @@ export function defineAiTable(
 		 */
 		_embedding_source: schema.string().optional(),
 
-		created_at: schema.string().datetime(),
-		updated_at: schema.string().datetime(),
+		// created_at / updated_at are auto-managed by the database (epoch ms)
 	})) as unknown as Database.Table;
 }
 
@@ -164,8 +163,7 @@ export function defineAiConversationTable(
 		/** Whether the conversation is active or archived */
 		status: schema.enum(['active', 'archived']),
 
-		created_at: schema.string().datetime(),
-		updated_at: schema.string().datetime(),
+		// created_at / updated_at are auto-managed by the database (epoch ms)
 
 		// Custom fields come after reserved fields (validated above to not collide)
 		...(customFields ? customFields(schema) : {}),

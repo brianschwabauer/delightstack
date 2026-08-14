@@ -1,5 +1,5 @@
 import type { DatabaseServer } from '@delightstack/database';
-import type { WebsocketServer } from '@delightstack/websocket/server';
+import type { AiBroadcastChannel } from './ai.server';
 import type {
 	AiProcessingOptions,
 	EmbeddingFieldConfig,
@@ -128,7 +128,7 @@ export function aiEmbeddings(
 	options: AiProcessingOptions & {
 		fields: EmbeddingFieldConfig[];
 		storage: DurableObjectStorage;
-		ws?: () => WebsocketServer | undefined;
+		ws?: () => AiBroadcastChannel | undefined;
 		/** Pre-built gateway client (shared with aiProcessing to avoid duplicate instances) */
 		gateway_client?: AiGatewayClient;
 	},

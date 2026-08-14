@@ -146,7 +146,7 @@ export function imageProcessing(
 	const storage = options.storage;
 	const MAX_RETRIES = 5;
 
-	return {
+	const integration = {
 		/**
 		 * Upload an image for processing.
 		 * Creates a pending record and schedules processing via DO alarm.
@@ -441,4 +441,10 @@ export function imageProcessing(
 			return tryGet(db, 'image', image_id) as ImageRecord | null;
 		},
 	};
+
+	// Self-register with the DO's alarm registry so the subclass doesn't have
+	// to hand-write an alarm() fan-out (the optional call tolerates mock DBs).
+	db.registerAlarm?.('images', () => integration.processAlarm());
+
+	return integration;
 }

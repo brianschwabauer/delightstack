@@ -1,5 +1,5 @@
 import type { DatabaseServer } from '@delightstack/database';
-import type { WebsocketServer } from '@delightstack/websocket/server';
+import type { WebsocketMessage } from '@delightstack/websocket/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDatabaseServer = DatabaseServer<any>;
@@ -19,12 +19,21 @@ import { createAiError } from './ai.errors';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
+/**
+ * The slice of the WebSocket server the AI integration needs. Satisfied by
+ * `WebsocketServer` itself or by a Durable Object stub for it — so the DO
+ * subclass can pass `() => env.WS.get(...)` directly, without casting.
+ */
+export interface AiBroadcastChannel {
+	broadcast(message: WebsocketMessage): void | Promise<void>;
+}
+
 export interface AiServerOptions extends AiProcessingOptions {
 	/**
 	 * WebSocket server for broadcasting stream chunks.
 	 * Required for resumable streaming via streamToClient().
 	 */
-	ws?: () => WebsocketServer | undefined;
+	ws?: () => AiBroadcastChannel | undefined;
 }
 
 /** In-memory buffer for a streaming response, enabling resumability */
@@ -190,7 +199,7 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 		}, 60_000);
 	}
 
-	return {
+	const server: AiServer = {
 		// ── Gateway pass-through ────────────────────────────────────────────
 
 		complete: (opts) => getGateway().complete(opts),
@@ -353,6 +362,12 @@ export function aiProcessing(db: AnyDatabaseServer, options: AiServerOptions): A
 			? (et) => embeddings.backfill(et)
 			: () => Promise.resolve({ processed: 0, failed: 0 }),
 	};
+
+	// Self-register with the DO's alarm registry so the subclass doesn't have
+	// to hand-write an alarm() fan-out (the optional call tolerates mock DBs).
+	db.registerAlarm?.('ai', () => server.processAlarm());
+
+	return server;
 }
 
 // ── WebSocket message handler ───────────────────────────────────────────────
