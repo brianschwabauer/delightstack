@@ -277,7 +277,7 @@ describe('WebsocketServer', () => {
 			const a = makeSocket(session_a);
 			const { server } = createServer({}, [a]);
 
-			server.entityChanged('updated', 'post', 42, { title: 'hi' }, 'u9');
+			server.entityChanged('updated', 'post', 42, { title: 'hi' }, { title: 'hi' });
 
 			expect(sentMessages(a)).toEqual([
 				{
@@ -285,7 +285,7 @@ describe('WebsocketServer', () => {
 					entity_type: 'post',
 					id: 42,
 					data: { title: 'hi' },
-					user_id: 'u9',
+					sparse: { title: 'hi' },
 				},
 			]);
 		});

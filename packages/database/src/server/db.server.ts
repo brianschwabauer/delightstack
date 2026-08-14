@@ -39,8 +39,6 @@ export type DatabaseServerTransaction<
 				type: keyof DatabaseConfig & string;
 				/** The data for the new entity */
 				data: any;
-				/** Optional event data associated with the creation */
-				event?: { user_id: string };
 			};
 	  }
 	| {
@@ -52,8 +50,6 @@ export type DatabaseServerTransaction<
 				id: string | number;
 				/** The data to update the entity with */
 				data: any;
-				/** Optional event data associated with the update */
-				event?: { user_id: string };
 			};
 	  }
 	| {
@@ -63,8 +59,6 @@ export type DatabaseServerTransaction<
 				type: keyof DatabaseConfig & string;
 				/** The ID of the entity to delete */
 				id: string | number;
-				/** Optional event data associated with the deletion */
-				event?: { user_id: string };
 			};
 	  }
 	| {
@@ -113,27 +107,9 @@ export type DatabaseServerTransactionResult<
 
 /** A record of changes used to sync entities 'sparse' search data between client & server. */
 export type DatabaseSyncRequest<DatabaseConfig extends Record<string, any>> = {
-	/** Limits the number of changes (inserts/deletes) to return in the response */
-	limit?: number;
 	/**
-	 * The starting 'updated_at' timestamp of all changes that should be returned.
-	 * The 'updated_at' timestamp is changed to the current time every time any entity is created/updated/deleted.
-	 * If this is provided, it will return changes in ASC order since this timestamp.
-	 * If this is undefined, it will return changes in DESC order since 'end_updated_at' (or the current time if 'end_updated_at' is undefined).
-	 */
-	start_updated_at?: number;
-	/**
-	 * The ending 'updated_at' timestamp of all changes that should be returned.
-	 * If this is undefined and 'start_updated_at' is defined, it will return changes in ASC order since the 'start_updated_at'.
-	 * If this is undefined and 'start_updated_at' is also undefined, it will return changes in DESC order before the current time.
-	 * If this is defined and 'start_updated_at' is undefined, it will return changes in DESC order before this timestamp.
-	 * If this is defined and 'start_updated_at' is also defined, it will return changes in ASC order between the 'start_updated_at' and 'end_updated_at'.
-	 * This can be used to page the results so a bunch of results don't need to be returned at once.
-	 */
-	end_updated_at?: number;
-	/**
-	 * A record of entities to fetch the changes for.
-	 * This is used to get more granular changes for a specific entity type instead of all entities.
+	 * A record of entities to fetch the changes for, each carrying its own
+	 * range/limit — one request syncs any number of entity types at once.
 	 * If this is undefined, it will return changes for all entities.
 	 */
 	entity?: {
@@ -142,13 +118,14 @@ export type DatabaseSyncRequest<DatabaseConfig extends Record<string, any>> = {
 			 * A version number of the search config/schema that the client currently is using.
 			 * If the server version is different, the server will return the new config/schema
 			 * and the client will will reindex the data using the new schema.
+			 * When omitted, no schema comparison happens (the response still carries the
+			 * server's current `config_version`).
 			 */
-			config_version: number;
+			config_version?: number;
 			/** Limits the number of changes (inserts/deletes) to return in the response for this entity */
 			limit?: number;
 			/**
 			 * The starting 'updated_at' timestamp of changes to this entity that should be returned.
-			 * This overrides the 'start_updated_at' timestamp for the entire sync event.
 			 * The 'updated_at' timestamp is changed to the current time every time any entity is created/updated/deleted.
 			 * If this is provided, it will return changes in ASC order since this timestamp.
 			 * If this is undefined, it will return changes in DESC order since 'end_updated_at' (or the current time if 'end_updated_at' is undefined).
@@ -156,7 +133,6 @@ export type DatabaseSyncRequest<DatabaseConfig extends Record<string, any>> = {
 			start_updated_at?: number;
 			/**
 			 * The ending 'updated_at' timestamp of changes to this entity that should be returned.
-			 * This overrides the 'end_updated_at' timestamp for the entire sync event.
 			 * If this is undefined and 'start_updated_at' is defined, it will return changes in ASC order since the 'start_updated_at'.
 			 * If this is undefined and 'start_updated_at' is also undefined, it will return changes in DESC order before the current time.
 			 * If this is defined and 'start_updated_at' is undefined, it will return changes in DESC order before this timestamp.
@@ -357,7 +333,6 @@ export class DatabaseServer<
 						entity_type: string,
 						id: string | number,
 						data?: unknown,
-						user_id?: string,
 						sparse?: unknown,
 					): void;
 			  }
@@ -458,16 +433,7 @@ export class DatabaseServer<
 					this.ctx.storage.sql.exec(
 						`CREATE TABLE IF NOT EXISTS ${table_name} (${columns.join(', ')});`,
 					);
-					this.ctx.storage.sql.exec(
-						`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
-						JSON.stringify({
-							...this.#state,
-							created_at: undefined,
-							updated_at: undefined,
-						}),
-						Date.now(),
-						'main',
-					);
+					this.saveState();
 				});
 				continue;
 			}
@@ -491,16 +457,7 @@ export class DatabaseServer<
 					this.ctx.storage.sql.exec(
 						`ALTER TABLE ${table_name} ADD COLUMN ${column} ${alter_def};`,
 					);
-					this.ctx.storage.sql.exec(
-						`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
-						JSON.stringify({
-							...this.#state,
-							created_at: undefined,
-							updated_at: undefined,
-						}),
-						Date.now(),
-						'main',
-					);
+					this.saveState();
 				});
 			}
 		}
@@ -543,16 +500,7 @@ export class DatabaseServer<
 					this.ctx.storage.sql.exec(
 						`CREATE INDEX IF NOT EXISTS ${index_name} ON ${table_name} (${columns})${unique};`,
 					);
-					this.ctx.storage.sql.exec(
-						`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
-						JSON.stringify({
-							...this.#state,
-							created_at: undefined,
-							updated_at: undefined,
-						}),
-						Date.now(),
-						'main',
-					);
+					this.saveState();
 				});
 			}
 
@@ -571,16 +519,7 @@ export class DatabaseServer<
 					this.ctx.storage.sql.exec(
 						`DROP INDEX IF EXISTS ${this.sanitize(existing_index.name)};`,
 					);
-					this.ctx.storage.sql.exec(
-						`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
-						JSON.stringify({
-							...this.#state,
-							created_at: undefined,
-							updated_at: undefined,
-						}),
-						Date.now(),
-						'main',
-					);
+					this.saveState();
 				});
 			}
 		}
@@ -609,6 +548,20 @@ export class DatabaseServer<
 		}
 
 		this.bootstrapSearch();
+	}
+
+	/**
+	 * Persist `#state` into the `state` row (id 'main'). `created_at`/`updated_at`
+	 * live in their own columns, so they are stripped from the JSON blob —
+	 * re-serializing them would shadow the columns on the next load.
+	 */
+	private saveState(): void {
+		this.ctx.storage.sql.exec(
+			`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
+			JSON.stringify({ ...this.#state, created_at: undefined, updated_at: undefined }),
+			Date.now(),
+			'main',
+		);
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -841,16 +794,7 @@ export class DatabaseServer<
 		>;
 		native_search[entity_type] = value;
 		(this.#state as { native_search?: unknown }).native_search = native_search;
-		this.ctx.storage.sql.exec(
-			`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
-			JSON.stringify({
-				...this.#state,
-				created_at: undefined,
-				updated_at: undefined,
-			}),
-			Date.now(),
-			'main',
-		);
+		this.saveState();
 	}
 
 	/**
@@ -1073,139 +1017,11 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * Gets multiple entities from the database in a batch.
-	 * Groups requests by entity type and uses `WHERE id IN (...)` for efficiency.
-	 * Returns results in the same order as the input array.
-	 * Throws a 404 if any entity is not found.
-	 */
-	get<
-		Type extends keyof DatabaseConfig & string,
-		Table extends DatabaseConfig[Type],
-		Entity extends Database.Entity<DatabaseConfig[Type]>,
-		ExpandedFields extends
-			| Array<keyof Table['config']['foreign_keys'] & string>
-			| undefined,
-		Output extends ExpandedFields extends Array<any>
-			? Entity & { expanded: { [K in ExpandedFields[number]]: any } }
-			: Entity,
-	>(
-		requests: Array<{
-			entity_type: Type;
-			id: string | number;
-			expand?: ExpandedFields;
-		}>,
-	): Output[];
-
-	/**
 	 * Gets an entity from the database with the given type/id
 	 * An array of expand fields can be provided to expand the entity with the given fields
 	 * @example expand: ['creator_id'] -> adds the full creator data to the entity in {expanded: {creator_id: {...}}}
 	 */
 	get<
-		Type extends keyof DatabaseConfig & string,
-		Table extends DatabaseConfig[Type],
-		Entity extends Database.Entity<DatabaseConfig[Type]>,
-		ExpandedFields extends
-			| Array<keyof Table['config']['foreign_keys'] & string>
-			| undefined,
-		Output extends ExpandedFields extends Array<any>
-			? Entity & { expanded: { [K in ExpandedFields[number]]: any } }
-			: Entity,
-	>(entity_type: Type, id: string | number, expand?: ExpandedFields): Output;
-
-	get(entity_type_or_requests: any, id?: string | number, expand?: any): any {
-		// Batch overload: array of requests
-		if (Array.isArray(entity_type_or_requests)) {
-			return this.getBatch(entity_type_or_requests);
-		}
-		// Single entity overload
-		return this.getSingle(entity_type_or_requests, id!, expand);
-	}
-
-	/** Internal: batch get implementation */
-	private getBatch(
-		requests: Array<{
-			entity_type: string;
-			id: string | number;
-			expand?: string[];
-		}>,
-	): any[] {
-		if (!requests.length) return [];
-
-		// Group by entity_type for efficient batching
-		const groups = new Map<
-			string,
-			Array<{ index: number; id: string | number; expand?: string[] }>
-		>();
-		for (let i = 0; i < requests.length; i++) {
-			const req = requests[i];
-			let group = groups.get(req.entity_type);
-			if (!group) {
-				group = [];
-				groups.set(req.entity_type, group);
-			}
-			group.push({ index: i, id: req.id, expand: req.expand });
-		}
-
-		const results: any[] = Array.from({ length: requests.length });
-
-		for (const [entity_type, group] of groups) {
-			const table = this.config[entity_type];
-			if (!table) {
-				throw new DelightError({
-					message: `Entity type ${entity_type} is not valid`,
-					status: 400,
-				});
-			}
-			const sanitized_table = this.sanitize(entity_type);
-			const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-			const ids = group.map((g) => g.id);
-			const placeholders = ids.map(() => '?').join(', ');
-
-			try {
-				const cursor = this.ctx.storage.sql.exec(
-					`SELECT * FROM ${sanitized_table} WHERE ${primary_key} IN (${placeholders})`,
-					...ids,
-				);
-
-				// Index fetched rows by their primary key
-				const fetched = new Map<string | number, any>();
-				for (const row of cursor) {
-					const entity = this.toEntityValue(entity_type, row);
-					if (entity) {
-						fetched.set((entity as any)[table.config.primary_key || 'id'], entity);
-					}
-				}
-
-				// Map results back in order and handle expansions
-				for (const { index, id, expand } of group) {
-					const data = fetched.get(id);
-					if (!data) {
-						const entity_name = this.sanitize(entity_type);
-						throw new DelightError({ message: `${entity_name} not found`, status: 404 });
-					}
-					if (expand?.length) {
-						// Delegate to getSingle for expansion (expansions are typically few)
-						results[index] = this.getSingle(entity_type, id, expand);
-					} else {
-						results[index] = data;
-					}
-				}
-			} catch (error: any) {
-				if (error?.status) throw error;
-				console.error('Database error fetching entities:', error);
-				throw new DelightError({
-					message: 'Database error occurred while fetching entities',
-					status: 500,
-				});
-			}
-		}
-
-		return results;
-	}
-
-	/** Internal: single get implementation */
-	private getSingle<
 		Type extends keyof DatabaseConfig & string,
 		Table extends DatabaseConfig[Type],
 		Entity extends Database.Entity<DatabaseConfig[Type]>,
@@ -1261,14 +1077,13 @@ export class DatabaseServer<
 						`SELECT * FROM ${foreign_key_table} WHERE ${foreign_key_column} = ? LIMIT 1`,
 						(data as any)[field],
 					);
-					let temp = foreign_key_result.next()?.value;
-					if (!temp) return;
-					temp = { ...temp, ...JSON.parse((temp?.json as any) || '{}') };
-					delete (temp as any).json;
-					for (const key in temp) {
-						if (temp[key] === null) delete temp[key];
-					}
-					expanded[field] = temp as Entity;
+					const row = foreign_key_result.next()?.value;
+					if (!row) return;
+					const entity = this.toEntityValue(
+						foreign_key.table as keyof DatabaseConfig & string,
+						row,
+					);
+					if (entity) expanded[field] = entity;
 				} catch {
 					throw new DelightError({
 						message: 'Database error occurred while fetching entity expansions',
@@ -1343,8 +1158,8 @@ export class DatabaseServer<
 		query?: DatabaseSyncRequest<DatabaseConfig>,
 	): DatabaseSyncResponse<DatabaseConfig> {
 		const results: DatabaseSyncResponse<DatabaseConfig> = {
-			start_updated_at: query?.start_updated_at || 0,
-			end_updated_at: query?.end_updated_at || 0,
+			start_updated_at: 0,
+			end_updated_at: 0,
 			first_updated_at: 0,
 			last_updated_at: 0,
 			entity: {},
@@ -1359,35 +1174,32 @@ export class DatabaseServer<
 			if (!this.isSearchIndexed(entity_type)) continue;
 			results.entity[entity_type] = this.syncEntity(
 				entity_type,
-				query,
+				query?.entity?.[entity_type],
 			) as (typeof results.entity)[typeof entity_type];
 		}
-		results.first_updated_at = Math.min(
-			Infinity,
-			...Object.values(results.entity).map(
-				(entity) => entity?.first_updated_at || Infinity,
-			),
-		);
-		results.last_updated_at = Math.max(
-			0,
-			...Object.values(results.entity).map((entity) => entity?.last_updated_at || 0),
-		);
-		results.start_updated_at = Math.min(
-			Infinity,
-			...Object.values(results.entity).map(
-				(entity) => entity?.start_updated_at || Infinity,
-			),
-		);
-		results.end_updated_at = Math.max(
-			0,
-			...Object.values(results.entity).map((entity) => entity?.end_updated_at || 0),
-		);
-		results.first_updated_at = isFinite(results.first_updated_at)
-			? results.first_updated_at
-			: 0;
-		results.start_updated_at = isFinite(results.start_updated_at)
-			? results.start_updated_at
-			: 0;
+		// Top-level bounds are the union of the per-entity windows (mins treat 0 /
+		// missing as "no data" rather than "epoch").
+		for (const entity of Object.values(results.entity)) {
+			if (!entity) continue;
+			if (
+				entity.first_updated_at &&
+				(!results.first_updated_at || entity.first_updated_at < results.first_updated_at)
+			) {
+				results.first_updated_at = entity.first_updated_at;
+			}
+			if (
+				entity.start_updated_at &&
+				(!results.start_updated_at || entity.start_updated_at < results.start_updated_at)
+			) {
+				results.start_updated_at = entity.start_updated_at;
+			}
+			if (entity.last_updated_at > results.last_updated_at) {
+				results.last_updated_at = entity.last_updated_at;
+			}
+			if (entity.end_updated_at > results.end_updated_at) {
+				results.end_updated_at = entity.end_updated_at;
+			}
+		}
 		return results;
 	}
 
@@ -1563,33 +1375,7 @@ export class DatabaseServer<
 				.replace(/\//g, '_');
 		};
 
-		// The driver answers the whole query from SQL + the postings tables.
-		// Everything above (cursor decode, limit clamps, sortable validation, cursor
-		// minting) is shared, so the public contract is storage-independent.
-		return this.listFromSearchTables(
-			entity_type,
-			query,
-			sparse,
-			generateCursor,
-		) as Output;
-	}
-
-	/**
-	 * The query half of `list()` (§7.5).	/**
-	 * The query half of `list()` (§7.5).
-	 *
-	 * The query object it receives has already been through the shared front half
-	 * of `list()` — cursor decode, `where` normalization, limit clamps and
-	 * sortable-field validation — and the cursor it returns is minted by the same
-	 * `generateCursor` closure.
-	 */
-	private listFromSearchTables(
-		entity_type: string,
-		query: Database.SearchQuery<Database.AnyTable> & { limit: number; sparse: boolean },
-		sparse: boolean,
-		generateCursor: (last_item: unknown, offset?: number) => string | undefined,
-	): unknown {
-		const table = this.config[entity_type];
+		// The driver answers the whole query from SQL + the postings tables (§7.5).
 		const engine_query: SearchQuery = {
 			...(query as SearchQuery),
 			sparse: undefined,
@@ -1652,7 +1438,7 @@ export class DatabaseServer<
 							((query as { offset?: number }).offset ?? 0) + hits.length,
 						)
 					: undefined,
-		};
+		} as Output;
 	}
 
 	/**
@@ -1668,7 +1454,10 @@ export class DatabaseServer<
 	 */
 	private syncEntity(
 		entity_type: string,
-		query: DatabaseSyncRequest<DatabaseConfig> | undefined,
+		entity_query:
+			| NonNullable<DatabaseSyncRequest<DatabaseConfig>['entity']>[keyof DatabaseConfig &
+					string]
+			| undefined,
 	) {
 		const table = this.config[entity_type];
 		const search_table = this.searchTable(entity_type);
@@ -1678,8 +1467,7 @@ export class DatabaseServer<
 			last_updated_at: 0,
 			doc_count: 0,
 		};
-		const entity_query = query?.entity?.[entity_type];
-		const requested_limit = entity_query?.limit || query?.limit || 0;
+		const requested_limit = entity_query?.limit || 0;
 		const limit = Math.min(5000, requested_limit > 0 ? requested_limit : 5000);
 		const schema_changed =
 			entity_query?.config_version !== undefined &&
@@ -1715,17 +1503,11 @@ export class DatabaseServer<
 				config: schema_changed ? table.config.index_schema : undefined,
 			};
 		}
-		const from = schema_changed
-			? 0
-			: (entity_query?.start_updated_at ?? query?.start_updated_at ?? 0);
+		const from = schema_changed ? 0 : (entity_query?.start_updated_at ?? 0);
 		const to = schema_changed
 			? Number.MAX_SAFE_INTEGER
-			: (entity_query?.end_updated_at ??
-				query?.end_updated_at ??
-				Number.MAX_SAFE_INTEGER);
-		const descending =
-			schema_changed ||
-			(entity_query?.start_updated_at ?? query?.start_updated_at) === undefined;
+			: (entity_query?.end_updated_at ?? Number.MAX_SAFE_INTEGER);
+		const descending = schema_changed || entity_query?.start_updated_at === undefined;
 
 		const table_name = quoteIdentifier(search_table.table_name);
 		const primary_key = quoteIdentifier(search_table.primary_key);
@@ -1840,16 +1622,7 @@ export class DatabaseServer<
 	/** Updates the durable object metadata with the given data and saves it to the database */
 	setMeta(data: Meta) {
 		this.#state.meta = data;
-		this.ctx.storage.sql.exec(
-			`UPDATE state SET json = ?, updated_at = ? WHERE id = ?;`,
-			JSON.stringify({
-				...this.#state,
-				created_at: undefined,
-				updated_at: undefined,
-			}),
-			Date.now(),
-			'main',
-		);
+		this.saveState();
 	}
 
 	/** Deletes all the database tables and data. @dangerous */
@@ -1961,10 +1734,10 @@ export class DatabaseServer<
 		const results: DatabaseServerTransactionResult<DatabaseConfig>[] = [];
 		const now = new Date();
 
-		// Inside a batch() the outer call owns the set (and the rollback handling
-		// and post-commit compaction check) — every nested write accumulates into it.
-		const in_batch = !!this.#deferred_touched_types;
-		const touched_indexes: Set<string> = this.#deferred_touched_types ?? new Set();
+		// Inside a batch() the outer call owns the write flag (and the rollback
+		// handling) — every nested write accumulates into it.
+		const batch = this.#batch_state;
+		const touched = batch ?? { wrote: false };
 		const runOperations = () => {
 			for (const op of operations) {
 				if ('exec' in op) {
@@ -2023,7 +1796,7 @@ export class DatabaseServer<
 					// Marked touched BEFORE the index write: if `indexDocument` throws
 					// mid-way, the transaction rolls back but the in-memory dictionary
 					// cache was already mutated — the rollback handler must still drop it.
-					touched_indexes.add(entity_type);
+					touched.wrote = true;
 					this.search.indexDocument(
 						entity_type,
 						String(created_id),
@@ -2032,7 +1805,7 @@ export class DatabaseServer<
 					this.cascadeReindexReferencing(
 						entity_type,
 						output_data[primary_key] || output_data.id,
-						touched_indexes,
+						touched,
 						now,
 					);
 					results.push({
@@ -2116,7 +1889,7 @@ export class DatabaseServer<
 					this.computeFkDerivedFields(entity_type, output_data, sparse_entity as any);
 					this.persistDerivedFields(entity_type, id, sparse_entity as any);
 					// Before the index write — see the create branch.
-					touched_indexes.add(entity_type);
+					touched.wrote = true;
 					this.search.indexDocument(
 						entity_type,
 						id.toString(),
@@ -2126,7 +1899,7 @@ export class DatabaseServer<
 					this.cascadeReindexReferencing(
 						entity_type,
 						output_data[primary_key] || output_data.id || id,
-						touched_indexes,
+						touched,
 						now,
 					);
 
@@ -2160,10 +1933,10 @@ export class DatabaseServer<
 					);
 					// `removeDocument` writes the tombstone that feeds the sync deletion
 					// timeline. Marked touched first — see the create branch.
-					touched_indexes.add(entity_type);
+					touched.wrote = true;
 					this.search.removeDocument(entity_type, id.toString(), now.getTime());
 					this.search.store.pruneTombstones(entity_type);
-					this.cascadeReindexReferencing(entity_type, id, touched_indexes, now);
+					this.cascadeReindexReferencing(entity_type, id, touched, now);
 					results.push({
 						entity: {
 							type: entity_type,
@@ -2184,7 +1957,7 @@ export class DatabaseServer<
 		} catch (error) {
 			// Inside a batch the outer call owns rollback handling (its transaction
 			// may still roll back writes this one committed).
-			if (!in_batch) this.dropStaleDictionaryCache(touched_indexes);
+			if (!batch && touched.wrote) this.#dropStaleDictionaryCache();
 			throw error;
 		}
 
@@ -2207,8 +1980,8 @@ export class DatabaseServer<
 				sparse: result.entity.sparse,
 			});
 		}
-		if (this.#deferred_broadcasts) {
-			this.#deferred_broadcasts.push(...broadcasts);
+		if (batch) {
+			batch.broadcasts.push(...broadcasts);
 		} else {
 			this.#flushBroadcasts(broadcasts);
 		}
@@ -2217,13 +1990,12 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * Entity types written during the currently open batch(). Non-null only
-	 * inside a batch, so it doubles as the nested-batch marker. Search rows are
-	 * written inline, so this exists purely to know whose cached term dictionaries
-	 * a rollback invalidates.
+	 * State of the currently open batch(): non-null only inside a batch, so it
+	 * doubles as the nested-batch marker. `wrote` records whether any indexed
+	 * entity was written (a rollback must then drop the in-memory dictionary
+	 * cache); `broadcasts` holds websocket notifications until the batch commits.
 	 */
-	#deferred_touched_types: Set<string> | null = null;
-	#deferred_broadcasts: DeferredBroadcast[] | null = null;
+	#batch_state: { wrote: boolean; broadcasts: DeferredBroadcast[] } | null = null;
 
 	#flushBroadcasts(broadcasts: DeferredBroadcast[]): void {
 		if (!broadcasts.length) return;
@@ -2236,7 +2008,7 @@ export class DatabaseServer<
 					const sparse = b.sparse
 						? this.toSyncDocument(b.entity_type, b.sparse)
 						: b.sparse;
-					ws_do.entityChanged(b.action, b.entity_type, b.id, b.data, undefined, sparse);
+					ws_do.entityChanged(b.action, b.entity_type, b.id, b.data, sparse);
 				}
 			}
 		} catch {
@@ -2254,41 +2026,35 @@ export class DatabaseServer<
 	 * events interleave into the open transaction.
 	 */
 	batch<T>(fn: () => T): T {
-		if (this.#deferred_touched_types) return fn(); // nested batch — join the outer one
-		const touched_indexes = new Set<string>();
-		this.#deferred_touched_types = touched_indexes;
-		this.#deferred_broadcasts = [];
+		if (this.#batch_state) return fn(); // nested batch — join the outer one
+		const state = { wrote: false, broadcasts: [] as DeferredBroadcast[] };
+		this.#batch_state = state;
 		try {
 			let result: T;
 			try {
 				result = this.ctx.storage.transactionSync(fn);
 			} catch (error) {
-				this.dropStaleDictionaryCache(touched_indexes);
+				if (state.wrote) this.#dropStaleDictionaryCache();
 				throw error;
 			}
-			this.#flushBroadcasts(this.#deferred_broadcasts);
+			this.#flushBroadcasts(state.broadcasts);
 			return result;
 		} finally {
-			this.#deferred_touched_types = null;
-			this.#deferred_broadcasts = null;
+			this.#batch_state = null;
 		}
 	}
 
 	/**
-	 * Drops the cached term dictionaries of entity types written by a rolled-back
-	 * transaction.
+	 * Drops the cached term dictionaries after a rolled-back transaction that
+	 * wrote indexed entities.
 	 *
 	 * The search rows themselves roll back with the entity rows — they are
 	 * written in the same SQLite transaction (§7.2). The dictionaries are an
 	 * in-memory read cache that the rolled-back writes already mutated in place,
 	 * so they must be dropped for the next search to reload from SQLite.
 	 */
-	private dropStaleDictionaryCache(entity_types: Iterable<string>) {
-		for (const entity_type of entity_types) {
-			if (!this.isSearchIndexed(entity_type)) continue;
-			this.#search_engine?.store.clearDictionaryCache();
-			return;
-		}
+	#dropStaleDictionaryCache() {
+		this.#search_engine?.store.clearDictionaryCache();
 	}
 
 	/**
@@ -2395,7 +2161,7 @@ export class DatabaseServer<
 	private cascadeReindexReferencing(
 		entity_type: string,
 		entity_id: string | number,
-		touched_indexes: Set<string>,
+		touched: { wrote: boolean },
 		now: Date,
 	): void {
 		const dependents = this.#reverse_fk_map.get(entity_type);
@@ -2459,7 +2225,7 @@ export class DatabaseServer<
 				this.persistDerivedFields(dep.table, dep_entity[dep_pk], sparse);
 				// Before the index write — a mid-call throw must still invalidate the
 				// dictionary cache on rollback.
-				touched_indexes.add(dep.table);
+				touched.wrote = true;
 				this.search.indexDocument(dep.table, dep_id, sparse, previous_sparse);
 			}
 		}

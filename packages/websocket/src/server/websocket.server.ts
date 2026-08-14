@@ -317,7 +317,6 @@ export class WebsocketServer<
 		entity_type: string,
 		id: string | number,
 		data?: unknown,
-		user_id?: string,
 		sparse?: unknown,
 	): void {
 		this.broadcast({
@@ -325,7 +324,6 @@ export class WebsocketServer<
 			entity_type,
 			id,
 			data: data as Record<string, unknown> | undefined,
-			user_id,
 			sparse: sparse as Record<string, unknown> | undefined,
 		});
 	}

@@ -1,13 +1,126 @@
-import {
-	SqlDatabaseSchema,
-	SqlEntityQueryResultData,
-	SqlTable,
-	SqlTableRow,
-} from './sql.helper';
-import { prepareSql, SqlEntityQuery, SqlQueryFn } from './sql.helper';
+import { prepareSql, type SqlQueryFn } from '@delightstack/database';
 import { DelightError, generateTimestampID } from '@delightstack/utilities';
 
-/** A helper class for writing/getting data to/from CloudFlare D1 using SQL commands */
+
+/** A schema object representing the tables, columns, and rows of a database */
+export type SqlDatabaseSchema = {
+	[table: string]: {
+		[column: string]: SqlStorageValue;
+	};
+};
+
+/** A name of a table in the database schema */
+export type SqlTable<Schema = SqlDatabaseSchema> = Extract<keyof Schema, string>;
+
+/** The object data representing an entry in the database schema */
+export type SqlTableRow<
+	Schema extends SqlDatabaseSchema,
+	Table extends SqlTable<Schema>,
+> = Schema[Table];
+
+/** A column name extracted from the given database schema & table */
+export type SqlTableColumn<
+	Schema extends SqlDatabaseSchema,
+	Table extends SqlTable<Schema>,
+> = Extract<keyof SqlTableRow<Schema, Table>, string>;
+
+/** The data type of a cell in a database with the given schema, table, and column */
+export type SqlTableCell<
+	Schema extends SqlDatabaseSchema,
+	Table extends SqlTable<Schema>,
+	Column extends SqlTableColumn<Schema, Table>,
+> = Schema[Table][Column];
+
+/** An object that can be used to generate an sqlite query where clause */
+export type SqlEntityQueryWhereClause<
+	Table extends Record<string, SqlStorageValue> = {},
+> =
+	| {
+			/** The list of clauses that each row must match to be included in the results */
+			and: SqlEntityQueryWhereClause<Table>[];
+	  }
+	| {
+			/** The list of clauses that each row must match at least one of to be included in the results */
+			or: SqlEntityQueryWhereClause<Table>[];
+	  }
+	| {
+			/** The column to check against */
+			key: Extract<keyof Table, string>;
+			/**
+			 * How the column's value will be compared to the given value
+			 * - `=`: equal
+			 * - `!=`: not equal
+			 * - `>`: greater than
+			 * - `<`: less than
+			 * - `>=`: greater than or equal
+			 * - `<=`: less than or equal
+			 * - `&=`: bitwise AND
+			 * - `LIKE`: value is "like" the value in the table
+			 * - `NOT LIKE`: value is "not like" the value in the tabe
+			 * - `IN`: value is "in" the array
+			 * - `NOT IN`: value is "not in" the array
+			 */
+			is:
+				| '='
+				| '!='
+				| '>'
+				| '<'
+				| '>='
+				| '<='
+				| '&='
+				| 'LIKE'
+				| 'NOT LIKE'
+				| 'IN'
+				| 'NOT IN';
+			/** The value to compare against */
+			value: any;
+	  };
+
+/** Data in an object form used to make a string sqlite query */
+export interface SqlEntityQuery<Table extends Record<string, SqlStorageValue> = {}> {
+	/** The order the data should be returned in */
+	order?: {
+		key: Extract<keyof Table, string>;
+		direction?: 'ASC' | 'DESC';
+	}[];
+
+	/** The max amount of results that should be returned */
+	limit?: number;
+
+	/** The amount of results that should be skipped */
+	offset?: number;
+
+	/** The filters that should be applied to the query results */
+	where?: SqlEntityQueryWhereClause<Table>;
+
+	/** The columns that should be returned in the results */
+	select?: Extract<keyof Table, string>[];
+}
+
+/**
+ * The shape of each item that will be returned from the given query.
+ * Uses the 'select' field to limit to limit which columns are returned.
+ */
+export type SqlEntityQueryResultData<
+	TableData extends Record<string, SqlStorageValue>,
+	Query extends SqlEntityQuery<TableData>,
+	OutputData extends Query['select'] extends (keyof TableData)[]
+		? Pick<TableData, Query['select'][number]>
+		: TableData = Query['select'] extends (keyof TableData)[]
+		? Pick<TableData, Query['select'][number]>
+		: TableData,
+> = OutputData;
+
+/**
+ * Sanitizes a table/column identifier: lowercase letters, numbers, and
+ * underscores only, and never starting with a number. The identifiers come
+ * from the typed schema so they should already be safe — this is peace of mind.
+ */
+function sanitizeIdentifier(name: string): string {
+	return (name || '').toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+}
+
+/** A helper class for reading/writing rows in a Durable Object SQLite database using SQL commands */
 export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	constructor(private storage: DurableObjectStorage) {}
 
@@ -37,7 +150,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, id: ID, data: Data) {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+		const sanitizedTable = sanitizeIdentifier(table);
 		if (!sanitizedTable) {
 			throw new DelightError({ message: 'Missing database table name', status: 400 });
 		}
@@ -49,7 +162,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			.map(([key, value]) => {
 				if (key === undefined || value === undefined) return;
 				// Peace of mind sql injection prevention (even though this should already be safe)
-				const column = key.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+				const column = sanitizeIdentifier(key);
 				if (column === 'id') return;
 				const val = this.formatData(value);
 				return [column, val];
@@ -91,7 +204,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, id: ID, data: Partial<Data>) {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = (table || '').toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+		const sanitizedTable = sanitizeIdentifier(table);
 		if (!sanitizedTable) {
 			throw new DelightError({ message: 'Missing database table name', status: 400 });
 		}
@@ -104,7 +217,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			.map(([key, value]) => {
 				if (key === undefined || value === undefined) return;
 				// Peace of mind sql injection prevention (even though this should already be safe)
-				const column = key.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+				const column = sanitizeIdentifier(key);
 				if (column === 'id') return;
 				const val = this.formatData(value);
 				return [column, val];
@@ -134,7 +247,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, id: ID) {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = table.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+		const sanitizedTable = sanitizeIdentifier(table);
 		if (!sanitizedTable) {
 			throw new DelightError({
 				message: 'Must provide a table to delete from',
@@ -184,7 +297,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, query?: Query) {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = table.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+		const sanitizedTable = sanitizeIdentifier(table);
 		let select = `SELECT * FROM ${sanitizedTable}`;
 		let order = ``;
 		let where = ``;
@@ -194,12 +307,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 
 		// Select the appropriate columns
 		if (query?.select?.length) {
-			const columns = query.select
-				.map((column) =>
-					// Peace of mind sql injection prevention
-					column.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, ''),
-				)
-				.join(', ');
+			const columns = query.select.map(sanitizeIdentifier).join(', ');
 			select = `SELECT ${columns} FROM ${sanitizedTable}`;
 		}
 
@@ -208,7 +316,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 			order = `ORDER BY ${query.order
 				.map(({ key, direction }) => {
 					// Peace of mind sql injection prevention
-					const sanitizedColumn = key.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+					const sanitizedColumn = sanitizeIdentifier(key);
 					return `${sanitizedColumn} ${direction || 'ASC'}`;
 				})
 				.join(', ')}`;
@@ -240,7 +348,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 				}
 				// Sanitize the key (this shouldn't be necessary because 'table' should be trustworthy)
 				// We're doing this just to be safe and for peace of mind
-				const sanitizedKey = where.key.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+				const sanitizedKey = sanitizeIdentifier(where.key);
 
 				// Bitwise AND operator
 				if (where.is === '&=') {
@@ -335,7 +443,7 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 	>(table: Table, id: ID): Data {
 		// Sanitize the table name (this shouldn't be necessary because 'table' should be trustworthy)
 		// We're doing this just to be safe and for peace of mind
-		const sanitizedTable = table.toLowerCase().replace(/[^a-z0-9_]/g, '').replace(/^[0-9]+/, '');
+		const sanitizedTable = sanitizeIdentifier(table);
 		const result = this.exec<Data>(
 			`SELECT * FROM ${sanitizedTable} WHERE id = ? LIMIT 1`,
 			id,
@@ -436,19 +544,6 @@ export class SqlServer<Schema extends SqlDatabaseSchema = SqlDatabaseSchema> {
 				return target[prop];
 			},
 		});
-	}
-
-	/** Restores the database to the given timestamp (if a number) or a bookmark (if a string) */
-	async restore(timestampOrBookmark: number | string) {
-		const bookmark =
-			typeof timestampOrBookmark === 'string'
-				? timestampOrBookmark
-				: await this.storage.getBookmarkForTime(timestampOrBookmark);
-		const new_bookmark = await this.storage.onNextSessionRestoreBookmark(bookmark);
-		console.log(
-			`Restored to ${timestampOrBookmark}. Undo restore with bookmark: ${new_bookmark}`,
-		);
-		return new_bookmark;
 	}
 
 	/** Formats the given data and returns a valid database value (for SQLite) */

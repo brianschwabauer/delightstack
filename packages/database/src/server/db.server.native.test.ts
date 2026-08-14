@@ -921,7 +921,7 @@ describe('search driver — first wake after upgrading from the in-memory engine
 			{ doc_id: 'gone_2', deleted_at: T0 + 900 },
 		]);
 		// ...and they still reach a syncing client on the deletion timeline.
-		const entity = fixture.db.sync({ start_updated_at: 0 }).entity.note as {
+		const entity = fixture.db.sync({ entity: { note: { start_updated_at: 0 } } }).entity.note as {
 			deleted: string[];
 		};
 		expect(entity.deleted.sort()).toEqual(['gone_1', 'gone_2']);
@@ -1032,7 +1032,7 @@ describe('native search driver — sync()', () => {
 
 	it('returns every created entity on an initial ascending sync', () => {
 		const ids = seed(5);
-		const entity = noteSync({ start_updated_at: 0, entity: { note: {} } });
+		const entity = noteSync({ entity: { note: { start_updated_at: 0 } } });
 		expect(entity.created.map((doc) => doc.id).sort()).toEqual([...ids].sort());
 		expect(entity.updated).toEqual([]);
 		expect(entity.deleted).toEqual([]);
@@ -1045,9 +1045,7 @@ describe('native search driver — sync()', () => {
 		let start = 0;
 		for (let guard = 0; guard < 20; guard++) {
 			const entity = noteSync({
-				start_updated_at: start,
-				limit: 3,
-				entity: { note: {} },
+				entity: { note: { start_updated_at: start, limit: 3 } },
 			});
 			seen.push(...entity.created.map((doc) => doc.id));
 			const progressed = entity.end_updated_at > start;
@@ -1061,11 +1059,10 @@ describe('native search driver — sync()', () => {
 
 	it('treats start_updated_at as exclusive and end_updated_at as inclusive', () => {
 		const ids = seed(3);
-		const first = noteSync({ start_updated_at: 0, limit: 1, entity: { note: {} } });
+		const first = noteSync({ entity: { note: { start_updated_at: 0, limit: 1 } } });
 		expect(first.created).toHaveLength(1);
 		const second = noteSync({
-			start_updated_at: first.end_updated_at,
-			entity: { note: {} },
+			entity: { note: { start_updated_at: first.end_updated_at } },
 		});
 		expect(second.created.map((doc) => doc.id)).not.toContain(first.created[0].id);
 		expect(second.created).toHaveLength(2);
@@ -1076,7 +1073,7 @@ describe('native search driver — sync()', () => {
 		seed(3);
 		const all = noteSync({ entity: { note: {} } });
 		expect(all.created).toHaveLength(3);
-		const page = noteSync({ end_updated_at: T0 + 2000, entity: { note: {} } });
+		const page = noteSync({ entity: { note: { end_updated_at: T0 + 2000 } } });
 		// Descending is half-open at the top: the T0+2000 row is excluded.
 		expect(page.created.map((doc) => doc.updated_at)).toEqual([T0 + 1000, T0]);
 	});
@@ -1093,7 +1090,7 @@ describe('native search driver — sync()', () => {
 		(
 			fixture.db as unknown as { rebuildSearchTables(type: string): void }
 		).rebuildSearchTables('note');
-		const entity = noteSync({ start_updated_at: 0, limit: 2, entity: { note: {} } });
+		const entity = noteSync({ entity: { note: { start_updated_at: 0, limit: 2 } } });
 		// The limit is 2 but all five share T0 — the page must grow rather than cut
 		// the run, because the next page's boundary is exclusive.
 		expect(entity.created).toHaveLength(5);
@@ -1103,15 +1100,13 @@ describe('native search driver — sync()', () => {
 		const ids = seed(3);
 		vi.setSystemTime(T0 + 5000);
 		fixture.db.delete('note', ids[1]);
-		const entity = noteSync({ start_updated_at: 0, entity: { note: {} } });
+		const entity = noteSync({ entity: { note: { start_updated_at: 0 } } });
 		expect(entity.deleted).toEqual([ids[1]]);
 		expect(entity.created.map((doc) => doc.id)).not.toContain(ids[1]);
 
 		// A deletion outside the window is not shipped.
 		const before = noteSync({
-			start_updated_at: 0,
-			end_updated_at: T0 + 3000,
-			entity: { note: {} },
+			entity: { note: { start_updated_at: 0, end_updated_at: T0 + 3000 } },
 		});
 		expect(before.deleted).toEqual([]);
 	});

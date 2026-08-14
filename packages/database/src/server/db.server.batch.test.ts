@@ -107,7 +107,7 @@ describe('DatabaseServer.batch()', () => {
 		});
 		expect(entityChanged).toHaveBeenCalledTimes(2);
 		// Broadcast carries the sparse projection for client indexes.
-		expect(entityChanged.mock.calls[0][5]).toMatchObject({ name: 'a' });
+		expect(entityChanged.mock.calls[0][4]).toMatchObject({ name: 'a' });
 	});
 
 	it('a throw inside the batch suppresses its broadcasts', () => {

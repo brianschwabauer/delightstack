@@ -8,7 +8,7 @@ import { decodeSearchQuery } from '../search-query';
 // ---------------------------------------------------------------------------
 
 /** Entity input (without auto-managed fields) */
-type EntityInput<T extends Database.AnyTable> = Omit<
+type EntityInput<T extends Database.Table> = Omit<
 	Database.Entity<T>,
 	'id' | 'created_at' | 'updated_at'
 >;
@@ -18,7 +18,7 @@ type EntityInput<T extends Database.AnyTable> = Omit<
 // ---------------------------------------------------------------------------
 
 /** Context passed to `beforeCreate` hooks */
-export interface BeforeCreateContext<T extends Database.AnyTable> {
+export interface BeforeCreateContext<T extends Database.Table> {
 	/** The parsed entity data (validated via table.parse) */
 	data: EntityInput<T>;
 	/** The SvelteKit request event */
@@ -26,7 +26,7 @@ export interface BeforeCreateContext<T extends Database.AnyTable> {
 }
 
 /** Context passed to `beforeUpdate` hooks */
-export interface BeforeUpdateContext<T extends Database.AnyTable> {
+export interface BeforeUpdateContext<T extends Database.Table> {
 	/** The entity ID from the URL */
 	id: string;
 	/** The raw partial update data from the request body */
@@ -38,7 +38,7 @@ export interface BeforeUpdateContext<T extends Database.AnyTable> {
 }
 
 /** Context passed to `beforeDelete` hooks */
-export interface BeforeDeleteContext<T extends Database.AnyTable> {
+export interface BeforeDeleteContext<T extends Database.Table> {
 	/** The entity ID from the URL */
 	id: string;
 	/** The existing entity fetched from the database */
@@ -64,7 +64,7 @@ export interface BeforeListContext {
 }
 
 /** Context passed to `afterCreate` and `afterUpdate` hooks */
-export interface AfterWriteContext<T extends Database.AnyTable> {
+export interface AfterWriteContext<T extends Database.Table> {
 	/** The entity as returned from the database after the write */
 	data: Database.Entity<T>;
 	/** The SvelteKit request event */
@@ -84,7 +84,7 @@ export interface AfterDeleteContext {
 // ---------------------------------------------------------------------------
 
 /** Lifecycle hooks for a database entity route */
-export interface DatabaseRouteHooks<T extends Database.AnyTable> {
+export interface DatabaseRouteHooks<T extends Database.Table> {
 	/**
 	 * Called before creating an entity. Throw to reject.
 	 * Optionally return modified data to override what gets written.
@@ -142,50 +142,15 @@ export interface DatabaseRouteHooks<T extends Database.AnyTable> {
 // ---------------------------------------------------------------------------
 
 /** Internal config stored per route (type-erased for the array) */
-export interface DatabaseRouteConfig {
+interface DatabaseRouteConfig {
 	/** The base route path (e.g. `/api/person`) */
 	route: string;
 	/** The entity type name matching the key in your DatabaseConfig (e.g. `'person'`) */
 	entity: string;
 	/** The table definition created by `Database.table()` */
-	table: Database.AnyTable;
+	table: Database.Table;
 	/** Optional lifecycle hooks */
-	hooks?: DatabaseRouteHooks<Database.AnyTable>;
-}
-
-/**
- * Defines a typed database entity route. The generic parameter flows into hook
- * context types, giving you autocomplete on `data` and `existing`.
- *
- * @example
- * ```ts
- * const personRoute = defineRoute({
- *   entity: 'person', // route defaults to '/api/person'
- *   table: personTable,
- *   hooks: {
- *     beforeCreate: ({ data, event }) => {
- *       if (!event.locals.user) throw new DelightError({ message: 'Unauthorized', status: 401 });
- *     },
- *     beforeUpdate: ({ existing, event }) => {
- *       if (existing.creator_id !== event.locals.user?.id) {
- *         throw new DelightError({ message: 'Forbidden', status: 403 });
- *       }
- *     },
- *   },
- * });
- * ```
- */
-export function defineRoute<T extends Database.AnyTable>(options: {
-	/** The base route path (e.g. `/api/person`). Defaults to `/api/${entity}`. */
-	route?: string;
-	entity: string;
-	table: T;
-	hooks?: DatabaseRouteHooks<T>;
-}): DatabaseRouteConfig {
-	return {
-		...options,
-		route: options.route || `/api/${options.entity}`,
-	} as DatabaseRouteConfig;
+	hooks?: DatabaseRouteHooks<Database.Table>;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +159,7 @@ export function defineRoute<T extends Database.AnyTable>(options: {
 
 /** Options for `createDatabaseHandle()` */
 export interface DatabaseHandleOptions<
-	Tables extends Record<string, Database.AnyTable> = Record<string, Database.AnyTable>,
+	Tables extends Record<string, Database.Table> = Record<string, Database.Table>,
 > {
 	/**
 	 * Returns the database server instance for the current request.
@@ -203,16 +168,12 @@ export interface DatabaseHandleOptions<
 	getDatabase: (event: RequestEvent) => DatabaseRpc | undefined;
 
 	/**
-	 * Tables to auto-generate CRUD routes for at `/api/${entity}`. Use with
-	 * `hooks` to customize per-entity behavior, or with `routes` for a
-	 * fully explicit config.
+	 * Tables to generate CRUD routes for at `/api/${entity}`. Use `hooks` to
+	 * customize per-entity behavior.
 	 */
-	tables?: Tables;
+	tables: Tables;
 
-	/**
-	 * Per-entity lifecycle hooks. Keyed by entity name. Only needed when
-	 * using `tables` — for `routes`, pass hooks inline via `defineRoute`.
-	 */
+	/** Per-entity lifecycle hooks, keyed by entity name. */
 	hooks?: { [K in keyof Tables]?: DatabaseRouteHooks<Tables[K]> };
 
 	/**
@@ -224,21 +185,17 @@ export interface DatabaseHandleOptions<
 	requireAuth?: boolean;
 
 	/**
-	 * Explicit route list. Use this for routes that need a custom path
-	 * or hooks that don't fit the `tables` + `hooks` shorthand. Merged
-	 * with any auto-generated routes from `tables`.
-	 */
-	routes?: DatabaseRouteConfig[];
-
-	/**
-	 * Enable the sync endpoint for client-side search index synchronization.
-	 * Set to `true` to expose `POST /api/sync`, or pass an object to customize
-	 * the path and/or add a `beforeSync` hook (e.g. for per-user authorization).
-	 * Requires the database RPC to implement `sync()`.
+	 * The sync endpoint for client-side search index synchronization —
+	 * enabled by default at `POST /api/sync` (the client's local search
+	 * index depends on it). Pass `false` to disable, or an object to
+	 * customize the path and/or add a `beforeSync` hook (e.g. for per-user
+	 * authorization). Requires the database RPC to implement `sync()`.
 	 *
-	 * Note: the sync endpoint returns the sparse search data of ALL entities.
-	 * When `requireAuth` is true (the default), it requires a session; use
-	 * `beforeSync` for anything more granular.
+	 * SECURITY: the sync endpoint returns the sparse (searchable) fields of
+	 * ALL entities — row-level restrictions applied in `beforeList` hooks do
+	 * NOT apply to it. When `requireAuth` is true (the default) it requires a
+	 * session; for entities with per-user visibility use `beforeSync` or opt
+	 * them out of syncing with `search_mode: 'server'` on the client.
 	 */
 	sync?:
 		| boolean
@@ -525,24 +482,11 @@ async function handleSync(db: DatabaseRpc, event: RequestEvent): Promise<Respons
 		});
 	}
 
-	// Support both POST body and URL search params for the sync query
 	let query: Record<string, unknown> = {};
-	if (event.request.method === 'POST') {
-		const body = await event.request.json().catch(() => undefined);
-		if (body && typeof body === 'object') {
-			query = body as Record<string, unknown>;
-		}
+	const body = await event.request.json().catch(() => undefined);
+	if (body && typeof body === 'object') {
+		query = body as Record<string, unknown>;
 	}
-
-	// Also merge URL params (start, end, limit) — ignore non-numeric values
-	const start = parseInt(event.url.searchParams.get('start') || '', 10);
-	if (Number.isFinite(start)) query.start_updated_at = query.start_updated_at ?? start;
-
-	const end = parseInt(event.url.searchParams.get('end') || '', 10);
-	if (Number.isFinite(end)) query.end_updated_at = query.end_updated_at ?? end;
-
-	const limit = parseInt(event.url.searchParams.get('limit') || '', 10);
-	if (Number.isFinite(limit)) query.limit = query.limit ?? limit;
 
 	const data = await db.sync(query);
 	return jsonResponse(data);
@@ -556,12 +500,9 @@ async function handleSync(db: DatabaseRpc, event: RequestEvent): Promise<Respons
  * Creates a SvelteKit Handle that intercepts requests matching the configured
  * entity routes and performs CRUD operations with lifecycle hooks.
  *
- * Two usage modes:
- *
- * **Table-driven (recommended):** pass your `tables` map and optional
- * per-entity `hooks`. CRUD routes at `/api/${entity}` are generated
- * automatically. `requireAuth: true` (the default) rejects CUD without a
- * session.
+ * Pass your `tables` map and optional per-entity `hooks`. CRUD routes at
+ * `/api/${entity}` are generated automatically. `requireAuth: true` (the
+ * default) rejects create/update/delete without a session.
  *
  * ```ts
  * const databaseHandle = createDatabaseHandle({
@@ -575,66 +516,48 @@ async function handleSync(db: DatabaseRpc, event: RequestEvent): Promise<Respons
  *   sync: true,
  * });
  * ```
- *
- * **Explicit routes:** pass a `routes` array (optionally alongside
- * `tables`) for full control over paths and hook composition.
  */
 export function createDatabaseHandle<
-	Tables extends Record<string, Database.AnyTable> = Record<string, Database.AnyTable>,
+	Tables extends Record<string, Database.Table> = Record<string, Database.Table>,
 >(options: DatabaseHandleOptions<Tables>): Handle {
 	const require_auth = options.requireAuth ?? true;
 
-	// Auto-generate routes from the tables map, merging per-entity hooks.
-	const auto_routes: DatabaseRouteConfig[] = options.tables
-		? Object.entries(options.tables).map(([entity, table]) => {
-				const user_hooks =
-					(options.hooks?.[entity as keyof Tables] as
-						| DatabaseRouteHooks<Database.Table>
-						| undefined) ?? {};
-				const hooks: DatabaseRouteHooks<Database.Table> = require_auth
-					? { ...withAuthGuards(user_hooks) }
-					: user_hooks;
-				return {
-					route: `/api/${entity}`,
-					entity,
-					table: table as Database.Table,
-					hooks,
-				};
-			})
-		: [];
-
-	// Explicit routes get the same auth guard as auto-generated ones —
-	// `requireAuth` (default true) must protect writes regardless of how the
-	// route was declared.
-	const explicit = (options.routes ?? []).map((r) =>
-		require_auth ? { ...r, hooks: withAuthGuards(r.hooks ?? {}) } : r,
+	// Generate routes from the tables map, merging per-entity hooks.
+	const routes: DatabaseRouteConfig[] = Object.entries(options.tables).map(
+		([entity, table]) => {
+			const user_hooks =
+				(options.hooks?.[entity as keyof Tables] as
+					| DatabaseRouteHooks<Database.Table>
+					| undefined) ?? {};
+			const hooks: DatabaseRouteHooks<Database.Table> = require_auth
+				? { ...withAuthGuards(user_hooks) }
+				: user_hooks;
+			return {
+				route: `/api/${entity}`,
+				entity,
+				table: table as Database.Table,
+				hooks,
+			};
+		},
 	);
 
-	// Later routes override earlier ones (so users can shadow an auto
-	// route by providing the same path in `routes`).
-	const by_route = new Map<string, DatabaseRouteConfig>();
-	for (const r of [...auto_routes, ...explicit]) {
-		const route = r.route.endsWith('/') ? r.route.slice(0, -1) : r.route;
-		by_route.set(route, { ...r, route });
-	}
-
-	const routes = [...by_route.values()].sort((a, b) => b.route.length - a.route.length);
-
-	// Resolve sync path + hook
-	const sync_path = options.sync
-		? typeof options.sync === 'object'
-			? (options.sync.path ?? '/api/sync')
+	// Resolve sync path + hook. Sync defaults ON — the client's local search
+	// index depends on it, and a missing endpoint fails silently. Pass
+	// `sync: false` to opt out.
+	const sync = options.sync ?? true;
+	const sync_path = sync
+		? typeof sync === 'object'
+			? (sync.path ?? '/api/sync')
 			: '/api/sync'
 		: null;
-	const before_sync =
-		typeof options.sync === 'object' ? options.sync.beforeSync : undefined;
+	const before_sync = typeof sync === 'object' ? sync.beforeSync : undefined;
 
 	return async ({ event, resolve }) => {
 		const pathname = event.url.pathname;
 		const method = event.request.method;
 
 		// Handle sync route
-		if (sync_path && pathname === sync_path && (method === 'POST' || method === 'GET')) {
+		if (sync_path && pathname === sync_path && method === 'POST') {
 			const db = options.getDatabase(event);
 			if (!db) {
 				return errorResponse(new DelightError('Database not available'));

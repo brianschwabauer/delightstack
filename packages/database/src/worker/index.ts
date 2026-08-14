@@ -2,4 +2,9 @@
 // that only resolves inside the Cloudflare Workers runtime.
 // SvelteKit apps should import from '@delightstack/database/server' instead.
 export { DatabaseServer } from '../server/db.server';
-export { SqlServer } from '../server/sql.server';
+export type {
+	DatabaseSyncRequest,
+	DatabaseSyncResponse,
+	DatabaseServerTransaction,
+	DatabaseServerTransactionResult,
+} from '../server/db.server';

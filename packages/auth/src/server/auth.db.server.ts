@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { SqlServer, type SqlEntityQuery } from '@delightstack/database';
+import { SqlServer, type SqlEntityQuery } from './sql.server';
 import { AUTH_DATABASE_UPGRADES, AuthDatabaseSchema } from './auth.sql.schema';
 import { DelightError, generateID, parseSchema } from '@delightstack/utilities';
 import { generateJwt, decodeJwt } from './jwt.server';

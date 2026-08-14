@@ -65,7 +65,7 @@ function pageThroughSync(
 	const deleted: (string | number)[] = [];
 	const pages: SyncEntity[] = [];
 	for (let guard = 0; guard < 50; guard++) {
-		const res = db.sync({ start_updated_at: start, limit });
+		const res = db.sync({ entity: { item: { start_updated_at: start, limit } } });
 		const entity = res.entity.item as SyncEntity;
 		pages.push(entity);
 		created.push(...entity.created);
@@ -101,7 +101,7 @@ describe('DatabaseServer.sync()', () => {
 			ids.push(db.create('item', { name: `item ${i}` }).id as string);
 		}
 
-		const res = db.sync({ start_updated_at: 0 });
+		const res = db.sync({ entity: { item: { start_updated_at: 0 } } });
 		const entity = res.entity.item as SyncEntity;
 		expect(entity.created.map((d: any) => d.id).sort()).toEqual([...ids].sort());
 		expect(entity.updated).toEqual([]);
@@ -132,7 +132,7 @@ describe('DatabaseServer.sync()', () => {
 		const second = db.create('item', { name: 'second' });
 
 		// A client that already synced through T0 must only get the second item
-		const res = db.sync({ start_updated_at: T0 });
+		const res = db.sync({ entity: { item: { start_updated_at: T0 } } });
 		const entity = res.entity.item as SyncEntity;
 		expect(entity.created.map((d: any) => d.id)).toEqual([second.id]);
 	});
@@ -144,7 +144,7 @@ describe('DatabaseServer.sync()', () => {
 		vi.setSystemTime(T0 + 1000);
 		db.create('item', { name: 'b' });
 
-		const res = db.sync({ start_updated_at: 0, end_updated_at: T0 });
+		const res = db.sync({ entity: { item: { start_updated_at: 0, end_updated_at: T0 } } });
 		const entity = res.entity.item as SyncEntity;
 		expect(entity.created.map((d: any) => d.id)).toEqual([a.id]);
 	});
@@ -160,7 +160,7 @@ describe('DatabaseServer.sync()', () => {
 		vi.setSystemTime(T0 + 100_000);
 		db.delete('item', ids[0]);
 
-		const res = db.sync({ start_updated_at: 0, end_updated_at: T0 + 50_000 });
+		const res = db.sync({ entity: { item: { start_updated_at: 0, end_updated_at: T0 + 50_000 } } });
 		const entity = res.entity.item as SyncEntity;
 		expect(entity.deleted).toEqual([]); // delete is outside (0, T0+50_000]
 		expect(entity.end_updated_at).toBeLessThanOrEqual(T0 + 50_000);
@@ -192,7 +192,7 @@ describe('DatabaseServer.sync()', () => {
 			db.create('item', { name: `item ${i}` });
 		}
 
-		const res = db.sync({ start_updated_at: 0, limit: 3 });
+		const res = db.sync({ entity: { item: { start_updated_at: 0, limit: 3 } } });
 		const entity = res.entity.item as SyncEntity;
 		const returned_max = Math.max(...entity.created.map((d: any) => d.updated_at));
 		expect(entity.end_updated_at).toBe(returned_max);
@@ -208,7 +208,7 @@ describe('DatabaseServer.sync()', () => {
 			{ create: { type: 'item', data: { name: 'b' } } },
 			{ create: { type: 'item', data: { name: 'c' } } },
 		]);
-		const first = db.sync({ start_updated_at: 0 });
+		const first = db.sync({ entity: { item: { start_updated_at: 0 } } });
 		const synced_through = (first.entity.item as SyncEntity).end_updated_at;
 		expect(synced_through).toBeGreaterThanOrEqual(T0);
 
@@ -218,7 +218,7 @@ describe('DatabaseServer.sync()', () => {
 		const d = db.create('item', { name: 'd' });
 		expect(d.updated_at).toBeGreaterThan(synced_through);
 
-		const second = db.sync({ start_updated_at: synced_through });
+		const second = db.sync({ entity: { item: { start_updated_at: synced_through } } });
 		const entity = second.entity.item as SyncEntity;
 		expect(entity.created.map((doc: any) => doc.id)).toEqual([d.id]);
 		expect(entity.last_updated_at).toBeGreaterThan(synced_through);
@@ -233,8 +233,8 @@ describe('DatabaseServer.sync()', () => {
 		}
 
 		const res = db.sync({
-			start_updated_at: T0 + 999_999, // far past — would normally return nothing
-			entity: { item: { config_version: 999 } },
+			// start far past — a schema change overrides the window and returns everything
+			entity: { item: { config_version: 999, start_updated_at: T0 + 999_999 } },
 		});
 		const entity = res.entity.item as SyncEntity;
 		expect(entity.config).toBeDefined();
@@ -260,7 +260,7 @@ describe('DatabaseServer.sync()', () => {
 			{ update: { type: 'item', id: a.id as string, data: { name: 'a2' } } },
 		]);
 
-		const res = db.sync({ start_updated_at: 0 });
+		const res = db.sync({ entity: { item: { start_updated_at: 0 } } });
 		const entity = res.entity.item as SyncEntity;
 		// The id now exists again — it must NOT still be reported as deleted,
 		// otherwise clients can apply the delete after the create and lose the row.
@@ -323,7 +323,7 @@ describe('DatabaseServer.sync(): vector strip (plan §7.0)', () => {
 		});
 		db.create('item', { name: 'embedded item', embedding: [0.1, 0.2, 0.3] });
 
-		const entity = db.sync({ start_updated_at: 0 }).entity.item as any;
+		const entity = db.sync({ entity: { item: { start_updated_at: 0 } } }).entity.item as any;
 		const docs = [...entity.created, ...entity.updated];
 		expect(docs).toHaveLength(1);
 		// The searchable fields still travel; the embedding does not — vector
@@ -360,7 +360,7 @@ describe('DatabaseServer.sync(): backfill ceiling (defer_over)', () => {
 	it('reports total_count on every entity result', () => {
 		const { db } = createServer();
 		seed(db, 3);
-		const entity = db.sync({ start_updated_at: 0 }).entity.item as SyncEntity;
+		const entity = db.sync({ entity: { item: { start_updated_at: 0 } } }).entity.item as SyncEntity;
 		expect(entity.total_count).toBe(3);
 		expect(entity.deferred).toBeUndefined();
 	});

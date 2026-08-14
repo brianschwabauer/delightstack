@@ -76,7 +76,9 @@ describe('DatabaseServer: entity API', () => {
 	});
 
 	it('fetches an entity', () => {
-		const created = fixture.db.create('users', { name: 'Test User' } as never) as unknown as { id: string };
+		const created = fixture.db.create('users', {
+			name: 'Test User',
+		} as never) as unknown as { id: string };
 		expect(fixture.db.get('users', created.id)).toMatchObject({
 			id: created.id,
 			name: 'Test User',
@@ -93,36 +95,6 @@ describe('DatabaseServer: entity API', () => {
 		expect(() => fixture.db.get('nonexistent_type' as never, '123')).toThrow(
 			expect.objectContaining({ status: 400 }),
 		);
-	});
-
-	it('batch-gets in request order with a single IN query', () => {
-		const alice = fixture.db.create('users', { name: 'Alice' } as never) as unknown as { id: string };
-		const bob = fixture.db.create('users', { name: 'Bob' } as never) as unknown as { id: string };
-		fixture.state.log.length = 0;
-
-		const results = fixture.db.get([
-			{ entity_type: 'users', id: bob.id },
-			{ entity_type: 'users', id: alice.id },
-		]) as unknown as { id: string }[];
-
-		expect(results.map((row) => row.id)).toEqual([bob.id, alice.id]);
-		expect(
-			fixture.state.log.filter((entry) => entry.sql.includes('WHERE id IN')),
-		).toHaveLength(1);
-	});
-
-	it('returns an empty array for an empty batch', () => {
-		expect(fixture.db.get([])).toEqual([]);
-	});
-
-	it('throws 404 if any batch entity is missing', () => {
-		const alice = fixture.db.create('users', { name: 'Alice' } as never) as unknown as { id: string };
-		expect(() =>
-			fixture.db.get([
-				{ entity_type: 'users', id: alice.id },
-				{ entity_type: 'users', id: 'missing' },
-			]),
-		).toThrow(expect.objectContaining({ status: 404 }));
 	});
 
 	it('creates an entity with generated id and timestamps', () => {
@@ -150,7 +122,9 @@ describe('DatabaseServer: entity API', () => {
 	});
 
 	it('deletes an entity', () => {
-		const created = fixture.db.create('users', { name: 'Doomed' } as never) as unknown as { id: string };
+		const created = fixture.db.create('users', {
+			name: 'Doomed',
+		} as never) as unknown as { id: string };
 		fixture.db.delete('users', created.id);
 		expect(() => fixture.db.get('users', created.id)).toThrow(
 			expect.objectContaining({ status: 404 }),
@@ -206,7 +180,9 @@ describe('DatabaseServer: entity API', () => {
 
 	it('does not crash on a corrupt json column and falls back to plain columns', () => {
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const created = fixture.db.create('users', { name: 'Test User' } as never) as unknown as { id: string };
+		const created = fixture.db.create('users', {
+			name: 'Test User',
+		} as never) as unknown as { id: string };
 		fixture.state.db
 			.prepare(`UPDATE users SET json = ? WHERE id = ?`)
 			.run('{not valid json', created.id);
@@ -306,7 +282,9 @@ describe('DatabaseServer: FK-derived fields', () => {
 	}
 
 	it('computes FK-derived fields on create', () => {
-		const author = fixture.db.create('authors', { name: 'Alice' } as never) as unknown as { id: string };
+		const author = fixture.db.create('authors', {
+			name: 'Alice',
+		} as never) as unknown as { id: string };
 		const book = fixture.db.create('books', {
 			title: 'Book 1',
 			author_id: author.id,
@@ -315,7 +293,9 @@ describe('DatabaseServer: FK-derived fields', () => {
 	});
 
 	it('cascades to dependent books when the author is updated', () => {
-		const author = fixture.db.create('authors', { name: 'Old Name' } as never) as unknown as { id: string };
+		const author = fixture.db.create('authors', {
+			name: 'Old Name',
+		} as never) as unknown as { id: string };
 		const first = fixture.db.create('books', {
 			title: 'Book 1',
 			author_id: author.id,
@@ -331,12 +311,17 @@ describe('DatabaseServer: FK-derived fields', () => {
 		expect(indexedAuthorName(second.id)).toBe('New Name');
 		// The dependent rows must move in the sync timeline or clients never see it.
 		expect(
-			Number((fixture.db.get('books', first.id) as unknown as { updated_at: number }).updated_at),
+			Number(
+				(fixture.db.get('books', first.id) as unknown as { updated_at: number })
+					.updated_at,
+			),
 		).toBeGreaterThan(first.updated_at);
 	});
 
 	it('cascades to dependent books when the author is deleted', () => {
-		const author = fixture.db.create('authors', { name: 'Alice' } as never) as unknown as { id: string };
+		const author = fixture.db.create('authors', {
+			name: 'Alice',
+		} as never) as unknown as { id: string };
 		const book = fixture.db.create('books', {
 			title: 'Book 1',
 			author_id: author.id,

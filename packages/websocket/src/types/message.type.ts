@@ -9,8 +9,6 @@ export interface EntityChangedMessage {
 	id: string | number;
 	/** Full entity data for create/update; undefined for delete */
 	data?: Record<string, unknown>;
-	/** The user who triggered the change (if known) */
-	user_id?: string;
 	/**
 	 * The sparse (search-index) projection of the entity, exactly as the
 	 * server indexed it. Clients maintaining a local search index must insert
