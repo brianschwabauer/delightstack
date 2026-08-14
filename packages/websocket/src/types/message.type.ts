@@ -162,11 +162,6 @@ export type ConnectionStatus =
 // Entity change event (used by DatabaseClient integration)
 // ---------------------------------------------------------------------------
 
-export interface EntityChangeEvent {
-	type: 'create' | 'update' | 'delete';
-	entity_type: string;
-	id: string | number;
-	data?: Record<string, unknown>;
-	/** The server's sparse search-index projection of the entity (see EntityChangedMessage.sparse) */
-	sparse?: Record<string, unknown>;
-}
+// The shape is owned by the database↔websocket contract in
+// @delightstack/database; this alias keeps the established name.
+export type { DatabaseEntityChange as EntityChangeEvent } from '@delightstack/database';

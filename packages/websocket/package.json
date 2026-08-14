@@ -71,6 +71,7 @@
 		}
 	},
 	"dependencies": {
+		"@delightstack/database": "workspace:*",
 		"@delightstack/utilities": "workspace:*",
 		"comlink": "^4.4.2"
 	},

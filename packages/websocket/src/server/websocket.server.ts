@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DelightError, generateID } from '@delightstack/utilities';
+import type { DatabaseBroadcast } from '@delightstack/database';
 import type {
 	WebsocketMessage,
 	WebsocketSessionMeta,
@@ -115,9 +116,12 @@ interface Env {
  * }
  * ```
  */
-export class WebsocketServer<
-	Meta extends Record<string, unknown> = AuthSessionMeta,
-> extends DurableObject<Env> {
+export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionMeta>
+	extends DurableObject<Env>
+	// The broadcast half of the database↔websocket contract — implementing it
+	// here makes any drift in entityChanged() a compile error.
+	implements DatabaseBroadcast
+{
 	private sessions = new Map<WebSocket, WebsocketSessionMeta<Meta>>();
 	private config: WebsocketServerConfig<Meta>;
 

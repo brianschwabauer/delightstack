@@ -1,4 +1,5 @@
 import type { Remote } from 'comlink';
+import type { DatabaseClientHooks } from '@delightstack/database';
 import type { WebsocketWorker } from './websocket.worker';
 import type {
 	WebsocketMessage,
@@ -392,11 +393,9 @@ export class WebsocketClient<
 	 * });
 	 * ```
 	 */
-	databaseHooks(): {
-		onEntityChange: (event: EntityChangeEvent) => void;
-		onSubscribe: (callback: (event: EntityChangeEvent) => void) => () => void;
-		isLive: () => boolean;
-	} {
+	// Typed as the contract from @delightstack/database, so a drift between the
+	// two packages is a compile error here rather than a runtime mismatch.
+	databaseHooks(): Required<DatabaseClientHooks> {
 		return {
 			onEntityChange: () => {
 				// No-op: when the local DatabaseClient performs a CRUD operation,
