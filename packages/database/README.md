@@ -280,7 +280,16 @@ schema.string().password(); // Masked input (UI hint only)
 schema.string().phone(); // Phone number (UI hint only)
 ```
 
-> **`Date` coercion.** `parse()` accepts a `Date` instance wherever the column can represent one, converting it to the declared type: epoch-ms number for `number()` fields (including `created_at`/`updated_at`), `"YYYY-MM-DD"` for `.date()`, `"HH:MM:SS"` for `.time()`, and full ISO 8601 for `.datetime()`. Unformatted string fields stay strict and reject `Date` objects, as does every other field type.
+> **Input coercion.** Before validating, `parse()` (and the form standard schema — both share one validator) converts inputs with a single canonical representation to the field's declared type:
+>
+> - `Date` → epoch-ms number for `number()` fields (including `created_at`/`updated_at`), `"YYYY-MM-DD"` for `.date()`, `"HH:MM:SS"` for `.time()`, full ISO 8601 for `.datetime()`
+> - `URL` instance → `.href` for `.url()` fields
+> - Whole numeric strings (`"42"`, `" 4.5 "`) → numbers for `number()` fields — so native `FormData` values validate
+> - `'true'`/`'on'`/`'1'`/`1` → `true` and `'false'`/`'0'`/`0` → `false` for `boolean()` fields
+> - `Float32Array`/`Float64Array` (and other typed arrays) → plain number arrays for `vector()` fields
+> - `{ latitude, longitude }` (e.g. a `GeolocationCoordinates`) → `{ lat, lon }` for `geopoint()` fields; out-of-range coordinates clamp
+>
+> Ambiguous conversions are deliberately not attempted: JSON strings never auto-parse, ISO text never coerces into plain `number()` fields, and a `Date` into an unformatted `string()` field is still an error.
 
 ### String Validators
 

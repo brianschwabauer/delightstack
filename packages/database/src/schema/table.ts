@@ -464,71 +464,10 @@ function recursivelyParseField(
 		);
 	}
 
-	// Parse/validate geopoint fields (used for location based searching)
-	if (field.type === 'geopoint') {
-		const lat = Number(value?.lat);
-		const lon = Number(value?.lon);
-		if (isNaN(lat) || isNaN(lon)) {
-			issues.push({
-				message: `Field '${label}' must be a geopoint with valid 'lat' and 'lon' numbers.`,
-				path,
-			});
-			return;
-		}
-		return {
-			lat: Math.max(-90, Math.min(90, lat)),
-			lon: Math.max(-180, Math.min(180, lon)),
-		};
-	}
-
-	// Parse/validate boolean fields
-	if (field.type === 'boolean') {
-		if (value === 'true' || value === '1' || value === 1) return true;
-		if (value === 'false' || value === '0' || value === 0) return false;
-		if (typeof value !== 'boolean') {
-			issues.push({
-				message: `Field '${label}' must be a boolean.`,
-				path,
-			});
-		}
-		return value;
-	}
-
-	// Parse/validate enum fields
-	if (field.type === 'enum') {
-		if (typeof value !== 'string' || !field.options.includes(value)) {
-			issues.push({
-				message: `Field '${label}' must be one of the allowed options: ${field.options.join(
-					', ',
-				)}.`,
-				path,
-			});
-			return;
-		}
-		return value;
-	}
-
-	// Parse/validate vector fields (used for vector search)
-	if (field.type === 'vector') {
-		if (!Array.isArray(value) || value.length !== field.dimensions) {
-			issues.push({
-				message: `Field '${label}' must be an array of numbers with length ${field.dimensions}.`,
-				path,
-			});
-			return;
-		}
-		const parsedVector = value.map((v, i) => {
-			const num = Number(v);
-			if (isNaN(num)) {
-				issues.push({
-					message: `Field '${label}' has an invalid number at index ${i}.`,
-					path,
-				});
-			}
-			return num;
-		});
-		return parsedVector;
-	}
+	// Geopoint, boolean, enum, and vector fields fall through to the shared
+	// FieldValidator below — its coercion stage covers the liberal inputs the
+	// old inline branches accepted (boolean form tokens, numeric-string
+	// coordinates and vector items, typed arrays, {latitude, longitude})
 
 	// Foreign key fields are either strings or numbers and have no validator
 	if (field.type === 'foreign_key') {

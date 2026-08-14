@@ -410,6 +410,87 @@ describe('Schema: parse()', () => {
 		expect(result).toHaveProperty('updated_at', date.getTime());
 	});
 
+	it('should coerce URL objects, numeric strings, and boolean tokens', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			homepage: schema.string().url(),
+			views: schema.number(),
+			rating: schema.number(),
+			published: schema.boolean(),
+			featured: schema.boolean(),
+		}));
+
+		const result = table.parse({
+			id: 'x',
+			homepage: new URL('https://example.com/a?b=1'),
+			views: '42',
+			rating: ' 4.5 ',
+			published: 'on',
+			featured: 'false',
+		} as any);
+		expect(result).toHaveProperty('homepage', 'https://example.com/a?b=1');
+		expect(result).toHaveProperty('views', 42);
+		expect(result).toHaveProperty('rating', 4.5);
+		expect(result).toHaveProperty('published', true);
+		expect(result).toHaveProperty('featured', false);
+
+		// Malformed numeric strings still fail
+		expect(() => table.parse({ ...result, views: '42abc' } as any)).toThrow();
+		expect(() => table.parse({ ...result, views: '' } as any)).toThrow();
+		// URL objects don't coerce for non-.url() fields
+		expect(() =>
+			table.parse({
+				...result,
+				homepage: 'https://ok.com',
+				views: new URL('https://x.com'),
+			} as any),
+		).toThrow();
+	});
+
+	it('should coerce typed arrays for vectors and lat/lon aliases for geopoints', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+			embedding: schema.vector(3),
+			location: schema.geopoint(),
+		}));
+
+		const result = table.parse({
+			id: 'x',
+			name: 'test',
+			embedding: new Float32Array([0.5, -0.25, 1]),
+			// GeolocationCoordinates-style input, out-of-range lat clamps
+			location: { latitude: 95, longitude: '-122.5' },
+		} as any);
+		expect(result).toHaveProperty('embedding', [0.5, -0.25, 1]);
+		expect(result).toHaveProperty('location', { lat: 90, lon: -122.5 });
+
+		// Wrong dimensions still fail
+		expect(() =>
+			table.parse({
+				id: 'x',
+				name: 't',
+				embedding: new Float32Array(2),
+				location: { lat: 0, lon: 0 },
+			} as any),
+		).toThrow();
+	});
+
+	it('should apply the same coercions through the form standard schema', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			views: schema.number(),
+			published: schema.boolean(),
+		}));
+
+		// Native FormData delivers strings — the form validator must accept them
+		const result = table.form.schema['~standard'].validate({
+			views: '7',
+			published: 'on',
+		}) as { issues?: unknown[] };
+		expect(result.issues).toBeUndefined();
+	});
+
 	it('should reject Date objects for unformatted string fields and invalid Dates', () => {
 		const table = Database.table('items', (schema) => ({
 			id: schema.primaryKey(),

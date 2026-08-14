@@ -139,8 +139,9 @@ export class FieldValidator {
 	 * Pipeline order:
 	 *   1. undefined → default (short-circuits like zod v4: the default value is
 	 *      returned as-is, without transforms or validation) or optional passthrough
-	 *   2. Date coercion — a Date becomes epoch ms for number fields, or ISO text
-	 *      for `.date()`/`.time()`/`.datetime()` string fields
+	 *   2. coercion — unambiguous conversions to the declared type: Date → epoch
+	 *      ms / ISO text, URL → href, numeric strings → numbers, boolean form
+	 *      tokens, typed arrays → vector arrays, {latitude,longitude} → {lat,lon}
 	 *   3. transforms (string fields only), in declaration order — so
 	 *      `.trim().min(1)` rejects a whitespace-only string
 	 *   4. built-in validators (min/max/format/gt/lt/step/…)
@@ -167,10 +168,17 @@ export class FieldValidator {
 			return { success: false, error: `Invalid input: expected ${field.type}` };
 		}
 
-		// Coercion stage — a Date instance is converted to the field's declared
-		// representation: epoch ms for number fields, ISO text (matching the
-		// declared `.date()`/`.time()`/`.datetime()` format) for string fields.
-		// Unformatted string fields (and every other type) stay strict.
+		// Coercion stage — rich objects and stringly inputs with a single
+		// canonical representation are converted to the field's declared type
+		// before any validation runs. Ambiguous conversions (JSON strings,
+		// ISO text into plain number fields, …) are deliberately not attempted.
+		//   Date          → epoch ms (number fields) / ISO text (`.date()`,
+		//                   `.time()`, `.datetime()` string fields)
+		//   URL           → `.href` (`.url()` string fields)
+		//   "42"          → 42 (number fields; whole numeric strings only)
+		//   'true' / 'on' → boolean (form & query-param tokens)
+		//   Float32Array… → plain number array (vector fields)
+		//   { latitude, longitude } → { lat, lon } (geopoint fields)
 		if (value instanceof Date) {
 			if (Number.isNaN(value.getTime())) {
 				return { success: false, error: 'Invalid date' };
@@ -188,6 +196,49 @@ export class FieldValidator {
 								? iso.slice(11, 19)
 								: iso;
 				}
+			}
+		} else if (value instanceof URL) {
+			if (field.type === 'string' && (field as StringField).format === 'url') {
+				value = value.href;
+			}
+		} else if (field.type === 'number' && typeof value === 'string') {
+			const trimmed = value.trim();
+			if (trimmed !== '' && Number.isFinite(Number(trimmed))) {
+				value = Number(trimmed);
+			}
+		} else if (field.type === 'boolean') {
+			if (value === 'true' || value === 'on' || value === '1' || value === 1) {
+				value = true;
+			} else if (value === 'false' || value === '0' || value === 0) {
+				value = false;
+			}
+		} else if (field.type === 'vector') {
+			if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
+				value = Array.from(value as unknown as ArrayLike<number>);
+			} else if (Array.isArray(value)) {
+				// Numeric-string items (form/JSON round-trips) coerce per item
+				value = value.map((item) =>
+					typeof item === 'string' && item.trim() !== '' && Number.isFinite(Number(item))
+						? Number(item)
+						: item,
+				);
+			}
+		} else if (field.type === 'geopoint' && typeof value === 'object' && value !== null) {
+			const point = value as {
+				lat?: unknown;
+				lon?: unknown;
+				latitude?: unknown;
+				longitude?: unknown;
+			};
+			const lat = Number(point.lat ?? point.latitude);
+			const lon = Number(point.lon ?? point.longitude);
+			if (Number.isFinite(lat) && Number.isFinite(lon)) {
+				// Out-of-range coordinates clamp (matching the historical
+				// table.parse behavior) rather than erroring
+				value = {
+					lat: Math.max(-90, Math.min(90, lat)),
+					lon: Math.max(-180, Math.min(180, lon)),
+				};
 			}
 		}
 
