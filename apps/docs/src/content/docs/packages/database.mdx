@@ -1,6 +1,6 @@
 ---
 title: Database
-description: Type-safe reactive SQLite on Cloudflare Durable Objects, with full-text + vector search, Zod validation, and automatic migrations.
+description: Type-safe reactive SQLite on Cloudflare Durable Objects, with full-text + vector search, dependency-free schema validation, and automatic migrations.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -13,7 +13,7 @@ full-text & vector search, runtime validation, automatic migrations, and a react
 - **Declarative schema** — fluent TypeScript API; field types and validators inferred at compile time.
 - **Full-text & vector search** — a built-in engine (BM25, typo tolerance, facets, geo, vector/hybrid) indexed into SQLite rows; mark fields `.searchable()`.
 - **Automatic migrations** — new columns are added when you change the schema; no migration files.
-- **Zod validation** — every `create()`/`update()` is validated at runtime.
+- **Dependency-free validation** — every `create()`/`update()` is validated against the schema at runtime (no zod).
 - **Transactions** — batch operations atomically.
 - **Incremental sync** — `sync()` returns only changes since a timestamp for client mirroring.
 - **Reactive client** — `DatabaseClient` gives reactive entity state, live search, IndexedDB
@@ -29,7 +29,7 @@ pnpm add @delightstack/database
 | --- | --- |
 | `@delightstack/database` | `Database` — the schema builder |
 | `@delightstack/database/worker` | `DatabaseServer` — the Durable Object class |
-| `@delightstack/database/server` | `createDatabaseHandle`, `SqlServer` (raw SQL) |
+| `@delightstack/database/server` | `createDatabaseHandle` — SvelteKit CRUD + sync routes |
 | `@delightstack/database/client` | `DatabaseClient` — reactive Svelte 5 client |
 
 ## 1. Define your schema
@@ -44,7 +44,6 @@ const postsTable = Database.table('post', (schema) => ({
 	author_id: schema.foreignKey({ type: 'string', table: 'user', column: 'id', on_delete: 'CASCADE' }),
 	tags: schema.array(schema.string()).searchable().optional(),
 	published: schema.boolean().default(false),
-	created_at: schema.string().datetime(),
 }));
 ```
 
@@ -70,7 +69,7 @@ export class OrgDatabaseServer extends DatabaseServer {
 const db = platform.env.DB.get(platform.env.DB.idFromName(org_id));
 
 await db.create('post', { title: 'Hello', body: '…', author_id: 'u_1' });
-const results = await db.search('post', { term: 'hello' }); // full-text
+const results = await db.list('post', { term: 'hello' }); // full-text search
 const recent = await db.list('post', { limit: 20 });
 ```
 
@@ -83,10 +82,10 @@ For declarative CRUD routes, mount `createDatabaseHandle()` in your SvelteKit `h
 	import { DatabaseClient } from '@delightstack/database/client';
 
 	const db = new DatabaseClient({ tables, db_name: `app:${org_id}`, fetch });
-	const posts = db.entity('post'); // reactive $state
+	const posts = db.list('post'); // live reactive list
 </script>
 
-{#each posts.list as post}
+{#each posts.items as post}
 	<article>{post.title}</article>
 {/each}
 ```

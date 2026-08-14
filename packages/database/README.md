@@ -1,19 +1,95 @@
 # @delightstack/database
 
-Type-safe database layer for Cloudflare Durable Objects with built-in full-text search, schema validation, and automatic migrations.
+Type-safe database layer for Cloudflare Durable Objects with built-in full-text search, schema validation, automatic migrations, and a reactive Svelte 5 client that syncs a local search index.
 
 ## Features
 
 - **Declarative schema** — Define tables with a fluent TypeScript API. Field types, constraints, and validators are inferred at compile time.
 - **Full-text & vector search** — A built-in search engine with no third-party dependency: BM25 ranking, typo tolerance, prefix search, facets, geo and vector/hybrid queries. Mark fields as `.searchable()` and query them. The index lives in SQLite rows written inside the same transaction as the entity row, so there is no snapshot to serialize and no cold-start rebuild.
 - **Automatic migrations** — New columns are added automatically when you update your schema. No migration files to manage.
-- **Zod validation** — Every `create()` and `update()` call validates data against the schema at runtime. String formats (`.email()`, `.url()`, `.datetime()`), number ranges (`.min()`, `.max()`), and custom constraints are enforced.
+- **Dependency-free validation** — Every `create()` and `update()` call validates data against the schema at runtime. String formats (`.email()`, `.url()`, `.datetime()`), length/number ranges (`.min()`, `.max()`), and custom `.check()` functions are enforced — all in-house, no zod.
 - **Transactions** — Batch multiple create/update/delete/exec operations into a single atomic transaction.
 - **Incremental sync** — `sync()` returns only the changes since a given timestamp, enabling efficient client-side search index mirroring.
-- **Form generation** — Schema definitions automatically produce HTML form field attributes (type, required, min, max, pattern, placeholder, label).
-- **Declarative API routes** — Define entity routes with lifecycle hooks instead of writing repetitive CRUD boilerplate. Plug into SvelteKit's `handle` via `createDatabaseHandle()`.
-- **Two server classes** — `DatabaseServer` for schema-driven CRUD with search, `SqlServer` for raw SQL when you need full control.
-- **Reactive client (Svelte 5)** — `DatabaseClient` gives you reactive entity state, live search, IndexedDB caching, and optimistic updates — all running off-thread in a SharedWorker.
+- **Form generation** — Schema definitions automatically produce HTML form field attributes plus a Standard Schema validator for whole-form validation.
+- **Auto-generated API routes** — `createDatabaseHandle({ tables, hooks })` plugs into SvelteKit's `handle` and serves CRUD + sync routes for every table, with lifecycle hooks for auth and side effects.
+- **Reactive client (Svelte 5)** — `DatabaseClient` gives you three reactive read handles (`get` / `entity` / `list`), IndexedDB caching, a local IndexedDB search index, optimistic updates, and coverage-based client/server query routing — all heavy work running off-thread in a SharedWorker.
+
+## Upgrading to v2
+
+v2 is a major release: the search engine, the client read API, and the schema validation layer were all replaced. The full set of breaking changes:
+
+### Client: three handles replace five read APIs
+
+`db.watch` (`DatabaseWatch`), `db.read` (`EntityReader`), `EntityState.from`, and `markHydrated` are **removed**. `db.get`, `db.entity`, and `db.list` now return reactive handle objects — not promises.
+
+```ts
+// v1
+let person = $derived(await db.get('person', id)); // db.get returned a Promise
+const people = db.watch('person', { term: 'alice' }); // live list
+const reader = db.read('person', () => id); // read-only reactive handle
+
+// v2
+const person = db.get('person', id); // reactive EntityHandle
+person.value; // live value (undefined until loaded)
+let loaded = $derived(await db.get('person', id).load()); // awaited form, still reactive
+const people = db.list('person', { term: 'alice' }); // live ListHandle (the old watch + list merged)
+const once = await db.list('person', { term: 'alice' }).load(); // one-shot form
+```
+
+- `WatchStatus` is renamed **`HandleStatus`** (same `'loading' | 'refreshing' | 'ready' | 'error'` union).
+- The client `SearchResult` drops `elapsed` and gains `mode: 'client' | 'server'` — the live routing decision, per result.
+- The worker RPCs `getSearchMode` / `isSynced` are removed; read `result.mode` (or `handle.mode`) instead.
+
+### Newer v2 changes (same release)
+
+- `ListHandle.results` → **`hits`** and `ListHandle.docs` → **`items`** (and `SearchResult.docs` → `items`). The hit objects keep their `{ id, score, document }` shape — `document` is also the wire field name in server list responses.
+- `createDatabaseHandle`'s **`sync` option now defaults to `true`** — pass `sync: false` to opt out. (Previously it was off unless enabled, which silently broke client search.)
+- **Reserved field names**: `and`, `or`, `not`, and `$derived` can no longer be used as table field names (compile-time and runtime errors) — the first three collide with the `where`-clause grammar, the last with the internal derived-values store. `created_at`/`updated_at` were already reserved.
+- `sparse: false` now routes client queries to the server automatically, and combining it with `source: 'client'` is an error (same treatment as `vector`).
+- New: **`db.signOut()`** wipes all locally persisted data (entity cache, sync cursors, and the local search index) — see [Lifecycle](#lifecycle).
+- `DatabaseClient`'s lifecycle booleans consolidated: **`db.status`** (`'idle' | 'initializing' | 'ready' | 'signed_out'`) replaces `initialized`, `hydrated` (now internal), and `signed_out`; the `syncing`/`synced` booleans remain.
+
+### Schema: zod is removed
+
+Validation is now in-house and dependency-free. `parse()` behavior is unchanged, except failures throw `DelightError` (status 400, with an `issues` array attached).
+
+- Some zod-passthrough builder methods are **deleted**: `length`, `nonempty`, `lowercase`/`uppercase` (the case *asserts*), `gte`/`lte` (use `min`/`max`), `positive`/`negative` (use `gt(0)`/`lt(0)`), `multipleOf` (use `step`), `refine`/`superRefine` (use `check`), `transform`, and `prefault`. Others were re-implemented in-house and still work: `startsWith`/`endsWith`/`includes`, the transforms `trim`/`toLowerCase`/`toUpperCase`/`normalize`, and the exclusive bounds `gt`/`lt`.
+- **`.check(fn)`** is the custom-validation escape hatch (return an error string to fail).
+- **`.step(n)`** replaces `multipleOf` — it validates divisibility (decimal-safe) *and* sets the form input's step attribute.
+- `Database.Table` is the one table type; `Database.AnyTable` remains as a deprecated alias.
+- `table()` no longer takes a third options argument (the temporary `search_engine` opt-in is gone).
+
+```ts
+// v1
+username: schema.string().nonempty().lowercase().refine((v) => !v.includes(' '), 'No spaces'),
+
+// v2
+username: schema.string().min(1).check((v) => (v.includes(' ') ? 'No spaces' : undefined)),
+```
+
+### Server & handler
+
+- `createDatabaseHandle` supports **only** the `tables` + `hooks` mode. `defineRoute` and the `routes` array are removed:
+
+  ```ts
+  // v1
+  createDatabaseHandle({ getDatabase, routes: [defineRoute({ entity: 'post', table: postTable, hooks })] });
+
+  // v2
+  createDatabaseHandle({ getDatabase, tables, hooks: { post: { ... } } });
+  ```
+
+- The sync endpoint is POST-only, and `DatabaseSyncRequest` drops the top-level `start_updated_at` / `end_updated_at` / `limit` — ranges and limits are **per-entity** in the `entity` map (one request still syncs any number of entity types; `config_version` is now optional).
+- The batch array overload of `DatabaseServer.get()` is removed — call `get()` per id.
+- The never-populated `event.user_id` fields on transaction operations are removed, as is `EntityChangedMessage.user_id` in `@delightstack/websocket` (`entityChanged` is now `(action, entity_type, id, data?, sparse?)`).
+- **`SqlServer` moved to `@delightstack/auth`** (it was auth-private in practice). `@delightstack/database` keeps `prepareSql` / `SqlTaggedTemplate`.
+
+### Search engine: Orama is gone (unreleased 1.x → 2.0 changesets)
+
+- The built-in SQLite engine is the only engine; `@orama/orama` and `@msgpack/msgpack` are no longer dependencies. Durable Objects **migrate themselves once** on first wake: sync metadata moves to `search_state`/`search_tombstones`, search rows rebuild from entity rows, `config_version` bumps (every client resyncs once), and the legacy `search_index`/`search_journal` tables are dropped. `table.config.orama` is now `table.config.index_schema` (the flat search schema itself).
+- **Query-key renames, with no legacy aliases** — old spellings stop working in typed queries, URLs, and old cursors: `distinctOn` → `distinct_on`, `properties` → `fields`, `vector.property` → `vector.field`, `order[].key` → `order[].field`, `containsAll`/`containsAny`/`nin` → `contains_all`/`contains_any`/`not_in`, and `q` is removed entirely (use `term`). `vector` gains an optional `similarity` floor (default `0.8`). The tokenizer also changed (apostrophe folding, camelCase splitting, dotted acronyms, whole numbers kept) — rankings shift slightly on affected corpora.
+- **The client index moved into IndexedDB** — no memory ceiling, no rebuild-on-load, transactional index writes, and byte-identical results between client and server. The old 5000-document auto-switch is replaced by **coverage-based routing** (see [Query routing](#query-routing)), and synced sparse documents no longer carry `vector[...]` fields (vector search is server-only).
+- `schema.array(schema.enum([...])).searchable()` now actually works (`enum[]` in the index schema: filterable and facetable, never term-matched), and searchable arrays now appear in the inferred `Database.SearchSchema<Table>` type.
 
 ## Architecture
 
@@ -43,11 +119,9 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
 
 **Schema → SQLite + search tables:** Each table definition produces a SQLite table (for persistent storage) and a set of shared search tables (`search_postings`, `search_tokens`, `search_docs`, `search_field_stats`, `search_vectors`, plus `search_state`/`search_tombstones` for sync). The `DatabaseServer` writes both inside one transaction, so a rolled-back write can never leave a stale index behind.
 
-**Upgrading from 1.1 or earlier.** Those versions kept an in-memory index serialized into a `search_index` blob. On the first Durable Object wake after upgrading, each table's search rows are rebuilt from its entity rows, its sync metadata (deletion tombstones and window bounds) is migrated into `search_tombstones`/`search_state`, its `config_version` is bumped (so every client resyncs once), and the legacy `search_index`/`search_journal` tables are dropped. This is automatic and idempotent; a large table costs one full scan, once.
-
 **Single-writer model:** Durable Objects guarantee a single instance handles all writes, eliminating race conditions. SQLite transactions provide atomicity within that instance.
 
-**JSON catch-all column:** Root-level scalar fields (string, number, boolean, enum, foreign key) get their own SQLite columns. Nested types (object, array) are serialized into a single `json` TEXT column and transparently deserialized on read.
+**JSON catch-all column:** Root-level scalar fields (string, number, boolean, enum, foreign key) get their own SQLite columns. Non-scalar fields (object, array, vector, geopoint) are serialized into a single `json` TEXT column and transparently deserialized on read.
 
 ## Quickstart
 
@@ -56,40 +130,38 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
 ```typescript
 import { Database } from '@delightstack/database';
 
-const usersTable = Database.table('user', (schema) => ({
-	id: schema.primaryKey(),
-	email: schema.string().email().unique().searchable(),
+const personTable = Database.table('person', (schema) => ({
 	name: schema.string().min(1).max(100).searchable(),
+	email: schema.string().email().unique().searchable(),
 	role: schema.enum(['admin', 'user', 'guest']).searchable(),
 	bio: schema.string().optional(),
 	avatar_url: schema.string().url().optional(),
-	created_at: schema.string().datetime(),
-	updated_at: schema.string().datetime(),
 }));
 
-const postsTable = Database.table('post', (schema) => ({
-	id: schema.primaryKey(),
+const postTable = Database.table('post', (schema) => ({
 	title: schema.string().searchable(),
 	body: schema.string().searchable(),
 	author_id: schema.foreignKey({
 		type: 'string',
-		table: 'user',
+		table: 'person',
 		column: 'id',
 		on_delete: 'CASCADE',
 	}),
 	tags: schema.array(schema.string()).searchable().optional(),
 	published: schema.boolean().default(false),
-	created_at: schema.string().datetime(),
-	updated_at: schema.string().datetime(),
 }));
+
+export const tables = { person: personTable, post: postTable };
 ```
+
+> **`id`, `created_at`, and `updated_at` are auto-managed — do not declare them.** Every table gets a string `id` primary key injected automatically (declare `schema.primaryKey()` yourself only for a numeric auto-increment key or a custom name). `created_at` / `updated_at` are epoch-millisecond **numbers** set by the server on every write; declaring either in your schema throws at table-definition time. Declaring them as datetime strings (the v1 pattern) would break `parse()` — they are numbers now.
 
 ### 2. Create your Durable Object
 
 ```typescript
-import { DatabaseServer } from '@delightstack/database';
-
-const tables = { user: usersTable, post: postsTable };
+// worker entry point (e.g. server/src/index.ts)
+import { DatabaseServer } from '@delightstack/database/worker';
+import { tables } from './schema';
 
 export class MyDatabase extends DatabaseServer<typeof tables> {
 	constructor(ctx: DurableObjectState, env: Env) {
@@ -98,69 +170,73 @@ export class MyDatabase extends DatabaseServer<typeof tables> {
 }
 ```
 
-On first instantiation, `DatabaseServer` automatically creates the SQLite tables, indexes, and search indexes. On subsequent runs, it detects schema changes and adds new columns. It does not automatically delete old tables.
+> **Import `DatabaseServer` from `@delightstack/database/worker`, not the package root.** The class imports `cloudflare:workers`, which only resolves inside the Workers runtime — the main entry (and `/server`) export only its *type*, so `import { DatabaseServer } from '@delightstack/database'` fails to resolve the value in a SvelteKit/Vite build. The `/worker` entry belongs in your Worker entry point; app code that needs the type uses `import type { DatabaseServer } from '@delightstack/database'`.
+
+The second constructor argument lazily returns your WebSocket Durable Object (any object with an `entityChanged(action, entity_type, id, data?, sparse?)` method) for broadcasting changes; return `undefined` to skip broadcasting.
+
+On first instantiation, `DatabaseServer` automatically creates the SQLite tables, indexes, and search tables. On subsequent runs, it detects schema changes and adds new columns. It does not automatically delete old tables.
 
 ### 3. Use the API
 
 ```typescript
 // Create
-const user = db.create('user', {
+const person = db.create('person', {
 	email: 'alice@example.com',
 	name: 'Alice',
 	role: 'admin',
 });
-// user.id is auto-generated, created_at/updated_at are set automatically
+// person.id is auto-generated, created_at/updated_at are set automatically
 
 // Read
-const alice = db.get('user', user.id);
+const alice = db.get('person', person.id);
 
 // Read with foreign key expansion
-const post = db.get('post', postId, ['author_id']);
-// post.expanded.author_id → full user record
+const post = db.get('post', post_id, ['author_id']);
+// post.expanded.author_id → full person record
 
 // Update (deep partial merge)
-db.update('user', user.id, { name: 'Alice B.' });
+db.update('person', person.id, { name: 'Alice B.' });
 
 // Delete
-db.delete('user', user.id);
+db.delete('person', person.id);
 
 // Search
-const results = db.list('user', {
+const results = db.list('person', {
 	term: 'alice',
 	where: { role: 'admin' },
 	limit: 20,
 });
 
 // Raw SQL
-const rows = db.exec(`SELECT * FROM user WHERE role = ?`, 'admin');
+const rows = db.exec(`SELECT * FROM person WHERE role = ?`, 'admin');
 
 // Tagged template (prevents SQL injection)
 const rows = db.exec((sql) => {
 	const role = 'admin';
-	return sql`SELECT * FROM user WHERE role = ${role}`;
+	return sql`SELECT * FROM person WHERE role = ${role}`;
 });
 ```
 
 ## Schema Reference
 
+> **Reserved field names.** `id` is auto-injected (unless you declare your own primary key), `created_at`/`updated_at` are auto-managed, and `and`/`or`/`not`/`$derived` are reserved (`where`-grammar keywords and the internal derived-values store). Declaring any of them is a compile-time and runtime error.
+
 ### Field Types
 
-| Type            | Constructor                     | SQLite Column         | Notes                                                                          |
-| --------------- | ------------------------------- | --------------------- | ------------------------------------------------------------------------------ |
-| **Primary Key** | `schema.primaryKey()`           | `TEXT PRIMARY KEY`    | Auto-generated string ID. Use `{ type: 'number' }` for auto-increment integer. |
-| **String**      | `schema.string()`               | `TEXT`                | Supports format validators, length constraints, regex patterns.                |
-| **Number**      | `schema.number()`               | `NUMERIC`             | Use `.int()` for `INTEGER`. Supports min/max, positive/negative.               |
-| **Boolean**     | `schema.boolean()`              | `BOOLEAN`             | Stored as 0/1 in SQLite.                                                       |
-| **Enum**        | `schema.enum(['a', 'b'])`       | `TEXT`                | Constrained to the provided values.                                            |
-| **Foreign Key** | `schema.foreignKey({...})`      | `TEXT REFERENCES ...` | Typed reference to another table with cascade options.                         |
-| **Object**      | `schema.object({...})`          | `TEXT` (JSON)         | Nested fields. Stored as JSON string.                                          |
-| **Array**       | `schema.array(schema.string())` | `TEXT` (JSON)         | Typed array. Stored as JSON string.                                            |
-| **Geopoint**    | `schema.geopoint()`             | `TEXT` (JSON)         | `{ lat, lon }`. Always searchable for geospatial queries.                      |
-| **Vector**      | `schema.vector(768)`            | `TEXT` (JSON)         | Fixed-dimension embedding. Always searchable for vector search.                |
+| Type            | Constructor                     | Storage               | Notes                                                                                 |
+| --------------- | ------------------------------- | --------------------- | ------------------------------------------------------------------------------------- |
+| **Primary Key** | `schema.primaryKey()`           | `TEXT PRIMARY KEY`    | Optional — an `id` string key is auto-injected when omitted. `{ type: 'number' }` for auto-increment integer. |
+| **String**      | `schema.string()`               | `TEXT`                | Format validators, length constraints, regex patterns.                                |
+| **Number**      | `schema.number()`               | `NUMERIC`             | Use `.int()` for `INTEGER`. Supports min/max and a form `step`.                       |
+| **Boolean**     | `schema.boolean()`              | `BOOLEAN`             | Stored as 0/1 in SQLite.                                                              |
+| **Enum**        | `schema.enum(['a', 'b'])`       | `TEXT`                | Constrained to the provided values. Also accepts `[{ value, label }]` pairs — labels drive form Select options. |
+| **Foreign Key** | `schema.foreignKey({...})`      | `TEXT REFERENCES ...` | Typed reference to another table with cascade options.                                |
+| **Object**      | `schema.object({...})`          | `json` column         | Nested fields. Stored in the internal JSON overflow column.                           |
+| **Array**       | `schema.array(schema.string())` | `json` column         | Typed array. `string[]`/`number[]`/`boolean[]`/`enum[]` items can be `.searchable()`. |
+| **Geopoint**    | `schema.geopoint()`             | `json` column         | `{ lat, lon }`. Always searchable for geospatial queries.                             |
+| **Vector**      | `schema.vector(768)`            | `json` column         | Fixed-dimension embedding. Always searchable; vector search runs server-side only.    |
 
 ### Modifiers
-
-All field types support a subset of these modifiers:
 
 ```typescript
 schema
@@ -173,17 +249,21 @@ schema
 	.indexable() // SQLite B-tree index for fast WHERE queries
 	.unique() // UNIQUE constraint in SQLite
 	.label('Name') // UI label for form generation
-	.placeholder('Enter name'); // UI placeholder
+	.placeholder('Enter name') // UI placeholder
+	.description('Shown below the input') // UI helper text
+	.check((v) => (v === 'bad' ? 'Not allowed' : undefined)); // Custom validation
 ```
+
+Not every modifier exists on every type: `indexable`/`unique` are for string and number fields (which own a SQLite column); `default`, `label`, `placeholder`, `description`, `check`, and `derived` are for the scalar types (string, number, boolean, enum); arrays support `min`/`max` (length), `label`, `placeholder`, `description`, and `searchable`; `optional`/`readonly` work everywhere.
 
 ### String Formats
 
-Mutually exclusive — pick one:
+Mutually exclusive — pick one. Formats compose with `.min()`/`.max()` (both are checked).
 
 ```typescript
 schema.string().email(); // RFC email
 schema.string().url(); // Valid URL
-schema.string().uuid(); // UUID v4/v5
+schema.string().uuid(); // UUID
 schema.string().datetime(); // ISO 8601 datetime
 schema.string().date(); // YYYY-MM-DD
 schema.string().time(); // HH:MM[:SS]
@@ -191,8 +271,8 @@ schema.string().ipv4(); // IPv4 address
 schema.string().ipv6(); // IPv6 address
 schema.string().base64(); // Base64 string
 schema.string().color(); // Hex color (#RGB or #RRGGBB)
-schema.string().password(); // Masked input (UI hint)
-schema.string().phone(); // Phone number (UI hint)
+schema.string().password(); // Masked input (UI hint only)
+schema.string().phone(); // Phone number (UI hint only)
 ```
 
 ### String Validators
@@ -202,16 +282,31 @@ schema
 	.string()
 	.min(1) // Minimum length
 	.max(255) // Maximum length
-	.length(10) // Exact length
-	.regex(/^[A-Z]+$/) // Regex pattern
-	.includes('foo') // Must contain substring
-	.startsWith('http') // Must start with prefix
-	.endsWith('.com') // Must end with suffix
-	.trim() // Trim whitespace
-	.lowercase() // Convert to lowercase
-	.uppercase() // Convert to uppercase
-	.nonempty() // Must not be empty
-	.textarea(); // Renders as textarea in forms
+	.regex(/^[A-Z]+$/) // Regex pattern (repeatable)
+	.startsWith('user_') // Must start with the prefix
+	.endsWith('.md') // Must end with the suffix
+	.includes('@') // Must contain the substring
+	.textarea(); // Renders as textarea in forms (no validation effect)
+```
+
+Transforms rewrite the value during `parse()` — they run in declaration order,
+**before** validators (so `.trim().min(1)` rejects a whitespace-only string),
+and the transformed value is what gets stored:
+
+```typescript
+schema.string().trim(); // Strip surrounding whitespace
+schema.string().toLowerCase(); // e.g. emails, slugs
+schema.string().toUpperCase();
+schema.string().normalize(); // Unicode normalization (NFC by default)
+```
+
+Anything beyond these goes through `.check()` (runs last, after transforms and
+built-in validators):
+
+```typescript
+schema.string().check((value) => {
+	if (value.endsWith('.test')) return 'Test domains are not allowed';
+});
 ```
 
 ### Number Validators
@@ -220,12 +315,30 @@ schema
 schema
 	.number()
 	.int() // Must be integer (INTEGER column)
-	.positive() // > 0
-	.negative() // < 0
-	.min(0) // >= value
-	.max(100) // <= value
-	.gt(0) // > value (exclusive)
-	.lt(100); // < value (exclusive)
+	.min(0) // >= value (inclusive)
+	.max(100) // <= value (inclusive)
+	.gt(0) // > value (exclusive — "price must be positive")
+	.lt(100) // < value (exclusive)
+	.step(0.01); // Must be a multiple (decimal-safe) + sets the form step attribute
+```
+
+### Derived Fields
+
+A derived field is **search-only**: computed from other fields at index time, never stored in SQLite, absent from `Database.Entity` but present in `Database.SearchEntity`. `derived()` implies `searchable` + `readonly`.
+
+```typescript
+const personTable = Database.table('person', (s) => ({
+	first_name: s.string(),
+	last_name: s.string(),
+	// Same-table derived value
+	full_name: s.string().derived((data) => `${data.first_name} ${data.last_name}`),
+	organization_id: s.foreignKey({ type: 'string', table: 'organization', column: 'id' }),
+	// Cross-table derived value: declare the FK dependencies, receive the
+	// referenced rows. Writes to the referenced organization cascade a reindex.
+	organization_name: s
+		.string()
+		.derived(['organization_id'], (data, refs) => refs.organization_id?.name ?? ''),
+}));
 ```
 
 ### Foreign Keys
@@ -233,12 +346,15 @@ schema
 ```typescript
 schema.foreignKey({
 	type: 'string', // Type of the referenced column
-	table: 'user', // Referenced table name
+	table: 'person', // Referenced table name
 	column: 'id', // Referenced column name
 	on_delete: 'CASCADE', // CASCADE | SET NULL | RESTRICT | NO ACTION | SET DEFAULT
 	on_update: 'CASCADE', // Same options
 });
+// or chain: schema.foreignKey({...}).onDelete('CASCADE').onUpdate('CASCADE')
 ```
+
+Foreign key constraints are always enforced in Durable Object SQLite (workerd compiles it with foreign keys ON by default).
 
 ### Indexes
 
@@ -260,24 +376,24 @@ schema.string().indexable({
 The schema system infers TypeScript types from your field definitions:
 
 ```typescript
-const usersTable = Database.table('user', (schema) => ({
-	id: schema.primaryKey(),
+const personTable = Database.table('person', (schema) => ({
 	name: schema.string(),
 	age: schema.number().int().optional(),
-	role: schema.enum(['admin', 'user'] as const),
+	role: schema.enum(['admin', 'user']),
 }));
 
-// Infer the entity type
-type User = Database.Entity<typeof usersTable>;
+type Person = Database.Entity<typeof personTable>;
 // {
-//   readonly id: string;
+//   readonly id: string;          // auto-injected primary key
 //   name: string;
 //   age?: number | null;
 //   role: 'admin' | 'user';
+//   readonly created_at: number;  // epoch ms, auto-managed
+//   readonly updated_at: number;  // epoch ms, auto-managed
 // }
 ```
 
-Optional fields become `T | undefined | null`. Readonly fields (like `id`) get the `readonly` modifier. Enum values are narrowed to their literal union type.
+Optional fields become `T | undefined | null`. Readonly fields get the `readonly` modifier. Enum values are narrowed to their literal union. Other useful types: `Database.SearchEntity<Table>` (the sparse indexed document), `Database.SearchQuery<Table>` (a typed query), and `Database.Table` (the widened constraint any table satisfies).
 
 ## DatabaseServer API
 
@@ -287,9 +403,9 @@ Optional fields become `T | undefined | null`. Readonly fields (like `id`) get t
 class DatabaseServer<Config, Meta> extends DurableObject {
 	constructor(
 		config: Config, // Record of table definitions
-		ws: () => WebSocketDO, // Lazy WebSocket DO for broadcasting
+		ws: () => WebSocketDO | undefined, // Lazy WebSocket DO for broadcasting
 		ctx: DurableObjectState, // Durable Object context
-		env: Env, // Environment bindings
+		env: Env, // Environment bindings ({ DEV: boolean })
 	);
 }
 ```
@@ -298,50 +414,78 @@ class DatabaseServer<Config, Meta> extends DurableObject {
 
 | Method     | Signature                         | Notes                                                                                |
 | ---------- | --------------------------------- | ------------------------------------------------------------------------------------ |
-| **create** | `create(type, data) → Entity`     | Auto-generates ID and timestamps. Validates with Zod. Updates search index.          |
-| **get**    | `get(type, id, expand?) → Entity` | Throws `DelightError` (404) if not found. `expand` populates foreign key references. |
+| **create** | `create(type, data) → Entity`     | Auto-generates ID and timestamps. Validates against the schema. Updates search index. |
+| **get**    | `get(type, id, expand?) → Entity` | Throws `DelightError` (404) if not found. `expand` populates foreign key references into `entity.expanded`. |
 | **update** | `update(type, id, data) → Entity` | Deep partial merge. Validates merged result. Updates search index.                   |
-| **delete** | `delete(type, id) → void`         | Removes from SQLite and search index. Tracks deletion for sync.                      |
+| **delete** | `delete(type, id) → void`         | Removes from SQLite and search index. Tracks deletion (tombstone) for sync.          |
 
 All CRUD methods are **synchronous** (SQLite in Durable Objects is synchronous).
 
-`create()` strips `id`, `created_at`, and `updated_at` from input data — these are auto-managed.
-
-`update()` auto-sets `updated_at` to the current time.
+`create()` strips `id`, `created_at`, and `updated_at` from input data — these are auto-managed. `update()` auto-sets `updated_at`. Validation failures throw `DelightError` (status 400) with an `issues` array of `{ path, message }`.
 
 ### Search & List
 
+`db.list(type, query)` runs a search query and returns matching documents. All query fields:
+
 ```typescript
-db.list('user', {
-  // Full-text search
+db.list('person', {
+  // Full-text search term (prefix-matched per token by default)
   term: 'alice',
 
-  // Vector search — the search mode is derived: `vector` alone runs a vector
-  // search, `term` + `vector` runs a hybrid search, `term` alone runs full text
-  // `similarity` is the inclusive minimum cosine similarity (default 0.8)
-  vector: { value: [0.1, 0.2, ...], field: 'embeddings', similarity: 0.8 },
+  // Which searchable fields the term matches against. '*' (default) = all.
+  fields: ['name', 'email'],
 
-  // Filters
-  where: {
-    role: 'admin',                     // Exact match
-    age: { gte: 18, lt: 65 },          // Range
-    tags: { contains_all: ['a', 'b'] }, // Array contains every value
-    labels: { contains_any: ['x', 'y'] } // Array contains at least one value
-  },
+  // Filters applied before scoring (see the where grammar below)
+  where: { role: { eq: 'admin' } },
 
-  // Sorting — only `updated_at` and fields marked `.sortable()` in the table's
-  // search config are valid here
-  order: [
-    { field: 'updated_at', direction: 'DESC' },
-  ],
+  // Ordering — only `updated_at` and fields marked `.sortable()` are valid.
+  // Browse queries (no term/vector) default to updated_at DESC; relevance
+  // queries default to score order.
+  order: [{ field: 'updated_at', direction: 'DESC' }],
 
   // Pagination
-  limit: 20,
-  cursor: previousResult.cursor,  // Cursor-based pagination
+  limit: 20, // clamped to 5000 sparse / 100 full; defaults 100 sparse / 10 full
+  offset: 40, // skip N results (clamped to 100 000)
+  cursor: previous.cursor, // keyset cursor — when set, other params are ignored
+                           // (except your `where`, which is re-ANDed for safety)
 
-  // Response shape
-  sparse: false,  // true = only searchable fields, false = full entities from SQLite
-  fields: ['name', 'email'],  // Which searchable fields the term matches against
+  // Facet counts alongside the results
+  facets: {
+    role: { limit: 10, sort: 'desc' }, // string/enum facet
+    age: { ranges: [{ from: 0, to: 18 }, { from: 18, to: 65 }] }, // number facet
+    published: {}, // boolean facet — both buckets always reported
+  },
+
+  // Per-field score multipliers during term matching
+  boost: { title: 2 },
+
+  // Match the term exactly instead of by prefix
+  exact: false,
+
+  // Max levenshtein distance for typo tolerance (clamped to 0–3)
+  tolerance: 1,
+
+  // Multi-token combining: 0 = every token must match, 1 (default) = any
+  // token, fractional = all-token matches + that top fraction of partials
+  threshold: 0.5,
+
+  // Keep only the first result per distinct value of this field
+  distinct_on: 'author_id',
+
+  // Vector search (server-only). `vector` alone = vector search,
+  // term + vector = hybrid, term alone = full text. `similarity` is the
+  // inclusive minimum cosine similarity (default 0.8).
+  vector: { value: [0.1, 0.2 /* … */], field: 'embedding', similarity: 0.8 },
+
+  // true (default) = sparse search documents; false = full entities from
+  // SQLite. Like `vector`, `sparse: false` is server-only — on the client it
+  // routes the query to the server (only the server has the full rows).
+  sparse: true,
+
+  // Client-only routing override — see the client's Query routing section.
+  // Ignored by the server. 'client' cannot be combined with `vector` or
+  // `sparse: false` (both compile-time and runtime errors).
+  source: 'auto',
 });
 ```
 
@@ -350,12 +494,47 @@ Returns:
 ```typescript
 {
   count: number;       // Total matching results
-  elapsed: number;     // Search time in ms
-  cursor?: string;     // Next page cursor (base64)
+  elapsed: { raw: number; formatted: string };
+  cursor: string | null; // Next page cursor (base64); null when exhausted
+  facets?: FacetResult;  // When facets were requested
   hits: Array<{
-    document: Entity;  // Full or sparse entity
-    score: number;     // Relevance score
+    id: string;
+    document: Entity | SearchEntity; // full or sparse, per `sparse`
+    score: number;
   }>;
+}
+```
+
+#### The `where` grammar
+
+```typescript
+where: {
+  // string / string[] fields — exact token match (value or one-of array)
+  name: 'alice',
+  tags: ['a', 'b'],
+
+  // number fields — comparison operators
+  age: { gte: 18, lt: 65 },       // gt / gte / lt / lte / eq / between: [a, b]
+
+  // boolean fields
+  published: true,
+
+  // enum fields
+  role: { eq: 'admin' },           // eq / in / not_in
+  role: 'admin',                   // shorthand — normalized to { eq: 'admin' }
+  role: ['admin', 'editor'],       // shorthand — normalized to { in: [...] }
+
+  // enum[] / array fields
+  labels: { contains_all: ['a', 'b'] }, // every value present
+  labels: { contains_any: ['x', 'y'] }, // at least one present
+
+  // geopoint fields
+  location: { radius: { coordinates: { lat, lon }, value: 5, unit: 'km' } },
+  location: { polygon: { coordinates: [{ lat, lon }, /* … */] } },
+
+  // composites (nestable up to 10 levels)
+  and: [ { role: { eq: 'admin' } }, { or: [ /* … */ ] } ],
+  not: { role: { eq: 'guest' } },
 }
 ```
 
@@ -363,12 +542,12 @@ Returns:
 
 ```typescript
 // String + bindings
-db.exec(`SELECT * FROM user WHERE role = ?`, 'admin');
+db.exec(`SELECT * FROM person WHERE role = ?`, 'admin');
 
 // Tagged template (recommended — prevents SQL injection)
 db.exec((sql) => {
 	const role = 'admin';
-	return sql`SELECT * FROM user WHERE role = ${role}`;
+	return sql`SELECT * FROM person WHERE role = ${role}`;
 });
 ```
 
@@ -376,11 +555,11 @@ Returns `Record<string, SqlStorageValue>[]`.
 
 ### Transactions
 
-Batch multiple operations atomically:
+Batch multiple operations atomically. Order is preserved, so later operations can depend on earlier ones:
 
 ```typescript
 const results = db.transaction([
-  { create: { type: 'user', data: { name: 'Alice', ... } } },
+  { create: { type: 'person', data: { name: 'Alice', ... } } },
   { create: { type: 'post', data: { title: 'Hello', ... } } },
   { update: { type: 'org', id: 'org-1', data: { user_count: 5 } } },
   { delete: { type: 'invite', id: 'inv-1' } },
@@ -388,29 +567,30 @@ const results = db.transaction([
 ]);
 ```
 
-Maximum 5,000 operations per transaction. All operations succeed or all roll back.
+Maximum 5,000 operations per transaction. All operations succeed or all roll back — including the search index writes.
 
 ### Sync
 
-Returns changes since a given timestamp for client-side search index mirroring:
+Returns per-entity changes for client-side search index mirroring. Ranges, limits, and ceilings are **per entity** — there are no top-level range fields:
 
 ```typescript
 const changes = db.sync({
-	start_updated_at: lastSyncTimestamp,
 	entity: {
-		user: { config_version: 1 },
-		post: { config_version: 1 },
+		person: { start_updated_at: last_sync, limit: 500 },
+		post: { config_version: 3, end_updated_at: cursor, defer_over: 50_000 },
 	},
 });
+// Omit `entity` entirely to sync every table.
 
-// changes.entity.user.created     → new entities (sparse)
-// changes.entity.user.updated     → changed entities (sparse)
-// changes.entity.user.deleted     → deleted entity IDs
-// changes.entity.user.config      → new search schema (if version changed)
-// changes.entity.user.total_count → total rows in the table
+// changes.entity.person.created     → new entities (sparse, minus vector fields)
+// changes.entity.person.updated     → changed entities (sparse)
+// changes.entity.person.deleted     → deleted entity IDs
+// changes.entity.person.config      → new search schema (only when the version changed)
+// changes.entity.person.total_count → total rows in the table
+// changes.entity.person.{start,end,first,last}_updated_at → the covered window
 ```
 
-A per-entity `defer_over` in the request sets a row-count ceiling: when the table's `total_count` exceeds it, the server withholds the page and answers count-only (`deferred: true`, no cursor advance). The client sends this automatically during backfill — see [`max_synced_docs`](#query-routing).
+Per-entity request fields: `start_updated_at` / `end_updated_at` (half-open window; ascending when `start` is set, descending backfill otherwise), `limit`, `config_version` (optional — when set and stale, the response carries the new `config`), and `defer_over` — a row-count ceiling: when the table's `total_count` exceeds it, the server withholds the page and answers count-only (`deferred: true`, no cursor advance). The client sends this automatically during backfill — see [`max_synced_docs`](#query-routing).
 
 `total_count` reads a counter maintained on `search_state` (bumped on every index/remove), never a `COUNT(*)` — Cloudflare bills Durable Object SQLite per row scanned, so counting a large table on every sync page would cost exactly what the ceiling exists to avoid.
 
@@ -428,112 +608,52 @@ const meta = db.getMeta(); // { org_id: 'org-123', plan: 'pro' }
 ```typescript
 db.destroy(); // Drop all tables and data
 db.restore(timestamp); // Point-in-time recovery (Cloudflare feature)
-db.restore(bookmark); // Restore to specific bookmark
+db.restore(bookmark); // Restore to a specific bookmark
 ```
-
-## SqlServer API
-
-A lower-level SQL wrapper for when you need direct control without schema validation or search indexing. Used by the `@delightstack/auth` package.
-
-```typescript
-import { SqlServer } from '@delightstack/database';
-
-const sql = new SqlServer<MySchema>(ctx.storage);
-
-// Insert
-sql.insert('user', 'user-123', { name: 'Alice', email: 'a@b.com' });
-sql.insert('user', null, { ... }); // null ID → auto-increment
-
-// Update
-sql.update('user', 'user-123', { name: 'Alice B.' });
-
-// Delete
-sql.delete('user', 'user-123');
-
-// Get one
-const user = sql.get('user', 'user-123');
-
-// List with WHERE
-sql.list('user', {
-  where: {
-    and: [
-      { key: 'role', is: '=', value: 'admin' },
-      { or: [
-        { key: 'age', is: '>', value: 18 },
-        { key: 'status', is: 'IN', value: ['active', 'pending'] },
-      ]},
-    ],
-  },
-  order: { key: 'created_at', direction: 'DESC' },
-  limit: 50,
-});
-
-// Raw SQL
-sql.exec('SELECT COUNT(*) as count FROM user');
-```
-
-### When to use which
-
-| Use case                      | Class            |
-| ----------------------------- | ---------------- |
-| Standard CRUD with validation | `DatabaseServer` |
-| Full-text or vector search    | `DatabaseServer` |
-| Schema-driven forms           | `DatabaseServer` |
-| Client-side sync              | `DatabaseServer` |
-| Raw SQL queries               | `SqlServer`      |
-| Custom auth flows             | `SqlServer`      |
-| Complex joins or aggregations | `SqlServer`      |
 
 ## Database Handler (SvelteKit)
 
-The database handler eliminates repetitive CRUD boilerplate by letting you define entity routes declaratively with lifecycle hooks. Instead of writing `+server.ts` files for every entity, define a route and its auth guards in one place.
+`createDatabaseHandle()` intercepts requests to `/api/${entity}` for every table you pass it and performs CRUD with lifecycle hooks — no `+server.ts` files per entity.
 
 ### Setup
 
 ```typescript
 // hooks.server.ts
 import { sequence } from '@sveltejs/kit/hooks';
-import { createDatabaseHandle, defineRoute } from '@delightstack/database';
-import { personTable, postTable } from './tables';
-
-const personRoute = defineRoute({
-	entity: 'person', // route defaults to '/api/person'
-	table: personTable,
-	hooks: {
-		beforeCreate: ({ event }) => {
-			if (!event.locals.user) throw DelightError.unauthorized('Authentication required');
-		},
-		beforeUpdate: ({ existing, event }) => {
-			if (existing.creator_id !== event.locals.user?.id) {
-				throw DelightError.forbidden('Not authorized');
-			}
-		},
-		beforeDelete: ({ existing, event }) => {
-			if (existing.creator_id !== event.locals.user?.id) {
-				throw DelightError.forbidden('Not authorized');
-			}
-		},
-	},
-});
-
-const postRoute = defineRoute({
-	entity: 'post', // route defaults to '/api/post'
-	table: postTable,
-});
+import { createDatabaseHandle } from '@delightstack/database/server';
+import { tables } from '$lib/schema';
 
 const databaseHandle = createDatabaseHandle({
 	getDatabase: (event) => event.locals.db,
-	routes: [personRoute, postRoute],
+	tables,
+	hooks: {
+		post: {
+			beforeCreate: ({ data, event }) => ({
+				...data,
+				author_id: event.locals.user!.id,
+			}),
+			beforeUpdate: ({ existing, event }) => {
+				if (existing.author_id !== event.locals.user?.id) {
+					throw DelightError.forbidden('Not authorized');
+				}
+			},
+		},
+	},
+	// sync defaults to true — POST /api/sync feeds the client's local index
 });
 
 export const handle = sequence(authHandle, appHandle, databaseHandle);
 ```
 
-This replaces all the `+server.ts` files you would otherwise need for `/api/person`, `/api/person/[id]`, `/api/post`, and `/api/post/[id]`.
+Options:
+
+- **`getDatabase(event)`** — returns the `DatabaseServer` stub for the request (return `undefined` when none is available, e.g. no org selected → 500 response).
+- **`tables`** — the table map; a CRUD route is generated at `/api/${entity}` for each key.
+- **`hooks`** — per-entity lifecycle hooks, keyed by entity name.
+- **`requireAuth`** — defaults to **`true`**: create/update/delete (and the sync endpoint) are rejected with a **401** unless `event.locals.session` is set. If you are not using `@delightstack/auth` (or your session lives elsewhere), pass `requireAuth: false` or you will get surprise 401s on every write. Read operations are unaffected — guard them via `beforeGet`/`beforeList`.
+- **`sync`** — **defaults to `true`**, exposing `POST /api/sync` (the client's sync, backfill, and local search depend on it). Pass `false` to disable, or `{ path?, beforeSync? }` to customize the path / add per-user authorization. **Security note:** the sync endpoint returns the sparse (searchable) fields of ALL entities — row-level restrictions in `beforeList` hooks do NOT apply to it. `requireAuth` gates it behind a session; for entities with per-user visibility use `beforeSync` or opt them out of syncing with `search_mode: 'server'`.
 
 ### Route Mapping
-
-For each registered route (e.g. `/api/person`), the handler maps HTTP methods to CRUD operations:
 
 | Method   | Path              | Operation  | DB Call                         |
 | -------- | ----------------- | ---------- | ------------------------------- |
@@ -542,130 +662,81 @@ For each registered route (e.g. `/api/person`), the handler maps HTTP methods to
 | `GET`    | `/api/person/:id` | **get**    | `db.get('person', id)`          |
 | `PATCH`  | `/api/person/:id` | **update** | `db.update('person', id, data)` |
 | `DELETE` | `/api/person/:id` | **delete** | `db.delete('person', id)`       |
+| `POST`   | `/api/sync`       | **sync**   | `db.sync(body)`                 |
 
-Any other method returns `405 Method Not Allowed`. URLs that don't match any route are passed through to SvelteKit's normal routing via `resolve(event)`.
+Any other method returns `405`. URLs that don't match any route pass through to SvelteKit's normal routing via `resolve(event)`.
 
 ### Lifecycle Hooks
 
-All hooks receive an `event` property (the SvelteKit `RequestEvent`), giving you access to `event.locals`, `event.url`, `event.params`, etc.
+All hooks receive the SvelteKit `RequestEvent` as `event`. **Before hooks** can throw to reject and can return modified data; **after hooks** are for side effects.
 
-**Before hooks** — throw to reject the operation. Optionally return modified data.
+| Hook           | Context Properties                | Notes                                                                        |
+| -------------- | --------------------------------- | ---------------------------------------------------------------------------- |
+| `beforeCreate` | `data`, `event`                   | `data` is parsed via `table.parse()`. Return an object to override.          |
+| `beforeUpdate` | `id`, `data`, `existing`, `event` | `existing` is pre-fetched. `data` is the raw partial. Return to override.    |
+| `beforeDelete` | `id`, `existing`, `event`         | `existing` is pre-fetched.                                                   |
+| `beforeGet`    | `id`, `event`                     | Lightweight guard — entity is not pre-fetched.                               |
+| `beforeList`   | `query`, `event`                  | `query` is decoded from URL params. Return an object to override (the documented row-level-auth pattern: inject a `where` restriction). |
+| `afterCreate`  | `data`, `event`                   | `data` is the created entity from the DB.                                    |
+| `afterUpdate`  | `data`, `event`                   | `data` is the updated entity from the DB.                                    |
+| `afterDelete`  | `id`, `event`                     | Entity has been deleted.                                                     |
 
-| Hook           | Context Properties                | Notes                                                                                              |
-| -------------- | --------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `beforeCreate` | `data`, `event`                   | `data` is parsed via `table.parse()`. Return an object to override.                                |
-| `beforeUpdate` | `id`, `data`, `existing`, `event` | `existing` is pre-fetched from DB. `data` is the raw partial update. Return an object to override. |
-| `beforeDelete` | `id`, `existing`, `event`         | `existing` is pre-fetched from DB.                                                                 |
-| `beforeGet`    | `id`, `event`                     | Lightweight guard — entity is not pre-fetched.                                                     |
-| `beforeList`   | `query`, `event`                  | `query` is decoded from URL search params. Return an object to override.                           |
-
-**After hooks** — for side effects (logging, notifications, cache invalidation).
-
-| Hook          | Context Properties | Notes                                     |
-| ------------- | ------------------ | ----------------------------------------- |
-| `afterCreate` | `data`, `event`    | `data` is the created entity from the DB. |
-| `afterUpdate` | `data`, `event`    | `data` is the updated entity from the DB. |
-| `afterDelete` | `id`, `event`      | Entity has been deleted.                  |
-
-### Type Safety
-
-`defineRoute()` is generic — the table type flows into all hook contexts:
-
-```typescript
-const personRoute = defineRoute({
-	entity: 'person',
-	table: personTable,
-	hooks: {
-		beforeUpdate: ({ existing, data, event }) => {
-			// 'existing' is typed as Database.Entity<typeof personTable>
-			// TypeScript knows about existing.creator_id, existing.name, etc.
-			console.log(existing.name);
-		},
-	},
-});
-```
+Hooks are typed per entity — inside `hooks.post.beforeUpdate`, `existing` is `Database.Entity<typeof postTable>`.
 
 ### List Query Parameters
 
-`GET` requests to collection routes decode URL search params into a search query:
+`GET` requests to collection routes decode URL search params via `decodeSearchQuery` — the symmetric counterpart of the client's `encodeSearchQuery`:
 
-| Param    | Example                           | Description                                              |
-| -------- | --------------------------------- | -------------------------------------------------------- |
-| `limit`  | `?limit=20`                       | Max results to return                                    |
-| `offset` | `?offset=40`                      | Skip N results                                           |
-| `cursor` | `?cursor=abc123`                  | Cursor-based pagination token                            |
-| `term`   | `?term=alice`                     | Full-text search term                                    |
-| `order`  | `?order=name:ASC,updated_at:DESC` | Comma-separated `field:direction` pairs (`updated_at` or `.sortable()` fields) |
-| `where`  | `?where={"role":"admin"}`         | JSON-encoded WHERE clause                                |
-| `sparse` | `?sparse=false`                   | `false` for full entities, `true` for search fields only |
+| Param                       | Example                            | Description                                    |
+| --------------------------- | ---------------------------------- | ---------------------------------------------- |
+| `term`                      | `?term=alice`                      | Full-text search term                          |
+| `limit` / `offset`          | `?limit=20&offset=40`              | Pagination                                     |
+| `cursor`                    | `?cursor=abc123`                   | Keyset pagination token                        |
+| `order`                     | `?order=name:ASC\|updated_at:DESC` | `field:direction` pairs (`\|` or `,` separated) |
+| `where` / `facets` / `boost` / `vector` | `?where={"role":{"eq":"admin"}}` | JSON-encoded                       |
+| `fields`                    | `?fields=name,email`               | Comma-separated, or `*`                        |
+| `sparse` / `exact`          | `?sparse=false`                    | Booleans                                       |
+| `threshold` / `tolerance`   | `?threshold=0.5`                   | Numbers                                        |
+| `distinct_on`               | `?distinct_on=author_id`           | Field name                                     |
 
-### Modifying Data in Hooks
-
-Before hooks can optionally return modified data. If void is returned, the original data is used:
-
-```typescript
-beforeCreate: ({ data, event }) => {
-  // Inject creator_id from the session
-  return { ...data, creator_id: event.locals.user.id };
-},
-
-beforeList: ({ query, event }) => {
-  // Restrict results to the current user's data
-  return { ...query, where: { creator_id: event.locals.user.id } };
-},
-```
+Only the canonical spellings are read — `q`, `distinctOn`, `properties`, and other pre-v2 names are ignored.
 
 ### Error Handling
 
-All errors are normalized through `DelightError.from()` and returned as JSON responses:
-
-```json
-{ "message": "Not authorized", "status": 403 }
-```
-
-If `getDatabase()` returns `undefined` (e.g. no org selected), the handler returns a 500 error.
-
-See the [Error Handling](#error-handling-1) section below for the full `DelightError` API.
+All errors are normalized through `DelightError.from()` and returned as JSON: `{ "message": "Not authorized", "status": 403 }`.
 
 ## Form Generation
 
-The schema automatically produces form field attributes:
+The schema automatically produces form field props and a whole-form validator:
 
 ```typescript
-const table = Database.table('user', (schema) => ({
-	id: schema.primaryKey(),
+const table = Database.table('person', (schema) => ({
 	email: schema.string().email().label('Email Address').placeholder('you@example.com'),
 	name: schema.string().min(1).max(100).label('Full Name'),
-	age: schema.number().int().min(0).max(150).optional(),
-	role: schema.enum(['admin', 'user', 'guest']).label('Role'),
+	age: schema.number().int().min(0).max(150).step(1).optional(),
+	role: schema.enum([{ value: 'admin', label: 'Administrator' }, { value: 'user', label: 'User' }]),
 }));
 
 // table.form.field.email
-// {
-//   name: 'email',
-//   type: 'email',
-//   required: true,
-//   label: 'Email Address',
-//   placeholder: 'you@example.com',
-// }
+// { name: 'email', type: 'email', required: true, readonly: false,
+//   label: 'Email Address', placeholder: 'you@example.com', parse: (value) => ... }
 
 // table.form.field.role
-// {
-//   name: 'role',
-//   type: 'text',
-//   required: true,
-//   label: 'Role',
-//   options: ['admin', 'user', 'guest'],
-// }
+// { ..., options: [{ value: 'admin', label: 'Administrator' }, { value: 'user', label: 'User' }] }
+
+// table.form.schema — a Standard Schema (v1) validator over all form fields,
+// keyed by the same dot-notation names. Pass to a Form component's `schema` prop.
 ```
 
-Spread these directly onto HTML input elements or use them to drive form component libraries.
+Field props include `type` (`text`/`email`/`url`/`date`/`datetime-local`/`time`/`color`/`password`/`tel`/`textarea`/`number`/`boolean`), `minlength`/`maxlength`/`pattern` for strings, `min`/`max`/`step` for numbers, `options` for enums, `multiple` for array items, `tristate`/`default_checked` for booleans, and a per-field `parse(value)` that throws a `DelightError` with a human-readable message. Nested object fields appear under dot-notation names (`address.city`). Labels default to Title Case of the field name.
+
+On the client, `db.entity(...)` carries these helpers as `entity.form`, so a page needs only the entity to build a form.
 
 ## Client (Svelte 5)
 
 The client package provides a reactive, type-safe API client for the browser. It uses the same table definitions as the server — single source of truth — and gives you local full-text search over an IndexedDB index, IndexedDB entity caching, optimistic updates, and automatic routing to server-side search whenever the local index does not cover the whole table.
 
-> **Svelte 5 required.** The client uses Svelte 5 runes (`$state`, `$derived`, `$effect`) and is not compatible with other frameworks. The server and schema packages have no framework dependency.
+> **Svelte 5 required.** The client uses Svelte 5 runes and is not compatible with other frameworks. The server and schema entry points have no framework dependency.
 
 ### How it works
 
@@ -673,17 +744,17 @@ The client package provides a reactive, type-safe API client for the browser. It
 ┌─ Browser Main Thread ─────────────────────────────────────┐
 │                                                           │
 │  DatabaseClient                                           │
-│  ├─ entity(type, id) → EntityState     (reactive wrapper) │
-│  ├─ create/update/delete(type, ...)    (optimistic CRUD)  │
-│  ├─ watch(type, query) → DatabaseWatch  (live results)    │
-│  └─ list(type, query) → Promise        (one-shot, routed) │
+│  ├─ get(type, id) → EntityHandle       (reactive read)    │
+│  ├─ entity(type, id?) → EntityState    (reactive editing) │
+│  ├─ list(type, query) → ListHandle     (reactive list)    │
+│  └─ create/update/delete/applyLocalPatch/uploadImage      │
 │           │                                               │
 │           │ comlink proxy                                 │
 │           ▼                                               │
 │  SharedWorker (prod) / Worker (dev)                       │
 │  ┌────────────────────────────────────────────────────┐   │
 │  │  DatabaseWorker                                    │   │
-│  │  ├─ IndexedDB search index (postings, per entity) │   │
+│  │  ├─ IndexedDB search index (postings, per entity)  │   │
 │  │  ├─ IndexedDB cache (entities + sync metadata)     │   │
 │  │  ├─ CRUD → fetch + index update                    │   │
 │  │  └─ sync() → /api/sync → update indices + IDB      │   │
@@ -700,209 +771,116 @@ The client package provides a reactive, type-safe API client for the browser. It
               └─────────────────────┘
 ```
 
-All heavy work (indexing, IndexedDB reads/writes, fetch calls) runs in a Web Worker. In production, a SharedWorker is used so multiple tabs share a single writer. In dev mode, a regular Worker is used for HMR compatibility — several tabs then share one IndexedDB, which the write path is built for (every index write is a single transaction).
+All heavy work (indexing, IndexedDB reads/writes, fetch calls) runs in a Web Worker. In production, a SharedWorker is used so multiple tabs share a single writer. In dev mode, a regular Worker is used for HMR compatibility.
 
 ### Setup
 
 ```typescript
+// +layout.ts (or a shared helper)
 import { DatabaseClient } from '@delightstack/database/client';
-import { personTable, postTable, commentTable } from './tables';
+import { tables } from '$lib/schema';
 
-const db = new DatabaseClient({
-	// Same table definitions used on the server
-	tables: { person: personTable, post: postTable, comment: commentTable },
+export const load = async ({ fetch }) => {
+	const db = new DatabaseClient({
+		// Same table definitions used on the server
+		tables,
 
-	// IndexedDB database name — scope per org/context
-	db_name: `org-${org_id}`,
+		// IndexedDB database name — scope per org/context
+		db_name: `org-${org_id}`,
 
-	// Per-entity overrides (all optional)
-	entities: {
-		comment: { search_mode: 'server' }, // never try client-side search
-		person: { search_mode: 'client' }, // search locally even mid-backfill
-		post: { cache: false }, // disable IDB cache for this entity
-	},
+		// SvelteKit's fetch — used on SSR / pre-init so server-side calls carry
+		// the request's cookies, and so SSR responses replay during hydration
+		fetch,
 
-	// Dev mode uses regular Worker instead of SharedWorker
-	dev: import.meta.env.DEV,
-
-	// Hooks for external integration (e.g. websocket)
-	hooks: {
-		onEntityChange: (event) => {
-			/* { type, entity_type, id, data } */
+		// Per-entity overrides (all optional)
+		entities: {
+			comment: { search_mode: 'server' }, // never search or sync locally
+			person: { search_mode: 'client' }, // search locally even mid-backfill
+			post: { cache: false }, // disable IDB cache for this entity
 		},
-		onSubscribe: (callback) => {
-			return websocket.on('entity:*', callback);
-		},
-	},
-});
 
-await db.init();
+		// Dev mode uses a regular Worker instead of a SharedWorker
+		dev: import.meta.env.DEV,
+
+		// Hooks for external integration — @delightstack/websocket supplies all
+		// three (onEntityChange, onSubscribe, isLive) via ws.databaseHooks()
+		hooks: ws.databaseHooks(),
+	});
+
+	await db.init(); // no-op on the server; SSR reads fall back to `fetch`
+	return { db };
+};
 ```
 
-### CRUD
+### Reading: three reactive handles
 
-All CRUD methods are type-safe — the entity type flows through from your table definitions.
+Rule of thumb: **reading → `get`, editing → `entity`, lists/search → `list`.** All three share the same cache and invalidation, so any mutation through the client refreshes every reader of the same data.
 
-```typescript
-// Create
-const person = await db.create('person', { name: 'Alice', email: 'a@b.com' });
+| Use                              | API                                     | Handle        |
+| -------------------------------- | --------------------------------------- | ------------- |
+| Display a single entity          | `db.get(type, id)`                      | `EntityHandle` |
+| Edit a single entity (forms)     | `db.entity(type, id?)`                  | `EntityState` |
+| Lists, search, live results      | `db.list(type, query?)`                 | `ListHandle`  |
 
-// Get (returns from IDB cache with background refresh)
-const alice = await db.get('person', person.id);
+Each handle works two ways: **reactive** (read its properties in a template or `$derived` — the first read starts a live subscription that tears down when nothing reads it anymore) and **awaited** (`await handle.load()` for a one-shot result, which also works on SSR).
 
-// Update (optimistically updates local search index)
-const updated = await db.update('person', person.id, { name: 'Alice B.' });
+### `db.get` — EntityHandle
 
-// Delete (optimistically removes from local search index)
-await db.delete('person', person.id);
-```
-
-`db.get` is also **reactive when called inside `$derived` / `$effect`**. After a mutation through `db.update` / `db.delete` / `db.create` — or a push via the `onSubscribe` hook — any reactive expression that read the same `type:id` re-runs automatically:
+Cached per `type:id`, so every call site shares one instance.
 
 ```svelte
 <script lang="ts">
 	import { page } from '$app/state';
+	const { data } = $props();
+	const { db } = $derived(data);
 
-	let person = $derived(await db.get('person', page.params.person_id));
-
-	async function rename(next: string) {
-		await db.update('person', page.params.person_id, { name: next });
-		// `person` re-evaluates — no invalidate() call needed.
-	}
-</script>
-```
-
-For richer reactive patterns see [Reactive reads](#reactive-reads) below.
-
-### Reactive reads
-
-Pick the primitive that matches what the page needs. All three share the same underlying cache + invalidation, so mutations through the client refresh every reader that touched the same entity.
-
-| Use                                  | API                                      | Returns                    |
-| ------------------------------------ | ---------------------------------------- | -------------------------- |
-| One-shot fetch (load functions, SSR) | `db.get(type, id)`                       | `Promise<Entity>`          |
-| Read-mostly page                     | `db.read(type, id)` → `EntityReader`     | sync reactive handle       |
-| Edit form / dirty-tracked state      | `db.entity(type, id)` → `EntityState`    | sync reactive handle       |
-
-- **`db.get`** — call it in a SvelteKit `load`, or inside `$derived(await …)` when you like the async-derived style. Reactive to mutations when read from a reactive context.
-- **`db.read`** — construct once, read `value`/`loading`/`error` in templates. Good for detail pages that just display data. Re-fetches automatically when the id changes or a mutation lands.
-- **`db.entity`** — use when the user will edit the value. Adds `has_changes`, `saving`, `reset()`, `save()` on top of what `db.read` offers.
-
-### EntityReader (`db.read`)
-
-Lightweight reactive wrapper for a single entity. Synchronous to construct; the first reactive read starts the underlying subscription, which tears down automatically when no one is reading anymore.
-
-```svelte
-<script>
-	import { page } from '$app/state';
-
-	// Pass a function for the id so it tracks `page.params` reactively.
-	const person = db.read('person', () => page.params.person_id);
+	const person = $derived(db.get('person', page.params.person_id));
 </script>
 
-{#if person.loading && !person.value}
-	Loading…
-{:else if person.error}
-	<Alert>{person.error.message}</Alert>
+{#if person.status === 'loading'}
+	<p>Loading…</p>
 {:else if person.value}
 	<h1>{person.value.name}</h1>
 {/if}
 ```
 
-**Reactive properties:**
+| Property / Method | Type                                  | Description                                                       |
+| ----------------- | ------------------------------------- | ----------------------------------------------------------------- |
+| `value`           | `Database.Entity<T> \| undefined`     | Live entity data; `undefined` until loaded / when not found. Replaced (never mutated) on updates. |
+| `status`          | `HandleStatus`                        | `'loading' \| 'refreshing' \| 'ready' \| 'error'`                 |
+| `error`           | `unknown`                             | Last fetch error; cleared on the next successful load             |
+| `load(options?)`  | `Promise<Entity \| undefined>`        | Awaited form. Reactive when called inside `$derived`/`$effect` — `$derived(await db.get(type, id).load())` re-runs on changes. `{ force_refresh: true }` bypasses the IDB cache. |
+| `refresh()`       | `Promise<Entity \| undefined>`        | Force a re-fetch, bypassing the IDB cache                         |
 
-| Property      | Type                      | Description                                                                        |
-| ------------- | ------------------------- | ---------------------------------------------------------------------------------- |
-| `value`       | `Database.Entity<T> \| undefined` | Current entity data; `undefined` before first load or if not found         |
-| `loading`     | `boolean`                 | `true` during the first fetch or whenever the id changes                           |
-| `loaded`      | `boolean`                 | `true` once the first fetch has resolved (even with no record)                     |
-| `error`       | `unknown`                 | Last fetch error, cleared on next successful load                                  |
-| `id`          | `string \| number \| undefined` | Currently tracked id (resolved from the id source)                           |
-| `entity_type` | `string` (literal)        | The entity type string                                                             |
-
-**Methods:**
-
-| Method      | Description                                                                    |
-| ----------- | ------------------------------------------------------------------------------ |
-| `reload()`  | Force a refetch, bypassing the IDB cache.                                      |
-| `destroy()` | Force cleanup. Normally not needed — auto-cleans on last reader disconnect.    |
-
-### EntityState (reactive wrapper)
-
-`EntityState` wraps a single entity with reactive state. It auto-loads from the server when first accessed in a Svelte component, tracks unsaved changes, and provides save/delete/reset methods.
-
-```typescript
-// Get a reactive wrapper (cached singleton per entity:id)
-const person = db.entity('person', 'abc123');
-
-// For creating a new entity (no ID) — save() will create on the server
-const person = db.entity('person');
-```
-
-**SSR hydration — preload in `+page.ts`, read in the component.** `db.entity(type, id)` is cached on the `DatabaseClient` instance, so awaiting `.load()` inside the load function populates the same wrapper the component reads later. There's nothing to pass through `data`:
+**SSR:** call `.load()` in a `+page.ts` load. With the SvelteKit `fetch` passed to the client config, the SSR response is serialized into the page payload and replayed during hydration — one request total:
 
 ```typescript
 // +page.ts
 export const load: PageLoad = async ({ params, parent }) => {
-  const { db } = await parent();
-  const person = db.entity('person', params.person_id);
-  await person.load();
-  if (!person.loaded) error(404, 'Person not found');
-  return {};
+	const { db } = await parent();
+	const post = await db.get('post', params.post_id).load();
+	return { post };
 };
 ```
 
+Mutations through `db.create/update/delete`, websocket pushes (via `hooks.onSubscribe`), and background refreshes all re-run reactive readers of the same `type:id` automatically.
+
+### `db.entity` — EntityState (editing)
+
+The edit-form wrapper: a draft `value` you can bind to, the last confirmed `server_value`, dirty tracking, and save/reset/delete. Cached per `type:id` on the client.
+
 ```svelte
-<!-- +page.svelte -->
 <script lang="ts">
-  import { page } from '$app/state';
-  const { data } = $props();
-  const { db } = $derived(data);
-  const person = $derived(db.entity('person', page.params.person_id));
+	const person = $derived(db.entity('person', person_id));
 </script>
 
 <input bind:value={person.value.name} />
-<button onclick={() => person.save()} disabled={!person.has_changes}>Save</button>
-```
 
-**How `load()` picks its read path.** The client carries a `hydrated` flag that decides between two paths inside `EntityState.load()`:
-
-- **Pre-hydration (SSR + initial hydration / full refresh):** fetches on the main thread using the `fetch` you passed to `DatabaseClient`. On the server this is SvelteKit's scoped fetch, which records the response so the client's hydration re-run finds it in the fetch cache — one network request covers both renders. After the response lands on the client, it's pushed into the worker's IDB cache + search index via `applyExternalChange`, so subsequent navigations can read it back from cache.
-- **Post-hydration (client-side navigation):** delegates to `worker.get`, which serves from the IDB cache (live-updated by websockets and by applied local mutations) — zero network for nav-heavy flows. `force_refresh: true` still bypasses IDB and hits the server.
-
-The flag flips automatically — `init()` schedules a short macrotask (50ms) that fires after the browser finishes its initial hydration work but long before the user can interact with the page, so no wiring is required in your layouts. If you ever need to switch paths manually (for example, if a sub-route should always read from IDB right away), call `db.markHydrated()` — it cancels the pending timer and flips immediately.
-
-**Worker-side safety-net refresh.** `worker.get` has a fallback: if the cached entry's `updated_at` is older than ~30s, it returns the cached value immediately but spawns a background fetch to freshen IDB. That's the right behavior when no push channel is in play — but for apps wired to a websocket it's redundant, because `applyExternalChange` is already keeping IDB current in real time. Wire `hooks.isLive` to your websocket client's live-state signal (`@delightstack/websocket`'s `ws.databaseHooks()` supplies it for you) and the worker will skip the refresh whenever the feed is trusted:
-
-- currently connected → `isLive` is `true` → skip the refresh, IDB is authoritative.
-- just disconnected (< 60s ago) → still `true` → brief blips don't trigger a thundering herd of refetches.
-- offline longer, or never connected → `false` → the worker's stale-refresh kicks back in so apps without a push channel still converge.
-
-If the hook isn't provided, the worker keeps the refresh-if-stale behavior (unchanged pre-1.0 default).
-
-If you already have the entity data in hand — for example from a different load that returned the full record — you can still seed directly: `db.entity('person', id, fullPerson)` treats `initial_data` as the authoritative server state and skips the load entirely.
-
-Use it in Svelte components — reactive properties update the UI automatically:
-
-```svelte
-<script>
-	const person = db.entity('person', id);
-</script>
-
-{#if person.loading}
-	<p>Loading...</p>
-{:else}
-	<input bind:value={person.value.name} />
-
-	{#if person.has_changes}
-		<button onclick={() => person.save()}>Save</button>
-		<button onclick={() => person.reset()}>Discard</button>
-	{/if}
-
-	{#if person.saving}
-		<p>Saving...</p>
-	{/if}
+{#if person.has_changes}
+	<button onclick={() => person.save()}>Save</button>
+	<button onclick={() => person.reset()}>Discard</button>
 {/if}
+{#if person.saving}<p>Saving…</p>{/if}
 ```
 
 **Reactive properties:**
@@ -915,123 +893,169 @@ Use it in Svelte components — reactive properties update the UI automatically:
 | `saving`       | `boolean`                       | Whether a save is in progress                     |
 | `loading`      | `boolean`                       | Whether entity is being fetched                   |
 | `loaded`       | `boolean`                       | Whether entity has been fetched at least once     |
-| `error`        | `unknown`                       | Last error from load/save/delete, cleared on next success |
+| `status`       | `HandleStatus`                  | Combined lifecycle state                          |
+| `error`        | `unknown`                       | Last error from load/save/delete                  |
 | `id`           | `string \| number \| undefined` | Entity ID (set after first save for new entities) |
-| `entity_type`  | `string` (literal)              | The entity type string                            |
-| `created_at`   | `number \| undefined`           | Creation timestamp                                |
-| `updated_at`   | `number \| undefined`           | Last update timestamp                             |
+| `form`         | `T['form']`                     | The table's form helpers (`form.field.*` spreadable props, `form.schema`) |
+| `created_at` / `updated_at` | `number \| undefined` | Auto-managed timestamps (epoch ms)              |
 
 **Methods:**
 
 | Method                             | Description                                                                                                 |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `save(changes?)`                   | Save to server. Creates if no ID, updates otherwise. Pass partial changes or omit to save the full `value`. |
-| `load({ force_refresh?, fetch? })` | Fetch fresh from server. Called automatically on first access.                                              |
+| `save(changes?)`                   | Save to server. Creates if no ID, updates otherwise. Concurrent saves are queued, never dropped.            |
+| `load({ force_refresh? })`         | Fetch fresh from server; resolves with the entity. Called automatically on first reactive access.           |
 | `delete()`                         | Delete from server. Clears local state and removes from cache.                                              |
 | `reset()`                          | Discard local changes, revert to `server_value`.                                                            |
 | `toJSON()`                         | Clean snapshot of the current value.                                                                        |
 
-**Standalone usage (without DatabaseClient):**
+**SSR pattern — preload in `+page.ts`, read in the component.** The instance is cached on the client, so awaiting `.load()` in the load function populates the same wrapper the component reads later:
 
 ```typescript
-import { EntityState } from '@delightstack/database/client';
-
-const person = new EntityState('person', id, {
-  worker, // optional; falls back to `fetch` on SSR / pre-init
-  fetch,
-  primary_key: 'id',
-});
-```
-
-Caching and version invalidation live on `DatabaseClient` — `new EntityState(...)` gives you a single unmanaged wrapper. Prefer `db.entity(...)` unless you have a specific reason to manage lifecycle yourself.
-
-### DatabaseWatch (reactive list)
-
-`db.watch` is the live counterpart of `db.list` — the same pairing as `db.read` and `db.get` for single entities. It returns a `DatabaseWatch` whose results auto-update when the underlying index changes (e.g. after a create/update/delete). Queries are routed to the server whenever the local index does not cover the whole table (see [Query routing](#query-routing)).
-
-> **Sparse results.** Search documents only contain fields declared `searchable` in your search schema (typed as `Database.SearchEntity<T>`, *not* `Database.Entity<T>`). Both client and server search default to sparse — the client index only holds the sparse fields, and the server path defaults to `sparse: true` for efficient sync payloads. When you need the full entity, call `db.get('type', hit.id)` or `db.read('type', () => hit.id)` — those always return the full `Database.Entity<T>`.
-
-```typescript
-const people = db.watch('person', { term: 'alice', limit: 20 });
+// +page.ts
+export const load: PageLoad = async ({ params, parent }) => {
+	const { db } = await parent();
+	const person = db.entity('person', params.person_id);
+	await person.load();
+	if (!person.loaded) error(404, 'Person not found');
+	return {};
+};
 ```
 
 ```svelte
-<script>
-	const people = db.watch('person', { term: '', limit: 20 });
+<!-- +page.svelte -->
+<script lang="ts">
+	import { page } from '$app/state';
+	const person = $derived(db.entity('person', page.params.person_id));
+</script>
+```
+
+Server-side, the load uses the `fetch` passed to `DatabaseClient` (carrying auth cookies); on hydration the load re-runs but reuses the SSR'd response via SvelteKit's fetch cache. After hydration, `load()` reads through the worker's IDB cache instead — zero network for client-side navigation (the flip is automatic).
+
+**New-entity pattern:** omit the id — `db.entity('person')` gives a blank draft whose `save()` creates on the server and attaches the returned id. Pass `initial_data` as the third argument to seed the draft (with an id, it's treated as authoritative server state and skips the load).
+
+### `db.list` — ListHandle
+
+The one list API: a live search that re-runs whenever the underlying index changes, and a one-shot query via `.load()`.
+
+```svelte
+<script lang="ts">
+	const posts = db.list('post', { limit: 50 });
 </script>
 
-<input bind:value={people.query.term} />
+<Input bind:value={posts.query.term} placeholder="Search posts…" />
 
-{#if people.status === 'loading'}
-	<p>Searching...</p>
+{#if posts.status === 'loading'}
+	<p>Searching…</p>
 {:else}
-	<p>{people.count} results ({people.mode} mode)</p>
-	{#each people.docs as person}
-		<p>{person.name}</p>
+	<p>{posts.count} results ({posts.mode} mode)</p>
+	{#each posts.items as post (post.id)}
+		<p>{post.title}</p>
 	{/each}
+	{#if posts.has_more}
+		<button onclick={() => posts.loadMore()}>Load more</button>
+	{/if}
 {/if}
 ```
 
 **Reactive properties:**
 
-| Property      | Type                         | Description                                             |
-| ------------- | ---------------------------- | ------------------------------------------------------- |
-| `results`     | `SearchHit<T>[]`             | Array of hits with `id`, `document` (sparse), and `score` |
-| `docs`        | `Database.SearchEntity<T>[]` | Convenience — just the sparse documents                 |
-| `count`       | `number`                     | Total matching count                                    |
-| `status`      | `WatchStatus`                | `'loading'` (no results yet) · `'refreshing'` (re-query in flight, previous results stay visible) · `'ready'` · `'error'` |
-| `error`       | `unknown`                    | Any error from the query (set while `status === 'error'`) |
-| `mode`        | `'client' \| 'server'`       | Which side answers this watch's queries                 |
-| `query`       | `Database.SearchQuery<T>`    | Get/set the live query. Setting triggers a re-query.    |
-| `entity_type` | `string` (literal)           | The entity type string                                  |
+| Property      | Type                         | Description                                                |
+| ------------- | ---------------------------- | ---------------------------------------------------------- |
+| `hits`        | `SearchHit<T>[]`             | Hits with `id`, `document` (sparse), and `score`           |
+| `items`       | `Database.SearchEntity<T>[]` | Convenience — just the sparse documents, in hit order      |
+| `count`       | `number`                     | Total matching count                                       |
+| `has_more`    | `boolean`                    | Whether rows exist beyond the current window               |
+| `status`      | `HandleStatus`               | `'loading'` (nothing yet) · `'refreshing'` (re-query in flight, previous results stay visible) · `'ready'` · `'error'` |
+| `error`       | `unknown`                    | Set while `status === 'error'`; last-known-good results stay visible |
+| `mode`        | `'client' \| 'server'`       | Which side answered the current results                    |
+| `query`       | `Database.SearchQuery<T>`    | The live query — mutate fields (`posts.query.term = 'x'`) or bind to them; re-queries automatically (debounced) |
 
 **Methods:**
 
-| Method      | Description                                         |
-| ----------- | --------------------------------------------------- |
-| `refresh()` | Manually re-execute the query.                      |
-| `destroy()` | Clean up subscriptions and effects. Call when done. |
+| Method           | Description                                                                    |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `load()`         | Run the current query once and resolve with a `SearchResult` (`hits`, `items`, `count`, `mode`). Never starts a subscription; works on SSR via the configured `fetch`. |
+| `loadMore(n?)`   | Grow the result window by `n` rows (default 100). The live subscription keeps the whole window updated — paging is a growing window, not detached pages. |
+| `refresh()`      | Manually re-execute the query.                                                 |
+| `destroy()`      | Force teardown. Normally not needed — auto-cleans when the last reader stops.  |
 
-### One-shot list
+Query defaults: `term: ''`, `limit: 100`, `order: [{ field: 'updated_at', direction: 'DESC' }]` — the recency order is dropped automatically for relevance queries (a `term` or `vector`) so score ranking wins. The query accepts every field from the [search DSL](#search--list), plus the client-only `source`.
 
-For queries that don't need live updates. Routed exactly like `db.watch` — locally once the synced window covers the table, on the server until then:
+Two forms of the query argument:
 
 ```typescript
-const results = await db.list('person', { term: 'alice', limit: 20 });
-// results.hits, results.docs, results.count
+// Static object — handles for identical queries are cached and shared
+const posts = db.list('post', { term: 'hello', limit: 20 });
+
+// Function form — reactive: re-derives the query from other reactive state.
+// One handle per call site (never shared).
+const results = $derived(db.list('place', () => ({ term, limit: 20 })));
 ```
 
-On SSR (no worker yet), `db.list` falls back to the auto-generated `/api/person` endpoint using the `fetch` you passed to `DatabaseClient`, so it works in `load` functions too.
+> **Sparse results.** Search documents only contain fields declared `searchable` (typed `Database.SearchEntity<T>`, not `Database.Entity<T>`), and synced documents never include vector fields. When you need the full entity, use `db.get(type, hit.id)` — or query with `sparse: false`, which routes to the server automatically (only the server has the full rows; combining it with `source: 'client'` is an error, same as `vector`).
+
+### Writes
+
+```typescript
+// Create / update / delete — optimistically update the local index + IDB cache,
+// then persist via the auto-generated /api routes
+const person = await db.create('person', { name: 'Alice', email: 'a@b.com' });
+const updated = await db.update('person', person.id, { name: 'Alice B.' });
+await db.delete('person', person.id);
+
+// Patch the LOCAL search index only — no server write. Use when the
+// authoritative write goes through a custom endpoint whose websocket echo
+// replaces this overlay. Returns false when the entity runs in server mode.
+await db.applyLocalPatch('post', post_id, { title: 'Draft title' });
+
+// Upload an image (POST multipart to /api/image; pairs with @delightstack/images)
+const record = await db.uploadImage(file, {
+	caption: 'Sunset',
+	onProgress: (fraction) => console.log(`${Math.round(fraction * 100)}%`),
+});
+```
+
+All writes bump the entity's reactive version, so every `get`/`entity`/`list` reader of the same data updates automatically.
 
 ### Lifecycle
 
 ```typescript
-// Change scope (e.g. user switches org) — clears cache, re-initializes
-await db.setScope(`org-${new_org_id}`);
-
-// Cleanup — terminates worker, clears subscriptions
-await db.destroy();
+await db.init(); // load IDB, connect worker, start background sync (SSR no-op)
+await db.setScope(`org-${new_org_id}`); // switch scope — clears caches, re-inits
+await db.signOut(); // wipe ALL local data (IDB cache + search index) — see below
+await db.destroy(); // disconnect from the worker, clear subscriptions
 ```
+
+**Sign-out.** `db.signOut()` deletes the scope's entire IndexedDB database —
+cached entities, sync cursors, and the local search index — so nothing
+searchable remains on disk after the user signs out (shared computers). It is
+flash-free by design: the client freezes first (no handle updates, no
+subscriber notifications, currently displayed data stays put), then wipes, so
+you can `await db.signOut()` and navigate without any list visibly emptying.
+Peer tabs are wiped silently over the same channel. After sign-out the client
+is inert (`db.status` is `'signed_out'`); a fresh `init()` on the next sign-in
+brings it back.
 
 **Reactive state on DatabaseClient:**
 
-| Property      | Type      | Description                             |
-| ------------- | --------- | --------------------------------------- |
-| `initialized` | `boolean` | Whether `init()` has completed          |
-| `syncing`     | `boolean` | Whether the initial sync is in progress |
-| `synced`      | `boolean` | Whether the initial sync has completed  |
+| Property  | Type             | Description                                                                                           |
+| --------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `status`  | `DatabaseStatus` | Lifecycle: `'idle'` (SSR / before `init()`) → `'initializing'` → `'ready'` → `'signed_out'`           |
+| `syncing` | `boolean`        | Whether the initial background sync is in progress (the client is already usable while it runs)       |
+| `synced`  | `boolean`        | Whether the initial sync has completed (local search answers from a fully mirrored index)             |
 
 ### Query routing
 
-Where a query (`db.list` or `db.watch`) is answered is decided **per query**, in this order:
+Where a query (`db.list`) is answered is decided **per query**, in this order:
 
-1. **Any query carrying `vector`** (including hybrid) goes to the server. Embeddings never reach the client — so `source: 'client'` combined with `vector` is rejected, at compile time and at runtime.
-2. **A per-query `source` wins.** `source: 'server'` forces the server; `source: 'client'` forces the local index even mid-backfill (a partial-corpus answer by choice). The default, `'auto'`, falls through to the next rules.
+1. **Any query carrying `vector`** (including hybrid) goes to the server. Embeddings never reach the client — `source: 'client'` combined with `vector` is rejected, at compile time and at runtime.
+2. **A per-query `source` wins.** `source: 'server'` forces the server; `source: 'client'` forces the local index even mid-backfill (a partial-corpus answer by choice). The default, `'auto'`, falls through to the next rule.
 3. **Otherwise, coverage decides.** Entities are indexed into IndexedDB as they sync. Once an entity type's synced window covers the whole table, its queries are answered locally — instant and offline-capable. Until the backfill completes, they go to the server, which has the full corpus and therefore the correct relevance statistics.
 
-Identical results are guaranteed only when the two corpora match: a partial local window is a different corpus, and the server's answer is the authoritative one.
+Every result reports which side answered via `mode`. Identical results are guaranteed only when the two corpora match — client and server run the same engine core, so a fully-synced local index gives byte-identical results.
 
-You can set the default per entity:
+Per-entity defaults:
 
 ```typescript
 entities: {
@@ -1040,12 +1064,7 @@ entities: {
 }
 ```
 
-`search_mode: 'client'` (like a per-query `source: 'client'`) is an explicit choice to accept partial-corpus answers while the window fills. `source: 'client'` on a `search_mode: 'server'` entity is an error — that entity never syncs, so no local index exists to answer from.
-
-```typescript
-// Force one query to the server even though `person` searches locally:
-const fresh = await db.list('person', { term: 'alice', source: 'server' });
-```
+`source: 'client'` on a `search_mode: 'server'` entity is an error — that entity never syncs, so no local index exists to answer from.
 
 **Huge tables: the sync ceiling.** A table can be too large to be worth mirroring at all. `max_synced_docs` (default **50 000**, global or per-entity, `false` disables) caps the backfill: when the server reports more rows than the ceiling, the backfill is deferred — sync sends cheap count-only probes instead of downloading pages — and the entity's queries answer from the server, exactly as if the window were still filling. The decision is re-probed on every sync run, so raising the ceiling or the table shrinking resumes the backfill automatically. A table that already finished backfilling keeps syncing incrementally however large it grows: the ceiling prevents the big download, it never evicts a finished index. Entities explicitly forced `search_mode: 'client'` ignore the default and global ceilings; only their own `max_synced_docs` caps them.
 
@@ -1053,9 +1072,10 @@ const fresh = await db.list('person', { term: 'alice', source: 'server' });
 const db = new DatabaseClient({
 	tables,
 	db_name,
+	fetch,
 	max_synced_docs: 20_000, // global ceiling (default 50 000)
 	entities: {
-		note: { max_synced_docs: false }, // this one is worth mirroring at any size
+		note: { max_synced_docs: false }, // worth mirroring at any size
 		person: { search_mode: 'client', max_synced_docs: 100_000 },
 	},
 });
@@ -1063,7 +1083,7 @@ const db = new DatabaseClient({
 
 ### Error handling
 
-CRUD errors from the worker are reconstructed as `DelightError` instances on the main thread:
+Errors from the worker are reconstructed as `DelightError` instances on the main thread:
 
 ```typescript
 import { DelightError } from '@delightstack/utilities';
@@ -1081,15 +1101,13 @@ try {
 
 ### Without SvelteKit
 
-The client package requires **Svelte 5** for its reactive state (`$state`, `$derived`, `$effect`). It does not depend on SvelteKit specifically — you can use it in any Svelte 5 app that has a bundler supporting Web Workers (Vite, webpack, etc.).
+The client package requires **Svelte 5** for its reactive state. It does not depend on SvelteKit specifically — any Svelte 5 app with a bundler supporting Web Workers works; the SvelteKit-specific parts (`fetch` replay, load-function SSR) simply don't apply.
 
-The server-side code _does_ work without Svelte or SvelteKit:
+The server-side code works without Svelte entirely:
 
-- **Schema definitions** (`Database.table()`) are framework-agnostic. Use them in any TypeScript project.
-- **DatabaseServer** and **SqlServer** are Cloudflare Durable Object classes. They work with any framework that deploys to Cloudflare Workers (Hono, itty-router, plain Workers, etc.).
-- **`createDatabaseHandle()`** is SvelteKit-specific (it returns a SvelteKit `Handle`). For other frameworks, call `DatabaseServer` methods directly from your route handlers.
-
-If you're using a non-Svelte frontend, you can still use the server package and call the REST API endpoints directly — the client package just provides convenience wrappers for the reactive patterns that Svelte enables.
+- **Schema definitions** (`Database.table()`) are framework-agnostic TypeScript.
+- **`DatabaseServer`** is a Cloudflare Durable Object class — use it with Hono, itty-router, plain Workers, anything on Cloudflare.
+- **`createDatabaseHandle()`** is SvelteKit-specific (it returns a SvelteKit `Handle`). For other frameworks, call `DatabaseServer` methods directly from your route handlers, and serve a `POST /api/sync` endpoint yourself if you want client sync.
 
 ## Design Decisions
 
@@ -1097,74 +1115,65 @@ If you're using a non-Svelte frontend, you can still use the server package and 
 FTS5 cannot run in the browser, so a client and a server query would rank differently — and the whole point is that a caller can choose either per query. An in-memory library (this package used Orama through 1.1) has no incremental persistence: the entire index has to be serialized after writes, which grew to 10+ seconds per save on a production corpus, and it has to be held in the Durable Object's memory. The engine here shares one pure core (tokenizer, BM25, filter/sort semantics) between a SQLite postings backend on the server and an IndexedDB one on the client, so the same query over the same documents gives byte-identical results, index writes are O(changed document), and cold start costs nothing.
 
 **Why a `json` catch-all column?**
-SQLite doesn't support nested objects or arrays natively. Rather than flattening deeply nested schemas into dozens of columns, object/array fields are serialized into a single `json` TEXT column. Root-level scalars still get their own columns for indexing and WHERE clauses.
+SQLite doesn't support nested objects or arrays natively. Rather than flattening deeply nested schemas into dozens of columns, non-scalar fields are serialized into a single `json` TEXT column. Root-level scalars still get their own columns for indexing and WHERE clauses.
 
 **Why synchronous CRUD?**
 Cloudflare Durable Object SQLite operations are synchronous by design. This simplifies the API — no `await` needed for `create()`, `get()`, `update()`, `delete()`.
 
-**Why Zod for validation?**
-Zod provides both runtime validation and TypeScript type inference from a single schema definition. The schema system compiles field definitions into Zod schemas automatically, so `create()` and `update()` validate data without manual validator code.
+**Why in-house validation instead of zod?**
+The schema builder already knows every constraint — compiling them into a second schema library added a dependency, a parallel type surface, and subtle mismatches (zod silently dropped a `.min()` when a format replaced the base schema). The in-house `FieldValidator` reads constraints live off the field definition, throws consistent `DelightError`s, and costs zero dependencies. `.check(fn)` covers everything a `refine` used to.
 
-**Why cursor-based pagination?**
-Offset-based pagination (`OFFSET 100 LIMIT 10`) degrades on large tables because the database must scan and discard rows. Cursor-based pagination uses WHERE clauses to skip directly to the next page, maintaining constant performance regardless of page depth.
+**Why cursor-based pagination on the server, a growing window on the client?**
+Offset pagination degrades on large tables. The server hands out keyset cursors with constant cost at any depth. The client's live lists instead grow their window (`loadMore()`), because a live subscription keeping N detached pages consistent is much harder than keeping one window consistent.
 
 ## Exports
 
-### `@delightstack/database` (server + schema)
+### `@delightstack/database` (main — schema, handler, search types)
 
-| Export                            | Description                                                         |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `Database`                        | Namespace containing `table()`, `Entity<T>`, and search query types |
-| `DatabaseServer`                  | Main Durable Object class for schema-driven CRUD + search           |
-| `SqlServer`                       | Lower-level SQL wrapper for direct database access                  |
-| `prepareSql`                      | Tagged template helper for safe SQL query construction              |
-| `DatabaseServerTransaction`       | Type for transaction operation arrays                               |
-| `DatabaseServerTransactionResult` | Type for transaction results                                        |
-| `DatabaseSyncRequest`             | Type for sync query parameters                                      |
-| `DatabaseSyncResponse`            | Type for sync response data                                         |
-| `SqlEntityQuery`                  | Type for SqlServer query parameters                                 |
-| `SqlEntityQueryWhereClause`       | Type for SqlServer WHERE clause                                     |
-| `createDatabaseHandle`            | SvelteKit Handle factory for declarative CRUD routes                |
-| `defineRoute`                     | Type-safe route definition helper for `createDatabaseHandle`        |
-| `DatabaseRouteConfig`             | Type for a configured entity route                                  |
-| `DatabaseRouteHooks`              | Type for lifecycle hooks on an entity route                         |
+| Export                                        | Description                                                                 |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
+| `Database`                                    | Namespace: `table()`, `Entity<T>`, `SearchEntity<T>`, `SearchQuery<T>`, `Table`, … |
+| `createDatabaseHandle`                        | SvelteKit Handle factory for auto-generated CRUD + sync routes              |
+| `DatabaseHandleOptions`, `DatabaseRouteHooks` | Types for the handler config and per-entity hooks                           |
+| `DatabaseServer` *(type only)*                | The DO class **type** — the value must be imported from `/worker`           |
+| `prepareSql`                                  | Tagged template helper for safe SQL construction (used by `@delightstack/auth`) |
+| `SqlTaggedTemplate`, `SqlPreparedQuery`, `SqlQueryFn` | Types for the `exec()` tagged-template API                          |
+| `encodeSearchQuery`, `decodeSearchQuery`      | Symmetric query ⇄ URLSearchParams codec                                     |
+| `normalizeWhere`                              | Normalizes where-clause shorthands into operator objects                    |
+| `SearchQueryInput`, `ValidSearchQuery`        | Loose (non-generic) query type + the vector/source compile-time guard       |
+| `FieldValidator`, `FieldGenerator` *(type)*   | The in-house validator class and the field builder type                     |
+| Search core types *(types)*                   | `SearchQuery`, `SearchQueryResults`, `WhereCondition`, `FacetDefinition`, `FacetResult`, `SearchHit`, `SearchableType`, `GeoPoint`, … |
+
+### `@delightstack/database/server`
+
+The handler + SQL helper subset of the main entry (everything above except the schema namespace and search types). Safe to import from SvelteKit server code.
+
+### `@delightstack/database/worker`
+
+| Export           | Description                                                                    |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `DatabaseServer` | The Durable Object class (value). Imports `cloudflare:workers` — only import this from your Worker entry point. |
 
 ### `@delightstack/database/client` (Svelte 5 only)
 
 | Export                 | Description                                                            |
 | ---------------------- | ---------------------------------------------------------------------- |
-| `DatabaseClient`       | Main client class — CRUD, search, entity state, sync, lifecycle        |
-| `EntityReader`         | Lightweight reactive single-entity reader (for `db.read`)              |
-| `EntityState`          | Reactive per-entity wrapper with auto-load, save, and change tracking  |
-| `DatabaseWatch`        | Reactive list with live results from the local index or the server     |
-| ~~`DatabaseError`~~    | **Removed.** Use `DelightError` from `@delightstack/utilities` instead |
-| `DatabaseClientConfig` | Type for `DatabaseClient` constructor config                           |
+| `DatabaseClient`       | Main client class — handles, CRUD, sync, routing, lifecycle            |
+| `EntityHandle`         | Reactive single-entity read handle (returned by `db.get`)              |
+| `EntityState`          | Reactive per-entity edit wrapper (returned by `db.entity`)             |
+| `ListHandle`           | Reactive list/search handle (returned by `db.list`)                    |
+| `DatabaseClientConfig` | Type for the `DatabaseClient` constructor config                       |
 | `SearchHit`            | Type for a single search result hit                                    |
-| `SearchResult`         | Type for a one-shot `db.list` result set (`hits`, `docs`, `count`)     |
-| `WatchQueryInit`       | Type for the `db.watch` query argument (object or reactive function)   |
-| `WatchStatus`          | `'loading' \| 'refreshing' \| 'ready' \| 'error'`                      |
-| `SearchQueryInput`     | Loose (non-generic) search query type for the encode/decode layer      |
-| `WorkerSearchResult`   | Type for search results from the worker                                |
+| `SearchResult`         | Type for a one-shot `.load()` result (`hits`, `items`, `count`, `mode`) |
+| `ListQueryInit`        | Type for the `db.list` query argument (object or reactive function)    |
+| `HandleStatus`         | `'loading' \| 'refreshing' \| 'ready' \| 'error'`                      |
+| `SearchQueryInput`, `ValidSearchQuery`, `encodeSearchQuery`, `decodeSearchQuery` | Query codec re-exports         |
+| `WorkerSearchResult`   | Type for raw search results from the worker                            |
 
-## Project Structure
+### `@delightstack/database/schema`
 
-```
-packages/database/
-  index.ts                    # Package entry — re-exports server + schema
-  schema/
-    schema.ts                 # Schema definition system (field types, validators, form generation)
-  server/
-    index.ts                  # Server entry — re-exports server classes
-    database.handler.ts       # SvelteKit Handle for declarative CRUD routes with hooks
-    db.server.ts              # DatabaseServer class (CRUD, search, sync, transactions)
-    db.server.test.ts         # Tests for DatabaseServer
-    sql.server.ts             # SqlServer class (raw SQL wrapper)
-    sql.helper.ts             # SQL query builder utilities and types
-  client/
-    index.ts                  # Client entry — re-exports client classes (Svelte 5)
-    database.client.svelte.ts # DatabaseClient, EntityState, DatabaseWatch
-    database.worker.ts        # Web Worker — IDB search index, entity cache, fetch, sync
-    database.worker.init.ts   # SharedWorker/Worker singleton factory
-    database.idb.ts           # IndexedDB helper utilities
-    database.error.ts         # DatabaseError for comlink worker-to-main transfer
-```
+| Export           | Description                                                     |
+| ---------------- | --------------------------------------------------------------- |
+| `Database`       | The schema namespace (same as the main entry's)                 |
+| `FieldValidator` | The in-house per-field validator                                |
+| `FieldGenerator` | *(type)* The field builder type                                 |
