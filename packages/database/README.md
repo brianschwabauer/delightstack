@@ -280,6 +280,8 @@ schema.string().password(); // Masked input (UI hint only)
 schema.string().phone(); // Phone number (UI hint only)
 ```
 
+> **`Date` coercion.** `parse()` accepts a `Date` instance wherever the column can represent one, converting it to the declared type: epoch-ms number for `number()` fields (including `created_at`/`updated_at`), `"YYYY-MM-DD"` for `.date()`, `"HH:MM:SS"` for `.time()`, and full ISO 8601 for `.datetime()`. Unformatted string fields stay strict and reject `Date` objects, as does every other field type.
+
 ### String Validators
 
 ```typescript

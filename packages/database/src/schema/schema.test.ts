@@ -381,6 +381,50 @@ describe('Schema: parse()', () => {
 		expect(result).toHaveProperty('updated_at', 1705320000000);
 	});
 
+	it('should coerce Date objects to the declared column type', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+			views: schema.number(),
+			published_at: schema.string().datetime(),
+			event_date: schema.string().date(),
+			doors_open: schema.string().time(),
+		}));
+
+		const date = new Date('2024-01-15T12:30:45.500Z');
+		const result = table.parse({
+			id: 'x',
+			name: 'test',
+			views: date,
+			published_at: date,
+			event_date: date,
+			doors_open: date,
+			created_at: date,
+			updated_at: date,
+		} as any);
+		expect(result).toHaveProperty('views', date.getTime());
+		expect(result).toHaveProperty('published_at', '2024-01-15T12:30:45.500Z');
+		expect(result).toHaveProperty('event_date', '2024-01-15');
+		expect(result).toHaveProperty('doors_open', '12:30:45');
+		expect(result).toHaveProperty('created_at', date.getTime());
+		expect(result).toHaveProperty('updated_at', date.getTime());
+	});
+
+	it('should reject Date objects for unformatted string fields and invalid Dates', () => {
+		const table = Database.table('items', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string(),
+			count: schema.number(),
+		}));
+
+		// A Date is not a plain string — unformatted string fields stay strict
+		expect(() => table.parse({ id: 'x', name: new Date(), count: 1 } as any)).toThrow();
+		// An invalid Date can't be coerced to anything
+		expect(() =>
+			table.parse({ id: 'x', name: 'test', count: new Date('nonsense') } as any),
+		).toThrow();
+	});
+
 	it('should parse tables with auto-injected id', () => {
 		const table = Database.table('items', (schema) => ({
 			name: schema.string(),

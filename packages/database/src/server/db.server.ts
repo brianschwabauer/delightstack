@@ -2437,7 +2437,20 @@ export class DatabaseServer<
 					if (value === undefined || value === null) {
 						(acc as any)[key] = null;
 					} else if (value instanceof Date) {
-						(acc as any)[key] = value.toISOString();
+						// Convert to the column's declared type: string fields get ISO
+						// text in their declared format, everything else gets epoch ms
+						const field = table._[key]?._;
+						if (field?.type === 'string') {
+							const iso = value.toISOString();
+							(acc as any)[key] =
+								field.format === 'date'
+									? iso.slice(0, 10)
+									: field.format === 'time'
+										? iso.slice(11, 19)
+										: iso;
+						} else {
+							(acc as any)[key] = value.getTime();
+						}
 					} else if (typeof value === 'boolean') {
 						// Durable Object SQLite only accepts null/number/string/ArrayBuffer bindings
 						(acc as any)[key] = value ? 1 : 0;

@@ -159,7 +159,7 @@
 		<article class="article">
 			<header class="article-header">
 				<div class="meta-row">
-					<time datetime={String(post.value.created_at)}>
+					<time datetime={new Date(post.value.created_at).toISOString()}>
 						{formatDate(post.value.created_at)}
 					</time>
 					{#if post.value.is_public}

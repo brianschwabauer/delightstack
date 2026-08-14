@@ -427,8 +427,8 @@ const articleTable = defineAiTable(
 | `embedding_error`   | `string().optional()`                                              | Error message on failure               |
 | `embedding_model`   | `string().optional()`                                              | Model used to generate the embedding   |
 | `_embedding_source` | `string().optional()`                                              | Hash of source text (change detection) |
-| `created_at`        | `string().datetime()`                                              | Creation timestamp                     |
-| `updated_at`        | `string().datetime()`                                              | Last update timestamp                  |
+| `created_at`        | `number` (epoch ms, auto-managed)                                  | Creation timestamp                     |
+| `updated_at`        | `number` (epoch ms, auto-managed)                                  | Last update timestamp                  |
 
 ### defineAiConversationTable()
 
@@ -455,8 +455,8 @@ const conversationTable = defineAiConversationTable((schema) => ({
 | `model`        | `string().optional()`                                                    | Model used             |
 | `total_tokens` | `number().int().optional()`                                              | Cumulative token usage |
 | `status`       | `enum(['active', 'archived'])`                                           | Conversation state     |
-| `created_at`   | `string().datetime()`                                                    | Creation timestamp     |
-| `updated_at`   | `string().datetime()`                                                    | Last update timestamp  |
+| `created_at`   | `number` (epoch ms, auto-managed)                                        | Creation timestamp     |
+| `updated_at`   | `number` (epoch ms, auto-managed)                                        | Last update timestamp  |
 
 ## Types
 

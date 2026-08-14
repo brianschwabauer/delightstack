@@ -139,10 +139,12 @@ export class FieldValidator {
 	 * Pipeline order:
 	 *   1. undefined → default (short-circuits like zod v4: the default value is
 	 *      returned as-is, without transforms or validation) or optional passthrough
-	 *   2. transforms (string fields only), in declaration order — so
+	 *   2. Date coercion — a Date becomes epoch ms for number fields, or ISO text
+	 *      for `.date()`/`.time()`/`.datetime()` string fields
+	 *   3. transforms (string fields only), in declaration order — so
 	 *      `.trim().min(1)` rejects a whitespace-only string
-	 *   3. built-in validators (min/max/format/gt/lt/step/…)
-	 *   4. custom `.check()` functions
+	 *   4. built-in validators (min/max/format/gt/lt/step/…)
+	 *   5. custom `.check()` functions
 	 * The transformed value is what gets returned (and persisted).
 	 */
 	safeParse(value: unknown): SafeParseResult {
@@ -163,6 +165,30 @@ export class FieldValidator {
 				return { success: true, data: null };
 			}
 			return { success: false, error: `Invalid input: expected ${field.type}` };
+		}
+
+		// Coercion stage — a Date instance is converted to the field's declared
+		// representation: epoch ms for number fields, ISO text (matching the
+		// declared `.date()`/`.time()`/`.datetime()` format) for string fields.
+		// Unformatted string fields (and every other type) stay strict.
+		if (value instanceof Date) {
+			if (Number.isNaN(value.getTime())) {
+				return { success: false, error: 'Invalid date' };
+			}
+			if (field.type === 'number') {
+				value = value.getTime();
+			} else if (field.type === 'string') {
+				const format = (field as StringField).format;
+				if (format === 'date' || format === 'time' || format === 'datetime') {
+					const iso = value.toISOString();
+					value =
+						format === 'date'
+							? iso.slice(0, 10)
+							: format === 'time'
+								? iso.slice(11, 19)
+								: iso;
+				}
+			}
 		}
 
 		// Transform stage — mutates the value before any validation runs

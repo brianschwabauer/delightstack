@@ -150,7 +150,7 @@ export function defineAiConversationTable(
 						}),
 					)
 					.optional(),
-				created_at: schema.string().datetime(),
+				created_at: schema.number().int(),
 			}),
 		),
 

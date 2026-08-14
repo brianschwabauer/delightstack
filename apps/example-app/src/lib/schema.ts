@@ -3,7 +3,7 @@ import { defineImageTable } from '@delightstack/images';
 import { organizationTable, placeTable } from './search-lab/tables';
 
 // `id` (string primary key), `created_at`, and `updated_at` are auto-managed —
-// tables don't declare them.
+// tables don't declare them. Timestamps are epoch-millisecond numbers.
 export const personTable = Database.table('person', (s) => ({
 	name: s.string().min(1).max(100).label('Name').placeholder('Full name').searchable(),
 	email: s.string().email().label('Email').optional().searchable(),

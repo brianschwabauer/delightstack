@@ -39,7 +39,7 @@ pnpm add @delightstack/database
 import { Database } from '@delightstack/database';
 
 // `id` (string primary key), `created_at`, and `updated_at` are auto-managed —
-// tables don't declare them.
+// tables don't declare them. Timestamps are epoch-millisecond numbers.
 export const userTable = Database.table('user', (schema) => ({
 	name: schema.string().min(1).searchable(),
 	email: schema.string().email().unique(),
