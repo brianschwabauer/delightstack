@@ -1,60 +1,21 @@
 import { DelightError } from '@delightstack/utilities';
-import type { FacetDefinition } from './search/core/types';
+import type {
+	AnySearchSchema,
+	FacetDefinition,
+	SearchQuery as CoreSearchQuery,
+} from './search/core/types';
 
 /**
  * Non-generic search query type for the encode/decode layer.
  * Structurally compatible with `Database.SearchQuery<Table>` but uses loose types
  * for fields that would otherwise require the Table generic.
  *
+ * The query fields (and their doc comments) are defined once on the core
+ * `SearchQuery` type — this only adds the client-routing `source` flag.
+ *
  * Use `Database.SearchQuery<Table>` when you have the table type available for full autocomplete.
  */
-export interface SearchQueryInput {
-	/** The search term */
-	term?: string;
-	/** Maximum number of results to return */
-	limit?: number;
-	/** Number of results to skip */
-	offset?: number;
-	/** Filter conditions */
-	where?: Record<string, unknown>;
-	/** Facet configuration */
-	facets?: Record<string, FacetDefinition>;
-	/** Boost configuration for specific fields */
-	boost?: Record<string, number>;
-	/** Return distinct results based on this field */
-	distinct_on?: string;
-	/** Whether to match the term exactly */
-	exact?: boolean;
-	/** Which fields to search in. Use `'*'` for all. */
-	fields?: string[] | '*';
-	/**
-	 * Controls how multi-token terms are combined.
-	 *
-	 * `0` returns only documents matching *every* token; `1` (the default)
-	 * returns every document matching *any* token; a fractional value returns
-	 * all-token matches plus that top fraction (by score) of the partial
-	 * matches.
-	 */
-	threshold?: number;
-	/** Maximum levenshtein distance tolerance */
-	tolerance?: number;
-	/**
-	 * Vector search configuration (server-only).
-	 *
-	 * `similarity` is the inclusive minimum cosine similarity a document must
-	 * reach; it rides inside the same `vector` JSON URL param.
-	 * @default similarity 0.8
-	 */
-	vector?: { value: number[]; field: string; similarity?: number };
-	/**
-	 * Whether only sparse searchable fields should be returned.
-	 * @default true
-	 */
-	sparse?: boolean;
-	/** Cursor for pagination (from a previous query result) */
-	cursor?: string;
-	/** Sort order. Multiple orderings determine sorting precedence. */
-	order?: { field: string; direction?: 'ASC' | 'DESC' }[];
+export interface SearchQueryInput extends CoreSearchQuery<AnySearchSchema> {
 	/**
 	 * Where this query is answered. `'auto'` (the default) routes by coverage:
 	 * local once the synced window covers the whole table, server until then.
@@ -79,7 +40,11 @@ export type ValidSearchQuery<Q> = Q extends { source: 'client' }
 		? {
 				source: "source: 'client' cannot be combined with `vector` — vector search is server-only";
 			}
-		: unknown
+		: Q extends { sparse: false }
+			? {
+					source: "source: 'client' cannot be combined with `sparse: false` — full entities only exist on the server";
+				}
+			: unknown
 	: unknown;
 
 /** Parse a boolean from a URL search param value with tolerance for multiple formats. */

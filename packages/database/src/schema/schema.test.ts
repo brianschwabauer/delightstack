@@ -175,7 +175,8 @@ describe('Schema: Database.table()', () => {
 		expect(() => {
 			Database.table('bad', (schema) => ({
 				id: schema.primaryKey(),
-				created_at: schema.string(),
+				// Reserved names are also rejected at the type level — cast to test the runtime throw
+				created_at: schema.string() as any,
 			}));
 		}).toThrow('created_at');
 	});
@@ -184,7 +185,8 @@ describe('Schema: Database.table()', () => {
 		expect(() => {
 			Database.table('bad', (schema) => ({
 				id: schema.primaryKey(),
-				updated_at: schema.string(),
+				// Reserved names are also rejected at the type level — cast to test the runtime throw
+				updated_at: schema.string() as any,
 			}));
 		}).toThrow('updated_at');
 	});
@@ -1351,5 +1353,288 @@ describe('Schema: form.schema (Standard Schema)', () => {
 		const bad = validate({ address: {} }) as any;
 		expect(bad.issues).toHaveLength(1);
 		expect(bad.issues[0].path.join('.')).toBe('address.city');
+	});
+});
+
+describe('Schema: string validators (startsWith/endsWith/includes)', () => {
+	it('should accept strings that satisfy startsWith', () => {
+		const table = Database.table('str_starts', (schema) => ({
+			id: schema.primaryKey(),
+			slug: schema.string().startsWith('post-'),
+		}));
+		const result = table.parse({ id: 'x', slug: 'post-hello' } as any);
+		expect(result).toHaveProperty('slug', 'post-hello');
+	});
+
+	it('should reject strings that fail startsWith with a clear message', () => {
+		const table = Database.table('str_starts_bad', (schema) => ({
+			id: schema.primaryKey(),
+			slug: schema.string().startsWith('post-'),
+		}));
+		expect(() => table.parse({ id: 'x', slug: 'hello' } as any)).toThrow(
+			'Must start with "post-"',
+		);
+	});
+
+	it('should accept strings that satisfy endsWith', () => {
+		const table = Database.table('str_ends', (schema) => ({
+			id: schema.primaryKey(),
+			file: schema.string().endsWith('.png'),
+		}));
+		const result = table.parse({ id: 'x', file: 'logo.png' } as any);
+		expect(result).toHaveProperty('file', 'logo.png');
+	});
+
+	it('should reject strings that fail endsWith with a clear message', () => {
+		const table = Database.table('str_ends_bad', (schema) => ({
+			id: schema.primaryKey(),
+			file: schema.string().endsWith('.png'),
+		}));
+		expect(() => table.parse({ id: 'x', file: 'logo.jpg' } as any)).toThrow(
+			'Must end with ".png"',
+		);
+	});
+
+	it('should accept strings that satisfy includes', () => {
+		const table = Database.table('str_includes', (schema) => ({
+			id: schema.primaryKey(),
+			handle: schema.string().includes('@'),
+		}));
+		const result = table.parse({ id: 'x', handle: 'a@b' } as any);
+		expect(result).toHaveProperty('handle', 'a@b');
+	});
+
+	it('should reject strings that fail includes with a clear message', () => {
+		const table = Database.table('str_includes_bad', (schema) => ({
+			id: schema.primaryKey(),
+			handle: schema.string().includes('@'),
+		}));
+		expect(() => table.parse({ id: 'x', handle: 'ab' } as any)).toThrow(
+			'Must include "@"',
+		);
+	});
+
+	it('should store the constraints on the field definition', () => {
+		const table = Database.table('str_constraint_defs', (schema) => ({
+			id: schema.primaryKey(),
+			a: schema.string().startsWith('a').endsWith('z').includes('m'),
+		}));
+		const field = table._['a']._ as any;
+		expect(field.starts_with).toBe('a');
+		expect(field.ends_with).toBe('z');
+		expect(field.includes).toBe('m');
+	});
+});
+
+describe('Schema: string transforms (trim/toLowerCase/toUpperCase/normalize)', () => {
+	it('should trim the value during parse and persist the trimmed result', () => {
+		const table = Database.table('str_trim', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string().trim(),
+		}));
+		const result = table.parse({ id: 'x', name: '  hello  ' } as any);
+		expect(result).toHaveProperty('name', 'hello');
+	});
+
+	it('should run transforms BEFORE validators (.trim().min(1) rejects whitespace-only)', () => {
+		const table = Database.table('str_trim_min', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string().trim().min(1),
+		}));
+		expect(() => table.parse({ id: 'x', name: '  ' } as any)).toThrow(
+			'Must be at least 1 character',
+		);
+		const result = table.parse({ id: 'x', name: ' a ' } as any);
+		expect(result).toHaveProperty('name', 'a');
+	});
+
+	it('should lowercase the value during parse', () => {
+		const table = Database.table('str_lower', (schema) => ({
+			id: schema.primaryKey(),
+			email: schema.string().toLowerCase(),
+		}));
+		const result = table.parse({ id: 'x', email: 'Foo@Bar.COM' } as any);
+		expect(result).toHaveProperty('email', 'foo@bar.com');
+	});
+
+	it('should uppercase the value during parse', () => {
+		const table = Database.table('str_upper', (schema) => ({
+			id: schema.primaryKey(),
+			code: schema.string().toUpperCase(),
+		}));
+		const result = table.parse({ id: 'x', code: 'abc' } as any);
+		expect(result).toHaveProperty('code', 'ABC');
+	});
+
+	it('should normalize the value during parse (default NFC)', () => {
+		const table = Database.table('str_norm', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string().normalize(),
+		}));
+		// 'e' + combining acute accent (NFD input) should normalize to the composed char
+		const result = table.parse({ id: 'x', name: 'e\u0301' } as any);
+		expect(result).toHaveProperty('name', '\u00e9');
+	});
+
+	it('should normalize to an explicit form (NFD decomposes)', () => {
+		const table = Database.table('str_norm_nfd', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string().normalize('NFD'),
+		}));
+		const result = table.parse({ id: 'x', name: '\u00e9' } as any);
+		expect(result).toHaveProperty('name', 'e\u0301');
+	});
+
+	it('should apply transforms in declaration order', () => {
+		const table = Database.table('str_transform_order', (schema) => ({
+			id: schema.primaryKey(),
+			code: schema.string().trim().toUpperCase(),
+		}));
+		const result = table.parse({ id: 'x', code: '  abc  ' } as any);
+		expect(result).toHaveProperty('code', 'ABC');
+		const field = table._['code']._ as any;
+		expect(field.transforms).toEqual([{ type: 'trim' }, { type: 'uppercase' }]);
+	});
+
+	it('should run transforms before startsWith/endsWith/includes validators', () => {
+		const table = Database.table('str_transform_validators', (schema) => ({
+			id: schema.primaryKey(),
+			slug: schema.string().trim().toLowerCase().startsWith('post-'),
+		}));
+		const result = table.parse({ id: 'x', slug: '  POST-Hello ' } as any);
+		expect(result).toHaveProperty('slug', 'post-hello');
+	});
+
+	it('should run .check() AFTER transforms (check sees the transformed value)', () => {
+		const seen: string[] = [];
+		const table = Database.table('str_transform_check', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema
+				.string()
+				.trim()
+				.toLowerCase()
+				.check((value) => {
+					seen.push(value);
+					if (value === 'forbidden') return 'That name is forbidden';
+				}),
+		}));
+		const result = table.parse({ id: 'x', name: '  Hello ' } as any);
+		expect(result).toHaveProperty('name', 'hello');
+		expect(seen).toContain('hello');
+		expect(() => table.parse({ id: 'x', name: '  FORBIDDEN ' } as any)).toThrow(
+			'That name is forbidden',
+		);
+	});
+
+	it('should apply defaults without running transforms (zod v4 short-circuit)', () => {
+		const table = Database.table('str_default_transform', (schema) => ({
+			id: schema.primaryKey(),
+			name: schema.string().trim().default('  keep  '),
+		}));
+		const result = table.parse({ id: 'x' } as any);
+		// Defaults short-circuit the pipeline (matching zod v4) — returned as-is
+		expect(result).toHaveProperty('name', '  keep  ');
+	});
+});
+
+describe('Schema: number validators (gt/lt/step)', () => {
+	it('should accept values strictly greater than gt', () => {
+		const table = Database.table('num_gt', (schema) => ({
+			id: schema.primaryKey(),
+			price: schema.number().gt(0),
+		}));
+		const result = table.parse({ id: 'x', price: 0.01 } as any);
+		expect(result).toHaveProperty('price', 0.01);
+	});
+
+	it('should reject the gt bound itself (exclusive, unlike min)', () => {
+		const table = Database.table('num_gt_bad', (schema) => ({
+			id: schema.primaryKey(),
+			price: schema.number().gt(0),
+		}));
+		expect(() => table.parse({ id: 'x', price: 0 } as any)).toThrow(
+			'Must be greater than 0',
+		);
+		expect(() => table.parse({ id: 'x', price: -1 } as any)).toThrow(
+			'Must be greater than 0',
+		);
+	});
+
+	it('should accept values strictly less than lt', () => {
+		const table = Database.table('num_lt', (schema) => ({
+			id: schema.primaryKey(),
+			discount: schema.number().lt(100),
+		}));
+		const result = table.parse({ id: 'x', discount: 99.999 } as any);
+		expect(result).toHaveProperty('discount', 99.999);
+	});
+
+	it('should reject the lt bound itself (exclusive, unlike max)', () => {
+		const table = Database.table('num_lt_bad', (schema) => ({
+			id: schema.primaryKey(),
+			discount: schema.number().lt(100),
+		}));
+		expect(() => table.parse({ id: 'x', discount: 100 } as any)).toThrow(
+			'Must be less than 100',
+		);
+	});
+
+	it('should keep min/max inclusive while gt/lt stay exclusive', () => {
+		const inclusive = Database.table('num_inclusive', (schema) => ({
+			id: schema.primaryKey(),
+			n: schema.number().min(0).max(10),
+		}));
+		expect(inclusive.parse({ id: 'x', n: 0 } as any)).toHaveProperty('n', 0);
+		expect(inclusive.parse({ id: 'x', n: 10 } as any)).toHaveProperty('n', 10);
+
+		const exclusive = Database.table('num_exclusive', (schema) => ({
+			id: schema.primaryKey(),
+			n: schema.number().gt(0).lt(10),
+		}));
+		expect(() => exclusive.parse({ id: 'x', n: 0 } as any)).toThrow();
+		expect(() => exclusive.parse({ id: 'x', n: 10 } as any)).toThrow();
+		expect(exclusive.parse({ id: 'x', n: 5 } as any)).toHaveProperty('n', 5);
+	});
+
+	it('should validate divisibility via step with float tolerance', () => {
+		const table = Database.table('num_step', (schema) => ({
+			id: schema.primaryKey(),
+			price: schema.number().step(0.01),
+		}));
+		// 19.99 % 0.01 !== 0 in raw floats — the decimal-aware check must accept it
+		expect(table.parse({ id: 'x', price: 19.99 } as any)).toHaveProperty('price', 19.99);
+		expect(table.parse({ id: 'x', price: 100 } as any)).toHaveProperty('price', 100);
+		expect(() => table.parse({ id: 'x', price: 19.995 } as any)).toThrow(
+			'Must be a multiple of 0.01',
+		);
+	});
+
+	it('should validate integer steps', () => {
+		const table = Database.table('num_step_int', (schema) => ({
+			id: schema.primaryKey(),
+			qty: schema.number().step(5),
+		}));
+		expect(table.parse({ id: 'x', qty: 15 } as any)).toHaveProperty('qty', 15);
+		expect(() => table.parse({ id: 'x', qty: 7 } as any)).toThrow(
+			'Must be a multiple of 5',
+		);
+	});
+
+	it('should still store step on the field for form inputs', () => {
+		const table = Database.table('num_step_attr', (schema) => ({
+			id: schema.primaryKey(),
+			price: schema.number().step(0.01),
+		}));
+		expect((table._['price']._ as any).step).toBe(0.01);
+	});
+
+	it('should store exclusive bounds on the field definition', () => {
+		const table = Database.table('num_bounds_defs', (schema) => ({
+			id: schema.primaryKey(),
+			n: schema.number().gt(0).lt(10),
+		}));
+		const field = table._['n']._ as any;
+		expect(field.exclusive_min).toBe(0);
+		expect(field.exclusive_max).toBe(10);
 	});
 });
