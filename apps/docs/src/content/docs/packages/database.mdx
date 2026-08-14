@@ -27,24 +27,34 @@ pnpm add @delightstack/database
 
 | Import | Use |
 | --- | --- |
-| `@delightstack/database` | `Database` — the schema builder |
-| `@delightstack/database/worker` | `DatabaseServer` — the Durable Object class |
+| `@delightstack/database` | `Database` (schema builder) + shared types (`DatabaseStub`, contract types) |
+| `@delightstack/database/worker` | `DatabaseServer` — the Durable Object class (Worker entry point only) |
 | `@delightstack/database/server` | `createDatabaseHandle` — SvelteKit CRUD + sync routes |
 | `@delightstack/database/client` | `DatabaseClient` — reactive Svelte 5 client |
 
 ## 1. Define your schema
 
 ```typescript
+// $lib/schema.ts — shared by the server worker and the browser client
 import { Database } from '@delightstack/database';
 
-const postsTable = Database.table('post', (schema) => ({
-	id: schema.primaryKey(),
+// `id` (string primary key), `created_at`, and `updated_at` are auto-managed —
+// tables don't declare them.
+export const userTable = Database.table('user', (schema) => ({
+	name: schema.string().min(1).searchable(),
+	email: schema.string().email().unique(),
+}));
+
+export const postTable = Database.table('post', (schema) => ({
 	title: schema.string().searchable(),
 	body: schema.string().searchable(),
-	author_id: schema.foreignKey({ type: 'string', table: 'user', column: 'id', on_delete: 'CASCADE' }),
+	// Pass the table object itself — a typo'd reference is a compile error
+	author_id: schema.foreignKey({ type: 'string', table: userTable, column: 'id', on_delete: 'CASCADE' }),
 	tags: schema.array(schema.string()).searchable().optional(),
 	published: schema.boolean().default(false),
 }));
+
+export const tables = { user: userTable, post: postTable };
 ```
 
 Root-level scalars become real SQLite columns; nested objects/arrays are serialized into a JSON
@@ -52,43 +62,96 @@ catch-all column and transparently rehydrated on read.
 
 ## 2. Register the Durable Object
 
-Subclass `DatabaseServer` with your tables and register it in `wrangler.toml`
-(see [Architecture](/getting-started/architecture/)):
+Subclass `DatabaseServer` in your Worker entry point, passing the table **record** and a lazy
+WebSocket factory (return `undefined` to skip broadcasting), and register the class in
+`wrangler.toml` (see [Architecture](/getting-started/architecture/)):
 
 ```typescript
+// server/src/index.ts (the Worker entry point)
 import { DatabaseServer } from '@delightstack/database/worker';
+import { tables } from '../../src/lib/schema';
 
-export class OrgDatabaseServer extends DatabaseServer {
-	tables = [postsTable /* … */];
+export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
+	constructor(ctx: DurableObjectState, env: Env) {
+		// The name this DO was created with (e.g. the org id) — use it to
+		// address the sibling WebSocket DO for the same org.
+		const room = DatabaseServer.instanceName(ctx);
+		super(tables, () => env.WS.get(env.WS.idFromName(room)), ctx, env);
+	}
 }
 ```
 
+Integrations like `imageProcessing()` and `aiProcessing()` register themselves with the base
+class's alarm registry — no hand-written `alarm()` fan-out needed.
+
 ## 3. Query from the server
 
-```typescript
-const db = platform.env.DB.get(platform.env.DB.idFromName(org_id));
+Durable Object stubs are opaque to TypeScript, so cast **once** at the boundary with
+`DatabaseStub<typeof tables>` — every call after that is fully typed:
 
-await db.create('post', { title: 'Hello', body: '…', author_id: 'u_1' });
-const results = await db.list('post', { term: 'hello' }); // full-text search
-const recent = await db.list('post', { limit: 20 });
+```typescript
+// app.d.ts
+import type { DatabaseStub } from '@delightstack/database';
+import type { tables } from '$lib/schema';
+
+interface Locals {
+	db: DatabaseStub<typeof tables> | undefined;
+}
 ```
 
-For declarative CRUD routes, mount `createDatabaseHandle()` in your SvelteKit `handle`.
+```typescript
+// hooks.server.ts (or wherever you resolve the stub)
+event.locals.db = penv.DB.get(penv.DB.idFromName(org_id)) as unknown as DatabaseStub<typeof tables>;
+
+// Anywhere on the server — typed end to end:
+await db.create('post', { title: 'Hello', body: '…', author_id: 'u_1' });
+const results = await db.list('post', { term: 'hello' }); // full-text search
+const post = await db.get('post', post_id); // Database.Entity<typeof postTable>
+```
+
+For declarative CRUD routes, mount `createDatabaseHandle()` from
+`@delightstack/database/server` in your SvelteKit `handle`.
 
 ## 4. The reactive client
 
-```svelte
-<script>
-	import { DatabaseClient } from '@delightstack/database/client';
+Create the client in your layout `load` and **`await db.init()`** before returning — every
+handle depends on it. Pass the load event's `fetch` so SSR reads carry the request's cookies:
 
+```typescript
+// +layout.ts
+import { DatabaseClient } from '@delightstack/database/client';
+import { tables } from '$lib/schema';
+
+export const load = async ({ fetch }) => {
 	const db = new DatabaseClient({ tables, db_name: `app:${org_id}`, fetch });
-	const posts = db.list('post'); // live reactive list
+	await db.init(); // no-op on the server; required before any handle is read
+	return { db };
+};
+
+/** One alias for components that take a `db` prop */
+export type AppDatabase = DatabaseClient<typeof tables>;
+```
+
+```svelte
+<script lang="ts">
+	const { data } = $props();
+	const posts = data.db.list('post'); // live reactive list
 </script>
 
-{#each posts.items as post}
+{#each posts.items as post (post.id)}
 	<article>{post.title}</article>
 {/each}
 ```
+
+### Client patterns
+
+- **Reading:** `db.get(type, id)` (display), `db.entity(type, id?)` (editing/forms),
+  `db.list(type, query)` (lists/search). Read handle properties in templates or `$derived` —
+  the first read starts a live subscription.
+- **SSR:** await `handle.load()` in a `+page.ts` load; the component then re-derives the same
+  cached handle (`const person = $derived(db.entity('person', page.params.id))`).
+- **Props:** type `db` props with the `AppDatabase` alias above instead of repeating
+  `DatabaseClient<typeof tables>` in every component.
 
 ## 5. Entity-backed forms
 
@@ -111,11 +174,12 @@ See [Working with Forms](/guides/forms/) for the full pattern.
 
 <Aside type="tip">
 Pair the client with [Realtime](/packages/websocket/) via `ws.databaseHooks()` so entity changes sync
-live across tabs and clients.
+live across tabs and clients — the hooks are typed by the shared `DatabaseClientHooks` contract.
 </Aside>
 
 <Aside>
-Need raw SQL? `SqlServer` (from `@delightstack/database/server`) gives you full control. See the
+Need raw SQL? `db.exec()` takes a tagged-template builder (`prepareSql` from
+`@delightstack/utilities`) that prevents injection. See the
 [package README](https://github.com/brianschwabauer/delightstack/tree/main/packages/database) for
 search tuning, transactions, and sync.
 </Aside>
