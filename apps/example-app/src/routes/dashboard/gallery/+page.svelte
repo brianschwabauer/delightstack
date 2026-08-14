@@ -43,7 +43,7 @@
 	// The db client is stable for the life of the page — capturing it once to
 	// create the live search query is intentional.
 	// svelte-ignore state_referenced_locally
-	const images = db.search('image', { sparse: false });
+	const images = db.watch('image', { sparse: false });
 
 	// Map the db image records into the Gallery's generic item shape via the
 	// `@delightstack/images` helper. The Gallery's `src` field accepts the
@@ -218,7 +218,7 @@
 		</div>
 	</section>
 
-	{#if galleryItems.length === 0 && !images.loading}
+	{#if galleryItems.length === 0 && images.status !== 'loading'}
 		<Callout>
 			You don't have any uploaded photos yet. Click <strong>Upload photos</strong>
 			to add some — uploaded images will show their thumbhash blur while the full-resolution

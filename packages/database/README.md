@@ -403,11 +403,14 @@ const changes = db.sync({
 	},
 });
 
-// changes.entity.user.created  → new entities (sparse)
-// changes.entity.user.updated  → changed entities (sparse)
-// changes.entity.user.deleted  → deleted entity IDs
-// changes.entity.user.config   → new search schema (if version changed)
+// changes.entity.user.created     → new entities (sparse)
+// changes.entity.user.updated     → changed entities (sparse)
+// changes.entity.user.deleted     → deleted entity IDs
+// changes.entity.user.config      → new search schema (if version changed)
+// changes.entity.user.total_count → total rows in the table
 ```
+
+A per-entity `defer_over` in the request sets a row-count ceiling: when the table's `total_count` exceeds it, the server withholds the page and answers count-only (`deferred: true`, no cursor advance). The client sends this automatically during backfill — see [`max_synced_docs`](#query-routing).
 
 ### Metadata
 
@@ -670,8 +673,8 @@ The client package provides a reactive, type-safe API client for the browser. It
 │  DatabaseClient                                           │
 │  ├─ entity(type, id) → EntityState     (reactive wrapper) │
 │  ├─ create/update/delete(type, ...)    (optimistic CRUD)  │
-│  ├─ search(type, query) → DatabaseSearch (live results)   │
-│  └─ list(type, query) → Promise        (one-shot fetch)   │
+│  ├─ watch(type, query) → DatabaseWatch  (live results)    │
+│  └─ list(type, query) → Promise        (one-shot, routed) │
 │           │                                               │
 │           │ comlink proxy                                 │
 │           ▼                                               │
@@ -940,28 +943,28 @@ const person = new EntityState('person', id, {
 
 Caching and version invalidation live on `DatabaseClient` — `new EntityState(...)` gives you a single unmanaged wrapper. Prefer `db.entity(...)` unless you have a specific reason to manage lifecycle yourself.
 
-### DatabaseSearch (reactive search)
+### DatabaseWatch (reactive list)
 
-`DatabaseSearch` provides live search results that auto-update when the underlying index changes (e.g. after a create/update/delete). Queries are routed to the server whenever the local index does not cover the whole table (see [Search modes](#search-modes)).
+`db.watch` is the live counterpart of `db.list` — the same pairing as `db.read` and `db.get` for single entities. It returns a `DatabaseWatch` whose results auto-update when the underlying index changes (e.g. after a create/update/delete). Queries are routed to the server whenever the local index does not cover the whole table (see [Query routing](#query-routing)).
 
 > **Sparse results.** Search documents only contain fields declared `searchable` in your search schema (typed as `Database.SearchEntity<T>`, *not* `Database.Entity<T>`). Both client and server search default to sparse — the client index only holds the sparse fields, and the server path defaults to `sparse: true` for efficient sync payloads. When you need the full entity, call `db.get('type', hit.id)` or `db.read('type', () => hit.id)` — those always return the full `Database.Entity<T>`.
 
 ```typescript
-const search = db.search('person', { term: 'alice', limit: 20 });
+const people = db.watch('person', { term: 'alice', limit: 20 });
 ```
 
 ```svelte
 <script>
-	const search = db.search('person', { term: '', limit: 20 });
+	const people = db.watch('person', { term: '', limit: 20 });
 </script>
 
-<input bind:value={search.query.term} />
+<input bind:value={people.query.term} />
 
-{#if search.loading}
+{#if people.status === 'loading'}
 	<p>Searching...</p>
 {:else}
-	<p>{search.count} results ({search.mode} mode)</p>
-	{#each search.docs as person}
+	<p>{people.count} results ({people.mode} mode)</p>
+	{#each people.docs as person}
 		<p>{person.name}</p>
 	{/each}
 {/if}
@@ -974,27 +977,29 @@ const search = db.search('person', { term: 'alice', limit: 20 });
 | `results`     | `SearchHit<T>[]`             | Array of hits with `id`, `document` (sparse), and `score` |
 | `docs`        | `Database.SearchEntity<T>[]` | Convenience — just the sparse documents                 |
 | `count`       | `number`                     | Total matching count                                    |
-| `loading`     | `boolean`                    | Whether search is in progress                           |
-| `error`       | `unknown`                    | Any error from the search                               |
-| `mode`        | `'client' \| 'server'`       | Current search mode                                     |
-| `query`       | `WorkerSearchQuery`          | Get/set the search query. Setting triggers a re-search. |
+| `status`      | `WatchStatus`                | `'loading'` (no results yet) · `'refreshing'` (re-query in flight, previous results stay visible) · `'ready'` · `'error'` |
+| `error`       | `unknown`                    | Any error from the query (set while `status === 'error'`) |
+| `mode`        | `'client' \| 'server'`       | Which side answers this watch's queries                 |
+| `query`       | `Database.SearchQuery<T>`    | Get/set the live query. Setting triggers a re-query.    |
 | `entity_type` | `string` (literal)           | The entity type string                                  |
 
 **Methods:**
 
 | Method      | Description                                         |
 | ----------- | --------------------------------------------------- |
-| `refresh()` | Manually re-execute the search.                     |
+| `refresh()` | Manually re-execute the query.                      |
 | `destroy()` | Clean up subscriptions and effects. Call when done. |
 
 ### One-shot list
 
-For simple server queries that don't need live updates:
+For queries that don't need live updates. Routed exactly like `db.watch` — locally once the synced window covers the table, on the server until then:
 
 ```typescript
 const results = await db.list('person', { term: 'alice', limit: 20 });
-// results.hits, results.count
+// results.hits, results.docs, results.count
 ```
+
+On SSR (no worker yet), `db.list` falls back to the auto-generated `/api/person` endpoint using the `fetch` you passed to `DatabaseClient`, so it works in `load` functions too.
 
 ### Lifecycle
 
@@ -1014,16 +1019,17 @@ await db.destroy();
 | `syncing`     | `boolean` | Whether the initial sync is in progress |
 | `synced`      | `boolean` | Whether the initial sync has completed  |
 
-### Search modes
+### Query routing
 
-Where a search is answered is decided **per query**, in this order:
+Where a query (`db.list` or `db.watch`) is answered is decided **per query**, in this order:
 
-1. **Any query carrying `vector`** (including hybrid) goes to the server. Embeddings never reach the client.
-2. **Otherwise, coverage decides.** Entities are indexed into IndexedDB as they sync. Once an entity type's synced window covers the whole table, its searches are answered locally — instant and offline-capable. Until the backfill completes, they go to the server, which has the full corpus and therefore the correct relevance statistics.
+1. **Any query carrying `vector`** (including hybrid) goes to the server. Embeddings never reach the client — so `source: 'client'` combined with `vector` is rejected, at compile time and at runtime.
+2. **A per-query `source` wins.** `source: 'server'` forces the server; `source: 'client'` forces the local index even mid-backfill (a partial-corpus answer by choice). The default, `'auto'`, falls through to the next rules.
+3. **Otherwise, coverage decides.** Entities are indexed into IndexedDB as they sync. Once an entity type's synced window covers the whole table, its queries are answered locally — instant and offline-capable. Until the backfill completes, they go to the server, which has the full corpus and therefore the correct relevance statistics.
 
 Identical results are guaranteed only when the two corpora match: a partial local window is a different corpus, and the server's answer is the authoritative one.
 
-You can force the decision per entity:
+You can set the default per entity:
 
 ```typescript
 entities: {
@@ -1032,9 +1038,26 @@ entities: {
 }
 ```
 
-`search_mode: 'client'` is an explicit choice to accept partial-corpus answers while the window fills.
+`search_mode: 'client'` (like a per-query `source: 'client'`) is an explicit choice to accept partial-corpus answers while the window fills. `source: 'client'` on a `search_mode: 'server'` entity is an error — that entity never syncs, so no local index exists to answer from.
 
-> **Deprecated:** `default_threshold` and `entities[type].threshold` force the server once the local document count reaches them. They existed to defend a memory ceiling that the IndexedDB index removed, are unset by default, and will be removed in the next major.
+```typescript
+// Force one query to the server even though `person` searches locally:
+const fresh = await db.list('person', { term: 'alice', source: 'server' });
+```
+
+**Huge tables: the sync ceiling.** A table can be too large to be worth mirroring at all. `max_synced_docs` (default **50 000**, global or per-entity, `false` disables) caps the backfill: when the server reports more rows than the ceiling, the backfill is deferred — sync sends cheap count-only probes instead of downloading pages — and the entity's queries answer from the server, exactly as if the window were still filling. The decision is re-probed on every sync run, so raising the ceiling or the table shrinking resumes the backfill automatically. A table that already finished backfilling keeps syncing incrementally however large it grows: the ceiling prevents the big download, it never evicts a finished index. Entities explicitly forced `search_mode: 'client'` ignore the default and global ceilings; only their own `max_synced_docs` caps them.
+
+```typescript
+const db = new DatabaseClient({
+	tables,
+	db_name,
+	max_synced_docs: 20_000, // global ceiling (default 50 000)
+	entities: {
+		note: { max_synced_docs: false }, // this one is worth mirroring at any size
+		person: { search_mode: 'client', max_synced_docs: 100_000 },
+	},
+});
+```
 
 ### Error handling
 
@@ -1111,12 +1134,14 @@ Offset-based pagination (`OFFSET 100 LIMIT 10`) degrades on large tables because
 | `DatabaseClient`       | Main client class — CRUD, search, entity state, sync, lifecycle        |
 | `EntityReader`         | Lightweight reactive single-entity reader (for `db.read`)              |
 | `EntityState`          | Reactive per-entity wrapper with auto-load, save, and change tracking  |
-| `DatabaseSearch`       | Reactive search with live results from the local index or the server   |
+| `DatabaseWatch`        | Reactive list with live results from the local index or the server     |
 | ~~`DatabaseError`~~    | **Removed.** Use `DelightError` from `@delightstack/utilities` instead |
 | `DatabaseClientConfig` | Type for `DatabaseClient` constructor config                           |
 | `SearchHit`            | Type for a single search result hit                                    |
-| `SearchResult`         | Type for a search result set                                           |
-| `WorkerSearchQuery`    | Type for search query parameters                                       |
+| `SearchResult`         | Type for a one-shot `db.list` result set (`hits`, `docs`, `count`)     |
+| `WatchQueryInit`       | Type for the `db.watch` query argument (object or reactive function)   |
+| `WatchStatus`          | `'loading' \| 'refreshing' \| 'ready' \| 'error'`                      |
+| `SearchQueryInput`     | Loose (non-generic) search query type for the encode/decode layer      |
 | `WorkerSearchResult`   | Type for search results from the worker                                |
 
 ## Project Structure
@@ -1135,7 +1160,7 @@ packages/database/
     sql.helper.ts             # SQL query builder utilities and types
   client/
     index.ts                  # Client entry — re-exports client classes (Svelte 5)
-    database.client.svelte.ts # DatabaseClient, EntityState, DatabaseSearch
+    database.client.svelte.ts # DatabaseClient, EntityState, DatabaseWatch
     database.worker.ts        # Web Worker — IDB search index, entity cache, fetch, sync
     database.worker.init.ts   # SharedWorker/Worker singleton factory
     database.idb.ts           # IndexedDB helper utilities

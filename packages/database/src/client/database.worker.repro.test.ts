@@ -35,7 +35,6 @@ vi.mock('comlink', () => ({ expose: vi.fn() }));
 let database_counter = 0;
 let db_name = 'worker-repro-0';
 
-
 // Mirrors the mail app's thread table shape: enum folder + numeric sort field.
 const threadTable = Database.table('thread', (s) => ({
 	id: s.primaryKey(),
@@ -90,7 +89,7 @@ function bridgeFetchToServer(
 	});
 }
 
-async function createWorker(threshold = 50_000) {
+async function createWorker() {
 	(globalThis as any).self = { addEventListener: vi.fn() };
 	const { DatabaseWorker } = await import('./database.worker');
 	const worker = new DatabaseWorker();
@@ -102,7 +101,6 @@ async function createWorker(threshold = 50_000) {
 			},
 		},
 		db_name,
-		default_threshold: threshold,
 	});
 	return worker;
 }
@@ -142,13 +140,13 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		const worker = await createWorker();
 		await worker.sync();
 
-		const result = await worker.search('thread', { limit: 1000 });
+		const result = await worker.list('thread', { limit: 1000 });
 		expect(result.count).toBe(300);
 		expect(await worker.isSynced('thread')).toBe(true);
 
 		// The sparse folder must survive — the incident dropped the (small,
 		// older) inbox entirely while big folders filled the index.
-		const inbox = await worker.search('thread', {
+		const inbox = await worker.list('thread', {
 			where: { folder: { eq: 'inbox' } },
 			limit: 100,
 		} as any);
@@ -195,9 +193,9 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
 
 		expect(await worker.isSynced('thread')).toBe(true);
-		const result = await worker.search('thread', { limit: 5000 });
+		const result = await worker.list('thread', { limit: 5000 });
 		expect(result.count).toBe(2600);
-		const inbox = await worker.search('thread', {
+		const inbox = await worker.list('thread', {
 			where: { folder: { eq: 'inbox' } },
 			limit: 100,
 		} as any);
@@ -241,7 +239,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		// docs of the page were silently dropped while the window advanced. The
 		// native driver has no validation step to throw at all: a null field is
 		// simply an absent field, and the page is one transaction either way.
-		const result = await worker.search('thread', { limit: 1000 });
+		const result = await worker.list('thread', { limit: 1000 });
 		expect(result.count).toBe(60);
 	});
 
@@ -262,7 +260,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 
 		const worker = await createWorker();
 		await worker.sync();
-		expect((await worker.search('thread', { limit: 100 })).count).toBe(20);
+		expect((await worker.list('thread', { limit: 100 })).count).toBe(20);
 
 		// Simulate the ws flood during a backfill: FULL entities (objects,
 		// arrays, nulls — shapes the sparse index schema rejected) arrive for
@@ -283,7 +281,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 			});
 		}
 
-		const result = await worker.search('thread', { limit: 100 });
+		const result = await worker.list('thread', { limit: 100 });
 		expect(result.count).toBe(20);
 
 		// And when the event carries the server's sparse projection, that exact
@@ -295,7 +293,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 			{ id: ids[0], subject: 'full entity', complex: { deep: true } },
 			{ id: ids[0], subject: 'sparse wins', folder: 'inbox', updated_at: T0 + 200_000 },
 		);
-		const hit = await worker.search('thread', { term: 'sparse', limit: 10 });
+		const hit = await worker.list('thread', { term: 'sparse', limit: 10 });
 		expect(hit.hits.some((h: any) => h.id === ids[0])).toBe(true);
 	});
 
@@ -315,9 +313,9 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 
 		// While the client backfills, keep bumping existing docs (a live Gmail
 		// backfill re-touches threads constantly). Total distinct docs stay at
-		// 150 + 40 new = 190, far under the 250 threshold — but the OLD
+		// 150 + 40 new = 190 — the OLD (since-removed) count valve's
 		// cumulative-inserts counter also counted every re-synced bump and
-		// switched to server mode anyway.
+		// switched to server mode anyway. Routing must stay client throughout.
 		let round = 0;
 		vi.stubGlobal(
 			'fetch',
@@ -342,14 +340,14 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 			}),
 		);
 
-		const worker = await createWorker(250);
+		const worker = await createWorker();
 		await worker.sync();
 		for (let i = 0; i < 10 && !(await worker.isSynced('thread')); i++) {
 			await worker.sync();
 		}
 
 		expect(await worker.getSearchMode('thread')).toBe('client');
-		const result = await worker.search('thread', { limit: 1000 });
+		const result = await worker.list('thread', { limit: 1000 });
 		expect(result.count).toBe(190);
 		expect(await worker.isSynced('thread')).toBe(true);
 		// Same CI headroom as the multi-page backfill above (2s+ on slow runners).
@@ -372,15 +370,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 				.prepare(
 					`INSERT INTO thread (id, subject, folder, last_message_at, created_at, updated_at, json) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				)
-				.run(
-					`legacy_${i}`,
-					`legacy ${i}`,
-					'archive',
-					T0,
-					T0 + 50_000,
-					T0 + 50_000,
-					'{}',
-				);
+				.run(`legacy_${i}`, `legacy ${i}`, 'archive', T0, T0 + 50_000, T0 + 50_000, '{}');
 		}
 		// Force the next boot to rebuild: clear the persisted schema signature.
 		const row = state.db.prepare(`SELECT json FROM state WHERE id = 'main'`).get() as {
@@ -407,7 +397,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		// Before the fix, the server cut the equal-timestamp run at the page limit
 		// (the search engine pre-truncated the fetch), the next page's exclusive
 		// boundary skipped the rest of the run, and those docs were permanently lost.
-		const result = await worker.search('thread', { limit: 100 });
+		const result = await worker.list('thread', { limit: 100 });
 		expect(result.count).toBe(13); // 1 seed + 12 legacy
 		expect(await worker.isSynced('thread')).toBe(true);
 	});

@@ -38,13 +38,13 @@
 	let editing_place = $state(false);
 
 	const organizations = $derived(
-		db.search('organization', () => ({
+		db.watch('organization', () => ({
 			limit: 50,
 			order: [{ field: 'name', direction: 'ASC' as const }],
 		})),
 	);
 
-	const places = $derived(db.search('place', () => ({ term: place_query, limit: 12 })));
+	const places = $derived(db.watch('place', () => ({ term: place_query, limit: 12 })));
 
 	const organization_options = $derived(
 		organizations.results.map((hit) => ({

@@ -55,7 +55,32 @@ export interface SearchQueryInput {
 	cursor?: string;
 	/** Sort order. Multiple orderings determine sorting precedence. */
 	order?: { field: string; direction?: 'ASC' | 'DESC' }[];
+	/**
+	 * Where this query is answered. `'auto'` (the default) routes by coverage:
+	 * local once the synced window covers the whole table, server until then.
+	 * `'server'` forces the server; `'client'` forces the local index even
+	 * mid-backfill (a partial-corpus answer by design). Overrides the entity's
+	 * `search_mode`. Client-routing only — never encoded onto the wire, and
+	 * ignored by the server. `'client'` cannot be combined with `vector`.
+	 */
+	source?: 'auto' | 'client' | 'server';
 }
+
+/**
+ * Compile-time guard for `source: 'client'` + `vector`: vector queries are
+ * server-only (no embeddings exist on the client), so the combination is
+ * rejected at the type level. Intersect with an inferred query type:
+ * `list<Q extends SearchQuery>(query: Q & ValidSearchQuery<Q>)`.
+ */
+export type ValidSearchQuery<Q> = Q extends { source: 'client' }
+	? Q extends {
+			vector: object;
+		}
+		? {
+				source: "source: 'client' cannot be combined with `vector` — vector search is server-only";
+			}
+		: unknown
+	: unknown;
 
 /** Parse a boolean from a URL search param value with tolerance for multiple formats. */
 function parseBool(params: URLSearchParams, key: string): boolean | undefined {

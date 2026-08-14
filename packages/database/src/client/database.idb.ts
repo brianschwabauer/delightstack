@@ -30,6 +30,12 @@ export interface SyncMeta {
 	start_updated_at: number | undefined;
 	/** The newest 'updated_at' timestamp that has been synced (undefined = never synced) */
 	end_updated_at: number | undefined;
+	/**
+	 * The server's last reported total row count for this entity's table.
+	 * Carried so a reload knows a deferred entity (count > ceiling) before the
+	 * first sync probe answers.
+	 */
+	server_total?: number;
 }
 
 export interface CachedEntity {

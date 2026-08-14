@@ -30,9 +30,9 @@ const clients = await createClients({
 
 	// The routed path: the coverage policy decides where this is answered, and
 	// `search.mode` reports the decision per query.
-	const search = $derived(db.search('place', () => ({ term, limit: 20 })));
+	const search = $derived(db.watch('place', () => ({ term, limit: 20 })));
 	const organizations = $derived(
-		db.search('organization', () => ({
+		db.watch('organization', () => ({
 			limit: 20,
 			order: [{ field: 'name', direction: 'ASC' as const }],
 		})),
@@ -56,7 +56,7 @@ const clients = await createClients({
 	);
 
 	const counts_agree = $derived(
-		server.result !== null && !search.loading && search.count === server.result.count,
+		server.result !== null && search.status === 'ready' && search.count === server.result.count,
 	);
 
 	function startRename(id: string, name: string) {
@@ -99,7 +99,7 @@ const clients = await createClients({
 
 <Panel
 	title="Routing &amp; live updates"
-	blurb="db.search() coverage routing · search_mode · derived-field cascade · tombstones">
+	blurb="db.watch() coverage routing · search_mode · derived-field cascade · tombstones">
 	{#snippet controls()}
 		<Input
 			type="search"
@@ -139,18 +139,18 @@ const clients = await createClients({
 	<section class="compare">
 		<div>
 			<h4>
-				Client — <code>db.search()</code>
+				Client — <code>db.watch()</code>
 				<span>{search.count.toLocaleString()} matches · {search.mode}</span>
 			</h4>
 			<ResultList
 				hits={client_hits.slice(0, 8)}
-				loading={search.loading}
+				loading={search.status === 'loading'}
 				error={search.error ? DelightError.from(search.error).message : null}
 				empty_hint="Nothing matched locally." />
 		</div>
 		<div>
 			<h4>
-				Server — <code>db.list()</code>
+				Server — <code>db.list(&lcub; source: 'server' &rcub;)</code>
 				<span>{(server.result?.count ?? 0).toLocaleString()} matches · server</span>
 			</h4>
 			<ResultList
@@ -162,7 +162,7 @@ const clients = await createClients({
 	</section>
 
 	<p class="verdict" class:agree={counts_agree}>
-		{#if search.loading || server.loading}
+		{#if search.status === 'loading' || server.loading}
 			Comparing…
 		{:else if counts_agree}
 			Both corpora agree — {search.count.toLocaleString()} matches either way.

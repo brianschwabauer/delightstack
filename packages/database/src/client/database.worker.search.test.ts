@@ -335,7 +335,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		// Reshaped like `toSparse`: unknown fields dropped, nulls omitted.
 		expect(optimistic?.sparse_doc.attachments).toBeUndefined();
 		expect('body' in (optimistic?.sparse_doc ?? {})).toBe(false);
-		expect((await worker.search('note', { term: 'optimistic' })).count).toBe(1);
+		expect((await worker.list('note', { term: 'optimistic' })).count).toBe(1);
 
 		// The server's own version then arrives through sync and replaces it whole.
 		vi.setSystemTime(T0 + 20_000);
@@ -347,7 +347,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		);
 		expect(corrected?.sparse_doc.title).toBe('server title');
 		expect(corrected?.sparse_doc.body).toBe('alpha beta gamma');
-		expect((await worker.search('note', { term: 'optimistic' })).count).toBe(0);
+		expect((await worker.list('note', { term: 'optimistic' })).count).toBe(0);
 	});
 
 	it('a websocket event carrying the sparse document indexes it verbatim', async () => {
@@ -387,7 +387,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		await worker.sync();
 		expect(await worker.getSearchMode('note')).toBe('client');
 
-		const result = await worker.search('note', {
+		const result = await worker.list('note', {
 			term: 'note',
 			vector: { value: [0.1, 0.2], field: 'embedding' },
 		});
@@ -407,12 +407,12 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		const worker = await createWorker();
 		// Nothing synced yet: the local corpus is empty, the server has everything.
 		expect(await worker.getSearchMode('note')).toBe('server');
-		await worker.search('note', { term: 'note' });
+		await worker.list('note', { term: 'note' });
 		expect(listed).toBe(1);
 
 		await worker.sync();
 		expect(await worker.getSearchMode('note')).toBe('client');
-		const local = await worker.search('note', { term: 'note', limit: 10 });
+		const local = await worker.list('note', { term: 'note', limit: 10 });
 		expect(listed).toBe(1); // no further network
 		expect(local.count).toBe(6);
 	});
@@ -425,7 +425,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 
 		const worker = await createWorker({ entities: { note: { search_mode: 'client' } } });
 		expect(await worker.getSearchMode('note')).toBe('client');
-		const result = await worker.search('note', { term: 'note' });
+		const result = await worker.list('note', { term: 'note' });
 		expect(listed).toBe(0);
 		expect(result.count).toBe(0); // a partial-corpus answer, by the app's choice
 	});
@@ -439,29 +439,156 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		const worker = await createWorker({ entities: { note: { search_mode: 'server' } } });
 		await worker.sync();
 		expect(await readAll('docs')).toEqual([]);
-		await worker.search('note', { term: 'note' });
+		await worker.list('note', { term: 'note' });
 		expect(listed).toBe(1);
 		expect(await worker.getSearchMode('note')).toBe('server');
 	});
 
-	it('the deprecated count threshold still forces the server above its ceiling', async () => {
+	it('query.source overrides routing per query', async () => {
 		const { server } = await createTestServer();
 		seed(server as any, 6);
 		let listed = 0;
 		vi.stubGlobal('fetch', bridgeFetch(server, { on_list: () => listed++ }));
 
-		const worker = await createWorker({ entities: { note: { threshold: 4 } } });
-		await worker.sync();
+		const worker = await createWorker();
+		// Nothing synced: coverage routes to the server, but `source: 'client'`
+		// forces the (empty) local index — a partial-corpus answer by choice.
+		const empty = await worker.list('note', { term: 'note', source: 'client' });
+		expect(listed).toBe(0);
+		expect(empty.count).toBe(0);
 
-		// The window is complete, so coverage says "client" — the valve overrides.
-		expect(await worker.getSearchMode('note')).toBe('server');
-		await worker.search('note', { term: 'note' });
+		await worker.sync();
+		// Coverage now says client; `source: 'server'` still forces the server.
+		expect(await worker.getSearchMode('note')).toBe('client');
+		await worker.list('note', { term: 'note', source: 'server' });
 		expect(listed).toBe(1);
 
-		// Below its ceiling the same valve is inert.
-		const relaxed = await createWorker({ entities: { note: { threshold: 100 } } });
-		await relaxed.sync();
-		expect(await relaxed.getSearchMode('note')).toBe('client');
+		// And the explicit spellings of the default change nothing.
+		const auto = await worker.list('note', { term: 'note', source: 'auto' });
+		expect(listed).toBe(1);
+		expect(auto.count).toBe(6);
+	});
+
+	it("source: 'client' rejects vector queries and server-only entities", async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 2);
+		vi.stubGlobal('fetch', bridgeFetch(server));
+		const { DelightError } = await import('@delightstack/utilities');
+
+		const worker = await createWorker();
+		await worker.sync();
+		const vector_failure = await worker
+			.list('note', {
+				source: 'client',
+				vector: { value: [0.1, 0.2], field: 'embedding' },
+			} as never)
+			.catch((error: Error) => error);
+		expect(DelightError.fromWorker(vector_failure)?.code).toBe('invalid_search_source');
+
+		const server_only = await createWorker({
+			entities: { note: { search_mode: 'server' } },
+		});
+		const mode_failure = await server_only
+			.list('note', { term: 'note', source: 'client' })
+			.catch((error: Error) => error);
+		expect(DelightError.fromWorker(mode_failure)?.code).toBe('invalid_search_source');
+	});
+
+	// ── Backfill ceiling (max_synced_docs) ───────────────────────────────────
+
+	it('defers the backfill when the table exceeds max_synced_docs', async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 6);
+		let listed = 0;
+		vi.stubGlobal('fetch', bridgeFetch(server, { on_list: () => listed++ }));
+
+		const worker = await createWorker({ max_synced_docs: 4 });
+		await worker.sync();
+
+		// Nothing mirrored, nothing indexed; queries answer from the server.
+		expect(await readAll('docs')).toEqual([]);
+		expect(await worker.getSearchMode('note')).toBe('server');
+		await worker.list('note', { term: 'note' });
+		expect(listed).toBe(1);
+		expect(await worker.isSynced('note')).toBe(false);
+
+		// The count survives the deferral so a reload knows before its first probe.
+		const meta = await readKeyed<{ server_total?: number }>('sync_meta', 'note');
+		expect(meta?.server_total).toBe(6);
+	});
+
+	it('resumes the backfill when the table shrinks below the ceiling', async () => {
+		const { server } = await createTestServer();
+		const ids = seed(server as any, 6);
+		vi.stubGlobal('fetch', bridgeFetch(server));
+
+		const worker = await createWorker({ max_synced_docs: 4 });
+		await worker.sync();
+		expect(await readAll('docs')).toEqual([]);
+
+		// Every sync run re-probes (count-only): dropping below the ceiling
+		// resumes the backfill with no client-side action.
+		for (const id of ids.slice(0, 3)) (server as any).delete('note', id);
+		await worker.sync();
+		expect((await readAll('docs')).length).toBe(3);
+		expect(await worker.getSearchMode('note')).toBe('client');
+	});
+
+	it('resumes the backfill when the ceiling is raised', async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 6);
+		vi.stubGlobal('fetch', bridgeFetch(server));
+
+		const capped = await createWorker({ max_synced_docs: 4 });
+		await capped.sync();
+		expect(await readAll('docs')).toEqual([]);
+
+		// A "reload" with a raised ceiling — same IndexedDB, new config.
+		const raised = await createWorker({ max_synced_docs: 100 });
+		await raised.sync();
+		expect((await readAll('docs')).length).toBe(6);
+		expect(await raised.getSearchMode('note')).toBe('client');
+	});
+
+	it('a fully-mirrored table keeps syncing incrementally past the ceiling', async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 6);
+		vi.stubGlobal('fetch', bridgeFetch(server));
+
+		const worker = await createWorker({ max_synced_docs: 10 });
+		await worker.sync();
+		expect((await readAll('docs')).length).toBe(6);
+
+		// The table grows past the ceiling AFTER the mirror finished. The
+		// ceiling gates the big download, not incremental pages — the paid-for
+		// index keeps tracking the server.
+		seed(server as any, 8);
+		await worker.sync();
+		expect((await readAll('docs')).length).toBe(14);
+		expect(await worker.getSearchMode('note')).toBe('client');
+	});
+
+	it("search_mode: 'client' is exempt from the global ceiling but not its own", async () => {
+		const { server } = await createTestServer();
+		seed(server as any, 6);
+		vi.stubGlobal('fetch', bridgeFetch(server));
+
+		// Forced client: the global ceiling does not apply.
+		const forced = await createWorker({
+			max_synced_docs: 2,
+			entities: { note: { search_mode: 'client' } },
+		});
+		await forced.sync();
+		expect((await readAll('docs')).length).toBe(6);
+
+		// An explicit per-entity ceiling still caps a forced-client entity.
+		database_counter += 1;
+		db_name = `worker-search-${database_counter}`;
+		const capped = await createWorker({
+			entities: { note: { search_mode: 'client', max_synced_docs: 4 } },
+		});
+		await capped.sync();
+		expect(await readAll('docs')).toEqual([]);
 	});
 
 	// ── config_version bump ──────────────────────────────────────────────────
@@ -499,8 +626,8 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		const docs = await readAll<DocRecord>('docs');
 		expect(docs.length).toBe(4); // rebuilt from the server, ghost gone
 		expect(docs.some((row) => row.doc_id === 'ghost')).toBe(false);
-		expect((await worker.search('note', { term: 'stale' })).count).toBe(0);
-		expect((await worker.search('note', { term: 'note', limit: 10 })).count).toBe(4);
+		expect((await worker.list('note', { term: 'stale' })).count).toBe(0);
+		expect((await worker.list('note', { term: 'note', limit: 10 })).count).toBe(4);
 		const meta = await readKeyed<{ config_version: number }>('sync_meta', 'note');
 		expect(meta?.config_version).toBe(bumped_version);
 	});
@@ -585,7 +712,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		];
 		for (const query of queries) {
 			const expected = reference.search(query);
-			const actual = await worker.search('note', query as never);
+			const actual = await worker.list('note', query as never);
 			expect(actual.count, JSON.stringify(query)).toBe(expected.count);
 			expect(
 				actual.hits.map((hit) => hit.id),
@@ -651,7 +778,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 			tags: ['alpha'],
 			updated_at: T0 + 1000,
 		});
-		const result = await w2.search('note', {
+		const result = await w2.list('note', {
 			where: { tags: { contains_any: ['alpha'] } },
 		} as never);
 		expect(result.count).toBe(1);
@@ -682,7 +809,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		errors.mockRestore();
 
 		expect(await worker.getSearchMode('note')).toBe('server');
-		const result = await worker.search('note', { term: 'note' });
+		const result = await worker.list('note', { term: 'note' });
 		expect(listed).toBe(1);
 		expect(result.count).toBe(0); // the stubbed server answer
 		await worker.sync(); // a no-op, not a crash
@@ -793,7 +920,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		});
 		// Warm B's in-memory dictionary cache off the current index state.
 		await vi.waitFor(async () => {
-			expect((await b.search('note', { term: 'zulu' })).count).toBe(1);
+			expect((await b.list('note', { term: 'zulu' })).count).toBe(1);
 		});
 
 		const counts: number[] = [];
@@ -812,7 +939,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		});
 		await vi.waitFor(async () => {
 			expect(counts[counts.length - 1]).toBe(1);
-			expect((await b.search('note', { term: 'yankee' })).count).toBe(1);
+			expect((await b.list('note', { term: 'yankee' })).count).toBe(1);
 		});
 
 		await a.destroy();
@@ -829,7 +956,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 
 		const worker = await createWorker();
 		await worker.sync();
-		expect((await worker.search('note', { term: 'note', limit: 10 })).count).toBe(3);
+		expect((await worker.list('note', { term: 'note', limit: 10 })).count).toBe(3);
 
 		// Another tab upgrades the database: this worker's connection gets
 		// `versionchange`, closes, and used to stay dead for the session.
@@ -844,7 +971,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		});
 
 		// The next search lazily reopens and still answers locally.
-		const result = await worker.search('note', { term: 'note', limit: 10 });
+		const result = await worker.list('note', { term: 'note', limit: 10 });
 		expect(result.count).toBe(3);
 		expect(listed).toBe(0);
 	});
@@ -903,9 +1030,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		// Without the recovery, the confirmed row would stay missing from local
 		// search until the next app-driven sync. The recovery resync repairs it.
 		await vi.waitFor(async () => {
-			expect((await worker.search('note', { term: 'rewritten', limit: 10 })).count).toBe(
-				1,
-			);
+			expect((await worker.list('note', { term: 'rewritten', limit: 10 })).count).toBe(1);
 		});
 		apply.mockRestore();
 		errors.mockRestore();

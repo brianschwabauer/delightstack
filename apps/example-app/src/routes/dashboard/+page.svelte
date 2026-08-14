@@ -10,7 +10,7 @@
 	// The db client is stable for the life of the page — capturing it once to
 	// create the live search query is intentional.
 	// svelte-ignore state_referenced_locally
-	const posts = db.search('post', { limit: 50 });
+	const posts = db.watch('post', { limit: 50 });
 
 	function formatDate(timestamp: string | number) {
 		return new Date(timestamp).toLocaleDateString(undefined, {
@@ -68,7 +68,7 @@
 			</a>
 		{/each}
 
-		{#if posts.docs.length === 0 && !posts.loading}
+		{#if posts.docs.length === 0 && posts.status !== 'loading'}
 			<div class="empty">
 				{#if posts.query.term}
 					<p>No posts match "{posts.query.term}".</p>

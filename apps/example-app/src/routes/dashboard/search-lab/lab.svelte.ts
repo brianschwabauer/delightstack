@@ -47,7 +47,7 @@ const DEBOUNCE_MS = 180;
  * client worker's result shape carries hits and counts only, and embeddings
  * deliberately never reach the browser, so this is the honest surface for
  * exercising the query language. The Routing panel is the exception: it drives
- * `db.search()` so the client engine gets its turn.
+ * `db.watch()` so the client engine gets its turn.
  */
 export class LabRunner {
 	readonly entity: 'place' | 'organization';

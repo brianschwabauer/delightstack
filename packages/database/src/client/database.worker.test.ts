@@ -165,7 +165,7 @@ async function createWorker() {
 }
 
 async function searchAllIds(worker: any): Promise<string[]> {
-	const result = await worker.search('item', { limit: 1000 });
+	const result = await worker.list('item', { limit: 1000 });
 	return result.hits.map((h: any) => h.id).sort();
 }
 
@@ -245,7 +245,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 
 		const expected = [...ids.slice(1), created.id as string].sort();
 		expect(await searchAllIds(worker)).toEqual(expected);
-		const renamed = await worker.search('item', { term: 'renamed', limit: 10 });
+		const renamed = await worker.list('item', { term: 'renamed', limit: 10 });
 		expect(renamed.hits.some((h: any) => h.id === ids[1])).toBe(true);
 	});
 
@@ -358,7 +358,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		expect(applied).toBe(true);
 		expect(fetch_mock.mock.calls.length).toBe(fetches_after_sync); // zero network
 
-		const hit = await worker.search('item', { term: 'patched', limit: 10 });
+		const hit = await worker.list('item', { term: 'patched', limit: 10 });
 		expect(hit.hits.some((h: any) => h.id === String(a.id))).toBe(true);
 
 		// Unknown id → false, no crash.
@@ -391,7 +391,7 @@ describe('DatabaseWorker.sync() against a real DatabaseServer', () => {
 		const worker = await createWorker();
 		await worker.sync();
 
-		const result = await worker.search('item', { limit: 100 });
+		const result = await worker.list('item', { limit: 100 });
 		expect(result.count).toBe(10); // 9 originals + the late arrival
 		expect(await worker.isSynced('item')).toBe(true);
 	});

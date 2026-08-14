@@ -33,7 +33,7 @@
 	// The db client is stable for the life of the page — capturing it once to
 	// create the live search query is intentional.
 	// svelte-ignore state_referenced_locally
-	const people = db.search('person');
+	const people = db.watch('person');
 </script>
 
 <svelte:head>
@@ -77,7 +77,7 @@
 			</a>
 		{/each}
 
-		{#if people.docs.length === 0 && !people.loading}
+		{#if people.docs.length === 0 && people.status !== 'loading'}
 			<div class="empty">
 				{#if people.query.term}
 					<p>No family members match "{people.query.term}".</p>

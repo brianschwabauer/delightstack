@@ -164,6 +164,16 @@ export type DatabaseSyncRequest<DatabaseConfig extends Record<string, any>> = {
 			 * This can be used to page the results so a bunch of results don't need to be returned at once.
 			 */
 			end_updated_at?: number;
+			/**
+			 * The client's sync ceiling for this entity. When the table's total
+			 * row count exceeds it, the server withholds the page and answers
+			 * with a count-only result (`deferred: true`) — the client then
+			 * routes this entity's queries to the server instead of mirroring a
+			 * table too large to download. Clients send this only during the
+			 * backfill phase; once a table is fully mirrored, incremental pages
+			 * are cheap regardless of size.
+			 */
+			defer_over?: number;
 		};
 	};
 };
@@ -231,6 +241,16 @@ export type DatabaseSyncResponse<DatabaseConfig extends Record<string, any>> = {
 			 * To get the next set of changes, use the end_updated_at timestamp from this event as the start_updated_at for the next request
 			 */
 			last_updated_at: number;
+			/** The total number of rows in this entity's table. */
+			total_count: number;
+			/**
+			 * Set when the request's `defer_over` was exceeded: the page was
+			 * withheld (`created`/`updated`/`deleted` are empty and the window
+			 * fields are 0 — no cursor advances). The client should treat this
+			 * entity as server-answered until the count drops below its ceiling
+			 * or the ceiling is raised.
+			 */
+			deferred?: true;
 		};
 	};
 };
@@ -1663,6 +1683,40 @@ export class DatabaseServer<
 		const schema_changed =
 			entity_query?.config_version !== undefined &&
 			entity_query.config_version !== state.config_version;
+
+		const total_count = Number(
+			this.ctx.storage.sql
+				.exec(
+					`SELECT COUNT(*) AS count FROM ${quoteIdentifier(search_table.table_name)};`,
+				)
+				.one().count,
+		);
+
+		// The client's sync ceiling: a table larger than `defer_over` is not
+		// worth mirroring, so withhold the page and answer with the count only.
+		// No cursor advances (window fields are 0), and a schema change still
+		// ships the new config so the client can adopt the version without
+		// downloading the corpus it will never hold.
+		const defer_over = entity_query?.defer_over;
+		if (
+			defer_over !== undefined &&
+			Number.isFinite(defer_over) &&
+			total_count > defer_over
+		) {
+			return {
+				deleted: [],
+				created: [],
+				updated: [],
+				config_version: state.config_version || 1,
+				first_updated_at: state.first_updated_at || 0,
+				last_updated_at: state.last_updated_at || 0,
+				start_updated_at: 0,
+				end_updated_at: 0,
+				total_count,
+				deferred: true as const,
+				config: schema_changed ? table.config.index_schema : undefined,
+			};
+		}
 		const from = schema_changed
 			? 0
 			: (entity_query?.start_updated_at ?? query?.start_updated_at ?? 0);
@@ -1764,6 +1818,7 @@ export class DatabaseServer<
 			last_updated_at: state.last_updated_at || 0,
 			start_updated_at: start_updated_at === Infinity ? 0 : start_updated_at,
 			end_updated_at,
+			total_count,
 			config: schema_changed ? table.config.index_schema : undefined,
 		};
 	}

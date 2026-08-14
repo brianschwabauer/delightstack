@@ -5,7 +5,8 @@ import { untrack } from 'svelte';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
 import type { DatabaseWorker, WorkerSearchResult } from './database.worker';
-import type { SearchQueryInput } from '../search-query';
+import { encodeSearchQuery } from '../search-query';
+import type { SearchQueryInput, ValidSearchQuery } from '../search-query';
 import { DelightError } from '@delightstack/utilities';
 import { getWorker, resetWorker, isWorkerShared } from './database.worker.init';
 
@@ -33,15 +34,14 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 			 * still filling — results are then a partial-corpus answer by design.
 			 */
 			search_mode?: 'client' | 'server';
-			/**
-			 * @deprecated Document-count ceiling above which this entity's searches
-			 * are routed to the server. The client index is IndexedDB-backed now, so
-			 * there is no memory ceiling to defend — leave it unset. Removed in the
-			 * next major.
-			 */
-			threshold?: number;
 			/** Disable IDB cache for this entity */
 			cache?: boolean;
+			/**
+			 * Per-entity sync ceiling — overrides the global `max_synced_docs`
+			 * (`false` disables the ceiling for this entity). Applies even to a
+			 * `search_mode: 'client'` entity.
+			 */
+			max_synced_docs?: number | false;
 		};
 	};
 
@@ -49,12 +49,20 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	db_name: string;
 
 	/**
-	 * @deprecated Default document-count ceiling above which searches are routed
-	 * to the server. Unset by default now: the client index is IndexedDB-backed
-	 * (no memory ceiling) and routing is coverage-based. Set it only as a
-	 * temporary override valve — removed in the next major.
+	 * Backfill ceiling, defaulting to 50 000: an entity whose server table
+	 * holds more rows than this is never mirrored locally. Its backfill is
+	 * deferred — sync sends cheap count-only probes instead — and its queries
+	 * answer from the server, exactly as if the window were still filling.
+	 * The decision is re-probed every sync run, so raising the ceiling or
+	 * shrinking the table resumes the backfill automatically. A table that
+	 * finished backfilling keeps syncing incrementally however large it grows;
+	 * the ceiling prevents the big download, it never evicts a finished index.
+	 *
+	 * `false` disables the ceiling globally. Entities explicitly forced
+	 * `search_mode: 'client'` ignore the default and the global value — only
+	 * their own `max_synced_docs` caps them.
 	 */
-	default_threshold?: number;
+	max_synced_docs?: number | false;
 
 	/** Whether the app is in dev mode (uses regular Worker instead of SharedWorker) */
 	dev?: boolean;
@@ -123,9 +131,21 @@ export interface SearchHit<T extends Database.AnyTable = Database.Table> {
 
 export interface SearchResult<T extends Database.AnyTable = Database.Table> {
 	hits: SearchHit<T>[];
+	/** Convenience — just the sparse documents, in hit order. */
+	docs: Database.SearchEntity<T>[];
 	count: number;
 	elapsed?: unknown;
 }
+
+/**
+ * Lifecycle of a {@link DatabaseWatch}:
+ * - `'loading'` — no results have arrived yet.
+ * - `'refreshing'` — a re-query is in flight; the previous results stay visible.
+ * - `'ready'` — the shown results answer the current query.
+ * - `'error'` — the last query failed; `error` holds it, and any previous
+ *   results stay visible (last-known-good).
+ */
+export type WatchStatus = 'loading' | 'refreshing' | 'ready' | 'error';
 
 // ---------------------------------------------------------------------------
 // EntityState — reactive per-entity wrapper
@@ -797,10 +817,10 @@ export class EntityReader<
 }
 
 // ---------------------------------------------------------------------------
-// DatabaseSearch — reactive search wrapper
+// DatabaseWatch — reactive list wrapper
 // ---------------------------------------------------------------------------
 
-/** Baseline defaults applied to every search. Callers override selectively. */
+/** Baseline defaults applied to every watch. Callers override selectively. */
 const DEFAULT_SEARCH_QUERY = {
 	term: '',
 	limit: 100,
@@ -826,11 +846,20 @@ function mergeQueryDefaults<T extends Database.AnyTable>(
 /** Quiet window for coalescing rapid query changes (e.g. typing) into one push */
 const QUERY_DEBOUNCE_MS = 150;
 
-export type SearchQueryInit<T extends Database.AnyTable = Database.Table> =
+export type WatchQueryInit<T extends Database.AnyTable = Database.Table> =
 	| Partial<Database.SearchQuery<T>>
 	| (() => Partial<Database.SearchQuery<T>>);
 
-export class DatabaseSearch<
+/**
+ * Compile-time guard applied to `db.watch`/`db.list` query arguments: rejects
+ * `source: 'client'` combined with `vector` (vector search is server-only).
+ * Unwraps the function form of {@link WatchQueryInit}.
+ */
+type ValidQueryInit<Q> = Q extends () => infer R
+	? ValidSearchQuery<R>
+	: ValidSearchQuery<Q>;
+
+export class DatabaseWatch<
 	T extends Database.AnyTable = Database.Table,
 	EntityType extends string = string,
 > {
@@ -858,9 +887,7 @@ export class DatabaseSearch<
 	#results = $state<SearchHit<T>[]>([]);
 	#docs = $derived<Database.SearchEntity<T>[]>(this.#results.map((h) => h.document));
 	#count = $state(0);
-	#loading = $state(true);
-	#searching = $state(false);
-	#loaded = $state(false);
+	#status = $state<WatchStatus>('loading');
 	#error = $state<unknown>(null);
 	#mode = $state<'client' | 'server'>('client');
 	#query_state = $state<Database.SearchQuery<T>>({});
@@ -883,25 +910,13 @@ export class DatabaseSearch<
 		return this.#count;
 	}
 
-	/** Whether the initial load is in progress (true until the first result arrives). */
-	get loading(): boolean {
+	/** Where the watch is in its lifecycle — see {@link WatchStatus}. */
+	get status(): WatchStatus {
 		this.#subscriber();
-		return this.#loading;
+		return this.#status;
 	}
 
-	/** Whether a background re-query is in progress. Previous results remain visible. */
-	get searching(): boolean {
-		this.#subscriber();
-		return this.#searching;
-	}
-
-	/** Whether the first result has arrived. */
-	get loaded(): boolean {
-		this.#subscriber();
-		return this.#loaded;
-	}
-
-	/** Any error from the search */
+	/** Any error from the query (set while `status === 'error'`) */
 	get error(): unknown {
 		return this.#error;
 	}
@@ -929,7 +944,7 @@ export class DatabaseSearch<
 	constructor(
 		entity_type: EntityType,
 		worker: Remote<DatabaseWorker>,
-		query?: SearchQueryInit<T>,
+		query?: WatchQueryInit<T>,
 	) {
 		this.entity_type = entity_type;
 		this.#worker = worker;
@@ -962,9 +977,8 @@ export class DatabaseSearch<
 	async refresh(): Promise<void> {
 		const token = ++this.#push_token;
 		try {
-			if (!this.#loaded) this.#loading = true;
-			else this.#searching = true;
-			const result = await this.#worker.search(
+			if (this.#status !== 'loading') this.#status = 'refreshing';
+			const result = await this.#worker.list(
 				this.entity_type,
 				$state.snapshot(this.#query_state) as SearchQueryInput,
 			);
@@ -974,16 +988,14 @@ export class DatabaseSearch<
 			this.#results = result.hits as SearchHit<T>[];
 			this.#count = result.count;
 			this.#error = null;
-			this.#loaded = true;
+			this.#status = 'ready';
 		} catch (e) {
 			// Keep the last-known-good results; surface the failure only when no
 			// newer result has landed in the meantime.
 			if (!this.#destroyed && token >= this.#delivered_token) {
 				this.#error = DelightError.fromWorker(e) ?? e;
+				this.#status = 'error';
 			}
-		} finally {
-			this.#loading = false;
-			this.#searching = false;
 		}
 	}
 
@@ -1083,8 +1095,10 @@ export class DatabaseSearch<
 		if (this.#destroyed) return;
 		if (this.#subscriber_id) {
 			const token = ++this.#push_token;
-			this.#searching = true;
+			if (this.#status !== 'loading') this.#status = 'refreshing';
 			try {
+				// The subscription callback delivers the result (and the 'ready' /
+				// 'error' status) before this await resolves.
 				await this.#worker.updateSubscription(
 					this.#subscriber_id,
 					$state.snapshot(this.#query_state) as SearchQueryInput,
@@ -1092,8 +1106,6 @@ export class DatabaseSearch<
 				);
 			} catch {
 				await this.refresh();
-			} finally {
-				this.#searching = false;
 			}
 		} else {
 			await this.refresh();
@@ -1106,7 +1118,10 @@ export class DatabaseSearch<
 
 		this.#init_promise = (async () => {
 			try {
-				const mode = await this.#worker.getSearchMode(this.entity_type);
+				const mode = await this.#worker.getSearchMode(
+					this.entity_type,
+					$state.snapshot(this.#query_state) as SearchQueryInput,
+				);
 				this.#mode = mode;
 
 				this.#subscriber_id = await this.#worker.subscribe(
@@ -1124,22 +1139,19 @@ export class DatabaseSearch<
 							// Keep the last-known-good results on screen; surface the
 							// failure through the error state instead of blanking the list.
 							this.#error = new DelightError(result.error);
-							this.#loading = false;
-							this.#searching = false;
+							this.#status = 'error';
 							return;
 						}
 						this.#results = result.hits as SearchHit<T>[];
 						this.#count = result.count;
-						this.#loading = false;
-						this.#searching = false;
-						this.#loaded = true;
 						this.#error = null;
+						this.#status = 'ready';
 					}),
 					this.#push_token,
 				);
 			} catch (e) {
 				this.#error = e;
-				this.#loading = false;
+				this.#status = 'error';
 				this.#init_promise = null;
 			}
 		})();
@@ -1268,7 +1280,11 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 
 		const entities: Record<
 			string,
-			{ search_mode?: 'client' | 'server'; threshold?: number; cache?: boolean }
+			{
+				search_mode?: 'client' | 'server';
+				cache?: boolean;
+				max_synced_docs?: number | false;
+			}
 		> = {};
 		if (this.#config.entities) {
 			for (const [name, overrides] of Object.entries(this.#config.entities)) {
@@ -1282,9 +1298,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			tables,
 			entities,
 			db_name: this.#config.db_name,
-			// Passed through as-is: `undefined` means "no count valve", which is the
-			// default now that routing is coverage-based.
-			default_threshold: this.#config.default_threshold,
+			max_synced_docs: this.#config.max_synced_docs,
 		});
 
 		// Clear stale EntityState cache so new instances get the active worker
@@ -1723,13 +1737,14 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	}
 
 	// -----------------------------------------------------------------------
-	// Search
+	// List
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Create a reactive search that auto-updates when the index changes.
+	 * Create a reactive list that auto-updates when the index changes — the
+	 * live counterpart of {@link list}, the way `db.read` is to `db.get`.
 	 *
-	 * The returned search has a live reactive `query` object with sensible
+	 * The returned watch has a live reactive `query` object with sensible
 	 * defaults (order by `updated_at` DESC, limit 100). Mutate fields on it
 	 * (`posts.query.term = 'x'`) or bind to them directly
 	 * (`<Input bind:value={posts.query.term} />`).
@@ -1738,30 +1753,71 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 * from other reactive state (the function's reactive reads are tracked).
 	 *
 	 * Subscriptions clean up automatically when no reactive context is reading
-	 * the search anymore (e.g. on component unmount).
+	 * the watch anymore (e.g. on component unmount).
 	 */
-	search<K extends keyof T & string>(
+	watch<K extends keyof T & string, Q extends WatchQueryInit<T[K]>>(
 		entity_type: K,
-		query?: SearchQueryInit<T[K]>,
-	): DatabaseSearch<T[K], K> {
+		query?: Q & ValidQueryInit<Q>,
+	): DatabaseWatch<T[K], K> {
 		const worker = this.#getWorker();
-		return new DatabaseSearch(entity_type, worker, query);
+		return new DatabaseWatch(entity_type, worker, query as WatchQueryInit<T[K]>);
 	}
 
-	/** One-shot list — always hits server. */
-	async list<K extends keyof T & string>(
+	/**
+	 * One-shot list/search. Routed like every query: answered locally once the
+	 * entity's synced window covers the whole table, by the server until then.
+	 * Force a side per query with `source: 'client' | 'server'`.
+	 *
+	 * On SSR (no worker), falls back to the auto-generated `/api/${entity}`
+	 * HTTP endpoint via the configured `fetch`.
+	 */
+	async list<K extends keyof T & string, Q extends Database.SearchQuery<T[K]>>(
 		entity_type: K,
-		query?: Database.SearchQuery<T[K]>,
+		query?: Q & ValidSearchQuery<Q>,
 	): Promise<SearchResult<T[K]>> {
-		const worker = this.#getWorker();
-		try {
-			return (await worker.list(
-				entity_type,
-				(query ?? {}) as SearchQueryInput,
-			)) as SearchResult<T[K]>;
-		} catch (error) {
-			throw DelightError.fromWorker(error) ?? error;
+		const q = (query ?? {}) as SearchQueryInput;
+		let result: WorkerSearchResult | undefined;
+		if (this.#worker) {
+			try {
+				result = await this.#worker.list(entity_type, q);
+			} catch (error) {
+				throw DelightError.fromWorker(error) ?? error;
+			}
+		} else {
+			result = await this.#listViaFetch(entity_type, q);
 		}
+		const hits = (result?.hits ?? []) as SearchHit<T[K]>[];
+		return {
+			hits,
+			docs: hits.map((h) => h.document),
+			count: result?.count ?? 0,
+			elapsed: result?.elapsed,
+		};
+	}
+
+	/**
+	 * SSR / pre-init fallback for {@link list}: the worker doesn't exist, so
+	 * call the auto-generated list endpoint directly with the configured
+	 * `fetch` (which carries the request's cookies and shares SvelteKit's
+	 * fetch cache with hydration).
+	 */
+	async #listViaFetch(
+		entity_type: string,
+		query: SearchQueryInput,
+	): Promise<WorkerSearchResult> {
+		const fetcher = this.#config.fetch ?? globalThis.fetch;
+		const params = encodeSearchQuery({ sparse: true, ...query });
+		const qs = params.toString();
+		const response = await fetcher(`/api/${entity_type}${qs ? '?' : ''}${qs}`);
+		if (!response.ok) {
+			const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+			throw new DelightError({
+				message: (body.message as string) || `List ${entity_type} failed`,
+				status: response.status,
+				detail: body.detail as string | undefined,
+			});
+		}
+		return (await response.json()) as WorkerSearchResult;
 	}
 
 	// -----------------------------------------------------------------------

@@ -339,3 +339,72 @@ describe('DatabaseServer.sync(): vector strip (plan §7.0)', () => {
 		expect(results.count).toBe(1);
 	});
 });
+
+describe('DatabaseServer.sync(): backfill ceiling (defer_over)', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(T0);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function seed(db: ReturnType<typeof createServer>['db'], count: number) {
+		for (let i = 0; i < count; i++) {
+			vi.setSystemTime(T0 + i * 1000);
+			db.create('item', { name: `item ${i}` });
+		}
+	}
+
+	it('reports total_count on every entity result', () => {
+		const { db } = createServer();
+		seed(db, 3);
+		const entity = db.sync({ start_updated_at: 0 }).entity.item as SyncEntity;
+		expect(entity.total_count).toBe(3);
+		expect(entity.deferred).toBeUndefined();
+	});
+
+	it('withholds the page (count-only) when total_count exceeds defer_over', () => {
+		const { db } = createServer();
+		seed(db, 6);
+		const entity = db.sync({
+			entity: { item: { config_version: 1, defer_over: 4 } },
+		}).entity.item as SyncEntity;
+
+		expect(entity.deferred).toBe(true);
+		expect(entity.total_count).toBe(6);
+		expect(entity.created).toEqual([]);
+		expect(entity.updated).toEqual([]);
+		expect(entity.deleted).toEqual([]);
+		// No cursor advances off a withheld page.
+		expect(entity.start_updated_at).toBe(0);
+		expect(entity.end_updated_at).toBe(0);
+	});
+
+	it('serves the page normally at or below defer_over', () => {
+		const { db } = createServer();
+		seed(db, 4);
+		const entity = db.sync({
+			entity: { item: { config_version: 1, defer_over: 4 } },
+		}).entity.item as SyncEntity;
+
+		expect(entity.deferred).toBeUndefined();
+		expect(entity.total_count).toBe(4);
+		expect(entity.created.length + entity.updated.length).toBe(4);
+	});
+
+	it('still ships the new config on a deferred schema change', () => {
+		const { db } = createServer();
+		seed(db, 6);
+		const entity = db.sync({
+			entity: { item: { config_version: 999, defer_over: 4 } },
+		}).entity.item as SyncEntity;
+
+		expect(entity.deferred).toBe(true);
+		// The client adopts the version without downloading the corpus it will
+		// never hold.
+		expect(entity.config).toBeDefined();
+		expect(entity.config_version).toBe(1);
+	});
+});

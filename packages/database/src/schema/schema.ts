@@ -2445,7 +2445,16 @@ export namespace Database {
 			readonly _: Record<string, FieldGenerator>;
 		},
 		IndexSchemaConfig extends AnySearchSchema = SearchSchema<Table>,
-	> = CoreSearchQuery<IndexSchemaConfig>;
+	> = CoreSearchQuery<IndexSchemaConfig> & {
+		/**
+		 * Where this query is answered (client routing only; the server ignores
+		 * it). `'auto'` (default) routes by coverage, `'server'` forces the
+		 * server, `'client'` forces the local index even mid-backfill. Overrides
+		 * the entity's `search_mode`. `'client'` cannot be combined with
+		 * `vector` — vector search is server-only.
+		 */
+		source?: 'auto' | 'client' | 'server';
+	};
 
 	/**
 	 * The type returned by the search query for a database table

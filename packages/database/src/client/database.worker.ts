@@ -42,6 +42,13 @@ interface SyncEntityResult {
 	end_updated_at: number;
 	first_updated_at: number;
 	last_updated_at: number;
+	/** The total number of rows in this entity's table on the server. */
+	total_count?: number;
+	/**
+	 * The server withheld the page because `total_count` exceeded the request's
+	 * `defer_over` — no rows shipped, no cursor advanced.
+	 */
+	deferred?: true;
 }
 
 interface SyncResponse {
@@ -71,20 +78,22 @@ export interface WorkerInitConfig {
 		string,
 		{
 			search_mode?: 'client' | 'server';
-			threshold?: number;
 			cache?: boolean;
+			/** Per-entity sync ceiling; overrides the global `max_synced_docs`. */
+			max_synced_docs?: number | false;
 		}
 	>;
 	/** IndexedDB database name */
 	db_name: string;
 	/**
-	 * @deprecated Document-count ceiling above which searches are routed to the
-	 * server. The client index is IndexedDB-backed now, so there is no memory
-	 * ceiling to defend and routing is coverage-based (§7.6): a complete synced
-	 * window searches locally, an incomplete one goes to the server. Set this
-	 * only as a temporary override valve — it is removed in the next major.
+	 * Backfill ceiling: an entity whose server table holds more rows than this
+	 * is not mirrored locally — its backfill is deferred (count-only sync
+	 * probes) and its queries answer from the server. `false` disables the
+	 * ceiling. Defaults to 50 000. Entities explicitly forced
+	 * `search_mode: 'client'` ignore this default (an explicit per-entity
+	 * `max_synced_docs` still applies to them).
 	 */
-	default_threshold?: number;
+	max_synced_docs?: number | false;
 	/** Injectable IDB factory (tests). Defaults to the worker's `indexedDB`. */
 	idb_factory?: IDBFactory;
 }
@@ -116,9 +125,17 @@ interface EntitySyncState {
 	start_updated_at: number | undefined;
 	end_updated_at: number | undefined;
 	synced: boolean;
-	/** @deprecated The override valve; `undefined` disables count-based routing. */
-	threshold: number | undefined;
 	cache_enabled: boolean;
+	/** The resolved backfill ceiling; `undefined` means no ceiling. */
+	max_synced_docs: number | undefined;
+	/**
+	 * The server declined the backfill because the table exceeds
+	 * `max_synced_docs`. Re-probed (count-only, cheap) on every sync run, so it
+	 * clears by itself when the table shrinks or the ceiling is raised.
+	 */
+	deferred: boolean;
+	/** The server's last reported total row count for this entity's table. */
+	server_total: number | undefined;
 	primary_key: string;
 	/** The flattened `dot.path → type` schema the client search engine works from. */
 	schema: WhereSchema;
@@ -139,6 +156,13 @@ type SearchSubscriber = {
 
 /** Cache entries fresher than this are not background-refreshed (ms) */
 const REFRESH_STALE_MS = 30_000;
+
+/**
+ * The default backfill ceiling (`max_synced_docs`). Above this many rows, a
+ * table is not mirrored into the client index — the download and the index
+ * build both stop being worth it, and the server answers instead.
+ */
+const DEFAULT_MAX_SYNCED_DOCS = 50_000;
 
 /** The legacy index blob store, dropped on the first search-store upgrade. */
 const LEGACY_SEARCH_INDEX_STORE = 'search_index';
@@ -308,8 +332,6 @@ export class DatabaseWorker {
 	#tables: WorkerInitConfig['tables'] = {};
 	#search_subscribers: SearchSubscriber[] = [];
 	#subscriber_counter = 0;
-	/** @deprecated The count-based override valve (§7.6); `undefined` disables it. */
-	#default_threshold: number | undefined;
 	#pending_notify = new Set<string>();
 	#notify_scheduled = false;
 	#pending_refreshes = new Set<string>();
@@ -363,7 +385,6 @@ export class DatabaseWorker {
 		this.#idb_unavailable = false;
 
 		this.#tables = config.tables;
-		this.#default_threshold = config.default_threshold;
 		this.#forced_client = new Set(
 			Object.entries(config.entities ?? {})
 				.filter(([, overrides]) => overrides?.search_mode === 'client')
@@ -405,6 +426,23 @@ export class DatabaseWorker {
 			const overrides = config.entities?.[entity_type];
 			const forced_mode = overrides?.search_mode;
 
+			// The backfill ceiling, resolved: an explicit per-entity value always
+			// wins (false = no ceiling); otherwise a forced-'client' entity is
+			// exempt (the app asserted local-first for it); otherwise the global
+			// config, defaulting to DEFAULT_MAX_SYNCED_DOCS.
+			const explicit_ceiling = overrides?.max_synced_docs;
+			const global_ceiling = config.max_synced_docs;
+			const max_synced_docs =
+				explicit_ceiling !== undefined
+					? explicit_ceiling === false
+						? undefined
+						: explicit_ceiling
+					: forced_mode === 'client'
+						? undefined
+						: global_ceiling === false
+							? undefined
+							: (global_ceiling ?? DEFAULT_MAX_SYNCED_DOCS);
+
 			// Load persisted sync meta
 			const meta = this.#db
 				? await idbGet<SyncMeta>(this.#db, 'sync_meta', entity_type).catch(
@@ -420,8 +458,15 @@ export class DatabaseWorker {
 				start_updated_at: meta?.start_updated_at,
 				end_updated_at: meta?.end_updated_at,
 				synced: false,
-				threshold: overrides?.threshold ?? this.#default_threshold,
 				cache_enabled: overrides?.cache !== false,
+				max_synced_docs,
+				// Deferral is a live decision, re-probed on every sync run; the
+				// persisted total just carries the last known answer across reloads.
+				deferred:
+					max_synced_docs !== undefined &&
+					meta?.server_total !== undefined &&
+					meta.server_total > max_synced_docs,
+				server_total: meta?.server_total,
 				primary_key: table.primary_key,
 				schema,
 				index_paths: indexPathsFor(schema),
@@ -761,15 +806,28 @@ export class DatabaseWorker {
 			const descending_request = new Set<string>();
 			for (const entity_type of client_types) {
 				const state = this.#entities[entity_type];
+				// The backfill ceiling rides only on backfill-phase (descending)
+				// requests: a table the client already fully mirrors keeps syncing
+				// incrementally however large it grows — the download was already
+				// paid for, and ascending pages are cheap. The ceiling exists to
+				// prevent the big download, not to evict a finished index.
+				const defer_over =
+					state.max_synced_docs !== undefined
+						? { defer_over: state.max_synced_docs }
+						: undefined;
 				if (state.start_updated_at === undefined) {
 					// Never synced — newest page first
-					entity_request[entity_type] = { config_version: state.config_version };
+					entity_request[entity_type] = {
+						config_version: state.config_version,
+						...defer_over,
+					};
 					descending_request.add(entity_type);
 				} else if (state.start_updated_at > 0) {
 					// Backfilling — the page of history just older than our window
 					entity_request[entity_type] = {
 						config_version: state.config_version,
 						end_updated_at: state.start_updated_at,
+						...defer_over,
 					};
 					descending_request.add(entity_type);
 				} else {
@@ -822,6 +880,21 @@ export class DatabaseWorker {
 					descending_request.add(entity_type);
 					changed.add(entity_type);
 				}
+
+				if (entity_result.total_count !== undefined) {
+					state.server_total = entity_result.total_count;
+				}
+				if (entity_result.deferred) {
+					// The table exceeds this entity's `max_synced_docs` — the server
+					// withheld the page. No cursor moved; queries keep routing to the
+					// server (the window stays incomplete). The next sync run re-probes
+					// (count-only), so shrinking below the ceiling resumes the
+					// backfill by itself.
+					state.deferred = true;
+					done.add(entity_type);
+					continue;
+				}
+				state.deferred = false;
 
 				if (!this.#store) {
 					done.add(entity_type);
@@ -892,6 +965,7 @@ export class DatabaseWorker {
 						last_synced_at: next_synced_at,
 						start_updated_at: next_start,
 						end_updated_at: next_end,
+						server_total: state.server_total,
 					} satisfies SyncMeta,
 				});
 
@@ -1268,28 +1342,27 @@ export class DatabaseWorker {
 	}
 
 	// -----------------------------------------------------------------------
-	// Search
+	// List
 	// -----------------------------------------------------------------------
 
 	/**
-	 * Search one entity type, locally or on the server (§7.6 routing policy).
+	 * List/search one entity type, locally or on the server (§7.6 routing
+	 * policy).
 	 *
 	 * The client answer and the server answer are identical **only when the
 	 * corpora match**. A partial window is a different corpus — different
 	 * membership, different global BM25 statistics — so a query is only answered
 	 * locally when the local index is known to hold the whole table.
+	 * `query.source` forces the decision per query.
 	 */
-	async search(
-		entity_type: string,
-		query: SearchQueryInput,
-	): Promise<WorkerSearchResult> {
+	async list(entity_type: string, query: SearchQueryInput): Promise<WorkerSearchResult> {
 		const state = this.#entities[entity_type];
 		if (!state) throw unknownEntityType(entity_type);
 
 		// A `versionchange` may have released the database — reopen before
 		// routing so one upgrade in another tab degrades one call at most.
 		await this.#ensureStore();
-		if (!(await this.#routesToClient(state, query))) {
+		if (!this.#routesToClient(state, query)) {
 			return this.#serverSearch(entity_type, query);
 		}
 		// Capture ONCE: `#engine` can be nulled by a `versionchange` between the
@@ -1329,36 +1402,51 @@ export class DatabaseWorker {
 	 * The routing decision, in the plan's order.
 	 *
 	 * 1. **Vector (and hybrid) queries always go to the server.** No embeddings
-	 *    exist on the client at all (§4.9, and the §7.0 sync strip).
-	 * 2. **Coverage.** The local index is authoritative only when the synced
+	 *    exist on the client at all (§4.9, and the §7.0 sync strip). Forcing
+	 *    `source: 'client'` on one is a caller error (also a type error at the
+	 *    public API), not a silent server fallback.
+	 * 2. **`query.source`** overrides everything else per query. `'client'` on
+	 *    a `search_mode: 'server'` entity is a caller error — that type never
+	 *    syncs, so no local index exists to answer from.
+	 * 3. **Coverage.** The local index is authoritative only when the synced
 	 *    window covers the whole table: `start_updated_at === 0` is the
 	 *    backfill-complete sentinel. `search_mode: 'server'` opts a type out
 	 *    entirely; `search_mode: 'client'` opts it in regardless of coverage
-	 *    (the app is asserting local-first semantics).
-	 * 3. **The deprecated count valve.** A configured `threshold` still forces
-	 *    the server once the local document count reaches it. Removed next major.
+	 *    (the app is asserting local-first semantics — as does a per-query
+	 *    `source: 'client'`).
+	 *
+	 * An unavailable engine (IDB blocked, `versionchange` in flight) always
+	 * answers `false` — even under `source: 'client'`, the server is the only
+	 * degraded-mode fallback that can answer at all.
 	 */
-	async #routesToClient(
-		state: EntitySyncState,
-		query: SearchQueryInput,
-	): Promise<boolean> {
+	#routesToClient(state: EntitySyncState, query: SearchQueryInput): boolean {
+		const source = query.source;
+		if (requiresServer(query as SearchQuery)) {
+			if (source === 'client') {
+				throw DelightError.transferable({
+					message:
+						"source: 'client' cannot be combined with `vector` — vector search is server-only",
+					status: 400,
+					code: 'invalid_search_source',
+				});
+			}
+			return false;
+		}
+		if (source === 'client' && state.search_mode === 'server') {
+			throw DelightError.transferable({
+				message:
+					`source: 'client' is not available for '${state.client_type.entity_type}' — ` +
+					"the entity is configured search_mode: 'server' and has no local index",
+				status: 400,
+				code: 'invalid_search_source',
+			});
+		}
 		if (!this.#engine || !this.#store) return false;
-		if (requiresServer(query as SearchQuery)) return false;
+		if (source === 'server') return false;
+		if (source === 'client') return true;
 		if (state.search_mode === 'server') return false;
 		const forced_client = this.#forced_client.has(state.client_type.entity_type);
-		if (!forced_client && state.start_updated_at !== 0) return false;
-		if (state.threshold !== undefined) {
-			const count = await this.#store.countDocs(state.client_type.entity_type);
-			if (count >= state.threshold) return false;
-		}
-		return true;
-	}
-
-	/** One-shot list that always hits the server */
-	async list(entity_type: string, query: SearchQueryInput): Promise<WorkerSearchResult> {
-		const state = this.#entities[entity_type];
-		if (!state) throw unknownEntityType(entity_type);
-		return this.#serverSearch(entity_type, query);
+		return forced_client || state.start_updated_at === 0;
 	}
 
 	/**
@@ -1386,7 +1474,7 @@ export class DatabaseWorker {
 
 		let result: WorkerSearchResult;
 		try {
-			result = { ...(await this.search(entity_type, query)), token };
+			result = { ...(await this.list(entity_type, query)), token };
 		} catch (error) {
 			result = { hits: [], count: 0, token, error: searchErrorPayload(error) };
 		}
@@ -1413,7 +1501,7 @@ export class DatabaseWorker {
 
 		let result: WorkerSearchResult;
 		try {
-			result = { ...(await this.search(sub.entity_type, query)), token: echo };
+			result = { ...(await this.list(sub.entity_type, query)), token: echo };
 		} catch (error) {
 			result = { hits: [], count: 0, token: echo, error: searchErrorPayload(error) };
 		}
@@ -1438,10 +1526,19 @@ export class DatabaseWorker {
 	 * still filling reports `'server'` and flips to `'client'` when the backfill
 	 * completes.
 	 */
-	async getSearchMode(entity_type: string): Promise<'client' | 'server'> {
+	async getSearchMode(
+		entity_type: string,
+		query?: SearchQueryInput,
+	): Promise<'client' | 'server'> {
 		const state = this.#entities[entity_type];
 		if (!state) return 'server';
-		return (await this.#routesToClient(state, {})) ? 'client' : 'server';
+		try {
+			return this.#routesToClient(state, query ?? {}) ? 'client' : 'server';
+		} catch {
+			// An invalid `source` combination — the query itself will throw with
+			// the real error; the reported mode is then moot.
+			return 'server';
+		}
 	}
 
 	/** Whether the entity type has completed its initial sync. */
@@ -1747,6 +1844,7 @@ export class DatabaseWorker {
 					last_synced_at: state.last_synced_at,
 					start_updated_at: state.start_updated_at,
 					end_updated_at: state.end_updated_at,
+					server_total: state.server_total,
 				} satisfies SyncMeta,
 			});
 		}
@@ -1769,7 +1867,7 @@ export class DatabaseWorker {
 				// query stored right now, and the client uses the echoed token to
 				// discard it if a newer push lands first.
 				const token = sub.query_token;
-				this.search(sub.entity_type, sub.query).then(
+				this.list(sub.entity_type, sub.query).then(
 					(result) => {
 						try {
 							sub.callback({ ...result, token });
