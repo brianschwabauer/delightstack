@@ -2,8 +2,9 @@ import { Database } from '@delightstack/database';
 import { defineImageTable } from '@delightstack/images';
 import { organizationTable, placeTable } from './search-lab/tables';
 
+// `id` (string primary key), `created_at`, and `updated_at` are auto-managed —
+// tables don't declare them.
 export const personTable = Database.table('person', (s) => ({
-	id: s.primaryKey(),
 	name: s.string().min(1).max(100).label('Name').placeholder('Full name').searchable(),
 	email: s.string().email().label('Email').optional().searchable(),
 	phone: s.string().phone().label('Phone').optional(),
@@ -29,7 +30,6 @@ export const personTable = Database.table('person', (s) => ({
 }));
 
 export const postTable = Database.table('post', (s) => ({
-	id: s.primaryKey(),
 	title: s.string().min(1).max(200).searchable(),
 	content: s.string().searchable(),
 	summary: s.string().max(500).optional(),

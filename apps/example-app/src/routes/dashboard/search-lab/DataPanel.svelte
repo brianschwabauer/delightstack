@@ -10,15 +10,14 @@
 		toast,
 	} from '@delightstack/components';
 	import { confetti } from '@delightstack/components/feedback';
-	import type { DatabaseClient } from '@delightstack/database/client';
 	import { DelightError } from '@delightstack/utilities';
-	import type { tables } from '$lib/schema';
+	import type { AppDatabase } from '$lib/clients';
 	import { DEFAULT_PLACE_COUNT, DEFAULT_SEED } from '$lib/search-lab/seed';
 	import Panel from './Panel.svelte';
 	import PlaceForm from './PlaceForm.svelte';
 
 	interface Props {
-		db: DatabaseClient<typeof tables>;
+		db: AppDatabase;
 		/** Corpus sizes from the page load, kept current after a reseed. */
 		counts: { places: number; organizations: number };
 	}

@@ -13,10 +13,6 @@ const WRITE_BATCH = 40;
 /** Upper bound on a single reseed, so a typo in the UI cannot wedge the DO. */
 const MAX_PLACES = 1000;
 
-interface SparseRow {
-	id?: string;
-}
-
 function requireDatabase(locals: App.Locals) {
 	if (!locals.session) throw DelightError.unauthorized('Sign in to use the Search Lab');
 	const db = locals.db;
@@ -25,18 +21,21 @@ function requireDatabase(locals: App.Locals) {
 }
 
 /** Every id currently stored for `entity_type`, paged through the sparse list. */
-async function collectIds(db: App.OrgDatabase, entity_type: string): Promise<string[]> {
+async function collectIds(
+	db: App.OrgDatabase,
+	entity_type: 'place' | 'organization',
+): Promise<string[]> {
 	const ids: string[] = [];
 	let offset = 0;
 	for (;;) {
-		const page = (await db.list(entity_type, {
+		const page = await db.list(entity_type, {
 			limit: 200,
 			offset,
 			sparse: true,
 			// updated_at is the only order field every table implicitly supports;
 			// paging just needs a stable order (PK tie-break keeps it deterministic).
 			order: [{ field: 'updated_at', direction: 'ASC' }],
-		})) as { hits?: { id?: string; document?: SparseRow }[] };
+		});
 		const hits = page.hits ?? [];
 		if (hits.length === 0) break;
 		for (const hit of hits) {
@@ -54,8 +53,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 	try {
 		const db = requireDatabase(locals as App.Locals);
 		const [places, organizations] = await Promise.all([
-			db.list('place', { limit: 1, sparse: true }) as Promise<{ count?: number }>,
-			db.list('organization', { limit: 1, sparse: true }) as Promise<{ count?: number }>,
+			db.list('place', { limit: 1, sparse: true }),
+			db.list('organization', { limit: 1, sparse: true }),
 		]);
 		return Response.json({
 			places: places.count ?? 0,

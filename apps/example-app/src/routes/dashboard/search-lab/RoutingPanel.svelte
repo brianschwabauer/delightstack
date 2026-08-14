@@ -1,14 +1,13 @@
 <script lang="ts">
 	import { Button, Callout, Code, Input, Stat, toast } from '@delightstack/components';
-	import type { DatabaseClient } from '@delightstack/database/client';
 	import { DelightError } from '@delightstack/utilities';
-	import type { tables } from '$lib/schema';
+	import type { AppDatabase } from '$lib/clients';
 	import Panel from './Panel.svelte';
 	import ResultList from './ResultList.svelte';
 	import { LabRunner, pruneQuery, type LabHit } from './lab.svelte';
 
 	interface Props {
-		db: DatabaseClient<typeof tables>;
+		db: AppDatabase;
 	}
 
 	let { db }: Props = $props();

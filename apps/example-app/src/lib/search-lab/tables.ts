@@ -12,7 +12,6 @@ import { Database } from '@delightstack/database';
 // ---------------------------------------------------------------------------
 
 export const organizationTable = Database.table('organization', (s) => ({
-	id: s.primaryKey(),
 	name: s
 		.string()
 		.min(1)
@@ -44,8 +43,6 @@ export const organizationTable = Database.table('organization', (s) => ({
 }));
 
 export const placeTable = Database.table('place', (s) => ({
-	id: s.primaryKey(),
-
 	// -- text --
 	name: s
 		.string()
@@ -157,7 +154,8 @@ export const placeTable = Database.table('place', (s) => ({
 	organization_id: s
 		.foreignKey({
 			type: 'string',
-			table: 'organization',
+			// The table object itself, so a typo'd reference is a compile error
+			table: organizationTable,
 			column: 'id',
 			on_delete: 'CASCADE',
 		})

@@ -5,27 +5,18 @@
 import type { AuthLocals } from '@delightstack/auth/server';
 import type { AiServer } from '@delightstack/ai/server';
 import type { ImageRecord } from '@delightstack/images';
+import type { DatabaseStub } from '@delightstack/database';
+import type { tables } from '$lib/schema';
 
 declare global {
 	namespace App {
-		interface Error {
-			status?: number;
-			message: string;
-		}
-
 		/**
 		 * RPC surface of the org database durable object (`OrgDatabaseServer`
-		 * in `server/src/index.ts`). Durable Object stubs are structurally
-		 * opaque to TypeScript, so the methods the app calls are declared here.
+		 * in `server/src/index.ts`): the typed async projection of
+		 * `DatabaseServer<typeof tables>` plus the integrations the DO
+		 * subclass adds (image uploads, AI).
 		 */
-		interface OrgDatabase {
-			create(entity_type: string, data: unknown): Promise<unknown>;
-			get(entity_type: string, id: string | number): Promise<unknown>;
-			list(entity_type: string, query?: unknown): Promise<unknown>;
-			update(entity_type: string, id: string | number, data: unknown): Promise<unknown>;
-			delete(entity_type: string, id: string | number): Promise<void>;
-			sync(query?: unknown): Promise<unknown>;
-			transaction(operations: unknown[]): Promise<unknown>;
+		type OrgDatabase = DatabaseStub<typeof tables> & {
 			uploadImage(
 				data: ArrayBuffer,
 				options?: {
@@ -35,6 +26,11 @@ declare global {
 				},
 			): Promise<ImageRecord>;
 			ai: AiServer;
+		};
+
+		interface Error {
+			status?: number;
+			message: string;
 		}
 
 		interface Locals extends AuthLocals {

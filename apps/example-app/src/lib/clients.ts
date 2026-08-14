@@ -5,6 +5,13 @@ import type { AuthClient } from '@delightstack/auth/client';
 import { tables } from './schema';
 
 /**
+ * The app's database client type — use this for `db` props instead of
+ * repeating `DatabaseClient<typeof tables>` (and the `tables` import) in
+ * every component.
+ */
+export type AppDatabase = DatabaseClient<typeof tables>;
+
+/**
  * Wire the WebSocket, Database, and AI clients for a request.
  *
  * Call this once in your dashboard layout's `load` — it returns

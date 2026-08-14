@@ -21,9 +21,6 @@
 		"@delightstack/rate-limiter": "workspace:*",
 		"@delightstack/utilities": "workspace:*",
 		"@delightstack/websocket": "workspace:*",
-		"@orama/orama": "^3.0.4",
-		"argon2-wasm-edge": "^1.0.23",
-		"stripe": "17.4.0-beta.2",
-		"zod": "^4.1.12"
+		"argon2-wasm-edge": "^1.0.23"
 	}
 }

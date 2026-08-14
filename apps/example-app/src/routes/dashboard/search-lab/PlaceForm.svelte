@@ -8,9 +8,8 @@
 		Toggle,
 		toast,
 	} from '@delightstack/components';
-	import type { DatabaseClient } from '@delightstack/database/client';
 	import { DelightError } from '@delightstack/utilities';
-	import type { tables } from '$lib/schema';
+	import type { AppDatabase } from '$lib/clients';
 	import { embed } from '$lib/search-lab/embedding';
 	import {
 		CITIES,
@@ -40,7 +39,7 @@
 	}
 
 	interface Props {
-		db: DatabaseClient<typeof tables>;
+		db: AppDatabase;
 		/** The place being edited, or `null` to create a new one. */
 		place_id: string | null;
 		organizations: { value: string; label: string }[];

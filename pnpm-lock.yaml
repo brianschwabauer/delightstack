@@ -219,18 +219,9 @@ importers:
       '@delightstack/websocket':
         specifier: workspace:*
         version: link:../../../packages/websocket
-      '@orama/orama':
-        specifier: ^3.0.4
-        version: 3.1.16
       argon2-wasm-edge:
         specifier: ^1.0.23
         version: 1.0.23
-      stripe:
-        specifier: 17.4.0-beta.2
-        version: 17.4.0-beta.2
-      zod:
-        specifier: ^4.1.12
-        version: 4.3.6
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20251120.0
@@ -321,9 +312,6 @@ importers:
 
   packages/auth:
     dependencies:
-      '@delightstack/database':
-        specifier: workspace:*
-        version: link:../database
       '@delightstack/utilities':
         specifier: workspace:*
         version: link:../utilities
@@ -709,6 +697,9 @@ importers:
 
   packages/websocket:
     dependencies:
+      '@delightstack/database':
+        specifier: workspace:*
+        version: link:../database
       '@delightstack/utilities':
         specifier: workspace:*
         version: link:../utilities
@@ -2161,10 +2152,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@orama/orama@3.1.16':
-    resolution: {integrity: sha512-scSmQBD8eANlMUOglxHrN1JdSW8tDghsPuS83otqealBiIeMukCQMOf/wc0JJjDXomqwNdEQFLXLGHrU6PGxuA==}
-    engines: {node: '>= 20.0.0'}
 
   '@oslojs/encoding@1.1.0':
     resolution: {integrity: sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ==}
@@ -4721,10 +4708,6 @@ packages:
   strip-literal@3.0.0:
     resolution: {integrity: sha512-TcccoMhJOM3OebGhSBEmp3UZ2SfDMZUEBdRA/9ynfLi8yYajyWX3JiXArcJt4Umh4vISpspkQIY8ZZoCqjbviA==}
 
-  stripe@17.4.0-beta.2:
-    resolution: {integrity: sha512-oylGCumPLwJK0tAM9hEJI1SgpoT7p0XA8oh6/IvFYChY9eW8K96cH0NazdRaXqVFz275om34mnE3lrlmbWYAgg==}
-    engines: {node: '>=12.*'}
-
   stripe@17.7.0:
     resolution: {integrity: sha512-aT2BU9KkizY9SATf14WhhYVv2uOapBWX0OFWF4xvcj1mPaNotlSc2CsxpS4DS46ZueSppmCF5BX1sNYBtwBvfw==}
     engines: {node: '>=12.*'}
@@ -6530,8 +6513,6 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
-
-  '@orama/orama@3.1.16': {}
 
   '@oslojs/encoding@1.1.0': {}
 
@@ -9920,11 +9901,6 @@ snapshots:
   strip-literal@3.0.0:
     dependencies:
       js-tokens: 9.0.1
-
-  stripe@17.4.0-beta.2:
-    dependencies:
-      '@types/node': 24.1.0
-      qs: 6.15.0
 
   stripe@17.7.0:
     dependencies:

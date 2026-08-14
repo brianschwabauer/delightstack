@@ -50,8 +50,7 @@ export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		// Use the same WS DO name that clients connect to (the org_id).
-		// ctx.id.name is available when the DO was created via idFromName().
-		const ws_name = (ctx.id as unknown as { name?: string }).name ?? ctx.id.toString();
+		const ws_name = DatabaseServer.instanceName(ctx);
 		const getWs = () => env.WS.get(env.WS.idFromName(ws_name));
 		super(tables, getWs, ctx, env);
 
@@ -64,7 +63,7 @@ export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
 		this.#ai = aiProcessing(this, {
 			ai: () => env.AI,
 			storage: ctx.storage,
-			ws: () => getWs() as unknown as WebsocketServer,
+			ws: () => getWs(),
 			fields: [{ entity_type: 'post', source_fields: ['title', 'content', 'tags'] }],
 		});
 	}
@@ -86,20 +85,9 @@ export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
 		return this.images.upload(blob, rest);
 	}
 
-	async alarm() {
-		// Isolate the two alarm handlers so a failure in one (e.g. a bad row)
-		// doesn't prevent the other from running on this tick.
-		try {
-			await this.images.processAlarm();
-		} catch (error) {
-			console.error('[OrgDatabaseServer] images.processAlarm threw:', error);
-		}
-		try {
-			await this.#ai.processAlarm();
-		} catch (error) {
-			console.error('[OrgDatabaseServer] ai.processAlarm threw:', error);
-		}
-	}
+	// No alarm() override needed: imageProcessing() and aiProcessing() register
+	// their handlers with the base class's alarm registry, which runs each one
+	// with per-handler error isolation.
 }
 
 /**
