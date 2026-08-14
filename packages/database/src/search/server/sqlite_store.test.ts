@@ -471,7 +471,28 @@ describe('state and tombstones', () => {
 			config_version: 1,
 			first_updated_at: 1000,
 			last_updated_at: 5000,
+			doc_count: 0,
 		});
+	});
+
+	it('maintains doc_count across index, re-index, remove and clear', () => {
+		const { store } = newStore();
+		store.indexDocument(CONFIG, 'a', DOC_A);
+		store.indexDocument(CONFIG, 'b', DOC_B);
+		expect(store.getState('article')?.doc_count).toBe(2);
+
+		// A re-index is not a new document.
+		store.indexDocument(CONFIG, 'a', { ...DOC_A, title: 'renamed' }, DOC_A);
+		expect(store.getState('article')?.doc_count).toBe(2);
+
+		expect(store.removeDocument(CONFIG, 'a', 1)).toBe(true);
+		expect(store.getState('article')?.doc_count).toBe(1);
+		// Removing a missing document changes nothing.
+		expect(store.removeDocument(CONFIG, 'missing', 2)).toBe(false);
+		expect(store.getState('article')?.doc_count).toBe(1);
+
+		store.clearEntityType('article');
+		expect(store.getState('article')?.doc_count).toBe(0);
 	});
 
 	it('writes a tombstone on delete and clears it on re-index', () => {

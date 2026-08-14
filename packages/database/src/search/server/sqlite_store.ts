@@ -142,6 +142,14 @@ export interface SearchStateRow {
 	config_version: number;
 	first_updated_at: number;
 	last_updated_at: number;
+	/**
+	 * The number of indexed documents (= entity table rows for a
+	 * search-indexed type). Maintained on every index/remove/clear so readers
+	 * (the sync ceiling) never pay a COUNT(*) — Cloudflare bills DO SQLite by
+	 * rows scanned, and a count over the big tables this serves is exactly the
+	 * cost it exists to avoid.
+	 */
+	doc_count: number;
 }
 
 /**
@@ -230,6 +238,7 @@ CREATE TABLE IF NOT EXISTS search_state (
 	config_version   INTEGER NOT NULL,
 	first_updated_at INTEGER NOT NULL,
 	last_updated_at  INTEGER NOT NULL,
+	doc_count        INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (entity_type)
 ) WITHOUT ROWID;
 `;
@@ -404,6 +413,20 @@ export class SqliteSearchStore {
 		this.sql.exec(SEARCH_TABLE_DDL);
 	}
 
+	/**
+	 * `doc_count ± delta` for one entity type, creating the state row if the
+	 * write beat `ensureState` to it. A fresh row's window bounds are 0 —
+	 * "no change recorded yet" — and `allocateTimestamp` fills them in.
+	 */
+	#bumpDocCount(entity_type: string, delta: number): void {
+		this.sql.exec(
+			`INSERT INTO search_state (entity_type, config_version, first_updated_at, last_updated_at, doc_count) VALUES (?, 1, 0, 0, MAX(0, ?)) ON CONFLICT (entity_type) DO UPDATE SET doc_count = MAX(0, doc_count + ?);`,
+			entity_type,
+			delta,
+			delta,
+		);
+	}
+
 	/** Drop the in-memory dictionary cache (used by tests and repair paths). */
 	clearDictionaryCache(): void {
 		this.#dictionaries.clear();
@@ -508,6 +531,9 @@ export class SqliteSearchStore {
 		this.#applyFieldStatDiff(entity_type, old_lengths, next.lengths);
 		this.#writeDocLengths(entity_type, doc_id, next.lengths);
 		this.#writeVectors(entity_type, doc_id, config.vector_fields, next.vectors);
+		// `stored_lengths` doubles as the existence check: absent means this is a
+		// brand-new document, not a re-index.
+		if (!stored_lengths) this.#bumpDocCount(entity_type, 1);
 		this.sql.exec(
 			`DELETE FROM search_tombstones WHERE entity_type = ? AND doc_id = ?;`,
 			entity_type,
@@ -542,6 +568,7 @@ export class SqliteSearchStore {
 				entity_type,
 				doc_id,
 			);
+			this.#bumpDocCount(entity_type, -1);
 		}
 		this.sql.exec(
 			`DELETE FROM search_vectors INDEXED BY search_vectors_by_doc WHERE entity_type = ? AND doc_id = ?;`,
@@ -563,6 +590,10 @@ export class SqliteSearchStore {
 		]) {
 			this.sql.exec(`DELETE FROM ${table} WHERE entity_type = ?;`, entity_type);
 		}
+		this.sql.exec(
+			`UPDATE search_state SET doc_count = 0 WHERE entity_type = ?;`,
+			entity_type,
+		);
 		for (const key of this.#dictionaries.keys()) {
 			if (key.startsWith(`${entity_type}\u0000`)) this.#dictionaries.delete(key);
 		}
@@ -1274,7 +1305,7 @@ export class SqliteSearchStore {
 	getState(entity_type: string): SearchStateRow | undefined {
 		const rows = this.sql
 			.exec(
-				`SELECT config_version, first_updated_at, last_updated_at FROM search_state WHERE entity_type = ? LIMIT 1;`,
+				`SELECT config_version, first_updated_at, last_updated_at, doc_count FROM search_state WHERE entity_type = ? LIMIT 1;`,
 				entity_type,
 			)
 			.toArray();
@@ -1283,6 +1314,7 @@ export class SqliteSearchStore {
 			config_version: readNumber(rows[0].config_version),
 			first_updated_at: readNumber(rows[0].first_updated_at),
 			last_updated_at: readNumber(rows[0].last_updated_at),
+			doc_count: readNumber(rows[0].doc_count),
 		};
 	}
 
@@ -1294,9 +1326,10 @@ export class SqliteSearchStore {
 			config_version: 1,
 			first_updated_at: now,
 			last_updated_at: now,
+			doc_count: 0,
 		};
 		this.sql.exec(
-			`INSERT INTO search_state (entity_type, config_version, first_updated_at, last_updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (entity_type) DO NOTHING;`,
+			`INSERT INTO search_state (entity_type, config_version, first_updated_at, last_updated_at, doc_count) VALUES (?, ?, ?, ?, 0) ON CONFLICT (entity_type) DO NOTHING;`,
 			entity_type,
 			state.config_version,
 			state.first_updated_at,

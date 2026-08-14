@@ -412,6 +412,8 @@ const changes = db.sync({
 
 A per-entity `defer_over` in the request sets a row-count ceiling: when the table's `total_count` exceeds it, the server withholds the page and answers count-only (`deferred: true`, no cursor advance). The client sends this automatically during backfill — see [`max_synced_docs`](#query-routing).
 
+`total_count` reads a counter maintained on `search_state` (bumped on every index/remove), never a `COUNT(*)` — Cloudflare bills Durable Object SQLite per row scanned, so counting a large table on every sync page would cost exactly what the ceiling exists to avoid.
+
 ### Metadata
 
 Attach arbitrary metadata to the Durable Object:

@@ -1676,6 +1676,7 @@ export class DatabaseServer<
 			config_version: 1,
 			first_updated_at: 0,
 			last_updated_at: 0,
+			doc_count: 0,
 		};
 		const entity_query = query?.entity?.[entity_type];
 		const requested_limit = entity_query?.limit || query?.limit || 0;
@@ -1684,13 +1685,10 @@ export class DatabaseServer<
 			entity_query?.config_version !== undefined &&
 			entity_query.config_version !== state.config_version;
 
-		const total_count = Number(
-			this.ctx.storage.sql
-				.exec(
-					`SELECT COUNT(*) AS count FROM ${quoteIdentifier(search_table.table_name)};`,
-				)
-				.one().count,
-		);
+		// The maintained counter, NOT a COUNT(*): Cloudflare bills DO SQLite by
+		// rows scanned, so counting a 100k-row table would cost 100k billed
+		// reads per sync page — on exactly the tables the ceiling exists for.
+		const total_count = state.doc_count;
 
 		// The client's sync ceiling: a table larger than `defer_over` is not
 		// worth mirroring, so withhold the page and answer with the count only.
