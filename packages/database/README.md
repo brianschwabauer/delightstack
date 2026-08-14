@@ -82,7 +82,12 @@ username: schema.string().min(1).check((v) => (v.includes(' ') ? 'No spaces' : u
 - The sync endpoint is POST-only, and `DatabaseSyncRequest` drops the top-level `start_updated_at` / `end_updated_at` / `limit` — ranges and limits are **per-entity** in the `entity` map (one request still syncs any number of entity types; `config_version` is now optional).
 - The batch array overload of `DatabaseServer.get()` is removed — call `get()` per id.
 - The never-populated `event.user_id` fields on transaction operations are removed, as is `EntityChangedMessage.user_id` in `@delightstack/websocket` (`entityChanged` is now `(action, entity_type, id, data?, sparse?)`).
-- **`SqlServer` moved to `@delightstack/auth`** (it was auth-private in practice). `@delightstack/database` keeps `prepareSql` / `SqlTaggedTemplate`.
+- **`SqlServer` moved to `@delightstack/auth`** (it was auth-private in practice), and **`prepareSql` / `SqlTaggedTemplate` moved to `@delightstack/utilities`** (still re-exported from `@delightstack/database/server` for compatibility).
+- **The root entry is now schema + types only.** It no longer re-exports `/server`, so `createDatabaseHandle` (and `prepareSql`) must be imported from `@delightstack/database/server`. The unused `./schema` export is removed. This keeps a schema-only import from dragging the SvelteKit handler into worker/client bundles.
+- New: **`DatabaseStub<Config>`** — the typed async RPC projection of `DatabaseServer` for typing DO stubs (see [Typed stubs](#typed-stubs-databasestub)).
+- New: **alarm registry + `instanceName`** — `registerAlarm(name, fn)` and a base `alarm()` with per-handler error isolation (integrations self-register); `DatabaseServer.instanceName(ctx)` / `this.instance_name` recover the `idFromName()` key without the `ctx.id` cast.
+- New: **the database ↔ websocket contract is typed** — `DatabaseBroadcast` / `DatabaseClientHooks` / `DatabaseEntityChange` are exported from the root; `@delightstack/websocket` implements them, so drift between the packages is a compile error.
+- **`foreignKey` accepts the referenced table object** (`table: organizationTable`) in addition to its name string — a typo'd reference becomes a compile error.
 
 ### Search engine: Orama is gone (unreleased 1.x → 2.0 changesets)
 
@@ -403,12 +408,50 @@ Optional fields become `T | undefined | null`. Readonly fields get the `readonly
 class DatabaseServer<Config, Meta> extends DurableObject {
 	constructor(
 		config: Config, // Record of table definitions
-		ws: () => WebSocketDO | undefined, // Lazy WebSocket DO for broadcasting
+		ws: () => DatabaseBroadcast | undefined, // Lazy WebSocket DO for broadcasting
 		ctx: DurableObjectState, // Durable Object context
 		env: Env, // Environment bindings ({ DEV: boolean })
 	);
 }
 ```
+
+The `ws` factory returns anything implementing the `DatabaseBroadcast` contract (`WebsocketServer` from `@delightstack/websocket` does), or `undefined` to skip broadcasting.
+
+### Instance name & alarms
+
+```typescript
+export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
+	constructor(ctx: DurableObjectState, env: Env) {
+		// The name this DO was created with via idFromName() (e.g. the org id).
+		// Static so it's usable before super(); also available as `this.instance_name`.
+		const room = DatabaseServer.instanceName(ctx);
+		super(tables, () => env.WS.get(env.WS.idFromName(room)), ctx, env);
+		// imageProcessing()/aiProcessing() call db.registerAlarm() themselves —
+		// the base alarm() runs every registered handler with per-handler
+		// error isolation, so no hand-written alarm() fan-out is needed.
+	}
+}
+```
+
+`registerAlarm(name, handler)` adds a named handler to the base `alarm()`. Only override `alarm()` when you need full control — the override then owns calling the registered handlers.
+
+### Typed stubs (`DatabaseStub`)
+
+Cloudflare types DO stubs opaquely, so cast **once** at the boundary with `DatabaseStub<typeof tables>` — the async RPC projection of `DatabaseServer` — and every later call is fully typed:
+
+```typescript
+// app.d.ts
+import type { DatabaseStub } from '@delightstack/database';
+interface Locals { db: DatabaseStub<typeof tables> | undefined }
+
+// hooks.server.ts
+event.locals.db = penv.DB.get(id) as unknown as DatabaseStub<typeof tables>;
+
+// anywhere on the server
+const post = await locals.db.get('post', post_id); // Database.Entity<typeof postTable>
+```
+
+Only RPC-serializable methods are projected — the tagged-template `exec` overload and `batch()` take function arguments that don't survive the RPC boundary.
 
 ### CRUD
 
@@ -1128,16 +1171,16 @@ Offset pagination degrades on large tables. The server hands out keyset cursors 
 
 ## Exports
 
-### `@delightstack/database` (main — schema, handler, search types)
+### `@delightstack/database` (main — schema + types only)
+
+The root entry never drags server code into a client or worker bundle: the SvelteKit handler lives in `/server`, the DO class value in `/worker`.
 
 | Export                                        | Description                                                                 |
 | --------------------------------------------- | --------------------------------------------------------------------------- |
 | `Database`                                    | Namespace: `table()`, `Entity<T>`, `SearchEntity<T>`, `SearchQuery<T>`, `Table`, … |
-| `createDatabaseHandle`                        | SvelteKit Handle factory for auto-generated CRUD + sync routes              |
-| `DatabaseHandleOptions`, `DatabaseRouteHooks` | Types for the handler config and per-entity hooks                           |
 | `DatabaseServer` *(type only)*                | The DO class **type** — the value must be imported from `/worker`           |
-| `prepareSql`                                  | Tagged template helper for safe SQL construction (used by `@delightstack/auth`) |
-| `SqlTaggedTemplate`, `SqlPreparedQuery`, `SqlQueryFn` | Types for the `exec()` tagged-template API                          |
+| `DatabaseStub` *(type)*                       | Typed async RPC projection of `DatabaseServer` — cast a DO stub to it once (see [Typed stubs](#typed-stubs-databasestub)) |
+| `DatabaseBroadcast`, `DatabaseClientHooks`, `DatabaseEntityChange` *(types)* | The database ↔ websocket contract — `@delightstack/websocket` implements these |
 | `encodeSearchQuery`, `decodeSearchQuery`      | Symmetric query ⇄ URLSearchParams codec                                     |
 | `normalizeWhere`                              | Normalizes where-clause shorthands into operator objects                    |
 | `SearchQueryInput`, `ValidSearchQuery`        | Loose (non-generic) query type + the vector/source compile-time guard       |
@@ -1146,7 +1189,12 @@ Offset pagination degrades on large tables. The server hands out keyset cursors 
 
 ### `@delightstack/database/server`
 
-The handler + SQL helper subset of the main entry (everything above except the schema namespace and search types). Safe to import from SvelteKit server code.
+| Export                                        | Description                                                                 |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
+| `createDatabaseHandle`                        | SvelteKit Handle factory for auto-generated CRUD + sync routes              |
+| `DatabaseHandleOptions`, `DatabaseRouteHooks` | Types for the handler config and per-entity hooks                           |
+| `prepareSql`, `SqlTaggedTemplate`, `SqlPreparedQuery`, `SqlQueryFn` | Safe SQL tagged-template API — canonical home is `@delightstack/utilities`; re-exported here for compatibility |
+| `DatabaseServer`, `DatabaseStub`, sync/transaction types *(types)* | Same type-only exports as the root entry             |
 
 ### `@delightstack/database/worker`
 

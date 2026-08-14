@@ -4,6 +4,7 @@ import { createSubscriber, SvelteMap } from 'svelte/reactivity';
 import { untrack } from 'svelte';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
+import type { DatabaseClientHooks } from '../contract';
 import type { DatabaseWorker, WorkerSearchResult } from './database.worker';
 import { encodeSearchQuery } from '../search-query';
 import type { SearchQueryInput, ValidSearchQuery } from '../search-query';
@@ -84,38 +85,12 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	 */
 	fetch?: typeof globalThis.fetch;
 
-	/** Hooks for external integration (e.g. websocket) */
-	hooks?: {
-		/** Called after any local CRUD operation */
-		onEntityChange?: (event: {
-			type: 'create' | 'update' | 'delete';
-			entity_type: string;
-			id: string | number;
-			data?: Record<string, unknown>;
-		}) => void;
-		/** Called to subscribe to external changes */
-		onSubscribe?: (
-			callback: (event: {
-				type: 'create' | 'update' | 'delete';
-				entity_type: string;
-				id: string | number;
-				data?: Record<string, unknown>;
-				/** The server's sparse search-index projection (preferred for indexing) */
-				sparse?: Record<string, unknown>;
-			}) => void,
-		) => (() => void) | void;
-		/**
-		 * Optional predicate that answers "is there a reliable live change
-		 * feed right now?" — typically wired to a websocket's connection
-		 * state. When it returns `true`, `worker.get` skips its safety-net
-		 * stale-refresh because any recent server changes would already have
-		 * landed in IDB via `applyExternalChange`. When it returns `false`
-		 * (or when the hook is absent), the worker falls back to the
-		 * refresh-if-stale behavior so apps without a push channel still
-		 * stay in sync.
-		 */
-		isLive?: () => boolean;
-	};
+	/**
+	 * Hooks for external integration — the client half of the
+	 * database ↔ websocket contract (see `DatabaseClientHooks`).
+	 * `@delightstack/websocket` supplies all three via `ws.databaseHooks()`.
+	 */
+	hooks?: DatabaseClientHooks;
 }
 
 type EntityInput<T extends Database.Table> = Omit<

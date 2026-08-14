@@ -710,6 +710,11 @@ type _FieldGenerator =
 
 export type FieldGenerator = Partial<_FieldGenerator> & { readonly _: any };
 
+/** Resolves a foreignKey `table` option (table object or name string) to the table's name */
+type ForeignKeyTableName<TableRef> = TableRef extends { name: infer Name extends string }
+	? Name
+	: TableRef & string;
+
 /** Helper functions for defining database fields and their attributes/constraints */
 export class DatabaseGenerator {
 	/**
@@ -723,18 +728,24 @@ export class DatabaseGenerator {
 		return new PrimaryKeyGenerator<Type>(options) as ReadOnly<PrimaryKeyGenerator<Type>>;
 	}
 
-	/** Returns a foreign key definition for a database table */
+	/**
+	 * Returns a foreign key definition for a database table.
+	 *
+	 * Prefer passing the referenced table object itself — a typo is then a
+	 * compile error instead of a runtime failure. The table's name string is
+	 * still accepted (e.g. for self-references or tables defined later).
+	 */
 	foreignKey<
 		ForeignKeyType extends 'string' | 'number',
-		TableName extends string,
+		TableRef extends string | { name: string },
 		ColumnName extends string,
 		OnUpdate extends SqliteForeignKeyAction | undefined = undefined,
 		OnDelete extends SqliteForeignKeyAction | undefined = undefined,
 	>(options: {
 		/** The type of the field that this foreign key references */
 		type: ForeignKeyType;
-		/** The name of the table this field references */
-		table: TableName;
+		/** The table this field references — the table object (typo-safe) or its name */
+		table: TableRef;
 		/** The name of the column in the referenced table @example 'id' */
 		column: ColumnName;
 		/** The action to take when the referenced row is updated */
@@ -744,15 +755,16 @@ export class DatabaseGenerator {
 	}): ForeignKey<
 		ForeignKeyFieldGenerator,
 		ForeignKeyType,
-		TableName,
+		ForeignKeyTableName<TableRef>,
 		ColumnName,
 		OnUpdate,
 		OnDelete
 	> {
-		return new ForeignKeyFieldGenerator(options) as ForeignKey<
+		const table = typeof options.table === 'string' ? options.table : options.table.name;
+		return new ForeignKeyFieldGenerator({ ...options, table }) as ForeignKey<
 			ForeignKeyFieldGenerator,
 			ForeignKeyType,
-			TableName,
+			ForeignKeyTableName<TableRef>,
 			ColumnName,
 			OnUpdate,
 			OnDelete

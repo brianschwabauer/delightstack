@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { prepareSql, SqlQueryFn } from './sql.helper';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
+import type { DatabaseBroadcast } from '../contract';
 import { normalizeWhere } from '../search-query';
 import type { SearchQuery, SearchQueryResults } from '../search/core/types';
 import {
@@ -293,6 +294,90 @@ type DeepPartial<T> = {
 	[P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
 
+/**
+ * The async RPC projection of {@link DatabaseServer} — what a Durable Object
+ * stub for a DatabaseServer subclass actually looks like from the caller's
+ * side: the same methods and inference as the class, but every return value
+ * wrapped in a Promise. Cloudflare types DO stubs opaquely, so cast once at
+ * the boundary and keep full entity/query inference everywhere else:
+ *
+ * @example
+ * // app.d.ts
+ * interface Locals { db: DatabaseStub<typeof tables> }
+ * // hooks.server.ts
+ * event.locals.db = env.DB.get(id) as unknown as DatabaseStub<typeof tables>;
+ *
+ * Only RPC-serializable methods are included: the tagged-template `exec`
+ * overload and `batch()` take function arguments that don't survive the RPC
+ * boundary, and property getters aren't projected.
+ */
+export type DatabaseStub<
+	DatabaseConfig extends Record<string, Database.Table>,
+	Meta = Record<string, any>,
+> = {
+	get<
+		Type extends keyof DatabaseConfig & string,
+		Table extends DatabaseConfig[Type],
+		Entity extends Database.Entity<DatabaseConfig[Type]>,
+		ExpandedFields extends
+			| Array<keyof Table['config']['foreign_keys'] & string>
+			| undefined,
+		Output extends ExpandedFields extends Array<any>
+			? Entity & { expanded: { [K in ExpandedFields[number]]: any } }
+			: Entity,
+	>(
+		entity_type: Type,
+		id: string | number,
+		expand?: ExpandedFields,
+	): Promise<Output>;
+	create<
+		Type extends keyof DatabaseConfig & string,
+		Table extends DatabaseConfig[Type],
+		OutputData extends Database.Entity<Table>,
+		InputData extends Omit<OutputData, 'id' | 'created_at' | 'updated_at'>,
+	>(
+		entity_type: Type,
+		unsafe_data: InputData,
+	): Promise<OutputData>;
+	update<
+		Type extends keyof DatabaseConfig & string,
+		Table extends DatabaseConfig[Type],
+		OutputData extends Database.Entity<Table>,
+		InputData extends DeepPartial<OutputData>,
+	>(
+		entity_type: Type,
+		id: string | number,
+		unsafe_data: InputData,
+	): Promise<OutputData>;
+	delete<Type extends keyof DatabaseConfig & string>(
+		entity_type: Type,
+		id: string | number,
+	): Promise<void>;
+	list<
+		Type extends keyof DatabaseConfig & string,
+		Table extends DatabaseConfig[Type],
+		Query extends Database.SearchQuery<Table>,
+		Output extends Database.SearchQueryResults<Table, Query>,
+	>(
+		entity_type: Type,
+		raw_query: Query,
+	): Promise<Output>;
+	sync(
+		query?: DatabaseSyncRequest<DatabaseConfig>,
+	): Promise<DatabaseSyncResponse<DatabaseConfig>>;
+	transaction(
+		operations: DatabaseServerTransaction<DatabaseConfig>[],
+	): Promise<DatabaseServerTransactionResult<DatabaseConfig>[]>;
+	exec(
+		sql_statement: string,
+		...bindings: any[]
+	): Promise<Record<string, SqlStorageValue>[]>;
+	getMeta(): Promise<Meta>;
+	setMeta(data: Meta): Promise<void>;
+	destroy(): Promise<void>;
+	restore(timestampOrBookmark: number | string): Promise<string>;
+};
+
 /** A Durable Object for handling database requests */
 export class DatabaseServer<
 	DatabaseConfig extends Record<string, Database.Table>,
@@ -324,19 +409,63 @@ export class DatabaseServer<
 		return this.ctx.id.toString();
 	}
 
+	/**
+	 * The name this instance was created with via `idFromName()`, falling back
+	 * to the hex id string. Cloudflare exposes `.name` on `DurableObjectId` at
+	 * runtime but not in the published types, so the cast lives here instead of
+	 * in every subclass. Use it to address sibling Durable Objects that share
+	 * the same key (e.g. the WebSocket room for the same org).
+	 */
+	public get instance_name(): string {
+		return DatabaseServer.instanceName(this.ctx);
+	}
+
+	/**
+	 * Static form of {@link instance_name} for use before `super()` — e.g. to
+	 * build the WebSocket factory passed to the constructor:
+	 *
+	 * @example
+	 * constructor(ctx: DurableObjectState, env: Env) {
+	 * 	const room = DatabaseServer.instanceName(ctx);
+	 * 	super(tables, () => env.WS.get(env.WS.idFromName(room)), ctx, env);
+	 * }
+	 */
+	static instanceName(ctx: DurableObjectState): string {
+		return (ctx.id as unknown as { name?: string }).name ?? ctx.id.toString();
+	}
+
+	/** Named alarm handlers run (isolated) by the base `alarm()` on every tick */
+	#alarm_handlers = new Map<string, () => void | Promise<void>>();
+
+	/**
+	 * Registers a named alarm handler. The base {@link alarm} runs every
+	 * registered handler on each tick with per-handler error isolation, so one
+	 * integration's failure can't starve another's queue. Integrations like
+	 * `imageProcessing()` and `aiProcessing()` register themselves — a subclass
+	 * only overrides `alarm()` when it needs full control (and then owns
+	 * calling the registered handlers itself).
+	 */
+	registerAlarm(name: string, handler: () => void | Promise<void>): void {
+		this.#alarm_handlers.set(name, handler);
+	}
+
+	/** Runs every registered alarm handler, isolating failures per handler */
+	async alarm(): Promise<void> {
+		for (const [name, handler] of this.#alarm_handlers) {
+			try {
+				await handler();
+			} catch (error) {
+				console.error(`[DatabaseServer] alarm handler "${name}" threw:`, error);
+			}
+		}
+	}
+
 	constructor(
 		private config: DatabaseConfig,
-		private ws: () =>
-			| {
-					entityChanged(
-						action: 'created' | 'updated' | 'deleted',
-						entity_type: string,
-						id: string | number,
-						data?: unknown,
-						sparse?: unknown,
-					): void;
-			  }
-			| undefined, // lazily returns the WebSocket Durable Object that is used for broadcasting events
+		// lazily returns the WebSocket Durable Object used for broadcasting
+		// events — any object implementing the DatabaseBroadcast contract
+		// (WebsocketServer in @delightstack/websocket does)
+		private ws: () => DatabaseBroadcast | undefined,
 		ctx: DurableObjectState,
 		protected env: Env,
 	) {

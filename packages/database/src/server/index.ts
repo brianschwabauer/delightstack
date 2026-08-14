@@ -1,4 +1,5 @@
 export * from './database.handler';
+export type * from '../contract';
 export * from './sql.helper';
 
 // Note: DatabaseServer is intentionally NOT re-exported from this barrel.
@@ -6,6 +7,7 @@ export * from './sql.helper';
 // Import it from '@delightstack/database/worker' in your Worker entry point.
 export type {
 	DatabaseServer,
+	DatabaseStub,
 	DatabaseSyncRequest,
 	DatabaseSyncResponse,
 	DatabaseServerTransaction,

@@ -13,6 +13,8 @@ export {
 
 export { type WorkerSearchResult } from './database.worker';
 
+export type { DatabaseClientHooks, DatabaseEntityChange } from '../contract';
+
 export {
 	type SearchQueryInput,
 	type ValidSearchQuery,
