@@ -161,37 +161,7 @@ describe('write path — diffing', () => {
 		expect(sql.exec('SELECT * FROM search_postings;').toArray()).toEqual([]);
 	});
 
-	it('exposes per-document lengths both whole and per field', () => {
-		const { store } = newStore();
-		store.indexDocument(CONFIG, 'a', DOC_A);
-		store.indexDocument(CONFIG, 'b', DOC_B);
-		expect(store.getDocLengths('article', ['a', 'b']).get('a')?.get('body')).toBe(3);
-		// The field-scoped read extracts in SQL — presence means the doc is indexed.
-		const lengths = store.getFieldLengths('article', 'body');
-		expect([...lengths.entries()].sort()).toEqual([
-			['a', 3],
-			['b', 2],
-		]);
-		expect(store.getFieldLengths('article', 'body', ['a'])).toEqual(new Map([['a', 3]]));
-		// A document with no content for the field is still present, at zero.
-		store.indexDocument(CONFIG, 'z', { id: 'z', title: 'only a title' });
-		expect(store.getFieldLengths('article', 'body').get('z')).toBe(0);
-	});
-
-	it('rejects a hostile field name before it can reach the SQL text', () => {
-		const { store } = newStore();
-		store.indexDocument(CONFIG, 'a', DOC_A);
-		for (const hostile of ["a'b", 'a"b', "body') --", 'body;DROP TABLE search_docs']) {
-			expect(() => store.getFieldLengths('article', hostile)).toThrowError(
-				expect.objectContaining({ status: 400 }),
-			);
-		}
-		// Dotted identifier paths (legal schema paths) still pass.
-		expect(store.getFieldLengths('article', 'body').size).toBe(1);
-		expect(() => store.getFieldLengths('article', 'address.city')).not.toThrow();
-	});
-
-	it('reads df and postings identically through the batched token reads', () => {
+	it('reads df and postings through the batched token reads', () => {
 		const { store } = newStore();
 		store.indexDocument(CONFIG, 'a', DOC_A);
 		store.indexDocument(CONFIG, 'b', DOC_B);
@@ -199,16 +169,17 @@ describe('write path — diffing', () => {
 		const tokens = ['data', 'database', 'beta', 'nope', 'token'];
 		const frequencies = store.getDocFrequencies('article', 'title', tokens);
 		const postings = store.getPostingsForTokens('article', 'title', tokens);
-		for (const token of tokens) {
-			expect(frequencies.get(token) ?? 0).toBe(
-				store.getDocFrequency('article', 'title', token),
-			);
-			expect(postings.get(token) ?? []).toEqual(
-				store.getPostings('article', 'title', token),
-			);
-		}
+		expect(frequencies.get('data')).toBe(1);
+		expect(frequencies.get('database')).toBe(1);
+		expect(frequencies.get('token')).toBe(1);
+		// Each posting carries `[doc_id, tf, len]` — `len` is the field's token count.
+		expect(postings.get('data')).toEqual([['a', 1, 2]]);
+		expect(postings.get('database')).toEqual([['a', 1, 2]]);
+		expect(postings.get('token')).toEqual([['b', 1, 2]]);
 		// Absent tokens are absent, not empty entries.
+		expect(frequencies.has('beta')).toBe(false);
 		expect(frequencies.has('nope')).toBe(false);
+		expect(postings.has('beta')).toBe(false);
 		expect(postings.has('nope')).toBe(false);
 	});
 

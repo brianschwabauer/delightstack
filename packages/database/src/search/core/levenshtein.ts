@@ -195,10 +195,6 @@ export class ToleranceMatcher {
 	readonly query_signature: number;
 	/** The query's code points. */
 	readonly #query_points: Int32Array<ArrayBuffer>;
-	/** Code-point count of the query. */
-	readonly #query_length: number;
-	/** Character-set signature of the query. */
-	readonly #query_signature: number;
 	/** Decoded candidate code points. */
 	#candidate_points: Int32Array<ArrayBuffer> = new Int32Array(64);
 	#previous_row: Int32Array<ArrayBuffer>;
@@ -209,11 +205,9 @@ export class ToleranceMatcher {
 		this.tolerance = tolerance;
 		const points = Array.from(query, (character) => character.codePointAt(0) as number);
 		this.#query_points = Int32Array.from(points);
-		this.#query_length = points.length;
 		this.query_length = points.length;
 		let signature = 0;
 		for (const point of points) signature |= 1 << signatureBit(point);
-		this.#query_signature = signature;
 		this.query_signature = signature;
 		this.#previous_row = new Int32Array(64);
 		this.#current_row = new Int32Array(64);
@@ -227,8 +221,8 @@ export class ToleranceMatcher {
 	signatureAccepts(signature: number): boolean {
 		const tolerance = this.tolerance;
 		return (
-			popcount(this.#query_signature & ~signature) <= tolerance &&
-			popcount(signature & ~this.#query_signature) <= tolerance
+			popcount(this.query_signature & ~signature) <= tolerance &&
+			popcount(signature & ~this.query_signature) <= tolerance
 		);
 	}
 
@@ -243,7 +237,7 @@ export class ToleranceMatcher {
 		// Comparing against `units` itself would be WRONG — an astral character is
 		// two units but one edit.
 		const units = candidate.length;
-		const query_length = this.#query_length;
+		const query_length = this.query_length;
 		if (((units + 1) >> 1) - query_length > tolerance) return false;
 		if (query_length - units > tolerance) return false;
 
@@ -280,8 +274,8 @@ export class ToleranceMatcher {
 		}
 
 		if (
-			popcount(this.#query_signature & ~signature) > tolerance ||
-			popcount(signature & ~this.#query_signature) > tolerance
+			popcount(this.query_signature & ~signature) > tolerance ||
+			popcount(signature & ~this.query_signature) > tolerance
 		) {
 			return false;
 		}

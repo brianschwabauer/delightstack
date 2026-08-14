@@ -25,8 +25,19 @@
 
 import { DelightError } from '@delightstack/utilities';
 import { bm25Score } from '../core/bm25';
-import { compareForOrder, comparePrimaryKeys, compareStrings } from '../core/compare';
+import { comparePrimaryKeys, compareStrings } from '../core/compare';
 import { computeFacets } from '../core/facets';
+import {
+	applyDistinct,
+	applyOrder,
+	applyThreshold,
+	elapsedSince,
+	resolveSearchFields,
+	validateDistinctOn,
+	validateOrder,
+	type ScoredDocument,
+} from '../core/pipeline';
+import { isVectorFieldType } from '../core/schema_fields';
 import { TokenHits } from '../core/token_hits';
 import { tokenize } from '../core/tokenizer';
 import type {
@@ -35,12 +46,7 @@ import type {
 	SearchQueryResults,
 	SearchableType,
 } from '../core/types';
-import {
-	evaluateWhere,
-	getFieldValue,
-	normalizeWhere,
-	type NormalizedWhere,
-} from '../core/where';
+import { evaluateWhere, normalizeWhere, type NormalizedWhere } from '../core/where';
 import { fuseScores } from './fusion';
 import {
 	compileOrder,
@@ -52,8 +58,6 @@ import {
 import {
 	chunk,
 	defineSearchType,
-	isTextFieldType,
-	isVectorFieldType,
 	MAX_IN_VALUES,
 	SqliteSearchStore,
 	type SearchSqlStorage,
@@ -109,14 +113,6 @@ export function defineServerTable(input: ServerSearchTableInput): ServerSearchTa
 
 /** An indexed document as returned in hits. */
 export type ServerDocument = Record<string, unknown>;
-
-/** A document plus the score it earned. */
-interface ScoredDocument {
-	doc_id: string;
-	primary_key: string | number;
-	document: ServerDocument;
-	score: number;
-}
 
 /** The scored matched set, before any document is read back. */
 interface ScoredIds {
@@ -544,17 +540,10 @@ export class SqliteSearchEngine {
 	 * and `count` are the fully-hydrated path's, with the reads it does not need
 	 * removed.
 	 *
-	 * **The one condition.** `#materialize` drops a matched id whose entity row
-	 * cannot be read back, which also removes it from `count`; this path can only
-	 * see that for ids it actually reads, so the two agree exactly when the
-	 * search index and the entity table agree. That is a write-path invariant,
-	 * not a hope: `indexDocument` and `removeDocument` run in the *same* SQLite
-	 * transaction as the entity row (§7.2), so postings for a row that does not
-	 * exist are not a reachable state — and the memory reference engine, which is
-	 * the specification, has no notion of the two disagreeing at all. When one
-	 * does show up anyway, this path drops it from the page and from `count` (by
-	 * pulling the next entry forward) instead of silently returning a hit with no
-	 * document.
+	 * Index/table divergence is not a reachable state (`indexDocument` and
+	 * `removeDocument` run in the *same* SQLite transaction as the entity row,
+	 * §7.2), but should an id fail to read back anyway it is skipped — dropped
+	 * from the page and from `count`, the same choice `#materialize` makes.
 	 */
 	#pageByScore(
 		table: ServerSearchTable,
@@ -576,16 +565,12 @@ export class SqliteSearchEngine {
 		const hits: SearchQueryResults<ServerDocument>['hits'] = [];
 		let cursor = 0;
 		let missing = 0;
-		// Widen the window only when a document really is unreadable, so the
-		// invariant's cost is one hydration of exactly the page. The loop runs
-		// until the page is full (`hits.length < wanted`) or the matched set is
-		// exhausted — `missing` widens each slice so a recovery pass reads exactly
-		// the entries pulled forward. Note `count` only subtracts misses inside
-		// the scanned windows: entries past the page are never hydrated, so a
-		// divergence out there is not observable (nor subtracted) — acceptable,
-		// since index/table divergence is not a reachable state on the write path.
+		// Each pass hydrates exactly the entries still needed; a missing document
+		// is skipped and the next entry fills its place on a later pass. `count`
+		// only subtracts misses actually observed — entries past the page are
+		// never hydrated.
 		while (cursor < entries.length && hits.length < wanted) {
-			const window = entries.slice(cursor, wanted + missing);
+			const window = entries.slice(cursor, cursor + (wanted - hits.length));
 			cursor += window.length;
 			const hydrated =
 				scored.documents ??
@@ -832,154 +817,4 @@ function coerceColumnValue(type: SearchableType | undefined, value: unknown): un
 	if (type === 'boolean') return value !== 0 && value !== '0' && value !== false;
 	if (type === 'number' && typeof value !== 'number') return Number(value);
 	return value;
-}
-
-/** `elapsed`, from a caller-supplied clock only (§3 determinism rules). */
-function elapsedSince(
-	started: number,
-	now: (() => number) | undefined,
-): { raw: number; formatted: string } {
-	const raw = now ? now() - started : 0;
-	return { raw, formatted: `${raw}ms` };
-}
-
-/** Resolve and validate `fields` into the searched text fields, ascending. */
-function resolveSearchFields(table: ServerSearchTable, query: SearchQuery): string[] {
-	const fields = query.fields;
-	if (!fields || fields === '*') return table.text_fields;
-	if (!Array.isArray(fields)) {
-		throw DelightError.badRequest('`fields` must be `"*"` or an array of field names.', {
-			code: 'invalid_search_field',
-		});
-	}
-	const resolved: string[] = [];
-	for (const field of fields) {
-		const type = table.schema[field];
-		if (type === undefined) {
-			throw DelightError.badRequest(`Unknown search field "${field}".`, {
-				code: 'unknown_search_field',
-			});
-		}
-		if (!isTextFieldType(type)) {
-			throw DelightError.badRequest(
-				`Field "${field}" is a ${type} — only string fields can be searched.`,
-				{ code: 'invalid_search_field' },
-			);
-		}
-		resolved.push(field);
-	}
-	return [...new Set(resolved)].sort(compareStrings);
-}
-
-/** Every `order[].field` must be a declared field or the primary key. */
-function validateOrder(table: ServerSearchTable, query: SearchQuery): void {
-	for (const instruction of query.order ?? []) {
-		const field = instruction.field;
-		if (field !== table.primary_key && table.schema[field] === undefined) {
-			throw DelightError.badRequest(`Unknown order field "${field}".`, {
-				code: 'unknown_order_field',
-			});
-		}
-	}
-}
-
-/** `distinct_on` must name a declared field or the primary key. */
-function validateDistinctOn(table: ServerSearchTable, query: SearchQuery): void {
-	const field = query.distinct_on;
-	if (field === undefined) return;
-	if (field !== table.primary_key && table.schema[field] === undefined) {
-		throw DelightError.badRequest(`Unknown distinct_on field "${field}".`, {
-			code: 'unknown_distinct_field',
-		});
-	}
-}
-
-/**
- * Apply `threshold` (§4.5) with per-DOCUMENT "all tokens" semantics.
- *
- * `U` = documents matching at least one query token; `A ⊆ U` = documents
- * matching every distinct query token anywhere in the searched fields.
- * `0` → `A`; `1` (the default) → `U`; `0 < t < 1` → `A` plus the top
- * `ceil(|U \ A| * t)` of the remainder by score.
- */
-function applyThreshold(
-	table: ServerSearchTable,
-	text_scores: ReadonlyMap<string, number>,
-	token_hits: TokenHits,
-	token_count: number,
-	threshold: number | undefined,
-): Set<string> {
-	// NOT sorted: every branch below turns `union` into a `Set` or re-sorts it
-	// with a *total* comparator (score, then primary key), so the walk order is
-	// unobservable — and sorting tens of thousands of matched ids to then throw
-	// the order away was pure cost. The caller sorts the ids it keeps.
-	const union = token_hits.ids();
-	const all_match = new Set(union.filter((id) => token_hits.size(id) >= token_count));
-	const value = threshold ?? 1;
-	if (value >= 1) return new Set(union);
-	if (value <= 0) return all_match;
-	const remainder = union.filter((id) => !all_match.has(id));
-	remainder.sort((a, b) => {
-		const score_a = text_scores.get(a) ?? 0;
-		const score_b = text_scores.get(b) ?? 0;
-		if (score_a !== score_b) return score_a > score_b ? -1 : 1;
-		return comparePrimaryKeys(a, b, table.primary_key_type);
-	});
-	const keep = Math.ceil(remainder.length * value);
-	const result = new Set(all_match);
-	for (const id of remainder.slice(0, keep)) result.add(id);
-	return result;
-}
-
-/**
- * Order results: by `order[]` when given, else by score descending when the
- * query scored anything, else by primary key ascending. Every path ends with a
- * primary-key ascending tie-break.
- */
-function applyOrder(
-	table: ServerSearchTable,
-	results: ScoredDocument[],
-	query: SearchQuery,
-	is_scored: boolean,
-): void {
-	const order = query.order ?? [];
-	results.sort((a, b) => {
-		for (const instruction of order) {
-			const comparison = compareForOrder(
-				getFieldValue(a.document, instruction.field),
-				getFieldValue(b.document, instruction.field),
-				instruction.direction ?? 'ASC',
-			);
-			if (comparison !== 0) return comparison;
-		}
-		if (order.length === 0 && is_scored && a.score !== b.score) {
-			return a.score > b.score ? -1 : 1;
-		}
-		return comparePrimaryKeys(a.primary_key, b.primary_key, table.primary_key_type);
-	});
-}
-
-/**
- * Keep the first result per distinct value of `distinct_on`, after ordering.
- *
- * Missing/null values form a single group like any other value, so at most one
- * document lacking the field survives.
- */
-function applyDistinct(
-	results: ScoredDocument[],
-	field: string | undefined,
-): ScoredDocument[] {
-	if (!field) return results;
-	const seen = new Set<string>();
-	const kept: ScoredDocument[] = [];
-	for (const entry of results) {
-		const value = getFieldValue(entry.document, field);
-		// Type-prefixed so `1` and `'1'` never collapse into one group.
-		const key =
-			value === null || value === undefined ? 'null' : `${typeof value}:${String(value)}`;
-		if (seen.has(key)) continue;
-		seen.add(key);
-		kept.push(entry);
-	}
-	return kept;
 }

@@ -11,8 +11,8 @@
 
 import { DelightError } from '@delightstack/utilities';
 import { compareStrings, type PrimaryKeyType } from '../core/compare';
+import { resolveTextFields, resolveVectorFields } from '../core/schema_fields';
 import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer';
-import type { SearchableType } from '../core/types';
 import { getFieldValue, type WhereSchema } from '../core/where';
 import { normalizeVector } from '../server/vector';
 
@@ -48,16 +48,6 @@ export interface FieldStats {
 	total_len: number;
 }
 
-/** Whether a declared type participates in full-text term matching. */
-export function isTextFieldType(type: SearchableType): boolean {
-	return type === 'string' || type === 'string[]';
-}
-
-/** Whether a declared type is a vector field. */
-export function isVectorFieldType(type: SearchableType): boolean {
-	return typeof type === 'string' && type.startsWith('vector[');
-}
-
 /** The in-memory reference index. */
 export class MemorySearchStore {
 	readonly schema: WhereSchema;
@@ -77,12 +67,8 @@ export class MemorySearchStore {
 		this.schema = config.schema;
 		this.primary_key = config.primary_key ?? 'id';
 		this.primary_key_type = config.primary_key_type ?? 'string';
-		this.text_fields = Object.keys(config.schema)
-			.filter((field) => isTextFieldType(config.schema[field]))
-			.sort(compareStrings);
-		this.vector_fields = Object.keys(config.schema)
-			.filter((field) => isVectorFieldType(config.schema[field]))
-			.sort(compareStrings);
+		this.text_fields = resolveTextFields(config.schema);
+		this.vector_fields = resolveVectorFields(config.schema);
 	}
 
 	/** Number of indexed documents. */

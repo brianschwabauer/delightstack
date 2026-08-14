@@ -25,12 +25,16 @@
 import { DelightError } from '@delightstack/utilities';
 import { compareStrings, type PrimaryKeyType } from '../core/compare';
 import {
-	characterSignature,
-	codePointLength,
-	ToleranceMatcher,
-} from '../core/levenshtein';
+	buildCachedDictionary,
+	expandCachedDictionary,
+	sameLengths,
+	sortedInsert,
+	sortedRemove,
+	type CachedDictionary,
+} from '../core/dictionary';
+import { ToleranceMatcher } from '../core/levenshtein';
+import { resolveTextFields, resolveVectorFields } from '../core/schema_fields';
 import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer';
-import type { SearchableType } from '../core/types';
 import { getFieldValue, type WhereSchema } from '../core/where';
 import { normalizeVector } from './vector';
 
@@ -98,30 +102,15 @@ export interface SearchTypeConfig {
 	vector_fields: string[];
 }
 
-/** Whether a declared type participates in full-text term matching. */
-export function isTextFieldType(type: SearchableType): boolean {
-	return type === 'string' || type === 'string[]';
-}
-
-/** Whether a declared type is a vector field. */
-export function isVectorFieldType(type: SearchableType): boolean {
-	return typeof type === 'string' && type.startsWith('vector[');
-}
-
 /** Resolve an entity type's field lists once, ascending. */
 export function defineSearchType(input: SearchTypeInput): SearchTypeConfig {
-	const fields = Object.keys(input.schema);
 	return {
 		entity_type: input.entity_type,
 		schema: input.schema,
 		primary_key: input.primary_key ?? 'id',
 		primary_key_type: input.primary_key_type ?? 'string',
-		text_fields: fields
-			.filter((f) => isTextFieldType(input.schema[f]))
-			.sort(compareStrings),
-		vector_fields: fields
-			.filter((f) => isVectorFieldType(input.schema[f]))
-			.sort(compareStrings),
+		text_fields: resolveTextFields(input.schema),
+		vector_fields: resolveVectorFields(input.schema),
 	};
 }
 
@@ -150,26 +139,6 @@ export interface SearchStateRow {
 	 * cost it exists to avoid.
 	 */
 	doc_count: number;
-}
-
-/**
- * One field's cached term dictionary.
- *
- * `lengths[i]` is `tokens[i]`'s **code-point** length, carried alongside so a
- * tolerance scan can reject a candidate on length without touching the string
- * at all. That prefilter is exact — an insert or delete moves the length by
- * exactly one, so `|len(a) - len(b)| > tolerance` cannot be within tolerance —
- * and it is what keeps a fuzzy query off the Levenshtein DP for the ~100% of a
- * high-cardinality dictionary (primary keys, slugs) that is nowhere near the
- * query token's length.
- */
-interface CachedDictionary {
-	/** Tokens, ascending by code point. */
-	tokens: string[];
-	/** Code-point length of the token at the same index. */
-	lengths: number[];
-	/** Character signature of the token at the same index. */
-	signatures: number[];
 }
 
 /** The tokenized projection of one document. */
@@ -278,19 +247,6 @@ function placeholderList(count: number): string {
 	return Array.from({ length: count }, () => '?').join(', ');
 }
 
-/** A field name must be a plain dot-separated identifier path (like `sql_where.ts`). */
-const SAFE_FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
-
-/** Reject a field name that could not have come from a declared schema. */
-function assertFieldNameIsSafe(field: string): void {
-	if (!SAFE_FIELD_NAME.test(field)) {
-		throw DelightError.badRequest(
-			`Field name "${field}" is not a valid identifier path.`,
-			{ code: 'invalid_search_field' },
-		);
-	}
-}
-
 /**
  * The exclusive upper bound of a prefix range, for the >200k-token SQL
  * fallback (§7.3).
@@ -320,37 +276,6 @@ export function prefixUpperBound(prefix: string): string | undefined {
 		return code_points.slice(0, -1).join('') + String.fromCodePoint(next);
 	}
 	return undefined;
-}
-
-/** Binary search for the first index whose token is `>= target`. */
-function lowerBound(tokens: readonly string[], target: string): number {
-	let low = 0;
-	let high = tokens.length;
-	while (low < high) {
-		const middle = (low + high) >>> 1;
-		if (compareStrings(tokens[middle], target) < 0) low = middle + 1;
-		else high = middle;
-	}
-	return low;
-}
-
-/** Insert into a cached dictionary, keeping it sorted. No-op when present. */
-function sortedInsert(dictionary: CachedDictionary, token: string): void {
-	const index = lowerBound(dictionary.tokens, token);
-	if (index < dictionary.tokens.length && dictionary.tokens[index] === token) return;
-	dictionary.tokens.splice(index, 0, token);
-	dictionary.lengths.splice(index, 0, codePointLength(token));
-	dictionary.signatures.splice(index, 0, characterSignature(token));
-}
-
-/** Remove from a cached dictionary. No-op when absent. */
-function sortedRemove(dictionary: CachedDictionary, token: string): void {
-	const index = lowerBound(dictionary.tokens, token);
-	if (index < dictionary.tokens.length && dictionary.tokens[index] === token) {
-		dictionary.tokens.splice(index, 1);
-		dictionary.lengths.splice(index, 1);
-		dictionary.signatures.splice(index, 1);
-	}
 }
 
 /** Coerce a SQLite BLOB (`ArrayBuffer` or `Uint8Array`) to a `Float32Array`. */
@@ -857,67 +782,10 @@ export class SqliteSearchStore {
 		};
 	}
 
-	/** Documents containing the token in the field (`df`). */
-	getDocFrequency(entity_type: string, field: string, token: string): number {
-		const rows = this.sql
-			.exec(
-				`SELECT df FROM search_tokens WHERE entity_type = ? AND field = ? AND token = ? LIMIT 1;`,
-				entity_type,
-				field,
-				token,
-			)
-			.toArray();
-		return rows.length === 0 ? 0 : readNumber(rows[0].df);
-	}
-
-	/**
-	 * Postings for one `(field, token)` as `[doc_id, tf, len]`, ascending by
-	 * doc id.
-	 *
-	 * `len` is the document's token count for this field, denormalized into the
-	 * posting row (§7.1). Reading it here rather than joining `search_docs` is
-	 * what keeps the term path's cost proportional to the *postings* a query
-	 * touches instead of to the corpus: the previous shape had to pull one
-	 * `json_extract(lengths, '$.field')` row per document — 12ms of a 30ms search
-	 * at 10k documents, and linear in corpus size from there.
-	 */
-	getPostings(
-		entity_type: string,
-		field: string,
-		token: string,
-	): [string, number, number][] {
-		const rows = this.sql
-			.exec(
-				`SELECT doc_id, tf, len FROM search_postings WHERE entity_type = ? AND field = ? AND token = ?;`,
-				entity_type,
-				field,
-				token,
-			)
-			.toArray();
-		const postings: [string, number, number][] = [];
-		// Never trust SQL result order for anything user-visible (§3) — but do
-		// *check* it. A posting list arrives in primary-key order, which is the
-		// order `compareStrings` defines, so the sort is almost always a no-op and
-		// one linear verification pass is cheaper than paying for it.
-		let ordered = true;
-		for (let index = 0; index < rows.length; index++) {
-			const row = rows[index];
-			const raw = row.doc_id;
-			const doc_id = typeof raw === 'string' ? raw : String(raw);
-			if (ordered && index > 0 && compareStrings(postings[index - 1][0], doc_id) > 0) {
-				ordered = false;
-			}
-			postings.push([doc_id, readNumber(row.tf), readNumber(row.len)]);
-		}
-		if (!ordered) postings.sort((a, b) => compareStrings(a[0], b[0]));
-		return postings;
-	}
-
 	/**
 	 * `df` for a batch of tokens in one field, via chunked `IN (...)` lists.
 	 *
-	 * Tokens absent from the map have `df = 0`. One statement per ≤90 tokens
-	 * instead of one per token — the batched form of {@link getDocFrequency}.
+	 * Tokens absent from the map have `df = 0`. One statement per ≤90 tokens.
 	 */
 	getDocFrequencies(
 		entity_type: string,
@@ -943,10 +811,15 @@ export class SqliteSearchStore {
 	/**
 	 * Postings for a batch of tokens in one field, grouped by token.
 	 *
-	 * The batched form of {@link getPostings}: each token's posting list is
-	 * `[doc_id, tf, len][]` ascending by doc id (verified, then sorted only when
-	 * SQL returned them out of order — same policy as the singular read).
-	 * Tokens with no postings are absent from the map.
+	 * Each token's posting list is `[doc_id, tf, len][]` ascending by doc id.
+	 * `len` is the document's token count for the field, denormalized into the
+	 * posting row (§7.1) so the term path never joins back to `search_docs` —
+	 * its cost stays proportional to the postings a query touches, not to the
+	 * corpus. Never trust SQL result order for anything user-visible (§3) — but
+	 * do *check* it: posting lists arrive in primary-key order, which is the
+	 * order `compareStrings` defines, so the sort is almost always a no-op and
+	 * one linear verification pass is cheaper than paying for it. Tokens with no
+	 * postings are absent from the map.
 	 */
 	getPostingsForTokens(
 		entity_type: string,
@@ -987,80 +860,6 @@ export class SqliteSearchStore {
 			if (!ordered) postings.sort((a, b) => compareStrings(a[0], b[0]));
 		}
 		return by_token;
-	}
-
-	/** Per-field token counts for a batch of documents. */
-	getDocLengths(
-		entity_type: string,
-		doc_ids: readonly string[],
-	): Map<string, Map<string, number>> {
-		const lengths = new Map<string, Map<string, number>>();
-		for (const batch of chunk(doc_ids, MAX_IN_VALUES)) {
-			if (batch.length === 0) continue;
-			const rows = this.sql
-				.exec(
-					`SELECT doc_id, lengths FROM search_docs WHERE entity_type = ? AND doc_id IN (${placeholderList(batch.length)});`,
-					entity_type,
-					...batch,
-				)
-				.toArray();
-			for (const row of rows) {
-				lengths.set(String(row.doc_id), parseLengths(row.lengths));
-			}
-		}
-		return lengths;
-	}
-
-	/**
-	 * One field's token count per document, extracted in SQL.
-	 *
-	 * BM25 needs a single number per document per field, and `search_docs`
-	 * stores a JSON map — so `json_extract` does the work in SQLite rather than
-	 * making JS parse one object per document (which dominated the term path at
-	 * 10k documents). Presence in the returned map means the document is
-	 * indexed; a document with no content for the field maps to `0`.
-	 *
-	 * Pass `doc_ids` to restrict the read, or omit it to read the whole entity
-	 * type in one statement (cheaper past a few hundred documents).
-	 */
-	getFieldLengths(
-		entity_type: string,
-		field: string,
-		doc_ids?: readonly string[],
-	): Map<string, number> {
-		// The field name is interpolated into the statement text (a bound JSON
-		// path would work too, but statement shapes are cached per text) — so it
-		// must be a plain identifier path, same rule as `sql_where.ts`.
-		assertFieldNameIsSafe(field);
-		const path = `$."${field.replaceAll('"', '""')}"`;
-		const lengths = new Map<string, number>();
-		const collect = (rows: Record<string, unknown>[]): void => {
-			for (const row of rows) lengths.set(String(row.doc_id), readNumber(row.len));
-		};
-		if (doc_ids === undefined) {
-			collect(
-				this.sql
-					.exec(
-						`SELECT doc_id, json_extract(lengths, '${path}') AS len FROM search_docs WHERE entity_type = ?;`,
-						entity_type,
-					)
-					.toArray(),
-			);
-			return lengths;
-		}
-		for (const batch of chunk(doc_ids, MAX_IN_VALUES)) {
-			if (batch.length === 0) continue;
-			collect(
-				this.sql
-					.exec(
-						`SELECT doc_id, json_extract(lengths, '${path}') AS len FROM search_docs WHERE entity_type = ? AND doc_id IN (${placeholderList(batch.length)});`,
-						entity_type,
-						...batch,
-					)
-					.toArray(),
-			);
-		}
-		return lengths;
 	}
 
 	/**
@@ -1154,11 +953,7 @@ export class SqliteSearchStore {
 		// Sorted in JS rather than trusting `ORDER BY`: the comparator is the
 		// contract, and it must be the same one the client driver uses.
 		tokens.sort(compareStrings);
-		const dictionary: CachedDictionary = {
-			tokens,
-			lengths: tokens.map(codePointLength),
-			signatures: tokens.map(characterSignature),
-		};
+		const dictionary = buildCachedDictionary(tokens);
 		this.#dictionaries.set(key, dictionary);
 		return dictionary;
 	}
@@ -1179,63 +974,16 @@ export class SqliteSearchStore {
 		exact: boolean,
 		tolerance: number,
 	): string[] {
-		const dictionary = this.getDictionary(entity_type, field);
-		if (dictionary === null) {
+		const tokens = this.getDictionary(entity_type, field);
+		if (tokens === null) {
 			return this.#expandTokenViaSql(entity_type, field, token, exact, tolerance);
 		}
-		if (exact) {
-			const index = lowerBound(dictionary, token);
-			return index < dictionary.length && dictionary[index] === token ? [token] : [];
-		}
-		if (tolerance > 0) {
-			// A tolerance scan has to see the whole dictionary anyway, so the prefix
-			// range is not worth computing separately. One matcher for the whole
-			// scan, and the cached code-point lengths in front of it: on a
-			// high-cardinality field (primary keys, slugs) the length band rejects
-			// effectively everything without touching a single character.
-			const matcher = new ToleranceMatcher(token, tolerance);
-			const query_length = matcher.query_length;
-			const cached = this.#dictionaries.get(dictionaryKey(entity_type, field));
-			// Normally the cache's own parallel arrays; recomputed only if something
-			// handed back a dictionary the cache does not own (a test double, say).
-			const owned =
-				cached !== undefined && cached !== null && cached.tokens === dictionary;
-			const lengths = owned
-				? (cached as CachedDictionary).lengths
-				: dictionary.map(codePointLength);
-			const signatures = owned
-				? (cached as CachedDictionary).signatures
-				: dictionary.map(characterSignature);
-			const matches: string[] = [];
-			// `startsWith` is a call V8 will not inline, and this loop runs once per
-			// dictionary token — so the first code unit is checked inline first, and
-			// only a candidate that can possibly be a prefix match pays for it.
-			const first_unit = token.length > 0 ? token.charCodeAt(0) : -1;
-			for (let index = 0; index < dictionary.length; index++) {
-				const candidate = dictionary[index];
-				if (
-					(first_unit < 0 || candidate.charCodeAt(0) === first_unit) &&
-					candidate.startsWith(token)
-				) {
-					matches.push(candidate);
-					continue;
-				}
-				// Both prefilters run off the precomputed arrays, so the Levenshtein
-				// DP — and even reading the candidate's characters — is reached only
-				// by the handful of tokens that could actually be within tolerance.
-				const delta = lengths[index] - query_length;
-				if (delta > tolerance || -delta > tolerance) continue;
-				if (!matcher.signatureAccepts(signatures[index])) continue;
-				if (matcher.matches(candidate)) matches.push(candidate);
-			}
-			return matches;
-		}
-		const matches: string[] = [];
-		for (let index = lowerBound(dictionary, token); index < dictionary.length; index++) {
-			if (!dictionary[index].startsWith(token)) break;
-			matches.push(dictionary[index]);
-		}
-		return matches;
+		const cached = this.#dictionaries.get(dictionaryKey(entity_type, field));
+		// Normally the cache's own parallel arrays; rebuilt only if something
+		// handed back a dictionary the cache does not own (a test double, say).
+		const dictionary =
+			cached && cached.tokens === tokens ? cached : buildCachedDictionary(tokens);
+		return expandCachedDictionary(dictionary, token, exact, tolerance);
 	}
 
 	/** The >200k-token fallback: range queries instead of an in-memory array. */
@@ -1443,11 +1191,4 @@ function parseLengths(value: unknown): Map<string, number> {
 		lengths.set(field, readNumber(parsed[field]));
 	}
 	return lengths;
-}
-
-/** Whether two per-field length maps agree exactly. */
-function sameLengths(a: Map<string, number>, b: Map<string, number>): boolean {
-	if (a.size !== b.size) return false;
-	for (const [field, length] of a) if (b.get(field) !== length) return false;
-	return true;
 }

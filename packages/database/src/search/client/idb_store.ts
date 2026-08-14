@@ -34,10 +34,14 @@
 import { DelightError } from '@delightstack/utilities';
 import { compareStrings, type PrimaryKeyType } from '../core/compare';
 import {
-	characterSignature,
-	codePointLength,
-	ToleranceMatcher,
-} from '../core/levenshtein';
+	buildCachedDictionary,
+	sameLengths,
+	sortedInsert,
+	sortedRemove,
+	type CachedDictionary,
+} from '../core/dictionary';
+import { ToleranceMatcher } from '../core/levenshtein';
+import { resolveTextFields } from '../core/schema_fields';
 import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer';
 import type { SearchableType } from '../core/types';
 import {
@@ -102,16 +106,6 @@ export interface ClientSearchType {
 	text_fields: string[];
 }
 
-/** Whether a declared type participates in full-text term matching. */
-export function isTextFieldType(type: SearchableType): boolean {
-	return type === 'string' || type === 'string[]';
-}
-
-/** Whether a declared type is a vector field (never stored on the client). */
-export function isVectorFieldType(type: SearchableType): boolean {
-	return typeof type === 'string' && type.startsWith('vector[');
-}
-
 /** Resolve an entity type's field lists once, ascending. */
 export function defineClientType(input: ClientSearchTypeInput): ClientSearchType {
 	return {
@@ -119,9 +113,7 @@ export function defineClientType(input: ClientSearchTypeInput): ClientSearchType
 		schema: input.schema,
 		primary_key: input.primary_key ?? 'id',
 		primary_key_type: input.primary_key_type ?? 'string',
-		text_fields: Object.keys(input.schema)
-			.filter((field) => isTextFieldType(input.schema[field]))
-			.sort(compareStrings),
+		text_fields: resolveTextFields(input.schema),
 	};
 }
 
@@ -177,16 +169,6 @@ export interface FieldStats {
 export interface FieldStatsRow extends FieldStats {
 	entity_type: string;
 	field: string;
-}
-
-/** One field's cached term dictionary (the mirror of §7.3's server cache). */
-export interface CachedDictionary {
-	/** Tokens, ascending by **code point** (`core/compare`, not IDB order). */
-	tokens: string[];
-	/** Code-point length of the token at the same index. */
-	lengths: number[];
-	/** Character signature of the token at the same index. */
-	signatures: number[];
 }
 
 /** The tokenized projection of one document (no vectors — §4.9). */
@@ -831,13 +813,6 @@ interface WritePlan {
 	stat_deltas: Map<string, FieldStats>;
 }
 
-/** Whether two per-field length maps agree exactly. */
-function sameLengths(a: Map<string, number>, b: Map<string, number>): boolean {
-	if (a.size !== b.size) return false;
-	for (const [field, length] of a) if (b.get(field) !== length) return false;
-	return true;
-}
-
 /** `lengths` as a plain record, keys ascending (stable, diffable JSON). */
 function lengthsToRecord(lengths: Map<string, number>): Record<string, number> {
 	const record: Record<string, number> = {};
@@ -857,37 +832,6 @@ function lengthsFromRecord(
 		if (typeof value === 'number') lengths.set(field, value);
 	}
 	return lengths;
-}
-
-/** Binary search for the first index whose token is `>= target`. */
-function lowerBound(tokens: readonly string[], target: string): number {
-	let low = 0;
-	let high = tokens.length;
-	while (low < high) {
-		const middle = (low + high) >>> 1;
-		if (compareStrings(tokens[middle], target) < 0) low = middle + 1;
-		else high = middle;
-	}
-	return low;
-}
-
-/** Insert into a cached dictionary, keeping it sorted. No-op when present. */
-function sortedInsert(dictionary: CachedDictionary, token: string): void {
-	const index = lowerBound(dictionary.tokens, token);
-	if (index < dictionary.tokens.length && dictionary.tokens[index] === token) return;
-	dictionary.tokens.splice(index, 0, token);
-	dictionary.lengths.splice(index, 0, codePointLength(token));
-	dictionary.signatures.splice(index, 0, characterSignature(token));
-}
-
-/** Remove from a cached dictionary. No-op when absent. */
-function sortedRemove(dictionary: CachedDictionary, token: string): void {
-	const index = lowerBound(dictionary.tokens, token);
-	if (index < dictionary.tokens.length && dictionary.tokens[index] === token) {
-		dictionary.tokens.splice(index, 1);
-		dictionary.lengths.splice(index, 1);
-		dictionary.signatures.splice(index, 1);
-	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1326,11 +1270,7 @@ export class IdbSearchStore {
 		// Sorted in JS rather than trusted from IDB: IDB orders strings by code
 		// unit, and the contract is `core/compare`'s code-point order.
 		tokens.sort(compareStrings);
-		const dictionary: CachedDictionary = {
-			tokens,
-			lengths: tokens.map(codePointLength),
-			signatures: tokens.map(characterSignature),
-		};
+		const dictionary = buildCachedDictionary(tokens);
 		this.#dictionaries.set(key, dictionary);
 		return dictionary;
 	}
@@ -1444,30 +1384,6 @@ export class IdbSearchStore {
 			result.set(tokens[index], { df: token_rows[index]?.df ?? 0, postings });
 		}
 		return result;
-	}
-
-	/** Postings for a set of tokens (the documented storage interface). */
-	async getPostings(
-		entity_type: string,
-		field: string,
-		tokens: readonly string[],
-	): Promise<Map<string, ClientPosting[]>> {
-		const terms = await this.getTerms(entity_type, field, tokens);
-		const postings = new Map<string, ClientPosting[]>();
-		for (const [token, term] of terms) postings.set(token, term.postings);
-		return postings;
-	}
-
-	/** `df` for a set of tokens. */
-	async getDocFrequencies(
-		entity_type: string,
-		field: string,
-		tokens: readonly string[],
-	): Promise<Map<string, number>> {
-		const terms = await this.getTerms(entity_type, field, tokens);
-		const frequencies = new Map<string, number>();
-		for (const [token, term] of terms) frequencies.set(token, term.df);
-		return frequencies;
 	}
 
 	/** `N(field)` and `Σ len` for one field, zeroed when the field is unused. */

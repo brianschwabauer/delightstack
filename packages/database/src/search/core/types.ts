@@ -132,8 +132,6 @@ export interface GeoRadiusOperator {
 		unit?: GeoDistanceUnit;
 		/** @default true */
 		inside?: boolean;
-		/** Accepted for compatibility — the engine is always precise */
-		highPrecision?: boolean;
 	};
 }
 
@@ -143,8 +141,6 @@ export interface GeoPolygonOperator {
 		coordinates: GeoPoint[];
 		/** @default true */
 		inside?: boolean;
-		/** Accepted for compatibility — the engine is always precise */
-		highPrecision?: boolean;
 	};
 }
 
@@ -186,7 +182,7 @@ export type WhereCondition<TSchema> =
 /* -------------------------------------------------------------------------- */
 
 /** Facet sort direction */
-export type FacetSorting = 'asc' | 'desc' | 'ASC' | 'DESC';
+export type FacetSorting = 'asc' | 'desc';
 
 /** Facet configuration for a string/enum field */
 export interface StringFacetDefinition {
@@ -200,11 +196,8 @@ export interface NumberFacetDefinition {
 	ranges: { from: number; to: number }[];
 }
 
-/** Facet configuration for a boolean field */
-export interface BooleanFacetDefinition {
-	true?: boolean;
-	false?: boolean;
-}
+/** Facet configuration for a boolean field — both buckets are always reported */
+export type BooleanFacetDefinition = Record<never, never>;
 
 /** Any facet configuration */
 export type FacetDefinition =
@@ -355,4 +348,3 @@ export interface SearchQueryResults<Document> {
 	/** Facet counts, when facets were requested */
 	facets?: FacetResult;
 }
-

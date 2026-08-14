@@ -170,30 +170,18 @@ export function validateGeoOperand(
  * `not: { field: { radius } }` still admits them, because `not` complements
  * over the corpus.
  *
- * `highPrecision` is accepted and ignored — we are always haversine.
+ * The operand's shape was already validated by {@link validateGeoOperand} at
+ * normalize time (`where.ts`), so this per-document path is plain reads.
  */
 export function evaluateGeoOperation(value: unknown, operation: GeoOperation): boolean {
 	if (!isGeoPoint(value)) return false;
 	if ('radius' in operation) {
 		const { coordinates, value: distance, unit, inside } = operation.radius;
-		if (!isGeoPoint(coordinates) || typeof distance !== 'number') {
-			throw DelightError.badRequest(
-				'A radius filter needs `coordinates` and a numeric `value`.',
-				{
-					code: 'invalid_geo_filter',
-				},
-			);
-		}
 		const radius_meters = convertDistanceToMeters(distance, unit ?? 'm');
 		const is_within = haversineDistance(coordinates, value) <= radius_meters;
 		return inside === false ? !is_within : is_within;
 	}
 	const { coordinates, inside } = operation.polygon;
-	if (!Array.isArray(coordinates) || !coordinates.every(isGeoPoint)) {
-		throw DelightError.badRequest('A polygon filter needs `{lat, lon}` coordinates.', {
-			code: 'invalid_geo_filter',
-		});
-	}
 	// A degenerate ring (fewer than three vertices) encloses nothing: the PNPOLY
 	// loop below returns false for every point, which is the frozen answer — and
 	// Orama 3.1.16 agrees, returning the empty set rather than throwing. A ring

@@ -120,17 +120,22 @@ describe('radius operator', () => {
 		).toBe(false);
 	});
 
-	it('accepts and ignores highPrecision', () => {
+	it('accepts and ignores an unknown extra property like highPrecision', () => {
+		// Runtime tolerance: the per-document path only reads the known fields, so
+		// a stray extra property (e.g. Orama's `highPrecision`) changes nothing.
 		const inside = evaluateGeoOperation(NEAR, {
 			radius: { coordinates: CENTER, value: 2000, highPrecision: true },
-		});
+		} as unknown as Parameters<typeof evaluateGeoOperation>[1]);
 		expect(inside).toBe(true);
 	});
 
-	it('throws a 400 on a malformed operand', () => {
+	it('rejects a malformed operand at normalize time with a 400', () => {
+		// Shape validation happens once per query in `validateGeoOperand`
+		// (`where.ts`), never per document.
 		expect(() =>
-			evaluateGeoOperation(NEAR, {
-				radius: { coordinates: CENTER, value: 'far' as unknown as number },
+			validateGeoOperand('radius', {
+				coordinates: CENTER,
+				value: 'far' as unknown as number,
 			}),
 		).toThrow(DelightError);
 	});
@@ -207,12 +212,11 @@ describe('polygon operator', () => {
 		}
 	});
 
-	it('still throws a 400 when a vertex is not a {lat, lon} pair', () => {
+	it('still throws a 400 at normalize time when a vertex is not a {lat, lon} pair', () => {
 		expect(() =>
-			evaluateGeoOperation(
-				{ lat: 1, lon: 1 },
-				{ polygon: { coordinates: [...BOX.slice(0, 2), { lat: 1 }] as never } },
-			),
+			validateGeoOperand('polygon', {
+				coordinates: [...BOX.slice(0, 2), { lat: 1 }],
+			}),
 		).toThrow(DelightError);
 	});
 });
