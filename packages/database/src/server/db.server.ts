@@ -819,6 +819,11 @@ export class DatabaseServer<
 		// decided by what this wake *found*, not by what it left behind.
 		const legacy_present = this.legacySearchTablesExist();
 
+		// One row budget SHARED by every entity type this wake — the cap exists
+		// to bound the invocation's CPU, and five types each spending a full
+		// per-type slice would multiply it right back past the limit.
+		let budget = this.searchRebuildRowsPerSlice();
+
 		for (const entity_type of indexed_types) {
 			const source = this.config[entity_type] as unknown as SearchTableSource;
 			const table = buildServerSearchTable(entity_type, source);
@@ -841,10 +846,12 @@ export class DatabaseServer<
 				// checkpointed cursor instead of clearing and starting over: without
 				// this, a corpus too large for one wake's slice would restart from
 				// row one on every wake and never finish.
-				this.runRebuild(entity_type, this.searchRebuildRowsPerSlice());
+				if (budget > 0) budget -= this.runRebuild(entity_type, budget).processed;
 			} else if (built?.schema_signature !== signature) {
+				// Begin even with no budget left — the clear + cursor must land so
+				// the stale index is never served as if it matched the new schema.
 				this.beginRebuild(entity_type, signature, had_state || legacy_present);
-				this.runRebuild(entity_type, this.searchRebuildRowsPerSlice());
+				if (budget > 0) budget -= this.runRebuild(entity_type, budget).processed;
 			} else if (pending) {
 				// A cursor for a schema that is already built — stale; drop it.
 				this.setSearchTableState(entity_type, { ...built, rebuild: undefined });
@@ -1018,8 +1025,9 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * How many entity rows one invocation may re-index before deferring the rest
-	 * of a rebuild to an alarm tick. A row cap — not a wall-clock budget —
+	 * How many entity rows one invocation may re-index — shared across ALL
+	 * pending entity types — before deferring the rest of a rebuild to an alarm
+	 * tick. A row cap — not a wall-clock budget —
 	 * because workerd freezes `Date.now()` during synchronous execution, so
 	 * elapsed time is unobservable from inside the loop. At even a pessimistic
 	 * several ms per large document this stays far below the 30s Durable Object
@@ -1083,7 +1091,9 @@ export class DatabaseServer<
 	/**
 	 * Advance an entity type's pending rebuild by up to `max_rows` rows,
 	 * finalizing it if the end of the table is reached. Returns whether the
-	 * rebuild is complete (`true` when nothing was pending at all).
+	 * rebuild is complete (`true` when nothing was pending at all) and how many
+	 * rows this call processed, so callers can spend one shared budget across
+	 * entity types.
 	 *
 	 * It deliberately does NOT use `SqliteSearchEngine.rebuildBatch`: that helper
 	 * reads documents straight out of the row (assuming `$derived` is already
@@ -1096,11 +1106,15 @@ export class DatabaseServer<
 	 * checkpointed inside each batch's transaction — a killed invocation resumes
 	 * at the last committed batch boundary.
 	 */
-	private runRebuild(entity_type: string, max_rows: number): boolean {
-		if (this.#rebuild_in_flight.has(entity_type)) return false;
+	private runRebuild(
+		entity_type: string,
+		max_rows: number,
+	): { complete: boolean; processed: number } {
+		if (this.#rebuild_in_flight.has(entity_type))
+			return { complete: false, processed: 0 };
 		const built = this.#state.native_search?.[entity_type];
 		const rebuild = built?.rebuild;
-		if (!built || !rebuild) return true;
+		if (!built || !rebuild) return { complete: true, processed: 0 };
 		this.#rebuild_in_flight.add(entity_type);
 		const table = this.searchTable(entity_type);
 		const source = this.config[entity_type];
@@ -1161,7 +1175,7 @@ export class DatabaseServer<
 				console.log(
 					`[DatabaseServer] search rebuild of ${entity_type} deferred after ${processed} rows (resumes at alarm)`,
 				);
-				return false;
+				return { complete: false, processed };
 			}
 			this.ctx.storage.transactionSync(() => {
 				const store = this.search.store;
@@ -1199,7 +1213,7 @@ export class DatabaseServer<
 						.map(([name]) => name),
 				);
 			}
-			return true;
+			return { complete: true, processed };
 		} finally {
 			this.#rebuild_in_flight.delete(entity_type);
 			this.search.store.clearDictionaryCache();
@@ -1213,11 +1227,21 @@ export class DatabaseServer<
 	 * handlers itself), or a deferred rebuild never completes.
 	 */
 	private async continueRebuilds(): Promise<void> {
+		// The slice budget is shared by every pending type, exactly as in the
+		// bootstrap — per-type budgets would multiply one tick's CPU by the
+		// number of pending types. A type left unfunded this tick stays pending
+		// and is first in line once earlier types finish.
+		let budget = this.searchRebuildRowsPerSlice();
 		let pending = false;
 		for (const entity_type of this.#search_tables.keys()) {
 			if (!this.#state.native_search?.[entity_type]?.rebuild) continue;
-			const done = this.runRebuild(entity_type, this.searchRebuildRowsPerSlice());
-			if (!done) pending = true;
+			if (budget <= 0) {
+				pending = true;
+				continue;
+			}
+			const result = this.runRebuild(entity_type, budget);
+			budget -= result.processed;
+			if (!result.complete) pending = true;
 		}
 		if (pending) await this.scheduleRebuildAlarm();
 	}

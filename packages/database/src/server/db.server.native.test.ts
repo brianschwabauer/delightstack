@@ -1130,11 +1130,11 @@ describe('search driver — a rebuild larger than one slice is chunked across wa
 		const state = seedLegacy();
 		wake(state);
 		await flushMicrotasks();
-		expect(dumpSearchRows(state, 'note').docs.map((doc) => doc.doc_id)).toEqual([
-			'n0',
-			'n1',
-		]);
-		expect(nativeSearchState(state, 'note')?.rebuild?.after).toBe('n1');
+		// The 2-row budget is SHARED across types: author (1 row) completes,
+		// note gets the remaining 1 row, legacy is left pending and unfunded.
+		expect(dumpSearchRows(state, 'note').docs.map((doc) => doc.doc_id)).toEqual(['n0']);
+		expect(nativeSearchState(state, 'note')?.rebuild?.after).toBe('n0');
+		expect(nativeSearchState(state, 'legacy')?.rebuild).toBeDefined();
 		expect(state.alarm()).not.toBeNull();
 		// Clients keep syncing against the old version until the corpus is whole.
 		expect(configVersion(state)).toBe(7);
@@ -1142,13 +1142,16 @@ describe('search driver — a rebuild larger than one slice is chunked across wa
 		state.close();
 	});
 
-	it('alarm ticks advance one slice at a time, then finalize: full index, one config bump, legacy tables dropped', async () => {
+	it('alarm ticks advance one shared slice at a time, then finalize: full index, one config bump, legacy tables dropped', async () => {
 		const state = seedLegacy();
-		const db = wake(state);
-		await db.alarm(); // n2, n3
-		expect(dumpSearchRows(state, 'note').docs).toHaveLength(4);
+		const db = wake(state); // author done + n0
+		await db.alarm(); // n1, n2
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(3);
 		expect(configVersion(state)).toBe(7);
-		await db.alarm(); // n4 → finalize
+		await db.alarm(); // n3, n4 (exactly the budget — not yet provably complete)
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(5);
+		expect(configVersion(state)).toBe(7);
+		await db.alarm(); // empty read → note finalizes, then legacy (0 rows) finalizes
 		expect(dumpSearchRows(state, 'note').docs).toHaveLength(5);
 		expect(configVersion(state)).toBe(8);
 		expect(nativeSearchState(state, 'note')?.rebuild).toBeUndefined();
