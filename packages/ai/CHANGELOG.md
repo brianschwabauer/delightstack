@@ -1,5 +1,13 @@
 # @delightstack/ai
 
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies [738c56e]
+  - @delightstack/database@2.1.0
+  - @delightstack/websocket@2.0.1
+
 ## 1.1.0
 
 ### Minor Changes
