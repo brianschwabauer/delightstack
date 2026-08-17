@@ -1248,21 +1248,24 @@ export class DatabaseServer<
 
 	/**
 	 * Arm the Durable Object alarm to continue a deferred rebuild immediately.
-	 * Only ever moves the alarm earlier, so a subclass's own scheduled alarm is
-	 * never delayed; an early fire is benign for well-behaved handlers (they
-	 * check their own queues and re-arm). Guarded for test harnesses whose
-	 * storage façade has no alarm support.
+	 *
+	 * Unconditional on purpose. The tempting guard — skip when `getAlarm()`
+	 * already reads at-or-before now — is a wedge: after workerd abandons a
+	 * crash-looping alarm, `getAlarm()` keeps returning that stale PAST
+	 * timestamp even though nothing will ever fire, and the guard then skips
+	 * re-arming forever (this stranded a production rebuild that could only
+	 * advance one constructor slice per cold start). Re-setting is idempotent,
+	 * revives an abandoned alarm, and only ever moves a real future alarm
+	 * earlier — an early fire is benign for well-behaved handlers (they check
+	 * their own queues and re-arm). Guarded for test harnesses whose storage
+	 * façade has no alarm support.
 	 */
 	private async scheduleRebuildAlarm(): Promise<void> {
 		const storage = this.ctx.storage as unknown as {
-			getAlarm?(): Promise<number | null>;
 			setAlarm?(time: number): Promise<void> | void;
 		};
 		if (typeof storage.setAlarm !== 'function') return;
-		const when = Date.now();
-		const existing =
-			typeof storage.getAlarm === 'function' ? await storage.getAlarm() : null;
-		if (existing === null || existing > when) await storage.setAlarm(when);
+		await storage.setAlarm(Date.now());
 	}
 
 	/**
