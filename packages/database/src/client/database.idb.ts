@@ -36,6 +36,12 @@ export interface SyncMeta {
 	 * first sync probe answers.
 	 */
 	server_total?: number;
+	/**
+	 * The server refused to sync this entity type (a permission decision, not a
+	 * size one). Carried so a reload routes the type's queries to the server
+	 * without re-attempting the backfill first.
+	 */
+	denied?: true;
 }
 
 export interface CachedEntity {
@@ -148,4 +154,57 @@ export function deleteDatabase(db_name: string, factory?: IDBFactory): Promise<v
 		request.onsuccess = () => resolve();
 		request.onerror = () => reject(request.error);
 	});
+}
+
+/**
+ * How long a sibling delete may block before sign-out gives up on it. A
+ * database another tab still holds open blocks forever (that tab has no reason
+ * to release it — it is not the one signing out), and sign-out must not hang.
+ */
+const SIBLING_DELETE_TIMEOUT_MS = 2000;
+
+/**
+ * Delete the databases named by `select`, except `current` — best effort.
+ *
+ * This serves the per-org `db_name` pattern: signing out of one org must not
+ * leave the other orgs' mirrors on disk. `current` is skipped because the
+ * worker's own wipe already owns it (with the freeze semantics sign-out needs).
+ *
+ * A function `select` filters the names reported by `indexedDB.databases()`;
+ * where that enumeration is unavailable there is nothing to filter and nothing
+ * is deleted. Every delete is bounded by {@link SIBLING_DELETE_TIMEOUT_MS} and
+ * its failure swallowed — a blocked sibling is a leftover database, never a
+ * failed sign-out.
+ */
+export async function deleteSiblingDatabases(
+	current: string,
+	select: string[] | ((name: string) => boolean),
+	factory?: IDBFactory,
+): Promise<void> {
+	const idb = factory ?? indexedDB;
+	let names: string[];
+	if (Array.isArray(select)) {
+		names = select;
+	} else {
+		if (typeof idb.databases !== 'function') return;
+		const entries = await idb.databases().catch(() => []);
+		names = entries
+			.map((entry) => entry.name)
+			.filter((name): name is string => !!name && select(name));
+	}
+
+	const targets = [...new Set(names)].filter((name) => !!name && name !== current);
+	await Promise.all(
+		targets.map((name) => {
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			return Promise.race([
+				deleteDatabase(name, idb),
+				new Promise<void>((resolve) => {
+					timer = setTimeout(resolve, SIBLING_DELETE_TIMEOUT_MS);
+				}),
+			])
+				.catch(() => {})
+				.finally(() => clearTimeout(timer));
+		}),
+	);
 }

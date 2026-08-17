@@ -50,6 +50,11 @@ interface SyncEntityResult {
 	 * `defer_over` — no rows shipped, no cursor advanced.
 	 */
 	deferred?: true;
+	/**
+	 * The server refused this entity type outright (a permission decision).
+	 * Nothing shipped, and re-asking cannot change the answer.
+	 */
+	denied?: true;
 }
 
 interface SyncResponse {
@@ -147,6 +152,14 @@ interface EntitySyncState {
 	 * clears by itself when the table shrinks or the ceiling is raised.
 	 */
 	deferred: boolean;
+	/**
+	 * The server refused to sync this entity type. Unlike `deferred` it is NOT
+	 * re-probed: a permission answer cannot change without a new request
+	 * context, so the type is dropped from every later sync request and its
+	 * queries route to the server. Persisted, so a reload does not re-attempt
+	 * the backfill; the sign-out wipe is what clears it.
+	 */
+	denied: boolean;
 	/** The server's last reported total row count for this entity's table. */
 	server_total: number | undefined;
 	primary_key: string;
@@ -553,6 +566,9 @@ export class DatabaseWorker {
 					max_synced_docs !== undefined &&
 					meta?.server_total !== undefined &&
 					meta.server_total > max_synced_docs,
+				// Denial IS restored: re-asking would only earn the same refusal,
+				// and a re-attempted backfill is exactly what it forbids.
+				denied: meta?.denied === true,
 				server_total: meta?.server_total,
 				primary_key: table.primary_key,
 				schema,
@@ -981,8 +997,14 @@ export class DatabaseWorker {
 		let num_requests = 0;
 		let pages_without_changes = 0;
 		while (num_requests++ < 50) {
+			// A denied type is dropped from the request entirely — asking again
+			// only earns the same refusal, and an empty per-entity result would
+			// otherwise read as "the server doesn't know this type".
 			const client_types = types.filter(
-				(t) => this.#entities[t]?.search_mode === 'client' && !done.has(t),
+				(t) =>
+					this.#entities[t]?.search_mode === 'client' &&
+					!this.#entities[t]?.denied &&
+					!done.has(t),
 			);
 			if (client_types.length === 0) break;
 
@@ -1072,6 +1094,29 @@ export class DatabaseWorker {
 				if (entity_result.total_count !== undefined) {
 					state.server_total = entity_result.total_count;
 				}
+				if (entity_result.denied) {
+					// A permission refusal, not a size one: no re-probe, ever. The
+					// type leaves the sync request for good (the flag is persisted,
+					// so a reload doesn't re-attempt the backfill either) and its
+					// queries route to the server — which may still answer them,
+					// under its own per-request rules.
+					const newly_denied = !state.denied;
+					state.denied = true;
+					done.add(entity_type);
+					// The routing decision changed for a type that may have been
+					// answering locally a moment ago.
+					routing_flipped.add(entity_type);
+					// Only the TRANSITION purges: a denied type is dropped from
+					// every later request, and a reload restores the flag before
+					// the first one, so this runs at most once per revocation.
+					if (newly_denied) {
+						await this.#purgeDeniedEntity(entity_type);
+						if (this.#wiped) return;
+						changed.add(entity_type);
+					}
+					continue;
+				}
+
 				if (entity_result.deferred) {
 					// The table exceeds this entity's `max_synced_docs` — the server
 					// withheld the page. No cursor moved; queries keep routing to the
@@ -1260,14 +1305,14 @@ export class DatabaseWorker {
 		// confirmed the row, so a failed local write must trigger the same
 		// window-rollback + resync recovery an external change uses — otherwise
 		// the row is invisible to local search until the next app-driven sync.
-		if (state.search_mode === 'client') {
+		if (this.#acceptsLocalWrites(entity_type)) {
 			const applied = await this.#indexEntity(entity_type, server_entity);
 			if (!applied) this.#recoverDroppedIndexWrite(entity_type, server_entity);
 			this.#notifySubscribers([entity_type]);
 		}
 
 		// Cache in IDB
-		if (state.cache_enabled && this.#db) {
+		if (this.#cachesEntities(entity_type) && this.#db) {
 			const id = server_entity[state.primary_key] as string | number;
 			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
 				entity_type,
@@ -1338,7 +1383,7 @@ export class DatabaseWorker {
 		// Store the pre-update document for rollback — the indexed sparse doc,
 		// read straight out of the `docs` store by primary key.
 		let prev_doc: Record<string, unknown> | undefined;
-		if (state.search_mode === 'client') {
+		if (this.#acceptsLocalWrites(entity_type)) {
 			prev_doc = await this.#indexedDocument(entity_type, id);
 
 			// Optimistic update
@@ -1374,14 +1419,14 @@ export class DatabaseWorker {
 		// Replace the optimistic overlay with the server's own data. A failed
 		// local write here leaves the STALE optimistic document in local search —
 		// recover the same way applyExternalChange does.
-		if (state.search_mode === 'client') {
+		if (this.#acceptsLocalWrites(entity_type)) {
 			const applied = await this.#indexEntity(entity_type, server_entity);
 			if (!applied) this.#recoverDroppedIndexWrite(entity_type, server_entity);
 			this.#notifySubscribers([entity_type]);
 		}
 
 		// Update IDB cache
-		if (state.cache_enabled && this.#db) {
+		if (this.#cachesEntities(entity_type) && this.#db) {
 			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
 				entity_type,
 				id,
@@ -1468,7 +1513,7 @@ export class DatabaseWorker {
 			return entity;
 		}
 
-		if (entity && state.cache_enabled && this.#db) {
+		if (entity && this.#cachesEntities(entity_type) && this.#db) {
 			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
 				entity_type,
 				id,
@@ -1477,7 +1522,7 @@ export class DatabaseWorker {
 			} satisfies CachedEntity);
 		}
 
-		if (state.search_mode === 'client') {
+		if (this.#acceptsLocalWrites(entity_type)) {
 			// Index the server's sparse projection when the event carries it —
 			// that is exactly the document a sync page would deliver, so it is
 			// indexed verbatim. The full entity is the fallback for servers that
@@ -1508,8 +1553,7 @@ export class DatabaseWorker {
 		id: string | number,
 		patch: Record<string, unknown>,
 	): Promise<boolean> {
-		const state = this.#entities[entity_type];
-		if (!state || state.search_mode !== 'client') return false;
+		if (!this.#acceptsLocalWrites(entity_type)) return false;
 		const current = await this.#indexedDocument(entity_type, id);
 		if (!current) return false;
 		const applied = await this.#indexEntity(entity_type, { ...current, ...patch });
@@ -1642,6 +1686,12 @@ export class DatabaseWorker {
 			return false;
 		}
 		if (!this.#engine || !this.#store) return false;
+		// A denied type has no trustworthy local corpus and never will — it
+		// routes to the server exactly like `search_mode: 'server'`, overriding
+		// a forced-client config and a per-query `source: 'client'` alike.
+		// Unlike the configured case this is NOT a caller error: the refusal
+		// arrives at runtime, long after the query was written.
+		if (state.denied) return false;
 		if (source === 'server') return false;
 		if (source === 'client') return true;
 		if (state.search_mode === 'server') return false;
@@ -1807,8 +1857,7 @@ export class DatabaseWorker {
 		id: string | number,
 		prev_doc: Record<string, unknown> | undefined,
 	): Promise<void> {
-		const state = this.#entities[entity_type];
-		if (!prev_doc || !state || state.search_mode !== 'client') return;
+		if (!prev_doc || !this.#acceptsLocalWrites(entity_type)) return;
 		await this.#indexDocuments(entity_type, [
 			{ entity_type, doc_id: String(id), sparse_doc: prev_doc },
 		]);
@@ -1897,7 +1946,7 @@ export class DatabaseWorker {
 		}
 		const data = (await response.json()) as Record<string, unknown>;
 
-		if (state.cache_enabled && this.#db) {
+		if (this.#cachesEntities(entity_type) && this.#db) {
 			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
 				entity_type,
 				id,
@@ -1908,7 +1957,7 @@ export class DatabaseWorker {
 
 		// Refresh the local index too (reshaped like `toSparse` — a full entity
 		// carries fields the index has no business tokenizing)
-		if (state.search_mode === 'client') {
+		if (this.#acceptsLocalWrites(entity_type)) {
 			await this.#indexEntity(entity_type, data);
 			this.#notifySubscribers([entity_type]);
 		}
@@ -2082,6 +2131,69 @@ export class DatabaseWorker {
 	}
 
 	/**
+	 * The server revoked this entity type: drop everything local for it.
+	 *
+	 * A denial is a permission decision, and the documents synced before it
+	 * arrived are exactly what that permission was protecting — so the indexed
+	 * documents and the cached entity rows both go, not just the future pages.
+	 * The window is reset to "never synced" so a later re-grant backfills from
+	 * scratch instead of resuming from a cursor describing documents nothing
+	 * kept.
+	 *
+	 * Called only on the transition into denial, and cheap/idempotent anyway:
+	 * both purges are single ranged operations that no-op on an empty type.
+	 */
+	async #purgeDeniedEntity(entity_type: string): Promise<void> {
+		const state = this.#entities[entity_type];
+		if (!state) return;
+
+		await this.#purgeEntityIndex(entity_type);
+		// Re-check at every await boundary, exactly as the sync loop does: a
+		// wipe mid-purge has already deleted the database out from under us.
+		if (this.#wiped) return;
+		if (this.#db) {
+			await idbDeleteByPrefix(this.#db, 'entities', `${entity_type}/`);
+			if (this.#wiped) return;
+		}
+
+		state.start_updated_at = undefined;
+		state.end_updated_at = undefined;
+		state.synced = false;
+		if (this.#db) {
+			await idbPut(
+				this.#db,
+				'sync_meta',
+				entity_type,
+				this.#syncMetaFor(entity_type, state),
+			);
+		}
+	}
+
+	/**
+	 * Whether a document may be written into this type's local mirror.
+	 *
+	 * False in server mode (there is no local index to write to) and false for
+	 * a denied type — inserting into a mirror the server just revoked is
+	 * exactly what {@link #purgeDeniedEntity} undid. REMOVALS are deliberately
+	 * not gated on this: dropping a stale row from a denied mirror is always
+	 * the right move.
+	 */
+	#acceptsLocalWrites(entity_type: string): boolean {
+		const state = this.#entities[entity_type];
+		return !!state && state.search_mode === 'client' && !state.denied;
+	}
+
+	/**
+	 * Whether an entity row may be written to the IDB cache. Denial revokes
+	 * the cache too — `get()` still answers a denied type, straight from the
+	 * server, it just leaves nothing behind on disk.
+	 */
+	#cachesEntities(entity_type: string): boolean {
+		const state = this.#entities[entity_type];
+		return !!state && state.cache_enabled && !state.denied && !!this.#db;
+	}
+
+	/**
 	 * The persisted `sync_meta` row for one entity type, from its in-memory
 	 * state (with optional not-yet-adopted overrides for mid-page persists).
 	 *
@@ -2102,6 +2214,7 @@ export class DatabaseWorker {
 			start_updated_at: state.start_updated_at,
 			end_updated_at: state.end_updated_at,
 			server_total: state.server_total,
+			...(state.denied ? { denied: true as const } : {}),
 			...overrides,
 		};
 	}

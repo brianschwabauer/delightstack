@@ -407,3 +407,138 @@ describe('DatabaseWorker.wipe() — sign-out data wipe', () => {
 		await worker_a.destroy();
 	});
 });
+
+// ── Sibling databases (the per-org `db_name` pattern) ───────────────────────
+
+/** Create a database by name, with one store, and close it again. */
+function createNamedDatabase(name: string): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const request = indexedDB.open(name, 1);
+		request.onupgradeneeded = () => request.result.createObjectStore('rows');
+		request.onsuccess = () => {
+			request.result.close();
+			resolve();
+		};
+		request.onerror = () => reject(request.error);
+	});
+}
+
+/** Every database name IndexedDB currently reports. */
+async function listDatabaseNames(): Promise<string[]> {
+	const entries = await (
+		indexedDB as IDBFactory & { databases: () => Promise<{ name?: string }[]> }
+	).databases();
+	return entries.map((entry) => entry.name).filter((name): name is string => !!name);
+}
+
+describe('deleteSiblingDatabases() — the per-org sign-out sweep', () => {
+	let scope = 0;
+
+	beforeEach(() => {
+		scope += 1;
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it('deletes the named siblings, and never the current database', async () => {
+		const { deleteSiblingDatabases } = await import('./database.idb');
+		const current = `org-${scope}-current`;
+		const sibling = `org-${scope}-sibling`;
+		const bystander = `other-${scope}`;
+		for (const name of [current, sibling, bystander]) await createNamedDatabase(name);
+
+		await deleteSiblingDatabases(current, [current, sibling]);
+
+		const names = await listDatabaseNames();
+		expect(names).not.toContain(sibling);
+		// The current database is the worker wipe's job — the sweep leaves it.
+		expect(names).toContain(current);
+		expect(names).toContain(bystander);
+	});
+
+	it('filters the enumeration when given a predicate', async () => {
+		const { deleteSiblingDatabases } = await import('./database.idb');
+		const current = `scoped-${scope}-current`;
+		const sibling = `scoped-${scope}-other`;
+		const bystander = `unscoped-${scope}`;
+		for (const name of [current, sibling, bystander]) await createNamedDatabase(name);
+
+		await deleteSiblingDatabases(current, (name) => name.startsWith(`scoped-${scope}-`));
+
+		const names = await listDatabaseNames();
+		expect(names).not.toContain(sibling);
+		expect(names).toContain(current);
+		expect(names).toContain(bystander);
+	});
+
+	it('deletes nothing under a predicate when `databases()` is unavailable', async () => {
+		const { deleteSiblingDatabases } = await import('./database.idb');
+		const current = `nolist-${scope}-current`;
+		const sibling = `nolist-${scope}-other`;
+		for (const name of [current, sibling]) await createNamedDatabase(name);
+
+		// A factory without the enumeration API — there is nothing to filter,
+		// so the sweep degrades to "current database only".
+		const factory = {
+			deleteDatabase: vi.fn(),
+		} as unknown as IDBFactory;
+
+		await deleteSiblingDatabases(current, (name) => name.startsWith('nolist-'), factory);
+
+		expect((factory.deleteDatabase as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(
+			0,
+		);
+		expect(await listDatabaseNames()).toContain(sibling);
+	});
+
+	it('a blocked sibling times out instead of hanging sign-out', async () => {
+		const { deleteSiblingDatabases } = await import('./database.idb');
+		// A delete request that fires `blocked` and never settles — exactly what
+		// a sibling another tab still holds open does.
+		const factory = {
+			deleteDatabase: vi.fn(() => ({
+				onsuccess: null,
+				onerror: null,
+				onblocked: null,
+			})),
+		} as unknown as IDBFactory;
+
+		vi.useFakeTimers();
+		try {
+			const swept = deleteSiblingDatabases('current', ['blocked-forever'], factory);
+			let settled = false;
+			swept.then(() => {
+				settled = true;
+			});
+
+			await vi.advanceTimersByTimeAsync(1999);
+			expect(settled).toBe(false);
+			await vi.advanceTimersByTimeAsync(2);
+			await expect(swept).resolves.toBeUndefined();
+			expect(settled).toBe(true);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('rejects nothing when a sibling delete errors', async () => {
+		const { deleteSiblingDatabases } = await import('./database.idb');
+		const factory = {
+			deleteDatabase: vi.fn(() => {
+				const request = {
+					onsuccess: null as null | (() => void),
+					onerror: null as null | (() => void),
+					error: new Error('denied'),
+				};
+				queueMicrotask(() => request.onerror?.());
+				return request;
+			}),
+		} as unknown as IDBFactory;
+
+		await expect(
+			deleteSiblingDatabases('current', ['broken'], factory),
+		).resolves.toBeUndefined();
+	});
+});

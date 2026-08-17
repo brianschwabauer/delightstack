@@ -228,6 +228,15 @@ export type DatabaseSyncResponse<DatabaseConfig extends Record<string, any>> = {
 			 * or the ceiling is raised.
 			 */
 			deferred?: true;
+			/**
+			 * Set when the server refused to sync this entity type for this
+			 * client at all (a permission decision — e.g. a `beforeSync` hook on
+			 * the entity's route). Nothing shipped and nothing ever will for
+			 * this session: the client must stop backfilling the type and route
+			 * its queries to the server. Unlike `deferred` this is not re-probed,
+			 * because the answer cannot change without a new request context.
+			 */
+			denied?: true;
 		};
 	};
 };

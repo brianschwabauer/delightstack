@@ -1,7 +1,16 @@
 import type { Handle, RequestEvent } from '@sveltejs/kit';
 import type { Database } from '../schema/schema';
+import type { DatabaseSyncResponse } from './db.server';
 import { DelightError } from '@delightstack/utilities';
 import { decodeSearchQuery } from '../search-query';
+
+/**
+ * One entity's member of a sync response. Type-only — `db.server` imports
+ * `cloudflare:workers`, which does not resolve outside the Workers runtime.
+ */
+type SyncEntityResult = NonNullable<
+	DatabaseSyncResponse<Record<string, Database.Table>>['entity'][string]
+>;
 
 // ---------------------------------------------------------------------------
 // Type helpers
@@ -51,6 +60,12 @@ export interface BeforeDeleteContext<T extends Database.Table> {
 export interface BeforeGetContext {
 	/** The entity ID from the URL */
 	id: string;
+	/** The SvelteKit request event */
+	event: RequestEvent;
+}
+
+/** Context passed to `beforeSync` hooks */
+export interface BeforeSyncContext {
 	/** The SvelteKit request event */
 	event: RequestEvent;
 }
@@ -120,6 +135,19 @@ export interface DatabaseRouteHooks<T extends Database.Table> {
 	beforeList?: (
 		ctx: BeforeListContext,
 	) => void | Record<string, unknown> | Promise<void | Record<string, unknown>>;
+
+	/**
+	 * Called before this entity type is included in a sync response. Throw to
+	 * deny it — the type is dropped from the request forwarded to the database
+	 * and comes back marked `denied: true`, which tells the client to stop
+	 * backfilling it and route its queries to the server. The rest of the
+	 * request syncs normally.
+	 *
+	 * This is the per-entity counterpart of the whole-request `sync.beforeSync`
+	 * option, and the only place row-visibility rules can reach the sync
+	 * endpoint: `beforeList` does NOT apply to it.
+	 */
+	beforeSync?: (ctx: BeforeSyncContext) => void | Promise<void>;
 
 	/**
 	 * Called after an entity is created. Use for side effects (logging, notifications, etc.).
@@ -194,8 +222,10 @@ export interface DatabaseHandleOptions<
 	 * SECURITY: the sync endpoint returns the sparse (searchable) fields of
 	 * ALL entities — row-level restrictions applied in `beforeList` hooks do
 	 * NOT apply to it. When `requireAuth` is true (the default) it requires a
-	 * session; for entities with per-user visibility use `beforeSync` or opt
-	 * them out of syncing with `search_mode: 'server'` on the client.
+	 * session; for entities with per-user visibility use `beforeSync` — either
+	 * this whole-request one, or `hooks[entity].beforeSync` to deny a single
+	 * type (the rest of the request still syncs) — or opt them out of syncing
+	 * with `search_mode: 'server'` on the client.
 	 */
 	sync?:
 		| boolean
@@ -476,7 +506,33 @@ async function handleDelete(
 // Sync handler
 // ---------------------------------------------------------------------------
 
-async function handleSync(db: DatabaseRpc, event: RequestEvent): Promise<Response> {
+/**
+ * The per-entity result synthesized for a type a `beforeSync` hook denied.
+ *
+ * It mirrors the minimal shape of the server's own deferred entry (nothing
+ * shipped, no cursor advanced) so a client can read it with the same code path
+ * — only the flag differs.
+ */
+function deniedSyncEntity(): SyncEntityResult {
+	return {
+		config_version: 0,
+		deleted: [],
+		created: [],
+		updated: [],
+		start_updated_at: 0,
+		end_updated_at: 0,
+		first_updated_at: 0,
+		last_updated_at: 0,
+		total_count: 0,
+		denied: true,
+	};
+}
+
+async function handleSync(
+	db: DatabaseRpc,
+	event: RequestEvent,
+	routes: DatabaseRouteConfig[],
+): Promise<Response> {
 	if (!db.sync) {
 		throw new DelightError({
 			message: 'Sync not supported by this database',
@@ -490,7 +546,42 @@ async function handleSync(db: DatabaseRpc, event: RequestEvent): Promise<Respons
 		query = body as Record<string, unknown>;
 	}
 
-	const data = await db.sync(query);
+	// A missing `entity` map means "every configured type", so it must be
+	// expanded BEFORE the per-entity gate runs — otherwise a client that simply
+	// omits the map would be served every type without a hook ever being asked.
+	const requested = query.entity as Record<string, unknown> | undefined;
+	const requested_types =
+		requested && typeof requested === 'object'
+			? Object.keys(requested)
+			: routes.map((route) => route.entity);
+
+	const allowed: Record<string, unknown> = {};
+	const denied: Record<string, SyncEntityResult> = {};
+	for (const entity_type of requested_types) {
+		const route = routes.find((candidate) => candidate.entity === entity_type);
+		// A type the app never configured is not forwarded — the database would
+		// ignore it anyway, and echoing it back invites request-shaped probing
+		if (!route) continue;
+		if (route.hooks?.beforeSync) {
+			try {
+				await route.hooks.beforeSync({ event });
+			} catch {
+				// A throw is the documented "this type does not sync for this
+				// request" signal, not a request failure — the rest still syncs
+				denied[entity_type] = deniedSyncEntity();
+				continue;
+			}
+		}
+		allowed[entity_type] = requested?.[entity_type] ?? {};
+	}
+
+	const data = (await db.sync({ ...query, entity: allowed })) as
+		| { entity?: Record<string, unknown> }
+		| undefined;
+
+	if (data && typeof data === 'object' && Object.keys(denied).length > 0) {
+		data.entity = { ...(data.entity ?? {}), ...denied };
+	}
 	return jsonResponse(data);
 }
 
@@ -575,7 +666,7 @@ export function createDatabaseHandle<
 					});
 				}
 				if (before_sync) await before_sync(event);
-				return await handleSync(db, event);
+				return await handleSync(db, event, routes);
 			} catch (error) {
 				return errorResponse(error);
 			}

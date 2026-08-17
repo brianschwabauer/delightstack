@@ -10,6 +10,7 @@ import { encodeSearchQuery } from '../search-query';
 import type { SearchQueryInput, ValidSearchQuery } from '../search-query';
 import { DelightError } from '@delightstack/utilities';
 import { getWorker, resetWorker, isWorkerShared } from './database.worker.init';
+import { deleteSiblingDatabases } from './database.idb';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1947,8 +1948,32 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 *
 	 * The client is inert afterwards; a later `init()` (fresh sign-in)
 	 * un-freezes and works normally.
+	 *
+	 * **Sibling databases.** Only the current `db_name` is wiped by default. An
+	 * app that scopes `db_name` per org (`db_name: `app-${org_id}`` — the
+	 * documented pattern) has one database per org the user visited, and the
+	 * others survive sign-out. Pass `databases` to take them too: an array of
+	 * names, or a predicate run over `indexedDB.databases()`:
+	 *
+	 * ```ts
+	 * await db.signOut({ databases: (name) => name.startsWith('app-') });
+	 * ```
+	 *
+	 * Sibling deletes are best-effort and run after the current database's
+	 * wipe: a database another tab still holds open blocks indefinitely, so
+	 * each delete is bounded by a short timeout and its failure ignored —
+	 * sign-out can never hang on one. Where `indexedDB.databases()` is
+	 * unavailable, the predicate form has nothing to enumerate and only the
+	 * current database is wiped.
 	 */
-	async signOut(): Promise<void> {
+	async signOut(options?: {
+		/**
+		 * Sibling databases to delete alongside the current one — an explicit
+		 * list of `db_name`s, or a predicate over the names `indexedDB` reports.
+		 * The current `db_name` is always handled by the wipe itself.
+		 */
+		databases?: string[] | ((name: string) => boolean);
+	}): Promise<void> {
 		// 1. Freeze — synchronously, before any await. From this line on no
 		//    version bump, refresh proxy, or late-arriving result can repaint.
 		this.#frozen = true;
@@ -1964,6 +1989,13 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		// 2. Silence the worker, then wipe the IndexedDB database.
 		if (this.#worker) {
 			await this.#worker.wipe();
+		}
+
+		// 2b. Other scopes' databases (the per-org `db_name` pattern). After the
+		//     wipe, never before — the freeze must not wait on a database some
+		//     other tab is still holding open.
+		if (options?.databases && typeof indexedDB !== 'undefined') {
+			await deleteSiblingDatabases(this.#config.db_name, options.databases);
 		}
 
 		// 3. Clear the client caches. The frozen guards keep this quiet: any
