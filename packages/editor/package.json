@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/editor",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"type": "module",
 	"license": "MIT",
 	"description": "A delightful rich text / block editor for Svelte 5 built on ProseMirror — slash commands, drag & drop blocks, magnetic resize, optimistic uploads, and an extensible block system.",

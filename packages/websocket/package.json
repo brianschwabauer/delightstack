@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/websocket",
-	"version": "1.0.2",
+	"version": "2.0.0",
 	"type": "module",
 	"license": "MIT",
 	"description": "Real-time WebSocket presence and messaging for Cloudflare Durable Objects, with a reactive Svelte client over Comlink.",
