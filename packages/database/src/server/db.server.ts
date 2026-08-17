@@ -272,12 +272,34 @@ type DatabaseServerState<
 	 * built from, so a schema change re-triggers the rebuild + config bump.
 	 */
 	native_search?: {
-		[TableName in keyof Database]?: {
-			/** The search schema the tables were last rebuilt from */
-			schema_signature: string;
-			/** Whether the legacy `search_index` metadata has been migrated across */
-			migrated: boolean;
-		};
+		[TableName in keyof Database]?: NativeSearchTableState;
+	};
+};
+
+/** Per-entity-type bookkeeping of the SQLite search driver (see `native_search`). */
+type NativeSearchTableState = {
+	/** The search schema the tables were last rebuilt from */
+	schema_signature: string;
+	/** Whether the legacy `search_index` metadata has been migrated across */
+	migrated: boolean;
+	/**
+	 * Present while a rebuild is in progress. A rebuild is chunked across wakes
+	 * (constructor slice + alarm ticks) so a large corpus can never pin a single
+	 * invocation past the Durable Object CPU limit; this cursor is what makes a
+	 * killed or deferred rebuild resume where it left off instead of starting
+	 * over. Checkpointed in the same transaction as each indexed batch.
+	 */
+	rebuild?: {
+		/** The schema signature this rebuild is building towards */
+		signature: string;
+		/** The last primary key indexed — the next batch resumes after it */
+		after?: string | number;
+		/** Smallest `updated_at` seen so far (0 until one is seen) */
+		first_updated_at: number;
+		/** Largest `updated_at` seen so far */
+		last_updated_at: number;
+		/** Whether finalizing must bump `config_version` (i.e. clients existed) */
+		bump_config_version: boolean;
 	};
 };
 
@@ -810,21 +832,51 @@ export class DatabaseServer<
 			const had_state = this.#search_engine.store.getState(entity_type) !== undefined;
 			this.migrateSearchMetadata(entity_type, legacy_present);
 
-			const signature = JSON.stringify({
-				schema: table.schema,
-				primary_key: table.primary_key,
-				derived: [...(table.derived_fields ?? [])].sort(),
-			});
+			const signature = this.searchSchemaSignature(entity_type);
 			const built = this.#state.native_search?.[entity_type];
-			if (built?.schema_signature === signature) continue;
-			this.rebuildSearchTables(entity_type, had_state || legacy_present);
-			this.setSearchTableState(entity_type, {
-				schema_signature: signature,
-				migrated: true,
-			});
+			const pending = built?.rebuild;
+			if (pending?.signature === signature) {
+				// A prior wake's rebuild was deferred — or the Durable Object was
+				// killed mid-rebuild (e.g. by the CPU limit). Resume from the
+				// checkpointed cursor instead of clearing and starting over: without
+				// this, a corpus too large for one wake's slice would restart from
+				// row one on every wake and never finish.
+				this.runRebuild(entity_type, this.searchRebuildRowsPerSlice());
+			} else if (built?.schema_signature !== signature) {
+				this.beginRebuild(entity_type, signature, had_state || legacy_present);
+				this.runRebuild(entity_type, this.searchRebuildRowsPerSlice());
+			} else if (pending) {
+				// A cursor for a schema that is already built — stale; drop it.
+				this.setSearchTableState(entity_type, { ...built, rebuild: undefined });
+			}
 		}
 
-		if (legacy_present) this.dropLegacySearchTables(indexed_types);
+		this.registerAlarm('search_rebuild', () => this.continueRebuilds());
+		if (this.hasPendingRebuilds()) {
+			// Can't await in the constructor; the alarm write is fire-and-forget.
+			void this.scheduleRebuildAlarm().catch((error) => {
+				console.error('[DatabaseServer] failed to arm the search rebuild alarm:', error);
+			});
+		} else if (legacy_present) {
+			this.dropLegacySearchTables(indexed_types);
+		}
+	}
+
+	/** The serialized search schema an entity type's tables must be built from. */
+	private searchSchemaSignature(entity_type: string): string {
+		const table = this.searchTable(entity_type);
+		return JSON.stringify({
+			schema: table.schema,
+			primary_key: table.primary_key,
+			derived: [...(table.derived_fields ?? [])].sort(),
+		});
+	}
+
+	/** Whether any entity type still has a rebuild cursor to advance. */
+	private hasPendingRebuilds(): boolean {
+		return [...this.#search_tables.keys()].some(
+			(entity_type) => this.#state.native_search?.[entity_type]?.rebuild !== undefined,
+		);
 	}
 
 	/** Whether this Durable Object still carries the pre-native search tables. */
@@ -946,20 +998,19 @@ export class DatabaseServer<
 				}
 			}
 		});
+		const existing = this.#state.native_search?.[entity_type];
 		this.setSearchTableState(entity_type, {
-			schema_signature: this.#state.native_search?.[entity_type]?.schema_signature ?? '',
+			schema_signature: existing?.schema_signature ?? '',
 			migrated: true,
+			rebuild: existing?.rebuild,
 		});
 	}
 
 	/** Persist one entity type's search bookkeeping into the `state` row. */
-	private setSearchTableState(
-		entity_type: string,
-		value: { schema_signature: string; migrated: boolean },
-	): void {
+	private setSearchTableState(entity_type: string, value: NativeSearchTableState): void {
 		const native_search = { ...this.#state.native_search } as Record<
 			string,
-			{ schema_signature: string; migrated: boolean }
+			NativeSearchTableState
 		>;
 		native_search[entity_type] = value;
 		(this.#state as { native_search?: unknown }).native_search = native_search;
@@ -967,21 +1018,89 @@ export class DatabaseServer<
 	}
 
 	/**
-	 * Clear and rebuild an entity type's search rows from the entity table.
+	 * How many entity rows one invocation may re-index before deferring the rest
+	 * of a rebuild to an alarm tick. A row cap — not a wall-clock budget —
+	 * because workerd freezes `Date.now()` during synchronous execution, so
+	 * elapsed time is unobservable from inside the loop. At even a pessimistic
+	 * several ms per large document this stays far below the 30s Durable Object
+	 * CPU limit. A method rather than a field so a subclass override is already
+	 * in effect during the base constructor's bootstrap slice (subclass field
+	 * initializers would run too late). Lower it for unusually heavy documents.
+	 */
+	protected searchRebuildRowsPerSlice(): number {
+		return 1000;
+	}
+
+	/**
+	 * Clear and rebuild an entity type's search rows from the entity table — the
+	 * universal repair path, and what a Durable Object runs on its first wake
+	 * after upgrading from the in-memory engine.
 	 *
-	 * The universal repair path, and what a Durable Object runs on its first wake
-	 * after upgrading from the in-memory engine. It deliberately does NOT use
-	 * `SqliteSearchEngine.rebuildBatch`: that helper reads documents straight out
-	 * of the row (assuming `$derived` is already persisted), whereas a table that
-	 * predates the SQLite engine has never written a `$derived` sub-object. This
-	 * loop re-derives and *backfills* it, so one pass both populates the postings
-	 * and makes the rows self-describing for every later query.
-	 *
-	 * Batched across transactions (paged by primary key) so a large table never
-	 * holds one enormous write open.
+	 * This entry point runs to completion in one invocation (tests and explicit
+	 * repairs want that); the bootstrap instead calls `beginRebuild` +
+	 * `runRebuild` with a row cap so a corpus of any size is chunked across
+	 * wakes and alarm ticks.
 	 */
 	private rebuildSearchTables(entity_type: string, bump_config_version = true): void {
 		if (this.#rebuild_in_flight.has(entity_type)) return;
+		this.beginRebuild(
+			entity_type,
+			this.searchSchemaSignature(entity_type),
+			bump_config_version,
+		);
+		this.runRebuild(entity_type, Infinity);
+	}
+
+	/**
+	 * Clear an entity type's search tables and persist a fresh rebuild cursor,
+	 * atomically — so a wake that dies after this point resumes an empty-but-
+	 * tracked rebuild rather than serving a cleared index it believes is built.
+	 * Until `runRebuild` finishes, queries see a partially built index; that is
+	 * tolerable because finalizing bumps `config_version`, which makes every
+	 * client discard its copy and resync the complete corpus.
+	 */
+	private beginRebuild(
+		entity_type: string,
+		signature: string,
+		bump_config_version: boolean,
+	): void {
+		const built = this.#state.native_search?.[entity_type];
+		this.ctx.storage.transactionSync(() => {
+			this.search.clearSearchTables(entity_type);
+			this.setSearchTableState(entity_type, {
+				schema_signature: built?.schema_signature ?? '',
+				migrated: built?.migrated ?? false,
+				rebuild: {
+					signature,
+					first_updated_at: 0,
+					last_updated_at: 0,
+					bump_config_version,
+				},
+			});
+		});
+	}
+
+	/**
+	 * Advance an entity type's pending rebuild by up to `max_rows` rows,
+	 * finalizing it if the end of the table is reached. Returns whether the
+	 * rebuild is complete (`true` when nothing was pending at all).
+	 *
+	 * It deliberately does NOT use `SqliteSearchEngine.rebuildBatch`: that helper
+	 * reads documents straight out of the row (assuming `$derived` is already
+	 * persisted), whereas a table that predates the SQLite engine has never
+	 * written a `$derived` sub-object. This loop re-derives and *backfills* it,
+	 * so one pass both populates the postings and makes the rows self-describing
+	 * for every later query.
+	 *
+	 * Paged by primary key in 200-row transactions, with the rebuild cursor
+	 * checkpointed inside each batch's transaction — a killed invocation resumes
+	 * at the last committed batch boundary.
+	 */
+	private runRebuild(entity_type: string, max_rows: number): boolean {
+		if (this.#rebuild_in_flight.has(entity_type)) return false;
+		const built = this.#state.native_search?.[entity_type];
+		const rebuild = built?.rebuild;
+		if (!built || !rebuild) return true;
 		this.#rebuild_in_flight.add(entity_type);
 		const table = this.searchTable(entity_type);
 		const source = this.config[entity_type];
@@ -989,29 +1108,30 @@ export class DatabaseServer<
 		const table_name = quoteIdentifier(table.table_name);
 		const BATCH_SIZE = 200;
 		try {
-			this.ctx.storage.transactionSync(() => {
-				this.search.clearSearchTables(entity_type);
-			});
 			// Referenced rows repeat heavily across a rebuild — memoize them.
 			const ref_cache = new Map<string, Record<string, any> | undefined>();
-			let after: string | number | undefined;
-			let first_updated_at = 0;
-			let last_updated_at = 0;
-			for (;;) {
+			let { after, first_updated_at, last_updated_at } = rebuild;
+			let processed = 0;
+			let complete = false;
+			while (!complete && processed < max_rows) {
+				const limit = Math.min(BATCH_SIZE, max_rows - processed);
 				const rows =
 					after === undefined
 						? this.ctx.storage.sql
 								.exec(
-									`SELECT * FROM ${table_name} ORDER BY ${primary_key} ASC LIMIT ${BATCH_SIZE};`,
+									`SELECT * FROM ${table_name} ORDER BY ${primary_key} ASC LIMIT ${limit};`,
 								)
 								.toArray()
 						: this.ctx.storage.sql
 								.exec(
-									`SELECT * FROM ${table_name} WHERE ${primary_key} > ? ORDER BY ${primary_key} ASC LIMIT ${BATCH_SIZE};`,
+									`SELECT * FROM ${table_name} WHERE ${primary_key} > ? ORDER BY ${primary_key} ASC LIMIT ${limit};`,
 									after,
 								)
 								.toArray();
-				if (rows.length === 0) break;
+				if (rows.length === 0) {
+					complete = true;
+					break;
+				}
 				this.ctx.storage.transactionSync(() => {
 					for (const row of rows) {
 						const entity = this.toEntityValue(entity_type, row) as any;
@@ -1028,8 +1148,20 @@ export class DatabaseServer<
 							first_updated_at = updated_at;
 						}
 					}
+					this.setSearchTableState(entity_type, {
+						schema_signature: built.schema_signature,
+						migrated: built.migrated,
+						rebuild: { ...rebuild, after, first_updated_at, last_updated_at },
+					});
 				});
-				if (rows.length < BATCH_SIZE) break;
+				processed += rows.length;
+				if (rows.length < limit) complete = true;
+			}
+			if (!complete) {
+				console.log(
+					`[DatabaseServer] search rebuild of ${entity_type} deferred after ${processed} rows (resumes at alarm)`,
+				);
+				return false;
 			}
 			this.ctx.storage.transactionSync(() => {
 				const store = this.search.store;
@@ -1048,12 +1180,65 @@ export class DatabaseServer<
 				// holds a copy must discard it and resync (§9 Phase 3). A first-ever
 				// bootstrap has no such client, and bumping there would hand every new
 				// deployment a gratuitous version 2.
-				if (bump_config_version) store.bumpConfigVersion(entity_type);
+				if (rebuild.bump_config_version) store.bumpConfigVersion(entity_type);
+				this.setSearchTableState(entity_type, {
+					schema_signature: rebuild.signature,
+					migrated: true,
+				});
 			});
+			// The drop is gated on EVERY configured type having finished (a missing
+			// state entry fails the gate), so with staggered rebuilds it runs
+			// exactly once — after the last one finalizes. Derived from the config,
+			// not `#search_tables`: mid-bootstrap that map only holds the types
+			// registered so far, and a drop before a later type's metadata
+			// migration would destroy its only copy of the legacy tombstones.
+			if (this.legacySearchTablesExist()) {
+				this.dropLegacySearchTables(
+					Object.entries(this.config)
+						.filter(([, table]) => table?.config?.table_definition)
+						.map(([name]) => name),
+				);
+			}
+			return true;
 		} finally {
 			this.#rebuild_in_flight.delete(entity_type);
 			this.search.store.clearDictionaryCache();
 		}
+	}
+
+	/**
+	 * Alarm tick: advance every pending rebuild by one slice, re-arming while
+	 * any remains. Registered as the `search_rebuild` alarm handler — a subclass
+	 * that overrides `alarm()` must call `super.alarm()` (or run the registered
+	 * handlers itself), or a deferred rebuild never completes.
+	 */
+	private async continueRebuilds(): Promise<void> {
+		let pending = false;
+		for (const entity_type of this.#search_tables.keys()) {
+			if (!this.#state.native_search?.[entity_type]?.rebuild) continue;
+			const done = this.runRebuild(entity_type, this.searchRebuildRowsPerSlice());
+			if (!done) pending = true;
+		}
+		if (pending) await this.scheduleRebuildAlarm();
+	}
+
+	/**
+	 * Arm the Durable Object alarm to continue a deferred rebuild immediately.
+	 * Only ever moves the alarm earlier, so a subclass's own scheduled alarm is
+	 * never delayed; an early fire is benign for well-behaved handlers (they
+	 * check their own queues and re-arm). Guarded for test harnesses whose
+	 * storage façade has no alarm support.
+	 */
+	private async scheduleRebuildAlarm(): Promise<void> {
+		const storage = this.ctx.storage as unknown as {
+			getAlarm?(): Promise<number | null>;
+			setAlarm?(time: number): Promise<void> | void;
+		};
+		if (typeof storage.setAlarm !== 'function') return;
+		const when = Date.now();
+		const existing =
+			typeof storage.getAlarm === 'function' ? await storage.getAlarm() : null;
+		if (existing === null || existing > when) await storage.setAlarm(when);
 	}
 
 	/**

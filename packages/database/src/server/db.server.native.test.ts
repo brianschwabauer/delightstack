@@ -921,7 +921,8 @@ describe('search driver — first wake after upgrading from the in-memory engine
 			{ doc_id: 'gone_2', deleted_at: T0 + 900 },
 		]);
 		// ...and they still reach a syncing client on the deletion timeline.
-		const entity = fixture.db.sync({ entity: { note: { start_updated_at: 0 } } }).entity.note as {
+		const entity = fixture.db.sync({ entity: { note: { start_updated_at: 0 } } }).entity
+			.note as {
 			deleted: string[];
 		};
 		expect(entity.deleted.sort()).toEqual(['gone_1', 'gone_2']);
@@ -981,6 +982,206 @@ describe('search driver — first wake after upgrading from the in-memory engine
 			).config_version,
 		).toBe(version_before);
 		expect(state.log.some((entry) => /DROP TABLE/i.test(entry.sql))).toBe(false);
+	});
+});
+
+/* -------------------------------------------------------------------------- */
+/* Chunked rebuild across wakes and alarm ticks                               */
+/* -------------------------------------------------------------------------- */
+
+describe('search driver — a rebuild larger than one slice is chunked across wakes', () => {
+	/** A server whose per-wake rebuild slice is 2 rows. */
+	class SlicedServer extends DatabaseServer<Record<string, Database.Table>> {
+		protected override searchRebuildRowsPerSlice(): number {
+			return 2;
+		}
+	}
+
+	/** One entity type's persisted search bookkeeping, straight from the state row. */
+	function nativeSearchState(state: Fixture['state'], entity_type: string) {
+		const row = state.db.prepare(`SELECT json FROM state WHERE id = 'main'`).get() as {
+			json: string;
+		};
+		return (JSON.parse(row.json).native_search ?? {})[entity_type] as
+			| {
+					schema_signature: string;
+					migrated: boolean;
+					rebuild?: { after?: string; bump_config_version: boolean };
+			  }
+			| undefined;
+	}
+
+	function configVersion(state: Fixture['state']): number {
+		return (
+			state.db
+				.prepare(`SELECT config_version FROM search_state WHERE entity_type = 'note'`)
+				.get() as { config_version: number }
+		).config_version;
+	}
+
+	function legacyTables(state: Fixture['state']): unknown[] {
+		return state.db
+			.prepare(
+				`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('search_index', 'search_journal')`,
+			)
+			.all();
+	}
+
+	/**
+	 * A Durable Object as the in-memory engine left it — like the upgrade suite's
+	 * fixture, but with five notes so a 2-row slice needs three invocations.
+	 */
+	function seedLegacy(): Fixture['state'] {
+		const state = createDurableObjectState();
+		state.db.exec(`
+			CREATE TABLE state (
+				id TEXT PRIMARY KEY,
+				json TEXT NOT NULL,
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			);
+			CREATE TABLE search_index (
+				id TEXT PRIMARY KEY,
+				index_data BLOB NOT NULL,
+				index_config TEXT NOT NULL,
+				index_version INTEGER NOT NULL,
+				index_format TEXT NOT NULL,
+				deleted_entity TEXT NOT NULL,
+				first_updated_at INTEGER NOT NULL,
+				last_updated_at INTEGER NOT NULL
+			);
+			CREATE TABLE search_journal (
+				entity_type TEXT NOT NULL,
+				doc_id TEXT NOT NULL,
+				op TEXT NOT NULL,
+				sparse_doc BLOB,
+				at INTEGER NOT NULL,
+				PRIMARY KEY (entity_type, doc_id)
+			);
+			CREATE TABLE author (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, json TEXT);
+			CREATE TABLE note (id TEXT PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, status TEXT NOT NULL, priority INTEGER NOT NULL, pinned INTEGER, author_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, json TEXT);
+			CREATE TABLE legacy (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, json TEXT);
+		`);
+		const table_config = Object.fromEntries(
+			Object.entries(CONFIG).map(([name, table]) => [
+				name,
+				{ ...table.config.table_definition, json: 'TEXT' },
+			]),
+		);
+		state.db
+			.prepare(`INSERT INTO state (id, json, created_at, updated_at) VALUES (?, ?, ?, ?)`)
+			.run('main', JSON.stringify({ meta: {}, sql_indexes: [], table_config }), T0, T0);
+		state.db
+			.prepare(
+				`INSERT INTO author (id, name, created_at, updated_at, json) VALUES (?, ?, ?, ?, ?)`,
+			)
+			.run('a1', 'Ada', T0, T0, '{}');
+		for (let index = 0; index < 5; index++) {
+			state.db
+				.prepare(
+					`INSERT INTO note (id, title, body, status, priority, author_id, created_at, updated_at, json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				)
+				.run(
+					`n${index}`,
+					`Note ${index}`,
+					`body about carbon ${index}`,
+					'published',
+					index,
+					'a1',
+					T0 + index * 1000,
+					T0 + index * 1000,
+					'{}',
+				);
+		}
+		state.db
+			.prepare(
+				`INSERT INTO search_index (id, index_data, index_config, index_version, index_format, deleted_entity, first_updated_at, last_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			)
+			.run('note.0', new Uint8Array([1, 2, 3]), '{}', 7, 'msgpack', '{}', T0, T0 + 4000);
+		return state;
+	}
+
+	function wake(
+		state: Fixture['state'],
+		ServerClass: typeof DatabaseServer = SlicedServer as never,
+	): DatabaseServer<Record<string, Database.Table>> {
+		return new ServerClass(
+			CONFIG as never,
+			() => undefined,
+			state.ctx as never,
+			{ DEV: true } as never,
+		) as DatabaseServer<Record<string, Database.Table>>;
+	}
+
+	/** The alarm arm is a fire-and-forget promise chain off the constructor. */
+	async function flushMicrotasks(): Promise<void> {
+		for (let index = 0; index < 5; index++) await Promise.resolve();
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(T0 + 10_000);
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('defers past the slice cap: partial index, checkpointed cursor, armed alarm, no config bump, legacy tables intact', async () => {
+		const state = seedLegacy();
+		wake(state);
+		await flushMicrotasks();
+		expect(dumpSearchRows(state, 'note').docs.map((doc) => doc.doc_id)).toEqual([
+			'n0',
+			'n1',
+		]);
+		expect(nativeSearchState(state, 'note')?.rebuild?.after).toBe('n1');
+		expect(state.alarm()).not.toBeNull();
+		// Clients keep syncing against the old version until the corpus is whole.
+		expect(configVersion(state)).toBe(7);
+		expect(legacyTables(state)).toHaveLength(2);
+		state.close();
+	});
+
+	it('alarm ticks advance one slice at a time, then finalize: full index, one config bump, legacy tables dropped', async () => {
+		const state = seedLegacy();
+		const db = wake(state);
+		await db.alarm(); // n2, n3
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(4);
+		expect(configVersion(state)).toBe(7);
+		await db.alarm(); // n4 → finalize
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(5);
+		expect(configVersion(state)).toBe(8);
+		expect(nativeSearchState(state, 'note')?.rebuild).toBeUndefined();
+		expect(legacyTables(state)).toEqual([]);
+		// The finished corpus answers like any other, `$derived` backfilled.
+		expect(
+			(db.list('note', { term: 'carbon' } as never) as unknown as { count: number })
+				.count,
+		).toBe(5);
+		const derived = state.db
+			.prepare(`SELECT json_extract(json, '$."$derived".author_name') AS name FROM note`)
+			.all() as { name: string }[];
+		expect(derived.map((row) => row.name)).toEqual(['Ada', 'Ada', 'Ada', 'Ada', 'Ada']);
+		state.close();
+	});
+
+	it('a fresh wake resumes from the checkpoint — no re-clear, no double config bump', async () => {
+		const state = seedLegacy();
+		wake(state); // "killed" after two rows: nothing else runs on this wake
+		await flushMicrotasks();
+		state.log.length = 0;
+		wake(state, DatabaseServer); // default slice finishes in the constructor
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(5);
+		expect(configVersion(state)).toBe(8);
+		expect(legacyTables(state)).toEqual([]);
+		// Resumed, not restarted: the already-indexed rows were never cleared.
+		expect(
+			state.log.some(
+				(entry) =>
+					/DELETE FROM search_docs/.test(entry.sql) && entry.params[0] === 'note',
+			),
+		).toBe(false);
+		state.close();
 	});
 });
 

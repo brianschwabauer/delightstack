@@ -118,12 +118,16 @@ export interface NodeDurableObjectState {
 			transactionSync<T>(callback: () => T): T;
 			deleteAll(): void;
 			deleteAlarm(): void;
+			getAlarm(): Promise<number | null>;
+			setAlarm(time: number): Promise<void>;
 		};
 		abort(): void;
 	};
 	db: DatabaseSync;
 	/** Every statement executed, in order. */
 	log: { sql: string; params: unknown[] }[];
+	/** The currently armed alarm time, if any — tests fire it via `db.alarm()`. */
+	alarm(): number | null;
 	close(): void;
 }
 
@@ -149,6 +153,7 @@ export function createDurableObjectState(id = 'test-do'): NodeDurableObjectState
 	db.exec('PRAGMA foreign_keys = OFF;');
 	const log: { sql: string; params: unknown[] }[] = [];
 	let depth = 0;
+	let alarm: number | null = null;
 
 	function cursor(rows: Record<string, unknown>[]): DurableSqlCursor {
 		let index = 0;
@@ -173,13 +178,21 @@ export function createDurableObjectState(id = 'test-do'): NodeDurableObjectState
 	return {
 		db,
 		log,
+		alarm: () => alarm,
 		close: () => db.close(),
 		ctx: {
 			id: { toString: () => id },
 			abort: () => {},
 			storage: {
 				deleteAll: () => {},
-				deleteAlarm: () => {},
+				deleteAlarm: () => {
+					alarm = null;
+				},
+				getAlarm: () => Promise.resolve(alarm),
+				setAlarm: (time: number) => {
+					alarm = time;
+					return Promise.resolve();
+				},
 				sql: {
 					exec(query: string, ...bindings: unknown[]): DurableSqlCursor {
 						log.push({ sql: query, params: bindings });
