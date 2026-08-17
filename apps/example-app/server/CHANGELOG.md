@@ -1,5 +1,18 @@
 # @delightstack/example-server
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [7b6f516]
+- Updated dependencies [f23eed0]
+- Updated dependencies [f23eed0]
+- Updated dependencies [c46dd5f]
+  - @delightstack/database@2.2.0
+  - @delightstack/websocket@2.1.0
+  - @delightstack/ai@1.1.2
+  - @delightstack/images@1.1.2
+
 ## 0.0.11
 
 ### Patch Changes

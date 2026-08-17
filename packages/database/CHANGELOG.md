@@ -1,5 +1,37 @@
 # @delightstack/database
 
+## 2.2.0
+
+### Minor Changes
+
+- f23eed0: Generated SQL now double-quotes every consumer-declared identifier, so reserved words work as table and column names.
+
+  `sanitize()` has always stripped table/column/index names to `[a-z0-9_]` as an injection guard, but the names were then interpolated **unquoted** — which meant a table named `transaction` or a column named `order` produced a syntax error at the very first statement, `CREATE TABLE transaction (...)`, and the Durable Object never finished booting. Sanitizing is not the same as being valid: a bare reserved word is a legal identifier only in quotes.
+
+  A `quote()` helper (sanitize + `"..."`) now wraps identifiers at every generated-SQL site in `db.server.ts`: `CREATE TABLE`, `ALTER TABLE ... ADD COLUMN`, `CREATE INDEX` / `DROP INDEX` (name, table and each indexed column), the `get`/`exists` reads, the `INSERT`/`UPDATE`/`DELETE` builders and their column lists, the foreign-key expansion lookups, and the FK-derived cascade's `SELECT`/`UPDATE`. `destroy()` also quotes the table names it reads back out of `sqlite_schema`, which had the same failure. The search subsystem already quoted throughout and is unchanged.
+
+  Column definitions built in `schema/table.ts` are covered too: a `foreignKey()` field emits `REFERENCES "<table>"("<column>")`. This was the last unquoted site, and it failed the same way as the rest — a `CREATE TABLE` naming a reserved-word parent table was a syntax error even though the table's own name was quoted. Both names are already validated to `[a-zA-Z0-9_]` at that point, so the quotes need no escaping.
+
+  Sanitizing still happens first and is unchanged, so this is behavior-neutral for ordinary names — only the emitted SQL text differs. Names compared against `sqlite_schema` or `PRAGMA table_info` output stay unquoted, since SQLite reports them that way.
+
+- c46dd5f: `db.list(type, { sparse: false })` is now typed with full entities.
+
+  A `sparse: false` query has always been answered with complete rows — the client routes it to the server, which reads the entity table rather than the search projection. The types never said so: `ListHandle.hits`, `.items` and `load()` all claimed `Database.SearchEntity<T>` (searchable fields only), so any consumer that queried `sparse: false` to read a non-searchable field had to cast it away. The narrowing is now in the type: `db.list` infers the query type and resolves the document shape through `ListDocument<T, Q>` — `Database.Entity<T>` when the query carries `sparse: false`, `Database.SearchEntity<T>` otherwise.
+
+  Only a **literal** `false` narrows. An object literal, an `as const` query and the function form (`db.list('post', () => ({ sparse: false }))`) all infer it; a query held in a `Database.SearchQuery` variable widens `sparse` to `boolean` and keeps the sparse type, which is the safe direction — the type can never over-promise fields the projection might not carry.
+
+  `SearchHit` and `SearchResult` take a second, defaulted generic (`SearchHit<T, Doc = Database.SearchEntity<T>>`), so existing `SearchResult<typeof POST>` annotations keep exactly their old meaning and compile unchanged. **Pedantically breaking:** code that explicitly annotated the result of a `sparse: false` query as `SearchResult<T>` / `SearchEntity<T>` now sees the wider entity type on one side of that assignment — the annotation still compiles, but the casts it was written to justify are now unnecessary. Runtime behavior is untouched; this release changes types only.
+
+### Patch Changes
+
+- 7b6f516: The first-wake search rebuild is now resumable and chunked across wakes, so a large corpus can no longer wedge a Durable Object in a CPU-limit reset loop.
+
+  Previously `bootstrapSearch()` ran the entire rebuild (re-derive + re-index every entity row) synchronously in the constructor. On a corpus big enough to exceed the Durable Object 30s CPU limit, workerd killed and reset the object — and because the schema signature was only persisted _after_ a completed rebuild, the next wake started over from row one. Every wake died the same way, taking every RPC (and the app on top of it) down with it, forever.
+
+  Now each rebuild persists a per-entity cursor (last primary key, window bounds, config-bump flag) in the state row, checkpointed inside each 200-row batch transaction. A wake advances the rebuild by at most `searchRebuildRowsPerSlice()` rows (default 1000 — a row cap rather than a wall-clock budget, because workerd freezes `Date.now()` during synchronous execution), then defers the rest to a self-re-arming alarm (registered as the `search_rebuild` handler). A killed or deferred wake resumes at the last committed batch instead of restarting. The legacy `search_index`/`search_journal` drop and the `config_version` bump both wait until the rebuild actually finishes, so mid-rebuild clients keep their old corpus and resync exactly once at the end.
+
+  Heads-up for subclasses that override `alarm()`: call `await super.alarm()` (or run the registered handlers yourself), or a deferred rebuild never continues.
+
 ## 2.1.0
 
 ### Minor Changes
