@@ -7,6 +7,7 @@ export {
 	type SearchHit,
 	type SearchResult,
 	type ListQueryInit,
+	type ListDocument,
 	type HandleStatus,
 	type DatabaseStatus,
 } from './database.client.svelte';

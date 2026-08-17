@@ -99,16 +99,22 @@ type EntityInput<T extends Database.Table> = Omit<
 	'id' | 'created_at' | 'updated_at'
 >;
 
-export interface SearchHit<T extends Database.Table = Database.Table> {
+export interface SearchHit<
+	T extends Database.Table = Database.Table,
+	Doc = Database.SearchEntity<T>,
+> {
 	id: string;
-	document: Database.SearchEntity<T>;
+	document: Doc;
 	score: number;
 }
 
-export interface SearchResult<T extends Database.Table = Database.Table> {
-	hits: SearchHit<T>[];
-	/** Convenience — just the sparse documents, in hit order. */
-	items: Database.SearchEntity<T>[];
+export interface SearchResult<
+	T extends Database.Table = Database.Table,
+	Doc = Database.SearchEntity<T>,
+> {
+	hits: SearchHit<T, Doc>[];
+	/** Convenience — just the documents, in hit order. */
+	items: Doc[];
 	count: number;
 	/** Which side answered — the live routing decision for this result. */
 	mode: 'client' | 'server';
@@ -887,6 +893,19 @@ type ValidQueryInit<Q> = Q extends () => infer R
 	: ValidSearchQuery<Q>;
 
 /**
+ * The document shape a query yields. Only a LITERAL `sparse: false` narrows to
+ * the full {@link Database.Entity} — the server answers those queries with
+ * complete rows. A widened `sparse?: boolean` (a query held in a variable
+ * without a literal type), or no `sparse` at all, keeps the sparse projection.
+ * Unwraps the function form of {@link ListQueryInit}.
+ */
+export type ListDocument<T extends Database.Table, Q> = (
+	Q extends () => infer R ? R : Q
+) extends { sparse: false }
+	? Database.Entity<T>
+	: Database.SearchEntity<T>;
+
+/**
  * The reactive list/search handle returned by `db.list(type, query)`.
  *
  * Read `hits`/`items`/`count` in a template or `$derived` — the first read
@@ -898,10 +917,15 @@ type ValidQueryInit<Q> = Q extends () => infer R
  * For a one-shot list, `await db.list(type, query).load()` resolves with a
  * {@link SearchResult} and never starts a subscription — including on SSR,
  * where it answers via the configured `fetch`.
+ *
+ * `Doc` is the document shape the query yields — the sparse projection, or the
+ * full entity when the query literal carries `sparse: false`. `db.list` infers
+ * it via {@link ListDocument}; it is never written by hand.
  */
 export class ListHandle<
 	T extends Database.Table = Database.Table,
 	EntityType extends string = string,
+	Doc = Database.SearchEntity<T>,
 > {
 	readonly entity_type: EntityType;
 	#deps: ListHandleDeps;
@@ -924,8 +948,8 @@ export class ListHandle<
 	/** The token of the newest result applied to `#hits`. */
 	#delivered_token = 0;
 
-	#hits = $state.raw<SearchHit<T>[]>([]);
-	#items = $derived<Database.SearchEntity<T>[]>(this.#hits.map((h) => h.document));
+	#hits = $state.raw<SearchHit<T, Doc>[]>([]);
+	#items = $derived<Doc[]>(this.#hits.map((h) => h.document));
 	#count = $state(0);
 	#status = $state<HandleStatus>('loading');
 	#error = $state<unknown>(null);
@@ -933,13 +957,13 @@ export class ListHandle<
 	#query_state = $state<Database.SearchQuery<T>>({});
 
 	/** Reactive array of scored search hits ({ id, score, document }) */
-	get hits(): SearchHit<T>[] {
+	get hits(): SearchHit<T, Doc>[] {
 		this.#subscriber();
 		return this.#hits;
 	}
 
 	/** Convenience accessor for just the documents, in hit order */
-	get items(): Database.SearchEntity<T>[] {
+	get items(): Doc[] {
 		this.#subscriber();
 		return this.#items;
 	}
@@ -1026,11 +1050,11 @@ export class ListHandle<
 	 * form of the handle. Never starts a subscription, and works on SSR (the
 	 * query is answered via the configured `fetch`). Rejects on failure.
 	 */
-	async load(): Promise<SearchResult<T>> {
+	async load(): Promise<SearchResult<T, Doc>> {
 		const result = await this.#runQuery(true);
 		return {
-			hits: result.hits as SearchHit<T>[],
-			items: (result.hits as SearchHit<T>[]).map((h) => h.document),
+			hits: result.hits as SearchHit<T, Doc>[],
+			items: (result.hits as SearchHit<T, Doc>[]).map((h) => h.document),
 			count: result.count,
 			mode: result.mode,
 		};
@@ -1073,7 +1097,7 @@ export class ListHandle<
 				token >= this.#delivered_token
 			) {
 				this.#delivered_token = token;
-				this.#hits = result.hits as SearchHit<T>[];
+				this.#hits = result.hits as SearchHit<T, Doc>[];
 				this.#count = result.count;
 				this.#mode = result.mode;
 				this.#error = null;
@@ -1265,7 +1289,7 @@ export class ListHandle<
 							this.#status = 'error';
 							return;
 						}
-						this.#hits = result.hits as SearchHit<T>[];
+						this.#hits = result.hits as SearchHit<T, Doc>[];
 						this.#count = result.count;
 						this.#mode = result.mode;
 						this.#error = null;
@@ -1887,11 +1911,17 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 *
 	 * Handles for identical static queries are cached and shared; a function
 	 * query gets its own handle per call.
+	 *
+	 * Documents are the sparse projection (searchable fields only) unless the
+	 * query literal carries `sparse: false`, which the server answers with full
+	 * entities — `hits`, `items` and `load()` are typed accordingly. Only a
+	 * literal narrows: a query held in a `Database.SearchQuery` variable widens
+	 * `sparse` to `boolean` and keeps the sparse type.
 	 */
 	list<K extends keyof T & string, Q extends ListQueryInit<T[K]>>(
 		entity_type: K,
 		query?: Q & ValidQueryInit<Q>,
-	): ListHandle<T[K], K> {
+	): ListHandle<T[K], K, ListDocument<T[K], Q>> {
 		const deps = (release: () => void) => ({
 			getWorker: () => this.#worker,
 			fetch: this.#config.fetch,
@@ -1900,7 +1930,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		});
 		// Function-form queries are reactive per call site — never shared.
 		if (typeof query === 'function') {
-			return new ListHandle(
+			return new ListHandle<T[K], K, ListDocument<T[K], Q>>(
 				entity_type,
 				deps(() => {}),
 				query as ListQueryInit<T[K]>,
@@ -1908,8 +1938,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		}
 		const key = `${entity_type}?${encodeSearchQuery((query ?? {}) as SearchQueryInput).toString()}`;
 		const cached = this.#list_cache.get(key);
-		if (cached) return cached as ListHandle<T[K], K>;
-		const handle = new ListHandle<T[K], K>(
+		if (cached) return cached as ListHandle<T[K], K, ListDocument<T[K], Q>>;
+		const handle = new ListHandle<T[K], K, ListDocument<T[K], Q>>(
 			entity_type,
 			deps(() => {
 				if (this.#list_cache.get(key) === (handle as ListHandle)) {
