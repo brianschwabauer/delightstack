@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/database",
-	"version": "2.2.1",
+	"version": "2.2.2",
 	"type": "module",
 	"license": "MIT",
 	"description": "Reactive SQLite for Cloudflare Durable Objects — typed schema, client/worker sync over Comlink, and a built-in full-text search engine.",
