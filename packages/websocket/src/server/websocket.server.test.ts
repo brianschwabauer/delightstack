@@ -291,6 +291,110 @@ describe('WebsocketServer', () => {
 		});
 	});
 
+	describe('filterEntityChange', () => {
+		it('withholds the event from sessions the filter rejects', () => {
+			const a = makeSocket(session_a);
+			const b = makeSocket(session_b);
+			const { server } = createServer(
+				{
+					filterEntityChange: (_change, session) => session.meta?.user_id === 'u1',
+				},
+				[a, b],
+			);
+
+			server.entityChanged('created', 'post', 7, { title: 'hi' });
+
+			expect(sentMessages(a)).toEqual([
+				{ event: 'entity:created', entity_type: 'post', id: 7, data: { title: 'hi' } },
+			]);
+			expect(b.send).not.toHaveBeenCalled();
+		});
+
+		it('passes the change descriptor to the filter', () => {
+			const a = makeSocket(session_a);
+			const filter = vi.fn(() => true);
+			const { server } = createServer({ filterEntityChange: filter }, [a]);
+
+			server.entityChanged('updated', 'post', 42);
+
+			expect(filter).toHaveBeenCalledWith(
+				{ action: 'updated', entity_type: 'post', id: 42 },
+				session_a,
+			);
+		});
+
+		it('serializes the message once, not once per session', () => {
+			const sockets = [
+				makeSocket(session_a),
+				makeSocket(session_b),
+				makeSocket(session_c),
+			];
+			const { server } = createServer({ filterEntityChange: () => true }, sockets);
+			const stringify = vi.spyOn(JSON, 'stringify');
+
+			server.entityChanged('updated', 'post', 42);
+
+			expect(stringify).toHaveBeenCalledTimes(1);
+			stringify.mockRestore();
+		});
+
+		it('filters delete events the same as create/update', () => {
+			const a = makeSocket(session_a);
+			const b = makeSocket(session_b);
+			const { server } = createServer(
+				{
+					filterEntityChange: (change, session) =>
+						change.action !== 'deleted' || session.meta?.user_id === 'u1',
+				},
+				[a, b],
+			);
+
+			server.entityChanged('deleted', 'post', 7);
+			expect(sentMessages(a)).toEqual([
+				{ event: 'entity:deleted', entity_type: 'post', id: 7 },
+			]);
+			expect(b.send).not.toHaveBeenCalled();
+
+			server.entityChanged('created', 'post', 8);
+			expect(sentMessages(b)).toEqual([
+				{ event: 'entity:created', entity_type: 'post', id: 8 },
+			]);
+		});
+
+		it('withholds only from the session whose filter throws', () => {
+			const a = makeSocket(session_a);
+			const b = makeSocket(session_b);
+			const c = makeSocket(session_c);
+			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const { server } = createServer(
+				{
+					filterEntityChange: (_change, session) => {
+						if (session.ws_session_id === 'b') throw new Error('boom');
+						return true;
+					},
+				},
+				[a, b, c],
+			);
+
+			server.entityChanged('updated', 'post', 42);
+
+			expect(a.send).toHaveBeenCalledTimes(1);
+			expect(c.send).toHaveBeenCalledTimes(1);
+			expect(b.send).not.toHaveBeenCalled();
+			expect(consoleError).toHaveBeenCalledTimes(1);
+			consoleError.mockRestore();
+		});
+
+		it('leaves presence and custom broadcasts ungated', () => {
+			const a = makeSocket(session_a);
+			const { server } = createServer({ filterEntityChange: () => false }, [a]);
+
+			server.broadcast({ event: 'custom' });
+
+			expect(sentMessages(a)).toEqual([{ event: 'custom' }]);
+		});
+	});
+
 	describe('fetch (new connection)', () => {
 		it('returns 404 for non-upgrade requests', async () => {
 			const { server } = createServer();

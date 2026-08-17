@@ -50,6 +50,28 @@ export interface WebsocketServerConfig<
 	) => void | Promise<void>;
 
 	/**
+	 * Outbound gate for entity-change broadcasts. Return `false` to withhold
+	 * this event from that session; `true` (or no filter at all) keeps the
+	 * broadcast-to-everyone behaviour. Only `entity:*` events pass through it —
+	 * presence (`session:*`) and custom broadcasts are unaffected.
+	 *
+	 * Staleness caveat: session metadata (including any `permission` bits) is
+	 * captured at connect time and restored from the hibernation attachment, so
+	 * a role change only takes effect when that client reconnects.
+	 *
+	 * A filter that throws withholds the event from that one session and is
+	 * logged once per broadcast; the remaining sessions are unaffected.
+	 */
+	filterEntityChange?: (
+		change: {
+			action: 'created' | 'updated' | 'deleted';
+			entity_type: string;
+			id: string | number;
+		},
+		session: WebsocketSessionMeta<Meta>,
+	) => boolean;
+
+	/**
 	 * Rate limit for incoming client messages (token bucket).
 	 * @default { max_tokens: 30, refill_every_seconds: 10 }
 	 */
@@ -314,7 +336,8 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 
 	/**
 	 * Called by DatabaseServer after a create/update/delete to broadcast
-	 * the entity change to all connected WebSocket clients.
+	 * the entity change to all connected WebSocket clients — or, when
+	 * `filterEntityChange` is configured, to the subset it admits.
 	 */
 	entityChanged(
 		action: 'created' | 'updated' | 'deleted',
@@ -323,13 +346,58 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 		data?: unknown,
 		sparse?: unknown,
 	): void {
-		this.broadcast({
+		const message: WebsocketMessage = {
 			event: `entity:${action}` as EntityChangedMessage['event'],
 			entity_type,
 			id,
 			data: data as Record<string, unknown> | undefined,
 			sparse: sparse as Record<string, unknown> | undefined,
-		});
+		};
+		const filter = this.config.filterEntityChange;
+		if (!filter) {
+			this.broadcast(message);
+			return;
+		}
+
+		// Serialize ONCE and reuse: a per-session JSON.stringify would scale the
+		// cost of every write with the size of the room.
+		const serialized = JSON.stringify(message);
+		const change = { action, entity_type, id };
+		const disconnected: WebsocketSessionMeta<Meta>[] = [];
+		let logged_filter_error = false;
+
+		for (const ws of this.ctx.getWebSockets()) {
+			const session = this.sessions.get(ws);
+			if (!session) continue;
+			let allowed = false;
+			try {
+				allowed = filter(change, session) !== false;
+			} catch (error) {
+				// Withhold from this session only — one bad filter call must not
+				// cost the rest of the room their event.
+				if (!logged_filter_error) {
+					logged_filter_error = true;
+					console.error('filterEntityChange threw; withholding event', error);
+				}
+				continue;
+			}
+			if (!allowed) continue;
+			try {
+				ws.send(serialized);
+			} catch {
+				// Dead connection — collect for cleanup after the loop
+				this.sessions.delete(ws);
+				disconnected.push(session);
+			}
+		}
+
+		for (const session of disconnected) {
+			this.broadcast({
+				event: 'session:disconnected',
+				...sessionFields(session),
+				num_connections: this.getActiveSessions().length,
+			} as WebsocketMessage);
+		}
 	}
 
 	/**

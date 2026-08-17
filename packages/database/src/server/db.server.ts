@@ -592,13 +592,13 @@ export class DatabaseServer<
 			// The table hasn't been created yet
 			if (!existing_table_def) {
 				const columns = Object.entries(full_definition).map(
-					([column, def]) => `${column} ${def}`,
+					([column, def]) => `${this.quote(column)} ${def}`,
 				);
 				this.ctx.storage.transactionSync(() => {
 					console.log(`Creating table ${table_name} (${columns.join(', ')})`);
 					(this.#state.table_config as any)[table_name] = full_definition;
 					this.ctx.storage.sql.exec(
-						`CREATE TABLE IF NOT EXISTS ${table_name} (${columns.join(', ')});`,
+						`CREATE TABLE IF NOT EXISTS ${this.quote(table_name)} (${columns.join(', ')});`,
 					);
 					this.saveState();
 				});
@@ -622,7 +622,7 @@ export class DatabaseServer<
 				this.ctx.storage.transactionSync(() => {
 					(this.#state.table_config as any)[table_name][column] = def;
 					this.ctx.storage.sql.exec(
-						`ALTER TABLE ${table_name} ADD COLUMN ${column} ${alter_def};`,
+						`ALTER TABLE ${this.quote(table_name)} ADD COLUMN ${this.quote(column)} ${alter_def};`,
 					);
 					this.saveState();
 				});
@@ -655,17 +655,19 @@ export class DatabaseServer<
 						(this.#state.sql_indexes as any) = (this.#state.sql_indexes as any).filter(
 							(i: any) => i.name !== index.name,
 						);
-						this.ctx.storage.sql.exec(`DROP INDEX IF EXISTS ${index_name};`);
+						this.ctx.storage.sql.exec(
+							`DROP INDEX IF EXISTS ${quoteIdentifier(index_name)};`,
+						);
 					}
 					(this.#state.sql_indexes as any).push(index);
 					const columns = index.columns
 						.map(
 							(col) =>
-								`${this.sanitize(col.column)} ${col.direction === 'DESC' ? 'DESC' : 'ASC'}`,
+								`${this.quote(col.column)} ${col.direction === 'DESC' ? 'DESC' : 'ASC'}`,
 						)
 						.join(', ');
 					this.ctx.storage.sql.exec(
-						`CREATE INDEX IF NOT EXISTS ${index_name} ON ${table_name} (${columns})${unique};`,
+						`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(index_name)} ON ${this.quote(table_name)} (${columns})${unique};`,
 					);
 					this.saveState();
 				});
@@ -684,7 +686,7 @@ export class DatabaseServer<
 						(i: any) => i.name !== existing_index.name,
 					);
 					this.ctx.storage.sql.exec(
-						`DROP INDEX IF EXISTS ${this.sanitize(existing_index.name)};`,
+						`DROP INDEX IF EXISTS ${this.quote(existing_index.name)};`,
 					);
 					this.saveState();
 				});
@@ -1209,7 +1211,7 @@ export class DatabaseServer<
 		let data: Entity | undefined;
 		try {
 			const result = this.ctx.storage.sql.exec(
-				`SELECT * FROM ${sanitized_table} WHERE ${primary_key} = ? LIMIT 1`,
+				`SELECT * FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ? LIMIT 1`,
 				id,
 			);
 			data = this.toEntityValue(entity_type, result.next()?.value);
@@ -1239,7 +1241,7 @@ export class DatabaseServer<
 					const foreign_key_table = this.sanitize(foreign_key.table);
 					const foreign_key_column = this.sanitize(foreign_key.column);
 					const foreign_key_result = this.ctx.storage.sql.exec(
-						`SELECT * FROM ${foreign_key_table} WHERE ${foreign_key_column} = ? LIMIT 1`,
+						`SELECT * FROM ${quoteIdentifier(foreign_key_table)} WHERE ${quoteIdentifier(foreign_key_column)} = ? LIMIT 1`,
 						(data as any)[field],
 					);
 					const row = foreign_key_result.next()?.value;
@@ -1321,7 +1323,10 @@ export class DatabaseServer<
 			const sanitized_table = this.sanitize(entity_type);
 			const primary_key = this.sanitize(table.config.primary_key || 'rowid');
 			const existing = this.ctx.storage.sql
-				.exec(`SELECT 1 FROM ${sanitized_table} WHERE ${primary_key} = ? LIMIT 1`, id)
+				.exec(
+					`SELECT 1 FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ? LIMIT 1`,
+					id,
+				)
 				.next();
 			if (existing.done) {
 				throw new DelightError({
@@ -1827,7 +1832,9 @@ export class DatabaseServer<
 				// in one), so use `defer_foreign_keys` instead. It postpones FK checks until the
 				// transaction commits (by which point all tables are gone) and resets automatically.
 				this.ctx.storage.sql.exec(
-					`PRAGMA defer_foreign_keys = true; ${tables.map((v) => `DROP TABLE IF EXISTS ${v.name}`).join('; ')};`,
+					`PRAGMA defer_foreign_keys = true; ${tables
+						.map((v) => `DROP TABLE IF EXISTS ${quoteIdentifier(String(v.name ?? ''))}`)
+						.join('; ')};`,
 				);
 			}
 		});
@@ -1976,9 +1983,9 @@ export class DatabaseServer<
 
 					const updates = Object.entries(this.toSqliteValue(entity_type, input_data)!);
 					const bindings = updates.map(([_, value]) => value);
-					const columns = updates.map(([column]) => column).join(', ');
+					const columns = updates.map(([column]) => this.quote(column)).join(', ');
 					const values = updates.map(() => '?').join(', ');
-					const query_sql = `INSERT INTO ${sanitized_table} (${columns}) VALUES (${values}) RETURNING *;`;
+					const query_sql = `INSERT INTO ${quoteIdentifier(sanitized_table)} (${columns}) VALUES (${values}) RETURNING *;`;
 					const result = this.ctx.storage.sql.exec(query_sql, ...bindings);
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
 					const sparse_entity = table.toSparse(output_data);
@@ -2038,7 +2045,10 @@ export class DatabaseServer<
 					// One SELECT serves both consumers below — `get()` followed by
 					// `readPersistedDerived()` would read the same row twice.
 					const current_row = this.ctx.storage.sql
-						.exec(`SELECT * FROM ${sanitized_table} WHERE ${primary_key} = ? LIMIT 1`, id)
+						.exec(
+							`SELECT * FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ? LIMIT 1`,
+							id,
+						)
 						.next()?.value as Record<string, SqlStorageValue> | undefined;
 					const current_data = this.toEntityValue(entity_type, current_row);
 					if (!current_data) {
@@ -2087,9 +2097,9 @@ export class DatabaseServer<
 					const updates = Object.entries(this.toSqliteValue(entity_type, input_data)!);
 					const bindings = [...updates.map(([_, value]) => value), id];
 					const updateFields = updates
-						.map(([column]) => `${this.sanitize(column)} = ?`)
+						.map(([column]) => `${this.quote(column)} = ?`)
 						.join(', ');
-					const query_sql = `UPDATE ${sanitized_table} SET ${updateFields} WHERE ${primary_key} = ? RETURNING *;`;
+					const query_sql = `UPDATE ${quoteIdentifier(sanitized_table)} SET ${updateFields} WHERE ${quoteIdentifier(primary_key)} = ? RETURNING *;`;
 					const result = this.ctx.storage.sql.exec(query_sql, ...bindings);
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
 					const sparse_entity = table.toSparse(output_data);
@@ -2135,7 +2145,7 @@ export class DatabaseServer<
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
 					this.ensureMonotonicTimestamp(now, entity_type);
 					this.ctx.storage.sql.exec(
-						`DELETE FROM ${sanitized_table} WHERE ${primary_key} = ?`,
+						`DELETE FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ?`,
 						id,
 					);
 					// `removeDocument` writes the tombstone that feeds the sync deletion
@@ -2328,7 +2338,7 @@ export class DatabaseServer<
 			}
 			try {
 				const result = this.ctx.storage.sql.exec(
-					`SELECT * FROM ${this.sanitize(fk_meta.table)} WHERE ${this.sanitize(fk_meta.column)} = ? LIMIT 1`,
+					`SELECT * FROM ${this.quote(fk_meta.table)} WHERE ${this.quote(fk_meta.column)} = ? LIMIT 1`,
 					fk_value,
 				);
 				const row = result.one();
@@ -2399,7 +2409,7 @@ export class DatabaseServer<
 			// Find all records in dep.table where dep.fk_field = entity_id
 			const rows = this.ctx.storage.sql
 				.exec(
-					`SELECT * FROM ${this.sanitize(dep.table)} WHERE ${this.sanitize(dep.fk_field)} = ?`,
+					`SELECT * FROM ${this.quote(dep.table)} WHERE ${this.quote(dep.fk_field)} = ?`,
 					entity_id,
 				)
 				.toArray();
@@ -2461,7 +2471,7 @@ export class DatabaseServer<
 					if (value !== undefined && value !== null) derived_blob[field] = value;
 				}
 				this.ctx.storage.sql.exec(
-					`UPDATE ${this.sanitize(dep.table)} SET updated_at = ?, "json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?)) WHERE ${this.sanitize(dep_pk)} = ?`,
+					`UPDATE ${this.quote(dep.table)} SET "updated_at" = ?, "json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?)) WHERE ${this.quote(dep_pk)} = ?`,
 					ts,
 					JSON.stringify(derived_blob),
 					dep_entity[dep_pk],
@@ -2600,6 +2610,18 @@ export class DatabaseServer<
 			.toLowerCase()
 			.replace(/[^a-z0-9_]/g, '')
 			.replace(/^[0-9]+/, '');
+	}
+
+	/**
+	 * Sanitizes AND double-quotes an identifier for interpolation into SQL.
+	 * `sanitize` alone is the injection guard; the quotes are what let a
+	 * consumer name a table `transaction` or a column `order` without the
+	 * generated statement becoming a syntax error. Only the SQL text gets
+	 * quotes — names compared against `sqlite_schema`/`PRAGMA table_info`
+	 * output must keep using `sanitize`, which returns them unquoted.
+	 */
+	private quote(string: string) {
+		return quoteIdentifier(this.sanitize(string));
 	}
 }
 

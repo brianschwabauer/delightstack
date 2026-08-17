@@ -228,7 +228,7 @@ describe('DatabaseServer: entity API', () => {
 
 		const create_index = state.log.find((entry) => entry.sql.startsWith('CREATE INDEX'));
 		expect(create_index?.sql).toBe(
-			'CREATE INDEX IF NOT EXISTS idxusersdroptableusers ON users (name ASC);',
+			'CREATE INDEX IF NOT EXISTS "idxusersdroptableusers" ON "users" ("name" ASC);',
 		);
 		expect(
 			state.db
@@ -330,5 +330,104 @@ describe('DatabaseServer: FK-derived fields', () => {
 
 		fixture.db.delete('authors', author.id);
 		expect(indexedAuthorName(book.id)).toBe('Unknown');
+	});
+});
+
+/* -------------------------------------------------------------------------- */
+/* SQLite reserved words as identifiers                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A consumer is free to name a table `transaction` and a column `order`. Every
+ * generated statement must therefore double-quote identifiers — unquoted, the
+ * boot-time `CREATE TABLE` alone is a syntax error and the DO never comes up.
+ */
+const reservedTable = Database.table('transaction', (s) => ({
+	id: s.primaryKey(),
+	order: s.string().searchable().indexable(),
+	group: s.string().searchable(),
+}));
+
+const RESERVED_CONFIG = { transaction: reservedTable } as unknown as Record<
+	string,
+	Database.Table
+>;
+
+describe('DatabaseServer: reserved-word identifiers', () => {
+	let fixture: Fixture;
+	beforeEach(() => {
+		fixture = createServer(RESERVED_CONFIG);
+	});
+	afterEach(() => fixture.state.close());
+
+	it('creates a table named `transaction` with a column named `order`', () => {
+		// `PRAGMA table_info` reports names UNQUOTED — only the SQL text carries quotes.
+		const columns = fixture.state.db
+			.prepare(`PRAGMA table_info("transaction")`)
+			.all()
+			.map((row) => (row as { name: string }).name);
+		expect(columns).toEqual(expect.arrayContaining(['id', 'order', 'group', 'json']));
+	});
+
+	it('round-trips create/get/update/delete against the reserved names', () => {
+		const created = fixture.db.create('transaction', {
+			order: 'first',
+			group: 'alpha',
+		} as never) as unknown as { id: string; order: string };
+		expect(created.order).toBe('first');
+
+		expect(
+			(fixture.db.get('transaction', created.id) as unknown as { order: string }).order,
+		).toBe('first');
+
+		const updated = fixture.db.update('transaction', created.id, {
+			order: 'second',
+		} as never) as unknown as { order: string; group: string };
+		expect(updated.order).toBe('second');
+		expect(updated.group).toBe('alpha');
+
+		fixture.db.delete('transaction', created.id);
+		expect(() => fixture.db.get('transaction', created.id)).toThrow();
+	});
+
+	it('answers a search query against the reserved table', () => {
+		fixture.db.create('transaction', { order: 'apricot', group: 'alpha' } as never);
+		fixture.db.create('transaction', { order: 'banana', group: 'beta' } as never);
+
+		const results = fixture.db.list('transaction', {
+			term: 'apricot',
+		} as never) as unknown as { count: number; hits: { document: { order: string } }[] };
+		expect(results.count).toBe(1);
+		expect(results.hits[0]?.document.order).toBe('apricot');
+
+		const all = fixture.db.list('transaction', {} as never) as unknown as {
+			count: number;
+		};
+		expect(all.count).toBe(2);
+	});
+
+	it('creates the configured sql index on the reserved column', () => {
+		const index = fixture.state.db
+			.prepare(
+				`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'transaction' AND name = ?`,
+			)
+			.all('idx_transaction_order');
+		expect(index).toHaveLength(1);
+	});
+
+	it('syncs the reserved table', () => {
+		const created = fixture.db.create('transaction', {
+			order: 'synced',
+			group: 'alpha',
+		} as never) as unknown as { id: string };
+
+		const response = fixture.db.sync({
+			entity: { transaction: { start_updated_at: 0, limit: 10 } },
+		} as never) as unknown as {
+			entity: { transaction: { created?: { id: string }[] } };
+		};
+		expect(response.entity.transaction.created?.map((row) => row.id)).toContain(
+			created.id,
+		);
 	});
 });

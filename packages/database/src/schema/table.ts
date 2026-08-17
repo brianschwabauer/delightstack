@@ -1117,7 +1117,11 @@ export namespace Database {
 						`Foreign key field '${fieldName}' has an invalid column name '${field.foreign_key.column}'. Column names can only contain alphanumeric characters and underscores.`,
 					);
 				}
-				sqliteColumnDef += ` REFERENCES ${field.foreign_key.table}(${field.foreign_key.column})`;
+				// Quoted like every other identifier the DDL emits, so a reserved
+				// word (`transaction`, `order`, …) is a usable table name. Both
+				// names are already validated as [a-zA-Z0-9_] above, so a plain
+				// double quote is safe with no escaping.
+				sqliteColumnDef += ` REFERENCES "${field.foreign_key.table}"("${field.foreign_key.column}")`;
 				if (field.foreign_key.on_update) {
 					sqliteColumnDef += ` ON UPDATE ${field.foreign_key.on_update}`;
 				}
