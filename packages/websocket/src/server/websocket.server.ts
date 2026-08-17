@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DelightError, generateID } from '@delightstack/utilities';
-import type { DatabaseBroadcast } from '@delightstack/database';
+import type { DatabaseBroadcast, DatabaseBroadcastChange } from '@delightstack/database';
 import type {
 	WebsocketMessage,
 	WebsocketSessionMeta,
@@ -330,6 +330,23 @@ export class WebsocketServer<Meta extends Record<string, unknown> = AuthSessionM
 			data: data as Record<string, unknown> | undefined,
 			sparse: sparse as Record<string, unknown> | undefined,
 		});
+	}
+
+	/**
+	 * Batched form of {@link entityChanged}: one RPC per DatabaseServer flush.
+	 * Clients still receive one frame per change — the wire protocol is
+	 * unchanged, only the DO-to-DO call count shrinks.
+	 */
+	entitiesChanged(changes: DatabaseBroadcastChange[]): void {
+		for (const change of changes) {
+			this.entityChanged(
+				change.action,
+				change.entity_type,
+				change.id,
+				change.data,
+				change.sparse,
+			);
+		}
 	}
 
 	/** Broadcast a message to all connected clients. Optionally exclude one connection. */

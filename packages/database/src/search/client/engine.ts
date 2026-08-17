@@ -40,7 +40,7 @@ import {
 	type ScoredDocument,
 } from '../core/pipeline';
 import { TokenHits } from '../core/token_hits';
-import { tokenize } from '../core/tokenizer';
+import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer';
 import type { FacetDefinition, SearchQuery, SearchQueryResults } from '../core/types';
 import {
 	evaluateWhere,
@@ -129,7 +129,13 @@ export class IdbSearchEngine {
 			config.schema,
 		);
 
-		const term_tokens = typeof query.term === 'string' ? tokenize(query.term) : [];
+		// DoS clamp: only the first MAX_QUERY_TOKENS tokens of the query term are
+		// used — identical to the server's slice, so both drivers score the same
+		// token set for the same term.
+		const term_tokens =
+			typeof query.term === 'string'
+				? tokenize(query.term).slice(0, MAX_QUERY_TOKENS)
+				: [];
 		const distinct_tokens = [...new Set(term_tokens)].sort(compareStrings);
 		const has_term = distinct_tokens.length > 0;
 

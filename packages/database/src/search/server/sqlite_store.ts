@@ -45,6 +45,9 @@ import { normalizeVector } from './vector';
 /** The subset of Cloudflare's `SqlStorageCursor` this module needs. */
 export interface SearchSqlCursor {
 	toArray(): Record<string, unknown>[];
+	// A real cursor is single-pass: consume it via toArray() OR iteration, never
+	// both. Iteration is what lets the full-field vector scan stay O(1) in rows.
+	[Symbol.iterator](): IterableIterator<Record<string, unknown>>;
 }
 
 /**
@@ -863,43 +866,27 @@ export class SqliteSearchStore {
 	}
 
 	/**
-	 * Stored vectors for a field, ascending by doc id.
-	 *
-	 * Pass `doc_ids` to read only those documents' vectors via chunked
-	 * `IN (...)` lists (the candidate-pushdown path); omit it to scan the whole
-	 * field. Membership in the result is identical either way for any doc id
-	 * present in `doc_ids`.
+	 * The listed documents' stored vectors, ascending by doc id, read via
+	 * chunked `IN (...)` lists — the candidate-pushdown path.
 	 */
 	getVectors(
 		entity_type: string,
 		field: string,
-		doc_ids?: readonly string[],
+		doc_ids: readonly string[],
 	): [string, Float32Array][] {
 		const rows: Record<string, unknown>[] = [];
-		if (doc_ids === undefined) {
+		for (const batch of chunk(doc_ids, MAX_IN_VALUES)) {
+			if (batch.length === 0) continue;
 			rows.push(
 				...this.sql
 					.exec(
-						`SELECT doc_id, vec FROM search_vectors WHERE entity_type = ? AND field = ?;`,
+						`SELECT doc_id, vec FROM search_vectors WHERE entity_type = ? AND field = ? AND doc_id IN (${placeholderList(batch.length)});`,
 						entity_type,
 						field,
+						...batch,
 					)
 					.toArray(),
 			);
-		} else {
-			for (const batch of chunk(doc_ids, MAX_IN_VALUES)) {
-				if (batch.length === 0) continue;
-				rows.push(
-					...this.sql
-						.exec(
-							`SELECT doc_id, vec FROM search_vectors WHERE entity_type = ? AND field = ? AND doc_id IN (${placeholderList(batch.length)});`,
-							entity_type,
-							field,
-							...batch,
-						)
-						.toArray(),
-				);
-			}
 		}
 		const vectors: [string, Float32Array][] = rows.map((row) => [
 			String(row.doc_id),
@@ -907,6 +894,27 @@ export class SqliteSearchStore {
 		]);
 		vectors.sort((a, b) => compareStrings(a[0], b[0]));
 		return vectors;
+	}
+
+	/**
+	 * Every stored vector for a field, streamed off the SQL cursor one row at a
+	 * time — never materialized, so a corpus-sized scan stays O(1) in rows
+	 * (the DO's 128MB heap is the constraint). Yield order is the cursor's, not
+	 * sorted: the only consumer accumulates scores into a Map and re-orders with
+	 * a total comparator, so scan order is unobservable.
+	 */
+	*scanVectors(
+		entity_type: string,
+		field: string,
+	): IterableIterator<[string, Float32Array]> {
+		const cursor = this.sql.exec(
+			`SELECT doc_id, vec FROM search_vectors WHERE entity_type = ? AND field = ?;`,
+			entity_type,
+			field,
+		);
+		for (const row of cursor) {
+			yield [String(row.doc_id), blobToVector(row.vec)];
+		}
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -973,10 +981,18 @@ export class SqliteSearchStore {
 		token: string,
 		exact: boolean,
 		tolerance: number,
+		range_memo?: Map<string, string[]>,
 	): string[] {
 		const tokens = this.getDictionary(entity_type, field);
 		if (tokens === null) {
-			return this.#expandTokenViaSql(entity_type, field, token, exact, tolerance);
+			return this.#expandTokenViaSql(
+				entity_type,
+				field,
+				token,
+				exact,
+				tolerance,
+				range_memo,
+			);
 		}
 		const cached = this.#dictionaries.get(dictionaryKey(entity_type, field));
 		// Normally the cache's own parallel arrays; rebuilt only if something
@@ -986,13 +1002,21 @@ export class SqliteSearchStore {
 		return expandCachedDictionary(dictionary, token, exact, tolerance);
 	}
 
-	/** The >200k-token fallback: range queries instead of an in-memory array. */
+	/**
+	 * The >200k-token fallback: range queries instead of an in-memory array.
+	 *
+	 * `range_memo` is a caller-owned per-query cache (the mirror of the client
+	 * driver's): a tolerance expansion has to read the field's whole token
+	 * table, and without the memo N query tokens would cost N identical
+	 * full-table reads and sorts. Keyed by field.
+	 */
 	#expandTokenViaSql(
 		entity_type: string,
 		field: string,
 		token: string,
 		exact: boolean,
 		tolerance: number,
+		range_memo?: Map<string, string[]>,
 	): string[] {
 		if (exact) {
 			const rows = this.sql
@@ -1006,15 +1030,20 @@ export class SqliteSearchStore {
 			return rows.map((row) => String(row.token));
 		}
 		if (tolerance > 0) {
-			const rows = this.sql
-				.exec(
-					`SELECT token FROM search_tokens WHERE entity_type = ? AND field = ?;`,
-					entity_type,
-					field,
-				)
-				.toArray()
-				.map((row) => String(row.token));
-			rows.sort(compareStrings);
+			const memo_key = dictionaryKey(entity_type, field);
+			let rows = range_memo?.get(memo_key);
+			if (!rows) {
+				rows = this.sql
+					.exec(
+						`SELECT token FROM search_tokens WHERE entity_type = ? AND field = ?;`,
+						entity_type,
+						field,
+					)
+					.toArray()
+					.map((row) => String(row.token));
+				rows.sort(compareStrings);
+				range_memo?.set(memo_key, rows);
+			}
 			const matcher = new ToleranceMatcher(token, tolerance);
 			return rows.filter(
 				(candidate) => candidate.startsWith(token) || matcher.matches(candidate),

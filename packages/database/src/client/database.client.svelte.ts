@@ -503,13 +503,18 @@ export class EntityState<
 					data = (await response.json()) as Database.Entity<T>;
 					if (this.#worker && data) {
 						// Seed the worker's IDB + search index so client-side nav reads
-						// back from cache.
-						await this.#worker.applyExternalChange(
-							this.entity_type,
-							'update',
-							this.#id,
-							data as unknown as Record<string, unknown>,
-						);
+						// back from cache. Fire-and-forget: comlink delivers port
+						// messages in order, so a later `worker.get` still sees the
+						// seed — awaiting would put a worker RPC + IDB write on the
+						// first-paint critical path for a pure cache-warm side effect.
+						void this.#worker
+							.applyExternalChange(
+								this.entity_type,
+								'update',
+								this.#id,
+								data as unknown as Record<string, unknown>,
+							)
+							.catch(() => {});
 					}
 				}
 			} else if (this.#worker) {
@@ -705,6 +710,15 @@ export class EntityHandle<
 	/** Last error from a fetch; cleared on the next successful load. */
 	get error(): unknown {
 		return this.#error;
+	}
+
+	/**
+	 * Whether a reactive listener currently holds the handle live (between
+	 * start and stop). Read by the owning client so cache eviction never
+	 * discards a handle with active subscribers.
+	 */
+	get live(): boolean {
+		return this.#effect_cleanup !== null;
 	}
 
 	constructor(entity_type: EntityType, id: string | number, deps: EntityHandleDeps) {
@@ -909,7 +923,7 @@ export class ListHandle<
 	/** The token of the newest result applied to `#hits`. */
 	#delivered_token = 0;
 
-	#hits = $state<SearchHit<T>[]>([]);
+	#hits = $state.raw<SearchHit<T>[]>([]);
 	#items = $derived<Database.SearchEntity<T>[]>(this.#hits.map((h) => h.document));
 	#count = $state(0);
 	#status = $state<HandleStatus>('loading');
@@ -1257,6 +1271,10 @@ export class ListHandle<
 						this.#status = 'ready';
 					}),
 					this.#push_token,
+					// Liveness probe: the worker pings this periodically and drops the
+					// subscription when the ping stops settling (this tab's port died
+					// without an unsubscribe — crash, hard navigation).
+					proxy(async () => true),
 				);
 			} catch (e) {
 				this.#error = e;
@@ -1307,10 +1325,21 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	static readonly #REFRESH_PROXY_LIMIT = 500;
 
 	/**
+	 * LRU cap shared by `#entity_cache` and `#get_cache`. Each entry retains
+	 * full entity copies, so both maps are bounded like `#refresh_proxies`;
+	 * eviction skips entries that hold live state (an active subscriber or
+	 * unsaved changes), so exceeding the cap is possible but self-limiting.
+	 */
+	static readonly #HANDLE_CACHE_LIMIT = 200;
+
+	/**
 	 * Cached `EntityState` instances keyed by `type:id`. Scoped to the
 	 * DatabaseClient so per-request SvelteKit SSR (where the layout creates
 	 * a fresh client) is cache-isolated, while client sessions still reuse
 	 * the same wrapper across navigations / multiple reads of the same id.
+	 * Bounded (LRU) — instances used once (e.g. a `load()` in `+page.ts`)
+	 * would otherwise accumulate for the lifetime of the session. An evicted
+	 * instance keeps working standalone; the same key just constructs fresh.
 	 */
 	#entity_cache = new Map<string, EntityState>();
 
@@ -1318,7 +1347,9 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 * Cached `EntityHandle` instances keyed by `type:id` — `db.get` in a load
 	 * function and in a component must land on the same handle for the SSR →
 	 * hydration handoff to be a single request. Entries drop themselves when
-	 * their last reactive listener stops reading.
+	 * their last reactive listener stops reading; handles that never start a
+	 * subscription (awaited `.load()` only) are bounded by LRU eviction
+	 * instead. An evicted handle keeps working standalone.
 	 */
 	#get_cache = new Map<string, EntityHandle>();
 
@@ -1549,7 +1580,23 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	): EntityHandle<T[K], K> {
 		const key = `${entity_type}:${id}`;
 		const cached = this.#get_cache.get(key);
-		if (cached) return cached as EntityHandle<T[K], K>;
+		if (cached) {
+			// Re-insert to mark as recently used (Map preserves insertion order)
+			this.#get_cache.delete(key);
+			this.#get_cache.set(key, cached);
+			return cached as EntityHandle<T[K], K>;
+		}
+		if (this.#get_cache.size >= DatabaseClient.#HANDLE_CACHE_LIMIT) {
+			// Evict the least recently used handle that has no active reactive
+			// listener — a live handle must never be discarded from under its
+			// subscribers, so when everything is live nothing is evicted.
+			for (const [k, h] of this.#get_cache) {
+				if (!h.live) {
+					this.#get_cache.delete(k);
+					break;
+				}
+			}
+		}
 		const handle = new EntityHandle<T[K], K>(entity_type, id, {
 			getWorker: () => this.#worker,
 			fetch: this.#config.fetch,
@@ -1754,7 +1801,26 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	): EntityState<T[K], K> {
 		const key = `${entity_type}:${id ?? ''}`;
 		const cached = this.#entity_cache.get(key);
-		if (cached) return cached as EntityState<T[K], K>;
+		if (cached) {
+			// Re-insert to mark as recently used (Map preserves insertion order)
+			this.#entity_cache.delete(key);
+			this.#entity_cache.set(key, cached);
+			return cached as EntityState<T[K], K>;
+		}
+		if (this.#entity_cache.size >= DatabaseClient.#HANDLE_CACHE_LIMIT) {
+			// Evict the least recently used instance with no unsaved work.
+			// `untrack` keeps the scan from registering reactive reads (this
+			// method is called from `$derived`) — `has_changes` would otherwise
+			// subscribe the caller to every scanned instance and auto-load them.
+			untrack(() => {
+				for (const [k, s] of this.#entity_cache) {
+					if (!s.has_changes && !s.saving) {
+						this.#entity_cache.delete(k);
+						break;
+					}
+				}
+			});
+		}
 
 		const table = this.#config.tables[entity_type];
 		const instance = new EntityState<T[K], K>(entity_type, id, {

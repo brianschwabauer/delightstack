@@ -369,11 +369,12 @@ function recursivelyParseField(
 	path: string[],
 	issues: Array<{ path: string[]; message: string }>,
 ): any {
-	let label = path.join('.');
-	if ('label' in field && (field as any).label) {
-		label = (field as any).label;
-	} else if ('placeholder' in field && (field as any).placeholder) {
-		label = (field as any).placeholder;
+	// Lazy: only issue messages need the label, so don't compute it per field per row
+	function label(): string {
+		if ('label' in field && (field as any).label) return (field as any).label;
+		if ('placeholder' in field && (field as any).placeholder)
+			return (field as any).placeholder;
+		return path.join('.');
 	}
 	if (value === undefined || value === null) {
 		// Apply .default() declared on the field — the validator fills it in for
@@ -389,7 +390,7 @@ function recursivelyParseField(
 		}
 		if (!('optional' in field && field.optional)) {
 			issues.push({
-				message: `Field '${label}' is required but was not provided.`,
+				message: `Field '${label()}' is required but was not provided.`,
 				path,
 			});
 		}
@@ -400,7 +401,7 @@ function recursivelyParseField(
 	if (field.type === 'object') {
 		if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 			issues.push({
-				message: `Field '${label}' must be an object.`,
+				message: `Field '${label()}' must be an object.`,
 				path,
 			});
 			return;
@@ -424,7 +425,7 @@ function recursivelyParseField(
 	if (field.type === 'array') {
 		if (!Array.isArray(value)) {
 			issues.push({
-				message: `Field '${label}' must be an array.`,
+				message: `Field '${label()}' must be an array.`,
 				path,
 			});
 			return;
@@ -434,30 +435,23 @@ function recursivelyParseField(
 		// Length constraints belong to the ARRAY field itself — the item
 		// field's min/max constrain each item's value and are enforced by
 		// recursivelyParseField below
-		let message = '';
-		if (
-			'min' in field &&
-			typeof field.min === 'number' &&
-			'max' in field &&
-			typeof field.max === 'number'
-		) {
-			message = `Field '${label}' must have between ${field.min} and ${field.max} items.`;
+		if ('min' in field && typeof field.min === 'number' && value.length < field.min) {
+			issues.push({
+				message:
+					'max' in field && typeof field.max === 'number'
+						? `Field '${label()}' must have between ${field.min} and ${field.max} items.`
+						: `Field '${label()}' must have at least ${field.min} items.`,
+				path,
+			});
 		}
-		if ('min' in field && typeof field.min === 'number') {
-			if (value.length < field.min) {
-				issues.push({
-					message: message || `Field '${label}' must have at least ${field.min} items.`,
-					path,
-				});
-			}
-		}
-		if ('max' in field && typeof field.max === 'number') {
-			if (value.length > field.max) {
-				issues.push({
-					message: message || `Field '${label}' must have at most ${field.max} items.`,
-					path,
-				});
-			}
+		if ('max' in field && typeof field.max === 'number' && value.length > field.max) {
+			issues.push({
+				message:
+					'min' in field && typeof field.min === 'number'
+						? `Field '${label()}' must have between ${field.min} and ${field.max} items.`
+						: `Field '${label()}' must have at most ${field.max} items.`,
+				path,
+			});
 		}
 		return value.map((itemValue, index) =>
 			recursivelyParseField(itemField, itemValue, [...path, `[${index}]`], issues),
@@ -475,7 +469,7 @@ function recursivelyParseField(
 			const parsedNumber = Number(value);
 			if (isNaN(parsedNumber)) {
 				issues.push({
-					message: `Field '${label}' must be a number.`,
+					message: `Field '${label()}' must be a number.`,
 					path,
 				});
 				return;
@@ -492,7 +486,7 @@ function recursivelyParseField(
 			const parsedNumber = Number(value);
 			if (isNaN(parsedNumber)) {
 				issues.push({
-					message: `Field '${label}' must be a number.`,
+					message: `Field '${label()}' must be a number.`,
 					path,
 				});
 				return;
@@ -509,7 +503,7 @@ function recursivelyParseField(
 			return field.schema.parse(value);
 		} catch (err) {
 			issues.push({
-				message: `Field '${label}' is invalid: ${DelightError.from(err).message}`,
+				message: `Field '${label()}' is invalid: ${DelightError.from(err).message}`,
 				path,
 			});
 			return;
@@ -1213,6 +1207,38 @@ export namespace Database {
 			}
 		}
 
+		// Precomputed per-table so the per-row hot paths (parse() on every write,
+		// toSparse() on every indexed write and sparse search hit) never re-split
+		// paths or re-scan the whole config. Safe to build eagerly: the config is
+		// finalized above, just like table_definition/indexes.
+
+		// Non-derived fields for parse() — derived fields are computed in
+		// toSparse(), not stored
+		const parse_fields: Array<[string, DatabaseField]> = Object.entries(table_config)
+			.filter(([, fieldDef]) => !(fieldDef as any)['_'].derived)
+			.map(([fieldName, fieldDef]) => [fieldName, fieldDef['_'] as DatabaseField]);
+
+		// Searchable paths, pre-split; FK-derived fields are excluded up front —
+		// they don't exist in entity data and are computed in db.server.ts
+		const searchable_paths: string[][] = searchable_fields
+			.map((field_dot_notation) => field_dot_notation.split('.'))
+			.filter((field_path) => !(field_path[0] in derived_fields));
+
+		// Same-table derived functions (FK-derived skipped — they need DB access
+		// and are computed in db.server.ts); empty for most tables
+		const same_table_derived: Array<[string, (data: unknown) => unknown]> = [];
+		for (const [fieldName, fieldDef] of Object.entries(table_config)) {
+			const field = (fieldDef as any)['_'];
+			if (!field.derived || typeof field.derived_fn !== 'function') continue;
+			if (
+				Array.isArray(field.derived_foreign_keys) &&
+				field.derived_foreign_keys.length > 0
+			) {
+				continue;
+			}
+			same_table_derived.push([fieldName, field.derived_fn]);
+		}
+
 		/**
 		 * The parse function to validate data against the table schema
 		 * @throws a DelightError (status 400, with an `issues` array) if the data is invalid
@@ -1220,12 +1246,9 @@ export namespace Database {
 		function parse(data: any): InstanceEntity {
 			const parsedData = {} as any;
 			const issues: Array<{ path: string[]; message: string }> = [];
-			for (const [fieldName, fieldDef] of Object.entries(table_config)) {
-				// Skip derived fields — they are computed in toSparse(), not stored
-				if ('derived' in (fieldDef as any)['_'] && (fieldDef as any)['_'].derived)
-					continue;
+			for (const [fieldName, field] of parse_fields) {
 				parsedData[fieldName] = recursivelyParseField(
-					fieldDef['_'],
+					field,
 					data[fieldName],
 					[fieldName],
 					issues,
@@ -1252,12 +1275,7 @@ export namespace Database {
 		 */
 		function toSparse(data: InstanceEntity): InstanceSearchEntity {
 			const root = {} as any;
-			for (const field_dot_notation of searchable_fields) {
-				// Skip FK-derived fields — they don't exist in entity data and are computed in db.server.ts
-				const top_field = field_dot_notation.split('.')[0];
-				if (top_field in derived_fields) continue;
-
-				const field_path = field_dot_notation.split('.');
+			for (const field_path of searchable_paths) {
 				let current = data;
 				let sparse_data = root;
 				for (let i = 0; i < field_path.length; i++) {
@@ -1280,27 +1298,17 @@ export namespace Database {
 			}
 
 			// Compute same-table derived field values for search indexing
-			// FK-derived fields are skipped here — they are computed in db.server.ts where DB access is available
-			for (const [fieldName, fieldDef] of Object.entries(table_config)) {
-				const field = (fieldDef as any)['_'];
-				if (field.derived && typeof field.derived_fn === 'function') {
-					if (
-						Array.isArray(field.derived_foreign_keys) &&
-						field.derived_foreign_keys.length > 0
-					) {
-						continue;
-					}
-					try {
-						const value = field.derived_fn(data);
-						if (value !== undefined && value !== null) {
-							root[fieldName] = value;
-						} else {
-							delete root[fieldName];
-						}
-					} catch {
-						// Silently skip — don't let one bad derived function break indexing
+			for (const [fieldName, derived_fn] of same_table_derived) {
+				try {
+					const value = derived_fn(data);
+					if (value !== undefined && value !== null) {
+						root[fieldName] = value;
+					} else {
 						delete root[fieldName];
 					}
+				} catch {
+					// Silently skip — don't let one bad derived function break indexing
+					delete root[fieldName];
 				}
 			}
 

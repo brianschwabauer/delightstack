@@ -343,7 +343,7 @@ async function handleCreate(
 		throw DelightError.badRequest('Request body must be a JSON object');
 	}
 
-	// Parse through the table's Zod schema for validation
+	// Parse through the table's schema for an early 400 without an RPC round trip
 	let data: Record<string, unknown>;
 	try {
 		// The primary key may have a custom name (e.g. `slug`) — use the
@@ -417,10 +417,11 @@ async function handleUpdate(
 		throw DelightError.badRequest('Request body must be a JSON object');
 	}
 
-	// Fetch existing entity for the hook (commonly needed for ownership checks)
-	const existing = await db.get(route.entity, id);
-
+	// The existing entity is only needed by the hook (commonly for ownership
+	// checks) — without one, fetching it would be a wasted RPC round trip:
+	// db.update() re-reads the current row itself and 404s when it's missing.
 	if (route.hooks?.beforeUpdate) {
+		const existing = await db.get(route.entity, id);
 		const result = await route.hooks.beforeUpdate({
 			id,
 			data,
@@ -450,10 +451,11 @@ async function handleDelete(
 	id: string,
 	event: RequestEvent,
 ): Promise<Response> {
-	// Fetch existing entity for the hook (commonly needed for ownership checks)
-	const existing = await db.get(route.entity, id);
-
+	// The existing entity is only needed by the hook (commonly for ownership
+	// checks) — without one, fetching it would be a wasted RPC round trip:
+	// db.delete() checks existence itself and 404s when it's missing.
 	if (route.hooks?.beforeDelete) {
+		const existing = await db.get(route.entity, id);
 		await route.hooks.beforeDelete({
 			id,
 			existing: existing as Database.Entity<Database.Table>,

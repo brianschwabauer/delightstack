@@ -28,6 +28,15 @@ export interface DatabaseEntityChange {
 	sparse?: Record<string, unknown>;
 }
 
+/** One entity change inside a batched {@link DatabaseBroadcast} flush. */
+export interface DatabaseBroadcastChange {
+	action: 'created' | 'updated' | 'deleted';
+	entity_type: string;
+	id: string | number;
+	data?: unknown;
+	sparse?: unknown;
+}
+
 /**
  * The broadcast half of the contract: what `DatabaseServer` needs from the
  * WebSocket Durable Object passed to its constructor. `WebsocketServer` in
@@ -41,6 +50,14 @@ export interface DatabaseBroadcast {
 		data?: unknown,
 		sparse?: unknown,
 	): void;
+	/**
+	 * Batched form: one DO-to-DO RPC per transaction flush instead of one per
+	 * mutated entity — a 5000-op `transaction()` must not make 5000 RPC calls.
+	 * Wire delivery to clients stays one frame per change. Optional so a
+	 * deployed DO from before this method still satisfies the contract;
+	 * `DatabaseServer` falls back to per-entity `entityChanged` calls.
+	 */
+	entitiesChanged?(changes: DatabaseBroadcastChange[]): void;
 }
 
 /**

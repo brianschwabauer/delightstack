@@ -964,14 +964,21 @@ export class IdbSearchStore {
 			// analogue of the server's `DELETE ... RETURNING` path.
 			const stale: number[] = [];
 			const current = new Map<string, DocRow | undefined>();
+			// Tokenization dominates indexing CPU, so each stored document is
+			// projected exactly once per batch — here — and the map is handed to
+			// `#planWrites`, which would otherwise re-project the same doc.
+			const previous_projections = new Map<string, ClientDocumentProjection>();
 			for (let index = 0; index < writes.length; index++) {
 				const write = writes[index];
 				const key = `${write.entity_type}${KEY_SEPARATOR}${write.doc_id}`;
 				if (!current.has(key)) current.set(key, previous[index]);
 				const row = current.get(key);
 				if (!row) continue;
-				const config = this.getType(write.entity_type);
-				const recomputed = projectDocument(config, row.sparse_doc);
+				let recomputed = previous_projections.get(key);
+				if (!recomputed) {
+					recomputed = projectDocument(this.getType(write.entity_type), row.sparse_doc);
+					previous_projections.set(key, recomputed);
+				}
 				if (!sameLengths(recomputed.lengths, lengthsFromRecord(row.lengths))) {
 					stale.push(index);
 				}
@@ -1007,7 +1014,12 @@ export class IdbSearchStore {
 			}
 
 			// (3) the whole diff, synchronously.
-			const plan = this.#planWrites(writes, previous, stale_postings);
+			const plan = this.#planWrites(
+				writes,
+				previous,
+				stale_postings,
+				previous_projections,
+			);
 
 			// (4) the `df` and statistics rows the deltas touch.
 			const df_keys = [...plan.df_deltas.keys()].sort(compareStrings);
@@ -1102,6 +1114,7 @@ export class IdbSearchStore {
 		writes: readonly DocWrite[],
 		previous: readonly (DocRow | undefined)[],
 		stale_postings: ReadonlyMap<string, Map<string, Map<string, number>>>,
+		previous_projections: ReadonlyMap<string, ClientDocumentProjection>,
 	): WritePlan {
 		const plan: WritePlan = {
 			posting_puts: [],
@@ -1127,7 +1140,9 @@ export class IdbSearchStore {
 				if (!row) {
 					state.set(doc_key, undefined);
 				} else {
-					const recomputed = projectDocument(config, row.sparse_doc);
+					// `applyWrites` already projected every stored row — never re-tokenize.
+					const recomputed =
+						previous_projections.get(doc_key) ?? projectDocument(config, row.sparse_doc);
 					const stored_lengths = lengthsFromRecord(row.lengths);
 					const fallback = stale_postings.get(doc_key);
 					state.set(

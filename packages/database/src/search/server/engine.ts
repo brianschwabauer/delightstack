@@ -39,7 +39,7 @@ import {
 } from '../core/pipeline';
 import { isVectorFieldType } from '../core/schema_fields';
 import { TokenHits } from '../core/token_hits';
-import { tokenize } from '../core/tokenizer';
+import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer';
 import type {
 	FacetDefinition,
 	SearchQuery,
@@ -147,8 +147,8 @@ export interface RebuildBatchResult {
 /* Engine                                                                     */
 /* -------------------------------------------------------------------------- */
 
-/** DoS clamp: query terms score at most this many tokens (index side untouched). */
-export const MAX_QUERY_TOKENS = 32;
+// Re-exported from `core/tokenizer` (the clamp is shared by all three drivers).
+export { MAX_QUERY_TOKENS };
 
 /**
  * When a `where` admits at most this many candidate ids, vectors are fetched
@@ -612,6 +612,8 @@ export class SqliteSearchEngine {
 		const boosts = query.boost as Record<string, number> | undefined;
 		const exact = query.exact === true;
 		const tolerance = exact ? 0 : (query.tolerance ?? 0);
+		/** Per-query cache for the oversized-dictionary full-table fallback. */
+		const expansion_memo = new Map<string, string[]>();
 		for (const field of search_fields) {
 			const stats = this.store.getFieldStats(entity_type, field);
 			if (stats.doc_count === 0) continue;
@@ -625,6 +627,7 @@ export class SqliteSearchEngine {
 					token,
 					exact,
 					tolerance,
+					expansion_memo,
 				);
 				// One chunked statement pair per expansion instead of two statements
 				// per candidate token. `candidates` is already sorted ascending, and
@@ -704,13 +707,14 @@ export class SqliteSearchEngine {
 		const minimum = vector_query.similarity ?? DEFAULT_SIMILARITY;
 		const scores = new Map<string, number>();
 		// Pushdown: with a small enough `where`-admitted candidate set, read only
-		// those documents' vectors (chunked `IN (...)`) instead of every stored
-		// vector for the field. Membership and scores are identical either way —
-		// the candidate check below still applies.
-		const vectors =
+		// those documents' vectors (chunked `IN (...)`); otherwise stream the
+		// whole field's vectors off the cursor, scoring row-at-a-time so the scan
+		// never holds the corpus in memory. Membership and scores are identical
+		// either way — the candidate check below still applies.
+		const vectors: Iterable<[string, Float32Array]> =
 			candidate_ids && candidate_ids.size <= VECTOR_PUSHDOWN_MAX_CANDIDATES
 				? this.store.getVectors(table.entity_type, field, [...candidate_ids])
-				: this.store.getVectors(table.entity_type, field);
+				: this.store.scanVectors(table.entity_type, field);
 		for (const [doc_id, vector] of vectors) {
 			if (candidate_ids && !candidate_ids.has(doc_id)) continue;
 			const similarity = dotProduct(query_vector, vector);

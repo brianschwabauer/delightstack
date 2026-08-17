@@ -399,6 +399,35 @@ export class DatabaseServer<
 	#vector_paths: Map<string, string[]> = new Map();
 
 	/**
+	 * Per-type sqlite column metadata, derived once from the (immutable) table
+	 * config: the sanitized real-column set and the BOOLEAN columns needing 0/1
+	 * coercion. Row-level converters run per row on bulk paths, so they must
+	 * not rebuild these on every call.
+	 */
+	#column_meta: Map<string, { columns: Set<string>; boolean_columns: string[] }> =
+		new Map();
+
+	private columnMeta(entity_type: string): {
+		columns: Set<string>;
+		boolean_columns: string[];
+	} {
+		let meta = this.#column_meta.get(entity_type);
+		if (!meta) {
+			const table_definition = (this.config[entity_type]?.config?.table_definition ??
+				{}) as Record<string, string>;
+			const columns = new Set<string>();
+			const boolean_columns: string[] = [];
+			for (const [column, definition] of Object.entries(table_definition)) {
+				columns.add(this.sanitize(column));
+				if (definition?.startsWith?.('BOOLEAN')) boolean_columns.push(column);
+			}
+			meta = { columns, boolean_columns };
+			this.#column_meta.set(entity_type, meta);
+		}
+		return meta;
+	}
+
+	/**
 	 * Entity types whose search rebuild is currently running: a rebuild recomputes
 	 * FK-derived fields, which can call back into this class, so it must never
 	 * re-enter itself.
@@ -1046,22 +1075,6 @@ export class DatabaseServer<
 		);
 	}
 
-	/** The `$derived` sub-object currently persisted for a row, as stored. */
-	private readPersistedDerived(
-		entity_type: string,
-		id: string | number,
-	): Record<string, unknown> {
-		const table = this.searchTable(entity_type);
-		if (!table.derived_fields || table.derived_fields.size === 0) return {};
-		const rows = this.ctx.storage.sql
-			.exec(
-				`SELECT json_extract("json", '$."$derived"') AS derived FROM ${quoteIdentifier(table.table_name)} WHERE ${quoteIdentifier(table.primary_key)} = ? LIMIT 1;`,
-				id,
-			)
-			.toArray();
-		return parseDerivedBlob(rows[0]?.derived);
-	}
-
 	/**
 	 * The sparse document as the wire ships it (sync AND sparse `list()`
 	 * responses): vector fields removed.
@@ -1093,9 +1106,23 @@ export class DatabaseServer<
 		entity_type: string,
 		row: Record<string, unknown>,
 	): Record<string, unknown> {
-		const entity = this.toEntityValue(entity_type, row as any) as any;
+		// Parse the `json` overflow column once — `toEntityValue` and the
+		// `$derived` read below both need it, and sync pages run this per document.
+		let json_fields: Record<string, unknown> | undefined;
+		const raw_json = row.json;
+		if (typeof raw_json === 'string' && raw_json.length > 0) {
+			try {
+				const parsed: unknown = JSON.parse(raw_json);
+				if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+					json_fields = parsed as Record<string, unknown>;
+				}
+			} catch {
+				// Corrupt json column — `toEntityValue` re-parses and logs it loudly
+			}
+		}
+		const entity = this.toEntityValue(entity_type, row as any, json_fields) as any;
 		const sparse = this.config[entity_type].toSparse(entity) as Record<string, unknown>;
-		const derived = parseDerivedBlob(readJsonDerived(row));
+		const derived = parseDerivedBlob(json_fields?.$derived);
 		for (const [field, value] of Object.entries(derived)) {
 			if (value !== undefined && value !== null) sparse[field] = value;
 		}
@@ -1270,11 +1297,30 @@ export class DatabaseServer<
 		return result.entity.data as OutputData;
 	}
 
-	/** Deletes the entity with the given id */
+	/**
+	 * Deletes the entity with the given id. Throws a 404 when it doesn't exist
+	 * — the check lives here (one indexed read, in-process) so HTTP handlers
+	 * don't need a whole extra RPC round trip just to answer "was there
+	 * anything to delete", and so delete() matches update()'s 404 behavior.
+	 */
 	delete<Type extends keyof DatabaseConfig & string>(
 		entity_type: Type,
 		id: string | number,
 	): void {
+		const table = this.config[entity_type];
+		if (table) {
+			const sanitized_table = this.sanitize(entity_type);
+			const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+			const existing = this.ctx.storage.sql
+				.exec(`SELECT 1 FROM ${sanitized_table} WHERE ${primary_key} = ? LIMIT 1`, id)
+				.next();
+			if (existing.done) {
+				throw new DelightError({
+					message: `${sanitized_table} not found`,
+					status: 404,
+				});
+			}
+		}
 		this.transaction([{ delete: { type: entity_type, id } }]);
 	}
 
@@ -1540,16 +1586,21 @@ export class DatabaseServer<
 				};
 			});
 		} else {
+			// `engine.list` already hydrated each hit from a full SELECT * of the
+			// entity row (columns + `json` overflow, `$derived` hoisted, `sv$`
+			// skipped) — re-fetching per hit would be a pure N+1. The document only
+			// needs the same normalization `toEntityValue` applies to a raw row:
+			// derived search values removed, nulls dropped, BOOLEANs coerced.
 			hits = results.hits.map((hit) => {
-				try {
-					return {
-						id: hit.id,
-						score: hit.score,
-						document: this.get(entity_type, hit.id),
-					};
-				} catch {
-					return { id: hit.id, score: hit.score, document: null };
+				const entity = { ...(hit.document as Record<string, unknown>) };
+				for (const field of derived_fields ?? []) delete entity[field];
+				for (const key in entity) {
+					if (entity[key] === null) delete entity[key];
 				}
+				for (const column of this.columnMeta(entity_type).boolean_columns) {
+					if (typeof entity[column] === 'number') entity[column] = !!entity[column];
+				}
+				return { id: hit.id, score: hit.score, document: entity };
 			});
 		}
 
@@ -1867,6 +1918,11 @@ export class DatabaseServer<
 		// handling) — every nested write accumulates into it.
 		const batch = this.#batch_state;
 		const touched = batch ?? { wrote: false };
+		// Tombstone retention is enforced once per type per transaction, not per
+		// delete op — `pruneTombstones` starts with a COUNT(*) over up to
+		// TOMBSTONE_CAP rows, which a 5000-row bulk delete would otherwise pay
+		// 5000 times.
+		const deleted_types = new Set<string>();
 		const runOperations = () => {
 			for (const op of operations) {
 				if ('exec' in op) {
@@ -1970,14 +2026,27 @@ export class DatabaseServer<
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
 					this.ensureMonotonicTimestamp(now, entity_type);
-					const current_data = this.get(entity_type, id); // will throw a 404 if not found
+					// One SELECT serves both consumers below — `get()` followed by
+					// `readPersistedDerived()` would read the same row twice.
+					const current_row = this.ctx.storage.sql
+						.exec(`SELECT * FROM ${sanitized_table} WHERE ${primary_key} = ? LIMIT 1`, id)
+						.next()?.value as Record<string, SqlStorageValue> | undefined;
+					const current_data = this.toEntityValue(entity_type, current_row);
+					if (!current_data) {
+						throw new DelightError({
+							message: `${sanitized_table} not found`,
+							status: 404,
+						});
+					}
 					// The previously-indexed sparse doc, for the store's `df`/field-stat
 					// decrements (§7.2 step 2). Derived values come from what was actually
 					// persisted, never a recomputation: a cascade may have changed the
 					// referenced rows since, and a wrong "previous" corrupts the statistics.
 					const previous_sparse = {
 						...(table.toSparse(current_data as any) as Record<string, unknown>),
-						...this.readPersistedDerived(entity_type, id),
+						...(this.searchTable(entity_type).derived_fields?.size
+							? parseDerivedBlob(readJsonDerived(current_row as Record<string, unknown>))
+							: {}),
 					};
 					let input_data = structuredClone(current_data);
 					const deepMerge = (current: any, next: any) => {
@@ -2064,7 +2133,7 @@ export class DatabaseServer<
 					// timeline. Marked touched first — see the create branch.
 					touched.wrote = true;
 					this.search.removeDocument(entity_type, id.toString(), now.getTime());
-					this.search.store.pruneTombstones(entity_type);
+					deleted_types.add(entity_type);
 					this.cascadeReindexReferencing(entity_type, id, touched, now);
 					results.push({
 						entity: {
@@ -2076,6 +2145,9 @@ export class DatabaseServer<
 					now.setMilliseconds(now.getMilliseconds() + 1); // Ensure unique timestamps
 					continue;
 				}
+			}
+			for (const entity_type of deleted_types) {
+				this.search.store.pruneTombstones(entity_type);
 			}
 		};
 
@@ -2130,14 +2202,24 @@ export class DatabaseServer<
 		if (!broadcasts.length) return;
 		try {
 			const ws_do = this.ws();
-			if (ws_do?.entityChanged) {
-				for (const b of broadcasts) {
-					// The broadcast `sparse` document is a sync page of one: clients
-					// index it verbatim, so it carries the same §7.0 vector strip.
-					const sparse = b.sparse
-						? this.toSyncDocument(b.entity_type, b.sparse)
-						: b.sparse;
-					ws_do.entityChanged(b.action, b.entity_type, b.id, b.data, sparse);
+			if (!ws_do) return;
+			const changes = broadcasts.map((b) => ({
+				action: b.action,
+				entity_type: b.entity_type,
+				id: b.id,
+				data: b.data,
+				// The broadcast `sparse` document is a sync page of one: clients
+				// index it verbatim, so it carries the same §7.0 vector strip.
+				sparse: b.sparse ? this.toSyncDocument(b.entity_type, b.sparse) : b.sparse,
+			}));
+			if (ws_do.entitiesChanged) {
+				// One DO-to-DO RPC per flush — a bulk transaction must not make one
+				// call per mutated entity.
+				ws_do.entitiesChanged(changes);
+			} else if (ws_do.entityChanged) {
+				// A deployed websocket DO from before the batched contract method
+				for (const c of changes) {
+					ws_do.entityChanged(c.action, c.entity_type, c.id, c.data, c.sparse);
 				}
 			}
 		} catch {
@@ -2327,31 +2409,57 @@ export class DatabaseServer<
 				// it was already reindexed by the operation itself
 				if (dep.table === entity_type && dep_id === String(entity_id)) continue;
 
+				// Recompute the dependent's derived values BEFORE touching the row:
+				// most writes to a referenced entity change nothing any derived fn
+				// reads, and an unaffected dependent must stay silent — a spurious
+				// `updated_at` bump would force every sync client to re-download it.
+				const base_sparse = dep_table.toSparse(dep_entity) as Record<string, unknown>;
+				const previous_derived = parseDerivedBlob(
+					readJsonDerived(row as Record<string, unknown>),
+				);
+				const previous_sparse = { ...base_sparse, ...previous_derived };
+				const next_sparse = { ...base_sparse };
+				this.computeFkDerivedFields(dep.table, dep_entity, next_sparse, ref_cache);
+				const derived_fields = this.searchTable(dep.table).derived_fields;
+				let derived_changed = false;
+				for (const field of derived_fields ?? []) {
+					if (!derivedValueEquals(previous_sparse[field], next_sparse[field])) {
+						derived_changed = true;
+						break;
+					}
+				}
+				if (!derived_changed) continue;
+
 				// Bump the dependent row's updated_at: its derived search fields just
 				// changed, and sync clients only receive documents whose updated_at
 				// falls inside the requested window. Without this, FK-derived changes
 				// would update the server index but never reach synced clients.
-				const previous_sparse = {
-					...(dep_table.toSparse(dep_entity) as Record<string, unknown>),
-					...parseDerivedBlob(readJsonDerived(row as Record<string, unknown>)),
-				};
 				// The monotonic allocator IS `search_state.last_updated_at`, advanced in
 				// this same transaction.
 				const ts = this.search.store.allocateTimestamp(dep.table, now.getTime());
-				this.ctx.storage.sql.exec(
-					`UPDATE ${this.sanitize(dep.table)} SET updated_at = ? WHERE ${this.sanitize(dep_pk)} = ?`,
-					ts,
-					dep_entity[dep_pk],
-				);
 				dep_entity.updated_at = ts;
 
 				// Recompute sparse (same-table derived first, then FK-derived)
 				const sparse = dep_table.toSparse(dep_entity) as any;
 				this.computeFkDerivedFields(dep.table, dep_entity, sparse, ref_cache);
 
+				// Timestamp bump and `$derived` persist (persistDerivedFields' blob
+				// shape) land in ONE statement — two UPDATEs of the same row per
+				// dependent doubles the write cost of large fan-outs.
+				const derived_blob: Record<string, unknown> = {};
+				for (const field of derived_fields ?? []) {
+					const value = sparse[field];
+					if (value !== undefined && value !== null) derived_blob[field] = value;
+				}
+				this.ctx.storage.sql.exec(
+					`UPDATE ${this.sanitize(dep.table)} SET updated_at = ?, "json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?)) WHERE ${this.sanitize(dep_pk)} = ?`,
+					ts,
+					JSON.stringify(derived_blob),
+					dep_entity[dep_pk],
+				);
+
 				// The postings update is the §7.2 write path with the row's previously
 				// persisted `$derived` as the "previous" doc, all in this transaction.
-				this.persistDerivedFields(dep.table, dep_entity[dep_pk], sparse);
 				// Before the index write — a mid-call throw must still invalidate the
 				// dictionary cache on rollback.
 				touched.wrote = true;
@@ -2369,7 +2477,11 @@ export class DatabaseServer<
 		Type extends keyof DatabaseConfig & string,
 		Table extends DatabaseConfig[Type],
 		Data extends Database.Entity<Table>,
-	>(entity_type: Type, value?: Record<string, SqlStorageValue>): Data | undefined {
+	>(
+		entity_type: Type,
+		value?: Record<string, SqlStorageValue>,
+		parsed_json?: Record<string, unknown>,
+	): Data | undefined {
 		if (!entity_type) {
 			throw new DelightError({
 				message: `Entity type ${entity_type} is not valid`,
@@ -2377,9 +2489,9 @@ export class DatabaseServer<
 			});
 		}
 		if (!value || typeof value !== 'object') return;
-		let json_fields: Record<string, unknown> = {};
+		let json_fields: Record<string, unknown> = parsed_json ?? {};
 		try {
-			json_fields = JSON.parse((value?.json as string) || '{}');
+			if (!parsed_json) json_fields = JSON.parse((value?.json as string) || '{}');
 		} catch (error) {
 			// A corrupt `json` column must not crash the whole request; fall back to the
 			// plain sqlite columns and surface the corruption loudly in the logs.
@@ -2396,17 +2508,13 @@ export class DatabaseServer<
 		// their own. It is index/sync machinery, never app-visible entity data.
 		delete (temp as any).$derived;
 		for (const key in temp) {
-			if (temp[key] === null) delete temp[key];
+			// `sv$` columns are the search engine's generated sort/filter columns —
+			// SELECT * returns them, but they are index machinery, not entity data.
+			if (temp[key] === null || key.startsWith('sv$')) delete temp[key];
 		}
 		// Convert BOOLEAN columns back from sqlite's 0/1 to real booleans
-		const table_definition = this.config[entity_type]?.config?.table_definition as
-			| Record<string, string>
-			| undefined;
-		if (table_definition) {
-			for (const [column, definition] of Object.entries(table_definition)) {
-				if (!definition?.startsWith?.('BOOLEAN')) continue;
-				if (typeof temp[column] === 'number') (temp as any)[column] = !!temp[column];
-			}
+		for (const column of this.columnMeta(entity_type).boolean_columns) {
+			if (typeof temp[column] === 'number') (temp as any)[column] = !!temp[column];
 		}
 		return temp as Data;
 	}
@@ -2428,12 +2536,10 @@ export class DatabaseServer<
 			});
 		}
 		if (!input_data) return;
-		const column_names = Object.keys(table.config.table_definition).map((col) =>
-			this.sanitize(col),
-		);
+		const column_names = this.columnMeta(entity_type).columns;
 		return {
 			...Object.entries(input_data).reduce((acc, [key, value]) => {
-				if (column_names.includes(key)) {
+				if (column_names.has(key)) {
 					if (value === undefined || value === null) {
 						(acc as any)[key] = null;
 					} else if (value instanceof Date) {
@@ -2464,7 +2570,7 @@ export class DatabaseServer<
 			}, {}),
 			json: JSON.stringify(
 				Object.entries(input_data).reduce((acc, [key, value]) => {
-					if (!column_names.includes(key)) (acc as any)[key] = value;
+					if (!column_names.has(key)) (acc as any)[key] = value;
 					return acc;
 				}, {}),
 			),
@@ -2491,6 +2597,21 @@ export class DatabaseServer<
 /* -------------------------------------------------------------------------- */
 /* Native-search module helpers                                               */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * "Same derived value" for the cascade's no-op check. `$derived` blobs only
+ * ever hold values a derived fn returned and `persistDerivedFields` kept, so
+ * null/undefined/absent are one state and objects compare by JSON identity.
+ */
+function derivedValueEquals(a: unknown, b: unknown): boolean {
+	if (a === b) return true;
+	if (a === undefined || a === null) return b === undefined || b === null;
+	if (b === undefined || b === null) return false;
+	if (typeof a === 'object' || typeof b === 'object') {
+		return JSON.stringify(a) === JSON.stringify(b);
+	}
+	return false;
+}
 
 /** The raw `$derived` value of a row's `json` column, if it has one. */
 function readJsonDerived(row: Record<string, unknown>): unknown {

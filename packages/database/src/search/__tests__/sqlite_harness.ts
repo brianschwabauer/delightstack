@@ -66,7 +66,7 @@ export class NodeSqlStorage implements SearchSqlStorage {
 		if (this.record) this.log.push({ sql: query, params: bindings });
 		if (bindings.length === 0 && countStatements(query) > 1) {
 			this.db.exec(query);
-			return { toArray: () => [] };
+			return { toArray: () => [], [Symbol.iterator]: () => [][Symbol.iterator]() };
 		}
 		let statement = this.#prepared.get(query);
 		if (!statement) {
@@ -82,7 +82,7 @@ export class NodeSqlStorage implements SearchSqlStorage {
 		// Re-prototyping in place rather than spreading: a copy per row is real
 		// work a DO cursor never does, and the term path reads tens of thousands.
 		for (const row of rows) Object.setPrototypeOf(row, Object.prototype);
-		return { toArray: () => rows };
+		return { toArray: () => rows, [Symbol.iterator]: () => rows[Symbol.iterator]() };
 	}
 
 	close(): void {

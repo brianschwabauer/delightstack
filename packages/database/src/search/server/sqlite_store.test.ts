@@ -197,12 +197,12 @@ describe('write path — vectors', () => {
 	it('stores unit-normalized vectors and replaces them on re-index', () => {
 		const { store } = newStore();
 		store.indexDocument(CONFIG, 'a', { id: 'a', embedding: [3, 4, 0] });
-		const [[doc_id, vector]] = store.getVectors('article', 'embedding');
+		const [[doc_id, vector]] = store.scanVectors('article', 'embedding');
 		expect(doc_id).toBe('a');
 		expect(vector[0]).toBeCloseTo(0.6, 6);
 		expect(vector[1]).toBeCloseTo(0.8, 6);
 		store.indexDocument(CONFIG, 'a', { id: 'a', embedding: [0, 0, 5] }, { id: 'a' });
-		expect([...store.getVectors('article', 'embedding')[0][1]]).toEqual([0, 0, 1]);
+		expect([...[...store.scanVectors('article', 'embedding')][0][1]]).toEqual([0, 0, 1]);
 	});
 
 	it('rejects a zero vector with a 400', () => {
@@ -220,7 +220,7 @@ describe('write path — vectors', () => {
 		const { store } = newStore();
 		store.indexDocument(CONFIG, 'a', { id: 'a', embedding: [1, 0, 0] });
 		store.removeDocument(CONFIG, 'a', 5);
-		expect(store.getVectors('article', 'embedding')).toEqual([]);
+		expect([...store.scanVectors('article', 'embedding')]).toEqual([]);
 	});
 
 	it('returns identical vectors through the scoped doc_id read', () => {
@@ -231,7 +231,7 @@ describe('write path — vectors', () => {
 			ids.push(id);
 			store.indexDocument(CONFIG, id, { id, embedding: [index + 1, 1, 0] });
 		}
-		const full = store.getVectors('article', 'embedding');
+		const full = [...store.scanVectors('article', 'embedding')];
 		sql.log.length = 0;
 		const scoped = store.getVectors('article', 'embedding', ids);
 		expect(scoped.map(([id, vec]) => [id, [...vec]])).toEqual(

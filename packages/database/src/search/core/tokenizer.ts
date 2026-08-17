@@ -73,6 +73,13 @@
  */
 export const MAX_TOKEN_LENGTH = 64;
 
+/**
+ * DoS clamp: query terms score at most this many tokens (index side untouched).
+ * Applied identically by all three drivers — the clamp is part of the
+ * cross-driver determinism contract, so it lives here rather than per driver.
+ */
+export const MAX_QUERY_TOKENS = 32;
+
 /** Any run of characters that is neither a Unicode letter nor a Unicode number. */
 const SPLIT_PATTERN = /[^\p{L}\p{N}]+/gu;
 

@@ -165,6 +165,14 @@ type SearchSubscriber = {
 	/** The sequence token of the query currently stored (echoed in results). */
 	query_token: number;
 	callback: (result: WorkerSearchResult) => void;
+	/**
+	 * Liveness probe registered by the client alongside `callback`. A Comlink
+	 * call into a closed MessagePort never settles (SharedWorker ports have no
+	 * close event), so the sweep drops subscribers whose ping times out.
+	 * Optional for wire compatibility with clients that don't send one — those
+	 * are never swept.
+	 */
+	ping?: () => unknown;
 };
 
 /** Cache entries fresher than this are not background-refreshed (ms) */
@@ -188,6 +196,12 @@ const SERVER_SEARCH_CACHE_TTL_MS = 10_000;
 
 /** Max cached server-search results (LRU). */
 const SERVER_SEARCH_CACHE_MAX = 50;
+
+/** How often the subscriber liveness sweep runs (only while subscribers exist). */
+const SUBSCRIBER_SWEEP_MS = 60_000;
+
+/** How long a subscriber's ping may take before it is presumed dead. */
+const SUBSCRIBER_PING_TIMEOUT_MS = 5_000;
 
 /** The legacy index blob store, dropped on the first search-store upgrade. */
 const LEGACY_SEARCH_INDEX_STORE = 'search_index';
@@ -376,6 +390,11 @@ export class DatabaseWorker {
 	#tables: WorkerInitConfig['tables'] = {};
 	#search_subscribers: SearchSubscriber[] = [];
 	#subscriber_counter = 0;
+	/**
+	 * The liveness-sweep interval. Running only while subscribers exist, so an
+	 * otherwise-idle worker holds no live timer.
+	 */
+	#liveness_timer: ReturnType<typeof setInterval> | null = null;
 	#pending_notify = new Set<string>();
 	#notify_scheduled = false;
 	#pending_refreshes = new Set<string>();
@@ -807,6 +826,7 @@ export class DatabaseWorker {
 		// 1. Silence — synchronously, before any await.
 		this.#wiped = true;
 		this.#search_subscribers = [];
+		this.#stopLivenessSweep();
 		this.#pending_notify.clear();
 		this.#pending_refreshes.clear();
 		this.#server_search_cache.clear();
@@ -847,6 +867,7 @@ export class DatabaseWorker {
 	#applyRemoteWipe(): void {
 		this.#wiped = true;
 		this.#search_subscribers = [];
+		this.#stopLivenessSweep();
 		this.#pending_notify.clear();
 		this.#pending_refreshes.clear();
 		this.#server_search_cache.clear();
@@ -864,6 +885,7 @@ export class DatabaseWorker {
 
 	async destroy(): Promise<void> {
 		this.#search_subscribers = [];
+		this.#stopLivenessSweep();
 		this.#store = null;
 		this.#engine = null;
 		if (this.#db) {
@@ -948,6 +970,13 @@ export class DatabaseWorker {
 		const caught_up = new Set<string>();
 		/** Entities whose local index this run changed — broadcast to peers. */
 		const changed = new Set<string>();
+		/**
+		 * Entities whose routing decision flipped THIS run: the backfill hit the
+		 * `start_updated_at === 0` sentinel, so subscriptions that were answering
+		 * from the server may now route client-side. They need a re-run even when
+		 * no document changed.
+		 */
+		const routing_flipped = new Set<string>();
 
 		let num_requests = 0;
 		let pages_without_changes = 0;
@@ -1153,6 +1182,7 @@ export class DatabaseWorker {
 							state.start_updated_at <= entity_result.first_updated_at);
 					if (reached_oldest) {
 						state.start_updated_at = 0; // sentinel: full history synced
+						routing_flipped.add(entity_type);
 						// Changes may have landed while we were backfilling — only fully
 						// caught up if the server's newest change is inside our window
 						if ((entity_result.last_updated_at || 0) <= (state.end_updated_at ?? 0)) {
@@ -1195,8 +1225,12 @@ export class DatabaseWorker {
 		// drop their dictionary caches and re-run their subscribers too.
 		this.#broadcastInvalidation([...changed]);
 
-		// Notify active search subscribers
-		this.#notifySubscribers(persist_types);
+		// Notify active search subscribers — only for entities whose data changed
+		// or whose routing just flipped. Notifying every requested type would bump
+		// `#server_search_generation` on a quiet poll and force server-routed
+		// subscriptions to refetch over the network for nothing.
+		const notify_types = [...new Set([...changed, ...routing_flipped])];
+		if (notify_types.length > 0) this.#notifySubscribers(notify_types);
 	}
 
 	// -----------------------------------------------------------------------
@@ -1628,6 +1662,7 @@ export class DatabaseWorker {
 		query: SearchQueryInput,
 		callback: (result: WorkerSearchResult) => void,
 		token = 0,
+		ping?: () => unknown,
 	): Promise<string> {
 		const id = `sub_${++this.#subscriber_counter}`;
 		// A subscribe that lands after a sign-out wipe (an in-flight Comlink
@@ -1639,7 +1674,9 @@ export class DatabaseWorker {
 			query,
 			query_token: token,
 			callback,
+			ping,
 		});
+		this.#startLivenessSweep();
 
 		let result: WorkerSearchResult;
 		try {
@@ -1698,6 +1735,66 @@ export class DatabaseWorker {
 		this.#search_subscribers = this.#search_subscribers.filter(
 			(s) => s.id !== subscriber_id,
 		);
+		if (this.#search_subscribers.length === 0) this.#stopLivenessSweep();
+	}
+
+	/**
+	 * Start the dead-tab sweep. A tab that crashes or navigates without
+	 * `unsubscribe()` leaves a subscriber whose Comlink callback posts into a
+	 * closed MessagePort forever — its query keeps executing on every
+	 * notification and the entry never goes away (SharedWorker ports have no
+	 * close event). The sweep pings each subscriber's dedicated ping proxy; a
+	 * ping into a dead port never settles, so a timeout means the tab is gone.
+	 */
+	#startLivenessSweep(): void {
+		if (this.#liveness_timer !== null || this.#search_subscribers.length === 0) return;
+		const timer = setInterval(() => {
+			void this.#sweepDeadSubscribers();
+		}, SUBSCRIBER_SWEEP_MS);
+		// Node exposes `unref` — never keep a process alive for the sweep.
+		(timer as unknown as { unref?: () => void }).unref?.();
+		this.#liveness_timer = timer;
+	}
+
+	#stopLivenessSweep(): void {
+		if (this.#liveness_timer === null) return;
+		clearInterval(this.#liveness_timer);
+		this.#liveness_timer = null;
+	}
+
+	async #sweepDeadSubscribers(): Promise<void> {
+		if (this.#wiped || this.#search_subscribers.length === 0) {
+			this.#stopLivenessSweep();
+			return;
+		}
+		// Subscribers without a ping proxy (older clients) cannot be probed and
+		// are never dropped — the pre-sweep behavior for them, no worse.
+		const probed = this.#search_subscribers.filter((sub) => sub.ping);
+		const dead = new Set<string>();
+		await Promise.all(
+			probed.map(async (sub) => {
+				// Settling AT ALL (even rejecting) proves the port is alive; only a
+				// ping that never comes back marks the subscriber dead.
+				const alive = await Promise.race([
+					Promise.resolve()
+						.then(() => sub.ping!())
+						.then(
+							() => true,
+							() => true,
+						),
+					new Promise<boolean>((resolve) => {
+						setTimeout(() => resolve(false), SUBSCRIBER_PING_TIMEOUT_MS);
+					}),
+				]);
+				if (!alive) dead.add(sub.id);
+			}),
+		);
+		if (dead.size > 0) {
+			this.#search_subscribers = this.#search_subscribers.filter(
+				(sub) => !dead.has(sub.id),
+			);
+		}
+		if (this.#search_subscribers.length === 0) this.#stopLivenessSweep();
 	}
 
 	// -----------------------------------------------------------------------
