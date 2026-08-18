@@ -1168,6 +1168,35 @@ describe('search driver — a rebuild larger than one slice is chunked across wa
 		state.close();
 	});
 
+	it('tears the legacy journal down in chunks across alarm ticks', async () => {
+		/** A server whose journal-teardown batch is 3 rows (slice stays large). */
+		class ChunkedDropServer extends DatabaseServer<Record<string, Database.Table>> {
+			protected override legacyJournalDropBatch(): number {
+				return 3;
+			}
+		}
+		const state = seedLegacy();
+		// 8 journal rows: needs three 3-row chunks before the DROP can run.
+		for (let index = 1; index < 8; index++) {
+			state.db
+				.prepare(
+					`INSERT INTO search_journal (entity_type, doc_id, op, sparse_doc, at) VALUES (?, ?, ?, ?, ?)`,
+				)
+				.run('note', `j${index}`, 'upsert', null, T0 + index);
+		}
+		const db = wake(state, ChunkedDropServer as never);
+		// Default slice → rebuilds finish inside the constructor, which then
+		// clears one 3-row teardown chunk. The tables must still be standing.
+		expect(legacyTables(state)).toHaveLength(2);
+		expect(state.alarm()).not.toBeNull();
+		// The alarm ticks clear the remaining 5 rows (3 + 2) and run the DROPs.
+		for (let tick = 0; tick < 3; tick++) await db.alarm();
+		expect(legacyTables(state)).toEqual([]);
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(5);
+		expect(configVersion(state)).toBe(8);
+		state.close();
+	});
+
 	it('a fresh wake resumes from the checkpoint — no re-clear, no double config bump', async () => {
 		const state = seedLegacy();
 		wake(state); // "killed" after two rows: nothing else runs on this wake

@@ -27,6 +27,14 @@ interface Env {
 }
 
 /**
+ * Legacy `search_journal` rows cleared per teardown invocation. DO SQLite
+ * deletes row by row (DROP TABLE included), so the journal — one msgpack row
+ * per document — must be emptied in bounded chunks before the DROP. 5000 plain
+ * row deletes stay far under the Durable Object CPU limit.
+ */
+const LEGACY_JOURNAL_DROP_BATCH = 5000;
+
+/**
  * An operation to perform in a database transaction.
  * This is typically added to an array used to batch multiple create/update/delete operations into a single transaction.
  */
@@ -859,13 +867,15 @@ export class DatabaseServer<
 		}
 
 		this.registerAlarm('search_rebuild', () => this.continueRebuilds());
-		if (this.hasPendingRebuilds()) {
+		if (!this.hasPendingRebuilds() && legacy_present) {
+			// One bounded teardown chunk; the alarm below continues the rest.
+			this.dropLegacySearchTables(indexed_types);
+		}
+		if (this.hasPendingRebuilds() || this.legacySearchTablesExist()) {
 			// Can't await in the constructor; the alarm write is fire-and-forget.
 			void this.scheduleRebuildAlarm().catch((error) => {
 				console.error('[DatabaseServer] failed to arm the search rebuild alarm:', error);
 			});
-		} else if (legacy_present) {
-			this.dropLegacySearchTables(indexed_types);
 		}
 	}
 
@@ -912,10 +922,47 @@ export class DatabaseServer<
 	 * retry cheap. Once dropped, `legacySearchTablesExist()` is false forever and
 	 * this is never reached again.
 	 */
+	/** Legacy `search_journal` rows cleared per invocation of the teardown. */
+	protected legacyJournalDropBatch(): number {
+		return LEGACY_JOURNAL_DROP_BATCH;
+	}
+
 	private dropLegacySearchTables(indexed_types: readonly string[]): void {
 		for (const entity_type of indexed_types) {
 			const state = this.#state.native_search?.[entity_type];
 			if (!state?.migrated || !state.schema_signature) return;
+		}
+		// DO SQLite executes DROP TABLE (and every large delete) row by row, so
+		// dropping a legacy journal holding one msgpack row per document in one
+		// transaction can exceed the CPU limit — and then retry identically on
+		// every wake, forever (this wedged a production mailbox right after its
+		// rebuild finished). Empty the journal in bounded chunks first — the
+		// rebuild alarm keeps calling back here until it is gone — and only run
+		// the now-cheap DROPs once the tail chunk fits.
+		const journal_exists =
+			this.ctx.storage.sql
+				.exec(
+					`SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'search_journal';`,
+				)
+				.toArray().length > 0;
+		if (journal_exists) {
+			const batch_size = Math.max(1, Math.trunc(this.legacyJournalDropBatch()));
+			const batch = this.ctx.storage.sql
+				.exec(`SELECT rowid FROM search_journal LIMIT ${batch_size};`)
+				.toArray().length;
+			if (batch > 0) {
+				this.ctx.storage.transactionSync(() => {
+					this.ctx.storage.sql.exec(
+						`DELETE FROM search_journal WHERE rowid IN (SELECT rowid FROM search_journal LIMIT ${batch_size});`,
+					);
+				});
+			}
+			if (batch >= batch_size) {
+				console.log(
+					`[DatabaseServer] legacy search_journal teardown: cleared ${batch} rows (continues at alarm)`,
+				);
+				return;
+			}
 		}
 		this.ctx.storage.transactionSync(() => {
 			this.ctx.storage.sql.exec(`DROP TABLE IF EXISTS search_index;`);
@@ -1242,6 +1289,17 @@ export class DatabaseServer<
 			const result = this.runRebuild(entity_type, budget);
 			budget -= result.processed;
 			if (!result.complete) pending = true;
+		}
+		// Rebuilds done but the legacy tables linger: their teardown is chunked
+		// for the same CPU-limit reason as the rebuild, so keep ticking until
+		// the tables are actually gone.
+		if (!pending && this.legacySearchTablesExist()) {
+			this.dropLegacySearchTables(
+				Object.entries(this.config)
+					.filter(([, table]) => table?.config?.table_definition)
+					.map(([name]) => name),
+			);
+			if (this.legacySearchTablesExist()) pending = true;
 		}
 		if (pending) await this.scheduleRebuildAlarm();
 	}
