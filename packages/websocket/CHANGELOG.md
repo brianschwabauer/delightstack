@@ -1,5 +1,12 @@
 # @delightstack/websocket
 
+## 2.1.3
+
+### Patch Changes
+
+- Updated dependencies [fe9d902]
+  - @delightstack/database@2.2.3
+
 ## 2.1.2
 
 ### Patch Changes
