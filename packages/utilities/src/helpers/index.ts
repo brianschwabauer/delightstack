@@ -4,6 +4,7 @@ export * from './error.helper';
 export * from './fetch.helper';
 export * from './id.helper';
 export * from './random.helper';
+export * from './sort-key.helper';
 export * from './sql.helper';
 export * from './string.helper';
 export * from './url.helper';
