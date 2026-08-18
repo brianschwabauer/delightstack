@@ -1168,6 +1168,29 @@ describe('search driver — a rebuild larger than one slice is chunked across wa
 		state.close();
 	});
 
+	it('with constructor slices disabled, the wake only records work and the alarm does all of it', async () => {
+		class AlarmOnlyServer extends DatabaseServer<Record<string, Database.Table>> {
+			protected override searchRebuildInConstructor(): boolean {
+				return false;
+			}
+		}
+		const state = seedLegacy();
+		const db = wake(state, AlarmOnlyServer as never);
+		await flushMicrotasks();
+		// The constructor did no indexing at all — it recorded the pending
+		// rebuilds and armed the alarm.
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(0);
+		expect(nativeSearchState(state, 'note')?.rebuild).toBeDefined();
+		expect(state.alarm()).not.toBeNull();
+		expect(legacyTables(state)).toHaveLength(2);
+		// Alarm ticks (default 1000-row slices) do the whole migration.
+		for (let tick = 0; tick < 3; tick++) await db.alarm();
+		expect(dumpSearchRows(state, 'note').docs).toHaveLength(5);
+		expect(configVersion(state)).toBe(8);
+		expect(legacyTables(state)).toEqual([]);
+		state.close();
+	});
+
 	it('tears the legacy journal down in chunks across alarm ticks', async () => {
 		/** A server whose journal-teardown batch is 3 rows (slice stays large). */
 		class ChunkedDropServer extends DatabaseServer<Record<string, Database.Table>> {

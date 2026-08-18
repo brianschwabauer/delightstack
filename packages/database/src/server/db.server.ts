@@ -852,18 +852,25 @@ export class DatabaseServer<
 			const signature = this.searchSchemaSignature(entity_type);
 			const built = this.#state.native_search?.[entity_type];
 			const pending = built?.rebuild;
+			// `false` keeps the constructor O(1): pending work is only recorded
+			// here and all slices/teardown run in alarm invocations, so an
+			// over-budget unit of work kills an alarm attempt (retried, and
+			// harmless to requests) instead of killing every wake of the object.
+			const inline = this.searchRebuildInConstructor();
 			if (pending?.signature === signature) {
 				// A prior wake's rebuild was deferred — or the Durable Object was
 				// killed mid-rebuild (e.g. by the CPU limit). Resume from the
 				// checkpointed cursor instead of clearing and starting over: without
 				// this, a corpus too large for one wake's slice would restart from
 				// row one on every wake and never finish.
-				if (budget > 0) budget -= this.runRebuild(entity_type, budget).processed;
+				if (inline && budget > 0)
+					budget -= this.runRebuild(entity_type, budget).processed;
 			} else if (built?.schema_signature !== signature) {
 				// Begin even with no budget left — the clear + cursor must land so
 				// the stale index is never served as if it matched the new schema.
 				this.beginRebuild(entity_type, signature, had_state || legacy_present);
-				if (budget > 0) budget -= this.runRebuild(entity_type, budget).processed;
+				if (inline && budget > 0)
+					budget -= this.runRebuild(entity_type, budget).processed;
 			} else if (pending) {
 				// A cursor for a schema that is already built — stale; drop it.
 				this.setSearchTableState(entity_type, { ...built, rebuild: undefined });
@@ -871,7 +878,22 @@ export class DatabaseServer<
 		}
 
 		this.registerAlarm('search_rebuild', () => this.continueRebuilds());
-		if (!this.hasPendingRebuilds() && legacy_present) {
+		{
+			// One line per cold wake: what migration work (if any) is outstanding.
+			const pending_types = indexed_types.filter(
+				(entity_type) => this.#state.native_search?.[entity_type]?.rebuild !== undefined,
+			);
+			if (pending_types.length > 0 || legacy_present) {
+				console.log(
+					`[DatabaseServer] bootstrap: pending rebuilds [${pending_types.join(', ')}], legacy tables ${legacy_present ? 'present' : 'gone'}`,
+				);
+			}
+		}
+		if (
+			this.searchRebuildInConstructor() &&
+			!this.hasPendingRebuilds() &&
+			legacy_present
+		) {
 			// One bounded teardown chunk; the alarm below continues the rest.
 			this.dropLegacySearchTables(indexed_types);
 		}
@@ -955,6 +977,11 @@ export class DatabaseServer<
 				.exec(`SELECT rowid FROM search_journal LIMIT ${batch_size};`)
 				.toArray().length;
 			if (batch > 0) {
+				// Log BEFORE the delete: an over-budget chunk dies silently
+				// otherwise, indistinguishable from never reaching this code.
+				console.log(
+					`[DatabaseServer] legacy search_journal teardown: clearing ${batch} rows`,
+				);
 				this.ctx.storage.transactionSync(() => {
 					this.ctx.storage.sql.exec(
 						`DELETE FROM search_journal WHERE rowid IN (SELECT rowid FROM search_journal LIMIT ${batch_size});`,
@@ -1091,6 +1118,21 @@ export class DatabaseServer<
 	}
 
 	/**
+	 * Whether the constructor may run rebuild slices / legacy-teardown chunks
+	 * inline (the default), or must only record pending work and arm the alarm.
+	 *
+	 * `true` keeps small corpora fully synchronous: a fresh table is searchable
+	 * the moment the object constructs. `false` makes the constructor O(1) —
+	 * the right choice for heavy corpora, because a unit of work that exceeds
+	 * the CPU limit then kills an alarm attempt (which retries, and never
+	 * blocks a request) instead of killing every single wake of the object,
+	 * which no deploy can recover from.
+	 */
+	protected searchRebuildInConstructor(): boolean {
+		return true;
+	}
+
+	/**
 	 * Clear and rebuild an entity type's search rows from the entity table — the
 	 * universal repair path, and what a Durable Object runs on its first wake
 	 * after upgrading from the in-memory engine.
@@ -1197,6 +1239,12 @@ export class DatabaseServer<
 					complete = true;
 					break;
 				}
+				// Log BEFORE the batch transaction: a batch that exceeds the CPU
+				// limit dies without committing, so this line is the only trace of
+				// which batch (type + cursor) is the poison one.
+				console.log(
+					`[DatabaseServer] rebuild ${entity_type}: batch of ${rows.length} after ${after ?? '<start>'}`,
+				);
 				this.ctx.storage.transactionSync(() => {
 					for (const row of rows) {
 						const entity = this.toEntityValue(entity_type, row) as any;
