@@ -939,6 +939,17 @@ export class ListHandle<
 	#push_timer: ReturnType<typeof setTimeout> | null = null;
 	#last_push_at = 0;
 	/**
+	 * JSON of the query most recently SENT anywhere (subscribe, subscription
+	 * update, or a one-shot run) — `null` before anything has been sent. The
+	 * query watcher compares against this instead of skipping its first run:
+	 * a reactive query function whose value changes between handle
+	 * construction and the first effect flush used to have exactly that
+	 * change swallowed by the first-run skip, leaving the worker subscription
+	 * serving the constructor-time query forever (no re-query ever fired for
+	 * a server-routed entity, since those get no local-write notifications).
+	 */
+	#sent_query: string | null = null;
+	/**
 	 * Monotonic query sequence. Every push (subscription update or manual
 	 * refresh) claims the next token; the worker echoes it back with the
 	 * result, and any result older than the newest one already applied is
@@ -1081,6 +1092,7 @@ export class ListHandle<
 		try {
 			if (this.#status !== 'loading') this.#status = 'refreshing';
 			const query = untrack(() => $state.snapshot(this.#query_state) as SearchQueryInput);
+			this.#sent_query = JSON.stringify(query);
 			const worker = this.#deps.getWorker();
 			let result: WorkerSearchResult;
 			if (worker) {
@@ -1165,13 +1177,13 @@ export class ListHandle<
 			}
 
 			// Watch #query_state and push changes to the worker subscription.
-			let first = true;
+			// Compared against the last SENT query rather than skipping the first
+			// run: the first flush may already carry a change (a reactive query
+			// function that settled between construction and this flush), and a
+			// first-run skip would swallow it permanently.
 			$effect(() => {
-				$state.snapshot(this.#query_state);
-				if (first) {
-					first = false;
-					return;
-				}
+				const snapshot = JSON.stringify($state.snapshot(this.#query_state));
+				if (snapshot === untrack(() => this.#sent_query)) return;
 				this.#schedulePushQuery();
 			});
 		});
@@ -1197,6 +1209,7 @@ export class ListHandle<
 			this.#subscriber_id = null;
 		}
 		this.#init_promise = null;
+		this.#sent_query = null;
 		this.#deps.release();
 	}
 
@@ -1242,11 +1255,9 @@ export class ListHandle<
 			try {
 				// The subscription callback delivers the result (and the 'ready' /
 				// 'error' status) before this await resolves.
-				await worker.updateSubscription(
-					this.#subscriber_id,
-					$state.snapshot(this.#query_state) as SearchQueryInput,
-					token,
-				);
+				const query = $state.snapshot(this.#query_state) as SearchQueryInput;
+				this.#sent_query = JSON.stringify(query);
+				await worker.updateSubscription(this.#subscriber_id, query, token);
 			} catch {
 				await this.refresh();
 			}
@@ -1269,9 +1280,14 @@ export class ListHandle<
 
 		this.#init_promise = (async () => {
 			try {
+				// Snapshot + record BEFORE the await, so the query watcher's first
+				// flush (which runs after this synchronous prefix) can tell whether
+				// the reactive query moved past what this subscription serves.
+				const initial_query = $state.snapshot(this.#query_state) as SearchQueryInput;
+				this.#sent_query = JSON.stringify(initial_query);
 				this.#subscriber_id = await worker.subscribe(
 					this.entity_type,
-					$state.snapshot(this.#query_state) as SearchQueryInput,
+					initial_query,
 					proxy((result: WorkerSearchResult) => {
 						// Destroyed or frozen (sign-out): a late-arriving push must
 						// not touch the displayed results.
@@ -1301,6 +1317,13 @@ export class ListHandle<
 					// without an unsubscribe — crash, hard navigation).
 					proxy(async () => true),
 				);
+				// The query may have moved while subscribe was in flight (or in the
+				// flush that started this subscription) — bring the subscription up
+				// to date, or it serves the stale query on every future notification.
+				const now_query = JSON.stringify(
+					untrack(() => $state.snapshot(this.#query_state)),
+				);
+				if (now_query !== this.#sent_query) this.#schedulePushQuery();
 			} catch (e) {
 				this.#error = e;
 				this.#status = 'error';
