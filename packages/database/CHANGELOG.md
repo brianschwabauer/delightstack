@@ -1,5 +1,19 @@
 # @delightstack/database
 
+## 2.2.4
+
+### Patch Changes
+
+- 5ba5968: New `searchRebuildInConstructor()` override (default `true`) lets heavy deployments keep the Durable Object constructor O(1): rebuild slices and legacy-teardown chunks then run only in alarm invocations.
+
+  With inline work, a single unit of migration work that exceeds the CPU limit kills every wake of the object — requests included — and no deploy can recover it, because the constructor re-runs the same doomed work first. With `searchRebuildInConstructor()` returning `false`, the constructor only records pending work and arms the alarm; an over-budget unit then kills an alarm attempt (retried, harmless to requests) while the object keeps serving.
+
+  Migration progress is also observable now: each cold wake logs its outstanding work (`bootstrap: pending rebuilds [...], legacy tables present/gone`), every rebuild batch logs its entity type and cursor BEFORE its transaction (a batch that dies from the CPU limit otherwise leaves no trace of which rows are the poison), and teardown chunks log before deleting.
+
+- 1c7c095: The legacy `search_journal` teardown batch default drops from 5000 to 500 rows per invocation.
+
+  5000 assumed plain rows; journal entries carry multi-KB msgpack sparse-doc blobs, and a production Durable Object measured ~6.5ms per deleted row — a single 5000-row chunk burned the entire 30s CPU budget and reset the object before the chunk's own log line printed. 500 keeps a chunk around ~3s worst case. Override `legacyJournalDropBatch()` to tune it per deployment.
+
 ## 2.2.3
 
 ### Patch Changes
