@@ -29,10 +29,14 @@ interface Env {
 /**
  * Legacy `search_journal` rows cleared per teardown invocation. DO SQLite
  * deletes row by row (DROP TABLE included), so the journal — one msgpack row
- * per document — must be emptied in bounded chunks before the DROP. 5000 plain
- * row deletes stay far under the Durable Object CPU limit.
+ * per document — must be emptied in bounded chunks before the DROP. Sized for
+ * the rows as they actually are, not as plain rows: journal entries carry
+ * multi-KB msgpack blobs and measured ~6.5ms per deleted row on a production
+ * Durable Object, so 5000 (the original default) burned the whole 30s CPU
+ * budget in one chunk. 500 ≈ ~3s worst case; `legacyJournalDropBatch()` lets
+ * a subclass tune it further.
  */
-const LEGACY_JOURNAL_DROP_BATCH = 5000;
+const LEGACY_JOURNAL_DROP_BATCH = 500;
 
 /**
  * An operation to perform in a database transaction.
