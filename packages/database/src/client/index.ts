@@ -14,6 +14,14 @@ export {
 
 export { type WorkerSearchResult } from './database.worker';
 
+export type {
+	FailedOperation,
+	FailureReason,
+	OutboxOperation,
+	OutboxSnapshot,
+	SyncState,
+} from './database.outbox';
+
 export type { DatabaseClientHooks, DatabaseEntityChange } from '../contract';
 
 export {

@@ -11,6 +11,7 @@ import type { SearchQueryInput, ValidSearchQuery } from '../search-query';
 import { DelightError } from '@delightstack/utilities';
 import { getWorker, resetWorker, isWorkerShared } from './database.worker.init';
 import { deleteSiblingDatabases } from './database.idb';
+import type { FailedOperation, OutboxSnapshot, SyncState } from './database.outbox';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,6 +93,31 @@ export interface DatabaseClientConfig<T extends TableMap = TableMap> {
 	 * `@delightstack/websocket` supplies all three via `ws.databaseHooks()`.
 	 */
 	hooks?: DatabaseClientHooks;
+
+	/**
+	 * Queue every mutation durably in IndexedDB before attempting the network
+	 * Off by default, because it changes what a mutation means:
+	 *
+	 * - `create`/`update`/`delete` resolve when the write is **queued and
+	 *   applied locally**, not when the server confirms it. They no longer throw
+	 *   for a rejected write — `onMutationFailed` and `db.failed` report that.
+	 * - `create` returns the local projection, and mints the primary key itself.
+	 *   The table's primary key must therefore be a string.
+	 * - `db.pending_count`, `db.failed` and `db.sync_state` become meaningful.
+	 *
+	 * Enable it for a local-first app; leave it off for one where a write must
+	 * be confirmed before the UI moves on.
+	 */
+	offline?: boolean;
+
+	/**
+	 * Called when a queued mutation is rejected and moved to the failed store.
+	 *
+	 * Only 4xx answers land here — everything retryable keeps retrying. This is
+	 * the one sync failure a user should ever see; the conventional treatment is
+	 * a toast offering `db.retryFailed(op_id)` and `db.discardFailed(op_id)`.
+	 */
+	onMutationFailed?: (operation: FailedOperation) => void;
 }
 
 type EntityInput<T extends Database.Table> = Omit<
@@ -1551,6 +1577,39 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 */
 	#list_cache = new Map<string, ListHandle>();
 
+	/**
+	 * The outbox mirror. Populated only when `offline: true` — otherwise it
+	 * reports an empty, always-`synced` queue, which is the truth for a client
+	 * that has none.
+	 */
+	#outbox = $state<OutboxSnapshot>({
+		pending_count: 0,
+		failed: [],
+		sync_state: 'synced',
+	});
+
+	/** How many mutations are queued and not yet accepted by the server. */
+	get pending_count(): number {
+		return this.#outbox.pending_count;
+	}
+
+	/**
+	 * Mutations the server rejected with a 4xx, plus the ones skipped because an
+	 * earlier change to the same row was rejected. Nothing retries these — call
+	 * {@link retryFailed} or {@link discardFailed}.
+	 */
+	get failed(): FailedOperation[] {
+		return this.#outbox.failed;
+	}
+
+	/**
+	 * `synced` | `syncing` | `offline` | `error` — the whole sync UI, in one
+	 * value. `error` means something is in {@link failed}.
+	 */
+	get sync_state(): SyncState {
+		return this.#outbox.sync_state;
+	}
+
 	/** Whether the initial sync is in progress */
 	#syncing = $state(false);
 
@@ -1657,7 +1716,23 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			entities,
 			db_name: this.#config.db_name,
 			max_synced_docs: this.#config.max_synced_docs,
+			offline: this.#config.offline,
 		});
+
+		if (this.#config.offline) {
+			const snapshot = await this.#worker.subscribeOutbox(
+				proxy((next: OutboxSnapshot) => {
+					if (this.#frozen || this.#destroyed) return;
+					this.#outbox = next;
+				}),
+				proxy((operation: FailedOperation) => {
+					if (this.#frozen || this.#destroyed) return;
+					this.#config.onMutationFailed?.(operation);
+				}),
+			);
+			if (snapshot) this.#outbox = snapshot;
+			this.#attachForegroundDrain();
+		}
 
 		// Clear stale caches so new instances get the active worker
 		this.#entity_cache.clear();
@@ -1889,6 +1964,55 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			entity_type,
 			id,
 		});
+	}
+
+	// -----------------------------------------------------------------------
+	// Offline outbox
+	// -----------------------------------------------------------------------
+
+	#foreground_drain: (() => void) | null = null;
+
+	/**
+	 * Drain when the app comes back to the foreground.
+	 *
+	 * The worker already drains on `online` and on its own 30s tick; this covers
+	 * the case those miss — a phone that was asleep, where the connection never
+	 * "changed" but a lot of wall time passed.
+	 */
+	#attachForegroundDrain(): void {
+		if (this.#foreground_drain || typeof document === 'undefined') return;
+		const listener = () => {
+			if (document.visibilityState !== 'visible') return;
+			void this.#worker?.drainOutbox().catch(() => {});
+		};
+		document.addEventListener('visibilitychange', listener);
+		this.#foreground_drain = () =>
+			document.removeEventListener('visibilitychange', listener);
+	}
+
+	/**
+	 * Re-queue a failed mutation. It keeps its `op_id` — so the server still
+	 * applies it exactly once — but takes a new place at the **back** of the
+	 * queue, behind anything enqueued since it failed.
+	 */
+	async retryFailed(op_id: string): Promise<boolean> {
+		if (!this.#worker) return false;
+		return this.#worker.retryFailed(op_id);
+	}
+
+	/**
+	 * Drop a failed mutation permanently. The optimistic local state it left
+	 * behind is not rolled back — call `db.sync()` afterwards if the row should
+	 * go back to matching the server.
+	 */
+	async discardFailed(op_id: string): Promise<boolean> {
+		if (!this.#worker) return false;
+		return this.#worker.discardFailed(op_id);
+	}
+
+	/** Attempt to send everything queued, now. */
+	async drainOutbox(): Promise<void> {
+		await this.#worker?.drainOutbox();
 	}
 
 	/**
@@ -2261,6 +2385,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		if (this.#external_unsubscribe) {
 			this.#external_unsubscribe();
 		}
+		this.#foreground_drain?.();
+		this.#foreground_drain = null;
 		this.#entity_cache.clear();
 		this.#get_cache.clear();
 		this.#list_cache.clear();

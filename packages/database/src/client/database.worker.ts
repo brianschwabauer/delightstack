@@ -9,7 +9,17 @@ import {
 	type SyncMeta,
 	type CachedEntity,
 } from './database.idb';
-import { DelightError } from '@delightstack/utilities';
+import { DelightError, generateTimestampID } from '@delightstack/utilities';
+import {
+	Outbox,
+	OUTBOX_STORE,
+	FAILED_STORE,
+	type FailedOperation,
+	type OutboxRow,
+	type OutboxScheduler,
+	type OutboxSnapshot,
+	type SendResult,
+} from './database.outbox';
 import { IdbSearchEngine, requiresServer } from '../search/client/engine';
 import {
 	defineClientType,
@@ -108,6 +118,21 @@ export interface WorkerInitConfig {
 	max_synced_docs?: number | false;
 	/** Injectable IDB factory (tests). Defaults to the worker's `indexedDB`. */
 	idb_factory?: IDBFactory;
+	/**
+	 * Queue every mutation durably before attempting the network.
+	 *
+	 * Off by default: it changes what a mutation *means*. With it on, a write
+	 * resolves as soon as it is queued and optimistically applied — not when the
+	 * server has confirmed it — and `create` returns a locally-projected entity
+	 * rather than the server's row.
+	 */
+	offline?: boolean;
+	/**
+	 * Injectable clock/timer/jitter for the outbox (tests). Like
+	 * {@link WorkerInitConfig.idb_factory}, this never crosses a Comlink
+	 * boundary — it exists for the in-process worker the test suite drives.
+	 */
+	outbox_scheduler?: OutboxScheduler;
 }
 
 /** A transferable DelightError parsed from a failed API response body. */
@@ -228,7 +253,14 @@ const SUBSCRIBER_PING_TIMEOUT_MS = 5_000;
 const LEGACY_SEARCH_INDEX_STORE = 'search_index';
 
 /** The worker-owned stores that live in the same database as the search stores. */
-const WORKER_STORES = [{ name: 'entities' }, { name: 'sync_meta' }] as const;
+const WORKER_STORES = [
+	{ name: 'entities' },
+	{ name: 'sync_meta' },
+	// The outbox's key IS the drain order, and IndexedDB's per-store generator
+	// is the only counter that survives a worker restart without a clock.
+	{ name: OUTBOX_STORE, key_path: 'seq', auto_increment: true },
+	{ name: FAILED_STORE, key_path: 'op_id' },
+] as const;
 
 // ---------------------------------------------------------------------------
 // Schema helpers
@@ -596,7 +628,225 @@ export class DatabaseWorker {
 
 		await this.#reconcileSearchDatabase();
 
+		// After the reconcile, because that is what guarantees the two stores
+		// exist (a database created before the outbox existed is upgraded there).
+		if (config.offline) {
+			this.#outbox ??= new Outbox({
+				getDatabase: () => this.#db,
+				send: (row) => this.#sendQueued(row),
+				onChange: (snapshot) => this.#publishOutbox(snapshot),
+				onFailed: (operation) => this.#outbox_failed_listener?.(operation),
+				scheduler: config.outbox_scheduler,
+			});
+			await this.#outbox.hydrate();
+			this.#outbox.start();
+			this.#attachOnlineListener();
+			// A reload with a non-empty queue must not wait for the 30s tick.
+			void this.#outbox.drain();
+		}
+
 		// Sync is NOT awaited here — the main thread controls sync lifecycle
+	}
+
+	// -----------------------------------------------------------------------
+	// Offline outbox
+	// -----------------------------------------------------------------------
+
+	/** The durable mutation queue, or `null` when `offline` was not enabled. */
+	#outbox: Outbox | null = null;
+	#outbox_listener: ((snapshot: OutboxSnapshot) => void) | null = null;
+	#outbox_failed_listener: ((operation: FailedOperation) => void) | null = null;
+	#online_listener_attached = false;
+
+	/** Whether mutations are queued rather than sent straight through. */
+	get offline_enabled(): boolean {
+		return this.#outbox !== null;
+	}
+
+	/**
+	 * Register the main thread's reactive mirror. Comlink proxies both
+	 * callbacks; the current snapshot is pushed immediately so a late subscriber
+	 * (a tab that connected to an already-running SharedWorker) is not blank
+	 * until the next change.
+	 */
+	async subscribeOutbox(
+		on_change: (snapshot: OutboxSnapshot) => void,
+		on_failed?: (operation: FailedOperation) => void,
+	): Promise<OutboxSnapshot | undefined> {
+		this.#outbox_listener = on_change;
+		this.#outbox_failed_listener = on_failed ?? null;
+		return this.#outbox?.snapshot();
+	}
+
+	#publishOutbox(snapshot: OutboxSnapshot): void {
+		if (this.#wiped) return;
+		try {
+			this.#outbox_listener?.(snapshot);
+		} catch {
+			// A dead Comlink proxy (the tab closed) must never break a drain.
+			this.#outbox_listener = null;
+		}
+	}
+
+	outboxSnapshot(): OutboxSnapshot | undefined {
+		return this.#outbox?.snapshot();
+	}
+
+	/** Ask the queue to drain now — reconnect, app foreground, a manual retry. */
+	async drainOutbox(): Promise<void> {
+		await this.#outbox?.drain();
+	}
+
+	async retryFailed(op_id: string): Promise<boolean> {
+		return (await this.#outbox?.retryFailed(op_id)) ?? false;
+	}
+
+	async discardFailed(op_id: string): Promise<boolean> {
+		return (await this.#outbox?.discardFailed(op_id)) ?? false;
+	}
+
+	/**
+	 * Drain on reconnect. Workers get `online`/`offline` on their global scope,
+	 * so the queue does not need the main thread to tell it the network is back.
+	 */
+	#attachOnlineListener(): void {
+		if (this.#online_listener_attached) return;
+		const scope = globalThis as unknown as {
+			addEventListener?: (type: string, listener: () => void) => void;
+		};
+		if (typeof scope.addEventListener !== 'function') return;
+		scope.addEventListener('online', () => {
+			void this.#outbox?.drain();
+		});
+		this.#online_listener_attached = true;
+	}
+
+	/**
+	 * One send attempt for a queued mutation.
+	 *
+	 * The `op_id` rides in a header rather than the body: the body is the
+	 * entity, and every byte of it goes through the table's schema on the
+	 * server. This is the only place the outbox touches the network.
+	 */
+	async #sendQueued(row: OutboxRow): Promise<SendResult> {
+		const base = `/api/${row.entity_type}`;
+		const headers: Record<string, string> = { 'Operation-ID': row.op_id };
+		let response: Response;
+		try {
+			if (row.operation === 'create') {
+				response = await fetch(base, {
+					method: 'POST',
+					headers: { ...headers, 'Content-Type': 'application/json' },
+					body: JSON.stringify(row.patch ?? {}),
+				});
+			} else if (row.operation === 'update') {
+				response = await fetch(`${base}/${row.id}`, {
+					method: 'PATCH',
+					headers: { ...headers, 'Content-Type': 'application/json' },
+					body: JSON.stringify(row.patch ?? {}),
+				});
+			} else {
+				response = await fetch(`${base}/${row.id}`, { method: 'DELETE', headers });
+			}
+		} catch {
+			// A network-level failure (offline, DNS, aborted) — always retryable.
+			return { ok: false, retry: true };
+		}
+
+		if (response.ok) {
+			if (row.operation === 'delete') return { ok: true };
+			const entity = (await response.json().catch(() => undefined)) as
+				| Record<string, unknown>
+				| undefined;
+			if (entity) await this.#applyServerEcho(row.entity_type, entity);
+			return { ok: true, entity };
+		}
+
+		// A delete whose row is already gone has achieved its purpose. Without
+		// this a replayed delete whose op-log entry aged out — or one the server
+		// route 404s before dedupe can answer — would sit in `failed` forever
+		// describing a state that already holds.
+		if (row.operation === 'delete' && response.status === 404) return { ok: true };
+
+		if (response.status >= 400 && response.status < 500) {
+			const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+			return {
+				ok: false,
+				retry: false,
+				error: {
+					message:
+						(body.message as string) ||
+						`${row.operation} ${row.entity_type}/${row.id} was rejected`,
+					status: response.status,
+					code: body.code as string | undefined,
+				},
+			};
+		}
+		return { ok: false, retry: true };
+	}
+
+	/** Replace the optimistic projection of a landed mutation with the server's row. */
+	async #applyServerEcho(
+		entity_type: string,
+		entity: Record<string, unknown>,
+	): Promise<void> {
+		const state = this.#entities[entity_type];
+		if (!state) return;
+		if (this.#acceptsLocalWrites(entity_type)) {
+			const applied = await this.#indexEntity(entity_type, entity);
+			if (!applied) this.#recoverDroppedIndexWrite(entity_type, entity);
+			this.#notifySubscribers([entity_type]);
+		}
+		if (this.#cachesEntities(entity_type) && this.#db) {
+			const id = entity[state.primary_key] as string | number;
+			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
+				entity_type,
+				id,
+				data: entity,
+				updated_at: Date.now(),
+			} satisfies CachedEntity);
+		}
+	}
+
+	/**
+	 * Re-apply queued mutations on top of freshly synced documents.
+	 *
+	 * A `sync()` pull answers with the server's state, which by definition has
+	 * not seen anything still sitting in the outbox. Committing that page
+	 * verbatim makes an offline edit visibly flicker away and come back when the
+	 * queue eventually drains — and, for a delete, makes the row reappear. The
+	 * outbox is the newer truth for exactly the rows it names, so it is layered
+	 * back on after every commit.
+	 */
+	async #reapplyPending(entity_types: readonly string[]): Promise<void> {
+		if (!this.#outbox || entity_types.length === 0) return;
+		const rows = await this.#outbox.pending(entity_types);
+		if (rows.length === 0) return;
+		const touched = new Set<string>();
+		for (const row of rows) {
+			if (!this.#acceptsLocalWrites(row.entity_type)) continue;
+			const state = this.#entities[row.entity_type];
+			if (!state) continue;
+			if (row.operation === 'delete') {
+				await this.#removeFromIndex(row.entity_type, row.id);
+				touched.add(row.entity_type);
+				continue;
+			}
+			const current = await this.#indexedDocument(row.entity_type, row.id);
+			const merged =
+				row.operation === 'create'
+					? {
+							...current,
+							...row.patch,
+							[state.primary_key]: row.id,
+							created_at: row.created_at,
+							updated_at: row.created_at,
+						}
+					: { [state.primary_key]: row.id, ...current, ...row.patch };
+			await this.#indexEntity(row.entity_type, merged);
+			touched.add(row.entity_type);
+		}
+		if (touched.size > 0) this.#notifySubscribers([...touched]);
 	}
 
 	/**
@@ -853,6 +1103,10 @@ export class DatabaseWorker {
 	async wipe(): Promise<void> {
 		// 1. Silence — synchronously, before any await.
 		this.#wiped = true;
+		// The queue's database is about to be deleted; a drain mid-wipe would
+		// resurrect rows into a store that no longer exists.
+		this.#outbox?.stop();
+		this.#outbox = null;
 		this.#search_subscribers = [];
 		this.#stopLivenessSweep();
 		this.#pending_notify.clear();
@@ -894,6 +1148,8 @@ export class DatabaseWorker {
 	 */
 	#applyRemoteWipe(): void {
 		this.#wiped = true;
+		this.#outbox?.stop();
+		this.#outbox = null;
 		this.#search_subscribers = [];
 		this.#stopLivenessSweep();
 		this.#pending_notify.clear();
@@ -912,6 +1168,10 @@ export class DatabaseWorker {
 	}
 
 	async destroy(): Promise<void> {
+		this.#outbox?.stop();
+		this.#outbox = null;
+		this.#outbox_listener = null;
+		this.#outbox_failed_listener = null;
 		this.#search_subscribers = [];
 		this.#stopLivenessSweep();
 		this.#store = null;
@@ -1278,6 +1538,12 @@ export class DatabaseWorker {
 		const persist_types = types.filter((t) => this.#entities[t]);
 		await this.#persistSyncState(persist_types);
 
+		// The server's answer predates everything still in the outbox, so a
+		// synced page would otherwise erase local edits until the queue drains.
+		// Layered back on BEFORE the notifications, so subscribers never observe
+		// the intermediate state.
+		if (changed.size > 0) await this.#reapplyPending([...changed]);
+
 		// Peer workers over the same database (dedicated-Worker fallback) must
 		// drop their dictionary caches and re-run their subscribers too.
 		this.#broadcastInvalidation([...changed]);
@@ -1301,6 +1567,7 @@ export class DatabaseWorker {
 	): Promise<Record<string, unknown>> {
 		const state = this.#entities[entity_type];
 		if (!state) throw unknownEntityType(entity_type);
+		if (this.#outbox) return this.#createQueued(entity_type, data, state);
 
 		const response = await fetch(`/api/${entity_type}`, {
 			method: 'POST',
@@ -1391,6 +1658,7 @@ export class DatabaseWorker {
 	): Promise<Record<string, unknown>> {
 		const state = this.#entities[entity_type];
 		if (!state) throw unknownEntityType(entity_type);
+		if (this.#outbox) return this.#updateQueued(entity_type, id, data, state);
 
 		// Store the pre-update document for rollback — the indexed sparse doc,
 		// read straight out of the `docs` store by primary key.
@@ -1453,6 +1721,7 @@ export class DatabaseWorker {
 	async delete(entity_type: string, id: string | number): Promise<void> {
 		const state = this.#entities[entity_type];
 		if (!state) throw unknownEntityType(entity_type);
+		if (this.#outbox) return this.#deleteQueued(entity_type, id, state);
 
 		// Store for rollback, then remove optimistically
 		let prev_doc: Record<string, unknown> | undefined;
@@ -1486,6 +1755,146 @@ export class DatabaseWorker {
 		}
 	}
 
+	/* ---------------------------------------------------------------------- */
+	/* Queued CRUD — the `offline: true` path                                 */
+	/* ---------------------------------------------------------------------- */
+
+	/**
+	 * Create through the outbox.
+	 *
+	 * The primary key is minted **here**, before anything is queued, because
+	 * every mutation queued behind this one already names the row. That is only
+	 * possible for a string key — a numeric one belongs to the database — so an
+	 * offline create against a `primary_key_type: 'number'` table is a loud
+	 * refusal rather than a row that changes identity on landing.
+	 *
+	 * The returned entity is the local projection, not the server's row: server
+	 * defaults, derived fields and the authoritative `created_at` arrive with
+	 * the echo when the queue drains.
+	 */
+	async #createQueued(
+		entity_type: string,
+		data: Record<string, unknown>,
+		state: EntitySyncState,
+	): Promise<Record<string, unknown>> {
+		const primary_key = state.primary_key;
+		const supplied = data[primary_key];
+		if (
+			supplied === undefined &&
+			this.#tables[entity_type]?.primary_key_type === 'number'
+		) {
+			throw DelightError.transferable({
+				message: `Cannot create a ${entity_type} offline: the table has a numeric primary key, which only the server can assign. Give the table a string primary key, or supply the id yourself.`,
+				status: 400,
+				code: 'offline_create_unsupported',
+			});
+		}
+		const id = (supplied as string | number | undefined) ?? generateTimestampID();
+		// The client clock, used for display and for the local projection only —
+		// the server's `updated_at` is what any ordering decision reads.
+		const now = Date.now();
+		const body = { ...data, [primary_key]: id };
+		const optimistic = { ...body, created_at: now, updated_at: now };
+
+		if (this.#acceptsLocalWrites(entity_type)) {
+			await this.#indexEntity(entity_type, optimistic);
+			this.#notifySubscribers([entity_type]);
+		}
+		if (this.#cachesEntities(entity_type) && this.#db) {
+			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
+				entity_type,
+				id,
+				data: optimistic,
+				updated_at: now,
+			} satisfies CachedEntity);
+		}
+
+		await this.#queue(entity_type, 'create', id, body, now);
+		return optimistic;
+	}
+
+	/** Update through the outbox — optimistic overlay first, queue second. */
+	async #updateQueued(
+		entity_type: string,
+		id: string | number,
+		data: Record<string, unknown>,
+		state: EntitySyncState,
+	): Promise<Record<string, unknown>> {
+		const now = Date.now();
+		let optimistic: Record<string, unknown> = {
+			...data,
+			[state.primary_key]: id,
+			updated_at: now,
+		};
+		if (this.#acceptsLocalWrites(entity_type)) {
+			const previous = await this.#indexedDocument(entity_type, id);
+			if (previous) optimistic = { ...previous, ...data, updated_at: now };
+			await this.#indexEntity(entity_type, optimistic);
+			this.#notifySubscribers([entity_type]);
+		}
+		if (this.#cachesEntities(entity_type) && this.#db) {
+			const cached = await idbGet<CachedEntity>(
+				this.#db,
+				'entities',
+				`${entity_type}/${id}`,
+			).catch(() => undefined);
+			const merged = { ...cached?.data, ...optimistic };
+			await idbPut(this.#db, 'entities', `${entity_type}/${id}`, {
+				entity_type,
+				id,
+				data: merged,
+				updated_at: now,
+			} satisfies CachedEntity);
+			optimistic = merged;
+		}
+
+		await this.#queue(entity_type, 'update', id, data, now);
+		return optimistic;
+	}
+
+	/** Delete through the outbox. */
+	async #deleteQueued(
+		entity_type: string,
+		id: string | number,
+		state: EntitySyncState,
+	): Promise<void> {
+		if (this.#acceptsLocalWrites(entity_type)) {
+			await this.#removeFromIndex(entity_type, id);
+			this.#notifySubscribers([entity_type]);
+		}
+		if (state.cache_enabled && this.#db) {
+			await idbDelete(this.#db, 'entities', `${entity_type}/${id}`);
+		}
+		await this.#queue(entity_type, 'delete', id, undefined, Date.now());
+	}
+
+	/**
+	 * Append one mutation and kick the drain.
+	 *
+	 * The append happens after the optimistic apply and before any network
+	 * attempt, which is the whole point: a tab killed between the two still
+	 * reloads into a state where the edit is both visible and queued.
+	 */
+	async #queue(
+		entity_type: string,
+		operation: 'create' | 'update' | 'delete',
+		id: string | number,
+		patch: Record<string, unknown> | undefined,
+		created_at: number,
+	): Promise<void> {
+		await this.#outbox!.enqueue({
+			op_id: generateTimestampID(),
+			entity_type,
+			operation,
+			id,
+			patch,
+			created_at,
+			attempts: 0,
+			next_attempt_at: 0,
+		});
+		void this.#outbox!.drain();
+	}
+
 	/**
 	 * Apply a change that originated outside this tab (e.g. a websocket
 	 * event). Upserts/removes the single entity in the index + IDB and notifies
@@ -1504,6 +1913,14 @@ export class DatabaseWorker {
 	): Promise<Record<string, unknown> | undefined> {
 		const state = this.#entities[entity_type];
 		if (!state) return undefined;
+
+		// A row this device has queued changes for is one the server has not
+		// finished hearing about. Its broadcast is therefore stale by
+		// construction, and applying it would flicker the optimistic state away
+		// and back. The drain's own echo is what settles the row.
+		if (this.#outbox && (await this.#hasQueuedMutation(entity_type, id))) {
+			return undefined;
+		}
 
 		if (event_type === 'delete') {
 			if (state.search_mode === 'client') {
@@ -1862,6 +2279,13 @@ export class DatabaseWorker {
 	// -----------------------------------------------------------------------
 	// Private helpers
 	// -----------------------------------------------------------------------
+
+	/** Whether the outbox still holds an unsent mutation for this exact row. */
+	async #hasQueuedMutation(entity_type: string, id: string | number): Promise<boolean> {
+		if (!this.#outbox) return false;
+		const rows = await this.#outbox.pending([entity_type]);
+		return rows.some((row) => String(row.id) === String(id));
+	}
 
 	/** Undo an optimistic index change by rewriting the previous document. */
 	async #rollbackIndex(

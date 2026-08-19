@@ -5,6 +5,9 @@ export { DatabaseServer, scoped, DEFAULT_ACTOR } from '../server/db.server';
 export type {
 	ScopedDatabase,
 	WriteOptions,
+	CreateOptions,
+	OperationKind,
+	AppliedOperation,
 	ChangeLogEntry,
 	HistoryOptions,
 	ChangesSinceOptions,

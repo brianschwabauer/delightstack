@@ -120,6 +120,46 @@ const CHANGE_LOG_SWEEP_BATCH = 1000;
  */
 const REVERT_OPERATION_MAX_CHANGES = 5000;
 
+/** The internal dedupe log every `{ op_id }` write is recorded in. */
+const OP_LOG_TABLE = '_op_log';
+
+/**
+ * How long a recorded operation stays replayable.
+ *
+ * Seven days is the offline outbox's horizon: a device that has been away
+ * longer has almost certainly been reset or re-synced, and keeping the log
+ * indefinitely would make it the largest thing in a write-heavy database.
+ */
+const OP_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Op-log rows deleted per sweeper invocation. */
+const OP_LOG_SWEEP_BATCH = 1000;
+
+/** How often the op-log sweeper runs when nothing is left to delete. */
+const OP_LOG_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** The kinds of write the op log can record. */
+export type OperationKind = 'create' | 'update' | 'delete' | 'transaction';
+
+/** One write recorded in the op log — see {@link DatabaseServer.appliedOperation}. */
+export interface AppliedOperation {
+	/** The client-generated id the write carried */
+	op_id: string;
+	/** Which entry point applied it */
+	kind: OperationKind;
+	/** The entity type it wrote, or `undefined` for a multi-table `transaction()` */
+	table: string | undefined;
+	/** The primary key it wrote, as text, when there was exactly one */
+	entity_id: string | undefined;
+	/**
+	 * What the write returned, as recorded. `blob()` columns come back as the
+	 * {@link BLOB_OMITTED} marker rather than their bytes.
+	 */
+	result: unknown;
+	/** When the write was applied, from the Durable Object's clock (epoch ms) */
+	created_at: number;
+}
+
 /** The internal queue of store objects whose owning row is gone. */
 const FILE_GC_TABLE = '_file_gc';
 
@@ -168,7 +208,8 @@ function readFieldPath(source: Record<string, unknown>, path: string): unknown {
 	if (!path.includes('.')) return source[path];
 	let current: unknown = source;
 	for (const segment of path.split('.')) {
-		if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
+		if (!current || typeof current !== 'object' || Array.isArray(current))
+			return undefined;
 		current = (current as Record<string, unknown>)[segment];
 	}
 	return current;
@@ -285,6 +326,39 @@ export interface WriteOptions {
 	 * also applies to bare-`db` writes made inside a scoped `batch()`.
 	 */
 	operation?: string;
+	/**
+	 * A client-generated id making this write idempotent.
+	 *
+	 * The first write carrying it is applied and recorded in the internal
+	 * `_op_log`; every later write carrying the same id is **not applied** and
+	 * returns the original result instead. That is what lets an offline outbox,
+	 * a retrying agent, or a replayed queue drain send the same mutation twice
+	 * without writing it twice.
+	 *
+	 * Mint it with `generateTimestampID()` from `@delightstack/utilities`, on the
+	 * client, *before* the first attempt — an id minted per attempt deduplicates
+	 * nothing.
+	 *
+	 * Recorded results expire after seven days; see
+	 * {@link DatabaseServer.appliedOperation}.
+	 */
+	op_id?: string;
+}
+
+/** Options accepted by {@link DatabaseServer.create}. */
+export interface CreateOptions extends WriteOptions {
+	/**
+	 * Honour a primary key supplied in the data instead of minting one.
+	 *
+	 * What makes an offline create possible: the row has to have its final
+	 * identity the moment it is queued, because the edits queued behind it
+	 * already name it. A key that is already taken is a `409` (`entity_exists`)
+	 * rather than a silent overwrite.
+	 *
+	 * Only meaningful for `primary_key_type: 'string'` tables — a numeric key is
+	 * the database's to assign.
+	 */
+	preserve_id?: boolean;
 }
 
 /** Options for {@link DatabaseServer.history} */
@@ -783,6 +857,7 @@ export type DatabaseStub<
 	>(
 		entity_type: Type,
 		unsafe_data: InputData,
+		options?: CreateOptions,
 	): Promise<OutputData>;
 	update<
 		Type extends keyof DatabaseConfig & string,
@@ -793,10 +868,12 @@ export type DatabaseStub<
 		entity_type: Type,
 		id: string | number,
 		unsafe_data: InputData,
+		options?: WriteOptions,
 	): Promise<OutputData>;
 	delete<Type extends keyof DatabaseConfig & string>(
 		entity_type: Type,
 		id: string | number,
+		options?: WriteOptions,
 	): Promise<void>;
 	list<
 		Type extends keyof DatabaseConfig & string,
@@ -812,6 +889,7 @@ export type DatabaseStub<
 	): Promise<DatabaseSyncResponse<DatabaseConfig>>;
 	transaction(
 		operations: DatabaseServerTransaction<DatabaseConfig>[],
+		options?: WriteOptions,
 	): Promise<DatabaseServerTransactionResult<DatabaseConfig>[]>;
 	exec(
 		sql_statement: string,
@@ -1158,12 +1236,13 @@ export class DatabaseServer<
 		}
 
 		this.bootstrapChangeLog();
+		this.bootstrapOpLog();
 		this.bootstrapFileGC();
 		this.bootstrapSearch();
 	}
 
 	/* ---------------------------------------------------------------------- */
-	/* Change log (DS-03)                                                     */
+	/* Change log                                                             */
 	/* ---------------------------------------------------------------------- */
 
 	/** Entity types that opted into history, mapped to their retention in days. */
@@ -1344,7 +1423,9 @@ export class DatabaseServer<
 			operation: String(row.operation) as ChangeLogOperation,
 			actor: String(row.actor),
 			operation_id:
-				typeof row.operation_id === 'string' && row.operation_id ? row.operation_id : undefined,
+				typeof row.operation_id === 'string' && row.operation_id
+					? row.operation_id
+					: undefined,
 			patch: parse(row.patch_json),
 			previous: parse(row.previous_json),
 			created_at: Number(row.created_at) || 0,
@@ -1441,7 +1522,10 @@ export class DatabaseServer<
 	 * `revertOperation()` is the one that refuses, because undoing nothing when you
 	 * asked to undo an import is a bug worth surfacing.
 	 */
-	operationChanges(operation_id: string, options?: OperationChangesOptions): ChangeLogEntry[] {
+	operationChanges(
+		operation_id: string,
+		options?: OperationChangesOptions,
+	): ChangeLogEntry[] {
 		this.assertChangeLog();
 		const operation = operation_id?.trim();
 		if (!operation) return [];
@@ -1662,6 +1746,232 @@ export class DatabaseServer<
 	 */
 	private async scheduleChangeLogAlarm(
 		delay_ms: number = CHANGE_LOG_SWEEP_INTERVAL_MS,
+	): Promise<void> {
+		const storage = this.ctx.storage as unknown as {
+			setAlarm?(time: number): Promise<void> | void;
+			getAlarm?(): Promise<number | null>;
+		};
+		if (typeof storage.setAlarm !== 'function') return;
+		const target = Date.now() + Math.max(0, delay_ms);
+		if (typeof storage.getAlarm === 'function') {
+			const current = await storage.getAlarm();
+			if (typeof current === 'number' && current > 0 && current <= target) return;
+		}
+		await storage.setAlarm(target);
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Operation log — `{ op_id }` dedupe                                     */
+	/* ---------------------------------------------------------------------- */
+
+	/**
+	 * Whether `_op_log` is known to exist. `undefined` until the first wake-time
+	 * probe or the first `{ op_id }` write answers the question.
+	 */
+	#op_log_ready: boolean | undefined = undefined;
+
+	/**
+	 * Notice an `_op_log` left behind by a previous deployment.
+	 *
+	 * Unlike `_change_log` and `_file_gc`, nothing in the *config* says whether
+	 * this database ever dedupes — only the writes do, and they may not arrive
+	 * for hours. Without this probe the retention sweeper would not be armed
+	 * until the next `{ op_id }` write, so a Durable Object that goes quiet
+	 * right after an offline drain would keep its op log forever.
+	 *
+	 * One `sqlite_master` lookup per wake, and only when the table is already
+	 * there does anything else happen.
+	 */
+	private bootstrapOpLog(): void {
+		const found = this.ctx.storage.sql
+			.exec(
+				`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;`,
+				OP_LOG_TABLE,
+			)
+			.toArray();
+		if (found.length === 0) return;
+		this.#op_log_ready = true;
+		this.armOpLogSweep();
+	}
+
+	/**
+	 * Create `_op_log` on first use.
+	 *
+	 * Created lazily rather than at bootstrap because most databases never see
+	 * an `{ op_id }` write at all — an app that does not run the offline outbox
+	 * would otherwise carry an empty internal table and a daily alarm for
+	 * nothing.
+	 *
+	 * The column set is fixed here for good: the package has no migration path
+	 * for its own internal tables, so `kind` / `table` / `entity_id` are
+	 * recorded even though dedupe itself only needs `op_id` and `result_json` —
+	 * they are what makes {@link appliedOperation} able to answer "did that
+	 * write land, and on what" without re-deriving it from the caller's request.
+	 */
+	private ensureOpLog(): void {
+		if (this.#op_log_ready) return;
+		this.ctx.storage.sql.exec(
+			`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(OP_LOG_TABLE)} (
+				op_id TEXT PRIMARY KEY,
+				kind TEXT NOT NULL,
+				"table" TEXT,
+				entity_id TEXT,
+				result_json TEXT,
+				created_at INTEGER NOT NULL
+			);`,
+		);
+		// The only read order there is: the log is swept oldest-first. Lookups go
+		// through the primary key.
+		this.ctx.storage.sql.exec(
+			`CREATE INDEX IF NOT EXISTS "idx__op_log_created_at" ON ${quoteIdentifier(OP_LOG_TABLE)} (created_at);`,
+		);
+		this.#op_log_ready = true;
+		this.armOpLogSweep();
+	}
+
+	/** Register + schedule the TTL sweep. Idempotent (the map is keyed by name). */
+	private armOpLogSweep(): void {
+		this.registerAlarm('op_log_retention', () => this.sweepOpLog());
+		void this.scheduleOpLogAlarm().catch((error) => {
+			console.error('[DatabaseServer] failed to arm the op-log alarm:', error);
+		});
+	}
+
+	/**
+	 * The op log's projection of a result: JSON, with `blob()` bytes dropped.
+	 *
+	 * Same rule and the same reason as the change log's `historyPayload()` — a
+	 * `Uint8Array` has no lossless JSON form, and the one it does have costs
+	 * roughly five bytes of text per byte of payload, which would push a
+	 * single-megabyte blob straight past the Durable Object's 2 MB per-value
+	 * ceiling. A blob column therefore comes back from a *replayed* write as the
+	 * {@link BLOB_OMITTED} marker rather than its bytes. `file()` references are
+	 * small descriptors and are recorded verbatim.
+	 */
+	private opLogResult(
+		kind: OperationKind,
+		entity_type: string | undefined,
+		result: unknown,
+	) {
+		if (result === undefined || result === null) return undefined;
+		if ((kind === 'create' || kind === 'update') && entity_type) {
+			return this.historyPayload(entity_type, result as Record<string, unknown>);
+		}
+		return result;
+	}
+
+	/** Read one recorded operation, or `undefined` when it has not been applied. */
+	private readOpLog(op_id: string): AppliedOperation | undefined {
+		if (!this.#op_log_ready) return undefined;
+		const row = this.ctx.storage.sql
+			.exec(
+				`SELECT op_id, kind, "table", entity_id, result_json, created_at FROM ${quoteIdentifier(OP_LOG_TABLE)} WHERE op_id = ? LIMIT 1;`,
+				op_id,
+			)
+			.toArray()[0] as Record<string, unknown> | undefined;
+		if (!row) return undefined;
+		let result: unknown = undefined;
+		if (typeof row.result_json === 'string') {
+			try {
+				result = JSON.parse(row.result_json);
+			} catch {
+				result = undefined;
+			}
+		}
+		return {
+			op_id: String(row.op_id),
+			kind: String(row.kind) as OperationKind,
+			table: typeof row.table === 'string' && row.table ? row.table : undefined,
+			entity_id:
+				typeof row.entity_id === 'string' && row.entity_id ? row.entity_id : undefined,
+			result,
+			created_at: Number(row.created_at) || 0,
+		};
+	}
+
+	/**
+	 * Whether this `op_id` has already been applied, and what it returned.
+	 *
+	 * The read half of the dedupe log: an offline client that lost the response
+	 * to a write it knows it sent can ask rather than re-sending and hoping. The
+	 * result is the recorded one, so it is subject to the blob rule in
+	 * {@link opLogResult} and to the seven-day retention window — an unknown
+	 * `op_id` means "never applied, **or** applied more than a week ago".
+	 */
+	appliedOperation(op_id: string): AppliedOperation | undefined {
+		const trimmed = op_id?.trim();
+		if (!trimmed) return undefined;
+		if (this.#op_log_ready === undefined) this.bootstrapOpLog();
+		return this.readOpLog(trimmed);
+	}
+
+	/**
+	 * Apply `run` exactly once for `op_id`, returning the original result on any
+	 * later replay.
+	 *
+	 * The write and its log row commit together (`batch()` is the package's
+	 * atomicity primitive, and joins an outer batch when one is open), so a
+	 * rolled-back write never leaves a log row claiming it happened — and a
+	 * retry of a *failed* write is therefore a real retry, not a silent no-op.
+	 */
+	private deduplicate<T>(
+		op_id: string,
+		kind: OperationKind,
+		entity_type: string | undefined,
+		entity_id: string | number | undefined,
+		run: () => T,
+	): T {
+		this.ensureOpLog();
+		const replay = this.readOpLog(op_id);
+		if (replay) return replay.result as T;
+		return this.batch(() => {
+			const result = run();
+			const recorded_id =
+				entity_id ??
+				(result && typeof result === 'object' && entity_type
+					? ((result as Record<string, unknown>)[
+							this.config[entity_type]?.config?.primary_key || 'id'
+						] as string | number | undefined)
+					: undefined);
+			this.ctx.storage.sql.exec(
+				`INSERT INTO ${quoteIdentifier(OP_LOG_TABLE)} (op_id, kind, "table", entity_id, result_json, created_at) VALUES (?, ?, ?, ?, ?, ?);`,
+				op_id,
+				kind,
+				entity_type ?? null,
+				recorded_id === undefined || recorded_id === null ? null : String(recorded_id),
+				JSON.stringify(this.opLogResult(kind, entity_type, result) ?? null),
+				Date.now(),
+			);
+			return result;
+		});
+	}
+
+	/** Delete op-log rows past the seven-day window, bounded like every sweep here. */
+	private async sweepOpLog(): Promise<void> {
+		if (!this.#op_log_ready) return;
+		const cutoff = Date.now() - OP_LOG_RETENTION_MS;
+		const doomed = this.ctx.storage.sql
+			.exec(
+				`SELECT op_id FROM ${quoteIdentifier(OP_LOG_TABLE)} WHERE created_at < ? ORDER BY created_at ASC LIMIT ${OP_LOG_SWEEP_BATCH};`,
+				cutoff,
+			)
+			.toArray();
+		if (doomed.length > 0) {
+			this.ctx.storage.transactionSync(() => {
+				this.ctx.storage.sql.exec(
+					`DELETE FROM ${quoteIdentifier(OP_LOG_TABLE)} WHERE op_id IN (SELECT op_id FROM ${quoteIdentifier(OP_LOG_TABLE)} WHERE created_at < ? ORDER BY created_at ASC LIMIT ${OP_LOG_SWEEP_BATCH});`,
+					cutoff,
+				);
+			});
+		}
+		await this.scheduleOpLogAlarm(
+			doomed.length >= OP_LOG_SWEEP_BATCH ? 0 : OP_LOG_SWEEP_INTERVAL_MS,
+		);
+	}
+
+	/** Arm the op-log sweep without ever pushing an earlier alarm later. */
+	private async scheduleOpLogAlarm(
+		delay_ms: number = OP_LOG_SWEEP_INTERVAL_MS,
 	): Promise<void> {
 		const storage = this.ctx.storage as unknown as {
 			setAlarm?(time: number): Promise<void> | void;
@@ -1925,7 +2235,7 @@ export class DatabaseServer<
 	}
 
 	/* ---------------------------------------------------------------------- */
-	/* Actor attribution (DS-07)                                              */
+	/* Actor attribution                                                      */
 	/* ---------------------------------------------------------------------- */
 
 	/** The actor the current write is attributed to. */
@@ -2827,18 +3137,31 @@ export class DatabaseServer<
 		Table extends DatabaseConfig[Type],
 		OutputData extends Database.Entity<Table>,
 		InputData extends Omit<OutputData, 'id' | 'created_at' | 'updated_at'>,
-	>(entity_type: Type, unsafe_data: InputData, options?: WriteOptions): OutputData {
-		const [result] = this.transaction(
-			[{ create: { type: entity_type, data: unsafe_data } }],
-			options,
-		);
-		if (!result || !('entity' in result)) {
-			throw new DelightError({
-				message: 'Database transaction did not return created entity',
-				status: 500,
-			});
-		}
-		return result.entity.data as OutputData;
+	>(entity_type: Type, unsafe_data: InputData, options?: CreateOptions): OutputData {
+		const run = (): OutputData => {
+			const [result] = this.transaction(
+				[
+					{
+						create: {
+							type: entity_type,
+							data: unsafe_data,
+							...(options?.preserve_id ? { preserve_id: true } : {}),
+						},
+					},
+				],
+				{ ...options, op_id: undefined },
+			);
+			if (!result || !('entity' in result)) {
+				throw new DelightError({
+					message: 'Database transaction did not return created entity',
+					status: 500,
+				});
+			}
+			return result.entity.data as OutputData;
+		};
+		const op_id = options?.op_id?.trim();
+		if (!op_id) return run();
+		return this.deduplicate<OutputData>(op_id, 'create', entity_type, undefined, run);
 	}
 
 	/**
@@ -2857,26 +3180,31 @@ export class DatabaseServer<
 		unsafe_data: InputData,
 		options?: InternalWriteOptions,
 	): OutputData {
-		const [result] = this.transaction(
-			[
-				{
-					update: {
-						type: entity_type,
-						id,
-						data: unsafe_data,
-						...(options?.allow_readonly ? { allow_readonly: true } : {}),
+		const run = (): OutputData => {
+			const [result] = this.transaction(
+				[
+					{
+						update: {
+							type: entity_type,
+							id,
+							data: unsafe_data,
+							...(options?.allow_readonly ? { allow_readonly: true } : {}),
+						},
 					},
-				},
-			],
-			options,
-		);
-		if (!result || !('entity' in result)) {
-			throw new DelightError({
-				message: 'Database transaction did not return updated entity',
-				status: 500,
-			});
-		}
-		return result.entity.data as OutputData;
+				],
+				{ ...options, op_id: undefined },
+			);
+			if (!result || !('entity' in result)) {
+				throw new DelightError({
+					message: 'Database transaction did not return updated entity',
+					status: 500,
+				});
+			}
+			return result.entity.data as OutputData;
+		};
+		const op_id = options?.op_id?.trim();
+		if (!op_id) return run();
+		return this.deduplicate<OutputData>(op_id, 'update', entity_type, id, run);
 	}
 
 	/**
@@ -2890,6 +3218,17 @@ export class DatabaseServer<
 		id: string | number,
 		options?: WriteOptions,
 	): void {
+		const op_id = options?.op_id?.trim();
+		if (op_id) {
+			// A replayed delete must NOT 404. The row is gone precisely because
+			// this operation already removed it, so re-raising "not found" would
+			// turn a successful drain into a permanent failure in the outbox.
+			this.deduplicate(op_id, 'delete', entity_type, id, () => {
+				this.delete(entity_type, id, { ...options, op_id: undefined });
+				return null;
+			});
+			return;
+		}
 		const table = this.config[entity_type];
 		if (table) {
 			const sanitized_table = this.sanitize(entity_type);
@@ -3500,6 +3839,12 @@ export class DatabaseServer<
 		operations: DatabaseServerTransaction<DatabaseConfig>[],
 		options?: WriteOptions,
 	): DatabaseServerTransactionResult<DatabaseConfig>[] {
+		const op_id = options?.op_id?.trim();
+		if (op_id) {
+			return this.deduplicate(op_id, 'transaction', undefined, undefined, () =>
+				this.transaction(operations, { ...options, op_id: undefined }),
+			);
+		}
 		if (this.hasWriteScope(options)) {
 			return this.withWriteScope(options, () => this.transaction(operations));
 		}
@@ -3953,6 +4298,18 @@ export class DatabaseServer<
 	 * events interleave into the open transaction.
 	 */
 	batch<T>(fn: () => T, options?: WriteOptions): T {
+		if (options?.op_id?.trim()) {
+			// A callback's return value is arbitrary — it can be a class instance,
+			// a cursor, `undefined` — so there is nothing the op log could record
+			// and hand back on replay. Dedupe that returns the wrong thing is
+			// worse than no dedupe, so this is a loud refusal.
+			throw new DelightError({
+				message:
+					'`batch()` cannot carry an `op_id` — its return value is arbitrary and cannot be recorded for replay. Put the `op_id` on `transaction()` or on the individual create/update/delete calls.',
+				status: 400,
+				code: 'op_id_unsupported',
+			});
+		}
 		if (this.hasWriteScope(options)) {
 			return this.withWriteScope(options, () => this.batch(fn));
 		}

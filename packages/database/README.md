@@ -811,6 +811,62 @@ db.transaction([
 
 > Inserting onto an id that is still live throws a `DelightError` (`entity_exists`, 409) rather than SQLite's raw `UNIQUE constraint failed` — the shape a double-`revert()` or a re-run import actually produces.
 
+`db.create()` takes the same option directly, which is what lets a client mint a
+row's id before the server has ever seen it:
+
+```typescript
+db.create('post', { id: client_minted_id, title: 'Draft' }, { preserve_id: true });
+```
+
+### Idempotent writes (`op_id`)
+
+Every mutation crosses at least one retry boundary — an offline queue drain, a
+replayed sync, an agent that timed out and tried again. Pass an `op_id` and the
+write becomes idempotent:
+
+```typescript
+db.create('post', data, { op_id });
+db.update('post', id, patch, { op_id });
+db.delete('post', id, { op_id });
+db.transaction(operations, { op_id });
+```
+
+The first write carrying an id is applied and recorded in an internal `_op_log`.
+Every later write carrying the same id is **not applied** and returns the
+original result. Mint the id on the client — `generateTimestampID()` from
+`@delightstack/utilities` — *before* the first attempt; an id minted per attempt
+deduplicates nothing.
+
+```typescript
+db.appliedOperation(op_id);
+// → { op_id, kind, table, entity_id, result, created_at } | undefined
+```
+
+Details worth knowing:
+
+- **The log row commits with the write.** A write that throws records nothing, so
+  retrying a *failed* operation is a real retry rather than a silent no-op.
+- **A replayed `delete` is a no-op, not a `404`.** The row is gone because this
+  operation removed it; re-raising "not found" would turn a successful drain into
+  a permanent failure.
+- **`blob()` columns are recorded as omitted**, exactly as the change log records
+  them — a `Uint8Array` has no lossless JSON form, and the expanded one would blow
+  past the Durable Object's 2 MB per-value ceiling. A replayed write therefore
+  returns the `__blob_omitted` marker where the bytes were. `file()` references
+  are small descriptors and are recorded verbatim.
+- **`batch()` refuses an `op_id`** (`op_id_unsupported`, 400): its return value is
+  arbitrary, so there is nothing the log could hand back on replay. Put the id on
+  `transaction()` or on the individual mutators.
+- **Retention is 7 days**, swept by a registered alarm. An unknown `op_id` means
+  "never applied, **or** applied more than a week ago".
+- The table is created lazily, on the first write that carries an `op_id` — a
+  database that never uses one never gets it.
+
+The SvelteKit handler reads the id from an `Operation-ID` request header
+(a header, not a body field: the body is the entity, and every byte of it goes
+through `table.parse()`). The `DatabaseClient` outbox sets it automatically —
+see [Offline writes](#offline-writes-the-durable-outbox).
+
 ### Change Log & History
 
 History is **opt-in per table**, via the third argument to `Database.table()`:
@@ -1439,6 +1495,88 @@ const record = await db.uploadImage(file, {
 
 All writes bump the entity's reactive version, so every `get`/`entity`/`list` reader of the same data updates automatically.
 
+### Offline writes: the durable outbox
+
+By default a write is optimistic but not durable — the client applies it locally,
+POSTs it, and rolls back if the request fails. Close the tab mid-flight and the
+write is gone.
+
+`offline: true` makes every mutation durable instead:
+
+```typescript
+const db = new DatabaseClient({
+	tables,
+	db_name: `org-${org_id}`,
+	offline: true,
+	// The only sync failure a user should ever see.
+	onMutationFailed: (operation) => {
+		toast.error(`Couldn't save that ${operation.entity_type}.`, {
+			actions: [
+				{ label: 'Retry', run: () => db.retryFailed(operation.op_id) },
+				{ label: 'Discard', run: () => db.discardFailed(operation.op_id) },
+			],
+		});
+	},
+});
+```
+
+Every mutation is then assigned a client-generated `op_id`, applied to the local
+index, and appended to an `outbox` object store **before** any network attempt.
+The queue drains in `seq` order, one request at a time, on reconnect, on app
+foreground, after a successful mutation, and on a 30-second tick. Retries use
+exponential backoff with jitter, capped at 30 seconds, and continue indefinitely
+while the server is unreachable.
+
+```typescript
+db.pending_count; // mutations queued and not yet accepted
+db.failed;        // FailedOperation[] — rejected, awaiting a decision
+db.sync_state;    // 'synced' | 'syncing' | 'offline' | 'error'
+
+await db.retryFailed(op_id);
+await db.discardFailed(op_id);
+await db.drainOutbox();       // "try now"
+```
+
+**What changes when it is on:**
+
+| | Default | `offline: true` |
+|---|---|---|
+| A mutation resolves | when the server confirms it | when it is queued and applied locally |
+| A rejected mutation | throws from `db.update(...)` | lands in `db.failed`, fires `onMutationFailed` |
+| `db.create` returns | the server's row | the local projection (server defaults arrive with the echo) |
+| Primary keys | assigned by the server | minted on the client — **the table's primary key must be a string** |
+
+**Ordering and failure.** `seq` comes from the object store's own key generator,
+which IndexedDB persists per store and never rewinds, so the order survives a
+worker restart without any clock being involved. A retryable failure stops the
+whole queue: everything behind the failed row may depend on it, and while
+offline nothing else would succeed either. A **4xx** does not — the server
+reached a verdict, so the row moves to `failed` and the queue keeps going, except
+for later mutations on the *same row*, which fail alongside it with
+`reason: 'dependency_failed'`. Applying an update whose create was rejected would
+write against a state that never existed; blocking the whole queue behind one
+rejected title change would be worse.
+
+`retryFailed` re-enters at the **back** of the queue — its original `seq` was
+consumed when it left, and re-using it would let it overtake newer work. It
+keeps its `op_id`, so the server still applies it exactly once.
+
+**Server side.** Idempotency is enforced by `DatabaseServer`, not by the client:
+each request carries its `op_id` in an `Operation-ID` header, and the write is
+recorded in an internal `_op_log`. See
+[Idempotent writes](#idempotent-writes-op_id) below.
+
+**Sync.** A `sync()` pull answers with the server's state, which by definition
+predates anything still queued. The worker layers the outbox back over every
+synced page before notifying subscribers, so an offline edit does not flicker
+away and come back — and a websocket echo for a row with queued changes is
+ignored, because it is stale by construction.
+
+**IndexedDB is required.** Where it is unavailable (private browsing, blocked
+storage) the client already degrades to server-only mode; with `offline: true` a
+mutation there throws a `503` `outbox_unavailable` rather than pretending to be
+durable.
+
 ### Lifecycle
 
 ```typescript
@@ -1465,6 +1603,9 @@ brings it back.
 | `status`  | `DatabaseStatus` | Lifecycle: `'idle'` (SSR / before `init()`) → `'initializing'` → `'ready'` → `'signed_out'`           |
 | `syncing` | `boolean`        | Whether the initial background sync is in progress (the client is already usable while it runs)       |
 | `synced`  | `boolean`        | Whether the initial sync has completed (local search answers from a fully mirrored index)             |
+| `pending_count` | `number`   | Queued mutations not yet accepted by the server (`offline: true` only)                                |
+| `failed`  | `FailedOperation[]` | Mutations the server rejected, awaiting `retryFailed` / `discardFailed`                          |
+| `sync_state` | `SyncState`   | `'synced'` \| `'syncing'` \| `'offline'` \| `'error'` — the whole sync UI in one value               |
 
 ### Query routing
 

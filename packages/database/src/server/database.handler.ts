@@ -241,12 +241,43 @@ export interface DatabaseHandleOptions<
  * Compatible with `DurableObjectStub<DatabaseServer<Config>>`.
  */
 interface DatabaseRpc {
-	create(entity_type: string, data: unknown): unknown;
+	create(entity_type: string, data: unknown, options?: DatabaseWriteOptions): unknown;
 	get(entity_type: string, id: string | number): unknown;
 	list(entity_type: string, query: unknown): unknown;
-	update(entity_type: string, id: string | number, data: unknown): unknown;
-	delete(entity_type: string, id: string | number): void;
+	update(
+		entity_type: string,
+		id: string | number,
+		data: unknown,
+		options?: DatabaseWriteOptions,
+	): unknown;
+	delete(entity_type: string, id: string | number, options?: DatabaseWriteOptions): void;
 	sync?(query?: unknown): unknown;
+}
+
+/**
+ * The write options this handler forwards. Structurally a subset of the server's
+ * `CreateOptions` — spelled out here because `db.server` imports
+ * `cloudflare:workers`, which does not resolve outside the Workers runtime.
+ */
+interface DatabaseWriteOptions {
+	op_id?: string;
+	preserve_id?: boolean;
+}
+
+/**
+ * The header a client uses to make a mutation idempotent.
+ *
+ * A header rather than a body field: the body is the entity, and every byte of
+ * it goes through `table.parse()`. An `op_id` in there would have to be a schema
+ * column in every table that wanted an outbox.
+ */
+export const OP_ID_HEADER = 'Operation-ID';
+
+/** The `op_id` this request carries, if any. Blank and oversized values are ignored. */
+function requestOpId(event: RequestEvent): string | undefined {
+	const raw = event.request.headers.get(OP_ID_HEADER)?.trim();
+	if (!raw || raw.length > 128) return undefined;
+	return raw;
 }
 
 // ---------------------------------------------------------------------------
@@ -373,16 +404,26 @@ async function handleCreate(
 		throw DelightError.badRequest('Request body must be a JSON object');
 	}
 
+	// A client-minted primary key is honoured rather than stripped. An offline
+	// create has to know its row's identity before it reaches the server,
+	// because the edits queued behind it already name it — see the outbox in
+	// the README. Only string keys: a numeric key is the database's to assign.
+	const primary_key = route.table.config.primary_key || 'id';
+	const supplied_key =
+		route.table.config.primary_key_type === 'string' &&
+		typeof (raw_body as Record<string, unknown>)[primary_key] === 'string' &&
+		((raw_body as Record<string, unknown>)[primary_key] as string).length > 0
+			? ((raw_body as Record<string, unknown>)[primary_key] as string)
+			: undefined;
+
 	// Parse through the table's schema for an early 400 without an RPC round trip
 	let data: Record<string, unknown>;
 	try {
-		// The primary key may have a custom name (e.g. `slug`) — use the
-		// configured name for both the temp value and the strip below
-		const primary_key = route.table.config.primary_key || 'id';
 		const parsed = route.table.parse({
 			...raw_body,
 			// Provide temp values for auto-managed fields so parse() succeeds
-			[primary_key]: route.table.config.primary_key_type === 'string' ? '_temp_' : 0,
+			[primary_key]:
+				supplied_key ?? (route.table.config.primary_key_type === 'string' ? '_temp_' : 0),
 			created_at: Date.now(),
 			updated_at: Date.now(),
 		});
@@ -394,6 +435,7 @@ async function handleCreate(
 			...rest
 		} = parsed as Record<string, unknown>;
 		data = rest;
+		if (supplied_key !== undefined) data[primary_key] = supplied_key;
 	} catch (error) {
 		throw DelightError.from(error);
 	}
@@ -408,7 +450,10 @@ async function handleCreate(
 		}
 	}
 
-	const created = await db.create(route.entity, data);
+	const created = await db.create(route.entity, data, {
+		op_id: requestOpId(event),
+		...(supplied_key !== undefined ? { preserve_id: true } : {}),
+	});
 
 	if (route.hooks?.afterCreate) {
 		await route.hooks.afterCreate({
@@ -463,7 +508,7 @@ async function handleUpdate(
 		}
 	}
 
-	const updated = await db.update(route.entity, id, data);
+	const updated = await db.update(route.entity, id, data, { op_id: requestOpId(event) });
 
 	if (route.hooks?.afterUpdate) {
 		await route.hooks.afterUpdate({
@@ -493,7 +538,7 @@ async function handleDelete(
 		});
 	}
 
-	await db.delete(route.entity, id);
+	await db.delete(route.entity, id, { op_id: requestOpId(event) });
 
 	if (route.hooks?.afterDelete) {
 		await route.hooks.afterDelete({ id, event });

@@ -234,6 +234,13 @@ export interface ExtraStoreDefinition {
 	name: string;
 	/** Omit for out-of-line keys (what `sync_meta`/`entities` use today). */
 	key_path?: string;
+	/**
+	 * Let IndexedDB generate the key. The generator is per-store and persists
+	 * across connections — it is not reset by deleting records or by `clear()` —
+	 * which is what makes it a safe monotonic sequence for an append-only queue
+	 * that survives worker restarts.
+	 */
+	auto_increment?: boolean;
 }
 
 /** Options for {@link openSearchDatabase}. */
@@ -341,7 +348,12 @@ export function openSearchDatabase(
 				if (db.objectStoreNames.contains(store.name)) continue;
 				db.createObjectStore(
 					store.name,
-					store.key_path ? { keyPath: store.key_path } : undefined,
+					store.key_path || store.auto_increment
+						? {
+								...(store.key_path ? { keyPath: store.key_path } : {}),
+								...(store.auto_increment ? { autoIncrement: true } : {}),
+							}
+						: undefined,
 				);
 			}
 			if (!db.objectStoreNames.contains(POSTINGS_STORE)) {
