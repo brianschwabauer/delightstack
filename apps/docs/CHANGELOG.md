@@ -1,5 +1,13 @@
 # @delightstack/docs
 
+## 0.0.14
+
+### Patch Changes
+
+- @delightstack/components@1.5.2
+- @delightstack/editor@1.0.4
+- @delightstack/presence@2.0.1
+
 ## 0.0.13
 
 ### Patch Changes

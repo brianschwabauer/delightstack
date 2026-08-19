@@ -1,9 +1,9 @@
 {
 	"name": "@delightstack/crdt",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"type": "module",
 	"license": "MIT",
-	"description": "Collaborative document storage for Cloudflare Durable Objects \u2014 a Loro CRDT wrapper with an append-only op log, derived edit sessions, named checkpoints, time travel and compaction.",
+	"description": "Collaborative document storage for Cloudflare Durable Objects — a Loro CRDT wrapper with an append-only op log, derived edit sessions, named checkpoints, time travel and compaction.",
 	"keywords": [
 		"crdt",
 		"loro",
