@@ -1,0 +1,54 @@
+{
+	"name": "@delightstack/diff",
+	"version": "1.0.0",
+	"type": "module",
+	"license": "MIT",
+	"description": "Zero-dependency diffing — word-level and line-level Myers text diff, plus key-based structural diff with move detection.",
+	"keywords": [
+		"diff",
+		"myers",
+		"text-diff",
+		"word-diff",
+		"line-diff",
+		"lcs",
+		"move-detection",
+		"delightstack"
+	],
+	"author": "Brian Schwabauer",
+	"homepage": "https://docs.thedelight.co",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/brianschwabauer/delightstack.git",
+		"directory": "packages/diff"
+	},
+	"bugs": "https://github.com/brianschwabauer/delightstack/issues",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"!dist/**/*.test.*",
+		"!dist/**/*.spec.*"
+	],
+	"scripts": {
+		"build": "svelte-package -i src",
+		"dev": "svelte-package -w -i src",
+		"check": "tsgo --noEmit",
+		"typecheck": "tsgo --noEmit",
+		"test": "vitest"
+	},
+	"devDependencies": {
+		"@sveltejs/package": "^2.4.0",
+		"svelte": "^5.36.16",
+		"tslib": "^2.8.1",
+		"typescript": "^5.8.3",
+		"vitest": "^3.2.1"
+	}
+}
