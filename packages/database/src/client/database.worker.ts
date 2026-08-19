@@ -75,6 +75,12 @@ export interface WorkerInitConfig {
 		string,
 		{
 			index_schema: Record<string, unknown>;
+			/**
+			 * Dot-paths carried into the sparse document without being indexed.
+			 * Absent from `index_schema` by design — see the field tiers in the
+			 * README — so the optimistic projection has to be told about them.
+			 */
+			carried_fields?: string[];
 			primary_key: string;
 			primary_key_type?: 'string' | 'number';
 		}
@@ -167,6 +173,8 @@ interface EntitySyncState {
 	schema: WhereSchema;
 	/** The `docs` indexes this type's schema asks for. */
 	index_paths: DocIndexPath[];
+	/** Dot-paths projected into the sparse document but never indexed. */
+	carried_fields: string[];
 	/** The registered search config (primary key, text fields). */
 	client_type: ClientSearchType;
 }
@@ -361,9 +369,12 @@ function writePath(doc: Record<string, unknown>, path: string, value: unknown): 
 function toSparseLike(
 	schema: WhereSchema,
 	entity: Record<string, unknown>,
+	carried_fields: readonly string[] = [],
 ): Record<string, unknown> {
 	const sparse: Record<string, unknown> = {};
-	for (const path of Object.keys(schema)) {
+	// Indexed paths come from the schema; carried paths are deliberately absent
+	// from it, so they are walked separately. Mirrors `toSparse()` on the server.
+	for (const path of [...Object.keys(schema), ...carried_fields]) {
 		const value = readPath(entity, path);
 		if (value === null || value === undefined) continue;
 		writePath(sparse, path, value);
@@ -552,6 +563,7 @@ export class DatabaseWorker {
 
 			const schema = flattenSearchSchema(table.index_schema);
 			this.#entities[entity_type] = {
+				carried_fields: table.carried_fields ?? [],
 				search_mode: forced_mode ?? meta?.search_mode ?? 'client',
 				config_version: meta?.config_version ?? 0,
 				last_synced_at: meta?.last_synced_at ?? 0,
@@ -2001,7 +2013,7 @@ export class DatabaseWorker {
 			{
 				entity_type,
 				doc_id: String(id),
-				sparse_doc: toSparseLike(state.schema, entity),
+				sparse_doc: toSparseLike(state.schema, entity, state.carried_fields),
 			},
 		]);
 	}
@@ -2086,6 +2098,10 @@ export class DatabaseWorker {
 		const table = this.#tables[entity_type];
 		const schema = flattenSearchSchema(config ?? table?.index_schema);
 		state.schema = schema;
+		// A server config version bump carries `index_schema` only; carried paths
+		// come from the local table definition, so re-read them rather than
+		// letting a stale copy survive a reindex.
+		state.carried_fields = table?.carried_fields ?? state.carried_fields;
 		state.index_paths = indexPathsFor(schema);
 		state.client_type = defineClientType({
 			entity_type,

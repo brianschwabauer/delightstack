@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { prepareSql, SqlQueryFn } from './sql.helper';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema';
+import type { FileReference } from '../schema/field-types';
 import type { DatabaseBroadcast } from '../contract';
 import { normalizeWhere } from '../search-query';
 import type { SearchQuery, SearchQueryResults } from '../search/core/types';
@@ -38,6 +39,393 @@ interface Env {
  */
 const LEGACY_JOURNAL_DROP_BATCH = 500;
 
+/** The `where` grammar's composite keys — containers, not field names. */
+const WHERE_COMPOSITE_KEYS = new Set(['and', 'or', 'not']);
+
+/**
+ * Rejects any query that tries to filter, order or search on a *carried* field.
+ *
+ * A carried field is delivered to the client but never indexed, so it has no
+ * entry in `index_schema`, no posting list and no column the engine can compile
+ * against. Every such path would already fail deeper down — `normalizeWhere`
+ * with `unknown_filter_field`, `resolveSearchFields` with
+ * `unknown_search_field` — but "unknown" is a lie that sends the caller looking
+ * for a typo. This says what actually happened, and it says it once, at the top
+ * of the query, for all three surfaces.
+ */
+function assertNotCarried(
+	carried_fields: readonly string[],
+	query: { where?: unknown; order?: unknown; fields?: unknown },
+): void {
+	if (carried_fields.length === 0) return;
+	const carried = new Set(carried_fields);
+	const reject = (field: string, surface: string): never => {
+		throw new DelightError({
+			message: `Field "${field}" is carried, not indexed — it is delivered to the client but never enters the search index, so it cannot be used in ${surface}. Mark it .searchable() if it needs to be queryable.`,
+			status: 400,
+			code: 'carried_field_not_queryable',
+		});
+	};
+
+	/** Walk the `where` tree, checking every leaf key against the carried set. */
+	const walkWhere = (node: unknown, depth: number): void => {
+		// The same depth ceiling `core/where` enforces — a hostile `where` must
+		// not be able to blow the stack in the guard that is meant to protect it.
+		if (depth > 10 || !node || typeof node !== 'object') return;
+		if (Array.isArray(node)) {
+			for (const child of node) walkWhere(child, depth + 1);
+			return;
+		}
+		for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+			if (WHERE_COMPOSITE_KEYS.has(key)) {
+				walkWhere(value, depth + 1);
+				continue;
+			}
+			if (carried.has(key)) reject(key, 'a `where` clause');
+		}
+	};
+	walkWhere(query.where, 0);
+
+	if (Array.isArray(query.order)) {
+		for (const entry of query.order) {
+			const field = (entry as { field?: unknown } | null)?.field;
+			if (typeof field === 'string' && carried.has(field)) reject(field, '`order`');
+		}
+	}
+	if (Array.isArray(query.fields)) {
+		for (const field of query.fields) {
+			if (typeof field === 'string' && carried.has(field)) {
+				reject(field, "a search's `fields` list");
+			}
+		}
+	}
+}
+
+/** The actor recorded when nothing scoped the write. */
+export const DEFAULT_ACTOR = 'system';
+
+/** The shared change-log table every history-enabled table writes into. */
+const CHANGE_LOG_TABLE = '_change_log';
+
+/** Change-log rows deleted per sweeper invocation, per table. */
+const CHANGE_LOG_SWEEP_BATCH = 1000;
+
+/**
+ * The largest operation `revertOperation()` will undo in one go.
+ *
+ * The whole revert runs inside a single Durable Object transaction (that is
+ * what makes it atomic), and a DO transaction has a CPU budget. Matching
+ * `transaction()`'s own 5,000-operation ceiling keeps the two limits from
+ * surprising each other.
+ */
+const REVERT_OPERATION_MAX_CHANGES = 5000;
+
+/** The internal queue of store objects whose owning row is gone. */
+const FILE_GC_TABLE = '_file_gc';
+
+/** Default / maximum page size for {@link DatabaseServer.pendingFileDeletions}. */
+const FILE_GC_DEFAULT_LIMIT = 100;
+const FILE_GC_MAX_LIMIT = 1000;
+
+/**
+ * One store object whose row no longer references it — a queued *intent* to
+ * delete, not a guarantee that deleting is safe. See
+ * {@link DatabaseServer.pendingFileDeletions}.
+ */
+export interface PendingFileDeletion {
+	/** The queue row's own id — pass it to `releaseFileDeletion()` when done */
+	id: string;
+	/** The binding the object lives in: the reference's own `store`, or the field's default */
+	store: string;
+	/** The object key within that store */
+	key: string;
+	/** The entity type whose row held the reference */
+	entity_type: string;
+	/** The primary key of the row that held it, as text */
+	entity_id: string;
+	/** When the reference was dropped, from the Durable Object's clock (epoch ms) */
+	deleted_at: number;
+}
+
+/** Options for {@link DatabaseServer.pendingFileDeletions} */
+export interface PendingFileDeletionsOptions {
+	/** Maximum rows to return (default 100, max 1000) */
+	limit?: number;
+}
+
+/**
+ * Marks a blob column whose bytes were deliberately not recorded in the change
+ * log. See `historyPayload()` for why, and `revert()` for what it means.
+ */
+export const BLOB_OMITTED = '__blob_omitted';
+
+/**
+ * Read a value at a dot path. File fields are recorded at their path so a
+ * reference nested inside an `object()` is still found — a flat lookup would
+ * miss it, and the object it points at would never be queued for deletion.
+ */
+function readFieldPath(source: Record<string, unknown>, path: string): unknown {
+	if (!path.includes('.')) return source[path];
+	let current: unknown = source;
+	for (const segment of path.split('.')) {
+		if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
+		current = (current as Record<string, unknown>)[segment];
+	}
+	return current;
+}
+
+/** The blob columns in a recorded payload whose bytes were not kept. */
+function omittedBlobFields(payload: Record<string, unknown> | undefined): string[] {
+	if (!payload) return [];
+	return Object.entries(payload)
+		.filter(
+			([, value]) =>
+				!!value &&
+				typeof value === 'object' &&
+				(value as Record<string, unknown>)[BLOB_OMITTED] === true,
+		)
+		.map(([key]) => key);
+}
+
+/** How often the retention sweeper runs when nothing is left to delete. */
+const CHANGE_LOG_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** Milliseconds in a day — the unit `history_retention_days` is expressed in. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The three mutations a change-log row can describe. */
+export type ChangeLogOperation = 'create' | 'update' | 'delete';
+
+/**
+ * One recorded mutation of a history-enabled table.
+ *
+ * Stored in `_change_log` with `patch_json` / `previous_json` as JSON text; the
+ * `history()` / `changesSince()` APIs hand back this parsed form.
+ */
+export interface ChangeLogEntry {
+	/** The change's own id (time-sortable) */
+	id: string;
+	/** The entity type (table) the change applies to */
+	table: string;
+	/** The primary key of the changed entity, as text */
+	entity_id: string;
+	/** Which mutation this row describes */
+	operation: ChangeLogOperation;
+	/** Who made the change — a `{ actor }` write option, or `'system'` when unscoped */
+	actor: string;
+	/**
+	 * The operation this change was part of — a `{ operation }` write option, or
+	 * `undefined` for a write that was not grouped.
+	 *
+	 * Rows sharing an operation id are undone as one unit by `revertOperation()`.
+	 */
+	operation_id?: string;
+	/**
+	 * What the change wrote: the full entity for a create, only the fields whose
+	 * values actually changed for an update, and `undefined` for a delete.
+	 */
+	patch: Record<string, unknown> | undefined;
+	/**
+	 * What the change overwrote: `undefined` for a create, the previous values
+	 * of exactly the fields in `patch` for an update, and the full entity for a
+	 * delete (which is what makes a delete revertible).
+	 */
+	previous: Record<string, unknown> | undefined;
+	/** When the change was recorded, from the Durable Object's clock (epoch ms) */
+	created_at: number;
+}
+
+/**
+ * Write options plus the internal escape hatch `revert()` needs. Not part of the
+ * public `update()` signature: restoring a readonly column is legitimate only
+ * because the row demonstrably held that value before.
+ */
+interface InternalWriteOptions extends WriteOptions {
+	allow_readonly?: boolean;
+}
+
+/** Options accepted by {@link DatabaseServer.revert}. */
+export interface RevertOptions extends WriteOptions {
+	/**
+	 * Restore everything except blob columns whose bytes the change log did not
+	 * keep, instead of refusing. The columns are left unset, so this still fails
+	 * if one of them is required. Defaults to `false` — losing blob data is not
+	 * something to do by accident.
+	 */
+	without_blobs?: boolean;
+}
+
+/** Options accepted by every write that can be attributed to an actor. */
+export interface WriteOptions {
+	/**
+	 * Who is performing the write. Recorded on every change-log row for tables
+	 * that opted into `history`. Defaults to `'system'`.
+	 *
+	 * `scoped(db, actor)` is the ergonomic form of this option for a run of
+	 * writes; the option itself exists because it survives the Durable Object
+	 * RPC boundary, which an object carrying methods does not.
+	 *
+	 * NOTE: the actor does **not** currently reach `createDatabaseHandle`'s
+	 * lifecycle hooks, and `DatabaseClient` has no actor of its own. Both are
+	 * still to be built.
+	 */
+	actor?: string;
+	/**
+	 * An id grouping every change this write produces with the other changes of
+	 * the same logical operation — an import, a bulk retag, one agent run.
+	 *
+	 * Recorded on each change-log row, read back with `db.operationChanges(id)`, and
+	 * undone as a unit with `db.revertOperation(id)`. Undo is almost always wanted
+	 * at operation granularity ("undo that import"), not row granularity, and
+	 * nothing else in the log can reconstruct which 4,000 rows belonged
+	 * together — timestamps and actor both group too much.
+	 *
+	 * Opaque to the database: any non-empty string. Blank or whitespace-only is
+	 * treated as absent. Threaded exactly like {@link WriteOptions.actor}, so it
+	 * also applies to bare-`db` writes made inside a scoped `batch()`.
+	 */
+	operation?: string;
+}
+
+/** Options for {@link DatabaseServer.history} */
+export interface HistoryOptions {
+	/** Maximum entries to return (default 50, max 1000) */
+	limit?: number;
+	/** Only return changes recorded strictly before this epoch-ms timestamp */
+	before?: number;
+}
+
+/** Options for {@link DatabaseServer.changesSince} */
+export interface ChangesSinceOptions {
+	/** Maximum entries to return (default 500, max 5000) */
+	limit?: number;
+	/** Restrict to a single entity type */
+	table?: string;
+	/**
+	 * Restrict to changes recorded under one `{ operation }` id.
+	 *
+	 * Combines with `table`: both narrow. Use this to follow one long-running
+	 * operation's progress through the same feed everything else arrives on.
+	 */
+	operation?: string;
+}
+
+/** Options for {@link DatabaseServer.operationChanges} */
+export interface OperationChangesOptions {
+	/** Maximum entries to return (default 500, max 5000) */
+	limit?: number;
+}
+
+/**
+ * The actor-scoped write surface returned by `scoped(db, actor)`.
+ *
+ * A thin façade, not a new database: every method forwards to the same
+ * `DatabaseServer` with the actor threaded through, so a scoped write is
+ * indistinguishable from an unscoped one apart from what the change log
+ * records.
+ */
+export interface ScopedDatabase<DatabaseConfig extends Record<string, Database.Table>> {
+	/** The actor every write through this handle is attributed to */
+	readonly actor: string;
+	/**
+	 * The operation id every write through this handle is grouped under, or
+	 * `undefined` when the handle was created without one.
+	 */
+	readonly operation_id: string | undefined;
+	create<
+		Type extends keyof DatabaseConfig & string,
+		Table extends DatabaseConfig[Type],
+		OutputData extends Database.Entity<Table>,
+		InputData extends Omit<OutputData, 'id' | 'created_at' | 'updated_at'>,
+	>(
+		entity_type: Type,
+		unsafe_data: InputData,
+	): OutputData;
+	update<
+		Type extends keyof DatabaseConfig & string,
+		Table extends DatabaseConfig[Type],
+		OutputData extends Database.Entity<Table>,
+		InputData extends DeepPartial<OutputData>,
+	>(
+		entity_type: Type,
+		id: string | number,
+		unsafe_data: InputData,
+	): OutputData;
+	delete<Type extends keyof DatabaseConfig & string>(
+		entity_type: Type,
+		id: string | number,
+	): void;
+	transaction(
+		operations: DatabaseServerTransaction<DatabaseConfig>[],
+	): DatabaseServerTransactionResult<DatabaseConfig>[];
+	batch<T>(fn: () => T): T;
+	revert(change_id: string): Record<string, unknown> | undefined;
+}
+
+/**
+ * Attribute every write made through the returned handle to `actor`.
+ *
+ * ```ts
+ * const claude = scoped(db, 'agent:claude');
+ * claude.update('post', id, { title });
+ * ```
+ *
+ * The actor lands in the change log; an unattributed write is `'system'`.
+ * Equivalent to passing `{ actor }` as the trailing option on each mutator —
+ * this is sugar for a run of writes that share one actor (an import, an agent
+ * session, a migration).
+ *
+ * The optional third argument groups those writes under one operation id, so the
+ * whole run can be undone with `db.revertOperation(operation_id)`:
+ *
+ * ```ts
+ * const import_id = crypto.randomUUID();
+ * const importer = scoped(db, 'import', import_id);
+ * for (const row of rows) importer.create('post', row);
+ * // …later
+ * db.revertOperation(import_id);
+ * ```
+ *
+ * It is a plain string rather than an options object for the same reason
+ * `actor` is: these are the two attributes of a scope, both opaque, and a
+ * two-string signature reads at the call site (`scoped(db, 'import', id)`)
+ * better than a wrapper. Blank or whitespace-only means "no operation".
+ *
+ * Deliberately a free function rather than a `db.as()` method: a method
+ * returning `ScopedDatabase<Config>` makes `DatabaseServer` invariant in its
+ * config type parameter, which breaks any consumer that widens or narrows a
+ * `DatabaseServer<Config>`. A standalone helper keeps the class's variance
+ * untouched.
+ *
+ * The handle carries methods, which cannot cross a Durable Object RPC
+ * boundary — call this inside the Durable Object. From outside (a
+ * `DatabaseStub`), pass `{ actor }` to the mutator directly.
+ */
+export function scoped<
+	DatabaseConfig extends Record<string, Database.Table>,
+	Meta extends Record<string, any> = Record<string, any>,
+>(
+	db: DatabaseServer<DatabaseConfig, Meta>,
+	actor: string,
+	operation?: string,
+): ScopedDatabase<DatabaseConfig> {
+	const resolved = actor?.trim() || DEFAULT_ACTOR;
+	const resolved_operation = operation?.trim() || undefined;
+	const options: WriteOptions = { actor: resolved, operation: resolved_operation };
+	return {
+		actor: resolved,
+		operation_id: resolved_operation,
+		create: (entity_type, unsafe_data) =>
+			db.create(entity_type, unsafe_data as never, options) as never,
+		update: (entity_type, id, unsafe_data) =>
+			db.update(entity_type, id, unsafe_data as never, options) as never,
+		delete: (entity_type, id) => db.delete(entity_type, id, options),
+		transaction: (operations) => db.transaction(operations, options),
+		batch: (fn) => db.batch(fn, options),
+		revert: (change_id) => db.revert(change_id, options),
+	};
+}
+
 /**
  * An operation to perform in a database transaction.
  * This is typically added to an array used to batch multiple create/update/delete operations into a single transaction.
@@ -52,6 +440,13 @@ export type DatabaseServerTransaction<
 				type: keyof DatabaseConfig & string;
 				/** The data for the new entity */
 				data: any;
+				/**
+				 * Reuse the primary key and `created_at` present in `data` instead of
+				 * generating fresh ones. This is what makes `revert()` able to undo a
+				 * delete — the row comes back with the identity it had — and is
+				 * equally useful for imports and restores. Off by default.
+				 */
+				preserve_id?: boolean;
 			};
 	  }
 	| {
@@ -63,6 +458,13 @@ export type DatabaseServerTransaction<
 				id: string | number;
 				/** The data to update the entity with */
 				data: any;
+				/**
+				 * Write `.readonly()` columns too, instead of stripping them.
+				 * Only `revert()` sets this — it restores a state the row already
+				 * held, so the usual immutability guard would drop exactly the
+				 * columns it was asked to put back.
+				 */
+				allow_readonly?: boolean;
 			};
 	  }
 	| {
@@ -447,12 +849,15 @@ export class DatabaseServer<
 	 * coercion. Row-level converters run per row on bulk paths, so they must
 	 * not rebuild these on every call.
 	 */
-	#column_meta: Map<string, { columns: Set<string>; boolean_columns: string[] }> =
-		new Map();
+	#column_meta: Map<
+		string,
+		{ columns: Set<string>; boolean_columns: string[]; blob_columns: string[] }
+	> = new Map();
 
 	private columnMeta(entity_type: string): {
 		columns: Set<string>;
 		boolean_columns: string[];
+		blob_columns: string[];
 	} {
 		let meta = this.#column_meta.get(entity_type);
 		if (!meta) {
@@ -460,11 +865,13 @@ export class DatabaseServer<
 				{}) as Record<string, string>;
 			const columns = new Set<string>();
 			const boolean_columns: string[] = [];
+			const blob_columns: string[] = [];
 			for (const [column, definition] of Object.entries(table_definition)) {
 				columns.add(this.sanitize(column));
 				if (definition?.startsWith?.('BOOLEAN')) boolean_columns.push(column);
+				if (definition?.startsWith?.('BLOB')) blob_columns.push(column);
 			}
-			meta = { columns, boolean_columns };
+			meta = { columns, boolean_columns, blob_columns };
 			this.#column_meta.set(entity_type, meta);
 		}
 		return meta;
@@ -750,7 +1157,833 @@ export class DatabaseServer<
 			}
 		}
 
+		this.bootstrapChangeLog();
+		this.bootstrapFileGC();
 		this.bootstrapSearch();
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Change log (DS-03)                                                     */
+	/* ---------------------------------------------------------------------- */
+
+	/** Entity types that opted into history, mapped to their retention in days. */
+	#history_tables: Map<string, number> = new Map();
+
+	/**
+	 * Create the shared `_change_log` table (and its indexes) when at least one
+	 * configured table opts into history, and arm the retention sweeper.
+	 *
+	 * Idempotent, like every other bootstrap step: it runs on every wake and
+	 * does nothing once the table exists. A deployment that later turns history
+	 * on for a table needs no migration — the first wake after the config change
+	 * creates the table.
+	 */
+	private bootstrapChangeLog(): void {
+		for (const [entity_type, table] of Object.entries(this.config)) {
+			const history = table?.config?.history;
+			if (!history?.enabled) continue;
+			this.#history_tables.set(entity_type, Math.max(0, history.retention_days ?? 0));
+		}
+		if (this.#history_tables.size === 0) return;
+		this.ctx.storage.sql.exec(
+			`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(CHANGE_LOG_TABLE)} (
+				id TEXT PRIMARY KEY,
+				"table" TEXT NOT NULL,
+				entity_id TEXT NOT NULL,
+				operation TEXT NOT NULL,
+				actor TEXT NOT NULL,
+				operation_id TEXT,
+				patch_json TEXT,
+				previous_json TEXT,
+				created_at INTEGER NOT NULL
+			);`,
+		);
+		// (table, entity_id, created_at) serves `history()`; (created_at) serves
+		// both `changesSince()` and the retention sweep. Without them each read
+		// is a full scan of the log, which Cloudflare bills per row.
+		this.ctx.storage.sql.exec(
+			`CREATE INDEX IF NOT EXISTS "idx__change_log_entity" ON ${quoteIdentifier(CHANGE_LOG_TABLE)} ("table", entity_id, created_at);`,
+		);
+		this.ctx.storage.sql.exec(
+			`CREATE INDEX IF NOT EXISTS "idx__change_log_created_at" ON ${quoteIdentifier(CHANGE_LOG_TABLE)} (created_at);`,
+		);
+		// (operation_id, created_at) serves `operationChanges()` and `revertOperation()`.
+		// `revertOperation` reads the operation in reverse chronological order, so the
+		// index has to carry the ordering too — otherwise undoing a 10,000-row
+		// import sorts the whole log to find them.
+		this.ctx.storage.sql.exec(
+			`CREATE INDEX IF NOT EXISTS "idx__change_log_operation" ON ${quoteIdentifier(CHANGE_LOG_TABLE)} (operation_id, created_at);`,
+		);
+		this.registerAlarm('change_log_retention', () => this.sweepChangeLog());
+		// Armed before `bootstrapSearch()` so a pending rebuild's immediate alarm
+		// still wins: `scheduleChangeLogAlarm` never moves an existing alarm later.
+		void this.scheduleChangeLogAlarm().catch((error) => {
+			console.error('[DatabaseServer] failed to arm the change-log alarm:', error);
+		});
+	}
+
+	/** Whether the entity type records its mutations in `_change_log`. */
+	private hasHistory(entity_type: string): boolean {
+		return this.#history_tables.has(entity_type);
+	}
+
+	/**
+	 * The change-log projection of an entity: everything except `blob()` columns.
+	 *
+	 * A change log that copied binary payloads would multiply the storage cost of
+	 * exactly the fields that are already the largest thing in the row (a 5 MB
+	 * blob updated ten times would cost 50 MB of history), and JSON has no
+	 * lossless representation for bytes anyway. `r2()` references — which are
+	 * small descriptors, not payloads — are recorded normally.
+	 */
+	private historyPayload(
+		entity_type: string,
+		data: Record<string, unknown> | undefined,
+	): Record<string, unknown> | undefined {
+		if (!data) return undefined;
+		const blob_columns = this.columnMeta(entity_type).blob_columns;
+		if (blob_columns.length === 0) return data;
+		const stripped = { ...data };
+		for (const column of blob_columns) {
+			const value = stripped[column];
+			if (value === undefined) continue;
+			// Deliberately NOT the bytes. `JSON.stringify(new Uint8Array([1,2]))`
+			// is `{"0":1,"1":2}` — five-ish bytes of JSON per byte of payload —
+			// so recording a 1MB blob would blow past the Durable Object's 2MB
+			// per-value ceiling and make the log larger than the table.
+			//
+			// A marker rather than a deleted key, so `revert()` can tell "this
+			// column held bytes we did not keep" from "this column was empty"
+			// and refuse instead of silently restoring an incomplete row.
+			// Just the flag: by the time a payload reaches here the value has
+			// already been encoded for storage, so any "size" recorded would be
+			// the encoded length rather than the blob's, which is worse than
+			// saying nothing. The marker exists to be detected, not measured.
+			stripped[column] = { [BLOB_OMITTED]: true };
+		}
+		return stripped;
+	}
+
+	/**
+	 * Append one row to `_change_log`. Called from inside the entity write
+	 * transaction, so a rolled-back write leaves no history behind.
+	 */
+	private recordChange(
+		entity_type: string,
+		entity_id: string | number,
+		operation: ChangeLogOperation,
+		patch: Record<string, unknown> | undefined,
+		previous: Record<string, unknown> | undefined,
+		created_at: number,
+	): void {
+		this.ctx.storage.sql.exec(
+			`INSERT INTO ${quoteIdentifier(CHANGE_LOG_TABLE)} (id, "table", entity_id, operation, actor, operation_id, patch_json, previous_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+			generateTimestampID(),
+			entity_type,
+			String(entity_id),
+			operation,
+			this.#actor,
+			this.#operation ?? null,
+			patch === undefined ? null : JSON.stringify(patch),
+			previous === undefined ? null : JSON.stringify(previous),
+			created_at,
+		);
+	}
+
+	/**
+	 * The changed half of an update: only the fields whose value actually
+	 * differs, plus the previous value of each of them.
+	 *
+	 * Recording the whole entity twice per update would make the log larger than
+	 * the table it describes within a handful of edits; a field-level diff keeps
+	 * a typical single-field edit at a few dozen bytes and is exactly what
+	 * `revert()` needs to put the row back.
+	 */
+	private diffForHistory(
+		previous: Record<string, unknown>,
+		next: Record<string, unknown>,
+	): { patch: Record<string, unknown>; previous: Record<string, unknown> } {
+		const patch: Record<string, unknown> = {};
+		const before: Record<string, unknown> = {};
+		const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+		for (const key of keys) {
+			// `updated_at` changes on every write by definition — recording it
+			// would make every diff non-empty and tell the reader nothing.
+			if (key === 'updated_at') continue;
+			if (deepEqual(previous[key], next[key])) continue;
+			// `JSON.stringify` drops keys whose value is `undefined`, which would
+			// erase the very fact this diff exists to record: that the field was
+			// unset before (or was cleared by this write). Both directions are
+			// normalized to `null` so the key survives the round trip and
+			// `revert()` can actually put the field back — an optional field is
+			// nullable, so `null` restores it faithfully.
+			patch[key] = next[key] === undefined ? null : next[key];
+			before[key] = previous[key] === undefined ? null : previous[key];
+		}
+		return { patch, previous: before };
+	}
+
+	/** Parse one raw `_change_log` row into the public {@link ChangeLogEntry}. */
+	private toChangeLogEntry(row: Record<string, unknown>): ChangeLogEntry {
+		const parse = (value: unknown): Record<string, unknown> | undefined => {
+			if (typeof value !== 'string') return undefined;
+			try {
+				const parsed: unknown = JSON.parse(value);
+				if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+					return undefined;
+				}
+				return parsed as Record<string, unknown>;
+			} catch {
+				return undefined;
+			}
+		};
+		return {
+			id: String(row.id),
+			table: String(row.table),
+			entity_id: String(row.entity_id),
+			operation: String(row.operation) as ChangeLogOperation,
+			actor: String(row.actor),
+			operation_id:
+				typeof row.operation_id === 'string' && row.operation_id ? row.operation_id : undefined,
+			patch: parse(row.patch_json),
+			previous: parse(row.previous_json),
+			created_at: Number(row.created_at) || 0,
+		};
+	}
+
+	/** Throws when nothing in the config records history (so there is no table to read). */
+	private assertChangeLog(): void {
+		if (this.#history_tables.size > 0) return;
+		throw new DelightError({
+			message:
+				'No table has history enabled. Pass `{ history: true }` to Database.table() for the tables you want recorded.',
+			status: 400,
+			code: 'history_disabled',
+		});
+	}
+
+	/**
+	 * The recorded changes to one entity, newest first.
+	 *
+	 * `before` pages backwards through time (pass the `created_at` of the oldest
+	 * entry you have); `limit` caps the page at 1000.
+	 */
+	history(
+		entity_type: keyof DatabaseConfig & string,
+		id: string | number,
+		options?: HistoryOptions,
+	): ChangeLogEntry[] {
+		this.assertChangeLog();
+		const limit = Math.max(1, Math.min(1000, Math.trunc(options?.limit || 50)));
+		const before =
+			typeof options?.before === 'number' && Number.isFinite(options.before)
+				? options.before
+				: undefined;
+		const rows =
+			before === undefined
+				? this.ctx.storage.sql
+						.exec(
+							`SELECT * FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE "table" = ? AND entity_id = ? ORDER BY created_at DESC, id DESC LIMIT ${limit};`,
+							entity_type,
+							String(id),
+						)
+						.toArray()
+				: this.ctx.storage.sql
+						.exec(
+							`SELECT * FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE "table" = ? AND entity_id = ? AND created_at < ? ORDER BY created_at DESC, id DESC LIMIT ${limit};`,
+							entity_type,
+							String(id),
+							before,
+						)
+						.toArray();
+		return rows.map((row) => this.toChangeLogEntry(row as Record<string, unknown>));
+	}
+
+	/**
+	 * Every recorded change at or after `timestamp`, oldest first — the feed
+	 * shape (audit trails, outbound replication, "what happened while I was
+	 * away"). Optionally narrowed to one entity type, one operation, or both.
+	 */
+	changesSince(timestamp: number, options?: ChangesSinceOptions): ChangeLogEntry[] {
+		this.assertChangeLog();
+		const since = Number.isFinite(timestamp) ? Math.max(0, timestamp) : 0;
+		const limit = Math.max(1, Math.min(5000, Math.trunc(options?.limit || 500)));
+		const conditions = ['created_at >= ?'];
+		const bindings: (string | number)[] = [since];
+		if (options?.table) {
+			conditions.push('"table" = ?');
+			bindings.push(options.table);
+		}
+		const operation = options?.operation?.trim();
+		if (operation) {
+			conditions.push('operation_id = ?');
+			bindings.push(operation);
+		}
+		const rows = this.ctx.storage.sql
+			.exec(
+				`SELECT * FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE ${conditions.join(' AND ')} ORDER BY created_at ASC, id ASC LIMIT ${limit};`,
+				...bindings,
+			)
+			.toArray();
+		return rows.map((row) => this.toChangeLogEntry(row as Record<string, unknown>));
+	}
+
+	/**
+	 * Every change recorded under one `{ operation }` id, oldest first — the shape of
+	 * "what did that import actually do".
+	 *
+	 * Chronological rather than newest-first because an operation is read as a story:
+	 * it is one operation, and the order the writes happened in is the order that
+	 * explains it. (`revertOperation()` walks the same rows backwards.)
+	 *
+	 * Returns an empty array for an unknown operation id — an operation is not an entity,
+	 * so "no changes recorded under this id" is an ordinary answer, not a 404.
+	 * `revertOperation()` is the one that refuses, because undoing nothing when you
+	 * asked to undo an import is a bug worth surfacing.
+	 */
+	operationChanges(operation_id: string, options?: OperationChangesOptions): ChangeLogEntry[] {
+		this.assertChangeLog();
+		const operation = operation_id?.trim();
+		if (!operation) return [];
+		const limit = Math.max(1, Math.min(5000, Math.trunc(options?.limit || 500)));
+		const rows = this.ctx.storage.sql
+			.exec(
+				`SELECT * FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE operation_id = ? ORDER BY created_at ASC, id ASC LIMIT ${limit};`,
+				operation,
+			)
+			.toArray();
+		return rows.map((row) => this.toChangeLogEntry(row as Record<string, unknown>));
+	}
+
+	/** Read one change-log row by id, or throw a 404. */
+	private getChange(change_id: string): ChangeLogEntry {
+		this.assertChangeLog();
+		const row = this.ctx.storage.sql
+			.exec(
+				`SELECT * FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE id = ? LIMIT 1;`,
+				change_id,
+			)
+			.next()?.value as Record<string, unknown> | undefined;
+		if (!row) {
+			throw new DelightError({ message: `Change ${change_id} not found`, status: 404 });
+		}
+		return this.toChangeLogEntry(row);
+	}
+
+	/**
+	 * Undo one recorded change, restoring the state it overwrote.
+	 *
+	 * A reverted create deletes the row, a reverted update writes the previous
+	 * values of exactly the fields it changed, and a reverted delete recreates
+	 * the row with its original id and `created_at`. The revert is itself an
+	 * ordinary mutation, so it appends its own change-log entry attributed to the
+	 * current actor — history is append-only and a revert can be reverted.
+	 *
+	 * Returns the resulting entity (`undefined` when the revert deleted it).
+	 */
+	revert(
+		change_id: string,
+		options?: RevertOptions,
+	): Record<string, unknown> | undefined {
+		const change = this.getChange(change_id);
+		const entity_type = change.table as keyof DatabaseConfig & string;
+		if (!this.config[entity_type]) {
+			throw new DelightError({
+				message: `Entity type ${change.table} is not valid`,
+				status: 400,
+			});
+		}
+		return this.withWriteScope(options, () => {
+			if (change.operation === 'create') {
+				this.delete(entity_type, change.entity_id);
+				return undefined;
+			}
+			if (!change.previous) {
+				throw new DelightError({
+					message: `Change ${change_id} has no previous state to restore`,
+					status: 409,
+				});
+			}
+
+			// Blob bytes are never recorded (see `historyPayload`), so a change
+			// that touched one cannot be fully undone. Say so instead of writing
+			// a row that quietly lost its payload.
+			const omitted = omittedBlobFields(change.previous);
+			if (omitted.length > 0 && !options?.without_blobs) {
+				throw new DelightError({
+					message: `Change ${change_id} cannot be reverted: the change log does not store blob bytes, so ${omitted.map((field) => `'${field}'`).join(', ')} would be lost. Pass { without_blobs: true } to restore everything else and leave ${omitted.length === 1 ? 'it' : 'them'} unset — which fails if the column is required.`,
+					status: 409,
+					code: 'blob_not_recoverable',
+				});
+			}
+			const previous = { ...change.previous };
+			for (const field of omitted) delete previous[field];
+
+			if (change.operation === 'update') {
+				// `allow_readonly` because a revert restores a state the row
+				// legitimately held; the usual readonly strip would silently drop
+				// exactly the columns the caller asked to put back.
+				return this.update(entity_type, change.entity_id, previous as never, {
+					...options,
+					allow_readonly: true,
+				}) as Record<string, unknown> | undefined;
+			}
+			const [result] = this.transaction([
+				{ create: { type: entity_type, data: previous, preserve_id: true } },
+			]);
+			return result && 'entity' in result
+				? (result.entity.data as Record<string, unknown>)
+				: undefined;
+		});
+	}
+
+	/**
+	 * Undo every change recorded under one `{ operation }` id — the whole import,
+	 * bulk retag or agent run — as a single atomic unit.
+	 *
+	 * Returns how many changes were reverted.
+	 *
+	 * Three properties make this different from calling `revert()` in a loop:
+	 *
+	 * - **Reverse chronological.** The operation is walked newest-first. This is a
+	 *   correctness requirement, not a preference: an operation that creates a row and
+	 *   then updates it must undo the update before the create, or the update's
+	 *   revert hits a row that no longer exists (and, worse, a delete-then-create
+	 *   pair replayed forwards would resurrect the wrong state).
+	 * - **Atomic.** The whole walk runs inside `batch()`, so one failure — a
+	 *   `blob_not_recoverable`, a foreign key, anything — rolls back every revert
+	 *   in the run. A half-undone import is worse than an un-undone one.
+	 * - **Revertible.** The reverts are themselves recorded, under a *new* operation
+	 *   id, so `revertOperation(that_id)` redoes the original operation. Pass
+	 *   `{ operation }` to choose that id (the only way to know it up front — this
+	 *   returns a count, not an id); one is generated when you do not.
+	 *
+	 * An unknown or blank operation id throws a `DelightError` (404): asking to undo
+	 * an operation and silently undoing nothing hides the real bug, which is
+	 * usually an operation id that never made it onto the writes.
+	 */
+	revertOperation(operation_id: string, options?: RevertOptions): number {
+		this.assertChangeLog();
+		const operation = operation_id?.trim();
+		const rows = operation
+			? this.ctx.storage.sql
+					.exec(
+						`SELECT * FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE operation_id = ? ORDER BY created_at DESC, id DESC LIMIT ${REVERT_OPERATION_MAX_CHANGES + 1};`,
+						operation,
+					)
+					.toArray()
+			: [];
+		if (rows.length === 0) {
+			throw new DelightError({
+				message: `No changes recorded under operation ${operation_id}`,
+				status: 404,
+				code: 'operation_not_found',
+			});
+		}
+		if (rows.length > REVERT_OPERATION_MAX_CHANGES) {
+			throw new DelightError({
+				message: `Operation ${operation} contains more than ${REVERT_OPERATION_MAX_CHANGES} changes, which cannot be reverted in one Durable Object transaction. Split the original work across several operation ids.`,
+				status: 413,
+				code: 'operation_too_large',
+			});
+		}
+		const changes = rows.map((row) =>
+			this.toChangeLogEntry(row as Record<string, unknown>),
+		);
+		// A fresh id so the reverts group as their own unit; taken from the
+		// caller when supplied, since the return value is a count and there is
+		// otherwise no way to learn a generated one.
+		const revert_operation = options?.operation?.trim() || generateTimestampID();
+		const revert_options: RevertOptions = {
+			...options,
+			actor: options?.actor,
+			operation: revert_operation,
+		};
+		return this.batch(() => {
+			for (const change of changes) this.revert(change.id, revert_options);
+			return changes.length;
+		}, revert_options);
+	}
+
+	/** Change-log rows deleted per table per sweeper invocation. */
+	protected changeLogSweepBatch(): number {
+		return CHANGE_LOG_SWEEP_BATCH;
+	}
+
+	/**
+	 * Delete change-log rows past their table's retention window.
+	 *
+	 * Bounded per invocation for the same reason the legacy journal teardown is:
+	 * DO SQLite deletes row by row, so an unbounded `DELETE` over a large log can
+	 * exceed the CPU limit and then retry identically forever. When a sweep
+	 * fills its batch the alarm is re-armed immediately; otherwise it is armed
+	 * for the next daily tick.
+	 */
+	private async sweepChangeLog(): Promise<void> {
+		if (this.#history_tables.size === 0) return;
+		const batch_size = Math.max(1, Math.trunc(this.changeLogSweepBatch()));
+		const now = Date.now();
+		let filled_a_batch = false;
+		for (const [entity_type, retention_days] of this.#history_tables) {
+			// 0 means "keep forever" — the documented opt-out.
+			if (!retention_days) continue;
+			const cutoff = now - retention_days * DAY_MS;
+			const doomed = this.ctx.storage.sql
+				.exec(
+					`SELECT id FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE "table" = ? AND created_at < ? ORDER BY created_at ASC LIMIT ${batch_size};`,
+					entity_type,
+					cutoff,
+				)
+				.toArray();
+			if (doomed.length === 0) continue;
+			this.ctx.storage.transactionSync(() => {
+				this.ctx.storage.sql.exec(
+					`DELETE FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE id IN (SELECT id FROM ${quoteIdentifier(CHANGE_LOG_TABLE)} WHERE "table" = ? AND created_at < ? ORDER BY created_at ASC LIMIT ${batch_size});`,
+					entity_type,
+					cutoff,
+				);
+			});
+			console.log(
+				`[DatabaseServer] change log retention: pruned ${doomed.length} ${entity_type} rows older than ${retention_days}d`,
+			);
+			if (doomed.length >= batch_size) filled_a_batch = true;
+		}
+		await this.scheduleChangeLogAlarm(filled_a_batch ? 0 : CHANGE_LOG_SWEEP_INTERVAL_MS);
+	}
+
+	/**
+	 * Arm the retention sweep, without ever pushing an earlier alarm later.
+	 *
+	 * Alarms are a single slot shared by every registered handler, so a naive
+	 * `setAlarm(now + 24h)` here would postpone a search rebuild that had armed
+	 * itself for *now*. The existing alarm is read first and left alone when it
+	 * already fires sooner — the base `alarm()` runs every handler, so an
+	 * earlier tick sweeps too.
+	 */
+	private async scheduleChangeLogAlarm(
+		delay_ms: number = CHANGE_LOG_SWEEP_INTERVAL_MS,
+	): Promise<void> {
+		const storage = this.ctx.storage as unknown as {
+			setAlarm?(time: number): Promise<void> | void;
+			getAlarm?(): Promise<number | null>;
+		};
+		if (typeof storage.setAlarm !== 'function') return;
+		const target = Date.now() + Math.max(0, delay_ms);
+		if (typeof storage.getAlarm === 'function') {
+			const current = await storage.getAlarm();
+			if (typeof current === 'number' && current > 0 && current <= target) return;
+		}
+		await storage.setAlarm(target);
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* File garbage collection                                                */
+	/* ---------------------------------------------------------------------- */
+
+	/** Entity types with `file()` columns, mapped to each column's default store. */
+	#file_tables: Map<string, Record<string, { store: string }>> = new Map();
+
+	/**
+	 * Create the `_file_gc` queue when at least one configured table has a
+	 * `file()` column.
+	 *
+	 * Same lifecycle as `bootstrapChangeLog()`: idempotent, runs on every wake,
+	 * and a database with no file columns never creates the table at all —
+	 * nothing can ever enqueue into it, so it would only be a row nobody reads.
+	 */
+	private bootstrapFileGC(): void {
+		for (const [entity_type, table] of Object.entries(this.config)) {
+			const file_fields = table?.config?.file_fields;
+			if (!file_fields || Object.keys(file_fields).length === 0) continue;
+			this.#file_tables.set(entity_type, file_fields);
+		}
+		if (this.#file_tables.size === 0) return;
+		this.ctx.storage.sql.exec(
+			`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(FILE_GC_TABLE)} (
+				id TEXT PRIMARY KEY,
+				store TEXT NOT NULL,
+				key TEXT NOT NULL,
+				entity_type TEXT NOT NULL,
+				entity_id TEXT NOT NULL,
+				deleted_at INTEGER NOT NULL
+			);`,
+		);
+		// The only read order there is: the queue is drained oldest-first.
+		this.ctx.storage.sql.exec(
+			`CREATE INDEX IF NOT EXISTS "idx__file_gc_deleted_at" ON ${quoteIdentifier(FILE_GC_TABLE)} (deleted_at);`,
+		);
+	}
+
+	/** The `file()` columns of an entity type, or `undefined` when it has none. */
+	private fileFields(entity_type: string): Record<string, { store: string }> | undefined {
+		return this.#file_tables.get(entity_type);
+	}
+
+	/**
+	 * The reference in `value`, if it is one.
+	 *
+	 * Structural rather than `instanceof`: a reference is a plain object that
+	 * came back out of the `json` column, and the only thing that matters here
+	 * is whether it names an object in a store.
+	 */
+	private asFileReference(value: unknown): FileReference | undefined {
+		if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+		const reference = value as Partial<FileReference>;
+		if (typeof reference.key !== 'string' || reference.key.length === 0) return undefined;
+		return reference as FileReference;
+	}
+
+	/**
+	 * Queue one now-unreferenced object for the application to delete.
+	 *
+	 * Called from inside the entity write transaction, like `recordChange()`, so
+	 * a rolled-back write never leaves a queue row telling the app to delete an
+	 * object the row still points at.
+	 */
+	private enqueueFileDeletion(
+		entity_type: string,
+		entity_id: string | number,
+		reference: FileReference,
+		default_store: string,
+		deleted_at: number,
+	): void {
+		// The reference's own store wins: a row migrated to another bucket keeps
+		// pointing at that bucket, and reading the field's default here would
+		// hand the app a key to delete from the wrong one.
+		const store = reference.store?.trim() || default_store;
+		if (!store) return;
+		this.ctx.storage.sql.exec(
+			`INSERT INTO ${quoteIdentifier(FILE_GC_TABLE)} (id, store, key, entity_type, entity_id, deleted_at) VALUES (?, ?, ?, ?, ?, ?);`,
+			generateTimestampID(),
+			store,
+			reference.key,
+			entity_type,
+			String(entity_id),
+			deleted_at,
+		);
+	}
+
+	/**
+	 * Queue every file reference a deleted row held.
+	 *
+	 * The row is gone, so every object it pointed at is now unreferenced by it.
+	 */
+	private enqueueFileDeletionsForDelete(
+		entity_type: string,
+		entity_id: string | number,
+		deleted_entity: Record<string, unknown> | undefined,
+		deleted_at: number,
+	): void {
+		const file_fields = this.fileFields(entity_type);
+		if (!file_fields || !deleted_entity) return;
+		for (const [field, meta] of Object.entries(file_fields)) {
+			const reference = this.asFileReference(readFieldPath(deleted_entity, field));
+			if (!reference) continue;
+			this.enqueueFileDeletion(entity_type, entity_id, reference, meta.store, deleted_at);
+		}
+	}
+
+	/**
+	 * Queue the objects an update orphaned — those whose `key` the write replaced.
+	 *
+	 * Keyed on `key` alone, deliberately. A write that changes only `mime`,
+	 * `name` or `metadata` is describing the *same* object better, not pointing
+	 * at a new one, and enqueueing there would have the application delete a file
+	 * the row still uses. Changing `store` without changing `key` is likewise a
+	 * migration record, not an orphaning: the same object now lives elsewhere.
+	 */
+	private enqueueFileDeletionsForUpdate(
+		entity_type: string,
+		entity_id: string | number,
+		previous_entity: Record<string, unknown> | undefined,
+		next_entity: Record<string, unknown> | undefined,
+		deleted_at: number,
+	): void {
+		const file_fields = this.fileFields(entity_type);
+		if (!file_fields || !previous_entity) return;
+		for (const [field, meta] of Object.entries(file_fields)) {
+			const before = this.asFileReference(readFieldPath(previous_entity, field));
+			if (!before) continue;
+			const after = next_entity
+				? this.asFileReference(readFieldPath(next_entity, field))
+				: undefined;
+			if (after && after.key === before.key) continue;
+			this.enqueueFileDeletion(entity_type, entity_id, before, meta.store, deleted_at);
+		}
+	}
+
+	/** Throws when no configured table has a `file()` column (so there is no queue). */
+	private assertFileGC(): void {
+		if (this.#file_tables.size > 0) return;
+		throw new DelightError({
+			message:
+				'No table has a file() column, so there is no file deletion queue. Declare one with schema.file({ store }).',
+			status: 400,
+			code: 'file_gc_disabled',
+		});
+	}
+
+	/**
+	 * Objects whose owning row is gone or has been repointed, oldest first.
+	 *
+	 * The database is the only component that knows both *when* a row died and
+	 * *what key it held*, inside the write transaction — an application watching
+	 * from outside sees the row already gone and has nothing left to read the key
+	 * from. So the queue is written here, and drained there:
+	 *
+	 * ```ts
+	 * for (const pending of db.pendingFileDeletions({ limit: 100 })) {
+	 *   await env[pending.store].delete(pending.key);
+	 *   db.releaseFileDeletion(pending.id);
+	 * }
+	 * ```
+	 *
+	 * Delete first, release second: a crash in between re-delivers the row, and
+	 * deleting an already-deleted object is a no-op in every store worth using.
+	 * The reverse order loses the object's key forever.
+	 *
+	 * > **This queue reports intent, not safety.** It records that *this row*
+	 * > stopped referencing this key. It does **not** know whether some *other*
+	 * > row still points at the same object. If your keys are content-addressed
+	 * > (a SHA-256 key, a dedup layer, a "copy" that reuses the key) then two
+	 * > rows can share one object, and deleting on this signal alone will break
+	 * > the survivors. In that case you MUST check for remaining references
+	 * > yourself before calling the store's `delete` — release the queue row
+	 * > either way.
+	 *
+	 * Reference counting is deliberately not implemented here. File references
+	 * live inside the internal `json` overflow column, so the only way for the
+	 * database to find other holders of a key would be a `LIKE` scan across every
+	 * row of every table with a `file()` column — expensive on a store billed per
+	 * row read, and wrong besides: a `LIKE '%key%'` matches keys that merely
+	 * contain each other, and matches the key appearing anywhere else in the
+	 * JSON. An application that dedups by key knows its own dedup rule and can
+	 * answer the question with an index; the database cannot.
+	 *
+	 * Throws a `DelightError` (`file_gc_disabled`, 400) when no table has a
+	 * `file()` column, for the same reason the history APIs do.
+	 */
+	pendingFileDeletions(options?: PendingFileDeletionsOptions): PendingFileDeletion[] {
+		this.assertFileGC();
+		const limit = Math.max(
+			1,
+			Math.min(FILE_GC_MAX_LIMIT, Math.trunc(options?.limit || FILE_GC_DEFAULT_LIMIT)),
+		);
+		const rows = this.ctx.storage.sql
+			.exec(
+				`SELECT * FROM ${quoteIdentifier(FILE_GC_TABLE)} ORDER BY deleted_at ASC, id ASC LIMIT ${limit};`,
+			)
+			.toArray();
+		return rows.map((row) => ({
+			id: String(row.id),
+			store: String(row.store),
+			key: String(row.key),
+			entity_type: String(row.entity_type),
+			entity_id: String(row.entity_id),
+			deleted_at: Number(row.deleted_at) || 0,
+		}));
+	}
+
+	/**
+	 * Drop one queue row, once the application has dealt with the object.
+	 *
+	 * Idempotent and silent about unknown ids: a redelivered row that was already
+	 * released must not turn a successful drain into an error. Returns whether a
+	 * row was actually removed, for callers that want to notice.
+	 */
+	releaseFileDeletion(id: string): boolean {
+		this.assertFileGC();
+		if (!id) return false;
+		// `RETURNING` rather than a `rowsWritten` count: it is one statement, and
+		// it is the only form that reports the row count identically on DO
+		// SQLite and on any other SQLite the tests run against.
+		const removed = this.ctx.storage.sql
+			.exec(
+				`DELETE FROM ${quoteIdentifier(FILE_GC_TABLE)} WHERE id = ? RETURNING id;`,
+				id,
+			)
+			.toArray();
+		return removed.length > 0;
+	}
+
+	/**
+	 * Release a whole drained page in one statement — the batch form of
+	 * {@link DatabaseServer.releaseFileDeletion}. Returns how many rows went.
+	 */
+	releaseFileDeletions(ids: readonly string[]): number {
+		this.assertFileGC();
+		const wanted = ids.filter(Boolean);
+		if (wanted.length === 0) return 0;
+		const placeholders = wanted.map(() => '?').join(', ');
+		const removed = this.ctx.storage.sql
+			.exec(
+				`DELETE FROM ${quoteIdentifier(FILE_GC_TABLE)} WHERE id IN (${placeholders}) RETURNING id;`,
+				...wanted,
+			)
+			.toArray();
+		return removed.length;
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Actor attribution (DS-07)                                              */
+	/* ---------------------------------------------------------------------- */
+
+	/** The actor the current write is attributed to. */
+	#actor: string = DEFAULT_ACTOR;
+
+	/** The operation id the current write's change rows are grouped under, if any. */
+	#operation: string | undefined = undefined;
+
+	/** Who the currently running write is attributed to (`'system'` when unscoped). */
+	public get actor(): string {
+		return this.#actor;
+	}
+
+	/**
+	 * The operation id the currently running write's change rows are grouped under,
+	 * or `undefined` outside a batched scope.
+	 */
+	public get operation_id(): string | undefined {
+		return this.#operation;
+	}
+
+	/**
+	 * Run `fn` with the given actor and operation id in effect, restoring the
+	 * previous pair after.
+	 *
+	 * Both are ambient for the duration, which is what makes a write through the
+	 * bare `db` inside a scoped `batch()` inherit them. An absent value *resets*
+	 * rather than inherits — `{ actor: 'x' }` with no `batch` runs unbatched even
+	 * inside a batched scope — so a scope always means exactly what it says.
+	 *
+	 * Safe without any async bookkeeping because every write path here is
+	 * synchronous — Durable Object SQLite is — so nothing can interleave between
+	 * the assignment and the restore. Nested scopes stack correctly.
+	 */
+	private withWriteScope<T>(options: WriteOptions | undefined, fn: () => T): T {
+		// Each field inherits from the surrounding scope independently. Resetting
+		// the unspecified one would mean `{ operation }` alone silently re-attributes
+		// the write to 'system' inside a `scoped()` run — losing exactly the
+		// attribution the actor feature exists to provide. At the top level
+		// `#actor` is already DEFAULT_ACTOR and `#operation` is undefined, so
+		// inheriting and defaulting coincide there.
+		const resolved_actor = options?.actor?.trim() || this.#actor;
+		const resolved_operation = options?.operation?.trim() || this.#operation;
+		const previous_actor = this.#actor;
+		const previous_operation = this.#operation;
+		this.#actor = resolved_actor;
+		this.#operation = resolved_operation;
+		try {
+			return fn();
+		} finally {
+			this.#actor = previous_actor;
+			this.#operation = previous_operation;
+		}
+	}
+
+	/** Whether `options` asks for a write scope at all (nothing to push when not). */
+	private hasWriteScope(options: WriteOptions | undefined): boolean {
+		return options?.actor !== undefined || options?.operation !== undefined;
 	}
 
 	/**
@@ -1594,10 +2827,11 @@ export class DatabaseServer<
 		Table extends DatabaseConfig[Type],
 		OutputData extends Database.Entity<Table>,
 		InputData extends Omit<OutputData, 'id' | 'created_at' | 'updated_at'>,
-	>(entity_type: Type, unsafe_data: InputData): OutputData {
-		const [result] = this.transaction([
-			{ create: { type: entity_type, data: unsafe_data } },
-		]);
+	>(entity_type: Type, unsafe_data: InputData, options?: WriteOptions): OutputData {
+		const [result] = this.transaction(
+			[{ create: { type: entity_type, data: unsafe_data } }],
+			options,
+		);
 		if (!result || !('entity' in result)) {
 			throw new DelightError({
 				message: 'Database transaction did not return created entity',
@@ -1617,10 +2851,25 @@ export class DatabaseServer<
 		Table extends DatabaseConfig[Type],
 		OutputData extends Database.Entity<Table>,
 		InputData extends DeepPartial<OutputData>,
-	>(entity_type: Type, id: string | number, unsafe_data: InputData): OutputData {
-		const [result] = this.transaction([
-			{ update: { type: entity_type, id, data: unsafe_data } },
-		]);
+	>(
+		entity_type: Type,
+		id: string | number,
+		unsafe_data: InputData,
+		options?: InternalWriteOptions,
+	): OutputData {
+		const [result] = this.transaction(
+			[
+				{
+					update: {
+						type: entity_type,
+						id,
+						data: unsafe_data,
+						...(options?.allow_readonly ? { allow_readonly: true } : {}),
+					},
+				},
+			],
+			options,
+		);
 		if (!result || !('entity' in result)) {
 			throw new DelightError({
 				message: 'Database transaction did not return updated entity',
@@ -1639,6 +2888,7 @@ export class DatabaseServer<
 	delete<Type extends keyof DatabaseConfig & string>(
 		entity_type: Type,
 		id: string | number,
+		options?: WriteOptions,
 	): void {
 		const table = this.config[entity_type];
 		if (table) {
@@ -1657,7 +2907,7 @@ export class DatabaseServer<
 				});
 			}
 		}
-		this.transaction([{ delete: { type: entity_type, id } }]);
+		this.transaction([{ delete: { type: entity_type, id } }], options);
 	}
 
 	/**
@@ -1770,6 +3020,13 @@ export class DatabaseServer<
 			typeof raw_offset === 'number' && Number.isFinite(raw_offset)
 				? Math.min(100_000, Math.max(0, Math.trunc(raw_offset)))
 				: undefined;
+		// Carried fields are absent from `index_schema`, so every surface below
+		// would reject them as "unknown". Catch them here instead, with an error
+		// that names the real reason. Both the caller's query and a (forgeable)
+		// cursor's are checked — `base_query` is whichever of the two is in play.
+		assertNotCarried(table.config.carried_fields, raw_query as never);
+		assertNotCarried(table.config.carried_fields, base_query as never);
+
 		// Accept plain-value where shorthands (`{folder: 'inbox'}`) on enum and
 		// number fields, normalizing them into operation objects.
 		let where = normalizeWhere(
@@ -2241,7 +3498,11 @@ export class DatabaseServer<
 	 */
 	transaction(
 		operations: DatabaseServerTransaction<DatabaseConfig>[],
+		options?: WriteOptions,
 	): DatabaseServerTransactionResult<DatabaseConfig>[] {
+		if (this.hasWriteScope(options)) {
+			return this.withWriteScope(options, () => this.transaction(operations));
+		}
 		if (!operations || !Array.isArray(operations) || operations.length === 0) return [];
 		if (operations.length > 5000) {
 			throw new DelightError({
@@ -2273,7 +3534,7 @@ export class DatabaseServer<
 				}
 
 				if ('create' in op) {
-					const { type: entity_type, data: unsafe_data } = op.create;
+					const { type: entity_type, data: unsafe_data, preserve_id } = op.create;
 					const table = this.config[entity_type];
 					if (!table || !this.isSearchIndexed(entity_type)) {
 						throw new DelightError({
@@ -2281,25 +3542,54 @@ export class DatabaseServer<
 							status: 400,
 						});
 					}
-					const data_copy = { ...unsafe_data };
-					delete data_copy.id;
-					delete data_copy.created_at;
-					delete data_copy.updated_at;
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+					const data_copy = { ...unsafe_data };
+					// `preserve_id` keeps the caller's identity — the restore/import
+					// path (and what makes reverting a delete give the row back rather
+					// than a copy of it). Everything else still strips them.
+					const restored_id = preserve_id ? data_copy[primary_key] : undefined;
+					const restored_created_at = preserve_id ? data_copy.created_at : undefined;
+					// Without this the insert hits a raw SQLite `UNIQUE constraint
+					// failed`, which carries no status and reads like an internal
+					// fault rather than "that row is already there" — the shape a
+					// double-revert or a re-run import actually produces.
+					if (restored_id !== undefined && restored_id !== null) {
+						const existing = this.ctx.storage.sql
+							.exec(
+								`SELECT 1 FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ? LIMIT 1`,
+								restored_id as SqlStorageValue,
+							)
+							.next();
+						if (!existing.done) {
+							throw new DelightError({
+								message: `${entity_type} ${String(restored_id)} already exists`,
+								status: 409,
+								code: 'entity_exists',
+							});
+						}
+					}
+					delete data_copy.id;
+					delete data_copy[primary_key];
+					delete data_copy.created_at;
+					delete data_copy.updated_at;
 					this.ensureMonotonicTimestamp(now, entity_type);
 
 					// Parse the data to ensure it's valid (throws an error if not)
 					const input_data = table.parse({
 						...data_copy,
 						[primary_key]:
-							table.config.primary_key_type === 'string' ? generateTimestampID() : 0,
-						created_at: now.getTime(),
+							restored_id ??
+							(table.config.primary_key_type === 'string' ? generateTimestampID() : 0),
+						created_at:
+							typeof restored_created_at === 'number'
+								? restored_created_at
+								: now.getTime(),
 						updated_at: now.getTime(),
 					}) as any;
 
 					// For numeric primary keys, we let the database auto-increment the ID
-					if (table.config.primary_key_type === 'number') {
+					if (table.config.primary_key_type === 'number' && restored_id === undefined) {
 						input_data[primary_key] = undefined;
 					}
 
@@ -2331,6 +3621,18 @@ export class DatabaseServer<
 						touched,
 						now,
 					);
+					// Inside the same transaction as the row: a rolled-back create must
+					// not leave history claiming it happened.
+					if (this.hasHistory(entity_type)) {
+						this.recordChange(
+							entity_type,
+							created_id,
+							'create',
+							this.historyPayload(entity_type, output_data),
+							undefined,
+							now.getTime(),
+						);
+					}
 					results.push({
 						entity: {
 							type: entity_type,
@@ -2344,7 +3646,7 @@ export class DatabaseServer<
 				}
 
 				if ('update' in op) {
-					const { type: entity_type, id, data: unsafe_data } = op.update;
+					const { type: entity_type, id, data: unsafe_data, allow_readonly } = op.update;
 					const table = this.config[entity_type];
 					if (!table || !this.isSearchIndexed(entity_type)) {
 						throw new DelightError({
@@ -2357,9 +3659,14 @@ export class DatabaseServer<
 					delete data_copy.created_at;
 					delete data_copy.updated_at;
 					// Readonly fields cannot be changed after creation — strip them like
-					// the other auto-managed fields (use a raw `exec` op to override)
-					for (const readonly_field of table.config.readonly_fields || []) {
-						delete data_copy[readonly_field];
+					// the other auto-managed fields (use a raw `exec` op to override).
+					// `revert()` opts out: it is restoring a value the row already
+					// held, and stripping would silently skip the column it was
+					// asked to put back.
+					if (!allow_readonly) {
+						for (const readonly_field of table.config.readonly_fields || []) {
+							delete data_copy[readonly_field];
+						}
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
@@ -2398,7 +3705,12 @@ export class DatabaseServer<
 							Array.isArray(current) ||
 							typeof next !== 'object' ||
 							Array.isArray(next) ||
-							next === null
+							next === null ||
+							// Binary values are opaque, not records: merging a
+							// Uint8Array key-by-key would splice two buffers together
+							// index by index instead of replacing one with the other.
+							isBinary(current) ||
+							isBinary(next)
 						) {
 							return next;
 						}
@@ -2441,6 +3753,34 @@ export class DatabaseServer<
 						touched,
 						now,
 					);
+					if (this.hasHistory(entity_type)) {
+						const diff = this.diffForHistory(
+							this.historyPayload(entity_type, current_data as never)!,
+							this.historyPayload(entity_type, output_data)!,
+						);
+						// A no-op update writes no history: a save button that changed
+						// nothing must not manufacture an audit entry.
+						if (Object.keys(diff.patch).length > 0) {
+							this.recordChange(
+								entity_type,
+								output_data[primary_key] || output_data.id || id,
+								'update',
+								diff.patch,
+								diff.previous,
+								now.getTime(),
+							);
+						}
+					}
+					// Inside the same transaction, for the same reason history is:
+					// a rolled-back update must not leave the app instructions to
+					// delete an object the row still points at.
+					this.enqueueFileDeletionsForUpdate(
+						entity_type,
+						output_data[primary_key] || output_data.id || id,
+						current_data as Record<string, unknown>,
+						output_data as Record<string, unknown>,
+						now.getTime(),
+					);
 
 					results.push({
 						entity: {
@@ -2466,6 +3806,22 @@ export class DatabaseServer<
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
 					this.ensureMonotonicTimestamp(now, entity_type);
+					// The whole row, read only when something will actually consume
+					// it: restoring a delete is the one revert that needs the entity
+					// in full, and the file GC queue needs the keys the row held.
+					// A table with neither must not pay for a SELECT nobody reads.
+					const deleted_entity =
+						this.hasHistory(entity_type) || this.#file_tables.has(entity_type)
+							? (this.toEntityValue(
+									entity_type,
+									this.ctx.storage.sql
+										.exec(
+											`SELECT * FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ? LIMIT 1`,
+											id,
+										)
+										.next()?.value,
+								) as Record<string, unknown> | undefined)
+							: undefined;
 					this.ctx.storage.sql.exec(
 						`DELETE FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ?`,
 						id,
@@ -2476,6 +3832,25 @@ export class DatabaseServer<
 					this.search.removeDocument(entity_type, id.toString(), now.getTime());
 					deleted_types.add(entity_type);
 					this.cascadeReindexReferencing(entity_type, id, touched, now);
+					if (deleted_entity && this.hasHistory(entity_type)) {
+						this.recordChange(
+							entity_type,
+							id,
+							'delete',
+							undefined,
+							this.historyPayload(entity_type, deleted_entity),
+							now.getTime(),
+						);
+					}
+					// Every object the row pointed at is now unreferenced by it.
+					// Enqueued inside this transaction, so a rollback takes the
+					// queue rows with it.
+					this.enqueueFileDeletionsForDelete(
+						entity_type,
+						id,
+						deleted_entity,
+						now.getTime(),
+					);
 					results.push({
 						entity: {
 							type: entity_type,
@@ -2577,7 +3952,10 @@ export class DatabaseServer<
 	 * The callback MUST be synchronous — an await inside would let other DO
 	 * events interleave into the open transaction.
 	 */
-	batch<T>(fn: () => T): T {
+	batch<T>(fn: () => T, options?: WriteOptions): T {
+		if (this.hasWriteScope(options)) {
+			return this.withWriteScope(options, () => this.batch(fn));
+		}
 		if (this.#batch_state) return fn(); // nested batch — join the outer one
 		const state = { wrote: false, broadcasts: [] as DeferredBroadcast[] };
 		this.#batch_state = state;
@@ -2956,6 +4334,17 @@ export class DatabaseServer<
  * ever hold values a derived fn returned and `persistDerivedFields` kept, so
  * null/undefined/absent are one state and objects compare by JSON identity.
  */
+/**
+ * Whether a value is binary data rather than a plain record.
+ *
+ * `deepMerge` walks objects key by key; a `Uint8Array` is an object with
+ * numeric keys, so merging one into another would splice the two buffers
+ * index by index instead of replacing one with the other.
+ */
+function isBinary(value: unknown): boolean {
+	return value instanceof ArrayBuffer || ArrayBuffer.isView(value);
+}
+
 function derivedValueEquals(a: unknown, b: unknown): boolean {
 	if (a === b) return true;
 	if (a === undefined || a === null) return b === undefined || b === null;

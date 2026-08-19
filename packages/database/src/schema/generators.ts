@@ -1,6 +1,9 @@
+import { DelightError } from '@delightstack/utilities';
 import type {
 	ArrayField,
+	BlobField,
 	BooleanField,
+	Carried,
 	DatabaseFieldType,
 	DefaultedValue,
 	DerivedValue,
@@ -24,6 +27,7 @@ import type {
 	OptionalValue,
 	Placeholder,
 	PrimaryKeyField,
+	FileField,
 	ReadOnly,
 	Searchable,
 	Sortable,
@@ -74,8 +78,42 @@ abstract class BaseFieldGenerator {
 	}
 }
 
+/**
+ * Adds the `.carried()` builder — the "carried, not indexed" field tier.
+ *
+ * Deliberately a tier of its own rather than a flag on the searchable
+ * generators: carrying a value to the client and indexing it are independent
+ * decisions, and plenty of carryable field types (vector, geopoint, object,
+ * array, file) are not searchable in the `.searchable()` sense at all.
+ *
+ * Every generator mixes this in **except** `blob()`, which stays on
+ * {@link BaseFieldGenerator} so raw bytes cannot be put on the wire at all.
+ */
+abstract class CarriableFieldGenerator extends BaseFieldGenerator {
+	/**
+	 * Carries the field into the sparse document — and so into every `sync()`
+	 * payload and the client's cached entity — **without indexing it**.
+	 *
+	 * The value is copied verbatim. Nothing tokenizes it, it gets no entry in
+	 * `index_schema`, and it never joins `searchable_fields` /
+	 * `sortable_fields`, so it cannot appear in a `where` clause, in `order`,
+	 * or in a search's `fields` list. Use it for anything the client renders
+	 * but nobody searches: a rendered HTML body, a long note, a media
+	 * descriptor.
+	 *
+	 * Mutually exclusive with `.searchable()` / `.sortable()` — declaring both
+	 * throws a `DelightError` when the table is built.
+	 *
+	 * @example schema.string().carried() // reaches the client, never indexed
+	 */
+	carried(): Omit<Carried<this>, 'carried'> {
+		this._.carried = true;
+		return this as Omit<Carried<this>, 'carried'>;
+	}
+}
+
 /** Adds the search-engine flags (searchable/sortable) shared by searchable field generators */
-abstract class SearchableFieldGenerator extends BaseFieldGenerator {
+abstract class SearchableFieldGenerator extends CarriableFieldGenerator {
 	/** Whether the field can be fuzzy searched and indexed by the search engine. If 'primary' is true, this is ignored */
 	searchable(): Omit<Searchable<this>, 'searchable'> {
 		this._.searchable = true;
@@ -461,7 +499,7 @@ export class EnumFieldGenerator<Options extends string[]> extends ScalarFieldGen
 }
 
 /** Helper functions for defining attributes & validators for vector fields */
-export class VectorFieldGenerator extends BaseFieldGenerator {
+export class VectorFieldGenerator extends CarriableFieldGenerator {
 	declare readonly _: VectorField;
 
 	constructor(size?: number) {
@@ -482,8 +520,62 @@ export class VectorFieldGenerator extends BaseFieldGenerator {
 	}
 }
 
+/**
+ * Helper functions for defining attributes & validators for binary fields.
+ *
+ * Deliberately built on {@link BaseFieldGenerator}: a blob has no searchable /
+ * sortable / indexable / unique builder, because raw bytes have nothing to
+ * index. That is also why blobs never reach the search index or a sync payload.
+ */
+export class BlobFieldGenerator extends BaseFieldGenerator {
+	declare readonly _: BlobField;
+
+	constructor(options?: { max_bytes?: number }) {
+		super();
+		const field: BlobField = { type: 'blob' } as BlobField;
+		if (typeof options?.max_bytes === 'number' && options.max_bytes > 0) {
+			field.max_bytes = Math.trunc(options.max_bytes);
+		}
+		field.schema = new FieldValidator(field);
+		(this as { _: BlobField })._ = field;
+	}
+
+	/** Sets the maximum size, in bytes, a value may have */
+	maxBytes(bytes: number): Omit<this, 'maxBytes'> {
+		if (bytes > 0) this._.max_bytes = Math.trunc(bytes);
+		return this as Omit<this, 'maxBytes'>;
+	}
+}
+
+/** Helper functions for defining attributes & validators for file reference fields */
+export class FileFieldGenerator extends CarriableFieldGenerator {
+	declare readonly _: FileField;
+
+	constructor(options: { store: string; carried?: boolean }) {
+		super();
+		if (!options?.store) {
+			throw new DelightError({
+				message: 'schema.file() requires a `store` binding name',
+				status: 400,
+				code: 'invalid_schema',
+			});
+		}
+		// Carried from birth: a file reference is a small descriptor whose whole
+		// purpose is to let the client build a URL, so it must reach the client —
+		// but it has nothing to tokenize, so it must not reach the index.
+		// `carried: false` opts out for a reference that should stay server-side.
+		const field: FileField = {
+			type: 'file',
+			store: options.store,
+			carried: options.carried !== false,
+		} as FileField;
+		field.schema = new FieldValidator(field);
+		(this as { _: FileField })._ = field;
+	}
+}
+
 /** Helper functions for defining attributes & validators for geopoint fields */
-export class GeopointFieldGenerator extends BaseFieldGenerator {
+export class GeopointFieldGenerator extends CarriableFieldGenerator {
 	declare readonly _: GeopointField;
 
 	constructor() {
@@ -609,7 +701,7 @@ export class ForeignKeyFieldGenerator extends SearchableFieldGenerator {
 /** Helper functions for defining attributes for nested object fields */
 export class ObjectFieldGenerator<
 	Properties extends Record<string, FieldGenerator>,
-> extends BaseFieldGenerator {
+> extends CarriableFieldGenerator {
 	declare readonly _: ObjectField<Properties>;
 
 	constructor(properties: Properties) {
@@ -624,7 +716,7 @@ export class ObjectFieldGenerator<
 /** Helper functions for defining attributes for array fields */
 export class ArrayFieldGenerator<
 	Items extends FieldGenerator,
-> extends BaseFieldGenerator {
+> extends CarriableFieldGenerator {
 	declare readonly _: ArrayField<Items>;
 
 	constructor(itemType: Items) {
@@ -703,6 +795,8 @@ type _FieldGenerator =
 	| BooleanFieldGenerator
 	| EnumFieldGenerator<string[]>
 	| VectorFieldGenerator
+	| BlobFieldGenerator
+	| FileFieldGenerator
 	| ForeignKeyFieldGenerator
 	| GeopointFieldGenerator
 	| ObjectFieldGenerator<any>
@@ -843,6 +937,40 @@ export class DatabaseGenerator {
 	): EnumFieldGenerator<{ -readonly [K in keyof Pairs]: Pairs[K]['value'] }>;
 	enum(values: any): any {
 		return new EnumFieldGenerator(values);
+	}
+
+	/**
+	 * Defines a binary entry for a field within a database table — raw bytes in
+	 * a SQLite `BLOB` column, read back as a `Uint8Array`.
+	 *
+	 * Bytes are never tokenized, so a blob is never part of the search index and
+	 * never travels in a `sync()` payload. Pass `max_bytes` to reject oversized
+	 * values with a `DelightError` before they reach SQLite.
+	 *
+	 * @example schema.blob({ max_bytes: 5_000_000 })
+	 */
+	blob(options?: { max_bytes?: number }): BlobFieldGenerator {
+		return new BlobFieldGenerator(options);
+	}
+
+	/**
+	 * Defines a reference to an object in an external store: the row stores a
+	 * `{ key, size, mime, sha256?, name? }` descriptor and the bytes stay put.
+	 *
+	 * Vendor-neutral — `store` names whatever binding holds the object (R2, S3,
+	 * GCS, a directory). Use this instead of {@link blob} once payloads get
+	 * large or need to be served directly: a row read then never pays for the
+	 * object. Resolve a stored reference with `resolveFile(ref, env.MEDIA)`.
+	 *
+	 * The descriptor is *carried* by default — synced to the client so it can
+	 * build a URL, but never indexed. Pass `carried: false` to keep it on the
+	 * server, for a private key you do not want in every browser's IndexedDB.
+	 *
+	 * @example schema.file({ store: 'MEDIA' })
+	 * @example schema.file({ store: 'PRIVATE', carried: false })
+	 */
+	file(options: { store: string; carried?: boolean }): FileFieldGenerator {
+		return new FileFieldGenerator(options);
 	}
 
 	/** Defines a geopoint type which can be used for location based searching */

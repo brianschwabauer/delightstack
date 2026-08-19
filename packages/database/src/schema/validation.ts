@@ -1,8 +1,10 @@
 import { DelightError } from '@delightstack/utilities';
 import type {
+	BlobField,
 	DatabaseField,
 	EnumField,
 	NumberField,
+	FileReference,
 	StringField,
 	StringFieldFormat,
 	VectorField,
@@ -223,6 +225,17 @@ export class FieldValidator {
 						: item,
 				);
 			}
+		} else if (field.type === 'blob') {
+			// One canonical in-memory shape: every binding, read-back and size
+			// check downstream works on a Uint8Array. An ArrayBuffer (what a
+			// Durable Object cursor hands back) and any other view over one
+			// convert without copying the bytes.
+			if (value instanceof ArrayBuffer) {
+				value = new Uint8Array(value);
+			} else if (ArrayBuffer.isView(value) && !(value instanceof Uint8Array)) {
+				const view = value as ArrayBufferView;
+				value = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+			}
 		} else if (field.type === 'geopoint' && typeof value === 'object' && value !== null) {
 			const point = value as {
 				lat?: unknown;
@@ -382,6 +395,73 @@ export class FieldValidator {
 				if (point.lat < -90 || point.lat > 90) return 'lat must be between -90 and 90';
 				if (point.lon < -180 || point.lon > 180) {
 					return 'lon must be between -180 and 180';
+				}
+				return undefined;
+			}
+			case 'blob': {
+				const blob_field = field as BlobField;
+				if (!(value instanceof Uint8Array)) {
+					return 'Invalid input: expected binary data (Uint8Array or ArrayBuffer)';
+				}
+				if (
+					typeof blob_field.max_bytes === 'number' &&
+					value.byteLength > blob_field.max_bytes
+				) {
+					return `Must be at most ${blob_field.max_bytes} bytes (received ${value.byteLength})`;
+				}
+				return undefined;
+			}
+			case 'file': {
+				if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+					return 'Invalid input: expected a file reference { key, size, mime }';
+				}
+				const ref = value as Partial<FileReference>;
+				if (typeof ref.key !== 'string' || ref.key.length === 0) {
+					return `Must have a non-empty 'key'`;
+				}
+				if (typeof ref.size !== 'number' || !Number.isFinite(ref.size) || ref.size < 0) {
+					return `Must have a non-negative numeric 'size'`;
+				}
+				if (typeof ref.mime !== 'string' || ref.mime.length === 0) {
+					return `Must have a non-empty 'mime'`;
+				}
+				// sha256 and name are optional: not every store hands back a
+				// digest, and not every object came from a named upload.
+				if (
+					ref.sha256 !== undefined &&
+					(typeof ref.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(ref.sha256))
+				) {
+					return `'sha256' must be a hex-encoded SHA-256 when present`;
+				}
+				if (ref.name !== undefined && typeof ref.name !== 'string') {
+					return `'name' must be a string when present`;
+				}
+				// A per-row override of the field's store. Empty is not "use the
+				// default" — it is a caller who built the string from something
+				// missing, and silently falling back would send the object to the
+				// wrong bucket.
+				if (
+					ref.store !== undefined &&
+					(typeof ref.store !== 'string' || ref.store.length === 0)
+				) {
+					return `'store' must be a non-empty string when present (it overrides the field's store for this row)`;
+				}
+				// String values only, like S3/R2 object metadata. Rejecting numbers
+				// and nested objects here rather than coercing them keeps the shape
+				// stable if an app later moves these pairs onto the real object.
+				if (ref.metadata !== undefined) {
+					if (
+						typeof ref.metadata !== 'object' ||
+						ref.metadata === null ||
+						Array.isArray(ref.metadata)
+					) {
+						return `'metadata' must be a plain object of string values when present`;
+					}
+					for (const [meta_key, meta_value] of Object.entries(ref.metadata)) {
+						if (typeof meta_value !== 'string') {
+							return `'metadata.${meta_key}' must be a string (metadata holds string values only — serialize numbers, dates and nested data yourself)`;
+						}
+					}
 				}
 				return undefined;
 			}

@@ -23,6 +23,7 @@ import type {
 	IsOptional,
 	IsPrimaryKey,
 	IsReadOnly,
+	IsCarried,
 	IsSearchable,
 	IsSortable,
 	IsUnique,
@@ -89,15 +90,55 @@ function toEpoch(value: unknown): number {
 
 /**
  * Recursively builds the search schema for a field, pushing any searchable /
- * sortable (dot-notation) paths it finds into the provided arrays.
+ * sortable / carried (dot-notation) paths it finds into the provided arrays.
+ *
+ * The three arrays are three different answers to "what happens to this
+ * value": `searchable_fields` is synced *and* indexed, `carried_fields` is
+ * synced *only*, and a path in neither is dropped at the projection.
  */
 function recursivelyBuildSearchSchema(
 	subfield: DatabaseField,
 	path: string,
-	force_searchable: boolean,
 	searchable_fields: string[],
 	sortable_fields: string[],
+	carried_fields: string[],
+	file_fields: Record<string, { store: string }>,
 ): AnySearchSchema | SearchableType | undefined {
+	// Collected here rather than in the column loop so a `file()` nested inside
+	// an `object()` is recorded too, at its dot path. The column loop only sees
+	// top-level fields, and a nested reference that syncs (carried handles
+	// nesting) but never enqueues for deletion is an invisible storage leak.
+	if (subfield.type === 'file' && path) {
+		file_fields[path] = { store: subfield.store };
+	}
+	// The "carried, not indexed" tier, tested before anything else so it wins
+	// over the per-type branches below. Recording the path
+	// is all that happens: `toSparse()` copies the value into the sparse
+	// document — and so into every sync payload — while returning `undefined`
+	// keeps the field out of `index_schema` entirely. A carried subtree is
+	// carried whole; we deliberately do not descend into it.
+	if ('carried' in subfield && subfield.carried) {
+		if (
+			('searchable' in subfield && subfield.searchable) ||
+			('sortable' in subfield && subfield.sortable)
+		) {
+			throw new DelightError({
+				message: `Field '${path}' is both carried and searchable/sortable. A carried field reaches the client but is never indexed, so the two are mutually exclusive — drop one.`,
+				status: 400,
+				code: 'invalid_schema',
+			});
+		}
+		if (path) carried_fields.push(path);
+		return;
+	}
+
+	// An object contributes only whichever leaves are themselves searchable —
+	// searchability is never inherited from the enclosing object. That is sound
+	// only because `ObjectFieldGenerator` exposes no `.searchable()`, so an
+	// object field can never carry the flag in the first place. If that ever
+	// changes, this recursion has to start propagating the parent's flag down
+	// again (there was such a parameter here once; it was removed as provably
+	// redundant, never decisive across the whole suite).
 	if (subfield.type === 'object') {
 		const child = Object.entries(subfield.properties).reduce(
 			(acc, [childFieldName, childFieldDef]) => {
@@ -106,9 +147,10 @@ function recursivelyBuildSearchSchema(
 				const childSchema = recursivelyBuildSearchSchema(
 					childField,
 					[path, childFieldName].filter(Boolean).join('.'),
-					force_searchable || ('searchable' in childField && !!childField.searchable),
 					searchable_fields,
 					sortable_fields,
+					carried_fields,
+					file_fields,
 				);
 				if (!childSchema) return acc;
 				acc[childFieldName] = childSchema;
@@ -121,7 +163,7 @@ function recursivelyBuildSearchSchema(
 	}
 
 	if (subfield.type === 'array') {
-		if ((!subfield.searchable && !force_searchable) || !('items' in subfield)) return;
+		if (!subfield.searchable || !('items' in subfield)) return;
 		const itemType = subfield.items._;
 		let arrayType: SearchableType | undefined;
 		if (itemType.type === 'string') {
@@ -140,7 +182,23 @@ function recursivelyBuildSearchSchema(
 		return arrayType;
 	}
 
-	if (!subfield.searchable && !force_searchable) return;
+	// Raw bytes have nothing to tokenize, so a blob never enters the index.
+	// Returning here with nothing pushed to either array also keeps it out of
+	// `toSparse`, and therefore out of every sync payload: a blob is the one
+	// field type that reaches neither tier.
+	//
+	// This is deliberately NOT symmetric with `file`. A `file()` reference is a
+	// tiny `{ key, size, mime }` descriptor the client needs in order to build a
+	// URL, so it is carried (handled by the `carried` branch at the top of this
+	// function); a `blob()` is the payload itself, and broadcasting megabytes to
+	// every connected client on every change is never what anyone wants.
+	if (subfield.type === 'blob') return;
+	// A `file()` that opted out of `carried` lands here. Like a blob it reaches
+	// neither tier: stored on the row, read with `db.get()`, never synced to a
+	// client and never indexed. (A carried file exits at the `carried` branch
+	// above, so this is only ever the `carried: false` case.)
+	if (subfield.type === 'file') return;
+	if (!subfield.searchable) return;
 	if (path) searchable_fields.push(path);
 	if ('sortable' in subfield && subfield.sortable) {
 		sortable_fields.push(path);
@@ -588,7 +646,58 @@ export namespace Database {
 	} & (true extends HasPrimaryKeyField<Table['_']> ? {} : { id: string }) & {
 			created_at: number;
 			updated_at: number;
-		};
+		} & CarriedEntity<Table>;
+
+	/**
+	 * The carried half of a {@link SearchEntity} — the fields that ride along in
+	 * the sparse/sync document without being indexed.
+	 *
+	 * Optional, because a carried field is copied only when the row actually has
+	 * a value: `toSparse` never materializes a key for `null`/`undefined`.
+	 *
+	 * Only top-level carried fields are typed. A field carried from *inside* an
+	 * object is projected at runtime (it is in `config.carried_fields`) but is
+	 * not expressible here, because the nested shape would have to be rebuilt
+	 * around a single leaf.
+	 */
+	export type CarriedEntity<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+	> = {
+		[Key in keyof Table['_'] as IsCarried<Table['_'][Key]> extends true
+			? Key
+			: never]?: FieldType<Table['_'][Key]>;
+	};
+
+	/**
+	 * A name of a field that is carried but not indexed — present in the sparse
+	 * document and every sync payload, absent from the search index.
+	 *
+	 * Deliberately disjoint from {@link SearchableField} and
+	 * {@link SortableField}: a name in this union is exactly a name that cannot
+	 * be filtered, ordered or searched on.
+	 */
+	export type CarriedField<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+	> = Table extends object
+		? {
+				[Key in keyof Table['_'] & string]: IsCarried<Table['_'][Key]> extends true
+					? Key
+					: Table['_'][Key] extends {
+								readonly _: {
+									type: 'object';
+									properties: infer Properties extends Record<string, FieldGenerator>;
+								};
+							}
+						? CarriedField<{ readonly _: Properties }> extends never
+							? never
+							: `${Key}.${CarriedField<{ readonly _: Properties }>}`
+						: never;
+			}[keyof Table['_'] & string]
+		: never;
 
 	/**
 	 * A name of a field that is searchable in the database table.
@@ -614,11 +723,16 @@ export namespace Database {
 						> extends never
 						? never
 						: `${Key}.${SearchableField<{ readonly _: Properties }, IsSearchable<Table['_'][Key]> extends true ? true : ForceSearchable>}`
-					: ForceSearchable extends true
-						? Key
-						: IsSearchable<Table['_'][Key]> extends true
+					: // A carried field is excluded even under `ForceSearchable`: being
+						// inside a searchable object does not index it, so it must not be
+						// offerable as a `where` / `fields` name either.
+						IsCarried<Table['_'][Key]> extends true
+						? never
+						: ForceSearchable extends true
 							? Key
-							: never;
+							: IsSearchable<Table['_'][Key]> extends true
+								? Key
+								: never;
 			}[keyof Table['_'] & string]
 		: never;
 
@@ -831,6 +945,12 @@ export namespace Database {
 			searchable_fields: SearchableField<{ readonly _: TableConfig }>[];
 			/** The list of fields that can be used for sorting results */
 			sortable_fields: SortableField<{ readonly _: TableConfig }>[];
+			/**
+			 * The list of fields carried into the sparse/sync document without
+			 * being indexed. Disjoint from `searchable_fields` — a name here can
+			 * never be filtered, ordered or searched on.
+			 */
+			carried_fields: CarriedField<{ readonly _: TableConfig }>[];
 			/** A record of fields that are foreign keys and reference a different table */
 			foreign_keys: ForeignKeysConfig<TableConfig>;
 			/**
@@ -849,8 +969,46 @@ export namespace Database {
 			indexes: SqlIndexes;
 			/** A record of derived fields and their FK dependencies (for FK-aware reindexing) */
 			derived_fields: Record<string, { foreign_keys?: string[] }>;
+			/** The names of `blob()` fields (real `BLOB` columns, never indexed) */
+			blob_fields: string[];
+			/** `file()` fields mapped to the store binding their objects live in */
+			file_fields: Record<string, { store: string }>;
+			/** The table's change-log settings (see `TableOptions.history`) */
+			history: TableHistoryConfig;
 		};
 	}
+
+	/** The resolved per-table change-log settings */
+	export interface TableHistoryConfig {
+		/** Whether every create/update/delete is appended to `_change_log` */
+		enabled: boolean;
+		/**
+		 * How long change-log rows are kept, in days. `0` keeps them forever.
+		 * Swept by the Durable Object's retention alarm.
+		 */
+		retention_days: number;
+	}
+
+	/** The third argument of {@link table} */
+	export interface TableOptions {
+		/**
+		 * Record every `create`/`update`/`delete` of this table in the shared
+		 * `_change_log` table, readable through `db.history()` /
+		 * `db.changesSince()` and reversible through `db.revert()`.
+		 *
+		 * Off by default: history roughly doubles the write cost of an update
+		 * and stores a copy of every changed field, so it is opt-in per table.
+		 */
+		history?: boolean;
+		/**
+		 * How long this table's change-log rows are kept, in days.
+		 * Defaults to 365; `0` keeps them forever. Ignored unless `history`.
+		 */
+		history_retention_days?: number;
+	}
+
+	/** The default change-log retention, in days, for a table that opts into history */
+	export const DEFAULT_HISTORY_RETENTION_DAYS = 365;
 
 	/**
 	 * A database table produced by `table()`.
@@ -878,6 +1036,7 @@ export namespace Database {
 			readonly_fields: string[];
 			searchable_fields: string[];
 			sortable_fields: string[];
+			carried_fields: string[];
 			foreign_keys: Record<
 				string,
 				{
@@ -892,6 +1051,9 @@ export namespace Database {
 			table_definition: Record<string, string>;
 			indexes: SqlIndexes;
 			derived_fields: Record<string, { foreign_keys?: string[] }>;
+			blob_fields: string[];
+			file_fields: Record<string, { store: string }>;
+			history: TableHistoryConfig;
 		};
 	}
 
@@ -929,6 +1091,7 @@ export namespace Database {
 	>(
 		rawTableName: TableName,
 		callback: (tableSchema: DatabaseGenerator) => TableConfig,
+		options?: TableOptions,
 	): TableInstance<TableName, TableConfig> {
 		if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(rawTableName)) {
 			throw new DelightError({
@@ -950,8 +1113,28 @@ export namespace Database {
 		const readonly_fields: string[] = [];
 		const searchable_fields: string[] = [];
 		const sortable_fields: string[] = [];
+		const carried_fields: string[] = [];
 		const foreign_keys: Record<string, unknown> = {};
 		const derived_fields: Record<string, { foreign_keys?: string[] }> = {};
+		const blob_fields: string[] = [];
+		const file_fields: Record<string, { store: string }> = {};
+		const history_enabled = options?.history === true;
+		const raw_retention = options?.history_retention_days;
+		if (
+			raw_retention !== undefined &&
+			(typeof raw_retention !== 'number' ||
+				!Number.isFinite(raw_retention) ||
+				raw_retention < 0)
+		) {
+			throw new DelightError({
+				message: `'history_retention_days' must be a non-negative number (0 keeps history forever).`,
+				status: 400,
+			});
+		}
+		const history: TableHistoryConfig = {
+			enabled: history_enabled,
+			retention_days: Math.trunc(raw_retention ?? DEFAULT_HISTORY_RETENTION_DAYS),
+		};
 		const indexes: SqlIndexes = [];
 		const form_field: Record<string, GenericFormFieldProps> = {};
 		const table_definition: Record<string, string> = {};
@@ -1081,7 +1264,10 @@ export namespace Database {
 
 			// Build the sqlite table definition
 			let sqliteColumnDef: string = 'TEXT';
-			if (field.type === 'boolean') {
+			if (field.type === 'blob') {
+				sqliteColumnDef = 'BLOB';
+				blob_fields.push(fieldName);
+			} else if (field.type === 'boolean') {
 				sqliteColumnDef = 'BOOLEAN';
 			} else if (field.type === 'number') {
 				if ('integer' in field && field.integer) {
@@ -1139,10 +1325,13 @@ export namespace Database {
 			// Non-scalar fields (objects, arrays, vectors, geopoints) are stored in
 			// the internal `json` overflow column. Giving them their own TEXT column
 			// would store a JSON string that never round-trips back into an object.
+			// An `file()` reference is a small object, so it rides in `json` too — a
+			// `blob()` is the one binary type with a real column (`BLOB`).
 			const stored_in_json_column =
 				field.type === 'object' ||
 				field.type === 'array' ||
 				field.type === 'vector' ||
+				field.type === 'file' ||
 				field.type === 'geopoint';
 			if (!stored_in_json_column) {
 				table_definition[fieldName] = sqliteColumnDef;
@@ -1152,9 +1341,10 @@ export namespace Database {
 			const built_schema = recursivelyBuildSearchSchema(
 				field,
 				fieldName,
-				false,
 				searchable_fields,
 				sortable_fields,
+				carried_fields,
+				file_fields,
 			);
 			if (built_schema) {
 				index_schema[fieldName] = built_schema;
@@ -1228,6 +1418,14 @@ export namespace Database {
 			.map((field_dot_notation) => field_dot_notation.split('.'))
 			.filter((field_path) => !(field_path[0] in derived_fields));
 
+		// Carried paths are copied by `toSparse` exactly like searchable ones —
+		// the tiers differ in what enters `index_schema`, not in how the value is
+		// projected — so the projection walks one combined list.
+		const carried_paths: string[][] = carried_fields.map((field_dot_notation) =>
+			field_dot_notation.split('.'),
+		);
+		const sparse_paths: string[][] = [...searchable_paths, ...carried_paths];
+
 		// Same-table derived functions (FK-derived skipped — they need DB access
 		// and are computed in db.server.ts); empty for most tables
 		const same_table_derived: Array<[string, (data: unknown) => unknown]> = [];
@@ -1279,7 +1477,7 @@ export namespace Database {
 		 */
 		function toSparse(data: InstanceEntity): InstanceSearchEntity {
 			const root = {} as any;
-			for (const field_path of searchable_paths) {
+			for (const field_path of sparse_paths) {
 				let current = data;
 				let sparse_data = root;
 				for (let i = 0; i < field_path.length; i++) {
@@ -1364,10 +1562,14 @@ export namespace Database {
 				indexable_fields,
 				searchable_fields,
 				sortable_fields,
+				carried_fields,
 				unique_fields,
 				readonly_fields,
 				foreign_keys,
 				derived_fields,
+				blob_fields,
+				file_fields,
+				history,
 				table_definition,
 				indexes,
 				index_schema,

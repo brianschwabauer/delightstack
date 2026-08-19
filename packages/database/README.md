@@ -9,6 +9,10 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
 - **Automatic migrations** — New columns are added automatically when you update your schema. No migration files to manage.
 - **Dependency-free validation** — Every `create()` and `update()` call validates data against the schema at runtime. String formats (`.email()`, `.url()`, `.datetime()`), length/number ranges (`.min()`, `.max()`), and custom `.check()` functions are enforced — all in-house, no zod.
 - **Transactions** — Batch multiple create/update/delete/exec operations into a single atomic transaction.
+- **Change log & history** — Opt a table into `{ history: true }` and every create/update/delete is recorded as a field-level diff in `_change_log`, readable with `db.history()` / `db.changesSince()` and undoable with `db.revert()` — or, a whole operation at a time, with `db.revertOperation(operation_id)`. Retention is swept on an alarm.
+- **Actor attribution** — Every mutator takes a trailing `{ actor }`, or wrap a run of writes with `scoped(db, actor, operation?)`. The actor and operation id land on every change-log row; unattributed writes are `'system'`.
+- **Binary & file fields** — `schema.blob()` stores raw bytes in a SQLite `BLOB` column; `schema.file({ store })` stores a small `{ key, size, mime }` descriptor for an object living in R2/S3/GCS, resolved on demand with `resolveFile()`. Orphaned objects are queued for you in `_file_gc` when their row dies — drain it with `db.pendingFileDeletions()`.
+- **Three field tiers** — `.searchable()` syncs and indexes, `.carried()` syncs without indexing, and the default does neither. Keeps large values a client needs out of the term dictionary.
 - **Incremental sync** — `sync()` returns only the changes since a given timestamp, enabling efficient client-side search index mirroring.
 - **Form generation** — Schema definitions automatically produce HTML form field attributes plus a Standard Schema validator for whole-form validation.
 - **Auto-generated API routes** — `createDatabaseHandle({ tables, hooks })` plugs into SvelteKit's `handle` and serves CRUD + sync routes for every table, with lifecycle hooks for auth and side effects.
@@ -240,6 +244,8 @@ const rows = db.exec((sql) => {
 | **Array**       | `schema.array(schema.string())` | `json` column         | Typed array. `string[]`/`number[]`/`boolean[]`/`enum[]` items can be `.searchable()`. |
 | **Geopoint**    | `schema.geopoint()`             | `json` column         | `{ lat, lon }`. Always searchable for geospatial queries.                             |
 | **Vector**      | `schema.vector(768)`            | `json` column         | Fixed-dimension embedding. Always searchable; vector search runs server-side only.    |
+| **Blob**        | `schema.blob({ max_bytes })`    | `BLOB`                | Raw bytes (`Uint8Array`/`ArrayBuffer`). Never searchable, never in a sync payload. See [Binary Data & File References](#binary-data--file-references). |
+| **File**        | `schema.file({ store })`        | `json` column         | A `{ key, size, mime, sha256?, name? }` reference to an object in an external store. Read the bytes with `resolveFile(ref, store)`. |
 
 ### Modifiers
 
@@ -249,7 +255,8 @@ schema
 	.optional() // Nullable (stored as NULL)
 	.readonly() // Immutable after creation
 	.default('foo') // Default value (or a function: () => value)
-	.searchable() // Indexed for full-text search
+	.searchable() // Synced to the client AND indexed for full-text search
+	.carried() // Synced to the client, never indexed (see Field tiers)
 	.sortable() // Sortable in search results (implies searchable)
 	.indexable() // SQLite B-tree index for fast WHERE queries
 	.unique() // UNIQUE constraint in SQLite
@@ -259,7 +266,7 @@ schema
 	.check((v) => (v === 'bad' ? 'Not allowed' : undefined)); // Custom validation
 ```
 
-Not every modifier exists on every type: `indexable`/`unique` are for string and number fields (which own a SQLite column); `default`, `label`, `placeholder`, `description`, `check`, and `derived` are for the scalar types (string, number, boolean, enum); arrays support `min`/`max` (length), `label`, `placeholder`, `description`, and `searchable`; `optional`/`readonly` work everywhere.
+Not every modifier exists on every type: `indexable`/`unique` are for string and number fields (which own a SQLite column); `default`, `label`, `placeholder`, `description`, `check`, and `derived` are for the scalar types (string, number, boolean, enum); arrays support `min`/`max` (length), `label`, `placeholder`, `description`, and `searchable`; `optional`/`readonly` work everywhere. `blob()` and `file()` deliberately expose neither `searchable` nor `sortable` nor `indexable` nor `unique` — bytes and object references have nothing to tokenize, so the builders simply don't exist and a mistake is a compile error rather than a silently-dead index. `blob()` additionally offers `.maxBytes(n)` as the chainable form of its constructor option.
 
 ### String Formats
 
@@ -372,6 +379,173 @@ schema.foreignKey({
 
 Foreign key constraints are always enforced in Durable Object SQLite (workerd compiles it with foreign keys ON by default).
 
+### Field tiers: indexed, carried, excluded
+
+Whether a field reaches the client and whether it is searchable are two separate questions. There are three tiers:
+
+| Tier | In `sync()` / the client's cached entity | In the search index |
+| --- | --- | --- |
+| **searchable** — `.searchable()` / `.sortable()` | yes | yes |
+| **carried** — `.carried()` | yes | **no** |
+| **excluded** — the default | no | no |
+
+A **carried** field is delivered to the client but never tokenized. It gets no entry in `index_schema`, joins neither `searchable_fields` nor `sortable_fields`, and cannot be used in a `where` clause, in `order`, or in a search's `fields` list — attempting any of those is a compile error in a typed schema, and a `DelightError` (`carried_field_not_queryable`, status 400) at runtime.
+
+```typescript
+const page = Database.table('page', (s) => ({
+	id: s.primaryKey(),
+	title: s.string().searchable(), // synced and indexed
+	rendered_html: s.string().carried(), // synced, never indexed
+	hero: s.file({ store: 'MEDIA' }), // carried automatically
+	thumbnail: s.blob(), // neither — stays on the server
+}));
+```
+
+Reach for `.carried()` for anything a client renders but nobody searches: a rendered HTML body, a layout config object, a media descriptor. It keeps the term dictionary and posting lists small without forcing a second round-trip to fetch the value.
+
+Know the cost, though: a carried field is shipped to **every** client on **every** change to the row, and stored in each one's IndexedDB. A multi-megabyte carried value bloats the sync payload and the client's local cache in proportion — the tier exists precisely for largish values, so this is a trade to make deliberately rather than a rule against it.
+
+`.carried()` exists on every field type **except `blob()`**, and is mutually exclusive with `.searchable()` / `.sortable()` — declaring both throws when the table is built. Only *top-level* carried fields appear in the `SearchEntity` type; a field carried from inside an object is projected at runtime and listed in `config.carried_fields`, but is not expressible in the type.
+
+### Binary Data & File References
+
+Two field types carry binary content, and which one you want depends on **where the bytes live**.
+
+```typescript
+const documentTable = Database.table('document', (schema) => ({
+	title: schema.string().searchable(),
+
+	// Bytes stored in the row itself, in a real SQLite BLOB column.
+	snapshot: schema.blob({ max_bytes: 5_000_000 }).optional(),
+
+	// A descriptor pointing at an object in the `MEDIA` binding.
+	cover: schema.file({ store: 'MEDIA' }).optional(),
+}));
+```
+
+#### `schema.blob({ max_bytes })`
+
+Raw bytes in a `BLOB` column. Accepts a `Uint8Array`, an `ArrayBuffer`, or any `ArrayBufferView`, and reads back as a `Uint8Array`.
+
+- `max_bytes` is validated on **every** write; exceeding it throws a `DelightError` (400) whose message names the limit and the received size. `.maxBytes(n)` is the chainable equivalent.
+- A blob is **never** tokenized, so it is not in the search index — and there is no `.searchable()` builder on it to suggest otherwise.
+- A blob is **never** part of a `sync()` payload. Broadcasting a multi-megabyte column to every connected client on every change is never the intent, so the field type simply cannot opt in.
+- A blob is opaque to `update()`'s deep merge: writing a new value **replaces** the old bytes rather than merging them index-by-index.
+- A blob is stripped from the [change log](#change-log--history) before recording — see the caveat there.
+
+Durable Object storage has a hard **2 MB per value** limit and bills per row read, so keep blobs small (CRDT snapshots, thumbnails, signatures). Anything user-sized belongs in a store, behind a `file()`.
+
+#### `schema.file({ store })`
+
+A reference, not a payload. The row holds only:
+
+```typescript
+interface FileReference {
+	key: string; // The object key within the store
+	size: number; // Size in bytes
+	mime: string; // MIME type
+	sha256?: string; // Hex SHA-256, when the store or the caller supplies one
+	name?: string; // The original filename, for uploads
+	store?: string; // Overrides the field's store for this row
+	metadata?: Record<string, string>; // App-defined string pairs
+}
+```
+
+`store` is the **name of a binding**, not the binding itself — a binding cannot cross a Durable Object RPC boundary, and the reference outlives whichever backend it currently points at. `key`, `size` and `mime` are required and validated on write; `sha256` must be 64 hex characters when present.
+
+##### Per-row `store`
+
+The `store` passed to `schema.file({ store })` is the field's **default**, not a constraint. A reference may carry its own `store`, and the effective store for a value is:
+
+```typescript
+const store_name = row.cover?.store ?? 'MEDIA'; // reference.store ?? field default
+```
+
+Without the override every row in a column is pinned to one bucket forever, which rules out three ordinary things: migrating a bucket (old rows must keep pointing at the old one until they are copied), hot/cold tiering (an archived object moves to cheaper storage while its row does not move at all), and per-tenant buckets (one column, one bucket per customer). It must be a non-empty string when present — a blank one is a caller who built the name from something missing, not a request for the default.
+
+`resolveFile()` takes the binding you hand it and does not do this lookup itself (it would need the whole `env` and the schema, both of which are yours). Pick the binding from the effective store, or a migrated row is looked up in the old bucket and reads as `null`:
+
+```typescript
+const object = await resolveFile(row.cover, platform.env[row.cover?.store ?? 'MEDIA']);
+```
+
+##### `metadata`
+
+An open bag of app-defined **string** pairs travelling with the reference — page count, duration, EXIF date, encoding, whatever this particular kind of file needs:
+
+```typescript
+schema.file({ store: 'MEDIA' }); // the field is unchanged; the reference carries it
+db.update('document', id, {
+	cover: { key, size, mime, metadata: { pages: '12', taken: '2024-03-01' } },
+});
+```
+
+Values are strings only. Numbers, `null`, arrays and nested objects are rejected with a message naming the key, deliberately mirroring how S3/R2 object metadata works — an app that later moves these pairs onto the real object finds the same shape waiting for it. Serialize anything richer yourself.
+
+It exists so the descriptor does not grow a new optional field every time an application stores a new kind of file. But the reason it lives on the *reference* rather than in sibling columns is stronger than tidiness: it is written in the same value as `key`, so it moves **atomically** with the file. Replacing the object replaces its description in one write, and there is no window in which the row claims a 12-page PDF while `key` already points at the 40-page one.
+
+`metadata` is not indexed and not queryable — it rides inside the `json` overflow column like the rest of the reference. Declare a real field for anything you need to search or sort on.
+
+The reference is stored in the internal `json` overflow column (it is a small object, not a scalar), and it is not tokenized — there is no `.searchable()` builder on a file field. If you want filename search, declare a separate `schema.string().searchable()` alongside it.
+
+A file reference is **carried** by default (see [Field tiers](#field-tiers-indexed-carried-excluded)): it syncs to the client, because its whole purpose is to let the client build a URL, but it never enters the index. Opt out for a reference the client has no business holding:
+
+```typescript
+schema.file({ store: 'PRIVATE', carried: false });
+```
+
+A non-carried reference reaches neither tier — exactly like a `blob()`. It is still stored on the row and still readable server-side with `db.get()`; it simply never leaves the Durable Object. Use it for a private object key you do not want sitting in every browser's IndexedDB.
+
+Read the bytes with `resolveFile`, which is structurally typed against `{ get(key) }` — a Cloudflare `R2Bucket` satisfies it, and so does any S3/GCS/filesystem wrapper you write:
+
+```typescript
+import { resolveFile } from '@delightstack/database';
+
+// In the Worker or SvelteKit endpoint that holds the binding — NOT inside the
+// Durable Object, which has no access to it.
+const doc = await locals.db.get('document', id);
+const object = await resolveFile(doc.cover, platform.env.MEDIA);
+const bytes = object ? await object.arrayBuffer() : undefined;
+```
+
+`resolveFile` returns `null` for a missing reference *and* for a missing object, so a deleted object reads the same way as a never-set field. It does **not** verify `sha256`, `size` or `mime` against the bytes it returns — those are checked on write. Verify on read yourself if the store is not trusted.
+
+> The database never writes to the store and never deletes from it. Uploading the object is the application's job — a `file()` field is a pointer, and deleting a pointer does not delete what it points at. It does, however, **tell you which pointers died**; see below.
+
+#### File deletion queue
+
+Deleting a row deletes its reference, not its object. Cleaning up the orphan is the application's job, but the application cannot do it unaided: by the time it sees the row is gone, the key went with it. Only the database knows *when* a row died and *what key it held*, inside the same write transaction — so it records that, in an internal `_file_gc` table, and you drain it.
+
+The queue is created at boot when at least one table has a `file()` column (a database with none never creates it, and the read APIs throw a `DelightError` with `code: 'file_gc_disabled'`). A row is enqueued when, inside the write transaction:
+
+- a row holding a file reference is **deleted** — every reference it held is queued; or
+- an **update** replaces a reference with one whose **`key` differs** — the old key is now unreachable from that row.
+
+Nothing is enqueued on create, on an update that leaves the key alone (changing `mime`, `name` or `metadata` describes the *same* object better), or on an update that changes only `store` (same key in a new bucket is a migration record, not an orphaning). Queue rows are written in the entity's transaction, so a rolled-back write leaves none behind.
+
+The `store` recorded is the reference's own `store` when it has one, else the field's default — so an object that was migrated to another bucket is deleted from the bucket it actually lives in.
+
+```typescript
+for (const pending of db.pendingFileDeletions({ limit: 100 })) {
+	// pending: { id, store, key, entity_type, entity_id, deleted_at }
+	await env[pending.store].delete(pending.key);
+	db.releaseFileDeletion(pending.id);
+}
+
+// Or drain a page and release it in one statement:
+const page = db.pendingFileDeletions();
+await Promise.all(page.map((p) => env[p.store].delete(p.key)));
+db.releaseFileDeletions(page.map((p) => p.id));
+```
+
+Rows come back oldest-first; `limit` defaults to 100 and clamps to 1000. **Delete first, release second** — a crash in between re-delivers the row, and deleting an already-deleted object is a no-op in every store worth using, whereas the reverse order loses the key forever. `releaseFileDeletion` is idempotent and returns whether a row was actually removed; `releaseFileDeletions` returns how many went.
+
+> **The queue reports intent, not safety.** It records that *this row* stopped referencing this key. It does **not** know whether some **other** row still points at the same object. If your keys are content-addressed — a SHA-256 key, a dedup layer, a "duplicate" that reuses the key — then two rows can share one object, and deleting on this signal alone breaks the survivors. In that case you **must** check for remaining references yourself before calling the store's `delete`, and release the queue row either way.
+
+Reference counting is deliberately **not** implemented, and no `LIKE`-based scan ships. File references live inside the internal `json` overflow column, so the only way for the database to find other holders of a key would be a `LIKE` scan across every row of every table with a `file()` column — expensive on storage billed per row read, and wrong besides: `LIKE '%key%'` matches keys that merely contain each other, and matches the key appearing anywhere else in the JSON. An application that dedups by key knows its own dedup rule and can answer the question with an index; the database cannot.
+
+The queue tracks every `file()` field, including one nested inside an `object()` — such a reference is recorded in `config.file_fields` at its dot path (`payload.attachment`) and enqueues like any other.
+
 ### Indexes
 
 ```typescript
@@ -466,16 +640,20 @@ Only RPC-serializable methods are projected — the tagged-template `exec` overl
 
 ### CRUD
 
-| Method     | Signature                         | Notes                                                                                |
-| ---------- | --------------------------------- | ------------------------------------------------------------------------------------ |
-| **create** | `create(type, data) → Entity`     | Auto-generates ID and timestamps. Validates against the schema. Updates search index. |
-| **get**    | `get(type, id, expand?) → Entity` | Throws `DelightError` (404) if not found. `expand` populates foreign key references into `entity.expanded`. |
-| **update** | `update(type, id, data) → Entity` | Deep partial merge. Validates merged result. Updates search index.                   |
-| **delete** | `delete(type, id) → void`         | Removes from SQLite and search index. Tracks deletion (tombstone) for sync.          |
+| Method     | Signature                                    | Notes                                                                                |
+| ---------- | -------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **create** | `create(type, data, options?) → Entity`      | Auto-generates ID and timestamps. Validates against the schema. Updates search index. |
+| **get**    | `get(type, id, expand?) → Entity`            | Throws `DelightError` (404) if not found. `expand` populates foreign key references into `entity.expanded`. |
+| **update** | `update(type, id, data, options?) → Entity`  | Deep partial merge. Validates merged result. Updates search index.                   |
+| **delete** | `delete(type, id, options?) → void`          | Throws `DelightError` (404) if not found. Removes from SQLite and search index. Tracks deletion (tombstone) for sync. |
 
 All CRUD methods are **synchronous** (SQLite in Durable Objects is synchronous).
 
-`create()` strips `id`, `created_at`, and `updated_at` from input data — these are auto-managed. `update()` auto-sets `updated_at`. Validation failures throw `DelightError` (status 400) with an `issues` array of `{ path, message }`.
+`create()` strips `id`, `created_at`, and `updated_at` from input data — these are auto-managed. `update()` auto-sets `updated_at`, and additionally strips every `.readonly()` field from the incoming partial. Validation failures throw `DelightError` (status 400) with an `issues` array of `{ path, message }`.
+
+`update()` is a **deep merge**, which has one consequence worth stating plainly: an `undefined` value means "leave this field alone", not "clear it". To clear an optional field, pass `null`.
+
+The trailing `options` is `WriteOptions` — currently just `{ actor }`, threaded into the [change log](#change-log--history). `transaction()`, `batch()` and `revert()` take the same trailing argument. See [Actor attribution](#actor-attribution).
 
 ### Search & List
 
@@ -623,6 +801,193 @@ const results = db.transaction([
 
 Maximum 5,000 operations per transaction. All operations succeed or all roll back — including the search index writes.
 
+A `create` operation additionally accepts `preserve_id: true`, which keeps the `id` and `created_at` present in `data` instead of generating fresh ones. This is what makes restoring a deleted row give you *the* row back rather than a copy of it — it powers `revert()` of a delete, and is equally useful for imports and restores.
+
+```typescript
+db.transaction([
+	{ create: { type: 'post', data: archived_row, preserve_id: true } },
+]);
+```
+
+> Inserting onto an id that is still live throws a `DelightError` (`entity_exists`, 409) rather than SQLite's raw `UNIQUE constraint failed` — the shape a double-`revert()` or a re-run import actually produces.
+
+### Change Log & History
+
+History is **opt-in per table**, via the third argument to `Database.table()`:
+
+```typescript
+const postTable = Database.table(
+	'post',
+	(schema) => ({
+		title: schema.string().searchable(),
+		body: schema.string().searchable().optional(),
+	}),
+	{ history: true, history_retention_days: 90 },
+);
+```
+
+| Option                   | Default | Description                                                                 |
+| ------------------------ | ------- | --------------------------------------------------------------------------- |
+| `history`                | `false` | Record every create/update/delete for this table in `_change_log`.          |
+| `history_retention_days` | `365`   | How long rows survive the retention sweep. `0` keeps them forever. Must be a non-negative number, or `Database.table()` throws. Ignored unless `history` is on. |
+
+When at least one table opts in, a shared `_change_log` table (plus two indexes) is created at boot. It is idempotent, so turning history on for a table later needs no migration — the first wake after the config change creates the table. When **no** table opts in, the table is never created and the read APIs throw a `DelightError` with `code: 'history_disabled'`.
+
+#### What gets recorded
+
+```typescript
+interface ChangeLogEntry {
+	id: string; // The change's own id (time-sortable)
+	table: string; // The entity type
+	entity_id: string; // The changed entity's primary key, as text
+	operation: 'create' | 'update' | 'delete';
+	actor: string; // 'system' when the write was unattributed
+	operation_id?: string; // The operation this change was part of, if any
+	patch: Record<string, unknown> | undefined; // What the change wrote
+	previous: Record<string, unknown> | undefined; // What it overwrote
+	created_at: number; // Epoch ms, from the Durable Object's clock
+}
+```
+
+| Operation  | `patch`                                     | `previous`                       |
+| ---------- | ------------------------------------------- | -------------------------------- |
+| **create** | the full entity                             | `undefined`                      |
+| **update** | only the fields whose value actually changed | the previous value of exactly those fields |
+| **delete** | `undefined`                                 | the full entity                  |
+
+Recording the whole entity twice per update would make the log larger than the table it describes within a handful of edits; a field-level diff keeps a typical single-field edit at a few dozen bytes, and is exactly what `revert()` needs. Rough overhead: a create costs roughly one extra copy of the row, an update costs about twice the size of the fields it touched, and a delete costs one copy of the row.
+
+Three behaviours follow from that and are worth knowing:
+
+- **`updated_at` is excluded from update diffs.** It changes on every write by definition, so recording it would make every diff non-empty and tell the reader nothing.
+- **A no-op update writes no change row.** A save button that changed nothing must not manufacture an audit entry.
+- **Change rows are written inside the entity's write transaction.** A rolled-back write leaves no history claiming it happened.
+
+> **`blob()` bytes are never recorded.** A change log that copied binary payloads would multiply the storage cost of exactly the largest thing in the row (a 5 MB blob updated ten times would cost 50 MB of history), and JSON has no compact representation for bytes — `JSON.stringify(new Uint8Array([1, 2]))` is `{"0":1,"1":2}`, roughly five bytes of JSON per byte of payload, which would also breach the Durable Object's 2 MB per-value limit.
+>
+> Each omitted column is recorded as a `{ __blob_omitted: true }` marker rather than dropped, so `revert()` can distinguish "bytes we did not keep" from "this column was empty". Reverting a change that would lose blob data throws a `DelightError` (`blob_not_recoverable`, 409) naming the columns instead of restoring an incomplete row. Pass `{ without_blobs: true }` to accept the loss and restore everything else — the columns are left unset, so it still fails if one is required.
+>
+> ```typescript
+> db.revert(change_id); // throws: 'bytes' would be lost
+> db.revert(change_id, { without_blobs: true }); // restores the rest
+> ```
+>
+> `file()` references, which are small descriptors rather than payloads, are recorded normally.
+
+#### Reading
+
+```typescript
+// One entity's changes, newest first. `before` pages backwards through time —
+// pass the `created_at` of the oldest entry you already have.
+db.history('post', post_id, { limit: 50, before: cursor });
+
+// Every change at or after a timestamp, oldest first — the feed shape (audit
+// trails, outbound replication, "what happened while I was away").
+db.changesSince(last_seen, { limit: 500, table: 'post' });
+
+// Narrowed to one operation, alone or together with `table`.
+db.changesSince(last_seen, { operation: import_id });
+```
+
+`history()` defaults `limit` to 50 and clamps it to 1000; `changesSince()` defaults to 500 and clamps to 5000. The `changesSince` timestamp boundary is **inclusive**.
+
+#### Reverting
+
+```typescript
+const [latest] = db.history('post', post_id);
+const restored = db.revert(latest.id); // → the resulting entity, or undefined
+```
+
+| Reverting a… | Does                                                                 |
+| ------------ | -------------------------------------------------------------------- |
+| **create**   | deletes the row (returns `undefined`)                                |
+| **update**   | writes back the previous values of exactly the fields it changed     |
+| **delete**   | recreates the row with its original `id` and `created_at`            |
+
+The revert is itself an ordinary mutation, so it appends its **own** change-log entry attributed to the current actor. History is append-only and a revert can be reverted. An unknown `change_id` throws 404; a change whose `table` is no longer in the config throws 400.
+
+> **`revert()` on an update restores readonly and cleared fields.** It is built on `update()` but deliberately opts out of two of its rules. A previously-*unset* value is recorded as `null` rather than being dropped by `JSON.stringify`, so clearing a field is revertible. And `.readonly()` columns are written rather than stripped — a revert restores a state the row demonstrably held, so the usual immutability guard would skip exactly the columns it was asked to put back.
+
+#### Operations — grouped undo
+
+Row-level undo is rarely what anyone wants. "Undo that import", "undo that bulk retag", "undo what the agent just did" are operations spanning thousands of rows, and nothing else in the log can reconstruct which rows belonged together — timestamps and actor both group too much. So every write takes an optional `{ operation }`, recorded on each change row it produces:
+
+```typescript
+const import_id = crypto.randomUUID();
+
+db.create('post', data, { actor: 'import', operation: import_id });
+
+// Or, for a whole run — `scoped()` takes the operation as a third argument:
+const importer = scoped(db, 'import', import_id);
+for (const row of rows) importer.create('post', row);
+
+db.batchChanges(import_id); // every change of that operation, oldest first
+db.revertBatch(import_id); // → 4_000 (how many changes were undone)
+```
+
+The batch id is opaque: any non-empty string, blank or whitespace-only treated as absent. It is threaded exactly like `actor`, so a bare-`db` write inside a scoped `batch()` inherits it too, and `db.batch_id` reports whichever batch the currently running write belongs to.
+
+`operationChanges()` returns oldest-first — an operation is read as a story, and the order the writes happened in is the order that explains it. It returns `[]` for an unknown id (an operation is not an entity; "no changes under this id" is an ordinary answer). `revertOperation()` is the one that throws `404` / `operation_not_found` there, because undoing an import and silently undoing nothing hides the real bug, which is usually an operation id that never reached the writes.
+
+Three properties distinguish `revertBatch()` from calling `revert()` in a loop:
+
+- **Reverse chronological.** The operation is walked newest-first. This is a correctness requirement: an operation that creates a row and then updates it must undo the update *before* the create, or the update's revert hits a row that no longer exists.
+- **Atomic.** The whole walk runs inside `batch()`, so one failure — a `blob_not_recoverable`, a foreign key, anything — rolls back every revert in the run. A half-undone import is worse than an un-undone one.
+- **Revertible.** The reverts are themselves recorded, under a **new** operation id, so `revertOperation(that_id)` redoes the original operation. Pass `{ operation }` to choose that id — the return value is a count, so this is the only way to know it up front — and one is generated when you do not.
+
+```typescript
+db.revertOperation(import_id, { actor: 'user:bob', operation: 'undo-of-import' });
+db.revertBatch('undo-of-import'); // redo
+```
+
+An operation of more than 5,000 changes throws `413` / `operation_too_large`: the whole revert runs in one Durable Object transaction — that is what makes it atomic — and a DO transaction has a CPU budget. Split the original work across several operation ids.
+
+#### Retention
+
+A `change_log_retention` handler is registered on the Durable Object's alarm at boot and re-arms itself daily. Each invocation deletes up to 1,000 rows per history-enabled table older than that table's `history_retention_days`; when a sweep fills its batch the alarm re-arms immediately rather than waiting a day, so a large backlog drains without ever exceeding the DO's CPU limit. A table with `history_retention_days: 0` is skipped entirely.
+
+The sweeper never pushes an existing earlier alarm later — alarms are a single slot shared by every registered handler, so it reads the current alarm first and leaves it alone when it already fires sooner.
+
+### Actor attribution
+
+Every mutator takes an optional trailing `WriteOptions`:
+
+```typescript
+db.create('post', { title: 'Hello' }, { actor: 'user:alice' });
+db.update('post', id, { title: 'Edited' }, { actor: 'agent:claude' });
+db.delete('post', id, { actor: 'user:alice' });
+db.transaction(operations, { actor: 'import' });
+db.batch(() => { … }, { actor: 'migration' });
+db.revert(change_id, { actor: 'user:bob' });
+```
+
+The actor is recorded on every change-log row the write produces. An unset, empty, or whitespace-only actor becomes `DEFAULT_ACTOR` — the string `'system'`. Actors are trimmed but otherwise opaque: the `user:` / `agent:` prefixes above are a convention, not a requirement.
+
+For a run of writes that share one actor, `scoped(db, actor)` returns a handle that applies it to each:
+
+```typescript
+import { scoped } from '@delightstack/database/worker';
+
+const claude = scoped(db, 'agent:claude');
+claude.create('post', { title: 'Drafted' });
+claude.update('post', id, { body });
+claude.batch(() => {
+	// Writes made through the bare `db` inside a scoped run inherit the actor
+	// too — `batch()` sets it ambiently for the duration of the callback.
+	db.update('post', id, { title });
+});
+```
+
+A third argument groups the run under an [operation id](#operations--grouped-undo) as well: `scoped(db, 'import', import_id)`. Both are plain strings rather than an options object, because a scope has exactly these two attributes and `scoped(db, 'import', id)` reads better at the call site than a wrapper.
+
+`scoped()` covers `create`, `update`, `delete`, `transaction`, `batch` and `revert`, and exposes the resolved pair as `handle.actor` / `handle.batch_id`. `db.actor` and `db.batch_id` report what the *currently running* write is attributed to (`'system'` and `undefined` outside a scope); both are restored correctly on normal return and on throw, and nested scopes stack. An absent value *resets* rather than inherits — `{ actor: 'x' }` with no `batch` runs unbatched even inside a batched scope, so a scope always means exactly what it says.
+
+`scoped()` is deliberately a **free function rather than a `db.as()` method**. A method returning `ScopedDatabase<Config>` would make `DatabaseServer` invariant in its config type parameter — `ScopedDatabase` uses the parameter both co- and contravariantly — which breaks any consumer that widens or narrows a `DatabaseServer<Config>`. A standalone helper leaves the class's variance untouched.
+
+The handle carries methods, which cannot cross a Durable Object RPC boundary, so call `scoped()` **inside** the Durable Object. From outside (through a `DatabaseStub`), pass `{ actor }` to the mutator directly — the option is the load-bearing API, and `scoped()` is convenience over it.
+
+> **Current limits.** The actor does **not** reach `createDatabaseHandle()`'s lifecycle hooks, and `DatabaseClient` has no actor of its own — a write that arrives over the HTTP routes is recorded as `'system'` unless the route handler passes `{ actor }` when calling the stub. Both are still to be built.
+
 ### Sync
 
 Returns per-entity changes for client-side search index mirroring. Ranges, limits, and ceilings are **per entity** — there are no top-level range fields:
@@ -736,6 +1101,8 @@ All hooks receive the SvelteKit `RequestEvent` as `event`. **Before hooks** can 
 | `afterDelete`  | `id`, `event`                     | Entity has been deleted.                                                     |
 
 Hooks are typed per entity — inside `hooks.post.beforeUpdate`, `existing` is `Database.Entity<typeof postTable>`.
+
+> **The handler does not attribute writes.** Hook context carries no `actor`, and the handler calls the stub without `WriteOptions`, so every mutation served by these routes is recorded in the [change log](#change-log--history) as `'system'`. To attribute HTTP writes today, call `locals.db.create(…, { actor })` from your own endpoint rather than relying on the generated routes. Threading the actor through the hooks is still to be built.
 
 ### List Query Parameters
 
@@ -1177,6 +1544,9 @@ Cloudflare Durable Object SQLite operations are synchronous by design. This simp
 **Why in-house validation instead of zod?**
 The schema builder already knows every constraint — compiling them into a second schema library added a dependency, a parallel type surface, and subtle mismatches (zod silently dropped a `.min()` when a format replaced the base schema). The in-house `FieldValidator` reads constraints live off the field definition, throws consistent `DelightError`s, and costs zero dependencies. `.check(fn)` covers everything a `refine` used to.
 
+**Why is history opt-in per table rather than always on?**
+History roughly doubles the write cost of an update and grows without bound until the sweeper catches up. Most tables — join tables, caches, counters — gain nothing from an audit trail and would pay for it on every write. Opting in per table means the cost lands only where someone asked for it, and a database with no history-enabled table never even creates `_change_log`.
+
 **Why cursor-based pagination on the server, a growing window on the client?**
 Offset pagination degrades on large tables. The server hands out keyset cursors with constant cost at any depth. The client's live lists instead grow their window (`loadMore()`), because a live subscription keeping N detached pages consistent is much harder than keeping one window consistent.
 
@@ -1196,6 +1566,8 @@ The root entry never drags server code into a client or worker bundle: the Svelt
 | `normalizeWhere`                              | Normalizes where-clause shorthands into operator objects                    |
 | `SearchQueryInput`, `ValidSearchQuery`        | Loose (non-generic) query type + the vector/source compile-time guard       |
 | `FieldValidator`, `FieldGenerator` *(type)*   | The in-house validator class and the field builder type                     |
+| `resolveFile`, `FileStore` *(type)*           | Reads the object a `schema.file()` reference points at out of a bound store (see [Binary Data & File References](#binary-data--file-references)) |
+| `FileReference` *(type)*                      | The `{ key, size, mime, sha256?, name? }` descriptor a `schema.file()` field stores |
 | Search core types *(types)*                   | `SearchQuery`, `SearchQueryResults`, `WhereCondition`, `FacetDefinition`, `FacetResult`, `SearchHit`, `SearchableType`, `GeoPoint`, … |
 
 ### `@delightstack/database/server`
@@ -1209,9 +1581,15 @@ The root entry never drags server code into a client or worker bundle: the Svelt
 
 ### `@delightstack/database/worker`
 
-| Export           | Description                                                                    |
-| ---------------- | ------------------------------------------------------------------------------ |
-| `DatabaseServer` | The Durable Object class (value). Imports `cloudflare:workers` — only import this from your Worker entry point. |
+| Export                                        | Description                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------ |
+| `DatabaseServer`                              | The Durable Object class (value). Imports `cloudflare:workers` — only import this from your Worker entry point. |
+| `scoped`                                      | `scoped(db, actor, operation?)` → an actor-attributed (and optionally grouped) write handle (see [Actor attribution](#actor-attribution)) |
+| `DEFAULT_ACTOR`                               | The actor recorded for an unattributed write — `'system'`                      |
+| `ScopedDatabase`, `WriteOptions` *(types)*    | The scoped write surface and the trailing `{ actor, operation }` option            |
+| `ChangeLogEntry`, `HistoryOptions`, `ChangesSinceOptions`, `BatchChangesOptions` *(types)* | The [change log](#change-log--history) read API's shapes |
+| `PendingFileDeletion`, `PendingFileDeletionsOptions` *(types)* | The [file deletion queue](#file-deletion-queue)'s shapes       |
+| `DatabaseSyncRequest`, `DatabaseSyncResponse`, `DatabaseServerTransaction`, `DatabaseServerTransactionResult` *(types)* | Sync and transaction shapes |
 
 ### `@delightstack/database/client` (Svelte 5 only)
 

@@ -1462,6 +1462,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			string,
 			{
 				index_schema: Record<string, unknown>;
+				carried_fields: string[];
 				primary_key: string;
 				primary_key_type?: 'string' | 'number';
 			}
@@ -1469,6 +1470,10 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		for (const [name, table] of Object.entries(this.#config.tables)) {
 			tables[name] = {
 				index_schema: table.config.index_schema as Record<string, unknown>,
+				// Carried fields are absent from `index_schema` by design, but they
+				// still belong in the local optimistic projection — without them a
+				// locally-created entity would lose them until the server echo.
+				carried_fields: table.config.carried_fields ?? [],
 				primary_key: table.config.primary_key,
 				primary_key_type: table.config.primary_key_type,
 			};

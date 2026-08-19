@@ -13,3 +13,5 @@
 export { Database } from './table';
 export type { FieldGenerator } from './generators';
 export { FieldValidator } from './validation';
+export { resolveFile, type FileStore } from './file';
+export type { FileReference } from './field-types';

@@ -15,7 +15,72 @@ export type DatabaseFieldType =
 	| 'object'
 	| 'array'
 	| 'enum'
-	| 'vector';
+	| 'vector'
+	| 'blob'
+	| 'file';
+
+/**
+ * A reference to an object held in an external store, written by a
+ * `schema.file()` field. The bytes live in the store; the row holds only this
+ * descriptor, so a row read never pays for the payload.
+ *
+ * Deliberately vendor-neutral: the same shape describes an object in R2, S3,
+ * GCS, Azure Blob Storage or a directory on disk. Only the binding named by
+ * {@link FileField.store} decides which.
+ */
+export interface FileReference {
+	/** The object key within the store */
+	key: string;
+	/** The object's size in bytes */
+	size: number;
+	/** The object's MIME type */
+	mime: string;
+	/**
+	 * Hex-encoded SHA-256 of the object's bytes.
+	 *
+	 * Optional because not every store provides one for free. Supply it when
+	 * keys are content-addressed or integrity matters.
+	 */
+	sha256?: string;
+	/** The original filename, when the object came from an upload */
+	name?: string;
+	/**
+	 * The binding this particular object lives in, overriding the field's
+	 * {@link FileField.store} for this row only.
+	 *
+	 * The field-level `store` is a *default*, not a constraint: the effective
+	 * store is `reference.store ?? field.store`. Without this override every row
+	 * in a column is pinned to one bucket forever, which makes three ordinary
+	 * things impossible — migrating a bucket (the old rows must keep pointing at
+	 * the old one until they are copied), hot/cold tiering (an archived object
+	 * moves to cheaper storage while its row does not move at all), and
+	 * per-tenant buckets (one column, one bucket per customer).
+	 *
+	 * Must be a non-empty string when present.
+	 */
+	store?: string;
+	/**
+	 * Arbitrary application-defined string pairs travelling with the reference —
+	 * page count, duration, EXIF date, encoding, whatever this object needs.
+	 *
+	 * The escape hatch that stops the descriptor growing a new optional field
+	 * every time an application stores a new kind of file. Values are strings
+	 * only (no nesting, no numbers, no `null`), deliberately mirroring how
+	 * S3/R2 object metadata works — an app that later moves this into real
+	 * object metadata finds the same shape waiting for it.
+	 *
+	 * It lives on the reference rather than in sibling columns for a reason that
+	 * matters more than tidiness: it is written in the same value as `key`, so
+	 * it moves **atomically** with the file. Replacing the object replaces its
+	 * description in one write, and there is no window in which the row claims a
+	 * 12-page PDF while `key` already points at the 40-page one.
+	 *
+	 * Not indexed and not queryable — it rides inside the `json` overflow column
+	 * like the rest of the reference. Declare a real field for anything you need
+	 * to search or sort on.
+	 */
+	metadata?: Record<string, string>;
+}
 
 /** A custom validation function added via `.check()`. Returning a string fails parsing with that message. */
 export type FieldCheck = (value: any) => string | undefined | void;
@@ -38,6 +103,27 @@ export interface DatabaseFieldBase {
 	 * If this is true, 'searchable' will also automatically be set to true so that sorting can be done by the search engine
 	 */
 	sortable?: boolean;
+
+	/**
+	 * Whether the field is *carried* — copied into the sparse document, and
+	 * therefore into every `sync()` payload and the client's cached entity,
+	 * **without ever entering the search index**.
+	 *
+	 * This is the third field tier. The other two are "excluded" (the default:
+	 * neither synced nor indexed) and "searchable" (both synced and indexed).
+	 * Carried sits between them: the client gets the value, the index never
+	 * sees it. Nothing tokenizes it, it has no entry in `index_schema`, and it
+	 * is absent from `searchable_fields` / `sortable_fields` — so it cannot be
+	 * used in a `where` clause, in `order`, or as a searched property.
+	 *
+	 * Use it for values a client needs but nobody would ever search: a
+	 * `schema.file()` reference (carried automatically), a rendered HTML blob,
+	 * a large body of text the client renders but the index would only bloat.
+	 *
+	 * Mutually exclusive with `searchable` / `sortable`: declaring both throws
+	 * at `table()` build time rather than silently picking one.
+	 */
+	carried?: boolean;
 
 	/** Whether the field is read-only - which shows the value but prevents updates */
 	readonly?: boolean;
@@ -259,6 +345,71 @@ export interface VectorField extends Omit<
 	schema: FieldValidator;
 }
 
+/**
+ * The options for a binary field — raw bytes in a SQLite `BLOB` column.
+ *
+ * Binary data is never tokenized, so a blob field is never searchable,
+ * indexable, sortable or unique: it has no place in the search index.
+ *
+ * It is not *carried* either — `carried` is omitted here, so `schema.blob()`
+ * has no `.carried()` builder and the flag is not even representable. This is
+ * the one deliberate asymmetry with {@link FileField}: a file field is a small
+ * descriptor the client genuinely needs, whereas a blob is raw bytes, and raw
+ * bytes must never ride along in a sync payload — one 5 MB row would be
+ * broadcast to every connected client on every change.
+ */
+export interface BlobField extends Omit<
+	DatabaseFieldBase,
+	'searchable' | 'sortable' | 'indexable' | 'unique' | 'carried'
+> {
+	type: 'blob';
+	/** The maximum size, in bytes, a value may have (validated on every write) */
+	max_bytes?: number;
+	/** The validator used to validate/parse the blob field */
+	schema: FieldValidator;
+}
+
+/**
+ * The options for a file reference field — a {@link FileReference} descriptor
+ * of an object living in an external store.
+ *
+ * Like {@link BlobField} it is never searchable: the row holds a pointer, and
+ * the bytes are fetched from the store on demand.
+ *
+ * Unlike {@link BlobField} it *is* carried — a descriptor is a few dozen bytes
+ * and a client needs it to build a URL, so it travels in the sparse document
+ * and every sync payload without ever entering the search index.
+ */
+export interface FileField extends Omit<
+	DatabaseFieldBase,
+	'searchable' | 'sortable' | 'indexable' | 'unique'
+> {
+	type: 'file';
+	/**
+	 * Whether the reference reaches the client. Defaults to `true`: a file
+	 * reference is a small descriptor whose purpose is to let a client build a
+	 * URL, so withholding it is usually pointless.
+	 *
+	 * Pass `carried: false` to `schema.file()` for a reference the client has no
+	 * business holding — a private object key you do not want sitting in every
+	 * browser's IndexedDB. The row still stores it; it simply never leaves the
+	 * server. Either way it is never indexed — see {@link DatabaseFieldBase.carried}.
+	 */
+	carried: boolean;
+	/**
+	 * The **default** name of the binding the referenced objects live in — an R2
+	 * or S3 bucket, a GCS bucket, an Azure container, a directory. The database
+	 * only records it; resolving it is the caller's job.
+	 *
+	 * A single row can override it with {@link FileReference.store}, so the
+	 * effective store for a value is `reference.store ?? field.store`. This one
+	 * is what a reference gets when it does not say otherwise.
+	 */
+	store: string;
+	/** The validator used to validate/parse the reference field */
+	schema: FieldValidator;
+}
+
 /** The options for a primary key field */
 export interface PrimaryKeyField<
 	Type extends 'string' | 'number' = 'string',
@@ -310,6 +461,8 @@ export type DatabaseField =
 	| ArrayField<any>
 	| EnumField
 	| VectorField
+	| BlobField
+	| FileField
 	| ForeignKeyField
 	| PrimaryKeyField<'string' | 'number'>;
 
@@ -321,6 +474,7 @@ export type Searchable<T extends { _: any }> = T & { _: T['_'] & { searchable: t
 export type Indexable<T extends { _: any }> = T & { _: T['_'] & { indexable: true } };
 export type Unique<T extends { _: any }> = T & { _: T['_'] & { unique: true } };
 export type Sortable<T extends { _: any }> = T & { _: T['_'] & { sortable: true } };
+export type Carried<T extends { _: any }> = T & { _: T['_'] & { carried: true } };
 export type OptionalValue<T extends { _: any }> = T & { _: T['_'] & { optional: true } };
 export type ReadOnly<T extends { _: any }> = T & { _: T['_'] & { readonly: true } };
 export type DerivedValue<T extends { _: any }> = T & { _: T['_'] & { derived: true } };
@@ -390,6 +544,11 @@ export type IsUnique<T> = T extends { _: (infer _U) & { unique: true } } ? true 
 export type IsSortable<T> = T extends { _: (infer _U) & { sortable: true } }
 	? true
 	: false;
+/**
+ * Whether a field is in the "carried, not indexed" tier — present in the sparse
+ * document and every sync payload, absent from the search index.
+ */
+export type IsCarried<T> = T extends { _: (infer _U) & { carried: true } } ? true : false;
 export type IsOptional<T> = T extends { _: (infer _U) & { optional: true } }
 	? true
 	: false;
@@ -437,69 +596,75 @@ export type AddQuestionMarks<T extends object> = Flatten<
 export type FieldType<T> = T extends {
 	readonly _: { type: infer TypeString extends DatabaseFieldType };
 }
-	? TypeString extends 'string'
-		? string
-		: TypeString extends 'number'
-			? number
-			: TypeString extends 'boolean'
-				? boolean
-				: TypeString extends 'vector'
-					? number[]
-					: TypeString extends 'geopoint'
-						? { lat: number; lon: number }
-						: TypeString extends 'primary_key'
-							? T extends {
-									_: { primary_key: { type: infer PKType extends 'string' | 'number' } };
-								}
-								? PKType extends 'string'
-									? string
-									: number
-								: never
-							: TypeString extends 'foreign_key'
-								? T extends {
-										_: {
-											foreign_key: { type: infer FKType extends 'string' | 'number' };
-										};
-									}
-									? FKType extends 'string'
-										? string
-										: number
-									: never
-								: TypeString extends 'enum'
-									? T extends { _: { options: infer EnumOptions extends string[] } }
-										? EnumOptions[number]
+	? TypeString extends 'blob'
+		? Uint8Array
+		: TypeString extends 'file'
+			? FileReference
+			: TypeString extends 'string'
+				? string
+				: TypeString extends 'number'
+					? number
+					: TypeString extends 'boolean'
+						? boolean
+						: TypeString extends 'vector'
+							? number[]
+							: TypeString extends 'geopoint'
+								? { lat: number; lon: number }
+								: TypeString extends 'primary_key'
+									? T extends {
+											_: {
+												primary_key: { type: infer PKType extends 'string' | 'number' };
+											};
+										}
+										? PKType extends 'string'
+											? string
+											: number
 										: never
-									: TypeString extends 'object'
-										? T extends { _: { properties: infer ObjectType } }
-											? AddQuestionMarks<
-													Flatten<
-														{
-															// Mark the readonly fields as readonly
-															readonly [Key in keyof ObjectType as IsReadOnly<
-																ObjectType[Key]
-															> extends true
-																? Key
-																: never]: IsOptional<ObjectType[Key]> extends true
-																? FieldType<ObjectType[Key]> | undefined | null
-																: FieldType<ObjectType[Key]>;
-														} & {
-															// Mark the non-readonly fields as normal
-															[Key in keyof ObjectType as IsReadOnly<
-																ObjectType[Key]
-															> extends true
-																? never
-																: Key]: IsOptional<ObjectType[Key]> extends true
-																? FieldType<ObjectType[Key]> | undefined | null
-																: FieldType<ObjectType[Key]>;
-														}
-													>
-												>
+									: TypeString extends 'foreign_key'
+										? T extends {
+												_: {
+													foreign_key: { type: infer FKType extends 'string' | 'number' };
+												};
+											}
+											? FKType extends 'string'
+												? string
+												: number
 											: never
-										: TypeString extends 'array'
-											? T extends { _: { items: infer ArrayType } }
-												? FieldType<ArrayType>[]
+										: TypeString extends 'enum'
+											? T extends { _: { options: infer EnumOptions extends string[] } }
+												? EnumOptions[number]
 												: never
-											: never
+											: TypeString extends 'object'
+												? T extends { _: { properties: infer ObjectType } }
+													? AddQuestionMarks<
+															Flatten<
+																{
+																	// Mark the readonly fields as readonly
+																	readonly [Key in keyof ObjectType as IsReadOnly<
+																		ObjectType[Key]
+																	> extends true
+																		? Key
+																		: never]: IsOptional<ObjectType[Key]> extends true
+																		? FieldType<ObjectType[Key]> | undefined | null
+																		: FieldType<ObjectType[Key]>;
+																} & {
+																	// Mark the non-readonly fields as normal
+																	[Key in keyof ObjectType as IsReadOnly<
+																		ObjectType[Key]
+																	> extends true
+																		? never
+																		: Key]: IsOptional<ObjectType[Key]> extends true
+																		? FieldType<ObjectType[Key]> | undefined | null
+																		: FieldType<ObjectType[Key]>;
+																}
+															>
+														>
+													: never
+												: TypeString extends 'array'
+													? T extends { _: { items: infer ArrayType } }
+														? FieldType<ArrayType>[]
+														: never
+													: never
 	: never;
 
 /** Determines the search-index type of a database field */

@@ -315,6 +315,56 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 
 	// ── Optimistic writes ────────────────────────────────────────────────────
 
+	it('an optimistic local write keeps carried fields out of the index but in the doc', async () => {
+		// Carried fields are absent from `index_schema` by design, so the local
+		// optimistic projection has to be told about them separately — otherwise a
+		// locally-originated write drops them until the server echo arrives.
+		const carriedTable = Database.table('note', (s) => ({
+			id: s.primaryKey(),
+			title: s.string().searchable(),
+			body: s.string().searchable(),
+			folder: s.enum(['inbox', 'archive']).searchable().default('inbox'),
+			rank: s.number().searchable().sortable(),
+			rendered_html: s.string().carried().optional(),
+		}));
+
+		const { server } = await createTestServer(carriedTable);
+		const ids = seed(server as any, 1);
+		vi.stubGlobal('fetch', bridgeFetch(server));
+
+		const worker = await createWorker(
+			{
+				tables: {
+					note: {
+						index_schema: carriedTable.config.index_schema as never,
+						carried_fields: carriedTable.config.carried_fields as string[],
+						primary_key: 'id',
+					},
+				},
+			},
+			carriedTable,
+		);
+		await worker.sync();
+
+		await worker.applyExternalChange('note', 'update', ids[0], {
+			id: ids[0],
+			title: 'optimistic title',
+			body: 'alpha beta gamma',
+			folder: 'inbox',
+			rank: 0,
+			rendered_html: '<p>zzyzx unsearchable marker</p>',
+			updated_at: T0 + 10_000,
+			created_at: T0,
+		});
+
+		const doc = (await readAll<DocRecord>('docs')).find((row) => row.doc_id === ids[0]);
+		// Carried: present in the document the client caches...
+		expect(doc?.sparse_doc.rendered_html).toBe('<p>zzyzx unsearchable marker</p>');
+		// ...but contributing nothing to the index.
+		expect((await worker.list('note', { term: 'zzyzx' })).count).toBe(0);
+		expect((await worker.list('note', { term: 'optimistic' })).count).toBe(1);
+	});
+
 	it('an optimistic local write is corrected by the server echo', async () => {
 		const { server } = await createTestServer();
 		const ids = seed(server as any, 3);
