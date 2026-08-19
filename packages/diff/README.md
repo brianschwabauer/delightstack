@@ -235,7 +235,7 @@ Nothing else throws. Empty inputs, wildly mismatched inputs, and inputs that tri
 
 ## Performance
 
-Measured by `src/diff.performance.test.ts` on a deterministic pseudo-document corpus (seeded PRNG, no `Math.random`), median of three runs:
+Measured by `src/diff.performance.test.ts` on a deterministic pseudo-document corpus (seeded PRNG, no `Math.random`), median of three runs **on a development machine**:
 
 | Operation                                | Input                    | Time    |
 | ---------------------------------------- | ------------------------ | ------- |
@@ -243,7 +243,9 @@ Measured by `src/diff.performance.test.ts` on a deterministic pseudo-document co
 | `diffLines`                              | two 50,000-word documents | ~9 ms   |
 | `diffStructured`                         | 20,000 blocks, 100 inserted / 100 deleted / many moved | ~26 ms |
 
-The suite asserts all three stay under 100 ms, so a regression fails CI rather than being noticed in production. Absolute numbers vary with the machine; the ratios do not.
+Absolute numbers vary a lot with the machine — the same suite measures 5-8x slower on a shared CI runner — so the 100 ms budgets are asserted only off CI (or anywhere with `DIFF_BENCH=1`).
+
+What is asserted **everywhere** is that doubling the input does not roughly quadruple the time: a ratio cancels out machine speed, so it holds on a laptop and on a throttled runner alike. Observed ratios are ~2.1x for `diffWords` and ~1.3x for `diffStructured`; the bound is 3x, and a deliberately quadratic implementation measures 4.1x. That is the regression these tests exist to catch — raising a millisecond budget until CI passes would have stopped catching a real 4x slowdown while still flaking on a busy runner.
 
 Two design choices carry most of that:
 

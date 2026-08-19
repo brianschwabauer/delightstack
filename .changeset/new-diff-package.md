@@ -12,4 +12,4 @@ New package: `@delightstack/diff` — zero-dependency diffing.
 
 Errors are `DiffError` (`message`, `status`, `code`) — deliberately the same shape as `DelightError`, because the package depends on nothing at all, not even `@delightstack/utilities`.
 
-Measured: `diffWords` over two 50,000-word documents ~58ms median, `diffLines` ~9ms, `diffStructured` over 20,000 blocks ~26ms.
+Measured on a development machine: `diffWords` over two 50,000-word documents ~58ms median, `diffLines` ~9ms, `diffStructured` over 20,000 blocks ~26ms. The suite asserts those budgets off CI, and asserts sub-quadratic scaling everywhere.
