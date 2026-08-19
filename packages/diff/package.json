@@ -1,6 +1,6 @@
 {
 	"name": "@delightstack/diff",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"type": "module",
 	"license": "MIT",
 	"description": "Zero-dependency diffing — word-level and line-level Myers text diff, plus key-based structural diff with move detection.",

@@ -1,5 +1,12 @@
 # @delightstack/components
 
+## 1.5.2
+
+### Patch Changes
+
+- Updated dependencies [a3e0a38]
+  - @delightstack/utilities@1.2.0
+
 ## 1.5.1
 
 ### Patch Changes
