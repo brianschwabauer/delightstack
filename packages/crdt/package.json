@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"type": "module",
 	"license": "MIT",
-	"description": "Collaborative document storage for Cloudflare Durable Objects — a Loro CRDT wrapper with an append-only op log, derived edit sessions, named checkpoints, time travel and compaction.",
+	"description": "Collaborative document storage for Cloudflare Durable Objects \u2014 a Loro CRDT wrapper with an append-only op log, derived edit sessions, named checkpoints, time travel and compaction.",
 	"keywords": [
 		"crdt",
 		"loro",
@@ -37,21 +37,13 @@
 			"types": "./dist/server/index.d.ts",
 			"workerd": "./dist/server/index.js",
 			"import": "./dist/server/index.js"
-		},
-		"./client": {
-			"types": "./dist/client/index.d.ts",
-			"svelte": "./dist/client/index.js",
-			"import": "./dist/client/index.js"
-		},
-		"./prosemirror": {
-			"types": "./dist/prosemirror/index.d.ts",
-			"import": "./dist/prosemirror/index.js"
 		}
 	},
 	"files": [
 		"dist",
 		"!dist/**/*.test.*",
-		"!dist/**/*.spec.*"
+		"!dist/**/*.spec.*",
+		"!dist/__tests__"
 	],
 	"scripts": {
 		"build": "svelte-package -i src",
@@ -61,28 +53,11 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"loro-crdt": "^1.14.1"
-	},
-	"peerDependencies": {
 		"@delightstack/utilities": "workspace:*",
-		"prosemirror-model": "^1.25.0",
-		"prosemirror-state": "^1.4.3",
-		"prosemirror-view": "^1.40.0"
-	},
-	"peerDependenciesMeta": {
-		"prosemirror-model": {
-			"optional": true
-		},
-		"prosemirror-state": {
-			"optional": true
-		},
-		"prosemirror-view": {
-			"optional": true
-		}
+		"loro-crdt": "^1.14.1"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250724.0",
-		"@delightstack/utilities": "workspace:*",
 		"@sveltejs/package": "^2.4.0",
 		"@types/node": "^24.1.0",
 		"prosemirror-model": "^1.25.0",

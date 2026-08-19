@@ -407,6 +407,9 @@ importers:
 
   packages/crdt:
     dependencies:
+      '@delightstack/utilities':
+        specifier: workspace:*
+        version: link:../utilities
       loro-crdt:
         specifier: ^1.14.1
         version: 1.14.1
@@ -414,9 +417,6 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250724.0
         version: 4.20260401.1
-      '@delightstack/utilities':
-        specifier: workspace:*
-        version: link:../utilities
       '@sveltejs/package':
         specifier: ^2.4.0
         version: 2.4.0(svelte@5.55.1)(typescript@5.9.3)
