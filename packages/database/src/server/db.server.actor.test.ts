@@ -1,9 +1,9 @@
 // @vitest-environment node
 /**
- * DS-07 actor attribution — the trailing `{ actor }` `WriteOptions` on every
+ * Actor attribution — the trailing `{ actor }` `WriteOptions` on every
  * mutator, the `scoped(db, actor)` handle, and the `'system'` default.
  *
- * The actor is only *observable* through the DS-03 change log, so this suite
+ * The actor is only *observable* through the change log, so this suite
  * drives a history-enabled table over real SQLite (the same
  * `search/__tests__/sqlite_harness.ts` façade `db.server.test.ts` uses) and
  * reads the recorded `actor` back through `history()` / `changesSince()`.

@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * The DS-03 change log — `_change_log`, `history()`, `changesSince()`,
+ * The change log — `_change_log`, `history()`, `changesSince()`,
  * `revert()` and the retention sweeper — over **real SQLite**.
  *
  * Same harness as `db.server.test.ts`: the production `DatabaseServer` runs

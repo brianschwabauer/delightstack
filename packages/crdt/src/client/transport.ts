@@ -15,10 +15,10 @@
  *   deterministically, including partitioning it mid-edit.
  *
  * Messages are **structured objects carrying `Uint8Array` payloads**, not
- * frames. Framing is a wire decision (DelightWrite uses length-prefixed binary;
- * something else might use JSON with base64) and it does not belong here. The
- * message set maps one-to-one onto the server half's API: `subscribe` →
- * `syncFor()`, `update` → `applyUpdate()`.
+ * frames. Framing is a wire decision (length-prefixed binary, JSON with base64,
+ * something else entirely) and it does not belong here. The message set maps
+ * one-to-one onto the server half's API: `subscribe` → `syncFor()`,
+ * `update` → `applyUpdate()`.
  */
 
 /** Sent by the client to the document server. */
