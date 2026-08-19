@@ -108,8 +108,33 @@ function expectWithinBudget(elapsed_ms: number, budget_ms: number): void {
 	expect(elapsed_ms).toBeLessThan(budget_ms);
 }
 
-/** Timed rounds per size. The fastest one wins; see `expectSubQuadratic`. */
+/** Timed rounds per size, per attempt. The fastest one wins. */
 const SCALING_ROUNDS = 7;
+
+/**
+ * How many times a measurement may disagree before it is believed.
+ *
+ * A contended machine can inflate a ratio past any bound — measured at 4.23x
+ * for honest code with every core saturated, higher than the 3.95x a
+ * deliberately quadratic body produces. No fixed threshold separates those two
+ * numbers, so a single measurement cannot be trusted to fail a build. What
+ * separates them is *repeatability*: contention produced one bad window in
+ * six, while a genuine regression exceeds the bound on every attempt. So the
+ * test re-measures and only fails if every attempt agrees.
+ */
+const SCALING_ATTEMPTS = 3;
+
+/**
+ * Ratio at which doubling the input counts as a regression.
+ *
+ * Both of these algorithms are O(n log n), not linear, so the honest ratio is
+ * `2 * log(2n)/log(n)` — about 2.15 at these sizes, never 2.0. Measured across
+ * ten idle runs it spans 2.0-2.7, and it does not tighten at larger sizes
+ * (checked at 20k and 40k). A deliberately quadratic body measures 3.95. So
+ * 3.4 sits clear of the honest spread with room for a slower machine, and
+ * still fails a regression to quadratic, whose ratio only grows with n.
+ */
+const SCALING_BOUND = 3.4;
 
 /**
  * Assert that doubling the input does not roughly quadruple the time.
@@ -122,35 +147,55 @@ const SCALING_ROUNDS = 7;
  * scaling when nothing about the algorithm changed. That is a measurement
  * artefact, and on a memory-constrained CI runner it is a large one.
  *
+ * The two sizes are measured **interleaved**, one round of each per pass,
+ * rather than all of one and then all of the other. A CI runner's load drifts
+ * over seconds as sibling test files start and finish, so measuring the sizes
+ * in separate windows lets that drift land entirely on one of them — and a
+ * ratio of two numbers taken under different conditions is not a ratio of
+ * anything. Interleaving puts both sizes under the same conditions.
+ *
  * The **fastest** of several rounds is used rather than the median: scheduler
  * noise only ever adds time, so the minimum is the least-biased estimate of
  * the true cost and the most stable thing to take a ratio of. One untimed
- * warm-up round first, so JIT compilation is not billed to the measurement.
- *
- * Linear-ish work lands near 2.0; quadratic lands at 4.0 or above. The bound
- * sits at 3.0 — comfortably above the honest result and comfortably below a
- * genuine regression.
+ * warm-up of each first, so JIT compilation is not billed to the measurement.
  */
 function expectSubQuadratic(prepare: (size: number) => () => void, base_size: number): void {
-	const fastest = (size: number): number => {
-		const run = prepare(size);
-		run(); // warm-up: JIT, and first-touch of the freshly built inputs
-		let best = Number.POSITIVE_INFINITY;
+	const run_small = prepare(base_size);
+	const run_large = prepare(base_size * 2);
+	run_small(); // warm-up: JIT, and first-touch of the freshly built inputs
+	run_large();
+
+	const measure = (): number => {
+		let small_ms = Number.POSITIVE_INFINITY;
+		let large_ms = Number.POSITIVE_INFINITY;
 		for (let round = 0; round < SCALING_ROUNDS; round++) {
-			const started_at = performance.now();
-			run();
-			best = Math.min(best, performance.now() - started_at);
+			let started_at = performance.now();
+			run_small();
+			small_ms = Math.min(small_ms, performance.now() - started_at);
+			started_at = performance.now();
+			run_large();
+			large_ms = Math.min(large_ms, performance.now() - started_at);
 		}
-		return best;
+		const ratio = large_ms / Math.max(small_ms, 0.001);
+		console.log(
+			`scaling ${base_size} -> ${base_size * 2}: ` +
+				`${small_ms.toFixed(1)}ms -> ${large_ms.toFixed(1)}ms (${ratio.toFixed(2)}x)`,
+		);
+		return ratio;
 	};
-	const small_ms = fastest(base_size);
-	const large_ms = fastest(base_size * 2);
-	const ratio = large_ms / Math.max(small_ms, 0.001);
-	console.log(
-		`scaling ${base_size} -> ${base_size * 2}: ` +
-			`${small_ms.toFixed(1)}ms -> ${large_ms.toFixed(1)}ms (${ratio.toFixed(2)}x)`,
-	);
-	expect(ratio).toBeLessThan(3);
+
+	const ratios: number[] = [];
+	for (let attempt = 0; attempt < SCALING_ATTEMPTS; attempt++) {
+		const ratio = measure();
+		ratios.push(ratio);
+		// One clean attempt is proof enough: noise only ever inflates a ratio.
+		if (ratio < SCALING_BOUND) return;
+	}
+	expect(
+		Math.min(...ratios),
+		`every attempt scaled worse than ${SCALING_BOUND}x: ` +
+			`${ratios.map((value) => value.toFixed(2)).join(', ')}`,
+	).toBeLessThan(SCALING_BOUND);
 }
 
 describe('performance', () => {
