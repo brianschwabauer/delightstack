@@ -82,6 +82,33 @@ Non-atom blocks mark their editable hole with the `content` attachment: `<div {@
 
 If you plan to use collaborative editing later, define custom block *schemas* with `defineBlockSchema()` in a file shared with your Worker, and compose UI on the client — `buildSchema()` + `schemaHash()` from `@delightstack/editor/schema` are worker-safe.
 
+## Block IDs
+
+Every block-level node carries a stable `block_id` attr, assigned automatically. It is the anchor
+for block references, per-block restore, structural diff, presence focus and comment fallback
+anchoring — anything that needs to name a block across edits.
+
+The ids are `generateTimestampID({ length: 12 })`: 8 base62 chars of millisecond timestamp, so they
+sort by creation, plus 4 of entropy.
+
+They survive the edits you would expect. Splitting a block leaves the id on the first half and
+gives the second a fresh one; joining keeps the first's; duplicating gives the copy a new id and
+leaves the original's alone, whichever side of the original the copy lands on.
+
+**Pass `doc_id` if the same app edits more than one document.** A block copied out of another
+document must not arrive carrying an id that already names a block there, or two different blocks
+answer to one id:
+
+```ts
+const editor = new Editor({ doc_id: node.id, content });
+```
+
+Copying stamps `<doc_id>:<block_id>` onto the clipboard; pasting keeps the bare id only when the
+stamp matches, and clears it otherwise so a fresh one is assigned. An unstamped id — HTML from
+another app, or one that happens to write its own `data-block-id` — is never trusted. Without
+`doc_id`, each editor instance is treated as its own document, which can only cause regeneration,
+never a collision.
+
 ## Server rendering
 
 Public pages shouldn't ship the editor. `@delightstack/editor/render` is a zero-dependency (no svelte, no prosemirror) JSON → HTML walker, safe in Workers:

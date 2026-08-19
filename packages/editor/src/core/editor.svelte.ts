@@ -42,6 +42,12 @@ import type { SuggestionHandler } from '../types/index.js';
 export interface EditorOptions {
 	/** Initial document as ProseMirror JSON */
 	content?: JSONContent | null;
+	/**
+	 * Identity of the document being edited. Blocks copied out of a different
+	 * document get fresh `block_id`s on paste, so one block id never names two
+	 * blocks. Without it, every editor instance is treated as its own document.
+	 */
+	doc_id?: string;
 	/** Block specs to register (see `defineBlock`). Include `defaultBlocks()` for the built-in media/callout/code blocks. */
 	blocks?: BlockSpec[];
 	/** Extra commands for the slash/plus/toolbar menus */
@@ -649,7 +655,7 @@ export class Editor {
 			dragAutoScroll(),
 			gapCursor(),
 			placeholder(this.#options.placeholder),
-			blockIds(),
+			blockIds({ doc_id: this.#options.doc_id }),
 			todoClicks(),
 		);
 		if (this.uploader) plugins.push(uploads(this));
