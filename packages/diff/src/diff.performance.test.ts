@@ -108,21 +108,40 @@ function expectWithinBudget(elapsed_ms: number, budget_ms: number): void {
 	expect(elapsed_ms).toBeLessThan(budget_ms);
 }
 
+/** Timed rounds per size. The fastest one wins; see `expectSubQuadratic`. */
+const SCALING_ROUNDS = 7;
+
 /**
  * Assert that doubling the input does not roughly quadruple the time.
  *
- * Uses the **fastest** of several rounds at each size rather than the median:
- * scheduler noise only ever adds time, so the minimum is the least-biased
- * estimate of the true cost and the most stable thing to take a ratio of.
+ * `prepare(size)` builds the inputs and returns a thunk that does only the
+ * work being measured. Building the inputs **once per size** rather than once
+ * per round is what makes this stable: the doubled size allocates twice the
+ * garbage, so a per-round rebuild lands collections inside the timed region
+ * disproportionately often at the larger size — which reads as super-linear
+ * scaling when nothing about the algorithm changed. That is a measurement
+ * artefact, and on a memory-constrained CI runner it is a large one.
+ *
+ * The **fastest** of several rounds is used rather than the median: scheduler
+ * noise only ever adds time, so the minimum is the least-biased estimate of
+ * the true cost and the most stable thing to take a ratio of. One untimed
+ * warm-up round first, so JIT compilation is not billed to the measurement.
  *
  * Linear-ish work lands near 2.0; quadratic lands at 4.0 or above. The bound
  * sits at 3.0 — comfortably above the honest result and comfortably below a
  * genuine regression.
  */
-function expectSubQuadratic(measure: (size: number) => number, base_size: number): void {
+function expectSubQuadratic(prepare: (size: number) => () => void, base_size: number): void {
 	const fastest = (size: number): number => {
-		const rounds = [measure(size), measure(size), measure(size)];
-		return Math.min(...rounds);
+		const run = prepare(size);
+		run(); // warm-up: JIT, and first-touch of the freshly built inputs
+		let best = Number.POSITIVE_INFINITY;
+		for (let round = 0; round < SCALING_ROUNDS; round++) {
+			const started_at = performance.now();
+			run();
+			best = Math.min(best, performance.now() - started_at);
+		}
+		return best;
 	};
 	const small_ms = fastest(base_size);
 	const large_ms = fastest(base_size * 2);
@@ -239,9 +258,7 @@ describe('performance', () => {
 			const words = makeDocument(random, size);
 			const old_text = words.join(' ');
 			const new_text = scatterEdits(random, words, 100).join(' ');
-			const started_at = performance.now();
-			diffWords(old_text, new_text);
-			return performance.now() - started_at;
+			return () => void diffWords(old_text, new_text);
 		}, 20_000);
 	});
 
@@ -258,9 +275,7 @@ describe('performance', () => {
 				new_blocks.unshift(block);
 			}
 			const key = (block: { id: string }): string => block.id;
-			const started_at = performance.now();
-			diffStructured(old_blocks, new_blocks, key);
-			return performance.now() - started_at;
+			return () => void diffStructured(old_blocks, new_blocks, key);
 		}, 10_000);
 	});
 });
