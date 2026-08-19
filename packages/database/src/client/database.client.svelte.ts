@@ -649,6 +649,13 @@ export class EntityState<
  */
 interface EntityHandleDeps {
 	getWorker: () => Remote<DatabaseWorker> | null;
+	/**
+	 * The client's in-flight (or settled) `init()`, or `null` when `init()`
+	 * has never been called — same contract as {@link ListHandleDeps.whenReady}:
+	 * `getWorker()` returns the worker before its tables are registered, and a
+	 * `get` issued in that window is rejected with `Unknown entity type`.
+	 */
+	whenReady?: () => Promise<void> | null;
 	fetch?: typeof globalThis.fetch;
 	trackVersion: (entity_type: string, id: string | number) => void;
 	refreshProxy: (
@@ -695,6 +702,19 @@ export class EntityHandle<
 	#deps: EntityHandleDeps;
 	#subscriber: () => void;
 	#effect_cleanup: (() => void) | null = null;
+	/**
+	 * Monotonic start-cycle token, same as ListHandle's: the deferred `#start`
+	 * (see the constructor) only runs when its token is still current, and
+	 * `#stop` bumps the token to cancel a pending start from a torn-down cycle.
+	 */
+	#start_token = 0;
+	/**
+	 * True between a subscribe and its deferred `#start` actually running.
+	 * `live` must count this window: the owning client's cache eviction skips
+	 * live handles, and a just-subscribed handle is live in every sense that
+	 * matters even though its effect root doesn't exist for one more microtask.
+	 */
+	#start_pending = false;
 
 	#value = $state.raw<Database.Entity<T> | undefined>(undefined);
 	#status = $state<HandleStatus>('loading');
@@ -725,15 +745,27 @@ export class EntityHandle<
 	 * discards a handle with active subscribers.
 	 */
 	get live(): boolean {
-		return this.#effect_cleanup !== null;
+		return this.#start_pending || this.#effect_cleanup !== null;
 	}
 
 	constructor(entity_type: EntityType, id: string | number, deps: EntityHandleDeps) {
 		this.entity_type = entity_type;
 		this.id = id;
 		this.#deps = deps;
+		// Deferred for the same reason as ListHandle (see its constructor):
+		// `$effect.root()` created inside createSubscriber's start callback is
+		// parented to the transient effect that first read the handle, and a
+		// root orphaned while non-CLEAN wedges permanently — its version-watch
+		// effect would never re-run. A microtask start makes the root
+		// parentless from birth.
 		this.#subscriber = createSubscriber(() => {
-			this.#start();
+			const token = ++this.#start_token;
+			this.#start_pending = true;
+			queueMicrotask(() => {
+				if (token !== this.#start_token) return;
+				this.#start_pending = false;
+				this.#start();
+			});
 			return () => this.#stop();
 		});
 	}
@@ -775,7 +807,11 @@ export class EntityHandle<
 		});
 	}
 
+	/** Safe when `#start` never ran (a cancelled deferred start): the token
+	 *  bump is the cancellation, and the cleanup below is null-guarded. */
 	#stop(): void {
+		this.#start_token++;
+		this.#start_pending = false;
 		if (this.#effect_cleanup) {
 			this.#effect_cleanup();
 			this.#effect_cleanup = null;
@@ -789,6 +825,19 @@ export class EntityHandle<
 	): Promise<Database.Entity<T> | undefined> {
 		// Sign-out freeze: no new fetch may start (the client is inert).
 		if (this.#deps.isFrozen?.()) return this.#value;
+		// Never race the client's init(): the worker exists before its tables
+		// are registered, and a `get` in that window rejects with `Unknown
+		// entity type`. Nothing to await on SSR / a fetch-only client (null),
+		// and a failed init resolves through so the real error surfaces.
+		const ready = this.#deps.whenReady?.();
+		if (ready) {
+			try {
+				await ready;
+			} catch {
+				// init() failed — let the fetch proceed and report its own error.
+			}
+			if (this.#deps.isFrozen?.()) return this.#value;
+		}
 		const token = ++this.#fetch_token;
 		try {
 			let data: Database.Entity<T> | undefined;
@@ -873,6 +922,16 @@ export type ListQueryInit<T extends Database.Table = Database.Table> =
  */
 interface ListHandleDeps {
 	getWorker: () => Remote<DatabaseWorker> | null;
+	/**
+	 * The client's in-flight (or settled) `init()`, or `null` when `init()`
+	 * has never been called. `getWorker()` starts returning the worker the
+	 * moment the worker module loads — BEFORE `worker.init()` has registered
+	 * the tables — so a query issued in that window is answered with
+	 * `Unknown entity type`. Handles await this before touching the worker.
+	 * `null` (SSR, or a fetch-only client) means "nothing to wait for", which
+	 * is what keeps the `#listViaFetch` path from deadlocking.
+	 */
+	whenReady?: () => Promise<void> | null;
 	fetch?: typeof globalThis.fetch;
 	/**
 	 * The client's sign-out freeze. While `true`, the handle runs no query and
@@ -934,6 +993,13 @@ export class ListHandle<
 	#subscriber: () => void;
 	#destroyed = false;
 	#effect_cleanup: (() => void) | null = null;
+	/**
+	 * Monotonic start-cycle token. `createSubscriber`'s start callback defers
+	 * `#start` to a microtask (see the constructor); `#stop` bumps this so a
+	 * pending deferred start belonging to an already-torn-down cycle is
+	 * dropped instead of resurrecting the handle.
+	 */
+	#start_token = 0;
 	#reactive_query: (() => Partial<Database.SearchQuery<T>>) | null = null;
 	#defaults: Database.SearchQuery<T>;
 	#push_timer: ReturnType<typeof setTimeout> | null = null;
@@ -1041,9 +1107,31 @@ export class ListHandle<
 		// read (from a template or effect) starts the effect root and worker
 		// subscription; the cleanup runs automatically when the last listener
 		// stops reading (e.g. the component unmounts).
+		//
+		// The start is deferred to a microtask so `$effect.root()` in `#start`
+		// is created with NO active effect, i.e. parentless from birth. Svelte
+		// runs this callback inside a render effect owned by whichever effect
+		// FIRST read the handle — usually a transient template branch — and
+		// parents the root to it. That root is then destroyed-but-orphaned
+		// (`parent = null`) when the branch swaps, and if the orphaning lands
+		// while a scheduling pass had already cleared the root's CLEAN flag,
+		// nothing can reach it to restore the flag: every later
+		// `Batch.schedule()` climb sees a non-CLEAN root and takes the
+		// "already dirty, bail" early exit, so the root's effects never run
+		// again. No error is thrown and `#stop` never fires (the new branch
+		// re-reads the handle, so the subscriber count never hits zero) — the
+		// handle just serves stale results forever. A parentless root is
+		// immune: nothing can orphan it mid-schedule.
 		this.#subscriber = createSubscriber(() => {
 			if (this.#destroyed) return;
-			this.#start();
+			// Pair the deferred start with its cleanup: `#stop` bumps the token,
+			// so a subscribe-then-immediately-unsubscribe never wakes a dead
+			// handle when the microtask finally runs.
+			const token = ++this.#start_token;
+			queueMicrotask(() => {
+				if (this.#destroyed || token !== this.#start_token) return;
+				this.#start();
+			});
 			return () => this.#stop();
 		});
 	}
@@ -1082,10 +1170,33 @@ export class ListHandle<
 		this.#query_state.limit = current + count;
 	}
 
+	/**
+	 * Wait for `DatabaseClient.init()` to settle before touching the worker.
+	 * The worker proxy exists before its tables are registered, so a query
+	 * that wins that race comes back `Unknown entity type` and the handle
+	 * silently renders an empty list at boot. Resolves immediately when there
+	 * is no init to wait for (SSR, or a fetch-only client) — that is what
+	 * keeps `#listViaFetch` from deadlocking. A failed init resolves too: the
+	 * query then runs and surfaces its own error rather than hanging.
+	 */
+	async #whenReady(): Promise<void> {
+		const ready = this.#deps.whenReady?.();
+		if (!ready) return;
+		try {
+			await ready;
+		} catch {
+			// init() failed — let the query proceed and report the real failure.
+		}
+	}
+
 	/** Run the query once (worker or SSR fetch) and apply the result. */
 	async #runQuery(rethrow = false): Promise<WorkerSearchResult> {
 		// Sign-out freeze: run nothing, touch nothing — not even `status`.
 		if (this.#deps.isFrozen?.()) {
+			return { hits: [], count: 0, mode: untrack(() => this.#mode) };
+		}
+		await this.#whenReady();
+		if (this.#destroyed || this.#deps.isFrozen?.()) {
 			return { hits: [], count: 0, mode: untrack(() => this.#mode) };
 		}
 		const token = ++this.#push_token;
@@ -1191,8 +1302,14 @@ export class ListHandle<
 		this.#initSubscription();
 	}
 
-	/** Tear down subscription and effects. Called by createSubscriber cleanup. */
+	/**
+	 * Tear down subscription and effects. Called by createSubscriber cleanup.
+	 * Safe to call when `#start` never ran (a deferred start that was cancelled
+	 * before its microtask fired): everything below is null-guarded, and the
+	 * token bump is what cancels that pending start.
+	 */
 	#stop(): void {
+		this.#start_token++;
 		if (this.#push_timer !== null) {
 			clearTimeout(this.#push_timer);
 			this.#push_timer = null;
@@ -1248,6 +1365,8 @@ export class ListHandle<
 
 	async #pushQuery(): Promise<void> {
 		if (this.#destroyed || this.#deps.isFrozen?.()) return;
+		await this.#whenReady();
+		if (this.#destroyed || this.#deps.isFrozen?.()) return;
 		const worker = this.#deps.getWorker();
 		if (this.#subscriber_id && worker) {
 			const token = ++this.#push_token;
@@ -1270,20 +1389,37 @@ export class ListHandle<
 		if (this.#destroyed || this.#deps.isFrozen?.()) return;
 		if (this.#init_promise) return;
 
-		const worker = this.#deps.getWorker();
-		if (!worker) {
-			// SSR / pre-init: no live subscription exists — answer the current
-			// query once so reactive readers still get data.
-			void this.#runQuery();
-			return;
-		}
+		// Record the query we are about to subscribe with SYNCHRONOUSLY, before
+		// any await: the query watcher's first flush lands in a microtask, and
+		// it compares against `#sent_query` to decide whether the reactive query
+		// moved. Leaving it `null` across the awaits below would make that flush
+		// fire a redundant one-shot query on every start.
+		this.#sent_query = JSON.stringify(untrack(() => $state.snapshot(this.#query_state)));
 
 		this.#init_promise = (async () => {
+			// Never subscribe against a worker whose tables are not registered
+			// yet — `subscribe` would reject with `Unknown entity type` and the
+			// handle would sit in 'error' with an empty list forever.
+			await this.#whenReady();
+			if (this.#destroyed || this.#deps.isFrozen?.()) return;
+
+			const worker = this.#deps.getWorker();
+			if (!worker) {
+				// SSR / no client init: no live subscription exists — answer the
+				// current query once so reactive readers still get data. Clear the
+				// guard so a later start can still subscribe for real.
+				this.#init_promise = null;
+				void this.#runQuery();
+				return;
+			}
+
 			try {
-				// Snapshot + record BEFORE the await, so the query watcher's first
-				// flush (which runs after this synchronous prefix) can tell whether
-				// the reactive query moved past what this subscription serves.
-				const initial_query = $state.snapshot(this.#query_state) as SearchQueryInput;
+				// Re-snapshot + re-record right before `subscribe`: the query may
+				// have moved while init was still settling, and `#sent_query` must
+				// name the query this subscription actually serves.
+				const initial_query = untrack(
+					() => $state.snapshot(this.#query_state) as SearchQueryInput,
+				);
 				this.#sent_query = JSON.stringify(initial_query);
 				this.#subscriber_id = await worker.subscribe(
 					this.entity_type,
@@ -1343,6 +1479,13 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	#config: DatabaseClientConfig<T>;
 	#worker: Remote<DatabaseWorker> | null = null;
 	#status = $state<DatabaseStatus>('idle');
+	/**
+	 * The in-flight (or settled) `init()`. Handles await it before issuing a
+	 * query, so nothing reaches the worker before its tables are registered.
+	 * `null` means there is nothing to wait for — SSR, a fetch-only client, or
+	 * after `destroy()` — and handles fall through to their fetch path.
+	 */
+	#ready_promise: Promise<void> | null = null;
 	#destroyed = false;
 	/**
 	 * Sign-out freeze (deliberately NOT reactive — flipping it must never
@@ -1446,10 +1589,24 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		this.#config = { ...config };
 	}
 
-	/** Initialize the client — loads IDB cache, syncs with server, builds indices. */
-	async init(): Promise<void> {
-		if (typeof window === 'undefined') return; // SSR guard
+	/**
+	 * Initialize the client — loads IDB cache, syncs with server, builds indices.
+	 *
+	 * The returned promise is also stashed as `#ready_promise` (synchronously,
+	 * before any await) so handles can wait for it. `#worker` is assigned as
+	 * soon as the worker module loads, which is well before `worker.init()`
+	 * registers the tables — a query issued in that window comes back
+	 * `Unknown entity type` and leaves the handle empty and in 'error'. Only
+	 * the promise tells the two apart.
+	 */
+	init(): Promise<void> {
+		if (typeof window === 'undefined') return Promise.resolve(); // SSR guard
+		const promise = this.#init();
+		this.#ready_promise = promise;
+		return promise;
+	}
 
+	async #init(): Promise<void> {
 		this.#destroyed = false;
 		// A fresh init un-freezes: after signOut(), a new sign-in calls init()
 		// and the client must come back to life normally.
@@ -1652,6 +1809,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		}
 		const handle = new EntityHandle<T[K], K>(entity_type, id, {
 			getWorker: () => this.#worker,
+			whenReady: () => this.#ready_promise,
 			fetch: this.#config.fetch,
 			trackVersion: (t, i) => this.#trackEntity(t, i),
 			refreshProxy: (t, i) => this.#refreshProxyFor(t, i),
@@ -1952,6 +2110,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	): ListHandle<T[K], K, ListDocument<T[K], Q>> {
 		const deps = (release: () => void) => ({
 			getWorker: () => this.#worker,
+			whenReady: () => this.#ready_promise,
 			fetch: this.#config.fetch,
 			isFrozen: () => this.#frozen,
 			release,
@@ -2096,6 +2255,9 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	/** Cleanup — disconnects from the worker, clears subscriptions. */
 	async destroy(): Promise<void> {
 		this.#destroyed = true;
+		// Nothing left to wait for: a handle that outlives the client must fall
+		// straight through to its fetch path rather than await a dead init.
+		this.#ready_promise = null;
 		if (this.#external_unsubscribe) {
 			this.#external_unsubscribe();
 		}
