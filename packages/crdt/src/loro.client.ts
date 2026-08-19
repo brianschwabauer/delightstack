@@ -15,5 +15,7 @@ export {
 	LoroText,
 	VersionVector,
 	UndoManager,
+	encodeFrontiers,
+	decodeFrontiers,
 } from 'loro-crdt/web';
 export type { Cursor, ContainerID, LoroEventBatch, Frontiers, PeerID } from 'loro-crdt';

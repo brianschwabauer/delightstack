@@ -37,6 +37,11 @@
 			"types": "./dist/server/index.d.ts",
 			"workerd": "./dist/server/index.js",
 			"import": "./dist/server/index.js"
+		},
+		"./client": {
+			"types": "./dist/client/index.d.ts",
+			"svelte": "./dist/client/index.js",
+			"import": "./dist/client/index.js"
 		}
 	},
 	"files": [
@@ -55,6 +60,14 @@
 	"dependencies": {
 		"@delightstack/utilities": "workspace:*",
 		"loro-crdt": "^1.14.1"
+	},
+	"peerDependencies": {
+		"svelte": "^5.36.0"
+	},
+	"peerDependenciesMeta": {
+		"svelte": {
+			"optional": true
+		}
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250724.0",

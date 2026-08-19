@@ -7,9 +7,9 @@ travel and compaction.
 One Durable Object per document. Loro lives **only** inside this package — nothing else in
 your app should import `loro-crdt`.
 
-> **Status.** The server half (`@delightstack/crdt/server`) is implemented. The client
-> (`/client`) and ProseMirror binding (`/prosemirror`) entries are declared but not yet
-> built.
+> **Status.** The server (`@delightstack/crdt/server`) and client
+> (`@delightstack/crdt/client`) halves are implemented. The ProseMirror binding
+> (`/prosemirror`) is not yet built.
 
 ---
 
@@ -102,6 +102,158 @@ Private SQLite inside the Durable Object — not a `@delightstack/database` sche
   Object a synchronous question.
 - `crdt_peer` — the compaction floor (below).
 - `doc_meta` — small key/value bag.
+
+---
+
+## The client
+
+```ts
+import { CrdtClient } from '@delightstack/crdt/client';
+
+const crdt = new CrdtClient({
+  transport,                 // you supply this — see below
+  storage: 'opfs',
+  actor: 'user:abc',
+  quota_bytes: 2_000_000_000,
+});
+
+const handle = await crdt.open(node_id);
+await handle.ready();        // ← the bootstrap gate. Not optional. Read the next section.
+
+handle.transact((doc) => doc.getText('content').insert(0, 'hello'));
+const stop = handle.subscribe((event) => render(event));
+
+crdt.close(node_id);         // resident for 5 more minutes, then snapshotted and dropped
+```
+
+### API
+
+| Member | Sync? | What it does |
+|---|---|---|
+| `open(node_id)` | async | Replays local storage (no network), returns a handle. |
+| `close(node_id)` | sync | Drops one reader. Idle documents are evicted after `idle_evict_ms`. |
+| `evict(node_id)` | async | Snapshot to storage, drop the Loro instance. Memory only. |
+| `purge(node_id)` | async | **Delete** the local copy. The recovery path from a `reset`. |
+| `flush()` / `destroy()` | async | Land every issued write; tear down. |
+| `enforceQuota()` | async | LRU-sweep local storage back under `quota_bytes`. |
+| `sync_state` | `$state` | `synced` / `syncing` / `offline` / `error`. |
+| `pending_count` | `$state` | Local commits not yet acked, across all open documents. |
+
+| Handle member | Sync? | What it does |
+|---|---|---|
+| `doc` | — | The live `LoroDoc`. Read freely; write only via `transact`. |
+| `frontier` | `$state` | Current point in history, as the opaque `Frontier` string. |
+| `loading` / `ready()` | `$state` / async | The bootstrap gate. |
+| `pending_count` | `$state` | This document's unacked commits. |
+| `transact(fn, opts?)` | **sync** | Apply a change, persist it, queue it for send. |
+| `subscribe(fn)` | sync | Loro events. Returns an unsubscribe function. |
+
+Reactive members are Svelte 5 runes, so `svelte` is an **optional peer dependency**. Nothing
+else in the client needs it; a non-Svelte consumer reads the same properties as plain
+getters.
+
+### The bootstrap ordering rule — the one that bites
+
+**Never mount an editor on a handle before `await handle.ready()`.**
+
+A Loro shallow snapshot imports only into a document whose version already covers the
+snapshot's shallow start — an *empty* document being the special case that always works. A
+rich-text editor's very first transaction writes an empty document into the CRDT. One
+operation is enough. After it, a compacted server can never bootstrap that device: `import()`
+returns `{ success: {}, pending: {} }`, throws nothing, and leaves the document untouched.
+Nothing in the Loro API signals this, both sides believe they are fine, and the device simply
+stops syncing forever. This is exactly how the Milestone 0 spike failed.
+
+So `open()` returns a handle that is `loading`, and the gate clears on the **first** of:
+
+1. the first `sync` message from the server;
+2. local storage already holding operations (the document cannot be "empty and dirty", so
+   there is nothing left to protect);
+3. `bootstrap_timeout_ms` (default **1.5s**) — what makes a genuinely offline first run
+   usable.
+
+And the gate has teeth: **`transact()` throws `bootstrap_pending` while `loading`.** Writing
+the rule down was not enough the first time.
+
+### Transport is injected, never owned
+
+There is no WebSocket in this package, on either side. `CrdtClient` takes a `CrdtTransport`:
+
+```ts
+interface CrdtTransport {
+  readonly connected: boolean;
+  send(message: CrdtOutboundMessage): void;
+  onMessage(handler: (m: CrdtInboundMessage) => void): () => void;
+  onConnectionChange(handler: (connected: boolean) => void): () => void;
+}
+```
+
+Messages are structured objects carrying `Uint8Array` payloads, not frames — framing is a
+wire decision. The set maps one-to-one onto the server: `subscribe` → `syncFor()`, `update` →
+`applyUpdate()`, and the server's `sync` / `broadcast` / `ack` / `error` come back. Wire it to
+`@delightstack/websocket`, to a `BroadcastChannel`, or to a test double.
+
+The reason is not purity. In a real app one connection carries metadata sync, presence and
+document bodies; a CRDT package that opens its own is a second socket, a second reconnect
+policy and a second auth handshake. It also makes partitioning a client mid-edit a two-line
+test.
+
+**Your transport must fire `onConnectionChange`.** Re-subscribing on reconnect *is* the
+catch-up protocol — the server answers with a version-vector diff, which covers an offline
+session of any length — so a transport that reconnects silently leaves documents stuck.
+
+### Durability: what `transact()` actually promises
+
+`transact()` is synchronous, and the update blob is appended to the local pending log before
+it returns. Persistence completing and the network send are fire-and-forget.
+
+That promise is only enforceable with `createSyncAccessHandle()`, whose `write()` is genuinely
+synchronous — and which exists **only in a worker**. Run this layer in a SharedWorker. On the
+main thread `OpfsCrdtStorage` still works, via `createWritable()`, but the write is merely
+*queued* synchronously; the instance reports which you got as `opfs.durable`.
+
+Local storage per document is a snapshot plus an append-only log of framed records (updates
+and ack tombstones), folded into a fresh snapshot every `snapshot_every` records. Remote blobs
+are logged too — the snapshot is only rewritten periodically and everything since it has to
+survive a reload. Unacked *local* blobs are re-appended after a fold even though the snapshot
+already contains their operations: the snapshot preserves the content, but only a log record
+preserves the `op_id`, and without it a reload loses the ability to resend.
+
+Sends are debounced by `send_debounce_ms` (default **200ms**) and a run of never-sent commits
+is coalesced into one update by re-exporting from the first one's version vector. The spike
+measured ~90 bytes of CRDT inside a ~175 byte frame per keystroke — half the traffic was
+framing. Blobs that have already been sent are never re-coalesced: that would change their
+`op_id` and defeat the server's deduplication.
+
+`storage: 'idb'` throws `not_implemented`. IndexedDB cannot offer the synchronous append, so
+an IndexedDB backend would silently weaken the contract rather than widen support. Pass a
+`CrdtStorage` of your own, or `MemoryCrdtStorage` for a deliberately non-durable one.
+
+### Eviction and quota
+
+Two different things, deliberately named differently:
+
+- **Memory eviction.** A document stays resident `idle_evict_ms` (default **5 minutes**) after
+  its last reader closes it, then its snapshot is written and the Loro instance is dropped. A
+  later `open()` restores from storage. A document holding unacked commits is *not* evicted —
+  dropping it would leave nothing in memory to resend from.
+- **Quota eviction.** `quota_bytes` (default **2GB**) is a soft cap on total local body
+  storage. `enforceQuota()` deletes whole documents, least-recently-used first. It never
+  touches a resident document, and **never a document holding unacked local commits** — quota
+  pressure must not be a route to losing an edit the server has not seen, so a workspace whose
+  entire quota is unsynced work simply stays over quota.
+
+### `reset` — the data-losing case
+
+If the server answers a `subscribe` with `kind: 'reset'`, this device holds state that
+predates the retained history. Its commits can never be accepted and the server's snapshot can
+never be imported on top of them. The client **does not apply it**: it marks the handle
+unusable (`transact()` throws `reset_required`), sets `sync_state` to `error`, and calls
+`config.on_reset({ node_id, unacked_ops })`. Discarding a user's offline work is a decision a
+UI makes, not a library. Recover with `await crdt.purge(node_id)` then `await crdt.open(...)`.
+
+Register your devices with the server (`syncFor` / `notePeer`) and this stays rare — see the
+peer floor above.
 
 ---
 
@@ -227,6 +379,19 @@ block ids and version vector. Seeded, so a failure is a seed and a seed goes in
 Plus explicit cases for same-offset typing, deleting a block another peer is editing, a peer
 offline for 1,000 operations, duplicate delivery, out-of-causal-order delivery, and a
 compacted peer merging with an uncompacted one.
+
+**`src/__tests__/client.test.ts`** drives `CrdtClient` against the **real**
+`CrdtDocumentServer` over real SQLite, through a loopback transport a test can partition. It
+covers the offline-edit-survives-reload path, the empty-doc-then-compacted-server trap (both
+that it is real and that the gate prevents it), in-order resend with duplicate delivery,
+eviction and restore, and the quota sweeper's refusal to drop unacked work.
+
+OPFS does not exist in Node and no DOM shim implements it, so storage is tested through
+`MemoryCrdtStorage` — the same `CrdtStorage` interface storing the **same framed bytes**, so
+framing, tombstones, log replay, snapshot folding and the quota sweep are all real. What that
+does not cover: that `createSyncAccessHandle().write()` really is synchronous in a browser, the
+main-thread positional-append path, two-worker handle contention, and browser-initiated
+eviction. Those need a browser.
 
 **`src/__tests__/invariants.test.ts`** is one test per invariant, including the real version
 of invariant 3: 10,000 edits with 50 checkpoints scattered through, compaction run to

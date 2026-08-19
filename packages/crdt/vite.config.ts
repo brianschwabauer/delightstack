@@ -1,6 +1,34 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, type Plugin } from 'vitest/config';
+import { transformWithEsbuild } from 'vite';
+import { compileModule } from 'svelte/compiler';
+
+/**
+ * Compile Svelte 5 "runes module" files (`*.svelte.ts`) for tests.
+ *
+ * `CrdtClient` lives in a `.svelte.ts` file and uses `$state` / `$derived`,
+ * which must go through the Svelte compiler. Done inline (esbuild strips the
+ * TS, `compileModule` lowers the runes) rather than by pulling in
+ * `@sveltejs/vite-plugin-svelte`, which would churn the shared build plugin for
+ * every other workspace package. Same approach as `packages/presence`.
+ */
+function svelteRunesModules(): Plugin {
+	return {
+		name: 'crdt:svelte-runes-modules',
+		enforce: 'pre',
+		async transform(code, id) {
+			const file = id.split('?')[0];
+			if (!/\.svelte\.(ts|js)$/.test(file)) return null;
+			const js = file.endsWith('.ts')
+				? (await transformWithEsbuild(code, file, { loader: 'ts' })).code
+				: code;
+			const compiled = compileModule(js, { filename: file, generate: 'client', dev: true });
+			return { code: compiled.js.code, map: compiled.js.map };
+		},
+	};
+}
 
 export default defineConfig({
+	plugins: [svelteRunesModules()],
 	test: {
 		globals: true,
 		environment: 'node',
