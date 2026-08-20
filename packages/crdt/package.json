@@ -55,7 +55,8 @@
 		"dev": "svelte-package -w -i src",
 		"check": "tsgo --noEmit",
 		"typecheck": "tsgo --noEmit",
-		"test": "vitest run"
+		"test": "vitest run && vitest run --config vitest.workers.config.ts",
+		"test:workerd": "vitest run --config vitest.workers.config.ts"
 	},
 	"dependencies": {
 		"@delightstack/utilities": "workspace:*",
@@ -70,6 +71,7 @@
 		}
 	},
 	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.12",
 		"@cloudflare/workers-types": "^4.20250724.0",
 		"@sveltejs/package": "^2.4.0",
 		"@types/node": "^24.1.0",

@@ -33,6 +33,9 @@ export default defineConfig({
 		globals: true,
 		environment: 'node',
 		include: ['**/*.test.ts'],
+		// Runs in workerd against the un-aliased build — see
+		// `vitest.workers.config.ts`. Running it here would defeat its purpose.
+		exclude: ['**/node_modules/**', 'src/__tests__/workerd.test.ts'],
 		testTimeout: 120_000,
 		hookTimeout: 120_000,
 		alias: {
