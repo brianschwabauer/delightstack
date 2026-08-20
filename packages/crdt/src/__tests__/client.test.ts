@@ -54,7 +54,12 @@ import {
 	encodeUpdateRecord,
 	type CrdtHandle,
 } from '../client/index.js';
-import { LoopbackNetwork, tick, waitFor, type LoopbackTransport } from './client_harness.js';
+import {
+	LoopbackNetwork,
+	tick,
+	waitFor,
+	type LoopbackTransport,
+} from './client_harness.js';
 
 const NODE_ID = 'node-1';
 
@@ -394,7 +399,7 @@ describe('reconnect', () => {
 		expect(client.pending_count).toBe(7);
 
 		transport.setConnected(true);
-		await tick(20);
+		await waitFor(() => client.pending_count === 0, { label: 'the burst to be acked' });
 
 		// One blob, not seven — the seven commits were re-exported from the version
 		// vector the first one started at. It may be *delivered* twice (the
@@ -502,7 +507,9 @@ describe('eviction and quota', () => {
 		await tick(10);
 
 		client.close(NODE_ID);
-		await waitFor(() => client.listOpen().length === 1, { label: 'the idle sweep to settle' });
+		await waitFor(() => client.listOpen().length === 1, {
+			label: 'the idle sweep to settle',
+		});
 		expect(client.listOpen()).toEqual([NODE_ID]);
 	});
 
@@ -521,7 +528,12 @@ describe('eviction and quota', () => {
 		const cold = await client.open('cold');
 		await cold.ready();
 		write(cold, 0, 'cold body');
-		await tick(10);
+		// Must be acked before eviction: the sweeper refuses to drop a document
+		// holding unsynced work, so an un-acked `cold` would survive and the
+		// assertion below would be measuring the wrong thing.
+		await waitFor(() => client.pending_count === 0, {
+			label: 'the cold body to be acked',
+		});
 		client.close('cold');
 		await client.evict('cold');
 
@@ -530,7 +542,11 @@ describe('eviction and quota', () => {
 		const unacked = await client.open('unacked');
 		await unacked.ready();
 		write(unacked, 0, 'unacked body');
-		await tick(10);
+		// Acks are off, so wait for the body to reach storage instead.
+		await waitFor(
+			async () => (await storage.list()).some((meta) => meta.node_id === 'unacked'),
+			{ label: 'the unacked body to be persisted' },
+		);
 		transport.setConnected(false);
 		client.close('unacked');
 		await client.evict('unacked');
@@ -539,9 +555,9 @@ describe('eviction and quota', () => {
 			'cold',
 			'unacked',
 		]);
-		expect((await storage.list()).find((meta) => meta.node_id === 'unacked')?.has_unacked).toBe(
-			true,
-		);
+		expect(
+			(await storage.list()).find((meta) => meta.node_id === 'unacked')?.has_unacked,
+		).toBe(true);
 
 		// A quota small enough that everything is over it. The sweeper still
 		// refuses to touch the document holding unsynced work.
@@ -638,7 +654,7 @@ describe('sync state', () => {
 		await served.server.compact({ force: true });
 
 		transport.setConnected(true);
-		await tick(10);
+		await waitFor(() => resets.length > 0, { label: 'the reset verdict to be surfaced' });
 
 		expect(resets).toEqual([{ node_id: NODE_ID, unacked_ops: 1 }]);
 		expect(client.sync_state).toBe('error');
@@ -650,6 +666,14 @@ describe('sync state', () => {
 		await client.purge(NODE_ID);
 		const fresh = await client.open(NODE_ID);
 		await fresh.ready();
+		// `ready()` is not enough on its own here: the gate also clears on
+		// `bootstrap_timeout_ms`, which this client sets to 5ms so the offline
+		// first-run path stays exercised — and that timeout can beat the server's
+		// bootstrap snapshot whenever the machine is busy. What recovery means is
+		// that the content arrives, so wait for the content.
+		await waitFor(() => textOf(fresh.doc).includes('x19'), {
+			label: 'the reopened document to bootstrap from the server',
+		});
 		expect(textOf(fresh.doc)).toContain('x19');
 	});
 });

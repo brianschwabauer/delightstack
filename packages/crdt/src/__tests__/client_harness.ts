@@ -180,12 +180,16 @@ export function tick(ms = 0): Promise<void> {
  * behaviour under test rather than a guess about scheduling.
  */
 export async function waitFor(
-	predicate: () => boolean,
-	{ timeout_ms = 5_000, label = 'condition' }: { timeout_ms?: number; label?: string } = {},
+	predicate: () => boolean | Promise<boolean>,
+	{
+		timeout_ms = 5_000,
+		label = 'condition',
+	}: { timeout_ms?: number; label?: string } = {},
 ): Promise<void> {
 	const deadline = Date.now() + timeout_ms;
-	while (!predicate()) {
-		if (Date.now() > deadline) throw new Error(`Timed out after ${timeout_ms}ms waiting for ${label}`);
+	while (!(await predicate())) {
+		if (Date.now() > deadline)
+			throw new Error(`Timed out after ${timeout_ms}ms waiting for ${label}`);
 		await tick(1);
 	}
 }
