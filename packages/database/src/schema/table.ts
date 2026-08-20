@@ -24,6 +24,7 @@ import type {
 	IsPrimaryKey,
 	IsReadOnly,
 	IsCarried,
+	IsServerOnly,
 	IsSearchable,
 	IsSortable,
 	IsUnique,
@@ -103,6 +104,7 @@ function recursivelyBuildSearchSchema(
 	sortable_fields: string[],
 	carried_fields: string[],
 	file_fields: Record<string, { store: string }>,
+	server_indexed_fields: string[],
 ): AnySearchSchema | SearchableType | undefined {
 	// Collected here rather than in the column loop so a `file()` nested inside
 	// an `object()` is recorded too, at its dot path. The column loop only sees
@@ -128,8 +130,37 @@ function recursivelyBuildSearchSchema(
 				code: 'invalid_schema',
 			});
 		}
+		if ('server_only' in subfield && subfield.server_only) {
+			throw new DelightError({
+				message: `Field '${path}' is both carried and serverOnly(). Carried means the client gets the value and the index does not; serverOnly means the reverse — a field cannot be both.`,
+				status: 400,
+				code: 'invalid_schema',
+			});
+		}
 		if (path) carried_fields.push(path);
 		return;
+	}
+
+	// The "indexed, not synced" tier — the mirror of carried, and checked right
+	// after it. Recorded *in addition to* the normal searchable bookkeeping
+	// below, never instead of it: the server indexes the field exactly as it
+	// always did, and this list is what the wire and the client index subtract.
+	if ('server_only' in subfield && subfield.server_only) {
+		if (!('searchable' in subfield) || !subfield.searchable) {
+			throw new DelightError({
+				message: `Field '${path}' is serverOnly() but not searchable(). A field that is neither synced nor indexed is the default tier — add .searchable(), or drop .serverOnly().`,
+				status: 400,
+				code: 'invalid_schema',
+			});
+		}
+		if ('sortable' in subfield && subfield.sortable) {
+			throw new DelightError({
+				message: `Field '${path}' is both sortable and serverOnly(). A server-only field never reaches the client, so the client index cannot order by it — drop one.`,
+				status: 400,
+				code: 'invalid_schema',
+			});
+		}
+		if (path) server_indexed_fields.push(path);
 	}
 
 	// An object contributes only whichever leaves are themselves searchable —
@@ -151,6 +182,7 @@ function recursivelyBuildSearchSchema(
 					sortable_fields,
 					carried_fields,
 					file_fields,
+					server_indexed_fields,
 				);
 				if (!childSchema) return acc;
 				acc[childFieldName] = childSchema;
@@ -646,7 +678,35 @@ export namespace Database {
 	} & (true extends HasPrimaryKeyField<Table['_']> ? {} : { id: string }) & {
 			created_at: number;
 			updated_at: number;
-		} & CarriedEntity<Table>;
+		} & CarriedEntity<Table> &
+		ServerOnlyEntity<Table>;
+
+	/**
+	 * The server-only half of a {@link SearchEntity} — the fields that are
+	 * indexed on the server and never put on the wire, typed as `never` so
+	 * reading one from a synced document is a compile error rather than `any`.
+	 *
+	 * They stay in {@link SearchSchema}, which describes what the *server*
+	 * indexes. This describes what comes back over the wire.
+	 *
+	 * Typed as absent rather than removed with `Omit`, because
+	 * {@link IndexedDocument} carries an open index signature — it deliberately
+	 * admits dot-notation child paths — so subtracting a key does nothing while
+	 * intersecting one still narrows it.
+	 *
+	 * Only top-level fields are covered, matching {@link CarriedEntity}'s limit:
+	 * a server-only field nested inside an object is stripped at runtime (it is
+	 * in `config.server_indexed_fields`) but is not expressible here.
+	 */
+	export type ServerOnlyEntity<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+	> = {
+		[Key in keyof Table['_'] as IsServerOnly<Table['_'][Key]> extends true
+			? Key
+			: never]?: never;
+	};
 
 	/**
 	 * The carried half of a {@link SearchEntity} — the fields that ride along in
@@ -691,7 +751,7 @@ export namespace Database {
 									type: 'object';
 									properties: infer Properties extends Record<string, FieldGenerator>;
 								};
-							}
+						  }
 						? CarriedField<{ readonly _: Properties }> extends never
 							? never
 							: `${Key}.${CarriedField<{ readonly _: Properties }>}`
@@ -951,6 +1011,14 @@ export namespace Database {
 			 * never be filtered, ordered or searched on.
 			 */
 			carried_fields: CarriedField<{ readonly _: TableConfig }>[];
+			/**
+			 * Searchable paths declared `.serverOnly()`: indexed in the
+			 * Durable Object, never put on the wire. A subset of
+			 * `searchable_fields` — the server treats them like any other
+			 * searchable field, and this list is what the sync payload and the
+			 * client's index subtract.
+			 */
+			server_indexed_fields: string[];
 			/** A record of fields that are foreign keys and reference a different table */
 			foreign_keys: ForeignKeysConfig<TableConfig>;
 			/**
@@ -1037,6 +1105,7 @@ export namespace Database {
 			searchable_fields: string[];
 			sortable_fields: string[];
 			carried_fields: string[];
+			server_indexed_fields: string[];
 			foreign_keys: Record<
 				string,
 				{
@@ -1114,6 +1183,8 @@ export namespace Database {
 		const searchable_fields: string[] = [];
 		const sortable_fields: string[] = [];
 		const carried_fields: string[] = [];
+		/** Searchable paths declared `.serverOnly()` — indexed, never synced. */
+		const server_indexed_fields: string[] = [];
 		const foreign_keys: Record<string, unknown> = {};
 		const derived_fields: Record<string, { foreign_keys?: string[] }> = {};
 		const blob_fields: string[] = [];
@@ -1345,6 +1416,7 @@ export namespace Database {
 				sortable_fields,
 				carried_fields,
 				file_fields,
+				server_indexed_fields,
 			);
 			if (built_schema) {
 				index_schema[fieldName] = built_schema;
@@ -1563,6 +1635,7 @@ export namespace Database {
 				searchable_fields,
 				sortable_fields,
 				carried_fields,
+				server_indexed_fields,
 				unique_fields,
 				readonly_fields,
 				foreign_keys,

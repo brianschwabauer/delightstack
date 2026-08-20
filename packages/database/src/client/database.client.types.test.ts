@@ -24,6 +24,36 @@ type Full = Database.Entity<typeof TEMPLATE>;
 
 declare const db: DatabaseClient<Templates>;
 
+// ── Field tiers ──────────────────────────────────────────────────────────────
+
+const NOTE = Database.table('note', (schema) => ({
+	title: schema.string().searchable(),
+	// Indexed on the server, never on the wire.
+	body: schema.string().searchable().serverOnly(),
+	// The mirror tier: on the wire, never indexed.
+	rendered: schema.string().carried(),
+}));
+
+type NoteSparse = Database.SearchEntity<typeof NOTE>;
+type NoteFull = Database.Entity<typeof NOTE>;
+
+/**
+ * A `serverOnly()` field is absent from the synced document's type.
+ *
+ * This is the reason the tier has a type marker rather than a runtime flag: the
+ * value can never arrive over the wire, so offering it on the client's document
+ * type would be autocomplete for something that is always missing.
+ */
+function assertServerOnlyIsNotInTheSparseDocument() {
+	expectTypeOf<NoteSparse['title']>().toEqualTypeOf<string | undefined>();
+	expectTypeOf<NoteSparse['rendered']>().toEqualTypeOf<string | undefined>();
+	// Typed absent, not merely missing: reading it gets `undefined`, so using it
+	// as a string is a compile error rather than a silent `any`.
+	expectTypeOf<NoteSparse['body']>().toEqualTypeOf<undefined>();
+	// Held back from the wire, not from the database — a full read still has it.
+	expectTypeOf<NoteFull['body']>().toEqualTypeOf<string>();
+}
+
 /** No query, or a query without `sparse: false`, keeps the sparse projection. */
 function assertSparseByDefault() {
 	expectTypeOf(db.list('template').items).toEqualTypeOf<Sparse[]>();

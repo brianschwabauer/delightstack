@@ -91,6 +91,13 @@ export interface WorkerInitConfig {
 			 * README — so the optimistic projection has to be told about them.
 			 */
 			carried_fields?: string[];
+			/**
+			 * Dot-paths declared `.serverOnly()`. Pruned from
+			 * `index_schema` before it reaches here, so the worker is told about
+			 * them separately — it needs the names to route a query that mentions
+			 * one, and to say which field forced the trip.
+			 */
+			server_indexed_fields?: string[];
 			primary_key: string;
 			primary_key_type?: 'string' | 'number';
 		}
@@ -527,7 +534,22 @@ export class DatabaseWorker {
 		}
 		this.#idb_unavailable = false;
 
-		this.#tables = config.tables;
+		// A `.serverOnly()` path is indexed in the Durable
+		// Object and never put on the wire, so the client index must not declare
+		// it: a field the sync payload can never deliver would make every local
+		// document look like it is missing one. Pruned once, here, so everything
+		// downstream reads an `index_schema` that matches what actually arrives.
+		this.#tables = Object.fromEntries(
+			Object.entries(config.tables).map(([name, table]) => [
+				name,
+				table.server_indexed_fields?.length
+					? {
+							...table,
+							index_schema: withoutPaths(table.index_schema, table.server_indexed_fields),
+						}
+					: table,
+			]),
+		);
 		this.#forced_client = new Set(
 			Object.entries(config.entities ?? {})
 				.filter(([, overrides]) => overrides?.search_mode === 'client')
@@ -2057,6 +2079,42 @@ export class DatabaseWorker {
 	}
 
 	/**
+	 * The first field named by this query that is indexed only on the server,
+	 * or `undefined`.
+	 *
+	 * Every place a query can name a property is checked — `where`, `order`,
+	 * `facets`, `boost`, `fields`, `distinct_on` — because naming one of these
+	 * fields means the local index provably cannot answer: the value was never
+	 * synced, so the field is not in the client's schema and every document
+	 * would look like it is missing one.
+	 *
+	 * A bare `term` search is deliberately **not** caught. Its default
+	 * `fields: '*'` means "everything indexed here", which on the client is
+	 * legitimately a subset — that is coverage-based routing doing its job, not
+	 * a query that cannot be answered.
+	 */
+	#serverOnlyFieldIn(entity_type: string, query: SearchQuery): string | undefined {
+		const server_only = this.#tables[entity_type]?.server_indexed_fields;
+		if (!server_only?.length) return undefined;
+		const named = new Set<string>();
+		const add = (value: unknown): void => {
+			if (typeof value === 'string') named.add(value);
+		};
+		for (const field of Object.keys(query.where ?? {})) add(field);
+		for (const entry of query.order ?? []) {
+			if (typeof entry === 'string') add(entry);
+			else if (entry && typeof entry === 'object')
+				add((entry as { field?: unknown }).field);
+		}
+		for (const field of Object.keys(query.facets ?? {})) add(field);
+		for (const field of Object.keys(query.boost ?? {})) add(field);
+		if (Array.isArray(query.fields))
+			for (const field of query.fields as string[]) add(field);
+		add(query.distinct_on);
+		return server_only.find((field) => named.has(field));
+	}
+
+	/**
 	 * The routing decision, in the plan's order.
 	 *
 	 * 1. **Vector (and hybrid) queries always go to the server.** No embeddings
@@ -2079,6 +2137,22 @@ export class DatabaseWorker {
 	 */
 	#routesToClient(state: EntitySyncState, query: SearchQueryInput): boolean {
 		const source = query.source;
+		const server_only = this.#serverOnlyFieldIn(
+			state.client_type.entity_type,
+			query as SearchQuery,
+		);
+		if (server_only) {
+			if (source === 'client') {
+				throw DelightError.transferable({
+					message:
+						`source: 'client' cannot be combined with '${server_only}' — the field is ` +
+						'declared serverOnly() and never reaches the client index',
+					status: 400,
+					code: 'invalid_search_source',
+				});
+			}
+			return false;
+		}
 		if (requiresServer(query as SearchQuery)) {
 			if (source === 'client') {
 				throw DelightError.transferable({
@@ -2777,3 +2851,35 @@ self.addEventListener('connect', (event) => {
 	const port = (event as MessageEvent)?.ports?.[0];
 	if (port) expose(worker, port);
 });
+
+/**
+ * A search schema with the given dot-notation paths removed.
+ *
+ * Keeps `.serverOnly()` fields out of the client's index
+ * schema. Returns the input untouched when there is nothing to remove, and
+ * otherwise copies only the branches it descends into — the schema arrives
+ * from the caller's table config and must not be mutated.
+ */
+export function withoutPaths(
+	schema: Record<string, unknown>,
+	paths: readonly string[],
+): Record<string, unknown> {
+	if (paths.length === 0) return schema;
+	const pruned: Record<string, unknown> = { ...schema };
+	for (const path of paths) {
+		const segments = path.split('.');
+		let container: Record<string, unknown> | undefined = pruned;
+		for (let index = 0; index < segments.length - 1 && container; index++) {
+			const next: unknown = container[segments[index]];
+			if (!next || typeof next !== 'object' || Array.isArray(next)) {
+				container = undefined;
+				break;
+			}
+			const copy: Record<string, unknown> = { ...(next as Record<string, unknown>) };
+			container[segments[index]] = copy;
+			container = copy;
+		}
+		if (container) delete container[segments[segments.length - 1]];
+	}
+	return pruned;
+}

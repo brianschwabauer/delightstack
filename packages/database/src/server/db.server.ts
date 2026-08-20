@@ -918,8 +918,12 @@ export class DatabaseServer<
 	/** Search-table configs, keyed by entity type */
 	#search_tables: Map<string, ServerSearchTable> = new Map();
 
-	/** Vector-typed schema paths per entity type — the sync strip list (§7.0) */
-	#vector_paths: Map<string, string[]> = new Map();
+	/**
+	 * Paths held back from the wire, per entity type: vector fields (§7.0) plus
+	 * every path declared `.serverOnly()`. Both are indexed
+	 * here and neither is synced, so one list drives one strip.
+	 */
+	#unsynced_paths: Map<string, string[]> = new Map();
 
 	/**
 	 * Per-type sqlite column metadata, derived once from the (immutable) table
@@ -2953,22 +2957,29 @@ export class DatabaseServer<
 
 	/**
 	 * The sparse document as the wire ships it (sync AND sparse `list()`
-	 * responses): vector fields removed.
+	 * responses): vector fields and server-only searchable fields removed.
 	 *
 	 * One place, both engines (§7.0). The server keeps indexing the full sparse
 	 * doc — this strip is the *wire* contract, and it is client-observable: an
 	 * app that used to read `entity.embedding` off a synced entity no longer can.
+	 * A field declared `.serverOnly()` is held back the same
+	 * way and for the same reason: it is indexed where it lives and too large to
+	 * copy to every device.
 	 */
 	private toSyncDocument(
 		entity_type: string,
 		doc: Record<string, unknown>,
 	): Record<string, unknown> {
-		let paths = this.#vector_paths.get(entity_type);
+		let paths = this.#unsynced_paths.get(entity_type);
 		if (!paths) {
-			paths = vectorFieldPaths(this.config[entity_type]?.config?.index_schema);
-			this.#vector_paths.set(entity_type, paths);
+			const config = this.config[entity_type]?.config;
+			paths = [
+				...vectorFieldPaths(config?.index_schema),
+				...(config?.server_indexed_fields ?? []),
+			];
+			this.#unsynced_paths.set(entity_type, paths);
 		}
-		return stripVectorFields(doc, paths);
+		return stripUnsyncedFields(doc, paths);
 	}
 
 	/**
@@ -4746,22 +4757,25 @@ function vectorFieldPaths(schema: unknown, prefix = ''): string[] {
 }
 
 /**
- * A sparse document with its vector fields removed (§7.0's one carve-out).
+ * A sparse document with its unsynced fields removed (§7.0's carve-out).
  *
  * The server indexes the full sparse doc; sync ships — and the client indexes —
- * *sparse doc minus vector fields*, because vector search is server-only and an
- * embedding is by far the heaviest thing in a document. Returns the input
- * untouched when the table declares no vectors, so the common table pays one
+ * *sparse doc minus these paths*. Two kinds qualify, for one reason: the value
+ * is indexed where it already lives and is too heavy to copy to every device.
+ * Vector fields, because an embedding is by far the largest thing in a
+ * document and vector search is server-only; and fields declared
+ * `.serverOnly()`, typically a full body of text. Returns
+ * the input untouched when there are none, so the common table pays one
  * array-length check; otherwise it returns a **copy**, since callers may hand
  * us a document that must not be mutated.
  */
-function stripVectorFields(
+function stripUnsyncedFields(
 	doc: Record<string, unknown>,
-	vector_paths: readonly string[],
+	unsynced_paths: readonly string[],
 ): Record<string, unknown> {
-	if (vector_paths.length === 0) return doc;
+	if (unsynced_paths.length === 0) return doc;
 	const stripped: Record<string, unknown> = { ...doc };
-	for (const path of vector_paths) {
+	for (const path of unsynced_paths) {
 		const segments = path.split('.');
 		let container: Record<string, unknown> | undefined = stripped;
 		for (let index = 0; index < segments.length - 1 && container; index++) {

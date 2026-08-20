@@ -92,6 +92,33 @@ export interface DatabaseFieldBase {
 	/** Whether the field can be fuzzy searched and indexed by the search engine. If 'primary' is true, this is ignored */
 	searchable?: boolean;
 
+	/**
+	 * Whether the field is *server-only* — indexed in the Durable Object, and
+	 * never put on the wire.
+	 *
+	 * The field tiers are two independent questions — does the value reach the
+	 * client, and is it indexed — and this fills the last corner:
+	 *
+	 * |                | not indexed | indexed        |
+	 * |----------------|-------------|----------------|
+	 * | **not synced** | the default | `serverOnly()` |
+	 * | **synced**     | `carried()` | `searchable()` |
+	 *
+	 * It is the mirror image of {@link DatabaseFieldBase.carried}: carried means
+	 * the client gets the value and the index does not, server-only means the
+	 * index gets it and the client does not. That is the only way to make a
+	 * large field — a full document body — searchable without shipping a copy
+	 * to every device. A query naming such a field routes to the server,
+	 * exactly as `vector` and `sparse: false` queries already do.
+	 *
+	 * Only meaningful alongside `searchable`: a field that is neither synced nor
+	 * indexed is simply the default tier, so `serverOnly()` without
+	 * `searchable()` throws at build. So does combining it with `carried`
+	 * (contradictory) or `sortable` (the client index cannot order by a value it
+	 * never receives).
+	 */
+	server_only?: boolean;
+
 	/** Whether the field should be indexed by sqlite. If 'primary' is true, this is ignored */
 	indexable?: boolean;
 
@@ -306,7 +333,7 @@ export interface ObjectField<
 /** The options for an array field */
 export interface ArrayField<Items extends FieldGenerator> extends Pick<
 	DatabaseFieldBase,
-	'optional' | 'readonly' | 'searchable'
+	'optional' | 'readonly' | 'searchable' | 'server_only'
 > {
 	type: 'array';
 	/** The type of items in the array */
@@ -475,6 +502,7 @@ export type Indexable<T extends { _: any }> = T & { _: T['_'] & { indexable: tru
 export type Unique<T extends { _: any }> = T & { _: T['_'] & { unique: true } };
 export type Sortable<T extends { _: any }> = T & { _: T['_'] & { sortable: true } };
 export type Carried<T extends { _: any }> = T & { _: T['_'] & { carried: true } };
+export type ServerOnly<T extends { _: any }> = T & { _: T['_'] & { server_only: true } };
 export type OptionalValue<T extends { _: any }> = T & { _: T['_'] & { optional: true } };
 export type ReadOnly<T extends { _: any }> = T & { _: T['_'] & { readonly: true } };
 export type DerivedValue<T extends { _: any }> = T & { _: T['_'] & { derived: true } };
@@ -549,6 +577,13 @@ export type IsSortable<T> = T extends { _: (infer _U) & { sortable: true } }
  * document and every sync payload, absent from the search index.
  */
 export type IsCarried<T> = T extends { _: (infer _U) & { carried: true } } ? true : false;
+/**
+ * Whether a field is in the "indexed, not synced" tier — present in the search
+ * index on the server, absent from every sync payload and the client index.
+ */
+export type IsServerOnly<T> = T extends { _: (infer _U) & { server_only: true } }
+	? true
+	: false;
 export type IsOptional<T> = T extends { _: (infer _U) & { optional: true } }
 	? true
 	: false;

@@ -4,6 +4,7 @@ import type {
 	BlobField,
 	BooleanField,
 	Carried,
+	ServerOnly,
 	DatabaseFieldType,
 	DefaultedValue,
 	DerivedValue,
@@ -118,6 +119,22 @@ abstract class SearchableFieldGenerator extends CarriableFieldGenerator {
 	searchable(): Omit<Searchable<this>, 'searchable'> {
 		this._.searchable = true;
 		return this as Omit<Searchable<this>, 'searchable'>;
+	}
+
+	/**
+	 * Indexes the field on the server and keeps it off the wire — the mirror
+	 * image of {@link CarriableFieldGenerator.carried}. Carried means the client
+	 * gets the value and the index does not; server-only means the index gets it
+	 * and the client does not.
+	 *
+	 * The way to make a large field — a full document body — searchable without
+	 * shipping a copy to every device. Combine with `.searchable()`, in either
+	 * order; alone it would describe a field that is neither synced nor indexed,
+	 * which is just the default tier, and throws at build.
+	 */
+	serverOnly(): Omit<ServerOnly<this>, 'serverOnly'> {
+		this._.server_only = true;
+		return this as Omit<ServerOnly<this>, 'serverOnly'>;
 	}
 
 	/** Whether the field can be used for sorting results */
@@ -740,6 +757,15 @@ export class ArrayFieldGenerator<
 			this._.searchable = true;
 		}
 		return this as Omit<Searchable<this>, 'searchable'>;
+	}
+
+	/**
+	 * Indexes the array on the server and keeps it off the wire. See
+	 * {@link SearchableFieldGenerator.serverOnly}.
+	 */
+	serverOnly(): Omit<ServerOnly<this>, 'serverOnly'> {
+		this._.server_only = true;
+		return this as Omit<ServerOnly<this>, 'serverOnly'>;
 	}
 
 	/** Sets the minimum length of the array */

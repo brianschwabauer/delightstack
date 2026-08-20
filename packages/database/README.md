@@ -379,14 +379,15 @@ schema.foreignKey({
 
 Foreign key constraints are always enforced in Durable Object SQLite (workerd compiles it with foreign keys ON by default).
 
-### Field tiers: indexed, carried, excluded
+### Field tiers: indexed, carried, server-only, excluded
 
-Whether a field reaches the client and whether it is searchable are two separate questions. There are three tiers:
+Whether a field reaches the client and whether it is searchable are two separate questions, and every combination of the two is expressible:
 
 | Tier | In `sync()` / the client's cached entity | In the search index |
 | --- | --- | --- |
-| **searchable** — `.searchable()` / `.sortable()` | yes | yes |
+| **searchable** — `.searchable()` / `.sortable()` | yes | yes, both sides |
 | **carried** — `.carried()` | yes | **no** |
+| **server-only** — `.searchable().serverOnly()` | **no** | yes, server only |
 | **excluded** — the default | no | no |
 
 A **carried** field is delivered to the client but never tokenized. It gets no entry in `index_schema`, joins neither `searchable_fields` nor `sortable_fields`, and cannot be used in a `where` clause, in `order`, or in a search's `fields` list — attempting any of those is a compile error in a typed schema, and a `DelightError` (`carried_field_not_queryable`, status 400) at runtime.
@@ -406,6 +407,34 @@ Reach for `.carried()` for anything a client renders but nobody searches: a rend
 Know the cost, though: a carried field is shipped to **every** client on **every** change to the row, and stored in each one's IndexedDB. A multi-megabyte carried value bloats the sync payload and the client's local cache in proportion — the tier exists precisely for largish values, so this is a trade to make deliberately rather than a rule against it.
 
 `.carried()` exists on every field type **except `blob()`**, and is mutually exclusive with `.searchable()` / `.sortable()` — declaring both throws when the table is built. Only *top-level* carried fields appear in the `SearchEntity` type; a field carried from inside an object is projected at runtime and listed in `config.carried_fields`, but is not expressible in the type.
+
+#### Server-only searchable fields
+
+`.serverOnly()` indexes a field in the Durable Object and keeps it out of the sync payload. It is the mirror image of `.carried()`: carried means the client gets the value and the index does not, server-only means the index gets it and the client does not.
+
+```typescript
+const note = Database.table('note', (s) => ({
+	id: s.primaryKey(),
+	title: s.string().searchable(), // synced and indexed everywhere
+	body: s.string().searchable().serverOnly(), // indexed here, never shipped
+}));
+```
+
+Combine it with `.searchable()` in either order. On its own it would describe a field that is neither synced nor indexed — which is just the default tier — so it throws when the table is built.
+
+This is the only way to make a large field full-text searchable without copying it to every device. A full document body is the motivating case: you want `term` search across every body in the vault, and you emphatically do not want every body in every client's IndexedDB.
+
+A query that **names** such a field — in `where`, `order`, `facets`, `boost`, `fields`, or `distinct_on` — routes to the server, the same way `vector` and `sparse: false` queries already do. Forcing `source: 'client'` on one is a `DelightError` (`invalid_search_source`, status 400) naming the field, because the local index provably cannot answer it.
+
+A bare `term` search is deliberately *not* redirected. Its default `fields: '*'` means "everything indexed here", and on the client that is legitimately a subset — ordinary coverage-based routing, not an unanswerable query. If you need a term search to see body text, ask for the server.
+
+Three things follow from the tier being server-only:
+
+- **It cannot be `.sortable()`,** and it cannot be `.carried()`. Sorting is something the client index does too, and it cannot order by a value it never receives; carried is the opposite tier outright. Both throw when the table is built.
+- **The value is held back from the wire, not from the database.** `db.get()` and any `sparse: false` read return it as normal — it is the *sync* payload and the *client* index that never see it.
+- **It is typed absent on the synced document.** `SearchEntity` gives the field type `undefined`, so reading it from a synced entity is a compile error rather than a silent `any`. The full `Entity` type still has it.
+
+There is deliberately no client-only counterpart. `index_schema` is a single object and the server indexes whatever it stores, so a client-only tier would mean maintaining a second, divergent schema. A value only the client needs is `.carried()`.
 
 ### Binary Data & File References
 
