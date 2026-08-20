@@ -160,7 +160,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		expect(inbox.count).toBe(8);
 		// ~700ms locally, but 2-vCPU CI runners have run it anywhere from 2s to
 		// past vitest's 5s default — which blocked two releases on pure noise.
-	}, 20_000);
+	}, 60_000);
 
 	it('a single sync page larger than 1000 docs loses nothing (2026-08-10 incident)', async () => {
 		// Prod shape: a fresh client (config_version 0) gets the ENTIRE dataset in
@@ -207,7 +207,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 			limit: 100,
 		} as any);
 		expect(inbox.count).toBe(50);
-	}, 20_000);
+	}, 60_000);
 
 	it('one invalid document in a sync page loses only itself, never the page tail', async () => {
 		const { server } = await createTestServer();
@@ -362,7 +362,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 		expect(result?.mode).toBe('client');
 		expect(result?.count).toBe(190);
 		// Same CI headroom as the multi-page backfill above (2s+ on slow runners).
-	}, 20_000);
+	}, 60_000);
 
 	it('legacy equal-timestamp runs are never split across sync pages', async () => {
 		// Bypass create() (which makes timestamps strictly monotonic) and seed
