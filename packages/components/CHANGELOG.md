@@ -1,5 +1,43 @@
 # @delightstack/components
 
+## 1.6.0
+
+### Minor Changes
+
+- be57fd5: `Tree`: a bindable `focused` prop, type-ahead, and keys typed into a control are left alone
+
+  - `bind:focused` exposes the node the keyboard cursor is on. Focus and selection are
+    separate in a tree — the arrows move the cursor and `Enter` selects — so an action
+    outside the tree ("new sibling of the current node", rename, context menu) had no way
+    to name the node the user is actually on.
+  - Typing printable characters jumps to the next node whose label starts with them,
+    which is the one list behaviour every native tree has and this one did not. The
+    buffer resets after 700ms and repeating a single character cycles the matches.
+  - Keystrokes and clicks that originate inside an `<input>`, `<textarea>`, `<select>`
+    or a `contenteditable` element are no longer claimed by the tree, so a control
+    rendered by the `node_content` snippet keeps its own arrows, `Home`/`End` and
+    `Enter`. An inline rename field was previously unusable.
+
+### Patch Changes
+
+- 9161971: `Tree`: collapsed branches are no longer rendered
+
+  - The tree mounted every descendant it was given, expanded or not. A 10,000-node
+    tree with two rows on screen put 10,520 `<li>` and 54,680 elements in the
+    document, and every keystroke then paid for all of them: one arrow press cost
+    ~28ms of main thread where the same press on the same tree now costs ~2ms.
+    Collapsed branches are mounted when they open and unmounted once the closing
+    animation has run, so DOM size follows what is open rather than how much data
+    was handed in — the same fixture is now 20 `<li>` and 140 elements.
+  - The expand animation grows `grid-template-rows: 0fr → 1fr`, which needs the
+    rows to exist and their collapsed state to be committed before the open state
+    is applied. Opening therefore takes two steps a style pass apart rather than
+    one, and reduced motion skips straight to the open state as it did before.
+  - Nothing changes for a consumer who was not hitting this: props, events and
+    bindings are untouched, and a tree small enough to mount whole renders the same
+    DOM once it is open. Code that reaches into the tree with `querySelector` will
+    only find rows inside open branches.
+
 ## 1.5.2
 
 ### Patch Changes
