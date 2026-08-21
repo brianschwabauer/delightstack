@@ -300,6 +300,20 @@ interface FlatTreeNode {
 }
 ```
 
+## Large Trees
+
+A collapsed branch is not rendered. The tree puts a branch's children in the
+document when it opens and takes them out again once the closing animation has
+finished, so the number of elements on the page follows what is open rather than
+how much data was passed in — a 10,000-node tree with everything collapsed is
+twenty rows of DOM, not ten thousand.
+
+That is invisible from the outside: `expanded`, `selected` and `focused` still
+name any node in `data`, keyboard navigation still walks the whole visible order,
+and `filter` still searches every node whether or not its branch is open. What it
+does mean is that `document.querySelector` only finds rows inside open branches —
+code reaching into the tree's DOM should read the node data instead.
+
 ## Keyboard Navigation
 
 | Key | Action |

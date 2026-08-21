@@ -37,7 +37,7 @@
 </script>
 
 <script lang="ts">
-	import { setContext, type Snippet } from 'svelte';
+	import { setContext, tick, untrack, type Snippet } from 'svelte';
 
 	const propId = $props.id();
 
@@ -328,6 +328,156 @@
 
 		onexpand?.({ node, expanded: !was_expanded });
 	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Child mounting                                                    */
+	/* ------------------------------------------------------------------ */
+
+	/*
+	 * A collapsed subtree is not rendered, so the number of elements in the
+	 * document follows what is open rather than how much data was handed in.
+	 *
+	 * That has to be reconciled with the expand animation, which grows the
+	 * child group's `grid-template-rows` from `0fr` to `1fr`: the rows must
+	 * already exist, and the browser must have computed their collapsed state,
+	 * before the open state is applied. Mounting and revealing are therefore
+	 * two steps a style pass apart — `mounted_ids` puts the group in the
+	 * document at `0fr`, and `shown_ids` flips it to `1fr` once that has been
+	 * committed. Collapsing runs the same pair backwards, unmounting only
+	 * after the closing transition has had its time.
+	 */
+
+	/** Matches the `.children` transition duration in the stylesheet below. */
+	const EXPAND_DURATION = 200;
+
+	/** Every open branch, walking only through branches that are themselves open. */
+	function collectOpenIds(): Set<string> {
+		const ids = new Set<string>();
+		function walk(nodes: TreeNode[]) {
+			for (const node of nodes) {
+				if (!isNodeVisible(node)) continue;
+				if (!hasChildren(node) || !isExpanded(node.id)) continue;
+				ids.add(node.id);
+				walk(getVisibleChildren(node));
+			}
+		}
+		walk(tree);
+		return ids;
+	}
+
+	/**
+	 * The CSS drops the expand transition under reduced motion; the mount
+	 * sequencing has to agree with it, so it asks the same question here.
+	 */
+	function prefersReducedMotion(): boolean {
+		return (
+			typeof window !== 'undefined' &&
+			window.matchMedia('(prefers-reduced-motion: reduce)').matches
+		);
+	}
+
+	/** Branches whose child group is in the document. */
+	let mounted_ids = $state(collectOpenIds());
+	/** Branches whose child group is at full height. A subset of the above. */
+	let shown_ids = $state(collectOpenIds());
+
+	const unmount_timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+	function scheduleUnmount(node_id: string) {
+		unmount_timers.set(
+			node_id,
+			setTimeout(
+				() => {
+					unmount_timers.delete(node_id);
+					const next = new Set(mounted_ids);
+					if (next.delete(node_id)) mounted_ids = next;
+				},
+				prefersReducedMotion() ? 0 : EXPAND_DURATION,
+			),
+		);
+	}
+
+	/**
+	 * Settle a freshly mounted group's collapsed style.
+	 *
+	 * A group that has only just been put in the document has no computed style
+	 * yet, so applying the open state in the same pass would land on full height
+	 * with nothing to transition from. Reading a computed value settles the
+	 * collapsed state, and that is where the transition then starts. It has to
+	 * be read off the group itself — a read higher up the tree only brings that
+	 * element's own ancestor chain up to date. `opacity` does not depend on
+	 * layout, so this costs a style recalculation and no reflow. The value is
+	 * returned so the read is not mistaken for a statement with no effect.
+	 */
+	function commitCollapsedStyle(group: Element): string {
+		return getComputedStyle(group).opacity;
+	}
+
+	async function revealAfterMount(ids: string[]) {
+		await tick();
+		const next = new Set(shown_ids);
+		for (const node_id of ids) {
+			if (!mounted_ids.has(node_id)) continue;
+			const group = tree_element?.querySelector(
+				`[data-node-id="${node_id}"] > .children`,
+			);
+			if (group) commitCollapsedStyle(group);
+			next.add(node_id);
+		}
+		shown_ids = next;
+	}
+
+	function reconcileMounts(open: Set<string>) {
+		const next_mounted = new Set(mounted_ids);
+		const next_shown = new Set(shown_ids);
+		const reduced = prefersReducedMotion();
+		const fresh: string[] = [];
+
+		for (const node_id of open) {
+			const pending = unmount_timers.get(node_id);
+			if (pending !== undefined) {
+				clearTimeout(pending);
+				unmount_timers.delete(node_id);
+			}
+			if (next_mounted.has(node_id)) {
+				// Still in the document from a collapse that has not finished —
+				// its collapsed height is already committed, so it can open now.
+				next_shown.add(node_id);
+			} else {
+				next_mounted.add(node_id);
+				if (reduced) next_shown.add(node_id);
+				else fresh.push(node_id);
+			}
+		}
+
+		// Deleting the entry the loop is currently on is safe in a Set.
+		for (const node_id of next_shown) {
+			if (open.has(node_id)) continue;
+			next_shown.delete(node_id);
+			scheduleUnmount(node_id);
+		}
+
+		// A branch mounted for an expand that was undone before it opened.
+		for (const node_id of next_mounted) {
+			if (open.has(node_id)) continue;
+			if (next_shown.has(node_id) || unmount_timers.has(node_id)) continue;
+			scheduleUnmount(node_id);
+		}
+
+		mounted_ids = next_mounted;
+		shown_ids = next_shown;
+		if (fresh.length > 0) revealAfterMount(fresh);
+	}
+
+	$effect(() => {
+		const open = collectOpenIds();
+		untrack(() => reconcileMounts(open));
+	});
+
+	$effect(() => () => {
+		for (const timer of unmount_timers.values()) clearTimeout(timer);
+		unmount_timers.clear();
+	});
 
 	/* ------------------------------------------------------------------ */
 	/*  Selection                                                         */
@@ -1189,8 +1339,8 @@
 			</div>
 
 			<!-- Children container with grid expand animation -->
-			{#if has_kids && children.length > 0}
-				<div class="children" class:show={node_expanded}>
+			{#if has_kids && children.length > 0 && mounted_ids.has(node.id)}
+				<div class="children" class:show={shown_ids.has(node.id)}>
 					<ul role="group" style:--line-offset="calc({level - 1} * var(--_indent))">
 						{#each children as child, child_index (child.id)}
 							{@render treeNode(child, level + 1, child_index)}
