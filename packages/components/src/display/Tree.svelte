@@ -51,6 +51,17 @@
 		/** Expanded node IDs, bindable */
 		expanded = $bindable([]) as string[],
 
+		/**
+		 * The ID of the node the keyboard cursor is on, bindable. `null` while
+		 * the tree does not have focus.
+		 *
+		 * Focus and selection are separate in a tree: the arrow keys move the
+		 * cursor, and `Enter`/`Space` selects what it is on. Read this when an
+		 * action outside the tree needs the node the user is *looking at* —
+		 * "new sibling of the current node", a context menu, a rename.
+		 */
+		focused = $bindable(null) as string | null,
+
 		/** Enable node selection */
 		selectable = false,
 
@@ -560,7 +571,6 @@
 	/*  Focus management                                                  */
 	/* ------------------------------------------------------------------ */
 
-	let focused_id = $state<string | null>(null);
 	let keyboard_nav = $state(false);
 	/* True while the current focus was driven by a pointer press. Chromium
 	   matches :focus-visible on a modifier-held click (ctrl/shift), which would
@@ -570,7 +580,7 @@
 	let tree_element: HTMLElement | undefined = $state(undefined);
 
 	function focusNode(node_id: string) {
-		focused_id = node_id;
+		focused = node_id;
 		// Scroll the focused element into view
 		if (tree_element) {
 			const el = tree_element.querySelector(`[data-node-id="${node_id}"]`) as HTMLElement;
@@ -582,7 +592,72 @@
 	/*  Keyboard navigation                                               */
 	/* ------------------------------------------------------------------ */
 
+	/**
+	 * Whether a keystroke was typed into a control rather than at the tree.
+	 *
+	 * A `node_content` snippet may render an input — an inline rename is the
+	 * usual reason — and inside one every key the tree binds means something
+	 * else: `ArrowLeft` moves the caret, `Home` goes to the start of the line,
+	 * `Enter` commits. Claiming them there would make the control unusable, so
+	 * the tree lets anything typed into one through untouched.
+	 */
+	function isFromEditable(e: Event): boolean {
+		const target = e.target as HTMLElement | null;
+		if (!target || target === tree_element) return false;
+		const tag = target.tagName;
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+		return target.isContentEditable === true;
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Type-ahead                                                        */
+	/* ------------------------------------------------------------------ */
+
+	/** How long typed characters accumulate into one search before it resets. */
+	const TYPEAHEAD_TIMEOUT = 700;
+
+	let typeahead_buffer = '';
+	let typeahead_timer: ReturnType<typeof setTimeout> | undefined;
+
+	/**
+	 * Jump the cursor to the next visible node whose label starts with what has
+	 * been typed, wrapping past the current one.
+	 *
+	 * Repeating a single character cycles through the nodes starting with it,
+	 * which is what every native tree does and what makes the feature usable
+	 * without looking at a search box that isn't there.
+	 */
+	function typeAhead(char: string) {
+		clearTimeout(typeahead_timer);
+		typeahead_timer = setTimeout(() => {
+			typeahead_buffer = '';
+		}, TYPEAHEAD_TIMEOUT);
+
+		const repeat =
+			typeahead_buffer.length > 0 && typeahead_buffer.split('').every((c) => c === char);
+		typeahead_buffer = repeat ? char : typeahead_buffer + char;
+
+		const visible = getVisibleNodeOrder();
+		if (visible.length === 0) return;
+		const start = focused ? visible.indexOf(focused) : -1;
+		const term = typeahead_buffer.toLowerCase();
+		// A continued search re-tests the node the cursor is already on, so
+		// typing "re" after "r" refines rather than skipping to the next match.
+		const offset = repeat || typeahead_buffer.length === 1 ? 1 : 0;
+
+		for (let step = offset; step < visible.length + offset; step++) {
+			const candidate = visible[(start + step + visible.length) % visible.length];
+			const node = node_map.get(candidate);
+			if (!node || node.disabled) continue;
+			if (node.label.toLowerCase().startsWith(term)) {
+				focusNode(candidate);
+				return;
+			}
+		}
+	}
+
 	function handleTreeKeyDown(e: KeyboardEvent) {
+		if (isFromEditable(e)) return;
 		// A lone modifier press (holding Ctrl/Shift before a multi-select click)
 		// isn't keyboard navigation — leave the modality untouched, or the
 		// focus-visible ring would flash between pressing the modifier and the
@@ -595,8 +670,8 @@
 		const visible = getVisibleNodeOrder();
 		if (visible.length === 0) return;
 
-		const current_idx = focused_id ? visible.indexOf(focused_id) : -1;
-		const current_node = focused_id ? node_map.get(focused_id) : null;
+		const current_idx = focused ? visible.indexOf(focused) : -1;
+		const current_node = focused ? node_map.get(focused) : null;
 
 		switch (e.key) {
 			case 'ArrowDown': {
@@ -687,6 +762,14 @@
 					}
 				}
 				break;
+			}
+			default: {
+				// Type-ahead. Modified keystrokes belong to the page's shortcuts,
+				// not to the tree, and only single characters are text.
+				if (e.ctrlKey || e.metaKey || e.altKey) break;
+				if ([...e.key].length !== 1 || e.key === ' ') break;
+				e.preventDefault();
+				typeAhead(e.key.toLowerCase());
 			}
 		}
 	}
@@ -890,7 +973,7 @@
 		class:pointer-focus={pointer_focus}
 		{id}
 		role="tree"
-		aria-activedescendant={focused_id ? `${id}-node-${focused_id}` : undefined}
+		aria-activedescendant={focused ? `${id}-node-${focused}` : undefined}
 		aria-multiselectable={multi_select || undefined}
 		tabindex="0"
 		bind:this={tree_element}
@@ -900,14 +983,14 @@
 			pointer_focus = true;
 		}}
 		onfocusin={() => {
-			if (!focused_id) {
+			if (!focused) {
 				const visible = getVisibleNodeOrder();
-				if (visible.length > 0) focused_id = visible[0];
+				if (visible.length > 0) focused = visible[0];
 			}
 		}}
 		onfocusout={(e) => {
 			if (!tree_element?.contains(e.relatedTarget as Node)) {
-				focused_id = null;
+				focused = null;
 				pointer_focus = false;
 			}
 		}}>
@@ -924,7 +1007,7 @@
 		{@const has_kids = hasChildren(node) || hasLoadableChildren(node)}
 		{@const is_loading = loading_ids.has(node.id)}
 		{@const is_selected = selected.includes(node.id)}
-		{@const is_focused = focused_id === node.id}
+		{@const is_focused = focused === node.id}
 		{@const check_state = checkboxes ? getCheckState(node) : null}
 		{@const is_drag_target = drop_target_id === node.id}
 		<li
@@ -971,6 +1054,10 @@
 					keyboard_nav = false;
 				}}
 				onclick={(e) => {
+					// A control the `node_content` snippet rendered owns its own
+					// clicks — reaching into a rename field should not also
+					// re-select the row it is in.
+					if (isFromEditable(e)) return;
 					if (isNodeSelectable(node)) {
 						selectNode(node, e);
 					} else if (has_kids || hasLoadableChildren(node)) {
@@ -978,6 +1065,7 @@
 					}
 				}}
 				onkeydown={(e) => {
+					if (isFromEditable(e)) return;
 					if (e.key === 'Enter' || e.key === ' ') {
 						e.preventDefault();
 						e.stopPropagation();

@@ -243,6 +243,7 @@ Use `dense` for compact node spacing or `comfortable` for relaxed spacing. The d
 | `data` | `TreeNode[] \| FlatTreeNode[]` | required | Tree data (nested or flat with parent IDs) |
 | `selected` | `string[]` | `[]` | Selected node IDs (bindable) |
 | `expanded` | `string[]` | `[]` | Expanded node IDs (bindable) |
+| `focused` | `string \| null` | `null` | The node the keyboard cursor is on (bindable); `null` when the tree is not focused |
 | `selectable` | `boolean` | `false` | Enable node selection |
 | `multi_select` | `boolean` | `false` | Allow multiple selection |
 | `checkboxes` | `boolean` | `false` | Show checkboxes for selection |
@@ -311,6 +312,11 @@ interface FlatTreeNode {
 | Home | Move focus to first visible node |
 | End | Move focus to last visible node |
 | * (asterisk) | Expand all siblings of the focused node |
+| Printable characters | Type-ahead — jumps to the next node whose label starts with what you typed. The buffer resets after 700ms; repeating one character cycles through the nodes starting with it |
+
+Keystrokes that originate inside an `<input>`, `<textarea>`, `<select>` or a
+`contenteditable` element — an inline rename rendered by `node_content`, say —
+are left alone, so the control keeps its own arrows, Home/End and Enter.
 
 ## Accessibility
 
