@@ -7,9 +7,9 @@ travel and compaction.
 One Durable Object per document. Loro lives **only** inside this package — nothing else in
 your app should import `loro-crdt`.
 
-> **Status.** The server (`@delightstack/crdt/server`) and client
-> (`@delightstack/crdt/client`) halves are implemented. The ProseMirror binding
-> (`/prosemirror`) is not yet built.
+> **Status.** All three entry points are implemented: the server
+> (`@delightstack/crdt/server`), the client (`@delightstack/crdt/client`) and the
+> ProseMirror binding (`@delightstack/crdt/prosemirror`).
 
 ---
 
@@ -30,6 +30,7 @@ point is the only place its build is named:
 ```ts
 import { CrdtDocumentServer } from '@delightstack/crdt/server';  // loro-crdt/bundler
 import { … } from '@delightstack/crdt/client';                   // loro-crdt/web (streaming)
+import { loroPlugins } from '@delightstack/crdt/prosemirror';    // loro-crdt/web (browser)
 import type { Frontier } from '@delightstack/crdt';              // types only, no wasm
 ```
 
@@ -359,6 +360,146 @@ the editor layer.
 
 ---
 
+## The ProseMirror binding
+
+```ts
+import { EditorState } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
+import { keymap } from 'prosemirror-keymap';
+import { loroPlugins, loroUndoKeymap } from '@delightstack/crdt/prosemirror';
+
+const handle = await crdt.open(node_id);
+await handle.ready();                       // ← never mount an editor before this
+
+const state = EditorState.create({
+  schema,
+  plugins: [keymap(loroUndoKeymap), ...loroPlugins({ crdt: handle })],
+});
+const view = new EditorView(element, { state });
+```
+
+It lives here, not in `@delightstack/editor`, so the editor never takes a wasm dependency —
+and so the one package allowed to import `loro-crdt` stays the one package that does.
+`prosemirror-model` and `prosemirror-state` are **optional peers**: nothing in `/server` or
+`/client` reaches them, so a Worker bundle never sees ProseMirror and a browser bundle
+without an editor never sees it either.
+
+### The document shape
+
+A `pm_doc` node is a `LoroMap`; its inline content is one `LoroText` **run** per stretch of
+text between inline atoms, carrying marks as Loro rich-text styles.
+
+```
+LoroMap { nodeName: 'paragraph',
+          attributes: LoroMap { block_id: 'x7…' },
+          children:   LoroList [ LoroText('hello '), LoroMap{nodeName:'wikilink'}, … ] }
+```
+
+Character-level concurrency lives in the text runs; everything structural lives in the
+lists. Block ids are ordinary attrs, so they are preserved by the same mechanism that
+preserves a heading level.
+
+### The four things it does differently from `loro-prosemirror`
+
+That package was the reference, and reading it is still the fastest way to understand the
+shape. As published (0.4.3) it does not work, and the fixes are not patches:
+
+1. **Writes are reconciled, not rewritten.** Typing one character emits **one** Loro
+   operation. Replacing a paragraph's text container because a character changed would
+   destroy every concurrent edit inside it and mint a new container per keystroke.
+2. **Remote changes arrive as minimal ProseMirror steps.** The projection reuses the *same
+   node objects* for untouched subtrees, so the diff finds the changed range by reference
+   comparison and emits a step over that range — not `tr.replace(0, doc.content.size, …)`,
+   which throws away decorations and node views on every remote keystroke.
+3. **The caret is anchored before the import, and restored in the same transaction.**
+   Upstream builds its Loro `Cursor` from the absolute position *after* importing, so it
+   anchors to whichever character slid into that offset, then restores a tick later in a
+   `setTimeout`. Measured in the spike: caret at 11, a peer inserts five characters at 0,
+   caret still reads 11 and the next keystroke lands mid-word. Here it reads 16.
+4. **Undo is Loro's, scoped to the local peer — and the encoding has to cooperate.**
+   `prosemirror-history`'s stack is a list of steps applied to *this editor*, which includes
+   a collaborator's paragraph and an agent's rewrite, so `Cmd+Z` deletes someone else's work.
+   Loro's `UndoManager` is bound to one peer id and cannot revert another peer's changes.
+
+   That is necessary and **not sufficient**, which is the part worth writing down. Undoing an
+   operation that *created a container* deletes the container, and a deleted container takes
+   every concurrent edit inside it — there is nothing left to rebase onto. So A typing the
+   first word into an empty paragraph, B typing into the same paragraph, and A pressing
+   `Cmd+Z` used to leave B with nothing. Containers are therefore created in their own commit
+   under an origin the undo manager excludes (see `createScaffolding` in `write.ts`), so an
+   undo step holds only the characters somebody typed.
+
+   Undoing **block** creation still removes the block, contents and all. That is a real
+   structural edit the user made, and undoing "press Enter" has to remove the paragraph.
+
+### API
+
+| Export | What it is |
+|---|---|
+| `loroPlugins({ crdt, actor?, merge_interval_ms?, max_steps? })` | Both plugins, in the order they must be installed. |
+| `loroSync({ crdt, actor? })` / `loroSyncKey` | The sync plugin. |
+| `loroUndo({ merge_interval_ms?, max_steps? })` / `loroUndoKey` | The undo plugin. Install **after** `loroSync`. |
+| `undo` / `redo` / `canUndo(state)` / `canRedo(state)` / `loroUndoKeymap` | Commands, in place of `prosemirror-history`'s. |
+| `LoroPmBinding` / `PmHost` | The binding object, and the editor surface it drives. An `EditorView` satisfies `PmHost`; so does a test double. |
+| `crdtBindingFromDoc(doc)` | Drive a bare `LoroDoc` with no client behind it — for a Durable Object, and for tests. |
+| `pmDocFromLoro(schema, doc, mapping?)` | The projection, read-only. |
+| `writePmDocToLoro(doc, pm_doc, mapping?, deferred?)` | The reconciliation, one commit. Call inside a `transact()`. |
+| `commitPmDoc(crdt, pm_doc, mapping, opts?)` | The reconciliation as commits, splitting scaffolding out of the undo step. What the binding and `restorePmDoc` use. |
+| `createScaffolding(doc, deferred)` | Creates the containers a deferred write postponed. |
+| `pmDocAtFrontier(schema, doc, frontier)` | The `pm_doc` at an old version, read from a fork. |
+| `restorePmDoc(binding, pm_doc, opts?)` | Make the document equal an old `pm_doc` by writing forward. |
+| `applyPmDiff(tr, old_doc, new_doc)` | The minimal-step diff, on its own. |
+| `caretAnchorAt` / `resolveCaretAnchor` | The cursor machinery, on its own. |
+
+### Two rules the editor has to keep
+
+**Mount after `handle.ready()`.** `transact()` throws `bootstrap_pending` until the
+bootstrap gate clears, and an editor's first transaction writes an empty document into the
+CRDT — which is exactly what makes a device unbootstrappable from a compacted server.
+
+**Do not install `prosemirror-history`.** In `@delightstack/editor`, the `history` option is
+the seam: pass it a factory returning a `HistoryImplementation` and it hands over `Mod-z`,
+`undo()`, `redo()`, `can_undo` and `can_redo` together.
+
+```ts
+import { loroPlugins, undo, redo, canUndo, canRedo } from '@delightstack/crdt/prosemirror';
+
+new Editor({
+  doc_id: node_id,
+  history: () => ({ plugins: loroPlugins({ crdt: handle }), undo, redo, canUndo, canRedo }),
+});
+```
+
+### Restore, and where the schema knowledge lives
+
+`restore()` on the server uses Loro's `revertTo`, which needs the target version still in
+the op log — so a checkpoint that survived compaction only as a snapshot can be **read** but
+not reverted to, and throws `restore_unreachable`. That gap closes here, because the fix
+needs to know what a document *is*:
+
+```ts
+const old = pmDocAtFrontier(schema, handle.doc, frontier);
+restorePmDoc(binding, old);      // minimal forward-written operations
+```
+
+### Restrictions
+
+- **The second peer must import before it binds.** Two peers seeding an empty root container
+  concurrently is a last-write-wins race on one map key. In the app the bootstrap gate makes
+  this unreachable; in a test, import first.
+- **A detached (checked-out) document is not editable.** The plugin reports
+  `editable: false` while time travel is on. Getting an old version back into the document
+  is a restore, which writes forward — and `restorePmDoc` refuses a detached document with
+  `pm_detached` rather than writing operations at a point history has moved past.
+- **The first character typed into an empty block costs three commits, not one.** Two of
+  them are usually empty; the split is what keeps undo from deleting a container. Every
+  other keystroke is one commit, and the client coalesces unsent commits anyway.
+- **The undo stack lives in the plugin's state.** Rebuilding the plugin array (rather than
+  reconfiguring around the same plugin instances) mints a new `UndoManager` and drops the
+  stack. The plugin frees the manager when the editor view is destroyed.
+
+---
+
 ## Tests
 
 ```bash
@@ -397,6 +538,14 @@ eviction. Those need a browser.
 of invariant 3: 10,000 edits with 50 checkpoints scattered through, compaction run to
 completion, then all 50 checked out and compared byte for byte against what the document
 said at the time.
+
+**`src/__tests__/prosemirror.test.ts`** drives two bound editors through a headless
+`PmHost`. It asserts the round trip (nesting, marks, an inline atom, attrs), that rewriting
+the same `pm_doc` emits *zero* operations and appending one character emits *one*, that a
+remote insert before the caret produces a single `ReplaceStep` over the inserted range and
+moves the caret from 11 to 16, that untouched blocks come back reference-equal with their
+block ids intact, that two editors typing in the same paragraph converge, and that undo
+takes this peer's sentence and leaves the other peer's paragraph alone.
 
 The Durable Object harness (`src/__tests__/do_harness.ts`) runs the real class against real
 SQLite via `node:sqlite`. A mock that records SQL strings can prove the statements were
