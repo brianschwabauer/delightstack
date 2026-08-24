@@ -1,5 +1,12 @@
 # @delightstack/docs
 
+## 0.0.17
+
+### Patch Changes
+
+- Updated dependencies [aa84486]
+  - @delightstack/editor@1.2.0
+
 ## 0.0.16
 
 ### Patch Changes
