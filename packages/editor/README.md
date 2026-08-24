@@ -135,6 +135,39 @@ Things unit tests can't cover — verify in the example app (`/editor`) after me
 - [ ] Read-only mode hides all chrome; `/editor/rendered` matches the editor's appearance
 - [ ] Undo/redo across all of the above behaves sanely
 
+## Replacing undo (`history`)
+
+`history` takes `false`, an options object, or a factory. A factory that returns a bare
+`Plugin[]` swaps the plugin only; one that returns a `HistoryImplementation` takes over
+`Mod-z`/`Mod-y`/`Mod-Shift-z`, `undo()`, `redo()`, `can_undo` and `can_redo` as a set:
+
+```ts
+interface HistoryImplementation {
+  plugins: Plugin[];
+  undo: Command;
+  redo: Command;
+  canUndo(state: EditorState): boolean;
+  canRedo(state: EditorState): boolean;
+}
+```
+
+They move together on purpose. An editor whose keyboard drives one undo stack while its
+toolbar reports another's depth is worse than one with no undo at all.
+
+This is what a CRDT binding needs. With `@delightstack/crdt/prosemirror` the undo stack
+belongs to Loro and is scoped to the local peer — `prosemirror-history`'s stack is a list of
+steps applied to *this editor*, which includes a collaborator's paragraph and an agent's
+rewrite, so `Cmd+Z` would delete someone else's work.
+
+```ts
+import { loroPlugins, undo, redo, canUndo, canRedo } from '@delightstack/crdt/prosemirror';
+
+const editor = new Editor({
+  doc_id: node_id,
+  history: () => ({ plugins: loroPlugins({ crdt: handle }), undo, redo, canUndo, canRedo }),
+});
+```
+
 ## Roadmap (designed, not yet built)
 
 Collaboration (prosemirror-collab + Durable Object authority over `@delightstack/websocket`), presence cursors (`@delightstack/presence`), comments (`@delightstack/database`), version history / time travel, AI suggestions (`@delightstack/ai`), `@` mentions, and layout/columns blocks. The core ships the seams these need: isomorphic schema + `schemaHash`, injectable history, a wrappable dispatch funnel, stable `block_id` attrs, the generic trigger-menu plugin, multi-source decorations, read-only state swap, and `EditorTransport`.

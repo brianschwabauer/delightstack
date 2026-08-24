@@ -39,6 +39,23 @@ import { builtinCommands } from './builtin-commands.js';
 import { suggestion, type SuggestionOptions } from './plugins/suggestion.js';
 import type { SuggestionHandler } from '../types/index.js';
 
+/**
+ * A complete replacement for the editor's undo stack.
+ *
+ * Returning one of these from the `history` option — instead of a bare plugin
+ * list — hands over `Mod-z`, `undo()`, `redo()`, `can_undo` and `can_redo`
+ * together. They have to move together: an editor whose toolbar reports
+ * ProseMirror's undo depth while its keyboard drives someone else's stack is
+ * worse than one with no undo at all.
+ */
+export interface HistoryImplementation {
+	plugins: Plugin[];
+	undo: PMCommand;
+	redo: PMCommand;
+	canUndo(state: EditorState): boolean;
+	canRedo(state: EditorState): boolean;
+}
+
 export interface EditorOptions {
 	/** Initial document as ProseMirror JSON */
 	content?: JSONContent | null;
@@ -65,8 +82,30 @@ export interface EditorOptions {
 	 * Undo/redo. `false` disables, an options object configures
 	 * prosemirror-history, and a factory replaces it entirely (the seam the
 	 * collab extension uses to install rebase-aware history).
+	 *
+	 * A factory that returns a {@link HistoryImplementation} rather than a bare
+	 * plugin list also takes over `undo()`, `redo()`, `can_undo` and `can_redo`
+	 * and the `Mod-z` bindings. That is what a CRDT binding needs: with
+	 * `@delightstack/crdt/prosemirror` the undo stack belongs to Loro and is
+	 * scoped to the local peer, so ProseMirror's own stack — which would gladly
+	 * undo a collaborator's or an agent's edit — must not be installed *and*
+	 * must not be what the toolbar asks.
+	 *
+	 * ```ts
+	 * import { loroPlugins, undo, redo, canUndo, canRedo }
+	 *   from '@delightstack/crdt/prosemirror';
+	 *
+	 * new Editor({
+	 *   doc_id: node_id,
+	 *   history: () => ({ plugins: loroPlugins({ crdt: handle }), undo, redo,
+	 *                     canUndo, canRedo }),
+	 * });
+	 * ```
 	 */
-	history?: boolean | { new_group_delay?: number } | ((schema: Schema) => Plugin[]);
+	history?:
+		| boolean
+		| { new_group_delay?: number }
+		| ((schema: Schema) => Plugin[] | HistoryImplementation);
 	/** Paste behavior (markdown parsing, custom HTML transform) */
 	paste?: PasteOptions;
 	link?: {
@@ -119,6 +158,8 @@ export class Editor {
 	#view: EditorView | null = null;
 	#pmState: EditorState;
 	#historyEnabled: boolean;
+	/** Set when the `history` factory returned a full implementation. */
+	#history_impl: HistoryImplementation | null = null;
 	#decorationSources = new Map<string, DecorationBuilder>();
 	#listeners = new Map<EditorEvent, Set<(editor: Editor, tr?: Transaction) => void>>();
 	#dispatchWrappers: ((tr: Transaction, next: (tr: Transaction) => void) => void)[] = [];
@@ -337,10 +378,12 @@ export class Editor {
 	}
 
 	undo(): boolean {
+		if (this.#history_impl) return this.exec(this.#history_impl.undo);
 		return this.#historyEnabled && this.exec(undo);
 	}
 
 	redo(): boolean {
+		if (this.#history_impl) return this.exec(this.#history_impl.redo);
 		return this.#historyEnabled && this.exec(redo);
 	}
 
@@ -641,10 +684,38 @@ export class Editor {
 			if (block.input_rules) blockRules.push(...block.input_rules(this.schema));
 		}
 		if (blockRules.length) plugins.push(inputRules({ rules: blockRules }));
-		plugins.push(...buildKeymaps(this.schema, { history: this.#historyEnabled }));
+		let history_impl: HistoryImplementation | null = null;
+		let history_plugins: Plugin[] = [];
+		if (typeof historyOption === 'function') {
+			const provided = historyOption(this.schema);
+			if (Array.isArray(provided)) history_plugins = provided;
+			else {
+				history_impl = provided;
+				history_plugins = provided.plugins;
+			}
+		}
+		this.#history_impl = history_impl;
+
+		// A replacement implementation owns `Mod-z` too — leaving
+		// prosemirror-history's commands bound would make the keyboard and the
+		// toolbar disagree about what undo means.
+		plugins.push(
+			...buildKeymaps(this.schema, {
+				history: this.#historyEnabled && !history_impl,
+			}),
+		);
+		if (history_impl) {
+			plugins.push(
+				keymap({
+					'Mod-z': history_impl.undo,
+					'Mod-y': history_impl.redo,
+					'Mod-Shift-z': history_impl.redo,
+				}),
+			);
+		}
 
 		if (typeof historyOption === 'function') {
-			plugins.push(...historyOption(this.schema));
+			plugins.push(...history_plugins);
 		} else if (historyOption !== false) {
 			const config = typeof historyOption === 'object' ? historyOption : {};
 			plugins.push(history({ newGroupDelay: config.new_group_delay ?? 250 }));
@@ -707,7 +778,10 @@ export class Editor {
 				this.#active_marks = computeActiveMarks(state);
 				this.#active_block = computeActiveBlock(state);
 			}
-			if (this.#historyEnabled) {
+			if (this.#history_impl) {
+				this.#can_undo = this.#history_impl.canUndo(state);
+				this.#can_redo = this.#history_impl.canRedo(state);
+			} else if (this.#historyEnabled) {
 				this.#can_undo = undoDepth(state) > 0;
 				this.#can_redo = redoDepth(state) > 0;
 			}

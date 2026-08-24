@@ -3,6 +3,7 @@ export {
 	type ActiveBlockInfo,
 	type EditorEvent,
 	type EditorOptions,
+	type HistoryImplementation,
 	type SelectionInfo,
 } from './editor.svelte.js';
 export { CommandRegistry } from './registry.svelte.js';

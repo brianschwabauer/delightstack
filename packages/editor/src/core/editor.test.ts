@@ -119,6 +119,44 @@ describe('Editor', () => {
 		editor.destroy();
 	});
 
+	it('a history implementation takes over undo, redo and their availability', () => {
+		const calls: string[] = [];
+		let available = true;
+		const editor = new Editor({
+			content: textDoc('a'),
+			history: () => ({
+				plugins: [],
+				undo: () => {
+					calls.push('undo');
+					return true;
+				},
+				redo: () => {
+					calls.push('redo');
+					return true;
+				},
+				canUndo: () => available,
+				canRedo: () => !available,
+			}),
+		});
+
+		flushSync();
+		expect(editor.can_undo).toBe(true);
+		expect(editor.can_redo).toBe(false);
+
+		expect(editor.undo()).toBe(true);
+		expect(editor.redo()).toBe(true);
+		expect(calls).toEqual(['undo', 'redo']);
+
+		// prosemirror-history is not installed, so its own stack must not be what
+		// the editor reports — a CRDT binding owns undo entirely or not at all.
+		available = false;
+		editor.dispatch(editor.state.tr.insertText('b', 2));
+		flushSync();
+		expect(editor.can_undo).toBe(false);
+		expect(editor.can_redo).toBe(true);
+		editor.destroy();
+	});
+
 	it('getJSON strips uploading nodes by default', () => {
 		const editor = new Editor({
 			blocks: [
