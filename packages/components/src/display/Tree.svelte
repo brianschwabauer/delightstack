@@ -38,6 +38,15 @@
 
 <script lang="ts">
 	import { setContext, tick, untrack, type Snippet } from 'svelte';
+	import {
+		applySelection,
+		clearSelection,
+		extendSelection,
+		fromIDs,
+		gestureOf,
+		selectAll,
+		type SelectionState,
+	} from './selection.js';
 
 	const propId = $props.id();
 
@@ -612,34 +621,12 @@
 			return;
 		}
 
-		if (multi_select && e && (e.ctrlKey || e.metaKey)) {
-			if (selected.includes(node.id)) {
-				selected = selected.filter((id) => id !== node.id);
-			} else {
-				selected = [...selected, node.id];
-			}
-		} else if (multi_select && e && e.shiftKey) {
-			// Range select based on visible order
-			const visible = getVisibleNodeOrder();
-			const last_selected = selected.length > 0 ? selected[selected.length - 1] : null;
-			if (last_selected) {
-				const from_idx = visible.indexOf(last_selected);
-				const to_idx = visible.indexOf(node.id);
-				if (from_idx !== -1 && to_idx !== -1) {
-					const start = Math.min(from_idx, to_idx);
-					const end = Math.max(from_idx, to_idx);
-					const range = visible.slice(start, end + 1);
-					const new_selected = new Set(selected);
-					for (const id of range) new_selected.add(id);
-					selected = [...new_selected];
-				} else {
-					selected = [node.id];
-				}
-			} else {
-				selected = [node.id];
-			}
+		if (multi_select) {
+			commitSelection(
+				applySelection(selectionState(), node.id, getSelectableOrder(), gestureOf(e)),
+			);
 		} else {
-			selected = [node.id];
+			commitSelection({ ids: [node.id], anchor: node.id, lead: node.id });
 		}
 
 		onselect?.({ node, selected });
@@ -680,6 +667,95 @@
 		}
 		walk(tree);
 		return order;
+	}
+
+	/**
+	 * The rows a selection gesture can reach — visible, and selectable.
+	 *
+	 * A range is measured over this rather than over every visible row, so
+	 * shift-clicking across a disabled separator selects what is on either side
+	 * of it and not the separator itself.
+	 */
+	function getSelectableOrder(): string[] {
+		return getVisibleNodeOrder().filter((id) => {
+			const node = node_map.get(id);
+			return !!node && !node.disabled && isNodeSelectable(node);
+		});
+	}
+
+	/* ------------------------------------------------------------------ */
+	/*  Multi-select                                                      */
+	/* ------------------------------------------------------------------ */
+
+	/**
+	 * The anchor and the far end of the current range.
+	 *
+	 * `selected` is the bindable array and stays the source of truth for *what*
+	 * is selected; these two say what the next `shift`-click or `shift+↑` means,
+	 * which the array cannot — "the last id in the array" is not the anchor, and
+	 * treating it as one is what makes a second shift-click ratchet outward
+	 * instead of re-ranging. See `selection.ts`.
+	 */
+	let anchor_id = $state<string | null>(null);
+	let lead_id = $state<string | null>(null);
+
+	/**
+	 * A copy of the ids this component last produced.
+	 *
+	 * Compared by *contents* to tell our own write apart from an assignment made
+	 * by the consumer. Ours carries an anchor; theirs does not, and the model is
+	 * rebuilt around what they set.
+	 *
+	 * By contents rather than by identity because identity does not survive the
+	 * round trip: `selected` is a `$bindable`, so writing it hands the array to
+	 * the consumer's `$state`, which deep-proxies it — and the proxy that comes
+	 * back is never `===` the array that went out. An identity check would
+	 * therefore fail on every gesture and re-derive the anchor from the last id
+	 * in the array, which is exactly the ratchet this model exists to prevent.
+	 */
+	let own_selection: string[] = [];
+
+	function sameSelection(ids: readonly string[]): boolean {
+		if (ids.length !== own_selection.length) return false;
+		for (let i = 0; i < ids.length; i++) {
+			if (ids[i] !== own_selection[i]) return false;
+		}
+		return true;
+	}
+
+	function selectionState(): SelectionState {
+		if (sameSelection(selected)) {
+			return { ids: [...selected], anchor: anchor_id, lead: lead_id };
+		}
+		return fromIDs(selected, getSelectableOrder());
+	}
+
+	function commitSelection(next: SelectionState) {
+		selected = next.ids;
+		own_selection = [...next.ids];
+		anchor_id = next.anchor;
+		lead_id = next.lead;
+	}
+
+	/**
+	 * `shift+↑` / `shift+↓` — extend the range and take the cursor with it.
+	 *
+	 * With nothing selected the extension starts from the cursor rather than
+	 * from the top of the tree: the row the user is looking at is the one they
+	 * mean, and starting anywhere else selects rows that are not on screen.
+	 */
+	function extendSelectionByKey(step: -1 | 1) {
+		const order = getSelectableOrder();
+		if (order.length === 0) return;
+		let state = selectionState();
+		if (state.ids.length === 0 && focused && order.includes(focused)) {
+			state = { ids: [focused], anchor: focused, lead: focused };
+		}
+		const next = extendSelection(state, step, order);
+		commitSelection(next);
+		if (next.lead) focusNode(next.lead);
+		const node = next.lead ? node_map.get(next.lead) : undefined;
+		if (node) onselect?.({ node, selected });
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -826,6 +902,10 @@
 		switch (e.key) {
 			case 'ArrowDown': {
 				e.preventDefault();
+				if (multi_select && e.shiftKey && !checkboxes) {
+					extendSelectionByKey(1);
+					break;
+				}
 				const next = current_idx + 1;
 				if (next < visible.length) {
 					focusNode(visible[next]);
@@ -834,10 +914,38 @@
 			}
 			case 'ArrowUp': {
 				e.preventDefault();
+				if (multi_select && e.shiftKey && !checkboxes) {
+					extendSelectionByKey(-1);
+					break;
+				}
 				const prev = current_idx - 1;
 				if (prev >= 0) {
 					focusNode(visible[prev]);
 				}
+				break;
+			}
+			case 'Escape': {
+				// Claimed only when there is a selection to drop, so Escape still
+				// reaches whatever the tree is inside of — a drawer, a modal — the
+				// rest of the time.
+				//
+				// When it *is* claimed it is stopped here, and that is the universal
+				// rule rather than a preference: Escape closes the topmost layer,
+				// and while a selection is up the selection is the topmost layer.
+				// Letting it through as well would clear the selection and close the
+				// drawer on one press, which is one press too few to see what
+				// happened. The second press finds nothing selected and propagates.
+				if (!multi_select || selected.length === 0) break;
+				e.preventDefault();
+				e.stopPropagation();
+				commitSelection(clearSelection());
+				break;
+			}
+			case 'a':
+			case 'A': {
+				if (!multi_select || !(e.ctrlKey || e.metaKey) || e.altKey) break;
+				e.preventDefault();
+				commitSelection(selectAll(selectionState(), getSelectableOrder()));
 				break;
 			}
 			case 'ArrowRight': {

@@ -102,7 +102,7 @@ have the exact types. Do not guess prop names.
 - `Stat` — Key metric display with labels, icons, change indicators (docs: /components/display/stat.md)
 - `Table` — Data table: sorting, pagination, selection, inline editing, CSV/JSON export (docs: /components/display/table.md)
 - `Timeline` / `TimelineItem` — Chronological events, vertical/horizontal, scroll-reveal (docs: /components/display/timeline.md)
-- `Tree` — Hierarchical data with expand/collapse, checkboxes, drag-and-drop, lazy loading, search (docs: /components/display/tree.md)
+- `Tree` — Hierarchical data with expand/collapse, checkboxes, drag-and-drop, lazy loading, search, and multi-select (`shift`/`mod` click, `shift+↑/↓`, `mod+a`, `escape`) (docs: /components/display/tree.md)
 - `Typewriter` — Character-by-character typing animation with text cycling (docs: /components/display/typewriter.md)
 
 ### Feedback

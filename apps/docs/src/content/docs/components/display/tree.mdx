@@ -326,7 +326,17 @@ code reaching into the tree's DOM should read the node data instead.
 | Home | Move focus to first visible node |
 | End | Move focus to last visible node |
 | * (asterisk) | Expand all siblings of the focused node |
+| Shift + Arrow Up/Down | Extend the selection one row, taking the cursor with it (`multi_select`) |
+| Mod + A | Select every visible node (`multi_select`) |
+| Escape | Clear the selection — claimed only when there is one to clear (`multi_select`) |
 | Printable characters | Type-ahead — jumps to the next node whose label starts with what you typed. The buffer resets after 700ms; repeating one character cycles through the nodes starting with it |
+
+With `multi_select`, clicking follows the same rules as the pointer half: `mod`-click toggles one
+node, `shift`-click takes the range from the anchor, and `mod+shift`-click keeps the rest. The
+anchor stays where the last plain or `mod`-click put it, so a second, closer `shift`-click narrows
+the range rather than ratcheting it outward. The rules live in the exported selection model
+(`applySelection`, `extendSelection`, `selectionGestureOf`), which `List` and `Table` can adopt
+through the same functions.
 
 Keystrokes that originate inside an `<input>`, `<textarea>`, `<select>` or a
 `contenteditable` element — an inline rename rendered by `node_content`, say —

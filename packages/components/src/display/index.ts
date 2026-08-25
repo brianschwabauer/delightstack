@@ -14,6 +14,18 @@ export { default as Expand } from './Expand.svelte';
 export { default as List } from './List.svelte';
 export { default as ListItem } from './ListItem.svelte';
 export { default as QR } from './QR.svelte';
+export {
+	applySelection,
+	clearSelection,
+	EMPTY_SELECTION,
+	extendSelection,
+	fromIDs as selectionFromIDs,
+	gestureOf as selectionGestureOf,
+	selectAll as selectionSelectAll,
+	type SelectionGesture,
+	type SelectionModifiers,
+	type SelectionState,
+} from './selection.js';
 export { default as SplitPane } from './SplitPane.svelte';
 export { default as Stat } from './Stat.svelte';
 export { default as Table } from './Table.svelte';
