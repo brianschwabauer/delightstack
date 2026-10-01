@@ -118,6 +118,16 @@ export class DelightError extends Error {
 				message = errors[0]?.message;
 				status = 400;
 			} else if (error instanceof Error) {
+				// A DelightError that crossed a Workers RPC boundary (a Durable
+				// Object method, a service binding) arrives as a plain Error whose
+				// own properties — status, code, detail, errors — survived the
+				// trip, but whose prototype did not. Read them off the instance
+				// first; a JSON envelope in the message (transferable()) still wins.
+				const own = error as unknown as Record<string, unknown>;
+				if (typeof own.status === 'number') status = own.status;
+				if (typeof own.code === 'string') code = own.code;
+				if (typeof own.detail === 'string') detail = own.detail;
+				if (Array.isArray(own.errors)) errors = own.errors as DelightErrorData[];
 				try {
 					const parsed = JSON.parse(error.message.replace(/^[^{]+/, ''));
 					if (parsed?.status) status = parsed.status;
