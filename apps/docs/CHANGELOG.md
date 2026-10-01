@@ -1,5 +1,14 @@
 # @delightstack/docs
 
+## 0.0.19
+
+### Patch Changes
+
+- Updated dependencies [b9668c0]
+  - @delightstack/components@1.8.0
+  - @delightstack/editor@1.2.1
+  - @delightstack/presence@2.0.2
+
 ## 0.0.18
 
 ### Patch Changes
