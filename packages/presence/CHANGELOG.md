@@ -1,5 +1,14 @@
 # @delightstack/presence
 
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies [2721e99]
+  - @delightstack/utilities@1.2.1
+  - @delightstack/auth@1.2.2
+  - @delightstack/websocket@2.1.9
+
 ## 2.0.1
 
 ### Patch Changes
