@@ -79,17 +79,20 @@ The browser uses the user's OS preference. When they switch their system theme, 
 
 ### Toggle with JavaScript
 
-To let users override the system preference, change the `color-scheme` property at runtime:
+To let users override the system preference, set `data-theme` on `<html>` (`@delightstack/styles` maps it to `color-scheme`) and remove it to follow the system again:
 
 ```javascript
 function setMode(mode) {
-  document.documentElement.style.colorScheme = mode;
+  if (mode === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = mode;
 }
 
-setMode('dark');         // Force dark
-setMode('light');        // Force light
-setMode('light dark');   // Follow system
+setMode('dark');    // Force dark
+setMode('light');   // Force light
+setMode('auto');    // Follow system
 ```
+
+Don't set `style.colorScheme` inline for this. A production build that lowers `light-dark()` (Lightning CSS, Vite's default CSS minifier, does) replaces each call with custom properties that only stylesheet `color-scheme` rules set, so an inline style switches nothing.
 
 ## The ThemeToggle Component
 
@@ -103,7 +106,7 @@ DelightStack includes a `ThemeToggle` component that handles all of this for you
 <ThemeToggle />
 ```
 
-The `ThemeToggle` cycles between three states: **light**, **dark**, and **auto** (system preference). It updates the `color-scheme` property on `<html>` and remembers the user's choice across sessions.
+The `ThemeToggle` cycles between three states: **light**, **dark**, and **auto** (system preference). It sets `data-theme` on `<html>` (removing it for auto) and remembers the user's choice across sessions.
 
 ## Using `light-dark()` in Your Own CSS
 
@@ -210,16 +213,14 @@ If you allow users to choose a theme (stored in `localStorage`), apply the prefe
 ```html
 <head>
   <script>
-    const stored = localStorage.getItem('theme');
-    if (stored === 'dark') {
-      document.documentElement.style.colorScheme = 'dark';
-    } else if (stored === 'light') {
-      document.documentElement.style.colorScheme = 'light';
-    }
+    try {
+      const stored = localStorage.getItem('delightstack:theme');
+      if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+    } catch {}
   </script>
 </head>
 ```
 
 <Aside>
-The `ThemeToggle` component handles this automatically — it injects an inline script that reads the stored preference before the page renders.
+`delightstack:theme` is the key `ThemeToggle` saves to, so this script applies the toggle's last choice before the page renders. The component itself only runs after hydration.
 </Aside>

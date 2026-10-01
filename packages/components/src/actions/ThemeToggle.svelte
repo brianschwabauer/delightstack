@@ -22,6 +22,13 @@
 		/** Whether the system/auto option should be disabled (only light/dark) */
 		disable_auto = false,
 
+		/**
+		 * Apply the theme to `<html>` (as `data-theme`). Set false for a
+		 * display-only toggle, such as a demo or preview, that still cycles,
+		 * stores the choice and updates its own icon but leaves the page alone.
+		 */
+		apply_theme = true,
+
 		/** Show a text label beside the icon ("Light" / "Dark" / "Auto"). */
 		show_label = false,
 
@@ -77,8 +84,16 @@
 		};
 	});
 
+	// Apply through `data-theme`, the attribute @delightstack/styles maps to
+	// `color-scheme`; 'auto' removes it so the OS preference takes over. Never an
+	// inline `color-scheme`: a build that lowers `light-dark()` (Lightning CSS,
+	// Vite's default CSS minifier) swaps each one for variables that only the
+	// stylesheet's own color-scheme rules set, so an inline style is ignored.
 	$effect(() => {
-		document.documentElement.style.colorScheme = effectiveDark ? 'dark' : 'light';
+		if (!apply_theme) return;
+		const root = document.documentElement;
+		if (theme === 'auto') delete root.dataset.theme;
+		else root.dataset.theme = theme;
 	});
 
 	function persistTheme(value: 'light' | 'dark' | 'auto') {

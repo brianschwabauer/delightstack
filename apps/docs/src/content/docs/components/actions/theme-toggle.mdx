@@ -14,8 +14,10 @@ import { ThemeToggle } from '@delightstack/components';
 
 ## Basic Usage
 
+The live demos on this page are display-only: they cycle their icon and label but leave this site's theme alone (each passes `apply_theme={false}`). Use the switch in the site header to change the theme.
+
 <ComponentPreview code={`<ThemeToggle />`}>
-	<ThemeToggle client:load />
+	<ThemeToggle client:load apply_theme={false} />
 </ComponentPreview>
 
 ## Examples
@@ -40,7 +42,7 @@ Bind to the `theme` prop to read or control the current theme preference.
 Disable the system/auto option to cycle only between light and dark.
 
 <ComponentPreview code={`<ThemeToggle disable_auto />`}>
-	<ThemeToggle client:load disable_auto />
+	<ThemeToggle client:load apply_theme={false} disable_auto />
 </ComponentPreview>
 
 ### With a Text Label
@@ -49,8 +51,8 @@ Set `show_label` to display the current mode name ("Light" / "Dark" / "Auto") be
 
 <ComponentPreview code={`<ThemeToggle show_label />
 <ThemeToggle show_label label="Appearance" />`}>
-	<ThemeToggle client:load show_label />
-	<ThemeToggle client:load show_label label="Appearance" />
+	<ThemeToggle client:load apply_theme={false} show_label />
+	<ThemeToggle client:load apply_theme={false} show_label label="Appearance" />
 </ComponentPreview>
 
 ### Detecting Effective Dark Mode
@@ -106,7 +108,7 @@ Use the `onchange` callback to run logic when the theme changes.
 Override the default tooltip text.
 
 <ComponentPreview code={`<ThemeToggle tooltip="Change appearance" />`}>
-	<ThemeToggle client:load tooltip="Change appearance" />
+	<ThemeToggle client:load apply_theme={false} tooltip="Change appearance" />
 </ComponentPreview>
 
 ## Props
@@ -117,6 +119,7 @@ Override the default tooltip text.
 | `is_dark` | `boolean` | `false` | Computed resolved dark state (`$bindable()`, read-only). True when effective appearance is dark. |
 | `size` | `'0' \| '1' \| '2'` | `'1'` | Component size (`'0'` = 18px icon, `'1'` = 24px icon, `'2'` = 32px icon) |
 | `disable_auto` | `boolean` | `false` | Hide the auto/system option (two-state toggle only) |
+| `apply_theme` | `boolean` | `true` | Apply the theme to `<html>` as `data-theme`. Set `false` for a display-only toggle (a demo or preview): it still cycles, stores the choice and updates its own icon and label, but never touches `<html>`. |
 | `show_label` | `boolean` | `false` | Show a text label beside the icon ("Light" / "Dark" / "Auto") |
 | `label` | `string` | `undefined` | Custom label text override. Falls back to the current mode name when `show_label` is set. |
 | `tooltip` | `string` | `''` | Override the default tooltip text. Defaults to the `aria-label` value. |
@@ -141,9 +144,11 @@ Override the default tooltip text.
 
 When the theme changes, the component:
 
-1. Sets `document.documentElement.style.colorScheme` to `'light'` or `'dark'` based on the effective dark state.
+1. Sets `data-theme="light"` or `data-theme="dark"` on `<html>` for an explicit choice, and removes the attribute for `'auto'` so the OS preference applies. `@delightstack/styles` maps the attribute to `color-scheme`. Skipped when `apply_theme` is `false`.
 2. Saves the preference to `localStorage` under the key `'delightstack:theme'`.
 3. Watches for system preference changes via `matchMedia('(prefers-color-scheme: dark)')` and updates `is_dark` reactively when theme is `'auto'`.
+
+It does not set an inline `color-scheme`. A production build that lowers `light-dark()` (Lightning CSS, Vite's default CSS minifier, does) replaces each call with custom properties that only the stylesheet's `color-scheme` rules set, so an inline style would leave every token unchanged.
 
 ### Anti-Flash Script
 
@@ -152,15 +157,10 @@ To prevent a flash of wrong theme on page load, add the following inline script 
 ```html
 <head>
   <script>
-    (function() {
-      try {
-        var saved = localStorage.getItem('delightstack:theme');
-        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var theme = (saved === 'light' || saved === 'dark' || saved === 'auto') ? saved : 'auto';
-        var is_dark = theme === 'dark' || (theme === 'auto' && prefersDark);
-        document.documentElement.style.colorScheme = is_dark ? 'dark' : 'light';
-      } catch(e) {}
-    })();
+    try {
+      var saved = localStorage.getItem('delightstack:theme');
+      if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
+    } catch (e) {}
   </script>
 </head>
 ```
