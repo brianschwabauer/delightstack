@@ -1,5 +1,12 @@
 # @delightstack/docs
 
+## 0.0.20
+
+### Patch Changes
+
+- Updated dependencies [d2d430e]
+  - @delightstack/components@1.8.1
+
 ## 0.0.19
 
 ### Patch Changes
