@@ -540,9 +540,11 @@
 				corner-shape: squircle;
 				border-radius: calc((var(--radius-lg, 10px) - 0.2rem) * var(--squircle-ratio, 2));
 			}
-			&.active {
-				color: var(--color-text-active, var(--color-text, #222));
-			}
+		}
+		/* Dark text for the white thumb — but pills + boxed fills the active tab
+		   itself, and the pill's light text has to win there. */
+		.tabs.boxed:not(.pills) &.active {
+			color: var(--color-text-active, var(--color-text, #222));
 		}
 	}
 
