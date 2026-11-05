@@ -14,6 +14,9 @@ import { env } from '$env/dynamic/private';
 import { env as public_env } from '$env/dynamic/public';
 import { building, dev } from '$app/environment';
 
+/** `pnpm dev:worker` — the server worker, in the repo's 5220–5229 dev block. */
+const DEV_WORKER_URL = 'http://localhost:5222';
+
 // ---------------------------------------------------------------------------
 // 1. Auth — JWT sessions, org resolution, /api/auth/* routes
 // ---------------------------------------------------------------------------
@@ -110,7 +113,7 @@ const imageUploadHandle: Handle = async ({ event, resolve }) => {
 		const body = await event.request.arrayBuffer();
 		const content_type = event.request.headers.get('content-type') ?? '';
 		try {
-			const res = await fetch('http://localhost:8787/api/image', {
+			const res = await fetch(`${DEV_WORKER_URL}/api/image`, {
 				method: 'POST',
 				headers: {
 					'content-type': content_type,
@@ -249,8 +252,8 @@ const appHandle: Handle = async ({ event, resolve }) => {
 export const handle = sequence(
 	// override: the DO classes live in the separate server worker, so
 	// platformProxy's cross-session stubs exist but throw on RPC — replace
-	// them with the fetch bridge to localhost:8787 (see dev-proxy.helper.ts).
-	...(dev ? [createDevHandle({ override: true })] : []),
+	// them with the fetch bridge to the server worker (see dev-proxy.helper.ts).
+	...(dev ? [createDevHandle({ override: true, url: DEV_WORKER_URL })] : []),
 	authHandle,
 	appHandle,
 	websocketHandle,

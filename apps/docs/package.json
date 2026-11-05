@@ -4,7 +4,7 @@
 	"type": "module",
 	"version": "0.0.21",
 	"scripts": {
-		"dev": "astro dev",
+		"dev": "astro dev --port $((${DEV_PORT:-5220}+3))",
 		"start": "astro dev",
 		"build": "astro build",
 		"preview": "astro build && wrangler preview",

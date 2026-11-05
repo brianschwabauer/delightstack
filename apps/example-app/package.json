@@ -4,8 +4,8 @@
 	"private": true,
 	"scripts": {
 		"dev": "turbo run dev:svelte dev:worker",
-		"dev:svelte": "vite dev --port 5174",
-		"dev:worker": "cd server && wrangler dev --config wrangler.toml --env staging --persist-to ./../.wrangler/state",
+		"dev:svelte": "vite dev --port 5221 --strictPort",
+		"dev:worker": "cd server && wrangler dev --config wrangler.toml --env staging --port 5222 --inspector-port 5224 --persist-to ./../.wrangler/state",
 		"build": "vite build",
 		"build:ci": "vite build --mode $VITE_MODE",
 		"deploy": "wrangler deploy --env production",

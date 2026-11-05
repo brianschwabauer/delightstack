@@ -43,6 +43,8 @@ export async function createClients(options: {
 
 	const ws = new WebsocketClient({
 		dev,
+		// The server worker's port in the repo's dev block (package.json dev:worker).
+		dev_worker_port: 5222,
 		dev_query: {
 			user_id: auth.id ?? undefined,
 			user_name: auth.name ?? undefined,

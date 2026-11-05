@@ -24,6 +24,9 @@
 		"dev": {
 			"cache": false,
 			"persistent": true,
+			// `system dev` moves the dev ports with DEV_PORT and lets vite answer
+			// on the dev domain; strict env mode would otherwise withhold both.
+			"passThroughEnv": ["DEV_PORT", "__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS"],
 		},
 		"dev:svelte": {
 			"cache": false,
