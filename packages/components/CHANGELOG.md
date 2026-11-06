@@ -1,5 +1,15 @@
 # @delightstack/components
 
+## 1.9.0
+
+### Minor Changes
+
+- 7db93be: Input and Select save on commit: when `onchange` returns a promise, the field shows a spinner while it runs, a checkmark when it resolves, and the rejection's message as its error when it fails (cleared on the next edit). A fast save skips the spinner but still gets its checkmark; a newer change supersedes one still in flight. Text inputs commit on Enter or blur, as before.
+
+### Patch Changes
+
+- 097cd06: Range: no stray box around the whole slider when it has keyboard focus. The global focus ring landed on the invisible native input; the thumb's own focus ring is the only one now.
+
 ## 1.8.4
 
 ### Patch Changes

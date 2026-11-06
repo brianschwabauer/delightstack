@@ -1,5 +1,11 @@
 # @delightstack/auth
 
+## 1.3.0
+
+### Minor Changes
+
+- 4fa3f4f: Session tokens carry the user's profile image as an optional `image` claim, and `locals.user.image` exposes it, so apps can draw an avatar without looking the user up. The claim is read from `user.image` whenever a session is issued or refreshed. `updateUser` can now remove an image: pass `image: null` (or `''`), which used to leave the old image in place.
+
 ## 1.2.3
 
 ### Patch Changes
