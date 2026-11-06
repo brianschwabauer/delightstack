@@ -17,6 +17,8 @@
 	import { tooltip, ripple } from '@delightstack/utilities';
 	import { getContext, untrack, type Snippet } from 'svelte';
 	import type { FormContext } from './Form.svelte';
+	import { AsyncChange } from './async-change.svelte.js';
+	import SaveStatus from './SaveStatus.svelte';
 	import { scale } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import { backOut, quintOut } from 'svelte/easing';
@@ -102,7 +104,14 @@
 		class: class_name = '',
 
 		/** Called when the value changes */
-		onchange = undefined as ((detail: { value: unknown }) => void) | undefined,
+		/**
+		 * Called when the selection changes. Return a promise to save on change:
+		 * the field shows a spinner while it runs, a checkmark when it resolves,
+		 * and the rejection's message as its error when it fails.
+		 */
+		onchange = undefined as
+			| ((detail: { value: unknown }) => void | Promise<unknown>)
+			| undefined,
 
 		/** Called when the search query changes (debounced 300ms) */
 		onsearch = undefined as ((detail: { query: string }) => void) | undefined,
@@ -192,9 +201,18 @@
 		if (parse_error) runParse();
 	}
 
-	/** Error from the local prop, standalone parse, or form context */
+	/** Save-on-change state, for an `onchange` that returns a promise */
+	const save = new AsyncChange();
+	$effect(() => () => save.destroy());
+
+	function commitChange(detail: { value: unknown }) {
+		save.track(onchange?.(detail));
+	}
+
+	/** Error from the local prop, a failed save, standalone parse, or form context */
 	const resolved_error = $derived.by(() => {
 		if (error !== undefined) return error;
+		if (save.error) return save.error;
 		if (parse_error) return parse_error;
 		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
 		return undefined;
@@ -306,7 +324,7 @@
 			closeDropdown();
 		}
 		commitToForm();
-		onchange?.({ value });
+		commitChange({ value });
 	}
 
 	/** Remove a value from multi-select */
@@ -316,7 +334,7 @@
 		if (!multiple || !Array.isArray(value)) return;
 		value = value.filter((v: unknown) => v !== optValue);
 		commitToForm();
-		onchange?.({ value });
+		commitChange({ value });
 	}
 
 	/**
@@ -348,7 +366,7 @@
 		if (disabled) return;
 		value = multiple ? [] : undefined;
 		commitToForm();
-		onchange?.({ value });
+		commitChange({ value });
 	}
 
 	/** Open the dropdown */
@@ -400,7 +418,7 @@
 			value = optValue;
 		}
 		commitToForm();
-		onchange?.({ value });
+		commitChange({ value });
 	}
 
 	/** Handle creating a new option */
@@ -472,7 +490,7 @@
 		}
 		value = opts[nextIdx].value;
 		commitToForm();
-		onchange?.({ value });
+		commitChange({ value });
 	}
 
 	/** Handle keyboard navigation on the trigger */
@@ -572,7 +590,7 @@
 						} else {
 							value = match.value;
 							commitToForm();
-							onchange?.({ value });
+							commitChange({ value });
 						}
 					}
 				}
@@ -763,6 +781,7 @@
 		role="combobox"
 		aria-expanded={open}
 		aria-haspopup="listbox"
+		aria-busy={save.busy || undefined}
 		aria-controls="{id}-listbox"
 		aria-disabled={disabled || undefined}
 		tabindex={disabled ? -1 : 0}
@@ -837,6 +856,8 @@
 				</svg>
 			</span>
 		{/if}
+
+		<SaveStatus status={save} />
 
 		<span class="chevron" class:open aria-hidden="true">
 			<svg viewBox="0 0 24 24" width="18" height="18">

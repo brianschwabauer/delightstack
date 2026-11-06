@@ -34,6 +34,8 @@
 	import { backOut, quintOut } from 'svelte/easing';
 	import type { FormContext } from './Form.svelte';
 	import Button from '../actions/Button.svelte';
+	import { AsyncChange } from './async-change.svelte.js';
+	import SaveStatus from './SaveStatus.svelte';
 	import List from '../display/List.svelte';
 	import ListItem from '../display/ListItem.svelte';
 
@@ -194,8 +196,15 @@
 		/** Called when value is changing */
 		oninput = undefined as ((detail: { value: InputValue }) => void) | undefined,
 
-		/** Called when value is committed */
-		onchange = undefined as ((detail: { value: InputValue }) => void) | undefined,
+		/**
+		 * Called when the value is committed (Enter or blur for text). Return a
+		 * promise to save on commit: the field shows a spinner while it runs, a
+		 * checkmark when it resolves, and the rejection's message as its error
+		 * when it fails.
+		 */
+		onchange = undefined as
+			| ((detail: { value: InputValue }) => void | Promise<unknown>)
+			| undefined,
 
 		/** Called when input is focused */
 		onfocus = undefined as (() => void) | undefined,
@@ -258,9 +267,18 @@
 		if (parse_error) runParse();
 	}
 
-	/** Error from local prop, standalone parse, or form context */
+	/** Save-on-commit state, for an `onchange` that returns a promise */
+	const save = new AsyncChange();
+	$effect(() => () => save.destroy());
+
+	function commitChange(detail: { value: InputValue }) {
+		save.track(onchange?.(detail));
+	}
+
+	/** Error from local prop, a failed save, standalone parse, or form context */
 	const resolved_error = $derived.by(() => {
 		if (error !== undefined) return error;
+		if (save.error) return save.error;
 		if (parse_error) return parse_error;
 		if (form_ctx && name && form_ctx.errors[name]) return form_ctx.errors[name];
 		return undefined;
@@ -672,7 +690,7 @@
 				if (form_ctx && name) form_ctx.setValue(name, value);
 				reparseIfErrored();
 				oninput?.({ value });
-				onchange?.({ value });
+				commitChange({ value });
 			}
 			return;
 		}
@@ -687,7 +705,7 @@
 		}
 		if (form_ctx && name) form_ctx.setValue(name, value);
 		closeAutocomplete();
-		onchange?.({ value: opt.value });
+		commitChange({ value: opt.value });
 	}
 
 	function scrollAcHighlightedIntoView() {
@@ -722,6 +740,7 @@
 
 	function handleInput(e: Event) {
 		const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+		save.clearError();
 		let new_value: string | number | null = target.value;
 
 		if (mask) {
@@ -761,7 +780,7 @@
 			value = target.value === '' ? null : Number(target.value);
 		}
 		if (form_ctx && name) form_ctx.setValue(name, value);
-		onchange?.({ value });
+		commitChange({ value });
 	}
 
 	function handleClear() {
@@ -779,7 +798,7 @@
 		if (form_ctx && name) form_ctx.setValue(name, value);
 		reparseIfErrored();
 		oninput?.({ value });
-		onchange?.({ value });
+		commitChange({ value });
 
 		const el = input_element ?? textarea_element;
 		el?.focus();
@@ -797,7 +816,7 @@
 		value = Number(next.toFixed(precision));
 		if (form_ctx && name) form_ctx.setValue(name, value);
 		oninput?.({ value });
-		if (commit) onchange?.({ value });
+		if (commit) commitChange({ value });
 	}
 
 	/* ---- Stepper hold-to-repeat ----
@@ -847,7 +866,7 @@
 		repeat_timer = undefined;
 		window.removeEventListener('pointerup', handleRepeatRelease);
 		window.removeEventListener('pointercancel', handleRepeatRelease);
-		if (commit && repeat_pressed) onchange?.({ value });
+		if (commit && repeat_pressed) commitChange({ value });
 		repeat_pressed = false;
 	}
 
@@ -895,7 +914,7 @@
 		value = next;
 		if (form_ctx && name) form_ctx.setValue(name, value);
 		oninput?.({ value });
-		onchange?.({ value });
+		commitChange({ value });
 	}
 
 	function handleFileChange(e: Event) {
@@ -998,7 +1017,7 @@
 			if (form_ctx && name) form_ctx.setValue(name, value);
 			reparseIfErrored();
 			oninput?.({ value });
-			onchange?.({ value });
+			commitChange({ value });
 		}
 		chip_input_value = '';
 	}
@@ -1009,7 +1028,7 @@
 		if (form_ctx && name) form_ctx.setValue(name, value);
 		reparseIfErrored();
 		oninput?.({ value });
-		onchange?.({ value });
+		commitChange({ value });
 	}
 
 	/**
@@ -1264,6 +1283,7 @@
 				{minlength}
 				aria-invalid={has_error || undefined}
 				aria-required={required || undefined}
+				aria-busy={save.busy || undefined}
 				aria-describedby={has_error
 					? `${id}-error`
 					: description
@@ -1416,7 +1436,7 @@
 					}}
 					onchange={(e) => {
 						value = (e.target as HTMLInputElement).value;
-						onchange?.({ value });
+						commitChange({ value });
 					}}
 					onfocus={handleFocus}
 					onblur={handleBlur} />
@@ -1434,6 +1454,7 @@
 				value={value ?? ''}
 				aria-invalid={has_error || undefined}
 				aria-required={required || undefined}
+				aria-busy={save.busy || undefined}
 				aria-describedby={has_error
 					? `${id}-error`
 					: description
@@ -1472,6 +1493,7 @@
 					: undefined}
 				aria-invalid={has_error || undefined}
 				aria-required={required || undefined}
+				aria-busy={save.busy || undefined}
 				aria-describedby={has_error
 					? `${id}-error`
 					: description
@@ -1628,6 +1650,9 @@
 				</svg>
 			</Button>
 		{/if}
+
+		<!-- Saving spinner / saved checkmark, for an onchange that returns a promise -->
+		<SaveStatus status={save} />
 
 		<!-- Date / time / datetime-local picker icon: replaces the native black
 		     ::-webkit-calendar-picker-indicator with a token-tinted icon (a clock
@@ -2420,6 +2445,11 @@
 
 	.suffix {
 		order: 1;
+	}
+
+	/* The save spinner/checkmark sits last, at the field's trailing edge */
+	.wrapper :global(.save-status) {
+		order: 3;
 	}
 
 	/* ================================================================== */
