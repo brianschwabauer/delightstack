@@ -33,6 +33,7 @@
 	import { flip } from 'svelte/animate';
 	import { backOut, quintOut } from 'svelte/easing';
 	import type { FormContext } from './Form.svelte';
+	import type { HTMLInputAttributes } from 'svelte/elements';
 	import Button from '../actions/Button.svelte';
 	import { AsyncChange } from './async-change.svelte.js';
 	import SaveStatus from './SaveStatus.svelte';
@@ -107,6 +108,19 @@
 
 		/** Maximum length */
 		maxlength = undefined as number | undefined,
+
+		/** Native autofill hint ('email', 'one-time-code', 'off', …). A field
+		 *  with suggestions (`options`/`onfilter`) always uses 'off'. */
+		autocomplete = undefined as HTMLInputAttributes['autocomplete'],
+
+		/** Virtual keyboard hint ('numeric', 'decimal', 'email', 'tel', …) */
+		inputmode = undefined as HTMLInputAttributes['inputmode'],
+
+		/** Native auto-capitalization ('off', 'characters', 'words', 'sentences') */
+		autocapitalize = undefined as HTMLInputAttributes['autocapitalize'],
+
+		/** Native spellcheck; undefined leaves the browser's default */
+		spellcheck = undefined as boolean | undefined,
 
 		/** Minimum value (number/date) */
 		min = undefined as number | string | undefined,
@@ -1281,6 +1295,10 @@
 				{rows}
 				{maxlength}
 				{minlength}
+				{autocomplete}
+				{inputmode}
+				{autocapitalize}
+				{spellcheck}
 				aria-invalid={has_error || undefined}
 				aria-required={required || undefined}
 				aria-busy={save.busy || undefined}
@@ -1483,7 +1501,10 @@
 				{min}
 				{max}
 				step={is_number ? step : undefined}
-				autocomplete={has_autocomplete ? 'off' : undefined}
+				autocomplete={has_autocomplete ? 'off' : autocomplete}
+				{inputmode}
+				{autocapitalize}
+				{spellcheck}
 				role={has_autocomplete ? 'combobox' : undefined}
 				aria-expanded={has_autocomplete ? ac_open : undefined}
 				aria-autocomplete={has_autocomplete ? 'list' : undefined}
