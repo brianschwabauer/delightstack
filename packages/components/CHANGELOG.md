@@ -1,5 +1,12 @@
 # @delightstack/components
 
+## 1.8.3
+
+### Patch Changes
+
+- 7d4a38b: Modal: a modal without a footer now has the same padding below its content as at its sides (2.5rem on desktop, was 2rem), so the last field no longer sits closer to the bottom edge than to the left and right.
+- 7d4a38b: Popover: no more sideways jump as an arrowed popover finishes opening. The arrow shift (which keeps the arrow clear of the rounded corners) was measured from the panel's box while the open animation was still scaling it, then re-measured at full size; it now measures the laid-out box with the running transform taken out, so both agree.
+
 ## 1.8.2
 
 ### Patch Changes
