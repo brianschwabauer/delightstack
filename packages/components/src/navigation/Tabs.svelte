@@ -106,6 +106,20 @@
 	let listEl = $state<HTMLElement | undefined>(undefined);
 	let tabEls = $state<HTMLElement[]>([]);
 	let indicatorStyle = $state('opacity: 0;');
+	/**
+	 * The indicator has been placed. Until it has — server render, and the
+	 * moment before hydration — it can't be: placing it means measuring the
+	 * active tab. So until then the active tab draws the same mark itself in
+	 * CSS (`.list:not(.measured)` below), and the page shows its selection on
+	 * first paint instead of fading it in after hydration.
+	 */
+	let measured = $state(false);
+	/**
+	 * A frame after the first placement. The indicator only transitions from
+	 * then on, so the handover from the tab's own mark is a straight swap in
+	 * one frame — no fade, no slide in from the left edge.
+	 */
+	let settled = $state(false);
 
 	function measure() {
 		const el = tabEls[tab];
@@ -123,6 +137,10 @@
 			indicatorStyle = `transform: translateY(${el.offsetTop}px); height: ${el.offsetHeight}px; opacity: 1;`;
 		} else {
 			indicatorStyle = `transform: translateX(${el.offsetLeft}px); width: ${el.offsetWidth}px; opacity: 1;`;
+		}
+		if (!measured) {
+			measured = true;
+			requestAnimationFrame(() => (settled = true));
 		}
 	}
 
@@ -280,7 +298,13 @@
 			{/each}
 		</div>
 	{:else}
-		<div class="list" role="tablist" aria-orientation={orientation} bind:this={listEl}>
+		<div
+			class="list"
+			class:measured
+			class:settled
+			role="tablist"
+			aria-orientation={orientation}
+			bind:this={listEl}>
 			<div class="indicator" style={indicatorStyle}></div>
 			{#each tabs as t, i (i)}
 				{@const isDisabled = disabled || !!t.disabled}
@@ -348,6 +372,15 @@
 <style>
 	/* ========== Container ========== */
 	.tabs {
+		/* The boxed variant's thumb. Light: a white surface lifted by a soft
+		   shadow. Dark: a shadow doesn't read and the surface token is the
+		   track's own color, so the thumb is a neutral step lighter than the
+		   track instead, flat. Never the accent: it marks a choice, it isn't
+		   one. */
+		--_thumb-bg: light-dark(var(--color-surface, #fff), var(--color-bg-5, #3a3a3a));
+		--_thumb-shadow:
+			0 1px 2px light-dark(rgb(0 0 0 / 0.06), transparent),
+			0 2px 6px light-dark(rgb(0 0 0 / 0.08), transparent);
 		display: flex;
 		flex-direction: column;
 		width: 100%;
@@ -437,6 +470,11 @@
 			display: none;
 		}
 
+		/* Placed in the same frame the tab's own mark goes away: no fade-in */
+		.list:not(.settled) & {
+			transition: none;
+		}
+
 		/* Boxed: the indicator becomes the active "thumb" — an elevated surface
 		   that glides between options. measure() gives it the active tab's exact
 		   box (translate x/y + width/height), so the list padding reads as an
@@ -446,15 +484,44 @@
 			bottom: auto;
 			left: 0;
 			height: auto;
-			background: var(--color-surface, #fff);
+			background: var(--_thumb-bg);
 			border-radius: calc(var(--radius-lg, 10px) - 0.2rem);
-			box-shadow:
-				0 1px 2px rgb(0 0 0 / 0.06),
-				0 2px 6px rgb(0 0 0 / 0.08);
+			box-shadow: var(--_thumb-shadow);
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;
 				border-radius: calc((var(--radius-lg, 10px) - 0.2rem) * var(--squircle-ratio, 2));
 			}
+		}
+	}
+
+	/* ========== Before the indicator is placed ========== */
+	/* Server render and pre-hydration: the active tab draws the indicator's
+	   mark itself, matching it exactly, so the selection shows on first
+	   paint. Once measure() places the real indicator the list gains
+	   .measured and these stand down in the same frame. */
+	.list:not(.measured) .tab.active {
+		.tabs:not(.boxed):not(.pills) &::after {
+			content: '';
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: -1px;
+			height: 2px;
+			background: var(--color-action-fg, var(--color-action, #1976d2));
+			border-radius: var(--radius-full, 1e5px);
+			pointer-events: none;
+		}
+		.tabs.vertical:not(.boxed):not(.pills) &::after {
+			left: auto;
+			right: -1px;
+			top: 0;
+			bottom: 0;
+			width: 2px;
+			height: auto;
+		}
+		.tabs.boxed:not(.pills) & {
+			background: var(--_thumb-bg);
+			box-shadow: var(--_thumb-shadow);
 		}
 	}
 
