@@ -3081,9 +3081,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			);
 		}
 
-		// Read every time: the image claim always reflects the current user row
-		const user = this.sql.get('user', user_id);
 		if (name === undefined) {
+			const user = this.sql.get('user', user_id);
 			if (user.deleted_at) {
 				throw new DelightError({
 					message: `This account has been deleted. Please contact support for help.`,
@@ -3092,6 +3091,13 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			}
 			name = user.name;
 		}
+
+		// Read every time, so the image claim follows the current user row. Not
+		// `sql.get`: sign-up issues its first token before the user row exists.
+		const [image_row] = this.sql.list('user', {
+			where: { key: 'id', is: '=', value: user_id },
+			limit: 1,
+		});
 
 		if (verified === undefined || email === undefined) {
 			const user_auth = this.sql.get('user_auth', user_auth_id);
@@ -3111,7 +3117,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			org: org || orgPermissions, // The record of orgs the user is a part of and their role/permissions
 			name,
 			email,
-			...(user.image ? { image: user.image } : {}), // The user's profile image, if any
+			...(image_row?.image ? { image: image_row.image } : {}), // The user's profile image, if any
 			verified, // The user's email verification status
 		});
 	}
