@@ -141,8 +141,8 @@ html {
 	   background when the brand seed is dark. This lifts lightness into a legible
 	   band — the same move the outline Button already applies to its own text —
 	   so action text/icons stay readable regardless of how dark --color-primary
-	   is. Use for text/icons; keep --color-action for backgrounds, borders, and
-	   focus rings. */
+	   is. Use for text/icons and focus indicators (Input/Select focus borders);
+	   keep --color-action for fills and resting borders. */
 	--color-action-fg: light-dark(
 		oklch(from var(--color-action) min(l, 0.5) c h),
 		oklch(from var(--color-action) max(l, 0.65) c h)

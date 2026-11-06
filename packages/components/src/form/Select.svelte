@@ -1069,7 +1069,7 @@
 		--_radius: var(--radius-lg, 10px);
 		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
 		--_border-hover: var(--color-border-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
-		--_border-focus: var(--color-action, hsl(217 75% 52%));
+		--_border-focus: var(--color-action-fg, var(--color-action, hsl(217 75% 52%)));
 		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
 		--_bg: var(--color-surface, light-dark(#fff, hsl(0 0% 9%)));
 		--_panel: var(--color-surface, light-dark(#fff, hsl(0 0% 13%)));

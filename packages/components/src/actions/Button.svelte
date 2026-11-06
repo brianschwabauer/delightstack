@@ -789,9 +789,29 @@
 				}
 			}
 		}
+		/* Selected outline/transparent buttons get a deeper wash than hover.
+		   Both used to share --color-bg-active (a faint tint of
+		   --color-action), so in a ButtonGroup the selected option looked like
+		   a hovered one, and with a dark brand seed in dark mode the tint was
+		   invisible. The wash is mixed from the button's own text color
+		   (currentColor resolves on the inner button, which already carries
+		   the active text color), so it follows the accent/error/success
+		   variants and stays visible in both schemes. Solid buttons don't set
+		   it and keep their darker/lighter fill. */
+		&.outline:not(.transparent):not(.translucent),
+		&.transparent {
+			--color-bg-selected: light-dark(
+				oklch(from currentColor l c h / 0.14),
+				oklch(from currentColor l c h / 0.24)
+			);
+		}
 		&.active {
-			--color-bg: var(--color-bg-active) !important;
+			--color-bg: var(--color-bg-selected, var(--color-bg-active)) !important;
 			--color-text: var(--color-text-active) !important;
+			/* Already selected: hovering it shouldn't fade back to the hover tint. */
+			> :is(button, a):hover:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
+				background-color: var(--color-bg);
+			}
 		}
 		&.full-width {
 			width: 100%;
@@ -1311,18 +1331,23 @@
 					border-right: none;
 				}
 			}
-			/* Icon-only ends: the pill curve crowds a centered icon at the
-			   rounded outer end. Widen the end button and pad its rounded side
-			   so the icon keeps its size and its spacing from the flat (inner)
-			   edge while gaining a little breathing room from the curve. */
+			/* Icon-only ends: the pill curve crowds an icon at the rounded
+			   outer end, so the end button is a little wider than a square.
+			   The extra width is split across both sides, slightly more on the
+			   rounded one, so the icon sits near the middle of its segment:
+			   all of it on the rounded side pushed the icon visibly toward the
+			   group's centre. The content box stays --_icon-size wide, so the
+			   icon keeps the same size as its neighbours. */
 			&.icon {
 				--_group-end-pad: 0.5em;
+				--_group-end-pad-outer: 0.3em;
 				&:first-child:not(:last-child) {
 					width: calc(var(--_icon-size) + var(--_group-end-pad));
 					button,
 					a {
 						box-sizing: border-box;
-						padding-left: var(--_group-end-pad);
+						padding-left: var(--_group-end-pad-outer);
+						padding-right: calc(var(--_group-end-pad) - var(--_group-end-pad-outer));
 					}
 				}
 				&:last-child:not(:first-child) {
@@ -1330,7 +1355,8 @@
 					button,
 					a {
 						box-sizing: border-box;
-						padding-right: var(--_group-end-pad);
+						padding-right: var(--_group-end-pad-outer);
+						padding-left: calc(var(--_group-end-pad) - var(--_group-end-pad-outer));
 					}
 				}
 			}
@@ -1376,16 +1402,18 @@
 					border-bottom: none;
 				}
 			}
-			/* Icon-only ends: same breathing room as horizontal, but the rounded
-			   ends are top/bottom here, so pad the block axis. */
+			/* Icon-only ends: same as horizontal, but the rounded ends are
+			   top/bottom here, so split the padding on the block axis. */
 			&.icon {
 				--_group-end-pad: 0.5em;
+				--_group-end-pad-outer: 0.3em;
 				&:first-child:not(:last-child) {
 					height: calc(var(--_icon-size) + var(--_group-end-pad));
 					button,
 					a {
 						box-sizing: border-box;
-						padding-top: var(--_group-end-pad);
+						padding-top: var(--_group-end-pad-outer);
+						padding-bottom: calc(var(--_group-end-pad) - var(--_group-end-pad-outer));
 					}
 				}
 				&:last-child:not(:first-child) {
@@ -1393,7 +1421,8 @@
 					button,
 					a {
 						box-sizing: border-box;
-						padding-bottom: var(--_group-end-pad);
+						padding-bottom: var(--_group-end-pad-outer);
+						padding-top: calc(var(--_group-end-pad) - var(--_group-end-pad-outer));
 					}
 				}
 			}
