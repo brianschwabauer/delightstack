@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
 import { createAuthHandle, type AuthServer } from './auth.handler.js';
+import { generateJwt } from './jwt.server.js';
 
 type HandleInput = Parameters<ReturnType<typeof createAuthHandle>>[0];
 
@@ -92,5 +93,42 @@ describe('createAuthHandle behind a TLS-terminating proxy', () => {
 		});
 		const { response } = await run(false, event);
 		expect(response.status).toBe(403);
+	});
+});
+
+describe('createAuthHandle user.image', () => {
+	async function localsFor(claims: Record<string, unknown>) {
+		const secret = 'a'.repeat(64);
+		const { jwt } = await generateJwt<'auth'>(secret, {
+			typ: 'auth',
+			iss: 'test',
+			sub: 'auth_1',
+			uid: 'user_1',
+			jti: 'session_1',
+			name: 'Ada',
+			email: 'ada@example.test',
+			verified: true,
+			org: {},
+			...claims,
+		});
+		const event = makeEvent('https://app.example.test/page');
+		(event.cookies as { get: (name: string) => string | undefined }).get = (name) =>
+			name === 'auth-session' ? jwt : undefined;
+		await makeHandle(false)({
+			event,
+			resolve: () => new Response('ok'),
+		} as unknown as HandleInput);
+		return event.locals as unknown as { user: { image?: string } | null };
+	}
+
+	it('carries the image claim onto locals.user', async () => {
+		const locals = await localsFor({ image: '/avatar/user_1/abc' });
+		expect(locals.user?.image).toBe('/avatar/user_1/abc');
+	});
+
+	it('leaves image off when the token has none', async () => {
+		const locals = await localsFor({});
+		expect(locals.user).not.toBeNull();
+		expect(locals.user && 'image' in locals.user).toBe(false);
 	});
 });

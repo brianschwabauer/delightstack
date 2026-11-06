@@ -2184,7 +2184,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		if (!Object.keys(user).length) return current_user;
 		return this.sql.update('user', user_id, {
 			name: user.name || current_user.name,
-			image: user.image || current_user.image,
+			// Omitted keeps the current image; null or '' removes it
+			image: user.image === undefined ? current_user.image : user.image || null,
 			json: JSON.stringify({ ...JSON.parse(current_user?.json || '{}'), ...user }),
 		});
 	}
@@ -3080,8 +3081,9 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			);
 		}
 
+		// Read every time: the image claim always reflects the current user row
+		const user = this.sql.get('user', user_id);
 		if (name === undefined) {
-			const user = this.sql.get('user', user_id);
 			if (user.deleted_at) {
 				throw new DelightError({
 					message: `This account has been deleted. Please contact support for help.`,
@@ -3109,6 +3111,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			org: org || orgPermissions, // The record of orgs the user is a part of and their role/permissions
 			name,
 			email,
+			...(user.image ? { image: user.image } : {}), // The user's profile image, if any
 			verified, // The user's email verification status
 		});
 	}

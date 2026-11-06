@@ -58,6 +58,8 @@ export interface AuthLocals {
 		id: string;
 		name: string;
 		email: string;
+		/** The user's profile image, from the session token. Absent when they have none */
+		image?: string;
 		verified: boolean;
 		user_auth_id: string;
 		user_session_id: string;
@@ -310,6 +312,7 @@ export function createAuthHandle<Config extends AuthConfig>(
 					id: session.uid,
 					name: session.name,
 					email: session.email,
+					...(session.image ? { image: session.image } : {}),
 					verified: session.verified,
 					user_auth_id: session.sub,
 					user_session_id: session.jti,

@@ -568,7 +568,8 @@ export class AuthClient<P extends string = string, E extends string = string> {
 		},
 		update: async (data: {
 			name?: string;
-			image?: string;
+			/** The image URL, or null to remove it */
+			image?: string | null;
 		}): Promise<{
 			id: string;
 			name: string;

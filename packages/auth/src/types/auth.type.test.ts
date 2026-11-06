@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { encodePermissions, decodePermissions, EmailCodeSignIn } from './auth.type';
+import {
+	encodePermissions,
+	decodePermissions,
+	EmailCodeSignIn,
+	UpdateUser,
+} from './auth.type';
 
 const permissions = ['read', 'write', 'admin', 'owner'] as const;
 
@@ -94,5 +99,16 @@ describe('EmailCodeSignIn', () => {
 
 	it('rejects an invalid email', () => {
 		expect(() => EmailCodeSignIn.parse({ email: 'nope', code: 'a3k9qx' })).toThrow();
+	});
+});
+
+describe('UpdateUser', () => {
+	it('accepts null to remove the image', () => {
+		expect(UpdateUser.parse({ image: null })).toEqual({ image: null });
+	});
+
+	it('accepts a new image and leaves an omitted one omitted', () => {
+		expect(UpdateUser.parse({ image: '/avatar/u/1' })).toEqual({ image: '/avatar/u/1' });
+		expect(UpdateUser.parse({ name: 'Ada' })).toEqual({ name: 'Ada' });
 	});
 });

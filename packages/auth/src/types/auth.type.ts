@@ -116,6 +116,12 @@ export const AuthSessionToken = z.object({
 	name: z.string(),
 	/** The email of the user signed in */
 	email: z.string(),
+	/**
+	 * The user's profile image (`user.image`), so apps can draw an avatar without
+	 * a lookup. Absent when the user has none. Changing the image only reaches
+	 * this claim when the session is next issued or refreshed.
+	 */
+	image: z.string().optional(),
 	/** Whether the user's email has been verified */
 	verified: z.boolean(),
 	/** The record of orgs the user is a part of and their role/permissions */
@@ -223,11 +229,12 @@ export const User = z.object({
 });
 export type User = z.infer<typeof User>;
 
-/** The fields in a user that can be updated */
+/** The fields in a user that can be updated. `image: null` (or '') removes the image */
 export const UpdateUser = User.pick({
 	name: true,
-	image: true,
-}).partial();
+})
+	.partial()
+	.extend({ image: z.string().nullable().optional() });
 export type UpdateUser = z.infer<typeof UpdateUser>;
 
 /** Additional metadata information attached to every request from a user */
