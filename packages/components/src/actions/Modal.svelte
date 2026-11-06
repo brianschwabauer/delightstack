@@ -390,7 +390,9 @@
 			padding-bottom: 4rem;
 		}
 		@media (min-width: 768px) {
-			padding: 2rem 2.5rem;
+			/* Bottom matches the sides, so the last field sits as far from the
+			   bottom edge as from the left and right (the top is the header's) */
+			padding: 2rem 2.5rem 2.5rem;
 			/* The body is the scroll container, so its own rounded clip is what
 			   actually crops the sticky header/footer. Match the panel's squircle
 			   corners — without this their square boxes bleed over the curve. */

@@ -433,10 +433,35 @@
 		return 'top center';
 	}
 
+	/**
+	 * The popover's box as laid out (its anchored position plus the shift
+	 * translate), with any running transform taken back out. Opening and
+	 * closing scale the panel, and a plain getBoundingClientRect() taken
+	 * mid-scale measures the shrunken box: the arrow shift computed from it
+	 * on open differs from the one computed once the panel reaches full
+	 * size, so the panel jumped sideways as it landed. The transform is a
+	 * scale about transform-origin (plus any translation in the matrix), so
+	 * it inverts exactly.
+	 */
+	function layoutRect(el: HTMLElement): DOMRect {
+		const rect = el.getBoundingClientRect();
+		const style = getComputedStyle(el);
+		if (!style.transform || style.transform === 'none') return rect;
+		const { a, d, e, f } = new DOMMatrixReadOnly(style.transform);
+		if (!a || !d) return rect;
+		const [ox = 0, oy = 0] = style.transformOrigin.split(' ').map(parseFloat);
+		return new DOMRect(
+			rect.left - ox * (1 - a) - e,
+			rect.top - oy * (1 - d) - f,
+			rect.width / a,
+			rect.height / d,
+		);
+	}
+
 	/** Detects actual placement after CSS anchor positioning resolves, then updates arrow/transform-origin/hit-box */
 	function detectAndUpdate() {
 		if (!popoverElement || !ref_element) return;
-		const popRect = popoverElement.getBoundingClientRect();
+		const popRect = layoutRect(popoverElement);
 		const refRect = ref_element.getBoundingClientRect();
 
 		// Detect primary axis based on which side of the ref the popover ended up
@@ -541,7 +566,7 @@
 	function calculateVirtualPosition() {
 		if (!popoverElement || typeof x !== 'number' || typeof y !== 'number') return;
 
-		const popRect = popoverElement.getBoundingClientRect();
+		const popRect = layoutRect(popoverElement);
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
 
