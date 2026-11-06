@@ -109,6 +109,17 @@
 		background-color: var(--color-action);
 		color: var(--color-action-text);
 	}
+	/* Inside a field, a selection is a working state, not a highlight: often
+	   the whole value (select-all on focus, a double-click), right under the
+	   floated label. The full action fill over that reads as a hard block and
+	   hides what it covers, so fields get a tint you can read through. */
+	:is(input, textarea, [contenteditable]:not([contenteditable='false'])),
+	:is(input, textarea, [contenteditable]:not([contenteditable='false'])) * {
+		&::selection {
+			background-color: oklch(from var(--color-action) l c h / 0.2);
+			color: var(--color-text);
+		}
+	}
 
 	h1,
 	h2,
