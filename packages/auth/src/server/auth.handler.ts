@@ -215,6 +215,19 @@ export function createAuthHandle<Config extends AuthConfig>(
 			return resolve(event);
 		}
 
+		// 1b. Dev behind a TLS-terminating proxy (e.g. Caddy → Vite over http):
+		// SvelteKit builds event.url from the plain-http hop, so the browser's
+		// https Origin fails the CSRF check and OAuth callbacks, email links and
+		// passkey origins come out as http://. Trust X-Forwarded-Proto in dev
+		// only; in production the platform hands over the real URL.
+		if (
+			config.dev &&
+			event.url.protocol === 'http:' &&
+			event.request.headers.get('x-forwarded-proto') === 'https'
+		) {
+			event.url.protocol = 'https:';
+		}
+
 		// 2. Extract meta
 		const meta = extractMeta(event);
 

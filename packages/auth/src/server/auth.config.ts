@@ -57,7 +57,8 @@ export interface AuthConfig<
 
 	/**
 	 * Whether the app is running in dev mode.
-	 * Used for: cookie secure default, DO proxy detection.
+	 * Used for: cookie secure default, DO proxy detection, and trusting a
+	 * proxy's `X-Forwarded-Proto: https` (so event.url is https behind Caddy).
 	 * Pass `dev` from '$app/environment'.
 	 * @default false
 	 */
