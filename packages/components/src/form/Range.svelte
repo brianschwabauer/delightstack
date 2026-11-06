@@ -677,7 +677,10 @@
 		appearance: none;
 		-webkit-appearance: none;
 		pointer-events: none;
+		/* The focus ring is drawn on the thumb below. Without this the global
+		   *:focus-visible ring boxes the whole (invisible) input. */
 		outline: none;
+		box-shadow: none;
 		z-index: 2;
 	}
 
