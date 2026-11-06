@@ -1,3 +1,17 @@
+<script lang="ts" module>
+	/**
+	 * Set by the first Button effect to run in the browser. Until then the app
+	 * is hydrating server HTML, where a Button stays disabled until it mounts
+	 * so a click can't land before its handler is attached. A Button created
+	 * after that (client-side navigation, a modal opening) already has its
+	 * handlers, so it starts out enabled. Otherwise it renders disabled for a
+	 * frame and fades out of the disabled colours on the background transition,
+	 * which reads as a flash. Effects never run during SSR, so the server never
+	 * sets this.
+	 */
+	let hydrated = false;
+</script>
+
 <script lang="ts">
 	import { ripple, tooltip } from '@delightstack/utilities';
 	import { getContext, type Snippet } from 'svelte';
@@ -213,9 +227,10 @@
 	let dropdownActive = $state(false);
 	let dropdownTrigger = $state(undefined as undefined | HTMLElement);
 	let menuActive = $state(false);
-	let mounted = $state(false);
+	let mounted = $state(hydrated);
 	$effect(() => {
 		mounted = true;
+		hydrated = true;
 	});
 
 	/* Promise-aware loading timing.
