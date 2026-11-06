@@ -719,6 +719,9 @@
 		width: 100%;
 		border: none;
 		outline: none;
+		/* The global *:focus-visible ring would draw a stray box inside the
+		   cell; the cell's own editing ring is the focus cue. */
+		box-shadow: none;
 		background: transparent;
 		padding: 0;
 		margin: 0;
