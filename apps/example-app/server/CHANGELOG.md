@@ -1,5 +1,12 @@
 # @delightstack/example-server
 
+## 0.0.22
+
+### Patch Changes
+
+- Updated dependencies [d48d556]
+  - @delightstack/auth@1.2.3
+
 ## 0.0.21
 
 ### Patch Changes
