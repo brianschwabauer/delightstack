@@ -1,5 +1,17 @@
 # @delightstack/components
 
+## 1.10.0
+
+### Minor Changes
+
+- 5f2378c: `Input` takes `autocomplete`, `inputmode`, `autocapitalize` and `spellcheck` and passes them to the native field (input and textarea), so a one-time-code field can ask phones to offer the code (`autocomplete="one-time-code" inputmode="numeric"`) without reaching into the rendered element. A field with suggestions (`options`/`onfilter`) still uses `autocomplete="off"`.
+
+### Patch Changes
+
+- 0a0b2f6: `Table`: the inline cell editor no longer draws the global focus ring as a stray box inside the cell. It reset `outline` but not the `box-shadow` the global `*:focus-visible` rule draws; the cell's own editing ring is the focus cue.
+- 350f17d: `Checkbox`: a label with a long description stays beside its box in a narrow container. The text block was sized to its max-content inside a wrapping row, so once the description was wider than the space left it dropped onto its own line under the box; it now shrinks and wraps its text instead.
+- 630fce7: `Popover`: a `List` that is the popover's only content takes the popover's corner radius, so its items' hover and active highlights run concentric with the panel. A dense list kept its own smaller radius, and the first and last highlights came out tighter than the panel's corners.
+
 ## 1.9.1
 
 ### Patch Changes
