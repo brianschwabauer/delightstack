@@ -1134,6 +1134,8 @@
 		   can't turn the panel into a blob — see --radius-cap. The corner
 		   flattening reads the computed corner radius, so it picks this up too. */
 		--_radius: min(var(--popover-radius, var(--radius-xl)), var(--radius-cap, 40px));
+		/* Under another name, so a list inside can take it (see below) */
+		--_popover-radius: var(--_radius);
 		z-index: var(--layer);
 		background-color: var(--color-bg);
 		border: 1px solid var(--color-border, transparent);
@@ -1176,6 +1178,14 @@
 		 * :global. */
 		&:has(> .content > :global(ul.list:only-child)) .content {
 			padding: 0;
+		}
+		/* That list is the panel now, so it takes the panel's radius: its
+		 * items' highlights are inset from it and drawn concentric with it. A
+		 * dense list otherwise keeps its own smaller radius, and the first and
+		 * last highlights come out tighter than the panel's corners. */
+		.content > :global(ul.list:only-child),
+		.content > :global(ul.list:only-child > li) {
+			--_radius: var(--_popover-radius);
 		}
 		/* If that list provides its OWN surface (`filled`/`outline`), also drop
 		 * the popover's background + border so the list surface takes over
