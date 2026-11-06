@@ -2,7 +2,7 @@
 	"name": "@delightstack/docs",
 	"private": true,
 	"type": "module",
-	"version": "0.0.22",
+	"version": "0.0.23",
 	"scripts": {
 		"dev": "astro dev --port $((${DEV_PORT:-5220}+3))",
 		"start": "astro dev",
