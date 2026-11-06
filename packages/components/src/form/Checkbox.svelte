@@ -421,6 +421,11 @@
 	.content {
 		display: flex;
 		flex-direction: column;
+		/* Shrink beside the box instead of wrapping under it: sized to its
+		   text's max-content in a wrapping row, a long description pushed the
+		   whole block onto its own line in narrow containers. */
+		flex: 1 1 0;
+		min-width: 0;
 		gap: 0.1em;
 		padding-top: calc((var(--size) + 20px) / 2 - 0.7em);
 		margin-left: -8px;
