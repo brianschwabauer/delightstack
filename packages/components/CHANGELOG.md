@@ -1,5 +1,19 @@
 # @delightstack/components
 
+## 1.9.1
+
+### Patch Changes
+
+- e2c3e92: `Tabs` `boxed`: the active thumb shows in dark mode. It used `--color-surface`, which in dark mode is the
+  track's own color, so the selection all but vanished. In dark mode the thumb is now a neutral one step
+  lighter than the track, with no shadow (a shadow doesn't read on dark); light mode is unchanged.
+- e2c3e92: `Tabs`: the selection shows on first paint. The sliding indicator is placed by measuring the active
+  tab, which can't happen until hydration, so a server-rendered `Tabs` showed no underline (or, `boxed`,
+  no thumb) and faded one in afterwards. Until the indicator is placed, the active tab now draws the same
+  mark itself in CSS; the indicator takes over in that same frame, with no fade, and glides as before.
+- Updated dependencies [58bc069]
+  - @delightstack/styles@1.1.2
+
 ## 1.9.0
 
 ### Minor Changes
