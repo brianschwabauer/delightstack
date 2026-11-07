@@ -189,7 +189,7 @@
 					aria-label={`${overflow_count} more avatars`}
 					onclick={expandable || onoverflowclick ? handleOverflowClick : undefined}
 					onkeydown={expandable || onoverflowclick ? handleOverflowKeyDown : undefined}>
-					+{overflow_count}
+					<span class="count">+{overflow_count}</span>
 				</div>
 			</div>
 		{/if}
@@ -229,10 +229,24 @@
 			margin-inline-start: calc(-1 * var(--overlap));
 		}
 
+		/* A covered avatar loses its left side (overlap + ring) to the one on
+		   top of it, which clipped two-letter initials ("BS" read as "S").
+		   Shift its label right by half that, centering it in the part that
+		   shows. The disc itself stays put. */
+		.avatar-group.direction-right &:not(:first-child),
+		.avatar-group.direction-left &:not(:last-child) {
+			--avatar-content-shift: calc(var(--overlap) / 2 + 1px);
+
+			/* Lifted on top: re-center in the full circle. */
+			&:hover {
+				--avatar-content-shift: 0px;
+			}
+		}
+
 		&:hover {
 			z-index: 100;
 			transform: translateY(-4px) scale(1.06);
-			filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.18));
+			filter: drop-shadow(0 6px 14px light-dark(rgb(0 0 0 / 0.18), transparent));
 			transition:
 				transform 250ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
 				filter 250ms ease,
@@ -274,6 +288,10 @@
 		flex-shrink: 0;
 		box-shadow: 0 0 0 2px var(--ring-color);
 		letter-spacing: -0.02em;
+
+		.count {
+			translate: var(--avatar-content-shift, 0px) 0;
+		}
 		outline: none;
 		transition: background 150ms ease;
 

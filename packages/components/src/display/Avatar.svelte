@@ -336,6 +336,12 @@
 			justify-content: center;
 			width: 100%;
 			height: 100%;
+			/* AvatarGroup shifts the label of a partly covered avatar into the
+			   visible part; padding moves the label, not the disc. */
+			box-sizing: border-box;
+			padding-inline-start: calc(var(--avatar-content-shift, 0px) * 2);
+			transition: padding-inline-start 250ms
+				var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
 			border-radius: var(--avatar-radius);
 			@supports (corner-shape: squircle) {
 				corner-shape: var(--_corner-shape);
@@ -360,6 +366,10 @@
 			justify-content: center;
 			width: 100%;
 			height: 100%;
+			box-sizing: border-box;
+			padding-inline-start: calc(var(--avatar-content-shift, 0px) * 2);
+			transition: padding-inline-start 250ms
+				var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
 			border-radius: var(--avatar-radius);
 			@supports (corner-shape: squircle) {
 				corner-shape: var(--_corner-shape);
@@ -372,8 +382,10 @@
 			);
 
 			svg {
-				width: 60%;
-				height: 60%;
+				/* Sized off the avatar, not the content box, so a group's label
+				   shift (padding) doesn't shrink the glyph. */
+				width: calc(var(--avatar-size) * 0.6);
+				height: calc(var(--avatar-size) * 0.6);
 			}
 		}
 
