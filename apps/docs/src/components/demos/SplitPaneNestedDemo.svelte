@@ -33,7 +33,7 @@
 				{/snippet}
 				{#snippet second()}
 					<div
-						style="padding: 1rem; height: 100%; background: var(--sl-color-gray-7, #1e1e2e); color: var(--sl-color-gray-11, #e0e0e0);">
+						style="padding: 1rem; height: 100%; background: var(--color-900, #16191b); color: var(--color-150, #eef0f1);">
 						<strong>Output</strong>
 						<p style="margin-top: 0.5rem; font-size: 0.8rem;">Build succeeded in 0.42s</p>
 					</div>

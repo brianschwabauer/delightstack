@@ -5,7 +5,7 @@
 	let open = $state(false);
 </script>
 
-<Button onclick={() => (open = true)}>Open Non-Dismissible Sheet</Button>
+<Button onclick={() => (open = true)}>Open non-dismissible sheet</Button>
 
 <BottomSheet bind:open dismissible={false} snap_points={[0.4, 0.85]}>
 	<div style="padding: 0 1.5rem 1.5rem;">

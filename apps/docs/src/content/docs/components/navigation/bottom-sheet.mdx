@@ -54,7 +54,7 @@ ${'  '}let open = $state(false);
 ${'  '}let snap = $state(0);
 </script>
 
-<Button onclick={() => open = true}>Open Multi-Snap Sheet</Button>
+<Button onclick={() => open = true}>Open multi-snap sheet</Button>
 
 <BottomSheet bind:open bind:snap snap_points={[0.3, 0.6, 1]}>
 ${'  '}<div style="padding: 0 1.5rem 1.5rem;">
@@ -131,7 +131,7 @@ ${'  '}import { BottomSheet, Button } from '@delightstack/components';
 ${'  '}let open = $state(false);
 </script>
 
-<Button onclick={() => open = true}>Open Sheet with Header</Button>
+<Button onclick={() => open = true}>Open sheet with header</Button>
 
 <BottomSheet bind:open snap_points={[0.5, 0.92]}>
 ${'  '}{#snippet header()}
@@ -158,7 +158,7 @@ ${'  '}import { BottomSheet, Button } from '@delightstack/components';
 ${'  '}let open = $state(false);
 </script>
 
-<Button onclick={() => open = true}>Open Non-Dismissible Sheet</Button>
+<Button onclick={() => open = true}>Open non-dismissible sheet</Button>
 
 <BottomSheet bind:open dismissible={false} snap_points={[0.4, 0.85]}>
 ${'  '}<div style="padding: 0 1.5rem 1.5rem;">

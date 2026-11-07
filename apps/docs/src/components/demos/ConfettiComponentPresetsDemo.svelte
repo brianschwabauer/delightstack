@@ -7,7 +7,7 @@
 
 <div style="display: flex; align-items: center; gap: 1rem;">
 	<Button onclick={() => (celebrating = true)} disabled={celebrating}>
-		{celebrating ? 'Firing...' : 'Complete Task'}
+		{celebrating ? 'Firing...' : 'Complete task'}
 	</Button>
 	<Confetti
 		active={celebrating}

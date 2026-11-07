@@ -7,7 +7,7 @@
 
 <div style="display: flex; flex-direction: column; align-items: flex-start;">
 	<Button onclick={() => (showDetails = !showDetails)}>
-		{showDetails ? 'Hide' : 'Show'} Details
+		{showDetails ? 'Hide' : 'Show'} details
 	</Button>
 
 	<Expand bind:show={showDetails}>

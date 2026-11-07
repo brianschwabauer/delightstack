@@ -17,7 +17,7 @@
 	</p>
 </Modal>
 
-<Modal bind:open={showFooter} title="Confirm Action">
+<Modal bind:open={showFooter} title="Confirm action">
 	<p style="margin: 0; line-height: 1.6;">
 		Are you sure you want to proceed with this action? This will apply the changes
 		immediately.

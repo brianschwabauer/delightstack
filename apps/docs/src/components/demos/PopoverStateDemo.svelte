@@ -22,7 +22,7 @@
 </script>
 
 <div class="controls">
-	<Toggle bind:checked={opened} label={opened ? 'Popover Opened' : 'Popover Closed'} />
+	<Toggle bind:checked={opened} label={opened ? 'Popover opened' : 'Popover closed'} />
 	<Select
 		options={placements.map((p) => ({ label: p, value: p }))}
 		bind:value={placement} />

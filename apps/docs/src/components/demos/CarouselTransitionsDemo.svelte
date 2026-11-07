@@ -3,21 +3,20 @@
 	import { featuredImages } from './_gallery-images';
 
 	let slide = $state(0);
-	let transition = $state<'none' | 'slide' | 'fade'>('slide');
-	const transitions: Array<'none' | 'slide' | 'fade'> = ['none', 'slide', 'fade'];
+	type Transition = 'none' | 'slide' | 'fade';
+	let transition = $state<string | number>('slide');
+	const transitions: Array<{ value: Transition; label: string }> = [
+		{ value: 'none', label: 'None' },
+		{ value: 'slide', label: 'Slide' },
+		{ value: 'fade', label: 'Fade' },
+	];
 </script>
 
 <div class="full-width">
 	<div class="picker-row">
-		<ButtonGroup>
-			{#each transitions as t (t)}
-				<Button
-					size="0"
-					transparent
-					active={transition === t}
-					onclick={() => (transition = t)}>
-					{t}
-				</Button>
+		<ButtonGroup bind:value={transition} translucent size="0" aria-label="Transition">
+			{#each transitions as t (t.value)}
+				<Button value={t.value}>{t.label}</Button>
 			{/each}
 		</ButtonGroup>
 	</div>
@@ -26,7 +25,7 @@
 		<Carousel
 			items={featuredImages}
 			bind:slide
-			{transition}
+			transition={transition as Transition}
 			inline
 			dismissable={false}
 			fit="cover" />

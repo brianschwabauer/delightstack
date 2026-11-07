@@ -6,7 +6,7 @@
 </script>
 
 <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-	<Button onclick={() => (showAlert = true)}>Confirm Action</Button>
+	<Button onclick={() => (showAlert = true)}>Confirm action</Button>
 	<Button error onclick={() => (showDestructive = true)}>Delete item</Button>
 </div>
 

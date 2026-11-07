@@ -5,7 +5,7 @@
 	let open = $state(false);
 </script>
 
-<Button onclick={() => (open = true)}>Open Sheet with Header</Button>
+<Button onclick={() => (open = true)}>Open sheet with header</Button>
 
 <BottomSheet bind:open snap_points={[0.5, 0.92]}>
 	{#snippet header()}

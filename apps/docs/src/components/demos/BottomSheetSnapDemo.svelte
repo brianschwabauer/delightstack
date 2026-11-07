@@ -6,7 +6,7 @@
 	let snap = $state(0);
 </script>
 
-<Button onclick={() => (open = true)}>Open Multi-Snap Sheet</Button>
+<Button onclick={() => (open = true)}>Open multi-snap sheet</Button>
 
 <BottomSheet bind:open bind:snap snap_points={[0.3, 0.6, 1]}>
 	<div style="padding: 0 1.5rem 1.5rem;">
