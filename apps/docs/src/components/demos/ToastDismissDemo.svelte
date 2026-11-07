@@ -10,6 +10,6 @@
 
 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
 	<Button onclick={showAndDismiss}>Show then Dismiss</Button>
-	<Button outline onclick={() => toast.dismiss()}>Clear All Toasts</Button>
+	<Button outline onclick={() => toast.dismiss()}>Clear all toasts</Button>
 </div>
 <Toaster />

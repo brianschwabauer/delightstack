@@ -101,7 +101,7 @@ ${'  '}import { contextMenu, ContextMenu } from '@delightstack/components';
 
 <div {@attach contextMenu({
 ${'  '}actions: [
-${'  '}${'  '}{ label: 'View Profile', href: '#profile' },
+${'  '}${'  '}{ label: 'View profile', href: '#profile' },
 ${'  '}${'  '}{ label: 'Open in New Tab', href: '#profile', target: '_blank' },
 ${'  '}]
 })}>
@@ -122,9 +122,9 @@ ${'  '}let viewMode = $state('grid');
 
 <div {@attach contextMenu({
 ${'  '}actions: [
-${'  '}${'  '}{ label: 'Grid View', active: viewMode === 'grid', onclick: () => viewMode = 'grid' },
-${'  '}${'  '}{ label: 'List View', active: viewMode === 'list', onclick: () => viewMode = 'list' },
-${'  '}${'  '}{ label: 'Table View', disabled: true },
+${'  '}${'  '}{ label: 'Grid view', active: viewMode === 'grid', onclick: () => viewMode = 'grid' },
+${'  '}${'  '}{ label: 'List view', active: viewMode === 'list', onclick: () => viewMode = 'list' },
+${'  '}${'  '}{ label: 'Table view', disabled: true },
 ${'  '}]
 })}>
 ${'  '}Right-click to change view (current: {viewMode})

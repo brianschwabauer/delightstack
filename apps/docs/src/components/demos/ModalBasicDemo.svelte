@@ -4,7 +4,7 @@
 	let open = $state(false);
 </script>
 
-<Button onclick={() => (open = true)}>Open Modal</Button>
+<Button onclick={() => (open = true)}>Open modal</Button>
 
 <Modal bind:open title="Welcome to your workspace" width="480px">
 	<div

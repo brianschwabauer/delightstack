@@ -8,7 +8,7 @@
 	{#snippet dropdown({ close })}
 		<List>
 			<ListItem onclick={() => close()}>Save As…</ListItem>
-			<ListItem onclick={() => close()}>Save Copy</ListItem>
+			<ListItem onclick={() => close()}>Save copy</ListItem>
 		</List>
 	{/snippet}
 </Button>

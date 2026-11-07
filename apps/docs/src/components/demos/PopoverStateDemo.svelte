@@ -39,7 +39,7 @@
 	close_on_outside_click={false}
 	close_on_escape_key={false}
 	{placement}>
-	<h2>Popover Title</h2>
+	<h2>Popover title</h2>
 	<p>Popover opened state is controlled outside the popover component.</p>
 </Popover>
 

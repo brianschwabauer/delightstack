@@ -3,7 +3,7 @@
 </script>
 
 <Timeline>
-	<TimelineItem status="complete" date="Jan 10" title="Order Confirmed">
+	<TimelineItem status="complete" date="Jan 10" title="Order confirmed">
 		Your order has been confirmed.
 	</TimelineItem>
 	<TimelineItem status="complete" date="Jan 11" title="Shipped">

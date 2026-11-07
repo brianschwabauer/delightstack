@@ -22,8 +22,8 @@ import { List, ListItem } from '@delightstack/components';
 
 ```svelte
 <List>
-  <ListItem onclick={() => console.log('clicked')}>Action Item</ListItem>
-  <ListItem onclick={() => console.log('clicked')}>Another Action</ListItem>
+  <ListItem onclick={() => console.log('clicked')}>Action item</ListItem>
+  <ListItem onclick={() => console.log('clicked')}>Another action</ListItem>
 </List>
 ```
 
@@ -84,7 +84,7 @@ ${'  '}let selected = $state<number[]>([]);
 
 <List type="checkbox" bind:value={selected}>
 ${'  '}<ListItem>Notifications</ListItem>
-${'  '}<ListItem>Email Updates</ListItem>
+${'  '}<ListItem>Email updates</ListItem>
 ${'  '}<ListItem>SMS Alerts</ListItem>
 </List>`}>
   <ListCheckboxDemo client:load />
@@ -104,7 +104,7 @@ ${'  '}let selected = $state<number[]>([]);
 <List type="toggle" bind:value={selected}>
 ${'  '}<ListItem>Wi-Fi</ListItem>
 ${'  '}<ListItem>Bluetooth</ListItem>
-${'  '}<ListItem>Airplane Mode</ListItem>
+${'  '}<ListItem>Airplane mode</ListItem>
 </List>`}>
   <ListToggleDemo client:load />
 </ComponentPreview>

@@ -4,6 +4,6 @@
 </script>
 
 <Button onclick={() => toast.warning('Session expiring soon', { persistent: true })}>
-	Show Persistent Warning
+	Show persistent warning
 </Button>
 <Toaster />

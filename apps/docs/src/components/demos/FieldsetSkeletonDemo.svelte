@@ -12,7 +12,7 @@
 		{loading ? 'Show loaded' : 'Show skeleton'}
 	</Button>
 	<div style="width: 100%;">
-		<Fieldset skeleton={loading} label="User Profile" bordered>
+		<Fieldset skeleton={loading} label="User profile" bordered>
 			<Input label="Name" name="name" skeleton={loading} bind:value={name} />
 			<Input
 				label="Email"

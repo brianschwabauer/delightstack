@@ -4,7 +4,7 @@
 	let collapsed = $state(false);
 </script>
 
-<Fieldset label="Advanced Options" collapsible bind:collapsed bordered>
-	<Input label="Custom Domain" name="domain" />
+<Fieldset label="Advanced options" collapsible bind:collapsed bordered>
+	<Input label="Custom domain" name="domain" />
 	<Toggle label="Enable API Access" name="api" />
 </Fieldset>

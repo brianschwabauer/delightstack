@@ -40,7 +40,7 @@
 </script>
 
 <Form bind:data {schema} onsubmit={handleSubmit} validate_on="blur" comfortable>
-	<Fieldset label="Create Account" bordered comfortable>
+	<Fieldset label="Create account" bordered comfortable>
 		<Input name="name" label="Name" />
 		<Input name="email" label="Email" type="email" />
 		<Input name="password" label="Password" type="password" />
@@ -56,8 +56,8 @@
 	</Fieldset>
 
 	<div style="display: flex; gap: 1rem;">
-		<Button type="reset" ghost>Reset</Button>
-		<Button type="submit">Create Account</Button>
+		<Button type="reset" transparent>Reset</Button>
+		<Button type="submit">Create account</Button>
 	</div>
 </Form>
 

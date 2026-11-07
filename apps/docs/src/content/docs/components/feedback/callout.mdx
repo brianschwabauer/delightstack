@@ -64,10 +64,10 @@ ${'  '}Failed to connect to the server. Please try again.
 	</Callout>
 </ComponentPreview>
 
-<ComponentPreview code={`<Callout tip title="Pro Tip">
+<ComponentPreview code={`<Callout tip title="Pro tip">
 ${'  '}Press Cmd+K to open the command palette.
 </Callout>`} title="Tip">
-	<Callout client:load tip title="Pro Tip">
+	<Callout client:load tip title="Pro tip">
 		Press Cmd+K to open the command palette.
 	</Callout>
 </ComponentPreview>
@@ -83,7 +83,7 @@ ${'  '}let visible = $state(true);
 </script>
 
 {#if visible}
-${'  '}<Callout tip title="Pro Tip" dismissible ondismiss={() => (visible = false)}>
+${'  '}<Callout tip title="Pro tip" dismissible ondismiss={() => (visible = false)}>
 ${'  '}${'  '}You can use keyboard shortcuts to speed up your workflow.
 ${'  '}</Callout>
 {/if}`}>

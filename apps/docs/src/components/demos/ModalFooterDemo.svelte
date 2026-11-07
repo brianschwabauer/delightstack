@@ -24,6 +24,6 @@
 
 	{#snippet footer()}
 		<Button transparent onclick={() => (open = false)}>Cancel</Button>
-		<Button accent onclick={() => (open = false)}>Save Changes</Button>
+		<Button accent onclick={() => (open = false)}>Save changes</Button>
 	{/snippet}
 </Modal>

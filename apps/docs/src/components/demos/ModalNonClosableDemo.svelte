@@ -11,7 +11,7 @@
 	}
 </script>
 
-<Button onclick={openModal}>Open Required Modal</Button>
+<Button onclick={openModal}>Open required modal</Button>
 
 <Modal bind:open title="Updated Terms of Service" closable={false} width="460px">
 	<div

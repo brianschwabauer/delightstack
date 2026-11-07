@@ -5,7 +5,7 @@
 	let tags = $state([
 		{ value: 'featured', label: 'Featured' },
 		{ value: 'new', label: 'New' },
-		{ value: 'sale', label: 'On Sale' },
+		{ value: 'sale', label: 'On sale' },
 	]);
 </script>
 

@@ -29,11 +29,11 @@ ${'  '}import { BottomSheet, Button } from '@delightstack/components';
 ${'  '}let open = $state(false);
 </script>
 
-<Button onclick={() => open = true}>Open Bottom Sheet</Button>
+<Button onclick={() => open = true}>Open bottom sheet</Button>
 
 <BottomSheet bind:open snap_points={[0.5, 0.92]}>
 ${'  '}<div style="padding: 0 1.5rem 1.5rem;">
-${'  '}${'  '}<h3>Bottom Sheet</h3>
+${'  '}${'  '}<h3>Bottom sheet</h3>
 ${'  '}${'  '}<p>Drag the handle to resize, flick down to dismiss, or tap the handle to toggle.</p>
 ${'  '}${'  '}<Button outline onclick={() => open = false}>Close</Button>
 ${'  '}</div>
@@ -82,7 +82,7 @@ ${'  '}let open = $state(false);
 ${'  '}let morph_percent = $state(0);
 </script>
 
-<Button onclick={() => open = true}>Open Morphing Sheet</Button>
+<Button onclick={() => open = true}>Open morphing sheet</Button>
 
 <BottomSheet
 ${'  '}bind:open
@@ -162,7 +162,7 @@ ${'  '}let open = $state(false);
 
 <BottomSheet bind:open dismissible={false} snap_points={[0.4, 0.85]}>
 ${'  '}<div style="padding: 0 1.5rem 1.5rem;">
-${'  '}${'  '}<h3>Required Action</h3>
+${'  '}${'  '}<h3>Required action</h3>
 ${'  '}${'  '}<p>You must complete this action before the sheet will close.</p>
 ${'  '}${'  '}<Button onclick={() => open = false}>Done</Button>
 ${'  '}</div>

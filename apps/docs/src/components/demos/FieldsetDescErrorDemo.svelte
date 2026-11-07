@@ -14,7 +14,7 @@
 
 <div style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%;">
 	<Fieldset label="Profile" description="This information is publicly visible" bordered>
-		<Input label="Display Name" name="displayName" />
+		<Input label="Display name" name="displayName" />
 		<Input label="Bio" name="bio" />
 	</Fieldset>
 

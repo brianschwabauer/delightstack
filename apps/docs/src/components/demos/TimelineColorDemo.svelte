@@ -3,7 +3,7 @@
 </script>
 
 <Timeline>
-	<TimelineItem title="Custom Color" color="var(--color-error)">
+	<TimelineItem title="Custom color" color="var(--color-error)">
 		A red-themed event marker.
 	</TimelineItem>
 </Timeline>

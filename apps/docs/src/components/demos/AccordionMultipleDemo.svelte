@@ -5,13 +5,13 @@
 </script>
 
 <Accordion multiple bind:value>
-	<AccordionItem value="section-1" title="First Section">
+	<AccordionItem value="section-1" title="First section">
 		<p>Content for the first section.</p>
 	</AccordionItem>
-	<AccordionItem value="section-2" title="Second Section">
+	<AccordionItem value="section-2" title="Second section">
 		<p>Content for the second section.</p>
 	</AccordionItem>
-	<AccordionItem value="section-3" title="Third Section">
+	<AccordionItem value="section-3" title="Third section">
 		<p>Content for the third section.</p>
 	</AccordionItem>
 </Accordion>

@@ -22,10 +22,10 @@ import { SplitPane } from '@delightstack/components';
 
 <ComponentPreview code={`<SplitPane>
 ${'  '}{#snippet first()}
-${'  '}${'  '}<div>Left Pane</div>
+${'  '}${'  '}<div>Left pane</div>
 ${'  '}{/snippet}
 ${'  '}{#snippet second()}
-${'  '}${'  '}<div>Right Pane</div>
+${'  '}${'  '}<div>Right pane</div>
 ${'  '}{/snippet}
 </SplitPane>`}>
   <SplitPaneDemo client:load />
@@ -87,10 +87,10 @@ ${'  '}let collapsed = $state<'first' | 'second' | null>(null);
 
 <SplitPane collapsible bind:collapsed>
 ${'  '}{#snippet first()}
-${'  '}${'  '}<div>First Pane</div>
+${'  '}${'  '}<div>First pane</div>
 ${'  '}{/snippet}
 ${'  '}{#snippet second()}
-${'  '}${'  '}<div>Second Pane</div>
+${'  '}${'  '}<div>Second pane</div>
 ${'  '}{/snippet}
 </SplitPane>`}>
   <SplitPaneCollapsibleDemo client:load />
@@ -102,7 +102,7 @@ Combine multiple SplitPanes for complex layouts.
 
 <ComponentPreview code={`<SplitPane size={20} collapsible>
 ${'  '}{#snippet first()}
-${'  '}${'  '}<div>File Tree</div>
+${'  '}${'  '}<div>File tree</div>
 ${'  '}{/snippet}
 ${'  '}{#snippet second()}
 ${'  '}${'  '}<SplitPane vertical size={70}>

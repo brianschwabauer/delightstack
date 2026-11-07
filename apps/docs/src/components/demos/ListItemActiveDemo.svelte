@@ -3,6 +3,6 @@
 </script>
 
 <List>
-	<ListItem active>Currently Selected</ListItem>
-	<ListItem>Another Item</ListItem>
+	<ListItem active>Currently selected</ListItem>
+	<ListItem>Another item</ListItem>
 </List>

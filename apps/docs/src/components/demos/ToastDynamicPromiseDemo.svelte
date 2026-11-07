@@ -14,5 +14,5 @@
 	}
 </script>
 
-<Button onclick={handleSave}>Save File</Button>
+<Button onclick={handleSave}>Save file</Button>
 <Toaster />

@@ -6,14 +6,14 @@
 	const commands = [
 		{
 			id: 'new',
-			title: 'New File',
+			title: 'New file',
 			category: 'File',
 			shortcut: ['Ctrl', 'N'],
 			onselect: () => {},
 		},
 		{
 			id: 'open',
-			title: 'Open File',
+			title: 'Open file',
 			category: 'File',
 			shortcut: ['Ctrl', 'O'],
 			onselect: () => {},
@@ -48,14 +48,14 @@
 		},
 		{
 			id: 'theme',
-			title: 'Toggle Theme',
+			title: 'Toggle theme',
 			category: 'View',
 			description: 'Switch between light and dark mode',
 			onselect: () => {},
 		},
 		{
 			id: 'zoom-in',
-			title: 'Zoom In',
+			title: 'Zoom in',
 			category: 'View',
 			shortcut: ['Ctrl', '='],
 			onselect: () => {},
@@ -63,6 +63,6 @@
 	];
 </script>
 
-<Button onclick={() => (open = true)}>Open Command Palette</Button>
+<Button onclick={() => (open = true)}>Open command palette</Button>
 
 <CommandPalette bind:open {commands} placeholder="Search commands..." />

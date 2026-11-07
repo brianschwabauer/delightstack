@@ -8,7 +8,7 @@
 </script>
 
 <Timeline horizontal>
-	<TimelineItem status="complete" title="Order Placed" {onclick} />
+	<TimelineItem status="complete" title="Order placed" {onclick} />
 	<TimelineItem status="complete" title="Processing" {onclick} />
 	<TimelineItem status="active" title="Shipping" {onclick} />
 	<TimelineItem status="pending" title="Delivered" {onclick} />

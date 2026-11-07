@@ -11,13 +11,13 @@
 	</Button>
 	<div style="width: 100%;">
 		<Accordion skeleton={loading} skeleton_count={3}>
-			<AccordionItem value="faq-1" title="Getting Started">
+			<AccordionItem value="faq-1" title="Getting started">
 				<p>Getting started is easy! Create an account and follow the onboarding steps.</p>
 			</AccordionItem>
-			<AccordionItem value="faq-2" title="Payment Methods">
+			<AccordionItem value="faq-2" title="Payment methods">
 				<p>We accept all major credit cards, PayPal, and bank transfers.</p>
 			</AccordionItem>
-			<AccordionItem value="faq-3" title="Contact Support">
+			<AccordionItem value="faq-3" title="Contact support">
 				<p>Reach our support team via email or through the in-app chat.</p>
 			</AccordionItem>
 		</Accordion>

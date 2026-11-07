@@ -5,14 +5,14 @@
 		{
 			id: 1,
 			date: 'Jan 1',
-			title: 'Project Kickoff',
+			title: 'Project kickoff',
 			description: 'Initial planning and team formation.',
 			status: 'complete',
 		},
 		{
 			id: 2,
 			date: 'Jan 15',
-			title: 'Design Phase',
+			title: 'Design phase',
 			description: 'Wireframes and mockups created.',
 			status: 'complete',
 		},
@@ -43,7 +43,7 @@
 		},
 		{
 			date: 'Mar 15',
-			title: 'Beta Launch',
+			title: 'Beta launch',
 			description: 'Public beta release.',
 			status: 'pending',
 		},

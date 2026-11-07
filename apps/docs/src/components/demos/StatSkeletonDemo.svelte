@@ -12,7 +12,7 @@
 	<Stat
 		skeleton={loading}
 		value={2451}
-		label="Total Users"
+		label="Total users"
 		change={12.5}
 		change_label="vs last month"
 		size="2" />

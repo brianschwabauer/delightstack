@@ -12,5 +12,5 @@
 	}
 </script>
 
-<Button onclick={handleDelete}>Delete Item</Button>
+<Button onclick={handleDelete}>Delete item</Button>
 <Toaster />

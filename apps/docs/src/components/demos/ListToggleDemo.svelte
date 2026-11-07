@@ -7,5 +7,5 @@
 <List type="toggle" bind:value={selected}>
 	<ListItem>Wi-Fi</ListItem>
 	<ListItem>Bluetooth</ListItem>
-	<ListItem>Airplane Mode</ListItem>
+	<ListItem>Airplane mode</ListItem>
 </List>

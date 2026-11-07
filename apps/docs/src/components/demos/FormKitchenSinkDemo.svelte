@@ -66,7 +66,7 @@
 	const role_options = [
 		{ value: 'developer', label: 'Developer' },
 		{ value: 'designer', label: 'Designer' },
-		{ value: 'manager', label: 'Product Manager' },
+		{ value: 'manager', label: 'Product manager' },
 		{ value: 'other', label: 'Other' },
 	];
 
@@ -98,7 +98,7 @@
 	reset_on_submit
 	onsubmit={handleSubmit}
 	onerror={handleError}>
-	<Fieldset label="Personal Information" bordered>
+	<Fieldset label="Personal information" bordered>
 		<Input name="first_name" label="First name" />
 		<Input name="last_name" label="Last name" />
 		<Input name="email" label="Email" type="email" />
@@ -152,7 +152,7 @@
 	</Fieldset>
 
 	<div style="display: flex; gap: 1rem;">
-		<Button type="reset" ghost>Reset</Button>
-		<Button type="submit">Create Account</Button>
+		<Button type="reset" transparent>Reset</Button>
+		<Button type="submit">Create account</Button>
 	</div>
 </Form>

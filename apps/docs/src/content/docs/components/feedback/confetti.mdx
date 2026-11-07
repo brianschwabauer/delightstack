@@ -75,7 +75,7 @@ ${'  '}${'  '}});
 ${'  '}}
 </script>
 
-<button onclick={celebrate}>Custom Burst</button>`}>
+<button onclick={celebrate}>Custom burst</button>`}>
   <ConfettiCustomDemo client:load />
 </ComponentPreview>
 
@@ -118,9 +118,9 @@ ${'  '}${'  '}stopCannon = confetti.cannon({ duration: 10000 });
 ${'  '}}
 </script>
 
-<button onclick={startCannon}>Start Cannon</button>
-<button onclick={() => stopCannon?.()}>Stop Cannon</button>
-<button onclick={() => confetti.stop()}>Stop All</button>`}>
+<button onclick={startCannon}>Start cannon</button>
+<button onclick={() => stopCannon?.()}>Stop cannon</button>
+<button onclick={() => confetti.stop()}>Stop all</button>`}>
   <ConfettiStopDemo client:load />
 </ComponentPreview>
 
@@ -132,7 +132,7 @@ ${'  '}import { Confetti } from '@delightstack/components';
 ${'  '}let celebrating = $state(false);
 </script>
 
-<button onclick={() => celebrating = true}>Complete Task</button>
+<button onclick={() => celebrating = true}>Complete task</button>
 <Confetti
 ${'  '}active={celebrating}
 ${'  '}preset="cannon"

@@ -12,4 +12,4 @@
 	}
 </script>
 
-<Button onclick={celebrate}>Custom Burst</Button>
+<Button onclick={celebrate}>Custom burst</Button>

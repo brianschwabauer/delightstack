@@ -8,7 +8,7 @@
 		{#snippet first()}
 			<div
 				style="padding: 1rem; height: 100%; background: var(--sl-color-accent-low, #eef2ff);">
-				<strong>File Tree</strong>
+				<strong>File tree</strong>
 				<div
 					style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--sl-color-gray-2, #6b7280);">
 					<div>src/</div>

@@ -5,7 +5,7 @@
 	let showWarning = $state(false);
 </script>
 
-<Button onclick={() => (showWarning = true)}>Show Warning</Button>
+<Button onclick={() => (showWarning = true)}>Show warning</Button>
 
 <Alert
 	bind:open={showWarning}

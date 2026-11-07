@@ -32,7 +32,7 @@
 		<Input name="name" label="Name" />
 		<Input name="email" label="Email" type="email" />
 		<div style="display: flex; gap: 1rem;">
-			<Button type="reset" ghost>Reset</Button>
+			<Button type="reset" transparent>Reset</Button>
 			<Button type="submit">Submit</Button>
 		</div>
 	</div>

@@ -13,13 +13,13 @@
 </script>
 
 <div style="display: flex; align-items: center; gap: 0.75rem;">
-	<Button onclick={() => (showAlert = true)}>Process Data</Button>
+	<Button onclick={() => (showAlert = true)}>Process data</Button>
 	{#if status}<span style="color: var(--color-text-muted);">{status}</span>{/if}
 </div>
 
 <Alert
 	bind:open={showAlert}
-	title="Process Data"
+	title="Process data"
 	message="This may take a moment."
 	continue_text="Process"
 	oncontinue={handleContinue} />

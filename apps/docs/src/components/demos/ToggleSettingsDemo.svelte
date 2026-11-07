@@ -11,7 +11,7 @@
 <div style="display: flex; flex-direction: column; gap: 1rem;">
 	<Toggle
 		bind:checked={settings.notifications}
-		label="Push Notifications"
+		label="Push notifications"
 		name="notifications"
 		value="enabled" />
 	<Toggle
@@ -21,7 +21,7 @@
 		value="enabled" />
 	<Toggle
 		bind:checked={settings.sounds}
-		label="Sound Effects"
+		label="Sound effects"
 		name="sounds"
 		value="enabled" />
 </div>

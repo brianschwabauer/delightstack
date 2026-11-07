@@ -5,11 +5,11 @@
 	let open = $state(false);
 </script>
 
-<Button onclick={() => (open = true)}>Open Bottom Sheet</Button>
+<Button onclick={() => (open = true)}>Open bottom sheet</Button>
 
 <BottomSheet bind:open snap_points={[0.5, 0.92]}>
 	<div style="padding: 0 1.5rem 1.5rem;">
-		<h3 style="margin: 0 0 0.75rem;">Bottom Sheet</h3>
+		<h3 style="margin: 0 0 0.75rem;">Bottom sheet</h3>
 		<p
 			style="margin: 0 0 1rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">
 			Drag the handle to resize, flick down to dismiss, or tap the handle to toggle

@@ -38,7 +38,7 @@
 		<Input name="email" label="Email" type="email" />
 		<Input name="password" label="Password" type="password" />
 		<Toggle name="remember" label="Remember me" />
-		<Button type="submit">Sign In</Button>
+		<Button type="submit">Sign in</Button>
 	</div>
 </Form>
 

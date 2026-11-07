@@ -23,7 +23,7 @@ import { Button } from '@delightstack/components';
 <ComponentPreview code={`<Button onclick={() => console.log('clicked')}>
 ${'  '}Click Me
 </Button>`}>
-  <Button client:load>Click Me</Button>
+  <Button client:load>Click me</Button>
 </ComponentPreview>
 
 ## Examples
@@ -44,36 +44,38 @@ Combine variant booleans freely. The default appearance (solid action-colored) r
 
 ### Color Schemes
 
-Apply semantic color schemes with the `accent`, `error`, or `success` props. These combine with any variant.
+Apply semantic color schemes with the `accent`, `error`, `success`, or `warning` props. These combine with any variant. `accent` is the ink-colored second voice — a confident alternative to the brand action, not a disabled-looking gray.
 
 <ComponentPreview code={`<Button accent>Accent</Button>
 <Button error>Error</Button>
 <Button success>Success</Button>
-<Button transparent error>Transparent Error</Button>
-<Button outline accent>Outline Accent</Button>
-<Button translucent success>Translucent Success</Button>`}>
+<Button warning>Warning</Button>
+<Button transparent error>Transparent error</Button>
+<Button outline accent>Outline accent</Button>
+<Button translucent success>Translucent success</Button>`}>
   <Button client:load accent>Accent</Button>
   <Button client:load error>Error</Button>
   <Button client:load success>Success</Button>
-  <Button client:load transparent error>Transparent Error</Button>
-  <Button client:load outline accent>Outline Accent</Button>
-  <Button client:load translucent success>Translucent Success</Button>
+  <Button client:load warning>Warning</Button>
+  <Button client:load transparent error>Transparent error</Button>
+  <Button client:load outline accent>Outline accent</Button>
+  <Button client:load translucent success>Translucent success</Button>
 </ComponentPreview>
 
 ### Sizes
 
 The `size` prop controls font size, which drives padding and dimensions via `em` units.
 
-<ComponentPreview code={`<Button size="00">Extra Small</Button>
+<ComponentPreview code={`<Button size="00">Extra small</Button>
 <Button size="0">Small</Button>
 <Button size="1">Default</Button>
 <Button size="2">Large</Button>
-<Button size="3">Extra Large</Button>`}>
-  <Button client:load size="00">Extra Small</Button>
+<Button size="3">Extra large</Button>`}>
+  <Button client:load size="00">Extra small</Button>
   <Button client:load size="0">Small</Button>
   <Button client:load size="1">Default</Button>
   <Button client:load size="2">Large</Button>
-  <Button client:load size="3">Extra Large</Button>
+  <Button client:load size="3">Extra large</Button>
 </ComponentPreview>
 
 ### Pill, Dense & Comfortable
@@ -85,13 +87,13 @@ fields in the same form row.
 <ComponentPreview code={`<Button dense>Dense</Button>
 <Button>Default</Button>
 <Button comfortable>Comfortable</Button>
-<Button pill>Pill Button</Button>
-<Button pill dense>Pill Dense</Button>`}>
+<Button pill>Pill button</Button>
+<Button pill dense>Pill dense</Button>`}>
   <Button client:load dense>Dense</Button>
   <Button client:load>Default</Button>
   <Button client:load comfortable>Comfortable</Button>
-  <Button client:load pill>Pill Button</Button>
-  <Button client:load pill dense>Pill Dense</Button>
+  <Button client:load pill>Pill button</Button>
+  <Button client:load pill dense>Pill dense</Button>
 </ComponentPreview>
 
 ### Icon Buttons
@@ -189,7 +191,7 @@ When `href` is set, the button renders as an `<a>` element.
 <ComponentPreview code={`<Button href="https://example.com" target="_blank">
 ${'  '}Visit Site
 </Button>`}>
-  <Button client:load href="https://example.com" target="_blank">Visit Site</Button>
+  <Button client:load href="https://example.com" target="_blank">Visit site</Button>
 </ComponentPreview>
 
 ### Dropdown Menu
@@ -214,7 +216,7 @@ Use the `dropdown` snippet for a secondary dropdown trigger alongside the main b
 ${'  '}Save
 ${'  '}{#snippet dropdown({ close })}
 ${'  '}${'  '}<button onclick={() => { saveAs(); close(); }}>Save As...</button>
-${'  '}${'  '}<button onclick={() => { saveCopy(); close(); }}>Save Copy</button>
+${'  '}${'  '}<button onclick={() => { saveCopy(); close(); }}>Save copy</button>
 ${'  '}{/snippet}
 </Button>`}>
 	<ButtonSplitDropdownDemo client:load />
@@ -233,6 +235,7 @@ ${'  '}{/snippet}
 | `grouped` | `boolean` | `false` | Indicates the button is part of a group (border radius adjusted) |
 | `error` | `boolean` | `false` | Red/destructive color scheme |
 | `success` | `boolean` | `false` | Green/success color scheme |
+| `warning` | `boolean` | `false` | Amber/warning color scheme (filled warning buttons use dark ink) |
 | `accent` | `boolean` | `false` | Accent/brand color scheme |
 | `overlay` | `boolean` | `false` | Dark overlay style with backdrop blur |
 | `dense` | `boolean` | `false` | Reduced padding/height for compact layouts |
@@ -245,6 +248,7 @@ ${'  '}{/snippet}
 | `tooltip` | `string` | `''` | Hover tooltip text |
 | `disabled` | `boolean` | `false` | Disable interaction |
 | `active` | `boolean` | `false` | Visually pressed/selected state (useful in toggle groups) |
+| `value` | `string \| number` | `undefined` | Inside a `ButtonGroup` with `bind:value`, the option this button selects |
 | `loading` | `boolean` | `undefined` | Show the loading spinner manually. Leave unset to let a promise-returning `onclick` drive it |
 | `loading_success` | `boolean` | `false` | For the manual `loading` path: flash a success checkmark when `loading` goes `true` → `false`. The promise path shows it automatically on resolve |
 | `badge` | `string \| boolean` | `undefined` | Badge indicator; `true` renders a dot, a string renders the text |

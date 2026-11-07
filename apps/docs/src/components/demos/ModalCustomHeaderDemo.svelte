@@ -7,7 +7,7 @@
 	let enabled = $state([0, 2]);
 </script>
 
-<Button onclick={() => (open = true)}>Open Settings</Button>
+<Button onclick={() => (open = true)}>Open settings</Button>
 
 <Modal bind:open width="420px">
 	{#snippet header()}

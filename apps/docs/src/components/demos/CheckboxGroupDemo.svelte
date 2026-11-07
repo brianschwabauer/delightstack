@@ -13,7 +13,9 @@
 </script>
 
 <div>
-	<p style="margin: 0 0 0.5rem; font-weight: 600;">Notification preferences</p>
+	<p style="margin: 0 0 0.25rem; font-size: 0.9375em; font-weight: 600;">
+		Notification preferences
+	</p>
 	<div style="display: flex; flex-direction: column; gap: 0.25rem;">
 		<Checkbox
 			checked={notifications.includes('email')}

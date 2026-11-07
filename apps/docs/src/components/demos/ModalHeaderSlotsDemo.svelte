@@ -4,7 +4,7 @@
 	let open = $state(false);
 </script>
 
-<Button onclick={() => (open = true)}>Open Document</Button>
+<Button onclick={() => (open = true)}>Open document</Button>
 
 <Modal bind:open title="Q3 Product Brief">
 	{#snippet header_start()}

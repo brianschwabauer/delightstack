@@ -6,7 +6,7 @@
 </script>
 
 <Accordion bind:value={outerValue}>
-	<AccordionItem value="parent-1" title="Frontend Frameworks">
+	<AccordionItem value="parent-1" title="Frontend frameworks">
 		<Accordion bind:value={innerValue}>
 			<AccordionItem value="child-1" title="Svelte">
 				<p>
@@ -21,7 +21,7 @@
 			</AccordionItem>
 		</Accordion>
 	</AccordionItem>
-	<AccordionItem value="parent-2" title="Backend Languages">
+	<AccordionItem value="parent-2" title="Backend languages">
 		<p>Popular choices include Node.js, Python, Go, and Rust.</p>
 	</AccordionItem>
 </Accordion>

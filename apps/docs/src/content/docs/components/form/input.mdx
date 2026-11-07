@@ -28,7 +28,7 @@ import type { InputType, InputOption } from '@delightstack/components';
 ## Basic Usage
 
 <ComponentPreview code={`<Input label="Name" placeholder="Enter your name" required />`}>
-	<Input client:load label="Name" placeholder="Enter your name" required />
+	<div style="width: min(20rem, 100%)"><Input client:load label="Name" placeholder="Enter your name" required /></div>
 </ComponentPreview>
 
 ## Input Types
@@ -59,16 +59,16 @@ The `type` prop supports 13 input types:
 <Input type="email" label="Email" placeholder="you@example.com" />
 <Input type="url" label="Website" placeholder="https://example.com" />
 <Input type="tel" label="Phone" placeholder="(555) 555-5555" />`}>
-	<Input client:load type="text" label="Username" placeholder="Enter username" />
-	<Input client:load type="email" label="Email" placeholder="you@example.com" />
-	<Input client:load type="url" label="Website" placeholder="https://example.com" />
-	<Input client:load type="tel" label="Phone" placeholder="(555) 555-5555" />
+	<div style="width: min(14rem, 100%)"><Input client:load type="text" label="Username" placeholder="Enter username" /></div>
+	<div style="width: min(18rem, 100%)"><Input client:load type="email" label="Email" placeholder="you@example.com" /></div>
+	<div style="width: min(18rem, 100%)"><Input client:load type="url" label="Website" placeholder="https://example.com" /></div>
+	<div style="width: min(11rem, 100%)"><Input client:load type="tel" label="Phone" placeholder="(555) 555-5555" /></div>
 </ComponentPreview>
 
 ### Number Input
 
 <ComponentPreview code={`<Input type="number" label="Quantity" min={0} max={100} step={5} />`}>
-	<Input client:load type="number" label="Quantity" min={0} max={100} step={5} />
+	<div style="width: min(9rem, 100%)"><Input client:load type="number" label="Quantity" min={0} max={100} step={5} /></div>
 </ComponentPreview>
 
 ### Date and Time
@@ -78,9 +78,9 @@ Use `date`, `time`, and `datetime-local` for temporal values. The label always s
 <ComponentPreview code={`<Input type="date" label="Date" bind:value={date} />
 <Input type="time" label="Time" bind:value={time} />
 <Input type="datetime-local" label="Date & time" bind:value={when} />`}>
-	<Input client:load type="date" label="Date" value="2026-06-11" />
-	<Input client:load type="time" label="Time" value="09:30" />
-	<Input client:load type="datetime-local" label="Date & time" value="2026-06-11T09:30" />
+	<div style="width: min(11rem, 100%)"><Input client:load type="date" label="Date" value="2026-06-11" /></div>
+	<div style="width: min(8.5rem, 100%)"><Input client:load type="time" label="Time" value="09:30" /></div>
+	<div style="width: min(15rem, 100%)"><Input client:load type="datetime-local" label="Date & time" value="2026-06-11T09:30" /></div>
 </ComponentPreview>
 
 ### Color
@@ -88,7 +88,7 @@ Use `date`, `time`, and `datetime-local` for temporal values. The label always s
 The `color` type pairs a live swatch with the selected hex value. Bind `value` to read the chosen colour.
 
 <ComponentPreview code={`<Input type="color" label="Brand color" bind:value={color} />`}>
-	<Input client:load type="color" label="Brand color" value="#10a6c4" />
+	<div style="width: min(11rem, 100%)"><Input client:load type="color" label="Brand color" value="#10a6c4" /></div>
 </ComponentPreview>
 
 ### File
@@ -97,8 +97,8 @@ Use `file` for uploads. Add `accept` to restrict file types and `multiple` to al
 
 <ComponentPreview code={`<Input type="file" label="Attachment" />
 <Input type="file" label="Photos" accept="image/*" multiple />`}>
-	<Input client:load type="file" label="Attachment" />
-	<Input client:load type="file" label="Photos" accept="image/*" multiple />
+	<div style="width: min(18rem, 100%)"><Input client:load type="file" label="Attachment" /></div>
+	<div style="width: min(18rem, 100%)"><Input client:load type="file" label="Photos" accept="image/*" multiple /></div>
 </ComponentPreview>
 
 ### Textarea
@@ -138,7 +138,7 @@ ${'  '}strength_indicator
 Use `mask` to auto-format user input. `#` = digit, `A` = letter, `*` = any character.
 
 <ComponentPreview code={`<Input label="Phone" mask="(###) ###-####" bind:value={phone} />
-<Input label="Card Number" mask="#### #### #### ####" bind:value={card} />
+<Input label="Card number" mask="#### #### #### ####" bind:value={card} />
 <Input label="Expiry" mask="##/##" bind:value={expiry} />`}>
 	<InputMaskedDemo client:load />
 </ComponentPreview>
@@ -194,14 +194,14 @@ ${'  '}let tags = $state<string[]>([]);
 
 <ComponentPreview code={`<Input label="Price" prefix="$" suffix="USD" type="number" />
 <Input label="Website" prefix="https://" placeholder="example.com" />`}>
-	<Input client:load label="Price" prefix="$" suffix="USD" type="number" />
-	<Input client:load label="Website" prefix="https://" placeholder="example.com" />
+	<div style="width: min(11rem, 100%)"><Input client:load label="Price" prefix="$" suffix="USD" type="number" /></div>
+	<div style="width: min(18rem, 100%)"><Input client:load label="Website" prefix="https://" placeholder="example.com" /></div>
 </ComponentPreview>
 
 ### Disabled
 
 <ComponentPreview code={`<Input label="Disabled input" placeholder="Cannot edit" disabled />`}>
-	<Input client:load label="Disabled input" placeholder="Cannot edit" disabled />
+	<div style="width: min(18rem, 100%)"><Input client:load label="Disabled input" placeholder="Cannot edit" disabled /></div>
 </ComponentPreview>
 
 ### Filled
@@ -210,8 +210,8 @@ Inputs are transparent (outlined) by default so they sit cleanly on any surface.
 
 <ComponentPreview code={`<Input label="Outlined (default)" placeholder="Transparent surface" />
 <Input label="Filled" placeholder="Solid surface" filled />`}>
-	<Input client:load label="Outlined (default)" placeholder="Transparent surface" />
-	<Input client:load label="Filled" placeholder="Solid surface" filled />
+	<div style="width: min(18rem, 100%)"><Input client:load label="Outlined (default)" placeholder="Transparent surface" /></div>
+	<div style="width: min(18rem, 100%)"><Input client:load label="Filled" placeholder="Solid surface" filled /></div>
 </ComponentPreview>
 
 ### Sizes

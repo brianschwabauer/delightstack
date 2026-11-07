@@ -7,9 +7,9 @@
 </script>
 
 <Steps bind:current orientation="vertical">
-	<Step title="Personal Info">
+	<Step title="Personal info">
 		<div class="fields">
-			<Input label="Full Name" />
+			<Input label="Full name" />
 			<Input label="Email" type="email" />
 		</div>
 		<div class="actions">

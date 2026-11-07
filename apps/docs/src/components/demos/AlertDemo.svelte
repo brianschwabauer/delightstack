@@ -7,7 +7,7 @@
 
 <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
 	<Button onclick={() => (showAlert = true)}>Confirm Action</Button>
-	<Button error onclick={() => (showDestructive = true)}>Delete Item</Button>
+	<Button error onclick={() => (showDestructive = true)}>Delete item</Button>
 </div>
 
 <Alert
@@ -18,7 +18,7 @@
 
 <Alert
 	bind:open={showDestructive}
-	title="Delete Item"
+	title="Delete item"
 	message="This action cannot be undone. Are you sure you want to delete this item?"
 	continue_text="Delete"
 	destructive />

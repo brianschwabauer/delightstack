@@ -6,8 +6,9 @@
 		value,
 		label = undefined,
 		change = undefined,
-		changeLabel = undefined,
+		change_label = undefined,
 		trend = undefined,
+		positive = undefined,
 		size = '1',
 		horizontal = false,
 		prefix = undefined,
@@ -25,8 +26,9 @@
 		{value}
 		{label}
 		{change}
-		change_label={changeLabel}
+		{change_label}
 		{trend}
+		{positive}
 		{size}
 		{horizontal}
 		{prefix}

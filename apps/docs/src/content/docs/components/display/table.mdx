@@ -93,7 +93,7 @@ ${'  '}<span class="status-badge">{value}</span>
 {/snippet}
 
 {#snippet actionsCell({ row })}
-${'  '}<Button size="0" onclick={() => editUser(row)}>Edit</Button>
+${'  '}<Button transparent size="0" onclick={() => editUser(row)}>Edit</Button>
 {/snippet}
 
 <Table
@@ -492,6 +492,7 @@ ${'  '}data={loading ? [] : rows}
 | `selectable` | `boolean` | `false` | Enable row selection with checkboxes |
 | `selected` | `T[]` | `[]` | Selected rows (bindable) |
 | `striped` | `boolean` | `false` | Alternating row background colors |
+| `column_dividers` | `boolean` | `false` | Vertical rules between columns (always on while `resizable`) |
 | `dense` | `boolean` | `false` | Compact cell padding |
 | `comfortable` | `boolean` | `false` | Relaxed cell padding |
 | `sticky_header` | `boolean` | `true` | Sticky header on vertical scroll |

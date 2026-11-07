@@ -9,7 +9,7 @@
 		bind:tab
 		tabs={[
 			{ label: 'Available' },
-			{ label: 'Coming Soon', disabled: true },
+			{ label: 'Coming soon', disabled: true },
 			{ label: 'Beta' },
 		]}>
 		{#snippet children({ tab })}

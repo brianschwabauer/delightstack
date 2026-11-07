@@ -1,14 +1,18 @@
 <script>
 	import { Popover } from '@delightstack/components/actions';
+	import { Input } from '@delightstack/components/form';
 
+	// Popover listens for `focus` on its reference, which doesn't bubble — so
+	// point it at the Input's own <input> rather than a wrapper.
+	let wrapper = $state(undefined);
 	let triggerEl = $state(undefined);
+	$effect(() => {
+		triggerEl = wrapper?.querySelector('input') ?? undefined;
+	});
 </script>
 
-<div style="position:relative;display:inline-block;">
-	<input
-		bind:this={triggerEl}
-		placeholder="Focus to see suggestions"
-		style="padding:0.5rem 0.75rem;border-radius:var(--radius-2,5px);border:1px solid var(--color-border, rgba(255,255,255,0.15));background:var(--color-bg-1, #1a1a1a);color:var(--color-text, white);font-size:0.9375rem;width:250px;font-family:inherit;" />
+<div style="position: relative; width: min(18rem, 100%);" bind:this={wrapper}>
+	<Input label="Search" placeholder="Focus to see suggestions" />
 	<Popover
 		ref_element={triggerEl}
 		open_on_focus

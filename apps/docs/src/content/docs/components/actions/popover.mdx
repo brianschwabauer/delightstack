@@ -24,9 +24,9 @@ ${'  '}${'  '}import { Button, Popover } from '@delightstack/components/actions'
 ${'  '}${'  '}let ref_element = $state(undefined);
 </script>
 
-<Button bind:button_element={ref_element}>Toggle Popover</Button>
+<Button bind:button_element={ref_element}>Toggle popover</Button>
 <Popover {ref_element} open_on_click>
-${'  '}${'  '}<h2>Popover Title</h2>
+${'  '}${'  '}<h2>Popover title</h2>
 ${'  '}${'  '}<p>Positioned automatically using Floating UI.</p>
 ${'  '}${'  '}<p>Click outside to dismiss.</p>
 </Popover>
@@ -82,7 +82,7 @@ ${'  '}${'  '}bind:ref_element
 ${'  '}${'  '}close_on_outside_click={false}
 ${'  '}${'  '}close_on_escape_key={false}
 ${'  '}${'  '}{placement}>
-${'  '}${'  '}<h2>Popover Title</h2>
+${'  '}${'  '}<h2>Popover title</h2>
 ${'  '}${'  '}<p>Popover opened state is controlled outside the popover component.</p>
 </Popover>
 

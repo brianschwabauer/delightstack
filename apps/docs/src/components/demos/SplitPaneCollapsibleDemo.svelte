@@ -10,7 +10,7 @@
 		{#snippet first()}
 			<div
 				style="padding: 1rem; height: 100%; background: var(--sl-color-accent-low, #eef2ff);">
-				<strong>First Pane</strong>
+				<strong>First pane</strong>
 				<p
 					style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--sl-color-gray-2, #6b7280);">
 					Double-click divider to collapse.
@@ -19,7 +19,7 @@
 		{/snippet}
 		{#snippet second()}
 			<div style="padding: 1rem; height: 100%;">
-				<strong>Second Pane</strong>
+				<strong>Second pane</strong>
 				<p
 					style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--sl-color-gray-2, #6b7280);">
 					{collapsed ? `"${collapsed}" pane is collapsed` : 'No pane collapsed'}

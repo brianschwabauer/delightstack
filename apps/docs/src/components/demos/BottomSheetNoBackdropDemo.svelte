@@ -9,7 +9,7 @@
 
 <BottomSheet bind:open backdrop={false} blocking={false} snap_points={[0.5, 0.9]}>
 	<div style="padding: 0 1.5rem 1.5rem;">
-		<h3 style="margin: 0 0 0.75rem;">No Backdrop</h3>
+		<h3 style="margin: 0 0 0.75rem;">No backdrop</h3>
 		<p
 			style="margin: 0 0 1rem; color: color-mix(in oklch, var(--color-text), transparent 35%);">
 			The backdrop has no blur or tint, so the page behind stays clearly visible. Tapping

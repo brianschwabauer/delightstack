@@ -29,10 +29,10 @@
 				? 'color-mix(in oklch, var(--color-warning) 15%, transparent)'
 				: 'color-mix(in oklch, var(--color-error) 15%, transparent)'};
 		color: {value === 'active'
-			? 'var(--color-success)'
+			? 'var(--color-success-fg)'
 			: value === 'pending'
-				? 'var(--color-warning)'
-				: 'var(--color-error)'};
+				? 'var(--color-warning-fg)'
+				: 'var(--color-error-fg)'};
 	">
 		<span
 			style="
@@ -47,7 +47,10 @@
 {/snippet}
 
 {#snippet actionsCell({ row })}
+	<!-- Row actions stay quiet (transparent): a column of solid buttons
+	     outshouts the data it sits beside. -->
 	<Button
+		transparent
 		size="0"
 		onclick={() => {
 			lastAction = `Editing ${row.name}`;

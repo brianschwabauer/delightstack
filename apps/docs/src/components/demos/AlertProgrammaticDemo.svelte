@@ -17,6 +17,6 @@
 </script>
 
 <div style="display: flex; align-items: center; gap: 0.75rem;">
-	<Button error onclick={handleClick}>Delete Item</Button>
+	<Button error onclick={handleClick}>Delete item</Button>
 	{#if result}<span style="color: var(--color-text-muted);">{result}</span>{/if}
 </div>

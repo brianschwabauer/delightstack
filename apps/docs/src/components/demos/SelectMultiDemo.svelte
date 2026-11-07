@@ -6,9 +6,9 @@
 	const tags = [
 		{ value: 'featured', label: 'Featured' },
 		{ value: 'new', label: 'New' },
-		{ value: 'sale', label: 'On Sale' },
+		{ value: 'sale', label: 'On sale' },
 		{ value: 'popular', label: 'Popular' },
-		{ value: 'limited', label: 'Limited Edition' },
+		{ value: 'limited', label: 'Limited edition' },
 	];
 </script>
 

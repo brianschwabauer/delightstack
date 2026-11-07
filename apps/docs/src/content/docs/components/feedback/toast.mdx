@@ -34,10 +34,10 @@ ${'  '}import { Toaster, toast } from '@delightstack/components';
 ${'  '}import { Button } from '@delightstack/components';
 </script>
 
-<Button onclick={() => toast.success('Changes saved successfully!')}>Success Toast</Button>
-<Button error onclick={() => toast.error('Something went wrong!')}>Error Toast</Button>
-<Button outline onclick={() => toast.warning('You have unsaved changes')}>Warning Toast</Button>
-<Button onclick={() => toast('This is an info notification')}>Info Toast</Button>
+<Button onclick={() => toast.success('Changes saved successfully!')}>Success toast</Button>
+<Button error onclick={() => toast.error('Something went wrong!')}>Error toast</Button>
+<Button warning onclick={() => toast.warning('You have unsaved changes')}>Warning toast</Button>
+<Button onclick={() => toast('This is an info notification')}>Info toast</Button>
 
 <Toaster />`}>
 	<ToastDemo client:load />
@@ -75,7 +75,7 @@ ${'  '}${'  '}});
 ${'  '}}
 </script>
 
-<button onclick={handleDelete}>Delete Item</button>`}>
+<button onclick={handleDelete}>Delete item</button>`}>
   <ToastActionDemo client:load />
 </ComponentPreview>
 
@@ -118,7 +118,7 @@ ${'  '}${'  '}});
 ${'  '}}
 </script>
 
-<button onclick={handleSave}>Save File</button>`}>
+<button onclick={handleSave}>Save file</button>`}>
   <ToastDynamicPromiseDemo client:load />
 </ComponentPreview>
 
@@ -164,7 +164,7 @@ ${'  '}}
 </script>
 
 <button onclick={showAndDismiss}>Show then Dismiss</button>
-<button onclick={() => toast.dismiss()}>Clear All Toasts</button>`}>
+<button onclick={() => toast.dismiss()}>Clear all toasts</button>`}>
   <ToastDismissDemo client:load />
 </ComponentPreview>
 

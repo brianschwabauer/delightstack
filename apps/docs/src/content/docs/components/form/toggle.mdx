@@ -17,24 +17,24 @@ import { Toggle } from '@delightstack/components';
 
 ## Basic Usage
 
-<ComponentPreview code={`<Toggle label="Dark Mode" />`}>
-	<Toggle client:load label="Dark Mode" />
+<ComponentPreview code={`<Toggle label="Dark mode" />`}>
+	<Toggle client:load label="Dark mode" />
 </ComponentPreview>
 
 ## Examples
 
 ### Simple Toggle
 
-<ComponentPreview code={`<Toggle label="Dark Mode" />`}>
-	<Toggle client:load label="Dark Mode" />
+<ComponentPreview code={`<Toggle label="Dark mode" />`}>
+	<Toggle client:load label="Dark mode" />
 </ComponentPreview>
 
 ### With On/Off Labels
 
 Dynamic text that changes based on the toggle state.
 
-<ComponentPreview code={`<Toggle on_label="Notifications On" off_label="Notifications Off" />`}>
-	<Toggle client:load on_label="Notifications On" off_label="Notifications Off" />
+<ComponentPreview code={`<Toggle on_label="Notifications on" off_label="Notifications off" />`}>
+	<Toggle client:load on_label="Notifications on" off_label="Notifications off" />
 </ComponentPreview>
 
 ### Label Position
@@ -138,7 +138,7 @@ ${'  '}});
 <div style="display: flex; flex-direction: column; gap: 1rem;">
 ${'  '}<Toggle
 ${'  '}${'  '}bind:checked={settings.notifications}
-${'  '}${'  '}label="Push Notifications"
+${'  '}${'  '}label="Push notifications"
 ${'  '}${'  '}name="notifications"
 ${'  '}${'  '}value="enabled"
 ${'  '}/>
@@ -150,7 +150,7 @@ ${'  '}${'  '}value="enabled"
 ${'  '}/>
 ${'  '}<Toggle
 ${'  '}${'  '}bind:checked={settings.sounds}
-${'  '}${'  '}label="Sound Effects"
+${'  '}${'  '}label="Sound effects"
 ${'  '}${'  '}name="sounds"
 ${'  '}${'  '}value="enabled"
 ${'  '}/>

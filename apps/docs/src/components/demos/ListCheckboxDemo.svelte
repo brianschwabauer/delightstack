@@ -6,6 +6,6 @@
 
 <List type="checkbox" bind:value={selected}>
 	<ListItem>Notifications</ListItem>
-	<ListItem>Email Updates</ListItem>
+	<ListItem>Email updates</ListItem>
 	<ListItem>SMS Alerts</ListItem>
 </List>

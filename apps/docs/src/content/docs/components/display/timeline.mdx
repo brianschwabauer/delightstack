@@ -45,7 +45,7 @@ ${'  '}import { Timeline, TimelineItem } from '@delightstack/components';
 </script>
 
 <Timeline>
-${'  '}<TimelineItem status="complete" date="Jan 10" title="Order Confirmed">
+${'  '}<TimelineItem status="complete" date="Jan 10" title="Order confirmed">
 ${'  '}${'  '}Your order has been confirmed.
 ${'  '}</TimelineItem>
 ${'  '}<TimelineItem status="complete" date="Jan 11" title="Shipped">
@@ -62,7 +62,7 @@ ${'  '}<TimelineItem status="pending" title="Delivered" />
 ### Horizontal Process Steps
 
 <ComponentPreview code={`<Timeline horizontal>
-${'  '}<TimelineItem status="complete" title="Order Placed" />
+${'  '}<TimelineItem status="complete" title="Order placed" />
 ${'  '}<TimelineItem status="complete" title="Processing" />
 ${'  '}<TimelineItem status="active" title="Shipping" />
 ${'  '}<TimelineItem status="pending" title="Delivered" />
@@ -108,7 +108,7 @@ Give an item an `onclick` and/or `href` to make it clickable (mirroring `<Button
 ${'  '}<TimelineItem
 ${'  '}${'  '}status="complete"
 ${'  '}${'  '}date="Jan 10"
-${'  '}${'  '}title="Order Confirmed"
+${'  '}${'  '}title="Order confirmed"
 ${'  '}${'  '}onclick={() => (selected = 'Order Confirmed')}>
 ${'  '}${'  '}Tap to view the confirmation.
 ${'  '}</TimelineItem>
@@ -144,7 +144,7 @@ ${'  '}</TimelineItem>
 ### Custom Marker Color
 
 <ComponentPreview code={`<Timeline>
-${'  '}<TimelineItem title="Custom Color" color="var(--color-error)">
+${'  '}<TimelineItem title="Custom color" color="var(--color-error)">
 ${'  '}${'  '}A red-themed event marker.
 ${'  '}</TimelineItem>
 </Timeline>`}>

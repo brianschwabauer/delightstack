@@ -19,7 +19,7 @@
 </script>
 
 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-	<Button onclick={startCannon} disabled={running}>Start Cannon</Button>
-	<Button outline onclick={() => stopCannon?.()}>Stop Cannon</Button>
-	<Button outline onclick={stopAll}>Stop All</Button>
+	<Button onclick={startCannon} disabled={running}>Start cannon</Button>
+	<Button outline onclick={() => stopCannon?.()}>Stop cannon</Button>
+	<Button outline onclick={stopAll}>Stop all</Button>
 </div>

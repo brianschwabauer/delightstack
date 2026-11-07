@@ -18,14 +18,14 @@ import { Fieldset } from '@delightstack/components';
 
 ## Basic Usage
 
-<ComponentPreview code={`<Fieldset label="Personal Information">
-${'  '}<Input label="First Name" name="firstName" />
-${'  '}<Input label="Last Name" name="lastName" />
+<ComponentPreview code={`<Fieldset label="Personal information">
+${'  '}<Input label="First name" name="firstName" />
+${'  '}<Input label="Last name" name="lastName" />
 ${'  '}<Input label="Email" type="email" name="email" />
 </Fieldset>`}>
-	<Fieldset client:load label="Personal Information">
-		<Input client:load label="First Name" name="firstName" />
-		<Input client:load label="Last Name" name="lastName" />
+	<Fieldset client:load label="Personal information">
+		<Input client:load label="First name" name="firstName" />
+		<Input client:load label="Last name" name="lastName" />
 		<Input client:load label="Email" type="email" name="email" />
 	</Fieldset>
 </ComponentPreview>
@@ -34,11 +34,11 @@ ${'  '}<Input label="Email" type="email" name="email" />
 
 ### Bordered
 
-<ComponentPreview title="Bordered" code={`<Fieldset bordered label="Account Settings">
+<ComponentPreview title="Bordered" code={`<Fieldset bordered label="Account settings">
 ${'  '}<Input label="Username" name="username" required />
 ${'  '}<Input label="Password" type="password" name="password" required />
 </Fieldset>`}>
-	<Fieldset client:load bordered label="Account Settings">
+	<Fieldset client:load bordered label="Account settings">
 		<Input client:load label="Username" name="username" required />
 		<Input client:load label="Password" type="password" name="password" required />
 	</Fieldset>
@@ -46,14 +46,14 @@ ${'  '}<Input label="Password" type="password" name="password" required />
 
 ### Grid Layout
 
-Use `grid` to arrange children in a CSS grid. Children can span columns with inline styles.
+Use `grid` to arrange children in a CSS grid. Wrap a field to span columns, so each one is as wide as what it holds — a long street line, a short state.
 
-<ComponentPreview code={`<Fieldset label="Address" grid columns={2} bordered>
-${'  '}<Input label="Street Address" name="street" style="grid-column: 1 / -1" />
-${'  '}<Input label="City" name="city" />
-${'  '}<Input label="State" name="state" />
-${'  '}<Input label="ZIP Code" name="zip" />
-${'  '}<Input label="Country" name="country" />
+<ComponentPreview code={`<Fieldset label="Address" grid columns={6} bordered>
+${'  '}<div style:grid-column="1 / -1"><Input label="Street address" name="street" /></div>
+${'  '}<div style:grid-column="span 3"><Input label="City" name="city" /></div>
+${'  '}<div style:grid-column="span 1"><Input label="State" name="state" /></div>
+${'  '}<div style:grid-column="span 2"><Input label="ZIP code" name="zip" /></div>
+${'  '}<div style:grid-column="span 3"><Input label="Country" name="country" /></div>
 </Fieldset>`}>
 	<FieldsetGridDemo client:load />
 </ComponentPreview>
@@ -68,8 +68,8 @@ ${'  '}import { Fieldset, Input, Toggle } from '@delightstack/components';
 ${'  '}let collapsed = $state(false);
 </script>
 
-<Fieldset label="Advanced Options" collapsible bind:collapsed bordered>
-${'  '}<Input label="Custom Domain" name="domain" />
+<Fieldset label="Advanced options" collapsible bind:collapsed bordered>
+${'  '}<Input label="Custom domain" name="domain" />
 ${'  '}<Toggle label="Enable API Access" name="api" />
 </Fieldset>`}>
 	<FieldsetCollapsibleDemo client:load />
@@ -78,7 +78,7 @@ ${'  '}<Toggle label="Enable API Access" name="api" />
 ### With Description and Error
 
 <ComponentPreview code={`<Fieldset label="Profile" description="This information is publicly visible" bordered>
-${'  '}<Input label="Display Name" name="displayName" />
+${'  '}<Input label="Display name" name="displayName" />
 ${'  '}<Input label="Bio" name="bio" />
 </Fieldset>
 
@@ -91,7 +91,7 @@ ${'  '}<Checkbox checked={false} label="Write" />
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Fieldset skeleton={loading} label="User Profile" bordered>
+<ComponentPreview code={`<Fieldset skeleton={loading} label="User profile" bordered>
 ${'  '}<Input label="Name" name="name" skeleton={loading} bind:value={name} />
 ${'  '}<Input label="Email" name="email" skeleton={loading} bind:value={email} />
 </Fieldset>`}>

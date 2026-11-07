@@ -5,7 +5,7 @@
 <div
 	{@attach contextMenu({
 		actions: [
-			{ label: 'View Profile', href: '#profile' },
+			{ label: 'View profile', href: '#profile' },
 			{ label: 'Open in New Tab', href: '#profile', target: '_blank' },
 		],
 	})}

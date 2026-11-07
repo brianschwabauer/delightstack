@@ -16,8 +16,8 @@ import { Stat } from '@delightstack/components';
 
 ## Basic Usage
 
-<ComponentPreview code={`<Stat value={1234} label="Total Users" />`}>
-  <StatDemo client:load value={1234} label="Total Users" />
+<ComponentPreview code={`<Stat value={1234} label="Total users" />`}>
+  <StatDemo client:load value={1234} label="Total users" />
 </ComponentPreview>
 
 ## Examples
@@ -47,7 +47,7 @@ Pass any Svelte component as the `icon` prop.
 
 <Stat
   value={1234}
-  label="Total Users"
+  label="Total users"
   icon={UsersIcon}
   change={15}
   change_label="this week"
@@ -71,23 +71,23 @@ Four sizes are available for different contexts.
   <StatDemo client:load horizontal value={99.9} suffix="%" decimals={1} label="Uptime" />
 </ComponentPreview>
 
-### Override Trend Direction
+### When lower is better
 
-When a decrease is positive (e.g., bug count going down), override the trend color.
+For metrics where a drop is good news (bugs, churn, latency), set `positive="down"`. The arrow still follows the number — down — but it's colored as an improvement.
 
 <ComponentPreview code={`<Stat
 ${'  '}value={23}
-${'  '}label="Open Bugs"
+${'  '}label="Open bugs"
 ${'  '}change={-15}
-${'  '}trend="up"
+${'  '}positive="down"
 ${'  '}change_label="fewer than last week"
 />`}>
-  <StatDemo client:load value={23} label="Open Bugs" change={-15} trend="up" change_label="fewer than last week" />
+  <StatDemo client:load value={23} label="Open bugs" change={-15} positive="down" change_label="fewer than last week" />
 </ComponentPreview>
 
 ### Skeleton Loading
 
-<ComponentPreview code={`<Stat skeleton={loading} value={2451} label="Total Users" size="2" />`}>
+<ComponentPreview code={`<Stat skeleton={loading} value={2451} label="Total users" size="2" />`}>
   <StatSkeletonDemo client:load />
 </ComponentPreview>
 
@@ -100,7 +100,8 @@ ${'  '}change_label="fewer than last week"
 | `icon` | `Component` | - | Leading icon component |
 | `change` | `number` | - | Percentage change from previous period |
 | `change_label` | `string` | - | Description for the change (e.g., "vs last month") |
-| `trend` | `'up' \| 'down' \| 'neutral'` | auto | Override trend direction (auto-detected from `change`) |
+| `trend` | `'up' \| 'down' \| 'neutral'` | auto | Override the arrow direction (auto-detected from `change`) |
+| `positive` | `'up' \| 'down'` | `'up'` | Which direction is good news — sets the green/red coloring |
 | `size` | `'0' \| '1' \| '2' \| '3'` | `'1'` | Component size |
 | `horizontal` | `boolean` | `false` | Horizontal layout instead of vertical |
 | `animated` | `boolean` | `true` | Animate numeric values via the Counter component |

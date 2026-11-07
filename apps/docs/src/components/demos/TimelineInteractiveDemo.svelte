@@ -9,7 +9,7 @@
 		<TimelineItem
 			status="complete"
 			date="Jan 10"
-			title="Order Confirmed"
+			title="Order confirmed"
 			onclick={() => (selected = 'Order Confirmed')}>
 			Tap to view the confirmation.
 		</TimelineItem>

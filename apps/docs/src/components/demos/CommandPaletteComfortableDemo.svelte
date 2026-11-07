@@ -6,14 +6,14 @@
 	const commands = [
 		{
 			id: 'new',
-			title: 'New File',
+			title: 'New file',
 			category: 'File',
 			shortcut: ['Ctrl', 'N'],
 			onselect: () => {},
 		},
 		{
 			id: 'open',
-			title: 'Open File',
+			title: 'Open file',
 			category: 'File',
 			shortcut: ['Ctrl', 'O'],
 			onselect: () => {},
@@ -49,6 +49,6 @@
 	];
 </script>
 
-<Button onclick={() => (open = true)}>Open Roomy Palette</Button>
+<Button onclick={() => (open = true)}>Open roomy palette</Button>
 
 <CommandPalette bind:open {commands} comfortable placeholder="Search commands..." />

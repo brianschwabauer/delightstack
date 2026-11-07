@@ -18,7 +18,7 @@
 	];
 </script>
 
-<Button onclick={() => (open = true)}>Open Wide Modal</Button>
+<Button onclick={() => (open = true)}>Open wide modal</Button>
 
 <Modal bind:open title="Monthly Report" width="800px" height="500px">
 	<div

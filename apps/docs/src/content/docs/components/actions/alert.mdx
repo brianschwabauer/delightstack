@@ -31,7 +31,7 @@ ${'  '}let showDestructive = $state(false);
 </script>
 
 <Button onclick={() => showAlert = true}>Confirm Action</Button>
-<Button error onclick={() => showDestructive = true}>Delete Item</Button>
+<Button error onclick={() => showDestructive = true}>Delete item</Button>
 
 <Alert
 ${'  '}bind:open={showAlert}
@@ -42,7 +42,7 @@ ${'  '}continue_text="Save"
 
 <Alert
 ${'  '}bind:open={showDestructive}
-${'  '}title="Delete Item"
+${'  '}title="Delete item"
 ${'  '}message="This action cannot be undone. Are you sure you want to delete this item?"
 ${'  '}continue_text="Delete"
 ${'  '}destructive
@@ -63,7 +63,7 @@ ${'  '}import WarningIcon from './WarningIcon.svelte';
 ${'  '}let showWarning = $state(false);
 </script>
 
-<Button onclick={() => showWarning = true}>Show Warning</Button>
+<Button onclick={() => showWarning = true}>Show warning</Button>
 
 <Alert
 ${'  '}bind:open={showWarning}
@@ -97,7 +97,7 @@ ${'  '}${'  '}}
 ${'  '}}
 </script>
 
-<Button error onclick={handleClick}>Delete Item</Button>`}>
+<Button error onclick={handleClick}>Delete item</Button>`}>
   <AlertProgrammaticDemo client:load />
 </ComponentPreview>
 
@@ -116,11 +116,11 @@ ${'  '}${'  '}showAlert = false;
 ${'  '}}
 </script>
 
-<Button accent onclick={() => showAlert = true}>Process Data</Button>
+<Button accent onclick={() => showAlert = true}>Process data</Button>
 
 <Alert
 ${'  '}bind:open={showAlert}
-${'  '}title="Process Data"
+${'  '}title="Process data"
 ${'  '}message="This may take a moment."
 ${'  '}continue_text="Process"
 ${'  '}oncontinue={handleContinue}

@@ -11,7 +11,7 @@
 
 <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
 	<div style="display:inline-block;" bind:this={denseEl}>
-		<Button onclick={() => (denseOpen = !denseOpen)}>Dense Popover</Button>
+		<Button onclick={() => (denseOpen = !denseOpen)}>Dense popover</Button>
 		<Popover
 			ref_element={denseEl}
 			bind:opened={denseOpen}
@@ -37,7 +37,7 @@
 
 	<div style="display:inline-block;" bind:this={comfortableEl}>
 		<Button onclick={() => (comfortableOpen = !comfortableOpen)}>
-			Comfortable Popover
+			Comfortable popover
 		</Button>
 		<Popover
 			ref_element={comfortableEl}

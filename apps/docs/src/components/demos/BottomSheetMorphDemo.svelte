@@ -6,7 +6,7 @@
 	let morphPercent = $state(0);
 </script>
 
-<Button onclick={() => (open = true)}>Open Morphing Sheet</Button>
+<Button onclick={() => (open = true)}>Open morphing sheet</Button>
 
 <BottomSheet
 	bind:open

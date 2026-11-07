@@ -8,16 +8,16 @@
 	{@attach contextMenu({
 		actions: [
 			{
-				label: 'Grid View',
+				label: 'Grid view',
 				active: viewMode === 'grid',
 				onclick: () => (viewMode = 'grid'),
 			},
 			{
-				label: 'List View',
+				label: 'List view',
 				active: viewMode === 'list',
 				onclick: () => (viewMode = 'list'),
 			},
-			{ label: 'Table View', disabled: true },
+			{ label: 'Table view', disabled: true },
 		],
 	})}
 	style="

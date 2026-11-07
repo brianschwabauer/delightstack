@@ -24,7 +24,7 @@ ${'  '}import { Modal, Button } from '@delightstack/components';
 ${'  '}let open = $state(false);
 </script>
 
-<Button onclick={() => open = true}>Open Modal</Button>
+<Button onclick={() => open = true}>Open modal</Button>
 
 <Modal bind:open title="Example Modal">
 ${'  '}<p>This is a modal dialog with some example content.
@@ -42,7 +42,7 @@ ${'  '}<p>Update your profile information below.</p>
 
 ${'  '}{#snippet footer()}
 ${'  '}${'  '}<Button transparent onclick={() => open = false}>Cancel</Button>
-${'  '}${'  '}<Button accent onclick={() => open = false}>Save Changes</Button>
+${'  '}${'  '}<Button accent onclick={() => open = false}>Save changes</Button>
 ${'  '}{/snippet}
 </Modal>`}>
 	<ModalFooterDemo client:load />

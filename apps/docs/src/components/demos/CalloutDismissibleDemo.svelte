@@ -9,7 +9,7 @@
 </script>
 
 {#if visible}
-	<Callout tip title="Pro Tip" dismissible ondismiss={() => (visible = false)}>
+	<Callout tip title="Pro tip" dismissible ondismiss={() => (visible = false)}>
 		You can use keyboard shortcuts to speed up your workflow.
 	</Callout>
 {:else}

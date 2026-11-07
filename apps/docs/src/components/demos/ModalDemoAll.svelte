@@ -4,7 +4,7 @@
 	let open = $state(false);
 </script>
 
-<Button onclick={() => (open = true)}>Open Modal</Button>
+<Button onclick={() => (open = true)}>Open modal</Button>
 
 <Modal bind:open title="Edit Profile">
 	<p style="margin: 0; color: var(--color-text);">
@@ -13,6 +13,6 @@
 
 	{#snippet footer({ close })}
 		<Button transparent onclick={close}>Cancel</Button>
-		<Button accent onclick={close}>Save Changes</Button>
+		<Button accent onclick={close}>Save changes</Button>
 	{/snippet}
 </Modal>

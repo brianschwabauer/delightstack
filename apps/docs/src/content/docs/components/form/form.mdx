@@ -45,7 +45,7 @@ import type { FormContext, StandardSchema } from '@delightstack/components';
 <Form bind:data={formData} {schema} onsubmit={({ data }) => console.log(data)}>
   <Input name="email" label="Email" type="email" />
   <Input name="password" label="Password" type="password" />
-  <Button type="submit">Sign In</Button>
+  <Button type="submit">Sign in</Button>
 </Form>`}>
   <FormDemo client:load />
 </ComponentPreview>
@@ -83,7 +83,7 @@ ${'  '}}
 </script>
 
 <Form bind:data={formData} {schema} onsubmit={handleSubmit} validate_on="blur">
-${'  '}<Fieldset label="Create Account" bordered>
+${'  '}<Fieldset label="Create account" bordered>
 ${'  '}${'  '}<Input name="name" label="Name" />
 ${'  '}${'  '}<Input name="email" label="Email" type="email" />
 ${'  '}${'  '}<Input name="password" label="Password" type="password" />
@@ -100,8 +100,8 @@ ${'  '}${'  '}<Checkbox name="terms" label="I accept the terms and conditions" /
 ${'  '}</Fieldset>
 
 ${'  '}<div style="display: flex; gap: 1rem;">
-${'  '}${'  '}<Button type="reset" ghost>Reset</Button>
-${'  '}${'  '}<Button type="submit">Create Account</Button>
+${'  '}${'  '}<Button type="reset" transparent>Reset</Button>
+${'  '}${'  '}<Button type="submit">Create account</Button>
 ${'  '}</div>
 </Form>`}>
   <FormValidationDemo client:load />
@@ -171,7 +171,7 @@ A native `<button type="reset">` triggers form reset, clearing all values, error
 <ComponentPreview code={`<Form bind:data={formData} {schema} reset_on_submit>
 ${'  '}<Input name="name" label="Name" />
 ${'  '}<Input name="email" label="Email" type="email" />
-${'  '}<Button type="reset" ghost>Reset</Button>
+${'  '}<Button type="reset" transparent>Reset</Button>
 ${'  '}<Button type="submit">Submit</Button>
 </Form>`}>
   <FormResetDemo client:load />

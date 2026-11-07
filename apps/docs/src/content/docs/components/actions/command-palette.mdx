@@ -24,14 +24,14 @@ ${'  '}import { CommandPalette, Button } from '@delightstack/components';
 ${'  '}let open = $state(false);
 
 ${'  '}const commands = [
-${'  '}${'  '}{ id: 'new', title: 'New File', category: 'File', shortcut: ['Ctrl', 'N'], onselect: () => {} },
+${'  '}${'  '}{ id: 'new', title: 'New file', category: 'File', shortcut: ['Ctrl', 'N'], onselect: () => {} },
 ${'  '}${'  '}{ id: 'save', title: 'Save', category: 'File', shortcut: ['Ctrl', 'S'], onselect: () => {} },
 ${'  '}${'  '}{ id: 'copy', title: 'Copy', category: 'Edit', shortcut: ['Ctrl', 'C'], onselect: () => {} },
-${'  '}${'  '}{ id: 'theme', title: 'Toggle Theme', category: 'View', onselect: () => {} },
+${'  '}${'  '}{ id: 'theme', title: 'Toggle theme', category: 'View', onselect: () => {} },
 ${'  '}];
 </script>
 
-<Button onclick={() => open = true}>Open Command Palette</Button>
+<Button onclick={() => open = true}>Open command palette</Button>
 <CommandPalette bind:open {commands} placeholder="Search commands..." />`}>
   <CommandPaletteDemo client:load />
 </ComponentPreview>
@@ -75,7 +75,7 @@ The palette automatically registers a global `Ctrl/Cmd + K` keyboard shortcut to
   const commands = [
     {
       id: 'new-project',
-      title: 'New Project',
+      title: 'New project',
       description: 'Create a new project',
       category: 'Projects',
       icon: PlusIcon,
@@ -93,7 +93,7 @@ The palette automatically registers a global `Ctrl/Cmd + K` keyboard shortcut to
     },
     {
       id: 'theme-toggle',
-      title: 'Toggle Theme',
+      title: 'Toggle theme',
       description: 'Switch between light and dark mode',
       category: 'Preferences',
       icon: ThemeIcon,
@@ -153,7 +153,7 @@ When a command's `onselect` returns a `Promise`, a spinner appears while executi
 const commands = [
   {
     id: 'sync',
-    title: 'Sync Data',
+    title: 'Sync data',
     description: 'Synchronize with the server',
     onselect: async () => {
       await api.syncAll();

@@ -1,5 +1,6 @@
 <script>
 	import { Tree } from '@delightstack/components/display';
+	import { Input } from '@delightstack/components/form';
 
 	const fileTree = [
 		{
@@ -33,8 +34,7 @@
 	let searchTerm = $state('');
 </script>
 
-<input
-	bind:value={searchTerm}
-	placeholder="Search nodes..."
-	style="margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--color-outline); border-radius: 0.375rem; background: var(--color-bg); color: var(--color-text); width: 100%; box-sizing: border-box;" />
+<div style="max-width: 18rem; margin-bottom: 0.75rem;">
+	<Input type="search" label="Filter files" dense bind:value={searchTerm} />
+</div>
 <Tree data={fileTree} filter={searchTerm} />

@@ -4,7 +4,7 @@
 
 <div style="display: flex; flex-direction: column; gap: 1rem;">
 	<div>
-		<p style="margin: 0 0 0.5rem; font-size: 0.875rem; font-weight: 500;">Disk Usage</p>
+		<p style="margin: 0 0 0.5rem; font-size: 0.875rem; font-weight: 500;">Disk usage</p>
 		<Progress
 			circular={false}
 			segments={[

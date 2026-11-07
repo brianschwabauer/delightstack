@@ -6,7 +6,7 @@
 </script>
 
 <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-	<Button onclick={() => (showBasic = true)}>Open Modal</Button>
+	<Button onclick={() => (showBasic = true)}>Open modal</Button>
 	<Button outline onclick={() => (showFooter = true)}>Modal with Footer</Button>
 </div>
 
@@ -25,6 +25,6 @@
 
 	{#snippet footer()}
 		<Button transparent onclick={() => (showFooter = false)}>Cancel</Button>
-		<Button onclick={() => (showFooter = false)}>Save Changes</Button>
+		<Button onclick={() => (showFooter = false)}>Save changes</Button>
 	{/snippet}
 </Modal>

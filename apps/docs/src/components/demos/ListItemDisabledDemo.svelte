@@ -3,6 +3,6 @@
 </script>
 
 <List>
-	<ListItem disabled>Unavailable Action</ListItem>
-	<ListItem>Available Action</ListItem>
+	<ListItem disabled>Unavailable action</ListItem>
+	<ListItem>Available action</ListItem>
 </List>

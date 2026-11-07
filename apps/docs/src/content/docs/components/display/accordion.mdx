@@ -29,15 +29,15 @@ ${'  '}let openSection = $state('faq-1');
 </script>
 
 <Accordion bind:value={openSection}>
-${'  '}<AccordionItem value="faq-1" title="Getting Started">
+${'  '}<AccordionItem value="faq-1" title="Getting started">
 ${'  '}${'  '}<p>Getting started is easy! Create an account and follow the onboarding steps.</p>
 ${'  '}</AccordionItem>
 
-${'  '}<AccordionItem value="faq-2" title="Payment Methods">
+${'  '}<AccordionItem value="faq-2" title="Payment methods">
 ${'  '}${'  '}<p>We accept all major credit cards, PayPal, and bank transfers.</p>
 ${'  '}</AccordionItem>
 
-${'  '}<AccordionItem value="faq-3" title="Contact Support">
+${'  '}<AccordionItem value="faq-3" title="Contact support">
 ${'  '}${'  '}<p>Reach our support team via email or through the in-app chat.</p>
 ${'  '}</AccordionItem>
 </Accordion>`}>
@@ -91,13 +91,13 @@ ${'  '}let openSections = $state(['section-1']);
 </script>
 
 <Accordion multiple bind:value={openSections}>
-${'  '}<AccordionItem value="section-1" title="First Section">
+${'  '}<AccordionItem value="section-1" title="First section">
 ${'  '}${'  '}<p>Content for the first section.</p>
 ${'  '}</AccordionItem>
-${'  '}<AccordionItem value="section-2" title="Second Section">
+${'  '}<AccordionItem value="section-2" title="Second section">
 ${'  '}${'  '}<p>Content for the second section.</p>
 ${'  '}</AccordionItem>
-${'  '}<AccordionItem value="section-3" title="Third Section">
+${'  '}<AccordionItem value="section-3" title="Third section">
 ${'  '}${'  '}<p>Content for the third section.</p>
 ${'  '}</AccordionItem>
 </Accordion>`}>
@@ -109,10 +109,10 @@ ${'  '}</AccordionItem>
 Prevent all sections from being collapsed by setting `collapsible` to `false`.
 
 <ComponentPreview code={`<Accordion collapsible={false} value="first">
-${'  '}<AccordionItem value="first" title="Always Visible">
+${'  '}<AccordionItem value="first" title="Always visible">
 ${'  '}${'  '}<p>At least one section is always open.</p>
 ${'  '}</AccordionItem>
-${'  '}<AccordionItem value="second" title="Another Section">
+${'  '}<AccordionItem value="second" title="Another section">
 ${'  '}${'  '}<p>Click to switch which section is open.</p>
 ${'  '}</AccordionItem>
 </Accordion>`}>
@@ -134,7 +134,7 @@ ${'  '}<AccordionItem value="profile">
 ${'  '}${'  '}{#snippet trigger()}
 ${'  '}${'  '}${'  '}<div style="display: flex; align-items: center; gap: 0.5rem;">
 ${'  '}${'  '}${'  '}${'  '}<UserIcon />
-${'  '}${'  '}${'  '}${'  '}<span>Profile Settings</span>
+${'  '}${'  '}${'  '}${'  '}<span>Profile settings</span>
 ${'  '}${'  '}${'  '}</div>
 ${'  '}${'  '}{/snippet}
 ${'  '}${'  '}<p>Manage your name, avatar, and public profile information.</p>
@@ -144,7 +144,7 @@ ${'  '}<AccordionItem value="settings">
 ${'  '}${'  '}{#snippet trigger()}
 ${'  '}${'  '}${'  '}<div style="display: flex; align-items: center; gap: 0.5rem;">
 ${'  '}${'  '}${'  '}${'  '}<SettingsIcon />
-${'  '}${'  '}${'  '}${'  '}<span>Advanced Settings</span>
+${'  '}${'  '}${'  '}${'  '}<span>Advanced settings</span>
 ${'  '}${'  '}${'  '}</div>
 ${'  '}${'  '}{/snippet}
 ${'  '}${'  '}<p>Configure advanced options like API keys, webhooks, and integrations.</p>
@@ -193,7 +193,7 @@ ${'  '}let innerValue = $state('');
 </script>
 
 <Accordion bind:value={outerValue}>
-${'  '}<AccordionItem value="parent-1" title="Frontend Frameworks">
+${'  '}<AccordionItem value="parent-1" title="Frontend frameworks">
 ${'  '}${'  '}<Accordion bind:value={innerValue}>
 ${'  '}${'  '}${'  '}<AccordionItem value="child-1" title="Svelte">
 ${'  '}${'  '}${'  '}${'  '}<p>A compiler-based framework that shifts work to build time.</p>
@@ -203,7 +203,7 @@ ${'  '}${'  '}${'  '}${'  '}<p>A library for building user interfaces with a vir
 ${'  '}${'  '}${'  '}</AccordionItem>
 ${'  '}${'  '}</Accordion>
 ${'  '}</AccordionItem>
-${'  '}<AccordionItem value="parent-2" title="Backend Languages">
+${'  '}<AccordionItem value="parent-2" title="Backend languages">
 ${'  '}${'  '}<p>Popular choices include Node.js, Python, Go, and Rust.</p>
 ${'  '}</AccordionItem>
 </Accordion>`}>

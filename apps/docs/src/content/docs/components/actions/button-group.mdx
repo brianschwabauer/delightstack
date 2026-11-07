@@ -9,6 +9,7 @@ import ButtonGroupToggleDemo from '../../../../components/demos/ButtonGroupToggl
 import ButtonGroupVariantDemo from '../../../../components/demos/ButtonGroupVariantDemo.svelte';
 import ButtonGroupVerticalDemo from '../../../../components/demos/ButtonGroupVerticalDemo.svelte';
 import ButtonGroupDetachedDemo from '../../../../components/demos/ButtonGroupDetachedDemo.svelte';
+import ButtonGroupSegmentedDemo from '../../../../components/demos/ButtonGroupSegmentedDemo.svelte';
 
 ## Import
 
@@ -20,13 +21,43 @@ import { ButtonGroup, Button } from '@delightstack/components';
 
 <ComponentPreview code={`<ButtonGroup aria-label="Document actions">
 ${'  '}<Button>Save</Button>
-${'  '}<Button>Save As</Button>
+${'  '}<Button>Save as</Button>
 ${'  '}<Button>Discard</Button>
 </ButtonGroup>`}>
 	<ButtonGroupDemo client:load />
 </ComponentPreview>
 
 ## Examples
+
+### Segmented control
+
+Bind `value` and the group owns the selection: each child Button with a `value` becomes a toggle (`aria-pressed`), the selected one fills, the rest stay quiet inside one shared frame. This is the control to reach for with 2–5 mutually exclusive options — every option visible, one click each. When an option has a visual consequence, show it instead of naming it. Add `translucent` for a quieter control: the selected option becomes a neutral chip instead of the brand fill, for secondary choices (a view switcher in a toolbar) that shouldn't compete with the page's primary actions.
+
+<ComponentPreview code={`<script>
+${'  '}let range = $state('week');
+${'  '}let weight = $state(400);
+${'  '}let view = $state('list');
+</script>
+
+<ButtonGroup bind:value={range} aria-label="Date range">
+${'  '}<Button value="day">Day</Button>
+${'  '}<Button value="week">Week</Button>
+${'  '}<Button value="month">Month</Button>
+</ButtonGroup>
+
+<ButtonGroup bind:value={weight} aria-label="Font weight">
+${'  '}<Button value={300} tooltip="Light"><span style:font-weight="300">Aa</span></Button>
+${'  '}<Button value={400} tooltip="Regular"><span style:font-weight="400">Aa</span></Button>
+${'  '}<Button value={700} tooltip="Bold"><span style:font-weight="700">Aa</span></Button>
+</ButtonGroup>
+
+<ButtonGroup bind:value={view} translucent aria-label="View">
+${'  '}<Button value="list">List</Button>
+${'  '}<Button value="board">Board</Button>
+${'  '}<Button value="calendar">Calendar</Button>
+</ButtonGroup>`}>
+	<ButtonGroupSegmentedDemo client:load />
+</ComponentPreview>
 
 ### Toggle Group (Single Selection)
 
@@ -108,7 +139,7 @@ Combine a primary action button with a dropdown trigger inside a group.
     <!-- ChevronDownIcon -->
     {#snippet menu({ close })}
       <button onclick={() => { saveAs(); close(); }}>Save As...</button>
-      <button onclick={() => { saveCopy(); close(); }}>Save Copy</button>
+      <button onclick={() => { saveCopy(); close(); }}>Save copy</button>
     {/snippet}
   </Button>
 </ButtonGroup>
@@ -133,13 +164,15 @@ ${'  '}<Button>Three</Button>
 | `size` | `'0000' \| '000' \| '00' \| '0' \| '1' \| '2' \| '3' \| '4' \| '5' \| '6'` | `undefined` | Size applied to all child Buttons via context |
 | `outline` | `boolean` | `false` | Apply outline variant to all children |
 | `transparent` | `boolean` | `false` | Apply transparent variant to all children |
-| `translucent` | `boolean` | `false` | Apply translucent variant to all children |
+| `translucent` | `boolean` | `false` | Apply translucent variant to all children. In segmented mode, the selected option becomes a neutral chip instead of the brand fill |
 | `accent` | `boolean` | `false` | Apply accent color to all children |
 | `error` | `boolean` | `false` | Apply error color to all children |
 | `success` | `boolean` | `false` | Apply success color to all children |
 | `orientation` | `'horizontal' \| 'vertical'` | `'horizontal'` | Layout direction |
 | `disabled` | `boolean` | `false` | Disable all child Buttons via context |
-| `attached` | `boolean` | `true` | Visually connect buttons (shared borders, merged radii) |
+| `attached` | `boolean` | `true` | Visually connect buttons (shared borders, merged radii). Ignored in segmented mode |
+| `value` | `string \| number` | `undefined` | Bindable selected value. Setting it turns the group into a segmented control |
+| `onchange` | `(value) => void` | `undefined` | Called when the user picks an option |
 | `id` | `string` | auto-generated | Element ID |
 | `class` | `string` | `''` | Additional CSS classes |
 | `children` | `Snippet` | `undefined` | Child Button components |
