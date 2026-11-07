@@ -8,22 +8,24 @@ html {
 	 * ============================================================ */
 	/* Brand seeds (match the logo gradient's leading stop). Primary is the only
 	 * required seed — secondary and neutral derive from it. The secondary seed
-	 * is a muted gray that keeps the primary's hue — low chroma, same hue —
-	 * so accent controls read as "quiet" without going tonally cold. The
-	 * neutral seed tints the background/text ramp; the ramp formulas clamp
-	 * chroma, so any hue yields a usable tinted gray. Override it to decouple
-	 * the surface tint from the brand color. */
+	 * keeps the primary's hue at low chroma; the accent tokens turn it into an
+	 * "ink" color (near-black in light mode, near-white in dark) so accent
+	 * controls read as a deliberate second voice rather than a disabled one.
+	 * The neutral seed tints the background/text ramp. Its default chroma is
+	 * kept low (0.012) so surfaces read as cool grays with a hint of the brand
+	 * rather than as brand-colored; the ramp scales that chroma per step.
+	 * Override it to decouple the surface tint from the brand color. */
 	--color-primary: #10a6c4;
 	--color-secondary: oklch(from var(--color-primary) l 0.05 h);
-	--color-neutral: oklch(from var(--color-primary) l min(0.02, c) h);
+	--color-neutral: oklch(from var(--color-primary) l min(0.012, c) h);
 
 	--color-0: white;
-	--color-50: oklch(from var(--color-neutral) 99% calc(c - 0.012) h);
-	--color-100: oklch(from var(--color-neutral) 97% calc(c - 0.01) h);
-	--color-150: oklch(from var(--color-neutral) 95% calc(c - 0.008) h);
-	--color-200: oklch(from var(--color-neutral) 92% calc(c - 0.006) h);
-	--color-250: oklch(from var(--color-neutral) 87% calc(c - 0.004) h);
-	--color-300: oklch(from var(--color-neutral) 82% calc(c - 0.002) h);
+	--color-50: oklch(from var(--color-neutral) 99% calc(c * 0.4) h);
+	--color-100: oklch(from var(--color-neutral) 97% calc(c * 0.5) h);
+	--color-150: oklch(from var(--color-neutral) 95% calc(c * 0.6) h);
+	--color-200: oklch(from var(--color-neutral) 92% calc(c * 0.7) h);
+	--color-250: oklch(from var(--color-neutral) 87% calc(c * 0.8) h);
+	--color-300: oklch(from var(--color-neutral) 82% calc(c * 0.9) h);
 	--color-350: oklch(from var(--color-neutral) 76% c h);
 	--color-400: oklch(from var(--color-neutral) 70% c h);
 	--color-450: oklch(from var(--color-neutral) 65% c h);
@@ -33,10 +35,10 @@ html {
 	--color-650: oklch(from var(--color-neutral) 41% c h);
 	--color-700: oklch(from var(--color-neutral) 35% c h);
 	--color-750: oklch(from var(--color-neutral) 29% c h);
-	--color-800: oklch(from var(--color-neutral) 24% calc(c + 0.002) h);
-	--color-850: oklch(from var(--color-neutral) 21% calc(c + 0.006) h);
-	--color-900: oklch(from var(--color-neutral) 18% calc(c + 0.01) h);
-	--color-950: oklch(from var(--color-neutral) 15% calc(c + 0.014) h);
+	--color-800: oklch(from var(--color-neutral) 24% calc(c * 1.1) h);
+	--color-850: oklch(from var(--color-neutral) 21% calc(c * 1.2) h);
+	--color-900: oklch(from var(--color-neutral) 18% calc(c * 1.3) h);
+	--color-950: oklch(from var(--color-neutral) 15% calc(c * 1.4) h);
 	--color-1000: black;
 
 	/* Internal background ramp (semantic bg/surface tokens map onto this) */
@@ -78,11 +80,11 @@ html {
 
 	/* --- Text --- */
 	--color-text: light-dark(
-		oklch(from var(--color-neutral) 42% min(0.06, c) h),
-		oklch(from var(--color-neutral) 82% min(0.06, c) h)
+		oklch(from var(--color-neutral) 37% min(0.06, c) h),
+		oklch(from var(--color-neutral) 86% min(0.06, c) h)
 	);
 	--color-text-muted: light-dark(
-		oklch(from var(--color-neutral) 55% min(0.06, c) h),
+		oklch(from var(--color-neutral) 51% min(0.06, c) h),
 		oklch(from var(--color-neutral) 70% min(0.06, c) h)
 	);
 	--color-text-disabled: light-dark(
@@ -99,6 +101,14 @@ html {
 		oklch(from currentColor 80% min(c, 0.1) h),
 		oklch(from currentColor 50% min(c, 0.09) h)
 	);
+	/* Boundary of an interactive control (Input, Select, Checkbox, Radio, the
+	   Range track…). WCAG 1.4.11 asks 3:1 of the edge that identifies a control,
+	   which the decorative --color-border (dividers, cards) deliberately doesn't
+	   reach — so controls take this stronger stroke instead. */
+	--color-border-control: light-dark(
+		oklch(from currentColor 62% min(c, 0.06) h),
+		oklch(from currentColor 52% min(c, 0.06) h)
+	);
 	--color-border-disabled: light-dark(
 		oklch(from currentColor 85% min(c, 0.06) h),
 		oklch(from currentColor 40% min(c, 0.05) h)
@@ -111,23 +121,26 @@ html {
 	/* --- Action (primary interactive) --- */
 	--color-action: light-dark(
 		oklch(from var(--color-primary) clamp(0.3, l, 0.5) min(0.3, c) h),
-		oklch(from var(--color-primary) clamp(0.4, l, 0.6) min(0.3, c) h)
+		oklch(from var(--color-primary) clamp(0.4, l, 0.5) min(0.3, c) h)
 	);
+	/* Disabled fills drain toward the neutral ramp (low chroma, low contrast
+	   with the page) — a brighter, still-saturated fill read as MORE active
+	   than the enabled button beside it. */
 	--color-action-disabled: light-dark(
-		oklch(from var(--color-action) calc(l + 0.08) calc(c - 0.01) h),
-		oklch(from var(--color-action) calc(l - 0.1) calc(c - 0.02) h)
+		oklch(from var(--color-action) 0.86 calc(c * 0.3) h),
+		oklch(from var(--color-action) 0.3 calc(c * 0.35) h)
 	);
 	--color-action-active: light-dark(
 		oklch(from var(--color-action) calc(l - 0.06) calc(c + 0.02) h),
-		oklch(from var(--color-action) calc(l + 0.07) calc(c + 0.02) h)
+		oklch(from var(--color-action) calc(l + 0.04) calc(c + 0.02) h)
 	);
 	--color-action-text: light-dark(
 		oklch(from var(--color-primary) 96% min(0.05, c) h),
 		oklch(from var(--color-primary) 96% min(0.05, c) h)
 	);
 	--color-action-text-disabled: light-dark(
-		oklch(from var(--color-primary) 82% min(0.09, c) h),
-		oklch(from var(--color-primary) 66% min(0.09, c) h)
+		oklch(from var(--color-primary) 56% min(0.04, c) h),
+		oklch(from var(--color-primary) 60% min(0.04, c) h)
 	);
 	--color-action-text-active: light-dark(
 		oklch(from var(--color-primary) 100% min(0.03, c) h),
@@ -136,7 +149,8 @@ html {
 	/* Foreground variant — action used as TEXT or an ICON on a neutral surface
 	   (page/card), NOT as the paired background under --color-action-text.
 	   --color-action is a *surface* color: its lightness is clamped to a mid
-	   band (dark 0.4–0.6, light 0.3–0.5), which reads fine as a fill under light
+	   band (0.3–0.5 light, 0.4–0.5 dark — the ceiling keeps the light label on
+	   a filled button above 4.5:1), which reads fine as a fill under light
 	   text but can fall below the 4.5:1 text-contrast floor against the page
 	   background when the brand seed is dark. This lifts lightness into a legible
 	   band — the same move the outline Button already applies to its own text —
@@ -148,30 +162,34 @@ html {
 		oklch(from var(--color-action) max(l, 0.65) c h)
 	);
 
-	/* --- Accent (secondary interactive) --- */
+	/* --- Accent (secondary interactive) ---
+	   An "ink" voice: near-black in light mode, near-white in dark, carrying
+	   just a trace of the brand hue. It sits beside the brand-colored action as
+	   the confident second choice (think a dark "Deploy" button next to a
+	   colored one) instead of a mid-gray that reads as disabled. */
 	--color-accent: light-dark(
-		oklch(from var(--color-secondary) clamp(0.3, l, 0.5) min(0.3, c) h),
-		oklch(from var(--color-secondary) clamp(0.4, l, 0.6) min(0.3, c) h)
+		oklch(from var(--color-secondary) 0.3 min(0.025, c) h),
+		oklch(from var(--color-secondary) 0.9 min(0.02, c) h)
 	);
 	--color-accent-disabled: light-dark(
-		oklch(from var(--color-accent) calc(l + 0.08) calc(c - 0.01) h),
-		oklch(from var(--color-accent) calc(l - 0.1) calc(c - 0.02) h)
+		oklch(from var(--color-accent) calc(l + 0.32) calc(c * 0.6) h),
+		oklch(from var(--color-accent) calc(l - 0.45) calc(c * 0.6) h)
 	);
 	--color-accent-active: light-dark(
-		oklch(from var(--color-accent) calc(l - 0.06) calc(c + 0.02) h),
-		oklch(from var(--color-accent) calc(l + 0.07) calc(c + 0.02) h)
+		oklch(from var(--color-accent) calc(l + 0.08) c h),
+		oklch(from var(--color-accent) calc(l - 0.07) c h)
 	);
 	--color-accent-text: light-dark(
-		oklch(from var(--color-secondary) 94% min(0.05, c) h),
-		oklch(from var(--color-secondary) 94% min(0.05, c) h)
+		oklch(from var(--color-secondary) 97% min(0.01, c) h),
+		oklch(from var(--color-secondary) 20% min(0.02, c) h)
 	);
 	--color-accent-text-disabled: light-dark(
-		oklch(from var(--color-secondary) 82% min(0.09, c) h),
-		oklch(from var(--color-secondary) 66% min(0.09, c) h)
+		oklch(from var(--color-secondary) 92% min(0.01, c) h),
+		oklch(from var(--color-secondary) 62% min(0.02, c) h)
 	);
 	--color-accent-text-active: light-dark(
-		oklch(from var(--color-secondary) 99% min(0.03, c) h),
-		oklch(from var(--color-secondary) 99% min(0.03, c) h)
+		oklch(from var(--color-secondary) 100% 0 h),
+		oklch(from var(--color-secondary) 12% min(0.02, c) h)
 	);
 	/* Foreground variant of accent — see --color-action-fg. */
 	--color-accent-fg: light-dark(
@@ -180,7 +198,10 @@ html {
 	);
 
 	/* --- Feedback --- */
-	--color-error: light-dark(#de463f, #ef6262);
+	/* Filled feedback colors sit at L≈0.50 so their light label clears 4.5:1 in
+	   both schemes. For red/green TEXT or icons on the page, use the -fg
+	   variants below — they lift lightness in dark mode. */
+	--color-error: light-dark(oklch(0.5 0.19 27), oklch(0.5 0.18 25));
 	--color-error-disabled: light-dark(
 		oklch(from var(--color-error) calc(l + 0.05) calc(c - 0.03) h),
 		oklch(from var(--color-error) calc(l - 0.05) calc(c - 0.03) h)
@@ -196,7 +217,7 @@ html {
 	);
 	--color-error-text-active: white;
 
-	--color-success: light-dark(#009d88, #00b7a1);
+	--color-success: light-dark(oklch(0.5 0.115 168), oklch(0.5 0.105 168));
 	--color-success-disabled: light-dark(
 		oklch(from var(--color-success) calc(l + 0.05) calc(c - 0.03) h),
 		oklch(from var(--color-success) calc(l - 0.05) calc(c - 0.03) h)
@@ -215,15 +236,30 @@ html {
 	--color-success-text-active: white;
 
 	--color-warning: light-dark(#e89c08, #e0a020);
+	/* Amber can't carry a light label at any lightness that still reads as
+	   amber, so a filled warning surface takes DARK ink instead. */
+	--color-warning-disabled: light-dark(
+		oklch(from var(--color-warning) calc(l + 0.08) calc(c - 0.06) h),
+		oklch(from var(--color-warning) calc(l - 0.2) calc(c - 0.06) h)
+	);
+	--color-warning-active: oklch(
+		from var(--color-warning) calc(l - 0.05) calc(c + 0.01) h
+	);
+	--color-warning-text: oklch(from var(--color-warning) 0.24 0.05 h);
+	--color-warning-text-disabled: oklch(from var(--color-warning) 0.45 0.04 h);
+	--color-warning-text-active: oklch(from var(--color-warning) 0.16 0.04 h);
 
 	/* Soft tinted surfaces for feedback components (Callout, Toast, Avatar,
-	   Input). Mixed over the page background so they adapt to light/dark.
+	   Input). Mixed over --color-surface (white in light, the raised gray in
+	   dark) so in dark mode they lift ABOVE the page instead of sinking toward
+	   black. Mixed in OKLab, not OKLCH: OKLCH interpolates HUE, so a 16% amber
+	   over the brand-tinted dark surface came out teal.
 	   Informational surfaces use the brand action color — there is no
 	   separate "info" hue. */
-	--color-action-bg: color-mix(in oklch, var(--color-action) 14%, var(--color-bg-00));
-	--color-success-bg: color-mix(in oklch, var(--color-success) 14%, var(--color-bg-00));
-	--color-warning-bg: color-mix(in oklch, var(--color-warning) 16%, var(--color-bg-00));
-	--color-error-bg: color-mix(in oklch, var(--color-error) 14%, var(--color-bg-00));
+	--color-action-bg: color-mix(in oklab, var(--color-action) 14%, var(--color-surface));
+	--color-success-bg: color-mix(in oklab, var(--color-success) 14%, var(--color-surface));
+	--color-warning-bg: color-mix(in oklab, var(--color-warning) 16%, var(--color-surface));
+	--color-error-bg: color-mix(in oklab, var(--color-error) 14%, var(--color-surface));
 
 	/* --- Overlay --- */
 	--color-backdrop: light-dark(rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.7));
@@ -347,10 +383,10 @@ html {
 	   The numbered --font-size-* scale is INTERNAL: it powers the `size` prop
 	   (components build `var(--font-size-{size})` from a '0000'..'6' value).
 	   The named --text-* tokens are the public typography API and alias onto it. */
-	--font-size-00: 0.65rem;
-	--font-size-0: 0.815rem;
+	--font-size-00: 0.75rem; /* 12px — the legibility floor */
+	--font-size-0: 0.8125rem; /* 13px */
 	--font-size-1: 1rem;
-	--font-size-2: 1.1rem;
+	--font-size-2: 1.125rem; /* 18px */
 	--font-size-3: 1.25rem;
 	--font-size-4: 1.5rem;
 	--font-size-5: 2rem;
@@ -384,7 +420,7 @@ html {
 	--leading-relaxed: 1.75;
 
 	/* Typography — letter spacing */
-	--tracking-tight: -0.05em;
+	--tracking-tight: -0.02em;
 	--tracking-normal: 0;
 	--tracking-wide: 0.05em;
 	--tracking-wider: 0.15em;
@@ -392,6 +428,7 @@ html {
 	/* Spacing */
 	--space-1: 0.25rem;
 	--space-2: 0.5rem;
+	--space-2-5: 0.75rem; /* 12px — the step between 8 and 16 */
 	--space-3: 1rem;
 	--space-4: 1.25rem;
 	--space-5: 1.5rem;
@@ -460,9 +497,16 @@ html {
 	--skeleton-duration: 2.4s;
 
 	/* Motion — easing (curves preserve the most-used shipped curves) */
-	--ease-default: cubic-bezier(0.76, 0, 0.24, 1);
-	--ease-in: cubic-bezier(0.5, 0, 0.75, 0);
-	--ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+	--ease-default: cubic-bezier(0.25, 1, 0.5, 1); /* quart out — things entering */
+	--ease-in: cubic-bezier(0.11, 0, 0.5, 0); /* quad in: outros */
+	--ease-out: cubic-bezier(0.25, 1, 0.5, 1); /* quart out: intros */
+	--ease-out-strong: cubic-bezier(
+		0.22,
+		1,
+		0.36,
+		1
+	); /* quint out: drawers, sheets, big moves */
+	--ease-settle: cubic-bezier(0.2, 0.9, 0.25, 1); /* drag-and-drop settle */
 	--ease-in-out: cubic-bezier(0.76, 0, 0.24, 1);
 	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
@@ -472,8 +516,10 @@ html {
 	--breakpoint-lg: 1024px;
 	--breakpoint-xl: 1280px;
 
-	/* Shadows. In light mode, traditional drop shadows; in dark mode they
-	   fade to transparent (dark shadows are invisible on dark surfaces). */
+	/* Shadows. Light mode only: tinted drop shadows. In dark mode every layer
+	   resolves to transparent — a dark shadow on a dark page blurs the edge
+	   instead of defining it. Raised surfaces separate themselves in dark mode
+	   with a 1px outline (--color-border) instead. */
 	--shadow-color: oklch(from var(--color-neutral) 0.05 0.15 h);
 	--shadow-strength: 15%;
 	--shadow-sm: 0 1px 3px -1px
