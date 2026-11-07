@@ -64,6 +64,7 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 const PING = JSON.stringify({ event: 'ping' });
+const PONG = JSON.stringify({ event: 'pong' });
 const OPTIONS = { url: 'wss://example.com/api/websocket', channel_name: 'org1' };
 
 function lastSocket(): FakeWebSocket {
@@ -182,8 +183,30 @@ describe('WebsocketWorker', () => {
 			await worker.connect(OPTIONS);
 			lastSocket().open();
 
-			vi.advanceTimersByTime(90_000);
+			for (let i = 0; i < 3; i++) {
+				vi.advanceTimersByTime(30_000);
+				lastSocket().onmessage?.({ data: PONG });
+			}
 			expect(lastSocket().sent.filter((m) => m === PING)).toHaveLength(3);
+			expect(FakeWebSocket.instances).toHaveLength(1);
+		});
+
+		it('replaces a socket that stopped answering, even though it still reports OPEN', async () => {
+			// After sleep or a network switch a TCP connection can look open for
+			// minutes with nothing flowing. Only the missing pong gives it away.
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS);
+			const silent = lastSocket();
+			silent.open();
+
+			vi.advanceTimersByTime(90_000); // pings at 30s and 60s go unanswered
+			expect(silent.close).toHaveBeenCalled();
+			expect(await worker.getStatus('org1')).toBe('reconnecting');
+
+			vi.advanceTimersByTime(1_000);
+			expect(FakeWebSocket.instances).toHaveLength(2);
+			lastSocket().open();
+			expect(await worker.getStatus('org1')).toBe('connected');
 		});
 
 		it('stops pinging when the socket errors (before any close event)', async () => {
@@ -273,6 +296,36 @@ describe('WebsocketWorker', () => {
 			expect(FakeWebSocket.instances).toHaveLength(3);
 		});
 
+		it('keeps retrying through a long outage instead of giving up', async () => {
+			// It used to stop after 20 attempts (~8 minutes), so a tab that slept
+			// through an outage stayed offline until it was reloaded.
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS);
+			for (let i = 0; i < 40; i++) {
+				lastSocket().onclose?.();
+				vi.advanceTimersByTime(30_000);
+			}
+			expect(FakeWebSocket.instances).toHaveLength(41);
+			expect(await worker.getStatus('org1')).toBe('reconnecting');
+			lastSocket().open();
+			expect(await worker.getStatus('org1')).toBe('connected');
+		});
+
+		it('caps the backoff at 30s', async () => {
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS);
+			for (let i = 0; i < 10; i++) {
+				lastSocket().onclose?.();
+				vi.advanceTimersByTime(30_000);
+			}
+			const before = FakeWebSocket.instances.length;
+			lastSocket().onclose?.();
+			vi.advanceTimersByTime(29_999);
+			expect(FakeWebSocket.instances).toHaveLength(before);
+			vi.advanceTimersByTime(1);
+			expect(FakeWebSocket.instances).toHaveLength(before + 1);
+		});
+
 		it('does not reconnect after an intentional disconnect', async () => {
 			const worker = new WebsocketWorker();
 			await worker.connect(OPTIONS);
@@ -282,6 +335,60 @@ describe('WebsocketWorker', () => {
 			vi.advanceTimersByTime(120_000);
 			expect(FakeWebSocket.instances).toHaveLength(1);
 			expect(await worker.getStatus('org1')).toBe('disconnected');
+		});
+	});
+
+	describe('nudge', () => {
+		it('skips the remaining backoff and reconnects now', async () => {
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS);
+			for (let i = 0; i < 6; i++) {
+				lastSocket().onclose?.();
+				vi.advanceTimersByTime(30_000);
+			}
+			lastSocket().onclose?.(); // next retry is 30s away
+			const before = FakeWebSocket.instances.length;
+
+			await worker.nudge('org1');
+			expect(FakeWebSocket.instances).toHaveLength(before + 1);
+
+			// The cancelled backoff timer must not open a second socket later.
+			vi.advanceTimersByTime(30_000);
+			expect(FakeWebSocket.instances).toHaveLength(before + 1);
+		});
+
+		it('probes an open-looking socket and replaces it when nothing answers', async () => {
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS);
+			const socket = lastSocket();
+			socket.open();
+
+			await worker.nudge('org1');
+			expect(socket.sent).toContain(PING);
+			vi.advanceTimersByTime(5_000);
+			expect(socket.close).toHaveBeenCalled();
+			vi.advanceTimersByTime(1_000);
+			expect(FakeWebSocket.instances).toHaveLength(2);
+		});
+
+		it('keeps a socket that answers the probe', async () => {
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS);
+			const socket = lastSocket();
+			socket.open();
+
+			await worker.nudge('org1');
+			socket.onmessage?.({ data: PONG });
+			vi.advanceTimersByTime(5_000);
+			expect(socket.close).not.toHaveBeenCalled();
+			expect(FakeWebSocket.instances).toHaveLength(1);
+		});
+
+		it('leaves an attempt that is already connecting alone', async () => {
+			const worker = new WebsocketWorker();
+			await worker.connect(OPTIONS); // CONNECTING
+			await worker.nudge('org1');
+			expect(FakeWebSocket.instances).toHaveLength(1);
 		});
 	});
 

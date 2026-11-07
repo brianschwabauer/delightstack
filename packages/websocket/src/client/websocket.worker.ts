@@ -24,6 +24,12 @@ interface Connection {
 	reconnect_attempts: number;
 	reconnect_timer: ReturnType<typeof setTimeout> | null;
 	ping_timer: ReturnType<typeof setInterval> | null;
+	/** Epoch ms of the last frame received on the current socket (pongs included). */
+	last_frame_at: number;
+	/** Frames received on the current socket; a probe compares it before and after. */
+	frame_count: number;
+	/** Pending liveness probe started by `nudge()` on a socket that looks open. */
+	probe_timer: ReturnType<typeof setTimeout> | null;
 	intentional_close: boolean;
 }
 
@@ -34,8 +40,16 @@ interface Connection {
 const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30_000;
 const JITTER_FACTOR = 0.3;
-const MAX_RECONNECT_ATTEMPTS = 20;
 const PING_INTERVAL_MS = 30_000;
+/**
+ * A socket that has delivered nothing — not even the server's auto-pong — for
+ * this long is dead even if the browser still reports it OPEN. After a laptop
+ * sleeps or the network changes, a TCP connection can sit "open" for many
+ * minutes with nothing flowing; only a missing reply reveals it.
+ */
+const STALE_AFTER_MS = PING_INTERVAL_MS * 2 + 10_000;
+/** How long a `nudge()` probe waits for any frame before declaring the socket dead. */
+const PROBE_TIMEOUT_MS = 5_000;
 
 const PING_MESSAGE = JSON.stringify({ event: 'ping' });
 
@@ -76,6 +90,9 @@ export class WebsocketWorker {
 			reconnect_attempts: 0,
 			reconnect_timer: null,
 			ping_timer: null,
+			last_frame_at: 0,
+			frame_count: 0,
+			probe_timer: null,
 			intentional_close: false,
 		};
 		this.#connections.set(options.channel_name, conn);
@@ -105,6 +122,46 @@ export class WebsocketWorker {
 		conn.ws.send(JSON.stringify(message));
 	}
 
+	/**
+	 * Something suggests the connection may be stale or newly recoverable — the
+	 * network came back, the tab became visible, the device woke up. Tabs call
+	 * this; there is no way to hear those events from inside a SharedWorker for
+	 * every browser.
+	 *
+	 * - Not connected: abandon any pending backoff and reconnect right now.
+	 * - Looks connected: send a ping and give the server {@link PROBE_TIMEOUT_MS}
+	 *   to answer; silence means the socket died while we weren't looking.
+	 */
+	async nudge(channel_name: string): Promise<void> {
+		const conn = this.#connections.get(channel_name);
+		if (!conn || conn.intentional_close) return;
+		if (
+			conn.status !== 'connected' ||
+			!conn.ws ||
+			conn.ws.readyState !== WebSocket.OPEN
+		) {
+			if (conn.ws && conn.ws.readyState === WebSocket.CONNECTING) return;
+			this.#clearReconnectTimer(conn);
+			conn.reconnect_attempts = 0;
+			this.#doConnect(conn);
+			return;
+		}
+		if (conn.probe_timer !== null) return;
+		const probed = conn.ws;
+		const frames_before = conn.frame_count;
+		probed.send(PING_MESSAGE);
+		conn.probe_timer = setTimeout(() => {
+			conn.probe_timer = null;
+			if (conn.ws === probed && conn.frame_count === frames_before)
+				this.#dropDeadSocket(conn);
+		}, PROBE_TIMEOUT_MS);
+	}
+
+	/** {@link nudge} every connection — used when the network comes back. */
+	nudgeAll(): void {
+		for (const name of this.#connections.keys()) void this.nudge(name);
+	}
+
 	/** Returns the current connection status for a specific org. */
 	async getStatus(channel_name: string): Promise<WorkerStatus> {
 		return this.#connections.get(channel_name)?.status ?? 'disconnected';
@@ -118,6 +175,22 @@ export class WebsocketWorker {
 		// Clear any ping timer left over from a previous connection attempt
 		// (e.g. a socket that errored without ever firing onclose).
 		this.#stopPing(conn);
+		// A nudge can start a fresh attempt while an old socket is still attached
+		// (half-open after sleep). Detach it so its late onclose can't schedule a
+		// second, competing reconnect.
+		if (conn.ws) {
+			const old = conn.ws;
+			old.onopen = null;
+			old.onmessage = null;
+			old.onclose = null;
+			old.onerror = null;
+			try {
+				old.close();
+			} catch {
+				/* already closed */
+			}
+			conn.ws = null;
+		}
 		this.#setStatus(conn, conn.reconnect_attempts > 0 ? 'reconnecting' : 'connecting');
 
 		try {
@@ -129,11 +202,14 @@ export class WebsocketWorker {
 
 		conn.ws.onopen = () => {
 			conn.reconnect_attempts = 0;
+			conn.last_frame_at = Date.now();
 			this.#setStatus(conn, 'connected');
 			this.#startPing(conn);
 		};
 
 		conn.ws.onmessage = (event: MessageEvent) => {
+			conn.last_frame_at = Date.now();
+			conn.frame_count++;
 			try {
 				const data = JSON.parse(event.data as string);
 				// Skip pong messages — they're just keep-alive responses
@@ -178,12 +254,12 @@ export class WebsocketWorker {
 		this.#connections.delete(conn.channel_name);
 	}
 
+	/**
+	 * Retries forever. Giving up after N attempts left a tab that slept through
+	 * an outage permanently offline — live updates stopped until a reload — and a
+	 * capped backoff already keeps a long outage cheap.
+	 */
 	#scheduleReconnect(conn: Connection): void {
-		if (conn.reconnect_attempts >= MAX_RECONNECT_ATTEMPTS) {
-			this.#setStatus(conn, 'disconnected');
-			return;
-		}
-
 		this.#clearReconnectTimer(conn);
 		this.#setStatus(conn, 'reconnecting');
 
@@ -209,16 +285,47 @@ export class WebsocketWorker {
 	#startPing(conn: Connection): void {
 		this.#stopPing(conn);
 		conn.ping_timer = setInterval(() => {
-			if (conn.ws?.readyState === WebSocket.OPEN) {
-				conn.ws.send(PING_MESSAGE);
+			if (conn.ws?.readyState !== WebSocket.OPEN) return;
+			if (Date.now() - conn.last_frame_at > STALE_AFTER_MS) {
+				this.#dropDeadSocket(conn);
+				return;
 			}
+			conn.ws.send(PING_MESSAGE);
 		}, PING_INTERVAL_MS);
+	}
+
+	/**
+	 * The socket is open in name only. Closing a dead TCP connection can take
+	 * minutes to fire `onclose`, so detach it and reconnect immediately.
+	 */
+	#dropDeadSocket(conn: Connection): void {
+		if (conn.intentional_close) return;
+		this.#stopPing(conn);
+		const dead = conn.ws;
+		conn.ws = null;
+		if (dead) {
+			dead.onopen = null;
+			dead.onmessage = null;
+			dead.onclose = null;
+			dead.onerror = null;
+			try {
+				dead.close(4000, 'No response');
+			} catch {
+				/* already closed */
+			}
+		}
+		conn.reconnect_attempts = 0;
+		this.#scheduleReconnect(conn);
 	}
 
 	#stopPing(conn: Connection): void {
 		if (conn.ping_timer !== null) {
 			clearInterval(conn.ping_timer);
 			conn.ping_timer = null;
+		}
+		if (conn.probe_timer !== null) {
+			clearTimeout(conn.probe_timer);
+			conn.probe_timer = null;
 		}
 	}
 
@@ -245,6 +352,9 @@ const worker = new WebsocketWorker();
 
 // Regular Worker mode
 expose(worker);
+
+// Workers hear the network come back too; reconnect without waiting out a backoff.
+self.addEventListener('online', () => worker.nudgeAll());
 
 // SharedWorker mode — expose on each connecting port
 self.addEventListener('connect', (event) => {

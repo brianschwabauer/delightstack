@@ -109,6 +109,10 @@ export class WebsocketClient<
 	#channel_name: string | null = null;
 	#listeners = new Map<string, Set<EventCallback>>();
 	#entity_change_listeners = new Set<(event: EntityChangeEvent) => void>();
+	#reconnect_listeners = new Set<() => void>();
+	/** Whether this room's socket has been connected at least once (so the next connect is a REconnect). */
+	#ever_connected = false;
+	#remove_wake_listeners: (() => void) | null = null;
 
 	// Reactive state (Svelte 5 runes)
 	#status = $state<ConnectionStatus>('disconnected');
@@ -214,6 +218,7 @@ export class WebsocketClient<
 			})();
 
 		this.#channel_name = channel_name;
+		this.#ever_connected = false;
 
 		// Set up BroadcastChannel to receive events from the SharedWorker
 		this.#channel = new BroadcastChannel(channel_name);
@@ -233,8 +238,22 @@ export class WebsocketClient<
 					// grace-window check returns to "fully trusted."
 					this.#disconnected_at = null;
 					this.#dispatch('ws:connected', message);
-				} else if (new_status === 'disconnected' && old_status !== 'disconnected') {
-					// Record the drop so `isLive` can grant a grace period.
+					if (this.#ever_connected) {
+						// Everything sent while the socket was down is gone for good —
+						// tell listeners to catch up (DatabaseClient re-syncs).
+						this.#dispatch('ws:reconnected', message);
+						for (const cb of this.#reconnect_listeners) {
+							try {
+								cb();
+							} catch {
+								/* listener errors should not break the chain */
+							}
+						}
+					}
+					this.#ever_connected = true;
+				} else if (old_status === 'connected' && new_status !== 'connected') {
+					// Record the drop so `isLive` can grant a grace period. Covers
+					// 'reconnecting' too: the worker goes straight there on a drop.
 					this.#disconnected_at = Date.now();
 					this.#dispatch('ws:disconnected', message);
 				}
@@ -279,6 +298,47 @@ export class WebsocketClient<
 
 		// Tell the SharedWorker to connect (increments tab count or creates new connection)
 		await this.#worker.connect({ url, channel_name });
+		this.#watchForWake();
+	}
+
+	/**
+	 * Ask the worker to check the connection now: reconnect immediately if it is
+	 * down, or probe it if it only looks up. Called automatically when the tab
+	 * becomes visible, regains focus, or the network comes back — the moments a
+	 * long-idle tab is most likely holding a dead socket.
+	 */
+	async checkConnection(): Promise<void> {
+		if (!this.#worker || !this.#channel_name) return;
+		try {
+			await this.#worker.nudge(this.#channel_name);
+		} catch {
+			/* worker gone — the next connect() rebuilds it */
+		}
+	}
+
+	#watchForWake(): void {
+		this.#remove_wake_listeners?.();
+		if (typeof window === 'undefined') return;
+		let last = 0;
+		const wake = () => {
+			if (document.visibilityState === 'hidden') return;
+			// visibilitychange + focus + pageshow often fire together; one check is enough.
+			const now = Date.now();
+			if (now - last < 1000) return;
+			last = now;
+			void this.checkConnection();
+		};
+		window.addEventListener('online', wake);
+		window.addEventListener('focus', wake);
+		window.addEventListener('pageshow', wake);
+		document.addEventListener('visibilitychange', wake);
+		this.#remove_wake_listeners = () => {
+			window.removeEventListener('online', wake);
+			window.removeEventListener('focus', wake);
+			window.removeEventListener('pageshow', wake);
+			document.removeEventListener('visibilitychange', wake);
+			this.#remove_wake_listeners = null;
+		};
 	}
 
 	/**
@@ -287,6 +347,7 @@ export class WebsocketClient<
 	 * Call `destroy()` for full cleanup including listeners.
 	 */
 	async disconnect(): Promise<void> {
+		this.#remove_wake_listeners?.();
 		if (this.#status === 'connected') this.#disconnected_at = Date.now();
 		if (this.#worker && this.#channel_name) {
 			await this.#worker.disconnect(this.#channel_name);
@@ -306,6 +367,7 @@ export class WebsocketClient<
 		await this.disconnect();
 		this.#listeners.clear();
 		this.#entity_change_listeners.clear();
+		this.#reconnect_listeners.clear();
 	}
 
 	/**
@@ -321,6 +383,8 @@ export class WebsocketClient<
 	 * // Transport lifecycle
 	 * ws.on('ws:connected', () => console.log('WebSocket connected'));
 	 * ws.on('ws:disconnected', () => console.log('WebSocket disconnected'));
+	 * // Connected again after a drop — anything sent meanwhile was missed
+	 * ws.on('ws:reconnected', () => refetchWhatMatters());
 	 *
 	 * // Wildcard — receives any WebsocketMessage
 	 * ws.on('*', (msg) => console.log(msg.event));
@@ -412,6 +476,14 @@ export class WebsocketClient<
 			// while the websocket is live (or just briefly dropped): change
 			// events are flowing in, so IDB is the source of truth.
 			isLive: () => this.isLive,
+			// The change feed only carries what happens while connected; after a
+			// drop the database pulls the gap with a catch-up sync.
+			onReconnect: (callback) => {
+				this.#reconnect_listeners.add(callback);
+				return () => {
+					this.#reconnect_listeners.delete(callback);
+				};
+			},
 		};
 	}
 
