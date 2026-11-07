@@ -191,11 +191,21 @@ describe('serializing cookies for hand-built responses', () => {
 			secure: true,
 			same_site: 'lax',
 		},
+		session: { max_age: 86400 },
 	} as unknown as Parameters<typeof serializeSessionCookie>[0];
 
 	it('serializes the session cookie with the configured options', () => {
 		const header = serializeSessionCookie(CONFIG, 'jwt.value.here');
-		expect(header).toBe('app-session=jwt.value.here; Path=/; HttpOnly; Secure; SameSite=Lax');
+		expect(header).toBe(
+			'app-session=jwt.value.here; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax',
+		);
+	});
+
+	it('gives the session cookie an expiry so it survives a browser restart', () => {
+		// A cookie without Max-Age/Expires is session-scoped: the browser drops it on
+		// close and the user is signed out every time they restart.
+		const header = serializeSessionCookie(CONFIG, 'jwt');
+		expect(header).toMatch(/; Max-Age=\d+;/);
 	});
 
 	it('serializes the preferences cookie so auth routes can persist it', async () => {
@@ -205,13 +215,16 @@ describe('serializing cookies for hand-built responses', () => {
 		expect(header.startsWith('app-pref=')).toBe(true);
 		expect(header).toContain('Path=/');
 		expect(header).toContain('HttpOnly');
+		expect(header).toContain('Max-Age=86400');
 
 		const value = decodeURIComponent(header.slice('app-pref='.length).split(';')[0]);
 		expect(await verifyState(value, SECRET)).toEqual({ theme: 'dark' });
 	});
 
 	it('serializes an org state cookie under the org-specific name', async () => {
-		const header = await serializeOrgStateCookie(CONFIG, SECRET, 'org_1', { last_tab: 2 });
+		const header = await serializeOrgStateCookie(CONFIG, SECRET, 'org_1', {
+			last_tab: 2,
+		});
 		expect(header.startsWith('app-org-org_1=')).toBe(true);
 		const value = decodeURIComponent(header.slice('app-org-org_1='.length).split(';')[0]);
 		expect(await verifyState(value, SECRET)).toEqual({ last_tab: 2 });

@@ -185,6 +185,22 @@ export interface AuthDatabaseServerOptions {
 	 * @default 'profile'
 	 */
 	oauthProfileScope?: string;
+
+	/**
+	 * Lifetime of an issued session JWT, in seconds. A JWT is verified statelessly, so
+	 * this is how long a revoked session can keep working; an expired JWT is refreshed
+	 * transparently on the next request.
+	 * @default 3600 (1 hour)
+	 */
+	session_expires_in?: number;
+
+	/**
+	 * How long, in seconds, an idle session can still be refreshed after its JWT expires.
+	 * Deleting a session row revokes it, so this is the "signed out after not visiting
+	 * for this long" window. Keep it in step with the auth config's `session.max_age`.
+	 * @default 34560000 (400 days)
+	 */
+	session_max_age?: number;
 }
 
 /**
@@ -3113,7 +3129,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 			uid: user_id, // The user's ID
 			jti: user_session_id, // A unique identifier for the token (can be saved to user_session to revoke the token later)
 			iat: iat, // The time the token was issued
-			exp: iat + Math.max(0, expires_in || 60 * 60), // The time the token expires (1 hour from now)
+			exp: iat + Math.max(0, expires_in || this.options.session_expires_in || 60 * 60), // When the token expires (1 hour by default)
 			org: org || orgPermissions, // The record of orgs the user is a part of and their role/permissions
 			name,
 			email,
@@ -4312,7 +4328,7 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 	/**
 	 * Deletes expired single-use token sessions (email verification, password reset,
 	 * email sign-in) and long-stale auth sessions so the table doesn't grow unbounded.
-	 * Auth sessions stay refreshable for STALE_AUTH_SESSION_DAYS past their jwt expiry —
+	 * Auth sessions stay refreshable for `session_max_age` past their jwt expiry —
 	 * deleting an auth row revokes its refresh grant, so they are kept well past expires_at.
 	 * Runs at most once per hour.
 	 */
@@ -4320,8 +4336,8 @@ export class AuthDatabaseServer extends DurableObject<Env> {
 		const now = Date.now();
 		if (now - this.last_session_cleanup < 1000 * 60 * 60) return;
 		this.last_session_cleanup = now;
-		const STALE_AUTH_SESSION_DAYS = 30;
-		const stale_auth_cutoff = now - STALE_AUTH_SESSION_DAYS * 24 * 60 * 60 * 1000;
+		const max_age_seconds = this.options.session_max_age ?? 60 * 60 * 24 * 400;
+		const stale_auth_cutoff = now - max_age_seconds * 1000;
 		this.sql.run(
 			(sql) => sql`DELETE FROM user_session
 				WHERE (type IN ('email_verification', 'password_reset', 'email_signin') AND expires_at < ${now})

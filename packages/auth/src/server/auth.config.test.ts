@@ -38,6 +38,7 @@ describe('defineAuthConfig', () => {
 		expect(config.session).toEqual({
 			expires_in: 3600,
 			refresh_threshold: 600,
+			max_age: 60 * 60 * 24 * 400,
 		});
 	});
 

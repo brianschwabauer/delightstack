@@ -93,8 +93,20 @@ export interface AuthConfig<
 
 	/** Session configuration */
 	session?: {
-		/** Session duration in seconds @default 3600 (1 hour) */
+		/**
+		 * @deprecated Ignored. The session JWT's lifetime is decided by the
+		 * `AuthDatabaseServer` that issues it — set `session_expires_in` on its options.
+		 */
 		expires_in?: number;
+		/**
+		 * How long, in seconds, the browser keeps the session (and preference) cookies.
+		 * Re-issued on every JWT refresh, so it rolls: a user who visits at least once in
+		 * this window stays signed in indefinitely. Keep it in step with the
+		 * `AuthDatabaseServer`'s `session_max_age`, which decides how long an idle session
+		 * can still be refreshed. Browsers cap cookie lifetimes at 400 days.
+		 * @default 34560000 (400 days)
+		 */
+		max_age?: number;
 		/** Refresh threshold in seconds @default 600 (10 minutes) */
 		refresh_threshold?: number;
 	};
@@ -290,6 +302,9 @@ export interface ResolvedAuthConfig<
 	session: Required<NonNullable<AuthConfig['session']>>;
 }
 
+/** Browsers cap cookie lifetimes at 400 days, so a longer default would be clamped anyway. */
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 400;
+
 /** Creates an auth config with sensible defaults */
 export function defineAuthConfig<
 	const P extends string,
@@ -338,6 +353,7 @@ export function defineAuthConfig<
 		session: {
 			expires_in: 3600,
 			refresh_threshold: 600,
+			max_age: SESSION_MAX_AGE_SECONDS,
 			...config.session,
 		},
 	};

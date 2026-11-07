@@ -35,6 +35,10 @@ function sessionCookieOptions(config: ResolvedAuthConfig) {
 		httpOnly: config.cookies.http_only,
 		secure: config.cookies.secure,
 		sameSite: config.cookies.same_site as 'lax' | 'strict' | 'none',
+		// Without an expiry the browser treats the cookie as session-scoped and drops it
+		// when the browser closes, signing the user out on every restart. The cookie is
+		// re-issued whenever the JWT refreshes, so this window rolls with use.
+		maxAge: config.session?.max_age,
 	};
 }
 
@@ -61,6 +65,7 @@ function serializeCookie(
 	const opts = sessionCookieOptions(config);
 	const parts = [`${name}=${encodeURIComponent(value)}`];
 	if (opts.path) parts.push(`Path=${opts.path}`);
+	if (opts.maxAge) parts.push(`Max-Age=${opts.maxAge}`);
 	if (opts.httpOnly) parts.push('HttpOnly');
 	if (opts.secure) parts.push('Secure');
 	if (opts.sameSite)
