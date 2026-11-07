@@ -775,9 +775,19 @@
 		}
 		&.translucent {
 			backdrop-filter: blur(10px);
-			--color-bg: rgb(from var(--color-text) r g b / 0.09);
-			--color-bg-disabled: rgb(from var(--color-text) r g b / 0.04);
-			--color-bg-active: rgb(from var(--color-text) r g b / 0.15);
+			/* A 9% wash disappears on a dark page; dark mode takes a deeper one. */
+			--color-bg: light-dark(
+				rgb(from var(--color-text) r g b / 0.09),
+				rgb(from var(--color-text) r g b / 0.15)
+			);
+			--color-bg-disabled: light-dark(
+				rgb(from var(--color-text) r g b / 0.04),
+				rgb(from var(--color-text) r g b / 0.07)
+			);
+			--color-bg-active: light-dark(
+				rgb(from var(--color-text) r g b / 0.15),
+				rgb(from var(--color-text) r g b / 0.23)
+			);
 			--button-border: none;
 			--button-border-disabled: none;
 			--button-border-active: none;
