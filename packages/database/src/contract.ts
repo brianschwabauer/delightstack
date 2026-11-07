@@ -79,4 +79,11 @@ export interface DatabaseClientHooks {
 	 * refresh-if-stale so apps without a push channel still stay in sync.
 	 */
 	isLive?: () => boolean;
+	/**
+	 * Subscribe to "the live channel came back after dropping". Changes made
+	 * while it was down never arrive over it, so `DatabaseClient` runs a
+	 * catch-up sync on every call. Not called for the first connection — the
+	 * client's `init()` already syncs. May return an unsubscribe fn.
+	 */
+	onReconnect?: (callback: () => void) => (() => void) | void;
 }

@@ -966,6 +966,24 @@ interface ListHandleDeps {
 	isFrozen?: () => boolean;
 	/** Called when the last reactive listener stops reading — drops the cache entry. */
 	release: () => void;
+	/**
+	 * Quiet window for coalescing rapid query changes, in ms. Defaults to
+	 * {@link QUERY_DEBOUNCE_MS}; `0` sends every change immediately.
+	 */
+	debounce?: number;
+}
+
+/** Options for `db.list()` beyond the query itself. */
+export interface ListOptions {
+	/**
+	 * How long, in ms, a reactive query waits for its inputs to settle before
+	 * re-running. The default (150ms) coalesces typing into one search. Use `0`
+	 * for queries keyed by an id the user steps through — a thread or record
+	 * viewer — so every step answers immediately instead of waiting out the
+	 * quiet window. Ignored for static (non-function) queries.
+	 * @default 150
+	 */
+	debounce?: number;
 }
 
 /**
@@ -1376,7 +1394,15 @@ export class ListHandle<
 	 */
 	#schedulePushQuery(): void {
 		const now = Date.now();
-		if (this.#push_timer === null && now - this.#last_push_at >= QUERY_DEBOUNCE_MS) {
+		const debounce = this.#deps.debounce ?? QUERY_DEBOUNCE_MS;
+		if (debounce <= 0) {
+			if (this.#push_timer !== null) clearTimeout(this.#push_timer);
+			this.#push_timer = null;
+			this.#last_push_at = now;
+			void this.#pushQuery();
+			return;
+		}
+		if (this.#push_timer === null && now - this.#last_push_at >= debounce) {
 			this.#last_push_at = now;
 			void this.#pushQuery();
 			return;
@@ -1386,7 +1412,7 @@ export class ListHandle<
 			this.#push_timer = null;
 			this.#last_push_at = Date.now();
 			void this.#pushQuery();
-		}, QUERY_DEBOUNCE_MS);
+		}, debounce);
 	}
 
 	async #pushQuery(): Promise<void> {
@@ -1522,6 +1548,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	 */
 	#frozen = false;
 	#external_unsubscribe: (() => void) | void = undefined;
+	#external_unreconnect: (() => void) | void = undefined;
 
 	/**
 	 * Per-entity reactive version counter. `db.get` reads the version for its
@@ -1756,16 +1783,18 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		}, 50);
 
 		// Fire sync in background — main thread tracks state
-		this.#syncing = true;
-		this.#worker
-			.sync()
-			.then(() => {
-				if (!this.#destroyed) this.#synced = true;
-			})
-			.catch(() => {})
-			.finally(() => {
-				if (!this.#destroyed) this.#syncing = false;
+		this.#backgroundSync();
+
+		// A live channel that drops and comes back has missed every change made
+		// while it was down — the change feed only carries what happens while it
+		// is connected. Catch up with a sync (it pulls from the stored cursor, so
+		// it only transfers the gap).
+		if (this.#config.hooks?.onReconnect) {
+			this.#external_unreconnect = this.#config.hooks.onReconnect(() => {
+				if (!this.#worker || this.#frozen || this.#destroyed) return;
+				this.#backgroundSync();
 			});
+		}
 
 		// Wire up external subscription hook (e.g. websocket)
 		if (this.#config.hooks?.onSubscribe) {
@@ -1805,6 +1834,22 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 					.catch(() => {});
 			});
 		}
+	}
+
+	/** Pull every change since the stored cursor, without blocking the caller. */
+	#backgroundSync(): void {
+		const worker = this.#worker;
+		if (!worker) return;
+		this.#syncing = true;
+		worker
+			.sync()
+			.then(() => {
+				if (!this.#destroyed) this.#synced = true;
+			})
+			.catch(() => {})
+			.finally(() => {
+				if (!this.#destroyed) this.#syncing = false;
+			});
 	}
 
 	// -----------------------------------------------------------------------
@@ -2233,6 +2278,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 	list<K extends keyof T & string, Q extends ListQueryInit<T[K]>>(
 		entity_type: K,
 		query?: Q & ValidQueryInit<Q>,
+		options?: ListOptions,
 	): ListHandle<T[K], K, ListDocument<T[K], Q>> {
 		const deps = (release: () => void) => ({
 			getWorker: () => this.#worker,
@@ -2240,6 +2286,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			fetch: this.#config.fetch,
 			isFrozen: () => this.#frozen,
 			release,
+			debounce: options?.debounce,
 		});
 		// Function-form queries are reactive per call site — never shared.
 		if (typeof query === 'function') {
@@ -2324,6 +2371,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 			this.#external_unsubscribe();
 			this.#external_unsubscribe = undefined;
 		}
+		this.#external_unreconnect?.();
+		this.#external_unreconnect = undefined;
 		if (this.#hydrate_timer) {
 			clearTimeout(this.#hydrate_timer);
 			this.#hydrate_timer = null;
@@ -2387,6 +2436,8 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 		if (this.#external_unsubscribe) {
 			this.#external_unsubscribe();
 		}
+		this.#external_unreconnect?.();
+		this.#external_unreconnect = undefined;
 		this.#foreground_drain?.();
 		this.#foreground_drain = null;
 		this.#entity_cache.clear();

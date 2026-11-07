@@ -10,6 +10,7 @@ export {
 	type ListDocument,
 	type HandleStatus,
 	type DatabaseStatus,
+	type ListOptions,
 } from './database.client.svelte';
 
 export { type WorkerSearchResult } from './database.worker';
