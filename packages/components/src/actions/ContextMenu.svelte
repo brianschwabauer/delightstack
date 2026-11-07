@@ -1,5 +1,12 @@
 <script lang="ts" module>
-	import { tick, untrack, type Component, type Snippet } from 'svelte';
+	import {
+		onDestroy,
+		onMount,
+		tick,
+		untrack,
+		type Component,
+		type Snippet,
+	} from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import Popover from './Popover.svelte';
 	import List from './../display/List.svelte';
@@ -38,6 +45,15 @@
 	/** The Y location of the context menu, used to position it */
 	let contextMenuLocationY = $state<number | undefined>(undefined);
 
+	// Single-instance election, as in <Toaster />: every <ContextMenu /> shares
+	// this module's menu state, so only the first-mounted one renders. Mounting
+	// it more than once (e.g. once per docs demo) used to open one popover per
+	// instance, stacked on the same spot — their shadows compounded into a
+	// heavy dark halo.
+	let registered: number[] = [];
+	let primary_token = $state<number | null>(null);
+	let election_counter = 0;
+
 	/** A record of context menu targets that will be chosen from when the user right clicks the window */
 	const contextMenuTargets = new WeakMap<
 		HTMLElement,
@@ -71,6 +87,18 @@
 </script>
 
 <script lang="ts">
+	const my_token = ++election_counter;
+	onMount(() => {
+		registered.push(my_token);
+		if (primary_token === null) primary_token = my_token;
+	});
+	onDestroy(() => {
+		const i = registered.indexOf(my_token);
+		if (i !== -1) registered.splice(i, 1);
+		if (primary_token === my_token) primary_token = registered[0] ?? null;
+	});
+	const is_primary = $derived(primary_token === my_token);
+
 	/** The menu the popover renders — retained after activeContextMenu clears so the
 	 * items don't unmount while the popover panel is still playing its close animation */
 	let renderedMenu = $state<(ContextMenuOptions & { el: HTMLElement }) | undefined>(
@@ -79,10 +107,17 @@
 	$effect(() => {
 		if (activeContextMenu?.actions?.length) renderedMenu = activeContextMenu;
 	});
+
+	/** Whether the open menu came from a mouse right-click (vs. the keyboard's
+	 * context-menu key / Shift+F10, which fires `contextmenu` with button 0). A
+	 * pointer-opened menu leaves focus where it was — moving it onto the first
+	 * item painted a keyboard focus ring the user never asked for. */
+	let opened_with_pointer = $state(true);
 </script>
 
 <svelte:window
 	oncontextmenu={(event) => {
+		if (!is_primary) return;
 		let target = event.target as HTMLElement;
 		while (target && !contextMenuTargets.has(target)) {
 			target = target.parentElement as HTMLElement;
@@ -90,6 +125,7 @@
 		const contextMenu = contextMenuTargets.get(target);
 		if (!contextMenu) return;
 		event.preventDefault();
+		opened_with_pointer = event.button === 2;
 		activeContextMenu = undefined;
 		contextMenuLocationX = event.clientX;
 		contextMenuLocationY = event.clientY;
@@ -99,48 +135,51 @@
 		if (activeContextMenu) activeContextMenu = undefined;
 	}} />
 
-<Popover
-	bind:opened={
-		() => !!activeContextMenu?.actions?.length,
-		(open) => {
-			// The Popover closes itself on outside click / escape / scroll. Funnel
-			// that back into clearing the active menu so it fully dismisses (a
-			// one-way `opened` prop would leave the menu state stale and re-open it).
-			if (!open) activeContextMenu = undefined;
+{#if is_primary}
+	<Popover
+		bind:opened={
+			() => !!activeContextMenu?.actions?.length,
+			(open) => {
+				// The Popover closes itself on outside click / escape / scroll. Funnel
+				// that back into clearing the active menu so it fully dismisses (a
+				// one-way `opened` prop would leave the menu state stale and re-open it).
+				if (!open) activeContextMenu = undefined;
+			}
 		}
-	}
-	strategy="fixed"
-	close_on_escape_key
-	close_on_outside_click
-	arrow={false}
-	radius="var(--radius-lg)"
-	x={contextMenuLocationX}
-	y={contextMenuLocationY}>
-	{#if renderedMenu?.actions?.length}
-		<List>
-			{#each renderedMenu.actions as action}
-				<ListItem
-					onclick={async (event) => {
-						if (action.onclick) await action.onclick(event as PointerEvent);
-						activeContextMenu = undefined;
-					}}
-					active={action.active}
-					href={action.href}
-					target={action.target}
-					disabled={action.disabled}>
-					{#if action.snippet}
-						{@render action.snippet(renderedMenu)}
-					{:else}
-						{#if action.icon}
-							<span
-								style="display:inline-flex; align-items: center; padding-right: 0.5rem; font-size: 1.1rem;">
-								<action.icon></action.icon>
-							</span>
+		strategy="fixed"
+		close_on_escape_key
+		close_on_outside_click
+		arrow={false}
+		disable_initial_focus={opened_with_pointer}
+		radius="var(--radius-lg)"
+		x={contextMenuLocationX}
+		y={contextMenuLocationY}>
+		{#if renderedMenu?.actions?.length}
+			<List>
+				{#each renderedMenu.actions as action}
+					<ListItem
+						onclick={async (event) => {
+							if (action.onclick) await action.onclick(event as PointerEvent);
+							activeContextMenu = undefined;
+						}}
+						active={action.active}
+						href={action.href}
+						target={action.target}
+						disabled={action.disabled}>
+						{#if action.snippet}
+							{@render action.snippet(renderedMenu)}
+						{:else}
+							{#if action.icon}
+								<span
+									style="display:inline-flex; align-items: center; padding-right: 0.5rem; font-size: 1.1rem;">
+									<action.icon></action.icon>
+								</span>
+							{/if}
+							{action.label}
 						{/if}
-						{action.label}
-					{/if}
-				</ListItem>
-			{/each}
-		</List>
-	{/if}
-</Popover>
+					</ListItem>
+				{/each}
+			</List>
+		{/if}
+	</Popover>
+{/if}
