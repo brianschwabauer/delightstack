@@ -16,7 +16,7 @@
 		/** Tip variant styling (uses accent color) */
 		tip = false,
 
-		/** Full-width banner mode with solid background and white text */
+		/** Full-width banner mode: solid variant background with its on-fill text color */
 		banner = false,
 
 		/** Optional heading text */
@@ -225,6 +225,9 @@
 	.callout {
 		--callout-color: var(--color-action);
 		--callout-bg: var(--color-action-bg);
+		/* Text on a solid banner: each variant's own on-fill token, so warning
+		   gets dark ink on amber instead of white (~2:1). */
+		--callout-on: var(--color-action-text, white);
 		/* Legible foreground for the icon, title and dismiss control — the accent
 		   color used as text/icons on the faint tinted surface. Derived from
 		   --callout-color so it tracks the variant; lifted into a readable band
@@ -263,27 +266,35 @@
 		&.success {
 			--callout-color: var(--color-success);
 			--callout-bg: var(--color-success-bg);
+			--callout-on: var(--color-success-text, white);
 		}
 		&.warning {
 			--callout-color: var(--color-warning);
 			--callout-bg: var(--color-warning-bg);
+			--callout-on: var(--color-warning-text, white);
 		}
 		&.error {
 			--callout-color: var(--color-error);
 			--callout-bg: var(--color-error-bg);
+			--callout-on: var(--color-error-text, white);
 		}
 		&.tip {
 			/* Ink on a neutral well, so a tip reads as an aside — distinct from the
 			   brand-tinted info callout instead of a near-twin of it. */
 			--callout-color: var(--color-accent);
 			--callout-bg: var(--color-bg-muted);
+			--callout-on: var(--color-accent-text, white);
 		}
 
 		&.banner {
 			border-radius: 0;
 			width: 100%;
 			background: var(--callout-color);
-			color: white;
+			/* Everything that used the tinted-surface foreground (icon, title,
+			   dismiss button, links) takes the on-fill color instead; the
+			   tinted fg on its own solid fill was invisible. */
+			--callout-fg: var(--callout-on);
+			color: var(--callout-on);
 			transform: none;
 			opacity: 0;
 			translate: 0 -100%;
@@ -302,16 +313,13 @@
 				}
 			}
 
-			.icon {
-				color: white;
-			}
-
+			.icon,
 			.title {
-				color: white;
+				color: var(--callout-on);
 			}
 
 			.body {
-				color: rgba(255, 255, 255, 0.9);
+				color: oklch(from var(--callout-on) l c h / 0.9);
 			}
 		}
 
@@ -361,11 +369,11 @@
 		&.banner.skeleton {
 			/* Solid banners carry the variant color as background — tint the
 			 * placeholder with white like the banner's own text. */
-			--skeleton-bg: rgb(255 255 255 / 0.25);
-			--skeleton-sheen: rgb(255 255 255 / 0.35);
+			--skeleton-bg: oklch(from var(--callout-on) l c h / 0.25);
+			--skeleton-sheen: oklch(from var(--callout-on) l c h / 0.35);
 
 			.skeleton-line.title-skeleton {
-				--skeleton-bg: rgb(255 255 255 / 0.4);
+				--skeleton-bg: oklch(from var(--callout-on) l c h / 0.4);
 			}
 		}
 	}
@@ -376,6 +384,13 @@
 		gap: var(--_gap);
 		padding: var(--_pad-y) var(--_pad-x);
 		overflow: hidden;
+
+		/* Without a title the text is one block: center it (and the icon) on
+		   the row, so it lines up with a taller action or dismiss button
+		   instead of riding above them. */
+		&:not(:has(.title)) {
+			align-items: center;
+		}
 
 		/* Accent bar. A border-left used to provide this emphasis, but a flush
 		 * border fights the rounded corners (the radius curves the bar's ends
