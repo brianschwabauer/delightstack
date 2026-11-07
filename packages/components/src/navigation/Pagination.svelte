@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { ripple } from '@delightstack/utilities';
+	import Button from '../actions/Button.svelte';
+	import List from '../display/List.svelte';
+	import ListItem from '../display/ListItem.svelte';
 
 	const propId = $props.id();
 	let {
@@ -164,9 +167,8 @@
 		goToPage(page + 1);
 	}
 
-	function handlePageSizeChange(e: Event) {
-		const target = e.target as HTMLSelectElement;
-		const newSize = Number(target.value);
+	function handlePageSizeChange(newSize: number) {
+		if (newSize === page_size) return;
 		page_size = newSize;
 		page = 1;
 		onpagesizechange?.({ page_size: newSize });
@@ -246,14 +248,33 @@
 		</div>
 	{:else}
 		{#if show_page_size}
-			<label class="page-size">
-				<span>Rows</span>
-				<select value={String(page_size)} onchange={handlePageSizeChange}>
-					{#each page_size_options as opt}
-						<option value={String(opt)} selected={opt === page_size}>{opt}</option>
-					{/each}
-				</select>
-			</label>
+			<!-- A themed menu button rather than a native <select>: the native control
+			     brought browser chrome, its own height and radius into the bar. -->
+			<div class="page-size">
+				<span aria-hidden="true">Rows</span>
+				<Button
+					outline
+					dense
+					show_chevron
+					style="font-size: inherit"
+					aria-label="Rows per page: {page_size}">
+					{page_size}
+					{#snippet menu({ close })}
+						<List>
+							{#each page_size_options as opt (opt)}
+								<ListItem
+									active={opt === page_size}
+									onclick={() => {
+										handlePageSizeChange(opt);
+										close();
+									}}>
+									{opt}
+								</ListItem>
+							{/each}
+						</List>
+					{/snippet}
+				</Button>
+			</div>
 		{/if}
 
 		{#if show_info && infoText}
@@ -591,29 +612,6 @@
 		white-space: nowrap;
 		font-size: 0.875em;
 		color: var(--color-text-muted, #6b7280);
-	}
-
-	select {
-		appearance: auto;
-		border: 1px solid
-			light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		border-radius: var(--radius-md, 0.375rem);
-		@supports (corner-shape: squircle) {
-			corner-shape: squircle;
-			border-radius: calc(var(--radius-md, 0.375rem) * var(--squircle-ratio, 2));
-		}
-		background: light-dark(var(--color-bg, white), var(--color-bg, #0a0a0a));
-		color: inherit;
-		font-size: inherit;
-		font-family: inherit;
-		padding: 0.25em 0.5em;
-		height: var(--pg-height);
-		cursor: pointer;
-
-		&:focus-visible {
-			outline: 2px solid var(--color-action, #2563eb);
-			outline-offset: 1px;
-		}
 	}
 
 	@keyframes -global-delight-skeleton-shimmer {

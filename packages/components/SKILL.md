@@ -76,8 +76,8 @@ have the exact types. Do not guess prop names.
 ## Component index
 
 ### Actions
-- `Button` — Polished button with ripple, promise-aware loading, dropdown menus, confirmation flows (docs: /components/actions/button.md)
-- `ButtonGroup` — Groups related buttons with shared borders and context-driven prop inheritance (docs: /components/actions/button-group.md)
+- `Button` — Polished button with ripple, promise-aware loading, dropdown menus, confirmation flows; colors `accent` (ink), `error`, `success`, `warning` (docs: /components/actions/button.md)
+- `ButtonGroup` — Groups related buttons with shared borders and context-driven prop inheritance. `bind:value` + child `<Button value>` makes it a segmented control — the default for 2–5 exclusive options; add `translucent` for a neutral selected chip instead of the brand fill (docs: /components/actions/button-group.md)
 - `Modal` — Dialog overlay with animations, focus trapping, backdrop blur, crossfade transitions (docs: /components/actions/modal.md)
 - `Alert` — Confirmation dialog built on Modal; programmatic yes/no `alert()` API (docs: /components/actions/alert.md)
 - `Popover` — Floating container with Floating UI positioning, trigger modes, hover-safe diagonal movement (docs: /components/actions/popover.md)
@@ -99,8 +99,8 @@ have the exact types. Do not guess prop names.
 - `List` / `ListItem` — Selection-aware list; items act as buttons, radios, checkboxes, submenus (docs: /components/display/list.md, /components/display/list-item.md)
 - `QR` — QR code generator rendering crisp SVGs with colors, logo overlay, download (docs: /components/display/qr.md)
 - `SplitPane` — Resizable two-pane split with drag, keyboard, snap, collapse (docs: /components/display/split-pane.md)
-- `Stat` — Key metric display with labels, icons, change indicators (docs: /components/display/stat.md)
-- `Table` — Data table: sorting, pagination, selection, inline editing, CSV/JSON export (docs: /components/display/table.md)
+- `Stat` — Key metric display with labels, icons, change indicators; `positive="down"` for lower-is-better metrics (docs: /components/display/stat.md)
+- `Table` — Data table: sorting, pagination, selection, inline editing, CSV/JSON export; row dividers only unless `column_dividers` (docs: /components/display/table.md)
 - `Timeline` / `TimelineItem` — Chronological events, vertical/horizontal, scroll-reveal (docs: /components/display/timeline.md)
 - `Tree` — Hierarchical data with expand/collapse, checkboxes, drag-and-drop, lazy loading, search, and multi-select (`shift`/`mod` click, `shift+↑/↓`, `mod+a`, `escape`) (docs: /components/display/tree.md)
 - `Typewriter` — Character-by-character typing animation with text cycling (docs: /components/display/typewriter.md)

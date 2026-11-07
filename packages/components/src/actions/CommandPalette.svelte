@@ -410,12 +410,16 @@
 			: undefined,
 	);
 
-	// Reset selection when results change
+	// Reset selection when results change. The new results came from typing,
+	// so hand the highlight back to the keyboard cursor — otherwise a pointer
+	// that touched a row earlier leaves row 0 selected but unhighlighted, and
+	// Enter runs a command the user can't see.
 	$effect(() => {
 		// Subscribe to visible_commands changes
 		// oxlint-disable-next-line no-unused-expressions
 		visible_commands;
 		selected_index = 0;
+		keyboard_nav = true;
 	});
 
 	// Focus input when opened; reset the query when closed (close() covers the
@@ -634,7 +638,10 @@
 							class:first-in-group={group_i === 0}
 							class:last-in-group={group_i === group.commands.length - 1}
 							class:disabled={command.disabled}
-							onpointerenter={() => {
+							onpointermove={() => {
+								// pointermove, not pointerenter: rows re-rendering under a
+								// still cursor (while typing) must not steal the highlight.
+								if (!keyboard_nav && selected_index === flat_index) return;
 								keyboard_nav = false;
 								selected_index = flat_index;
 							}}
@@ -707,7 +714,7 @@
 		transform: translateX(-50%);
 		z-index: var(--layer-popover);
 		width: min(600px, 90vw);
-		background-color: var(--color-bg);
+		background-color: var(--color-surface, var(--color-bg));
 		border-radius: var(--_radius);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
@@ -1003,6 +1010,19 @@
 				}
 				line-height: 1;
 			}
+		}
+	}
+
+	/* Reduced motion: rows keep their color feedback but don't press/shift. */
+	@media (prefers-reduced-motion: reduce) {
+		.palette,
+		.palette * {
+			transition-property:
+				color, background-color, border-color, opacity, box-shadow !important;
+		}
+		.palette *:active {
+			translate: none !important;
+			scale: none !important;
 		}
 	}
 </style>

@@ -24,7 +24,7 @@
 		display: grid;
 		grid-template-rows: min-content 0fr;
 		transition:
-			grid-template-rows 300ms cubic-bezier(0.23, 1, 0.32, 1),
+			grid-template-rows 300ms var(--ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
 			opacity 200ms;
 		opacity: 0;
 		&::before {
@@ -43,6 +43,22 @@
 				visibility: visible;
 				transition: visibility 0ms;
 			}
+		}
+	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.expand,
+		.expand * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.expand:active,
+		.expand *:active,
+		.expand *:hover {
+			translate: none !important;
+			scale: none !important;
 		}
 	}
 </style>

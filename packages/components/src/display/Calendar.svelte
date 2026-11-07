@@ -163,6 +163,17 @@
 	const day_name_formatter = $derived(
 		new Intl.DateTimeFormat(locale, { weekday: 'short' }),
 	);
+	const day_name_long_formatter = $derived(
+		new Intl.DateTimeFormat(locale, { weekday: 'long' }),
+	);
+
+	/** Column headers want two letters ("Mo Tu We"): three-letter caps crowd a
+	 * 7-column grid and read as shouting. Latin-script abbreviations are
+	 * trimmed to two; other scripts keep the locale's own short form. */
+	function weekdayHeader(date: Date): string {
+		const short = day_name_formatter.format(date).replace(/\.$/, '');
+		return /^\p{Script=Latin}{3,}$/u.test(short) ? short.slice(0, 2) : short;
+	}
 
 	/* ------------------------------------------------------------------ */
 	/*  Grid computation                                                  */
@@ -179,14 +190,17 @@
 
 	/** Day-of-week headers respecting week_starts_on */
 	const weekday_headers = $derived.by(() => {
-		const headers: string[] = [];
+		const headers: { short: string; long: string }[] = [];
 		// Use a known reference: Jan 4 2026 is a Sunday (day 0)
 		for (let i = 0; i < 7; i++) {
 			const day_index = (week_starts_on + i) % 7;
 			// Build a date that is the correct weekday
 			// Jan 4 2026 = Sunday. Add day_index to get desired weekday.
 			const ref = new Date(2026, 0, 4 + day_index);
-			headers.push(day_name_formatter.format(ref));
+			headers.push({
+				short: weekdayHeader(ref),
+				long: day_name_long_formatter.format(ref),
+			});
 		}
 		return headers;
 	});
@@ -656,8 +670,8 @@
 		<!-- Weekday headers -->
 		<div class="weekdays" role="row">
 			{#each weekday_headers as header}
-				<div class="weekday" role="columnheader" aria-label={header}>
-					{header}
+				<div class="weekday" role="columnheader" aria-label={header.long}>
+					{header.short}
 					{#if skeleton}
 						<span class="skeleton-fill skeleton-weekday"></span>
 					{/if}
@@ -905,9 +919,22 @@
 	}
 
 	/* ========== Weekday Headers ========== */
+	/* Columns never drop below a comfortable 36px target (28/44px dense /
+	   comfortable); the shrink-wrapped grid used to size them off the header
+	   text, landing ~29px. */
+	.calendar {
+		--_cell: 2.25rem;
+		&.dense {
+			--_cell: 1.75rem;
+		}
+		&.comfortable {
+			--_cell: 2.75rem;
+		}
+	}
+
 	.weekdays {
 		display: grid;
-		grid-template-columns: repeat(7, 1fr);
+		grid-template-columns: repeat(7, minmax(var(--_cell), 1fr));
 		gap: 2px;
 		padding: 0 0.75rem;
 
@@ -922,10 +949,8 @@
 
 	.weekday {
 		text-align: center;
-		font-size: 0.6875rem;
+		font-size: 0.75rem;
 		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
 		padding: 0.25rem 0;
 		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
 
@@ -943,7 +968,7 @@
 	/* ========== Day Grid ========== */
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(7, 1fr);
+		grid-template-columns: repeat(7, minmax(var(--_cell), 1fr));
 		gap: 2px;
 		padding: 0.375rem 0.75rem 0.75rem;
 
@@ -973,7 +998,7 @@
 		}
 		cursor: pointer;
 		padding: 0;
-		font-size: 0.8125rem;
+		font-size: 0.875rem;
 		font-family: inherit;
 		font-variant-numeric: tabular-nums;
 		color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
@@ -1020,10 +1045,12 @@
 			opacity: 0.4;
 		}
 
-		/* Today ring */
+		/* Today: brand-colored, heavier numeral in a soft brand ring — findable
+		   at a glance, yet clearly not a selection (which is a solid fill). */
 		&.today {
-			box-shadow: inset 0 0 0 1.5px
-				light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
+			color: var(--color-action-fg, var(--color-action, #3b82f6));
+			font-weight: 650;
+			box-shadow: inset 0 0 0 1.5px oklch(from var(--color-action, #3b82f6) l c h / 0.45);
 		}
 
 		/* Selected */

@@ -1471,8 +1471,9 @@
 
 	/* ========== Tree Container ========== */
 	.tree {
-		/* Per-level indentation step — override with --tree-indent */
-		--_indent: var(--tree-indent, 0.75rem);
+		/* Per-level indentation step — override with --tree-indent. 20px: at the
+		   old 12px a nested level barely registered against its parent. */
+		--_indent: var(--tree-indent, 1.25rem);
 		width: 100%;
 		/* Inline-size container so the row press can compute a fixed-pixel scale
 		   from 100cqi (see .row:active). Safe: width is explicitly 100%, so the
@@ -1757,11 +1758,12 @@
 
 		/* Check-in: elastic checkmark draw with overshoot + scale pulse */
 		&.animating-check {
-			animation: box-pulse 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			animation: box-pulse 350ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
 			.mark {
 				stroke-dashoffset: 0;
-				transition: stroke-dashoffset 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+				transition: stroke-dashoffset 300ms
+					var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 			}
 		}
 
@@ -1866,8 +1868,8 @@
 	.tree.show-lines .children > :global(ul) {
 		position: relative;
 		--_tree-rail: light-dark(
-			rgb(from var(--color-text, #000) r g b / 0.15),
-			rgb(from var(--color-text, #fff) r g b / 0.2)
+			rgb(from var(--color-text, #000) r g b / 0.22),
+			rgb(from var(--color-text, #fff) r g b / 0.26)
 		);
 		transition: --_tree-rail 200ms ease;
 	}
@@ -1899,7 +1901,8 @@
 
 	.tree.show-lines .node > .children > :global(ul > .node:last-child > .row)::before {
 		height: 50%;
-		width: 0.5rem;
+		/* The foot reaches most of the way to the child's label. */
+		width: calc(var(--_indent) * 0.6);
 		border-bottom: 1.5px solid var(--_tree-rail);
 		border-bottom-left-radius: 0.375rem;
 	}

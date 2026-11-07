@@ -322,9 +322,12 @@
 		}
 	}
 
+	/* The group label is the question being asked — it needs more presence
+	   than its answers, not less (it was 0.85em in the disabled color). */
 	.group-label {
-		font-size: 0.85em;
-		color: var(--color-text-disabled, #888);
+		font-size: 0.9375em;
+		font-weight: 600;
+		color: var(--color-text, inherit);
 		margin-bottom: 0.25em;
 	}
 
@@ -343,7 +346,7 @@
 	.error-text {
 		display: none;
 		font-size: 0.8em;
-		color: var(--color-error, #d32f2f);
+		color: var(--color-error-fg, var(--color-error, #d32f2f));
 		margin-top: 0.25em;
 	}
 
@@ -406,6 +409,14 @@
 		margin: -1px;
 	}
 
+	/* With a label, pull the indicator's 10px hover halo back over the left
+	   edge so the visible box lines up with the legend, sibling inputs and the
+	   error text (the halo used to push it ~10px in). Label-less checkboxes —
+	   centered in a table cell, say — keep their symmetric box. */
+	.radio:has(> .content) > .indicator-wrapper {
+		margin-inline-start: -10px;
+	}
+
 	.indicator-wrapper {
 		position: relative;
 		display: flex;
@@ -464,12 +475,12 @@
 
 		/* Select animation: elastic dot scale + ring pulse */
 		&.animating {
-			animation: ring-pulse 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			animation: ring-pulse 350ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
 			.dot {
 				transition:
 					fill 150ms ease,
-					transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+					transform 300ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 			}
 		}
 	}
@@ -505,5 +516,21 @@
 		font-size: 0.85em;
 		color: var(--color-text-disabled, #888);
 		line-height: 1.3;
+	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.radio-group,
+		.radio-group * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.radio-group:active,
+		.radio-group *:active,
+		.radio-group *:hover {
+			translate: none !important;
+			scale: none !important;
+		}
 	}
 </style>

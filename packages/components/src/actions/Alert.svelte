@@ -175,12 +175,15 @@
 		font-size: 2rem;
 
 		&.destructive {
-			color: var(--color-error);
+			color: var(--color-error-fg, var(--color-error));
 		}
 	}
 
+	/* One step under the Modal title (1.5rem) — a compact dialog, but still
+	   clearly a dialog title rather than a bold line of body copy. */
 	h3 {
-		font-size: var(--text-lg, 1.125rem);
+		font-size: var(--text-xl, 1.25rem);
+		letter-spacing: var(--tracking-tight, -0.02em);
 		font-weight: var(--font-weight-semibold, 600);
 		color: var(--color-text);
 		margin: 0 0 0.5rem;

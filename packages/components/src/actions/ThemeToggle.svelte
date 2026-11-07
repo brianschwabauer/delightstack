@@ -195,7 +195,7 @@
 <style>
 	button {
 		--icon-duration: 500ms;
-		--icon-easing: cubic-bezier(0.22, 1, 0.36, 1);
+		--icon-easing: var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
 
 		position: relative;
 		display: inline-flex;

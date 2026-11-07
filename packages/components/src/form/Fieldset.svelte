@@ -177,24 +177,37 @@
 	.fieldset {
 		border: none;
 		margin: 0;
-		padding: 0.5em 1em 1em 1em;
+		/* --_inset is the gap between the frame and the controls inside it. The
+		   frame's radius is the controls' radius PLUS that gap (concentric
+		   corners), so the space around a field stays even as it turns the
+		   corner instead of pinching. */
+		--_inset: 1em;
+		padding: 0.5em var(--_inset) var(--_inset) var(--_inset);
 		min-inline-size: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0.75em;
-		border-radius: var(--radius-lg, 8px);
+		border-radius: min(
+			calc(var(--radius-lg, 10px) + var(--_inset)),
+			var(--radius-cap, 40px)
+		);
 		@supports (corner-shape: squircle) {
 			corner-shape: squircle;
-			border-radius: calc(var(--radius-lg, 8px) * var(--squircle-ratio, 2));
+			border-radius: calc(
+				min(calc(var(--radius-lg, 10px) + var(--_inset)), var(--radius-cap, 40px)) *
+					var(--squircle-ratio, 2)
+			);
 		}
 		position: relative;
 
 		&.dense {
-			padding: 0.25em 0.5em 0.5em 0.5em;
+			--_inset: 0.5em;
+			padding-top: 0.25em;
 			gap: 0.5em;
 		}
 		&.comfortable {
-			padding: 1em 1.5em 1.5em 1.5em;
+			--_inset: 1.5em;
+			padding-top: 1em;
 			gap: 1em;
 		}
 
@@ -208,7 +221,7 @@
 			border-color: var(--color-error, hsl(0 70% 55%));
 
 			.legend-text {
-				color: var(--color-error, hsl(0 70% 55%));
+				color: var(--color-error-fg, var(--color-error, hsl(0 70% 55%)));
 			}
 		}
 
@@ -335,7 +348,7 @@
 	}
 
 	.required-mark {
-		color: var(--color-error, hsl(0 70% 55%));
+		color: var(--color-error-fg, var(--color-error, hsl(0 70% 55%)));
 		margin-left: 0.125em;
 		font-weight: 700;
 	}
@@ -404,7 +417,7 @@
 	.error-message {
 		margin: 0;
 		font-size: 0.8em;
-		color: var(--color-error, hsl(0 70% 55%));
+		color: var(--color-error-fg, var(--color-error, hsl(0 70% 55%)));
 		line-height: 1.4;
 	}
 </style>

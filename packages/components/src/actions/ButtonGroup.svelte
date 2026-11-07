@@ -20,6 +20,13 @@
 		orientation: 'horizontal' | 'vertical';
 		/** Whether the buttons are visually attached (merged borders, no gap) */
 		attached: boolean;
+		/** True when the group owns a selection (`bind:value`): child Buttons
+		 *  with a `value` become pressed/unpressed toggles. */
+		selectable: boolean;
+		/** The selected child's value (selection mode only) */
+		value: string | number | undefined;
+		/** Select a child's value (selection mode only) */
+		select: (value: string | number) => void;
 	}
 </script>
 
@@ -37,7 +44,9 @@
 		/** Whether all child buttons should have a transparent background */
 		transparent = false,
 
-		/** Whether all child buttons should have a translucent background */
+		/** Whether all child buttons should have a translucent background. In a
+		 *  segmented group (`bind:value`), the selected option becomes a neutral
+		 *  translucent chip instead of the solid brand fill. */
 		translucent = false,
 
 		/** Whether all child buttons should use the accent color */
@@ -57,6 +66,15 @@
 
 		/** Whether child buttons should have merged borders (no gap between them) */
 		attached = true,
+		/**
+		 * The selected value. Binding it turns the group into a segmented control
+		 * for 2–5 mutually exclusive options: each child Button with a matching
+		 * `value` is a toggle (`aria-pressed`), the selected one is filled and the
+		 * rest stay quiet inside one shared frame.
+		 */
+		value = $bindable(undefined) as string | number | undefined,
+		/** Called with the new value when the user picks an option */
+		onchange = undefined as undefined | ((value: string | number) => void),
 
 		/** The ID of the element. @defaults to a random ID */
 		id = propId,
@@ -99,7 +117,18 @@
 			return orientation;
 		},
 		get attached() {
-			return attached;
+			return attached && value === undefined;
+		},
+		get selectable() {
+			return value !== undefined;
+		},
+		get value() {
+			return value;
+		},
+		select(next) {
+			if (next === value) return;
+			value = next;
+			onchange?.(next);
 		},
 	};
 	setContext<ButtonGroupContext>('button-group', context);
@@ -110,11 +139,34 @@
 	class={['button-group', class_name].filter(Boolean).join(' ')}
 	class:vertical={orientation === 'vertical'}
 	class:horizontal={orientation === 'horizontal'}
-	class:attached
+	class:attached={attached && value === undefined}
+	class:selectable={value !== undefined}
 	role="group"
 	style:display="inline-flex"
 	style:align-items="stretch"
 	style:flex-direction={orientation === 'vertical' ? 'column' : 'row'}
-	style:gap={attached ? null : '0.25em'}>
+	style:gap={attached && value === undefined ? null : '0.25em'}>
 	{#if children}{@render children()}{/if}
 </div>
+
+<style>
+	/* Segmented mode: one framed track, options inset inside it. The track
+	   radius is concentric with the buttons' (button radius + inset). */
+	.selectable {
+		/* Hug the options even when a flex/grid parent would stretch it. */
+		width: fit-content;
+		align-self: flex-start;
+		--_inset: 3px;
+		padding: var(--_inset);
+		gap: 2px !important;
+		border: 1px solid var(--color-border-control, var(--color-border));
+		border-radius: calc(var(--action-radius, var(--radius-lg, 10px)) + var(--_inset));
+		@supports (corner-shape: squircle) {
+			corner-shape: squircle;
+			border-radius: calc(
+				(var(--action-radius, var(--radius-lg, 10px)) + var(--_inset)) *
+					var(--squircle-ratio, 2)
+			);
+		}
+	}
+</style>

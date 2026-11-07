@@ -2432,4 +2432,20 @@
 			transform: rotate(360deg);
 		}
 	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.carousel,
+		.carousel * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.carousel:active,
+		.carousel *:active,
+		.carousel *:hover {
+			translate: none !important;
+			scale: none !important;
+		}
+	}
 </style>

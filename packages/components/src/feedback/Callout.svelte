@@ -273,8 +273,10 @@
 			--callout-bg: var(--color-error-bg);
 		}
 		&.tip {
-			--callout-color: var(--color-action);
-			--callout-bg: color-mix(in oklch, var(--color-action) 10%, transparent);
+			/* Ink on a neutral well, so a tip reads as an aside — distinct from the
+			   brand-tinted info callout instead of a near-twin of it. */
+			--callout-color: var(--color-accent);
+			--callout-bg: var(--color-bg-muted);
 		}
 
 		&.banner {

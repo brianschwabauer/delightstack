@@ -1067,14 +1067,15 @@
 			<input type="hidden" {name} {value} />
 		{/if}
 	{/if}
-</div>
 
-<!-- Error message / description text -->
-{#if resolved_error}
-	<span class="error-text">{resolved_error}</span>
-{:else if description}
-	<span class="description-text">{description}</span>
-{/if}
+	<!-- Error message / description text. Inside the root so they inherit its
+	     custom properties (--_border-error etc.) and sit at Input's spacing. -->
+	{#if resolved_error}
+		<span class="error-text" role="alert">{resolved_error}</span>
+	{:else if description}
+		<span class="description-text">{description}</span>
+	{/if}
+</div>
 
 <style>
 	/* ================================================================== */
@@ -1088,7 +1089,12 @@
 		   so Input, Select and Button land on the same height. */
 		--_height: calc(var(--_font) * var(--control-height-ratio, 3));
 		--_radius: var(--radius-lg, 10px);
-		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
+		/* The control boundary must reach 3:1 against the page (WCAG 1.4.11);
+		   the decorative --color-border is for dividers and doesn't. */
+		--_border: var(
+			--color-border-control,
+			var(--color-border, light-dark(hsl(0 0% 60%), hsl(0 0% 40%)))
+		);
 		--_border-hover: var(--color-border-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
 		--_border-focus: var(--color-action-fg, var(--color-action, hsl(217 75% 52%)));
 		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
@@ -1118,7 +1124,7 @@
 		--_ease: var(--ease-in-out, cubic-bezier(0.76, 0, 0.24, 1));
 		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
 		/* Snappy ease-out for the dropdown's expand-in animation */
-		--_ease-expand: cubic-bezier(0.16, 1, 0.3, 1);
+		--_ease-expand: var(--ease-out-strong, cubic-bezier(0.16, 1, 0.3, 1));
 		/* Back-out easing — overshoots the target so the chevron flip has a
 		   little bounce. */
 		--_ease-back: var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
@@ -1527,8 +1533,11 @@
 		white-space: nowrap;
 	}
 
+	/* Same treatment as Input's ::placeholder, so an empty Select can't be
+	   mistaken for one holding a value. */
 	.placeholder {
 		color: var(--_text-muted);
+		opacity: 0.85;
 	}
 
 	.chip {
@@ -1607,6 +1616,10 @@
 		display: flex;
 		align-items: center;
 		flex-shrink: 0;
+		/* Pull into the end padding so the 1.4em chevron box sits as far from
+		   the right edge as from the top and bottom: (height − 1.4em) / 2 −
+		   pad-x, which is −0.2em at every density. */
+		margin-inline-end: -0.2em;
 		color: var(--_text-muted);
 		transition:
 			transform 300ms var(--_ease-back),
@@ -1772,17 +1785,8 @@
 			translate 200ms ease,
 			scale 200ms ease;
 	}
-	/* Hairline between consecutive rows, matching ListItem's separator (same
-	   6% text tint, same 1rem inset). Group labels carry their own stronger
-	   rule, so only option-to-option seams get one. */
-	.option + .option::after {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 1rem;
-		right: 1rem;
-		border-top: 1px solid var(--_option-hover);
-	}
+	/* No hairline between options: a listbox is one set of choices and the
+	   highlight already marks the row in play. Group labels keep their rule. */
 	/* The first and last rows hug the panel's rounded corners (panel radius
 	   minus its 0.3em padding) so a highlighted edge item nests cleanly. */
 	.dropdown > .option:first-child,
@@ -1936,7 +1940,7 @@
 	.error-text {
 		display: block;
 		font-size: 0.78em;
-		color: var(--_border-error);
+		color: var(--color-error-fg, var(--_border-error));
 		margin-top: 0.35em;
 		padding: 0 0.5em;
 	}

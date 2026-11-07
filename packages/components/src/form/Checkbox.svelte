@@ -305,6 +305,14 @@
 		margin: -1px;
 	}
 
+	/* With a label, pull the indicator's 10px hover halo back over the left
+	   edge so the visible box lines up with the legend, sibling inputs and the
+	   error text (the halo used to push it ~10px in). Label-less checkboxes —
+	   centered in a table cell, say — keep their symmetric box. */
+	.checkbox:has(> .content) > .indicator-wrapper {
+		margin-inline-start: -10px;
+	}
+
 	.indicator-wrapper {
 		position: relative;
 		display: flex;
@@ -384,11 +392,12 @@
 
 		/* Check-in: elastic checkmark draw with overshoot + scale pulse */
 		&.animating-check {
-			animation: box-pulse 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			animation: box-pulse 350ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
 			.check {
 				stroke-dashoffset: 0;
-				transition: stroke-dashoffset 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+				transition: stroke-dashoffset 300ms
+					var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 			}
 		}
 
@@ -448,7 +457,23 @@
 		display: none;
 		width: 100%;
 		font-size: 0.8em;
-		color: var(--color-error, #d32f2f);
+		color: var(--color-error-fg, var(--color-error, #d32f2f));
 		margin-top: -0.25em;
+	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.checkbox,
+		.checkbox * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.checkbox:active,
+		.checkbox *:active,
+		.checkbox *:hover {
+			translate: none !important;
+			scale: none !important;
+		}
 	}
 </style>

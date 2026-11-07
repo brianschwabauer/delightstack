@@ -108,6 +108,11 @@
 	const OFFSET = 4;
 	const OFFSET_WITH_ARROW = 12;
 	const TRANSITION_IN_DURATION = 200;
+	/** Reduced motion turns the pop (scale from 0.7 with overshoot) into a
+	 * plain fade: `scale` with start 1 only animates opacity. */
+	const reducedMotion = () =>
+		typeof matchMedia !== 'undefined' &&
+		matchMedia('(prefers-reduced-motion: reduce)').matches;
 	const TRANSITION_OUT_DURATION = 150;
 
 	let popoverElement = $state<HTMLElement | undefined>(undefined);
@@ -1007,7 +1012,10 @@
 			data-popover-index={popoverIndex}
 			role="presentation"
 			{@attach focusTrap({
-				enabled: !open_on_focus,
+				// Hover- and focus-opened popovers are peeks, not dialogs: they must
+				// never take focus away from where the user is working (a tooltip
+				// that grabs the caret mid-typing is the classic bug).
+				enabled: !open_on_focus && !open_on_hover,
 				initialFocus: disable_initial_focus ? false : undefined,
 				clickOutsideDeactivates: (e) => {
 					if ((e as MouseEvent).button === 2) return false; // Ignore right clicks
@@ -1044,8 +1052,16 @@
 				}
 				if (isButtonLike && opened) opened = false;
 			}}
-			in:scale={{ start: 0.7, easing: backOut, duration: TRANSITION_IN_DURATION }}
-			out:scale={{ start: 0.7, easing: backIn, duration: TRANSITION_OUT_DURATION }}
+			in:scale={{
+				start: reducedMotion() ? 1 : 0.7,
+				easing: backOut,
+				duration: TRANSITION_IN_DURATION,
+			}}
+			out:scale={{
+				start: reducedMotion() ? 1 : 0.7,
+				easing: backIn,
+				duration: TRANSITION_OUT_DURATION,
+			}}
 			onoutroend={() => {
 				// The anchor must survive the outro (it still positions the leaving
 				// panel), but only release it if the popover didn't reopen meanwhile
@@ -1137,7 +1153,7 @@
 		/* Under another name, so a list inside can take it (see below) */
 		--_popover-radius: var(--_radius);
 		z-index: var(--layer);
-		background-color: var(--color-bg);
+		background-color: var(--color-surface, var(--color-bg));
 		border: 1px solid var(--color-border, transparent);
 		border-radius: var(--_radius);
 		@supports (corner-shape: squircle) {
@@ -1187,6 +1203,11 @@
 		.content > :global(ul.list:only-child > li) {
 			--_radius: var(--_popover-radius);
 		}
+		/* A list used as a menu reads as one set of choices: no hairline between
+		 * every item (the hover highlight already separates the row in play). */
+		& > .content > :global(ul.list) {
+			--list-separator: transparent;
+		}
 		/* If that list provides its OWN surface (`filled`/`outline`), also drop
 		 * the popover's background + border so the list surface takes over
 		 * (otherwise a double surface). A plain (transparent) list instead keeps
@@ -1210,7 +1231,7 @@
 		.arrow {
 			position: absolute;
 			pointer-events: none;
-			background-color: var(--color-bg);
+			background-color: var(--color-surface, var(--color-bg));
 			width: calc(var(--arrow-size) / 2);
 			height: calc(var(--arrow-size) / 2);
 			top: calc(var(--arrow-size) / -2);

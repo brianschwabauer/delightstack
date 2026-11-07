@@ -72,8 +72,9 @@
 	};
 
 	const font_map: Record<string, string> = {
-		'0': '0.5rem',
-		'1': '0.625rem',
+		// "+3" stays legible: 10/11/12px floors at the small sizes (was 8/10px).
+		'0': '0.625rem',
+		'1': '0.6875rem',
 		'2': '0.75rem',
 		'3': '0.875rem',
 		'4': '1.125rem',
@@ -220,7 +221,7 @@
 		 * abrupt re-stack. */
 		transform-origin: center;
 		transition:
-			transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+			transform 250ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
 			filter 250ms ease,
 			z-index 0s 200ms;
 
@@ -233,7 +234,7 @@
 			transform: translateY(-4px) scale(1.06);
 			filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.18));
 			transition:
-				transform 250ms cubic-bezier(0.22, 1, 0.36, 1),
+				transform 250ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
 				filter 250ms ease,
 				z-index 0s 0s;
 		}
@@ -264,8 +265,8 @@
 		width: var(--avatar-size);
 		height: var(--avatar-size);
 		border-radius: var(--radius-full, 9999px);
-		background: light-dark(var(--color-border, #d1d5db), var(--color-border, #4b5563));
-		color: light-dark(var(--color-text-muted, #6b7280), var(--color-text-muted, #9ca3af));
+		background: var(--color-bg-4, light-dark(#d1d5db, #4b5563));
+		color: var(--color-text, light-dark(#374151, #e5e7eb));
 		font-size: var(--overflow-font);
 		font-weight: 600;
 		line-height: 1;
@@ -293,6 +294,22 @@
 					0 0 0 2px var(--ring-color),
 					0 0 0 4px var(--color-accent, currentColor);
 			}
+		}
+	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.avatar-group,
+		.avatar-group * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.avatar-group:active,
+		.avatar-group *:active,
+		.avatar-group *:hover {
+			translate: none !important;
+			scale: none !important;
 		}
 	}
 </style>

@@ -2263,7 +2263,7 @@
 	 * Keep the hover grow + halo. */
 	.seek :global(.handle) {
 		transition:
-			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			transform 200ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)),
 			box-shadow 150ms ease;
 	}
 

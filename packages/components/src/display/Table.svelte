@@ -223,6 +223,11 @@
 		/** Alternating row backgrounds */
 		striped = false,
 
+		/** Vertical rules between columns. Off by default — row dividers alone
+		 *  read cleaner; always on while `resizable`, since the rules are the
+		 *  drag targets. */
+		column_dividers = false,
+
 		/** Compact padding */
 		dense = false,
 
@@ -2512,6 +2517,7 @@
 	class:dense
 	class:comfortable
 	class:striped
+	class:column-dividers={column_dividers || resizable}
 	class:reordering={reorderDragging || reorderDropping}
 	class:resizing-active={!!resizing}
 	{id}>
@@ -3233,6 +3239,13 @@
 <style>
 	/* ========== Wrapper ========== */
 	.wrapper {
+		/* Row separators sit a step quieter than the frame and header rule: they
+		   only need to guide the eye along a row, while the outer border defines
+		   the table. Override with --table-row-divider. */
+		--_row-divider: var(
+			--table-row-divider,
+			color-mix(in oklab, var(--color-border, #e5e7eb) 55%, transparent)
+		);
 		width: 100%;
 		position: relative;
 	}
@@ -3470,9 +3483,18 @@
 	   header background is opaque, so a crisp border reads fine here. Body column
 	   dividers are drawn separately (see `td::after`) so the row tint + ripple can
 	   paint over them. */
-	th:not(:last-child) {
-		border-right: 1px solid
-			light-dark(var(--color-border, #e8eaed), var(--color-border, #2b2b2b));
+	/* Drawn as the same 1px pseudo the body cells use, so header and body
+	   rules land on the identical pixel (a border-right and an ::after rounded
+	   to different columns at fractional widths). */
+	.column-dividers th:not(:last-child)::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: 0;
+		width: 1px;
+		background: light-dark(var(--color-border, #e8eaed), var(--color-border, #2b2b2b));
+		pointer-events: none;
 	}
 
 	/* Non-interactive header content keeps the regular cell padding */
@@ -3716,7 +3738,7 @@
 	   the body `td::after` dividers (and the header line above). The `:not(:last-
 	   child)` both matches the base divider's structure and out-specifies it, so
 	   the accent wins regardless of source order. */
-	tbody td.col-hover:not(:last-child)::after {
+	.column-dividers tbody td.col-hover:not(:last-child)::after {
 		background: light-dark(
 			rgb(from var(--color-action, #1976d2) r g b / 0.6),
 			rgb(from var(--color-action, #5c9ce6) r g b / 0.7)
@@ -3739,7 +3761,7 @@
 		);
 	}
 
-	tbody td.col-resizing:not(:last-child)::after {
+	.column-dividers tbody td.col-resizing:not(:last-child)::after {
 		background: light-dark(var(--color-action, #1976d2), var(--color-action, #5c9ce6));
 		width: 2px;
 		/* Lift above the row tint + ripple for the duration of the drag. */
@@ -3765,8 +3787,7 @@
 	}
 
 	tbody tr.row {
-		border-bottom: 1px solid
-			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
+		border-bottom: 1px solid var(--_row-divider, var(--color-border));
 	}
 
 	/* The row background tint lives on a ::before layer (z-index -2) rather than
@@ -3825,7 +3846,7 @@
 	/* Body column dividers: a low pseudo-layer (z-index -3) that sits BELOW the
 	   row background tint (-2) and the ripple (-1), so the hover wash and the
 	   ripple paint over the lines while the cell text stays on top. */
-	tbody td:not(:last-child)::after {
+	.column-dividers tbody td:not(:last-child)::after {
 		content: '';
 		position: absolute;
 		top: 0;
@@ -4001,8 +4022,8 @@
 		color: var(--color-action-fg, var(--color-action, #1976d2));
 	}
 	.cell-status.saved {
-		color: var(--color-success, #16a34a);
-		animation: cell-saved-pop 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+		color: var(--color-success-fg, var(--color-success, #16a34a));
+		animation: cell-saved-pop 240ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 	}
 	.cell-status.saved svg {
 		width: 100%;
@@ -4384,8 +4405,7 @@
 	/* ========== Skeleton ========== */
 	.skeleton-row {
 		pointer-events: none;
-		border-bottom: 1px solid
-			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
+		border-bottom: 1px solid var(--_row-divider, var(--color-border));
 
 		/* Real rows drop the last border (see tr.row:last-child) — mirror it so
 		   the skeleton table is exactly as tall as the loaded one. */
@@ -4627,8 +4647,7 @@
 	}
 
 	.ghost-row:not(:last-child) {
-		border-bottom: 1px solid
-			light-dark(var(--color-border, #e5e7eb), var(--color-border, #2e2e2e));
+		border-bottom: 1px solid var(--_row-divider, var(--color-border));
 	}
 
 	.ghost-cell {

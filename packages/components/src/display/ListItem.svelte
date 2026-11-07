@@ -445,7 +445,9 @@
 			top: 0px;
 			right: 1rem;
 			left: 1rem;
-			border-top: solid 1px color-mix(in oklch, transparent, var(--color-text) 6%);
+			/* --list-separator lets a host turn the hairlines off (menus do). */
+			border-top: solid 1px
+				var(--list-separator, color-mix(in oklch, transparent, var(--color-text) 6%));
 		}
 		&:first-child {
 			&::after {

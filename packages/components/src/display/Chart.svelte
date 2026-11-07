@@ -379,7 +379,6 @@
 		area_path: string;
 		points: PointCoord[];
 		values: number[];
-		path_length: number;
 	}
 
 	const line_datasets = $derived.by((): LineDataset[] => {
@@ -409,14 +408,6 @@
 			const line_path = buildLinePath(points, curved);
 			const area_path = type === 'area' ? buildAreaPath(points, base_values, curved) : '';
 
-			// Estimate path length for animation
-			let path_length = 0;
-			for (let i = 1; i < points.length; i++) {
-				const dx = points[i].x - points[i - 1].x;
-				const dy = points[i].y - points[i - 1].y;
-				path_length += Math.sqrt(dx * dx + dy * dy);
-			}
-
 			result.push({
 				original_index: di,
 				color: ds_color,
@@ -425,7 +416,6 @@
 				area_path,
 				points,
 				values,
-				path_length: Math.ceil(path_length),
 			});
 		}
 
@@ -869,7 +859,8 @@
 					{/each}
 				{/if}
 
-				<!-- Lines -->
+				<!-- Lines. pathLength="1" measures the dash in units of the path's real
+				     (curved) length, so the draw-in always ends exactly at the last point. -->
 				{#each line_datasets as ds}
 					<path
 						d={ds.line_path}
@@ -879,8 +870,9 @@
 						stroke-linecap="round"
 						stroke-linejoin="round"
 						class="line"
-						style:stroke-dasharray={animate ? ds.path_length : 'none'}
-						style:stroke-dashoffset={animate && !has_animated ? ds.path_length : 0} />
+						pathLength="1"
+						style:stroke-dasharray={animate ? '1 1.01' : 'none'}
+						style:stroke-dashoffset={animate && !has_animated ? 1 : 0} />
 				{/each}
 
 				<!-- Data points -->
@@ -950,15 +942,17 @@
 					</text>
 				{/each}
 
-				<!-- Bars -->
+				<!-- Bars. Stacked segments are inset by a hairline so each reads as its
+				     own piece; corners round to a quarter of the bar width (max 4px). -->
 				{#each bar_rects as bar}
+					{@const seam = stacked && bar.height > 3 ? 1 : 0}
 					<rect
 						x={bar.x}
-						y={bar.y}
+						y={bar.y + seam}
 						width={Math.max(0, bar.width)}
-						height={Math.max(0, bar.height)}
+						height={Math.max(0, bar.height - seam * 2)}
 						style:fill={bar.color}
-						rx="2"
+						rx={Math.min(4, Math.max(0, bar.width) / 4)}
 						class="bar"
 						style:transform-origin="{bar.x + bar.width / 2}px {PADDING_TOP +
 							chart_height}px"
@@ -1018,7 +1012,7 @@
 						width={Math.max(0, bar.width)}
 						height={Math.max(0, bar.height)}
 						style:fill={bar.color}
-						rx="2"
+						rx={Math.min(4, Math.max(0, bar.height) / 4)}
 						class="hbar"
 						style:transform-origin="{H_PADDING_LEFT}px {bar.y + bar.height / 2}px"
 						onmouseenter={(e) =>
@@ -1109,10 +1103,10 @@
 
 	/* ── Grid ─────────────────────────────────────────────────── */
 
+	/* Solid, faint rules: dashes added texture that competed with the data. */
 	.grid-line {
-		stroke: var(--color-border, light-dark(#e5e7eb, #374151));
+		stroke: color-mix(in oklch, var(--color-text, #6b7280) 10%, transparent);
 		stroke-width: 1;
-		stroke-dasharray: 4 4;
 		opacity: 0.6;
 	}
 
@@ -1211,6 +1205,12 @@
 	.segment {
 		transition: transform 0.15s ease;
 		cursor: pointer;
+		/* A 2px seam in the surrounding surface color between slices, so
+		   neighbors don't bleed into one another (set --chart-surface when the
+		   chart sits on something other than the page). */
+		stroke: var(--chart-surface, var(--color-bg, #fff));
+		stroke-width: 2px;
+		stroke-linejoin: round;
 
 		&:hover {
 			transform: scale(1.03);
@@ -1250,7 +1250,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+		box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 0.1), transparent);
 		transform: translateX(-50%);
 		font-size: 12px;
 

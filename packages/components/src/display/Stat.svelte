@@ -19,8 +19,14 @@
 		/** Description for the change (e.g., "vs last month") */
 		change_label = undefined as string | undefined,
 
-		/** Override trend direction (auto-detected from change by default) */
+		/** Override trend direction (auto-detected from change by default). This is
+		 *  the ARROW — which way the number moved — not whether that's good. */
 		trend = undefined as 'up' | 'down' | 'neutral' | undefined,
+
+		/** Which direction is good news. 'up' (default) colors a rise green and a
+		 *  fall red; 'down' flips that for metrics where less is better (open
+		 *  bugs, churn, latency). */
+		positive = 'up' as 'up' | 'down',
 
 		/** Component size */
 		size = '1' as '0' | '1' | '2' | '3',
@@ -55,6 +61,7 @@
 		change?: number;
 		change_label?: string;
 		trend?: 'up' | 'down' | 'neutral';
+		positive?: 'up' | 'down';
 		size?: '0' | '1' | '2' | '3';
 		horizontal?: boolean;
 		animated?: boolean;
@@ -81,9 +88,8 @@
 	});
 
 	const trend_color = $derived.by<'success' | 'error' | 'neutral'>(() => {
-		if (resolved_trend === 'up') return 'success';
-		if (resolved_trend === 'down') return 'error';
-		return 'neutral';
+		if (resolved_trend === 'neutral') return 'neutral';
+		return resolved_trend === positive ? 'success' : 'error';
 	});
 
 	function formatChange(val: number): string {
@@ -261,11 +267,17 @@
 			font-size: var(--stat-value-font);
 			font-weight: 600;
 			line-height: 1.15;
-			color: var(--color-text, light-dark(#111827, #f9fafb));
+			/* The headline number gets the strongest ink on the page — a step
+			   past body text — so it reads before its label does. */
+			color: light-dark(
+				oklch(from var(--color-text, #374151) calc(l - 0.14) c h),
+				oklch(from var(--color-text, #e5e7eb) calc(l + 0.08) c h)
+			);
+			letter-spacing: -0.015em;
 			font-variant-numeric: tabular-nums;
 			white-space: nowrap;
 			display: inline-flex;
-			align-items: flex-start;
+			align-items: baseline;
 
 			/* Counter resets line-height to 1 on itself; inherit ours so the
 			   animated value occupies the same 1.15 line box as static values and
@@ -277,11 +289,10 @@
 		}
 
 		.affix {
-			font-size: 0.5em;
+			font-size: 0.6em;
 			line-height: 1;
 			font-weight: 500;
-			opacity: 0.85;
-			padding-top: 0.15em;
+			color: var(--color-text-muted, currentcolor);
 		}
 		.prefix {
 			margin-right: 0.1em;
@@ -307,10 +318,13 @@
 			white-space: nowrap;
 
 			&.success {
-				color: var(--color-success, light-dark(#16a34a, #4ade80));
+				color: var(
+					--color-success-fg,
+					var(--color-success, light-dark(#16a34a, #4ade80))
+				);
 			}
 			&.error {
-				color: var(--color-error, light-dark(#dc2626, #f87171));
+				color: var(--color-error-fg, var(--color-error, light-dark(#dc2626, #f87171)));
 			}
 			&.neutral {
 				color: var(--color-text-muted, light-dark(#6b7280, #9ca3af));

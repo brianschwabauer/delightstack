@@ -386,4 +386,20 @@
 		width: 2.5em;
 		height: 2.5em;
 	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.image,
+		.image * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.image:active,
+		.image *:active,
+		.image *:hover {
+			translate: none !important;
+			scale: none !important;
+		}
+	}
 </style>

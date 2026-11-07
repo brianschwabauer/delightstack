@@ -81,6 +81,12 @@
 		 */
 		success = false,
 
+		/**
+		 * Styles the button as a warning (amber). Filled warning buttons use dark
+		 * ink; transparent/translucent/outline ones use amber text.
+		 */
+		warning = false,
+
 		/** Whether the button is an 'overlay' - blurs & darkens the background */
 		overlay = false,
 
@@ -122,6 +128,10 @@
 
 		/** Whether the button is in in the 'active' state (similar to how a toggle button would be 'selected') */
 		active = false,
+
+		/** Inside a ButtonGroup with `bind:value`, the option this button selects.
+		 *  Also forwarded as the native button `value`. */
+		value = undefined as string | number | undefined,
 
 		/**
 		 * Whether a loading spinner should appear before the button text.
@@ -207,9 +217,22 @@
 
 	// Merge ButtonGroup context with local props (local props take precedence when explicitly set)
 	const resolvedSize = $derived(size ?? groupContext?.size);
-	const resolvedOutline = $derived(outline || groupContext?.outline || false);
-	const resolvedTransparent = $derived(transparent || groupContext?.transparent || false);
-	const resolvedTranslucent = $derived(translucent || groupContext?.translucent || false);
+	// Segmented ButtonGroup: this button is one option of the group's value.
+	const isOption = $derived(!!groupContext?.selectable && value !== undefined);
+	const isSelected = $derived(isOption && groupContext?.value === value);
+	const resolvedTransparent = $derived(
+		isOption ? !isSelected : transparent || groupContext?.transparent || false,
+	);
+	// A segmented group with `translucent` gives its selected option the quiet
+	// translucent chip instead of the solid fill.
+	const resolvedTranslucent = $derived(
+		isOption
+			? isSelected && !!groupContext?.translucent
+			: translucent || groupContext?.translucent || false,
+	);
+	const resolvedOutline = $derived(
+		!isOption && (outline || groupContext?.outline || false),
+	);
 	const resolvedAccent = $derived(accent || groupContext?.accent || false);
 	const resolvedError = $derived(error || groupContext?.error || false);
 	const resolvedSuccess = $derived(success || groupContext?.success || false);
@@ -357,6 +380,7 @@
 
 	function handleClick(e: MouseEvent) {
 		if (inFlight || externalLoading) return;
+		if (isOption && value !== undefined) groupContext?.select(value);
 		if (!onclick) return;
 		const maybePromise = onclick(e);
 		if (!(maybePromise instanceof Promise)) return;
@@ -430,8 +454,10 @@
 	class:translucent={resolvedTranslucent}
 	class:outline={resolvedOutline}
 	class:success={resolvedSuccess}
+	class:warning
 	class:accent={resolvedAccent}
 	class:active
+	class:option={isOption}
 	class:error={resolvedError}
 	class:is-loading={isLoading}
 	{style}
@@ -458,6 +484,8 @@
 		})}
 		disabled={resolvedDisabled || inFlight || (!mounted && !href)}
 		aria-busy={isLoading ? 'true' : null}
+		aria-pressed={isOption ? isSelected : null}
+		{value}
 		aria-haspopup={!!menu}
 		aria-expanded={menu ? menuActive : null}
 		bind:this={button_element}
@@ -483,11 +511,13 @@
 		{/if}
 		{#if children}{@render children({ isLoading, isLoadingSuccess })}{/if}
 		{#if show_chevron && menu}
+			<!-- viewBox cropped to the glyph's width, so the box IS the visible
+			     chevron and the end padding below can be measured against it. -->
 			<svg
-				viewBox="0 0 24 24"
+				viewBox="6 6 12 12"
 				fill="currentColor"
 				style="pointer-events:none;"
-				class="chevron {menuActive ? 'active' : ''}"
+				class="chevron menu-chevron {menuActive ? 'active' : ''}"
 				aria-hidden="true">
 				<path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
 			</svg>
@@ -583,6 +613,9 @@
 		   a row. An explicit `size` (inline font-size) or an in-field font
 		   override (e.g. .input-icon-btn) wins over this. */
 		font-size: var(--control-font-1, 1rem);
+		/* Medium weight: a 400 label reads thin on a solid fill and gives the
+		   action no more weight than the body text around it. */
+		font-weight: var(--button-font-weight, var(--font-weight-medium, 500));
 		display: inline-flex;
 		justify-content: center;
 		position: relative;
@@ -638,6 +671,14 @@
 			--color-text-active: var(--color-success-text-active);
 			--color-text-disabled: var(--color-success-text-disabled);
 		}
+		&.warning:not(.transparent):not(.translucent) {
+			--color-bg: var(--color-warning);
+			--color-bg-disabled: var(--color-warning-disabled);
+			--color-bg-active: var(--color-warning-active);
+			--color-text: var(--color-warning-text);
+			--color-text-active: var(--color-warning-text-active);
+			--color-text-disabled: var(--color-warning-text-disabled);
+		}
 
 		&.outline:not(.transparent):not(.translucent) {
 			--color-bg: transparent;
@@ -660,6 +701,15 @@
 			);
 
 			&.accent {
+				/* In dark mode the accent ink is near-white, so a full-strength
+				   currentColor ring glared against the page. The label keeps its
+				   contrast; the ring steps back to roughly a control border. */
+				--button-border: 1px solid
+					light-dark(currentColor, oklch(from currentColor l c h / 0.42));
+				--button-border-disabled: 1px solid
+					light-dark(currentColor, oklch(from currentColor l c h / 0.3));
+				--button-border-active: 1px solid
+					light-dark(currentColor, oklch(from currentColor l c h / 0.55));
 				--color-bg-active: rgb(from var(--color-accent) r g b / 0.08);
 				--color-text: light-dark(
 					oklch(from var(--color-accent) min(l, 0.5) c h),
@@ -704,6 +754,18 @@
 					oklch(from var(--color-success) max(l + 0.1, 0.75) c h)
 				);
 			}
+			&.warning {
+				--color-bg-active: rgb(from var(--color-warning) r g b / 0.1);
+				--color-text: var(--color-warning-fg);
+				--color-text-disabled: light-dark(
+					oklch(from var(--color-warning-fg) calc(l + 0.15) calc(c - 0.05) h),
+					oklch(from var(--color-warning-fg) calc(l - 0.15) calc(c - 0.05) h)
+				);
+				--color-text-active: light-dark(
+					oklch(from var(--color-warning-fg) calc(l - 0.08) c h),
+					oklch(from var(--color-warning-fg) calc(l + 0.08) c h)
+				);
+			}
 		}
 
 		&.transparent {
@@ -719,6 +781,23 @@
 			--button-border: none;
 			--button-border-disabled: none;
 			--button-border-active: none;
+		}
+		/* Status colors are darker and less chromatic than the brand action
+		   color, so at the base 9% their wash barely lifts off a dark page.
+		   Give them a deeper tint (mostly in dark mode). */
+		&.translucent:is(.error, .success, .warning) {
+			--color-bg: light-dark(
+				rgb(from var(--color-text) r g b / 0.1),
+				rgb(from var(--color-text) r g b / 0.2)
+			);
+			--color-bg-disabled: light-dark(
+				rgb(from var(--color-text) r g b / 0.05),
+				rgb(from var(--color-text) r g b / 0.09)
+			);
+			--color-bg-active: light-dark(
+				rgb(from var(--color-text) r g b / 0.16),
+				rgb(from var(--color-text) r g b / 0.28)
+			);
 		}
 		&.transparent,
 		&.translucent {
@@ -783,6 +862,43 @@
 					oklch(from var(--color-success) max(l + 0.1, 0.75) c h)
 				);
 			}
+			&.warning {
+				--color-text: var(--color-warning-fg);
+				--color-text-disabled: light-dark(
+					oklch(from var(--color-warning-fg) calc(l + 0.15) calc(c - 0.05) h),
+					oklch(from var(--color-warning-fg) calc(l - 0.15) calc(c - 0.05) h)
+				);
+				--color-text-active: light-dark(
+					oklch(from var(--color-warning-fg) calc(l - 0.08) c h),
+					oklch(from var(--color-warning-fg) calc(l + 0.08) c h)
+				);
+			}
+		}
+		/* Unselected option in a segmented ButtonGroup: quiet neutral text, not
+		   the action color a plain transparent button uses — only the selected
+		   option should carry color. */
+		&.option.transparent:not(.accent):not(.error):not(.success):not(.warning) {
+			--color-text: var(--color-text-muted, currentColor);
+			--color-text-active: light-dark(
+				oklch(from var(--color-text-muted, currentColor) calc(l - 0.18) c h),
+				oklch(from var(--color-text-muted, currentColor) calc(l + 0.14) c h)
+			);
+		}
+		/* Selected option of a `translucent` segmented group: a neutral chip in
+		   full-strength ink, no brand color, so the control sits quietly in
+		   the layout. */
+		&.option.translucent:not(.accent):not(.error):not(.success):not(.warning) {
+			--color-text: light-dark(
+				oklch(from var(--color-text-muted, currentColor) calc(l - 0.2) c h),
+				oklch(from var(--color-text-muted, currentColor) calc(l + 0.17) c h)
+			);
+			--color-text-active: var(--color-text);
+			--color-bg: light-dark(
+				oklch(from var(--color-text-muted, currentColor) l c h / 0.14),
+				oklch(from var(--color-text-muted, currentColor) l c h / 0.2)
+			);
+			--color-bg-active: var(--color-bg);
+			backdrop-filter: none;
 		}
 		&.is-loading {
 			cursor: not-allowed;
@@ -824,7 +940,9 @@
 			--color-bg: var(--color-bg-selected, var(--color-bg-active)) !important;
 			--color-text: var(--color-text-active) !important;
 			/* Already selected: hovering it shouldn't fade back to the hover tint. */
-			> :is(button, a):hover:not(:disabled):not([aria-disabled='true']):not([aria-busy='true']) {
+			> :is(button, a):hover:not(:disabled):not([aria-disabled='true']):not(
+					[aria-busy='true']
+				) {
 				background-color: var(--color-bg);
 			}
 		}
@@ -1131,12 +1249,38 @@
 			display: flex;
 			align-items: center;
 			justify-content: center;
+			/* An explicit size: as a bare flex child the svg collapsed to 0×0,
+			   so `show_chevron` menu buttons never showed their chevron. */
+			width: 1.25em;
+			height: 1.25em;
+			flex-shrink: 0;
 			pointer-events: none;
 			transform: rotate(0);
 			transition: transform 300ms var(--easing);
 		}
 		:global(.chevron.active) {
 			transform: rotate(180deg);
+		}
+		/* Menu chevron: a glyph-tight box (see the cropped viewBox), and end
+		   padding that leaves the same space to its right as above and below
+		   it: half of (control height - chevron). */
+		:global(.menu-chevron) {
+			--_chevron: 0.625em;
+			width: var(--_chevron);
+			height: var(--_chevron);
+		}
+		&:not(.icon) {
+			> :is(button, a):has(> :global(.menu-chevron)) {
+				padding-right: calc((var(--control-height-ratio, 3) * 1em - 0.625em) / 2);
+			}
+			&.dense > :is(button, a):has(> :global(.menu-chevron)) {
+				padding-right: calc((var(--control-height-ratio-dense, 2.5) * 1em - 0.625em) / 2);
+			}
+			&.comfortable > :is(button, a):has(> :global(.menu-chevron)) {
+				padding-right: calc(
+					(var(--control-height-ratio-comfortable, 3.5) * 1em - 0.625em) / 2
+				);
+			}
 		}
 
 		&.has-dropdown-trigger {
@@ -1197,7 +1341,7 @@
 					padding: 0.5em 1em 0.5em 1.1em;
 				}
 			}
-			:global(.chevron) {
+			.dropdown-trigger :global(.chevron) {
 				margin: 0 -0.2em;
 			}
 			.loading-icon {
@@ -1312,6 +1456,31 @@
 			&:focus-within {
 				z-index: 1;
 			}
+		}
+		/* Solid attached groups get one deliberate divider at every join. The
+		   buttons overlap by 1px at fractional offsets, so the raw seams
+		   antialiased differently (a dark line here, a light one there). */
+		&.group-h:not(:first-child),
+		&.group-v:not(:first-child) {
+			&:not(.outline):not(.transparent):not(.translucent)::after {
+				content: '';
+				position: absolute;
+				z-index: 2;
+				pointer-events: none;
+				background: color-mix(in oklch, var(--color-text) 28%, transparent);
+			}
+		}
+		&.group-h:not(:first-child):not(.outline):not(.transparent):not(.translucent)::after {
+			left: 0;
+			top: 22%;
+			bottom: 22%;
+			width: 1px;
+		}
+		&.group-v:not(:first-child):not(.outline):not(.transparent):not(.translucent)::after {
+			top: 0;
+			left: 14%;
+			right: 14%;
+			height: 1px;
 		}
 		&.group-h {
 			&:not(:first-child):not(:last-child) {

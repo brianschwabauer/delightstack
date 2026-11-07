@@ -707,7 +707,7 @@
 			padding: 1rem 1.25rem;
 		}
 		&.has-error .cell-input {
-			color: var(--color-error, #dc2626);
+			color: var(--color-error-fg, var(--color-error, #dc2626));
 		}
 	}
 
@@ -861,8 +861,8 @@
 		opacity: 1;
 		transform: scaleY(1);
 		transition:
-			opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
-			transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+			opacity 200ms var(--ease-out-strong, cubic-bezier(0.16, 1, 0.3, 1)),
+			transform 200ms var(--ease-out-strong, cubic-bezier(0.16, 1, 0.3, 1)),
 			display 200ms allow-discrete,
 			overlay 200ms allow-discrete;
 	}

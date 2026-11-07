@@ -70,20 +70,22 @@
 		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 	}
 
+	/** FNV-1a: spreads similar names ("Ann", "Anne") across the wheel, which
+	 * a plain char-code sum clustered. */
 	function hashName(value: string): number {
-		let hash = 0;
+		let hash = 0x811c9dc5;
 		for (let i = 0; i < value.length; i++) {
-			hash = hash + value.charCodeAt(i);
+			hash ^= value.charCodeAt(i);
+			hash = Math.imul(hash, 0x01000193);
 		}
-		return hash;
+		return hash >>> 0;
 	}
 
-	function getNameColor(value: string): string {
-		const hash = hashName(value);
-		const hue = hash % 360;
-		const lightness = 0.55 + (hash % 21) * 0.01;
-		const chroma = 0.12 + (hash % 7) * 0.01;
-		return `oklch(${lightness} ${chroma} ${hue})`;
+	/** The name only picks a hue; lightness and chroma are fixed per scheme in
+	 * CSS (a soft tinted disc with same-hue ink), so every avatar is legible
+	 * and the set reads as one family instead of a crayon box. */
+	function getNameHue(value: string): number {
+		return hashName(value) % 360;
 	}
 
 	const showImage = $derived(src && !imgError);
@@ -101,7 +103,13 @@
 	});
 	const initials = $derived(name ? getInitials(name) : '');
 	const colorKey = $derived(color_seed ?? name);
-	const nameColor = $derived(colorKey ? getNameColor(colorKey) : undefined);
+	const nameHue = $derived(colorKey ? getNameHue(colorKey) : undefined);
+	/** Exposed for consumers (rings, badges) — the disc's own fill. */
+	const nameColor = $derived(
+		nameHue === undefined
+			? undefined
+			: `light-dark(oklch(0.9 0.06 ${nameHue}), oklch(0.36 0.08 ${nameHue}))`,
+	);
 	const isInteractive = $derived(!!onclick);
 	const badgeText = $derived(
 		badge === true
@@ -182,7 +190,7 @@
 			onerror={handleImgError}
 			draggable="false" />
 	{:else if showInitials}
-		<span class="initials" style:background={nameColor}>
+		<span class="initials" style:--avatar-hue={nameHue}>
 			{initials}
 		</span>
 	{:else if !show_skeleton}
@@ -333,7 +341,14 @@
 				corner-shape: var(--_corner-shape);
 				border-radius: calc(var(--avatar-radius) * var(--_corner-scale));
 			}
-			color: #fff;
+			background: light-dark(
+				oklch(0.9 0.06 var(--avatar-hue, 220)),
+				oklch(0.36 0.08 var(--avatar-hue, 220))
+			);
+			color: light-dark(
+				oklch(0.38 0.12 var(--avatar-hue, 220)),
+				oklch(0.9 0.07 var(--avatar-hue, 220))
+			);
 			font-weight: 600;
 			letter-spacing: 0.02em;
 			text-transform: uppercase;
@@ -464,6 +479,14 @@
 
 		&.skeleton {
 			pointer-events: none;
+		}
+		/* The shimmer fill is translucent, so overlapping skeletons in an
+		   AvatarGroup showed each other through it (darker lenses where they
+		   overlap). A ringed avatar's ring color is the surface behind it, so
+		   an opaque disc of that color gives the shimmer a solid base and the
+		   stack reads like the loaded one. */
+		&.skeleton.ring {
+			background-color: var(--ring-color, var(--color-bg));
 		}
 
 		/* Overlays the (still-loading) image so the photo can stream in

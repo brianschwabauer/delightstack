@@ -375,11 +375,13 @@
 				onkeydown={handleKeyDown}>
 				{#if vertical}
 					<svg viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M12 4l-4 4h8zM12 20l-4-4h8z" fill="currentColor" />
+						<path d="M7 9l5-5 5 5M7 15l5 5 5-5" />
 					</svg>
 				{:else}
+					<!-- Chevrons pointing both ways: the old 6px solid triangles read as a
+					     blank disc. -->
 					<svg viewBox="0 0 24 24" aria-hidden="true">
-						<path d="M4 12l4-4v8zM20 12l-4-4v8z" fill="currentColor" />
+						<path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
 					</svg>
 				{/if}
 			</div>
@@ -560,7 +562,7 @@
 		&.after {
 			position: absolute;
 			inset: 0;
-			transition: clip-path 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			transition: clip-path 300ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
 			.dragging & {
 				transition: none;
@@ -602,7 +604,7 @@
 		align-items: center;
 		justify-content: center;
 		pointer-events: none;
-		transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+		transition: transform 300ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 
 		&::before {
 			content: '';
@@ -677,9 +679,14 @@
 		}
 
 		svg {
-			width: 20px;
-			height: 20px;
+			width: 22px;
+			height: 22px;
 			color: rgba(0, 0, 0, 0.75);
+			fill: none;
+			stroke: currentColor;
+			stroke-width: 2.25;
+			stroke-linecap: round;
+			stroke-linejoin: round;
 			pointer-events: none;
 		}
 	}

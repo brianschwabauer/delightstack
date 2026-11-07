@@ -432,6 +432,12 @@
 			}
 		}
 
+		/* A segmented control hugs its options; stretched across the row it left
+		   an empty track trailing off to the right. `full_width` still fills. */
+		.tabs.boxed:not(.full-width):not(.vertical) & {
+			width: fit-content;
+		}
+
 		.tabs.full-width & {
 			width: 100%;
 		}
@@ -451,10 +457,13 @@
 		pointer-events: none;
 		z-index: 1;
 		opacity: 0;
+		/* Quint-out, no overshoot: a spring carried the indicator past the
+		   target tab's edge and back, which read as a glitch (most visibly on
+		   the boxed thumb). */
 		transition:
-			transform 260ms var(--ease-spring, cubic-bezier(0.34, 1.4, 0.64, 1)),
-			width 260ms var(--ease-spring, cubic-bezier(0.34, 1.4, 0.64, 1)),
-			height 260ms var(--ease-spring, cubic-bezier(0.34, 1.4, 0.64, 1)),
+			transform 320ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
+			width 320ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
+			height 320ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
 			opacity 150ms ease;
 
 		.tabs.vertical & {
@@ -531,6 +540,12 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.5em;
+
+		/* Stacked labels read down a left edge, like any nav list. */
+		.tabs.vertical & {
+			justify-content: flex-start;
+			text-align: start;
+		}
 		position: relative;
 		z-index: 2;
 		flex-shrink: 0;

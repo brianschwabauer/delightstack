@@ -105,7 +105,8 @@
 		aria-valuemax={isIndeterminate ? undefined : 100}
 		aria-label={label ||
 			(isIndeterminate ? 'Loading' : `${Math.round(percentage)}% complete`)}
-		style:--progress-color={color || null}>
+		style:--progress-color={color || null}
+		style:--progress-diameter={circular ? `${circularConfig.diameter}px` : null}>
 		{#if circular}
 			<svg
 				class="spinner"
@@ -194,7 +195,10 @@
 				transition: none;
 			}
 			circle.track {
-				stroke: var(--color-border, rgb(0 0 0 / 0.1));
+				stroke: var(
+					--progress-track,
+					color-mix(in oklch, var(--color-text, currentColor) 14%, transparent)
+				);
 			}
 			circle.arc {
 				stroke: var(--progress-color, var(--color-action, currentColor));
@@ -206,7 +210,10 @@
 				top: 50%;
 				left: 50%;
 				transform: translate(-50%, -50%);
-				font-size: 0.625em;
+				/* Scales with the ring (≈ a quarter of its diameter) but never drops
+				   below the 11px legibility floor; a fixed 0.625em was ~9px at size 1. */
+				font-size: max(11px, calc(var(--progress-diameter, 40px) * 0.27));
+				font-variant-numeric: tabular-nums;
 				font-weight: 600;
 				line-height: 1;
 			}
@@ -220,7 +227,12 @@
 			.track {
 				flex: 1;
 				border-radius: var(--radius-full, 9999px);
-				background: var(--color-border, rgb(0 0 0 / 0.1));
+				/* Low-alpha ink, not --color-border: the border token is a heavy mid
+				   gray in dark mode and flattened the fill/track contrast. */
+				background: var(
+					--progress-track,
+					color-mix(in oklch, var(--color-text, currentColor) 14%, transparent)
+				);
 				overflow: hidden;
 				position: relative;
 				display: flex;

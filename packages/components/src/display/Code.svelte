@@ -127,7 +127,9 @@
 {:else}
 	<div class={['code', class_name].filter(Boolean).join(' ')} class:wrap {id}>
 		{#if show_header}
-			<div class="header">
+			<!-- Without a filename the bar would be an empty strip holding one
+			     icon, so the copy button floats in the corner instead. -->
+			<div class="header" class:floating={!filename}>
 				{#if filename}
 					<span class="filename">{filename}</span>
 				{:else}
@@ -208,8 +210,16 @@
 			border-radius: calc(var(--radius-lg, 0.5rem) * var(--squircle-ratio, 2));
 		}
 		border: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
-		background: var(--color-bg-muted, light-dark(#f8fafc, #1e293b));
+		/* A shallow well: a step below the page in light mode (the old bg-muted
+		   read as a muddy slab), the raised gray in dark. */
+		background: light-dark(var(--color-bg-2, #f1f5f9), var(--color-bg-muted, #1e293b));
+		position: relative;
 		overflow: hidden;
+
+		/* A floating copy button needs room: keep the code clear of it. */
+		&:has(> .header.floating) pre {
+			padding-inline-end: 2.5rem;
+		}
 		font-family:
 			ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas,
 			'DejaVu Sans Mono', monospace;
@@ -238,8 +248,24 @@
 		justify-content: space-between;
 		padding: 0.5rem 0.75rem;
 		border-bottom: 1px solid var(--color-border, light-dark(#e2e8f0, #334155));
-		background: var(--color-bg-4, light-dark(#f1f5f9, #1a2332));
+		background: light-dark(var(--color-bg-3, #e2e8f0), var(--color-bg-4, #1a2332));
 		min-height: 2rem;
+
+		&.floating {
+			position: absolute;
+			top: 0.375rem;
+			right: 0.375rem;
+			z-index: 1;
+			padding: 0;
+			min-height: 0;
+			border: none;
+			background: none;
+
+			/* The empty spacer that balances a filename isn't needed here. */
+			> span:empty {
+				display: none;
+			}
+		}
 
 		/* The copy button — the component's only <button> */
 		button {

@@ -328,8 +328,8 @@
 		/* Open items glide apart; surfaces tint and corners round as the frame
 		   splits into pieces (separated mode). */
 		transition:
-			margin 320ms cubic-bezier(0.23, 1, 0.32, 1),
-			border-radius 320ms cubic-bezier(0.23, 1, 0.32, 1),
+			margin 320ms var(--ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
+			border-radius 320ms var(--ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
 			background-color 300ms,
 			border-color 300ms;
 
@@ -412,18 +412,21 @@
 			font-weight: 500;
 		}
 
+		/* The panel's text starts where the header's label does (header padding +
+		   16px chevron + gap), so the answer reads as belonging to its question
+		   instead of hanging out under the chevron. */
 		.panel {
-			padding: 0 1.25rem 1rem;
+			padding: 0 1.25rem 1rem calc(1.25rem + 16px + 0.75rem);
 			color: light-dark(var(--color-text, #1a1a1a), var(--color-text, #f5f5f5));
 		}
 
 		&.dense .panel {
-			padding: 0 0.75rem 0.5rem;
+			padding: 0 0.75rem 0.5rem calc(0.75rem + 16px + 0.5rem);
 			font-size: 0.875rem;
 		}
 
 		&.comfortable .panel {
-			padding: 0 1.5rem 1.25rem;
+			padding: 0 1.5rem 1.25rem calc(1.5rem + 16px + 1rem);
 		}
 
 		/* ================================================================ */

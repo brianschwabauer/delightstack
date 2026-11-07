@@ -70,7 +70,7 @@
 		justify-content: center;
 	}
 	.check {
-		color: var(--color-success, #16a34a);
+		color: var(--color-success-fg, var(--color-success, #16a34a));
 		svg {
 			display: block;
 			width: 100%;

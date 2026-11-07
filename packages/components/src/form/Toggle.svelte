@@ -553,7 +553,7 @@
 			background-color 0.2s ease,
 			width 0.15s ease,
 			left 0.15s ease;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+		box-shadow: 0 1px 3px light-dark(rgb(0 0 0 / 0.2), transparent);
 	}
 
 	/* Instant pointer tracking while dragging — the inline transform drives
@@ -640,6 +640,22 @@
 	.error-text {
 		width: 100%;
 		font-size: 0.8em;
-		color: var(--color-error, #d32f2f);
+		color: var(--color-error-fg, var(--color-error, #d32f2f));
+	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.toggle,
+		.toggle * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.toggle:active,
+		.toggle *:active,
+		.toggle *:hover {
+			translate: none !important;
+			scale: none !important;
+		}
 	}
 </style>

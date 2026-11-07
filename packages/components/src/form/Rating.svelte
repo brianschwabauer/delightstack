@@ -217,6 +217,22 @@
 					style:width="{px}px"
 					style:height="{px}px">
 					{#if precision === 0.5 && isInteractive}
+						<!-- One drawing per star: an inactive star with the active star layered
+						     on top, clipped to the left half for a half value. Two separately
+						     clipped halves left an antialiasing seam down every FULL star. -->
+						<svg
+							class="star-visual"
+							viewBox="0 0 24 24"
+							width={px}
+							height={px}
+							aria-hidden="true">
+							<path d={starPath} class="star-path" />
+							<path
+								d={starPath}
+								class="star-path filled star-fill"
+								class:half={fill === 'half'}
+								class:empty={fill === 'empty'} />
+						</svg>
 						<!-- Left half (0.5) -->
 						<button
 							type="button"
@@ -226,17 +242,6 @@
 							aria-hidden="true"
 							onclick={() => selectValue(vals.half)}
 							onmouseenter={() => hoverStar(vals.half)}>
-							<svg
-								viewBox="0 0 24 24"
-								width={px}
-								height={px}
-								aria-hidden="true"
-								style="clip-path: inset(0 50% 0 0)">
-								<path
-									d={starPath}
-									class="star-path"
-									class:filled={fill === 'full' || fill === 'half'} />
-							</svg>
 						</button>
 						<!-- Right half (1.0) -->
 						<button
@@ -247,14 +252,6 @@
 							aria-hidden="true"
 							onclick={() => selectValue(vals.full)}
 							onmouseenter={() => hoverStar(vals.full)}>
-							<svg
-								viewBox="0 0 24 24"
-								width={px}
-								height={px}
-								aria-hidden="true"
-								style="clip-path: inset(0 0 0 50%)">
-								<path d={starPath} class="star-path" class:filled={fill === 'full'} />
-							</svg>
 						</button>
 					{:else}
 						<!-- Full star button -->
@@ -297,7 +294,7 @@
 
 		.error-text {
 			font-size: 0.8em;
-			color: var(--color-error, #d32f2f);
+			color: var(--color-error-fg, var(--color-error, #d32f2f));
 		}
 	}
 
@@ -330,14 +327,14 @@
 
 	.stars {
 		--star-active: var(--star-color, #f59e0b);
-		/* Empty stars use the neutral border gray (absolute lightness: light in
-		   light mode, dark in dark mode) rather than --color-text-disabled, which
-		   is a *relative* nudge of currentColor — against dark page text that
-		   resolved to a near-black fill, making empty stars look selected. */
-		--star-inactive: light-dark(
-			var(--color-border, #d4d4d8),
-			var(--color-border, #52525b)
-		);
+		/* Empty stars use an absolute ramp step (light in light mode, dark in
+		   dark mode) rather than --color-text-disabled, which is a relative
+		   nudge of currentColor — against dark page text that resolved to a
+		   near-black fill, making empty stars look selected. */
+		/* A fixed ramp step, not --color-border: that one derives from
+		   currentColor, so empty stars changed shade with whatever text color
+		   the rating happened to sit in. */
+		--star-inactive: var(--color-bg-6, light-dark(#c4c9cc, #52585b));
 		display: inline-flex;
 		align-items: center;
 		gap: 2px;
@@ -397,6 +394,29 @@
 		clip-path: inset(0 0 0 50%);
 	}
 
+	.star-visual {
+		display: block;
+		pointer-events: none;
+		transition: translate 200ms ease;
+
+		.star-wrapper:has(.star-half:active:not(:disabled)) & {
+			translate: 0px 1px;
+		}
+	}
+
+	.star-fill {
+		transition:
+			opacity 150ms ease,
+			clip-path 150ms ease;
+
+		&.half {
+			clip-path: inset(0 50% 0 0);
+		}
+		&.empty {
+			opacity: 0;
+		}
+	}
+
 	.star-path {
 		fill: var(--star-inactive);
 		stroke: none;
@@ -424,6 +444,22 @@
 		}
 		100% {
 			transform: scale(1);
+		}
+	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.rating-field,
+		.rating-field * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.rating-field:active,
+		.rating-field *:active,
+		.rating-field *:hover {
+			translate: none !important;
+			scale: none !important;
 		}
 	}
 </style>

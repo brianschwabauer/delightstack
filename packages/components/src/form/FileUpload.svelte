@@ -657,6 +657,9 @@
 		position: relative;
 		border: 2px dashed var(--color-border, hsl(0 0% 80%));
 		border-radius: var(--radius-lg, 8px);
+		/* A faint well at rest, so the zone reads as a place to put something
+		   rather than a dashed outline around nothing. */
+		background: color-mix(in oklch, var(--color-text, currentColor) 3%, transparent);
 		padding: 2rem;
 		text-align: center;
 		cursor: pointer;
@@ -679,7 +682,12 @@
 
 		&:hover {
 			border-color: var(--color-action, hsl(220 70% 55%));
-			transition: none;
+			background: color-mix(
+				in oklch,
+				var(--color-action, hsl(220 70% 55%)) 5%,
+				transparent
+			);
+			transition: translate 200ms ease;
 		}
 
 		&:focus-visible {
@@ -689,9 +697,10 @@
 
 		&.drag-over {
 			border-color: var(--color-action, hsl(220 70% 55%));
+			border-style: solid;
 			background: color-mix(
 				in oklch,
-				var(--color-action, hsl(220 70% 55%)) 5%,
+				var(--color-action, hsl(220 70% 55%)) 10%,
 				transparent
 			);
 			transition: none;
@@ -910,7 +919,7 @@
 	}
 
 	.remove-button:hover {
-		color: var(--color-error, hsl(0 70% 55%));
+		color: var(--color-error-fg, var(--color-error, hsl(0 70% 55%)));
 		background: color-mix(in oklch, var(--color-error, hsl(0 70% 55%)) 10%, transparent);
 		transition: none;
 	}
@@ -928,7 +937,7 @@
 	.error-message {
 		margin: 0;
 		font-size: 0.8em;
-		color: var(--color-error, hsl(0 70% 55%));
+		color: var(--color-error-fg, var(--color-error, hsl(0 70% 55%)));
 		line-height: 1.4;
 	}
 </style>

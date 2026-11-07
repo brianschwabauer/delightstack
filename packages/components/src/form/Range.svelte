@@ -547,7 +547,9 @@
 		--inactive-height: 4px;
 		--gap: 7px;
 		--fill-color: var(--color-action, hsl(220 70% 55%));
-		--track-bg: var(--color-bg-muted, hsl(0 0% 80%));
+		/* Ink at low alpha rather than a ramp step, so the unfilled track stays
+		   visible on any surface in both schemes (bg-muted vanished in dark). */
+		--track-bg: color-mix(in oklch, var(--color-text, currentColor) 16%, transparent);
 
 		display: flex;
 		flex-direction: column;
@@ -564,7 +566,7 @@
 
 		.error-text {
 			font-size: 0.8em;
-			color: var(--color-error, #d32f2f);
+			color: var(--color-error-fg, var(--color-error, #d32f2f));
 		}
 
 		/* Sizes */
@@ -754,7 +756,7 @@
 		   track segments). The transform/box-shadow ease the hover grow + halo. */
 		transition:
 			left 100ms ease,
-			transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			transform 200ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)),
 			box-shadow 150ms ease;
 	}
 
@@ -910,6 +912,22 @@
 
 		.tick-label {
 			transform: translateX(-50%) rotate(90deg);
+		}
+	}
+	/* Reduced motion: state still changes, but nothing travels — transitions
+	   keep only color/opacity, and presses and hover lifts stay put. Loading
+	   spinners keep spinning (a frozen ring stops reading as "busy"). */
+	@media (prefers-reduced-motion: reduce) {
+		.range-container,
+		.range-container * {
+			transition-property:
+				color, background-color, border-color, opacity, fill, stroke, box-shadow !important;
+		}
+		.range-container:active,
+		.range-container *:active,
+		.range-container *:hover {
+			translate: none !important;
+			scale: none !important;
 		}
 	}
 </style>

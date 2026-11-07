@@ -208,7 +208,9 @@
 <style>
 	.counter {
 		display: inline-flex;
-		align-items: flex-start;
+		/* Affixes sit on the number's baseline, a size down — "98.1%", not a
+		   superscript "98.1⁰⁄₀" that reads like a pricing table. */
+		align-items: baseline;
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 		line-height: 1;
@@ -219,12 +221,10 @@
 
 		.affix {
 			display: inline-block;
-			font-size: 0.5em;
+			font-size: 0.6em;
 			line-height: 1;
 			font-weight: 500;
-			opacity: 0.85;
-			align-self: flex-start;
-			padding-top: 0.15em;
+			color: var(--color-text-muted, currentcolor);
 		}
 		.prefix {
 			margin-right: 0.1em;

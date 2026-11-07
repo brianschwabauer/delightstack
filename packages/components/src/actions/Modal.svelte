@@ -125,6 +125,20 @@
 		},
 	});
 
+	/* Reduced motion: no morph out of the trigger and no shrink on close — the
+	   dialog simply fades. Read per transition so an OS toggle applies live. */
+	const prefersReducedMotion = () =>
+		typeof matchMedia !== 'undefined' &&
+		matchMedia('(prefers-reduced-motion: reduce)').matches;
+	function modalIn(node: HTMLElement, params: { key: string }) {
+		return prefersReducedMotion() ? fade(node, { duration: 150 }) : receive(node, params);
+	}
+	function modalOut(node: HTMLElement) {
+		return prefersReducedMotion()
+			? fade(node, { duration: 100 })
+			: scale(node, { duration: 100, start: 0.75 });
+	}
+
 	// Set when close() already notified onclose, so the unmount notification
 	// (which covers the parent flipping `open` externally) doesn't fire it twice
 	let notified_close = false;
@@ -161,8 +175,8 @@
 	<div
 		class={['modal', class_name].filter(Boolean).join(' ')}
 		{style}
-		in:receive={{ key: 'modal' }}
-		out:scale={{ duration: 100, start: 0.75 }}
+		in:modalIn={{ key: 'modal' }}
+		out:modalOut
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby={titleId}
@@ -300,7 +314,7 @@
 			position: absolute;
 			bottom: 0;
 			left: 0;
-			background-color: var(--color-bg);
+			background-color: var(--color-surface, var(--color-bg));
 			z-index: 2;
 			gap: 0.5rem;
 			padding: 0.5rem 0.5rem 0.5rem 0;
@@ -358,7 +372,7 @@
 			.close {
 				position: sticky;
 				left: 0;
-				background-color: var(--color-bg);
+				background-color: var(--color-surface, var(--color-bg));
 				border-radius: var(--_radius);
 				@supports (corner-shape: squircle) {
 					corner-shape: squircle;
@@ -381,10 +395,10 @@
 		overflow-x: hidden;
 		overscroll-behavior: contain;
 		pointer-events: auto;
-		/* The overlay scrollbar takes no layout space (the native gutter that
-		   scrollbar-gutter: stable both-edges used to reserve is gone), so the
-		   inline padding carries the full edge distance itself. */
-		scrollbar-gutter: stable both-edges;
+		/* No scrollbar-gutter: the overlay scrollbar takes no layout space, and a
+		   reserved gutter (Chromium keeps it even with the native bar hidden)
+		   left the full-bleed footer ~15px short of each edge and the actions
+		   farther from the side than from the bottom. */
 		@media (max-width: 767px) {
 			min-width: 100vw;
 			padding-bottom: 4rem;
@@ -417,7 +431,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		justify-content: flex-end;
-		background-color: var(--color-bg);
+		background-color: var(--color-surface, var(--color-bg));
 		border-top: 1px solid var(--color-border, rgb(from var(--color-text) r g b / 0.1));
 		/* Full-bleed: negative inline margins cancel the body's padding so the
 		   divider spans edge to edge, like the header bar. */
@@ -447,10 +461,15 @@
 		grid-column: 1 / 1;
 		grid-row: 1 / 1;
 		height: 100%;
-		background-color: var(--color-bg);
+		background-color: var(--color-surface, var(--color-bg));
 		z-index: -1;
 		box-shadow: var(--_shadow);
 		@media (min-width: 768px) {
+			/* Dark mode has no shadow (it blurs a dark edge); a 1px ring in the
+			   border color separates the panel from the page instead. */
+			box-shadow:
+				var(--_shadow),
+				0 0 0 1px light-dark(transparent, var(--color-border));
 			border-radius: var(--_radius);
 			@supports (corner-shape: squircle) {
 				corner-shape: squircle;

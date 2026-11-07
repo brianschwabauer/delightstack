@@ -1836,7 +1836,12 @@
 		   height. --_font is a length the floated-label maths can divide by. */
 		--_height: calc(var(--_font) * var(--control-height-ratio, 3));
 		--_radius: var(--radius-lg, 10px);
-		--_border: var(--color-border, light-dark(hsl(0 0% 78%), hsl(0 0% 32%)));
+		/* The control boundary must reach 3:1 against the page (WCAG 1.4.11);
+		   the decorative --color-border is for dividers and doesn't. */
+		--_border: var(
+			--color-border-control,
+			var(--color-border, light-dark(hsl(0 0% 60%), hsl(0 0% 40%)))
+		);
 		--_border-hover: var(--color-border-active, light-dark(hsl(0 0% 60%), hsl(0 0% 48%)));
 		--_border-focus: var(--color-action-fg, var(--color-action, hsl(217 75% 52%)));
 		--_border-error: var(--color-error, light-dark(#ef6262, #b04343));
@@ -1853,7 +1858,7 @@
 		/* The legacy label glide easing */
 		--_ease-label: cubic-bezier(0, 0.54, 0.47, 1);
 		/* Snappy ease-out for the panel's expand-in animation (matches Select) */
-		--_ease-expand: cubic-bezier(0.16, 1, 0.3, 1);
+		--_ease-expand: var(--ease-out-strong, cubic-bezier(0.16, 1, 0.3, 1));
 
 		position: relative;
 		width: 100%;
@@ -2499,6 +2504,20 @@
 		height: 4em;
 	}
 
+	/* The trailing icon button pulls into the end padding so its icon sits as
+	   far from the right edge as from the top and bottom: the 4em button is
+	   2× the field font, so its icon is (height − 2em) / 2 from the top and
+	   bottom edges but pad-x + that from the right edge. Half the field font
+	   evens it out at every density (each pads 0.5em more than it insets
+	   vertically). Not when a suffix, the steppers or the save status
+	   follow it (the screen-reader-only text after it doesn't count). */
+	.wrapper:not(:has(> .suffix, > .steppers))
+		> :global(.button.input-icon-btn):not(
+			:has(~ :not(.visually-hidden, .skeleton-sweep))
+		) {
+		margin-inline-end: calc(var(--_font) * -0.5);
+	}
+
 	/* The clear button fades in on hover/focus of the field. */
 	.input :global(.button.input-clear-btn) {
 		opacity: 0;
@@ -2524,7 +2543,10 @@
 		gap: 0;
 		flex-shrink: 0;
 		order: 2;
-		margin-right: -0.45em;
+		/* Leaves the last arrow as far from the right edge as from the top and
+		   bottom (the buttons' own -0.5em inline margins pull it the rest of
+		   the way). */
+		margin-right: -0.25em;
 	}
 	.steppers :global(.button.input-icon-btn) {
 		margin-inline: -0.5em;
@@ -2834,7 +2856,7 @@
 
 	.error {
 		font-size: 0.78em;
-		color: var(--_border-error);
+		color: var(--color-error-fg, var(--_border-error));
 		animation: error-in 200ms var(--_ease);
 	}
 

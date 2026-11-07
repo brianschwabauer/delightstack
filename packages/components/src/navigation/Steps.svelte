@@ -702,19 +702,21 @@
 			height: 55%;
 		}
 
+		/* Done steps step back: a soft brand tint with a brand check. */
 		.step.complete & {
-			background: var(--color-success, #16a34a);
-			border-color: var(--color-success, #16a34a);
-			color: white;
+			background: var(--color-action-bg, rgb(37 99 235 / 0.12));
+			border-color: transparent;
+			color: var(--color-action-fg, #1d4ed8);
 		}
 
-		/* "You are here" is neutral on purpose: a surface-filled circle with a
-		   strong text-colored ring and a soft breathing halo. It reads clearly
-		   without adding a hue that clashes with the success/error states. */
+		/* "You are here" is the loudest step: a solid brand fill with a soft
+		   breathing halo. It used to be a white disc, quieter than the green
+		   completed steps beside it — so the eye landed on the past, not the
+		   present. */
 		.step.current & {
-			background: var(--color-surface, light-dark(#ffffff, #111111));
-			border-color: var(--color-text, light-dark(#1a1a1a, #f5f5f5));
-			color: var(--color-text, light-dark(#1a1a1a, #f5f5f5));
+			background: var(--color-action, #2563eb);
+			border-color: var(--color-action, #2563eb);
+			color: var(--color-action-text, #fff);
 			font-weight: 600;
 			animation: steps-pulse 2.4s ease-in-out infinite;
 		}
@@ -737,18 +739,20 @@
 			transition: none;
 		}
 		.step.complete &:hover {
-			background: var(--color-success-active, #128b7e);
-			border-color: var(--color-success-active, #128b7e);
+			background: oklch(from var(--color-action, #2563eb) l c h / 0.22);
 		}
 		.step.error &:hover {
 			background: var(--color-error-active, light-dark(#ca3030, #f55d5d));
 			border-color: var(--color-error-active, light-dark(#ca3030, #f55d5d));
 		}
-		.step.upcoming &:hover,
-		.step.current &:hover {
+		.step.upcoming &:hover {
 			background: rgb(from var(--color-text, #888888) r g b / 0.08);
 			border-color: var(--color-text, light-dark(#1a1a1a, #f5f5f5));
 			color: var(--color-text, light-dark(#1a1a1a, #f5f5f5));
+		}
+		.step.current &:hover {
+			background: var(--color-action-active, #1d4ed8);
+			border-color: var(--color-action-active, #1d4ed8);
 		}
 
 		&:focus-visible {
@@ -858,7 +862,7 @@
 	.fill {
 		position: absolute;
 		inset: 0;
-		background: var(--color-success, #16a34a);
+		background: var(--color-action, #2563eb);
 		transform-origin: left;
 		transform: scaleX(0);
 		transition: transform 300ms ease;
@@ -954,10 +958,10 @@
 	@keyframes steps-pulse {
 		0%,
 		100% {
-			box-shadow: 0 0 0 3px rgb(from var(--color-text, #888888) r g b / 0.18);
+			box-shadow: 0 0 0 3px oklch(from var(--color-action, #2563eb) l c h / 0.22);
 		}
 		50% {
-			box-shadow: 0 0 0 7px rgb(from var(--color-text, #888888) r g b / 0.05);
+			box-shadow: 0 0 0 7px oklch(from var(--color-action, #2563eb) l c h / 0.06);
 		}
 	}
 
@@ -1000,7 +1004,7 @@
 		.step.current .circle {
 			animation: none;
 			/* Keep a static halo so "current" stays identifiable without motion. */
-			box-shadow: 0 0 0 3px rgb(from var(--color-text, #888888) r g b / 0.18);
+			box-shadow: 0 0 0 3px oklch(from var(--color-action, #2563eb) l c h / 0.22);
 		}
 		.main {
 			transition: none;

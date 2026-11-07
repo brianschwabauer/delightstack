@@ -577,7 +577,7 @@
 		max-height: 100svh;
 		display: flex;
 		flex-direction: column;
-		background-color: var(--color-bg, light-dark(#fff, #0a0a0a));
+		background-color: var(--color-surface, light-dark(#fff, #1c1c1f));
 		/* Clamp so an over-rounded --radius-2xl can't blob this large sheet — see --radius-cap. */
 		--_radius: min(var(--radius-2xl, 28px), var(--radius-cap, 40px));
 		border-top-left-radius: var(--_radius);
@@ -607,11 +607,13 @@
 		flex-shrink: 0;
 		touch-action: none;
 
+		/* Big and solid enough to find at a glance in both schemes (28% read as
+		   nearly nothing on the dark surface). */
 		.bar {
-			width: 36px;
-			height: 4px;
+			width: 40px;
+			height: 5px;
 			border-radius: var(--radius-full, 9999px);
-			background-color: color-mix(in oklch, transparent, var(--color-text, #888) 28%);
+			background-color: color-mix(in oklch, transparent, var(--color-text, #888) 38%);
 		}
 	}
 

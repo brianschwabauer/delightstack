@@ -589,7 +589,7 @@
 		}
 
 		.snapping & {
-			transition: flex-basis 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			transition: flex-basis 300ms var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1));
 		}
 
 		.animating & {
