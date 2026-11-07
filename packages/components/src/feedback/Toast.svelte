@@ -196,6 +196,7 @@
 	import { portal } from '../actions/Portal.svelte';
 	import Button from '../actions/Button.svelte';
 	import Progress from './Progress.svelte';
+	import ToastSurface from './ToastSurface.svelte';
 
 	const propId = $props.id();
 	let {
@@ -528,6 +529,11 @@
 				onpointermove={onPointerMove}
 				onpointerup={onPointerUp}
 				onpointercancel={onPointerUp}>
+				<ToastSurface
+					side={align === 'right' ? 'right' : 'left'}
+					open={t.options.dismissible !== false &&
+						!t.dismissed &&
+						(expanded || frontDistance(t) === 0)} />
 				<div class="inner">
 					<span class="icon">
 						{#if t.variant === 'success'}
@@ -613,26 +619,23 @@
 				</div>
 
 				{#if t.options.dismissible !== false}
-					<div class="close">
-						<Button
-							icon
-							size="0"
-							transparent
-							dense
-							aria-label="Dismiss notification"
-							onclick={() => removeToast(t.id)}>
-							<svg
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.2"
-								stroke-linecap="round"
-								stroke-linejoin="round">
-								<line x1="18" y1="6" x2="6" y2="18" />
-								<line x1="6" y1="6" x2="18" y2="18" />
-							</svg>
-						</Button>
-					</div>
+					<button
+						type="button"
+						class="close"
+						aria-label="Dismiss notification"
+						onclick={() => removeToast(t.id)}>
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.4"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true">
+							<line x1="18" y1="6" x2="6" y2="18" />
+							<line x1="6" y1="6" x2="18" y2="18" />
+						</svg>
+					</button>
 				{/if}
 			</div>
 		{/each}
@@ -646,9 +649,9 @@
 		width: var(--toast-width, 356px);
 		max-width: calc(100vw - 2rem);
 		pointer-events: none;
-		--toast-bg: light-dark(#fff, #1c1c1f);
-		--toast-fg: light-dark(#18181b, #f4f4f5);
-		--toast-border: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.1));
+		--toast-bg: var(--color-surface, light-dark(#fff, #1c1c1f));
+		--toast-fg: var(--color-text, light-dark(#18181b, #f4f4f5));
+		--toast-border: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.12));
 
 		&.bottom-right {
 			bottom: 1rem;
@@ -691,23 +694,34 @@
 			corner-shape: squircle;
 			border-radius: calc(var(--radius-lg, 12px) * var(--squircle-ratio, 2));
 		}
-		background-color: var(--toast-bg);
+		/* The card itself is drawn by ToastSurface (an SVG path, so the close
+		   button's notch gets the outline too); these feed its fill/stroke. The
+		   transparent border keeps the box the same size it always was. */
+		--_fill: var(--toast-bg);
+		--_stroke: var(--toast-border);
+		isolation: isolate;
 		color: var(--toast-fg);
-		border: 1px solid var(--toast-border);
-		box-shadow:
-			0 4px 12px rgb(0 0 0 / 0.1),
-			0 2px 4px rgb(0 0 0 / 0.06);
+		border: 1px solid transparent;
+		/* Light mode only, as a filter so it follows the notched outline (and
+		   the close bubble). Dark mode relies on the outline alone. */
+		--_lift-a: 0 4px 12px;
+		--_lift-a-color: light-dark(rgb(0 0 0 / 0.1), transparent);
+		--_lift-b: 0 2px 4px;
+		--_lift-b-color: light-dark(rgb(0 0 0 / 0.06), transparent);
+		filter: drop-shadow(var(--_lift-a) var(--_lift-a-color))
+			drop-shadow(var(--_lift-b) var(--_lift-b-color));
 		cursor: default;
 		/* Stacked <-> expanded reflow: fast + strong ease-out (quintOut). */
 		transition:
-			transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+			transform 200ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
 			opacity 300ms ease,
-			box-shadow 250ms ease;
+			filter 250ms ease;
 		/* `backwards` (not `both`): the enter keyframe only fills BEFORE the run,
 		 * so once it finishes it releases the transform back to the base value and
 		 * the stacked<->expanded transition can animate it. A lingering `both`
 		 * fill would keep overriding transform and make expand/collapse jump. */
-		animation: toast-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+		animation: toast-enter 350ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1))
+			backwards;
 		transform-origin: center top;
 	}
 	.toaster:is(.bottom-right, .bottom-left, .bottom-center) .toast {
@@ -722,9 +736,10 @@
 
 	/* Slightly lift the stack while expanded for a sense of depth. */
 	.toaster.expanded .toast {
-		box-shadow:
-			0 8px 24px rgb(0 0 0 / 0.14),
-			0 3px 8px rgb(0 0 0 / 0.08);
+		--_lift-a: 0 8px 24px;
+		--_lift-a-color: light-dark(rgb(0 0 0 / 0.14), transparent);
+		--_lift-b: 0 3px 8px;
+		--_lift-b-color: light-dark(rgb(0 0 0 / 0.08), transparent);
 
 		/* While expanded, each toast carries a transparent hit-area halo extending
 		 * ~22px beyond it on every side (sits behind the card via z-index:-1 so it
@@ -768,13 +783,13 @@
 		}
 
 		.toast.success & {
-			color: var(--color-success, #16a34a);
+			color: var(--color-success-fg, var(--color-success, #16a34a));
 		}
 		.toast.error & {
-			color: var(--color-error, #dc2626);
+			color: var(--color-error-fg, var(--color-error, #dc2626));
 		}
 		.toast.warning & {
-			color: var(--color-warning, #d97706);
+			color: var(--color-warning-fg, var(--color-warning, #d97706));
 		}
 		.toast.info & {
 			color: var(--color-action-fg, var(--color-action, #3b82f6));
@@ -787,12 +802,14 @@
 		 * itself on — most visible when a promise toast's spinner flips to the
 		 * confirmation, instead of the check just blinking into place. */
 		.toast.success & svg {
-			animation: toast-check-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+			animation: toast-check-pop 400ms
+				var(--ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) backwards;
 
 			path {
 				/* Dash length >= the tick's path length (~23px) so `from` hides it fully */
 				stroke-dasharray: 24;
-				animation: toast-check-draw 350ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+				animation: toast-check-draw 350ms
+					var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)) 80ms backwards;
 			}
 		}
 	}
@@ -833,35 +850,86 @@
 		align-self: center;
 	}
 
+	/* The close button sits in ToastSurface's notch: a 22px bubble centered
+	   4px in from the top corner (keep CENTER_INSET/BUBBLE_R there in sync),
+	   inside a 32px hit area so it stays easy to tap. */
 	.close {
 		position: absolute;
-		top: 0;
-		left: 0;
-		font-size: 7px; /* scales the icon Button (4em) to 28px, host-independent */
-		transform: translate(-35%, -35%);
+		/* Padding-box coords (the toast has a 1px border): center at 3px. */
+		top: -13px;
+		left: -13px;
+		width: 32px;
+		height: 32px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: none;
+		background: none;
 		border-radius: 50%;
-		background: var(--toast-bg);
-		box-shadow: 0 0 0 1px var(--toast-border);
+		color: oklch(from var(--toast-fg) l c h / 0.72);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
 		opacity: 0;
-		transition: opacity 150ms ease;
+		scale: 0.5;
+		pointer-events: none;
+		/* Leaving: the bubble shrinks back as the notch closes. */
+		transition:
+			opacity 150ms ease,
+			scale 200ms ease,
+			color 200ms ease;
 
-		/* Trim the × glyph a touch smaller than the dense default (60%) so the
-		   button box stays a comfortable tap target without an oversized icon. */
-		:global(svg) {
-			width: 52%;
-			height: 52%;
+		&::before {
+			content: '';
+			position: absolute;
+			inset: 5px;
+			border-radius: 50%;
+			background: var(--_fill);
+			border: 1px solid var(--_stroke);
+			transition: background-color 200ms ease;
+		}
+		svg {
+			position: relative;
+			width: 10px;
+			height: 10px;
 		}
 
 		.toaster.expanded .toast &,
-		.toast.front &,
-		.toast:hover & {
+		.toast.front & {
 			opacity: 1;
+			scale: 1;
+			pointer-events: auto;
+			/* Arriving: grow with the notch (ToastSurface tweens 260ms, ease-out). */
+			transition:
+				opacity 150ms ease,
+				scale 260ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
+				color 200ms ease;
+		}
+		.toast.dismissed & {
+			opacity: 0;
+		}
+
+		/* Colors snap in on hover and ease back out. */
+		&:hover {
+			color: var(--toast-fg);
+			transition:
+				opacity 150ms ease,
+				scale 260ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+			&::before {
+				background: color-mix(in oklab, var(--toast-fg) 10%, var(--_fill));
+				transition: none;
+			}
+		}
+		&:focus-visible {
+			outline: none;
+			&::before {
+				outline: 2px solid var(--color-focus, var(--color-action, Highlight));
+				outline-offset: 1px;
+			}
 		}
 
 		.toaster.align-right & {
 			left: auto;
-			right: 0;
-			transform: translate(35%, -35%);
+			right: -13px;
 		}
 	}
 
@@ -879,48 +947,39 @@
 		--toast-accent: var(--color-action, #3b82f6);
 	}
 	.toast:is(.success, .error, .warning, .info) {
-		background-color: color-mix(in oklch, var(--toast-accent) 6%, var(--toast-bg));
-		border-color: color-mix(in oklch, var(--toast-accent) 28%, var(--toast-border));
-		box-shadow:
-			0 4px 12px rgb(0 0 0 / 0.1),
-			0 2px 4px rgb(0 0 0 / 0.06),
-			inset 0 0 0 1px color-mix(in oklch, var(--toast-accent) 10%, transparent);
-	}
-	.toaster.expanded .toast:is(.success, .error, .warning, .info) {
-		box-shadow:
-			0 8px 24px rgb(0 0 0 / 0.14),
-			0 3px 8px rgb(0 0 0 / 0.08),
-			inset 0 0 0 1px color-mix(in oklch, var(--toast-accent) 10%, transparent);
+		--_fill: color-mix(in oklab, var(--toast-accent) 6%, var(--toast-bg));
+		--_stroke: color-mix(in oklab, var(--toast-accent) 28%, var(--toast-border));
 	}
 
 	/* Rich colors — saturated variant surfaces (overrides the subtle tint). */
 	.toaster.rich .toast {
 		&.success {
-			--toast-bg: light-dark(#ecfdf5, #052e1a);
-			--toast-fg: light-dark(#065f46, #6ee7b7);
-			--toast-border: light-dark(#a7f3d0, #065f46);
+			/* Theme tokens, so rich toasts follow the brand + dark mode. */
+			--toast-bg: var(--color-success-bg);
+			--toast-fg: var(--color-success-fg);
+			--toast-border: oklch(from var(--color-success) l c h / 0.35);
 		}
 		&.error {
-			--toast-bg: light-dark(#fef2f2, #2d0a0a);
-			--toast-fg: light-dark(#991b1b, #fca5a5);
-			--toast-border: light-dark(#fecaca, #7f1d1d);
+			/* Theme tokens, so rich toasts follow the brand + dark mode. */
+			--toast-bg: var(--color-error-bg);
+			--toast-fg: var(--color-error-fg);
+			--toast-border: oklch(from var(--color-error) l c h / 0.35);
 		}
 		&.warning {
-			--toast-bg: light-dark(#fffbeb, #2b1c00);
-			--toast-fg: light-dark(#92400e, #fcd34d);
-			--toast-border: light-dark(#fde68a, #78350f);
+			/* Theme tokens, so rich toasts follow the brand + dark mode. */
+			--toast-bg: var(--color-warning-bg);
+			--toast-fg: var(--color-warning-fg);
+			--toast-border: oklch(from var(--color-warning) l c h / 0.35);
 		}
 		&.info {
-			--toast-bg: light-dark(#eff6ff, #0a1b2e);
-			--toast-fg: light-dark(#1e40af, #93c5fd);
-			--toast-border: light-dark(#bfdbfe, #1e3a8a);
+			/* Theme tokens, so rich toasts follow the brand + dark mode. */
+			--toast-bg: var(--color-action-bg);
+			--toast-fg: var(--color-action-fg);
+			--toast-border: oklch(from var(--color-action) l c h / 0.35);
 		}
 		&:is(.success, .error, .warning, .info) {
-			background-color: var(--toast-bg);
-			border-color: var(--toast-border);
-			box-shadow:
-				0 4px 12px rgb(0 0 0 / 0.1),
-				0 2px 4px rgb(0 0 0 / 0.06);
+			--_fill: var(--toast-bg);
+			--_stroke: var(--toast-border);
 		}
 		.icon {
 			color: currentColor;
@@ -928,7 +987,8 @@
 	}
 
 	.toast.dismissed {
-		animation: toast-exit 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+		animation: toast-exit 320ms var(--ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1))
+			both;
 		pointer-events: none;
 	}
 
@@ -947,6 +1007,9 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.close {
+			scale: 1 !important;
+		}
 		.toast {
 			animation-duration: 1ms !important;
 			transition-duration: 1ms !important;
