@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Attachment } from 'svelte/attachments';
 	import { scrollbar } from '../actions/scrollbar';
 	import { tokenizeLine } from './code-tokens.js';
 
@@ -99,6 +100,27 @@
 		if (line.startsWith('-')) return 'diff-remove';
 		return '';
 	}
+
+	// Which edges of the scroll body have more code past them (see .fade-*).
+	let fade_top = $state(false);
+	let fade_bottom = $state(false);
+	const scrollFades: Attachment<HTMLElement> = (node) => {
+		const update = () => {
+			const rest = node.scrollHeight - node.clientHeight - node.scrollTop;
+			fade_top = node.scrollTop > 1;
+			fade_bottom = rest > 1;
+		};
+		update();
+		node.addEventListener('scroll', update, { passive: true });
+		// Content (wrap, code changes) and box (max_height) both change overflow.
+		const observer = new ResizeObserver(update);
+		observer.observe(node);
+		if (node.firstElementChild) observer.observe(node.firstElementChild);
+		return () => {
+			node.removeEventListener('scroll', update);
+			observer.disconnect();
+		};
+	};
 </script>
 
 {#if skeleton}
@@ -180,7 +202,13 @@
 			</div>
 		{/if}
 
-		<div class="body" style:max-height={max_height} {@attach scrollbar()}>
+		<div
+			class="body"
+			class:fade-top={fade_top}
+			class:fade-bottom={fade_bottom}
+			style:max-height={max_height}
+			{@attach scrollbar()}
+			{@attach scrollFades}>
 			<pre><code>{#each tokenized_lines as tokens, i}{@const line_num =
 							start_line + i}{@const is_highlighted =
 							highlight_set.has(line_num)}{@const raw_line = lines[i]}<span
@@ -330,6 +358,51 @@
 			display: block;
 			padding: 0.75rem 0;
 		}
+	}
+
+	/* Scroll fades (max_height): an eased fade on whichever edge has more code
+	   past it, so a block cut at max-height reads as scrollable instead of
+	   stopping mid-line. Alpha follows a smoothstep curve over 13 stops; a
+	   plain two-stop fade shows a hard band where it ends. */
+	.body.fade-top,
+	.body.fade-bottom {
+		--_fade-top: 0px;
+		--_fade-bottom: 0px;
+		mask-image: linear-gradient(
+			to bottom,
+			rgb(0 0 0 / 0) calc(var(--_fade-top) * 0),
+			rgb(0 0 0 / 0.0197) calc(var(--_fade-top) * 0.0833),
+			rgb(0 0 0 / 0.0741) calc(var(--_fade-top) * 0.1667),
+			rgb(0 0 0 / 0.1562) calc(var(--_fade-top) * 0.25),
+			rgb(0 0 0 / 0.2593) calc(var(--_fade-top) * 0.3333),
+			rgb(0 0 0 / 0.3762) calc(var(--_fade-top) * 0.4167),
+			rgb(0 0 0 / 0.5) calc(var(--_fade-top) * 0.5),
+			rgb(0 0 0 / 0.6238) calc(var(--_fade-top) * 0.5833),
+			rgb(0 0 0 / 0.7407) calc(var(--_fade-top) * 0.6667),
+			rgb(0 0 0 / 0.8438) calc(var(--_fade-top) * 0.75),
+			rgb(0 0 0 / 0.9259) calc(var(--_fade-top) * 0.8333),
+			rgb(0 0 0 / 0.9803) calc(var(--_fade-top) * 0.9167),
+			rgb(0 0 0 / 1) calc(var(--_fade-top) * 1),
+			rgb(0 0 0 / 1) calc(100% - var(--_fade-bottom) * 1),
+			rgb(0 0 0 / 0.9803) calc(100% - var(--_fade-bottom) * 0.9167),
+			rgb(0 0 0 / 0.9259) calc(100% - var(--_fade-bottom) * 0.8333),
+			rgb(0 0 0 / 0.8438) calc(100% - var(--_fade-bottom) * 0.75),
+			rgb(0 0 0 / 0.7407) calc(100% - var(--_fade-bottom) * 0.6667),
+			rgb(0 0 0 / 0.6238) calc(100% - var(--_fade-bottom) * 0.5833),
+			rgb(0 0 0 / 0.5) calc(100% - var(--_fade-bottom) * 0.5),
+			rgb(0 0 0 / 0.3762) calc(100% - var(--_fade-bottom) * 0.4167),
+			rgb(0 0 0 / 0.2593) calc(100% - var(--_fade-bottom) * 0.3333),
+			rgb(0 0 0 / 0.1562) calc(100% - var(--_fade-bottom) * 0.25),
+			rgb(0 0 0 / 0.0741) calc(100% - var(--_fade-bottom) * 0.1667),
+			rgb(0 0 0 / 0.0197) calc(100% - var(--_fade-bottom) * 0.0833),
+			rgb(0 0 0 / 0) calc(100% - var(--_fade-bottom) * 0)
+		);
+	}
+	.body.fade-top {
+		--_fade-top: 2.5rem;
+	}
+	.body.fade-bottom {
+		--_fade-bottom: 2.5rem;
 	}
 
 	/* ========== Lines ========== */
