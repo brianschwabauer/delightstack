@@ -23,6 +23,7 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
+import { quantizeLength } from '../core/bm25.js';
 import { compareStrings, type PrimaryKeyType } from '../core/compare.js';
 import {
 	buildCachedDictionary,
@@ -34,7 +35,8 @@ import {
 } from '../core/dictionary.js';
 import { ToleranceMatcher } from '../core/levenshtein.js';
 import { resolveTextFields, resolveVectorFields } from '../core/schema_fields.js';
-import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer.js';
+import { countTokenFrequencies, fieldTokenLimit, tokenizeField } from '../core/tokenizer.js';
+import type { SearchFieldOptions } from '../core/types.js';
 import { getFieldValue, type WhereSchema } from '../core/where.js';
 import { normalizeVector } from './vector.js';
 
@@ -63,11 +65,11 @@ export interface SearchSqlStorage {
 /** DO SQLite caps bound parameters per statement. */
 export const MAX_SQL_PARAMS = 100;
 
-/** Rows per batched posting INSERT — 6 columns each, so 96 of the 100 params. */
-export const MAX_INSERT_ROWS = 16;
+/** Rows per batched posting INSERT — 5 columns each, so 95 of the 100 params. */
+export const MAX_INSERT_ROWS = 19;
 
-/** Columns per `search_postings` row, and therefore params per batched row. */
-export const POSTING_COLUMNS = 6;
+/** Columns per `search_entries` row, and therefore params per batched row. */
+export const POSTING_COLUMNS = 5;
 
 /** Values per chunked `IN (...)` list, leaving room for the fixed bindings. */
 export const MAX_IN_VALUES = 90;
@@ -91,6 +93,8 @@ export interface SearchTypeInput {
 	primary_key?: string;
 	/** How primary keys compare in tie-breaks @default 'string' */
 	primary_key_type?: PrimaryKeyType;
+	/** Per-field `.searchable({ weight, max_tokens })` options. */
+	field_options?: Record<string, SearchFieldOptions>;
 }
 
 /** A prepared entity-type configuration (field lists resolved once). */
@@ -103,6 +107,8 @@ export interface SearchTypeConfig {
 	text_fields: string[];
 	/** Vector fields, ascending */
 	vector_fields: string[];
+	/** Per-field schema options. */
+	field_options: Record<string, SearchFieldOptions>;
 }
 
 /** Resolve an entity type's field lists once, ascending. */
@@ -114,6 +120,7 @@ export function defineSearchType(input: SearchTypeInput): SearchTypeConfig {
 		primary_key_type: input.primary_key_type ?? 'string',
 		text_fields: resolveTextFields(input.schema),
 		vector_fields: resolveVectorFields(input.schema),
+		field_options: input.field_options ?? {},
 	};
 }
 
@@ -158,38 +165,59 @@ export interface DocumentProjection {
 /* DDL                                                                        */
 /* -------------------------------------------------------------------------- */
 
-/** The §7.1 DDL, verbatim. Idempotent. */
+/**
+ * The index tables. Idempotent.
+ *
+ * The layout is built around what a Durable Object bills and stores:
+ *
+ * - `search_entries` is the inverted index, one row per (field, word,
+ *   document), one B-tree and no secondary index. The previous layout
+ *   repeated the entity type, the field name and the 20-character document id
+ *   in every posting, and again in a by-document index: several times the
+ *   size, and two billed rows per posting instead of one.
+ * - `search_terms` is the dictionary with each word's document frequency.
+ *   A new word is one row.
+ * - `search_documents` maps a document's string id to a small integer and
+ *   holds its words (`{ field: { word: tf } }`) and field lengths: what an
+ *   update diffs against and a delete removes, in one row, instead of a
+ *   by-document index over the entries.
+ * - `search_fields` gives each (entity type, field) an integer id and holds
+ *   the field's statistics (`N(field)`, `Σ len`).
+ *
+ * `search_entries.len` is the field length rounded by `quantizeLength`, so a
+ * posting is rewritten only when its document's field length crosses a step.
+ */
 export const SEARCH_TABLE_DDL = `
-CREATE TABLE IF NOT EXISTS search_postings (
+CREATE TABLE IF NOT EXISTS search_fields (
+	fid         INTEGER PRIMARY KEY,
 	entity_type TEXT NOT NULL,
 	field       TEXT NOT NULL,
-	token       TEXT NOT NULL,
-	doc_id      TEXT NOT NULL,
-	tf          INTEGER NOT NULL,
-	len         INTEGER NOT NULL,
-	PRIMARY KEY (entity_type, field, token, doc_id)
+	doc_count   INTEGER NOT NULL DEFAULT 0,
+	total_len   INTEGER NOT NULL DEFAULT 0,
+	UNIQUE (entity_type, field)
+);
+CREATE TABLE IF NOT EXISTS search_terms (
+	fid   INTEGER NOT NULL,
+	token TEXT NOT NULL,
+	df    INTEGER NOT NULL,
+	PRIMARY KEY (fid, token)
 ) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS search_postings_by_doc ON search_postings (entity_type, doc_id);
-CREATE TABLE IF NOT EXISTS search_tokens (
-	entity_type TEXT NOT NULL,
-	field       TEXT NOT NULL,
-	token       TEXT NOT NULL,
-	df          INTEGER NOT NULL,
-	PRIMARY KEY (entity_type, field, token)
+CREATE TABLE IF NOT EXISTS search_entries (
+	fid   INTEGER NOT NULL,
+	token TEXT NOT NULL,
+	doc   INTEGER NOT NULL,
+	tf    INTEGER NOT NULL,
+	len   INTEGER NOT NULL,
+	PRIMARY KEY (fid, token, doc)
 ) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS search_docs (
+CREATE TABLE IF NOT EXISTS search_documents (
+	doc         INTEGER PRIMARY KEY,
 	entity_type TEXT NOT NULL,
 	doc_id      TEXT NOT NULL,
 	lengths     TEXT NOT NULL,
-	PRIMARY KEY (entity_type, doc_id)
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS search_field_stats (
-	entity_type TEXT NOT NULL,
-	field       TEXT NOT NULL,
-	doc_count   INTEGER NOT NULL,
-	total_len   INTEGER NOT NULL,
-	PRIMARY KEY (entity_type, field)
-) WITHOUT ROWID;
+	terms       TEXT NOT NULL,
+	UNIQUE (entity_type, doc_id)
+);
 CREATE TABLE IF NOT EXISTS search_vectors (
 	entity_type TEXT NOT NULL,
 	field       TEXT NOT NULL,
@@ -215,12 +243,27 @@ CREATE TABLE IF NOT EXISTS search_state (
 ) WITHOUT ROWID;
 `;
 
-/** Every table this module owns, in drop-safe order. */
-export const SEARCH_TABLE_NAMES = [
+/**
+ * The previous layout's tables, dropped on bootstrap. Every entity type's
+ * search signature carries the index format, so each one rebuilds into the
+ * new tables on the same wake (sliced, like any rebuild).
+ */
+export const LEGACY_SEARCH_TABLES = [
 	'search_postings',
 	'search_tokens',
 	'search_docs',
 	'search_field_stats',
+] as const;
+
+/** The index format version, part of every entity type's search signature. */
+export const SEARCH_INDEX_FORMAT = 3;
+
+/** Every table this module owns, in drop-safe order. */
+export const SEARCH_TABLE_NAMES = [
+	'search_entries',
+	'search_terms',
+	'search_documents',
+	'search_fields',
 	'search_vectors',
 	'search_tombstones',
 	'search_state',
@@ -237,6 +280,31 @@ export function chunk<T>(values: readonly T[], size: number): T[][] {
 		chunks.push(values.slice(index, index + size));
 	}
 	return chunks;
+}
+
+/** Same fields, same tokens, same term frequencies. */
+function samePostings(
+	a: Map<string, Map<string, number>>,
+	b: Map<string, Map<string, number>>,
+): boolean {
+	if (a.size !== b.size) return false;
+	for (const [field, tokens] of a) {
+		const other = b.get(field);
+		if (!other || other.size !== tokens.size) return false;
+		for (const [token, tf] of tokens) if (other.get(token) !== tf) return false;
+	}
+	return true;
+}
+
+/** Same vector fields with element-wise identical (normalized) values. */
+function sameVectors(a: Map<string, Float32Array>, b: Map<string, Float32Array>): boolean {
+	if (a.size !== b.size) return false;
+	for (const [field, vector] of a) {
+		const other = b.get(field);
+		if (!other || other.length !== vector.length) return false;
+		for (let i = 0; i < vector.length; i++) if (other[i] !== vector[i]) return false;
+	}
+	return true;
 }
 
 /** `(?, ?, ?)` placeholder groups for a batched multi-row INSERT. */
@@ -279,6 +347,35 @@ export function prefixUpperBound(prefix: string): string | undefined {
 		return code_points.slice(0, -1).join('') + String.fromCodePoint(next);
 	}
 	return undefined;
+}
+
+/** A document's stored words, `field → word → tf`, as JSON. */
+export function encodeTerms(terms: ReadonlyMap<string, ReadonlyMap<string, number>>): string {
+	const serialized: Record<string, Record<string, number>> = {};
+	for (const field of [...terms.keys()].sort(compareStrings)) {
+		const words = terms.get(field) as ReadonlyMap<string, number>;
+		const entry: Record<string, number> = {};
+		for (const token of [...words.keys()].sort(compareStrings)) {
+			entry[token] = words.get(token) as number;
+		}
+		serialized[field] = entry;
+	}
+	return JSON.stringify(serialized);
+}
+
+/** Read {@link encodeTerms} back. */
+export function decodeTerms(value: unknown): Map<string, Map<string, number>> {
+	const terms = new Map<string, Map<string, number>>();
+	if (typeof value !== 'string' || !value) return terms;
+	const parsed = JSON.parse(value) as Record<string, Record<string, unknown>>;
+	for (const field of Object.keys(parsed)) {
+		const words = new Map<string, number>();
+		for (const token of Object.keys(parsed[field] ?? {})) {
+			words.set(token, readNumber(parsed[field][token]));
+		}
+		terms.set(field, words);
+	}
+	return terms;
 }
 
 /** Coerce a SQLite BLOB (`ArrayBuffer` or `Uint8Array`) to a `Float32Array`. */
@@ -327,6 +424,8 @@ export class SqliteSearchStore {
 
 	/** `entity_type` + NUL + `field` → cached dictionary, or `null` when oversized. */
 	readonly #dictionaries = new Map<string, CachedDictionary | null>();
+	/** `entity_type` + NUL + `field` → its `search_fields.fid`. */
+	readonly #field_ids = new Map<string, number>();
 
 	constructor(sql: SearchSqlStorage) {
 		this.sql = sql;
@@ -338,7 +437,58 @@ export class SqliteSearchStore {
 
 	/** Create every search table. Idempotent; safe on every DO boot. */
 	bootstrap(): void {
+		const legacy = this.sql
+			.exec(
+				`SELECT name FROM sqlite_schema WHERE type = 'table' AND name IN (${placeholderList(LEGACY_SEARCH_TABLES.length)});`,
+				...LEGACY_SEARCH_TABLES,
+			)
+			.toArray()
+			.map((row) => String(row.name));
+		for (const table of legacy) this.sql.exec(`DROP TABLE IF EXISTS ${table};`);
 		this.sql.exec(SEARCH_TABLE_DDL);
+	}
+
+	/**
+	 * The integer id of an (entity type, field), created on first use when
+	 * `create` is set. Cached for the instance's life.
+	 */
+	#fieldId(entity_type: string, field: string, create: boolean): number | undefined {
+		const key = dictionaryKey(entity_type, field);
+		const cached = this.#field_ids.get(key);
+		if (cached !== undefined) {
+			// On the write path, check the cached id still names a row: a rolled-back
+			// savepoint (a failed row in a catch-up drain, a create() whose error
+			// was caught inside batch()) can remove the row that created it, and
+			// writing under a vanished id would leave entries no field owns. One
+			// primary-key read per field per write; reads trust the cache.
+			if (!create) return cached;
+			const alive =
+				this.sql.exec(`SELECT 1 FROM search_fields WHERE fid = ? LIMIT 1;`, cached).toArray()
+					.length > 0;
+			if (alive) return cached;
+			this.#field_ids.delete(key);
+			this.#dictionaries.delete(key);
+		}
+		let row = this.sql
+			.exec(
+				`SELECT fid FROM search_fields WHERE entity_type = ? AND field = ? LIMIT 1;`,
+				entity_type,
+				field,
+			)
+			.toArray()[0];
+		if (!row && create) {
+			row = this.sql
+				.exec(
+					`INSERT INTO search_fields (entity_type, field) VALUES (?, ?) RETURNING fid;`,
+					entity_type,
+					field,
+				)
+				.toArray()[0];
+		}
+		if (!row) return undefined;
+		const fid = readNumber(row.fid);
+		this.#field_ids.set(key, fid);
+		return fid;
 	}
 
 	/**
@@ -358,6 +508,7 @@ export class SqliteSearchStore {
 	/** Drop the in-memory dictionary cache (used by tests and repair paths). */
 	clearDictionaryCache(): void {
 		this.#dictionaries.clear();
+		this.#field_ids.clear();
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -381,7 +532,7 @@ export class SqliteSearchStore {
 		for (const field of config.text_fields) {
 			const value = getFieldValue(sparse_doc, field);
 			if (value === null || value === undefined) continue;
-			const tokens = tokenizeValue(value);
+			const tokens = tokenizeField(value, fieldTokenLimit(field, config.field_options));
 			lengths.set(field, tokens.length);
 			postings.set(field, countTokenFrequencies(tokens));
 		}
@@ -418,50 +569,67 @@ export class SqliteSearchStore {
 		config: SearchTypeConfig,
 		doc_id: string,
 		sparse_doc: Record<string, unknown>,
-		previous_sparse_doc?: Record<string, unknown> | null,
+		// Kept for callers; the stored word list is the authoritative previous
+		// state now (one row read), so a stale previous document can't mislead.
+		_previous_sparse_doc?: Record<string, unknown> | null,
 	): void {
 		const entity_type = config.entity_type;
 		const next = this.projectDocument(config, sparse_doc);
-		const stored_lengths = this.#readDocLengths(entity_type, doc_id);
+		const stored = this.#readDocument(entity_type, doc_id);
+		const previous = stored?.terms ?? new Map<string, Map<string, number>>();
 
-		let old_postings: Map<string, Map<string, number>> | undefined;
-		let old_lengths: Map<string, number> | undefined;
-		let postings_already_deleted = false;
-
-		if (stored_lengths) {
-			if (previous_sparse_doc) {
-				const previous = this.projectDocument(config, previous_sparse_doc);
-				if (sameLengths(previous.lengths, stored_lengths)) {
-					old_postings = previous.postings;
-					old_lengths = previous.lengths;
-				}
-			}
-			if (!old_postings) {
-				// Fallback: the previous document is unavailable (or disagreed with
-				// what is actually indexed). `RETURNING` hands back the token set for
-				// the `df` decrements; the stored `lengths` row supplies the field-stat
-				// decrements, which `field, token` alone cannot.
-				old_postings = this.#deletePostingsReturning(entity_type, doc_id);
-				old_lengths = stored_lengths;
-				postings_already_deleted = true;
-			}
+		// Nothing the index stores changed (an update to a column the search
+		// index doesn't cover, or a no-op): every write below would rewrite a
+		// row with the value it already holds, and a Durable Object bills each.
+		if (
+			stored &&
+			samePostings(previous, next.postings) &&
+			sameLengths(stored.lengths, next.lengths) &&
+			(config.vector_fields.length === 0 ||
+				sameVectors(this.#readVectors(entity_type, doc_id), next.vectors))
+		) {
+			return;
 		}
 
-		this.#applyPostingDiff(
-			entity_type,
-			doc_id,
-			old_postings,
-			next.postings,
-			postings_already_deleted,
-			old_lengths,
-			next.lengths,
-		);
-		this.#applyFieldStatDiff(entity_type, old_lengths, next.lengths);
-		this.#writeDocLengths(entity_type, doc_id, next.lengths);
+		const doc = this.#writeDocument(entity_type, doc_id, stored?.doc, next.lengths, next.postings);
+		const fields = [...new Set([...previous.keys(), ...next.postings.keys()])].sort(compareStrings);
+		for (const field of fields) {
+			const fid = this.#fieldId(entity_type, field, true) as number;
+			const before = previous.get(field);
+			const after = next.postings.get(field);
+			const len = quantizeLength(next.lengths.get(field) ?? 0);
+			const length_changed =
+				quantizeLength(stored?.lengths.get(field) ?? -1) !== len;
+			const added: string[] = [];
+			const removed: string[] = [];
+			const writes: [string, number][] = [];
+			for (const [token, tf] of after ?? []) {
+				const old_tf = before?.get(token);
+				if (old_tf === undefined) added.push(token);
+				if (old_tf === undefined || old_tf !== tf || length_changed) writes.push([token, tf]);
+			}
+			for (const token of before?.keys() ?? []) {
+				if (!after?.has(token)) removed.push(token);
+			}
+			added.sort(compareStrings);
+			removed.sort(compareStrings);
+			writes.sort((a, b) => compareStrings(a[0], b[0]));
+			this.#deleteEntries(fid, doc, removed);
+			for (const batch of chunk(writes, MAX_INSERT_ROWS)) {
+				const bindings: unknown[] = [];
+				for (const [token, tf] of batch) bindings.push(fid, token, doc, tf, len);
+				this.sql.exec(
+					`INSERT INTO search_entries (fid, token, doc, tf, len) VALUES ${placeholderRows(batch.length, POSTING_COLUMNS)} ON CONFLICT (fid, token, doc) DO UPDATE SET tf = excluded.tf, len = excluded.len;`,
+					...bindings,
+				);
+			}
+			this.#incrementDocFrequencies(entity_type, field, fid, added);
+			this.#decrementDocFrequencies(entity_type, field, fid, removed);
+		}
+
+		this.#applyFieldStatDiff(entity_type, stored?.lengths, next.lengths);
 		this.#writeVectors(entity_type, doc_id, config.vector_fields, next.vectors);
-		// `stored_lengths` doubles as the existence check: absent means this is a
-		// brand-new document, not a re-index.
-		if (!stored_lengths) this.#bumpDocCount(entity_type, 1);
+		if (!stored) this.#bumpDocCount(entity_type, 1);
 		this.sql.exec(
 			`DELETE FROM search_tombstones WHERE entity_type = ? AND doc_id = ?;`,
 			entity_type,
@@ -470,32 +638,24 @@ export class SqliteSearchStore {
 	}
 
 	/**
-	 * Remove a document: postings, `df`, field statistics, lengths and vectors,
-	 * plus a tombstone for the sync deletion feed.
+	 * Remove a document: entries, `df`, field statistics, its document row and
+	 * vectors, plus a tombstone for the sync deletion feed.
 	 *
 	 * `deleted_at` is supplied by the caller (determinism rule §3 — the engine
 	 * never reads a clock).
 	 */
 	removeDocument(config: SearchTypeConfig, doc_id: string, deleted_at: number): boolean {
 		const entity_type = config.entity_type;
-		const stored_lengths = this.#readDocLengths(entity_type, doc_id);
-		if (stored_lengths) {
-			const removed = this.#deletePostingsReturning(entity_type, doc_id);
-			this.#applyPostingDiff(
-				entity_type,
-				doc_id,
-				removed,
-				new Map(),
-				true,
-				stored_lengths,
-				new Map(),
-			);
-			this.#applyFieldStatDiff(entity_type, stored_lengths, new Map());
-			this.sql.exec(
-				`DELETE FROM search_docs WHERE entity_type = ? AND doc_id = ?;`,
-				entity_type,
-				doc_id,
-			);
+		const stored = this.#readDocument(entity_type, doc_id);
+		if (stored) {
+			for (const field of [...stored.terms.keys()].sort(compareStrings)) {
+				const fid = this.#fieldId(entity_type, field, true) as number;
+				const tokens = [...(stored.terms.get(field)?.keys() ?? [])].sort(compareStrings);
+				this.#deleteEntries(fid, stored.doc, tokens);
+				this.#decrementDocFrequencies(entity_type, field, fid, tokens);
+			}
+			this.#applyFieldStatDiff(entity_type, stored.lengths, new Map());
+			this.sql.exec(`DELETE FROM search_documents WHERE doc = ?;`, stored.doc);
 			this.#bumpDocCount(entity_type, -1);
 		}
 		this.sql.exec(
@@ -504,155 +664,118 @@ export class SqliteSearchStore {
 			doc_id,
 		);
 		this.writeTombstone(entity_type, doc_id, deleted_at);
-		return stored_lengths !== undefined;
+		return stored !== undefined;
 	}
 
 	/** Wipe every search row for one entity type (state and tombstones survive). */
 	clearEntityType(entity_type: string): void {
-		for (const table of [
-			'search_postings',
-			'search_tokens',
-			'search_docs',
-			'search_field_stats',
-			'search_vectors',
-		]) {
-			this.sql.exec(`DELETE FROM ${table} WHERE entity_type = ?;`, entity_type);
-		}
+		this.sql.exec(
+			`DELETE FROM search_entries WHERE fid IN (SELECT fid FROM search_fields WHERE entity_type = ?);`,
+			entity_type,
+		);
+		this.sql.exec(
+			`DELETE FROM search_terms WHERE fid IN (SELECT fid FROM search_fields WHERE entity_type = ?);`,
+			entity_type,
+		);
+		this.sql.exec(`DELETE FROM search_documents WHERE entity_type = ?;`, entity_type);
+		this.sql.exec(`DELETE FROM search_fields WHERE entity_type = ?;`, entity_type);
+		this.sql.exec(`DELETE FROM search_vectors WHERE entity_type = ?;`, entity_type);
 		this.sql.exec(
 			`UPDATE search_state SET doc_count = 0 WHERE entity_type = ?;`,
 			entity_type,
 		);
-		for (const key of this.#dictionaries.keys()) {
+		for (const key of [...this.#dictionaries.keys()]) {
 			if (key.startsWith(`${entity_type}\u0000`)) this.#dictionaries.delete(key);
 		}
-	}
-
-	/** The stored per-field token counts for a document, if it is indexed. */
-	#readDocLengths(entity_type: string, doc_id: string): Map<string, number> | undefined {
-		const rows = this.sql
-			.exec(
-				`SELECT lengths FROM search_docs WHERE entity_type = ? AND doc_id = ? LIMIT 1;`,
-				entity_type,
-				doc_id,
-			)
-			.toArray();
-		if (rows.length === 0) return undefined;
-		return parseLengths(rows[0].lengths);
-	}
-
-	/** Delete every posting for a document and return what was removed. */
-	#deletePostingsReturning(
-		entity_type: string,
-		doc_id: string,
-	): Map<string, Map<string, number>> {
-		const rows = this.sql
-			.exec(
-				// `INDEXED BY` is not decoration: without it SQLite ignores
-				// `search_postings_by_doc` and scans the whole entity type's slice of
-				// the primary key (verified with EXPLAIN QUERY PLAN — a WITHOUT ROWID
-				// table makes the planner distrust a secondary index, and there are no
-				// ANALYZE statistics in a DO). That turned a per-document delete into a
-				// 20ms whole-partition scan at 10k documents.
-				`DELETE FROM search_postings INDEXED BY search_postings_by_doc WHERE entity_type = ? AND doc_id = ? RETURNING field, token, tf;`,
-				entity_type,
-				doc_id,
-			)
-			.toArray();
-		const removed = new Map<string, Map<string, number>>();
-		for (const row of rows) {
-			const field = String(row.field);
-			let tokens = removed.get(field);
-			if (!tokens) {
-				tokens = new Map();
-				removed.set(field, tokens);
-			}
-			tokens.set(String(row.token), readNumber(row.tf));
+		for (const key of [...this.#field_ids.keys()]) {
+			if (key.startsWith(`${entity_type}\u0000`)) this.#field_ids.delete(key);
 		}
-		return removed;
 	}
 
-	/**
-	 * Apply the posting/`df` diff between the old and new token sets.
-	 *
-	 * `df` moves only for tokens that *appear* or *disappear* for this document
-	 * — a changed `tf` is a posting update, never a `df` change.
-	 *
-	 * Each posting row also carries the document's token count for that field
-	 * (`len`), denormalized off `search_docs` so the read path never has to join
-	 * back for it (§7.1). That makes the field's length part of every row's
-	 * payload, so when the length moves, *every* token of the field is rewritten
-	 * — not only the ones whose `tf` changed.
-	 */
-	#applyPostingDiff(
+	/** A document's index row: its integer id, field lengths and words. */
+	#readDocument(
 		entity_type: string,
 		doc_id: string,
-		old_postings: Map<string, Map<string, number>> | undefined,
-		new_postings: Map<string, Map<string, number>>,
-		postings_already_deleted: boolean,
-		old_lengths: Map<string, number> | undefined,
-		new_lengths: Map<string, number>,
+	):
+		| { doc: number; lengths: Map<string, number>; terms: Map<string, Map<string, number>> }
+		| undefined {
+		const row = this.sql
+			.exec(
+				`SELECT doc, lengths, terms FROM search_documents WHERE entity_type = ? AND doc_id = ? LIMIT 1;`,
+				entity_type,
+				doc_id,
+			)
+			.toArray()[0];
+		if (!row) return undefined;
+		return {
+			doc: readNumber(row.doc),
+			lengths: parseLengths(row.lengths),
+			terms: decodeTerms(row.terms),
+		};
+	}
+
+	/** Insert or replace a document's index row; returns its integer id. */
+	#writeDocument(
+		entity_type: string,
+		doc_id: string,
+		doc: number | undefined,
+		lengths: Map<string, number>,
+		terms: Map<string, Map<string, number>>,
+	): number {
+		const serialized: Record<string, number> = {};
+		for (const field of [...lengths.keys()].sort(compareStrings)) {
+			serialized[field] = lengths.get(field) as number;
+		}
+		if (doc !== undefined) {
+			this.sql.exec(
+				`UPDATE search_documents SET lengths = ?, terms = ? WHERE doc = ?;`,
+				JSON.stringify(serialized),
+				encodeTerms(terms),
+				doc,
+			);
+			return doc;
+		}
+		return readNumber(
+			this.sql
+				.exec(
+					`INSERT INTO search_documents (entity_type, doc_id, lengths, terms) VALUES (?, ?, ?, ?) RETURNING doc;`,
+					entity_type,
+					doc_id,
+					JSON.stringify(serialized),
+					encodeTerms(terms),
+				)
+				.toArray()[0]?.doc,
+		);
+	}
+
+	/** Delete one document's entries for some words of a field (primary-key lookups). */
+	#deleteEntries(fid: number, doc: number, tokens: readonly string[]): void {
+		for (const batch of chunk(tokens, MAX_IN_VALUES)) {
+			if (batch.length === 0) continue;
+			this.sql.exec(
+				`DELETE FROM search_entries WHERE fid = ? AND doc = ? AND token IN (${placeholderList(batch.length)});`,
+				fid,
+				doc,
+				...batch,
+			);
+		}
+	}
+
+	/** `df + 1` per word, creating the dictionary row (one row) when it is new. */
+	#incrementDocFrequencies(
+		entity_type: string,
+		field: string,
+		fid: number,
+		tokens: readonly string[],
 	): void {
-		const fields = [
-			...new Set([...(old_postings?.keys() ?? []), ...new_postings.keys()]),
-		].sort(compareStrings);
-		for (const field of fields) {
-			const previous = old_postings?.get(field);
-			const next = new_postings.get(field);
-			const length = new_lengths.get(field) ?? 0;
-			const length_changed = old_lengths?.get(field) !== length;
-			const added: string[] = [];
-			const removed: string[] = [];
-			const inserts: [string, number][] = [];
-			for (const [token, tf] of next ?? []) {
-				if (!previous?.has(token)) added.push(token);
-				if (postings_already_deleted || length_changed || previous?.get(token) !== tf) {
-					inserts.push([token, tf]);
-				}
-			}
-			for (const token of previous?.keys() ?? []) {
-				if (!next?.has(token)) removed.push(token);
-			}
-			added.sort(compareStrings);
-			removed.sort(compareStrings);
-			inserts.sort((a, b) => compareStrings(a[0], b[0]));
-
-			if (!postings_already_deleted && removed.length > 0) {
-				for (const batch of chunk(removed, MAX_IN_VALUES)) {
-					this.sql.exec(
-						`DELETE FROM search_postings WHERE entity_type = ? AND field = ? AND doc_id = ? AND token IN (${placeholderList(batch.length)});`,
-						entity_type,
-						field,
-						doc_id,
-						...batch,
-					);
-				}
-			}
-			if (inserts.length > 0) {
-				for (const batch of chunk(inserts, MAX_INSERT_ROWS)) {
-					const bindings: unknown[] = [];
-					for (const [token, tf] of batch) {
-						bindings.push(entity_type, field, token, doc_id, tf, length);
-					}
-					this.sql.exec(
-						`INSERT INTO search_postings (entity_type, field, token, doc_id, tf, len) VALUES ${placeholderRows(batch.length, POSTING_COLUMNS)} ON CONFLICT (entity_type, field, token, doc_id) DO UPDATE SET tf = excluded.tf, len = excluded.len;`,
-						...bindings,
-					);
-				}
-			}
-			if (added.length > 0) this.#incrementDocFrequencies(entity_type, field, added);
-			if (removed.length > 0) this.#decrementDocFrequencies(entity_type, field, removed);
-		}
-	}
-
-	/** `df + 1` per token, creating the dictionary row when it is new. */
-	#incrementDocFrequencies(entity_type: string, field: string, tokens: string[]): void {
 		const dictionary = this.#dictionaries.get(dictionaryKey(entity_type, field));
-		for (const batch of chunk(tokens, MAX_INSERT_ROWS)) {
+		for (const batch of chunk(tokens, Math.floor(MAX_SQL_PARAMS / 2))) {
+			if (batch.length === 0) continue;
 			const bindings: unknown[] = [];
-			for (const token of batch) bindings.push(entity_type, field, token);
+			for (const token of batch) bindings.push(fid, token);
 			const rows = this.sql
 				.exec(
-					`INSERT INTO search_tokens (entity_type, field, token, df) VALUES ${Array.from({ length: batch.length }, () => '(?, ?, ?, 1)').join(', ')} ON CONFLICT (entity_type, field, token) DO UPDATE SET df = df + 1 RETURNING token, df;`,
+					`INSERT INTO search_terms (fid, token, df) VALUES ${Array.from({ length: batch.length }, () => '(?, ?, 1)').join(', ')} ON CONFLICT (fid, token) DO UPDATE SET df = df + 1 RETURNING token, df;`,
 					...bindings,
 				)
 				.toArray();
@@ -664,30 +787,33 @@ export class SqliteSearchStore {
 		}
 	}
 
-	/** `df - 1` per token, dropping dictionary rows that reach zero. */
-	#decrementDocFrequencies(entity_type: string, field: string, tokens: string[]): void {
+	/** `df - 1` per word, dropping dictionary rows that reach zero. */
+	#decrementDocFrequencies(
+		entity_type: string,
+		field: string,
+		fid: number,
+		tokens: readonly string[],
+	): void {
 		const dictionary = this.#dictionaries.get(dictionaryKey(entity_type, field));
 		for (const batch of chunk(tokens, MAX_IN_VALUES)) {
+			if (batch.length === 0) continue;
 			const rows = this.sql
 				.exec(
-					`UPDATE search_tokens SET df = df - 1 WHERE entity_type = ? AND field = ? AND token IN (${placeholderList(batch.length)}) RETURNING token, df;`,
-					entity_type,
-					field,
+					`UPDATE search_terms SET df = df - 1 WHERE fid = ? AND token IN (${placeholderList(batch.length)}) RETURNING token, df;`,
+					fid,
 					...batch,
 				)
 				.toArray();
 			const empty = rows
 				.filter((row) => readNumber(row.df) <= 0)
 				.map((row) => String(row.token));
-			if (empty.length > 0) {
-				this.sql.exec(
-					`DELETE FROM search_tokens WHERE entity_type = ? AND field = ? AND token IN (${placeholderList(empty.length)});`,
-					entity_type,
-					field,
-					...empty,
-				);
-				if (dictionary) for (const token of empty) sortedRemove(dictionary, token);
-			}
+			if (empty.length === 0) continue;
+			this.sql.exec(
+				`DELETE FROM search_terms WHERE fid = ? AND token IN (${placeholderList(empty.length)});`,
+				fid,
+				...empty,
+			);
+			if (dictionary) for (const token of empty) sortedRemove(dictionary, token);
 		}
 	}
 
@@ -709,36 +835,29 @@ export class SqliteSearchStore {
 		for (const field of [...deltas.keys()].sort(compareStrings)) {
 			const delta = deltas.get(field) as FieldStats;
 			if (delta.doc_count === 0 && delta.total_len === 0) continue;
+			const fid = this.#fieldId(entity_type, field, true) as number;
 			this.sql.exec(
-				`INSERT INTO search_field_stats (entity_type, field, doc_count, total_len) VALUES (?, ?, ?, ?) ON CONFLICT (entity_type, field) DO UPDATE SET doc_count = doc_count + excluded.doc_count, total_len = total_len + excluded.total_len;`,
-				entity_type,
-				field,
+				`UPDATE search_fields SET doc_count = MAX(0, doc_count + ?), total_len = MAX(0, total_len + ?) WHERE fid = ?;`,
 				delta.doc_count,
 				delta.total_len,
+				fid,
 			);
 		}
-		this.sql.exec(
-			`DELETE FROM search_field_stats WHERE entity_type = ? AND doc_count <= 0;`,
-			entity_type,
-		);
 	}
 
-	/** Replace the document's `lengths` row. */
-	#writeDocLengths(
-		entity_type: string,
-		doc_id: string,
-		lengths: Map<string, number>,
-	): void {
-		const serialized: Record<string, number> = {};
-		for (const field of [...lengths.keys()].sort(compareStrings)) {
-			serialized[field] = lengths.get(field) as number;
+	/** A document's stored vectors, by field. */
+	#readVectors(entity_type: string, doc_id: string): Map<string, Float32Array> {
+		const vectors = new Map<string, Float32Array>();
+		for (const row of this.sql
+			.exec(
+				`SELECT field, vec FROM search_vectors INDEXED BY search_vectors_by_doc WHERE entity_type = ? AND doc_id = ?;`,
+				entity_type,
+				doc_id,
+			)
+			.toArray()) {
+			vectors.set(String(row.field), blobToVector(row.vec));
 		}
-		this.sql.exec(
-			`INSERT INTO search_docs (entity_type, doc_id, lengths) VALUES (?, ?, ?) ON CONFLICT (entity_type, doc_id) DO UPDATE SET lengths = excluded.lengths;`,
-			entity_type,
-			doc_id,
-			JSON.stringify(serialized),
-		);
+		return vectors;
 	}
 
 	/** Replace the document's vector rows. */
@@ -773,7 +892,7 @@ export class SqliteSearchStore {
 	getFieldStats(entity_type: string, field: string): FieldStats {
 		const rows = this.sql
 			.exec(
-				`SELECT doc_count, total_len FROM search_field_stats WHERE entity_type = ? AND field = ? LIMIT 1;`,
+				`SELECT doc_count, total_len FROM search_fields WHERE entity_type = ? AND field = ? LIMIT 1;`,
 				entity_type,
 				field,
 			)
@@ -796,13 +915,14 @@ export class SqliteSearchStore {
 		tokens: readonly string[],
 	): Map<string, number> {
 		const frequencies = new Map<string, number>();
-		for (const batch of chunk(tokens, MAX_IN_VALUES)) {
+		const fid = this.#fieldId(entity_type, field, false);
+		if (fid === undefined) return frequencies;
+		for (const batch of chunk([...new Set(tokens)], MAX_IN_VALUES)) {
 			if (batch.length === 0) continue;
 			const rows = this.sql
 				.exec(
-					`SELECT token, df FROM search_tokens WHERE entity_type = ? AND field = ? AND token IN (${placeholderList(batch.length)});`,
-					entity_type,
-					field,
+					`SELECT token, df FROM search_terms WHERE fid = ? AND token IN (${placeholderList(batch.length)});`,
+					fid,
 					...batch,
 				)
 				.toArray();
@@ -812,11 +932,52 @@ export class SqliteSearchStore {
 	}
 
 	/**
+	 * {@link getDocFrequencies} for one term's raw candidates. Prefix
+	 * completions all sit in one key range, so past one `IN` list's worth they
+	 * are read with a single range scan instead of a statement per 90 (a
+	 * one-letter prefix over a large dictionary was dozens of statements).
+	 */
+	getDocFrequenciesForTerm(
+		entity_type: string,
+		field: string,
+		prefix: string | null,
+		tokens: readonly string[],
+	): Map<string, number> {
+		const upper = prefix ? prefixUpperBound(prefix) : undefined;
+		const in_range = prefix ? tokens.filter((token) => token.startsWith(prefix)) : [];
+		if (!prefix || in_range.length <= MAX_IN_VALUES) {
+			return this.getDocFrequencies(entity_type, field, tokens);
+		}
+		const frequencies = new Map<string, number>();
+		const fid = this.#fieldId(entity_type, field, false);
+		if (fid === undefined) return frequencies;
+		const rows =
+			upper === undefined
+				? this.sql
+						.exec(`SELECT token, df FROM search_terms WHERE fid = ? AND token >= ?;`, fid, prefix)
+						.toArray()
+				: this.sql
+						.exec(
+							`SELECT token, df FROM search_terms WHERE fid = ? AND token >= ? AND token < ?;`,
+							fid,
+							prefix,
+							upper,
+						)
+						.toArray();
+		for (const row of rows) frequencies.set(String(row.token), readNumber(row.df));
+		const rest = tokens.filter((token) => !token.startsWith(prefix));
+		for (const [token, df] of this.getDocFrequencies(entity_type, field, rest)) {
+			frequencies.set(token, df);
+		}
+		return frequencies;
+	}
+
+	/**
 	 * Postings for a batch of tokens in one field, grouped by token.
 	 *
 	 * Each token's posting list is `[doc_id, tf, len][]` ascending by doc id.
 	 * `len` is the document's token count for the field, denormalized into the
-	 * posting row (§7.1) so the term path never joins back to `search_docs` —
+	 * posting row (§7.1) so the term path never reads `search_documents.lengths` —
 	 * its cost stays proportional to the postings a query touches, not to the
 	 * corpus. Never trust SQL result order for anything user-visible (§3) — but
 	 * do *check* it: posting lists arrive in primary-key order, which is the
@@ -830,13 +991,14 @@ export class SqliteSearchStore {
 		tokens: readonly string[],
 	): Map<string, [string, number, number][]> {
 		const by_token = new Map<string, [string, number, number][]>();
+		const fid = this.#fieldId(entity_type, field, false);
+		if (fid === undefined) return by_token;
 		for (const batch of chunk(tokens, MAX_IN_VALUES)) {
 			if (batch.length === 0) continue;
 			const rows = this.sql
 				.exec(
-					`SELECT token, doc_id, tf, len FROM search_postings WHERE entity_type = ? AND field = ? AND token IN (${placeholderList(batch.length)});`,
-					entity_type,
-					field,
+					`SELECT e.token AS token, d.doc_id AS doc_id, e.tf AS tf, e.len AS len FROM search_entries e JOIN search_documents d ON d.doc = e.doc WHERE e.fid = ? AND e.token IN (${placeholderList(batch.length)});`,
+					fid,
 					...batch,
 				)
 				.toArray();
@@ -928,6 +1090,11 @@ export class SqliteSearchStore {
 	 * Returns `null` when the dictionary exceeds
 	 * `MAX_CACHED_DICTIONARY_TOKENS` — the caller then uses the SQL fallback.
 	 */
+	/** The field's cached dictionary with lengths and signatures, or null past the cap. */
+	getCachedDictionary(entity_type: string, field: string): CachedDictionary | null {
+		return this.#cachedDictionary(entity_type, field);
+	}
+
 	getDictionary(entity_type: string, field: string): string[] | null {
 		return this.#cachedDictionary(entity_type, field)?.tokens ?? null;
 	}
@@ -937,27 +1104,26 @@ export class SqliteSearchStore {
 		const key = dictionaryKey(entity_type, field);
 		const cached = this.#dictionaries.get(key);
 		if (cached !== undefined) return cached;
-		const count = readNumber(
-			this.sql
-				.exec(
-					`SELECT COUNT(*) AS count FROM search_tokens WHERE entity_type = ? AND field = ?;`,
-					entity_type,
-					field,
-				)
-				.toArray()[0]?.count,
-		);
+		const fid = this.#fieldId(entity_type, field, false);
+		const count =
+			fid === undefined
+				? 0
+				: readNumber(
+						this.sql
+							.exec(`SELECT COUNT(*) AS count FROM search_terms WHERE fid = ?;`, fid)
+							.toArray()[0]?.count,
+					);
 		if (count > MAX_CACHED_DICTIONARY_TOKENS) {
 			this.#dictionaries.set(key, null);
 			return null;
 		}
-		const tokens = this.sql
-			.exec(
-				`SELECT token FROM search_tokens WHERE entity_type = ? AND field = ?;`,
-				entity_type,
-				field,
-			)
-			.toArray()
-			.map((row) => String(row.token));
+		const tokens =
+			fid === undefined
+				? []
+				: this.sql
+						.exec(`SELECT token FROM search_terms WHERE fid = ?;`, fid)
+						.toArray()
+						.map((row) => String(row.token));
 		// Sorted in JS rather than trusting `ORDER BY`: the comparator is the
 		// contract, and it must be the same one the client driver uses.
 		tokens.sort(compareStrings);
@@ -1018,14 +1184,11 @@ export class SqliteSearchStore {
 		tolerance: number,
 		range_memo?: Map<string, string[]>,
 	): string[] {
+		const fid = this.#fieldId(entity_type, field, false);
+		if (fid === undefined) return [];
 		if (exact) {
 			const rows = this.sql
-				.exec(
-					`SELECT token FROM search_tokens WHERE entity_type = ? AND field = ? AND token = ? LIMIT 1;`,
-					entity_type,
-					field,
-					token,
-				)
+				.exec(`SELECT token FROM search_terms WHERE fid = ? AND token = ? LIMIT 1;`, fid, token)
 				.toArray();
 			return rows.map((row) => String(row.token));
 		}
@@ -1034,11 +1197,7 @@ export class SqliteSearchStore {
 			let rows = range_memo?.get(memo_key);
 			if (!rows) {
 				rows = this.sql
-					.exec(
-						`SELECT token FROM search_tokens WHERE entity_type = ? AND field = ?;`,
-						entity_type,
-						field,
-					)
+					.exec(`SELECT token FROM search_terms WHERE fid = ?;`, fid)
 					.toArray()
 					.map((row) => String(row.token));
 				rows.sort(compareStrings);
@@ -1052,16 +1211,10 @@ export class SqliteSearchStore {
 		const upper = prefixUpperBound(token);
 		const rows = (
 			upper === undefined
-				? this.sql.exec(
-						`SELECT token FROM search_tokens WHERE entity_type = ? AND field = ? AND token >= ?;`,
-						entity_type,
-						field,
-						token,
-					)
+				? this.sql.exec(`SELECT token FROM search_terms WHERE fid = ? AND token >= ?;`, fid, token)
 				: this.sql.exec(
-						`SELECT token FROM search_tokens WHERE entity_type = ? AND field = ? AND token >= ? AND token < ?;`,
-						entity_type,
-						field,
+						`SELECT token FROM search_terms WHERE fid = ? AND token >= ? AND token < ?;`,
+						fid,
 						token,
 						upper,
 					)
@@ -1072,6 +1225,66 @@ export class SqliteSearchStore {
 		// The range is a superset only in pathological cases; filter anyway so the
 		// SQL fallback and the cached path can never disagree.
 		return rows.filter((candidate) => candidate.startsWith(token));
+	}
+
+	/**
+	 * Index size per field of one entity type, for `searchReport()`. Scans the
+	 * type's entries, terms and document rows once (reads only, so cheap in
+	 * billing, but proportional to the index: an admin call, not a hot path).
+	 */
+	fieldReport(
+		entity_type: string,
+		caps: (field: string) => number,
+	): {
+		field: string;
+		documents: number;
+		words: number;
+		single_use_words: number;
+		entries: number;
+		entry_bytes: number;
+		capped_documents: number;
+	}[] {
+		const fields = this.sql
+			.exec(
+				`SELECT fid, field, doc_count FROM search_fields WHERE entity_type = ? ORDER BY field;`,
+				entity_type,
+			)
+			.toArray();
+		const capped = new Map<string, number>();
+		for (const row of this.sql
+			.exec(`SELECT terms FROM search_documents WHERE entity_type = ?;`, entity_type)) {
+			for (const [field, words] of decodeTerms(row.terms)) {
+				if (words.size >= caps(field)) capped.set(field, (capped.get(field) ?? 0) + 1);
+			}
+		}
+		return fields.map((row) => {
+			const fid = readNumber(row.fid);
+			const field = String(row.field);
+			const terms = this.sql
+				.exec(
+					`SELECT COUNT(*) AS words, IFNULL(SUM(df = 1), 0) AS single FROM search_terms WHERE fid = ?;`,
+					fid,
+				)
+				.toArray()[0];
+			const entries = this.sql
+				.exec(
+					`SELECT COUNT(*) AS entries, IFNULL(SUM(length(token)), 0) AS bytes FROM search_entries WHERE fid = ?;`,
+					fid,
+				)
+				.toArray()[0];
+			const count = readNumber(entries?.entries);
+			return {
+				field,
+				documents: readNumber(row.doc_count),
+				words: readNumber(terms?.words),
+				single_use_words: readNumber(terms?.single),
+				entries: count,
+				// Key bytes plus the integer columns and record overhead (~12 bytes a row):
+				// an estimate, since DO SQLite has no `dbstat`.
+				entry_bytes: readNumber(entries?.bytes) + count * 12,
+				capped_documents: capped.get(field) ?? 0,
+			};
+		});
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -1211,7 +1424,7 @@ function dictionaryKey(entity_type: string, field: string): string {
 	return `${entity_type}\u0000${field}`;
 }
 
-/** Parse a `search_docs.lengths` JSON blob. */
+/** Parse a `search_documents.lengths` JSON blob. */
 function parseLengths(value: unknown): Map<string, number> {
 	const lengths = new Map<string, number>();
 	if (typeof value !== 'string') return lengths;

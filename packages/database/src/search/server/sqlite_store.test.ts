@@ -47,16 +47,27 @@ function newStore(): { sql: NodeSqlStorage; store: SqliteSearchStore } {
 	return { sql, store };
 }
 
-/** Every search row, ordered, as a comparable snapshot. */
-function dump(sql: NodeSqlStorage): Record<string, Record<string, unknown>[]> {
+/**
+ * Every search row, ordered, as a comparable snapshot — logical, not
+ * physical: the integer field, term and document ids differ between two
+ * databases that index the same documents in a different order, so each is
+ * joined back to the strings it stands for.
+ */
+function dump(sql: NodeSqlStorage): Record<string, unknown[]> {
 	const read = (query: string): Record<string, unknown>[] => sql.exec(query).toArray();
 	return {
 		postings: read(
-			'SELECT * FROM search_postings ORDER BY entity_type, field, token, doc_id;',
+			'SELECT f.entity_type AS entity_type, f.field AS field, e.token AS token, d.doc_id AS doc_id, e.tf AS tf, e.len AS len FROM search_entries e JOIN search_fields f ON f.fid = e.fid JOIN search_documents d ON d.doc = e.doc ORDER BY 1, 2, 3, 4;',
 		),
-		tokens: read('SELECT * FROM search_tokens ORDER BY entity_type, field, token;'),
-		docs: read('SELECT * FROM search_docs ORDER BY entity_type, doc_id;'),
-		field_stats: read('SELECT * FROM search_field_stats ORDER BY entity_type, field;'),
+		tokens: read(
+			'SELECT f.entity_type AS entity_type, f.field AS field, t.token AS token, t.df AS df FROM search_terms t JOIN search_fields f ON f.fid = t.fid ORDER BY 1, 2, 3;',
+		),
+		docs: read(
+			'SELECT entity_type, doc_id, lengths, terms FROM search_documents ORDER BY entity_type, doc_id;',
+		),
+		field_stats: read(
+			'SELECT entity_type, field, doc_count, total_len FROM search_fields WHERE doc_count > 0 ORDER BY entity_type, field;',
+		),
 		vectors: read(
 			'SELECT entity_type, field, doc_id FROM search_vectors ORDER BY entity_type, field, doc_id;',
 		),
@@ -156,9 +167,12 @@ describe('write path — diffing', () => {
 		const { sql, store } = newStore();
 		store.indexDocument(CONFIG, 'a', { id: 'a', title: 'only' });
 		store.removeDocument(CONFIG, 'a', 1);
-		expect(sql.exec('SELECT * FROM search_field_stats;').toArray()).toEqual([]);
-		expect(sql.exec('SELECT * FROM search_tokens;').toArray()).toEqual([]);
-		expect(sql.exec('SELECT * FROM search_postings;').toArray()).toEqual([]);
+		expect(
+			sql.exec('SELECT * FROM search_fields WHERE doc_count > 0 OR total_len > 0;').toArray(),
+		).toEqual([]);
+		expect(sql.exec('SELECT * FROM search_terms;').toArray()).toEqual([]);
+		expect(sql.exec('SELECT * FROM search_entries;').toArray()).toEqual([]);
+		expect(sql.exec('SELECT * FROM search_documents;').toArray()).toEqual([]);
 	});
 
 	it('reads df and postings through the batched token reads', () => {
@@ -261,7 +275,8 @@ describe('batching under the DO SQLite caps', () => {
 		}
 		const posting_inserts = sql.log.filter(
 			(entry) =>
-				entry.sql.startsWith('INSERT INTO search_postings') && entry.params[1] === 'body',
+				entry.sql.startsWith('INSERT INTO search_entries') &&
+				entry.params.some((param) => typeof param === 'string' && param.startsWith('word')),
 		);
 		expect(posting_inserts.length).toBe(Math.ceil(137 / MAX_INSERT_ROWS));
 		for (const entry of posting_inserts) {
@@ -409,19 +424,12 @@ describe('prefixUpperBound', () => {
 			AFTER_SURROGATES,
 		];
 		for (const token of tokens) {
-			sql.exec(
-				'INSERT INTO search_tokens (entity_type, field, token, df) VALUES (?, ?, ?, 1);',
-				'article',
-				'body',
-				token,
-			);
+			sql.exec('INSERT INTO search_terms (fid, token, df) VALUES (1, ?, 1);', token);
 		}
 		const upper = prefixUpperBound(BEFORE_SURROGATES) as string;
 		const rows = sql
 			.exec(
-				'SELECT token FROM search_tokens WHERE entity_type = ? AND field = ? AND token >= ? AND token < ? ORDER BY token;',
-				'article',
-				'body',
+				'SELECT token FROM search_terms WHERE fid = 1 AND token >= ? AND token < ? ORDER BY token;',
 				BEFORE_SURROGATES,
 				upper,
 			)
@@ -513,7 +521,14 @@ describe('clearEntityType', () => {
 		store.indexDocument(other, 'a', DOC_A);
 		store.clearEntityType('article');
 		expect(
-			sql.exec('SELECT DISTINCT entity_type FROM search_postings;').toArray(),
+			sql
+				.exec(
+					'SELECT DISTINCT f.entity_type AS entity_type FROM search_entries e JOIN search_fields f ON f.fid = e.fid;',
+				)
+				.toArray(),
+		).toEqual([{ entity_type: 'event' }]);
+		expect(
+			sql.exec('SELECT DISTINCT entity_type FROM search_documents;').toArray(),
 		).toEqual([{ entity_type: 'event' }]);
 	});
 });

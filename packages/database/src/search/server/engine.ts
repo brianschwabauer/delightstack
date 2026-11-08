@@ -26,20 +26,38 @@
 import { DelightError } from '@delightstack/utilities';
 import { bm25Score } from '../core/bm25.js';
 import { comparePrimaryKeys, compareStrings } from '../core/compare.js';
+import { expandCachedDictionary } from '../core/dictionary.js';
+import {
+	fieldBoost,
+	fieldTolerance,
+	planQueryTerms,
+	selectExpansions,
+} from '../core/expansion.js';
 import { computeFacets } from '../core/facets.js';
+import {
+	type MatchedTokens,
+	noteMatch,
+	orderedDistinct,
+	RERANK_WINDOW,
+	rerankByProximity,
+} from '../core/proximity.js';
 import {
 	applyDistinct,
 	applyOrder,
+	applyProximity,
 	applyThreshold,
 	elapsedSince,
+	multiMatchIds,
 	resolveSearchFields,
 	validateDistinctOn,
+	validateHighlight,
 	validateOrder,
+	withHighlights,
 	type ScoredDocument,
 } from '../core/pipeline.js';
 import { isVectorFieldType } from '../core/schema_fields.js';
 import { TokenHits } from '../core/token_hits.js';
-import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer.js';
+import { fieldTokenLimit, MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer.js';
 import type {
 	FacetDefinition,
 	SearchQuery,
@@ -80,6 +98,8 @@ export interface ServerSearchTable extends SearchTypeConfig {
 	derived_fields?: ReadonlySet<string>;
 	/** The overflow column holding non-scalars @default 'json' */
 	json_column?: string;
+	/** Top-level fields stored as JSON text in their own column. */
+	json_fields?: ReadonlySet<string>;
 	/** Paths whose SQL form is lossy — `core/where` decides those. */
 	inexact_fields?: ReadonlySet<string>;
 	/** Real columns declared `TEXT`, whose affinity coerces non-string operands. */
@@ -92,6 +112,7 @@ export interface ServerSearchTableInput extends SearchTypeInput {
 	columns: Iterable<string>;
 	derived_fields?: Iterable<string>;
 	json_column?: string;
+	json_fields?: Iterable<string>;
 	inexact_fields?: Iterable<string>;
 	text_affinity_fields?: Iterable<string>;
 }
@@ -104,6 +125,7 @@ export function defineServerTable(input: ServerSearchTableInput): ServerSearchTa
 		columns: new Set(input.columns),
 		derived_fields: input.derived_fields ? new Set(input.derived_fields) : undefined,
 		json_column: input.json_column ?? 'json',
+		json_fields: input.json_fields ? new Set(input.json_fields) : undefined,
 		inexact_fields: input.inexact_fields ? new Set(input.inexact_fields) : undefined,
 		text_affinity_fields: input.text_affinity_fields
 			? new Set(input.text_affinity_fields)
@@ -122,6 +144,8 @@ interface ScoredIds {
 	scores: Map<string, number>;
 	/** Documents an inexact `where` already had to read, or `null`. */
 	documents: Map<string, ScoredDocument> | null;
+	/** Ids that matched two or more distinct query tokens (proximity candidates). */
+	multi_match: Set<string>;
 }
 
 /** Options for {@link SqliteSearchEngine}. */
@@ -283,6 +307,7 @@ export class SqliteSearchEngine {
 		// problems must fail with the same one on both drivers.
 		const search_fields = resolveSearchFields(table, query);
 		validateOrder(table, query);
+		validateHighlight(query, search_fields);
 		validateDistinctOn(table, query);
 
 		const where_node = normalizeWhere(
@@ -313,6 +338,9 @@ export class SqliteSearchEngine {
 		}
 
 		let results: ScoredDocument[];
+		const matched_tokens: MatchedTokens = new Map();
+		const ordered_tokens = orderedDistinct(term_tokens);
+		let multi_match = new Set<string>();
 		if (has_term || has_vector) {
 			const scored = this.#scoreDocuments(
 				table,
@@ -321,6 +349,7 @@ export class SqliteSearchEngine {
 				compiled,
 				search_fields,
 				distinct_tokens,
+				matched_tokens,
 			);
 			// Score ordering needs a score and a primary key, nothing else — so when
 			// nothing downstream needs the whole matched set as *documents*
@@ -333,7 +362,18 @@ export class SqliteSearchEngine {
 				!has_distinct &&
 				(query.order?.length ?? 0) === 0 &&
 				(query.offset ?? 0) >= 0;
-			if (deferrable) return this.#pageByScore(table, query, scored, started);
+			if (deferrable) {
+				return this.#pageByScore(
+					table,
+					query,
+					scored,
+					started,
+					search_fields,
+					has_term ? ordered_tokens : [],
+					matched_tokens,
+				);
+			}
+			multi_match = scored.multi_match;
 			results = this.#materialize(table, scored);
 		} else {
 			results = this.#fetchMatched(table, where_node, compiled).map((entry) => ({
@@ -343,6 +383,17 @@ export class SqliteSearchEngine {
 		}
 
 		applyOrder(table, results, query, has_term || has_vector);
+		if (has_term) {
+			applyProximity(
+				table,
+				results,
+				query,
+				search_fields,
+				ordered_tokens,
+				matched_tokens,
+				multi_match,
+			);
+		}
 		const distinct = applyDistinct(results, query.distinct_on);
 		const facets = computeFacets(
 			distinct.map((entry) => entry.document),
@@ -354,11 +405,16 @@ export class SqliteSearchEngine {
 		const page = distinct.slice(offset, offset + Math.max(0, limit));
 		return {
 			count: distinct.length,
-			hits: page.map((entry) => ({
-				id: entry.doc_id,
-				score: entry.score,
-				document: entry.document,
-			})),
+			hits: withHighlights(
+				page.map((entry) => ({
+					id: entry.doc_id,
+					score: entry.score,
+					document: entry.document,
+				})),
+				query,
+				search_fields,
+				matched_tokens,
+			),
 			elapsed: elapsedSince(started, this.#now),
 			...(facets ? { facets } : {}),
 		};
@@ -463,13 +519,19 @@ export class SqliteSearchEngine {
 		compiled: CompiledSql,
 		search_fields: readonly string[],
 		distinct_tokens: readonly string[],
+		matched_tokens: MatchedTokens,
 	): ScoredIds {
-		const { ids: candidate_ids, documents } = this.#candidateIds(
-			table,
-			where_node,
-			compiled,
-		);
 		const has_term = distinct_tokens.length > 0;
+		// A term with an exact `where`: score the term first, then check the
+		// filter only for the documents the term matched. Scoring a document
+		// never depends on which others are scored, so this is the same answer
+		// as filtering first, without reading every id the filter admits (57k
+		// rows read for `status = open` over 5,000 notes, to keep a handful).
+		const term_first =
+			has_term && query.vector === undefined && !!where_node && compiled.exact;
+		const { ids: candidate_ids, documents } = term_first
+			? { ids: null, documents: null }
+			: this.#candidateIds(table, where_node, compiled);
 
 		// DS-08: `weight` is the vector share, and the endpoints short-circuit —
 		// `0` IS the pure-text result and `1` IS the pure-vector one (fusing at a
@@ -496,7 +558,21 @@ export class SqliteSearchEngine {
 				candidate_ids,
 				text_scores,
 				token_hits,
+				matched_tokens,
 			);
+			if (term_first) {
+				// Few matches: check just those ids. Many: one read of the
+				// filter's ids beats dozens of chunked `IN` lookups.
+				const matched_ids = [...text_scores.keys()];
+				const admitted =
+					matched_ids.length <= 900
+						? this.#admittedIds(table, compiled, matched_ids)
+						: (this.#candidateIds(table, where_node, compiled).ids ?? new Set<string>());
+				for (const doc_id of [...text_scores.keys()]) {
+					if (!admitted.has(doc_id)) text_scores.delete(doc_id);
+				}
+				token_hits.retain((doc_id) => admitted.has(doc_id));
+			}
 		}
 		const text_ids =
 			has_term && !skip_text
@@ -533,7 +609,12 @@ export class SqliteSearchEngine {
 		// `final_scores` holds the whole matched set, which is tens of thousands of
 		// ids on a head-term query. Scores are already fully accumulated by the
 		// time anything reads this, so ordering here cannot affect a float sum.
-		return { ids: [...final_scores.keys()], scores: final_scores, documents };
+		return {
+			ids: [...final_scores.keys()],
+			scores: final_scores,
+			documents,
+			multi_match: multiMatchIds(token_hits, distinct_tokens.length),
+		};
 	}
 
 	/** Read every matched document back. */
@@ -568,8 +649,11 @@ export class SqliteSearchEngine {
 		query: SearchQuery,
 		scored: ScoredIds,
 		started: number,
+		search_fields: readonly string[],
+		ordered_tokens: readonly string[],
+		matched_tokens: MatchedTokens,
 	): SearchQueryResults<ServerDocument> {
-		const entries: { doc_id: string; score: number }[] = [];
+		let entries: { doc_id: string; score: number }[] = [];
 		for (const id of scored.ids) {
 			entries.push({ doc_id: id, score: scored.scores.get(id) as number });
 		}
@@ -577,6 +661,32 @@ export class SqliteSearchEngine {
 			if (a.score !== b.score) return a.score > b.score ? -1 : 1;
 			return comparePrimaryKeys(a.doc_id, b.doc_id, table.primary_key_type);
 		});
+		// The proximity pass re-reads the top of the ranking. A document that
+		// can't be read is dropped first, as the paging loop below would.
+		let head: Map<string, ScoredDocument> | undefined;
+		const rerank_ids =
+			ordered_tokens.length >= 2
+				? entries
+						.slice(0, RERANK_WINDOW)
+						.map((entry) => entry.doc_id)
+						.filter((doc_id) => scored.multi_match.has(doc_id))
+				: [];
+		if (rerank_ids.length > 0) {
+			const window = rerank_ids;
+			head = scored.documents ?? this.#hydrate(table, window);
+			const gone = new Set(window.filter((doc_id) => !head!.has(doc_id)));
+			if (gone.size) entries = entries.filter((entry) => !gone.has(entry.doc_id));
+			rerankByProximity(
+				entries,
+				(entry) => head!.get(entry.doc_id)?.document,
+				search_fields,
+				ordered_tokens,
+				matched_tokens,
+				(field) => fieldTokenLimit(field, table.field_options),
+				table.primary_key_type,
+				scored.multi_match,
+			);
+		}
 		const offset = query.offset ?? 0;
 		const limit = query.limit ?? entries.length;
 		const wanted = offset + Math.max(0, limit);
@@ -590,12 +700,19 @@ export class SqliteSearchEngine {
 		while (cursor < entries.length && hits.length < wanted) {
 			const window = entries.slice(cursor, cursor + (wanted - hits.length));
 			cursor += window.length;
-			const hydrated =
-				scored.documents ??
-				this.#hydrate(
-					table,
-					window.map((entry) => entry.doc_id),
-				);
+			// Documents the rerank already read are reused; only the rest are read.
+			let hydrated: Map<string, ScoredDocument>;
+			if (scored.documents) hydrated = scored.documents;
+			else {
+				const need = window.filter((entry) => !head?.has(entry.doc_id));
+				hydrated = need.length
+					? this.#hydrate(
+							table,
+							need.map((entry) => entry.doc_id),
+						)
+					: new Map();
+				if (head) for (const [doc_id, document] of head) hydrated.set(doc_id, document);
+			}
 			for (const entry of window) {
 				const document = hydrated.get(entry.doc_id);
 				if (!document) {
@@ -607,7 +724,7 @@ export class SqliteSearchEngine {
 		}
 		return {
 			count: entries.length - missing,
-			hits: hits.slice(offset),
+			hits: withHighlights(hits.slice(offset), query, search_fields, matched_tokens),
 			elapsed: elapsedSince(started, this.#now),
 		};
 	}
@@ -625,44 +742,61 @@ export class SqliteSearchEngine {
 		candidate_ids: ReadonlySet<string> | null,
 		text_scores: Map<string, number>,
 		token_hits: TokenHits,
+		matched_tokens: MatchedTokens,
 	): void {
 		const entity_type = table.entity_type;
 		const boosts = query.boost as Record<string, number> | undefined;
-		const exact = query.exact === true;
-		const tolerance = exact ? 0 : (query.tolerance ?? 0);
+		const plan = planQueryTerms(distinct_tokens, query);
 		/** Per-query cache for the oversized-dictionary full-table fallback. */
 		const expansion_memo = new Map<string, string[]>();
 		for (const field of search_fields) {
 			const stats = this.store.getFieldStats(entity_type, field);
 			if (stats.doc_count === 0) continue;
 			const average_field_length = stats.total_len / stats.doc_count;
-			const boost = boosts?.[field] ?? 1;
+			const boost = fieldBoost(field, boosts, table.field_options);
+			const dictionary = this.store.getCachedDictionary(entity_type, field);
 			for (let token_index = 0; token_index < distinct_tokens.length; token_index++) {
-				const token = distinct_tokens[token_index];
-				const candidates = this.store.expandToken(
+				const term = plan[token_index];
+				const tolerance = fieldTolerance(
+					term,
+					dictionary ? dictionary.tokens.length : Infinity,
+				);
+				const raw = dictionary
+					? expandCachedDictionary(dictionary, term.token, term.exact, tolerance)
+					: this.store.expandToken(
+							entity_type,
+							field,
+							term.token,
+							term.exact,
+							tolerance,
+							expansion_memo,
+						);
+				for (const variant of term.variants) {
+					raw.push(...this.store.expandToken(entity_type, field, variant, true, 0));
+				}
+				// The capped, weighted selection needs each raw candidate's
+				// frequency; the postings are then read for the survivors only.
+				const doc_frequencies = this.store.getDocFrequenciesForTerm(
 					entity_type,
 					field,
-					token,
-					exact,
+					term.exact ? null : term.token,
+					raw,
+				);
+				const expansions = selectExpansions(
+					term,
+					raw,
 					tolerance,
-					expansion_memo,
+					(token) => doc_frequencies.get(token) ?? 0,
 				);
-				// One chunked statement pair per expansion instead of two statements
-				// per candidate token. `candidates` is already sorted ascending, and
-				// the accumulation below still walks it in that exact order, so the
-				// float summation sequence — and therefore every score — is unchanged.
-				const doc_frequencies = this.store.getDocFrequencies(
-					entity_type,
-					field,
-					candidates,
-				);
+				const candidates = expansions.map((expansion) => expansion.token);
 				const postings_by_token = this.store.getPostingsForTokens(
 					entity_type,
 					field,
 					candidates,
 				);
-				for (const candidate of candidates) {
+				for (const { token: candidate, weight } of expansions) {
 					const doc_frequency = doc_frequencies.get(candidate) ?? 0;
+					if (doc_frequency > 0) noteMatch(matched_tokens, field, term.token, candidate);
 					// `field_length` rides along on the posting row (§7.1), so nothing
 					// here is proportional to the corpus — only to the postings the
 					// query actually touches.
@@ -676,12 +810,42 @@ export class SqliteSearchEngine {
 							field_doc_count: stats.doc_count,
 							doc_frequency,
 						});
-						text_scores.set(doc_id, (text_scores.get(doc_id) ?? 0) + boost * score);
+						text_scores.set(
+							doc_id,
+							(text_scores.get(doc_id) ?? 0) + boost * weight * score,
+						);
 						token_hits.add(doc_id, token_index);
 					}
 				}
 			}
 		}
+	}
+
+	/** Which of `doc_ids` an exact compiled `where` admits. */
+	#admittedIds(
+		table: ServerSearchTable,
+		compiled: CompiledSql,
+		doc_ids: readonly string[],
+	): Set<string> {
+		const admitted = new Set<string>();
+		const primary_key = quoteIdentifier(table.primary_key);
+		// Leaves room in the 100-parameter budget for the filter's own bindings.
+		const size = Math.max(1, MAX_IN_VALUES - compiled.params.length);
+		for (const batch of chunk(doc_ids, size)) {
+			if (batch.length === 0) continue;
+			const keys = batch.map((doc_id) =>
+				table.primary_key_type === 'number' ? Number(doc_id) : doc_id,
+			);
+			const rows = this.sql
+				.exec(
+					`SELECT ${primary_key} AS pk FROM ${quoteIdentifier(table.table_name)} WHERE ${primary_key} IN (${Array.from({ length: batch.length }, () => '?').join(', ')}) AND (${compiled.sql});`,
+					...keys,
+					...compiled.params,
+				)
+				.toArray();
+			for (const row of rows) admitted.add(String(row.pk));
+		}
+		return admitted;
 	}
 
 	/**
@@ -805,6 +969,7 @@ export function whereContext(table: ServerSearchTable): SqlWhereContext {
 		columns: table.columns,
 		derived_fields: table.derived_fields,
 		json_column: table.json_column,
+		json_fields: table.json_fields,
 		primary_key: table.primary_key,
 		inexact_fields: table.inexact_fields,
 		text_affinity_fields: table.text_affinity_fields,
@@ -846,8 +1011,20 @@ export function rowToDocument(
 	for (const key of Object.keys(row)) {
 		if (key === json_column) continue;
 		if (key.startsWith('sv$')) continue;
+		// The change-capture write marker (db.server.ts) — never entity data
+		if (key === '_w') continue;
 		const value = row[key];
 		if (value === null || value === undefined) continue;
+		if (table.json_fields?.has(key) && typeof value === 'string') {
+			// A JSON column (objects, arrays, geopoints). A NULL one leaves the
+			// overflow blob's value in place, for rows not yet moved over.
+			try {
+				document[key] = JSON.parse(value);
+			} catch {
+				// json_valid guards the column; nothing to recover here
+			}
+			continue;
+		}
 		document[key] = coerceColumnValue(table.schema[key], value);
 	}
 	return document;

@@ -3,6 +3,7 @@ import {
 	countTokenFrequencies,
 	MAX_TOKEN_LENGTH,
 	tokenize,
+	tokenizeReference,
 	tokenizeValue,
 } from './tokenizer.js';
 
@@ -297,5 +298,35 @@ describe('countTokenFrequencies', () => {
 		const counts = countTokenFrequencies(['a', 'b', 'a', 'a']);
 		expect(counts.get('a')).toBe(3);
 		expect(counts.get('b')).toBe(1);
+	});
+});
+
+describe('tokenize fast paths', () => {
+	it('emit exactly what the full pipeline emits', () => {
+		const samples = [
+			'1234 Elm Street, Wichita KS 67202',
+			'Jane Doe jane.doe@example.com (316) 555-1234',
+			'getUserData HTTPServer iPhone MacDonald v2Beta V2BETA A1b',
+			"O'Brien's u.s.a. 3.14 1,000 2.5.1 don''t ʼquotedʼ",
+			'café naïve Zürich 東京 مـــد data\u00ADbase',
+			'ALLCAPS lower Mixed 42 x y Z',
+			'https://example.com/listings/12?size=Large&id=Ab12Cd',
+			'2026-11-07T09:33:55.064Z',
+			'tab\tseparated\nlines  double  spaces',
+			'a'.repeat(80) + ' ' + 'B'.repeat(70),
+		];
+		// Pseudo-random ASCII-heavy words too.
+		let seed = 7;
+		const next = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+		const alphabet = 'abcXYZ019.-_@\' ';
+		for (let i = 0; i < 400; i++) {
+			const length = 1 + Math.floor(next() * 12);
+			let word = '';
+			for (let c = 0; c < length; c++) word += alphabet[Math.floor(next() * alphabet.length)];
+			samples.push(word);
+		}
+		for (const sample of samples) {
+			expect(tokenize(sample), JSON.stringify(sample)).toEqual(tokenizeReference(sample));
+		}
 	});
 });

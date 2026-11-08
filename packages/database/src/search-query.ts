@@ -110,6 +110,14 @@ export function encodeSearchQuery(query: SearchQueryInput): URLSearchParams {
 	if (query.facets !== undefined) params.set('facets', JSON.stringify(query.facets));
 	if (query.boost !== undefined) params.set('boost', JSON.stringify(query.boost));
 	if (query.vector !== undefined) params.set('vector', JSON.stringify(query.vector));
+	if (query.highlight !== undefined) {
+		params.set(
+			'highlight',
+			typeof query.highlight === 'boolean'
+				? String(query.highlight)
+				: JSON.stringify(query.highlight),
+		);
+	}
 
 	// Fields: comma-separated or '*'
 	if (query.fields !== undefined) {
@@ -175,6 +183,18 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 
 	const exact = parseBool(params, 'exact');
 	if (exact !== undefined) query.exact = exact;
+
+	const raw_highlight = params.get('highlight');
+	if (raw_highlight !== null) {
+		const parsed = raw_highlight.trim().startsWith('{')
+			? parseJson(params, 'highlight')
+			: undefined;
+		if (parsed && typeof parsed === 'object') {
+			query.highlight = parsed as { fields?: string[]; length?: number };
+		} else {
+			query.highlight = parseBool(params, 'highlight');
+		}
+	}
 
 	// JSON objects
 	const where = parseJson(params, 'where');

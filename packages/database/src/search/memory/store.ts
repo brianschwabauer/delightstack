@@ -12,7 +12,8 @@
 import { DelightError } from '@delightstack/utilities';
 import { compareStrings, type PrimaryKeyType } from '../core/compare.js';
 import { resolveTextFields, resolveVectorFields } from '../core/schema_fields.js';
-import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer.js';
+import { countTokenFrequencies, fieldTokenLimit, tokenizeField } from '../core/tokenizer.js';
+import type { SearchFieldOptions } from '../core/types.js';
 import { getFieldValue, type WhereSchema } from '../core/where.js';
 import { normalizeVector } from '../server/vector.js';
 
@@ -24,6 +25,8 @@ export interface MemoryIndexConfig {
 	primary_key?: string;
 	/** How primary keys compare in tie-breaks @default 'string' */
 	primary_key_type?: PrimaryKeyType;
+	/** Per-field `.searchable({ weight, max_tokens })` options. */
+	field_options?: Record<string, SearchFieldOptions>;
 }
 
 /** A document as held by the store. */
@@ -57,6 +60,8 @@ export class MemorySearchStore {
 	readonly text_fields: string[];
 	/** Vector fields, ascending */
 	readonly vector_fields: string[];
+	/** Per-field schema options. */
+	readonly field_options: Record<string, SearchFieldOptions>;
 
 	readonly #documents = new Map<string, StoredDocument>();
 	/** field → token → doc_id → tf */
@@ -69,6 +74,7 @@ export class MemorySearchStore {
 		this.primary_key_type = config.primary_key_type ?? 'string';
 		this.text_fields = resolveTextFields(config.schema);
 		this.vector_fields = resolveVectorFields(config.schema);
+		this.field_options = config.field_options ?? {};
 	}
 
 	/** Number of indexed documents. */
@@ -97,7 +103,7 @@ export class MemorySearchStore {
 		for (const field of this.text_fields) {
 			const value = getFieldValue(document, field);
 			if (value === null || value === undefined) continue;
-			const tokens = tokenizeValue(value);
+			const tokens = tokenizeField(value, fieldTokenLimit(field, this.field_options));
 			lengths.set(field, tokens.length);
 			const frequencies = countTokenFrequencies(tokens);
 			let field_postings = this.#postings.get(field);

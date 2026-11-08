@@ -57,6 +57,12 @@ export class TokenHits {
 		return (word * 0x01010101) >>> 24;
 	}
 
+	/** Drop every document `keep` rejects (a filter applied after scoring). */
+	retain(keep: (doc_id: string) => boolean): void {
+		const map = this.#sets ?? this.#masks;
+		for (const doc_id of [...map.keys()]) if (!keep(doc_id)) map.delete(doc_id);
+	}
+
 	/** Every document that matched at least one query token, in no order. */
 	ids(): string[] {
 		return [...(this.#sets ?? this.#masks).keys()];

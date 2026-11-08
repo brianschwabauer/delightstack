@@ -36,7 +36,9 @@ export interface SearchTableSource {
 		primary_key_type?: 'string' | 'number';
 		table_definition?: Record<string, unknown>;
 		derived_fields?: Record<string, { foreign_keys?: string[] }>;
+		json_fields?: string[];
 		index_schema: unknown;
+		search_options?: Record<string, { weight?: number; max_tokens?: number }>;
 	};
 }
 
@@ -118,7 +120,9 @@ export function buildServerSearchTable(
 		primary_key_type: table.config.primary_key_type ?? 'string',
 		columns,
 		derived_fields: derived_fields.size > 0 ? derived_fields : undefined,
+		json_fields: table.config.json_fields?.length ? table.config.json_fields : undefined,
 		text_affinity_fields:
 			text_affinity_fields.size > 0 ? text_affinity_fields : undefined,
+		field_options: table.config.search_options,
 	});
 }

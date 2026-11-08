@@ -292,7 +292,12 @@ export interface SearchQuery<TSchema = unknown> {
 	/** Which fields to search in. Use `'*'` for all. @default '*' */
 	fields?: '*' | SearchFieldName<TSchema>[];
 
-	/** The maximum levenshtein distance between the term and an indexed token */
+	/**
+	 * Typo tolerance: the most edits between a query word and an indexed word.
+	 * By default it scales with the word: none under 5 characters, 1 from 5, 2
+	 * from 9, and none for words with a digit. `0` turns typos off. Typo
+	 * matches count less than exact and prefix matches.
+	 */
 	tolerance?: number;
 
 	/**
@@ -305,8 +310,16 @@ export interface SearchQuery<TSchema = unknown> {
 	 */
 	threshold?: number;
 
-	/** Whether to match the term exactly instead of by prefix */
+	/** Whether to match the term exactly: no prefixes, plurals or typos */
 	exact?: boolean;
+
+	/**
+	 * Return a snippet of each matching field on every hit, with the matched
+	 * words' offsets (`hit.highlights`). `true` covers every searched field;
+	 * `{ fields, length }` narrows it and sets the snippet length (default
+	 * 160 characters). Only meaningful with a `term`.
+	 */
+	highlight?: boolean | { fields?: SearchFieldName<TSchema>[]; length?: number };
 
 	/** Keep only the first result per distinct value of this field */
 	distinct_on?: SearchFieldName<TSchema>;
@@ -347,6 +360,11 @@ export interface SearchHit<Document> {
 	score: number;
 	/** The document */
 	document: Document;
+	/**
+	 * When the query asked for `highlight`: each matching field's snippet and
+	 * the `[start, end)` offsets of the matched words in it.
+	 */
+	highlights?: Record<string, { text: string; ranges: [number, number][] }>;
 }
 
 /** The result set returned by a search */
@@ -359,4 +377,16 @@ export interface SearchQueryResults<Document> {
 	elapsed: ElapsedTime;
 	/** Facet counts, when facets were requested */
 	facets?: FacetResult;
+}
+
+/**
+ * Per-field search options declared in the schema (`.searchable({ weight,
+ * max_tokens })`), keyed by dot path. Every driver reads the same map, so a
+ * field ranks and indexes identically on the server and the client.
+ */
+export interface SearchFieldOptions {
+	/** Default ranking weight of a match in this field; a query's `boost` overrides it. */
+	weight?: number;
+	/** The most distinct words indexed from one value. */
+	max_tokens?: number;
 }

@@ -193,7 +193,7 @@ describe('exact', () => {
 });
 
 describe('tolerance', () => {
-	it('admits tokens within the edit distance at full weight', () => {
+	it('admits tokens within the edit distance, ranked below the exact match', () => {
 		const engine = new MemorySearchEngine({ schema: SCHEMA });
 		engine.insertMany([
 			{ id: 'exactword', title: 'hello world one two' },
@@ -201,7 +201,7 @@ describe('tolerance', () => {
 		]);
 		const results = engine.search({ term: 'hello', tolerance: 1 });
 		expect(results.hits.map((hit) => hit.id)).toEqual(['exactword', 'fuzzyword']);
-		expect(results.hits[0].score).toBe(results.hits[1].score);
+		expect(results.hits[0].score).toBeGreaterThan(results.hits[1].score);
 	});
 
 	it('is a union with prefix matching, not a replacement', () => {

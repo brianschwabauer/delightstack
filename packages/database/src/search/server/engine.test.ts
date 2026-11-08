@@ -247,14 +247,17 @@ describe('query planning', () => {
 	it('DS-08: weight 0/1 equal the pure orders, and the blend moves monotonically', () => {
 		const { engine } = load();
 		const ids = (result: { hits: { id: string }[] }) => result.hits.map((hit) => hit.id);
+		// Two exact words, one per document, so 'b' (and 'c') tie for the top
+		// text score and 'b' also holds the top vector score.
+		const term = 'database dataset';
 		const at = (weight: number) =>
 			engine.list('article', {
-				term: 'data',
+				term,
 				vector: { value: [0, 1, 0], field: 'embedding', similarity: 0, weight },
 			});
 
 		// 0 IS the pure text answer — membership too: no vector-only stragglers.
-		const pure_text = engine.list('article', { term: 'data' });
+		const pure_text = engine.list('article', { term });
 		expect(ids(at(0))).toEqual(ids(pure_text));
 		expect(at(0).count).toBe(pure_text.count);
 
@@ -292,7 +295,7 @@ describe('query planning', () => {
 		);
 		expect(zero.result.hits.length).toBeGreaterThan(0);
 		const one = at(1);
-		expect(one.log.some((entry) => entry.sql.includes('FROM search_postings'))).toBe(
+		expect(one.log.some((entry) => entry.sql.includes('search_entries'))).toBe(
 			false,
 		);
 		expect(one.result.hits.length).toBeGreaterThan(0);
@@ -301,7 +304,7 @@ describe('query planning', () => {
 		expect(blend.log.some((entry) => entry.sql.includes('FROM search_vectors'))).toBe(
 			true,
 		);
-		expect(blend.log.some((entry) => entry.sql.includes('FROM search_postings'))).toBe(
+		expect(blend.log.some((entry) => entry.sql.includes('search_entries'))).toBe(
 			true,
 		);
 	});
@@ -371,8 +374,8 @@ describe('query planning', () => {
 		// Chunked `IN (...)` reads: no per-candidate statement proliferation.
 		for (const entry of statements) {
 			if (
-				entry.sql.includes('FROM search_postings') ||
-				(entry.sql.includes('FROM search_tokens') && entry.sql.includes('df'))
+				entry.sql.includes('search_entries') ||
+				(entry.sql.includes('FROM search_terms') && entry.sql.includes('df'))
 			) {
 				expect(entry.sql).toContain('IN (');
 				expect(entry.params.length).toBeLessThanOrEqual(100);

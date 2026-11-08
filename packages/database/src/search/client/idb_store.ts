@@ -42,7 +42,8 @@ import {
 } from '../core/dictionary.js';
 import { ToleranceMatcher } from '../core/levenshtein.js';
 import { resolveTextFields } from '../core/schema_fields.js';
-import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer.js';
+import { countTokenFrequencies, fieldTokenLimit, tokenizeField } from '../core/tokenizer.js';
+import type { SearchFieldOptions } from '../core/types.js';
 import type { SearchableType } from '../core/types.js';
 import {
 	getFieldValue,
@@ -94,6 +95,8 @@ export interface ClientSearchTypeInput {
 	primary_key?: string;
 	/** @default 'string' */
 	primary_key_type?: PrimaryKeyType;
+	/** Per-field `.searchable({ weight, max_tokens })` options. */
+	field_options?: Record<string, SearchFieldOptions>;
 }
 
 /** A prepared entity-type configuration (field lists resolved once). */
@@ -104,6 +107,8 @@ export interface ClientSearchType {
 	primary_key_type: PrimaryKeyType;
 	/** Searchable text fields, ascending — the deterministic accumulation order. */
 	text_fields: string[];
+	/** Per-field schema options. */
+	field_options: Record<string, SearchFieldOptions>;
 }
 
 /** Resolve an entity type's field lists once, ascending. */
@@ -114,6 +119,7 @@ export function defineClientType(input: ClientSearchTypeInput): ClientSearchType
 		primary_key: input.primary_key ?? 'id',
 		primary_key_type: input.primary_key_type ?? 'string',
 		text_fields: resolveTextFields(input.schema),
+		field_options: input.field_options ?? {},
 	};
 }
 
@@ -784,7 +790,7 @@ export function projectDocument(
 	for (const field of config.text_fields) {
 		const value = getFieldValue(sparse_doc, field);
 		if (value === null || value === undefined) continue;
-		const tokens = tokenizeValue(value);
+		const tokens = tokenizeField(value, fieldTokenLimit(field, config.field_options));
 		lengths.set(field, tokens.length);
 		postings.set(field, countTokenFrequencies(tokens));
 	}

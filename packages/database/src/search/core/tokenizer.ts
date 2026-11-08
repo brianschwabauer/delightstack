@@ -80,6 +80,17 @@ export const MAX_TOKEN_LENGTH = 64;
  */
 export const MAX_QUERY_TOKENS = 32;
 
+/** Anything outside ASCII. */
+const NON_ASCII = /[^\x00-\x7f]/;
+
+/**
+ * An ASCII chunk the full pipeline would emit unchanged but lowercased:
+ * letters and digits only (no punctuation, so no email, number-chunk,
+ * acronym or apostrophe handling applies) and no camelCase boundary (an
+ * optional leading capital then lowercase/digits, or no lowercase at all).
+ */
+const SIMPLE_CHUNK = /^(?:[A-Z]?[a-z0-9]+|[A-Z0-9]+)$/;
+
 /** Any run of characters that is neither a Unicode letter nor a Unicode number. */
 const SPLIT_PATTERN = /[^\p{L}\p{N}]+/gu;
 
@@ -227,10 +238,35 @@ function pushToken(tokens: string[], token: string): void {
  * (`getUserData` → `getuserdata`, `get`, `user`, `data`).
  */
 export function tokenize(input: string): string[] {
+	return tokenizeWith(input, true);
+}
+
+/**
+ * {@link tokenize} with both fast paths off: the full pipeline for every
+ * chunk. Exported for the test that proves the fast paths change nothing.
+ * @internal
+ */
+export function tokenizeReference(input: string): string[] {
+	return tokenizeWith(input, false);
+}
+
+function tokenizeWith(input: string, fast: boolean): string[] {
 	if (typeof input !== 'string' || input.length === 0) return [];
 	const tokens: string[] = [];
-	for (const raw_chunk of normalizeValue(input).split(/\s+/)) {
+	// ASCII is already NFKD-normal, has no combining marks and no format
+	// characters, so normalizing it is a no-op worth skipping.
+	const normalized = fast && !NON_ASCII.test(input) ? input : normalizeValue(input);
+	for (const raw_chunk of normalized.split(/\s+/)) {
 		if (!raw_chunk) continue;
+		// Fast path, same output: a chunk of ASCII letters and digits with no
+		// case boundary (`elm`, `Street`, `KS`, `1234`) is exactly one token,
+		// its lowercase form — none of the passes below would change it. Most
+		// prose is these, and they skip ~10 regex passes each (the full path
+		// is ~20× slower per word).
+		if (fast && SIMPLE_CHUNK.test(raw_chunk)) {
+			pushToken(tokens, raw_chunk.toLowerCase());
+			continue;
+		}
 		const camel_parts = camelCaseParts(raw_chunk);
 		const chunk = foldChunk(raw_chunk.toLowerCase());
 		const trimmed = chunk.replace(EDGE_PUNCTUATION, '');
@@ -269,6 +305,44 @@ export function tokenizeValue(value: unknown): string[] {
 		for (const token of tokenize(element)) tokens.push(token);
 	}
 	return tokens;
+}
+
+/**
+ * The most distinct tokens one field value contributes to the index, unless
+ * the schema says otherwise (`.searchable({ max_tokens })`). A 2,000-word body
+ * is ~1,450 distinct tokens, each a billed posting write on every save; a
+ * pasted 1 MB document would be tens of thousands in one transaction.
+ */
+export const DEFAULT_MAX_FIELD_TOKENS = 1000;
+
+/**
+ * Tokenize a field value for indexing, keeping tokens in order until
+ * `max_distinct` distinct ones have been seen. The returned length is the
+ * indexed field length. Every driver indexes through this, so a capped field
+ * scores identically everywhere.
+ */
+export function tokenizeField(
+	value: unknown,
+	max_distinct: number = DEFAULT_MAX_FIELD_TOKENS,
+): string[] {
+	const tokens = tokenizeValue(value);
+	if (!(max_distinct < tokens.length)) return tokens;
+	const seen = new Set<string>();
+	for (let index = 0; index < tokens.length; index++) {
+		const token = tokens[index];
+		if (seen.has(token)) continue;
+		if (seen.size >= max_distinct) return tokens.slice(0, index);
+		seen.add(token);
+	}
+	return tokens;
+}
+
+/** A field's token cap from its schema options. */
+export function fieldTokenLimit(
+	field: string,
+	field_options: Readonly<Record<string, { max_tokens?: number }>> | undefined,
+): number {
+	return field_options?.[field]?.max_tokens ?? DEFAULT_MAX_FIELD_TOKENS;
 }
 
 /**

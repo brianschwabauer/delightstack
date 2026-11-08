@@ -160,6 +160,23 @@ export interface Bm25Input {
 }
 
 /**
+ * A field length rounded down to five significant bits: exact below 32, then
+ * 16 steps per doubling (about 6% apart), like Lucene's one-byte norms.
+ *
+ * BM25 barely moves with a few percent of length, and the rounding is what
+ * lets a store keep the length on each posting without rewriting every
+ * posting of a field whenever one word is added: the stored value changes
+ * only when the length crosses a step. Adding a word to a 2,000-word body
+ * used to rewrite all ~1,450 of its postings.
+ */
+export function quantizeLength(length: number): number {
+	if (!(length >= 32)) return length;
+	const value = Math.min(Math.trunc(length), 0x7fffffff);
+	const shift = 31 - Math.clz32(value) - 4;
+	return (value >>> shift) << shift;
+}
+
+/**
  * BM25+ score for one `(document, token, field)` triple.
  *
  * A document's total score is the sum of this over every
@@ -167,8 +184,8 @@ export interface Bm25Input {
  * multiplied by `boost[field]`.
  */
 export function bm25Score(input: Bm25Input, params: Bm25Params = BM25_DEFAULTS): number {
-	const { tf, field_length, average_field_length, field_doc_count, doc_frequency } =
-		input;
+	const { tf, average_field_length, field_doc_count, doc_frequency } = input;
+	const field_length = quantizeLength(input.field_length);
 	const { k1, b, d } = params;
 	// A zero average only happens when the field has no indexed content, in which
 	// case field_length is zero too; fall back to no length normalization.

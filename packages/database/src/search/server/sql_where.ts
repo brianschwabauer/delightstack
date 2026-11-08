@@ -118,6 +118,13 @@ export interface SqlWhereContext {
 	derived_fields?: ReadonlySet<string>;
 	/** The overflow column holding non-scalars @default 'json' */
 	json_column?: string;
+	/**
+	 * Top-level fields stored as JSON text in a column of their own (objects,
+	 * arrays, geopoints). A path under one reads from that column first and
+	 * falls back to the overflow column, which still holds the value for rows
+	 * written before fields had columns.
+	 */
+	json_fields?: ReadonlySet<string>;
 	/** The primary-key column. */
 	primary_key: string;
 	/**
@@ -184,6 +191,8 @@ export interface GeneratedColumnSpec {
 	column: string;
 	/** The `json_extract` path it computes */
 	json_path: string;
+	/** The (unqualified) SQL expression it computes */
+	expression?: string;
 	/** The index created over it */
 	index_name: string;
 	/** The declared path it serves */
@@ -204,12 +213,14 @@ function indexNameFor(table_name: string, column: string): string {
  */
 export function planGeneratedColumns(ctx: SqlWhereContext): GeneratedColumnSpec[] {
 	const specs: GeneratedColumnSpec[] = [];
+	const unqualified = (column: string) => quoteIdentifier(column);
 	for (const path of Object.keys(ctx.schema).sort()) {
 		const placement = placeField(path, ctx);
 		if (placement.kind === 'generated') {
 			specs.push({
 				column: placement.column,
 				json_path: placement.json_path,
+				expression: jsonValueSql(path, ctx, unqualified),
 				index_name: indexNameFor(ctx.table_name, placement.column),
 				field: path,
 			});
@@ -218,12 +229,14 @@ export function planGeneratedColumns(ctx: SqlWhereContext): GeneratedColumnSpec[
 				{
 					column: placement.lat_column,
 					json_path: `${placement.json_path}.lat`,
+					expression: jsonValueSql(path, ctx, unqualified, '.lat'),
 					index_name: indexNameFor(ctx.table_name, placement.lat_column),
 					field: path,
 				},
 				{
 					column: placement.lon_column,
 					json_path: `${placement.json_path}.lon`,
+					expression: jsonValueSql(path, ctx, unqualified, '.lon'),
 					index_name: indexNameFor(ctx.table_name, placement.lon_column),
 					field: path,
 				},
@@ -231,6 +244,28 @@ export function planGeneratedColumns(ctx: SqlWhereContext): GeneratedColumnSpec[
 		}
 	}
 	return specs;
+}
+
+/**
+ * The SQL expression for a JSON-held path, with column references built by
+ * `ref` (unqualified for generated-column DDL, table-qualified in queries).
+ *
+ * A path under a top-level JSON field reads that field's own column, then
+ * falls back to the overflow column for rows the background move has not
+ * reached. Everything else (and FK-derived values) reads the overflow column.
+ */
+export function jsonValueSql(
+	path: string,
+	ctx: SqlWhereContext,
+	ref: (column: string) => string,
+	suffix = '',
+): string {
+	const derived = ctx.derived_fields?.has(path) === true;
+	const overflow = `json_extract(${ref(ctx.json_column ?? 'json')}, '${jsonPath(path, derived)}${suffix}')`;
+	const head = path.split('.')[0];
+	if (derived || !ctx.json_fields?.has(head)) return overflow;
+	const rest = path.slice(head.length);
+	return `COALESCE(json_extract(${ref(head)}, '$${rest}${suffix}'), ${overflow})`;
 }
 
 /** The DDL that adds one generated column plus its index. */
@@ -242,7 +277,7 @@ export function generatedColumnStatements(
 	// No type name on purpose: a declared TEXT affinity would coerce numeric
 	// comparisons and break the DSL's strict typed equality (see the docblock).
 	return [
-		`ALTER TABLE ${quoteIdentifier(table_name)} ADD COLUMN ${quoteIdentifier(spec.column)} GENERATED ALWAYS AS (json_extract(${quoteIdentifier(json_column)}, '${spec.json_path}')) VIRTUAL;`,
+		`ALTER TABLE ${quoteIdentifier(table_name)} ADD COLUMN ${quoteIdentifier(spec.column)} GENERATED ALWAYS AS (${spec.expression ?? `json_extract(${quoteIdentifier(json_column)}, '${spec.json_path}')`}) VIRTUAL;`,
 		`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(spec.index_name)} ON ${quoteIdentifier(table_name)} (${quoteIdentifier(spec.column)});`,
 	];
 }
@@ -358,10 +393,6 @@ function jsonRef(state: CompileState): string {
 	return `${quoteIdentifier(state.ctx.table_name)}.${quoteIdentifier(state.ctx.json_column ?? 'json')}`;
 }
 
-/** `json_extract(<table>."json", '<path>')` — always table-qualified. */
-function jsonExtract(state: CompileState, path: string): string {
-	return `json_extract(${jsonRef(state)}, '${path}')`;
-}
 
 /** Whether a JS operand's type matches the field's declared type. */
 function operandMatchesType(type: SearchableType, value: unknown): boolean {
@@ -719,7 +750,7 @@ function compileLeaf(
 				compileArrayOperator(
 					state,
 					negated,
-					jsonExtract(state, placement.json_path),
+					jsonValueSql(leaf.field, state.ctx, (column) => columnRef(state, column)),
 					leaf.type,
 					operator,
 					operand,

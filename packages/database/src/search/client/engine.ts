@@ -28,19 +28,37 @@ import { DelightError } from '@delightstack/utilities';
 import { bm25Score } from '../core/bm25.js';
 import { comparePrimaryKeys, compareStrings } from '../core/compare.js';
 import { expandCachedDictionary } from '../core/dictionary.js';
+import {
+	fieldBoost,
+	fieldTolerance,
+	planQueryTerms,
+	selectExpansions,
+	type WeightedToken,
+} from '../core/expansion.js';
+import {
+	type MatchedTokens,
+	noteMatch,
+	orderedDistinct,
+	RERANK_WINDOW,
+	rerankByProximity,
+} from '../core/proximity.js';
 import { computeFacets } from '../core/facets.js';
 import {
 	applyDistinct,
 	applyOrder,
+	applyProximity,
 	applyThreshold,
 	elapsedSince,
+	multiMatchIds,
 	resolveSearchFields,
 	validateDistinctOn,
+	validateHighlight,
 	validateOrder,
+	withHighlights,
 	type ScoredDocument,
 } from '../core/pipeline.js';
 import { TokenHits } from '../core/token_hits.js';
-import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer.js';
+import { fieldTokenLimit, MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer.js';
 import type { FacetDefinition, SearchQuery, SearchQueryResults } from '../core/types.js';
 import {
 	evaluateWhere,
@@ -122,6 +140,7 @@ export class IdbSearchEngine {
 		// problems must fail with the same one everywhere.
 		const search_fields = resolveSearchFields(config, query);
 		validateOrder(config, query);
+		validateHighlight(query, search_fields);
 		validateDistinctOn(config, query);
 
 		const where_node = normalizeWhere(
@@ -167,6 +186,9 @@ export class IdbSearchEngine {
 				: (await this.store.getAllDocs(entity_type)).map(toScored(config)).sort(byDocId);
 
 		let results: ScoredDocument[];
+		const matched_tokens: MatchedTokens = new Map();
+		const ordered_tokens = orderedDistinct(term_tokens);
+		let multi_match = new Set<string>();
 		if (has_term) {
 			const candidate_ids = matched
 				? new Set(matched.map((entry) => entry.doc_id))
@@ -181,7 +203,9 @@ export class IdbSearchEngine {
 				candidate_ids,
 				text_scores,
 				token_hits,
+				matched_tokens,
 			);
+			multi_match = multiMatchIds(token_hits, distinct_tokens.length);
 			const text_ids = applyThreshold(
 				config,
 				text_scores,
@@ -205,7 +229,17 @@ export class IdbSearchEngine {
 				? new Map(matched.map((entry) => [entry.doc_id, entry] as const))
 				: undefined;
 			if (deferrable) {
-				return await this.#pageByScore(config, query, scores, known, started);
+				return await this.#pageByScore(
+					config,
+					query,
+					scores,
+					known,
+					started,
+					search_fields,
+					ordered_tokens,
+					matched_tokens,
+					multi_match,
+				);
 			}
 			results = await this.#materialize(config, scores, known);
 		} else {
@@ -213,6 +247,17 @@ export class IdbSearchEngine {
 		}
 
 		applyOrder(config, results, query, has_term);
+		if (has_term) {
+			applyProximity(
+				config,
+				results,
+				query,
+				search_fields,
+				ordered_tokens,
+				matched_tokens,
+				multi_match,
+			);
+		}
 		const distinct = applyDistinct(results, query.distinct_on);
 		const facets = computeFacets(
 			distinct.map((entry) => entry.document),
@@ -224,11 +269,16 @@ export class IdbSearchEngine {
 		const page = distinct.slice(offset, offset + Math.max(0, limit));
 		return {
 			count: distinct.length,
-			hits: page.map((entry) => ({
-				id: entry.doc_id,
-				score: entry.score,
-				document: entry.document,
-			})),
+			hits: withHighlights(
+				page.map((entry) => ({
+					id: entry.doc_id,
+					score: entry.score,
+					document: entry.document,
+				})),
+				query,
+				search_fields,
+				matched_tokens,
+			),
 			elapsed: elapsedSince(started, this.#now),
 			...(facets ? { facets } : {}),
 		};
@@ -347,49 +397,62 @@ export class IdbSearchEngine {
 		candidate_ids: ReadonlySet<string> | null,
 		text_scores: Map<string, number>,
 		token_hits: TokenHits,
+		matched_tokens: MatchedTokens,
 	): Promise<void> {
 		const entity_type = config.entity_type;
 		const boosts = query.boost as Record<string, number> | undefined;
-		const exact = query.exact === true;
-		const tolerance = exact ? 0 : (query.tolerance ?? 0);
+		const plan = planQueryTerms(distinct_tokens, query);
 		/** Per-query cache for the oversized-dictionary full-range fallback. */
 		const expansion_memo = new Map<string, string[]>();
 		for (const field of search_fields) {
 			const stats = await this.store.getFieldStats(entity_type, field);
 			if (stats.doc_count === 0) continue;
 			const average_field_length = stats.total_len / stats.doc_count;
-			const boost = boosts?.[field] ?? 1;
+			const boost = fieldBoost(field, boosts, config.field_options);
 			const dictionary = await this.store.getTokenDictionary(entity_type, field);
 			// A field whose dictionary is too large to cache expands through range
 			// scans instead — same candidates, same order (§7.3's mirror). The
 			// expansions run sequentially so the per-query memo turns N identical
-			// full-range tolerance reads into one.
-			let expansions: string[][];
-			if (dictionary) {
-				expansions = distinct_tokens.map((token) =>
-					expandCachedDictionary(dictionary, token, exact, tolerance),
-				);
-			} else {
-				expansions = [];
-				for (const token of distinct_tokens) {
-					expansions.push(
-						await this.store.expandToken(
-							entity_type,
-							field,
-							token,
-							exact,
-							tolerance,
-							expansion_memo,
-						),
+			// full-range tolerance reads into one. An uncached dictionary is over
+			// the default-typo size limit, hence `Infinity` for its size.
+			const raw: string[][] = [];
+			const tolerances: number[] = [];
+			for (const term of plan) {
+				const tolerance = fieldTolerance(term, dictionary ? dictionary.tokens.length : Infinity);
+				tolerances.push(tolerance);
+				if (dictionary) {
+					const found = expandCachedDictionary(dictionary, term.token, term.exact, tolerance);
+					for (const variant of term.variants) {
+						found.push(...expandCachedDictionary(dictionary, variant, true, 0));
+					}
+					raw.push(found);
+				} else {
+					const found = await this.store.expandToken(
+						entity_type,
+						field,
+						term.token,
+						term.exact,
+						tolerance,
+						expansion_memo,
 					);
+					for (const variant of term.variants) {
+						found.push(
+							...(await this.store.expandToken(entity_type, field, variant, true, 0)),
+						);
+					}
+					raw.push(found);
 				}
 			}
-			const wanted = [...new Set(expansions.flat())].sort(compareStrings);
+			const wanted = [...new Set(raw.flat())].sort(compareStrings);
 			const terms = await this.store.getTerms(entity_type, field, wanted);
+			const expansions: WeightedToken[][] = plan.map((term, index) =>
+				selectExpansions(term, raw[index], tolerances[index], (token) => terms.get(token)?.df ?? 0),
+			);
 			for (let token_index = 0; token_index < distinct_tokens.length; token_index++) {
-				for (const candidate of expansions[token_index]) {
+				for (const { token: candidate, weight } of expansions[token_index]) {
 					const term = terms.get(candidate);
 					if (!term) continue;
+					noteMatch(matched_tokens, field, distinct_tokens[token_index], candidate);
 					for (const posting of term.postings) {
 						if (candidate_ids && !candidate_ids.has(posting.doc_id)) continue;
 						const score = bm25Score({
@@ -401,7 +464,7 @@ export class IdbSearchEngine {
 						});
 						text_scores.set(
 							posting.doc_id,
-							(text_scores.get(posting.doc_id) ?? 0) + boost * score,
+							(text_scores.get(posting.doc_id) ?? 0) + boost * weight * score,
 						);
 						token_hits.add(posting.doc_id, token_index);
 					}
@@ -444,29 +507,63 @@ export class IdbSearchEngine {
 		scores: ReadonlyMap<string, number>,
 		known: ReadonlyMap<string, ScoredDocument> | undefined,
 		started: number,
+		search_fields: readonly string[],
+		ordered_tokens: readonly string[],
+		matched_tokens: MatchedTokens,
+		multi_match: ReadonlySet<string>,
 	): Promise<SearchQueryResults<ClientDocument>> {
-		const entries = [...scores.entries()].map(([doc_id, score]) => ({ doc_id, score }));
+		let entries = [...scores.entries()].map(([doc_id, score]) => ({ doc_id, score }));
 		entries.sort((a, b) => {
 			if (a.score !== b.score) return a.score > b.score ? -1 : 1;
 			return comparePrimaryKeys(a.doc_id, b.doc_id, config.primary_key_type);
 		});
+		let missing = 0;
+		// The proximity pass re-reads the top of the ranking. A document that
+		// cannot be read is dropped first, exactly as the paging loop would.
+		let head: ReadonlyMap<string, ScoredDocument> | undefined;
+		const window =
+			ordered_tokens.length >= 2
+				? entries.slice(0, RERANK_WINDOW).filter((entry) => multi_match.has(entry.doc_id))
+				: [];
+		if (window.length > 0) {
+			head = known ?? (await this.#hydrate(config, window.map((entry) => entry.doc_id)));
+			const gone = new Set(window.filter((entry) => !head!.has(entry.doc_id)).map((entry) => entry.doc_id));
+			if (gone.size) entries = entries.filter((entry) => !gone.has(entry.doc_id));
+			rerankByProximity(
+				entries,
+				(entry) => head!.get(entry.doc_id)?.document,
+				search_fields,
+				ordered_tokens,
+				matched_tokens,
+				(field) => fieldTokenLimit(field, config.field_options),
+				config.primary_key_type,
+				multi_match,
+			);
+		}
 		const offset = query.offset ?? 0;
 		const limit = query.limit ?? entries.length;
 		const wanted = offset + Math.max(0, limit);
 		const hits: SearchQueryResults<ClientDocument>['hits'] = [];
 		let cursor = 0;
-		let missing = 0;
 		// Each pass hydrates exactly the entries still needed; a missing document
 		// is skipped and the next entry fills its place on a later pass.
 		while (cursor < entries.length && hits.length < wanted) {
 			const window = entries.slice(cursor, cursor + (wanted - hits.length));
 			cursor += window.length;
-			const hydrated =
-				known ??
-				(await this.#hydrate(
-					config,
-					window.map((entry) => entry.doc_id),
-				));
+			// Documents the rerank already read are reused; only the rest are read.
+			let hydrated: ReadonlyMap<string, ScoredDocument>;
+			if (known) hydrated = known;
+			else {
+				const need = window.filter((entry) => !head?.has(entry.doc_id));
+				const read = need.length
+					? await this.#hydrate(
+							config,
+							need.map((entry) => entry.doc_id),
+						)
+					: new Map<string, ScoredDocument>();
+				if (head) for (const [doc_id, document] of head) read.set(doc_id, document);
+				hydrated = read;
+			}
 			for (const entry of window) {
 				const document = hydrated.get(entry.doc_id);
 				if (!document) {
@@ -478,7 +575,7 @@ export class IdbSearchEngine {
 		}
 		return {
 			count: entries.length - missing,
-			hits: hits.slice(offset),
+			hits: withHighlights(hits.slice(offset), query, search_fields, matched_tokens),
 			elapsed: elapsedSince(started, this.#now),
 		};
 	}

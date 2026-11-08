@@ -32,15 +32,21 @@
 import { DelightError } from '@delightstack/utilities';
 import { bm25Score } from '../core/bm25.js';
 import { compareStrings } from '../core/compare.js';
-import { buildCachedDictionary, expandCachedDictionary } from '../core/dictionary.js';
+import { buildCachedDictionary } from '../core/dictionary.js';
+import { expandTerm, fieldBoost, planQueryTerms } from '../core/expansion.js';
+import { type MatchedTokens, noteMatch, orderedDistinct } from '../core/proximity.js';
 import { computeFacets } from '../core/facets.js';
 import {
 	applyDistinct,
 	applyOrder,
+	applyProximity,
 	applyThreshold,
+	multiMatchIds,
 	resolveSearchFields,
 	validateDistinctOn,
+	validateHighlight,
 	validateOrder,
+	withHighlights,
 	type ScoredDocument,
 } from '../core/pipeline.js';
 import { isVectorFieldType } from '../core/schema_fields.js';
@@ -88,6 +94,7 @@ export class MemorySearchEngine {
 		const store = this.store;
 		const search_fields = resolveSearchFields(store, query);
 		validateOrder(store, query);
+		validateHighlight(query, search_fields);
 		validateDistinctOn(store, query);
 
 		// 1. where
@@ -122,6 +129,7 @@ export class MemorySearchEngine {
 
 		const text_scores = new Map<string, number>();
 		const token_hits = new TokenHits(distinct_tokens.length);
+		const matched_tokens: MatchedTokens = new Map();
 		if (has_term && !skip_text) {
 			this.#accumulateText(
 				query,
@@ -130,6 +138,7 @@ export class MemorySearchEngine {
 				matched_ids,
 				text_scores,
 				token_hits,
+				matched_tokens,
 			);
 		}
 		const text_ids =
@@ -155,6 +164,17 @@ export class MemorySearchEngine {
 
 		// 5. order
 		applyOrder(store, results, query, has_term || vector_scores !== undefined);
+		if (has_term && !skip_text) {
+			applyProximity(
+				store,
+				results,
+				query,
+				search_fields,
+				orderedDistinct(term_tokens),
+				matched_tokens,
+				multiMatchIds(token_hits, distinct_tokens.length),
+			);
+		}
 
 		// 6. distinct_on (count is post-distinct — see the module docblock)
 		const distinct = applyDistinct(results, query.distinct_on);
@@ -173,11 +193,16 @@ export class MemorySearchEngine {
 
 		return {
 			count: distinct.length,
-			hits: page.map((entry) => ({
-				id: entry.doc_id,
-				score: entry.score,
-				document: entry.document,
-			})),
+			hits: withHighlights(
+				page.map((entry) => ({
+					id: entry.doc_id,
+					score: entry.score,
+					document: entry.document,
+				})),
+				query,
+				search_fields,
+				matched_tokens,
+			),
 			// No `Date.now()` anywhere in the engine (§3 determinism rules).
 			elapsed: { raw: 0, formatted: '0ms' },
 			...(facets ? { facets } : {}),
@@ -196,26 +221,24 @@ export class MemorySearchEngine {
 		matched_ids: ReadonlySet<string>,
 		text_scores: Map<string, number>,
 		token_hits: TokenHits,
+		matched_tokens: MatchedTokens,
 	): void {
 		const store = this.store;
 		const boosts = query.boost as Record<string, number> | undefined;
-		const exact = query.exact === true;
-		const tolerance = exact ? 0 : (query.tolerance ?? 0);
+		const terms = planQueryTerms(distinct_tokens, query);
 		for (const field of search_fields) {
 			const stats = store.getFieldStats(field);
 			if (stats.doc_count === 0) continue;
 			const average_field_length = stats.total_len / stats.doc_count;
-			const boost = boosts?.[field] ?? 1;
+			const boost = fieldBoost(field, boosts, store.field_options);
 			const dictionary = buildCachedDictionary(store.getDictionary(field));
 			for (let token_index = 0; token_index < distinct_tokens.length; token_index++) {
-				const token = distinct_tokens[token_index];
-				for (const candidate of expandCachedDictionary(
-					dictionary,
-					token,
-					exact,
-					tolerance,
+				const term = terms[token_index];
+				for (const { token: candidate, weight } of expandTerm(dictionary, term, (token) =>
+					store.getDocFrequency(field, token),
 				)) {
 					const doc_frequency = store.getDocFrequency(field, candidate);
+					if (doc_frequency > 0) noteMatch(matched_tokens, field, term.token, candidate);
 					for (const [doc_id, tf] of store.getPostings(field, candidate)) {
 						if (!matched_ids.has(doc_id)) continue;
 						const stored = store.getDocument(doc_id);
@@ -227,7 +250,10 @@ export class MemorySearchEngine {
 							field_doc_count: stats.doc_count,
 							doc_frequency,
 						});
-						text_scores.set(doc_id, (text_scores.get(doc_id) ?? 0) + boost * score);
+						text_scores.set(
+							doc_id,
+							(text_scores.get(doc_id) ?? 0) + boost * weight * score,
+						);
 						token_hits.add(doc_id, token_index);
 					}
 				}

@@ -14,8 +14,15 @@ import {
 	compareStrings,
 	type PrimaryKeyType,
 } from './compare.js';
+import {
+	highlightDocument,
+	type HighlightOption,
+	type MatchedTokens,
+	rerankByProximity,
+} from './proximity.js';
 import { isTextFieldType } from './schema_fields.js';
 import type { TokenHits } from './token_hits.js';
+import { DEFAULT_MAX_FIELD_TOKENS } from './tokenizer.js';
 import type { SearchQuery } from './types.js';
 import { getFieldValue, type WhereSchema } from './where.js';
 
@@ -29,6 +36,8 @@ export interface PipelineConfig {
 	primary_key_type: PrimaryKeyType;
 	/** Searchable text fields, ascending — the deterministic accumulation order. */
 	text_fields: readonly string[];
+	/** Per-field `.searchable({ weight, max_tokens })` options. */
+	field_options?: Readonly<Record<string, { weight?: number; max_tokens?: number }>>;
 }
 
 /** A document plus the score it earned. `doc_id` is `String(primary_key)`. */
@@ -77,6 +86,38 @@ export function resolveSearchFields(
 		resolved.push(field);
 	}
 	return [...new Set(resolved)].sort(compareStrings);
+}
+
+/**
+ * `highlight` must be a boolean or `{ fields?, length? }` naming searched
+ * fields and a positive length. It arrives from a URL as arbitrary JSON, so
+ * it is checked here once, identically for every driver.
+ */
+export function validateHighlight(query: SearchQuery, search_fields: readonly string[]): void {
+	const option = query.highlight as unknown;
+	if (option === undefined || typeof option === 'boolean') return;
+	const fail = (message: string) =>
+		DelightError.badRequest(message, { code: 'invalid_highlight' });
+	if (!option || typeof option !== 'object' || Array.isArray(option)) {
+		throw fail('`highlight` must be true, false or { fields, length }.');
+	}
+	const { fields, length } = option as { fields?: unknown; length?: unknown };
+	if (fields !== undefined) {
+		if (!Array.isArray(fields) || fields.some((field) => typeof field !== 'string')) {
+			throw fail('`highlight.fields` must be an array of field names.');
+		}
+		for (const field of fields as string[]) {
+			if (!search_fields.includes(field)) {
+				throw fail(`\`highlight.fields\` names "${field}", which this query does not search.`);
+			}
+		}
+	}
+	if (
+		length !== undefined &&
+		!(typeof length === 'number' && Number.isFinite(length) && length > 0)
+	) {
+		throw fail('`highlight.length` must be a positive number.');
+	}
 }
 
 /** Every `order[].field` must be a declared field or the primary key. */
@@ -194,4 +235,53 @@ export function applyDistinct(
 		kept.push(entry);
 	}
 	return kept;
+}
+
+/**
+ * The proximity pass (`core/proximity`) over score-ordered results, in place.
+ * Runs only when results are ranked by score (no `order[]`) and the term has
+ * at least two words; every driver calls it after {@link applyOrder} and
+ * before {@link applyDistinct}.
+ */
+export function applyProximity(
+	config: PipelineConfig,
+	results: ScoredDocument[],
+	query: SearchQuery,
+	search_fields: readonly string[],
+	ordered_tokens: readonly string[],
+	matched: MatchedTokens,
+	multi_match: ReadonlySet<string>,
+): void {
+	if ((query.order?.length ?? 0) > 0 || ordered_tokens.length < 2) return;
+	rerankByProximity(
+		results,
+		(entry) => entry.document,
+		search_fields,
+		ordered_tokens,
+		matched,
+		(field) => config.field_options?.[field]?.max_tokens ?? DEFAULT_MAX_FIELD_TOKENS,
+		config.primary_key_type,
+		multi_match,
+	);
+}
+
+/** Documents that matched at least two distinct query tokens (proximity candidates). */
+export function multiMatchIds(token_hits: TokenHits, token_count: number): Set<string> {
+	if (token_count < 2) return new Set();
+	return new Set(token_hits.ids().filter((doc_id) => token_hits.size(doc_id) >= 2));
+}
+
+/** Attach `highlights` to page hits when the query asked for them. */
+export function withHighlights<Hit extends { document: Record<string, unknown> }>(
+	hits: Hit[],
+	query: SearchQuery,
+	search_fields: readonly string[],
+	matched: MatchedTokens,
+): Hit[] {
+	const option = query.highlight as HighlightOption | undefined;
+	if (!option || matched.size === 0) return hits;
+	return hits.map((hit) => {
+		const highlights = highlightDocument(hit.document, search_fields, matched, option);
+		return highlights ? { ...hit, highlights } : hit;
+	});
 }
