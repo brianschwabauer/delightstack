@@ -1,4 +1,4 @@
-import type { FileReference } from './field-types';
+import type { FileReference } from './field-types.js';
 
 /**
  * The one method of an object store this module needs.

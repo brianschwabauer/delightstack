@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DatabaseServer } from './db.server';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { DatabaseServer } from './db.server.js';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 // batch(): many imperative writes → ONE SQLite transaction, atomic commit
 // (entity rows AND their search rows together), and websocket broadcasts held
@@ -65,9 +65,9 @@ describe('DatabaseServer.batch()', () => {
 		// The postings are written by the same transaction as the entity rows —
 		// nothing is serialized, snapshotted or journaled anywhere.
 		expect(state.log.some((entry) => /search_postings/.test(entry.sql))).toBe(true);
-		expect(
-			state.log.some((entry) => /search_index|search_journal/.test(entry.sql)),
-		).toBe(false);
+		expect(state.log.some((entry) => /search_index|search_journal/.test(entry.sql))).toBe(
+			false,
+		);
 		// All rows searchable.
 		const res = db.list('item', { limit: 100 });
 		expect((res as { count: number }).count).toBe(26);

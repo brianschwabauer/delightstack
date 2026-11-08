@@ -34,17 +34,17 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import type { FacetResult } from '../../core/types';
+import type { FacetResult } from '../../core/types.js';
 import {
 	SEARCH_BATTERY,
 	type BatteryCase,
 	type FixtureSearchQuery,
-} from '../fixtures/battery';
+} from '../fixtures/battery.js';
 import {
 	generateCorpus,
 	type CorpusPresetName,
 	type CorpusSizeName,
-} from '../fixtures/corpus';
+} from '../fixtures/corpus.js';
 import {
 	GOLDEN_FORMAT_VERSION,
 	type GoldenCorpusRef,
@@ -52,8 +52,8 @@ import {
 	type GoldenFacet,
 	type GoldenSuite,
 	type GoldenVector,
-} from '../fixtures/golden_format';
-import { buildMemoryEngine, toEngineQuery } from '../support';
+} from '../fixtures/golden_format.js';
+import { buildMemoryEngine, toEngineQuery } from '../support.js';
 
 /** Which implementation produced the answers. Recorded in every suite. */
 export const GENERATED_FROM = 'memory-reference';

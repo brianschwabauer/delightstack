@@ -23,15 +23,15 @@
  */
 
 import { DatabaseSync } from 'node:sqlite';
-import type { SearchSqlCursor, SearchSqlStorage } from '../server/sqlite_store';
+import type { SearchSqlCursor, SearchSqlStorage } from '../server/sqlite_store.js';
 import {
 	generatedColumnStatements,
 	planGeneratedColumns,
 	quoteIdentifier,
-} from '../server/sql_where';
-import { defineServerTable, type ServerSearchTable } from '../server/engine';
-import type { PrimaryKeyType } from '../core/compare';
-import type { WhereSchema } from '../core/where';
+} from '../server/sql_where.js';
+import { defineServerTable, type ServerSearchTable } from '../server/engine.js';
+import type { PrimaryKeyType } from '../core/compare.js';
+import type { WhereSchema } from '../core/where.js';
 
 /* -------------------------------------------------------------------------- */
 /* SqlStorage adapter                                                         */

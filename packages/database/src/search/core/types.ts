@@ -248,6 +248,18 @@ export interface SearchVectorQuery<TSchema = unknown> {
 	 * @default 0.8
 	 */
 	similarity?: number;
+	/**
+	 * The vector share of a **hybrid** query's fused score, `0..1` — text gets
+	 * `1 - weight`. `0` returns exactly the pure-text result (membership and
+	 * order), `1` exactly the pure-vector one; anything between fuses the two
+	 * max-normalized score sets at these weights. Meaningless without a `term`
+	 * (a vector-only query has nothing to weigh against) but still validated,
+	 * so a caller wiring a slider learns about a bad value on every query
+	 * shape. Rides inside the `vector` JSON URL param like `similarity`.
+	 *
+	 * @default 0.5
+	 */
+	weight?: number;
 }
 
 /**

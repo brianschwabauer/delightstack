@@ -6,9 +6,9 @@
  * accumulation order (§3), so it must come from exactly one place.
  */
 
-import { compareStrings } from './compare';
-import type { SearchableType } from './types';
-import type { WhereSchema } from './where';
+import { compareStrings } from './compare.js';
+import type { SearchableType } from './types.js';
+import type { WhereSchema } from './where.js';
 
 /** Whether a declared type participates in full-text term matching. */
 export function isTextFieldType(type: SearchableType): boolean {

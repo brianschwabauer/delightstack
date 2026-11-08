@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { Database } from '../schema/schema';
-import type { DatabaseClient, SearchResult } from './database.client.svelte';
+import { Database } from '../schema/schema.js';
+import type { DatabaseClient, SearchResult } from './database.client.svelte.js';
 
 // ── Type-level tests ─────────────────────────────────────────────────────────
 // These assert how `db.list(...)` types its documents: the sparse projection by

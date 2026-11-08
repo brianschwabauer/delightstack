@@ -13,15 +13,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { DelightError } from '@delightstack/utilities';
-import { evaluateWhere, normalizeWhere, type WhereSchema } from '../core/where';
-import { evaluateGeoOperation } from '../core/geo';
-import type { GeoPoint } from '../core/types';
+import { evaluateWhere, normalizeWhere, type WhereSchema } from '../core/where.js';
+import { evaluateGeoOperation } from '../core/geo.js';
+import type { GeoPoint } from '../core/types.js';
 import {
 	createEntityTable,
 	insertEntityRow,
 	NodeSqlStorage,
-} from '../__tests__/sqlite_harness';
-import { rowToDocument, whereContext, type ServerSearchTable } from './engine';
+} from '../__tests__/sqlite_harness.js';
+import { rowToDocument, whereContext, type ServerSearchTable } from './engine.js';
 import {
 	compileOrder,
 	compileWhere,
@@ -32,7 +32,7 @@ import {
 	planGeneratedColumns,
 	quoteIdentifier,
 	type SqlWhereContext,
-} from './sql_where';
+} from './sql_where.js';
 
 const SCHEMA: WhereSchema = {
 	id: 'string',

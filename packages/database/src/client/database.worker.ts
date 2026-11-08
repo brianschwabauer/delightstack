@@ -8,7 +8,7 @@ import {
 	deleteDatabase,
 	type SyncMeta,
 	type CachedEntity,
-} from './database.idb';
+} from './database.idb.js';
 import { DelightError, generateTimestampID } from '@delightstack/utilities';
 import {
 	Outbox,
@@ -19,8 +19,8 @@ import {
 	type OutboxScheduler,
 	type OutboxSnapshot,
 	type SendResult,
-} from './database.outbox';
-import { IdbSearchEngine, requiresServer } from '../search/client/engine';
+} from './database.outbox.js';
+import { IdbSearchEngine, requiresServer } from '../search/client/engine.js';
 import {
 	defineClientType,
 	docIndexName,
@@ -33,14 +33,14 @@ import {
 	type DocIndexPath,
 	type DocWrite,
 	type ExtraStoreOp,
-} from '../search/client/idb_store';
+} from '../search/client/idb_store.js';
 import type {
 	SearchableType,
 	SearchQuery,
 	SearchQueryResults,
-} from '../search/core/types';
-import type { WhereSchema } from '../search/core/where';
-import { type SearchQueryInput, encodeSearchQuery } from '../search-query';
+} from '../search/core/types.js';
+import type { WhereSchema } from '../search/core/where.js';
+import { type SearchQueryInput, encodeSearchQuery } from '../search-query.js';
 
 /** Inline sync response type to avoid importing server module in worker context. */
 interface SyncEntityResult {

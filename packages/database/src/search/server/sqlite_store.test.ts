@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { DelightError } from '@delightstack/utilities';
-import { NodeSqlStorage } from '../__tests__/sqlite_harness';
+import { NodeSqlStorage } from '../__tests__/sqlite_harness.js';
 import {
 	defineSearchType,
 	MAX_INSERT_ROWS,
@@ -22,7 +22,7 @@ import {
 	SqliteSearchStore,
 	TOMBSTONE_CAP,
 	type SearchTypeConfig,
-} from './sqlite_store';
+} from './sqlite_store.js';
 
 const SCHEMA = {
 	id: 'string',

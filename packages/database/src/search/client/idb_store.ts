@@ -32,24 +32,24 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { compareStrings, type PrimaryKeyType } from '../core/compare';
+import { compareStrings, type PrimaryKeyType } from '../core/compare.js';
 import {
 	buildCachedDictionary,
 	sameLengths,
 	sortedInsert,
 	sortedRemove,
 	type CachedDictionary,
-} from '../core/dictionary';
-import { ToleranceMatcher } from '../core/levenshtein';
-import { resolveTextFields } from '../core/schema_fields';
-import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer';
-import type { SearchableType } from '../core/types';
+} from '../core/dictionary.js';
+import { ToleranceMatcher } from '../core/levenshtein.js';
+import { resolveTextFields } from '../core/schema_fields.js';
+import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer.js';
+import type { SearchableType } from '../core/types.js';
 import {
 	getFieldValue,
 	type NormalizedLeaf,
 	type NormalizedWhere,
 	type WhereSchema,
-} from '../core/where';
+} from '../core/where.js';
 
 /* -------------------------------------------------------------------------- */
 /* Store names                                                                */

@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DatabaseServer, DatabaseSyncResponse } from './db.server';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { DatabaseServer, DatabaseSyncResponse } from './db.server.js';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 // The documented sync-protocol semantics — half-open windows, equal-timestamp
 // runs, deletions on the same timeline, monotonic timestamps, config_version
@@ -144,7 +144,9 @@ describe('DatabaseServer.sync()', () => {
 		vi.setSystemTime(T0 + 1000);
 		db.create('item', { name: 'b' });
 
-		const res = db.sync({ entity: { item: { start_updated_at: 0, end_updated_at: T0 } } });
+		const res = db.sync({
+			entity: { item: { start_updated_at: 0, end_updated_at: T0 } },
+		});
 		const entity = res.entity.item as SyncEntity;
 		expect(entity.created.map((d: any) => d.id)).toEqual([a.id]);
 	});
@@ -160,7 +162,9 @@ describe('DatabaseServer.sync()', () => {
 		vi.setSystemTime(T0 + 100_000);
 		db.delete('item', ids[0]);
 
-		const res = db.sync({ entity: { item: { start_updated_at: 0, end_updated_at: T0 + 50_000 } } });
+		const res = db.sync({
+			entity: { item: { start_updated_at: 0, end_updated_at: T0 + 50_000 } },
+		});
 		const entity = res.entity.item as SyncEntity;
 		expect(entity.deleted).toEqual([]); // delete is outside (0, T0+50_000]
 		expect(entity.end_updated_at).toBeLessThanOrEqual(T0 + 50_000);
@@ -323,7 +327,8 @@ describe('DatabaseServer.sync(): vector strip (plan §7.0)', () => {
 		});
 		db.create('item', { name: 'embedded item', embedding: [0.1, 0.2, 0.3] });
 
-		const entity = db.sync({ entity: { item: { start_updated_at: 0 } } }).entity.item as any;
+		const entity = db.sync({ entity: { item: { start_updated_at: 0 } } }).entity
+			.item as any;
 		const docs = [...entity.created, ...entity.updated];
 		expect(docs).toHaveLength(1);
 		// The searchable fields still travel; the embedding does not — vector
@@ -360,7 +365,8 @@ describe('DatabaseServer.sync(): backfill ceiling (defer_over)', () => {
 	it('reports total_count on every entity result', () => {
 		const { db } = createServer();
 		seed(db, 3);
-		const entity = db.sync({ entity: { item: { start_updated_at: 0 } } }).entity.item as SyncEntity;
+		const entity = db.sync({ entity: { item: { start_updated_at: 0 } } }).entity
+			.item as SyncEntity;
 		expect(entity.total_count).toBe(3);
 		expect(entity.deferred).toBeUndefined();
 	});

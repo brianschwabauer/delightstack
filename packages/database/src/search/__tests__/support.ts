@@ -14,17 +14,17 @@
  * `golden.test.ts` (plan §8.2).
  */
 
-import { MemorySearchEngine } from '../memory/engine';
-import type { SearchQuery } from '../core/types';
-import type { WhereSchema } from '../core/where';
-import type { FixtureSearchQuery } from './fixtures/battery';
+import { MemorySearchEngine } from '../memory/engine.js';
+import type { SearchQuery } from '../core/types.js';
+import type { WhereSchema } from '../core/where.js';
+import type { FixtureSearchQuery } from './fixtures/battery.js';
 import {
 	generateCorpus,
 	type Corpus,
 	type CorpusPresetName,
 	type CorpusSizeName,
 	type FixtureSchema,
-} from './fixtures/corpus';
+} from './fixtures/corpus.js';
 
 /* -------------------------------------------------------------------------- */
 /* Static drift guard                                                         */

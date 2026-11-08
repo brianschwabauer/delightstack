@@ -19,19 +19,21 @@
  * - `count` is reported AFTER `distinct_on` (Orama reported the pre-distinct
  *   count, which makes pagination arithmetic wrong).
  * - Vector mode scores dot products over write-time unit-normalized vectors and
- *   hybrid fusion is max-normalized 0.5/0.5. `vector.similarity` (default
- *   `0.8`, inclusive) is the admission floor for both modes — it is part of the
- *   public typed API (decided 2026-08-12) where Orama's was unreachable.
+ *   hybrid fusion is max-normalized at `vector.weight` (DS-08 — the vector
+ *   share, default 0.5/0.5; `0`/`1` short-circuit to the pure text/vector
+ *   result). `vector.similarity` (default `0.8`, inclusive) is the admission
+ *   floor for both modes — it is part of the public typed API (decided
+ *   2026-08-12) where Orama's was unreachable.
  *
  * Determinism: no `Date.now()`, no randomness, and no reliance on Map/object
  * iteration order — `elapsed` is therefore always zero here.
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { bm25Score } from '../core/bm25';
-import { compareStrings } from '../core/compare';
-import { buildCachedDictionary, expandCachedDictionary } from '../core/dictionary';
-import { computeFacets } from '../core/facets';
+import { bm25Score } from '../core/bm25.js';
+import { compareStrings } from '../core/compare.js';
+import { buildCachedDictionary, expandCachedDictionary } from '../core/dictionary.js';
+import { computeFacets } from '../core/facets.js';
 import {
 	applyDistinct,
 	applyOrder,
@@ -40,15 +42,19 @@ import {
 	validateDistinctOn,
 	validateOrder,
 	type ScoredDocument,
-} from '../core/pipeline';
-import { isVectorFieldType } from '../core/schema_fields';
-import { TokenHits } from '../core/token_hits';
-import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer';
-import type { FacetDefinition, SearchQuery, SearchQueryResults } from '../core/types';
-import { evaluateWhere, normalizeWhere } from '../core/where';
-import { fuseScores } from '../server/fusion';
-import { DEFAULT_SIMILARITY, dotProduct, normalizeVector } from '../server/vector';
-import { MemorySearchStore, type MemoryIndexConfig, type StoredDocument } from './store';
+} from '../core/pipeline.js';
+import { isVectorFieldType } from '../core/schema_fields.js';
+import { TokenHits } from '../core/token_hits.js';
+import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer.js';
+import type { FacetDefinition, SearchQuery, SearchQueryResults } from '../core/types.js';
+import { evaluateWhere, normalizeWhere } from '../core/where.js';
+import { fuseScores, fusionWeights } from '../server/fusion.js';
+import { DEFAULT_SIMILARITY, dotProduct, normalizeVector } from '../server/vector.js';
+import {
+	MemorySearchStore,
+	type MemoryIndexConfig,
+	type StoredDocument,
+} from './store.js';
 
 /** An indexed document as returned in hits. */
 export type MemoryDocument = Record<string, unknown>;
@@ -104,9 +110,19 @@ export class MemorySearchEngine {
 				: [];
 		const distinct_tokens = [...new Set(term_tokens)].sort(compareStrings);
 		const has_term = distinct_tokens.length > 0;
+
+		// DS-08 endpoint short-circuits as *skips* — the server driver's rule,
+		// restated: at weight 0 the vector scan never runs (its query shape is
+		// still validated), at weight 1 the BM25 side never runs. Either skip
+		// leaves one score set, and `#combine`'s single-set branches ARE the
+		// endpoint results.
+		const weight = query.vector?.weight;
+		const skip_text = has_term && query.vector !== undefined && weight === 1;
+		const skip_vector = has_term && query.vector !== undefined && weight === 0;
+
 		const text_scores = new Map<string, number>();
 		const token_hits = new TokenHits(distinct_tokens.length);
-		if (has_term) {
+		if (has_term && !skip_text) {
 			this.#accumulateText(
 				query,
 				search_fields,
@@ -116,23 +132,26 @@ export class MemorySearchEngine {
 				token_hits,
 			);
 		}
-		const text_ids = has_term
-			? applyThreshold(
-					store,
-					text_scores,
-					token_hits,
-					distinct_tokens.length,
-					query.threshold,
-				)
-			: undefined;
+		const text_ids =
+			has_term && !skip_text
+				? applyThreshold(
+						store,
+						text_scores,
+						token_hits,
+						distinct_tokens.length,
+						query.threshold,
+					)
+				: undefined;
 
 		// 3. vector
-		const vector_scores = query.vector
-			? this.#scoreVectors(query, matched_ids)
-			: undefined;
+		let vector_scores: Map<string, number> | undefined;
+		if (query.vector) {
+			if (skip_vector) this.#validateVector(query);
+			else vector_scores = this.#scoreVectors(query, matched_ids);
+		}
 
 		// 4. combine into the result membership + scores
-		const results = this.#combine(matched, text_scores, text_ids, vector_scores);
+		const results = this.#combine(matched, text_scores, text_ids, vector_scores, weight);
 
 		// 5. order
 		applyOrder(store, results, query, has_term || vector_scores !== undefined);
@@ -216,13 +235,23 @@ export class MemorySearchEngine {
 		}
 	}
 
-	/** Dot-product scoring over unit vectors, filtered by the similarity floor. */
-	#scoreVectors(
-		query: SearchQuery,
-		matched_ids: ReadonlySet<string>,
-	): Map<string, number> {
-		const vector_query = query.vector;
-		if (!vector_query) return new Map();
+	/**
+	 * Validate a vector query's shape without touching any stored vector — the
+	 * server driver's `#validateVector`, restated, so a `weight: 0` skip still
+	 * rejects a garbage field, type, dimension or weight identically on both
+	 * engines. The dimension check reuses `dotProduct`'s exact message (goldens
+	 * pin it); before the skip existed this engine met a wrong dimension only
+	 * inside the scan.
+	 */
+	#validateVector(query: SearchQuery): {
+		field: string;
+		query_vector: Float32Array;
+		minimum: number;
+	} {
+		const vector_query = query.vector!;
+		// Validated here — not only where fusion reads it — so a bad weight is an
+		// error on every query shape, vector-only included (DS-08).
+		fusionWeights(vector_query.weight);
 		const field = vector_query.field;
 		const type = this.store.schema[field];
 		if (type === undefined) {
@@ -235,8 +264,31 @@ export class MemorySearchEngine {
 				code: 'invalid_vector_field',
 			});
 		}
-		const query_vector = normalizeVector(vector_query.value);
-		const minimum = vector_query.similarity ?? DEFAULT_SIMILARITY;
+		const declared_dimension = Number((type as string).slice('vector['.length, -1));
+		if (
+			Number.isInteger(declared_dimension) &&
+			declared_dimension > 0 &&
+			vector_query.value.length !== declared_dimension
+		) {
+			throw DelightError.badRequest(
+				`Vector dimension mismatch: query has ${vector_query.value.length}, index has ${declared_dimension}.`,
+				{ code: 'invalid_vector' },
+			);
+		}
+		return {
+			field,
+			query_vector: normalizeVector(vector_query.value),
+			minimum: vector_query.similarity ?? DEFAULT_SIMILARITY,
+		};
+	}
+
+	/** Dot-product scoring over unit vectors, filtered by the similarity floor. */
+	#scoreVectors(
+		query: SearchQuery,
+		matched_ids: ReadonlySet<string>,
+	): Map<string, number> {
+		if (!query.vector) return new Map();
+		const { field, query_vector, minimum } = this.#validateVector(query);
 		const scores = new Map<string, number>();
 		for (const stored of this.store.documents()) {
 			if (!matched_ids.has(stored.doc_id)) continue;
@@ -254,6 +306,7 @@ export class MemorySearchEngine {
 		text_scores: ReadonlyMap<string, number>,
 		text_ids: ReadonlySet<string> | undefined,
 		vector_scores: ReadonlyMap<string, number> | undefined,
+		weight: number | undefined,
 	): ScoredDocument[] {
 		const toEntry = (stored: StoredDocument, score: number): ScoredDocument => ({
 			doc_id: stored.doc_id,
@@ -262,9 +315,12 @@ export class MemorySearchEngine {
 			score,
 		});
 		if (text_ids && vector_scores) {
+			// Both sets exist only for a genuine blend — the endpoint weights skip
+			// the dead side's scoring upstream, so `0`/`1` land in the single-set
+			// branches below, which ARE the pure results.
 			const text_subset = new Map<string, number>();
 			for (const id of text_ids) text_subset.set(id, text_scores.get(id) ?? 0);
-			const fused = fuseScores(text_subset, vector_scores);
+			const fused = fuseScores(text_subset, vector_scores, fusionWeights(weight));
 			return matched
 				.filter((stored) => fused.has(stored.doc_id))
 				.map((stored) => toEntry(stored, fused.get(stored.doc_id) as number));

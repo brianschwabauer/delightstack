@@ -13,11 +13,11 @@ import {
 	comparePrimaryKeys,
 	compareStrings,
 	type PrimaryKeyType,
-} from './compare';
-import { isTextFieldType } from './schema_fields';
-import type { TokenHits } from './token_hits';
-import type { SearchQuery } from './types';
-import { getFieldValue, type WhereSchema } from './where';
+} from './compare.js';
+import { isTextFieldType } from './schema_fields.js';
+import type { TokenHits } from './token_hits.js';
+import type { SearchQuery } from './types.js';
+import { getFieldValue, type WhereSchema } from './where.js';
 
 /** The structural configuration the pipeline needs — every driver satisfies it. */
 export interface PipelineConfig {

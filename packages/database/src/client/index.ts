@@ -11,9 +11,9 @@ export {
 	type HandleStatus,
 	type DatabaseStatus,
 	type ListOptions,
-} from './database.client.svelte';
+} from './database.client.svelte.js';
 
-export { type WorkerSearchResult } from './database.worker';
+export { type WorkerSearchResult } from './database.worker.js';
 
 export type {
 	FailedOperation,
@@ -21,13 +21,13 @@ export type {
 	OutboxOperation,
 	OutboxSnapshot,
 	SyncState,
-} from './database.outbox';
+} from './database.outbox.js';
 
-export type { DatabaseClientHooks, DatabaseEntityChange } from '../contract';
+export type { DatabaseClientHooks, DatabaseEntityChange } from '../contract.js';
 
 export {
 	type SearchQueryInput,
 	type ValidSearchQuery,
 	encodeSearchQuery,
 	decodeSearchQuery,
-} from '../search-query';
+} from '../search-query.js';

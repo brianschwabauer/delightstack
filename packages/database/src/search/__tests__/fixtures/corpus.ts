@@ -24,7 +24,7 @@
  * two together.
  */
 
-import { createPrng, type Prng } from './prng';
+import { createPrng, type Prng } from './prng.js';
 
 /* -------------------------------------------------------------------------- */
 /* Schema vocabulary (mirrors core/types.ts)                                  */

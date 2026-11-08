@@ -1,6 +1,6 @@
-export * from './database.handler';
-export type * from '../contract';
-export * from './sql.helper';
+export * from './database.handler.js';
+export type * from '../contract.js';
+export * from './sql.helper.js';
 
 // Note: DatabaseServer is intentionally NOT re-exported from this barrel.
 // It imports cloudflare:workers which only resolves in the Workers runtime.
@@ -12,4 +12,5 @@ export type {
 	DatabaseSyncResponse,
 	DatabaseServerTransaction,
 	DatabaseServerTransactionResult,
-} from './db.server';
+	DatabaseEmbedder,
+} from './db.server.js';

@@ -35,7 +35,7 @@ import {
 	VECTOR_QUERY,
 	type CorpusPresetName,
 	type FixtureGeoPoint,
-} from './corpus';
+} from './corpus.js';
 
 /* -------------------------------------------------------------------------- */
 /* Query mirror types                                                         */
@@ -1713,6 +1713,72 @@ function buildBattery(): BatteryCase[] {
 		{
 			notes:
 				'Report §12: an empty/zero-max score set must be guarded, not produce NaN/-0.',
+		},
+	);
+	add(
+		'hybrid.weight_025',
+		{
+			term: 'alpha',
+			vector: { value: VECTOR_QUERY, field: 'embedding', weight: 0.25 },
+		},
+		['hybrid', 'vector', 'scored', 'server-only'],
+		{
+			notes:
+				'DS-08: an intermediate fusion weight — 0.75 * text + 0.25 * vector over max-normalized sets.',
+		},
+	);
+	add(
+		'hybrid.weight_075',
+		{
+			term: 'alpha',
+			vector: { value: VECTOR_QUERY, field: 'embedding', weight: 0.75 },
+		},
+		['hybrid', 'vector', 'scored', 'server-only'],
+		{
+			notes:
+				'DS-08: the same query at the mirrored weight — the ranking must move toward the vector order, monotonically in `weight`.',
+		},
+	);
+	add(
+		'hybrid.weight_zero_is_pure_text',
+		{
+			term: 'alpha',
+			vector: { value: VECTOR_QUERY, field: 'embedding', weight: 0 },
+		},
+		['hybrid', 'vector', 'scored', 'server-only'],
+		{
+			notes:
+				'DS-08: weight 0 short-circuits — membership and order equal the bare `term: alpha` query, with no vector-only documents admitted at score 0.',
+		},
+	);
+	add(
+		'hybrid.weight_one_is_pure_vector',
+		{
+			term: 'alpha',
+			vector: { value: VECTOR_QUERY, field: 'embedding', weight: 1 },
+		},
+		['hybrid', 'vector', 'scored', 'server-only'],
+		{
+			notes:
+				'DS-08: weight 1 short-circuits — membership and order equal the vector-only query, text matches contributing nothing.',
+		},
+	);
+	add(
+		'hybrid.error.weight_out_of_range',
+		{
+			term: 'alpha',
+			vector: { value: VECTOR_QUERY, field: 'embedding', weight: 1.5 },
+		},
+		['error', 'hybrid', 'vector', 'server-only'],
+		{ notes: 'DS-08: a fusion weight outside 0..1 is a 400, not a strange ranking.' },
+	);
+	add(
+		'vector.error.weight_on_vector_only',
+		{ vector: { value: VECTOR_QUERY, field: 'embedding', weight: -0.1 } },
+		['error', 'vector', 'server-only'],
+		{
+			notes:
+				'DS-08: the weight is validated on every query shape — vector-only included, where fusion would never read it.',
 		},
 	);
 

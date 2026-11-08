@@ -13,9 +13,9 @@ import {
 	createEntityTable,
 	insertEntityRow,
 	NodeSqlStorage,
-} from '../__tests__/sqlite_harness';
-import type { WhereSchema } from '../core/where';
-import { SqliteSearchEngine, rowToDocument, type ServerSearchTable } from './engine';
+} from '../__tests__/sqlite_harness.js';
+import type { WhereSchema } from '../core/where.js';
+import { SqliteSearchEngine, rowToDocument, type ServerSearchTable } from './engine.js';
 
 const SCHEMA: WhereSchema = {
 	id: 'string',
@@ -242,6 +242,113 @@ describe('query planning', () => {
 			vector: { value: [1, 0, 0], field: 'embedding', similarity: 0 },
 		});
 		expect(hybrid.hits[0].id).toBe('a');
+	});
+
+	it('DS-08: weight 0/1 equal the pure orders, and the blend moves monotonically', () => {
+		const { engine } = load();
+		const ids = (result: { hits: { id: string }[] }) => result.hits.map((hit) => hit.id);
+		const at = (weight: number) =>
+			engine.list('article', {
+				term: 'data',
+				vector: { value: [0, 1, 0], field: 'embedding', similarity: 0, weight },
+			});
+
+		// 0 IS the pure text answer — membership too: no vector-only stragglers.
+		const pure_text = engine.list('article', { term: 'data' });
+		expect(ids(at(0))).toEqual(ids(pure_text));
+		expect(at(0).count).toBe(pure_text.count);
+
+		// 1 IS the pure vector answer — text matches contribute nothing.
+		const pure_vector = engine.list('article', {
+			vector: { value: [0, 1, 0], field: 'embedding', similarity: 0 },
+		});
+		expect(ids(at(1))).toEqual(ids(pure_vector));
+		expect(at(1).count).toBe(pure_vector.count);
+
+		// In between, a text-only document's fused score falls as the vector
+		// share rises: monotone in `weight`.
+		const score = (result: { hits: { id: string; score: number }[] }, id: string) =>
+			result.hits.find((hit) => hit.id === id)!.score;
+		expect(score(at(0.25), 'c')).toBeGreaterThan(score(at(0.75), 'c'));
+		expect(score(at(0.25), 'b')).toBeCloseTo(1, 12);
+		expect(score(at(0.75), 'b')).toBeCloseTo(1, 12);
+	});
+
+	it('DS-08: weight 0 skips the vector scan; weight 1 skips the text side', () => {
+		const { sql, engine } = load();
+		const at = (weight: number) => {
+			sql.log.length = 0;
+			const result = engine.list('article', {
+				term: 'data',
+				vector: { value: [0, 1, 0], field: 'embedding', similarity: 0, weight },
+			});
+			return { result, log: [...sql.log] };
+		};
+		// The results are identical to the pure queries (asserted above) AND the
+		// dead side's storage is never touched.
+		const zero = at(0);
+		expect(zero.log.some((entry) => entry.sql.includes('FROM search_vectors'))).toBe(
+			false,
+		);
+		expect(zero.result.hits.length).toBeGreaterThan(0);
+		const one = at(1);
+		expect(one.log.some((entry) => entry.sql.includes('FROM search_postings'))).toBe(
+			false,
+		);
+		expect(one.result.hits.length).toBeGreaterThan(0);
+		// An intermediate weight reads both sides — the skip is the endpoints'.
+		const blend = at(0.5);
+		expect(blend.log.some((entry) => entry.sql.includes('FROM search_vectors'))).toBe(
+			true,
+		);
+		expect(blend.log.some((entry) => entry.sql.includes('FROM search_postings'))).toBe(
+			true,
+		);
+	});
+
+	it('DS-08: a skipped vector scan still validates the vector query', () => {
+		const { engine } = load();
+		// Garbage field, type and dimension must fail identically at weight 0 —
+		// a slider parked at "all words" is not a validation hole.
+		expect(() =>
+			engine.list('article', {
+				term: 'data',
+				vector: { value: [0, 1, 0], field: 'nope', weight: 0 },
+			}),
+		).toThrowError(expect.objectContaining({ code: 'unknown_vector_field' }));
+		expect(() =>
+			engine.list('article', {
+				term: 'data',
+				vector: { value: [0, 1, 0], field: 'title', weight: 0 },
+			}),
+		).toThrowError(expect.objectContaining({ code: 'invalid_vector_field' }));
+		expect(() =>
+			engine.list('article', {
+				term: 'data',
+				vector: { value: [1, 0], field: 'embedding', weight: 0 },
+			}),
+		).toThrowError(
+			expect.objectContaining({
+				status: 400,
+				message: 'Vector dimension mismatch: query has 2, index has 3.',
+			}),
+		);
+	});
+
+	it('DS-08: rejects a weight outside 0..1 on every query shape', () => {
+		const { engine } = load();
+		for (const query of [
+			{
+				term: 'data',
+				vector: { value: [0, 1, 0], field: 'embedding', weight: 1.5 },
+			},
+			// Vector-only: fusion never runs, the validation still must.
+			{ vector: { value: [0, 1, 0], field: 'embedding', weight: -0.1 } },
+		]) {
+			expect(() => engine.list('article', query)).toThrowError(
+				expect.objectContaining({ status: 400, code: 'invalid_vector_weight' }),
+			);
+		}
 	});
 
 	it('never binds more than 100 parameters on the read path either', () => {

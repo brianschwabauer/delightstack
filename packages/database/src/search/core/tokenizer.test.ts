@@ -4,7 +4,7 @@ import {
 	MAX_TOKEN_LENGTH,
 	tokenize,
 	tokenizeValue,
-} from './tokenizer';
+} from './tokenizer.js';
 
 describe('tokenize', () => {
 	it('lowercases and splits on non-letter/non-number runs', () => {

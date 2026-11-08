@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { DatabaseServer } from './db.server';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { DatabaseServer } from './db.server.js';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 // `.searchable().serverOnly()`: indexed in the Durable Object, never on the
 // wire. Driven through the public API against real SQLite.

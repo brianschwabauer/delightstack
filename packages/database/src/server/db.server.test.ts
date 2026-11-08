@@ -15,9 +15,9 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DatabaseServer } from './db.server';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { DatabaseServer } from './db.server.js';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {

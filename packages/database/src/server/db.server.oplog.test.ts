@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DatabaseServer, BLOB_OMITTED } from './db.server';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { DatabaseServer, BLOB_OMITTED } from './db.server.js';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 // `{ op_id }` dedupe, against real SQLite. What is under test is that a
 // replayed mutation writes nothing and returns what the first one returned —

@@ -26,9 +26,9 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { compareValues, isNullish } from './compare';
-import { evaluateGeoOperation, validateGeoOperand } from './geo';
-import type { GeoOperation, SearchableType } from './types';
+import { compareValues, isNullish } from './compare.js';
+import { evaluateGeoOperation, validateGeoOperand } from './geo.js';
+import type { GeoOperation, SearchableType } from './types.js';
 
 /** A flat map of dot-path → declared field type. The set of legal paths. */
 export type WhereSchema = Record<string, SearchableType>;

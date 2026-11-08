@@ -4,7 +4,7 @@ import type {
 	SearchableType,
 	SearchQuery as CoreSearchQuery,
 	SearchQueryResults as CoreSearchQueryResults,
-} from '../search/core/types';
+} from '../search/core/types.js';
 import { DelightError } from '@delightstack/utilities';
 import type {
 	AddQuestionMarks,
@@ -30,8 +30,8 @@ import type {
 	IsUnique,
 	OmitNeverProperties,
 	SqliteForeignKeyAction,
-} from './field-types';
-import { DatabaseGenerator, type FieldGenerator } from './generators';
+} from './field-types.js';
+import { DatabaseGenerator, type FieldGenerator } from './generators.js';
 
 /**
  * TODO:

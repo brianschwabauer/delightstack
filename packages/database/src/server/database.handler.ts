@@ -1,8 +1,8 @@
 import type { Handle, RequestEvent } from '@sveltejs/kit';
-import type { Database } from '../schema/schema';
-import type { DatabaseSyncResponse } from './db.server';
+import type { Database } from '../schema/schema.js';
+import type { DatabaseSyncResponse } from './db.server.js';
 import { DelightError } from '@delightstack/utilities';
-import { decodeSearchQuery } from '../search-query';
+import { decodeSearchQuery } from '../search-query.js';
 
 /**
  * One entity's member of a sync response. Type-only — `db.server` imports

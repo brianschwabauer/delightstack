@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_FUSION_WEIGHTS, fuseScores, maxNormalize } from './fusion';
+import {
+	DEFAULT_FUSION_WEIGHTS,
+	fuseScores,
+	fusionWeights,
+	maxNormalize,
+} from './fusion.js';
 
 describe('maxNormalize', () => {
 	it('divides by the maximum WITHOUT subtracting the minimum', () => {
@@ -81,5 +86,29 @@ describe('fuseScores', () => {
 			vector: 0.1,
 		});
 		expect(fused.get('a')).toBeCloseTo(1, 12);
+	});
+});
+
+describe('fusionWeights (DS-08)', () => {
+	it('defaults to 0.5 / 0.5 when the weight is absent', () => {
+		expect(fusionWeights(undefined)).toEqual(DEFAULT_FUSION_WEIGHTS);
+	});
+
+	it('gives the vector the weight and the text the complement', () => {
+		expect(fusionWeights(0.25)).toEqual({ text: 0.75, vector: 0.25 });
+		expect(fusionWeights(0)).toEqual({ text: 1, vector: 0 });
+		expect(fusionWeights(1)).toEqual({ text: 0, vector: 1 });
+	});
+
+	it('rejects anything outside 0..1, or not a finite number', () => {
+		for (const bad of [-0.1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+			expect(() => fusionWeights(bad)).toThrowError(
+				expect.objectContaining({ status: 400 }),
+			);
+		}
+		// A non-number smuggled past the types (a JSON URL param can carry one).
+		expect(() => fusionWeights('0.5' as unknown as number)).toThrowError(
+			expect.objectContaining({ status: 400 }),
+		);
 	});
 });

@@ -10,11 +10,11 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { compareStrings, type PrimaryKeyType } from '../core/compare';
-import { resolveTextFields, resolveVectorFields } from '../core/schema_fields';
-import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer';
-import { getFieldValue, type WhereSchema } from '../core/where';
-import { normalizeVector } from '../server/vector';
+import { compareStrings, type PrimaryKeyType } from '../core/compare.js';
+import { resolveTextFields, resolveVectorFields } from '../core/schema_fields.js';
+import { countTokenFrequencies, tokenizeValue } from '../core/tokenizer.js';
+import { getFieldValue, type WhereSchema } from '../core/where.js';
+import { normalizeVector } from '../server/vector.js';
 
 /** Configuration for a memory index. */
 export interface MemoryIndexConfig {

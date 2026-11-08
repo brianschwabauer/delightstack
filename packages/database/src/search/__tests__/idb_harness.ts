@@ -23,12 +23,12 @@ import {
 	type ClientSearchType,
 	type DocIndexPath,
 	type DocWrite,
-} from '../client/idb_store';
-import { IdbSearchEngine, type IdbSearchEngineOptions } from '../client/engine';
-import type { WhereSchema } from '../core/where';
-import type { SearchableType } from '../core/types';
-import { flattenSchema } from './support';
-import type { Corpus, FixtureDocument } from './fixtures/corpus';
+} from '../client/idb_store.js';
+import { IdbSearchEngine, type IdbSearchEngineOptions } from '../client/engine.js';
+import type { WhereSchema } from '../core/where.js';
+import type { SearchableType } from '../core/types.js';
+import { flattenSchema } from './support.js';
+import type { Corpus, FixtureDocument } from './fixtures/corpus.js';
 
 /** Unique database names, so no two tests can ever share state. */
 let database_counter = 0;

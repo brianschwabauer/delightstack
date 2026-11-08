@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TokenHits } from './token_hits';
+import { TokenHits } from './token_hits.js';
 
 /**
  * The reference shape this replaces — a `Set` of token indices per document.

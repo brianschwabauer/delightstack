@@ -17,14 +17,14 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { compareStrings, compareValues } from './compare';
+import { compareStrings, compareValues } from './compare.js';
 import type {
 	FacetDefinition,
 	FacetResult,
 	NumberFacetDefinition,
 	StringFacetDefinition,
-} from './types';
-import { getFieldValue, isArrayFieldType, type WhereSchema } from './where';
+} from './types.js';
+import { getFieldValue, isArrayFieldType, type WhereSchema } from './where.js';
 
 /** Orama's default cap on returned string-facet values. */
 export const DEFAULT_STRING_FACET_LIMIT = 10;

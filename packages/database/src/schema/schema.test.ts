@@ -1,5 +1,5 @@
 import { describe, it, expect, assertType } from 'vitest';
-import { Database } from './schema';
+import { Database } from './schema.js';
 
 // ── Type-level tests ─────────────────────────────────────────────────────────
 // These verify that Database.Entity<> produces the correct TypeScript type

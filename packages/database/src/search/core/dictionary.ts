@@ -18,8 +18,8 @@
  * BM25 accumulation order follows it.
  */
 
-import { compareStrings } from './compare';
-import { characterSignature, codePointLength, ToleranceMatcher } from './levenshtein';
+import { compareStrings } from './compare.js';
+import { characterSignature, codePointLength, ToleranceMatcher } from './levenshtein.js';
 
 /** One field's cached term dictionary. */
 export interface CachedDictionary {

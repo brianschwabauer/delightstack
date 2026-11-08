@@ -15,7 +15,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { buildAllGoldenSuites, stringifyGoldenSuite } from './generate';
+import { buildAllGoldenSuites, stringifyGoldenSuite } from './generate.js';
 
 const SHOULD_REGENERATE =
 	typeof process !== 'undefined' && process.env?.DELIGHT_REGEN_GOLDEN === '1';

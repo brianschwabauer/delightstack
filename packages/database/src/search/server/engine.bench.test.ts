@@ -21,14 +21,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createPrng } from '../__tests__/fixtures/prng';
+import { createPrng } from '../__tests__/fixtures/prng.js';
 import {
 	createEntityTable,
 	insertEntityRow,
 	NodeSqlStorage,
-} from '../__tests__/sqlite_harness';
-import type { WhereSchema } from '../core/where';
-import { SqliteSearchEngine } from './engine';
+} from '../__tests__/sqlite_harness.js';
+import type { WhereSchema } from '../core/where.js';
+import { SqliteSearchEngine } from './engine.js';
 
 const CORPUS_SIZES = process.env.DELIGHT_SEARCH_BENCH_SIZE
 	? [Number(process.env.DELIGHT_SEARCH_BENCH_SIZE)]

@@ -20,8 +20,8 @@
  * a generator that lived alongside the assertions could drift with them.
  */
 
-import type { CorpusPresetName, CorpusSizeName } from './corpus';
-import type { BatteryTag, FixtureSearchQuery } from './battery';
+import type { CorpusPresetName, CorpusSizeName } from './corpus.js';
+import type { BatteryTag, FixtureSearchQuery } from './battery.js';
 
 /**
  * How to rebuild the corpus a golden vector was generated against.

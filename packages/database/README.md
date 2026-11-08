@@ -266,7 +266,7 @@ schema
 	.check((v) => (v === 'bad' ? 'Not allowed' : undefined)); // Custom validation
 ```
 
-Not every modifier exists on every type: `indexable`/`unique` are for string and number fields (which own a SQLite column); `default`, `label`, `placeholder`, `description`, `check`, and `derived` are for the scalar types (string, number, boolean, enum); arrays support `min`/`max` (length), `label`, `placeholder`, `description`, and `searchable`; `optional`/`readonly` work everywhere. `blob()` and `file()` deliberately expose neither `searchable` nor `sortable` nor `indexable` nor `unique` — bytes and object references have nothing to tokenize, so the builders simply don't exist and a mistake is a compile error rather than a silently-dead index. `blob()` additionally offers `.maxBytes(n)` as the chainable form of its constructor option.
+Not every modifier exists on every type: `indexable`/`unique` are for string and number fields (which own a SQLite column); `default`, `label`, `placeholder`, `description`, `check`, and `derived` are for the scalar types (string, number, boolean, enum); arrays support `min`/`max` (length), `label`, `placeholder`, `description`, and `searchable`; `optional`/`readonly` work everywhere; `vector()` adds `.embedFrom(source_fields, { model?, debounce_ms?, max_chars? })` — see [Auto-embedding](#auto-embedding-embedfrom). `blob()` and `file()` deliberately expose neither `searchable` nor `sortable` nor `indexable` nor `unique` — bytes and object references have nothing to tokenize, so the builders simply don't exist and a mistake is a compile error rather than a silently-dead index. `blob()` additionally offers `.maxBytes(n)` as the chainable form of its constructor option.
 
 ### String Formats
 
@@ -649,6 +649,62 @@ export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
 
 `registerAlarm(name, handler)` adds a named handler to the base `alarm()`. Only override `alarm()` when you need full control — the override then owns calling the registered handlers.
 
+### Auto-embedding (`embedFrom`)
+
+Declare, on a vector field, which fields its embedding is built from — and the server keeps the
+vector current on its own:
+
+```typescript
+const articleTable = Database.table('article', (schema) => ({
+	id: schema.primaryKey(),
+	title: schema.string().searchable(),
+	summary: schema.string().optional().searchable(),
+	embedding: schema
+		.vector(768)
+		.embedFrom(['title', 'summary'], { model: '@cf/baai/bge-base-en-v1.5', debounce_ms: 60_000 })
+		.optional(),
+}));
+
+export class OrgDatabaseServer extends DatabaseServer<typeof tables> {
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(tables, () => undefined, ctx, env);
+		// The one wiring step: how source text becomes a vector.
+		this.registerEmbedder(async (texts, model) => {
+			const result = await env.AI.run(model ?? '@cf/baai/bge-base-en-v1.5', { text: texts });
+			return result.data;
+		});
+	}
+}
+```
+
+How it behaves:
+
+- **A mutation never awaits an embedding.** A create/update that changes any source field
+  enqueues a row into the internal `_embed_queue` (inside the write transaction) and returns.
+  A self-registered `'auto_embed'` alarm handler drains the queue later.
+- **Debounced and batched.** Each further source change pushes the row's deadline out again
+  (`debounce_ms`, default 5s); a drain embeds up to 20 due rows with one embedder call per model.
+  A row that has failed three times is retried **alone**, so one poisoned text cannot walk its
+  whole batch to the drop ceiling with it.
+- **The vector write is quiet.** It bumps no `updated_at`, appends no change-log row, and
+  broadcasts nothing — the vector is a derived projection, and it never syncs to clients anyway.
+  The search index is refreshed in the same transaction, so vector queries see it immediately.
+- **Failure never loses the write.** An embedder throw retries with exponential backoff (up to 8
+  attempts, then the row is dropped and logged); the mutation that queued it committed long before.
+  A wrong-length or non-finite (NaN/Infinity) answer is a failure too, never a stored vector.
+- **Backfill is automatic.** When `.embedFrom()` first appears on a table — or its source fields,
+  model or dimensions change — every existing row is re-enqueued on the next boot.
+- **No embedder, no problem.** Without `registerEmbedder()` the queue accumulates and waits (one
+  warning is logged); registering one picks it back up.
+
+Source text is the source fields' values in declared order, joined with newlines (array values
+joined with `', '`), capped at `max_chars` (default 2000 — roughly a 512-token embedding window
+of English, so order the fields densest-first); when the sources empty out after a vector
+existed, the vector is cleared. Vector fields are also stripped from change-log payloads — a
+reverted delete restores the row without its vector and the queue simply regenerates it.
+The source fields must be top-level string/number/boolean/enum/array fields of the same table —
+validated when the server boots.
+
 ### Typed stubs (`DatabaseStub`)
 
 Cloudflare types DO stubs opaquely, so cast **once** at the boundary with `DatabaseStub<typeof tables>` — the async RPC projection of `DatabaseServer` — and every later call is fully typed:
@@ -735,8 +791,13 @@ db.list('person', {
 
   // Vector search (server-only). `vector` alone = vector search,
   // term + vector = hybrid, term alone = full text. `similarity` is the
-  // inclusive minimum cosine similarity (default 0.8).
-  vector: { value: [0.1, 0.2 /* … */], field: 'embedding', similarity: 0.8 },
+  // inclusive minimum cosine similarity (default 0.8). `weight` is the vector
+  // share of a hybrid query's fused score, 0..1 (default 0.5; text gets the
+  // complement). It affects the ranking monotonically, and the endpoints
+  // short-circuit: 0 returns exactly the pure-text result (membership and
+  // order), 1 exactly the pure-vector one. Out-of-range is a 400
+  // (`invalid_vector_weight`), validated on every query shape.
+  vector: { value: [0.1, 0.2 /* … */], field: 'embedding', similarity: 0.8, weight: 0.4 },
 
   // true (default) = sparse search documents; false = full entities from
   // SQLite. Like `vector`, `sparse: false` is server-only — on the client it

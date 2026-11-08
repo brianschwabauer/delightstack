@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BM25_DEFAULTS, bm25Score, idf, ln } from './bm25';
+import { BM25_DEFAULTS, bm25Score, idf, ln } from './bm25.js';
 
 describe('ln (deterministic fdlibm port)', () => {
 	it('matches Math.log across a wide value sweep', () => {

@@ -1,10 +1,10 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Database } from '../schema/schema';
-import { MemorySearchEngine } from '../search/memory/engine';
-import type { SearchQuery } from '../search/core/types';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { Database } from '../schema/schema.js';
+import { MemorySearchEngine } from '../search/memory/engine.js';
+import type { SearchQuery } from '../search/core/types.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 /**
  * The Phase 4 client driver, through the worker's public API.
@@ -49,7 +49,7 @@ afterEach(() => {
 });
 
 async function createTestServer(table: Database.Table = noteTable) {
-	const { DatabaseServer } = await import('../server/db.server');
+	const { DatabaseServer } = await import('../server/db.server.js');
 	const state = createDurableObjectState();
 	open_states.push(state);
 	const server = new DatabaseServer(
@@ -165,11 +165,11 @@ interface PostingRecord {
 }
 
 async function createWorker(
-	init: Partial<import('./database.worker').WorkerInitConfig> = {},
+	init: Partial<import('./database.worker.js').WorkerInitConfig> = {},
 	table: Database.Table = noteTable,
 ) {
 	(globalThis as any).self = { addEventListener: vi.fn() };
-	const { DatabaseWorker } = await import('./database.worker');
+	const { DatabaseWorker } = await import('./database.worker.js');
 	const worker = new DatabaseWorker();
 	await worker.init({
 		tables: {
@@ -261,7 +261,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		seed(server as any, 4);
 		vi.stubGlobal('fetch', bridgeFetch(server));
 
-		const { IdbSearchStore } = await import('../search/client/idb_store');
+		const { IdbSearchStore } = await import('../search/client/idb_store.js');
 		const failed = vi
 			.spyOn(IdbSearchStore.prototype, 'applyWrites')
 			.mockRejectedValue(new Error('transaction aborted'));
@@ -851,7 +851,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 			vi.fn(async () => new Response('{}', { status: 404 })),
 		);
 		(globalThis as any).self = { addEventListener: vi.fn() };
-		const { DatabaseWorker } = await import('./database.worker');
+		const { DatabaseWorker } = await import('./database.worker.js');
 
 		// Build 1 declares `tags` as a scalar string…
 		const w1 = new DatabaseWorker();
@@ -960,7 +960,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		);
 
 		const worker = await createWorker();
-		type Result = import('./database.worker').WorkerSearchResult;
+		type Result = import('./database.worker.js').WorkerSearchResult;
 		const calls: Result[] = [];
 		const id = await worker.subscribe(
 			'note',
@@ -1000,7 +1000,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		);
 		const worker = await createWorker();
 
-		type Result = import('./database.worker').WorkerSearchResult;
+		type Result = import('./database.worker.js').WorkerSearchResult;
 		const calls: Result[] = [];
 		await worker.subscribe('note', { term: 'x' } as never, (result) =>
 			calls.push(result),
@@ -1020,7 +1020,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 		const { server } = await createTestServer();
 		vi.stubGlobal('fetch', bridgeFetch(server));
 		(globalThis as any).self = { addEventListener: vi.fn() };
-		const { DatabaseWorker } = await import('./database.worker');
+		const { DatabaseWorker } = await import('./database.worker.js');
 		const tables = {
 			note: { index_schema: noteTable.config.index_schema as never, primary_key: 'id' },
 		};
@@ -1127,7 +1127,7 @@ describe('DatabaseWorker client search (IndexedDB driver)', () => {
 
 		// The optimistic write AND the server-echo write both fail; the sync the
 		// recovery triggers then runs against the healthy store.
-		const { IdbSearchStore } = await import('../search/client/idb_store');
+		const { IdbSearchStore } = await import('../search/client/idb_store.js');
 		const original = IdbSearchStore.prototype.applyWrites;
 		let fails = 2;
 		const apply = vi

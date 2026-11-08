@@ -29,12 +29,12 @@
 
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DatabaseServer } from './db.server';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
-import { generateCorpus } from '../search/__tests__/fixtures/corpus';
-import { SqliteSearchEngine } from '../search/server/engine';
-import { flattenSearchSchema } from '../search/server/table_config';
+import { DatabaseServer } from './db.server.js';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
+import { generateCorpus } from '../search/__tests__/fixtures/corpus.js';
+import { SqliteSearchEngine } from '../search/server/engine.js';
+import { flattenSearchSchema } from '../search/server/table_config.js';
 
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {

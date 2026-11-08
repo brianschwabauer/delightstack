@@ -32,9 +32,9 @@ import {
 	type FieldStatsRow,
 	type PostingRow,
 	type TokenRow,
-} from './idb_store';
-import { normalizeWhere, type WhereSchema } from '../core/where';
-import { openTestDriver } from '../__tests__/idb_harness';
+} from './idb_store.js';
+import { normalizeWhere, type WhereSchema } from '../core/where.js';
+import { openTestDriver } from '../__tests__/idb_harness.js';
 
 /* -------------------------------------------------------------------------- */
 /* Fixtures                                                                   */

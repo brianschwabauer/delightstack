@@ -3,7 +3,7 @@ import type {
 	AnySearchSchema,
 	FacetDefinition,
 	SearchQuery as CoreSearchQuery,
-} from './search/core/types';
+} from './search/core/types.js';
 
 /**
  * Non-generic search query type for the encode/decode layer.
@@ -186,10 +186,16 @@ export function decodeSearchQuery(params: URLSearchParams): SearchQueryInput {
 	const boost = parseJson(params, 'boost');
 	if (boost !== undefined) query.boost = boost as Record<string, number>;
 
-	// Vector: `{ value, field, similarity? }` — `similarity` rides along for free
+	// Vector: `{ value, field, similarity?, weight? }` — `similarity` and DS-08's
+	// `weight` ride along for free inside the one JSON param.
 	const vector = parseJson(params, 'vector');
 	if (vector !== undefined) {
-		query.vector = vector as { value: number[]; field: string; similarity?: number };
+		query.vector = vector as {
+			value: number[];
+			field: string;
+			similarity?: number;
+			weight?: number;
+		};
 	}
 
 	// Fields: comma-separated or '*'

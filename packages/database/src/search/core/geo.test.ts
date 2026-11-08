@@ -9,8 +9,8 @@ import {
 	isGeoPoint,
 	isPointInPolygon,
 	validateGeoOperand,
-} from './geo';
-import type { GeoPoint } from './types';
+} from './geo.js';
+import type { GeoPoint } from './types.js';
 
 const CENTER: GeoPoint = { lat: 0, lon: 0 };
 /**

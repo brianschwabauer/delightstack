@@ -1,7 +1,7 @@
 import { DelightError } from '@delightstack/utilities';
 import { describe, expect, it } from 'vitest';
-import { computeFacets, DEFAULT_STRING_FACET_LIMIT } from './facets';
-import type { WhereSchema } from './where';
+import { computeFacets, DEFAULT_STRING_FACET_LIMIT } from './facets.js';
+import type { WhereSchema } from './where.js';
 
 const SCHEMA: WhereSchema = {
 	folder: 'enum',

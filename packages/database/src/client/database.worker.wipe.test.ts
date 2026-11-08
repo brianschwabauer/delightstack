@@ -1,8 +1,8 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 // Sign-out data wipe tests. Same harness as database.worker.test.ts: the
 // worker's fetch('/api/sync') is bridged to a REAL DatabaseServer and
@@ -95,7 +95,7 @@ afterEach(() => {
 });
 
 async function createTestServer() {
-	const { DatabaseServer } = await import('../server/db.server');
+	const { DatabaseServer } = await import('../server/db.server.js');
 	const state = createDurableObjectState();
 	open_states.push(state);
 	return new DatabaseServer(
@@ -131,7 +131,7 @@ function bridgeFetchToServer(
 async function createWorker() {
 	// The worker module expects a worker global scope on import
 	(globalThis as any).self = { addEventListener: vi.fn() };
-	const { DatabaseWorker } = await import('./database.worker');
+	const { DatabaseWorker } = await import('./database.worker.js');
 	const worker = new DatabaseWorker();
 	await worker.init({
 		tables: {
@@ -443,7 +443,7 @@ describe('deleteSiblingDatabases() — the per-org sign-out sweep', () => {
 	});
 
 	it('deletes the named siblings, and never the current database', async () => {
-		const { deleteSiblingDatabases } = await import('./database.idb');
+		const { deleteSiblingDatabases } = await import('./database.idb.js');
 		const current = `org-${scope}-current`;
 		const sibling = `org-${scope}-sibling`;
 		const bystander = `other-${scope}`;
@@ -459,7 +459,7 @@ describe('deleteSiblingDatabases() — the per-org sign-out sweep', () => {
 	});
 
 	it('filters the enumeration when given a predicate', async () => {
-		const { deleteSiblingDatabases } = await import('./database.idb');
+		const { deleteSiblingDatabases } = await import('./database.idb.js');
 		const current = `scoped-${scope}-current`;
 		const sibling = `scoped-${scope}-other`;
 		const bystander = `unscoped-${scope}`;
@@ -474,7 +474,7 @@ describe('deleteSiblingDatabases() — the per-org sign-out sweep', () => {
 	});
 
 	it('deletes nothing under a predicate when `databases()` is unavailable', async () => {
-		const { deleteSiblingDatabases } = await import('./database.idb');
+		const { deleteSiblingDatabases } = await import('./database.idb.js');
 		const current = `nolist-${scope}-current`;
 		const sibling = `nolist-${scope}-other`;
 		for (const name of [current, sibling]) await createNamedDatabase(name);
@@ -494,7 +494,7 @@ describe('deleteSiblingDatabases() — the per-org sign-out sweep', () => {
 	});
 
 	it('a blocked sibling times out instead of hanging sign-out', async () => {
-		const { deleteSiblingDatabases } = await import('./database.idb');
+		const { deleteSiblingDatabases } = await import('./database.idb.js');
 		// A delete request that fires `blocked` and never settles — exactly what
 		// a sibling another tab still holds open does.
 		const factory = {
@@ -524,7 +524,7 @@ describe('deleteSiblingDatabases() — the per-org sign-out sweep', () => {
 	});
 
 	it('rejects nothing when a sibling delete errors', async () => {
-		const { deleteSiblingDatabases } = await import('./database.idb');
+		const { deleteSiblingDatabases } = await import('./database.idb.js');
 		const factory = {
 			deleteDatabase: vi.fn(() => {
 				const request = {

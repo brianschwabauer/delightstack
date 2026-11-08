@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
-import { createDatabaseHandle } from './database.handler';
-import { Database } from '../schema/schema';
+import { createDatabaseHandle } from './database.handler.js';
+import { Database } from '../schema/schema.js';
 
 // Per-entity sync gating at the handler level. The database RPC is a stub —
 // what is under test is which entity types reach `db.sync()` and what the

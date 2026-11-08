@@ -3,15 +3,15 @@ import type { Remote } from 'comlink';
 import { createSubscriber, SvelteMap } from 'svelte/reactivity';
 import { untrack } from 'svelte';
 import { deepEqual } from 'fast-equals';
-import type { Database } from '../schema/schema';
-import type { DatabaseClientHooks } from '../contract';
-import type { DatabaseWorker, WorkerSearchResult } from './database.worker';
-import { encodeSearchQuery } from '../search-query';
-import type { SearchQueryInput, ValidSearchQuery } from '../search-query';
+import type { Database } from '../schema/schema.js';
+import type { DatabaseClientHooks } from '../contract.js';
+import type { DatabaseWorker, WorkerSearchResult } from './database.worker.js';
+import { encodeSearchQuery } from '../search-query.js';
+import type { SearchQueryInput, ValidSearchQuery } from '../search-query.js';
 import { DelightError } from '@delightstack/utilities';
-import { getWorker, resetWorker, isWorkerShared } from './database.worker.init';
-import { deleteSiblingDatabases } from './database.idb';
-import type { FailedOperation, OutboxSnapshot, SyncState } from './database.outbox';
+import { getWorker, resetWorker, isWorkerShared } from './database.worker.init.js';
+import { deleteSiblingDatabases } from './database.idb.js';
+import type { FailedOperation, OutboxSnapshot, SyncState } from './database.outbox.js';
 
 // ---------------------------------------------------------------------------
 // Types

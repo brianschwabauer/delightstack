@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createPrng, hashSeed, splitmix32 } from './fixtures/prng';
+import { createPrng, hashSeed, splitmix32 } from './fixtures/prng.js';
 import {
 	ARTICLE_SCHEMA,
 	CORPUS_SIZES,
@@ -23,14 +23,14 @@ import {
 	type FixtureDocument,
 	type FixtureGeoPoint,
 	type FixtureSchema,
-} from './fixtures/corpus';
+} from './fixtures/corpus.js';
 import {
 	BATTERY_TAGS,
 	SEARCH_BATTERY,
 	batteryCasesForCorpus,
 	type BatteryCase,
-} from './fixtures/battery';
-import { GOLDEN_FORMAT_VERSION } from './fixtures/golden_format';
+} from './fixtures/battery.js';
+import { GOLDEN_FORMAT_VERSION } from './fixtures/golden_format.js';
 
 /* -------------------------------------------------------------------------- */
 /* prng                                                                       */

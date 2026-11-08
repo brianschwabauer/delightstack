@@ -18,14 +18,17 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { DelightError } from '@delightstack/utilities';
-import { DOCS_STORE, transactionDone, type DocWrite } from './idb_store';
-import { generateCorpus } from '../__tests__/fixtures/corpus';
-import { batteryCasesForCorpus, type BatteryCase } from '../__tests__/fixtures/battery';
-import { buildMemoryEngine, toEngineQuery } from '../__tests__/support';
-import { buildIdbDriver, openTestDriver } from '../__tests__/idb_harness';
-import { requiresServer } from './engine';
-import type { SearchQuery } from '../core/types';
-import type { WhereSchema } from '../core/where';
+import { DOCS_STORE, transactionDone, type DocWrite } from './idb_store.js';
+import { generateCorpus } from '../__tests__/fixtures/corpus.js';
+import {
+	batteryCasesForCorpus,
+	type BatteryCase,
+} from '../__tests__/fixtures/battery.js';
+import { buildMemoryEngine, toEngineQuery } from '../__tests__/support.js';
+import { buildIdbDriver, openTestDriver } from '../__tests__/idb_harness.js';
+import { requiresServer } from './engine.js';
+import type { SearchQuery } from '../core/types.js';
+import type { WhereSchema } from '../core/where.js';
 
 /** Battery cases a corpus supports that the client can answer (no vectors, §4.9). */
 function clientCases(preset: 'article' | 'event'): BatteryCase[] {

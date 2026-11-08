@@ -7,11 +7,11 @@
  * - `table.ts` — `Database.table()` and the `Database` namespace types
  * - `validation.ts` — the in-house field validators (replaces zod)
  *
- * This file re-exports everything so existing `from '../schema/schema'`
+ * This file re-exports everything so existing `from '../schema/schema.js'`
  * imports keep working.
  */
-export { Database } from './table';
-export type { FieldGenerator } from './generators';
-export { FieldValidator } from './validation';
-export { resolveFile, type FileStore } from './file';
-export type { FileReference } from './field-types';
+export { Database } from './table.js';
+export type { FieldGenerator } from './generators.js';
+export { FieldValidator } from './validation.js';
+export { resolveFile, type FileStore } from './file.js';
+export type { FileReference } from './field-types.js';

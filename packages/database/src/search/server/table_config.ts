@@ -22,9 +22,9 @@
  * `where: { status: 'active' }` — stay fully pushed down and indexed.
  */
 
-import type { SearchableType } from '../core/types';
-import type { WhereSchema } from '../core/where';
-import { defineServerTable, type ServerSearchTable } from './engine';
+import type { SearchableType } from '../core/types.js';
+import type { WhereSchema } from '../core/where.js';
+import { defineServerTable, type ServerSearchTable } from './engine.js';
 
 /** The structural subset of a `Database.table()` result this module reads. */
 export interface SearchTableSource {

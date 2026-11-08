@@ -9,10 +9,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DatabaseServer } from './db.server';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
-import type { FileReference } from '../schema/field-types';
+import { DatabaseServer } from './db.server.js';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
+import type { FileReference } from '../schema/field-types.js';
 
 vi.mock('cloudflare:workers', () => {
 	class DurableObject {
@@ -54,7 +54,10 @@ const bundleTable = Database.table('bundles', (s) => ({
 		.optional(),
 }));
 
-const NESTED_CONFIG = { bundles: bundleTable } as unknown as Record<string, Database.Table>;
+const NESTED_CONFIG = { bundles: bundleTable } as unknown as Record<
+	string,
+	Database.Table
+>;
 
 const CONFIG = { assets: assetTable, notes: noteTable } as unknown as Record<
 	string,
@@ -290,7 +293,10 @@ describe('DatabaseServer: nested file references', () => {
 		// object it points at leaks silently and forever.
 		const row = fixture.db.create('bundles', {
 			title: 'a',
-			payload: { label: 'l', attachment: { key: 'nested-1', size: 1, mime: 'image/avif' } },
+			payload: {
+				label: 'l',
+				attachment: { key: 'nested-1', size: 1, mime: 'image/avif' },
+			},
 		} as never) as unknown as { id: string };
 		fixture.db.delete('bundles', row.id);
 
@@ -302,13 +308,18 @@ describe('DatabaseServer: nested file references', () => {
 	it('enqueues a nested reference whose key an update replaced', () => {
 		const row = fixture.db.create('bundles', {
 			title: 'a',
-			payload: { label: 'l', attachment: { key: 'nested-1', size: 1, mime: 'image/avif' } },
+			payload: {
+				label: 'l',
+				attachment: { key: 'nested-1', size: 1, mime: 'image/avif' },
+			},
 		} as never) as unknown as { id: string };
 		fixture.db.update('bundles', row.id, {
 			payload: { attachment: { key: 'nested-2', size: 2, mime: 'image/avif' } },
 		} as never);
 
-		expect(fixture.db.pendingFileDeletions().map((queued) => queued.key)).toEqual(['nested-1']);
+		expect(fixture.db.pendingFileDeletions().map((queued) => queued.key)).toEqual([
+			'nested-1',
+		]);
 	});
 });
 

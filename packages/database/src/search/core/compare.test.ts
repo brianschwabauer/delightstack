@@ -5,7 +5,7 @@ import {
 	compareStrings,
 	compareValues,
 	isNullish,
-} from './compare';
+} from './compare.js';
 
 /** The astral-plane pair the plan calls out: JS `<` and code-point order disagree. */
 const EMOJI = '\u{1F600}';

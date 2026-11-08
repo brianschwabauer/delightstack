@@ -1,8 +1,8 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 // Regression tests for the 2026-07-14 "empty inbox" incident: after a large
 // live backfill, a client index silently lost ~30% of its thread docs while
@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 async function createTestServer() {
-	const { DatabaseServer } = await import('../server/db.server');
+	const { DatabaseServer } = await import('../server/db.server.js');
 	const state = createDurableObjectState();
 	open_states.push(state);
 	const server = new DatabaseServer(
@@ -98,7 +98,7 @@ function bridgeFetchToServer(
 
 async function createWorker() {
 	(globalThis as any).self = { addEventListener: vi.fn() };
-	const { DatabaseWorker } = await import('./database.worker');
+	const { DatabaseWorker } = await import('./database.worker.js');
 	const worker = new DatabaseWorker();
 	await worker.init({
 		tables: {
@@ -393,7 +393,7 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 			.prepare(`UPDATE state SET json = ? WHERE id = 'main'`)
 			.run(JSON.stringify(persisted));
 
-		const { DatabaseServer } = await import('../server/db.server');
+		const { DatabaseServer } = await import('../server/db.server.js');
 		const server2 = new DatabaseServer(
 			{ thread: threadTable as unknown as Database.Table },
 			() => undefined,

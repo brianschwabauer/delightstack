@@ -1,9 +1,9 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Database } from '../schema/schema';
-import { decodeSearchQuery } from '../search-query';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { Database } from '../schema/schema.js';
+import { decodeSearchQuery } from '../search-query.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 
 // Per-entity sync denial, from the client's side. Same harness as
 // database.worker.test.ts — a REAL DatabaseServer behind fetch and
@@ -79,7 +79,7 @@ afterEach(() => {
 });
 
 async function createTestServer() {
-	const { DatabaseServer } = await import('../server/db.server');
+	const { DatabaseServer } = await import('../server/db.server.js');
 	const state = createDurableObjectState();
 	open_states.push(state);
 	return new DatabaseServer(
@@ -189,7 +189,7 @@ function bridgeFetchToServer(
 async function createWorker() {
 	// The worker module expects a worker global scope on import
 	(globalThis as any).self = { addEventListener: vi.fn() };
-	const { DatabaseWorker } = await import('./database.worker');
+	const { DatabaseWorker } = await import('./database.worker.js');
 	const worker = new DatabaseWorker();
 	await worker.init({
 		tables: {

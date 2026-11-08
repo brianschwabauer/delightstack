@@ -3,10 +3,10 @@
 // - SvelteKit handler (createDatabaseHandle): '@delightstack/database/server'
 // - Durable Object class (DatabaseServer value): '@delightstack/database/worker'
 // - Svelte 5 client (DatabaseClient): '@delightstack/database/client'
-export * from './schema/schema';
-export type * from './contract';
-export * from './search-query';
-export type * from './search/core/types';
+export * from './schema/schema.js';
+export type * from './contract.js';
+export * from './search-query.js';
+export type * from './search/core/types.js';
 export type {
 	DatabaseServer,
 	DatabaseStub,
@@ -14,4 +14,5 @@ export type {
 	DatabaseSyncResponse,
 	DatabaseServerTransaction,
 	DatabaseServerTransactionResult,
-} from './server/db.server';
+	DatabaseEmbedder,
+} from './server/db.server.js';

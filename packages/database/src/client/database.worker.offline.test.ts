@@ -2,10 +2,10 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
-import { createDatabaseHandle } from '../server/database.handler';
-import type { OutboxScheduler } from './database.outbox';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
+import { createDatabaseHandle } from '../server/database.handler.js';
+import type { OutboxScheduler } from './database.outbox.js';
 
 // The whole offline path, end to end and unmocked: the real DatabaseWorker over
 // `fake-indexeddb`, its fetches routed through the REAL SvelteKit handler into
@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 async function createTestServer() {
-	const { DatabaseServer } = await import('../server/db.server');
+	const { DatabaseServer } = await import('../server/db.server.js');
 	const state = createDurableObjectState();
 	open_states.push(state);
 	const db = new DatabaseServer(
@@ -177,7 +177,7 @@ const open_workers: { destroy(): Promise<void> }[] = [];
 
 async function createWorker(scheduler?: OutboxScheduler) {
 	(globalThis as any).self = { addEventListener: vi.fn() };
-	const { DatabaseWorker } = await import('./database.worker');
+	const { DatabaseWorker } = await import('./database.worker.js');
 	const worker = new DatabaseWorker();
 	await worker.init({
 		tables: {
@@ -492,7 +492,7 @@ describe('DatabaseWorker offline outbox', () => {
 		const server = await createTestServer();
 		vi.stubGlobal('fetch', createNetwork(server).fetch);
 		(globalThis as any).self = { addEventListener: vi.fn() };
-		const { DatabaseWorker } = await import('./database.worker');
+		const { DatabaseWorker } = await import('./database.worker.js');
 		const worker = new DatabaseWorker();
 		await worker.init({
 			tables: {

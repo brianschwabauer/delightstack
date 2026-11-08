@@ -1,6 +1,6 @@
 import { DelightError } from '@delightstack/utilities';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SIMILARITY, dotProduct, normalizeVector } from './vector';
+import { DEFAULT_SIMILARITY, dotProduct, normalizeVector } from './vector.js';
 
 describe('normalizeVector', () => {
 	it('produces a unit vector', () => {

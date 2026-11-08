@@ -1,5 +1,5 @@
-import type { FieldGenerator } from './generators';
-import type { FieldValidator } from './validation';
+import type { FieldGenerator } from './generators.js';
+import type { FieldValidator } from './validation.js';
 
 /* -------------------------------------------------------------------------- */
 /* Field definitions                                                          */
@@ -358,6 +358,32 @@ export interface EnumField<Options extends string[] = string[]> extends Omit<
 	schema: FieldValidator;
 }
 
+/**
+ * Auto-embedding (DS-05): the declaration `.embedFrom()` writes onto a vector
+ * field. `DatabaseServer` watches the named source fields on every write and
+ * regenerates the vector through the registered embedder — debounced, batched,
+ * in an alarm, never inline with the mutation.
+ */
+export interface EmbedFromConfig {
+	/** The (top-level) fields of the same table the embedding text is built from */
+	source_fields: string[];
+	/** The model name handed to the embedder. The embedder may ignore or default it. */
+	model?: string;
+	/**
+	 * How long after the last source-field change the embedding regenerates.
+	 * Every further change pushes the deadline out again (a true debounce).
+	 */
+	debounce_ms?: number;
+	/**
+	 * The most characters of source text handed to the embedder (default 2000).
+	 * Embedding models read a fixed token window — bge-base's is 512 tokens,
+	 * roughly 2000 English characters — and everything past it is silently
+	 * ignored, so the cap makes the truncation explicit and deterministic:
+	 * order the source fields densest-first and the window holds what matters.
+	 */
+	max_chars?: number;
+}
+
 /** The options for a vector field */
 export interface VectorField extends Omit<
 	DatabaseFieldBase,
@@ -368,6 +394,8 @@ export interface VectorField extends Omit<
 	searchable: true;
 	/** The dimensionality of the vector (also known as 'size') */
 	dimensions: number;
+	/** Auto-embedding config — see {@link EmbedFromConfig} */
+	embed_from?: EmbedFromConfig;
 	/** The validator used to validate/parse the vector field */
 	schema: FieldValidator;
 }

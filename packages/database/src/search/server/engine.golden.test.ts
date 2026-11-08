@@ -19,20 +19,20 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DelightError } from '@delightstack/utilities';
-import { generateCorpus } from '../__tests__/fixtures/corpus';
+import { generateCorpus } from '../__tests__/fixtures/corpus.js';
 import {
 	GOLDEN_FORMAT_VERSION,
 	type GoldenCorpusRef,
 	type GoldenSuite,
-} from '../__tests__/fixtures/golden_format';
-import { GOLDEN_SUITES } from '../__tests__/golden/generate';
-import { flattenSchema, toEngineQuery } from '../__tests__/support';
+} from '../__tests__/fixtures/golden_format.js';
+import { GOLDEN_SUITES } from '../__tests__/golden/generate.js';
+import { flattenSchema, toEngineQuery } from '../__tests__/support.js';
 import {
 	createEntityTable,
 	insertEntityRow,
 	NodeSqlStorage,
-} from '../__tests__/sqlite_harness';
-import { SqliteSearchEngine } from './engine';
+} from '../__tests__/sqlite_harness.js';
+import { SqliteSearchEngine } from './engine.js';
 
 /** Reads a committed suite. */
 function readSuite(file: string): GoldenSuite {

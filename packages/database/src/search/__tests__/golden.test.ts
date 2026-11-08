@@ -18,15 +18,15 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DelightError } from '@delightstack/utilities';
-import { generateCorpus } from './fixtures/corpus';
+import { generateCorpus } from './fixtures/corpus.js';
 import {
 	GOLDEN_FORMAT_VERSION,
 	type GoldenCorpusRef,
 	type GoldenSuite,
-} from './fixtures/golden_format';
-import { GOLDEN_SUITES } from './golden/generate';
-import { buildMemoryEngine, toEngineQuery } from './support';
-import type { MemorySearchEngine } from '../memory/engine';
+} from './fixtures/golden_format.js';
+import { GOLDEN_SUITES } from './golden/generate.js';
+import { buildMemoryEngine, toEngineQuery } from './support.js';
+import type { MemorySearchEngine } from '../memory/engine.js';
 
 /** Reads a committed suite. Parsed rather than imported so `tsgo` never has to
  * infer a type for a 500KB JSON literal. */

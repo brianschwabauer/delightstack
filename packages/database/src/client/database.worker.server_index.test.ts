@@ -1,7 +1,7 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { Database } from '../schema/schema';
+import { Database } from '../schema/schema.js';
 
 // `database.worker` reads `self` at module scope, so it is imported lazily —
 // after the stub below exists.
@@ -12,7 +12,7 @@ let withoutPaths: (
 
 beforeAll(async () => {
 	(globalThis as any).self = { addEventListener: vi.fn() };
-	({ withoutPaths } = await import('./database.worker'));
+	({ withoutPaths } = await import('./database.worker.js'));
 });
 
 // Routing and index pruning for `.serverOnly()`. The server
@@ -37,7 +37,7 @@ beforeEach(() => {
 
 async function createWorker() {
 	(globalThis as any).self = { addEventListener: vi.fn() };
-	const { DatabaseWorker } = await import('./database.worker');
+	const { DatabaseWorker } = await import('./database.worker.js');
 	const worker = new DatabaseWorker();
 	await worker.init({
 		tables: {

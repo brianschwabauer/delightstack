@@ -1,9 +1,9 @@
 import { DelightError } from '@delightstack/utilities';
 import { describe, expect, it } from 'vitest';
-import type { SearchableType } from '../core/types';
-import type { WhereSchema } from '../core/where';
-import { MemorySearchEngine } from './engine';
-import type { SearchQuery } from '../core/types';
+import type { SearchableType } from '../core/types.js';
+import type { WhereSchema } from '../core/where.js';
+import { MemorySearchEngine } from './engine.js';
+import type { SearchQuery } from '../core/types.js';
 
 const SCHEMA: WhereSchema = {
 	title: 'string',

@@ -14,9 +14,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BLOB_OMITTED, DatabaseServer, scoped, type ChangeLogEntry } from './db.server';
-import { Database } from '../schema/schema';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import {
+	BLOB_OMITTED,
+	DatabaseServer,
+	scoped,
+	type ChangeLogEntry,
+} from './db.server.js';
+import { Database } from '../schema/schema.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 import { DelightError } from '@delightstack/utilities';
 
 vi.mock('cloudflare:workers', () => {
@@ -651,7 +656,9 @@ describe('DatabaseServer: change log and blob columns', () => {
 		fixture.db.delete('drafts', created.id);
 		const [delete_entry] = fixture.db.history('drafts', created.id);
 
-		const restored = fixture.db.revert(delete_entry!.id, { without_blobs: true }) as unknown as {
+		const restored = fixture.db.revert(delete_entry!.id, {
+			without_blobs: true,
+		}) as unknown as {
 			id: string;
 			label: string;
 			bytes?: Uint8Array;
@@ -783,7 +790,9 @@ describe('DatabaseServer: change operations', () => {
 
 	it('records the `{ operation }` write option on every change the write produces', () => {
 		const post = createPost(fixture, { title: 'a' });
-		fixture.db.update('posts', post.id, { title: 'b' } as never, { operation: 'import-1' });
+		fixture.db.update('posts', post.id, { title: 'b' } as never, {
+			operation: 'import-1',
+		});
 		const [row] = rawChangeRows(fixture).filter((r) => r.operation === 'update');
 		expect(row.operation_id).toBe('import-1');
 		const [entry] = fixture.db.history('posts', post.id);
@@ -797,7 +806,9 @@ describe('DatabaseServer: change operations', () => {
 		const post = createPost(fixture, { title: 'a' });
 		fixture.db.batch(
 			() => {
-				fixture.db.update('posts', post.id, { title: 'b' } as never, { operation: 'op-1' });
+				fixture.db.update('posts', post.id, { title: 'b' } as never, {
+					operation: 'op-1',
+				});
 			},
 			{ actor: 'agent:claude' },
 		);
@@ -810,7 +821,9 @@ describe('DatabaseServer: change operations', () => {
 		const post = createPost(fixture, { title: 'a' });
 		fixture.db.batch(
 			() => {
-				fixture.db.update('posts', post.id, { title: 'b' } as never, { actor: 'user:brian' });
+				fixture.db.update('posts', post.id, { title: 'b' } as never, {
+					actor: 'user:brian',
+				});
 			},
 			{ operation: 'op-2' },
 		);
@@ -865,7 +878,9 @@ describe('DatabaseServer: change operations', () => {
 
 	it('returns an operation oldest-first from `operationChanges()`', () => {
 		const importer = scoped(fixture.db, 'import', 'run-10');
-		const first = importer.create('posts', { title: 'first' } as never) as unknown as Post;
+		const first = importer.create('posts', {
+			title: 'first',
+		} as never) as unknown as Post;
 		importer.update('posts', first.id, { title: 'second' } as never);
 		createPost(fixture, { title: 'unrelated' });
 
@@ -888,8 +903,12 @@ describe('DatabaseServer: change operations', () => {
 		const grouped = fixture.db.changesSince(0, { operation: 'run-11' });
 		expect(grouped).toHaveLength(1);
 		expect((grouped[0].patch as { title: string }).title).toBe('grouped');
-		expect(fixture.db.changesSince(0, { operation: 'run-11', table: 'posts' })).toHaveLength(1);
-		expect(fixture.db.changesSince(0, { operation: 'run-11', table: 'comments' })).toHaveLength(0);
+		expect(
+			fixture.db.changesSince(0, { operation: 'run-11', table: 'posts' }),
+		).toHaveLength(1);
+		expect(
+			fixture.db.changesSince(0, { operation: 'run-11', table: 'comments' }),
+		).toHaveLength(0);
 		expect(fixture.db.changesSince(0)).toHaveLength(2);
 	});
 
@@ -946,12 +965,16 @@ describe('DatabaseServer: change operations', () => {
 		expect(() => fixture.db.revertOperation('run-15')).toThrow(DelightError);
 		// Nothing was undone — not even the change that would have succeeded.
 		expect(postIds(fixture).sort()).toEqual([post.id, other.id].sort());
-		expect(fixture.db.changesSince(0).filter((e) => e.operation === 'delete')).toHaveLength(0);
+		expect(
+			fixture.db.changesSince(0).filter((e) => e.operation === 'delete'),
+		).toHaveLength(0);
 	});
 
 	it('records its own reverts under a new operation id, which is itself revertible', () => {
 		const importer = scoped(fixture.db, 'import', 'run-16');
-		const post = importer.create('posts', { title: 'imported' } as never) as unknown as Post;
+		const post = importer.create('posts', {
+			title: 'imported',
+		} as never) as unknown as Post;
 
 		fixture.db.revertOperation('run-16', { operation: 'undo-16' });
 		expect(postIds(fixture)).toEqual([]);

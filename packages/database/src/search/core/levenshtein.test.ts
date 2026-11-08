@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { boundedLevenshtein, isWithinTolerance, ToleranceMatcher } from './levenshtein';
+import {
+	boundedLevenshtein,
+	isWithinTolerance,
+	ToleranceMatcher,
+} from './levenshtein.js';
 
 /** Unbounded reference implementation, used to cross-check the bounded one. */
 function referenceDistance(a: string, b: string): number {

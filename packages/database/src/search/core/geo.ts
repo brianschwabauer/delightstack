@@ -21,7 +21,7 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import type { GeoDistanceUnit, GeoOperation, GeoPoint } from './types';
+import type { GeoDistanceUnit, GeoOperation, GeoPoint } from './types.js';
 
 /** Spherical earth radius in metres — Orama's `EARTH_RADIUS`, verified. */
 export const EARTH_RADIUS_METERS = 6371e3;

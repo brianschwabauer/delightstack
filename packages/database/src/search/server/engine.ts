@@ -24,9 +24,9 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { bm25Score } from '../core/bm25';
-import { comparePrimaryKeys, compareStrings } from '../core/compare';
-import { computeFacets } from '../core/facets';
+import { bm25Score } from '../core/bm25.js';
+import { comparePrimaryKeys, compareStrings } from '../core/compare.js';
+import { computeFacets } from '../core/facets.js';
 import {
 	applyDistinct,
 	applyOrder,
@@ -36,25 +36,25 @@ import {
 	validateDistinctOn,
 	validateOrder,
 	type ScoredDocument,
-} from '../core/pipeline';
-import { isVectorFieldType } from '../core/schema_fields';
-import { TokenHits } from '../core/token_hits';
-import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer';
+} from '../core/pipeline.js';
+import { isVectorFieldType } from '../core/schema_fields.js';
+import { TokenHits } from '../core/token_hits.js';
+import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer.js';
 import type {
 	FacetDefinition,
 	SearchQuery,
 	SearchQueryResults,
 	SearchableType,
-} from '../core/types';
-import { evaluateWhere, normalizeWhere, type NormalizedWhere } from '../core/where';
-import { fuseScores } from './fusion';
+} from '../core/types.js';
+import { evaluateWhere, normalizeWhere, type NormalizedWhere } from '../core/where.js';
+import { fuseScores, fusionWeights } from './fusion.js';
 import {
 	compileOrder,
 	compileWhere,
 	quoteIdentifier,
 	type CompiledSql,
 	type SqlWhereContext,
-} from './sql_where';
+} from './sql_where.js';
 import {
 	chunk,
 	defineSearchType,
@@ -63,8 +63,8 @@ import {
 	type SearchSqlStorage,
 	type SearchTypeConfig,
 	type SearchTypeInput,
-} from './sqlite_store';
-import { DEFAULT_SIMILARITY, dotProduct, normalizeVector } from './vector';
+} from './sqlite_store.js';
+import { DEFAULT_SIMILARITY, dotProduct, normalizeVector } from './vector.js';
 
 /* -------------------------------------------------------------------------- */
 /* Table configuration                                                        */
@@ -470,9 +470,24 @@ export class SqliteSearchEngine {
 			compiled,
 		);
 		const has_term = distinct_tokens.length > 0;
+
+		// DS-08: `weight` is the vector share, and the endpoints short-circuit —
+		// `0` IS the pure-text result and `1` IS the pure-vector one (fusing at a
+		// zero weight would still admit the other set's documents at score 0,
+		// which is a different and worse answer than "off"). Short-circuiting is
+		// implemented as a *skip of the dead side's scoring*, so a slider parked
+		// at an endpoint pays nothing for the mode it turned off: at `0` the
+		// vector scan never runs (the vector query is still validated — a garbage
+		// field or dimension must fail identically at every weight), and at `1`
+		// the BM25 accumulation never runs. Either skip leaves exactly one score
+		// set, so the single-set branches below ARE the endpoint results.
+		const weight = query.vector?.weight;
+		const skip_text = has_term && query.vector !== undefined && weight === 1;
+		const skip_vector = has_term && query.vector !== undefined && weight === 0;
+
 		const text_scores = new Map<string, number>();
 		const token_hits = new TokenHits(distinct_tokens.length);
-		if (has_term) {
+		if (has_term && !skip_text) {
 			this.#accumulateText(
 				table,
 				query,
@@ -483,24 +498,27 @@ export class SqliteSearchEngine {
 				token_hits,
 			);
 		}
-		const text_ids = has_term
-			? applyThreshold(
-					table,
-					text_scores,
-					token_hits,
-					distinct_tokens.length,
-					query.threshold,
-				)
-			: undefined;
-		const vector_scores = query.vector
-			? this.#scoreVectors(table, query, candidate_ids)
-			: undefined;
+		const text_ids =
+			has_term && !skip_text
+				? applyThreshold(
+						table,
+						text_scores,
+						token_hits,
+						distinct_tokens.length,
+						query.threshold,
+					)
+				: undefined;
+		let vector_scores: Map<string, number> | undefined;
+		if (query.vector) {
+			if (skip_vector) this.#validateVector(table, query);
+			else vector_scores = this.#scoreVectors(table, query, candidate_ids);
+		}
 
 		let final_scores: Map<string, number>;
 		if (text_ids && vector_scores) {
 			const text_subset = new Map<string, number>();
 			for (const id of text_ids) text_subset.set(id, text_scores.get(id) ?? 0);
-			final_scores = fuseScores(text_subset, vector_scores);
+			final_scores = fuseScores(text_subset, vector_scores, fusionWeights(weight));
 		} else if (text_ids) {
 			final_scores = new Map();
 			for (const id of text_ids) final_scores.set(id, text_scores.get(id) ?? 0);
@@ -666,14 +684,20 @@ export class SqliteSearchEngine {
 		}
 	}
 
-	/** Dot-product scoring over unit vectors, filtered by the similarity floor. */
-	#scoreVectors(
+	/**
+	 * Validate a vector query's shape without touching any stored vector — the
+	 * whole refusal surface, split from the scan (DS-08) so a `weight: 0` skip
+	 * still rejects a garbage field, type, dimension or weight identically.
+	 * Returns what the scan needs; the skip path discards it.
+	 */
+	#validateVector(
 		table: ServerSearchTable,
 		query: SearchQuery,
-		candidate_ids: ReadonlySet<string> | null,
-	): Map<string, number> {
-		const vector_query = query.vector;
-		if (!vector_query) return new Map();
+	): { field: string; query_vector: Float32Array; minimum: number } {
+		const vector_query = query.vector!;
+		// Validated here — not only where fusion reads it — so a bad weight is an
+		// error on every query shape, vector-only included (DS-08).
+		fusionWeights(vector_query.weight);
 		const field = vector_query.field;
 		const type = table.schema[field];
 		if (type === undefined) {
@@ -703,8 +727,21 @@ export class SqliteSearchEngine {
 				{ code: 'invalid_vector' },
 			);
 		}
-		const query_vector = normalizeVector(vector_query.value);
-		const minimum = vector_query.similarity ?? DEFAULT_SIMILARITY;
+		return {
+			field,
+			query_vector: normalizeVector(vector_query.value),
+			minimum: vector_query.similarity ?? DEFAULT_SIMILARITY,
+		};
+	}
+
+	/** Dot-product scoring over unit vectors, filtered by the similarity floor. */
+	#scoreVectors(
+		table: ServerSearchTable,
+		query: SearchQuery,
+		candidate_ids: ReadonlySet<string> | null,
+	): Map<string, number> {
+		if (!query.vector) return new Map();
+		const { field, query_vector, minimum } = this.#validateVector(table, query);
 		const scores = new Map<string, number>();
 		// Pushdown: with a small enough `where`-admitted candidate set, read only
 		// those documents' vectors (chunked `IN (...)`); otherwise stream the

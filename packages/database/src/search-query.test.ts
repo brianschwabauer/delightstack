@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeSearchQuery, encodeSearchQuery, normalizeWhere } from './search-query';
+import { decodeSearchQuery, encodeSearchQuery, normalizeWhere } from './search-query.js';
 
 const SCHEMA = {
 	id: 'string',
@@ -83,10 +83,7 @@ describe('normalizeWhere without legacy aliases', () => {
 
 	it('leaves the current operator spellings untouched', () => {
 		expect(
-			normalizeWhere(
-				{ label_ids: { contains_all: ['a'], contains_any: ['b'] } },
-				SCHEMA,
-			),
+			normalizeWhere({ label_ids: { contains_all: ['a'], contains_any: ['b'] } }, SCHEMA),
 		).toEqual({ label_ids: { contains_all: ['a'], contains_any: ['b'] } });
 	});
 });
@@ -147,6 +144,16 @@ describe('decodeSearchQuery', () => {
 			),
 		);
 		expect(query.vector).toEqual({ value: [1], field: 'embedding', similarity: 0.9 });
+	});
+
+	it('round-trips a vector query carrying the DS-08 fusion weight', () => {
+		const original = {
+			term: 'alpha',
+			vector: { value: [0.5, 0.5], field: 'embedding', similarity: 0.7, weight: 0.25 },
+		};
+		const decoded = decodeSearchQuery(encodeSearchQuery(original));
+		expect(decoded.vector).toEqual(original.vector);
+		expect(decoded.term).toBe('alpha');
 	});
 
 	it('round-trips through encode → decode', () => {

@@ -12,7 +12,7 @@ import {
 	type OutboxScheduler,
 	type OutboxSnapshot,
 	type SendResult,
-} from './database.outbox';
+} from './database.outbox.js';
 
 // The queue in isolation: no fetch, no worker, no search index. Everything
 // time-dependent is injected, so a test can prove the 30-second cap without

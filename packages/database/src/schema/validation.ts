@@ -8,7 +8,7 @@ import type {
 	StringField,
 	StringFieldFormat,
 	VectorField,
-} from './field-types';
+} from './field-types.js';
 
 /* -------------------------------------------------------------------------- */
 /* String format validation                                                   */

@@ -1,5 +1,5 @@
 import type { Remote } from 'comlink';
-import type { DatabaseWorker } from './database.worker';
+import type { DatabaseWorker } from './database.worker.js';
 
 let cached: Promise<Remote<DatabaseWorker>> | undefined;
 let raw_worker: Worker | SharedWorker | undefined;

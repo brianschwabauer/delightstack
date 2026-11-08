@@ -1,7 +1,12 @@
 import { DelightError } from '@delightstack/utilities';
 import { describe, expect, it } from 'vitest';
-import type { SearchableType } from './types';
-import { getFieldValue, matchesWhere, normalizeWhere, type WhereSchema } from './where';
+import type { SearchableType } from './types.js';
+import {
+	getFieldValue,
+	matchesWhere,
+	normalizeWhere,
+	type WhereSchema,
+} from './where.js';
 
 const SCHEMA: WhereSchema = {
 	title: 'string',
@@ -329,14 +334,16 @@ describe('NaN field values (review fix 1)', () => {
 	});
 
 	it('lets a NaN field pass `not`, like null and missing do', () => {
-		expect(matchesWhere({ count: NaN }, { not: { count: { gt: 5 } } }, SCHEMA)).toBe(true);
+		expect(matchesWhere({ count: NaN }, { not: { count: { gt: 5 } } }, SCHEMA)).toBe(
+			true,
+		);
 	});
 
 	it('skips NaN elements inside array fields instead of comparing them', () => {
 		expect(matchesWhere({ scores: [NaN] }, { scores: { gt: 5 } }, SCHEMA)).toBe(false);
-		expect(matchesWhere({ scores: [NaN] }, { scores: { between: [0, 10] } }, SCHEMA)).toBe(
-			false,
-		);
+		expect(
+			matchesWhere({ scores: [NaN] }, { scores: { between: [0, 10] } }, SCHEMA),
+		).toBe(false);
 		expect(matchesWhere({ scores: [NaN, 7] }, { scores: { gt: 5 } }, SCHEMA)).toBe(true);
 	});
 });

@@ -25,10 +25,10 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { bm25Score } from '../core/bm25';
-import { comparePrimaryKeys, compareStrings } from '../core/compare';
-import { expandCachedDictionary } from '../core/dictionary';
-import { computeFacets } from '../core/facets';
+import { bm25Score } from '../core/bm25.js';
+import { comparePrimaryKeys, compareStrings } from '../core/compare.js';
+import { expandCachedDictionary } from '../core/dictionary.js';
+import { computeFacets } from '../core/facets.js';
 import {
 	applyDistinct,
 	applyOrder,
@@ -38,23 +38,23 @@ import {
 	validateDistinctOn,
 	validateOrder,
 	type ScoredDocument,
-} from '../core/pipeline';
-import { TokenHits } from '../core/token_hits';
-import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer';
-import type { FacetDefinition, SearchQuery, SearchQueryResults } from '../core/types';
+} from '../core/pipeline.js';
+import { TokenHits } from '../core/token_hits.js';
+import { MAX_QUERY_TOKENS, tokenize } from '../core/tokenizer.js';
+import type { FacetDefinition, SearchQuery, SearchQueryResults } from '../core/types.js';
 import {
 	evaluateWhere,
 	getFieldValue,
 	normalizeWhere,
 	type NormalizedWhere,
-} from '../core/where';
+} from '../core/where.js';
 import {
 	collectProbes,
 	type CandidateProbe,
 	type ClientSearchType,
 	type DocRow,
 	type IdbSearchStore,
-} from './idb_store';
+} from './idb_store.js';
 
 /** An indexed document as returned in hits. */
 export type ClientDocument = Record<string, unknown>;

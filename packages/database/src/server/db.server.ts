@@ -1,26 +1,26 @@
 import { DurableObject } from 'cloudflare:workers';
-import { prepareSql, SqlQueryFn } from './sql.helper';
+import { prepareSql, SqlQueryFn } from './sql.helper.js';
 import { deepEqual } from 'fast-equals';
-import type { Database } from '../schema/schema';
-import type { FileReference } from '../schema/field-types';
-import type { DatabaseBroadcast } from '../contract';
-import { normalizeWhere } from '../search-query';
-import type { SearchQuery, SearchQueryResults } from '../search/core/types';
+import type { Database } from '../schema/schema.js';
+import type { FileReference, VectorField } from '../schema/field-types.js';
+import type { DatabaseBroadcast } from '../contract.js';
+import { normalizeWhere } from '../search-query.js';
+import type { SearchQuery, SearchQueryResults } from '../search/core/types.js';
 import {
 	SqliteSearchEngine,
 	whereContext,
 	type ServerDocument,
 	type ServerSearchTable,
-} from '../search/server/engine';
+} from '../search/server/engine.js';
 import {
 	planGeneratedColumnMigration,
 	planGeneratedColumns,
 	quoteIdentifier,
-} from '../search/server/sql_where';
+} from '../search/server/sql_where.js';
 import {
 	buildServerSearchTable,
 	type SearchTableSource,
-} from '../search/server/table_config';
+} from '../search/server/table_config.js';
 import { generateTimestampID, DelightError } from '@delightstack/utilities';
 
 interface Env {
@@ -166,6 +166,76 @@ const FILE_GC_TABLE = '_file_gc';
 /** Default / maximum page size for {@link DatabaseServer.pendingFileDeletions}. */
 const FILE_GC_DEFAULT_LIMIT = 100;
 const FILE_GC_MAX_LIMIT = 1000;
+
+/** The internal auto-embedding queue (DS-05) — one row per pending vector. */
+const EMBED_QUEUE_TABLE = '_embed_queue';
+
+/** How long after the last source-field change a vector regenerates, unless `embedFrom` says. */
+const EMBED_DEFAULT_DEBOUNCE_MS = 5_000;
+
+/** How many due queue rows one alarm tick embeds (one embedder call per model). */
+const EMBED_BATCH_SIZE = 20;
+
+/** After this many failed attempts a queue row is dropped (and logged). */
+const EMBED_MAX_ATTEMPTS = 8;
+
+/**
+ * From this many failed attempts on, a row is retried **alone** rather than in
+ * the shared per-model batch. An embedder failure fails its whole call, so one
+ * poisoned text would otherwise walk up to 19 innocent rows to the attempt
+ * ceiling with it; three shared failures buys the transient-outage case its
+ * batching back, and past that the poison isolates — the good rows embed
+ * singly and only the truly failing row reaches {@link EMBED_MAX_ATTEMPTS}.
+ */
+const EMBED_SINGLE_RETRY_ATTEMPTS = 3;
+
+/**
+ * The default {@link EmbedFromConfig.max_chars}: roughly what a 512-token
+ * embedding window (bge-base's) holds of English text.
+ */
+const EMBED_DEFAULT_MAX_CHARS = 2000;
+
+/** Retry backoff: `min(EMBED_RETRY_BASE_MS * 2^attempts, EMBED_RETRY_MAX_MS)`. */
+const EMBED_RETRY_BASE_MS = 5_000;
+const EMBED_RETRY_MAX_MS = 10 * 60_000;
+
+/**
+ * The function {@link DatabaseServer.registerEmbedder} takes: given the source
+ * texts of one batch (all sharing one `model`, which may be `undefined` when
+ * the schema named none), answer one vector per text, in order. Typically a
+ * thin wrapper over Workers AI or `@delightstack/ai`'s gateway. A throw fails
+ * the whole batch, which is retried with backoff — it never fails the mutation
+ * that queued it, because that committed long before.
+ */
+export type DatabaseEmbedder = (
+	texts: string[],
+	model: string | undefined,
+) => Promise<number[][]>;
+
+/** One resolved `.embedFrom()` declaration, validated against its table. */
+interface ResolvedEmbedConfig {
+	/** The vector field the embedding is written to */
+	field: string;
+	/** The top-level fields the source text is built from, in declared order */
+	source_fields: string[];
+	/** The model name handed to the embedder (the embedder may default it) */
+	model?: string;
+	/** How long after the last source change the embedding regenerates */
+	debounce_ms: number;
+	/** The most characters of source text handed to the embedder */
+	max_chars: number;
+	/** The declared vector size — an embedder answer of any other length is an error */
+	dimensions: number;
+}
+
+/** One `_embed_queue` row. */
+interface EmbedQueueRow {
+	entity_type: string;
+	entity_id: string;
+	field: string;
+	due_at: number;
+	attempts: number;
+}
 
 /**
  * One store object whose row no longer references it — a queued *intent* to
@@ -762,6 +832,14 @@ type DatabaseServerState<
 	native_search?: {
 		[TableName in keyof Database]?: NativeSearchTableState;
 	};
+	/**
+	 * Auto-embedding (DS-05) bookkeeping: `entity_type.field` → the serialized
+	 * embed config the table's rows were last enqueued against. A mismatch on
+	 * boot (new source fields, new model, new dimensions, or a field that never
+	 * had one) re-enqueues every row of the table, which is what backfills an
+	 * existing table the first time `.embedFrom()` appears on it.
+	 */
+	auto_embed?: Record<string, string>;
 };
 
 /** Per-entity-type bookkeeping of the SQLite search driver (see `native_search`). */
@@ -1243,6 +1321,9 @@ export class DatabaseServer<
 		this.bootstrapOpLog();
 		this.bootstrapFileGC();
 		this.bootstrapSearch();
+		// After `bootstrapSearch()`: the backfill enqueue reads the entity tables
+		// this constructor may have just created or migrated.
+		this.bootstrapAutoEmbedding();
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -1319,14 +1400,42 @@ export class DatabaseServer<
 	 * lossless representation for bytes anyway. `r2()` references — which are
 	 * small descriptors, not payloads — are recorded normally.
 	 */
+	/** Vector-typed top-level fields per entity type, for the history strip. */
+	#history_vector_fields: Map<string, string[]> = new Map();
+
+	/** The entity type's vector fields — computed once, `historyPayload` is hot. */
+	private historyVectorFields(entity_type: string): string[] {
+		let fields = this.#history_vector_fields.get(entity_type);
+		if (!fields) {
+			fields = [];
+			const generators = this.config[entity_type]?._ ?? {};
+			for (const [field_name, generator] of Object.entries(generators)) {
+				const def = (generator as { _?: { type?: string } })?._;
+				if (def?.type === 'vector') fields.push(field_name);
+			}
+			this.#history_vector_fields.set(entity_type, fields);
+		}
+		return fields;
+	}
+
 	private historyPayload(
 		entity_type: string,
 		data: Record<string, unknown> | undefined,
 	): Record<string, unknown> | undefined {
 		if (!data) return undefined;
 		const blob_columns = this.columnMeta(entity_type).blob_columns;
-		if (blob_columns.length === 0) return data;
+		const vector_fields = this.historyVectorFields(entity_type);
+		if (blob_columns.length === 0 && vector_fields.length === 0) return data;
 		const stripped = { ...data };
+		// Vectors are dropped outright, marker-less — the opposite of the blob
+		// treatment below, for the opposite reason. A 768-float vector is
+		// ~10-15KB of JSON per recorded payload, in change logs that tables
+		// like to keep forever, and unlike blob bytes it is *derived*: a
+		// reverted delete restores the row without it, the restore is an
+		// ordinary create, and the auto-embed queue regenerates the vector
+		// from the restored source fields. Nothing is lost, so nothing needs
+		// a marker to refuse over.
+		for (const field of vector_fields) delete stripped[field];
 		for (const column of blob_columns) {
 			const value = stripped[column];
 			if (value === undefined) continue;
@@ -2236,6 +2345,574 @@ export class DatabaseServer<
 			)
 			.toArray();
 		return removed.length;
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Auto-embedding (DS-05)                                                 */
+	/* ---------------------------------------------------------------------- */
+
+	/** Resolved `.embedFrom()` declarations, keyed by entity type. */
+	#embed_configs: Map<string, ResolvedEmbedConfig[]> = new Map();
+
+	/** The registered embedder, if any. Without one the queue simply waits. */
+	#embedder: DatabaseEmbedder | undefined;
+
+	/** Whether the "no embedder registered" warning has been logged this boot. */
+	#embedder_warned = false;
+
+	/**
+	 * The earliest wake this instance has already asked the alarm for, so a
+	 * burst of writes doesn't issue one `getAlarm()` round trip per row. Reset
+	 * when the drain runs; correctness never depends on it — the alarm slot
+	 * itself is only ever moved *earlier* (the same set-only-if-earlier rule
+	 * every alarm integration here follows).
+	 */
+	#embed_alarm_at: number | null = null;
+
+	/**
+	 * Resolve and validate every `.embedFrom()` declaration, create the queue
+	 * table, self-register the alarm handler, and enqueue the backfill.
+	 *
+	 * Validation lives here rather than in `table()` on purpose: only the
+	 * server ever acts on `embed_from`, and the table builder runs on every
+	 * client boot, where these checks would be dead bytes on the boot chunk.
+	 */
+	private bootstrapAutoEmbedding(): void {
+		for (const [entity_type, table] of Object.entries(this.config)) {
+			if (!table?._) continue;
+			for (const [field_name, generator] of Object.entries(table._)) {
+				const def = (generator as { _?: { type?: string } })?._ as
+					| VectorField
+					| undefined;
+				if (!def || def.type !== 'vector' || !def.embed_from) continue;
+				const embed = def.embed_from;
+				if (!def.dimensions) {
+					throw new DelightError({
+						message: `Field '${entity_type}.${field_name}' declares embedFrom() but no dimensions. Give the vector a size: schema.vector(768).`,
+						status: 400,
+						code: 'invalid_schema',
+					});
+				}
+				if (!Array.isArray(embed.source_fields) || embed.source_fields.length === 0) {
+					throw new DelightError({
+						message: `Field '${entity_type}.${field_name}' declares embedFrom() with no source fields.`,
+						status: 400,
+						code: 'invalid_schema',
+					});
+				}
+				for (const source of embed.source_fields) {
+					const source_def = (table._[source] as { _?: { type?: string } })?._;
+					if (!source_def) {
+						throw new DelightError({
+							message: `embedFrom() source '${source}' on '${entity_type}.${field_name}' is not a declared field of '${entity_type}'.`,
+							status: 400,
+							code: 'invalid_schema',
+						});
+					}
+					if (
+						source === field_name ||
+						source_def.type === 'vector' ||
+						source_def.type === 'blob' ||
+						source_def.type === 'file' ||
+						source_def.type === 'object' ||
+						source_def.type === 'geopoint'
+					) {
+						throw new DelightError({
+							message: `embedFrom() source '${source}' on '${entity_type}.${field_name}' has no text to embed (${source_def.type ?? 'unknown'}). Name string, number, boolean, enum or array fields.`,
+							status: 400,
+							code: 'invalid_schema',
+						});
+					}
+				}
+				const list = this.#embed_configs.get(entity_type) ?? [];
+				list.push({
+					field: field_name,
+					source_fields: [...embed.source_fields],
+					model: embed.model,
+					debounce_ms: Math.max(
+						0,
+						Math.trunc(embed.debounce_ms ?? EMBED_DEFAULT_DEBOUNCE_MS),
+					),
+					max_chars: Math.max(1, Math.trunc(embed.max_chars ?? EMBED_DEFAULT_MAX_CHARS)),
+					dimensions: def.dimensions,
+				});
+				this.#embed_configs.set(entity_type, list);
+			}
+		}
+		if (this.#embed_configs.size === 0) {
+			// No declarations this boot. A *stale* signature would silently
+			// suppress the backfill if an identical `.embedFrom()` ever returned
+			// — the signatures say "already enqueued against this config", which
+			// stopped being true the boot the declaration left. Clear them, and
+			// drop the orphaned queue with them: its rows name configs that no
+			// longer exist and nothing will ever drain them.
+			const state = this.#state as { auto_embed?: Record<string, string> };
+			if (state.auto_embed && Object.keys(state.auto_embed).length > 0) {
+				delete state.auto_embed;
+				this.saveState();
+				this.ctx.storage.sql.exec(
+					`DROP TABLE IF EXISTS ${quoteIdentifier(EMBED_QUEUE_TABLE)};`,
+				);
+			}
+			return;
+		}
+
+		this.ctx.storage.sql.exec(
+			`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(EMBED_QUEUE_TABLE)} (
+				entity_type TEXT NOT NULL,
+				entity_id TEXT NOT NULL,
+				field TEXT NOT NULL,
+				due_at INTEGER NOT NULL,
+				attempts INTEGER NOT NULL DEFAULT 0,
+				PRIMARY KEY (entity_type, entity_id, field)
+			);`,
+		);
+		this.ctx.storage.sql.exec(
+			`CREATE INDEX IF NOT EXISTS "idx__embed_queue_due_at" ON ${quoteIdentifier(EMBED_QUEUE_TABLE)} (due_at);`,
+		);
+		this.registerAlarm('auto_embed', () => this.processEmbedQueue());
+
+		// Backfill: when a field's serialized config differs from what this
+		// database last enqueued against (including "never"), every row of the
+		// table is (re-)enqueued. That is what gives an existing table vectors
+		// the first time `.embedFrom()` appears, and what re-embeds everything
+		// when the source fields or the model change.
+		const stored =
+			(this.#state as { auto_embed?: Record<string, string> }).auto_embed ?? {};
+		const next_signatures: Record<string, string> = {};
+		let state_changed = false;
+		const now = Date.now();
+		for (const [entity_type, configs] of this.#embed_configs) {
+			const table = this.config[entity_type]!;
+			const sanitized_table = this.sanitize(entity_type);
+			const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+			for (const config of configs) {
+				const key = `${entity_type}.${config.field}`;
+				next_signatures[key] = JSON.stringify({
+					source_fields: config.source_fields,
+					model: config.model ?? null,
+					dimensions: config.dimensions,
+					max_chars: config.max_chars,
+				});
+				if (stored[key] === next_signatures[key]) continue;
+				this.ctx.storage.sql.exec(
+					`INSERT INTO ${quoteIdentifier(EMBED_QUEUE_TABLE)} (entity_type, entity_id, field, due_at, attempts)
+					SELECT ?, CAST(${quoteIdentifier(primary_key)} AS TEXT), ?, ?, 0 FROM ${quoteIdentifier(sanitized_table)} WHERE true
+					ON CONFLICT (entity_type, entity_id, field) DO UPDATE SET due_at = excluded.due_at, attempts = 0;`,
+					entity_type,
+					config.field,
+					now + config.debounce_ms,
+				);
+				state_changed = true;
+			}
+		}
+		if (
+			state_changed ||
+			Object.keys(stored).length !== Object.keys(next_signatures).length
+		) {
+			(this.#state as { auto_embed?: Record<string, string> }).auto_embed =
+				next_signatures;
+			this.saveState();
+		}
+		// Queue rows can outlive a hibernation with no write to re-arm them.
+		this.rearmEmbedAlarm();
+	}
+
+	/**
+	 * Register the function that turns source text into vectors. Call it once
+	 * from the Durable Object constructor, the way `imageProcessing()` and
+	 * `aiProcessing()` register themselves. Until one is registered the queue
+	 * accumulates and waits — a database whose AI binding is absent keeps
+	 * working, it just doesn't embed.
+	 */
+	registerEmbedder(embedder: DatabaseEmbedder): void {
+		this.#embedder = embedder;
+		this.#embedder_warned = false;
+		if (this.#embed_configs.size > 0) this.rearmEmbedAlarm();
+	}
+
+	/**
+	 * The source text one `.embedFrom()` declaration reads off one entity:
+	 * declared order, `\n` between fields, arrays joined `', '`, absent values
+	 * skipped, capped at `max_chars`. Deterministic, because enqueueing
+	 * compares previous to next — and the cap is part of that determinism: a
+	 * change entirely past the window compares equal and re-embeds nothing,
+	 * which is correct, because the embedder would never have seen it.
+	 */
+	private embedSourceText(
+		entity: Record<string, unknown>,
+		config: Pick<ResolvedEmbedConfig, 'source_fields' | 'max_chars'>,
+	): string {
+		const parts: string[] = [];
+		for (const field of config.source_fields) {
+			const value = entity[field];
+			if (value === undefined || value === null) continue;
+			if (typeof value === 'string') {
+				if (value) parts.push(value);
+				continue;
+			}
+			if (Array.isArray(value)) {
+				const joined = value
+					.filter((item) => item !== undefined && item !== null && item !== '')
+					.map((item) => String(item))
+					.join(', ');
+				if (joined) parts.push(joined);
+				continue;
+			}
+			parts.push(String(value));
+		}
+		const text = parts.join('\n').trim();
+		if (text.length <= config.max_chars) return text;
+		return text.slice(0, config.max_chars).trimEnd();
+	}
+
+	/**
+	 * Queue (or re-queue) the entity's embeddings whose source text this write
+	 * changed. Runs inside the write transaction — a rollback takes the queue
+	 * rows with it — and touches nothing when no source field moved, so the hot
+	 * write path pays a string compare and nothing else. Returns the earliest
+	 * `due_at` it queued, for the caller to arm the alarm with *after* commit.
+	 */
+	private queueAutoEmbeds(
+		entity_type: string,
+		id: string | number,
+		previous: Record<string, unknown> | undefined,
+		next: Record<string, unknown>,
+		now: number,
+	): number | null {
+		const configs = this.#embed_configs.get(entity_type);
+		if (!configs) return null;
+		let min_due: number | null = null;
+		for (const config of configs) {
+			const next_text = this.embedSourceText(next, config);
+			if (previous) {
+				if (this.embedSourceText(previous, config) === next_text) continue;
+			} else if (!next_text) {
+				// A create with nothing to embed queues nothing — there is no stale
+				// vector to clear on a row that never had one.
+				continue;
+			}
+			const due_at = now + config.debounce_ms;
+			this.ctx.storage.sql.exec(
+				`INSERT INTO ${quoteIdentifier(EMBED_QUEUE_TABLE)} (entity_type, entity_id, field, due_at, attempts) VALUES (?, ?, ?, ?, 0)
+				ON CONFLICT (entity_type, entity_id, field) DO UPDATE SET due_at = excluded.due_at, attempts = 0;`,
+				entity_type,
+				String(id),
+				config.field,
+				due_at,
+			);
+			min_due = min_due === null ? due_at : Math.min(min_due, due_at);
+		}
+		return min_due;
+	}
+
+	/** Drop a deleted entity's pending embeds. Runs inside the delete transaction. */
+	private dropAutoEmbeds(entity_type: string, id: string | number): void {
+		if (!this.#embed_configs.has(entity_type)) return;
+		this.ctx.storage.sql.exec(
+			`DELETE FROM ${quoteIdentifier(EMBED_QUEUE_TABLE)} WHERE entity_type = ? AND entity_id = ?;`,
+			entity_type,
+			String(id),
+		);
+	}
+
+	/**
+	 * Ask the shared alarm slot for a wake at `at`, only ever moving it
+	 * earlier — the rule every alarm integration here follows, so none can
+	 * starve another. Fire-and-forget: callers are synchronous write paths.
+	 */
+	private armEmbedAlarm(at: number): void {
+		if (this.#embed_alarm_at !== null && this.#embed_alarm_at <= at) return;
+		this.#embed_alarm_at = at;
+		void this.ctx.storage
+			.getAlarm()
+			.then((existing) => {
+				if (existing === null || existing > at) return this.ctx.storage.setAlarm(at);
+			})
+			.catch((error) =>
+				console.error('[DatabaseServer] failed to arm auto-embed alarm:', error),
+			);
+	}
+
+	/** Arm the alarm for the queue's earliest row, if it has one. */
+	private rearmEmbedAlarm(): void {
+		if (this.#embed_configs.size === 0) return;
+		const row = this.ctx.storage.sql
+			.exec(`SELECT MIN(due_at) AS due FROM ${quoteIdentifier(EMBED_QUEUE_TABLE)};`)
+			.next()?.value as { due?: number | null } | undefined;
+		if (typeof row?.due === 'number') this.armEmbedAlarm(row.due);
+	}
+
+	/**
+	 * Drain due queue rows: read each row's current source text, embed one
+	 * batch per model, write each vector back quietly, and re-arm for whatever
+	 * remains. Registered on the base alarm registry as `'auto_embed'`.
+	 *
+	 * Failure isolation: an embedder throw re-queues its batch with backoff
+	 * (capped by {@link EMBED_MAX_ATTEMPTS}); the mutation that queued the row
+	 * committed long ago and is never at risk.
+	 */
+	private async processEmbedQueue(): Promise<void> {
+		if (this.#embed_configs.size === 0) return;
+		this.#embed_alarm_at = null;
+		const now = Date.now();
+		const due = this.ctx.storage.sql
+			.exec(
+				`SELECT entity_type, entity_id, field, due_at, attempts FROM ${quoteIdentifier(EMBED_QUEUE_TABLE)} WHERE due_at <= ? ORDER BY due_at ASC LIMIT ${EMBED_BATCH_SIZE};`,
+				now,
+			)
+			.toArray() as unknown as EmbedQueueRow[];
+		if (due.length === 0) {
+			this.rearmEmbedAlarm();
+			return;
+		}
+		if (!this.#embedder) {
+			// Deliberately no re-arm: without an embedder a re-armed alarm is a
+			// busy loop. `registerEmbedder()` re-arms when one appears.
+			if (!this.#embedder_warned) {
+				this.#embedder_warned = true;
+				console.warn(
+					`[DatabaseServer] ${due.length} auto-embed row(s) due but no embedder is registered — call db.registerEmbedder() from the Durable Object constructor.`,
+				);
+			}
+			return;
+		}
+
+		// Resolve each row against the live entity. Rows whose entity is gone,
+		// whose config vanished, or whose source text emptied are settled here
+		// without an embedder call.
+		interface EmbedJob {
+			row: EmbedQueueRow;
+			config: ResolvedEmbedConfig;
+			text: string;
+		}
+		const jobs: EmbedJob[] = [];
+		for (const row of due) {
+			const config = this.#embed_configs
+				.get(row.entity_type)
+				?.find((candidate) => candidate.field === row.field);
+			if (!config) {
+				this.settleEmbedRow(row);
+				continue;
+			}
+			const entity = this.readEntityRaw(row.entity_type, row.entity_id);
+			if (!entity) {
+				this.settleEmbedRow(row);
+				continue;
+			}
+			const text = this.embedSourceText(entity, config);
+			if (!text) {
+				// The sources emptied out after a vector existed: clear it, so an
+				// erased title stops answering vector queries.
+				try {
+					this.writeEmbeddedVector(row.entity_type, row.entity_id, row.field, null);
+					this.settleEmbedRow(row);
+				} catch (error) {
+					this.retryEmbedRow(row, now, error);
+				}
+				continue;
+			}
+			jobs.push({ row, config, text });
+		}
+
+		// One embedder call per model over the resolved jobs — except rows that
+		// have already failed EMBED_SINGLE_RETRY_ATTEMPTS times, which retry
+		// **alone**: a failure fails its whole call, so a poisoned text in a
+		// shared batch would walk every innocent row to the drop ceiling with
+		// it. Isolated, the good rows embed and only the poison keeps failing.
+		const groups: EmbedJob[][] = [];
+		const batched = new Map<string, EmbedJob[]>();
+		for (const job of jobs) {
+			if (job.row.attempts >= EMBED_SINGLE_RETRY_ATTEMPTS) {
+				groups.push([job]);
+				continue;
+			}
+			const key = job.config.model ?? '';
+			const group = batched.get(key) ?? [];
+			group.push(job);
+			batched.set(key, group);
+		}
+		groups.push(...batched.values());
+		for (const group of groups) {
+			const model = group[0].config.model;
+			let vectors: number[][];
+			try {
+				vectors = await this.#embedder(
+					group.map((job) => job.text),
+					model,
+				);
+			} catch (error) {
+				for (const job of group) this.retryEmbedRow(job.row, now, error);
+				continue;
+			}
+			for (let i = 0; i < group.length; i++) {
+				const job = group[i];
+				const vector = vectors?.[i];
+				if (!Array.isArray(vector) || vector.length !== job.config.dimensions) {
+					this.retryEmbedRow(
+						job.row,
+						now,
+						new Error(
+							`embedder answered ${Array.isArray(vector) ? vector.length : typeof vector} for '${job.row.entity_type}.${job.row.field}' (${job.config.dimensions} expected)`,
+						),
+					);
+					continue;
+				}
+				// A NaN/Infinity entry survives JSON round-trips as `null` and
+				// poisons every dot product it touches — refuse it whole rather
+				// than store a vector that ranks as garbage.
+				if (
+					!vector.every((entry) => typeof entry === 'number' && Number.isFinite(entry))
+				) {
+					this.retryEmbedRow(
+						job.row,
+						now,
+						new Error(
+							`embedder answered a non-finite entry for '${job.row.entity_type}.${job.row.field}'`,
+						),
+					);
+					continue;
+				}
+				try {
+					this.writeEmbeddedVector(
+						job.row.entity_type,
+						job.row.entity_id,
+						job.row.field,
+						vector,
+					);
+					this.settleEmbedRow(job.row);
+				} catch (error) {
+					this.retryEmbedRow(job.row, now, error);
+				}
+			}
+		}
+		this.rearmEmbedAlarm();
+	}
+
+	/**
+	 * Remove a handled queue row — unless a write during the (async) embed
+	 * pushed `due_at` out again, in which case the newer intent survives.
+	 */
+	private settleEmbedRow(row: EmbedQueueRow): void {
+		this.ctx.storage.sql.exec(
+			`DELETE FROM ${quoteIdentifier(EMBED_QUEUE_TABLE)} WHERE entity_type = ? AND entity_id = ? AND field = ? AND due_at = ?;`,
+			row.entity_type,
+			row.entity_id,
+			row.field,
+			row.due_at,
+		);
+	}
+
+	/**
+	 * Push a failed queue row out with exponential backoff, dropping (and
+	 * logging) it past {@link EMBED_MAX_ATTEMPTS}. The `due_at` guard leaves
+	 * the row alone when a concurrent write already re-queued it fresh.
+	 */
+	private retryEmbedRow(row: EmbedQueueRow, now: number, error: unknown): void {
+		const attempts = row.attempts + 1;
+		if (attempts >= EMBED_MAX_ATTEMPTS) {
+			console.error(
+				`[DatabaseServer] auto-embed for ${row.entity_type}/${row.entity_id}.${row.field} dropped after ${attempts} attempts:`,
+				error,
+			);
+			this.settleEmbedRow(row);
+			return;
+		}
+		const backoff = Math.min(
+			EMBED_RETRY_BASE_MS * 2 ** (attempts - 1),
+			EMBED_RETRY_MAX_MS,
+		);
+		this.ctx.storage.sql.exec(
+			`UPDATE ${quoteIdentifier(EMBED_QUEUE_TABLE)} SET attempts = ?, due_at = ? WHERE entity_type = ? AND entity_id = ? AND field = ? AND due_at = ?;`,
+			attempts,
+			now + backoff,
+			row.entity_type,
+			row.entity_id,
+			row.field,
+			row.due_at,
+		);
+	}
+
+	/** The raw entity for embedding reads — `undefined` rather than a 404 throw. */
+	private readEntityRaw(
+		entity_type: string,
+		id: string | number,
+	): Record<string, unknown> | undefined {
+		const table = this.config[entity_type];
+		if (!table) return undefined;
+		const row = this.ctx.storage.sql
+			.exec(
+				`SELECT * FROM ${quoteIdentifier(this.sanitize(entity_type))} WHERE ${quoteIdentifier(this.sanitize(table.config.primary_key || 'rowid'))} = ? LIMIT 1;`,
+				id,
+			)
+			.next()?.value as Record<string, SqlStorageValue> | undefined;
+		return this.toEntityValue(entity_type, row) as Record<string, unknown> | undefined;
+	}
+
+	/**
+	 * Write one regenerated vector — **quietly**. The vector is a derived
+	 * projection: writing it through the public `update()` would bump
+	 * `updated_at` (re-syncing a row whose synced fields did not change), append
+	 * a change-log row (768 floats of noise per regeneration, in tables whose
+	 * history is kept forever), and broadcast — all for a value the wire strips
+	 * anyway (§7.0). So this rewrites the row's columns byte-for-byte except the
+	 * vector, restores the `$derived` blob `toSqliteValue` doesn't know about,
+	 * and refreshes the search index, all in one transaction.
+	 */
+	private writeEmbeddedVector(
+		entity_type: string,
+		id: string | number,
+		field: string,
+		vector: number[] | null,
+	): void {
+		const table = this.config[entity_type];
+		if (!table) return;
+		const sanitized_table = this.sanitize(entity_type);
+		const primary_key = this.sanitize(table.config.primary_key || 'rowid');
+		const row = this.ctx.storage.sql
+			.exec(
+				`SELECT * FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ? LIMIT 1;`,
+				id,
+			)
+			.next()?.value as Record<string, SqlStorageValue> | undefined;
+		if (!row) return;
+		try {
+			this.ctx.storage.transactionSync(() => {
+				const previous_sparse = this.sparseFromRow(
+					entity_type,
+					row as Record<string, unknown>,
+				);
+				const entity = this.toEntityValue(entity_type, row) as
+					| Record<string, unknown>
+					| undefined;
+				if (!entity) return;
+				if (vector === null) delete entity[field];
+				else entity[field] = vector;
+				const updates = Object.entries(this.toSqliteValue(entity_type, entity as never)!);
+				const set_clause = updates
+					.map(([column]) => `${this.quote(column)} = ?`)
+					.join(', ');
+				this.ctx.storage.sql.exec(
+					`UPDATE ${quoteIdentifier(sanitized_table)} SET ${set_clause} WHERE ${quoteIdentifier(primary_key)} = ?;`,
+					...updates.map(([, value]) => value),
+					id,
+				);
+				const sparse = table.toSparse(entity) as Record<string, unknown>;
+				const derived = parseDerivedBlob(readJsonDerived(row as Record<string, unknown>));
+				for (const [key, value] of Object.entries(derived)) {
+					if (value !== undefined && value !== null) sparse[key] = value;
+				}
+				// `toSqliteValue` rebuilt the `json` column without `$derived`;
+				// this puts the (unchanged) blob back, like the update branch does.
+				this.persistDerivedFields(entity_type, id, sparse);
+				this.search.indexDocument(entity_type, String(id), sparse, previous_sparse);
+			});
+		} catch (error) {
+			// The transaction rolled back but the in-memory dictionary cache may
+			// already hold ids the rollback discarded — same rule as transaction().
+			this.#dropStaleDictionaryCache();
+			throw error;
+		}
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -3878,6 +4555,13 @@ export class DatabaseServer<
 		// TOMBSTONE_CAP rows, which a 5000-row bulk delete would otherwise pay
 		// 5000 times.
 		const deleted_types = new Set<string>();
+		// The earliest auto-embed deadline this transaction queued; the alarm is
+		// armed after commit (arming is async, the transaction is not).
+		let embed_min_due: number | null = null;
+		const noteEmbedDue = (due: number | null) => {
+			if (due === null) return;
+			embed_min_due = embed_min_due === null ? due : Math.min(embed_min_due, due);
+		};
 		const runOperations = () => {
 			for (const op of operations) {
 				if ('exec' in op) {
@@ -3976,6 +4660,16 @@ export class DatabaseServer<
 						output_data[primary_key] || output_data.id,
 						touched,
 						now,
+					);
+					// Inside this transaction, so a rollback un-queues it with the row.
+					noteEmbedDue(
+						this.queueAutoEmbeds(
+							entity_type,
+							created_id,
+							undefined,
+							output_data as Record<string, unknown>,
+							now.getTime(),
+						),
 					);
 					// Inside the same transaction as the row: a rolled-back create must
 					// not leave history claiming it happened.
@@ -4109,6 +4803,16 @@ export class DatabaseServer<
 						touched,
 						now,
 					);
+					// Inside this transaction, so a rollback un-queues it with the row.
+					noteEmbedDue(
+						this.queueAutoEmbeds(
+							entity_type,
+							output_data[primary_key] || output_data.id || id,
+							current_data as Record<string, unknown>,
+							output_data as Record<string, unknown>,
+							now.getTime(),
+						),
+					);
 					if (this.hasHistory(entity_type)) {
 						const diff = this.diffForHistory(
 							this.historyPayload(entity_type, current_data as never)!,
@@ -4198,6 +4902,8 @@ export class DatabaseServer<
 							now.getTime(),
 						);
 					}
+					// A gone row has nothing left to embed.
+					this.dropAutoEmbeds(entity_type, id);
 					// Every object the row pointed at is now unreferenced by it.
 					// Enqueued inside this transaction, so a rollback takes the
 					// queue rows with it.
@@ -4233,6 +4939,11 @@ export class DatabaseServer<
 			if (!batch && touched.wrote) this.#dropStaleDictionaryCache();
 			throw error;
 		}
+
+		// After commit: the queue rows are durable now, so the (async) alarm ask
+		// can no longer race a rollback. Inside a batch the outer transaction may
+		// still roll back — a spuriously armed alarm drains to a no-op.
+		if (embed_min_due !== null) this.armEmbedAlarm(embed_min_due);
 
 		// Broadcast entity changes via WebSocket (fire-and-forget, after the
 		// transaction commits). Inside a batch() the outer transaction can still

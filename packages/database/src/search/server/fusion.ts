@@ -11,14 +11,17 @@
  * which is unstable for one- or two-member sets and throws away the information
  * that a weak-but-nonzero match is still a match.
  *
- * Weights are Orama's fixed 0.5/0.5 (`getQueryWeights()` is a stub returning
- * them, and `hybridWeights` was never reachable through this package's API), so
- * they are not configurable in v1. Two deliberate additions over Orama: the
+ * Weights default to Orama's fixed 0.5/0.5 (`getQueryWeights()` is a stub
+ * returning them, and `hybridWeights` was never reachable through this
+ * package's API); since DS-08 a query may set `vector.weight` — the vector
+ * share, `0..1` — which both engines turn into {@link FusionWeights} through
+ * {@link fusionWeights}. Two deliberate additions over Orama: the
  * empty/zero-maximum guards (Orama produces `-0`/`NaN` there) and a
  * primary-key-ascending tie-break, applied by the caller.
  */
 
-import { compareStrings } from '../core/compare';
+import { DelightError } from '@delightstack/utilities';
+import { compareStrings } from '../core/compare.js';
 
 /** Relative contribution of each score set to the fused score. */
 export interface FusionWeights {
@@ -26,8 +29,35 @@ export interface FusionWeights {
 	vector: number;
 }
 
-/** Orama's fixed weights. */
+/** Orama's fixed weights — what a query without `vector.weight` fuses at. */
 export const DEFAULT_FUSION_WEIGHTS: FusionWeights = { text: 0.5, vector: 0.5 };
+
+/**
+ * The {@link FusionWeights} a query's `vector.weight` asks for — the vector
+ * share, text getting the complement — or the default when it is absent.
+ *
+ * Throws `DelightError.badRequest` for anything outside `0..1` (or not a
+ * finite number): a fusion weight is a caller-supplied query value, and a
+ * garbage one must be an error, not a silently strange ranking. Both engines
+ * call this wherever `query.vector` is first handled, so a bad weight is
+ * rejected on every query shape — vector-only included, where it would
+ * otherwise never be read.
+ */
+export function fusionWeights(weight: number | undefined): FusionWeights {
+	if (weight === undefined) return DEFAULT_FUSION_WEIGHTS;
+	if (
+		typeof weight !== 'number' ||
+		!Number.isFinite(weight) ||
+		weight < 0 ||
+		weight > 1
+	) {
+		throw DelightError.badRequest(
+			`vector.weight must be a number between 0 and 1, got ${String(weight)}.`,
+			{ code: 'invalid_vector_weight' },
+		);
+	}
+	return { text: 1 - weight, vector: weight };
+}
 
 /**
  * Divide every score by the set's maximum.

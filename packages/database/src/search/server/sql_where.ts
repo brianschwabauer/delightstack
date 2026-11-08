@@ -40,10 +40,14 @@
  */
 
 import { DelightError } from '@delightstack/utilities';
-import { convertDistanceToMeters, EARTH_RADIUS_METERS } from '../core/geo';
-import type { GeoPoint, SearchOrder, SearchableType } from '../core/types';
-import { isArrayFieldType, type NormalizedWhere, type WhereSchema } from '../core/where';
-import { MAX_SQL_PARAMS } from './sqlite_store';
+import { convertDistanceToMeters, EARTH_RADIUS_METERS } from '../core/geo.js';
+import type { GeoPoint, SearchOrder, SearchableType } from '../core/types.js';
+import {
+	isArrayFieldType,
+	type NormalizedWhere,
+	type WhereSchema,
+} from '../core/where.js';
+import { MAX_SQL_PARAMS } from './sqlite_store.js';
 
 /* -------------------------------------------------------------------------- */
 /* Identifiers                                                                */

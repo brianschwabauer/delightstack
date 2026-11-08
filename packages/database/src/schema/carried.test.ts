@@ -23,9 +23,9 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Database } from './schema';
-import { DatabaseServer } from '../server/db.server';
-import { createDurableObjectState } from '../search/__tests__/sqlite_harness';
+import { Database } from './schema.js';
+import { DatabaseServer } from '../server/db.server.js';
+import { createDurableObjectState } from '../search/__tests__/sqlite_harness.js';
 import { DelightError } from '@delightstack/utilities';
 
 vi.mock('cloudflare:workers', () => {
@@ -373,7 +373,10 @@ describe('carried fields: not queryable', () => {
 	it('still returns the carried value on a query it does match', () => {
 		const { db } = createServer();
 		db.create('asset', assetInput() as never);
-		const results = db.list('asset', { term: 'hero', sparse: true } as never) as unknown as {
+		const results = db.list('asset', {
+			term: 'hero',
+			sparse: true,
+		} as never) as unknown as {
 			hits: { document: Record<string, unknown> }[];
 		};
 		expect(results.hits).toHaveLength(1);

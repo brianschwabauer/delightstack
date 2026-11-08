@@ -38,8 +38,8 @@ import type {
 	TextareaString,
 	Unique,
 	VectorField,
-} from './field-types';
-import { FieldValidator } from './validation';
+} from './field-types.js';
+import { FieldValidator } from './validation.js';
 
 /**
  * The loose runtime shape of a field definition that the shared builder
@@ -534,6 +534,23 @@ export class VectorFieldGenerator extends CarriableFieldGenerator {
 	size(dimensions: number): Omit<this, 'size'> {
 		this._.dimensions = dimensions;
 		return this as Omit<this, 'size'>;
+	}
+
+	/**
+	 * Auto-embedding (DS-05): regenerate this vector from the named source
+	 * fields whenever any of them changes — debounced, batched, in the server's
+	 * alarm, never inline with the write. The source fields must be top-level
+	 * fields of the same table (validated when `DatabaseServer` boots, where the
+	 * table is known — the builder cannot see its siblings). The server needs an
+	 * embedder registered via `DatabaseServer.registerEmbedder()`; without one
+	 * the queue simply waits.
+	 */
+	embedFrom(
+		source_fields: string[],
+		options?: { model?: string; debounce_ms?: number; max_chars?: number },
+	): Omit<this, 'embedFrom'> {
+		this._.embed_from = { source_fields: [...source_fields], ...options };
+		return this as Omit<this, 'embedFrom'>;
 	}
 }
 
