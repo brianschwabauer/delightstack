@@ -249,6 +249,26 @@ html {
 	--color-warning-text-disabled: oklch(from var(--color-warning) 0.45 0.04 h);
 	--color-warning-text-active: oklch(from var(--color-warning) 0.16 0.04 h);
 
+	/* Foreground variants of the three feedback colours — see --color-action-fg.
+	   The base tokens above are *surface* colours: as small text on the page they
+	   measure 3.8:1 (error), 2.1:1 (warning) and 3.4:1 (success) in light, under
+	   the 4.5:1 floor. Every consumer that wanted a red failure line was reaching
+	   for --color-error and getting one that fails WCAG, or for --color-error-text
+	   — which is 96% lightness, the ink for the *filled* surface, and effectively
+	   invisible on the page. Same clamps as --color-action-fg. */
+	--color-error-fg: light-dark(
+		oklch(from var(--color-error) min(l, 0.5) c h),
+		oklch(from var(--color-error) max(l, 0.65) c h)
+	);
+	--color-warning-fg: light-dark(
+		oklch(from var(--color-warning) min(l, 0.5) c h),
+		oklch(from var(--color-warning) max(l, 0.65) c h)
+	);
+	--color-success-fg: light-dark(
+		oklch(from var(--color-success) min(l, 0.5) c h),
+		oklch(from var(--color-success) max(l, 0.65) c h)
+	);
+
 	/* Soft tinted surfaces for feedback components (Callout, Toast, Avatar,
 	   Input). Mixed over --color-surface (white in light, the raised gray in
 	   dark) so in dark mode they lift ABOVE the page instead of sinking toward

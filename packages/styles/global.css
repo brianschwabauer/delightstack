@@ -154,9 +154,16 @@
 		color: var(--color-text);
 	}
 
+	/* WCAG 1.4.11 asks 3:1 of a focus indicator and 2.4.13 asks two pixels of it.
+	   One pixel of --color-border measures 1.7:1 against the light page and 1.6:1
+	   against a warmer one, so the previous ring — outline: none plus a 1px
+	   box-shadow — was a suppression with a decoration in place of a
+	   replacement. --color-action is the ring every component that has an opinion
+	   already draws, and it clears 4.8:1 in both schemes. An outline rather than a
+	   box-shadow so it survives overflow: hidden and follows border-radius. */
 	*:focus-visible {
-		outline: none;
-		box-shadow: 0 0 0 1px var(--color-border);
+		outline: 2px solid var(--color-action);
+		outline-offset: 1px;
 	}
 }
 
