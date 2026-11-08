@@ -151,6 +151,16 @@
 	/** Resolve a snap value: <= 1 is a viewport fraction, > 1 is absolute pixels. */
 	const resolve = (v: number) => (v <= 1 ? v * viewport_h : v);
 	const sorted_snaps = $derived([...snap_points].sort((a, b) => a - b));
+	/**
+	 * Height of the highest snap. The panel is capped at it (`--top-snap`), so
+	 * when the sheet is fully open its scroll area ends at the bottom of the
+	 * screen. Without the cap a `[0.6, 0.95]` sheet with tall content stopped
+	 * below `max_offset`, never counted as fully open, and its content could not
+	 * be scrolled by touch, while its last 5% sat off screen.
+	 */
+	const top_snap_h = $derived(
+		sorted_snaps.length ? resolve(sorted_snaps[sorted_snaps.length - 1]) : viewport_h,
+	);
 	const max_offset = $derived(Math.min(viewport_h || Infinity, container_h || Infinity));
 	const snap_heights = $derived(
 		sorted_snaps.map((v) => Math.min(resolve(v), max_offset || Infinity)),
@@ -495,6 +505,7 @@
 		class:dragging
 		style:--offset="{offset}px"
 		style:--max-offset="{max_offset || 0}px"
+		style:--top-snap={top_snap_h ? `${top_snap_h}px` : undefined}
 		style:--morph-percent={morph}
 		style:--max-width="{max_width}px">
 		<!-- Backdrop: always catches taps to dismiss; `.frosted` adds the blur + tint. -->
@@ -506,7 +517,11 @@
 			style:pointer-events={offset > 0 ? 'auto' : 'none'}>
 		</div>
 
-		<div bind:this={panel_el} class="panel" role="dialog" aria-modal="true">
+		<div
+			bind:this={panel_el}
+			class="panel"
+			role="dialog"
+			aria-modal={blocking ? 'true' : undefined}>
 			{#if show_handle}
 				<div class="handle" aria-hidden="true">
 					<div class="bar"></div>
@@ -574,7 +589,7 @@
 		/* Reveal `--offset` pixels from the bottom; never higher than the panel top. */
 		transform: translate3d(-50%, clamp(-100%, calc(-1 * var(--offset)), 0px), 0);
 		height: max-content;
-		max-height: 100svh;
+		max-height: min(100svh, var(--top-snap, 100svh));
 		display: flex;
 		flex-direction: column;
 		background-color: var(--color-surface, light-dark(#fff, #1c1c1f));
