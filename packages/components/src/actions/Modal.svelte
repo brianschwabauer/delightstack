@@ -401,6 +401,9 @@
 		   farther from the side than from the bottom. */
 		@media (max-width: 767px) {
 			min-width: 100vw;
+			/* A phone's usual 16px gutter: at 0.5rem fields and text sat 8px
+			   from the glass, tighter than any page behind the modal. */
+			padding-inline: 1rem;
 			padding-bottom: 4rem;
 		}
 		@media (min-width: 768px) {
@@ -437,6 +440,9 @@
 		   divider spans edge to edge, like the header bar. */
 		margin: 1rem -0.5rem 0;
 		padding: 0.75rem 1rem;
+		@media (max-width: 767px) {
+			margin-inline: -1rem;
+		}
 		@media (min-width: 768px) {
 			/* The body drops its bottom padding when a footer is present (see
 			   .body.has-footer), so the footer ends flush with the modal's
