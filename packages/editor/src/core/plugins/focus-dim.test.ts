@@ -400,8 +400,9 @@ describe('boundary and structure edges', () => {
 
 	it('degrades sentence to paragraph without Intl.Segmenter', () => {
 		const original = Intl.Segmenter;
-		// @ts-expect-error — simulating an environment without the segmenter.
-		Intl.Segmenter = undefined;
+		// Simulating an environment without the segmenter (read-only in the types).
+		const intl = Intl as unknown as { Segmenter: unknown };
+		intl.Segmenter = undefined;
 		try {
 			const text = 'First one. Second one.';
 			expect(sentenceRangesIn(text)).toEqual([{ from: 0, to: text.length }]);
@@ -416,7 +417,7 @@ describe('boundary and structure edges', () => {
 			expect(inner).toEqual([]);
 			editor.destroy();
 		} finally {
-			Intl.Segmenter = original;
+			intl.Segmenter = original;
 		}
 	});
 });

@@ -53,6 +53,8 @@ export interface FixtureVectorQuery {
 	field: string;
 	/** Inclusive minimum cosine similarity, server-only. @default 0.8 */
 	similarity?: number;
+	/** The vector share of a hybrid query's fused score (DS-08). @default 0.5 */
+	weight?: number;
 }
 
 /**

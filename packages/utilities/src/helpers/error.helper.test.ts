@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DelightError } from './error.helper';
+import { DelightError } from './error.helper.js';
 
 /**
  * What a DelightError looks like after a Workers RPC hop (a Durable Object

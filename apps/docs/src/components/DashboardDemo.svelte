@@ -19,10 +19,10 @@
 		Accordion,
 		AccordionItem,
 		Calendar,
-		Code,
 		List,
 		ListItem,
 	} from '@delightstack/components/display';
+	import Code from '@delightstack/components/display/Code.svelte';
 	import type { ChartData, TableColumn } from '@delightstack/components/display';
 	import {
 		Progress,

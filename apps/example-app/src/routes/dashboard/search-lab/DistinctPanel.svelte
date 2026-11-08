@@ -3,10 +3,10 @@
 		Button,
 		ButtonGroup,
 		Callout,
-		Code,
 		Input,
 		Toggle,
 	} from '@delightstack/components';
+	import Code from '@delightstack/components/display/Code.svelte';
 	import Panel from './Panel.svelte';
 	import QueryPreview from './QueryPreview.svelte';
 	import ResultList from './ResultList.svelte';
