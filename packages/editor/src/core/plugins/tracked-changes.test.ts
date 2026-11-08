@@ -566,7 +566,10 @@ describe('anchoring the awkward cases', () => {
 		const started = performance.now();
 		for (let round = 0; round < 50; round++) resolveSuggestions(editor.state.doc, edits);
 		const per_resolve = (performance.now() - started) / 50;
-		expect(per_resolve).toBeLessThan(4);
+		// ~1 ms locally, just over 4 on a shared CI runner; the whole-document
+		// scan this guards against is hundreds of times slower, so a loose
+		// budget still catches it without flaking.
+		expect(per_resolve).toBeLessThan(20);
 	});
 });
 
