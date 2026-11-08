@@ -16,6 +16,7 @@ import { DelightError } from '@delightstack/utilities';
 import { NodeSqlStorage } from '../__tests__/sqlite_harness.js';
 import {
 	defineSearchType,
+	indexesNothing,
 	MAX_INSERT_ROWS,
 	POSTING_COLUMNS,
 	prefixUpperBound,
@@ -530,5 +531,52 @@ describe('clearEntityType', () => {
 		expect(
 			sql.exec('SELECT DISTINCT entity_type FROM search_documents;').toArray(),
 		).toEqual([{ entity_type: 'event' }]);
+	});
+});
+
+describe('a type that indexes nothing', () => {
+	const EMPTY = defineSearchType({
+		entity_type: 'log',
+		schema: { kind: 'enum', note_id: 'enum' },
+	});
+
+	it('is recognised from its field lists', () => {
+		expect(indexesNothing(EMPTY)).toBe(true);
+		expect(indexesNothing(CONFIG)).toBe(false);
+	});
+
+	it('writes no document row, and leaves doc_count to the caller', () => {
+		const { sql, store } = newStore();
+		store.allocateTimestamp('log', 1000, 1);
+		store.indexDocument(EMPTY, 'a', { id: 'a', kind: 'opened', note_id: 'n1' }, undefined, true);
+		store.allocateTimestamp('log', 1001, 1);
+		store.indexDocument(EMPTY, 'b', { id: 'b', kind: 'opened', note_id: 'n1' }, undefined, true);
+		expect(sql.exec(`SELECT COUNT(*) AS n FROM search_documents`).toArray()[0].n).toBe(0);
+		expect(store.getState('log')?.doc_count).toBe(2);
+		store.removeDocument(EMPTY, 'a', 1002);
+		expect(store.getState('log')?.doc_count).toBe(2);
+		expect(store.countTombstones('log')).toBe(1);
+	});
+});
+
+describe('allocateTimestamp', () => {
+	it('moves doc_count in the same write as the clock', () => {
+		const { store } = newStore();
+		expect(store.allocateTimestamp('article', 500, 1)).toBe(500);
+		expect(store.getState('article')?.doc_count).toBe(1);
+		expect(store.allocateTimestamp('article', 400, 1)).toBe(501);
+		expect(store.getState('article')).toMatchObject({ doc_count: 2, last_updated_at: 501 });
+		store.allocateTimestamp('article', 600, -5);
+		expect(store.getState('article')?.doc_count).toBe(0);
+	});
+
+	it('does not count a created document twice', () => {
+		const { store } = newStore();
+		store.allocateTimestamp('article', 1000, 1);
+		store.indexDocument(CONFIG, 'a', { id: 'a', title: 'Hello world' }, undefined, true);
+		expect(store.getState('article')?.doc_count).toBe(1);
+		// Without the flag (a repair or raw catch-up), the store counts it.
+		store.indexDocument(CONFIG, 'b', { id: 'b', title: 'Second' });
+		expect(store.getState('article')?.doc_count).toBe(2);
 	});
 });

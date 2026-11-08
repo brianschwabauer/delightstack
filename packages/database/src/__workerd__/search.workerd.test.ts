@@ -163,3 +163,116 @@ describe('searchReport()', () => {
 		});
 	});
 });
+
+describe('a table with nothing to search', () => {
+	const log = Database.table('log', (s) => ({
+		note_id: s.string().indexable(),
+		kind: s.enum(['opened', 'signed']),
+		detail: s.string().optional(),
+	}));
+	const LOG_TABLES = { log };
+	const bootLog = (db: BareDatabase, tables: Record<string, unknown> = LOG_TABLES) =>
+		new DatabaseServer(tables as never, () => undefined, db.state, { DEV: true } as never) as unknown as {
+			create(type: string, data: Record<string, unknown>): { id: string };
+			delete(type: string, id: string): unknown;
+			exec(sql: string, ...bindings: unknown[]): unknown;
+			alarm(): Promise<void>;
+		};
+	const sql = (db: BareDatabase, query: string, ...bindings: unknown[]) =>
+		db.state.storage.sql.exec(query, ...bindings).toArray();
+	const documents = (db: BareDatabase, type = 'log') =>
+		Number(sql(db, `SELECT COUNT(*) AS n FROM search_documents WHERE entity_type = ?`, type)[0].n);
+	const state = (db: BareDatabase, type = 'log') =>
+		sql(db, `SELECT doc_count, config_version FROM search_state WHERE entity_type = ?`, type)[0] as {
+			doc_count: number;
+			config_version: number;
+		};
+
+	it('writes no index row, and the state row once per create', async () => {
+		await runInDurableObject(stub(), (db: BareDatabase) => {
+			const server = bootLog(db);
+			server.create('log', { note_id: 'n1', kind: 'opened' });
+			const cost = measure(db.state, () => {
+				server.create('log', { note_id: 'n1', kind: 'signed', detail: 'field 3' });
+			});
+			// The row, its primary key, note_id and updated_at index entries, and
+			// the state row (clock and count in one write).
+			expect(cost.written).toBe(5);
+			expect(documents(db)).toBe(0);
+			expect(state(db).doc_count).toBe(2);
+		});
+	});
+
+	it('keeps doc_count exact through library, raw and repeated deletes', async () => {
+		await runInDurableObject(stub(), (db: BareDatabase) => {
+			const server = bootLog(db);
+			const ids = [0, 1, 2].map((i) => server.create('log', { note_id: `n${i}`, kind: 'opened' }).id);
+			server.delete('log', ids[0]);
+			expect(state(db).doc_count).toBe(2);
+			// Deleting what is already gone changes nothing.
+			try {
+				server.delete('log', ids[0]);
+			} catch {
+				// a missing row may throw; either way the count must hold
+			}
+			expect(state(db).doc_count).toBe(2);
+			server.exec(
+				`INSERT INTO log (id, note_id, kind, created_at, updated_at) VALUES ('raw1', 'n9', 'opened', 1, 1)`,
+			);
+			expect(state(db).doc_count).toBe(3);
+			server.exec(`UPDATE log SET detail = 'x' WHERE id = 'raw1'`);
+			expect(state(db).doc_count).toBe(3);
+			server.exec(`DELETE FROM log WHERE id = ?`, ids[1]);
+			expect(state(db).doc_count).toBe(2);
+			expect(documents(db)).toBe(0);
+		});
+	});
+
+	it('clears the empty rows an older version wrote, without making clients resync', async () => {
+		await runInDurableObject(stub(), async (db: BareDatabase) => {
+			const first = bootLog(db) as unknown as {
+				create(type: string, data: Record<string, unknown>): { id: string };
+				searchSchemaSignature(type: string, with_layout?: boolean): string;
+				setSearchTableState(type: string, value: unknown): void;
+			};
+			const ids = [0, 1, 2, 3, 4].map((i) => first.create('log', { note_id: `n${i}`, kind: 'opened' }).id);
+			// What 3.0.0 left behind: an empty document row per entity, under a
+			// signature without the layout marker.
+			for (const id of ids) {
+				sql(db, `INSERT INTO search_documents (entity_type, doc_id, lengths, terms) VALUES ('log', ?, '{}', '{}')`, id);
+			}
+			first.setSearchTableState('log', {
+				schema_signature: first.searchSchemaSignature('log', false),
+				migrated: true,
+			});
+			const version = state(db).config_version;
+
+			const next = bootLog(db);
+			for (let i = 0; i < 5 && documents(db) > 0; i++) await next.alarm();
+			expect(documents(db)).toBe(0);
+			expect(state(db).doc_count).toBe(5);
+			expect(state(db).config_version).toBe(version);
+			next.create('log', { note_id: 'n5', kind: 'signed' });
+			expect(state(db).doc_count).toBe(6);
+		});
+	});
+
+	it('counts and clears a table whose last searchable field is removed', async () => {
+		await runInDurableObject(stub(), async (db: BareDatabase) => {
+			const before = Database.table('item', (s) => ({ label: s.string().searchable() }));
+			const after = Database.table('item', (s) => ({ label: s.string() }));
+			const first = bootLog(db, { item: before });
+			for (let i = 0; i < 4; i++) first.create('item', { label: `Checklist item ${i}` });
+			expect(documents(db, 'item')).toBe(4);
+			const version = state(db, 'item').config_version;
+
+			const next = bootLog(db, { item: after });
+			for (let i = 0; i < 5 && documents(db, 'item') > 0; i++) await next.alarm();
+			expect(documents(db, 'item')).toBe(0);
+			expect(Number(sql(db, `SELECT COUNT(*) AS n FROM search_entries`)[0].n)).toBe(0);
+			expect(state(db, 'item').doc_count).toBe(4);
+			// The schema clients hold changed: they resync.
+			expect(state(db, 'item').config_version).toBe(version + 1);
+		});
+	});
+});

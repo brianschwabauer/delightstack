@@ -111,6 +111,18 @@ export interface SearchTypeConfig {
 	field_options: Record<string, SearchFieldOptions>;
 }
 
+/**
+ * Whether an entity type keeps nothing in the index: no searchable text and no
+ * vectors. Such a type writes no `search_documents` row — it would hold empty
+ * lengths and terms that nothing ever reads. Its `search_state` (the sync
+ * clock and `doc_count`) and tombstones are kept as for any other type; the
+ * callers maintain its `doc_count`, since there is no index row to tell a
+ * create from an update.
+ */
+export function indexesNothing(config: SearchTypeConfig): boolean {
+	return config.text_fields.length === 0 && config.vector_fields.length === 0;
+}
+
 /** Resolve an entity type's field lists once, ascending. */
 export function defineSearchType(input: SearchTypeInput): SearchTypeConfig {
 	return {
@@ -496,7 +508,8 @@ export class SqliteSearchStore {
 	 * write beat `ensureState` to it. A fresh row's window bounds are 0 —
 	 * "no change recorded yet" — and `allocateTimestamp` fills them in.
 	 */
-	#bumpDocCount(entity_type: string, delta: number): void {
+	adjustDocCount(entity_type: string, delta: number): void {
+		if (delta === 0) return;
 		this.sql.exec(
 			`INSERT INTO search_state (entity_type, config_version, first_updated_at, last_updated_at, doc_count) VALUES (?, 1, 0, 0, MAX(0, ?)) ON CONFLICT (entity_type) DO UPDATE SET doc_count = MAX(0, doc_count + ?);`,
 			entity_type,
@@ -564,6 +577,11 @@ export class SqliteSearchStore {
 	 * stale or wrong previous document), the store silently falls back to the
 	 * authoritative `DELETE ... RETURNING` path rather than corrupting `df` and
 	 * the field statistics.
+	 *
+	 * `counted` says the caller already added this document to `doc_count`
+	 * (a create folds it into `allocateTimestamp`'s write), so a new document
+	 * isn't counted twice. A type that {@link indexesNothing} writes nothing
+	 * here at all.
 	 */
 	indexDocument(
 		config: SearchTypeConfig,
@@ -572,8 +590,18 @@ export class SqliteSearchStore {
 		// Kept for callers; the stored word list is the authoritative previous
 		// state now (one row read), so a stale previous document can't mislead.
 		_previous_sparse_doc?: Record<string, unknown> | null,
+		counted = false,
 	): void {
 		const entity_type = config.entity_type;
+		if (indexesNothing(config)) {
+			// A re-created id is no longer deleted. No tombstone: no write.
+			this.sql.exec(
+				`DELETE FROM search_tombstones WHERE entity_type = ? AND doc_id = ?;`,
+				entity_type,
+				doc_id,
+			);
+			return;
+		}
 		const next = this.projectDocument(config, sparse_doc);
 		const stored = this.#readDocument(entity_type, doc_id);
 		const previous = stored?.terms ?? new Map<string, Map<string, number>>();
@@ -629,7 +657,7 @@ export class SqliteSearchStore {
 
 		this.#applyFieldStatDiff(entity_type, stored?.lengths, next.lengths);
 		this.#writeVectors(entity_type, doc_id, config.vector_fields, next.vectors);
-		if (!stored) this.#bumpDocCount(entity_type, 1);
+		if (!stored && !counted) this.adjustDocCount(entity_type, 1);
 		this.sql.exec(
 			`DELETE FROM search_tombstones WHERE entity_type = ? AND doc_id = ?;`,
 			entity_type,
@@ -656,7 +684,9 @@ export class SqliteSearchStore {
 			}
 			this.#applyFieldStatDiff(entity_type, stored.lengths, new Map());
 			this.sql.exec(`DELETE FROM search_documents WHERE doc = ?;`, stored.doc);
-			this.#bumpDocCount(entity_type, -1);
+			// A type that indexes nothing only has a row left by an older version;
+			// its count is the caller's.
+			if (!indexesNothing(config)) this.adjustDocCount(entity_type, -1);
 		}
 		this.sql.exec(
 			`DELETE FROM search_vectors INDEXED BY search_vectors_by_doc WHERE entity_type = ? AND doc_id = ?;`,
@@ -1309,21 +1339,22 @@ export class SqliteSearchStore {
 	}
 
 	/** Create the state row if it is missing, seeding both window bounds. */
-	ensureState(entity_type: string, now: number): SearchStateRow {
+	ensureState(entity_type: string, now: number, doc_count = 0): SearchStateRow {
 		const existing = this.getState(entity_type);
 		if (existing) return existing;
 		const state: SearchStateRow = {
 			config_version: 1,
 			first_updated_at: now,
 			last_updated_at: now,
-			doc_count: 0,
+			doc_count: Math.max(0, doc_count),
 		};
 		this.sql.exec(
-			`INSERT INTO search_state (entity_type, config_version, first_updated_at, last_updated_at, doc_count) VALUES (?, ?, ?, ?, 0) ON CONFLICT (entity_type) DO NOTHING;`,
+			`INSERT INTO search_state (entity_type, config_version, first_updated_at, last_updated_at, doc_count) VALUES (?, ?, ?, ?, ?) ON CONFLICT (entity_type) DO NOTHING;`,
 			entity_type,
 			state.config_version,
 			state.first_updated_at,
 			state.last_updated_at,
+			state.doc_count,
 		);
 		return this.getState(entity_type) ?? state;
 	}
@@ -1334,13 +1365,16 @@ export class SqliteSearchStore {
 	 * The clock is the caller's (`proposed`) — the engine never reads one. The
 	 * result is `max(proposed, last_updated_at + 1)`, persisted in the same
 	 * transaction, which is exactly today's `ensureMonotonicTimestamp`.
+	 *
+	 * `doc_delta` moves `doc_count` in the same write: a create passes 1, so
+	 * the state row is written once per create, not twice.
 	 */
-	allocateTimestamp(entity_type: string, proposed: number): number {
+	allocateTimestamp(entity_type: string, proposed: number, doc_delta = 0): number {
 		const existing = this.getState(entity_type);
 		if (!existing) {
 			// The very first write of an entity type keeps the caller's clock: the
 			// window's lower bound is that timestamp, not one past it.
-			this.ensureState(entity_type, proposed);
+			this.ensureState(entity_type, proposed, doc_delta);
 			return proposed;
 		}
 		const allocated = Math.max(proposed, existing.last_updated_at + 1);
@@ -1350,10 +1384,11 @@ export class SqliteSearchStore {
 		// window bound at 0 forever, and a descending-backfilling client reads that
 		// as "you have reached the beginning" after its very first page.
 		this.sql.exec(
-			`UPDATE search_state SET last_updated_at = ?, first_updated_at = CASE WHEN first_updated_at = 0 THEN ? ELSE MIN(first_updated_at, ?) END WHERE entity_type = ?;`,
+			`UPDATE search_state SET last_updated_at = ?, first_updated_at = CASE WHEN first_updated_at = 0 THEN ? ELSE MIN(first_updated_at, ?) END, doc_count = MAX(0, doc_count + ?) WHERE entity_type = ?;`,
 			allocated,
 			allocated,
 			allocated,
+			doc_delta,
 			entity_type,
 		);
 		return allocated;

@@ -76,6 +76,7 @@ import {
 import {
 	chunk,
 	defineSearchType,
+	indexesNothing,
 	MAX_IN_VALUES,
 	SqliteSearchStore,
 	type SearchSqlStorage,
@@ -224,19 +225,30 @@ export class SqliteSearchEngine {
 	/* Write path                                                             */
 	/* ---------------------------------------------------------------------- */
 
-	/** Index one document. Must run inside the caller's transaction. */
+	/**
+	 * Index one document. Must run inside the caller's transaction. `counted`:
+	 * the caller already added a new document to `doc_count` (see
+	 * {@link SqliteSearchStore.indexDocument}).
+	 */
 	indexDocument(
 		entity_type: string,
 		doc_id: string,
 		sparse_doc: ServerDocument,
 		previous_sparse_doc?: ServerDocument | null,
+		counted = false,
 	): void {
 		this.store.indexDocument(
 			this.getTable(entity_type),
 			doc_id,
 			sparse_doc,
 			previous_sparse_doc,
+			counted,
 		);
+	}
+
+	/** Whether an entity type keeps nothing in the index (see {@link indexesNothing}). */
+	indexesNothing(entity_type: string): boolean {
+		return indexesNothing(this.getTable(entity_type));
 	}
 
 	/** Remove one document. Must run inside the caller's transaction. */
@@ -288,6 +300,8 @@ export class SqliteSearchEngine {
 			last_primary_key = primary_value;
 			this.store.indexDocument(table, String(primary_value), document);
 		}
+		// Nothing was stored to count from; the rebuild counts the rows itself.
+		if (indexesNothing(table)) this.store.adjustDocCount(entity_type, rows.length);
 		return {
 			indexed: rows.length,
 			last_primary_key,

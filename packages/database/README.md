@@ -152,7 +152,7 @@ username: schema.string().min(1).check((v) => (v.includes(' ') ? 'No spaces' : u
   └─────────────────────────────────────────────────────┘
 ```
 
-**Schema → SQLite + search tables:** Each table definition produces a SQLite table (for persistent storage) and a set of shared search tables (`search_entries`, `search_terms`, `search_documents`, `search_fields`, `search_vectors`, plus `search_state`/`search_tombstones` for sync). The `DatabaseServer` writes both inside one transaction, so a rolled-back write can never leave a stale index behind.
+**Schema → SQLite + search tables:** Each table definition produces a SQLite table (for persistent storage) and a set of shared search tables (`search_entries`, `search_terms`, `search_documents`, `search_fields`, `search_vectors`, plus `search_state`/`search_tombstones` for sync). The `DatabaseServer` writes both inside one transaction, so a rolled-back write can never leave a stale index behind. A table with nothing to search (no `.searchable()` text and no vectors; enums and `.keyword()` fields are filters, not index rows) writes no search rows at all, only its `search_state` sync clock and the tombstones its deletes leave.
 
 **Single-writer model:** Durable Objects guarantee a single instance handles all writes, eliminating race conditions. SQLite transactions provide atomicity within that instance.
 
@@ -1359,7 +1359,7 @@ const changes = db.sync({
 
 Per-entity request fields: `start_updated_at` / `end_updated_at` (half-open window; ascending when `start` is set, descending backfill otherwise), `limit`, `config_version` (optional — when set and stale, the response carries the new `config`), and `defer_over` — a row-count ceiling: when the table's `total_count` exceeds it, the server withholds the page and answers count-only (`deferred: true`, no cursor advance). The client sends this automatically during backfill — see [`max_synced_docs`](#query-routing).
 
-`total_count` reads a counter maintained on `search_state` (bumped on every index/remove), never a `COUNT(*)` — Cloudflare bills Durable Object SQLite per row scanned, so counting a large table on every sync page would cost exactly what the ceiling exists to avoid.
+`total_count` reads a counter maintained on `search_state` (moved by every create and delete, in the same write as the sync clock), never a `COUNT(*)` — Cloudflare bills Durable Object SQLite per row scanned, so counting a large table on every sync page would cost exactly what the ceiling exists to avoid.
 
 ### Metadata
 
@@ -1975,7 +1975,7 @@ So raw SQL reads what it looks like: `SELECT field_schema FROM document` instead
 Full-text indexing an opaque value is the most common way to bloat the index: a random id splits into 5–8 meaningless fragments (camelCase and digit boundaries), each a billed row on every write, each a dictionary entry that typo and prefix expansion then scan, and each a junk match for real searches. Four of the apps on this package had the mistake. The name is a cheap, reliable signal, so the error names the fix (`.keyword()`) at the moment the table is defined, and `{ text: true }` is there for the rare field that really is prose.
 
 **Why one index row per word per document, keyed by word?**
-A Durable Object bills every row and every index entry written. The index is one B-tree (`search_entries`, keyed field + word + document) with no secondary index; what a document contains is kept as one row of its own (`search_documents`) for updates and deletes. Integer word ids would make the table smaller still, but each new word would cost two rows, and most of what real apps index (names, addresses, emails) is new words.
+A Durable Object bills every row and every index entry written. The index is one B-tree (`search_entries`, keyed field + word + document) with no secondary index; what a document contains is kept as one row of its own (`search_documents`) for updates and deletes, and only for a table that has something to search: an audit log or join table with no searchable text keeps none. Integer word ids would make the table smaller still, but each new word would cost two rows, and most of what real apps index (names, addresses, emails) is new words.
 
 **Why synchronous CRUD?**
 Cloudflare Durable Object SQLite operations are synchronous by design. This simplifies the API — no `await` needed for `create()`, `get()`, `update()`, `delete()`.

@@ -105,8 +105,8 @@ describe('billed rows per operation', () => {
 			expect(costs.update_same.written).toBe(0);
 			expect(costs.update_indexed.written).toBeLessThanOrEqual(4);
 			expect(costs.autosave.written).toBeLessThanOrEqual(8);
-			expect(costs.create_deal.written).toBeLessThanOrEqual(30);
-			expect(costs.create_participant.written).toBeLessThanOrEqual(15);
+			expect(costs.create_deal.written).toBeLessThanOrEqual(29);
+			expect(costs.create_participant.written).toBeLessThanOrEqual(13);
 			expect(costs.delete_document.written).toBeLessThanOrEqual(25);
 			expect(costs.delete_document.read).toBeLessThanOrEqual(45);
 			// A raw write is now fully caught up (index, sync stamp, broadcast),

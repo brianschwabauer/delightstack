@@ -2322,6 +2322,7 @@ export class DatabaseServer<
 						last_before: string | null;
 						befores: string[];
 						created: boolean;
+						existed: boolean;
 						stamped: boolean;
 					}
 				>();
@@ -2349,6 +2350,9 @@ export class DatabaseServer<
 						last_before: change.before === null ? null : String(change.before),
 						befores: change.before === null ? [] : [String(change.before)],
 						created: change.op === 'insert',
+						// The row was there before the run unless the run began
+						// by inserting it.
+						existed: change.op !== 'insert',
 						stamped,
 					});
 				}
@@ -2511,6 +2515,7 @@ export class DatabaseServer<
 			last_before: string | null;
 			befores: string[];
 			created: boolean;
+			existed: boolean;
 			stamped: boolean;
 		},
 		now: Date,
@@ -2552,7 +2557,12 @@ export class DatabaseServer<
 			row && change.stamped && typeof row.updated_at === 'number' && row.updated_at > 0
 				? row.updated_at
 				: now.getTime();
-		now.setTime(this.search.store.allocateTimestamp(entity_type, proposed));
+		// A type that indexes nothing is counted here, from the row itself:
+		// whether it exists now, and whether it did before the run.
+		const doc_delta = this.search.indexesNothing(entity_type)
+			? (row ? 1 : 0) - (change.existed ? 1 : 0)
+			: 0;
+		now.setTime(this.search.store.allocateTimestamp(entity_type, proposed, doc_delta));
 		const at = now.getTime();
 
 		if (!row) {
@@ -4488,7 +4498,16 @@ export class DatabaseServer<
 			} else if (built?.schema_signature !== signature) {
 				// Begin even with no budget left — the clear + cursor must land so
 				// the stale index is never served as if it matched the new schema.
-				this.beginRebuild(entity_type, signature, had_state || legacy_present);
+				// When only the layout of a type that indexes nothing changed
+				// (dropping its empty rows), clients hold nothing stale: no resync.
+				const layout_only =
+					built?.schema_signature !== undefined &&
+					built.schema_signature === this.searchSchemaSignature(entity_type, false);
+				this.beginRebuild(
+					entity_type,
+					signature,
+					!layout_only && (had_state || legacy_present),
+				);
 				if (inline && budget > 0)
 					budget -= this.runRebuild(entity_type, budget).processed;
 			} else if (pending) {
@@ -4526,7 +4545,7 @@ export class DatabaseServer<
 	}
 
 	/** The serialized search schema an entity type's tables must be built from. */
-	private searchSchemaSignature(entity_type: string): string {
+	private searchSchemaSignature(entity_type: string, with_layout = true): string {
 		const table = this.searchTable(entity_type);
 		// Only what changes the index contents: a field's weight ranks at query
 		// time, its token cap decides what is indexed.
@@ -4541,6 +4560,11 @@ export class DatabaseServer<
 			...(max_tokens.length ? { max_tokens } : {}),
 			// The on-disk index layout: a new format rebuilds every type once.
 			format: SEARCH_INDEX_FORMAT,
+			// A type that indexes nothing keeps no document rows (3.0.1): the
+			// one rebuild this triggers clears the empty rows older versions wrote.
+			...(with_layout && this.search.indexesNothing(entity_type)
+				? { stores_nothing: true }
+				: {}),
 		});
 	}
 
@@ -4833,6 +4857,16 @@ export class DatabaseServer<
 		const built = this.#state.native_search?.[entity_type];
 		this.ctx.storage.transactionSync(() => {
 			this.search.clearSearchTables(entity_type);
+			// A type that indexes nothing has no document rows for the rebuild
+			// to count, so it is counted here, once; creates and deletes keep it
+			// exact from now on, including those that land mid-rebuild.
+			if (this.search.indexesNothing(entity_type)) {
+				const table_name = quoteIdentifier(this.searchTable(entity_type).table_name);
+				const rows = Number(
+					this.ctx.storage.sql.exec(`SELECT COUNT(*) AS n FROM ${table_name}`).one().n,
+				);
+				this.search.store.adjustDocCount(entity_type, rows);
+			}
 			this.setSearchTableState(entity_type, {
 				schema_signature: built?.schema_signature ?? '',
 				migrated: built?.migrated ?? false,
@@ -6110,7 +6144,9 @@ export class DatabaseServer<
 					delete data_copy[primary_key];
 					delete data_copy.created_at;
 					delete data_copy.updated_at;
-					this.ensureMonotonicTimestamp(now, entity_type);
+					// Counts the new row in the same write as the clock (one state
+					// write per create); the index write below is told so.
+					this.ensureMonotonicTimestamp(now, entity_type, 1);
 
 					// Parse the data to ensure it's valid (throws an error if not)
 					const input_data = table.parse({
@@ -6154,6 +6190,8 @@ export class DatabaseServer<
 						entity_type,
 						String(created_id),
 						sparse_entity as Record<string, unknown>,
+						undefined,
+						true,
 					);
 					this.cascadeReindexReferencing(
 						entity_type,
@@ -6399,7 +6437,18 @@ export class DatabaseServer<
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-					this.ensureMonotonicTimestamp(now, entity_type);
+					// A type that indexes nothing has no index row for removeDocument
+					// to uncount, so the delete counts itself: one read, and the
+					// count rides the clock's write.
+					const uncount =
+						this.search.indexesNothing(entity_type) &&
+						this.ctx.storage.sql
+							.exec(
+								`SELECT 1 FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ? LIMIT 1`,
+								id,
+							)
+							.toArray().length > 0;
+					this.ensureMonotonicTimestamp(now, entity_type, uncount ? -1 : 0);
 					// The whole row, read only when something will actually consume
 					// it: restoring a delete is the one revert that needs the entity
 					// in full, and the file GC queue needs the keys the row held.
@@ -6711,8 +6760,10 @@ export class DatabaseServer<
 	 * The invariant lives in `search_state.last_updated_at`, read AND advanced
 	 * inside the entity write transaction (§7.5).
 	 */
-	private ensureMonotonicTimestamp(now: Date, entity_type: string) {
-		now.setTime(this.search.store.allocateTimestamp(entity_type, now.getTime()));
+	private ensureMonotonicTimestamp(now: Date, entity_type: string, doc_delta = 0) {
+		now.setTime(
+			this.search.store.allocateTimestamp(entity_type, now.getTime(), doc_delta),
+		);
 	}
 
 	/**
