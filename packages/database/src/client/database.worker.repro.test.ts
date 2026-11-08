@@ -340,7 +340,9 @@ describe('sync durability regressions (2026-07-14 incident)', () => {
 					}
 					for (let i = 0; i < 20; i++) {
 						const id = created_ids[(round * 20 + i) % created_ids.length];
-						server.update('thread', id, { last_message_at: T0 + round });
+						// Always a real change: an update that changes nothing writes
+						// nothing (and so re-syncs nothing).
+						server.update('thread', id, { last_message_at: T0 + 1_000 + round });
 					}
 					round++;
 				},

@@ -29,8 +29,10 @@ import type {
 	Placeholder,
 	PrimaryKeyField,
 	FileField,
+	Keyword,
 	ReadOnly,
 	Searchable,
+	SearchableOptions,
 	Sortable,
 	SqliteForeignKeyAction,
 	StringField,
@@ -115,9 +117,19 @@ abstract class CarriableFieldGenerator extends BaseFieldGenerator {
 
 /** Adds the search-engine flags (searchable/sortable) shared by searchable field generators */
 abstract class SearchableFieldGenerator extends CarriableFieldGenerator {
-	/** Whether the field can be fuzzy searched and indexed by the search engine. If 'primary' is true, this is ignored */
-	searchable(): Omit<Searchable<this>, 'searchable'> {
+	/**
+	 * Index the field for search: filterable, sortable (with `.sortable()`),
+	 * synced to clients, and — for strings — full-text searchable, split into
+	 * words.
+	 *
+	 * For a string that is an id, key, URL, code or other opaque value, use
+	 * `.keyword()` instead: it is matched whole and never split into words.
+	 *
+	 * @example schema.string().searchable({ weight: 3 }) // a title outranks a body
+	 */
+	searchable(options?: SearchableOptions): Omit<Searchable<this>, 'searchable'> {
 		this._.searchable = true;
+		if (options) this._.search_options = { ...options };
 		return this as Omit<Searchable<this>, 'searchable'>;
 	}
 
@@ -272,6 +284,21 @@ export class StringFieldGenerator extends ColumnFieldGenerator<string> {
 		const field: StringField = { type: 'string' } as StringField;
 		field.schema = new FieldValidator(field);
 		(this as { _: StringField })._ = field;
+	}
+
+	/**
+	 * Index the string as one exact value: filterable (`where: { code: 'X1' }`),
+	 * sortable and synced like `.searchable()`, but never split into words, so
+	 * a full-text `term` does not match it. The right tier for ids, keys,
+	 * codes, URLs, hashes and tokens — tokenizing one of those yields a handful
+	 * of meaningless fragments per row, each a billed index write.
+	 *
+	 * @example schema.string().keyword() // `thumbnail_key`, `external_id`, `sku`
+	 */
+	keyword(): Omit<Keyword<Searchable<this>>, 'searchable' | 'keyword'> {
+		this._.searchable = true;
+		this._.keyword = true;
+		return this as Omit<Keyword<Searchable<this>>, 'searchable' | 'keyword'>;
 	}
 
 	/** Sets the minimum length of the string */
@@ -768,12 +795,26 @@ export class ArrayFieldGenerator<
 	 * it is filterable (`contains_all` / `contains_any`) and facetable, but it
 	 * never participates in full-text term matching.
 	 */
-	searchable(): Omit<Searchable<this>, 'searchable'> {
+	searchable(options?: SearchableOptions): Omit<Searchable<this>, 'searchable'> {
 		const searchableTypes = ['string', 'number', 'boolean', 'enum'];
 		if (this._.items._.type && searchableTypes.includes(this._.items._.type)) {
 			this._.searchable = true;
+			if (options) this._.search_options = { ...options };
 		}
 		return this as Omit<Searchable<this>, 'searchable'>;
+	}
+
+	/**
+	 * Index a string array as a list of exact values (ids, tags, codes):
+	 * filterable with `contains_any` / `contains_all`, never split into words.
+	 * See {@link StringFieldGenerator.keyword}.
+	 */
+	keyword(): Omit<Keyword<Searchable<this>>, 'searchable' | 'keyword'> {
+		if (this._.items._.type === 'string') {
+			this._.searchable = true;
+			this._.keyword = true;
+		}
+		return this as Omit<Keyword<Searchable<this>>, 'searchable' | 'keyword'>;
 	}
 
 	/**

@@ -2,6 +2,7 @@ import type {
 	AnySearchSchema,
 	IndexedDocument,
 	SearchableType,
+	SearchFieldOptions,
 	SearchQuery as CoreSearchQuery,
 	SearchQueryResults as CoreSearchQueryResults,
 } from '../search/core/types.js';
@@ -30,6 +31,7 @@ import type {
 	IsUnique,
 	OmitNeverProperties,
 	SqliteForeignKeyAction,
+	StorageType,
 } from './field-types.js';
 import { DatabaseGenerator, type FieldGenerator } from './generators.js';
 
@@ -105,6 +107,7 @@ function recursivelyBuildSearchSchema(
 	carried_fields: string[],
 	file_fields: Record<string, { store: string }>,
 	server_indexed_fields: string[],
+	search_options: Record<string, SearchFieldOptions>,
 ): AnySearchSchema | SearchableType | undefined {
 	// Collected here rather than in the column loop so a `file()` nested inside
 	// an `object()` is recorded too, at its dot path. The column loop only sees
@@ -183,6 +186,7 @@ function recursivelyBuildSearchSchema(
 					carried_fields,
 					file_fields,
 					server_indexed_fields,
+					search_options,
 				);
 				if (!childSchema) return acc;
 				acc[childFieldName] = childSchema;
@@ -199,7 +203,17 @@ function recursivelyBuildSearchSchema(
 		const itemType = subfield.items._;
 		let arrayType: SearchableType | undefined;
 		if (itemType.type === 'string') {
-			arrayType = 'string[]';
+			if (
+				subfield.keyword ||
+				itemType.keyword ||
+				(itemType.format && KEYWORD_FORMATS.has(itemType.format))
+			) {
+				arrayType = 'enum[]';
+			} else {
+				guardTextField(path, subfield.search_options);
+				recordSearchOptions(path, subfield.search_options, search_options);
+				arrayType = 'string[]';
+			}
 		} else if (itemType.type === 'number') {
 			arrayType = 'number[]';
 		} else if (itemType.type === 'boolean') {
@@ -240,14 +254,95 @@ function recursivelyBuildSearchSchema(
 	if (subfield.type === 'geopoint') return 'geopoint';
 	if (subfield.type === 'vector') return `vector[${subfield.dimensions}]`;
 	if (subfield.type === 'enum') return 'enum';
-	if (subfield.type === 'string') return 'string';
+	if (subfield.type === 'string') {
+		// Opaque values (ids, keys, timestamps, URLs) match whole: see
+		// `.keyword()`. Same `enum` index type the ids below use.
+		const format = 'format' in subfield ? subfield.format : undefined;
+		if (subfield.keyword || (format && KEYWORD_FORMATS.has(format))) return 'enum';
+		guardTextField(path, subfield.search_options);
+		recordSearchOptions(path, subfield.search_options, search_options);
+		return 'string';
+	}
+	// Ids index as exact-match `enum`, never as tokenized text. A random id
+	// tokenizes into 5–8 meaningless fragments (camelCase and digit splits),
+	// each a posting row plus a dictionary row written on every create —
+	// about a third of a create's billed writes — and a dictionary that grows
+	// with every row forever, which typo/prefix expansion then has to scan.
+	// `where: { id }` / `{ deal_id }` filters and sorting work the same.
 	if (subfield.type === 'foreign_key') {
-		return subfield.foreign_key.type === 'number' ? 'number' : 'string';
+		return subfield.foreign_key.type === 'number' ? 'number' : 'enum';
 	}
 	if (subfield.type === 'primary_key') {
-		return subfield.primary_key.type === 'number' ? 'number' : 'string';
+		return subfield.primary_key.type === 'number' ? 'number' : 'enum';
 	}
 	return;
+}
+
+/**
+ * String formats whose values are opaque — matched whole, never split into
+ * words. A datetime tokenizes into `2026`, `11`, `07t09`…; a URL into
+ * `https`, `com` and path fragments that then match unrelated searches.
+ */
+const KEYWORD_FORMATS: ReadonlySet<string> = new Set(['datetime', 'date', 'time', 'uuid', 'url']);
+
+/**
+ * Field names that almost always hold an identifier, key, hash, token, URL or
+ * timestamp rather than words. Full-text indexing one splits every value into
+ * meaningless fragments — each a billed index row on every write, a dictionary
+ * that grows with every row, and junk matches for real searches — which is the
+ * mistake this catches at table definition.
+ */
+const IDENTIFIER_NAME =
+	/(?:^|_)(?:ids?|keys?|urls?|uris?|hash(?:es)?|tokens?|uuids?|guids?|etag|sha\d*|checksum)$|_at$/;
+
+/** Throw for a full-text field whose name says it is not text (see IDENTIFIER_NAME). */
+function guardTextField(path: string, options: SearchFieldOptionsInput | undefined): void {
+	if (!path || options?.text === true) return;
+	const name = path.split('.').pop() ?? path;
+	if (!IDENTIFIER_NAME.test(name)) return;
+	throw new DelightError({
+		message: `Field '${path}' looks like an identifier, key or timestamp, but .searchable() indexes it as full text, splitting every value into meaningless fragments (a random id becomes 5–8 index rows). Use .keyword() to filter and sort on the exact value, .carried() if it only needs to reach the client, or .searchable({ text: true }) if it really holds words people search for.`,
+		status: 400,
+		code: 'invalid_schema',
+	});
+}
+
+/** The options `.searchable({ … })` accepts, as stored on the field. */
+type SearchFieldOptionsInput = { weight?: number; max_tokens?: number; text?: true };
+
+/** Validate and record a text field's ranking/size options under its path. */
+function recordSearchOptions(
+	path: string,
+	options: SearchFieldOptionsInput | undefined,
+	search_options: Record<string, SearchFieldOptions>,
+): void {
+	if (!path || !options) return;
+	const recorded: SearchFieldOptions = {};
+	if (options.weight !== undefined) {
+		if (typeof options.weight !== 'number' || !Number.isFinite(options.weight) || options.weight <= 0) {
+			throw new DelightError({
+				message: `Field '${path}': searchable({ weight }) must be a positive number.`,
+				status: 400,
+				code: 'invalid_schema',
+			});
+		}
+		recorded.weight = options.weight;
+	}
+	if (options.max_tokens !== undefined) {
+		const max = options.max_tokens;
+		if (
+			typeof max !== 'number' ||
+			!(max === Infinity || (Number.isInteger(max) && max > 0))
+		) {
+			throw new DelightError({
+				message: `Field '${path}': searchable({ max_tokens }) must be a positive integer or Infinity.`,
+				status: 400,
+				code: 'invalid_schema',
+			});
+		}
+		recorded.max_tokens = max;
+	}
+	if (Object.keys(recorded).length) search_options[path] = recorded;
 }
 
 /**
@@ -649,6 +744,42 @@ export namespace Database {
 			}
 	>;
 
+	/**
+	 * One row of the table exactly as SQLite returns it from a raw `SELECT *` —
+	 * the type to give `db.exec<Row>()`.
+	 *
+	 * This is the storage shape, not the entity shape ({@link Entity}):
+	 * booleans are `0 | 1`, objects and arrays are JSON text, optional columns
+	 * are `| null` (never `undefined`), and `created_at` / `updated_at` are
+	 * epoch milliseconds. `json` is the overflow column (FK-derived search
+	 * values and keys from older schemas); app code should not need it.
+	 *
+	 * Pick only what you select: `Pick<Database.Row<typeof table>, 'id' | 'name'>`.
+	 *
+	 * @example
+	 * type DocumentRow = Database.Row<typeof documentTable>;
+	 * const rows = db.exec<Pick<DocumentRow, 'id' | 'status'>>(
+	 * 	`SELECT id, status FROM document WHERE deal_id = ?`, deal_id,
+	 * );
+	 */
+	export type Row<
+		Table extends {
+			readonly _: Record<string, FieldGenerator>;
+		},
+	> = Flatten<
+		{
+			[Key in keyof Table['_'] as IsDerived<Table['_'][Key]> extends true
+				? never
+				: Key]: IsOptional<Table['_'][Key]> extends true
+				? StorageType<Table['_'][Key]> | null
+				: StorageType<Table['_'][Key]>;
+		} & (true extends HasPrimaryKeyField<Table['_']> ? {} : { id: string }) & {
+				created_at: number;
+				updated_at: number;
+				json: string | null;
+			}
+	>;
+
 	/** Infers the type of the schema the search engine indexes this table with */
 	export type SearchSchema<
 		Table extends {
@@ -917,7 +1048,41 @@ export namespace Database {
 		}[];
 		/** Whether the index should be unique (no duplicates) */
 		unique: boolean;
+		/**
+		 * A partial index's condition, as raw SQL (`WHERE` is added for you).
+		 * Only rows matching it are indexed. Declared through the table's
+		 * `indexes` option; field-level `.indexable()` indexes never have one.
+		 */
+		where?: string;
 	}>;
+
+	/**
+	 * One index declared in a table's `indexes` option — the way to index
+	 * several columns at once, an enum column, or only some rows (partial).
+	 *
+	 * @example
+	 * Database.table('audit_event', (s) => ({ ... }), {
+	 * 	indexes: [
+	 * 		// The chain-head lookup: WHERE document_id = ? ORDER BY created_at DESC, id DESC
+	 * 		{ columns: ['document_id', { column: 'created_at', direction: 'DESC' }, { column: 'id', direction: 'DESC' }] },
+	 * 		// Only undispatched rows, the only ones the drain ever looks at
+	 * 		{ columns: ['next_attempt_at'], where: 'dispatched_at IS NULL' },
+	 * 	],
+	 * });
+	 */
+	export interface TableIndex<Column extends string = string> {
+		/** Defaults to `idx_<table>_<column>_<column>…` */
+		name?: string;
+		/** The indexed columns, in order. A bare name sorts ascending. */
+		columns: (Column | { column: Column; direction?: 'ASC' | 'DESC' })[];
+		/** Refuse duplicate values across the indexed columns. @default false */
+		unique?: boolean;
+		/**
+		 * Raw SQL condition for a partial index, without the `WHERE` keyword.
+		 * It must only reference this table's columns.
+		 */
+		where?: string;
+	}
 
 	/** The name of the primary-key field declared in a table config (never when auto-injected) */
 	type PrimaryKeyColumnName<TableConfig extends Record<string, FieldGenerator>> = {
@@ -1039,10 +1204,16 @@ export namespace Database {
 			derived_fields: Record<string, { foreign_keys?: string[] }>;
 			/** The names of `blob()` fields (real `BLOB` columns, never indexed) */
 			blob_fields: string[];
+			/** Top-level fields stored as JSON text in their own column */
+			json_fields: string[];
 			/** `file()` fields mapped to the store binding their objects live in */
 			file_fields: Record<string, { store: string }>;
 			/** The table's change-log settings (see `TableOptions.history`) */
 			history: TableHistoryConfig;
+			/** Whether raw SQL writes are caught up (see `TableOptions.capture_raw_writes`) */
+			capture_raw_writes: boolean;
+			/** Per-field `.searchable({ weight, max_tokens })` options, by dot path */
+			search_options: Record<string, SearchFieldOptions>;
 		};
 	}
 
@@ -1058,7 +1229,7 @@ export namespace Database {
 	}
 
 	/** The third argument of {@link table} */
-	export interface TableOptions {
+	export interface TableOptions<Column extends string = string> {
 		/**
 		 * Record every `create`/`update`/`delete` of this table in the shared
 		 * `_change_log` table, readable through `db.history()` /
@@ -1073,6 +1244,25 @@ export namespace Database {
 		 * Defaults to 365; `0` keeps them forever. Ignored unless `history`.
 		 */
 		history_retention_days?: number;
+		/**
+		 * Indexes beyond the single-column ones `.indexable()` declares: several
+		 * columns, enum columns, sort direction, partial (`where`) and unique.
+		 * They are created and kept in step with this list on every wake, like
+		 * field-level indexes, and appear in `Database.schemaSql()`.
+		 */
+		indexes?: TableIndex<Column>[];
+		/**
+		 * Catch up raw SQL writes to this table (`exec()`, `ctx.storage.sql`,
+		 * foreign-key cascades): re-index, re-stamp `updated_at` for sync,
+		 * record history, broadcast. On by default.
+		 *
+		 * Set `false` for an internal ledger (a job outbox, a dedup table) that
+		 * only raw SQL writes and nothing searches, syncs or subscribes to.
+		 * Each raw write then costs exactly its own rows, with no trigger, no
+		 * catch-up and no broadcast, as in v2. Writes through the library are
+		 * unaffected.
+		 */
+		capture_raw_writes?: boolean;
 	}
 
 	/** The default change-log retention, in days, for a table that opts into history */
@@ -1121,8 +1311,12 @@ export namespace Database {
 			indexes: SqlIndexes;
 			derived_fields: Record<string, { foreign_keys?: string[] }>;
 			blob_fields: string[];
+			/** Top-level fields stored as JSON text in their own column */
+			json_fields: string[];
 			file_fields: Record<string, { store: string }>;
 			history: TableHistoryConfig;
+			capture_raw_writes: boolean;
+			search_options: Record<string, SearchFieldOptions>;
 		};
 	}
 
@@ -1160,7 +1354,9 @@ export namespace Database {
 	>(
 		rawTableName: TableName,
 		callback: (tableSchema: DatabaseGenerator) => TableConfig,
-		options?: TableOptions,
+		options?: TableOptions<
+			(keyof TableConfig & string) | 'id' | 'created_at' | 'updated_at'
+		>,
 	): TableInstance<TableName, TableConfig> {
 		if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(rawTableName)) {
 			throw new DelightError({
@@ -1188,7 +1384,10 @@ export namespace Database {
 		const foreign_keys: Record<string, unknown> = {};
 		const derived_fields: Record<string, { foreign_keys?: string[] }> = {};
 		const blob_fields: string[] = [];
+		/** Top-level fields stored as JSON text in their own column. */
+		const json_fields: string[] = [];
 		const file_fields: Record<string, { store: string }> = {};
+		const search_options: Record<string, SearchFieldOptions> = {};
 		const history_enabled = options?.history === true;
 		const raw_retention = options?.history_retention_days;
 		if (
@@ -1269,8 +1468,8 @@ export namespace Database {
 					field.primary_key.type === 'string'
 						? 'TEXT PRIMARY KEY'
 						: 'INTEGER PRIMARY KEY AUTOINCREMENT';
-				index_schema[fieldName] =
-					field.primary_key.type === 'number' ? 'number' : 'string';
+				// `enum`, not `string`: see recursivelyBuildSearchSchema
+				index_schema[fieldName] = field.primary_key.type === 'number' ? 'number' : 'enum';
 				searchable_fields.push(fieldName);
 				if ('sortable' in field && field.sortable) {
 					sortable_fields.push(fieldName);
@@ -1393,18 +1592,25 @@ export namespace Database {
 					on_delete: field.foreign_key.on_delete,
 				};
 			}
-			// Non-scalar fields (objects, arrays, vectors, geopoints) are stored in
-			// the internal `json` overflow column. Giving them their own TEXT column
-			// would store a JSON string that never round-trips back into an object.
-			// An `file()` reference is a small object, so it rides in `json` too — a
-			// `blob()` is the one binary type with a real column (`BLOB`).
-			const stored_in_json_column =
+			// Non-scalar fields (objects, arrays, vectors, geopoints, file
+			// references) get a column of their own holding the value as JSON text,
+			// so raw SQL reads `SELECT field_schema FROM document` instead of
+			// digging it out of a shared blob. The column is always nullable:
+			// SQLite can only ADD a column to a populated table that way, and
+			// parse() enforces presence. `json_valid` keeps raw writes honest.
+			// (These used to share the internal `json` overflow column; rows
+			// written that way are moved over in the background — see
+			// db.server.ts "JSON columns".)
+			const is_json_field =
 				field.type === 'object' ||
 				field.type === 'array' ||
 				field.type === 'vector' ||
 				field.type === 'file' ||
 				field.type === 'geopoint';
-			if (!stored_in_json_column) {
+			if (is_json_field) {
+				json_fields.push(fieldName);
+				table_definition[fieldName] = `TEXT CHECK (json_valid("${fieldName}"))`;
+			} else {
 				table_definition[fieldName] = sqliteColumnDef;
 			}
 
@@ -1417,6 +1623,7 @@ export namespace Database {
 				carried_fields,
 				file_fields,
 				server_indexed_fields,
+				search_options,
 			);
 			if (built_schema) {
 				index_schema[fieldName] = built_schema;
@@ -1451,6 +1658,63 @@ export namespace Database {
 		// Add auto-managed timestamp columns to the SQLite table definition
 		table_definition['created_at'] = 'INTEGER NOT NULL';
 		table_definition['updated_at'] = 'INTEGER NOT NULL';
+
+		// Table-level indexes (`options.indexes`): several columns, enums,
+		// partial. Validated here so a typo'd column fails at definition time
+		// rather than as a CREATE INDEX error inside a Durable Object's
+		// constructor, where it would take the whole tenant down.
+		for (const declared of options?.indexes ?? []) {
+			const columns = (declared?.columns ?? []).map((entry) =>
+				typeof entry === 'string'
+					? { column: entry, direction: 'ASC' as const }
+					: {
+							column: entry.column,
+							direction: (entry.direction === 'DESC' ? 'DESC' : 'ASC') as 'ASC' | 'DESC',
+						},
+			);
+			if (!columns.length) {
+				throw new DelightError({
+					message: `An index on table '${tableName}' declares no columns.`,
+					status: 400,
+				});
+			}
+			for (const { column } of columns) {
+				if (!(column in table_definition) && column !== primary_key) {
+					throw new DelightError({
+						message: `Index on table '${tableName}' names column '${column}', which the table does not have.`,
+						status: 400,
+					});
+				}
+			}
+			const name =
+				declared.name ?? `idx_${tableName}_${columns.map((c) => c.column).join('_')}`;
+			if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+				throw new DelightError({
+					message: `Index name '${name}' on table '${tableName}' must be letters, numbers and underscores.`,
+					status: 400,
+				});
+			}
+			if (indexes.some((index) => index.name === name)) {
+				throw new DelightError({
+					message: `Table '${tableName}' declares the index '${name}' twice.`,
+					status: 400,
+				});
+			}
+			const where = declared.where?.trim();
+			if (where !== undefined && (!where || /;/.test(where))) {
+				throw new DelightError({
+					message: `The partial-index condition on '${name}' must be one non-empty SQL expression.`,
+					status: 400,
+				});
+			}
+			indexes.push({
+				name,
+				table: tableName,
+				columns,
+				unique: declared.unique === true,
+				...(where ? { where } : {}),
+			});
+		}
 
 		// Add timestamps to the search schema as sortable numbers (epoch ms)
 		index_schema['updated_at'] = 'number';
@@ -1641,8 +1905,11 @@ export namespace Database {
 				foreign_keys,
 				derived_fields,
 				blob_fields,
+				json_fields,
 				file_fields,
 				history,
+				capture_raw_writes: options?.capture_raw_writes !== false,
+				search_options,
 				table_definition,
 				indexes,
 				index_schema,

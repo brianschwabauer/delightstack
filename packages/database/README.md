@@ -18,6 +18,32 @@ Type-safe database layer for Cloudflare Durable Objects with built-in full-text 
 - **Auto-generated API routes** — `createDatabaseHandle({ tables, hooks })` plugs into SvelteKit's `handle` and serves CRUD + sync routes for every table, with lifecycle hooks for auth and side effects.
 - **Reactive client (Svelte 5)** — `DatabaseClient` gives you three reactive read handles (`get` / `entity` / `list`), IndexedDB caching, a local IndexedDB search index, optimistic updates, and coverage-based client/server query routing — all heavy work running off-thread in a SharedWorker.
 
+## Upgrading to v3 (SQL-first)
+
+v3 makes raw SQL a first-class way to read **and write**, adds numbered migrations, and stops one database's schema problem from taking it down. Existing databases upgrade themselves on their first wake; nothing needs a manual step except the raw-SQL reads listed first.
+
+### Breaking
+
+- **Objects, arrays, vectors, geopoints and file references have a column of their own**, holding the value as JSON text (`"field_schema" TEXT CHECK (json_valid("field_schema"))`). They used to share the `json` overflow column. Rows written before the upgrade are moved on the first wake, before any request is served, when the old blobs total under 128 MB (in 1,000-row statements; measured at about 240 MB/s in local workerd, so well under a second there, once; `jsonColumnMoveBytesInConstructor()` sets the limit). A bigger database moves 1,000 rows per wake and the rest on the alarm; until then the library's own reads fall back to the old location, but a raw read of a row not reached yet returns `NULL` (use `COALESCE(field_schema, json_extract(json, '$.field_schema'))` in that window, or check `schemaReport().json_columns_pending`). **Raw SQL that reads `json_extract(json, '$.field')` must read the column instead**: `SELECT field_schema FROM document`, `json_extract(field_schema, '$[0].page')`, `json_each(tags)`.
+- **Ids are indexed as exact-match `enum`, not tokenized text.** A string primary key (and a `.searchable()` string foreign key) used to be split into 5–8 meaningless tokens per row, which cost about a third of every create's billed writes and grew the token dictionary forever. `where: { id }` filters and sorting are unchanged; a full-text `term` no longer matches fragments of ids. The search schema changes, so each database rebuilds its index once on wake (sliced, like any rebuild) and every synced client re-downloads once.
+- **Every entity table gets a `_w INTEGER NOT NULL DEFAULT 0` column** and three `_chg_*` triggers (see [Raw SQL](#raw-sql)). `SELECT *` returns `_w`; leave it alone.
+- **A raw-SQL write is now caught up**: search index, a fresh `updated_at`, history, file GC, auto-embeds and a websocket broadcast. Code that wrote raw SQL and expected none of that (rare) now gets it. A raw write can't backdate `updated_at` below what sync has already handed out (see [Raw SQL](#raw-sql)).
+- **`DatabaseServer` extends `SqlDatabase`** and takes an optional fifth constructor argument, `{ migrations }`.
+- **An update that changes nothing writes nothing**: no row, no index entry, no new `updated_at`, no history, no broadcast. Its result is the current row, marked `unchanged: true` in `transaction()` results. Code that called `update()` with unchanged values to bump `updated_at` (to make clients re-sync a row) must change a value instead.
+- **`transaction()` rejects an operation it doesn't recognise** with a 400. It used to skip it and report success.
+- **A full-text field named like an identifier throws at table definition** (`author_id: s.string().searchable()`): use `.keyword()` (exact match, what an id or key needs), `.carried()`, or `.searchable({ text: true })` if it really is text. `datetime`, `date`, `time`, `uuid` and `url` strings now index as keywords.
+- **Ranking changed** (see [Search ranking](#search-ranking)): typo tolerance is on by default, plurals match, exact matches outrank prefix and typo matches, and prefix/typo expansions are capped. A field value indexes at most 1,000 distinct words unless `.searchable({ max_tokens })` says otherwise.
+- **A new on-disk index layout** (`search_entries`, `search_terms`, `search_documents`, `search_fields`). The old tables are dropped on the first wake and every type rebuilds into the new ones (the same one-time rebuild and client resync the id change above causes). Code that read `search_postings` / `search_tokens` directly must not; use `searchReport()`.
+
+### Fixed along the way
+
+- `ON DELETE CASCADE` / `SET NULL` children are caught up when SQLite changes them. They used to stay in the search index and never reached synced clients.
+- `.indexable({ unique: true })` emitted invalid SQL (`CREATE INDEX … (col) UNIQUE`); it now creates a unique index.
+- A unique index the existing rows violate no longer throws out of the constructor (which failed every request to that database). It is left out, logged, and reported by `schemaReport()`.
+- An update writes only the columns whose value changed, and skips the search index when nothing it indexes changed: a plain-column update bills 3 rows instead of 8, and an update that changes nothing bills 0 instead of 8.
+- The search index is smaller and cheaper to write: one row per indexed word per document (the old layout wrote two, plus repeated the table, field and document id in each), and editing a long field rewrites only what changed (adding a word to a 2,000-word body: 1,489 rows before, 3 now).
+- A new `NOT NULL` boolean column added to a populated table defaults to `0`, not `''`.
+
 ## Upgrading to v2
 
 v2 is a major release: the search engine, the client read API, and the schema validation layer were all replaced. The full set of breaking changes:
@@ -126,11 +152,13 @@ username: schema.string().min(1).check((v) => (v.includes(' ') ? 'No spaces' : u
   └─────────────────────────────────────────────────────┘
 ```
 
-**Schema → SQLite + search tables:** Each table definition produces a SQLite table (for persistent storage) and a set of shared search tables (`search_postings`, `search_tokens`, `search_docs`, `search_field_stats`, `search_vectors`, plus `search_state`/`search_tombstones` for sync). The `DatabaseServer` writes both inside one transaction, so a rolled-back write can never leave a stale index behind.
+**Schema → SQLite + search tables:** Each table definition produces a SQLite table (for persistent storage) and a set of shared search tables (`search_entries`, `search_terms`, `search_documents`, `search_fields`, `search_vectors`, plus `search_state`/`search_tombstones` for sync). The `DatabaseServer` writes both inside one transaction, so a rolled-back write can never leave a stale index behind.
 
 **Single-writer model:** Durable Objects guarantee a single instance handles all writes, eliminating race conditions. SQLite transactions provide atomicity within that instance.
 
-**JSON catch-all column:** Root-level scalar fields (string, number, boolean, enum, foreign key) get their own SQLite columns. Non-scalar fields (object, array, vector, geopoint) are serialized into a single `json` TEXT column and transparently deserialized on read.
+**One column per field:** Every field has its own SQLite column. Scalars are stored natively (booleans as `0`/`1`); objects, arrays, vectors, geopoints and file references are JSON text in their column, parsed on read. The internal `json` column holds only FK-derived search values (and keys from older schemas).
+
+**Raw SQL is safe:** Triggers on every entity table record writes that bypass the library (raw SQL, foreign-key cascades) and `DatabaseServer` catches them up — search index, sync timestamp, history, broadcast — so `exec()` can write as freely as it reads.
 
 ## Quickstart
 
@@ -590,6 +618,22 @@ schema.string().indexable({
 });
 ```
 
+For anything a single field can't say — an enum column, several columns in a chosen order, a partial index — declare it on the table:
+
+```typescript
+Database.table('audit_event', (s) => ({ ... }), {
+	indexes: [
+		// WHERE document_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
+		{ columns: ['document_id', { column: 'created_at', direction: 'DESC' }, { column: 'id', direction: 'DESC' }] },
+		{ columns: ['status'] }, // an enum
+		{ columns: ['next_attempt_at'], where: 'dispatched_at IS NULL' }, // partial
+		{ columns: ['code'], unique: true, where: 'code IS NOT NULL' },
+	],
+});
+```
+
+Column names are checked at definition time. Indexes are created, re-created when their definition changes, and dropped when removed, on every wake.
+
 ## Type Inference
 
 The schema system infers TypeScript types from your field definitions:
@@ -746,7 +790,8 @@ The trailing `options` is `WriteOptions` — currently just `{ actor }`, threade
 
 ```typescript
 db.list('person', {
-  // Full-text search term (prefix-matched per token by default)
+  // Full-text search term. Each word matches exactly, as a plural/singular,
+  // as a prefix and with typos, ranked in that order (see Search ranking).
   term: 'alice',
 
   // Which searchable fields the term matches against. '*' (default) = all.
@@ -773,14 +818,20 @@ db.list('person', {
     published: {}, // boolean facet — both buckets always reported
   },
 
-  // Per-field score multipliers during term matching
+  // Per-field score multipliers during term matching. Overrides the schema's
+  // `.searchable({ weight })` for that field.
   boost: { title: 2 },
 
-  // Match the term exactly instead of by prefix
+  // Whole words only: no plurals, prefixes or typos
   exact: false,
 
-  // Max levenshtein distance for typo tolerance (clamped to 0–3)
+  // Typo tolerance in edits (clamped to 0–3). Default: none under 5
+  // characters, 1 from 5, 2 from 9, none for words with a digit. 0 = off.
   tolerance: 1,
+
+  // A snippet of each matching field on every hit, with the matched words'
+  // offsets. `true`, or `{ fields: ['body'], length: 160 }`.
+  highlight: true,
 
   // Multi-token combining: 0 = every token must match, 1 (default) = any
   // token, fractional = all-token matches + that top fraction of partials
@@ -823,9 +874,46 @@ Returns:
     id: string;
     document: Entity | SearchEntity; // full or sparse, per `sparse`
     score: number;
+    // With `highlight`: field → snippet + [start, end) offsets of each match
+    highlights?: Record<string, { text: string; ranges: [number, number][] }>;
   }>;
 }
 ```
+
+Highlights can include a snippet of a `.serverOnly()` field: a window around the match (160 characters by default), which is what a result list shows. A caller who can ask for `sparse: false` can read the whole field anyway, but a `beforeList` hook that forces `sparse: true` to keep server-only text off the wire should also delete `highlight` from the query. Render marks from `ranges`, never by injecting HTML.
+
+#### Search ranking
+
+BM25 over each searched field, plus:
+
+| A query word matches… | Example | Counts |
+|---|---|---|
+| exactly | `contract` → `contract` | 1 |
+| a plural or singular | `contracts` → `contract`, `property` → `properties` | 0.9 |
+| as a prefix | `contr` → `contract` | 0.75 |
+| with one typo | `kontract` → `contract` | 0.6 |
+| with two typos | 9+ characters only | 0.4 |
+
+- **Typos are on by default**, scaled by word length (none under 5 characters, 1 edit from 5, 2 from 9) and never for words with a digit, so a zip code or unit number doesn't match its neighbor. `tolerance` overrides it; `exact: true` turns off plurals, prefixes and typos together.
+- **Expansions are capped.** A prefix keeps its 50 most frequent completions (10 for one or two characters), and only while they add up to 2,000 index entries; typos keep the 20 closest, up to 1,000 entries. A short prefix used to expand to every word starting with it (measured: 52,908 entries and 42 ms for `sen` over 5,000 notes; now 10 ms).
+- **Field weights** come from the schema: `title: s.string().searchable({ weight: 3 })` makes a title match outrank the same words in a body. A query's `boost` overrides it.
+- **Proximity.** For a query of two or more words, the top 100 results are re-read and a document with the words side by side, in order, gains up to 50%. The index stores no word positions (that would roughly triple it); only documents that matched two or more of the words are re-read.
+- **Lengths are rounded** to about 6% (exact below 32 words) before BM25 uses them, so adding a word to a long field doesn't rewrite its index entries.
+
+The server, the client and the in-memory reference engine rank identically (golden vectors over all three).
+
+#### Index size: what to index and how
+
+Each indexed word of each document is one row written on every create and on every change to that field, and one row of storage. What goes in the index:
+
+- **Text people search** — names, titles, addresses, notes: `.searchable()`.
+- **Opaque values** — ids, keys, codes, URLs, hashes, tokens: `.keyword()`. Matched whole (`where: { sku: 'A-100' }`, sortable, synced), never split into words. `datetime`, `date`, `time`, `uuid` and `url` strings are keywords automatically. As text, a random id becomes 5–8 index rows of fragments, a URL becomes `https`, `com` and path pieces that match unrelated searches.
+- **Values the client renders but nobody searches**: `.carried()`.
+- **Long bodies**: `.searchable().serverOnly()` keeps them off the wire. Each value indexes at most its first 1,000 distinct words (`.searchable({ max_tokens })` changes it; `Infinity` lifts it).
+
+A full-text field whose name says it isn't text (`*_id`, `*_ids`, `*_key`, `*_url`, `*_hash`, `*_token`, `*_at`) throws at table definition, naming the fix. `.searchable({ text: true })` confirms one that really holds words.
+
+`db.searchReport()` (admin, reads the whole index once) lists every field's documents, distinct words, index entries, estimated bytes and capped values, with warnings: a field whose words mostly occur once (an id or key indexed as text), a field writing hundreds of rows per document, values cut off by `max_tokens`.
 
 #### The `where` grammar
 
@@ -862,18 +950,132 @@ where: {
 
 ### Raw SQL
 
-```typescript
-// String + bindings
-db.exec(`SELECT * FROM person WHERE role = ?`, 'admin');
+Raw SQL is a first-class way to read **and write**. Agents and people both write it reliably; what the library adds is that a raw write can't leave anything behind.
 
-// Tagged template (recommended — prevents SQL injection)
-db.exec((sql) => {
-	const role = 'admin';
-	return sql`SELECT * FROM person WHERE role = ${role}`;
+```typescript
+// Typed reads: Database.Row is the storage shape (booleans 0 | 1, JSON as text)
+type DocumentRow = Database.Row<typeof documentTable>;
+const rows = db.exec<Pick<DocumentRow, 'id' | 'status' | 'field_schema'>>(
+	`SELECT id, status, field_schema FROM document WHERE deal_id = ?`,
+	deal_id,
+);
+
+// Raw writes are caught up: search, a fresh updated_at for sync, history,
+// file GC, auto-embeds, websocket broadcast
+db.exec(`UPDATE document SET status = 'voided' WHERE deal_id = ?`, deal_id);
+
+// Attribute a raw write's history to an actor
+scoped(db, 'agent:claude').exec(`UPDATE deal SET notes = ? WHERE id = ?`, notes, id);
+
+// Tagged template
+db.exec((sql) => sql`SELECT * FROM person WHERE role = ${role}`);
+```
+
+**How raw writes are caught up.** Each entity table has three triggers (`_chg_<table>_ins|upd|del`) that append a row to `_changes` for every insert, update or delete that did not come through `create`/`update`/`delete`/`transaction`. Library writes flip the table's `_w` column in the same statement and write their delete tombstone first, so the triggers skip them at no extra billed row. `drainChanges()` processes `_changes`; it runs after every `exec()` (and after each `exec` op inside a `transaction()`), at the start of every read and write through the class, on the alarm, and on wake. Several raw writes to one row become one catch-up. These automatic drains stop after 2,000 rows and arm the alarm for the rest, so a huge raw import can't stall the next request past the CPU limit; until the alarm finishes, the search index and sync lag behind those rows. Call `db.drainChanges()` yourself (it drains everything) after writing through `ctx.storage.sql` when the very next statement must see the result in search.
+
+**Opting a table out.** A ledger only raw SQL writes, which nothing searches, syncs or subscribes to (a job outbox, a dedup table), can skip all of this: `Database.table('outbox', …, { capture_raw_writes: false })`. Its raw writes then cost exactly their own rows, with no trigger, catch-up or broadcast, as in v2.
+
+Rules for raw writes:
+
+- Leave `_w` alone, and don't copy it: `INSERT INTO deal SELECT * FROM deal_archive` carries the source rows' `_w = 1` and is not captured. Name the columns.
+- `updated_at` is the sync cursor, so it only moves forward. A raw write's own `updated_at` is kept when it is ahead of every timestamp already handed out for that table; anything else (a backdate, a wall-clock value that has fallen behind a burst of writes) is replaced with a fresh one, or sync clients would never see the row. Keep your own times in `created_at` or a column of your own. A raw insert may pass `0` for `created_at` / `updated_at` and gets real ones.
+- A raw `INSERT OR REPLACE` over an existing row is recorded in history as a `create` (SQLite fires no delete trigger for the replaced row).
+- A row the catch-up throws on (a zero vector, say) is set aside in `_changes_failed`, logged and listed in `schemaReport().failed_changes`; it never blocks other rows or requests.
+- Enums are not `CHECK`ed by SQLite, and `.check()` / format validators only run on the library path. `schemaSql()` lists each enum's allowed values.
+- A broadcast for a raw write made inside your own `ctx.storage.transactionSync()` is sent once that transaction has committed, and not at all if it rolled back.
+
+#### One round trip: `execMany`
+
+```typescript
+const [deals, documents] = await stub.execMany<[DealRow, DocumentRow]>([
+	['SELECT * FROM deal WHERE id = ?', id],
+	['SELECT * FROM document WHERE deal_id = ? ORDER BY created_at', id],
+]);
+```
+
+Up to 100 read-only statements in one call, from one snapshot. From a Worker that is one Durable Object round trip (and one billed request) instead of one per query. Writes are refused, including a `WITH … INSERT`. Each entry is a single statement (`SELECT 1; DROP TABLE x` is refused), and the only `PRAGMA`s allowed are schema introspection (`table_info`, `table_xinfo`, `table_list`, `index_list`, `index_info`, `index_xinfo`, `foreign_key_list`, `foreign_key_check`, `data_version`). On a `DatabaseServer` it catches up pending raw writes first, like every other read.
+
+#### Check SQL against the schema: `explainSql`
+
+```typescript
+it('every list query matches the schema', () => {
+	for (const sql of Object.values(LIST_QUERIES)) db.explainSql(sql); // throws naming the bad column/table
 });
 ```
 
-Returns `Record<string, SqlStorageValue>[]`.
+#### The schema as SQL: `schemaSql`
+
+`schemaSql(tables)` (from `/server` or `/worker`) returns the exact DDL the server creates — tables with their generated search columns, every index, the change triggers — with enum values and `0 or 1` noted on each column. Commit it and assert it, so the file an agent reads is always the real schema:
+
+```typescript
+await expect(schemaSql(tables)).toMatchFileSnapshot('../schema.sql');
+```
+
+### Migrations
+
+New tables and new nullable-or-defaulted columns are still added automatically on wake. Everything else — nullability, type, default, renames, drops, data fixes — is a numbered migration:
+
+```typescript
+import type { Migration } from '@delightstack/database/worker';
+
+const migrations: Migration[] = [
+	{
+		id: '0001_relax_address',
+		up: (m) => {
+			m.alterColumn('deal', 'address'); // to the declared definition
+			m.exec(`UPDATE deal SET address = NULL WHERE address = ''`); // caught up like any raw write
+		},
+	},
+	{ id: '0002_rename_notes', up: (m) => m.exec(`ALTER TABLE deal RENAME COLUMN notes TO memo`) },
+];
+
+export class AppDB extends DatabaseServer<typeof tables> {
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(tables, () => undefined, ctx, env, { migrations });
+	}
+}
+```
+
+- Pending migrations run in order on wake, **before** the automatic additive pass, so they see the schema the previous version left. Each runs in its own transaction.
+- A brand-new database is created at the current schema and records every migration as applied without running it.
+- **A failing migration rolls back and does not take the database down.** It is logged, reported by `migrationStatus()` / `schemaReport()`, the ones after it wait, and it is retried on the next wake.
+- **While any migration is pending** (failed, or shipped as `preflight`), the automatic pass waits, so a migration always sees the schema the previous version left: a rename's new column is not added under it. The library's own columns (`_w`, `json`, and on the v3 upgrade the JSON field columns it moves into) are added regardless, so writes keep working. New tables and your own new columns wait, and writes to a table that is missing a declared column fail until the migration applies, so don't ship schema additions in the same deploy as a `preflight` migration.
+- `m.alterColumn(table, column, { definition?, copy? })` swaps a column for a new definition (add, copy, drop, rename) inside the transaction. Child rows and foreign keys are untouched. A `NOT NULL` column comes out with a `DEFAULT ''` / `0` (SQLite requires one to add it to a populated table).
+- `m.rebuildTable(table, { definition?, copy? })` re-creates a whole table, for a primary key, `UNIQUE` or `NOT NULL` foreign key change. It refuses a table other tables reference: dropping it would run SQLite's implicit `DELETE` and cascade into their rows (measured: `ON DELETE CASCADE` children are deleted), and the switch that prevents that can't be turned off inside a transaction.
+- `m.dropColumn(table, column)` drops the indexes on it first.
+
+**Preflight.** Ship a migration with `preflight: true` and it is skipped on wake. Call `checkMigrations()` on every tenant: it dry-runs everything pending against that tenant's real data and rolls it all back, reporting which would fail. Fix those, then deploy again without the flag.
+
+### Schema health: `schemaReport`
+
+```typescript
+const report = await stub.schemaReport();
+// { migrations: { applied, pending, failed },
+//   drift: [{ table, column, kind: 'nullability', declared: 'NULL', live: 'NOT NULL', fix: "alterColumn('deal', 'address')" }],
+//   pending_changes: 0, failed_changes: [], json_columns_pending: [], database_size: 3350528 }
+```
+
+Drift kinds: `missing_table`, `missing_column`, `extra_column`, `nullability`, `type`, `unique`, `missing_index`, `index_failed` (with the error). Each says which migration step fixes it. Cheap; call it on every tenant after a deploy.
+
+### SqlDatabase (no declared schema)
+
+For a Durable Object that wants SQLite and nothing else — no declared tables, search or sync — extend `SqlDatabase`: numbered migrations (a brand-new database runs all of them), typed `exec`, `execMany`, `explainSql`, `migrationStatus()`, `checkMigrations()` and `databaseSize()`.
+
+```typescript
+import { SqlDatabase, type Migration } from '@delightstack/database/worker';
+
+const MIGRATIONS: Migration[] = [
+	{ id: '0001_baseline', up: (m) => m.exec(`CREATE TABLE IF NOT EXISTS room (id TEXT PRIMARY KEY, name TEXT NOT NULL)`) },
+];
+
+export class Room extends SqlDatabase<Env> {
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(ctx, env, { migrations: MIGRATIONS });
+	}
+}
+```
+
+Moving an existing hand-migrated object over: make its current idempotent setup code `0001_baseline`. A live database runs it as a no-op; a new one is built by it.
 
 ### Transactions
 
@@ -1766,8 +1968,14 @@ The server-side code works without Svelte entirely:
 **Why a hand-written search engine (not SQLite FTS5, not a library)?**
 FTS5 cannot run in the browser, so a client and a server query would rank differently — and the whole point is that a caller can choose either per query. An in-memory library (this package used Orama through 1.1) has no incremental persistence: the entire index has to be serialized after writes, which grew to 10+ seconds per save on a production corpus, and it has to be held in the Durable Object's memory. The engine here shares one pure core (tokenizer, BM25, filter/sort semantics) between a SQLite postings backend on the server and an IndexedDB one on the client, so the same query over the same documents gives byte-identical results, index writes are O(changed document), and cold start costs nothing.
 
-**Why a `json` catch-all column?**
-SQLite doesn't support nested objects or arrays natively. Rather than flattening deeply nested schemas into dozens of columns, non-scalar fields are serialized into a single `json` TEXT column. Root-level scalars still get their own columns for indexing and WHERE clauses.
+**Why does every field get its own column, even objects?**
+So raw SQL reads what it looks like: `SELECT field_schema FROM document` instead of digging a value out of a shared blob, which an author (human or agent) has to know about to get right. A nested object is still one column (JSON text, queried with `json_extract(col, '$.path')`) rather than being flattened. Until v3 every non-scalar field shared one `json` column; that column now only holds FK-derived search values.
+
+**Why does `.searchable()` on a field named `*_id` or `*_key` throw?**
+Full-text indexing an opaque value is the most common way to bloat the index: a random id splits into 5–8 meaningless fragments (camelCase and digit boundaries), each a billed row on every write, each a dictionary entry that typo and prefix expansion then scan, and each a junk match for real searches. Four of the apps on this package had the mistake. The name is a cheap, reliable signal, so the error names the fix (`.keyword()`) at the moment the table is defined, and `{ text: true }` is there for the rare field that really is prose.
+
+**Why one index row per word per document, keyed by word?**
+A Durable Object bills every row and every index entry written. The index is one B-tree (`search_entries`, keyed field + word + document) with no secondary index; what a document contains is kept as one row of its own (`search_documents`) for updates and deletes. Integer word ids would make the table smaller still, but each new word would cost two rows, and most of what real apps index (names, addresses, emails) is new words.
 
 **Why synchronous CRUD?**
 Cloudflare Durable Object SQLite operations are synchronous by design. This simplifies the API — no `await` needed for `create()`, `get()`, `update()`, `delete()`.

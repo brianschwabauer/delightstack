@@ -132,6 +132,11 @@ export interface SearchHit<
 	id: string;
 	document: Doc;
 	score: number;
+	/**
+	 * With `highlight` on the query: a snippet of each matching field and the
+	 * `[start, end)` offsets of the matched words in it, for rendering marks.
+	 */
+	highlights?: Record<string, { text: string; ranges: [number, number][] }>;
 }
 
 export interface SearchResult<
@@ -1707,6 +1712,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 				index_schema: Record<string, unknown>;
 				carried_fields: string[];
 				server_indexed_fields: string[];
+				search_options?: Record<string, { weight?: number; max_tokens?: number }>;
 				primary_key: string;
 				primary_key_type?: 'string' | 'number';
 			}
@@ -1719,6 +1725,7 @@ export class DatabaseClient<T extends TableMap = TableMap> {
 				// locally-created entity would lose them until the server echo.
 				carried_fields: table.config.carried_fields ?? [],
 				server_indexed_fields: table.config.server_indexed_fields ?? [],
+				search_options: table.config.search_options,
 				primary_key: table.config.primary_key,
 				primary_key_type: table.config.primary_key_type,
 			};

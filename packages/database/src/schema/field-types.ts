@@ -82,6 +82,31 @@ export interface FileReference {
 	metadata?: Record<string, string>;
 }
 
+/** Options for `.searchable({ … })` on a text field. */
+export interface SearchableOptions {
+	/**
+	 * How much a match in this field counts relative to other fields (a
+	 * title at 3 outranks the same words in a body at 1). A query's `boost`
+	 * overrides it. @default 1
+	 */
+	weight?: number;
+	/**
+	 * The most distinct words indexed from one value. Words after that are
+	 * stored but not searchable. Keeps one large value (a pasted document)
+	 * from writing thousands of index rows per save. `Infinity` lifts it.
+	 * @default 1000
+	 */
+	max_tokens?: number;
+	/**
+	 * Confirms full-text indexing for a field whose name looks like an
+	 * identifier (`*_id`, `*_ids`, `*_key`, `*_url`, `*_hash`, `*_token`,
+	 * `*_at`). Without it such a field throws at table definition: tokenizing
+	 * an id or key splits it into meaningless fragments. Use `.keyword()` for
+	 * exact matching instead.
+	 */
+	text?: true;
+}
+
 /** A custom validation function added via `.check()`. Returning a string fails parsing with that message. */
 export type FieldCheck = (value: any) => string | undefined | void;
 
@@ -91,6 +116,17 @@ export interface DatabaseFieldBase {
 
 	/** Whether the field can be fuzzy searched and indexed by the search engine. If 'primary' is true, this is ignored */
 	searchable?: boolean;
+
+	/**
+	 * A string (or string array) indexed as one exact value instead of
+	 * tokenized text: filterable, sortable and synced like any searchable
+	 * field, never split into words. Set by `.keyword()`, and implied by the
+	 * `datetime`, `date`, `time`, `uuid` and `url` formats.
+	 */
+	keyword?: boolean;
+
+	/** Ranking and size options for a full-text field (`.searchable({ … })`). */
+	search_options?: SearchableOptions;
 
 	/**
 	 * Whether the field is *server-only* — indexed in the Durable Object, and
@@ -333,7 +369,7 @@ export interface ObjectField<
 /** The options for an array field */
 export interface ArrayField<Items extends FieldGenerator> extends Pick<
 	DatabaseFieldBase,
-	'optional' | 'readonly' | 'searchable' | 'server_only'
+	'optional' | 'readonly' | 'searchable' | 'server_only' | 'keyword' | 'search_options'
 > {
 	type: 'array';
 	/** The type of items in the array */
@@ -526,6 +562,9 @@ export type DatabaseField =
 /* -------------------------------------------------------------------------- */
 
 export type Searchable<T extends { _: any }> = T & { _: T['_'] & { searchable: true } };
+export type Keyword<T extends { _: any }> = T & { _: T['_'] & { keyword: true } };
+/** String formats indexed as exact values (see `.keyword()`). */
+type KeywordFormat = 'datetime' | 'date' | 'time' | 'uuid' | 'url';
 export type Indexable<T extends { _: any }> = T & { _: T['_'] & { indexable: true } };
 export type Unique<T extends { _: any }> = T & { _: T['_'] & { unique: true } };
 export type Sortable<T extends { _: any }> = T & { _: T['_'] & { sortable: true } };
@@ -730,6 +769,51 @@ export type FieldType<T> = T extends {
 													: never
 	: never;
 
+/**
+ * The type SQLite hands back for a field's column — what a raw `SELECT`
+ * returns, as opposed to {@link FieldType}, the parsed entity value.
+ *
+ * Booleans come back `0 | 1`, binary as an `ArrayBuffer`, and every object,
+ * array, vector, geopoint and file reference as JSON text in its own column
+ * (nullable, since such a column can be added to a populated table).
+ */
+export type StorageType<T> = T extends {
+	readonly _: { type: infer TypeString extends DatabaseFieldType };
+}
+	? TypeString extends 'blob'
+		? ArrayBuffer
+		: TypeString extends 'boolean'
+			? 0 | 1
+			: TypeString extends 'object' | 'array' | 'vector' | 'geopoint' | 'file'
+				? // Always nullable at the SQL level (see table.ts), required or not
+					string | null
+				: TypeString extends 'enum'
+					? T extends { _: { options: infer EnumOptions extends string[] } }
+						? EnumOptions[number]
+						: never
+					: TypeString extends 'string'
+						? string
+						: TypeString extends 'number'
+							? number
+							: TypeString extends 'primary_key'
+								? T extends {
+										_: { primary_key: { type: infer PKType extends 'string' | 'number' } };
+									}
+									? PKType extends 'string'
+										? string
+										: number
+									: never
+								: TypeString extends 'foreign_key'
+									? T extends {
+											_: { foreign_key: { type: infer FKType extends 'string' | 'number' } };
+										}
+										? FKType extends 'string'
+											? string
+											: number
+										: never
+									: never
+	: never;
+
 /** Determines the search-index type of a database field */
 export type IndexFieldType<T> = T extends {
 	readonly _: { type: infer TypeString extends DatabaseFieldType };
@@ -750,7 +834,11 @@ export type IndexFieldType<T> = T extends {
 				}
 				? IsSearchable<T> extends true
 					? ArrayType extends 'string'
-						? `string[]`
+						? T extends { _: { keyword: true } }
+							? `enum[]`
+							: T extends { _: { items: { _: { keyword: true } | { format: KeywordFormat } } } }
+								? `enum[]`
+								: `string[]`
 						: ArrayType extends 'number'
 							? `number[]`
 							: ArrayType extends 'boolean'
@@ -765,11 +853,15 @@ export type IndexFieldType<T> = T extends {
 						_: { primary_key: { type: infer PKType extends 'string' | 'number' } };
 					}
 					? PKType extends 'string'
-						? `string`
+						? `enum`
 						: `number`
 					: never
 				: IsSearchable<T> extends true
-					? TypeString extends 'string' | 'number' | 'boolean' | 'geopoint' | 'enum'
+					? TypeString extends 'string'
+						? T extends { _: { keyword: true } | { format: KeywordFormat } }
+							? `enum`
+							: `string`
+						: TypeString extends 'number' | 'boolean' | 'geopoint' | 'enum'
 						? TypeString
 						: TypeString extends 'vector'
 							? `vector[${number}]`
@@ -780,7 +872,7 @@ export type IndexFieldType<T> = T extends {
 										};
 									}
 									? FKType extends 'string'
-										? `string`
+										? `enum`
 										: `number`
 									: never
 								: never

@@ -469,6 +469,9 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
     devDependencies:
+      '@cloudflare/vitest-pool-workers':
+        specifier: ^0.12
+        version: 0.12.21(@cloudflare/workers-types@4.20260401.1)(@vitest/runner@4.1.2)(@vitest/snapshot@4.1.2)(vitest@3.2.4(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.1.0)(happy-dom@20.10.4)(sass@1.89.2))
       '@cloudflare/workers-types':
         specifier: ^4.20251120.0
         version: 4.20260401.1
@@ -493,6 +496,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.1
+        version: 3.2.4(@edge-runtime/vm@5.0.0)(@types/debug@4.1.12)(@types/node@24.1.0)(happy-dom@20.10.4)(sass@1.89.2)
 
   packages/diff:
     devDependencies:
@@ -1008,6 +1014,7 @@ packages:
 
   '@cloudflare/vitest-pool-workers@0.12.21':
     resolution: {integrity: sha512-xqvqVR+qAhekXWaTNY36UtFFmHrz13yGUoWVGOu6LDC2ABiQqI1E1lQ3eUZY8KVB+1FXY/mP5dB6oD07XUGnPg==}
+    deprecated: '@cloudflare/vitest-pool-workers has been renamed to @cloudflare/vitest-plugin. This package will not receive future updates.'
     peerDependencies:
       '@vitest/runner': 2.0.x - 3.2.x
       '@vitest/snapshot': 2.0.x - 3.2.x

@@ -98,6 +98,8 @@ export interface WorkerInitConfig {
 			 * one, and to say which field forced the trip.
 			 */
 			server_indexed_fields?: string[];
+			/** Per-field `.searchable({ weight, max_tokens })` options. */
+			search_options?: Record<string, { weight?: number; max_tokens?: number }>;
 			primary_key: string;
 			primary_key_type?: 'string' | 'number';
 		}
@@ -154,7 +156,12 @@ async function transferableFromResponse(response: Response, fallback_message: st
 }
 
 export interface WorkerSearchResult {
-	hits: { id: string; document: Record<string, unknown>; score: number }[];
+	hits: {
+		id: string;
+		document: Record<string, unknown>;
+		score: number;
+		highlights?: Record<string, { text: string; ranges: [number, number][] }>;
+	}[];
 	count: number;
 	/** Which side answered this result — the live routing decision, per result. */
 	mode: 'client' | 'server';
@@ -644,6 +651,7 @@ export class DatabaseWorker {
 					schema,
 					primary_key: table.primary_key,
 					primary_key_type: table.primary_key_type,
+					field_options: table.search_options,
 				}),
 			};
 		}
@@ -2072,6 +2080,7 @@ export class DatabaseWorker {
 				id: String(hit.id),
 				document: hit.document,
 				score: hit.score,
+				...(hit.highlights ? { highlights: hit.highlights } : {}),
 			})),
 			count: results.count,
 			mode: 'client',
@@ -2606,6 +2615,7 @@ export class DatabaseWorker {
 			schema,
 			primary_key: state.primary_key,
 			primary_key_type: table?.primary_key_type,
+			field_options: table?.search_options,
 		});
 		state.config_version = config_version;
 		state.start_updated_at = undefined;

@@ -1,5 +1,12 @@
 # Native Search Engine Plan
 
+> **Superseded in part (2026-11-07):** the §7.1 table layout, the full-weight fuzzy/prefix
+> matching and the unbounded expansion described here were replaced in the v3 major. See
+> `SQL-First Database Plan.md`, section "D7. Search": compact index tables (`search_entries`,
+> `search_terms`, `search_documents`, `search_fields`), weighted and capped expansions, default
+> typo tolerance, plurals, proximity re-ranking, highlights and `.keyword()`. The determinism
+> contract (identical results on every driver) is unchanged.
+
 Replace Orama in `@delightstack/database` with a purpose-built, isomorphic search/filter/sort engine: a shared pure core with two storage drivers — synchronous DO-SQLite postings on the server, asynchronous IndexedDB postings on the client.
 
 **Status: all five phases implemented** (working tree, pending review) as of 2026-08-12. Phase 1 (owned types + snake_case renames), Phase 2 (`search/core/*`, the memory reference engine and store, the differential harness, the golden vectors), Phase 3 (the SQLite server driver, production wiring, the perf pass), Phase 4 (the IndexedDB client driver and worker wiring) and Phase 5 (Orama excised: the `search_engine` flag, the in-memory index, the msgpack snapshot, the journal, the Appendix-A workarounds and the `@orama/orama` + `@msgpack/msgpack` dependencies are all gone; the legacy `search_index`/`search_journal` tables are migrated and dropped on the first wake) are in `packages/database/src/`. Every `[verify-vs-orama]` marker below is resolved against `plans/database/orama-verification-report.md` and the spec is frozen.

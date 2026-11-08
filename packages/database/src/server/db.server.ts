@@ -1,4 +1,17 @@
-import { DurableObject } from 'cloudflare:workers';
+import {
+	SqlDatabase,
+	addableColumnDefinition,
+	type ExecStatement,
+	type Migration,
+	type MigrationStatus,
+} from './sql.database.js';
+import {
+	CHANGES_TABLE,
+	CHANGE_TRIGGER_PREFIX,
+	WRITE_MARK_COLUMN,
+	capturesBeforeImage,
+	changeTriggerStatements,
+} from './schema.sql.js';
 import { prepareSql, SqlQueryFn } from './sql.helper.js';
 import { deepEqual } from 'fast-equals';
 import type { Database } from '../schema/schema.js';
@@ -13,6 +26,7 @@ import {
 	type ServerSearchTable,
 } from '../search/server/engine.js';
 import {
+	GENERATED_COLUMN_PREFIX,
 	planGeneratedColumnMigration,
 	planGeneratedColumns,
 	quoteIdentifier,
@@ -21,6 +35,8 @@ import {
 	buildServerSearchTable,
 	type SearchTableSource,
 } from '../search/server/table_config.js';
+import { SEARCH_INDEX_FORMAT } from '../search/server/sqlite_store.js';
+import { fieldTokenLimit } from '../search/core/tokenizer.js';
 import { generateTimestampID, DelightError } from '@delightstack/utilities';
 
 interface Env {
@@ -119,6 +135,28 @@ const CHANGE_LOG_SWEEP_BATCH = 1000;
  * surprising each other.
  */
 const REVERT_OPERATION_MAX_CHANGES = 5000;
+
+export { CHANGES_TABLE, WRITE_MARK_COLUMN } from './schema.sql.js';
+
+/** Raw writes the catch-up could not process, set aside so they block nothing. */
+const CHANGES_FAILED_TABLE = '_changes_failed';
+
+/** Prefix of the transitional triggers that guard the JSON column move. */
+const JSON_CLEAR_TRIGGER_PREFIX = '_mv_';
+
+/** The SET fragment every library UPDATE of an entity row carries. */
+const WRITE_MARK_FLIP = `"_w" = 1 - "_w"`;
+
+/** Rows the drain consumes per transaction. */
+const CHANGE_DRAIN_BATCH = 200;
+
+/**
+ * Batches an automatic drain (a read, a write, the alarm) runs before it
+ * hands the rest to the alarm: 2,000 rows, a few hundred ms. Without the
+ * cap, a 200k-row raw import would be caught up inside whichever request
+ * happened to arrive next and could run it past the CPU limit.
+ */
+const CHANGE_DRAIN_AUTO_BATCHES = 10;
 
 /** The internal dedupe log every `{ op_id }` write is recorded in. */
 const OP_LOG_TABLE = '_op_log';
@@ -504,6 +542,14 @@ export interface ScopedDatabase<DatabaseConfig extends Record<string, Database.T
 	): DatabaseServerTransactionResult<DatabaseConfig>[];
 	batch<T>(fn: () => T): T;
 	revert(change_id: string): Record<string, unknown> | undefined;
+	/**
+	 * Raw SQL, with any write it makes caught up (search, sync, history,
+	 * broadcast) and its history attributed to this handle's actor.
+	 */
+	exec<Row extends Record<string, SqlStorageValue> = Record<string, SqlStorageValue>>(
+		sql_statement: string,
+		...bindings: any[]
+	): Row[];
 }
 
 /**
@@ -567,6 +613,10 @@ export function scoped<
 		transaction: (operations) => db.transaction(operations, options),
 		batch: (fn) => db.batch(fn, options),
 		revert: (change_id) => db.revert(change_id, options),
+		// Inside a scoped batch, so the drain that exec() runs records history
+		// under this actor and operation.
+		exec: (sql_statement, ...bindings) =>
+			db.batch(() => db.exec(sql_statement, ...bindings), options) as never,
 	};
 }
 
@@ -657,6 +707,11 @@ export type DatabaseServerTransactionResult<
 				 * receives exactly what the server indexed.
 				 */
 				sparse?: Record<string, unknown>;
+				/**
+				 * An update that changed nothing: no row was written, `updated_at`
+				 * kept its value, and no client is told about it.
+				 */
+				unchanged?: true;
 			};
 	  }
 	| {
@@ -840,6 +895,18 @@ type DatabaseServerState<
 	 * existing table the first time `.embedFrom()` appears on it.
 	 */
 	auto_embed?: Record<string, string>;
+	/**
+	 * Entity types whose rows have had every JSON-typed field moved out of the
+	 * shared `json` overflow column into the field's own column (see "JSON
+	 * columns"). Absent: the background move is still running (or has not
+	 * started) for that type.
+	 */
+	json_columns_moved?: Record<string, true>;
+	/**
+	 * The last rowid moved per entity type while its move is under way, so a
+	 * new instance (an eviction between slices) resumes instead of rescanning.
+	 */
+	json_columns_cursor?: Record<string, number>;
 };
 
 /** Per-entity-type bookkeeping of the SQLite search driver (see `native_search`). */
@@ -890,6 +957,94 @@ interface LegacySearchIndexRow {
 type DeepPartial<T> = {
 	[P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
+
+/** Construction options for {@link DatabaseServer}. */
+export interface DatabaseServerOptions {
+	/**
+	 * Numbered schema/data changes, applied in order when the object wakes,
+	 * before the declared schema's additive pass (new tables and columns are
+	 * still added automatically). A brand-new database is created at the
+	 * current schema and records every migration as applied without running
+	 * it. See `Migration` for the contract.
+	 */
+	migrations?: Migration[];
+}
+
+/** One way the live database differs from the declared schema. */
+export interface SchemaDrift {
+	table: string;
+	column?: string;
+	index?: string;
+	kind:
+		| 'missing_table'
+		| 'missing_column'
+		| 'extra_column'
+		| 'nullability'
+		| 'type'
+		| 'unique'
+		| 'missing_index'
+		| 'index_failed';
+	declared?: string;
+	live?: string;
+	/** The migration step that would fix it */
+	fix?: string;
+}
+
+/** One field's share of the search index (see `searchReport()`). */
+export interface SearchFieldReport {
+	field: string;
+	/** Documents with a value in the field. */
+	documents: number;
+	/** Distinct words in the field's dictionary. */
+	words: number;
+	/** Words that occur in exactly one document. */
+	single_use_words: number;
+	/** Index entries (one per word per document): the rows each write pays for. */
+	entries: number;
+	/** Estimated bytes of those entries. */
+	entry_bytes: number;
+	/** Average distinct words indexed per document. */
+	words_per_document: number;
+	/** The field's `max_tokens` cap. */
+	max_tokens: number | 'none';
+	/** Documents whose value hit the cap (the rest of the value isn't searchable). */
+	capped_documents: number;
+	/** What looks wrong, in plain words, with the fix. */
+	warnings: string[];
+}
+
+/** `searchReport()`: how big each table's search index is, and why. */
+export interface SearchReport {
+	tables: {
+		entity_type: string;
+		documents: number;
+		entries: number;
+		entry_bytes: number;
+		fields: SearchFieldReport[];
+	}[];
+	/** Every field warning, prefixed with its table and field. */
+	warnings: string[];
+}
+
+/** `schemaReport()`: migrations, drift from the declared schema, failures. */
+export interface SchemaReport {
+	migrations: MigrationStatus;
+	drift: SchemaDrift[];
+	/** Raw writes not yet caught up (normally 0). */
+	pending_changes: number;
+	/**
+	 * Raw writes the catch-up threw on, set aside in `_changes_failed` so they
+	 * block nothing. Each is an entity whose search, sync or history may be
+	 * stale until it is written again.
+	 */
+	failed_changes: { entity_type: string; entity_id: string; error: string }[];
+	/**
+	 * Tables whose older rows still hold JSON fields in the overflow column
+	 * rather than in the fields' own columns (the move runs in the background).
+	 */
+	json_columns_pending: string[];
+	database_size: number;
+}
 
 /**
  * The async RPC projection of {@link DatabaseServer} — what a Durable Object
@@ -969,10 +1124,25 @@ export type DatabaseStub<
 		operations: DatabaseServerTransaction<DatabaseConfig>[],
 		options?: WriteOptions,
 	): Promise<DatabaseServerTransactionResult<DatabaseConfig>[]>;
-	exec(
+	exec<Row extends Record<string, SqlStorageValue> = Record<string, SqlStorageValue>>(
 		sql_statement: string,
 		...bindings: any[]
-	): Promise<Record<string, SqlStorageValue>[]>;
+	): Promise<Row[]>;
+	execMany<
+		Rows extends readonly Record<string, SqlStorageValue>[] = Record<
+			string,
+			SqlStorageValue
+		>[],
+	>(
+		statements: readonly ExecStatement[],
+	): Promise<{ [K in keyof Rows]: Rows[K][] }>;
+	explainSql(sql_statement: string): Promise<void>;
+	drainChanges(): Promise<number>;
+	schemaReport(): Promise<SchemaReport>;
+	searchReport(): Promise<SearchReport>;
+	migrationStatus(): Promise<MigrationStatus>;
+	checkMigrations(): Promise<{ id: string; ok: boolean; error?: string }[]>;
+	databaseSize(): Promise<number>;
 	getMeta(): Promise<Meta>;
 	setMeta(data: Meta): Promise<void>;
 	destroy(): Promise<void>;
@@ -983,7 +1153,7 @@ export type DatabaseStub<
 export class DatabaseServer<
 	DatabaseConfig extends Record<string, Database.Table>,
 	Meta = Record<string, any>,
-> extends DurableObject<Env> {
+> extends SqlDatabase<Env> {
 	/** Persistent state of the database server (saved/loaded in sqlite) */
 	#state: DatabaseServerState<DatabaseConfig, Meta>;
 
@@ -1011,13 +1181,20 @@ export class DatabaseServer<
 	 */
 	#column_meta: Map<
 		string,
-		{ columns: Set<string>; boolean_columns: string[]; blob_columns: string[] }
+		{
+			columns: Set<string>;
+			boolean_columns: string[];
+			blob_columns: string[];
+			json_columns: string[];
+		}
 	> = new Map();
 
 	private columnMeta(entity_type: string): {
 		columns: Set<string>;
 		boolean_columns: string[];
 		blob_columns: string[];
+		/** Columns holding a field's value as JSON text (objects, arrays, …) */
+		json_columns: string[];
 	} {
 		let meta = this.#column_meta.get(entity_type);
 		if (!meta) {
@@ -1026,12 +1203,16 @@ export class DatabaseServer<
 			const columns = new Set<string>();
 			const boolean_columns: string[] = [];
 			const blob_columns: string[] = [];
+			const json_columns = [
+				...((this.config[entity_type]?.config as { json_fields?: string[] } | undefined)
+					?.json_fields ?? []),
+			];
 			for (const [column, definition] of Object.entries(table_definition)) {
 				columns.add(this.sanitize(column));
 				if (definition?.startsWith?.('BOOLEAN')) boolean_columns.push(column);
 				if (definition?.startsWith?.('BLOB')) blob_columns.push(column);
 			}
-			meta = { columns, boolean_columns, blob_columns };
+			meta = { columns, boolean_columns, blob_columns, json_columns };
 			this.#column_meta.set(entity_type, meta);
 		}
 		return meta;
@@ -1090,6 +1271,13 @@ export class DatabaseServer<
 
 	/** Runs every registered alarm handler, isolating failures per handler */
 	async alarm(): Promise<void> {
+		// A raw write made through ctx.storage.sql is otherwise only caught up
+		// by the next call into this class.
+		try {
+			this.#drainPending();
+		} catch (error) {
+			console.error('Change-capture drain failed on alarm', error);
+		}
 		for (const [name, handler] of this.#alarm_handlers) {
 			try {
 				await handler();
@@ -1107,6 +1295,7 @@ export class DatabaseServer<
 		private ws: () => DatabaseBroadcast | undefined,
 		ctx: DurableObjectState,
 		protected env: Env,
+		options?: DatabaseServerOptions,
 	) {
 		super(ctx, env);
 
@@ -1170,7 +1359,43 @@ export class DatabaseServer<
 		}
 		this.#state = state;
 
-		// Add/update sqlite database tables based on the current configuration
+		// Numbered migrations run first, against the schema exactly as the
+		// previous version left it: a rename or a rebuild must see the old
+		// columns before the additive pass below adds the new ones. A brand-new
+		// database is created at the current shape, so every migration is simply
+		// recorded as applied.
+		const migration_status = this.runMigrations(options?.migrations ?? [], {
+			baseline_if_fresh: true,
+			// A state row and no table of the app's (only the library's own)
+			// means an earlier wake threw before creating them: still a new
+			// database. Any app table at all, declared or not, means data — a
+			// table a migration is about to rename is not declared under its
+			// old name.
+			fresh: () => !raw_row || !this.hasAppTables(),
+		});
+		// While any migration is pending — failed, or shipped as `preflight` —
+		// the additive pass below waits. Otherwise it would add the very columns
+		// a pending migration is about to create (a rename's new name, say), and
+		// that migration could then never apply; a preflight dry run would also
+		// be checking a schema the pass had already changed.
+		const hold_back_schema = migration_status.pending.length > 0;
+		if (hold_back_schema) {
+			console.warn(
+				`[DatabaseServer] ${migration_status.pending.length} migration(s) pending (${migration_status.pending.join(', ')}): new tables, columns and indexes wait until they apply`,
+			);
+		}
+
+		// Add tables and columns the schema declares and the database lacks.
+		// This is the one kind of change made automatically: it is additive and
+		// can't lose data. Everything else (nullability, types, renames, drops)
+		// is a migration. Checked against the live schema, not the saved state,
+		// so a migration that rebuilt or altered a table is seen as it is.
+		const live_tables = new Set(
+			this.ctx.storage.sql
+				.exec(`SELECT name FROM sqlite_schema WHERE type = 'table';`)
+				.toArray()
+				.map((row) => String(row.name)),
+		);
 		for (const table_config of Object.values(this.config)) {
 			const table_definition = table_config?.config?.table_definition;
 			if (!table_definition) continue;
@@ -1184,14 +1409,11 @@ export class DatabaseServer<
 					status: 500,
 				});
 			}
-			const existing_table_def = this.#state?.table_config?.[table_config.name];
 			const table_name = table_config.name.toLowerCase();
+			const full_definition = this.fullDefinition(table_config.name);
 
-			// Ensure the internal `json` column (for overflow/non-column fields) is in the definition
-			const full_definition = { ...table_definition, json: 'TEXT' as const };
-
-			// The table hasn't been created yet
-			if (!existing_table_def) {
+			if (!live_tables.has(table_name)) {
+				if (hold_back_schema) continue;
 				const columns = Object.entries(full_definition).map(
 					([column, def]) => `${this.quote(column)} ${def}`,
 				);
@@ -1206,78 +1428,127 @@ export class DatabaseServer<
 				continue;
 			}
 
-			// The table has already been created, check if we need to add columns
-			// Note: we don't support removing/renaming columns for now (as it can lead to data loss)
+			const live_columns = new Set(
+				this.ctx.storage.sql
+					.exec(`PRAGMA table_xinfo(${quoteIdentifier(table_name)});`)
+					.toArray()
+					.map((row) => String(row.name)),
+			);
+			// The library's own columns are added even while a migration holds
+			// the pass back: the write marker and the overflow blob, plus — only
+			// on the v3 upgrade, before this table's JSON move has ever finished
+			// — the JSON field columns that move creates. Every write names them,
+			// so without them an upgrade that ships with a pending migration
+			// would fail every write to every table. After the upgrade a new
+			// JSON field is the app's column like any other and waits, so a
+			// pending rename of one can still apply.
+			const upgrading = !this.#state.json_columns_moved?.[table_config.name];
+			const library_owned = new Set([
+				'json',
+				WRITE_MARK_COLUMN,
+				...(upgrading
+					? ((table_config.config as { json_fields?: string[] }).json_fields ?? [])
+					: []
+				).map((field) => this.sanitize(field)),
+			]);
 			for (const [column, def] of Object.entries(full_definition)) {
-				if (existing_table_def[column as keyof typeof existing_table_def]) continue;
+				if (live_columns.has(this.sanitize(column))) continue;
+				if (hold_back_schema && !library_owned.has(this.sanitize(column))) continue;
 				console.log(`Adding column ${column} to table ${table_name}`);
-				// SQLite refuses to ADD a NOT NULL column to a table with rows unless
-				// the column carries a DEFAULT. Backfill with the type's zero value —
-				// entity reads go through parse(), which applies the schema's real
-				// default anyway; this only satisfies SQLite for existing rows.
-				let alter_def = String(def);
-				if (/NOT NULL/i.test(alter_def) && !/DEFAULT/i.test(alter_def)) {
-					const zero = /INTEGER|REAL|NUMERIC/i.test(alter_def) ? '0' : "''";
-					alter_def = `${alter_def} DEFAULT ${zero}`;
-				}
+				const alter_def = addableColumnDefinition(String(def));
 				this.ctx.storage.transactionSync(() => {
-					(this.#state.table_config as any)[table_name][column] = def;
 					this.ctx.storage.sql.exec(
 						`ALTER TABLE ${this.quote(table_name)} ADD COLUMN ${this.quote(column)} ${alter_def};`,
 					);
-					this.saveState();
 				});
+			}
+			if (
+				!hold_back_schema &&
+				!deepEqual(this.#state.table_config?.[table_name], full_definition)
+			) {
+				(this.#state.table_config as any)[table_name] = full_definition;
+				this.saveState();
 			}
 		}
 
-		for (const table_config of Object.values(this.config)) {
+		const live_indexes = new Set(
+			this.ctx.storage.sql
+				.exec(`SELECT name FROM sqlite_schema WHERE type = 'index';`)
+				.toArray()
+				.map((row) => String(row.name)),
+		);
+		for (const table_config of hold_back_schema ? [] : Object.values(this.config)) {
 			if (!table_config?.config?.indexes) continue;
 			const table_name = table_config.name.toLowerCase();
 
 			// Create the sqlite indexes that are defined in the table config but not
-			// yet created — or whose definition (columns/direction/uniqueness)
-			// changed since they were created. Matching by name alone would
-			// silently keep a stale index when its definition is edited in place.
+			// yet created — or whose definition (columns/direction/uniqueness/
+			// condition) changed since they were created, or that a migration's
+			// rebuild dropped. Matching by name alone would silently keep a stale
+			// index when its definition is edited in place.
 			for (const index of table_config.config.indexes) {
 				if (table_name !== index.table) continue;
+				const index_name = this.sanitize(index.name);
+				if (!index_name) continue;
 				const existing = this.#state.sql_indexes.find((i) => i.name === index.name);
 				// Compare the serializable projection: `existing` already survived a
 				// JSON round trip, so an undefined member on the live definition would
 				// otherwise read as a changed index.
-				if (existing && deepEqual(existing, JSON.parse(JSON.stringify(index)))) continue;
+				if (
+					existing &&
+					deepEqual(existing, JSON.parse(JSON.stringify(index))) &&
+					live_indexes.has(index_name)
+				) {
+					continue;
+				}
 				const unique = index.unique ? ' UNIQUE' : '';
-				const index_name = this.sanitize(index.name);
-				if (!index_name) continue;
 				console.log(
 					`${existing ? 'Recreating' : 'Creating'} index ${index_name} on table ${table_name}`,
 				);
-				this.ctx.storage.transactionSync(() => {
-					if (existing) {
+				try {
+					this.ctx.storage.transactionSync(() => {
 						(this.#state.sql_indexes as any) = (this.#state.sql_indexes as any).filter(
 							(i: any) => i.name !== index.name,
 						);
 						this.ctx.storage.sql.exec(
 							`DROP INDEX IF EXISTS ${quoteIdentifier(index_name)};`,
 						);
-					}
-					(this.#state.sql_indexes as any).push(index);
-					const columns = index.columns
-						.map(
-							(col) =>
-								`${this.quote(col.column)} ${col.direction === 'DESC' ? 'DESC' : 'ASC'}`,
-						)
-						.join(', ');
-					this.ctx.storage.sql.exec(
-						`CREATE INDEX IF NOT EXISTS ${quoteIdentifier(index_name)} ON ${this.quote(table_name)} (${columns})${unique};`,
+						const columns = index.columns
+							.map(
+								(col) =>
+									`${this.quote(col.column)} ${col.direction === 'DESC' ? 'DESC' : 'ASC'}`,
+							)
+							.join(', ');
+						const where = index.where ? ` WHERE ${index.where}` : '';
+						this.ctx.storage.sql.exec(
+							`CREATE${unique} INDEX IF NOT EXISTS ${quoteIdentifier(index_name)} ON ${this.quote(table_name)} (${columns})${where};`,
+						);
+						(this.#state.sql_indexes as any).push(index);
+						this.saveState();
+					});
+				} catch (error) {
+					// The classic case: a UNIQUE index the existing rows violate. That
+					// used to throw out of the constructor, which takes every request
+					// to this database down with it — the reads and writes that have
+					// nothing to do with the index included. The index is left absent
+					// (the transaction rolled back), the failure is logged and
+					// reported by schemaReport(), and it is retried on the next wake.
+					const message = DelightError.from(error).message;
+					console.error(
+						`Index ${index_name} on ${table_name} could not be created: ${message}`,
 					);
-					this.saveState();
-				});
+					this.#index_failures.push({
+						table: table_name,
+						index: index_name,
+						error: message,
+					});
+				}
 			}
 
 			// Delete indexes that are no longer in the table config.
 			// Only consider indexes belonging to THIS table — otherwise each table's
 			// pass would drop every other table's indexes.
-			for (const existing_index of this.#state.sql_indexes) {
+			for (const existing_index of [...this.#state.sql_indexes]) {
 				if (existing_index.table !== table_name) continue;
 				if (table_config.config.indexes.some((i) => i.name === existing_index.name))
 					continue;
@@ -1324,6 +1595,1087 @@ export class DatabaseServer<
 		// After `bootstrapSearch()`: the backfill enqueue reads the entity tables
 		// this constructor may have just created or migrated.
 		this.bootstrapAutoEmbedding();
+		try {
+			this.bootstrapJsonColumns();
+		} catch (error) {
+			// Reads fall back to the blob, so a move that can't run degrades to
+			// "not moved yet" (reported by schemaReport) instead of failing
+			// every request. The alarm retries it.
+			console.error('[DatabaseServer] JSON column move failed on wake', error);
+		}
+		// Last: the triggers name every live column, and anything raw SQL wrote
+		// while the previous version was running is caught up before the first
+		// request is served.
+		this.bootstrapChangeCapture();
+		try {
+			this.#drainPending();
+		} catch (error) {
+			// Never let a catch-up failure take the object down on wake.
+			console.error('[DatabaseServer] change-capture drain failed on wake', error);
+		}
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* JSON columns                                                           */
+	/* ---------------------------------------------------------------------- */
+
+	/**
+	 * Move JSON-typed fields (objects, arrays, vectors, geopoints, files) out
+	 * of the shared `json` overflow column into the columns of their own the
+	 * schema now gives them.
+	 *
+	 * Rows written before that change hold those values in the blob. Every
+	 * read already falls back to it (`toEntityValue`, the search engine's
+	 * generated columns), so nothing waits on this; it exists so raw SQL can
+	 * rely on `SELECT field_schema FROM document` holding the value. It runs in
+	 * slices — one per wake, the rest on the alarm — because a large tenant's
+	 * blobs can be gigabytes, far past one invocation's CPU budget. Each slice
+	 * is a library write (the write marker flips), so nothing is re-indexed or
+	 * re-synced: the values don't change, only where they live.
+	 */
+	private bootstrapJsonColumns(): void {
+		if (!this.pendingJsonColumnTypes().length) return;
+		this.registerAlarm('json_columns', () => this.continueJsonColumns());
+		// Same switch as the search rebuild: a subclass that keeps its
+		// constructor O(1) gets every slice on the alarm instead.
+		// Below `jsonColumnMoveBytesInConstructor()` of blob (the common case)
+		// the whole move runs now, before the first request is served, so raw
+		// SQL never sees a column the move hasn't reached. Above it, slices.
+		let remaining = true;
+		if (this.searchRebuildInConstructor()) {
+			if (this.pendingJsonColumnBytes() <= this.jsonColumnMoveBytesInConstructor()) {
+				// Slice after slice, each its own statement and transaction, so no
+				// single statement rewrites a whole large table.
+				do {
+					remaining = this.moveJsonColumns(this.searchRebuildRowsPerSlice());
+				} while (remaining);
+			} else {
+				remaining = this.moveJsonColumns(this.searchRebuildRowsPerSlice());
+			}
+		}
+		if (remaining) {
+			for (const entity_type of this.pendingJsonColumnTypes()) {
+				this.ensureJsonClearTriggers(entity_type);
+			}
+			void this.ctx.storage
+				.getAlarm()
+				.then((existing) => {
+					const now = Date.now();
+					if (existing === null || existing > now) return this.ctx.storage.setAlarm(now);
+				})
+				.catch((error) =>
+					console.error(
+						'[DatabaseServer] failed to arm the JSON column move alarm:',
+						error,
+					),
+				);
+		}
+	}
+
+	/**
+	 * While a table's rows are still being moved, a raw `SET field = NULL` on a
+	 * row not reached yet would look like "not moved": every read falls back to
+	 * the old blob value, and the move then copies it back into the column.
+	 * One trigger per JSON column catches exactly that write (`UPDATE OF` the
+	 * column, leaving it NULL) and removes the field from the blob in the same
+	 * statement. Library writes never trip it: they rewrite the blob without
+	 * the field. Dropped when the table's move finishes.
+	 */
+	private ensureJsonClearTriggers(entity_type: string): void {
+		const fields = (this.config[entity_type]?.config as { json_fields?: string[] })
+			?.json_fields;
+		if (!fields?.length) return;
+		const table_name = this.sanitize(entity_type);
+		for (const field of fields) {
+			const column = this.sanitize(field);
+			this.ctx.storage.sql.exec(
+				`CREATE TRIGGER IF NOT EXISTS ${quoteIdentifier(`${JSON_CLEAR_TRIGGER_PREFIX}${table_name}_${column}`)} AFTER UPDATE OF ${quoteIdentifier(column)} ON ${quoteIdentifier(table_name)} WHEN NEW.${quoteIdentifier(column)} IS NULL AND json_valid(NEW."json") AND json_type(NEW."json", '$.${column}') IS NOT NULL BEGIN UPDATE ${quoteIdentifier(table_name)} SET "json" = json_remove("json", '$.${column}') WHERE rowid = NEW.rowid; END;`,
+			);
+		}
+	}
+
+	private dropJsonClearTriggers(entity_type: string): void {
+		const table_name = this.sanitize(entity_type);
+		for (const row of this.ctx.storage.sql
+			.exec(
+				`SELECT name FROM sqlite_schema WHERE type = 'trigger' AND tbl_name = ? AND name LIKE ?;`,
+				table_name,
+				`${JSON_CLEAR_TRIGGER_PREFIX}%`,
+			)
+			.toArray()) {
+			this.ctx.storage.sql.exec(`DROP TRIGGER IF EXISTS ${quoteIdentifier(String(row.name))};`);
+		}
+	}
+
+	/** Whether any table exists that isn't SQLite's, Cloudflare's or this library's. */
+	private hasAppTables(): boolean {
+		return !this.ctx.storage.sql
+			.exec(
+				`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND substr(name, 1, 1) != '_' AND name NOT IN ('state', 'search_fields', 'search_terms', 'search_entries', 'search_documents', 'search_postings', 'search_tokens', 'search_docs', 'search_field_stats', 'search_vectors', 'search_tombstones', 'search_state') LIMIT 1;`,
+			)
+			.next().done;
+	}
+
+	/** Whether a table exists right now (the schema pass can be held back). */
+	private liveTableExists(table_name: string): boolean {
+		return !this.ctx.storage.sql
+			.exec(`SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ? LIMIT 1;`, table_name)
+			.next().done;
+	}
+
+	/**
+	 * How much `json` blob the first wake after the upgrade moves into the
+	 * new columns before serving anything. Measured in local workerd at
+	 * about 240 MB/s; production storage is slower, so the default 128 MB is
+	 * kept well inside a wake's CPU budget, once. Bigger databases
+	 * move 1,000 rows per wake and alarm, and until then a raw read of a JSON
+	 * column on a row not reached yet returns NULL (library reads fall back
+	 * to the blob; raw SQL can use `COALESCE(col, json_extract(json, '$.col'))`
+	 * or check `schemaReport().json_columns_pending`).
+	 */
+	protected jsonColumnMoveBytesInConstructor(): number {
+		return 128 * 1024 * 1024;
+	}
+
+	/** Bytes of `json` blob left to move, read from the row headers. */
+	private pendingJsonColumnBytes(): number {
+		let bytes = 0;
+		for (const entity_type of this.pendingJsonColumnTypes()) {
+			const table_name = quoteIdentifier(this.sanitize(entity_type));
+			const cursor = this.#state.json_columns_cursor?.[entity_type] ?? 0;
+			try {
+				// octet_length() reads the stored size without loading the value.
+				bytes += Number(
+					this.ctx.storage.sql
+						.exec(
+							`SELECT IFNULL(SUM(octet_length("json")), 0) AS bytes FROM ${table_name} WHERE rowid > ?;`,
+							cursor,
+						)
+						.one().bytes,
+				);
+			} catch {
+				return Number.POSITIVE_INFINITY;
+			}
+		}
+		return bytes;
+	}
+
+	/** Entity types whose JSON fields are not all moved into their columns yet. */
+	private pendingJsonColumnTypes(): string[] {
+		const moved = this.#state.json_columns_moved ?? {};
+		return Object.keys(this.config).filter((entity_type) => {
+			if (moved[entity_type]) return false;
+			if (!this.liveTableExists(this.sanitize(entity_type))) return false;
+			const fields = (this.config[entity_type]?.config as { json_fields?: string[] })
+				?.json_fields;
+			return Array.isArray(fields) && fields.length > 0;
+		});
+	}
+
+	/**
+	 * Move up to `budget` rows. Returns whether any work remains.
+	 */
+	private moveJsonColumns(budget: number): boolean {
+		for (const entity_type of this.pendingJsonColumnTypes()) {
+			if (budget <= 0) return true;
+			const fields = (this.config[entity_type].config as { json_fields: string[] })
+				.json_fields;
+			const table_name = quoteIdentifier(this.sanitize(entity_type));
+			const cursor = this.#state.json_columns_cursor?.[entity_type] ?? 0;
+			const window = this.ctx.storage.sql
+				.exec(
+					`SELECT MAX(rowid) AS last, COUNT(*) AS n FROM (SELECT rowid FROM ${table_name} WHERE rowid > ? ORDER BY rowid LIMIT ?);`,
+					cursor,
+					budget,
+				)
+				.next()?.value as { last?: number | null; n?: number } | undefined;
+			const last = typeof window?.last === 'number' ? window.last : null;
+			// A full window may still be the last one (a table of exactly
+			// `budget` rows): look one row past it rather than spend a slice.
+			const reached_end =
+				Number(window?.n ?? 0) < budget ||
+				(last !== null &&
+					this.ctx.storage.sql
+						.exec(`SELECT 1 FROM ${table_name} WHERE rowid > ? LIMIT 1;`, last)
+						.next().done === true);
+			const setCursor = (value: number | undefined) => {
+				const next = { ...(this.#state.json_columns_cursor ?? {}) };
+				if (value === undefined) delete next[entity_type];
+				else next[entity_type] = value;
+				this.#state.json_columns_cursor = next;
+			};
+			const markMoved = () => {
+				// Every row seen: this type is done for good.
+				this.#state.json_columns_moved = {
+					...(this.#state.json_columns_moved ?? {}),
+					[entity_type]: true,
+				};
+				setCursor(undefined);
+				this.saveState();
+				this.dropJsonClearTriggers(entity_type);
+			};
+			if (last === null) {
+				markMoved();
+				continue;
+			}
+			const sets = fields.map((field) => {
+				const column = quoteIdentifier(this.sanitize(field));
+				// `->` returns the value as JSON text (a string comes out quoted),
+				// so it always passes the column's json_valid CHECK; json_extract
+				// would hand back a bare string that fails it.
+				return `${column} = COALESCE(${column}, "json" -> '$.${this.sanitize(field)}')`;
+			});
+			const removals = fields.map((field) => `'$.${this.sanitize(field)}'`).join(', ');
+			const holds_any = fields
+				.map((field) => `json_type("json", '$.${this.sanitize(field)}') IS NOT NULL`)
+				.join(' OR ');
+			this.ctx.storage.transactionSync(() => {
+				this.ctx.storage.sql.exec(
+					`UPDATE ${table_name} SET ${sets.join(', ')}, "json" = json_remove("json", ${removals}), ${WRITE_MARK_FLIP} WHERE rowid > ? AND rowid <= ? AND "json" IS NOT NULL AND json_valid("json") AND (${holds_any});`,
+					cursor,
+					last,
+				);
+				// The cursor commits with the rows it covers.
+				if (!reached_end) {
+					setCursor(last);
+					this.saveState();
+				}
+			});
+			budget -= Number(window?.n ?? 1);
+			if (reached_end) markMoved();
+		}
+		return this.pendingJsonColumnTypes().length > 0;
+	}
+
+	/** Alarm slice of the JSON column move; re-arms until nothing is left. */
+	private async continueJsonColumns(): Promise<void> {
+		if (!this.pendingJsonColumnTypes().length) return;
+		if (this.moveJsonColumns(this.searchRebuildRowsPerSlice())) {
+			await this.ctx.storage.setAlarm(Date.now());
+		}
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/* Change capture                                                         */
+	/* ---------------------------------------------------------------------- */
+
+	/** Indexes that could not be created on this wake (see the constructor). */
+	#index_failures: { table: string; index: string; error: string }[] = [];
+
+	/**
+	 * Every column a table should have: the declared ones plus the internal
+	 * `json` overflow column and the change-capture write marker.
+	 */
+	private fullDefinition(entity_type: string): Record<string, string> {
+		const table_definition = (this.config[entity_type]?.config?.table_definition ??
+			{}) as Record<string, string>;
+		return {
+			...table_definition,
+			json: 'TEXT',
+			[WRITE_MARK_COLUMN]: 'INTEGER NOT NULL DEFAULT 0',
+		};
+	}
+
+	protected override declaredColumn(table: string, column: string): string | undefined {
+		if (!this.config[table]) return undefined;
+		return this.fullDefinition(table)[column];
+	}
+
+	protected override declaredTable(table: string): Record<string, string> | undefined {
+		if (!this.config[table]) return undefined;
+		return this.fullDefinition(table);
+	}
+
+	/**
+	 * A migration helper is about to change this table's structure. SQLite
+	 * refuses to drop or swap a column a trigger names, and the copy step must
+	 * not be captured as a raw write of every row, so the change triggers come
+	 * off for the duration.
+	 */
+	protected override beforeTableAlter(table: string): void {
+		const table_name = this.sanitize(table);
+		for (const suffix of ['ins', 'upd', 'del']) {
+			this.ctx.storage.sql.exec(
+				`DROP TRIGGER IF EXISTS ${quoteIdentifier(`${CHANGE_TRIGGER_PREFIX}${table_name}_${suffix}`)};`,
+			);
+		}
+		// The JSON-move guards name their column, and so do the search engine's
+		// generated `sv$` columns: SQLite refuses to drop or swap a column
+		// either references. Both are rebuilt from the schema later in this wake
+		// (bootstrapJsonColumns, bootstrapSearch), after the migrations.
+		this.dropJsonClearTriggers(table);
+		const generated = this.ctx.storage.sql
+			.exec(`PRAGMA table_xinfo(${quoteIdentifier(table_name)});`)
+			.toArray()
+			.map((row) => String(row.name))
+			.filter((column) => column.startsWith(GENERATED_COLUMN_PREFIX));
+		for (const column of generated) {
+			for (const index of this.ctx.storage.sql
+				.exec(
+					`SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name = ? AND sql LIKE ?;`,
+					table_name,
+					`%${column}%`,
+				)
+				.toArray()) {
+				this.ctx.storage.sql.exec(`DROP INDEX IF EXISTS ${quoteIdentifier(String(index.name))};`);
+			}
+			this.ctx.storage.sql.exec(
+				`ALTER TABLE ${quoteIdentifier(table_name)} DROP COLUMN ${quoteIdentifier(column)};`,
+			);
+		}
+	}
+
+	/** ...and go back on, naming the table's new columns. */
+	protected override afterTableAlter(table: string): void {
+		if (!this.config[table]?.config?.table_definition) return;
+		if (this.config[table].config.capture_raw_writes === false) return;
+		if (!this.liveColumns(this.sanitize(table)).length) return;
+		for (const [, ddl] of this.changeTriggerDdl(table)) this.ctx.storage.sql.exec(ddl);
+	}
+
+	/**
+	 * How this database stands against the code: which migrations ran, are
+	 * pending or failed, how the live tables differ from the declared schema
+	 * (each difference with the migration step that fixes it), indexes that
+	 * could not be built, and raw writes not yet caught up.
+	 *
+	 * Cheap (schema reads only). Call it on every tenant after a deploy to
+	 * find the ones that need attention — a failed migration or a unique index
+	 * the data violates no longer takes a database down, so this is where they
+	 * show up.
+	 */
+	/**
+	 * How big each table's search index is, field by field, with warnings for
+	 * the usual mistakes: an id or key indexed as text (most of its words
+	 * occur once), a field so large every save writes hundreds of index rows,
+	 * values cut off by `max_tokens`. Reads the whole index once, so it is an
+	 * admin call, not something to run per request.
+	 */
+	searchReport(): SearchReport {
+		this.#drainPending();
+		const report: SearchReport = { tables: [], warnings: [] };
+		for (const entity_type of [...this.#search_tables.keys()].sort()) {
+			const table = this.searchTable(entity_type);
+			const cap = (field: string) => fieldTokenLimit(field, table.field_options);
+			const fields = this.search.store.fieldReport(entity_type, cap).map((row) => {
+				const words_per_document =
+					row.documents > 0 ? Math.round((row.entries / row.documents) * 10) / 10 : 0;
+				const warnings: string[] = [];
+				if (row.words >= 200 && row.single_use_words / row.words > 0.6 && words_per_document <= 12) {
+					warnings.push(
+						`${Math.round((row.single_use_words / row.words) * 100)}% of its ${row.words} words occur in one document only, which is what ids, keys, codes and URLs look like as text. If nobody types words from it into search, make it .keyword() (exact match) or .carried().`,
+					);
+				}
+				if (words_per_document >= 300) {
+					warnings.push(
+						`about ${Math.round(words_per_document)} index rows per document, written again on every change to them. If it is long body text, consider .serverOnly(), a lower max_tokens, or not indexing it.`,
+					);
+				}
+				if (row.capped_documents > 0) {
+					warnings.push(
+						`${row.capped_documents} document(s) hit max_tokens (${cap(row.field)}): words past the cap are not searchable. Raise it with .searchable({ max_tokens }) if they need to be.`,
+					);
+				}
+				for (const warning of warnings) {
+					report.warnings.push(`${entity_type}.${row.field}: ${warning}`);
+				}
+				const max_tokens = cap(row.field);
+				return {
+					...row,
+					words_per_document,
+					max_tokens: max_tokens === Infinity ? ('none' as const) : max_tokens,
+					warnings,
+				};
+			});
+			report.tables.push({
+				entity_type,
+				documents: this.search.store.getState(entity_type)?.doc_count ?? 0,
+				entries: fields.reduce((sum, field) => sum + field.entries, 0),
+				entry_bytes: fields.reduce((sum, field) => sum + field.entry_bytes, 0),
+				fields,
+			});
+		}
+		return report;
+	}
+
+	schemaReport(): SchemaReport {
+		const drift: SchemaDrift[] = [];
+		const sql = this.ctx.storage.sql;
+		const referenced_tables = new Set<string>();
+		for (const entity_type of Object.keys(this.config)) {
+			for (const fk of Object.values(
+				(this.config[entity_type]?.config?.foreign_keys ?? {}) as Record<string, { table?: string }>,
+			)) {
+				if (fk?.table && fk.table !== entity_type) referenced_tables.add(this.sanitize(fk.table));
+			}
+		}
+		for (const entity_type of Object.keys(this.config)) {
+			const table = this.config[entity_type];
+			if (!table?.config?.table_definition) continue;
+			const table_name = this.sanitize(entity_type);
+			const live = sql
+				.exec(`PRAGMA table_xinfo(${quoteIdentifier(table_name)});`)
+				.toArray()
+				.filter((row) => Number(row.hidden ?? 0) === 0);
+			if (!live.length) {
+				drift.push({ table: table_name, kind: 'missing_table' });
+				continue;
+			}
+			const declared = this.fullDefinition(entity_type);
+			const live_by_name = new Map(live.map((row) => [String(row.name), row]));
+			const unique_live = new Set<string>();
+			for (const index of sql
+				.exec(`PRAGMA index_list(${quoteIdentifier(table_name)});`)
+				.toArray()) {
+				if (Number(index.unique) !== 1 || String(index.origin) === 'pk') continue;
+				const covered = sql
+					.exec(`PRAGMA index_info(${quoteIdentifier(String(index.name))});`)
+					.toArray();
+				if (covered.length === 1 && String(index.origin) === 'u') {
+					unique_live.add(String(covered[0].name));
+				}
+			}
+			for (const [column, definition] of Object.entries(declared)) {
+				const column_name = this.sanitize(column);
+				const row = live_by_name.get(column_name);
+				if (!row) {
+					drift.push({
+						table: table_name,
+						column: column_name,
+						kind: 'missing_column',
+						declared: definition,
+					});
+					continue;
+				}
+				if (Number(row.pk) > 0) continue;
+				const declared_type = definition.split(/\s+/)[0].toUpperCase();
+				const live_type = String(row.type ?? '').toUpperCase();
+				if (declared_type && live_type && declared_type !== live_type) {
+					drift.push({
+						table: table_name,
+						column: column_name,
+						kind: 'type',
+						declared: declared_type,
+						live: live_type,
+						fix: `alterColumn('${table_name}', '${column_name}')`,
+					});
+				}
+				const declared_not_null = /\bNOT\s+NULL\b/i.test(definition);
+				const live_not_null = Number(row.notnull) === 1;
+				if (declared_not_null !== live_not_null) {
+					drift.push({
+						table: table_name,
+						column: column_name,
+						kind: 'nullability',
+						declared: declared_not_null ? 'NOT NULL' : 'NULL',
+						live: live_not_null ? 'NOT NULL' : 'NULL',
+						fix: `alterColumn('${table_name}', '${column_name}')`,
+					});
+				}
+				const declared_unique = /\bUNIQUE\b/i.test(definition);
+				if (declared_unique !== unique_live.has(column_name)) {
+					drift.push({
+						table: table_name,
+						column: column_name,
+						kind: 'unique',
+						declared: declared_unique ? 'UNIQUE' : 'not unique',
+						live: unique_live.has(column_name) ? 'UNIQUE' : 'not unique',
+						// SQLite can't swap a UNIQUE column, and rebuildTable refuses a
+						// table others reference (the drop would cascade into them).
+						fix: referenced_tables.has(table_name)
+							? `not fixable in place: ${table_name} is referenced by foreign keys; use a unique index (table indexes option) instead of a UNIQUE column`
+							: `rebuildTable('${table_name}')`,
+					});
+				}
+			}
+			for (const column of live_by_name.keys()) {
+				if (column in declared || column.startsWith('sv$')) continue;
+				drift.push({
+					table: table_name,
+					column,
+					kind: 'extra_column',
+					fix: `dropColumn('${table_name}', '${column}')`,
+				});
+			}
+			const live_indexes = new Set(
+				sql
+					.exec(
+						`SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name = ?;`,
+						table_name,
+					)
+					.toArray()
+					.map((row) => String(row.name)),
+			);
+			for (const index of table.config.indexes ?? []) {
+				const name = this.sanitize(index.name);
+				if (live_indexes.has(name)) continue;
+				const failure = this.#index_failures.find((f) => f.index === name);
+				drift.push({
+					table: table_name,
+					index: name,
+					kind: failure ? 'index_failed' : 'missing_index',
+					...(failure ? { live: failure.error } : {}),
+				});
+			}
+		}
+		return {
+			migrations: this.migrationStatus(),
+			drift,
+			pending_changes: Number(
+				sql.exec(`SELECT COUNT(*) AS n FROM ${quoteIdentifier(CHANGES_TABLE)};`).one().n,
+			),
+			json_columns_pending: this.pendingJsonColumnTypes(),
+			failed_changes: sql
+				.exec(
+					`SELECT entity_type, entity_id, error FROM ${quoteIdentifier(CHANGES_FAILED_TABLE)} ORDER BY id DESC LIMIT 100;`,
+				)
+				.toArray()
+				.map((row) => ({
+					entity_type: String(row.entity_type),
+					entity_id: String(row.entity_id),
+					error: String(row.error),
+				})),
+			database_size: sql.databaseSize,
+		};
+	}
+
+	/**
+	 * Whether the `_changes` table and its triggers are in place. False only
+	 * during construction, before `bootstrapChangeCapture()` has run.
+	 */
+	#change_capture_ready = false;
+
+	/**
+	 * Create the `_changes` log and one insert, update and delete trigger per
+	 * entity table.
+	 *
+	 * The triggers are the safety net under raw SQL. A write made through
+	 * `create`/`update`/`delete`/`transaction` keeps the search index, sync
+	 * timestamps, history, file GC, embeddings and websocket broadcasts in step
+	 * inline, in its own transaction. A write made any other way — `exec()`,
+	 * `ctx.storage.sql`, a foreign-key `ON DELETE CASCADE` / `SET NULL` — used
+	 * to skip all of that silently. Now its trigger appends a row to `_changes`
+	 * and `drainChanges()` does the same catch-up work.
+	 *
+	 * Library writes are told apart without an extra billed row: inserts and
+	 * updates flip the `_w` marker in the same statement (raw SQL leaves it
+	 * alone, so `NEW._w IS OLD._w` / `NEW._w = 0`), and deletes write their
+	 * tombstone first (raw deletes and cascades have none at the current
+	 * timestamp).
+	 *
+	 * Triggers are re-created when their definition changes (a column was
+	 * added, history was turned on) and dropped for tables no longer declared.
+	 */
+	private bootstrapChangeCapture(): void {
+		this.ctx.storage.sql.exec(
+			`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(CHANGES_TABLE)} (
+				seq INTEGER PRIMARY KEY,
+				entity_type TEXT NOT NULL,
+				entity_id TEXT NOT NULL,
+				op TEXT NOT NULL,
+				before TEXT,
+				stamped INTEGER NOT NULL DEFAULT 0
+			);`,
+		);
+		this.ctx.storage.sql.exec(
+			`CREATE TABLE IF NOT EXISTS ${quoteIdentifier(CHANGES_FAILED_TABLE)} (
+				id INTEGER PRIMARY KEY,
+				entity_type TEXT NOT NULL,
+				entity_id TEXT NOT NULL,
+				error TEXT NOT NULL,
+				failed_at INTEGER NOT NULL
+			);`,
+		);
+		const existing = new Map<string, string>();
+		for (const row of this.ctx.storage.sql
+			.exec(
+				`SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' AND name LIKE ?;`,
+				`${CHANGE_TRIGGER_PREFIX}%`,
+			)
+			.toArray()) {
+			existing.set(String(row.name), String(row.sql ?? ''));
+		}
+		const wanted = new Map<string, string>();
+		for (const entity_type of Object.keys(this.config)) {
+			if (!this.isSearchIndexed(entity_type)) continue;
+			if (this.config[entity_type]?.config?.capture_raw_writes === false) continue;
+			if (!this.liveTableExists(this.sanitize(entity_type))) continue;
+			for (const [name, ddl] of this.changeTriggerDdl(entity_type)) wanted.set(name, ddl);
+		}
+		const stale = [...existing.keys()].filter(
+			(name) =>
+				!wanted.has(name) ||
+				normalizeDdl(existing.get(name)!) !== normalizeDdl(wanted.get(name)!),
+		);
+		const missing = [...wanted.keys()].filter(
+			(name) => !existing.has(name) || stale.includes(name),
+		);
+		if (stale.length || missing.length) {
+			this.ctx.storage.transactionSync(() => {
+				for (const name of stale) {
+					this.ctx.storage.sql.exec(`DROP TRIGGER IF EXISTS ${quoteIdentifier(name)};`);
+				}
+				for (const name of missing) this.ctx.storage.sql.exec(wanted.get(name)!);
+			});
+		}
+		this.#change_capture_ready = true;
+	}
+
+	/**
+	 * Re-create any missing change-capture triggers. Call it after code of
+	 * your own that rebuilds an entity table (a `DROP TABLE` takes the table's
+	 * triggers with it); the object does this on every wake anyway.
+	 */
+	protected refreshChangeCapture(): void {
+		this.bootstrapChangeCapture();
+	}
+
+	/**
+	 * The three change-capture triggers for one entity table, as
+	 * `[name, CREATE TRIGGER …]` pairs.
+	 *
+	 * `before` (the old row as JSON) is captured only for tables whose catch-up
+	 * needs it: history (the field-level diff) and file fields (which objects
+	 * the row stopped pointing at). Everything else is recomputed from the
+	 * current row, so it costs nothing to store.
+	 */
+	private changeTriggerDdl(entity_type: string): [string, string][] {
+		const table = this.config[entity_type];
+		const table_name = this.sanitize(entity_type);
+		// From the config rather than the bootstrapped maps: a migration helper
+		// re-creates these mid-migration, before the bootstraps have run.
+		return changeTriggerStatements(
+			table_name,
+			this.sanitize(table.config.primary_key || 'id'),
+			capturesBeforeImage(table) ? this.liveColumns(table_name) : [],
+		);
+	}
+
+	/** The table's stored (non-generated, non-binary, non-marker) columns. */
+	private liveColumns(table_name: string): string[] {
+		const blob = new Set(
+			this.columnMeta(table_name).blob_columns.map((c) => this.sanitize(c)),
+		);
+		return this.ctx.storage.sql
+			.exec(`PRAGMA table_xinfo(${quoteIdentifier(table_name)});`)
+			.toArray()
+			.filter((row) => Number(row.hidden ?? 0) === 0)
+			.map((row) => String(row.name))
+			.filter((column) => column !== WRITE_MARK_COLUMN && !blob.has(column));
+	}
+
+	/**
+	 * Catch up every entity write that bypassed `DatabaseServer`: raw SQL
+	 * through `exec()` or `ctx.storage.sql`, and the rows a foreign key
+	 * cascaded to.
+	 *
+	 * For each changed row it does what the library write path does inline:
+	 * stamps a fresh `updated_at` (so sync clients pick it up), re-indexes it
+	 * for search (or removes it), refreshes FK-derived fields on rows that
+	 * reference it, records history (attributed to the current `actor`), queues
+	 * file GC and auto-embeds, and broadcasts the change. Several raw writes
+	 * to one row since the last drain become one catch-up.
+	 *
+	 * It runs on its own at the start of every read and write through this
+	 * class (one indexed `SELECT` when nothing is pending), after every
+	 * `exec()`, and when the object wakes — so app code rarely needs to call
+	 * it. Call it directly after writing through `ctx.storage.sql` when the
+	 * next read must already see the result in search.
+	 *
+	 * Those automatic drains stop after 2,000 rows and leave the rest to the
+	 * alarm, so one huge raw write can't stall the next request. Called
+	 * directly, it drains everything.
+	 *
+	 * Returns the number of rows caught up.
+	 */
+	drainChanges(): number {
+		return this.#drain(Infinity);
+	}
+
+	#drain(max_batches: number): number {
+		if (!this.#change_capture_ready || this.#draining) return 0;
+		this.#draining = true;
+		let caught_up = 0;
+		let more = false;
+		try {
+			for (let batch_number = 0; ; batch_number++) {
+				if (batch_number >= max_batches) {
+					more = true;
+					break;
+				}
+				const pending = this.ctx.storage.sql
+					.exec(
+						`SELECT seq, entity_type, entity_id, op, before, stamped FROM ${quoteIdentifier(CHANGES_TABLE)} ORDER BY seq LIMIT ${CHANGE_DRAIN_BATCH};`,
+					)
+					.toArray();
+				if (pending.length === 0) break;
+				const last_seq = Number(pending[pending.length - 1].seq);
+				// One catch-up per row: the first change's `before` is the row as it
+				// was before any of them, and an insert anywhere in the run makes it
+				// a create.
+				const rows = new Map<
+					string,
+					{
+						entity_type: string;
+						entity_id: string;
+						before: string | null;
+						last_before: string | null;
+						befores: string[];
+						created: boolean;
+						stamped: boolean;
+					}
+				>();
+				for (const change of pending) {
+					const key = `${change.entity_type}\u0000${change.entity_id}`;
+					const stamped = Number(change.stamped ?? 0) === 1;
+					const existing = rows.get(key);
+					if (existing) {
+						if (change.op === 'insert') existing.created = true;
+						// The row as it was just before the latest change: what a
+						// delete in the run removed (and whose files it orphaned).
+						if (change.before !== null) {
+							existing.last_before = String(change.before);
+							existing.befores.push(String(change.before));
+						}
+						// The latest write decides whether the row's timestamp is the
+						// caller's own (kept) or needs a fresh one.
+						existing.stamped = stamped;
+						continue;
+					}
+					rows.set(key, {
+						entity_type: String(change.entity_type),
+						entity_id: String(change.entity_id),
+						before: change.before === null ? null : String(change.before),
+						last_before: change.before === null ? null : String(change.before),
+						befores: change.before === null ? [] : [String(change.before)],
+						created: change.op === 'insert',
+						stamped,
+					});
+				}
+				const broadcasts: DeferredBroadcast[] = [];
+				const batch = this.#batch_state;
+				const touched = batch ?? { wrote: false };
+				let row_failed = false;
+				const deleted_types = new Set<string>();
+				let embed_min_due: number | null = null;
+				try {
+					this.ctx.storage.transactionSync(() => {
+						const now = new Date();
+						for (const row of rows.values()) {
+							// Each row in its own savepoint: one row the catch-up can't
+							// process must not hold every other row (and, since the
+							// drain runs at every entry point, every request) hostage.
+							// It is set aside in `_changes_failed`, logged, and
+							// reported by schemaReport().
+							const row_broadcasts: DeferredBroadcast[] = [];
+							try {
+								const due = this.ctx.storage.transactionSync(() =>
+									this.applyCapturedChange(
+										row,
+										now,
+										touched,
+										row_broadcasts,
+										deleted_types,
+									),
+								);
+								broadcasts.push(...row_broadcasts);
+								if (due !== null)
+									embed_min_due =
+										embed_min_due === null ? due : Math.min(embed_min_due, due);
+							} catch (error) {
+								row_failed = true;
+								// The row's savepoint rolled back whatever it wrote; the
+								// in-memory caches may still hold it, and the rows after
+								// it in this batch must not build on that.
+								this.#dropStaleDictionaryCache();
+								const message = DelightError.from(error).message;
+								console.error(
+									`[DatabaseServer] could not catch up ${row.entity_type} ${row.entity_id}: ${message}`,
+								);
+								this.ctx.storage.sql.exec(
+									`INSERT INTO ${quoteIdentifier(CHANGES_FAILED_TABLE)} (entity_type, entity_id, error, failed_at) VALUES (?, ?, ?, ?);`,
+									row.entity_type,
+									row.entity_id,
+									message,
+									Date.now(),
+								);
+							}
+							now.setMilliseconds(now.getMilliseconds() + 1);
+						}
+						for (const entity_type of deleted_types) {
+							this.search.store.pruneTombstones(entity_type);
+						}
+						this.ctx.storage.sql.exec(
+							`DELETE FROM ${quoteIdentifier(CHANGES_TABLE)} WHERE seq <= ?;`,
+							last_seq,
+						);
+					});
+				} catch (error) {
+					if (!batch && touched.wrote) this.#dropStaleDictionaryCache();
+					throw error;
+				}
+				// A rolled-back row may have touched the in-memory term dictionary.
+				if (row_failed) this.#dropStaleDictionaryCache();
+				if (embed_min_due !== null) this.armEmbedAlarm(embed_min_due);
+				if (batch) batch.broadcasts.push(...broadcasts);
+				else this.#flushCommittedBroadcasts(broadcasts);
+				caught_up += rows.size;
+			}
+		} finally {
+			this.#draining = false;
+		}
+		// Possibly more left: the alarm carries on (and re-arms itself until
+		// the log is empty). Only ever moves the alarm earlier.
+		if (more) {
+			void this.ctx.storage
+				.getAlarm()
+				.then((existing) => {
+					const now = Date.now();
+					if (existing === null || existing > now) return this.ctx.storage.setAlarm(now);
+				})
+				.catch((error) =>
+					console.error('[DatabaseServer] failed to arm the change-capture alarm:', error),
+				);
+		}
+		return caught_up;
+	}
+
+	/**
+	 * Broadcast catch-up results once they are known to have committed.
+	 *
+	 * A drain can run inside an app's own `ctx.storage.transactionSync()` (raw
+	 * SQL written there, then `exec()` or a read catching it up). That outer
+	 * transaction may still roll back after the drain returns, and a broadcast
+	 * for a write that never happened plants rows on clients that no tombstone
+	 * removes. So the broadcasts wait for the current synchronous run to end,
+	 * then each is checked against the database: an update or create whose
+	 * row no longer carries the timestamp the drain stamped, or a delete whose
+	 * row is back, is dropped.
+	 */
+	#flushCommittedBroadcasts(broadcasts: DeferredBroadcast[]): void {
+		if (!broadcasts.length) return;
+		queueMicrotask(() => {
+			const committed = broadcasts.filter((broadcast) => {
+				const table = this.config[broadcast.entity_type];
+				if (!table) return false;
+				const row = this.ctx.storage.sql
+					.exec(
+						`SELECT "updated_at" FROM ${quoteIdentifier(this.sanitize(broadcast.entity_type))} WHERE ${quoteIdentifier(this.sanitize(table.config.primary_key || 'id'))} = ? LIMIT 1;`,
+						broadcast.id,
+					)
+					.next()?.value as { updated_at?: number } | undefined;
+				if (broadcast.action === 'deleted') return row === undefined;
+				const stamped = (broadcast.data as { updated_at?: number } | undefined)?.updated_at;
+				return row !== undefined && row.updated_at === stamped;
+			});
+			this.#flushBroadcasts(committed);
+		});
+	}
+
+	/** Re-entrancy guard: catch-up work must never trigger another drain. */
+	#draining = false;
+
+	/**
+	 * The cheap check run at every entry point: drain only when something is
+	 * actually pending (one indexed read otherwise).
+	 */
+	#drainPending(): void {
+		if (!this.#change_capture_ready || this.#draining) return;
+		let pending: { done?: boolean };
+		try {
+			pending = this.ctx.storage.sql
+				.exec(`SELECT 1 FROM ${quoteIdentifier(CHANGES_TABLE)} LIMIT 1;`)
+				.next();
+		} catch (error) {
+			// The database was wiped under this instance (`ctx.storage.deleteAll()`,
+			// destroy()): no tables, so nothing to catch up. Stop checking until
+			// the next wake rebuilds everything.
+			if (/no such table/i.test(DelightError.from(error).message)) {
+				this.#change_capture_ready = false;
+				return;
+			}
+			throw error;
+		}
+		if (!pending.done) this.#drain(CHANGE_DRAIN_AUTO_BATCHES);
+	}
+
+	/**
+	 * Catch up one row a raw write changed. Returns the earliest auto-embed
+	 * deadline it queued, if any.
+	 */
+	private applyCapturedChange(
+		change: {
+			entity_type: string;
+			entity_id: string;
+			before: string | null;
+			last_before: string | null;
+			befores: string[];
+			created: boolean;
+			stamped: boolean;
+		},
+		now: Date,
+		touched: { wrote: boolean },
+		broadcasts: DeferredBroadcast[],
+		deleted_types: Set<string>,
+	): number | null {
+		const { entity_type } = change;
+		const table = this.config[entity_type];
+		if (!table || !this.isSearchIndexed(entity_type)) return null;
+		const table_name = this.sanitize(entity_type);
+		const primary_key = this.sanitize(table.config.primary_key || 'id');
+		const id: string | number =
+			table.config.primary_key_type === 'number'
+				? Number(change.entity_id)
+				: change.entity_id;
+		let before_entity: Record<string, unknown> | undefined;
+		if (change.before) {
+			try {
+				before_entity = this.toEntityValue(entity_type, JSON.parse(change.before)) as
+					| Record<string, unknown>
+					| undefined;
+			} catch {
+				before_entity = undefined;
+			}
+		}
+		const row = this.ctx.storage.sql
+			.exec(
+				`SELECT * FROM ${quoteIdentifier(table_name)} WHERE ${quoteIdentifier(primary_key)} = ? LIMIT 1;`,
+				id,
+			)
+			.next()?.value as Record<string, SqlStorageValue> | undefined;
+		// The raw write's own `updated_at` is offered to the type's clock as the
+		// proposed timestamp. The clock never goes backwards (it is the sync
+		// cursor), so the value survives only when it is ahead of every
+		// timestamp already handed out; anything at or below that would sit
+		// under a client's cursor and never sync, and gets a fresh one instead.
+		const proposed =
+			row && change.stamped && typeof row.updated_at === 'number' && row.updated_at > 0
+				? row.updated_at
+				: now.getTime();
+		now.setTime(this.search.store.allocateTimestamp(entity_type, proposed));
+		const at = now.getTime();
+
+		if (!row) {
+			touched.wrote = true;
+			this.search.removeDocument(entity_type, String(id), at);
+			deleted_types.add(entity_type);
+			this.cascadeReindexReferencing(entity_type, id, touched, now);
+			// The row as the delete found it. It differs from `before_entity`
+			// when the run also inserted or updated the row.
+			let removed_entity = before_entity;
+			if (change.last_before && change.last_before !== change.before) {
+				try {
+					removed_entity = this.toEntityValue(
+						entity_type,
+						JSON.parse(change.last_before),
+					) as Record<string, unknown> | undefined;
+				} catch {
+					removed_entity = before_entity;
+				}
+			}
+			// History replays the run: a create or an update the delete swallowed
+			// is recorded first, then the delete with the row it removed.
+			if (removed_entity && this.hasHistory(entity_type)) {
+				const removed_payload = this.historyPayload(entity_type, removed_entity);
+				if (change.created) {
+					this.recordChange(entity_type, id, 'create', removed_payload, undefined, at);
+				} else if (before_entity && removed_entity !== before_entity) {
+					const diff = this.diffForHistory(
+						this.historyPayload(entity_type, before_entity)!,
+						removed_payload!,
+					);
+					if (Object.keys(diff.patch).length > 0) {
+						this.recordChange(entity_type, id, 'update', diff.patch, diff.previous, at);
+					}
+				}
+				this.recordChange(entity_type, id, 'delete', undefined, removed_payload, at);
+			}
+			this.dropAutoEmbeds(entity_type, id);
+			this.enqueueFileDeletionsForRun(entity_type, id, change.befores, undefined, at);
+			broadcasts.push({ action: 'deleted', entity_type, id, data: undefined });
+			return null;
+		}
+
+		const entity = this.toEntityValue(entity_type, row) as Record<string, unknown>;
+		// A fresh `updated_at` is what makes sync clients fetch the row again.
+		// A value the raw write chose itself is kept when the clock accepted it
+		// (it was ahead of everything already synced; see above).
+		const keep_stamp = row.updated_at === at;
+		if (!keep_stamp) entity.updated_at = at;
+		const fix_created_at = !(typeof row.created_at === 'number' && row.created_at > 0);
+		if (fix_created_at) entity.created_at = keep_stamp ? entity.updated_at : at;
+		const sparse = table.toSparse(entity as never) as Record<string, unknown>;
+		this.computeFkDerivedFields(entity_type, entity as never, sparse as never);
+		const derived_fields = this.searchTable(entity_type).derived_fields;
+		const sets = [WRITE_MARK_FLIP];
+		const bindings: SqlStorageValue[] = [];
+		if (!keep_stamp) {
+			sets.push(`"updated_at" = ?`);
+			bindings.push(at);
+		}
+		if (fix_created_at) {
+			sets.push(`"created_at" = ?`);
+			bindings.push(entity.created_at as number);
+		}
+		if (derived_fields?.size) {
+			const blob: Record<string, unknown> = {};
+			for (const field of derived_fields) {
+				const value = sparse[field];
+				if (value !== undefined && value !== null) blob[field] = value;
+			}
+			sets.push(`"json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?))`);
+			bindings.push(JSON.stringify(blob));
+		}
+		// The stamp flips the write marker like every library write, so it is
+		// not itself captured. Nothing to stamp (the raw write set a fresh
+		// `updated_at` itself, no derived fields): no write at all.
+		if (sets.length > 1) {
+			this.ctx.storage.sql.exec(
+				`UPDATE ${quoteIdentifier(table_name)} SET ${sets.join(', ')} WHERE ${quoteIdentifier(primary_key)} = ?;`,
+				...bindings,
+				id,
+			);
+		}
+		touched.wrote = true;
+		// No previous document: raw SQL changed the row behind the index's back,
+		// so the store reads the old token set back from the index itself.
+		this.search.indexDocument(entity_type, String(id), sparse);
+		this.cascadeReindexReferencing(entity_type, id, touched, now);
+		if (this.hasHistory(entity_type)) {
+			if (before_entity && !change.created) {
+				const diff = this.diffForHistory(
+					this.historyPayload(entity_type, before_entity)!,
+					this.historyPayload(entity_type, entity)!,
+				);
+				if (Object.keys(diff.patch).length > 0) {
+					this.recordChange(entity_type, id, 'update', diff.patch, diff.previous, at);
+				}
+			} else if (change.created) {
+				this.recordChange(
+					entity_type,
+					id,
+					'create',
+					this.historyPayload(entity_type, entity),
+					undefined,
+					at,
+				);
+			}
+		}
+		this.enqueueFileDeletionsForRun(entity_type, id, change.befores, entity, at);
+		broadcasts.push({
+			action: change.created ? 'created' : 'updated',
+			entity_type,
+			id,
+			data: entity,
+			sparse,
+		});
+		return this.queueAutoEmbeds(
+			entity_type,
+			id,
+			change.created ? undefined : before_entity,
+			entity,
+			at,
+		);
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -1568,6 +2920,7 @@ export class DatabaseServer<
 		options?: HistoryOptions,
 	): ChangeLogEntry[] {
 		this.assertChangeLog();
+		this.#drainPending();
 		const limit = Math.max(1, Math.min(1000, Math.trunc(options?.limit || 50)));
 		const before =
 			typeof options?.before === 'number' && Number.isFinite(options.before)
@@ -1600,6 +2953,7 @@ export class DatabaseServer<
 	 */
 	changesSince(timestamp: number, options?: ChangesSinceOptions): ChangeLogEntry[] {
 		this.assertChangeLog();
+		this.#drainPending();
 		const since = Number.isFinite(timestamp) ? Math.max(0, timestamp) : 0;
 		const limit = Math.max(1, Math.min(5000, Math.trunc(options?.limit || 500)));
 		const conditions = ['created_at >= ?'];
@@ -2191,6 +3545,44 @@ export class DatabaseServer<
 	 *
 	 * The row is gone, so every object it pointed at is now unreferenced by it.
 	 */
+	/**
+	 * File GC for a run of raw writes to one row: every object any version
+	 * of the row pointed at during the run (each change's before image) and
+	 * the final row no longer does. A run `insert A → update to B → delete`
+	 * orphans both A and B.
+	 */
+	private enqueueFileDeletionsForRun(
+		entity_type: string,
+		entity_id: string | number,
+		befores: string[],
+		final_entity: Record<string, unknown> | undefined,
+		deleted_at: number,
+	): void {
+		const file_fields = this.fileFields(entity_type);
+		if (!file_fields || befores.length === 0) return;
+		const versions: Record<string, unknown>[] = [];
+		for (const before of befores) {
+			try {
+				const entity = this.toEntityValue(entity_type, JSON.parse(before));
+				if (entity) versions.push(entity as Record<string, unknown>);
+			} catch {
+				// An unreadable image orphans nothing we can name.
+			}
+		}
+		for (const [field, meta] of Object.entries(file_fields)) {
+			const kept = final_entity
+				? this.asFileReference(readFieldPath(final_entity, field))?.key
+				: undefined;
+			const queued = new Set<string>();
+			for (const version of versions) {
+				const reference = this.asFileReference(readFieldPath(version, field));
+				if (!reference || reference.key === kept || queued.has(reference.key)) continue;
+				queued.add(reference.key);
+				this.enqueueFileDeletion(entity_type, entity_id, reference, meta.store, deleted_at);
+			}
+		}
+	}
+
 	private enqueueFileDeletionsForDelete(
 		entity_type: string,
 		entity_id: string | number,
@@ -2889,9 +4281,10 @@ export class DatabaseServer<
 				if (vector === null) delete entity[field];
 				else entity[field] = vector;
 				const updates = Object.entries(this.toSqliteValue(entity_type, entity as never)!);
-				const set_clause = updates
-					.map(([column]) => `${this.quote(column)} = ?`)
-					.join(', ');
+				const set_clause = [
+					...updates.map(([column]) => `${this.quote(column)} = ?`),
+					WRITE_MARK_FLIP,
+				].join(', ');
 				this.ctx.storage.sql.exec(
 					`UPDATE ${quoteIdentifier(sanitized_table)} SET ${set_clause} WHERE ${quoteIdentifier(primary_key)} = ?;`,
 					...updates.map(([, value]) => value),
@@ -3065,6 +4458,9 @@ export class DatabaseServer<
 			const table = buildServerSearchTable(entity_type, source);
 			this.#search_tables.set(entity_type, table);
 			this.#search_engine.register(table);
+			// A table the held-back schema pass hasn't created yet (a migration is
+			// pending; see the constructor) has nothing to index or rebuild yet.
+			if (!this.liveTableExists(table.table_name)) continue;
 			this.migrateGeneratedColumns(table);
 			this.createUpdatedAtIndex(table);
 			// Read before the migration creates one: a type with no state row and no
@@ -3132,10 +4528,19 @@ export class DatabaseServer<
 	/** The serialized search schema an entity type's tables must be built from. */
 	private searchSchemaSignature(entity_type: string): string {
 		const table = this.searchTable(entity_type);
+		// Only what changes the index contents: a field's weight ranks at query
+		// time, its token cap decides what is indexed.
+		const max_tokens = Object.entries(table.field_options ?? {})
+			.filter(([, options]) => options.max_tokens !== undefined)
+			.map(([field, options]) => [field, options.max_tokens === Infinity ? 'all' : options.max_tokens])
+			.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 		return JSON.stringify({
 			schema: table.schema,
 			primary_key: table.primary_key,
 			derived: [...(table.derived_fields ?? [])].sort(),
+			...(max_tokens.length ? { max_tokens } : {}),
+			// The on-disk index layout: a new format rebuilds every type once.
+			format: SEARCH_INDEX_FORMAT,
 		});
 	}
 
@@ -3233,15 +4638,51 @@ export class DatabaseServer<
 	 * descriptive `DelightError` instead of an opaque SQLite error mid-migration.
 	 */
 	private migrateGeneratedColumns(table: ServerSearchTable): void {
-		const existing_columns = this.ctx.storage.sql
+		let existing_columns = this.ctx.storage.sql
 			.exec(`PRAGMA table_xinfo(${quoteIdentifier(table.table_name)});`)
 			.toArray()
 			.map((row) => String((row as { name?: unknown }).name ?? ''))
 			.filter(Boolean);
 		if (existing_columns.length === 0) return;
+		const desired = planGeneratedColumns(whereContext(table));
+		// A generated column is matched by name, but its expression can change
+		// under the same name — it did when JSON fields moved into columns of
+		// their own (the expression now reads the field's column first). The
+		// table's stored SQL holds each generated column's definition; any that
+		// no longer matches is dropped here and re-added below.
+		const table_sql = normalizeDdl(
+			String(
+				this.ctx.storage.sql
+					.exec(
+						`SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?;`,
+						table.table_name,
+					)
+					.next()?.value?.sql ?? '',
+			),
+		);
+		const stale = desired.filter(
+			(spec) =>
+				spec.expression !== undefined &&
+				existing_columns.includes(spec.column) &&
+				!table_sql.includes(normalizeDdl(`GENERATED ALWAYS AS (${spec.expression})`)),
+		);
+		if (stale.length) {
+			this.ctx.storage.transactionSync(() => {
+				for (const spec of stale) {
+					this.ctx.storage.sql.exec(
+						`DROP INDEX IF EXISTS ${quoteIdentifier(spec.index_name)};`,
+					);
+					this.ctx.storage.sql.exec(
+						`ALTER TABLE ${quoteIdentifier(table.table_name)} DROP COLUMN ${quoteIdentifier(spec.column)};`,
+					);
+				}
+			});
+			const dropped = new Set(stale.map((spec) => spec.column));
+			existing_columns = existing_columns.filter((column) => !dropped.has(column));
+		}
 		const migration = planGeneratedColumnMigration({
 			table_name: table.table_name,
-			desired: planGeneratedColumns(whereContext(table)),
+			desired,
 			existing_columns,
 			json_column: table.json_column,
 		});
@@ -3626,7 +5067,7 @@ export class DatabaseServer<
 			if (value !== undefined && value !== null) derived[field] = value;
 		}
 		this.ctx.storage.sql.exec(
-			`UPDATE ${quoteIdentifier(table.table_name)} SET "json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?)) WHERE ${quoteIdentifier(table.primary_key)} = ?;`,
+			`UPDATE ${quoteIdentifier(table.table_name)} SET "json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?)), ${WRITE_MARK_FLIP} WHERE ${quoteIdentifier(table.primary_key)} = ?;`,
 			JSON.stringify(derived),
 			id,
 		);
@@ -3752,6 +5193,7 @@ export class DatabaseServer<
 			? Entity & { expanded: { [K in ExpandedFields[number]]: any } }
 			: Entity,
 	>(entity_type: Type, id: string | number, expand?: ExpandedFields): Output {
+		this.#drainPending();
 		const table = this.config[entity_type];
 		if (!table) {
 			throw new DelightError({
@@ -3945,6 +5387,7 @@ export class DatabaseServer<
 	sync(
 		query?: DatabaseSyncRequest<DatabaseConfig>,
 	): DatabaseSyncResponse<DatabaseConfig> {
+		this.#drainPending();
 		const results: DatabaseSyncResponse<DatabaseConfig> = {
 			start_updated_at: 0,
 			end_updated_at: 0,
@@ -4002,6 +5445,7 @@ export class DatabaseServer<
 		Query extends Database.SearchQuery<Table>,
 		Output extends Database.SearchQueryResults<Table, Query>,
 	>(entity_type: Type, raw_query: Query): Output {
+		this.#drainPending();
 		const table = this.config[entity_type];
 		if (!table || !this.isSearchIndexed(entity_type)) {
 			throw new DelightError({
@@ -4184,7 +5628,12 @@ export class DatabaseServer<
 		);
 
 		const derived_fields = this.searchTable(entity_type).derived_fields;
-		let hits: { id: string; score: number; document: unknown }[];
+		let hits: {
+			id: string;
+			score: number;
+			document: unknown;
+			highlights?: Record<string, { text: string; ranges: [number, number][] }>;
+		}[];
 		if (sparse) {
 			// `engine.list` hydrates from the entity row, so a hit's document carries
 			// every column plus the whole `json` payload. The sparse contract is the
@@ -4203,6 +5652,9 @@ export class DatabaseServer<
 					id: hit.id,
 					score: hit.score,
 					document: this.toSyncDocument(entity_type, document),
+					// Snippets of searched fields, `.serverOnly()` ones included: a
+					// window around the match, which is what a result list shows.
+					...(hit.highlights ? { highlights: hit.highlights } : {}),
 				};
 			});
 		} else {
@@ -4220,7 +5672,12 @@ export class DatabaseServer<
 				for (const column of this.columnMeta(entity_type).boolean_columns) {
 					if (typeof entity[column] === 'number') entity[column] = !!entity[column];
 				}
-				return { id: hit.id, score: hit.score, document: entity };
+				return {
+					id: hit.id,
+					score: hit.score,
+					document: entity,
+					...(hit.highlights ? { highlights: hit.highlights } : {}),
+				};
 			});
 		}
 
@@ -4469,7 +5926,9 @@ export class DatabaseServer<
 	 * Be very careful when using this function, as the sql_statement is not sanitized in any way.
 	 * Use the ...bindings parameter to safely pass in any user-provided data.
 	 */
-	exec(query_function: SqlQueryFn): Record<string, SqlStorageValue>[];
+	exec<Row extends Record<string, SqlStorageValue> = Record<string, SqlStorageValue>>(
+		query_function: SqlQueryFn,
+	): Row[];
 	/**
 	 * Calls the given callback function with a template literal function.
 	 * The callback should return a tagged template literal
@@ -4482,15 +5941,24 @@ export class DatabaseServer<
 				return sql`INSERT INTO users (name, age) VALUES (${name}, ${age})`;
 			});
 	 */
-	exec(sql_statement: string, ...bindings: any[]): Record<string, SqlStorageValue>[];
+	exec<Row extends Record<string, SqlStorageValue> = Record<string, SqlStorageValue>>(
+		sql_statement: string,
+		...bindings: any[]
+	): Row[];
 	exec(
 		sql_statement_or_query_function: string | SqlQueryFn,
 		...bindings: any[]
 	): Record<string, SqlStorageValue>[] {
 		if (typeof sql_statement_or_query_function === 'string') {
-			return this.ctx.storage.sql
+			const rows = this.ctx.storage.sql
 				.exec(sql_statement_or_query_function, ...bindings)
 				.toArray();
+			// A raw write is caught up (search, sync, history, broadcast) before
+			// exec() returns. Checked after every statement, reads included: one
+			// string can hold several (`SELECT 1; DELETE …`), and the check is a
+			// single indexed read.
+			this.#drainPending();
+			return rows;
 		}
 		const parsed = sql_statement_or_query_function(prepareSql);
 		if (!parsed) {
@@ -4513,7 +5981,24 @@ export class DatabaseServer<
 			`Ran query in ${performance.now() - start}ms: ${query.replace(/\t+/g, '')}`,
 			`(${values.length} bound values)`,
 		);
-		return result.toArray();
+		const rows = result.toArray();
+		this.#drainPending();
+		return rows;
+	}
+
+	/**
+	 * {@link SqlDatabase.execMany}, after catching up any pending raw writes,
+	 * like every other read here: a stamped `updated_at` or the search tables
+	 * read in the batch then reflect them.
+	 */
+	override execMany<
+		Rows extends readonly Record<string, SqlStorageValue>[] = Record<
+			string,
+			SqlStorageValue
+		>[],
+	>(statements: readonly ExecStatement[]): { [K in keyof Rows]: Rows[K][] } {
+		this.#drainPending();
+		return super.execMany<Rows>(statements);
 	}
 
 	/**
@@ -4537,6 +6022,9 @@ export class DatabaseServer<
 			return this.withWriteScope(options, () => this.transaction(operations));
 		}
 		if (!operations || !Array.isArray(operations) || operations.length === 0) return [];
+		// Earlier raw writes first, so the inline write path reads (and the
+		// index holds) the row as it actually is.
+		this.#drainPending();
 		if (operations.length > 5000) {
 			throw new DelightError({
 				message: `Too many operations in a single transaction. Maximum is 5000.`,
@@ -4570,6 +6058,15 @@ export class DatabaseServer<
 						.exec(statement, ...(bindings || []))
 						.toArray();
 					results.push({ results: result });
+					// Catch the raw write up now, while the row is exactly as it
+					// left it: a later op in this transaction that writes the same
+					// row would otherwise be recorded twice in history (once by
+					// itself, once inside the drain's before/after diff). A
+					// rollback undoes the drain with everything else; its
+					// broadcasts are re-checked after commit, and the flag below
+					// drops the term cache the drain may have touched.
+					touched.wrote = true;
+					this.#drainPending();
 					continue;
 				}
 
@@ -4634,6 +6131,9 @@ export class DatabaseServer<
 					}
 
 					const updates = Object.entries(this.toSqliteValue(entity_type, input_data)!);
+					// The write marker: 1 tells the insert trigger this row came
+					// through the library and needs no catch-up.
+					updates.push([WRITE_MARK_COLUMN, 1]);
 					const bindings = updates.map(([_, value]) => value);
 					const columns = updates.map(([column]) => this.quote(column)).join(', ');
 					const values = updates.map(() => '?').join(', ');
@@ -4720,7 +6220,6 @@ export class DatabaseServer<
 					}
 					const sanitized_table = this.sanitize(entity_type);
 					const primary_key = this.sanitize(table.config.primary_key || 'rowid');
-					this.ensureMonotonicTimestamp(now, entity_type);
 					// One SELECT serves both consumers below — `get()` followed by
 					// `readPersistedDerived()` would read the same row twice.
 					const current_row = this.ctx.storage.sql
@@ -4778,11 +6277,46 @@ export class DatabaseServer<
 						created_at: (current_data as any).created_at,
 					}) as any;
 
-					const updates = Object.entries(this.toSqliteValue(entity_type, input_data)!);
+					// SET only the columns whose stored value actually changes (plus
+					// updated_at, which always does). Naming an unchanged column in SET
+					// still rewrites every index entry that covers it, and Durable
+					// Objects bill each one as a written row.
+					const updates = Object.entries(
+						this.toSqliteValue(entity_type, input_data)!,
+					).filter(
+						([column, value]) =>
+							column === 'updated_at' ||
+							!current_row ||
+							!(column === 'json'
+								? sameOverflowBlob(current_row[column], value)
+								: sameStoredValue(current_row[column], value)),
+					);
+					// Nothing but the timestamp would change: write nothing. The row,
+					// its index entries and the sync clock stay as they are (an
+					// autosave of unchanged content used to cost 3 billed rows and
+					// a resync on every client).
+					if (current_row && updates.every(([column]) => column === 'updated_at')) {
+						results.push({
+							entity: {
+								type: entity_type,
+								data: current_data,
+								id: (current_data as any)[primary_key] || (current_data as any).id || id,
+								unchanged: true,
+							},
+						});
+						continue;
+					}
+					// Only now that the row will change: advancing the type's clock
+					// is itself a billed write.
+					this.ensureMonotonicTimestamp(now, entity_type);
+					for (const entry of updates) {
+						if (entry[0] === 'updated_at') entry[1] = now.getTime();
+					}
 					const bindings = [...updates.map(([_, value]) => value), id];
-					const updateFields = updates
-						.map(([column]) => `${this.quote(column)} = ?`)
-						.join(', ');
+					const updateFields = [
+						...updates.map(([column]) => `${this.quote(column)} = ?`),
+						WRITE_MARK_FLIP,
+					].join(', ');
 					const query_sql = `UPDATE ${quoteIdentifier(sanitized_table)} SET ${updateFields} WHERE ${quoteIdentifier(primary_key)} = ? RETURNING *;`;
 					const result = this.ctx.storage.sql.exec(query_sql, ...bindings);
 					const output_data = this.toEntityValue(entity_type, result.one()) as any;
@@ -4882,14 +6416,18 @@ export class DatabaseServer<
 										.next()?.value,
 								) as Record<string, unknown> | undefined)
 							: undefined;
+					// `removeDocument` writes the tombstone that feeds the sync deletion
+					// timeline. Marked touched first — see the create branch. It runs
+					// BEFORE the row's DELETE: the delete trigger recognises a library
+					// delete by this tombstone (stamped with the timestamp just
+					// allocated), so it must already exist when the trigger fires.
+					// Rows a foreign key cascades to have none, so they are captured.
+					touched.wrote = true;
+					this.search.removeDocument(entity_type, id.toString(), now.getTime());
 					this.ctx.storage.sql.exec(
 						`DELETE FROM ${quoteIdentifier(sanitized_table)} WHERE ${quoteIdentifier(primary_key)} = ?`,
 						id,
 					);
-					// `removeDocument` writes the tombstone that feeds the sync deletion
-					// timeline. Marked touched first — see the create branch.
-					touched.wrote = true;
-					this.search.removeDocument(entity_type, id.toString(), now.getTime());
 					deleted_types.add(entity_type);
 					this.cascadeReindexReferencing(entity_type, id, touched, now);
 					if (deleted_entity && this.hasHistory(entity_type)) {
@@ -4923,6 +6461,14 @@ export class DatabaseServer<
 					now.setMilliseconds(now.getMilliseconds() + 1); // Ensure unique timestamps
 					continue;
 				}
+
+				// An operation of no known shape used to be skipped silently, so a
+				// typo (`{ type: 'create', … }`) committed nothing and reported
+				// success.
+				throw new DelightError({
+					message: `Unknown transaction operation: expected one of create, update, delete or exec, got ${JSON.stringify(Object.keys(op ?? {}))}`,
+					status: 400,
+				});
 			}
 			for (const entity_type of deleted_types) {
 				this.search.store.pruneTombstones(entity_type);
@@ -4945,6 +6491,12 @@ export class DatabaseServer<
 		// still roll back — a spuriously armed alarm drains to a no-op.
 		if (embed_min_due !== null) this.armEmbedAlarm(embed_min_due);
 
+		// Catch up what this transaction wrote around the library: raw `exec`
+		// operations, and rows SQLite changed on its own (ON DELETE CASCADE /
+		// SET NULL children). Now that it has committed, so no broadcast can
+		// precede a rollback. One indexed read when nothing is pending.
+		this.#drainPending();
+
 		// Broadcast entity changes via WebSocket (fire-and-forget, after the
 		// transaction commits). Inside a batch() the outer transaction can still
 		// roll back, so broadcasts are deferred until the batch commits — a
@@ -4953,7 +6505,7 @@ export class DatabaseServer<
 		const broadcasts: DeferredBroadcast[] = [];
 		for (let i = 0; i < operations.length; i++) {
 			const result = results[i];
-			if (!result || !('entity' in result)) continue;
+			if (!result || !('entity' in result) || result.entity.unchanged) continue;
 			const op = operations[i];
 			const action = 'create' in op ? 'created' : 'update' in op ? 'updated' : 'deleted';
 			broadcasts.push({
@@ -5250,7 +6802,7 @@ export class DatabaseServer<
 					if (value !== undefined && value !== null) derived_blob[field] = value;
 				}
 				this.ctx.storage.sql.exec(
-					`UPDATE ${this.quote(dep.table)} SET "updated_at" = ?, "json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?)) WHERE ${this.quote(dep_pk)} = ?`,
+					`UPDATE ${this.quote(dep.table)} SET "updated_at" = ?, "json" = json_set(IFNULL("json", '{}'), '$."$derived"', json(?)), ${WRITE_MARK_FLIP} WHERE ${this.quote(dep_pk)} = ?`,
 					ts,
 					JSON.stringify(derived_blob),
 					dep_entity[dep_pk],
@@ -5299,8 +6851,27 @@ export class DatabaseServer<
 				error,
 			);
 		}
-		const temp = { ...value, ...json_fields };
+		const temp: Record<string, unknown> = { ...value };
+		// JSON columns hold their field as JSON text. A row written before
+		// fields had columns of their own still carries the value in the
+		// overflow blob until the background move reaches it, so the blob
+		// fills in whatever its column doesn't have yet.
+		const json_columns = this.columnMeta(entity_type).json_columns;
+		for (const column of json_columns) {
+			const raw = temp[column];
+			if (typeof raw === 'string') {
+				try {
+					temp[column] = JSON.parse(raw);
+				} catch {
+					temp[column] = null;
+				}
+			}
+		}
+		for (const [key, field_value] of Object.entries(json_fields)) {
+			if (temp[key] === undefined || temp[key] === null) temp[key] = field_value;
+		}
 		delete (temp as any).json;
+		delete (temp as any)[WRITE_MARK_COLUMN];
 		// `$derived` is the search engine's reserved sub-object of the `json`
 		// column (§7.0): FK/same-table derived search values with no column of
 		// their own. It is index/sync machinery, never app-visible entity data.
@@ -5335,7 +6906,16 @@ export class DatabaseServer<
 		}
 		if (!input_data) return;
 		const column_names = this.columnMeta(entity_type).columns;
+		// Every caller passes the entity's complete new state, so a column whose
+		// field is absent from it is a field that was removed: NULL, not "leave
+		// whatever is there". (When objects and arrays shared the rebuilt `json`
+		// blob this fell out for free; with columns of their own it must be said.)
+		const absent: Record<string, null> = {};
+		for (const column of column_names) {
+			if (!(column in input_data)) absent[column] = null;
+		}
 		return {
+			...absent,
 			...Object.entries(input_data).reduce((acc, [key, value]) => {
 				if (column_names.has(key)) {
 					if (value === undefined || value === null) {
@@ -5413,6 +6993,69 @@ export class DatabaseServer<
  * ever hold values a derived fn returned and `persistDerivedFields` kept, so
  * null/undefined/absent are one state and objects compare by JSON identity.
  */
+/** Whitespace-insensitive comparison key for a stored trigger/index definition. */
+function normalizeDdl(sql: string): string {
+	return sql.replace(/\s+/g, ' ').replace(/;\s*$/, '').trim();
+}
+
+/**
+ * Whether a column's stored value equals the value an update would write.
+ *
+ * Both sides are SQLite storage values (`toSqliteValue` output vs. the row as
+ * read), so this is identity for scalars and a byte comparison for BLOBs.
+ * A false "changed" only costs a redundant SET; a false "unchanged" would drop
+ * a write, so anything unrecognised counts as changed.
+ */
+/**
+ * Whether the `json` overflow blob is unchanged. The stored one also holds
+ * the `$derived` sub-object (written separately after every update), which
+ * the freshly built one never has; ignoring it lets an update that changes
+ * nothing be recognised on tables with derived fields too. Errs toward
+ * "changed" (key order, unparsable text).
+ */
+function sameOverflowBlob(stored: unknown, next: unknown): boolean {
+	if (sameStoredValue(stored, next)) return true;
+	if (typeof stored !== 'string') return false;
+	if (next !== null && next !== undefined && typeof next !== 'string') return false;
+	try {
+		const parsed = JSON.parse(stored) as Record<string, unknown>;
+		if (!parsed || typeof parsed !== 'object' || !('$derived' in parsed)) return false;
+		delete parsed.$derived;
+		const rest = JSON.stringify(parsed);
+		return next === null || next === undefined ? rest === '{}' : rest === next;
+	} catch {
+		return false;
+	}
+}
+
+function sameStoredValue(stored: unknown, next: unknown): boolean {
+	if (stored === next) return true;
+	if (
+		(stored === null || stored === undefined) &&
+		(next === null || next === undefined)
+	) {
+		return true;
+	}
+	const stored_bytes = binaryView(stored);
+	const next_bytes = binaryView(next);
+	if (stored_bytes && next_bytes) {
+		if (stored_bytes.byteLength !== next_bytes.byteLength) return false;
+		for (let i = 0; i < stored_bytes.byteLength; i++) {
+			if (stored_bytes[i] !== next_bytes[i]) return false;
+		}
+		return true;
+	}
+	return false;
+}
+
+function binaryView(value: unknown): Uint8Array | undefined {
+	if (value instanceof ArrayBuffer) return new Uint8Array(value);
+	if (ArrayBuffer.isView(value)) {
+		return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+	}
+	return undefined;
+}
+
 /**
  * Whether a value is binary data rather than a plain record.
  *

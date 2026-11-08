@@ -1081,7 +1081,7 @@ describe('Schema: FK-derived fields', () => {
 // ── Regression tests: storage + validation fixes ────────────────────────────
 
 describe('non-scalar field storage', () => {
-	it('stores object/array/vector/geopoint fields in the json column (no sqlite columns)', () => {
+	it('gives object/array/vector/geopoint fields JSON text columns of their own', () => {
 		const table = Database.table('storage_test', (schema) => ({
 			name: schema.string(),
 			address: schema.object({ city: schema.string() }),
@@ -1089,11 +1089,15 @@ describe('non-scalar field storage', () => {
 			embedding: schema.vector(3),
 			location: schema.geopoint(),
 		}));
-		expect(table.config.table_definition).toHaveProperty('name');
-		expect(table.config.table_definition).not.toHaveProperty('address');
-		expect(table.config.table_definition).not.toHaveProperty('tags');
-		expect(table.config.table_definition).not.toHaveProperty('embedding');
-		expect(table.config.table_definition).not.toHaveProperty('location');
+		expect(table.config.table_definition).toHaveProperty('name', 'TEXT NOT NULL');
+		for (const field of ['address', 'tags', 'embedding', 'location']) {
+			// Nullable (addable to a populated table) and guarded by json_valid
+			expect(table.config.table_definition).toHaveProperty(
+				field,
+				`TEXT CHECK (json_valid("${field}"))`,
+			);
+		}
+		expect(table.config.json_fields).toEqual(['address', 'tags', 'embedding', 'location']);
 	});
 });
 
@@ -1148,7 +1152,8 @@ describe('searchable arrays', () => {
 		expect(table.config.searchable_fields).toContain('label_ids');
 		expect(table.config.index_schema).toHaveProperty('label_ids', 'enum[]');
 		// Arrays live in the internal `json` overflow column, never their own column
-		expect(table.config.table_definition).not.toHaveProperty('label_ids');
+		// Its own JSON column, but never term-indexed (see index_schema above)
+		expect(table.config.table_definition).toHaveProperty('label_ids');
 		const sparse = table.toSparse({
 			id: 'a',
 			title: 'hello',

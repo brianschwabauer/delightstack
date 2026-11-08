@@ -147,6 +147,11 @@ describe('DatabaseServer auto-embedding (DS-05)', () => {
 		db.create('article', { title: 'First' });
 		db.create('article', { title: 'Second' });
 		db.create('article', { title: 'Third' });
+		// Each write's timestamp is kept strictly increasing, so three creates in
+		// the same millisecond queue at t, t+1, t+2 — up to two ms ahead of the
+		// wall clock the alarm compares `due_at` against. Let the clock catch up,
+		// or the last row is (correctly) left for the re-armed alarm.
+		await new Promise((resolve) => setTimeout(resolve, 5));
 		await db.alarm();
 		expect(embedder).toHaveBeenCalledTimes(1);
 		expect((embedder.mock.calls[0][0] as string[]).sort()).toEqual([

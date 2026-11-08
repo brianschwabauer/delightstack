@@ -5,5 +5,6 @@ export default defineConfig({
 		globals: true,
 		environment: 'edge-runtime',
 		include: ['**/*.test.ts'],
+		exclude: ['**/node_modules/**', '**/*.workerd.test.ts'],
 	},
 });

@@ -64,7 +64,7 @@ describe('DatabaseServer.batch()', () => {
 
 		// The postings are written by the same transaction as the entity rows —
 		// nothing is serialized, snapshotted or journaled anywhere.
-		expect(state.log.some((entry) => /search_postings/.test(entry.sql))).toBe(true);
+		expect(state.log.some((entry) => /search_entries/.test(entry.sql))).toBe(true);
 		expect(state.log.some((entry) => /search_index|search_journal/.test(entry.sql))).toBe(
 			false,
 		);
@@ -85,7 +85,7 @@ describe('DatabaseServer.batch()', () => {
 
 		expect((db.list('item', { limit: 100 }) as { count: number }).count).toBe(1);
 		const postings = state.db
-			.prepare(`SELECT DISTINCT doc_id FROM search_postings WHERE entity_type = 'item'`)
+			.prepare(`SELECT doc_id FROM search_documents WHERE entity_type = 'item'`)
 			.all();
 		expect(postings).toHaveLength(1);
 	});
